@@ -8,52 +8,52 @@ namespace Runtime::Config
 
 struct UserSettings final
 {
-	int32_t RendererType;
-	
-	// Scene
-	int SceneIndex {};
+    int32_t RendererType;
+    
+    // Scene
+    int SceneIndex {};
     float LDrawLduToWorldScale = 0.001f;
     float ScadToWorldScale = 1.0f;
 
-	// Renderer
-	int32_t NumberOfSamples;
-	uint32_t NumberOfBounces;
-	uint32_t MaxNumberOfBounces;
-	bool TAA {};
-	bool FastGather = false;
-	uint32_t PresentMode = 3;
-	uint32_t SuperResolution = 1;
-	bool DLSS = false;
+    // Renderer
+    int32_t NumberOfSamples;
+    uint32_t NumberOfBounces;
+    uint32_t MaxNumberOfBounces;
+    bool TAA {};
+    bool FastGather = false;
+    uint32_t PresentMode = 3;
+    uint32_t SuperResolution = 1;
+    bool DLSS = false;
     bool FSR = false;
-	bool DLSSRR = false;
-	bool DLSSG = false;
-	uint32_t DLSSGFrameMultiplier = 2;
-	uint32_t DLSSGFrameLimitFps = 0;
+    bool DLSSRR = false;
+    bool DLSSG = false;
+    uint32_t DLSSGFrameMultiplier = 2;
+    uint32_t DLSSGFrameLimitFps = 0;
     uint32_t DLSSJitterFrames = 16;
     bool DLSSJitterInvertY = false;
-	int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low
+    int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low
 
-	// Camera
-	int CameraIdx;
+    // Camera
+    int CameraIdx;
 
-	// Profiler
-	float HeatmapScale;
+    // Profiler
+    float HeatmapScale;
 
-	// UI
-	bool ShowSettings;
-	bool ShowOverlay;
+    // UI
+    bool ShowSettings;
+    bool ShowOverlay;
     bool BorderlessFullscreen = false;
 
-	// Performance
-	uint32_t TemporalFrames;
-	// Denoise (variance-guided a-trous wavelet; see PipelineCommon::AtrousDenoiser)
-	bool Denoiser;
-	int DenoiseAtrousIterations;    // diffuse wavelet iterations: quality/perf knob (higher = smoother, slower)
-	int DenoiseAtrousSpecularIterations; // specular wavelet iterations (usually lower than diffuse)
-	float DenoiseAtrousSigmaLuma;   // variance-guided luminance edge-stop (lower = sharper, noisier)
-	float DenoiseAtrousNormalPower; // a-trous normal edge-stop exponent
-	float DenoiseSigmaDepth;        // planar depth tolerance (multiples of local depth slope)
-	float DenoiseSpecFootprint;     // specular filter radius (pixels) per unit roughness
+    // Performance
+    uint32_t TemporalFrames;
+    // Denoise (variance-guided a-trous wavelet; see PipelineCommon::AtrousDenoiser)
+    bool Denoiser;
+    int DenoiseAtrousIterations;    // diffuse wavelet iterations: quality/perf knob (higher = smoother, slower)
+    int DenoiseAtrousSpecularIterations; // specular wavelet iterations (usually lower than diffuse)
+    float DenoiseAtrousSigmaLuma;   // variance-guided luminance edge-stop (lower = sharper, noisier)
+    float DenoiseAtrousNormalPower; // a-trous normal edge-stop exponent
+    float DenoiseSigmaDepth;        // planar depth tolerance (multiples of local depth slope)
+    float DenoiseSpecFootprint;     // specular filter radius (pixels) per unit roughness
 
     // SwModernNoAmbient screen-space sky occlusion.
     bool GTAOEnable = true;
@@ -63,12 +63,12 @@ struct UserSettings final
     float GTAOThickness = 0.5f;
     int GTAODebugMode = 0;
 
-	// ReProject history clamp (Phase A black-dot fix; see Process.ReProject.comp.slang).
-	float ReprojectClampGammaHi = 2.5f;    // tight (low-confidence) upper YCoCg luma box half-width in sigmas
-	float ReprojectClampGammaLo = 5.0f;    // tight lower box half-width (kept looser than upper to avoid black dots)
-	float ReprojectClampFloor = 0.5f;      // relative luma floor (history luma >= floor * filtered mean)
+    // ReProject history clamp (Phase A black-dot fix; see Process.ReProject.comp.slang).
+    float ReprojectClampGammaHi = 2.5f;    // tight (low-confidence) upper YCoCg luma box half-width in sigmas
+    float ReprojectClampGammaLo = 5.0f;    // tight lower box half-width (kept looser than upper to avoid black dots)
+    float ReprojectClampFloor = 0.5f;      // relative luma floor (history luma >= floor * filtered mean)
 
-	float PaperWhiteNit;
+    float PaperWhiteNit;
 
     bool TickPhysics = true;
     bool TickAnimation = true;

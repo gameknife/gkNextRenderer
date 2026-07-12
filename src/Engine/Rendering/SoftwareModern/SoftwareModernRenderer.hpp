@@ -9,23 +9,23 @@
 
 namespace Vulkan::SoftwareModern
 {
-	class SoftwareModernRenderer final : public Vulkan::LogicRendererBase
-	{
-	public:
-		VULKAN_NON_COPIABLE(SoftwareModernRenderer)
+    class SoftwareModernRenderer final : public Vulkan::LogicRendererBase
+    {
+    public:
+        VULKAN_NON_COPIABLE(SoftwareModernRenderer)
 
-		explicit SoftwareModernRenderer(Vulkan::VulkanBaseRenderer& baseRender);
-		~SoftwareModernRenderer();
+        explicit SoftwareModernRenderer(Vulkan::VulkanBaseRenderer& baseRender);
+        ~SoftwareModernRenderer();
 
-		void CreateSwapChain(const VkExtent2D& extent) override;
-		void DeleteSwapChain() override;
-		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
-		void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles) override;
+        void CreateSwapChain(const VkExtent2D& extent) override;
+        void DeleteSwapChain() override;
+        void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
+        void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles) override;
 
-	private:
-		std::unique_ptr<PipelineCommon::ZeroBindPipeline> deferredShadingPipeline_;
-		PipelineCommon::TemporalPostChain temporalPostChain_;
+    private:
+        std::unique_ptr<PipelineCommon::ZeroBindPipeline> deferredShadingPipeline_;
+        PipelineCommon::TemporalPostChain temporalPostChain_;
 
-	};
+    };
 
 }

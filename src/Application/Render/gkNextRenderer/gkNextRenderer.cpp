@@ -458,17 +458,17 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 NextRendererGameInstance::NextRendererGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine) :
     NextGameInstanceBase(config, options, engine)
 {
-	config.HideTitleBar = true;
+    config.HideTitleBar = true;
 }
 
 void NextRendererGameInstance::OnInit()
 {
-	std::string initializedScene = Runtime::Scene::SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex];
-	if (!GOption->SceneName.empty())
-	{
-		initializedScene = GOption->SceneName;
-	}
-	GetEngine().RequestLoadScene({.filename = initializedScene});
+    std::string initializedScene = Runtime::Scene::SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex];
+    if (!GOption->SceneName.empty())
+    {
+        initializedScene = GOption->SceneName;
+    }
+    GetEngine().RequestLoadScene({.filename = initializedScene});
     // GetEngine().GetUserSettings().SceneEpsilonScale = 0.01f;
     // GetEngine().GetUserSettings().AmbientCubeUnit = 0.02f;
     // GetEngine().GetUserSettings().AmbientCubeOffsetX = 0.0f;
@@ -488,25 +488,25 @@ void NextRendererGameInstance::OnTick(double deltaSeconds)
 std::vector<Assets::FMaterial> MatPreparedForAdd;
 
 void NextRendererGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
-	std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
-	std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
+    std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
+    std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
 {
-	models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0,0,0), 0.2f));
-	modelId_ = static_cast<uint32_t>(models.size() - 1);
+    models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0,0,0), 0.2f));
+    modelId_ = static_cast<uint32_t>(models.size() - 1);
     
     models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.2,-0.2,-0.2), glm::vec3(0.2,0.2,0.2)));
     boxModelId_ = static_cast<uint32_t>(models.size() - 1);
 
-	matIds_.clear();
+    matIds_.clear();
 
-	matIds_.push_back(Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1,1,1)));
-	MatPreparedForAdd.push_back(materials.back());
-	MatPreparedForAdd.push_back({Assets::Material::Metallic(glm::vec3(0.5,0.5,0.5), 0.4f)});
-	materials.push_back(MatPreparedForAdd.back());matIds_.push_back(uint32_t(materials.size() - 1));
-	MatPreparedForAdd.push_back({Assets::Material::Dielectric(1.5f, 0.0f)});
-	materials.push_back(MatPreparedForAdd.back());matIds_.push_back(uint32_t(materials.size() - 1));
-	MatPreparedForAdd.push_back({Assets::Material::Mixture(glm::vec3(1.0f, 0.3f, 0.3f), 0.01f)});
-	materials.push_back(MatPreparedForAdd.back());matIds_.push_back(uint32_t(materials.size() - 1));
+    matIds_.push_back(Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1,1,1)));
+    MatPreparedForAdd.push_back(materials.back());
+    MatPreparedForAdd.push_back({Assets::Material::Metallic(glm::vec3(0.5,0.5,0.5), 0.4f)});
+    materials.push_back(MatPreparedForAdd.back());matIds_.push_back(uint32_t(materials.size() - 1));
+    MatPreparedForAdd.push_back({Assets::Material::Dielectric(1.5f, 0.0f)});
+    materials.push_back(MatPreparedForAdd.back());matIds_.push_back(uint32_t(materials.size() - 1));
+    MatPreparedForAdd.push_back({Assets::Material::Mixture(glm::vec3(1.0f, 0.3f, 0.3f), 0.01f)});
+    materials.push_back(MatPreparedForAdd.back());matIds_.push_back(uint32_t(materials.size() - 1));
 }
 
 void NextRendererGameInstance::OnSceneLoaded()
@@ -514,7 +514,7 @@ void NextRendererGameInstance::OnSceneLoaded()
     NextGameInstanceBase::OnSceneLoaded();
     modelViewController_.Reset( GetEngine().GetScene().GetRenderCamera() );
 
-	GetEngine().GetScene().PlayAllTracks();
+    GetEngine().GetScene().PlayAllTracks();
 }
 
 void NextRendererGameInstance::OnPreConfigUI()
@@ -628,7 +628,7 @@ bool NextRendererGameInstance::DrawRendererUi(const FGameUiFrameContext& context
         uiState.memoryStatisticsPanelOpen = false;
     }
 
-	DrawTitleBar(context, uiState);
+    DrawTitleBar(context, uiState);
     DrawModeRail(uiState);
     DrawSettings(uiState);
     DrawViewportTopBar(context, uiState);
@@ -636,48 +636,48 @@ bool NextRendererGameInstance::DrawRendererUi(const FGameUiFrameContext& context
     DrawBottomStatusBar(uiState);
     DrawMemoryStatisticsPanel(uiState);
 
-	if (context.surfaceKind == FGameUiFrameContext::ESurfaceKind::MainWindow && ImGui::GetCurrentContext() != nullptr)
-	{
-		auto& swapChain = GetEngine().GetRenderer().SwapChain();
-		const auto offset = swapChain.OutputOffset();
-		const auto extent = swapChain.OutputExtent();
-		const ImVec2 viewportOrigin = ImGui::GetMainViewport()->Pos;
-		uiState.gizmoController.Draw(GetEngine(),
-			glm::vec2(viewportOrigin.x + static_cast<float>(offset.x), viewportOrigin.y + static_cast<float>(offset.y)),
-			glm::vec2(static_cast<float>(extent.width), static_cast<float>(extent.height)));
-	}
-	if (GOption->ReferenceMode)
-	{
-		ImGuiIO& io = ImGui::GetIO();
-		const auto viewport = io.DisplaySize;
-		static constexpr std::array<const char*, 4> rendererNames{
-			"SoftwareModern", "SoftwareTracing", "SoftwareModernNoAmbient", "PathTracing"};
-		const std::array<ImVec2, rendererNames.size()> labelPositions{
-			ImVec2(viewport.x * 0.25f, viewport.y * 0.45f),
-			ImVec2(viewport.x * 0.75f, viewport.y * 0.45f),
-			ImVec2(viewport.x * 0.25f, viewport.y * 0.95f),
-			ImVec2(viewport.x * 0.75f, viewport.y * 0.95f)
-		};
-		const ImGuiWindowFlags windowFlags =
-			ImGuiWindowFlags_NoDecoration |
-			ImGuiWindowFlags_AlwaysAutoResize |
-			ImGuiWindowFlags_NoSavedSettings |
-			ImGuiWindowFlags_NoMove |
-			ImGuiWindowFlags_NoFocusOnAppearing;
+    if (context.surfaceKind == FGameUiFrameContext::ESurfaceKind::MainWindow && ImGui::GetCurrentContext() != nullptr)
+    {
+        auto& swapChain = GetEngine().GetRenderer().SwapChain();
+        const auto offset = swapChain.OutputOffset();
+        const auto extent = swapChain.OutputExtent();
+        const ImVec2 viewportOrigin = ImGui::GetMainViewport()->Pos;
+        uiState.gizmoController.Draw(GetEngine(),
+            glm::vec2(viewportOrigin.x + static_cast<float>(offset.x), viewportOrigin.y + static_cast<float>(offset.y)),
+            glm::vec2(static_cast<float>(extent.width), static_cast<float>(extent.height)));
+    }
+    if (GOption->ReferenceMode)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        const auto viewport = io.DisplaySize;
+        static constexpr std::array<const char*, 4> rendererNames{
+            "SoftwareModern", "SoftwareTracing", "SoftwareModernNoAmbient", "PathTracing"};
+        const std::array<ImVec2, rendererNames.size()> labelPositions{
+            ImVec2(viewport.x * 0.25f, viewport.y * 0.45f),
+            ImVec2(viewport.x * 0.75f, viewport.y * 0.45f),
+            ImVec2(viewport.x * 0.25f, viewport.y * 0.95f),
+            ImVec2(viewport.x * 0.75f, viewport.y * 0.95f)
+        };
+        const ImGuiWindowFlags windowFlags =
+            ImGuiWindowFlags_NoDecoration |
+            ImGuiWindowFlags_AlwaysAutoResize |
+            ImGuiWindowFlags_NoSavedSettings |
+            ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoFocusOnAppearing;
 
-		for (size_t index = 0; index < rendererNames.size(); ++index)
-		{
-			ImGui::SetNextWindowPos(labelPositions[index], ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-			ImGui::SetNextWindowBgAlpha(0.5f);
+        for (size_t index = 0; index < rendererNames.size(); ++index)
+        {
+            ImGui::SetNextWindowPos(labelPositions[index], ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowBgAlpha(0.5f);
 
-			auto windowName = fmt::format("RendererName{}", index);
-			if (ImGui::Begin(windowName.c_str(), nullptr, windowFlags))
-			{
-				ImGui::TextUnformatted(rendererNames[index]);
-			}
-			ImGui::End();
-		}
-	}
+            auto windowName = fmt::format("RendererName{}", index);
+            if (ImGui::Begin(windowName.c_str(), nullptr, windowFlags))
+            {
+                ImGui::TextUnformatted(rendererNames[index]);
+            }
+            ImGui::End();
+        }
+    }
     return false;
 }
 
@@ -689,38 +689,38 @@ void NextRendererGameInstance::OnInitUI()
 
 void NextRendererGameInstance::RequestScreenshot(bool openFolder, const std::string& tag)
 {
-	if (isTakingScreenshot_)
-	{
-		return;
-	}
+    if (isTakingScreenshot_)
+    {
+        return;
+    }
 
-	std::string folderPath = Utilities::FileHelper::GetPlatformFilePath("screenshots");
-	Utilities::FileHelper::EnsureDirectoryExists(folderPath);
+    std::string folderPath = Utilities::FileHelper::GetPlatformFilePath("screenshots");
+    Utilities::FileHelper::EnsureDirectoryExists(folderPath);
 
-	auto now = std::chrono::system_clock::now();
-	std::time_t in_time_t = std::chrono::system_clock::to_time_t(now);
-	std::tm* tm_ptr = std::localtime(&in_time_t);
-	std::string timestamp = fmt::format("{:%Y-%m-%d_%H-%M-%S}", *tm_ptr);
-	std::string suffix = tag.empty() ? "" : "_" + tag;
-	std::string filename = (std::filesystem::path(folderPath) / (timestamp + suffix)).string();
+    auto now = std::chrono::system_clock::now();
+    std::time_t in_time_t = std::chrono::system_clock::to_time_t(now);
+    std::tm* tm_ptr = std::localtime(&in_time_t);
+    std::string timestamp = fmt::format("{:%Y-%m-%d_%H-%M-%S}", *tm_ptr);
+    std::string suffix = tag.empty() ? "" : "_" + tag;
+    std::string filename = (std::filesystem::path(folderPath) / (timestamp + suffix)).string();
 
-	isTakingScreenshot_ = true;
+    isTakingScreenshot_ = true;
 
-	GetEngine().AddTimerTask(0.2, [this, filename, folderPath, openFolder]() {
-		Runtime::ScreenShot::SaveSwapChainToFile(&GetEngine().GetRenderer(), filename, 0, 0, 0, 0);
-		if (openFolder)
-		{
-			NextRenderer::OSCommand(folderPath.c_str());
-		}
-		isTakingScreenshot_ = false;
-		return true;
-	});
+    GetEngine().AddTimerTask(0.2, [this, filename, folderPath, openFolder]() {
+        Runtime::ScreenShot::SaveSwapChainToFile(&GetEngine().GetRenderer(), filename, 0, 0, 0, 0);
+        if (openFolder)
+        {
+            NextRenderer::OSCommand(folderPath.c_str());
+        }
+        isTakingScreenshot_ = false;
+        return true;
+    });
 }
 
 bool NextRendererGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
 {
     outRenderCamera.ModelView = modelViewController_.ModelView();
-	outRenderCamera.FieldOfView = modelViewController_.FieldOfView();
+    outRenderCamera.FieldOfView = modelViewController_.FieldOfView();
     return true;
 }
 
@@ -734,14 +734,14 @@ bool NextRendererGameInstance::OnKey(SDL_Event& event)
     // WASDQE camera movement (only active when right mouse is pressed)
     modelViewController_.OnKey(event);
 
-	if (event.key.type == SDL_EVENT_KEY_DOWN)
-	{
-		switch (event.key.key)
-		{
-		case SDLK_ESCAPE:
-			GetEngine().GetScene().SetSelectedId(-1);
-			GetEngine().GetShowFlags().ShowEdge = false;
-			return true;
+    if (event.key.type == SDL_EVENT_KEY_DOWN)
+    {
+        switch (event.key.key)
+        {
+        case SDLK_ESCAPE:
+            GetEngine().GetScene().SetSelectedId(-1);
+            GetEngine().GetShowFlags().ShowEdge = false;
+            return true;
         case SDLK_F:
             {
                 glm::vec3 focusCenter;
@@ -752,8 +752,8 @@ bool NextRendererGameInstance::OnKey(SDL_Event& event)
                 }
             }
             break;
-		case SDLK_SPACE: CreateBoxAndPush(); return true;
-			break;
+        case SDLK_SPACE: CreateBoxAndPush(); return true;
+            break;
         case SDLK_DELETE:
         case SDLK_BACKSPACE:
         {
@@ -772,9 +772,9 @@ bool NextRendererGameInstance::OnKey(SDL_Event& event)
             GetEngine().GetCommandHistory().Execute(std::move(cmd));
             return true;
         }
-		default: break;
-		}
-	}
+        default: break;
+        }
+    }
     if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN)
     {
         switch (event.gbutton.button)
@@ -823,47 +823,47 @@ bool NextRendererGameInstance::OnMouseButton(SDL_Event& event)
         return true;
     }
 
-	if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT)
-	{
-		auto mousePos = GetEngine().GetMousePos();
-		glm::vec3 org;
-		glm::vec3 dir;
+    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT)
+    {
+        auto mousePos = GetEngine().GetMousePos();
+        glm::vec3 org;
+        glm::vec3 dir;
         Runtime::EngineHelper::GetScreenToWorldRay(mousePos, org, dir);
-		GetEngine().RayCast( org, dir, [this](Assets::RayCastResult result)
-		{
-			if (result.Hit)
-			{
-				GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
-				Runtime::EngineHelper::DrawAuxPoint( result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 60 );
-				GetEngine().GetScene().SetSelectedId(result.InstanceId);
-				GetEngine().GetShowFlags().ShowEdge = true;
-			}
-			else
-			{
-				GetEngine().GetScene().SetSelectedId(-1);
-				GetEngine().GetShowFlags().ShowEdge = false;
-			}
-			return true;
-		});
-		return true;
-	}
+        GetEngine().RayCast( org, dir, [this](Assets::RayCastResult result)
+        {
+            if (result.Hit)
+            {
+                GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
+                Runtime::EngineHelper::DrawAuxPoint( result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 60 );
+                GetEngine().GetScene().SetSelectedId(result.InstanceId);
+                GetEngine().GetShowFlags().ShowEdge = true;
+            }
+            else
+            {
+                GetEngine().GetScene().SetSelectedId(-1);
+                GetEngine().GetShowFlags().ShowEdge = false;
+            }
+            return true;
+        });
+        return true;
+    }
 
     return true;
 }
 
 bool NextRendererGameInstance::OnScroll(double xoffset, double yoffset)
 {
-	if (!mainUiState_.gizmoController.IsInteracting())
-	{
-		modelViewController_.OnScroll(xoffset, yoffset);
-	}
-	return true;
+    if (!mainUiState_.gizmoController.IsInteracting())
+    {
+        modelViewController_.OnScroll(xoffset, yoffset);
+    }
+    return true;
 }
 
 bool NextRendererGameInstance::OnGamepadInput(int16_t leftStickX, int16_t leftStickY, int16_t rightStickX, int16_t rightStickY,
-	int16_t leftTrigger, int16_t rightTrigger)
+    int16_t leftTrigger, int16_t rightTrigger)
 {
-	return modelViewController_.OnGamepadInput(leftStickX, leftStickY, rightStickX, rightStickY, leftTrigger, rightTrigger);
+    return modelViewController_.OnGamepadInput(leftStickX, leftStickY, rightStickX, rightStickY, leftTrigger, rightTrigger);
 }
 
 bool NextRendererGameInstance::OnRemoteViewAction(const FRemoteViewActionContext& context, std::string_view action)
@@ -893,25 +893,25 @@ void NextRendererGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 
 void NextRendererGameInstance::CreateSphereAndPush()
 {
-	glm::vec3 forward = modelViewController_.GetForward();
-	glm::vec3 center = modelViewController_.GetPosition() + forward * 0.1f + modelViewController_.GetRight() * 0.5f + modelViewController_.GetUp() * -0.5f;
-	glm::vec3 farTarget = modelViewController_.GetPosition() + forward * 1000.0f + modelViewController_.GetUp() * 100.f;
-	glm::vec3 shotDir = normalize((farTarget - center));
-	uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size());
+    glm::vec3 forward = modelViewController_.GetForward();
+    glm::vec3 center = modelViewController_.GetPosition() + forward * 0.1f + modelViewController_.GetRight() * 0.5f + modelViewController_.GetUp() * -0.5f;
+    glm::vec3 farTarget = modelViewController_.GetPosition() + forward * 1000.0f + modelViewController_.GetUp() * 100.f;
+    glm::vec3 shotDir = normalize((farTarget - center));
+    uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size());
 
-	uint32_t newMatId = matIds_[std::rand() % matIds_.size()];
-	std::shared_ptr<Assets::Node> newNode = Assets::SceneBuilder::CreateRenderNode("temp", center, glm::vec3(1), instanceId, modelId_, newMatId);
-	
-	auto phys = std::make_shared<Runtime::PhysicsComponent>();
-	phys->SetMobility(Runtime::ENodeMobility::Dynamic);
-	auto id = GetEngine().GetPhysicsEngine()->CreateSphereBody(center, 0.2f, NextMotionType::Dynamic);
-	phys->BindPhysicsBody(id);
-	newNode->AddComponent(phys);
+    uint32_t newMatId = matIds_[std::rand() % matIds_.size()];
+    std::shared_ptr<Assets::Node> newNode = Assets::SceneBuilder::CreateRenderNode("temp", center, glm::vec3(1), instanceId, modelId_, newMatId);
+    
+    auto phys = std::make_shared<Runtime::PhysicsComponent>();
+    phys->SetMobility(Runtime::ENodeMobility::Dynamic);
+    auto id = GetEngine().GetPhysicsEngine()->CreateSphereBody(center, 0.2f, NextMotionType::Dynamic);
+    phys->BindPhysicsBody(id);
+    newNode->AddComponent(phys);
 
-	GetEngine().GetScene().AddNode(newNode);
-	GetEngine().GetScene().MarkDirty();
+    GetEngine().GetScene().AddNode(newNode);
+    GetEngine().GetScene().MarkDirty();
 
-	GetEngine().GetPhysicsEngine()->AddForceToBody(id, shotDir * 70000.f);
+    GetEngine().GetPhysicsEngine()->AddForceToBody(id, shotDir * 70000.f);
 }
 
 void NextRendererGameInstance::CreateBoxAndPush()

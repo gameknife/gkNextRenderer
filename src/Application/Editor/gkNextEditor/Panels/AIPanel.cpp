@@ -64,7 +64,7 @@ namespace Editor
 
     static void DrawProviderSelector(NextEngine& engine, FEditorAIService& service)
     {
-		(void)engine;
+        (void)engine;
 
         // Status indicator
         auto status = service.GetStatus();
@@ -104,36 +104,36 @@ namespace Editor
         }
 
         ImGui::SetNextItemWidth(120.0f);
-		const auto& providers = service.GetProviderCatalog();
-		const std::string& currentId = service.GetCurrentProviderId();
-		std::string currentName = currentId;
-		if (auto current = std::find_if(providers.begin(), providers.end(), [&currentId](const auto& option) { return option.id == currentId; }); current != providers.end()) currentName = current->displayName;
+        const auto& providers = service.GetProviderCatalog();
+        const std::string& currentId = service.GetCurrentProviderId();
+        std::string currentName = currentId;
+        if (auto current = std::find_if(providers.begin(), providers.end(), [&currentId](const auto& option) { return option.id == currentId; }); current != providers.end()) currentName = current->displayName;
 
         if (ImGui::BeginCombo("##ProviderSelect", currentName.c_str()))
         {
             for (const auto& option : providers)
             {
-				const bool isSelected = option.id == currentId;
-				const bool isConfigured = option.configured;
+                const bool isSelected = option.id == currentId;
+                const bool isConfigured = option.configured;
 
                 if (!isConfigured)
                 {
                     ImGui::BeginDisabled();
                 }
 
-				if (ImGui::Selectable(option.displayName.c_str(), isSelected))
+                if (ImGui::Selectable(option.displayName.c_str(), isSelected))
                 {
-					if (!isSelected)
+                    if (!isSelected)
                     {
-						if (service.SelectProvider(option.id))
+                        if (service.SelectProvider(option.id))
                         {
-							chatHistory.push_back({fmt::format("Switched to {} provider", option.displayName), false});
+                            chatHistory.push_back({fmt::format("Switched to {} provider", option.displayName), false});
                             chatScrollToBottom = true;
                         }
                         else
                         {
                             chatHistory.push_back(
-								{fmt::format("Failed to switch to {}: {}", option.displayName, service.GetStatusMessage()), false, true});
+                                {fmt::format("Failed to switch to {}: {}", option.displayName, service.GetStatusMessage()), false, true});
                             chatScrollToBottom = true;
                         }
                     }
@@ -144,7 +144,7 @@ namespace Editor
                     ImGui::EndDisabled();
                     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
                     {
-						ImGui::SetTooltip("Provider is not configured in gnb AI catalog");
+                        ImGui::SetTooltip("Provider is not configured in gnb AI catalog");
                     }
                 }
 

@@ -35,15 +35,15 @@ namespace ScadStudio
     {
     public:
         explicit ScadAIService(NextEngine& engine);
-		~ScadAIService();
+        ~ScadAIService();
 
         bool IsConfigured() const;
         bool IsGenerating() const { return generating_.load(); }
         std::string ProviderName() const;
-		std::string ProviderId() const;
-		std::vector<NextAI::FAIProviderDescriptor> Providers() const;
-		bool IsProviderConfigured(const std::string& providerId) const;
-		bool SwitchProvider(const std::string& providerId);
+        std::string ProviderId() const;
+        std::vector<NextAI::FAIProviderDescriptor> Providers() const;
+        bool IsProviderConfigured(const std::string& providerId) const;
+        bool SwitchProvider(const std::string& providerId);
         std::vector<std::string> CurrentProviderModels() const;
         std::string CurrentModel() const;
         bool SetCurrentModel(const std::string& model);
@@ -76,7 +76,7 @@ namespace ScadStudio
         mutable std::mutex mutex_;
         FScadGenResult pending_;
         std::string streamingText_;
-		std::jthread worker_;
+        std::jthread worker_;
 
         // Plain-text turn history (no embedded source); the live source is injected into
         // the latest user message at request-build time. Main-thread only.

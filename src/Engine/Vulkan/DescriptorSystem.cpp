@@ -134,16 +134,8 @@ DescriptorSets::DescriptorSets(
 
 DescriptorSets::~DescriptorSets()
 {
-    //if (!descriptorSets_.empty())
-    //{
-    //	vkFreeDescriptorSets(
-    //		descriptorPool_.Device().Handle(),
-    //		descriptorPool_.Handle(),
-    //		static_cast<uint32_t>(descriptorSets_.size()),
-    //		descriptorSets_.data());
-
-    //	descriptorSets_.clear();
-    //}
+    // Sets are not freed individually: the pool is created without
+    // VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT and reclaims them on destroy.
 }
 
 VkWriteDescriptorSet DescriptorSets::Bind(const uint32_t index, const uint32_t binding, const VkDescriptorBufferInfo& bufferInfo, uint32_t arrayElement, const uint32_t count) const

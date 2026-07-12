@@ -18,54 +18,54 @@ TextureImage::TextureImage(Vulkan::CommandPool& commandPool,
                            uint32_t size,
                            VkComponentMapping componentMapping)
 {
-	// Create a host staging buffer and copy the image into it.
-	const VkDeviceSize imageSize = size;
-	const auto& device = commandPool.Device();
+    // Create a host staging buffer and copy the image into it.
+    const VkDeviceSize imageSize = size;
+    const auto& device = commandPool.Device();
 
-	// Create the device side image, memory, view and sampler.
-	image_.reset(new Vulkan::Image(device, VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) }, miplevel, format));
-	imageMemory_.reset(new Vulkan::DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-	imageView_.reset(new Vulkan::ImageView(
+    // Create the device side image, memory, view and sampler.
+    image_.reset(new Vulkan::Image(device, VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) }, miplevel, format));
+    imageMemory_.reset(new Vulkan::DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+    imageView_.reset(new Vulkan::ImageView(
         device, image_->Handle(), image_->Format(), VK_IMAGE_ASPECT_COLOR_BIT, miplevel, componentMapping));
-	device.DebugUtils().SetObjectName(image_->Handle(), "TextureImage Image");
-	imageMemory_->SetName("TextureImage Memory");
-	device.DebugUtils().SetObjectName(imageView_->Handle(), "TextureImage ImageView");
-	
-	Vulkan::SamplerConfig samplerConfig;
-	if (format == VK_FORMAT_R32_UINT || format == VK_FORMAT_R32_SINT)
-	{
-		samplerConfig.MagFilter = VK_FILTER_NEAREST;
-		samplerConfig.MinFilter = VK_FILTER_NEAREST;
-		samplerConfig.MipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-	}
-	sampler_.reset(new Vulkan::Sampler(device, samplerConfig));
+    device.DebugUtils().SetObjectName(image_->Handle(), "TextureImage Image");
+    imageMemory_->SetName("TextureImage Memory");
+    device.DebugUtils().SetObjectName(imageView_->Handle(), "TextureImage ImageView");
+    
+    Vulkan::SamplerConfig samplerConfig;
+    if (format == VK_FORMAT_R32_UINT || format == VK_FORMAT_R32_SINT)
+    {
+        samplerConfig.MagFilter = VK_FILTER_NEAREST;
+        samplerConfig.MinFilter = VK_FILTER_NEAREST;
+        samplerConfig.MipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    }
+    sampler_.reset(new Vulkan::Sampler(device, samplerConfig));
 
-	if(data)
-	{
-		auto stagingBuffer = std::make_unique<Vulkan::Buffer>(device, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-		auto stagingBufferMemory = stagingBuffer->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		device.DebugUtils().SetObjectName(stagingBuffer->Handle(), "TextureImage Upload Staging Buffer");
-		stagingBufferMemory.SetName("TextureImage Upload Staging Memory");
+    if(data)
+    {
+        auto stagingBuffer = std::make_unique<Vulkan::Buffer>(device, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+        auto stagingBufferMemory = stagingBuffer->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        device.DebugUtils().SetObjectName(stagingBuffer->Handle(), "TextureImage Upload Staging Buffer");
+        stagingBufferMemory.SetName("TextureImage Upload Staging Memory");
 
-		const auto stagingData = stagingBufferMemory.Map(0, imageSize);
-		std::memcpy(stagingData, data, imageSize);
-		stagingBufferMemory.Unmap();
+        const auto stagingData = stagingBufferMemory.Map(0, imageSize);
+        std::memcpy(stagingData, data, imageSize);
+        stagingBufferMemory.Unmap();
 
 
-		// Transfer the data to device side.
-		image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		image_->CopyFrom(commandPool, *stagingBuffer);
+        // Transfer the data to device side.
+        image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        image_->CopyFrom(commandPool, *stagingBuffer);
 
-		// Delete the buffer before the memory
-		stagingBuffer.reset();
-	}
-	else
-	{
-		image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-	}
+        // Delete the buffer before the memory
+        stagingBuffer.reset();
+    }
+    else
+    {
+        image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    }
 
-	// cannot done this on non-graphicbit queue
-	//image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    // cannot done this on non-graphicbit queue
+    //image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 TextureImage::TextureImage(
@@ -141,13 +141,13 @@ TextureImage::TextureImage(
     // Cannot transition to shader read only on non-graphics queue
     // Will be done in MainThreadPostLoading
 }
-	
+    
 TextureImage::~TextureImage()
 {
-	sampler_.reset();
-	imageView_.reset();
-	image_.reset();
-	imageMemory_.reset();
+    sampler_.reset();
+    imageView_.reset();
+    image_.reset();
+    imageMemory_.reset();
 }
 
 void TextureImage::UpdateDataMainThread(
@@ -213,20 +213,20 @@ void TextureImage::UpdateDataMainThread(
 
 void TextureImage::SetDebugName(const std::string& debugName)
 {
-	const auto& debugUtils = image_->Device().DebugUtils();
-	debugUtils.SetObjectName(image_->Handle(), debugName.c_str());
-	if (imageMemory_)
-	{
-		imageMemory_->SetName((debugName + " Memory").c_str());
-	}
-	if (imageView_)
-	{
-		debugUtils.SetObjectName(imageView_->Handle(), (debugName + " ImageView").c_str());
-	}
+    const auto& debugUtils = image_->Device().DebugUtils();
+    debugUtils.SetObjectName(image_->Handle(), debugName.c_str());
+    if (imageMemory_)
+    {
+        imageMemory_->SetName((debugName + " Memory").c_str());
+    }
+    if (imageView_)
+    {
+        debugUtils.SetObjectName(imageView_->Handle(), (debugName + " ImageView").c_str());
+    }
 }
 
 void TextureImage::MainThreadPostLoading(Vulkan::CommandPool& commandPool)
 {
-	image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 }

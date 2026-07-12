@@ -465,7 +465,7 @@ void StudioSimGameInstance::OnInit()
     // M4 self-test: switch to the local LLM and fire one async probe to confirm the
     // engine -> llama-server link before wiring up the decision scheduler.
     // Prefer the local llama-server for employee decisions.
-	if (auto* ai = NextAI::GetAIService(GetEngine())) ai->SetProfile("simulation");
+    if (auto* ai = NextAI::GetAIService(GetEngine())) ai->SetProfile("simulation");
 }
 
 void StudioSimGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& /*nodes*/,

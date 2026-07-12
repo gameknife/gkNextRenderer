@@ -45,13 +45,13 @@ namespace Editor
         FDeferredEditorAction request;
     };
 
-	struct FGnbProviderOption
-	{
-		std::string id;
-		std::string displayName;
-		std::string defaultModel;
-		bool configured = false;
-	};
+    struct FGnbProviderOption
+    {
+        std::string id;
+        std::string displayName;
+        std::string defaultModel;
+        bool configured = false;
+    };
 
     class FEditorAIService
     {
@@ -86,9 +86,9 @@ namespace Editor
         EEditorAIStatus GetStatus() const { return status_; }
         const std::string& GetStatusMessage() const { return statusMessage_; }
         bool IsAIConfigured() const;
-		const std::vector<FGnbProviderOption>& GetProviderCatalog() const { return providerCatalog_; }
-		const std::string& GetCurrentProviderId() const { return currentProviderId_; }
-		bool SelectProvider(const std::string& providerId);
+        const std::vector<FGnbProviderOption>& GetProviderCatalog() const { return providerCatalog_; }
+        const std::string& GetCurrentProviderId() const { return currentProviderId_; }
+        bool SelectProvider(const std::string& providerId);
 
         const std::vector<FPendingEditorAction>& GetPendingActions() const { return pendingActions_; }
         bool ConfirmPendingAction(uint64_t actionId, EditorContext& ctx);
@@ -110,11 +110,11 @@ namespace Editor
 
     private:
         void EnsureToolRegistry();
-		void RunGnbAgentAsync(const std::string& userPrompt, const EditorContext& ctx);
+        void RunGnbAgentAsync(const std::string& userPrompt, const EditorContext& ctx);
         void HarvestDeferredActions();
         void TrimConversation();
 
-		std::string BuildSystemPrompt(const EditorContext& ctx);
+        std::string BuildSystemPrompt(const EditorContext& ctx);
         std::string BuildSceneContext(const EditorContext& ctx);
         std::string BuildSelectionContext(const EditorContext& ctx);
         std::string BuildSceneAssetCatalog();
@@ -143,13 +143,13 @@ namespace Editor
         NextAI::FToolRegistry toolRegistry_;
         bool toolRegistryInitialized_ = false;
         EditorContext* currentContext_ = nullptr;
-		NextAI::FGnbAgentClient* gnbClient_ = nullptr;
-		std::string gnbSessionId_;
-		std::string activeRunId_;
-		std::jthread runThread_;
-		std::vector<FGnbProviderOption> providerCatalog_;
-		std::string currentProviderId_ = "localllm";
-		std::string currentModelId_;
+        NextAI::FGnbAgentClient* gnbClient_ = nullptr;
+        std::string gnbSessionId_;
+        std::string activeRunId_;
+        std::jthread runThread_;
+        std::vector<FGnbProviderOption> providerCatalog_;
+        std::string currentProviderId_ = "localllm";
+        std::string currentModelId_;
 
         // Persistent multi-turn chat history (user/assistant text turns only). The
         // dynamic system prompt is rebuilt and prepended per request, and agent-loop

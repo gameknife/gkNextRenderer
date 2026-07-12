@@ -45,11 +45,11 @@ namespace NextAI
         std::vector<std::filesystem::path> candidates;
         if (const char* configured = std::getenv("GNB_EXECUTABLE")) candidates.emplace_back(configured);
 #if WIN32
-		candidates.emplace_back(repoRoot / "gnb.exe");
-		candidates.emplace_back(NextRenderer::GetExecutableDirectory() / "gnb.exe");
+        candidates.emplace_back(repoRoot / "gnb.exe");
+        candidates.emplace_back(NextRenderer::GetExecutableDirectory() / "gnb.exe");
 #else
-		candidates.emplace_back(repoRoot / "gnb");
-		candidates.emplace_back(NextRenderer::GetExecutableDirectory() / "gnb");
+        candidates.emplace_back(repoRoot / "gnb");
+        candidates.emplace_back(NextRenderer::GetExecutableDirectory() / "gnb");
 #endif
         for (const auto& candidate : candidates)
         {

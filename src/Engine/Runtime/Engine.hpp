@@ -284,8 +284,8 @@ private:
     void OnScroll(double xoffset, double yoffset);
     void OnDropFile(const char* path);
     void TickGamepadInput();
-	nlohmann::json HandleAgentControlCommand(const std::string& method, const nlohmann::json& params);
-	std::optional<Runtime::Agent::FAgentQueryValue> QueryAgentControl(const std::string& query) const;
+    nlohmann::json HandleAgentControlCommand(const std::string& method, const nlohmann::json& params);
+    std::optional<Runtime::Agent::FAgentQueryValue> QueryAgentControl(const std::string& query) const;
     bool HandleDebugShortcut(SDL_Keycode key);
 
     // Lifecycle helpers
@@ -377,8 +377,8 @@ private:
     FInputState inputState_{};
     FProgressiveRenderState progressiveRender_{};
     FScreenShotState screenShot_{};
-	std::unique_ptr<Runtime::Agent::FAgentControlServer> agentControl_;
-	Runtime::Agent::FAgentQueryRegistry agentQueries_;
+    std::unique_ptr<Runtime::Agent::FAgentControlServer> agentControl_;
+    Runtime::Agent::FAgentQueryRegistry agentQueries_;
     int requestedExitCode_ = 0;
     FTaskQueues taskQueues_{};
     NextRenderer::EApplicationStatus status_{};

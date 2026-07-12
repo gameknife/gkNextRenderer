@@ -94,7 +94,7 @@ void AirportSimGameInstance::OnInit()
     GetEngine().RequestLoadScene({.filename = initialScene});
 
     // 行为决策走本地 llama-server（§5.3）；不可用时全程 fallback。
-	if (auto* ai = NextAI::GetAIService(GetEngine())) ai->SetProfile("simulation");
+    if (auto* ai = NextAI::GetAIService(GetEngine())) ai->SetProfile("simulation");
 }
 
 void AirportSimGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& /*nodes*/,

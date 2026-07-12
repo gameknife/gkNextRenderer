@@ -723,7 +723,7 @@ namespace Vulkan
 #if WIN32 && GK_ENABLE_SHADER_CLOCK
         indexingFeatures.pNext = &shaderClockFeatures;
 #else
-	indexingFeatures.pNext = nextDeviceFeatures;
+    indexingFeatures.pNext = nextDeviceFeatures;
 #endif
         indexingFeatures.runtimeDescriptorArray = supportedIndexingFeatures.runtimeDescriptorArray;
         indexingFeatures.shaderSampledImageArrayNonUniformIndexing = supportedIndexingFeatures.shaderSampledImageArrayNonUniformIndexing;

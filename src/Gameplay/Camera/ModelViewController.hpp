@@ -32,96 +32,96 @@ class ModelViewController final
 {
 public:
 
-	 void Reset(const Assets::Camera& RenderCamera);
+     void Reset(const Assets::Camera& RenderCamera);
 
-	 glm::mat4 ModelView() const;
-	 float FieldOfView() const { return fieldOfView_; }
-	 glm::vec4 Position() const { return position_; }
+     glm::mat4 ModelView() const;
+     float FieldOfView() const { return fieldOfView_; }
+     glm::vec4 Position() const { return position_; }
 
-	 bool OnKey(SDL_Event& event);
-	 bool OnCursorPosition(double xpos, double ypos);
-	 bool OnMouseButton(SDL_Event& event);
-	 bool OnTouch(bool down, double xpos, double ypos);
-	 void OnScroll(double xoffset, double yoffset);
+     bool OnKey(SDL_Event& event);
+     bool OnCursorPosition(double xpos, double ypos);
+     bool OnMouseButton(SDL_Event& event);
+     bool OnTouch(bool down, double xpos, double ypos);
+     void OnScroll(double xoffset, double yoffset);
 
      void SetKeyHeld(SDL_Keycode key, bool held);
      void ApplyMouseMove(double x, double y, bool relative);
      void ApplyMouseButton(uint8_t button, bool down, double x, double y);
      void ApplyWheel(double xoffset, double yoffset);
 
-	 bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY,
-	                    int16_t rightStickX, int16_t rightStickY,
-	                    int16_t leftTrigger, int16_t rightTrigger);
-	 bool UpdateCamera(double speed, double timeDelta);
+     bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY,
+                        int16_t rightStickX, int16_t rightStickY,
+                        int16_t leftTrigger, int16_t rightTrigger);
+     bool UpdateCamera(double speed, double timeDelta);
 
-	void SetModelRotation(double x, double y)
-	{
-		modelRotX_ = x;
-		modelRotY_ = y;
-	}
+    void SetModelRotation(double x, double y)
+    {
+        modelRotX_ = x;
+        modelRotY_ = y;
+    }
 
     void SetOrbitTarget(std::optional<glm::vec3> target) { orbitTarget_ = target; }
     void SetAltPressed(bool pressed) { altPressed_ = pressed; }
     void Focus(const glm::vec3& focusPoint, float radius = 0.5f);
 
-	glm::vec3 GetRight() const;
-	glm::vec3 GetUp() const;
-	glm::vec3 GetForward() const;
-	glm::vec3 GetPosition() const;
+    glm::vec3 GetRight() const;
+    glm::vec3 GetUp() const;
+    glm::vec3 GetForward() const;
+    glm::vec3 GetPosition() const;
 
 private:
 
-	void MoveForward(float d);
-	void MoveRight(float d);
-	void MoveUp(float d);
-	void Rotate(float y, float x);
+    void MoveForward(float d);
+    void MoveRight(float d);
+    void MoveUp(float d);
+    void Rotate(float y, float x);
     void Orbit(float x, float y);
-	void UpdateVectors();
+    void UpdateVectors();
 
-	// Matrices and vectors.
-	glm::mat4 orientation_{};
+    // Matrices and vectors.
+    glm::mat4 orientation_{};
 
-	glm::vec4 position_{};
-	glm::vec4 right_{ 1, 0, 0, 0 };
-	glm::vec4 up_{ 0, 1, 0, 0 };
-	glm::vec4 forward_{ 0, 0, -1, 0 };
+    glm::vec4 position_{};
+    glm::vec4 right_{ 1, 0, 0, 0 };
+    glm::vec4 up_{ 0, 1, 0, 0 };
+    glm::vec4 forward_{ 0, 0, -1, 0 };
 
     // Orbit control
     std::optional<glm::vec3> orbitTarget_;
     bool altPressed_{};
 
-	// Focus animation
+    // Focus animation
     FocusAnimation focusAnimation_;
 
     // Movement input (replaces 12 bools)
     MovementInput keyboardInput_;
     MovementInput gamepadInput_;
 
-	// with smooth movement
-	double cameraRotX_{};
-	double cameraRotY_{};
+    // with smooth movement
+    double cameraRotX_{};
+    double cameraRotY_{};
     double cameraRotXAbs_{};
     double cameraRotYAbs_{};
-	double modelRotX_{};
-	double modelRotY_{};
+    double modelRotX_{};
+    double modelRotY_{};
 
-	double rawCameraRotX_ {};
-	double rawCameraRotY_ {};
-	double rawModelRotX_ {};
-	double rawModelRotY_ {};
-	
-	double mousePosX_{};
-	double mousePosY_{};
+    double rawCameraRotX_ {};
+    double rawCameraRotY_ {};
+    double rawModelRotX_ {};
+    double rawModelRotY_ {};
+    
+    double mousePosX_{};
+    double mousePosY_{};
 
-	bool resetMousePos_{};
-	bool mouseLeftPressed_{};
-	bool mouseRightPressed_{};
+    bool resetMousePos_{};
+    bool mouseLeftPressed_{};
+    bool mouseRightPressed_{};
 
-	double mouseSensitive_ {};
+    double mouseSensitive_ {};
 
-	float fieldOfView_ {};
+    float fieldOfView_ {};
 
-	bool movedByEvent_ {};
+    bool movedByEvent_ {};
 };
 
 }

@@ -192,64 +192,64 @@ void RenderPass::SetDebugName(const std::string& name)
 
 FrameBuffer::FrameBuffer(const VkExtent2D& extent, const class ImageView& imageView, const class RenderPass& renderPass, bool withDS ) : device_(imageView.Device())
 {
-	std::vector<VkImageView> attachments;
-	attachments.push_back(imageView.Handle());
-	if(withDS)
-	{
-		attachments.push_back( renderPass.DepthBuffer().ImageView().Handle() );
-	}
+    std::vector<VkImageView> attachments;
+    attachments.push_back(imageView.Handle());
+    if(withDS)
+    {
+        attachments.push_back( renderPass.DepthBuffer().ImageView().Handle() );
+    }
 
-	VkFramebufferCreateInfo framebufferInfo = {};
-	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-	framebufferInfo.renderPass = renderPass.Handle();
-	framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-	framebufferInfo.pAttachments = attachments.data();
-	framebufferInfo.width = extent.width;
-	framebufferInfo.height = extent.height;
-	framebufferInfo.layers = 1;
+    VkFramebufferCreateInfo framebufferInfo = {};
+    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.renderPass = renderPass.Handle();
+    framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+    framebufferInfo.pAttachments = attachments.data();
+    framebufferInfo.width = extent.width;
+    framebufferInfo.height = extent.height;
+    framebufferInfo.layers = 1;
 
-	Check(vkCreateFramebuffer(imageView.Device().Handle(), &framebufferInfo, nullptr, &framebuffer_),
-		"create framebuffer");
+    Check(vkCreateFramebuffer(imageView.Device().Handle(), &framebufferInfo, nullptr, &framebuffer_),
+        "create framebuffer");
 }
 
 FrameBuffer::FrameBuffer(const VkExtent2D& extent, const Vulkan::ImageView& imageView, const Vulkan::ImageView& imageView1,
 const Vulkan::ImageView& imageView2, const Vulkan::RenderPass& renderPass): device_(imageView.Device())
 {
-	std::array<VkImageView, 4> attachments =
-	{
-		imageView.Handle(),
-		imageView1.Handle(),
-		imageView2.Handle(),
-		renderPass.DepthBuffer().ImageView().Handle()
-	};
+    std::array<VkImageView, 4> attachments =
+    {
+        imageView.Handle(),
+        imageView1.Handle(),
+        imageView2.Handle(),
+        renderPass.DepthBuffer().ImageView().Handle()
+    };
 
-	VkFramebufferCreateInfo framebufferInfo = {};
-	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-	framebufferInfo.renderPass = renderPass.Handle();
-	framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-	framebufferInfo.pAttachments = attachments.data();
-	framebufferInfo.width = extent.width;
-	framebufferInfo.height = extent.height;
-	framebufferInfo.layers = 1;
+    VkFramebufferCreateInfo framebufferInfo = {};
+    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.renderPass = renderPass.Handle();
+    framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+    framebufferInfo.pAttachments = attachments.data();
+    framebufferInfo.width = extent.width;
+    framebufferInfo.height = extent.height;
+    framebufferInfo.layers = 1;
 
-	Check(vkCreateFramebuffer(imageView.Device().Handle(), &framebufferInfo, nullptr, &framebuffer_),
-		"create framebuffer");
+    Check(vkCreateFramebuffer(imageView.Device().Handle(), &framebufferInfo, nullptr, &framebuffer_),
+        "create framebuffer");
 }
 
 FrameBuffer::FrameBuffer(FrameBuffer&& other) noexcept :
-	device_(other.device_),
-	framebuffer_(other.framebuffer_)
+    device_(other.device_),
+    framebuffer_(other.framebuffer_)
 {
-	other.framebuffer_ = nullptr;
+    other.framebuffer_ = nullptr;
 }
 
 FrameBuffer::~FrameBuffer()
 {
-	if (framebuffer_ != nullptr)
-	{
-		vkDestroyFramebuffer(device_.Handle(), framebuffer_, nullptr);
-		framebuffer_ = nullptr;
-	}
+    if (framebuffer_ != nullptr)
+    {
+        vkDestroyFramebuffer(device_.Handle(), framebuffer_, nullptr);
+        framebuffer_ = nullptr;
+    }
 }
 
 // ============================================================================
@@ -257,66 +257,66 @@ FrameBuffer::~FrameBuffer()
 // ============================================================================
 
 PipelineLayout::PipelineLayout(const Device& device, const std::vector<DescriptorSetManager*> managers, uint32_t maxSets, const VkPushConstantRange* pushConstantRanges,
-	uint32_t pushConstantRangeCount) : device_(device)
+    uint32_t pushConstantRangeCount) : device_(device)
 {
-	for ( DescriptorSetManager* manager : managers )
-	{
-		cachedDescriptorSetLayouts_.push_back(manager->DescriptorSetLayout().Handle());
-	}
+    for ( DescriptorSetManager* manager : managers )
+    {
+        cachedDescriptorSetLayouts_.push_back(manager->DescriptorSetLayout().Handle());
+    }
 
-	cachedDescriptorSets_.resize(maxSets);
-	for( uint32_t i = 0; i < maxSets; ++i )
-	{
-		for ( DescriptorSetManager* manager : managers )
-		{
-			cachedDescriptorSets_[i].push_back(manager->DescriptorSets().Handle(i));
-		}
-	}
-	CreateLayout(pushConstantRanges, pushConstantRangeCount);
+    cachedDescriptorSets_.resize(maxSets);
+    for( uint32_t i = 0; i < maxSets; ++i )
+    {
+        for ( DescriptorSetManager* manager : managers )
+        {
+            cachedDescriptorSets_[i].push_back(manager->DescriptorSets().Handle(i));
+        }
+    }
+    CreateLayout(pushConstantRanges, pushConstantRangeCount);
 }
 
 PipelineLayout::PipelineLayout(const Device & device, const DescriptorSetLayout& descriptorSetLayout, const VkPushConstantRange* pushConstantRanges, uint32_t pushConstantRangeCount) :
-	device_(device)
+    device_(device)
 {
-	// add the global texture set with set = 1, currently an ugly impl
-	Assets::GlobalTexturePool* gPool = Assets::GlobalTexturePool::GetInstance();
-	cachedDescriptorSetLayouts_ = { descriptorSetLayout.Handle(), gPool->Layout() };
+    // add the global texture set with set = 1, currently an ugly impl
+    Assets::GlobalTexturePool* gPool = Assets::GlobalTexturePool::GetInstance();
+    cachedDescriptorSetLayouts_ = { descriptorSetLayout.Handle(), gPool->Layout() };
 
-	CreateLayout(pushConstantRanges, pushConstantRangeCount);
+    CreateLayout(pushConstantRanges, pushConstantRangeCount);
 }
 
 PipelineLayout::PipelineLayout(const Device& device, const VkPushConstantRange* pushConstantRanges,
-	uint32_t pushConstantRangeCount) : device_(device)
+    uint32_t pushConstantRangeCount) : device_(device)
 {
-	CreateLayout(pushConstantRanges, pushConstantRangeCount);
+    CreateLayout(pushConstantRanges, pushConstantRangeCount);
 }
 
 void PipelineLayout::CreateLayout(const VkPushConstantRange* pushConstantRanges, uint32_t pushConstantRangeCount)
 {
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(cachedDescriptorSetLayouts_.size());
-	pipelineLayoutInfo.pSetLayouts = cachedDescriptorSetLayouts_.empty() ? nullptr : cachedDescriptorSetLayouts_.data();
-	pipelineLayoutInfo.pushConstantRangeCount = pushConstantRangeCount;
-	pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges;
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(cachedDescriptorSetLayouts_.size());
+    pipelineLayoutInfo.pSetLayouts = cachedDescriptorSetLayouts_.empty() ? nullptr : cachedDescriptorSetLayouts_.data();
+    pipelineLayoutInfo.pushConstantRangeCount = pushConstantRangeCount;
+    pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges;
 
-	Check(vkCreatePipelineLayout(device_.Handle(), &pipelineLayoutInfo, nullptr, &pipelineLayout_),
-		"create pipeline layout");
+    Check(vkCreatePipelineLayout(device_.Handle(), &pipelineLayoutInfo, nullptr, &pipelineLayout_),
+        "create pipeline layout");
 }
 
 PipelineLayout::~PipelineLayout()
 {
-	if (pipelineLayout_ != nullptr)
-	{
-		vkDestroyPipelineLayout(device_.Handle(), pipelineLayout_, nullptr);
-		pipelineLayout_ = nullptr;
-	}
+    if (pipelineLayout_ != nullptr)
+    {
+        vkDestroyPipelineLayout(device_.Handle(), pipelineLayout_, nullptr);
+        pipelineLayout_ = nullptr;
+    }
 }
 
 void PipelineLayout::BindDescriptorSets(VkCommandBuffer commandBuffer, uint32_t idx, VkPipelineBindPoint bindPoint) const
 {
-	vkCmdBindDescriptorSets( commandBuffer, bindPoint,Handle(), 0,
-						 static_cast<uint32_t>(cachedDescriptorSets_[idx].size()), cachedDescriptorSets_[idx].data(), 0, nullptr );
+    vkCmdBindDescriptorSets( commandBuffer, bindPoint,Handle(), 0,
+                         static_cast<uint32_t>(cachedDescriptorSets_[idx].size()), cachedDescriptorSets_[idx].data(), 0, nullptr );
 
 }
 

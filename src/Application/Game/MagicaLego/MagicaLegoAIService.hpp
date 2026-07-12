@@ -44,7 +44,7 @@ namespace MagicaLego
     {
     public:
         explicit FAIService(MagicaLegoGameInstance* gi);
-		~FAIService();
+        ~FAIService();
 
         bool LoadConfig();
         bool IsConfigured() const;
@@ -66,10 +66,10 @@ namespace MagicaLego
         std::vector<FColorSemantic> GetColorSemantics();
 
         std::string GetProviderName() const;
-		std::string GetProviderId() const;
-		bool SwitchProvider(const std::string& providerId);
-		bool IsProviderConfigured(const std::string& providerId) const;
-		std::vector<NextAI::FAIProviderDescriptor> GetAvailableProviders() const;
+        std::string GetProviderId() const;
+        bool SwitchProvider(const std::string& providerId);
+        bool IsProviderConfigured(const std::string& providerId) const;
+        std::vector<NextAI::FAIProviderDescriptor> GetAvailableProviders() const;
 
     private:
         std::string BuildSystemPrompt();
@@ -85,6 +85,6 @@ namespace MagicaLego
         std::atomic<bool> hasPendingResult_{false};
         FAIResponse pendingResult_;
         std::mutex resultMutex_;
-		std::jthread worker_;
+        std::jthread worker_;
     };
 }

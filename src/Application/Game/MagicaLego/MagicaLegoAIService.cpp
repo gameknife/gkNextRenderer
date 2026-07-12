@@ -43,7 +43,7 @@ namespace MagicaLego
         if (gameInstance_)
         {
             aiService_ = NextAI::GetAIService(gameInstance_->GetEngine());
-			if (aiService_) aiService_->SetProfile("magicalego-script");
+            if (aiService_) aiService_->SetProfile("magicalego-script");
         }
 
         if (aiService_)
@@ -52,10 +52,10 @@ namespace MagicaLego
         }
     }
 
-	FAIService::~FAIService()
-	{
-		if (worker_.joinable()) { worker_.request_stop(); worker_.join(); }
-	}
+    FAIService::~FAIService()
+    {
+        if (worker_.joinable()) { worker_.request_stop(); worker_.join(); }
+    }
 
     bool FAIService::LoadConfig()
     {
@@ -88,24 +88,24 @@ namespace MagicaLego
         return aiService_ ? aiService_->GetProviderName() : "None";
     }
 
-	std::string FAIService::GetProviderId() const
+    std::string FAIService::GetProviderId() const
     {
-		return aiService_ ? aiService_->GetProviderId() : std::string();
+        return aiService_ ? aiService_->GetProviderId() : std::string();
     }
 
-	bool FAIService::SwitchProvider(const std::string& providerId)
+    bool FAIService::SwitchProvider(const std::string& providerId)
     {
-		return aiService_ ? aiService_->SwitchProvider(providerId) : false;
+        return aiService_ ? aiService_->SwitchProvider(providerId) : false;
     }
 
-	bool FAIService::IsProviderConfigured(const std::string& providerId) const
+    bool FAIService::IsProviderConfigured(const std::string& providerId) const
     {
-		return aiService_ ? aiService_->IsProviderConfigured(providerId) : false;
+        return aiService_ ? aiService_->IsProviderConfigured(providerId) : false;
     }
 
-	std::vector<NextAI::FAIProviderDescriptor> FAIService::GetAvailableProviders() const
+    std::vector<NextAI::FAIProviderDescriptor> FAIService::GetAvailableProviders() const
     {
-		return aiService_ ? aiService_->GetAvailableProviders() : std::vector<NextAI::FAIProviderDescriptor>{};
+        return aiService_ ? aiService_->GetAvailableProviders() : std::vector<NextAI::FAIProviderDescriptor>{};
     }
 
     FColorSemantic FAIService::AnalyzeColor(const std::string& colorCode, glm::vec4 rgba)
@@ -597,7 +597,7 @@ Based on the existing scene above, generate ADDITIONAL script to fulfill the use
     void FAIService::GenerateScriptAsync(const std::string& prompt,
                                          std::function<void(FAIResponse)> callback)
     {
-		if (worker_.joinable()) worker_.join();
+        if (worker_.joinable()) worker_.join();
         worker_ = std::jthread([this, prompt, callback](std::stop_token)
         {
             auto response = CallProvider(prompt);
@@ -624,7 +624,7 @@ Based on the existing scene above, generate ADDITIONAL script to fulfill the use
     void FAIService::GenerateScriptWithContextAsync(const std::string& prompt,
                                                     std::function<void(FAIResponse)> callback)
     {
-		if (worker_.joinable()) worker_.join();
+        if (worker_.joinable()) worker_.join();
         worker_ = std::jthread([this, prompt, callback](std::stop_token)
         {
             std::string contextPrompt = BuildContextPrompt(prompt);
