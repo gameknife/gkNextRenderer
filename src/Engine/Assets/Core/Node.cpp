@@ -1,11 +1,11 @@
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Reflection/PropertyMeta.h"
+#include "Engine/Runtime/Reflection/PropertyMeta.hpp"
 #include <entt/meta/factory.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>

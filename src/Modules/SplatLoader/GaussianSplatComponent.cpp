@@ -1,6 +1,6 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Modules/SplatLoader/GaussianSplatComponent.h"
-#include "Engine/Runtime/Reflection/PropertyMeta.h"
+#include "Engine/Runtime/Reflection/PropertyMeta.hpp"
 
 #include <entt/meta/factory.hpp>
 

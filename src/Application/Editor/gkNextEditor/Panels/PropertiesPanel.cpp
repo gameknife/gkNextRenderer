@@ -1,15 +1,15 @@
 #include "EditorUi.hpp"
 #include "Panels/PropertyWidgets.h"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Modules/DevTools/Command/RenameNodeCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Modules/DevTools/ProfessionalUI.hpp"
-#include "Engine/Runtime/Reflection/PropertyAccessor.h"
+#include "Engine/Runtime/Reflection/PropertyAccessor.hpp"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 

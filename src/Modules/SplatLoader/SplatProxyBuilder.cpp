@@ -3,8 +3,8 @@
 
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/Core/Model.hpp"
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Modules/SplatLoader/GaussianSplat.hpp"
 #include "Modules/SplatLoader/GaussianSplatComponent.h"

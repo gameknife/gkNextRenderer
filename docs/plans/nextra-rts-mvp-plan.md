@@ -52,7 +52,7 @@ last_updated: 2026-06-26
 任务：
 - [x] 在 [`src/CMakeLists.txt`](../../src/CMakeLists.txt) 加 `add_executable(NextRA ...)`（参照 `CharacterDemo` `:206`、链接 `:602` 段），`target_include_directories` + `DEV_MODE=1`，链接 `gkNextEngine`。
 - [x] `NextRAGameInstance.{hpp,cpp}` 继承 `NextGameInstanceBase`（[`GameInstance.hpp:20`](../../src/Engine/Runtime/GameInstance.hpp)），实现 `OnInit/OnTick/OnDestroy/OnRenderUI` 空壳 + `CreateGameInstance`（参照 [`CharacterDemoGameInstance.cpp:32`](../../src/Application/Game/CharacterDemo/CharacterDemoGameInstance.cpp)）。
-- [x] `BeforeSceneRebuild`（[`GameInstance.hpp:36`](../../src/Engine/Runtime/GameInstance.hpp)）注入：大平面地形（`FProcModel::CreateBox` 扁盒，[`FProcModel.h:11`](../../src/Engine/Assets/Loaders/FProcModel.h)）+ 几个彩色盒（`SceneBuilder::AddLambertianMaterial`/`CreateRenderNode`，[`SceneBuilder.h:12/17`](../../src/Engine/Runtime/Scene/SceneBuilder.h)）。
+- [x] `BeforeSceneRebuild`（[`GameInstance.hpp:36`](../../src/Engine/Runtime/GameInstance.hpp)）注入：大平面地形（`FProcModel::CreateBox` 扁盒，[`FProcModel.h:11`](../../src/Engine/Assets/Loaders/FProcModel.hpp)）+ 几个彩色盒（`SceneBuilder::AddLambertianMaterial`/`CreateRenderNode`，[`SceneBuilder.h:12/17`](../../src/Engine/Runtime/Scene/SceneBuilder.hpp)）。
 - [x] `RtsCamera` + `OverrideRenderCamera`：固定俯角，WASD / 边缘平移、滚轮缩放。
 
 **验收**：`./gnb build NextRA` 通过；`./gnb run NextRA` 显示俯视地面 + 盒子，相机可平移缩放；`gnb shot --target NextRA` 截图正确。
@@ -69,7 +69,7 @@ last_updated: 2026-06-26
 - [x] `Sim/SimComponents.h`：`FSimTransform/FOwner/FHealth/FMobile/...`（§5.6，先用到的几个）。
 - [x] `Sim/SimWorld.{h,cpp}`：独立 `entt::registry` + `Step(tick)` + 系统编排骨架（先只有 Movement）+ 稳定 actor 列表（§5.6 遍历顺序）。
 - [x] `NextRAGameInstance::OnTick` 接入固定 tick 累加器（`SIM_HZ=20`，§5.4），算 `renderAlpha`。
-- [x] `Render/RenderProxySystem`：sim actor ↔ 渲染 node 映射（`FRenderLink`），每帧 `lerp(prevPos,currPos,alpha)` 写 `Node::SetTranslation`（[`Node.h:25`](../../src/Engine/Assets/Core/Node.h)）。
+- [x] `Render/RenderProxySystem`：sim actor ↔ 渲染 node 映射（`FRenderLink`），每帧 `lerp(prevPos,currPos,alpha)` 写 `Node::SetTranslation`（[`Node.h:25`](../../src/Engine/Assets/Core/Node.hpp)）。
 - [x] 把 `Fixed/WMath` 纯逻辑加入 `gkNextUnitTests` 源集，写定点 / 坐标转换单测。
 
 **验收**：一个盒子在 sim 中定点匀速移动，渲染丝滑无抖动；`gkNextUnitTests` 定点 / 坐标用例绿；改 sim 步长 / 帧率插值仍正确。
@@ -83,7 +83,7 @@ last_updated: 2026-06-26
 任务：
 - [x] `Net/Order.h`：`FOrder` + 序列化往返（§6.1）。
 - [x] `Net/OrderManager`（单机最小版）：收集本地 order，`GetExecOrders(tick)` 直接返回本 tick（latency=0）。
-- [x] 输入：左键单击选 / 拖框多选（`RayCastGPU` [`Engine.hpp:156`](../../src/Engine/Runtime/Engine.hpp) 或 CPU `RayCastInCPU` [`CPUAccelerationStructure.h:127`](../../src/Engine/Assets/Acceleration/CPUAccelerationStructure.h)）；右键地面 → `Move` order（命中点 float→`WPos`，§8）。
+- [x] 输入：左键单击选 / 拖框多选（`RayCastGPU` [`Engine.hpp:156`](../../src/Engine/Runtime/Engine.hpp) 或 CPU `RayCastInCPU` [`CPUAccelerationStructure.h:127`](../../src/Engine/Assets/Acceleration/CPUAccelerationStructure.hpp)）；右键地面 → `Move` order（命中点 float→`WPos`，§8）。
 - [x] `Sim/PathfindGrid.{h,cpp}`：定点格子 A\*（确定性 tie-break，§5.5）。
 - [x] `Systems/OrderApplySystem` + `Systems/MovementSystem`：order 落 goal → A\* 路径 → `FMobile` 逐 tick 沿 waypoint 定点推进。
 - [x] 选择表现：选中圈（`Render/NextRAHud` 起步）。

@@ -1,5 +1,5 @@
 #pragma once
-#include "Engine/Runtime/Reflection/PropertyMeta.h"
+#include "Engine/Runtime/Reflection/PropertyMeta.hpp"
 #include <string>
 #include <cstdint>
 

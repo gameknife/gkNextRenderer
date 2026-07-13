@@ -2,7 +2,7 @@
 #include "Modules/SplatLoader/GaussianSplatPass.hpp"
 
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"

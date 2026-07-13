@@ -1,4 +1,4 @@
-#include "Engine/Runtime/Editor/ImGuiScaling.h"
+#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
 
 #include <algorithm>
 

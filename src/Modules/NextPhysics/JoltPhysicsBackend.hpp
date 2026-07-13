@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 
 struct FNextPhysicsContext;
 

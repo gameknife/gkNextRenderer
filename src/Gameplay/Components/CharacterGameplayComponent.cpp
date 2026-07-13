@@ -1,7 +1,7 @@
 #include "Gameplay/Components/CharacterGameplayComponent.h"
 
-#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
-#include "Engine/Runtime/Reflection/PropertyMeta.h"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
+#include "Engine/Runtime/Reflection/PropertyMeta.hpp"
 
 #include <entt/meta/factory.hpp>
 

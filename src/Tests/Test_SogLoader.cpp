@@ -2,7 +2,7 @@
 #include <catch2/catch_approx.hpp>
 
 #include "Modules/SplatLoader/FSplatQuant.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Modules/SplatLoader/GaussianSplatComponent.h"
 #include "Modules/SplatLoader/SplatModule.hpp"
 #include "Engine/Utilities/FileHelper.hpp"

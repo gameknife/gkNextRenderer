@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 
 namespace Assets { class Node; }
 

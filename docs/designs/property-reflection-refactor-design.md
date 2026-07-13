@@ -349,11 +349,11 @@ namespace Reflection {
 
 | 角色 | 文件:行号 |
 | --- | --- |
-| 组件声明宏 | `src/Engine/Runtime/Reflection/ReflectionMacros.h:5` |
-| 元数据结构/预设 | `src/Engine/Runtime/Reflection/PropertyMeta.h:46` |
+| 组件声明宏 | `src/Engine/Runtime/Reflection/ReflectionMacros.hpp:5` |
+| 元数据结构/预设 | `src/Engine/Runtime/Reflection/PropertyMeta.hpp:46` |
 | 类型枚举/PropertyInfo | `src/Engine/Runtime/Reflection/PropertyTypes.h` |
 | 属性访问/类型推导 | `src/Engine/Runtime/Reflection/PropertyAccessor.cpp:201`、`:30` |
-| GLM/容器注册 | `src/Engine/Runtime/Reflection/GlmTypeSupport.h:10`、`:49` |
+| GLM/容器注册 | `src/Engine/Runtime/Reflection/GlmTypeSupport.hpp:10`、`:49` |
 | 中心注册清单 | `src/Engine/Runtime/Reflection/ReflectionRegistry.cpp:29`；`src/Gameplay/Reflection/GameplayReflectionRegistry.cpp` |
 | 注册样例（繁杂代表） | `src/Engine/Runtime/Components/RenderComponent.cpp:14`、`src/Gameplay/Components/AIAgentComponent.cpp` |
 | 编辑器消费/派发 switch | `src/Application/Editor/gkNextEditor/Panels/PropertiesPanel.cpp:426`；`Panels/PropertyWidgets.cpp:146`、`:958` |

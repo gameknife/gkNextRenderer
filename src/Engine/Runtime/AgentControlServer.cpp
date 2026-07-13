@@ -6,7 +6,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/AgentControlServer.hpp"
 
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 
 #include <future>
 #if !WIN32

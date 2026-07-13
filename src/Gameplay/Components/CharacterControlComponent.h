@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Assets/Core/Component.h"
+#include "Engine/Assets/Core/Component.hpp"
 #include "Gameplay/Gameplay/GameplayTypes.h"
-#include "Engine/Runtime/Reflection/ReflectionMacros.h"
+#include "Engine/Runtime/Reflection/ReflectionMacros.hpp"
 
 #include <glm/glm.hpp>
 

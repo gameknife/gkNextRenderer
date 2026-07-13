@@ -1,6 +1,6 @@
 #include "Brotato3DDataLoader.hpp"
 
-#include "Engine/Runtime/Utilities/JsonHelpers.h"
+#include "Engine/Runtime/Utilities/JsonHelpers.hpp"
 
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>

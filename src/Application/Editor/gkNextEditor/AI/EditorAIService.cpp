@@ -1,11 +1,11 @@
 #include "AI/EditorAIService.hpp"
 #include "AI/EditorTools.hpp"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "EditorContext.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Reflection/PropertyAccessor.h"
+#include "Engine/Runtime/Reflection/PropertyAccessor.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Modules/NextQuickJS/NextQuickJSModule.hpp"
 #include "Modules/NextQuickJS/QuickJSEngine.hpp"

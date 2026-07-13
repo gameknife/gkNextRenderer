@@ -1,6 +1,6 @@
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
-#include "Engine/Assets/Loaders/LoaderUtils.h"
+#include "Engine/Assets/Loaders/LoaderUtils.hpp"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>

@@ -14,15 +14,15 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Engine/Assets/Core/Model.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Assets/Loaders/FProcModel.h"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Interface/AgentQueries.hpp"
-#include "Engine/Runtime/Scene/NodeUtils.h"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
 
 namespace

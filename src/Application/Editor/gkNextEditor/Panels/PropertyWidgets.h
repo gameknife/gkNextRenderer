@@ -1,10 +1,10 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/Reflection/PropertyTypes.h"
-#include "Engine/Runtime/Reflection/PropertyAccessor.h"
+#include "Engine/Runtime/Reflection/PropertyTypes.hpp"
+#include "Engine/Runtime/Reflection/PropertyAccessor.hpp"
 #include "Engine/Runtime/Command/CommandHistory.hpp"
-#include "Engine/Assets/Core/Component.h"
+#include "Engine/Assets/Core/Component.hpp"
 
 #include <imgui.h>
 #include <string>

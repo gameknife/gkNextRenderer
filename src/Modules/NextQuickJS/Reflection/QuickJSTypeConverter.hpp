@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Engine/Runtime/Reflection/PropertyTypes.h"
+#include "Engine/Runtime/Reflection/PropertyTypes.hpp"
 #include <entt/meta/meta.hpp>
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
 #include <glm/glm.hpp>

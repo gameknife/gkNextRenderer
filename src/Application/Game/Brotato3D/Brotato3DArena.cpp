@@ -1,12 +1,12 @@
 #include "Brotato3DArena.hpp"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Data/Material.hpp"
-#include "Engine/Assets/Loaders/FProcModel.h"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Brotato3DDataLoader.hpp"
 #include "Brotato3DPcgGenerator.hpp"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
 
 #include <cmath>
 #include <limits>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Engine/Runtime/Reflection/PropertyAccessor.h"
+#include "Engine/Runtime/Reflection/PropertyAccessor.hpp"
 #include "Modules/NextQuickJS/Reflection/QuickJSTypeConverter.hpp"
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
 #include <entt/meta/meta.hpp>

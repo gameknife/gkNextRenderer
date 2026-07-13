@@ -1,10 +1,10 @@
 #include "BrickPlayerGameInstance.hpp"
 #include "BrickPlayerSnapLogic.hpp"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Modules/LDrawLoader/FLDrawTypes.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 
 #include <imgui.h>
 

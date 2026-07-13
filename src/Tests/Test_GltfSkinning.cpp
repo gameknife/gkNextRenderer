@@ -28,7 +28,7 @@ TEST_CASE("Load glTF Skinning Data", "[Assets][glTF]")
     REQUIRE(models[0].CPUWeights().size() > 0);
 }
 
-#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 
 TEST_CASE("SkinnedMeshComponent Animation Playback", "[Runtime][Animation]") {
     Assets::Skeleton skeleton;

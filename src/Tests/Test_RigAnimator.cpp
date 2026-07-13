@@ -1,6 +1,6 @@
 #include <catch2/catch_all.hpp>
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Data/RigAsset.hpp"
 #include "Gameplay/Rig/RigInstance.h"
 

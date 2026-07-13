@@ -2,7 +2,7 @@
 #include <imgui.h>
 #include "Modules/DevTools/GizmoController.hpp"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Modules/DevTools/Command/DuplicateNodesCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"

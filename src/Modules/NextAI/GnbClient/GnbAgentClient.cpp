@@ -1,6 +1,6 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Modules/NextAI/GnbClient/GnbAgentClient.hpp"
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 
 #include <cstdlib>
 

@@ -1,7 +1,7 @@
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #if GK_MODULE_GLTFLOADER
 #include "Modules/GltfLoader/GltfModule.hpp"
 #endif

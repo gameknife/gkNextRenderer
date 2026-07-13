@@ -2,7 +2,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include <cfloat>
 
-#include "Engine/Assets/Loaders/LoaderUtils.h"
+#include "Engine/Assets/Loaders/LoaderUtils.hpp"
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -22,10 +22,10 @@
 #include <tiny_gltf.h>
 
 #include "Engine/Assets/Data/Material.hpp"
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/EnvironmentComponent.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/SceneReferenceComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/EnvironmentComponent.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/SceneReferenceComponent.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 namespace Assets

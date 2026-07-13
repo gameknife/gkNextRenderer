@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Engine/Assets/Core/Component.h"
+#include "Engine/Assets/Core/Component.hpp"
 #include "Engine/Assets/Core/Model.hpp"
-#include "Engine/Runtime/Reflection/ReflectionMacros.h"
+#include "Engine/Runtime/Reflection/ReflectionMacros.hpp"
 
 namespace Runtime
 {

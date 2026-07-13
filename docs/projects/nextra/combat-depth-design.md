@@ -129,8 +129,8 @@ node->SetRotation(glm::slerp(angleAxis(prevYaw, up), angleAxis(currYaw, up), alp
 
 | 能力 | 复用 | 新建 |
 | --- | --- | --- |
-| 父子层级 transform 传播 | `Node::SetParent/AddChild`（[`Node.h:53-60`](../../src/Engine/Assets/Core/Node.h)）、`RecalcTransform` 递归（[`Node.cpp:92-112`](../../src/Engine/Assets/Core/Node.cpp)） | — |
-| proc 组合几何 | `FProcModel::CreateBox`（[`FProcModel.h:11`](../../src/Engine/Assets/Loaders/FProcModel.h)）、Brotato3D 多 box 范本（[`Brotato3DEffectSystem.cpp:232-289`](../../src/Application/Game/Brotato3D/Brotato3DEffectSystem.cpp)） | — |
+| 父子层级 transform 传播 | `Node::SetParent/AddChild`（[`Node.h:53-60`](../../src/Engine/Assets/Core/Node.hpp)）、`RecalcTransform` 递归（[`Node.cpp:92-112`](../../src/Engine/Assets/Core/Node.cpp)） | — |
+| proc 组合几何 | `FProcModel::CreateBox`（[`FProcModel.h:11`](../../src/Engine/Assets/Loaders/FProcModel.hpp)）、Brotato3D 多 box 范本（[`Brotato3DEffectSystem.cpp:232-289`](../../src/Application/Game/Brotato3D/Brotato3DEffectSystem.cpp)） | — |
 | 朝向限速算法思路 | `AdvanceYawToward`（[`GameplayMath.hpp:22-40`](../../src/Gameplay/Gameplay/GameplayMath.hpp)，浮点版，仅作思路参考） | 定点 `Atan2FromVec2` / `TurnToward`（`Sim/WMath.h`） |
 | sim 朝向字段 | `FSimTransform.facing/prevFacing`（[`SimComponents.h:12-18`](../../src/Application/Game/NextRA/Sim/SimComponents.h)，已存闲置） | `FTurret` 组件 |
 | 渲染朝向应用 | `Node::SetRotation`（quat）、Brotato3D bodyNode->SetRotation 范式 | `RenderProxySystem::Sync` 加朝向插值段 |
@@ -302,7 +302,7 @@ inline const FUnitDef& UnitDef(uint16_t typeId);  // 查表
 
 | # | 红线 | 缓解 |
 | --- | --- | --- |
-| **R-NEW1** | **软推离 / 占位查询禁用引擎 `CPUAccelerationStructure`**（浮点 BVH，[`CPUAccelerationStructure.h:127`](../../src/Engine/Assets/Acceleration/CPUAccelerationStructure.h) `RayCastInCPU` 是它唯一公开 API，无邻域查询） | 自建整数 `FOccupancyGrid`（§4.2），cell→actor 哈希，全程整数 |
+| **R-NEW1** | **软推离 / 占位查询禁用引擎 `CPUAccelerationStructure`**（浮点 BVH，[`CPUAccelerationStructure.h:127`](../../src/Engine/Assets/Acceleration/CPUAccelerationStructure.hpp) `RayCastInCPU` 是它唯一公开 API，无邻域查询） | 自建整数 `FOccupancyGrid`（§4.2），cell→actor 哈希，全程整数 |
 | **R-NEW2** | **朝向计算禁 `std::atan2` / `std::sin`** | 定点 `Atan2FromVec2`（整数多项式 + 象限映射，§2.2）；朝向角度换算 float **只允许在渲染层** `WAngleToRadians` |
 | **R-NEW3** | **软推离排斥方向禁用 float 归一化**（除零 / NaN / 跨平台不一致） | 用整数 cell 差符号 + 固定主轴优先规则定方向（§4.3） |
 | **R-NEW4** | **软推离 / 朝向 / 占位结果必须进 SyncHash** | `ComputeSyncHash`（[`SyncHash.cpp:32-91`](../../src/Application/Game/NextRA/Sim/SyncHash.cpp)）扩展覆盖 `facing` / `FTurret.facing` / 软推离后位置（位置已覆盖，确认顺序确定） |

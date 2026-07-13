@@ -1,6 +1,6 @@
 #include <catch2/catch_all.hpp>
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Gameplay/Components/AIAgentComponent.h"
 #include "Gameplay/Components/CharacterAnimationComponent.h"
 #include "Gameplay/Components/CharacterControlComponent.h"

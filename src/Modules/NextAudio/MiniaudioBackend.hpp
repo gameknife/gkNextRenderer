@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Engine/Runtime/Subsystems/NextAudio.h"
+#include "Engine/Runtime/Subsystems/NextAudio.hpp"
 
 struct ma_decoder;
 struct ma_engine;

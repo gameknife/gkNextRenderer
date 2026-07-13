@@ -1,7 +1,7 @@
 #include "Gameplay/Camera/ModelViewController.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include <SDL3/SDL_mouse.h>
 
 namespace Runtime::Camera

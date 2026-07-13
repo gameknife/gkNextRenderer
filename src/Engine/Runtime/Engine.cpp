@@ -1,6 +1,6 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Assets/Core/Model.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
@@ -9,7 +9,7 @@
 #include "Engine/Runtime/Interface/RenderFrameConsumer.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Config/EngineCVars.hpp"
-#include "Engine/Runtime/Subsystems/NextLocalization.h"
+#include "Engine/Runtime/Subsystems/NextLocalization.hpp"
 #include "Engine/Runtime/ScreenShot.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Interface/UiOverlay.hpp"
@@ -33,7 +33,7 @@
 #include <system_error>
 #include <nlohmann/json.hpp>
 
-#include "Engine/Runtime/Subsystems/NextAudio.h"
+#include "Engine/Runtime/Subsystems/NextAudio.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
@@ -46,12 +46,12 @@
 #include <entt/meta/factory.hpp>
 
 #define BUILDVER(X) std::string buildver(#X);
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "build.version"
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/Reflection/ReflectionRegistry.h"
+#include "Engine/Runtime/Reflection/ReflectionRegistry.hpp"
 
 // spdlog logging
 #include <spdlog/stopwatch.h>

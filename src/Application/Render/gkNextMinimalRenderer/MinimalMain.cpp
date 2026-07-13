@@ -1,7 +1,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "MinimalRenderer.hpp"
 
 #define SDL_MAIN_USE_CALLBACKS

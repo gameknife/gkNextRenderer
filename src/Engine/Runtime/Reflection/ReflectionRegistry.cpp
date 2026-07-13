@@ -1,13 +1,13 @@
-#include "Engine/Runtime/Reflection/ReflectionRegistry.h"
-#include "Engine/Runtime/Reflection/GlmTypeSupport.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/EnvironmentComponent.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
-#include "Engine/Runtime/Components/SceneReferenceComponent.h"
+#include "Engine/Runtime/Reflection/ReflectionRegistry.hpp"
+#include "Engine/Runtime/Reflection/GlmTypeSupport.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/EnvironmentComponent.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
+#include "Engine/Runtime/Components/SceneReferenceComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 
 namespace Reflection
 {

@@ -1,5 +1,5 @@
-#include "Engine/Runtime/Reflection/PropertyAccessor.h"
-#include "Engine/Runtime/Reflection/PropertyMeta.h"
+#include "Engine/Runtime/Reflection/PropertyAccessor.hpp"
+#include "Engine/Runtime/Reflection/PropertyMeta.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <array>

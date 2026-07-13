@@ -9,8 +9,8 @@
 #include "MagicaLegoUIHelpers.hpp"
 
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/Editor/FontLoader.h"
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Editor/FontLoader.hpp"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/ImGui.hpp"

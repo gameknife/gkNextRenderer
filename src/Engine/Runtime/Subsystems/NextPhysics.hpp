@@ -5,7 +5,7 @@
 
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
+#include "Engine/Runtime/Subsystems/NextPhysicsTypes.hpp"
 
 enum class ENextBodyShape
 {

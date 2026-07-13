@@ -4,9 +4,9 @@
 
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/Command/ICommand.hpp"
-#include "Engine/Runtime/Reflection/PropertyAccessor.h"
-#include "Engine/Assets/Core/Component.h"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Runtime/Reflection/PropertyAccessor.hpp"
+#include "Engine/Assets/Core/Component.hpp"
+#include "Engine/Assets/Core/Node.hpp"
 
 #include <entt/meta/meta.hpp>
 #include <string_view>

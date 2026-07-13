@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 
 #include <algorithm>

@@ -31,9 +31,9 @@ namespace NextRenderer
 }
 
 #if ANDROID
-#include "Engine/Runtime/Platform/PlatformAndroid.h"
+#include "Engine/Runtime/Platform/PlatformAndroid.hpp"
 #elif WIN32
-#include "Engine/Runtime/Platform/PlatformWindows.h"
+#include "Engine/Runtime/Platform/PlatformWindows.hpp"
 #else
-#include "Engine/Runtime/Platform/PlatformLinux.h"
+#include "Engine/Runtime/Platform/PlatformLinux.hpp"
 #endif

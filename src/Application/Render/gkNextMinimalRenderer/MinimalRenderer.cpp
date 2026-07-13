@@ -1,13 +1,13 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "MinimalRenderer.hpp"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Data/Material.hpp"
-#include "Engine/Assets/Loaders/FProcModel.h"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Assets/Loaders/LoaderRegistry.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
 
 namespace
 {

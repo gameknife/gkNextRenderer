@@ -1,12 +1,12 @@
 #include <catch2/catch_all.hpp>
 
 #include "Engine/Assets/Core/Model.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"
-#include "Engine/Runtime/Components/EnvironmentComponent.h"
-#include "Engine/Runtime/Components/SceneReferenceComponent.h"
+#include "Engine/Runtime/Components/EnvironmentComponent.hpp"
+#include "Engine/Runtime/Components/SceneReferenceComponent.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Modules/GltfLoader/GltfModule.hpp"
 #include "Engine/Utilities/FileHelper.hpp"

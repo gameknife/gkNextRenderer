@@ -1,5 +1,5 @@
 #include "Gameplay/AI/NavGrid.h"
-#include "Engine/Assets/Acceleration/CPUAccelerationStructure.h"
+#include "Engine/Assets/Acceleration/CPUAccelerationStructure.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 
 #include <algorithm>

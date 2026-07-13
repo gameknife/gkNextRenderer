@@ -1,7 +1,7 @@
 #pragma once
 #include "Engine/Assets/AssetsFwd.hpp"
-#include "Engine/Runtime/Reflection/PropertyTypes.h"
-#include "Engine/Runtime/Reflection/PropertyMeta.h"
+#include "Engine/Runtime/Reflection/PropertyTypes.hpp"
+#include "Engine/Runtime/Reflection/PropertyMeta.hpp"
 #include <entt/meta/meta.hpp>
 #include <entt/meta/resolve.hpp>
 #include <vector>

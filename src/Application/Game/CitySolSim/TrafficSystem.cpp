@@ -8,11 +8,11 @@
 #include <fmt/format.h>
 #include <glm/gtc/quaternion.hpp>
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Assets/Loaders/FProcModel.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
 
 namespace CitySolSim
 {

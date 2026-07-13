@@ -2,7 +2,7 @@
 
 #include "Engine/Assets/Core/Model.hpp"
 #include "Gameplay/Camera/ModelViewController.hpp"
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 
 TEST_CASE("Camera focus moves closer for small targets", "[Unit][Camera]")
 {

@@ -2,7 +2,7 @@
 #include "Modules/NextAI/AIService.hpp"
 #include "Modules/NextAI/GnbClient/GnbAgentClient.hpp"
 
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 
 #include <nlohmann/json.hpp>
 

@@ -1,10 +1,10 @@
 #include "Modules/LDrawLoader/FLDrawLoader.h"
 #include "Modules/LDrawLoader/FLDrawGeometry.h"
 #include "Modules/LDrawLoader/FLDrawParser.h"
-#include "Engine/Assets/Loaders/LoaderUtils.h"
+#include "Engine/Assets/Loaders/LoaderUtils.hpp"
 #include "Engine/Assets/Data/Material.hpp"
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <spdlog/spdlog.h>

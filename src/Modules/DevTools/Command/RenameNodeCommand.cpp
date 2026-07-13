@@ -1,6 +1,6 @@
 #include "Modules/DevTools/Command/RenameNodeCommand.hpp"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 
 namespace Runtime::Command

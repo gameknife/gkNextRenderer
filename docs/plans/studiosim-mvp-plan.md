@@ -143,7 +143,7 @@ last_updated: 2026-06-07
 
 - `scene.Nodes()` → `std::vector<std::shared_ptr<Node>>&`：遍历全部节点，**按名字前缀**筛出 POI（见 [Scene.hpp:77](../../src/Engine/Assets/Core/Scene.hpp)）。
 - `scene.GetNode(name)` / `GetNodeById(id)` / `FindNodeIdWithComponent(type)`；`GetNodeBounds(nodeId, center, radius)` 拿世界包围球。
-- `Node`：`GetName()`、`WorldTranslation()` / `WorldTransform()`、`SetTranslation/Rotation/Scale`、`RecalcTransform()`、`AddComponent<T>()`、`GetComponentByTypeName()`。见 [Node.h](../../src/Engine/Assets/Core/Node.h)。
+- `Node`：`GetName()`、`WorldTranslation()` / `WorldTransform()`、`SetTranslation/Rotation/Scale`、`RecalcTransform()`、`AddComponent<T>()`、`GetComponentByTypeName()`。见 [Node.h](../../src/Engine/Assets/Core/Node.hpp)。
 - 运行时建节点：`Node::CreateNode(name, t, r, s)`。
 
 ### 4.5 导航 —— `NextGameplay::FNavGrid` + `FPathFollower`

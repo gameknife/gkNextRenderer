@@ -6,10 +6,10 @@
 #include "Brotato3DAssetPaths.hpp"
 #include "Brotato3DGameInstance.hpp"
 #include "Modules/DevTools/ImGuiPainter.h"
-#include "Engine/Runtime/Editor/ImGuiScaling.h"
+#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/Subsystems/NextLocalization.h"
-#include "Engine/Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Runtime/Subsystems/NextLocalization.hpp"
+#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 
 namespace
 {

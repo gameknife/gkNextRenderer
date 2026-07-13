@@ -4,13 +4,13 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
-#include "Engine/Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 
 namespace
 {

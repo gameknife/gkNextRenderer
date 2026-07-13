@@ -48,8 +48,8 @@ src/Application/Editor/gkNextEditor/Panels/
 In your component's `.cpp` file, add registration in an anonymous namespace:
 
 ```cpp
-#include "Engine/Runtime/Reflection/ReflectionRegistry.h"
-#include "Engine/Runtime/Reflection/ReflectionMacros.h"
+#include "Engine/Runtime/Reflection/ReflectionRegistry.hpp"
+#include "Engine/Runtime/Reflection/ReflectionMacros.hpp"
 
 namespace
 {
@@ -243,8 +243,8 @@ The project uses unity builds. New `.cpp` files are auto-detected via `GLOB_RECU
 ```cpp
 // PhysicsComponent.cpp
 #include "PhysicsComponent.h"
-#include "Engine/Runtime/Reflection/ReflectionRegistry.h"
-#include "Engine/Runtime/Reflection/ReflectionMacros.h"
+#include "Engine/Runtime/Reflection/ReflectionRegistry.hpp"
+#include "Engine/Runtime/Reflection/ReflectionMacros.hpp"
 
 namespace
 {

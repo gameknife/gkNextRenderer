@@ -58,11 +58,11 @@ last_updated: 2026-06-26
 | 引擎设施 | 位置 | 在 NextRA 的用途 |
 | --- | --- | --- |
 | 游戏入口 `NextGameInstanceBase` | [`src/Engine/Runtime/GameInstance.hpp:20`](../../src/Engine/Runtime/GameInstance.hpp)（`OnTick(double)`）、`:36`（`BeforeSceneRebuild`）、`:95`（`CreateGameInstance`） | NextRA 主类继承它，`OnTick` 驱动固定 tick 累加器，`BeforeSceneRebuild` 注入地形 / 初始单位几何，输入回调收集 order |
-| proc 几何 `Assets::FProcModel` | [`src/Engine/Assets/Loaders/FProcModel.h:11`](../../src/Engine/Assets/Loaders/FProcModel.h)（`CreateBox`）、`:12`（`CreateSphere`） | 全部占位资产：单位 / 建筑 / 地形 / 子弹 |
-| 场景装配 `Assets::SceneBuilder` | [`src/Engine/Runtime/Scene/SceneBuilder.h:12`](../../src/Engine/Runtime/Scene/SceneBuilder.h)（`AddLambertianMaterial`）、`:17`（`CreateRenderNode`） | 把 proc model + faction 颜色装成渲染 node |
-| 节点 transform | [`src/Engine/Assets/Core/Node.h:25`](../../src/Engine/Assets/Core/Node.h)（`SetTranslation`）、`:35`（`WorldTransform`） | 渲染层每帧把插值后的 float 位置写进 node |
+| proc 几何 `Assets::FProcModel` | [`src/Engine/Assets/Loaders/FProcModel.hpp:11`](../../src/Engine/Assets/Loaders/FProcModel.hpp)（`CreateBox`）、`:12`（`CreateSphere`） | 全部占位资产：单位 / 建筑 / 地形 / 子弹 |
+| 场景装配 `Assets::SceneBuilder` | [`src/Engine/Runtime/Scene/SceneBuilder.hpp:12`](../../src/Engine/Runtime/Scene/SceneBuilder.hpp)（`AddLambertianMaterial`）、`:17`（`CreateRenderNode`） | 把 proc model + faction 颜色装成渲染 node |
+| 节点 transform | [`src/Engine/Assets/Core/Node.hpp:25`](../../src/Engine/Assets/Core/Node.hpp)（`SetTranslation`）、`:35`（`WorldTransform`） | 渲染层每帧把插值后的 float 位置写进 node |
 | ECS + 反射 | entt + entt::meta（见 `AGENTS.md` "Key Architectural Patterns"） | sim World 用独立 `entt::registry`；组件可选反射给编辑器 / 调试面板 |
-| 屏幕拾取 `RayCastGPU` | [`src/Engine/Runtime/Engine.hpp:156`](../../src/Engine/Runtime/Engine.hpp)；CPU 版 [`src/Engine/Assets/Acceleration/CPUAccelerationStructure.h:127`](../../src/Engine/Assets/Acceleration/CPUAccelerationStructure.h)（`RayCastInCPU`） | 鼠标 → 世界射线 → 命中地面 / 单位，转 `WPos` 生成 order（**仅本地表现，不入 sim hash**） |
+| 屏幕拾取 `RayCastGPU` | [`src/Engine/Runtime/Engine.hpp:156`](../../src/Engine/Runtime/Engine.hpp)；CPU 版 [`src/Engine/Assets/Acceleration/CPUAccelerationStructure.hpp:127`](../../src/Engine/Assets/Acceleration/CPUAccelerationStructure.hpp)（`RayCastInCPU`） | 鼠标 → 世界射线 → 命中地面 / 单位，转 `WPos` 生成 order（**仅本地表现，不入 sim hash**） |
 | ticked task | [`src/Engine/Runtime/Engine.hpp:185`](../../src/Engine/Runtime/Engine.hpp)（`AddTickedTask`） | 可选：HUD / 调试刷新 |
 | 共享游戏层 `NextGameplay` | `src/Gameplay/`（[`AI/PathFollower.h`](../../src/Gameplay/AI/PathFollower.h) 等） | **仅渲染 / 表现侧参考**；其寻路 `FNavGrid` 基于浮点 BVH，**不可进 sim**（§10 R2） |
 
@@ -301,8 +301,8 @@ struct INetTransport {
 
 ### 7.1 sim → render 映射与插值
 
-- 每个 sim actor 创建时，表现层用 `FProcModel::CreateBox/CreateSphere`（[`FProcModel.h:11`](../../src/Engine/Assets/Loaders/FProcModel.h)）+ `SceneBuilder::AddLambertianMaterial`（按 `FOwner.playerId` 取 faction 色）+ `CreateRenderNode`（[`SceneBuilder.h:17`](../../src/Engine/Runtime/Scene/SceneBuilder.h)）建一个渲染 node，记到 `FRenderLink`。
-- 每渲染帧：`renderPos = lerp(prevPos.ToFloat(), currPos.ToFloat(), renderAlpha)`，朝向同理（环形插值），写 `Node::SetTranslation`（[`Node.h:25`](../../src/Engine/Assets/Core/Node.h)）。`renderAlpha` 来自 §5.4。
+- 每个 sim actor 创建时，表现层用 `FProcModel::CreateBox/CreateSphere`（[`FProcModel.h:11`](../../src/Engine/Assets/Loaders/FProcModel.hpp)）+ `SceneBuilder::AddLambertianMaterial`（按 `FOwner.playerId` 取 faction 色）+ `CreateRenderNode`（[`SceneBuilder.h:17`](../../src/Engine/Runtime/Scene/SceneBuilder.hpp)）建一个渲染 node，记到 `FRenderLink`。
+- 每渲染帧：`renderPos = lerp(prevPos.ToFloat(), currPos.ToFloat(), renderAlpha)`，朝向同理（环形插值），写 `Node::SetTranslation`（[`Node.h:25`](../../src/Engine/Assets/Core/Node.hpp)）。`renderAlpha` 来自 §5.4。
 - actor 销毁 → 移除对应 node。
 
 ### 7.2 占位几何约定
@@ -325,7 +325,7 @@ struct INetTransport {
 
 ## 8. 输入与交互（产生 Order）
 
-- **屏幕 → 世界**：鼠标射线用 `RayCastGPU`（[`Engine.hpp:156`](../../src/Engine/Runtime/Engine.hpp)）或 CPU `RayCastInCPU`（[`CPUAccelerationStructure.h:127`](../../src/Engine/Assets/Acceleration/CPUAccelerationStructure.h)）命中地面 / 单位 → 命中点 `float` 转 `WPos`（仅这一步 float→定点，发生在**生成 order 时**，order 内是定点，故确定）。
+- **屏幕 → 世界**：鼠标射线用 `RayCastGPU`（[`Engine.hpp:156`](../../src/Engine/Runtime/Engine.hpp)）或 CPU `RayCastInCPU`（[`CPUAccelerationStructure.h:127`](../../src/Engine/Assets/Acceleration/CPUAccelerationStructure.hpp)）命中地面 / 单位 → 命中点 `float` 转 `WPos`（仅这一步 float→定点，发生在**生成 order 时**，order 内是定点，故确定）。
 - **选择**：左键单击选单位、拖框多选、双击选同类型；选择集是**本地表现态**。
 - **命令**：右键——命中敌方单位 → `Attack`；命中地面 → `Move`；按住修饰键 → `AttackMove`。生产建筑选中后 HUD 出"造步兵 / 造坦克"按钮 → `Produce`。
 - **关键纪律**：输入处理**只构造 `FOrder` 入 OrderManager**，绝不直接改 sim 组件（§4.2 不变量 4）。

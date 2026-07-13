@@ -3,7 +3,7 @@
 #include "Modules/SplatLoader/FSplatQuant.hpp"
 
 #include "Engine/Assets/Core/Model.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Modules/SplatLoader/GaussianSplatComponent.h"
 #include "Modules/SplatLoader/SplatProxyBuilder.hpp"
 #include "Engine/Utilities/FileHelper.hpp"

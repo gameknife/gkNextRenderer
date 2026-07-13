@@ -1,7 +1,7 @@
 #include "Modules/NextQuickJS/Reflection/QuickJSTypeConverter.hpp"
 
-#include "Engine/Runtime/Reflection/PropertyAccessor.h"
-#include "Engine/Runtime/Reflection/ReflectionMacros.h"
+#include "Engine/Runtime/Reflection/PropertyAccessor.hpp"
+#include "Engine/Runtime/Reflection/ReflectionMacros.hpp"
 #include <entt/meta/resolve.hpp>
 
 namespace Reflection

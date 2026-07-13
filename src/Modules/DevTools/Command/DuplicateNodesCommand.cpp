@@ -1,14 +1,14 @@
 #include "Modules/DevTools/Command/DuplicateNodesCommand.hpp"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/SceneReferenceComponent.h"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/SceneReferenceComponent.hpp"
 #include "Modules/DevTools/Command/SelectionCommandUtils.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
 
 #include <algorithm>
 #include <unordered_set>

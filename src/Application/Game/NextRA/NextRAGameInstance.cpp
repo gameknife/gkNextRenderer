@@ -4,11 +4,11 @@
 #include <imgui.h>
 #include <spdlog/spdlog.h>
 
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Assets/Loaders/FProcModel.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
-#include "Engine/Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
+#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Sim/SyncHash.h"
 #include "Sim/Systems/OrderApplySystem.h"
 

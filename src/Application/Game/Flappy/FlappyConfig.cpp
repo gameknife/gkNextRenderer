@@ -1,6 +1,6 @@
 #include "FlappyConfig.hpp"
 
-#include "Engine/Runtime/Utilities/JsonHelpers.h"
+#include "Engine/Runtime/Utilities/JsonHelpers.hpp"
 
 #include <nlohmann/json.hpp>
 

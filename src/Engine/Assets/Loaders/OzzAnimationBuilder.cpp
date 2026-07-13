@@ -1,4 +1,4 @@
-#include "Engine/Assets/Loaders/OzzAnimationBuilder.h"
+#include "Engine/Assets/Loaders/OzzAnimationBuilder.hpp"
 
 #include "Engine/Assets/Data/Skeleton.hpp"
 #include "Engine/Assets/Core/Model.hpp"

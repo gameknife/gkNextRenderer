@@ -1,5 +1,5 @@
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Reflection/PropertyMeta.h"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Reflection/PropertyMeta.hpp"
 #include <entt/meta/factory.hpp>
 
 namespace Runtime

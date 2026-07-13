@@ -2,8 +2,8 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"
 #include "Engine/Assets/Core/Model.hpp"
-#include "Engine/Assets/Core/Component.h"
-#include "Engine/Runtime/Reflection/ReflectionMacros.h"
+#include "Engine/Assets/Core/Component.hpp"
+#include "Engine/Runtime/Reflection/ReflectionMacros.hpp"
 
 namespace Runtime
 {

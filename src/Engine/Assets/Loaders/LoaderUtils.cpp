@@ -1,10 +1,10 @@
-#include "Engine/Assets/Loaders/LoaderUtils.h"
+#include "Engine/Assets/Loaders/LoaderUtils.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 
 #include "ThirdParty/mikktspace/mikktspace.h"
 
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
 
 #include <cfloat>
 #include <glm/glm.hpp>

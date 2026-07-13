@@ -35,7 +35,7 @@
 #include <glm/ext.hpp>
 
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 
 

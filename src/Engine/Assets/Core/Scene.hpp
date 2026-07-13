@@ -2,11 +2,11 @@
 #include <glm/vec2.hpp>
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
+#include "Engine/Runtime/Subsystems/NextPhysicsTypes.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
-#include "Engine/Assets/Acceleration/CPUAccelerationStructure.h"
+#include "Engine/Assets/Acceleration/CPUAccelerationStructure.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/SceneSelectionState.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"

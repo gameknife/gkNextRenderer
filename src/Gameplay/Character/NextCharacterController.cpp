@@ -1,6 +1,6 @@
 #include "Gameplay/Character/NextCharacterController.h"
 
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 
 NextCharacterController::NextCharacterController() = default;
 NextCharacterController::~NextCharacterController() = default;

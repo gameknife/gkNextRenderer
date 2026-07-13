@@ -2,7 +2,7 @@
 
 #include "KongLie3DAudio.hpp"
 #include "KongLie3DBattleSystem.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 
 #include <spdlog/spdlog.h>
 

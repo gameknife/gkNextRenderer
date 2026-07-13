@@ -1,13 +1,13 @@
 // CPU BVH wrapper: tinybvh implementation unit, shared TLAS state and the
 // CPU ray trace entry points.
 // Split from CPUAccelerationStructure.cpp; same namespace, separate TU.
-#include "Engine/Assets/Acceleration/CPUAccelerationStructure.h"
+#include "Engine/Assets/Acceleration/CPUAccelerationStructure.hpp"
 #include "Engine/Assets/Acceleration/CPUAccelerationStructure.Internal.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Assets/Core/Scene.hpp"

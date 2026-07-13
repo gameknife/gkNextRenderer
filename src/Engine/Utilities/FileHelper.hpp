@@ -9,7 +9,7 @@
 #include <assert.h>
 #include <regex>
 #include <SDL3/SDL.h>
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 
 namespace Utilities
 {

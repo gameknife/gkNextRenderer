@@ -4,7 +4,7 @@
 #include <glm/glm.hpp>
 #include <glm/detail/type_quat.hpp>
 
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 
 class NextCharacterController final
 {

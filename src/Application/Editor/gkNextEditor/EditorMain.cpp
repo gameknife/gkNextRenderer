@@ -1,13 +1,13 @@
 #include "EditorMain.h"
-#include <Engine/Runtime/Platform/PlatformCommon.h>
-#include "Engine/Assets/Core/Node.h"
+#include <Engine/Runtime/Platform/PlatformCommon.hpp>
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "EditorInterface.hpp"
-#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
-#include "Engine/Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Modules/RenderViews/OffscreenRenderViewController.hpp"
 #include "Modules/SceneExport/FSceneSaver.h"
 

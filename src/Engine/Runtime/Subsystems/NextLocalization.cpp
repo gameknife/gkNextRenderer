@@ -1,6 +1,6 @@
-#include "Engine/Runtime/Subsystems/NextLocalization.h"
+#include "Engine/Runtime/Subsystems/NextLocalization.hpp"
 
-#include "Engine/Runtime/Utilities/JsonHelpers.h"
+#include "Engine/Runtime/Utilities/JsonHelpers.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <fstream>

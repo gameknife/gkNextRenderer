@@ -4,13 +4,13 @@
 #include <tiny_gltf.h>
 
 #include "Engine/Assets/Core/Model.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
-#include "Engine/Runtime/Components/EnvironmentComponent.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/SceneReferenceComponent.h"
+#include "Engine/Runtime/Components/EnvironmentComponent.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/SceneReferenceComponent.hpp"
 
 #include <numeric>
 

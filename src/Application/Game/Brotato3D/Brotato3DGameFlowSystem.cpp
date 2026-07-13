@@ -1,7 +1,7 @@
 #include "Brotato3DGameInstance.hpp"
 #include "Brotato3DCommon.hpp"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Brotato3DAudio.hpp"
 
 using namespace Brotato3DUtil;

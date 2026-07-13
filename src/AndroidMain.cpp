@@ -10,7 +10,7 @@
 
 #include <fmt/format.h>
 #include <filesystem>
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 
 #if WIN32
 #include "ThirdParty/renderdoc/renderdoc_app.h"

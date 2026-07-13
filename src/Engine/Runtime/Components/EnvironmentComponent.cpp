@@ -1,6 +1,6 @@
-#include "Engine/Runtime/Components/EnvironmentComponent.h"
+#include "Engine/Runtime/Components/EnvironmentComponent.hpp"
 
-#include "Engine/Runtime/Reflection/PropertyMeta.h"
+#include "Engine/Runtime/Reflection/PropertyMeta.hpp"
 
 #include <entt/meta/factory.hpp>
 

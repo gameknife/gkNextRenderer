@@ -62,7 +62,7 @@ SOG 高斯集合
 - 太阳阴影 pass 是 depth-only CSM，只画 soft mesh shader 的间接绘制结果（`src/Engine/Rendering/Shadow/ShadowMapPass.cpp:212`）。SOG 不参与，所以不会投影。
 - TLAS 构建只为 scene models 生成 BLAS（`src/Engine/Rendering/VulkanBaseRenderer.RayTracingAS.cpp:143`），TLAS 实例来自 `NodeProxy` 的 mesh model（`src/Engine/Rendering/VulkanBaseRenderer.cpp:2356`）。
 - 主视口 GPU cull 和 shadow GPU cull 都用 `node.visible > 0` 作为候选条件（`assets/shaders/Task.SoftMeshShaderGpuCullCompact.comp.slang:55`, `assets/shaders/Task.SoftMeshShaderShadowGpuCullCompact.comp.slang:53`）。所以不能简单把 proxy mesh 的 `RenderComponent::Visible=false`，否则它也不会投影阴影。
-- `RenderComponent` 已有 `CastShadows / ReceiveGI / LayerMask`（`src/Engine/Runtime/Components/RenderComponent.h:37`），但当前 `NodeProxy` 和 GPU cull 没有完整消费这些用途标志。SOG proxy mesh 需要推动这里收敛为明确的 render participation mask。
+- `RenderComponent` 已有 `CastShadows / ReceiveGI / LayerMask`（`src/Engine/Runtime/Components/RenderComponent.hpp:37`），但当前 `NodeProxy` 和 GPU cull 没有完整消费这些用途标志。SOG proxy mesh 需要推动这里收敛为明确的 render participation mask。
 - AmbientCube 硬件 bake 使用 `FHardwareRayTracer`（`assets/shaders/Bake.HwAmbientCube.comp.slang:8`）。只要 proxy mesh 进入 triangle TLAS，现有后续 ray query 就能开始被 SOG 影响；当前混合 path tracing 的 primary surface 来自 visibility buffer，不依赖 TLAS primary ray。
 
 ### 2.3 AmbientCube 可复用点

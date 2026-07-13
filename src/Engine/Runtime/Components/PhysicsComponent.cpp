@@ -1,5 +1,5 @@
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Reflection/PropertyMeta.h"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Reflection/PropertyMeta.hpp"
 #include <entt/meta/factory.hpp>
 
 namespace Runtime

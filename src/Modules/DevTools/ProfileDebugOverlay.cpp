@@ -12,7 +12,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Vulkan/Allocator.hpp"
 #include "Engine/Runtime/Profiling/FrameProfiler.hpp"

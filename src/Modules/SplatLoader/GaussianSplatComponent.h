@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Engine/Assets/Core/Component.h"
-#include "Engine/Runtime/Reflection/ReflectionMacros.h"
+#include "Engine/Assets/Core/Component.hpp"
+#include "Engine/Runtime/Reflection/ReflectionMacros.hpp"
 #include "Modules/SplatLoader/GaussianSplat.hpp"
 
 #include <algorithm>

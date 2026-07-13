@@ -1,4 +1,4 @@
-#include "Engine/Assets/Loaders/FProcModel.h"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 
 #define _USE_MATH_DEFINES

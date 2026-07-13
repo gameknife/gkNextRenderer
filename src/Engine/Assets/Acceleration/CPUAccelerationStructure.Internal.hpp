@@ -3,7 +3,7 @@
 // Internal declarations shared between the CPUAccelerationStructure partial
 // TUs (CpuBvh / ProbeBaker / BrickPageTable / main). Not engine public API.
 
-#include "Engine/Assets/Acceleration/CPUAccelerationStructure.h"
+#include "Engine/Assets/Acceleration/CPUAccelerationStructure.hpp"
 
 namespace Assets::CPU
 {

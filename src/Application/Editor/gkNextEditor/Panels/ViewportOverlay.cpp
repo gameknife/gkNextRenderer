@@ -2,15 +2,15 @@
 
 #include "EditorDragDrop.hpp"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "EditorActionDispatcher.hpp"
-#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Modules/DevTools/GizmoController.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/ImGui.hpp"
 

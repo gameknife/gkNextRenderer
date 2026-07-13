@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/Scene/NodeUtils.h"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
 
 namespace Brotato3DUtil
 {

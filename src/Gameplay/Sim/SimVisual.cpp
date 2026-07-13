@@ -1,6 +1,6 @@
 #include "SimVisual.h"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 
 #include <glm/gtc/quaternion.hpp>
 

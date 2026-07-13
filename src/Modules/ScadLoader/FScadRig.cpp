@@ -1,6 +1,6 @@
 #include "Modules/ScadLoader/FScadRig.h"
 
-#include "Engine/Assets/Loaders/FProcModel.h"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Modules/ScadLoader/FScadEvaluator.h"
 #include "Modules/ScadLoader/FScadShared.h"
 

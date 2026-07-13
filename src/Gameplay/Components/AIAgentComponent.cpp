@@ -1,6 +1,6 @@
 #include "Gameplay/Components/AIAgentComponent.h"
 
-#include "Engine/Runtime/Reflection/PropertyMeta.h"
+#include "Engine/Runtime/Reflection/PropertyMeta.hpp"
 
 #include <entt/meta/factory.hpp>
 

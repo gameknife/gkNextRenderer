@@ -1,7 +1,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Modules/NextAI/GnbClient/GnbAgentProcess.hpp"
 
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 
 #if WIN32
 namespace NextAI

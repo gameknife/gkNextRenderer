@@ -1,12 +1,12 @@
 #include "Modules/ScadLoader/FScadLoader.h"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Data/Material.hpp"
-#include "Engine/Assets/Loaders/FProcModel.h"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Modules/ScadLoader/FScadEvaluator.h"
 #include "Modules/ScadLoader/FScadShared.h"
-#include "Engine/Assets/Loaders/LoaderUtils.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Assets/Loaders/LoaderUtils.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
 
 #include <algorithm>
 #include <array>

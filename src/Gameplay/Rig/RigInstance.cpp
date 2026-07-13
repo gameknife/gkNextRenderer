@@ -1,8 +1,8 @@
 #include "Gameplay/Rig/RigInstance.h"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
 
 #include <algorithm>
 #include <cmath>

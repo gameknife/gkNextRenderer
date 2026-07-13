@@ -1,4 +1,4 @@
-#include "Engine/Runtime/Platform/UserPaths.h"
+#include "Engine/Runtime/Platform/UserPaths.hpp"
 
 #include <SDL3/SDL.h>
 

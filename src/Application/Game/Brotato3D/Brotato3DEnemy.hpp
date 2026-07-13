@@ -2,7 +2,7 @@
 
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Brotato3DDataLoader.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
+#include "Engine/Runtime/Subsystems/NextPhysicsTypes.hpp"
 
 namespace Assets
 {

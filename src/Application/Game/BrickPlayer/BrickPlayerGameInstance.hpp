@@ -3,7 +3,7 @@
 #include "BrickPlayerLDrawShadow.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 
 class BrickPlayerUserInterface;
 namespace Assets { class Node; }

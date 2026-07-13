@@ -4,9 +4,9 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/Loaders/LoaderRegistry.hpp"
-#include "Engine/Runtime/Components/EnvironmentComponent.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/SceneReferenceComponent.h"
+#include "Engine/Runtime/Components/EnvironmentComponent.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/SceneReferenceComponent.hpp"
 
 #include <algorithm>
 #include <cctype>

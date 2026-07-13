@@ -1,6 +1,6 @@
 #include "KongLie3DDataLoader.hpp"
 
-#include "Engine/Runtime/Utilities/JsonHelpers.h"
+#include "Engine/Runtime/Utilities/JsonHelpers.hpp"
 #include "Engine/Utilities/Exception.hpp"
 
 #include <nlohmann/json.hpp>

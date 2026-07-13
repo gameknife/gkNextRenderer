@@ -2,8 +2,8 @@
 
 #include "Gameplay/Components/CharacterGameplayComponent.h"
 #include "Gameplay/Gameplay/GameplayMath.hpp"
-#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
-#include "Engine/Runtime/Reflection/PropertyMeta.h"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
+#include "Engine/Runtime/Reflection/PropertyMeta.hpp"
 
 #include <algorithm>
 #include <cmath>

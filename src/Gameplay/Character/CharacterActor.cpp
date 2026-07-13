@@ -1,12 +1,12 @@
 #include "Gameplay/Character/CharacterActor.h"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Gameplay/Utilities/SceneNodeUtils.hpp"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
-#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
 
 namespace NextGameplay
 {

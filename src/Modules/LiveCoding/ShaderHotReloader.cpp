@@ -3,7 +3,7 @@
 #include "Modules/LiveCoding/ShaderHotReloader.hpp"
 
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
