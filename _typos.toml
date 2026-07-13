@@ -1,5 +1,5 @@
 # typos (https://github.com/crate-ci/typos) 拼写检查配置
-# 运行:typos            (仓库根目录)
+# Run: ./gnb typos (from the repository root)
 # 只检查第一方代码与文档,排除第三方与资产数据。
 
 [files]

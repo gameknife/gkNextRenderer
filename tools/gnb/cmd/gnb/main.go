@@ -121,6 +121,7 @@ func main() {
 	root.AddCommand(newTodoCommand(ctx))
 	root.AddCommand(newDashboardCommand(ctx))
 	root.AddCommand(newLocCommand(ctx))
+	root.AddCommand(newTyposCommand(ctx))
 	root.AddCommand(newGitCommand(ctx))
 	root.AddCommand(newLLMCommand(ctx))
 	root.AddCommand(newAgentCommand(ctx))
@@ -906,6 +907,27 @@ func newLocCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().BoolVar(&includeThirdParty, "thirdparty", false, "include src/ThirdParty in the report")
 	cmd.Flags().StringSliceVar(&extensions, "ext", nil, "override file extensions (e.g. --ext .cpp,.h)")
 	return cmd
+}
+
+func newTyposCommand(ctx appContext) *cobra.Command {
+	return &cobra.Command{
+		Use:                "typos [flags]",
+		Short:              "Check first-party files for spelling mistakes",
+		DisableFlagParsing: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			typosPath, err := exec.LookPath("typos")
+			if err != nil {
+				return fmt.Errorf("typos is not installed; see https://github.com/crate-ci/typos#install")
+			}
+
+			check := exec.Command(typosPath, args...)
+			check.Dir = ctx.repoRoot
+			check.Stdin = os.Stdin
+			check.Stdout = os.Stdout
+			check.Stderr = os.Stderr
+			return check.Run()
+		},
+	}
 }
 
 func gitCommit(repoRoot string) (string, error) {

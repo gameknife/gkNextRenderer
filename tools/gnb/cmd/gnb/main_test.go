@@ -59,6 +59,15 @@ func TestResolveIOSSkipCodeSignRejectsConflictingFlags(t *testing.T) {
 	}
 }
 
+func TestTyposCommandReportsMissingExecutable(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	err := newTyposCommand(appContext{repoRoot: t.TempDir()}).RunE(nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "typos is not installed") {
+		t.Fatalf("expected missing typos error, got %v", err)
+	}
+}
+
 func TestParseRunArgsPassesTargetArgsWithoutSeparator(t *testing.T) {
 	opts, showHelp, err := parseRunArgs("windows", []string{"gkNextRenderer", "--help"})
 	if err != nil {
