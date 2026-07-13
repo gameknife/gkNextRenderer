@@ -163,26 +163,26 @@ void TextureImage::UpdateDataMainThread(
 {
     const auto& device = commandPool.Device();
 
-    // 创建临时暂存缓冲区并复制数据
+    // Create a temporary staging buffer and copy the data into it.
     auto stagingBuffer = std::make_unique<Vulkan::Buffer>(device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
     auto stagingBufferMemory = stagingBuffer->AllocateMemory(
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     device.DebugUtils().SetObjectName(stagingBuffer->Handle(), "TextureImage Update Staging Buffer");
     stagingBufferMemory.SetName("TextureImage Update Staging Memory");
 
-    // 映射内存并复制数据
+    // Map the memory and copy the data.
     const auto stagingData = stagingBufferMemory.Map(0, size);
     std::memcpy(stagingData, data, size);
     stagingBufferMemory.Unmap();
 
-    // 将图像从着色器读取转换为传输目标布局
+    // Transition the image from shader-read to transfer-destination layout.
     image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    // 定义复制区域
+    // Define the copy region.
     VkBufferImageCopy region{};
     region.bufferOffset = (sourceWidth * startY + startX) * 4;  // 4 bytes per pixel
-    region.bufferRowLength = sourceWidth;  // 紧凑排列
-    region.bufferImageHeight = sourceHeight;  // 紧凑排列
+    region.bufferRowLength = sourceWidth;  // Tightly packed.
+    region.bufferImageHeight = sourceHeight;  // Tightly packed.
 
     region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     region.imageSubresource.mipLevel = 0;
@@ -192,7 +192,7 @@ void TextureImage::UpdateDataMainThread(
     region.imageOffset = {static_cast<int32_t>(startX), static_cast<int32_t>(startY), 0};
     region.imageExtent = {width, height, 1};
 
-    // 执行区域复制
+    // Execute the region copy.
     Vulkan::SingleTimeCommands::Submit(commandPool, [&](VkCommandBuffer commandBuffer)
     {
         vkCmdCopyBufferToImage(
@@ -204,10 +204,10 @@ void TextureImage::UpdateDataMainThread(
             &region);
     });
 
-    // 复制完成后，将图像转换回着色器只读布局
+    // Transition the image back to shader-read-only layout after the copy.
     image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_GENERAL);
 
-    // 清理临时资源
+    // Release temporary resources.
     stagingBuffer.reset();
 }
 

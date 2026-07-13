@@ -401,7 +401,7 @@ namespace Assets
             ambientArenaBufferMemory_->Unmap();
         }
 
-        // 太阳方向光 CSM：4 个单层 D32_SFLOAT 阴影图，初始 layout = DEPTH_READ_ONLY。
+        // Directional-sun CSM: four single-layer D32_SFLOAT shadow maps, initially in DEPTH_READ_ONLY layout.
         {
             const auto& device = commandPool.Device();
             const VkExtent2D extent{kSunShadowResolution, kSunShadowResolution};

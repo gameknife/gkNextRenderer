@@ -961,7 +961,7 @@ namespace Vulkan
                 overlay_.wireframePipeline->RenderPass());
         }
 
-        // 公用Pipeline
+        // Shared pipelines.
         overlay_.fsrComposePipeline.reset( new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.UpScaleFSR.comp.slang.spv", 20));
         overlay_.bufferClearPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*frame_.swapChain, "assets/shaders/Util.BufferClear.comp.slang.spv", 4));
         // Shared swap-chain resources must cover every registered renderer because
@@ -1000,7 +1000,7 @@ namespace Vulkan
         overlay_.visibilityPipeline.reset(new PipelineCommon::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
         overlay_.visibilityFrameBuffer.reset(new FrameBuffer(frame_.swapChain->RenderExtent(), GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(), overlay_.visibilityPipeline->RenderPass()));
 
-        // 太阳方向光 CSM 阴影 pass + 注册 4 个 cascade 到 Bindless
+        // Directional-sun CSM shadow pass; register four cascades with the bindless set.
         {
             overlay_.sunShadowPass.reset(new Shadow::ShadowMapPass(*ctx_.device));
             overlay_.sunShadowPass->CreateResources(GetScene());
@@ -1020,7 +1020,7 @@ namespace Vulkan
 
     void VulkanBaseRenderer::CreateSwapChain()
     {
-        // 窗口等待
+        // Wait for the window.
         while (ctx_.window->IsMinimized())
         {
             ctx_.window->WaitForEvents();
@@ -1100,7 +1100,7 @@ namespace Vulkan
         frame_.queuedSignalSemaphores.clear();
         frame_.queuedSignalValues.clear();
 
-        // 公用RenderImages
+        // Shared render images.
         CreateRenderImages();
         renderViews_->CreateSwapChain(SwapChain());
         CreateSceneSwapChainResources();

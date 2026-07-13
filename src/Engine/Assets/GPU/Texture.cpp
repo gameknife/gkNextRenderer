@@ -328,7 +328,7 @@ namespace Assets
         uint32_t newTextureIdx = 0;
         if (textureNameMap_.find(texname) != textureNameMap_.end())
         {
-            // 这里要判断一下，如果TextureUnLoaded，重新绑定
+            // Rebind textures that have transitioned to TextureUnLoaded.
             if(textureNameMap_[texname].Status_ == ETextureStatus::ETS_Unloaded)
             {
                 textureNameMap_[texname].Status_ = ETextureStatus::ETS_Loaded;
@@ -338,7 +338,7 @@ namespace Assets
             else
             {
                 textureNameMap_[texname].Lifetime_ = lifetime;
-                // 这里要判断一下，如果已经加载了，直接返回
+                // Return immediately if the texture is already loaded.
                 return textureNameMap_[texname].GlobalIdx_;
             }
         }

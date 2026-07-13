@@ -241,14 +241,14 @@ void FCPUBrickTable::UploadGPU(Vulkan::DeviceMemory& deviceMemory, size_t tableB
 
 void FCPUPageIndex::UpdateData(const std::vector<FCPUProbeBaker>& bakers)
 {
-    // 粗暴实现，先全部page置空
+    // Simple implementation: clear every page first.
     for (auto& page : pageIndex)
     {
         page = {};
         page.voxelCount = 0;
     }
 
-    // 聚合所有cascade，构建全局PageIndex覆盖
+    // Aggregate all cascades to build the global PageIndex coverage.
     for (const FCPUProbeBaker& baker : bakers)
     {
         const uint32_t voxelCount = static_cast<uint32_t>(baker.voxels.size());
@@ -269,7 +269,7 @@ void FCPUPageIndex::UpdateData(const std::vector<FCPUProbeBaker>& bakers)
 
             Assets::PageIndex& page = GetPage(worldPos);
 
-            // 当前仅使用voxelCount>0做粗粒度裁剪，保持占用标记语义即可
+            // Coarse culling currently only tests voxelCount > 0; preserve occupancy-marker semantics.
             page.voxelCount = 1;
         }
     }
@@ -277,22 +277,22 @@ void FCPUPageIndex::UpdateData(const std::vector<FCPUProbeBaker>& bakers)
 
 Assets::PageIndex& FCPUPageIndex::GetPage(glm::vec3 worldpos)
 {
-    // 假设CUBE_OFFSET定义了世界空间的起始位置
+    // CUBE_OFFSET defines the world-space origin.
     glm::vec3 relativePos = worldpos - Assets::ACGI_PAGE_OFFSET;
 
-    // 计算页面索引，假设每个page对应PAGE_UNIT的世界空间距离
-    // 使用xz平面进行映射
+    // Compute the page index, with each page spanning PAGE_UNIT in world space.
+    // Map on the XZ plane.
     int pageX = static_cast<int>(relativePos.x / Assets::ACGI_PAGE_SIZE);
     int pageZ = static_cast<int>(relativePos.z / Assets::ACGI_PAGE_SIZE);
 
-    // 限制在有效范围内
+    // Clamp to the valid range.
     pageX = glm::clamp(pageX, 0, Assets::ACGI_PAGE_COUNT - 1);
     pageZ = glm::clamp(pageZ, 0, Assets::ACGI_PAGE_COUNT - 1);
 
-    // 计算一维索引
+    // Compute the linear index.
     int index = pageZ * Assets::ACGI_PAGE_COUNT + pageX;
 
-    // 返回对应的PageIndex引用
+    // Return the corresponding PageIndex reference.
     return pageIndex[index];
 }
 

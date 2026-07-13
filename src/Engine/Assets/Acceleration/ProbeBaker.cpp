@@ -149,7 +149,7 @@ float DetectDistance(FLOAT3 origin, FLOAT3 rayDir, float cubeUnit)
 
 bool InsideGeometry(FLOAT3& origin, FLOAT3 rayDir, VoxelData& outCube, float& distance, float cubeUnit)
 {
-    // 求交测试
+    // Intersection test.
     vec3 outNormal;
     float outRayDist;
     uint tempMaterialId;
@@ -163,7 +163,7 @@ bool InsideGeometry(FLOAT3& origin, FLOAT3 rayDir, VoxelData& outCube, float& di
             FMaterial hitMaterial = FetchMaterial(tempMaterialId);
             outCube.matId = tempMaterialId;
 
-            // 命中反面，识别为固体，并将lightprobe推出体外
+            // A back-face hit indicates solid geometry; push the light probe outside it.
             if (dot(outNormal, rayDir) > 0.0 || ((hitMaterial.gpuMaterial_.MaterialModel == Material::Enum::DiffuseLight)))// && OutRayDist < 0.02f))
             {
                 distance = 0;
@@ -186,7 +186,7 @@ void VoxelizeCube(VoxelData& cube, FLOAT3 origin, float cubeUnit)
     float distPZ = 255.0f;
     float distNZ = 255.0f;
 
-    // 现在是向轴向上发射了6根光线，记录下距离，并用于后续采样判断
+    // Cast six axis-aligned rays and retain their distances for later sampling decisions.
     InsideGeometry(origin, FLOAT3(0, 1, 0), cube, distPY, cubeUnit);
     InsideGeometry(origin, FLOAT3(0, -1, 0), cube, distNY, cubeUnit);
     InsideGeometry(origin, FLOAT3(1, 0, 0), cube, distPX, cubeUnit);
@@ -208,7 +208,7 @@ void VoxelizeCube(VoxelData& cube, FLOAT3 origin, float cubeUnit)
         minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, -1), cubeUnit)});
     }
 
-    // 现在，相当于每一个体素，都有了一个距离场，通过判断这个，可以快速跳过？
+    // Each voxel now has a distance field that can be used for fast skipping.
     distPY = glm::fclamp(distPY / cubeUnit, 0.0f, 1.0f);
     distNY = glm::fclamp(distNY / cubeUnit, 0.0f, 1.0f);
     distPX = glm::fclamp(distPX / cubeUnit, 0.0f, 1.0f);

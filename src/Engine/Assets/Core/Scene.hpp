@@ -249,7 +249,7 @@ namespace Assets
         TextureImage& ShadowMap() const;
         TextureImage& EnsureCpuShadowMap(Vulkan::CommandPool& commandPool);
 
-        // GPU CSM 资源（4 个 cascade，单层 D32_SFLOAT，独立 image）。
+        // GPU CSM resources: four cascades, each backed by a separate single-layer D32_SFLOAT image.
         Vulkan::Image& SunShadowImage(uint32_t cascade) const { return *sunShadowImages_[cascade]; }
         const Vulkan::ImageView& SunShadowImageView(uint32_t cascade) const { return *sunShadowViews_[cascade]; }
         const Vulkan::Sampler& SunShadowSampler() const { return *sunShadowSampler_; }

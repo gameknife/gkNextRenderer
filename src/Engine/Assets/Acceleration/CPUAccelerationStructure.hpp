@@ -64,8 +64,8 @@ struct FCPUBLASContext
     std::vector<FCPUBLASVertInfo> extinfos;
 };
 
-// 抽象一个CPUBaker，拥有独立的上下文和独立的Task发起机制
-// 由CpuAS来控制
+// A CPU baker owns an independent context and task-dispatch mechanism.
+// Its lifetime and execution are controlled by CpuAS.
 struct FCPUProbeBaker
 {
     uint32_t cascadeIndex = 0;

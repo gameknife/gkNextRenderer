@@ -19,7 +19,7 @@ namespace
 {
     constexpr uint32_t maxJitterFrameCount = 256;
 
-    // 生成Halton序列的单一维度
+    // Generate one dimension of a Halton sequence.
     float HaltonSequence(int index, int base)
     {
         float f = 1.0f;
@@ -146,7 +146,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         {
             if (!viewState.cachedSunCascadesValid)
             {
-                // 未初始化 cascade 对应的贴图已经被清成 depth=1，先给 UBO 一个有效矩阵。
+                // The uninitialized cascade image is already cleared to depth=1; provide the UBO a valid matrix.
                 viewState.cachedSunCascades = cascades;
             }
             if (forceRefresh)

@@ -487,20 +487,20 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Sc
 }
 void FCPUAccelerationStructure::ClearAllTasks()
 {
-    // 等待所有并行任务完成
+    // Wait for all parallel tasks to finish.
     Tasks::TaskCoordinator::GetInstance()->WaitForAllParralledTask();
     
-    // 清空待更新队列
+    // Clear the pending-update queue.
     while (!needUpdateGroups.empty())
     {
         needUpdateGroups.pop();
     }
     
-    // 清空当前批次任务列表
+    // Clear the current batch's task list.
     lastBatchTasks.clear();
     distanceFieldRebuildTasks.clear();
     
-    // 重置刷新标志
+    // Reset the refresh flag.
     needFlush = false;
     distanceFieldRebuildScheduled_ = false;
     ClearNavRelevantDirtyBounds();

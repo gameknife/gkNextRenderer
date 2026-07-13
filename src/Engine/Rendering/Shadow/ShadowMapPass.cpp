@@ -100,7 +100,7 @@ namespace Vulkan::Shadow
             Check(vkCreateRenderPass(device_.Handle(), &rpInfo, nullptr, &renderPass_), "create shadow render pass");
         }
 
-        // Pipeline layout：复用 bindless 全局描述符集 + GPUScene push constant
+        // Pipeline layout: reuse the global bindless descriptor set and GPUScene push constants.
         {
             std::vector<DescriptorSetManager*> managers = {
                 &Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager(),
@@ -112,7 +112,7 @@ namespace Vulkan::Shadow
             pipelineLayout_.reset(new PipelineLayout(device_, managers, 1, &pushConstantRange, 1));
         }
 
-        // 图形管线
+        // Graphics pipeline.
         {
             const VkExtent2D extent{Assets::Scene::kSunShadowResolution, Assets::Scene::kSunShadowResolution};
 
@@ -128,7 +128,7 @@ namespace Vulkan::Shadow
                 .Build(pipelineLayout_->Handle(), renderPass_, "create shadow graphics pipeline");
         }
 
-        // 4 个 framebuffer
+        // Four framebuffers, one per cascade.
         for (uint32_t i = 0; i < Assets::Scene::kSunShadowCascadeCount; ++i)
         {
             VkImageView attachment = scene.SunShadowImageView(i).Handle();

@@ -359,7 +359,7 @@ namespace Assets
             // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,0,-1), NextMotionType::Static);
         }
 
-        // 重建universe mesh buffer, 这个可以比较静态
+        // Rebuild the universe mesh buffer; this data is relatively static.
         std::vector<GPUVertex> vertices;
         std::vector<uint32_t> indices;
         std::vector<glm::vec4> allWeights;
@@ -400,7 +400,7 @@ namespace Assets
             std::vector<std::vector<uint32_t>> slicedIndices;
             constexpr uint32_t maxIndicesPerSlice = 65535 * 3;
 
-            // 将localIndices分片，每片最多65535*3个索引
+            // Split localIndices into chunks of at most 65535 * 3 indices.
             for (size_t i = 0; i < localIndices.size(); i += maxIndicesPerSlice)
             {
                 size_t endIndex = std::min(i + maxIndicesPerSlice, localIndices.size());
@@ -460,7 +460,7 @@ namespace Assets
 
             model.SetSectionCount(processSection);
 
-            // 在编辑器模式下保留CPU网格数据用于场景保存功能
+            // Retain CPU mesh data in editor mode for scene saving.
             if (!GOption->KeepCPUMeshData)
             {
                 model.FreeMemory();
@@ -489,7 +489,7 @@ namespace Assets
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SkinJoints", flags, allJoints, skinJointBuffer_,
                                                skinJointBufferMemory_);
 
-        // 一些数据
+        // Auxiliary scene data.
         lightCount_ = static_cast<uint32_t>(lights_.size());
         indicesCount_ = static_cast<uint32_t>(indices.size());
         vertexCount_ = static_cast<uint32_t>(vertices.size());

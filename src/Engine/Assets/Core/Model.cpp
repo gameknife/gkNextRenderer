@@ -50,7 +50,7 @@ namespace Assets
         float shadowFar) const
     {
         constexpr int CASCADE_COUNT = 4;
-        constexpr float SPLIT_LAMBDA = 0.75f;   // 偏 log
+        constexpr float SPLIT_LAMBDA = 0.75f;   // Bias toward logarithmic splits.
         constexpr float SHADOW_MAP_RESOLUTION = 1024.0f;
 
         const float n = std::max(cameraNear, 1e-3f);
@@ -70,7 +70,7 @@ namespace Assets
         const glm::vec3 lightDir = glm::normalize(-sunDir);
         const glm::mat4 invCamVP = glm::inverse(cameraViewProj);
 
-        // 主相机视椎 8 顶点：z=0 是 Vulkan 近平面 (GLM_FORCE_DEPTH_ZERO_TO_ONE)，z=1 是远平面。
+        // Eight main-camera frustum corners: z=0 is Vulkan's near plane (GLM_FORCE_DEPTH_ZERO_TO_ONE), z=1 is far.
         const glm::vec4 ndc[8] = {
             {-1, -1, 0, 1}, {1, -1, 0, 1}, {1, 1, 0, 1}, {-1, 1, 0, 1},
             {-1, -1, 1, 1}, {1, -1, 1, 1}, {1, 1, 1, 1}, {-1, 1, 1, 1},
@@ -109,11 +109,11 @@ namespace Assets
             radius = std::ceil(radius * 16.0f) / 16.0f;
 
             const glm::vec3 lightUp = std::abs(lightDir.y) > 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
-            const float backOff = radius + 50.0f;       // 让光源相机后挪一段，吃到背面阻挡物
+            const float backOff = radius + 50.0f;       // Move the light camera back to include rear occluders.
             const glm::vec3 lightPos = center - lightDir * backOff;
             glm::mat4 lightView = glm::lookAt(lightPos, center, lightUp);
 
-            // Stable CSM: 把 cascade 中心在光空间按 texel 尺寸吸附，避免镜头移动时高层 cascade 整体抖动。
+            // Stable CSM: snap the cascade center to light-space texels to prevent camera-motion shimmer.
             const float worldUnitsPerTexel = (radius * 2.0f) / SHADOW_MAP_RESOLUTION;
             glm::vec4 centerLS = lightView * glm::vec4(center, 1.0f);
             centerLS.x = std::floor(centerLS.x / worldUnitsPerTexel) * worldUnitsPerTexel;
@@ -160,7 +160,7 @@ namespace Assets
         return T{};
     }
 
-    // 偏特化T == glm::quat
+    // Partial specialization for T == glm::quat.
     template <>
     glm::quat AnimationChannel<glm::quat>::Sample(float time) const
     {
