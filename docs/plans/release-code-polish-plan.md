@@ -1,7 +1,7 @@
 ---
 title: "Release 前代码修缮：书写规范、结构卫生与明显错误清理"
 category: plan
-status: 草案（待决策项拍板后执行）
+status: 执行中（Phase 1-4 已完成，Phase 5 待跨平台彩排）
 owner: engine
 created: 2026-07-13
 last_updated: 2026-07-13
@@ -9,13 +9,30 @@ last_updated: 2026-07-13
 
 # Release 前代码修缮：书写规范、结构卫生与明显错误清理
 
-> 状态：分析完成 / 待执行 | 编写日期：2026-07-13
+> 状态：Phase 1-4 已完成 / Phase 5 待执行 | 编写日期：2026-07-13
 > 背景：项目即将进入对外发布节奏（系列文章深链源码 + README 导流 + 预编译 release）。多篇文章会把读者直接带到仓库的具体文件与行号，这批"公开检视路径"上的拼写错误、命名混乱与文档漂移会直接损伤可信度。本计划聚焦**书写规范、结构明显不合理、代码不优雅、明显错误**四类问题，不做大型架构重构。
 >
 > 与既有计划的边界：
 > - 架构级拆分归 [engine-core-refactor-round5.md](engine-core-refactor-round5.md) 与 [vulkan-base-renderer-architecture-audit-fable.md](../notes/vulkan-base-renderer-architecture-audit-fable.md)，本计划不重复其条目；
 > - StudioSim/AirportSim 公共层抽取归 [studiosim-refactor-simkit-plan.md](studiosim-refactor-simkit-plan.md)，本计划仅标注其发布相关性；
 > - 本计划的全部任务均为**行为不变**的修缮：编译等价、渲染结果等价（用 `gnb shot` / VisualTest 验证）。
+
+## 0. 执行进度（2026-07-13）
+
+| 阶段 | 状态 | 落地提交 / 说明 |
+| --- | --- | --- |
+| Phase 1 | 完成 | `7c6588c7`：拼写、死代码、文档漂移、工具链；MIT LICENSE 同步落地 |
+| Phase 2 | 完成 | `de2e839e`：深链文件精修 |
+| Phase 3 | 完成 | `93f4447e`：ScadLoader 结构整理与物理崩溃保护 |
+| Phase 4a | 完成 | `5aceac61`：Engine/Modules tab 缩进统一为 4 空格 |
+| Phase 4b | 完成 | `cff3d43e`：Engine 头文件统一为 `.hpp`；全 target `--reconfigure` 构建通过 |
+| Phase 4c | 完成 | `2e5e034c`：Engine 中文注释统一英译；171 个单测（49,525 条断言）通过 |
+| 拼写防护补齐 | 完成 | `9ad37dc`：新增 `gnb typos`；全量 Go 测试与仓库拼写检查通过 |
+| Phase 5 | 待执行 | Windows/Linux/macOS clean-clone 彩排、文章命令实测、预编译产物冒烟 |
+
+当前已知验证阻塞：macOS 上 `gkNextVisualTest` 在首个场景截图时抛出
+`screenshot capture was not recorded before present`，尚未进入 baseline diff。全量编译、单测与
+拼写检查均已通过；该问题需按视觉测试截图时序单独诊断，不计作本轮机械修缮的像素回归。
 
 ---
 
