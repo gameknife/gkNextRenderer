@@ -439,24 +439,6 @@ void NextEngine::Start()
         it = renderFrameConsumers_.erase(it);
     }
 
-    // Assets layer hooks (GlobalTexturePool must not depend on Runtime).
-    if (auto* texturePool = Assets::GlobalTexturePool::GetInstance())
-    {
-        texturePool->SetHdrStreamingPolicy([this]() { return config_.userSettings.StreamHDRTextures; });
-        texturePool->SetHdrShUpdatedCallback([this]()
-        {
-            if (scene_)
-            {
-                scene_->UpdateHDRSH();
-            }
-            if (renderer_)
-            {
-                renderer_->OnHdrShUpdated();
-            }
-        });
-    }
-    
-    
     auto resolvedRendererType = ResolveRendererType(
         renderer_->CurrentLogicRendererType(), renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget());
     if (resolvedRendererType != renderer_->CurrentLogicRendererType())
@@ -1096,6 +1078,25 @@ VkAccelerationStructureKHR NextEngine::TryGetGPUAccelerationStructureHandle() co
 
 void NextEngine::OnRendererDeviceSet()
 {
+    // Configure the texture policy before the initial HDR textures are queued. The
+    // GlobalTexturePool is created immediately before this callback, so HDR loads
+    // can start at their lowest mip instead of being demoted one per tick later.
+    if (auto* texturePool = Assets::GlobalTexturePool::GetInstance())
+    {
+        texturePool->SetHdrStreamingPolicy([this]() { return config_.userSettings.StreamHDRTextures; });
+        texturePool->SetHdrShUpdatedCallback([this]()
+        {
+            if (scene_)
+            {
+                scene_->UpdateHDRSH();
+            }
+            if (renderer_)
+            {
+                renderer_->OnHdrShUpdated();
+            }
+        });
+    }
+
     // global textures
     // texture id 0: dynamic hdri sky
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/river_road_2.hdr");

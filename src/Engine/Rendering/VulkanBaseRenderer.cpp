@@ -1712,21 +1712,6 @@ namespace Vulkan
         frame_.currentFrame = (frame_.currentFrame + 1) % frame_.inFlightFences.size();
         resetUpscalerHistory_ = false;
         frame_.frameCount++;
-        if (frame_.frameCount % 300 == 0)
-        {
-            PipelineCommon::FResourceStateStats stats = PrimaryView().ResourceStates().Stats();
-            for (const auto& view : renderViews_->AdditionalViews())
-            {
-                stats += view->ResourceStates().Stats();
-            }
-            stats += swapchainStateTracker_.Stats();
-            stats += visibilityStateTracker_.Stats();
-            stats += auxiliaryImageStateTracker_.Stats();
-            SPDLOG_INFO("[ResourceState] frames={} uses={} barriers={} discards={} barrier-rate={:.1f}%",
-                        frame_.frameCount, stats.uses, stats.barriers, stats.discards,
-                        stats.uses > 0 ? 100.0 * double(stats.barriers) / double(stats.uses) : 0.0);
-        }
-    
     }
 
     void VulkanBaseRenderer::BeforeNextFrame()
