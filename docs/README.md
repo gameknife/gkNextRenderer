@@ -31,6 +31,7 @@
 | [AmbientCube 命中驱动探针残留（SHARC 式 insert/evict）— 设计方案与开发计划](designs/ambientcube-hit-driven-residency-design.md) | ✅ 已完成 | 2026-06-24 |
 | [高斯溅射（SOG 加载 + GS 渲染模式）设计与开发计划](designs/gaussian-splatting-sog-design.md) | ✅ 已完成 | 2026-06-18 |
 | [多视口渲染（RenderView：单窗口分区 + 离屏到纹理 + 多相机/缩略图）设计与开发计划](designs/multi-viewport-renderview-design.md) | 📝 草案 | 2026-06-26 |
+| [NextAI 面向具体产品能力的目标架构](designs/nextai-product-focused-architecture.md) | 📝 草案 | 2026-07-15 |
 | [NextRA —— OpenRA 风格帧同步 RTS 原型（MVP 架构设计）](designs/nextra-rts-mvp-design.md) | 📝 草案 | 2026-06-26 |
 | [SCAD 加载器（SCADLoader）设计与开发计划](designs/scad-loader-design.md) | ✅ 已完成 | 2026-05-30 |
 | [SCAD Model Generator（SCAD Studio）设计与开发计划](designs/scad-model-generator-design.md) | ✅ 已完成 | 2026-06-07 |
@@ -47,8 +48,8 @@
 | [AmbientCube 显存占用降低 — 可行性评估与开发计划](plans/ambient-cube-memory-reduction.md) | ✅ 已完成 | 2026-06-07 |
 | [DLSS 超分无抗锯齿 / scale 无收益 —— 根因定位与修复开发计划](plans/dlss-superres-no-aa-fix.md) | 📝 草案 | 2026-06-20 |
 | [gkNextEditor MaterialEditor 扩展设计与开发计划](plans/gknexteditor-material-editor-expansion-plan.md) | ⚪ 待实现 | 2026-06-25 |
-| [NextAI 面向具体产品能力的轻量化重构计划](plans/nextai-product-focused-refactor-plan.md) | 📝 草案 | 2026-07-14 |
-| [gnb AI / Agent 统一控制面重构计划](plans/gnb-ai-agent-unification-refactor-plan.md) | 🗄 已取代 | 2026-07-14 |
+| [NextAI 面向具体产品能力的轻量化重构计划](plans/nextai-product-focused-refactor-plan.md) | 📝 草案 | 2026-07-15 |
+| [gnb AI / Agent 统一控制面重构计划](plans/gnb-ai-agent-unification-refactor-plan.md) | 🗄 已取代 | 2026-07-15 |
 | [Git 历史资产瘦身方案](plans/repository-history-asset-slimming-plan.md) | 📝 草案 | 2026-07-07 |
 | [Release 前代码修缮：书写规范、结构卫生与明显错误清理](plans/release-code-polish-plan.md) | 📝 草案 | 2026-07-13 |
 | [src/Engine 核心层精炼 Round 2：god class 拆解 + include 卫生](plans/engine-core-refactor-round2.md) | 📝 草案 | 2026-06-11 |

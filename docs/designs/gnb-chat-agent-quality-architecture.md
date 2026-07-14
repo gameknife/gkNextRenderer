@@ -4,12 +4,12 @@ category: design
 status: 已被取代
 owner: tools/gnb
 created: 2026-07-13
-last_updated: 2026-07-14
+last_updated: 2026-07-15
 ---
 
 # gnb Chat Agent 质量目标架构
 
-> **方向更新（2026-07-14）：** gnb Dashboard 不再向 Coding Agent 演进。本文保留为历史分析，当前目标架构见 [NextAI 面向具体产品能力的轻量化重构计划](../plans/nextai-product-focused-refactor-plan.md)。
+> **方向更新（2026-07-15）：** gnb Dashboard 不再向 Coding Agent 演进。本文保留为历史分析，当前目标架构见 [NextAI 面向具体产品能力的目标架构](nextai-product-focused-architecture.md)，执行顺序见 [轻量化重构计划](../plans/nextai-product-focused-refactor-plan.md)。
 
 > 目标：在保留 gnb 统一 AI 控制面的前提下，把 Dashboard Chat 从“支持 tool call 的仓库问答”演进为可验证、可恢复、安全的 coding agent。
 >

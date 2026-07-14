@@ -4,12 +4,12 @@ category: plan
 status: 已被取代
 owner: tools/gnb
 created: 2026-07-13
-last_updated: 2026-07-14
+last_updated: 2026-07-15
 ---
 
 # gnb Chat Agent 质量提升开发计划
 
-> **方向更新（2026-07-14）：** Dashboard 不再以 Research/Coding Agent 为产品目标。本计划不再执行；Dashboard 的目标已收敛为普通 Chat + 最小 Tool Call 能力探针，见 [NextAI 面向具体产品能力的轻量化重构计划](nextai-product-focused-refactor-plan.md)。
+> **方向更新（2026-07-15）：** Dashboard 不再以 Research/Coding Agent 为产品目标。本计划不再执行；当前边界见 [NextAI 面向具体产品能力的目标架构](../designs/nextai-product-focused-architecture.md)，执行顺序见 [轻量化重构计划](nextai-product-focused-refactor-plan.md)。
 
 > 目标：按可独立合并、可回归、可回滚的里程碑实施 [质量目标架构](../designs/gnb-chat-agent-quality-architecture.md)。
 >
