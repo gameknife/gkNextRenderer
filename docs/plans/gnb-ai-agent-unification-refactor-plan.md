@@ -1,15 +1,17 @@
 ---
 title: "gnb AI / Agent 统一控制面重构计划"
 category: plan
-status: 草案
+status: 已被取代
 owner: tools/engine
 created: 2026-07-12
-last_updated: 2026-07-12
+last_updated: 2026-07-14
 ---
 
 # gnb AI / Agent 统一控制面重构计划
 
-> 状态：草案，待后续 agent 分阶段实施  
+> **方向更新（2026-07-14）：** 本计划中“统一 provider/profile/bridge”的基础设施方向继续保留；“通用 Editor Agent、repo tools、开放式 Agent Runtime”等后续目标不再执行。AgentDriver 与 LLM 无关，其后续演进应由验证系统独立规划，不再捆绑在 AI 重构中。新的当前计划是 [NextAI 面向具体产品能力的轻量化重构计划](nextai-product-focused-refactor-plan.md)。本文仅保留为历史设计记录。
+
+> 状态：已被取代，不再按本文里程碑继续实施
 > 目标：把 provider 调用、Agent 循环、会话、工具调度和领域生成工作流统一收敛到 `gnb`；NextEngine 只保留一个薄客户端及必须访问运行时状态的工具实现。  
 > 范围：`tools/gnb/**`、`src/Modules/NextAI/**`、现有 AI 使用方，以及最后一阶段的确定性 `AgentDriver` 控制面迁移。  
 > 不要求本计划的编写者实施代码；本文应作为后续 agent 的执行依据。

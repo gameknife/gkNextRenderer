@@ -16,6 +16,7 @@
 | [gnb 架构与代码导览](guides/gnb-architecture.md) | 🟢 现行 | 2026-06-12 |
 | [gnb CLI](guides/gnb-cli.md) | 🟢 现行 | 2026-06-12 |
 | [gnb 技术栈说明](guides/gnb-tech-stack.md) | 🟢 现行 | 2026-06-12 |
+| [高 Token 效率的 Agent 工程开发方式](guides/token-efficient-agent-development.md) | 🟢 现行 | 2026-07-13 |
 | [Gaussian Splat / SOG](../AGENT_GUIDE/GaussianSplat.md) | 🟢 现行 | 2026-06-18 |
 | [SCAD 场景生成指引（AGENT 向）](guides/scad-scene-authoring-guide.md) | 🟢 现行 | 2026-06-12 |
 | [Soft Mesh Shader GPU-Driven 提交路径](guides/soft-mesh-shader-gpu-driven-submit.md) | 🟢 现行 | 2026-06-07 |
@@ -46,7 +47,8 @@
 | [AmbientCube 显存占用降低 — 可行性评估与开发计划](plans/ambient-cube-memory-reduction.md) | ✅ 已完成 | 2026-06-07 |
 | [DLSS 超分无抗锯齿 / scale 无收益 —— 根因定位与修复开发计划](plans/dlss-superres-no-aa-fix.md) | 📝 草案 | 2026-06-20 |
 | [gkNextEditor MaterialEditor 扩展设计与开发计划](plans/gknexteditor-material-editor-expansion-plan.md) | ⚪ 待实现 | 2026-06-25 |
-| [gnb AI / Agent 统一控制面重构计划](plans/gnb-ai-agent-unification-refactor-plan.md) | 📝 草案 | 2026-07-12 |
+| [NextAI 面向具体产品能力的轻量化重构计划](plans/nextai-product-focused-refactor-plan.md) | 📝 草案 | 2026-07-14 |
+| [gnb AI / Agent 统一控制面重构计划](plans/gnb-ai-agent-unification-refactor-plan.md) | 🗄 已取代 | 2026-07-14 |
 | [Git 历史资产瘦身方案](plans/repository-history-asset-slimming-plan.md) | 📝 草案 | 2026-07-07 |
 | [Release 前代码修缮：书写规范、结构卫生与明显错误清理](plans/release-code-polish-plan.md) | 📝 草案 | 2026-07-13 |
 | [src/Engine 核心层精炼 Round 2：god class 拆解 + include 卫生](plans/engine-core-refactor-round2.md) | 📝 草案 | 2026-06-11 |

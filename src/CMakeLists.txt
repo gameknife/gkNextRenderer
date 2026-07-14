@@ -107,6 +107,16 @@ function(gk_enable_fast_dev_link target)
 	endif()
 endfunction()
 
+function(gk_enable_minimal_size_link target)
+	if ( MSVC )
+		target_link_options(${target} PRIVATE
+			/INCREMENTAL:NO
+			/OPT:REF
+			/OPT:ICF
+		)
+	endif()
+endfunction()
+
 
 # library and app
 if ( ANDROID )
@@ -603,7 +613,11 @@ foreach(target IN LISTS AllTargets)
 		get_target_property(_target_type ${target} TYPE)
 		if ( _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests )
 			gk_enable_unity_build(${target} 8)
-			gk_enable_fast_dev_link(${target})
+			if ( ${target} STREQUAL gkNextMinimalRenderer )
+				gk_enable_minimal_size_link(${target})
+			else()
+				gk_enable_fast_dev_link(${target})
+			endif()
 		endif()
 		endif()
 	endif()

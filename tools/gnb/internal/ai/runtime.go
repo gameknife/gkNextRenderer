@@ -8,6 +8,7 @@ import (
 	aiconfig "github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/config"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/protocol"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/provider"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/provider/claudecompat"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/provider/gemini"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/provider/localllama"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/provider/ollama"
@@ -54,6 +55,12 @@ func NewRuntime(repoRoot string, cfg baseconfig.Config) (*Runtime, error) {
 			adapter = localllama.New(id, repoRoot, cfg.External.LLM)
 		case "openai-compatible":
 			adapter = openaicompat.New(openaicompat.Config{
+				ID: id, DisplayName: providerConfig.DisplayName, Endpoint: providerConfig.Endpoint,
+				APIKey: cfg.AI.ProviderAPIKey(id), DefaultModel: providerConfig.DefaultModel,
+				Models: providerConfig.Models,
+			})
+		case "claude-compatible":
+			adapter = claudecompat.New(claudecompat.Config{
 				ID: id, DisplayName: providerConfig.DisplayName, Endpoint: providerConfig.Endpoint,
 				APIKey: cfg.AI.ProviderAPIKey(id), DefaultModel: providerConfig.DefaultModel,
 				Models: providerConfig.Models,

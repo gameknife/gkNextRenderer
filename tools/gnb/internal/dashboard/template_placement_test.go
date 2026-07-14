@@ -33,3 +33,21 @@ func TestProviderSelectorIsOnlyRenderedInChatTab(t *testing.T) {
 		}
 	}
 }
+
+func TestStreamingChatRequestIncludesProviderSelection(t *testing.T) {
+	layout, err := templateFS.ReadFile("templates/layout.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(layout)
+	for _, expected := range []string{
+		"const provider = document.getElementById('chat-provider');",
+		"const profile = document.getElementById('chat-profile');",
+		"body.set('provider', provider.value);",
+		"body.set('profile', profile.value);",
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("streaming chat request is missing %q", expected)
+		}
+	}
+}

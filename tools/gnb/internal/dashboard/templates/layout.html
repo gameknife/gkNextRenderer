@@ -3246,12 +3246,14 @@
   async function handleChatSubmit(form) {
     const panel = form.closest('#chat-panel');
     const input = form.querySelector('textarea[name="message"]');
+    const provider = document.getElementById('chat-provider');
+    const profile = document.getElementById('chat-profile');
     const model = document.getElementById('chat-model');
     const session = document.getElementById('chat-session-id');
     const thinking = document.getElementById('chat-thinking');
     const maxTokens = document.getElementById('chat-max-tokens');
     const text = input?.value?.trim() || '';
-    if (!panel || !input || !model || !session || !text || form.dataset.busy === '1') return;
+    if (!panel || !input || !provider || !profile || !model || !session || !text || form.dataset.busy === '1') return;
 
     setChatError(panel, '');
     appendChatMessage(panel, 'user', text, true);
@@ -3263,6 +3265,8 @@
 
     const body = new URLSearchParams();
     body.set('session_id', session.value);
+    body.set('provider', provider.value);
+    body.set('profile', profile.value);
     body.set('model', model.value);
     body.set('message', text);
     body.set('thinking', thinking?.checked ? '1' : '0');
