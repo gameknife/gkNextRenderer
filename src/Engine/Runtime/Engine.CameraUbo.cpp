@@ -77,12 +77,12 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     });
 
     ubo.FastGather = config_.userSettings.FastGather;
-    ubo.SuperResolution = GOption->ReferenceMode ? 2 : config_.userSettings.SuperResolution;
+    ubo.SuperResolution = GOption->ReferenceMode ? 2 : renderer_->EffectiveSuperResolutionMode();
 
     glm::mat4x4 projectionUnJit = ubo.Projection;
     const bool noAmbientRenderer = renderer_->CurrentLogicRendererType() == Vulkan::ERT_SoftwareModernNoAmbient;
     const bool enableTaa = config_.userSettings.TAA && !noAmbientRenderer;
-    const bool enableStreamlineJitter = config_.userSettings.DLSS;
+    const bool enableStreamlineJitter = renderer_->IsDLSSSuperResolutionActive();
 
     if (enableTaa || enableStreamlineJitter)
     {

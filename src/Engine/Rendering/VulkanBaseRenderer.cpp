@@ -1046,20 +1046,47 @@ namespace Vulkan
         frame_.currentFence = nullptr;
         frame_.currentFenceSerial = 0;
         VkExtent2D renderExtent = frame_.swapChain->Extent();
+        dlssSuperResolutionActive_ = false;
+        fsrSuperResolutionActive_ = false;
+        effectiveSuperResolutionMode_ =
+            static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Native);
         if (!GOption->ReferenceMode)
         {
-            const bool dlssEnabled = caps_.supportDLSS && settings.DLSS && upscaler_;
-            if (dlssEnabled && upscaler_)
+            const auto resolvedMode = Rendering::Upscaler::ResolveUpscaleMode(
+                settings.SuperResolution,
+                frame_.swapChain->Extent());
+            effectiveSuperResolutionMode_ = resolvedMode.mode;
+
+            const FRendererContract& contract = GetRendererContract(logicRenderers_.current);
+            dlssSuperResolutionActive_ =
+                resolvedMode.enabled &&
+                HasAny(contract.post, EPostProcess::DLSS) &&
+                caps_.supportDLSS && settings.DLSS && upscaler_;
+
+            const bool fsrRequested =
+                resolvedMode.enabled &&
+                HasAny(contract.post, EPostProcess::SpatialUpscale) &&
+                settings.FSR;
+            fsrSuperResolutionActive_ =
+                fsrRequested && frame_.swapChain->SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT);
+
+            if (fsrRequested && !fsrSuperResolutionActive_)
+            {
+                SPDLOG_WARN("FSR compose requires swapchain STORAGE usage; using native rendering");
+            }
+
+            if (dlssSuperResolutionActive_)
             {
                 const auto optimal = upscaler_->GetOptimalRenderSettings(
-                    settings.SuperResolution,
+                    effectiveSuperResolutionMode_,
                     frame_.swapChain->Extent(),
-                    dlssEnabled);
+                    true);
                 renderExtent = optimal.renderExtent;
             }
-            else
+            else if (fsrSuperResolutionActive_)
             {
-                const auto& modeInfo = Rendering::Upscaler::GetUpscaleModeInfo(settings.SuperResolution);
+                const auto& modeInfo =
+                    Rendering::Upscaler::GetUpscaleModeInfo(effectiveSuperResolutionMode_);
                 renderExtent = Rendering::Upscaler::ScaleExtent(frame_.swapChain->Extent(), modeInfo.fallbackScale);
             }
         }
@@ -1118,6 +1145,10 @@ namespace Vulkan
         {
             return;
         }
+        dlssSuperResolutionActive_ = false;
+        fsrSuperResolutionActive_ = false;
+        effectiveSuperResolutionMode_ =
+            static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Native);
         renderViews_->ClearSchedule();
 
         for (auto& logicRenderer : logicRenderers_.renderers)
@@ -1920,8 +1951,7 @@ namespace Vulkan
         }, "resolve primary view source");
 
         bool resolvedByUpscaler = false;
-        if (HasAny(contract.post, EPostProcess::DLSS) && upscaler_ && SupportDLSS() &&
-            NextEngine::GetInstance()->GetUserSettings().DLSS)
+        if (HasAny(contract.post, EPostProcess::DLSS) && upscaler_ && dlssSuperResolutionActive_)
         {
             SCOPED_GPU_TIMER("DLSS resolve");
             TransitionSwapchainImage(
@@ -1938,18 +1968,8 @@ namespace Vulkan
             return;
         }
 
-        const bool fsrRequested = HasAny(contract.post, EPostProcess::SpatialUpscale) &&
-                                  NextEngine::GetInstance()->GetUserSettings().FSR;
-        const bool fsrEnabled = fsrRequested && SwapChain().SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT);
-        if (fsrRequested && !fsrEnabled)
-        {
-            static bool warnedMissingStorage = false;
-            if (!warnedMissingStorage)
-            {
-                SPDLOG_WARN("FSR compose requires swapchain STORAGE usage; falling back to blit");
-                warnedMissingStorage = true;
-            }
-        }
+        const bool fsrEnabled =
+            HasAny(contract.post, EPostProcess::SpatialUpscale) && fsrSuperResolutionActive_;
         if (fsrEnabled)
         {
             SCOPED_GPU_TIMER("FSR resolve");
@@ -2315,10 +2335,10 @@ namespace Vulkan
         inputs.frameIndex = static_cast<uint32_t>(frame_.frameCount);
         inputs.imageIndex = imageIndex;
         inputs.reset = resetUpscalerHistory_ || frame_.frameCount < 2;
-        inputs.enableDLSS = caps_.supportDLSS && settings.DLSS;
-        inputs.enableDLSSRR = caps_.supportDLSSRR && settings.DLSSRR;
+        inputs.enableDLSS = dlssSuperResolutionActive_;
+        inputs.enableDLSSRR = dlssSuperResolutionActive_ && caps_.supportDLSSRR && settings.DLSSRR;
         inputs.enableDLSSG = caps_.supportDLSSG && settings.DLSSG;
-        inputs.superResolutionMode = settings.SuperResolution;
+        inputs.superResolutionMode = effectiveSuperResolutionMode_;
         inputs.frameGenerationMultiplier = std::clamp(settings.DLSSGFrameMultiplier, 2u, 4u);
         inputs.hdrOutput = swapChain.IsHDR();
         inputs.renderExtent = swapChain.RenderExtent();

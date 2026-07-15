@@ -68,7 +68,7 @@ namespace NextCVar
         GK_CVAR_FLOAT("r.reproject.clampGammaHi", settings, ReprojectClampGammaHi, 2.5f, ECVarFlags::Archive, "ReProject history clamp: tight upper YCoCg-luma box half-width in sigmas (lower = less ghosting)");
         GK_CVAR_FLOAT("r.reproject.clampGammaLo", settings, ReprojectClampGammaLo, 5.0f, ECVarFlags::Archive, "ReProject history clamp: tight lower box half-width in sigmas (kept looser than upper to avoid black dots)");
         GK_CVAR_FLOAT("r.reproject.clampFloor", settings, ReprojectClampFloor, 0.5f, ECVarFlags::Archive, "ReProject history clamp: relative luma floor as a fraction of the filtered mean (guards against black dots)");
-        GK_CVAR_UINT_CB("r.superResolution", settings, SuperResolution, 0, ECVarFlags::Archive, "Super resolution mode (0-4)", std::bind(RequestSwapChainIfPossible, engine));
+        GK_CVAR_UINT_CB("r.superResolution", settings, SuperResolution, 5, ECVarFlags::Archive, "Super resolution mode (0=Quality,1=Balanced,2=Performance,3=Ultra Performance,4=Native/DLAA,5=Auto)", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlss", settings, DLSS, false, ECVarFlags::Archive, "Enable NVIDIA DLSS", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.fsr", settings, FSR, false, ECVarFlags::Archive, "Enable FSR1 spatial upscaling", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlssrr", settings, DLSSRR, false, ECVarFlags::Archive, "Enable NVIDIA DLSS Ray Reconstruction", std::bind(RequestSwapChainIfPossible, engine));

@@ -272,6 +272,8 @@ namespace Vulkan
         bool SupportDLSSRR() const { return caps_.supportDLSSRR; }
         bool SupportDLSSG() const { return caps_.supportDLSSG; }
         bool SupportReflex() const { return caps_.supportReflex; }
+        bool IsDLSSSuperResolutionActive() const { return dlssSuperResolutionActive_; }
+        uint32_t EffectiveSuperResolutionMode() const { return effectiveSuperResolutionMode_; }
         Rendering::Upscaler::FFrameGenerationState GetFrameGenerationState() const;
         bool HasFullAmbientCubeBudget() const { return caps_.fullAmbientCubeBudget; }
         void SetDenoiserEnabled(bool enabled) { caps_.supportDenoiser = enabled; }
@@ -519,6 +521,10 @@ namespace Vulkan
         bool visualDebug_{};
         bool requestRecreateSwapChain_ = false;
         bool resetUpscalerHistory_ = true;
+        bool dlssSuperResolutionActive_ = false;
+        bool fsrSuperResolutionActive_ = false;
+        uint32_t effectiveSuperResolutionMode_ =
+            static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Native);
 
         // Device / swapchain internals
         void SelectPhysicalDevice(uint32_t gpuIdx);

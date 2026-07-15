@@ -22,7 +22,7 @@ struct UserSettings final
     bool TAA {};
     bool FastGather = false;
     uint32_t PresentMode = 3;
-    uint32_t SuperResolution = 1;
+    uint32_t SuperResolution = 5;
     bool DLSS = false;
     bool FSR = false;
     bool DLSSRR = false;

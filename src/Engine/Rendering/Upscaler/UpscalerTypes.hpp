@@ -20,6 +20,7 @@ namespace Rendering::Upscaler
         Performance = 2,
         UltraPerformance = 3,
         Native = 4,
+        Auto = 5,
     };
 
     struct FUpscaleModeInfo
@@ -37,6 +38,9 @@ namespace Rendering::Upscaler
             {EUpscaleMode::Performance, "Performance", 2.0f},
             {EUpscaleMode::UltraPerformance, "Ultra Performance", 3.0f},
             {EUpscaleMode::Native, "Native", 1.0f},
+            // Auto has no fixed scale. ResolveUpscaleMode converts it to either
+            // disabled/native rendering or Quality before the provider sees it.
+            {EUpscaleMode::Auto, "Auto", 1.0f},
         };
 
         if (rawMode >= std::size(kModes))
@@ -44,6 +48,31 @@ namespace Rendering::Upscaler
             return kModes[0];
         }
         return kModes[rawMode];
+    }
+
+    struct FResolvedUpscaleMode
+    {
+        bool enabled = false;
+        uint32_t mode = static_cast<uint32_t>(EUpscaleMode::Native);
+    };
+
+    inline FResolvedUpscaleMode ResolveUpscaleMode(uint32_t rawMode, VkExtent2D outputExtent)
+    {
+        const auto& modeInfo = GetUpscaleModeInfo(rawMode);
+        if (modeInfo.mode != EUpscaleMode::Auto)
+        {
+            return {true, static_cast<uint32_t>(modeInfo.mode)};
+        }
+
+        constexpr uint64_t fullHdPixelCount = 1920ull * 1080ull;
+        const uint64_t outputPixelCount =
+            static_cast<uint64_t>(outputExtent.width) * static_cast<uint64_t>(outputExtent.height);
+        if (outputPixelCount <= fullHdPixelCount)
+        {
+            return {false, static_cast<uint32_t>(EUpscaleMode::Native)};
+        }
+
+        return {true, static_cast<uint32_t>(EUpscaleMode::Quality)};
     }
 
     inline VkExtent2D ScaleExtent(VkExtent2D extent, float scale)

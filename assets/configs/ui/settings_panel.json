@@ -40,7 +40,7 @@
               "cvar": "r.superResolution",
               "label": "Quality Mode",
               "widget": "combo",
-              "options": ["Native", "Ultra Quality", "Quality", "Balanced", "Performance"]
+              "options": ["Quality", "Balanced", "Performance", "Ultra Performance", "Native / DLAA", "Auto"]
             },
             {"cvar": "r.dlss", "label": "DLSS", "widget": "checkbox"},
             {"cvar": "r.fsr", "label": "FSR", "widget": "checkbox"},

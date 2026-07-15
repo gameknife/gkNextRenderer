@@ -8,7 +8,7 @@ gkNextEngine 只在 Windows x86_64 上集成 NVIDIA Streamline。非 Windows 构
 - `r.dlssrr 1`：在 DLSS 已启用且功能受支持时启用 DLSS Ray Reconstruction。
 - `r.dlssg 1`：在 DLSS-G 和 Reflex 均受支持时启用 DLSS Frame Generation。
 - `r.dlssg.multiplier 2`：帧倍增系数，目前限制在 `2..4`。
-- `r.superResolution 0..4`：Quality、Balanced、Performance、Ultra Performance、Native/DLAA。
+- `r.superResolution 0..5`：Quality、Balanced、Performance、Ultra Performance、Native/DLAA、Auto。Auto 在输出不超过 1920×1080 时关闭超分并使用原生分辨率，更高分辨率使用 Quality。
 
 修改 DLSS、DLSS-RR、DLSS-G、帧倍增系数或超分辨率模式会重建 swapchain。
 

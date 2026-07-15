@@ -154,6 +154,8 @@ namespace
             return sl::DLSSMode::eUltraPerformance;
         case EUpscaleMode::Native:
             return sl::DLSSMode::eDLAA;
+        case EUpscaleMode::Auto:
+            return sl::DLSSMode::eMaxQuality;
         }
         return sl::DLSSMode::eMaxQuality;
     }

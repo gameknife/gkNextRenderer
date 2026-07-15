@@ -1176,7 +1176,7 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
                            return false;
                        });
 
-        const char* qualities[] = {"Quality", "Balanced", "Performance", "Ultra Performance", "Native"};
+        const char* qualities[] = {"Quality", "Balanced", "Performance", "Ultra Performance", "Native", "Auto"};
         DrawSettingRow("Quality",
                        [&]()
                        {

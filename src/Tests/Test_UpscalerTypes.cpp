@@ -12,7 +12,32 @@ TEST_CASE("Upscaler mode mapping is centralized", "[Unit][Upscaler]")
     CHECK(GetUpscaleModeInfo(2).mode == EUpscaleMode::Performance);
     CHECK(GetUpscaleModeInfo(3).mode == EUpscaleMode::UltraPerformance);
     CHECK(GetUpscaleModeInfo(4).mode == EUpscaleMode::Native);
+    CHECK(GetUpscaleModeInfo(5).mode == EUpscaleMode::Auto);
     CHECK(GetUpscaleModeInfo(99).mode == EUpscaleMode::Quality);
+}
+
+TEST_CASE("Upscaler auto mode favors native quality at Full HD", "[Unit][Upscaler]")
+{
+    using namespace Rendering::Upscaler;
+
+    const auto fullHd = ResolveUpscaleMode(5, {1920, 1080});
+    CHECK_FALSE(fullHd.enabled);
+    CHECK(fullHd.mode == static_cast<uint32_t>(EUpscaleMode::Native));
+
+    const auto smallWindow = ResolveUpscaleMode(5, {1600, 900});
+    CHECK_FALSE(smallWindow.enabled);
+    CHECK(smallWindow.mode == static_cast<uint32_t>(EUpscaleMode::Native));
+
+    const auto ultrawideBelowFullHdPixels = ResolveUpscaleMode(5, {2560, 720});
+    CHECK_FALSE(ultrawideBelowFullHdPixels.enabled);
+
+    const auto quadHd = ResolveUpscaleMode(5, {2560, 1440});
+    CHECK(quadHd.enabled);
+    CHECK(quadHd.mode == static_cast<uint32_t>(EUpscaleMode::Quality));
+
+    const auto explicitQuality = ResolveUpscaleMode(0, {1280, 720});
+    CHECK(explicitQuality.enabled);
+    CHECK(explicitQuality.mode == static_cast<uint32_t>(EUpscaleMode::Quality));
 }
 
 TEST_CASE("Upscaler fallback render extent stays valid", "[Unit][Upscaler]")
