@@ -54,5 +54,16 @@ else
     echo "PASSED: Validator correctly handled non-existent file."
 fi
 
+# Test 5: Validate all first-party project CMake files.
+echo "Test 5: Checking first-party CMake tree..."
+$VALIDATOR_SCRIPT .
+EXIT_CODE=$?
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "FAILED: Validator rejected the first-party CMake tree."
+    exit 1
+else
+    echo "PASSED: First-party CMake tree uses target-scoped configuration."
+fi
+
 echo "All tests passed!"
 exit 0

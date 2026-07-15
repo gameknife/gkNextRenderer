@@ -1,33 +1,11 @@
-# --- Standard Project Options ---
-if (WIN32)
-    add_compile_definitions(
-        UNICODE _UNICODE _CRT_SECURE_NO_WARNINGS
-        NOMINMAX
-        WIN32_LEAN_AND_MEAN
-    )
-endif ()
-
 if (MSVC)
 	# 使用 CMake 3.15+ 的标准方式设置 MSVC 运行时库为静态链接
 	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "" FORCE)
-
-	add_compile_options("/MP")
-    add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>" "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
-
 endif()
-
-if (UNIX AND NOT ANDROID)
-	add_compile_definitions(UNIX)
-	add_compile_options("-Wall")
-	add_compile_options("-fvisibility=hidden")
-endif ()
 
 if (APPLE)
     include(CheckLinkerFlag)
     check_linker_flag(CXX "-Wl,-no_warn_duplicate_libraries" GK_HAS_NO_WARN_DUPLICATE_LIBRARIES)
-    if (GK_HAS_NO_WARN_DUPLICATE_LIBRARIES)
-        add_link_options("-Wl,-no_warn_duplicate_libraries")
-    endif()
 endif()
 
 # LTO/LTCG - Disabled by default (slows down build), enable with -DENABLE_LTO=ON

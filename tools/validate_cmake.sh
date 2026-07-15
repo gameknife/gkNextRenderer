@@ -1,15 +1,34 @@
 #!/bin/bash
 
-FILE_PATH="$1"
+INPUT_PATH="$1"
 
-if [ -z "$FILE_PATH" ]; then
-    echo "Usage: $0 <path-to-CMakeLists.txt>"
+if [ -z "$INPUT_PATH" ]; then
+    echo "Usage: $0 <path-to-CMakeLists.txt-or-directory>"
     exit 1
 fi
 
-if [ ! -f "$FILE_PATH" ]; then
-    echo "Error: File '$FILE_PATH' not found."
+if [ ! -e "$INPUT_PATH" ]; then
+    echo "Error: Path '$INPUT_PATH' not found."
     exit 1
+fi
+
+if [ -d "$INPUT_PATH" ]; then
+    mapfile -t CMAKE_FILES < <(
+        find "$INPUT_PATH" \
+            \( -type d \( \
+                -name .git -o \
+                -name .vcpkg -o \
+                -name out -o \
+                -name external -o \
+                -name ThirdParty -o \
+                -name vcpkg-overlays -o \
+                -name custom-triplets -o \
+                -path '*/tests/build_system/fixtures' \
+            \) -prune \) -o \
+            \( -type f \( -name CMakeLists.txt -o -name '*.cmake' \) -print \)
+    )
+else
+    CMAKE_FILES=("$INPUT_PATH")
 fi
 
 # forbidden_patterns array
@@ -19,17 +38,20 @@ forbidden_patterns=(
     "^\s*link_libraries\("
     "^\s*link_directories\("
     "^\s*add_definitions\("
+    "^\s*set\s*\(\s*CMAKE_(C|CXX|EXE_LINKER)_FLAGS"
 )
 
 found_errors=0
 
-for pattern in "${forbidden_patterns[@]}"; do
-    if grep -Eq "$pattern" "$FILE_PATH"; then
-        echo "Error: Forbidden pattern '$pattern' found in '$FILE_PATH'."
-        echo "  -> Please use target-specific commands (e.g., target_include_directories)."
-        grep -En "$pattern" "$FILE_PATH"
-        found_errors=1
-    fi
+for file_path in "${CMAKE_FILES[@]}"; do
+    for pattern in "${forbidden_patterns[@]}"; do
+        if grep -Eq "$pattern" "$file_path"; then
+            echo "Error: Forbidden pattern '$pattern' found in '$file_path'."
+            echo "  -> Please use target-specific commands (e.g., target_include_directories)."
+            grep -En "$pattern" "$file_path"
+            found_errors=1
+        fi
+    done
 done
 
 if [ $found_errors -ne 0 ]; then

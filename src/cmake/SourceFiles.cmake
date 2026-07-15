@@ -1,37 +1,39 @@
 # ============================================================================
 # SourceFiles.cmake - Source file definitions for gkNextRenderer
 # ============================================================================
-# Centralized source file configuration using GLOB_RECURSE.
+# Core and module source collections shared by the normal library layout and
+# Android's intentionally monolithic shared-library layout. Application sources
+# live beside each application's own CMakeLists.txt.
 # ============================================================================
 
 # --- Assets ---
-file(GLOB_RECURSE src_files_assets
+file(GLOB_RECURSE src_files_assets CONFIGURE_DEPENDS
     "Engine/Assets/*.cpp"
     "Engine/Assets/*.hpp"
     "Engine/Assets/*.h"
 )
 
 # --- Utilities ---
-file(GLOB_RECURSE src_files_utilities
+file(GLOB_RECURSE src_files_utilities CONFIGURE_DEPENDS
     "Engine/Utilities/*.cpp"
     "Engine/Utilities/*.hpp"
     "Engine/Utilities/*.h"
 )
 
 # --- Vulkan Backend ---
-file(GLOB_RECURSE src_files_vulkan
+file(GLOB_RECURSE src_files_vulkan CONFIGURE_DEPENDS
     "Engine/Vulkan/*.cpp"
     "Engine/Vulkan/*.hpp"
 )
 
 # --- Rendering ---
-file(GLOB_RECURSE src_files_rendering
+file(GLOB_RECURSE src_files_rendering CONFIGURE_DEPENDS
     "Engine/Rendering/*.cpp"
     "Engine/Rendering/*.hpp"
 )
 
 # --- ThirdParty Libraries ---
-file(GLOB_RECURSE src_files_thirdparty
+file(GLOB_RECURSE src_files_thirdparty CONFIGURE_DEPENDS
     "ThirdParty/mikktspace/*.c"
     "ThirdParty/mikktspace/*.h"
     "ThirdParty/miniaudio/*.h"
@@ -47,7 +49,7 @@ file(GLOB_RECURSE src_files_thirdparty
 )
 
 # --- Engine Core ---
-file(GLOB_RECURSE src_files_engine
+file(GLOB_RECURSE src_files_engine CONFIGURE_DEPENDS
     "Engine/Common/*.hpp"
     "Engine/Runtime/*.h"
     "Engine/Runtime/*.hpp"
@@ -57,7 +59,7 @@ file(GLOB_RECURSE src_files_engine
 )
 
 # --- Gameplay Layer ---
-file(GLOB_RECURSE src_files_nextgameplay
+file(GLOB_RECURSE src_files_nextgameplay CONFIGURE_DEPENDS
     "Gameplay/*.cpp"
     "Gameplay/*.hpp"
     "Gameplay/*.h"
@@ -72,7 +74,7 @@ if(NOT ANDROID)
     list(APPEND GK_MODULE_NAMES NextQuickJS)
 endif()
 foreach(gk_module IN LISTS GK_MODULE_NAMES)
-    file(GLOB_RECURSE src_files_module_${gk_module}
+    file(GLOB_RECURSE src_files_module_${gk_module} CONFIGURE_DEPENDS
         "Modules/${gk_module}/*.cpp"
         "Modules/${gk_module}/*.hpp"
         "Modules/${gk_module}/*.h"
@@ -82,105 +84,3 @@ set(src_files_modules_all "")
 foreach(gk_module IN LISTS GK_MODULE_NAMES)
     list(APPEND src_files_modules_all ${src_files_module_${gk_module}})
 endforeach()
-
-# --- Application shared code (demo scenes etc.) ---
-file(GLOB_RECURSE src_files_appcommon
-    "Application/Common/*.cpp"
-    "Application/Common/*.hpp"
-)
-
-# --- Editor ---
-file(GLOB_RECURSE src_files_editorcommon "Application/Editor/Common/*")
-file(GLOB_RECURSE src_files_editor "Application/Editor/gkNextEditor/*")
-
-# --- SCAD Studio (conversational SCAD model generator) ---
-file(GLOB_RECURSE src_files_scadstudio "Application/Editor/ScadStudio/*")
-
-# --- SCAD Library (kit browser + compose bench) ---
-file(GLOB_RECURSE src_files_scadlibrary "Application/Editor/ScadLibrary/*")
-
-# --- Applications ---
-file(GLOB_RECURSE src_files_magicalego
-    "Application/Game/MagicaLego/*.cpp"
-    "Application/Game/MagicaLego/*.hpp"
-)
-
-file(GLOB_RECURSE src_files_brickplayer
-    "Application/Game/BrickPlayer/*.cpp"
-    "Application/Game/BrickPlayer/*.hpp"
-)
-
-file(GLOB_RECURSE src_files_gkrenderer "Application/Render/gkNextRenderer/*")
-
-# Intentionally core-only renderer used to validate the Engine -> Module ->
-# Application boundary. It has its own entry point and does not use
-# DESKTOP_MAIN_SOURCES, which installs optional modules.
-file(GLOB_RECURSE src_files_gkminimalrenderer "Application/Render/gkNextMinimalRenderer/*")
-
-file(GLOB_RECURSE src_files_benchmarkcommon "Application/Render/gkNextBenchmark/Common/*")
-
-file(GLOB_RECURSE src_files_gkstillbenchmark "Application/Render/gkNextBenchmark/gkNextStillBenchmark/*")
-
-file(GLOB_RECURSE src_files_gkmotionbenchmark "Application/Render/gkNextBenchmark/gkNextMotionBenchmark/*")
-
-file(GLOB_RECURSE src_files_gkvisualtest "Application/Render/gkNextVisualTest/*"
-)
-
-file(GLOB_RECURSE src_files_rmluidemo "Application/Render/RmlUiDemo/*")
-
-file(GLOB_RECURSE src_files_konglie3d
-    "Application/Game/KongLie3D/*.cpp"
-    "Application/Game/KongLie3D/*.hpp"
-)
-
-file(GLOB_RECURSE src_files_brotato3d
-    "Application/Game/Brotato3D/*.cpp"
-    "Application/Game/Brotato3D/*.hpp"
-)
-
-file(GLOB_RECURSE src_files_nextra
-    "Application/Game/NextRA/*.cpp"
-    "Application/Game/NextRA/*.hpp"
-    "Application/Game/NextRA/*.h"
-)
-
-file(GLOB_RECURSE src_files_flappycpp
-    "Application/Game/Flappy/FlappyCommon.hpp"
-    "Application/Game/Flappy/FlappyConfig.cpp"
-    "Application/Game/Flappy/FlappyConfig.hpp"
-    "Application/Game/Flappy/FlappyCpp/*.cpp"
-    "Application/Game/Flappy/FlappyCpp/*.hpp"
-)
-
-file(GLOB_RECURSE src_files_flappyjs
-    "Application/Game/Flappy/FlappyJs/*.cpp"
-    "Application/Game/Flappy/FlappyJs/*.hpp"
-)
-
-file(GLOB_RECURSE src_files_characterdemo
-    "Application/Game/CharacterDemo/*.cpp"
-    "Application/Game/CharacterDemo/*.hpp"
-)
-
-file(GLOB_RECURSE src_files_truckerdemo
-    "Application/Game/TruckerDemo/*.cpp"
-    "Application/Game/TruckerDemo/*.hpp"
-)
-
-file(GLOB_RECURSE src_files_studiosim
-    "Application/Game/StudioSim/*.cpp"
-    "Application/Game/StudioSim/*.hpp"
-    "Application/Game/StudioSim/*.h"
-)
-
-file(GLOB_RECURSE src_files_airportsim
-    "Application/Game/AirportSim/*.cpp"
-    "Application/Game/AirportSim/*.hpp"
-    "Application/Game/AirportSim/*.h"
-)
-
-file(GLOB_RECURSE src_files_citysolsim
-    "Application/Game/CitySolSim/*.cpp"
-    "Application/Game/CitySolSim/*.hpp"
-    "Application/Game/CitySolSim/*.h"
-)

@@ -137,18 +137,28 @@ dest = "src/ThirdParty/ffmpeg/bin/ffmpeg.exe"
 default = "gkNextRenderer"
 all = [
   "gkNextRenderer",
+  "gkNextMinimalRenderer",
   "gkNextEditor",
   "gkNextStillBenchmark",
   "gkNextMotionBenchmark",
   "gkNextVisualTest",
+  "RmlUiDemo",
+  "ScadStudio",
+  "ScadLibrary",
   "MagicaLego",
   "KongLie3D",
   "Brotato3D",
+  "NextRA",
   "FlappyCpp",
   "FlappyJs",
   "BrickPlayer",
   "CharacterDemo",
+  "TruckerDemo",
+  "StudioSim",
+  "AirportSim",
   "CitySolSim",
+  "Voyage3D",
   "Packager",
+  "ScadCatalog",
   "gkNextUnitTests"
 ]

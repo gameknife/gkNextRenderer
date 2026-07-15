@@ -294,6 +294,9 @@ func parseDotGraph(path string) (dotGraph, error) {
 			continue
 		}
 		if match := dotEdgeRE.FindStringSubmatch(line); match != nil {
+			if match[1] == match[2] {
+				continue
+			}
 			graph.edges = append(graph.edges, dotEdge{from: match[1], to: match[2], style: parseDotAttr(dotStyleRE, line), line: line})
 		}
 	}
