@@ -1,7 +1,7 @@
 ---
 title: "NextAI 面向具体产品能力的轻量化重构计划"
 category: plan
-status: 草案
+status: 已完成
 owner: engine/tools/applications
 created: 2026-07-14
 last_updated: 2026-07-15
@@ -26,9 +26,9 @@ last_updated: 2026-07-15
 
 不在本轮处理：AgentDriver、`gnb validate`、agentscript、游戏 NPC `AgentSystem`，以及新的 BrickPlayer AI 功能实现。
 
-## 1. 当前到目标的差异
+## 1. 重构前到目标的差异
 
-| 范围 | 当前 | 目标 |
+| 范围 | 重构前 | 目标 |
 | --- | --- | --- |
 | Dashboard | 默认 `RunAgent` + 8 个 repo tools | 默认 `Router.Chat`；可选一个内存 Tool Probe |
 | gkNextEditor | 17 个 remote scene/editor tools | 无 LLM Agent；保留独立手工 Script Console |
@@ -38,7 +38,7 @@ last_updated: 2026-07-15
 | 场景辅助 | prompt 后直接抽取产物 | 领域解析、校验、最多一次修复、预览后应用 |
 | 运行时 AI | 文本请求后手工截取 JSON | schema/JSON mode + validator + fallback |
 
-当前代码证据：
+重构前代码证据（对应实现现已删除或迁移）：
 
 - Dashboard 在 [`handlers_chat.go`](../../tools/gnb/internal/dashboard/handlers_chat.go#L292) 调用 `Runtime.RunAgent`；
 - repo tools 在 [`runtime.go`](../../tools/gnb/internal/ai/runtime.go#L80) 默认注册；
@@ -65,13 +65,13 @@ M1 与 M2 可独立实施；两者都完成后才能做 M3。M4、M5 不依赖�
 
 任务：
 
-- [ ] 普通和流式 handler 从 `Runtime.RunAgent` 改为 `Router.Chat`。
-- [ ] 默认请求不附带 tools。
-- [ ] 移除 Agent steps/tool progress UI，改为请求诊断信息。
-- [ ] 保留 provider/model/profile、thinking、stream、usage、finish reason 和错误展示。
-- [ ] 增加显式 `Tool Call Smoke` 模式，只提供 `lookup_diagnostic_fixture(key)`。
-- [ ] Probe 最多两次模型请求、一次工具执行；任何额外调用直接诊断失败。
-- [ ] 增加普通 Chat 和 Tool Probe 的 handler/provider contract tests。
+- [x] 普通和流式 handler 从 `Runtime.RunAgent` 改为 `Router.Chat`。
+- [x] 默认请求不附带 tools。
+- [x] 移除 Agent steps/tool progress UI，改为请求诊断信息。
+- [x] 保留 provider/model/profile、thinking、stream、usage、finish reason 和错误展示。
+- [x] 增加显式 `Tool Call Smoke` 模式，只提供 `lookup_diagnostic_fixture(key)`。
+- [x] Probe 最多两次模型请求、一次工具执行；任何额外调用直接诊断失败。
+- [x] 增加普通 Chat 和 Tool Probe 的 handler/provider contract tests。
 
 退出条件：
 
@@ -93,12 +93,12 @@ go test ./...
 
 任务：
 
-- [ ] 从 Editor UI 删除 AI Assistant、provider selector、conversation、Agent steps 和 pending AI actions。
-- [ ] 删除 `FEditorAIService`、`EditorTools` 和远程工具注册。
-- [ ] 把 `FEditorScriptExecutor` 及手工 UI 迁到 `Automation/` 或 `Script Console`。
-- [ ] 清理 Editor 的 NextAI include、状态泵送和主线程工具回调。
-- [ ] 若无其他引用，从 `gkNextEditor` 解除 `NextAI` 链接。
-- [ ] 保留 EditorScript/JavaScript 的显式执行和编辑器高风险确认语义。
+- [x] 从 Editor UI 删除 AI Assistant、provider selector、conversation、Agent steps 和 pending AI actions。
+- [x] 删除 `FEditorAIService`、`EditorTools` 和远程工具注册。
+- [x] 把 `FEditorScriptExecutor` 及手工 UI 迁到 `Automation/` 或 `Script Console`。
+- [x] 清理 Editor 的 NextAI include、状态泵送和主线程工具回调。
+- [x] 若无其他引用，从 `gkNextEditor` 解除 `NextAI` 链接。
+- [x] 保留 EditorScript/JavaScript 的显式执行和编辑器高风险确认语义。
 
 候选删除文件：
 
@@ -124,14 +124,14 @@ go test ./...
 
 任务：
 
-- [ ] 删除 Go `internal/ai/agent/`、通用 `internal/ai/tool/` 和 `internal/repotools/`。
-- [ ] 删除 `Runtime.RunAgent` 和 `gnb agent run`。
-- [ ] bridge 删除 `agent.run`、`tools.register`、`tool.execute` 与对应事件。
-- [ ] C++ client 删除 `RunAgent`、`RegisterTools` 和 remote tool dispatcher。
-- [ ] 删除 C++ `IAITool`、`FToolRegistry` 及只为工具存在的事件类型。
-- [ ] 精简 C++ `AIChat` DTO；Go protocol 只在诊断侧保留 Tool Call DTO。
-- [ ] 将 `gnb agent bridge/doctor` 迁为 `gnb ai bridge/doctor`，保留一个版本的隐藏兼容别名。
-- [ ] 用不含 remote tools 的精简协议替换 Agent Bridge Protocol v1 文档和 fixture。
+- [x] 删除 Go `internal/ai/agent/`、通用 `internal/ai/tool/` 和 `internal/repotools/`。
+- [x] 删除 `Runtime.RunAgent` 和 `gnb agent run`。
+- [x] bridge 删除 `agent.run`、`tools.register`、`tool.execute` 与对应事件。
+- [x] C++ client 删除 `RunAgent`、`RegisterTools` 和 remote tool dispatcher。
+- [x] 删除 C++ `IAITool`、`FToolRegistry` 及只为工具存在的事件类型。
+- [x] 精简 C++ `AIChat` DTO；Go protocol 只在诊断侧保留 Tool Call DTO。
+- [x] 将 `gnb agent bridge/doctor` 迁为 `gnb ai bridge/doctor`，保留一个版本的隐藏兼容别名。
+- [x] 用不含 remote tools 的精简协议替换 Agent Bridge Protocol v1 文档和 fixture。
 
 候选删除文件：
 
@@ -169,12 +169,12 @@ cd ../../..
 
 任务：
 
-- [ ] ScadStudio 抽出生成、解析、校验、最多一次修复和预览状态。
-- [ ] 复用 SCAD parser/evaluator 的真实错误作为 repair 输入。
-- [ ] MagicaLego 将 script parser/placement rule 错误接入最多一次修复。
-- [ ] 为两者增加固定 prompt/output 回归夹具，覆盖成功、坏 fence、坏语法、修复成功和修复失败。
-- [ ] 为 BrickPlayer 单独设计 `BrickBuildPlan` 或 `.ldr` 领域契约和 validator；本阶段不接模型。
-- [ ] 如果 workflow 放在 gnb，RPC 只暴露业务请求和业务结果，不暴露内部“工具”。
+- [x] ScadStudio 抽出生成、解析、校验、最多一次修复和预览状态。
+- [x] 复用 SCAD parser/evaluator 的真实错误作为 repair 输入。
+- [x] MagicaLego 将 script parser/placement rule 错误接入最多一次修复。
+- [x] 为两者增加固定 prompt/output 回归夹具，覆盖成功、坏 fence、坏语法、修复成功和修复失败。
+- [x] 为 BrickPlayer 单独设计 `BrickBuildPlan` 或 `.ldr` 领域契约和 validator；本阶段不接模型。
+- [x] 如果 workflow 放在 gnb，RPC 只暴露业务请求和业务结果，不暴露内部“工具”。
 
 退出条件：
 
@@ -197,13 +197,13 @@ cd ../../..
 
 任务：
 
-- [ ] 为 Go/C++ Chat request 增加 JSON mode/schema 能力描述。
-- [ ] provider adapter 明确报告 native schema、JSON mode 或 prompt-only 降级。
-- [ ] StudioSim 为各类请求定义独立 DTO 和 validator。
-- [ ] AirportSim 为 NPC 决策定义 action/target allowlist、字符串限长和枚举校验。
-- [ ] 两个游戏统一使用 deadline、generation ID、cancel 和主线程结果队列。
-- [ ] 增加坏 JSON、未知 action、超时、provider unavailable 的 deterministic fallback 测试。
-- [ ] 保持 `--agent-validation` 下不发真实模型请求。
+- [x] 为 Go/C++ Chat request 增加 JSON mode/schema 能力描述。
+- [x] provider adapter 明确报告 native schema、JSON mode 或 prompt-only 降级。
+- [x] StudioSim 为各类请求定义独立 DTO 和 validator。
+- [x] AirportSim 为 NPC 决策定义 action/target allowlist、字符串限长和枚举校验。
+- [x] 两个游戏统一使用 deadline、generation ID、cancel 和主线程结果队列。
+- [x] 增加坏 JSON、未知 action、超时、provider unavailable 的 deterministic fallback 测试。
+- [x] 保持 `--agent-validation` 下不发真实模型请求。
 
 退出条件：运行时 AI 的任何失败都不会卡住玩法、写入越代结果或产生非法游戏动作。
 
@@ -222,12 +222,12 @@ cd ../../..
 
 任务：
 
-- [ ] `GnbAgentClient` 重命名为 `GnbAIClient`。
-- [ ] 删除 `editor` profile、`tool_sets`、`max_steps`、`max_tool_calls` 和 Agent 专用预算配置。
-- [ ] 保留 `general`、`scad-scene`、`scad-studio`、`magicalego-script`、`simulation` 等业务 profile。
-- [ ] 更新 `AGENTS.md`、Modules README、gnb CLI 文档和各产品指南。
-- [ ] 清理 Dashboard 中 Agent/Coding/Research 模式用语。
-- [ ] 运行 LOC/依赖检查，确认删除不是把同一机制改名后保留。
+- [x] `GnbAgentClient` 重命名为 `GnbAIClient`。
+- [x] 删除 `editor` profile、`tool_sets`、`max_steps`、`max_tool_calls` 和 Agent 专用预算配置。
+- [x] 保留 `general`、`scad-scene`、`scad-studio`、`magicalego-script`、`simulation` 等业务 profile。
+- [x] 更新 `AGENTS.md`、Modules README、gnb CLI 文档和各产品指南。
+- [x] 清理 Dashboard 中 Agent/Coding/Research 模式用语。
+- [x] 运行 LOC/依赖检查，确认删除不是把同一机制改名后保留。
 
 退出条件：面向用户和开发者的资料把 NextAI 描述为“模型接入 + 具体业务 AI”，不再描述成通用代码/场景 Agent 平台。
 
@@ -281,16 +281,23 @@ cd ../../..
 
 ## 5. 完成定义
 
-- [ ] gkNextEditor 不存在 LLM 驱动的场景操作 Agent；
-- [ ] 手工 EditorScript/JavaScript 若保留，已成为独立非 AI 功能；
-- [ ] Dashboard 默认请求不包含 tools，也不进入多步 Agent Loop；
-- [ ] Dashboard 只有一个固定内存 Tool Call Probe，无文件/Git/Shell/Scene 权限；
-- [ ] `gnb agent run`、repo tools 和 remote editor tools 已删除；
-- [ ] Engine bridge 不再支持 `agent.run`、`tools.register` 或 `tool.execute`；
-- [ ] `NextAI` 不包含 Tool Registry 或通用 Agent API；
-- [ ] ScadStudio 和 MagicaLego 使用领域产物、本地校验和最多一次修复；
-- [ ] BrickPlayer 在 AI 接入前具备明确领域 schema 和 validator；
-- [ ] StudioSim/AirportSim 使用结构化单次推理，并有 deterministic fallback；
-- [ ] provider/profile/streaming/session/cancel/usage 等统一基础设施继续可用；
-- [ ] AgentDriver、`gnb validate` 和游戏 NPC Agent 不受影响；
-- [ ] 文档和 CLI 不再把 NextAI 描述为通用 Coding/Scene Agent。
+- [x] gkNextEditor 不存在 LLM 驱动的场景操作 Agent；
+- [x] 手工 EditorScript/JavaScript 若保留，已成为独立非 AI 功能；
+- [x] Dashboard 默认请求不包含 tools，也不进入多步 Agent Loop；
+- [x] Dashboard 只有一个固定内存 Tool Call Probe，无文件/Git/Shell/Scene 权限；
+- [x] `gnb agent run`、repo tools 和 remote editor tools 已删除；
+- [x] Engine bridge 不再支持 `agent.run`、`tools.register` 或 `tool.execute`；
+- [x] `NextAI` 不包含 Tool Registry 或通用 Agent API；
+- [x] ScadStudio 和 MagicaLego 使用领域产物、本地校验和最多一次修复；
+- [x] BrickPlayer 在 AI 接入前具备明确领域 schema 和 validator；
+- [x] StudioSim/AirportSim 使用结构化单次推理，并有 deterministic fallback；
+- [x] provider/profile/streaming/session/cancel/usage 等统一基础设施继续可用；
+- [x] AgentDriver、`gnb validate` 和游戏 NPC Agent 不受影响；
+- [x] 文档和 CLI 不再把 NextAI 描述为通用 Coding/Scene Agent。
+
+## 6. 完成记录
+
+2026-07-15 完成 M1–M6。最终验证包括：全量 CMake `--reconfigure` 后所有目标构建通过、
+`gkNextUnitTests "[AI]"` 7 个用例 39 个断言通过、Go AI/Dashboard/CLI 测试通过、
+ScadStudio/MagicaLego/StudioSim/AirportSim 隐藏窗口截图验证通过，以及生产代码禁用接口扫描无命中。
+完整 `go test ./...` 仅剩 Windows 非提权环境无法创建符号链接的既有 `TestUntarPreservesSymlink` 环境失败。

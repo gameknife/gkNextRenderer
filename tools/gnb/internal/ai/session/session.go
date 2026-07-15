@@ -7,9 +7,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/agent"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/protocol"
 )
+
+type Trace struct {
+	RunID    string         `json:"runId"`
+	Provider string         `json:"provider,omitempty"`
+	Model    string         `json:"model,omitempty"`
+	Status   string         `json:"status"`
+	Usage    protocol.Usage `json:"usage,omitempty"`
+	Error    string         `json:"error,omitempty"`
+}
 
 type Session struct {
 	ID         string             `json:"id"`
@@ -25,13 +33,13 @@ type Run struct {
 	SessionID string
 	Cancel    context.CancelFunc
 	StartedAt time.Time
-	Trace     agent.Trace
+	Trace     Trace
 }
 type Store struct {
 	mu          sync.RWMutex
 	sessions    map[string]*Session
 	runs        map[string]*Run
-	traces      map[string]agent.Trace
+	traces      map[string]Trace
 	maxMessages int
 }
 
@@ -41,7 +49,7 @@ func NewStore(maxMessages int) *Store {
 	if maxMessages <= 0 {
 		maxMessages = 100
 	}
-	return &Store{sessions: map[string]*Session{}, runs: map[string]*Run{}, traces: map[string]agent.Trace{}, maxMessages: maxMessages}
+	return &Store{sessions: map[string]*Session{}, runs: map[string]*Run{}, traces: map[string]Trace{}, maxMessages: maxMessages}
 }
 func (s *Store) Create(profile, providerID, modelID string) Session {
 	s.mu.Lock()
@@ -74,6 +82,32 @@ func (s *Store) Append(id string, messages ...protocol.Message) error {
 	session.UpdatedAt = time.Now()
 	return nil
 }
+func (s *Store) Reset(id string) (Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.sessions[id]
+	if !ok {
+		return Session{}, fmt.Errorf("unknown session %q", id)
+	}
+	session.Messages = nil
+	session.UpdatedAt = time.Now()
+	return clone(session), nil
+}
+func (s *Store) Close(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.sessions[id]; !ok {
+		return false
+	}
+	delete(s.sessions, id)
+	for runID, run := range s.runs {
+		if run.SessionID == id {
+			run.Cancel()
+			delete(s.runs, runID)
+		}
+	}
+	return true
+}
 func (s *Store) StartRun(sessionID, runID string, parent context.Context) (context.Context, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -96,7 +130,7 @@ func (s *Store) CancelRun(runID string) bool {
 	}
 	return ok
 }
-func (s *Store) FinishRun(runID string, trace agent.Trace) {
+func (s *Store) FinishRun(runID string, trace Trace) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if run, ok := s.runs[runID]; ok {
@@ -105,7 +139,7 @@ func (s *Store) FinishRun(runID string, trace agent.Trace) {
 	}
 	s.traces[runID] = trace
 }
-func (s *Store) Trace(runID string) (agent.Trace, bool) {
+func (s *Store) Trace(runID string) (Trace, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	trace, ok := s.traces[runID]

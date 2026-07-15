@@ -59,3 +59,37 @@ func TestResolvePrecedenceAndProfileDefaults(t *testing.T) {
 		t.Fatalf("route=%#v request=%#v", route, external.seen)
 	}
 }
+
+func TestPlainChatDoesNotAttachTools(t *testing.T) {
+	registry := provider.NewRegistry()
+	fake := &fakeProvider{descriptor: provider.Descriptor{ID: "plain", Configured: true, Available: true}}
+	_ = registry.Register(fake)
+	cfg := aiconfig.Config{DefaultProfile: "general", Profiles: map[string]aiconfig.Profile{"general": {Provider: "plain"}}}
+	if _, _, err := New(cfg, registry).Chat(context.Background(), Overrides{}, protocol.ChatRequest{Messages: []protocol.Message{{Role: protocol.RoleUser, Content: "hello"}}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.seen.Tools) != 0 {
+		t.Fatalf("plain chat unexpectedly received tools: %#v", fake.seen.Tools)
+	}
+}
+
+func TestStructuredOutputReportsNativeAndPromptOnlyModes(t *testing.T) {
+	registry := provider.NewRegistry()
+	native := &fakeProvider{descriptor: provider.Descriptor{ID: "native", Configured: true, Available: true, Capabilities: provider.Capabilities{StructuredOutput: true}}}
+	_ = registry.Register(native)
+	cfg := aiconfig.Config{DefaultProfile: "p", Profiles: map[string]aiconfig.Profile{"p": {Provider: "native"}}}
+	format := &protocol.ResponseFormat{Mode: "schema", Name: "sample", Schema: map[string]any{"type": "object"}}
+	response, _, err := New(cfg, registry).Chat(context.Background(), Overrides{}, protocol.ChatRequest{ResponseFormat: format}, nil)
+	if err != nil || response.StructuredOutputMode != "native_schema" || native.seen.ResponseFormat == nil {
+		t.Fatalf("native response=%#v request=%#v err=%v", response, native.seen, err)
+	}
+
+	promptOnly := &fakeProvider{descriptor: provider.Descriptor{ID: "prompt", Configured: true, Available: true}}
+	registry = provider.NewRegistry()
+	_ = registry.Register(promptOnly)
+	cfg.Profiles["p"] = aiconfig.Profile{Provider: "prompt"}
+	response, _, err = New(cfg, registry).Chat(context.Background(), Overrides{}, protocol.ChatRequest{ResponseFormat: format}, nil)
+	if err != nil || response.StructuredOutputMode != "prompt_only" || promptOnly.seen.ResponseFormat != nil || len(promptOnly.seen.Messages) == 0 {
+		t.Fatalf("prompt-only response=%#v request=%#v err=%v", response, promptOnly.seen, err)
+	}
+}

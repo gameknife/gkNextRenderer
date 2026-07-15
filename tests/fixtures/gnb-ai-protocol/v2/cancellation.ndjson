@@ -1,0 +1,2 @@
+{"jsonrpc":"2.0","id":"4","method":"run.cancel","params":{"runId":"run-chat"}}
+{"jsonrpc":"2.0","id":"4","result":{"cancelled":true}}

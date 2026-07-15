@@ -53,6 +53,7 @@ type request struct {
 	Tools    []map[string]any `json:"tools,omitempty"`
 	Stream   bool             `json:"stream"`
 	Options  map[string]any   `json:"options,omitempty"`
+	Format   any              `json:"format,omitempty"`
 }
 type response struct {
 	Message         message `json:"message"`
@@ -65,6 +66,13 @@ type response struct {
 
 func (a *Adapter) Chat(ctx context.Context, in protocol.ChatRequest, sink protocol.EventSink) (protocol.ChatResponse, error) {
 	body := request{Model: in.Model, Stream: sink != nil, Options: map[string]any{}}
+	if in.ResponseFormat != nil {
+		if in.ResponseFormat.Mode == "schema" {
+			body.Format = in.ResponseFormat.Schema
+		} else {
+			body.Format = "json"
+		}
+	}
 	for _, m := range in.Messages {
 		body.Messages = append(body.Messages, message{Role: string(m.Role), Content: m.Content})
 	}

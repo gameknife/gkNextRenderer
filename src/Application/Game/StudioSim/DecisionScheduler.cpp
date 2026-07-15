@@ -2,13 +2,13 @@
 
 #include "EmployeeSystem.h"
 #include "OfficeMap.h"
+#include "StructuredDecisionContract.hpp"
 #include "StudioSimLabels.hpp"
 #include "StudioSimProjectMetrics.hpp"
 
 #include <algorithm>
 #include <chrono>
 
-#include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
 #include "Engine/Common/CoreMinimal.hpp"
@@ -246,32 +246,6 @@ namespace StudioSim
                 projectLine, memoryLine, eventLine, incomingLine, mates, poiList);
         }
 
-        FDecisionResult ParseDecision(const std::string& text)
-        {
-            FDecisionResult result;
-            const size_t open = text.find('{');
-            const size_t close = text.rfind('}');
-            if (open == std::string::npos || close == std::string::npos || close <= open)
-            {
-                return result;
-            }
-            try
-            {
-                const nlohmann::json json = nlohmann::json::parse(text.substr(open, close - open + 1));
-                result.action = json.value("action", std::string("IDLE"));
-                result.targetPoi = json.value("target_poi", std::string());
-                result.targetEmployee = json.value("target_employee", std::string());
-                result.dialogue = json.value("dialogue", std::string());
-                result.mood = MoodFromString(json.value("mood", std::string("calm")));
-                result.durationMinutes = std::clamp(json.value("duration_minutes", 30), 10, 60);
-                result.valid = true;
-            }
-            catch (...)
-            {
-                result.valid = false;
-            }
-            return result;
-        }
     }
 
     double DecisionScheduler::InFlightElapsedMs() const
@@ -409,11 +383,11 @@ namespace StudioSim
         inFlightPrompt_ = prompt;
 
         const uint64_t generation = generation_;
-        ai->GenerateTextAsync(prompt,
+        ai->GenerateStructuredTextAsync(prompt, "studio_employee_decision", std::string(kStructuredDecisionSchema),
                               [this, chosenIndex, generation, prompt](NextAI::FAIResponse response)
                               {
                                   FDecisionResult result =
-                                      ParseDecision(response.success ? response.text : std::string());
+                                      ParseStructuredDecision(response.success ? response.text : std::string());
                                   std::lock_guard<std::mutex> lock(mutex_);
                                   if (generation != generation_)
                                   {

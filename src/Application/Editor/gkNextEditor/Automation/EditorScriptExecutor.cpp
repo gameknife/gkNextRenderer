@@ -1,4 +1,4 @@
-#include "AI/EditorScriptExecutor.hpp"
+#include "Automation/EditorScriptExecutor.hpp"
 
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"

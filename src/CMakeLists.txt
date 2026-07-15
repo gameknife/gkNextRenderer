@@ -48,7 +48,12 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_Brotato3DPcg.cpp
 	Tests/Test_ImAnimIntegration.cpp
 	Tests/Test_BrickPlayerSnapLogic.cpp
+	Tests/Test_BrickBuildPlan.cpp
+	Tests/Test_ProductAIStructuredContracts.cpp
+	Tests/Test_ProductAIArtifactFixtures.cpp
+	Application/Editor/ScadStudio/ScadOutline.cpp
 	Application/Game/BrickPlayer/BrickPlayerSnapLogic.cpp
+	Application/Game/BrickPlayer/BrickBuildPlan.cpp
 	Tests/Test_MagicaLegoStyle.cpp
 	Tests/Test_MagicaLegoScript.cpp
 	Tests/Test_MagicaLegoPlacementRules.cpp
@@ -67,7 +72,7 @@ set(UNIT_TEST_SOURCES
 	Application/Game/NextRA/Sim/SyncHash.cpp
 	Application/Game/NextRA/Sim/Systems/OrderApplySystem.cpp
 	Application/Game/Brotato3D/Brotato3DPcgGenerator.cpp
-	Tests/Test_GnbAgentClient.cpp
+	Tests/Test_GnbAIClient.cpp
 	Tests/Test_ScadPromptContext.cpp
 	Tests/Test_ScadSessionStore.cpp
 	Tests/Test_Rgb9e5Pack.cpp
@@ -688,8 +693,9 @@ foreach(target IN LISTS AllTargets)
 	if ( ${target} STREQUAL gkNextEditor )
 	# third-party warning fix
 	set_source_files_properties(
-		Application/Editor/gkNextEditor/AI/EditorAIService.cpp
-		Application/Editor/gkNextEditor/AI/EditorScriptExecutor.cpp
+		Application/Editor/gkNextEditor/Automation/EditorScriptExecutor.cpp
+		Application/Editor/gkNextEditor/Automation/ScriptConsole.cpp
+		Application/Editor/gkNextEditor/Panels/PropertyWidgets.cpp
 		PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
 	)
 	if (MSVC)
@@ -768,7 +774,7 @@ if ( TARGET SplatLoader )
 	endforeach()
 endif()
 if ( TARGET NextAI )
-	foreach(t NextGameplay gkNextEditor ScadStudio MagicaLego StudioSim AirportSim gkNextUnitTests)
+	foreach(t NextGameplay ScadStudio MagicaLego StudioSim AirportSim gkNextUnitTests)
 		if ( TARGET ${t} )
 			target_link_libraries(${t} PRIVATE NextAI)
 		endif()

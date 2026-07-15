@@ -1,6 +1,7 @@
 // Chat tab: the local-LLM conversation UI — building the chat view model,
 // session lifecycle (new/clear/archive/switch), and the send / streaming
-// endpoints. Tool-calling logic lives in chat_tools.go.
+// endpoints. The optional tool-call smoke probe is deliberately local to the
+// dashboard and never exposes repository or engine capabilities.
 package dashboard
 
 import (
@@ -15,7 +16,6 @@ import (
 	"time"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai"
-	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/agent"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/protocol"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/router"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/config"
@@ -262,6 +262,7 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	profileID := strings.TrimSpace(r.FormValue("profile"))
 	userText := strings.TrimSpace(r.FormValue("message"))
 	thinking := r.FormValue("thinking") == "1"
+	toolProbe := r.FormValue("tool_probe") == "1"
 	maxTokens := parseChatMaxTokens(r.FormValue("max_tokens"))
 	if userText == "" {
 		s.renderChatPanel(w, sessionID, "请输入要发送的内容")
@@ -279,7 +280,6 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
-	_ = thinking
 	runtime, err := ai.NewRuntime(s.opts.RepoRoot, s.opts.Config)
 	if err != nil {
 		s.renderChatPanel(w, sess.ID, "AI runtime 失败: "+err.Error())
@@ -289,9 +289,15 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	for i, message := range messages {
 		converted[i] = protocol.Message{Role: protocol.Role(message.Role), Content: message.Content}
 	}
-	result, err := runtime.RunAgent(ctx, router.Overrides{Profile: profileID, Provider: providerID, Model: modelID}, protocol.ChatRequest{Messages: converted, Temperature: .7, MaxOutputTokens: maxTokens}, agent.Options{}, nil)
+	request := protocol.ChatRequest{Messages: converted, Temperature: .7, MaxOutputTokens: maxTokens, EnableThinking: thinking}
+	var result protocol.ChatResponse
+	if toolProbe {
+		result, err = runToolCallSmoke(ctx, runtime.Router, router.Overrides{Profile: profileID, Provider: providerID, Model: modelID}, request, nil)
+	} else {
+		result, _, err = runtime.Router.Chat(ctx, router.Overrides{Profile: profileID, Provider: providerID, Model: modelID}, request, nil)
+	}
 	if err != nil {
-		s.renderChatPanel(w, sess.ID, "Agent 请求失败: "+err.Error())
+		s.renderChatPanel(w, sess.ID, "LLM 请求失败: "+err.Error())
 		return
 	}
 	sess = s.chats.AppendExchangeSelection(sess.ID, profileID, providerID, modelID, userText, strings.TrimSpace(result.Content))
@@ -338,6 +344,7 @@ func (s *Server) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 	profileID := strings.TrimSpace(r.FormValue("profile"))
 	userText := strings.TrimSpace(r.FormValue("message"))
 	thinking := r.FormValue("thinking") == "1"
+	toolProbe := r.FormValue("tool_probe") == "1"
 	maxTokens := parseChatMaxTokens(r.FormValue("max_tokens"))
 	if userText == "" {
 		emit("error", map[string]string{"message": "请输入要发送的内容"})
@@ -359,7 +366,7 @@ func (s *Server) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
-	emit("status", map[string]string{"message": "正在运行统一 Agent..."})
+	emit("status", map[string]string{"message": "正在请求模型..."})
 	reasoningEmitted := false
 	if thinking {
 		emit("thinking", map[string]string{"message": "正在思考..."})
@@ -375,7 +382,8 @@ func (s *Server) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 	for i, message := range messages {
 		converted[i] = protocol.Message{Role: protocol.Role(message.Role), Content: message.Content}
 	}
-	result, err := runtime.RunAgent(ctx, router.Overrides{Profile: profileID, Provider: providerID, Model: modelID}, protocol.ChatRequest{Messages: converted, Temperature: .7, MaxOutputTokens: maxTokens}, agent.Options{}, func(_ context.Context, event protocol.Event) error {
+	request := protocol.ChatRequest{Messages: converted, Temperature: .7, MaxOutputTokens: maxTokens, EnableThinking: thinking}
+	sink := func(_ context.Context, event protocol.Event) error {
 		switch event.Type {
 		case protocol.EventReasoningDelta:
 			if !reasoningEmitted {
@@ -388,15 +396,26 @@ func (s *Server) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 			if !emit("delta", map[string]string{"text": event.Content}) {
 				return fmt.Errorf("client disconnected")
 			}
-		case protocol.EventToolCall:
-			emit("tool", chatToolEvent{Step: event.Step, Phase: "start", Name: event.Name, Summary: event.Arguments})
-		case protocol.EventToolResult:
-			emit("tool", chatToolEvent{Step: event.Step, Phase: "done", Name: event.Name, Detail: event.Content})
 		}
 		return nil
-	})
+	}
+	var result protocol.ChatResponse
+	var route router.Route
+	if toolProbe {
+		route, err = runtime.Router.Resolve(router.Overrides{Profile: profileID, Provider: providerID, Model: modelID})
+		if err == nil {
+			result, err = runToolCallSmoke(ctx, runtime.Router, router.Overrides{Profile: profileID, Provider: providerID, Model: modelID}, request, func(event chatToolEvent) {
+				emit("tool", event)
+			})
+		}
+		if err == nil && result.Content != "" {
+			emit("delta", map[string]string{"text": result.Content})
+		}
+	} else {
+		result, route, err = runtime.Router.Chat(ctx, router.Overrides{Profile: profileID, Provider: providerID, Model: modelID}, request, sink)
+	}
 	if err != nil {
-		emit("error", map[string]string{"message": "Agent 请求失败: " + err.Error()})
+		emit("error", map[string]string{"message": "LLM 请求失败: " + err.Error()})
 		return
 	}
 	sess = s.chats.AppendExchangeSelection(sess.ID, profileID, providerID, modelID, userText, strings.TrimSpace(result.Content))
@@ -405,8 +424,12 @@ func (s *Server) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 	emit("done", map[string]any{
 		"session_id":    sess.ID,
 		"messages":      len(sess.Messages),
-		"finish_reason": "stop",
-		"truncated":     false,
+		"provider":      route.Provider.Descriptor().ID,
+		"model":         route.Model,
+		"finish_reason": result.FinishReason,
+		"prompt_tokens": result.Usage.PromptTokens,
+		"output_tokens": result.Usage.CompletionTokens,
+		"truncated":     result.FinishReason == "length",
 		"max_tokens":    maxTokens,
 		"context_used":  contextUsed,
 		"context_limit": contextLimit,

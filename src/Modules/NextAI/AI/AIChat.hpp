@@ -10,24 +10,13 @@ namespace NextAI
     {
         System,
         User,
-        Assistant,
-        Tool
-    };
-
-    struct FToolCall
-    {
-        std::string id;
-        std::string name;
-        std::string argumentsJson;
+        Assistant
     };
 
     struct FChatMessage
     {
         EChatRole role = EChatRole::User;
         std::string content;
-        std::string name;
-        std::string toolCallId;
-        std::vector<FToolCall> toolCalls;
 
         static FChatMessage System(std::string text)
         {
@@ -50,46 +39,11 @@ namespace NextAI
             m.content = std::move(text);
             return m;
         }
-        static FChatMessage ToolResult(std::string toolCallId, std::string toolName, std::string text)
-        {
-            FChatMessage m;
-            m.role = EChatRole::Tool;
-            m.toolCallId = std::move(toolCallId);
-            m.name = std::move(toolName);
-            m.content = std::move(text);
-            return m;
-        }
-    };
-
-    enum class EToolParamType
-    {
-        String,
-        Number,
-        Integer,
-        Boolean,
-        Object,
-        Array
-    };
-
-    struct FToolParam
-    {
-        std::string name;
-        EToolParamType type = EToolParamType::String;
-        std::string description;
-        bool required = false;
-    };
-
-    struct FToolSchema
-    {
-        std::string name;
-        std::string description;
-        std::vector<FToolParam> params;
     };
 
     struct FChatRequest
     {
         std::vector<FChatMessage> messages;
-        std::vector<FToolSchema> tools;
         std::string model;
         float temperature = 0.7f;
         int maxTokens = 0;
@@ -97,6 +51,14 @@ namespace NextAI
         // reasoning never leaks into content or confuses tool-call parsing. Only
         // honored by backends that accept chat_template_kwargs (llama-server).
         bool enableThinking = false;
+        // Optional structured-output contract. jsonSchema must contain a JSON
+        // Schema object when responseFormat is Schema.
+        enum class EResponseFormat { Text, Json, Schema } responseFormat = EResponseFormat::Text;
+        std::string responseSchemaName;
+        std::string jsonSchema;
+        bool strictSchema = true;
+        int deadlineMs = 0;
+        bool stateless = false;
     };
 
     struct FChatUsage
@@ -109,10 +71,10 @@ namespace NextAI
     {
         bool success = false;
         std::string content;
-        std::vector<FToolCall> toolCalls;
         std::string finishReason;
         std::string errorMessage;
         FChatUsage usage;
+        std::string structuredOutputMode;
 
         static FChatResponse Success(std::string c)
         {
@@ -132,6 +94,5 @@ namespace NextAI
 
     using FChatStreamCallback = std::function<void(const std::string& delta)>;
 
-    const char* ToolParamTypeToString(EToolParamType t);
     const char* ChatRoleToString(EChatRole r);
 }

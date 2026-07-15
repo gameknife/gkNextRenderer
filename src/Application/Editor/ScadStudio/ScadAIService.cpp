@@ -1,4 +1,5 @@
 #include "ScadAIService.hpp"
+#include "ScadOutline.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Modules/NextAI/AIService.hpp"
@@ -347,28 +348,66 @@ namespace ScadStudio
                 streamingText_ += delta;
             });
 
-            FScadGenResult result;
-            if (response.success)
+            auto parseAndValidate = [this](const NextAI::FChatResponse& candidate)
             {
-                result.success = true;
-                result.assistantText = response.content;
-                result.files = ExtractProjectFiles(response.content);
+                FScadGenResult result;
+                if (!candidate.success)
+                {
+                    result.error = candidate.errorMessage.empty() ? "generation failed" : candidate.errorMessage;
+                    return result;
+                }
+                result.assistantText = candidate.content;
+                result.files = ExtractProjectFiles(candidate.content);
                 if (!result.files.empty())
                 {
                     const auto root = std::find_if(result.files.begin(), result.files.end(), [](const FScadProjectFile& file) {
                         return ToLower(file.path) == "main.scad";
                     });
                     result.scadSource = (root != result.files.end()) ? root->source : result.files.front().source;
+                    for (const auto& file : result.files)
+                    {
+                        const auto outline = BuildScadOutline(file.source);
+                        if (!outline.ok)
+                        {
+                            result.error = file.path + ": " + outline.error;
+                            return result;
+                        }
+                    }
                 }
                 else
                 {
-                    result.scadSource = ExtractScadBlock(response.content);
+                    result.scadSource = ExtractScadBlock(candidate.content);
+                    if (result.scadSource.empty())
+                    {
+                        result.error = "response contains no scad or scad-project fenced artifact";
+                        return result;
+                    }
+                    const auto outline = BuildScadOutline(result.scadSource);
+                    if (!outline.ok)
+                    {
+                        result.error = outline.error;
+                        return result;
+                    }
                 }
-            }
-            else
+                result.success = true;
+                return result;
+            };
+
+            FScadGenResult result = parseAndValidate(response);
+            if (!result.success && response.success)
             {
-                result.success = false;
-                result.error = response.errorMessage.empty() ? "generation failed" : response.errorMessage;
+                const std::string validationError = result.error;
+                request.messages.push_back(NextAI::FChatMessage::Assistant(response.content));
+                request.messages.push_back(NextAI::FChatMessage::User(
+                    "The generated artifact failed local SCAD validation. Return one complete corrected artifact. "
+                    "Do not explain. Exact validator error: " + validationError));
+                const NextAI::FChatResponse repaired = svc->Chat(request);
+                result = parseAndValidate(repaired);
+                result.repairAttempted = true;
+                if (!result.success)
+                {
+                    result.error = "repair failed after one attempt: " + result.error;
+                }
             }
 
             {

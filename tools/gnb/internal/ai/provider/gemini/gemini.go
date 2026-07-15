@@ -85,6 +85,12 @@ func (a *Adapter) Chat(ctx context.Context, in protocol.ChatRequest, sink protoc
 	if in.MaxOutputTokens != 0 {
 		body.GenerationConfig["maxOutputTokens"] = in.MaxOutputTokens
 	}
+	if in.ResponseFormat != nil {
+		body.GenerationConfig["responseMimeType"] = "application/json"
+		if in.ResponseFormat.Mode == "schema" && len(in.ResponseFormat.Schema) > 0 {
+			body.GenerationConfig["responseJsonSchema"] = in.ResponseFormat.Schema
+		}
+	}
 	for _, m := range in.Messages {
 		if m.Role == protocol.RoleSystem {
 			if body.SystemInstruction == nil {

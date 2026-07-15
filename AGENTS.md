@@ -304,7 +304,7 @@ gnb git ai-commit                    # commit-msg 的短别名
 
 commit-msg prompt 内容包含：模式（staged / working tree）、文件清单（含 `??` 未跟踪）、`git diff --stat`、已跟踪文件 diff、未跟踪文件合成的 `+++ b/<path>` 新文件 diff（带二进制/64KB 大小保护）。超 `--max-diff-chars` 按文件边界截断。
 
-引擎层 `NextAI::FAIService` 通过 `localllm` provider 复用同一个 llama-server（无需独立模型进程）：默认读 `external/llm/run/server.pid` 自动发现 host/port/model，PID 文件缺失或解析失败时回退到 `ai_config.json` 的 `localllm.endpoint`。`gnb llm serve --model <id>` 切模型时引擎会在下次 Chat 调用前重读 PID，无需重启编辑器。
+引擎层 `NextAI::FAIService` 通过 AI bridge 复用 gnb 的 provider/profile 和同一个 llama-server（无需独立模型进程）。NextAI 只提供 Chat、Structured Output、stream、session/cancel/usage 等轻量能力；SCAD、MagicaLego、StudioSim、AirportSim 的 prompt、领域校验、一次修复和 deterministic fallback 由各产品拥有。Dashboard 默认走普通 Chat，仅显式 `Tool Call Smoke` 使用固定内存 fixture；不得向普通请求附加 repo/Git/Shell/Scene 工具。`gnb llm serve --model <id>` 切模型后由 gnb 路由新请求，无需重启应用。
 
 ## Spec Workflow
 

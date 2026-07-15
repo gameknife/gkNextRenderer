@@ -1,5 +1,0 @@
-{"jsonrpc":"2.0","id":"5","method":"agent.run","params":{"sessionId":"session-fixture","prompt":"wait"}}
-{"jsonrpc":"2.0","id":"6","method":"run.cancel","params":{"runId":"run-cancel"}}
-{"jsonrpc":"2.0","id":"6","result":{"cancelled":true}}
-{"jsonrpc":"2.0","method":"run.event","params":{"runId":"run-cancel","sequence":1,"type":"run.cancelled","visibility":"internal"}}
-{"jsonrpc":"2.0","id":"5","error":{"code":-32005,"message":"run cancelled","data":{"category":"cancelled","retryable":false}}}

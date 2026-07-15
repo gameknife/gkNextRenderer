@@ -1,5 +1,5 @@
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Modules/NextAI/GnbClient/GnbAgentClient.hpp"
+#include "Modules/NextAI/GnbClient/GnbAIClient.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
 
 #include <cstdlib>
@@ -16,22 +16,22 @@ namespace NextAI
         }
     }
 
-    FGnbAgentClient::FGnbAgentClient() = default;
-    FGnbAgentClient::~FGnbAgentClient() { Stop(); }
+    FGnbAIClient::FGnbAIClient() = default;
+    FGnbAIClient::~FGnbAIClient() { Stop(); }
 
-    bool FGnbAgentClient::Start(const std::filesystem::path& executable, const std::filesystem::path& repoRoot,
+    bool FGnbAIClient::Start(const std::filesystem::path& executable, const std::filesystem::path& repoRoot,
                                 std::string& error)
     {
         Stop(); stopping_ = false;
         if (!process_.Start(executable, repoRoot, error)) return false;
-        readerThread_ = std::thread(&FGnbAgentClient::ReaderLoop, this);
+        readerThread_ = std::thread(&FGnbAIClient::ReaderLoop, this);
         try
         {
             const nlohmann::json response = Request("initialize", {
-                {"protocolVersion", 1}, {"client", {{"name", "gkNextEngine"}, {"version", "1"}}},
-                {"capabilities", {{"remoteTools", true}}}
+                {"protocolVersion", 2}, {"client", {{"name", "gkNextEngine"}, {"version", "2"}}},
+                {"capabilities", {{"streaming", true}, {"structuredOutput", true}}}
             }).get();
-            if (response.value("protocolVersion", 0) != 1) throw std::runtime_error("bridge protocol mismatch");
+            if (response.value("protocolVersion", 0) != 2) throw std::runtime_error("bridge protocol mismatch");
         }
         catch (const std::exception& exception)
         {
@@ -40,7 +40,7 @@ namespace NextAI
         return true;
     }
 
-    bool FGnbAgentClient::StartDefault(const std::filesystem::path& repoRoot, std::string& error)
+    bool FGnbAIClient::StartDefault(const std::filesystem::path& repoRoot, std::string& error)
     {
         std::vector<std::filesystem::path> candidates;
         if (const char* configured = std::getenv("GNB_EXECUTABLE")) candidates.emplace_back(configured);
@@ -60,16 +60,16 @@ namespace NextAI
         return false;
     }
 
-    void FGnbAgentClient::Stop()
+    void FGnbAIClient::Stop()
     {
         stopping_ = true;
         process_.Stop();
         if (readerThread_.joinable() && readerThread_.get_id() != std::this_thread::get_id()) readerThread_.join();
         FailPending("gnb bridge stopped");
     }
-    bool FGnbAgentClient::IsAvailable() const { return !stopping_ && process_.IsRunning(); }
+    bool FGnbAIClient::IsAvailable() const { return !stopping_ && process_.IsRunning(); }
 
-    std::future<nlohmann::json> FGnbAgentClient::Request(const std::string& method, const nlohmann::json& params)
+    std::future<nlohmann::json> FGnbAIClient::Request(const std::string& method, const nlohmann::json& params)
     {
         if (!process_.IsRunning()) return FailedFuture("gnb bridge is not running");
         const std::string id = std::to_string(nextRequestId_++);
@@ -83,50 +83,21 @@ namespace NextAI
         }
         return future;
     }
-    std::future<nlohmann::json> FGnbAgentClient::CreateSession(const std::string& profile,
+    std::future<nlohmann::json> FGnbAIClient::CreateSession(const std::string& profile,
                                                                const std::string& provider,
                                                                const std::string& model)
     { return Request("session.create", {{"profile", profile}, {"provider", provider}, {"model", model}}); }
-    std::future<nlohmann::json> FGnbAgentClient::Chat(const std::string& sessionId,
+    std::future<nlohmann::json> FGnbAIClient::Chat(const std::string& sessionId,
                                                       const std::vector<nlohmann::json>& messages,
                                                       const std::string& runId)
     { return Request("llm.chat", {{"sessionId", sessionId}, {"messages", messages}, {"runId", runId}}); }
-    std::future<nlohmann::json> FGnbAgentClient::RunAgent(const std::string& sessionId, const std::string& prompt,
-                                                          const std::string& runId)
-    { return Request("agent.run", {{"sessionId", sessionId}, {"prompt", prompt}, {"runId", runId}}); }
-    std::future<nlohmann::json> FGnbAgentClient::Cancel(const std::string& runId)
+    std::future<nlohmann::json> FGnbAIClient::Cancel(const std::string& runId)
     { return Request("run.cancel", {{"runId", runId}}); }
 
-    std::future<nlohmann::json> FGnbAgentClient::RegisterTools(std::vector<FGnbRemoteTool> tools)
-    {
-        nlohmann::json descriptors = nlohmann::json::array();
-        { std::lock_guard lock(mutex_); for (auto& tool : tools) { descriptors.push_back({{"name", tool.name}, {"description", tool.description}, {"inputSchema", tool.inputSchema}, {"mutating", tool.mutating}}); tools_[tool.name] = std::move(tool); } }
-        return Request("tools.register", {{"tools", descriptors}});
-    }
+    std::vector<FGnbAIEvent> FGnbAIClient::DrainEvents()
+    { std::lock_guard lock(mutex_); std::vector<FGnbAIEvent> result; result.swap(events_); return result; }
 
-    void FGnbAgentClient::PumpEvents()
-    {
-        std::vector<FToolInvocation> queue;
-        { std::lock_guard lock(mutex_); queue.swap(toolQueue_); }
-        for (const auto& invocation : queue)
-        {
-            nlohmann::json response{{"jsonrpc", "2.0"}, {"id", invocation.requestId}};
-            try
-            {
-                FGnbRemoteTool tool;
-                { std::lock_guard lock(mutex_); auto it = tools_.find(invocation.params.value("name", "")); if (it == tools_.end()) throw std::runtime_error("unknown remote tool"); tool = it->second; }
-                response["result"] = {{"callId", invocation.params.value("callId", "")}, {"content", tool.handler(invocation.params.value("arguments", nlohmann::json::object()))}};
-            }
-            catch (const std::exception& exception)
-            { response["error"] = {{"code", -32007}, {"message", exception.what()}, {"data", {{"category", "tool_error"}, {"retryable", false}}}}; }
-            WriteFrame(response);
-        }
-    }
-
-    std::vector<FGnbAgentEvent> FGnbAgentClient::DrainEvents()
-    { std::lock_guard lock(mutex_); std::vector<FGnbAgentEvent> result; result.swap(events_); return result; }
-
-    void FGnbAgentClient::ReaderLoop()
+    void FGnbAIClient::ReaderLoop()
     {
         std::string line;
         while (!stopping_ && process_.ReadLine(line))
@@ -137,7 +108,7 @@ namespace NextAI
         if (!stopping_) FailPending("gnb bridge exited");
     }
 
-    void FGnbAgentClient::HandleFrame(const nlohmann::json& frame)
+    void FGnbAIClient::HandleFrame(const nlohmann::json& frame)
     {
         std::string validationError;
         if (!ValidateProtocolFrame(frame, validationError)) throw std::runtime_error(validationError);
@@ -149,8 +120,6 @@ namespace NextAI
                 const auto params = frame.value("params", nlohmann::json::object());
                 std::lock_guard lock(mutex_); events_.push_back({params.value("type", ""), params.value("runId", ""), params.value("sequence", 0), params});
             }
-            else if (method == "tool.execute")
-            { std::lock_guard lock(mutex_); toolQueue_.push_back({frame.at("id").get<std::string>(), frame.value("params", nlohmann::json::object())}); }
             return;
         }
         const std::string id = frame.at("id").get<std::string>();
@@ -160,14 +129,14 @@ namespace NextAI
         else pending->promise.set_value(frame.value("result", nlohmann::json::object()));
     }
 
-    void FGnbAgentClient::FailPending(const std::string& message)
+    void FGnbAIClient::FailPending(const std::string& message)
     {
         std::unordered_map<std::string, std::shared_ptr<FPendingRequest>> pending;
         { std::lock_guard lock(mutex_); pending.swap(pending_); }
         for (auto& [id, request] : pending) request->promise.set_exception(std::make_exception_ptr(std::runtime_error(message)));
     }
-    bool FGnbAgentClient::WriteFrame(const nlohmann::json& frame) { return process_.WriteLine(frame.dump()); }
-    bool FGnbAgentClient::ValidateProtocolFrame(const nlohmann::json& frame, std::string& error)
+    bool FGnbAIClient::WriteFrame(const nlohmann::json& frame) { return process_.WriteLine(frame.dump()); }
+    bool FGnbAIClient::ValidateProtocolFrame(const nlohmann::json& frame, std::string& error)
     {
         if (!frame.is_object() || frame.value("jsonrpc", "") != "2.0") { error = "expected JSON-RPC 2.0 object"; return false; }
         if (!frame.contains("id") && !frame.contains("method")) { error = "frame requires id or method"; return false; }

@@ -29,15 +29,6 @@ provider = "localllm"
 temperature = 0.4
 max_output_tokens = 4096
 
-[ai.profiles.editor]
-provider = "localllm"
-temperature = 0.3
-max_output_tokens = 4096
-tool_sets = ["repo-read", "engine-editor"]
-max_steps = 12
-max_tool_calls = 32
-timeout_seconds = 300
-
 [ai.profiles.simulation]
 provider = "localllm"
 temperature = 0.4

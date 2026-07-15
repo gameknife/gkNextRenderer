@@ -168,7 +168,7 @@ void EditorInterface::RebuildDefaultDockLayout(ImGuiID id)
     ImGui::DockBuilderDockWindow("Outliner", dock1);
     ImGui::DockBuilderDockWindow("Properties", dock2);
     ImGui::DockBuilderDockWindow("Command History", dock2);
-    ImGui::DockBuilderDockWindow("AI Assistant", dock2);
+    ImGui::DockBuilderDockWindow("Script Console", dock2);
     ImGui::DockBuilderDockWindow("Hot Reload", dock2);
     ImGui::DockBuilderDockWindow("Content Browser", dock3);
     ImGui::DockBuilderDockWindow("Log", dock3);
@@ -318,12 +318,8 @@ void EditorInterface::Render(Editor::EditorUiState& uiState)
     if (uiState.hotReloadPanel)
         Editor::DrawHotReloadPanel(ctx, uiState);
     Editor::DrawCameraViewPanel(ctx, uiState);
-    // Pump the AI agent main-thread queue every frame, regardless of panel
-    // visibility, so in-flight agent tool calls never stall (and the user-confirm
-    // UI can appear) when the panel is hidden, collapsed, or on an inactive tab.
-    Editor::TickAIAgentMainThread(ctx);
-    if (uiState.aiPanel)
-        Editor::DrawAIPanel(ctx, uiState);
+    if (uiState.scriptConsolePanel)
+        Editor::DrawScriptConsolePanel(ctx, uiState);
 
     DevTools::FUiDevPanels::Get().RenderConsoleOverlay();
 

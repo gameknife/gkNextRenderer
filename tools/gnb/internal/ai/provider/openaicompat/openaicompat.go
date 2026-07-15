@@ -19,6 +19,7 @@ type Config struct {
 	ID, DisplayName, Endpoint, APIKey, DefaultModel string
 	Models                                          []string
 	HTTP                                            *http.Client
+	ChatTemplateKwargs                              bool
 }
 
 type Adapter struct{ config Config }
@@ -45,13 +46,15 @@ func (a *Adapter) Descriptor() provider.Descriptor {
 }
 
 type request struct {
-	Model       string           `json:"model"`
-	Messages    []map[string]any `json:"messages"`
-	Tools       []map[string]any `json:"tools,omitempty"`
-	Temperature float64          `json:"temperature,omitempty"`
-	TopP        float64          `json:"top_p,omitempty"`
-	MaxTokens   int              `json:"max_tokens,omitempty"`
-	Stream      bool             `json:"stream"`
+	Model              string           `json:"model"`
+	Messages           []map[string]any `json:"messages"`
+	Tools              []map[string]any `json:"tools,omitempty"`
+	Temperature        float64          `json:"temperature,omitempty"`
+	TopP               float64          `json:"top_p,omitempty"`
+	MaxTokens          int              `json:"max_tokens,omitempty"`
+	Stream             bool             `json:"stream"`
+	ResponseFormat     map[string]any   `json:"response_format,omitempty"`
+	ChatTemplateKwargs map[string]any   `json:"chat_template_kwargs,omitempty"`
 }
 
 type response struct {
@@ -92,6 +95,16 @@ type response struct {
 
 func (a *Adapter) Chat(ctx context.Context, in protocol.ChatRequest, sink protocol.EventSink) (protocol.ChatResponse, error) {
 	body := request{Model: in.Model, Temperature: in.Temperature, TopP: in.TopP, MaxTokens: in.MaxOutputTokens, Stream: sink != nil}
+	if a.config.ChatTemplateKwargs {
+		body.ChatTemplateKwargs = map[string]any{"enable_thinking": in.EnableThinking}
+	}
+	if in.ResponseFormat != nil {
+		if in.ResponseFormat.Mode == "schema" {
+			body.ResponseFormat = map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": in.ResponseFormat.Name, "schema": in.ResponseFormat.Schema, "strict": in.ResponseFormat.Strict}}
+		} else {
+			body.ResponseFormat = map[string]any{"type": "json_object"}
+		}
+	}
 	for _, m := range in.Messages {
 		item := map[string]any{"role": m.Role, "content": m.Content}
 		if m.Name != "" {

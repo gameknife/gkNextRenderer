@@ -1,2 +1,0 @@
-{"jsonrpc":"2.0","id":"1","method":"initialize","params":{"protocolVersion":1,"client":{"name":"fixture-client","version":"1.0.0"},"capabilities":{"remoteTools":true}}}
-{"jsonrpc":"2.0","id":"1","result":{"protocolVersion":1,"server":{"name":"gnb-agent-bridge","version":"1.0.0"},"capabilities":{"streaming":true,"remoteTools":true,"cancellation":true}}}

@@ -33,12 +33,9 @@ type Profile struct {
 	Provider          string   `toml:"provider"`
 	Model             string   `toml:"model"`
 	FallbackProviders []string `toml:"fallback_providers"`
-	ToolSets          []string `toml:"tool_sets"`
 	Temperature       float64  `toml:"temperature"`
 	TopP              float64  `toml:"top_p"`
 	MaxOutputTokens   int      `toml:"max_output_tokens"`
-	MaxSteps          int      `toml:"max_steps"`
-	MaxToolCalls      int      `toml:"max_tool_calls"`
 	TimeoutSeconds    int      `toml:"timeout_seconds"`
 	MaxConcurrency    int      `toml:"max_concurrency"`
 }
@@ -206,9 +203,6 @@ func merge(dst *Config, src Config) {
 		if p.FallbackProviders != nil {
 			base.FallbackProviders = p.FallbackProviders
 		}
-		if p.ToolSets != nil {
-			base.ToolSets = p.ToolSets
-		}
 		if p.Temperature != 0 {
 			base.Temperature = p.Temperature
 		}
@@ -217,12 +211,6 @@ func merge(dst *Config, src Config) {
 		}
 		if p.MaxOutputTokens != 0 {
 			base.MaxOutputTokens = p.MaxOutputTokens
-		}
-		if p.MaxSteps != 0 {
-			base.MaxSteps = p.MaxSteps
-		}
-		if p.MaxToolCalls != 0 {
-			base.MaxToolCalls = p.MaxToolCalls
 		}
 		if p.TimeoutSeconds != 0 {
 			base.TimeoutSeconds = p.TimeoutSeconds

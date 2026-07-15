@@ -4,14 +4,14 @@
 
 namespace NextAI
 {
-    class FGnbAgentProcess
+    class FGnbAIProcess
     {
     public:
-        FGnbAgentProcess();
-        ~FGnbAgentProcess();
+        FGnbAIProcess();
+        ~FGnbAIProcess();
 
-        FGnbAgentProcess(const FGnbAgentProcess&) = delete;
-        FGnbAgentProcess& operator=(const FGnbAgentProcess&) = delete;
+        FGnbAIProcess(const FGnbAIProcess&) = delete;
+        FGnbAIProcess& operator=(const FGnbAIProcess&) = delete;
 
         bool Start(const std::filesystem::path& executable, const std::filesystem::path& repoRoot,
                    std::string& error);

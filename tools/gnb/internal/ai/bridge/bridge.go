@@ -11,13 +11,12 @@ import (
 	"time"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai"
-	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/agent"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/protocol"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/router"
-	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/tool"
+	aisession "github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/session"
 )
 
-const ProtocolVersion = 1
+const ProtocolVersion = 2
 const maxFrameBytes = 4 << 20
 
 type frame struct {
@@ -33,10 +32,6 @@ type rpcError struct {
 	Message string         `json:"message"`
 	Data    map[string]any `json:"data,omitempty"`
 }
-type pendingResult struct {
-	result json.RawMessage
-	err    *rpcError
-}
 type Server struct {
 	runtime     *ai.Runtime
 	reader      io.Reader
@@ -44,14 +39,13 @@ type Server struct {
 	writeMu     sync.Mutex
 	stateMu     sync.Mutex
 	initialized bool
-	pending     map[string]chan pendingResult
 	closed      chan struct{}
 	nextID      atomic.Uint64
 	handlers    sync.WaitGroup
 }
 
 func New(runtime *ai.Runtime, reader io.Reader, writer io.Writer) *Server {
-	return &Server{runtime: runtime, reader: reader, writer: writer, pending: map[string]chan pendingResult{}, closed: make(chan struct{})}
+	return &Server{runtime: runtime, reader: reader, writer: writer, closed: make(chan struct{})}
 }
 func (s *Server) Serve(ctx context.Context) error {
 	scanner := bufio.NewScanner(s.reader)
@@ -60,10 +54,6 @@ func (s *Server) Serve(ctx context.Context) error {
 		var message frame
 		if err := json.Unmarshal(scanner.Bytes(), &message); err != nil {
 			s.writeError(nil, -32700, "parse error", map[string]any{"category": "protocol", "retryable": false})
-			continue
-		}
-		if message.Method == "" && len(message.ID) > 0 {
-			s.deliver(message)
 			continue
 		}
 		if message.Method == "initialize" {
@@ -111,17 +101,16 @@ func (s *Server) handle(parent context.Context, message frame) {
 		var p struct{ SessionID string }
 		err = json.Unmarshal(message.Params, &p)
 		if err == nil {
-			session, ok := s.runtime.Sessions.Get(p.SessionID)
-			if !ok {
-				err = fmt.Errorf("unknown session %q", p.SessionID)
-			} else {
-				result = s.runtime.Sessions.Create(session.ProfileID, session.ProviderID, session.ModelID)
-			}
+			result, err = s.runtime.Sessions.Reset(p.SessionID)
+		}
+	case "session.close":
+		var p struct{ SessionID string }
+		err = json.Unmarshal(message.Params, &p)
+		if err == nil {
+			result = map[string]any{"closed": s.runtime.Sessions.Close(p.SessionID)}
 		}
 	case "llm.chat":
 		result, err = s.chat(parent, message.Params)
-	case "agent.run":
-		result, err = s.runAgent(parent, message.Params)
 	case "workflow.run":
 		result, err = s.runWorkflow(parent, message.Params)
 	case "run.cancel":
@@ -130,8 +119,6 @@ func (s *Server) handle(parent context.Context, message frame) {
 		if err == nil {
 			result = map[string]any{"cancelled": s.runtime.Sessions.CancelRun(p.RunID)}
 		}
-	case "tools.register":
-		result, err = s.registerTools(message.Params)
 	case "shutdown":
 		result = map[string]any{"ok": true}
 	default:
@@ -157,18 +144,22 @@ func (s *Server) initialize(raw json.RawMessage) (any, error) {
 	s.stateMu.Lock()
 	s.initialized = true
 	s.stateMu.Unlock()
-	return map[string]any{"protocolVersion": ProtocolVersion, "server": map[string]any{"name": "gnb-agent-bridge", "version": "1"}, "capabilities": map[string]bool{"streaming": true, "remoteTools": true, "cancellation": true}}, nil
+	return map[string]any{"protocolVersion": ProtocolVersion, "server": map[string]any{"name": "gnb-ai-bridge", "version": "2"}, "capabilities": map[string]bool{"streaming": true, "structuredOutput": true, "cancellation": true}}, nil
 }
 
 type runParams struct {
-	SessionID       string             `json:"sessionId"`
-	RunID           string             `json:"runId"`
-	Profile         string             `json:"profile"`
-	Provider        string             `json:"provider"`
-	Model           string             `json:"model"`
-	Messages        []protocol.Message `json:"messages"`
-	Prompt          string             `json:"prompt"`
-	MaxOutputTokens int                `json:"maxOutputTokens"`
+	SessionID       string                   `json:"sessionId"`
+	RunID           string                   `json:"runId"`
+	Profile         string                   `json:"profile"`
+	Provider        string                   `json:"provider"`
+	Model           string                   `json:"model"`
+	Messages        []protocol.Message       `json:"messages"`
+	Prompt          string                   `json:"prompt"`
+	MaxOutputTokens int                      `json:"maxOutputTokens"`
+	EnableThinking  bool                     `json:"enableThinking"`
+	ResponseFormat  *protocol.ResponseFormat `json:"responseFormat"`
+	DeadlineMs      int                      `json:"deadlineMs"`
+	Stateless       bool                     `json:"stateless"`
 }
 
 func (s *Server) prepareRun(parent context.Context, p *runParams) (context.Context, error) {
@@ -179,7 +170,15 @@ func (s *Server) prepareRun(parent context.Context, p *runParams) (context.Conte
 		session := s.runtime.Sessions.Create(p.Profile, p.Provider, p.Model)
 		p.SessionID = session.ID
 	}
-	return s.runtime.Sessions.StartRun(p.SessionID, p.RunID, parent)
+	ctx, err := s.runtime.Sessions.StartRun(p.SessionID, p.RunID, parent)
+	if err != nil {
+		return nil, err
+	}
+	if p.DeadlineMs > 0 {
+		deadline, _ := context.WithTimeout(ctx, time.Duration(p.DeadlineMs)*time.Millisecond)
+		return deadline, nil
+	}
+	return ctx, nil
 }
 func (s *Server) chat(parent context.Context, raw json.RawMessage) (any, error) {
 	var p runParams
@@ -192,13 +191,16 @@ func (s *Server) chat(parent context.Context, raw json.RawMessage) (any, error) 
 	}
 	defer func() {}()
 	session, _ := s.runtime.Sessions.Get(p.SessionID)
-	messages := append([]protocol.Message{}, session.Messages...)
+	var messages []protocol.Message
+	if !p.Stateless {
+		messages = append(messages, session.Messages...)
+	}
 	messages = append(messages, p.Messages...)
 	if p.Prompt != "" {
 		messages = append(messages, protocol.Message{Role: protocol.RoleUser, Content: p.Prompt})
 	}
-	response, route, err := s.runtime.Router.Chat(ctx, router.Overrides{Profile: first(p.Profile, session.ProfileID), Provider: first(p.Provider, session.ProviderID), Model: first(p.Model, session.ModelID)}, protocol.ChatRequest{Messages: messages, MaxOutputTokens: p.MaxOutputTokens}, s.eventSink(p.RunID))
-	trace := agent.Trace{RunID: p.RunID, Status: "completed", Usage: response.Usage}
+	response, route, err := s.runtime.Router.Chat(ctx, router.Overrides{Profile: first(p.Profile, session.ProfileID), Provider: first(p.Provider, session.ProviderID), Model: first(p.Model, session.ModelID)}, protocol.ChatRequest{Messages: messages, MaxOutputTokens: p.MaxOutputTokens, EnableThinking: p.EnableThinking, ResponseFormat: p.ResponseFormat}, s.eventSink(p.RunID))
+	trace := aisession.Trace{RunID: p.RunID, Status: "completed", Usage: response.Usage}
 	if route.Provider != nil {
 		trace.Provider = route.Provider.Descriptor().ID
 		trace.Model = route.Model
@@ -216,36 +218,10 @@ func (s *Server) chat(parent context.Context, raw json.RawMessage) (any, error) 
 		appended = append(appended, protocol.Message{Role: protocol.RoleUser, Content: p.Prompt})
 	}
 	appended = append(appended, protocol.Message{Role: protocol.RoleAssistant, Content: response.Content})
-	_ = s.runtime.Sessions.Append(p.SessionID, appended...)
-	return map[string]any{"runId": p.RunID, "sessionId": p.SessionID, "content": response.Content, "finishReason": response.FinishReason, "usage": response.Usage, "provider": trace.Provider, "model": trace.Model}, nil
-}
-func (s *Server) runAgent(parent context.Context, raw json.RawMessage) (any, error) {
-	var p runParams
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return nil, err
+	if !p.Stateless {
+		_ = s.runtime.Sessions.Append(p.SessionID, appended...)
 	}
-	ctx, err := s.prepareRun(parent, &p)
-	if err != nil {
-		return nil, err
-	}
-	session, _ := s.runtime.Sessions.Get(p.SessionID)
-	messages := append([]protocol.Message{}, session.Messages...)
-	messages = append(messages, p.Messages...)
-	if p.Prompt != "" {
-		messages = append(messages, protocol.Message{Role: protocol.RoleUser, Content: p.Prompt})
-	}
-	profile := first(p.Profile, session.ProfileID)
-	route, err := s.runtime.Router.Resolve(router.Overrides{Profile: profile, Provider: first(p.Provider, session.ProviderID), Model: first(p.Model, session.ModelID)})
-	if err != nil {
-		return nil, err
-	}
-	result, err := s.runtime.RunAgent(ctx, router.Overrides{Profile: profile, Provider: first(p.Provider, session.ProviderID), Model: first(p.Model, session.ModelID)}, protocol.ChatRequest{Messages: messages, MaxOutputTokens: p.MaxOutputTokens}, agent.Options{RunID: p.RunID, MaxSteps: route.Settings.MaxSteps, MaxToolCalls: route.Settings.MaxToolCalls}, s.eventSink(p.RunID))
-	s.runtime.Sessions.FinishRun(p.RunID, result.Trace)
-	if err != nil {
-		return nil, err
-	}
-	_ = s.runtime.Sessions.Append(p.SessionID, protocol.Message{Role: protocol.RoleUser, Content: p.Prompt}, protocol.Message{Role: protocol.RoleAssistant, Content: result.Content})
-	return map[string]any{"runId": p.RunID, "sessionId": p.SessionID, "content": result.Content, "trace": result.Trace}, nil
+	return map[string]any{"runId": p.RunID, "sessionId": p.SessionID, "content": response.Content, "finishReason": response.FinishReason, "usage": response.Usage, "provider": trace.Provider, "model": trace.Model, "structuredOutputMode": response.StructuredOutputMode}, nil
 }
 func (s *Server) runWorkflow(parent context.Context, raw json.RawMessage) (any, error) {
 	var p struct {
@@ -269,65 +245,6 @@ func (s *Server) eventSink(runID string) protocol.EventSink {
 	return func(_ context.Context, event protocol.Event) error {
 		event.RunID = runID
 		return s.write(frame{JSONRPC: "2.0", Method: "run.event", Params: mustJSON(event)})
-	}
-}
-func (s *Server) registerTools(raw json.RawMessage) (any, error) {
-	var p struct {
-		Tools []protocol.ToolDescriptor `json:"tools"`
-	}
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return nil, err
-	}
-	for _, descriptor := range p.Tools {
-		d := descriptor
-		err := s.runtime.Tools.Register(tool.Entry{Descriptor: d, Timeout: 30 * time.Second, Handler: func(ctx context.Context, args json.RawMessage, callCtx tool.Context) (string, error) {
-			return s.executeRemote(ctx, d, callCtx, args)
-		}})
-		if err != nil {
-			return nil, err
-		}
-	}
-	return map[string]any{"registered": len(p.Tools)}, nil
-}
-func (s *Server) executeRemote(ctx context.Context, descriptor protocol.ToolDescriptor, callCtx tool.Context, args json.RawMessage) (string, error) {
-	id := fmt.Sprintf("tool-%d", s.nextID.Add(1))
-	ch := make(chan pendingResult, 1)
-	s.stateMu.Lock()
-	s.pending[id] = ch
-	s.stateMu.Unlock()
-	defer func() { s.stateMu.Lock(); delete(s.pending, id); s.stateMu.Unlock() }()
-	request := map[string]any{"runId": callCtx.RunID, "callId": callCtx.CallID, "name": descriptor.Name, "arguments": json.RawMessage(args), "mutating": descriptor.Mutating}
-	if err := s.write(frame{JSONRPC: "2.0", ID: mustJSON(id), Method: "tool.execute", Params: mustJSON(request)}); err != nil {
-		return "", err
-	}
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
-	case response := <-ch:
-		if response.err != nil {
-			return "", fmt.Errorf("remote tool: %s", response.err.Message)
-		}
-		var out struct {
-			Content string `json:"content"`
-		}
-		if err := json.Unmarshal(response.result, &out); err != nil {
-			return "", err
-		}
-		return out.Content, nil
-	case <-s.closed:
-		return "", fmt.Errorf("bridge closed during remote tool")
-	}
-}
-func (s *Server) deliver(message frame) {
-	var id string
-	if json.Unmarshal(message.ID, &id) != nil {
-		return
-	}
-	s.stateMu.Lock()
-	ch := s.pending[id]
-	s.stateMu.Unlock()
-	if ch != nil {
-		ch <- pendingResult{result: message.Result, err: message.Error}
 	}
 }
 func (s *Server) writeResult(id json.RawMessage, result any) {

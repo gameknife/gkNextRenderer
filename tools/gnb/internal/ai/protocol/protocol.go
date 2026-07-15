@@ -39,6 +39,15 @@ type ChatRequest struct {
 	Temperature     float64          `json:"temperature,omitempty"`
 	TopP            float64          `json:"topP,omitempty"`
 	MaxOutputTokens int              `json:"maxOutputTokens,omitempty"`
+	EnableThinking  bool             `json:"enableThinking,omitempty"`
+	ResponseFormat  *ResponseFormat  `json:"responseFormat,omitempty"`
+}
+
+type ResponseFormat struct {
+	Mode   string         `json:"mode"` // json or schema
+	Name   string         `json:"name,omitempty"`
+	Schema map[string]any `json:"schema,omitempty"`
+	Strict bool           `json:"strict,omitempty"`
 }
 
 type Usage struct {
@@ -47,10 +56,11 @@ type Usage struct {
 }
 
 type ChatResponse struct {
-	Content      string     `json:"content,omitempty"`
-	ToolCalls    []ToolCall `json:"toolCalls,omitempty"`
-	FinishReason string     `json:"finishReason,omitempty"`
-	Usage        Usage      `json:"usage,omitempty"`
+	Content              string     `json:"content,omitempty"`
+	ToolCalls            []ToolCall `json:"toolCalls,omitempty"`
+	FinishReason         string     `json:"finishReason,omitempty"`
+	Usage                Usage      `json:"usage,omitempty"`
+	StructuredOutputMode string     `json:"structuredOutputMode,omitempty"`
 }
 
 type EventType string

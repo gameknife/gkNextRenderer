@@ -186,12 +186,12 @@ dashboard 的 Git 标签页、`gnb git` 命令都复用它——想改 git 行�
 - 浏览器通过 `GET /jobs/{id}/stream`（`handleJobStream`）建立 SSE，实时追加日志行；`JobSnapshot` 用于首屏把已有缓冲渲染出来。
 - `buildJobSpec` / `runJobSpec` / `testJobSpec` 负责把一个 target 翻译成具体命令行。
 
-### 9.5 聊天与工具调用
+### 9.5 AI Chat、Structured Output 与业务 Workflow
 
 - `ChatStore` 管理 v2 多会话，持久化 profile、provider 和 model 字符串 ID。
-- Dashboard、CLI、SCAD 和 commit message 共用 `internal/ai` 的 Router、Agent、Tool Registry、Session 与 Workflow；repo tools 位于 `internal/repotools`。
+- Dashboard、CLI、SCAD 和 commit message 共用 `internal/ai` 的 Router、Session 与 Workflow。普通 Chat 不附加工具，也不存在 repo/Git/Shell 工具注册表。
 - provider/model 由 catalog 动态提供；endpoint、API key、LocalLlama 生命周期和 PID 发现只存在于 gnb，不进入 Engine。
-- Engine 应用通过 `gnb agent bridge --stdio` 的协议 v1 薄客户端发起 chat/agent/workflow；Editor 场景工具以 remote tool 回调在主线程执行。
+- Engine 应用通过 `gnb ai bridge --stdio` 的协议 v2 薄客户端发起 Chat、Structured Chat 和业务 workflow。Dashboard 的显式 Tool Call Smoke 只访问固定内存 fixture，不进入 Bridge 或 NextAI 抽象。
 
 ### 9.6 验证控制面
 

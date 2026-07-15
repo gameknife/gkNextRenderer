@@ -1,12 +1,12 @@
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Modules/NextAI/GnbClient/GnbAgentProcess.hpp"
+#include "Modules/NextAI/GnbClient/GnbAIProcess.hpp"
 
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
 
 #if WIN32
 namespace NextAI
 {
-    struct FGnbAgentProcess::FImpl
+    struct FGnbAIProcess::FImpl
     {
         HANDLE process = nullptr;
         HANDLE inputWrite = nullptr;
@@ -15,10 +15,10 @@ namespace NextAI
         std::atomic<bool> running = false;
     };
 
-    FGnbAgentProcess::FGnbAgentProcess() : impl_(std::make_unique<FImpl>()) {}
-    FGnbAgentProcess::~FGnbAgentProcess() { Stop(); }
+    FGnbAIProcess::FGnbAIProcess() : impl_(std::make_unique<FImpl>()) {}
+    FGnbAIProcess::~FGnbAIProcess() { Stop(); }
 
-    bool FGnbAgentProcess::Start(const std::filesystem::path& executable, const std::filesystem::path& repoRoot,
+    bool FGnbAIProcess::Start(const std::filesystem::path& executable, const std::filesystem::path& repoRoot,
                                  std::string& error)
     {
         Stop();
@@ -42,7 +42,7 @@ namespace NextAI
         startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
         PROCESS_INFORMATION processInfo{};
         std::wstring command = L"\"" + executable.wstring() + L"\" --repo-root \"" + repoRoot.wstring() +
-            L"\" agent bridge --stdio";
+            L"\" ai bridge --stdio";
         const BOOL created = CreateProcessW(nullptr, command.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW,
                                              nullptr, repoRoot.wstring().c_str(), &startup, &processInfo);
         CloseHandle(childInputRead);
@@ -59,7 +59,7 @@ namespace NextAI
         return true;
     }
 
-    bool FGnbAgentProcess::WriteLine(const std::string& line)
+    bool FGnbAIProcess::WriteLine(const std::string& line)
     {
         std::lock_guard lock(impl_->writeMutex);
         if (!impl_->running || !impl_->inputWrite) return false;
@@ -69,7 +69,7 @@ namespace NextAI
             written == framed.size();
     }
 
-    bool FGnbAgentProcess::ReadLine(std::string& line)
+    bool FGnbAIProcess::ReadLine(std::string& line)
     {
         line.clear();
         char value = 0;
@@ -84,13 +84,13 @@ namespace NextAI
         return false;
     }
 
-    bool FGnbAgentProcess::IsRunning() const
+    bool FGnbAIProcess::IsRunning() const
     {
         if (!impl_->running || !impl_->process) return false;
         return WaitForSingleObject(impl_->process, 0) == WAIT_TIMEOUT;
     }
 
-    void FGnbAgentProcess::Stop()
+    void FGnbAIProcess::Stop()
     {
         impl_->running = false;
         if (impl_->inputWrite) { CloseHandle(impl_->inputWrite); impl_->inputWrite = nullptr; }

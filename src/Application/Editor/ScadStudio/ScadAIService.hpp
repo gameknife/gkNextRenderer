@@ -24,6 +24,7 @@ namespace ScadStudio
         std::string scadSource;    // extracted ```scad``` block (empty if none)
         std::vector<FScadProjectFile> files; // extracted ```scad-project``` files (empty for single-file replies)
         std::string error;         // populated when success == false
+        bool repairAttempted = false;
     };
 
     // Thin wrapper around the engine's NextAI::FAIService that:

@@ -73,6 +73,22 @@ func (r *Router) Chat(ctx context.Context, o Overrides, req protocol.ChatRequest
 	}
 	requestForRoute := req
 	requestForRoute.Model = route.Model
+	structuredMode := ""
+	if req.ResponseFormat != nil {
+		capabilities := route.Provider.Descriptor().Capabilities
+		switch {
+		case req.ResponseFormat.Mode == "schema" && capabilities.StructuredOutput:
+			structuredMode = "native_schema"
+		case capabilities.JSONMode:
+			structuredMode = "native_json"
+			requestForRoute.ResponseFormat = &protocol.ResponseFormat{Mode: "json"}
+			requestForRoute.Messages = append([]protocol.Message{{Role: protocol.RoleSystem, Content: "Return only valid JSON matching the requested schema."}}, requestForRoute.Messages...)
+		default:
+			structuredMode = "prompt_only"
+			requestForRoute.ResponseFormat = nil
+			requestForRoute.Messages = append([]protocol.Message{{Role: protocol.RoleSystem, Content: "Return only valid JSON. Do not include markdown fences or commentary."}}, requestForRoute.Messages...)
+		}
+	}
 	if req.Temperature == 0 {
 		requestForRoute.Temperature = route.Settings.Temperature
 	}
@@ -88,6 +104,7 @@ func (r *Router) Chat(ctx context.Context, o Overrides, req protocol.ChatRequest
 		wrappedSink = func(ctx context.Context, event protocol.Event) error { emitted = true; return sink(ctx, event) }
 	}
 	resp, err := route.Provider.Chat(ctx, requestForRoute, wrappedSink)
+	resp.StructuredOutputMode = structuredMode
 	if err == nil || emitted || len(resp.ToolCalls) > 0 || !canFallback(err) {
 		return resp, route, err
 	}
@@ -106,6 +123,7 @@ func (r *Router) Chat(ctx context.Context, o Overrides, req protocol.ChatRequest
 		fallbackReq := requestForRoute
 		fallbackReq.Model = fallbackRoute.Model
 		resp, fallbackErr := fallback.Chat(ctx, fallbackReq, wrappedSink)
+		resp.StructuredOutputMode = structuredMode
 		if fallbackErr == nil {
 			return resp, fallbackRoute, nil
 		}

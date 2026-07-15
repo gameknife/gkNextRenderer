@@ -23,6 +23,13 @@ namespace StudioSim
         constexpr double kPantryDurationMinutes = 20.0;
         constexpr double kLineIntervalSeconds = 3.0;
         constexpr double kGatheringBubbleDurationMinutes = 20.0;
+        constexpr std::string_view kGatheringSchema = R"json({
+            "type":"object","additionalProperties":false,"required":["lines"],
+            "properties":{
+                "lines":{"type":"array","minItems":1,"maxItems":10,"items":{"type":"object","additionalProperties":false,"required":["speaker","line"],"properties":{"speaker":{"type":"string","maxLength":64},"line":{"type":"string","maxLength":48}}}},
+                "decision":{"type":"object","additionalProperties":false,"properties":{"summary":{"type":"string","maxLength":60},"focus_meter":{"type":"string","enum":["tech","design","art","polish"]},"reassign":{"type":"array","maxItems":6,"items":{"type":"object","additionalProperties":false,"required":["who","task"],"properties":{"who":{"type":"string","maxLength":64},"task":{"type":"string","maxLength":48}}}}}}
+            }
+        })json";
 
         const char* GatheringKindName(EGatheringKind kind)
         {
@@ -136,7 +143,8 @@ namespace StudioSim
                         FMeetingLine line;
                         line.speaker = item.value("speaker", std::string());
                         line.text = item.value("line", std::string());
-                        if (!line.speaker.empty() && !line.text.empty())
+                        if (!line.speaker.empty() && !line.text.empty() && line.speaker.size() <= 64 &&
+                            line.text.size() <= 48)
                         {
                             outLines.push_back(std::move(line));
                         }
@@ -539,7 +547,7 @@ namespace StudioSim
             generation = generation_;
         }
 
-        ai->GenerateTextAsync(prompt,
+        ai->GenerateStructuredTextAsync(prompt, "studio_gathering", std::string(kGatheringSchema),
                               [this, gatheringId, generation](NextAI::FAIResponse response)
                               {
                                   // Worker thread：只解析 + 入队，绝不触碰 gatherings_/employees。

@@ -307,7 +307,7 @@ namespace Editor
                 ImGui::MenuItem("Color Export", nullptr, &ui.child_color);
                 ImGui::MenuItem("Command History", nullptr, &ui.commandHistoryPanel);
                 ImGui::MenuItem("Hot Reload", nullptr, &ui.hotReloadPanel);
-                ImGui::MenuItem("AI Assistant", nullptr, &ui.aiPanel);
+                ImGui::MenuItem("Script Console", nullptr, &ui.scriptConsolePanel);
                 ImGui::MenuItem("Log", nullptr, &ui.logPanel);
                 ImGui::MenuItem("Material Editor", nullptr, &ui.child_mat_editor);
                 ImGui::EndMenu();
@@ -347,7 +347,7 @@ namespace Editor
                 ImGui::MenuItem("Camera View 3", nullptr, &ui.cameraViews[2].open);
                 ui.cameraViewPanel = ui.cameraViews[0].open;
                 ImGui::Separator();
-                ImGui::MenuItem("AI Assistant", nullptr, &ui.aiPanel);
+                ImGui::MenuItem("Script Console", nullptr, &ui.scriptConsolePanel);
                 ImGui::MenuItem("Command History", nullptr, &ui.commandHistoryPanel);
                 ImGui::MenuItem("Hot Reload", nullptr, &ui.hotReloadPanel);
                 ImGui::MenuItem("Settings", nullptr, &ui.settingsPanel);

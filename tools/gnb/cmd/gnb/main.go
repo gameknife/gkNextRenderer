@@ -124,7 +124,8 @@ func main() {
 	root.AddCommand(newTyposCommand(ctx))
 	root.AddCommand(newGitCommand(ctx))
 	root.AddCommand(newLLMCommand(ctx))
-	root.AddCommand(newAgentCommand(ctx))
+	root.AddCommand(newAICommand(ctx))
+	root.AddCommand(newLegacyAgentCommand(ctx))
 	root.AddCommand(newInitCommand())
 
 	if err := root.Execute(); err != nil {

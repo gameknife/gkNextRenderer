@@ -1,0 +1,2 @@
+{"jsonrpc":"2.0","method":"run.event","params":{"type":"content.delta","runId":"run-stream","sequence":1,"content":"hello"}}
+{"jsonrpc":"2.0","id":"3","result":{"runId":"run-stream","content":"hello","finishReason":"stop"}}

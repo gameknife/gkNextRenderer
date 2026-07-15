@@ -153,11 +153,12 @@ On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is i
 - **TUI terminal rendering / Remote Play / Visual Test / Benchmark / Packager**
 - **`gnb` project CLI (build / run / screenshot validation / dashboard / local LLM)**
 
-### AI Native
+### Product-focused AI
 
-- **Built-in AI agent infrastructure with room for runtime LLM features**
-- **Codex / agentic-coding-native development for engine infrastructure and sample demos**
-- **Moving away from low-code narratives toward a more direct agentic coding workflow**
+- **Unified provider, profile, streaming, structured-output, cancellation, and local-model infrastructure**
+- **Domain workflows for SCAD and MagicaLego generation, with local validation and one bounded repair attempt**
+- **Structured single-request runtime decisions with deterministic fallback in StudioSim and AirportSim**
+- **Dashboard capability lab for ordinary Chat and one isolated in-memory Tool Call smoke probe**
 
 ---
 

@@ -1,6 +1,6 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Modules/NextAI/AIService.hpp"
-#include "Modules/NextAI/GnbClient/GnbAgentClient.hpp"
+#include "Modules/NextAI/GnbClient/GnbAIClient.hpp"
 
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
 
@@ -40,7 +40,7 @@ namespace NextAI
         if (client_ && client_->IsAvailable()) return true;
         const auto repoRoot = FindRepoRoot();
         if (repoRoot.empty()) { statusMessage_ = "gnb repository root not found"; return false; }
-        client_ = std::make_unique<FGnbAgentClient>();
+        client_ = std::make_unique<FGnbAIClient>();
         std::string error;
         if (!client_->StartDefault(repoRoot, error))
         {
@@ -138,8 +138,18 @@ namespace NextAI
         const std::string runId = fmt::format("chat-{}", nextRun++);
         try
         {
-            auto future = client_->Request("llm.chat", {{"sessionId", sessionId_}, {"runId", runId}, {"messages", messages},
-                {"maxOutputTokens", request.maxTokens}, {"model", request.model}});
+            nlohmann::json params{{"sessionId", sessionId_}, {"runId", runId}, {"messages", messages},
+                {"maxOutputTokens", request.maxTokens}, {"model", request.model}, {"deadlineMs", request.deadlineMs},
+                {"enableThinking", request.enableThinking}, {"stateless", request.stateless}};
+            if (request.responseFormat != FChatRequest::EResponseFormat::Text)
+            {
+                nlohmann::json format{{"mode", request.responseFormat == FChatRequest::EResponseFormat::Schema ? "schema" : "json"}};
+                if (!request.responseSchemaName.empty()) format["name"] = request.responseSchemaName;
+                if (!request.jsonSchema.empty()) format["schema"] = nlohmann::json::parse(request.jsonSchema);
+                format["strict"] = request.strictSchema;
+                params["responseFormat"] = std::move(format);
+            }
+            auto future = client_->Request("llm.chat", params);
             while (future.wait_for(std::chrono::milliseconds(5)) != std::future_status::ready)
             {
                 if (onDelta) for (const auto& event : client_->DrainEvents())
@@ -148,6 +158,7 @@ namespace NextAI
             const auto result = future.get();
             FChatResponse response = FChatResponse::Success(result.value("content", ""));
             response.finishReason = result.value("finishReason", "");
+            response.structuredOutputMode = result.value("structuredOutputMode", "");
             if (result.contains("usage")) { response.usage.promptTokens = result["usage"].value("promptTokens", 0); response.usage.completionTokens = result["usage"].value("completionTokens", 0); }
             return response;
         }
@@ -180,5 +191,38 @@ namespace NextAI
     {
         std::lock_guard lock(asyncThreadsMutex_);
         asyncThreads_.emplace_back([this, prompt, callback = std::move(callback)](std::stop_token) { auto response = GenerateText(prompt); if (callback) callback(std::move(response)); });
+    }
+
+    FAIResponse FAIService::GenerateStructuredText(const std::string& prompt, std::string_view schemaName,
+                                                    std::string_view jsonSchema)
+    {
+        const auto started = std::chrono::steady_clock::now();
+        FChatRequest request;
+        request.messages.push_back(FChatMessage::User(prompt));
+        request.responseFormat = FChatRequest::EResponseFormat::Schema;
+        request.responseSchemaName = schemaName;
+        request.jsonSchema = jsonSchema;
+        request.maxTokens = 512;
+        request.deadlineMs = 30000;
+        request.stateless = true;
+        const auto response = Chat(request);
+        const double elapsed = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - started).count();
+        return response.success ? FAIResponse::Success(response.content, elapsed)
+                                : FAIResponse::Failure(response.errorMessage, elapsed);
+    }
+
+    void FAIService::GenerateStructuredTextAsync(const std::string& prompt, std::string schemaName,
+                                                  std::string jsonSchema,
+                                                  std::function<void(FAIResponse)> callback)
+    {
+        std::lock_guard lock(asyncThreadsMutex_);
+        asyncThreads_.emplace_back(
+            [this, prompt, schemaName = std::move(schemaName), jsonSchema = std::move(jsonSchema),
+             callback = std::move(callback)](std::stop_token)
+            {
+                auto response = GenerateStructuredText(prompt, schemaName, jsonSchema);
+                if (callback) callback(std::move(response));
+            });
     }
 }

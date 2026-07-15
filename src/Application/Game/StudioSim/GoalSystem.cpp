@@ -22,6 +22,9 @@ namespace StudioSim
             "为今天提出3个不同的、具体的团队目标。只输出一个JSON数组，不要任何解释：\n"
             "[{\"title\":\"<简短目标>\",\"description\":\"<一句话说明>\"},{\"title\":\"...\",\"description\":\"...\"},"
             "{\"title\":\"...\",\"description\":\"...\"}]";
+        constexpr std::string_view kGoalsSchema = R"json({"type":"array","minItems":3,"maxItems":3,"items":{"type":"object","additionalProperties":false,"required":["title","description"],"properties":{"title":{"type":"string","maxLength":48},"description":{"type":"string","maxLength":120}}}})json";
+        constexpr std::string_view kDecomposeSchema = R"json({"type":"object","additionalProperties":false,"required":["engineer","artist","designer","pm","qa"],"properties":{"engineer":{"type":"string","maxLength":120},"artist":{"type":"string","maxLength":120},"designer":{"type":"string","maxLength":120},"pm":{"type":"string","maxLength":120},"qa":{"type":"string","maxLength":120}}})json";
+        constexpr std::string_view kSummarySchema = R"json({"type":"object","additionalProperties":false,"required":["summary"],"properties":{"summary":{"type":"string","maxLength":160}}})json";
 
         std::vector<FGoalOption> FallbackOptions()
         {
@@ -184,7 +187,7 @@ namespace StudioSim
                     FGoalOption option;
                     option.title = item.value("title", std::string());
                     option.description = item.value("description", std::string());
-                    if (!option.title.empty())
+                    if (!option.title.empty() && option.title.size() <= 48 && option.description.size() <= 120)
                     {
                         result.push_back(std::move(option));
                     }
@@ -221,7 +224,7 @@ namespace StudioSim
         }
 
         const uint64_t generation = generation_;
-        ai->GenerateTextAsync(prompt,
+        ai->GenerateStructuredTextAsync(prompt, "studio_goal_options", std::string(kGoalsSchema),
                               [this, generation](NextAI::FAIResponse response)
                               {
                                   std::lock_guard<std::mutex> lock(mutex_);
@@ -252,7 +255,7 @@ namespace StudioSim
             goal_.title, goal_.description);
 
         const uint64_t generation = generation_;
-        ai->GenerateTextAsync(prompt,
+        ai->GenerateStructuredTextAsync(prompt, "studio_role_tasks", std::string(kDecomposeSchema),
                               [this, generation](NextAI::FAIResponse response)
                               {
                                   std::lock_guard<std::mutex> lock(mutex_);
@@ -441,7 +444,7 @@ namespace StudioSim
             goal_.title, facts, localScore_, status);
 
         const uint64_t generation = generation_;
-        ai->GenerateTextAsync(prompt,
+        ai->GenerateStructuredTextAsync(prompt, "studio_day_summary", std::string(kSummarySchema),
                               [this, generation](NextAI::FAIResponse response)
                               {
                                   std::lock_guard<std::mutex> lock(mutex_);

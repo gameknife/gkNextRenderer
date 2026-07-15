@@ -46,7 +46,7 @@ func (a *Adapter) Descriptor() provider.Descriptor {
 		ID: a.config.ID, Kind: "claude-compatible", DisplayName: a.config.DisplayName,
 		Models: a.config.Models, DefaultModel: a.config.DefaultModel, Configured: configured,
 		ConfiguredReason: reason, Available: true,
-		Capabilities: provider.Capabilities{Streaming: true, NativeTools: true, StructuredOutput: true, ReasoningControl: true, JSONMode: true},
+		Capabilities: provider.Capabilities{Streaming: true, NativeTools: true, ReasoningControl: true},
 	}
 }
 

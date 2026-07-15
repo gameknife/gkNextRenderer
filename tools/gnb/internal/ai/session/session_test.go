@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/agent"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/protocol"
 )
 
@@ -24,7 +23,7 @@ func TestSessionTrimCancelAndTrace(t *testing.T) {
 		t.Fatal("cancel missing")
 	}
 	<-ctx.Done()
-	trace := agent.Trace{RunID: "r", Status: "cancelled"}
+	trace := Trace{RunID: "r", Status: "cancelled"}
 	store.FinishRun("r", trace)
 	stored, ok := store.Trace("r")
 	if !ok || stored.Status != "cancelled" {

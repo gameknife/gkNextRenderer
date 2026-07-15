@@ -53,7 +53,7 @@ func (a *Adapter) Chat(ctx context.Context, req protocol.ChatRequest, sink proto
 	}
 	defer lease.Release()
 	server := llm.NewServer(a.repoRoot, cfg)
-	client := openaicompat.New(openaicompat.Config{ID: a.id, Endpoint: info.BaseURL() + "/v1", APIKey: "local", DefaultModel: req.Model})
+	client := openaicompat.New(openaicompat.Config{ID: a.id, Endpoint: info.BaseURL() + "/v1", APIKey: "local", DefaultModel: req.Model, ChatTemplateKwargs: true})
 	response, err := client.Chat(ctx, req, sink)
 	if err == nil {
 		err = a.leases.Validate(lease, server.Status())

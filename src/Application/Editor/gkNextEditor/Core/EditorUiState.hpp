@@ -123,7 +123,7 @@ namespace Editor
         bool textureBrowser = true;
         bool meshBrowser = true;
         bool logPanel = true;
-        bool aiPanel = true;
+        bool scriptConsolePanel = true;
         bool hotReloadPanel = false;
         bool settingsPanel = false;
         bool cameraViewPanel = false; // legacy alias for cameraViews[0].open

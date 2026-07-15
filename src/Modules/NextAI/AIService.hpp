@@ -32,7 +32,7 @@ namespace NextAI
         bool available = false;
     };
 
-    class FGnbAgentClient;
+    class FGnbAIClient;
 
     // Client-only compatibility facade. Provider routing, credentials, sessions and
     // inference all live in the gnb sidecar; this class contains no provider protocol.
@@ -50,9 +50,12 @@ namespace NextAI
 
         FAIResponse GenerateText(const std::string& prompt);
         void GenerateTextAsync(const std::string& prompt, std::function<void(FAIResponse)> callback);
+        FAIResponse GenerateStructuredText(const std::string& prompt, std::string_view schemaName,
+                                           std::string_view jsonSchema);
+        void GenerateStructuredTextAsync(const std::string& prompt, std::string schemaName,
+                                         std::string jsonSchema, std::function<void(FAIResponse)> callback);
         FChatResponse Chat(const FChatRequest& request);
         FChatResponse ChatStream(const FChatRequest& request, FChatStreamCallback onDelta);
-        bool SupportsTools() const { return configured_; }
 
         std::string GetProviderName() const { return currentProviderId_; }
         const std::string& GetProviderId() const { return currentProviderId_; }
@@ -69,7 +72,7 @@ namespace NextAI
         bool RecreateSession();
         FChatResponse ChatViaGnb(const FChatRequest& request, FChatStreamCallback onDelta = {});
 
-        std::unique_ptr<FGnbAgentClient> client_;
+        std::unique_ptr<FGnbAIClient> client_;
         std::vector<FAIProviderDescriptor> providers_;
         std::string sessionId_;
         std::string currentProfileId_ = "general";

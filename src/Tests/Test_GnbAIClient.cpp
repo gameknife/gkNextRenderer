@@ -1,5 +1,5 @@
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Modules/NextAI/GnbClient/GnbAgentClient.hpp"
+#include "Modules/NextAI/GnbClient/GnbAIClient.hpp"
 
 #include <catch2/catch_all.hpp>
 #include <fstream>
@@ -15,9 +15,9 @@ namespace
     }
 }
 
-TEST_CASE("Gnb bridge v1 shared fixtures contain valid JSON-RPC frames", "[Unit][AI][Bridge]")
+TEST_CASE("Gnb AI bridge v2 shared fixtures contain valid JSON-RPC frames", "[Unit][AI][Bridge]")
 {
-    const auto fixtureDir = SourceRoot() / "tests" / "fixtures" / "gnb-agent-protocol" / "v1";
+    const auto fixtureDir = SourceRoot() / "tests" / "fixtures" / "gnb-ai-protocol" / "v2";
     REQUIRE(std::filesystem::is_directory(fixtureDir));
     size_t fixtureCount = 0;
     for (const auto& entry : std::filesystem::directory_iterator(fixtureDir))
@@ -31,18 +31,18 @@ TEST_CASE("Gnb bridge v1 shared fixtures contain valid JSON-RPC frames", "[Unit]
             if (line.empty()) continue;
             const json frame = json::parse(line);
             std::string error;
-            REQUIRE(FGnbAgentClient::ValidateProtocolFrame(frame, error));
+            REQUIRE(FGnbAIClient::ValidateProtocolFrame(frame, error));
         }
     }
     REQUIRE(fixtureCount >= 5);
 }
 
-TEST_CASE("GnbAgentClient starts the real bridge and performs handshake", "[Unit][AI][Bridge]")
+TEST_CASE("GnbAIClient starts the real bridge and performs handshake", "[Unit][AI][Bridge]")
 {
 #if ANDROID || IOS
     SKIP("desktop sidecar only");
 #else
-    FGnbAgentClient client;
+    FGnbAIClient client;
     std::string error;
     REQUIRE(client.StartDefault(SourceRoot(), error));
     const json providers = client.Request("providers.list").get();

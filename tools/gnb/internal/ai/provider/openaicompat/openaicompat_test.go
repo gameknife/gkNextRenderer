@@ -85,3 +85,42 @@ func TestHTTPErrorDoesNotExposeAuthorization(t *testing.T) {
 		t.Fatalf("unexpected redacted error: %v", err)
 	}
 }
+
+func TestChatTranslatesJSONSchemaResponseFormat(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		format, ok := body["response_format"].(map[string]any)
+		if !ok || format["type"] != "json_schema" {
+			t.Fatalf("response_format = %#v", body["response_format"])
+		}
+		_, _ = io.WriteString(w, `{"choices":[{"finish_reason":"stop","message":{"content":"{}"}}]}`)
+	}))
+	defer server.Close()
+	adapter := New(Config{ID: "mock", Endpoint: server.URL, APIKey: "secret"})
+	_, err := adapter.Chat(context.Background(), protocol.ChatRequest{ResponseFormat: &protocol.ResponseFormat{Mode: "schema", Name: "fixture", Schema: map[string]any{"type": "object"}, Strict: true}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLlamaCppRequestControlsThinkingExplicitly(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		kwargs, ok := body["chat_template_kwargs"].(map[string]any)
+		if !ok || kwargs["enable_thinking"] != false {
+			t.Fatalf("chat_template_kwargs = %#v", body["chat_template_kwargs"])
+		}
+		_, _ = io.WriteString(w, `{"choices":[{"finish_reason":"stop","message":{"content":"{}"}}]}`)
+	}))
+	defer server.Close()
+	adapter := New(Config{ID: "local", Endpoint: server.URL, APIKey: "local", ChatTemplateKwargs: true})
+	if _, err := adapter.Chat(context.Background(), protocol.ChatRequest{EnableThinking: false}, nil); err != nil {
+		t.Fatal(err)
+	}
+}

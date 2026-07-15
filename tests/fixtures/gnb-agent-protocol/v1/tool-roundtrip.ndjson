@@ -1,5 +1,0 @@
-{"jsonrpc":"2.0","id":"4","method":"agent.run","params":{"sessionId":"session-fixture","prompt":"list nodes"}}
-{"jsonrpc":"2.0","method":"tool.execute","params":{"runId":"run-tool","callId":"call-1","name":"scene_list_nodes","arguments":{},"mutating":false}}
-{"jsonrpc":"2.0","id":"tool-call-1","result":{"callId":"call-1","content":"node-a,node-b"}}
-{"jsonrpc":"2.0","method":"run.event","params":{"runId":"run-tool","sequence":1,"type":"tool.result","visibility":"internal","callId":"call-1","name":"scene_list_nodes"}}
-{"jsonrpc":"2.0","id":"4","result":{"runId":"run-tool","content":"There are two nodes.","finishReason":"stop"}}

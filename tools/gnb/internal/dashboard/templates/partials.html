@@ -2222,6 +2222,10 @@
             <input id="chat-thinking" type="checkbox" name="thinking" value="1">
             <span>思考模式</span>
           </label>
+          <label class="chat-thinking-opt" title="仅调用固定内存诊断工具，不访问仓库、Shell、网络或场景">
+            <input id="chat-tool-probe" type="checkbox" name="tool_probe" value="1">
+            <span>Tool Call Smoke</span>
+          </label>
           <label class="chat-token-opt">
             <span>输出上限</span>
             <input id="chat-max-tokens" type="number" name="max_tokens" min="256" max="32768" step="256" value="4096">

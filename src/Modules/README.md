@@ -20,7 +20,7 @@ Android 平台模块源直接并入单一 SHARED target；`NextTui` 仅桌面 + 
 | NextQuickJS | QuickJS runtime、TypeScript 热重载、反射脚本绑定 |
 | NextPhysics | Jolt 物理后端 |
 | NextAudio | miniaudio 音频后端 |
-| NextAI | LLM provider 抽象 + tool calling（`FAIService`、GnbClient） |
+| NextAI | 轻量 LLM Chat / Structured Output 客户端（`FAIService`、`GnbAIClient`）；provider 路由与凭据由 gnb 管理 |
 | NextRmlUi | RmlUi 文档 UI 系统 |
 | NextRemote | Remote Play：视频编码、WebRTC、远程输入 |
 | NextStreamline | DLSS / Streamline 集成（仅 Windows） |

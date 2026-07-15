@@ -1,7 +1,7 @@
 ---
 title: "NextAI 面向具体产品能力的目标架构"
 category: design
-status: 草案
+status: 已实现
 owner: engine/tools/applications
 created: 2026-07-15
 last_updated: 2026-07-15
