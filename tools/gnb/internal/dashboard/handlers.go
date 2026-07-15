@@ -124,14 +124,11 @@ type locDepthOption struct {
 }
 
 type locTableRowVM struct {
-	Name           string
-	Path           string
-	ParentPath     string
-	Files          int
-	Lines          int
-	Depth          int
-	IsFile         bool
-	FileChildCount int
+	Name  string
+	Path  string
+	Files int
+	Lines int
+	Depth int
 }
 
 type contributionDayVM struct {
@@ -456,9 +453,6 @@ func normalizeLocDepth(value string, maxDepth int) string {
 	if maxDepth < 1 {
 		maxDepth = 1
 	}
-	if value == "file" {
-		return "file"
-	}
 	defaultDepth := 3
 	if maxDepth < defaultDepth {
 		defaultDepth = maxDepth
@@ -483,7 +477,7 @@ func buildLocDepthOptions(maxDepth int, selected string) []locDepthOption {
 	if maxDepth < 1 {
 		maxDepth = 1
 	}
-	options := make([]locDepthOption, 0, maxDepth+1)
+	options := make([]locDepthOption, 0, maxDepth)
 	for depth := 1; depth <= maxDepth; depth++ {
 		options = append(options, locDepthOption{
 			Value:    strconv.Itoa(depth),
@@ -491,11 +485,6 @@ func buildLocDepthOptions(maxDepth int, selected string) []locDepthOption {
 			Selected: selected == strconv.Itoa(depth),
 		})
 	}
-	options = append(options, locDepthOption{
-		Value:    "file",
-		Label:    "文件级",
-		Selected: selected == "file",
-	})
 	return options
 }
 
@@ -504,79 +493,33 @@ func buildLocTableRows(snap *loc.Snapshot, selectedDepth string) []locTableRowVM
 		return nil
 	}
 	rows := []locTableRowVM{}
-	fileLevel := selectedDepth == "file"
-	depthLimit := snap.MaxFolderDepth
-	if !fileLevel {
-		depthLimit, _ = strconv.Atoi(selectedDepth)
-		if depthLimit < 1 {
-			depthLimit = 1
-		}
+	depthLimit, _ := strconv.Atoi(selectedDepth)
+	if depthLimit < 1 {
+		depthLimit = 1
 	}
 	for _, category := range snap.Tree.Children {
-		appendLocTableRows(&rows, category, depthLimit, fileLevel)
+		appendLocTableRows(&rows, category, depthLimit)
 	}
-	annotateLocFileChildren(rows)
 	return rows
 }
 
-func appendLocTableRows(rows *[]locTableRowVM, node *loc.TreeNodeSummary, depthLimit int, fileLevel bool) {
-	if node == nil {
-		return
-	}
-	if node.IsFile {
-		if !fileLevel && node.Depth > depthLimit {
-			return
-		}
-		*rows = append(*rows, locTableRowVM{
-			Name:       node.Name,
-			Path:       node.Path,
-			ParentPath: locParentPath(node.Path),
-			Files:      node.Files,
-			Lines:      node.Lines,
-			Depth:      max(0, node.Depth-1),
-			IsFile:     true,
-		})
+func appendLocTableRows(rows *[]locTableRowVM, node *loc.TreeNodeSummary, depthLimit int) {
+	if node == nil || node.IsFile {
 		return
 	}
 	*rows = append(*rows, locTableRowVM{
-		Name:   node.Name,
-		Path:   node.Path,
-		Files:  node.Files,
-		Lines:  node.Lines,
-		Depth:  max(0, node.Depth-1),
-		IsFile: node.IsFile,
+		Name:  node.Name,
+		Path:  node.Path,
+		Files: node.Files,
+		Lines: node.Lines,
+		Depth: max(0, node.Depth-1),
 	})
-	if !fileLevel && node.Depth >= depthLimit {
+	if node.Depth >= depthLimit {
 		return
 	}
 	for _, child := range node.Children {
-		appendLocTableRows(rows, child, depthLimit, fileLevel)
+		appendLocTableRows(rows, child, depthLimit)
 	}
-}
-
-func annotateLocFileChildren(rows []locTableRowVM) {
-	rowByPath := make(map[string]*locTableRowVM, len(rows))
-	for i := range rows {
-		if rows[i].Path != "" {
-			rowByPath[rows[i].Path] = &rows[i]
-		}
-	}
-	for i := range rows {
-		if !rows[i].IsFile || rows[i].ParentPath == "" {
-			continue
-		}
-		if parent := rowByPath[rows[i].ParentPath]; parent != nil {
-			parent.FileChildCount++
-		}
-	}
-}
-
-func locParentPath(path string) string {
-	idx := strings.LastIndex(path, "/")
-	if idx < 0 {
-		return ""
-	}
-	return path[:idx]
 }
 
 func contributionChartStart(today time.Time) time.Time {

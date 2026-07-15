@@ -2945,31 +2945,6 @@
     .loc-table tbody td.num { text-align: right; color: var(--fg); }
     .loc-table tr.cat-row td { background: var(--bg-card-hover); color: var(--fg); font-weight: 650; }
     .loc-table tr.dir-row td.name { color: var(--fg-mute); }
-    .loc-table tr.file-row td.name { color: var(--fg-dim); font-style: italic; }
-    .loc-table tr.file-row[hidden] { display: none; }
-    .loc-file-toggle {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 18px;
-      height: 18px;
-      margin-right: 6px;
-      border: 0;
-      border-radius: 6px;
-      background: transparent;
-      color: var(--fg-mute);
-      cursor: pointer;
-      vertical-align: middle;
-    }
-    .loc-file-toggle:hover { background: var(--bg-card-hover); color: var(--fg); }
-    .loc-file-toggle svg { transition: transform 120ms ease; }
-    .loc-file-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
-    .loc-file-count {
-      margin-left: 6px;
-      color: var(--fg-dim);
-      font-size: 11px;
-      font-family: var(--font-ui);
-    }
     .loc-toolbar { display: flex; align-items: center; gap: 12px; }
     .loc-toolbar .tp-opt { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-mute); font-size: 12px; cursor: pointer; }
     .loc-toolbar .tp-opt input { accent-color: var(--accent); width: 13px; height: 13px; }
@@ -3097,10 +3072,10 @@
             </span>
             分类明细
           </h2>
-          <table class="loc-table" data-loc-table>
+          <table class="loc-table">
             <thead>
               <tr>
-                <th>目录 / 文件</th>
+                <th>目录</th>
                 <th class="num" style="text-align:right;">文件</th>
                 <th class="num" style="text-align:right;">行数</th>
                 <th class="num" style="text-align:right;">占比</th>
@@ -3109,19 +3084,8 @@
             <tbody>
               {{$total := .Snapshot.TotalLines}}
               {{range .TableRows}}
-                <tr class="{{if eq .Depth 0}}cat-row{{else if .IsFile}}file-row{{else}}dir-row{{end}}"
-                    {{if .IsFile}}data-loc-file-row="1" data-loc-parent="{{.ParentPath}}" hidden{{end}}>
-                  <td class="name" style="padding-left: {{locIndent .Depth .IsFile}}px;" title="{{.Path}}">
-                    {{if and (not .IsFile) (gt .FileChildCount 0)}}
-                      <button class="loc-file-toggle" type="button" data-loc-folder-toggle="{{.Path}}" aria-expanded="false" title="展开 {{.Name}} 下的文件">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="9 18 15 12 9 6"/></svg>
-                      </button>
-                    {{end}}
-                    {{.Name}}
-                    {{if and (not .IsFile) (gt .FileChildCount 0)}}
-                      <span class="loc-file-count">{{.FileChildCount}} files</span>
-                    {{end}}
-                  </td>
+                <tr class="{{if eq .Depth 0}}cat-row{{else}}dir-row{{end}}">
+                  <td class="name" style="padding-left: {{locIndent .Depth}}px;" title="{{.Path}}">{{.Name}}</td>
                   <td class="num">{{intCommas .Files}}</td>
                   <td class="num">{{intCommas .Lines}}</td>
                   <td class="num">{{locShare .Lines $total}}%</td>

@@ -86,42 +86,37 @@ func TestContributionLevel(t *testing.T) {
 	}
 }
 
-func TestBuildLocVMProvidesDepthOptionsAndFileRows(t *testing.T) {
+func TestBuildLocVMProvidesFolderDepthOptionsOnly(t *testing.T) {
 	s := setupLocRepo(t)
 
 	vm := s.buildLocVM(false, "file")
 
-	if vm.SelectedDepth != "file" {
-		t.Fatalf("SelectedDepth = %q, want file", vm.SelectedDepth)
+	if vm.SelectedDepth != "3" {
+		t.Fatalf("SelectedDepth = %q, want fallback depth 3", vm.SelectedDepth)
 	}
-	if len(vm.DepthOptions) != 5 {
-		t.Fatalf("len(DepthOptions) = %d, want 5", len(vm.DepthOptions))
+	if len(vm.DepthOptions) != 4 {
+		t.Fatalf("len(DepthOptions) = %d, want 4", len(vm.DepthOptions))
 	}
-	if vm.DepthOptions[len(vm.DepthOptions)-1].Value != "file" || !vm.DepthOptions[len(vm.DepthOptions)-1].Selected {
-		t.Fatalf("unexpected file depth option: %+v", vm.DepthOptions[len(vm.DepthOptions)-1])
+	if containsLocRow(vm.TableRows, "Engine/Runtime/Scripting/ScriptContext.cpp") {
+		t.Fatalf("folder rows unexpectedly contain a file: %+v", vm.TableRows)
 	}
-	if !containsLocRow(vm.TableRows, "Engine/Runtime/Scripting/ScriptContext.cpp", true) {
-		t.Fatalf("file-level rows missing ScriptContext.cpp: %+v", vm.TableRows)
-	}
-	if files := fileChildCountForPath(vm.TableRows, "Engine/Runtime/Scripting"); files != 1 {
-		t.Fatalf("Scripting file child count = %d, want 1", files)
+	if !containsLocRow(vm.TableRows, "Engine/Runtime/Scripting") {
+		t.Fatalf("folder rows missing Scripting: %+v", vm.TableRows)
 	}
 }
 
-func TestBuildLocVMNumericDepthIncludesFilesAtThatLevel(t *testing.T) {
+func TestBuildLocVMNumericDepthStillExcludesFiles(t *testing.T) {
 	s := setupLocRepo(t)
 
 	vm := s.buildLocVM(false, "4")
 
-	if !containsLocRow(vm.TableRows, "Engine/Runtime/Scripting/ScriptContext.cpp", true) {
-		t.Fatalf("depth=4 should include ScriptContext.cpp: %+v", vm.TableRows)
-	}
-	if !containsLocRow(vm.TableRows, "Engine/Runtime/Reflection/Meta.cpp", true) {
-		t.Fatalf("depth=4 should include Meta.cpp: %+v", vm.TableRows)
+	if containsLocRow(vm.TableRows, "Engine/Runtime/Scripting/ScriptContext.cpp") ||
+		containsLocRow(vm.TableRows, "Engine/Runtime/Reflection/Meta.cpp") {
+		t.Fatalf("depth=4 should not include files: %+v", vm.TableRows)
 	}
 }
 
-func TestHandleTabLocRendersDepthSelectorAndFileLevel(t *testing.T) {
+func TestHandleTabLocRendersFolderDepthSelector(t *testing.T) {
 	s := setupLocRepo(t)
 	req := httptest.NewRequest("GET", "/tab/loc?depth=file&thirdparty=1", nil)
 	req.SetPathValue("kind", "loc")
@@ -135,15 +130,16 @@ func TestHandleTabLocRendersDepthSelectorAndFileLevel(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		`name="depth"`,
-		`<option value="file" selected>文件级</option>`,
+		`<option value="3" selected>展开 3 层</option>`,
 		`name="thirdparty" value="1" checked`,
-		`data-loc-folder-toggle="Engine/Runtime/Scripting"`,
-		`title="Engine/Runtime/Scripting/ScriptContext.cpp"`,
-		`data-loc-parent="Engine/Runtime/Scripting" hidden`,
+		`<th>目录</th>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("loc response missing %q:\n%s", want, body)
 		}
+	}
+	if strings.Contains(body, "ScriptContext.cpp") || strings.Contains(body, `value="file"`) {
+		t.Fatalf("loc response should render folders only:\n%s", body)
 	}
 }
 
@@ -179,20 +175,11 @@ func setupLocRepo(t *testing.T) *Server {
 	}
 }
 
-func containsLocRow(rows []locTableRowVM, path string, isFile bool) bool {
+func containsLocRow(rows []locTableRowVM, path string) bool {
 	for _, row := range rows {
-		if row.Path == path && row.IsFile == isFile {
+		if row.Path == path {
 			return true
 		}
 	}
 	return false
-}
-
-func fileChildCountForPath(rows []locTableRowVM, path string) int {
-	for _, row := range rows {
-		if row.Path == path {
-			return row.FileChildCount
-		}
-	}
-	return 0
 }
