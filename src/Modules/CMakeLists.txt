@@ -6,6 +6,15 @@ foreach(gkModule IN LISTS GK_MODULE_NAMES)
     endif()
 endforeach()
 
+if(TARGET LiveCoding AND GK_ENABLE_CPP_LIVE_CODING)
+    target_include_directories(LiveCoding SYSTEM PRIVATE
+        "${GK_LIVEPP_RESOLVED_ROOT}/API/x64"
+    )
+    target_compile_definitions(LiveCoding PRIVATE
+        GK_LIVEPP_ROOT="${GK_LIVEPP_RESOLVED_ROOT}"
+    )
+endif()
+
 if(TARGET GltfLoader)
     set_source_files_properties(
         ${GK_SOURCE_ROOT}/Modules/GltfLoader/FSceneLoader.cpp

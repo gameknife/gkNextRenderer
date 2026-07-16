@@ -2,15 +2,31 @@
 #include "Modules/LiveCoding/LiveCodingModule.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
+#include "Modules/LiveCoding/CppLiveCodingService.hpp"
 #include "Modules/LiveCoding/ShaderHotReloader.hpp"
 
 namespace Modules::LiveCoding
 {
-    void Install(NextEngine& engine)
+    void Install(NextEngine& engine, const bool enableCppLiveCoding)
     {
         engine.SetShaderHotReloaderFactory([](NextEngine& owner) -> std::unique_ptr<Runtime::IShaderHotReloader>
         {
             return std::make_unique<ShaderHotReloader>(owner.GetRenderer());
         });
+
+        if (enableCppLiveCoding)
+        {
+            CppLiveCoding::Startup();
+        }
+    }
+
+    void BeginFrame()
+    {
+        CppLiveCoding::BeginFrame();
+    }
+
+    void Shutdown()
+    {
+        CppLiveCoding::Shutdown();
     }
 }

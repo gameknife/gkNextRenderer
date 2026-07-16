@@ -62,6 +62,7 @@ public:
     bool HighPrecisionProgressiveHistory{}; // Use high-precision buffers for progressive accumulation/history.
     bool UpdateVisualTestBaseline{};
     bool FlappyReplay{};
+    bool CppLiveCoding{true};
     bool ShaderHotReload{true};
     float ShaderHotReloadInterval{0.5f};
     std::vector<std::string> CVarOverrides{};

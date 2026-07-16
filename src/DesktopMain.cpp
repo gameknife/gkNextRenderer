@@ -46,6 +46,9 @@ std::unique_ptr<Runtime::Config::Options> GOptionPtr;
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
+#if GK_MODULE_LIVECODING
+    Modules::LiveCoding::BeginFrame();
+#endif
     if( GApplication->Tick() )
     {
         return SDL_APP_SUCCESS;
@@ -126,7 +129,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     Modules::Physics::Install(*GApplication);
 #endif
 #if GK_MODULE_LIVECODING
-    Modules::LiveCoding::Install(*GApplication);
+    Modules::LiveCoding::Install(*GApplication, GOption->CppLiveCoding);
 #endif
 #if GK_MODULE_GLTFLOADER
     Modules::Gltf::Register();
@@ -161,6 +164,9 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
     const int exitCode = GApplication ? GApplication->GetRequestedExitCode() : 0;
     // Shutdown
+#if GK_MODULE_LIVECODING
+    Modules::LiveCoding::Shutdown();
+#endif
     GApplication->End();
     
     if (GOption->FastExit)

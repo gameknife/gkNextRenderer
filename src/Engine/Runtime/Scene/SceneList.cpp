@@ -1,6 +1,7 @@
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/Loaders/LoaderRegistry.hpp"

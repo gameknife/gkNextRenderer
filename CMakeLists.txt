@@ -22,7 +22,33 @@ if(WIN32 AND ENABLE_STREAMLINE)
 endif()
 
 option(GK_ENABLE_HOT_RELOAD "Enable desktop Slang shader hot reload" ON)
+option(GK_ENABLE_CPP_LIVE_CODING "Enable Windows C++ live coding through Live++" OFF)
+set(GK_LIVEPP_ROOT "$ENV{LIVEPP_ROOT}" CACHE PATH
+    "Path to the Live++ root directory (the directory containing API/ and Agent/)")
 option(GK_ENABLE_SHADER_CLOCK "Enable shader clock heatmap instrumentation" OFF)
+
+if(GK_ENABLE_CPP_LIVE_CODING)
+    if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+        message(FATAL_ERROR "GK_ENABLE_CPP_LIVE_CODING currently requires 64-bit Windows")
+    endif()
+    if(ENABLE_LTO)
+        message(FATAL_ERROR "Live++ is incompatible with LTO/LTCG; configure with -DENABLE_LTO=OFF")
+    endif()
+
+    set(GK_LIVEPP_RESOLVED_ROOT "${GK_LIVEPP_ROOT}")
+    if(EXISTS "${GK_LIVEPP_RESOLVED_ROOT}/LivePP/API/x64/LPP_API_x64_CPP.h")
+        set(GK_LIVEPP_RESOLVED_ROOT "${GK_LIVEPP_RESOLVED_ROOT}/LivePP")
+    endif()
+    if(NOT EXISTS "${GK_LIVEPP_RESOLVED_ROOT}/API/x64/LPP_API_x64_CPP.h" OR
+       NOT EXISTS "${GK_LIVEPP_RESOLVED_ROOT}/Agent/x64/LPP_Agent_x64_CPP.dll")
+        message(FATAL_ERROR
+            "Live++ SDK not found. Set GK_LIVEPP_ROOT or LIVEPP_ROOT to either the LivePP directory "
+            "or its parent directory. Current value: '${GK_LIVEPP_ROOT}'")
+    endif()
+    file(TO_CMAKE_PATH "${GK_LIVEPP_RESOLVED_ROOT}" GK_LIVEPP_RESOLVED_ROOT)
+    message(STATUS "C++ live coding enabled with Live++: ${GK_LIVEPP_RESOLVED_ROOT}")
+endif()
+
 if (ANDROID OR IOS)
     if (GK_ENABLE_HOT_RELOAD)
         message(STATUS "Hot reload is only enabled for desktop targets. Disabling.")

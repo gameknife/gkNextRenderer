@@ -22,6 +22,18 @@ function(gk_enable_fast_dev_link target)
     endif()
 endfunction()
 
+function(gk_enable_cpp_live_coding_link target)
+    if(MSVC AND GK_ENABLE_CPP_LIVE_CODING)
+        target_link_options(${target} PRIVATE
+            /FUNCTIONPADMIN
+            /INCREMENTAL
+            /OPT:NOREF
+            /OPT:NOICF
+            /DEBUG:FULL
+        )
+    endif()
+endfunction()
+
 function(gk_enable_minimal_size_link target)
     if(MSVC)
         target_link_options(${target} PRIVATE
@@ -54,6 +66,7 @@ function(gk_apply_target_defaults target)
         MA_NO_ENCODING
         MA_NO_FLAC
         GK_ENABLE_HOT_RELOAD=$<BOOL:${GK_ENABLE_HOT_RELOAD}>
+        GK_ENABLE_CPP_LIVE_CODING=$<BOOL:${GK_ENABLE_CPP_LIVE_CODING}>
         GK_ENABLE_SHADER_CLOCK=$<BOOL:${GK_ENABLE_SHADER_CLOCK}>
         GK_WITH_TUI=$<BOOL:${GK_WITH_TUI}>
         GK_WITH_RMLUI=1
@@ -93,6 +106,9 @@ function(gk_apply_target_defaults target)
 
     if(MSVC)
         target_compile_options(${target} PRIVATE /MP /utf-8 /WX /wd4200)
+        if(GK_ENABLE_CPP_LIVE_CODING)
+            target_compile_options(${target} PRIVATE /Zi /Gm- /Gy /Gw)
+        endif()
     else()
         target_compile_options(${target} PRIVATE
             -Wall
@@ -176,6 +192,11 @@ function(gk_configure_application target)
 
     if(ARG_MODULES)
         gk_target_runtime_modules(${target} MODULES ${ARG_MODULES})
+    endif()
+
+    get_target_property(runtimeModules ${target} GK_RUNTIME_MODULES)
+    if(runtimeModules AND "LiveCoding" IN_LIST runtimeModules)
+        gk_enable_cpp_live_coding_link(${target})
     endif()
 
     if(ARG_CORE_ONLY)
