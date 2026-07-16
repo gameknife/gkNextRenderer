@@ -41,7 +41,7 @@ namespace
     // human-scale interior parts get mixed into city-scale layouts.
     std::string ScaleClassFor(const std::string& kitName)
     {
-        if (kitName == "kit_office" || kitName == "kit_airport")
+        if (kitName == "kit_office" || kitName == "kit_airport" || kitName == "kit_char")
         {
             return "human";
         }

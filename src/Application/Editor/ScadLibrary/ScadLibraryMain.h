@@ -26,7 +26,12 @@ public:
     bool OnRenderUI() override;
     void OnPreConfigUI() override;
     void OnInitUI() override;
+    void BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                            std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
+                            std::vector<Assets::LightObject>& lights,
+                            std::vector<Assets::AnimationTrack>& tracks) override;
     void OnSceneLoaded() override;
+    void OnSceneUnloaded() override;
     void ConfigureCVars(NextCVar::FCVarSystem& cvars) override;
 
     // Orbit/zoom/pan the previewed parts in the central viewport.

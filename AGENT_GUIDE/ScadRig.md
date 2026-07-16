@@ -37,6 +37,29 @@ anim_sit = [ ["loop", false], ["bone_root","pos",[[0,[0,0,-0.42]]]] ];   // 单�
 
 示例资产：`assets/scad/characters/agent_basic.scad`（7 骨骼、~250 tris、idle/walk/sit/work）。
 
+## 角色件库 kit_char（造型组装，非只换色）
+
+`assets/scad/lib/kit_char.scad`（prefix `ch_`，scaleClass human）把 rig 角色拆成可组合部件，
+新角色 = 薄 `.scad` 文件选件拼装：
+
+- **部件**（分类 = 名字第二段，进 catalog / ScadLibrary 浏览器）：`ch_head_*` / `ch_hair_*` /
+  `ch_hat_*` / `ch_torso_*` / `ch_arm_*` / `ch_leg_*` / `ch_acc_*`；整装预设 `ch_char_*`。
+  部件原点 = 所属骨骼 pivot；手臂/腿以左侧建模，右侧骨骼体内 `mirror([1,0,0])`。
+- **骨架标准**：`ch_pivot_torso/head/arm_l/arm_r/leg_l/leg_r()` 返回固定 pivot（与 agent_basic
+  相同），因此 **clip 跨角色复用**：`anim_walk = ch_clip_walk();`（idle/walk/sit/work/wave）。
+- **use 语义约束**：kit 顶层赋值会被丢弃，常量一律零参函数（`ch_TINT()` 品红换色占位、
+  `ch_SKIN(i)` 等）。loader 侧零改动：`use <>` 闭包 + 函数导入本来就支持。
+- **范例角色**：`characters/worker.scad`（安全帽+反光背心+背包+工具腰带+靴）、
+  `characters/citizen.scad`(马尾+连衣裙)；单测 `gkNextUnitTests "[KitChar]"`。
+
+**ScadLibrary 角色设计台**（右侧"角色台"tab，`CharacterDesigner.*`）：按分类选件 + 调
+肤色/发色/主色 → 生成角色 scad → `FRigPreview` 实机预览（rig 加载 → `BeforeSceneRebuild`
+注入部件模型/材质 → `OnSceneLoaded` RigInstance 实例化 + FRigAnimator 播 clip，可切动画/
+绑定姿态）→ 导出 `assets/scad/characters/<名>.scad`（`use <../lib/kit_char.scad>`，游戏直接
+加载）。**生命周期**：引擎顺序 BeforeSceneRebuild → OnSceneUnloaded → OnSceneLoaded，
+`FRigPreview::OnSceneUnloaded` 只清 animator/节点指针，不可清注入产物（同 AirportSim 教训）。
+回归脚本：`gnb validate --script assets/agentscripts/scadlibrary-designer.agentscript.json`。
+
 ## 运行时管线
 
 ```

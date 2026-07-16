@@ -13,6 +13,7 @@
 #include <imgui_freetype.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <fmt/format.h>
@@ -48,6 +49,14 @@ namespace ScadLibrary
             if (category == "part") return "构件";
             if (category == "ground") return "地面";
             if (category == "road") return "道路";
+            if (category == "head") return "头部";
+            if (category == "hair") return "发型";
+            if (category == "hat") return "帽饰";
+            if (category == "torso") return "躯干";
+            if (category == "arm") return "手臂";
+            if (category == "leg") return "腿部";
+            if (category == "acc") return "配饰";
+            if (category == "char") return "角色";
             if (category == "misc") return "其他";
             return category.c_str();
         }
@@ -145,6 +154,10 @@ namespace ScadLibrary
         if (benchDirty_ && autoReload_ && !ImGui::IsAnyItemActive())
         {
             ReloadBench();
+        }
+        if (designerDirty_ && !ImGui::IsAnyItemActive())
+        {
+            ReloadDesigner();
         }
 
         engine_.GetRenderer().SwapChain().UpdateOutputViewport(
@@ -402,8 +415,25 @@ namespace ScadLibrary
             benchCollapsed_ = true;
         }
         ImGui::SameLine();
-        ImGui::Text("组合台 (%zu)", bench_.size());
+        if (ImGui::BeginTabBar("##bench_tabs"))
+        {
+            if (ImGui::BeginTabItem(fmt::format("组合台 ({})###bench_tab", bench_.size()).c_str()))
+            {
+                DrawBenchContent();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("角色台###designer_tab"))
+            {
+                DrawDesignerContent();
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
+        }
+        ImGui::End();
+    }
 
+    void ScadLibraryInterface::DrawBenchContent()
+    {
         ImGui::Spacing();
         ImGui::Checkbox("自动刷新", &autoReload_);
         ImGui::SameLine();
@@ -505,7 +535,6 @@ namespace ScadLibrary
         {
             ImGui::SetTooltip("写入 assets/scad/gen/<名>.scad（use 相对路径，可直接作为场景加载）");
         }
-        ImGui::End();
     }
 
     void ScadLibraryInterface::RescanKits()
@@ -534,6 +563,19 @@ namespace ScadLibrary
         bench_.erase(std::remove_if(bench_.begin(), bench_.end(),
                                     [](const FBenchItem& b) { return b.kitIndex < 0; }),
                      bench_.end());
+
+        // Character designer feeds from the kit_char parts library.
+        kitCharIndex_ = -1;
+        for (size_t k = 0; k < kits_.size(); ++k)
+        {
+            if (kits_[k].name == "kit_char")
+            {
+                kitCharIndex_ = static_cast<int>(k);
+                break;
+            }
+        }
+        designer_.SetKit(kitCharIndex_ >= 0 ? &kits_[kitCharIndex_] : nullptr);
+        designerEverLoaded_ = false;
     }
 
     void ScadLibraryInterface::PreviewModule(int kitIndex, const std::string& moduleName)
@@ -544,6 +586,7 @@ namespace ScadLibrary
         }
         selectedKit_ = kitIndex;
         selectedModule_ = moduleName;
+        rigPreview_.SetActive(false);
 
         std::string source;
         source += "// ScadLibrary module preview\n";
@@ -656,6 +699,7 @@ namespace ScadLibrary
     void ScadLibraryInterface::ReloadBench()
     {
         benchDirty_ = false;
+        rigPreview_.SetActive(false);
         if (bench_.empty())
         {
             statusLine_ = "组合台为空";
@@ -694,7 +738,8 @@ namespace ScadLibrary
         SPDLOG_INFO("[ScadLibrary] exported bench -> {}", outPath.string());
     }
 
-    bool ScadLibraryInterface::WriteAndLoad(const std::string& fileName, const std::string& source)
+    bool ScadLibraryInterface::WriteWorkspaceFile(const std::string& fileName, const std::string& source,
+                                                  std::string& outAbsPath)
     {
         std::error_code ec;
         std::filesystem::create_directories(WorkspaceDir(), ec);
@@ -708,7 +753,239 @@ namespace ScadLibrary
         }
         out << source;
         out.close();
-        engine_.RequestLoadScene({.filename = std::filesystem::absolute(path, ec).string()});
+        outAbsPath = std::filesystem::absolute(path, ec).string();
         return true;
+    }
+
+    bool ScadLibraryInterface::WriteAndLoad(const std::string& fileName, const std::string& source)
+    {
+        std::string absPath;
+        if (!WriteWorkspaceFile(fileName, source, absPath))
+        {
+            return false;
+        }
+        engine_.RequestLoadScene({.filename = absPath});
+        return true;
+    }
+
+    // ------------------------------------------------------------- character designer
+
+    std::string ScadLibraryInterface::KitCharUsePath(bool relative) const
+    {
+        if (relative)
+        {
+            return "../lib/kit_char.scad";
+        }
+        if (kitCharIndex_ < 0)
+        {
+            return "";
+        }
+        std::string usePath = kits_[kitCharIndex_].filePath;
+        std::replace(usePath.begin(), usePath.end(), '\\', '/');
+        return usePath;
+    }
+
+    void ScadLibraryInterface::ReloadDesigner()
+    {
+        designerDirty_ = false;
+        if (!designer_.HasKit())
+        {
+            statusLine_ = "assets/scad/lib 下没有可用的 kit_char.scad";
+            statusError_ = true;
+            return;
+        }
+
+        const std::string source = designer_.BuildSource(KitCharUsePath(false));
+        std::string characterPath;
+        if (!WriteWorkspaceFile("character_preview.scad", source, characterPath))
+        {
+            return;
+        }
+
+        std::string error;
+        std::vector<std::string> warnings;
+        if (!rigPreview_.LoadRig(characterPath, error, &warnings))
+        {
+            // Rig 解析失败：退回静态场景加载，至少能看到几何和报错。
+            rigPreview_.SetActive(false);
+            engine_.RequestLoadScene({.filename = characterPath});
+            statusLine_ = fmt::format("rig 解析失败: {}", error);
+            statusError_ = true;
+            return;
+        }
+
+        rigPreview_.SetTint(glm::vec3(designerTint_[0], designerTint_[1], designerTint_[2]));
+        rigPreview_.SetActive(true);
+
+        // 舞台场景只有地板；角色由 rig 实例化（避免与静态 bind 网格重影）。
+        std::string stage;
+        stage += "// rig preview stage\n";
+        stage += "color([0.50, 0.51, 0.53]) translate([0, 0, -0.15]) cube([3.5, 3.5, 0.3], center = true);\n";
+        stage += "color([0.62, 0.63, 0.65]) translate([0, 0, 0.001]) cube([0.9, 0.9, 0.002], center = true);\n";
+        if (!WriteAndLoad("rigstage.scad", stage))
+        {
+            return;
+        }
+
+        // DroidSansFallback 缺"骼"字形，用"骨架"。
+        statusLine_ = fmt::format("角色预览: 骨架 {} / 部件 {} / 动画 {}{}",
+                                  rigPreview_.Asset().bones.size(), rigPreview_.Asset().parts.size(),
+                                  rigPreview_.Asset().clips.size(),
+                                  warnings.empty() ? "" : fmt::format("，{} 条 warning", warnings.size()));
+        statusError_ = !warnings.empty();
+    }
+
+    void ScadLibraryInterface::ExportCharacter()
+    {
+        std::string clean;
+        for (const char c : std::string(characterNameBuf_))
+        {
+            if (std::isalnum(static_cast<unsigned char>(c)) || c == '_')
+            {
+                clean.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+            }
+        }
+        if (clean.empty())
+        {
+            clean = "my_character";
+        }
+        const std::filesystem::path charDir = Utilities::FileHelper::GetPlatformFilePath("assets/scad") +
+            std::string(1, std::filesystem::path::preferred_separator) + "characters";
+        std::error_code ec;
+        std::filesystem::create_directories(charDir, ec);
+        const std::filesystem::path outPath = charDir / (clean + ".scad");
+        std::ofstream out(outPath, std::ios::binary | std::ios::trunc);
+        if (!out)
+        {
+            statusLine_ = fmt::format("导出失败: {}", outPath.string());
+            statusError_ = true;
+            return;
+        }
+        out << designer_.BuildSource(KitCharUsePath(true));
+        statusLine_ = fmt::format("已导出 {}", outPath.string());
+        statusError_ = false;
+        SPDLOG_INFO("[ScadLibrary] exported character -> {}", outPath.string());
+    }
+
+    void ScadLibraryInterface::DrawDesignerContent()
+    {
+        if (!designer_.HasKit())
+        {
+            ImGui::Spacing();
+            ImGui::TextDisabled("assets/scad/lib 下没有可用的 kit_char.scad");
+            ImGui::TextDisabled("（需要 head/torso/arm/leg 分类的部件）");
+            return;
+        }
+        if (!designerEverLoaded_)
+        {
+            designerEverLoaded_ = true;
+            designerDirty_ = true;
+        }
+
+        ImGui::Spacing();
+        auto slotCombo = [&](const char* label, const std::vector<FKitModuleInfo>& options, int& index,
+                             bool optional)
+        {
+            const char* current = index >= 0 && index < static_cast<int>(options.size())
+                                      ? options[index].name.c_str()
+                                      : "（无）";
+            if (ImGui::BeginCombo(label, current))
+            {
+                if (optional && ImGui::Selectable("（无）", index < 0) && index != -1)
+                {
+                    index = -1;
+                    designerDirty_ = true;
+                }
+                for (int i = 0; i < static_cast<int>(options.size()); ++i)
+                {
+                    if (ImGui::Selectable(options[i].name.c_str(), index == i) && index != i)
+                    {
+                        index = i;
+                        designerDirty_ = true;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+        };
+
+        slotCombo("头型", designer_.Heads(), designer_.head, false);
+        slotCombo("发型", designer_.Hairs(), designer_.hair, true);
+        slotCombo("帽饰", designer_.Hats(), designer_.hat, true);
+        // DroidSansFallback 缺"躯"字形，用"上身"。
+        slotCombo("上身", designer_.Torsos(), designer_.torso, false);
+        slotCombo("手臂", designer_.Arms(), designer_.arm, false);
+        slotCombo("腿部", designer_.Legs(), designer_.leg, false);
+
+        if (!designer_.Accessories().empty())
+        {
+            ImGui::Separator();
+            ImGui::TextDisabled("配饰");
+            for (size_t i = 0; i < designer_.Accessories().size(); ++i)
+            {
+                bool enabled = i < designer_.accEnabled.size() && designer_.accEnabled[i] != 0;
+                if (ImGui::Checkbox(designer_.Accessories()[i].name.c_str(), &enabled))
+                {
+                    designer_.accEnabled[i] = enabled ? 1 : 0;
+                    designerDirty_ = true;
+                }
+            }
+        }
+
+        ImGui::Separator();
+        if (ImGui::ColorEdit3("肤色", designer_.skinColor))
+        {
+            designerDirty_ = true;
+        }
+        if (ImGui::ColorEdit3("发色", designer_.hairColor))
+        {
+            designerDirty_ = true;
+        }
+        if (ImGui::ColorEdit3("主色", designerTint_))
+        {
+            // 运行时 tint（品红占位部位），改材质即可，无需重载。
+            rigPreview_.SetTint(glm::vec3(designerTint_[0], designerTint_[1], designerTint_[2]));
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("运行时换色（ch_TINT() 品红占位部位）；导出文件保留占位");
+        }
+
+        ImGui::Separator();
+        if (rigPreview_.HasRig() && rigPreview_.Active())
+        {
+            const std::string& current = rigPreview_.CurrentClip();
+            if (ImGui::BeginCombo("动画", current.empty() ? "绑定姿态" : current.c_str()))
+            {
+                if (ImGui::Selectable("绑定姿态", current.empty()))
+                {
+                    rigPreview_.PlayClip("");
+                }
+                for (const Assets::FRigClip& clip : rigPreview_.Asset().clips)
+                {
+                    if (ImGui::Selectable(clip.name.c_str(), current == clip.name))
+                    {
+                        rigPreview_.PlayClip(clip.name);
+                    }
+                }
+                ImGui::EndCombo();
+            }
+        }
+        if (ImGui::Button(ICON_FA_ROTATE_RIGHT " 刷新预览"))
+        {
+            ReloadDesigner();
+        }
+
+        ImGui::Separator();
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 96.0f);
+        ImGui::InputTextWithHint("##char_name", "角色文件名", characterNameBuf_, sizeof(characterNameBuf_));
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_FILE_EXPORT " 导出##char"))
+        {
+            ExportCharacter();
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("写入 assets/scad/characters/<名>.scad（use ../lib/kit_char.scad，游戏可直接加载）");
+        }
     }
 }
