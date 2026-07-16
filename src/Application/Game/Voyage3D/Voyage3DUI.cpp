@@ -2,6 +2,7 @@
 
 #include <imgui.h>
 
+#include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Voyage3DCommon.hpp"
 #include "Voyage3DGameInstance.hpp"

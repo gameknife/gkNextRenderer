@@ -11,6 +11,8 @@
 
 namespace Modules::Audio
 {
+    FMiniaudioBackend::FMiniaudioBackend() = default;
+
     FMiniaudioBackend::~FMiniaudioBackend()
     {
         Stop();

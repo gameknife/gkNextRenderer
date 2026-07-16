@@ -11,7 +11,7 @@ namespace Modules::Audio
     class FMiniaudioBackend final : public NextAudio
     {
     public:
-        FMiniaudioBackend() = default;
+        FMiniaudioBackend();
         ~FMiniaudioBackend() override;
 
         void Start() override;

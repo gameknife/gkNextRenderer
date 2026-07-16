@@ -39,6 +39,14 @@
             }
         },
         {
+            "name": "windows-no-unity",
+            "inherits": "windows",
+            "displayName": "Windows (No Unity)",
+            "cacheVariables": {
+                "ENABLE_UNITY_BUILD": "OFF"
+            }
+        },
+        {
             "name": "linux",
             "inherits": "base",
             "displayName": "Linux",
@@ -91,6 +99,11 @@
         {
             "name": "windows",
             "configurePreset": "windows",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "windows-no-unity",
+            "configurePreset": "windows-no-unity",
             "configuration": "RelWithDebInfo"
         },
         {

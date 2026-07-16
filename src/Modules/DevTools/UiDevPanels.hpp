@@ -18,6 +18,11 @@ namespace NextUI
     struct Statistics;
 }
 
+namespace Runtime
+{
+    class FrameProfiler;
+}
+
 namespace DevTools
 {
     // Developer console + statistics overlay, extracted from the engine core

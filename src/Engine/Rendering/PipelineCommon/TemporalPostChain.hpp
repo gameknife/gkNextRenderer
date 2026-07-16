@@ -3,6 +3,8 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
+#include <vulkan/vulkan.h>
+
 namespace Assets
 {
     class Scene;

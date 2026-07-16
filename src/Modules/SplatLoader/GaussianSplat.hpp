@@ -2,6 +2,8 @@
 
 #include "Engine/Common/CoreMinimal.hpp"
 
+#include <glm/glm.hpp>
+
 namespace Assets
 {
     struct alignas(16) FGaussianSplatGpu

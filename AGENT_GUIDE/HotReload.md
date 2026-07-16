@@ -25,14 +25,14 @@
 
 ### 启用 Live++
 
-Live++ SDK 不提交到仓库。`GK_LIVEPP_ROOT` 可以指向包含 `API/`、`Agent/` 的 `LivePP` 目录，也可以指向它的父目录：
+Live++ SDK 不提交到仓库。`GK_LIVEPP_ROOT` 可以指向包含 `API/`、`Agent/` 的 `LivePP` 目录，也可以指向它的父目录。推荐直接使用独立的 No-Unity preset，避免 Live++ 首次拆分 unity bucket：
 
 ```powershell
-cmake --preset windows `
+cmake --preset windows-no-unity `
   -DGK_ENABLE_CPP_LIVE_CODING=ON `
   -DGK_LIVEPP_ROOT=P:/tools/LPP_2_11_3
-./gnb.bat build gkNextRenderer
-./gnb.bat run gkNextRenderer
+cmake --build --preset windows-no-unity --target gkNextRenderer --parallel
+./out/build/windows-no-unity/bin/gkNextRenderer.exe
 ```
 
 也可以在首次 configure 前设置 `LIVEPP_ROOT` 环境变量。构建开关会验证 SDK header、x64 Agent、LTO 设置，并向 first-party targets 增加 Live++ 所需的 `/Zi /Gm- /Gy /Gw`；链接 LiveCoding module 的 executable 额外使用 `/FUNCTIONPADMIN /DEBUG:FULL /INCREMENTAL /OPT:NOREF /OPT:NOICF`。
@@ -44,7 +44,27 @@ cmake --preset windows `
 [LiveCoding] C++ Live++ enabled for [gkNextRenderer.exe] ...
 ```
 
-修改受支持的 `.cpp` 函数体并保存，然后按 `Ctrl+Alt+F11`。如果修改发生在当前调用栈上，新实现要等函数退出并再次进入后才生效。第一次修改 unity bucket 时 Live++ 会拆分 unity file，通常比后续 patch 慢。
+修改受支持的 `.cpp` 函数体并保存，然后按 `Ctrl+Alt+F11`。如果修改发生在当前调用栈上，新实现要等函数退出并再次进入后才生效。若使用普通 Unity preset，第一次修改 unity bucket 时 Live++ 会先拆分 unity file，通常更慢且更容易暴露隐式 include；推荐日常 Live++ 开发使用 `windows-no-unity`。
+
+### No-Unity 独立编译检查
+
+Live++ 拆分 unity bucket 后，每个 `.cpp` 必须能够作为独立 translation unit 编译。仓库提供独立输出目录的 `windows-no-unity` preset，用于提前发现被 unity include 顺序掩盖的头文件依赖：
+
+```powershell
+cmake --preset windows-no-unity
+cmake --build --preset windows-no-unity --parallel
+```
+
+如需在完全关闭 Unity Build 的配置中直接使用 Live++：
+
+```powershell
+cmake --preset windows-no-unity `
+  -DGK_ENABLE_CPP_LIVE_CODING=ON `
+  -DGK_LIVEPP_ROOT=P:/tools/LPP_2_11_3
+cmake --build --preset windows-no-unity --target gkNextRenderer --parallel
+```
+
+该 preset 使用 `out/build/windows-no-unity`，不会覆盖日常 `out/build/windows` 配置。`.github/workflows/no-unity.yml` 每周一执行一次 Windows 全目标 No-Unity 构建，也支持手动触发。CI 只检查独立 TU 编译，不启用需要本地商业 SDK 的 Live++ Agent。
 
 常用运行时开关：
 

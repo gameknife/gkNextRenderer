@@ -1,3 +1,5 @@
+#include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 
 #include <algorithm>
