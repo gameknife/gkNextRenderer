@@ -44,7 +44,9 @@ void NextEngine::OnKey(SDL_Event& event)
         const bool altPressed = (modifiers & SDL_KMOD_ALT) != 0;
         const bool isAltEnter =
             altPressed && (event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER);
-        const bool isF11 = event.key.key == SDLK_F11;
+        const bool hasShortcutModifier =
+            (modifiers & (SDL_KMOD_CTRL | SDL_KMOD_ALT | SDL_KMOD_SHIFT | SDL_KMOD_GUI)) != 0;
+        const bool isF11 = event.key.key == SDLK_F11 && !hasShortcutModifier;
 
         if (isAltEnter || isF11)
         {
