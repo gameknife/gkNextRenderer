@@ -746,38 +746,13 @@ bool NextEngine::Tick(bool forcingDelta)
 
         {
             SCOPED_CPU_TIMER("draw frame");
-            if (screenShot_.hasPending || screenShot_.captureFramesRemaining == 1)
+            if (ShouldCaptureScreenShotThisFrame())
             {
                 renderer_->RequestScreenShotCapture();
             }
             renderer_->DrawFrame();
         }
         frameState_.totalFrames = renderer_->FrameCount();
-
-        if (screenShot_.hasPending)
-        {
-            renderer_->Device().WaitIdle();
-            if (screenShot_.pending.fast)
-            {
-                Runtime::ScreenShot::SaveSwapChainToFileFast(renderer_.get(),
-                                               screenShot_.pending.filename,
-                                               screenShot_.pending.x,
-                                               screenShot_.pending.y,
-                                               screenShot_.pending.width,
-                                               screenShot_.pending.height);
-            }
-            else
-            {
-                Runtime::ScreenShot::SaveSwapChainToFile(renderer_.get(),
-                                               screenShot_.pending.filename,
-                                               screenShot_.pending.x,
-                                               screenShot_.pending.y,
-                                               screenShot_.pending.width,
-                                               screenShot_.pending.height);
-            }
-            screenShot_.hasPending = false;
-            screenShot_.pending = {};
-        }
 
         if (progressiveRender_.warmupFramesRemaining > 0)
         {
@@ -795,27 +770,7 @@ bool NextEngine::Tick(bool forcingDelta)
                 std::min(progressiveRender_.accumulatedFrames + 1, FProgressiveRenderState::TargetFrames);
         }
 
-        // High quality capture: count down accumulated frames after DrawFrame
-        if (screenShot_.captureFramesRemaining > 0)
-        {
-            screenShot_.captureFramesRemaining--;
-            if (screenShot_.captureFramesRemaining == 0)
-            {
-                renderer_->Device().WaitIdle();
-                Runtime::ScreenShot::SaveSwapChainToFile(renderer_.get(),
-                                               screenShot_.captureSpec.filename,
-                                               screenShot_.captureSpec.x,
-                                               screenShot_.captureSpec.y,
-                                               screenShot_.captureSpec.width,
-                                               screenShot_.captureSpec.height);
-                spdlog::info("High quality capture saved: {} ({} frames accumulated)",
-                             screenShot_.captureSpec.filename, screenShot_.captureTotalFrames);
-
-                progressiveRender_.enabled = screenShot_.previousProgressiveEnabled;
-                progressiveRender_.warmupFramesRemaining = screenShot_.previousProgressiveWarmupFrames;
-                screenShot_.captureSpec = {};
-            }
-        }
+        AdvanceScreenShotCapture();
 
         // sample gamepad stats
         {
@@ -984,7 +939,7 @@ void NextEngine::RequestScreenShot(FScreenShotSpec spec)
 {
     ++screenShot_.queuedRequests;
     AddTickedTask([this, spec = std::move(spec)](double) mutable {
-        if (screenShot_.hasPending || screenShot_.captureFramesRemaining > 0)
+        if (screenShot_.hasPending)
         {
             return false;
         }
@@ -994,24 +949,69 @@ void NextEngine::RequestScreenShot(FScreenShotSpec spec)
         {
             screenShot_.previousProgressiveEnabled = progressiveRender_.enabled;
             screenShot_.previousProgressiveWarmupFrames = progressiveRender_.warmupFramesRemaining;
-            screenShot_.captureTotalFrames = spec.accumulateFrames;
             screenShot_.captureFramesRemaining = spec.accumulateFrames;
-            screenShot_.captureSpec = std::move(spec);
-            screenShot_.captureSpec.filename =
-                ResolveScreenShotFilename(screenShot_.captureSpec.filename, "hq_screenshot");
+            spec.filename = ResolveScreenShotFilename(spec.filename, "hq_screenshot");
 
             progressiveRender_.enabled = true;
             progressiveRender_.warmupFramesRemaining = 0;
             spdlog::info("High quality capture started: accumulating {} frames...",
-                         screenShot_.captureTotalFrames);
-            return true;
+                         spec.accumulateFrames);
         }
-
-        spec.filename = ResolveScreenShotFilename(spec.filename, "screenshot");
+        else
+        {
+            spec.filename = ResolveScreenShotFilename(spec.filename, "screenshot");
+            screenShot_.captureFramesRemaining = 0;
+        }
         screenShot_.pending = std::move(spec);
         screenShot_.hasPending = true;
         return true;
     });
+}
+
+bool NextEngine::ShouldCaptureScreenShotThisFrame() const
+{
+    return screenShot_.hasPending && screenShot_.captureFramesRemaining <= 1;
+}
+
+void NextEngine::AdvanceScreenShotCapture()
+{
+    if (!screenShot_.hasPending)
+    {
+        return;
+    }
+
+    if (screenShot_.captureFramesRemaining > 1)
+    {
+        --screenShot_.captureFramesRemaining;
+        return;
+    }
+
+    screenShot_.captureFramesRemaining = 0;
+    SaveScreenShot(screenShot_.pending);
+    if (screenShot_.pending.accumulateFrames > 0)
+    {
+        spdlog::info("High quality capture saved: {} ({} frames accumulated)",
+                     screenShot_.pending.filename, screenShot_.pending.accumulateFrames);
+
+        progressiveRender_.enabled = screenShot_.previousProgressiveEnabled;
+        progressiveRender_.warmupFramesRemaining = screenShot_.previousProgressiveWarmupFrames;
+    }
+    screenShot_.hasPending = false;
+    screenShot_.pending = {};
+}
+
+void NextEngine::SaveScreenShot(const FScreenShotSpec& spec)
+{
+    renderer_->Device().WaitIdle();
+    if (spec.fast)
+    {
+        Runtime::ScreenShot::SaveSwapChainToFileFast(
+            renderer_.get(), spec.filename, spec.x, spec.y, spec.width, spec.height);
+        return;
+    }
+
+    Runtime::ScreenShot::SaveSwapChainToFile(
+        renderer_.get(), spec.filename, spec.x, spec.y, spec.width, spec.height);
 }
 
 glm::ivec2 NextEngine::GetMonitorSize() const
@@ -1172,7 +1172,7 @@ void NextEngine::OnRendererPostLoadScene()
 void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
     SCOPED_CPU_TIMER("post render");
-    const bool suppressAllUi = screenShot_.hasPending && !screenShot_.pending.includeUi &&
+    const bool suppressAllUi = ShouldCaptureScreenShotThisFrame() && !screenShot_.pending.includeUi &&
         (!gameInstance_ || !gameInstance_->ShouldRenderUiDuringScreenshot());
 
     if (userInterface_)

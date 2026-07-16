@@ -270,6 +270,9 @@ private:
     void OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     void OnRendererAfterSubmit();
     void OnRendererBeforeNextFrame();
+    bool ShouldCaptureScreenShotThisFrame() const;
+    void AdvanceScreenShotCapture();
+    void SaveScreenShot(const FScreenShotSpec& spec);
 
     // Scene helpers
     const Assets::Scene& GetScene() const { return *scene_; }
@@ -335,13 +338,11 @@ private:
         bool hasPending = false;
         FScreenShotSpec pending{};
         uint32_t captureFramesRemaining = 0;
-        uint32_t captureTotalFrames = 0;
-        FScreenShotSpec captureSpec{};
         uint32_t queuedRequests = 0;
         bool previousProgressiveEnabled = false;
         uint32_t previousProgressiveWarmupFrames = 0;
 
-        bool IsCapturing() const { return queuedRequests > 0 || hasPending || captureFramesRemaining > 0; }
+        bool IsCapturing() const { return queuedRequests > 0 || hasPending; }
     };
 
     // Main-thread task queues
