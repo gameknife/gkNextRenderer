@@ -4,7 +4,6 @@
 
 #include <functional>
 #include <memory>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -51,8 +50,6 @@ namespace Vulkan
         virtual FExternalPassContract Contract() const = 0;
         virtual void CreateResources() = 0;
         virtual void Execute(VkCommandBuffer commandBuffer, uint32_t imageIndex) = 0;
-        virtual void ReloadShaders(const std::set<std::string>& changedShaderFiles,
-                                   std::set<std::string>& handledShaderFiles) {}
     };
 
     using FExternalPassFactory = std::function<std::unique_ptr<IExternalRenderPass>(VulkanBaseRenderer&)>;

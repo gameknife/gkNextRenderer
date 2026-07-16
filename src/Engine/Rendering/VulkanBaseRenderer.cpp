@@ -181,20 +181,6 @@ namespace
             swapChain.ImageUsage()};
     }
 
-    std::string JoinShaderNames(const std::set<std::string>& names)
-    {
-        std::string result;
-        for (const std::string& name : names)
-        {
-            if (!result.empty())
-            {
-                result += ", ";
-            }
-            result += name;
-        }
-        return result;
-    }
-
 }
 
 namespace Vulkan
@@ -1280,107 +1266,9 @@ namespace Vulkan
 
     void VulkanBaseRenderer::ReloadShaders()
     {
+        // Keep shader refresh on the same complete resource lifecycle used by resize/recovery.
+        // A partial pipeline registry is faster only marginally and is easy to leave incomplete.
         RecreateSwapChain();
-    }
-
-    void VulkanBaseRenderer::ReloadShaders(const std::vector<std::filesystem::path>& changedShaderFiles)
-    {
-        if (changedShaderFiles.empty())
-        {
-            RecreateSwapChain();
-            return;
-        }
-
-        std::set<std::string> changedShaderFilenames;
-        for (const std::filesystem::path& shaderFile : changedShaderFiles)
-        {
-            const std::string filename = shaderFile.filename().string();
-            if (!filename.empty())
-            {
-                changedShaderFilenames.insert(filename);
-            }
-        }
-
-        if (changedShaderFilenames.empty())
-        {
-            RecreateSwapChain();
-            return;
-        }
-
-        ctx_.device->WaitIdle();
-
-        std::set<std::string> handledShaderFiles;
-        auto reloadPipeline = [&](auto& pipeline)
-        {
-            if (pipeline)
-            {
-                pipeline->ReloadIfShaderChanged(changedShaderFilenames, handledShaderFiles);
-            }
-        };
-
-        reloadPipeline(overlay_.bufferClearPipeline);
-        reloadPipeline(overlay_.fsrComposePipeline);
-        reloadPipeline(overlay_.visualDebuggerPipeline);
-        reloadPipeline(overlay_.wireframePipeline);
-        reloadPipeline(overlay_.visibilityPipeline);
-        reloadPipeline(overlay_.gpuCullCompactPipeline);
-        reloadPipeline(overlay_.softMeshShaderFinalizePipeline);
-        reloadPipeline(overlay_.softMeshShaderExpandPipeline);
-        reloadPipeline(overlay_.shadowGpuCullCompactPipeline);
-        reloadPipeline(skin_.pipeline);
-        reloadPipeline(ambient_.softBake);
-        reloadPipeline(ambient_.clearCache);
-        if (rt_)
-        {
-            reloadPipeline(rt_->directLightGenPipeline);
-        }
-        for (const auto& externalPass : overlay_.externalPasses)
-        {
-            externalPass->ReloadShaders(changedShaderFilenames, handledShaderFiles);
-        }
-        if (overlay_.sunShadowPass)
-        {
-            overlay_.sunShadowPass->ReloadShaders(changedShaderFilenames, handledShaderFiles);
-        }
-
-        for (auto& [type, logicRenderer] : logicRenderers_.renderers)
-        {
-            if (logicRenderer && logicRenderers_.swapChainCreatedTypes.find(type) != logicRenderers_.swapChainCreatedTypes.end())
-            {
-                logicRenderer->ReloadShaders(changedShaderFilenames, handledShaderFiles);
-            }
-        }
-
-        renderViews_->Primary().AtrousDenoiser().ReloadShaders(changedShaderFilenames, handledShaderFiles);
-        for (const std::unique_ptr<RenderView>& view : renderViews_->AdditionalViews())
-        {
-            if (view)
-            {
-                view->AtrousDenoiser().ReloadShaders(changedShaderFilenames, handledShaderFiles);
-            }
-        }
-        if (NextEngine* engine = NextEngine::GetInstance())
-        {
-            if (NextUI::UserInterface* ui = engine->GetUserInterface())
-            {
-                ui->ReloadShaders(changedShaderFilenames, handledShaderFiles);
-            }
-        }
-
-        std::set<std::string> unhandledShaderFiles;
-        std::set_difference(changedShaderFilenames.begin(), changedShaderFilenames.end(),
-                            handledShaderFiles.begin(), handledShaderFiles.end(),
-                            std::inserter(unhandledShaderFiles, unhandledShaderFiles.begin()));
-        if (!unhandledShaderFiles.empty())
-        {
-            SPDLOG_INFO("[HotReload] Falling back to swapchain recreation for shader(s): {}",
-                        JoinShaderNames(unhandledShaderFiles));
-            RecreateSwapChain();
-            return;
-        }
-
-        SPDLOG_INFO("[HotReload] Reloaded compute pipeline(s): {}", JoinShaderNames(handledShaderFiles));
-        resetUpscalerHistory_ = true;
     }
 
     void VulkanBaseRenderer::CaptureScreenShot()

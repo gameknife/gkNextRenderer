@@ -27,14 +27,6 @@ void SoftwareTracingRenderer::DeleteSwapChain()
     temporalPostChain_.DeleteSwapChain();
 }
 
-void SoftwareTracingRenderer::ReloadShaders(
-    const std::set<std::string>& changedShaderFiles,
-    std::set<std::string>& handledShaderFiles)
-{
-    if (deferredShadingPipeline_) deferredShadingPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-    temporalPostChain_.ReloadShaders(changedShaderFiles, handledShaderFiles);
-}
-
 void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
     baseRender_.ActiveRenderView().TemporalResolve().PrepareHistoryForRead(baseRender_, commandBuffer);

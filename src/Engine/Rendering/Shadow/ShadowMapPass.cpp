@@ -9,32 +9,11 @@
 #include "Engine/Vulkan/GraphicsPipelineBuilder.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 
-#include <filesystem>
-
 namespace Vulkan::Shadow
 {
     namespace
     {
         constexpr VkFormat kShadowFormat = VK_FORMAT_D32_SFLOAT;
-
-        std::string ShaderFilename(const std::string& shaderFile)
-        {
-            return std::filesystem::path(shaderFile).filename().string();
-        }
-
-        bool MarkChangedShaderFile(
-            const std::string& shaderFile,
-            const std::set<std::string>& changedShaderFiles,
-            std::set<std::string>& handledShaderFiles)
-        {
-            const std::string filename = ShaderFilename(shaderFile);
-            if (changedShaderFiles.find(filename) == changedShaderFiles.end())
-            {
-                return false;
-            }
-            handledShaderFiles.insert(filename);
-            return true;
-        }
     }
 
     ShadowMapPass::ShadowMapPass(const Vulkan::Device& device) : device_(device)
@@ -143,45 +122,6 @@ namespace Vulkan::Shadow
             Check(vkCreateFramebuffer(device_.Handle(), &fbInfo, nullptr, &frameBuffers_[i]),
                 "create shadow framebuffer");
         }
-    }
-
-    void ShadowMapPass::RecreatePipeline()
-    {
-        if (pipeline_)
-        {
-            vkDestroyPipeline(device_.Handle(), pipeline_, nullptr);
-            pipeline_ = VK_NULL_HANDLE;
-        }
-
-        const VkExtent2D extent{Assets::Scene::kSunShadowResolution, Assets::Scene::kSunShadowResolution};
-        const ShaderModule fragShader(device_, "assets/shaders/Rast.ShadowMap.frag.slang.spv");
-        const ShaderModule vertShader(device_, "assets/shaders/Rast.ShadowMapSoftMeshShader.vert.slang.spv");
-
-        pipeline_ = GraphicsPipelineBuilder(device_)
-            .SetShaders(vertShader, fragShader)
-            .SetFixedViewport({0, 0}, extent)
-            .SetDepth(true, true, VK_COMPARE_OP_LESS)
-            .SetDepthBias(1.25f, 1.75f)
-            .SetColorAttachmentCount(0)
-            .Build(pipelineLayout_->Handle(), renderPass_, "recreate shadow graphics pipeline");
-    }
-
-    void ShadowMapPass::ReloadShaders(
-        const std::set<std::string>& changedShaderFiles,
-        std::set<std::string>& handledShaderFiles)
-    {
-        constexpr const char* vertexShader = "assets/shaders/Rast.ShadowMapSoftMeshShader.vert.slang.spv";
-        constexpr const char* fragmentShader = "assets/shaders/Rast.ShadowMap.frag.slang.spv";
-        const bool reloadVertex = changedShaderFiles.find(ShaderFilename(vertexShader)) != changedShaderFiles.end();
-        const bool reloadFragment = changedShaderFiles.find(ShaderFilename(fragmentShader)) != changedShaderFiles.end();
-        if (!reloadVertex && !reloadFragment)
-        {
-            return;
-        }
-
-        RecreatePipeline();
-        MarkChangedShaderFile(vertexShader, changedShaderFiles, handledShaderFiles);
-        MarkChangedShaderFile(fragmentShader, changedShaderFiles, handledShaderFiles);
     }
 
     void ShadowMapPass::DestroyResources()

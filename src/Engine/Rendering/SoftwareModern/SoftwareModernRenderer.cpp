@@ -23,16 +23,6 @@ namespace Vulkan::SoftwareModern
         temporalPostChain_.DeleteSwapChain();
     }
 
-    void SoftwareModernRenderer::ReloadShaders(
-        const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles)
-    {
-        if (deferredShadingPipeline_)
-        {
-            deferredShadingPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-        temporalPostChain_.ReloadShaders(changedShaderFiles, handledShaderFiles);
-    }
-
     void SoftwareModernRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
         baseRender_.ActiveRenderView().TemporalResolve().PrepareHistoryForRead(baseRender_, commandBuffer);

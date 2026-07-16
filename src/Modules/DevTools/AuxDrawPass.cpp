@@ -16,7 +16,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <filesystem>
 
 namespace Vulkan::AuxDraw
 {
@@ -46,20 +45,6 @@ namespace Vulkan::AuxDraw
         };
         static_assert(sizeof(FAuxDrawPushConstants) == 32);
 
-        std::string ShaderFilename(const std::string& shaderFile)
-        {
-            return std::filesystem::path(shaderFile).filename().string();
-        }
-
-        bool IsShaderChanged(const char* shaderFile, const std::set<std::string>& changedShaderFiles)
-        {
-            return changedShaderFiles.find(ShaderFilename(shaderFile)) != changedShaderFiles.end();
-        }
-
-        void MarkShaderHandled(const char* shaderFile, std::set<std::string>& handledShaderFiles)
-        {
-            handledShaderFiles.insert(ShaderFilename(shaderFile));
-        }
     }
 
     AuxDrawPass::AuxDrawPass(VulkanBaseRenderer& renderer) : renderer_(renderer) {}
@@ -212,27 +197,6 @@ namespace Vulkan::AuxDraw
             .SetDepth(true, false, VK_COMPARE_OP_LESS_OR_EQUAL)
             .SetAlphaBlend(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
             .Build(pipelineLayout_->Handle(), renderPass_, "create AuxDraw graphics pipeline");
-    }
-
-    void AuxDrawPass::ReloadShaders(
-        const std::set<std::string>& changedShaderFiles,
-        std::set<std::string>& handledShaderFiles)
-    {
-        if (!IsShaderChanged(vertexShaderPath, changedShaderFiles) &&
-            !IsShaderChanged(fragmentShaderPath, changedShaderFiles))
-        {
-            return;
-        }
-
-        RecreateGraphicsPipeline();
-        if (IsShaderChanged(vertexShaderPath, changedShaderFiles))
-        {
-            MarkShaderHandled(vertexShaderPath, handledShaderFiles);
-        }
-        if (IsShaderChanged(fragmentShaderPath, changedShaderFiles))
-        {
-            MarkShaderHandled(fragmentShaderPath, handledShaderFiles);
-        }
     }
 
     void AuxDrawPass::EnsureFrameBufferCapacity(uint32_t imageIndex, VkDeviceSize requiredSize)

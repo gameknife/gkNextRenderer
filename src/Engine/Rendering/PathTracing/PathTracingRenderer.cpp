@@ -68,29 +68,6 @@ namespace Vulkan::PathTracing
         temporalPostChain_.DeleteSwapChain();
     }
 
-    void PathTracingRenderer::ReloadShaders(
-        const std::set<std::string>& changedShaderFiles,
-        std::set<std::string>& handledShaderFiles)
-    {
-        if (rayTracingPipeline_)
-        {
-            rayTracingPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-        if (sharcUpdatePipeline_)
-        {
-            sharcUpdatePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-        if (sharcResolvePipeline_)
-        {
-            sharcResolvePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-        if (sharcQueryPipeline_)
-        {
-            sharcQueryPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-        temporalPostChain_.ReloadShaders(changedShaderFiles, handledShaderFiles);
-    }
-
     void PathTracingRenderer::EnsureSharcPipelines()
     {
         if (!sharcUpdatePipeline_)

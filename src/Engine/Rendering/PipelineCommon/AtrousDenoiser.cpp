@@ -46,16 +46,6 @@ namespace Vulkan::PipelineCommon
         pipeline_.reset();
     }
 
-    void AtrousDenoiser::ReloadShaders(
-        const std::set<std::string>& changedShaderFiles,
-        std::set<std::string>& handledShaderFiles)
-    {
-        if (pipeline_)
-        {
-            pipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-    }
-
     void AtrousDenoiser::Run(
         VulkanBaseRenderer& baseRenderer,
         const SwapChain& swapChain,

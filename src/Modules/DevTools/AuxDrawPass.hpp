@@ -6,7 +6,6 @@
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <memory>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -34,8 +33,6 @@ namespace Vulkan::AuxDraw
 
         void CreateResources() override;
         void ReleaseResources();
-        void ReloadShaders(const std::set<std::string>& changedShaderFiles,
-                           std::set<std::string>& handledShaderFiles) override;
         void Execute(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
     private:

@@ -399,15 +399,10 @@ namespace Modules::LiveCoding
 
         spdlog::stopwatch stopwatch;
         bool allSucceeded = true;
-        std::vector<std::filesystem::path> rebuiltShaders;
         for (const FShaderCompileRequest& request : result.requests)
         {
             const bool succeeded = CompileShader(request);
             allSucceeded = succeeded && allSucceeded;
-            if (succeeded)
-            {
-                rebuiltShaders.push_back(request.outputPath);
-            }
         }
 
         if (!allSucceeded)
@@ -419,7 +414,7 @@ namespace Modules::LiveCoding
 
         if (renderer_->HasSwapChain())
         {
-            renderer_->ReloadShaders(rebuiltShaders);
+            renderer_->ReloadShaders();
         }
         SPDLOG_INFO("[HotReload] Shader rebuilt: {} file(s) in {}", result.requests.size(), stopwatch.elapsed_ms());
     }

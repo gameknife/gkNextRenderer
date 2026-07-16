@@ -108,25 +108,6 @@ namespace Vulkan::GaussianSplat
         };
         static_assert(sizeof(FSplatModelState) == 96);
 
-        std::string ShaderFilename(const std::string& shaderFile)
-        {
-            return std::filesystem::path(shaderFile).filename().string();
-        }
-
-        bool MarkChangedShaderFile(
-            const std::string& shaderFile,
-            const std::set<std::string>& changedShaderFiles,
-            std::set<std::string>& handledShaderFiles)
-        {
-            const std::string filename = ShaderFilename(shaderFile);
-            if (changedShaderFiles.find(filename) == changedShaderFiles.end())
-            {
-                return false;
-            }
-            handledShaderFiles.insert(filename);
-            return true;
-        }
-
         uint32_t AutoBucketCount(uint32_t splatCount)
         {
             if (splatCount == 0) return 4096;
@@ -321,7 +302,7 @@ namespace Vulkan::GaussianSplat
             &Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager(),
         };
         pipelineLayout_ = std::make_unique<PipelineLayout>(device, managers, 1, &pushRange, 1);
-        RecreateGraphicsPipeline();
+        CreateGraphicsPipeline();
 
         SPDLOG_INFO("uploaded {} Gaussian splats in {} models ({} SH palette entries)",
                     combinedSplats.size(), modelCount_, combinedPalette.size());
@@ -377,20 +358,9 @@ namespace Vulkan::GaussianSplat
         renderPass_ = VK_NULL_HANDLE;
     }
 
-    void GaussianSplatPass::RecreateGraphicsPipeline()
+    void GaussianSplatPass::CreateGraphicsPipeline()
     {
-        if (!renderPass_ || !pipelineLayout_)
-        {
-            return;
-        }
-
         const Device& device = renderer_.Device();
-        if (pipeline_)
-        {
-            vkDestroyPipeline(device.Handle(), pipeline_, nullptr);
-            pipeline_ = VK_NULL_HANDLE;
-        }
-
         const VkExtent2D extent = renderer_.SwapChain().RenderExtent();
         const ShaderModule vertexShader(device, "assets/shaders/Splat.Billboard.vert.slang.spv");
         const ShaderModule fragmentShader(device, "assets/shaders/Splat.Billboard.frag.slang.spv");
@@ -399,49 +369,7 @@ namespace Vulkan::GaussianSplat
             .SetFixedViewport({0, 0}, extent)
             .SetDepth(true, false, VK_COMPARE_OP_LESS_OR_EQUAL)
             .SetAlphaBlend(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
-            .Build(pipelineLayout_->Handle(), renderPass_, "recreate Gaussian splat graphics pipeline");
-    }
-
-    void GaussianSplatPass::ReloadShaders(
-        const std::set<std::string>& changedShaderFiles,
-        std::set<std::string>& handledShaderFiles)
-    {
-        bool sortShaderReloaded = false;
-        if (histogramPipeline_)
-        {
-            sortShaderReloaded |= histogramPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-        if (prefixPipeline_)
-        {
-            sortShaderReloaded |= prefixPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-        if (groupScanPipeline_)
-        {
-            sortShaderReloaded |= groupScanPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-        if (scatterPipeline_)
-        {
-            sortShaderReloaded |= scatterPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-        if (sortShaderReloaded)
-        {
-            sortCacheValid_ = false;
-        }
-        if (composePipeline_)
-        {
-            composePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-
-        constexpr const char* vertexShader = "assets/shaders/Splat.Billboard.vert.slang.spv";
-        constexpr const char* fragmentShader = "assets/shaders/Splat.Billboard.frag.slang.spv";
-        const bool reloadVertex = changedShaderFiles.find(ShaderFilename(vertexShader)) != changedShaderFiles.end();
-        const bool reloadFragment = changedShaderFiles.find(ShaderFilename(fragmentShader)) != changedShaderFiles.end();
-        if (reloadVertex || reloadFragment)
-        {
-            RecreateGraphicsPipeline();
-            MarkChangedShaderFile(vertexShader, changedShaderFiles, handledShaderFiles);
-            MarkChangedShaderFile(fragmentShader, changedShaderFiles, handledShaderFiles);
-        }
+            .Build(pipelineLayout_->Handle(), renderPass_, "create Gaussian splat graphics pipeline");
     }
 
     void GaussianSplatPass::UpdateModelStates(uint32_t imageIndex)

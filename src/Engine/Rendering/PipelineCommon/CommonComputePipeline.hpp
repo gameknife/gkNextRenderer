@@ -7,8 +7,6 @@
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <memory>
-#include <set>
-#include <string>
 #include <vector>
 
 namespace Vulkan::PipelineCommon
@@ -22,11 +20,6 @@ namespace Vulkan::PipelineCommon
 
         void BindPipeline(VkCommandBuffer commandBuffer, const Assets::Scene& scene, uint32_t imageIndex);
         void BindPipeline(VkCommandBuffer commandBuffer, const Assets::GPUScene& gpuScene);
-        bool ReloadIfShaderChanged(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles);
-
-    private:
-        void RecreatePipeline();
-        std::string shaderFile_;
     };
     
     class ZeroBindPipeline : public PipelineBase
@@ -41,11 +34,6 @@ namespace Vulkan::PipelineCommon
         void BindPipeline(VkCommandBuffer commandBuffer, const Assets::GPUScene& gpuScene);
         void BindPipeline(VkCommandBuffer commandBuffer, const Assets::GPUScene& gpuScene,
                           uint32_t customData0, uint32_t customData1, uint32_t customData2);
-        bool ReloadIfShaderChanged(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles);
-
-    private:
-        void RecreatePipeline();
-        std::string shaderFile_;
     };
     
     class ZeroBindCustomPushConstantPipeline : public PipelineBase
@@ -58,11 +46,8 @@ namespace Vulkan::PipelineCommon
             BindPipeline(commandBuffer, data, 0);
         }
         void BindPipeline(VkCommandBuffer commandBuffer, const void* data, uint32_t viewBankBase);
-        bool ReloadIfShaderChanged(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles);
 
     private:
-        void RecreatePipeline();
-        std::string shaderFile_;
         uint32_t pushConstantSize_;
     };
 
@@ -79,10 +64,8 @@ namespace Vulkan::PipelineCommon
         ~VisibilityPipeline();
         
         const Vulkan::RenderPass& RenderPass() const { return *renderPass_; }
-        bool ReloadIfShaderChanged(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles);
 
     private:
-        void RecreatePipeline();
         std::unique_ptr<Vulkan::RenderPass> renderPass_;
     };
 
@@ -101,11 +84,8 @@ namespace Vulkan::PipelineCommon
         ~GraphicsPipeline();
         
         const class RenderPass& RenderPass() const { return *renderPass_; }
-        bool ReloadIfShaderChanged(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles);
 
     private:
-        void RecreatePipeline();
         std::unique_ptr<class RenderPass> renderPass_;
-        bool isWireFrame_ = false;
     };
 }

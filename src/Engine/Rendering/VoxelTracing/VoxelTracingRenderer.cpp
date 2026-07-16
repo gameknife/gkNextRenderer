@@ -29,16 +29,6 @@ namespace Vulkan::VoxelTracing
         deferredShadingPipeline_.reset();
     }
 
-    void VoxelTracingRenderer::ReloadShaders(
-        const std::set<std::string>& changedShaderFiles,
-        std::set<std::string>& handledShaderFiles)
-    {
-        if (deferredShadingPipeline_)
-        {
-            deferredShadingPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-    }
-
     void VoxelTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();

@@ -36,20 +36,6 @@ namespace Vulkan::PipelineCommon
         composePipeline_.reset();
     }
 
-    void TemporalPostChain::ReloadShaders(
-        const std::set<std::string>& changedShaderFiles,
-        std::set<std::string>& handledShaderFiles)
-    {
-        if (accumulatePipeline_)
-        {
-            accumulatePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-        if (composePipeline_)
-        {
-            composePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-    }
-
     void TemporalPostChain::Run(
         VulkanBaseRenderer& baseRenderer,
         const SwapChain& swapChain,

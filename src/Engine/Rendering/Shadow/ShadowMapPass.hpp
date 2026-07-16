@@ -6,8 +6,6 @@
 
 #include <array>
 #include <memory>
-#include <set>
-#include <string>
 
 namespace Vulkan::Shadow
 {
@@ -22,7 +20,6 @@ namespace Vulkan::Shadow
         // Create the render pass, pipeline, and four framebuffers after the scene's sunShadowMap_ is ready.
         void CreateResources(const Assets::Scene& scene);
         void DestroyResources();
-        void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles);
 
         // Draw one cascade shadow map after GPU culling has populated the soft-mesh shader draw arguments.
         void DrawCascade(VkCommandBuffer commandBuffer, const Assets::Scene& scene, const Assets::GPUScene& gpuScene,
@@ -36,6 +33,5 @@ namespace Vulkan::Shadow
         VkPipeline pipeline_ = VK_NULL_HANDLE;
         std::array<VkFramebuffer, 4> frameBuffers_{};
 
-        void RecreatePipeline();
     };
 }

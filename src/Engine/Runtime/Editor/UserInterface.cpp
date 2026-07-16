@@ -41,7 +41,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
-#include <filesystem>
 
 namespace NextUI
 {
@@ -114,25 +113,6 @@ namespace
         VkPipeline pipeline = VK_NULL_HANDLE;
         VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     };
-
-    std::string ShaderFilename(const std::string& shaderFile)
-    {
-        return std::filesystem::path(shaderFile).filename().string();
-    }
-
-    bool MarkChangedShaderFile(
-        const std::string& shaderFile,
-        const std::set<std::string>& changedShaderFiles,
-        std::set<std::string>& handledShaderFiles)
-    {
-        const std::string filename = ShaderFilename(shaderFile);
-        if (changedShaderFiles.find(filename) == changedShaderFiles.end())
-        {
-            return false;
-        }
-        handledShaderFiles.insert(filename);
-        return true;
-    }
 
     ImVec2 TransformUiPointToFramebuffer(const ImVec2 point, const UiPushConstants& pushConsts, const VkExtent2D& extent)
     {
@@ -584,37 +564,6 @@ void UserInterface::DestroyUiPipeline()
         vkDestroyPipelineLayout(device.Handle(), uiPipelineLayout_, nullptr);
         uiPipelineLayout_ = VK_NULL_HANDLE;
     }
-}
-
-void UserInterface::ReloadShaders(
-    const std::set<std::string>& changedShaderFiles,
-    std::set<std::string>& handledShaderFiles)
-{
-    const bool reloadVertex = changedShaderFiles.find(ShaderFilename(kUiVertexShaderPath)) != changedShaderFiles.end();
-    const bool reloadFragment = changedShaderFiles.find(ShaderFilename(kUiFragmentShaderPath)) != changedShaderFiles.end();
-    if (!reloadVertex && !reloadFragment)
-    {
-        return;
-    }
-    if (renderPass_ == nullptr || uiPipelineLayout_ == VK_NULL_HANDLE)
-    {
-        return;
-    }
-
-    const auto& device = engine_->GetRenderer().Device();
-    if (multiViewportBackend_)
-    {
-        multiViewportBackend_->OnUiPipelineDestroyed();
-    }
-    if (uiPipeline_ != VK_NULL_HANDLE)
-    {
-        vkDestroyPipeline(device.Handle(), uiPipeline_, nullptr);
-        uiPipeline_ = VK_NULL_HANDLE;
-    }
-    uiPipeline_ = CreateUiGraphicsPipeline(device, uiPipelineLayout_, renderPass_->Handle());
-
-    MarkChangedShaderFile(kUiVertexShaderPath, changedShaderFiles, handledShaderFiles);
-    MarkChangedShaderFile(kUiFragmentShaderPath, changedShaderFiles, handledShaderFiles);
 }
 
 VkPipeline UserInterface::CreateViewportPipeline(VkRenderPass renderPass) const

@@ -6,7 +6,6 @@
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <glm/mat4x4.hpp>
-#include <set>
 #include <string>
 
 namespace Vulkan::PipelineCommon
@@ -28,14 +27,12 @@ namespace Vulkan::GaussianSplat
 
         void CreateResources() override;
         void DestroyResources();
-        void ReloadShaders(const std::set<std::string>& changedShaderFiles,
-                           std::set<std::string>& handledShaderFiles) override;
         void Execute(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
     private:
         void UpdateModelStates(uint32_t imageIndex);
         void DispatchGpuSort(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-        void RecreateGraphicsPipeline();
+        void CreateGraphicsPipeline();
 
         VulkanBaseRenderer& renderer_;
         VkRenderPass renderPass_ = VK_NULL_HANDLE;

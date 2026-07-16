@@ -21,7 +21,6 @@
 #include <functional>
 #include <map>
 #include <array>
-#include <filesystem>
 #include <set>
 
 namespace Rendering::Upscaler
@@ -188,7 +187,6 @@ namespace Vulkan
         void End();
         void DrawFrame();
         void ReloadShaders();
-        void ReloadShaders(const std::vector<std::filesystem::path>& changedShaderFiles);
         void RequestRecreateSwapChain() { requestRecreateSwapChain_ = true; }
         VkPresentModeKHR RequestedPresentMode() const { return presentMode_; }
         void SetRequestedPresentMode(VkPresentModeKHR presentMode)
@@ -606,7 +604,6 @@ namespace Vulkan
         virtual void DeleteSwapChain() {};
         virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) {};
         virtual void BeforeNextFrame() {};
-        virtual void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles) {};
         
         VulkanBaseRenderer& baseRender_;
         template<typename T>

@@ -34,15 +34,6 @@ namespace Vulkan::SoftwareModernNoAmbient
         composePipeline_.reset();
     }
 
-    void SoftwareModernNoAmbientRenderer::ReloadShaders(
-        const std::set<std::string>& changedShaderFiles,
-        std::set<std::string>& handledShaderFiles)
-    {
-        if (shadingPipeline_) shadingPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        if (gtaoPipeline_) gtaoPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        if (composePipeline_) composePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-    }
-
     void SoftwareModernNoAmbientRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();

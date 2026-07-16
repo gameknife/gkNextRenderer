@@ -37,8 +37,6 @@ namespace Vulkan::PipelineCommon
     public:
         void CreateSwapChain(const SwapChain& swapChain, const Assets::Scene& scene);
         void DeleteSwapChain();
-        void ReloadShaders(const std::set<std::string>& changedShaderFiles,
-                           std::set<std::string>& handledShaderFiles);
         void Run(VulkanBaseRenderer& baseRenderer, const SwapChain& swapChain,
                  VkCommandBuffer commandBuffer, uint32_t imageIndex,
                  const Runtime::Config::UserSettings& settings,
