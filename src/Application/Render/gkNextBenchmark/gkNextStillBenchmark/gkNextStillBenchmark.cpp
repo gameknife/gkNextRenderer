@@ -51,17 +51,24 @@ void BenchmarkGameInstance::OnTick(double deltaSeconds)
      {
          // Benchmark is done, report the results.
          benchMarker_->OnReport( &(GetEngine().GetRenderer()) , Runtime::Scene::SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]);
-         
-         if (static_cast<size_t>(GetEngine().GetUserSettings().SceneIndex) ==
-             Runtime::Scene::SceneList::AllScenes.size() - 1)
-         {
-             GetEngine().RequestClose();
-         }
-         else
-         {
-             GetEngine().GetUserSettings().SceneIndex += 1;
-             GetEngine().RequestLoadScene({.filename = Runtime::Scene::SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]});
-         }
+         GetEngine().AddTickedTask([this](double) {
+             if (GetEngine().IsCapturingScreenShot())
+             {
+                 return false;
+             }
+
+             if (static_cast<size_t>(GetEngine().GetUserSettings().SceneIndex) ==
+                 Runtime::Scene::SceneList::AllScenes.size() - 1)
+             {
+                 GetEngine().RequestClose();
+             }
+             else
+             {
+                 GetEngine().GetUserSettings().SceneIndex += 1;
+                 GetEngine().RequestLoadScene({.filename = Runtime::Scene::SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]});
+             }
+             return true;
+         });
      }
 }
 

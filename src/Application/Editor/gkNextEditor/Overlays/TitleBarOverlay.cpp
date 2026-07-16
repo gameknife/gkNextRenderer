@@ -15,6 +15,7 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
 #include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Modules/LiveCoding/LiveCodingModule.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
 #include "Modules/SceneExport/FSceneSaver.h"
@@ -381,6 +382,9 @@ namespace Editor
         };
         NextUI::Theme::DrawAppTitleBar(ctx.engine, config);
 
-        NextUI::Theme::DrawStandardBottomBar(ctx.engine, "Footer", kFooterHeight);
+        NextUI::Theme::DrawStandardBottomBar(
+            ctx.engine, "Footer", kFooterHeight, {}, false,
+            []() { Modules::LiveCoding::RequestCppReload(); },
+            Modules::LiveCoding::IsCppLiveCodingAvailable());
     }
 } // namespace Editor

@@ -430,7 +430,8 @@ namespace NextUI::Theme
     }
 
     void DrawStandardBottomBar(NextEngine& engine, const char* windowId, float height,
-                               std::function<void()> onMemoryClicked, bool memoryActive)
+                               std::function<void()> onMemoryClicked, bool memoryActive,
+                               std::function<void()> onCppReloadClicked, bool cppLiveCodingAvailable)
     {
         NextUI::UserInterface* ui = engine.GetUserInterface();
         const NextEngine::FHotReloadStatus hotReloadStatus = engine.GetHotReloadStatus();
@@ -442,15 +443,11 @@ namespace NextUI::Theme
                 : 0.0f;
 
         const bool shaderLive = hotReloadStatus.shaderHotReloadEnabled && hotReloadStatus.shaderInitialized;
-        const char* shaderLabel = shaderLive ? "Shader Live"
-            : (hotReloadStatus.shaderHotReloadEnabled ? "Shader Init" : "Shader Off");
-        const ImVec4 shaderBackground = shaderLive
-            ? Color(EColor::Success, 0.14f)
-            : (hotReloadStatus.shaderHotReloadEnabled ? Color(EColor::Warning, 0.14f)
-                                                      : Color(EColor::Background, 0.78f));
-        const ImVec4 shaderForeground = shaderLive
-            ? Color(EColor::Success)
-            : (hotReloadStatus.shaderHotReloadEnabled ? Color(EColor::Warning) : Color(EColor::TextMuted));
+        const char* shaderTooltip = shaderLive
+            ? "Rebuild shaders now (hot reload ready)"
+            : (hotReloadStatus.shaderHotReloadEnabled
+                   ? "Rebuild shaders now (hot reload initializing)"
+                   : "Rebuild shaders now (automatic hot reload is off)");
 
         const std::string fpsText = fmt::format("FPS {:.0f}", engine.GetFrameRate());
         const std::string memoryText = fmt::format("VRAM {} / {}",
@@ -478,13 +475,16 @@ namespace NextUI::Theme
         constexpr float kStatsButtonWidth = 58.0f;
         constexpr float kCaptureButtonWidth = 72.0f;
         constexpr float kButtonHeight = 22.0f;
+        constexpr float kHotReloadButtonWidth = 24.0f;
+        constexpr float kHotReloadGapWidth = 4.0f;
         constexpr float kSeparatorWidth = 25.0f;
         constexpr float kGapWidth = 8.0f;
 
         const float memoryTextWidth = ImGui::CalcTextSize(memoryText.c_str()).x;
         const float memoryWidgetWidth = memoryTextWidth + (onMemoryClicked ? 12.0f : 0.0f);
         const float rightWidth = kConsoleButtonWidth + kGapWidth + kStatsButtonWidth + kGapWidth + kCaptureButtonWidth +
-            kSeparatorWidth + CalcBadgeWidth(shaderLabel) + kSeparatorWidth + ImGui::CalcTextSize(fpsText.c_str()).x +
+            kSeparatorWidth + kHotReloadButtonWidth * 2.0f + kHotReloadGapWidth +
+            kSeparatorWidth + ImGui::CalcTextSize(fpsText.c_str()).x +
             kSeparatorWidth + memoryWidgetWidth + 18.0f;
 
         FBottomBarConfig config{};
@@ -517,7 +517,27 @@ namespace NextUI::Theme
             }
 
             DrawVerticalSeparator(14.0f, 10.0f, 0.72f);
-            DrawBadge(shaderLabel, shaderBackground, shaderForeground);
+            if (ToolbarButton(ICON_FA_WAND_MAGIC_SPARKLES "##BottomBarRebuildShaders",
+                              shaderTooltip, shaderLive,
+                              ImVec2(kHotReloadButtonWidth, kButtonHeight)))
+            {
+                engine.RequestShaderHotReload();
+            }
+
+            ImGui::SameLine(0.0f, kHotReloadGapWidth);
+            ImGui::BeginDisabled(!cppLiveCodingAvailable || !onCppReloadClicked);
+            if (ToolbarButton(ICON_FA_HAMMER "##BottomBarCompileCpp",
+                              cppLiveCodingAvailable
+                                  ? "Compile C++ changes with Live++"
+                                  : "Live++ is not available in this process",
+                              cppLiveCodingAvailable,
+                              ImVec2(kHotReloadButtonWidth, kButtonHeight)) &&
+                onCppReloadClicked)
+            {
+                onCppReloadClicked();
+            }
+            ImGui::EndDisabled();
+
             DrawVerticalSeparator(14.0f, 10.0f, 0.72f);
             ImGui::TextColored(Color(EColor::TextMuted), "%s", fpsText.c_str());
             DrawVerticalSeparator(14.0f, 10.0f, 0.72f);

@@ -70,6 +70,7 @@ public:
         uint32_t accumulateFrames = 0;
         bool sync = false;
         bool includeUi = false;
+        bool fast = false;
     };
 
     using FHotReloadStatus = Runtime::FShaderHotReloadStatus;
@@ -186,7 +187,7 @@ public:
     void RequestShaderHotReload();
 
     // Main-thread tasks
-    void AddTickedTask(TickedTask task) { taskQueues_.ticked.push_back(task); }
+    void AddTickedTask(TickedTask task) { taskQueues_.pendingTicked.push_back(std::move(task)); }
     void AddTimerTask(double delay, DelayedTask task);
     
     // Optional Modules
@@ -336,16 +337,18 @@ private:
         uint32_t captureFramesRemaining = 0;
         uint32_t captureTotalFrames = 0;
         FScreenShotSpec captureSpec{};
+        uint32_t queuedRequests = 0;
         bool previousProgressiveEnabled = false;
         uint32_t previousProgressiveWarmupFrames = 0;
 
-        bool IsCapturing() const { return hasPending || captureFramesRemaining > 0; }
+        bool IsCapturing() const { return queuedRequests > 0 || hasPending || captureFramesRemaining > 0; }
     };
 
     // Main-thread task queues
     struct FTaskQueues
     {
         std::vector<TickedTask> ticked;
+        std::vector<TickedTask> pendingTicked;
         std::vector<FDelayTaskContext> delayed;
     };
 

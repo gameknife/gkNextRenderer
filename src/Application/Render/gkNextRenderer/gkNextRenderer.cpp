@@ -22,10 +22,10 @@
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
 #include "Modules/DevTools/Command/DeleteNodesCommand.hpp"
 #include "Modules/DevTools/Command/DuplicateNodesCommand.hpp"
+#include "Modules/LiveCoding/LiveCodingModule.hpp"
 #include "Engine/Utilities/Localization.hpp"
 #include "Engine/Utilities/ImGui.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
-#include "Engine/Runtime/ScreenShot.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
@@ -705,9 +705,13 @@ void NextRendererGameInstance::RequestScreenshot(bool openFolder, const std::str
     std::string filename = (std::filesystem::path(folderPath) / (timestamp + suffix)).string();
 
     isTakingScreenshot_ = true;
+    GetEngine().RequestScreenShot({.filename = filename});
+    GetEngine().AddTickedTask([this, folderPath, openFolder](double) {
+        if (GetEngine().IsCapturingScreenShot())
+        {
+            return false;
+        }
 
-    GetEngine().AddTimerTask(0.2, [this, filename, folderPath, openFolder]() {
-        Runtime::ScreenShot::SaveSwapChainToFile(&GetEngine().GetRenderer(), filename, 0, 0, 0, 0);
         if (openFolder)
         {
             NextRenderer::OSCommand(folderPath.c_str());
@@ -1637,7 +1641,9 @@ void NextRendererGameInstance::DrawBottomStatusBar(FRendererUiState& uiState)
                                          {
                                              uiState.memoryStatisticsPanelOpen = !uiState.memoryStatisticsPanelOpen;
                                          },
-                                         uiState.memoryStatisticsPanelOpen);
+                                         uiState.memoryStatisticsPanelOpen,
+                                         []() { Modules::LiveCoding::RequestCppReload(); },
+                                         Modules::LiveCoding::IsCppLiveCodingAvailable());
 }
 
 void NextRendererGameInstance::DrawMemoryStatisticsPanel(FRendererUiState& uiState)

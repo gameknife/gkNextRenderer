@@ -2,6 +2,9 @@
 
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Modules/LiveCoding/LiveCodingModule.hpp"
+#include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include <fmt/format.h>
 #include <imgui.h>
@@ -64,10 +67,25 @@ namespace Editor
             SetCVarFloat(cvars, "r.shader.hot_reload_interval", shaderInterval);
         }
 
-        if (ImGui::Button("Rebuild shaders now"))
+        if (NextUI::Theme::IconButton(
+                ICON_FA_WAND_MAGIC_SPARKLES "##RebuildShaders",
+                "Rebuild shaders now"))
         {
             ctx.engine.RequestShaderHotReload();
         }
+
+        ImGui::SameLine();
+        const bool cppLiveCodingAvailable = Modules::LiveCoding::IsCppLiveCodingAvailable();
+        ImGui::BeginDisabled(!cppLiveCodingAvailable);
+        if (NextUI::Theme::IconButton(
+                ICON_FA_HAMMER "##CompileCppLiveCoding",
+                cppLiveCodingAvailable
+                    ? "Compile C++ changes with Live++"
+                    : "Live++ is not available in this process"))
+        {
+            Modules::LiveCoding::RequestCppReload();
+        }
+        ImGui::EndDisabled();
 
         ImGui::Separator();
         ImGui::Text("Shader: %s", status.shaderInitialized ? "ready" : "not initialized");

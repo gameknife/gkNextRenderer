@@ -17,7 +17,6 @@ using json = nlohmann::json;
 #include <utility>
 
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/ScreenShot.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Vulkan/Device.hpp"
@@ -118,10 +117,16 @@ void BenchMarker::OnSceneStart(double nowInSeconds)
     measurementInitialTime_ = 0.0;
     previousMeasurementTime_ = 0.0;
     measurementStarted_ = false;
+    reportCompleted_ = false;
 }
 
 bool BenchMarker::OnTick(double nowInSeconds, Vulkan::VulkanBaseRenderer* renderer)
 {
+    if (reportCompleted_)
+    {
+        return false;
+    }
+
     double prevTime = time_;
     time_ = nowInSeconds;
     // Initialise scene benchmark timers
@@ -199,6 +204,7 @@ bool BenchMarker::OnTick(double nowInSeconds, Vulkan::VulkanBaseRenderer* render
 
 void BenchMarker::OnReport(Vulkan::VulkanBaseRenderer* renderer, const std::string& sceneName)
 {
+    reportCompleted_ = true;
     Report(renderer, std::filesystem::path(sceneName).filename().replace_extension().string(), false, GOption->SaveFile);
 }
 
@@ -258,7 +264,7 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, const std::string
     std::string imgEncoded{};
     if (uploadScreen || saveScreen)
     {
-        Runtime::ScreenShot::SaveSwapChainToFile(renderer, sceneName, 0, 0, 0, 0);
+        NextEngine::GetInstance()->RequestScreenShot({.filename = sceneName});
     }
 
     // perf server upload

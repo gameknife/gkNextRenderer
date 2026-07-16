@@ -48,5 +48,6 @@ public:
     double trisActualTotal_{};
     double trisTotal_{};
     bool measurementStarted_{};
+    bool reportCompleted_{};
     std::ofstream benchmarkCsvReportFile;
 };

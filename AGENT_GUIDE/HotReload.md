@@ -132,7 +132,8 @@ r.shader.hot_reload_interval
 
 - 开关 `r.shader.hot_reload`
 - 调整 shader 轮询间隔
-- 手动 `Rebuild shaders now`
+- 用魔棒图标手动重编 shader
+- 用锤子图标请求 Live++ 编译 C++ 变更（Agent 不可用时禁用）
 - 显示 shader source/output/slangc 路径
 
 面板文件：`src/Application/Editor/gkNextEditor/Panels/HotReloadPanel.cpp`。

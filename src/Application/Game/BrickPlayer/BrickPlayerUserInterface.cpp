@@ -144,11 +144,7 @@ void BrickPlayerUserInterface::RenderTitleBar()
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_CAMERA, ImVec2(titleBarHeight, titleBarHeight)))
         {
-            gameInstance_->GetEngine().AddTickedTask([this](double deltaSeconds) -> bool
-            {
-                gameInstance_->GetEngine().RequestScreenShot({});
-                return true;
-            });
+            gameInstance_->GetEngine().RequestScreenShot({});
         }
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Take a Screenshot into the screenshots folder");

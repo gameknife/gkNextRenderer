@@ -114,6 +114,23 @@ namespace Modules::LiveCoding::CppLiveCoding
         SPDLOG_INFO("[LiveCoding] C++ patch applied");
     }
 
+    bool RequestReload()
+    {
+        if (!GStarted)
+        {
+            return false;
+        }
+
+        SPDLOG_INFO("[LiveCoding] C++ reload requested");
+        GAgent.ScheduleReload();
+        return true;
+    }
+
+    bool IsStarted()
+    {
+        return GStarted;
+    }
+
     void Shutdown()
     {
         if (!GStarted)
@@ -133,6 +150,16 @@ namespace Modules::LiveCoding::CppLiveCoding
 
     void BeginFrame()
     {
+    }
+
+    bool RequestReload()
+    {
+        return false;
+    }
+
+    bool IsStarted()
+    {
+        return false;
     }
 
     void Shutdown()

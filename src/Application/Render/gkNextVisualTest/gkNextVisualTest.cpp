@@ -2,7 +2,6 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
-#include "Engine/Runtime/ScreenShot.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Utilities/StbImage.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
@@ -442,24 +441,25 @@ bool VisualTestGameInstance::ShouldIncludeScene(const std::string& scenePath) co
 
 void VisualTestGameInstance::CaptureAndAdvance()
 {
-    // Calculate render time
-    auto endTime = std::chrono::steady_clock::now();
-    double elapsed = std::chrono::duration<double>(endTime - sceneStartTime_).count();
-    
     // Generate screenshot filename
     std::string screenshotName = GetScreenshotFilename();
     std::string fullOutputDir = Utilities::FileHelper::GetPlatformFilePath(outputDir_.c_str());
     std::string screenshotPath = fullOutputDir + "/" + screenshotName;
-    
-    // Take screenshot
-    if (useFastCapture_)
+
+    if (!captureRequested_)
     {
-        Runtime::ScreenShot::SaveSwapChainToFileFast(&GetEngine().GetRenderer(), screenshotPath, 0, 0, 0, 0);
+        captureRenderTimeSeconds_ = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - sceneStartTime_).count();
+        captureRequested_ = true;
+        GetEngine().RequestScreenShot({.filename = screenshotPath, .fast = useFastCapture_});
+        return;
     }
-    else
+
+    if (GetEngine().IsCapturingScreenShot())
     {
-        Runtime::ScreenShot::SaveSwapChainToFile(&GetEngine().GetRenderer(), screenshotPath, 0, 0, 0, 0);
+        return;
     }
+
     Tasks::TaskCoordinator::GetInstance()->WaitForAllTasks();
     
     // Record result
@@ -469,15 +469,16 @@ void VisualTestGameInstance::CaptureAndAdvance()
     result.sceneCategory = GetSceneCategory(scenes_[currentSceneIndex_].path);
     result.rendererName = GetRendererName();
     result.screenshotPath = screenshotName + ".jpg";
-    result.renderTimeSeconds = elapsed;
+    result.renderTimeSeconds = captureRenderTimeSeconds_;
     result.framesWaited = scenes_[currentSceneIndex_].framesToWait;
     result.success = true;
     EvaluateBaseline(result, screenshotPath + ".jpg");
     results_.push_back(result);
+    captureRequested_ = false;
     
     SPDLOG_INFO("[VisualTest] {}/{} - {} captured ({:.2f}s, {} frames)", 
         currentSceneIndex_ + 1, scenes_.size(),
-        result.sceneName, elapsed, scenes_[currentSceneIndex_].framesToWait);
+        result.sceneName, captureRenderTimeSeconds_, scenes_[currentSceneIndex_].framesToWait);
     
     // Advance to next scene
     currentSceneIndex_++;

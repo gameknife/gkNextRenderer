@@ -220,11 +220,17 @@ void BenchmarkGameInstance::OnTick(double deltaSeconds)
     {
         // Benchmark is done, report the results.
         benchMarker_->OnReport(&(GetEngine().GetRenderer()), benchmarkRuns_[currentRunIndex_].label);
-
-        if (!AdvanceRun())
-        {
-            GetEngine().RequestClose();
-        }
+        GetEngine().AddTickedTask([this](double) {
+            if (GetEngine().IsCapturingScreenShot())
+            {
+                return false;
+            }
+            if (!AdvanceRun())
+            {
+                GetEngine().RequestClose();
+            }
+            return true;
+        });
     }
     totalTime_ += deltaSeconds * 20.0;
     modelViewController_.SetModelRotation( totalTime_, 0 );

@@ -639,6 +639,12 @@ bool NextEngine::Tick(bool forcingDelta)
     {
         SCOPED_CPU_TIMER("engine");
 
+        taskQueues_.ticked.insert(
+            taskQueues_.ticked.end(),
+            std::make_move_iterator(taskQueues_.pendingTicked.begin()),
+            std::make_move_iterator(taskQueues_.pendingTicked.end()));
+        taskQueues_.pendingTicked.clear();
+
         // make sure the output is flushed
         std::cout << std::flush;
 
@@ -751,12 +757,24 @@ bool NextEngine::Tick(bool forcingDelta)
         if (screenShot_.hasPending)
         {
             renderer_->Device().WaitIdle();
-            Runtime::ScreenShot::SaveSwapChainToFile(renderer_.get(),
-                                           screenShot_.pending.filename,
-                                           screenShot_.pending.x,
-                                           screenShot_.pending.y,
-                                           screenShot_.pending.width,
-                                           screenShot_.pending.height);
+            if (screenShot_.pending.fast)
+            {
+                Runtime::ScreenShot::SaveSwapChainToFileFast(renderer_.get(),
+                                               screenShot_.pending.filename,
+                                               screenShot_.pending.x,
+                                               screenShot_.pending.y,
+                                               screenShot_.pending.width,
+                                               screenShot_.pending.height);
+            }
+            else
+            {
+                Runtime::ScreenShot::SaveSwapChainToFile(renderer_.get(),
+                                               screenShot_.pending.filename,
+                                               screenShot_.pending.x,
+                                               screenShot_.pending.y,
+                                               screenShot_.pending.width,
+                                               screenShot_.pending.height);
+            }
             screenShot_.hasPending = false;
             screenShot_.pending = {};
         }
@@ -964,40 +982,36 @@ void NextEngine::ToggleMaximize()
 
 void NextEngine::RequestScreenShot(FScreenShotSpec spec)
 {
-    if (spec.accumulateFrames > 0)
-    {
-        if (screenShot_.captureFramesRemaining > 0)
+    ++screenShot_.queuedRequests;
+    AddTickedTask([this, spec = std::move(spec)](double) mutable {
+        if (screenShot_.hasPending || screenShot_.captureFramesRemaining > 0)
         {
-            spdlog::warn("High quality capture already in progress, ignoring request");
-            return;
+            return false;
         }
 
-        screenShot_.previousProgressiveEnabled = progressiveRender_.enabled;
-        screenShot_.previousProgressiveWarmupFrames = progressiveRender_.warmupFramesRemaining;
-        screenShot_.captureTotalFrames = spec.accumulateFrames;
-        screenShot_.captureFramesRemaining = spec.accumulateFrames;
-        screenShot_.captureSpec = std::move(spec);
-        screenShot_.captureSpec.filename =
-            ResolveScreenShotFilename(screenShot_.captureSpec.filename, "hq_screenshot");
+        --screenShot_.queuedRequests;
+        if (spec.accumulateFrames > 0)
+        {
+            screenShot_.previousProgressiveEnabled = progressiveRender_.enabled;
+            screenShot_.previousProgressiveWarmupFrames = progressiveRender_.warmupFramesRemaining;
+            screenShot_.captureTotalFrames = spec.accumulateFrames;
+            screenShot_.captureFramesRemaining = spec.accumulateFrames;
+            screenShot_.captureSpec = std::move(spec);
+            screenShot_.captureSpec.filename =
+                ResolveScreenShotFilename(screenShot_.captureSpec.filename, "hq_screenshot");
 
-        progressiveRender_.enabled = true;
-        progressiveRender_.warmupFramesRemaining = 0;
-        spdlog::info("High quality capture started: accumulating {} frames...",
-                     screenShot_.captureTotalFrames);
-        return;
-    }
+            progressiveRender_.enabled = true;
+            progressiveRender_.warmupFramesRemaining = 0;
+            spdlog::info("High quality capture started: accumulating {} frames...",
+                         screenShot_.captureTotalFrames);
+            return true;
+        }
 
-    spec.filename = ResolveScreenShotFilename(spec.filename, "screenshot");
-    if (spec.sync)
-    {
-        SPDLOG_WARN("Synchronous screenshot requests are deferred to the current frame before present");
+        spec.filename = ResolveScreenShotFilename(spec.filename, "screenshot");
         screenShot_.pending = std::move(spec);
         screenShot_.hasPending = true;
-        return;
-    }
-
-    screenShot_.pending = std::move(spec);
-    screenShot_.hasPending = true;
+        return true;
+    });
 }
 
 glm::ivec2 NextEngine::GetMonitorSize() const

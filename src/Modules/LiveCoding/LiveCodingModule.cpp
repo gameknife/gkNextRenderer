@@ -25,6 +25,16 @@ namespace Modules::LiveCoding
         CppLiveCoding::BeginFrame();
     }
 
+    bool RequestCppReload()
+    {
+        return CppLiveCoding::RequestReload();
+    }
+
+    bool IsCppLiveCodingAvailable()
+    {
+        return CppLiveCoding::IsStarted();
+    }
+
     void Shutdown()
     {
         CppLiveCoding::Shutdown();
