@@ -36,6 +36,8 @@
 | [SCAD 加载器（SCADLoader）设计与开发计划](designs/scad-loader-design.md) | ✅ 已完成 | 2026-05-30 |
 | [SCAD Model Generator（SCAD Studio）设计与开发计划](designs/scad-model-generator-design.md) | ✅ 已完成 | 2026-06-07 |
 | [SCAD 刚体骨骼角色（ScadRig）设计与开发计划](designs/scad-rig-design.md) | ✅ 已完成 | 2026-06-13 |
+| [SCAD Scene Compose：基于既有 module 库的大规模场景组合系统](designs/scad-scene-compose-design.md) | ✅ 已完成 | 2026-07-11 |
+| [SCAD Terrain：语言描述的低模可行走地形（设计方案）](designs/scad-terrain-design.md) | ⚪ 待实现 | 2026-07-17 |
 | [SwModernNoAmbient 天光遮蔽（屏幕空间 GTAO）设计与开发计划](designs/swmodern-noambient-sky-occlusion-design.md) | ✅ 已完成 | 2026-06-21 |
 | [VoxelData 体素天光可见度（GPU Soft Tracing）设计与开发计划](designs/voxel-skyvisibility-soft-tracing-design.md) | ⚪ 待实现 | 2026-06-22 |
 | [WebRTC 远程游玩（Remote Play）设计与开发计划](designs/webrtc-remoteplay-design.md) | 🔵 进行中 | 2026-06-08 |
@@ -63,6 +65,7 @@
 | [ReProject 历史钳制黑点问题 — 根因分析与改进方案](plans/reproject-history-clamp-blackdot-fix.md) | 🚧 Phase A 已实现 | 2026-06-20 |
 | [Remote MultiView 独立 ImGui 界面开发计划](plans/remote-multiview-imgui-isolation-plan.md) | 📝 草案 | 2026-07-03 |
 | [Shader 编译迭代提速重构方案](plans/shader-compile-iteration-refactor-plan.md) | 📝 草案 | 2026-06-30 |
+| [SCAD Terrain：语言描述的低模可行走地形（开发计划）](plans/scad-terrain-plan.md) | ⚪ 待实现 | 2026-07-17 |
 | [SHARC Spatially Hashed Radiance Cache — 可行性评估与开发计划](plans/sharc-integration-plan.md) | ⚪ 待实现 | 2026-06-07 |
 | [SOG 高斯溅射与普通场景深度融合开发计划](plans/sog-scene-integration-plan.md) | 📝 草案 | 2026-07-04 |
 | [StudioSim —— 游戏项目化迭代计划（向《游戏发展国》再进一步）](plans/studiosim-gameproject-iteration-plan.md) | 🔵 进行中 | 2026-06-08 |
