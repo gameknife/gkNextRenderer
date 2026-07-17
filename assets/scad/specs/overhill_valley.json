@@ -1,0 +1,341 @@
+{
+  "name": "overhill_valley",
+  "seed": 11,
+  "kits": [
+    "overhill"
+  ],
+  "terrain": {
+    "size": [
+      240,
+      200
+    ],
+    "cells": [
+      120,
+      100
+    ],
+    "seed": 11,
+    "base": {
+      "height": 0,
+      "relief": 1.4,
+      "roughness": 0.55
+    },
+    "palette": "temperate",
+    "features": [
+      {
+        "type": "mountain",
+        "at": [
+          -70,
+          62
+        ],
+        "radius": 46,
+        "height": 24,
+        "rugged": 0.6
+      },
+      {
+        "type": "mountain",
+        "at": [
+          10,
+          70
+        ],
+        "radius": 40,
+        "height": 19,
+        "rugged": 0.5
+      },
+      {
+        "type": "ridge",
+        "pts": [
+          [
+            -95,
+            45
+          ],
+          [
+            -40,
+            74
+          ],
+          [
+            18,
+            60
+          ]
+        ],
+        "width": 36,
+        "height": 13
+      },
+      {
+        "type": "plateau",
+        "at": [
+          78,
+          -48
+        ],
+        "radius": 30,
+        "height": 7
+      },
+      {
+        "type": "lake",
+        "at": [
+          -78,
+          -20
+        ],
+        "radius": 18,
+        "depth": 2.2
+      },
+      {
+        "type": "river",
+        "pts": [
+          [
+            -52,
+            52
+          ],
+          [
+            -28,
+            20
+          ],
+          [
+            -6,
+            -6
+          ],
+          [
+            2,
+            -52
+          ],
+          [
+            -6,
+            -96
+          ]
+        ],
+        "width": 7,
+        "depth": 1.8
+      },
+      {
+        "type": "road",
+        "pts": [
+          [
+            -108,
+            -46
+          ],
+          [
+            -40,
+            -38
+          ],
+          [
+            16,
+            -30
+          ],
+          [
+            38,
+            -26
+          ]
+        ],
+        "width": 5
+      },
+      {
+        "type": "pad",
+        "at": [
+          58,
+          -24
+        ],
+        "size": [
+          34,
+          24
+        ],
+        "rot": 8
+      }
+    ]
+  },
+  "placements": [
+    {
+      "module": "oh_prop_bridge",
+      "args": "L = 18",
+      "at": [
+        2,
+        -30.5
+      ],
+      "rot": 8,
+      "snapAt": [
+        -8.5,
+        -31
+      ]
+    },
+    {
+      "module": "oh_bldg_cabin",
+      "args": "seed = 1",
+      "at": [
+        50,
+        -20
+      ],
+      "rot": 172
+    },
+    {
+      "module": "oh_bldg_cabin",
+      "args": "seed = 4, L = 5.5, D = 4.5",
+      "at": [
+        64,
+        -18
+      ],
+      "rot": 188
+    },
+    {
+      "module": "oh_bldg_tower",
+      "args": "seed = 2",
+      "at": [
+        68,
+        -30
+      ],
+      "rot": 262
+    },
+    {
+      "module": "oh_prop_campfire",
+      "args": "seed = 3",
+      "at": [
+        56,
+        -29
+      ]
+    },
+    {
+      "module": "oh_prop_log_pile",
+      "args": "seed = 5",
+      "at": [
+        49,
+        -28
+      ],
+      "rot": 40
+    },
+    {
+      "module": "oh_prop_signpost",
+      "args": "seed = 6",
+      "at": [
+        44,
+        -26
+      ],
+      "rot": 100
+    },
+    {
+      "module": "oh_prop_tent",
+      "args": "seed = 7",
+      "at": [
+        -52,
+        -14
+      ],
+      "rot": 250
+    },
+    {
+      "module": "oh_prop_campfire",
+      "args": "seed = 8",
+      "at": [
+        -48,
+        -19
+      ]
+    }
+  ],
+  "alongs": [
+    {
+      "pts": [
+        [
+          -100,
+          -38.4
+        ],
+        [
+          -44,
+          -30.9
+        ]
+      ],
+      "step": 4.6,
+      "seed": 9,
+      "children": [
+        {
+          "module": "oh_prop_fence_log",
+          "args": "len = 4.2"
+        }
+      ]
+    }
+  ],
+  "scatters": [
+    {
+      "region": [
+        -115,
+        -95,
+        115,
+        95
+      ],
+      "n": 90,
+      "seed": 21,
+      "where": {
+        "hMin": 0.3,
+        "hMax": 13,
+        "slopeMax": 26,
+        "avoidWater": 3,
+        "biome": [
+          "grass",
+          "grass_dark"
+        ]
+      },
+      "children": [
+        {
+          "module": "oh_nature_pine",
+          "args": "s = lay_randr($seed, 5, 0.8, 1.4), seed = $seed"
+        },
+        {
+          "module": "oh_nature_pine",
+          "args": "s = lay_randr($seed, 6, 0.9, 1.5), seed = $seed + 1"
+        },
+        {
+          "module": "oh_nature_autumn",
+          "args": "s = lay_randr($seed, 7, 0.8, 1.2), seed = $seed"
+        },
+        {
+          "module": "oh_nature_bush",
+          "args": "s = lay_randr($seed, 8, 0.9, 1.3), seed = $seed"
+        }
+      ]
+    },
+    {
+      "region": [
+        -115,
+        -95,
+        115,
+        95
+      ],
+      "n": 22,
+      "seed": 33,
+      "where": {
+        "hMin": 0.5,
+        "hMax": 30,
+        "slopeMax": 60,
+        "biome": [
+          "rock",
+          "rock_high"
+        ]
+      },
+      "children": [
+        {
+          "module": "oh_rock_boulder",
+          "args": "s = lay_randr($seed, 4, 0.7, 1.5), seed = $seed"
+        }
+      ]
+    },
+    {
+      "region": [
+        -115,
+        -95,
+        115,
+        95
+      ],
+      "n": 40,
+      "seed": 47,
+      "where": {
+        "hMin": 0.3,
+        "hMax": 20,
+        "slopeMax": 24,
+        "avoidWater": 1,
+        "biome": [
+          "dry_grass"
+        ]
+      },
+      "children": [
+        {
+          "module": "oh_nature_grass",
+          "args": "seed = $seed"
+        }
+      ]
+    }
+  ]
+}

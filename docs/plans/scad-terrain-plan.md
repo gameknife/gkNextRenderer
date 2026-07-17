@@ -1,7 +1,7 @@
 ---
 title: "SCAD Terrain：语言描述的低模可行走地形（开发计划）"
 category: plan
-status: ⚪ 待实现
+status: ✅ M0–M4 已完成
 owner: engine
 created: 2026-07-17
 last_updated: 2026-07-17
@@ -155,14 +155,39 @@ last_updated: 2026-07-17
 
 ---
 
+## 执行记录（2026-07-17，全部里程碑一次会话完成）
+
+| 里程碑 | 结果 | 验收数据 |
+|--------|------|----------|
+| M0 | ✅ | `FScadTerrain.{h,cpp}`（~1200 行）+ 3 个 `gk_*` builtin + faceted/water 桶标志透传；`[ScadTerrain]` 15 用例；`terrain_demo.scad` 7 特征全覆盖出图 0 warning（27k 三角形） |
+| M1 | ✅ | `lib/kit_terrain.scad`（ter_place/place_tilt/snap/along/scatter + ter_rand 族）；catalog 白名单跳过；`terrain_layout_demo.scad` 出图 0 warning（39k 三角形），水域/坡度/生物群系过滤肉眼可辨 |
+| M2 | ✅ | spec `terrain` 段 + `snap/snapAt/where` 扩展 + 校验（互斥/越界/枚举/永假过滤/pad 压河告警）；Go 单测 5 组新增全绿；`specs/overhill_valley.json` → gen 出图 0 warning；既有 spec 产物逐字节不变 |
+| M3 | ✅ | `TerrainComponent`（反射注册）+ loader 挂接 + `FNavGrid::MaskUnwalkable`；集成测试 `Test_TerrainWalkable.cpp`：河中格全部不可达、路径必经桥面且高于水面、pad 落球停在地表、河面落球穿水沉底（22 断言） |
+| M4 | ✅ | prompt schema/硬规则 9–13/第二 few-shot（few-shot 有"必须能对真实 catalog compose"的守卫测试）；验收题 Gemma-4-E4B 本地 3 轮通过、要素齐备 0 warning |
+
+**与计划的偏差（重要）：**
+
+1. **"NavGrid 零改动"不成立**（设计 §7.3 已修正）：缓坡河岸逐格落差 < maxStepHeight，射线又
+   打到干河床，纯几何挡不住涉水。新增通用钩子 `FNavGrid::MaskUnwalkable(predicate)`，
+   游戏侧用 TerrainComponent 的水域语义否决水下格。
+2. **road 算子新增最大填方规则**（maxFill 0.9）：路穿河时不再把河填成可走的浅滩，深沟自动
+   断开留桥位（设计 §5.1 已补）。
+3. **桥的布置契约**：桥长必须 ≥ 2.5×河宽且 `snapAt` 锚在岸上路面，否则引桥落在河岸下切带内、
+   下桥台阶超步高导致断连（首版 L=13 实测断连，改 L=18 修复；已写入 LLM prompt 硬规则 12）。
+4. **3.5 agentscript 实走冒烟未做**，以 EngineTestFixture 集成测试（NavGrid 寻路 + Jolt 落球）
+   覆盖同等语义；带角色的 agentscript 实走留待有地形玩法的 game target 出现后补。
+5. 发现存量问题（非本次改动引入，已另开后台任务）：4 个旧 spec 用已废弃的 region 旧顺序
+   无法 recompose；3 个 gen 头部 sha 过期。
+
 ## 完成定义（整个专项）
 
-- [ ] M0–M4 验收全部通过，journal 各一篇。
-- [ ] `AGENT_GUIDE/SCADLoader.md` 增补 `gk_terrain` 系列 builtin 的条目（已实现子集表 + 已知限制）。
-- [ ] 新增 `AGENT_GUIDE/ScadTerrain.md`（面向后续 agent 的使用速查：TERR 编码、组合子、spec 字段、
-      TerrainComponent API、调试技巧），并在 `AGENTS.md` Key References 挂链。
-- [ ] `docs/README.md` 索引状态更新（设计/计划 → ✅）。
-- [ ] 回归红线在最终态复核一遍（既有场景逐字节不变 + `[Scad]` 全绿）。
+- [x] M0–M4 验收全部通过（记录见上表；本专项不走 .spec 工作流，无 journal）。
+- [x] `AGENT_GUIDE/SCADLoader.md` 增补 `gk_terrain` 系列 builtin 的条目。
+- [x] 新增 `AGENT_GUIDE/ScadTerrain.md`（TERR 编码、组合子、spec 字段、TerrainComponent API、
+      调试技巧），并在 `AGENTS.md` Key References 挂链。
+- [x] `docs/README.md` 索引状态更新（设计/计划 → ✅）。
+- [x] 回归红线最终态复核：`[Scad]+[ScadTerrain]+[Gameplay]+[Unit]` 171 用例全绿；
+      acient_city / beer_cup / deadly_roadtrip_map 三角形数与改动前一致。
 
 ## 明确不在本计划内（设计 §1.3 / §9 演进）
 

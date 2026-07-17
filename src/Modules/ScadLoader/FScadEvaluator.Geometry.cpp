@@ -111,6 +111,86 @@ namespace Assets::Scad::EvalDetail
         return MakeGeom(std::move(soup), xform, color, hasColor);
     }
 
+    std::shared_ptr<const FTerrainData> Evaluator::TerrainFromValue(const Value& value, const char* where)
+    {
+        FTerrainSpec spec;
+        std::string err;
+        std::vector<std::string> warnings;
+        if (!ScadTerrain::DecodeSpec(value, spec, err, warnings))
+        {
+            Warn("terrain", std::string(where) + ": " + err);
+            return nullptr;
+        }
+        for (const std::string& w : warnings)
+        {
+            Warn("terrain", std::string(where) + ": " + w);
+        }
+
+        const std::string key = ScadTerrain::SpecCacheKey(spec);
+        auto found = terrainCache_.find(key);
+        if (found != terrainCache_.end())
+        {
+            return found->second;
+        }
+        std::shared_ptr<const FTerrainData> data = ScadTerrain::Build(spec);
+        terrainCache_.emplace(key, data);
+        return data;
+    }
+
+    GeomList Evaluator::EvalTerrain(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor)
+    {
+        (void)color;
+        (void)hasColor;
+        std::shared_ptr<const FTerrainData> data = TerrainFromValue(Arg(inst, "spec", 0), "gk_terrain");
+        if (!data)
+        {
+            return {};
+        }
+
+        GeomList out;
+        auto emit = [&](const FTerrainData::ColoredTris& src, bool water)
+        {
+            if (src.tris.empty()) return;
+            TriSoup soup = src.tris; // MakeGeom consumes; cached data stays intact
+            GeomList part = MakeGeom(std::move(soup), xform, glm::dvec4(src.color), true);
+            for (ColoredSoup& cs : part)
+            {
+                cs.faceted = true;
+                cs.terrainWater = water;
+                cs.materialName = src.materialName;
+            }
+            AppendMove(out, std::move(part));
+        };
+        for (const FTerrainData::ColoredTris& land : data->landGeom)
+        {
+            emit(land, false);
+        }
+        for (const FTerrainData::ColoredTris& water : data->waterGeom)
+        {
+            emit(water, true);
+        }
+
+        // Record the terrain payload for the loader (TerrainComponent). Skip
+        // inside CSG evaluation: the geometry gets consumed by the boolean and
+        // no longer matches the heightfield.
+        if (sceneResult_ && suppressSceneNodes_ == 0)
+        {
+            SceneTerrain payload;
+            payload.data = data;
+            payload.xform = xform;
+            if (SceneNodeBuild* owner = CurrentSceneOwner())
+            {
+                payload.ownerInstanceId = owner->instanceId;
+            }
+            else
+            {
+                payload.ownerInstanceId = topLevelFallbackInstanceId_;
+            }
+            sceneResult_->terrains.push_back(std::move(payload));
+        }
+        return out;
+    }
+
     GeomList Evaluator::EvalLinearExtrude(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor)
     {
         const double height = Arg(inst, "height", 0).AsNumber(1.0);

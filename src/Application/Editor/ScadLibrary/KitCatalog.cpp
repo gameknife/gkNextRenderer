@@ -135,9 +135,9 @@ namespace ScadLibrary
             {
                 continue;
             }
-            // kit_layout.scad is the layout-combinator rules library (children-based
-            // placement operators), not browsable/previewable parts.
-            if (path.filename() == "kit_layout.scad")
+            // kit_layout.scad / kit_terrain.scad are combinator rules libraries
+            // (children-based placement operators), not browsable/previewable parts.
+            if (path.filename() == "kit_layout.scad" || path.filename() == "kit_terrain.scad")
             {
                 continue;
             }

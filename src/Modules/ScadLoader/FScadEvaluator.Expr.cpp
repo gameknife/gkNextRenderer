@@ -384,6 +384,36 @@ namespace Assets::Scad::EvalDetail
             for (const Value& v : a) s += ValueToString(v);
             return Value::MakeStr(std::move(s));
         }
+        if (name == "gk_terrain_height" || name == "gk_terrain_info")
+        {
+            if (a.empty())
+            {
+                Warn("terrain", name + "() requires (TERR, x, y)");
+                return Value();
+            }
+            std::shared_ptr<const FTerrainData> data = TerrainFromValue(a[0], name.c_str());
+            if (!data)
+            {
+                return Value();
+            }
+            const double x = num(1);
+            const double y = num(2);
+            if (name == "gk_terrain_height")
+            {
+                return Value::MakeNumber(data->HeightAt(x, y));
+            }
+            double h = 0.0;
+            double slopeDeg = 0.0;
+            bool waterFlag = false;
+            uint8_t biome = 0;
+            data->InfoAt(x, y, h, slopeDeg, waterFlag, biome);
+            std::vector<Value> info;
+            info.push_back(Value::MakeNumber(h));
+            info.push_back(Value::MakeNumber(slopeDeg));
+            info.push_back(Value::MakeNumber(waterFlag ? 1.0 : 0.0));
+            info.push_back(Value::MakeNumber(static_cast<double>(biome)));
+            return Value::MakeVec(std::move(info));
+        }
 
         Warn("unknownfn", "unknown function '" + name + "'");
         return Value();

@@ -144,3 +144,86 @@ func TestGenerateGivesUp(t *testing.T) {
 		t.Fatalf("expected give-up error after 2 rounds, got %v", err)
 	}
 }
+
+// The few-shot examples inside SystemPrompt must stay valid against the real
+// kit catalog — a drifting example teaches the model broken output.
+func TestSystemPromptFewShotsCompose(t *testing.T) {
+	catalogPath := filepath.Join("..", "..", "..", "..", "assets", "scad", "lib", "catalog.json")
+	if _, err := os.Stat(catalogPath); err != nil {
+		t.Skipf("real catalog not available: %v", err)
+	}
+	catalog, err := scadcompose.LoadCatalog(catalogPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	examples := 0
+	for _, line := range strings.Split(SystemPrompt, "\n") {
+		if !strings.HasPrefix(line, `{"name":`) {
+			continue
+		}
+		examples++
+		spec, err := scadcompose.ParseSpec([]byte(line), "few-shot")
+		if err != nil {
+			t.Errorf("few-shot example does not parse: %v\n%s", err, line)
+			continue
+		}
+		if _, err := scadcompose.Compose(spec, catalog, "few-shot.json", "x"); err != nil {
+			t.Errorf("few-shot example %q does not compose: %v", spec.Name, err)
+		}
+	}
+	if examples != 2 {
+		t.Errorf("expected 2 few-shot examples in SystemPrompt, found %d", examples)
+	}
+}
+
+func TestSystemPromptTerrainVocabulary(t *testing.T) {
+	for _, want := range []string{
+		`"terrain"`, `"mountain"`, `"river"`, `"road"`, `"pad"`, `"snapAt"`,
+		`"avoidWater"`, "grass/grass_dark/dry_grass/sand/rock/rock_high/snow/bed/road/pad",
+		"互斥", "上游", "桥",
+	} {
+		if !strings.Contains(SystemPrompt, want) {
+			t.Errorf("SystemPrompt missing terrain vocabulary %q", want)
+		}
+	}
+}
+
+func TestGenerateTerrainRepairLoop(t *testing.T) {
+	catalog, err := scadcompose.LoadCatalog(writeTestCatalog(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	replies := []string{
+		// Round 1: terrain + ground together -> exclusivity error fed back.
+		`{"name": "bad", "kits": ["old_city"],
+		  "ground": {"size": [50, 50]},
+		  "terrain": {"size": [100, 100], "features": [{"type": "mountain", "at": [0, 0], "radius": 20, "height": 10}]}}`,
+		// Round 2: fixed, with a snapped placement.
+		`{"name": "good", "kits": ["old_city"],
+		  "terrain": {"size": [100, 100], "features": [{"type": "mountain", "at": [0, 0], "radius": 20, "height": 10}]},
+		  "placements": [{"module": "oc_bldg_house", "args": "seed = 1", "at": [30, -30]}]}`,
+	}
+	var transcripts [][]Message
+	chat := func(ctx context.Context, messages []Message) (string, error) {
+		transcripts = append(transcripts, append([]Message{}, messages...))
+		return replies[len(transcripts)-1], nil
+	}
+
+	outcome, err := Generate(context.Background(), chat, catalog, "menu", "山上一个房子", Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Rounds != 2 {
+		t.Errorf("expected 2 rounds, got %d", outcome.Rounds)
+	}
+	for _, want := range []string{"gk_terrain(TERR);", "ter_place(TERR, 30, -30) oc_bldg_house(seed = 1);"} {
+		if !strings.Contains(outcome.Source, want) {
+			t.Errorf("composed source missing %q:\n%s", want, outcome.Source)
+		}
+	}
+	repair := transcripts[1][len(transcripts[1])-1]
+	if repair.Role != "user" || !strings.Contains(repair.Content, "mutually exclusive") {
+		t.Errorf("repair prompt should quote the exclusivity error, got: %s", repair.Content)
+	}
+}

@@ -1,7 +1,7 @@
 ---
 title: "SCAD Terrain：语言描述的低模可行走地形（设计方案）"
 category: design
-status: ⚪ 待实现
+status: ✅ M0–M4 已落地
 owner: engine
 created: 2026-07-17
 last_updated: 2026-07-17
@@ -222,6 +222,10 @@ h(x,y) = base.height + relief · fbm(seed, x·f, y·f)          // 基底
        ⊕ pad:      矩形/圆域压平到域内平均高度（裙边 smoothstep），标记 pad 掩码
 ```
 
+**road 最大填方规则（实现中补充的关键语义）**：道路可挖可填，但单点填方深度超过
+0.9 时跳过（保持原地形）——路穿过已下切的河道时**不会把河填成浅滩**，深沟自动断开留给桥；
+浅沟（<0.9）则被路"涉水铺过"。没有该规则时"路过河"会形成可行走的旱滩，破坏"桥是唯一通路"。
+
 - 噪声：整数格点 hash（**含平方项**，沿用 `kit_layout` 的 PRNG 教训——线性组合会出格线伪影）
   + 双线性插值 value noise，fbm 2~4 octaves。全部 double，跨平台确定性（不用 std::rand / 不依赖库）。
 - 所有特征用 smoothmax/smoothmin（多项式 smooth k 可调）混合，避免硬接缝。
@@ -389,14 +393,23 @@ public:
 
 ### 7.3 寻路 / 物理 / 水面语义
 
-- **NavGrid**：零改动。BVH 射线向下采样直接得到坡面高度；坡度过陡处 `Build` 的净空/步高判定
-  自然标不可走。**水面节点标记 rayCast 不可见**（loader 对水面 Node 设既有的 RayCastVisibility），
-  射线穿水面打到河床 → 河床深度差使其不可走；桥面 mesh 在水上 → 射线打到桥面 → 桥可走。
-  整条"河挡路、桥连通"链路不需要 NavGrid 任何新代码。
-- **Jolt**：地形 Model 走既有 `CreateMeshShape` → 静态 MeshBody；水面不建碰撞体。
-  角色 `CharacterVirtual` 的 maxSlopeAngle 已有配置，与 `IsWalkable` 阈值对齐即可。
+- **NavGrid**（实施修正：原设想"零改动"不成立）：BVH 射线向下采样得到坡面高度；
+  **水面节点标记 rayCast 不可见**（loader 对水面 Node 设既有的 RayCastVisibility），射线穿水面
+  打到**干河床**——而缓坡河岸的逐格落差通常小于 maxStepHeight，纯几何判定挡不住涉水。
+  因此给 `FNavGrid` 增加了通用语义钩子 **`MaskUnwalkable(predicate)`**（`src/Gameplay/AI/NavGrid.h`）：
+  Build 后由游戏侧传谓词把"水下格"否决（`IsWater && cellY < WaterSurface`，桥面高于水线不受影响），
+  内部重跑 erosion。集成测试 `src/Tests/Test_TerrainWalkable.cpp` 验证"河挡路、桥连通"。
+  注意 `RebuildDirtyRegion` 只重采几何，区域内的 mask 需要重新应用。
+- **Jolt**：零改动。场景构建只为 rayCast 可见节点建静态 MeshBody（`Scene.Build.cpp`），
+  水面节点因 rayCast 不可见**自动没有碰撞体**——落水物体穿过水面停在河床（集成测试已断言）。
+  限制：单 Model 索引数 ≥ 65535×3 时引擎跳过 MeshShape——地形超过 ~6.5 万三角形（约 180×180 cells）
+  将没有物理碰撞体，需要分块（§9 演进）。
+- **桥的布置契约**（实施经验）：河岸下切带宽 = 2.2×半河宽，桥长必须 ≥ 2.5×河宽让引桥落在
+  下切带之外，且锚点（`snapAt`）取岸上路面而非河中心——否则下桥台阶超过 maxStepHeight，
+  桥两端在 NavGrid 上断连。
 - **TerrainComponent 的定位**：游戏逻辑的**快速语义查询**（刷怪点选择、载具贴地、AI 涉水判断、
-  水花特效），不替代物理；物理/寻路继续以 mesh 为准，三方由 §5.6 保证一致。
+  水花特效、NavGrid 水域 mask 的数据源），不替代物理；物理/寻路继续以 mesh 为准，三方由 §5.6
+  保证一致。
 
 ---
 
@@ -449,11 +462,14 @@ public:
 
 ## 10. 里程碑概览
 
-| 里程碑 | 内容 | 详见 |
+| 里程碑 | 内容 | 状态 |
 |--------|------|------|
-| **M0 地形核心** | FScadTerrain（高度场 + 网格化 + 着色 + 水面）+ `gk_terrain/gk_terrain_height/gk_terrain_info` builtin + faceted 透传 + `[ScadTerrain]` 单测 + 手写 demo 场景出图 | `docs/plans/scad-terrain-plan.md` M0 |
-| **M1 贴地组合子** | `lib/kit_terrain.scad`（ter_place/tilt/along/scatter）+ overhill 件贴地 demo | 同上 M1 |
-| **M2 spec/compose** | terrain 段 schema + 校验 + 展开 + `specs/overhill_valley.json` 样例 | 同上 M2 |
-| **M3 可行走闭环** | TerrainComponent + loader 挂接 + 水面 rayCast 语义 + NavGrid/Jolt 实走验证 | 同上 M3 |
-| **M4 LLM 生成** | generate prompt/schema 扩展 + 一句话验收题 | 同上 M4 |
-| M5（后续） | 编辑器集成 / 不透明水回退 / 分块大地图 / 侵蚀风格化 | 非本期 |
+| **M0 地形核心** | FScadTerrain（高度场 + 网格化 + 着色 + 水面）+ `gk_terrain/gk_terrain_height/gk_terrain_info` builtin + faceted 透传 + `[ScadTerrain]` 单测 + 手写 demo 场景出图 | ✅ 2026-07-17 |
+| **M1 贴地组合子** | `lib/kit_terrain.scad`（ter_place/tilt/along/scatter/snap）+ overhill 件贴地 demo | ✅ 2026-07-17 |
+| **M2 spec/compose** | terrain 段 schema + 校验 + 展开 + `specs/overhill_valley.json` 样例 | ✅ 2026-07-17 |
+| **M3 可行走闭环** | TerrainComponent + loader 挂接 + 水面 rayCast 语义 + NavGrid MaskUnwalkable + Jolt 集成测试 | ✅ 2026-07-17 |
+| **M4 LLM 生成** | generate prompt/schema 扩展 + 一句话验收题（Gemma-4-E4B 3 轮通过） | ✅ 2026-07-17 |
+| M5（后续） | 编辑器集成 / 不透明水回退 / 分块大地图（>180² cells 物理分块）/ 侵蚀风格化 | 非本期 |
+
+执行细节、验收记录与偏差说明见 `docs/plans/scad-terrain-plan.md`；使用速查见
+`AGENT_GUIDE/ScadTerrain.md`。

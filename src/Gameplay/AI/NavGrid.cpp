@@ -50,6 +50,31 @@ void FNavGrid::Build(Assets::CPU::FCPUAccelerationStructure& bvh, const FNavGrid
                  width_, height_, walkableCount, settings_.cellSize, settings_.agentRadius);
 }
 
+void FNavGrid::MaskUnwalkable(const std::function<bool(const glm::vec3&)>& predicate)
+{
+    if (cells_.empty() || !predicate)
+    {
+        return;
+    }
+    int maskedCount = 0;
+    for (int gz = 0; gz < height_; ++gz)
+    {
+        for (int gx = 0; gx < width_; ++gx)
+        {
+            FNavCell& cell = cells_[CellIndex(gx, gz)];
+            if (cell.baseWalkable && predicate(GetCellWorldPosition(gx, gz)))
+            {
+                cell.baseWalkable = false;
+                ++maskedCount;
+            }
+        }
+    }
+    // Re-derive walkable from base so agent-radius erosion respects the mask.
+    const FGridRect fullRect{0, 0, width_ - 1, height_ - 1};
+    UpdateWalkabilityFromBase(fullRect);
+    spdlog::info("NavGrid mask: {} cells vetoed", maskedCount);
+}
+
 void FNavGrid::RebuildDirtyRegion(Assets::CPU::FCPUAccelerationStructure& bvh, const glm::vec3& dirtyWorldMin,
                                   const glm::vec3& dirtyWorldMax)
 {

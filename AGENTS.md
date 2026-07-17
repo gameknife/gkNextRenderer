@@ -264,6 +264,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
   - `HotReload.md` - Shader/script hot reload mechanics
   - `LDrawLoader.md` - LDraw model loading (used by MagicaLego/BrickPlayer)
   - `SCADLoader.md` - OpenSCAD (.scad) DSL loading (parser/evaluator/CSG via Manifold/text via FreeType)
+  - `ScadTerrain.md` - gk_terrain low-poly walkable terrain (TERR spec, ter_* combinators, TerrainComponent)
   - `ScadRig.md` - ScadRig rigid-body character rigs (bone_ modules + anim_* clips, FRigAnimator runtime)
   - `PrefabSceneWorkflow.md` - KayKit procedural scene prefab workflow
   - `MagicaLego.md` - MagicaLego subproject notes

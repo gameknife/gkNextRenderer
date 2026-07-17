@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -28,11 +29,14 @@
 
 namespace Assets::Scad
 {
+    struct FTerrainData; // FScadTerrain.h
+
     struct ColorBucket
     {
         glm::vec4 color = glm::vec4(0.78f, 0.78f, 0.78f, 1.0f);
         std::string groupName;
         std::vector<glm::dvec3> tris; // triangle soup (3N), SCAD world space (Z-up)
+        bool faceted = false;         // skip vertex-normal smoothing (terrain)
     };
 
     struct BucketKey
@@ -67,6 +71,9 @@ namespace Assets::Scad
         glm::vec4 color = glm::vec4(0.78f, 0.78f, 0.78f, 1.0f);
         std::string materialName;
         std::vector<glm::dvec3> tris; // triangle soup (3N), local to the owning scene node
+        bool faceted = false;         // skip vertex-normal smoothing (terrain)
+        bool terrainWater = false;    // translucent terrain water surface (split to a
+                                      // dedicated node, no raycast visibility)
     };
 
     struct SceneNode
@@ -78,6 +85,17 @@ namespace Assets::Scad
         std::vector<SceneNode> children;
     };
 
+    // One gk_terrain() instance evaluated during the scene run. `xform` is the
+    // accumulated SCAD-space transform at the call site (local to the owning
+    // scene node); the loader bakes it together with the Z-up -> Y-up
+    // conversion and the node's world transform when exposing terrain queries.
+    struct SceneTerrain
+    {
+        std::shared_ptr<const FTerrainData> data;
+        glm::dmat4 xform = glm::dmat4(1.0);
+        uint64_t ownerInstanceId = 0; // scene node the terrain geometry lands in
+    };
+
     struct SceneEvalResult
     {
         std::vector<SceneNode> roots;
@@ -85,6 +103,7 @@ namespace Assets::Scad
         // the main file's top level runs). Lets rig/animation loaders read data
         // variables (e.g. anim_*) without re-evaluating expressions.
         std::map<std::string, Value> topLevelVariables;
+        std::vector<SceneTerrain> terrains;
         int warningCount = 0;
         size_t triangleCount = 0;
     };
