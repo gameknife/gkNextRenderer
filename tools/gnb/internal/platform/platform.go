@@ -145,6 +145,7 @@ func ensureLinuxAptPackages() error {
 		"libxinerama-dev",
 		"libxcursor-dev",
 		"libxrandr-dev",
+		"libxtst-dev",
 		"wayland-protocols",
 		"libxkbcommon-dev",
 		"xorg-dev",
@@ -179,6 +180,7 @@ func ensureLinuxPacmanPackages() error {
 		"tar",
 		"pkgconf",
 		"libxrandr",
+		"libxtst",
 		"wayland-protocols",
 		"libxkbcommon",
 	}
