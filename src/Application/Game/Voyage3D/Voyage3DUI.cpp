@@ -207,7 +207,7 @@ namespace
         {
             const Voyage3D::FShipRuntime& player = gameInstance.GetPlayerShip();
             const float playerRatio = player.def.hp > 0 ? static_cast<float>(player.currentHp) / static_cast<float>(player.def.hp) : 0.0f;
-            ImGui::Text(Voyage3D::U8Text(u8"旗舰"));
+            ImGui::TextUnformatted(Voyage3D::U8Text(u8"旗舰"));
             ImGui::PushStyleColor(ImGuiCol_PlotHistogram, HealthColor(playerRatio));
             ImGui::ProgressBar(playerRatio, ImVec2(-1.0f, 16.0f), fmt::format("{}/{}", player.currentHp, player.def.hp).c_str());
             ImGui::PopStyleColor();
@@ -217,7 +217,7 @@ namespace
             {
                 const Voyage3D::FShipRuntime& enemy = enemies.front();
                 const float enemyRatio = enemy.def.hp > 0 ? static_cast<float>(enemy.currentHp) / static_cast<float>(enemy.def.hp) : 0.0f;
-                ImGui::Text(Voyage3D::U8Text(u8"海盗"));
+                ImGui::TextUnformatted(Voyage3D::U8Text(u8"海盗"));
                 ImGui::PushStyleColor(ImGuiCol_PlotHistogram, HealthColor(enemyRatio));
                 ImGui::ProgressBar(enemyRatio, ImVec2(-1.0f, 16.0f), fmt::format("{}/{}", enemy.currentHp, enemy.def.hp).c_str());
                 ImGui::PopStyleColor();

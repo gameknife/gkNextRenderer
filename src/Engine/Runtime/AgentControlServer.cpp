@@ -110,7 +110,9 @@ namespace Runtime::Agent
     }
     void FAgentControlServer::Stop()
     {
-        if (!impl_) return; impl_->running = false; if (impl_->thread.joinable()) impl_->thread.request_stop();
+        if (!impl_) return;
+        impl_->running = false;
+        if (impl_->thread.joinable()) impl_->thread.request_stop();
         CloseSocket(impl_->client); impl_->client = invalidSocket; CloseSocket(impl_->listener); impl_->listener = invalidSocket;
         if (impl_->thread.joinable()) impl_->thread.join();
 #if WIN32
