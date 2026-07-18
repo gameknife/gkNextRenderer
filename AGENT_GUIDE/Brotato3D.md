@@ -29,7 +29,6 @@ Brotato3DGameInstance  (类声明集中在 Brotato3DGameInstance.hpp)
 独立于上帝类、可单独复用/测试的有两块：
 - `FWaveSystem`（[Brotato3DWaveSystem.hpp](../src/Application/Game/Brotato3D/Brotato3DWaveSystem.hpp)）—— 波次/黄昏状态机，纯逻辑、无渲染依赖。
 - `FShop`（[Brotato3DShop.hpp](../src/Application/Game/Brotato3D/Brotato3DShop.hpp)）—— 商店抽卡，纯逻辑。
-- `Pcg::`（PCG* 文件）—— 程序化竞技场生成，有独立单元测试 [`Tests/Test_Brotato3DPcg.cpp`](../src/Tests/Test_Brotato3DPcg.cpp)。
 
 > **架构启示**：要加一个新子系统（例如"天气系统"），优先开一个新的 `Brotato3DXxxSystem.cpp`，在 `Brotato3DGameInstance.hpp` 里加成员/方法声明，在 `OnTick` 里插入调用——而不是往现有大文件里堆。能做成无渲染依赖的纯逻辑类（像 `FWaveSystem`）就更好，可单测。
 
@@ -48,8 +47,7 @@ Brotato3DGameInstance  (类声明集中在 Brotato3DGameInstance.hpp)
 | `Brotato3DProjectile.hpp` | 投射物/特效数据 | `FProjectileRuntime`、`FEnemyProjectileRuntime`、`FExpandingRing`、`FLaserBeam`、`FGroundIndicator` |
 | `Brotato3DWeapon.hpp` | 武器数据 | `FWeaponRuntime`（含 `tieredDef` 副本） |
 | `Brotato3DDebris.hpp` | 碎块数据 | `FDebrisRuntime`、`EDebrisKind/EPickupState/EDebrisPayload` |
-| `Brotato3DArena.{hpp,cpp}` | 竞技场构建 | `BuildArena`、`FArenaResources`（地面/边界/道具节点 + 碰撞盒） |
-| `Brotato3DPcg{Config,Types,Generator}.*` | 程序化地形 | Voronoi 地块、边界碎裂、道具泊松撒点、地形高度采样 |
+| `assets/scad/brotato3d/*.scad` | **固定竞技场** | 基于 `kit_deadly.scad` 的城镇、公路郊外、沙漠荒野场景，可直接人工修缮 |
 | `Brotato3DWaveSystem.{hpp,cpp}` | 波次状态机 | `FWaveSystem`：Active/DuskSurge/Intermission，事件用 `Consume*()` 拉取 |
 | `Brotato3DShop.{hpp,cpp}` | 商店抽卡 | `FShop`：按权重抽属性卡/被动/武器 |
 | `Brotato3DUI.{hpp,cpp}` | ImGui 界面 | 主菜单、HUD、升级/商店/暂停/结算/设置面板 + 本地化辅助 |
@@ -149,7 +147,7 @@ Idle → Active →(时间到)→ DuskSurge →(玩家在撤离车驻留够秒�
 
 引擎在加载/重建场景前回调 `BeforeSceneRebuild(nodes, models, materials, lights, tracks)`，这是**唯一可以批量塞入程序化几何体的窗口**（实现在 `Brotato3DEffectSystem.cpp`，体量大是因为它一口气建了：竞技场 → 灯光池 → 玩家+武器节点 → 撤离车 → 每种敌人的盒模型+5 个材质 → 子弹池 → 碎块池 → kinematic body 池）。
 
-切换竞技场/重开时通过 `GetEngine().RequestLoadScene({.filename="Empty.proc"})` 触发重建。`sceneReady_` 标志保证波次只在场景就绪后才启动。
+切换竞技场时加载 `arenas.json` 中配置的固定 SCAD 场景并触发重建。`sceneReady_` 标志保证波次只在场景与运行时对象池准备完毕后才启动。
 
 ### 5.3 敌人移动的统一落点解析
 

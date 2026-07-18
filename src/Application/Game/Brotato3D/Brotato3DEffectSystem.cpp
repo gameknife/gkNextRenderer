@@ -4,10 +4,8 @@
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Brotato3DAudio.hpp"
-#include "Brotato3DPcgGenerator.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
 
 using namespace Brotato3DUtil;
@@ -16,6 +14,8 @@ namespace
 {
     constexpr float ExtractionVehicleObstacleHalfX = 1.45f;
     constexpr float ExtractionVehicleObstacleHalfZ = 0.78f;
+    constexpr float ExtractionVehicleApproachDistance = 18.0f;
+    constexpr float ExtractionVehicleStopDistance = 8.0f;
     constexpr float SegmentEpsilon = 0.0001f;
 
     bool SegmentIntersectsAabb2D(const glm::vec2& from,
@@ -49,18 +49,6 @@ namespace
                clipAxis(from.y, delta.y, minBounds.y, maxBounds.y);
     }
 
-    glm::vec2 BoxAabbHalfExtentXZ(const Brotato3D::FArenaResources::FBoxCollider& collider)
-    {
-        const glm::mat3 rotationMatrix = glm::mat3_cast(collider.rotation);
-        const glm::vec3 halfExtent = collider.extent * 0.5f;
-        return glm::vec2(std::abs(rotationMatrix[0][0]) * halfExtent.x +
-                             std::abs(rotationMatrix[1][0]) * halfExtent.y +
-                             std::abs(rotationMatrix[2][0]) * halfExtent.z,
-                         std::abs(rotationMatrix[0][2]) * halfExtent.x +
-                             std::abs(rotationMatrix[1][2]) * halfExtent.y +
-                             std::abs(rotationMatrix[2][2]) * halfExtent.z);
-    }
-
     glm::vec3 ResolveAabbCollisionXZ(const glm::vec3& pos,
                                      float radius,
                                      const glm::vec3& center,
@@ -90,22 +78,6 @@ namespace
         return resolved;
     }
 
-    Brotato3D::FArenaResources::FBoxCollider GetCurrentPropCollider(const Brotato3D::FArenaResources::FBoxCollider& source,
-                                                                    NextPhysics* physics,
-                                                                    const std::vector<NextBodyID>& bodyIds,
-                                                                    size_t index)
-    {
-        Brotato3D::FArenaResources::FBoxCollider collider = source;
-        if (physics && index < bodyIds.size())
-        {
-            if (const FNextPhysicsBody* body = physics->GetBody(bodyIds[index]))
-            {
-                collider.center = body->position;
-                collider.rotation = body->rotation;
-            }
-        }
-        return collider;
-    }
 }
 
 void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
@@ -117,7 +89,6 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     (void)tracks;
     sceneReady_ = false;
     ApplyLightingSettings();
-    Brotato3D::BuildArena(models, materials, nodes, arenaResources_, arenaDefs_, selectedArenaId_);
     lightMaterialIds_.clear();
     tempLightPool_.clear();
     playerLightIndex_ = -1;
@@ -383,7 +354,7 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
 bool Brotato3DGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
 {
     glm::vec3 cameraTarget = cameraSmoothedTarget_;
-    glm::vec3 cameraPosition = cameraTarget + glm::vec3(0.0f, 10.8f, 6.6f);
+    glm::vec3 cameraPosition = cameraTarget + glm::vec3(0.0f, 30.0f, 11.0f);
     if (Brotato3D::ScreenShakeEnabled && screenShakeMs_ > 0.0f)
     {
         const float strength = std::min(0.25f, screenShakeIntensity_ * 0.05f);
@@ -393,7 +364,7 @@ bool Brotato3DGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera
         cameraTarget += jitter * (strength * 0.5f);
     }
     outRenderCamera.ModelView = glm::lookAtRH(cameraPosition, cameraTarget, glm::vec3(0.0f, 1.0f, 0.0f));
-    outRenderCamera.FieldOfView = 50.0f;
+    outRenderCamera.FieldOfView = 60.0f;
     return true;
 }
 
@@ -431,18 +402,33 @@ void Brotato3DGameInstance::ResetExtractionVehicle()
 void Brotato3DGameInstance::BeginDuskSurge()
 {
     const int side = std::uniform_int_distribution<int>(0, 3)(rng_);
-    const float anchorX = side < 2 ? 0.0f : (side == 2 ? -arenaHalfExtent_.x : arenaHalfExtent_.x);
-    const float anchorZ = side < 2 ? (side == 0 ? -arenaHalfExtent_.y : arenaHalfExtent_.y) : 0.0f;
-    glm::vec3 inward(-anchorX, 0.0f, -anchorZ);
-    if (glm::length(inward) < 0.001f)
-    {
-        inward = glm::vec3(0.0f, 0.0f, side == 0 ? 1.0f : -1.0f);
-    }
-    inward = glm::normalize(inward);
+    static constexpr std::array<glm::vec3, 4> OutwardDirections = {
+        glm::vec3(0.0f, 0.0f, -1.0f),
+        glm::vec3(0.0f, 0.0f, 1.0f),
+        glm::vec3(-1.0f, 0.0f, 0.0f),
+        glm::vec3(1.0f, 0.0f, 0.0f),
+    };
+    glm::vec3 outward = OutwardDirections[side];
 
-    const glm::vec3 anchor(anchorX, 0.0f, anchorZ);
-    extractionVehicleStartPos_ = anchor - inward * 4.0f + glm::vec3(0.0f, 0.02f, 0.0f);
-    extractionVehicleTargetPos_ = anchor + inward * std::min(arenaHalfExtent_.x, arenaHalfExtent_.y) * 0.42f + glm::vec3(0.0f, 0.02f, 0.0f);
+    const float availableDistance = outward.x > 0.0f ? arenaHalfExtent_.x - player_.worldPos.x :
+        outward.x < 0.0f ? arenaHalfExtent_.x + player_.worldPos.x :
+        outward.z > 0.0f ? arenaHalfExtent_.y - player_.worldPos.z :
+                           arenaHalfExtent_.y + player_.worldPos.z;
+    if (availableDistance < ExtractionVehicleApproachDistance)
+    {
+        outward = -outward;
+    }
+
+    extractionVehicleStartPos_ = ClampToArena(
+        player_.worldPos + outward * ExtractionVehicleApproachDistance,
+        ExtractionVehicleObstacleHalfX,
+        arenaHalfExtent_);
+    extractionVehicleTargetPos_ = ClampToArena(
+        player_.worldPos + outward * ExtractionVehicleStopDistance,
+        ExtractionVehicleObstacleHalfX,
+        arenaHalfExtent_);
+    extractionVehicleStartPos_.y = 0.02f;
+    extractionVehicleTargetPos_.y = 0.02f;
     extractionVehiclePos_ = extractionVehicleStartPos_;
     extractionVehicleAnimTotalMs_ = 1500.0f;
     extractionVehicleAnimMs_ = extractionVehicleAnimTotalMs_;
@@ -510,13 +496,6 @@ glm::vec3 Brotato3DGameInstance::ResolveExtractionVehicleCollision(const glm::ve
                                           glm::vec2(ExtractionVehicleObstacleHalfX, ExtractionVehicleObstacleHalfZ));
     }
 
-    NextPhysics* physics = GetEngine().GetPhysicsEngine();
-    for (size_t index = 0; index < arenaResources_.propColliders.size(); ++index)
-    {
-        const Brotato3D::FArenaResources::FBoxCollider collider =
-            GetCurrentPropCollider(arenaResources_.propColliders[index], physics, arenaPropBodyIds_, index);
-        resolved = ResolveAabbCollisionXZ(resolved, radius, collider.center, BoxAabbHalfExtentXZ(collider));
-    }
     return resolved;
 }
 
@@ -553,35 +532,7 @@ bool Brotato3DGameInstance::IsSegmentBlockedByExtractionVehicle(const glm::vec3&
         }
     }
 
-    NextPhysics* physics = GetEngine().GetPhysicsEngine();
-    for (size_t index = 0; index < arenaResources_.propColliders.size(); ++index)
-    {
-        const Brotato3D::FArenaResources::FBoxCollider collider =
-            GetCurrentPropCollider(arenaResources_.propColliders[index], physics, arenaPropBodyIds_, index);
-        const glm::vec2 halfExtent = BoxAabbHalfExtentXZ(collider);
-        const glm::vec2 minBounds(collider.center.x - halfExtent.x - padding,
-                                  collider.center.z - halfExtent.y - padding);
-        const glm::vec2 maxBounds(collider.center.x + halfExtent.x + padding,
-                                  collider.center.z + halfExtent.y + padding);
-        if (SegmentIntersectsAabb2D(fromXZ, toXZ, minBounds, maxBounds))
-        {
-            return true;
-        }
-    }
     return false;
-}
-
-float Brotato3DGameInstance::SampleArenaGroundY(const glm::vec3& worldPos) const
-{
-    if (!arenaResources_.terrainHeight.enabled)
-    {
-        return 0.0f;
-    }
-
-    return Brotato3D::Pcg::SampleVisualHeight(arenaResources_.terrainHeight.rootSeed,
-                                             arenaResources_.terrainHeight.vertexJitterAmplitude,
-                                             arenaResources_.terrainHeight.vertexJitterFrequency,
-                                             glm::vec2(worldPos.x, worldPos.z));
 }
 
 glm::vec3 Brotato3DGameInstance::ResolveEnemyGroundedPosition(const Brotato3D::FEnemyRuntime& enemy, glm::vec3 candidate) const
@@ -591,7 +542,7 @@ glm::vec3 Brotato3DGameInstance::ResolveEnemyGroundedPosition(const Brotato3D::F
     candidate = ClampToArena(candidate, enemy.radius, arenaHalfExtent_);
     if (enemy.def)
     {
-        candidate.y = enemy.def->size.y * 0.5f + SampleArenaGroundY(candidate);
+        candidate.y = enemy.def->size.y * 0.5f;
     }
     return candidate;
 }

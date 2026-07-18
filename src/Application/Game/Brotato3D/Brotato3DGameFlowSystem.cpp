@@ -6,11 +6,6 @@
 
 using namespace Brotato3DUtil;
 
-namespace
-{
-    constexpr const char* EmptySceneName = "Empty.proc";
-}
-
 void Brotato3DGameInstance::RestartGame()
 {
     Brotato3D::PlayUiClickSfx();
@@ -22,7 +17,7 @@ void Brotato3DGameInstance::StartNewRun()
     Brotato3D::StopBgm();
     ResetRuntimeState();
     ApplySelectedCharacter();
-    player_.worldPos.y = 0.5f + SampleArenaGroundY(player_.worldPos);
+    player_.worldPos.y = player_.radius;
     SetSkyIntensityTarget(30.0f, 0.0f);
     if (player_.bodyNode)
     {
@@ -204,7 +199,7 @@ void Brotato3DGameInstance::ApplySelectedArena()
 
     if (sceneReady_)
     {
-        GetEngine().RequestLoadScene({.filename = EmptySceneName});
+        GetEngine().RequestLoadScene({.filename = arenaDef->scenePath});
     }
 }
 

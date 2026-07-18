@@ -2,7 +2,6 @@
 
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Brotato3DArena.hpp"
 #include "Brotato3DDataLoader.hpp"
 #include "Brotato3DDebris.hpp"
 #include "Brotato3DEnemy.hpp"
@@ -274,10 +273,8 @@ private:
     glm::vec3 ResolveExtractionVehicleCollision(const glm::vec3& pos, float radius) const;
     glm::vec3 ResolvePlayerObstacleCollision(const glm::vec3& pos, float radius);
     bool IsSegmentBlockedByExtractionVehicle(const glm::vec3& from, const glm::vec3& to, float radius) const;
-    float SampleArenaGroundY(const glm::vec3& worldPos) const;
-    // Clamps a candidate enemy position to the arena, pushes it out of obstacles (extraction
-    // truck + props), re-clamps, then snaps it onto the (possibly displaced) ground. This is the
-    // single source of truth for "where can this enemy legally stand", shared by every move path.
+    // Clamps a candidate enemy position to the arena, pushes it out of the extraction truck,
+    // re-clamps, then snaps it onto the flat gameplay plane shared by the fixed SCAD scenes.
     glm::vec3 ResolveEnemyGroundedPosition(const Brotato3D::FEnemyRuntime& enemy, glm::vec3 candidate) const;
     bool IsDuskSurgeActive() const;
     void ClearMovementInput();
@@ -285,8 +282,6 @@ private:
     void SetWorldPhysicsPaused(bool paused);
     void BuildArenaWallBodies();
     void ClearArenaWallBodies();
-    void BuildArenaPropBodies();
-    void ClearArenaPropBodies();
     void UpdateCameraTracking(double deltaSeconds);
     glm::vec3 RandomDebugSpawnPosition();
     NextBodyID AcquireEnemyKinematicBody(const std::string& enemyId) const;
@@ -296,7 +291,6 @@ private:
     const Brotato3D::FArenaDef* FindArenaDef(const std::string& arenaId) const;
 
     Brotato3D::EAppState appState_ = Brotato3D::EAppState::MainMenu;
-    Brotato3D::FArenaResources arenaResources_{};
     glm::vec2 arenaHalfExtent_ = glm::vec2(12.0f, 8.0f);
     Brotato3D::FPlayerRuntime player_{};
     std::map<std::string, Brotato3D::FEnemyDef> enemyDefs_;
@@ -308,7 +302,7 @@ private:
     std::vector<Brotato3D::FCharacterDef> characterDefs_;
     std::vector<Brotato3D::FArenaDef> arenaDefs_;
     std::string selectedCharacterId_ = "soldier";
-    std::string selectedArenaId_ = "grassland";
+    std::string selectedArenaId_ = "deadly_town";
     Brotato3D::FBestRecord bestRecord_{};
     std::vector<Brotato3D::FWaveDef> waveDefs_;
     std::map<std::string, FEnemyVisualResource> enemyVisuals_;
@@ -355,7 +349,6 @@ private:
     uint32_t playerDebrisMatId_ = 0;
     uint64_t debrisTickCounter_ = 0;
     std::array<NextBodyID, 4> arenaWallBodyIds_{};
-    std::vector<NextBodyID> arenaPropBodyIds_;
     NextBodyID playerKinematicBodyId_{};
     bool playerKinematicBodyActive_ = false;
     std::map<std::string, std::vector<NextBodyID>> enemyKinematicBodyPools_;

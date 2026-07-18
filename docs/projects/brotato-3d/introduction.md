@@ -41,7 +41,7 @@ Brotato3D 的意义不只是“复刻一个玩法”，而是提供一个高频�
 
 - 大量运行时节点：敌人、子弹、碎块、拾取物、地面警示、激光和临时光源都需要稳定创建、复用、隐藏和同步。
 - 物理反馈：XP / Material / 尸块碎片使用 Jolt 物理体与 kinematic body 同步，让战斗反馈从纯 UI 飘字扩展到真实空间。
-- 程序化场景：竞技场可以使用固定 tile，也可以使用 PCG 生成地形块、边界和障碍物，用于验证场景构建与碰撞体生成。
+- 固定末日场景：竞技场直接加载基于 `kit_deadly.scad` 搭建的城镇、公路郊外和沙漠荒野，布局可持续人工修缮。
 - ImGui 游戏 HUD：主菜单、角色选择、战斗 HUD、升级、商店、暂停、设置和结算都在 ImGui 中实现，覆盖较完整的游戏 UI 状态机。
 - 数据加载链路：JSON 配置加载、校验、结构化为运行时数据，并与 C++ 子系统保持清晰分工。
 - 音频与资源 fallback：占位音频、图标和字体通过统一路径解析，缺失资源不会阻断玩法运行。
@@ -62,7 +62,7 @@ Brotato3D 的意义不只是“复刻一个玩法”，而是提供一个高频�
 | 商店 / 构筑 | `Brotato3DShopSystem.cpp`, `Brotato3DShop.cpp` | 升级卡、商店、被动物品、触发器 |
 | UI | `Brotato3DUI.cpp` | 菜单、HUD、Modal、结算、设置 |
 | 数据加载 | `Brotato3DDataLoader.cpp/.hpp` | JSON 到运行时结构体 |
-| 场景 / PCG | `Brotato3DArena.cpp`, `Brotato3DPcgGenerator.cpp` | 竞技场几何、地面 tile、PCG props 和边界 |
+| 场景 | `assets/scad/brotato3d/*.scad`, `arenas.json` | 固定 SCAD 布景、场景路径和玩法边界 |
 
 ## 配置入口
 
@@ -75,7 +75,7 @@ Brotato3D 的意义不只是“复刻一个玩法”，而是提供一个高频�
 | `upgrades.json` | 升级三选一卡池 |
 | `shop_items.json` | 商店属性卡、武器卡、被动 Item 入口 |
 | `items.json` | 被动 Item 的 trigger / effect 数据 |
-| `arenas.json` | 竞技场尺寸、材质、PCG 参数 |
+| `arenas.json` | 固定 SCAD 场景路径、玩法边界和 UI 色板 |
 | `i18n.json` | UI 文案本地化 |
 
 如果只是调平衡，优先从这些配置开始；如果要扩 trigger、effect、AI 行为或全新武器机制，再进入 C++ 子系统。

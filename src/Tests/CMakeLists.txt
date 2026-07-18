@@ -22,7 +22,6 @@ set(unitTestSources
     Test_ScadRig.cpp
     Test_RigAnimator.cpp
     Test_RenderComponent.cpp
-    Test_Brotato3DPcg.cpp
     Test_ImAnimIntegration.cpp
     Test_BrickPlayerSnapLogic.cpp
     Test_BrickBuildPlan.cpp
@@ -58,7 +57,6 @@ set(unitTestSources
     ${GK_SOURCE_ROOT}/Application/Game/NextRA/Sim/SimWorld.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextRA/Sim/SyncHash.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextRA/Sim/Systems/OrderApplySystem.cpp
-    ${GK_SOURCE_ROOT}/Application/Game/Brotato3D/Brotato3DPcgGenerator.cpp
 )
 
 find_package(Catch2 3 REQUIRED)

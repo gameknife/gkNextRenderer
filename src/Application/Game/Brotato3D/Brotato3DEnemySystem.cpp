@@ -200,7 +200,7 @@ void Brotato3DGameInstance::SpawnEnemy(const std::string& enemyId, const glm::ve
 
     const Brotato3D::FEnemyDef& def = defIt->second;
     const FEnemyVisualResource& visual = visualIt->second;
-    const glm::vec3 spawnPos(worldPos.x, def.size.y * 0.5f + SampleArenaGroundY(worldPos), worldPos.z);
+    const glm::vec3 spawnPos(worldPos.x, def.size.y * 0.5f, worldPos.z);
     auto reusableEnemy = std::find_if(enemies_.begin(), enemies_.end(),
                                       [&def](const Brotato3D::FEnemyRuntime& enemy)
                                       {

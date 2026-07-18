@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Brotato3DPcgConfig.hpp"
 #include "Brotato3DPlayer.hpp"
 
 #include <glm/ext.hpp>
@@ -171,34 +170,14 @@ namespace Brotato3D
         FPlayerStats startStats{};
     };
 
-    enum class EGroundMaterialKind : uint8_t
-    {
-        Lambertian = 0,
-        Metallic = 1,
-        Mixture = 2,
-    };
-
-    struct FGroundTileDef
-    {
-        glm::vec2 minXZ = glm::vec2(0.0f);
-        glm::vec2 maxXZ = glm::vec2(0.0f);
-        std::vector<glm::vec2> pointsXZ;
-        glm::vec3 color = glm::vec3(0.5f);
-        EGroundMaterialKind kind = EGroundMaterialKind::Lambertian;
-        float coverage = 0.0f;
-        float fuzziness = 0.1f;
-        float refractionIndex = 1.45f;
-    };
-
     struct FArenaDef
     {
         std::string id;
         std::string name;
+        std::string scenePath;
         glm::vec2 halfExtent = glm::vec2(12.0f, 8.0f);
         glm::vec3 baseGroundColor = glm::vec3(0.32f, 0.40f, 0.28f);
         glm::vec3 borderColor = glm::vec3(0.45f, 0.55f, 0.35f);
-        std::vector<FGroundTileDef> groundTiles;
-        Pcg::FArenaPcgConfig pcg;
     };
 
     struct FSpawnEntry
