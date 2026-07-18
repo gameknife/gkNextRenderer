@@ -1,69 +1,36 @@
-# SCAD（OpenSCAD）文件加载器
+# SCAD（OpenSCAD DSL）加载器
 
-本文档记录 `.scad`（OpenSCAD DSL）加载功能的实现细节、架构决策与已知限制。设计与开发计划见 `docs/SCADLoader-Design.md`。
+本文记录当前 `ScadLoader` 可选模块。它实现 OpenSCAD 风格子集，不是完整 OpenSCAD 兼容层；功能判断以 `src/Modules/ScadLoader/` 和 `[Scad]` 单测为准。
 
-## 功能概览
+## 入口与文件
 
-加载 `.scad` 文件，解析 `use`/`include` 闭包，求值出几何，并按 user module 调用树重建可渲染场景层级。
+应用链接 `ScadLoader` 后，在加载/扫描场景前调用 `Modules::Scad::Register()`，把 `.scad` loader 注册到 `Assets::FLoaderRegistry`。主要文件：
 
-- **支持格式**：`.scad`
-- **资源依赖**：`assets/scad/`（示例场景）、`assets/fonts/DroidSansFallback.ttf`（text() 字形，含 CJK）
-- **验证场景**：
-  - `assets/scad/acient_city.scad`（古城：城墙/城门/房屋/装饰/招牌"酒楼"，0 warning）
-  - `assets/scad/beer_cup.scad`（啤酒杯：rotate_extrude 把手 / sphere 泡沫 / 半透明玻璃，0 warning）
-- **运行**：`./gnb run gkNextRenderer --load-scene "assets/scad/acient_city.scad"`
+- `ScadModule.*`：模块注册。
+- `FScadLexer.*` / `FScadParser.*` / `FScadTypes.h`：词法、AST 与值模型。
+- `FScadEvaluator.cpp`、`.Expr.cpp`、`.Geometry.cpp`：作用域、语言求值和几何分发。
+- `FScadGeometry.*` / `FScadCsg.*` / `FScadTess.*` / `FScadText.*`：图元、Manifold boolean、earcut 和 FreeType text。
+- `FScadShared.*`：scene 与 rig 共用的 `use/include` 闭包、坐标转换和法线工具。
+- `FScadLoader.*`：颜色桶、module 调用树、Model/Node/材质组装。
+- `FScadRig.*`：ScadRig 资产读取；约定见 [ScadRig](ScadRig.md)。
 
-## 文件结构
-
-```
-src/Engine/Assets/Loaders/
-├── FScadTypes.h            # ScadLoadOptions、Value 变体、AST（Expr/Stmt）、常量
-├── FScadLexer.h/.cpp       # 词法（注释/数字/字符串/$特殊变量/运算符/范围）
-├── FScadParser.h/.cpp      # 递归下降解析 → AST（module/function/for/if/let、表达式、list comprehension）
-├── FScadEvaluator.h/.cpp   # AST + Context → 扁平颜色桶 / scene graph；CSG/2D 子求值
-├── FScadGeometry.h/.cpp    # 图元 cube/sphere/cylinder/polyhedron + linear/rotate extrude
-├── FScadCsg.h/.cpp         # CSG 布尔后端（Manifold，GK_WITH_MANIFOLD）
-├── FScadTess.h/.cpp        # earcut 凹多边形/带洞三角化（GK_WITH_EARCUT，排除 unity）
-├── FScadText.h/.cpp        # text() 字形 → 轮廓（FreeType，GK_WITH_FREETYPE，排除 unity）
-└── FScadLoader.h/.cpp      # 场景组装：scene graph→Node 层级、多 section Model、法线平滑、相机、环境
-```
-
-修改的现有文件：
-- `SceneList.cpp`：`.scad` 扩展名分发 + `assets/scad/` 扫描（仅顶层，子文件经 use/include 拉入）
-- `EngineCVars.cpp` + `UserSettings.hpp`：CVar `sys.scadToWorldScale`
-- `assets/CMakeLists.txt`：`scad` 资源拷贝
-- `src/CMakeLists.txt`：链接 `manifold::manifold` / `Freetype::Freetype`，定义 `GK_WITH_*`
-- `vcpkg.json`：新增 `manifold`、`earcut-hpp`、`freetype`（桌面）
-- `UserInterface.hpp`：补 `#include CoreMinimal.hpp`（修复 unity 顺序脆弱点）
-- `UserInterface.hpp` 同时附带修复一个与 SCAD 无关的潜在 unity-build bug
+不要再从旧的 `src/Engine/Assets/Loaders/FScad*` 路径寻找实现；2026-06-10 后它属于 `Modules/ScadLoader`，Engine 核心不依赖该模块。
 
 ## 数据流
 
+```text
+.scad + use/include closure
+  → Lexer → Parser → AST
+  → evaluator（动态变量作用域、局部 module/function 定义、transform/color 栈）
+  → SCAD-space triangle soup + user-module 调用树 + RGBA bucket
+  → loader：Z-up → Y-up、scale、法线、材质、Model/Node 层级
 ```
-.scad → ExtractDirectives(剥离 use/include) → Lexer → Parser → AST(每文件)
-   → 合并 module/function 定义表 + main 顶层语句
-   → Evaluator（transform/color 栈 + Context 动态作用域）
-       图元→三角汤(Z-up)；CSG 节点调用 FScadCsg；2D 节点经 Collect2D + FScadTess
-   → Scene graph（user module 调用实例为逻辑节点，直属几何按 quantized RGBA 分桶）
-   → Loader：Z-up→Y-up(绕 X −90°) + scale；法线平滑；重建 Node 父子层级；每个逻辑节点尽量合并为一个多 section Model
-```
 
-## 关键设计决策
+坐标转换是右手 Z-up 到右手 Y-up：`world=(x,z,-y)`，等价绕 X -90°，不翻 winding。`sys.scadToWorldScale` 写入 `ScadLoadOptions::scadToWorldScale`，默认 1；默认 `smoothAngleDegrees=35`。
 
-| 议题 | 决策 |
-|------|------|
-| 坐标系 | OpenSCAD Z-up 右手 → 引擎 Y-up 右手，绕 X −90°：`world=(x, z, −y)`，纯旋转 det+1，**不翻 winding** |
-| 缩放 | `ScadLoadOptions::scadToWorldScale`（CVar `sys.scadToWorldScale`，默认 1.0） |
-| 几何→模型 | **按 user module 调用树重建层级**：每个 user module 调用实例生成一个逻辑 Node；直属几何按颜色分桶并尽量合并成单个多 section Model；超过 16 材质槽时退化为同名 `__render` 子节点分块 |
-| CSG | `union/group` = 拼接（不透明等价、省布尔开销）；`difference/intersection` 先 `ScadCsg::Union` 合并正侧再走 **Manifold** 真布尔；`hull` = Manifold Hull |
-| 求值 | 未建独立 CSG 树：Evaluator 带 transform/color 栈遍历，返回 `GeomList`（色→三角汤），CSG/extrude 节点就地调用后端 |
-| 变量/定义作用域 | 变量采用动态作用域（模块/函数体可见调用链变量），比 OpenSCAD 宽松；`$fn` 因此天然动态生效。`module`/`function` 定义按 scope 建局部定义栈，支持模块内 helper 和后向引用 |
-| 法线 | 平滑：按位置焊接相邻面，面积加权，夹角 ≤ `smoothAngleDegrees`（默认 35°）才平滑——曲面光滑、硬边保留 |
-| 材质 | `color` 不透明→`Lambertian`；`alpha < 0.99`→`Dielectric(ior=1.45)` + `Diffuse=(rgb,a)`（玻璃/液体）。颜色分桶含 alpha |
-| 2D | `Collect2D`（`glm::dmat3` 仿射栈）收集 `linear/rotate_extrude` 子轮廓，支持嵌套 translate/rotate/scale/union/circle/square/polygon(含 paths 洞)/用户模块 |
-| 三角化 | text/凹多边形/带洞经 `FScadTess`（earcut，even-odd 嵌套分组）；无 earcut 时退化为凸多边形扇形 |
+每个 user module 调用实例形成逻辑 Node；直属几何按量化 RGBA 分桶并尽量合并进多-section Model。材质槽超过引擎上限时拆成同名 render 子节点。alpha `< 0.99` 的 bucket 使用透明 Dielectric 路径。
 
-## 已实现的 OpenSCAD 子集
+## 当前语言面
 
 - **图元 3D**：`cube`、`sphere`、`cylinder`(含 r1/r2 圆锥)、`polyhedron`
 - **图元 2D**（在 extrude 内）：`circle`、`square`、`polygon`(含 `paths` 洞)、`text`(FreeType, CJK)
@@ -73,38 +40,33 @@ src/Engine/Assets/Loaders/
 - **控制流**：`for`(笛卡尔多绑定)、`if/else`、`let`、`intersection_for`(按 for)
 - **语言**：`module`/`function` 定义（含局部 helper 与后向引用）与默认参/关键字参、`children()`/`children(i)`/`$children`、list comprehension(`for`/`if`/`let`/`each`)、`echo`/`assert`/`str`、`$fn`/`$fa`/`$fs`
 - **内置函数**：`max min abs floor ceil round sqrt pow exp ln log sign sin cos tan asin acos atan atan2 len norm concat str`（三角函数为角度制）
+- **引擎扩展（`gk_` 前缀，非 OpenSCAD 标准）**：`gk_terrain(TERR)` 低模高度场地形 module +
+  `gk_terrain_height(TERR,x,y)` / `gk_terrain_info(TERR,x,y)` 纯函数（`FScadTerrain.{h,cpp}`）。
+  地形桶带 faceted 标志（loader 跳过法线平滑）、水面桶拆分为 `__water` 子节点（rayCast 不可见、
+  无物理体）、地形数据经 `SceneTerrain` payload 挂成引擎 `TerrainComponent`。
+  详见 `AGENT_GUIDE/ScadTerrain.md`。
 
-## 依赖与编译开关
+变量采用调用链可见的动态作用域，定义使用局部 definition stack；它与 OpenSCAD 的所有边角语义不保证完全一致。遇到不支持语法应补最小 parser/evaluator test，而不是在资产中依赖偶然降级。
 
-- `GK_WITH_MANIFOLD`（Manifold 3.2.1，clipper2 依赖，TBB 关闭/串行 `MANIFOLD_PAR=-1`）：真 CSG。关闭→difference/intersection 降级首子。`-DGK_DISABLE_MANIFOLD=ON` 强制关闭。
-- `GK_WITH_FREETYPE`（FreeType）：text()。关闭→跳过 text + warn。`-DGK_DISABLE_SCAD_TEXT=ON` 强制关闭。
-- `GK_WITH_EARCUT`（earcut-hpp，header-only）：凹多边形/带洞。关闭→凸扇形退化。
-- **CMake 隔离要点**：Manifold imported target 的 INTERFACE 暴露 `cxx_std_17` + `-D` 选项会污染引擎 C++20 编译，已 `set_target_properties(... INTERFACE_COMPILE_FEATURES "" INTERFACE_COMPILE_OPTIONS "")` 剥离并手动补 define。
-- **Unity build**：`FScadText.cpp`/`FScadTess.cpp` 因重型三方头文件 `SKIP_UNITY_BUILD_INCLUSION`。
+## 后端与降级
 
-## 性能数据（RTX 5070 Ti）
+- `GK_WITH_MANIFOLD`：真实 CSG。缺失时 difference/intersection 保留第一个 child 并 warning。
+- `GK_WITH_FREETYPE`：`text()`。缺失时跳过并 warning。
+- `GK_WITH_EARCUT`：凹多边形/洞与 glyph tessellation；iOS 当前关闭。
 
-| 场景 | 颜色组 | 三角形 | CPU 解析 | GPU 上传 |
-|------|--------|--------|----------|----------|
-| acient_city.scad | 24 | ~154596 | ~40ms | ~250ms |
-| beer_cup.scad | 7 | ~102520 | ~100ms | ~160ms |
+这些 capability 在 `src/Modules/CMakeLists.txt` 配置。warning 不是成功兼容的证明；正式资产以 0 warning 为目标。
 
-## 已知限制与后续方向
+## 资产与 compose
 
-1. **`difference(union)` 透明度**：正侧已用 Manifold union 合并为单实体，重叠二次着色问题已解决。但若正侧含多种颜色，结果统一取第一个颜色（与 OpenSCAD 行为一致）。
-2. **`resize` 为 no-op**：融合求值下无法在不重排管线的前提下正确按 bbox 缩放；当前透传 + warn。
-3. **`offset` / `projection` 未实现**：示例未用；offset 可接已装好的 clipper2，projection 需切片。
-4. **`minkowski` 近似为 union**：真闵可夫斯基需凸分解。
-5. **`import`（STL/DXF/SVG）/ `surface` 未实现**。
-6. **rotate_extrude 部分扫掠端盖**为扇形（凸轮廓正确）；凹轮廓端盖未走 earcut。
-7. **变量动态作用域**：非严格 OpenSCAD 词法作用域；`include` 顶层语句位置丢失（追加到 main 后，示例全用 use 不受影响）。
-8. **Node 仍受 TRS 表达能力限制**：scene graph 会完整保留 user module 父子关系，但引擎 Node 只有 TRS；`mirror` / 一般仿射最终仍需分解到平移/旋转/缩放，极端 shear 场景可能无法 1:1 还原。
-9. **无磁盘缓存**：每次重新解析（SCAD 解析很快，~40-100ms，暂不需要）。
+现行手写验证场景使用 `assets/scad/beer_cup.scad`、`old_city.scad` 等。Kit 位于 `assets/scad/lib/`，严格 JSON spec 位于 `assets/scad/specs/`，派生场景位于 `assets/scad/gen/`。生成管线见 `docs/designs/scad-scene-compose-design.md`；不要引用已删除的 `acient_city.scad`、`habor_city_hd.scad` 或旧 loader 设计文档。
 
-## 调试技巧
+## 验证
 
-- 日志前缀 `SCAD:`，`grep "SCAD"` 过滤；`ECHO:` 为 `echo()` 输出。
-- 启动：`--load-scene "assets/scad/<file>.scad"`。快速肉眼验证用 `gnb shot --target ScadStudio --scene assets/scad/<file>.scad`（隐藏窗口、自动截图到 `out/build/<preset>/screenshots/agent_validation.jpg`、自动退出，详见 AGENTS.md "Agent Visual Validation"）。
-- 单测：`gkNextUnitTests "[Scad]"`（lexer/parser/evaluator/几何/CSG/text/loader 全覆盖）。
-- warning 数 > 0 时检查降级特性（unknown module / text 缺后端 / difference 无后端）。
-- 几何朝向/黑面：检查法线平滑阈值与 polyhedron face winding（OpenSCAD 约定 clockwise-from-outside，加载器已 reverse）。
+```bash
+./gnb.sh build gkNextRenderer gkNextUnitTests
+./out/build/<preset>/bin/gkNextUnitTests "[Scad]"
+./gnb.sh shot --scene assets/scad/old_city.scad
+./gnb.sh shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60
+```
+
+排查顺序：先看 `SCAD:` warning 与 include 路径，再看节点/三角形/颜色 bucket 数；几何黑面检查 face winding 和 normal smoothing；复杂 boolean 慢时缩小 CSG 范围，不要对整座场景做一次巨型 operation。

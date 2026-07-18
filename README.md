@@ -129,7 +129,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 
 ### 5. 代码规模可控，适合学习和扩展
 
-- **第一方引擎代码目标 < 50k LOC**：引擎核心刻意保持在便于理解和持续演进的区间（连同全部示例 game + 测试约 85k LOC，可用 `gnb loc` 查看分类统计）
+- **第一方 Engine core 目标 < 50k LOC**：核心刻意保持在便于理解和持续演进的区间；2026-07-17 实测 Engine 约 31k 行，连同 Modules、Gameplay、全部应用与测试共 141,421 行。数字会变化，以 `gnb loc` 为准
 - **优先清晰实现而非过度设计**：尽量用明确的数据流、职责边界和成熟三方库解决问题，避免把实验性功能过早抽象成沉重框架
 - **适合阅读现代引擎实现**：从 Vulkan 渲染、资源管理、脚本、编辑器、反射、内容导入到测试 / benchmark / agent validation，都能看到完整的工程组织方式
 
@@ -192,8 +192,8 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 
 ### 通用说明
 
-- 推荐先执行 `./gnb doctor`（Windows: `./gnb.bat doctor`）检查宿主机缺失的基础工具
-- `./gnb setup`（Windows: `./gnb.bat setup`）会准备 vcpkg、项目外部工具链与可选资源包；如果直接执行 `./gnb build`，首次缺少 toolchain 时也会自动补齐核心依赖
+- 推荐先执行 `./gnb.sh doctor`（Windows: `gnb.bat doctor`）检查宿主机缺失的基础工具
+- `./gnb.sh setup`（Windows: `gnb.bat setup`）会准备 vcpkg、项目外部工具链与可选资源包；如果直接执行 `./gnb.sh build`，首次缺少 toolchain 时也会自动补齐核心依赖
 - 桌面平台现在通过 `gnb` 统一构建和运行，通常不再需要先 `cd` 到 `out/build/<platform>/bin`
 - 可用 CMake 预设收敛为：`windows`、`linux`、`macos-arm64`、`ios`
 
@@ -275,11 +275,11 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 <details>
 <summary><b>Android (Windows 构建)</b></summary>
 
-**前置条件：** JDK 17+、Android SDK、NDK r27
+**前置条件：** JDK 17+、Android SDK，以及通过 `ANDROID_NDK_HOME` 指定的已安装 NDK（仓库当前不固定具体 NDK 版本）
 
 ```bat
 set ANDROID_HOME=C:\Android\Sdk
-set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\27.0.12077973
+set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\YOUR_NDK_VERSION
 ./gnb.bat setup --vcpkg-only
 ./gnb.bat android
 ```

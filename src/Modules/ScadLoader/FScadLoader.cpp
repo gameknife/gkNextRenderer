@@ -5,8 +5,10 @@
 #include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Modules/ScadLoader/FScadEvaluator.h"
 #include "Modules/ScadLoader/FScadShared.h"
+#include "Modules/ScadLoader/FScadTerrain.h"
 #include "Engine/Assets/Loaders/LoaderUtils.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/TerrainComponent.hpp"
 
 #include <algorithm>
 #include <array>
@@ -15,6 +17,10 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
@@ -99,6 +105,9 @@ namespace Assets
         {
             std::unordered_map<uint32_t, uint32_t> materialByColor;
             std::unordered_map<std::string, uint32_t> modelByMesh;
+            // Scene-eval instanceId -> engine node + accumulated engine-space
+            // world transform (for the TerrainComponent hookup).
+            std::unordered_map<uint64_t, std::pair<std::shared_ptr<Node>, glm::dmat4>> nodeByInstanceId;
         };
 
         uint32_t GetOrCreateScadMaterial(
@@ -127,6 +136,7 @@ namespace Assets
             size_t maxBucketCount,
             double scale,
             float smoothAngleDegrees,
+            bool rayCastVisible,
             std::shared_ptr<Node> node,
             std::vector<Model>& models,
             std::vector<FMaterial>& materials,
@@ -157,7 +167,10 @@ namespace Assets
                 {
                     localPos[i] = Scad::ScadToWorldPos(bucket.tris[i], scale);
                 }
-                const std::vector<glm::vec3> normals = Scad::ScadComputeSmoothNormals(localPos, smoothAngleDegrees);
+                // Terrain buckets stay faceted: smoothing would wash the low-poly
+                // facets on gentle slopes into a soft gradient.
+                const float bucketSmoothAngle = bucket.faceted ? 0.0f : smoothAngleDegrees;
+                const std::vector<glm::vec3> normals = Scad::ScadComputeSmoothNormals(localPos, bucketSmoothAngle);
 
                 const uint32_t vertexOffset = static_cast<uint32_t>(vertices.size());
                 vertices.reserve(vertices.size() + localPos.size());
@@ -216,7 +229,7 @@ namespace Assets
             auto renderComp = std::make_shared<Runtime::RenderComponent>();
             renderComp->SetModelId(modelIdx);
             renderComp->SetVisible(true);
-            renderComp->SetRayCastVisible(true);
+            renderComp->SetRayCastVisible(rayCastVisible);
             renderComp->SetMaterials(nodeMaterials);
             node->AddComponent(renderComp);
             return true;
@@ -225,6 +238,7 @@ namespace Assets
         void BuildScadSceneNodeRecursive(
             const Scad::SceneNode& sceneNode,
             const std::shared_ptr<Node>& parent,
+            const glm::dmat4& parentWorld,
             double scale,
             float smoothAngleDegrees,
             std::vector<std::shared_ptr<Node>>& nodes,
@@ -249,18 +263,36 @@ namespace Assets
             }
             nodes.push_back(node);
 
+            const glm::dmat4 nodeWorld = parentWorld *
+                (glm::translate(glm::dmat4(1.0), glm::dvec3(localTranslation)) *
+                 glm::toMat4(glm::dquat(localRotation)) *
+                 glm::scale(glm::dmat4(1.0), glm::dvec3(localScale)));
+            cache.nodeByInstanceId[sceneNode.instanceId] = {node, nodeWorld};
+
             if (!sceneNode.meshes.empty())
             {
+                // Terrain water surfaces get their own child node: translucent,
+                // and invisible to raycasts so NavGrid/picking hit the river bed
+                // (or a bridge deck) instead of the water plane.
+                std::vector<Scad::SceneMeshBucket> solidBuckets;
+                std::vector<Scad::SceneMeshBucket> waterBuckets;
+                solidBuckets.reserve(sceneNode.meshes.size());
+                for (const Scad::SceneMeshBucket& bucket : sceneNode.meshes)
+                {
+                    (bucket.terrainWater ? waterBuckets : solidBuckets).push_back(bucket);
+                }
+
                 constexpr size_t kMaxMaterialsPerNode = 16;
-                if (sceneNode.meshes.size() <= kMaxMaterialsPerNode)
+                if (solidBuckets.size() <= kMaxMaterialsPerNode)
                 {
                     AttachSceneMeshesToNode(
                         sceneNode.name,
-                        sceneNode.meshes,
+                        solidBuckets,
                         0,
                         kMaxMaterialsPerNode,
                         scale,
                         smoothAngleDegrees,
+                        true,
                         node,
                         models,
                         materials,
@@ -268,7 +300,7 @@ namespace Assets
                 }
                 else
                 {
-                    for (size_t start = 0; start < sceneNode.meshes.size(); start += kMaxMaterialsPerNode)
+                    for (size_t start = 0; start < solidBuckets.size(); start += kMaxMaterialsPerNode)
                     {
                         auto chunkNode = Node::CreateNode(
                             fmt::format("{}__render", sceneNode.name),
@@ -280,22 +312,104 @@ namespace Assets
                         nodes.push_back(chunkNode);
                         AttachSceneMeshesToNode(
                             sceneNode.name,
-                            sceneNode.meshes,
+                            solidBuckets,
                             start,
                             kMaxMaterialsPerNode,
                             scale,
                             smoothAngleDegrees,
+                            true,
                             chunkNode,
                             models,
                             materials,
                             cache);
                     }
                 }
+
+                if (!waterBuckets.empty())
+                {
+                    auto waterNode = Node::CreateNode(
+                        fmt::format("{}__water", sceneNode.name),
+                        glm::vec3(0.0f),
+                        glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+                        glm::vec3(1.0f),
+                        static_cast<uint32_t>(nodes.size()));
+                    waterNode->SetParent(node);
+                    nodes.push_back(waterNode);
+                    AttachSceneMeshesToNode(
+                        fmt::format("{}__water", sceneNode.name),
+                        waterBuckets,
+                        0,
+                        kMaxMaterialsPerNode,
+                        scale,
+                        smoothAngleDegrees,
+                        false,
+                        waterNode,
+                        models,
+                        materials,
+                        cache);
+                }
             }
 
             for (const Scad::SceneNode& child : sceneNode.children)
             {
-                BuildScadSceneNodeRecursive(child, node, scale, smoothAngleDegrees, nodes, models, materials, cache);
+                BuildScadSceneNodeRecursive(child, node, nodeWorld, scale, smoothAngleDegrees, nodes, models, materials, cache);
+            }
+        }
+
+        // Attaches a TerrainComponent for each gk_terrain payload: the exact
+        // triangulated grid the render mesh was built from, plus the combined
+        // terrain-local -> engine-world transform.
+        void AttachTerrainComponents(
+            const std::vector<Scad::SceneTerrain>& terrains,
+            double scale,
+            ScadBuildCache& cache)
+        {
+            if (terrains.empty())
+            {
+                return;
+            }
+
+            // SCAD (Z-up) -> engine (Y-up): world = (x, z, -y) * scale.
+            glm::dmat4 scadToEngine(0.0);
+            scadToEngine[0] = glm::dvec4(scale, 0.0, 0.0, 0.0);
+            scadToEngine[1] = glm::dvec4(0.0, 0.0, -scale, 0.0);
+            scadToEngine[2] = glm::dvec4(0.0, scale, 0.0, 0.0);
+            scadToEngine[3] = glm::dvec4(0.0, 0.0, 0.0, 1.0);
+
+            for (const Scad::SceneTerrain& terrain : terrains)
+            {
+                if (!terrain.data)
+                {
+                    continue;
+                }
+                auto found = cache.nodeByInstanceId.find(terrain.ownerInstanceId);
+                if (found == cache.nodeByInstanceId.end())
+                {
+                    SPDLOG_WARN("SCAD: terrain payload owner node {} not found; skipping TerrainComponent",
+                                terrain.ownerInstanceId);
+                    continue;
+                }
+                const std::shared_ptr<Node>& node = found->second.first;
+                const glm::dmat4& nodeWorld = found->second.second;
+
+                const Scad::FTerrainData& src = *terrain.data;
+                auto grid = std::make_shared<Runtime::TerrainComponent::FGridData>();
+                grid->cellsX = src.spec.cells.x;
+                grid->cellsY = src.spec.cells.y;
+                grid->sizeX = src.spec.size.x;
+                grid->sizeY = src.spec.size.y;
+                grid->seed = src.spec.seed;
+                grid->verts = src.verts;
+                grid->diagFlip = src.cellDiagFlip;
+                grid->biome = src.cellBiome;
+                grid->flags = src.cellFlags;
+                grid->waterLevel = src.cellWater;
+                grid->localToWorld = nodeWorld * scadToEngine * terrain.xform;
+                grid->worldToLocal = glm::inverse(grid->localToWorld);
+
+                auto component = std::make_shared<Runtime::TerrainComponent>();
+                component->SetGridData(std::move(grid));
+                node->AddComponent(component);
             }
         }
     } // namespace
@@ -337,9 +451,12 @@ namespace Assets
         size_t rootCount = 0;
         for (const Scad::SceneNode& root : result.roots)
         {
-            BuildScadSceneNodeRecursive(root, nullptr, scale, options.smoothAngleDegrees, nodes, models, materials, buildCache);
+            BuildScadSceneNodeRecursive(root, nullptr, glm::dmat4(1.0), scale, options.smoothAngleDegrees, nodes, models, materials, buildCache);
             ++rootCount;
         }
+
+        // ---- Terrain payloads -> TerrainComponent (height/water/biome queries) ----
+        AttachTerrainComponents(result.terrains, scale, buildCache);
 
         // ---- Camera + environment ----
         cameraInit.HasSky = true;

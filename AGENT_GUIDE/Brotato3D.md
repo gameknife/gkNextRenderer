@@ -58,7 +58,7 @@ Brotato3DGameInstance  (类声明集中在 Brotato3DGameInstance.hpp)
 
 > 历史上还有 `Brotato3DEnemy.cpp / Player.cpp / Projectile.cpp / Weapon.cpp` 四个**只 include 头文件、无任何实现**的空壳文件，已删除（逻辑早就搬进了 `*System.cpp`）。新增数据类型时**不要**再建这种空 `.cpp`。
 
-**构建方式**：`src/cmake/SourceFiles.cmake` 用 `GLOB_RECURSE` 收集 `Application/Game/Brotato3D/*.{cpp,hpp}`，所以**新增/删除文件后必须 `--reconfigure`**（CMake 才会重新跑 glob）。Target 定义在 `src/CMakeLists.txt`（`add_executable(Brotato3D ...)`，带 `DEV_MODE=1`）。
+**构建方式**：`src/Application/Game/Brotato3D/CMakeLists.txt` 用带 `CONFIGURE_DEPENDS` 的 `GLOB_RECURSE` 收集本目录源码，并在同一文件定义 target 与 `DEV_MODE=1`。普通增量 `./gnb.sh build Brotato3D` 会让 CMake 在 glob 变化时自动重扫；只有改 CMake/preset 或生成器没有重扫时才显式加 `--reconfigure`。
 
 ---
 
@@ -181,50 +181,27 @@ glm::vec3 Brotato3DGameInstance::ResolveEnemyGroundedPosition(
 - **`using namespace Brotato3DUtil;`**：每个 `*System.cpp` 顶部都写，以直接用 `ClampToArena`/`DistanceXZ`/`HiddenPosition` 等共享工具。
 - **音频单入口**：玩法代码**只调** `Brotato3DAudio.hpp` 里的 `PlayXxxSfx`，绝不直接碰 `NextAudio`。加武器/敌人音效就扩这个 header。
 - **`MasterDifficulty`**（`Brotato3DAudio.hpp`，默认 1.0）：作用于敌人接触/迫击炮伤害的全局难度乘子，可做难度/作弊开关。
-- **`DEV_MODE`**：编译期宏（target 带 `DEV_MODE=1`）。`K` 召唤 rat、`1~6` 切单一武器等调试键都在 `#if DEV_MODE` 里，Release 不含。
+- **`DEV_MODE`**：编译期宏；当前 target 在所有构建配置都定义 `DEV_MODE=1`。`K` 召唤 rat、`1~6` 切单一武器等调试键在 `#if DEV_MODE` 中，但不要声称当前 Release 会自动移除它们；若要区分配置，应先修改 CMake 条件。
 - **本地化**：UI 文本走 `Tr(gameInstance, key, fallback)` / `TrFormat(...)`，底层是引擎的 `NextLocalization`（在 `OnInit` 里 `LoadFromJson(i18n.json, "zh")`）。
 
 ---
 
-## 7. 代码健康：本次清理 + 仍可简化的点
-
-**本次已做（行为不变的清理/重构）：**
-- 删除 4 个空壳 `.cpp`（`Brotato3DEnemy/Player/Projectile/Weapon.cpp`）。
-- 删除从未被调用的 `RenderSettingsModal` 的旧占位 `RenderSettingsPlaceholder`（残留 "P9" 字样）。
-- 删除死函数 `LoadI18n`（本地化实际走引擎 `NextLocalization`，此函数无人调用）。
-- 抽出 `ResolveEnemyGroundedPosition`，消除敌人移动落点解析在 5 处的重复（见 §5.3）。
-
-**仍存在、可作为后续优雅化目标（本次未动，避免风险扩散）：**
-
-| 现象 | 位置 | 建议 |
-| --- | --- | --- |
-| 属性字符串分发的长 if-else 链 | `ApplyShopItem` / `ApplyPassiveItemStats`（ShopSystem）、`GetStatValue`（UI）三处各写一遍 stat 名 | 抽成"stat 名 → 成员指针/lambda"表，三处共用，新增 stat 只改一处 |
-| `Tr()` 仅转发 `Localize()` | `Brotato3DUI.cpp` | 二选一保留即可（纯重复封装） |
-| 武器商店价格硬编码 if-else | `FShop::MakeOfferFromWeapon`（Brotato3DShop.cpp） | 抽进 `weapons.json` 的 `cost` 字段 |
-| `PlayWeaponFireSfx` 武器分支硬编码 | `Brotato3DAudio.hpp` | 数据驱动（武器 def 带音效 id）可去掉 if-chain |
-| `PlayShopCantBuySfx` 已定义但**从未接线** | `Brotato3DAudio.hpp` | 对应资源 `shop_cant_buy.wav` 已导入；应在购买失败处接上，或确认废弃后删除 |
-| `duskBonusXpMult` 已加载未生效 | 见配置向 guide §7 | 黄昏期 XP 倍率字段，接线或确认废弃后删除 |
-
-> 这些都是**可选**的优雅化，不影响功能。属性分发表是收益最高的一项（消除三处重复 + 降低加 stat 出错概率）。
-
----
-
-## 8. 改完怎么验证
+## 7. 改完怎么验证
 
 ```bash
-# 构建（删/加文件后必须 --reconfigure）
-./gnb.bat build Brotato3D --reconfigure      # Windows
-./gnb build Brotato3D --reconfigure        # macOS/Linux
+# 构建
+gnb.bat build Brotato3D      # Windows
+./gnb.sh build Brotato3D     # macOS/Linux
 
 # 运行：看到 "uploaded scene [...] to gpu" 即初始化通过
-./gnb run Brotato3D
+./gnb.sh run Brotato3D
 ```
 - 配置缺字段会在 `OnInit()` 抛 `Brotato3D failed to load required data`。
 - 用 `DEV_MODE` 的 `K`（喷怪）+ `1~6`（切武器）边玩边验数值。
 
 ---
 
-## 9. 进一步阅读
+## 8. 进一步阅读
 
 - [`docs/projects/brotato-3d/developer-guide.md`](../docs/projects/brotato-3d/developer-guide.md) —— 配置/数值/加内容向开发指南（本文的姊妹篇）
 - [`docs/projects/brotato-3d/introduction.md`](../docs/projects/brotato-3d/introduction.md) —— 项目定位

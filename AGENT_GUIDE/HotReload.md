@@ -90,7 +90,7 @@ cmake --build --preset windows-no-unity --target gkNextRenderer --parallel
 - module `Install()`、callback/registry 所有权、线程启动停止。
 - 新源文件、CMake、依赖、编译选项和第三方代码。
 
-不要启用 Live++ 的结构迁移 hook 来绕过以上边界；本项目没有 Unreal 式对象 reinstancing。完整的方案比较和风险分析见 [`docs/notes/cpp-live-coding-feasibility-2026.md`](../docs/notes/cpp-live-coding-feasibility-2026.md)。
+不要启用 Live++ 的结构迁移 hook 来绕过以上边界；本项目没有 Unreal 式对象 reinstancing。历史可行性评估已归档，当前支持范围以本节和 `CppLiveCodingService` 为准。
 
 对应 CVar：
 

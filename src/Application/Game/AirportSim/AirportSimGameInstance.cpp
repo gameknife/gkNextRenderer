@@ -93,7 +93,7 @@ void AirportSimGameInstance::OnInit()
     SPDLOG_INFO("AirportSim: loading scene '{}'", initialScene);
     GetEngine().RequestLoadScene({.filename = initialScene});
 
-    // 行为决策走本地 llama-server（§5.3）；不可用时全程 fallback。
+    // 行为决策走本地 llama-server；不可用时全程 fallback。
     if (auto* ai = NextAI::GetAIService(GetEngine())) ai->SetProfile("simulation");
 }
 

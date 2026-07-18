@@ -24,7 +24,7 @@ namespace StudioSim
         std::string personality;
     };
 
-    // 一个员工的运行态（M2：卡片 + 可视节点 + 寻路）。后续里程碑会扩 mood/action/task。
+    // 一个员工的运行态：卡片、可视节点、寻路、决策与当日产出。
     struct FEmployee : NextGameplay::Sim::FSimCharacter
     {
         std::string id;
@@ -32,20 +32,20 @@ namespace StudioSim
         ERole       role = ERole::Unknown;
         glm::vec3   color{1.0f};
         std::string homeDeskPoi;
-        std::string personality;   // M4：喂进 LLM prompt
-        std::string todayTask;     // M5：今日目标分解出的个人重点
-        FProjectMeters myContribution; // 当日个人产出累计（R1：确定性产出状态机）
+        std::string personality;   // 喂进 LLM prompt
+        std::string todayTask;     // 今日目标分解出的个人重点
+        FProjectMeters myContribution; // 当日个人产出累计（确定性产出状态机）
         std::vector<std::string> shortMemory; // 最近几条经历摘要，喂回 LLM 决策 prompt
 
         std::string targetPoi;
 
-        // M4：LLM 决策态。overrideTargetPoi 非空且未过期 → 覆盖脚本日程。
+        // LLM 决策态。overrideTargetPoi 非空且未过期 → 覆盖脚本日程。
         std::string overrideTargetPoi;
         double      overrideUntilMinutes = 0.0;
         std::string bubbleText;    // 头顶气泡（LLM 对话）
         double      bubbleClearAt = 0.0;
-        std::string pendingFrom;   // M7：谁刚对我说了话
-        std::string pendingText;   // M7：对方说的内容
+        std::string pendingFrom;   // 谁刚对我说了话
+        std::string pendingText;   // 对方说的内容
         EMood       mood = EMood::Calm;
         bool        decisionPending = false;
         bool        eventReactionPending = false;
@@ -55,8 +55,8 @@ namespace StudioSim
         double      nextWorkOutputAt = 0.0;
     };
 
-    // 生成员工几何体、从场景 BVH 建 NavGrid、用 PathFollower 驱动移动。
-    // M2 先做随机巡游验证移动；M3+ 改由日程/调度器决定目标。
+    // 生成员工几何体、从场景 BVH 建 NavGrid、用 PathFollower 驱动移动；
+    // 目标由脚本日程或决策调度器提供。
     class EmployeeSystem
     {
     public:

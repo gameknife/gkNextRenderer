@@ -1,5 +1,5 @@
 // ScadCatalog: headless generator for the machine-readable SCAD kit catalog
-// (assets/scad/lib/catalog.json, design docs/designs/scad-scene-compose-design.md §4.2).
+// (assets/scad/lib/catalog.json; see docs/designs/scad-scene-compose-design.md).
 //
 // For every kit_*.scad under the lib directory it lists the module signatures
 // (shared scanner with ScadLibrary's KitCatalog) and evaluates each module once
@@ -37,11 +37,11 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 
 namespace
 {
-    // Kit-level scale class (design §4.1 point 5): warns future composers when
-    // human-scale interior parts get mixed into city-scale layouts.
+    // Kit-level scale class used by catalog consumers to warn when human-scale
+    // interior parts are mixed into city-scale layouts.
     std::string ScaleClassFor(const std::string& kitName)
     {
-        if (kitName == "kit_office" || kitName == "kit_airport")
+        if (kitName == "kit_office" || kitName == "kit_airport" || kitName == "kit_char")
         {
             return "human";
         }

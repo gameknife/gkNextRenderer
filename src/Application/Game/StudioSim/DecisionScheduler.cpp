@@ -471,7 +471,7 @@ namespace StudioSim
         }
         PushShortMemory(emp, gameMinutes, memory);
 
-        // M7：TALK 时给目标同事投递消息，让其插队尽快回应（形成来回 + 情绪扩散）。
+        // TALK 时给目标同事投递消息，让其插队尽快回应（形成来回 + 情绪扩散）。
         if (result.action == "TALK" && !result.targetEmployee.empty() && !result.dialogue.empty())
         {
             for (auto& other : employees)

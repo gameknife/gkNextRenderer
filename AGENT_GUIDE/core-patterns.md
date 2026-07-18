@@ -13,8 +13,9 @@
 - **避免分散**: 不要单独包含标准库头文件，CoreMinimal.hpp已提供
 
 ### 构建验证
-- **每次必做**: 代码修改后必须运行构建脚本
-- **运行时验证**: 构建成功后必须运行应用程序验证功能
+- **按影响面验证**: C++/shader 修改按 `AGENTS.md` 选择受影响 target；不要默认全量构建
+- **文档与工具**: 纯文档无需 C++ build，gnb/工具修改运行自身测试
+- **运行时验证**: 只在改动影响运行时行为时启动相关应用或使用 `gnb shot` / `gnb validate`
 
 ## ⚡ 核心命令
 
@@ -27,8 +28,8 @@
 
 ### 2. 项目构建
 ```bash
-./gnb.bat build      # Windows
-./gnb.sh build     # macOS/Linux
+./gnb.bat build gkNextRenderer gkNextUnitTests  # Windows Engine 改动
+./gnb.sh build gkNextRenderer gkNextUnitTests   # macOS/Linux Engine 改动
 ./gnb.sh android   # Android
 ```
 
@@ -48,12 +49,12 @@
 ## ✅ 成功标准
 
 ### 构建成功标志
-- 编译无错误和警告
+- 受影响目标编译无错误
 - 生成可执行文件到正确目录 (`out/build/<preset>/bin/`)
 
 ### 运行时成功标志
 - 应用程序正常启动
-- 日志显示 `uploaded scene [CornellBox.proc] to gpu`
+- 日志显示 `uploaded scene [...] to gpu`
 
 ### 测试成功标志
 - `gkNextUnitTests` 输出 `All tests passed`

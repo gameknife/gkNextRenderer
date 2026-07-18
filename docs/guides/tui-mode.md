@@ -4,7 +4,7 @@ category: guide
 status: 现行
 owner: engine
 created: 2026-06-25
-last_updated: 2026-06-25
+last_updated: 2026-07-17
 ---
 
 # TUI 终端模式
@@ -22,7 +22,7 @@ last_updated: 2026-06-25
 也可以透传到底层 target：
 
 ```bash
-./gnb.sh run gkNextRenderer -- --tui --load-scene=assets/models/playground.glb
+./gnb.sh run gkNextRenderer --tui --load-scene=assets/models/playground.glb
 ```
 
 常用参数：
@@ -39,7 +39,8 @@ last_updated: 2026-06-25
 - `q`：退出
 - `Ctrl+C`：退出
 - `r`：截图到 `out/build/<preset>/screenshots/tui_capture.jpg`
-- `WASD` / 方向键：转发为 SDL 键盘事件，复用 target 自己已有的输入绑定
+- 字母、数字、常用标点、Space/Enter/Tab/Backspace 与方向键：转发为短按 SDL 键盘事件，复用 target 自己已有的输入绑定
+- 支持 mouse-reporting 的终端还会转发鼠标移动、按键和滚轮，并映射到当前 TUI viewport
 
 ## 行为说明
 

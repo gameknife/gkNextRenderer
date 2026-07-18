@@ -7,6 +7,7 @@
 // children 内可读的每实例变量：
 //   $idx   线性序号            $col / $row  网格坐标（lay_grid）
 //   $seed  每实例派生种子      $t           段内参数 0..1（lay_along）
+//   $px / $py  本实例在组合子自身坐标系内的放置偏移（kit_terrain 的 ter_snap 用它贴地）
 //
 // 已在引擎 loader 验证：for 体内 `$var = ...;` 赋值经动态作用域穿透 children()。
 
@@ -30,10 +31,9 @@ module lay_grid(cols = 3, rows = 3, cw = 10, ch = 10, seed = 0, center = true)
         $row = r;
         $idx = r * cols + c;
         $seed = seed * 8191 + r * 131 + c * 7;
-        translate([
-            center ? (c - (cols - 1) / 2) * cw : c * cw,
-            center ? (r - (rows - 1) / 2) * ch : r * ch,
-            0])
+        $px = center ? (c - (cols - 1) / 2) * cw : c * cw;
+        $py = center ? (r - (rows - 1) / 2) * ch : r * ch;
+        translate([$px, $py, 0])
             children();
     }
 }
@@ -45,7 +45,9 @@ module lay_row(n = 4, dx = 10, dy = 0, seed = 0)
     {
         $idx = i;
         $seed = seed * 8191 + i * 131;
-        translate([i * dx, i * dy, 0]) children();
+        $px = i * dx;
+        $py = i * dy;
+        translate([$px, $py, 0]) children();
     }
 }
 
@@ -58,6 +60,8 @@ module lay_ring(n = 6, r = 10, seed = 0, face = 1, a0 = 0)
         $idx = i;
         $seed = seed * 8191 + i * 131;
         lay_ring_a = a0 + i * 360 / n;
+        $px = r * sin(lay_ring_a);
+        $py = -r * cos(lay_ring_a);
         rotate([0, 0, lay_ring_a]) translate([0, -r, 0])
             rotate([0, 0, face == 1 ? 180 : (face == -1 ? 0 : -lay_ring_a)])
                 children();
@@ -73,7 +77,9 @@ module lay_scatter(n = 10, x0 = -20, x1 = 20, y0 = -20, y1 = 20, seed = 0, rot =
     {
         $idx = i;
         $seed = seed * 8191 + i * 131;
-        translate([lay_randr($seed, 1, x0, x1), lay_randr($seed, 2, y0, y1), 0])
+        $px = lay_randr($seed, 1, x0, x1);
+        $py = lay_randr($seed, 2, y0, y1);
+        translate([$px, $py, 0])
             rotate([0, 0, rot ? lay_randi($seed, 3, 360) : 0])
                 children();
     }
@@ -97,7 +103,9 @@ module lay_along(pts, step = 6, seed = 0, offset = 0)
                 $idx = s * 1024 + k;
                 $seed = seed * 8191 + s * 131 + k * 7;
                 $t = (offset + k * step) / lay_al_len;
-                translate([pts[s][0] + lay_al_d[0] * $t, pts[s][1] + lay_al_d[1] * $t, 0])
+                $px = pts[s][0] + lay_al_d[0] * $t;
+                $py = pts[s][1] + lay_al_d[1] * $t;
+                translate([$px, $py, 0])
                     rotate([0, 0, lay_al_a])
                         children();
             }

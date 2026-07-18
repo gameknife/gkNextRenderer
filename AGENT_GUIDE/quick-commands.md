@@ -66,13 +66,13 @@
 
 ### 运行时错误
 *   **找不到 DLL/so**: 先运行 `gnb setup` 和 `gnb build`。
-*   **Shader 缺失**: 确保 `assets/shaders` 下有编译好的 `.spv` 文件。
+*   **Shader 缺失**: 检查构建日志，并确认运行时 build assets 的 `assets/shaders` 下有对应 `.slang.spv` 文件；source tree 只保存 `.slang` 源码。
 
 ### 常用搜索
 ```bash
 # 搜索类定义
-grep -r "class NextEngine" src/
+rg "class NextEngine" src/
 
 # 搜索 TODO
-grep -r "TODO" src/
+rg "TODO" src/
 ```

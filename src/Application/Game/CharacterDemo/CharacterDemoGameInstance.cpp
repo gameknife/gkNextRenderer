@@ -71,8 +71,8 @@ void CharacterDemoGameInstance::OnInit()
         const char* message =
             "CharacterDemo needs the optional asset pack (character mesh).\n\n"
             "Run one of the following from the repo root, then relaunch:\n"
-            "  scripts/fetch-paks.sh --optional      (Linux / macOS / Git Bash)\n"
-            "  scripts\\fetch-paks.bat --optional    (Windows)";
+            "  ./gnb.sh paks fetch optional      (Linux / macOS / Git Bash)\n"
+            "  gnb.bat paks fetch optional       (Windows)";
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "CharacterDemo - Missing Optional Assets",
                                  message, GetEngine().GetWindow().Handle());
         SPDLOG_ERROR("CharacterDemo: optional asset pack missing; aborting OnInit");

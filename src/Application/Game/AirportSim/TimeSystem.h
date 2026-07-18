@@ -9,7 +9,7 @@ namespace Assets
 
 namespace AirportSim
 {
-    // 世界时钟 + 日夜光照 + 班次窗口（§4.1/§4.2）。所有系统以游戏分钟为单位。
+    // 世界时钟 + 日夜光照 + 班次窗口。所有系统以游戏分钟为单位。
     class TimeSystem
     {
     public:

@@ -1,9 +1,9 @@
-// kit_city_hd.scad —— generated from habor_city_hd.scad by tools/scadkit (kit split M0)
+// kit_city_hd.scad —— 由一次性 tools/scadkit 迁移生成；原顶层场景已删除，本文件现在是 hc_ kit 的事实来源。
 // 纯零件库：只含 module/function 定义，无顶层几何。命名空间前缀 "hc_"。
 // 常量以零参 function 内置（use 语义不传播顶层赋值），调用方无需重申环境常量。
 // 放置契约：落地件底面 z=0，带朝向件 front = -y。调用方自设 $fn（建议 12）。
 
-// habor_city_hd.scad —— 人尺度低多边形海滨城市（HD 版，参考低多边形卡通城市示意图）
+// 以下注释描述该 kit 原始海滨城市场景的尺度与约定。
 //
 // 与 habor_city.scad（微缩沙盘 672x508）不同，本场景为**人尺度**（1 单位 = 1 米），
 // 细节密度对齐 airport.scad：门是门、灯是灯、车是车，角色可直接行走其中。

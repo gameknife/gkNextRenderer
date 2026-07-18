@@ -66,12 +66,12 @@
 - 缩进：**4 空格**（禁止 Tab）
 - 大括号：函数/方法的大括号另起一行（Allman 风格）
   ```cpp
-  void RenderFrame() {  // ✅
+  void RenderFrame()    // ✅
+  {
       // ...
   }
 
-  void RenderFrame()    // ❌
-  {
+  void RenderFrame() {  // ❌
       // ...
   }
   ```
@@ -89,7 +89,7 @@
 - Windows (MSVC 2022)
 - Linux (GCC/Clang)
 - macOS (arm64, Clang)
-- Android (NDK r27, arm64)
+- Android (arm64; use the NDK selected by the current Gradle/host setup, no repository-pinned release)
 - iOS (arm64, Xcode)
 
 **审查建议:**
@@ -97,7 +97,7 @@
 - [ ] 文件路径使用跨平台 API (`std::filesystem` 或引擎封装)
 - [ ] 着色器代码使用 Slang，避免平台特定的 GLSL/HLSL
 - [ ] 检查大小端、对齐、字节序等问题（移动平台）
-- [ ] Android 构建需特别注意 SDL3 依赖处理（使用 `.aar`）
+- [ ] Android 构建需特别注意当前 Gradle/NDK 与 SDL3 依赖处理，不在源码或文档里臆造固定 NDK 版本
 
 ---
 
@@ -174,8 +174,8 @@
 **审查建议:**
 - [ ] 新增第三方库需更新 `vcpkg.json`
 - [ ] CMakeLists.txt 避免硬编码路径（使用变量）
-- [ ] 可选依赖需条件编译（如 AVIF、Superluminal）
-- [ ] Android 构建需检查 NDK 版本兼容性（当前 r27）
+- [ ] 可选依赖需按现有 CMake option/module 边界条件编译（如 AVIF、Streamline）
+- [ ] Android 构建需检查项目当前配置与本机 NDK 的兼容性
 
 ---
 
@@ -190,7 +190,7 @@
 - [ ] 渲染改动需附截图对比（性能改动需附 FPS 数据）
 - [ ] 跨平台改动需在至少 2 个平台验证
 - [ ] 着色器改动需运行 `gkNextRenderer` 目视检查
-- [ ] TypeScript 脚本改动需执行 bundled tsc：Windows 用 `tools\tsc\tsc.exe -p assets\typescript\tsconfig.json`，macOS/Linux 用 `tools/tsc/tsc -p assets/typescript/tsconfig.json`；运行时热重载同样使用 bundled tsc，不依赖 Node/npm
+- [ ] TypeScript 脚本改动先做不落盘类型检查：Windows 用 `tools\tsc\tsc.exe --noEmit -p assets\typescript\tsconfig.json`，macOS/Linux 用 `tools/tsc/tsc --noEmit -p assets/typescript/tsconfig.json`；运行时热重载同样使用 bundled tsc，不依赖 Node/npm
 
 ---
 

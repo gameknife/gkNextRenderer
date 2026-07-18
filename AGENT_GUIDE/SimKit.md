@@ -67,10 +67,11 @@ Animation hints are deliberately small:
 from domain context before calling `Tick`, for example `Work` at a desk or `Sit` in a
 meeting area.
 
-## Round 2 TODO
+## 当前非目标（不是活动 TODO）
 
-The following systems are intentionally still application-local. Extract them only
-after AirportSim and StudioSim have converged on compatible behavior:
+The following systems are intentionally still application-local. This list records an
+architecture boundary, not scheduled work. Extract one only after the actual consumers
+have converged on compatible behavior and a user task defines acceptance criteria:
 
 - `FDecisionScheduler`: serial AI request, timeout, fallback, and main-thread apply.
 - `FWorldClock`: game minutes, speed, pause, day index, and optional daylight.
@@ -84,9 +85,8 @@ after AirportSim and StudioSim have converged on compatible behavior:
 Build shared consumers after changing Sim Kit:
 
 ```bash
-./gnb build gkNextRenderer
-./gnb build gkNextUnitTests
+./gnb.sh build AirportSim StudioSim CitySolSim gkNextUnitTests
 ./out/build/<preset>/bin/gkNextUnitTests "[Unit][SimKit]"
 ```
 
-Then build and visually verify the affected application with `gnb shot`.
+Then visually verify the affected application with `./gnb.sh shot --target <target> --ui`.

@@ -9,6 +9,7 @@
 
 #include "Modules/ScadLoader/FScadCsg.h"
 #include "Modules/ScadLoader/FScadGeometry.h"
+#include "Modules/ScadLoader/FScadTerrain.h"
 #include "Modules/ScadLoader/FScadTess.h"
 #include "Modules/ScadLoader/FScadText.h"
 
@@ -34,6 +35,8 @@ namespace Assets::Scad
         {
             glm::dvec4 color = glm::dvec4(0.78, 0.78, 0.78, 1.0);
             bool hasColor = false;
+            bool faceted = false;      // terrain: keep flat shading in the loader
+            bool terrainWater = false; // terrain water surface (dedicated node)
             std::string materialName;
             std::string groupName;
             uint64_t groupInstanceId = 0;
@@ -288,6 +291,7 @@ namespace Assets::Scad
                     ColorBucket& bucket = flatResult_->buckets[key];
                     bucket.color = c;
                     bucket.groupName = groupName;
+                    bucket.faceted = bucket.faceted || cs.faceted;
                     bucket.tris.insert(bucket.tris.end(), cs.soup.begin(), cs.soup.end());
                     AddTriangleCount(cs.soup.size() / 3);
                 }
@@ -366,6 +370,8 @@ namespace Assets::Scad
                     {
                         bucket.materialName = cs.materialName;
                     }
+                    bucket.faceted = bucket.faceted || cs.faceted;
+                    bucket.terrainWater = bucket.terrainWater || cs.terrainWater;
                     bucket.tris.insert(bucket.tris.end(), cs.soup.begin(), cs.soup.end());
                     AddTriangleCount(cs.soup.size() / 3);
                 }
@@ -619,6 +625,10 @@ namespace Assets::Scad
                 if (name == "cube" || name == "sphere" || name == "cylinder" || name == "polyhedron")
                 {
                     return EvalPrimitive(inst, xform, color, hasColor);
+                }
+                if (name == "gk_terrain")
+                {
+                    return EvalTerrain(inst, xform, color, hasColor);
                 }
                 if (name == "linear_extrude")
                 {
@@ -996,6 +1006,17 @@ namespace Assets::Scad
             GeomList MakeGeom(TriSoup&& objSpace, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor);
 
             GeomList EvalPrimitive(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor);
+
+            // --------------------------------------------------------------
+            // gk_terrain (native low-poly heightfield; FScadTerrain backend)
+            // --------------------------------------------------------------
+            GeomList EvalTerrain(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor);
+
+            // Decodes + builds (or returns the cached) terrain for a TERR value.
+            // Returns nullptr after warning on malformed specs.
+            std::shared_ptr<const FTerrainData> TerrainFromValue(const Value& value, const char* where);
+
+            std::unordered_map<std::string, std::shared_ptr<const FTerrainData>> terrainCache_;
 
             GeomList EvalLinearExtrude(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor);
 

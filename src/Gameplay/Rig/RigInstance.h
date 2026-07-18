@@ -2,7 +2,7 @@
 
 // ============================================================================
 // RigInstance.h - Runtime side of the rigid-body rig (see RigAsset.hpp and
-// docs/ScadRig-Design.md): FRigInstance builds one Node tree per character
+// AGENT_GUIDE/ScadRig.md): FRigInstance builds one Node tree per character
 // (bone nodes carry bind TRS, part render nodes hang under their bone), and
 // FRigAnimator plays clips by writing bone-local TRS offsets on top of the
 // bind pose. Animators hold raw Node pointers and never look nodes up by

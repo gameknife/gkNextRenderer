@@ -68,7 +68,7 @@ namespace AirportSim
         }
     };
 
-    // 角色池（spawn/despawn）+ NavGrid + 移动/分离力 + 视觉驱动（§6/§7.2/§7.4）。
+    // 角色池（spawn/despawn）+ NavGrid + 移动/分离力 + 视觉驱动。
     class AgentSystem
     {
     public:
@@ -86,7 +86,7 @@ namespace AirportSim
 
         // 走 NavGrid A* 去目标；返回 false = 寻路失败（仍直线走）。
         bool MoveTo(FAgent& agent, const glm::vec3& target);
-        // 脚本走点（安检南进北出等单向流，§7.2）。
+        // 脚本走点（安检南进北出等单向流）。
         void MoveAlong(FAgent& agent, std::vector<glm::vec3> waypoints);
         bool Arrived(const FAgent& agent) const;
 

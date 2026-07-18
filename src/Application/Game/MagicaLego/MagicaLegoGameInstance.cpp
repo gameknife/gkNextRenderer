@@ -344,8 +344,8 @@ void MagicaLegoGameInstance::OnInit()
         const char* message =
             "MagicaLego needs legobricks.glb (shipped via the optional asset pack).\n\n"
             "Run one of the following from the repo root, then relaunch:\n"
-            "  scripts/fetch-paks.sh --optional      (Linux / macOS / Git Bash)\n"
-            "  scripts\\fetch-paks.bat --optional    (Windows)";
+            "  ./gnb.sh paks fetch optional      (Linux / macOS / Git Bash)\n"
+            "  gnb.bat paks fetch optional       (Windows)";
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "MagicaLego - Missing Optional Assets",
                                  message, GetEngine().GetWindow().Handle());
         SPDLOG_ERROR("MagicaLego: legobricks.glb not found in disk or any mounted pak; aborting OnInit");
@@ -1625,4 +1625,3 @@ void MagicaLegoGameInstance::UpdateMouseCursor()
         SDL_SetCursor(cursor);
     }
 }
-

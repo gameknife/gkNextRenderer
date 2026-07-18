@@ -445,3 +445,65 @@ TEST_CASE("ScadRig loads the shipped NextRA soldier", "[Unit][ScadRig][NextRA]")
     const FRigBone& head = asset.bones[asset.FindBone("bone_head")];
     CHECK(torso.bindT.y + head.bindT.y == Catch::Approx(1.44f).margin(0.02f));
 }
+
+// kit_char 组装角色：use <../lib/kit_char.scad> 闭包 + 库函数 clip 的完整链路。
+static void CheckKitCharacter(const char* path, int expectedTintable)
+{
+    FRigAsset asset;
+    std::string err;
+    std::vector<std::string> warnings;
+    REQUIRE(FScadRigLoader::LoadRig(path, ScadRigLoadOptions{}, asset, err, &warnings));
+
+    CHECK(warnings.empty());
+    REQUIRE(asset.bones.size() == 7);
+    CHECK(asset.bones[0].name == "bone_root");
+    for (const char* bone : {"bone_torso", "bone_head", "bone_arm_l", "bone_arm_r",
+                             "bone_leg_l", "bone_leg_r"})
+    {
+        CHECK(asset.FindBone(bone) >= 0);
+    }
+
+    // clip 来自 kit 函数（anim_x = ch_clip_x()），与 agent_basic 语义一致。
+    for (const char* clip : {"idle", "walk", "sit", "work", "wave"})
+    {
+        const FRigClip* c = asset.FindClip(clip);
+        REQUIRE(c != nullptr);
+        CHECK_FALSE(c->channels.empty());
+    }
+    CHECK(asset.FindClip("walk")->duration == Catch::Approx(0.8f));
+    CHECK(asset.FindClip("walk")->loop);
+    CHECK_FALSE(asset.FindClip("sit")->loop);
+
+    // 骨架标准 pivot：torso(0.84) + head(0.54) = 1.38（引擎 Y）。
+    const FRigBone& torso = asset.bones[asset.FindBone("bone_torso")];
+    const FRigBone& head = asset.bones[asset.FindBone("bone_head")];
+    CHECK(torso.bindT.y + head.bindT.y == Catch::Approx(1.38f).margin(0.02f));
+
+    size_t triangles = 0;
+    for (const Model& model : asset.partModels)
+    {
+        triangles += model.NumberOfIndices() / 3;
+    }
+    CHECK(triangles > 0);
+    CHECK(triangles < 900);
+
+    int tintableSections = 0;
+    for (const FRigPart& part : asset.parts)
+    {
+        for (bool tintable : part.sectionTintable)
+        {
+            if (tintable) ++tintableSections;
+        }
+    }
+    CHECK(tintableSections >= expectedTintable);
+}
+
+TEST_CASE("ScadRig loads the kit_char worker character", "[Unit][ScadRig][KitChar]")
+{
+    CheckKitCharacter("assets/scad/characters/worker.scad", 3); // 背心 + 双手套袖
+}
+
+TEST_CASE("ScadRig loads the kit_char citizen character", "[Unit][ScadRig][KitChar]")
+{
+    CheckKitCharacter("assets/scad/characters/citizen.scad", 3); // 连衣裙 + 双袖
+}

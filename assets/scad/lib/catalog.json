@@ -1654,6 +1654,906 @@
       ]
     },
     {
+      "name": "kit_char",
+      "file": "kit_char.scad",
+      "prefix": "ch_",
+      "scaleClass": "human",
+      "modules": [
+        {
+          "name": "ch_acc_apron",
+          "category": "acc",
+          "params": "c = ch_WHITEC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_WHITEC()"
+            }
+          ],
+          "line": 221,
+          "footprint": [
+            0.3,
+            0.02
+          ],
+          "height": 0.38,
+          "zMin": -0.02,
+          "center": [
+            0.0,
+            -0.11
+          ],
+          "triangles": 24,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_acc_backpack",
+          "category": "acc",
+          "params": "c = [0.48, 0.32, 0.20]",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "[0.48, 0.32, 0.20]"
+            }
+          ],
+          "line": 197,
+          "footprint": [
+            0.29,
+            0.13
+          ],
+          "height": 0.5,
+          "zMin": 0.11,
+          "center": [
+            0.0,
+            0.16
+          ],
+          "triangles": 24,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_acc_scarf",
+          "category": "acc",
+          "params": "c = [0.75, 0.25, 0.22]",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "[0.75, 0.25, 0.22]"
+            }
+          ],
+          "line": 216,
+          "footprint": [
+            0.28,
+            0.24
+          ],
+          "height": 0.54,
+          "zMin": 0.47,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_acc_tie",
+          "category": "acc",
+          "params": "c = [0.65, 0.16, 0.18]",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "[0.65, 0.16, 0.18]"
+            }
+          ],
+          "line": 210,
+          "footprint": [
+            0.07,
+            0.02
+          ],
+          "height": 0.5,
+          "zMin": 0.2,
+          "center": [
+            0.0,
+            -0.11
+          ],
+          "triangles": 24,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_acc_toolbelt",
+          "category": "acc",
+          "params": "c = [0.35, 0.24, 0.14]",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "[0.35, 0.24, 0.14]"
+            }
+          ],
+          "line": 203,
+          "footprint": [
+            0.36,
+            0.24
+          ],
+          "height": 0.07,
+          "zMin": -0.07,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 36,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_arm_gloved",
+          "category": "arm",
+          "params": "c = ch_TINT(), glove = [0.30, 0.30, 0.32]",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_TINT()"
+            },
+            {
+              "name": "glove",
+              "default": "[0.30, 0.30, 0.32]"
+            }
+          ],
+          "line": 167,
+          "footprint": [
+            0.1,
+            0.11
+          ],
+          "height": 0.0,
+          "zMin": -0.51,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_arm_long",
+          "category": "arm",
+          "params": "c = ch_TINT(), skin = ch_SKIN()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_TINT()"
+            },
+            {
+              "name": "skin",
+              "default": "ch_SKIN()"
+            }
+          ],
+          "line": 161,
+          "footprint": [
+            0.1,
+            0.11
+          ],
+          "height": 0.0,
+          "zMin": -0.5,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_arm_shirt",
+          "category": "arm",
+          "params": "c = ch_TINT(), skin = ch_SKIN()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_TINT()"
+            },
+            {
+              "name": "skin",
+              "default": "ch_SKIN()"
+            }
+          ],
+          "line": 155,
+          "footprint": [
+            0.1,
+            0.11
+          ],
+          "height": 0.0,
+          "zMin": -0.49,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_char_casual",
+          "category": "char",
+          "params": "tint = [0.30, 0.52, 0.75], skin = ch_SKIN(), hair = ch_HAIRC()",
+          "paramList": [
+            {
+              "name": "tint",
+              "default": "[0.30, 0.52, 0.75]"
+            },
+            {
+              "name": "skin",
+              "default": "ch_SKIN()"
+            },
+            {
+              "name": "hair",
+              "default": "ch_HAIRC()"
+            }
+          ],
+          "line": 229,
+          "footprint": [
+            0.54,
+            0.3
+          ],
+          "height": 1.61,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 144,
+          "colors": 11,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_char_chef",
+          "category": "char",
+          "params": "skin = ch_SKIN()",
+          "paramList": [
+            {
+              "name": "skin",
+              "default": "ch_SKIN()"
+            }
+          ],
+          "line": 256,
+          "footprint": [
+            0.54,
+            0.29
+          ],
+          "height": 1.8,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.02
+          ],
+          "triangles": 288,
+          "colors": 12,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_char_citizen",
+          "category": "char",
+          "params": "tint = [0.68, 0.30, 0.42], skin = ch_SKIN(), hair = ch_HAIRC(2)",
+          "paramList": [
+            {
+              "name": "tint",
+              "default": "[0.68, 0.30, 0.42]"
+            },
+            {
+              "name": "skin",
+              "default": "ch_SKIN()"
+            },
+            {
+              "name": "hair",
+              "default": "ch_HAIRC(2)"
+            }
+          ],
+          "line": 284,
+          "footprint": [
+            0.54,
+            0.32
+          ],
+          "height": 1.62,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 204,
+          "colors": 13,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_char_suit",
+          "category": "char",
+          "params": "tint = [0.22, 0.24, 0.30], skin = ch_SKIN()",
+          "paramList": [
+            {
+              "name": "tint",
+              "default": "[0.22, 0.24, 0.30]"
+            },
+            {
+              "name": "skin",
+              "default": "ch_SKIN()"
+            }
+          ],
+          "line": 270,
+          "footprint": [
+            0.54,
+            0.3
+          ],
+          "height": 1.62,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 216,
+          "colors": 13,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_char_worker",
+          "category": "char",
+          "params": "tint = [0.95, 0.60, 0.10], skin = ch_SKIN(1)",
+          "paramList": [
+            {
+              "name": "tint",
+              "default": "[0.95, 0.60, 0.10]"
+            },
+            {
+              "name": "skin",
+              "default": "ch_SKIN(1)"
+            }
+          ],
+          "line": 242,
+          "footprint": [
+            0.54,
+            0.32
+          ],
+          "height": 1.68,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 240,
+          "colors": 14,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_hair_buzz",
+          "category": "hair",
+          "params": "c = ch_HAIRC(1)",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_HAIRC(1)"
+            }
+          ],
+          "line": 74,
+          "footprint": [
+            0.23,
+            0.23
+          ],
+          "height": 0.23,
+          "zMin": 0.2,
+          "center": [
+            0.0,
+            0.01
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_hair_flat",
+          "category": "hair",
+          "params": "c = ch_HAIRC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_HAIRC()"
+            }
+          ],
+          "line": 69,
+          "footprint": [
+            0.24,
+            0.24
+          ],
+          "height": 0.23,
+          "zMin": 0.18,
+          "center": [
+            0.0,
+            0.02
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_hair_ponytail",
+          "category": "hair",
+          "params": "c = ch_HAIRC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_HAIRC()"
+            }
+          ],
+          "line": 85,
+          "footprint": [
+            0.24,
+            0.26
+          ],
+          "height": 0.23,
+          "zMin": -0.06,
+          "center": [
+            0.0,
+            0.03
+          ],
+          "triangles": 24,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_hair_swept",
+          "category": "hair",
+          "params": "c = ch_HAIRC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_HAIRC()"
+            }
+          ],
+          "line": 79,
+          "footprint": [
+            0.24,
+            0.27
+          ],
+          "height": 0.23,
+          "zMin": 0.12,
+          "center": [
+            0.0,
+            0.01
+          ],
+          "triangles": 24,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_hat_beanie",
+          "category": "hat",
+          "params": "c = ch_TINT()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_TINT()"
+            }
+          ],
+          "line": 111,
+          "footprint": [
+            0.25,
+            0.25
+          ],
+          "height": 0.27,
+          "zMin": 0.19,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 24,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_hat_cap",
+          "category": "hat",
+          "params": "c = ch_TINT()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_TINT()"
+            }
+          ],
+          "line": 93,
+          "footprint": [
+            0.24,
+            0.35
+          ],
+          "height": 0.27,
+          "zMin": 0.19,
+          "center": [
+            0.0,
+            -0.05
+          ],
+          "triangles": 24,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_hat_chef",
+          "category": "hat",
+          "params": "c = ch_WHITEC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_WHITEC()"
+            }
+          ],
+          "line": 105,
+          "footprint": [
+            0.24,
+            0.24
+          ],
+          "height": 0.42,
+          "zMin": 0.2,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 24,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_hat_helmet",
+          "category": "hat",
+          "params": "c = [0.95, 0.78, 0.12]",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "[0.95, 0.78, 0.12]"
+            }
+          ],
+          "line": 99,
+          "footprint": [
+            0.3,
+            0.3
+          ],
+          "height": 0.3,
+          "zMin": 0.19,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 24,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_head_box",
+          "category": "head",
+          "params": "skin = ch_SKIN()",
+          "paramList": [
+            {
+              "name": "skin",
+              "default": "ch_SKIN()"
+            }
+          ],
+          "line": 49,
+          "footprint": [
+            0.22,
+            0.25
+          ],
+          "height": 0.22,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 24,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_head_round",
+          "category": "head",
+          "params": "skin = ch_SKIN()",
+          "paramList": [
+            {
+              "name": "skin",
+              "default": "ch_SKIN()"
+            }
+          ],
+          "line": 55,
+          "footprint": [
+            0.25,
+            0.27
+          ],
+          "height": 0.25,
+          "zMin": -0.02,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 132,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_head_slim",
+          "category": "head",
+          "params": "skin = ch_SKIN()",
+          "paramList": [
+            {
+              "name": "skin",
+              "default": "ch_SKIN()"
+            }
+          ],
+          "line": 61,
+          "footprint": [
+            0.19,
+            0.23
+          ],
+          "height": 0.24,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.02
+          ],
+          "triangles": 24,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_leg_boots",
+          "category": "leg",
+          "params": "c = ch_PANTSC(), boot = [0.32, 0.24, 0.18]",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_PANTSC()"
+            },
+            {
+              "name": "boot",
+              "default": "[0.32, 0.24, 0.18]"
+            }
+          ],
+          "line": 188,
+          "footprint": [
+            0.14,
+            0.26
+          ],
+          "height": 0.0,
+          "zMin": -0.78,
+          "center": [
+            0.0,
+            -0.04
+          ],
+          "triangles": 36,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_leg_pants",
+          "category": "leg",
+          "params": "c = ch_PANTSC(), shoe = ch_SHOEC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_PANTSC()"
+            },
+            {
+              "name": "shoe",
+              "default": "ch_SHOEC()"
+            }
+          ],
+          "line": 175,
+          "footprint": [
+            0.13,
+            0.24
+          ],
+          "height": 0.0,
+          "zMin": -0.78,
+          "center": [
+            0.0,
+            -0.04
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_leg_shorts",
+          "category": "leg",
+          "params": "c = ch_PANTSC(), skin = ch_SKIN(), shoe = ch_SHOEC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_PANTSC()"
+            },
+            {
+              "name": "skin",
+              "default": "ch_SKIN()"
+            },
+            {
+              "name": "shoe",
+              "default": "ch_SHOEC()"
+            }
+          ],
+          "line": 181,
+          "footprint": [
+            0.14,
+            0.24
+          ],
+          "height": 0.0,
+          "zMin": -0.78,
+          "center": [
+            0.0,
+            -0.04
+          ],
+          "triangles": 36,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_torso_dress",
+          "category": "torso",
+          "params": "c = ch_TINT()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_TINT()"
+            }
+          ],
+          "line": 146,
+          "footprint": [
+            0.44,
+            0.28
+          ],
+          "height": 0.52,
+          "zMin": -0.29,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 36,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_torso_hoodie",
+          "category": "torso",
+          "params": "c = ch_TINT()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_TINT()"
+            }
+          ],
+          "line": 124,
+          "footprint": [
+            0.34,
+            0.29
+          ],
+          "height": 0.52,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.03
+          ],
+          "triangles": 36,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_torso_shirt",
+          "category": "torso",
+          "params": "c = ch_TINT()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_TINT()"
+            }
+          ],
+          "line": 119,
+          "footprint": [
+            0.34,
+            0.2
+          ],
+          "height": 0.52,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_torso_suit",
+          "category": "torso",
+          "params": "c = [0.22, 0.24, 0.30], shirt = ch_WHITEC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "[0.22, 0.24, 0.30]"
+            },
+            {
+              "name": "shirt",
+              "default": "ch_WHITEC()"
+            }
+          ],
+          "line": 138,
+          "footprint": [
+            0.34,
+            0.22
+          ],
+          "height": 0.52,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 48,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ch_torso_vest",
+          "category": "torso",
+          "params": "c = ch_TINT(), base = [0.35, 0.38, 0.42]",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ch_TINT()"
+            },
+            {
+              "name": "base",
+              "default": "[0.35, 0.38, 0.42]"
+            }
+          ],
+          "line": 131,
+          "footprint": [
+            0.38,
+            0.25
+          ],
+          "height": 0.52,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 36,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        }
+      ]
+    },
+    {
       "name": "kit_city_blocks",
       "file": "kit_city_blocks.scad",
       "prefix": "v2_",
@@ -9743,7 +10643,7 @@
               "default": "0"
             }
           ],
-          "line": 741,
+          "line": 737,
           "footprint": [
             6.39,
             2.55
@@ -9780,8 +10680,8 @@
             0.29,
             -0.05
           ],
-          "triangles": 396,
-          "colors": 27,
+          "triangles": 312,
+          "colors": 23,
           "warnings": 0,
           "ok": true
         },

@@ -1,3 +1,12 @@
+---
+title: "NVIDIA Streamline / DLSS / DLSS-G"
+category: guide
+status: 现行
+owner: NextStreamline
+created: 2026-06-18
+last_updated: 2026-07-17
+---
+
 # NVIDIA Streamline / DLSS / DLSS-G 指南
 
 gkNextEngine 只在 Windows x86_64 上集成 NVIDIA Streamline。非 Windows 构建会编译相同的 renderer 路径，但 Streamline 处于禁用状态。
@@ -8,6 +17,9 @@ gkNextEngine 只在 Windows x86_64 上集成 NVIDIA Streamline。非 Windows 构
 - `r.dlssrr 1`：在 DLSS 已启用且功能受支持时启用 DLSS Ray Reconstruction。
 - `r.dlssg 1`：在 DLSS-G 和 Reflex 均受支持时启用 DLSS Frame Generation。
 - `r.dlssg.multiplier 2`：帧倍增系数，目前限制在 `2..4`。
+- `r.dlssg.frameLimitFps 0`：DLSS-G 开启时的 Reflex base-frame 限帧；0 表示不限制。
+- `r.dlss.jitterFrames 16`：DLSS/TAA projection jitter 序列长度，运行时钳制到 `1..256`。
+- `r.dlss.jitterInvertY 0`：只用于验证 Streamline jitter 符号的诊断开关，不是画质 preset。
 - `r.superResolution 0..5`：Quality、Balanced、Performance、Ultra Performance、Native/DLAA、Auto。Auto 在输出不超过 1920×1080 时关闭超分并使用原生分辨率，更高分辨率使用 Quality。
 
 修改 DLSS、DLSS-RR、DLSS-G、帧倍增系数或超分辨率模式会重建 swapchain。
@@ -15,7 +27,7 @@ gkNextEngine 只在 Windows x86_64 上集成 NVIDIA Streamline。非 Windows 构
 无需编辑 `cvar_user.json`，也可以通过启动参数覆盖：
 
 ```bash
-gkNextRenderer --load-scene=assets/models/playground.glb --cvar "r.dlss 1" --cvar "r.dlssg 1"
+./gnb.sh run gkNextRenderer --load-scene=assets/models/playground.glb --cvar "r.dlss 1" --cvar "r.dlssg 1"
 ```
 
 对于会反复创建和销毁 engine instance 的测试进程，使用 `--disable-streamline`。

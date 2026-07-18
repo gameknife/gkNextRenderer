@@ -25,7 +25,7 @@ namespace StudioSim
     struct FEmployee;
     class OfficeMap;
 
-    // 串行 LLM 决策调度器（见计划 §9）。匹配本地 llama-server 的单实例串行
+    // 串行 LLM 决策调度器。匹配本地 llama-server 的单实例串行
     // （parallel:1）：同一时刻最多 1 个在途请求。`GenerateTextAsync` 的回调在
     // worker 线程触发，只把解析结果入队；所有员工状态/Scene 改动在主线程 Tick 完成。
     class DecisionScheduler

@@ -15,7 +15,8 @@
 - `src/Application/Game/MagicaLego/MagicaLegoGameInstance.cpp`
   - 主要运行流程与核心行为实现。
   - `CreateGameInstance` 为游戏入口工厂。
-- `src/Application/Game/MagicaLego/MagicaLegoUserInterface.hpp/.cpp`
+- `src/Application/Game/MagicaLego/MagicaLegoUserInterface.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoUserInterface.cpp`
   - `MagicaLegoUserInterface`：ImGui UI 逻辑。
 
 ## 核心数据结构
@@ -83,8 +84,8 @@
   - `DrawOpening` / `DrawHelp` / `DrawNotify`。
 
 ## 资源与文件路径
-- 场景模型：`assets/models/legobricks.glb`
-- pak：`assets/paks/lego.pak`、`assets/paks/thumbs.pak`
+- 场景模型：`assets/models/legobricks.glb`（由可选资源包提供，不应假定 source tree 直接存在）
+- pak：`assets/paks/magicalego.pak` 是 `gnb paks fetch magicalego` 的现行分发包；运行时仍兼容挂载旧 `lego.pak` / `thumbs.pak`
 - 缩略图：`assets/textures/thumb/thumb_<type>_<name>.jpg`
 - 存档：`assets/legos/*.mls`
 - 截图：`screenshots/`
@@ -148,7 +149,7 @@ end
 ## AI 助手集成
 
 ### 核心文件
-- `MagicaLegoAIService.hpp/.cpp` - 薄封装，通过 client-only `NextAI::FAIService` 连接长生命周期 `gnb agent bridge --stdio`
+- `MagicaLegoAIService.hpp/.cpp` - 薄封装，通过 client-only `NextAI::FAIService` 连接长生命周期 `gnb ai bridge --stdio`
 - 配置文件：仓库 `gnb.toml` 的 `[ai]`、可选用户 `gnb-ai.toml` 与 secrets JSON
 
 ### 配置格式

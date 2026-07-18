@@ -51,13 +51,31 @@ void ScadLibraryGameInstance::OnInit() {}
 void ScadLibraryGameInstance::OnTick(double deltaSeconds)
 {
     cameraController_.UpdateCamera(1.0, deltaSeconds);
+    ui_->RigPreview().Tick(deltaSeconds);
     // Agent validation (capture + auto-exit) is handled centrally by NextEngine.
 }
 
 void ScadLibraryGameInstance::OnDestroy() {}
 
+void ScadLibraryGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                                                 std::vector<Assets::Model>& models,
+                                                 std::vector<Assets::FMaterial>& materials,
+                                                 std::vector<Assets::LightObject>& lights,
+                                                 std::vector<Assets::AnimationTrack>& tracks)
+{
+    // Character designer rig preview: part models/materials must ride the rebuild.
+    ui_->RigPreview().InjectAssets(models, materials);
+}
+
+void ScadLibraryGameInstance::OnSceneUnloaded()
+{
+    ui_->RigPreview().OnSceneUnloaded();
+}
+
 void ScadLibraryGameInstance::OnSceneLoaded()
 {
+    ui_->RigPreview().OnSceneLoaded(GetEngine().GetScene());
+
     // Re-frame whatever was just previewed/composed and orbit around it.
     Assets::Scene& scene = GetEngine().GetScene();
     cameraController_.Reset(scene.GetRenderCamera());

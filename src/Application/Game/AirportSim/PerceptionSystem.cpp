@@ -106,7 +106,7 @@ namespace AirportSim
             companion->lastGroupDiscussionAt = gameMinutes;
         }
 
-        // 相遇寒暄：3m 内邻居，带冷却（§5.3 感知事件）。
+        // 相遇寒暄：3m 内邻居，带冷却。
         for (size_t i = 0; i < all.size(); ++i)
         {
             FAgent& a = all[i];

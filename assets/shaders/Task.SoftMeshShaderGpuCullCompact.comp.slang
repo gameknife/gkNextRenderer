@@ -5,7 +5,7 @@ import Shader.GpuScene;
 import Shader.SoftMeshShaderCull; // IsAABBInFrustum / IsOccludedVolume
 
 // ---------------------------------------------------------------------------
-// Block-level aggregation (see docs/plans/softmeshshader-gpucull-atomic-contention-plan.md)
+// Block-level aggregation (current flow: docs/guides/soft-mesh-shader-gpu-driven-submit.md)
 //
 // Instead of every surviving thread spinning on a single global CAS to reserve
 // its prim range (and every candidate firing 2~4 stats atomics), each 64-thread
@@ -113,7 +113,8 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Lid : SV_GroupThreadID)
     {
         uint primBase = g_blockTriBase  + g_tri[lid];
         uint itemIdx  = g_blockItemBase + g_item[lid];
-        // cap check replaces the CAS loop; over-budget lanes are dropped (see plan §3.2).
+        // A block-wide reservation can cross the output cap. Drop only the
+        // over-budget lanes instead of retrying the reservation with a CAS loop.
         if (primBase + triangleCount <= cap && itemIdx < uint(MAX_NODES))
         {
             SoftMeshShaderVisibleItem item;

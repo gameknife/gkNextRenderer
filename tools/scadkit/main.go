@@ -1,6 +1,8 @@
-// scadkit: mechanical splitter that extracts reusable kit libraries from the
-// theme .scad scenes under assets/scad/ (M0 of the SCAD scene-compose plan,
-// docs/designs/scad-scene-compose-design.md).
+// Deprecated one-time migration utility. It originally split reusable kit
+// libraries from theme scenes during the initial SCAD scene-compose migration.
+// Some of those input scenes have since been removed, so this program is not a current
+// regeneration path and must not be run as repository maintenance. The
+// checked-in assets/scad/lib/kit_*.scad files are now the source of truth.
 //
 // For each job it:
 //   - splits the source into top-level items (comment/string aware),
@@ -13,7 +15,6 @@
 //     modules (name pattern *_NN, looked up by games via scene node names) and
 //     the assembly statements in their original order.
 //
-// Run from the repo root:  go run tools/scadkit/main.go
 package main
 
 import (
@@ -424,7 +425,7 @@ func runJob(j job) (jobResult, error) {
 
 	// ---- Emit kit ----
 	var kit strings.Builder
-	fmt.Fprintf(&kit, "// %s —— generated from %s by tools/scadkit (kit split M0)\n", filepath.Base(j.kitOut), filepath.Base(j.src))
+	fmt.Fprintf(&kit, "// %s —— initially extracted from %s by the one-time tools/scadkit migration; this file is now authoritative.\n", filepath.Base(j.kitOut), filepath.Base(j.src))
 	fmt.Fprintf(&kit, "// 纯零件库：只含 module/function 定义，无顶层几何。命名空间前缀 %q。\n", j.prefix)
 	kit.WriteString("// 常量以零参 function 内置（use 语义不传播顶层赋值），调用方无需重申环境常量。\n")
 	kit.WriteString("// 放置契约：落地件底面 z=0，带朝向件 front = -y。调用方自设 $fn（建议 12）。\n\n")

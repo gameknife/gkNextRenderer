@@ -27,8 +27,6 @@ extend-exclude = [
     "package-lock.json",
     "*.patch",
     "*.diff",
-    # 历史文档:记录了修缮前的拼写错误原文,不参与检查
-    "docs/plans/release-code-polish-plan.md",
 ]
 
 [default.extend-words]

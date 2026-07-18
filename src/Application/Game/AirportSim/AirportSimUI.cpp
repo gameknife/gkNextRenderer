@@ -1013,7 +1013,7 @@ namespace AirportSim
             }
         }
 
-        // 气泡按距相机排序，同屏上限 8（§7.5）。
+        // 气泡按距相机排序，同屏上限 8。
         struct FBubbleEntry
         {
             const FAgent* agent;

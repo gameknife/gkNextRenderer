@@ -11,7 +11,7 @@ namespace Assets
 
 namespace AirportSim
 {
-    // 把 airport.scad 加载出的具名锚点节点解析为 POI 表（仿 StudioSim::OfficeMap，§2.3）。
+    // 把 airport.scad 加载出的具名锚点节点解析为 POI 表，沿用 StudioSim::OfficeMap 的模式。
     // frontDir 从节点世界旋转恢复：scad 局部 -y → 引擎局部 +z。
     class AirportMap
     {

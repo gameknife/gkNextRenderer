@@ -28,11 +28,11 @@
 - 按名称/标签筛选：`gkNextUnitTests "RenderComponent Usage"` 或 `gkNextUnitTests "[Unit][RenderComponent]"`。
 
 ### 2. 编译验证
-- **每次修改**: 代码修改后必须验证编译成功。
-- **多平台**: 跨平台修改需要在每个目标平台测试。
+- **代码修改**: 按 `AGENTS.md` 的 targeted build 规则验证受影响目标；纯文档不需要 C++ build。
+- **多平台**: 跨平台修改在可用平台验证，并明确报告未实际覆盖的平台，不虚构结果。
 
 ### 3. 功能验证
-- **重要修改**: 运行 `gkNextRenderer` 进行视觉验证。
+- **重要运行时修改**: 运行受影响 target；渲染修改优先使用 `gnb shot`。
 - **成功标志**: 看到日志 `uploaded scene [...] to gpu` 且渲染画面正常。
 
 ## 📂 项目结构理解

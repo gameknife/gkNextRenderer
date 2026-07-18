@@ -7,7 +7,7 @@
 
 namespace AirportSim
 {
-    // 当日离港航班表 + 状态机 + 状态变化事件（§4.3）。
+    // 当日离港航班表 + 状态机 + 状态变化事件。
     class FlightBoard
     {
     public:

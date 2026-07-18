@@ -1,6 +1,6 @@
 // office.scad —— StudioSim 游戏工作室办公室（参考低多边形等距办公室示意图重制）
 //
-// 命名约定见 docs/StudioSim-MVP-Plan.md §6：
+// StudioSim::OfficeMap 使用以下现行命名约定：
 //   功能点位 = 具名 user module（desk_<role>_<id> / meet_seat_<id> / pantry_<id> /
 //   lounge_<id>），加载后节点名 = module 名，供 OfficeMap 解析为锚点。
 //   墙体/隔断/家具用非点位命名（wall_* / part_* / furn_* / prop_*），OfficeMap 自动忽略。

@@ -5,6 +5,7 @@
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Engine/Runtime/Components/SceneReferenceComponent.hpp"
+#include "Engine/Runtime/Components/TerrainComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Core/Node.hpp"
@@ -32,6 +33,7 @@ namespace Reflection
         Runtime::PhysicsComponent::RegisterReflection();
         Runtime::SkinnedMeshComponent::RegisterReflection();
         Runtime::SceneReferenceComponent::RegisterReflection();
+        Runtime::TerrainComponent::RegisterReflection();
         Assets::Node::RegisterReflection();
         
         NextEngine::RegisterReflection();

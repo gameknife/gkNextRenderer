@@ -3,7 +3,7 @@ title: Brotato3D 项目介绍
 category: project
 status: 现行
 owner: docs
-last_updated: 2026-05-18
+last_updated: 2026-07-17
 ---
 
 # Brotato3D 项目介绍
@@ -17,7 +17,7 @@ Brotato3D 是 gkNextEngine 内置的俯视角 3D 生存射击子项目。它参�
 - 入口目标：`Brotato3D`
 - 源码目录：`src/Application/Game/Brotato3D/`
 - 配置目录：`assets/configs/brotato3d/`
-- 运行方式：`./gnb.bat run Brotato3D`
+- 运行方式：macOS/Linux 使用 `./gnb.sh run Brotato3D`，Windows 使用 `gnb.bat run Brotato3D`
 - 主要文档：`docs/projects/brotato-3d/developer-guide.md`
 
 游戏默认从主菜单进入角色选择，选择角色和竞技场后开始一局。玩家使用 WASD / 手柄左摇杆移动，武器自动锁敌开火；击杀与命中会喷出 XP / Material 碎块，靠近玩家后磁吸拾取。升级时进入三选一属性卡，波次间进入商店购买武器、被动物品或属性卡。最后一波为 Boss 波，击杀 Boss 后进入胜利结算。
@@ -85,4 +85,3 @@ Brotato3D 的意义不只是“复刻一个玩法”，而是提供一个高频�
 1. 先读本文，了解 Brotato3D 的定位和系统边界。
 2. 再读 `developer-guide.md`，按“改数值 / 加武器 / 加敌人 / 加波次”的方式进入实操。
 3. 想了解代码结构与工程模式（god-class、子系统拆分、对象池），读 `AGENT_GUIDE/Brotato3D.md`。
-

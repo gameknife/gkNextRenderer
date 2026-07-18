@@ -16,6 +16,8 @@ set(unitTestSources
     Test_SceneList.cpp
     Test_SceneReference.cpp
     Test_ScadLoader.cpp
+    Test_ScadTerrain.cpp
+    Test_TerrainWalkable.cpp
     Test_SimKit.cpp
     Test_ScadRig.cpp
     Test_RigAnimator.cpp

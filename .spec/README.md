@@ -1,15 +1,26 @@
 # .spec — 交互式工作流规范
 
-gkNextRenderer 项目的 spec 驱动开发工作流目录。AGENT 在当前 session 内根据这些文件调度任务，**不调用其他 agent，不 sleep**。
+gkNextRenderer 项目的 spec 驱动开发工作流目录。只有用户明确要求“启动交互式工作流”时，AGENT 才根据这些文件持续调度任务；普通开发请求不会自动执行 `TODO.md`。工作流内 **不调用其他 agent，不自行 sleep**。
+
+## 权威性与生命周期
+
+`.spec` 同时包含当前任务和历史记录，不能把整个目录当成当前实现说明：
+
+1. `AGENTS.md`、代码、构建配置和测试描述当前仓库事实。
+2. `TODO.md` 中未完成的任务，以及它显式链接的 `specs/<id>.md`，只描述尚未实现的用户意图。
+3. `journal/` 和 `ARCHIVE.md` 是历史快照；其中的文件路径、方案和限制可能已被后续提交替换，不可据此覆盖当前代码。
+4. 任务完成、放弃或被后续实现取代后，应从活动任务面移出；不再承担当前约束的 spec 可以删除，历史结论由 journal、archive 和 Git 保存。
+
+执行任务前必须重新核对当前代码和提交记录。若历史记录与当前实现冲突，以当前实现为准，并在新任务中重新写明验收标准。
 
 ## 文件结构
 
 | 路径 | 用途 | 谁写 |
 | --- | --- | --- |
 | `TODO.md` | 活跃任务列表 | 用户（任务内容）+ AGENT（状态字符、journal 链接） |
-| `ARCHIVE.md` | 归档的完成任务 | `gnb todo archive` 或用户 |
-| `specs/<id>.md` | 复杂任务的详细规格，**仅 spec 类任务需要** | 用户 |
-| `journal/<id>.md` | 任务完成报告，一任务一文件 | AGENT |
+| `ARCHIVE.md` | 历史任务索引（非当前实现说明） | `gnb todo archive` 或用户 |
+| `specs/<id>.md` | 活跃复杂任务的详细规格，**仅 spec 类任务需要** | 用户 |
+| `journal/<id>.md` | 任务完成时的历史报告，一任务一文件 | AGENT |
 | `blockers/<id>.md` | AGENT 卡住时的提问，一任务一文件 | AGENT |
 
 ## TODO.md 格式
@@ -20,16 +31,18 @@ gkNextRenderer 项目的 spec 驱动开发工作流目录。AGENT 在当前 sess
 ## Milestone: <名字>  <!-- status: active|done -->
 
 ### 下一步
-- [ ] `#00018` [P0][BUG] 修复贴图采样越界
-- [/] `#00019` [P1][FEAT] 体积雾 → specs/00019.md
-- [!] `#00020` [SPIKE] work graphs (blockers/00020.md)
+- [ ] `#NNNNN` [P0][BUG] 修复贴图采样越界
+- [/] `#NNNNN` [P1][FEAT] 体积雾 → specs/NNNNN.md
+- [!] `#NNNNN` [SPIKE] work graphs (blockers/NNNNN.md)
 
 ### 待规划
-- [ ] `#00021` [IDEA] 试试 NRD 降噪
+- [ ] `#NNNNN` [IDEA] 试试 NRD 降噪
 
 ### 最近完成
-- [x] `#00017` [BUG] 修复贴图过滤 → journal/00017.md (2026-05-13)
+- [x] `#NNNNN` [BUG] 修复贴图过滤 → journal/NNNNN.md (YYYY-MM-DD)
 ```
+
+`NNNNN` 表示同一个五位任务 ID；示例只说明语法，不对应仓库中的实际任务文件。
 
 ### 三个段落
 
@@ -68,7 +81,7 @@ build_ok: true
 …
 
 ## 改动文件
-- `src/Rendering/VolumeFog.cpp`
+- `src/Engine/Runtime/Engine.cpp`
 
 ## 风险/遗留
 - ⚠️ 与 SSR 有交互问题，未处理
@@ -106,6 +119,8 @@ blocked_at: 2026-05-14T15:30:00
 - `specs/` 下的文件（用户写的需求）
 - `ARCHIVE.md`（归档由工具或用户操作）
 - "待规划"段任何任务
+
+以上边界约束的是普通交互式任务执行。若用户明确授权仓库级文档治理或 `.spec` 清洁，AGENT 可以核对代码和 Git 后归档失效任务、删除废弃 spec、修正规范说明；不得借此臆造新需求或悄悄改变仍有效的用户目标。
 
 ## AGENT 调度规则
 

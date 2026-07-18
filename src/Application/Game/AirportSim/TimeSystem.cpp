@@ -51,7 +51,7 @@ namespace AirportSim
     {
         const float hour = static_cast<float>(DayMinutes()) / 60.0f;
 
-        // 黎明 05:00–07:00 升、黄昏 17:00–19:00 落（§4.2）。
+        // 黎明 05:00–07:00 升、黄昏 17:00–19:00 落。
         const float rise = SmoothStep(5.0f, 7.0f, hour);
         const float set = 1.0f - SmoothStep(17.0f, 19.0f, hour);
         daylight_ = std::min(rise, set);

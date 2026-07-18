@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CharacterDesigner.hpp"
 #include "KitCatalog.hpp"
 
 #include <string>
@@ -35,17 +36,27 @@ namespace ScadLibrary
         void Init();   // OnInitUI: fonts
         void Render(); // OnRenderUI: title bar + panels + viewport mapping
 
+        // Engine hooks forwarded by ScadLibraryGameInstance for the rig preview.
+        FRigPreview& RigPreview() { return rigPreview_; }
+
     private:
         void DrawTitleBar();
         void DrawBottomBar();
         void DrawBrowserPanel(const ImVec2& pos, const ImVec2& size);
         void DrawBenchPanel(const ImVec2& pos, const ImVec2& size);
+        void DrawBenchContent();
+        void DrawDesignerContent();
         void RescanKits();
         void PreviewModule(int kitIndex, const std::string& moduleName);
         void AddToBench(int kitIndex, const std::string& moduleName);
         void ReloadBench();
         void ExportBench();
+        void ReloadDesigner();
+        void ExportCharacter();
+        std::string KitCharUsePath(bool relative) const;
         std::string BuildBenchSource(bool relativeUses) const;
+        bool WriteWorkspaceFile(const std::string& fileName, const std::string& source,
+                                std::string& outAbsPath);
         bool WriteAndLoad(const std::string& fileName, const std::string& source);
 
         NextEngine& engine_;
@@ -53,6 +64,15 @@ namespace ScadLibrary
 
         std::vector<FKitInfo> kits_;
         std::vector<FBenchItem> bench_;
+
+        // Character designer state.
+        FCharacterDesigner designer_;
+        FRigPreview rigPreview_;
+        int kitCharIndex_ = -1;
+        bool designerDirty_ = false;
+        bool designerEverLoaded_ = false;
+        float designerTint_[3] = {0.30f, 0.52f, 0.75f};
+        char characterNameBuf_[128] = "my_character";
 
         // Browser state.
         char filterBuf_[128] = {};
