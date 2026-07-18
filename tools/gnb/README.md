@@ -4,9 +4,9 @@
 tests, optional pak assets, packaging, mobile build entry points, and a
 dashboard (native Wails window on Windows/macOS; browser/server-only on Linux).
 
-Architecture and stack overview: [`docs/guides/gnb-tech-stack.md`](../../docs/guides/gnb-tech-stack.md)
+CLI overview: [`docs/guides/gnb-cli.md`](../../docs/guides/gnb-cli.md)
 
-Source-level code & architecture guide (for editing `gnb` itself): [`docs/guides/gnb-architecture.md`](../../docs/guides/gnb-architecture.md)
+Source-level architecture guide (for editing `gnb` itself): [`docs/guides/gnb-architecture.md`](../../docs/guides/gnb-architecture.md)
 
 Build locally from the repository root:
 

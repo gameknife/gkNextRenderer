@@ -1,47 +1,38 @@
 # Gaussian Splat / SOG
 
-gkNextEngine 支持 PlayCanvas SOG v2 高斯溅射场景，包括打包 `.sog` 和非打包
-`meta.json + WebP`。主验证资产为 `assets/sog/Grape.sog`。
+当前实现位于可选模块 `src/Modules/SplatLoader/`。`SplatModule::Install()` 注册 `.sog` loader、反射组件、运行时 CVar 和 external render pass；Engine 核心不直接拥有 SOG 解析器。
+
+SOG v2 的反量化、坐标/covariance 转换、Scene 产物和 external-pass 契约见 [现行设计](../docs/designs/gaussian-splatting-sog-design.md)。修改 loader 时必须同时遵守该格式契约，不能只以某个示例资产“看起来能开”为准。
+
+PlayCanvas SOG v2 可以是打包 `.sog`，也可以由 loader 内部读取 `meta.json + WebP` 条目。示例 `assets/sog/Grape.sog` 属于可选资产，不应假定 source tree 一定存在；缺少时先检查 `./gnb.sh paks list`。
 
 ## 运行与验证
 
-```powershell
-.\gnb.bat build gkNextRenderer
-.\gnb.bat shot --scene assets/sog/Grape.sog --frames 120
+```bash
+./gnb.sh build gkNextRenderer
+./gnb.sh shot --scene assets/sog/Grape.sog --frames 120
 ```
 
-成功加载时日志包含：
+Windows 使用对应的 `gnb.bat`。成功日志包含 `decoded SOG`、`uploaded ... Gaussian splats` 和 `uploaded scene [Grape.sog] to gpu`。没有可选样例时，以当前可用 `.sog` 输入替代，不要把资产缺失写成 loader 平台限制。
 
-```text
-decoded SOG ...
-uploaded ... Gaussian splats ...
-uploaded scene [Grape.sog] to gpu
-```
+## 当前渲染路径
 
-## 渲染路径
+`GaussianSplatPass` 是 primary view 后、debug overlay 前的 external content pass：
 
-`GaussianSplatPass` 在 logic renderer 写完 `RT_DENOISED` 后执行：
+1. GPU 直方图、前缀和与 scatter 生成由远到近的索引和 indirect draw；静止相机/模型可复用 sort cache。
+2. 实例化 billboard 写入 `RT_SPLAT_ACCUM`，使用场景深度测试但不写深度。
+3. compute compose 把透明累积结果合成回 `RT_DENOISED`，随后继续走正常 DLSS/blit resolve。
+4. `SplatProxyBuilder` 可为 splat 创建隐藏的体素化 proxy mesh，供阴影、ray occlusion、拾取/选择边界等非 billboard 路径使用。
 
-1. GPU 直方图、前缀和、scatter，生成由远到近的有序索引和 indirect draw。
-2. 实例化 billboard 光栅到 `RT_SPLAT_ACCUM`，使用场景深度测试，不写深度。
-3. compute compose 将透明累积结果按 over 规则合成回 `RT_DENOISED`。
-4. 引擎原有 DLSS / blit resolve 继续处理最终 HDR 结果。
+节点挂载 `Runtime::GaussianSplatComponent`。组件拥有显隐、射线拾取、透明度、proxy 阴影/遮挡和密度阈值等可反射属性；不要把所有行为写成全局 CVar。
 
-节点挂载 `GaussianSplatComponent`。组件支持显隐、射线拾取开关和透明度缩放；
-场景使用整个 SOG 的 3σ AABB 进行选择、聚焦和相机绕物旋转。
+## CVar 分组
 
-## CVar
+- 可见与排序：`show.gaussianSplats`、`r.splat.bucketCount`、`r.splat.maxCount`、`r.splat.sortCache`。
+- billboard：`r.splat.sigma`、`r.splat.forceAA`、`r.splat.aaStrength`。
+- proxy：`r.splat.proxy.enable/gridMax/brickSize/sigma/isoThreshold/simplifyRatio/debugVisible`。
+- 交互与光照：`r.splat.shadow.enable`、`r.splat.rayOcclusion.enable`、`r.splat.receiveLighting`、`r.splat.lightingStrength`、`r.splat.proxy.debug`。
 
-- `show.gaussianSplats`：全局显示开关。
-- `r.splat.bucketCount`：GPU 深度排序桶数，运行时限制为 16–4096。
-- `r.splat.maxCount`：每帧最多处理的 splat 数，0 表示全部。
-- `r.splat.sigma`：billboard 半径，单位为标准差，运行时限制为 1–4。
+默认值和运行时钳制以 `SplatSettings.cpp`、`GaussianSplatPass.cpp` 与 `SplatProxyBuilder.cpp` 为准。尤其 `bucketCount` 是最小请求值，pass 还会根据 splat 数自动提高；不要把它描述成始终精确的桶数。
 
-示例：
-
-```powershell
-.\gnb.bat run gkNextRenderer --scene assets/sog/Grape.sog --cvar "r.splat.bucketCount 1024"
-```
-
-降低桶数主要减少 prefix 阶段成本；降低 `maxCount` 是更强的性能/质量旋钮。
-`sigma` 越小 overdraw 越低，但会裁掉更多高斯尾部。
+降低 `maxCount` 是直接的质量/性能旋钮；降低桶数主要影响排序，但会受自动下限约束。`sigma` 越小 overdraw 越低，也会裁掉更多高斯尾部。修改 proxy 参数后还要验证阴影、ray occlusion 与隐藏 proxy 是否同步，不能只看正面截图。

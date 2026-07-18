@@ -13,7 +13,7 @@ namespace AirportSim
     class QueueSystem;
     class TimeSystem;
 
-    // 全 ImGui 的气泡/HUD/调试面板（§7.5）。世界坐标 → 屏幕投影画头顶气泡与名牌。
+    // 全 ImGui 的气泡/HUD/调试面板。世界坐标 → 屏幕投影画头顶气泡与名牌。
     class AirportSimUI
     {
     public:

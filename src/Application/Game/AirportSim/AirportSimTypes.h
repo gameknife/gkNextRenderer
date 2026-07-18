@@ -9,7 +9,7 @@
 
 #include <glm/glm.hpp>
 
-// AirportSim 共享数据模型（见 docs/AirportSim-MVP-Plan.md §2/§4/§5）。
+// Shared AirportSim data model. System code is the source of truth for transitions and invariants.
 namespace AirportSim
 {
     enum class EAgentRole
@@ -163,7 +163,7 @@ namespace AirportSim
         }
     }
 
-    // 旅客旅程状态机（§5.1，Layer 0 刚性主线）。
+    // 旅客旅程状态机（Layer 0 刚性主线）。
     enum class EPassengerState
     {
         ToEntrance,
@@ -202,7 +202,7 @@ namespace AirportSim
         }
     }
 
-    // 员工日程状态机（§5.2）。
+    // 员工日程状态机。
     enum class EStaffState
     {
         Commute,   // 停车场/公交 → entrance
@@ -247,10 +247,10 @@ namespace AirportSim
         }
     }
 
-    // 从 SCAD 具名节点解析出的功能点位锚点（§2.2）。
+    // 从 SCAD 具名节点解析出的功能点位锚点。
     using FPointOfInterest = NextGameplay::Sim::FAnchorPoi;
 
-    // 离港航班（§4.3）。
+    // 离港航班。
     struct FFlight
     {
         std::string number;      // "GK101"
@@ -263,7 +263,7 @@ namespace AirportSim
         int         colorIdx = 0;
     };
 
-    // LLM 决策 JSON（§5.3 动作 schema）。
+    // LLM 决策 JSON 动作 schema。
     struct FDecisionResult
     {
         std::string action;   // goto / use_poi / say_to / emote / idle

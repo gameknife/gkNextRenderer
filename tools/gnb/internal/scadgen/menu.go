@@ -1,7 +1,7 @@
-// Package scadgen drives the LLM scene-generation loop (M4 of the SCAD
-// scene-compose design): the kit catalog becomes a parts menu in the prompt,
-// the model answers with a scene-spec JSON, and compose validation errors are
-// fed back for self-repair until the spec expands cleanly.
+// Package scadgen drives the optional LLM scene-generation loop documented in
+// docs/designs/scad-scene-compose-design.md: the kit catalog becomes a parts
+// menu in the prompt, the model answers with scene-spec JSON, and compose
+// validation errors are fed back for self-repair until the spec expands cleanly.
 package scadgen
 
 import (

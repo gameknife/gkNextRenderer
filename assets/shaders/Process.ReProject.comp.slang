@@ -96,8 +96,9 @@ float3 FireflyClamp(RWTexture2D<float4> src, RWTexture2D<uint> objId, int2 ipos,
 // clamped) so it stays clean both when static AND while the camera pans over it; young / freshly
 // reset pixels -> ~1 (history unreliable, clamp pulls it toward the spatial estimate). Camera motion
 // is deliberately NOT a trigger: panning over well-accumulated static geometry would otherwise clamp
-// clean history into the jittery 1spp box every frame and reintroduce salt noise. Ghosting of moving
-// highlights/shadows on long-history surfaces is left to the temporal-moment variance (Phase B).
+// clean history into the jittery 1spp box every frame and reintroduce salt noise. This means the
+// current implementation does not specially reject moving highlights/shadows on long-history
+// surfaces. Temporal moments are only a conditional future option; no moments history exists today.
 float ClampStrengthFromConfidence(float historyLen, float nMax)
 {
     const float histConf = saturate(historyLen / max(nMax, 1.0));

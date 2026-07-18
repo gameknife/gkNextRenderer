@@ -187,7 +187,7 @@ namespace Utilities
     namespace FileHelper
     {
         // Returns true if a relative asset path can be resolved either from disk or from any mounted pak.
-        // Game instances use this to bail out gracefully when optional assets (fetched via scripts/fetch-paks)
+        // Game instances use this to bail out gracefully when optional assets (fetched via gnb paks fetch)
         // are missing, instead of crashing later in scene/component code.
         static bool IsAssetAvailable(const std::string& relativePath)
         {

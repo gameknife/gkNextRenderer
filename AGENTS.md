@@ -9,7 +9,7 @@ Always communicate with the user in Chinese (中文).
 
 ## Project Overview
 
-gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vulkan, featuring hardware/software ray tracing, real-time global illumination, GPU-driven rendering, and GPU CSM shadows. Target codebase size is <50k LOC of first-party engine code (currently ~85k LOC including all games + tests; see `gnb loc`).
+gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vulkan, featuring hardware/software ray tracing, real-time global illumination, GPU-driven rendering, and GPU CSM shadows. The Engine core remains below the 50k LOC target (~31k on 2026-07-17); all first-party Engine, Modules, Gameplay, applications and tests total 141,421 lines. Treat these as snapshots and use `gnb loc` for the current count.
 
 **Key Technologies:**
 - C++20/C11, Vulkan API, Slang shader language (ray query, not ray pipeline)
@@ -18,33 +18,33 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 - Multi-platform: Windows x86_64 / Linux x86_64 / macOS arm64 / Android arm64 / iOS arm64
 
 **Subprojects (under `src/Application/`):**
-- Render: gkNextRenderer (main), gkNextBenchmark, gkNextVisualTest
-- Editor: gkNextEditor (ImGui editor + node-based material editor)
-- Game: MagicaLego, Brotato3D, KongLie3D, BrickPlayer, CharacterDemo, Flappy (Cpp + Js), Voyage3D
-- Util: Packager (asset packaging to `.pkg`)
+- Render: gkNextRenderer (main), gkNextMinimalRenderer, gkNextStillBenchmark, gkNextMotionBenchmark, gkNextVisualTest, RmlUiDemo
+- Editor: gkNextEditor (ImGui editor + node-based material editor), ScadStudio, ScadLibrary
+- Game: MagicaLego, Brotato3D, KongLie3D, NextRA, BrickPlayer, CharacterDemo, FlappyCpp/FlappyJs, TruckerDemo, StudioSim, AirportSim, CitySolSim, Voyage3D
+- Util: Packager (release packaging), ScadCatalog
 
 ## Build Commands
 
 **Build (vcpkg is auto-bootstrapped on first run):**
-- Setup once: `./gnb setup` (Windows: `./gnb.bat setup`)
-- Desktop build: `./gnb build` (Windows: `./gnb.bat build`)
-- Specific target: `./gnb build gkNextEditor`
-- Android: `./gnb android`
-- Clean rebuild: `./gnb build --clean`
-- Force vcpkg update: `./gnb setup --refresh`
+- Setup once: `./gnb.sh setup` (Windows: `gnb.bat setup`)
+- Desktop build: `./gnb.sh build` (Windows: `gnb.bat build`)
+- Specific target: `./gnb.sh build gkNextEditor`
+- Android: `./gnb.sh android`
+- Clean rebuild: `./gnb.sh build --clean`
+- Force vcpkg update: `./gnb.sh setup --refresh`
 
 **Targeted builds (IMPORTANT — prefer over full `gnb build`):**
 随着 program 增多，全量 `gnb build` 很慢。AGENT 在验证改动时**默认只构建受影响的目标**，不要无脑全量构建：
-- **改动 Engine 层**（`src/Engine/**`、shaders、公共 runtime/reflection）：只需 `./gnb build gkNextRenderer` + `./gnb build gkNextUnitTests`（可写成 `./gnb build gkNextRenderer gkNextUnitTests`）。这两个目标编译通过即代表 engine API 没有破坏面上调用。
-- **改动某个具体 program**（`src/Application/**` 下的单一子项目，如 MagicaLego、Brotato3D、ScadStudio 等）：只构建该目标自身，例如 `./gnb build MagicaLego`。
+- **改动 Engine 层**（`src/Engine/**`、shaders、公共 runtime/reflection）：只需 `./gnb.sh build gkNextRenderer gkNextUnitTests`。这两个目标编译通过即代表 engine API 没有破坏面上调用。
+- **改动某个具体 program**（`src/Application/**` 下的单一子项目，如 MagicaLego、Brotato3D、ScadStudio 等）：只构建该目标自身，例如 `./gnb.sh build MagicaLego`。
 - **改动 gnb / tools / 纯文档**：无需 C++ 构建。
-- **大型 engine 重构、改动 ABI/广泛 header、不确定影响面，或用户明确要求**：才执行全量 `./gnb build --reconfigure`，确认所有 program 都能编译。
+- **大型 engine 重构、改动 ABI/广泛 header、不确定影响面，或用户明确要求**：才执行全量 `./gnb.sh build --reconfigure`，确认所有 program 都能编译。
 - 增量构建无需 `--reconfigure`；仅在改了 CMake/preset/新增文件未被 glob 收录时才加 `--reconfigure`。
 
 **CMake presets:** `windows`, `linux`, `macos-arm64`, `ios`.
 
 **Optional Features:**
-- AVIF is manual: `cmake --preset windows -DENABLE_AVIF=ON -DVCPKG_MANIFEST_FEATURES=avif` then `./gnb build`
+- AVIF is manual: `cmake --preset windows -DENABLE_AVIF=ON -DVCPKG_MANIFEST_FEATURES=avif` then `./gnb.sh build`
 - DLSS/Streamline is always enabled on Windows and disabled elsewhere
 - OIDN and MinGW support have been removed
 
@@ -52,15 +52,15 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 
 ## Run Commands
 
-- Default target: `./gnb run`
-- Specific target: `./gnb run gkNextEditor`
-- Editor shortcut: `./gnb editor`
-- Visual test shortcut: `./gnb visual`
-- TUI terminal mode: `./gnb tui --scene assets/models/playground.glb`
-- Android: `./gnb android`
-- Optional assets: `./gnb paks fetch` / `./gnb paks list`
-- Source-line stats: `./gnb loc` (CLI) — also browsable in `./gnb dashboard`
-- Native dashboard: `./gnb dashboard` (Wails window; todo / build / run / test / git / chat / LOC tabs)
+- Default target/list: `./gnb.sh run`
+- Specific target: `./gnb.sh run gkNextEditor`
+- Editor shortcut: `./gnb.sh editor`
+- Visual test shortcut: `./gnb.sh visual`
+- TUI terminal mode: `./gnb.sh tui --scene assets/models/playground.glb`
+- Android: `./gnb.sh android`
+- Optional assets: `./gnb.sh paks fetch` / `./gnb.sh paks list`
+- Source-line stats: `./gnb.sh loc` (CLI) — also browsable in `./gnb.sh dashboard`
+- Dashboard: `./gnb.sh dashboard` (Wails window on Windows/macOS, browser fallback on Linux; todo/build/run/test/git/chat/LOC tabs)
 
 Desktop binaries can be launched from any working directory; no `cd out/build/<preset>/bin` is required.
 
@@ -193,10 +193,10 @@ src/
 
 assets/
 ├── shaders/                 # Slang shaders (.slang)
-├── configs/                 # Runtime config (visual_test.json, ai_config.json, ...)
+├── configs/                 # Runtime config (cvar_default.json, visual_test.json, per-game configs, ...)
 ├── models/                  # glTF scenes
-├── scripts/                 # TypeScript scripts (hot-reloadable via QuickJS)
-└── typescript/              # TypeScript definitions for QuickJS scripting
+├── scripts/                 # Hand-maintained runtime JS/MLS scripts
+└── typescript/              # TypeScript sources + generated Engine.d.ts; runtime JS is emitted under build assets
 
 tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 ```
@@ -213,7 +213,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 
 **QuickJS Scripting:**
 - TypeScript hot reload support via bundled `tools/tsc/tsc[.exe]` (`tsc.exe` on Windows, `tsc` on macOS/Linux); no Node/npm/global `tsc` dependency is required at runtime
-- ES module loading supports compiled TypeScript relative imports under `assets/scripts`
+- ES module loading supports relative imports under the runtime `assets/scripts` path; sources live in `assets/typescript`, while the source-tree `assets/scripts` directory contains separately maintained scripts
 - Components reflected via `entt::meta` are auto-exposed to JavaScript
 - Global namespace: `Global.GetEngine()`, `Global.GetScene()`, `Global.spdlog()`
 - Scripted games should extend `assets/typescript/NextGameInstanceBase.ts` and call `RunGameInstance(new YourGameInstance())`
@@ -227,7 +227,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 - Common components: RenderComponent, PhysicsComponent, SkinnedMeshComponent
 
 **Rendering / Shadows:**
-- Three rendering paths: PathTracing (HW RT), SoftwareTracing (SW DDA on ambient cubes), SoftwareModern (rasterizer + GPU CSM). `SwModernNoAmbient` is the deferred Lambert+IBL+CSM-only variant.
+- Five registered renderer types: PathTracing (HW RT), SoftwareTracing (SW DDA on ambient cubes), SoftwareModern (rasterizer + software GI), VoxelTracing, and SoftwareModernNoAmbient (deferred Lambert+IBL+CSM without AmbientCube).
 - GPU CSM: 4 cascades, D32_SFLOAT per-cascade images bound bindless (slots 0..3); cascade selection + 3x3 PCF lives in `Common.SampleSunShadowCSM` (PathTracingRenderer.slang).
 - `ShadowMapPass` (Engine/Rendering/Shadow) renders the cascades; UBO carries `SunCascadeViewProjection[4]` + `CascadeSplits`.
 
@@ -246,9 +246,9 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 ## Verification After Changes
 
 1. **Build:** 按改动范围选择目标构建（详见上文 "Targeted builds"），默认**不要**全量构建：
-   - Engine 层改动：`./gnb build gkNextRenderer gkNextUnitTests`（Windows: `./gnb.bat build ...`）
-   - 单个 program 改动：`./gnb build <该 target>`
-   - 仅大型重构 / 广泛 header / ABI 改动 / 用户要求时才用 `./gnb build --reconfigure` 全量验证
+   - Engine 层改动：`./gnb.sh build gkNextRenderer gkNextUnitTests`（Windows: `gnb.bat build ...`）
+   - 单个 program 改动：`./gnb.sh build <该 target>`
+   - 仅大型重构 / 广泛 header / ABI 改动 / 用户要求时才用 `./gnb.sh build --reconfigure` 全量验证
 2. **Run:** Verify application starts and logs `uploaded scene [...] to gpu`
 3. **Test:** Run unit tests if touching core systems
 4. **Visual:** 渲染类改动 → `gnb shot --scene <X>` 截一张图肉眼验证（不弹窗、自动退出，见上文 "Agent Visual Validation"）；需要 baseline 回归再跑 `gkNextVisualTest`
@@ -257,6 +257,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 
 ## Key References
 
+- **`docs/README.md`** - 现行文档索引与生命周期规则；架构设计、项目说明和仍有效计划从这里进入
 - **AGENT_GUIDE/** - Layered documentation:
   - `core-patterns.md` / `contextual-rules.md` / `coding-standards.md` / `quick-commands.md` - General rules
   - `ReflectionSystem.md` - entt::meta reflection (editor UI + JS bindings)
@@ -266,7 +267,6 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
   - `SCADLoader.md` - OpenSCAD (.scad) DSL loading (parser/evaluator/CSG via Manifold/text via FreeType)
   - `ScadTerrain.md` - gk_terrain low-poly walkable terrain (TERR spec, ter_* combinators, TerrainComponent)
   - `ScadRig.md` - ScadRig rigid-body character rigs (bone_ modules + anim_* clips, FRigAnimator runtime)
-  - `PrefabSceneWorkflow.md` - KayKit procedural scene prefab workflow
   - `MagicaLego.md` - MagicaLego subproject notes
   - `Brotato3D.md` - Brotato3D code structure (god-class + per-system split, runtime data model, object pools)
   - `CharacterDemo.md` - CharacterDemo + NextGameplay shared layer (CharacterActor facade, ECS components, NavGrid A*, AI behavior tree)
@@ -279,7 +279,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 - **TODO**：可视化 `.spec/TODO.md` 的工作流操作（增删改、move、spec 创建、标 done/blocked）
 - **Build / Run / Test**：触发 cmake build、运行 target、Catch2 测试，SSE 实时流日志
 - **Git**：分支管理、stash、commits、本地改动 stage/unstage、LLM 生成 commit message
-- **Chat**：直接对接本地 llama-server，流式 + 工具调用，多会话归档
+- **Chat**：通过统一 AI provider/profile router 对话（LocalLlama 可按需启动），支持流式与多会话归档
 - **LOC**：`gnb loc` 的图表/表格化视图（分类柱图 + 嵌套表格）
 
 实现位置：`tools/gnb/internal/dashboard/`（Go + 内嵌 html template）。
@@ -305,7 +305,7 @@ gnb git ai-commit                    # commit-msg 的短别名
 
 commit-msg prompt 内容包含：模式（staged / working tree）、文件清单（含 `??` 未跟踪）、`git diff --stat`、已跟踪文件 diff、未跟踪文件合成的 `+++ b/<path>` 新文件 diff（带二进制/64KB 大小保护）。超 `--max-diff-chars` 按文件边界截断。
 
-引擎层 `NextAI::FAIService` 通过 AI bridge 复用 gnb 的 provider/profile 和同一个 llama-server（无需独立模型进程）。NextAI 只提供 Chat、Structured Output、stream、session/cancel/usage 等轻量能力；SCAD、MagicaLego、StudioSim、AirportSim 的 prompt、领域校验、一次修复和 deterministic fallback 由各产品拥有。Dashboard 默认走普通 Chat，仅显式 `Tool Call Smoke` 使用固定内存 fixture；不得向普通请求附加 repo/Git/Shell/Scene 工具。`gnb llm serve --model <id>` 切模型后由 gnb 路由新请求，无需重启应用。
+引擎层 `NextAI::FAIService` 通过 AI bridge 复用 gnb 的 provider/profile；选择 LocalLlama 时共享同一个 llama-server，无需独立模型进程。NextAI 只提供 Chat、Structured Output、stream、session/cancel/usage 等轻量能力；SCAD、MagicaLego、StudioSim、AirportSim 的 prompt、领域校验、一次修复和 deterministic fallback 由各产品拥有。Dashboard 默认走普通 Chat，仅显式 `Tool Call Smoke` 使用固定内存 fixture；不得向普通请求附加 repo/Git/Shell/Scene 工具。`gnb llm serve --model <id>` 切模型后由 gnb 路由新请求，无需重启应用。
 
 ## Spec Workflow
 

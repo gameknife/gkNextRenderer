@@ -27,7 +27,7 @@ last_updated: 2026-07-17
 
 - **构建口径**：改 Engine/Modules → `./gnb build gkNextRenderer gkNextUnitTests`；
   改 gnb Go 代码 → `cd tools/gnb && go test ./...`；不要全量构建。
-- **回归红线**：既有 `[Scad]` 单测全绿；`acient_city.scad` / `beer_cup.scad` /
+- **回归红线**：既有 `[Scad]` 单测全绿；`old_city.scad` / `beer_cup.scad` /
   `gen/deadly_roadtrip_map.scad` 三个场景的 节点数/三角形数/warning 数 与改动前一致
   （faceted 标志默认关闭路径必须逐字节无影响）。
 - **视觉验收**：`gnb shot --scene <x.scad>`（隐藏窗口自动截图），截图人审记录在 journal。

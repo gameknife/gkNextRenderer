@@ -1,6 +1,6 @@
 # ScadRig — SCAD 刚体骨骼角色
 
-基于 OpenSCAD DSL 的角色建模 + 动作机制（Blockbench/Minecraft-entity 同语义：刚体部件挂骨骼层级，**无蒙皮**）。设计文档：`docs/ScadRig-Design.md`。首个落地：AirportSim 的 `ScadRigVisual`。
+基于 OpenSCAD DSL 的角色建模 + 动作机制（Blockbench/Minecraft-entity 同语义：刚体部件挂骨骼层级，**无蒙皮**）。本文件是现行约定；运行时复用入口是 `NextGameplay::Sim::FScadRigVisual` / `FCharacterPool`。
 
 ## 资产格式速查（作者视角）
 
@@ -78,10 +78,10 @@ FRigAnimator                              // 每实例：Bind / Play(clip, fade)
 - 多实例去同步：`SetPhaseOffset`；行走速度匹配：`SetPlaySpeed(speed / baseSpeed)`。
 - 单测：`gkNextUnitTests "[ScadRig]"`（loader）、`"[Rig]"`（animator/实例化链路，含真实资产站姿数值验证）。
 
-## AirportSim 接入纪要（§5 实施结论）
+## Sim Kit 与 AirportSim 接入结论
 
-- `ScadRigVisual`（`src/Application/Game/AirportSim/ScadRigVisual.*`）：世界 Node（位置/yaw/体型微缩放/PhysicsComponent）+ rig 子树 + animator。`IAgentVisual` 增加 `SetMoveSpeed` 与 `Tick(dt)` 缺省空实现，游戏逻辑不变。
-- **§5.3 材质结论**：per-node 材质可靠（MagicaLego 同机制）——非 tint section 材质全池共享、tint section 每池位一份。**model 维度走 Plan B**：GPU-driven primitive buffer 按注入 model 总三角数定容，因此每池位注入独立 part model 拷贝（42 池位 × ~250 tris，开销可忽略）。
-- **生命周期陷阱**：引擎回调顺序为 `BeforeSceneRebuild`（注入）→ `OnSceneUnloaded`（→`AgentSystem::Clear`）→ `OnSceneLoaded`（实例化）。`Clear()` 只能复位 `assetsInjected_` 与玩法状态，**不可清空注入产物**（rig 资产、model/材质 id 表），否则实例化回退 box 分支且 modelId 兜底成 0（场景首个网格 → "巨大拍扁片" 显示 bug 的根因）。
-- 开关：`AirportSimConfig.hpp` 的 `kUseScadRigVisual`（默认 true）；rig 路径 `kAgentRigPath`。
-- 验收：`gnb shot --target AirportSim --frames 300` 可见多色角色排队/行走/在岗，28 实例 × 7 骨骼采样开销远低于 1ms。
+- `src/Gameplay/Sim/ScadRigVisual.*` 实现 `FScadRigVisual`：世界 Node（位置/yaw/体型微缩放/PhysicsComponent）+ rig 子树 + animator；`FCharacterPool` 统一负责注入、实例化、动画提示与 box fallback。AirportSim、StudioSim 和 CitySolSim 都走这条共享路径。
+- 非 tint section 材质全池共享，tint section 每池位一份；为满足 GPU-driven primitive buffer 的定容语义，每池位注入独立 part model 拷贝。容量和开销必须以当前消费端配置及 profiler 为准。
+- 生命周期顺序仍是 `BeforeSceneRebuild` 注入 → `OnSceneUnloaded` 清运行时指针 → `OnSceneLoaded` 实例化。清理时不能提前销毁已注入的 model/material 数据；`FCharacterPool::Clear()` 只重置 visual、导航、scene 指针和重新注入标志。
+- AirportSim 开关是 `AirportSimConfig.hpp` 的 `kUseScadRigVisual`（默认 true），rig 路径为 `kAgentRigPath`；当前池容量由 18 名员工 + 24 名旅客组成，共 42 个 slot。
+- 验收使用 `./gnb.sh shot --target AirportSim --frames 300` 检查多色角色排队、行走与在岗；性能结论必须重新采样，不沿用旧日志中的固定毫秒数。

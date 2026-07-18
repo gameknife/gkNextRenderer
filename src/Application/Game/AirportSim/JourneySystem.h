@@ -17,7 +17,7 @@ namespace AirportSim
     class TimeSystem;
     struct FAgent;
 
-    // Layer 0 确定性执行层：旅客旅程状态机 + 员工日程状态机（§5.1/§5.2）。
+    // Layer 0 确定性执行层：旅客旅程状态机 + 员工日程状态机。
     // 保证"机场永远在正确运转"；LLM 只通过 ApplyAirsideChoice 覆盖空侧弹性活动。
     class JourneySystem
     {
@@ -28,7 +28,7 @@ namespace AirportSim
 
         // Layer 1 接口：给空侧旅客指定下一个活动 POI（已通过白名单校验）。
         void ApplyAirsideChoice(FAgent& agent, const std::string& poiName, AgentSystem& agents, AirportMap& map);
-        // 空侧弹性活动的合法 POI 类别（决策白名单，§5.3）。
+        // 空侧弹性活动的合法 POI 类别（决策白名单）。
         static bool IsAirsideLeisureCategory(const std::string& category);
 
     private:

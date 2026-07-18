@@ -123,7 +123,7 @@ On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is i
 
 ### 5. Controlled codebase size for learning and extension
 
-- **First-party engine code targeted under 50k LOC**: the engine core is intentionally kept understandable and maintainable (~85k LOC including all sample games + tests; browse the breakdown with `gnb loc`)
+- **First-party Engine core targeted under 50k LOC**: the core stays intentionally understandable and maintainable. On 2026-07-17, Engine was about 31k lines and all first-party Engine, Modules, Gameplay, applications, and tests totaled 141,421 lines; use `gnb loc` for the live count
 - **Clarity over over-engineering**: favors explicit data flow, clear ownership, and mature third-party libraries, without turning experimental systems into heavy frameworks too early
 - **A good engine codebase to study**: from Vulkan rendering, resource management, scripting, editor integration, reflection, and content import to testing, benchmarking, and agent validation
 
@@ -187,8 +187,8 @@ The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond 
 
 ### General Notes
 
-- Start with `./gnb doctor` (Windows: `./gnb.bat doctor`) to see which host-side tools are still missing
-- `./gnb setup` (Windows: `./gnb.bat setup`) prepares vcpkg, project external toolchains, and optional pak assets; if you go straight to `./gnb build`, the first build will also bootstrap the core toolchain when needed
+- Start with `./gnb.sh doctor` (Windows: `gnb.bat doctor`) to see which host-side tools are still missing
+- `./gnb.sh setup` (Windows: `gnb.bat setup`) prepares vcpkg, project external toolchains, and optional pak assets; if you go straight to `./gnb.sh build`, the first build will also bootstrap the core toolchain when needed
 - Desktop binaries are now built and launched through `gnb`, so you usually no longer need to `cd` into `out/build/<platform>/bin`
 - CMake presets are now: `windows`, `linux`, `macos-arm64`, `ios`
 
@@ -270,11 +270,11 @@ Notes:
 <details>
 <summary><b>Android (Build on Windows)</b></summary>
 
-**Prerequisites:** JDK 17+, Android SDK, NDK r27
+**Prerequisites:** JDK 17+, Android SDK, and an installed NDK selected through `ANDROID_NDK_HOME` (the repository does not currently pin one NDK release)
 
 ```bat
 set ANDROID_HOME=C:\Android\Sdk
-set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\27.0.12077973
+set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\YOUR_NDK_VERSION
 ./gnb.bat setup --vcpkg-only
 ./gnb.bat android
 ```

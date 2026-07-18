@@ -9,8 +9,7 @@
 
 #include <glm/glm.hpp>
 
-// StudioSim 共享数据模型（见 docs/StudioSim-MVP-Plan.md §7）。
-// 随里程碑增量扩充；M1 只需职位枚举 + 功能点位 POI。
+// Shared StudioSim data model. Keep deterministic simulation state independent from LLM response text.
 namespace StudioSim
 {
     enum class ERole
@@ -51,7 +50,7 @@ namespace StudioSim
 
     using FPointOfInterest = NextGameplay::Sim::FAnchorPoi;
 
-    // 一天的阶段机（见计划 §10）。M3 主要跑 Working；Briefing/Review 在 M5 接 LLM 目标。
+    // In-game day phases. UI and simulation transitions consume this enum directly.
     enum class EDayPhase
     {
         Briefing,
@@ -224,7 +223,7 @@ namespace StudioSim
         bool fixedBug = false;
     };
 
-    // 玩家注入的事件（见计划 §11）。
+    // 玩家注入的事件。
     struct FWorldEvent
     {
         std::string id;
@@ -233,16 +232,16 @@ namespace StudioSim
         double      gameTimeRaised = 0.0;
     };
 
-    // 全局世界状态：模拟时钟 + 阶段 + 当日事件。时钟只在 Working 推进（见计划 §5.2）。
+    // 全局世界状态：模拟时钟 + 阶段 + 当日事件。时钟只在 Working 推进。
     struct FWorldState
     {
-        EDayPhase phase = EDayPhase::Working; // M3 直接从 Working 开始
+        EDayPhase phase = EDayPhase::Working;
         int       dayIndex = 0;
         double    gameClockMinutes = 9.0 * 60.0; // 09:00
         float     timeScale = 5.0f;              // 1 真实秒 = N 游戏分钟（运行时 slider 可调）
         bool      paused = false;
-        std::string globalMood;                  // M6：事件带来的全局氛围
-        std::vector<FWorldEvent> todaysEvents;   // M6：今日已注入的事件
+        std::string globalMood;                  // 事件带来的全局氛围
+        std::vector<FWorldEvent> todaysEvents;   // 今日已注入的事件
     };
 
     inline void MinutesToHHMM(double minutes, int& outHour, int& outMinute)
@@ -286,26 +285,26 @@ namespace StudioSim
         return EMood::Calm;
     }
 
-    // LLM 决策 JSON 解析后的结构（见计划 §8）。
+    // LLM 决策 JSON 解析后的结构。
     struct FDecisionResult
     {
         std::string action;        // WORK / REST / TALK / MEETING / IDLE
         std::string targetPoi;
-        std::string targetEmployee; // M7：TALK 的对象同事
+        std::string targetEmployee; // TALK 的对象同事
         std::string dialogue;
         EMood       mood = EMood::Calm;
         int         durationMinutes = 30;
         bool        valid = false;
     };
 
-    // 晨会候选目标（LLM 给的一项，见计划 §10.2）。
+    // 晨会候选目标（LLM 给出的一项）。
     struct FGoalOption
     {
         std::string title;
         std::string description;
     };
 
-    // 今日团队目标（玩家选定或自定义，见计划 §10）。
+    // 今日团队目标（玩家选定或自定义）。
     struct FDailyGoal
     {
         std::string title;

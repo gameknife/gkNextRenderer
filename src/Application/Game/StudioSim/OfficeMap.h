@@ -14,7 +14,7 @@ namespace Assets
 namespace StudioSim
 {
     // 把 SCAD 加载出的场景节点（按命名约定）解析为功能点位锚点表。
-    // 见 docs/StudioSim-MVP-Plan.md §6 / §10。仅认点位前缀，墙体/家具节点被忽略。
+    // Prefix rules are defined by BuildFromScene; walls and furniture are ignored.
     class OfficeMap
     {
     public:

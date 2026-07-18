@@ -16,7 +16,7 @@ namespace StudioSim
 {
     struct FEmployee;
 
-    // 每日目标系统（见计划 §10）。晨会异步向 LLM 要 3 个候选目标 →
+    // 每日目标系统。晨会异步向 LLM 要 3 个候选目标 →
     // 等玩家用 ChooseGoal/ChooseCustom 选择 → 异步分解到各职位 todayTask → Active。
     // GameInstance 在 State()==Active 时把阶段从 Briefing 切到 Working。
     // 所有 LLM 调用走 detached worker（GenerateTextAsync），回调只把文本入队，

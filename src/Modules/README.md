@@ -4,7 +4,7 @@
 Application 显式链接；核心层 `src/Engine` 不得反向依赖本目录。
 
 构建机制见 `src/cmake/SourceFiles.cmake`（`GK_MODULE_NAMES` / `src_files_module_*`）
-与 `src/CMakeLists.txt`（`GK_MODULE_TARGETS`）：模块目录为空时自动跳过，
+与 `src/Modules/CMakeLists.txt`：模块目录为空时自动跳过，
 Android 平台模块源直接并入单一 SHARED target；`NextTui` 仅桌面 + `GK_WITH_TUI`，
 `NextQuickJS` 在 Android 之外的平台可用。
 
@@ -29,10 +29,10 @@ Android 平台模块源直接并入单一 SHARED target；`NextTui` 仅桌面 + 
 | DevTools | 调试面板、AuxDraw、ProfessionalUI、CVar 编辑器等 |
 | LiveCoding | shader 热重载 watcher / `slangc` 增量编译 |
 
-模块拆分的历史脉络见 `docs/plans/engine-core-refactor.md` 及其 Round 2-5 系列。
+当前添加/链接模块的方法见 `docs/guides/cmake-structure.md`；历史拆分过程只在 Git 提交记录中保留。
 
 `NextQuickJS` 由应用通过 `Modules::NextQuickJS::Install()` 显式安装。目前
-`FlappyJs`、`StudioSim` 和 `gkNextEditor` 链接该模块；普通 renderer 与其他 program
+`FlappyJs` 和 `gkNextEditor` 链接该模块；普通 renderer 与其他 program
 不会创建 JavaScript runtime，也不会执行默认测试脚本。
 
 `LiveCoding` 也通过 `Modules::LiveCoding::Install()` 显式安装；核心层只保留

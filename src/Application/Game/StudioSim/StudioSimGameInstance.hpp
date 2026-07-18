@@ -18,8 +18,8 @@
 
 #include <glm/glm.hpp>
 
-// StudioSim —— LLM 驱动的游戏工作室办公室模拟（见 docs/StudioSim-MVP-Plan.md）。
-// M0：脚手架 + 空场景。 M1：OfficeMap 语义锚点。 M2：员工实体 + NavGrid 移动。
+// StudioSim: game-studio office simulation with deterministic production and optional LLM commentary/decisions.
+// This class owns application lifecycle, systems, scene integration, and player decision flow.
 class StudioSimGameInstance : public NextGameInstanceBase
 {
 public:

@@ -1,4 +1,4 @@
-// kit_old_city.scad —— generated from old_city.scad by tools/scadkit (kit split M0)
+// Initially extracted from old_city.scad by the one-time tools/scadkit migration; this checked-in file is now authoritative.
 // 纯零件库：只含 module/function 定义，无顶层几何。命名空间前缀 "oc_"。
 // 常量以零参 function 内置（use 语义不传播顶层赋值），调用方无需重申环境常量。
 // 放置契约：落地件底面 z=0，带朝向件 front = -y。调用方自设 $fn（建议 12）。

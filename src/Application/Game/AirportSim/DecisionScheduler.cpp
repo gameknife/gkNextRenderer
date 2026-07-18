@@ -52,7 +52,7 @@ namespace AirportSim
             return Config::kDecisionCooldownMinutes;
         }
         constexpr size_t kLogLimit = 60;
-        // ---- 预制台词库（fallback，§5.3）----
+        // ---- 预制台词库（fallback）----
         const char* kGreetLines[] = {"嗨，今天人真多", "又见面啦", "辛苦辛苦", "吃了吗您", "今天天气不错"};
         const char* kQueueLines[] = {"怎么还不动啊", "前面快点啊…", "早知道走自助了", "要赶不上了吧", "唉，排到天黑"};
         const char* kBoardingLines[] = {"该登机了！", "走走走，登机去", "终于登机了", "别忘了登机牌"};
@@ -114,7 +114,7 @@ namespace AirportSim
                 neighbors = "无";
             }
 
-            // 白名单动作集（由 Layer 0 按当前状态给出，§5.3）。
+            // 白名单动作集（由 Layer 0 按当前状态给出）。
             std::string actions;
             std::string poiList;
             const bool isAirsidePassenger = agent.role == EAgentRole::Passenger;
@@ -305,7 +305,7 @@ namespace AirportSim
             completed_.clear();
         }
 
-        // 超时弃单 → fallback 兜底（§10 风险表）。
+        // 超时弃单后由 fallback 兜底。
         if (inFlight_ && gameMinutes - inFlightSince_ > kLlmTimeoutGameMinutes)
         {
             const double elapsedMs = InFlightElapsedMs();
@@ -390,7 +390,7 @@ namespace AirportSim
         ai->GenerateStructuredTextAsync(prompt, "airport_npc_decision", std::string(kStructuredDecisionSchema),
                               [this, agentId, generation, prompt](NextAI::FAIResponse response)
                               {
-                                  // Worker 线程：只解析 + 入队，绝不碰 Scene/agents（§7.4）。
+                                  // Worker 线程：只解析 + 入队，绝不碰 Scene/agents。
                                   FDecisionResult result =
                                       ParseStructuredDecision(response.success ? response.text : std::string());
                                   std::lock_guard<std::mutex> lock(mutex_);

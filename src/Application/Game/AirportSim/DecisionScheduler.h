@@ -27,7 +27,7 @@ namespace AirportSim
     class JourneySystem;
     struct FAgent;
 
-    // Layer 1 串行 LLM 决策调度（§5.3，照搬 StudioSim 模式）：同时在途 1 个请求；
+    // Layer 1 串行 LLM 决策调度（沿用 StudioSim 模式）：同时在途 1 个请求；
     // GenerateTextAsync 回调在 worker 线程只入队，主线程 Tick 消费并 apply。
     // ai == nullptr / 解析失败 / 超时 → 规则 fallback（加权随机 + 预制台词库）。
     class DecisionScheduler

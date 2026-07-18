@@ -2,7 +2,7 @@
 title: "gnb AI Bridge Protocol v2"
 category: design
 status: 已实现
-last_updated: 2026-07-15
+last_updated: 2026-07-17
 ---
 
 # gnb AI Bridge Protocol v2

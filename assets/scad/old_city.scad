@@ -16,7 +16,7 @@
 //
 // 标高：地形草地顶 z=0.30(oc_TZ())；城基台地顶 z=0.50(oc_CZ())；街面 oc_CZ()+0.05；墙顶步道 oc_CZ()+9.12。
 //
-// POI 锚点（命名约定与 airport.scad / habor_city_hd.scad 同构）：
+// POI 锚点（命名约定与 airport.scad / habor_city_v2.scad 同构）：
 //   锚点 = 具名 user module，加载后节点名 = module 名，WorldTranslation = 点位坐标。
 //   锚点调用必须 translate(...) 在 rotate(...) 外层。锚点即建筑/设施本体或点位标石。
 //   —— 攻防 / 巡逻 玩法 ——
@@ -34,7 +34,7 @@
 //     well_01..02    水井
 //   非锚点一律 ground_* / part_* / wall_* / bldg_* / prop_* / farm_* / nature_* 前缀。
 //
-// 构造约定（沿用 airport.scad / habor_city_hd.scad 经验）：
+// 构造约定（沿用 airport.scad / habor_city_v2.scad 经验）：
 //   * 仅用引擎 SCADLoader 已支持特性（无 offset/projection/minkowski/import/resize）；
 //   * 避免 difference：门洞用分段墩台 + 过梁拼出，屋面用 polyhedron 画家叠层；
 //   * 伪随机 oc_rnd(i,m) 整数散列，确定性（引擎与 OpenSCAD 渲染一致）；

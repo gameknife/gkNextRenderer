@@ -31,7 +31,7 @@ set(all_asset_stamps "")
 foreach(dir IN LISTS ASSET_DIRS)
     set(src_dir "${CMAKE_CURRENT_SOURCE_DIR}/${dir}")
     if(NOT EXISTS "${src_dir}")
-        message(STATUS "Asset folder '${dir}' not found at ${src_dir}; skipping copy. Run scripts/fetch-paks --${dir} (then re-run CMake configure) if you need its contents.")
+        message(STATUS "Asset folder '${dir}' not found at ${src_dir}; skipping copy. Run 'gnb paks fetch' from the repository root (then re-run CMake configure) if you need optional assets.")
         continue()
     endif()
 

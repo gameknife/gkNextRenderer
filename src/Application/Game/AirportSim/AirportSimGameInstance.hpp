@@ -14,8 +14,8 @@
 
 #include <glm/glm.hpp>
 
-// AirportSim —— Jumbo Airport Story 风格机场生态观察 Demo（见 docs/AirportSim-MVP-Plan.md）。
-// 编排层：加载 airport.scad、tick 各系统、观察相机（俯视总览 + 锁定跟踪）。
+// AirportSim: airport ecosystem simulation. Owns airport.scad loading, system ticks,
+// overview/follow cameras, and player-facing UI.
 class AirportSimGameInstance : public NextGameInstanceBase
 {
 public:

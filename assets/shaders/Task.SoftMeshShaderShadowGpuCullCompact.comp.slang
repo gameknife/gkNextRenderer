@@ -5,7 +5,7 @@ import Shader.GpuScene;
 import Shader.SoftMeshShaderCull; // IsAABBInFrustum (IsOccludedVolume unused here)
 
 // ---------------------------------------------------------------------------
-// Block-level aggregation, per cascade (see plan: softmeshshader-gpucull-atomic-contention).
+// Block-level aggregation per cascade; see docs/guides/soft-mesh-shader-gpu-driven-submit.md.
 //
 // The original code had every surviving thread spin on a per-cascade CAS and fire
 // up to 4 stats atomics per candidate. The shadow loop iterates all 4 cascades, so
