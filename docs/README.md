@@ -56,6 +56,7 @@
 ## Plans（仍有条件性或明确未实现的工作）
 
 - [ReProject 历史钳制：Phase B/C](plans/reproject-history-clamp-blackdot-fix.md)
+- [PathTracing ReSTIR：开发计划](plans/pathtracing-restir-plan.md) · [设计方案（提案）](designs/pathtracing-restir-design.md)
 
 计划是否仍应执行，必须同时满足：状态未完成、目标代码尚未落地、且没有更新架构取代它。只满足文档里的未勾选框不够。
 索引中的 plan 不是自动授权；只有用户任务或活动 spec 明确要求时才执行。
