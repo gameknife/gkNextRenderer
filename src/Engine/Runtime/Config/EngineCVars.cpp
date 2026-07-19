@@ -117,6 +117,7 @@ namespace NextCVar
         GK_CVAR_UINT("r.sharc.responsiveFrameMax", settings, SharcResponsiveFrameMax, 8, ECVarFlags::Archive, "Official SHARC responsive temporal accumulation frames");
         GK_CVAR_UINT("r.sharc.staleFrameMax", settings, SharcStaleFrameMax, 180, ECVarFlags::Archive, "Official SHARC stale frame eviction threshold");
         GK_CVAR_BOOL("show.debugLighting", showFlags, DebugDraw_Lighting, false, ECVarFlags::None, "Debug draw lighting");
+        GK_CVAR_BOOL("show.debugAreaLights", showFlags, DebugDraw_AreaLights, false, ECVarFlags::None, "Debug draw scene area lights");
         GK_CVAR_BOOL("show.debugBoundingBox", showFlags, DebugDraw_BoundingBox, false, ECVarFlags::None, "Debug draw bounding box");
         GK_CVAR_BOOL("debug.physics.overlay", showFlags, DebugPhysicsOverlay, false, ECVarFlags::None, "Show physics debug overlay");
         GK_CVAR_BOOL("debug.graphics.panel", showFlags, DebugGraphicsPanel, false, ECVarFlags::None, "Show graphics debug panel");

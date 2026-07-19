@@ -64,6 +64,7 @@ namespace Assets
                 softMeshShaderDrawArgBuffer_->GetDeviceAddress(),
                 softMeshShaderDispatchArgBuffer_->GetDeviceAddress(),
                 softMeshShaderCounterBuffer_->GetDeviceAddress(),
+                lightBuffer_ ? lightBuffer_->GetDeviceAddress() : 0,
             },
         };
         Vulkan::BufferUtil::CreateDeviceBuffer(
@@ -483,14 +484,22 @@ namespace Assets
                                                primAddressBuffer_, primAddressBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Offsets", flags, offsets_, offsetBuffer_,
                                                offsetBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights_, lightBuffer_, lightBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "Lights", flags,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            sizeof(LightObject) * kMaxLightCount, lightBuffer_, lightBufferMemory_);
+        lightCount_ = std::min<uint32_t>(static_cast<uint32_t>(lights_.size()), kMaxLightCount);
+        if (lights_.size() > kMaxLightCount)
+        {
+            SPDLOG_WARN("Scene contains {} area lights; only the first {} are uploaded", lights_.size(), kMaxLightCount);
+        }
+        UpdateLights();
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SkinWeights", flags, allWeights, skinWeightBuffer_,
                                                skinWeightBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SkinJoints", flags, allJoints, skinJointBuffer_,
                                                skinJointBufferMemory_);
 
         // Auxiliary scene data.
-        lightCount_ = static_cast<uint32_t>(lights_.size());
         indicesCount_ = static_cast<uint32_t>(indices.size());
         vertexCount_ = static_cast<uint32_t>(vertices.size());
 
@@ -535,6 +544,7 @@ namespace Assets
                 softMeshShaderDrawArgBuffer_->GetDeviceAddress(),
                 softMeshShaderDispatchArgBuffer_->GetDeviceAddress(),
                 softMeshShaderCounterBuffer_->GetDeviceAddress(),
+                lightBuffer_->GetDeviceAddress(),
             },
         };
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SoftMeshShaderResources", softMeshShaderFlags, softMeshShaderResources,

@@ -21,12 +21,95 @@
 #include "Engine/Utilities/Exception.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <entt/meta/factory.hpp>
 #include <limits>
 
 namespace Assets
 {
+    void Scene::UpdateLights()
+    {
+        lightCount_ = std::min<uint32_t>(static_cast<uint32_t>(lights_.size()), kMaxLightCount);
+        if (!lightBufferMemory_ || lightCount_ == 0)
+        {
+            return;
+        }
+        std::vector<LightObject> uploadLights(lights_.begin(), lights_.begin() + lightCount_);
+        std::vector<float> weights(lightCount_, 0.0f);
+        float totalWeight = 0.0f;
+        for (uint32_t i = 0; i < lightCount_; ++i)
+        {
+            const LightObject& light = uploadLights[i];
+            if (light.lightMatIdx >= materials_.size())
+            {
+                continue;
+            }
+            const Material& material = materials_[light.lightMatIdx].gpuMaterial_;
+            if (material.MaterialModel != Material::Enum::DiffuseLight)
+            {
+                continue;
+            }
+            const glm::vec3 radiance = glm::max(glm::vec3(material.Diffuse), glm::vec3(0.0f));
+            const float luminance = glm::dot(radiance, glm::vec3(0.2126f, 0.7152f, 0.0722f));
+            weights[i] = luminance * std::max(light.normal_area.w, 0.0f);
+            totalWeight += weights[i];
+        }
+
+        float cdf = 0.0f;
+        for (uint32_t i = 0; i < lightCount_; ++i)
+        {
+            const float pdf = totalWeight > 0.0f ? weights[i] / totalWeight : 1.0f / float(lightCount_);
+            cdf += pdf;
+            uploadLights[i].reserved1 = std::bit_cast<uint32_t>(i + 1 == lightCount_ ? 1.0f : cdf);
+            uploadLights[i].reserved2 = std::bit_cast<uint32_t>(pdf);
+        }
+
+        void* data = lightBufferMemory_->Map(0, sizeof(LightObject) * lightCount_);
+        std::memcpy(data, uploadLights.data(), sizeof(LightObject) * lightCount_);
+        lightBufferMemory_->Unmap();
+    }
+
+    void Scene::DrawAreaLights() const
+    {
+        constexpr glm::vec4 activeColor(1.0f, 0.72f, 0.08f, 1.0f);
+        constexpr glm::vec4 inactiveColor(1.0f, 0.18f, 0.12f, 1.0f);
+        constexpr glm::vec4 normalColor(0.08f, 0.9f, 1.0f, 1.0f);
+
+        for (const LightObject& light : lights_)
+        {
+            const glm::vec3 p0(light.p0);
+            const glm::vec3 p1(light.p1);
+            const glm::vec3 p3(light.p3);
+            const glm::vec3 p2 = p1 + p3 - p0;
+            const bool active = light.lightMatIdx < materials_.size() &&
+                materials_[light.lightMatIdx].gpuMaterial_.MaterialModel == Material::Enum::DiffuseLight &&
+                glm::any(glm::greaterThan(glm::vec3(materials_[light.lightMatIdx].gpuMaterial_.Diffuse),
+                                          glm::vec3(0.0f))) &&
+                light.normal_area.w > 0.0f;
+            const glm::vec4 outlineColor = active ? activeColor : inactiveColor;
+
+            Runtime::EngineHelper::DrawAuxLine(p0, p1, outlineColor, 2.5f, false);
+            Runtime::EngineHelper::DrawAuxLine(p1, p2, outlineColor, 2.5f, false);
+            Runtime::EngineHelper::DrawAuxLine(p2, p3, outlineColor, 2.5f, false);
+            Runtime::EngineHelper::DrawAuxLine(p3, p0, outlineColor, 2.5f, false);
+
+            const glm::vec3 center = (p0 + p1 + p2 + p3) * 0.25f;
+            Runtime::EngineHelper::DrawAuxPoint(center, outlineColor, 4.0f, 0, false);
+
+            const glm::vec3 normal(light.normal_area);
+            const float normalLengthSquared = glm::dot(normal, normal);
+            if (normalLengthSquared > 1.0e-8f)
+            {
+                const float markerLength = std::clamp(std::sqrt(std::max(light.normal_area.w, 0.0f)) * 0.5f,
+                                                      0.2f, 2.0f);
+                const glm::vec3 normalEnd = center + normal * glm::inversesqrt(normalLengthSquared) * markerLength;
+                Runtime::EngineHelper::DrawAuxLine(center, normalEnd, normalColor, 2.0f, false);
+                Runtime::EngineHelper::DrawAuxPoint(normalEnd, normalColor, 3.0f, 0, false);
+            }
+        }
+    }
+
     void Scene::Tick(float deltaSeconds)
     {
         if (NextEngine::GetInstance()->GetUserSettings().TickAnimation)
@@ -238,6 +321,11 @@ namespace Assets
 
     bool Scene::UpdateNodes()
     {
+        UpdateLights();
+        if (NextEngine::GetInstance()->GetShowFlags().DebugDraw_AreaLights)
+        {
+            DrawAreaLights();
+        }
         GPUDrivenStat zero{};
         // read back gpu driven stats
         const auto data = sceneDynamicBufferMemory_->Map(

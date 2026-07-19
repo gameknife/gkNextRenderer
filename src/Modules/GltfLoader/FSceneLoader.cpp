@@ -30,6 +30,139 @@
 
 namespace Assets
 {
+    static glm::vec4 GetAttributeValue(const tinygltf::Model& model, const tinygltf::Accessor& accessor, size_t index);
+
+    namespace
+    {
+        uint32_t ReadIndex(const tinygltf::Model& model, const tinygltf::Accessor& accessor, size_t index)
+        {
+            const tinygltf::BufferView& view = model.bufferViews[accessor.bufferView];
+            const unsigned char* data = model.buffers[view.buffer].data.data() + view.byteOffset + accessor.byteOffset +
+                                        index * accessor.ByteStride(view);
+            switch (accessor.componentType)
+            {
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+                return *reinterpret_cast<const uint8_t*>(data);
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+                return *reinterpret_cast<const uint16_t*>(data);
+            case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
+                return *reinterpret_cast<const uint32_t*>(data);
+            default:
+                return std::numeric_limits<uint32_t>::max();
+            }
+        }
+
+        bool IsPureEmissivePrimitive(const tinygltf::Model& model, const tinygltf::Primitive& primitive)
+        {
+            if (primitive.material < 0 || primitive.material >= static_cast<int>(model.materials.size()))
+            {
+                return false;
+            }
+            const tinygltf::Material& material = model.materials[primitive.material];
+            if (material.emissiveTexture.index >= 0 || material.emissiveFactor.size() < 3)
+            {
+                return false;
+            }
+            const glm::dvec3 emissive(material.emissiveFactor[0], material.emissiveFactor[1],
+                                      material.emissiveFactor[2]);
+            return glm::length(emissive) > 0.001;
+        }
+
+        bool TryBuildAreaLight(const tinygltf::Model& model, const tinygltf::Primitive& primitive,
+                               const glm::mat4& worldTransform, int materialOffset, LightObject& outLight)
+        {
+            if (primitive.mode != TINYGLTF_MODE_TRIANGLES || primitive.indices < 0 ||
+                primitive.attributes.find("POSITION") == primitive.attributes.end())
+            {
+                return false;
+            }
+
+            const tinygltf::Accessor& positionAccessor =
+                model.accessors[primitive.attributes.at("POSITION")];
+            const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
+            if (positionAccessor.count != 4 || indexAccessor.count != 6)
+            {
+                return false;
+            }
+
+            std::array<uint32_t, 3> firstTriangle = {
+                ReadIndex(model, indexAccessor, 0),
+                ReadIndex(model, indexAccessor, 1),
+                ReadIndex(model, indexAccessor, 2),
+            };
+            std::array<uint32_t, 3> secondTriangle = {
+                ReadIndex(model, indexAccessor, 3),
+                ReadIndex(model, indexAccessor, 4),
+                ReadIndex(model, indexAccessor, 5),
+            };
+
+            std::vector<uint32_t> shared;
+            uint32_t firstUnique = std::numeric_limits<uint32_t>::max();
+            uint32_t secondUnique = std::numeric_limits<uint32_t>::max();
+            for (uint32_t index : firstTriangle)
+            {
+                if (std::find(secondTriangle.begin(), secondTriangle.end(), index) != secondTriangle.end())
+                {
+                    shared.push_back(index);
+                }
+                else
+                {
+                    firstUnique = index;
+                }
+            }
+            for (uint32_t index : secondTriangle)
+            {
+                if (std::find(firstTriangle.begin(), firstTriangle.end(), index) == firstTriangle.end())
+                {
+                    secondUnique = index;
+                    break;
+                }
+            }
+            if (shared.size() != 2 || firstUnique >= positionAccessor.count || secondUnique >= positionAccessor.count)
+            {
+                return false;
+            }
+
+            const uint32_t cornerIndex = shared.front();
+            glm::vec3 p0 = glm::vec3(worldTransform * GetAttributeValue(model, positionAccessor, cornerIndex));
+            glm::vec3 p1 = glm::vec3(worldTransform * GetAttributeValue(model, positionAccessor, firstUnique));
+            glm::vec3 p3 = glm::vec3(worldTransform * GetAttributeValue(model, positionAccessor, secondUnique));
+
+            glm::vec3 crossEdges = glm::cross(p1 - p0, p3 - p0);
+            const float area = glm::length(crossEdges);
+            if (!std::isfinite(area) || area <= 1.0e-8f)
+            {
+                return false;
+            }
+
+            const auto normalAttribute = primitive.attributes.find("NORMAL");
+            if (normalAttribute != primitive.attributes.end())
+            {
+                const tinygltf::Accessor& normalAccessor = model.accessors[normalAttribute->second];
+                if (normalAccessor.count > 0)
+                {
+                    const uint32_t normalIndex =
+                        std::min<uint32_t>(cornerIndex, static_cast<uint32_t>(normalAccessor.count - 1));
+                    const glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(worldTransform)));
+                    const glm::vec3 expectedNormal =
+                        glm::normalize(normalMatrix * glm::vec3(GetAttributeValue(model, normalAccessor, normalIndex)));
+                    if (glm::dot(crossEdges, expectedNormal) < 0.0f)
+                    {
+                        std::swap(p1, p3);
+                        crossEdges = -crossEdges;
+                    }
+                }
+            }
+
+            outLight = {};
+            outLight.p0 = glm::vec4(p0, 1.0f);
+            outLight.p1 = glm::vec4(p1, 1.0f);
+            outLight.p3 = glm::vec4(p3, 1.0f);
+            outLight.normal_area = glm::vec4(glm::normalize(crossEdges), area);
+            outLight.lightMatIdx = static_cast<uint32_t>(primitive.material + materialOffset);
+            return true;
+        }
+    }
 
     std::string ReadSceneReferenceAssetPath(const tinygltf::Node& node)
     {
@@ -125,7 +258,7 @@ namespace Assets
     }
     
     void ParseGltfNode(std::vector<std::shared_ptr<Assets::Node>>& outNodes, std::map<int, std::shared_ptr<Node> >& nodeMap, Assets::EnvironmentSetting& outCamera, std::vector<Assets::LightObject>& outLights,
-        tinygltf::Model& model, int nodeIdx, int modelIdx, int materialOffset)
+        tinygltf::Model& model, int nodeIdx, int modelIdx, int materialOffset, const std::shared_ptr<Node>& parent)
     {
         tinygltf::Node& node = model.nodes[nodeIdx];
         
@@ -180,8 +313,11 @@ namespace Assets
             }
         }
 
-        uint32_t primaryMatIdx = 0;
         std::shared_ptr<Node> sceneNode = Node::CreateNode(node.name, translation, rotation, scale, uint32_t(outNodes.size()));
+        if (parent)
+        {
+            sceneNode->SetParent(parent);
+        }
         if (node.extras.Has("tag") && node.extras.Get("tag").IsString())
         {
             sceneNode->SetTag(node.extras.Get("tag").Get<std::string>());
@@ -223,7 +359,6 @@ namespace Assets
                 assert( i < 16 );
                 auto& primitive = model.meshes[node.mesh].primitives[i];
                 materialIdx[i] = (max(0, primitive.material + materialOffset));
-                primaryMatIdx = primitive.material + materialOffset;
             }
             renderComp->SetMaterials(materialIdx);
 
@@ -277,31 +412,38 @@ namespace Assets
 
         if( node.extras.Has("arealight") )
         {
-            // use the aabb to build a light, using the average normals and area
-            // the basic of lightquad from blender is a 2 x 2 quad ,from -1 to 1
-            glm::vec4 localP0 = glm::vec4(-1,0,-1, 1);
-            glm::vec4 localP1 = glm::vec4(-1,0,1, 1);
-            glm::vec4 localP3 = glm::vec4(1,0,-1, 1);
-
-            auto transform = sceneNode->WorldTransform();
-                
-            LightObject light;
-            light.p0 = transform * localP0;
-            light.p1 = transform * localP1;
-            light.p3 = transform * localP3;
-            vec3 dir = vec3(transform * glm::vec4(0,1,0,0));
-            light.normal_area = glm::vec4(glm::normalize(dir),0);
-            light.normal_area.w = glm::length(glm::cross(glm::vec3(light.p1 - light.p0), glm::vec3(light.p3 - light.p0))) / 2.0f;
-            light.lightMatIdx = primaryMatIdx;
-            
-            outLights.push_back(light);
+            bool foundAreaLight = false;
+            if (node.mesh >= 0 && node.mesh < static_cast<int>(model.meshes.size()))
+            {
+                for (const tinygltf::Primitive& primitive : model.meshes[node.mesh].primitives)
+                {
+                    if (!IsPureEmissivePrimitive(model, primitive))
+                    {
+                        continue;
+                    }
+                    LightObject light{};
+                    if (TryBuildAreaLight(model, primitive, sceneNode->WorldTransform(), materialOffset, light))
+                    {
+                        outLights.push_back(light);
+                        foundAreaLight = true;
+                    }
+                    else
+                    {
+                        SPDLOG_WARN("Area-light node '{}' has an emissive primitive that is not a two-triangle quad",
+                                    node.name);
+                    }
+                }
+            }
+            if (!foundAreaLight)
+            {
+                SPDLOG_WARN("Area-light node '{}' does not contain a supported pure-emissive quad", node.name);
+            }
         }
         
         // for each child node
         for (int child : node.children)
         {
-            ParseGltfNode(outNodes, nodeMap, outCamera, outLights, model, child, modelIdx, materialOffset);
-            nodeMap[child]->SetParent(sceneNode);
+            ParseGltfNode(outNodes, nodeMap, outCamera, outLights, model, child, modelIdx, materialOffset, sceneNode);
         }
     }
     
@@ -880,7 +1022,7 @@ namespace Assets
         std::map<int, std::shared_ptr<Node> > nodeMap;
         for (int nodeIdx : model.scenes[0].nodes)
         {
-            ParseGltfNode(nodes, nodeMap, cameraInit, lights, model, nodeIdx, modelIdx, materialOffset);
+            ParseGltfNode(nodes, nodeMap, cameraInit, lights, model, nodeIdx, modelIdx, materialOffset, nullptr);
             // if (nodeMap.find(nodeIdx) != nodeMap.end())
             // {
             //     nodeMap[nodeIdx]->SetParent(sceneNode);

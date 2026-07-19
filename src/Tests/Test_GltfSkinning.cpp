@@ -2,10 +2,98 @@
 #include "Modules/GltfLoader/FSceneLoader.h"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Data/Material.hpp"
+#include <chrono>
 #include <fstream>
 #include <filesystem>
 
 #include "Engine/Utilities/FileHelper.hpp"
+
+namespace
+{
+    class ScopedGltfFile
+    {
+    public:
+        ScopedGltfFile()
+        {
+            const auto suffix = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+            root_ = std::filesystem::temp_directory_path() / ("gk_area_light_" + suffix);
+            std::filesystem::create_directories(root_);
+        }
+
+        ~ScopedGltfFile()
+        {
+            std::error_code error;
+            std::filesystem::remove_all(root_, error);
+        }
+
+        std::filesystem::path Write(const std::string& contents) const
+        {
+            const std::filesystem::path path = root_ / "area_light.gltf";
+            std::ofstream stream(path);
+            REQUIRE(stream.is_open());
+            stream << contents;
+            return path;
+        }
+
+    private:
+        std::filesystem::path root_;
+    };
+}
+
+TEST_CASE("glTF area light uses emissive quad geometry and world transform", "[Assets][glTF][AreaLight]")
+{
+    Utilities::Package::FPackageFileSystem pakSys(Utilities::Package::EPM_OsFile);
+    ScopedGltfFile fixture;
+    const std::filesystem::path filename = fixture.Write(R"json({
+        "asset":{"version":"2.0"},
+        "scene":0,
+        "scenes":[{"nodes":[0]}],
+        "nodes":[
+            {"name":"parent","translation":[10,2,3],"children":[1]},
+            {"name":"area","translation":[1,0,0],"mesh":0,"extras":{"arealight":1}}
+        ],
+        "meshes":[{"primitives":[
+            {"attributes":{"POSITION":0,"NORMAL":1},"indices":2,"material":0},
+            {"attributes":{"POSITION":0,"NORMAL":1},"indices":2,"material":1}
+        ]}],
+        "materials":[
+            {"name":"emitter","emissiveFactor":[1,1,1],"pbrMetallicRoughness":{"roughnessFactor":0.5}},
+            {"name":"frame","pbrMetallicRoughness":{"baseColorFactor":[0.5,0.5,0.5,1],"roughnessFactor":0.5}}
+        ],
+        "buffers":[{"byteLength":108,"uri":"data:application/octet-stream;base64,PQpXvgAAAABI4fo+PQpXvgAAAABI4fq+PQpXPgAAAABI4fq+PQpXPgAAAABI4fo+AAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAABAAIAAAACAAMA"}],
+        "bufferViews":[
+            {"buffer":0,"byteOffset":0,"byteLength":48,"target":34962},
+            {"buffer":0,"byteOffset":48,"byteLength":48,"target":34962},
+            {"buffer":0,"byteOffset":96,"byteLength":12,"target":34963}
+        ],
+        "accessors":[
+            {"bufferView":0,"componentType":5126,"count":4,"type":"VEC3","min":[-0.21,0,-0.49],"max":[0.21,0,0.49]},
+            {"bufferView":1,"componentType":5126,"count":4,"type":"VEC3"},
+            {"bufferView":2,"componentType":5123,"count":6,"type":"SCALAR"}
+        ]
+    })json");
+
+    Assets::EnvironmentSetting camera;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FSceneLoader::LoadGLTFScene(filename.string(), camera, nodes, models, materials, lights,
+                                                tracks, skeletons));
+    REQUIRE(lights.size() == 1);
+    const Assets::LightObject& light = lights.front();
+    CHECK(light.lightMatIdx == 0);
+    CHECK(light.p0.x == Catch::Approx(10.79f));
+    CHECK(light.p0.y == Catch::Approx(2.0f));
+    CHECK(light.p0.z == Catch::Approx(3.49f));
+    CHECK(light.normal_area.x == Catch::Approx(0.0f).margin(1.0e-6f));
+    CHECK(light.normal_area.y == Catch::Approx(-1.0f).margin(1.0e-6f));
+    CHECK(light.normal_area.z == Catch::Approx(0.0f).margin(1.0e-6f));
+    CHECK(light.normal_area.w == Catch::Approx(0.4116f).margin(1.0e-5f));
+}
 
 TEST_CASE("Load glTF Skinning Data", "[Assets][glTF]")
 {

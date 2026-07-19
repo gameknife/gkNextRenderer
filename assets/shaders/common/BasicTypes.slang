@@ -99,6 +99,7 @@ public struct ALIGN_16 SoftMeshShaderResources
     public uint64_t DrawArgs;
     public uint64_t DispatchArgs;
     public uint64_t Counters;
+    public uint64_t Lights;
 };
 
 public struct ALIGN_16 UniformBufferObject
@@ -553,6 +554,10 @@ public struct ALIGN_8 GPUScene
     {
         get { return (SoftMeshShaderResources*)SoftMeshShaderResourcesAddress; }
     }
+    public property LightObject* Lights
+    {
+        get { return (LightObject*)SoftMeshShader.Lights; }
+    }
 
     public RaytracingAccelerationStructure GetTLAS() {
 		return RaytracingAccelerationStructure(TLAS);
@@ -700,6 +705,10 @@ public struct ALIGN_8 GPUScene
     public property SoftMeshShaderResources* SoftMeshShader
     {
         get { return (SoftMeshShaderResources*)JointMatrices_Reserved_Address.y; }
+    }
+    public property LightObject* Lights
+    {
+        get { return (LightObject*)SoftMeshShader.Lights; }
     }
 
     public RaytracingAccelerationStructure GetTLAS() {

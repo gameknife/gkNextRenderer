@@ -13,7 +13,8 @@ public struct FHardwareDirectIlluminator : IDirectIlluminator
 {
     public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)
     {
-        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+        GPUScene gpuScene = Bindless.GetGpuscene();
+        UniformBufferObject Camera = gpuScene.Camera[0];
         float shadow = 0.0f;
         const float3 lightVector = Camera.SunDirection.xyz;
         const float4 d = max(dot(lightVector, normalize(normal)), 0.0) * M_1_PI;
@@ -28,6 +29,62 @@ public struct FHardwareDirectIlluminator : IDirectIlluminator
             }
         }
         directIllumColor = Camera.SunColor * d * shadow;
+
+        if (Camera.LightCount == 0 || gpuScene.SoftMeshShader.Lights == 0)
+        {
+            return;
+        }
+
+        const float lightSelector = RandomFloat(RandomSeed);
+        uint lightIndex = Camera.LightCount - 1;
+        for (uint i = 0; i < Camera.LightCount; ++i)
+        {
+            if (lightSelector < asfloat(gpuScene.Lights[i].reserved1))
+            {
+                lightIndex = i;
+                break;
+            }
+        }
+
+        LightObject light = gpuScene.Lights[lightIndex];
+        const float lightPdf = asfloat(light.reserved2);
+        const float lightArea = light.normal_area.w;
+        if (lightPdf <= 0.0f || lightArea <= 0.0f)
+        {
+            return;
+        }
+
+        Material lightMaterial = gpuScene.GetMaterial(light.lightMatIdx);
+        if (lightMaterial.MaterialModel != MaterialDiffuseLight)
+        {
+            return;
+        }
+
+        const float2 uv = RandomFloat2(RandomSeed);
+        const float3 lightPosition = light.p0.xyz + uv.x * (light.p1.xyz - light.p0.xyz) +
+                                     uv.y * (light.p3.xyz - light.p0.xyz);
+        const float3 toLight = lightPosition - position;
+        const float distanceSquared = dot(toLight, toLight);
+        if (distanceSquared <= EPS * EPS)
+        {
+            return;
+        }
+
+        const float3 lightDirection = toLight * rsqrt(distanceSquared);
+        const float surfaceCosine = max(dot(normalize(normal), lightDirection), 0.0f);
+        const float lightCosine = max(dot(normalize(light.normal_area.xyz), -lightDirection), 0.0f);
+        if (surfaceCosine <= 0.0f || lightCosine <= 0.0f)
+        {
+            return;
+        }
+
+        const float3 shadowOrigin = position + normalize(normal) * EPS2;
+        if (!HWTracer.TraceSegment(shadowOrigin, lightPosition, EPS))
+        {
+            const float geometryPdfWeight = surfaceCosine * lightCosine * lightArea /
+                                            (M_PI * distanceSquared * lightPdf);
+            directIllumColor += float4(lightMaterial.Diffuse.rgb * geometryPdfWeight, 0.0f);
+        }
     }
 
     FHardwareRayTracer HWTracer;
@@ -183,7 +240,47 @@ public struct FPathTracingRenderer{
         return float4(0, 0, 0, 1);
     }
 
-    bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal, out float outHitDist, out bool outHitMiss, out float3 outTerminalRadiance)
+    bool IsRegisteredAreaLightHit(float3 position, uint materialIndex)
+    {
+        GPUScene gpuScene = Bindless.GetGpuscene();
+        UniformBufferObject Camera = gpuScene.Camera[0];
+        for (uint i = 0; i < Camera.LightCount; ++i)
+        {
+            LightObject light = gpuScene.Lights[i];
+            if (light.lightMatIdx != materialIndex)
+            {
+                continue;
+            }
+
+            const float3 edge1 = light.p1.xyz - light.p0.xyz;
+            const float3 edge3 = light.p3.xyz - light.p0.xyz;
+            const float3 relative = position - light.p0.xyz;
+            const float d00 = dot(edge1, edge1);
+            const float d01 = dot(edge1, edge3);
+            const float d11 = dot(edge3, edge3);
+            const float d20 = dot(relative, edge1);
+            const float d21 = dot(relative, edge3);
+            const float denominator = d00 * d11 - d01 * d01;
+            if (abs(denominator) <= EPS * EPS)
+            {
+                continue;
+            }
+            const float u = (d11 * d20 - d01 * d21) / denominator;
+            const float v = (d00 * d21 - d01 * d20) / denominator;
+            const float planeDistance = abs(dot(relative, normalize(light.normal_area.xyz)));
+            if (u >= -EPS && u <= 1.0f + EPS && v >= -EPS && v <= 1.0f + EPS &&
+                planeDistance <= EPS10)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor,
+                     inout uint4 RandomSeed, bool suppressRegisteredEmitter, inout bool hitReflect,
+                     inout bool hitMetal, out float outHitDist, out bool outHitMiss,
+                     out float3 outTerminalRadiance)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
         outHitMiss = false;
@@ -274,6 +371,13 @@ public struct FPathTracingRenderer{
             }
             if (hitMat.MaterialModel == MaterialDiffuseLight)
             {
+                if (suppressRegisteredEmitter && !chanceGGX &&
+                    IsRegisteredAreaLightHit(inVertex.Position, inVertex.MaterialIndex))
+                {
+                    // The same primary diffuse-light path is already represented by area-light NEE.
+                    rayColor = float4(0, 0, 0, 0);
+                    return true;
+                }
                 outTerminalRadiance = outAlbedo.rgb;
                 return true;
             }
@@ -360,7 +464,10 @@ public struct FPathTracingRenderer{
                 bool bHitMiss = false;
                 float3 bTerminalRadiance = float3(0, 0, 0);
                 float3 rayColorBefore = RayColor.rgb;
-                bool segmentExit = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed_, bHitReflect, bHitMetal, bHitDist, bHitMiss, bTerminalRadiance);
+                const bool suppressRegisteredEmitter = (b == 0) || wantsDirect;
+                bool segmentExit = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed_,
+                                               suppressRegisteredEmitter, bHitReflect, bHitMetal, bHitDist,
+                                               bHitMiss, bTerminalRadiance);
 
                 if (b == 0)
                 {

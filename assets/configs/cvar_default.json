@@ -21,6 +21,7 @@
   "sys.tickAnimation": true,
   "sys.sceneEpsilonScale": 1.0,
   "show.debugLighting": false,
+  "show.debugAreaLights": false,
   "show.debugBoundingBox": false,
   "show.visualDebug": false,
   "show.edge": false,

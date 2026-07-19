@@ -25,6 +25,7 @@ namespace Assets
         static constexpr uint32_t kSunShadowCascadeCount = 4;
         static constexpr uint32_t kSunShadowResolution = 1024;
         static constexpr uint32_t kMaxIndirectDrawCount = 65535;
+        static constexpr uint32_t kMaxLightCount = 1024;
         static constexpr uint32_t kModelSectionStride = 10;
         static constexpr uint32_t kSoftMeshShaderDrawSlotCount = 1 + kSunShadowCascadeCount;
         static constexpr uint32_t kSunShadowCascadeMask = (1u << kSunShadowCascadeCount) - 1u;
@@ -387,6 +388,8 @@ namespace Assets
 
         void MarkNodeIndexDirty() const { nodeIndexDirty_ = true; }
         void RebuildNodeIndex() const;
+        void UpdateLights();
+        void DrawAreaLights() const;
         void RegisterNodeIndex(const std::shared_ptr<Node>& node) const;
         void UnregisterNodeIndex(uint32_t id) const;
 

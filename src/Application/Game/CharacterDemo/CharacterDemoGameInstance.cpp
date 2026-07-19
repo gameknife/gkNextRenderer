@@ -377,7 +377,7 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("Space - Jump | Mouse - Look");
     ImGui::Text("V - Toggle FPS/TPS | Tab - Move Mode");
     ImGui::Text("LMB - Shoot | F1 - Physics | F2 - Graphics | Q - Next Renderer");
-    ImGui::Text("1-8 - View Modes | F8 - AI Debug Menu | F9 - IK Debug");
+    ImGui::Text("1-9 - View Modes | F8 - AI Debug Menu | F9 - IK Debug");
     ImGui::Text("ESC - Release Mouse");
 
     ImGui::SliderFloat("Walk Speed", &config_.Player.WalkSpeed, 1.0f, 10.0f);

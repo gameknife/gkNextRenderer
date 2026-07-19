@@ -30,6 +30,7 @@ namespace Runtime
             Edge,
             Skeleton,
             Wireframe,
+            AreaLights,
             Custom,
         };
 
@@ -41,7 +42,7 @@ namespace Runtime
             {"PathTracing", Vulkan::ERT_PathTracing},
         }};
 
-        inline constexpr std::array<const char*, 8> ViewModeLabels = {{
+        inline constexpr std::array<const char*, 9> ViewModeLabels = {{
             "Lit",
             "Visual Debug",
             "Lighting",
@@ -50,6 +51,7 @@ namespace Runtime
             "Edge",
             "Skeleton",
             "Wireframe",
+            "Area Lights",
         }};
 
         inline int GetRendererOptionCount(NextEngine& engine)
@@ -236,6 +238,7 @@ namespace Runtime
             registerMode(showFlags.ShowEdge, EViewMode::Edge);
             registerMode(showFlags.ShowDebugSkeleton, EViewMode::Skeleton);
             registerMode(showFlags.ShowWireframe, EViewMode::Wireframe);
+            registerMode(showFlags.DebugDraw_AreaLights, EViewMode::AreaLights);
 
             if (enabledModeCount == 0)
             {
@@ -259,6 +262,7 @@ namespace Runtime
             showFlags.ShowEdge = false;
             showFlags.ShowDebugSkeleton = false;
             showFlags.ShowWireframe = false;
+            showFlags.DebugDraw_AreaLights = false;
 
             switch (mode)
             {
@@ -285,6 +289,9 @@ namespace Runtime
                 break;
             case EViewMode::Wireframe:
                 showFlags.ShowWireframe = true;
+                break;
+            case EViewMode::AreaLights:
+                showFlags.DebugDraw_AreaLights = true;
                 break;
             }
         }
@@ -324,6 +331,9 @@ namespace Runtime
                 case SDLK_8:
                 case SDLK_KP_8:
                     return EViewMode::Wireframe;
+                case SDLK_9:
+                case SDLK_KP_9:
+                    return EViewMode::AreaLights;
                 default:
                     return EViewMode::Custom;
                 }
