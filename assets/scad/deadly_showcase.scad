@@ -1,5 +1,5 @@
 // deadly_showcase.scad —— kit_deadly 零件总览（按类别排行，验收/选型用）
-// 行序（自北向南）：建筑 / 载具 / 植被 / 道具 / 地面。
+// 行序（自北向南）：建筑 / 载具 / 植被 / 道具 / 地面 / 农场细节 / 大件。
 // gnb shot --scene assets/scad/deadly_showcase.scad
 
 use <lib/kit_deadly.scad>
@@ -7,7 +7,7 @@ use <lib/kit_deadly.scad>
 $fn = 12;
 
 // 展台
-color([0.42, 0.47, 0.29]) translate([0, 2, -0.15]) cube([64, 52, 0.3], center = true);
+color([0.42, 0.47, 0.29]) translate([0, -6, -0.15]) cube([94, 80, 0.3], center = true);
 
 // ================= 建筑 =================
 translate([-24, 18, 0]) dd_bldg_house(seed = 3);
@@ -15,6 +15,7 @@ translate([-10, 18, 0]) dd_bldg_house_porch(seed = 7);
 translate([3, 18, 0]) dd_bldg_shop(seed = 1);
 translate([14, 21, 0]) dd_bldg_church(seed = 0);
 translate([24, 18, 0]) dd_bldg_shed(seed = 2);
+translate([37, 20, 0]) dd_bldg_barn(seed = 6);
 
 // ================= 载具 =================
 translate([-20, 8, 0]) dd_veh_sedan(seed = 4);
@@ -22,6 +23,8 @@ translate([-10, 8, 0]) dd_veh_van(seed = 8);
 translate([0, 8, 0]) dd_veh_pickup(seed = 5);
 translate([10, 8, 0]) dd_veh_wreck(seed = 7);
 translate([20, 8, 0]) dd_veh_sedan(seed = 23);
+translate([30, 8, 0]) dd_veh_flipped(seed = 9);
+translate([40, 8, 0]) dd_veh_harvester(seed = 3);
 
 // ================= 植被 =================
 translate([-24, 0, 0]) dd_nature_pine(s = 1.3, seed = 1);
@@ -56,3 +59,21 @@ translate([-20, -16, 0]) dd_ground_road(L = 16, seed = 1);
 translate([-4, -16, 0]) dd_ground_cross(seed = 2);
 translate([8, -16, 0]) dd_ground_sidewalk(L = 12);
 translate([22, -16, 0]) dd_ground_grass(L = 10, D = 8, seed = 3);
+translate([35, -16, 0]) dd_ground_dirt(L = 9, D = 7, seed = 4);
+translate([43, -16, 0]) dd_ground_puddle(s = 1.2, seed = 5);
+
+// ================= 农场细节 =================
+translate([-30, -27, 0]) dd_nature_field_rows(seed = 2);
+translate([-15, -27, 0]) dd_nature_pumpkin_patch(seed = 3);
+translate([-6, -27, 0]) dd_nature_stump(s = 1.1, seed = 1);
+translate([-2, -27, 0]) dd_nature_log(seed = 2);
+translate([3, -27, 0]) dd_prop_haybale(seed = 3);
+translate([7, -27, 0]) dd_prop_haybale(seed = 6);
+translate([10, -27, 0]) dd_prop_gascan();
+translate([13, -27, 0]) dd_prop_pallet(seed = 1);
+translate([17, -27, 0]) dd_prop_tires(seed = 2);
+translate([22, -27, 0]) dd_prop_debris(seed = 4);
+translate([28, -27, 0]) dd_prop_debris(seed = 9);
+
+// ================= 大件 =================
+translate([-34, -39, 0]) dd_prop_windturbine_fallen(seed = 1, s = 1.0);

@@ -2,6 +2,7 @@
 // 1 unit = 1 metre。840 x 600 边界内，以真实公路、车辆、前哨和地貌尺度组织少数热点。
 
 use <../lib/kit_deadly.scad>
+use <../lib/kit_overhill.scad>   // 沙漠植被：oh_nature_cactus / oh_nature_deadtree
 use <../lib/kit_layout.scad>
 
 $fn = 12;
@@ -71,6 +72,12 @@ lay_scatter(42, -395, -245, -150, -42, seed = 215)
     lay_pick($seed) { dd_prop_barrel(seed = $seed); dd_prop_crate(); dd_prop_trash(seed = $seed); dd_prop_cone(); }
 lay_along([[-405, -155], [-240, -155], [-240, -35], [-405, -35], [-405, -155]], step = 9, seed = 216)
     dd_prop_fence(len = 8);
+// 废车场地面细节：轮胎堆/托盘/油壶成堆，两辆翻覆车，压出油渍与杂物。
+lay_scatter(14, -390, -250, -145, -50, seed = 217)
+    lay_pick($seed) { dd_prop_tires(seed = $seed); dd_prop_pallet(seed = $seed); dd_prop_gascan(); }
+translate([-322, -118, 0]) rotate([0, 0, 40]) dd_veh_flipped(seed = 218);
+translate([-268, -68, 0]) rotate([0, 0, 205]) dd_veh_flipped(seed = 219);
+lay_scatter(12, -395, -245, -148, -45, seed = 220) dd_prop_debris(seed = $seed);
 
 // 公路车队按真实车长与间距排列，原点附近约 24 m 保持通畅。
 translate([35, -3.5, 0]) rotate([0, 0, -8]) lay_row(15, 11, 0, seed = 221)
@@ -85,6 +92,11 @@ translate([35, -3.5, 0]) rotate([0, 0, -8]) lay_row(15, 11, 0, seed = 221)
 lay_scatter(18, 28, 205, -34, 14, seed = 222) dd_prop_cone();
 translate([28, -7, 0]) dd_prop_barricade();
 translate([205, 22, 0]) rotate([0, 0, 180]) dd_prop_barricade();
+// 车队里一辆翻下路基的车 + 公路走廊散落物。
+translate([150, -24, 0]) rotate([0, 0, 168]) dd_veh_flipped(seed = 223);
+lay_scatter(16, -200, 220, -30, 20, seed = 224) dd_prop_debris(seed = $seed);
+lay_scatter(5, 40, 200, -28, 12, seed = 225)
+    lay_pick($seed) { dd_prop_gascan(); dd_prop_tires(seed = $seed); }
 
 // 东部前哨贴着公路：建筑前场距路缘 6–12 m，而非散落在几十米外。
 translate([255, -48, 0]) rotate([0, 0, -8]) dd_bldg_shop(seed = 231, L = 16, D = 11);
@@ -120,3 +132,66 @@ lay_scatter(12, -325, -245, 28, 72, seed = 254)
 
 lay_along([[-400, 48], [-120, 9]], step = 38, seed = 261, offset = 12) dd_prop_pole(seed = $seed);
 lay_along([[170, -25], [405, -58]], step = 42, seed = 262, offset = 6) dd_prop_pole(seed = $seed);
+
+// ================= 地表细节层：风蚀沙斑/干涸洼地/杂物，让盆地不再是一整块纯色 =================
+
+// 深浅沙斑（覆盖 c1/c2 为沙色）分布全盆地；比地基色深半档，模拟风蚀与板结。
+lay_scatter(26, -400, 400, -270, 270, seed = 271)
+    dd_ground_dirt(L = lay_randr($seed, 5, 10, 24), D = lay_randr($seed, 6, 7, 16), seed = $seed,
+                   c1 = [0.42, 0.28, 0.15], c2 = [0.35, 0.23, 0.12]);
+lay_scatter(9, -200, 250, -100, 100, seed = 272)
+    dd_ground_dirt(L = lay_randr($seed, 5, 7, 14), D = lay_randr($seed, 6, 5, 10), seed = $seed,
+                   c1 = [0.52, 0.37, 0.20], c2 = [0.44, 0.30, 0.16]);
+// 前哨与避难点周边的生活痕迹。
+lay_scatter(10, 215, 340, -92, -35, seed = 273) dd_prop_debris(seed = $seed);
+lay_scatter(6, -330, -240, 25, 75, seed = 274)
+    lay_pick($seed) { dd_prop_debris(seed = $seed); dd_prop_gascan(); dd_prop_tires(seed = $seed); }
+// 岩带间散落的白骨杂物。
+lay_scatter(10, -180, 180, -240, -120, seed = 275) dd_prop_debris(seed = $seed);
+lay_scatter(8, 80, 380, 90, 220, seed = 276) dd_prop_debris(seed = $seed);
+
+// 西北荒滩上的倒塌风机：沙漠风电场残骸，公路可见的大地标。
+translate([-95, 165, 0]) rotate([0, 0, -50]) dd_prop_windturbine_fallen(seed = 277, s = 1.2);
+translate([-190, 205, 0]) rotate([0, 0, 120]) dd_prop_windturbine_fallen(seed = 278, s = 0.9);
+
+// ================= 全图兜底密度层（俯视一屏约 50 m，保证屏屏有物） =================
+// 公路沿 -8° 斜穿（y ≈ -0.14x），散布矩形避开路走廊。
+
+// 沙漠疏林：仙人掌与枯树混布，南北两大区 + 路侧两条窄带。
+lay_scatter(48, -410, 410, 75, 290, seed = 281)
+    lay_pick($seed)
+    {
+        oh_nature_cactus(s = lay_randr($seed, 5, 0.9, 1.5), seed = $seed);
+        oh_nature_deadtree(s = lay_randr($seed, 6, 0.9, 1.3), seed = $seed);
+        dd_nature_bush(s = lay_randr($seed, 7, 0.9, 1.2), seed = $seed);
+    }
+lay_scatter(48, -410, 410, -290, -75, seed = 282)
+    lay_pick($seed)
+    {
+        oh_nature_cactus(s = lay_randr($seed, 5, 0.9, 1.5), seed = $seed);
+        oh_nature_deadtree(s = lay_randr($seed, 6, 0.9, 1.3), seed = $seed);
+        dd_nature_bush(s = lay_randr($seed, 7, 0.9, 1.2), seed = $seed);
+    }
+lay_scatter(6, -410, -260, -35, 25, seed = 283)
+    lay_pick($seed) { oh_nature_cactus(s = 1.1, seed = $seed); dd_nature_bush(s = 1.0, seed = $seed); }
+lay_scatter(6, 260, 410, -18, 70, seed = 284)
+    lay_pick($seed) { oh_nature_cactus(s = 1.2, seed = $seed); oh_nature_deadtree(s = 1.0, seed = $seed); }
+
+// 孤石与小风积丘补进两大区，接续既有地质带。
+lay_scatter(28, -400, 400, 80, 285, seed = 285) desert_rock(s = lay_randr($seed, 4, 0.8, 2.0), seed = $seed);
+lay_scatter(28, -400, 400, -285, -80, seed = 286) desert_rock(s = lay_randr($seed, 4, 0.8, 2.2), seed = $seed);
+for (d = [[-120, 120, 16, 6, 21], [40, 95, 20, 7, 22], [-40, -110, 18, 6, 23],
+          [150, -140, 22, 8, 24], [-260, 150, 20, 7, 25], [330, -150, 18, 6, 26]])
+    desert_dune(d[0], d[1], d[2], d[3], d[4]);
+
+// 白骨/垃圾/补给残留加密。
+lay_scatter(30, -400, 400, 78, 285, seed = 287) dd_prop_debris(seed = $seed);
+lay_scatter(30, -400, 400, -285, -78, seed = 288) dd_prop_debris(seed = $seed);
+lay_scatter(8, -400, 400, -280, -80, seed = 289)
+    lay_pick($seed) { dd_prop_barrel(seed = $seed); dd_prop_gascan(); dd_prop_tires(seed = $seed); }
+lay_scatter(6, -400, 400, 80, 280, seed = 290)
+    lay_pick($seed) { dd_prop_crate(s = 0.85); dd_prop_barrel(seed = $seed); }
+// 干草色草簇（沙地稀疏植被）。
+lay_scatter(110, -400, 400, 75, 290, seed = 291) dd_nature_grass(seed = $seed);
+lay_scatter(110, -400, 400, -290, -75, seed = 292) dd_nature_grass(seed = $seed);
+lay_scatter(20, -250, 250, -60, 60, seed = 293) dd_nature_grass(seed = $seed);

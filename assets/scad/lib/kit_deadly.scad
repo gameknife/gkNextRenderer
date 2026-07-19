@@ -3,8 +3,10 @@
 // 常量以零参 function 内置（use 语义不传播顶层赋值），调用方无需重申环境常量。
 // 放置契约：落地件底面 z=0，带朝向件 front = -y（载具车头朝 +x）。调用方自设 $fn（建议 12）。
 // 尺度：mid（与 kit_old_city 同级；民房 ~8x6、轿车长 ~4）。
-// 主题元素：木板房/门廊房/工具棚/石教堂/街角店、沥青路网、层叠松、白栅栏、
-//           电线杆/公路绿牌（含倒塌残骸）、油桶/锥桶/路障、轿车/厢式车/皮卡/烧毁残骸。
+// 主题元素：木板房/门廊房/工具棚/石教堂/街角店/红谷仓、沥青路网、层叠松、白栅栏、
+//           电线杆/公路绿牌（含倒塌残骸）、油桶/锥桶/路障、轿车/厢式车/皮卡/烧毁残骸/
+//           翻覆车/联合收割机、泥地斑块/水洼、垄沟田/南瓜田/树桩/倒木、
+//           干草捆/木托盘/轮胎堆/油壶/地面杂物簇/倒塌风机。
 
 // ================= 配色（低饱和末日郊区；PT 强日光下会整体提亮，故基色偏深偏饱和） =================
 function dd_ASPHC()  = [0.32, 0.32, 0.34];   // 沥青路面
@@ -554,4 +556,310 @@ module dd_veh_wreck(seed = 0)
         color(dd_METALD()) translate([-1.25, -0.92, 0.3]) rotate([90, 0, 0]) cylinder(h = 0.1, r = 0.16, $fn = 7);
     }
     color(dd_ASPHD()) translate([1.9, 0.3, 0]) dd_slab(1.3, 1.0, 0.02);   // 油渍
+}
+
+// 翻覆的轿车：座舱着地压扁、底盘朝天、轮子冲天、甩出一扇车门
+module dd_veh_flipped(seed = 0)
+{
+    c0 = dd_car_c(seed + 41);
+    c = [c0[0] * 0.82, c0[1] * 0.82, c0[2] * 0.82];
+    rotate([0, 0, dd_rnd(seed, 30) - 15])
+    {
+        color([0.22, 0.21, 0.20]) translate([-0.25, 0, 0.26]) dd_boxc([2.1, 1.7, 0.52]);
+        color(dd_GLASSC()) translate([-0.25, 0, 0.28]) dd_boxc([1.82, 1.78, 0.32]);
+        color(c) translate([0, 0, 0.83]) dd_boxc([4.0, 1.8, 0.62]);
+        color([0.13, 0.13, 0.13]) translate([0, 0, 1.18]) dd_boxc([3.6, 1.5, 0.14]);   // 底盘朝天
+        color(dd_METALD()) translate([-0.7, 0, 1.26]) dd_boxc([1.6, 0.4, 0.14]);       // 排气/传动轴
+        translate([1.25, 0.92, 1.3]) dd_veh_wheel();
+        translate([-1.25, 0.92, 1.3]) dd_veh_wheel();
+        translate([-1.25, -0.92, 1.3]) dd_veh_wheel();
+        color(dd_METALD()) translate([1.25, -0.92, 1.28]) rotate([90, 0, 0]) cylinder(h = 0.1, r = 0.16, $fn = 7);
+        // 甩出的车门 + 玻璃碎片
+        translate([2.7, -1.5, 0]) rotate([0, 0, dd_rnd(seed + 7, 70)])
+        {
+            color(c) dd_slab(1.1, 0.8, 0.08);
+            color(dd_GLASSC()) translate([0.1, 0.1, 0.08]) dd_slab(0.7, 0.4, 0.02);
+        }
+        for (i = [0 : 2])
+            color(dd_GLASSC())
+                translate([dd_rndr(seed + i * 13, -2.4, -1.2), dd_rndr(seed + i * 19 + 2, 1.1, 1.9), 0])
+                    dd_slab(0.22, 0.16, 0.03);
+    }
+    color(dd_ASPHD()) translate([-1.6, -0.4, 0]) dd_slab(1.2, 0.9, 0.02);   // 油渍
+}
+
+// 绿色联合收割机：主机体 + 驾驶室 + 顶部粮斗 + 前割台拨禾轮 + 卸粮筒（车头 +x）
+module dd_veh_harvester(seed = 0)
+{
+    g = [0.16, 0.36, 0.16];
+    gd = [0.12, 0.28, 0.12];
+    color(g) translate([-0.4, 0, 1.7]) dd_boxc([3.8, 2.1, 1.5]);
+    color(gd) translate([-2.1, 0, 1.85]) dd_boxc([0.7, 1.9, 1.15]);      // 尾部发动机罩
+    color(g) translate([1.35, 0, 2.75]) dd_boxc([1.3, 1.7, 1.0]);        // 驾驶室
+    color(dd_GLASSC()) translate([1.42, 0, 2.75]) dd_boxc([1.25, 1.76, 0.8]);
+    // 顶部粮斗（外扩四壁）
+    color(dd_METALC())
+    {
+        for (sy = [-1, 1]) translate([-0.5, sy * 0.78, 2.8]) rotate([sy * -12, 0, 0]) dd_boxc([1.8, 0.1, 0.9]);
+        for (sx = [-1, 1]) translate([-0.5 + sx * 0.85, 0, 2.8]) rotate([0, sx * 12, 0]) dd_boxc([0.1, 1.7, 0.9]);
+    }
+    color(gd) translate([-1.2, 0.9, 2.7]) rotate([-75, 0, 10]) cylinder(h = 2.2, r = 0.16, $fn = 6);   // 卸粮筒
+    // 前割台 + 拨禾轮 + 分禾齿
+    color(dd_METALC()) translate([2.6, 0, 0.55]) dd_boxc([1.1, 3.6, 0.65]);
+    color(dd_METALD()) translate([2.7, 0, 1.05]) rotate([90, 0, 0]) cylinder(h = 3.4, r = 0.28, center = true, $fn = 7);
+    color([0.60, 0.54, 0.24]) for (i = [0 : 8]) translate([3.18, -1.6 + i * 0.4, 0.35]) dd_boxc([0.24, 0.12, 0.22]);
+    color(gd) translate([1.9, 0, 1.15]) rotate([0, 25, 0]) dd_boxc([1.3, 1.1, 0.5]);   // 进料喉
+    for (sy = [-1, 1]) translate([0.9, sy * 1.0, 0.62]) dd_veh_wheel(r = 0.62, w = 0.4);
+    for (sy = [-1, 1]) translate([-1.7, sy * 0.95, 0.4]) dd_veh_wheel(r = 0.4, w = 0.3);
+}
+
+// ================= 地面细节（打散大片平地；底面 z=0） =================
+
+// 裸土/泥地斑块：多边形叠片近似有机轮廓，带深色湿泥斑。
+// 沙漠地图可覆盖 c1/c2 为沙色（如 [0.52,0.36,0.19] / [0.42,0.28,0.14]）。
+module dd_ground_dirt(L = 10, D = 8, seed = 0, c1 = [0.40, 0.30, 0.21], c2 = [0.30, 0.22, 0.15])
+{
+    color(c1)
+    {
+        rotate([0, 0, dd_rnd(seed, 180)]) scale([L * 0.5, D * 0.5, 1]) cylinder(h = 0.08, r = 1, $fn = 9);
+        translate([L * 0.2, D * 0.14, 0]) rotate([0, 0, dd_rnd(seed + 3, 180)])
+            scale([L * 0.3, D * 0.26, 1]) cylinder(h = 0.08, r = 1, $fn = 8);
+        translate([-L * 0.22, -D * 0.15, 0]) rotate([0, 0, dd_rnd(seed + 5, 180)])
+            scale([L * 0.26, D * 0.3, 1]) cylinder(h = 0.08, r = 1, $fn = 8);
+    }
+    for (i = [0 : 2])
+        color(c2)
+            translate([dd_rndr(seed * 7 + i * 31, -L * 0.28, L * 0.28),
+                       dd_rndr(seed * 11 + i * 17 + 3, -D * 0.28, D * 0.28), 0.08])
+                scale([dd_rndr(seed + i, L * 0.08, L * 0.18), dd_rndr(seed + i + 5, D * 0.08, D * 0.18), 1])
+                    cylinder(h = 0.012, r = 1, $fn = 8);
+}
+
+// 泥水洼：深泥缘 + 暗水面（雨后农家院/土路点缀）
+module dd_ground_puddle(s = 1.0, seed = 0)
+{
+    color([0.28, 0.21, 0.14]) rotate([0, 0, dd_rnd(seed, 180)]) scale([1.3 * s, 0.95 * s, 1]) cylinder(h = 0.05, r = 1, $fn = 9);
+    color([0.22, 0.29, 0.33]) translate([0.06 * s, 0, 0]) rotate([0, 0, dd_rnd(seed, 180)])
+        scale([1.02 * s, 0.7 * s, 1]) cylinder(h = 0.065, r = 1, $fn = 9);
+    color([0.22, 0.29, 0.33]) translate([1.05 * s, 0.4 * s, 0]) scale([0.35 * s, 0.25 * s, 1]) cylinder(h = 0.06, r = 1, $fn = 7);
+}
+
+// ================= 农场（底面 z=0） =================
+
+// 垄沟菜田：起垄 + 成排低矮作物丛（seed 决定缺株与枯行）
+module dd_nature_field_rows(L = 12, D = 9, seed = 0)
+{
+    color(dd_SOILC()) dd_slab(L, D, 0.14);
+    nr = max(2, floor(D / 1.3));
+    for (r = [0 : nr - 1])
+    {
+        py = -D / 2 + 0.8 + r * (D - 1.6) / (nr - 1);
+        color([0.33, 0.25, 0.17]) translate([0, py, 0.14]) dd_slab(L - 0.8, 0.55, 0.14);
+        nc = floor((L - 1.2) / 0.85);
+        for (c = [0 : nc - 1])
+            if (dd_rnd(seed + r * 31 + c * 7, 5) != 0)
+                color(dd_rnd(seed + r * 17, 4) == 0 ? [0.55, 0.46, 0.22]
+                      : (dd_rnd(seed + r * 13 + c * 3, 2) == 0 ? dd_LEAFD() : [0.24, 0.40, 0.20]))
+                    translate([-L / 2 + 0.7 + c * 0.85, py, 0.42]) sphere(r = 0.26, $fn = 6);
+    }
+}
+
+// 南瓜田：田土 + 藤蔓 + 橙色南瓜（seed 决定缺位与大小）
+module dd_nature_pumpkin_patch(L = 10, D = 8, seed = 0)
+{
+    color(dd_SOILC()) dd_slab(L, D, 0.14);
+    for (i = [0 : 3])
+        color([0.20, 0.30, 0.14])
+            translate([dd_rndr(seed * 7 + i * 13, -(L - 2.4) / 2, (L - 2.4) / 2),
+                       dd_rndr(seed * 11 + i * 29 + 3, -(D - 2.4) / 2, (D - 2.4) / 2), 0.14])
+                rotate([0, 0, dd_rnd(seed + i, 180)]) dd_slab(dd_rndr(seed + i + 5, 1.4, 2.6), 0.5, 0.03);
+    nr = max(2, floor(D / 1.5));
+    nc = max(2, floor(L / 1.5));
+    for (r = [0 : nr - 1], c = [0 : nc - 1])
+        if (dd_rnd(seed + r * 37 + c * 11, 4) != 0)
+        {
+            ps = dd_rndr(seed + r * 19 + c * 5, 0.24, 0.40);
+            translate([-L / 2 + 0.9 + c * (L - 1.8) / (nc - 1) + dd_rndr(seed + r * 7 + c * 23, -0.25, 0.25),
+                       -D / 2 + 0.9 + r * (D - 1.8) / (nr - 1) + dd_rndr(seed + r * 3 + c * 31 + 9, -0.25, 0.25),
+                       0.14 + ps * 0.35])
+            {
+                color([0.62, 0.28, 0.07]) scale([1, 1, 0.72]) sphere(r = ps, $fn = 7);
+                color([0.30, 0.36, 0.16]) translate([0, 0, ps * 0.66]) cylinder(h = 0.14, r = 0.045, $fn = 5);
+            }
+        }
+}
+
+// 树桩（砍伐后的林缘细节）
+module dd_nature_stump(s = 1.0, seed = 0)
+{
+    scale([s, s, s])
+    {
+        color(dd_TRUNKC()) cylinder(h = 0.55, r = 0.34, $fn = 7);
+        color([0.55, 0.44, 0.28]) translate([0, 0, 0.55]) cylinder(h = 0.04, r = 0.29, $fn = 7);
+        color(dd_TRUNKC()) rotate([0, 0, dd_rnd(seed, 180)]) translate([0.3, 0.12, 0]) cylinder(h = 0.2, r = 0.13, $fn = 5);
+    }
+}
+
+// 倒木（沿 x 躺放，浅色断面 + 残枝）
+module dd_nature_log(seed = 0)
+{
+    color(dd_TRUNKC()) translate([-1.2, 0, 0.26]) rotate([0, 90, 0]) cylinder(h = 2.4, r = 0.26, $fn = 7);
+    color([0.55, 0.44, 0.28]) translate([1.2, 0, 0.26]) rotate([0, 90, 0]) cylinder(h = 0.04, r = 0.21, $fn = 7);
+    color([0.55, 0.44, 0.28]) translate([-1.24, 0, 0.26]) rotate([0, 90, 0]) cylinder(h = 0.04, r = 0.21, $fn = 7);
+    color(dd_TRUNKC()) translate([0.35, 0.12, 0.38]) rotate([-35, 0, 0]) cylinder(h = 0.5, r = 0.08, $fn = 5);
+    if (dd_rnd(seed, 2) == 0)
+        color(dd_LEAFD()) translate([-0.6, -0.15, 0.42]) sphere(r = 0.24, $fn = 6);   // 残叶/青苔
+}
+
+// ================= 农场建筑 =================
+
+// 红色美式谷仓：阶梯山墙芯 + 折坡（gambrel）屋面板 + 白框大门带 X 撑 + 阁楼草料口。
+// 正脊沿 y，front = -y（大门面向 -y）。
+module dd_bldg_barn(seed = 0, L = 10, D = 12)
+{
+    wh = 3.0;
+    bw = [0.44, 0.13, 0.10];
+    bd = [0.34, 0.10, 0.08];
+    rc = dd_rnd(seed, 2) == 0 ? dd_ROOFD() : [0.30, 0.30, 0.32];
+    a1 = atan(1.3 / (L * 0.11));
+    l1 = sqrt(1.3 * 1.3 + L * 0.11 * L * 0.11) + 0.6;
+    a2 = atan(1.05 / (L * 0.39));
+    l2 = sqrt(1.05 * 1.05 + L * 0.39 * L * 0.39) + 0.4;
+    color(dd_PLINTH()) dd_slab(L + 0.3, D + 0.3, 0.25);
+    color(bw) translate([0, 0, 0.25]) dd_slab(L, D, wh - 0.25);
+    // 阶梯阁楼芯（低模 gambrel 内腔）
+    color(bw) translate([0, 0, wh]) dd_slab(L * 0.78, D, 1.3);
+    color(bw) translate([0, 0, wh + 1.3]) dd_slab(L * 0.42, D, 0.95);
+    // 折坡屋面板（下陡上缓）+ 脊盖
+    for (sx = [-1, 1])
+    {
+        color(rc) translate([sx * L * 0.445, 0, wh + 0.65]) rotate([0, sx * a1, 0]) dd_boxc([l1, D + 0.9, 0.14]);
+        color(rc) translate([sx * L * 0.195, 0, wh + 1.83]) rotate([0, sx * a2, 0]) dd_boxc([l2, D + 0.9, 0.14]);
+    }
+    color(dd_ROOFD()) translate([0, 0, wh + 2.42]) dd_boxc([0.5, D * 0.9, 0.16]);
+    // 前立面：白框推拉大门 + X 撑 + 阁楼草料口
+    translate([0, -D / 2 - 0.05, 0])
+    {
+        color(dd_TRIMW()) translate([0, 0, 1.3]) dd_boxc([2.9, 0.1, 2.6]);
+        color(bd) translate([0, -0.03, 1.3]) dd_boxc([2.6, 0.1, 2.4]);
+        color(dd_TRIMW()) translate([0, -0.08, 1.3]) dd_boxc([0.09, 0.04, 2.4]);
+        for (sl = [-1, 1], sa = [-1, 1])
+            color(dd_TRIMW()) translate([sl * 0.66, -0.08, 1.3]) rotate([0, sa * 28, 0]) dd_boxc([0.09, 0.04, 2.6]);
+        color(dd_TRIMW()) translate([0, 0, wh + 0.75]) dd_boxc([1.15, 0.1, 1.15]);
+        color(dd_DARKC()) translate([0, -0.03, wh + 0.75]) dd_boxc([0.95, 0.1, 0.95]);
+        for (sx = [-1, 1])
+            color(dd_TRIMW()) translate([sx * (L / 2 - 0.1), 0.02, wh / 2 + 0.12]) dd_boxc([0.18, 0.08, wh - 0.25]);
+    }
+    // 侧墙小窗
+    translate([L / 2 + 0.04, -D * 0.2, 1.7]) rotate([0, 0, 90]) dd_part_window(w = 0.8, h = 0.8);
+    translate([-L / 2 - 0.04, D * 0.2, 1.7]) rotate([0, 0, -90]) dd_part_window(w = 0.8, h = 0.8);
+}
+
+// ================= 农场/废墟道具（底面 z=0） =================
+
+// 方形干草捆（seed 偶尔叠放第二捆）
+module dd_prop_haybale(seed = 0)
+{
+    hc = [0.62, 0.50, 0.20];
+    hd = [0.50, 0.39, 0.15];
+    rotate([0, 0, dd_rnd(seed, 30) - 15])
+    {
+        color(hc) translate([0, 0, 0.45]) dd_boxc([1.5, 0.95, 0.9]);
+        color(hd) for (x = [-0.45, 0.15]) translate([x, 0, 0.45]) dd_boxc([0.08, 0.99, 0.94]);
+        if (dd_rnd(seed, 3) == 0)
+        {
+            color(hc) translate([0.1, 0.05, 1.32]) rotate([0, 0, 14]) dd_boxc([1.4, 0.9, 0.85]);
+            color(hd) translate([0.1, 0.05, 1.32]) rotate([0, 0, 14]) dd_boxc([0.08, 0.94, 0.89]);
+        }
+    }
+}
+
+// 红色油壶（补给点/残骸旁小物）
+module dd_prop_gascan()
+{
+    color([0.55, 0.13, 0.09]) translate([0, 0, 0.24]) dd_boxc([0.34, 0.2, 0.46]);
+    color([0.44, 0.10, 0.07]) translate([0, 0, 0.51]) dd_boxc([0.2, 0.16, 0.1]);
+    color([0.72, 0.66, 0.36]) translate([0.13, 0, 0.5]) cylinder(h = 0.12, r = 0.045, $fn = 5);
+}
+
+// 木托盘（seed 偶尔带斜靠散板）
+module dd_prop_pallet(seed = 0)
+{
+    pc = [0.42, 0.32, 0.20];
+    pd = [0.33, 0.24, 0.15];
+    rotate([0, 0, dd_rnd(seed, 40) - 20])
+    {
+        color(pd) for (y = [-0.5, 0, 0.5]) translate([0, y, 0.07]) dd_boxc([1.2, 0.14, 0.14]);
+        color(pc) for (i = [0 : 4]) translate([-0.52 + i * 0.26, 0, 0.17]) dd_boxc([0.2, 1.2, 0.06]);
+        if (dd_rnd(seed, 2) == 0)
+            color(pc) translate([0.78, 0.2, 0.4]) rotate([0, 68, 15]) dd_boxc([0.18, 1.1, 0.05]);
+    }
+}
+
+// 轮胎堆：2-4 只叠放 + 偶尔一只立靠
+module dd_prop_tires(seed = 0)
+{
+    n = 2 + dd_rnd(seed, 3);
+    for (i = [0 : n - 1])
+        color(i % 2 == 0 ? [0.10, 0.10, 0.10] : [0.14, 0.14, 0.15])
+            translate([dd_rndr(seed + i * 7, -0.07, 0.07), dd_rndr(seed + i * 13 + 3, -0.07, 0.07), 0.11 + i * 0.22])
+                cylinder(h = 0.22, r = 0.36, center = true, $fn = 8);
+    if (dd_rnd(seed + 5, 2) == 0)
+        color([0.10, 0.10, 0.10]) translate([0.64, 0.1, 0.36]) rotate([90, 0, dd_rnd(seed, 90)])
+            cylinder(h = 0.22, r = 0.36, center = true, $fn = 8);
+}
+
+// 地面杂物簇：污渍 + 纸张 + 骨头 + 空瓶（seed 决定组合），撒在空地打散平面感
+module dd_prop_debris(seed = 0)
+{
+    if (dd_rnd(seed, 3) != 2)
+        color([0.25, 0.19, 0.13]) rotate([0, 0, dd_rnd(seed, 180)])
+            scale([dd_rndr(seed, 0.5, 0.9), dd_rndr(seed + 3, 0.35, 0.7), 1]) cylinder(h = 0.03, r = 1, $fn = 8);
+    for (i = [0 : 1 + dd_rnd(seed, 2)])
+        color([0.72, 0.70, 0.62])
+            translate([dd_rndr(seed + i * 11, -0.9, 0.9), dd_rndr(seed + i * 17 + 5, -0.9, 0.9), 0.03])
+                rotate([0, 0, dd_rnd(seed + i, 180)]) dd_slab(0.32, 0.24, 0.015);
+    if (dd_rnd(seed + 1, 2) == 0)
+        translate([dd_rndr(seed + 21, -0.6, 0.6), dd_rndr(seed + 23, -0.6, 0.6), 0])
+            rotate([0, 0, dd_rnd(seed + 25, 180)])
+            {
+                color([0.78, 0.74, 0.62]) translate([0, 0, 0.06]) dd_boxc([0.42, 0.07, 0.07]);
+                color([0.78, 0.74, 0.62]) for (sx = [-1, 1], sy = [-1, 1])
+                    translate([sx * 0.21, sy * 0.045, 0.06]) sphere(r = 0.055, $fn = 5);
+            }
+    if (dd_rnd(seed + 2, 2) == 0)
+        color([0.22, 0.38, 0.24])
+            translate([dd_rndr(seed + 31, -0.7, 0.7), dd_rndr(seed + 33, -0.7, 0.7), 0.06])
+                rotate([0, 90, dd_rnd(seed + 35, 180)]) cylinder(h = 0.3, r = 0.06, $fn = 6);
+}
+
+// 倒塌的风力发电机：混凝土基座 + 撕裂塔根 + 躺倒塔身 + 机舱 + 摊平的三叶转子。
+// 全长约 16*s 米，横贯空旷地带的大型地标；rotate 由调用方控制倒伏方向（塔身向 +x 躺倒）。
+module dd_prop_windturbine_fallen(seed = 0, s = 1.0)
+{
+    wtw = [0.68, 0.68, 0.66];
+    wtd = [0.50, 0.50, 0.49];
+    scale([s, s, s])
+    {
+        color(dd_PLINTH()) cylinder(h = 0.5, r = 1.1, $fn = 8);
+        color(wtw) translate([0, 0, 0.5]) cylinder(h = 1.6, r1 = 0.55, r2 = 0.48, $fn = 8);
+        color(dd_METALD()) translate([0, 0, 2.0]) rotate([0, 18, 0]) cylinder(h = 0.5, r = 0.42, $fn = 7);
+        rotate([0, 0, dd_rnd(seed, 24) - 12])
+        {
+            color(wtw) translate([1.4, 0, 0.5]) rotate([0, 87, 0]) cylinder(h = 9.5, r1 = 0.46, r2 = 0.28, $fn = 8);
+            color(wtd) translate([11.4, 0, 0.55]) dd_boxc([1.6, 0.9, 0.9]);
+            // 转子摔在机舱前：叶盘近水平摊开，两叶尖触地
+            translate([12.5, 0, 0.6]) rotate([0, 75, 0])
+            {
+                color(wtd) sphere(r = 0.42, $fn = 7);
+                for (a = [0, 120, 240])
+                    color(wtw) rotate([a, 0, 0]) translate([0, 0, 2.3]) dd_boxc([0.16, 0.55, 4.4]);
+            }
+            // 散落碎片
+            for (i = [0 : 2])
+                color(wtd)
+                    translate([dd_rndr(seed + i * 17, 3, 10), dd_rndr(seed + i * 23 + 3, -2.2, 2.2), 0])
+                        rotate([0, 0, dd_rnd(seed + i, 180)]) dd_slab(0.8, 0.4, 0.12);
+        }
+    }
 }
