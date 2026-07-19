@@ -377,6 +377,30 @@ public struct FAmbientCubeRayTracerIndirect : IRayTracer
         return probeData.a < 0.5;
     }
 }
+public bool IsPointOnAreaLight(float3 position, LightObject light, float planeTolerance)
+{
+    const float3 edge1 = light.p1.xyz - light.p0.xyz;
+    const float3 edge3 = light.p3.xyz - light.p0.xyz;
+    const float3 relative = position - light.p0.xyz;
+    const float d00 = dot(edge1, edge1);
+    const float d01 = dot(edge1, edge3);
+    const float d11 = dot(edge3, edge3);
+    const float d20 = dot(relative, edge1);
+    const float d21 = dot(relative, edge3);
+    const float denominator = d00 * d11 - d01 * d01;
+    const float normalLengthSquared = dot(light.normal_area.xyz, light.normal_area.xyz);
+    if (abs(denominator) <= EPS * EPS || normalLengthSquared <= EPS * EPS)
+    {
+        return false;
+    }
+
+    const float u = (d11 * d20 - d01 * d21) / denominator;
+    const float v = (d00 * d21 - d01 * d20) / denominator;
+    const float planeDistance = abs(dot(relative, light.normal_area.xyz)) * rsqrt(normalLengthSquared);
+    return u >= -EPS && u <= 1.0f + EPS && v >= -EPS && v <= 1.0f + EPS &&
+           planeDistance <= planeTolerance;
+}
+
 public struct FHardwareRayTracer : IRayTracer
 {
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
@@ -422,6 +446,35 @@ public struct FHardwareRayTracer : IRayTracer
             0xff,
             ray);
 
+        q.Proceed();
+        return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+    }
+
+    public bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
+    {
+        const float3 segment = rayTarget - rayOrigin;
+        const float segmentLength = length(segment);
+        // Visibility is evaluated on the open segment between the shading point and the sampled
+        // emitter point.  A slightly wider endpoint margin absorbs ray/triangle rounding without
+        // ever classifying an in-segment hit by material or projected position.
+        const float endpointEpsilon = max(epsilon * 4.0f, segmentLength * 1.0e-5f);
+        if (segmentLength <= epsilon + endpointEpsilon)
+        {
+            return false;
+        }
+
+        RayDesc ray;
+        ray.Origin = rayOrigin;
+        ray.TMin = epsilon;
+        ray.TMax = segmentLength - endpointEpsilon;
+        ray.Direction = segment / segmentLength;
+
+        RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
+                 RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> q;
+        let rayFlags = RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
+                       RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
+
+        q.TraceRayInline(Bindless.GetGpuscene().GetTLAS(), rayFlags, 0xff, ray);
         q.Proceed();
         return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
     }

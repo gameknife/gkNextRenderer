@@ -79,7 +79,7 @@ public struct FHardwareDirectIlluminator : IDirectIlluminator
         }
 
         const float3 shadowOrigin = position + normalize(normal) * EPS2;
-        if (!HWTracer.TraceSegment(shadowOrigin, lightPosition, EPS))
+        if (!HWTracer.TraceAreaLightSegment(shadowOrigin, lightPosition, EPS))
         {
             const float geometryPdfWeight = surfaceCosine * lightCosine * lightArea /
                                             (M_PI * distanceSquared * lightPdf);
@@ -252,24 +252,7 @@ public struct FPathTracingRenderer{
                 continue;
             }
 
-            const float3 edge1 = light.p1.xyz - light.p0.xyz;
-            const float3 edge3 = light.p3.xyz - light.p0.xyz;
-            const float3 relative = position - light.p0.xyz;
-            const float d00 = dot(edge1, edge1);
-            const float d01 = dot(edge1, edge3);
-            const float d11 = dot(edge3, edge3);
-            const float d20 = dot(relative, edge1);
-            const float d21 = dot(relative, edge3);
-            const float denominator = d00 * d11 - d01 * d01;
-            if (abs(denominator) <= EPS * EPS)
-            {
-                continue;
-            }
-            const float u = (d11 * d20 - d01 * d21) / denominator;
-            const float v = (d00 * d21 - d01 * d20) / denominator;
-            const float planeDistance = abs(dot(relative, normalize(light.normal_area.xyz)));
-            if (u >= -EPS && u <= 1.0f + EPS && v >= -EPS && v <= 1.0f + EPS &&
-                planeDistance <= EPS10)
+            if (IsPointOnAreaLight(position, light, EPS10))
             {
                 return true;
             }
