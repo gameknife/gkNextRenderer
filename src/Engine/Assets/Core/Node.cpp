@@ -163,14 +163,26 @@ namespace Assets
         combinedTS = prevTransform_ * glm::inverse(transform_);
         prevTransform_ = transform_;
 
-        glm::vec3 newPos = combinedTS * glm::vec4(0,0,0,1);
-        bool moving = glm::length(newPos) > 0.001;
+        constexpr float transformEpsilon = 0.001f;
+        const glm::mat4 identity(1.0f);
+        bool moving = false;
+        for (glm::length_t column = 0; column < 4 && !moving; ++column)
+        {
+            for (glm::length_t row = 0; row < 4; ++row)
+            {
+                if (glm::abs(combinedTS[column][row] - identity[column][row]) > transformEpsilon)
+                {
+                    moving = true;
+                    break;
+                }
+            }
+        }
         if (moving)
         {
             return true;
         }
 
-        combinedTS = glm::mat4(1);
+        combinedTS = identity;
         return false;
     }
 

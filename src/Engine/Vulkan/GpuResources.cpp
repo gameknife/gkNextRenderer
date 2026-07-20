@@ -440,7 +440,13 @@ DepthBuffer::DepthBuffer(CommandPool& commandPool, const VkExtent2D extent) :
 {
     const auto& device = commandPool.Device();
 
-    image_.reset(new Image(device, extent, 1, format_, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT));
+    image_.reset(new Image(
+        device,
+        extent,
+        1,
+        format_,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT));
     imageMemory_.reset(new DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, false, true)));
     imageView_.reset(new class ImageView(device, image_->Handle(), format_, VK_IMAGE_ASPECT_DEPTH_BIT));
 

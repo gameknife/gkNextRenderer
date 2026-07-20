@@ -500,18 +500,6 @@ public struct FPathTracingRenderer{
         float FinalSpecularHitDist = 0;
 
         Material mat = Bindless.GetGpuscene().GetMaterial(hitPrimaryVertex_.MaterialIndex);
-        if (mat.MaterialModel == MaterialDiffuseLight)
-        {
-            FinalColor = min(mat.Diffuse, float4(1000, 1000, 1000, 1));
-            if (WriteOutputs)
-            {
-                OutSingleDiffuse.Store(pixel_, FinalColor);
-                OutSingleSpecular.Store(pixel_, FinalReflection);
-                OutDiffuseHitDist.Store(pixel_, primaryRayLength_);
-                OutSpecularHitDist.Store(pixel_, primaryRayLength_);
-            }
-            return;
-        }
 
         const int sample = max(1, Camera.NumberOfSamples / SampleDownscale * sampleMultiplier);
         const bool wantsDirect = cache.WantsDirectLighting();
@@ -737,8 +725,22 @@ public struct FPathTracingRenderer{
             const bool locked = (hitPrimaryNode_.reserved2 & 2u) != 0;
             const bool danger = (hitPrimaryNode_.reserved2 & 4u) != 0;
             OutObjectID.Store(pixel_, Common.EncodeObjectId(hitPrimaryNode_.instanceId, selected, hovered, locked, danger));
-            OutMotionVector.Store(pixel_, float4(motion * size_, 0, 0));
+            OutMotionVector.Store(pixel_, float4(motion, 0, 0));
             OutPrevDepth.Store(pixel_, ndcDepth);
+        }
+
+        if (material.MaterialModel == MaterialDiffuseLight)
+        {
+            if (WriteOutputs)
+            {
+                OutAlbedo.Store(pixel_, float4(1, 1, 1, 0));
+                OutSingleDiffuse.Store(pixel_, material.Diffuse);
+                OutSingleSpecular.Store(pixel_, float4(0, 0, 0, 0));
+                OutDiffuseHitDist.Store(pixel_, 10);
+                OutSpecularHitDist.Store(pixel_, 10);
+                OutSpecularAlbedo.Store(pixel_, float4(0, 0, 0, 0));
+            }
+            return false;
         }
 
         float4 specAlbedo = material.MaterialModel == MaterialMetallic ? primaryAlbedo_ : float4(1, 1, 1, 1);

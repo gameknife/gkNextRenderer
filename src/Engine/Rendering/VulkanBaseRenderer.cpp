@@ -157,7 +157,7 @@ namespace
             extent,
             depthBuffer.Format(),
             layout,
-            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT};
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT};
     }
 
     Rendering::Upscaler::FImageResource MakeSwapchainResource(

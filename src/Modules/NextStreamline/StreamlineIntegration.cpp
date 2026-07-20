@@ -1504,7 +1504,7 @@ namespace
             constants.clipToPrevClip = ToSlMatrix(reprojection.clipToPrevClip);
             constants.prevClipToClip = ToSlMatrix(reprojection.prevClipToClip);
             constants.jitterOffset = sl::float2(ubo.Jitter.x, ubo.Jitter.y);
-            constants.mvecScale = {motionVectorScale.x, motionVectorScale.y};
+            constants.mvecScale = {1,1};
             constants.cameraPos = sl::float3(
                 ubo.ModelViewInverse[3][0],
                 ubo.ModelViewInverse[3][1],
@@ -1530,7 +1530,7 @@ namespace
             constants.motionVectors3D = sl::Boolean::eFalse;
             constants.reset = inputs.reset ? sl::Boolean::eTrue : sl::Boolean::eFalse;
             constants.cameraPinholeOffset = sl::float2(0.0f, 0.0f);
-
+            
             sl::ViewportHandle viewport(0);
             const sl::Result result = slSetConstants(
                 constants,
