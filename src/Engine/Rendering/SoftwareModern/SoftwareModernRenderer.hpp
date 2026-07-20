@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Rendering/PipelineCommon/TemporalPostChain.hpp"
+#include "Engine/Rendering/PipelineCommon/SamplePostChain.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <memory>
@@ -23,7 +23,7 @@ namespace Vulkan::SoftwareModern
 
     private:
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> deferredShadingPipeline_;
-        PipelineCommon::TemporalPostChain temporalPostChain_;
+        PipelineCommon::SamplePostChain samplePostChain_;
 
     };
 

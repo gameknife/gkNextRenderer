@@ -46,14 +46,6 @@ struct UserSettings final
 
     // Performance
     uint32_t TemporalFrames;
-    // Denoise (variance-guided a-trous wavelet; see PipelineCommon::AtrousDenoiser)
-    bool Denoiser;
-    int DenoiseAtrousIterations;    // diffuse wavelet iterations: quality/perf knob (higher = smoother, slower)
-    int DenoiseAtrousSpecularIterations; // specular wavelet iterations (usually lower than diffuse)
-    float DenoiseAtrousSigmaLuma;   // variance-guided luminance edge-stop (lower = sharper, noisier)
-    float DenoiseAtrousNormalPower; // a-trous normal edge-stop exponent
-    float DenoiseSigmaDepth;        // planar depth tolerance (multiples of local depth slope)
-    float DenoiseSpecFootprint;     // specular filter radius (pixels) per unit roughness
 
     // SwModernNoAmbient screen-space sky occlusion.
     bool GTAOEnable = true;
@@ -62,11 +54,6 @@ struct UserSettings final
     float GTAOStrength = 1.5f; // master sky-occlusion strength
     float GTAOThickness = 0.5f;
     int GTAODebugMode = 0;
-
-    // ReProject history clamp (Phase A black-dot fix; see Process.ReProject.comp.slang).
-    float ReprojectClampGammaHi = 2.5f;    // tight (low-confidence) upper YCoCg luma box half-width in sigmas
-    float ReprojectClampGammaLo = 5.0f;    // tight lower box half-width (kept looser than upper to avoid black dots)
-    float ReprojectClampFloor = 0.5f;      // relative luma floor (history luma >= floor * filtered mean)
 
     float PaperWhiteNit;
 

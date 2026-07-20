@@ -45,7 +45,6 @@ void ScadStudioGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     std::string error;
     cvars.SetDefaultFromString("r.samples", "4", &error);
     cvars.SetDefaultFromString("r.temporalFrames", "16", &error);
-    cvars.SetDefaultFromString("r.denoiser", "0", &error);
 }
 
 void ScadStudioGameInstance::OnInit() {}

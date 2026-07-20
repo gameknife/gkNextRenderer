@@ -92,7 +92,7 @@ namespace Vulkan::AuxDraw
 
     void AuxDrawPass::CreateRenderPassAndFramebuffer()
     {
-        const RenderImage* outputImage = renderer_.GetViewStorageImage(Assets::Bindless::RT_DENOISED);
+        const RenderImage* outputImage = renderer_.GetViewStorageImage(Assets::Bindless::RT_SCENE_COLOR);
         if (outputImage == nullptr)
         {
             return;
@@ -272,13 +272,13 @@ namespace Vulkan::AuxDraw
             0,
             uploadSize);
 
-        const RenderImage* outputImage = renderer_.GetViewStorageImage(Assets::Bindless::RT_DENOISED);
+        const RenderImage* outputImage = renderer_.GetViewStorageImage(Assets::Bindless::RT_SCENE_COLOR);
         if (outputImage == nullptr)
         {
             return;
         }
         renderer_.TransitionActiveViewImages(commandBuffer, {
-            {Assets::Bindless::RT_DENOISED, PipelineCommon::ERenderStage::ColorAttachment,
+            {Assets::Bindless::RT_SCENE_COLOR, PipelineCommon::ERenderStage::ColorAttachment,
              PipelineCommon::EResourceAccess::ColorRead | PipelineCommon::EResourceAccess::ColorWrite},
         }, "aux draw output");
 

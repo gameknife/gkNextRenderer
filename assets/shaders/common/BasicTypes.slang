@@ -164,8 +164,8 @@ public struct ALIGN_16 UniformBufferObject
 
     public float4 AmbientCubeCascadeParams;
 
-    public uint DenoiseDiffuseSourceSlot;
-    public uint DenoiseSpecularSourceSlot;
+    public uint PostProcessPadding0;
+    public uint PostProcessPadding1;
     public float GTAORadius;
     public float GTAOStrength;
 

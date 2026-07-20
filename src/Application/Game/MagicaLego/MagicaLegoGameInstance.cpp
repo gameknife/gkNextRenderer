@@ -1331,7 +1331,6 @@ void MagicaLegoGameInstance::GenerateThumbnail()
     realCameraCenter_ = cameraCenter_;
     GetEngine().GetUserSettings().TemporalFrames = 8;
     GetEngine().GetUserSettings().NumberOfSamples = 256;
-    GetEngine().GetUserSettings().Denoiser = false;
     GetEngine().GetRenderer().SwapChain().UpdateRenderViewport(1920 / 2 - thumbSize / 2, 960 / 2 - thumbSize / 2, thumbSize, thumbSize);
     PlaceDynamicBlock({{0, 0, 0}, EOrientation::EO_North, 0, BasicNodes[0].brushId_, 0, 0});
 
@@ -1364,7 +1363,6 @@ void MagicaLegoGameInstance::GenerateThumbnail()
             PlaceDynamicBlock({{0, 0, 0}, EOrientation::EO_North, 0, -1, 0, 0});
             GetEngine().GetUserSettings().TemporalFrames = 16;
             GetEngine().GetUserSettings().NumberOfSamples = 8;
-            GetEngine().GetUserSettings().Denoiser = true;
             cameraArm_ = 5.0f;
             cameraCenter_ = glm::vec3(0, 0.0f, 0);
             realCameraCenter_ = cameraCenter_;

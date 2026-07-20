@@ -168,10 +168,6 @@ public:
         return progressiveRender_.enabled && renderer_ != nullptr &&
             renderer_->CurrentLogicRendererType() == Vulkan::ERT_PathTracing;
     }
-    bool IsEffectiveDenoiserEnabled() const
-    {
-        return config_.userSettings.Denoiser && !IsOfflineProgressivePathTracing();
-    }
     bool IsEffectiveSharcEnabled() const
     {
         return config_.userSettings.SharcEnable && !IsOfflineProgressivePathTracing();

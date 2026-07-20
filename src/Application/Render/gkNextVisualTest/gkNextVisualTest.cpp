@@ -109,7 +109,6 @@ void VisualTestGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     cvars.SetDefaultFromString("r.samples", "1", &error);
     cvars.SetDefaultFromString("r.temporalFrames", "1", &error);
     cvars.SetDefaultFromString("r.bounces", "2", &error);
-    cvars.SetDefaultFromString("r.denoiser", "0", &error);
     cvars.SetDefaultFromString("r.superResolution", "4", &error);
 }
 

@@ -18,8 +18,6 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
-#include "Engine/Rendering/PipelineCommon/AtrousDenoiser.hpp"
-#include "Engine/Rendering/PipelineCommon/TemporalResolve.hpp"
 #include "Engine/Rendering/PipelineCommon/ResourceStateTracker.hpp"
 
 #include <vulkan/vulkan.h>
@@ -207,10 +205,6 @@ namespace Vulkan
 
         FViewRenderState&       State() { return state_; }
         const FViewRenderState& State() const { return state_; }
-        PipelineCommon::AtrousDenoiser& AtrousDenoiser() { return atrousDenoiser_; }
-        const PipelineCommon::AtrousDenoiser& AtrousDenoiser() const { return atrousDenoiser_; }
-        PipelineCommon::TemporalResolve& TemporalResolve() { return temporalResolve_; }
-        const PipelineCommon::TemporalResolve& TemporalResolve() const { return temporalResolve_; }
         PipelineCommon::FResourceStateTracker& ResourceStates() { return resourceStates_; }
 
         void SetDebugName(std::string debugName) { debugName_ = std::move(debugName); }
@@ -264,19 +258,14 @@ namespace Vulkan
             ++state_.historyGeneration;
             state_.historyInvalidationReason = reason;
             prevDepthValid_ = false;
-            temporalResolve_.InvalidateHistory();
             resourceStates_.Reset();
         }
         void CreateSwapChain(const SwapChain& swapChain)
         {
-            atrousDenoiser_.CreateSwapChain(swapChain);
-            temporalResolve_.SetupDefaultHistory();
-            temporalResolve_.InvalidateHistory();
+            (void)swapChain;
         }
         void DeleteSwapChain()
         {
-            atrousDenoiser_.DeleteSwapChain();
-            temporalResolve_.InvalidateHistory();
         }
 
     private:
@@ -293,8 +282,6 @@ namespace Vulkan
         bool             prevDepthValid_ = false;
         FViewRenderState state_{};
         std::vector<Assets::UniformBuffer> cameraUboRing_;
-        PipelineCommon::AtrousDenoiser atrousDenoiser_;
-        PipelineCommon::TemporalResolve temporalResolve_;
         PipelineCommon::FResourceStateTracker resourceStates_;
     };
 
@@ -496,7 +483,7 @@ namespace Vulkan
             VkExtent2D extent,
             uint32_t sampleSlot,
             const char* debugName);
-        bool CopyDenoisedOutputToImage(
+        bool CopyRenderOutputToImage(
             VkCommandBuffer commandBuffer,
             RenderView& view,
             RenderImage& dst,

@@ -18,20 +18,18 @@ SoftwareTracingRenderer::~SoftwareTracingRenderer()
 void SoftwareTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
 {
     deferredShadingPipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Core.SwTracing.comp.slang.spv", GetScene()));
-    temporalPostChain_.CreateSwapChain(SwapChain(), GetScene());
+    samplePostChain_.CreateSwapChain(SwapChain(), GetScene());
 }
 
 void SoftwareTracingRenderer::DeleteSwapChain()
 {
     deferredShadingPipeline_.reset();
-    temporalPostChain_.DeleteSwapChain();
+    samplePostChain_.DeleteSwapChain();
 }
 
 void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
-    baseRender_.ActiveRenderView().TemporalResolve().PrepareHistoryForRead(baseRender_, commandBuffer);
     const bool isPrimaryView = baseRender_.ActiveViewBankBase() == 0;
-    const bool allowTemporal = baseRender_.ActiveRenderView().Schedule() != EViewSchedule::Transient;
     const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
     {
         SCOPED_GPU_TIMER("shadingpass");
@@ -55,12 +53,10 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
             Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
     }
     const auto& frameSettings = baseRender_.FrameSettings();
-    const auto& settings = frameSettings.userSettings;
-    temporalPostChain_.Run(baseRender_, SwapChain(), commandBuffer, imageIndex, settings, {
+    samplePostChain_.Run(baseRender_, commandBuffer, imageIndex, {
         .progressiveRender = isPrimaryView && frameSettings.progressiveRendering,
-        .fastReproject = true,
-        .runAtrous = true,
-        .temporalFrames = allowTemporal ? uint32_t(settings.TemporalFrames) : 1u,
+        .progressiveSampleCount = frameSettings.progressiveAccumulatedFrames,
+        .progressiveTargetSampleCount = frameSettings.progressiveTargetFrames,
     });
 }
 }

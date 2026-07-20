@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
-#include "Engine/Rendering/PipelineCommon/TemporalPostChain.hpp"
+#include "Engine/Rendering/PipelineCommon/SamplePostChain.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
@@ -63,6 +63,7 @@ namespace Vulkan::PathTracing
             bool pendingClear = false;
             uint32_t lastFrameIndex = ~0u;
             uint64_t lastLightsGeneration = 0;
+            uint64_t lastHistoryGeneration = 0;
             // Stamped into gpuScene.CustomData1 per dispatch (bit0 parity, bit1 temporal
             // valid): these are race-critical and must ride the recorded push constant, not
             // the host-visible parameter buffer.
@@ -77,7 +78,7 @@ namespace Vulkan::PathTracing
         std::unique_ptr<PipelineCommon::ZeroBindWithTLASPipeline> sharcQueryPipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindWithTLASPipeline> restirSpatialPipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> sharcResolvePipeline_;
-        PipelineCommon::TemporalPostChain temporalPostChain_;
+        PipelineCommon::SamplePostChain samplePostChain_;
 
         FSharcState sharc_;
         FRestirState restir_;

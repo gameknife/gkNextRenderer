@@ -151,8 +151,7 @@ public FRestirState RestirUnpackReservoir(FRestirReservoir packed)
 
 public static const float3 kRestirLumaWeights = float3(0.212671f, 0.715160f, 0.072169f);
 
-// Object-id decoding mirrors Process.ReProject so temporal rejection semantics match the
-// color-history reprojection exactly.
+// Object-id decoding is shared with the visibility history used for reservoir rejection.
 public static const uint RESTIR_OBJID_FLAG_VALID = 0x80000000u;
 public static const uint RESTIR_OBJID_INSTANCE_MASK = 0x07FFFFFFu;
 public static const uint RESTIR_OBJID_INVALID = 0xFFFFFFFFu;
@@ -253,8 +252,8 @@ public void RestirPrimaryGather(inout uint4 randomSeed, int2 pixel, float3 posit
     combined.Merge(reservoir, reservoir.TargetLum, RandomFloat(randomSeed));
 
     // Temporal reuse: reproject via the motion vector into the previous frame's FINAL
-    // reservoirs (post-spatial, post-visibility). Rejection mirrors Process.ReProject:
-    // off-screen, object-id mismatch and moving-object (MotionMoment) pixels drop history.
+    // reservoirs (post-spatial, post-visibility). Off-screen, object-id mismatch and
+    // moving-object (MotionMoment) pixels drop reservoir history.
     // The history sample's target function is re-evaluated at this pixel before merging; an
     // invalid-here sample still contributes M (biased-mode accounting, per design).
     if ((params.Flags & RESTIR_FLAG_TEMPORAL_ENABLE) != 0 &&

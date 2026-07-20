@@ -263,7 +263,6 @@ void BenchmarkGameInstance::LoadConfig(Runtime::Config::Options& options, Vulkan
         {"r.samples", "4"},
         {"r.temporalFrames", "16"},
         {"r.bounces", "4"},
-        {"r.denoiser", "0"},
         {"r.superResolution", "4"},
         {"sys.tickAnimation", "0"},
     };

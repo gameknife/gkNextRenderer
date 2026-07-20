@@ -597,7 +597,7 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         SCOPED_GPU_TIMER("wireframe");
 
         TransitionActiveViewImages(commandBuffer, {
-            {Assets::Bindless::RT_DENOISED, PipelineCommon::ERenderStage::ColorAttachment,
+            {Assets::Bindless::RT_SCENE_COLOR, PipelineCommon::ERenderStage::ColorAttachment,
              PipelineCommon::EResourceAccess::ColorRead | PipelineCommon::EResourceAccess::ColorWrite},
         }, "wireframe overlay");
 

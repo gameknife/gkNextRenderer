@@ -67,7 +67,7 @@ loader 根据 `3σ` covariance extent 建 AABB，生成一个默认 orbit-friend
 1. 收集当前 scene 中有数据的 splat components，组合 immutable splat/palette buffer 和 per-model state。
 2. compute histogram → group scan/prefix → scatter，得到远到近的 sorted index 与 indirect draw；相机和 model state 未变化时可复用 sort cache。
 3. instanced billboard 使用 scene depth test、不写 scene depth，累积到专用 splat RT。
-4. compute compose 回 `RT_DENOISED`，然后继续正常的 DLSS/spatial upscale/blit resolve。
+4. compute compose 回 `RT_SCENE_COLOR`，然后继续正常的 DLSS/spatial upscale/blit resolve。
 
 当前是 bucket 近似排序，不是逐 splat CPU sort；`r.splat.bucketCount` 是请求下限，pass 还会根据 splat count 自动提高到受限的 2 的幂。
 

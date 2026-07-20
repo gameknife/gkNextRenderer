@@ -571,7 +571,7 @@ namespace Vulkan::GaussianSplat
             renderer_.TransitionActiveViewImages(commandBuffer, {
                 {Assets::Bindless::RT_SPLAT_ACCUM, PipelineCommon::ERenderStage::Compute,
                  PipelineCommon::EResourceAccess::ShaderRead},
-                {Assets::Bindless::RT_DENOISED, PipelineCommon::ERenderStage::Compute,
+                {Assets::Bindless::RT_SCENE_COLOR, PipelineCommon::ERenderStage::Compute,
                  PipelineCommon::EResourceAccess::ShaderRead | PipelineCommon::EResourceAccess::ShaderWrite},
             }, "gaussian splat compose");
 

@@ -59,7 +59,7 @@ namespace Vulkan::PathTracing
     {
         rayTracingPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(
             SwapChain(), "assets/shaders/Core.PathTracing.comp.slang.spv", GetScene(), baseRender_.ActiveTLASHandle()));
-        temporalPostChain_.CreateSwapChain(SwapChain(), GetScene());
+        samplePostChain_.CreateSwapChain(SwapChain(), GetScene());
     }
 
     void PathTracingRenderer::DeleteSwapChain()
@@ -69,7 +69,7 @@ namespace Vulkan::PathTracing
         sharcResolvePipeline_.reset();
         sharcQueryPipeline_.reset();
         restirSpatialPipeline_.reset();
-        temporalPostChain_.DeleteSwapChain();
+        samplePostChain_.DeleteSwapChain();
     }
 
     void PathTracingRenderer::EnsureSharcPipelines()
@@ -285,16 +285,16 @@ namespace Vulkan::PathTracing
         const auto& settings = baseRender_.FrameSettings().userSettings;
         const uint32_t frameIndex = static_cast<uint32_t>(std::max(FrameCount(), 0));
         const uint64_t lightsGeneration = GetScene().LightsGeneration();
-        // Reservoir history follows the TemporalResolve validity rules (camera cut, scene /
-        // renderer switch, non-consecutive frames) plus ReSTIR-specific invalidation: the
-        // reservoirs themselves must be continuous (no recreation gap) and the light set
-        // must not have been re-ordered, or stored light indices change meaning.
+        // Reservoir history follows the view history generation (camera cut, scene / renderer
+        // switch, extent change) plus ReSTIR-specific continuity and light ordering rules.
+        const uint64_t historyGeneration = baseRender_.ActiveRenderView().State().historyGeneration;
         const bool temporalValid =
-            baseRender_.ActiveRenderView().TemporalResolve().IsHistoryValidForFrame(static_cast<int>(frameIndex)) &&
             restir_.lastFrameIndex != ~0u && frameIndex == restir_.lastFrameIndex + 1 &&
+            historyGeneration == restir_.lastHistoryGeneration &&
             lightsGeneration == restir_.lastLightsGeneration &&
             !restir_.pendingClear;
         restir_.lastFrameIndex = frameIndex;
+        restir_.lastHistoryGeneration = historyGeneration;
         restir_.lastLightsGeneration = lightsGeneration;
         // Bit0 (frame parity) is unused since the reservoirs moved to fixed roles
         // (intermediate / final); only the temporal-valid bit remains.
@@ -393,13 +393,9 @@ namespace Vulkan::PathTracing
 
     void PathTracingRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        baseRender_.ActiveRenderView().TemporalResolve().PrepareHistoryForRead(baseRender_, commandBuffer);
         const FFrameRenderSettings& frameSettings = baseRender_.FrameSettings();
-        const Runtime::Config::UserSettings& settings = frameSettings.userSettings;
-        const bool offlineProgressiveRender = IsOfflineProgressiveRenderActive();
         const bool sharcEnabled = IsEffectiveSharcEnabled();
         const bool isPrimaryView = baseRender_.ActiveViewBankBase() == 0;
-        const bool allowTemporal = baseRender_.ActiveRenderView().Schedule() != EViewSchedule::Transient;
         const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
 
         // Execute ray tracing shaders.
@@ -519,13 +515,10 @@ namespace Vulkan::PathTracing
             }
         }
         
-        temporalPostChain_.Run(baseRender_, SwapChain(), commandBuffer, imageIndex, settings, {
+        samplePostChain_.Run(baseRender_, commandBuffer, imageIndex, {
             .progressiveRender = isPrimaryView && frameSettings.progressiveRendering,
-            .fastReproject = false,
-            .runAtrous = !offlineProgressiveRender,
-            .temporalFrames = isPrimaryView && offlineProgressiveRender
-                ? frameSettings.progressiveTargetFrames
-                : (allowTemporal ? uint32_t(settings.TemporalFrames) : 1u),
+            .progressiveSampleCount = frameSettings.progressiveAccumulatedFrames,
+            .progressiveTargetSampleCount = frameSettings.progressiveTargetFrames,
         });
     }
 }

@@ -276,7 +276,7 @@ float4 doUpscale(RWTexture2D<float4> tex,
     return c;
 }
 
-// A simple accumulation shader, reproject can be implemented here later.
+// Spatial upscale/native copy from the renderer's common scene-color output.
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
@@ -287,7 +287,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    int2 ssize = Bindless.GetStorageTextureDimensions<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_DENOISED));
+    int2 ssize = Bindless.GetStorageTextureDimensions<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SCENE_COLOR));
     int2 osize = int2(pushConsts.output_w, pushConsts.output_h);
 
     float4 outColor = float4(0, 0, 0, 1);
@@ -296,7 +296,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     {
         const float2 uv = float2(ipos) / float2(pushConsts.output_w, pushConsts.output_h);
         outColor = doUpscale(
-            Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_DENOISED)),
+            Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SCENE_COLOR)),
             uv,
             float2(ssize),
             float2(osize)
@@ -305,7 +305,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     else
     {
         const int2 iposOffset = int2(ipos * float2(ssize) / float2(pushConsts.output_w, pushConsts.output_h));
-        outColor = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_DENOISED))[iposOffset];
+        outColor = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SCENE_COLOR))[iposOffset];
     }
 
     Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos + int2(pushConsts.offset_x, pushConsts.offset_y)] = outColor;

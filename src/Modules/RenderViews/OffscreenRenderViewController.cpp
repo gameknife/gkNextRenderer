@@ -280,7 +280,7 @@ namespace Vulkan
         auto& resources = views_[viewIndex];
         if (resources.target.offscreenImage)
         {
-            RenderViewResourceFactory(renderer_).CopyDenoisedOutputToImage(
+            RenderViewResourceFactory(renderer_).CopyRenderOutputToImage(
                 commandBuffer,
                 view,
                 *resources.target.offscreenImage,

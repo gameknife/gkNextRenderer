@@ -12,7 +12,6 @@ Build Bar, switch build / camera / base mode. Handle file save.;建造区，切�
 Camera;相机
 Click: Click Object to Focus.;点击物件对焦
 DebugDraw;可视化调试
-Denoiser;降噪器
 Dig a block;挖掉一个块
 Dir;阳光方向
 DropFile: if glb file, load it.;拖入文件：加载支持的模型文件

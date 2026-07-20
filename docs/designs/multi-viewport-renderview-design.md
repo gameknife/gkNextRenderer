@@ -27,7 +27,7 @@ last_updated: 2026-07-17
 
 - camera UBO ring 和 camera address
 - bindless RT bank
-- previous UBO、TAA/accumulation/denoiser history
+- previous UBO、ObjectId/depth 有效性、ReSTIR reservoir history generation
 - previous depth/object-id 有效性
 - CSM cache 与 dirty/update mask
 - resource-state tracker

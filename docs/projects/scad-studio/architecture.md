@@ -56,7 +56,7 @@ validated session source/files
 - ScadStudio 不是通用 coding agent，不开放 repo/shell/Scene tool registry。
 - parser outline 成功不保证 CSG 性能、字体/Manifold capability 或 0 warning；最终仍以 ScadLoader 日志和渲染为准。
 - session chat 的 restore-to-turn 会替换 source/files 并 reload；新增字段时需保持 JSON 向后兼容。
-- `ConfigureCVars` 只给迭代预览设低 samples/temporal frames/denoiser 默认值，不应改用户全局配置文件。
+- `ConfigureCVars` 只给迭代预览设低 samples/motion-history 默认值，不应改用户全局配置文件。
 
 ```bash
 ./gnb.sh build ScadStudio

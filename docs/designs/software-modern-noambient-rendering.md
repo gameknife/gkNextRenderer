@@ -27,7 +27,7 @@ last_updated: 2026-07-17
 
 1. `Core.SwModernNoAmbient.comp.slang` 从 visibility buffer 重建表面并写 full-resolution G-buffer/output。
 2. 若 `r.gtao.enable`，`Core.GTAO.comp.slang` 在 half-resolution `R16_SFLOAT` 的 `RT_GTAO` 上计算 horizon visibility。
-3. `Process.GTAOCompose.comp.slang` 以 3×3 depth/normal joint bilateral 上采样 AO，合成天光，画 selection/hover/lock/danger outline，并编码 HDR 或做 SDR tonemap 到 `RT_DENOISED`。
+3. `Process.GTAOCompose.comp.slang` 以 3×3 depth/normal joint bilateral 上采样 AO，合成天光，画 selection/hover/lock/danger outline，并编码 HDR 或做 SDR tonemap 到 `RT_SCENE_COLOR`。
 
 着色阶段有意把光照拆开：
 
@@ -60,9 +60,9 @@ Engine 注册默认值是：`r.gtao.enable=true`、`quality=1`、`radius=1.0`、
 
 ## 明确没有时序 history
 
-当前 renderer 不创建或复制 color/AO history。`NextEngine::GetUniformBufferObject()` 对该 renderer 禁用普通 TAA jitter，并把 `TemporalFrames` 设为 1；`Process.ReProjectSimple.comp.slang` 当前也不存在。Motion output 仍是 contract 的有效输出，但不能据此宣称 NoAmbient 正在执行 TAA。
+当前 renderer 不创建或复制 color/AO history。`NextEngine::GetUniformBufferObject()` 对该 renderer 禁用普通 TAA jitter，并把 `TemporalFrames` 设为 1。Motion output 仍是 upscaler contract 的有效输出，但不能据此宣称 NoAmbient 正在执行引擎 TAA。
 
-若未来重新加入时序 AA/AO，必须先修改 renderer contract，定义每 view history channel、copy/barrier、首次使用、camera cut/scene/extent/view-reuse 失效以及 auxiliary view 行为。不能只恢复旧 shader 或打开全局 jitter。通用约束见 [时序历史与降噪链](temporal-history-and-denoising.md)。
+若未来加入新的时序 AA/AO，必须由 upscaler contract 或独立、明确的 feature design 定义资源与生命周期，不能恢复已删除的通用颜色 history。通用约束见 [直接样本后处理与 Upscaler 输入链](direct-sample-post-chain.md)。
 
 ## 修改与验证
 

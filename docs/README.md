@@ -51,15 +51,8 @@
 - [NextAI 产品化边界](designs/nextai-product-focused-architecture.md)
 - [SCAD Scene Compose](designs/scad-scene-compose-design.md)
 - [SoftwareModernNoAmbient 渲染与 GTAO](designs/software-modern-noambient-rendering.md)
-- [时序历史与降噪链](designs/temporal-history-and-denoising.md)
+- [直接样本后处理与 Upscaler 输入链](designs/direct-sample-post-chain.md)
 - [WebRTC Remote Play](designs/webrtc-remoteplay-design.md)
-
-## Plans（仍有条件性或明确未实现的工作）
-
-- [ReProject 历史钳制：Phase B/C](plans/reproject-history-clamp-blackdot-fix.md)
-
-计划是否仍应执行，必须同时满足：状态未完成、目标代码尚未落地、且没有更新架构取代它。只满足文档里的未勾选框不够。
-索引中的 plan 不是自动授权；只有用户任务或活动 spec 明确要求时才执行。
 
 ## Projects
 

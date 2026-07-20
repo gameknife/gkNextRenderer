@@ -15,16 +15,8 @@
               "options": ["Path Tracing", "Software Tracing", "Software Modern", "Voxel Tracing", "Modern No Ambient"]
             },
             {"cvar": "r.samples", "label": "Samples", "widget": "slider_int", "min": 1, "max": 16},
-            {"cvar": "r.temporalFrames", "label": "Temporal Frames", "widget": "slider_int", "min": 1, "max": 64},
+            {"cvar": "r.temporalFrames", "label": "Motion History", "widget": "slider_int", "min": 1, "max": 64},
             {"cvar": "r.bounces", "label": "Ray Bounces", "widget": "slider_int", "min": 1, "max": 16}
-          ]
-        },
-        {
-          "label": "Denoising",
-          "items": [
-            {"cvar": "r.denoiser", "label": "Denoiser", "widget": "checkbox"},
-            {"cvar": "r.denoiseAtrousIterations", "label": "Diffuse Iterations", "widget": "slider_int", "min": 0, "max": 6},
-            {"cvar": "r.denoiseAtrousSpecularIterations", "label": "Specular Iterations", "widget": "slider_int", "min": 0, "max": 6}
           ]
         }
       ]

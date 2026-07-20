@@ -36,6 +36,7 @@ namespace Vulkan
         bool progressiveRendering = false;
         bool offlineProgressivePathTracing = false;
         bool effectiveSharc = false;
+        uint32_t progressiveAccumulatedFrames = 0;
         uint32_t progressiveTargetFrames = 1;
     };
     class FActiveRenderViewScope;
@@ -274,7 +275,6 @@ namespace Vulkan
         uint32_t EffectiveSuperResolutionMode() const { return effectiveSuperResolutionMode_; }
         Rendering::Upscaler::FFrameGenerationState GetFrameGenerationState() const;
         bool HasFullAmbientCubeBudget() const { return caps_.fullAmbientCubeBudget; }
-        void SetDenoiserEnabled(bool enabled) { caps_.supportDenoiser = enabled; }
         void SetVisualDebugEnabled(bool enabled) { visualDebug_ = enabled; }
         void QueueSubmitSignalSemaphore(VkSemaphore semaphore, uint64_t value = 0);
 
@@ -341,7 +341,6 @@ namespace Vulkan
             bool supportDLSSG            = false;
             bool supportReflex           = false;
             bool supportPCL              = false;
-            bool supportDenoiser         = false;
             bool fullAmbientCubeBudget   = true;
             bool supportSubgroupCull     = false;
         };

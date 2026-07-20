@@ -509,7 +509,7 @@ namespace Vulkan
         RenderView& view,
         RenderImage& dst)
     {
-        RenderViewResourceFactory(renderer_).CopyDenoisedOutputToImage(commandBuffer, view, dst);
+        RenderViewResourceFactory(renderer_).CopyRenderOutputToImage(commandBuffer, view, dst);
     }
 
     void AssetThumbnailRenderer::CopyMaterialPreviewOutput(VkCommandBuffer commandBuffer, RenderView& view)
@@ -518,7 +518,7 @@ namespace Vulkan
         {
             return;
         }
-        RenderViewResourceFactory(renderer_).CopyDenoisedOutputToImage(
+        RenderViewResourceFactory(renderer_).CopyRenderOutputToImage(
             commandBuffer,
             view,
             *materialPreviewTarget_.offscreenImage);

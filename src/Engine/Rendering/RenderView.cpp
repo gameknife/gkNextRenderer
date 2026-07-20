@@ -226,13 +226,13 @@ namespace Vulkan
         view.InvalidateTemporalHistory(EHistoryInvalidationReason::ExtentChanged);
     }
 
-    bool RenderViewResourceFactory::CopyDenoisedOutputToImage(
+    bool RenderViewResourceFactory::CopyRenderOutputToImage(
         VkCommandBuffer commandBuffer,
         RenderView& view,
         RenderImage& dst,
         const VkFilter filter)
     {
-        const RenderImage* src = renderer_.GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_DENOISED);
+        const RenderImage* src = renderer_.GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_SCENE_COLOR);
         if (src == nullptr)
         {
             return false;
@@ -242,7 +242,7 @@ namespace Vulkan
         auto& viewStates = view.ResourceStates();
         auto& outputStates = renderer_.AuxiliaryImageStates();
         const PipelineCommon::FImageHandle srcHandle{
-            static_cast<uint64_t>(view.RtBankBase() + Assets::Bindless::RT_DENOISED) + 1u};
+            static_cast<uint64_t>(view.RtBankBase() + Assets::Bindless::RT_SCENE_COLOR) + 1u};
         const PipelineCommon::FImageHandle dstHandle{
             static_cast<uint64_t>(reinterpret_cast<uintptr_t>(dst.GetImage().Handle()))};
         EmitTrackedImageBarrier(commandBuffer, viewStates, {

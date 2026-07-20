@@ -15,7 +15,7 @@ last_updated: 2026-07-17
 
 - `VulkanBaseRenderer` 是 Vulkan 资源、swapchain、每帧编排和 logic renderer 的 facade，不应重新吸收缩略图、Remote 或产品专用业务。
 - `FrameSubmission` 收口 acquire/submit/present；`RayTracingSceneBackend`、`AmbientCubeBaker` 和 `GpuDrivenPasses` 分别承担 scene-global 准备和 per-view prepass。
-- `LogicRendererBase` 的实现只负责自身着色路径。共享时序后处理位于 `PipelineCommon/TemporalPostChain`。
+- `LogicRendererBase` 的实现只负责自身着色路径。共享的当前样本 compose 位于 `PipelineCommon/SamplePostChain`。
 - `RenderView`/`RenderViewManager` 拥有每视图 RT bank、相机、历史、generation 和资源状态；上层调度见 [RenderView 多视图架构](multi-viewport-renderview-design.md)。
 - 可选模块通过 `FExternalPassContract` 注册外部 pass。模块不得靠访问 renderer 私有成员或假定某个 G-buffer 总是存在来插入渲染。
 

@@ -7,18 +7,18 @@ void OutputColor(int2 ipos, float3 Total, bool noSkyBackground)
     let Camera = Bindless.GetGpuscene().Camera[0];
     if (noSkyBackground)
     {
-        Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] =
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_SCENE_COLOR)[ipos] =
             float4(EncodeNoSkyBackground(Camera.HDR, Camera.PaperWhiteNit, Camera.HDROutputMode), 1.0f);
         return;
     }
 
     if (Camera.HDR)
     {
-        Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] = float4(EncodeHdrOutput(Total, Camera.PaperWhiteNit, Camera.HDROutputMode), 0.0);
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_SCENE_COLOR)[ipos] = float4(EncodeHdrOutput(Total, Camera.PaperWhiteNit, Camera.HDROutputMode), 0.0);
     }
     else
     {
-        Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] = float4(Uncharted2_Tonemapping(Total * Camera.PaperWhiteNit / 20000.0), 0.0);
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_SCENE_COLOR)[ipos] = float4(Uncharted2_Tonemapping(Total * Camera.PaperWhiteNit / 20000.0), 0.0);
     }
 }
 
@@ -26,7 +26,7 @@ void OutputColor(int2 ipos, float3 Total, bool noSkyBackground)
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    const uint2 outputSize = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
+    const uint2 outputSize = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SCENE_COLOR);
     if (any(DTid.xy >= outputSize))
     {
         return;
@@ -57,7 +57,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         float4 residencyDebugColor;
         if (TryAmbientResidencyDebug(hitVertex.Position, residencyDebugColor))
         {
-            Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] = residencyDebugColor;
+            Bindless.GetViewStorageTexture<float4>(Bindless.RT_SCENE_COLOR)[ipos] = residencyDebugColor;
             END_SHADERCLOCK(ipos)
             return;
         }

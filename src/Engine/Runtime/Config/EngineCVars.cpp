@@ -47,27 +47,17 @@ namespace NextCVar
 {
     void RegisterEngineCVars(FCVarSystem& cvars, Runtime::Config::UserSettings& settings, Runtime::Config::ShowFlags& showFlags, NextEngine* engine)
     {
-        GK_CVAR_UINT("r.temporalFrames", settings, TemporalFrames, 16, ECVarFlags::Archive, "Temporal accumulation frames");
+        GK_CVAR_UINT("r.temporalFrames", settings, TemporalFrames, 16, ECVarFlags::Archive, "Moving-object history rejection and progressive warmup frames");
         GK_CVAR_INT("r.samples", settings, NumberOfSamples, 4, ECVarFlags::Archive, "Samples per pixel");
         GK_CVAR_UINT("r.bounces", settings, NumberOfBounces, 8, ECVarFlags::Archive, "Ray bounce count");
         GK_CVAR_INT("r.rendererType", settings, RendererType, 0, ECVarFlags::Archive, "Renderer type (0=PathTracing,1=SoftwareTracing,2=SoftwareModern,3=VoxelTracing,4=SoftwareModernNoAmbient)");
         GK_CVAR_UINT("r.maxBounces", settings, MaxNumberOfBounces, 10, ECVarFlags::Archive, "Maximum ray bounce count");
-        GK_CVAR_BOOL("r.denoiser", settings, Denoiser, false, ECVarFlags::Archive, "Enable the variance-guided a-trous denoiser");
-        GK_CVAR_INT("r.denoiseAtrousIterations", settings, DenoiseAtrousIterations, 3, ECVarFlags::Archive, "Diffuse a-trous wavelet iterations: quality/perf knob (higher = smoother, slower; 1-6)");
-        GK_CVAR_INT("r.denoiseAtrousSpecularIterations", settings, DenoiseAtrousSpecularIterations, 3, ECVarFlags::Archive, "Specular a-trous wavelet iterations (lower is faster and preserves glossy detail; 0-6)");
-        GK_CVAR_FLOAT("r.denoiseAtrousSigmaLuma", settings, DenoiseAtrousSigmaLuma, 4.0f, ECVarFlags::Archive, "A-trous luminance edge-stop sigma (lower = sharper detail, more residual noise)");
-        GK_CVAR_FLOAT("r.denoiseAtrousNormalPower", settings, DenoiseAtrousNormalPower, 64.0f, ECVarFlags::Archive, "A-trous normal edge-stop exponent");
-        GK_CVAR_FLOAT("r.denoiseSigmaDepth", settings, DenoiseSigmaDepth, 2.0f, ECVarFlags::Archive, "A-trous planar depth tolerance (multiples of local depth slope)");
-        GK_CVAR_FLOAT("r.denoiseSpecFootprint", settings, DenoiseSpecFootprint, 32.0f, ECVarFlags::Archive, "Specular a-trous filter radius in pixels per unit roughness");
         GK_CVAR_BOOL("r.gtao.enable", settings, GTAOEnable, true, ECVarFlags::Archive, "Enable half-resolution GTAO for SoftwareModernNoAmbient sky lighting");
         GK_CVAR_INT("r.gtao.quality", settings, GTAOQuality, 1, ECVarFlags::Archive, "GTAO sampling quality (0=low 16 taps,1=medium 36 taps,2=high 64 taps,3=ultra 120 taps)");
         GK_CVAR_FLOAT("r.gtao.radius", settings, GTAORadius, 1.0f, ECVarFlags::Archive, "GTAO world-space sampling radius");
         GK_CVAR_FLOAT("r.gtao.strength", settings, GTAOStrength, 5.0f, ECVarFlags::Archive, "Master sky-occlusion strength: scales GTAO sky darkening (1=natural, lower=lighter)");
         GK_CVAR_FLOAT("r.gtao.thickness", settings, GTAOThickness, 0.5f, ECVarFlags::Archive, "GTAO depth-discontinuity thickness heuristic in world units");
         GK_CVAR_INT("r.gtao.debugMode", settings, GTAODebugMode, 0, ECVarFlags::Archive, "GTAO debug mode (0=off,1=occlusion,2=unoccluded sky lighting)");
-        GK_CVAR_FLOAT("r.reproject.clampGammaHi", settings, ReprojectClampGammaHi, 2.5f, ECVarFlags::Archive, "ReProject history clamp: tight upper YCoCg-luma box half-width in sigmas (lower = less ghosting)");
-        GK_CVAR_FLOAT("r.reproject.clampGammaLo", settings, ReprojectClampGammaLo, 5.0f, ECVarFlags::Archive, "ReProject history clamp: tight lower box half-width in sigmas (kept looser than upper to avoid black dots)");
-        GK_CVAR_FLOAT("r.reproject.clampFloor", settings, ReprojectClampFloor, 0.5f, ECVarFlags::Archive, "ReProject history clamp: relative luma floor as a fraction of the filtered mean (guards against black dots)");
         GK_CVAR_UINT_CB("r.superResolution", settings, SuperResolution, 5, ECVarFlags::Archive, "Super resolution mode (0=Quality,1=Balanced,2=Performance,3=Ultra Performance,4=Native/DLAA,5=Auto)", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlss", settings, DLSS, false, ECVarFlags::Archive, "Enable NVIDIA DLSS", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.fsr", settings, FSR, false, ECVarFlags::Archive, "Enable FSR1 spatial upscaling", std::bind(RequestSwapChainIfPossible, engine));

@@ -56,7 +56,7 @@ session 建立、场景变更或 swapchain 失效后，相应 pipeline 会重新
 
 Remote MultiView 的 post-render callback 在主渲染线程录制 command buffer 时执行，顺序固定为：
 
-1. 从该 RenderView 的 `RT_DENOISED` 拷贝到 session composite image（`CopyViewToComposite`）。
+1. 从该 RenderView 的 `RT_SCENE_COLOR` 拷贝到 session composite image（`CopyViewToComposite`）。
 2. 在 composite image 上绘制该 session 的 ImGui draw data。
 3. 通过 `RecordFrameFromStorageImage` 交给该 session 的 `VideoPipeline` 做颜色转换和编码。
 

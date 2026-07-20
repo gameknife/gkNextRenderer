@@ -654,7 +654,7 @@ namespace Runtime::Remote
                                            Vulkan::VulkanBaseRenderer& renderer,
                                            Vulkan::RenderView& view)
     {
-        const Vulkan::RenderImage* src = renderer.GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_DENOISED);
+        const Vulkan::RenderImage* src = renderer.GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_SCENE_COLOR);
         if (!src || !clientView.compositeImage)
         {
             return;

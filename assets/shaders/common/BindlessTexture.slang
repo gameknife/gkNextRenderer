@@ -5,7 +5,7 @@ namespace Bindless
     // --- Screen-space RT slots (0..30): per-RenderView, resolved through ViewRT() ---
 
     // G-buffer / primary signals
-    public static const int RT_ACCUMULATE_DIFFUSE = 0;
+    public static const int RT_PROGRESSIVE_DIFFUSE = 0;
     public static const int RT_SINGLE_DIFFUSE = 1;
     public static const int RT_MINIGBUFFER = 2;
     public static const int RT_OBJECTID_0 = 3;
@@ -14,33 +14,19 @@ namespace Bindless
     public static const int RT_ALBEDO = 6;
     public static const int RT_NORMAL = 7;
     public static const int RT_SHADER_TIMER = 8;
-    public static const int RT_DENOISED = 9;
+    public static const int RT_SCENE_COLOR = 9;
     public static const int RT_PREV_DEPTHBUFFER = 10;
-    public static const int RT_ACCUMULATE_SPECULAR = 11;
+    public static const int RT_PROGRESSIVE_SPECULAR = 11;
     public static const int RT_SINGLE_SPECULAR = 12;
-    public static const int RT_ACCUMULATE_ALBEDO = 13;
     public static const int RT_MOTIONMOMENT = 14;
     public static const int RT_DIFFUSE_HITDIST = 15;
     public static const int RT_SPECULAR_HITDIST = 16;
     public static const int RT_SPECULAR_ALBEDO = 17;
 
-    // Variance-guided a-trous wavelet ping-pong. RGBA16F: rgb = filtered color, a = variance.
-    public static const int RT_ATROUS_PING = 18;
-    public static const int RT_ATROUS_PONG = 19;
-
-    // Temporal history of the single-frame signals
-    public static const int RT_SINGLE_PREV_DIFFUSE = 20;
-    public static const int RT_SINGLE_PREV_SPECULAR = 21;
-    public static const int RT_SINGLE_PREV_ALBEDO = 22;
-
     public static const int RT_MINIGBUFFER_DRAW = 23;
 
-    // A-trous outputs, splat accumulation, ambient & AO
-    public static const int RT_ATROUS_OUT = 24;
-    public static const int RT_ATROUS_SPEC_OUT = 25;
+    // Splat accumulation, ambient & AO
     public static const int RT_SPLAT_ACCUM = 26;
-    public static const int RT_ATROUS_SPEC_PING = 27;
-    public static const int RT_ATROUS_SPEC_PONG = 28;
     public static const int RT_AMBIENT = 29;
     public static const int RT_GTAO = 30;
 

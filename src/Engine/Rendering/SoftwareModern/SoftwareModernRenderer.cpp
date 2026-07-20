@@ -14,18 +14,17 @@ namespace Vulkan::SoftwareModern
         (void)extent;
         deferredShadingPipeline_ = std::make_unique<PipelineCommon::ZeroBindPipeline>(
             SwapChain(), "assets/shaders/Core.SwModern.comp.slang.spv", GetScene());
-        temporalPostChain_.CreateSwapChain(SwapChain(), GetScene());
+        samplePostChain_.CreateSwapChain(SwapChain(), GetScene());
     }
 
     void SoftwareModernRenderer::DeleteSwapChain()
     {
         deferredShadingPipeline_.reset();
-        temporalPostChain_.DeleteSwapChain();
+        samplePostChain_.DeleteSwapChain();
     }
 
     void SoftwareModernRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        baseRender_.ActiveRenderView().TemporalResolve().PrepareHistoryForRead(baseRender_, commandBuffer);
         const VkExtent2D extent = baseRender_.ActiveViewRenderExtent();
         baseRender_.TransitionActiveViewImages(commandBuffer, {
             {Assets::Bindless::RT_SINGLE_DIFFUSE, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
@@ -49,13 +48,10 @@ namespace Vulkan::SoftwareModern
         }
 
         const auto& frameSettings = baseRender_.FrameSettings();
-        const auto& settings = frameSettings.userSettings;
-        temporalPostChain_.Run(baseRender_, SwapChain(), commandBuffer, imageIndex, settings, {
+        samplePostChain_.Run(baseRender_, commandBuffer, imageIndex, {
             .progressiveRender = baseRender_.ActiveViewBankBase() == 0 && frameSettings.progressiveRendering,
-            .fastReproject = true,
-            .runAtrous = true,
-            .temporalFrames = baseRender_.ActiveRenderView().Schedule() != EViewSchedule::Transient
-                ? uint32_t(settings.TemporalFrames) : 1u,
+            .progressiveSampleCount = frameSettings.progressiveAccumulatedFrames,
+            .progressiveTargetSampleCount = frameSettings.progressiveTargetFrames,
         });
     }
 }

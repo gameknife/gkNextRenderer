@@ -40,7 +40,7 @@ gkNextEditor 的 Material Editor 是 `Assets::FMaterial` 的参数式编辑器�
 
 材质球使用独立小 Scene、独立 RenderView/RT bank、固定环境和 sampled output。材质或相机变化后，provider 更新 preview Scene、失效相关 view 状态并重新调度。默认使用 `SoftwareModernNoAmbient`，因为它是当前允许 `SceneOverride` 而不依赖主场景 TLAS/Ambient 准备的 renderer；不要改成依赖 scene-global 资源的路径后仍假定 override 安全。
 
-preview 的 post-render callback 立即把 `RT_DENOISED` 复制到 sampled image。该 callback 在主 command buffer 录制线程执行，不是后台渲染任务。RenderView 的通用约束见 [多视图架构](multi-viewport-renderview-design.md)。
+preview 的 post-render callback 立即把 `RT_SCENE_COLOR` 复制到 sampled image。该 callback 在主 command buffer 录制线程执行，不是后台渲染任务。RenderView 的通用约束见 [多视图架构](multi-viewport-renderview-design.md)。
 
 ## 保存边界
 

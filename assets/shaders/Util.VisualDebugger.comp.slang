@@ -154,10 +154,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SINGLE_DIFFUSE)), 3, 2, 4, ipos, isize, 0.005);
     
     // center
-    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_DENOISED)), 0.5, 0.5, 2, ipos, isize, 1);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SCENE_COLOR)), 0.5, 0.5, 2, ipos, isize, 1);
 
     // line back
-    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_ACCUMULATE_DIFFUSE)), 0, 3, 4, ipos, isize, 0.005);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_PROGRESSIVE_DIFFUSE)), 0, 3, 4, ipos, isize, 0.005);
     DRAWINTX(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MINIGBUFFER)), 1, 3, 4, ipos, isize);
     DRAWINTY(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MINIGBUFFER)), 2, 3, 4, ipos, isize);
     DRAWINT(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MOTIONMOMENT)), 3, 3, 4, ipos, isize);

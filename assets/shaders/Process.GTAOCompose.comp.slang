@@ -115,10 +115,10 @@ float UpsampleAO(UniformBufferObject camera, int2 pixel, uint2 fullSize, float c
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     const UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
-    let OutImage = Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED);
+    let OutImage = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SCENE_COLOR);
     let ObjectIdImage = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_0);
 
-    const uint2 fullSize = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
+    const uint2 fullSize = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SCENE_COLOR);
     const int2 pixel = int2(DTid.xy);
     if (DTid.x >= fullSize.x || DTid.y >= fullSize.y)
     {

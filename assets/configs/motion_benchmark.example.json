@@ -9,7 +9,6 @@
   "cvars": {
     "r.samples": 4,
     "r.temporalFrames": 16,
-    "r.denoiser": false,
     "r.dlss": false,
     "r.fsr": false,
     "r.superResolution": 4,

@@ -1144,20 +1144,6 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
         NextUI::Theme::EndPanelSection();
     }
 
-    if (NextUI::Theme::BeginPanelSection(LOCTEXT("Denoiser"), true))
-    {
-        // Variance-guided a-trous wavelet denoiser. Diffuse/specular run in one fused pass;
-        // specular often needs fewer iterations to preserve glossy detail.
-        DrawSettingCheckboxRow(LOCTEXT("Enable"), &userSetting.Denoiser);
-        DrawIntSetting(LOCTEXT("Diffuse Iterations"), &userSetting.DenoiseAtrousIterations, 1, 6);
-        DrawIntSetting(LOCTEXT("Specular Iterations"), &userSetting.DenoiseAtrousSpecularIterations, 0, 6);
-        DrawFloatSetting(LOCTEXT("Sigma Luma"), &userSetting.DenoiseAtrousSigmaLuma, 0.5f, 16.0f, "%.2f", 0.1f);
-        DrawFloatSetting(LOCTEXT("Normal Power"), &userSetting.DenoiseAtrousNormalPower, 1.0f, 128.0f, "%.0f", 1.0f);
-        DrawFloatSetting(LOCTEXT("Sigma Depth"), &userSetting.DenoiseSigmaDepth, 0.0f, 8.0f, "%.2f", 0.05f);
-        DrawFloatSetting(LOCTEXT("Spec Footprint"), &userSetting.DenoiseSpecFootprint, 0.0f, 64.0f, "%.1f", 0.5f);
-        NextUI::Theme::EndPanelSection();
-    }
-    
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Upscaling"), true))
     {
         int upscaleMethod = userSetting.DLSS ? 1 : userSetting.FSR ? 2 : 0;
@@ -1326,7 +1312,7 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
 
         ImGui::Spacing();
         uint32_t tmin = 8, tmax = 32;
-        ImGui::SliderScalar(LOCTEXT("Temporal Frames"), ImGuiDataType_U32, &userSetting.TemporalFrames, &tmin,
+        ImGui::SliderScalar(LOCTEXT("Motion History"), ImGuiDataType_U32, &userSetting.TemporalFrames, &tmin,
                             &tmax);
         NextUI::Theme::EndPanelSection();
     }

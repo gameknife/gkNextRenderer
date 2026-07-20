@@ -310,7 +310,6 @@ namespace Vulkan
                        ? new DebugUtilsMessenger( *ctx_.instance, VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)
                        : nullptr);
         ctx_.surface.reset(new Surface(*ctx_.instance));
-        caps_.supportDenoiser = false;
         forceSDR_ = GOption->ForceSDR;
 
         caps_.supportRayTracing = false;
@@ -842,8 +841,8 @@ namespace Vulkan
             ? VK_FORMAT_R32G32B32A32_SFLOAT
             : VK_FORMAT_R16G16B16A16_SFLOAT;
 
-        CREATE_STORAGE_IMAGE(RT_ACCUMULATE_DIFFUSE, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT );
-        CREATE_STORAGE_IMAGE(RT_SINGLE_DIFFUSE, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
+        CREATE_STORAGE_IMAGE(RT_PROGRESSIVE_DIFFUSE, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        CREATE_STORAGE_IMAGE(RT_SINGLE_DIFFUSE, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
         CREATE_STORAGE_IMAGE(RT_MINIGBUFFER, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
         CREATE_STORAGE_IMAGE(RT_MINIGBUFFER_DRAW, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT );
         CREATE_STORAGE_IMAGE(RT_OBJECTID_0, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT );
@@ -852,24 +851,14 @@ namespace Vulkan
         CREATE_STORAGE_IMAGE(RT_ALBEDO, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
         CREATE_STORAGE_IMAGE(RT_NORMAL, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
         CREATE_STORAGE_IMAGE(RT_SHADER_TIMER, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT );
-        CREATE_STORAGE_IMAGE(RT_DENOISED, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT );
+        CREATE_STORAGE_IMAGE(RT_SCENE_COLOR, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT );
         CREATE_STORAGE_IMAGE(RT_PREV_DEPTHBUFFER, VK_FORMAT_R32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
-        CREATE_STORAGE_IMAGE(RT_ACCUMULATE_SPECULAR, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT );
-        CREATE_STORAGE_IMAGE(RT_SINGLE_SPECULAR, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
-        CREATE_STORAGE_IMAGE(RT_ACCUMULATE_ALBEDO, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT );
-        CREATE_STORAGE_IMAGE(RT_SINGLE_PREV_DIFFUSE, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
-        CREATE_STORAGE_IMAGE(RT_SINGLE_PREV_SPECULAR, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
-        CREATE_STORAGE_IMAGE(RT_SINGLE_PREV_ALBEDO, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
+        CREATE_STORAGE_IMAGE(RT_PROGRESSIVE_SPECULAR, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        CREATE_STORAGE_IMAGE(RT_SINGLE_SPECULAR, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
         CREATE_STORAGE_IMAGE(RT_MOTIONMOMENT, VK_FORMAT_R16_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
         CREATE_STORAGE_IMAGE(RT_DIFFUSE_HITDIST, VK_FORMAT_R16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
         CREATE_STORAGE_IMAGE(RT_SPECULAR_HITDIST, VK_FORMAT_R16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
         CREATE_STORAGE_IMAGE(RT_SPECULAR_ALBEDO, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
-        CREATE_STORAGE_IMAGE(RT_ATROUS_PING, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
-        CREATE_STORAGE_IMAGE(RT_ATROUS_PONG, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
-        CREATE_STORAGE_IMAGE(RT_ATROUS_OUT, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
-        CREATE_STORAGE_IMAGE(RT_ATROUS_SPEC_OUT, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
-        CREATE_STORAGE_IMAGE(RT_ATROUS_SPEC_PING, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
-        CREATE_STORAGE_IMAGE(RT_ATROUS_SPEC_PONG, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
         CREATE_STORAGE_IMAGE(RT_SPLAT_ACCUM, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
         CREATE_STORAGE_IMAGE(RT_AMBIENT, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
         const VkExtent2D gtaoExtent{
@@ -911,7 +900,7 @@ namespace Vulkan
             {
                 ctx_.globalTexturePool->BindStorageTexture(
                     Assets::Bindless::RT_SWAPCHAIN0 + i,
-                    GetViewStorageImage(Assets::Bindless::RT_DENOISED)->GetImageView());
+                    GetViewStorageImage(Assets::Bindless::RT_SCENE_COLOR)->GetImageView());
             }
         }
 
@@ -943,7 +932,7 @@ namespace Vulkan
         {
             overlay_.wireframeFrameBuffers.emplace_back(
                 frame_.swapChain->RenderExtent(),
-                GetViewStorageImage(Assets::Bindless::RT_DENOISED)->GetImageView(),
+                GetViewStorageImage(Assets::Bindless::RT_SCENE_COLOR)->GetImageView(),
                 overlay_.wireframePipeline->RenderPass());
         }
 
@@ -1018,6 +1007,7 @@ namespace Vulkan
         frameSettings_.progressiveRendering = engine->IsProgressiveRendering();
         frameSettings_.offlineProgressivePathTracing = engine->IsOfflineProgressivePathTracing();
         frameSettings_.effectiveSharc = engine->IsEffectiveSharcEnabled();
+        frameSettings_.progressiveAccumulatedFrames = engine->GetProgressiveRenderAccumulatedFrames();
         frameSettings_.progressiveTargetFrames = engine->GetProgressiveRenderTargetFrames();
         const auto& settings = frameSettings_.userSettings;
         const VkPresentModeKHR requestedPresentMode =
@@ -1381,7 +1371,6 @@ namespace Vulkan
         {
             ubo.PrevViewProjection = ubo.ViewProjection;
             ubo.PrevViewProjectionUnJit = ubo.ViewProjectionUnJit;
-            view.TemporalResolve().InvalidateHistory();
         }
         else
         {
@@ -1416,6 +1405,7 @@ namespace Vulkan
         frameSettings_.progressiveRendering = engine->IsProgressiveRendering();
         frameSettings_.offlineProgressivePathTracing = engine->IsOfflineProgressivePathTracing();
         frameSettings_.effectiveSharc = engine->IsEffectiveSharcEnabled();
+        frameSettings_.progressiveAccumulatedFrames = engine->GetProgressiveRenderAccumulatedFrames();
         frameSettings_.progressiveTargetFrames = engine->GetProgressiveRenderTargetFrames();
         const auto& settings = frameSettings_.userSettings;
         const bool frameGenerationEnabled =
@@ -1785,14 +1775,14 @@ namespace Vulkan
              .layout = VK_IMAGE_LAYOUT_GENERAL},
             "compose view subrect");
 
-        const RenderImage* denoisedImage = GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_DENOISED);
-        if (denoisedImage == nullptr)
+        const RenderImage* sceneColorImage = GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_SCENE_COLOR);
+        if (sceneColorImage == nullptr)
         {
             return;
         }
 
         TransitionViewImages(commandBuffer, view, {
-            {Assets::Bindless::RT_DENOISED, PipelineCommon::ERenderStage::Transfer,
+            {Assets::Bindless::RT_SCENE_COLOR, PipelineCommon::ERenderStage::Transfer,
              PipelineCommon::EResourceAccess::TransferRead},
         }, "compose view subrect source");
 
@@ -1818,7 +1808,7 @@ namespace Vulkan
         };
 
         vkCmdBlitImage(commandBuffer,
-                       denoisedImage->GetImage().Handle(),
+                       sceneColorImage->GetImage().Handle(),
                        VK_IMAGE_LAYOUT_GENERAL,
                        SwapChain().Images()[imageIndex],
                        VK_IMAGE_LAYOUT_GENERAL,
@@ -1833,7 +1823,7 @@ namespace Vulkan
     {
         const FRendererContract& contract = GetRendererContract(logicRenderers_.current);
         TransitionActiveViewImages(commandBuffer, {
-            {Assets::Bindless::RT_DENOISED,
+            {Assets::Bindless::RT_SCENE_COLOR,
              PipelineCommon::ERenderStage::Compute | PipelineCommon::ERenderStage::Transfer,
              PipelineCommon::EResourceAccess::ShaderRead | PipelineCommon::EResourceAccess::TransferRead},
         }, "resolve primary view source");
@@ -1913,7 +1903,7 @@ namespace Vulkan
             };
 
             vkCmdBlitImage(commandBuffer,
-                           GetViewStorageImage(Assets::Bindless::RT_DENOISED)->GetImage().Handle(),
+                           GetViewStorageImage(Assets::Bindless::RT_SCENE_COLOR)->GetImage().Handle(),
                            VK_IMAGE_LAYOUT_GENERAL,
                            SwapChain().Images()[imageIndex],
                            VK_IMAGE_LAYOUT_GENERAL,
@@ -2253,7 +2243,7 @@ namespace Vulkan
             VK_IMAGE_LAYOUT_GENERAL,
             VK_IMAGE_USAGE_STORAGE_BIT);
         inputs.scalingInputColor = MakeRenderImageResource(
-            GetViewStorageImage(Assets::Bindless::RT_DENOISED),
+            GetViewStorageImage(Assets::Bindless::RT_SCENE_COLOR),
             VK_IMAGE_LAYOUT_GENERAL,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
         inputs.scalingOutputColor = MakeSwapchainResource(
@@ -2276,11 +2266,11 @@ namespace Vulkan
             VK_IMAGE_LAYOUT_GENERAL,
             VK_IMAGE_USAGE_STORAGE_BIT);
         inputs.diffuseNoisy = MakeRenderImageResource(
-            GetViewStorageImage(Assets::Bindless::RT_ACCUMULATE_DIFFUSE),
+            GetViewStorageImage(Assets::Bindless::RT_SINGLE_DIFFUSE),
             VK_IMAGE_LAYOUT_GENERAL,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
         inputs.specularNoisy = MakeRenderImageResource(
-            GetViewStorageImage(Assets::Bindless::RT_ACCUMULATE_SPECULAR),
+            GetViewStorageImage(Assets::Bindless::RT_SINGLE_SPECULAR),
             VK_IMAGE_LAYOUT_GENERAL,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
         inputs.diffuseHitDistance = MakeRenderImageResource(
