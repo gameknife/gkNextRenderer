@@ -166,7 +166,7 @@ float calculateWeight(float centerDist, bool sameObject, bool isCenter, float3 N
     }
 }
 
-float3 FilterHistoryColor( RWTexture2D<float4> prevFrameTexture, float2 subpixel, int2 previpos,
+float3 FilterHistoryColor( RWTexture2D<float4> prevFrameTexture, float2 subpixel, int2 previpos, int2 imageMax,
                           uint current_primitive_index0,
                           uint prev_primitive_index0,
                           uint prev_primitive_index1,
@@ -174,11 +174,16 @@ float3 FilterHistoryColor( RWTexture2D<float4> prevFrameTexture, float2 subpixel
                           uint prev_primitive_index3,
                           float4 currFrameSample)
 {
+    // Bilinear taps clamp at the border so the outermost row/column can still use history
+    // (rejecting them outright left a permanently non-accumulating, flickering edge strip).
+    const int2 p1 = min(previpos + int2(1, 0), imageMax);
+    const int2 p2 = min(previpos + int2(0, 1), imageMax);
+    const int2 p3 = min(previpos + int2(1, 1), imageMax);
     float3 historyColor[4];
     historyColor[0] = current_primitive_index0 == prev_primitive_index0 ? prevFrameTexture[previpos].rgb : currFrameSample.rgb;
-    historyColor[1] = current_primitive_index0 == prev_primitive_index1 ? prevFrameTexture[previpos + int2(1, 0)].rgb : currFrameSample.rgb;
-    historyColor[2] = current_primitive_index0 == prev_primitive_index2 ? prevFrameTexture[previpos + int2(0, 1)].rgb : currFrameSample.rgb;
-    historyColor[3] = current_primitive_index0 == prev_primitive_index3 ? prevFrameTexture[previpos + int2(1, 1)].rgb : currFrameSample.rgb;
+    historyColor[1] = current_primitive_index0 == prev_primitive_index1 ? prevFrameTexture[p1].rgb : currFrameSample.rgb;
+    historyColor[2] = current_primitive_index0 == prev_primitive_index2 ? prevFrameTexture[p2].rgb : currFrameSample.rgb;
+    historyColor[3] = current_primitive_index0 == prev_primitive_index3 ? prevFrameTexture[p3].rgb : currFrameSample.rgb;
 
     float3 history = lerp(lerp(historyColor[0], historyColor[1], subpixel.x),
                             lerp(historyColor[2], historyColor[3], subpixel.x),
@@ -266,8 +271,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
     bool useHistory = true;
     float2 motion = MotionVector[ipos].rg;
     int2 previpos = int2(floor(float2(ipos) + motion));
+    // The +1 bilinear footprint clamps at the border (FilterHistoryColor), so the primary
+    // tap only needs to be on-screen; excluding the last row/column here left a permanent
+    // no-history flickering edge strip.
     const bool inside = all(previpos >= int2(0, 0)) &&
-                        all(previpos + int2(1, 1) < imageSize);
+                        all(previpos < imageSize);
     uint prev_primitive_index0 = OBJECT_ID_INVALID_INSTANCE;
     if (inside)
     {
@@ -282,43 +290,62 @@ void main(uint3 DTid : SV_DispatchThreadID)
         useHistory = false;
     }
 
+    // Geometry-weighted spatial estimate, needed by BOTH branches: the reprojected branch
+    // uses it for the history clamp box and the young-pixel fallback; the disocclusion
+    // branch writes it instead of the raw 1spp center (see below).
+    const int SAMPLE_RANGE = pushConsts.FastReproject ? 0 : 2;
+    const float3 CenterNormal = NormalBuffer[ipos].rgb;
+
+    float4 spatialDiffuseSample = float4(0, 0, 0, 0);
+    float4 spatialSpecularSample = float4(0, 0, 0, 0);
+
+    float totalWeight = 0.0;
+    float motionInRange = 0;
+
+    // Center-excluded luma means feed the input clamp reference below: a firefly must never
+    // justify its own cap through its contribution to the neighborhood estimate.
+    float lumaDiffuseNC = 0.0;
+    float lumaSpecularNC = 0.0;
+    float totalWeightNC = 0.0;
+
+    for (int y = -SAMPLE_RANGE; y <= SAMPLE_RANGE; y++) {
+        for (int x = -SAMPLE_RANGE; x <= SAMPLE_RANGE; x++) {
+            const int2 offset = int2(x, y);
+            const int2 samplePos = clamp(ipos + offset, int2(0, 0), imageMax);
+            const int2 motionSamplePos = clamp(ipos + offset * 2, int2(0, 0), imageMax);
+            const uint primitiveIdx = FetchPrimitiveIndex(ObjectId0[samplePos]);
+            const float3 worldNormal = NormalBuffer[samplePos].rgb;
+
+            const bool isCenter = (x == 0 && y == 0);
+            const bool sameObject = (primitiveIdx == current_primitive_index0);
+            const float centerDist = length(float2(x, y));
+            const float weight = calculateWeight(centerDist, sameObject, isCenter, worldNormal, CenterNormal);
+
+            const float4 diffuseTap = SourceDiffuse[samplePos];
+            const float4 specularTap = SourceSpecular[samplePos];
+            spatialDiffuseSample += diffuseTap * weight;
+            spatialSpecularSample += specularTap * weight;
+            totalWeight += weight;
+            if (!isCenter)
+            {
+                lumaDiffuseNC += dot(diffuseTap.rgb, kLumaWeights) * weight;
+                lumaSpecularNC += dot(specularTap.rgb, kLumaWeights) * weight;
+                totalWeightNC += weight;
+            }
+
+            motionInRange += length(MotionVector[motionSamplePos].rg);
+        }
+    }
+    spatialDiffuseSample /= max(totalWeight, 1e-5);
+    spatialSpecularSample /= max(totalWeight, 1e-5);
+    lumaDiffuseNC /= max(totalWeightNC, 1e-5);
+    lumaSpecularNC /= max(totalWeightNC, 1e-5);
+
     if (useHistory)
     {
-        const int SAMPLE_RANGE = pushConsts.FastReproject ? 0 : 2;
-        const float3 CenterNormal = NormalBuffer[ipos].rgb;
-
-        float4 spatialDiffuseSample = float4(0, 0, 0, 0);
-        float4 spatialSpecularSample = float4(0, 0, 0, 0);
-
-        float totalWeight = 0.0;
-        float motionInRange = 0;
-
-        for (int y = -SAMPLE_RANGE; y <= SAMPLE_RANGE; y++) {
-            for (int x = -SAMPLE_RANGE; x <= SAMPLE_RANGE; x++) {
-                const int2 offset = int2(x, y);
-                const int2 samplePos = clamp(ipos + offset, int2(0, 0), imageMax);
-                const int2 motionSamplePos = clamp(ipos + offset * 2, int2(0, 0), imageMax);
-                const uint primitiveIdx = FetchPrimitiveIndex(ObjectId0[samplePos]);
-                const float3 worldNormal = NormalBuffer[samplePos].rgb;
-
-                const bool isCenter = (x == 0 && y == 0);
-                const bool sameObject = (primitiveIdx == current_primitive_index0);
-                const float centerDist = length(float2(x, y));
-                const float weight = calculateWeight(centerDist, sameObject, isCenter, worldNormal, CenterNormal);
-
-                spatialDiffuseSample += SourceDiffuse[samplePos] * weight;
-                spatialSpecularSample += SourceSpecular[samplePos] * weight;
-                totalWeight += weight;
-
-                motionInRange += length(MotionVector[motionSamplePos].rg);
-            }
-        }
-        spatialDiffuseSample /= max(totalWeight, 1e-5);
-        spatialSpecularSample /= max(totalWeight, 1e-5);
-
-        uint prev_primitive_index1 = FetchPrimitiveIndex(ObjectId1[previpos + int2(1, 0)]);
-        uint prev_primitive_index2 = FetchPrimitiveIndex(ObjectId1[previpos + int2(0, 1)]);
-        uint prev_primitive_index3 = FetchPrimitiveIndex(ObjectId1[previpos + int2(1, 1)]);
+        uint prev_primitive_index1 = FetchPrimitiveIndex(ObjectId1[min(previpos + int2(1, 0), imageMax)]);
+        uint prev_primitive_index2 = FetchPrimitiveIndex(ObjectId1[min(previpos + int2(0, 1), imageMax)]);
+        uint prev_primitive_index3 = FetchPrimitiveIndex(ObjectId1[min(previpos + int2(1, 1), imageMax)]);
 
         if (length(motionInRange) < 0.1)
         {
@@ -329,7 +356,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         }
 
         float2 subpixel = frac(float2(ipos) + motion);
-        float3 historyDiffuse = FilterHistoryColor( PrevDiffuse, subpixel, previpos,
+        float3 historyDiffuse = FilterHistoryColor( PrevDiffuse, subpixel, previpos, imageMax,
                           current_primitive_index0,
                           prev_primitive_index0,
                           prev_primitive_index1,
@@ -337,7 +364,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
                           prev_primitive_index3,
                           spatialDiffuseSample);
 
-        float3 historySpecular = FilterHistoryColor( PrevSpecular, subpixel, previpos,
+        float3 historySpecular = FilterHistoryColor( PrevSpecular, subpixel, previpos, imageMax,
                           current_primitive_index0,
                           prev_primitive_index0,
                           prev_primitive_index1,
@@ -345,7 +372,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
                           prev_primitive_index3,
                           spatialSpecularSample);
 
-        float3 historyAlbedo = FilterHistoryColor( PrevAlbedo, subpixel, previpos,
+        float3 historyAlbedo = FilterHistoryColor( PrevAlbedo, subpixel, previpos, imageMax,
                           current_primitive_index0,
                           prev_primitive_index0,
                           prev_primitive_index1,
@@ -377,6 +404,46 @@ void main(uint3 DTid : SV_DispatchThreadID)
             spatialSpecularSample.rgb, clampStrength,
             pushConsts.ClampGammaHi, pushConsts.ClampGammaLo, pushConsts.ClampFloor);
 
+        // History-referenced input clamp (firefly kill, steady state). The FireflyClamp above
+        // works off 1spp neighborhood statistics whose sigma is itself sample noise, so bright
+        // multi-pixel spikes routinely pass it, then linger for ~TemporalFrames frames after the
+        // 1/historyLen blend. Converged history is the far more reliable reference: once a pixel
+        // has a few trusted frames, the incoming sample luma may not exceed a generous multiple
+        // of the history luma. Genuine lighting changes still converge geometrically (the cap
+        // scales with history, ~1.4x growth per frame at nMax=16), and camera cuts bypass this
+        // entirely via the disocclusion branch, so only extreme dark-to-bright flips see a short
+        // ramp. Confidence fade keeps young pixels (whose history is not yet meaningful) unclamped.
+        {
+            const float inputClampConf = saturate((historyLen - 2.0) / 6.0);
+            // Reference = max(own converged history, center-excluded neighborhood mean): the
+            // second term lets genuine area lighting changes and glossy highlight regions
+            // (where neighbors are bright too) converge immediately, while an isolated spike
+            // cannot raise its own cap. Specular gets the tighter multiplier: its spikes are
+            // 1spp glossy light hits worth thousands of nits that read as saturated salt on
+            // dark surfaces, and its legit highlights are exactly the neighbor-bright case.
+            // Confidence fades the clamp by RAISING the cap (divide, never lerp against a
+            // huge sentinel: lerp(1e12, x, 1) cancels catastrophically in fp32 and returns 0).
+            if (inputClampConf > 1e-3)
+            {
+                const float lumHistD = dot(historyDiffuse, kLumaWeights);
+                const float refD = max(lumHistD, lumaDiffuseNC);
+                const float capD = (refD * 8.0 + 1.0) / inputClampConf;
+                const float lumCurrD = dot(currDiffuseSample.rgb, kLumaWeights);
+                if (lumCurrD > capD)
+                {
+                    currDiffuseSample.rgb *= capD / max(lumCurrD, 1e-5);
+                }
+                const float lumHistS = dot(historySpecular, kLumaWeights);
+                const float refS = max(lumHistS, lumaSpecularNC);
+                const float capS = (refS * 4.0 + 1.0) / inputClampConf;
+                const float lumCurrS = dot(currSpecularSample.rgb, kLumaWeights);
+                if (lumCurrS > capS)
+                {
+                    currSpecularSample.rgb *= capS / max(lumCurrS, 1e-5);
+                }
+            }
+        }
+
         // Spatial fallback for young pixels (camera-motion noise fix). With only reproject and no
         // a-trous, a pixel whose history just reset (reprojection crossed an object boundary while
         // the camera moved) would blend in the raw 1spp center -> visible salt noise. Lean on the
@@ -394,8 +461,14 @@ void main(uint3 DTid : SV_DispatchThreadID)
     else
     {
         // Disocclusion: drop history, restart the accumulation counter (carried in alpha).
-        AccumulateDiffuse[ipos] = float4(currDiffuseSample.rgb, 1.0);
-        AccumulateSpecular[ipos] = float4(currSpecularSample.rgb, 1.0);
+        // Write the geometry-weighted spatial estimate instead of the raw 1spp center:
+        // freshly revealed pixels otherwise showcase every firefly at full strength for the
+        // next ~TemporalFrames frames. This matches the young-pixel treatment in the
+        // reprojected branch, which at historyLen=1 already leans fully on the spatial
+        // estimate via spatialFallback. FastReproject keeps SAMPLE_RANGE=0, where the
+        // estimate degenerates to the center and behaviour is unchanged.
+        AccumulateDiffuse[ipos] = float4(spatialDiffuseSample.rgb, 1.0);
+        AccumulateSpecular[ipos] = float4(spatialSpecularSample.rgb, 1.0);
         AccumulateAlbedo[ipos] = currAlbedoSample;
     }
 }

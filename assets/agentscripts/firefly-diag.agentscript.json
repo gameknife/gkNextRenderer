@@ -1,0 +1,67 @@
+{
+  "name": "firefly-diag",
+  "target": "gkNextRenderer",
+  "scene": "assets/models/conf_room.glb",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running",
+      "timeoutMs": 30000
+    },
+    {
+      "type": "wait-frames",
+      "n": 90
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/ffd_a0"
+    },
+    {
+      "type": "wait-frames",
+      "n": 1
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/ffd_a1"
+    },
+    {
+      "type": "wait-frames",
+      "n": 1
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/ffd_a2"
+    },
+    {
+      "type": "cvar",
+      "name": "r.sharc.enable",
+      "set": false
+    },
+    {
+      "type": "wait-frames",
+      "n": 60
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/ffd_nosharc"
+    },
+    {
+      "type": "cvar",
+      "name": "r.sharc.enable",
+      "set": true
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

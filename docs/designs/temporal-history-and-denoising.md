@@ -25,7 +25,7 @@ last_updated: 2026-07-17
 
 0. （PathTracing + `r.restir.enable` 时）`Core.RestirSpatialShade` 在进入本链前把 ReSTIR 面光直接项累加进 `RT_SINGLE_DIFFUSE`，并维护自己的蓄水池历史（失效规则对齐本文，见 [PathTracing ReSTIR DI 架构](pathtracing-restir-design.md)）。
 1. 将当前 `RT_SINGLE_DIFFUSE/SPECULAR`、Albedo、Normal、ObjectId、MotionVector 和 MotionMoment 声明为输入。
-2. `Process.ReProject.comp.slang` 做 motion reprojection、object boundary/disocclusion rejection、firefly pre-clamp、YCoCg history clamp 和自适应混合。
+2. `Process.ReProject.comp.slang` 做 motion reprojection、object boundary/disocclusion rejection、firefly pre-clamp、YCoCg history clamp 和自适应混合。防 firefly 有三层：①1spp 邻域统计的 pre-clamp（弱，只挡孤立极端值）；②高置信历史像素的**历史参考输入钳**——incoming 亮度不得超过 max(自身历史, 排除中心的邻域均值) 的 8×（diffuse）/4×（specular），参考排除中心是为了让尖峰不能自我合理化，置信度以**除法**放宽上限（严禁 lerp 大 sentinel：`lerp(1e12,x,1)` 在 fp32 下灾难性消去返回 0，会把整帧钳黑）；③失遮挡分支写几何加权空间估计而非原始 1spp（与重投影分支 historyLen=1 的 spatialFallback 行为一致，否则新出现像素满强度展示每个 firefly）。最外行/列的双线性 tap 钳边处理，避免永久无历史的闪烁边条。
 3. 可选 `Process.AtrousWavelet.comp.slang` 同一 dispatch 过滤 diffuse/specular，使用 object/normal/depth edge stop。
 4. `Process.DenoiseJBF.comp.slang` compose 到 `RT_DENOISED`。
 5. `TemporalResolve::CopyToHistory()` 将累计 Diffuse、Specular、Albedo 复制到当前 view bank 的 history，并记录 rendered frame。
