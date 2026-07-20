@@ -54,6 +54,23 @@ public float3 EncodeHdrOutput(float3 color, float paperWhiteNit, uint outputMode
     return LinearSrgbToHdr10(linearSrgbNits);
 }
 
+// Display-space middle gray for camera-visible misses in scenes without a skylight.
+// This is applied after lighting so it never contributes environment radiance.
+public float3 EncodeNoSkyBackground(bool hdr, float paperWhiteNit, uint outputMode)
+{
+    if (!hdr)
+    {
+        return float3(0.5f);
+    }
+
+    const float3 middleGrayNits = float3(paperWhiteNit * 0.18f);
+    if (outputMode == HDR_OUTPUT_MODE_EXTENDED_SRGB_LINEAR)
+    {
+        return middleGrayNits / 203.0f;
+    }
+    return LinearSrgbToHdr10(middleGrayNits);
+}
+
 public float3 CODTonemapping(float3 color)
 {
     float a = 0.22;

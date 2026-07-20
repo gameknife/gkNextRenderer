@@ -39,7 +39,7 @@ namespace Rendering::Upscaler
             {EUpscaleMode::UltraPerformance, "Ultra Performance", 3.0f},
             {EUpscaleMode::Native, "Native", 1.0f},
             // Auto has no fixed scale. ResolveUpscaleMode converts it to either
-            // disabled/native rendering or Quality before the provider sees it.
+            // Native/DLAA or Quality before the provider sees it.
             {EUpscaleMode::Auto, "Auto", 1.0f},
         };
 
@@ -69,7 +69,7 @@ namespace Rendering::Upscaler
             static_cast<uint64_t>(outputExtent.width) * static_cast<uint64_t>(outputExtent.height);
         if (outputPixelCount <= fullHdPixelCount)
         {
-            return {false, static_cast<uint32_t>(EUpscaleMode::Native)};
+            return {true, static_cast<uint32_t>(EUpscaleMode::Native)};
         }
 
         return {true, static_cast<uint32_t>(EUpscaleMode::Quality)};

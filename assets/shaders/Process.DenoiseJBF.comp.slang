@@ -92,6 +92,9 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
         Total = FinalImage[ipos].rgb * AccumulateAlbedo[ipos].rgb + FinalImageSpec[ipos].rgb;
     }
 
+    const bool noSkyBackground =
+        !Camera.HasSky && !HasObjectFlag(ObjectId0[ipos], OBJECT_ID_FLAG_VALID);
+
     float selectedEdge = saturate(ComputeEdgeStrengthTwoSided(ObjectId0, ipos, OBJECT_ID_FLAG_SELECTED) * 0.80 +
                                   ComputeEdgeStrengthTwoSided(ObjectId1, ipos, OBJECT_ID_FLAG_SELECTED) * 0.20);
     float hoveredEdge = saturate(ComputeEdgeStrengthTwoSided(ObjectId0, ipos, OBJECT_ID_FLAG_HOVERED) * 0.75 +
@@ -121,10 +124,16 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
 
     if(Camera.HDR)
     {
-        OutImage[ipos] = float4(EncodeHdrOutput(Total, Camera.PaperWhiteNit, Camera.HDROutputMode), 1.0);
+        const float3 outputColor = noSkyBackground
+            ? EncodeNoSkyBackground(true, Camera.PaperWhiteNit, Camera.HDROutputMode)
+            : EncodeHdrOutput(Total, Camera.PaperWhiteNit, Camera.HDROutputMode);
+        OutImage[ipos] = float4(outputColor, 1.0);
     }
     else
     {
-        OutImage[ipos] = float4(GT_Tonemapping(Total * Camera.PaperWhiteNit / 40000.0), 1.0);
+        const float3 outputColor = noSkyBackground
+            ? EncodeNoSkyBackground(false, Camera.PaperWhiteNit, Camera.HDROutputMode)
+            : GT_Tonemapping(Total * Camera.PaperWhiteNit / 40000.0);
+        OutImage[ipos] = float4(outputColor, 1.0);
     }
 }

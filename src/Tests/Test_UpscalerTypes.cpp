@@ -16,20 +16,21 @@ TEST_CASE("Upscaler mode mapping is centralized", "[Unit][Upscaler]")
     CHECK(GetUpscaleModeInfo(99).mode == EUpscaleMode::Quality);
 }
 
-TEST_CASE("Upscaler auto mode favors native quality at Full HD", "[Unit][Upscaler]")
+TEST_CASE("Upscaler auto mode favors DLAA at Full HD", "[Unit][Upscaler]")
 {
     using namespace Rendering::Upscaler;
 
     const auto fullHd = ResolveUpscaleMode(5, {1920, 1080});
-    CHECK_FALSE(fullHd.enabled);
+    CHECK(fullHd.enabled);
     CHECK(fullHd.mode == static_cast<uint32_t>(EUpscaleMode::Native));
 
     const auto smallWindow = ResolveUpscaleMode(5, {1600, 900});
-    CHECK_FALSE(smallWindow.enabled);
+    CHECK(smallWindow.enabled);
     CHECK(smallWindow.mode == static_cast<uint32_t>(EUpscaleMode::Native));
 
     const auto ultrawideBelowFullHdPixels = ResolveUpscaleMode(5, {2560, 720});
-    CHECK_FALSE(ultrawideBelowFullHdPixels.enabled);
+    CHECK(ultrawideBelowFullHdPixels.enabled);
+    CHECK(ultrawideBelowFullHdPixels.mode == static_cast<uint32_t>(EUpscaleMode::Native));
 
     const auto quadHd = ResolveUpscaleMode(5, {2560, 1440});
     CHECK(quadHd.enabled);

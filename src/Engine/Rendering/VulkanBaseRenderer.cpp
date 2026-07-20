@@ -1051,6 +1051,7 @@ namespace Vulkan
 
             const bool fsrRequested =
                 resolvedMode.enabled &&
+                resolvedMode.mode != static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Native) &&
                 HasAny(contract.post, EPostProcess::SpatialUpscale) &&
                 settings.FSR;
             fsrSuperResolutionActive_ =
@@ -1131,10 +1132,9 @@ namespace Vulkan
         {
             return;
         }
-        dlssSuperResolutionActive_ = false;
-        fsrSuperResolutionActive_ = false;
-        effectiveSuperResolutionMode_ =
-            static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Native);
+        // The swapchain extent and upscaler selection remain valid across a scene-only
+        // resource refresh. SetScene() already requests a temporal-history reset for
+        // the next evaluation, so preserve the active DLSS/FSR mode here.
         renderViews_->ClearSchedule();
 
         for (auto& logicRenderer : logicRenderers_.renderers)

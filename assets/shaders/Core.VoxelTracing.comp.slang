@@ -2,15 +2,23 @@ import Shader.Bindless;
 import Shader.PathTracing;
 #include "common/ShaderClock.slang"
 
-void OutputColor(int2 ipos, float3 Total)
+void OutputColor(int2 ipos, float3 Total, bool noSkyBackground)
 {
-    if (Bindless.GetGpuscene().Camera->HDR)
+    let Camera = Bindless.GetGpuscene().Camera[0];
+    if (noSkyBackground)
     {
-        Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] = float4(EncodeHdrOutput(Total, Bindless.GetGpuscene().Camera->PaperWhiteNit, Bindless.GetGpuscene().Camera->HDROutputMode), 0.0);
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] =
+            float4(EncodeNoSkyBackground(Camera.HDR, Camera.PaperWhiteNit, Camera.HDROutputMode), 1.0f);
+        return;
+    }
+
+    if (Camera.HDR)
+    {
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] = float4(EncodeHdrOutput(Total, Camera.PaperWhiteNit, Camera.HDROutputMode), 0.0);
     }
     else
     {
-        Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] = float4(Uncharted2_Tonemapping(Total * Bindless.GetGpuscene().Camera->PaperWhiteNit / 20000.0), 0.0);
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] = float4(Uncharted2_Tonemapping(Total * Camera.PaperWhiteNit / 20000.0), 0.0);
     }
 }
 
@@ -40,6 +48,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     NodeProxy hitNode;
 
     float4 outColor = float4(0, 0, 0, 1);
+    bool noSkyBackground = false;
     float3 rayDir;
     float rayLength = 0.0;
     float2 pixelOffset = float2(0, 0);
@@ -66,9 +75,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     else
     {
         outColor= float4(10,10,10,0);
+        noSkyBackground = !Camera.HasSky;
     }
 
-    OutputColor(ipos, outColor.rgb);
+    OutputColor(ipos, outColor.rgb, noSkyBackground);
 
     END_SHADERCLOCK(ipos)
 }
