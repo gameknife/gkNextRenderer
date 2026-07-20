@@ -110,6 +110,13 @@ gnb shot --target AirportSim --ui  # 截图包含 ImGui，适合验证 HUD / 面
 - **改了某个场景/材质/光照/着色，只想看一眼对不对** → `gnb shot --scene <X>`（最轻、最快）。
 - **做渲染回归、需要和 baseline 对比 / 一次性扫多个场景** → 跑全量 `gkNextVisualTest`（生成 report + baseline diff + manifest，较重）。
 
+### DLSS / Streamline 验证限制
+
+- `gnb shot` 和 `gnb validate`（包括 `--visible`）都会传入 `--agent-validation`；该模式为了确定性会强制禁用 Streamline，因此只能验证送入 DLSS 前的 scene color / depth / motion 等资源链，**不能证明 DLSS 或 DLSS-RR 实际生效**。
+- 不要尝试用单独的 `--hidden-window` 绕过上述限制。普通 hidden SDL window 可能被识别为 minimized，swapchain 创建会等待窗口恢复，导致程序停在 DLSS evaluate 之前；这条路径不适合 Streamline/DLSS 验证。
+- 需要验证真实 DLSS 时，必须在 Windows NVIDIA 环境中使用**非 hidden、非 agent-validation**的正常窗口/present 路径。需要自动结束时可使用短时 `gkNextMotionBenchmark` 配置，但仍不能传 `--hidden-window`；运行会弹出窗口，AGENT 应先告知用户。
+- 验证时确认日志出现 `DLSS Super Resolution active for <renderer>` 或 `DLSS Ray Reconstruction active for PathTracing`，并检查没有 `slEvaluateFeature` / Streamline failure。普通 DLSS 应适用于 PathTracing、SoftwareTracing、SoftwareModern、SoftwareModernNoAmbient；DLSS-RR 只适用于 PathTracing。
+
 ### Agent Interactive Validation（输入驱动 + 断言）
 
 需要把应用驱动到交互状态并自动判断 pass/fail 时，用声明式脚本：

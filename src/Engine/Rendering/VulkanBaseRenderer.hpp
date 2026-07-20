@@ -96,6 +96,7 @@ namespace Vulkan
         DLSS = 1u << 2u,
         FrameGeneration = 1u << 3u,
         DebugGBuffer = 1u << 4u,
+        DLSSRayReconstruction = 1u << 5u,
     };
 
     enum class EHistoryChannel : uint32_t

@@ -109,8 +109,16 @@ TEST_CASE("Renderer contracts describe prepasses outputs and history", "[Unit][R
     CHECK(HasAny(path.sceneResources, ESceneResource::TLAS));
     CHECK(HasAny(path.prepasses, EViewPrepass::Visibility));
     CHECK_FALSE(HasAny(path.prepasses, EViewPrepass::CSM));
+    CHECK(HasAll(path.post, EPostProcess::DLSS | EPostProcess::DLSSRayReconstruction));
     CHECK(HasAll(path.history, EHistoryChannel::Diffuse | EHistoryChannel::Specular |
                                EHistoryChannel::Albedo | EHistoryChannel::ObjectId));
+
+    const auto& softwareTracing = GetRendererContract(ERT_SoftwareTracing);
+    const auto& softwareModern = GetRendererContract(ERT_SoftwareModern);
+    CHECK(HasAny(softwareTracing.post, EPostProcess::DLSS));
+    CHECK(HasAny(softwareModern.post, EPostProcess::DLSS));
+    CHECK_FALSE(HasAny(softwareTracing.post, EPostProcess::DLSSRayReconstruction));
+    CHECK_FALSE(HasAny(softwareModern.post, EPostProcess::DLSSRayReconstruction));
 
     const auto& voxel = GetRendererContract(ERT_VoxelTracing);
     CHECK(voxel.prepasses == EViewPrepass::None);
@@ -123,6 +131,8 @@ TEST_CASE("Renderer contracts describe prepasses outputs and history", "[Unit][R
     CHECK(noAmbient.sceneResources == ESceneResource::None);
     CHECK(HasAny(noAmbient.outputs, ERenderOutput::Depth | ERenderOutput::Motion |
                                     ERenderOutput::ObjectId | ERenderOutput::Normal));
+    CHECK(HasAny(noAmbient.post, EPostProcess::DLSS));
+    CHECK_FALSE(HasAny(noAmbient.post, EPostProcess::DLSSRayReconstruction));
     CHECK(noAmbient.history == EHistoryChannel::None);
     CHECK(noAmbient.supportsSceneOverrideWithoutPrepare);
     CHECK_FALSE(path.supportsSceneOverrideWithoutPrepare);

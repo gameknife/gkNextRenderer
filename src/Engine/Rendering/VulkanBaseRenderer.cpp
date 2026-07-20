@@ -212,7 +212,8 @@ namespace Vulkan
                                    ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion | ERenderOutput::ObjectId |
                                        ERenderOutput::Normal | ERenderOutput::Albedo | ERenderOutput::Diffuse | ERenderOutput::Specular,
                                    EPostProcess::Temporal | EPostProcess::SpatialUpscale | EPostProcess::DLSS |
-                                       EPostProcess::FrameGeneration | EPostProcess::DebugGBuffer,
+                                       EPostProcess::DLSSRayReconstruction | EPostProcess::FrameGeneration |
+                                       EPostProcess::DebugGBuffer,
                                    EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 1, 1,
                                &CreateLogicRenderer<PathTracing::PathTracingRenderer>},
             RendererDescriptor{ERT_SoftwareTracing, "SoftwareTracing", {
@@ -220,7 +221,8 @@ namespace Vulkan
                                    EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility | EViewPrepass::CSM,
                                    ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion | ERenderOutput::ObjectId |
                                        ERenderOutput::Normal | ERenderOutput::Albedo | ERenderOutput::Diffuse | ERenderOutput::Specular,
-                                   EPostProcess::Temporal | EPostProcess::SpatialUpscale | EPostProcess::DebugGBuffer,
+                                   EPostProcess::Temporal | EPostProcess::SpatialUpscale | EPostProcess::DLSS |
+                                       EPostProcess::DebugGBuffer,
                                    EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 1, 0,
                                &CreateLogicRenderer<SoftwareTracing::SoftwareTracingRenderer>},
             RendererDescriptor{ERT_SoftwareModern, "SoftwareModern", {
@@ -228,7 +230,8 @@ namespace Vulkan
                                    EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility | EViewPrepass::CSM,
                                    ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion | ERenderOutput::ObjectId |
                                        ERenderOutput::Normal | ERenderOutput::Albedo | ERenderOutput::Diffuse | ERenderOutput::Specular,
-                                   EPostProcess::Temporal | EPostProcess::SpatialUpscale | EPostProcess::DebugGBuffer,
+                                   EPostProcess::Temporal | EPostProcess::SpatialUpscale | EPostProcess::DLSS |
+                                       EPostProcess::DebugGBuffer,
                                    EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 0, 0,
                                &CreateLogicRenderer<SoftwareModern::SoftwareModernRenderer>},
             RendererDescriptor{ERT_VoxelTracing, "VoxelTracing", {
@@ -243,7 +246,7 @@ namespace Vulkan
                                    EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility | EViewPrepass::CSM,
                                    ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion |
                                        ERenderOutput::ObjectId | ERenderOutput::Normal,
-                                   EPostProcess::SpatialUpscale | EPostProcess::DebugGBuffer,
+                                   EPostProcess::SpatialUpscale | EPostProcess::DLSS | EPostProcess::DebugGBuffer,
                                    EHistoryChannel::None, true}, 0, 1,
                                &CreateLogicRenderer<SoftwareModernNoAmbient::SoftwareModernNoAmbientRenderer>},
         };
@@ -1065,6 +1068,19 @@ namespace Vulkan
                 const auto& modeInfo =
                     Rendering::Upscaler::GetUpscaleModeInfo(effectiveSuperResolutionMode_);
                 renderExtent = Rendering::Upscaler::ScaleExtent(frame_.swapChain->Extent(), modeInfo.fallbackScale);
+            }
+
+            if (dlssSuperResolutionActive_)
+            {
+                const bool rayReconstructionActive =
+                    settings.DLSSRR && caps_.supportDLSSRR &&
+                    HasAny(contract.post, EPostProcess::DLSSRayReconstruction);
+                SPDLOG_INFO("DLSS {} active for {}: {}x{} -> {}x{}",
+                            rayReconstructionActive ? "Ray Reconstruction" : "Super Resolution",
+                            GetRendererName(logicRenderers_.current),
+                            renderExtent.width, renderExtent.height,
+                            frame_.swapChain->OutputExtent().width,
+                            frame_.swapChain->OutputExtent().height);
             }
         }
 
@@ -2214,7 +2230,11 @@ namespace Vulkan
         inputs.imageIndex = imageIndex;
         inputs.reset = resetUpscalerHistory_ || frame_.frameCount < 2;
         inputs.enableDLSS = dlssSuperResolutionActive_;
-        inputs.enableDLSSRR = dlssSuperResolutionActive_ && caps_.supportDLSSRR && settings.DLSSRR;
+        const FRendererContract& contract = GetRendererContract(logicRenderers_.current);
+        inputs.enableDLSSRR =
+            dlssSuperResolutionActive_ &&
+            HasAny(contract.post, EPostProcess::DLSSRayReconstruction) &&
+            caps_.supportDLSSRR && settings.DLSSRR;
         inputs.enableDLSSG = caps_.supportDLSSG && settings.DLSSG;
         inputs.superResolutionMode = effectiveSuperResolutionMode_;
         inputs.frameGenerationMultiplier = std::clamp(settings.DLSSGFrameMultiplier, 2u, 4u);

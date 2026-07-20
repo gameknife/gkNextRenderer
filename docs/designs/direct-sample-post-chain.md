@@ -28,6 +28,10 @@ spatial denoiser；renderer 生成的当前帧 diffuse/specular 样本直接 com
 `SoftwareModernNoAmbient` 和 `VoxelTracing` 有自己的 compose shader，但输出契约同样是
 `RT_SCENE_COLOR`，因此后续 presentation 不需要知道 renderer 类型。
 
+PathTracing、SoftwareTracing、SoftwareModern 和 SoftwareModernNoAmbient 都声明普通 DLSS
+Super Resolution 能力。只有 PathTracing 声明 DLSS Ray Reconstruction 能力；即使全局
+`r.dlssrr` 已开启，其他 renderer 也会自动使用普通 DLSS，不会提交不完整的 RR G-buffer。
+
 ## 唯一保留的颜色累积
 
 显式 offline progressive rendering 仍需要多帧收敛。该模式只运行
