@@ -1,182 +1,111 @@
 ---
-title: "PathTracing ReSTIR 设计方案"
+title: "PathTracing ReSTIR DI 架构"
 category: design
-status: 提案（未实现；落地后按里程碑转正为现行）
+status: 现行
 owner: engine/rendering
 created: 2026-07-19
-last_updated: 2026-07-19
+last_updated: 2026-07-20
 ---
 
-# PathTracing ReSTIR 设计方案
+# PathTracing ReSTIR DI 架构
 
-配套执行顺序见 [ReSTIR 开发计划](../plans/pathtracing-restir-plan.md)。本文记录设计边界、数据契约和取舍；计划完成前本文状态为"提案"，不得当作当前架构引用。
+PathTracing 渲染器的 primary 表面面光源直接光采用 ReSTIR DI（蓄水池时空重采样）。本文记录当前实现的边界、数据契约、已知偏差与修改护栏。实施过程见 Git 历史；`r.restir.enable` 默认关闭（开启需重录 visual test baseline，见 §7）。
 
-## 1. 背景与动机
+## 1. 范围与边界
 
-当前 PathTracing 渲染器已有三类样本复用手段：
+**只替换 primary vertex 的面光源 NEE**，其余全部不变：
 
-| 手段 | 位置 | 复用维度 |
+- 太阳 NEE 独立走锥形 shadow ray（delta 光方差低，且与 SoftwareTracing/CSM 路径共享约定）；天空 IBL 仍走 BSDF miss 路径。
+- 次级 bounce 的直接光策略（`SecondaryDirectMode`、SHARC update 的逐 hit 直接光记账）不变；**蓄水池样本不喂 SHARC**（相关样本会破坏缓存时域累积）。`Core.SharcUpdate` 入口显式 `RestirPrimary = false`。
+- `suppressRegisteredEmitter` MIS 约定不变（ReSTIR 仍是 NEE 的重采样形式）。
+- 目标函数为 Lambert-only（albedo 解调），与 `RT_SINGLE_DIFFUSE` 光照通道语义一致；无 specular direct。
+- 仅 primary view：shader 侧以 `gpuScene.CustomData0 == 0`（view bank base）判定，非 primary / Transient view 走经典单样本 NEE。
+- Offline progressive（编辑器空闲渐进、still benchmark）强制降级为 **RIS-only**（时空复用全关）：保住"收敛到参考"的语义，同时充当内建的无偏对照组。
+
+## 2. 管线结构
+
+```
+主 PT dispatch (Core.PathTracing.comp / Core.SharcQuery.comp)
+  PrimaryHit → …path loop… → DirectIlluminatePrimary:
+      太阳 NEE（照旧）
+      RestirPrimaryGather：初始 RIS + 初始可见性 + 时域合并 → 写 intermediate buffer
+  [barrier: reservoir + RT_SINGLE_DIFFUSE / G-buffer]
+Core.RestirSpatialShade.comp（第 4 条 pipeline，ZeroBindWithTLASPipeline）
+  G-buffer 重建表面 → center 胜者最终可见性 → 写 final buffer（时域历史）
+  → 空间邻居合并 → shading 可见性 → RT_SINGLE_DIFFUSE += direct
+  [之后进入 TemporalPostChain（reproject → à-trous → compose），输入契约零改动]
+```
+
+`IDirectIlluminator` 增加 `DirectIlluminatePrimary(seed, pixel, pos, normal, color)`；除 `FHardwareDirectIlluminator` 外其余实现委托回 `DirectIlluminate`。采样几何项由 `Common.EvaluateAreaLightSample` 单一来源提供，经典 NEE、目标函数 p̂ 与 ReSTIR shading 共用，**不得分叉**。
+
+## 3. 数据契约
+
+**资源挂载**：`GPUScene` push constant 已满 128B，扩展资源经 `ReservedAddress0 → FPathTracingExtras` 表（原 SharcResources 的 3 个保留槽改为 `RestirReservoirPing/Pong/Parameters`）。可用性按**字段**判定（`HashEntries != 0` = SHARC、`RestirParameters != 0` = ReSTIR），不判表指针——表在任一特性启用时都存在。表内容必须 view 无关（host-visible、每视图 Render() 均可触达），仅在地址变化时重写（稳态零 host 写，见 §9-③）。
+
+**蓄水池**（`FRestirReservoir`，16B/px，双缓冲）：`LightData`（24 位灯索引 + 8 位类型）、`PackedUV`（灯面 uv，2×unorm16）、`WeightW`（fp32）、`PackedMTarget`（16 位 M + fp16 p̂）。存生成参数而非世界坐标点：复用跟随灯变换、无需 Jacobian。1080p 双缓冲 ≈ 63 MiB。
+
+**固定角色双缓冲（无帧奇偶）**：intermediate 由 gather 写、spatial pass 读；final 由 spatial pass 写、**下一帧时域读**。每个 buffer 单一写者 pass，跨像素邻居读永远不会观察到半更新数据。
+
+**逐帧竞态关键位走录制 push constant**：`gpuScene.CustomData1` bit1 = 本帧时域有效（PathTracingRenderer 每 dispatch 盖章）。host-visible 参数 buffer（`FRestirRuntimeParameters`）只承载调参类字段。
+
+## 4. 算法
+
+1. **初始候选**（默认 8）：现有 CDF 选灯（`Scene::UpdateLights` 预计算 reserved1/2）+ 灯面均匀 uv，流式 RIS，权重 w = p̂ / (lightPdf/area)。无效候选计入 M（等价零权重流入）。
+2. **初始可见性**：对初始 RIS 胜者打 1 根 shadow ray，遮挡则 W=0 但保留 M（visibility reuse，防止复用扩散漏光）。
+3. **时域合并**：motion vector 重投影读上一帧 final buffer；拒绝语义镜像 `Process.ReProject`（屏外 / ObjectId 不一致 / `MOTIONMOMENT != 0`）；当前像素重算 p̂ 后按 W-form 合并（候选权重 = p̂·W·M）；prev.M 钳到 `r.restir.mClamp`（默认 160）。当前像素的 instanceId/motion **由 renderer 状态传参**，不读本 dispatch 刚写的纹理（§9-②）。
+4. **空间合并**（pass 2，默认 5 邻居 / 半径 16px golden-angle 螺旋）：几何测试 = 同 ObjectId + 法线点积 > 0.9 + view 深度相对差 < 10%；邻居样本在 center 表面重算 p̂ 后 W-form 合并；**邻居 M 钳到 4×初始候选数**（时域 entrenched 邻居不得主导选择，否则可见性错配样本吃能量）。
+5. **最终可见性 + shading**：center 胜者先验证（其判决写入 final buffer = 时域链的可见性反馈）；合并胜者若非 center 样本再补 1 根 ray。每像素合计 2–3 根 shadow ray（经典 NEE 为 1 根面光 + 1 根太阳）。
+
+**时域链与空间去耦（关键结构决策）**：final buffer 存"center 经最终可见性"的蓄水池，**空间合并结果只用于本帧 shading、绝不回写历史**。有偏空间合并在可见性边界变暗，回写历史会跨帧复利（实测 13–16% 能量丢失；去耦后 1–2%）。与 RTXDI 结构一致。
+
+## 5. 生命周期与失效
+
+- 蓄水池按 `ActiveViewRenderExtent()` 分配，extent 变化重建并清零（DLSS 模式切换自动覆盖）。
+- 时域有效 = `TemporalResolve::IsHistoryValidForFrame()` ∧ 帧号连续 ∧ 灯集合 generation 不变 ∧ 无 pendingClear。灯 generation 由 `Scene::UpdateLights` 对（数量 + lightMatIdx 序列）做 FNV 签名维护，纯变换/调色不失效。
+- **写者全覆盖契约**：primary miss 像素与发光体 primary（Render 早退不走 gather）由入口 shader 显式 `RestirStoreEmpty`，spatial pass 对无效像素写空 final——任何像素每帧必须被写，否则下游消费陈旧蓄水池。
+
+## 6. 已知偏差与精度
+
+- RIS-only：与经典 NEE 收敛逐位一致量级（signed diff ≈ -0.03/255）。
+- 时域：visibility-reuse 记账带来 ≈ -0.08/255，不可见。
+- 空间：半影带局部 ≤ 0.7%（-1.7/255）变暗——有偏合并在可见性边界的固有代价，肉眼不可辨；调 `spatialRadius`/`spatialSamples` 可进一步换取。
+- 带 history clamp 的收敛对比会额外显示 ≈ -0.45/255 的"伪偏差"：不对称 clamp 对不同噪声分布的非线性反应，非估计器问题。**验证偏差必须开大 `r.reproject.clampGamma*` 复测**。
+- pass 2 深度重建必须精确复刻 `FVisibilityBufferRayCaster` 的 ndc 约定：**`(pixel/size)*2-1`，无 +0.5 半像素**（GTAO 的 +0.5 是自洽 AO 才没暴露）。差半像素在 40m 处偏数厘米、shadow ray 全体自遮挡。shadow 起点用深度比例偏移 `max(EPS2, |viewZ|·1e-4)`。
+
+## 7. CVar 与调试
+
+| CVar | 默认 | 说明 |
 |---|---|---|
-| NEE（太阳 + 面光源） | `FHardwareDirectIlluminator`（`assets/shaders/common/PathTracingRenderer.slang`） | 无复用：每像素每帧对面光源只抽 1 个 CDF 样本 |
-| SHARC 辐射缓存 | `Core.SharcUpdate/Resolve/Query` 三 pass + `IRadianceCache` 抽象 | 世界空间 hash voxel 内跨像素、跨帧复用**间接**辐射 |
-| 屏幕空间重投影 | `Process.ReProject.comp.slang` + à-trous | 像素级跨帧复用**最终颜色**（denoise 语义，非采样语义） |
+| `r.restir.enable` | false | 总开关；默认关保证存量 visual test baseline 稳定，默认开需重录 baseline |
+| `r.restir.candidates` | 8 | 初始候选数（时域健康时 2 即接近同质量） |
+| `r.restir.temporal` / `mClamp` | true / 160 | 时域复用 / M 上限 |
+| `r.restir.spatial` / `spatialSamples` / `spatialRadius` | true / 5 / 16 | 空间复用（关闭只影响邻居数，两个 pass 恒运行） |
+| `r.restir.debugMode` | 0 | 1=M 热力图 2=W 3=胜者灯着色 4=复用 proxy（红=无复用） |
 
-缺口在**直接光采样本身**：`DirectIlluminate` 对面光源做亮度×面积加权 CDF 选灯（`Scene::UpdateLights` 预计算，`reserved1`=cdf、`reserved2`=pdf，上限 `kMaxLightCount=1024`），然后在灯面上均匀取 1 个点、打 1 根 shadow ray。多灯、遮挡复杂或灯面积大的场景中，这 1 个样本命中"又亮又可见"的概率很低，噪声全部推给后端 denoiser 扛。
+Debug 视图由 pass 2 从本地合并状态渲染（race-free）；颜色用 0–255 nit 尺度（compose tonemap 约定）。**每帧运行的 debug overlay 只准替换光照颜色（`WriteDebugColorOnly`），踩 ObjectId/Motion 会毁掉被观测的时域状态**。
 
-ReSTIR（Reservoir-based Spatio-Temporal Importance Resampling）把"选哪盏灯的哪个点"这一离散/低维采样问题改为流式 RIS + 蓄水池跨帧跨像素复用：每像素每帧仍只付 1~2 根 shadow ray，但有效候选数可达数百（M 次时空累积），且复用的是**候选样本**而非最终颜色，不与现有 denoiser 冲突。
+## 8. 性能
 
-## 2. 范围界定
+720p ManyLights（64 灯）全链 +0.50ms（RTX 4070）；预算 0.6ms。超预算先降 `candidates`/`spatialSamples`，不砍可见性光线。
 
-**主线（本设计覆盖）：ReSTIR DI，只作用于 primary vertex 的面光源直接光。**
+## 9. 修改护栏（实施中验证过的失败模式）
 
-- 替换目标：`FPathTracingRenderer::Render` 尾部对 primary vertex 的一次 `directIllum.DirectIlluminate` 调用中的**面光源部分**。
-- 太阳 NEE 保持现状独立走锥形 shadow ray（delta 光方差本来就低，且与 CSM/SoftwareTracing 路径共享约定）；末期里程碑可选并入候选池。
-- 天空 IBL 仍走 BSDF 采样 miss 路径，不做 environment ReSTIR（可作远期候选，不在本设计内）。
+1. **Slang 裸声明 struct 不保证应用字段默认初始化器**。新增字段必须给显式 `__init`，且所有入口声明点显式赋值——未初始化的 `RestirPrimary` 曾把 SharcUpdate pass 送进空指针路径（device lost，且 GPU 相关：一块卡上垃圾恰为 0 不崩）。
+2. **同一 invocation 内 storage image 写后读不可见**。当前像素的 primary 数据（instanceId/motion）从 renderer 状态传参；只有前置 pass 写的纹理（ObjectId1/MotionMoment/G-buffer）可读。
+3. **竞态关键的逐帧状态严禁放 host-visible buffer**（host 覆写与 in-flight GPU 帧竞争），必须走录进 command buffer 的 push constant。
+4. **空间复用结果不得回写时域历史**（§4）。
+5. p̂ / shading / 经典 NEE 共用 `Common.EvaluateAreaLightSample`，改面光模型只改这一处。
+6. 蓄水池是屏幕空间时序状态：新增失效条件对齐 `TemporalResolve`（见[时序历史与降噪链](temporal-history-and-denoising.md)），不建独立状态机。
 
-**显式不在范围：**
+## 10. 否决路线与远期方向
 
-- 次级 bounce 的直接光策略（`SecondaryDirectMode`、SHARC update 的逐 hit 直接光记账）不动——这是 SHARC 缓存语义的一部分，动了会污染缓存内容。
-- ReSTIR GI / ReSTIR PT（全路径复用、reconnection shift）：只在计划 M5 中作为**探索项**，需 M1–M4 验收后单独授权。
-- Ray pipeline：维持 ray query。
-- 镜面直接光：现状 `DirectIlluminate` 输出就是 Lambert-only（`M_1_PI`），ReSTIR 目标函数沿用该约定，不引入 specular direct。
+- **无偏空间合并（Talbot/pairwise MIS）**：每邻居额外可见性光线或全对 p̂ 重估，实时预算不匹配；biased + 几何测试 + M 钳制已达肉眼不可辨。
+- **世界空间 ReSTIR（ReGIR）**：`kMaxLightCount=1024` 且典型场景灯数十级，屏幕空间足够；>10⁴ 灯再议。
+- **太阳并入候选池**：推迟。太阳是低方差 delta 光，进池稀释面光候选质量，且 SoftwareTracing/CSM 路径无法对齐；省 1 根 ray 的收益不抵。
+- **ReSTIR GI（未授权备忘）**：蓄水池存首个间接 bounce 重连点（位置/法线/出射辐射），reconnection shift + Jacobian；本项目特有协同点是 **SHARC 缓存作重连点辐射的廉价目标函数评估**（候选评估零光线，最终 shading 才验证）。需单独立项授权。
 
-## 3. 与现有系统的边界
+## 11. 验证方式
 
-### 3.1 直接光集成点（唯一改动面）
-
-`FPathTracingRenderer::Render` 中 sample 循环结束后的：
-
-```slang
-float4 directColor = float4(0, 0, 0, 0);
-directIllum.DirectIlluminate(RandomSeed_, hitPrimaryVertex_.Position, hitPrimaryVertex_.Normal, directColor);
-FinalColor += directColor;
-```
-
-改为：ReSTIR 启用时，此处只加太阳项；面光源项由 ReSTIR 蓄水池流程给出并写入同一 `RT_SINGLE_DIFFUSE` 通道。ReSTIR 关闭时行为逐位不变（与 `FNullRadianceCache` 同样的"编译掉/短路掉"原则）。
-
-保持不变的约定：
-
-- `suppressRegisteredEmitter`：bounce 0 的 diffuse 路径命中已注册面光源时清零（该贡献由 NEE/ReSTIR 表达）。ReSTIR DI 仍是 NEE 的重采样形式，此 MIS 约定继续成立，无需改。
-- SHARC update 路径的 `WantsDirectLighting()` 逐 hit 直接光仍用原 `DirectIlluminate`（单样本即可，缓存自己做时域累积）。**蓄水池样本不得喂给 SHARC**，否则缓存收到的是相关样本，时域累积语义被破坏。
-- 独立渲染帧内 `EvaluateDirectLighting` 在 bounce 间的调用（`SecondaryDirectMode==1` 等）不动。
-
-### 3.2 Pass 布局
-
-现有两种模式的 dispatch 序列：
-
-- 普通：`Core.PathTracing.comp`（单 dispatch）
-- SHARC：`Core.SharcUpdate`（稀疏）→ `Core.SharcResolve` → `Core.SharcQuery`（全分辨率）
-
-ReSTIR 分两段接入，两种模式共用：
-
-1. **候选生成 + 时域复用**：内联在全分辨率主 dispatch（`Core.PathTracing.comp` / `Core.SharcQuery.comp`）的 `Render` 收尾处。理由：primary vertex（位置/法线/材质）在这里现成，不必重建；候选生成是纯 ALU + buffer 读，不加光线。产出：当前帧 reservoir 写入 ping buffer。
-2. **空间复用 + 最终 shading**：新增 `Core.RestirSpatialShade.comp.slang`（`ZeroBindWithTLASPipeline`，需 TLAS 打 shadow ray）。读邻域 reservoir 做 1–2 轮空间合并，对胜者打 1 根 `TraceAreaLightSegment` 可见性光线，把 `W × f` 累加进 `RT_SINGLE_DIFFUSE`。此 pass 在主 dispatch 之后、`TemporalPostChain.Run` 之前执行，barrier 用 `RT_SINGLE_DIFFUSE` 的 compute→compute 读写依赖 + reservoir buffer barrier（模式同 `InsertSharcBarrier`）。
-
-里程碑 M1（RIS-only）阶段第 2 段尚不存在：初始 RIS + 可见性 + shading 全部内联主 dispatch，先验证目标函数与权重正确，再拆 pass。
-
-**Pass 2 的 primary 表面重建**：空间复用 pass 拿不到 `Vertex`，从 G-buffer 重建——法线取 `RT_NORMAL`、albedo 取 `RT_ALBEDO`、世界坐标由 `RT_PREV_DEPTHBUFFER`（ndc depth，`PrimaryHit` 已写）+ `ModelViewInverse`/`Projection` 逆变换重建。大世界（如 riverland 1km）远距离 fp32 深度重建精度需在 M3 验证；若 shadow ray 自遮挡不可接受，备选方案是加一张 fp32x4 世界坐标 RT（Bindless 槽位 31–49 空闲），按需再启用，不默认付带宽。
-
-### 3.3 数据结构与资源布局
-
-**Reservoir（16 字节/像素）：**
-
-```slang
-struct FRestirReservoir            // 16 bytes, 双缓冲 ping/pong
-{
-    uint lightData;                // 低 24 位: lightIndex; 高 8 位: 类型/标志（0=空, 1=面光, 预留 sun/env）
-    uint packedUV;                 // 灯面采样点 uv, 2×unorm16
-    float weightW;                 // 无偏贡献权重 W = (1/p̂) · (wSum/M)
-    uint packedMTarget;            // 低 16 位: M (clamp 后), 高 16 位: p̂ 亮度 fp16
-};
-```
-
-存样本的"生成参数"（lightIndex + uv）而非世界坐标点，复用时按当前灯 buffer 重新展开——灯动画/变换时样本自动跟随灯面，且无需 Jacobian（目标域就是灯面均匀采样域）。代价：时域复用隐含"灯索引跨帧稳定"假设，见 3.6 失效处理。
-
-**资源挂载**：`GPUScene` push constant 已满（128 字节，14 地址 + 4 uint，`BasicTypes.slang`），无空闲地址槽。方案：把现有 `ReservedAddress0 → Assets::SharcResources` 升级为 PathTracing 扩展资源表：
-
-```cpp
-struct FPathTracingExtras          // 原 SharcResources 扩展
-{
-    // SHARC（原有 5 项）
-    uint64_t HashEntries, LockBuffer, Accumulation, Resolved, Parameters;
-    // ReSTIR（新增）
-    uint64_t RestirReservoirPing;
-    uint64_t RestirReservoirPong;
-    uint64_t RestirParameters;     // FRestirRuntimeParameters
-};
-```
-
-配套语义修正：`SharcIsAvailable()` 现在判 `Sharc != nullptr`（判表指针）；升级后表在 ReSTIR-only 模式下也存在，可用性必须改判**字段**——`HashEntries != 0` 为 SHARC 可用、`RestirParameters != 0` 为 ReSTIR 可用。这是本设计中唯一触碰 SHARC 代码的点，属于纯管道判定，不改缓存算法。
-
-**生命周期**：reservoir 是屏幕分辨率时序状态，归属与失效规则对齐 `TemporalResolve`（见 `docs/designs/temporal-history-and-denoising.md`）：
-
-- 按 render extent 分配，extent 变化即重建并清零；
-- `TemporalResolve::IsHistoryValidForFrame()` 为假的帧（camera cut、scene changed、renderer 切换、非连续帧……），时域复用整帧禁用（读侧 M 视为 0），不引入独立的失效状态机；
-- 多视图：首版只对 primary view（`ActiveViewBankBase()==0`）启用完整 ReSTIR；非 primary / Transient view 退回旧单样本 NEE 路径。理由：PiP/缩略图分辨率小、无稳定历史，蓄水池收益低且要为每 view 双缓冲付显存。后续按需扩展为 per-view 分配。
-
-显存：1080p 全屏 16B × 2 buffer ≈ 66 MiB；1440p ≈ 118 MiB。与 SHARC 2^21 表同量级，可接受；4K 原生（无 DLSS）≈ 265 MiB，文档化为已知成本。
-
-### 3.4 算法各阶段
-
-**目标函数**：p̂ = luminance(Le · surfaceCos · lightCos · lightArea / (π · dist²))，即现有 `DirectIlluminate` 面光路径的 unshadowed 贡献亮度（Lambert-only，albedo 解调后的 lighting 域——与 `RT_SINGLE_DIFFUSE` 存"未乘 albedo 的光照"的约定一致）。
-
-1. **初始候选（默认 8 个）**：沿用现有 CDF 线性选灯（源 pdf = `reserved2`）+ 灯面均匀 uv（源 pdf = 1/area），流式 RIS 进蓄水池。候选生成 0 光线。
-2. **初始可见性**：对初始 RIS 胜者打 1 根 shadow ray；被遮挡则 `weightW = 0`（样本保留在蓄水池参与后续 M 计数）。这是标准的"visibility reuse"，防止时空复用把阴影区样本扩散成漏光。
-3. **时域复用**：用 `RT_MOTIONVECTOR` 重投影读上一帧 pong buffer，接受条件沿用 `Process.ReProject` 的拒绝语义——重投影落点在屏内、`ObjectId` 一致、`RT_MOTIONMOMENT == 0`（动体像素本来就走 4× sampleMultiplier 补偿，不吃历史）。合并前先按当前像素重算 p̂（灯可能动了），M clamp 默认 20×初始候选数。
-4. **空间复用（1 轮，默认 5 邻居，半径 30px）**：邻居接受条件：法线点积 > 0.9、线性深度相对差 < 10%、ObjectId 一致。采用 biased 变体（不做邻居间 Jacobian/收缩补偿），几何测试控制 bias 可见度——与实时业界主流一致，代价是接缝处轻微变暗，验收时盯边缘。
-5. **最终 shading**：对最终胜者重算 f 与可见性（1 根 ray），输出 `f × W` 加入 diffuse 通道。
-
-每像素光线预算：现状面光 NEE 1 根 → ReSTIR 2 根（初始可见性 + 最终 shading；M1 内联阶段两者合一仍是 1 根）。太阳 1 根不变。
-
-### 3.5 与 denoiser / 累积链的互动
-
-- ReSTIR 输出仍写 `RT_SINGLE_DIFFUSE`，`TemporalPostChain`（reproject → à-trous → JBF compose）输入契约不变，**零改动接入**。
-- 蓄水池时域复用会让相邻帧输出相关，`ReProject` 的 history clamp 统计假设（帧间独立噪声）轻度失真。预期影响是残噪呈低频"绺状"而非白噪；à-trous 对此更友好而非更差。M2 验收显式对比 clamp 行为（黑点回归场景）。
-- FireflyClamp 保留：ReSTIR 的 W 在 p̂ 极小时会产生离群亮点，前端 clamp 仍是必要保险。
-- **Offline progressive 模式（`IsOfflineProgressiveRenderActive()`）强制降级为 RIS-only（M=初始候选，不做时空复用）**：时空复用带来帧间相关与 biased 空间合并，会污染"1024 帧收敛到参考"的语义。RIS-only 是无偏的，收敛目标不变——这同时提供了内建的 bias 对照组。
-
-### 3.6 失效与边界情况
-
-- 灯集合变化（增删灯、材质切换 DiffuseLight）：CDF 重排后 lightIndex 语义漂移。`Scene::UpdateLights` 侧维护一个 lights generation 计数，写入 `FRestirRuntimeParameters`；变化帧时域读侧 M 归零。灯只变换/变色不重排时无需失效（样本按新灯面重展开）。
-- 光照环境变化（sun/sky 切换）：不影响面光蓄水池，无需失效（太阳不在池内）。
-- DLSS/upscaler：ReSTIR 全程 render resolution，与现有 temporal 链一致，无额外约定。
-- `LightCount == 0`：直接跳过，行为同现状。
-
-### 3.7 CVar 与调试
-
-沿用 `EngineCVars.cpp` 的 GK_CVAR 模式：
-
-```
-r.restir.enable          bool   false   总开关（默认关，M4 验收后再议默认值）
-r.restir.candidates      uint   8       初始候选数
-r.restir.temporal        bool   true    时域复用
-r.restir.mClamp          uint   160     时域 M 上限（≈20×candidates）
-r.restir.spatial         bool   true    空间复用
-r.restir.spatialSamples  uint   5       空间邻居数
-r.restir.spatialRadius   float  30.0    空间半径（px）
-r.restir.debugMode       int    0       0 关; 1 M 热力图; 2 W; 3 胜者灯索引着色; 4 时域复用命中率
-```
-
-调试视图走 `SharcDebugMode` 同款模式（entry shader 里 `WriteDebugColor` 短路）。
-
-## 4. 性能预算
-
-- 光线：+1 根/像素（最终 shading 与初始可见性各 1，替换原面光 NEE 的 1）。
-- 带宽：reservoir 读写 ≈ 16B 写 + 时域 16B 读 + 空间 5×16B 读 ≈ 112B/px，另加 pass 2 的 G-buffer 读。
-- ALU：候选生成 8× 目标函数评估（每个含一次 CDF 线性扫描，1024 灯上限下最坏 1024 次比较——候选生成阶段可换二分或 alias table，M1 先线性，profile 后定）。
-- 预算门槛：1080p、RTX 级桌面卡，ReSTIR 两段合计 < 0.6 ms（`SCOPED_GPU_TIMER` 计量）。超预算优先降 candidates/spatialSamples，而非砍可见性光线。
-
-## 5. 验证策略
-
-- **正确性（bias）**：offline progressive 1024 帧作参考图。对照组：旧 NEE、RIS-only、完整 ReSTIR 三者各累积收敛后与参考 diff。RIS-only 必须逐位收敛一致（无偏）；完整 ReSTIR 允许边缘轻微变暗但需肉眼不可辨（diff 阈值对齐 visual test 的 5）。
-- **等 spp 噪声**：`CornellBox.proc`（面光基线）、`conf_room.glb`（真实房间面光）、新增多灯压力场景（程序化 8×8 灯阵 proc 场景，M1 一并加入 DemoScenes）单帧截图对比。
-- **时域行为**：`gnb validate` agentscript 驱动相机平移/急转，盯 lag、ghost、disocclusion 噪声爆点；对照 `temporal-history-and-denoising.md` 修改护栏的验证清单（静止收敛、平移、快速旋转、物体边缘、renderer 切换、双 RenderView）。
-- **回归**：`r.restir.enable=false` 时 `gkNextVisualTest` 全量 baseline 逐位不变（默认关保证存量 baseline 稳定到 M4）。
-- 日常肉眼验证走 `gnb shot --scene CornellBox.proc` / `--scene assets/models/conf_room.glb`。
-
-## 6. 备选路线与否决理由
-
-- **全独立 ReSTIR pass 链（候选生成也拆出主 dispatch）**：G-buffer 重建 primary vertex 需补材质信息，且候选生成本身无光线、拆出去只多付一遍 G-buffer 带宽。否决，保留内联。
-- **无偏空间复用（talbot MIS / pairwise MIS）**：每邻居多付可见性光线或全对 p̂ 重估，实时预算内收益不匹配。首版 biased + 几何测试，把无偏版留给 offline 模式的远期选项。
-- **世界空间 ReSTIR（灯格/hash 蓄水池，类 ReGIR）**：与 SHARC hash grid 思路同构，对超多灯（>10⁴）才有明显收益；当前 `kMaxLightCount=1024` 且典型场景灯数十级，屏幕空间足够。列为远期，不设计。
-- **把太阳并入候选池**：省 1 根 ray，但太阳是低方差 delta 光，进池反而稀释面光候选质量，且 SoftwareTracing/CSM 路径无法对齐。仅 M4 作为可选实验。
+- 日常：`gnb shot --scene ManyLightsShowcase.proc`（8×8 灯阵压力场景，`DemoScenes.cpp`）/ `CornellBox.proc` / `assets/models/conf_room.glb`。
+- 脚本：`assets/agentscripts/restir-*.agentscript.json`（quick 等 spp 对比、converge-nee/restir 收敛无偏、noclamp-* 去 clamp 偏差判定、perf、m2-temporal 运动与失效、m3-ab 空间 A/B）。
+- 无偏判定方法：静止 600 帧、`r.temporalFrames=1024`、`r.reproject.clampGamma*` 开大，restir on/off 两个独立进程各收敛后 diff；signed mean 与半影区域分布是关键指标，不是只看 mean abs。

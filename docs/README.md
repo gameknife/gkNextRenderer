@@ -44,6 +44,7 @@
 - [GI 缓存与体素资源架构](designs/gi-cache-architecture.md)
 - [Gaussian Splat / SOG v2 格式与集成](designs/gaussian-splatting-sog-design.md)
 - [gnb AI Bridge Protocol v2](designs/gnb-ai-bridge-protocol-v2.md)
+- [PathTracing ReSTIR DI 架构](designs/pathtracing-restir-design.md)
 - [RenderView 多视图架构](designs/multi-viewport-renderview-design.md)
 - [渲染运行时架构与契约](designs/rendering-runtime-architecture.md)
 - [场景导出 glTF/GLB 契约](designs/scene-export-gltf-contract.md)
@@ -56,7 +57,6 @@
 ## Plans（仍有条件性或明确未实现的工作）
 
 - [ReProject 历史钳制：Phase B/C](plans/reproject-history-clamp-blackdot-fix.md)
-- [PathTracing ReSTIR：开发计划](plans/pathtracing-restir-plan.md) · [设计方案（提案）](designs/pathtracing-restir-design.md)
 
 计划是否仍应执行，必须同时满足：状态未完成、目标代码尚未落地、且没有更新架构取代它。只满足文档里的未勾选框不够。
 索引中的 plan 不是自动授权；只有用户任务或活动 spec 明确要求时才执行。

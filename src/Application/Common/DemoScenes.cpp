@@ -1022,12 +1022,102 @@ namespace
     }
 }
 
+namespace
+{
+    // ReSTIR stress scene: 64 colored area lights over a pillar field, no sun/sky, so every
+    // surface point sees a different subset of many lights (docs/plans/pathtracing-restir-plan.md M1).
+    void ManyLightsShowcase(Assets::EnvironmentSetting& cameraInit, std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                            std::vector<Assets::Model>& models,
+                            std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights,
+                            std::vector<Assets::AnimationTrack>& tracks)
+    {
+        Assets::Camera defaultCam;
+        defaultCam.name = "Cam";
+        defaultCam.ModelView = lookAt(vec3(0, 15.0f, 24.0f), vec3(0, 0.5f, 0), vec3(0, 1, 0));
+        defaultCam.FieldOfView = 50;
+        defaultCam.Aperture = 0;
+        defaultCam.FocalDistance = 26;
+
+        cameraInit.cameras.push_back(defaultCam);
+        cameraInit.ControlSpeed = 10.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = false;
+        cameraInit.HasSun = false;
+
+        const uint32_t matGround = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.55f, 0.55f, 0.55f)), "ml_ground"});
+        const uint32_t matPillar = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.70f, 0.68f, 0.62f)), "ml_pillar"});
+
+        // Eight emitter colors with a wide intensity spread: the light CDF weights by
+        // luminance * area, so this also exercises non-uniform light selection.
+        const vec3 lightColors[8] = {
+            vec3(1200.0f, 300.0f, 120.0f), vec3(300.0f, 1200.0f, 200.0f),
+            vec3(200.0f, 350.0f, 1400.0f), vec3(1100.0f, 1000.0f, 250.0f),
+            vec3(1000.0f, 250.0f, 1000.0f), vec3(250.0f, 1000.0f, 1000.0f),
+            vec3(900.0f, 850.0f, 780.0f), vec3(1600.0f, 500.0f, 250.0f),
+        };
+        const uint32_t lightMatBase = static_cast<uint32_t>(materials.size());
+        for (int i = 0; i < 8; ++i)
+        {
+            materials.push_back({Material::DiffuseLight(lightColors[i]), "ml_light_" + std::to_string(i)});
+        }
+
+        auto addNode = [&](const std::string& name, uint32_t modelIdx, uint32_t matIdx)
+        {
+            nodes.push_back(Assets::SceneBuilder::CreateRenderNode(name, vec3(0), vec3(1),
+                                                                   static_cast<uint32_t>(nodes.size()),
+                                                                   modelIdx, matIdx));
+        };
+
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-22.0f, -0.2f, -22.0f), vec3(22.0f, 0.0f, 22.0f)));
+        addNode("Ground", static_cast<uint32_t>(models.size() - 1), matGround);
+
+        // 8x8 grid of downward-facing light quads at y = 5 (normal = cross(right, up) = -y).
+        const int gridN = 8;
+        const float spacing = 5.0f;
+        const float lightSize = 1.2f;
+        for (int row = 0; row < gridN; ++row)
+        {
+            for (int col = 0; col < gridN; ++col)
+            {
+                const float x = (col - (gridN - 1) * 0.5f) * spacing - lightSize * 0.5f;
+                const float z = (row - (gridN - 1) * 0.5f) * spacing - lightSize * 0.5f;
+                const uint32_t matIdx = lightMatBase + (row * 3 + col) % 8;
+                models.push_back(Assets::FProcModel::CreateAreaLight(
+                    "ml_light_quad_" + std::to_string(row) + "_" + std::to_string(col),
+                    vec3(x, 5.0f, z), vec3(lightSize, 0, 0), vec3(0, 0, lightSize),
+                    matIdx, lights));
+                addNode("Light_" + std::to_string(row) + "_" + std::to_string(col),
+                        static_cast<uint32_t>(models.size() - 1), matIdx);
+            }
+        }
+
+        // Occluder pillars offset half a cell from the lights with varying heights: every
+        // surface point sees a different subset of lights, which stresses light selection.
+        for (int row = 0; row < gridN - 1; ++row)
+        {
+            for (int col = 0; col < gridN - 1; ++col)
+            {
+                const float x = (col - (gridN - 2) * 0.5f) * spacing;
+                const float z = (row - (gridN - 2) * 0.5f) * spacing;
+                const float h = 1.5f + float((row * 5 + col * 3) % 4);
+                models.push_back(Assets::FProcModel::CreateBox(
+                    vec3(x - 0.3f, 0.0f, z - 0.3f), vec3(x + 0.3f, h, z + 0.3f)));
+                addNode("Pillar_" + std::to_string(row) + "_" + std::to_string(col),
+                        static_cast<uint32_t>(models.size() - 1), matPillar);
+            }
+        }
+    }
+}
+
 namespace AppCommon
 {
     void RegisterDemoScenes()
     {
         auto& registry = Assets::FLoaderRegistry::Get();
         registry.RegisterProcScene("CornellBox.proc", CornellBox);
+        registry.RegisterProcScene("ManyLightsShowcase.proc", ManyLightsShowcase);
         registry.RegisterProcScene("GIBootcamp.proc", GIBootcamp);
         registry.RegisterProcScene("MaterialShowcase.proc", MaterialShowcase);
         registry.RegisterProcScene("LightingShowcase.proc", LightingShowcase);

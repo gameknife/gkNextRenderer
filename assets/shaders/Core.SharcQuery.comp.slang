@@ -29,6 +29,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.SecondaryDirectMode = 1;
     renderer.Init(DTid.xy);
 
+    // ReSTIR is primary-view-only (see Core.PathTracing.comp.slang).
+    const bool restirActive = RestirIsAvailable() && Bindless.GetGpuscene().CustomData0 == 0;
+    dIlluminator.RestirPrimary = restirActive;
+
     uint2 screenSize = renderer.GetSize();
 
     if (params.DebugMode == 3u)
@@ -47,8 +51,24 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     if (!renderer.PrimaryHit(rayCaster))
     {
+        if (restirActive)
+        {
+            RestirStoreEmpty(int2(DTid.xy));
+        }
         END_SHADERCLOCK(DTid.xy)
         return;
+    }
+    // Primary-hit data for the ReSTIR temporal gates (see Core.PathTracing.comp.slang).
+    dIlluminator.PrimaryInstanceId = renderer.GetPrimaryInstanceId();
+    dIlluminator.PrimaryMotionPixels = renderer.GetPrimaryMotionPixels();
+    if (restirActive)
+    {
+        // Emitter primaries early-out of Render before the gather step (see Core.PathTracing).
+        Material primaryMat = Bindless.GetGpuscene().GetMaterial(renderer.GetPrimaryVertex().MaterialIndex);
+        if (primaryMat.MaterialModel == MaterialDiffuseLight)
+        {
+            RestirStoreEmpty(int2(DTid.xy));
+        }
     }
 
     if (params.DebugMode == 4u)

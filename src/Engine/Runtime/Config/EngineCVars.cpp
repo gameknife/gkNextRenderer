@@ -116,6 +116,14 @@ namespace NextCVar
         GK_CVAR_UINT("r.sharc.accumulatedFrameMax", settings, SharcAccumulatedFrameMax, 64, ECVarFlags::Archive, "Official SHARC maximum temporal accumulation frames");
         GK_CVAR_UINT("r.sharc.responsiveFrameMax", settings, SharcResponsiveFrameMax, 8, ECVarFlags::Archive, "Official SHARC responsive temporal accumulation frames");
         GK_CVAR_UINT("r.sharc.staleFrameMax", settings, SharcStaleFrameMax, 180, ECVarFlags::Archive, "Official SHARC stale frame eviction threshold");
+        GK_CVAR_BOOL("r.restir.enable", settings, RestirEnable, false, ECVarFlags::Archive, "Enable ReSTIR DI resampling for primary-surface area light direct lighting");
+        GK_CVAR_UINT_RANGE("r.restir.candidates", settings, RestirCandidates, 8, ECVarFlags::Archive, "ReSTIR initial candidate count per pixel", 1, 64);
+        GK_CVAR_BOOL("r.restir.temporal", settings, RestirTemporal, true, ECVarFlags::Archive, "Enable ReSTIR temporal reservoir reuse");
+        GK_CVAR_UINT_RANGE("r.restir.mClamp", settings, RestirMClamp, 160, ECVarFlags::Archive, "ReSTIR temporal reservoir M clamp", 1, 4096);
+        GK_CVAR_BOOL("r.restir.spatial", settings, RestirSpatial, true, ECVarFlags::Archive, "Enable ReSTIR spatial reservoir reuse");
+        GK_CVAR_UINT_RANGE("r.restir.spatialSamples", settings, RestirSpatialSamples, 5, ECVarFlags::Archive, "ReSTIR spatial reuse neighbor count", 1, 16);
+        GK_CVAR_FLOAT_RANGE("r.restir.spatialRadius", settings, RestirSpatialRadius, 16.0f, ECVarFlags::Archive, "ReSTIR spatial reuse radius in pixels", 1.0, 128.0);
+        GK_CVAR_INT_RANGE("r.restir.debugMode", settings, RestirDebugMode, 0, ECVarFlags::None, "ReSTIR debug (0=off,1=M heatmap,2=W,3=winner light id,4=reuse proxy)", 0, 4);
         GK_CVAR_BOOL("show.debugLighting", showFlags, DebugDraw_Lighting, false, ECVarFlags::None, "Debug draw lighting");
         GK_CVAR_BOOL("show.debugAreaLights", showFlags, DebugDraw_AreaLights, false, ECVarFlags::None, "Debug draw scene area lights");
         GK_CVAR_BOOL("show.debugBoundingBox", showFlags, DebugDraw_BoundingBox, false, ECVarFlags::None, "Debug draw bounding box");

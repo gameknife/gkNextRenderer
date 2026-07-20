@@ -31,6 +31,26 @@ namespace Assets
     void Scene::UpdateLights()
     {
         lightCount_ = std::min<uint32_t>(static_cast<uint32_t>(lights_.size()), kMaxLightCount);
+
+        // Light-set signature (count + lightMatIdx sequence, FNV-1a): a change means stored
+        // light indices change meaning, so index-holding consumers must drop history.
+        uint64_t signature = 1469598103934665603ull;
+        const auto mix = [&signature](uint64_t v)
+        {
+            signature ^= v;
+            signature *= 1099511628211ull;
+        };
+        mix(lights_.size());
+        for (const LightObject& light : lights_)
+        {
+            mix(light.lightMatIdx);
+        }
+        if (signature != lightsSignature_)
+        {
+            lightsSignature_ = signature;
+            ++lightsGeneration_;
+        }
+
         if (!lightBufferMemory_ || lightCount_ == 0)
         {
             return;

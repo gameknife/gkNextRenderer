@@ -313,16 +313,48 @@ public struct ALIGN_16 SharcRuntimeParameters
     public float4 CameraPositionPrev;
 };
 
-public struct ALIGN_16 SharcResources
+// PathTracing extension resource table reached via GPUScene.ReservedAddress0. Shared by
+// SHARC and ReSTIR: per-feature availability is judged by its field being non-zero, never
+// by the table pointer itself (the table exists whenever either feature is enabled).
+public struct ALIGN_16 FPathTracingExtras
 {
-    public uint64_t HashEntries;
-    public uint64_t LockBuffer;
-    public uint64_t Accumulation;
-    public uint64_t Resolved;
-    public uint64_t Parameters;
-    public uint64_t Reserved0;
-    public uint64_t Reserved1;
-    public uint64_t Reserved2;
+    public uint64_t HashEntries;          // SHARC hash keys
+    public uint64_t LockBuffer;           // SHARC bucket locks
+    public uint64_t Accumulation;         // SHARC accumulation entries
+    public uint64_t Resolved;             // SHARC resolved entries
+    public uint64_t Parameters;           // SharcRuntimeParameters
+    public uint64_t RestirReservoirPing;  // FRestirReservoir[], buffer A
+    public uint64_t RestirReservoirPong;  // FRestirReservoir[], buffer B
+    public uint64_t RestirParameters;     // FRestirRuntimeParameters
+};
+
+// Screen-space ReSTIR DI reservoir, 16 bytes per pixel, double buffered (ping/pong).
+// Stores the sample's generation parameters (light index + light-surface uv) instead of a
+// world-space point so reuse follows animated lights and needs no Jacobian.
+public struct ALIGN_16 FRestirReservoir
+{
+    public uint LightData;      // low 24 bits: light index; high 8 bits: type (0 = empty, 1 = area light)
+    public uint PackedUV;       // sample uv on the light quad, 2x unorm16
+    public float WeightW;       // unbiased contribution weight W
+    public uint PackedMTarget;  // low 16 bits: clamped M; high 16 bits: fp16 target luminance
+};
+
+public struct ALIGN_16 FRestirRuntimeParameters
+{
+    public uint FrameIndex;       // parity selects the current write buffer (ping on even)
+    public uint DebugMode;
+    public uint Flags;            // bit0 temporal enable, bit1 spatial enable, bit2 temporal history valid this frame
+    public uint LightsGeneration; // bumped when the light set is re-ordered; mismatched history resets M
+
+    public uint ReservoirWidth;
+    public uint ReservoirHeight;
+    public uint InitialCandidates;
+    public uint TemporalMClamp;
+
+    public float SpatialRadius;
+    public uint SpatialSamples;
+    public uint Pad0;
+    public uint Pad1;
 };
 
 public struct ALIGN_16 SphericalHarmonics
@@ -489,9 +521,9 @@ public struct ALIGN_8 GPUScene
     public uint64_t ReservedAddress0;
 
     public uint64_t AmbientBase; // -> AmbientResources table (see BasicTypes.slang AmbientResources)
-    public property SharcResources* Sharc
+    public property FPathTracingExtras* PtExtras
     {
-        get { return (SharcResources*)ReservedAddress0; }
+        get { return (FPathTracingExtras*)ReservedAddress0; }
     }
     public property AmbientCube* Cubes
     {
@@ -619,9 +651,9 @@ public struct ALIGN_8 GPUScene
     /* Others */
     uint64_t2 Reserved_AmbientBase_Address;
 
-    public property SharcResources* Sharc
+    public property FPathTracingExtras* PtExtras
     {
-        get { return (SharcResources*)Reserved_AmbientBase_Address.x; }
+        get { return (FPathTracingExtras*)Reserved_AmbientBase_Address.x; }
     }
 
     public property AmbientCube* Cubes

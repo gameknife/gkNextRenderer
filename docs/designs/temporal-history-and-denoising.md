@@ -23,6 +23,7 @@ last_updated: 2026-07-17
 
 一帧时序后处理按以下顺序执行：
 
+0. （PathTracing + `r.restir.enable` 时）`Core.RestirSpatialShade` 在进入本链前把 ReSTIR 面光直接项累加进 `RT_SINGLE_DIFFUSE`，并维护自己的蓄水池历史（失效规则对齐本文，见 [PathTracing ReSTIR DI 架构](pathtracing-restir-design.md)）。
 1. 将当前 `RT_SINGLE_DIFFUSE/SPECULAR`、Albedo、Normal、ObjectId、MotionVector 和 MotionMoment 声明为输入。
 2. `Process.ReProject.comp.slang` 做 motion reprojection、object boundary/disocclusion rejection、firefly pre-clamp、YCoCg history clamp 和自适应混合。
 3. 可选 `Process.AtrousWavelet.comp.slang` 同一 dispatch 过滤 diffuse/specular，使用 object/normal/depth edge stop。

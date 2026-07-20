@@ -9,33 +9,14 @@
 //   - FPathTracingRenderer         : multi-bounce path tracer driving any IRayTracer + IDirectIlluminator
 // IRayTracer impls live in RayTracers.slang; primary ray casters and interfaces stay in Shading.slang.
 
-public struct FHardwareDirectIlluminator : IDirectIlluminator
+namespace Common
 {
-    public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)
+    // CDF light selection shared by classic area-light NEE and ReSTIR candidate generation
+    // (reserved1 carries the cdf built in Scene::UpdateLights).
+    public uint SelectAreaLight(float lightSelector)
     {
         GPUScene gpuScene = Bindless.GetGpuscene();
         UniformBufferObject Camera = gpuScene.Camera[0];
-        float shadow = 0.0f;
-        const float3 lightVector = Camera.SunDirection.xyz;
-        const float4 d = max(dot(lightVector, normalize(normal)), 0.0) * M_1_PI;
-        if (Camera.HasSun)
-        {
-            const float3 lightVector = Camera.SunDirection.xyz;
-            const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
-            shadow = 1;
-            if (HWTracer.TraceOcclusion(position, lightVectorCone))
-            {
-                shadow = 0;
-            }
-        }
-        directIllumColor = Camera.SunColor * d * shadow;
-
-        if (Camera.LightCount == 0 || gpuScene.SoftMeshShader.Lights == 0)
-        {
-            return;
-        }
-
-        const float lightSelector = RandomFloat(RandomSeed);
         uint lightIndex = Camera.LightCount - 1;
         for (uint i = 0; i < Camera.LightCount; ++i)
         {
@@ -45,7 +26,99 @@ public struct FHardwareDirectIlluminator : IDirectIlluminator
                 break;
             }
         }
+        return lightIndex;
+    }
 
+    // Unshadowed area-light contribution f = Le * cos_s * cos_l / (pi * d^2) for the sample
+    // at uv on the light quad (albedo-demodulated Lambert, matching the lighting channel).
+    // Shared by classic NEE, the ReSTIR target function and ReSTIR final shading so the three
+    // can never drift apart. Excludes the source pdf: classic NEE multiplies area / lightPdf.
+    public bool EvaluateAreaLightSample(uint lightIndex, float2 uv, float3 position, float3 normal,
+                                        out float3 f, out float3 lightPosition)
+    {
+        f = float3(0, 0, 0);
+        lightPosition = float3(0, 0, 0);
+        GPUScene gpuScene = Bindless.GetGpuscene();
+        LightObject light = gpuScene.Lights[lightIndex];
+        if (light.normal_area.w <= 0.0f)
+        {
+            return false;
+        }
+        Material lightMaterial = gpuScene.GetMaterial(light.lightMatIdx);
+        if (lightMaterial.MaterialModel != MaterialDiffuseLight)
+        {
+            return false;
+        }
+        lightPosition = light.p0.xyz + uv.x * (light.p1.xyz - light.p0.xyz) +
+                        uv.y * (light.p3.xyz - light.p0.xyz);
+        const float3 toLight = lightPosition - position;
+        const float distanceSquared = dot(toLight, toLight);
+        if (distanceSquared <= EPS * EPS)
+        {
+            return false;
+        }
+        const float3 lightDirection = toLight * rsqrt(distanceSquared);
+        const float surfaceCosine = max(dot(normalize(normal), lightDirection), 0.0f);
+        const float lightCosine = max(dot(normalize(light.normal_area.xyz), -lightDirection), 0.0f);
+        if (surfaceCosine <= 0.0f || lightCosine <= 0.0f)
+        {
+            return false;
+        }
+        f = lightMaterial.Diffuse.rgb * (surfaceCosine * lightCosine / (M_PI * distanceSquared));
+        return true;
+    }
+}
+
+public struct FHardwareDirectIlluminator : IDirectIlluminator
+{
+    // Set on the primary view when ReSTIR is active: the primary-surface area-light term is
+    // then produced by reservoir resampling. Per-bounce DirectIlluminate keeps the classic
+    // single-sample estimator so SHARC cache accounting is unchanged.
+    public bool RestirPrimary;
+    // Primary-hit state for the ReSTIR temporal gates, set by the entry shader after
+    // PrimaryHit. Must come from renderer state: reading the freshly written G-buffer back
+    // inside the same invocation is not coherent.
+    public uint PrimaryInstanceId;
+    public float2 PrimaryMotionPixels;
+
+    // Explicit __init: a bare local declaration does not reliably apply field initializers,
+    // and an uninitialized RestirPrimary sent the SharcUpdate pass into the ReSTIR path with
+    // a null parameter table (GPU page fault / device lost on some GPUs).
+    public __init()
+    {
+        RestirPrimary = false;
+        PrimaryInstanceId = 0;
+        PrimaryMotionPixels = float2(0, 0);
+    }
+
+    void SunIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)
+    {
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+        float shadow = 0.0f;
+        const float3 lightVector = Camera.SunDirection.xyz;
+        const float4 d = max(dot(lightVector, normalize(normal)), 0.0) * M_1_PI;
+        if (Camera.HasSun)
+        {
+            const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
+            shadow = 1;
+            if (HWTracer.TraceOcclusion(position, lightVectorCone))
+            {
+                shadow = 0;
+            }
+        }
+        directIllumColor = Camera.SunColor * d * shadow;
+    }
+
+    void AreaIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)
+    {
+        GPUScene gpuScene = Bindless.GetGpuscene();
+        UniformBufferObject Camera = gpuScene.Camera[0];
+        if (Camera.LightCount == 0 || gpuScene.SoftMeshShader.Lights == 0)
+        {
+            return;
+        }
+
+        const uint lightIndex = Common.SelectAreaLight(RandomFloat(RandomSeed));
         LightObject light = gpuScene.Lights[lightIndex];
         const float lightPdf = asfloat(light.reserved2);
         const float lightArea = light.normal_area.w;
@@ -61,19 +134,9 @@ public struct FHardwareDirectIlluminator : IDirectIlluminator
         }
 
         const float2 uv = RandomFloat2(RandomSeed);
-        const float3 lightPosition = light.p0.xyz + uv.x * (light.p1.xyz - light.p0.xyz) +
-                                     uv.y * (light.p3.xyz - light.p0.xyz);
-        const float3 toLight = lightPosition - position;
-        const float distanceSquared = dot(toLight, toLight);
-        if (distanceSquared <= EPS * EPS)
-        {
-            return;
-        }
-
-        const float3 lightDirection = toLight * rsqrt(distanceSquared);
-        const float surfaceCosine = max(dot(normalize(normal), lightDirection), 0.0f);
-        const float lightCosine = max(dot(normalize(light.normal_area.xyz), -lightDirection), 0.0f);
-        if (surfaceCosine <= 0.0f || lightCosine <= 0.0f)
+        float3 f;
+        float3 lightPosition;
+        if (!Common.EvaluateAreaLightSample(lightIndex, uv, position, normal, f, lightPosition))
         {
             return;
         }
@@ -81,9 +144,30 @@ public struct FHardwareDirectIlluminator : IDirectIlluminator
         const float3 shadowOrigin = position + normalize(normal) * EPS2;
         if (!HWTracer.TraceAreaLightSegment(shadowOrigin, lightPosition, EPS))
         {
-            const float geometryPdfWeight = surfaceCosine * lightCosine * lightArea /
-                                            (M_PI * distanceSquared * lightPdf);
-            directIllumColor += float4(lightMaterial.Diffuse.rgb * geometryPdfWeight, 0.0f);
+            directIllumColor += float4(f * (lightArea / lightPdf), 0.0f);
+        }
+    }
+
+    public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)
+    {
+        SunIlluminate(RandomSeed, position, normal, directIllumColor);
+        AreaIlluminate(RandomSeed, position, normal, directIllumColor);
+    }
+
+    public void DirectIlluminatePrimary(inout uint4 RandomSeed, int2 pixel, float3 position, float3 normal, inout float4 directIllumColor)
+    {
+        SunIlluminate(RandomSeed, position, normal, directIllumColor);
+        if (RestirPrimary)
+        {
+            // Gather only: the area-light contribution is produced by the ReSTIR spatial /
+            // shade pass (Core.RestirSpatialShade.comp.slang) and added to the diffuse
+            // channel there, after this dispatch completes.
+            RestirPrimaryGather(RandomSeed, pixel, position, normal,
+                                PrimaryInstanceId, PrimaryMotionPixels, HWTracer);
+        }
+        else
+        {
+            AreaIlluminate(RandomSeed, position, normal, directIllumColor);
         }
     }
 
@@ -95,6 +179,11 @@ public struct FAmbientCubeIlluminator : IDirectIlluminator
     public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)
     {
         directIllumColor = float4(0, 0, 0, 0);
+    }
+
+    public void DirectIlluminatePrimary(inout uint4 RandomSeed, int2 pixel, float3 position, float3 normal, inout float4 directIllumColor)
+    {
+        DirectIlluminate(RandomSeed, position, normal, directIllumColor);
     }
 }
 
@@ -128,6 +217,11 @@ public struct FSoftwareDirectIlluminator : IDirectIlluminator
             }
         }
         directIllumColor = Camera.SunColor * d * shadow;
+    }
+
+    public void DirectIlluminatePrimary(inout uint4 RandomSeed, int2 pixel, float3 position, float3 normal, inout float4 directIllumColor)
+    {
+        DirectIlluminate(RandomSeed, position, normal, directIllumColor);
     }
 
     // all stuffs like pointers
@@ -201,6 +295,11 @@ public struct FShadowMapDirectIlluminator : IDirectIlluminator
             shadow = Common.SampleSunShadowCSM(position, normal, viewDist);
         }
         directIllumColor = Camera.SunColor * d * shadow;
+    }
+
+    public void DirectIlluminatePrimary(inout uint4 RandomSeed, int2 pixel, float3 position, float3 normal, inout float4 directIllumColor)
+    {
+        DirectIlluminate(RandomSeed, position, normal, directIllumColor);
     }
 }
 
@@ -585,7 +684,7 @@ public struct FPathTracingRenderer{
         FinalSpecularHitDist /= float(sample);
 
         float4 directColor = float4(0, 0, 0, 0);
-        directIllum.DirectIlluminate(RandomSeed_, hitPrimaryVertex_.Position, hitPrimaryVertex_.Normal, directColor);
+        directIllum.DirectIlluminatePrimary(RandomSeed_, pixel_, hitPrimaryVertex_.Position, hitPrimaryVertex_.Normal, directColor);
         FinalColor += directColor;
 
         if (WriteOutputs)
@@ -624,6 +723,7 @@ public struct FPathTracingRenderer{
         float4 clipPos = mul(Camera.ViewProjection, float4(hitPrimaryVertex_.Position, 1.0));
         float ndcDepth = clipPos.z / clipPos.w;
         float2 motion = Common.CalculateMotionVector(Camera, hitPrimaryNode_, hitPrimaryVertex_, pixel_);
+        primaryMotionPixels_ = motion * size_;
         float4 gbuffer = float4(0, 0, 0, 0);
         Material material = Bindless.GetGpuscene().GetMaterial(hitPrimaryVertex_.MaterialIndex);
         Common.FetchGBuffer(hitPrimaryVertex_, material, hitPrimaryNode_, primaryRayDir_, primaryAlbedo_, gbuffer);
@@ -657,6 +757,20 @@ public struct FPathTracingRenderer{
 
     public uint2 GetSize() { return size_; }
     public Vertex GetPrimaryVertex() { return hitPrimaryVertex_; }
+    // Primary-hit data for consumers inside the same dispatch (ReSTIR temporal gates).
+    // Reading the freshly written G-buffer back is NOT coherent within an invocation, so
+    // this state must come from the renderer, never from the output textures.
+    public uint GetPrimaryInstanceId() { return hitPrimaryNode_.instanceId; }
+    public float2 GetPrimaryMotionPixels() { return primaryMotionPixels_; }
+
+    // Debug write that only replaces the lighting color and leaves the real G-buffer
+    // (object id, motion, normals) intact. Debug overlays that run every frame must use
+    // this, or they destroy the very temporal state they are trying to visualize.
+    public void WriteDebugColorOnly(float4 color)
+    {
+        OutSingleDiffuse.Store(pixel_, color);
+        OutSingleSpecular.Store(pixel_, float4(0, 0, 0, 0));
+    }
 
     // Generic debug-color G-buffer write (used by entry-shader debug views).
     public void WriteDebugColor(float4 color)
@@ -705,6 +819,7 @@ public struct FPathTracingRenderer{
         primaryRayDir_ = float3(0, 1, 0);
         primaryRayLength_ = 0;
         primaryPixelOffset_ = float2(0, 0);
+        primaryMotionPixels_ = float2(0, 0);
         primaryAlbedo_ = float4(0, 0, 0, 0);
 
         OutAlbedo = Bindless.GetViewStorageTexture<float4>(Bindless.RT_ALBEDO);
@@ -728,6 +843,7 @@ public struct FPathTracingRenderer{
     float3 primaryRayDir_;
     float primaryRayLength_;
     float2 primaryPixelOffset_;
+    float2 primaryMotionPixels_;
     float4 primaryAlbedo_;
 
     RWTexture2D<float4> OutAlbedo;

@@ -107,6 +107,10 @@ namespace Assets
         const std::vector<ModelData>& Offsets() const { return offsets_; }
         std::vector<LightObject>& Lights() { return lights_; }
         const std::vector<LightObject>& Lights() const { return lights_; }
+        // Bumped by UpdateLights whenever the light set is re-ordered (count or lightMatIdx
+        // sequence changed); consumers holding light indices across frames (ReSTIR reservoirs)
+        // must drop history on a mismatch. Pure transforms / color edits do not bump it.
+        uint64_t LightsGeneration() const { return lightsGeneration_; }
         const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
         const Vulkan::Buffer& IndexBuffer() const { return *indexBuffer_; }
         const Vulkan::Buffer& MaterialBuffer() const { return *sceneDynamicBuffer_; }
@@ -265,6 +269,8 @@ namespace Assets
         std::vector<Model> models_;
         std::vector<std::shared_ptr<Node>> nodes_;
         std::vector<LightObject> lights_;
+        uint64_t lightsGeneration_ = 0;
+        uint64_t lightsSignature_ = 0;
         std::vector<AnimationTrack> tracks_;
         std::vector<ModelData> offsets_;
 

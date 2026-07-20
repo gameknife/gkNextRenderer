@@ -1,0 +1,116 @@
+{
+  "name": "restir-m3-ab",
+  "target": "gkNextRenderer",
+  "scene": "ManyLightsShowcase.proc",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running",
+      "timeoutMs": 20000
+    },
+    {
+      "type": "wait-frames",
+      "n": 30
+    },
+    {
+      "type": "cvar",
+      "name": "r.restir.enable",
+      "set": true
+    },
+    {
+      "type": "cvar",
+      "name": "r.temporalFrames",
+      "set": 1
+    },
+    {
+      "type": "cvar",
+      "name": "r.restir.candidates",
+      "set": 8
+    },
+    {
+      "type": "cvar",
+      "name": "r.restir.spatial",
+      "set": false
+    },
+    {
+      "type": "wait-frames",
+      "n": 50
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/restir_m3_c8_nospatial"
+    },
+    {
+      "type": "cvar",
+      "name": "r.restir.spatial",
+      "set": true
+    },
+    {
+      "type": "wait-frames",
+      "n": 50
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/restir_m3_c8_spatial"
+    },
+    {
+      "type": "cvar",
+      "name": "r.restir.candidates",
+      "set": 2
+    },
+    {
+      "type": "cvar",
+      "name": "r.restir.spatial",
+      "set": false
+    },
+    {
+      "type": "wait-frames",
+      "n": 50
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/restir_m3_c2_nospatial"
+    },
+    {
+      "type": "cvar",
+      "name": "r.restir.spatial",
+      "set": true
+    },
+    {
+      "type": "wait-frames",
+      "n": 50
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/restir_m3_c2_spatial"
+    },
+    {
+      "type": "cvar",
+      "name": "r.restir.candidates",
+      "set": 8
+    },
+    {
+      "type": "cvar",
+      "name": "r.temporalFrames",
+      "set": 16
+    },
+    {
+      "type": "cvar",
+      "name": "r.restir.enable",
+      "set": false
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}
