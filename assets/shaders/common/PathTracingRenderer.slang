@@ -734,7 +734,7 @@ public struct FPathTracingRenderer{
             if (WriteOutputs)
             {
                 OutAlbedo.Store(pixel_, float4(1, 1, 1, 0));
-                OutSingleDiffuse.Store(pixel_, material.Diffuse);
+                OutSingleDiffuse.Store(pixel_, primaryAlbedo_);
                 OutSingleSpecular.Store(pixel_, float4(0, 0, 0, 0));
                 OutDiffuseHitDist.Store(pixel_, 10);
                 OutSpecularHitDist.Store(pixel_, 10);

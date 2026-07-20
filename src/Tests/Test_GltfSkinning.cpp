@@ -116,6 +116,44 @@ TEST_CASE("Load glTF Skinning Data", "[Assets][glTF]")
     REQUIRE(models[0].CPUWeights().size() > 0);
 }
 
+TEST_CASE("glTF cameras use node camera indices and standard FOV", "[Assets][glTF][Camera]")
+{
+    Utilities::Package::FPackageFileSystem pakSys(Utilities::Package::EPM_OsFile);
+    ScopedGltfFile fixture;
+    const std::filesystem::path filename = fixture.Write(R"json({
+        "asset":{"version":"2.0"},
+        "scene":0,
+        "scenes":[{"nodes":[0,1]}],
+        "nodes":[
+            {"name":"second","camera":1},
+            {"name":"first","camera":0}
+        ],
+        "cameras":[
+            {"name":"camera-zero","type":"perspective","perspective":{"yfov":0.5,"znear":0.1,"zfar":100.0}},
+            {"name":"camera-one","type":"perspective","perspective":{"yfov":1.0,"znear":0.2,"zfar":200.0}},
+            {"name":"unused-camera","type":"perspective","perspective":{"yfov":1.5,"znear":0.3,"zfar":300.0}}
+        ]
+    })json");
+
+    Assets::EnvironmentSetting camera;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FSceneLoader::LoadGLTFScene(filename.string(), camera, nodes, models, materials, lights,
+                                                tracks, skeletons));
+    REQUIRE(camera.cameras.size() == 2);
+    CHECK(camera.cameras[0].name == "1 second");
+    CHECK(camera.cameras[0].FieldOfView == Catch::Approx(glm::degrees(1.0f)));
+    CHECK(camera.cameras[0].NearPlane == Catch::Approx(0.2f));
+    CHECK(camera.cameras[0].FarPlane == Catch::Approx(200.0f));
+    CHECK(camera.cameras[1].name == "0 first");
+    CHECK(camera.cameras[1].FieldOfView == Catch::Approx(glm::degrees(0.5f)));
+}
+
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 
 TEST_CASE("SkinnedMeshComponent Animation Playback", "[Runtime][Animation]") {

@@ -257,6 +257,52 @@ namespace Assets
         }
     }
     
+    Assets::Camera ParseGltfCamera(const tinygltf::Camera& gltfCamera)
+    {
+        Assets::Camera camera{};
+        camera.name = gltfCamera.name;
+        camera.ModelView = glm::mat4(1.0f);
+        camera.FieldOfView = 40.0f;
+        camera.Aperture = 0.0f;
+        camera.FocalDistance = 1000.0f;
+
+        if (gltfCamera.type == "perspective")
+        {
+            if (gltfCamera.perspective.yfov > 0.0)
+            {
+                camera.FieldOfView = static_cast<float>(gltfCamera.perspective.yfov * 180.0 / M_PI);
+            }
+            if (gltfCamera.perspective.znear > 0.0)
+            {
+                camera.NearPlane = static_cast<float>(gltfCamera.perspective.znear);
+            }
+            if (gltfCamera.perspective.zfar > camera.NearPlane)
+            {
+                camera.FarPlane = static_cast<float>(gltfCamera.perspective.zfar);
+            }
+        }
+        else
+        {
+            SPDLOG_WARN("glTF camera '{}' uses unsupported type '{}'; using perspective defaults",
+                        gltfCamera.name, gltfCamera.type);
+        }
+
+        if (gltfCamera.extras.Has("F-Stop") && gltfCamera.extras.Get("F-Stop").IsNumber())
+        {
+            const double fStop = gltfCamera.extras.Get("F-Stop").GetNumberAsDouble();
+            if (fStop > 0.0)
+            {
+                camera.Aperture = static_cast<float>(0.2 / fStop);
+            }
+        }
+        if (gltfCamera.extras.Has("FocalDistance") && gltfCamera.extras.Get("FocalDistance").IsNumber())
+        {
+            camera.FocalDistance = static_cast<float>(gltfCamera.extras.Get("FocalDistance").GetNumberAsDouble());
+        }
+
+        return camera;
+    }
+
     void ParseGltfNode(std::vector<std::shared_ptr<Assets::Node>>& outNodes, std::map<int, std::shared_ptr<Node> >& nodeMap, Assets::EnvironmentSetting& outCamera, std::vector<Assets::LightObject>& outLights,
         tinygltf::Model& model, int nodeIdx, int modelIdx, int materialOffset, const std::shared_ptr<Node>& parent)
     {
@@ -309,7 +355,17 @@ namespace Assets
                 vec4 camEye = transform * glm::vec4(0,0,0,1);
                 vec4 camFwd = transform * glm::vec4(0,0,-1,0);
                 glm::mat4 modelView = lookAt(vec3(camEye), vec3(camEye) + vec3(camFwd.x, camFwd.y, camFwd.z), glm::vec3(0, 1, 0));
-                outCamera.cameras.push_back({ std::to_string(node.camera) + " " + node.name, modelView, 40});
+                if (node.camera >= static_cast<int>(model.cameras.size()))
+                {
+                    SPDLOG_WARN("glTF node '{}' references invalid camera index {}", node.name, node.camera);
+                }
+                else
+                {
+                    Assets::Camera camera = ParseGltfCamera(model.cameras[node.camera]);
+                    camera.name = std::to_string(node.camera) + " " + node.name;
+                    camera.ModelView = modelView;
+                    outCamera.cameras.push_back(std::move(camera));
+                }
             }
         }
 
@@ -1206,25 +1262,6 @@ namespace Assets
             }
         }
 
-        // if we got camera in the scene
-        int i = 0;
-        for (tinygltf::Camera& cam : model.cameras)
-        {
-            cameraInit.cameras[i].Aperture = 0.0f;
-            cameraInit.cameras[i].FocalDistance = 1000.0f;
-            cameraInit.cameras[i].FieldOfView = static_cast<float>(cam.perspective.yfov) * 180.f / float(M_PI);
-            cameraInit.cameras[i].NearPlane = static_cast<float>(cam.perspective.znear);
-            cameraInit.cameras[i].FarPlane = static_cast<float>(cam.perspective.zfar);
-            if( cam.extras.Has("F-Stop") )
-            {
-                cameraInit.cameras[i].Aperture = 0.2f / cam.extras.Get("F-Stop").GetNumberAsDouble();
-            }
-            if( cam.extras.Has("FocalDistance") )
-            {
-                cameraInit.cameras[i].FocalDistance = cam.extras.Get("FocalDistance").GetNumberAsDouble();
-            }
-            i++;
-        }
         return true;
     }
 
