@@ -18,6 +18,7 @@ namespace Rendering::Upscaler
         None,
         Streamline,
         FidelityFX,
+        NativeTemporal,
     };
 
     enum class EUpscaleMode : uint32_t
@@ -128,6 +129,7 @@ namespace Rendering::Upscaler
         bool supportPCL = false;
         bool supportFSR = false;
         bool supportFSRFrameGeneration = false;
+        bool supportNativeTemporal = false;
         bool requestedDeviceExtensionsAvailable = false;
         uint32_t requiredGraphicsQueues = 0;
         uint32_t requiredComputeQueues = 0;
@@ -223,10 +225,18 @@ namespace Rendering::Upscaler
         bool enableDLSSG = false;
         bool enableFSR = false;
         bool enableFSRFrameGeneration = false;
+        bool enableNativeTemporal = false;
         uint32_t superResolutionMode = 0;
         uint32_t frameGenerationMultiplier = 2;
         bool hdrOutput = false;
         float frameTimeDeltaMilliseconds = 16.6667f;
+        float nativeTemporalHistoryWeight = 0.97f;
+        float nativeTemporalSharpness = 0.25f;
+        bool temporalPostFilterEnabled = true;
+        uint32_t temporalPostFilterPasses = 3;
+        float temporalPostFilterStrength = 0.65f;
+        float temporalPostFilterLumaSigma = 0.10f;
+        float temporalFireflySigma = 2.5f;
 
         VkExtent2D renderExtent{};
         VkExtent2D outputExtent{};

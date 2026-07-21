@@ -25,6 +25,7 @@ Android 平台模块源直接并入单一 SHARED target；`NextTui` 仅桌面 + 
 | NextRemote | Remote Play：视频编码、WebRTC、远程输入 |
 | NextStreamline | DLSS / Streamline 集成（仅 Windows） |
 | NextFidelityFX | FidelityFX FSR 3.1 upscale / Frame Generation Vulkan 集成（仅 Windows） |
+| NextTemporalUpscaler | 自研 compute-only TAAU（全 Vulkan 平台，见 `AGENT_GUIDE/NativeTemporalUpscaler.md`） |
 | NextTui | 终端 TUI 渲染模式 |
 | RenderViews | 离屏 RenderView 控制器（缩略图 / 多视口） |
 | DevTools | 调试面板、AuxDraw、ProfessionalUI、CVar 编辑器等 |

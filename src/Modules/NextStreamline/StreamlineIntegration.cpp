@@ -1101,7 +1101,8 @@ namespace
             uint32_t superResolutionMode,
             VkExtent2D outputExtent,
             bool dlssEnabled,
-            bool hdrOutput) override
+            bool hdrOutput,
+            Rendering::Upscaler::EUpscalerProvider) override
         {
             Rendering::Upscaler::FOptimalRenderSettings result{};
             const auto& modeInfo = Rendering::Upscaler::GetUpscaleModeInfo(superResolutionMode);

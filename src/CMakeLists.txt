@@ -38,6 +38,7 @@ set(GK_STANDARD_RUNTIME_MODULES
     NextPhysics
     NextStreamline
     NextFidelityFX
+    NextTemporalUpscaler
     GltfLoader
     NextRemote
 )

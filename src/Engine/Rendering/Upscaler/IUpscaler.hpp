@@ -16,7 +16,8 @@ namespace Rendering::Upscaler
             uint32_t superResolutionMode,
             VkExtent2D outputExtent,
             bool upscalerEnabled,
-            bool hdrOutput) = 0;
+            bool hdrOutput,
+            EUpscalerProvider provider = EUpscalerProvider::None) = 0;
         virtual uint32_t JitterPhaseCount() const { return 0; }
 
         virtual FFrameToken BeginFrame(

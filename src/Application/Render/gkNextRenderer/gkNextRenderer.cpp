@@ -1146,8 +1146,8 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
 
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Upscaling"), true))
     {
-        int upscaleMethod = userSetting.DLSS ? 1 : userSetting.FSR ? 2 : 0;
-        const char* methods[] = {"None", "DLSS", "FSR"};
+        int upscaleMethod = userSetting.DLSS ? 1 : userSetting.FSR ? 2 : userSetting.NativeTemporal ? 3 : 0;
+        const char* methods[] = {"None", "DLSS", "FSR", "Native TAAU"};
         DrawSettingRow("Method",
                        [&]()
                        {
@@ -1156,6 +1156,8 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
                            {
                                userSetting.DLSS = upscaleMethod == 1 && GetEngine().GetRenderer().SupportDLSS();
                                userSetting.FSR = upscaleMethod == 2;
+                               userSetting.NativeTemporal =
+                                   upscaleMethod == 3 && GetEngine().GetRenderer().SupportNativeTemporal();
                                if (!userSetting.DLSS)
                                {
                                    userSetting.DLSSG = false;
@@ -1188,8 +1190,22 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
         {
             ImGui::TextDisabled("DLSS not supported on this hardware.");
         }
+        if (upscaleMethod == 3 && !GetEngine().GetRenderer().SupportNativeTemporal())
+        {
+            ImGui::TextDisabled("Native TAAU requires formatless Vulkan storage image access.");
+        }
+        if (upscaleMethod == 3)
+        {
+            DrawFloatSetting("History Weight", &userSetting.NativeTemporalHistoryWeight,
+                             0.5f, 0.98f, "%.2f", 0.01f);
+            DrawFloatSetting("Sharpness", &userSetting.NativeTemporalSharpness,
+                             0.0f, 1.0f, "%.2f", 0.01f);
+        }
 
-        if (upscaleMethod == 2 && GetEngine().GetRenderer().SupportFSR())
+        const bool supportsTemporalNoiseFilter =
+            (upscaleMethod == 2 && GetEngine().GetRenderer().SupportFSR()) ||
+            (upscaleMethod == 3 && GetEngine().GetRenderer().SupportNativeTemporal());
+        if (supportsTemporalNoiseFilter)
         {
             DrawSettingCheckboxRow("Noise Filter", &userSetting.FSRPostFilter);
             ImGui::BeginDisabled(!userSetting.FSRPostFilter);

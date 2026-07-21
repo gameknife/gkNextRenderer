@@ -250,6 +250,10 @@ namespace Vulkan
             visibilityFramebuffer_ = nullptr;
             prevDepthValid_ = false;
             ResetCameraUbo();
+            // Swapchain recreation replaces every image in this view's RT bank while keeping
+            // the same logical bindless IDs. Old states therefore cannot be carried over to
+            // the new VkImage handles; their first use must transition from UNDEFINED again.
+            resourceStates_.Reset();
         }
         void InvalidateTemporalHistory(
             EHistoryInvalidationReason reason = EHistoryInvalidationReason::CameraCut)

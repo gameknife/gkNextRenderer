@@ -791,6 +791,7 @@ namespace Vulkan
             caps_.supportDLSSG = featureCaps.supportDLSSG;
             caps_.supportFSR = featureCaps.supportFSR;
             caps_.supportFSRFrameGeneration = featureCaps.supportFSRFrameGeneration;
+            caps_.supportNativeTemporal = featureCaps.supportNativeTemporal;
             caps_.supportReflex = featureCaps.supportReflex;
             caps_.supportPCL = featureCaps.supportPCL;
         }
@@ -1089,6 +1090,7 @@ namespace Vulkan
         VkExtent2D renderExtent = frame_.swapChain->Extent();
         dlssSuperResolutionActive_ = false;
         fsrTemporalSuperResolutionActive_ = false;
+        nativeTemporalSuperResolutionActive_ = false;
         fsrSuperResolutionActive_ = false;
         effectiveSuperResolutionMode_ =
             static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Native);
@@ -1107,8 +1109,17 @@ namespace Vulkan
 
             fsrTemporalSuperResolutionActive_ =
                 resolvedMode.enabled &&
+                !dlssSuperResolutionActive_ &&
                 HasAny(contract.post, EPostProcess::SpatialUpscale) &&
                 caps_.supportFSR && settings.FSR && upscaler_ &&
+                frame_.swapChain->SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT);
+
+            nativeTemporalSuperResolutionActive_ =
+                resolvedMode.enabled &&
+                !dlssSuperResolutionActive_ && !fsrTemporalSuperResolutionActive_ && !settings.FSR &&
+                HasAny(contract.post, EPostProcess::SpatialUpscale) &&
+                HasAll(contract.outputs, ERenderOutput::Depth | ERenderOutput::Motion) &&
+                caps_.supportNativeTemporal && settings.NativeTemporal && upscaler_ &&
                 frame_.swapChain->SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT);
 
             const bool fsrRequested =
@@ -1124,13 +1135,20 @@ namespace Vulkan
                 SPDLOG_WARN("FSR compose requires swapchain STORAGE usage; using native rendering");
             }
 
-            if (dlssSuperResolutionActive_ || fsrTemporalSuperResolutionActive_)
+            if (dlssSuperResolutionActive_ || fsrTemporalSuperResolutionActive_ ||
+                nativeTemporalSuperResolutionActive_)
             {
+                const auto provider = dlssSuperResolutionActive_
+                    ? Rendering::Upscaler::EUpscalerProvider::Streamline
+                    : fsrTemporalSuperResolutionActive_
+                        ? Rendering::Upscaler::EUpscalerProvider::FidelityFX
+                        : Rendering::Upscaler::EUpscalerProvider::NativeTemporal;
                 const auto optimal = upscaler_->GetOptimalRenderSettings(
                     effectiveSuperResolutionMode_,
                     frame_.swapChain->Extent(),
                     true,
-                    frame_.swapChain->IsHDR());
+                    frame_.swapChain->IsHDR(),
+                    provider);
                 renderExtent = optimal.renderExtent;
             }
             else if (fsrSuperResolutionActive_)
@@ -1155,6 +1173,14 @@ namespace Vulkan
             else if (fsrTemporalSuperResolutionActive_)
             {
                 SPDLOG_INFO("FidelityFX FSR 3.1 active for {}: {}x{} -> {}x{}",
+                            GetRendererName(logicRenderers_.current),
+                            renderExtent.width, renderExtent.height,
+                            frame_.swapChain->Extent().width,
+                            frame_.swapChain->Extent().height);
+            }
+            else if (nativeTemporalSuperResolutionActive_)
+            {
+                SPDLOG_INFO("NativeTemporal TAAU selected for {}: {}x{} -> {}x{}",
                             GetRendererName(logicRenderers_.current),
                             renderExtent.width, renderExtent.height,
                             frame_.swapChain->Extent().width,
@@ -2120,7 +2146,8 @@ namespace Vulkan
         bool resolvedByUpscaler = false;
         const bool temporalUpscalerActive =
             (HasAny(contract.post, EPostProcess::DLSS) && dlssSuperResolutionActive_) ||
-            (HasAny(contract.post, EPostProcess::SpatialUpscale) && fsrTemporalSuperResolutionActive_);
+            (HasAny(contract.post, EPostProcess::SpatialUpscale) &&
+             (fsrTemporalSuperResolutionActive_ || nativeTemporalSuperResolutionActive_));
         if (upscaler_ && temporalUpscalerActive)
         {
             SCOPED_GPU_TIMER("temporal upscaler resolve");
@@ -2132,10 +2159,9 @@ namespace Vulkan
                 "temporal upscaler resolve");
 
             auto inputs = BuildUpscalerFrameInputs(commandBuffer, imageIndex, VK_IMAGE_LAYOUT_GENERAL);
-            const bool fsrPostFilterActive =
-                fsrTemporalSuperResolutionActive_ &&
+            const bool fsrPostFilterActive = fsrTemporalSuperResolutionActive_ &&
                 PrepareFsrPostFilterOutput(commandBuffer, imageIndex, inputs);
-            if (fsrTemporalSuperResolutionActive_)
+            if (fsrTemporalSuperResolutionActive_ || nativeTemporalSuperResolutionActive_)
             {
                 VkImageSubresourceRange depthRange{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
                 ImageMemoryBarrier::Insert(
@@ -2191,6 +2217,19 @@ namespace Vulkan
                     VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
             }
             else if (fsrTemporalSuperResolutionActive_)
+            {
+                VkImageSubresourceRange depthRange{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
+                ImageMemoryBarrier::Insert(
+                    commandBuffer,
+                    DepthBuffer().GetImage().Handle(),
+                    depthRange,
+                    VK_ACCESS_SHADER_READ_BIT,
+                    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                    VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+            }
+            else if (nativeTemporalSuperResolutionActive_)
             {
                 VkImageSubresourceRange depthRange{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
                 ImageMemoryBarrier::Insert(
@@ -2594,6 +2633,7 @@ namespace Vulkan
             caps_.supportDLSSRR && settings.DLSSRR;
         inputs.enableDLSSG = caps_.supportDLSSG && settings.DLSSG;
         inputs.enableFSR = fsrTemporalSuperResolutionActive_;
+        inputs.enableNativeTemporal = nativeTemporalSuperResolutionActive_;
         inputs.enableFSRFrameGeneration =
             caps_.supportFSRFrameGeneration && settings.FSRG && settings.FSR;
         inputs.superResolutionMode = effectiveSuperResolutionMode_;
@@ -2601,6 +2641,13 @@ namespace Vulkan
         inputs.hdrOutput = swapChain.IsHDR();
         inputs.frameTimeDeltaMilliseconds = static_cast<float>(
             std::max(NextEngine::GetInstance()->GetDeltaSeconds() * 1000.0, 0.001));
+        inputs.nativeTemporalHistoryWeight = settings.NativeTemporalHistoryWeight;
+        inputs.nativeTemporalSharpness = settings.NativeTemporalSharpness;
+        inputs.temporalPostFilterEnabled = settings.FSRPostFilter;
+        inputs.temporalPostFilterPasses = settings.FSRPostFilterPasses;
+        inputs.temporalPostFilterStrength = settings.FSRPostFilterStrength;
+        inputs.temporalPostFilterLumaSigma = settings.FSRPostFilterLumaSigma;
+        inputs.temporalFireflySigma = settings.FSRFireflySigma;
         inputs.renderExtent = swapChain.RenderExtent();
         inputs.outputExtent = swapChain.OutputExtent();
         inputs.outputOffset = swapChain.OutputOffset();

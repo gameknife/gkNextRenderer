@@ -7,6 +7,7 @@
 #include "Modules/NextAudio/NextAudioModule.hpp"
 #include "Modules/NextPhysics/NextPhysicsModule.hpp"
 #include "Modules/NextRemote/NextRemoteModule.hpp"
+#include "Modules/NextTemporalUpscaler/NextTemporalUpscalerModule.hpp"
 
 #include <fmt/format.h>
 #include <filesystem>
@@ -92,6 +93,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     // Create the DevTools provider first: its constructor attaches the console
     // log sink so engine startup logs are captured.
     Runtime::IDebugUiProvider& debugUiProvider = DevTools::DefaultDebugUiProvider();
+    Modules::NextTemporalUpscaler::Install(*GOption);
     GApplication.reset( new NextEngine(*GOption) );
     GApplication->SetDebugUiProvider(&debugUiProvider);
     Modules::Audio::Install(*GApplication);

@@ -730,7 +730,7 @@ namespace FidelityFXWrapper
 
             Rendering::Upscaler::FOptimalRenderSettings GetOptimalRenderSettings(
                 uint32_t superResolutionMode, VkExtent2D outputExtent, bool upscalerEnabled,
-                bool hdrOutput) override
+                bool hdrOutput, Rendering::Upscaler::EUpscalerProvider) override
             {
                 Rendering::Upscaler::FOptimalRenderSettings result{};
                 const auto& modeInfo = Rendering::Upscaler::GetUpscaleModeInfo(superResolutionMode);

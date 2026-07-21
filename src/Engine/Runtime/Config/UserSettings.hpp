@@ -25,6 +25,9 @@ struct UserSettings final
     uint32_t SuperResolution = 5;
     bool DLSS = false;
     bool FSR = false;
+    bool NativeTemporal = false;
+    float NativeTemporalHistoryWeight = 0.97f;
+    float NativeTemporalSharpness = 0.25f;
     bool FSRPostFilter = true;
     uint32_t FSRPostFilterPasses = 3;
     float FSRPostFilterStrength = 0.65f;
