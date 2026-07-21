@@ -1,0 +1,35 @@
+{
+  "name": "sgsr2-motion",
+  "target": "gkNextRenderer",
+  "scene": "assets/models/playground.glb",
+  "defaults": {
+    "waitFrames": 0,
+    "stepTimeoutMs": 15000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 10000 },
+    { "type": "cvar", "name": "r.dlss", "set": false },
+    { "type": "cvar", "name": "r.fsr", "set": false },
+    { "type": "cvar", "name": "r.taau", "set": false },
+    { "type": "cvar", "name": "r.superResolution", "set": 0 },
+    { "type": "cvar", "name": "r.sgsr2", "set": true },
+    { "type": "cvar", "name": "r.fsr.postFilter", "set": true },
+    { "type": "wait-frames", "n": 45 },
+    { "type": "mouse-move", "to": { "norm": [0.5, 0.5] } },
+    { "type": "mouse-button", "button": "right", "action": "down", "at": { "norm": [0.5, 0.5] } },
+    { "type": "key", "code": "W", "action": "down" },
+    { "type": "mouse-move", "relative": true, "to": [180, -20] },
+    { "type": "wait-ms", "ms": 1000 },
+    { "type": "screenshot", "out": "screenshots/sgsr2_during_motion" },
+    { "type": "key", "code": "W", "action": "up" },
+    { "type": "mouse-button", "button": "right", "action": "up" },
+    { "type": "wait-frames", "n": 30 },
+    { "type": "screenshot", "out": "screenshots/sgsr2_after_motion" },
+    { "type": "assert", "query": "cvar.r.sgsr2", "op": "eq", "value": true },
+    { "type": "quit" }
+  ]
+}

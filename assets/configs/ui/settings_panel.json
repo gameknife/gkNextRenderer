@@ -36,6 +36,7 @@
             },
             {"cvar": "r.dlss", "label": "DLSS", "widget": "checkbox"},
             {"cvar": "r.fsr", "label": "FSR", "widget": "checkbox"},
+            {"cvar": "r.sgsr2", "label": "SGSR2 (2-pass CS)", "widget": "checkbox"},
             {"cvar": "r.taau", "label": "Native TAAU", "widget": "checkbox"},
             {"cvar": "r.taau.historyWeight", "label": "TAAU History Weight", "widget": "slider_float", "min": 0.5, "max": 0.98, "step": 0.01, "format": "%.2f", "advanced": true},
             {"cvar": "r.taau.sharpness", "label": "TAAU Sharpness", "widget": "slider_float", "min": 0.0, "max": 1.0, "step": 0.01, "format": "%.2f", "advanced": true},

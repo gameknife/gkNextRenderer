@@ -2,6 +2,7 @@
 #include "Modules/NextTemporalUpscaler/NextTemporalUpscalerModule.hpp"
 
 #include "Engine/Rendering/Upscaler/UpscalerRegistry.hpp"
+#include "Modules/NextTemporalUpscaler/SGSR2Upscaler.hpp"
 #include "Modules/NextTemporalUpscaler/TemporalUpscaler.hpp"
 
 namespace Modules::NextTemporalUpscaler
@@ -10,6 +11,8 @@ namespace Modules::NextTemporalUpscaler
     {
         Rendering::Upscaler::RegisterUpscalerFactory(
             [] { return CreateTemporalUpscaler(); });
-        SPDLOG_INFO("Native temporal compute upscaler provider installed");
+        Rendering::Upscaler::RegisterUpscalerFactory(
+            [] { return CreateSGSR2Upscaler(); });
+        SPDLOG_INFO("Native TAAU and Snapdragon GSR 2 compute upscaler providers installed");
     }
 }

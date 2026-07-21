@@ -34,6 +34,7 @@ namespace Rendering::Upscaler
                     caps.supportPCL |= providerCaps.supportPCL;
                     caps.supportFSR |= providerCaps.supportFSR;
                     caps.supportFSRFrameGeneration |= providerCaps.supportFSRFrameGeneration;
+                    caps.supportSGSR2 |= providerCaps.supportSGSR2;
                     caps.supportNativeTemporal |= providerCaps.supportNativeTemporal;
                     caps.requestedDeviceExtensionsAvailable |= providerCaps.requestedDeviceExtensionsAvailable;
                     caps.requiredGraphicsQueues = std::max(caps.requiredGraphicsQueues, providerCaps.requiredGraphicsQueues);
@@ -122,9 +123,11 @@ namespace Rendering::Upscaler
 
             bool Evaluate(const FFrameInputs& inputs) override
             {
-                IUpscaler* requested = inputs.enableNativeTemporal
-                    ? FindProvider(EUpscalerProvider::NativeTemporal)
-                    : inputs.enableFSR
+                IUpscaler* requested = inputs.enableSGSR2
+                    ? FindProvider(EUpscalerProvider::SnapdragonGSR2)
+                    : inputs.enableNativeTemporal
+                        ? FindProvider(EUpscalerProvider::NativeTemporal)
+                        : inputs.enableFSR
                         ? FindProvider(EUpscalerProvider::FidelityFX)
                         : inputs.enableDLSS
                             ? FindProvider(EUpscalerProvider::Streamline)

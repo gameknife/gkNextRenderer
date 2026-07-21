@@ -272,6 +272,7 @@ namespace Vulkan
         bool SupportDLSSRR() const { return caps_.supportDLSSRR; }
         bool SupportDLSSG() const { return caps_.supportDLSSG; }
         bool SupportFSR() const { return caps_.supportFSR; }
+        bool SupportSGSR2() const { return caps_.supportSGSR2; }
         bool SupportNativeTemporal() const { return caps_.supportNativeTemporal; }
         bool SupportFSRFrameGeneration() const { return caps_.supportFSRFrameGeneration; }
         bool SupportReflex() const { return caps_.supportReflex; }
@@ -279,7 +280,7 @@ namespace Vulkan
         bool IsTemporalSuperResolutionActive() const
         {
             return dlssSuperResolutionActive_ || fsrTemporalSuperResolutionActive_ ||
-                   nativeTemporalSuperResolutionActive_;
+                   sgsr2SuperResolutionActive_ || nativeTemporalSuperResolutionActive_;
         }
         uint32_t TemporalJitterFrameCount() const;
         uint32_t EffectiveSuperResolutionMode() const { return effectiveSuperResolutionMode_; }
@@ -351,6 +352,7 @@ namespace Vulkan
             bool supportDLSSG            = false;
             bool supportFSR              = false;
             bool supportFSRFrameGeneration = false;
+            bool supportSGSR2           = false;
             bool supportNativeTemporal   = false;
             bool supportReflex           = false;
             bool supportPCL              = false;
@@ -543,6 +545,7 @@ namespace Vulkan
         bool resetUpscalerHistory_ = true;
         bool dlssSuperResolutionActive_ = false;
         bool fsrTemporalSuperResolutionActive_ = false;
+        bool sgsr2SuperResolutionActive_ = false;
         bool nativeTemporalSuperResolutionActive_ = false;
         bool fsrSuperResolutionActive_ = false;
         uint32_t effectiveSuperResolutionMode_ =

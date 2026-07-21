@@ -1146,8 +1146,12 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
 
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Upscaling"), true))
     {
-        int upscaleMethod = userSetting.DLSS ? 1 : userSetting.FSR ? 2 : userSetting.NativeTemporal ? 3 : 0;
-        const char* methods[] = {"None", "DLSS", "FSR", "Native TAAU"};
+        int upscaleMethod = userSetting.DLSS ? 1
+            : userSetting.FSR ? 2
+            : userSetting.SGSR2 ? 3
+            : userSetting.NativeTemporal ? 4
+            : 0;
+        const char* methods[] = {"None", "DLSS", "FSR", "SGSR2 (2-pass CS)", "Native TAAU"};
         DrawSettingRow("Method",
                        [&]()
                        {
@@ -1156,8 +1160,10 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
                            {
                                userSetting.DLSS = upscaleMethod == 1 && GetEngine().GetRenderer().SupportDLSS();
                                userSetting.FSR = upscaleMethod == 2;
+                               userSetting.SGSR2 =
+                                   upscaleMethod == 3 && GetEngine().GetRenderer().SupportSGSR2();
                                userSetting.NativeTemporal =
-                                   upscaleMethod == 3 && GetEngine().GetRenderer().SupportNativeTemporal();
+                                   upscaleMethod == 4 && GetEngine().GetRenderer().SupportNativeTemporal();
                                if (!userSetting.DLSS)
                                {
                                    userSetting.DLSSG = false;
@@ -1190,11 +1196,15 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
         {
             ImGui::TextDisabled("DLSS not supported on this hardware.");
         }
-        if (upscaleMethod == 3 && !GetEngine().GetRenderer().SupportNativeTemporal())
+        if (upscaleMethod == 3 && !GetEngine().GetRenderer().SupportSGSR2())
+        {
+            ImGui::TextDisabled("SGSR2 requires sampled/storage RGBA16F and R32UI images plus formatless storage access.");
+        }
+        if (upscaleMethod == 4 && !GetEngine().GetRenderer().SupportNativeTemporal())
         {
             ImGui::TextDisabled("Native TAAU requires formatless Vulkan storage image access.");
         }
-        if (upscaleMethod == 3)
+        if (upscaleMethod == 4)
         {
             DrawFloatSetting("History Weight", &userSetting.NativeTemporalHistoryWeight,
                              0.5f, 0.98f, "%.2f", 0.01f);
@@ -1204,7 +1214,8 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
 
         const bool supportsTemporalNoiseFilter =
             (upscaleMethod == 2 && GetEngine().GetRenderer().SupportFSR()) ||
-            (upscaleMethod == 3 && GetEngine().GetRenderer().SupportNativeTemporal());
+            (upscaleMethod == 3 && GetEngine().GetRenderer().SupportSGSR2()) ||
+            (upscaleMethod == 4 && GetEngine().GetRenderer().SupportNativeTemporal());
         if (supportsTemporalNoiseFilter)
         {
             DrawSettingCheckboxRow("Noise Filter", &userSetting.FSRPostFilter);

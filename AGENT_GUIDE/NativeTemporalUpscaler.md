@@ -1,8 +1,8 @@
-# NativeTemporal Upscaler
+# Native temporal upscalers
 
-`NextTemporalUpscaler` is the engine-owned, compute-only temporal upscaler. It has no vendor
-SDK dependency and is registered on every Vulkan target, including Windows, Linux, macOS/iOS
-through MoltenVK, and Android. At runtime it is exposed as `Native TAAU` / `r.taau`.
+`NextTemporalUpscaler` owns two compute-only temporal providers with no binary SDK dependency:
+Native TAAU (`r.taau`) and Snapdragon Game Super Resolution 2 (`r.sgsr2`). Both are registered
+on every Vulkan target, including Windows, Linux, macOS/iOS through MoltenVK, and Android.
 
 ## Pipeline
 
@@ -27,17 +27,28 @@ and Native TAAU. The provider restores the engine depth attachment layout after 
 
 ## Controls
 
+- `r.sgsr2`: enable the BSD-3-Clause SGSR2 2-pass compute provider. It uses the official
+  Convert + Upscale data flow, render-resolution `RGBA16F`/`R32UI` intermediates, and ping-pong
+  display-resolution `RGBA16F` history. The engine's full-scene render-pixel motion is converted
+  to SGSR2's Vulkan clip-space convention in Convert. Published SGSR2 ratios stop at 2x, so the
+  shared Ultra Performance mode is clamped to the 2x Performance extent for this provider. The
+  port tracks Qualcomm's [SGSR2 v2 source](https://github.com/SnapdragonGameStudios/snapdragon-gsr/tree/main/sgsr/v2)
+  and retains its BSD-3-Clause notice under `assets/shaders/third_party/sgsr2/`.
 - `r.taau`: enable Native TAAU.
 - `r.superResolution`: shared Quality/Balanced/Performance/Ultra Performance/Native/Auto mode.
 - `r.taau.historyWeight` (default `0.97`, range `0.5..0.98`): stable-history contribution.
 - `r.taau.sharpness` (default `0.25`, range `0..1`): display-resolution adaptive sharpening.
 - `r.fsr.postFilter` and its `postFilterPasses`, `postFilterStrength`, `postFilterLumaSigma`,
-  and `fireflySigma` controls are shared by temporal FSR and Native TAAU for compatibility.
+  and `fireflySigma` controls are shared by temporal FSR, SGSR2, and Native TAAU for compatibility.
+  All three paths reuse the same bindless ping/pong images and `Process.FsrPostFilter` a-trous
+  compute pipeline.
 
-The main renderer UI keeps DLSS, FSR, and Native TAAU mutually exclusive. If several cvars are
+The main renderer UI keeps DLSS, FSR, SGSR2, and Native TAAU mutually exclusive. If several cvars are
 set externally, selection priority is DLSS, requested FSR (FidelityFX when available, otherwise
-the spatial FSR1 fallback), then Native TAAU. Native TAAU requires depth and motion outputs, swapchain storage-image usage, and
-formatless storage-image reads/writes; unsupported devices disable it without failing startup.
+the spatial FSR1 fallback), SGSR2, then Native TAAU. Both native providers require depth and
+motion outputs, swapchain storage-image usage, and formatless storage-image access. SGSR2 also
+requires sampled/storage support for `RGBA16F` and `R32UI`; unsupported devices disable the
+provider without failing startup.
 
 ## Validation
 
@@ -47,6 +58,8 @@ Use the deterministic smoke script for both visual and synchronization validatio
 gnb validate --script assets/agentscripts/native-taau-smoke.agentscript.json
 gnb validate --script assets/agentscripts/native-taau-smoke.agentscript.json --sync-validation
 gnb validate --script assets/agentscripts/native-taau-motion.agentscript.json
+gnb validate --script assets/agentscripts/sgsr2-smoke.agentscript.json
+gnb validate --script assets/agentscripts/sgsr2-motion.agentscript.json
 ```
 
 The first implementation derives reactivity from color change because the renderer contract has

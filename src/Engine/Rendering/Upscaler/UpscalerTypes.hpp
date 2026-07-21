@@ -18,6 +18,7 @@ namespace Rendering::Upscaler
         None,
         Streamline,
         FidelityFX,
+        SnapdragonGSR2,
         NativeTemporal,
     };
 
@@ -129,6 +130,7 @@ namespace Rendering::Upscaler
         bool supportPCL = false;
         bool supportFSR = false;
         bool supportFSRFrameGeneration = false;
+        bool supportSGSR2 = false;
         bool supportNativeTemporal = false;
         bool requestedDeviceExtensionsAvailable = false;
         uint32_t requiredGraphicsQueues = 0;
@@ -225,6 +227,7 @@ namespace Rendering::Upscaler
         bool enableDLSSG = false;
         bool enableFSR = false;
         bool enableFSRFrameGeneration = false;
+        bool enableSGSR2 = false;
         bool enableNativeTemporal = false;
         uint32_t superResolutionMode = 0;
         uint32_t frameGenerationMultiplier = 2;

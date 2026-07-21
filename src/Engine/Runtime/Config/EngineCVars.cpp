@@ -61,10 +61,11 @@ namespace NextCVar
         GK_CVAR_UINT_CB("r.superResolution", settings, SuperResolution, 5, ECVarFlags::Archive, "Super resolution mode (0=Quality,1=Balanced,2=Performance,3=Ultra Performance,4=Native/DLAA,5=Auto)", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlss", settings, DLSS, false, ECVarFlags::Archive, "Enable NVIDIA DLSS", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.fsr", settings, FSR, false, ECVarFlags::Archive, "Enable FidelityFX FSR (temporal SDK provider with FSR1 fallback)", std::bind(RequestSwapChainIfPossible, engine));
+        GK_CVAR_BOOL_CB("r.sgsr2", settings, SGSR2, false, ECVarFlags::Archive, "Enable Snapdragon Game Super Resolution 2 (2-pass compute)", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.taau", settings, NativeTemporal, false, ECVarFlags::Archive, "Enable the cross-platform native temporal compute upscaler", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_FLOAT_RANGE("r.taau.historyWeight", settings, NativeTemporalHistoryWeight, 0.97f, ECVarFlags::Archive, "Native TAAU stable-history blend weight", 0.5, 0.98);
         GK_CVAR_FLOAT_RANGE("r.taau.sharpness", settings, NativeTemporalSharpness, 0.25f, ECVarFlags::Archive, "Native TAAU display-resolution adaptive sharpening", 0.0, 1.0);
-        GK_CVAR_BOOL("r.fsr.postFilter", settings, FSRPostFilter, true, ECVarFlags::Archive, "Apply display-resolution bilateral noise and firefly suppression after temporal FSR or Native TAAU");
+        GK_CVAR_BOOL("r.fsr.postFilter", settings, FSRPostFilter, true, ECVarFlags::Archive, "Apply display-resolution bilateral noise and firefly suppression after temporal FSR, SGSR2, or Native TAAU");
         GK_CVAR_UINT_RANGE("r.fsr.postFilterPasses", settings, FSRPostFilterPasses, 3, ECVarFlags::Archive, "Temporal upscaler post-filter a-trous pass count", 1, 4);
         GK_CVAR_FLOAT_RANGE("r.fsr.postFilterStrength", settings, FSRPostFilterStrength, 0.65f, ECVarFlags::Archive, "Temporal upscaler post-filter blend strength", 0.0, 1.0);
         GK_CVAR_FLOAT_RANGE("r.fsr.postFilterLumaSigma", settings, FSRPostFilterLumaSigma, 0.10f, ECVarFlags::Archive, "Temporal upscaler post-filter color/luminance edge threshold", 0.01, 0.5);
