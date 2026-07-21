@@ -92,11 +92,10 @@ namespace Vulkan
     {
         None = 0,
         Temporal = 1u << 0u,
-        SpatialUpscale = 1u << 1u,
-        DLSS = 1u << 2u,
+        Upscale = 1u << 1u,
         FrameGeneration = 1u << 3u,
         DebugGBuffer = 1u << 4u,
-        DLSSRayReconstruction = 1u << 5u,
+        RayReconstruction = 1u << 5u,
     };
 
     enum class EHistoryChannel : uint32_t
@@ -268,19 +267,27 @@ namespace Vulkan
         // Capabilities / flags
         bool VisualDebug() const {return visualDebug_;}
         bool SupportsRayTracing() const { return caps_.supportRayTracing; }
-        bool SupportDLSS() const { return caps_.supportDLSS; }
-        bool SupportDLSSRR() const { return caps_.supportDLSSRR; }
-        bool SupportDLSSG() const { return caps_.supportDLSSG; }
-        bool SupportFSR() const { return caps_.supportFSR; }
-        bool SupportSGSR2() const { return caps_.supportSGSR2; }
-        bool SupportNativeTemporal() const { return caps_.supportNativeTemporal; }
-        bool SupportFSRFrameGeneration() const { return caps_.supportFSRFrameGeneration; }
-        bool SupportReflex() const { return caps_.supportReflex; }
-        bool IsDLSSSuperResolutionActive() const { return dlssSuperResolutionActive_; }
-        bool IsTemporalSuperResolutionActive() const
+        bool SupportsUpscaler(Rendering::Upscaler::EUpscalerType type) const
         {
-            return dlssSuperResolutionActive_ || fsrTemporalSuperResolutionActive_ ||
-                   sgsr2SuperResolutionActive_ || nativeTemporalSuperResolutionActive_;
+            return Rendering::Upscaler::SupportsUpscalerType(caps_.supportedUpscalerTypes, type);
+        }
+        bool SupportsFrameGeneration(Rendering::Upscaler::EUpscalerType type) const
+        {
+            return Rendering::Upscaler::SupportsUpscalerType(caps_.frameGenerationTypes, type);
+        }
+        bool SupportReflex() const { return caps_.supportReflex; }
+        bool IsTemporalSuperResolutionActive() const { return temporalSuperResolutionActive_; }
+        bool IsRayReconstructionActive() const
+        {
+            return temporalSuperResolutionActive_ &&
+                Rendering::Upscaler::GetUpscalerTypeInfo(
+                    static_cast<uint32_t>(activeUpscalerType_)).requiresRayReconstruction;
+        }
+        bool RequiresInvalidMotionMask() const
+        {
+            return temporalSuperResolutionActive_ &&
+                Rendering::Upscaler::GetUpscalerTypeInfo(
+                    static_cast<uint32_t>(activeUpscalerType_)).requiresInvalidMotionMask;
         }
         uint32_t TemporalJitterFrameCount() const;
         uint32_t EffectiveSuperResolutionMode() const { return effectiveSuperResolutionMode_; }
@@ -347,13 +354,8 @@ namespace Vulkan
         struct DeviceCaps
         {
             bool supportRayTracing       = false;
-            bool supportDLSS             = false;
-            bool supportDLSSRR           = false;
-            bool supportDLSSG            = false;
-            bool supportFSR              = false;
-            bool supportFSRFrameGeneration = false;
-            bool supportSGSR2           = false;
-            bool supportNativeTemporal   = false;
+            Rendering::Upscaler::FUpscalerTypeMask supportedUpscalerTypes = 0;
+            Rendering::Upscaler::FUpscalerTypeMask frameGenerationTypes = 0;
             bool supportReflex           = false;
             bool supportPCL              = false;
             bool fullAmbientCubeBudget   = true;
@@ -453,7 +455,6 @@ namespace Vulkan
             std::unique_ptr<Shadow::ShadowMapPass> sunShadowPass;
             std::vector<std::unique_ptr<IExternalRenderPass>> externalPasses;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> bufferClearPipeline;
-            std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> fsrComposePipeline;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> temporalPostFilterPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> visualDebuggerPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> gpuCullCompactPipeline;
@@ -543,11 +544,9 @@ namespace Vulkan
         bool visualDebug_{};
         bool requestRecreateSwapChain_ = false;
         bool resetUpscalerHistory_ = true;
-        bool dlssSuperResolutionActive_ = false;
-        bool fsrTemporalSuperResolutionActive_ = false;
-        bool sgsr2SuperResolutionActive_ = false;
-        bool nativeTemporalSuperResolutionActive_ = false;
-        bool fsrSuperResolutionActive_ = false;
+        Rendering::Upscaler::EUpscalerType activeUpscalerType_ =
+            Rendering::Upscaler::EUpscalerType::None;
+        bool temporalSuperResolutionActive_ = false;
         uint32_t effectiveSuperResolutionMode_ =
             static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Native);
 

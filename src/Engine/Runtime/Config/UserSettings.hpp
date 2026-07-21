@@ -23,24 +23,19 @@ struct UserSettings final
     bool FastGather = false;
     uint32_t PresentMode = 3;
     uint32_t SuperResolution = 5;
-    bool DLSS = false;
-    bool FSR = false;
-    bool SGSR2 = false;
-    bool NativeTemporal = false;
-    float NativeTemporalHistoryWeight = 0.97f;
-    float NativeTemporalSharpness = 0.25f;
-    bool FSRPostFilter = true;
-    uint32_t FSRPostFilterPasses = 3;
-    float FSRPostFilterStrength = 0.65f;
-    float FSRPostFilterLumaSigma = 0.10f;
-    float FSRFireflySigma = 2.5f;
-    bool DLSSRR = false;
-    bool DLSSG = false;
-    bool FSRG = false;
-    uint32_t DLSSGFrameMultiplier = 2;
-    uint32_t DLSSGFrameLimitFps = 0;
-    uint32_t DLSSJitterFrames = 16;
-    bool DLSSJitterInvertY = false;
+    int32_t UpscalerType = 0;
+    float NativeTAAUHistoryWeight = 0.97f;
+    float NativeTAAUSharpness = 0.25f;
+    bool TemporalUpscalerPostFilter = true;
+    uint32_t TemporalUpscalerPostFilterPasses = 3;
+    float TemporalUpscalerPostFilterStrength = 0.65f;
+    float TemporalUpscalerPostFilterLumaSigma = 0.10f;
+    float TemporalUpscalerFireflySigma = 2.5f;
+    bool FrameGeneration = false;
+    uint32_t FrameGenerationMultiplier = 2;
+    uint32_t FrameGenerationFrameLimitFps = 0;
+    uint32_t UpscalerJitterFrames = 16;
+    bool UpscalerJitterInvertY = false;
     int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low
 
     // Camera

@@ -832,9 +832,12 @@ namespace
             {
                 CheckFeatureSupport(info.physicalDevice);
                 SPDLOG_INFO("Streamline Vulkan proxy device ready. DLSS={}, RR={}, DLSS-G={}, Reflex={}, PCL={}",
-                            caps_.supportDLSS,
-                            caps_.supportDLSSRR,
-                            caps_.supportDLSSG,
+                            Rendering::Upscaler::SupportsUpscalerType(
+                                caps_.supportedTypes, Rendering::Upscaler::EUpscalerType::DLSS),
+                            Rendering::Upscaler::SupportsUpscalerType(
+                                caps_.supportedTypes, Rendering::Upscaler::EUpscalerType::DLSSRayReconstruction),
+                            Rendering::Upscaler::SupportsUpscalerType(
+                                caps_.frameGenerationTypes, Rendering::Upscaler::EUpscalerType::DLSS),
                             caps_.supportReflex,
                             caps_.supportPCL);
                 return;
@@ -869,9 +872,12 @@ namespace
             caps_.streamlineDeviceReady = true;
             CheckFeatureSupport(info.physicalDevice);
             SPDLOG_INFO("Streamline device ready. DLSS={}, RR={}, DLSS-G={}, Reflex={}, PCL={}",
-                        caps_.supportDLSS,
-                        caps_.supportDLSSRR,
-                        caps_.supportDLSSG,
+                        Rendering::Upscaler::SupportsUpscalerType(
+                            caps_.supportedTypes, Rendering::Upscaler::EUpscalerType::DLSS),
+                        Rendering::Upscaler::SupportsUpscalerType(
+                            caps_.supportedTypes, Rendering::Upscaler::EUpscalerType::DLSSRayReconstruction),
+                        Rendering::Upscaler::SupportsUpscalerType(
+                            caps_.frameGenerationTypes, Rendering::Upscaler::EUpscalerType::DLSS),
                         caps_.supportReflex,
                         caps_.supportPCL);
         }
@@ -972,10 +978,25 @@ namespace
             sl::AdapterInfo adapterInfo{};
             adapterInfo.vkPhysicalDevice = physicalDevice;
 
-            caps_.supportDLSS = slIsFeatureSupported(sl::kFeatureDLSS, adapterInfo) == sl::Result::eOk;
-            caps_.supportDLSSRR = slIsFeatureSupported(sl::kFeatureDLSS_RR, adapterInfo) == sl::Result::eOk;
-            caps_.supportDLSSG = slIsFeatureSupported(sl::kFeatureDLSS_G, adapterInfo) == sl::Result::eOk;
+            Rendering::Upscaler::SetUpscalerTypeSupport(
+                caps_.supportedTypes, Rendering::Upscaler::EUpscalerType::DLSS,
+                slIsFeatureSupported(sl::kFeatureDLSS, adapterInfo) == sl::Result::eOk);
+            Rendering::Upscaler::SetUpscalerTypeSupport(
+                caps_.supportedTypes, Rendering::Upscaler::EUpscalerType::DLSSRayReconstruction,
+                slIsFeatureSupported(sl::kFeatureDLSS_RR, adapterInfo) == sl::Result::eOk);
             caps_.supportReflex = slIsFeatureSupported(sl::kFeatureReflex, adapterInfo) == sl::Result::eOk;
+            const bool supportFrameGeneration = caps_.supportReflex &&
+                slIsFeatureSupported(sl::kFeatureDLSS_G, adapterInfo) == sl::Result::eOk;
+            Rendering::Upscaler::SetUpscalerTypeSupport(
+                caps_.frameGenerationTypes, Rendering::Upscaler::EUpscalerType::DLSS,
+                supportFrameGeneration && Rendering::Upscaler::SupportsUpscalerType(
+                    caps_.supportedTypes, Rendering::Upscaler::EUpscalerType::DLSS));
+            Rendering::Upscaler::SetUpscalerTypeSupport(
+                caps_.frameGenerationTypes,
+                Rendering::Upscaler::EUpscalerType::DLSSRayReconstruction,
+                supportFrameGeneration && Rendering::Upscaler::SupportsUpscalerType(
+                    caps_.supportedTypes,
+                    Rendering::Upscaler::EUpscalerType::DLSSRayReconstruction));
             caps_.supportPCL = slIsFeatureSupported(sl::kFeaturePCL, adapterInfo) == sl::Result::eOk;
         }
 
@@ -1011,12 +1032,10 @@ namespace
         {
             StreamlineContext().SetVulkanInfo(deviceInfo);
             caps = StreamlineContext().Caps();
-            caps.provider = Rendering::Upscaler::EUpscalerProvider::Streamline;
             if (!GStreamlineDeviceExtsEnabled)
             {
-                caps.supportDLSS = false;
-                caps.supportDLSSRR = false;
-                caps.supportDLSSG = false;
+                caps.supportedTypes = 0;
+                caps.frameGenerationTypes = 0;
             }
 
             if (caps.supportPCL)
@@ -1032,7 +1051,7 @@ namespace
 
         void OnSwapChainDestroyed() override
         {
-            if (!StreamlineContext().Caps().supportDLSSG)
+            if (StreamlineContext().Caps().frameGenerationTypes == 0)
             {
                 return;
             }
@@ -1100,9 +1119,9 @@ namespace
         Rendering::Upscaler::FOptimalRenderSettings GetOptimalRenderSettings(
             uint32_t superResolutionMode,
             VkExtent2D outputExtent,
-            bool dlssEnabled,
+            bool upscalerEnabled,
             bool hdrOutput,
-            Rendering::Upscaler::EUpscalerProvider) override
+            Rendering::Upscaler::EUpscalerType type) override
         {
             Rendering::Upscaler::FOptimalRenderSettings result{};
             const auto& modeInfo = Rendering::Upscaler::GetUpscaleModeInfo(superResolutionMode);
@@ -1111,7 +1130,9 @@ namespace
             result.maxRenderExtent = outputExtent;
 
             const auto caps = StreamlineContext().Caps();
-            if (!dlssEnabled || !caps.supportDLSS || outputExtent.width == 0 || outputExtent.height == 0)
+            if (!upscalerEnabled ||
+                !Rendering::Upscaler::SupportsUpscalerType(caps.supportedTypes, type) ||
+                outputExtent.width == 0 || outputExtent.height == 0)
             {
                 return result;
             }
@@ -1222,12 +1243,14 @@ namespace
         bool Evaluate(const Rendering::Upscaler::FFrameInputs& inputs) override
         {
             const auto caps = StreamlineContext().Caps();
-            if (!inputs.enableDLSS || !caps.supportDLSS || !inputs.frameToken || inputs.ubo == nullptr)
+            if (!Rendering::Upscaler::SupportsUpscalerType(caps.supportedTypes, inputs.upscalerType) ||
+                !inputs.frameToken || inputs.ubo == nullptr)
             {
                 return false;
             }
 
-            const bool useRR = inputs.enableDLSSRR && caps.supportDLSSRR;
+            const bool useRR = Rendering::Upscaler::GetUpscalerTypeInfo(
+                static_cast<uint32_t>(inputs.upscalerType)).requiresRayReconstruction;
             if (!SetSuperResolutionOptions(inputs, useRR))
             {
                 return false;
@@ -1259,14 +1282,16 @@ namespace
         void TagFrameGeneration(const Rendering::Upscaler::FFrameInputs& inputs) override
         {
             const auto caps = StreamlineContext().Caps();
-            if (!inputs.frameToken || !caps.supportDLSSG)
+            if (!inputs.frameToken ||
+                !Rendering::Upscaler::SupportsUpscalerType(
+                    caps.frameGenerationTypes, inputs.upscalerType))
             {
                 return;
             }
 
             const bool hdrFormatSupported =
                 IsHDRFormatSupportedForDLSSG(inputs.swapchainFormat, inputs.hdrOutput);
-            if (inputs.enableDLSSG && inputs.hdrOutput && !hdrFormatSupported &&
+            if (inputs.enableFrameGeneration && inputs.hdrOutput && !hdrFormatSupported &&
                 lastUnsupportedDLSSGHDRFormat_ != inputs.swapchainFormat)
             {
                 SPDLOG_WARN(
@@ -1280,7 +1305,7 @@ namespace
             }
 
             const bool canEnable =
-                inputs.enableDLSSG &&
+                inputs.enableFrameGeneration &&
                 caps.supportReflex &&
                 caps.supportPCL &&
                 inputs.depth.IsValid() &&
@@ -1346,7 +1371,7 @@ namespace
         void UpdateFrameGenerationState() override
         {
             const auto caps = StreamlineContext().Caps();
-            if (!caps.supportDLSSG)
+            if (caps.frameGenerationTypes == 0)
             {
                 frameGenerationState_ = {};
                 return;

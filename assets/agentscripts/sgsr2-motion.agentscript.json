@@ -12,12 +12,9 @@
   },
   "steps": [
     { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 10000 },
-    { "type": "cvar", "name": "r.dlss", "set": false },
-    { "type": "cvar", "name": "r.fsr", "set": false },
-    { "type": "cvar", "name": "r.taau", "set": false },
+    { "type": "cvar", "name": "r.upscalerType", "set": 5 },
     { "type": "cvar", "name": "r.superResolution", "set": 0 },
-    { "type": "cvar", "name": "r.sgsr2", "set": true },
-    { "type": "cvar", "name": "r.fsr.postFilter", "set": true },
+    { "type": "cvar", "name": "r.upscaler.postFilter", "set": true },
     { "type": "wait-frames", "n": 45 },
     { "type": "mouse-move", "to": { "norm": [0.5, 0.5] } },
     { "type": "mouse-button", "button": "right", "action": "down", "at": { "norm": [0.5, 0.5] } },
@@ -29,7 +26,7 @@
     { "type": "mouse-button", "button": "right", "action": "up" },
     { "type": "wait-frames", "n": 30 },
     { "type": "screenshot", "out": "screenshots/sgsr2_after_motion" },
-    { "type": "assert", "query": "cvar.r.sgsr2", "op": "eq", "value": true },
+    { "type": "assert", "query": "cvar.r.upscalerType", "op": "eq", "value": 5 },
     { "type": "quit" }
   ]
 }

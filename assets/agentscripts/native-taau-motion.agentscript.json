@@ -12,11 +12,9 @@
   },
   "steps": [
     { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 10000 },
-    { "type": "cvar", "name": "r.dlss", "set": false },
-    { "type": "cvar", "name": "r.fsr", "set": false },
+    { "type": "cvar", "name": "r.upscalerType", "set": 4 },
     { "type": "cvar", "name": "r.superResolution", "set": 0 },
-    { "type": "cvar", "name": "r.fsr.postFilter", "set": true },
-    { "type": "cvar", "name": "r.taau", "set": true },
+    { "type": "cvar", "name": "r.upscaler.postFilter", "set": true },
     { "type": "wait-frames", "n": 45 },
     { "type": "mouse-move", "to": { "norm": [0.5, 0.5] } },
     { "type": "mouse-button", "button": "right", "action": "down", "at": { "norm": [0.5, 0.5] } },
@@ -28,8 +26,8 @@
     { "type": "mouse-button", "button": "right", "action": "up" },
     { "type": "wait-frames", "n": 30 },
     { "type": "screenshot", "out": "screenshots/native_taau_after_motion" },
-    { "type": "assert", "query": "cvar.r.taau", "op": "eq", "value": true },
-    { "type": "assert", "query": "cvar.r.fsr.postFilter", "op": "eq", "value": true },
+    { "type": "assert", "query": "cvar.r.upscalerType", "op": "eq", "value": 4 },
+    { "type": "assert", "query": "cvar.r.upscaler.postFilter", "op": "eq", "value": true },
     { "type": "quit" }
   ]
 }

@@ -164,8 +164,8 @@ public struct ALIGN_16 UniformBufferObject
 
     public float4 AmbientCubeCascadeParams;
 
-    public bool DLSS;
-    public bool DLSSRR;
+    public bool UpscalerInvalidMotionMask;
+    public bool RayReconstruction;
     public float GTAORadius;
     public float GTAOStrength;
 

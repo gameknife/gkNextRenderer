@@ -157,7 +157,7 @@ void CharacterDemoGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
     //cvars.SetDefaultFromString("r.superResolution", "4", &error);
     cvars.SetDefaultFromString("r.fastGather", "true", &error);
-    //cvars.SetDefaultFromString("r.dlss", "true", &error);
+    //cvars.SetDefaultFromString("r.upscalerType", "1", &error);
 }
 
 void CharacterDemoGameInstance::BeforeSceneRebuild(

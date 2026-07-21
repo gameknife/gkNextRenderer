@@ -22,7 +22,7 @@ spatial denoiser；renderer 生成的当前帧 diffuse/specular 样本直接 com
    `RT_SINGLE_DIFFUSE`。ReSTIR reservoir 的时域复用是光照采样器自身状态，不是颜色历史。
 3. `Process.Compose.comp.slang` 直接读取 single diffuse/specular 与当前 albedo，叠加编辑器
    outline，输出 HDR 编码或 SDR tonemap 后的 `RT_SCENE_COLOR`。
-4. DLSS、FidelityFX FSR 3.1、内建 spatial FSR/native presentation 统一消费
+4. DLSS、FidelityFX FSR 3.1、Native TAAU、SGSR2 或 native presentation 统一消费
    `RT_SCENE_COLOR`。DLSS Ray Reconstruction 的
    noisy diffuse/specular resource 直接绑定 `RT_SINGLE_DIFFUSE/SPECULAR`，不经过引擎滤波。
 
@@ -35,9 +35,9 @@ FidelityFX temporal FSR 与 Native TAAU 可在 evaluate 后运行同一层显示
 `SoftwareModernNoAmbient` 和 `VoxelTracing` 有自己的 compose shader，但输出契约同样是
 `RT_SCENE_COLOR`，因此后续 presentation 不需要知道 renderer 类型。
 
-PathTracing、SoftwareTracing、SoftwareModern 和 SoftwareModernNoAmbient 都声明普通 DLSS
-Super Resolution 能力。只有 PathTracing 声明 DLSS Ray Reconstruction 能力；即使全局
-`r.dlssrr` 已开启，其他 renderer 也会自动使用普通 DLSS，不会提交不完整的 RR G-buffer。
+PathTracing、SoftwareTracing、SoftwareModern 和 SoftwareModernNoAmbient 都声明通用 upscale
+能力。只有 PathTracing 声明 Ray Reconstruction contract；在其他 renderer 选择 type 2 时，
+该类型不可用并回到 native rendering，不会隐式改成另一种 upscaler。
 
 ## 唯一保留的颜色累积
 

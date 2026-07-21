@@ -130,7 +130,6 @@ namespace Modules::NextTemporalUpscaler
                 Rendering::Upscaler::FFeatureCaps& caps) override
             {
                 deviceInfo_ = deviceInfo;
-                caps.provider = Rendering::Upscaler::EUpscalerProvider::SnapdragonGSR2;
 
                 VkPhysicalDeviceFeatures features{};
                 vkGetPhysicalDeviceFeatures(deviceInfo_.physicalDevice, &features);
@@ -157,7 +156,8 @@ namespace Modules::NextTemporalUpscaler
                     return;
                 }
 
-                caps.supportSGSR2 = true;
+                caps.supportedTypes = Rendering::Upscaler::UpscalerTypeBit(
+                    Rendering::Upscaler::EUpscalerType::SnapdragonGSR2);
                 SPDLOG_INFO("Snapdragon GSR 2 2-pass compute provider ready");
             }
 
@@ -208,7 +208,7 @@ namespace Modules::NextTemporalUpscaler
 
             Rendering::Upscaler::FOptimalRenderSettings GetOptimalRenderSettings(
                 uint32_t mode, VkExtent2D outputExtent, bool, bool,
-                Rendering::Upscaler::EUpscalerProvider) override
+                Rendering::Upscaler::EUpscalerType) override
             {
                 // Qualcomm publishes SGSR2 2-pass CS profiles for 1.5x, 1.7x and 2.0x.
                 // Keep Ultra Performance within the supported 2x envelope.
@@ -250,7 +250,7 @@ namespace Modules::NextTemporalUpscaler
 
             bool Evaluate(const Rendering::Upscaler::FFrameInputs& inputs) override
             {
-                if (!inputs.enableSGSR2 || !deviceReady_ ||
+                if (inputs.upscalerType != Rendering::Upscaler::EUpscalerType::SnapdragonGSR2 || !deviceReady_ ||
                     inputs.commandBuffer == VK_NULL_HANDLE || inputs.ubo == nullptr ||
                     !inputs.scalingInputColor.IsValid() || !inputs.scalingOutputColor.IsValid() ||
                     !inputs.motionVectors.IsValid() || !inputs.depth.IsValid())

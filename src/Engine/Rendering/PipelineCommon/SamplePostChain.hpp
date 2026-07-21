@@ -30,7 +30,7 @@ namespace Vulkan::PipelineCommon
 
     // Converts the current renderer sample directly into scene color. The only history path
     // retained here is explicit offline progressive accumulation; realtime rendering never
-    // reprojects or spatially filters the sample before DLSS/FSR consumes it.
+    // reprojects or spatially filters the sample before a temporal upscaler consumes it.
     class SamplePostChain final
     {
     public:

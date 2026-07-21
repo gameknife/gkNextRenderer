@@ -113,3 +113,23 @@ TEST_CASE("Upscaler motion vectors use pixel-space normalization", "[Unit][Upsca
     CHECK(clampedScale.x == 1.0f);
     CHECK(clampedScale.y == 1.0f);
 }
+TEST_CASE("Upscaler types have one stable ordered selection", "[Unit][Upscaler]")
+{
+    using namespace Rendering::Upscaler;
+
+    CHECK(GetUpscalerTypeInfo(0).type == EUpscalerType::None);
+    CHECK(GetUpscalerTypeInfo(1).type == EUpscalerType::DLSS);
+    CHECK(GetUpscalerTypeInfo(2).type == EUpscalerType::DLSSRayReconstruction);
+    CHECK(GetUpscalerTypeInfo(3).type == EUpscalerType::FidelityFXFSR);
+    CHECK(GetUpscalerTypeInfo(4).type == EUpscalerType::NativeTAAU);
+    CHECK(GetUpscalerTypeInfo(5).type == EUpscalerType::SnapdragonGSR2);
+    CHECK(GetUpscalerTypeInfo(99).type == EUpscalerType::None);
+
+    const FUpscalerTypeMask nativeTypes =
+        UpscalerTypeBit(EUpscalerType::NativeTAAU) |
+        UpscalerTypeBit(EUpscalerType::SnapdragonGSR2);
+    CHECK(SupportsUpscalerType(nativeTypes, EUpscalerType::NativeTAAU));
+    CHECK(SupportsUpscalerType(nativeTypes, EUpscalerType::SnapdragonGSR2));
+    CHECK_FALSE(SupportsUpscalerType(nativeTypes, EUpscalerType::FidelityFXFSR));
+    CHECK(HasTemporalPostFilterUpscaler(nativeTypes));
+}

@@ -27,15 +27,10 @@ namespace Rendering::Upscaler
                     const auto& providerCaps = providerCaps_[i];
                     caps.streamlineInitialized |= providerCaps.streamlineInitialized;
                     caps.streamlineDeviceReady |= providerCaps.streamlineDeviceReady;
-                    caps.supportDLSS |= providerCaps.supportDLSS;
-                    caps.supportDLSSRR |= providerCaps.supportDLSSRR;
-                    caps.supportDLSSG |= providerCaps.supportDLSSG;
+                    caps.supportedTypes |= providerCaps.supportedTypes;
+                    caps.frameGenerationTypes |= providerCaps.frameGenerationTypes;
                     caps.supportReflex |= providerCaps.supportReflex;
                     caps.supportPCL |= providerCaps.supportPCL;
-                    caps.supportFSR |= providerCaps.supportFSR;
-                    caps.supportFSRFrameGeneration |= providerCaps.supportFSRFrameGeneration;
-                    caps.supportSGSR2 |= providerCaps.supportSGSR2;
-                    caps.supportNativeTemporal |= providerCaps.supportNativeTemporal;
                     caps.requestedDeviceExtensionsAvailable |= providerCaps.requestedDeviceExtensionsAvailable;
                     caps.requiredGraphicsQueues = std::max(caps.requiredGraphicsQueues, providerCaps.requiredGraphicsQueues);
                     caps.requiredComputeQueues = std::max(caps.requiredComputeQueues, providerCaps.requiredComputeQueues);
@@ -62,13 +57,13 @@ namespace Rendering::Upscaler
 
             FOptimalRenderSettings GetOptimalRenderSettings(
                 uint32_t mode, VkExtent2D outputExtent, bool enabled, bool hdrOutput,
-                EUpscalerProvider requestedProvider) override
+                EUpscalerType requestedType) override
             {
-                activeProvider_ = FindProvider(requestedProvider);
+                activeProvider_ = FindProvider(requestedType);
                 if (activeProvider_ != nullptr)
                 {
                     return activeProvider_->GetOptimalRenderSettings(
-                        mode, outputExtent, enabled, hdrOutput, requestedProvider);
+                        mode, outputExtent, enabled, hdrOutput, requestedType);
                 }
 
                 const VkExtent2D renderExtent = ScaleExtent(
@@ -123,15 +118,7 @@ namespace Rendering::Upscaler
 
             bool Evaluate(const FFrameInputs& inputs) override
             {
-                IUpscaler* requested = inputs.enableSGSR2
-                    ? FindProvider(EUpscalerProvider::SnapdragonGSR2)
-                    : inputs.enableNativeTemporal
-                        ? FindProvider(EUpscalerProvider::NativeTemporal)
-                        : inputs.enableFSR
-                        ? FindProvider(EUpscalerProvider::FidelityFX)
-                        : inputs.enableDLSS
-                            ? FindProvider(EUpscalerProvider::Streamline)
-                            : nullptr;
+                IUpscaler* requested = FindProvider(inputs.upscalerType);
                 return requested != nullptr && requested->Evaluate(inputs);
             }
 
@@ -165,11 +152,11 @@ namespace Rendering::Upscaler
             }
 
         private:
-            IUpscaler* FindProvider(EUpscalerProvider requestedProvider) const
+            IUpscaler* FindProvider(EUpscalerType requestedType) const
             {
                 for (size_t i = 0; i < providers_.size(); ++i)
                 {
-                    if (providerCaps_[i].provider == requestedProvider)
+                    if (SupportsUpscalerType(providerCaps_[i].supportedTypes, requestedType))
                     {
                         return providers_[i].get();
                     }

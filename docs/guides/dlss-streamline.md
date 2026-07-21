@@ -13,13 +13,13 @@ gkNextEngine 只在 Windows x86_64 上集成 NVIDIA Streamline。非 Windows 构
 
 ## 运行时 CVar
 
-- `r.dlss 1`：启用 DLSS Super Resolution。
-- `r.dlssrr 1`：在 DLSS 已启用且功能受支持时启用 DLSS Ray Reconstruction。
-- `r.dlssg 1`：在 DLSS-G 和 Reflex 均受支持时启用 DLSS Frame Generation。
-- `r.dlssg.multiplier 2`：帧倍增系数，目前限制在 `2..4`。
-- `r.dlssg.frameLimitFps 0`：DLSS-G 开启时的 Reflex base-frame 限帧；0 表示不限制。
-- `r.dlss.jitterFrames 16`：DLSS/TAA projection jitter 序列长度，运行时钳制到 `1..256`。
-- `r.dlss.jitterInvertY 0`：只用于验证 Streamline jitter 符号的诊断开关，不是画质 preset。
+- `r.upscalerType 1`：选择 DLSS Super Resolution。
+- `r.upscalerType 2`：选择 DLSS Ray Reconstruction；这是独立的 upscaler type。
+- `r.frameGeneration 1`：在当前 type 支持 Frame Generation 时启用。
+- `r.frameGeneration.multiplier 2`：帧倍增系数，目前限制在 `2..4`。
+- `r.frameGeneration.frameLimitFps 0`：Frame Generation 开启时的 base-frame 限帧；0 表示不限制。
+- `r.upscaler.jitterFrames 16`：provider 未给出 phase count 时的 projection jitter 序列长度。
+- `r.upscaler.jitterInvertY 0`：只用于验证 temporal upscaler jitter 符号的诊断开关。
 - `r.superResolution 0..5`：Quality、Balanced、Performance、Ultra Performance、Native/DLAA、Auto。Auto 在输出不超过 1920×1080 时关闭超分并使用原生分辨率，更高分辨率使用 Quality。
 
 修改 DLSS、DLSS-RR、DLSS-G、帧倍增系数或超分辨率模式会重建 swapchain。
@@ -27,7 +27,7 @@ gkNextEngine 只在 Windows x86_64 上集成 NVIDIA Streamline。非 Windows 构
 无需编辑 `cvar_user.json`，也可以通过启动参数覆盖：
 
 ```bash
-./gnb.sh run gkNextRenderer --load-scene=assets/models/playground.glb --cvar "r.dlss 1" --cvar "r.dlssg 1"
+./gnb.sh run gkNextRenderer --load-scene=assets/models/playground.glb --cvar "r.upscalerType 1" --cvar "r.frameGeneration 1"
 ```
 
 对于会反复创建和销毁 engine instance 的测试进程，使用 `--disable-streamline`。Windows

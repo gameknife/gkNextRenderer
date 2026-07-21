@@ -109,30 +109,30 @@ TEST_CASE("Renderer contracts describe prepasses outputs and history", "[Unit][R
     CHECK(HasAny(path.sceneResources, ESceneResource::TLAS));
     CHECK(HasAny(path.prepasses, EViewPrepass::Visibility));
     CHECK_FALSE(HasAny(path.prepasses, EViewPrepass::CSM));
-    CHECK(HasAll(path.post, EPostProcess::DLSS | EPostProcess::DLSSRayReconstruction));
+    CHECK(HasAll(path.post, EPostProcess::Upscale | EPostProcess::RayReconstruction));
     CHECK(HasAll(path.history, EHistoryChannel::Diffuse | EHistoryChannel::Specular |
                                EHistoryChannel::Albedo | EHistoryChannel::ObjectId));
 
     const auto& softwareTracing = GetRendererContract(ERT_SoftwareTracing);
     const auto& softwareModern = GetRendererContract(ERT_SoftwareModern);
-    CHECK(HasAny(softwareTracing.post, EPostProcess::DLSS));
-    CHECK(HasAny(softwareModern.post, EPostProcess::DLSS));
-    CHECK_FALSE(HasAny(softwareTracing.post, EPostProcess::DLSSRayReconstruction));
-    CHECK_FALSE(HasAny(softwareModern.post, EPostProcess::DLSSRayReconstruction));
+    CHECK(HasAny(softwareTracing.post, EPostProcess::Upscale));
+    CHECK(HasAny(softwareModern.post, EPostProcess::Upscale));
+    CHECK_FALSE(HasAny(softwareTracing.post, EPostProcess::RayReconstruction));
+    CHECK_FALSE(HasAny(softwareModern.post, EPostProcess::RayReconstruction));
 
     const auto& voxel = GetRendererContract(ERT_VoxelTracing);
     CHECK(voxel.prepasses == EViewPrepass::None);
     CHECK(voxel.outputs == ERenderOutput::Color);
     CHECK(voxel.history == EHistoryChannel::None);
-    CHECK_FALSE(HasAny(voxel.post, EPostProcess::Temporal | EPostProcess::DLSS |
+    CHECK_FALSE(HasAny(voxel.post, EPostProcess::Temporal |
                                   EPostProcess::DebugGBuffer));
 
     const auto& noAmbient = GetRendererContract(ERT_SoftwareModernNoAmbient);
     CHECK(noAmbient.sceneResources == ESceneResource::None);
     CHECK(HasAny(noAmbient.outputs, ERenderOutput::Depth | ERenderOutput::Motion |
                                     ERenderOutput::ObjectId | ERenderOutput::Normal));
-    CHECK(HasAny(noAmbient.post, EPostProcess::DLSS));
-    CHECK_FALSE(HasAny(noAmbient.post, EPostProcess::DLSSRayReconstruction));
+    CHECK(HasAny(noAmbient.post, EPostProcess::Upscale));
+    CHECK_FALSE(HasAny(noAmbient.post, EPostProcess::RayReconstruction));
     CHECK(noAmbient.history == EHistoryChannel::None);
     CHECK(noAmbient.supportsSceneOverrideWithoutPrepare);
     CHECK_FALSE(path.supportsSceneOverrideWithoutPrepare);

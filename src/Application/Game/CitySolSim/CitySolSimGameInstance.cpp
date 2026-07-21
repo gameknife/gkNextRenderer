@@ -373,7 +373,7 @@ void CitySolSimGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
     cvars.SetDefaultFromString("r.samples", "2", &error);
     cvars.SetDefaultFromString("r.sharc.enable", "true", &error);
-    cvars.SetDefaultFromString("r.dlss", "true", &error);
+    cvars.SetDefaultFromString("r.upscalerType", "1", &error);
 }
 
 void CitySolSimGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegistry& reg)

@@ -116,7 +116,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     const float centerNormalLengthSquared = dot(centerNormal, centerNormal);
 
     // B3-spline a-trous kernel. Successive passes increase StepWidth (1, 2, 4, ...),
-    // growing the denoising support without downsampling the FSR output.
+    // growing the denoising support without downsampling the upscaler output.
     for (int y = -2; y <= 2; ++y)
     {
         for (int x = -2; x <= 2; ++x)

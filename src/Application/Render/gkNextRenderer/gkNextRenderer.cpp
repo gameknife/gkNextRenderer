@@ -1146,31 +1146,22 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
 
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Upscaling"), true))
     {
-        int upscaleMethod = userSetting.DLSS ? 1
-            : userSetting.FSR ? 2
-            : userSetting.SGSR2 ? 3
-            : userSetting.NativeTemporal ? 4
-            : 0;
-        const char* methods[] = {"None", "DLSS", "FSR", "SGSR2 (2-pass CS)", "Native TAAU"};
+        int upscaleMethod = userSetting.UpscalerType;
+        const char* methods[] = {
+            "None", "DLSS", "DLSS Ray Reconstruction", "FidelityFX FSR",
+            "Native TAAU", "SGSR2 (2-pass CS)"};
         DrawSettingRow("Method",
                        [&]()
                        {
                            ImGui::SetNextItemWidth(-FLT_MIN);
                            if (ImGui::Combo("##UpscaleMethod", &upscaleMethod, methods, IM_ARRAYSIZE(methods)))
                            {
-                               userSetting.DLSS = upscaleMethod == 1 && GetEngine().GetRenderer().SupportDLSS();
-                               userSetting.FSR = upscaleMethod == 2;
-                               userSetting.SGSR2 =
-                                   upscaleMethod == 3 && GetEngine().GetRenderer().SupportSGSR2();
-                               userSetting.NativeTemporal =
-                                   upscaleMethod == 4 && GetEngine().GetRenderer().SupportNativeTemporal();
-                               if (!userSetting.DLSS)
+                               userSetting.UpscalerType = upscaleMethod;
+                               const auto type = Rendering::Upscaler::GetUpscalerTypeInfo(
+                                   static_cast<uint32_t>(upscaleMethod)).type;
+                               if (!GetEngine().GetRenderer().SupportsFrameGeneration(type))
                                {
-                                   userSetting.DLSSG = false;
-                               }
-                               if (!userSetting.FSR)
-                               {
-                                   userSetting.FSRG = false;
+                                   userSetting.FrameGeneration = false;
                                }
                                GetEngine().GetRenderer().RequestRecreateSwapChain();
                                return true;
@@ -1192,104 +1183,81 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
                            return false;
                        });
 
-        if (upscaleMethod == 1 && !GetEngine().GetRenderer().SupportDLSS())
+        const auto& upscalerTypeInfo = Rendering::Upscaler::GetUpscalerTypeInfo(
+            static_cast<uint32_t>(upscaleMethod));
+        if (upscalerTypeInfo.type != Rendering::Upscaler::EUpscalerType::None &&
+            !GetEngine().GetRenderer().SupportsUpscaler(upscalerTypeInfo.type))
         {
-            ImGui::TextDisabled("DLSS not supported on this hardware.");
+            ImGui::TextDisabled("%s is not supported on this hardware.", upscalerTypeInfo.name);
         }
-        if (upscaleMethod == 3 && !GetEngine().GetRenderer().SupportSGSR2())
+        if (upscalerTypeInfo.type == Rendering::Upscaler::EUpscalerType::NativeTAAU)
         {
-            ImGui::TextDisabled("SGSR2 requires sampled/storage RGBA16F and R32UI images plus formatless storage access.");
-        }
-        if (upscaleMethod == 4 && !GetEngine().GetRenderer().SupportNativeTemporal())
-        {
-            ImGui::TextDisabled("Native TAAU requires formatless Vulkan storage image access.");
-        }
-        if (upscaleMethod == 4)
-        {
-            DrawFloatSetting("History Weight", &userSetting.NativeTemporalHistoryWeight,
+            DrawFloatSetting("History Weight", &userSetting.NativeTAAUHistoryWeight,
                              0.5f, 0.98f, "%.2f", 0.01f);
-            DrawFloatSetting("Sharpness", &userSetting.NativeTemporalSharpness,
+            DrawFloatSetting("Sharpness", &userSetting.NativeTAAUSharpness,
                              0.0f, 1.0f, "%.2f", 0.01f);
         }
 
-        const bool supportsTemporalNoiseFilter =
-            (upscaleMethod == 2 && GetEngine().GetRenderer().SupportFSR()) ||
-            (upscaleMethod == 3 && GetEngine().GetRenderer().SupportSGSR2()) ||
-            (upscaleMethod == 4 && GetEngine().GetRenderer().SupportNativeTemporal());
+        const bool supportsTemporalNoiseFilter = upscalerTypeInfo.supportsTemporalPostFilter &&
+            GetEngine().GetRenderer().SupportsUpscaler(upscalerTypeInfo.type);
         if (supportsTemporalNoiseFilter)
         {
-            DrawSettingCheckboxRow("Noise Filter", &userSetting.FSRPostFilter);
-            ImGui::BeginDisabled(!userSetting.FSRPostFilter);
-            int filterPasses = static_cast<int>(userSetting.FSRPostFilterPasses);
+            DrawSettingCheckboxRow("Noise Filter", &userSetting.TemporalUpscalerPostFilter);
+            ImGui::BeginDisabled(!userSetting.TemporalUpscalerPostFilter);
+            int filterPasses = static_cast<int>(userSetting.TemporalUpscalerPostFilterPasses);
             if (DrawIntSetting("A-Trous Passes", &filterPasses, 1, 4))
             {
-                userSetting.FSRPostFilterPasses = static_cast<uint32_t>(filterPasses);
+                userSetting.TemporalUpscalerPostFilterPasses = static_cast<uint32_t>(filterPasses);
             }
-            DrawFloatSetting("Filter Strength", &userSetting.FSRPostFilterStrength, 0.0f, 1.0f, "%.2f", 0.01f);
-            DrawFloatSetting("Edge Sigma", &userSetting.FSRPostFilterLumaSigma, 0.01f, 0.5f, "%.2f", 0.01f);
-            DrawFloatSetting("Firefly Sigma", &userSetting.FSRFireflySigma, 1.0f, 8.0f, "%.1f", 0.1f);
+            DrawFloatSetting("Filter Strength", &userSetting.TemporalUpscalerPostFilterStrength, 0.0f, 1.0f, "%.2f", 0.01f);
+            DrawFloatSetting("Edge Sigma", &userSetting.TemporalUpscalerPostFilterLumaSigma, 0.01f, 0.5f, "%.2f", 0.01f);
+            DrawFloatSetting("Firefly Sigma", &userSetting.TemporalUpscalerFireflySigma, 1.0f, 8.0f, "%.1f", 0.1f);
             ImGui::EndDisabled();
         }
 
-        const bool canUseDLSSFrameGeneration =
-            upscaleMethod == 1 &&
-            GetEngine().GetRenderer().SupportDLSSG() &&
-            GetEngine().GetRenderer().SupportReflex();
-        const bool canUseFSRFrameGeneration =
-            upscaleMethod == 2 &&
-            GetEngine().GetRenderer().SupportFSRFrameGeneration();
         const bool canUseFrameGeneration =
-            canUseDLSSFrameGeneration || canUseFSRFrameGeneration;
+            GetEngine().GetRenderer().SupportsFrameGeneration(upscalerTypeInfo.type);
         DrawSettingRow("Frame Generation",
                        [&]()
                        {
-                           bool enabled = upscaleMethod == 1 ? userSetting.DLSSG : userSetting.FSRG;
+                           bool enabled = userSetting.FrameGeneration;
                            ImGui::BeginDisabled(!canUseFrameGeneration);
                            const bool changed = ImGui::Checkbox("##FrameGeneration", &enabled);
                            ImGui::EndDisabled();
                            if (changed)
                            {
-                               userSetting.DLSSG = enabled && canUseDLSSFrameGeneration;
-                               userSetting.FSRG = enabled && canUseFSRFrameGeneration;
+                               userSetting.FrameGeneration = enabled && canUseFrameGeneration;
                                GetEngine().GetRenderer().RequestRecreateSwapChain();
                                return true;
                            }
                            return false;
                        });
 
-        int frameMultiplier = static_cast<int>(std::clamp(userSetting.DLSSGFrameMultiplier, 2u, 4u));
-        ImGui::BeginDisabled(upscaleMethod != 1);
+        int frameMultiplier = static_cast<int>(std::clamp(userSetting.FrameGenerationMultiplier, 2u, 4u));
+        ImGui::BeginDisabled(!canUseFrameGeneration);
         if (DrawIntSetting("FG Multiplier", &frameMultiplier, 2, 4))
         {
-            userSetting.DLSSGFrameMultiplier = static_cast<uint32_t>(std::clamp(frameMultiplier, 2, 4));
+            userSetting.FrameGenerationMultiplier = static_cast<uint32_t>(std::clamp(frameMultiplier, 2, 4));
             GetEngine().GetRenderer().RequestRecreateSwapChain();
         }
         ImGui::EndDisabled();
 
-        int frameLimitFps = static_cast<int>(std::min(userSetting.DLSSGFrameLimitFps, 1000u));
+        int frameLimitFps = static_cast<int>(std::min(userSetting.FrameGenerationFrameLimitFps, 1000u));
         if (DrawIntSetting("FG Base FPS Limit", &frameLimitFps, 0, 1000))
         {
-            userSetting.DLSSGFrameLimitFps = static_cast<uint32_t>(std::clamp(frameLimitFps, 0, 1000));
+            userSetting.FrameGenerationFrameLimitFps = static_cast<uint32_t>(std::clamp(frameLimitFps, 0, 1000));
         }
 
         const auto frameGenerationState = GetEngine().GetRenderer().GetFrameGenerationState();
-        if ((userSetting.DLSSG || userSetting.FSRG) && frameGenerationState.valid)
+        if (userSetting.FrameGeneration && frameGenerationState.valid)
         {
             ImGui::TextDisabled("Frame Generation presented x%u, status 0x%X",
                                 frameGenerationState.numFramesActuallyPresented,
                                 frameGenerationState.statusMask);
         }
-        if (upscaleMethod == 1 && !canUseFrameGeneration)
+        if (userSetting.FrameGeneration && !canUseFrameGeneration)
         {
-            ImGui::TextDisabled("DLSS Frame Generation requires Streamline DLSS-G and Reflex support.");
-        }
-        if (upscaleMethod == 2 && !GetEngine().GetRenderer().SupportFSR())
-        {
-            ImGui::TextDisabled("FidelityFX SDK unavailable; using the FSR1 spatial fallback.");
-        }
-        if (upscaleMethod == 2 && !canUseFrameGeneration)
-        {
-            ImGui::TextDisabled("FSR Frame Generation requires the FidelityFX Vulkan provider and four distinct queues.");
+            ImGui::TextDisabled("Frame generation is unavailable for the selected upscaler.");
         }
         NextUI::Theme::EndPanelSection();
     }

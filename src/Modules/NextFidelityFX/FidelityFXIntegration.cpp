@@ -242,7 +242,10 @@ namespace FidelityFXWrapper
             {
                 NextEngine* engine = NextEngine::GetInstance();
                 const bool frameGenerationRequested = engine != nullptr &&
-                    engine->GetUserSettings().FSR && engine->GetUserSettings().FSRG;
+                    engine->GetUserSettings().FrameGeneration &&
+                    Rendering::Upscaler::GetUpscalerTypeInfo(
+                        engine->GetUserSettings().UpscalerType).type ==
+                        Rendering::Upscaler::EUpscalerType::FidelityFXFSR;
                 SPDLOG_INFO("FidelityFX swapchain path: proxyRequested={}, proxyAvailable={}",
                             frameGenerationRequested, frameGenerationAvailable_);
                 if (!frameGenerationAvailable_ || !frameGenerationRequested)
@@ -706,11 +709,18 @@ namespace FidelityFXWrapper
                                  Rendering::Upscaler::FFeatureCaps& caps) override
             {
                 Context().SetDevice(deviceInfo);
-                caps.provider = Rendering::Upscaler::EUpscalerProvider::FidelityFX;
-                caps.supportFSR = Context().IsDeviceReady();
-                caps.supportFSRFrameGeneration = Context().IsFrameGenerationAvailable();
+                if (Context().IsDeviceReady())
+                {
+                    caps.supportedTypes = Rendering::Upscaler::UpscalerTypeBit(
+                        Rendering::Upscaler::EUpscalerType::FidelityFXFSR);
+                }
+                if (Context().IsDeviceReady() && Context().IsFrameGenerationAvailable())
+                {
+                    caps.frameGenerationTypes = Rendering::Upscaler::UpscalerTypeBit(
+                        Rendering::Upscaler::EUpscalerType::FidelityFXFSR);
+                }
                 SPDLOG_INFO("FidelityFX Vulkan device ready. FSR={}, Frame Generation={}",
-                            caps.supportFSR, caps.supportFSRFrameGeneration);
+                            Context().IsDeviceReady(), Context().IsFrameGenerationAvailable());
             }
 
             void OnSwapChainDestroyed() override
@@ -730,7 +740,7 @@ namespace FidelityFXWrapper
 
             Rendering::Upscaler::FOptimalRenderSettings GetOptimalRenderSettings(
                 uint32_t superResolutionMode, VkExtent2D outputExtent, bool upscalerEnabled,
-                bool hdrOutput, Rendering::Upscaler::EUpscalerProvider) override
+                bool hdrOutput, Rendering::Upscaler::EUpscalerType) override
             {
                 Rendering::Upscaler::FOptimalRenderSettings result{};
                 const auto& modeInfo = Rendering::Upscaler::GetUpscaleModeInfo(superResolutionMode);
@@ -774,7 +784,8 @@ namespace FidelityFXWrapper
 
             bool Evaluate(const Rendering::Upscaler::FFrameInputs& inputs) override
             {
-                if (!inputs.enableFSR || inputs.commandBuffer == VK_NULL_HANDLE || inputs.ubo == nullptr ||
+                if (inputs.upscalerType != Rendering::Upscaler::EUpscalerType::FidelityFXFSR ||
+                    inputs.commandBuffer == VK_NULL_HANDLE || inputs.ubo == nullptr ||
                     !inputs.scalingInputColor.IsValid() || !inputs.scalingOutputColor.IsValid() ||
                     !inputs.depth.IsValid() || !inputs.motionVectors.IsValid() ||
                     !Context().EnsureUpscaleContext(inputs.renderExtent, inputs.outputExtent, inputs.hdrOutput))
@@ -821,7 +832,8 @@ namespace FidelityFXWrapper
 
             void TagFrameGeneration(const Rendering::Upscaler::FFrameInputs& inputs) override
             {
-                if (!inputs.enableFSRFrameGeneration || inputs.swapchain == VK_NULL_HANDLE ||
+                if (inputs.upscalerType != Rendering::Upscaler::EUpscalerType::FidelityFXFSR ||
+                    !inputs.enableFrameGeneration || inputs.swapchain == VK_NULL_HANDLE ||
                     inputs.ubo == nullptr || !inputs.hudlessColor.IsValid() ||
                     !Context().EnsureFrameGenerationContext(inputs))
                 {

@@ -70,7 +70,7 @@ Options::Options(const int argc, const char* argv[])
         ("shader-hotreload", "Enable Slang shader hot reload.", cxxopts::value<bool>(ShaderHotReload)->default_value("true")->implicit_value("true"))
         ("no-shader-hotreload", "Disable Slang shader hot reload.", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
         ("shader-hotreload-interval", "Slang shader hot reload poll interval in seconds.", cxxopts::value<float>(ShaderHotReloadInterval)->default_value("0.5"))
-        ("cvar", "Apply a startup CVar override, e.g. --cvar \"r.dlss 1\". Can be repeated.", cxxopts::value<std::vector<std::string>>(CVarOverrides))
+        ("cvar", "Apply a startup CVar override, e.g. --cvar \"r.upscalerType 1\". Can be repeated.", cxxopts::value<std::vector<std::string>>(CVarOverrides))
         ("benchmark-config", "Load gkNextMotionBenchmark orchestration JSON.", cxxopts::value<std::string>(BenchmarkConfig)->default_value(""))
 
         ("test-gltf", "Run glTF robustness test from Khronos Sample Assets.", cxxopts::value<bool>(TestGltfRobustness)->default_value("false"))

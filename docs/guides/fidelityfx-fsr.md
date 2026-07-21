@@ -38,25 +38,25 @@ Windows 桌面启动时先安装 `NextStreamline`，只有 Streamline 未初始�
 
 相关 CVar：
 
-- `r.fsr 1`：provider 可用时启用 FSR 3.1 temporal upscale；不可用时保留原来的内建
-  spatial FSR fallback。
-- `r.fsr.postFilter 1`：在 FSR temporal evaluate 后启用 display-resolution a-trous
-  cleanup；默认开启，与 Native TAAU 共用同一 bindless pass，不影响 DLSS 或 FSR1 fallback。
-- `r.fsr.postFilterPasses 1..4`：a-trous pass 数，步长依次为 1、2、4、8，默认 `3`。
-- `r.fsr.postFilterStrength 0..1`：滤波结果混合强度，默认 `0.65`。
-- `r.fsr.postFilterLumaSigma 0.01..0.5`：颜色/亮度边缘阈值，越小越保边，默认 `0.10`。
-- `r.fsr.fireflySigma 1..8`：孤立高亮相对邻域标准差的拒绝阈值，越小抑制越强，默认 `2.5`。
-- `r.fsrg 1`：同时启用 FSR Frame Generation；要求 `r.fsr 1`。
+- `r.upscalerType 3`：provider 可用时选择 FSR 3.1 temporal upscale；不可用时使用 native
+  rendering，不再提供内建 spatial FSR fallback。
+- `r.upscaler.postFilter 1`：在支持该后处理的 temporal upscaler evaluate 后启用
+  display-resolution a-trous cleanup；默认开启，与 Native TAAU、SGSR2 共用同一 bindless pass。
+- `r.upscaler.postFilterPasses 1..4`：a-trous pass 数，步长依次为 1、2、4、8，默认 `3`。
+- `r.upscaler.postFilterStrength 0..1`：滤波结果混合强度，默认 `0.65`。
+- `r.upscaler.postFilterLumaSigma 0.01..0.5`：颜色/亮度边缘阈值，越小越保边，默认 `0.10`。
+- `r.upscaler.fireflySigma 1..8`：孤立高亮相对邻域标准差的拒绝阈值，越小抑制越强，默认 `2.5`。
+- `r.frameGeneration 1`：为当前选择的 upscaler type 启用 Frame Generation。
 - `r.superResolution 0..5`：Quality、Balanced、Performance、Ultra Performance、Native
   AA、Auto。
 
 在 NVIDIA 机器上强制验证 FSR upscale：
 
 ```bash
-gnb run gkNextRenderer --disable-streamline --cvar "r.fsr 1" --cvar "r.superResolution 0"
+gnb run gkNextRenderer --disable-streamline --cvar "r.upscalerType 3" --cvar "r.superResolution 0"
 ```
 
-加入 `--cvar "r.fsrg 1"` 可验证 frame generation。真实 FG 验证应使用普通可见窗口；
+加入 `--cvar "r.frameGeneration 1"` 可验证 frame generation。真实 FG 验证应使用普通可见窗口；
 `gnb shot`/`gnb validate` 的 agent-validation 模式会禁用 FidelityFX，不能证明 SDK dispatch
 或 proxy present 已生效。
 
@@ -74,7 +74,7 @@ SDK query，camera cut、scene/extent 切换通过 `reset` 清空 history。
 全引擎 `RT_MOTIONVECTOR` 契约为 render-pixel 单位，因此 FSR 和 Streamline 都使用 1:1
 motion-vector scale。depth 使用普通（非 reversed、有限 far plane）语义。
 
-Frame Generation 使用官方 Vulkan proxy swapchain；只有 `r.fsrg` 实际请求 FG 时才替换
+Frame Generation 使用官方 Vulkan proxy swapchain；只有 `r.frameGeneration` 实际请求 FG 时才替换
 swapchain，单独使用 upscale 保持普通 Vulkan swapchain。设备创建前，模块会选择并请求四条互不
 相同的 Vulkan queue：game、async compute、present、image acquire。adapter 无法提供四条
 queue 时只关闭 FG，FSR upscale 仍然可用。启用 FG 后 renderer 强制 immediate present，

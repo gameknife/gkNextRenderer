@@ -108,7 +108,6 @@ namespace Modules::NextTemporalUpscaler
                 vkGetPhysicalDeviceFeatures(deviceInfo_.physicalDevice, &features);
                 deviceReady_ = features.shaderStorageImageReadWithoutFormat &&
                                features.shaderStorageImageWriteWithoutFormat;
-                caps.provider = Rendering::Upscaler::EUpscalerProvider::NativeTemporal;
                 if (!deviceReady_)
                 {
                     SPDLOG_WARN("NativeTemporal disabled: formatless storage image access is unavailable");
@@ -124,7 +123,8 @@ namespace Modules::NextTemporalUpscaler
                     Shutdown();
                     return;
                 }
-                caps.supportNativeTemporal = true;
+                caps.supportedTypes = Rendering::Upscaler::UpscalerTypeBit(
+                    Rendering::Upscaler::EUpscalerType::NativeTAAU);
                 SPDLOG_INFO("NativeTemporal compute provider ready");
             }
 
@@ -173,7 +173,7 @@ namespace Modules::NextTemporalUpscaler
 
             Rendering::Upscaler::FOptimalRenderSettings GetOptimalRenderSettings(
                 uint32_t mode, VkExtent2D outputExtent, bool, bool,
-                Rendering::Upscaler::EUpscalerProvider) override
+                Rendering::Upscaler::EUpscalerType) override
             {
                 const VkExtent2D renderExtent = Rendering::Upscaler::ScaleExtent(
                     outputExtent, Rendering::Upscaler::GetUpscaleModeInfo(mode).fallbackScale);
@@ -211,7 +211,7 @@ namespace Modules::NextTemporalUpscaler
 
             bool Evaluate(const Rendering::Upscaler::FFrameInputs& inputs) override
             {
-                if (!inputs.enableNativeTemporal || !deviceReady_ ||
+                if (inputs.upscalerType != Rendering::Upscaler::EUpscalerType::NativeTAAU || !deviceReady_ ||
                     inputs.commandBuffer == VK_NULL_HANDLE || inputs.ubo == nullptr ||
                     !inputs.scalingInputColor.IsValid() || !inputs.scalingOutputColor.IsValid() ||
                     !inputs.motionVectors.IsValid() || !inputs.depth.IsValid())

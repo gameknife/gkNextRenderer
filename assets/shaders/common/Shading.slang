@@ -85,9 +85,8 @@ namespace Common
         }
 
         float2 motion = prevfpos - currfpos;
-        // DLSS Super Resolution needs moving-object vectors explicitly marked invalid. DLSS-RR
-        // consumes the motion vector for its own reconstruction path and must receive the value.
-        return Camera.DLSS && !Camera.DLSSRR && MotionMoment[ipos] > 0
+        // Some upscalers require moving-object vectors to be explicitly marked invalid.
+        return Camera.UpscalerInvalidMotionMask && !Camera.RayReconstruction && MotionMoment[ipos] > 0
             ? float2(3.40282346638528859811704183484516925440e38f)
             : motion;
     }

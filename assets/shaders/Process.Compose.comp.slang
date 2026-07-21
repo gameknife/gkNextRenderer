@@ -5,7 +5,7 @@ import Shader.Tonemap;
 
 // Direct sample compose. Realtime rendering reads the current diffuse/specular sample;
 // explicit offline progressive rendering selects the running-average buffers instead.
-// The resulting scene color is the common input for DLSS, FSR and native presentation.
+// The resulting scene color is the common input for temporal upscalers and native presentation.
 
 static const uint OBJECT_ID_FLAG_VALID = 0x80000000u;
 static const uint OBJECT_ID_FLAG_SELECTED = 0x40000000u;

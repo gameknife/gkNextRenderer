@@ -13,14 +13,77 @@ namespace Assets
 
 namespace Rendering::Upscaler
 {
-    enum class EUpscalerProvider : uint32_t
+    enum class EUpscalerType : uint32_t
     {
-        None,
-        Streamline,
-        FidelityFX,
-        SnapdragonGSR2,
-        NativeTemporal,
+        None = 0,
+        DLSS = 1,
+        DLSSRayReconstruction = 2,
+        FidelityFXFSR = 3,
+        NativeTAAU = 4,
+        SnapdragonGSR2 = 5,
+        Count,
     };
+
+    using FUpscalerTypeMask = uint32_t;
+
+    constexpr FUpscalerTypeMask UpscalerTypeBit(EUpscalerType type)
+    {
+        return type == EUpscalerType::None || type >= EUpscalerType::Count
+            ? 0u
+            : 1u << static_cast<uint32_t>(type);
+    }
+
+    constexpr bool SupportsUpscalerType(FUpscalerTypeMask supportedTypes, EUpscalerType type)
+    {
+        return (supportedTypes & UpscalerTypeBit(type)) != 0;
+    }
+
+    inline void SetUpscalerTypeSupport(
+        FUpscalerTypeMask& supportedTypes, EUpscalerType type, bool supported)
+    {
+        const FUpscalerTypeMask bit = UpscalerTypeBit(type);
+        supportedTypes = supported ? supportedTypes | bit : supportedTypes & ~bit;
+    }
+
+    struct FUpscalerTypeInfo
+    {
+        EUpscalerType type = EUpscalerType::None;
+        const char* name = "None";
+        bool requiresDepthAndMotion = false;
+        bool requiresRayReconstruction = false;
+        bool supportsTemporalPostFilter = false;
+        bool requiresInvalidMotionMask = false;
+        bool requiresStorageOutput = false;
+        bool frameGenerationRequiresReadableDepth = false;
+        bool leavesInputsShaderRead = false;
+    };
+
+    inline const FUpscalerTypeInfo& GetUpscalerTypeInfo(uint32_t rawType)
+    {
+        static constexpr FUpscalerTypeInfo kTypes[] = {
+            {EUpscalerType::None, "None", false, false, false, false, false, false, false},
+            {EUpscalerType::DLSS, "DLSS", true, false, false, true, false, false, false},
+            {EUpscalerType::DLSSRayReconstruction, "DLSS Ray Reconstruction", true, true, false, false, false, false, false},
+            {EUpscalerType::FidelityFXFSR, "FidelityFX FSR", true, false, true, false, true, true, true},
+            {EUpscalerType::NativeTAAU, "Native TAAU", true, false, true, false, true, false, false},
+            {EUpscalerType::SnapdragonGSR2, "SGSR2 (2-pass CS)", true, false, true, false, true, false, false},
+        };
+        static_assert(std::size(kTypes) == static_cast<size_t>(EUpscalerType::Count));
+        return rawType < std::size(kTypes) ? kTypes[rawType] : kTypes[0];
+    }
+
+    inline bool HasTemporalPostFilterUpscaler(FUpscalerTypeMask supportedTypes)
+    {
+        for (uint32_t rawType = 1; rawType < static_cast<uint32_t>(EUpscalerType::Count); ++rawType)
+        {
+            if (SupportsUpscalerType(supportedTypes, static_cast<EUpscalerType>(rawType)) &&
+                GetUpscalerTypeInfo(rawType).supportsTemporalPostFilter)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 
     enum class EUpscaleMode : uint32_t
     {
@@ -120,18 +183,12 @@ namespace Rendering::Upscaler
 
     struct FFeatureCaps
     {
-        EUpscalerProvider provider = EUpscalerProvider::None;
+        FUpscalerTypeMask supportedTypes = 0;
+        FUpscalerTypeMask frameGenerationTypes = 0;
         bool streamlineInitialized = false;
         bool streamlineDeviceReady = false;
-        bool supportDLSS = false;
-        bool supportDLSSRR = false;
-        bool supportDLSSG = false;
         bool supportReflex = false;
         bool supportPCL = false;
-        bool supportFSR = false;
-        bool supportFSRFrameGeneration = false;
-        bool supportSGSR2 = false;
-        bool supportNativeTemporal = false;
         bool requestedDeviceExtensionsAvailable = false;
         uint32_t requiredGraphicsQueues = 0;
         uint32_t requiredComputeQueues = 0;
@@ -222,13 +279,8 @@ namespace Rendering::Upscaler
         uint32_t frameIndex = 0;
         uint32_t imageIndex = 0;
         bool reset = false;
-        bool enableDLSS = false;
-        bool enableDLSSRR = false;
-        bool enableDLSSG = false;
-        bool enableFSR = false;
-        bool enableFSRFrameGeneration = false;
-        bool enableSGSR2 = false;
-        bool enableNativeTemporal = false;
+        EUpscalerType upscalerType = EUpscalerType::None;
+        bool enableFrameGeneration = false;
         uint32_t superResolutionMode = 0;
         uint32_t frameGenerationMultiplier = 2;
         bool hdrOutput = false;

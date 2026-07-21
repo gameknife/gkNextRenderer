@@ -9,8 +9,7 @@
   "cvars": {
     "r.samples": 4,
     "r.temporalFrames": 16,
-    "r.dlss": false,
-    "r.fsr": false,
+    "r.upscalerType": 0,
     "r.superResolution": 4,
     "r.gtao.enable": false,
     "sys.tickAnimation": false

@@ -78,11 +78,8 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
 
     ubo.FastGather = config_.userSettings.FastGather;
     ubo.SuperResolution = GOption->ReferenceMode ? 2 : renderer_->EffectiveSuperResolutionMode();
-    const Vulkan::FRendererContract& rendererContract =
-        Vulkan::GetRendererContract(renderer_->CurrentLogicRendererType());
-    ubo.DLSS = renderer_->IsDLSSSuperResolutionActive();
-    ubo.DLSSRR = ubo.DLSS && config_.userSettings.DLSSRR && renderer_->SupportDLSSRR() &&
-                 Vulkan::HasAny(rendererContract.post, Vulkan::EPostProcess::DLSSRayReconstruction);
+    ubo.UpscalerInvalidMotionMask = renderer_->RequiresInvalidMotionMask();
+    ubo.RayReconstruction = renderer_->IsRayReconstructionActive();
 
     glm::mat4x4 projectionUnJit = ubo.Projection;
     const bool noAmbientRenderer = renderer_->CurrentLogicRendererType() == Vulkan::ERT_SoftwareModernNoAmbient;
@@ -94,10 +91,10 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         const VkExtent2D renderExtent = renderer_->SwapChain().RenderExtent();
         const uint32_t providerJitterFrames = renderer_->TemporalJitterFrameCount();
         const uint32_t jitterFrames = enableUpscalerJitter
-            ? (providerJitterFrames > 0 ? providerJitterFrames : config_.userSettings.DLSSJitterFrames)
+            ? (providerJitterFrames > 0 ? providerJitterFrames : config_.userSettings.UpscalerJitterFrames)
             : config_.userSettings.TemporalFrames;
         glm::vec2 jitter = GetTemporalJitter(frameState_.totalFrames, jitterFrames);
-        if (config_.userSettings.DLSSJitterInvertY)
+        if (config_.userSettings.UpscalerJitterInvertY)
         {
             jitter.y = -jitter.y;
         }

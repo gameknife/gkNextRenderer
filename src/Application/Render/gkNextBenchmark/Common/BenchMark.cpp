@@ -96,7 +96,7 @@ BenchMarker::BenchMarker(FBenchmarkSettings settings) : settings_(std::move(sett
 
     benchmarkCsvReportFile.open(reportFilename);
     benchmarkCsvReportFile << fmt::format(
-        "#,scene,renderer,gpu,driver,resolution,frame_time_ms,gpu_time_ms,fps,vram_mib,draw_calls_actual,draw_calls_total,tris_actual,tris_total,frames,duration_s,dlss,fsr,super_resolution\n");
+        "#,scene,renderer,gpu,driver,resolution,frame_time_ms,gpu_time_ms,fps,vram_mib,draw_calls_actual,draw_calls_total,tris_actual,tris_total,frames,duration_s,upscaler_type,super_resolution\n");
 }
 
 BenchMarker::~BenchMarker() { benchmarkCsvReportFile.close(); }
@@ -234,7 +234,7 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, const std::string
     vkGetPhysicalDeviceProperties(renderer->Device().PhysicalDevice(), &deviceProp1);
     const std::string driverInfo = GetPhysicalDeviceDriverInfo(renderer->Device().PhysicalDevice(), deviceProp1);
 
-    benchmarkCsvReportFile << fmt::format("{},{},{},{},{},{},{:.3f},{:.3f},{:.2f},{:.1f},{:.2f},{:.2f},{:.2f},{:.2f},{},{:.3f},{},{},{}\n",
+    benchmarkCsvReportFile << fmt::format("{},{},{},{},{},{},{:.3f},{:.3f},{:.2f},{:.1f},{:.2f},{:.2f},{:.2f},{:.2f},{},{:.3f},{},{}\n",
                                           benchUnit_++,
                                           sceneName,
                                           rendererName,
@@ -251,8 +251,7 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, const std::string
                                           trisTotal,
                                           benchmarkTotalFrames_,
                                           totalTime,
-                                          userSettings.DLSS ? 1 : 0,
-                                          userSettings.FSR ? 1 : 0,
+                                          userSettings.UpscalerType,
                                           userSettings.SuperResolution);
     benchmarkCsvReportFile.flush();
 

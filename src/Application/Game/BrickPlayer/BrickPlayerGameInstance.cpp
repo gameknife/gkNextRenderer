@@ -259,8 +259,7 @@ void BrickPlayerGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     cvars.SetDefaultFromString("r.samples", "16", &error);
     cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
     cvars.SetDefaultFromString("r.rendererType", "0", &error);
-    // cvars.SetDefaultFromString("r.dlss", "true", &error);
-    // cvars.SetDefaultFromString("r.dlssrr", "true", &error);
+    // cvars.SetDefaultFromString("r.upscalerType", "2", &error);
 }
 
 void BrickPlayerGameInstance::InitializeDefaultBGMPlaylist()
