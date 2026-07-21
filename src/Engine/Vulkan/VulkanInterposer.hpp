@@ -6,6 +6,32 @@
 
 namespace Vulkan
 {
+    // Optional swapchain-only layer composed around the process-wide Vulkan
+    // interposer. This lets independent modules intercept their own swapchains
+    // without replacing instance/device hooks owned by another module.
+    class IVulkanSwapchainInterposer
+    {
+    public:
+        virtual ~IVulkanSwapchainInterposer() = default;
+
+        virtual void BeforeDeviceWaitIdle(VkDevice device) {}
+        virtual bool TryCreateSwapchainKHR(VkDevice device,
+                                           const VkSwapchainCreateInfoKHR* createInfo,
+                                           const VkAllocationCallbacks* allocator,
+                                           VkSwapchainKHR* swapchain,
+                                           VkResult& result) = 0;
+        virtual bool OwnsSwapchain(VkSwapchainKHR swapchain) const = 0;
+        virtual bool OwnsPresent(const VkPresentInfoKHR* presentInfo) const;
+        virtual void DestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain,
+                                         const VkAllocationCallbacks* allocator) = 0;
+        virtual VkResult GetSwapchainImagesKHR(VkDevice device, VkSwapchainKHR swapchain,
+                                               uint32_t* count, VkImage* images) = 0;
+        virtual VkResult AcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain,
+                                             uint64_t timeout, VkSemaphore semaphore,
+                                             VkFence fence, uint32_t* imageIndex) = 0;
+        virtual VkResult QueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* presentInfo) = 0;
+    };
+
     // Interposer seam for Vulkan object creation and swapchain entry points.
     // A module (e.g. NextStreamline) can take over instance/device/swapchain
     // creation via SetInterposer; the default implementation calls the vanilla
@@ -58,4 +84,6 @@ namespace Vulkan
     IVulkanInterposer& Interposer();
     // Set before instance creation; nullptr restores the default.
     void SetInterposer(IVulkanInterposer* interposer);
+    // Register before instance creation. Layers are queried in registration order.
+    void RegisterSwapchainInterposer(IVulkanSwapchainInterposer* interposer);
 }

@@ -113,24 +113,26 @@ namespace Modules::NextTemporalUpscaler
                     SPDLOG_WARN("NativeTemporal disabled: formatless storage image access is unavailable");
                     return;
                 }
-                try
-                {
-                    CreateStaticResources();
-                }
-                catch (const std::exception& error)
-                {
-                    SPDLOG_ERROR("NativeTemporal initialization failed: {}", error.what());
-                    Shutdown();
-                    return;
-                }
                 caps.supportedTypes = Rendering::Upscaler::UpscalerTypeBit(
                     Rendering::Upscaler::EUpscalerType::NativeTAAU);
-                SPDLOG_INFO("NativeTemporal compute provider ready");
+                SPDLOG_INFO("NativeTemporal compute provider available");
+            }
+
+            void SetActiveType(Rendering::Upscaler::EUpscalerType type) override
+            {
+                if (type == Rendering::Upscaler::EUpscalerType::NativeTAAU)
+                {
+                    EnsureStaticResources();
+                }
+                else
+                {
+                    DestroyGpuResources();
+                }
             }
 
             void OnSwapChainDestroyed() override
             {
-                DestroyHistory();
+                DestroyGpuResources();
                 previousJitter_ = {};
                 loggedDispatch_ = false;
             }
@@ -141,32 +143,7 @@ namespace Modules::NextTemporalUpscaler
                 {
                     return;
                 }
-                DestroyHistory();
-                if (reprojectPipeline_ != VK_NULL_HANDLE)
-                {
-                    vkDestroyPipeline(deviceInfo_.device, reprojectPipeline_, nullptr);
-                    reprojectPipeline_ = VK_NULL_HANDLE;
-                }
-                if (sharpenPipeline_ != VK_NULL_HANDLE)
-                {
-                    vkDestroyPipeline(deviceInfo_.device, sharpenPipeline_, nullptr);
-                    sharpenPipeline_ = VK_NULL_HANDLE;
-                }
-                if (pipelineLayout_ != VK_NULL_HANDLE)
-                {
-                    vkDestroyPipelineLayout(deviceInfo_.device, pipelineLayout_, nullptr);
-                    pipelineLayout_ = VK_NULL_HANDLE;
-                }
-                if (descriptorPool_ != VK_NULL_HANDLE)
-                {
-                    vkDestroyDescriptorPool(deviceInfo_.device, descriptorPool_, nullptr);
-                    descriptorPool_ = VK_NULL_HANDLE;
-                }
-                if (descriptorSetLayout_ != VK_NULL_HANDLE)
-                {
-                    vkDestroyDescriptorSetLayout(deviceInfo_.device, descriptorSetLayout_, nullptr);
-                    descriptorSetLayout_ = VK_NULL_HANDLE;
-                }
+                DestroyGpuResources();
                 deviceInfo_ = {};
                 deviceReady_ = false;
             }
@@ -218,7 +195,7 @@ namespace Modules::NextTemporalUpscaler
                 {
                     return false;
                 }
-                if (!EnsureHistory(inputs.outputExtent))
+                if (!EnsureStaticResources() || !EnsureHistory(inputs.outputExtent))
                 {
                     return false;
                 }
@@ -282,6 +259,30 @@ namespace Modules::NextTemporalUpscaler
             }
 
         private:
+            bool EnsureStaticResources()
+            {
+                if (reprojectPipeline_ != VK_NULL_HANDLE && sharpenPipeline_ != VK_NULL_HANDLE)
+                {
+                    return true;
+                }
+                if (!deviceReady_ || deviceInfo_.device == VK_NULL_HANDLE)
+                {
+                    return false;
+                }
+                try
+                {
+                    CreateStaticResources();
+                    SPDLOG_INFO("NativeTemporal GPU resources activated");
+                    return true;
+                }
+                catch (const std::exception& error)
+                {
+                    SPDLOG_ERROR("NativeTemporal GPU resource creation failed: {}", error.what());
+                    DestroyGpuResources();
+                    return false;
+                }
+            }
+
             void CreateStaticResources()
             {
                 std::array<VkDescriptorSetLayoutBinding, descriptorBindingCount> bindings{};
@@ -338,6 +339,52 @@ namespace Modules::NextTemporalUpscaler
                     "assets/shaders/Process.NativeTemporalReproject.comp.slang.spv");
                 sharpenPipeline_ = CreatePipeline(
                     "assets/shaders/Process.NativeTemporalSharpen.comp.slang.spv");
+            }
+
+            void DestroyStaticResources()
+            {
+                if (deviceInfo_.device == VK_NULL_HANDLE)
+                {
+                    return;
+                }
+                if (reprojectPipeline_ != VK_NULL_HANDLE)
+                {
+                    vkDestroyPipeline(deviceInfo_.device, reprojectPipeline_, nullptr);
+                    reprojectPipeline_ = VK_NULL_HANDLE;
+                }
+                if (sharpenPipeline_ != VK_NULL_HANDLE)
+                {
+                    vkDestroyPipeline(deviceInfo_.device, sharpenPipeline_, nullptr);
+                    sharpenPipeline_ = VK_NULL_HANDLE;
+                }
+                if (pipelineLayout_ != VK_NULL_HANDLE)
+                {
+                    vkDestroyPipelineLayout(deviceInfo_.device, pipelineLayout_, nullptr);
+                    pipelineLayout_ = VK_NULL_HANDLE;
+                }
+                if (descriptorPool_ != VK_NULL_HANDLE)
+                {
+                    vkDestroyDescriptorPool(deviceInfo_.device, descriptorPool_, nullptr);
+                    descriptorPool_ = VK_NULL_HANDLE;
+                }
+                descriptorSet_ = VK_NULL_HANDLE;
+                if (descriptorSetLayout_ != VK_NULL_HANDLE)
+                {
+                    vkDestroyDescriptorSetLayout(deviceInfo_.device, descriptorSetLayout_, nullptr);
+                    descriptorSetLayout_ = VK_NULL_HANDLE;
+                }
+            }
+
+            void DestroyGpuResources()
+            {
+                const bool hadResources = reprojectPipeline_ != VK_NULL_HANDLE ||
+                    historyColor_[0].image != VK_NULL_HANDLE;
+                DestroyHistory();
+                DestroyStaticResources();
+                if (hadResources)
+                {
+                    SPDLOG_INFO("NativeTemporal GPU resources released");
+                }
             }
 
             VkPipeline CreatePipeline(const char* shaderPath) const

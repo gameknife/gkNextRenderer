@@ -20,6 +20,9 @@
     { "type": "assert", "query": "cvar.r.upscaler.postFilter", "op": "eq", "value": true },
     { "type": "assert", "query": "engine.totalFrames", "op": "ge", "value": 30 },
     { "type": "screenshot", "out": "screenshots/sgsr2_smoke" },
+    { "type": "cvar", "name": "r.upscalerType", "set": 0 },
+    { "type": "wait-frames", "n": 5 },
+    { "type": "assert", "query": "cvar.r.upscalerType", "op": "eq", "value": 0 },
     { "type": "quit" }
   ]
 }

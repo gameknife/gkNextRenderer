@@ -31,8 +31,8 @@ gkNextEngine 只在 Windows x86_64 上集成 NVIDIA Streamline。非 Windows 构
 ```
 
 对于会反复创建和销毁 engine instance 的测试进程，使用 `--disable-streamline`。Windows
-桌面应用先尝试安装 Streamline；Streamline 不可用或被该参数禁用时，会由
-`NextFidelityFX` 接管同一个 `IUpscaler` provider slot。
+桌面应用会同时注册 Streamline 与 FidelityFX；二者通过 composite `IUpscaler` 和可叠加的
+swapchain interposer layer 共存，选择 FSR 不再要求 `--disable-streamline`。
 
 ## 预期启动日志
 
@@ -68,7 +68,8 @@ Streamline 初始化时，engine 会要求 SDL 将 `sl.interposer.dll` 作为 Vu
 
 当前 ImGui backend 不会生成独立的 premultiplied `kBufferTypeUIColorAndAlpha` target。无 HUD 集成是 SDK 支持的 fallback，可避免 UI 像素进入 optical-flow 输入；专用 UI target 仍是复杂 world-space HUD 的可选质量增强项。
 
-swapchain 重建时，DLSS-G 会先关闭，释放其资源和 persistent tag，并在新 swapchain 完成一整帧后重新启用。
+swapchain 重建或切换到非 Streamline upscaler 时，DLSS-SR、RR、DLSS-G 都会关闭并释放 feature
+resources 与 persistent tag；重新激活后由首帧 evaluate 按需创建。
 
 engine 状态为 `Loading` 时不会启用 DLSS-G。这可以避免 `slDLSSGSetOptions` 与场景加载期间的 swapchain 替换发生竞争。
 

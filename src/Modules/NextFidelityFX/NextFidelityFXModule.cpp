@@ -17,17 +17,12 @@ namespace Modules::NextFidelityFX
             SPDLOG_INFO("FidelityFX FSR plugins disabled for this application");
             return;
         }
-        if (Rendering::Upscaler::HasRegisteredUpscalerFactory())
-        {
-            SPDLOG_INFO("FidelityFX FSR provider skipped because another upscaler provider is active");
-            return;
-        }
-
-        Vulkan::SetInterposer(&FidelityFXWrapper::InterposerInstance());
+        Vulkan::RegisterSwapchainInterposer(
+            &FidelityFXWrapper::SwapchainInterposerInstance());
         Vulkan::RegisterDeviceCreationAugmenter(&FidelityFXWrapper::DeviceAugmenterInstance());
         Rendering::Upscaler::RegisterUpscalerFactory(
             [] { return FidelityFXWrapper::CreateUpscaler(); });
-        SPDLOG_INFO("FidelityFX FSR 3.1 Vulkan provider installed");
+        SPDLOG_INFO("FidelityFX FSR 3.1 Vulkan provider installed alongside other upscalers");
 #else
         (void)options;
 #endif

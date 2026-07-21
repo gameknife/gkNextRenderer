@@ -131,5 +131,4 @@ TEST_CASE("Upscaler types have one stable ordered selection", "[Unit][Upscaler]"
     CHECK(SupportsUpscalerType(nativeTypes, EUpscalerType::NativeTAAU));
     CHECK(SupportsUpscalerType(nativeTypes, EUpscalerType::SnapdragonGSR2));
     CHECK_FALSE(SupportsUpscalerType(nativeTypes, EUpscalerType::FidelityFXFSR));
-    CHECK(HasTemporalPostFilterUpscaler(nativeTypes));
 }

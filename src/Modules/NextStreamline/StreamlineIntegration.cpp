@@ -1051,11 +1051,6 @@ namespace
 
         void OnSwapChainDestroyed() override
         {
-            if (StreamlineContext().Caps().frameGenerationTypes == 0)
-            {
-                return;
-            }
-
             sl::ViewportHandle viewport(0);
             if (lastDLSSGEnabled_)
             {
@@ -1076,6 +1071,9 @@ namespace
                 lastDLSSGEnabled_ = false;
             }
 
+            ReleaseSuperResolutionResources(
+                Rendering::Upscaler::EUpscalerType::None);
+
             sl::ResourceTag nullDepth(nullptr, sl::kBufferTypeDepth, sl::ResourceLifecycle::eValidUntilPresent);
             sl::ResourceTag nullMvec(nullptr, sl::kBufferTypeMotionVectors, sl::ResourceLifecycle::eValidUntilPresent);
             sl::ResourceTag nullHudless(nullptr, sl::kBufferTypeHUDLessColor,
@@ -1090,27 +1088,14 @@ namespace
             }
         }
 
+        void SetActiveType(Rendering::Upscaler::EUpscalerType type) override
+        {
+            ReleaseSuperResolutionResources(type);
+        }
+
         void Shutdown() override
         {
-            sl::ViewportHandle viewport(0);
             OnSwapChainDestroyed();
-
-            if (lastDLSSRRActive_)
-            {
-                sl::DLSSDOptions options{};
-                options.mode = sl::DLSSMode::eOff;
-                slDLSSDSetOptions(viewport, options);
-                slFreeResources(sl::kFeatureDLSS_RR, viewport);
-                lastDLSSRRActive_ = false;
-            }
-            if (lastDLSSActive_)
-            {
-                sl::DLSSOptions options{};
-                options.mode = sl::DLSSMode::eOff;
-                slDLSSSetOptions(viewport, options);
-                slFreeResources(sl::kFeatureDLSS, viewport);
-                lastDLSSActive_ = false;
-            }
 
             // Process-wide SL teardown; the engine no longer knows about Streamline.
             StreamlineContext().Shutdown();
@@ -1418,6 +1403,31 @@ namespace
         }
 
     private:
+        void ReleaseSuperResolutionResources(Rendering::Upscaler::EUpscalerType activeType)
+        {
+            sl::ViewportHandle viewport(0);
+            if (lastDLSSRRActive_ &&
+                activeType != Rendering::Upscaler::EUpscalerType::DLSSRayReconstruction)
+            {
+                sl::DLSSDOptions options{};
+                options.mode = sl::DLSSMode::eOff;
+                slDLSSDSetOptions(viewport, options);
+                slFreeResources(sl::kFeatureDLSS_RR, viewport);
+                lastDLSSRRActive_ = false;
+                SPDLOG_INFO("Streamline DLSS Ray Reconstruction GPU resources released");
+            }
+            if (lastDLSSActive_ &&
+                activeType != Rendering::Upscaler::EUpscalerType::DLSS)
+            {
+                sl::DLSSOptions options{};
+                options.mode = sl::DLSSMode::eOff;
+                slDLSSSetOptions(viewport, options);
+                slFreeResources(sl::kFeatureDLSS, viewport);
+                lastDLSSActive_ = false;
+                SPDLOG_INFO("Streamline DLSS GPU resources released");
+            }
+        }
+
         bool SetSuperResolutionOptions(const Rendering::Upscaler::FFrameInputs& inputs, bool useRR)
         {
             sl::ViewportHandle viewport(0);

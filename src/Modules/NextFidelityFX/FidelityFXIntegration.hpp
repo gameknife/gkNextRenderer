@@ -10,13 +10,13 @@ namespace Rendering::Upscaler
 namespace Vulkan
 {
     class IDeviceCreationAugmenter;
-    class IVulkanInterposer;
+    class IVulkanSwapchainInterposer;
 }
 
 namespace FidelityFXWrapper
 {
 #if WITH_FIDELITYFX && WIN32
-    Vulkan::IVulkanInterposer& InterposerInstance();
+    Vulkan::IVulkanSwapchainInterposer& SwapchainInterposerInstance();
     Vulkan::IDeviceCreationAugmenter& DeviceAugmenterInstance();
 #endif
 

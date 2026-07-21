@@ -10,6 +10,9 @@ namespace Rendering::Upscaler
         virtual ~IUpscaler() = default;
 
         virtual void OnDeviceCreated(const FDeviceInfo& deviceInfo, FFeatureCaps& caps) = 0;
+        // Called after swapchain selection resolves. Providers must keep GPU
+        // resources only while one of their types is active.
+        virtual void SetActiveType(EUpscalerType type) {}
         virtual void OnSwapChainDestroyed() = 0;
         virtual void Shutdown() = 0;
         virtual FOptimalRenderSettings GetOptimalRenderSettings(

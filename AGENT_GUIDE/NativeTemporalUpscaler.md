@@ -23,7 +23,9 @@ Color history uses ping-pong `R16G16B16A16_SFLOAT` images, depth history uses pi
 `R32_SFLOAT` images, and luminance moments use ping-pong `R16G16_SFLOAT` images. These provider
 resources remain in `GENERAL` layout and are destroyed on swapchain teardown. The renderer owns
 one bindless post-filter ping/pong pair per swapchain image and reuses it for both temporal FSR
-and Native TAAU. The provider restores the engine depth attachment layout after dispatch.
+and Native TAAU. Provider pipelines, descriptors, history/intermediate images, and the shared
+post-filter resources are created only for the active upscaler and released when switching to
+another type or None. The provider restores the engine depth attachment layout after dispatch.
 
 ## Controls
 

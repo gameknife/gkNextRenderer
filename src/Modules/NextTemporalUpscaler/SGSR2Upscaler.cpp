@@ -145,25 +145,26 @@ namespace Modules::NextTemporalUpscaler
                     return;
                 }
 
-                try
-                {
-                    CreateStaticResources();
-                }
-                catch (const std::exception& error)
-                {
-                    SPDLOG_ERROR("SGSR2 initialization failed: {}", error.what());
-                    Shutdown();
-                    return;
-                }
-
                 caps.supportedTypes = Rendering::Upscaler::UpscalerTypeBit(
                     Rendering::Upscaler::EUpscalerType::SnapdragonGSR2);
-                SPDLOG_INFO("Snapdragon GSR 2 2-pass compute provider ready");
+                SPDLOG_INFO("Snapdragon GSR 2 2-pass compute provider available");
+            }
+
+            void SetActiveType(Rendering::Upscaler::EUpscalerType type) override
+            {
+                if (type == Rendering::Upscaler::EUpscalerType::SnapdragonGSR2)
+                {
+                    EnsureStaticResources();
+                }
+                else
+                {
+                    DestroyGpuResources();
+                }
             }
 
             void OnSwapChainDestroyed() override
             {
-                DestroyFrameResources();
+                DestroyGpuResources();
                 stationaryFrameCount_ = 0;
                 loggedDispatch_ = false;
             }
@@ -175,33 +176,7 @@ namespace Modules::NextTemporalUpscaler
                     return;
                 }
 
-                DestroyFrameResources();
-                if (convertPipeline_ != VK_NULL_HANDLE)
-                {
-                    vkDestroyPipeline(deviceInfo_.device, convertPipeline_, nullptr);
-                    convertPipeline_ = VK_NULL_HANDLE;
-                }
-                if (upscalePipeline_ != VK_NULL_HANDLE)
-                {
-                    vkDestroyPipeline(deviceInfo_.device, upscalePipeline_, nullptr);
-                    upscalePipeline_ = VK_NULL_HANDLE;
-                }
-                if (pipelineLayout_ != VK_NULL_HANDLE)
-                {
-                    vkDestroyPipelineLayout(deviceInfo_.device, pipelineLayout_, nullptr);
-                    pipelineLayout_ = VK_NULL_HANDLE;
-                }
-                if (descriptorPool_ != VK_NULL_HANDLE)
-                {
-                    vkDestroyDescriptorPool(deviceInfo_.device, descriptorPool_, nullptr);
-                    descriptorPool_ = VK_NULL_HANDLE;
-                }
-                if (descriptorSetLayout_ != VK_NULL_HANDLE)
-                {
-                    vkDestroyDescriptorSetLayout(deviceInfo_.device, descriptorSetLayout_, nullptr);
-                    descriptorSetLayout_ = VK_NULL_HANDLE;
-                }
-                descriptorSet_ = VK_NULL_HANDLE;
+                DestroyGpuResources();
                 deviceInfo_ = {};
                 deviceReady_ = false;
             }
@@ -257,7 +232,8 @@ namespace Modules::NextTemporalUpscaler
                 {
                     return false;
                 }
-                if (!EnsureFrameResources(inputs.renderExtent, inputs.outputExtent))
+                if (!EnsureStaticResources() ||
+                    !EnsureFrameResources(inputs.renderExtent, inputs.outputExtent))
                 {
                     return false;
                 }
@@ -334,6 +310,30 @@ namespace Modules::NextTemporalUpscaler
             }
 
         private:
+            bool EnsureStaticResources()
+            {
+                if (convertPipeline_ != VK_NULL_HANDLE && upscalePipeline_ != VK_NULL_HANDLE)
+                {
+                    return true;
+                }
+                if (!deviceReady_ || deviceInfo_.device == VK_NULL_HANDLE)
+                {
+                    return false;
+                }
+                try
+                {
+                    CreateStaticResources();
+                    SPDLOG_INFO("SGSR2 GPU resources activated");
+                    return true;
+                }
+                catch (const std::exception& error)
+                {
+                    SPDLOG_ERROR("SGSR2 GPU resource creation failed: {}", error.what());
+                    DestroyGpuResources();
+                    return false;
+                }
+            }
+
             void CreateStaticResources()
             {
                 std::array<VkDescriptorSetLayoutBinding, sgsr2DescriptorBindingCount> bindings{};
@@ -392,6 +392,52 @@ namespace Modules::NextTemporalUpscaler
                     "assets/shaders/Process.SGSR2Convert.comp.slang.spv");
                 upscalePipeline_ = CreatePipeline(
                     "assets/shaders/Process.SGSR2Upscale.comp.slang.spv");
+            }
+
+            void DestroyStaticResources()
+            {
+                if (deviceInfo_.device == VK_NULL_HANDLE)
+                {
+                    return;
+                }
+                if (convertPipeline_ != VK_NULL_HANDLE)
+                {
+                    vkDestroyPipeline(deviceInfo_.device, convertPipeline_, nullptr);
+                    convertPipeline_ = VK_NULL_HANDLE;
+                }
+                if (upscalePipeline_ != VK_NULL_HANDLE)
+                {
+                    vkDestroyPipeline(deviceInfo_.device, upscalePipeline_, nullptr);
+                    upscalePipeline_ = VK_NULL_HANDLE;
+                }
+                if (pipelineLayout_ != VK_NULL_HANDLE)
+                {
+                    vkDestroyPipelineLayout(deviceInfo_.device, pipelineLayout_, nullptr);
+                    pipelineLayout_ = VK_NULL_HANDLE;
+                }
+                if (descriptorPool_ != VK_NULL_HANDLE)
+                {
+                    vkDestroyDescriptorPool(deviceInfo_.device, descriptorPool_, nullptr);
+                    descriptorPool_ = VK_NULL_HANDLE;
+                }
+                descriptorSet_ = VK_NULL_HANDLE;
+                if (descriptorSetLayout_ != VK_NULL_HANDLE)
+                {
+                    vkDestroyDescriptorSetLayout(deviceInfo_.device, descriptorSetLayout_, nullptr);
+                    descriptorSetLayout_ = VK_NULL_HANDLE;
+                }
+            }
+
+            void DestroyGpuResources()
+            {
+                const bool hadResources = convertPipeline_ != VK_NULL_HANDLE ||
+                    motionDepthClip_.image != VK_NULL_HANDLE;
+                DestroyFrameResources();
+                DestroyStaticResources();
+                if (hadResources)
+                {
+                    SPDLOG_INFO("SGSR2 GPU resources released");
+                }
             }
 
             VkPipeline CreatePipeline(const char* shaderPath) const

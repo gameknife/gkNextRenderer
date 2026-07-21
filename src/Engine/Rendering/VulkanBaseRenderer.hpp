@@ -277,6 +277,10 @@ namespace Vulkan
         }
         bool SupportReflex() const { return caps_.supportReflex; }
         bool IsTemporalSuperResolutionActive() const { return temporalSuperResolutionActive_; }
+        bool IsFrameGenerationSwapchainRequested() const
+        {
+            return frameGenerationSwapchainRequested_;
+        }
         bool IsRayReconstructionActive() const
         {
             return temporalSuperResolutionActive_ &&
@@ -547,6 +551,7 @@ namespace Vulkan
         Rendering::Upscaler::EUpscalerType activeUpscalerType_ =
             Rendering::Upscaler::EUpscalerType::None;
         bool temporalSuperResolutionActive_ = false;
+        bool frameGenerationSwapchainRequested_ = false;
         uint32_t effectiveSuperResolutionMode_ =
             static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Native);
 

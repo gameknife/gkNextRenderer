@@ -914,7 +914,10 @@ namespace Vulkan
         }
 
         frameGeneration_.hudlessImages.clear();
-        if (caps_.frameGenerationTypes != 0)
+        const bool frameGenerationActive = temporalSuperResolutionActive_ &&
+            frameSettings_.userSettings.FrameGeneration &&
+            SupportsFrameGeneration(activeUpscalerType_);
+        if (frameGenerationActive)
         {
             frameGeneration_.hudlessImages.reserve(frame_.swapChain->Images().size());
             for (size_t i = 0; i < frame_.swapChain->Images().size(); ++i)
@@ -935,7 +938,10 @@ namespace Vulkan
         temporalPostFilter_.pongImages.clear();
         temporalPostFilter_.pingInitialized.clear();
         temporalPostFilter_.pongInitialized.clear();
-        if (Rendering::Upscaler::HasTemporalPostFilterUpscaler(caps_.supportedUpscalerTypes))
+        const bool temporalPostFilterActive = temporalSuperResolutionActive_ &&
+            Rendering::Upscaler::GetUpscalerTypeInfo(
+                static_cast<uint32_t>(activeUpscalerType_)).supportsTemporalPostFilter;
+        if (temporalPostFilterActive)
         {
             const size_t imageCount = frame_.swapChain->Images().size();
             if (Assets::Bindless::RT_TEMPORAL_POST_PONG0 + imageCount > Assets::Bindless::RT_REMOTE_ENCODE0_Y)
@@ -991,7 +997,10 @@ namespace Vulkan
         }
 
         // Shared pipelines.
-        if (Rendering::Upscaler::HasTemporalPostFilterUpscaler(caps_.supportedUpscalerTypes))
+        const bool temporalPostFilterActive = temporalSuperResolutionActive_ &&
+            Rendering::Upscaler::GetUpscalerTypeInfo(
+                static_cast<uint32_t>(activeUpscalerType_)).supportsTemporalPostFilter;
+        if (temporalPostFilterActive)
         {
             overlay_.temporalPostFilterPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(
                 SwapChain(), "assets/shaders/Process.TemporalPostFilter.comp.slang.spv", 44));
@@ -1070,10 +1079,21 @@ namespace Vulkan
         const auto& settings = frameSettings_.userSettings;
         const auto requestedUpscalerType = Rendering::Upscaler::GetUpscalerTypeInfo(
             static_cast<uint32_t>(settings.UpscalerType)).type;
-        const bool frameGenerationRequested = settings.FrameGeneration &&
-            SupportsFrameGeneration(requestedUpscalerType);
+        const auto& requestedTypeInfo = Rendering::Upscaler::GetUpscalerTypeInfo(
+            static_cast<uint32_t>(requestedUpscalerType));
+        const FRendererContract& requestedContract = GetRendererContract(logicRenderers_.current);
+        const bool canActivateRequestedType = !GOption->ReferenceMode && upscaler_ &&
+            requestedUpscalerType != Rendering::Upscaler::EUpscalerType::None &&
+            SupportsUpscaler(requestedUpscalerType) &&
+            (!requestedTypeInfo.requiresDepthAndMotion ||
+             HasAll(requestedContract.outputs, ERenderOutput::Depth | ERenderOutput::Motion)) &&
+            HasAny(requestedContract.post, EPostProcess::Upscale) &&
+            (!requestedTypeInfo.requiresRayReconstruction ||
+             HasAny(requestedContract.post, EPostProcess::RayReconstruction));
+        frameGenerationSwapchainRequested_ = settings.FrameGeneration &&
+            SupportsFrameGeneration(requestedUpscalerType) && canActivateRequestedType;
         const VkPresentModeKHR requestedPresentMode =
-            frameGenerationRequested
+            frameGenerationSwapchainRequested_
                 ? VK_PRESENT_MODE_IMMEDIATE_KHR
                 : presentMode_;
         frame_.swapChain.reset(new class SwapChain(*ctx_.device, requestedPresentMode, forceSDR_));
@@ -1113,6 +1133,7 @@ namespace Vulkan
             if (temporalSuperResolutionActive_)
             {
                 activeUpscalerType_ = requestedUpscalerType;
+                upscaler_->SetActiveType(activeUpscalerType_);
                 const auto optimal = upscaler_->GetOptimalRenderSettings(
                     effectiveSuperResolutionMode_,
                     frame_.swapChain->Extent(),
@@ -1132,6 +1153,11 @@ namespace Vulkan
                 SPDLOG_WARN("{} is unavailable for {}; using native rendering",
                             typeInfo.name, GetRendererName(logicRenderers_.current));
             }
+        }
+
+        if (upscaler_ && !temporalSuperResolutionActive_)
+        {
+            upscaler_->SetActiveType(Rendering::Upscaler::EUpscalerType::None);
         }
 
         frame_.swapChain->UpdateRenderViewport(0, 0, renderExtent.width, renderExtent.height);

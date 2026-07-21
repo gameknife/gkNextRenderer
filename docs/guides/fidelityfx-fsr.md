@@ -9,7 +9,7 @@ last_updated: 2026-07-21
 
 # AMD FidelityFX FSR 3.1 / Frame Generation 指南
 
-`NextFidelityFX` 通过引擎已有的 `IUpscaler`、Vulkan interposer 和 device creation
+`NextFidelityFX` 通过引擎已有的 `IUpscaler`、可组合 swapchain interposer 和 device creation
 augmenter 接入 FidelityFX SDK v1.1.4（FSR 3.1.4）。当前实现只在 Windows Vulkan 构建
 启用；其他平台保留可编译的空模块。版本固定在 1.1.4，是因为新版 Redstone SDK 当前
 不提供 Vulkan backend。
@@ -29,11 +29,12 @@ gnb build gkNextRenderer gkNextUnitTests
 
 ## Provider 选择与 CVar
 
-Windows 桌面启动时先安装 `NextStreamline`，只有 Streamline 未初始化时才安装
-`NextFidelityFX`，因此一个进程只有一个 `IUpscaler` provider：
+Windows 桌面会同时安装可用的 `NextStreamline` 和 `NextFidelityFX` provider：
 
-- NVIDIA 默认使用 Streamline；传 `--disable-streamline` 可强制走 FidelityFX。
-- 非 NVIDIA adapter 自动使用 FidelityFX。
+- NVIDIA adapter 可以在 DLSS、DLSS Ray Reconstruction 与 FidelityFX FSR 之间运行时切换。
+- Streamline 保持 process-wide Vulkan loader/interposer；FidelityFX 只在 FSR Frame Generation
+  激活时通过独立 swapchain layer 接管对应 swapchain，两者不再争用同一个 provider slot。
+- 非 NVIDIA adapter 仍可使用 FidelityFX。
 - `--disable-fidelityfx` 禁用 FidelityFX；`--agent-validation` 会同时禁用两个外部 provider。
 
 相关 CVar：
@@ -50,10 +51,10 @@ Windows 桌面启动时先安装 `NextStreamline`，只有 Streamline 未初始�
 - `r.superResolution 0..5`：Quality、Balanced、Performance、Ultra Performance、Native
   AA、Auto。
 
-在 NVIDIA 机器上强制验证 FSR upscale：
+在 NVIDIA 机器上验证 FSR upscale：
 
 ```bash
-gnb run gkNextRenderer --disable-streamline --cvar "r.upscalerType 3" --cvar "r.superResolution 0"
+gnb run gkNextRenderer --cvar "r.upscalerType 3" --cvar "r.superResolution 0"
 ```
 
 加入 `--cvar "r.frameGeneration 1"` 可验证 frame generation。真实 FG 验证应使用普通可见窗口；
@@ -81,6 +82,10 @@ queue 时只关闭 FG，FSR upscale 仍然可用。启用 FG 后 renderer 强制
 在 ImGui 之前保存无 HUD scene image，并向 frame-generation context 提交 depth、motion、
 camera vectors 与 frame timing。
 
+FSR upscale/frame-generation context、proxy swapchain context、无 HUD image 和共享 temporal
+post-filter image/pipeline 都只在 FidelityFX FSR 或对应 Frame Generation 实际激活时存在；切换到
+其他 upscaler 或 None 时随 swapchain teardown 立即释放。
+
 SDK 1.1.4 的 backend 会在 Vulkan 1.1+ 上调用 KHR 后缀的 memory-requirements entry point，
 因此模块仍显式启用 `VK_KHR_get_memory_requirements2` 与
 `VK_KHR_dedicated_allocation`，并为 proxy swapchain 启用 timeline semaphore feature。不要把
@@ -91,7 +96,7 @@ SDK 1.1.4 的 backend 会在 Vulkan 1.1+ 上调用 KHR 后缀的 memory-requirem
 正常启动应出现：
 
 ```text
-FidelityFX FSR 3.1 Vulkan provider installed
+FidelityFX FSR 3.1 Vulkan provider installed alongside other upscalers
 FidelityFX FG queues: game=..., async=..., present=..., acquire=...
 FidelityFX Vulkan device ready. FSR=true, Frame Generation=true
 FidelityFX FSR 3.1 active for ...
@@ -101,8 +106,7 @@ FidelityFX Frame Generation prepare dispatch is active
 ```
 
 - 只有 `Frame Generation=false`：检查是否能暴露四条独立 queue；upscale 不受影响。
-- 没有 provider installed：确认未由 Streamline 占用 provider，或检查
-  `--disable-fidelityfx`/`--agent-validation`。
+- 没有 provider installed：检查 `--disable-fidelityfx`/`--agent-validation` 和 SDK DLL。
 - SDK context/dispatch 失败：确认 executable 旁存在 `amd_fidelityfx_vk.dll`，并检查输入
   image usage/layout、swapchain STORAGE 支持和输出 format。
 - Vulkan Validation 报 `rw_luma_history` 的 `rgba8`/`R16G16B16A16_SFLOAT` mismatch：这是

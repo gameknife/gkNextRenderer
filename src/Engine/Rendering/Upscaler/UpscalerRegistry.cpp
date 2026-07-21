@@ -47,6 +47,15 @@ namespace Rendering::Upscaler
                 activeProvider_ = nullptr;
             }
 
+            void SetActiveType(EUpscalerType type) override
+            {
+                for (auto& provider : providers_)
+                {
+                    provider->SetActiveType(type);
+                }
+                activeProvider_ = FindProvider(type);
+            }
+
             void Shutdown() override
             {
                 for (auto& provider : providers_)
@@ -173,11 +182,6 @@ namespace Rendering::Upscaler
     void RegisterUpscalerFactory(FUpscalerFactory factory)
     {
         Factories().push_back(std::move(factory));
-    }
-
-    bool HasRegisteredUpscalerFactory()
-    {
-        return !Factories().empty();
     }
 
     std::unique_ptr<IUpscaler> CreateRegisteredUpscaler()

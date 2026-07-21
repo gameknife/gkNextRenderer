@@ -235,6 +235,10 @@ namespace FidelityFXWrapper
 
             bool IsDeviceReady() const { return deviceReady_; }
             bool IsFrameGenerationAvailable() const { return frameGenerationAvailable_; }
+            bool OwnsSwapchain(VkSwapchainKHR swapchain) const
+            {
+                return swapchain != VK_NULL_HANDLE && swapchain == activeProxySwapchain_;
+            }
 
             bool CreateSwapchain(const VkSwapchainCreateInfoKHR* createInfo,
                                   const VkAllocationCallbacks* allocator,
@@ -243,6 +247,8 @@ namespace FidelityFXWrapper
                 NextEngine* engine = NextEngine::GetInstance();
                 const bool frameGenerationRequested = engine != nullptr &&
                     engine->GetUserSettings().FrameGeneration &&
+                    engine->GetRenderer().IsFrameGenerationSwapchainRequested() &&
+                    (createInfo->imageUsage & VK_IMAGE_USAGE_STORAGE_BIT) != 0 &&
                     Rendering::Upscaler::GetUpscalerTypeInfo(
                         engine->GetUserSettings().UpscalerType).type ==
                         Rendering::Upscaler::EUpscalerType::FidelityFXFSR;
@@ -317,9 +323,11 @@ namespace FidelityFXWrapper
                         device, swapchain, allocator, swapchainContext_);
                     activeProxySwapchain_ = VK_NULL_HANDLE;
                     loggedProxyPresent_ = false;
+                    ffx::DestroyContext(swapchainContext_);
+                    swapchainContext_ = nullptr;
+                    replacementFunctions_ = {};
                     return;
                 }
-                vkDestroySwapchainKHR(device, swapchain, allocator);
             }
 
             VkResult GetSwapchainImages(VkDevice device, VkSwapchainKHR swapchain,
@@ -658,24 +666,29 @@ namespace FidelityFXWrapper
             VkPhysicalDeviceTimelineSemaphoreFeatures timelineSemaphoreFeatures_{};
         };
 
-        class FFidelityFXInterposer final : public Vulkan::IVulkanInterposer
+        class FFidelityFXSwapchainInterposer final : public Vulkan::IVulkanSwapchainInterposer
         {
         public:
-            VkResult DeviceWaitIdle(VkDevice device) override
+            void BeforeDeviceWaitIdle(VkDevice) override
             {
                 Context().WaitForPresents();
-                return vkDeviceWaitIdle(device);
             }
 
-            VkResult CreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR* createInfo,
-                                        const VkAllocationCallbacks* allocator,
-                                        VkSwapchainKHR* swapchain) override
+            bool TryCreateSwapchainKHR(VkDevice, const VkSwapchainCreateInfoKHR* createInfo,
+                                       const VkAllocationCallbacks* allocator,
+                                       VkSwapchainKHR* swapchain, VkResult& result) override
             {
                 if (Context().CreateSwapchain(createInfo, allocator, swapchain))
                 {
-                    return VK_SUCCESS;
+                    result = VK_SUCCESS;
+                    return true;
                 }
-                return vkCreateSwapchainKHR(device, createInfo, allocator, swapchain);
+                return false;
+            }
+
+            bool OwnsSwapchain(VkSwapchainKHR swapchain) const override
+            {
+                return Context().OwnsSwapchain(swapchain);
             }
 
             void DestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain,
@@ -731,6 +744,14 @@ namespace FidelityFXWrapper
                 frameGenerationState_ = {};
                 loggedUpscaleDispatch_ = false;
                 loggedFrameGenerationDispatch_ = false;
+            }
+
+            void SetActiveType(Rendering::Upscaler::EUpscalerType type) override
+            {
+                if (type != Rendering::Upscaler::EUpscalerType::FidelityFXFSR)
+                {
+                    OnSwapChainDestroyed();
+                }
             }
 
             void Shutdown() override
@@ -924,9 +945,9 @@ namespace FidelityFXWrapper
         };
     }
 
-    Vulkan::IVulkanInterposer& InterposerInstance()
+    Vulkan::IVulkanSwapchainInterposer& SwapchainInterposerInstance()
     {
-        static FFidelityFXInterposer interposer;
+        static FFidelityFXSwapchainInterposer interposer;
         return interposer;
     }
 

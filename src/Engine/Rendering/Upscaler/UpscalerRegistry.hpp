@@ -12,7 +12,6 @@ namespace Rendering::Upscaler
     // Registered by upscaler modules before renderer start. Multiple independent
     // providers may coexist (for example an SDK provider plus NativeTemporal).
     void RegisterUpscalerFactory(FUpscalerFactory factory);
-    bool HasRegisteredUpscalerFactory();
     // Creates a composite over every provider that accepted creation.
     std::unique_ptr<IUpscaler> CreateRegisteredUpscaler();
 }

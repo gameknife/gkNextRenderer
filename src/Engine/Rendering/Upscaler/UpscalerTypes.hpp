@@ -72,19 +72,6 @@ namespace Rendering::Upscaler
         return rawType < std::size(kTypes) ? kTypes[rawType] : kTypes[0];
     }
 
-    inline bool HasTemporalPostFilterUpscaler(FUpscalerTypeMask supportedTypes)
-    {
-        for (uint32_t rawType = 1; rawType < static_cast<uint32_t>(EUpscalerType::Count); ++rawType)
-        {
-            if (SupportsUpscalerType(supportedTypes, static_cast<EUpscalerType>(rawType)) &&
-                GetUpscalerTypeInfo(rawType).supportsTemporalPostFilter)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
     enum class EUpscaleMode : uint32_t
     {
         Quality = 0,
