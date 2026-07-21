@@ -891,7 +891,7 @@ bool NextRendererGameInstance::OnRemoteViewAction(const FRemoteViewActionContext
 void NextRendererGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     //std::string error;
-    //cvars.SetDefaultFromString("r.superResolution", "4", &error);
+    //cvars.SetDefaultFromString("r.upscaler.qualityMode", "4", &error);
 }
 
 
@@ -1139,7 +1139,7 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
     {
         DrawSettingCheckboxRow(LOCTEXT("AntiAlias"), &userSetting.TAA);
         DrawIntSetting(LOCTEXT("Samples"), &userSetting.NumberOfSamples, 1, 16);
-        DrawSettingCheckboxRow(LOCTEXT("FastGather"), &userSetting.FastGather);
+        DrawSettingCheckboxRow(LOCTEXT("Exit After First"), &userSetting.ExitAfterFirst);
         DrawIntSetting(LOCTEXT("Ambient Speed"), &userSetting.BakeSpeedLevel, 0, 2);
         NextUI::Theme::EndPanelSection();
     }

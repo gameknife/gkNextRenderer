@@ -147,7 +147,7 @@ public struct ALIGN_16 UniformBufferObject
     public uint HDROutputMode;
     public bool TAA;
     public bool ProgressiveRender;
-    public bool FastGather;
+    public bool ExitAfterFirst;
 
     public bool DebugDraw_Lighting;
     public uint DebugDrawPadding0;

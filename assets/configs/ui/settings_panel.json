@@ -29,13 +29,13 @@
           "label": "Super Resolution",
           "items": [
             {
-              "cvar": "r.superResolution",
+              "cvar": "r.upscaler.qualityMode",
               "label": "Quality Mode",
               "widget": "combo",
               "options": ["Quality", "Balanced", "Performance", "Ultra Performance", "Native / DLAA", "Auto"]
             },
             {
-              "cvar": "r.upscalerType",
+              "cvar": "r.upscaler.type",
               "label": "Upscaler",
               "widget": "combo",
               "options": ["None", "DLSS", "DLSS Ray Reconstruction", "FidelityFX FSR", "Native TAAU", "SGSR2 (2-pass CS)"]

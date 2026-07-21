@@ -30,8 +30,8 @@ Windows 使用对应的 `gnb.bat`。成功日志包含 `decoded SOG`、`uploaded
 
 - 可见与排序：`show.gaussianSplats`、`r.splat.bucketCount`、`r.splat.maxCount`、`r.splat.sortCache`。
 - billboard：`r.splat.sigma`、`r.splat.forceAA`、`r.splat.aaStrength`。
-- proxy：`r.splat.proxy.enable/gridMax/brickSize/sigma/isoThreshold/simplifyRatio/debugVisible`。
-- 交互与光照：`r.splat.shadow.enable`、`r.splat.rayOcclusion.enable`、`r.splat.receiveLighting`、`r.splat.lightingStrength`、`r.splat.proxy.debug`。
+- proxy：`r.splat.proxy.enable/gridMax/sigma/isoThreshold/debugVisible`。
+- 交互与光照：`r.splat.proxy.shadow.enable`、`r.splat.proxy.rayOcclusion.enable`、`r.splat.receiveLighting`、`r.splat.lightingStrength`。
 
 默认值和运行时钳制以 `SplatSettings.cpp`、`GaussianSplatPass.cpp` 与 `SplatProxyBuilder.cpp` 为准。尤其 `bucketCount` 是最小请求值，pass 还会根据 splat 数自动提高；不要把它描述成始终精确的桶数。
 

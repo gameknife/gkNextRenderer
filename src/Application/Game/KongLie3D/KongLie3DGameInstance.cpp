@@ -352,7 +352,7 @@ void KongLie3DGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
                         "KongLie3D battle simulation speed");
     
     //std::string error;
-    //cvars.SetDefaultFromString("r.upscalerType", "2", &error);
+    //cvars.SetDefaultFromString("r.upscaler.type", "2", &error);
 }
 
 void KongLie3DGameInstance::OnTick(double deltaSeconds)

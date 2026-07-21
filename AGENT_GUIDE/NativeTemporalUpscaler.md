@@ -1,7 +1,7 @@
 # Native temporal upscalers
 
 `NextTemporalUpscaler` owns two compute-only temporal providers with no binary SDK dependency:
-Native TAAU (`r.upscalerType 4`) and Snapdragon Game Super Resolution 2 (`r.upscalerType 5`). Both are registered
+Native TAAU (`r.upscaler.type 4`) and Snapdragon Game Super Resolution 2 (`r.upscaler.type 5`). Both are registered
 on every Vulkan target, including Windows, Linux, macOS/iOS through MoltenVK, and Android.
 
 ## Pipeline
@@ -29,15 +29,15 @@ another type or None. The provider restores the engine depth attachment layout a
 
 ## Controls
 
-- `r.upscalerType 5`: select the BSD-3-Clause SGSR2 2-pass compute provider. It uses the official
+- `r.upscaler.type 5`: select the BSD-3-Clause SGSR2 2-pass compute provider. It uses the official
   Convert + Upscale data flow, render-resolution `RGBA16F`/`R32UI` intermediates, and ping-pong
   display-resolution `RGBA16F` history. The engine's full-scene render-pixel motion is converted
   to SGSR2's Vulkan clip-space convention in Convert. Published SGSR2 ratios stop at 2x, so the
   shared Ultra Performance mode is clamped to the 2x Performance extent for this provider. The
   port tracks Qualcomm's [SGSR2 v2 source](https://github.com/SnapdragonGameStudios/snapdragon-gsr/tree/main/sgsr/v2)
   and retains its BSD-3-Clause notice under `assets/shaders/third_party/sgsr2/`.
-- `r.upscalerType 4`: select Native TAAU.
-- `r.superResolution`: shared Quality/Balanced/Performance/Ultra Performance/Native/Auto mode.
+- `r.upscaler.type 4`: select Native TAAU.
+- `r.upscaler.qualityMode`: shared Quality/Balanced/Performance/Ultra Performance/Native/Auto mode.
 - `r.taau.historyWeight` (default `0.97`, range `0.5..0.98`): stable-history contribution.
 - `r.taau.sharpness` (default `0.25`, range `0..1`): display-resolution adaptive sharpening.
 - `r.upscaler.postFilter` and its `postFilterPasses`, `postFilterStrength`, `postFilterLumaSigma`,

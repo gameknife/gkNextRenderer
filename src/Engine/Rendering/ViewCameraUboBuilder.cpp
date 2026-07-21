@@ -78,7 +78,7 @@ namespace Vulkan
         {
             ubo.Aperture = camera.Aperture;
             ubo.FocusDistance = camera.FocalDistance;
-            ubo.FastGather = false;
+            ubo.ExitAfterFirst = false;
             ubo.SuperResolution = 0;
             ubo.MaxNumberOfBounces = 1;
             ubo.NumberOfSamples = 64;

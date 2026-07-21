@@ -12,17 +12,17 @@
   },
   "steps": [
     { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 10000 },
-    { "type": "cvar", "name": "r.upscalerType", "set": 5 },
-    { "type": "cvar", "name": "r.superResolution", "set": 0 },
+    { "type": "cvar", "name": "r.upscaler.type", "set": 5 },
+    { "type": "cvar", "name": "r.upscaler.qualityMode", "set": 0 },
     { "type": "cvar", "name": "r.upscaler.postFilter", "set": true },
     { "type": "wait-frames", "n": 60 },
-    { "type": "assert", "query": "cvar.r.upscalerType", "op": "eq", "value": 5 },
+    { "type": "assert", "query": "cvar.r.upscaler.type", "op": "eq", "value": 5 },
     { "type": "assert", "query": "cvar.r.upscaler.postFilter", "op": "eq", "value": true },
     { "type": "assert", "query": "engine.totalFrames", "op": "ge", "value": 30 },
     { "type": "screenshot", "out": "screenshots/sgsr2_smoke" },
-    { "type": "cvar", "name": "r.upscalerType", "set": 0 },
+    { "type": "cvar", "name": "r.upscaler.type", "set": 0 },
     { "type": "wait-frames", "n": 5 },
-    { "type": "assert", "query": "cvar.r.upscalerType", "op": "eq", "value": 0 },
+    { "type": "assert", "query": "cvar.r.upscaler.type", "op": "eq", "value": 0 },
     { "type": "quit" }
   ]
 }

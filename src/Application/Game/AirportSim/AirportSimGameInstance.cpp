@@ -372,6 +372,6 @@ void AirportSimGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
     cvars.SetDefaultFromString("r.samples", "4", &error);
     cvars.SetDefaultFromString("r.sharc.enable", "true", &error);
-    //cvars.SetDefaultFromString("r.superResolution", "4", &error);
-    cvars.SetDefaultFromString("r.upscalerType", "1", &error);
+    //cvars.SetDefaultFromString("r.upscaler.qualityMode", "4", &error);
+    cvars.SetDefaultFromString("r.upscaler.type", "1", &error);
 }

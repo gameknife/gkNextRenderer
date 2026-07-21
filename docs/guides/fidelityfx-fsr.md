@@ -39,7 +39,7 @@ Windows 桌面会同时安装可用的 `NextStreamline` 和 `NextFidelityFX` pro
 
 相关 CVar：
 
-- `r.upscalerType 3`：provider 可用时选择 FSR 3.1 temporal upscale；不可用时使用 native
+- `r.upscaler.type 3`：provider 可用时选择 FSR 3.1 temporal upscale；不可用时使用 native
   rendering，不再提供内建 spatial FSR fallback。
 - `r.upscaler.postFilter 1`：在支持该后处理的 temporal upscaler evaluate 后启用
   display-resolution a-trous cleanup；默认开启，与 Native TAAU、SGSR2 共用同一 bindless pass。
@@ -48,13 +48,13 @@ Windows 桌面会同时安装可用的 `NextStreamline` 和 `NextFidelityFX` pro
 - `r.upscaler.postFilterLumaSigma 0.01..0.5`：颜色/亮度边缘阈值，越小越保边，默认 `0.10`。
 - `r.upscaler.fireflySigma 1..8`：孤立高亮相对邻域标准差的拒绝阈值，越小抑制越强，默认 `2.5`。
 - `r.frameGeneration 1`：为当前选择的 upscaler type 启用 Frame Generation。
-- `r.superResolution 0..5`：Quality、Balanced、Performance、Ultra Performance、Native
+- `r.upscaler.qualityMode 0..5`：Quality、Balanced、Performance、Ultra Performance、Native
   AA、Auto。
 
 在 NVIDIA 机器上验证 FSR upscale：
 
 ```bash
-gnb run gkNextRenderer --cvar "r.upscalerType 3" --cvar "r.superResolution 0"
+gnb run gkNextRenderer --cvar "r.upscaler.type 3" --cvar "r.upscaler.qualityMode 0"
 ```
 
 加入 `--cvar "r.frameGeneration 1"` 可验证 frame generation。真实 FG 验证应使用普通可见窗口；

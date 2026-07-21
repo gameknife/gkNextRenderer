@@ -52,7 +52,7 @@ void NextEngine::OnKey(SDL_Event& event)
         {
             if (services_.cvarSystem)
             {
-                auto result = services_.cvarSystem->ExecuteCommand("cvar.toggle sys.fullscreen");
+                auto result = services_.cvarSystem->ExecuteCommand("cvar.toggle sys.borderlessFullscreen");
                 if (!result.success)
                 {
                     ToggleBorderlessFullscreen();

@@ -155,9 +155,9 @@ void CharacterDemoGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
     cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
-    //cvars.SetDefaultFromString("r.superResolution", "4", &error);
-    cvars.SetDefaultFromString("r.fastGather", "true", &error);
-    //cvars.SetDefaultFromString("r.upscalerType", "1", &error);
+    //cvars.SetDefaultFromString("r.upscaler.qualityMode", "4", &error);
+    cvars.SetDefaultFromString("r.tracing.exitAfterFirst", "true", &error);
+    //cvars.SetDefaultFromString("r.upscaler.type", "1", &error);
 }
 
 void CharacterDemoGameInstance::BeforeSceneRebuild(

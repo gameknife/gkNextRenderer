@@ -106,7 +106,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Run
     options.ForceSDR = true;
     options.locale = "zhCN";
     //options.SuperResolution = 0;
-    // Select r.upscalerType=1 to prefer DLSS when supported.
+    // Select r.upscaler.type=1 to prefer DLSS when supported.
 
     // mode init
     SetBuildMode(ELegoMode::ELM_Place);

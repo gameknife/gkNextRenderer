@@ -92,12 +92,7 @@ cmake --build --preset windows-no-unity --target gkNextRenderer --parallel
 
 不要启用 Live++ 的结构迁移 hook 来绕过以上边界；本项目没有 Unreal 式对象 reinstancing。历史可行性评估已归档，当前支持范围以本节和 `CppLiveCodingService` 为准。
 
-对应 CVar：
-
-```text
-r.shader.hot_reload
-r.shader.hot_reload_interval
-```
+热重载开关和轮询间隔属于 `Runtime::Config::Options`，不是 CVar；Editor 面板直接修改这两个 option。
 
 ---
 
@@ -130,7 +125,7 @@ r.shader.hot_reload_interval
 
 `gkNextEditor` 的 Tools 菜单有 `Hot Reload` 面板：
 
-- 开关 `r.shader.hot_reload`
+- 开关 shader hot reload option
 - 调整 shader 轮询间隔
 - 用魔棒图标手动重编 shader
 - 用锤子图标请求 Live++ 编译 C++ 变更（Agent 不可用时禁用）

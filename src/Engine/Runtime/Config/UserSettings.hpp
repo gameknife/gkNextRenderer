@@ -12,18 +12,18 @@ struct UserSettings final
     
     // Scene
     int SceneIndex {};
-    float LDrawLduToWorldScale = 0.001f;
+    float LDrawLduToWorldScale = 0.02f;
     float ScadToWorldScale = 1.0f;
 
     // Renderer
-    int32_t NumberOfSamples;
+    int32_t NumberOfSamples = 2;
     uint32_t NumberOfBounces;
     uint32_t MaxNumberOfBounces;
     bool TAA {};
-    bool FastGather = false;
+    bool ExitAfterFirst = false;
     uint32_t PresentMode = 3;
     uint32_t SuperResolution = 5;
-    int32_t UpscalerType = 0;
+    int32_t UpscalerType = 4;
     float NativeTAAUHistoryWeight = 0.97f;
     float NativeTAAUSharpness = 0.25f;
     bool TemporalUpscalerPostFilter = true;
@@ -45,7 +45,6 @@ struct UserSettings final
     float HeatmapScale;
 
     // UI
-    bool ShowSettings;
     bool ShowOverlay;
     bool BorderlessFullscreen = false;
 
@@ -56,7 +55,7 @@ struct UserSettings final
     bool GTAOEnable = true;
     int GTAOQuality = 1;
     float GTAORadius = 1.0f;
-    float GTAOStrength = 1.5f; // master sky-occlusion strength
+    float GTAOStrength = 5.0f; // master sky-occlusion strength
     float GTAOThickness = 0.5f;
     int GTAODebugMode = 0;
 

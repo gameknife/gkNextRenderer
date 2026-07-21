@@ -76,7 +76,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         .fillSceneLighting = false,
     });
 
-    ubo.FastGather = config_.userSettings.FastGather;
+    ubo.ExitAfterFirst = config_.userSettings.ExitAfterFirst;
     ubo.SuperResolution = GOption->ReferenceMode ? 2 : renderer_->EffectiveSuperResolutionMode();
     ubo.UpscalerInvalidMotionMask = renderer_->RequiresInvalidMotionMask();
     ubo.RayReconstruction = renderer_->IsRayReconstructionActive();

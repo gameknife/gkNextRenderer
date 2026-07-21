@@ -13,21 +13,21 @@ gkNextEngine 只在 Windows x86_64 上集成 NVIDIA Streamline。非 Windows 构
 
 ## 运行时 CVar
 
-- `r.upscalerType 1`：选择 DLSS Super Resolution。
-- `r.upscalerType 2`：选择 DLSS Ray Reconstruction；这是独立的 upscaler type。
+- `r.upscaler.type 1`：选择 DLSS Super Resolution。
+- `r.upscaler.type 2`：选择 DLSS Ray Reconstruction；这是独立的 upscaler type。
 - `r.frameGeneration 1`：在当前 type 支持 Frame Generation 时启用。
 - `r.frameGeneration.multiplier 2`：帧倍增系数，目前限制在 `2..4`。
 - `r.frameGeneration.frameLimitFps 0`：Frame Generation 开启时的 base-frame 限帧；0 表示不限制。
 - `r.upscaler.jitterFrames 16`：provider 未给出 phase count 时的 projection jitter 序列长度。
 - `r.upscaler.jitterInvertY 0`：只用于验证 temporal upscaler jitter 符号的诊断开关。
-- `r.superResolution 0..5`：Quality、Balanced、Performance、Ultra Performance、Native/DLAA、Auto。Auto 在输出不超过 1920×1080 时关闭超分并使用原生分辨率，更高分辨率使用 Quality。
+- `r.upscaler.qualityMode 0..5`：Quality、Balanced、Performance、Ultra Performance、Native/DLAA、Auto。Auto 在输出不超过 1920×1080 时关闭超分并使用原生分辨率，更高分辨率使用 Quality。
 
 修改 DLSS、DLSS-RR、DLSS-G、帧倍增系数或超分辨率模式会重建 swapchain。
 
 无需编辑 `cvar_user.json`，也可以通过启动参数覆盖：
 
 ```bash
-./gnb.sh run gkNextRenderer --load-scene=assets/models/playground.glb --cvar "r.upscalerType 1" --cvar "r.frameGeneration 1"
+./gnb.sh run gkNextRenderer --load-scene=assets/models/playground.glb --cvar "r.upscaler.type 1" --cvar "r.frameGeneration 1"
 ```
 
 对于会反复创建和销毁 engine instance 的测试进程，使用 `--disable-streamline`。Windows
@@ -75,7 +75,7 @@ engine 状态为 `Loading` 时不会启用 DLSS-G。这可以避免 `slDLSSGSetO
 
 ## 故障排查
 
-- 如果 `r.dlssg 1` 没有增加 presented frames，检查 renderer settings 面板中的 DLSS-G state 行。非零 status mask 表示 Streamline runtime 拒绝了当前状态。
+- 如果 `r.frameGeneration 1` 没有增加 presented frames，检查 renderer settings 面板中的 DLSS-G state 行。非零 status mask 表示 Streamline runtime 拒绝了当前状态。
 - 如果 status 为 `0` 但 presented count 仍为 `1`，确认游戏窗口处于活动状态，并在重新测试前禁用 RivaTuner Statistics Server 等 present-hook overlay。
 - 不要用 `--agent-validation` 或 `--hidden-window` 验证 Streamline。Agent validation 为确定性
   会禁用 Streamline；`gnb shot` 只能验证进入 DLSS 前的 scene color/depth/motion 资源链。

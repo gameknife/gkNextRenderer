@@ -48,7 +48,7 @@ namespace NextCVar
     void RegisterEngineCVars(FCVarSystem& cvars, Runtime::Config::UserSettings& settings, Runtime::Config::ShowFlags& showFlags, NextEngine* engine)
     {
         GK_CVAR_UINT("r.temporalFrames", settings, TemporalFrames, 16, ECVarFlags::Archive, "Moving-object history rejection and progressive warmup frames");
-        GK_CVAR_INT("r.samples", settings, NumberOfSamples, 4, ECVarFlags::Archive, "Samples per pixel");
+        GK_CVAR_INT("r.samples", settings, NumberOfSamples, 2, ECVarFlags::Archive, "Samples per pixel");
         GK_CVAR_UINT("r.bounces", settings, NumberOfBounces, 8, ECVarFlags::Archive, "Ray bounce count");
         GK_CVAR_INT("r.rendererType", settings, RendererType, 0, ECVarFlags::Archive, "Renderer type (0=PathTracing,1=SoftwareTracing,2=SoftwareModern,3=VoxelTracing,4=SoftwareModernNoAmbient)");
         GK_CVAR_UINT("r.maxBounces", settings, MaxNumberOfBounces, 10, ECVarFlags::Archive, "Maximum ray bounce count");
@@ -58,8 +58,8 @@ namespace NextCVar
         GK_CVAR_FLOAT("r.gtao.strength", settings, GTAOStrength, 5.0f, ECVarFlags::Archive, "Master sky-occlusion strength: scales GTAO sky darkening (1=natural, lower=lighter)");
         GK_CVAR_FLOAT("r.gtao.thickness", settings, GTAOThickness, 0.5f, ECVarFlags::Archive, "GTAO depth-discontinuity thickness heuristic in world units");
         GK_CVAR_INT("r.gtao.debugMode", settings, GTAODebugMode, 0, ECVarFlags::Archive, "GTAO debug mode (0=off,1=occlusion,2=unoccluded sky lighting)");
-        GK_CVAR_UINT_CB("r.superResolution", settings, SuperResolution, 5, ECVarFlags::Archive, "Super resolution mode (0=Quality,1=Balanced,2=Performance,3=Ultra Performance,4=Native/DLAA,5=Auto)", std::bind(RequestSwapChainIfPossible, engine));
-        GK_CVAR_INT_CB("r.upscalerType", settings, UpscalerType, 0, ECVarFlags::Archive, "Upscaler type (0=None,1=DLSS,2=DLSS Ray Reconstruction,3=FidelityFX FSR,4=Native TAAU,5=SGSR2)", std::bind(RequestSwapChainIfPossible, engine));
+        GK_CVAR_UINT_CB("r.upscaler.qualityMode", settings, SuperResolution, 5, ECVarFlags::Archive, "Upscaler quality mode (0=Quality,1=Balanced,2=Performance,3=Ultra Performance,4=Native/DLAA,5=Auto)", std::bind(RequestSwapChainIfPossible, engine));
+        GK_CVAR_INT_CB("r.upscaler.type", settings, UpscalerType, 4, ECVarFlags::Archive, "Upscaler type (0=None,1=DLSS,2=DLSS Ray Reconstruction,3=FidelityFX FSR,4=Native TAAU,5=SGSR2)", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_FLOAT_RANGE("r.taau.historyWeight", settings, NativeTAAUHistoryWeight, 0.97f, ECVarFlags::Archive, "Native TAAU stable-history blend weight", 0.5, 0.98);
         GK_CVAR_FLOAT_RANGE("r.taau.sharpness", settings, NativeTAAUSharpness, 0.25f, ECVarFlags::Archive, "Native TAAU display-resolution adaptive sharpening", 0.0, 1.0);
         GK_CVAR_BOOL("r.upscaler.postFilter", settings, TemporalUpscalerPostFilter, true, ECVarFlags::Archive, "Apply display-resolution bilateral noise and firefly suppression after supported temporal upscalers");
@@ -73,15 +73,14 @@ namespace NextCVar
         GK_CVAR_UINT("r.upscaler.jitterFrames", settings, UpscalerJitterFrames, 16, ECVarFlags::Archive, "Fallback temporal upscaler projection jitter sequence length (clamped to 1-256)");
         GK_CVAR_BOOL("r.upscaler.jitterInvertY", settings, UpscalerJitterInvertY, false, ECVarFlags::Archive, "Invert temporal upscaler projection jitter Y for diagnostics");
         GK_CVAR_BOOL("r.taa", settings, TAA, true, ECVarFlags::Archive, "Enable temporal anti-aliasing");
-        GK_CVAR_BOOL("r.fastGather", settings, FastGather, false, ECVarFlags::Archive, "Enable fast gather");
+        GK_CVAR_BOOL("r.tracing.exitAfterFirst", settings, ExitAfterFirst, false, ECVarFlags::Archive, "Terminate tracing after the first non-dielectric surface hit");
         GK_CVAR_INT("r.bakeSpeedLevel", settings, BakeSpeedLevel, 1, ECVarFlags::Archive, "Bake speed level (0=realtime,1=normal,2=low)");
         GK_CVAR_FLOAT("r.heatmapScale", settings, HeatmapScale, 1.0f, ECVarFlags::Archive, "Profiler heatmap scale");
         GK_CVAR_FLOAT("r.paperWhiteNit", settings, PaperWhiteNit, 600.0f, ECVarFlags::Archive, "Paper white nit");
-        GK_CVAR_BOOL("ui.showSettings", settings, ShowSettings, true, ECVarFlags::Archive, "Show settings panel");
         GK_CVAR_BOOL("ui.showOverlay", settings, ShowOverlay, true, ECVarFlags::Archive, "Show overlay");
         GK_CVAR_BOOL("sys.tickPhysics", settings, TickPhysics, true, ECVarFlags::Archive, "Tick physics system");
         GK_CVAR_BOOL("sys.tickAnimation", settings, TickAnimation, true, ECVarFlags::Archive, "Tick animation system");
-        GK_CVAR_BOOL_CB("sys.fullscreen", settings, BorderlessFullscreen, settings.BorderlessFullscreen, ECVarFlags::Archive, "Toggle borderless fullscreen mode", std::bind(ApplyBorderlessFullscreenIfPossible, engine, std::cref(settings)));
+        GK_CVAR_BOOL_CB("sys.borderlessFullscreen", settings, BorderlessFullscreen, settings.BorderlessFullscreen, ECVarFlags::Archive, "Toggle borderless fullscreen mode", std::bind(ApplyBorderlessFullscreenIfPossible, engine, std::cref(settings)));
         GK_CVAR_FLOAT("sys.ldrawLduToWorldScale", settings, LDrawLduToWorldScale, 0.02f, ECVarFlags::Archive, "World-space units represented by one LDraw LDU when loading .ldr/.mpd scenes");
         GK_CVAR_FLOAT("sys.scadToWorldScale", settings, ScadToWorldScale, 1.0f, ECVarFlags::Archive, "Uniform world scale applied when loading .scad scenes (1 unit -> N meters)");
         GK_CVAR_FLOAT("sys.sceneEpsilonScale", settings, SceneEpsilonScale, 1.0f, ECVarFlags::Archive, "Scene epsilon scale");
