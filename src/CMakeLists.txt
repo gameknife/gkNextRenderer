@@ -37,6 +37,7 @@ set(GK_STANDARD_RUNTIME_MODULES
     NextAudio
     NextPhysics
     NextStreamline
+    NextFidelityFX
     GltfLoader
     NextRemote
 )

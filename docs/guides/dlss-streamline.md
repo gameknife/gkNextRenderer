@@ -4,7 +4,7 @@ category: guide
 status: 现行
 owner: NextStreamline
 created: 2026-06-18
-last_updated: 2026-07-17
+last_updated: 2026-07-21
 ---
 
 # NVIDIA Streamline / DLSS / DLSS-G 指南
@@ -30,7 +30,9 @@ gkNextEngine 只在 Windows x86_64 上集成 NVIDIA Streamline。非 Windows 构
 ./gnb.sh run gkNextRenderer --load-scene=assets/models/playground.glb --cvar "r.dlss 1" --cvar "r.dlssg 1"
 ```
 
-对于会反复创建和销毁 engine instance 的测试进程，使用 `--disable-streamline`。
+对于会反复创建和销毁 engine instance 的测试进程，使用 `--disable-streamline`。Windows
+桌面应用先尝试安装 Streamline；Streamline 不可用或被该参数禁用时，会由
+`NextFidelityFX` 接管同一个 `IUpscaler` provider slot。
 
 ## 预期启动日志
 
@@ -74,7 +76,9 @@ engine 状态为 `Loading` 时不会启用 DLSS-G。这可以避免 `slDLSSGSetO
 
 - 如果 `r.dlssg 1` 没有增加 presented frames，检查 renderer settings 面板中的 DLSS-G state 行。非零 status mask 表示 Streamline runtime 拒绝了当前状态。
 - 如果 status 为 `0` 但 presented count 仍为 `1`，确认游戏窗口处于活动状态，并在重新测试前禁用 RivaTuner Statistics Server 等 present-hook overlay。
-- 不要用 `--agent-validation` 或 `--hidden-window` 验证 frame generation。Streamline 无法把隐藏 SDL 窗口与 Vulkan swapchain 关联起来。请使用正常可见运行；`gnb shot` 仍可用于 DLSS-SR/RR 图像检查。
+- 不要用 `--agent-validation` 或 `--hidden-window` 验证 Streamline。Agent validation 为确定性
+  会禁用 Streamline；`gnb shot` 只能验证进入 DLSS 前的 scene color/depth/motion 资源链。
+  DLSS-SR/RR/DLSS-G 必须使用正常可见窗口验证。
 - 如果启动日志显示请求的 Vulkan extension 不可用，该 adapter 的 DLSS 功能会被禁用，renderer 会回退到普通 resolve。
 - 如果启用了 HDR 但 DLSS-G 拒绝运行，强制使用 SDR，或切换到 10-bit HDR swapchain format。
 - 如果 validation 报告 swapchain layout 问题，确认 resolve 路径在 DLSS/blit 前调用 `SwapChain::InsertBarrierToWrite`，并在 present 前调用 `InsertBarrierToPresent`。

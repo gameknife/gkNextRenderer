@@ -60,9 +60,10 @@ namespace NextCVar
         GK_CVAR_INT("r.gtao.debugMode", settings, GTAODebugMode, 0, ECVarFlags::Archive, "GTAO debug mode (0=off,1=occlusion,2=unoccluded sky lighting)");
         GK_CVAR_UINT_CB("r.superResolution", settings, SuperResolution, 5, ECVarFlags::Archive, "Super resolution mode (0=Quality,1=Balanced,2=Performance,3=Ultra Performance,4=Native/DLAA,5=Auto)", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlss", settings, DLSS, false, ECVarFlags::Archive, "Enable NVIDIA DLSS", std::bind(RequestSwapChainIfPossible, engine));
-        GK_CVAR_BOOL_CB("r.fsr", settings, FSR, false, ECVarFlags::Archive, "Enable FSR1 spatial upscaling", std::bind(RequestSwapChainIfPossible, engine));
+        GK_CVAR_BOOL_CB("r.fsr", settings, FSR, false, ECVarFlags::Archive, "Enable FidelityFX FSR (temporal SDK provider with FSR1 fallback)", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlssrr", settings, DLSSRR, false, ECVarFlags::Archive, "Enable NVIDIA DLSS Ray Reconstruction", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlssg", settings, DLSSG, false, ECVarFlags::Archive, "Enable NVIDIA DLSS Frame Generation", std::bind(RequestSwapChainIfPossible, engine));
+        GK_CVAR_BOOL_CB("r.fsrg", settings, FSRG, false, ECVarFlags::Archive, "Enable FidelityFX FSR Frame Generation", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_UINT_CB("r.dlssg.multiplier", settings, DLSSGFrameMultiplier, 2, ECVarFlags::Archive, "DLSS Frame Generation multiplier (2-4)", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_UINT("r.dlssg.frameLimitFps", settings, DLSSGFrameLimitFps, 0, ECVarFlags::Archive, "Reflex base frame-rate limit while DLSS Frame Generation is enabled (0=unlimited)");
         GK_CVAR_UINT("r.dlss.jitterFrames", settings, DLSSJitterFrames, 16, ECVarFlags::Archive, "DLSS projection jitter sequence length (clamped to 1-256)");

@@ -3,6 +3,7 @@
 #include <vulkan/vulkan.h>
 
 #include <cstdint>
+#include <map>
 #include <vector>
 
 namespace Vulkan
@@ -25,6 +26,12 @@ namespace Vulkan
 
         // Additional queue family to create a queue for, or UINT32_MAX.
         virtual uint32_t AdditionalQueueFamily(VkPhysicalDevice physicalDevice) { return UINT32_MAX; }
+
+        // Request minimum queue counts per family for features that require
+        // multiple distinct VkQueue handles.
+        virtual void AugmentQueueRequests(VkPhysicalDevice physicalDevice,
+                                          VkSurfaceKHR surface,
+                                          std::map<uint32_t, uint32_t>& queueCounts) {}
     };
 
     void RegisterDeviceCreationAugmenter(IDeviceCreationAugmenter* augmenter);

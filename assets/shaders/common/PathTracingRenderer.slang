@@ -725,7 +725,10 @@ public struct FPathTracingRenderer{
             const bool locked = (hitPrimaryNode_.reserved2 & 2u) != 0;
             const bool danger = (hitPrimaryNode_.reserved2 & 4u) != 0;
             OutObjectID.Store(pixel_, Common.EncodeObjectId(hitPrimaryNode_.instanceId, selected, hovered, locked, danger));
-            OutMotionVector.Store(pixel_, float4(motion, 0, 0));
+            // The engine-wide upscaler contract stores motion in render-pixel
+            // units. Streamline and FidelityFX can therefore both use a 1:1
+            // motion-vector scale.
+            OutMotionVector.Store(pixel_, float4(primaryMotionPixels_, 0, 0));
             OutPrevDepth.Store(pixel_, ndcDepth);
         }
 

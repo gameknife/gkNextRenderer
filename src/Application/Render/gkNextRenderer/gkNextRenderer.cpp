@@ -1160,6 +1160,10 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
                                {
                                    userSetting.DLSSG = false;
                                }
+                               if (!userSetting.FSR)
+                               {
+                                   userSetting.FSRG = false;
+                               }
                                GetEngine().GetRenderer().RequestRecreateSwapChain();
                                return true;
                            }
@@ -1185,20 +1189,26 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
             ImGui::TextDisabled("DLSS not supported on this hardware.");
         }
 
-        const bool canUseFrameGeneration =
+        const bool canUseDLSSFrameGeneration =
             upscaleMethod == 1 &&
             GetEngine().GetRenderer().SupportDLSSG() &&
             GetEngine().GetRenderer().SupportReflex();
+        const bool canUseFSRFrameGeneration =
+            upscaleMethod == 2 &&
+            GetEngine().GetRenderer().SupportFSRFrameGeneration();
+        const bool canUseFrameGeneration =
+            canUseDLSSFrameGeneration || canUseFSRFrameGeneration;
         DrawSettingRow("Frame Generation",
                        [&]()
                        {
-                           bool enabled = userSetting.DLSSG;
+                           bool enabled = upscaleMethod == 1 ? userSetting.DLSSG : userSetting.FSRG;
                            ImGui::BeginDisabled(!canUseFrameGeneration);
-                           const bool changed = ImGui::Checkbox("##DLSSG", &enabled);
+                           const bool changed = ImGui::Checkbox("##FrameGeneration", &enabled);
                            ImGui::EndDisabled();
                            if (changed)
                            {
-                               userSetting.DLSSG = enabled && canUseFrameGeneration;
+                               userSetting.DLSSG = enabled && canUseDLSSFrameGeneration;
+                               userSetting.FSRG = enabled && canUseFSRFrameGeneration;
                                GetEngine().GetRenderer().RequestRecreateSwapChain();
                                return true;
                            }
@@ -1206,11 +1216,13 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
                        });
 
         int frameMultiplier = static_cast<int>(std::clamp(userSetting.DLSSGFrameMultiplier, 2u, 4u));
+        ImGui::BeginDisabled(upscaleMethod != 1);
         if (DrawIntSetting("FG Multiplier", &frameMultiplier, 2, 4))
         {
             userSetting.DLSSGFrameMultiplier = static_cast<uint32_t>(std::clamp(frameMultiplier, 2, 4));
             GetEngine().GetRenderer().RequestRecreateSwapChain();
         }
+        ImGui::EndDisabled();
 
         int frameLimitFps = static_cast<int>(std::min(userSetting.DLSSGFrameLimitFps, 1000u));
         if (DrawIntSetting("FG Base FPS Limit", &frameLimitFps, 0, 1000))
@@ -1219,15 +1231,23 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
         }
 
         const auto frameGenerationState = GetEngine().GetRenderer().GetFrameGenerationState();
-        if (userSetting.DLSSG && frameGenerationState.valid)
+        if ((userSetting.DLSSG || userSetting.FSRG) && frameGenerationState.valid)
         {
-            ImGui::TextDisabled("DLSS-G presented x%u, status 0x%X",
+            ImGui::TextDisabled("Frame Generation presented x%u, status 0x%X",
                                 frameGenerationState.numFramesActuallyPresented,
                                 frameGenerationState.statusMask);
         }
         if (upscaleMethod == 1 && !canUseFrameGeneration)
         {
             ImGui::TextDisabled("DLSS Frame Generation requires Streamline DLSS-G and Reflex support.");
+        }
+        if (upscaleMethod == 2 && !GetEngine().GetRenderer().SupportFSR())
+        {
+            ImGui::TextDisabled("FidelityFX SDK unavailable; using the FSR1 spatial fallback.");
+        }
+        if (upscaleMethod == 2 && !canUseFrameGeneration)
+        {
+            ImGui::TextDisabled("FSR Frame Generation requires the FidelityFX Vulkan provider and four distinct queues.");
         }
         NextUI::Theme::EndPanelSection();
     }

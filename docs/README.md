@@ -27,6 +27,7 @@
 - [CMake 结构](guides/cmake-structure.md)
 - [SDR / HDR10 / EDR 输出模式](guides/display-output-modes.md)
 - [NVIDIA Streamline / DLSS / DLSS-G](guides/dlss-streamline.md)
+- [AMD FidelityFX FSR 3.1 / Frame Generation](guides/fidelityfx-fsr.md)
 - [gnb 架构与代码导览](guides/gnb-architecture.md)
 - [gnb CLI](guides/gnb-cli.md)
 - [SCAD 场景生成指引](guides/scad-scene-authoring-guide.md)

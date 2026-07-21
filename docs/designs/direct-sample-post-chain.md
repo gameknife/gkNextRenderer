@@ -4,7 +4,7 @@ category: design
 status: 现行
 owner: engine/rendering
 created: 2026-07-20
-last_updated: 2026-07-20
+last_updated: 2026-07-21
 ---
 
 # 直接样本后处理与 Upscaler 输入链
@@ -22,7 +22,8 @@ spatial denoiser；renderer 生成的当前帧 diffuse/specular 样本直接 com
    `RT_SINGLE_DIFFUSE`。ReSTIR reservoir 的时域复用是光照采样器自身状态，不是颜色历史。
 3. `Process.Compose.comp.slang` 直接读取 single diffuse/specular 与当前 albedo，叠加编辑器
    outline，输出 HDR 编码或 SDR tonemap 后的 `RT_SCENE_COLOR`。
-4. DLSS/FSR/native presentation 统一消费 `RT_SCENE_COLOR`。DLSS Ray Reconstruction 的
+4. DLSS、FidelityFX FSR 3.1、内建 spatial FSR/native presentation 统一消费
+   `RT_SCENE_COLOR`。DLSS Ray Reconstruction 的
    noisy diffuse/specular resource 直接绑定 `RT_SINGLE_DIFFUSE/SPECULAR`，不经过引擎滤波。
 
 `SoftwareModernNoAmbient` 和 `VoxelTracing` 有自己的 compose shader，但输出契约同样是
@@ -56,4 +57,7 @@ previous UBO、ObjectId/depth 与 ReSTIR reservoir 失效；它不代表存在�
   不要为了“加强 DLSS”再叠一层引擎 TAA/reprojection。
 - realtime scene color 必须来自当前样本。只有用户明确进入 offline progressive 模式时才
   允许读取 `RT_PROGRESSIVE_*`。
-- FSR3/4 接入应实现现有 `IUpscaler`/scene-color 契约，不应要求 renderer 恢复旧 storage。
+- temporal upscaler provider 必须实现现有 `IUpscaler`/scene-color 契约，不应要求 renderer
+  恢复旧 storage。当前 `NextStreamline` 与 `NextFidelityFX` 互斥注册同一个 provider factory。
+- `RT_MOTIONVECTOR` 的全引擎契约是 render-pixel 单位；Streamline 与 FidelityFX 都提交
+  1:1 motion-vector scale。renderer 不得单独写 normalized UV motion。

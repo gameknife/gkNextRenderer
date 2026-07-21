@@ -128,8 +128,32 @@ Device::Device(
         }
     }
 
+    std::map<uint32_t, uint32_t> requestedQueueCounts;
+    for (uint32_t queueFamilyIndex : uniqueQueueFamilies)
+    {
+        requestedQueueCounts[queueFamilyIndex] = 1;
+    }
+    for (IDeviceCreationAugmenter* augmenter : DeviceCreationAugmenters())
+    {
+        augmenter->AugmentQueueRequests(physicalDevice, surface.Handle(), requestedQueueCounts);
+    }
+    for (auto& [queueFamilyIndex, queueCount] : requestedQueueCounts)
+    {
+        if (queueFamilyIndex >= queueFamilies.size())
+        {
+            Throw(std::runtime_error(fmt::format("module requested invalid queue family {}", queueFamilyIndex)));
+        }
+        queueCount = std::clamp(queueCount, 1u, queueFamilies[queueFamilyIndex].queueCount);
+        uniqueQueueFamilies.insert(queueFamilyIndex);
+    }
+
     // Create queues
-    std::vector<float> queuePriority = {1.0f};
+    uint32_t maxRequestedQueueCount = 1;
+    for (const auto& [queueFamilyIndex, queueCount] : requestedQueueCounts)
+    {
+        maxRequestedQueueCount = std::max(maxRequestedQueueCount, queueCount);
+    }
+    std::vector<float> queuePriority(maxRequestedQueueCount, 1.0f);
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 
     for (uint32_t queueFamilyIndex : uniqueQueueFamilies)
@@ -137,7 +161,7 @@ Device::Device(
         VkDeviceQueueCreateInfo queueCreateInfo = {};
         queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
-        queueCreateInfo.queueCount = 1;
+        queueCreateInfo.queueCount = requestedQueueCounts[queueFamilyIndex];
         queueCreateInfo.pQueuePriorities = queuePriority.data();
 
         queueCreateInfos.push_back(queueCreateInfo);
@@ -167,6 +191,15 @@ Device::Device(
     for (auto& [familyIndex, queue] : extraQueues_)
     {
         vkGetDeviceQueue(device_, familyIndex, 0, &queue);
+    }
+    for (const auto& [familyIndex, queueCount] : requestedQueueCounts)
+    {
+        auto& queues = createdQueues_[familyIndex];
+        queues.resize(queueCount);
+        for (uint32_t queueIndex = 0; queueIndex < queueCount; ++queueIndex)
+        {
+            vkGetDeviceQueue(device_, familyIndex, queueIndex, &queues[queueIndex]);
+        }
     }
 
     vkGetPhysicalDeviceProperties(PhysicalDevice(), &deviceProp_);
@@ -220,6 +253,23 @@ VkQueue Device::QueueForFamilyIndex(uint32_t queueFamilyIndex) const
         return extraQueue->second;
     }
     Throw(std::runtime_error(fmt::format("queue family {} is not available on this device", queueFamilyIndex)));
+}
+
+VkQueue Device::QueueForFamilyIndex(uint32_t queueFamilyIndex, uint32_t queueIndex) const
+{
+    const auto family = createdQueues_.find(queueFamilyIndex);
+    if (family == createdQueues_.end() || queueIndex >= family->second.size())
+    {
+        Throw(std::runtime_error(fmt::format("queue family {} index {} is not available on this device",
+                                             queueFamilyIndex, queueIndex)));
+    }
+    return family->second[queueIndex];
+}
+
+uint32_t Device::CreatedQueueCount(uint32_t queueFamilyIndex) const
+{
+    const auto family = createdQueues_.find(queueFamilyIndex);
+    return family != createdQueues_.end() ? static_cast<uint32_t>(family->second.size()) : 0;
 }
 
 void Device::CheckRequiredExtensions(VkPhysicalDevice physicalDevice, const std::vector<const char*>& requiredExtensions) const

@@ -27,6 +27,7 @@ struct UserSettings final
     bool FSR = false;
     bool DLSSRR = false;
     bool DLSSG = false;
+    bool FSRG = false;
     uint32_t DLSSGFrameMultiplier = 2;
     uint32_t DLSSGFrameLimitFps = 0;
     uint32_t DLSSJitterFrames = 16;

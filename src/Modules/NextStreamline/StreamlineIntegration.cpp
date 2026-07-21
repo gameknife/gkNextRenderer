@@ -1011,6 +1011,7 @@ namespace
         {
             StreamlineContext().SetVulkanInfo(deviceInfo);
             caps = StreamlineContext().Caps();
+            caps.provider = Rendering::Upscaler::EUpscalerProvider::Streamline;
             if (!GStreamlineDeviceExtsEnabled)
             {
                 caps.supportDLSS = false;
@@ -1099,7 +1100,8 @@ namespace
         Rendering::Upscaler::FOptimalRenderSettings GetOptimalRenderSettings(
             uint32_t superResolutionMode,
             VkExtent2D outputExtent,
-            bool dlssEnabled) override
+            bool dlssEnabled,
+            bool hdrOutput) override
         {
             Rendering::Upscaler::FOptimalRenderSettings result{};
             const auto& modeInfo = Rendering::Upscaler::GetUpscaleModeInfo(superResolutionMode);
@@ -1117,7 +1119,7 @@ namespace
             options.mode = ToDLSSMode(superResolutionMode);
             options.outputWidth = outputExtent.width;
             options.outputHeight = outputExtent.height;
-            options.colorBuffersHDR = sl::Boolean::eTrue;
+            options.colorBuffersHDR = hdrOutput ? sl::Boolean::eTrue : sl::Boolean::eFalse;
 
             sl::DLSSOptimalSettings settings{};
             const sl::Result slResult = slDLSSGetOptimalSettings(options, settings);

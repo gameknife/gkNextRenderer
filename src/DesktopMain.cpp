@@ -23,6 +23,9 @@
 #if GK_MODULE_NEXTSTREAMLINE
 #include "Modules/NextStreamline/NextStreamlineModule.hpp"
 #endif
+#if GK_MODULE_NEXTFIDELITYFX
+#include "Modules/NextFidelityFX/NextFidelityFXModule.hpp"
+#endif
 #if GK_MODULE_SPLATLOADER
 #include "Modules/SplatLoader/SplatModule.hpp"
 #endif
@@ -117,6 +120,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     // Streamline must hook the Vulkan interposer before the engine creates the instance.
 #if GK_MODULE_NEXTSTREAMLINE
     Modules::NextStreamline::Install(*GOption);
+#endif
+#if GK_MODULE_NEXTFIDELITYFX
+    Modules::NextFidelityFX::Install(*GOption);
 #endif
     GApplication.reset( new NextEngine(*GOption) );
 #if GK_MODULE_DEVTOOLS

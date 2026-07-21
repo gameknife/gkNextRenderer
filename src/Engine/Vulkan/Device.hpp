@@ -43,6 +43,8 @@ namespace Vulkan
         VkQueue TransferQueue() const { return transferQueue_; }
         // Also resolves queues created for augmenter-requested extra families.
         VkQueue QueueForFamilyIndex(uint32_t queueFamilyIndex) const;
+        VkQueue QueueForFamilyIndex(uint32_t queueFamilyIndex, uint32_t queueIndex) const;
+        uint32_t CreatedQueueCount(uint32_t queueFamilyIndex) const;
 
         VkPhysicalDeviceProperties DeviceProperties() const { return deviceProp_; }
         MemoryStatsSnapshot CaptureMemoryStats(bool includeDetails = false) const;
@@ -74,6 +76,7 @@ namespace Vulkan
         VkQueue transferQueue_{};
         // Queues for augmenter-requested extra families (e.g. video encode).
         std::map<uint32_t, VkQueue> extraQueues_;
+        std::map<uint32_t, std::vector<VkQueue>> createdQueues_;
                 
         std::unique_ptr<DeviceProcedures> deviceProcedures_;
         std::unique_ptr<MemoryAllocator> memoryAllocator_;

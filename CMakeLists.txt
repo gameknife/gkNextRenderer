@@ -21,6 +21,17 @@ if(WIN32 AND ENABLE_STREAMLINE)
     set(WITH_STREAMLINE ON)
 endif()
 
+if (WIN32)
+    set(ENABLE_FIDELITYFX_DEFAULT ON)
+else()
+    set(ENABLE_FIDELITYFX_DEFAULT OFF)
+endif()
+option(ENABLE_FIDELITYFX "Enable AMD FidelityFX FSR 3.1 Vulkan integration" ${ENABLE_FIDELITYFX_DEFAULT})
+set(WITH_FIDELITYFX OFF)
+if(WIN32 AND ENABLE_FIDELITYFX)
+    set(WITH_FIDELITYFX ON)
+endif()
+
 option(GK_ENABLE_HOT_RELOAD "Enable desktop Slang shader hot reload" ON)
 option(GK_ENABLE_CPP_LIVE_CODING "Enable Windows C++ live coding through Live++" OFF)
 set(GK_LIVEPP_ROOT "$ENV{LIVEPP_ROOT}" CACHE PATH

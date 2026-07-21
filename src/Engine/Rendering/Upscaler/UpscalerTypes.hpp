@@ -13,6 +13,13 @@ namespace Assets
 
 namespace Rendering::Upscaler
 {
+    enum class EUpscalerProvider : uint32_t
+    {
+        None,
+        Streamline,
+        FidelityFX,
+    };
+
     enum class EUpscaleMode : uint32_t
     {
         Quality = 0,
@@ -111,6 +118,7 @@ namespace Rendering::Upscaler
 
     struct FFeatureCaps
     {
+        EUpscalerProvider provider = EUpscalerProvider::None;
         bool streamlineInitialized = false;
         bool streamlineDeviceReady = false;
         bool supportDLSS = false;
@@ -118,6 +126,8 @@ namespace Rendering::Upscaler
         bool supportDLSSG = false;
         bool supportReflex = false;
         bool supportPCL = false;
+        bool supportFSR = false;
+        bool supportFSRFrameGeneration = false;
         bool requestedDeviceExtensionsAvailable = false;
         uint32_t requiredGraphicsQueues = 0;
         uint32_t requiredComputeQueues = 0;
@@ -211,15 +221,19 @@ namespace Rendering::Upscaler
         bool enableDLSS = false;
         bool enableDLSSRR = false;
         bool enableDLSSG = false;
+        bool enableFSR = false;
+        bool enableFSRFrameGeneration = false;
         uint32_t superResolutionMode = 0;
         uint32_t frameGenerationMultiplier = 2;
         bool hdrOutput = false;
+        float frameTimeDeltaMilliseconds = 16.6667f;
 
         VkExtent2D renderExtent{};
         VkExtent2D outputExtent{};
         VkOffset2D outputOffset{};
         VkFormat swapchainFormat = VK_FORMAT_UNDEFINED;
         uint32_t backBufferCount = 0;
+        VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 
         const Assets::UniformBufferObject* ubo = nullptr;
         FCameraConstants camera{};

@@ -101,6 +101,17 @@ if(TARGET NextStreamline AND WITH_STREAMLINE)
     target_link_directories(NextStreamline PRIVATE ${STREAMLINE_LIB_DIR})
 endif()
 
+if(TARGET NextFidelityFX)
+    target_compile_definitions(NextFidelityFX PRIVATE
+        WITH_FIDELITYFX=$<BOOL:${WITH_FIDELITYFX}>
+    )
+    if(WITH_FIDELITYFX)
+        target_include_directories(NextFidelityFX PRIVATE ${FIDELITYFX_INCLUDE_DIR})
+        target_link_libraries(NextFidelityFX PRIVATE ${FIDELITYFX_LIB})
+        file(COPY ${FIDELITYFX_DLL} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+    endif()
+endif()
+
 if(TARGET NextRemote)
     if(TARGET RenderViews)
         target_link_libraries(NextRemote PRIVATE RenderViews)

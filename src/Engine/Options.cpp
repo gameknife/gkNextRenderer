@@ -50,6 +50,7 @@ Options::Options(const int argc, const char* argv[])
         ("tui-ssaa", "Supersample factor for --tui hidden rendering (1-4).", cxxopts::value<uint32_t>(TuiSsaa)->default_value("1"))
         ("tui-no-input", "Do not capture stdin in --tui mode.", cxxopts::value<bool>(TuiNoInput)->default_value("false")->implicit_value("true"))
         ("disable-streamline", "Disable NVIDIA Streamline/DLSS integration for this process.", cxxopts::value<bool>(DisableStreamline)->default_value("false")->implicit_value("true"))
+        ("disable-fidelityfx", "Disable AMD FidelityFX FSR integration for this process.", cxxopts::value<bool>(DisableFidelityFX)->default_value("false")->implicit_value("true"))
         ("remote", "Enable WebRTC Remote Play host mode. Implies --hidden-window and --forcesdr unless --remote-show-window is set.", cxxopts::value<bool>(RemoteMode)->default_value("false")->implicit_value("true"))
         ("remote-show-window", "Keep the desktop window visible while --remote is active.", cxxopts::value<bool>(RemoteShowWindow)->default_value("false")->implicit_value("true"))
         ("remote-multiview", "Enable Cloud Play multi-client multi-view mode. Each browser owns an independent remote camera/input context.", cxxopts::value<bool>(RemoteMultiView)->default_value("false")->implicit_value("true"))
@@ -84,6 +85,7 @@ Options::Options(const int argc, const char* argv[])
             Validation = true;
         }
         DisableStreamline = DisableStreamline || disableStreamlineForApplication || AgentValidation;
+        DisableFidelityFX = DisableFidelityFX || AgentValidation;
 
         if (result.count("help"))
         {

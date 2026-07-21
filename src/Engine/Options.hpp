@@ -46,6 +46,7 @@ public:
     uint32_t TuiSsaa{1};
     bool TuiNoInput{};
     bool DisableStreamline{};
+    bool DisableFidelityFX{};
     bool RemoteMode{};
     bool RemoteShowWindow{};
     bool RemoteMultiView{};

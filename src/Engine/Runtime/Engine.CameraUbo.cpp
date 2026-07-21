@@ -82,13 +82,14 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     glm::mat4x4 projectionUnJit = ubo.Projection;
     const bool noAmbientRenderer = renderer_->CurrentLogicRendererType() == Vulkan::ERT_SoftwareModernNoAmbient;
     const bool enableTaa = config_.userSettings.TAA && !noAmbientRenderer;
-    const bool enableStreamlineJitter = renderer_->IsDLSSSuperResolutionActive();
+    const bool enableUpscalerJitter = renderer_->IsTemporalSuperResolutionActive();
 
-    if (enableTaa || enableStreamlineJitter)
+    if (enableTaa || enableUpscalerJitter)
     {
         const VkExtent2D renderExtent = renderer_->SwapChain().RenderExtent();
-        const uint32_t jitterFrames = enableStreamlineJitter
-            ? config_.userSettings.DLSSJitterFrames
+        const uint32_t providerJitterFrames = renderer_->TemporalJitterFrameCount();
+        const uint32_t jitterFrames = enableUpscalerJitter
+            ? (providerJitterFrames > 0 ? providerJitterFrames : config_.userSettings.DLSSJitterFrames)
             : config_.userSettings.TemporalFrames;
         glm::vec2 jitter = GetTemporalJitter(frameState_.totalFrames, jitterFrames);
         if (config_.userSettings.DLSSJitterInvertY)

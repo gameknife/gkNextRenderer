@@ -552,6 +552,11 @@ namespace Vulkan
         return upscaler_ ? upscaler_->FrameGenerationState() : Rendering::Upscaler::FFrameGenerationState{};
     }
 
+    uint32_t VulkanBaseRenderer::TemporalJitterFrameCount() const
+    {
+        return upscaler_ ? upscaler_->JitterPhaseCount() : 0;
+    }
+
     Assets::UniformBufferObject VulkanBaseRenderer::GetUniformBufferObject(
         const VkOffset2D offset, const VkExtent2D extent) const
     {
@@ -784,6 +789,8 @@ namespace Vulkan
             caps_.supportDLSS = featureCaps.supportDLSS;
             caps_.supportDLSSRR = featureCaps.supportDLSSRR;
             caps_.supportDLSSG = featureCaps.supportDLSSG;
+            caps_.supportFSR = featureCaps.supportFSR;
+            caps_.supportFSRFrameGeneration = featureCaps.supportFSRFrameGeneration;
             caps_.supportReflex = featureCaps.supportReflex;
             caps_.supportPCL = featureCaps.supportPCL;
         }
@@ -850,11 +857,13 @@ namespace Vulkan
         CREATE_STORAGE_IMAGE(RT_MINIGBUFFER_DRAW, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT );
         CREATE_STORAGE_IMAGE(RT_OBJECTID_0, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT );
         CREATE_STORAGE_IMAGE(RT_OBJECTID_1, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
-        CREATE_STORAGE_IMAGE(RT_MOTIONVECTOR, VK_FORMAT_R32G32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
+        // External temporal upscalers bind motion vectors as sampled images during their
+        // current-frame dispatch. Keep STORAGE for engine writes and SAMPLED for the SDK read.
+        CREATE_STORAGE_IMAGE(RT_MOTIONVECTOR, VK_FORMAT_R32G32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT );
         CREATE_STORAGE_IMAGE(RT_ALBEDO, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
         CREATE_STORAGE_IMAGE(RT_NORMAL, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
         CREATE_STORAGE_IMAGE(RT_SHADER_TIMER, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT );
-        CREATE_STORAGE_IMAGE(RT_SCENE_COLOR, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT );
+        CREATE_STORAGE_IMAGE(RT_SCENE_COLOR, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT );
         CREATE_STORAGE_IMAGE(RT_PREV_DEPTHBUFFER, VK_FORMAT_R32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
         CREATE_STORAGE_IMAGE(RT_PROGRESSIVE_SPECULAR, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
         CREATE_STORAGE_IMAGE(RT_SINGLE_SPECULAR, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
@@ -908,12 +917,12 @@ namespace Vulkan
         }
 
         frameGeneration_.hudlessImages.clear();
-        if (caps_.supportDLSSG)
+        if (caps_.supportDLSSG || caps_.supportFSRFrameGeneration)
         {
             frameGeneration_.hudlessImages.reserve(frame_.swapChain->Images().size());
             for (size_t i = 0; i < frame_.swapChain->Images().size(); ++i)
             {
-                const std::string debugName = fmt::format("DLSS-G HUD-less {}", i);
+                const std::string debugName = fmt::format("Frame Generation HUD-less {}", i);
                 frameGeneration_.hudlessImages.emplace_back(std::make_unique<RenderImage>(
                     Device(),
                     frame_.swapChain->OutputExtent(),
@@ -1013,8 +1022,11 @@ namespace Vulkan
         frameSettings_.progressiveAccumulatedFrames = engine->GetProgressiveRenderAccumulatedFrames();
         frameSettings_.progressiveTargetFrames = engine->GetProgressiveRenderTargetFrames();
         const auto& settings = frameSettings_.userSettings;
+        const bool frameGenerationRequested =
+            (caps_.supportDLSSG && settings.DLSSG) ||
+            (caps_.supportFSRFrameGeneration && settings.FSRG);
         const VkPresentModeKHR requestedPresentMode =
-            caps_.supportDLSSG && settings.DLSSG
+            frameGenerationRequested
                 ? VK_PRESENT_MODE_IMMEDIATE_KHR
                 : presentMode_;
         frame_.swapChain.reset(new class SwapChain(*ctx_.device, requestedPresentMode, forceSDR_));
@@ -1026,6 +1038,7 @@ namespace Vulkan
         frame_.currentFenceSerial = 0;
         VkExtent2D renderExtent = frame_.swapChain->Extent();
         dlssSuperResolutionActive_ = false;
+        fsrTemporalSuperResolutionActive_ = false;
         fsrSuperResolutionActive_ = false;
         effectiveSuperResolutionMode_ =
             static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Native);
@@ -1042,11 +1055,17 @@ namespace Vulkan
                 HasAny(contract.post, EPostProcess::DLSS) &&
                 caps_.supportDLSS && settings.DLSS && upscaler_;
 
+            fsrTemporalSuperResolutionActive_ =
+                resolvedMode.enabled &&
+                HasAny(contract.post, EPostProcess::SpatialUpscale) &&
+                caps_.supportFSR && settings.FSR && upscaler_ &&
+                frame_.swapChain->SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT);
+
             const bool fsrRequested =
                 resolvedMode.enabled &&
                 resolvedMode.mode != static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Native) &&
                 HasAny(contract.post, EPostProcess::SpatialUpscale) &&
-                settings.FSR;
+                settings.FSR && !fsrTemporalSuperResolutionActive_;
             fsrSuperResolutionActive_ =
                 fsrRequested && frame_.swapChain->SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT);
 
@@ -1055,12 +1074,13 @@ namespace Vulkan
                 SPDLOG_WARN("FSR compose requires swapchain STORAGE usage; using native rendering");
             }
 
-            if (dlssSuperResolutionActive_)
+            if (dlssSuperResolutionActive_ || fsrTemporalSuperResolutionActive_)
             {
                 const auto optimal = upscaler_->GetOptimalRenderSettings(
                     effectiveSuperResolutionMode_,
                     frame_.swapChain->Extent(),
-                    true);
+                    true,
+                    frame_.swapChain->IsHDR());
                 renderExtent = optimal.renderExtent;
             }
             else if (fsrSuperResolutionActive_)
@@ -1081,6 +1101,14 @@ namespace Vulkan
                             renderExtent.width, renderExtent.height,
                             frame_.swapChain->OutputExtent().width,
                             frame_.swapChain->OutputExtent().height);
+            }
+            else if (fsrTemporalSuperResolutionActive_)
+            {
+                SPDLOG_INFO("FidelityFX FSR 3.1 active for {}: {}x{} -> {}x{}",
+                            GetRendererName(logicRenderers_.current),
+                            renderExtent.width, renderExtent.height,
+                            frame_.swapChain->Extent().width,
+                            frame_.swapChain->Extent().height);
             }
         }
 
@@ -1424,15 +1452,18 @@ namespace Vulkan
         frameSettings_.progressiveAccumulatedFrames = engine->GetProgressiveRenderAccumulatedFrames();
         frameSettings_.progressiveTargetFrames = engine->GetProgressiveRenderTargetFrames();
         const auto& settings = frameSettings_.userSettings;
+        const bool dlssFrameGenerationEnabled =
+            caps_.supportDLSSG && settings.DLSSG && settings.DLSS;
+        const bool fsrFrameGenerationEnabled =
+            caps_.supportFSRFrameGeneration && settings.FSRG && settings.FSR;
         const bool frameGenerationEnabled =
-            caps_.supportDLSSG &&
-            settings.DLSSG &&
+            (dlssFrameGenerationEnabled || fsrFrameGenerationEnabled) &&
             engine->GetEngineStatus() != NextRenderer::EApplicationStatus::Loading;
 
         frame_.streamlineFrameToken = upscaler_
             ? upscaler_->BeginFrame(static_cast<uint32_t>(frame_.frameCount),
                                     frameGenerationEnabled,
-                                    settings.DLSSGFrameLimitFps)
+                                    dlssFrameGenerationEnabled ? settings.DLSSGFrameLimitFps : 0)
             : Rendering::Upscaler::FFrameToken{};
         if (upscaler_ && frame_.streamlineFrameToken)
         {
@@ -1524,7 +1555,7 @@ namespace Vulkan
 
             if (upscaler_ && frameGenerationEnabled)
             {
-                SCOPED_GPU_TIMER("dlssg-tag");
+                SCOPED_GPU_TIMER("frame-generation-prepare");
                 CaptureFrameGenerationHudless(commandBuffer, frame_.currentImageIndex);
                 auto inputs = BuildUpscalerFrameInputs(
                     commandBuffer,
@@ -1537,8 +1568,35 @@ namespace Vulkan
                         VK_IMAGE_LAYOUT_GENERAL,
                         VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
                 }
-                inputs.enableDLSSG = true;
+                inputs.enableDLSSG = dlssFrameGenerationEnabled;
+                inputs.enableFSRFrameGeneration = fsrFrameGenerationEnabled;
+                if (fsrFrameGenerationEnabled)
+                {
+                    VkImageSubresourceRange depthRange{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
+                    ImageMemoryBarrier::Insert(
+                        commandBuffer,
+                        DepthBuffer().GetImage().Handle(),
+                        depthRange,
+                        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                        VK_ACCESS_SHADER_READ_BIT,
+                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+                    inputs.depth.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+                }
                 upscaler_->TagFrameGeneration(inputs);
+                if (fsrFrameGenerationEnabled)
+                {
+                    VkImageSubresourceRange depthRange{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
+                    ImageMemoryBarrier::Insert(
+                        commandBuffer,
+                        DepthBuffer().GetImage().Handle(),
+                        depthRange,
+                        VK_ACCESS_SHADER_READ_BIT,
+                        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+                }
             }
 
             if (delegates_.postRender)
@@ -1842,20 +1900,94 @@ namespace Vulkan
             {Assets::Bindless::RT_SCENE_COLOR,
              PipelineCommon::ERenderStage::Compute | PipelineCommon::ERenderStage::Transfer,
              PipelineCommon::EResourceAccess::ShaderRead | PipelineCommon::EResourceAccess::TransferRead},
+            {Assets::Bindless::RT_MOTIONVECTOR,
+             PipelineCommon::ERenderStage::Compute,
+             PipelineCommon::EResourceAccess::ShaderRead},
         }, "resolve primary view source");
 
         bool resolvedByUpscaler = false;
-        if (HasAny(contract.post, EPostProcess::DLSS) && upscaler_ && dlssSuperResolutionActive_)
+        const bool temporalUpscalerActive =
+            (HasAny(contract.post, EPostProcess::DLSS) && dlssSuperResolutionActive_) ||
+            (HasAny(contract.post, EPostProcess::SpatialUpscale) && fsrTemporalSuperResolutionActive_);
+        if (upscaler_ && temporalUpscalerActive)
         {
-            SCOPED_GPU_TIMER("DLSS resolve");
+            SCOPED_GPU_TIMER("temporal upscaler resolve");
             TransitionSwapchainImage(
                 commandBuffer, imageIndex,
                 {.stages = PipelineCommon::ERenderStage::Compute,
                  .access = PipelineCommon::EResourceAccess::ShaderWrite,
                  .layout = VK_IMAGE_LAYOUT_GENERAL},
-                "DLSS resolve");
-            resolvedByUpscaler = upscaler_->Evaluate(
-                BuildUpscalerFrameInputs(commandBuffer, imageIndex, VK_IMAGE_LAYOUT_GENERAL));
+                "temporal upscaler resolve");
+
+            auto inputs = BuildUpscalerFrameInputs(commandBuffer, imageIndex, VK_IMAGE_LAYOUT_GENERAL);
+            if (fsrTemporalSuperResolutionActive_)
+            {
+                VkImageSubresourceRange depthRange{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
+                ImageMemoryBarrier::Insert(
+                    commandBuffer,
+                    DepthBuffer().GetImage().Handle(),
+                    depthRange,
+                    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                    VK_ACCESS_SHADER_READ_BIT,
+                    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                    VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+                inputs.depth.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            }
+            resolvedByUpscaler = upscaler_->Evaluate(inputs);
+            if (fsrTemporalSuperResolutionActive_ && resolvedByUpscaler)
+            {
+                // FidelityFX registers external inputs only for this dispatch (the same
+                // lifetime semantics as Streamline's eOnlyValidNow tags), but its Vulkan
+                // backend leaves sampled inputs in SHADER_READ_ONLY_OPTIMAL. Restore the
+                // engine-owned layouts before the resources are reused on the next frame.
+                constexpr VkImageSubresourceRange colorRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+                ImageMemoryBarrier::Insert(
+                    commandBuffer,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    inputs.scalingInputColor.image,
+                    colorRange,
+                    VK_ACCESS_SHADER_READ_BIT,
+                    VK_ACCESS_SHADER_READ_BIT,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    VK_IMAGE_LAYOUT_GENERAL);
+                ImageMemoryBarrier::Insert(
+                    commandBuffer,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    inputs.motionVectors.image,
+                    colorRange,
+                    VK_ACCESS_SHADER_READ_BIT,
+                    VK_ACCESS_SHADER_READ_BIT,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    VK_IMAGE_LAYOUT_GENERAL);
+
+                VkImageSubresourceRange depthRange{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
+                ImageMemoryBarrier::Insert(
+                    commandBuffer,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                    DepthBuffer().GetImage().Handle(),
+                    depthRange,
+                    VK_ACCESS_SHADER_READ_BIT,
+                    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+            }
+            else if (fsrTemporalSuperResolutionActive_)
+            {
+                VkImageSubresourceRange depthRange{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
+                ImageMemoryBarrier::Insert(
+                    commandBuffer,
+                    DepthBuffer().GetImage().Handle(),
+                    depthRange,
+                    VK_ACCESS_SHADER_READ_BIT,
+                    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                    VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+            }
         }
         if (resolvedByUpscaler)
         {
@@ -2236,14 +2368,20 @@ namespace Vulkan
             HasAny(contract.post, EPostProcess::DLSSRayReconstruction) &&
             caps_.supportDLSSRR && settings.DLSSRR;
         inputs.enableDLSSG = caps_.supportDLSSG && settings.DLSSG;
+        inputs.enableFSR = fsrTemporalSuperResolutionActive_;
+        inputs.enableFSRFrameGeneration =
+            caps_.supportFSRFrameGeneration && settings.FSRG && settings.FSR;
         inputs.superResolutionMode = effectiveSuperResolutionMode_;
         inputs.frameGenerationMultiplier = std::clamp(settings.DLSSGFrameMultiplier, 2u, 4u);
         inputs.hdrOutput = swapChain.IsHDR();
+        inputs.frameTimeDeltaMilliseconds = static_cast<float>(
+            std::max(NextEngine::GetInstance()->GetDeltaSeconds() * 1000.0, 0.001));
         inputs.renderExtent = swapChain.RenderExtent();
         inputs.outputExtent = swapChain.OutputExtent();
         inputs.outputOffset = swapChain.OutputOffset();
         inputs.swapchainFormat = swapChain.Format();
         inputs.backBufferCount = static_cast<uint32_t>(swapChain.Images().size());
+        inputs.swapchain = swapChain.Handle();
         inputs.ubo = &frame_.lastUBO;
 
         auto& camera = GetScene().GetRenderCamera();
@@ -2261,11 +2399,13 @@ namespace Vulkan
         inputs.motionVectors = MakeRenderImageResource(
             GetViewStorageImage(Assets::Bindless::RT_MOTIONVECTOR),
             VK_IMAGE_LAYOUT_GENERAL,
-            VK_IMAGE_USAGE_STORAGE_BIT);
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
         inputs.scalingInputColor = MakeRenderImageResource(
             GetViewStorageImage(Assets::Bindless::RT_SCENE_COLOR),
             VK_IMAGE_LAYOUT_GENERAL,
-            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+                VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
         inputs.scalingOutputColor = MakeSwapchainResource(
             swapChain,
             imageIndex,

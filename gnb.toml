@@ -44,6 +44,11 @@ root = ".vcpkg"
 when = "windows"
 url = "https://github.com/NVIDIA-RTX/Streamline/releases/download/v2.10.0/streamline-sdk-v2.10.0.zip"
 
+[external.fidelityfx]
+when = "windows"
+version = "1.1.4"
+url = "https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/archive/refs/tags/v1.1.4.zip"
+
 [external.tsc]
 version = "v2025.5.23"
 windows = "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-windows-amd64.exe"
