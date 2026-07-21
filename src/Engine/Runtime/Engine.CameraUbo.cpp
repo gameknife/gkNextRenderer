@@ -78,6 +78,11 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
 
     ubo.FastGather = config_.userSettings.FastGather;
     ubo.SuperResolution = GOption->ReferenceMode ? 2 : renderer_->EffectiveSuperResolutionMode();
+    const Vulkan::FRendererContract& rendererContract =
+        Vulkan::GetRendererContract(renderer_->CurrentLogicRendererType());
+    ubo.DLSS = renderer_->IsDLSSSuperResolutionActive();
+    ubo.DLSSRR = ubo.DLSS && config_.userSettings.DLSSRR && renderer_->SupportDLSSRR() &&
+                 Vulkan::HasAny(rendererContract.post, Vulkan::EPostProcess::DLSSRayReconstruction);
 
     glm::mat4x4 projectionUnJit = ubo.Projection;
     const bool noAmbientRenderer = renderer_->CurrentLogicRendererType() == Vulkan::ERT_SoftwareModernNoAmbient;

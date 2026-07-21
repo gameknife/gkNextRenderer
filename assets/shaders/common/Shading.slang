@@ -85,9 +85,11 @@ namespace Common
         }
 
         float2 motion = prevfpos - currfpos;
-        // mark invalid if motion objects
-        // return MotionMoment[ipos] > 0 ? 3.40282346638528859811704183484516925440e38f : motion;
-        return motion;
+        // DLSS Super Resolution needs moving-object vectors explicitly marked invalid. DLSS-RR
+        // consumes the motion vector for its own reconstruction path and must receive the value.
+        return Camera.DLSS && !Camera.DLSSRR && MotionMoment[ipos] > 0
+            ? float2(3.40282346638528859811704183484516925440e38f)
+            : motion;
     }
 
     float3 mikkTSpace(float3 vNt, float3 normal, float4 tangent)

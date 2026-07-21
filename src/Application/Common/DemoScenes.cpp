@@ -1052,10 +1052,10 @@ namespace
         // Eight emitter colors with a wide intensity spread: the light CDF weights by
         // luminance * area, so this also exercises non-uniform light selection.
         const vec3 lightColors[8] = {
-            vec3(1200.0f, 300.0f, 120.0f), vec3(300.0f, 1200.0f, 200.0f),
-            vec3(200.0f, 350.0f, 1400.0f), vec3(1100.0f, 1000.0f, 250.0f),
-            vec3(1000.0f, 250.0f, 1000.0f), vec3(250.0f, 1000.0f, 1000.0f),
-            vec3(900.0f, 850.0f, 780.0f), vec3(1600.0f, 500.0f, 250.0f),
+            vec3(1200.0f, 30.0f, 12.0f), vec3(30.0f, 1200.0f, 20.0f),
+            vec3(20.0f, 35.0f, 1400.0f), vec3(1100.0f, 1000.0f, 25.0f),
+            vec3(1000.0f, 25.0f, 1000.0f), vec3(25.0f, 1000.0f, 1000.0f),
+            vec3(900.0f, 850.0f, 780.0f), vec3(1600.0f, 50.0f, 25.0f),
         };
         const uint32_t lightMatBase = static_cast<uint32_t>(materials.size());
         for (int i = 0; i < 8; ++i)

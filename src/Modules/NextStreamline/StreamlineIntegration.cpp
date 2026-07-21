@@ -1507,7 +1507,7 @@ namespace
             constants.clipToPrevClip = ToSlMatrix(reprojection.clipToPrevClip);
             constants.prevClipToClip = ToSlMatrix(reprojection.prevClipToClip);
             constants.jitterOffset = sl::float2(ubo.Jitter.x, ubo.Jitter.y);
-            constants.mvecScale = {1,1};
+            constants.mvecScale = {motionVectorScale.x, motionVectorScale.y};
             constants.cameraPos = sl::float3(
                 ubo.ModelViewInverse[3][0],
                 ubo.ModelViewInverse[3][1],

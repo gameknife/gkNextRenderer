@@ -164,8 +164,8 @@ public struct ALIGN_16 UniformBufferObject
 
     public float4 AmbientCubeCascadeParams;
 
-    public uint PostProcessPadding0;
-    public uint PostProcessPadding1;
+    public bool DLSS;
+    public bool DLSSRR;
     public float GTAORadius;
     public float GTAOStrength;
 
