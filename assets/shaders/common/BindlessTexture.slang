@@ -32,6 +32,10 @@ namespace Bindless
 
     // --- Global / shared slots: absolute, must NOT be remapped through ViewRT() ---
     public static const int RT_TEMP_USAGE0 = 50;
+    // Per-swapchain-image ping/pong images used by the optional FSR post filter.
+    // Slots 50..55 mirror RT_SWAPCHAIN0..2 and stay below the remote encode range.
+    public static const int RT_FSR_POST_PING0 = RT_TEMP_USAGE0;
+    public static const int RT_FSR_POST_PONG0 = RT_FSR_POST_PING0 + 3;
     public static const int RT_REMOTE_ENCODE0_Y = 60;
     public static const int RT_REMOTE_ENCODE0_UV = 61;
     public static const int RT_REMOTE_ENCODE1_Y = 62;

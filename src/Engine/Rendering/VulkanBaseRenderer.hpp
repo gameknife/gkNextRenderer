@@ -449,6 +449,7 @@ namespace Vulkan
             std::vector<std::unique_ptr<IExternalRenderPass>> externalPasses;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> bufferClearPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> fsrComposePipeline;
+            std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> fsrPostFilterPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> visualDebuggerPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> gpuCullCompactPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> softMeshShaderFinalizePipeline;
@@ -496,6 +497,14 @@ namespace Vulkan
             std::vector<std::unique_ptr<RenderImage>> hudlessImages;
         };
 
+        struct FsrPostFilterResources
+        {
+            std::vector<std::unique_ptr<RenderImage>> pingImages;
+            std::vector<std::unique_ptr<RenderImage>> pongImages;
+            std::vector<bool> pingInitialized;
+            std::vector<bool> pongInitialized;
+        };
+
         DeviceCaps caps_;
         DeviceContext ctx_;
         FrameResources frame_;
@@ -510,6 +519,7 @@ namespace Vulkan
         std::unique_ptr<GpuDrivenPasses> gpuDrivenPasses_;
         ScreenshotResources screenshot_;
         FrameGenerationResources frameGeneration_;
+        FsrPostFilterResources fsrPostFilter_;
         AmbientCubePipelines ambient_;
         OverlayPipelines overlay_;
         ShadowCameraFamilyCache shadowCameraFamilyCache_;
@@ -553,6 +563,14 @@ namespace Vulkan
         void CreateRenderTargetBank(uint32_t bankBase, VkExtent2D extent);
         bool DispatchScheduledRenderViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
         void ResolvePrimaryViewToSwapchain(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+        bool PrepareFsrPostFilterOutput(
+            VkCommandBuffer commandBuffer,
+            uint32_t imageIndex,
+            Rendering::Upscaler::FFrameInputs& inputs);
+        void ApplyFsrPostFilter(
+            VkCommandBuffer commandBuffer,
+            uint32_t imageIndex,
+            const Rendering::Upscaler::FFrameInputs& inputs);
         void CreateStorageImage(uint32_t bindlessIdx, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
         void CreateStorageImage(uint32_t bindlessIdx, VkExtent2D extent, VkFormat format, VkImageTiling tiling,
                                 VkImageUsageFlags usage, const char* debugName);

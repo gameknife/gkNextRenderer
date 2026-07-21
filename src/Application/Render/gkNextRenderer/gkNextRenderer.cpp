@@ -1189,6 +1189,21 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
             ImGui::TextDisabled("DLSS not supported on this hardware.");
         }
 
+        if (upscaleMethod == 2 && GetEngine().GetRenderer().SupportFSR())
+        {
+            DrawSettingCheckboxRow("Noise Filter", &userSetting.FSRPostFilter);
+            ImGui::BeginDisabled(!userSetting.FSRPostFilter);
+            int filterPasses = static_cast<int>(userSetting.FSRPostFilterPasses);
+            if (DrawIntSetting("A-Trous Passes", &filterPasses, 1, 4))
+            {
+                userSetting.FSRPostFilterPasses = static_cast<uint32_t>(filterPasses);
+            }
+            DrawFloatSetting("Filter Strength", &userSetting.FSRPostFilterStrength, 0.0f, 1.0f, "%.2f", 0.01f);
+            DrawFloatSetting("Edge Sigma", &userSetting.FSRPostFilterLumaSigma, 0.01f, 0.5f, "%.2f", 0.01f);
+            DrawFloatSetting("Firefly Sigma", &userSetting.FSRFireflySigma, 1.0f, 8.0f, "%.1f", 0.1f);
+            ImGui::EndDisabled();
+        }
+
         const bool canUseDLSSFrameGeneration =
             upscaleMethod == 1 &&
             GetEngine().GetRenderer().SupportDLSSG() &&

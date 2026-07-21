@@ -26,6 +26,12 @@ spatial denoiser；renderer 生成的当前帧 diffuse/specular 样本直接 com
    `RT_SCENE_COLOR`。DLSS Ray Reconstruction 的
    noisy diffuse/specular resource 直接绑定 `RT_SINGLE_DIFFUSE/SPECULAR`，不经过引擎滤波。
 
+FidelityFX temporal FSR 可在 evaluate 后运行一层显示分辨率的可选后处理：FSR 先写入
+每个 swapchain image 独立的 ping/pong intermediate，随后 firefly neighborhood clamp 与
+以当前帧 albedo/normal 引导的多 pass a-trous 滤波写回 swapchain。该阶段只清理 upscaler
+输出中的孤立亮点和高频残余噪声，不参与 renderer
+样本生成、历史重投影或 DLSS 路径。
+
 `SoftwareModernNoAmbient` 和 `VoxelTracing` 有自己的 compose shader，但输出契约同样是
 `RT_SCENE_COLOR`，因此后续 presentation 不需要知道 renderer 类型。
 
@@ -55,6 +61,8 @@ previous UBO、ObjectId/depth 与 ReSTIR reservoir 失效；它不代表存在�
   renderer 内重新建立一条颜色历史链。
 - upscaler 的 reset、jitter、motion-vector 和 exposure 契约由 upscaler integration 管理；
   不要为了“加强 DLSS”再叠一层引擎 TAA/reprojection。
+- FSR 输出滤波必须保持无历史、只读本帧 FSR intermediate，并在显示分辨率执行；不要将它
+  扩展成另一条 temporal accumulation 链。
 - realtime scene color 必须来自当前样本。只有用户明确进入 offline progressive 模式时才
   允许读取 `RT_PROGRESSIVE_*`。
 - temporal upscaler provider 必须实现现有 `IUpscaler`/scene-color 契约，不应要求 renderer

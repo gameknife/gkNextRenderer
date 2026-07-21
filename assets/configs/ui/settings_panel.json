@@ -36,6 +36,11 @@
             },
             {"cvar": "r.dlss", "label": "DLSS", "widget": "checkbox"},
             {"cvar": "r.fsr", "label": "FSR", "widget": "checkbox"},
+            {"cvar": "r.fsr.postFilter", "label": "FSR Noise Filter", "widget": "checkbox", "advanced": true},
+            {"cvar": "r.fsr.postFilterPasses", "label": "A-Trous Passes", "widget": "slider_int", "min": 1, "max": 4, "advanced": true},
+            {"cvar": "r.fsr.postFilterStrength", "label": "Filter Strength", "widget": "slider_float", "min": 0.0, "max": 1.0, "step": 0.01, "format": "%.2f", "advanced": true},
+            {"cvar": "r.fsr.postFilterLumaSigma", "label": "Edge Sigma", "widget": "slider_float", "min": 0.01, "max": 0.5, "step": 0.01, "format": "%.2f", "advanced": true},
+            {"cvar": "r.fsr.fireflySigma", "label": "Firefly Sigma", "widget": "slider_float", "min": 1.0, "max": 8.0, "step": 0.1, "format": "%.1f", "advanced": true},
             {"cvar": "r.fsrg", "label": "FSR Frame Generation", "widget": "checkbox"},
             {"cvar": "r.dlssrr", "label": "Ray Reconstruction", "widget": "checkbox", "advanced": true},
             {"cvar": "r.dlssg", "label": "Frame Generation", "widget": "checkbox", "advanced": true}

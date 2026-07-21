@@ -40,6 +40,12 @@ Windows 桌面启动时先安装 `NextStreamline`，只有 Streamline 未初始�
 
 - `r.fsr 1`：provider 可用时启用 FSR 3.1 temporal upscale；不可用时保留原来的内建
   spatial FSR fallback。
+- `r.fsr.postFilter 1`：在 FSR temporal evaluate 后启用 display-resolution a-trous
+  cleanup；默认开启，只影响 FidelityFX temporal FSR，不影响 DLSS 或 FSR1 fallback。
+- `r.fsr.postFilterPasses 1..4`：a-trous pass 数，步长依次为 1、2、4、8，默认 `3`。
+- `r.fsr.postFilterStrength 0..1`：滤波结果混合强度，默认 `0.65`。
+- `r.fsr.postFilterLumaSigma 0.01..0.5`：颜色/亮度边缘阈值，越小越保边，默认 `0.10`。
+- `r.fsr.fireflySigma 1..8`：孤立高亮相对邻域标准差的拒绝阈值，越小抑制越强，默认 `2.5`。
 - `r.fsrg 1`：同时启用 FSR Frame Generation；要求 `r.fsr 1`。
 - `r.superResolution 0..5`：Quality、Balanced、Performance、Ultra Performance、Native
   AA、Auto。
@@ -57,7 +63,10 @@ gnb run gkNextRenderer --disable-streamline --cvar "r.fsr 1" --cvar "r.superReso
 ## Vulkan 与帧数据契约
 
 FSR 3.1 upscale 通过当前 frame command buffer dispatch，输入 scene color、depth、motion
-vector，直接写 swapchain storage image。输入 `RT_SCENE_COLOR` 已按目标显示空间编码，
+vector。启用 post filter 时，FSR 先写每个 swapchain image 对应的 display-resolution storage
+image；后续多 pass 对孤立高亮做邻域方差裁剪，再以当前帧 albedo/normal 作为稳定边缘引导，
+执行 B3-spline a-trous 滤波并写入 swapchain。关闭
+post filter 时 FSR 仍直接写 swapchain storage image。输入 `RT_SCENE_COLOR` 已按目标显示空间编码，
 集成按 SDR sRGB 或 HDR10 PQ 设置 non-linear color flags。projection jitter phase count 来自
 SDK query，camera cut、scene/extent 切换通过 `reset` 清空 history。
 

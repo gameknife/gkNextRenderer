@@ -25,6 +25,11 @@ struct UserSettings final
     uint32_t SuperResolution = 5;
     bool DLSS = false;
     bool FSR = false;
+    bool FSRPostFilter = true;
+    uint32_t FSRPostFilterPasses = 3;
+    float FSRPostFilterStrength = 0.65f;
+    float FSRPostFilterLumaSigma = 0.10f;
+    float FSRFireflySigma = 2.5f;
     bool DLSSRR = false;
     bool DLSSG = false;
     bool FSRG = false;
