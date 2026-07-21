@@ -232,12 +232,6 @@ namespace Rendering::Upscaler
         float frameTimeDeltaMilliseconds = 16.6667f;
         float nativeTemporalHistoryWeight = 0.97f;
         float nativeTemporalSharpness = 0.25f;
-        bool temporalPostFilterEnabled = true;
-        uint32_t temporalPostFilterPasses = 3;
-        float temporalPostFilterStrength = 0.65f;
-        float temporalPostFilterLumaSigma = 0.10f;
-        float temporalFireflySigma = 2.5f;
-
         VkExtent2D renderExtent{};
         VkExtent2D outputExtent{};
         VkOffset2D outputOffset{};

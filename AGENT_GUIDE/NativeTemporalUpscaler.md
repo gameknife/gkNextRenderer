@@ -15,16 +15,15 @@ temporal-upscaler post-filter when `r.fsr.postFilter` is enabled:
    clipping, luminance reactivity, and confidence-based temporal locking.
 2. `Process.NativeTemporalSharpen`: a conservative, edge-adaptive five-tap sharpen over the
    completed temporal image.
-3. `Process.NativeTemporalAtrous`: an explicit-descriptor variant of the same
-   normal/albedo-guided B3-spline a-trous algorithm used by `Process.FsrPostFilter`. Its first
-   pass rejects isolated fireflies from neighbor-only luminance statistics, and later passes
-   expand the filter support without downsampling. Keeping the Native variant inside the
-   provider avoids depending on the engine's global bindless post-filter set.
+3. The renderer's shared bindless `Process.FsrPostFilter` pass, also used after FidelityFX FSR.
+   Its first pass rejects isolated fireflies from neighbor-only luminance statistics, and later
+   passes apply normal/albedo-guided B3-spline a-trous filtering with expanding support.
 
 Color history uses ping-pong `R16G16B16A16_SFLOAT` images, depth history uses ping-pong
-`R32_SFLOAT` images, luminance moments use ping-pong `R16G16_SFLOAT` images, and the final
-a-trous stage uses two `R16G16B16A16_SFLOAT` scratch images. All provider resources remain in `GENERAL` layout and are destroyed on
-swapchain teardown. The provider restores the engine depth attachment layout after dispatch.
+`R32_SFLOAT` images, and luminance moments use ping-pong `R16G16_SFLOAT` images. These provider
+resources remain in `GENERAL` layout and are destroyed on swapchain teardown. The renderer owns
+one bindless post-filter ping/pong pair per swapchain image and reuses it for both temporal FSR
+and Native TAAU. The provider restores the engine depth attachment layout after dispatch.
 
 ## Controls
 

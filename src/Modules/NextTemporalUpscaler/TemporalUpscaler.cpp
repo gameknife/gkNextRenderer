@@ -13,7 +13,7 @@ namespace Modules::NextTemporalUpscaler
 {
     namespace
     {
-        constexpr uint32_t descriptorBindingCount = 14;
+        constexpr uint32_t descriptorBindingCount = 10;
 
         struct FHistoryImage
         {
@@ -32,16 +32,8 @@ namespace Modules::NextTemporalUpscaler
             float sharpness = 0.25f;
             float historyWeight = 0.97f;
             float padding = 0.0f;
-            uint32_t filterPassIndex = 0;
-            uint32_t filterPassCount = 3;
-            uint32_t filterStepWidth = 1;
-            uint32_t applyFireflyClamp = 0;
-            float filterStrength = 0.65f;
-            float filterLumaSigma = 0.10f;
-            float fireflySigma = 2.5f;
-            float filterPadding = 0.0f;
         };
-        static_assert(sizeof(FPushConstants) == 80);
+        static_assert(sizeof(FPushConstants) == 48);
 
         uint32_t FindMemoryType(
             VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties)
@@ -141,7 +133,6 @@ namespace Modules::NextTemporalUpscaler
                 DestroyHistory();
                 previousJitter_ = {};
                 loggedDispatch_ = false;
-                loggedFilterDispatch_ = false;
             }
 
             void Shutdown() override
@@ -160,11 +151,6 @@ namespace Modules::NextTemporalUpscaler
                 {
                     vkDestroyPipeline(deviceInfo_.device, sharpenPipeline_, nullptr);
                     sharpenPipeline_ = VK_NULL_HANDLE;
-                }
-                if (atrousPipeline_ != VK_NULL_HANDLE)
-                {
-                    vkDestroyPipeline(deviceInfo_.device, atrousPipeline_, nullptr);
-                    atrousPipeline_ = VK_NULL_HANDLE;
                 }
                 if (pipelineLayout_ != VK_NULL_HANDLE)
                 {
@@ -239,10 +225,8 @@ namespace Modules::NextTemporalUpscaler
 
                 const uint32_t writeIndex = inputs.frameIndex & 1u;
                 const uint32_t readIndex = 1u - writeIndex;
-                const bool postFilterEnabled = inputs.temporalPostFilterEnabled &&
-                    inputs.albedo.IsValid() && inputs.normalRoughness.IsValid();
                 PrepareHistoryBarriers(inputs.commandBuffer, readIndex, writeIndex);
-                UpdateDescriptorSet(inputs, readIndex, writeIndex, postFilterEnabled);
+                UpdateDescriptorSet(inputs, readIndex, writeIndex);
 
                 FPushConstants constants{};
                 constants.renderSize = {inputs.renderExtent.width, inputs.renderExtent.height};
@@ -253,16 +237,6 @@ namespace Modules::NextTemporalUpscaler
                 constants.sharpness = std::clamp(inputs.nativeTemporalSharpness, 0.0f, 1.0f);
                 constants.historyWeight = std::clamp(
                     inputs.nativeTemporalHistoryWeight, 0.5f, 0.98f);
-                constants.filterPassCount = std::clamp(inputs.temporalPostFilterPasses, 1u, 4u);
-                constants.filterLumaSigma = std::clamp(
-                    inputs.temporalPostFilterLumaSigma, 0.01f, 0.5f);
-                constants.fireflySigma = std::clamp(inputs.temporalFireflySigma, 1.0f, 8.0f);
-                const float totalFilterStrength = std::clamp(
-                    inputs.temporalPostFilterStrength, 0.0f, 1.0f);
-                constants.filterStrength = 1.0f - std::pow(
-                    1.0f - totalFilterStrength,
-                    1.0f / static_cast<float>(constants.filterPassCount));
-
                 vkCmdBindDescriptorSets(inputs.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                         pipelineLayout_, 0, 1, &descriptorSet_, 0, nullptr);
                 vkCmdPushConstants(inputs.commandBuffer, pipelineLayout_, VK_SHADER_STAGE_COMPUTE_BIT,
@@ -281,18 +255,6 @@ namespace Modules::NextTemporalUpscaler
                 vkCmdDispatch(inputs.commandBuffer,
                               (inputs.outputExtent.width + 7u) / 8u,
                               (inputs.outputExtent.height + 7u) / 8u, 1);
-
-                if (postFilterEnabled)
-                {
-                    DispatchAtrousFilter(inputs, constants);
-                    if (!loggedFilterDispatch_)
-                    {
-                        SPDLOG_INFO(
-                            "NativeTemporal a-trous filter active: {} passes, strength {:.2f}, firefly sigma {:.2f}",
-                            constants.filterPassCount, totalFilterStrength, constants.fireflySigma);
-                        loggedFilterDispatch_ = true;
-                    }
-                }
 
                 historyValid_ = true;
                 previousJitter_ = constants.jitter;
@@ -320,46 +282,6 @@ namespace Modules::NextTemporalUpscaler
             }
 
         private:
-            void DispatchAtrousFilter(
-                const Rendering::Upscaler::FFrameInputs& inputs,
-                FPushConstants constants)
-            {
-                vkCmdBindPipeline(
-                    inputs.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, atrousPipeline_);
-                for (uint32_t pass = 0; pass < constants.filterPassCount; ++pass)
-                {
-                    const bool sourceIsPing = (pass & 1u) == 0u;
-                    FHistoryImage& source = filterColor_[sourceIsPing ? 0u : 1u];
-                    InsertImageBarrier(inputs.commandBuffer, source.image,
-                                       VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                                       VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
-                                       VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                       VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
-
-                    const bool finalPass = pass + 1u == constants.filterPassCount;
-                    if (!finalPass)
-                    {
-                        FHistoryImage& destination = filterColor_[sourceIsPing ? 1u : 0u];
-                        InsertImageBarrier(inputs.commandBuffer, destination.image,
-                                           VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-                                           VK_ACCESS_SHADER_WRITE_BIT,
-                                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
-                                           VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                           VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
-                    }
-
-                    constants.filterPassIndex = pass;
-                    constants.filterStepWidth = 1u << pass;
-                    constants.applyFireflyClamp = pass == 0u ? 1u : 0u;
-                    vkCmdPushConstants(inputs.commandBuffer, pipelineLayout_,
-                                       VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                                       sizeof(constants), &constants);
-                    vkCmdDispatch(inputs.commandBuffer,
-                                  (inputs.outputExtent.width + 7u) / 8u,
-                                  (inputs.outputExtent.height + 7u) / 8u, 1);
-                }
-            }
-
             void CreateStaticResources()
             {
                 std::array<VkDescriptorSetLayoutBinding, descriptorBindingCount> bindings{};
@@ -416,8 +338,6 @@ namespace Modules::NextTemporalUpscaler
                     "assets/shaders/Process.NativeTemporalReproject.comp.slang.spv");
                 sharpenPipeline_ = CreatePipeline(
                     "assets/shaders/Process.NativeTemporalSharpen.comp.slang.spv");
-                atrousPipeline_ = CreatePipeline(
-                    "assets/shaders/Process.NativeTemporalAtrous.comp.slang.spv");
             }
 
             VkPipeline CreatePipeline(const char* shaderPath) const
@@ -460,10 +380,6 @@ namespace Modules::NextTemporalUpscaler
                     for (auto& image : historyMoments_)
                     {
                         CreateHistoryImage(image, VK_FORMAT_R16G16_SFLOAT);
-                    }
-                    for (auto& image : filterColor_)
-                    {
-                        CreateHistoryImage(image, VK_FORMAT_R16G16B16A16_SFLOAT);
                     }
                 }
                 catch (const std::exception& error)
@@ -551,10 +467,6 @@ namespace Modules::NextTemporalUpscaler
                 {
                     destroy(image);
                 }
-                for (auto& image : filterColor_)
-                {
-                    destroy(image);
-                }
                 historyExtent_ = {};
                 historyLayoutsInitialized_ = false;
                 historyValid_ = false;
@@ -566,7 +478,7 @@ namespace Modules::NextTemporalUpscaler
                 if (!historyLayoutsInitialized_)
                 {
                     for (auto* collection : {
-                             &historyColor_, &historyDepth_, &historyMoments_, &filterColor_})
+                             &historyColor_, &historyDepth_, &historyMoments_})
                     {
                         for (auto& image : *collection)
                         {
@@ -595,24 +507,12 @@ namespace Modules::NextTemporalUpscaler
                                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
                 }
-                for (auto& image : filterColor_)
-                {
-                    InsertImageBarrier(commandBuffer, image.image,
-                                       VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-                                       VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-                                       VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
-                                       VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                       VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
-                }
             }
 
             void UpdateDescriptorSet(
                 const Rendering::Upscaler::FFrameInputs& inputs,
-                uint32_t readIndex, uint32_t writeIndex, bool postFilterEnabled)
+                uint32_t readIndex, uint32_t writeIndex)
             {
-                const VkImageView sharpenOutput = postFilterEnabled
-                    ? filterColor_[0].view
-                    : inputs.scalingOutputColor.view;
                 const std::array<VkDescriptorImageInfo, descriptorBindingCount> images{{
                     {VK_NULL_HANDLE, inputs.scalingInputColor.view, VK_IMAGE_LAYOUT_GENERAL},
                     {VK_NULL_HANDLE, inputs.motionVectors.view, VK_IMAGE_LAYOUT_GENERAL},
@@ -624,10 +524,6 @@ namespace Modules::NextTemporalUpscaler
                     {VK_NULL_HANDLE, historyDepth_[writeIndex].view, VK_IMAGE_LAYOUT_GENERAL},
                     {VK_NULL_HANDLE, historyMoments_[writeIndex].view, VK_IMAGE_LAYOUT_GENERAL},
                     {VK_NULL_HANDLE, inputs.scalingOutputColor.view, VK_IMAGE_LAYOUT_GENERAL},
-                    {VK_NULL_HANDLE, sharpenOutput, VK_IMAGE_LAYOUT_GENERAL},
-                    {VK_NULL_HANDLE, filterColor_[1].view, VK_IMAGE_LAYOUT_GENERAL},
-                    {VK_NULL_HANDLE, inputs.albedo.view, VK_IMAGE_LAYOUT_GENERAL},
-                    {VK_NULL_HANDLE, inputs.normalRoughness.view, VK_IMAGE_LAYOUT_GENERAL},
                 }};
                 std::array<VkWriteDescriptorSet, descriptorBindingCount> writes{};
                 for (uint32_t i = 0; i < descriptorBindingCount; ++i)
@@ -653,11 +549,9 @@ namespace Modules::NextTemporalUpscaler
             VkPipelineLayout pipelineLayout_ = VK_NULL_HANDLE;
             VkPipeline reprojectPipeline_ = VK_NULL_HANDLE;
             VkPipeline sharpenPipeline_ = VK_NULL_HANDLE;
-            VkPipeline atrousPipeline_ = VK_NULL_HANDLE;
             std::array<FHistoryImage, 2> historyColor_{};
             std::array<FHistoryImage, 2> historyDepth_{};
             std::array<FHistoryImage, 2> historyMoments_{};
-            std::array<FHistoryImage, 2> filterColor_{};
             VkExtent2D historyExtent_{};
             glm::vec2 previousJitter_{};
             uint32_t jitterPhaseCount_ = 16;
@@ -665,7 +559,6 @@ namespace Modules::NextTemporalUpscaler
             bool historyLayoutsInitialized_ = false;
             bool historyValid_ = false;
             bool loggedDispatch_ = false;
-            bool loggedFilterDispatch_ = false;
         };
     }
 

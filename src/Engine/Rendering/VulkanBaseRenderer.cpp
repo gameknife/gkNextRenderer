@@ -935,25 +935,25 @@ namespace Vulkan
             }
         }
 
-        fsrPostFilter_.pingImages.clear();
-        fsrPostFilter_.pongImages.clear();
-        fsrPostFilter_.pingInitialized.clear();
-        fsrPostFilter_.pongInitialized.clear();
-        if (caps_.supportFSR)
+        temporalPostFilter_.pingImages.clear();
+        temporalPostFilter_.pongImages.clear();
+        temporalPostFilter_.pingInitialized.clear();
+        temporalPostFilter_.pongInitialized.clear();
+        if (caps_.supportFSR || caps_.supportNativeTemporal)
         {
             const size_t imageCount = frame_.swapChain->Images().size();
-            if (Assets::Bindless::RT_FSR_POST_PONG0 + imageCount > Assets::Bindless::RT_REMOTE_ENCODE0_Y)
+            if (Assets::Bindless::RT_TEMPORAL_POST_PONG0 + imageCount > Assets::Bindless::RT_REMOTE_ENCODE0_Y)
             {
-                Throw(std::runtime_error("FSR post-filter bindless slot range exhausted"));
+                Throw(std::runtime_error("Temporal post-filter bindless slot range exhausted"));
             }
-            fsrPostFilter_.pingImages.reserve(imageCount);
-            fsrPostFilter_.pongImages.reserve(imageCount);
-            fsrPostFilter_.pingInitialized.assign(imageCount, false);
-            fsrPostFilter_.pongInitialized.assign(imageCount, false);
+            temporalPostFilter_.pingImages.reserve(imageCount);
+            temporalPostFilter_.pongImages.reserve(imageCount);
+            temporalPostFilter_.pingInitialized.assign(imageCount, false);
+            temporalPostFilter_.pongInitialized.assign(imageCount, false);
             for (size_t i = 0; i < imageCount; ++i)
             {
-                const std::string pingDebugName = fmt::format("FSR post-filter ping {}", i);
-                fsrPostFilter_.pingImages.emplace_back(std::make_unique<RenderImage>(
+                const std::string pingDebugName = fmt::format("Temporal post-filter ping {}", i);
+                temporalPostFilter_.pingImages.emplace_back(std::make_unique<RenderImage>(
                     Device(),
                     frame_.swapChain->OutputExtent(),
                     frame_.swapChain->Format(),
@@ -962,11 +962,11 @@ namespace Vulkan
                     false,
                     pingDebugName.c_str()));
                 ctx_.globalTexturePool->BindStorageTexture(
-                    Assets::Bindless::RT_FSR_POST_PING0 + static_cast<uint32_t>(i),
-                    fsrPostFilter_.pingImages.back()->GetImageView());
+                    Assets::Bindless::RT_TEMPORAL_POST_PING0 + static_cast<uint32_t>(i),
+                    temporalPostFilter_.pingImages.back()->GetImageView());
 
-                const std::string pongDebugName = fmt::format("FSR post-filter pong {}", i);
-                fsrPostFilter_.pongImages.emplace_back(std::make_unique<RenderImage>(
+                const std::string pongDebugName = fmt::format("Temporal post-filter pong {}", i);
+                temporalPostFilter_.pongImages.emplace_back(std::make_unique<RenderImage>(
                     Device(),
                     frame_.swapChain->OutputExtent(),
                     frame_.swapChain->Format(),
@@ -975,8 +975,8 @@ namespace Vulkan
                     false,
                     pongDebugName.c_str()));
                 ctx_.globalTexturePool->BindStorageTexture(
-                    Assets::Bindless::RT_FSR_POST_PONG0 + static_cast<uint32_t>(i),
-                    fsrPostFilter_.pongImages.back()->GetImageView());
+                    Assets::Bindless::RT_TEMPORAL_POST_PONG0 + static_cast<uint32_t>(i),
+                    temporalPostFilter_.pongImages.back()->GetImageView());
             }
         }
     }
@@ -996,9 +996,9 @@ namespace Vulkan
 
         // Shared pipelines.
         overlay_.fsrComposePipeline.reset( new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.UpScaleFSR.comp.slang.spv", 20));
-        if (caps_.supportFSR)
+        if (caps_.supportFSR || caps_.supportNativeTemporal)
         {
-            overlay_.fsrPostFilterPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(
+            overlay_.temporalPostFilterPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(
                 SwapChain(), "assets/shaders/Process.FsrPostFilter.comp.slang.spv", 44));
         }
         overlay_.bufferClearPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*frame_.swapChain, "assets/shaders/Util.BufferClear.comp.slang.spv", 4));
@@ -1276,7 +1276,7 @@ namespace Vulkan
         skin_.jointBuffer.reset();
         skin_.jointMemory.reset();
         overlay_.fsrComposePipeline.reset();
-        overlay_.fsrPostFilterPipeline.reset();
+        overlay_.temporalPostFilterPipeline.reset();
         overlay_.visualDebuggerPipeline.reset();
 
         CreateSceneSwapChainResources();
@@ -1331,10 +1331,10 @@ namespace Vulkan
         screenshot_.image.reset();
         screenshot_.imageMemory.reset();
         frameGeneration_.hudlessImages.clear();
-        fsrPostFilter_.pingImages.clear();
-        fsrPostFilter_.pongImages.clear();
-        fsrPostFilter_.pingInitialized.clear();
-        fsrPostFilter_.pongInitialized.clear();
+        temporalPostFilter_.pingImages.clear();
+        temporalPostFilter_.pongImages.clear();
+        temporalPostFilter_.pingInitialized.clear();
+        temporalPostFilter_.pongInitialized.clear();
         frame_.commandBuffers.reset();
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframePipeline.reset();
@@ -1358,7 +1358,7 @@ namespace Vulkan
         skin_.jointMemory.reset();
 
         overlay_.fsrComposePipeline.reset();
-        overlay_.fsrPostFilterPipeline.reset();
+        overlay_.temporalPostFilterPipeline.reset();
         overlay_.visualDebuggerPipeline.reset();
         frame_.uniformBuffers.clear();
         frame_.inFlightFences.clear();
@@ -1973,21 +1973,21 @@ namespace Vulkan
                        VK_FILTER_LINEAR);
     }
 
-    bool VulkanBaseRenderer::PrepareFsrPostFilterOutput(
+    bool VulkanBaseRenderer::PrepareTemporalPostFilterOutput(
         VkCommandBuffer commandBuffer,
         const uint32_t imageIndex,
         Rendering::Upscaler::FFrameInputs& inputs)
     {
         const auto& settings = NextEngine::GetInstance()->GetUserSettings();
-        if (!settings.FSRPostFilter || overlay_.fsrPostFilterPipeline == nullptr ||
-            imageIndex >= fsrPostFilter_.pingImages.size() ||
-            imageIndex >= fsrPostFilter_.pingInitialized.size())
+        if (!settings.FSRPostFilter || overlay_.temporalPostFilterPipeline == nullptr ||
+            imageIndex >= temporalPostFilter_.pingImages.size() ||
+            imageIndex >= temporalPostFilter_.pingInitialized.size())
         {
             return false;
         }
 
-        RenderImage& output = *fsrPostFilter_.pingImages[imageIndex];
-        const bool initialized = fsrPostFilter_.pingInitialized[imageIndex];
+        RenderImage& output = *temporalPostFilter_.pingImages[imageIndex];
+        const bool initialized = temporalPostFilter_.pingInitialized[imageIndex];
         constexpr VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
         ImageMemoryBarrier::Insert(
             commandBuffer,
@@ -1999,23 +1999,23 @@ namespace Vulkan
             VK_ACCESS_SHADER_WRITE_BIT,
             initialized ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_GENERAL);
-        fsrPostFilter_.pingInitialized[imageIndex] = true;
+        temporalPostFilter_.pingInitialized[imageIndex] = true;
         inputs.scalingOutputColor = MakeRenderImageResource(
             &output, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_USAGE_STORAGE_BIT);
         return true;
     }
 
-    void VulkanBaseRenderer::ApplyFsrPostFilter(
+    void VulkanBaseRenderer::ApplyTemporalPostFilter(
         VkCommandBuffer commandBuffer,
         const uint32_t imageIndex,
         const Rendering::Upscaler::FFrameInputs& inputs)
     {
-        SCOPED_GPU_TIMER("FSR a-trous filter");
-        if (imageIndex >= fsrPostFilter_.pingImages.size() ||
-            imageIndex >= fsrPostFilter_.pongImages.size() ||
-            imageIndex >= fsrPostFilter_.pingInitialized.size() ||
-            imageIndex >= fsrPostFilter_.pongInitialized.size() ||
-            overlay_.fsrPostFilterPipeline == nullptr)
+        SCOPED_GPU_TIMER("Temporal a-trous filter");
+        if (imageIndex >= temporalPostFilter_.pingImages.size() ||
+            imageIndex >= temporalPostFilter_.pongImages.size() ||
+            imageIndex >= temporalPostFilter_.pingInitialized.size() ||
+            imageIndex >= temporalPostFilter_.pongInitialized.size() ||
+            overlay_.temporalPostFilterPipeline == nullptr)
         {
             return;
         }
@@ -2038,8 +2038,8 @@ namespace Vulkan
         };
         static_assert(sizeof(FPushConstants) == 44);
 
-        RenderImage* sourceImage = fsrPostFilter_.pingImages[imageIndex].get();
-        uint32_t sourceIndex = Assets::Bindless::RT_FSR_POST_PING0 + imageIndex;
+        RenderImage* sourceImage = temporalPostFilter_.pingImages[imageIndex].get();
+        uint32_t sourceIndex = Assets::Bindless::RT_TEMPORAL_POST_PING0 + imageIndex;
         const uint32_t passCount = std::clamp(settings.FSRPostFilterPasses, 1u, 4u);
         const float totalStrength = std::clamp(settings.FSRPostFilterStrength, 0.0f, 1.0f);
         const float passStrength =
@@ -2064,16 +2064,16 @@ namespace Vulkan
             int32_t destinationOffsetY = inputs.outputOffset.y;
             if (!finalPass)
             {
-                const bool sourceIsPing = sourceIndex == Assets::Bindless::RT_FSR_POST_PING0 + imageIndex;
+                const bool sourceIsPing = sourceIndex == Assets::Bindless::RT_TEMPORAL_POST_PING0 + imageIndex;
                 destinationImage = sourceIsPing
-                    ? fsrPostFilter_.pongImages[imageIndex].get()
-                    : fsrPostFilter_.pingImages[imageIndex].get();
+                    ? temporalPostFilter_.pongImages[imageIndex].get()
+                    : temporalPostFilter_.pingImages[imageIndex].get();
                 destinationIndex = (sourceIsPing
-                    ? Assets::Bindless::RT_FSR_POST_PONG0
-                    : Assets::Bindless::RT_FSR_POST_PING0) + imageIndex;
+                    ? Assets::Bindless::RT_TEMPORAL_POST_PONG0
+                    : Assets::Bindless::RT_TEMPORAL_POST_PING0) + imageIndex;
                 const bool destinationInitialized = sourceIsPing
-                    ? fsrPostFilter_.pongInitialized[imageIndex]
-                    : fsrPostFilter_.pingInitialized[imageIndex];
+                    ? temporalPostFilter_.pongInitialized[imageIndex]
+                    : temporalPostFilter_.pingInitialized[imageIndex];
                 ImageMemoryBarrier::Insert(
                     commandBuffer,
                     destinationInitialized ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -2086,11 +2086,11 @@ namespace Vulkan
                     VK_IMAGE_LAYOUT_GENERAL);
                 if (sourceIsPing)
                 {
-                    fsrPostFilter_.pongInitialized[imageIndex] = true;
+                    temporalPostFilter_.pongInitialized[imageIndex] = true;
                 }
                 else
                 {
-                    fsrPostFilter_.pingInitialized[imageIndex] = true;
+                    temporalPostFilter_.pingInitialized[imageIndex] = true;
                 }
                 destinationOffsetX = 0;
                 destinationOffsetY = 0;
@@ -2109,7 +2109,7 @@ namespace Vulkan
                 1u << pass,
                 pass == 0u ? 1u : 0u,
             };
-            overlay_.fsrPostFilterPipeline->BindPipeline(commandBuffer, &pushConstants);
+            overlay_.temporalPostFilterPipeline->BindPipeline(commandBuffer, &pushConstants);
             vkCmdDispatch(commandBuffer,
                           (inputs.outputExtent.width + 7u) / 8u,
                           (inputs.outputExtent.height + 7u) / 8u,
@@ -2159,8 +2159,9 @@ namespace Vulkan
                 "temporal upscaler resolve");
 
             auto inputs = BuildUpscalerFrameInputs(commandBuffer, imageIndex, VK_IMAGE_LAYOUT_GENERAL);
-            const bool fsrPostFilterActive = fsrTemporalSuperResolutionActive_ &&
-                PrepareFsrPostFilterOutput(commandBuffer, imageIndex, inputs);
+            const bool temporalPostFilterActive =
+                (fsrTemporalSuperResolutionActive_ || nativeTemporalSuperResolutionActive_) &&
+                PrepareTemporalPostFilterOutput(commandBuffer, imageIndex, inputs);
             if (fsrTemporalSuperResolutionActive_ || nativeTemporalSuperResolutionActive_)
             {
                 VkImageSubresourceRange depthRange{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
@@ -2242,15 +2243,15 @@ namespace Vulkan
                     VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
                     VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
             }
-            if (fsrPostFilterActive && resolvedByUpscaler)
+            if (temporalPostFilterActive && resolvedByUpscaler)
             {
-                ApplyFsrPostFilter(commandBuffer, imageIndex, inputs);
+                ApplyTemporalPostFilter(commandBuffer, imageIndex, inputs);
             }
-            else if (fsrPostFilterActive)
+            else if (temporalPostFilterActive)
             {
                 // The intermediate may contain a partially recorded failed dispatch. Discard it
                 // before the next attempt instead of treating it as a readable previous result.
-                fsrPostFilter_.pingInitialized[imageIndex] = false;
+                temporalPostFilter_.pingInitialized[imageIndex] = false;
             }
         }
         if (resolvedByUpscaler)
@@ -2643,11 +2644,6 @@ namespace Vulkan
             std::max(NextEngine::GetInstance()->GetDeltaSeconds() * 1000.0, 0.001));
         inputs.nativeTemporalHistoryWeight = settings.NativeTemporalHistoryWeight;
         inputs.nativeTemporalSharpness = settings.NativeTemporalSharpness;
-        inputs.temporalPostFilterEnabled = settings.FSRPostFilter;
-        inputs.temporalPostFilterPasses = settings.FSRPostFilterPasses;
-        inputs.temporalPostFilterStrength = settings.FSRPostFilterStrength;
-        inputs.temporalPostFilterLumaSigma = settings.FSRPostFilterLumaSigma;
-        inputs.temporalFireflySigma = settings.FSRFireflySigma;
         inputs.renderExtent = swapChain.RenderExtent();
         inputs.outputExtent = swapChain.OutputExtent();
         inputs.outputOffset = swapChain.OutputOffset();

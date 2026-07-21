@@ -452,7 +452,7 @@ namespace Vulkan
             std::vector<std::unique_ptr<IExternalRenderPass>> externalPasses;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> bufferClearPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> fsrComposePipeline;
-            std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> fsrPostFilterPipeline;
+            std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> temporalPostFilterPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> visualDebuggerPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> gpuCullCompactPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> softMeshShaderFinalizePipeline;
@@ -500,7 +500,7 @@ namespace Vulkan
             std::vector<std::unique_ptr<RenderImage>> hudlessImages;
         };
 
-        struct FsrPostFilterResources
+        struct TemporalPostFilterResources
         {
             std::vector<std::unique_ptr<RenderImage>> pingImages;
             std::vector<std::unique_ptr<RenderImage>> pongImages;
@@ -522,7 +522,7 @@ namespace Vulkan
         std::unique_ptr<GpuDrivenPasses> gpuDrivenPasses_;
         ScreenshotResources screenshot_;
         FrameGenerationResources frameGeneration_;
-        FsrPostFilterResources fsrPostFilter_;
+        TemporalPostFilterResources temporalPostFilter_;
         AmbientCubePipelines ambient_;
         OverlayPipelines overlay_;
         ShadowCameraFamilyCache shadowCameraFamilyCache_;
@@ -567,11 +567,11 @@ namespace Vulkan
         void CreateRenderTargetBank(uint32_t bankBase, VkExtent2D extent);
         bool DispatchScheduledRenderViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
         void ResolvePrimaryViewToSwapchain(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-        bool PrepareFsrPostFilterOutput(
+        bool PrepareTemporalPostFilterOutput(
             VkCommandBuffer commandBuffer,
             uint32_t imageIndex,
             Rendering::Upscaler::FFrameInputs& inputs);
-        void ApplyFsrPostFilter(
+        void ApplyTemporalPostFilter(
             VkCommandBuffer commandBuffer,
             uint32_t imageIndex,
             const Rendering::Upscaler::FFrameInputs& inputs);

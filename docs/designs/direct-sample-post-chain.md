@@ -26,7 +26,7 @@ spatial denoiser；renderer 生成的当前帧 diffuse/specular 样本直接 com
    `RT_SCENE_COLOR`。DLSS Ray Reconstruction 的
    noisy diffuse/specular resource 直接绑定 `RT_SINGLE_DIFFUSE/SPECULAR`，不经过引擎滤波。
 
-FidelityFX temporal FSR 可在 evaluate 后运行一层显示分辨率的可选后处理：FSR 先写入
+FidelityFX temporal FSR 与 Native TAAU 可在 evaluate 后运行同一层显示分辨率的可选后处理：upscaler 先写入
 每个 swapchain image 独立的 ping/pong intermediate，随后 firefly neighborhood clamp 与
 以当前帧 albedo/normal 引导的多 pass a-trous 滤波写回 swapchain。该阶段只清理 upscaler
 输出中的孤立亮点和高频残余噪声，不参与 renderer

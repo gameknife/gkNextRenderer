@@ -10,9 +10,7 @@
 [[vk::binding(6, 0)]] RWTexture2D<float4> resolvedColor;
 [[vk::binding(7, 0)]] RWTexture2D<float> historyDepthWrite;
 [[vk::binding(8, 0)]] RWTexture2D<float2> historyMomentsWrite;
-// Binding 9 is the external final output. Sharpen writes binding 10, which aliases the
-// external output when post-filtering is disabled and otherwise points at filter ping.
-[[vk::binding(10, 0)]] RWTexture2D<float4> outputColor;
+[[vk::binding(9, 0)]] RWTexture2D<float4> outputColor;
 
 struct PushConstants
 {
