@@ -206,11 +206,12 @@ The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond 
 
 ```bat
 ./gnb.bat setup
-./gnb.bat build
+./gnb.bat build        # Builds core targets by default (gkNextRenderer + gkNextUnitTests)
+./gnb.bat build --all  # Full build of all 15+ subprojects
 ./gnb.bat run gkNextRenderer
 ```
 
-Aside from host-side requirements such as Visual Studio, the rest of the project dependencies are usually prepared by `gnb`, including the pinned Vulkan SDK, Slang, and TypeScript toolchains. NVIDIA Streamline (DLSS) is enabled by default on Windows.
+Aside from host-side requirements such as Visual Studio, the rest of the project dependencies are usually prepared by `gnb`, including the pinned Vulkan SDK, Slang, and TypeScript toolchains. `gnb` defaults to the **Ninja** generator on Windows (with automatic MSVC & SDK environment resolution). NVIDIA Streamline (DLSS) is enabled by default on Windows.
 
 </details>
 

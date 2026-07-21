@@ -13,7 +13,8 @@
 ### 1. 构建 (Build)
 ```bash
 # Windows
-./gnb.bat build
+./gnb.bat build        # 默认构建核心目标 (gkNextRenderer + gkNextUnitTests)
+./gnb.bat build --all  # 全量构建所有 15+ 子项目
 ./gnb.bat build --clean  # 清理重编
 
 # macOS / Linux
@@ -23,17 +24,17 @@
 ./gnb.sh android
 ```
 
-**⚠️ 按范围选目标，默认不要全量 `gnb build`（program 多，全量很慢）：**
+**⚠️ 按范围选目标，默认无需全量构建：**
 ```bash
-# 改 Engine 层 (src/Engine/**、shaders、公共 runtime)：只编渲染器 + 单测
-./gnb.bat build gkNextRenderer gkNextUnitTests
+# 改 Engine 层 (src/Engine/**、shaders、公共 runtime)：默认 ./gnb.bat build 即可（即编渲染器 + 单测）
+./gnb.bat build
 
 # 改某个具体 program (src/Application/** 单一子项目)：只编它自己
 ./gnb.bat build MagicaLego
 
 # 改 gnb/tools/纯文档：无需 C++ 构建
 ```
-仅**大型重构 / 广泛 header / ABI 改动 / 用户明确要求**时，才执行全量 `gnb build --reconfigure`。增量构建无需 `--reconfigure`（除非改了 CMake/preset 或新增文件未被 glob 收录）。
+仅**大型重构 / 广泛 header / ABI 改动 / 用户明确要求**时，才执行全量 `./gnb.bat build --all --reconfigure`。增量构建无需 `--reconfigure`（除非改了 CMake/preset 或新增文件未被 glob 收录）。
 
 ### 2. 单元测试 (Test)
 ```bash

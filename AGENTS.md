@@ -27,21 +27,22 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 
 **Build (vcpkg is auto-bootstrapped on first run):**
 - Setup once: `./gnb.sh setup` (Windows: `gnb.bat setup`)
-- Desktop build: `./gnb.sh build` (Windows: `gnb.bat build`)
+- Core build (default): `./gnb.sh build` (Windows: `gnb.bat build` —— 默认仅构建核心目标 `gkNextRenderer` 与 `gkNextUnitTests`)
+- Full build (all targets): `./gnb.sh build --all` (Windows: `gnb.bat build --all` —— 构建全量 15+ 子项目)
 - Specific target: `./gnb.sh build gkNextEditor`
 - Android: `./gnb.sh android`
 - Clean rebuild: `./gnb.sh build --clean`
 - Force vcpkg update: `./gnb.sh setup --refresh`
 
-**Targeted builds (IMPORTANT — prefer over full `gnb build`):**
-随着 program 增多，全量 `gnb build` 很慢。AGENT 在验证改动时**默认只构建受影响的目标**，不要无脑全量构建：
-- **改动 Engine 层**（`src/Engine/**`、shaders、公共 runtime/reflection）：只需 `./gnb.sh build gkNextRenderer gkNextUnitTests`。这两个目标编译通过即代表 engine API 没有破坏面上调用。
+**Targeted builds (IMPORTANT — prefer over full `gnb build --all`):**
+默认不加参数运行 `./gnb.sh build` 只会编译 `gkNextRenderer` 和 `gkNextUnitTests`。AGENT 在验证改动时**默认只构建受影响的目标**，避免全量构建：
+- **改动 Engine 层**（`src/Engine/**`、shaders、公共 runtime/reflection）：只需 `./gnb.sh build`（即默认构建 `gkNextRenderer` + `gkNextUnitTests`）。这两个目标编译通过即代表 engine API 没有破坏面上调用。
 - **改动某个具体 program**（`src/Application/**` 下的单一子项目，如 MagicaLego、Brotato3D、ScadStudio 等）：只构建该目标自身，例如 `./gnb.sh build MagicaLego`。
 - **改动 gnb / tools / 纯文档**：无需 C++ 构建。
-- **大型 engine 重构、改动 ABI/广泛 header、不确定影响面，或用户明确要求**：才执行全量 `./gnb.sh build --reconfigure`，确认所有 program 都能编译。
+- **大型 engine 重构、改动 ABI/广泛 header、不确定影响面，或用户明确要求**：才执行全量 `./gnb.sh build --all --reconfigure`，确认所有 program 都能编译。
 - 增量构建无需 `--reconfigure`；仅在改了 CMake/preset/新增文件未被 glob 收录时才加 `--reconfigure`。
 
-**CMake presets:** `windows`, `linux`, `macos-arm64`, `ios`.
+**CMake presets:** `windows` (默认使用 Ninja 极速生成器，带 MSVC/SDK 环境自动发现), `windows-vs`, `linux`, `macos-arm64`, `ios`.
 
 **Optional Features:**
 - AVIF is manual: `cmake --preset windows -DENABLE_AVIF=ON -DVCPKG_MANIFEST_FEATURES=avif` then `./gnb.sh build`

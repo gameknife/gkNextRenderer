@@ -65,14 +65,21 @@ add_executable(gkNextUnitTests ${unitTestSources})
 gk_apply_target_defaults(gkNextUnitTests)
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 add_dependencies(gkNextUnitTests Assets)
+find_package(nlohmann_json CONFIG REQUIRED)
+
 target_include_directories(gkNextUnitTests PRIVATE
     ${GK_SOURCE_ROOT}/Application/Game/NextRA
+    ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio
+    ${GK_SOURCE_ROOT}/Application/Game/BrickPlayer
+    ${GK_SOURCE_ROOT}/Application/Game/MagicaLego
 )
 target_link_libraries(gkNextUnitTests PRIVATE
     gkNextEngine
     NextGameplay
     Catch2::Catch2WithMain
     NextAI
+    nlohmann_json::nlohmann_json
+    fmt::fmt
 )
 set(unitTestRuntimeModules
     DevTools

@@ -5,4 +5,4 @@ file(GLOB_RECURSE gkNextMinimalRendererSources CONFIGURE_DEPENDS
 )
 
 add_executable(gkNextMinimalRenderer ${gkNextMinimalRendererSources})
-gk_configure_application(gkNextMinimalRenderer CORE_ONLY MINIMAL_LINK)
+gk_configure_application(gkNextMinimalRenderer MODULES NextTemporalUpscaler MINIMAL_LINK)

@@ -217,3 +217,104 @@ func runSystemPrepare(name string, args ...string) error {
 	}
 	return nil
 }
+
+func EnsureMSVCEnvironment() error {
+	if runtime.GOOS != "windows" {
+		return nil
+	}
+
+	vswhere := filepath.Join(os.Getenv("ProgramFiles(x86)"), "Microsoft Visual Studio", "Installer", "vswhere.exe")
+	if _, err := os.Stat(vswhere); err != nil {
+		return nil
+	}
+
+	cmd := exec.Command(vswhere, "-latest", "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	vsPath := strings.TrimSpace(string(output))
+	if vsPath == "" {
+		return nil
+	}
+
+	msvcToolsDir := filepath.Join(vsPath, "VC", "Tools", "MSVC")
+	entries, err := os.ReadDir(msvcToolsDir)
+	if err != nil || len(entries) == 0 {
+		return nil
+	}
+
+	var latestVer string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			latestVer = entry.Name()
+		}
+	}
+	if latestVer == "" {
+		return nil
+	}
+
+	msvcRoot := filepath.Join(msvcToolsDir, latestVer)
+	clDir := filepath.Join(msvcRoot, "bin", "Hostx64", "x64")
+	if _, err := os.Stat(filepath.Join(clDir, "cl.exe")); err == nil {
+		if !CommandExists("cl.exe") {
+			os.Setenv("PATH", clDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+		}
+
+		// 设置 MSVC INCLUDE & LIB
+		appendEnvPath("INCLUDE", filepath.Join(msvcRoot, "include"))
+		appendEnvPath("LIB", filepath.Join(msvcRoot, "lib", "x64"))
+
+		console.Info("已自动加载 MSVC 编译工具链环境: %s", clDir)
+	}
+
+	// 补全 Windows SDK 工具链 (rc.exe, mt.exe, include, lib)
+	sdkDir := filepath.Join(os.Getenv("ProgramFiles(x86)"), "Windows Kits", "10")
+	sdkBinDir := filepath.Join(sdkDir, "bin")
+	if sdkEntries, err := os.ReadDir(sdkBinDir); err == nil {
+		var latestSDKVer string
+		for _, entry := range sdkEntries {
+			if entry.IsDir() && strings.HasPrefix(entry.Name(), "10.") {
+				latestSDKVer = entry.Name()
+			}
+		}
+		if latestSDKVer != "" {
+			rcDir := filepath.Join(sdkBinDir, latestSDKVer, "x64")
+			if _, err := os.Stat(filepath.Join(rcDir, "rc.exe")); err == nil {
+				if !CommandExists("rc.exe") {
+					os.Setenv("PATH", rcDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+				}
+			}
+
+			// 设置 SDK INCLUDE
+			sdkIncludeBase := filepath.Join(sdkDir, "Include", latestSDKVer)
+			appendEnvPath("INCLUDE", filepath.Join(sdkIncludeBase, "ucrt"))
+			appendEnvPath("INCLUDE", filepath.Join(sdkIncludeBase, "um"))
+			appendEnvPath("INCLUDE", filepath.Join(sdkIncludeBase, "shared"))
+			appendEnvPath("INCLUDE", filepath.Join(sdkIncludeBase, "winrt"))
+
+			// 设置 SDK LIB (kernel32.lib 等)
+			sdkLibBase := filepath.Join(sdkDir, "Lib", latestSDKVer)
+			appendEnvPath("LIB", filepath.Join(sdkLibBase, "ucrt", "x64"))
+			appendEnvPath("LIB", filepath.Join(sdkLibBase, "um", "x64"))
+		}
+	}
+	return nil
+}
+
+func appendEnvPath(envName string, dir string) {
+	if _, err := os.Stat(dir); err != nil {
+		return
+	}
+	curr := os.Getenv(envName)
+	if curr == "" {
+		os.Setenv(envName, dir)
+		return
+	}
+	for _, p := range strings.Split(curr, string(os.PathListSeparator)) {
+		if strings.EqualFold(p, dir) {
+			return
+		}
+	}
+	os.Setenv(envName, curr+string(os.PathListSeparator)+dir)
+}

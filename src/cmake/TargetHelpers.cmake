@@ -18,6 +18,10 @@ function(gk_enable_fast_dev_link target)
             /INCREMENTAL
             /OPT:NOREF
             /OPT:NOICF
+            /cgthreads:8
+        )
+        target_compile_options(${target} PRIVATE
+            /Zf
         )
     endif()
 endfunction()
@@ -105,7 +109,7 @@ function(gk_apply_target_defaults target)
     endif()
 
     if(MSVC)
-        target_compile_options(${target} PRIVATE /MP /utf-8 /WX /wd4200)
+        target_compile_options(${target} PRIVATE /MP /utf-8 /WX /wd4200 /Zf)
         if(GK_ENABLE_CPP_LIVE_CODING)
             target_compile_options(${target} PRIVATE /Zi /Gm- /Gy /Gw)
         endif()

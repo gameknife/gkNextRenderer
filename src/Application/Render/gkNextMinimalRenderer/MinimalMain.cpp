@@ -4,6 +4,10 @@
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "MinimalRenderer.hpp"
 
+#if GK_MODULE_NEXTTEMPORALUPSCALER
+#include "Modules/NextTemporalUpscaler/NextTemporalUpscalerModule.hpp"
+#endif
+
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -22,6 +26,9 @@ SDL_AppResult SDL_AppInit(void**, int argc, char* argv[])
     GOption = options.get();
 
     NextRenderer::PlatformInit();
+#if GK_MODULE_NEXTTEMPORALUPSCALER
+    Modules::NextTemporalUpscaler::Install(*options);
+#endif
     application = std::make_unique<NextEngine>(*options);
     application->Start();
     return SDL_APP_CONTINUE;

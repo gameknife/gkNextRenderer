@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/android"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/cmakerun"
@@ -320,12 +321,21 @@ func newDepsCommand(ctx appContext) *cobra.Command {
 func newBuildCommand(ctx appContext) *cobra.Command {
 	opts := cmakerun.BuildOptions{}
 	skipSetup := false
+	allTargets := false
 	cmd := &cobra.Command{
 		Use:   "build [targets...]",
 		Short: "Configure and build the native project",
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Targets = append([]string(nil), args...)
+			startTime := time.Now()
+			if len(args) == 0 && !allTargets {
+				opts.Targets = []string{"gkNextRenderer", "gkNextUnitTests"}
+				if !opts.PrintCmd {
+					console.Info("默认仅构建核心目标: gkNextRenderer, gkNextUnitTests (使用 --all 构建全部项目)")
+				}
+			} else {
+				opts.Targets = append([]string(nil), args...)
+			}
 			if !skipSetup {
 				if _, err := os.Stat(vcpkg.Toolchain(ctx.repoRoot, ctx.cfg)); err != nil {
 					console.Info("首次构建：自动执行 setup（如需跳过用 --skip-setup）")
@@ -348,20 +358,29 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 			if err := platform.EnsureLinuxDesktopPackages(); err != nil {
 				return err
 			}
+			if err := platform.EnsureMSVCEnvironment(); err != nil {
+				return err
+			}
 			cmakePath, err := vcpkg.EnsureBundledCMake(ctx.repoRoot, ctx.cfg)
 			if err != nil {
 				return err
 			}
-			if ctx.preset == "linux" || ctx.preset == "macos-arm64" {
+			if ctx.preset == "windows" || ctx.preset == "windows-ninja" || ctx.preset == "linux" || ctx.preset == "macos-arm64" {
 				ninjaPath, err := vcpkg.EnsureBundledNinja(ctx.repoRoot, ctx.cfg)
 				if err != nil {
 					return err
 				}
 				opts.MakeProgram = ninjaPath
 			}
-			return cmakerun.BuildWithCMake(ctx.repoRoot, cmakePath, ctx.preset, opts)
+			buildErr := cmakerun.BuildWithCMake(ctx.repoRoot, cmakePath, ctx.preset, opts)
+			if !opts.PrintCmd {
+				elapsed := time.Since(startTime)
+				console.Info("Build completed in %s", formatDuration(elapsed))
+			}
+			return buildErr
 		},
 	}
+	cmd.Flags().BoolVar(&allTargets, "all", false, "build all targets in the project")
 	cmd.Flags().BoolVar(&opts.Clean, "clean", false, "delete the CMake build directory before building")
 	cmd.Flags().BoolVar(&opts.Reconfigure, "reconfigure", false, "force CMake configure")
 	cmd.Flags().IntVar(&opts.Jobs, "jobs", 0, "parallel build jobs")
@@ -944,4 +963,17 @@ func gitCommit(repoRoot string) (string, error) {
 func fatal(err error) {
 	console.Error("%s", err)
 	os.Exit(1)
+}
+
+func formatDuration(d time.Duration) string {
+	d = d.Round(time.Second)
+	min := int(d / time.Minute)
+	sec := int((d % time.Minute) / time.Second)
+	if min > 0 {
+		if sec == 0 {
+			return fmt.Sprintf("%d min", min)
+		}
+		return fmt.Sprintf("%d min %d sec", min, sec)
+	}
+	return fmt.Sprintf("%d sec", sec)
 }
