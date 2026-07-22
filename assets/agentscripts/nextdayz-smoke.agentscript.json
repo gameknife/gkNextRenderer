@@ -1,0 +1,65 @@
+{
+  "name": "nextdayz-smoke",
+  "target": "NextDayz",
+  "scene": "assets/scad/coldwar/riverland_1km.scad",
+  "defaults": { "waitFrames": 2, "stepTimeoutMs": 20000 },
+  "viewport": { "width": 1600, "height": 900 },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "wait-frames", "n": 60 },
+
+    { "type": "log", "message": "M3: start armed with an AK and a full magazine" },
+    { "type": "assert", "query": "game.equippedWeapon", "op": "eq", "value": "ak" },
+    { "type": "assert", "query": "game.ammoInMag", "op": "eq", "value": 30 },
+    { "type": "assert", "query": "game.lootRemaining", "op": "eq", "value": 39 },
+    { "type": "screenshot", "out": "screenshots/nextdayz_fps" },
+
+    { "type": "log", "message": "M3: fire a burst -> magazine decrements" },
+    { "type": "mouse-button", "button": "left", "action": "down" },
+    { "type": "wait-ms", "ms": 350 },
+    { "type": "mouse-button", "button": "left", "action": "up" },
+    { "type": "wait-frames", "n": 10 },
+    { "type": "assert", "query": "game.ammoInMag", "op": "lt", "value": 30 },
+
+    { "type": "log", "message": "M3: reload -> magazine refills, reserve drops" },
+    { "type": "key", "code": "R", "action": "press" },
+    { "type": "wait-frames", "n": 240 },
+    { "type": "wait-ms", "ms": 3000 },
+    { "type": "assert", "query": "game.ammoInMag", "op": "eq", "value": 30 },
+    { "type": "assert", "query": "game.ammoReserve", "op": "lt", "value": 60 },
+
+    { "type": "log", "message": "M1: walk forward into the gas-station loot cluster" },
+    { "type": "key", "code": "W", "action": "down" },
+    { "type": "wait-ms", "ms": 650 },
+    { "type": "key", "code": "W", "action": "up" },
+    { "type": "wait-frames", "n": 15 },
+    { "type": "assert", "query": "game.posZ", "op": "gt", "value": 178.5 },
+
+    { "type": "log", "message": "M4: aim down and pick up nearby loot" },
+    { "type": "mouse-move", "relative": true, "to": { "px": [0, 0] } },
+    { "type": "mouse-move", "relative": true, "to": { "px": [0, 150] } },
+    { "type": "wait-frames", "n": 5 },
+    { "type": "key", "code": "E", "action": "press" },
+    { "type": "wait-frames", "n": 10 },
+    { "type": "assert", "query": "game.lootRemaining", "op": "lt", "value": 39 },
+    { "type": "assert", "query": "game.inventoryCount", "op": "ge", "value": 2 },
+
+    { "type": "log", "message": "M2: third person shows the soldier rig" },
+    { "type": "key", "code": "V", "action": "press" },
+    { "type": "wait-frames", "n": 30 },
+    { "type": "assert", "query": "game.firstPerson", "op": "eq", "value": false },
+    { "type": "screenshot", "out": "screenshots/nextdayz_tps" },
+    { "type": "key", "code": "V", "action": "press" },
+
+    { "type": "log", "message": "M5: advance time and switch to overcast" },
+    { "type": "key", "code": "T", "action": "press" },
+    { "type": "key", "code": "T", "action": "press" },
+    { "type": "key", "code": "T", "action": "press" },
+    { "type": "key", "code": "G", "action": "press" },
+    { "type": "wait-frames", "n": 20 },
+    { "type": "assert", "query": "game.hour", "op": "ge", "value": 13 },
+    { "type": "screenshot", "out": "screenshots/nextdayz_overcast" },
+
+    { "type": "quit" }
+  ]
+}
