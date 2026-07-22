@@ -8,6 +8,7 @@ module PathTracing;
 #include "common/RadianceCache.slang"
 #include "common/Sharc.slang"
 #include "common/Restir.slang"
+#include "common/RestirSpatialShade.slang"
 #include "common/PathTracingRenderer.slang"
 #include "common/ConstFunc.slang"
 #include "common/Tonemap.slang"

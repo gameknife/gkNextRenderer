@@ -15,7 +15,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     FVisibilityBufferRayCaster rayCaster;
     FSoftwareRayTracer tracer;
-    FShadowMapDirectIlluminator dIlluminator;
+    FSoftwareTracingDirectIlluminator dIlluminator;
 
     FPathTracingRenderer renderer;
     renderer.ExitProbability = 0.5f;
@@ -28,10 +28,28 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.SecondaryDirectMode = 0;
     renderer.Init(DTid.xy);
 
+    const bool restirActive = RestirIsAvailable() && Bindless.GetGpuscene().CustomData0 == 0;
+    dIlluminator.RestirPrimary = restirActive;
+
     if( !renderer.PrimaryHit(rayCaster) )
     {
+        if (restirActive)
+        {
+            RestirStoreEmpty(int2(DTid.xy));
+        }
         END_SHADERCLOCK(DTid.xy)
         return;
+    }
+
+    dIlluminator.PrimaryInstanceId = renderer.GetPrimaryInstanceId();
+    dIlluminator.PrimaryMotionPixels = renderer.GetPrimaryMotionPixels();
+    if (restirActive)
+    {
+        Material primaryMat = Bindless.GetGpuscene().GetMaterial(renderer.GetPrimaryVertex().MaterialIndex);
+        if (primaryMat.MaterialModel == MaterialDiffuseLight)
+        {
+            RestirStoreEmpty(int2(DTid.xy));
+        }
     }
 
     float4 residencyDebugColor;

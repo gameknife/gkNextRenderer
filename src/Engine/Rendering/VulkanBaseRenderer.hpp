@@ -28,6 +28,11 @@ namespace Rendering::Upscaler
     class IUpscaler;
 }
 
+namespace Vulkan::PipelineCommon
+{
+    class RestirDI;
+}
+
 namespace Vulkan
 {
     struct FFrameRenderSettings
@@ -335,6 +340,7 @@ namespace Vulkan
         void RequestSkinUpdate(uint32_t modelId);
         std::vector<RayTracing::TopLevelAccelerationStructure>& TLAS();
         VkAccelerationStructureKHR ActiveTLASHandle() const;
+        PipelineCommon::RestirDI& RestirDIResources();
 
         // Narrow scheduling API for render-view providers (thumbnails, offscreen views).
         LogicRendererBase* EnsureLogicRenderer(ERendererType type);
@@ -539,6 +545,7 @@ namespace Vulkan
         FViewRenderContext activeViewContext_{};
         Delegates delegates_;
         std::unique_ptr<Rendering::Upscaler::IUpscaler> upscaler_;
+        std::unique_ptr<PipelineCommon::RestirDI> restirDI_;
 
         FSceneRenderState sceneState_;
         FFrameRenderSettings frameSettings_;

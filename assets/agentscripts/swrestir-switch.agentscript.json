@@ -1,0 +1,27 @@
+{
+  "name": "swrestir-switch",
+  "target": "gkNextRenderer",
+  "scene": "ManyLightsShowcase.proc",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "cvar", "name": "r.restir.enable", "set": true },
+    { "type": "cvar", "name": "r.rendererType", "set": 1 },
+    { "type": "wait-frames", "n": 30 },
+    { "type": "cvar", "name": "r.rendererType", "set": 2 },
+    { "type": "wait-frames", "n": 20 },
+    { "type": "cvar", "name": "r.rendererType", "set": 1 },
+    { "type": "wait-frames", "n": 20 },
+    { "type": "assert", "query": "engine.rendererType", "op": "eq", "value": 1 },
+    { "type": "screenshot", "out": "screenshots/swrestir_after_switch" },
+    { "type": "cvar", "name": "r.restir.enable", "set": false },
+    { "type": "quit" }
+  ]
+}

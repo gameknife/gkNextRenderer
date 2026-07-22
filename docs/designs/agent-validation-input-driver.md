@@ -4,7 +4,7 @@ category: design
 status: 现行
 owner: engine/tools
 created: 2026-06-09
-last_updated: 2026-07-17
+last_updated: 2026-07-22
 ---
 
 # Agent 输入驱动验证架构
@@ -53,6 +53,8 @@ gnb 先占用一个随机 `127.0.0.1` 端口并生成一次性随机 token，再
 ```
 
 `shot` 复用同一控制通道，固定执行 wait-running → wait-frames → screenshot → quit。默认截图为 `out/build/<preset>/screenshots/agent_validation.jpg`；`validate` 默认报告在 `out/build/<preset>/agent_reports/`。
+
+`screenshot` 步骤可选 `"accumulateFrames": N`。大于零时 Engine 暂时进入显式 offline progressive rendering，累计 N 帧后保存，并恢复此前 progressive 状态；这适合用两个独立进程做随机估计器的收敛/偏差对照。普通截图省略该字段，保持单帧当前样本语义。
 
 ## 约束
 

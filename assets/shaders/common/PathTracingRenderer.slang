@@ -141,7 +141,8 @@ public struct FHardwareDirectIlluminator : IDirectIlluminator
             return;
         }
 
-        const float3 shadowOrigin = position + normalize(normal) * EPS2;
+        const float3 shadowOrigin =
+            HWTracer.GetAreaLightShadowOrigin(position, normal, lightPosition, EPS2);
         if (!HWTracer.TraceAreaLightSegment(shadowOrigin, lightPosition, EPS))
         {
             directIllumColor += float4(f * (lightArea / lightPdf), 0.0f);
@@ -301,6 +302,97 @@ public struct FShadowMapDirectIlluminator : IDirectIlluminator
     {
         DirectIlluminate(RandomSeed, position, normal, directIllumColor);
     }
+}
+
+// SoftwareTracing direct lighting keeps the existing CSM sun while adding area-light NEE
+// through finite voxel-DDA visibility. It is intentionally separate from
+// FShadowMapDirectIlluminator so SoftwareModern keeps its current sun-only contract.
+public struct FSoftwareTracingDirectIlluminator : IDirectIlluminator
+{
+    public bool RestirPrimary;
+    public uint PrimaryInstanceId;
+    public float2 PrimaryMotionPixels;
+
+    public __init()
+    {
+        RestirPrimary = false;
+        PrimaryInstanceId = 0;
+        PrimaryMotionPixels = float2(0, 0);
+    }
+
+    void SunIlluminate(inout uint4 randomSeed, float3 position, float3 normal,
+                       inout float4 directIllumColor)
+    {
+        UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
+        const float3 lightVector = camera.SunDirection.xyz;
+        const float4 d = max(dot(lightVector, normalize(normal)), 0.0f) * M_1_PI;
+        float shadow = 0.0f;
+        if (camera.HasSun)
+        {
+            const float viewDistance = -mul(camera.ModelView, float4(position, 1.0f)).z;
+            shadow = Common.SampleSunShadowCSM(position, normal, viewDistance);
+        }
+        directIllumColor = camera.SunColor * d * shadow;
+    }
+
+    void AreaIlluminate(inout uint4 randomSeed, float3 position, float3 normal,
+                        inout float4 directIllumColor)
+    {
+        GPUScene gpuScene = Bindless.GetGpuscene();
+        UniformBufferObject camera = gpuScene.Camera[0];
+        if (camera.LightCount == 0 || gpuScene.SoftMeshShader.Lights == 0)
+        {
+            return;
+        }
+
+        const uint lightIndex = Common.SelectAreaLight(RandomFloat(randomSeed));
+        LightObject light = gpuScene.Lights[lightIndex];
+        const float lightPdf = asfloat(light.reserved2);
+        const float lightArea = light.normal_area.w;
+        if (lightPdf <= 0.0f || lightArea <= 0.0f)
+        {
+            return;
+        }
+
+        const float2 uv = RandomFloat2(randomSeed);
+        float3 f;
+        float3 lightPosition;
+        if (!Common.EvaluateAreaLightSample(lightIndex, uv, position, normal, f, lightPosition))
+        {
+            return;
+        }
+
+        const float3 shadowOrigin =
+            SoftwareTracer.GetAreaLightShadowOrigin(position, normal, lightPosition, EPS2);
+        if (!SoftwareTracer.TraceAreaLightSegment(shadowOrigin, lightPosition, EPS))
+        {
+            directIllumColor += float4(f * (lightArea / lightPdf), 0.0f);
+        }
+    }
+
+    public void DirectIlluminate(inout uint4 randomSeed, float3 position, float3 normal,
+                                 inout float4 directIllumColor)
+    {
+        SunIlluminate(randomSeed, position, normal, directIllumColor);
+        AreaIlluminate(randomSeed, position, normal, directIllumColor);
+    }
+
+    public void DirectIlluminatePrimary(inout uint4 randomSeed, int2 pixel, float3 position,
+                                        float3 normal, inout float4 directIllumColor)
+    {
+        SunIlluminate(randomSeed, position, normal, directIllumColor);
+        if (RestirPrimary)
+        {
+            RestirPrimaryGather(randomSeed, pixel, position, normal,
+                                PrimaryInstanceId, PrimaryMotionPixels, SoftwareTracer);
+        }
+        else
+        {
+            AreaIlluminate(randomSeed, position, normal, directIllumColor);
+        }
+    }
+
+    FSoftwareRayTracer SoftwareTracer;
 }
 
 public struct FPathTracingRenderer{

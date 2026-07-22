@@ -43,6 +43,7 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
+#include "Engine/Rendering/PipelineCommon/RestirDI.hpp"
 #include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
 #include "Engine/Rendering/Upscaler/IUpscaler.hpp"
 #include "Engine/Rendering/Upscaler/UpscalerRegistry.hpp"
@@ -331,6 +332,7 @@ namespace Vulkan
         renderViewServices_.reset();
         logicRenderers_.renderers.clear();
         logicRenderers_.swapChainCreatedTypes.clear();
+        restirDI_.reset();
         renderViews_.reset();
         upscaler_.reset();
         ctx_.frameProfiler.reset();
@@ -342,6 +344,15 @@ namespace Vulkan
         ctx_.debugUtilsMessenger.reset();
         ctx_.instance.reset();
         ctx_.window = nullptr;
+    }
+
+    PipelineCommon::RestirDI& VulkanBaseRenderer::RestirDIResources()
+    {
+        if (!restirDI_)
+        {
+            restirDI_ = std::make_unique<PipelineCommon::RestirDI>(*this);
+        }
+        return *restirDI_;
     }
 
     void VulkanBaseRenderer::SelectPhysicalDevice(uint32_t gpuIdx)

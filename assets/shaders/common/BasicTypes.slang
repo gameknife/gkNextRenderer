@@ -313,10 +313,10 @@ public struct ALIGN_16 SharcRuntimeParameters
     public float4 CameraPositionPrev;
 };
 
-// PathTracing extension resource table reached via GPUScene.ReservedAddress0. Shared by
-// SHARC and ReSTIR: per-feature availability is judged by its field being non-zero, never
-// by the table pointer itself (the table exists whenever either feature is enabled).
-public struct ALIGN_16 FPathTracingExtras
+// Tracing extension resource table reached via GPUScene.ReservedAddress0. PathTracing may
+// expose SHARC and ReSTIR together; SoftwareTracing exposes ReSTIR only. Per-feature
+// availability is judged by its field being non-zero, never by the table pointer itself.
+public struct ALIGN_16 FTracingExtras
 {
     public uint64_t HashEntries;          // SHARC hash keys
     public uint64_t LockBuffer;           // SHARC bucket locks
@@ -521,9 +521,9 @@ public struct ALIGN_8 GPUScene
     public uint64_t ReservedAddress0;
 
     public uint64_t AmbientBase; // -> AmbientResources table (see BasicTypes.slang AmbientResources)
-    public property FPathTracingExtras* PtExtras
+    public property FTracingExtras* TracingExtras
     {
-        get { return (FPathTracingExtras*)ReservedAddress0; }
+        get { return (FTracingExtras*)ReservedAddress0; }
     }
     public property AmbientCube* Cubes
     {
@@ -651,9 +651,9 @@ public struct ALIGN_8 GPUScene
     /* Others */
     uint64_t2 Reserved_AmbientBase_Address;
 
-    public property FPathTracingExtras* PtExtras
+    public property FTracingExtras* TracingExtras
     {
-        get { return (FPathTracingExtras*)Reserved_AmbientBase_Address.x; }
+        get { return (FTracingExtras*)Reserved_AmbientBase_Address.x; }
     }
 
     public property AmbientCube* Cubes

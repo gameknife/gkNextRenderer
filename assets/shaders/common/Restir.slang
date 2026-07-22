@@ -1,7 +1,7 @@
 // ReSTIR DI shared primitives: availability, reservoir pack/unpack, streaming RIS
 // (Update / Merge / FinalizeW) and the M0 plumbing debug views. Data layouts live in
-// BasicTypes.slang (FPathTracingExtras, FRestirReservoir, FRestirRuntimeParameters);
-// buffer ownership and per-frame parameters are in PathTracingRenderer.cpp.
+// BasicTypes.slang (FTracingExtras, FRestirReservoir, FRestirRuntimeParameters);
+// buffer ownership and per-frame parameters are in PipelineCommon::RestirDI.
 // Design: docs/designs/pathtracing-restir-design.md
 
 public static const uint RESTIR_FLAG_TEMPORAL_ENABLE = 1u << 0;
@@ -15,8 +15,8 @@ public static const uint RESTIR_SAMPLE_AREA_LIGHT = 1u;
 // load must never execute against a null table pointer (see SharcIsAvailable).
 public bool RestirIsAvailable()
 {
-    FPathTracingExtras* extras = Bindless.GetGpuscene().PtExtras;
-    if (extras == (FPathTracingExtras*)0)
+    FTracingExtras* extras = Bindless.GetGpuscene().TracingExtras;
+    if (extras == (FTracingExtras*)0)
     {
         return false;
     }
@@ -25,7 +25,7 @@ public bool RestirIsAvailable()
 
 public FRestirRuntimeParameters RestirGetRuntimeParameters()
 {
-    FPathTracingExtras* extras = Bindless.GetGpuscene().PtExtras;
+    FTracingExtras* extras = Bindless.GetGpuscene().TracingExtras;
     return ((FRestirRuntimeParameters*)extras[0].RestirParameters)[0];
 }
 
@@ -41,12 +41,12 @@ public static const uint RESTIR_FRAME_TEMPORAL_VALID_BIT = 1u << 1;
 // one writer pass, so cross-pixel neighbor reads never observe partially updated data.
 public FRestirReservoir* RestirGetIntermediateBuffer(FRestirRuntimeParameters params)
 {
-    return (FRestirReservoir*)Bindless.GetGpuscene().PtExtras[0].RestirReservoirPing;
+    return (FRestirReservoir*)Bindless.GetGpuscene().TracingExtras[0].RestirReservoirPing;
 }
 
 public FRestirReservoir* RestirGetFinalBuffer(FRestirRuntimeParameters params)
 {
-    return (FRestirReservoir*)Bindless.GetGpuscene().PtExtras[0].RestirReservoirPong;
+    return (FRestirReservoir*)Bindless.GetGpuscene().TracingExtras[0].RestirReservoirPong;
 }
 
 public uint RestirReservoirIndex(int2 pixel, FRestirRuntimeParameters params)
@@ -182,7 +182,7 @@ public void RestirStoreEmpty(int2 pixel)
 // ray and writes the final buffer. Sampling shares Common.EvaluateAreaLightSample with
 // classic NEE so the target function and shading can never drift apart.
 public void RestirPrimaryGather(inout uint4 randomSeed, int2 pixel, float3 position, float3 normal,
-                                uint primaryInstanceId, float2 motionPixels, FHardwareRayTracer tracer)
+                                uint primaryInstanceId, float2 motionPixels, IRayTracer tracer)
 {
     // Defense in depth: never touch the parameter table or reservoirs unless the resources
     // actually exist, whatever the caller's gating did.
@@ -236,13 +236,21 @@ public void RestirPrimaryGather(inout uint4 randomSeed, int2 pixel, float3 posit
     // W to zero, so the W-form merges below never spread shadowed samples as light leaks.
     if (reservoir.SampleType == RESTIR_SAMPLE_AREA_LIGHT && reservoir.WeightW > 0.0f)
     {
-        const float3 shadowOrigin = position + normalize(normal) * EPS2;
         float3 f;
         float3 lightPosition;
-        if (!Common.EvaluateAreaLightSample(reservoir.LightIndex, reservoir.LightUV, position, normal, f, lightPosition) ||
-            tracer.TraceAreaLightSegment(shadowOrigin, lightPosition, EPS))
+        if (!Common.EvaluateAreaLightSample(
+                reservoir.LightIndex, reservoir.LightUV, position, normal, f, lightPosition))
         {
             reservoir.WeightW = 0.0f;
+        }
+        else
+        {
+            const float3 shadowOrigin =
+                tracer.GetAreaLightShadowOrigin(position, normal, lightPosition, EPS2);
+            if (tracer.TraceAreaLightSegment(shadowOrigin, lightPosition, EPS))
+            {
+                reservoir.WeightW = 0.0f;
+            }
         }
     }
 

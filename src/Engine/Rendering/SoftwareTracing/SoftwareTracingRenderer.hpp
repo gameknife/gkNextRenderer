@@ -26,6 +26,7 @@ namespace Vulkan::SoftwareTracing
 
     private:
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> deferredShadingPipeline_;
+        std::unique_ptr<PipelineCommon::ZeroBindPipeline> restirSpatialPipeline_;
         PipelineCommon::SamplePostChain samplePostChain_;
 
     };

@@ -52,24 +52,6 @@ namespace Vulkan::PathTracing
             bool pendingClear = false;
         };
 
-        // Screen-space ReSTIR DI reservoirs (docs/designs/pathtracing-restir-design.md).
-        // Extent-sized double buffer, primary view only; recreated when the render extent changes.
-        struct FRestirState
-        {
-            FSharcBuffer reservoirPing;
-            FSharcBuffer reservoirPong;
-            FSharcBuffer parameters;
-            VkExtent2D extent{};
-            bool pendingClear = false;
-            uint32_t lastFrameIndex = ~0u;
-            uint64_t lastLightsGeneration = 0;
-            uint64_t lastHistoryGeneration = 0;
-            // Stamped into gpuScene.CustomData1 per dispatch (bit0 parity, bit1 temporal
-            // valid): these are race-critical and must ride the recorded push constant, not
-            // the host-visible parameter buffer.
-            uint32_t frameStamp = 0;
-        };
-
     private:
 
         // individual textures
@@ -81,24 +63,18 @@ namespace Vulkan::PathTracing
         PipelineCommon::SamplePostChain samplePostChain_;
 
         FSharcState sharc_;
-        FRestirState restir_;
-        // FPathTracingExtras table shared by SHARC and ReSTIR, reached via GPUScene.ReservedAddress0.
+        // FTracingExtras table shared by SHARC and ReSTIR, reached via GPUScene.ReservedAddress0.
         // Content is view-invariant (fixed device addresses) so per-Render() rewrites cannot race
         // across views; per-view gating happens shader-side via the recorded push constant.
         FSharcBuffer extras_;
-        Assets::FPathTracingExtras lastExtrasContent_{};
+        Assets::FTracingExtras lastExtrasContent_{};
 
         void EnsureSharcPipelines();
         void EnsureSharcResources();
         void UpdateSharcParameters();
         void ClearSharcResources(VkCommandBuffer commandBuffer);
         void InsertSharcBarrier(VkCommandBuffer commandBuffer, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask) const;
-        void EnsureRestirResources(const VkExtent2D& extent);
-        void UpdateRestirParameters();
-        void ClearRestirResources(VkCommandBuffer commandBuffer);
-        void InsertRestirBarrier(VkCommandBuffer commandBuffer, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask) const;
         void UpdateExtrasTable(bool sharcActive);
-        bool IsOfflineProgressiveRenderActive() const;
         bool IsEffectiveSharcEnabled() const;
         bool IsRestirEnabled() const;
     };

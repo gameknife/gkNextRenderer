@@ -2,12 +2,12 @@ import Shader.Bindless;
 import Shader.PathTracing;
 #include "common/PreProcessor.slang"
 
-// Hardware ReSTIR DI pass 2. The shared algorithm lives in
-// common/RestirSpatialShade.slang; this entry only selects ray-query visibility.
+// Software ReSTIR DI pass 2. No TLAS descriptor is required; visibility uses finite
+// voxel-DDA segments through FSoftwareRayTracer.
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
-    FHardwareRayTracer tracer;
+    FSoftwareRayTracer tracer;
     RestirSpatialShade(dispatchThreadId, tracer);
 }

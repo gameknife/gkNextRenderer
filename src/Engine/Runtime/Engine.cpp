@@ -1358,7 +1358,12 @@ nlohmann::json NextEngine::HandleAgentControlCommand(const std::string& method, 
     {
         const std::string path = Utilities::FileHelper::GetPlatformFilePath(params.value("out", "screenshots/agent_validation").c_str());
         Utilities::FileHelper::EnsureDirectoryExists(std::filesystem::path(path).parent_path().string());
-        RequestScreenShot({.filename = path, .includeUi = params.value("ui", false)}); return {{"path", path + ".jpg"}};
+        RequestScreenShot({
+            .filename = path,
+            .accumulateFrames = params.value("accumulateFrames", 0u),
+            .includeUi = params.value("ui", false),
+        });
+        return {{"path", path + ".jpg"}};
     }
     if (method == "quit") { RequestExit(params.value("exitCode", 0)); return {{"ok", true}}; }
     throw std::runtime_error("unknown agent control method: " + method);

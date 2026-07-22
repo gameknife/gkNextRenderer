@@ -45,7 +45,7 @@
 - [GI 缓存与体素资源架构](designs/gi-cache-architecture.md)
 - [Gaussian Splat / SOG v2 格式与集成](designs/gaussian-splatting-sog-design.md)
 - [gnb AI Bridge Protocol v2](designs/gnb-ai-bridge-protocol-v2.md)
-- [PathTracing ReSTIR DI 架构](designs/pathtracing-restir-design.md)
+- [Tracing Direct Lighting 与 ReSTIR DI 架构](designs/pathtracing-restir-design.md)
 - [RenderView 多视图架构](designs/multi-viewport-renderview-design.md)
 - [渲染运行时架构与契约](designs/rendering-runtime-architecture.md)
 - [场景导出 glTF/GLB 契约](designs/scene-export-gltf-contract.md)

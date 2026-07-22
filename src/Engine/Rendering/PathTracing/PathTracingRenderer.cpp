@@ -1,5 +1,6 @@
 #include "Engine/Rendering/PathTracing/PathTracingRenderer.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
+#include "Engine/Rendering/PipelineCommon/RestirDI.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
@@ -20,9 +21,7 @@ namespace Vulkan::PathTracing
         static_assert(sizeof(Assets::SharcAccumulationEntry) == 16);
         static_assert(sizeof(Assets::SharcResolvedEntry) == 16);
         static_assert(sizeof(Assets::SharcRuntimeParameters) == 64);
-        static_assert(sizeof(Assets::FPathTracingExtras) == 64);
-        static_assert(sizeof(Assets::FRestirReservoir) == 16);
-        static_assert(sizeof(Assets::FRestirRuntimeParameters) == 48);
+        static_assert(sizeof(Assets::FTracingExtras) == 64);
 
         void CreateSharcBuffer(
             Vulkan::CommandPool& commandPool,
@@ -89,11 +88,6 @@ namespace Vulkan::PathTracing
             sharcQueryPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(
                 SwapChain(), "assets/shaders/Core.SharcQuery.comp.slang.spv", GetScene(), baseRender_.ActiveTLASHandle()));
         }
-    }
-
-    bool PathTracingRenderer::IsOfflineProgressiveRenderActive() const
-    {
-        return baseRender_.FrameSettings().offlineProgressivePathTracing;
     }
 
     bool PathTracingRenderer::IsEffectiveSharcEnabled() const
@@ -255,111 +249,12 @@ namespace Vulkan::PathTracing
         return baseRender_.FrameSettings().userSettings.RestirEnable;
     }
 
-    void PathTracingRenderer::EnsureRestirResources(const VkExtent2D& extent)
-    {
-        if (restir_.reservoirPing.buffer &&
-            restir_.extent.width == extent.width && restir_.extent.height == extent.height)
-        {
-            return;
-        }
-
-        restir_ = {};
-        restir_.extent = extent;
-        const VkDeviceSize reservoirBytes =
-            sizeof(Assets::FRestirReservoir) * VkDeviceSize(extent.width) * VkDeviceSize(extent.height);
-        CreateSharcBuffer(CommandPool(), "RestirReservoirPing", reservoirBytes,
-                          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, restir_.reservoirPing);
-        CreateSharcBuffer(CommandPool(), "RestirReservoirPong", reservoirBytes,
-                          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, restir_.reservoirPong);
-        CreateSharcBuffer(CommandPool(), "RestirParameters",
-                          sizeof(Assets::FRestirRuntimeParameters),
-                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                          restir_.parameters);
-        restir_.pendingClear = true;
-        SPDLOG_INFO("ReSTIR reservoirs allocated: {}x{}, memory={:.2f} MiB", extent.width, extent.height,
-                    static_cast<double>(reservoirBytes * 2) / (1024.0 * 1024.0));
-    }
-
-    void PathTracingRenderer::UpdateRestirParameters()
-    {
-        const auto& settings = baseRender_.FrameSettings().userSettings;
-        const uint32_t frameIndex = static_cast<uint32_t>(std::max(FrameCount(), 0));
-        const uint64_t lightsGeneration = GetScene().LightsGeneration();
-        // Reservoir history follows the view history generation (camera cut, scene / renderer
-        // switch, extent change) plus ReSTIR-specific continuity and light ordering rules.
-        const uint64_t historyGeneration = baseRender_.ActiveRenderView().State().historyGeneration;
-        const bool temporalValid =
-            restir_.lastFrameIndex != ~0u && frameIndex == restir_.lastFrameIndex + 1 &&
-            historyGeneration == restir_.lastHistoryGeneration &&
-            lightsGeneration == restir_.lastLightsGeneration &&
-            !restir_.pendingClear;
-        restir_.lastFrameIndex = frameIndex;
-        restir_.lastHistoryGeneration = historyGeneration;
-        restir_.lastLightsGeneration = lightsGeneration;
-        // Bit0 (frame parity) is unused since the reservoirs moved to fixed roles
-        // (intermediate / final); only the temporal-valid bit remains.
-        restir_.frameStamp = temporalValid ? 0x2u : 0u;
-
-        // Offline progressive rendering must converge to ground truth: reuse is disabled so
-        // ReSTIR degrades to unbiased RIS-only (design §3.5), which doubles as the built-in
-        // bias control arm.
-        const bool reuseAllowed = !IsOfflineProgressiveRenderActive();
-
-        Assets::FRestirRuntimeParameters params{};
-        params.FrameIndex = frameIndex;
-        params.DebugMode = static_cast<uint32_t>(std::max(settings.RestirDebugMode, 0));
-        params.Flags = (settings.RestirTemporal && reuseAllowed ? 0x1u : 0u) |
-                       (settings.RestirSpatial && reuseAllowed ? 0x2u : 0u) |
-                       (temporalValid ? 0x4u : 0u);
-        params.LightsGeneration = static_cast<uint32_t>(lightsGeneration);
-        params.ReservoirWidth = restir_.extent.width;
-        params.ReservoirHeight = restir_.extent.height;
-        params.InitialCandidates = std::clamp(settings.RestirCandidates, 1u, 64u);
-        params.TemporalMClamp = std::max(settings.RestirMClamp, 1u);
-        params.SpatialRadius = std::max(settings.RestirSpatialRadius, 1.0f);
-        params.SpatialSamples = std::clamp(settings.RestirSpatialSamples, 1u, 16u);
-        WriteHostVisibleBuffer(restir_.parameters, &params, sizeof(params));
-    }
-
-    void PathTracingRenderer::ClearRestirResources(VkCommandBuffer commandBuffer)
-    {
-        if (!restir_.pendingClear)
-        {
-            return;
-        }
-
-        vkCmdFillBuffer(commandBuffer, restir_.reservoirPing.buffer->Handle(), 0, restir_.reservoirPing.size, 0);
-        vkCmdFillBuffer(commandBuffer, restir_.reservoirPong.buffer->Handle(), 0, restir_.reservoirPong.size, 0);
-        InsertRestirBarrier(commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT,
-                            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
-        restir_.pendingClear = false;
-    }
-
-    void PathTracingRenderer::InsertRestirBarrier(
-        VkCommandBuffer commandBuffer,
-        VkAccessFlags srcAccessMask,
-        VkAccessFlags dstAccessMask) const
-    {
-        if (!restir_.reservoirPing.buffer)
-        {
-            return;
-        }
-
-        const VkPipelineStageFlags srcStage =
-            (srcAccessMask & VK_ACCESS_TRANSFER_WRITE_BIT) != 0 ? VK_PIPELINE_STAGE_TRANSFER_BIT :
-                                                                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-        BufferMemoryBarrier::Insert(commandBuffer, srcStage, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, {
-            BufferMemoryBarrier::Make(restir_.reservoirPing.buffer->Handle(), srcAccessMask, dstAccessMask),
-            BufferMemoryBarrier::Make(restir_.reservoirPong.buffer->Handle(), srcAccessMask, dstAccessMask),
-        });
-    }
-
     void PathTracingRenderer::UpdateExtrasTable(bool sharcActive)
     {
         if (!extras_.buffer)
         {
-            CreateSharcBuffer(CommandPool(), "PathTracingExtras",
-                              sizeof(Assets::FPathTracingExtras),
+            CreateSharcBuffer(CommandPool(), "TracingExtras",
+                              sizeof(Assets::FTracingExtras),
                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                               extras_);
         }
@@ -369,7 +264,7 @@ namespace Vulkan::PathTracing
         // buffer is only rewritten when an address actually changes (buffer recreation):
         // in-flight frames read this memory, so a steady-state per-frame memcpy would be a
         // torn-read hazard against the GPU.
-        Assets::FPathTracingExtras extras{};
+        Assets::FTracingExtras extras{};
         if (sharcActive && sharc_.hashEntries.buffer)
         {
             extras.HashEntries = sharc_.hashEntries.buffer->GetDeviceAddress();
@@ -378,11 +273,12 @@ namespace Vulkan::PathTracing
             extras.Resolved = sharc_.resolved.buffer->GetDeviceAddress();
             extras.Parameters = sharc_.parameters.buffer->GetDeviceAddress();
         }
-        if (IsRestirEnabled() && restir_.reservoirPing.buffer)
+        const auto& restir = baseRender_.RestirDIResources();
+        if (IsRestirEnabled() && restir.HasResources())
         {
-            extras.RestirReservoirPing = restir_.reservoirPing.buffer->GetDeviceAddress();
-            extras.RestirReservoirPong = restir_.reservoirPong.buffer->GetDeviceAddress();
-            extras.RestirParameters = restir_.parameters.buffer->GetDeviceAddress();
+            extras.RestirReservoirPing = restir.ReservoirPingAddress();
+            extras.RestirReservoirPong = restir.ReservoirPongAddress();
+            extras.RestirParameters = restir.ParametersAddress();
         }
         if (std::memcmp(&extras, &lastExtrasContent_, sizeof(extras)) != 0)
         {
@@ -416,11 +312,10 @@ namespace Vulkan::PathTracing
             // ReSTIR reservoirs are primary-view state; non-primary views skip ReSTIR shader-side
             // via the recorded view bank base (gpuScene.CustomData0 != 0).
             const bool restirEnabled = IsRestirEnabled();
+            auto& restir = baseRender_.RestirDIResources();
             if (restirEnabled && isPrimaryView)
             {
-                EnsureRestirResources(activeExtent);
-                UpdateRestirParameters();
-                ClearRestirResources(commandBuffer);
+                restir.Prepare(commandBuffer, activeExtent, !frameSettings.progressiveRendering);
             }
 
             Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase());
@@ -439,7 +334,7 @@ namespace Vulkan::PathTracing
                 // push constant; the host-visible parameter buffer races with in-flight frames.
                 if (restirEnabled && isPrimaryView)
                 {
-                    gpuScene.CustomData1 = restir_.frameStamp;
+                    gpuScene.CustomData1 = restir.FrameStamp();
                 }
             }
 
@@ -489,7 +384,7 @@ namespace Vulkan::PathTracing
             // term into RT_SINGLE_DIFFUSE and stores the final reservoirs for the next
             // frame's temporal merge. Runs whenever ReSTIR is on (spatial toggle only
             // controls the neighbor count inside the shader).
-            if (restirEnabled && isPrimaryView && restir_.reservoirPing.buffer)
+            if (restirEnabled && isPrimaryView && restir.HasResources())
             {
                 if (!restirSpatialPipeline_)
                 {
@@ -498,10 +393,12 @@ namespace Vulkan::PathTracing
                         baseRender_.ActiveTLASHandle()));
                 }
 
-                InsertRestirBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
-                                    VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+                restir.InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
+                                     VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
                 baseRender_.TransitionActiveViewImages(commandBuffer, {
-                    {Assets::Bindless::RT_SINGLE_DIFFUSE, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+                    {Assets::Bindless::RT_SINGLE_DIFFUSE, PipelineCommon::ERenderStage::Compute,
+                     PipelineCommon::EResourceAccess::ShaderRead |
+                         PipelineCommon::EResourceAccess::ShaderWrite},
                     {Assets::Bindless::RT_OBJECTID_0, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
                     {Assets::Bindless::RT_NORMAL, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
                     {Assets::Bindless::RT_PREV_DEPTHBUFFER, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},

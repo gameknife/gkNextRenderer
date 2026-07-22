@@ -90,7 +90,7 @@ struct UserSettings final
     uint32_t SharcAccumulatedFrameMax = 64;
     uint32_t SharcResponsiveFrameMax = 8;
     uint32_t SharcStaleFrameMax = 180;
-    // ReSTIR DI (docs/designs/pathtracing-restir-design.md)
+    // PathTracing/SoftwareTracing ReSTIR DI (docs/designs/pathtracing-restir-design.md)
     bool RestirEnable = false;
     uint32_t RestirCandidates = 8;
     bool RestirTemporal = true;

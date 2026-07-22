@@ -237,7 +237,11 @@ func execute(c *client, st map[string]any, s Script, o Options) (map[string]any,
 		return e, er
 	case "screenshot":
 		p := str(st, "out", fmt.Sprintf("screenshots/%s_step", s.Name))
-		r, er := c.call(typ, map[string]any{"out": p, "ui": boolv(st, "ui", false)})
+		r, er := c.call(typ, map[string]any{
+			"out":              p,
+			"ui":               boolv(st, "ui", false),
+			"accumulateFrames": uint32(numv(st, "accumulateFrames", 0)),
+		})
 		if er != nil {
 			return e, er
 		}

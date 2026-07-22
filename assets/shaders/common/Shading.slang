@@ -277,6 +277,9 @@ public interface IRayTracer
     bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor, out float outHitDist);
     bool TraceOcclusion(float3 rayOrigin, float3 rayDir);
     bool TraceSegment(float3 rayOrigin, float3 rayTarget, float epsilon);
+    float3 GetAreaLightShadowOrigin(float3 position, float3 normal, float3 lightPosition,
+                                    float minimumNormalOffset);
+    bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon);
 }
 
 // direct illum
