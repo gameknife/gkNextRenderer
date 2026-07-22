@@ -49,6 +49,9 @@ namespace Modules::Physics
         NextVehicleID CreateWheeledVehicle(const FNextVehicleSettings& settings) override;
         void RemoveVehicle(NextVehicleID vehicleID) override;
         void SetVehicleInput(NextVehicleID vehicleID, const FNextVehicleInput& input) override;
+        void SetVehicleDiffLock(NextVehicleID vehicleID, bool locked) override;
+        void SetVehicleAllWheelDrive(NextVehicleID vehicleID, bool enabled) override;
+        bool GetVehicleTelemetry(NextVehicleID vehicleID, FNextVehicleTelemetry& telemetry) const override;
         bool GetVehicleBodyTransform(NextVehicleID vehicleID, glm::vec3& position, glm::quat& rotation) override;
         bool GetVehicleWheelLocalTransform(NextVehicleID vehicleID, int wheel, glm::vec3& position,
                                            glm::quat& rotation) override;

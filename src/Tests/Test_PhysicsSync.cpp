@@ -123,3 +123,77 @@ TEST_CASE_METHOD(EngineTestFixture, "SetBodyVelocity Reactivates Resting Dynamic
     physics->RemoveBody(boxBodyId);
     physics->RemoveBody(floorBodyId);
 }
+
+TEST_CASE_METHOD(EngineTestFixture, "Wheeled vehicle suspension and drivetrain telemetry", "[Integration][Physics][Vehicle]")
+{
+    auto* physics = engine_->GetPhysicsEngine();
+    REQUIRE(physics != nullptr);
+    const NextBodyID floor = physics->CreateBoxBody({0.0f, -0.5f, 0.0f}, {40.0f, 0.5f, 12.0f},
+                                                    NextMotionType::Static);
+
+    FNextVehicleSettings settings;
+    settings.initialPosition = {0.0f, 1.4f, 0.0f};
+    settings.centerOfMassOffset = {0.0f, -0.35f, 0.0f};
+    settings.frontAntiRollStiffness = 10000.0f;
+    settings.rearAntiRollStiffness = 14000.0f;
+    settings.engine.maxTorque = 1150.0f;
+    constexpr float axleX[] = {2.5f, -0.6f, -1.75f};
+    for (int axle = 0; axle < 3; ++axle)
+    {
+        for (int side = 0; side < 2; ++side)
+        {
+            FNextWheelSettings wheel;
+            wheel.position = {axleX[axle], -0.2f, side ? -1.0f : 1.0f};
+            wheel.suspensionMin = 0.15f;
+            wheel.suspensionMax = 0.55f;
+            wheel.suspensionFrequency = axle == 0 ? 1.3f : 1.6f;
+            wheel.suspensionDamping = axle == 0 ? 0.35f : 0.40f;
+            wheel.steered = axle == 0;
+            wheel.driven = axle != 0;
+            settings.wheels.push_back(wheel);
+        }
+    }
+
+    const NextVehicleID vehicle = physics->CreateWheeledVehicle(settings);
+    REQUIRE(vehicle != invalidNextVehicleId);
+    Simulate(90);
+    physics->SetVehicleDiffLock(vehicle, true);
+    physics->SetVehicleAllWheelDrive(vehicle, true);
+    physics->SetVehicleInput(vehicle, {0.8f, 0.0f, 0.0f, 0.0f});
+    Simulate(240);
+
+    glm::vec3 position; glm::quat rotation;
+    REQUIRE(physics->GetVehicleBodyTransform(vehicle, position, rotation));
+    CHECK(position.x > 0.25f);
+    const glm::vec3 up = rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+    CHECK(glm::dot(up, glm::vec3(0.0f, 1.0f, 0.0f)) > 0.7f);
+
+    FNextVehicleTelemetry telemetry;
+    REQUIRE(physics->GetVehicleTelemetry(vehicle, telemetry));
+    CHECK(telemetry.gear >= 1);
+    CHECK(telemetry.rpm > 0.0f);
+    CHECK(telemetry.wheelSlip.size() == 6);
+    CHECK(telemetry.wheelContact.size() == 6);
+
+    physics->RemoveVehicle(vehicle);
+    physics->RemoveBody(floor);
+
+    const glm::quat rampRotation = glm::angleAxis(glm::radians(18.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    const NextBodyID ramp = physics->CreateBoxBody({0.0f, 3.0f, 0.0f}, rampRotation, {20.0f, 0.6f, 8.0f},
+                                                   NextMotionType::Static);
+    settings.initialPosition = {-7.0f, 2.10f, 0.0f};
+    settings.initialRotation = rampRotation;
+    const NextVehicleID climbingVehicle = physics->CreateWheeledVehicle(settings);
+    REQUIRE(climbingVehicle != invalidNextVehicleId);
+    physics->SetVehicleInput(climbingVehicle, {0.0f, 0.0f, 1.0f, 1.0f});
+    Simulate(90);
+    physics->SetVehicleAllWheelDrive(climbingVehicle, true);
+    physics->SetVehicleDiffLock(climbingVehicle, true);
+    physics->SetVehicleInput(climbingVehicle, {0.9f, 0.0f, 0.0f, 0.0f});
+    Simulate(120);
+    REQUIRE(physics->GetVehicleBodyTransform(climbingVehicle, position, rotation));
+    CHECK(position.x > -6.5f);
+    CHECK(glm::dot(rotation * glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)) > 0.5f);
+    physics->RemoveVehicle(climbingVehicle);
+    physics->RemoveBody(ramp);
+}

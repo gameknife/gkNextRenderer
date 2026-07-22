@@ -14,6 +14,7 @@
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/OffsetCenterOfMassShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/PlaneShape.h>
@@ -54,6 +55,8 @@ struct FJoltPhysicsBackend::FVehicleData
     NextBodyID bodyID;
     Ref<VehicleConstraint> constraint;
     std::vector<std::pair<float, float>> frictionScales;
+    std::vector<bool> differentialDriven;
+    float lastThrottle = 0.0f;
 };
 
 namespace
@@ -1041,8 +1044,15 @@ NextVehicleID FJoltPhysicsBackend::CreateWheeledVehicle(const FNextVehicleSettin
 {
     if (!context_ || settings.wheels.empty()) return invalidNextVehicleId;
     BodyInterface& bi = context_->physicsSystem.GetBodyInterface();
-    BodyCreationSettings bodySettings(new BoxShape(Vec3(settings.chassisHalfExtent.x, settings.chassisHalfExtent.y,
-                                                        settings.chassisHalfExtent.z)),
+    RefConst<Shape> chassis = new BoxShape(Vec3(settings.chassisHalfExtent.x, settings.chassisHalfExtent.y,
+                                                settings.chassisHalfExtent.z));
+    if (glm::dot(settings.centerOfMassOffset, settings.centerOfMassOffset) > 0.0f)
+    {
+        chassis = new OffsetCenterOfMassShape(chassis, Vec3(settings.centerOfMassOffset.x,
+                                                            settings.centerOfMassOffset.y,
+                                                            settings.centerOfMassOffset.z));
+    }
+    BodyCreationSettings bodySettings(chassis,
                                       RVec3(settings.initialPosition.x, settings.initialPosition.y, settings.initialPosition.z),
                                       Quat(settings.initialRotation.x, settings.initialRotation.y,
                                            settings.initialRotation.z, settings.initialRotation.w),
@@ -1060,8 +1070,22 @@ NextVehicleID FJoltPhysicsBackend::CreateWheeledVehicle(const FNextVehicleSettin
     vehicleSettings.mForward = Vec3::sAxisX();
     vehicleSettings.mMaxPitchRollAngle = DegreesToRadians(85.0f);
     auto* controller = new WheeledVehicleControllerSettings();
-    controller->mEngine.mMaxTorque = settings.maxEngineTorque;
-    std::vector<int> driven;
+    const float maxTorque = settings.engine.maxTorque > 0.0f ? settings.engine.maxTorque : settings.maxEngineTorque;
+    controller->mEngine.mMaxTorque = maxTorque;
+    controller->mEngine.mMinRPM = settings.engine.minRPM;
+    controller->mEngine.mMaxRPM = settings.engine.maxRPM;
+    controller->mEngine.mInertia = settings.engine.inertia;
+    controller->mEngine.mNormalizedTorque.Clear();
+    for (const glm::vec2& point : settings.engine.normalizedTorque)
+        controller->mEngine.mNormalizedTorque.AddPoint(point.x, point.y);
+    controller->mEngine.mNormalizedTorque.Sort();
+    controller->mTransmission.mMode = settings.transmission.automatic ? ETransmissionMode::Auto : ETransmissionMode::Manual;
+    controller->mTransmission.mGearRatios.clear();
+    for (float ratio : settings.transmission.gearRatios) controller->mTransmission.mGearRatios.push_back(ratio);
+    controller->mTransmission.mReverseGearRatios = {settings.transmission.reverseRatio};
+    controller->mTransmission.mShiftUpRPM = settings.transmission.shiftUpRPM;
+    controller->mTransmission.mShiftDownRPM = settings.transmission.shiftDownRPM;
+    controller->mTransmission.mClutchStrength = settings.transmission.clutchStrength;
     for (const auto& source : settings.wheels)
     {
         WheelSettingsWV* wheel = new WheelSettingsWV();
@@ -1074,20 +1098,33 @@ NextVehicleID FJoltPhysicsBackend::CreateWheeledVehicle(const FNextVehicleSettin
         wheel->mWidth = source.width;
         wheel->mSuspensionMinLength = source.suspensionMin;
         wheel->mSuspensionMaxLength = source.suspensionMax;
-        wheel->mSuspensionSpring = SpringSettings(ESpringMode::FrequencyAndDamping, 2.2f, 0.85f);
+        wheel->mSuspensionPreloadLength = source.suspensionPreload;
+        wheel->mSuspensionSpring = SpringSettings(ESpringMode::FrequencyAndDamping,
+                                                  source.suspensionFrequency, source.suspensionDamping);
         wheel->mMaxSteerAngle = source.steered ? DegreesToRadians(settings.maxSteerAngleDeg) : 0.0f;
         wheel->mMaxHandBrakeTorque = source.steered ? 0.0f : 5000.0f;
         vehicleSettings.mWheels.push_back(Ref<WheelSettings>(wheel));
-        if (source.driven) driven.push_back(static_cast<int>(vehicleSettings.mWheels.size() - 1));
     }
-    for (size_t i = 0; i + 1 < driven.size(); i += 2)
+    std::vector<bool> differentialDriven;
+    for (size_t i = 0; i + 1 < settings.wheels.size(); i += 2)
     {
         VehicleDifferentialSettings diff;
-        diff.mLeftWheel = driven[i];
-        diff.mRightWheel = driven[i + 1];
-        diff.mEngineTorqueRatio = 2.0f / static_cast<float>(driven.size());
+        diff.mLeftWheel = static_cast<int>(i);
+        diff.mRightWheel = static_cast<int>(i + 1);
+        const bool driven = settings.wheels[i].driven || settings.wheels[i + 1].driven;
+        differentialDriven.push_back(driven);
+        diff.mEngineTorqueRatio = driven ? 1.0f : 0.0f;
         controller->mDifferentials.push_back(diff);
+        VehicleAntiRollBar antiRoll;
+        antiRoll.mLeftWheel = static_cast<int>(i);
+        antiRoll.mRightWheel = static_cast<int>(i + 1);
+        antiRoll.mStiffness = i == 0 ? settings.frontAntiRollStiffness : settings.rearAntiRollStiffness;
+        if (antiRoll.mStiffness > 0.0f) vehicleSettings.mAntiRollBars.push_back(antiRoll);
     }
+    const size_t drivenDifferentials = static_cast<size_t>(std::count(differentialDriven.begin(), differentialDriven.end(), true));
+    if (drivenDifferentials > 0)
+        for (auto& diff : controller->mDifferentials)
+            if (diff.mEngineTorqueRatio > 0.0f) diff.mEngineTorqueRatio = 1.0f / static_cast<float>(drivenDifferentials);
     vehicleSettings.mController = controller;
     Ref<VehicleConstraint> constraint = new VehicleConstraint(*body, vehicleSettings);
     constraint->SetVehicleCollisionTester(new VehicleCollisionTesterCastCylinder(NextLayers::MOVING));
@@ -1096,6 +1133,7 @@ NextVehicleID FJoltPhysicsBackend::CreateWheeledVehicle(const FNextVehicleSettin
     data->bodyID = FromJoltBodyID(body->GetID());
     data->constraint = constraint;
     data->frictionScales.resize(settings.wheels.size(), {1.0f, 1.0f});
+    data->differentialDriven = std::move(differentialDriven);
     FVehicleData* raw = data.get();
     constraint->SetCombineFriction([raw](uint index, float& longitudinal, float& lateral, const Body&, const SubShapeID&)
     {
@@ -1126,10 +1164,53 @@ void FJoltPhysicsBackend::RemoveVehicle(NextVehicleID id)
 void FJoltPhysicsBackend::SetVehicleInput(NextVehicleID id, const FNextVehicleInput& input)
 {
     auto it = vehicles_.find(id); if (it == vehicles_.end()) return;
+    it->second->lastThrottle = glm::clamp(input.throttle, -1.0f, 1.0f);
     static_cast<WheeledVehicleController*>(it->second->constraint->GetController())->SetDriverInput(
         glm::clamp(input.throttle, -1.0f, 1.0f), glm::clamp(input.steer, -1.0f, 1.0f),
         glm::clamp(input.brake, 0.0f, 1.0f), glm::clamp(input.handbrake, 0.0f, 1.0f));
     context_->physicsSystem.GetBodyInterface().ActivateBody(ToJoltBodyID(it->second->bodyID));
+}
+
+void FJoltPhysicsBackend::SetVehicleDiffLock(NextVehicleID id, bool locked)
+{
+    auto it = vehicles_.find(id); if (it == vehicles_.end()) return;
+    auto* controller = static_cast<WheeledVehicleController*>(it->second->constraint->GetController());
+    for (auto& diff : controller->GetDifferentials()) diff.mLimitedSlipRatio = locked ? 1.02f : 1.4f;
+    controller->SetDifferentialLimitedSlipRatio(locked ? 1.02f : 1.4f);
+}
+
+void FJoltPhysicsBackend::SetVehicleAllWheelDrive(NextVehicleID id, bool enabled)
+{
+    auto it = vehicles_.find(id); if (it == vehicles_.end()) return;
+    auto& diffs = static_cast<WheeledVehicleController*>(it->second->constraint->GetController())->GetDifferentials();
+    const size_t active = enabled ? diffs.size() : static_cast<size_t>(std::count(it->second->differentialDriven.begin(),
+                                                                                  it->second->differentialDriven.end(), true));
+    if (active == 0) return;
+    for (size_t index = 0; index < diffs.size(); ++index)
+        diffs[index].mEngineTorqueRatio = (enabled || it->second->differentialDriven[index]) ? 1.0f / static_cast<float>(active) : 0.0f;
+}
+
+bool FJoltPhysicsBackend::GetVehicleTelemetry(NextVehicleID id, FNextVehicleTelemetry& telemetry) const
+{
+    auto it = vehicles_.find(id); if (it == vehicles_.end() || !context_) return false;
+    const auto* controller = static_cast<const WheeledVehicleController*>(it->second->constraint->GetController());
+    telemetry.gear = controller->GetTransmission().GetCurrentGear();
+    telemetry.rpm = controller->GetEngine().GetCurrentRPM();
+    telemetry.maxRPM = controller->GetEngine().mMaxRPM;
+    telemetry.engineTorque = controller->GetEngine().GetTorque(std::abs(it->second->lastThrottle));
+    const BodyInterface& bi = context_->physicsSystem.GetBodyInterface();
+    const BodyID bodyID = ToJoltBodyID(it->second->bodyID);
+    const Vec3 velocity = bi.GetLinearVelocity(bodyID);
+    const Vec3 forward = bi.GetRotation(bodyID) * Vec3::sAxisX();
+    telemetry.forwardSpeed = velocity.Dot(forward);
+    telemetry.wheelSlip.clear(); telemetry.wheelContact.clear();
+    for (const Wheel* wheel : it->second->constraint->GetWheels())
+    {
+        const auto* wheeled = static_cast<const WheelWV*>(wheel);
+        telemetry.wheelSlip.push_back(wheeled->mLongitudinalSlip);
+        telemetry.wheelContact.push_back(wheel->HasContact());
+    }
+    return true;
 }
 
 bool FJoltPhysicsBackend::GetVehicleBodyTransform(NextVehicleID id, glm::vec3& position, glm::quat& rotation)

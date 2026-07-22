@@ -79,6 +79,28 @@ struct FNextWheelSettings
     float suspensionMax = 0.42f;
     bool steered = false;
     bool driven = false;
+    float suspensionFrequency = 1.5f;
+    float suspensionDamping = 0.5f;
+    float suspensionPreload = 0.0f;
+};
+
+struct FNextVehicleEngineSettings
+{
+    float maxTorque = 0.0f;
+    float minRPM = 700.0f;
+    float maxRPM = 3000.0f;
+    float inertia = 1.0f;
+    std::vector<glm::vec2> normalizedTorque{{0.0f, 0.72f}, {0.4f, 1.0f}, {0.72f, 0.82f}, {1.0f, 0.35f}};
+};
+
+struct FNextVehicleTransmissionSettings
+{
+    bool automatic = true;
+    std::vector<float> gearRatios{3.8f, 2.4f, 1.55f, 1.0f, 0.72f};
+    float reverseRatio = -3.5f;
+    float shiftUpRPM = 2600.0f;
+    float shiftDownRPM = 1300.0f;
+    float clutchStrength = 18.0f;
 };
 
 struct FNextVehicleSettings
@@ -87,6 +109,11 @@ struct FNextVehicleSettings
     float mass = 3500.0f;
     float maxEngineTorque = 900.0f;
     float maxSteerAngleDeg = 32.0f;
+    glm::vec3 centerOfMassOffset{0.0f, -0.35f, 0.0f};
+    float frontAntiRollStiffness = 0.0f;
+    float rearAntiRollStiffness = 0.0f;
+    FNextVehicleEngineSettings engine;
+    FNextVehicleTransmissionSettings transmission;
     std::vector<FNextWheelSettings> wheels;
     glm::vec3 initialPosition{0.0f, 1.2f, 0.0f};
     glm::quat initialRotation{1.0f, 0.0f, 0.0f, 0.0f};
@@ -98,6 +125,17 @@ struct FNextVehicleInput
     float steer = 0.0f;
     float brake = 0.0f;
     float handbrake = 0.0f;
+};
+
+struct FNextVehicleTelemetry
+{
+    int gear = 0;
+    float rpm = 0.0f;
+    float maxRPM = 0.0f;
+    float engineTorque = 0.0f;
+    float forwardSpeed = 0.0f;
+    std::vector<float> wheelSlip;
+    std::vector<bool> wheelContact;
 };
 
 class INextCharacterControllerBackend
@@ -160,6 +198,9 @@ public:
     virtual NextVehicleID CreateWheeledVehicle(const FNextVehicleSettings& settings) = 0;
     virtual void RemoveVehicle(NextVehicleID vehicleID) = 0;
     virtual void SetVehicleInput(NextVehicleID vehicleID, const FNextVehicleInput& input) = 0;
+    virtual void SetVehicleDiffLock(NextVehicleID vehicleID, bool locked) = 0;
+    virtual void SetVehicleAllWheelDrive(NextVehicleID vehicleID, bool enabled) = 0;
+    virtual bool GetVehicleTelemetry(NextVehicleID vehicleID, FNextVehicleTelemetry& telemetry) const = 0;
     virtual bool GetVehicleBodyTransform(NextVehicleID vehicleID, glm::vec3& position, glm::quat& rotation) = 0;
     virtual bool GetVehicleWheelLocalTransform(NextVehicleID vehicleID, int wheel, glm::vec3& position,
                                                glm::quat& rotation) = 0;
