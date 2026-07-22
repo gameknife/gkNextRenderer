@@ -24,6 +24,7 @@ namespace Runtime
     class IDebugUiProvider;
     class IRenderFrameConsumer;
     class IScriptRuntime;
+    class FScreenShotService;
     class IUiOverlay;
 }
 

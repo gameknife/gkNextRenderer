@@ -107,6 +107,8 @@ public:
     // Runtime services
     NextUI::UserInterface* GetUserInterface() { return userInterface_.get(); }
     Runtime::IUiOverlay* GetUiOverlay() { return uiOverlay_.get(); }
+    Runtime::FScreenShotService& GetScreenShotService() { return *screenShotService_; }
+    const Runtime::FScreenShotService& GetScreenShotService() const { return *screenShotService_; }
     NextAudio* GetAudio() { return services_.audio.get(); }
     const NextAudio* GetAudio() const { return services_.audio.get(); }
     NextLocalization* GetLocalization() { return services_.localization.get(); }
@@ -377,6 +379,7 @@ private:
     FInputState inputState_{};
     FProgressiveRenderState progressiveRender_{};
     FScreenShotState screenShot_{};
+    std::unique_ptr<Runtime::FScreenShotService> screenShotService_;
     std::unique_ptr<Runtime::Agent::FAgentControlServer> agentControl_;
     Runtime::Agent::FAgentQueryRegistry agentQueries_;
     int requestedExitCode_ = 0;

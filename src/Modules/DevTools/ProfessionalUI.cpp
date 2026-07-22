@@ -3,6 +3,7 @@
 #include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/ScreenShotService.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 
 #include <algorithm>
@@ -431,7 +432,8 @@ namespace NextUI::Theme
 
     void DrawStandardBottomBar(NextEngine& engine, const char* windowId, float height,
                                std::function<void()> onMemoryClicked, bool memoryActive,
-                               std::function<void()> onCppReloadClicked, bool cppLiveCodingAvailable)
+                               std::function<void()> onCppReloadClicked, bool cppLiveCodingAvailable,
+                               std::function<void()> onCaptureClicked)
     {
         NextUI::UserInterface* ui = engine.GetUserInterface();
         const NextEngine::FHotReloadStatus hotReloadStatus = engine.GetHotReloadStatus();
@@ -473,7 +475,7 @@ namespace NextUI::Theme
 
         constexpr float kConsoleButtonWidth = 74.0f;
         constexpr float kStatsButtonWidth = 58.0f;
-        constexpr float kCaptureButtonWidth = 72.0f;
+        constexpr float kScreenshotButtonWidth = 82.0f;
         constexpr float kButtonHeight = 22.0f;
         constexpr float kHotReloadButtonWidth = 24.0f;
         constexpr float kHotReloadGapWidth = 4.0f;
@@ -482,7 +484,7 @@ namespace NextUI::Theme
 
         const float memoryTextWidth = ImGui::CalcTextSize(memoryText.c_str()).x;
         const float memoryWidgetWidth = memoryTextWidth + (onMemoryClicked ? 12.0f : 0.0f);
-        const float rightWidth = kConsoleButtonWidth + kGapWidth + kStatsButtonWidth + kGapWidth + kCaptureButtonWidth +
+        const float rightWidth = kConsoleButtonWidth + kGapWidth + kStatsButtonWidth + kGapWidth + kScreenshotButtonWidth +
             kSeparatorWidth + kHotReloadButtonWidth * 2.0f + kHotReloadGapWidth +
             kSeparatorWidth + ImGui::CalcTextSize(fpsText.c_str()).x +
             kSeparatorWidth + memoryWidgetWidth + 18.0f;
@@ -511,9 +513,16 @@ namespace NextUI::Theme
             }
 
             ImGui::SameLine();
-            if (ToolbarButton("Capture", "Take Screenshot", false, ImVec2(kCaptureButtonWidth, kButtonHeight)))
+            if (ToolbarButton("Screenshot", "Take Screenshot", false, ImVec2(kScreenshotButtonWidth, kButtonHeight)))
             {
-                engine.RequestScreenShot({});
+                if (onCaptureClicked)
+                {
+                    onCaptureClicked();
+                }
+                else
+                {
+                    engine.GetScreenShotService().Request();
+                }
             }
 
             DrawVerticalSeparator(14.0f, 10.0f, 0.72f);

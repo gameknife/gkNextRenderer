@@ -12,6 +12,7 @@
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/ScreenShotService.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Editor/FontLoader.hpp"
@@ -26,7 +27,6 @@
 #include "Engine/Utilities/Localization.hpp"
 #include "Engine/Utilities/ImGui.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
-#include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Vulkan/Allocator.hpp"
@@ -689,36 +689,28 @@ void NextRendererGameInstance::OnInitUI()
 
 void NextRendererGameInstance::RequestScreenshot(bool openFolder, const std::string& tag)
 {
-    if (isTakingScreenshot_)
+    if (isTakingScreenshot_ || GetEngine().GetScreenShotService().IsBusy())
     {
         return;
     }
 
-    std::string folderPath = Utilities::FileHelper::GetPlatformFilePath("screenshots");
-    Utilities::FileHelper::EnsureDirectoryExists(folderPath);
-
-    auto now = std::chrono::system_clock::now();
-    std::time_t in_time_t = std::chrono::system_clock::to_time_t(now);
-    std::tm* tm_ptr = std::localtime(&in_time_t);
-    std::string timestamp = fmt::format("{:%Y-%m-%d_%H-%M-%S}", *tm_ptr);
-    std::string suffix = tag.empty() ? "" : "_" + tag;
-    std::string filename = (std::filesystem::path(folderPath) / (timestamp + suffix)).string();
-
     isTakingScreenshot_ = true;
-    GetEngine().RequestScreenShot({.filename = filename});
-    GetEngine().AddTickedTask([this, folderPath, openFolder](double) {
-        if (GetEngine().IsCapturingScreenShot())
-        {
-            return false;
-        }
-
+    Runtime::FScreenShotService::FRequest request;
+    request.tag = tag;
+    request.onCompleted = [this, openFolder](const std::string&) {
         if (openFolder)
         {
+            const std::string folderPath = GetEngine().GetScreenShotService().GetDirectory();
+            GetEngine().GetScreenShotService().EnsureDirectory();
             NextRenderer::OSCommand(folderPath.c_str());
         }
         isTakingScreenshot_ = false;
-        return true;
-    });
+    };
+
+    if (!GetEngine().GetScreenShotService().Request(std::move(request)))
+    {
+        isTakingScreenshot_ = false;
+    }
 }
 
 bool NextRendererGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
@@ -1563,7 +1555,9 @@ void NextRendererGameInstance::DrawTitleBar(const FGameUiFrameContext& context, 
             }
             if (ImGui::MenuItem("Open Screenshot Folder"))
             {
-                RequestScreenshot(true, "");
+                GetEngine().GetScreenShotService().EnsureDirectory();
+                const std::string folderPath = GetEngine().GetScreenShotService().GetDirectory();
+                NextRenderer::OSCommand(folderPath.c_str());
             }
             ImGui::EndMenu();
         }
@@ -1585,7 +1579,7 @@ void NextRendererGameInstance::DrawTitleBar(const FGameUiFrameContext& context, 
             UpdateMenuRight();
         }
 
-        if (ImGui::BeginMenu("Capture"))
+        if (ImGui::BeginMenu("Screenshot"))
         {
             UpdateMenuRight();
             if (ImGui::MenuItem("Screenshot"))
@@ -1659,7 +1653,8 @@ void NextRendererGameInstance::DrawBottomStatusBar(FRendererUiState& uiState)
                                          },
                                          uiState.memoryStatisticsPanelOpen,
                                          []() { Modules::LiveCoding::RequestCppReload(); },
-                                         Modules::LiveCoding::IsCppLiveCodingAvailable());
+                                         Modules::LiveCoding::IsCppLiveCodingAvailable(),
+                                         [this]() { RequestScreenshot(false, ""); });
 }
 
 void NextRendererGameInstance::DrawMemoryStatisticsPanel(FRendererUiState& uiState)

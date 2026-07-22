@@ -11,6 +11,7 @@
 #include "Engine/Runtime/Config/EngineCVars.hpp"
 #include "Engine/Runtime/Subsystems/NextLocalization.hpp"
 #include "Engine/Runtime/ScreenShot.hpp"
+#include "Engine/Runtime/ScreenShotService.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Interface/UiOverlay.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
@@ -166,7 +167,10 @@ namespace
         }
 
         const auto now = std::time(nullptr);
-        return fmt::format("{}_{:%Y-%m-%d-%H-%M-%S}", defaultPrefix, *std::localtime(&now));
+        const std::string filename = fmt::format("{}_{:%Y-%m-%d-%H-%M-%S}", defaultPrefix, *std::localtime(&now));
+        const std::string directory = Utilities::FileHelper::GetPlatformFilePath("screenshots");
+        Utilities::FileHelper::EnsureDirectoryExists(directory);
+        return (std::filesystem::path(directory) / filename).string();
     }
 } // namespace
 
@@ -279,6 +283,7 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     Reflection::RegisterAllReflection();
 
     status_ = NextRenderer::EApplicationStatus::Starting;
+    screenShotService_ = std::make_unique<Runtime::FScreenShotService>(*this);
 
     services_.packageFileSystem.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
     {

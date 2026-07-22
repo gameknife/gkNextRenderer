@@ -1,5 +1,6 @@
 #include "BrickPlayerUserInterface.hpp"
 #include "BrickPlayerGameInstance.hpp"
+#include "Engine/Runtime/ScreenShotService.hpp"
 #include "Engine/Utilities/ImGui.hpp"
 #include <imgui_internal.h>
 
@@ -144,7 +145,7 @@ void BrickPlayerUserInterface::RenderTitleBar()
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_CAMERA, ImVec2(titleBarHeight, titleBarHeight)))
         {
-            gameInstance_->GetEngine().RequestScreenShot({});
+            gameInstance_->GetEngine().GetScreenShotService().Request();
         }
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Take a Screenshot into the screenshots folder");
