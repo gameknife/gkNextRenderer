@@ -19,7 +19,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     FPathTracingRenderer renderer;
     SharcRuntimeParameters params = SharcGetRuntimeParameters();
-    renderer.ExitProbability = 0.05f;
+    renderer.ExitProbability = 0.01f;
     renderer.ExitAfterFirst = false;
     renderer.HitNormalOffset = 0.001f * Bindless.GetGpuscene().Camera->SceneEpsilonScale;
     renderer.SampleDownscale = 1;
