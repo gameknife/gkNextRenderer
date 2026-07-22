@@ -70,7 +70,6 @@ public:
         uint32_t accumulateFrames = 0;
         bool sync = false;
         bool includeUi = false;
-        bool fast = false;
     };
 
     using FHotReloadStatus = Runtime::FShaderHotReloadStatus;
@@ -337,10 +336,13 @@ private:
         FScreenShotSpec pending{};
         uint32_t captureFramesRemaining = 0;
         uint32_t queuedRequests = 0;
+        bool captureSubmitted = false;
+        uint64_t captureSubmitSerial = 0;
+        bool exportPending = false;
         bool previousProgressiveEnabled = false;
         uint32_t previousProgressiveWarmupFrames = 0;
 
-        bool IsCapturing() const { return queuedRequests > 0 || hasPending; }
+        bool IsCapturing() const { return queuedRequests > 0 || hasPending || exportPending; }
     };
 
     // Main-thread task queues

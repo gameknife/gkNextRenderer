@@ -68,7 +68,6 @@ private:
     double loadTimeoutSeconds_ = 20.0;
     std::string baselineDir_ = "assets/visual_test_baselines";
     int diffThreshold_ = 5;
-    bool useFastCapture_ = true;
     bool useSceneList_ = true;
     bool updateBaseline_ = false;
     std::vector<std::string> includeExtensions_;

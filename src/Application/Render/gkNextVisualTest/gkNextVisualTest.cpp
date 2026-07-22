@@ -291,11 +291,6 @@ bool VisualTestGameInstance::LoadConfig()
             diffThreshold_ = config["diffThreshold"].get<int>();
         }
 
-        if (config.contains("useFastCapture"))
-        {
-            useFastCapture_ = config["useFastCapture"].get<bool>();
-        }
-
         if (config.contains("useSceneList"))
         {
             useSceneList_ = config["useSceneList"].get<bool>();
@@ -450,7 +445,7 @@ void VisualTestGameInstance::CaptureAndAdvance()
         captureRenderTimeSeconds_ = std::chrono::duration<double>(
             std::chrono::steady_clock::now() - sceneStartTime_).count();
         captureRequested_ = true;
-        GetEngine().RequestScreenShot({.filename = screenshotPath, .fast = useFastCapture_});
+        GetEngine().RequestScreenShot({.filename = screenshotPath});
         return;
     }
 
@@ -690,7 +685,7 @@ void VisualTestGameInstance::GenerateReport()
 #endif
     report << fmt::format("**GPU**: {}  \n", deviceProp.deviceName);
     report << fmt::format("**Renderer**: {}  \n\n", GetRendererName());
-    report << fmt::format("**Capture Mode**: {}  \n", useFastCapture_ ? "Fast JPG" : "Standard JPG");
+    report << "**Capture Mode**: Asynchronous screenshot export  \n";
     report << fmt::format("**Default Frames**: {}  \n", defaultFrames_);
     report << fmt::format("**Baseline Directory**: `{}`  \n", baselineDir_);
     report << fmt::format("**Diff Threshold**: {}  \n", diffThreshold_);
@@ -778,7 +773,7 @@ void VisualTestGameInstance::GenerateHtmlReport()
     report << "<h1>Visual Test Report</h1>";
     report << "<div class=\"meta\">";
     report << "<div><b>Renderer:</b> " << HtmlEscape(GetRendererName()) << "</div>";
-    report << "<div><b>Capture Mode:</b> " << (useFastCapture_ ? "Fast JPG" : "Standard JPG") << "</div>";
+    report << "<div><b>Capture Mode:</b> Asynchronous screenshot export</div>";
     report << "<div><b>Baseline Directory:</b> <code>" << HtmlEscape(baselineDir_) << "</code></div>";
     report << "<div><b>Diff Threshold:</b> " << diffThreshold_ << "</div>";
     report << "<div><b>Update Baseline:</b> " << (updateBaseline_ ? "true" : "false") << "</div>";
@@ -897,7 +892,6 @@ void VisualTestGameInstance::GenerateAgentManifest()
     manifest["renderer"] = GetRendererName();
     manifest["outputDir"] = outputDir_;
     manifest["defaultFramesToWait"] = defaultFrames_;
-    manifest["useFastCapture"] = useFastCapture_;
     manifest["baselineDir"] = baselineDir_;
     manifest["diffThreshold"] = diffThreshold_;
     manifest["updateBaseline"] = updateBaseline_;

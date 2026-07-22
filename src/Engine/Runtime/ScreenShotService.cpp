@@ -51,7 +51,6 @@ namespace Runtime
             .filename = filename,
             .accumulateFrames = request.accumulateFrames,
             .includeUi = request.includeUi,
-            .fast = request.fast,
         });
 
         engine_.AddTickedTask([this, filename, onCompleted = std::move(request.onCompleted)](double) mutable

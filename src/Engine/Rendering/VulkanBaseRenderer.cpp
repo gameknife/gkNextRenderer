@@ -896,6 +896,10 @@ namespace Vulkan
         screenshot_.imageMemory.reset(new DeviceMemory(
             screenshot_.image->
             AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+        screenshot_.captureRequested = false;
+        screenshot_.captureReady = false;
+        screenshot_.initialized = false;
+        screenshot_.captureSubmitSerial = 0;
         ctx_.device->DebugUtils().SetObjectName(screenshot_.image->Handle(), "Screenshot Image");
         screenshot_.imageMemory->SetName("Screenshot Memory");
 
@@ -1312,6 +1316,10 @@ namespace Vulkan
         
         screenshot_.image.reset();
         screenshot_.imageMemory.reset();
+        screenshot_.captureRequested = false;
+        screenshot_.captureReady = false;
+        screenshot_.initialized = false;
+        screenshot_.captureSubmitSerial = 0;
         frameGeneration_.hudlessImages.clear();
         temporalPostFilter_.pingImages.clear();
         temporalPostFilter_.pongImages.clear();
@@ -1709,6 +1717,7 @@ namespace Vulkan
                 screenshot_.captureRequested = false;
                 screenshot_.captureReady = true;
                 screenshot_.initialized = true;
+                screenshot_.captureSubmitSerial = frame_.recordingSubmitSerial;
             }
         }
         frame_.commandBuffers->End(frame_.currentFrame);

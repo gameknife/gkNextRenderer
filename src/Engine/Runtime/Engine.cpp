@@ -944,7 +944,7 @@ void NextEngine::RequestScreenShot(FScreenShotSpec spec)
 {
     ++screenShot_.queuedRequests;
     AddTickedTask([this, spec = std::move(spec)](double) mutable {
-        if (screenShot_.hasPending)
+        if (screenShot_.hasPending || screenShot_.exportPending)
         {
             return false;
         }
@@ -968,6 +968,8 @@ void NextEngine::RequestScreenShot(FScreenShotSpec spec)
             screenShot_.captureFramesRemaining = 0;
         }
         screenShot_.pending = std::move(spec);
+        screenShot_.captureSubmitted = false;
+        screenShot_.captureSubmitSerial = 0;
         screenShot_.hasPending = true;
         return true;
     });
@@ -975,7 +977,8 @@ void NextEngine::RequestScreenShot(FScreenShotSpec spec)
 
 bool NextEngine::ShouldCaptureScreenShotThisFrame() const
 {
-    return screenShot_.hasPending && screenShot_.captureFramesRemaining <= 1;
+    return screenShot_.hasPending && !screenShot_.captureSubmitted &&
+        screenShot_.captureFramesRemaining <= 1;
 }
 
 void NextEngine::AdvanceScreenShotCapture()
@@ -992,10 +995,26 @@ void NextEngine::AdvanceScreenShotCapture()
     }
 
     screenShot_.captureFramesRemaining = 0;
+    if (!screenShot_.captureSubmitted)
+    {
+        if (renderer_->IsScreenShotCaptureReady())
+        {
+            screenShot_.captureSubmitted = true;
+            screenShot_.captureSubmitSerial = renderer_->ScreenShotCaptureSubmitSerial();
+        }
+        return;
+    }
+
+    if (renderer_->CompletedSubmitSerial() < screenShot_.captureSubmitSerial)
+    {
+        return;
+    }
+
+    screenShot_.exportPending = true;
     SaveScreenShot(screenShot_.pending);
     if (screenShot_.pending.accumulateFrames > 0)
     {
-        spdlog::info("High quality capture saved: {} ({} frames accumulated)",
+        spdlog::info("High quality capture queued: {} ({} frames accumulated)",
                      screenShot_.pending.filename, screenShot_.pending.accumulateFrames);
 
         progressiveRender_.enabled = screenShot_.previousProgressiveEnabled;
@@ -1007,16 +1026,9 @@ void NextEngine::AdvanceScreenShotCapture()
 
 void NextEngine::SaveScreenShot(const FScreenShotSpec& spec)
 {
-    renderer_->Device().WaitIdle();
-    if (spec.fast)
-    {
-        Runtime::ScreenShot::SaveSwapChainToFileFast(
-            renderer_.get(), spec.filename, spec.x, spec.y, spec.width, spec.height);
-        return;
-    }
-
     Runtime::ScreenShot::SaveSwapChainToFile(
-        renderer_.get(), spec.filename, spec.x, spec.y, spec.width, spec.height);
+        renderer_.get(), spec.filename, spec.x, spec.y, spec.width, spec.height,
+        [this]() { screenShot_.exportPending = false; });
 }
 
 glm::ivec2 NextEngine::GetMonitorSize() const
@@ -1156,6 +1168,13 @@ void NextEngine::OnRendererCreateSwapChain()
 
 void NextEngine::OnRendererDeleteSwapChain()
 {
+    if (screenShot_.hasPending)
+    {
+        // Swapchain recreation invalidates the capture image and its submit
+        // serial. Keep the request alive and retry it on the new swapchain.
+        screenShot_.captureSubmitted = false;
+        screenShot_.captureSubmitSerial = 0;
+    }
     if (userInterface_.get() != nullptr)
     {
         userInterface_->OnDestroySurface();

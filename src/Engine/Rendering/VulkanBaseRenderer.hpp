@@ -222,6 +222,8 @@ namespace Vulkan
         const FFrameRenderSettings& FrameSettings() const { return frameSettings_; }
         DeviceMemory* GetScreenShotMemory() const {return screenshot_.imageMemory.get();}
         const Image* GetScreenShotImage() const { return screenshot_.image.get(); }
+        bool IsScreenShotCaptureReady() const { return screenshot_.captureReady; }
+        uint64_t ScreenShotCaptureSubmitSerial() const { return screenshot_.captureSubmitSerial; }
 
         // Scene
         Assets::Scene& GetScene();
@@ -506,6 +508,7 @@ namespace Vulkan
             bool captureRequested = false;
             bool captureReady = false;
             bool initialized = false;
+            uint64_t captureSubmitSerial = 0;
         };
 
         struct FrameGenerationResources

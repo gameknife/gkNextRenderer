@@ -5,7 +5,6 @@
   "loadTimeoutSeconds": 20.0,
   "baselineDir": "assets/visual_test_baselines",
   "diffThreshold": 5,
-  "useFastCapture": true,
   "useSceneList": false,
   "includeExtensions": [
     ".proc",

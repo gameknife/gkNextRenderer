@@ -18,7 +18,6 @@ namespace Runtime
             std::string tag;
             uint32_t accumulateFrames = 0;
             bool includeUi = false;
-            bool fast = false;
             std::function<void(const std::string& path)> onCompleted;
         };
 

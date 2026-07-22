@@ -1,17 +1,22 @@
 #include "Engine/Runtime/ScreenShot.hpp"
-#include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Utilities/Exception.hpp"
 
-#include "curl/curl.h"
+#include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
+#include "Engine/Utilities/Exception.hpp"
+#include "Engine/Vulkan/MemoryAndShader.hpp"
+#include "Engine/Vulkan/SwapChain.hpp"
+
 #include "stb_image_write.h"
 
 #define _USE_MATH_DEFINES
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
-#include <filesystem>
-#include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
-#include "Engine/Vulkan/SwapChain.hpp"
+#include <fstream>
+#include <string>
+#include <utility>
+#include <vector>
 
 #if WITH_AVIF
 #include "avif/avif.h"
@@ -21,7 +26,24 @@ namespace Runtime::ScreenShot
 {
     namespace
     {
-        float HalfToFloat(uint16_t value)
+        struct FCaptureRect final
+        {
+            uint32_t x = 0;
+            uint32_t y = 0;
+            VkExtent2D extent{};
+        };
+
+        struct FRawScreenshot final
+        {
+            VkExtent2D extent{};
+            uint32_t sourcePixelBytes = 0;
+            uint32_t sourceRowBytes = 0;
+            bool hdr10 = false;
+            bool extendedLinear = false;
+            std::vector<uint8_t> pixels;
+        };
+
+        float HalfToFloat(const uint16_t value)
         {
             const uint32_t sign = (value & 0x8000u) << 16u;
             int32_t exponent = static_cast<int32_t>((value >> 10u) & 0x1fu);
@@ -82,283 +104,290 @@ namespace Runtime::ScreenShot
             subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             subresource.mipLevel = 0;
             subresource.arrayLayer = 0;
-            vkGetImageSubresourceLayout(
-                renderer->Device().Handle(),
-                image->Handle(),
-                &subresource,
-                &layout);
+            vkGetImageSubresourceLayout(renderer->Device().Handle(), image->Handle(), &subresource, &layout);
             return layout;
         }
 
-        // Copies the captured swapchain rect into a tightly packed buffer, invoking
-        // convert(srcPixel, dstPixel) per pixel; dst advances by dstPixelBytes.
-        template <typename ConvertFn>
-        void ConvertScreenshotRect(Vulkan::VulkanBaseRenderer* renderer, const VkSubresourceLayout& imageLayout,
-                                   const VkExtent2D extent, const int inX, const int inY,
-                                   const uint32_t srcPixelBytes, const uint32_t dstPixelBytes, void* dst,
-                                   ConvertFn&& convert)
+        FCaptureRect ResolveCaptureRect(const VkExtent2D fullExtent,
+                                        const int inX,
+                                        const int inY,
+                                        const int inWidth,
+                                        const int inHeight)
         {
-            Vulkan::DeviceMemory* vkMemory = renderer->GetScreenShotMemory();
-            uint8_t* mappedData = static_cast<uint8_t*>(vkMemory->Map(0, VK_WHOLE_SIZE));
+            const uint32_t x = static_cast<uint32_t>(std::clamp(inX, 0, static_cast<int>(fullExtent.width)));
+            const uint32_t y = static_cast<uint32_t>(std::clamp(inY, 0, static_cast<int>(fullExtent.height)));
+            const uint32_t availableWidth = fullExtent.width - x;
+            const uint32_t availableHeight = fullExtent.height - y;
+
+            FCaptureRect rect;
+            rect.x = x;
+            rect.y = y;
+            rect.extent.width = inWidth > 0
+                ? std::min(static_cast<uint32_t>(inWidth), availableWidth)
+                : availableWidth;
+            rect.extent.height = inHeight > 0
+                ? std::min(static_cast<uint32_t>(inHeight), availableHeight)
+                : availableHeight;
+            return rect;
+        }
+
+        // The GPU copy is already complete when this function is called. Keep this
+        // operation limited to a tightly packed crop so the render thread does not
+        // also pay for conversion, encoding, or filesystem I/O.
+        FRawScreenshot ReadbackScreenshot(Vulkan::VulkanBaseRenderer* renderer,
+                                          const FCaptureRect& rect,
+                                          const Vulkan::ESwapChainOutputMode outputMode)
+        {
+            const VkSubresourceLayout imageLayout = GetScreenShotImageLayout(renderer);
+            if (imageLayout.rowPitch == 0)
+            {
+                Throw(std::runtime_error("screenshot image layout is unavailable"));
+            }
+
+            FRawScreenshot screenshot;
+            screenshot.extent = rect.extent;
+            screenshot.hdr10 = outputMode == Vulkan::ESwapChainOutputMode::HDR10_ST2084;
+            screenshot.extendedLinear = outputMode == Vulkan::ESwapChainOutputMode::ExtendedSrgbLinear;
+            screenshot.sourcePixelBytes = screenshot.extendedLinear ? 8u : 4u;
+            screenshot.sourceRowBytes = rect.extent.width * screenshot.sourcePixelBytes;
+            screenshot.pixels.resize(static_cast<size_t>(screenshot.sourceRowBytes) * rect.extent.height);
+
+            Vulkan::DeviceMemory* memory = renderer->GetScreenShotMemory();
+            if (!memory)
+            {
+                Throw(std::runtime_error("screenshot image memory is unavailable"));
+            }
+
+            const uint8_t* mappedData = static_cast<const uint8_t*>(memory->Map(0, VK_WHOLE_SIZE));
             const uint8_t* imageData = mappedData + imageLayout.offset;
-            const uint32_t srcRowBytes = static_cast<uint32_t>(imageLayout.rowPitch);
-
-            uint8_t* dstBytes = static_cast<uint8_t*>(dst);
-            for (uint32_t y = 0; y < extent.height; y++)
+            for (uint32_t y = 0; y < rect.extent.height; ++y)
             {
-                const uint8_t* srcRow = imageData + (inY + y) * srcRowBytes + inX * srcPixelBytes;
-                for (uint32_t x = 0; x < extent.width; x++)
+                const uint8_t* sourceRow = imageData + (rect.y + y) * imageLayout.rowPitch +
+                    rect.x * screenshot.sourcePixelBytes;
+                uint8_t* destinationRow = screenshot.pixels.data() +
+                    static_cast<size_t>(y) * screenshot.sourceRowBytes;
+                std::memcpy(destinationRow, sourceRow, screenshot.sourceRowBytes);
+            }
+            memory->Unmap();
+            return screenshot;
+        }
+
+        template <typename ConvertFn>
+        std::vector<uint8_t> ConvertScreenshot(const FRawScreenshot& screenshot,
+                                               const uint32_t destinationPixelBytes,
+                                               ConvertFn&& convert)
+        {
+            std::vector<uint8_t> destination(
+                static_cast<size_t>(screenshot.extent.width) * screenshot.extent.height * destinationPixelBytes);
+            uint8_t* destinationBytes = destination.data();
+            for (uint32_t y = 0; y < screenshot.extent.height; ++y)
+            {
+                const uint8_t* sourceRow = screenshot.pixels.data() +
+                    static_cast<size_t>(y) * screenshot.sourceRowBytes;
+                for (uint32_t x = 0; x < screenshot.extent.width; ++x)
                 {
-                    convert(srcRow + x * srcPixelBytes, dstBytes);
-                    dstBytes += dstPixelBytes;
+                    convert(sourceRow + x * screenshot.sourcePixelBytes, destinationBytes);
+                    destinationBytes += destinationPixelBytes;
                 }
             }
-            vkMemory->Unmap();
-        }
-    }
-
-    void SaveSwapChainToFileFast(Vulkan::VulkanBaseRenderer* renderer, const std::string& filePathWithoutExtension, int inX, int inY, int inWidth, int inHeight)
-    {
-        // screenshot stuffs
-        const Vulkan::SwapChain& swapChain = renderer->SwapChain();
-        if (swapChain.IsHDR())
-        {
-            // The fast path assumes 8-bit SDR swapchain pixels. HDR swapchains use packed 10-bit output,
-            // so re-use the standard path's tone-mapped export to avoid color corruption.
-            SaveSwapChainToFile(renderer, filePathWithoutExtension, inX, inY, inWidth, inHeight);
-            return;
+            return destination;
         }
 
-        auto orgExtent = swapChain.Extent();
-        auto extent = swapChain.Extent();
-
-        if(inWidth > 0 && inHeight > 0)
+        void EncodeAndWriteScreenshot(FRawScreenshot screenshot, const std::string& filePathWithoutExtension)
         {
-            extent.width = inWidth;
-            extent.height = inHeight;
-        }
-
-        // capture and export
-        renderer->CaptureScreenShot();
-    
-        uint32_t dataBytes = 0;
-        uint32_t rowBytes = 0;
-        constexpr uint32_t kCompCnt = 3;
-        dataBytes = extent.width * extent.height * kCompCnt;
-        rowBytes = extent.width * 3 * sizeof(uint8_t);
-    
-        Vulkan::DeviceMemory* vkMemory = renderer->GetScreenShotMemory();
-        const VkSubresourceLayout imageLayout = GetScreenShotImageLayout(renderer);
-        const uint32_t srcRowBytes = static_cast<uint32_t>(imageLayout.rowPitch);
-        const uint32_t rawDataBytes = srcRowBytes * orgExtent.height;
-        uint8_t* mappedGPUData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
-        uint8_t* mappedData = (uint8_t*)malloc(rawDataBytes);
-        memcpy(mappedData, mappedGPUData + imageLayout.offset, rawDataBytes);
-        vkMemory->Unmap();
-        Tasks::TaskCoordinator::GetInstance()->AddTask([=](Tasks::ResTask& task)->void
-        {
-            uint8_t* dataview = (uint8_t*)malloc(dataBytes);
+            constexpr uint32_t kComponentCount = 3;
+            const size_t pixelCount = static_cast<size_t>(screenshot.extent.width) * screenshot.extent.height;
+            if (pixelCount == 0)
             {
-                uint32_t yDelta = extent.width * kCompCnt;
-                uint32_t xDelta = kCompCnt;
-                uint32_t srcYDelta = srcRowBytes;
-                uint32_t srcXDelta = 4;
-            
-                uint32_t yy = 0;
-                uint32_t xx = 0;
-                uint32_t srcY = inY * srcYDelta;
-                uint32_t srcX = inX * srcXDelta;
-            
-                for (uint32_t y = 0; y < extent.height; y++)
-                {
-                    xx = 0;
-                    srcX = inX * srcXDelta;
-                    for (uint32_t x = 0; x < extent.width; x++)
+                spdlog::error("Cannot save an empty screenshot: {}", filePathWithoutExtension);
+                return;
+            }
+
+            if (screenshot.hdr10)
+            {
+                // A2B10G10R10 -> packed RGB 10-bit-in-uint16.
+                screenshot.pixels = ConvertScreenshot(screenshot, kComponentCount * sizeof(uint16_t),
+                    [](const uint8_t* source, uint8_t* destination)
                     {
-                        uint32_t* pInPixel = (uint32_t*)&mappedData[srcY + srcX];
-                        uint32_t uInPixel = *pInPixel;
-                        dataview[yy + xx] = (uInPixel & (0b11111111 << 16)) >> 16;
-                        dataview[yy + xx + 1] = (uInPixel & (0b11111111 << 8)) >> 8;
-                        dataview[yy + xx + 2] = (uInPixel & (0b11111111 << 0)) >> 0;
-        
-                        srcX += srcXDelta;
-                        xx += xDelta;
-                    }
-                    srcY += srcYDelta;
-                    yy += yDelta;
+                        const uint32_t inputPixel = *reinterpret_cast<const uint32_t*>(source);
+                        uint16_t* outputPixel = reinterpret_cast<uint16_t*>(destination);
+                        outputPixel[2] = static_cast<uint16_t>((inputPixel >> 20u) & 0x3ffu);
+                        outputPixel[1] = static_cast<uint16_t>((inputPixel >> 10u) & 0x3ffu);
+                        outputPixel[0] = static_cast<uint16_t>(inputPixel & 0x3ffu);
+                    });
+            }
+            else if (screenshot.extendedLinear)
+            {
+                // RGBA16F linear -> sRGB bytes.
+                screenshot.pixels = ConvertScreenshot(screenshot, kComponentCount,
+                    [](const uint8_t* source, uint8_t* destination)
+                    {
+                        const uint16_t* inputPixel = reinterpret_cast<const uint16_t*>(source);
+                        destination[0] = LinearToSrgbByte(HalfToFloat(inputPixel[0]));
+                        destination[1] = LinearToSrgbByte(HalfToFloat(inputPixel[1]));
+                        destination[2] = LinearToSrgbByte(HalfToFloat(inputPixel[2]));
+                    });
+            }
+            else
+            {
+                // B8G8R8A8 -> RGB bytes.
+                screenshot.pixels = ConvertScreenshot(screenshot, kComponentCount,
+                    [](const uint8_t* source, uint8_t* destination)
+                    {
+                        const uint32_t inputPixel = *reinterpret_cast<const uint32_t*>(source);
+                        destination[0] = static_cast<uint8_t>((inputPixel >> 16u) & 0xffu);
+                        destination[1] = static_cast<uint8_t>((inputPixel >> 8u) & 0xffu);
+                        destination[2] = static_cast<uint8_t>(inputPixel & 0xffu);
+                    });
+            }
+
+#if WITH_AVIF
+            avifImage* image = avifImageCreate(
+                screenshot.extent.width,
+                screenshot.extent.height,
+                screenshot.hdr10 ? 10 : 8,
+                AVIF_PIXEL_FORMAT_YUV444);
+            if (!image)
+            {
+                spdlog::error("Failed to create AVIF image: {}", filePathWithoutExtension);
+                return;
+            }
+
+            image->yuvRange = AVIF_RANGE_FULL;
+            image->colorPrimaries = screenshot.hdr10 ? AVIF_COLOR_PRIMARIES_BT2020 : AVIF_COLOR_PRIMARIES_BT709;
+            image->transferCharacteristics = screenshot.hdr10
+                ? AVIF_TRANSFER_CHARACTERISTICS_SMPTE2084
+                : AVIF_TRANSFER_CHARACTERISTICS_BT709;
+            image->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_IDENTITY;
+            image->clli.maxCLL = 600;
+            image->clli.maxPALL = 0;
+
+            avifRGBImage rgbImage{};
+            avifRGBImageSetDefaults(&rgbImage, image);
+            rgbImage.format = AVIF_RGB_FORMAT_RGB;
+            rgbImage.ignoreAlpha = AVIF_TRUE;
+            rgbImage.pixels = screenshot.pixels.data();
+            rgbImage.rowBytes = screenshot.extent.width * kComponentCount * (screenshot.hdr10 ? sizeof(uint16_t) : sizeof(uint8_t));
+
+            const avifResult convertResult = avifImageRGBToYUV(image, &rgbImage);
+            if (convertResult != AVIF_RESULT_OK)
+            {
+                spdlog::error("Failed to convert screenshot to AVIF: {} ({})",
+                              filePathWithoutExtension, avifResultToString(convertResult));
+                avifImageDestroy(image);
+                return;
+            }
+
+            avifEncoder* encoder = avifEncoderCreate();
+            if (!encoder)
+            {
+                spdlog::error("Failed to create AVIF encoder: {}", filePathWithoutExtension);
+                avifImageDestroy(image);
+                return;
+            }
+
+            encoder->quality = 80;
+            encoder->qualityAlpha = AVIF_QUALITY_LOSSLESS;
+            encoder->speed = AVIF_SPEED_FASTEST;
+            avifRWData output = AVIF_DATA_EMPTY;
+            const avifResult addImageResult = avifEncoderAddImage(encoder, image, 1, AVIF_ADD_IMAGE_FLAG_SINGLE);
+            const avifResult encodeResult = addImageResult == AVIF_RESULT_OK
+                ? avifEncoderFinish(encoder, &output)
+                : addImageResult;
+            if (encodeResult != AVIF_RESULT_OK)
+            {
+                spdlog::error("Failed to encode screenshot as AVIF: {} ({})",
+                              filePathWithoutExtension, avifResultToString(encodeResult));
+                avifRWDataFree(&output);
+                avifEncoderDestroy(encoder);
+                avifImageDestroy(image);
+                return;
+            }
+
+            const std::string filename = filePathWithoutExtension + ".avif";
+            std::ofstream file(filename, std::ios::out | std::ios::binary);
+            if (file.is_open())
+            {
+                file.write(reinterpret_cast<const char*>(output.data), static_cast<std::streamsize>(output.size));
+            }
+            else
+            {
+                spdlog::error("Failed to open screenshot file: {}", filename);
+            }
+            file.close();
+            avifRWDataFree(&output);
+            avifEncoderDestroy(encoder);
+            avifImageDestroy(image);
+#else
+            const std::string filename = filePathWithoutExtension + ".jpg";
+            if (screenshot.hdr10)
+            {
+                const uint16_t* hdrData = reinterpret_cast<const uint16_t*>(screenshot.pixels.data());
+                std::vector<uint8_t> sdrData(pixelCount * kComponentCount);
+                for (size_t index = 0; index < sdrData.size(); ++index)
+                {
+                    float scaled = static_cast<float>(hdrData[index]) / 1300.0f * 2.0f;
+                    scaled = scaled * scaled * 255.0f;
+                    sdrData[index] = static_cast<uint8_t>(std::min(scaled, 255.0f));
+                }
+                if (stbi_write_jpg(filename.c_str(), static_cast<int>(screenshot.extent.width),
+                                   static_cast<int>(screenshot.extent.height), kComponentCount,
+                                   sdrData.data(), 91) == 0)
+                {
+                    spdlog::error("Failed to write screenshot: {}", filename);
                 }
             }
-            std::string filename = filePathWithoutExtension + ".jpg";
-            stbi_write_jpg(filename.c_str(), extent.width, extent.height, kCompCnt, dataview, 91);
-        
-            free(dataview);
-            free(mappedData);
-        },
-        [](Tasks::ResTask& task)
-        {
-
-        },1);
-    }
-
-    void SaveSwapChainToFile(Vulkan::VulkanBaseRenderer* renderer, const std::string& filePathWithoutExtension, int inX, int inY, int inWidth, int inHeight)
-    {
-        // screenshot stuffs
-        const Vulkan::SwapChain& swapChain = renderer->SwapChain();
-
-        auto orgExtent = swapChain.Extent();
-        auto extent = swapChain.Extent();
-
-        if(inWidth > 0 && inHeight > 0)
-        {
-            extent.width = inWidth;
-            extent.height = inHeight;
-        }
-
-        // capture and export
-        renderer->CaptureScreenShot();
-
-        // too slow on main thread, copy out buffer and use thread to save
-    
-        // prepare data
-        void* data = nullptr;
-        uint32_t dataBytes = 0;
-        uint32_t rowBytes = 0;
-        const VkSubresourceLayout imageLayout = GetScreenShotImageLayout(renderer);
-        const bool hdr10Screenshot = swapChain.OutputMode() == Vulkan::ESwapChainOutputMode::HDR10_ST2084;
-        const bool extendedLinearScreenshot =
-            swapChain.OutputMode() == Vulkan::ESwapChainOutputMode::ExtendedSrgbLinear;
-
-        constexpr uint32_t kCompCnt = 3;
-        if(hdr10Screenshot)
-        {
-            // A2B10G10R10 -> packed RGB 10-bit-in-uint16.
-            dataBytes = extent.width * extent.height * kCompCnt * sizeof(uint16_t);
-            rowBytes = extent.width * kCompCnt * sizeof(uint16_t);
-            data = malloc(dataBytes);
-            ConvertScreenshotRect(renderer, imageLayout, extent, inX, inY, 4, kCompCnt * sizeof(uint16_t), data,
-                [](const uint8_t* src, uint8_t* dst)
-                {
-                    const uint32_t uInPixel = *reinterpret_cast<const uint32_t*>(src);
-                    uint16_t* outPixel = reinterpret_cast<uint16_t*>(dst);
-                    outPixel[2] = (uInPixel & (0b1111111111 << 20)) >> 20;
-                    outPixel[1] = (uInPixel & (0b1111111111 << 10)) >> 10;
-                    outPixel[0] = (uInPixel & (0b1111111111 << 0)) >> 0;
-                });
-        }
-        else if (extendedLinearScreenshot)
-        {
-            // RGBA16F linear -> sRGB bytes.
-            dataBytes = extent.width * extent.height * kCompCnt;
-            rowBytes = extent.width * kCompCnt * sizeof(uint8_t);
-            data = malloc(dataBytes);
-            ConvertScreenshotRect(renderer, imageLayout, extent, inX, inY, 8, kCompCnt, data,
-                [](const uint8_t* src, uint8_t* dst)
-                {
-                    const uint16_t* inPixel = reinterpret_cast<const uint16_t*>(src);
-                    dst[0] = LinearToSrgbByte(HalfToFloat(inPixel[0]));
-                    dst[1] = LinearToSrgbByte(HalfToFloat(inPixel[1]));
-                    dst[2] = LinearToSrgbByte(HalfToFloat(inPixel[2]));
-                });
-        }
-        else
-        {
-            // B8G8R8A8 -> RGB bytes.
-            dataBytes = extent.width * extent.height * kCompCnt;
-            rowBytes = extent.width * kCompCnt * sizeof(uint8_t);
-            data = malloc(dataBytes);
-            ConvertScreenshotRect(renderer, imageLayout, extent, inX, inY, 4, kCompCnt, data,
-                [](const uint8_t* src, uint8_t* dst)
-                {
-                    const uint32_t uInPixel = *reinterpret_cast<const uint32_t*>(src);
-                    dst[0] = (uInPixel & (0b11111111 << 16)) >> 16;
-                    dst[1] = (uInPixel & (0b11111111 << 8)) >> 8;
-                    dst[2] = (uInPixel & (0b11111111 << 0)) >> 0;
-                });
-        }
-        
-#if WITH_AVIF
-        avifImage* image = avifImageCreate(extent.width, extent.height, hdr10Screenshot ? 10 : 8, AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
-        if (!image)
-        {
-            Throw(std::runtime_error("avif image creation failed"));
-        }
-        image->yuvRange = AVIF_RANGE_FULL;
-        image->colorPrimaries = hdr10Screenshot ? AVIF_COLOR_PRIMARIES_BT2020 : AVIF_COLOR_PRIMARIES_BT709;
-        image->transferCharacteristics = hdr10Screenshot ? AVIF_TRANSFER_CHARACTERISTICS_SMPTE2084 : AVIF_TRANSFER_CHARACTERISTICS_BT709;
-        image->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_IDENTITY;
-        image->clli.maxCLL = static_cast<uint16_t>(600); //maxCLLNits;
-        image->clli.maxPALL = 0; //maxFALLNits;
-
-        avifEncoder* encoder = NULL;
-        avifRWData avifOutput = AVIF_DATA_EMPTY;
-
-        avifRGBImage rgbAvifImage{};
-        avifRGBImageSetDefaults(&rgbAvifImage, image);
-        rgbAvifImage.format = AVIF_RGB_FORMAT_RGB;
-        rgbAvifImage.ignoreAlpha = AVIF_TRUE;
-        rgbAvifImage.pixels = (uint8_t*)data;
-        rgbAvifImage.rowBytes = rowBytes;
-
-        avifResult convertResult = avifImageRGBToYUV(image, &rgbAvifImage);
-        if (convertResult != AVIF_RESULT_OK)
-        {
-            Throw(std::runtime_error("Failed to convert RGB to YUV: " + std::string(avifResultToString(convertResult))));
-        }
-        encoder = avifEncoderCreate();
-        if (!encoder)
-        {
-            Throw(std::runtime_error("Failed to create encoder"));
-        }
-        encoder->quality = 80;
-        encoder->qualityAlpha = AVIF_QUALITY_LOSSLESS;
-        encoder->speed = AVIF_SPEED_FASTEST;
-
-        avifResult addImageResult = avifEncoderAddImage(encoder, image, 1, AVIF_ADD_IMAGE_FLAG_SINGLE);
-        if (addImageResult != AVIF_RESULT_OK)
-        {
-            Throw(std::runtime_error("Failed to add image: " + std::string(avifResultToString(addImageResult))));
-        }
-        avifResult finishResult = avifEncoderFinish(encoder, &avifOutput);
-        if (finishResult != AVIF_RESULT_OK)
-        {
-            Throw(std::runtime_error("Failed to finish encoding: " + std::string(avifResultToString(finishResult))));
-        }
-
-        // save to file with scenename
-        std::string filename = filePathWithoutExtension + ".avif";
-        std::ofstream file(filename, std::ios::out | std::ios::binary);
-        if(file.is_open())
-        {
-            file.write(reinterpret_cast<const char*>(avifOutput.data), avifOutput.size);
-        }
-        file.close();
-
-        // send to server
-        //img_encoded = base64_encode(avifOutput.data, avifOutput.size, false);
-#else
-        // save to file with scenename
-        std::string filename = filePathWithoutExtension + ".jpg";
-        
-        // if hdr, transcode 16bit to 8bit
-        if(hdr10Screenshot)
-        {
-            uint16_t* dataview = (uint16_t*)data;
-            uint8_t* sdrData = (uint8_t*)malloc(extent.width * extent.height * kCompCnt);
-            for ( uint32_t i = 0; i < extent.width * extent.height * kCompCnt; i++ )
+            else if (stbi_write_jpg(filename.c_str(), static_cast<int>(screenshot.extent.width),
+                                    static_cast<int>(screenshot.extent.height), kComponentCount,
+                                    screenshot.pixels.data(), 91) == 0)
             {
-                float scaled = dataview[i] / 1300.f * 2.0f;
-                scaled = scaled * scaled;
-                scaled *= 255.f;
-                sdrData[i] = (uint8_t)(std::min(scaled, 255.f));
+                spdlog::error("Failed to write screenshot: {}", filename);
             }
-            stbi_write_jpg(filename.c_str(), extent.width, extent.height, kCompCnt, (const void*)sdrData, 91);
-            free(sdrData);
-        }
-        else
-        {
-            stbi_write_jpg(filename.c_str(), extent.width, extent.height, kCompCnt, (const void*)data, 91);
-        }
 #endif
-        free(data);
+        }
+    } // namespace
+
+    void SaveSwapChainToFile(Vulkan::VulkanBaseRenderer* renderer,
+                             const std::string& filePathWithoutExtension,
+                             const int inX,
+                             const int inY,
+                             const int inWidth,
+                             const int inHeight,
+                             std::function<void()> onCompleted)
+    {
+        const Vulkan::SwapChain& swapChain = renderer->SwapChain();
+        const VkExtent2D fullExtent = swapChain.Extent();
+        const FCaptureRect rect = ResolveCaptureRect(fullExtent, inX, inY, inWidth, inHeight);
+        if (rect.extent.width == 0 || rect.extent.height == 0)
+        {
+            Throw(std::runtime_error("screenshot crop is empty"));
+        }
+
+        renderer->CaptureScreenShot();
+        FRawScreenshot screenshot = ReadbackScreenshot(renderer, rect, swapChain.OutputMode());
+        Tasks::TaskCoordinator::GetInstance()->AddTask(
+            [screenshot = std::move(screenshot), filePathWithoutExtension](Tasks::ResTask&) mutable
+            {
+                try
+                {
+                    EncodeAndWriteScreenshot(std::move(screenshot), filePathWithoutExtension);
+                }
+                catch (const std::exception& exception)
+                {
+                    spdlog::error("Failed to save screenshot {}: {}", filePathWithoutExtension, exception.what());
+                }
+                catch (...)
+                {
+                    spdlog::error("Failed to save screenshot {}: unknown error", filePathWithoutExtension);
+                }
+            },
+            [onCompleted = std::move(onCompleted)](Tasks::ResTask&) mutable
+            {
+                if (onCompleted)
+                {
+                    onCompleted();
+                }
+            },
+            1);
     }
 }
