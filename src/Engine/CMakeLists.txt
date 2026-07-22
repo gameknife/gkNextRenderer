@@ -55,6 +55,7 @@ target_link_libraries(gkNextEngine PRIVATE
     imgui::imgui
     draco::draco
     WebP::webp
+    WebP::libwebpmux
     GPUOpen::VulkanMemoryAllocator
     ${extra_libs}
 )

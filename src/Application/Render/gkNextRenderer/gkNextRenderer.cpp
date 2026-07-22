@@ -584,7 +584,8 @@ void NextRendererGameInstance::EnsureUiFonts(FRendererUiState& uiState, const bo
 
 bool NextRendererGameInstance::DrawRendererUi(const FGameUiFrameContext& context, FRendererUiState& uiState)
 {
-    if (isTakingScreenshot_ && context.surfaceKind == FGameUiFrameContext::ESurfaceKind::MainWindow)
+    if ((isTakingScreenshot_ || isRecordingVideo_) &&
+        context.surfaceKind == FGameUiFrameContext::ESurfaceKind::MainWindow)
     {
         return true;
     }
@@ -710,6 +711,39 @@ void NextRendererGameInstance::RequestScreenshot(bool openFolder, const std::str
     if (!GetEngine().GetScreenShotService().Request(std::move(request)))
     {
         isTakingScreenshot_ = false;
+    }
+}
+
+void NextRendererGameInstance::RequestThreeSecondVideo(
+    const Runtime::FScreenShotService::EAnimationFormat format)
+{
+    if (isTakingScreenshot_ || isRecordingVideo_ || GetEngine().GetScreenShotService().IsBusy())
+    {
+        return;
+    }
+
+    isRecordingVideo_ = true;
+    Runtime::FScreenShotService::FThreeSecondVideoRequest request;
+    request.format = format;
+    request.onCaptureFinished = [this]()
+    {
+        isRecordingVideo_ = false;
+    };
+    request.onCompleted = [this](const std::string& path)
+    {
+        if (path.empty())
+        {
+            spdlog::error("Three-second video recording failed");
+        }
+        else
+        {
+            spdlog::info("Three-second video saved: {}", path);
+        }
+    };
+
+    if (!GetEngine().GetScreenShotService().RequestThreeSecondVideo(std::move(request)))
+    {
+        isRecordingVideo_ = false;
     }
 }
 
@@ -1589,6 +1623,14 @@ void NextRendererGameInstance::DrawTitleBar(const FGameUiFrameContext& context, 
             if (ImGui::MenuItem("Screenshot and Open Folder"))
             {
                 RequestScreenshot(true, "");
+            }
+            if (ImGui::MenuItem("Record 3s GIF"))
+            {
+                RequestThreeSecondVideo(Runtime::FScreenShotService::EAnimationFormat::Gif);
+            }
+            if (ImGui::MenuItem("Record 3s Animated WebP"))
+            {
+                RequestThreeSecondVideo(Runtime::FScreenShotService::EAnimationFormat::AnimatedWebp);
             }
             ImGui::EndMenu();
         }

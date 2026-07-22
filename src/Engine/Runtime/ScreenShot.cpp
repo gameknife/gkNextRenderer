@@ -193,7 +193,9 @@ namespace Runtime::ScreenShot
             return destination;
         }
 
-        void EncodeAndWriteScreenshot(FRawScreenshot screenshot, const std::string& filePathWithoutExtension)
+        void EncodeAndWriteScreenshot(FRawScreenshot screenshot,
+                                      const std::string& filePathWithoutExtension,
+                                      const EFileFormat fileFormat)
         {
             constexpr uint32_t kComponentCount = 3;
             const size_t pixelCount = static_cast<size_t>(screenshot.extent.width) * screenshot.extent.height;
@@ -242,6 +244,8 @@ namespace Runtime::ScreenShot
             }
 
 #if WITH_AVIF
+            if (fileFormat == EFileFormat::Automatic)
+            {
             avifImage* image = avifImageCreate(
                 screenshot.extent.width,
                 screenshot.extent.height,
@@ -318,7 +322,10 @@ namespace Runtime::ScreenShot
             avifRWDataFree(&output);
             avifEncoderDestroy(encoder);
             avifImageDestroy(image);
-#else
+            }
+            else
+#endif
+            {
             const std::string filename = filePathWithoutExtension + ".jpg";
             if (screenshot.hdr10)
             {
@@ -343,7 +350,7 @@ namespace Runtime::ScreenShot
             {
                 spdlog::error("Failed to write screenshot: {}", filename);
             }
-#endif
+            }
         }
     } // namespace
 
@@ -353,7 +360,9 @@ namespace Runtime::ScreenShot
                              const int inY,
                              const int inWidth,
                              const int inHeight,
-                             std::function<void()> onCompleted)
+                             const EFileFormat fileFormat,
+                             std::function<void()> onCompleted,
+                             std::function<void()> onReadbackCompleted)
     {
         const Vulkan::SwapChain& swapChain = renderer->SwapChain();
         const VkExtent2D fullExtent = swapChain.Extent();
@@ -365,12 +374,16 @@ namespace Runtime::ScreenShot
 
         renderer->CaptureScreenShot();
         FRawScreenshot screenshot = ReadbackScreenshot(renderer, rect, swapChain.OutputMode());
+        if (onReadbackCompleted)
+        {
+            onReadbackCompleted();
+        }
         Tasks::TaskCoordinator::GetInstance()->AddTask(
-            [screenshot = std::move(screenshot), filePathWithoutExtension](Tasks::ResTask&) mutable
+            [screenshot = std::move(screenshot), filePathWithoutExtension, fileFormat](Tasks::ResTask&) mutable
             {
                 try
                 {
-                    EncodeAndWriteScreenshot(std::move(screenshot), filePathWithoutExtension);
+                    EncodeAndWriteScreenshot(std::move(screenshot), filePathWithoutExtension, fileFormat);
                 }
                 catch (const std::exception& exception)
                 {

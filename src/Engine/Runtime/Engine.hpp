@@ -18,6 +18,7 @@
 #include "Engine/Runtime/Config/ShowFlags.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
+#include "Engine/Runtime/ScreenShot.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 #include <nlohmann/json_fwd.hpp>
@@ -70,6 +71,8 @@ public:
         uint32_t accumulateFrames = 0;
         bool sync = false;
         bool includeUi = false;
+        Runtime::ScreenShot::EFileFormat fileFormat = Runtime::ScreenShot::EFileFormat::Automatic;
+        bool allowOverlappingExports = false;
     };
 
     using FHotReloadStatus = Runtime::FShaderHotReloadStatus;
@@ -339,6 +342,7 @@ private:
         bool captureSubmitted = false;
         uint64_t captureSubmitSerial = 0;
         bool exportPending = false;
+        uint32_t asyncExportsInFlight = 0;
         bool previousProgressiveEnabled = false;
         uint32_t previousProgressiveWarmupFrames = 0;
 

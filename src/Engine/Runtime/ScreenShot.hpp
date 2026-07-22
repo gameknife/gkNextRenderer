@@ -7,11 +7,19 @@
 
 namespace Runtime::ScreenShot
 {
+    enum class EFileFormat
+    {
+        Automatic,
+        Jpeg,
+    };
+
     void SaveSwapChainToFile(Vulkan::VulkanBaseRenderer* renderer_,
                              const std::string& filePathWithoutExtension,
                              int x,
                              int y,
                              int width,
                              int height,
-                             std::function<void()> onCompleted = {});
+                             EFileFormat fileFormat = EFileFormat::Automatic,
+                             std::function<void()> onCompleted = {},
+                             std::function<void()> onReadbackCompleted = {});
 };

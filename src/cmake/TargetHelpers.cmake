@@ -181,6 +181,17 @@ function(gk_configure_application target)
     target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     add_dependencies(${target} Assets)
 
+    if(MSVC)
+        set(gkFfmpegPath "${GK_SOURCE_ROOT}/ThirdParty/ffmpeg/bin/ffmpeg.exe")
+        if(EXISTS "${gkFfmpegPath}")
+            add_custom_command(TARGET ${target} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${gkFfmpegPath}
+                    $<TARGET_FILE_DIR:${target}>/ffmpeg.exe
+                COMMENT "Copying ffmpeg.exe for ${target}")
+        endif()
+    endif()
+
     if(NOT ANDROID)
         target_link_libraries(${target} PRIVATE gkNextEngine)
     endif()

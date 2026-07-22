@@ -1,6 +1,7 @@
 #pragma once
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
+#include "Engine/Runtime/ScreenShotService.hpp"
 #include "Modules/DevTools/GizmoController.hpp"
 #include "Gameplay/Camera/ModelViewController.hpp"
 
@@ -86,6 +87,7 @@ private:
     void DrawViewportTopBar(const FGameUiFrameContext& context, const FRendererUiState& uiState);
     void DrawViewportBottomBar(const FGameUiFrameContext& context);
     void RequestScreenshot(bool openFolder, const std::string& tag);
+    void RequestThreeSecondVideo(Runtime::FScreenShotService::EAnimationFormat format);
     Runtime::Camera::ModelViewController modelViewController_;
 
     FRendererUiState mainUiState_;
@@ -96,6 +98,7 @@ private:
     std::vector<uint32_t> matIds_;
 
     bool isTakingScreenshot_ = false;
+    bool isRecordingVideo_ = false;
     bool playbackPaused_ = false;
     bool stepRequested_ = false;
 };

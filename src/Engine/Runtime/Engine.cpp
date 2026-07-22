@@ -944,7 +944,9 @@ void NextEngine::RequestScreenShot(FScreenShotSpec spec)
 {
     ++screenShot_.queuedRequests;
     AddTickedTask([this, spec = std::move(spec)](double) mutable {
-        if (screenShot_.hasPending || screenShot_.exportPending)
+        if (screenShot_.hasPending ||
+            (!spec.allowOverlappingExports &&
+             (screenShot_.exportPending || screenShot_.asyncExportsInFlight > 0)))
         {
             return false;
         }
@@ -1011,6 +1013,7 @@ void NextEngine::AdvanceScreenShotCapture()
     }
 
     screenShot_.exportPending = true;
+    ++screenShot_.asyncExportsInFlight;
     SaveScreenShot(screenShot_.pending);
     if (screenShot_.pending.accumulateFrames > 0)
     {
@@ -1026,9 +1029,28 @@ void NextEngine::AdvanceScreenShotCapture()
 
 void NextEngine::SaveScreenShot(const FScreenShotSpec& spec)
 {
+    const bool allowOverlappingExports = spec.allowOverlappingExports;
     Runtime::ScreenShot::SaveSwapChainToFile(
         renderer_.get(), spec.filename, spec.x, spec.y, spec.width, spec.height,
-        [this]() { screenShot_.exportPending = false; });
+        spec.fileFormat,
+        [this, allowOverlappingExports]()
+        {
+            if (!allowOverlappingExports)
+            {
+                screenShot_.exportPending = false;
+            }
+            if (screenShot_.asyncExportsInFlight > 0)
+            {
+                --screenShot_.asyncExportsInFlight;
+            }
+        },
+        [this, allowOverlappingExports]()
+        {
+            if (allowOverlappingExports)
+            {
+                screenShot_.exportPending = false;
+            }
+        });
 }
 
 glm::ivec2 NextEngine::GetMonitorSize() const
