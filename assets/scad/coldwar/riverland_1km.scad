@@ -64,6 +64,10 @@ ter_place(TERR, -300, -174)
     translate([6.8, -11, 0]) cw_item_can(seed = 3);
     translate([16, 0.5, 0]) cw_wpn_mosin(seed = 1);
     translate([-9, 1, 0]) cw_item_jerrycan(seed = 2);
+    // 室内物资（可进入木屋，掩体攻防）
+    translate([-15, 4, 0]) cw_item_can(seed = 5);
+    translate([0, 5, 0]) cw_item_medkit();
+    translate([15, 4, 0]) cw_wpn_shotgun(seed = 3);
 }
 ter_place(TERR, -335, -140) rotate([0, 0, -24]) cw_prop_sign_town(seed = 1);
 ter_place(TERR, -270, -158) cw_nature_tree_dead(s = 1.6, seed = 2);
@@ -83,6 +87,8 @@ ter_place(TERR, -30, -177)
     translate([1.5, -3.5, 0]) cw_item_jerrycan(seed = 1);
     translate([4.5, -4.2, 0]) cw_item_jerrycan(seed = 4);
     translate([-5.5, -3, 0]) cw_prop_cart_shop(seed = 2);
+    // 室内物资（可进入收银亭）
+    translate([0, -4.9, 0]) cw_item_medkit();
 }
 
 // ================= POI 3：桥东碉堡哨点（pad 50,-176） =================
@@ -154,6 +160,12 @@ ter_place(TERR, 340, 165)
     translate([-18, 22, 0]) cw_wpn_svd(seed = 1);
     translate([-9, 18.5, 0]) cw_item_backpack(seed = 2);
     translate([14, 26, 0]) cw_item_crate_supply(seed = 1);
+    // 室内物资（可进入 HQ / 营房 / 仓库，掩体攻防）
+    translate([-24, 12, 0]) cw_prop_crate_ammo(seed = 5);
+    translate([-25.5, 11, 0]) cw_item_radio(seed = 2);
+    translate([-8, -22, 0]) cw_wpn_ak(seed = 4);
+    translate([8, -22, 0]) cw_item_ammobox(seed = 4);
+    translate([36, -24, 0]) cw_item_crate_supply(seed = 3);
 }
 ter_place(TERR, 160, -100) cw_prop_sign_road(seed = 0);
 
@@ -194,6 +206,14 @@ ter_place(TERR, 240, -246)
     translate([16, 9.8, 0]) rotate([0, 0, 182]) cw_veh_bus(seed = 1);
     translate([1.5, -12, 0]) rotate([0, 0, 92]) cw_veh_wreck(seed = 3);
     translate([-2, -24, 0]) rotate([0, 0, 180]) cw_prop_billboard(seed = 0);
+    // 室内物资（可进入超市 / 商铺 / 板楼 / 教堂 / 民房，掩体攻防）
+    translate([-16, -6, 0]) cw_item_can(seed = 6);
+    translate([-13, -7, 0]) cw_item_medkit();
+    translate([14, -5, 0]) cw_wpn_pistol(seed = 3);
+    translate([-18, 19, 0]) cw_item_backpack(seed = 5);
+    translate([16, 19, 0]) cw_item_ammobox(seed = 6);
+    translate([30, 17, 0]) cw_item_lantern(seed = 2);
+    translate([-30, -18, 0]) cw_item_bedroll(seed = 6);
 }
 ter_place(TERR, 232, -150) cw_prop_sign_road(seed = 1);
 
@@ -218,6 +238,11 @@ ter_place(TERR, 95, -332)
     for (x = [-22, -6, 12]) translate([x, -19, 0]) cw_prop_fence_concrete(len = 13);
     translate([-24, 16, 0]) cw_prop_lamp();
     translate([10, -2, 0]) cw_prop_lamp();
+    // 室内物资（可进入厂房 / 仓库，掩体攻防）
+    translate([-12, 6, 0]) cw_prop_crate_ammo(seed = 6);
+    translate([-13.5, 5, 0]) cw_wpn_svd(seed = 2);
+    translate([9, 9, 0]) cw_item_jerrycan(seed = 5);
+    translate([15, -10, 0]) cw_item_crate_supply(seed = 4);
 }
 
 // ================= POI 7：西山通信站（pad -345,112；土路从南接入） =================

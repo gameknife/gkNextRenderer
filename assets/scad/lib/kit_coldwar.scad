@@ -129,6 +129,44 @@ module cw_part_door_metal(w = 1.1, h = 2.1, c = [0.26, 0.28, 0.30])
     color(cw_METALC()) translate([w * 0.3, -0.10, h * 0.5]) cw_boxc([0.06, 0.05, 0.16]);
 }
 
+// ---- 可进入空心外壳（DayZ 掩体攻防：角色可走入，室内可放 loot） ----
+// 四面墙 + 混凝土脚圈，室内挖空直通地面（无门槛），门/窗为纯洞口。front = -y。
+// 本 evaluator 中 difference() 结果整体取首个子件颜色，故墙体与脚圈各用独立单色 difference。
+// 每个颜色桶都会生成三角网碰撞：任何装饰件都不得横跨门洞的行走高度，否则会挡住入口。
+//   L,D,wh   外墙足印/墙高；wc 墙色；t 墙厚
+//   dw,dh,dx 前墙门洞 宽/高/中心x（洞口直通地面）
+//   roomH    室内净高：0 => 直通墙顶（坡屋顶另置于其上）；>0 => 该高度以上留实心（平顶/多层地面楼板）
+//   wins     窗洞列表 [face,u,z,w,h]；face 0=前(-y)/1=后(+y)/2=左(-x)/3=右(+x)，u=沿墙偏移，z=洞心高
+//   plinth   是否绘制混凝土脚圈
+module cw_part_shell_hole(L, D, t, w)
+{
+    if (w[0] == 0)      translate([w[1], -D / 2, w[2]]) cw_boxc([w[3], t * 4, w[4]]);
+    else if (w[0] == 1) translate([w[1],  D / 2, w[2]]) cw_boxc([w[3], t * 4, w[4]]);
+    else if (w[0] == 2) translate([-L / 2, w[1], w[2]]) cw_boxc([t * 4, w[3], w[4]]);
+    else                translate([ L / 2, w[1], w[2]]) cw_boxc([t * 4, w[3], w[4]]);
+}
+
+module cw_part_shell(L, D, wh, wc, t = 0.28, dw = 1.5, dh = 2.1, dx = 0, roomH = 0, wins = [], plinth = true)
+{
+    ih = (roomH > 0 ? roomH : wh + 1.0);
+    // 墙体：实心块挖空 + 门洞 + 窗洞（单色 wc）
+    color(wc) difference()
+    {
+        cw_slab(L, D, wh);
+        translate([0, 0, -0.1]) cw_slab(L - 2 * t, D - 2 * t, ih + 0.1);
+        translate([dx, -D / 2, dh / 2 - 0.06]) cw_boxc([dw, t * 4, dh]);
+        for (w = wins) cw_part_shell_hole(L, D, t, w);
+    }
+    // 混凝土脚圈：门洞处断开，避免门槛（单色）
+    if (plinth)
+        color(cw_CONCD()) difference()
+        {
+            cw_slab(L + 0.25, D + 0.25, 0.16);
+            translate([0, 0, -0.1]) cw_slab(L - 2 * t, D - 2 * t, 0.5);
+            translate([dx, -D / 2, 0.12]) cw_boxc([dw, 1.4, 0.6]);
+        }
+}
+
 // ================= 地面（沿 x 铺设，底面 z=0） =================
 
 // 老化沥青路段：褪色单虚中线 + 裂缝 + 补丁
@@ -255,8 +293,13 @@ module cw_bldg_panel_flat(seed = 0, floors = 4, L = 16, D = 10)
     wh = floors * fh + 0.5;
     wc = cw_panel_c(seed);
     sc = [wc[0] * 0.78, wc[1] * 0.78, wc[2] * 0.78];
-    color(cw_CONCD()) cw_slab(L + 0.3, D + 0.3, 0.5);
-    color(wc) translate([0, 0, 0.5]) cw_slab(L, D, wh - 0.5);
+    nw = max(3, floor((L - 2.6) / 2.2));
+    dx = -L * 0.18;
+    // 底层可进入（门斗洞 + 底层前后窗洞），以上楼层实心
+    cw_part_shell(L, D, wh, wc, t = 0.3, dw = 1.5, dh = 2.1, dx = dx, roomH = fh - 0.3,
+                  wins = [ for (i = [0 : nw - 1]) if (abs(-L / 2 + 1.5 + i * (L - 3.0) / (nw - 1) - dx) > 1.2)
+                               [0, -L / 2 + 1.5 + i * (L - 3.0) / (nw - 1), 1.6, 1.0, 1.2],
+                           for (i = [0 : nw - 1]) [1, -L / 2 + 1.5 + i * (L - 3.0) / (nw - 1), 1.6, 1.0, 1.2] ]);
     // 竖向板缝（前后立面）
     nb = max(2, floor(L / 3.2));
     color(sc) for (i = [1 : nb - 1], sy = [-1, 1])
@@ -264,9 +307,8 @@ module cw_bldg_panel_flat(seed = 0, floors = 4, L = 16, D = 10)
     // 横向层缝
     color(sc) for (f = [1 : floors - 1], sy = [-1, 1])
         translate([0, sy * (D / 2 + 0.01), 0.5 + f * fh]) cw_boxc([L, 0.05, 0.10]);
-    // 窗阵（前后立面，seed 决定钉板窗）
-    nw = max(3, floor((L - 2.6) / 2.2));
-    for (f = [0 : floors - 1], i = [0 : nw - 1], sy = [-1, 1])
+    // 上层窗阵（贴墙，seed 决定钉板窗；底层为洞口）
+    for (f = [1 : floors - 1], i = [0 : nw - 1], sy = [-1, 1])
         translate([-L / 2 + 1.5 + i * (L - 3.0) / (nw - 1), sy * (D / 2 + 0.04), 0.5 + f * fh + 1.5])
             rotate([0, 0, sy > 0 ? 180 : 0])
                 cw_part_window_worn(1.0, 1.3, seed * 13 + f * 31 + i * 7 + sy * 3);
@@ -280,9 +322,8 @@ module cw_bldg_panel_flat(seed = 0, floors = 4, L = 16, D = 10)
                     color(cw_rnd(seed + f + i, 2) == 0 ? cw_METALD() : [0.44, 0.48, 0.42])
                         translate([0, -0.5, 1.35]) cw_boxc([1.7, 0.08, 0.9]);
                 }
-    // 门斗 + 雨棚
-    translate([-L * 0.18, -D / 2 - 0.04, 0.5]) cw_part_door_metal();
-    color(cw_CONCD()) translate([-L * 0.18, -D / 2 - 0.6, 2.7]) cw_boxc([1.9, 1.2, 0.12]);
+    // 门斗雨棚（门为洞口）
+    color(cw_CONCD()) translate([dx, -D / 2 - 0.6, 2.7]) cw_boxc([1.9, 1.2, 0.12]);
     // 女儿墙 + 屋面构件
     color(sc) translate([0, 0, wh]) difference()
     {
@@ -298,19 +339,16 @@ module cw_bldg_house_rural(seed = 0, L = 7, D = 5.5)
 {
     wh = 2.5;
     rc = cw_roof_c(seed + 3);
-    color(cw_CONCD()) cw_slab(L + 0.2, D + 0.2, 0.3);
-    color(cw_rnd(seed, 2) == 0 ? cw_WOODC() : [0.44, 0.34, 0.22]) translate([0, 0, 0.3]) cw_slab(L, D, wh - 0.3);
-    // 原木水平线
-    color(cw_WOODD()) for (z = [0.9, 1.5, 2.1], sy = [-1, 1])
-        translate([0, sy * (D / 2 + 0.01), z]) cw_boxc([L, 0.04, 0.07]);
+    wc = cw_rnd(seed, 2) == 0 ? cw_WOODC() : [0.44, 0.34, 0.22];
+    dx = (cw_rnd(seed + 5, 2) == 0 ? -1 : 1) * L * 0.24;
+    // 可进入空心木屋：门洞 + 前/侧窗洞（纯洞）
+    cw_part_shell(L, D, wh, wc, t = 0.24, dw = 1.3, dh = 2.0, dx = dx,
+                  wins = [[0, -dx, 1.5, 0.9, 1.1], [2, D * 0.12, 1.5, 0.9, 1.1], [3, -D * 0.12, 1.5, 0.9, 1.1]]);
+    // 原木水平线（仅后檐墙外侧，避免横跨门/窗洞挡路）
+    color(cw_WOODD()) for (z = [0.9, 1.5, 2.1])
+        translate([0, D / 2 + 0.01, z]) cw_boxc([L, 0.04, 0.07]);
     translate([0, 0, wh]) cw_part_roof(L, D, 1.6, 0.5, 0, rc);
     color(cw_BRICKD()) translate([L * 0.26, D * 0.15, wh + 0.8]) cw_boxc([0.5, 0.5, 2.0]);
-    // 门 + 白套窗
-    dx = (cw_rnd(seed + 5, 2) == 0 ? -1 : 1) * L * 0.24;
-    translate([dx, -D / 2 - 0.04, 0.3]) cw_part_door(h = 1.9);
-    translate([-dx, -D / 2 - 0.04, 1.5]) cw_part_window_worn(0.9, 1.1, seed + 1);
-    translate([L / 2 + 0.04, -D * 0.12, 1.5]) rotate([0, 0, 90]) cw_part_window_worn(0.9, 1.1, seed + 2);
-    translate([-L / 2 - 0.04, D * 0.12, 1.5]) rotate([0, 0, -90]) cw_part_window_worn(0.9, 1.1, seed + 3);
     // 门廊台阶
     color(cw_WOODD()) translate([dx, -D / 2 - 0.5, 0]) cw_slab(1.5, 0.9, 0.28);
 }
@@ -321,22 +359,13 @@ module cw_bldg_shop_row(seed = 0, L = 10, D = 6)
     wh = 3.4;
     wc = cw_wall_c(seed);
     sc = cw_goods_c(seed + 2);
-    color(wc) cw_slab(L, D, wh);
-    color(cw_CONCD()) translate([0, 0, wh]) cw_slab(L + 0.2, D + 0.2, 0.15);
-    // 橱窗带
     nw = max(2, floor(L / 3.4));
-    for (i = [0 : nw - 1])
-    {
-        wx = -L / 2 + (i + 0.5) * L / nw;
-        if (cw_rnd(seed + i * 13, 3) == 0)
-        {
-            color(cw_WOODD()) translate([wx, -D / 2 - 0.05, 1.4]) cw_boxc([2.2, 0.1, 1.5]);
-            color(cw_WOODC()) translate([wx, -D / 2 - 0.09, 1.4]) rotate([0, 12, 0]) cw_boxc([2.3, 0.05, 0.26]);
-        }
-        else
-            color(cw_DARKC()) translate([wx, -D / 2 - 0.05, 1.4]) cw_boxc([2.2, 0.1, 1.5]);
-    }
-    color(cw_DARKC()) translate([L / 2 - 1.2, -D / 2 - 0.05, 1.05]) cw_boxc([0.9, 0.1, 2.1]);
+    dx = L / 2 - 1.2;
+    // 可进入商铺：右侧门洞 + 敞开橱窗洞（避开门），平顶留楼板
+    cw_part_shell(L, D, wh, wc, t = 0.22, dw = 1.0, dh = 2.1, dx = dx, roomH = wh - 0.35,
+                  wins = [ for (i = [0 : nw - 1]) let (wx = -L / 2 + (i + 0.5) * L / nw)
+                               if (abs(wx - dx) > 1.4) [0, wx, 1.5, 2.0, 1.6] ]);
+    color(cw_CONCD()) translate([0, 0, wh]) cw_slab(L + 0.2, D + 0.2, 0.15);
     // 招牌带（色块 + 白字块示意）
     color(sc) translate([0, -D / 2 - 0.10, 2.85]) cw_boxc([L - 0.6, 0.16, 0.7]);
     color(cw_MARKW()) translate([-L * 0.1, -D / 2 - 0.20, 2.85]) cw_boxc([L * 0.4, 0.03, 0.34]);
@@ -346,16 +375,20 @@ module cw_bldg_shop_row(seed = 0, L = 10, D = 6)
 module cw_bldg_supermarket(seed = 0, L = 18, D = 12)
 {
     wh = 4.6;
-    color(cw_CONCD()) cw_slab(L + 0.3, D + 0.3, 0.25);
-    color(cw_PANEL()) translate([0, 0, 0.25]) cw_slab(L, D, wh - 0.25);
-    // 竖肋
-    color(cw_PANELD()) for (i = [0 : floor(L / 1.6)], sy = [-1, 1])
-        translate([-L / 2 + 0.8 + i * 1.6, sy * (D / 2 + 0.01), wh / 2 + 0.6]) cw_boxc([0.18, 0.05, wh - 1.6]);
-    // 玻璃门面带 + 门
-    color(cw_GLASSC()) translate([-L * 0.12, -D / 2 - 0.04, 1.5]) cw_boxc([L * 0.6, 0.08, 2.2]);
-    color(cw_METALD()) for (i = [0 : 4])
-        translate([-L * 0.12 - L * 0.3 + (i + 0.5) * L * 0.6 / 5, -D / 2 - 0.07, 1.5]) cw_boxc([0.08, 0.06, 2.2]);
-    color(cw_DARKC()) translate([-L * 0.12, -D / 2 - 0.08, 1.2]) cw_boxc([1.8, 0.06, 2.0]);
+    dx = -L * 0.12;
+    // 可进入超市：敞开店面（中门 + 两侧橱窗洞）+ 侧/后窗洞，平顶留楼板
+    cw_part_shell(L, D, wh, cw_PANEL(), t = 0.3, dw = 2.0, dh = 2.5, dx = dx, roomH = wh - 0.4,
+                  wins = [[0, dx - L * 0.22, 1.4, L * 0.16, 1.9], [0, dx + L * 0.22, 1.4, L * 0.16, 1.9],
+                          [1, -L * 0.22, 1.8, 1.4, 1.2], [1, -L * 0.02, 1.8, 1.4, 1.2],
+                          [2, 0, 1.8, 1.4, 1.2], [3, 0, 1.8, 1.4, 1.2]]);
+    // 竖肋（前排避开店面洞口 → 充当橱窗竖梃）
+    color(cw_PANELD()) for (i = [0 : floor(L / 1.6)])
+    {
+        rx = -L / 2 + 0.8 + i * 1.6;
+        translate([rx, D / 2 + 0.01, wh / 2 + 0.6]) cw_boxc([0.18, 0.05, wh - 1.6]);
+        if (abs(rx - dx) > 1.2)
+            translate([rx, -D / 2 - 0.01, wh / 2 + 0.6]) cw_boxc([0.18, 0.05, wh - 1.6]);
+    }
     // 大招牌带（红底白块）
     color(cw_REDC()) translate([0, -D / 2 - 0.14, wh - 0.55]) cw_boxc([L - 1.0, 0.2, 0.95]);
     color(cw_MARKW()) for (i = [0 : 5])
@@ -377,14 +410,18 @@ module cw_bldg_hospital(seed = 0, floors = 3, L = 18, D = 9)
 {
     fh = 3.0;
     wh = floors * fh + 0.5;
-    color(cw_CONCD()) cw_slab(L + 0.3, D + 0.3, 0.5);
-    color(cw_WHITEW()) translate([0, 0, 0.5]) cw_slab(L, D, wh - 0.5);
+    nw = max(3, floor((L - 2.6) / 2.0));
+    // 底层可进入（中央大门 + 底层前后窗洞），以上楼层实心
+    cw_part_shell(L, D, wh, cw_WHITEW(), t = 0.3, dw = 2.2, dh = 2.4, dx = 0, roomH = fh - 0.3,
+                  wins = [ for (i = [0 : nw - 1]) if (abs(-L / 2 + 1.4 + i * (L - 2.8) / (nw - 1)) > 1.4)
+                               [0, -L / 2 + 1.4 + i * (L - 2.8) / (nw - 1), 1.55, 1.1, 1.4],
+                           for (i = [0 : nw - 1]) if (abs(-L / 2 + 1.4 + i * (L - 2.8) / (nw - 1)) > 1.4)
+                               [1, -L / 2 + 1.4 + i * (L - 2.8) / (nw - 1), 1.55, 1.1, 1.4] ]);
     // 层间带
     color([0.48, 0.52, 0.52]) for (f = [1 : floors - 1], sy = [-1, 1])
         translate([0, sy * (D / 2 + 0.01), 0.5 + f * fh]) cw_boxc([L, 0.05, 0.5]);
-    // 窗阵
-    nw = max(3, floor((L - 2.6) / 2.0));
-    for (f = [0 : floors - 1], i = [0 : nw - 1], sy = [-1, 1])
+    // 上层窗阵（贴墙装饰；底层为洞口）
+    for (f = [1 : floors - 1], i = [0 : nw - 1], sy = [-1, 1])
         translate([-L / 2 + 1.4 + i * (L - 2.8) / (nw - 1), sy * (D / 2 + 0.04), 0.5 + f * fh + 1.55])
             rotate([0, 0, sy > 0 ? 180 : 0]) cw_part_window(1.1, 1.4);
     // 红十字招牌（front 顶部）
@@ -402,8 +439,6 @@ module cw_bldg_hospital(seed = 0, floors = 3, L = 18, D = 9)
         translate([0, -D / 2 - 0.9, 0]) cw_slab(5.0, 1.8, 0.4);
         translate([-4.2, -D / 2 - 0.9, 0]) rotate([0, -7, 0]) cw_slab(3.6, 1.6, 0.36);
     }
-    color(cw_DARKC()) translate([0, -D / 2 - 0.05, 1.5 + 0.4]) cw_boxc([2.4, 0.1, 2.2]);
-    color(cw_METALD()) translate([0, -D / 2 - 0.10, 1.9]) cw_boxc([0.08, 0.06, 2.2]);
     // 女儿墙 + 电梯机房
     color([0.52, 0.54, 0.52]) translate([0, 0, wh]) difference()
     {
@@ -419,22 +454,15 @@ module cw_bldg_factory_hall(seed = 0, L = 14, D = 9)
 {
     wh = 4.6;
     bc = cw_rnd(seed, 2) == 0 ? cw_BRICK() : [0.44, 0.40, 0.34];
-    color(cw_CONCD()) cw_slab(L + 0.2, D + 0.2, 0.4);
-    color(bc) translate([0, 0, 0.4]) cw_slab(L, D, wh - 0.4);
+    // 可进入厂房：前墙大门洞 + 前后高侧窗（天窗带），坡顶在上
+    cw_part_shell(L, D, wh, bc, t = 0.3, dw = 3.0, dh = 3.4, dx = -L * 0.15,
+                  wins = [[0, L * 0.28, 3.95, L * 0.3, 1.0], [1, 0, 3.95, L - 2.4, 1.0]]);
     translate([0, 0, wh]) cw_part_roof(L, D, 1.8, 0.4, 0, cw_roof_c(seed + 1));
     // 天窗脊
     color(cw_GLASSC()) translate([0, 0, wh + 1.35]) cw_boxc([L * 0.65, 0.9, 0.7]);
     color(cw_METALD()) translate([0, 0, wh + 1.75]) cw_boxc([L * 0.68, 1.1, 0.12]);
-    // 高窗带（前后）
-    color(cw_DARKC()) for (sy = [-1, 1])
-        translate([0, sy * (D / 2 + 0.03), wh - 1.2]) cw_boxc([L - 2.4, 0.1, 1.3]);
-    color(bc) for (i = [0 : floor(L / 1.4)], sy = [-1, 1])
-        translate([-L / 2 + 1.2 + i * 1.4, sy * (D / 2 + 0.04), wh - 1.2]) cw_boxc([0.14, 0.12, 1.3]);
-    // 大推拉门（front，半开）
-    color(cw_METALD()) translate([-L * 0.15, -D / 2 - 0.06, 1.75]) cw_boxc([3.0, 0.12, 3.5]);
-    color(cw_DARKC()) translate([1.35 - L * 0.15 + 1.0, -D / 2 - 0.04, 1.75]) cw_boxc([1.6, 0.08, 3.5]);
+    // 门楣导轨
     color(cw_METALC()) translate([-L * 0.15, -D / 2 - 0.13, 3.6]) cw_boxc([5.6, 0.08, 0.14]);
-    color(cw_RUSTC()) translate([-L * 0.15 - 0.8, -D / 2 - 0.13, 1.4]) cw_boxc([0.9, 0.02, 1.1]);
 }
 
 // 锯齿厂房：三连锯齿顶（北向天窗）+ 砖墙 + 侧门
@@ -442,8 +470,10 @@ module cw_bldg_factory_saw(seed = 0, L = 14, D = 10)
 {
     wh = 3.8;
     bc = cw_rnd(seed, 2) == 0 ? cw_BRICK() : cw_PANELD();
-    color(cw_CONCD()) cw_slab(L + 0.2, D + 0.2, 0.4);
-    color(bc) translate([0, 0, 0.4]) cw_slab(L, D, wh - 0.4);
+    // 可进入锯齿厂房：前墙装卸大门 + 右侧小门洞 + 左墙高窗洞，锯齿顶在上
+    cw_part_shell(L, D, wh, bc, t = 0.3, dw = 2.2, dh = 3.0, dx = -L * 0.2,
+                  wins = [[0, L * 0.25, 1.05, 1.1, 2.1],
+                          for (i = [0 : 2]) [2, -D / 2 + 2 + i * 3, 2.6, 1.0, 1.2]]);
     nt = 3;
     for (i = [0 : nt - 1])
     {
@@ -452,10 +482,6 @@ module cw_bldg_factory_saw(seed = 0, L = 14, D = 10)
             rotate([-22, 0, 0]) cw_boxc([L + 0.4, D / nt * 1.12, 0.14]);
         color(cw_GLASSC()) translate([0, ty - D / nt * 0.42, wh + 0.62]) rotate([70, 0, 0]) cw_boxc([L - 0.8, 1.2, 0.1]);
     }
-    color(cw_DARKC()) translate([-L * 0.2, -D / 2 - 0.05, 1.6]) cw_boxc([2.2, 0.1, 3.2]);
-    translate([L * 0.25, -D / 2 - 0.04, 0.4]) cw_part_door_metal();
-    color(cw_DARKC()) for (i = [0 : 2])
-        translate([-L / 2 - 0.03, -D / 2 + 2 + i * 3, 2.6]) cw_boxc([0.1, 1.0, 1.2]);
 }
 
 // 砖砌烟囱：锥柱 + 白环带 + 顶箍
@@ -474,16 +500,20 @@ module cw_bldg_warehouse(seed = 0, L = 12, D = 8)
     wh = 3.6;
     mc = cw_rnd(seed, 2) == 0 ? cw_METALC() : [0.38, 0.42, 0.38];
     md = [mc[0] * 0.8, mc[1] * 0.8, mc[2] * 0.8];
-    color(cw_CONCD()) cw_slab(L + 0.2, D + 0.2, 0.3);
-    color(mc) translate([0, 0, 0.3]) cw_slab(L, D, wh - 0.3);
-    color(md) for (i = [0 : floor(L / 1.1)], sy = [-1, 1])
-        translate([-L / 2 + 0.55 + i * 1.1, sy * (D / 2 + 0.01), wh / 2 + 0.15]) cw_boxc([0.34, 0.04, wh - 0.3]);
+    dx = -L * 0.12;
+    // 可进入仓库：前墙卷帘大门 + 前后高窗洞，坡顶在上
+    cw_part_shell(L, D, wh, mc, t = 0.26, dw = 2.8, dh = 2.6, dx = dx,
+                  wins = [[0, L * 0.35, wh - 0.7, 1.2, 0.6], [1, L * 0.35, wh - 0.7, 1.2, 0.6],
+                          [1, -L * 0.25, wh - 0.7, 1.2, 0.6]]);
+    // 波纹竖肋（前排避开门洞）
+    color(md) for (i = [0 : floor(L / 1.1)])
+    {
+        rx = -L / 2 + 0.55 + i * 1.1;
+        translate([rx, D / 2 + 0.01, wh / 2 + 0.15]) cw_boxc([0.34, 0.04, wh - 0.3]);
+        if (abs(rx - dx) > 1.6)
+            translate([rx, -D / 2 - 0.01, wh / 2 + 0.15]) cw_boxc([0.34, 0.04, wh - 0.3]);
+    }
     translate([0, 0, wh]) cw_part_roof(L, D, 1.0, 0.45, 0, cw_roof_c(seed + 4));
-    color(cw_METALD()) translate([-L * 0.12, -D / 2 - 0.06, 1.6]) cw_boxc([2.8, 0.12, 2.6]);
-    color(cw_DARKC()) translate([-L * 0.12 + 1.9, -D / 2 - 0.04, 1.6]) cw_boxc([1.1, 0.08, 2.6]);
-    color(cw_RUSTC()) translate([L * 0.3, -D / 2 - 0.02, 0.9]) cw_boxc([1.4, 0.03, 1.0]);
-    color(cw_DARKC()) for (sy = [-1, 1])
-        translate([L * 0.35, sy * (D / 2 + 0.03), wh - 0.7]) cw_boxc([1.2, 0.1, 0.6]);
 }
 
 // 加油站雨棚 + 收银亭（油泵用 cw_prop_pump_gas 另摆；front=-y）
@@ -494,13 +524,12 @@ module cw_bldg_gas_canopy(seed = 0)
     color(cw_MARKW()) translate([0, 0, 3.9]) cw_boxc([10.5, 6.5, 0.35]);
     color(cw_REDC()) translate([0, -3.3, 3.9]) cw_boxc([10.5, 0.12, 0.35]);
     color(cw_REDC()) translate([0, 3.3, 3.9]) cw_boxc([10.5, 0.12, 0.35]);
-    // 收银亭（雨棚后侧）
+    // 收银亭（雨棚后侧，可进入：右门洞 + 左橱窗洞）
     translate([0, 4.9, 0])
     {
-        color(cw_WHITEW()) cw_slab(4.5, 3.2, 2.9);
+        cw_part_shell(4.5, 3.2, 2.9, cw_WHITEW(), t = 0.2, dw = 0.95, dh = 2.1, dx = 1.5, roomH = 2.6,
+                      wins = [[0, -0.6, 1.5, 1.9, 1.2]]);
         color(cw_CONCD()) translate([0, 0, 2.9]) cw_slab(4.7, 3.4, 0.15);
-        color(cw_DARKC()) translate([-0.6, -1.63, 1.5]) cw_boxc([2.0, 0.1, 1.3]);
-        color(cw_DARKC()) translate([1.5, -1.63, 1.05]) cw_boxc([0.9, 0.1, 2.1]);
         color(cw_REDC()) translate([0, -1.7, 2.55]) cw_boxc([4.0, 0.1, 0.5]);
     }
 }
@@ -537,14 +566,13 @@ module cw_bldg_barracks(seed = 0, L = 14, D = 6)
 {
     wh = 2.8;
     wc = cw_rnd(seed, 2) == 0 ? cw_OLIVE() : cw_KHAKI();
-    color(cw_CONCD()) cw_slab(L + 0.2, D + 0.2, 0.3);
-    color(wc) translate([0, 0, 0.3]) cw_slab(L, D, wh - 0.3);
-    translate([0, 0, wh]) cw_part_roof(L, D, 1.1, 0.45, 0, cw_roof_c(seed + 7));
     nw = max(3, floor((L - 2.4) / 2.0));
-    for (i = [0 : nw - 1], sy = [-1, 1])
-        translate([-L / 2 + 1.4 + i * (L - 2.8) / (nw - 1), sy * (D / 2 + 0.04), 1.6])
-            rotate([0, 0, sy > 0 ? 180 : 0]) cw_part_window_worn(0.9, 1.0, seed * 7 + i * 13 + sy);
-    translate([0, -D / 2 - 0.04, 0.3]) cw_part_door_metal();
+    // 可进入营房：中央门洞 + 前后成排窗洞（前排避开门）
+    cw_part_shell(L, D, wh, wc, t = 0.24, dw = 1.5, dh = 2.1, dx = 0,
+                  wins = [ for (i = [0 : nw - 1]) [1, -L / 2 + 1.4 + i * (L - 2.8) / (nw - 1), 1.6, 0.9, 1.0],
+                           for (i = [0 : nw - 1]) if (abs(-L / 2 + 1.4 + i * (L - 2.8) / (nw - 1)) > 1.1)
+                               [0, -L / 2 + 1.4 + i * (L - 2.8) / (nw - 1), 1.6, 0.9, 1.0] ]);
+    translate([0, 0, wh]) cw_part_roof(L, D, 1.1, 0.45, 0, cw_roof_c(seed + 7));
     color(cw_METALD()) translate([L * 0.32, D * 0.1, wh + 0.9]) cylinder(h = 1.1, r = 0.1, $fn = 6);
 }
 
@@ -552,17 +580,21 @@ module cw_bldg_barracks(seed = 0, L = 14, D = 6)
 module cw_bldg_hq(seed = 0, L = 12, D = 8)
 {
     wh = 6.2;
-    color(cw_CONCD()) cw_slab(L + 0.3, D + 0.3, 0.4);
-    color(cw_PLASTER()) translate([0, 0, 0.4]) cw_slab(L, D, wh - 0.4);
-    color(cw_CONCD()) for (sy = [-1, 1]) translate([0, sy * (D / 2 + 0.01), 3.2]) cw_boxc([L, 0.06, 0.3]);
     nw = max(3, floor((L - 2.4) / 2.2));
-    for (f = [0 : 1], i = [0 : nw - 1], sy = [-1, 1])
-        translate([-L / 2 + 1.4 + i * (L - 2.8) / (nw - 1), sy * (D / 2 + 0.04), 1.7 + f * 2.9])
+    // 底层可进入（中央大门 + 底层前后窗洞），二层实心
+    cw_part_shell(L, D, wh, cw_PLASTER(), t = 0.3, dw = 1.6, dh = 2.4, dx = 0, roomH = 2.7,
+                  wins = [ for (i = [0 : nw - 1]) if (abs(-L / 2 + 1.4 + i * (L - 2.8) / (nw - 1)) > 1.2)
+                               [0, -L / 2 + 1.4 + i * (L - 2.8) / (nw - 1), 1.7, 1.0, 1.4],
+                           for (i = [0 : nw - 1]) if (abs(-L / 2 + 1.4 + i * (L - 2.8) / (nw - 1)) > 1.2)
+                               [1, -L / 2 + 1.4 + i * (L - 2.8) / (nw - 1), 1.7, 1.0, 1.4] ]);
+    color(cw_CONCD()) for (sy = [-1, 1]) translate([0, sy * (D / 2 + 0.01), 3.2]) cw_boxc([L, 0.06, 0.3]);
+    // 二层窗阵（贴墙装饰；底层为洞口）
+    for (i = [0 : nw - 1], sy = [-1, 1])
+        translate([-L / 2 + 1.4 + i * (L - 2.8) / (nw - 1), sy * (D / 2 + 0.04), 1.7 + 2.9])
             rotate([0, 0, sy > 0 ? 180 : 0]) cw_part_window(1.0, 1.4);
     // 中央门廊 + 红星
     color(cw_WHITEW()) for (sx = [-1, 1]) translate([sx * 1.1, -D / 2 - 0.9, 1.55]) cw_boxc([0.34, 0.34, 3.1]);
     color(cw_CONCD()) translate([0, -D / 2 - 0.85, 3.1]) cw_boxc([3.4, 2.0, 0.25]);
-    translate([0, -D / 2 - 0.04, 0.4]) cw_part_door_metal(w = 1.5);
     color(cw_REDC())
     {
         translate([0, -D / 2 - 0.10, wh - 0.85]) cw_boxc([0.75, 0.10, 0.28]);
@@ -617,13 +649,12 @@ module cw_bldg_prison_block(seed = 0, floors = 2, L = 14, D = 7)
 {
     fh = 2.9;
     wh = floors * fh + 0.4;
-    color(cw_CONCD()) cw_slab(L + 0.2, D + 0.2, 0.4);
-    color([0.46, 0.46, 0.44]) translate([0, 0, 0.4]) cw_slab(L, D, wh - 0.4);
     nw = max(4, floor((L - 2.0) / 1.7));
+    // 底层可进入（铁门洞），二层实心；铁栏窗保留为贴墙装饰（窄且高，不可穿越）
+    cw_part_shell(L, D, wh, [0.46, 0.46, 0.44], t = 0.3, dw = 1.5, dh = 2.1, dx = -L * 0.2, roomH = fh - 0.3);
     for (f = [0 : floors - 1], i = [0 : nw - 1], sy = [-1, 1])
         translate([-L / 2 + 1.2 + i * (L - 2.4) / (nw - 1), sy * (D / 2 + 0.04), 0.4 + f * fh + 1.7])
             rotate([0, 0, sy > 0 ? 180 : 0]) cw_part_window_bar(0.7, 0.8);
-    translate([-L * 0.2, -D / 2 - 0.04, 0.4]) cw_part_door_metal();
     color(cw_CONCD()) translate([0, 0, wh]) difference()
     {
         cw_slab(L + 0.14, D + 0.14, 0.4);
@@ -698,9 +729,11 @@ module cw_bldg_water_tower(seed = 0)
 module cw_bldg_chapel(seed = 0)
 {
     wh = 3.4;
-    color(cw_CONCD()) cw_slab(4.6, 4.6, 0.3);
-    color(cw_WHITEW()) translate([0, 0, 0.3]) cw_slab(4.2, 4.2, wh - 0.3);
-    translate([0, 0, wh]) cw_part_roof(4.2, 4.2, 1.3, 0.4, 0, cw_ROOFM());
+    L = 4.2;
+    // 可进入小教堂：前门洞 + 三面高窗洞，坡顶洋葱顶在上
+    cw_part_shell(L, L, wh, cw_WHITEW(), t = 0.24, dw = 1.0, dh = 2.0, dx = 0,
+                  wins = [[1, 0, 2.1, 0.55, 1.1], [2, 0, 2.1, 0.55, 1.1], [3, 0, 2.1, 0.55, 1.1]]);
+    translate([0, 0, wh]) cw_part_roof(L, L, 1.3, 0.4, 0, cw_ROOFM());
     color(cw_WHITEW()) translate([0, 0, wh + 1.2]) cylinder(h = 1.3, r = 0.75, $fn = 8);
     color([0.58, 0.44, 0.14])
     {
@@ -712,9 +745,6 @@ module cw_bldg_chapel(seed = 0)
         translate([0, 0, wh + 4.1]) cw_boxc([0.06, 0.06, 0.55]);
         translate([0, 0, wh + 4.28]) cw_boxc([0.3, 0.06, 0.06]);
     }
-    color(cw_DARKC()) for (a = [0, 90, 180, 270])
-        rotate([0, 0, a]) translate([0, -2.13, 2.1]) cw_boxc([0.55, 0.1, 1.1]);
-    translate([0, -2.13, 0.3]) cw_part_door(w = 1.0, h = 1.9, c = cw_WOODD());
 }
 
 // 公交候车亭：混凝土壳 + 马赛克色带 + 内置坐凳
