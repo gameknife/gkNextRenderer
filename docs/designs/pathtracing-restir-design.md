@@ -9,16 +9,33 @@ last_updated: 2026-07-22
 
 # Tracing Direct Lighting 与 ReSTIR DI 架构
 
-PathTracing 与 SoftwareTracing 可为 primary 表面面光源直接光启用 ReSTIR DI（蓄水池时空重采样）。两者共享估计器、reservoir 与复用算法，只在可见性实现上不同：PathTracing 使用 ray query，SoftwareTracing 使用有限长度的级联 voxel DDA。本文记录当前实现的边界、数据契约、已知偏差与修改护栏。`r.restir.enable` 默认关闭；关闭时两条 tracing renderer 都运行经典单样本面光 NEE，开启后由 ReSTIR DI 替换 primary 面光采样。
+PathTracing 与 SoftwareTracing 使用公共 BSDF-aware direct-lighting 层，并可为 primary 表面的
+**面光 diffuse lobe** 启用 ReSTIR DI（蓄水池时空重采样）。两者共享 BSDF、估计器、reservoir
+与复用算法，只在可见性实现上不同：PathTracing 使用 ray query，SoftwareTracing 使用有限长度的
+级联 voxel DDA。`r.restir.enable` 关闭时运行经典 BSDF-aware 单样本面光 NEE；开启后仅以
+material-aware ReSTIR 替换 Lambertian/Mixture 的 diffuse 面光项，specular 与解析太阳仍由主 tracing
+pass 独立估计。
 
 ## 1. 范围与边界
 
-**只替换 primary vertex 的面光源 NEE**，其余全部不变：
+**只替换 primary vertex 的面光源 diffuse NEE**：
 
-- 太阳不进入 reservoir：PathTracing 走锥形 shadow ray，SoftwareTracing 走 CSM；天空 IBL 仍走 BSDF miss 路径。
+- `common/BSDF.slang` 是 Lambert、GGX reflection、Fresnel、roughness/PDF 的单一数学来源；
+  `FDirectLighting` 将 albedo-demodulated diffuse 与完整 specular radiance 分开。
+- GGX 使用 `alpha=perceptualRoughness²` 与精确 Smith G1；不得把
+  `k=(roughness+1)²/8` 的实时栅格近似带回 tracing BSDF，否则 smooth grazing highlight 会损失
+  约 20–55% 能量。Mixture 的 opaque surface IOR 来自 `RefractionIndex`，材质工厂同时保持
+  `RefractionIndex2` 一致；Dielectric transmission 才使用第二介质 IOR。
+- 太阳不进入 reservoir：有限 0.25° 太阳盘的 light sample、shadow、BSDF sample hit 和 primary miss
+  使用同一方向/能量定义；PathTracing 走 ray query，SoftwareTracing 走 CSM。
 - 次级 bounce 的直接光策略（`SecondaryDirectMode`、SHARC update 的逐 hit 直接光记账）不变；**蓄水池样本不喂 SHARC**（相关样本会破坏缓存时域累积）。`Core.SharcUpdate` 入口显式 `RestirPrimary = false`。
-- `suppressRegisteredEmitter` MIS 约定不变（ReSTIR 仍是 NEE 的重采样形式）。
-- 目标函数为 Lambert-only（albedo 解调），与 `RT_SINGLE_DIFFUSE` 光照通道语义一致；无 specular direct。
+- Lambertian 与 Mixture 可进入 diffuse reservoir；Mixture 的目标使用方向相关
+  `kD=(1-F)*(1-metalness)`。Metallic、Dielectric、Isotropic 与 DiffuseLight 的 diffuse target 为 0。
+- 面光 specular 使用 light proposal + glossy-direction proposal，并以 power heuristic MIS；near-delta
+  reflection 使用确定性方向。registered emitter 只按被覆盖的 lobe 抑制，dielectric transmission
+  命中不再被 diffuse NEE 误删。
+- 当前 dielectric transmission direct 只覆盖 near-delta 确定性透射；rough dielectric microfacet BTDF、
+  caustics 与 specular reservoir 不属于现行实现。
 - 仅 primary view：shader 侧以 `gpuScene.CustomData0 == 0`（view bank base）判定，非 primary / Transient view 走经典单样本 NEE。
 - Offline progressive（编辑器空闲渐进、still benchmark、agentscript 的 accumulated screenshot）强制降级为 **RIS-only**（时空复用全关）：保住“收敛到参考”的语义，同时充当内建的无偏对照组。
 
@@ -27,8 +44,11 @@ PathTracing 与 SoftwareTracing 可为 primary 表面面光源直接光启用 Re
 ```
 主 tracing dispatch (PathTracing 或 Core.SwTracing)
   PrimaryHit → …path loop… → DirectIlluminatePrimary:
-      太阳 NEE（照旧）
-      RestirPrimaryGather：初始 RIS + 初始可见性 + 时域合并 → 写 intermediate buffer
+      有限太阳盘 diffuse/specular
+      面光 specular light/BSDF proposal + MIS
+      Lambertian/Mixture diffuse:
+        classic → BSDF-aware NEE
+        ReSTIR → 初始 RIS + 初始可见性 + 时域合并 → 写 intermediate
   [barrier: reservoir + RT_SINGLE_DIFFUSE / G-buffer]
 Core.RestirSpatialShade / Core.SwRestirSpatialShade
   G-buffer 重建表面 → center 胜者最终可见性 → 写 final buffer（时域历史）
@@ -38,7 +58,9 @@ Core.RestirSpatialShade / Core.SwRestirSpatialShade
 
 两条第二阶段入口都调用 `common/RestirSpatialShade.slang` 的同一算法主体；硬件入口使用 `ZeroBindWithTLASPipeline + FHardwareRayTracer`，软件入口使用不含 TLAS descriptor 的 `ZeroBindPipeline + FSoftwareRayTracer`。`FSoftwareTracingDirectIlluminator` 单独承载 CSM sun + area NEE，不能把面光逻辑塞回 `FShadowMapDirectIlluminator`，否则会无意改变 SoftwareModern。
 
-采样几何项由 `Common.EvaluateAreaLightSample` 单一来源提供，经典 NEE、目标函数 p̂ 与 ReSTIR shading 共用，**不得分叉**。
+经典 direct 使用 `Common.EvaluateAreaLightDirectSample`；ReSTIR gather、重评估和 final shading
+统一使用 `Common.EvaluateAreaLightDiffuseSample`。两者都调用 `EvaluateSurfaceBSDF`，不得重新内嵌
+Lambert/GGX 公式。
 
 ## 3. 数据契约
 
@@ -52,12 +74,19 @@ Core.RestirSpatialShade / Core.SwRestirSpatialShade
 
 **逐帧竞态关键位走录制 push constant**：`gpuScene.CustomData1` bit1 = 本帧时域有效（PathTracingRenderer 每 dispatch 盖章）。host-visible 参数 buffer（`FRestirRuntimeParameters`）只承载调参类字段。
 
+**最小 BSDF G-buffer**：`RT_BSDF_DATA` 为 `R32G32_UINT`（8B/px），x 保存 material index，y
+按位保存 effective metalness；effective roughness 继续来自 `RT_NORMAL.a`，base color 来自
+`RT_ALBEDO`，view direction 由 depth/camera 重建。sky/emitter/debug miss 写 `0xffffffff` invalid。
+spatial gate 除 ObjectId/normal/depth 外还要求 material index 相同，避免同 instance 多材质串样本。
+
 ## 4. 算法
 
 1. **初始候选**（默认 8）：现有 CDF 选灯（`Scene::UpdateLights` 预计算 reserved1/2）+ 灯面均匀 uv，流式 RIS，权重 w = p̂ / (lightPdf/area)。无效候选计入 M（等价零权重流入）。
 2. **初始可见性**：对初始 RIS 胜者打 1 根 shadow ray，遮挡则 W=0 但保留 M（visibility reuse，防止复用扩散漏光）。
 3. **时域合并**：motion vector 重投影读上一帧 final reservoir；屏外 / ObjectId 不一致 / `MOTIONMOMENT != 0` 时拒绝。当前像素重算 p̂ 后按 W-form 合并（候选权重 = p̂·W·M）；prev.M 钳到 `r.restir.mClamp`（默认 160）。当前像素的 instanceId/motion **由 renderer 状态传参**，不读本 dispatch 刚写的纹理（§9-②）。这只是 reservoir 复用，不读取或生成颜色 history。
-4. **空间合并**（pass 2，默认 5 邻居 / 半径 16px golden-angle 螺旋）：几何测试 = 同 ObjectId + 法线点积 > 0.9 + view 深度相对差 < 10%；邻居样本在 center 表面重算 p̂ 后 W-form 合并；**邻居 M 钳到 4×初始候选数**（时域 entrenched 邻居不得主导选择，否则可见性错配样本吃能量）。
+4. **空间合并**（pass 2，默认 5 邻居 / 半径 16px golden-angle 螺旋）：几何测试 = 同 ObjectId +
+   同 material index + 法线点积 > 0.9 + view 深度相对差 < 10%；邻居样本用 center 的完整 diffuse
+   BSDF context 重算 p̂ 后 W-form 合并；**邻居 M 钳到 4×初始候选数**。
 5. **最终可见性 + shading**：center 胜者先验证（其判决写入 final buffer = 时域链的可见性反馈）；合并胜者若非 center 样本再补 1 根 visibility query。硬件路径是 open-segment ray query；软件路径是以真实灯点为终点的有限 DDA，起点偏移按所在级联的 voxel unit 自适应。不得退化为固定 80m、恒无遮挡或忽略所有 emissive voxel。
 
 **时域链与空间去耦（关键结构决策）**：final buffer 存"center 经最终可见性"的蓄水池，**空间合并结果只用于本帧 shading、绝不回写历史**。有偏空间合并在可见性边界变暗，回写历史会跨帧复利（实测 13–16% 能量丢失；去耦后 1–2%）。与 RTXDI 结构一致。
@@ -105,7 +134,8 @@ Apple 数据来自 hidden immediate-mode 的 `engine.frameRate`，只能表示�
 2. **同一 invocation 内 storage image 写后读不可见**。当前像素的 primary 数据（instanceId/motion）从 renderer 状态传参；只有前置 pass 写的纹理（ObjectId1/MotionMoment/G-buffer）可读。
 3. **竞态关键的逐帧状态严禁放 host-visible buffer**（host 覆写与 in-flight GPU 帧竞争），必须走录进 command buffer 的 push constant。
 4. **空间复用结果不得回写时域历史**（§4）。
-5. p̂ / shading / 经典 NEE 共用 `Common.EvaluateAreaLightSample`，改面光模型只改这一处。
+5. p̂ / ReSTIR shading 共用 `Common.EvaluateAreaLightDiffuseSample`；经典 NEE 与它共享
+   `EvaluateSurfaceBSDF`，修改材质 lobe 不得产生第二套 evaluator。
 6. 蓄水池是屏幕空间时序状态：新增失效条件必须体现在 RenderView `historyGeneration` 或 ReSTIR 自身 generation 检查中；不要依赖已删除的颜色 history。
 7. `RT_SINGLE_DIFFUSE` 的第二阶段既读又写，资源声明必须同时包含 `ShaderRead | ShaderWrite`；reservoir barrier 同时覆盖 intermediate/final 的 shader read/write。
 
@@ -120,6 +150,10 @@ Apple 数据来自 hidden immediate-mode 的 `engine.frameRate`，只能表示�
 
 - 日常：`gnb shot --scene ManyLightsShowcase.proc`（8×8 灯阵压力场景，`DemoScenes.cpp`）或 `CornellBox.proc`。`conf_room.glb` 属可选资产，使用前先确认当前 pak 确实包含。
 - PathTracing 脚本：`assets/agentscripts/restir-*.agentscript.json`。
+- BSDF direct smoke：`bsdf-direct-classic-smoke.agentscript.json` 与
+  `bsdf-direct-smoke.agentscript.json` 分别以 classic / ReSTIR temporal+spatial 独立进程运行
+  `MaterialShowcase.proc`，覆盖 Lambertian/Metallic/Mixture/Dielectric roughness 矩阵。截图后需
+  留出实际时间等待 JPEG flush；只等待若干 engine frame 可能得到截断文件和伪灰块。
 - SoftwareTracing 脚本：`swrestir-smoke`（classic/RIS/temporal/spatial/debug）、`swrestir-converge-nee` 与 `swrestir-converge-ris`（真正的 accumulated screenshot）、`swrestir-temporal`、`swrestir-switch`、`swrestir-perf`。
 - 无偏判定方法：restir on/off 两个独立进程在 offline progressive RIS-only 模式各自收敛后 diff；signed mean 与半影区域分布是关键指标，不是只看 mean abs。
 - 2026-07-22 macOS/MoltenVK 主机路径已通过；Android `gradle build` 尚未进入 native 编译，因为验证机的 Android SDK 缺少项目指定的 CMake 3.31.6。补齐该 SDK component 后必须补跑 Android shader/C++ 构建。

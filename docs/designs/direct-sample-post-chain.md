@@ -27,6 +27,11 @@ spatial denoiser；renderer 生成的当前帧 diffuse/specular 样本直接 com
    `RT_SCENE_COLOR`。DLSS Ray Reconstruction 的
    noisy diffuse/specular resource 直接绑定 `RT_SINGLE_DIFFUSE/SPECULAR`，不经过引擎滤波。
 
+Tracing renderer 的 direct-lighting 通道语义是强契约：`RT_SINGLE_DIFFUSE` 保存
+albedo-demodulated diffuse lighting，compose 时才乘 `RT_ALBEDO`；`RT_SINGLE_SPECULAR` 保存已经
+包含 Fresnel、metal tint、BSDF 与 emitter radiance 的完整 specular radiance，compose 不再乘
+base color。ReSTIR 第二阶段只能累加前者，不能覆盖主 pass 已写入的 glossy/delta direct。
+
 FidelityFX temporal FSR 与 Native TAAU 可在 evaluate 后运行同一层显示分辨率的可选后处理：upscaler 先写入
 每个 swapchain image 独立的 ping/pong intermediate，随后 firefly neighborhood clamp 与
 以当前帧 albedo/normal 引导的多 pass a-trous 滤波写回 swapchain。该阶段只清理 upscaler

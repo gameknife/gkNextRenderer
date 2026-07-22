@@ -1,12 +1,20 @@
 #include <catch2/catch_all.hpp>
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
+#include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Rendering/PipelineCommon/ResourceStateTracker.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Rendering/ExternalPassRegistry.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include <memory>
 #include <array>
+
+TEST_CASE("Mixture material keeps a valid dielectric IOR", "[Unit][Material]")
+{
+    const Assets::Material material = Assets::Material::Mixture(glm::vec3(0.5f), 0.1f);
+    CHECK(material.RefractionIndex == Catch::Approx(1.45f));
+    CHECK(material.RefractionIndex2 == Catch::Approx(material.RefractionIndex));
+}
 
 TEST_CASE("RenderComponent Usage", "[Unit][RenderComponent]") {
     auto node = Assets::Node::CreateNode("RenderNode", glm::vec3(0), glm::quat(1,0,0,0), glm::vec3(1), 0);

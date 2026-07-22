@@ -18,6 +18,8 @@ namespace Bindless
     public static const int RT_PREV_DEPTHBUFFER = 10;
     public static const int RT_PROGRESSIVE_SPECULAR = 11;
     public static const int RT_SINGLE_SPECULAR = 12;
+    // material index + effective metalness for BSDF-aware ReSTIR reconstruction
+    public static const int RT_BSDF_DATA = 13;
     public static const int RT_MOTIONMOMENT = 14;
     public static const int RT_DIFFUSE_HITDIST = 15;
     public static const int RT_SPECULAR_HITDIST = 16;

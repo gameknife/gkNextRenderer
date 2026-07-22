@@ -179,9 +179,9 @@ public void RestirStoreEmpty(int2 pixel)
 // initial-winner visibility, temporal merge from the previous frame's FINAL reservoirs,
 // then stores the post-temporal reservoir to the INTERMEDIATE buffer. Shading and spatial
 // reuse happen in Core.RestirSpatialShade.comp.slang, which also owns the final visibility
-// ray and writes the final buffer. Sampling shares Common.EvaluateAreaLightSample with
+// ray and writes the final buffer. Sampling shares Common.EvaluateAreaLightDiffuseSample with
 // classic NEE so the target function and shading can never drift apart.
-public void RestirPrimaryGather(inout uint4 randomSeed, int2 pixel, float3 position, float3 normal,
+public void RestirPrimaryGather(inout uint4 randomSeed, int2 pixel, FBSDFContext context,
                                 uint primaryInstanceId, float2 motionPixels, IRayTracer tracer)
 {
     // Defense in depth: never touch the parameter table or reservoirs unless the resources
@@ -221,7 +221,7 @@ public void RestirPrimaryGather(inout uint4 randomSeed, int2 pixel, float3 posit
         float3 f;
         float3 lightPosition;
         if (lightPdf <= 0.0f || lightArea <= 0.0f ||
-            !Common.EvaluateAreaLightSample(lightIndex, uv, position, normal, f, lightPosition))
+            !Common.EvaluateAreaLightDiffuseSample(lightIndex, uv, context, f, lightPosition))
         {
             reservoir.M += 1.0f;
             continue;
@@ -238,15 +238,16 @@ public void RestirPrimaryGather(inout uint4 randomSeed, int2 pixel, float3 posit
     {
         float3 f;
         float3 lightPosition;
-        if (!Common.EvaluateAreaLightSample(
-                reservoir.LightIndex, reservoir.LightUV, position, normal, f, lightPosition))
+        if (!Common.EvaluateAreaLightDiffuseSample(
+                reservoir.LightIndex, reservoir.LightUV, context, f, lightPosition))
         {
             reservoir.WeightW = 0.0f;
         }
         else
         {
             const float3 shadowOrigin =
-                tracer.GetAreaLightShadowOrigin(position, normal, lightPosition, EPS2);
+                tracer.GetAreaLightShadowOrigin(context.Position, context.Normal,
+                                                lightPosition, EPS2);
             if (tracer.TraceAreaLightSegment(shadowOrigin, lightPosition, EPS))
             {
                 reservoir.WeightW = 0.0f;
@@ -291,8 +292,8 @@ public void RestirPrimaryGather(inout uint4 randomSeed, int2 pixel, float3 posit
                     float3 prevF;
                     float3 prevLightPosition;
                     float prevTargetLum = 0.0f;
-                    if (Common.EvaluateAreaLightSample(prev.LightIndex, prev.LightUV, position, normal,
-                                                      prevF, prevLightPosition))
+                    if (Common.EvaluateAreaLightDiffuseSample(prev.LightIndex, prev.LightUV, context,
+                                                             prevF, prevLightPosition))
                     {
                         prevTargetLum = dot(prevF, kRestirLumaWeights);
                     }

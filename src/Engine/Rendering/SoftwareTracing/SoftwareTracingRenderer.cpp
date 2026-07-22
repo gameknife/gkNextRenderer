@@ -65,6 +65,7 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
             {Assets::Bindless::RT_DIFFUSE_HITDIST, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
             {Assets::Bindless::RT_SPECULAR_HITDIST, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
             {Assets::Bindless::RT_SPECULAR_ALBEDO, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+            {Assets::Bindless::RT_BSDF_DATA, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
             {Assets::Bindless::RT_MOTIONMOMENT, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
         }, "software tracing shading");
         // cs shading pass
@@ -91,6 +92,10 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
             {Assets::Bindless::RT_OBJECTID_0, PipelineCommon::ERenderStage::Compute,
              PipelineCommon::EResourceAccess::ShaderRead},
             {Assets::Bindless::RT_NORMAL, PipelineCommon::ERenderStage::Compute,
+             PipelineCommon::EResourceAccess::ShaderRead},
+            {Assets::Bindless::RT_ALBEDO, PipelineCommon::ERenderStage::Compute,
+             PipelineCommon::EResourceAccess::ShaderRead},
+            {Assets::Bindless::RT_BSDF_DATA, PipelineCommon::ERenderStage::Compute,
              PipelineCommon::EResourceAccess::ShaderRead},
             {Assets::Bindless::RT_PREV_DEPTHBUFFER, PipelineCommon::ERenderStage::Compute,
              PipelineCommon::EResourceAccess::ShaderRead},

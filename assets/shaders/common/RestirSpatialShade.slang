@@ -38,6 +38,8 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
     UniformBufferObject camera = gpuScene.Camera[0];
     let objectId0 = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_0);
     let normalBuffer = Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL);
+    let albedoBuffer = Bindless.GetViewStorageTexture<float4>(Bindless.RT_ALBEDO);
+    let bsdfDataBuffer = Bindless.GetViewStorageTexture<uint2>(Bindless.RT_BSDF_DATA);
     let depthBuffer = Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER);
     let singleDiffuse = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE);
 
@@ -58,13 +60,39 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
         return;
     }
 
-    const float3 normal = normalBuffer[pixel].rgb;
+    const float4 normalData = normalBuffer[pixel];
+    const float3 normal = normalData.rgb;
     const float centerDepth = depthBuffer[pixel];
     const float3 centerView =
         RestirReconstructViewPosition(camera, pixel, size, centerDepth);
     float3 position = mul(camera.ModelViewInverse, float4(centerView, 1.0f)).xyz;
     const float3 eye = mul(camera.ModelViewInverse, float4(0, 0, 0, 1)).xyz;
     position -= normalize(position - eye) * camera.SceneEpsilonScale * 0.01f;
+
+    const uint2 packedBsdf = bsdfDataBuffer[pixel];
+    if (packedBsdf.x == 0xFFFFFFFFu)
+    {
+        RestirGetFinalBuffer(params)[reservoirIndex] = RestirPackReservoir(FRestirState());
+        return;
+    }
+    Material material = gpuScene.GetMaterial(int(packedBsdf.x));
+    if (material.MaterialModel != MaterialLambertian &&
+        material.MaterialModel != MaterialMixture)
+    {
+        RestirGetFinalBuffer(params)[reservoirIndex] = RestirPackReservoir(FRestirState());
+        return;
+    }
+    FBSDFContext context;
+    context.Position = position;
+    context.Normal = normalize(normal);
+    context.Wo = normalize(eye - position);
+    context.BaseColor = albedoBuffer[pixel].rgb;
+    context.PerceptualRoughness = saturate(normalData.a);
+    context.Metalness = saturate(asfloat(packedBsdf.y));
+    context.EtaOutside = 1.0f;
+    context.EtaInside = max(material.RefractionIndex2, 1.0001f);
+    context.MaterialModel = material.MaterialModel;
+    context.FrontFace = true;
 
     uint4 randomSeed = InitRandomSeed(
         dispatchThreadId.x, dispatchThreadId.y, camera.TotalFrames + 7777u);
@@ -75,8 +103,8 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
     {
         float3 centerF;
         float3 centerLightPosition;
-        if (!Common.EvaluateAreaLightSample(
-                center.LightIndex, center.LightUV, position, normal,
+        if (!Common.EvaluateAreaLightDiffuseSample(
+                center.LightIndex, center.LightUV, context,
                 centerF, centerLightPosition))
         {
             center.WeightW = 0.0f;
@@ -84,7 +112,7 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
         else
         {
             const float3 shadowOrigin = tracer.GetAreaLightShadowOrigin(
-                position, normal, centerLightPosition, reconstructionOffset);
+                context.Position, context.Normal, centerLightPosition, reconstructionOffset);
             if (tracer.TraceAreaLightSegment(shadowOrigin, centerLightPosition, EPS))
             {
                 center.WeightW = 0.0f;
@@ -117,6 +145,10 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
             {
                 continue;
             }
+            if (bsdfDataBuffer[neighbor].x != packedBsdf.x)
+            {
+                continue;
+            }
             const float3 neighborNormal = normalBuffer[neighbor].rgb;
             if (dot(neighborNormal, normal) < 0.9f)
             {
@@ -141,8 +173,8 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
             float3 otherF;
             float3 otherLightPosition;
             float otherTargetLum = 0.0f;
-            if (Common.EvaluateAreaLightSample(
-                    other.LightIndex, other.LightUV, position, normal,
+            if (Common.EvaluateAreaLightDiffuseSample(
+                    other.LightIndex, other.LightUV, context,
                     otherF, otherLightPosition))
             {
                 otherTargetLum = dot(otherF, kRestirLumaWeights);
@@ -157,8 +189,8 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
     {
         float3 f;
         float3 lightPosition;
-        if (!Common.EvaluateAreaLightSample(
-                combined.LightIndex, combined.LightUV, position, normal, f, lightPosition))
+        if (!Common.EvaluateAreaLightDiffuseSample(
+                combined.LightIndex, combined.LightUV, context, f, lightPosition))
         {
             combined.WeightW = 0.0f;
         }
@@ -168,7 +200,7 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
                 combined.LightIndex == center.LightIndex &&
                 all(combined.LightUV == center.LightUV);
             const float3 shadowOrigin = tracer.GetAreaLightShadowOrigin(
-                position, normal, lightPosition, reconstructionOffset);
+                context.Position, context.Normal, lightPosition, reconstructionOffset);
             if (!alreadyVerified &&
                 tracer.TraceAreaLightSegment(shadowOrigin, lightPosition, EPS))
             {

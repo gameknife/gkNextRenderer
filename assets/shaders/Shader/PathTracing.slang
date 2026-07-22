@@ -3,6 +3,7 @@ import Shader.Bindless;
 module PathTracing;
 
 #include "common/BasicTypes.slang"
+#include "common/BSDF.slang"
 #include "common/Shading.slang"
 #include "common/RayTracers.slang"
 #include "common/RadianceCache.slang"

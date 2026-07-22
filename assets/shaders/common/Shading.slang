@@ -285,11 +285,13 @@ public interface IRayTracer
 // direct illum
 public interface IDirectIlluminator
 {
-    void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor);
+    void DirectIlluminate(inout uint4 RandomSeed, FBSDFContext context,
+                          inout FDirectLighting directLighting);
 
     // Primary-surface variant. Identical to DirectIlluminate unless a screen-space resampler
     // (ReSTIR) replaces part of the estimate; pixel addresses the per-pixel reservoir.
-    void DirectIlluminatePrimary(inout uint4 RandomSeed, int2 pixel, float3 position, float3 normal, inout float4 directIllumColor);
+    void DirectIlluminatePrimary(inout uint4 RandomSeed, int2 pixel, FBSDFContext context,
+                                 inout FDirectLighting directLighting);
 }
 
 // renderer
