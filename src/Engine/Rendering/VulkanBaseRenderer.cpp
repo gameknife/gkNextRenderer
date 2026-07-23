@@ -1539,7 +1539,7 @@ namespace Vulkan
         frameSettings_.progressiveAccumulatedFrames = engine->GetProgressiveRenderAccumulatedFrames();
         frameSettings_.progressiveTargetFrames = engine->GetProgressiveRenderTargetFrames();
         const auto& settings = frameSettings_.userSettings;
-        const bool frameGenerationEnabled = settings.FrameGeneration &&
+        const bool frameGenerationEnabled = !frameSettings_.progressiveRendering && settings.FrameGeneration &&
             SupportsFrameGeneration(activeUpscalerType_) && temporalSuperResolutionActive_ &&
             engine->GetEngineStatus() != NextRenderer::EApplicationStatus::Loading;
 
@@ -2148,6 +2148,7 @@ namespace Vulkan
 
         bool resolvedByUpscaler = false;
         const bool temporalUpscalerActive =
+            !frameSettings_.progressiveRendering &&
             HasAny(contract.post, EPostProcess::Upscale) && temporalSuperResolutionActive_;
         if (upscaler_ && temporalUpscalerActive)
         {

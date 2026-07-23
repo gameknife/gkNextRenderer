@@ -53,6 +53,8 @@ PathTracing、SoftwareTracing、SoftwareModern 和 SoftwareModernNoAmbient 都�
 average，然后由同一个 compose pass 读取。该 history 在 primary RenderView 第一次确实
 需要 progressive rendering 时按需创建，并保持到本次 swapchain 资源销毁；实时路径不分配它。
 它不读取 motion、ObjectId 或上一帧投影，不是 reprojection，也不参与实时路径。
+offline progressive 保留主相机 jitter 以获取不同子像素样本，但不调用 temporal upscaler 或 Frame Generation；
+最终 `RT_SCENE_COLOR` 通过普通线性 blit 映射到 swapchain，避免再次按 motion vector 重投影已经累积的结果。
 
 ## 已删除资源与接口
 
