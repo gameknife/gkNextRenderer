@@ -796,8 +796,8 @@ bool NextEngine::Tick(bool forcingDelta)
 void NextEngine::End()
 {
     if (agentControl_) { agentControl_->Stop(); agentControl_.reset(); }
-
-    if (!GOption->FastExit)
+    
+    //if (!GOption->FastExit)
     {
         Tasks::TaskCoordinator::GetInstance()->CancelAllParralledTasks();
         Tasks::TaskCoordinator::GetInstance()->WaitForAllTasks();

@@ -259,6 +259,7 @@ namespace Modules::NextTemporalUpscaler
                 constants.minLerpContribution = stationaryFrameCount_ > 5u ? 0.3f : 0.0f;
                 constants.sameCamera = sameCamera ? 1u : 0u;
                 constants.reset = reset ? 1u : 0u;
+                constants.preExposure = 300.0f;
 
                 vkCmdBindDescriptorSets(inputs.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                         pipelineLayout_, 0, 1, &descriptorSet_, 0, nullptr);
