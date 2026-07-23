@@ -1,0 +1,34 @@
+{
+  "name": "upscaler-brightness-ab",
+  "target": "gkNextRenderer",
+  "scene": "assets/models/playground.glb",
+  "defaults": {
+    "waitFrames": 0,
+    "stepTimeoutMs": 15000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 15000 },
+    { "type": "cvar", "name": "r.upscaler.type", "set": 0 },
+    { "type": "wait-frames", "n": 60 },
+    { "type": "screenshot", "out": "screenshots/ab_upscaler_none" },
+    { "type": "cvar", "name": "r.upscaler.type", "set": 3 },
+    { "type": "cvar", "name": "r.upscaler.qualityMode", "set": 0 },
+    { "type": "cvar", "name": "r.upscaler.postFilter", "set": true },
+    { "type": "wait-frames", "n": 60 },
+    { "type": "assert", "query": "cvar.r.upscaler.type", "op": "eq", "value": 3 },
+    { "type": "screenshot", "out": "screenshots/ab_upscaler_fsr" },
+    { "type": "cvar", "name": "r.upscaler.postFilter", "set": false },
+    { "type": "wait-frames", "n": 30 },
+    { "type": "screenshot", "out": "screenshots/ab_upscaler_fsr_nofilter" },
+    { "type": "cvar", "name": "r.upscaler.type", "set": 4 },
+    { "type": "cvar", "name": "r.upscaler.postFilter", "set": true },
+    { "type": "wait-frames", "n": 60 },
+    { "type": "assert", "query": "cvar.r.upscaler.type", "op": "eq", "value": 4 },
+    { "type": "screenshot", "out": "screenshots/ab_upscaler_native" },
+    { "type": "quit" }
+  ]
+}

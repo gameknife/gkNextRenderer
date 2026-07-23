@@ -243,7 +243,10 @@ namespace Modules::NextTemporalUpscaler
                 PrepareFrameBarriers(inputs.commandBuffer, readIndex, writeIndex);
                 UpdateDescriptorSet(inputs, readIndex, writeIndex);
 
-                const bool reset = inputs.reset || !historyValid_;
+                const float exposure = std::max(inputs.ubo->PaperWhiteNit / 40000.0f, 1.0e-6f);
+                const bool exposureChanged =
+                    historyValid_ && std::abs(exposure - previousExposure_) > 1.0e-6f;
+                const bool reset = inputs.reset || !historyValid_ || exposureChanged;
                 const bool sameCamera = !reset && IsSGSR2CameraStill(*inputs.ubo);
                 stationaryFrameCount_ = sameCamera ? stationaryFrameCount_ + 1u : 0u;
 
@@ -259,7 +262,7 @@ namespace Modules::NextTemporalUpscaler
                 constants.minLerpContribution = stationaryFrameCount_ > 5u ? 0.3f : 0.0f;
                 constants.sameCamera = sameCamera ? 1u : 0u;
                 constants.reset = reset ? 1u : 0u;
-                constants.preExposure = 300.0f;
+                constants.preExposure = 4.5f / exposure;
 
                 vkCmdBindDescriptorSets(inputs.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                         pipelineLayout_, 0, 1, &descriptorSet_, 0, nullptr);
@@ -287,6 +290,7 @@ namespace Modules::NextTemporalUpscaler
                               (inputs.outputExtent.height + 7u) / 8u, 1);
 
                 historyValid_ = true;
+                previousExposure_ = exposure;
                 if (!loggedDispatch_)
                 {
                     SPDLOG_INFO("Snapdragon GSR 2 active (2-pass CS): {}x{} -> {}x{}",
@@ -660,6 +664,7 @@ namespace Modules::NextTemporalUpscaler
             std::array<FSGSR2Image, 2> history_{};
             VkExtent2D renderExtent_{};
             VkExtent2D displayExtent_{};
+            float previousExposure_ = 0.0f;
             uint32_t jitterPhaseCount_ = 16;
             uint32_t stationaryFrameCount_ = 0;
             bool deviceReady_ = false;

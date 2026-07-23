@@ -22,7 +22,7 @@ struct PushConstants
     uint reset;
     float sharpness;
     float historyWeight;
-    float padding;
+    float exposure;
 };
 
 [[vk::push_constant]]
@@ -40,7 +40,10 @@ int2 ClampOutputPixel(int2 pixel)
 
 float4 LoadCurrent(int2 pixel)
 {
-    return currentColor.Load(ClampRenderPixel(pixel));
+    const float4 color = currentColor.Load(ClampRenderPixel(pixel));
+    const float exposure = max(constants.exposure, 1.0e-6);
+    const float3 exposedColor = max(color.rgb, 0.0) * exposure;
+    return float4(exposedColor / (1.0 + Luminance(exposedColor)), color.a);
 }
 
 float LoadDepth(int2 pixel)

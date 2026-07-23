@@ -1059,7 +1059,7 @@ namespace Vulkan
         if (temporalPostFilterActive)
         {
             overlay_.temporalPostFilterPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(
-                SwapChain(), "assets/shaders/Process.TemporalPostFilter.comp.slang.spv", 44));
+                SwapChain(), "assets/shaders/Process.TemporalPostFilter.comp.slang.spv", 52));
         }
         overlay_.toneMappingPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(
             SwapChain(), "assets/shaders/Process.TonemapAfterUpscaler.comp.slang.spv", 52));
@@ -2041,8 +2041,10 @@ namespace Vulkan
             float fireflySigma;
             uint32_t stepWidth;
             uint32_t applyFireflyClamp;
+            float exposure;
+            uint32_t finalPass;
         };
-        static_assert(sizeof(FPushConstants) == 44);
+        static_assert(sizeof(FPushConstants) == 52);
 
         RenderImage* sourceImage = temporalPostFilter_.pingImages[imageIndex].get();
         uint32_t sourceIndex = Assets::Bindless::RT_TEMPORAL_POST_PING0 + imageIndex;
@@ -2133,6 +2135,8 @@ namespace Vulkan
                 settings.TemporalUpscalerFireflySigma,
                 1u << pass,
                 pass == 0u ? 1u : 0u,
+                std::max(inputs.ubo->PaperWhiteNit / 40000.0f, 1.0e-6f),
+                finalPass ? 1u : 0u,
             };
             overlay_.temporalPostFilterPipeline->BindPipeline(commandBuffer, &pushConstants);
             vkCmdDispatch(commandBuffer,

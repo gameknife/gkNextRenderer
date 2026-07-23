@@ -19,6 +19,8 @@ struct PushConsts
     float FireflySigma;
     uint StepWidth;
     uint ApplyFireflyClamp;
+    float Exposure;
+    uint FinalPass;
 };
 
 [[vk::push_constant]]
@@ -35,14 +37,16 @@ float3 ClampLuminance(float3 color, float ceiling)
     return luma > ceiling ? color * (ceiling / max(luma, 1e-5f)) : color;
 }
 
-float RelativeColorDelta(float3 centerColor, float3 sampleColor)
+float3 CompressHdr(float3 color, float exposure)
 {
-    const float centerLuma = Luminance(max(centerColor, float3(0.0f)));
-    const float sampleLuma = Luminance(max(sampleColor, float3(0.0f)));
-    const float radianceScale = max(max(centerLuma, sampleLuma), 1.0e-4f);
-    const float lumaDelta = abs(sampleLuma - centerLuma) / radianceScale;
-    const float chromaDelta = length(sampleColor - centerColor) / radianceScale * 0.35f;
-    return max(lumaDelta, chromaDelta);
+    color = max(color, float3(0.0f)) * exposure;
+    return color / (1.0f + Luminance(color));
+}
+
+float3 DecompressHdr(float3 color, float exposure)
+{
+    return max(color, float3(0.0f)) /
+        (max(1.0f - Luminance(color), 6.1e-5f) * exposure);
 }
 
 float AtrousKernelWeight(int offset)
@@ -65,8 +69,13 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     let source = Bindless.GetStorageTexture<float4>(pushConsts.InputIndex);
     let destination = Bindless.GetStorageTexture<float4>(pushConsts.OutputIndex);
 
-    const float4 original = source[pixel];
-    float3 center = original.rgb;
+    const float exposure = max(pushConsts.Exposure, 1.0e-6f);
+    const bool firstPass = pushConsts.ApplyFireflyClamp != 0;
+    float3 center = source[pixel].rgb;
+    if (firstPass)
+    {
+        center = CompressHdr(center, exposure);
+    }
     float neighborMean = 0.0f;
     float neighborSquareMean = 0.0f;
     uint neighborCount = 0;
@@ -81,8 +90,13 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             {
                 continue;
             }
-            const float sampleLuma =
-                Luminance(source[clamp(pixel + int2(x, y), int2(0, 0), imageMax)].rgb);
+            float3 sampleColor =
+                source[clamp(pixel + int2(x, y), int2(0, 0), imageMax)].rgb;
+            if (firstPass)
+            {
+                sampleColor = CompressHdr(sampleColor, exposure);
+            }
+            const float sampleLuma = Luminance(sampleColor);
             neighborMean += sampleLuma;
             neighborSquareMean += sampleLuma * sampleLuma;
             ++neighborCount;
@@ -94,26 +108,19 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     neighborSquareMean *= reciprocalCount;
     const float neighborDeviation =
         sqrt(max(0.0f, neighborSquareMean - neighborMean * neighborMean));
-    const float relativeNeighborDeviation =
-        neighborDeviation / max(neighborMean, 1.0e-4f);
     if (pushConsts.ApplyFireflyClamp != 0)
     {
         // The center does not contribute to this threshold, so an isolated bright sample
         // cannot inflate its own acceptance range.
-        const float fireflyRatio =
-            max(0.025f, pushConsts.FireflySigma * relativeNeighborDeviation);
-        const float fireflyFloor = 0.025f * max(neighborMean, 1.0f);
-        const float fireflyCeiling = neighborMean +
-            max(fireflyFloor, neighborMean * fireflyRatio);
+        const float fireflyCeiling =
+            neighborMean + max(0.025f, pushConsts.FireflySigma * neighborDeviation);
         center = ClampLuminance(center, fireflyCeiling);
     }
 
+    const float centerLuma = Luminance(center);
     float3 accumulated = float3(0.0f);
     float accumulatedWeight = 0.0f;
-    // The post-filter now consumes linear HDR radiance. Keep the cvar in relative units so
-    // its behavior does not collapse when the scene exposure changes.
-    const float sigma = clamp(
-        max(pushConsts.LumaSigma, relativeNeighborDeviation * 2.0f), 0.01f, 0.5f);
+    const float sigma = clamp(max(pushConsts.LumaSigma, neighborDeviation * 2.0f), 0.01f, 0.5f);
     const float inverseSigmaSquared = 1.0f / (sigma * sigma);
     const int stepWidth = int(max(pushConsts.StepWidth, 1u));
 
@@ -140,8 +147,15 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         {
             const int2 samplePixel =
                 clamp(pixel + int2(x, y) * stepWidth, int2(0, 0), imageMax);
-            const float3 sampleColor = x == 0 && y == 0 ? center : source[samplePixel].rgb;
-            const float rangeDelta = RelativeColorDelta(center, sampleColor);
+            float3 sampleColor = x == 0 && y == 0 ? center : source[samplePixel].rgb;
+            if (firstPass && (x != 0 || y != 0))
+            {
+                sampleColor = CompressHdr(sampleColor, exposure);
+            }
+            const float sampleLuma = Luminance(sampleColor);
+            const float lumaDelta = sampleLuma - centerLuma;
+            const float chromaDelta = length(sampleColor - center) * 0.35f;
+            const float rangeDelta = max(abs(lumaDelta), chromaDelta);
             const float spatialWeight = AtrousKernelWeight(x) * AtrousKernelWeight(y);
             const float rangeWeight = exp2(-0.7213475f * rangeDelta * rangeDelta * inverseSigmaSquared);
             const int2 sampleGuidePixel = clamp(
@@ -166,7 +180,11 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     }
 
     const float3 filtered = accumulated / max(accumulatedWeight, 1e-5f);
-    const float3 result = lerp(center, filtered, saturate(pushConsts.Strength));
+    float3 result = lerp(center, filtered, saturate(pushConsts.Strength));
+    if (pushConsts.FinalPass != 0)
+    {
+        result = DecompressHdr(result, exposure);
+    }
     destination[pixel + int2(pushConsts.OutputOffsetX, pushConsts.OutputOffsetY)] =
         float4(result, 1.0f);
 }

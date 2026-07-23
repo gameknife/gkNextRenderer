@@ -66,7 +66,7 @@ namespace NextCVar
         GK_CVAR_BOOL("r.upscaler.postFilter", settings, TemporalUpscalerPostFilter, true, ECVarFlags::Archive, "Apply display-resolution bilateral noise and firefly suppression after supported temporal upscalers");
         GK_CVAR_UINT_RANGE("r.upscaler.postFilterPasses", settings, TemporalUpscalerPostFilterPasses, 3, ECVarFlags::Archive, "Temporal upscaler post-filter a-trous pass count", 1, 4);
         GK_CVAR_FLOAT_RANGE("r.upscaler.postFilterStrength", settings, TemporalUpscalerPostFilterStrength, 0.65f, ECVarFlags::Archive, "Temporal upscaler post-filter blend strength", 0.0, 1.0);
-        GK_CVAR_FLOAT_RANGE("r.upscaler.postFilterLumaSigma", settings, TemporalUpscalerPostFilterLumaSigma, 0.10f, ECVarFlags::Archive, "Temporal upscaler post-filter relative HDR color/luminance edge threshold", 0.01, 0.5);
+        GK_CVAR_FLOAT_RANGE("r.upscaler.postFilterLumaSigma", settings, TemporalUpscalerPostFilterLumaSigma, 0.10f, ECVarFlags::Archive, "Temporal upscaler post-filter compressed-domain color/luminance edge threshold", 0.01, 0.5);
         GK_CVAR_FLOAT_RANGE("r.upscaler.fireflySigma", settings, TemporalUpscalerFireflySigma, 2.5f, ECVarFlags::Archive, "Temporal upscaler post-filter isolated highlight rejection threshold in neighborhood standard deviations", 1.0, 8.0);
         GK_CVAR_BOOL_CB("r.frameGeneration", settings, FrameGeneration, false, ECVarFlags::Archive, "Enable frame generation for the selected upscaler type", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_UINT_CB("r.frameGeneration.multiplier", settings, FrameGenerationMultiplier, 2, ECVarFlags::Archive, "Frame generation multiplier (2-4 when supported)", std::bind(RequestSwapChainIfPossible, engine));

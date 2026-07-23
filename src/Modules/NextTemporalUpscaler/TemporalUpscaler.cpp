@@ -31,7 +31,7 @@ namespace Modules::NextTemporalUpscaler
             uint32_t reset = 0;
             float sharpness = 0.25f;
             float historyWeight = 0.97f;
-            float padding = 0.0f;
+            float exposure = 1.0f;
         };
         static_assert(sizeof(FPushConstants) == 48);
 
@@ -206,14 +206,18 @@ namespace Modules::NextTemporalUpscaler
                 UpdateDescriptorSet(inputs, readIndex, writeIndex);
 
                 FPushConstants constants{};
+                const float exposure = std::max(inputs.ubo->PaperWhiteNit / 40000.0f, 1.0e-6f);
+                const bool exposureChanged =
+                    historyValid_ && std::abs(exposure - previousExposure_) > 1.0e-6f;
                 constants.renderSize = {inputs.renderExtent.width, inputs.renderExtent.height};
                 constants.outputSize = {inputs.outputExtent.width, inputs.outputExtent.height};
                 constants.jitter = {inputs.ubo->Jitter.x, inputs.ubo->Jitter.y};
                 constants.previousJitter = previousJitter_;
-                constants.reset = inputs.reset || !historyValid_ ? 1u : 0u;
+                constants.reset = inputs.reset || !historyValid_ || exposureChanged ? 1u : 0u;
                 constants.sharpness = std::clamp(inputs.nativeTemporalSharpness, 0.0f, 1.0f);
                 constants.historyWeight = std::clamp(
                     inputs.nativeTemporalHistoryWeight, 0.5f, 0.98f);
+                constants.exposure = exposure;
                 vkCmdBindDescriptorSets(inputs.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                         pipelineLayout_, 0, 1, &descriptorSet_, 0, nullptr);
                 vkCmdPushConstants(inputs.commandBuffer, pipelineLayout_, VK_SHADER_STAGE_COMPUTE_BIT,
@@ -235,6 +239,7 @@ namespace Modules::NextTemporalUpscaler
 
                 historyValid_ = true;
                 previousJitter_ = constants.jitter;
+                previousExposure_ = exposure;
                 if (!loggedDispatch_)
                 {
                     SPDLOG_INFO("NativeTemporal TAAU active: {}x{} -> {}x{}",
@@ -601,6 +606,7 @@ namespace Modules::NextTemporalUpscaler
             std::array<FHistoryImage, 2> historyMoments_{};
             VkExtent2D historyExtent_{};
             glm::vec2 previousJitter_{};
+            float previousExposure_ = 0.0f;
             uint32_t jitterPhaseCount_ = 16;
             bool deviceReady_ = false;
             bool historyLayoutsInitialized_ = false;
