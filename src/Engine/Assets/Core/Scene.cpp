@@ -1066,19 +1066,18 @@ namespace Assets
     {
         sceneDirty_ = true;
         sceneDirtyForCpuAS_ = true;
-        NextEngine::GetInstance()->SetProgressiveRendering(false, false);
+        NextEngine::GetInstance()->SetProgressiveRendering(false);
     }
 
     void Scene::MarkTransformDirty()
     {
         sceneDirty_ = true;
-        NextEngine::GetInstance()->SetProgressiveRendering(false, false);
+        NextEngine::GetInstance()->SetProgressiveRendering(false);
     }
 
     void Scene::MarkSelectionDirty()
     {
         sceneDirty_ = true;
-        NextEngine::GetInstance()->SetProgressiveRendering(false, false);
     }
 
     void Scene::OverrideModelView(glm::mat4& outMatrix)

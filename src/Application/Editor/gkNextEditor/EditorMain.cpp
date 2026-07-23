@@ -68,9 +68,9 @@ std::unique_ptr<NextUI::IMultiViewportBackend> EditorGameInstance::CreateMultiVi
 void EditorGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
-    cvars.SetDefaultFromString("r.samples", "4", &error);
-    cvars.SetDefaultFromString("r.temporalFrames", "16", &error);
-    cvars.SetDefaultFromString("r.upscaler.qualityMode", "2", &error);
+    //cvars.SetDefaultFromString("r.samples", "4", &error);
+    //cvars.SetDefaultFromString("r.temporalFrames", "16", &error);
+    cvars.SetDefaultFromString("r.upscaler.qualityMode", "4", &error);
     cvars.RegisterBool("ed.hoverHighlight", true, &settings_.hoverHighlight, NextCVar::ECVarFlags::Archive,
                        "Raycast under the cursor and highlight the hovered object");
     cvars.RegisterBool("ed.outlinerAutoScroll", true, &settings_.outlinerAutoScroll, NextCVar::ECVarFlags::Archive,
@@ -213,10 +213,10 @@ void EditorGameInstance::OnTick(double deltaSeconds)
     }
     if (GOption != nullptr && GOption->RemoteMode && GOption->RemoteMultiView)
     {
-        GetEngine().SetProgressiveRendering(false, false);
+        GetEngine().SetProgressiveRendering(false);
         return;
     }
-    GetEngine().SetProgressiveRendering(!moving, false);
+    GetEngine().SetProgressiveRendering(!moving);
 }
 
 void EditorGameInstance::OnSceneLoaded()

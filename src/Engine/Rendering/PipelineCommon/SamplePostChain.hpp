@@ -29,8 +29,9 @@ namespace Vulkan::PipelineCommon
     };
 
     // Converts the current renderer sample directly into scene color. The only history path
-    // retained here is explicit offline progressive accumulation; realtime rendering never
-    // reprojects or spatially filters the sample before a temporal upscaler consumes it.
+    // retained here is explicit offline progressive accumulation of composed linear radiance;
+    // realtime rendering never reprojects or spatially filters the sample before a temporal
+    // upscaler consumes it.
     class SamplePostChain final
     {
     public:
@@ -40,7 +41,7 @@ namespace Vulkan::PipelineCommon
                  uint32_t imageIndex, const FSamplePostSettings& settings) const;
 
     private:
-        std::unique_ptr<ZeroBindCustomPushConstantPipeline> progressiveAccumulatePipeline_;
+        std::unique_ptr<ZeroBindPipeline> progressiveAccumulatePipeline_;
         std::unique_ptr<ZeroBindPipeline> composePipeline_;
     };
 }

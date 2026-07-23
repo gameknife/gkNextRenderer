@@ -336,7 +336,7 @@ namespace Assets
         std::memcpy(data, gpuMaterials_.data(), gpuMaterials_.size() * sizeof(Material));
         sceneDynamicBufferMemory_->Unmap();
 
-        NextEngine::GetInstance()->SetProgressiveRendering(false, false);
+        NextEngine::GetInstance()->SetProgressiveRendering(false);
     }
 
     bool Scene::UpdateNodes()

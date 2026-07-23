@@ -4,7 +4,7 @@ import Shader.GpuScene;
 import Shader.Tonemap;
 
 // Direct sample compose. Realtime rendering reads the current diffuse/specular sample;
-// explicit offline progressive rendering selects the running-average buffers instead.
+// explicit offline progressive rendering reads the running-average linear scene color instead.
 // The resulting scene color is the common input for temporal upscalers and native presentation.
 
 static const uint OBJECT_ID_FLAG_VALID = 0x80000000u;
@@ -52,24 +52,26 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     }
 
     const bool progressiveRender = Bindless.GetGpuscene().CustomData1 != 0u;
-    const int diffuseSlot = progressiveRender
-        ? Bindless.RT_PROGRESSIVE_DIFFUSE
-        : Bindless.RT_SINGLE_DIFFUSE;
-    const int specularSlot = progressiveRender
-        ? Bindless.RT_PROGRESSIVE_SPECULAR
-        : Bindless.RT_SINGLE_SPECULAR;
-
-    let finalImage = Bindless.GetViewStorageTexture<float4>(diffuseSlot);
-    let finalImageSpecular = Bindless.GetViewStorageTexture<float4>(specularSlot);
-    let albedo = Bindless.GetViewStorageTexture<float4>(Bindless.RT_ALBEDO);
     let objectId0 = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_0);
     let objectId1 = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_1);
     let sceneColor = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SCENE_COLOR);
 
     const int2 pixel = int2(dispatchThreadId.xy) + int2(camera.ViewportRect.xy);
-    float3 total = camera.DebugDraw_Lighting
-        ? finalImage[pixel].rgb * float3(0.5, 0.5, 0.5) + finalImageSpecular[pixel].rgb
-        : finalImage[pixel].rgb * albedo[pixel].rgb + finalImageSpecular[pixel].rgb;
+    float3 total;
+    if (progressiveRender)
+    {
+        let progressiveSceneColor = Bindless.GetViewStorageTexture<float4>(Bindless.RT_PROGRESSIVE_SCENE_COLOR);
+        total = progressiveSceneColor[pixel].rgb;
+    }
+    else
+    {
+        let singleDiffuse = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE);
+        let singleSpecular = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR);
+        let albedo = Bindless.GetViewStorageTexture<float4>(Bindless.RT_ALBEDO);
+        total = camera.DebugDraw_Lighting
+            ? singleDiffuse[pixel].rgb * float3(0.5, 0.5, 0.5) + singleSpecular[pixel].rgb
+            : singleDiffuse[pixel].rgb * albedo[pixel].rgb + singleSpecular[pixel].rgb;
+    }
 
     const bool noSkyBackground =
         !camera.HasSky && !HasObjectFlag(objectId0[pixel], OBJECT_ID_FLAG_VALID);

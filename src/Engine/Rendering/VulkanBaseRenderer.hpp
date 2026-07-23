@@ -335,6 +335,9 @@ namespace Vulkan
                                   std::initializer_list<FViewImageUse> uses,
                                   std::string_view passName);
         const RenderImage* GetStorageImage(uint32_t bindlessIdx) const;
+        // Lazily creates the primary progressive history. Once created, it lives until the
+        // current swapchain resources are destroyed.
+        void EnsureProgressiveRenderTarget();
         // Screen-space RT image of the view currently being recorded (its bank). C++ counterpart
         // of the shader-side Bindless::GetViewStorageTexture; resolves slot through the active
         // view's bank base. Primary view (base 0) == GetStorageImage (legacy absolute).

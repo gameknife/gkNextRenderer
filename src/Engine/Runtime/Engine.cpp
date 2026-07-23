@@ -759,16 +759,6 @@ bool NextEngine::Tick(bool forcingDelta)
         }
         frameState_.totalFrames = renderer_->FrameCount();
 
-        if (progressiveRender_.warmupFramesRemaining > 0)
-        {
-            progressiveRender_.warmupFramesRemaining--;
-            if (progressiveRender_.warmupFramesRemaining == 0)
-            {
-                progressiveRender_.enabled = true;
-                progressiveRender_.accumulatedFrames = 0;
-            }
-        }
-
         if (progressiveRender_.enabled)
         {
             progressiveRender_.accumulatedFrames =
@@ -955,12 +945,11 @@ void NextEngine::RequestScreenShot(FScreenShotSpec spec)
         if (spec.accumulateFrames > 0)
         {
             screenShot_.previousProgressiveEnabled = progressiveRender_.enabled;
-            screenShot_.previousProgressiveWarmupFrames = progressiveRender_.warmupFramesRemaining;
             screenShot_.captureFramesRemaining = spec.accumulateFrames;
             spec.filename = ResolveScreenShotFilename(spec.filename, "hq_screenshot");
 
             progressiveRender_.enabled = true;
-            progressiveRender_.warmupFramesRemaining = 0;
+            progressiveRender_.accumulatedFrames = 0;
             spdlog::info("High quality capture started: accumulating {} frames...",
                          spec.accumulateFrames);
         }
@@ -1021,7 +1010,6 @@ void NextEngine::AdvanceScreenShotCapture()
                      screenShot_.pending.filename, screenShot_.pending.accumulateFrames);
 
         progressiveRender_.enabled = screenShot_.previousProgressiveEnabled;
-        progressiveRender_.warmupFramesRemaining = screenShot_.previousProgressiveWarmupFrames;
     }
     screenShot_.hasPending = false;
     screenShot_.pending = {};
@@ -1077,38 +1065,15 @@ void NextEngine::RayCast(glm::vec3 rayOrigin, glm::vec3 rayDir,
     callback(result);
 }
 
-void NextEngine::SetProgressiveRendering(bool enable, bool directly)
+void NextEngine::SetProgressiveRendering(bool enable)
 {
-    if (directly)
+    if (progressiveRender_.enabled == enable)
     {
-        if (enable && !progressiveRender_.enabled)
-        {
-            progressiveRender_.accumulatedFrames = 0;
-            progressiveRender_.warmupFramesRemaining = 0;
-        }
-        else if (!enable)
-        {
-            progressiveRender_.accumulatedFrames = 0;
-            progressiveRender_.warmupFramesRemaining = 0;
-        }
-        progressiveRender_.enabled = enable;
         return;
     }
 
-    if (enable)
-    {
-        if (!progressiveRender_.enabled && progressiveRender_.warmupFramesRemaining == 0)
-        {
-            progressiveRender_.accumulatedFrames = 0;
-            progressiveRender_.warmupFramesRemaining = config_.userSettings.TemporalFrames * 2;
-        }
-    }
-    else
-    {
-        progressiveRender_.warmupFramesRemaining = 0;
-        progressiveRender_.enabled = false;
-        progressiveRender_.accumulatedFrames = 0;
-    }
+    progressiveRender_.enabled = enable;
+    progressiveRender_.accumulatedFrames = 0;
 }
 
 VkDeviceAddress NextEngine::TryGetGPUAccelerationStructureAddress() const

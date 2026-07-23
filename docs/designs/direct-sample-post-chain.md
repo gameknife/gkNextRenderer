@@ -4,7 +4,7 @@ category: design
 status: 现行
 owner: engine/rendering
 created: 2026-07-20
-last_updated: 2026-07-22
+last_updated: 2026-07-23
 ---
 
 # 直接样本后处理与 Upscaler 输入链
@@ -48,9 +48,11 @@ PathTracing、SoftwareTracing、SoftwareModern 和 SoftwareModernNoAmbient 都�
 ## 唯一保留的颜色累积
 
 显式 offline progressive rendering 仍需要多帧收敛。该模式只运行
-`Process.ProgressiveAccumulate.comp.slang`，在 `RT_PROGRESSIVE_DIFFUSE/SPECULAR` 中做原位
-running average，然后由同一个 compose pass 读取。它不读取 motion、ObjectId 或上一帧
-投影，不是 reprojection，也不参与实时路径。
+`Process.ProgressiveAccumulate.comp.slang`，先将当前帧的 diffuse/specular 按 direct-light
+契约合成为线性 scene radiance，再在单个 `RT_PROGRESSIVE_SCENE_COLOR` 中做原位 running
+average，然后由同一个 compose pass 读取。该 history 在 primary RenderView 第一次确实
+需要 progressive rendering 时按需创建，并保持到本次 swapchain 资源销毁；实时路径不分配它。
+它不读取 motion、ObjectId 或上一帧投影，不是 reprojection，也不参与实时路径。
 
 ## 已删除资源与接口
 
@@ -70,7 +72,7 @@ previous UBO、ObjectId/depth 与 ReSTIR reservoir 失效；它不代表存在�
 - FSR 输出滤波必须保持无历史、只读本帧 FSR intermediate，并在显示分辨率执行；不要将它
   扩展成另一条 temporal accumulation 链。
 - realtime scene color 必须来自当前样本。只有用户明确进入 offline progressive 模式时才
-  允许读取 `RT_PROGRESSIVE_*`。
+  允许读取 `RT_PROGRESSIVE_SCENE_COLOR`。
 - temporal upscaler provider 必须实现现有 `IUpscaler`/scene-color 契约，不应要求 renderer
   恢复旧 storage。当前 `NextStreamline` 与 `NextFidelityFX` 互斥注册同一个 provider factory。
 - `RT_MOTIONVECTOR` 的全引擎契约是 render-pixel 单位；Streamline 与 FidelityFX 都提交

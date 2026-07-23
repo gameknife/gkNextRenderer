@@ -213,7 +213,7 @@ void VisualTestGameInstance::OnSceneLoaded()
             currentSceneIndex_ + 1, scenes_.size(),
             GetSceneName(scenes_[currentSceneIndex_].path));
         
-        GetEngine().SetProgressiveRendering(false, true);
+        GetEngine().SetProgressiveRendering(false);
         frameCounter_ = 0;
         sceneStartTime_ = std::chrono::steady_clock::now();
         state_ = State::Rendering;

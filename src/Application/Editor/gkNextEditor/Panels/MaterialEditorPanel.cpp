@@ -97,7 +97,7 @@ namespace Editor
         void MarkMaterialEdited(EditorContext& ctx)
         {
             ctx.scene.MarkMaterialsDirty();
-            ctx.engine.SetProgressiveRendering(false, false);
+            ctx.engine.SetProgressiveRendering(false);
         }
 
         class MaterialEditCommand final : public Runtime::Command::ICommand

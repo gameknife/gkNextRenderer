@@ -165,7 +165,7 @@ public:
                     std::function<bool(Assets::RayCastResult rayResult)> callback);
     
     // Rendering helpers
-    void SetProgressiveRendering(bool enable, bool directly);
+    void SetProgressiveRendering(bool enable);
     bool IsProgressiveRendering() const { return progressiveRender_.enabled; }
     bool IsOfflineProgressivePathTracing() const
     {
@@ -323,12 +323,11 @@ private:
         uint32_t mouseButtons = 0;
     };
 
-    // Progressive rendering warmup state
+    // Progressive rendering state
     struct FProgressiveRenderState
     {
         static constexpr uint32_t TargetFrames = 1024;
         bool enabled = false;
-        uint32_t warmupFramesRemaining = 0;
         uint32_t accumulatedFrames = 0;
     };
 
@@ -344,7 +343,6 @@ private:
         bool exportPending = false;
         uint32_t asyncExportsInFlight = 0;
         bool previousProgressiveEnabled = false;
-        uint32_t previousProgressiveWarmupFrames = 0;
 
         bool IsCapturing() const { return queuedRequests > 0 || hasPending || exportPending; }
     };

@@ -51,21 +51,61 @@ float3 UintToStableColor(uint value)
     return rgb + m;
 }
 
+float2 GetFilteredUv(float quadx, float quady, float divider, int2 ipos, int2 isize)
+{
+    const float2 tileSize = float2(isize) / divider;
+    const float2 tileOrigin = tileSize * float2(quadx, quady) +
+                              float2(pushConsts.offset_x, pushConsts.offset_y);
+    // Map the destination pixel center to normalized source coordinates. The -0.5
+    // in SampleBilinear below then applies the usual texel-center convention.
+    return (float2(ipos) - tileOrigin + 0.5) / tileSize;
+}
+
+float4 SampleBilinear(RWTexture2D<float4> image, float2 uv)
+{
+    int2 size;
+    image.GetDimensions(size.x, size.y);
+    const int2 maxCoord = size - 1;
+    const float2 position = clamp(uv * float2(size) - 0.5, 0.0, float2(maxCoord));
+    const int2 base = int2(floor(position));
+    const int2 nextX = min(base + int2(1, 0), maxCoord);
+    const int2 nextY = min(base + int2(0, 1), maxCoord);
+    const int2 nextXY = min(base + int2(1, 1), maxCoord);
+    const float2 fraction = frac(position);
+
+    const float4 top = lerp(image[base], image[nextX], fraction.x);
+    const float4 bottom = lerp(image[nextY], image[nextXY], fraction.x);
+    return lerp(top, bottom, fraction.y);
+}
+
+float SampleBilinear(RWTexture2D<float> image, float2 uv)
+{
+    int2 size;
+    image.GetDimensions(size.x, size.y);
+    const int2 maxCoord = size - 1;
+    const float2 position = clamp(uv * float2(size) - 0.5, 0.0, float2(maxCoord));
+    const int2 base = int2(floor(position));
+    const int2 nextX = min(base + int2(1, 0), maxCoord);
+    const int2 nextY = min(base + int2(0, 1), maxCoord);
+    const int2 nextXY = min(base + int2(1, 1), maxCoord);
+    const float2 fraction = frac(position);
+
+    const float top = lerp(image[base], image[nextX], fraction.x);
+    const float bottom = lerp(image[nextY], image[nextXY], fraction.x);
+    return lerp(top, bottom, fraction.y);
+}
+
 #define DRAW(IMAGE, quadx, quady, divider, ipos, isize, multiplier) {                                                              \
-        int2 uv = int2(0, 0);                                      \
-        if (DrawQuad(quadx, quady, divider, ipos, isize, uv)) {                                                          \
-            int2 ssize;                                            \
-            IMAGE.GetDimensions(ssize.x, ssize.y);                 \
-            float4 col = IMAGE[uv * ssize / isize]; \
+        float2 uv = float2(0, 0);                                      \
+        if (DrawQuadFiltered(quadx, quady, divider, ipos, isize, uv)) {                                                          \
+            float4 col = SampleBilinear(IMAGE, uv); \
             Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = col * multiplier;} \
 }
 
 #define DRAWNORMAL(IMAGE, quadx, quady, divider, ipos, isize) {                                                         \
-        int2 uv = int2(0, 0);                                 \
-        if (DrawQuad(quadx, quady, divider, ipos, isize, uv)) {                                                     \
-            int2 ssize;                                       \
-            IMAGE.GetDimensions(ssize.x, ssize.y);            \
-            float4 col = IMAGE[uv * ssize / isize]; \
+        float2 uv = float2(0, 0);                                 \
+        if (DrawQuadFiltered(quadx, quady, divider, ipos, isize, uv)) {                                                     \
+            float4 col = SampleBilinear(IMAGE, uv); \
             Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = col.rbga * 0.5 + 0.5;} \
 }
 
@@ -100,14 +140,26 @@ float3 UintToStableColor(uint value)
     }
 
 #define DRAWDEPTH(IMAGE, quadx, quady, divider, ipos, isize, depth) {                                                               \
-        int2 uv = int2(0, 0);                                       \
-        if (DrawQuad(quadx, quady, divider, ipos, isize, uv)) {                                                           \
-            int2 ssize;                                             \
-            IMAGE.GetDimensions(ssize.x, ssize.y);                  \
-            float icol = IMAGE[uv * ssize / isize];                 \
+        float2 uv = float2(0, 0);                                       \
+        if (DrawQuadFiltered(quadx, quady, divider, ipos, isize, uv)) {                                                           \
+            float icol = SampleBilinear(IMAGE, uv);                 \
             float3 color = float3(pow(saturate(icol / depth), 100));           \
             Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = float4(color, 1.0);}                                                     \
+}
+
+bool DrawQuadFiltered(float quadx, float quady, float divider, int2 ipos, int2 isize, out float2 uv)
+{
+    const float2 tileSize = float2(isize) / divider;
+    const float2 tileOrigin = tileSize * float2(quadx, quady) +
+                              float2(pushConsts.offset_x, pushConsts.offset_y);
+    if (all(float2(ipos) >= tileOrigin) && all(float2(ipos) < tileOrigin + tileSize))
+    {
+        uv = GetFilteredUv(quadx, quady, divider, ipos, isize);
+        return true;
     }
+    uv = float2(0, 0);
+    return false;
+}
 
 bool DrawQuad(float quadx, float quady, float divider, int2 ipos, int2 isize, out int2 uv)
 {
@@ -157,7 +209,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SHADER_TIMER)), 0.5, 0.5, 2, ipos, isize, 1);
 
     // line back
-    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_PROGRESSIVE_DIFFUSE)), 0, 3, 4, ipos, isize, 0.005);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_DIFFUSE_HITDIST)), 0, 3, 4, ipos, isize, 0.005);
     DRAWINTX(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MINIGBUFFER)), 1, 3, 4, ipos, isize);
     DRAWINTY(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MINIGBUFFER)), 2, 3, 4, ipos, isize);
     DRAWINT(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MOTIONMOMENT)), 3, 3, 4, ipos, isize);

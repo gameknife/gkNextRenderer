@@ -5,7 +5,8 @@ namespace Bindless
     // --- Screen-space RT slots (0..30): per-RenderView, resolved through ViewRT() ---
 
     // G-buffer / primary signals
-    public static const int RT_PROGRESSIVE_DIFFUSE = 0;
+    // Single linear scene-color history used only by offline progressive rendering.
+    public static const int RT_PROGRESSIVE_SCENE_COLOR = 0;
     public static const int RT_SINGLE_DIFFUSE = 1;
     public static const int RT_MINIGBUFFER = 2;
     public static const int RT_OBJECTID_0 = 3;
@@ -16,7 +17,7 @@ namespace Bindless
     public static const int RT_SHADER_TIMER = 8;
     public static const int RT_SCENE_COLOR = 9;
     public static const int RT_PREV_DEPTHBUFFER = 10;
-    public static const int RT_PROGRESSIVE_SPECULAR = 11;
+    // Slot 11 is intentionally unused; keep later slots stable for the bindless layout.
     public static const int RT_SINGLE_SPECULAR = 12;
     // material index + effective metalness for BSDF-aware ReSTIR reconstruction
     public static const int RT_BSDF_DATA = 13;

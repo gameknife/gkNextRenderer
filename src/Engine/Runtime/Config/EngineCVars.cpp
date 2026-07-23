@@ -47,7 +47,7 @@ namespace NextCVar
 {
     void RegisterEngineCVars(FCVarSystem& cvars, Runtime::Config::UserSettings& settings, Runtime::Config::ShowFlags& showFlags, NextEngine* engine)
     {
-        GK_CVAR_UINT("r.temporalFrames", settings, TemporalFrames, 16, ECVarFlags::Archive, "Moving-object history rejection and progressive warmup frames");
+        GK_CVAR_UINT("r.temporalFrames", settings, TemporalFrames, 16, ECVarFlags::Archive, "Moving-object history rejection frames");
         GK_CVAR_INT("r.samples", settings, NumberOfSamples, 2, ECVarFlags::Archive, "Samples per pixel");
         GK_CVAR_UINT("r.bounces", settings, NumberOfBounces, 8, ECVarFlags::Archive, "Ray bounce count");
         GK_CVAR_INT("r.rendererType", settings, RendererType, 0, ECVarFlags::Archive, "Renderer type (0=PathTracing,1=SoftwareTracing,2=SoftwareModern,3=VoxelTracing,4=SoftwareModernNoAmbient)");
