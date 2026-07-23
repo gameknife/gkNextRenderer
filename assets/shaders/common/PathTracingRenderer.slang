@@ -1,3 +1,5 @@
+implementing PathTracing;
+
 #include "PreProcessor.slang"
 
 // Direct illumination strategies + path-tracing renderer split out of Shading.slang.

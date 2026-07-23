@@ -1,3 +1,7 @@
+implementing PathTracing;
+
+#include "PreProcessor.slang"
+
 // ReSTIR DI shared primitives: availability, reservoir pack/unpack, streaming RIS
 // (Update / Merge / FinalizeW) and the M0 plumbing debug views. Data layouts live in
 // BasicTypes.slang (FTracingExtras, FRestirReservoir, FRestirRuntimeParameters);

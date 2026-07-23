@@ -1,3 +1,7 @@
+implementing PathTracing;
+
+#include "PreProcessor.slang"
+
 // Availability is judged per-feature on the extras table fields, not on the table pointer:
 // the table also exists when only ReSTIR is enabled (see FTracingExtras). The null check
 // is an explicit branch on purpose — scalar && does not guarantee short-circuiting here, and

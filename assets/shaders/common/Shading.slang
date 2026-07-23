@@ -1,3 +1,5 @@
+implementing PathTracing;
+
 #include "PreProcessor.slang"
 
 static const float PT_MAX_TRACE_DISTANCE = 1000.f;

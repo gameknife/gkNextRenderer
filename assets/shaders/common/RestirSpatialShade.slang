@@ -1,3 +1,7 @@
+implementing PathTracing;
+
+#include "PreProcessor.slang"
+
 // Shared ReSTIR DI pass 2. Hardware and software entry shaders provide an IRayTracer;
 // reservoir combination and shading stay single-source.
 

@@ -1,3 +1,5 @@
+implementing PathTracing;
+
 #include "PreProcessor.slang"
 
 // IRayTracer implementations split out of Shading.slang.

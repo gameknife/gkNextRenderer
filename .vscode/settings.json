@@ -28,5 +28,15 @@
     "cmake.debugConfig": {
         "name": "CMake Debug (LLDB)"
     },
-    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools"
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "slang.additionalSearchPaths": [
+        "${workspaceFolder}/assets/shaders"
+    ],
+    "slang.searchInAllWorkspaceDirectories": true,
+    "slang.predefinedMacros": [
+        "SHADER_CLOCK",
+        "GK_ENABLE_OFFICIAL_SHARC",
+        "SHARC_UPDATE=0",
+        "SHARC_QUERY=0"
+    ]
 }
