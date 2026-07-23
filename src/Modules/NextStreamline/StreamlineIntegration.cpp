@@ -1461,10 +1461,10 @@ namespace
             options.outputHeight = inputs.outputExtent.height;
             options.colorBuffersHDR = (inputs.inputColorIsLinear || inputs.hdrOutput)
                 ? sl::Boolean::eTrue : sl::Boolean::eFalse;
-            options.dlaaPreset = sl::DLSSPreset::ePresetK;
-            options.qualityPreset = sl::DLSSPreset::ePresetK;
-            options.balancedPreset = sl::DLSSPreset::ePresetK;
-            options.performancePreset = sl::DLSSPreset::ePresetK;
+            options.dlaaPreset = sl::DLSSPreset::ePresetJ;
+            options.qualityPreset = sl::DLSSPreset::ePresetJ;
+            options.balancedPreset = sl::DLSSPreset::ePresetJ;
+            options.performancePreset = sl::DLSSPreset::ePresetJ;
             options.ultraPerformancePreset = sl::DLSSPreset::ePresetF;
 
             const sl::Result result = slDLSSSetOptions(viewport, options);

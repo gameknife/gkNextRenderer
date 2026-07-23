@@ -121,7 +121,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         const float neighborDeviation = sqrt(max(
             neighborSquareMean - neighborMean * neighborMean, 0.0));
         const float fireflyCeiling =
-            neighborMean + max(0.025, fireflySigma * neighborDeviation);
+            neighborMean + max(0.01, fireflySigma * neighborDeviation);
         const float centerLuma = Luminance(total);
         if (centerLuma > fireflyCeiling)
         {

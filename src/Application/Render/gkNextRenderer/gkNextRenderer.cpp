@@ -1241,9 +1241,9 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
             }
             DrawFloatSetting("Filter Strength", &userSetting.TemporalUpscalerPostFilterStrength, 0.0f, 1.0f, "%.2f", 0.01f);
             DrawFloatSetting("Edge Sigma", &userSetting.TemporalUpscalerPostFilterLumaSigma, 0.01f, 0.5f, "%.2f", 0.01f);
-            DrawFloatSetting("Firefly Sigma", &userSetting.TemporalUpscalerFireflySigma, 1.0f, 8.0f, "%.1f", 0.1f);
             ImGui::EndDisabled();
         }
+        DrawFloatSetting("Firefly Sigma", &userSetting.TemporalUpscalerFireflySigma, 0.1f, 16.0f, "%.1f", 0.1f);
 
         const bool canUseFrameGeneration =
             GetEngine().GetRenderer().SupportsFrameGeneration(upscalerTypeInfo.type);
