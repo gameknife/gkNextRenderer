@@ -36,7 +36,12 @@ option(GK_ENABLE_HOT_RELOAD "Enable desktop Slang shader hot reload" ON)
 option(GK_ENABLE_CPP_LIVE_CODING "Enable Windows C++ live coding through Live++" OFF)
 set(GK_LIVEPP_ROOT "$ENV{LIVEPP_ROOT}" CACHE PATH
     "Path to the Live++ root directory (the directory containing API/ and Agent/)")
-option(GK_ENABLE_SHADER_CLOCK "Enable shader clock heatmap instrumentation" OFF)
+if(WIN32)
+    set(GK_ENABLE_SHADER_CLOCK_DEFAULT ON)
+else()
+    set(GK_ENABLE_SHADER_CLOCK_DEFAULT OFF)
+endif()
+option(GK_ENABLE_SHADER_CLOCK "Enable shader clock heatmap instrumentation" ${GK_ENABLE_SHADER_CLOCK_DEFAULT})
 
 if(GK_ENABLE_CPP_LIVE_CODING)
     if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)

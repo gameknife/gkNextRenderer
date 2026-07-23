@@ -145,7 +145,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
 // line 2/3 left
 #ifdef SHADER_CLOCK
-    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SHADER_TIMER)), 0, 1, 4, ipos, isize, 1);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SCENE_COLOR)), 0, 1, 4, ipos, isize, 1);
 #endif
     DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MOTIONVECTOR)), 0, 2, 4, ipos, isize, 1);
 
@@ -154,7 +154,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SINGLE_DIFFUSE)), 3, 2, 4, ipos, isize, 0.005);
     
     // center
-    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SCENE_COLOR)), 0.5, 0.5, 2, ipos, isize, 1);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SHADER_TIMER)), 0.5, 0.5, 2, ipos, isize, 1);
 
     // line back
     DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_PROGRESSIVE_DIFFUSE)), 0, 3, 4, ipos, isize, 0.005);
