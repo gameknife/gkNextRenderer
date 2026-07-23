@@ -95,6 +95,7 @@ private:
     std::optional<EViewportInputTarget> capturedInputViewport_{};
     NextUI::GizmoController gizmoController_;
     Editor::EditorSettings settings_{};
+    uint32_t progressiveRenderResumeFramesRemaining_ = 0;
 };
 
 inline bool EditorGameInstance::OverrideRenderCamera(Assets::Camera& OutRenderCamera) const

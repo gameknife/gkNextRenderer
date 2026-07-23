@@ -944,6 +944,31 @@ namespace Vulkan
             }
         }
 
+        lateToneMapping_.inputInitialized.clear();
+        {
+            const size_t imageCount = frame_.swapChain->Images().size();
+            if (Assets::Bindless::RT_TONEMAP_INPUT0 + imageCount > Assets::Bindless::RT_REMOTE_ENCODE0_Y)
+            {
+                Throw(std::runtime_error("Late tone-mapping bindless slot range exhausted"));
+            }
+            lateToneMapping_.inputInitialized.assign(imageCount, false);
+            for (size_t i = 0; i < imageCount; ++i)
+            {
+                const std::string debugName = fmt::format("Late tone-mapping input {}", i);
+                bindless_.images[Assets::Bindless::RT_TONEMAP_INPUT0 + i].reset(new RenderImage(
+                    Device(),
+                    frame_.swapChain->OutputExtent(),
+                    VK_FORMAT_R16G16B16A16_SFLOAT,
+                    VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                    false,
+                    debugName.c_str()));
+                ctx_.globalTexturePool->BindStorageTexture(
+                    Assets::Bindless::RT_TONEMAP_INPUT0 + static_cast<uint32_t>(i),
+                    bindless_.images[Assets::Bindless::RT_TONEMAP_INPUT0 + i]->GetImageView());
+            }
+        }
+
         frameGeneration_.hudlessImages.clear();
         const bool frameGenerationActive = temporalSuperResolutionActive_ &&
             frameSettings_.userSettings.FrameGeneration &&
@@ -989,7 +1014,7 @@ namespace Vulkan
                 temporalPostFilter_.pingImages.emplace_back(std::make_unique<RenderImage>(
                     Device(),
                     frame_.swapChain->OutputExtent(),
-                    frame_.swapChain->Format(),
+                    VK_FORMAT_R16G16B16A16_SFLOAT,
                     VK_IMAGE_TILING_OPTIMAL,
                     VK_IMAGE_USAGE_STORAGE_BIT,
                     false,
@@ -1002,7 +1027,7 @@ namespace Vulkan
                 temporalPostFilter_.pongImages.emplace_back(std::make_unique<RenderImage>(
                     Device(),
                     frame_.swapChain->OutputExtent(),
-                    frame_.swapChain->Format(),
+                    VK_FORMAT_R16G16B16A16_SFLOAT,
                     VK_IMAGE_TILING_OPTIMAL,
                     VK_IMAGE_USAGE_STORAGE_BIT,
                     false,
@@ -1036,6 +1061,8 @@ namespace Vulkan
             overlay_.temporalPostFilterPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(
                 SwapChain(), "assets/shaders/Process.TemporalPostFilter.comp.slang.spv", 44));
         }
+        overlay_.toneMappingPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(
+            SwapChain(), "assets/shaders/Process.TonemapAfterUpscaler.comp.slang.spv", 52));
         overlay_.bufferClearPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*frame_.swapChain, "assets/shaders/Util.BufferClear.comp.slang.spv", 4));
         // Shared swap-chain resources must cover every registered renderer because
         // switching logic renderers does not recreate the swap chain.
@@ -1279,6 +1306,7 @@ namespace Vulkan
         skin_.jointBuffer.reset();
         skin_.jointMemory.reset();
         overlay_.temporalPostFilterPipeline.reset();
+        overlay_.toneMappingPipeline.reset();
         overlay_.visualDebuggerPipeline.reset();
 
         CreateSceneSwapChainResources();
@@ -1341,6 +1369,7 @@ namespace Vulkan
         temporalPostFilter_.pongImages.clear();
         temporalPostFilter_.pingInitialized.clear();
         temporalPostFilter_.pongInitialized.clear();
+        lateToneMapping_.inputInitialized.clear();
         frame_.commandBuffers.reset();
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframePipeline.reset();
@@ -1364,6 +1393,7 @@ namespace Vulkan
         skin_.jointMemory.reset();
 
         overlay_.temporalPostFilterPipeline.reset();
+        overlay_.toneMappingPipeline.reset();
         overlay_.visualDebuggerPipeline.reset();
         frame_.uniformBuffers.clear();
         frame_.inFlightFences.clear();
@@ -1926,14 +1956,6 @@ namespace Vulkan
         const uint32_t imageIndex,
         RenderView& view)
     {
-        SCOPED_GPU_TIMER("blit");
-        TransitionSwapchainImage(
-            commandBuffer, imageIndex,
-            {.stages = PipelineCommon::ERenderStage::Transfer,
-             .access = PipelineCommon::EResourceAccess::TransferWrite,
-             .layout = VK_IMAGE_LAYOUT_GENERAL},
-            "compose view subrect");
-
         const RenderImage* sceneColorImage = GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_SCENE_COLOR);
         if (sceneColorImage == nullptr)
         {
@@ -1941,39 +1963,20 @@ namespace Vulkan
         }
 
         TransitionViewImages(commandBuffer, view, {
-            {Assets::Bindless::RT_SCENE_COLOR, PipelineCommon::ERenderStage::Transfer,
-             PipelineCommon::EResourceAccess::TransferRead},
+            {Assets::Bindless::RT_SCENE_COLOR, PipelineCommon::ERenderStage::Compute,
+             PipelineCommon::EResourceAccess::ShaderRead},
         }, "compose view subrect source");
 
         const VkRect2D subrect = view.Desc().subrect;
-        VkImageBlit blitRegion = {};
-        blitRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        blitRegion.srcOffsets[0] = {0, 0, 0};
-        blitRegion.srcOffsets[1] = {
-            static_cast<int32_t>(view.RenderExtent().width),
-            static_cast<int32_t>(view.RenderExtent().height),
-            1
-        };
-        blitRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        blitRegion.dstOffsets[0] = {
-            subrect.offset.x,
-            subrect.offset.y,
-            0
-        };
-        blitRegion.dstOffsets[1] = {
-            subrect.offset.x + static_cast<int32_t>(subrect.extent.width),
-            subrect.offset.y + static_cast<int32_t>(subrect.extent.height),
-            1
-        };
-
-        vkCmdBlitImage(commandBuffer,
-                       sceneColorImage->GetImage().Handle(),
-                       VK_IMAGE_LAYOUT_GENERAL,
-                       SwapChain().Images()[imageIndex],
-                       VK_IMAGE_LAYOUT_GENERAL,
-                       1,
-                       &blitRegion,
-                       VK_FILTER_LINEAR);
+        ApplyToneMappingAfterUpscaler(
+            commandBuffer,
+            imageIndex,
+            false,
+            view.RtBankBase(),
+            view.RenderExtent(),
+            subrect.extent,
+            subrect.offset,
+            view.State().previousUniformBuffer);
     }
 
     bool VulkanBaseRenderer::PrepareTemporalPostFilterOutput(
@@ -2065,7 +2068,26 @@ namespace Vulkan
             uint32_t destinationIndex = Assets::Bindless::RT_SWAPCHAIN0 + imageIndex;
             int32_t destinationOffsetX = inputs.outputOffset.x;
             int32_t destinationOffsetY = inputs.outputOffset.y;
-            if (!finalPass)
+            if (finalPass)
+            {
+                destinationImage = bindless_.images[Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex].get();
+                destinationIndex = Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex;
+                destinationOffsetX = 0;
+                destinationOffsetY = 0;
+                const bool initialized = lateToneMapping_.inputInitialized[imageIndex];
+                ImageMemoryBarrier::Insert(
+                    commandBuffer,
+                    initialized ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    destinationImage->GetImage().Handle(),
+                    range,
+                    initialized ? VK_ACCESS_SHADER_READ_BIT : 0u,
+                    VK_ACCESS_SHADER_WRITE_BIT,
+                    initialized ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED,
+                    VK_IMAGE_LAYOUT_GENERAL);
+                lateToneMapping_.inputInitialized[imageIndex] = true;
+            }
+            else
             {
                 const bool sourceIsPing = sourceIndex == Assets::Bindless::RT_TEMPORAL_POST_PING0 + imageIndex;
                 destinationImage = sourceIsPing
@@ -2126,6 +2148,167 @@ namespace Vulkan
         }
     }
 
+    void VulkanBaseRenderer::ApplyToneMappingAfterUpscaler(
+        VkCommandBuffer commandBuffer,
+        const uint32_t imageIndex,
+        const bool sourceIsUpscaled,
+        const uint32_t sourceViewBankBase,
+        const VkExtent2D sourceExtent,
+        const VkExtent2D outputExtent,
+        const VkOffset2D outputOffset,
+        const Assets::UniformBufferObject& outputUbo)
+    {
+        if (overlay_.toneMappingPipeline == nullptr ||
+            imageIndex >= lateToneMapping_.inputInitialized.size())
+        {
+            return;
+        }
+
+        SCOPED_GPU_TIMER("tone mapping after upscaler");
+        constexpr VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        const bool writesSwapchain = SwapChain().SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT);
+        uint32_t inputIndex = Assets::Bindless::RT_SCENE_COLOR;
+        VkExtent2D inputExtent = sourceExtent;
+        if (sourceIsUpscaled)
+        {
+            inputIndex = Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex;
+            inputExtent = outputExtent;
+            RenderImage* inputImage = bindless_.images[inputIndex].get();
+            if (inputImage == nullptr)
+            {
+                return;
+            }
+            ImageMemoryBarrier::Insert(
+                commandBuffer,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                inputImage->GetImage().Handle(),
+                range,
+                VK_ACCESS_SHADER_WRITE_BIT,
+                VK_ACCESS_SHADER_READ_BIT,
+                VK_IMAGE_LAYOUT_GENERAL,
+                VK_IMAGE_LAYOUT_GENERAL);
+        }
+
+        const uint32_t outputIndex = writesSwapchain
+            ? Assets::Bindless::RT_SWAPCHAIN0 + imageIndex
+            : Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex;
+        RenderImage* offscreenOutput = writesSwapchain
+            ? nullptr
+            : bindless_.images[Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex].get();
+        if (!writesSwapchain && offscreenOutput == nullptr)
+        {
+            return;
+        }
+        if (offscreenOutput != nullptr)
+        {
+            const bool initialized = lateToneMapping_.inputInitialized[imageIndex];
+            ImageMemoryBarrier::Insert(
+                commandBuffer,
+                initialized ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT
+                             : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                offscreenOutput->GetImage().Handle(),
+                range,
+                initialized ? VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT : 0u,
+                VK_ACCESS_SHADER_WRITE_BIT,
+                initialized ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_GENERAL);
+            lateToneMapping_.inputInitialized[imageIndex] = true;
+        }
+
+        TransitionSwapchainImage(
+            commandBuffer, imageIndex,
+            {.stages = writesSwapchain ? PipelineCommon::ERenderStage::Compute
+                                       : PipelineCommon::ERenderStage::Transfer,
+             .access = writesSwapchain ? PipelineCommon::EResourceAccess::ShaderWrite
+                                       : PipelineCommon::EResourceAccess::TransferWrite,
+             .layout = VK_IMAGE_LAYOUT_GENERAL},
+            "tone mapping after upscaler");
+
+        struct FPushConstants
+        {
+            uint32_t inputIndex;
+            uint32_t inputWidth;
+            uint32_t inputHeight;
+            uint32_t outputWidth;
+            uint32_t outputHeight;
+            int32_t outputOffsetX;
+            int32_t outputOffsetY;
+            uint32_t outputIndex;
+            uint32_t sourceIsUpscaled;
+            float paperWhiteNit;
+            uint32_t hdrOutputMode;
+            uint32_t hdr;
+            uint32_t hasSky;
+        };
+        static_assert(sizeof(FPushConstants) == 52);
+
+        const FPushConstants pushConstants{
+            inputIndex,
+            inputExtent.width,
+            inputExtent.height,
+            outputExtent.width,
+            outputExtent.height,
+            outputOffset.x,
+            outputOffset.y,
+            outputIndex,
+            sourceIsUpscaled ? 1u : 0u,
+            outputUbo.PaperWhiteNit,
+            outputUbo.HDROutputMode,
+            outputUbo.HDR,
+            outputUbo.HasSky,
+        };
+        overlay_.toneMappingPipeline->BindPipeline(commandBuffer, &pushConstants, sourceViewBankBase);
+        vkCmdDispatch(
+            commandBuffer,
+            (outputExtent.width + 7u) / 8u,
+            (outputExtent.height + 7u) / 8u,
+            1);
+
+        if (offscreenOutput != nullptr)
+        {
+            ImageMemoryBarrier::Insert(
+                commandBuffer,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                offscreenOutput->GetImage().Handle(),
+                range,
+                VK_ACCESS_SHADER_WRITE_BIT,
+                VK_ACCESS_TRANSFER_READ_BIT,
+                VK_IMAGE_LAYOUT_GENERAL,
+                VK_IMAGE_LAYOUT_GENERAL);
+            VkImageBlit blitRegion{};
+            blitRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            blitRegion.srcOffsets[0] = {
+                outputOffset.x,
+                outputOffset.y,
+                0};
+            blitRegion.srcOffsets[1] = {
+                outputOffset.x + static_cast<int32_t>(outputExtent.width),
+                outputOffset.y + static_cast<int32_t>(outputExtent.height),
+                1};
+            blitRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            blitRegion.dstOffsets[0] = {
+                outputOffset.x,
+                outputOffset.y,
+                0};
+            blitRegion.dstOffsets[1] = {
+                outputOffset.x + static_cast<int32_t>(outputExtent.width),
+                outputOffset.y + static_cast<int32_t>(outputExtent.height),
+                1};
+            vkCmdBlitImage(
+                commandBuffer,
+                offscreenOutput->GetImage().Handle(),
+                VK_IMAGE_LAYOUT_GENERAL,
+                SwapChain().Images()[imageIndex],
+                VK_IMAGE_LAYOUT_GENERAL,
+                1,
+                &blitRegion,
+                VK_FILTER_LINEAR);
+        }
+    }
+
     void VulkanBaseRenderer::ResolvePrimaryViewToSwapchain(
         VkCommandBuffer commandBuffer,
         const uint32_t imageIndex)
@@ -2163,8 +2346,35 @@ namespace Vulkan
             auto inputs = BuildUpscalerFrameInputs(commandBuffer, imageIndex, VK_IMAGE_LAYOUT_GENERAL);
             const auto& typeInfo = Rendering::Upscaler::GetUpscalerTypeInfo(
                 static_cast<uint32_t>(activeUpscalerType_));
+            inputs.inputColorIsLinear = true;
+            RenderImage* toneMappingInput =
+                bindless_.images[Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex].get();
+            if (toneMappingInput == nullptr)
+            {
+                return;
+            }
+            inputs.scalingOutputColor = MakeRenderImageResource(
+                toneMappingInput,
+                VK_IMAGE_LAYOUT_GENERAL,
+                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
             const bool temporalPostFilterActive = typeInfo.supportsTemporalPostFilter &&
                 PrepareTemporalPostFilterOutput(commandBuffer, imageIndex, inputs);
+            if (!temporalPostFilterActive)
+            {
+                const bool initialized = lateToneMapping_.inputInitialized[imageIndex];
+                constexpr VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+                ImageMemoryBarrier::Insert(
+                    commandBuffer,
+                    initialized ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    toneMappingInput->GetImage().Handle(),
+                    range,
+                    initialized ? VK_ACCESS_SHADER_READ_BIT : 0u,
+                    VK_ACCESS_SHADER_WRITE_BIT,
+                    initialized ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED,
+                    VK_IMAGE_LAYOUT_GENERAL);
+                lateToneMapping_.inputInitialized[imageIndex] = true;
+            }
             if (typeInfo.requiresStorageOutput)
             {
                 VkImageSubresourceRange depthRange{VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
@@ -2244,50 +2454,15 @@ namespace Vulkan
                 temporalPostFilter_.pingInitialized[imageIndex] = false;
             }
         }
-        if (resolvedByUpscaler)
-        {
-            return;
-        }
-
-        if (!resolvedByUpscaler)
-        {
-            SCOPED_GPU_TIMER("blit");
-            TransitionSwapchainImage(
-                commandBuffer, imageIndex,
-                {.stages = PipelineCommon::ERenderStage::Transfer,
-                 .access = PipelineCommon::EResourceAccess::TransferWrite,
-                 .layout = VK_IMAGE_LAYOUT_GENERAL},
-                "primary blit");
-            
-            VkImageBlit blitRegion = {};
-            blitRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            blitRegion.srcOffsets[0] = {0, 0, 0};
-            blitRegion.srcOffsets[1] = {
-                static_cast<int32_t>(SwapChain().RenderExtent().width),
-                static_cast<int32_t>(SwapChain().RenderExtent().height),
-                1
-            };
-            blitRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            blitRegion.dstOffsets[0] = {
-                static_cast<int32_t>(SwapChain().OutputOffset().x),
-                static_cast<int32_t>(SwapChain().OutputOffset().y),
-                0
-            };
-            blitRegion.dstOffsets[1] = {
-                static_cast<int32_t>(SwapChain().OutputOffset().x + SwapChain().OutputExtent().width),
-                static_cast<int32_t>(SwapChain().OutputOffset().y + SwapChain().OutputExtent().height),
-                1
-            };
-
-            vkCmdBlitImage(commandBuffer,
-                           GetViewStorageImage(Assets::Bindless::RT_SCENE_COLOR)->GetImage().Handle(),
-                           VK_IMAGE_LAYOUT_GENERAL,
-                           SwapChain().Images()[imageIndex],
-                           VK_IMAGE_LAYOUT_GENERAL,
-                           1,
-                           &blitRegion,
-                           VK_FILTER_LINEAR);
-        }
+        ApplyToneMappingAfterUpscaler(
+            commandBuffer,
+            imageIndex,
+            resolvedByUpscaler,
+            0,
+            SwapChain().RenderExtent(),
+            SwapChain().OutputExtent(),
+            SwapChain().OutputOffset(),
+            frame_.lastUBO);
     }
 
     void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)

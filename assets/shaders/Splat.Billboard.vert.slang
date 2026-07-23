@@ -355,7 +355,7 @@ VertexOutput main(uint vertexIndex : SV_VertexID, uint instanceIndex : SV_Instan
     UniformBufferObject* camera = push.gpuScene.Camera;
     const float3 worldPosition = mul(model.world, float4(splat.positionOpacity.xyz, 1.0)).xyz;
     const float4 viewPosition = mul(camera[0].ModelView, float4(worldPosition, 1.0));
-    float4 clip = mul(camera[0].ProjectionUnJit, viewPosition);
+    float4 clip = mul(camera[0].Projection, viewPosition);
     clip.z = clamp(clip.z, 0.0, abs(clip.w));
 
     float3 right = float3(camera[0].ModelView[0][0], camera[0].ModelView[0][1], camera[0].ModelView[0][2]);

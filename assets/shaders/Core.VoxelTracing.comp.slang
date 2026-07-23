@@ -4,22 +4,8 @@ import Shader.PathTracing;
 
 void OutputColor(int2 ipos, float3 Total, bool noSkyBackground)
 {
-    let Camera = Bindless.GetGpuscene().Camera[0];
-    if (noSkyBackground)
-    {
-        Bindless.GetViewStorageTexture<float4>(Bindless.RT_SCENE_COLOR)[ipos] =
-            float4(EncodeNoSkyBackground(Camera.HDR, Camera.PaperWhiteNit, Camera.HDROutputMode), 1.0f);
-        return;
-    }
-
-    if (Camera.HDR)
-    {
-        Bindless.GetViewStorageTexture<float4>(Bindless.RT_SCENE_COLOR)[ipos] = float4(EncodeHdrOutput(Total, Camera.PaperWhiteNit, Camera.HDROutputMode), 0.0);
-    }
-    else
-    {
-        Bindless.GetViewStorageTexture<float4>(Bindless.RT_SCENE_COLOR)[ipos] = float4(Uncharted2_Tonemapping(Total * Camera.PaperWhiteNit / 20000.0), 0.0);
-    }
+    Bindless.GetViewStorageTexture<float4>(Bindless.RT_SCENE_COLOR)[ipos] =
+        float4(Total, noSkyBackground ? 0.0 : 1.0);
 }
 
 [shader("compute")]

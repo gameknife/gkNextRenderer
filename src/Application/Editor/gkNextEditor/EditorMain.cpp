@@ -81,6 +81,9 @@ void EditorGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
                         NextCVar::ECVarFlags::Archive, "Translation gizmo snap distance", nullptr, 0.001, 1000.0);
     cvars.RegisterInt("ed.gizmoDefaultMode", 0, &settings_.gizmoDefaultMode, NextCVar::ECVarFlags::Archive,
                       "Default gizmo operation (0=translate,1=rotate,2=scale)", nullptr, 0, 2);
+    cvars.RegisterInt("ed.progressiveRenderResumeFrames", 8, &settings_.progressiveRenderResumeFrames,
+                      NextCVar::ECVarFlags::Archive,
+                      "Frames to wait after gizmo interaction before resuming progressive rendering", nullptr, 0, 120);
     cvars.RegisterUserFileChannel("ed.", "assets/configs/cvar_user.editor.json");
 }
 
@@ -213,10 +216,29 @@ void EditorGameInstance::OnTick(double deltaSeconds)
     }
     if (GOption != nullptr && GOption->RemoteMode && GOption->RemoteMultiView)
     {
+        progressiveRenderResumeFramesRemaining_ =
+            static_cast<uint32_t>(std::max(settings_.progressiveRenderResumeFrames, 0));
         GetEngine().SetProgressiveRendering(false);
         return;
     }
-    GetEngine().SetProgressiveRendering(!moving);
+
+    const uint32_t progressiveRenderResumeFrames =
+        static_cast<uint32_t>(std::max(settings_.progressiveRenderResumeFrames, 0));
+    if (moving || gizmoController_.IsUsing())
+    {
+        progressiveRenderResumeFramesRemaining_ = progressiveRenderResumeFrames;
+        GetEngine().SetProgressiveRendering(false);
+        return;
+    }
+
+    if (progressiveRenderResumeFramesRemaining_ > 0)
+    {
+        --progressiveRenderResumeFramesRemaining_;
+        GetEngine().SetProgressiveRendering(false);
+        return;
+    }
+
+    GetEngine().SetProgressiveRendering(true);
 }
 
 void EditorGameInstance::OnSceneLoaded()

@@ -1,7 +1,6 @@
 import Shader.Bindless;
 import Shader.Types;
 import Shader.GpuScene;
-import Shader.Tonemap;
 
 static const uint OBJECT_ID_FLAG_VALID = 0x80000000u;
 static const uint OBJECT_ID_FLAG_SELECTED = 0x40000000u;
@@ -176,12 +175,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
         total = lerp(total, float3(80, 220, 120), saturate(hoveredEdge * 0.75));
     }
 
-    if (camera.HDR)
-    {
-        OutImage[pixel] = float4(EncodeHdrOutput(total, camera.PaperWhiteNit, camera.HDROutputMode), 1.0);
-    }
-    else
-    {
-        OutImage[pixel] = float4(GT_Tonemapping(total * camera.PaperWhiteNit / 40000.0), 1.0);
-    }
+    const bool noSkyBackground = !camera.HasSky && !surface;
+    OutImage[pixel] = float4(total, noSkyBackground ? 0.0 : 1.0);
 }

@@ -31,7 +31,7 @@ namespace Vulkan::PipelineCommon
     // Converts the current renderer sample directly into scene color. The only history path
     // retained here is explicit offline progressive accumulation of composed linear radiance;
     // realtime rendering never reprojects or spatially filters the sample before a temporal
-    // upscaler consumes it.
+    // upscaler consumes it. Display encoding is applied by the final output pass.
     class SamplePostChain final
     {
     public:

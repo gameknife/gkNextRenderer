@@ -471,6 +471,7 @@ namespace Vulkan
             std::vector<std::unique_ptr<IExternalRenderPass>> externalPasses;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> bufferClearPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> temporalPostFilterPipeline;
+            std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> toneMappingPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> visualDebuggerPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> gpuCullCompactPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> softMeshShaderFinalizePipeline;
@@ -527,6 +528,11 @@ namespace Vulkan
             std::vector<bool> pongInitialized;
         };
 
+        struct LateToneMappingResources
+        {
+            std::vector<bool> inputInitialized;
+        };
+
         DeviceCaps caps_;
         DeviceContext ctx_;
         FrameResources frame_;
@@ -542,6 +548,7 @@ namespace Vulkan
         ScreenshotResources screenshot_;
         FrameGenerationResources frameGeneration_;
         TemporalPostFilterResources temporalPostFilter_;
+        LateToneMappingResources lateToneMapping_;
         AmbientCubePipelines ambient_;
         OverlayPipelines overlay_;
         ShadowCameraFamilyCache shadowCameraFamilyCache_;
@@ -595,6 +602,15 @@ namespace Vulkan
             VkCommandBuffer commandBuffer,
             uint32_t imageIndex,
             const Rendering::Upscaler::FFrameInputs& inputs);
+        void ApplyToneMappingAfterUpscaler(
+            VkCommandBuffer commandBuffer,
+            uint32_t imageIndex,
+            bool sourceIsUpscaled,
+            uint32_t sourceViewBankBase,
+            VkExtent2D sourceExtent,
+            VkExtent2D outputExtent,
+            VkOffset2D outputOffset,
+            const Assets::UniformBufferObject& outputUbo);
         void CreateStorageImage(uint32_t bindlessIdx, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
         void CreateStorageImage(uint32_t bindlessIdx, VkExtent2D extent, VkFormat format, VkImageTiling tiling,
                                 VkImageUsageFlags usage, const char* debugName);

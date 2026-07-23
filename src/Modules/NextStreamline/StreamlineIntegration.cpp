@@ -1442,7 +1442,8 @@ namespace
                 options.ultraPerformancePreset = sl::DLSSDPreset::ePresetE;
                 options.outputWidth = inputs.outputExtent.width;
                 options.outputHeight = inputs.outputExtent.height;
-                options.colorBuffersHDR = inputs.hdrOutput ? sl::Boolean::eTrue : sl::Boolean::eFalse;
+                options.colorBuffersHDR = (inputs.inputColorIsLinear || inputs.hdrOutput)
+                    ? sl::Boolean::eTrue : sl::Boolean::eFalse;
                 options.normalRoughnessMode = sl::DLSSDNormalRoughnessMode::ePacked;
 
                 const sl::Result result = slDLSSDSetOptions(viewport, options);
@@ -1458,7 +1459,8 @@ namespace
             options.mode = ToDLSSMode(inputs.superResolutionMode);
             options.outputWidth = inputs.outputExtent.width;
             options.outputHeight = inputs.outputExtent.height;
-            options.colorBuffersHDR = inputs.hdrOutput ? sl::Boolean::eTrue : sl::Boolean::eFalse;
+            options.colorBuffersHDR = (inputs.inputColorIsLinear || inputs.hdrOutput)
+                ? sl::Boolean::eTrue : sl::Boolean::eFalse;
             options.dlaaPreset = sl::DLSSPreset::ePresetK;
             options.qualityPreset = sl::DLSSPreset::ePresetK;
             options.balancedPreset = sl::DLSSPreset::ePresetK;

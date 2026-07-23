@@ -833,9 +833,11 @@ namespace FidelityFXWrapper
                 dispatch.cameraFar = inputs.camera.farPlane;
                 dispatch.cameraFovAngleVertical = inputs.camera.verticalFovRadians;
                 dispatch.viewSpaceToMetersFactor = 1.0f;
-                dispatch.flags = inputs.hdrOutput
-                    ? FFX_UPSCALE_FLAG_NON_LINEAR_COLOR_PQ
-                    : FFX_UPSCALE_FLAG_NON_LINEAR_COLOR_SRGB;
+                dispatch.flags = inputs.inputColorIsLinear
+                    ? 0u
+                    : (inputs.hdrOutput
+                        ? FFX_UPSCALE_FLAG_NON_LINEAR_COLOR_PQ
+                        : FFX_UPSCALE_FLAG_NON_LINEAR_COLOR_SRGB);
 
                 const ffx::ReturnCode result = ffx::Dispatch(Context().UpscaleContext(), dispatch);
                 if (result != ffx::ReturnCode::Ok)

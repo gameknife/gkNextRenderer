@@ -92,6 +92,7 @@
             {"cvar": "ed.outlinerAutoScroll", "label": "Auto-scroll Outliner", "widget": "checkbox"},
             {"cvar": "ed.gizmoSnap", "label": "Gizmo Snap", "widget": "checkbox"},
             {"cvar": "ed.gizmoSnapTranslate", "label": "Translation Snap", "widget": "drag_float", "min": 0.001, "max": 1000.0, "step": 0.1, "format": "%.3f"},
+            {"cvar": "ed.progressiveRenderResumeFrames", "label": "Progressive Render Delay", "widget": "slider_int", "min": 0, "max": 120},
             {
               "cvar": "ed.gizmoDefaultMode",
               "label": "Default Gizmo",

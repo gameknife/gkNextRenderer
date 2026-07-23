@@ -845,15 +845,15 @@ namespace Assets
 
             if (mat.occlusionTexture.index != -1 && mat.occlusionTexture.index != mat.pbrMetallicRoughness.metallicRoughnessTexture.index)
             {
-                SPDLOG_WARN("Material '{}': Separate Occlusion texture not supported. Pack it into the R channel of Metallic-Roughness texture.", mat.name);
+                //SPDLOG_WARN("Material '{}': Separate Occlusion texture not supported. Pack it into the R channel of Metallic-Roughness texture.", mat.name);
             }
             if (mat.alphaMode != "OPAQUE")
             {
-                 SPDLOG_WARN("Material '{}': Alpha mode '{}' not fully supported (assumed OPAQUE).", mat.name, mat.alphaMode);
+                 //SPDLOG_WARN("Material '{}': Alpha mode '{}' not fully supported (assumed OPAQUE).", mat.name, mat.alphaMode);
             }
             if (mat.doubleSided)
             {
-                 SPDLOG_WARN("Material '{}': Double sided not supported.", mat.name);
+                 //SPDLOG_WARN("Material '{}': Double sided not supported.", mat.name);
             }
             
             glm::vec3 emissiveColor = mat.emissiveFactor.empty()

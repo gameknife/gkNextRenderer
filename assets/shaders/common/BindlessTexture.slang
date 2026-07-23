@@ -39,6 +39,9 @@ namespace Bindless
     // Slots 50..55 mirror RT_SWAPCHAIN0..2 and stay below the remote encode range.
     public static const int RT_TEMPORAL_POST_PING0 = RT_TEMP_USAGE0;
     public static const int RT_TEMPORAL_POST_PONG0 = RT_TEMPORAL_POST_PING0 + 3;
+    // Full-resolution linear scene color targets consumed by the final output pass.
+    // Slots 56..58 remain below the remote encode range.
+    public static const int RT_TONEMAP_INPUT0 = RT_TEMPORAL_POST_PONG0 + 3;
     // Compatibility aliases for older shader and host code.
     public static const int RT_REMOTE_ENCODE0_Y = 60;
     public static const int RT_REMOTE_ENCODE0_UV = 61;

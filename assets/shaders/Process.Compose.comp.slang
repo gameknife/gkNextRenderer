@@ -1,11 +1,11 @@
 import Shader.Bindless;
 import Shader.Types;
 import Shader.GpuScene;
-import Shader.Tonemap;
 
 // Direct sample compose. Realtime rendering reads the current diffuse/specular sample;
 // explicit offline progressive rendering reads the running-average linear scene color instead.
-// The resulting scene color is the common input for temporal upscalers and native presentation.
+// The resulting scene color is linear HDR radiance. Display encoding is performed only by the
+// final output pass after temporal upscaling.
 
 static const uint OBJECT_ID_FLAG_VALID = 0x80000000u;
 static const uint OBJECT_ID_FLAG_SELECTED = 0x40000000u;
@@ -106,18 +106,5 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         total = lerp(total, float3(80, 220, 120), hoveredEdge);
     }
 
-    if (camera.HDR)
-    {
-        const float3 outputColor = noSkyBackground
-            ? EncodeNoSkyBackground(true, camera.PaperWhiteNit, camera.HDROutputMode)
-            : EncodeHdrOutput(total, camera.PaperWhiteNit, camera.HDROutputMode);
-        sceneColor[pixel] = float4(outputColor, 1.0);
-    }
-    else
-    {
-        const float3 outputColor = noSkyBackground
-            ? EncodeNoSkyBackground(false, camera.PaperWhiteNit, camera.HDROutputMode)
-            : GT_Tonemapping(total * camera.PaperWhiteNit / 40000.0);
-        sceneColor[pixel] = float4(outputColor, 1.0);
-    }
+    sceneColor[pixel] = float4(total, noSkyBackground ? 0.0 : 1.0);
 }

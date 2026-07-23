@@ -479,9 +479,12 @@ void NextRendererGameInstance::OnTick(double deltaSeconds)
 {
     if (playbackPaused_ && !stepRequested_)
     {
+        GetEngine().SetProgressiveRendering(GetEngine().GetUserSettings().ProgressiveRender);
         return;
     }
-    modelViewController_.UpdateCamera(10.0f, deltaSeconds);
+
+    const bool moving = modelViewController_.UpdateCamera(10.0f, deltaSeconds);
+    GetEngine().SetProgressiveRendering(GetEngine().GetUserSettings().ProgressiveRender && !moving);
     stepRequested_ = false;
 }
 
@@ -1164,6 +1167,7 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Ray Tracing"), true))
     {
         DrawSettingCheckboxRow(LOCTEXT("AntiAlias"), &userSetting.TAA);
+        DrawSettingCheckboxRow(LOCTEXT("Progressive Render"), &userSetting.ProgressiveRender);
         DrawIntSetting(LOCTEXT("Samples"), &userSetting.NumberOfSamples, 1, 16);
         DrawSettingCheckboxRow(LOCTEXT("Exit After First"), &userSetting.ExitAfterFirst);
         DrawIntSetting(LOCTEXT("Ambient Speed"), &userSetting.BakeSpeedLevel, 0, 2);

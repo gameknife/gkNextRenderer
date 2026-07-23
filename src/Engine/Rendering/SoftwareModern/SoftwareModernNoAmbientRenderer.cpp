@@ -85,7 +85,9 @@ namespace Vulkan::SoftwareModernNoAmbient
                     {Assets::Bindless::RT_SCENE_COLOR, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
                 }, "gtao compose");
                 composePipeline_->BindPipeline(commandBuffer,
-                    GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase()));
+                    GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase()),
+                    baseRender_.ActiveViewBankBase(),
+                    0u, 0u);
                 vkCmdDispatch(commandBuffer,
                               Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
                               Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
