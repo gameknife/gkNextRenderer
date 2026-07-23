@@ -834,18 +834,11 @@ public struct FPathTracingRenderer{
         }
         else
         {
-            // if(FuzzyTracing)
-            // {
-            //     float4 skyColor = Camera.HasSky ? Common.SampleIBLRough(Camera.SkyIdx, trace_dir, Camera.SkyRotation) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
-            //     rayColor *= skyColor;
-            // }
-            // else
-            {
-                float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
-                rayColor *= skyColor;
-                outHitMiss = true;
-                outTerminalRadiance = skyColor.rgb;
-            }
+            float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+            rayColor *= skyColor;
+            outHitMiss = true;
+            outTerminalRadiance = skyColor.rgb;
+            
             outHitDist = PT_MAX_TRACE_DISTANCE;
             return true;
         }
@@ -1077,11 +1070,13 @@ public struct FPathTracingRenderer{
         {
             float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir_, Camera.SkyRotation, 0) * Camera.SkyIntensity : float4(0, 0, 0, 0);
             skyColor.rgb += Common.EvaluateAnalyticSunDisk(primaryRayDir_);
+            float2 skyMotionPixels =
+                Common.CalculateSkyMotionVector(Camera, primaryRayDir_) * size_;
 
             if (WriteOutputs)
             {
                 OutSingleDiffuse.Store(pixel_, skyColor);
-                OutMotionVector.Store(pixel_, float4(0, 0, 0, 0));
+                OutMotionVector.Store(pixel_, float4(skyMotionPixels, 0, 0));
                 OutAlbedo.Store(pixel_, float4(1, 1, 1, 1));
                 OutNormal.Store(pixel_, float4(0, 1, 0, 1));
                 OutObjectID.Store(pixel_, 0);

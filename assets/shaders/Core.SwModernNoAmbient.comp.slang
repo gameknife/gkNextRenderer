@@ -79,7 +79,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, float4(0));
         Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_0).Store(pixel, 0);
         Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, 1000);
-        Bindless.GetViewStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(pixel, float4(0));
+        float2 skyMotionPixels =
+            Common.CalculateSkyMotionVector(Camera, primaryRayDir) * float2(size);
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(
+            pixel, float4(skyMotionPixels, 0, 0));
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL).Store(pixel, float4(0));
         return;
     }

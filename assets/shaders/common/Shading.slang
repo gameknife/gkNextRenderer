@@ -93,6 +93,17 @@ namespace Common
             : motion;
     }
 
+    public float2 CalculateSkyMotionVector(in UniformBufferObject Camera, float3 worldRayDirection)
+    {
+        // Sky radiance is infinitely far away: camera translation must not contribute to
+        // its motion, while camera rotation (and projection changes) still must reproject it.
+        float4 currFrameHPos = mul(Camera.ViewProjectionUnJit, float4(worldRayDirection, 0));
+        float4 prevFrameHPos = mul(Camera.PrevViewProjectionUnJit, float4(worldRayDirection, 0));
+        float2 currfpos = currFrameHPos.xy / currFrameHPos.w * 0.5;
+        float2 prevfpos = prevFrameHPos.xy / prevFrameHPos.w * 0.5;
+        return prevfpos - currfpos;
+    }
+
     float3 mikkTSpace(float3 vNt, float3 normal, float4 tangent)
     {
         vNt = vNt * 2.0 - 1.0;
