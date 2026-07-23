@@ -271,8 +271,8 @@ namespace Rendering::Upscaler
         uint32_t superResolutionMode = 0;
         uint32_t frameGenerationMultiplier = 2;
         bool hdrOutput = false;
-        // True when the scaling input remains linear scene radiance. Providers must not
-        // apply an sRGB/PQ transfer to this input; display encoding happens afterwards.
+        // True when the scaling input remains pre-exposed linear scene radiance. Providers
+        // must not apply an sRGB/PQ transfer; display encoding happens afterwards.
         bool inputColorIsLinear = false;
         float frameTimeDeltaMilliseconds = 16.6667f;
         float nativeTemporalHistoryWeight = 0.97f;

@@ -827,7 +827,8 @@ namespace FidelityFXWrapper
                 dispatch.enableSharpening = false;
                 dispatch.sharpness = 0.0f;
                 dispatch.frameTimeDelta = inputs.frameTimeDeltaMilliseconds;
-                dispatch.preExposure = 1.0f;
+                dispatch.preExposure =
+                    std::max(inputs.ubo->PaperWhiteNit / 40000.0f, 1.0e-6f);
                 dispatch.reset = inputs.reset;
                 dispatch.cameraNear = inputs.camera.nearPlane;
                 dispatch.cameraFar = inputs.camera.farPlane;

@@ -21,7 +21,7 @@ struct PushConstants
     uint reset;
     float sharpness;
     float historyWeight;
-    float exposure;
+    float padding;
 };
 
 [[vk::push_constant]]
@@ -38,10 +38,10 @@ float Luminance(float3 color)
     return dot(color, float3(0.2126, 0.7152, 0.0722));
 }
 
-float3 DecompressHdr(float3 color, float exposure)
+float3 DecompressHdr(float3 color)
 {
     return max(color, float3(0.0)) /
-        (max(1.0 - Luminance(color), 6.1e-5) * max(exposure, 1.0e-6));
+        max(1.0 - Luminance(color), 6.1e-5);
 }
 
 [shader("compute")]
@@ -66,6 +66,9 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     const float contrast = (Luminance(localMaximum) - Luminance(localMinimum)) /
                            max(Luminance(localMaximum), 0.05);
     const float adaptiveStrength = constants.sharpness * saturate(1.0 - contrast * 0.65);
-    const float3 sharpened = max(center + (center - blur) * adaptiveStrength, 0.0);
-    outputColor[pixel] = float4(DecompressHdr(sharpened, constants.exposure), 1.0);
+    const float3 sharpened = clamp(
+        center + (center - blur) * adaptiveStrength,
+        localMinimum,
+        localMaximum);
+    outputColor[pixel] = float4(DecompressHdr(sharpened), 1.0);
 }

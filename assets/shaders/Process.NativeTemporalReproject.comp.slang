@@ -22,7 +22,7 @@ struct PushConstants
     uint reset;
     float sharpness;
     float historyWeight;
-    float exposure;
+    float padding;
 };
 
 [[vk::push_constant]]
@@ -41,9 +41,8 @@ int2 ClampOutputPixel(int2 pixel)
 float4 LoadCurrent(int2 pixel)
 {
     const float4 color = currentColor.Load(ClampRenderPixel(pixel));
-    const float exposure = max(constants.exposure, 1.0e-6);
-    const float3 exposedColor = max(color.rgb, 0.0) * exposure;
-    return float4(exposedColor / (1.0 + Luminance(exposedColor)), color.a);
+    const float3 positiveColor = max(color.rgb, 0.0);
+    return float4(positiveColor / (1.0 + Luminance(positiveColor)), color.a);
 }
 
 float LoadDepth(int2 pixel)
@@ -201,8 +200,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     const bool historyOnScreen = all(previousUv > 0.0) && all(previousUv < 1.0);
     const float previousDepth = historyOnScreen ? SampleHistoryDepth(previousUv) : depth;
     const float depthThreshold = max(
-        0.00035 + abs(depth) * 0.0005,
-        (localDepthMaximum - localDepthMinimum) * 1.1);
+        0.01 + abs(depth) * 0.01,
+        (localDepthMaximum - localDepthMinimum) * 1.35);
     const bool disoccluded = !historyOnScreen || abs(previousDepth - depth) > depthThreshold;
 
     // Current-frame spatial statistics. YCoCg prevents a bright channel from expanding the
@@ -231,7 +230,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         RgbToYCoCg(reconstructedCurrent.rgb),
         neighborhoodMinimum - spatialSigma * 0.2,
         neighborhoodMaximum + spatialSigma * 0.2);
-    const float3 currentRgb = max(YCoCgToRgb(currentYCoCg), 0.0);
+    float3 currentRgb = max(YCoCgToRgb(currentYCoCg), 0.0);
 
     float4 history = SampleHistoryCatmullRom(previousUv);
     history.a = saturate(history.a);
@@ -241,6 +240,18 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     const float temporalSigma = sqrt(temporalVariance);
     const float noiseRatio = temporalSigma / max(abs(previousMoments.x), 0.05);
     const float clipGamma = lerp(1.25, 2.75, saturate(noiseRatio * 2.0));
+    const float learnedLock = saturate((history.a - 0.2) * 1.5);
+    const bool invalidHistory = constants.reset != 0 || disoccluded ||
+                                any(isnan(history)) || any(isnan(previousMoments));
+    if (!invalidHistory && learnedLock > 0.5)
+    {
+        const float currentLuminance = Luminance(currentRgb);
+        const float fireflyCeiling = previousMoments.x + temporalSigma * 2.5;
+        if (currentLuminance > fireflyCeiling)
+        {
+            currentRgb *= fireflyCeiling / max(currentLuminance, 1.0e-5);
+        }
+    }
     // A locked history is allowed slightly outside this frame's noisy min/max range. Clamping
     // strictly to a single noisy frame defeats temporal convergence and was the main source of
     // the weak reuse in the first implementation.
@@ -267,14 +278,11 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         max(max(currentLuminance, abs(previousMoments.x)) + temporalSigma, 0.05);
     const float clipDistance = abs(historyYCoCg.x - clippedHistoryYCoCg.x) /
         max(max(abs(historyYCoCg.x), abs(currentYCoCg.x)), 0.05);
-    const float learnedLock = saturate((history.a - 0.2) * 1.5);
     const float reactive = saturate(unexpectedChange * 1.25 + clipDistance * 0.75) * learnedLock;
     const float outputMotionLength = length(
         motion * (float2(constants.outputSize) / float2(constants.renderSize)));
     const float motionStability = exp2(-outputMotionLength * 0.012);
 
-    const bool invalidHistory = constants.reset != 0 || disoccluded ||
-                                any(isnan(history)) || any(isnan(previousMoments));
     const float confidence = invalidHistory ? 0.0 : min(history.a + 0.12, 1.0);
     const float historyBlend = invalidHistory ? 0.0 : min(
         constants.historyWeight * confidence * motionStability * (1.0 - reactive * 0.85),

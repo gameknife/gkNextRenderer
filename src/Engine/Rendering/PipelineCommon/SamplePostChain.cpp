@@ -75,7 +75,14 @@ namespace Vulkan::PipelineCommon
             composePipeline_->BindPipeline(
                 commandBuffer,
                 baseRenderer.GetScene().FetchGPUScene(imageIndex, baseRenderer.ActiveViewBankBase()),
-                baseRenderer.ActiveViewBankBase(), settings.progressiveRender ? 1u : 0u, 0u);
+                baseRenderer.ActiveViewBankBase(),
+                settings.progressiveRender ? 1u : 0u,
+                !settings.progressiveRender &&
+                        !baseRenderer.FrameSettings().offlineProgressivePathTracing &&
+                        baseRenderer.FrameSettings().userSettings.ComposeFireflyClamp
+                    ? std::bit_cast<uint32_t>(
+                          baseRenderer.FrameSettings().userSettings.TemporalUpscalerFireflySigma)
+                    : 0u);
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(extent.width, 8),
                           Utilities::Math::GetSafeDispatchCount(extent.height, 8), 1);
         }

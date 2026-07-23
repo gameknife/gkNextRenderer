@@ -64,7 +64,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         noSkyBackground = !Camera.HasSky;
     }
 
-    OutputColor(ipos, outColor.rgb, noSkyBackground);
+    const float exposure = max(Camera.PaperWhiteNit / 40000.0, 1.0e-6);
+    OutputColor(ipos, max(outColor.rgb, 0.0) * exposure, noSkyBackground);
 
     END_SHADERCLOCK(ipos)
 }

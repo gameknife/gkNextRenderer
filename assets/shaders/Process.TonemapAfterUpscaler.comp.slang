@@ -68,12 +68,15 @@ float3 EncodeDisplayColor(
     {
         return noSkyBackground
             ? EncodeNoSkyBackground(true, paperWhiteNit, outputMode)
-            : EncodeHdrOutput(linearColor, paperWhiteNit, outputMode);
+            : EncodeHdrOutput(
+                  linearColor / max(paperWhiteNit / 40000.0, 1.0e-6),
+                  paperWhiteNit,
+                  outputMode);
     }
 
     return noSkyBackground
         ? EncodeNoSkyBackground(false, paperWhiteNit, outputMode)
-        : GT_Tonemapping(linearColor * paperWhiteNit / 40000.0);
+        : GT_Tonemapping(linearColor);
 }
 
 [shader("compute")]

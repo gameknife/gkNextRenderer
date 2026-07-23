@@ -152,6 +152,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     {
         total = ambient.rgb;
     }
+    const float exposure = max(camera.PaperWhiteNit / 40000.0f, 1.0e-6f);
+    total = max(total, float3(0.0f)) * exposure;
 
     const float dangerEdge = ComputeEdgeStrengthTwoSided(ObjectIdImage, pixel, imageMax, OBJECT_ID_FLAG_DANGER);
     const float lockedEdge = ComputeEdgeStrengthTwoSided(ObjectIdImage, pixel, imageMax, OBJECT_ID_FLAG_LOCKED);
@@ -160,19 +162,19 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     if (dangerEdge > 0)
     {
-        total = lerp(total, float3(255, 45, 35), saturate(dangerEdge * 0.90));
+        total = lerp(total, float3(255, 45, 35) * exposure, saturate(dangerEdge * 0.90));
     }
     else if (lockedEdge > 0)
     {
-        total = lerp(total, float3(35, 145, 255), saturate(lockedEdge * 0.75));
+        total = lerp(total, float3(35, 145, 255) * exposure, saturate(lockedEdge * 0.75));
     }
     else if (selectedEdge > 0)
     {
-        total = lerp(total, float3(150, 100, 0), saturate(selectedEdge * 0.80));
+        total = lerp(total, float3(150, 100, 0) * exposure, saturate(selectedEdge * 0.80));
     }
     else if (hoveredEdge > 0)
     {
-        total = lerp(total, float3(80, 220, 120), saturate(hoveredEdge * 0.75));
+        total = lerp(total, float3(80, 220, 120) * exposure, saturate(hoveredEdge * 0.75));
     }
 
     const bool noSkyBackground = !camera.HasSky && !surface;

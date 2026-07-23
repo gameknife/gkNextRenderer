@@ -31,7 +31,7 @@ namespace Modules::NextTemporalUpscaler
             uint32_t reset = 0;
             float sharpness = 0.25f;
             float historyWeight = 0.97f;
-            float exposure = 1.0f;
+            float padding = 0.0f;
         };
         static_assert(sizeof(FPushConstants) == 48);
 
@@ -217,7 +217,6 @@ namespace Modules::NextTemporalUpscaler
                 constants.sharpness = std::clamp(inputs.nativeTemporalSharpness, 0.0f, 1.0f);
                 constants.historyWeight = std::clamp(
                     inputs.nativeTemporalHistoryWeight, 0.5f, 0.98f);
-                constants.exposure = exposure;
                 vkCmdBindDescriptorSets(inputs.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                         pipelineLayout_, 0, 1, &descriptorSet_, 0, nullptr);
                 vkCmdPushConstants(inputs.commandBuffer, pipelineLayout_, VK_SHADER_STAGE_COMPUTE_BIT,

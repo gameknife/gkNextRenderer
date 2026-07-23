@@ -565,7 +565,7 @@ namespace
         cameraInit.GammaCorrection = true;
         cameraInit.HasSky = true;
         cameraInit.SkyIdx = 0;
-        cameraInit.SkyIntensity = 15.0f;
+        cameraInit.SkyIntensity = 50.0f;
         cameraInit.HasSun = false;
 
         const uint32_t matGround = static_cast<uint32_t>(materials.size());
@@ -625,7 +625,7 @@ namespace
         }
         for (int i = 0; i < 3; ++i)
         {
-            const float intensity = 280.0f + roughness[i] * 520.0f;
+            const float intensity = 100.0f + roughness[i] * 100.0f;
             materials.push_back({Material::DiffuseLight(vec3(intensity, intensity * 0.85f, intensity * 0.55f)),
                                  fmt::format("ms_diffuse_light_{:.1f}", roughness[i])});
         }
@@ -659,7 +659,7 @@ namespace
 
         models.push_back(Assets::FProcModel::CreateAreaLight(
             "KeyLight", vec3(-3.0f, 5.5f, 1.5f), vec3(6.0f, 0.0f, 0.0f),
-            vec3(0.0f, 0.0f, -3.0f), matLight, lights));
+            vec3(0.0f, 0.0f, 3.0f), matLight, lights));
         addNode("KeyLight", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matLight);
     }
 
@@ -683,7 +683,7 @@ namespace
         cameraInit.HasSky = true;
         cameraInit.SkyIdx = 0;
         cameraInit.SkyIntensity = 10.0f;
-        cameraInit.HasSun = true;
+        cameraInit.HasSun = false;
         cameraInit.SunIntensity = 300.0f;
 
         const uint32_t matGround = static_cast<uint32_t>(materials.size());
@@ -694,9 +694,9 @@ namespace
         const uint32_t matPointLight = static_cast<uint32_t>(materials.size());
         materials.push_back({Material::DiffuseLight(vec3(1000.0f, 900.0f, 800.0f)), "ls_point_light"});
         const uint32_t matAreaLight = static_cast<uint32_t>(materials.size());
-        materials.push_back({Material::DiffuseLight(vec3(700.0f, 800.0f, 900.0f)), "ls_area_light"});
+        materials.push_back({Material::DiffuseLight(vec3(700.0f, 800.0f, 1200.0f)), "ls_area_light"});
         const uint32_t matFillLight = static_cast<uint32_t>(materials.size());
-        materials.push_back({Material::DiffuseLight(vec3(150.0f, 180.0f, 200.0f)), "ls_fill_light"});
+        materials.push_back({Material::DiffuseLight(vec3(1050.0f, 1080.0f, 600.0f)), "ls_fill_light"});
 
         auto addNode = [&](const std::string& name, const vec3& pos, uint32_t modelIdx, uint32_t matIdx)
         {
@@ -741,14 +741,14 @@ namespace
         // Light 2: Area light (rectangle above sphere 2)
         models.push_back(Assets::FProcModel::CreateAreaLight(
             "AreaLight", vec3(-2.75f, 4.5f, -0.5f), vec3(2.0f, 0.0f, 0.0f),
-            vec3(0.0f, 0.0f, -1.0f), matAreaLight, lights));
+            vec3(0.0f, 0.0f, 1.0f), matAreaLight, lights));
         addNode("AreaLight", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matAreaLight);
 
         // Light 3: Uses global sun (directional) - no explicit light node needed
         // Light 4: Fill light (small area light near sphere 4)
         models.push_back(Assets::FProcModel::CreateAreaLight(
             "FillLight", vec3(4.75f, 2.8f, 1.0f), vec3(1.0f, 0.0f, 0.0f),
-            vec3(0.0f, 0.5f, -0.5f), matFillLight, lights));
+            vec3(0.0f, -0.5f, 0.5f), matFillLight, lights));
         addNode("FillLight", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matFillLight);
     }
 
@@ -771,7 +771,7 @@ namespace
         cameraInit.GammaCorrection = true;
         cameraInit.HasSky = true;
         cameraInit.SkyIdx = 0;
-        cameraInit.SkyIntensity = 10.0f;
+        cameraInit.SkyIntensity = 50.0f;
         cameraInit.HasSun = true;
         cameraInit.SunIntensity = 400.0f;
 
@@ -854,7 +854,7 @@ namespace
         cameraInit.GammaCorrection = true;
         cameraInit.HasSky = true;
         cameraInit.SkyIdx = 0;
-        cameraInit.SkyIntensity = 12.0f;
+        cameraInit.SkyIntensity = 50.0f;
         cameraInit.HasSun = true;
         cameraInit.SunIntensity = 250.0f;
 
@@ -946,7 +946,7 @@ namespace
         cameraInit.GammaCorrection = true;
         cameraInit.HasSky = true;
         cameraInit.SkyIdx = 0;
-        cameraInit.SkyIntensity = 12.0f;
+        cameraInit.SkyIntensity = 50.0f;
         cameraInit.HasSun = true;
         cameraInit.SunIntensity = 350.0f;
 

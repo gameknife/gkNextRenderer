@@ -32,6 +32,7 @@ struct UserSettings final
     float TemporalUpscalerPostFilterStrength = 0.65f;
     float TemporalUpscalerPostFilterLumaSigma = 0.10f;
     float TemporalUpscalerFireflySigma = 2.5f;
+    bool ComposeFireflyClamp = true;
     bool FrameGeneration = false;
     uint32_t FrameGenerationMultiplier = 2;
     uint32_t FrameGenerationFrameLimitFps = 0;
