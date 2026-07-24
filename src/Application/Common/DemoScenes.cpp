@@ -766,30 +766,63 @@ namespace
         constexpr float pointLightRadius = 0.2f;
         size_t firstLight = lights.size();
         models.push_back(Assets::FProcModel::CreatePointLight(
-            "PointLight", pointLightPosition, pointLightRadius, matPointLight, lights));
+            "PointLight", vec3(0.0f), pointLightRadius, matPointLight, lights));
         const uint32_t pointLightModel = static_cast<uint32_t>(models.size() - 1);
-        addNode("PointLight", vec3(0), pointLightModel, matPointLight);
+        addNode("PointLight", pointLightPosition, pointLightModel, matPointLight);
         nodes.back()->AddComponent(std::make_shared<Runtime::LightComponent>(lights.back()));
         lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstLight), lights.end());
 
         // Light 2: Area light (rectangle above sphere 2)
+        const vec3 areaLightPosition(-1.75f, 4.5f, 0.0f);
         firstLight = lights.size();
         models.push_back(Assets::FProcModel::CreateAreaLight(
-            "AreaLight", vec3(-2.75f, 4.5f, -0.5f), vec3(2.0f, 0.0f, 0.0f),
+            "AreaLight", vec3(-1.0f, 0.0f, -0.5f), vec3(2.0f, 0.0f, 0.0f),
             vec3(0.0f, 0.0f, 1.0f), matAreaLight, lights));
-        addNode("AreaLight", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matAreaLight);
+        addNode("AreaLight", areaLightPosition, static_cast<uint32_t>(models.size() - 1), matAreaLight);
         nodes.back()->AddComponent(std::make_shared<Runtime::LightComponent>(lights.back()));
         lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstLight), lights.end());
 
         // Light 3: Uses global sun (directional) - no explicit light node needed
         // Light 4: Fill light (small area light near sphere 4)
+        const vec3 fillRight(1.0f, 0.0f, 0.0f);
+        const vec3 fillUp(0.0f, -0.5f, 0.5f);
+        const vec3 fillLightPosition(5.25f, 2.55f, 1.25f);
         firstLight = lights.size();
         models.push_back(Assets::FProcModel::CreateAreaLight(
-            "FillLight", vec3(4.75f, 2.8f, 1.0f), vec3(1.0f, 0.0f, 0.0f),
-            vec3(0.0f, -0.5f, 0.5f), matFillLight, lights));
-        addNode("FillLight", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matFillLight);
+            "FillLight", -0.5f * (fillRight + fillUp), fillRight, fillUp, matFillLight, lights));
+        addNode("FillLight", fillLightPosition, static_cast<uint32_t>(models.size() - 1), matFillLight);
         nodes.back()->AddComponent(std::make_shared<Runtime::LightComponent>(lights.back()));
         lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstLight), lights.end());
+
+        auto addSubtleLightMotion = [&tracks](const std::string& nodeName,
+                                               const vec3& center,
+                                               const vec3& amplitude,
+                                               float phase)
+        {
+            Assets::AnimationTrack track;
+            track.AnimationName = nodeName + "_SubtleMotion";
+            track.NodeName_ = nodeName;
+            track.Duration_ = 8.0f;
+            track.Play();
+            constexpr int keyCount = 16;
+            for (int keyIndex = 0; keyIndex <= keyCount; ++keyIndex)
+            {
+                const float time = 8.0f * static_cast<float>(keyIndex) / static_cast<float>(keyCount);
+                const float angle = glm::two_pi<float>() * time / 8.0f + phase;
+                const vec3 offset(
+                    amplitude.x * std::sin(angle),
+                    amplitude.y * std::sin(angle * 2.0f),
+                    amplitude.z * std::cos(angle));
+                track.TranslationChannel.Keys.push_back({time, center + offset});
+            }
+            tracks.push_back(std::move(track));
+        };
+
+        addSubtleLightMotion("PointLight", pointLightPosition, vec3(0.28f, 0.10f, 0.16f) * 2.f, 0.0f);
+        addSubtleLightMotion("AreaLight", areaLightPosition, vec3(0.16f, 0.08f, 0.12f) * 2.f,
+                             glm::two_pi<float>() / 3.0f);
+        addSubtleLightMotion("FillLight", fillLightPosition, vec3(0.14f, 0.07f, 0.20f) * 2.f,
+                             glm::two_pi<float>() * 2.0f / 3.0f);
     }
 
     void CameraShowcase(Assets::EnvironmentSetting& cameraInit,
