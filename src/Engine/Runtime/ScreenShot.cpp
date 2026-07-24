@@ -361,6 +361,7 @@ namespace Runtime::ScreenShot
                              const int inWidth,
                              const int inHeight,
                              const EFileFormat fileFormat,
+                             const bool synchronous,
                              std::function<void()> onCompleted,
                              std::function<void()> onReadbackCompleted)
     {
@@ -378,22 +379,37 @@ namespace Runtime::ScreenShot
         {
             onReadbackCompleted();
         }
-        Tasks::TaskCoordinator::GetInstance()->AddTask(
-            [screenshot = std::move(screenshot), filePathWithoutExtension, fileFormat](Tasks::ResTask&) mutable
+
+        auto encodeAndWrite = [screenshot = std::move(screenshot), filePathWithoutExtension, fileFormat]() mutable
+        {
+            try
             {
-                try
-                {
-                    EncodeAndWriteScreenshot(std::move(screenshot), filePathWithoutExtension, fileFormat);
-                }
-                catch (const std::exception& exception)
-                {
-                    spdlog::error("Failed to save screenshot {}: {}", filePathWithoutExtension, exception.what());
-                }
-                catch (...)
-                {
-                    spdlog::error("Failed to save screenshot {}: unknown error", filePathWithoutExtension);
-                }
-            },
+                EncodeAndWriteScreenshot(std::move(screenshot), filePathWithoutExtension, fileFormat);
+            }
+            catch (const std::exception& exception)
+            {
+                spdlog::error("Failed to save screenshot {}: {}", filePathWithoutExtension, exception.what());
+            }
+            catch (...)
+            {
+                spdlog::error("Failed to save screenshot {}: unknown error", filePathWithoutExtension);
+            }
+        };
+
+        if (synchronous)
+        {
+            encodeAndWrite();
+            if (onCompleted)
+            {
+                onCompleted();
+            }
+            return;
+        }
+
+        // Keep regular interactive captures off the render thread. Agent validation passes
+        // synchronous=true so the caller can safely exit immediately after this function returns.
+        Tasks::TaskCoordinator::GetInstance()->AddTask(
+            [encodeAndWrite = std::move(encodeAndWrite)](Tasks::ResTask&) mutable { encodeAndWrite(); },
             [onCompleted = std::move(onCompleted)](Tasks::ResTask&) mutable
             {
                 if (onCompleted)

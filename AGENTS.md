@@ -34,6 +34,11 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 - Clean rebuild: `./gnb.sh build --clean`
 - Force vcpkg update: `./gnb.sh setup --refresh`
 
+**Build serialization (IMPORTANT):** `gnb build` is a synchronous command. Do not impose a
+short tool timeout on it; always wait for the command to return before taking any other build
+action. Never start another `gnb`, CMake, or Ninja build while one build/configure is running,
+because concurrent Windows builds can lock `.obj`, executables, or vcpkg state files.
+
 **Targeted builds (IMPORTANT — prefer over full `gnb build --all`):**
 默认不加参数运行 `./gnb.sh build` 只会编译 `gkNextRenderer` 和 `gkNextUnitTests`。AGENT 在验证改动时**默认只构建受影响的目标**，避免全量构建：
 - **改动 Engine 层**（`src/Engine/**`、shaders、公共 runtime/reflection）：只需 `./gnb.sh build`（即默认构建 `gkNextRenderer` + `gkNextUnitTests`）。这两个目标编译通过即代表 engine API 没有破坏面上调用。

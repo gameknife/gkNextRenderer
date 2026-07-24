@@ -69,6 +69,7 @@ public:
         int width = 0;
         int height = 0;
         uint32_t accumulateFrames = 0;
+        // Keep the caller blocked until readback encoding and file output are complete.
         bool sync = false;
         bool includeUi = false;
         Runtime::ScreenShot::EFileFormat fileFormat = Runtime::ScreenShot::EFileFormat::Automatic;

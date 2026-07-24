@@ -1025,6 +1025,7 @@ void NextEngine::SaveScreenShot(const FScreenShotSpec& spec)
     Runtime::ScreenShot::SaveSwapChainToFile(
         renderer_.get(), spec.filename, spec.x, spec.y, spec.width, spec.height,
         spec.fileFormat,
+        spec.sync,
         [this, allowOverlappingExports]()
         {
             if (!allowOverlappingExports)
@@ -1376,6 +1377,7 @@ nlohmann::json NextEngine::HandleAgentControlCommand(const std::string& method, 
         RequestScreenShot({
             .filename = path,
             .accumulateFrames = params.value("accumulateFrames", 0u),
+            .sync = true,
             .includeUi = params.value("ui", false),
         });
         return {{"path", path + ".jpg"}};

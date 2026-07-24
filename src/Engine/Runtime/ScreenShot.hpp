@@ -20,6 +20,8 @@ namespace Runtime::ScreenShot
                              int width,
                              int height,
                              EFileFormat fileFormat = EFileFormat::Automatic,
+                             // Synchronous captures encode and close the image before returning.
+                             bool synchronous = false,
                              std::function<void()> onCompleted = {},
                              std::function<void()> onReadbackCompleted = {});
 };
