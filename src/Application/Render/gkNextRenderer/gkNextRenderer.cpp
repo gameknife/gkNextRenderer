@@ -172,6 +172,76 @@ bool DrawSettingComboRow(const char* label, const char* preview, DrawComboBody&&
     return changed;
 }
 
+void PushViewportToolbarStyle()
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(7.0f, 3.0f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, NextUI::Theme::Color(NextUI::Theme::EColor::Surface, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered,
+                          NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.72f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive,
+                          NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.24f));
+    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Surface, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.72f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.28f));
+    ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.0f));
+}
+
+void PopViewportToolbarStyle()
+{
+    ImGui::PopStyleColor(7);
+    ImGui::PopStyleVar(3);
+}
+
+bool DrawFlatViewportButton(
+    const char* label, const char* tooltip, bool active, const ImVec2 size)
+{
+    ImGui::PushStyleColor(
+        ImGuiCol_Button,
+        active ? NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.28f)
+               : NextUI::Theme::Color(NextUI::Theme::EColor::Surface, 0.0f));
+    ImGui::PushStyleColor(
+        ImGuiCol_Text,
+        active ? NextUI::Theme::Color(NextUI::Theme::EColor::Text)
+               : NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted));
+    const bool pressed = ImGui::Button(label, size);
+    ImGui::PopStyleColor(2);
+    NextUI::Theme::DrawTooltip(tooltip);
+    return pressed;
+}
+
+void PushViewportPopupStyle()
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
+    ImGui::PushStyleColor(
+        ImGuiCol_PopupBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.96f));
+    ImGui::PushStyleColor(
+        ImGuiCol_Header, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.46f));
+    ImGui::PushStyleColor(
+        ImGuiCol_HeaderHovered, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.78f));
+    ImGui::PushStyleColor(
+        ImGuiCol_HeaderActive, NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.26f));
+    ImGui::PushStyleColor(
+        ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.0f));
+}
+
+void PopViewportPopupStyle()
+{
+    ImGui::PopStyleColor(5);
+    ImGui::PopStyleVar(4);
+}
+
+bool DrawViewportComboOption(const char* label, const bool selected)
+{
+    return ImGui::Selectable(label, selected, ImGuiSelectableFlags_None, ImVec2(0.0f, 28.0f));
+}
+
 std::string FormatBytes(VkDeviceSize bytes)
 {
     static constexpr const char* units[] = {"B", "KB", "MB", "GB", "TB"};
@@ -463,11 +533,30 @@ NextRendererGameInstance::NextRendererGameInstance(Vulkan::WindowConfig& config,
 
 void NextRendererGameInstance::OnInit()
 {
+    // Keep the viewport clean on startup. The Stats button remains available in
+    // the bottom status bar for sessions that need the diagnostic overlay.
+    GetEngine().GetUserSettings().ShowOverlay = false;
+    GetEngine().GetShowFlags().DebugCVarPanel = false;
+
     std::string initializedScene = "CornellBox.proc";
     if (!GOption->SceneName.empty())
     {
         initializedScene = GOption->SceneName;
     }
+
+    const std::filesystem::path initializedPath(initializedScene);
+    for (int sceneIndex = 0;
+         sceneIndex < static_cast<int>(Runtime::Scene::SceneList::AllScenes.size());
+         ++sceneIndex)
+    {
+        const std::filesystem::path candidatePath(Runtime::Scene::SceneList::AllScenes[sceneIndex]);
+        if (candidatePath == initializedPath || candidatePath.filename() == initializedPath.filename())
+        {
+            GetEngine().GetUserSettings().SceneIndex = sceneIndex;
+            break;
+        }
+    }
+
     GetEngine().RequestLoadScene({.filename = initializedScene});
 }
 
@@ -594,45 +683,54 @@ bool NextRendererGameInstance::DrawRendererUi(const FGameUiFrameContext& context
 
     if (uiState.workMode != uiState.lastWorkMode)
     {
+        auto& showFlags = GetEngine().GetShowFlags();
+        Runtime::Config::UserSettings& userSettings = GetEngine().GetUserSettings();
         switch (uiState.workMode)
         {
-        case EWorkMode::Renderer:
-            uiState.showSettings = true;
-            uiState.showOverlay = false;
-            uiState.memoryStatisticsPanelOpen = false;
-            break;
-        case EWorkMode::Profiler:
+        case EWorkMode::Render:
             uiState.showSettings = false;
-            uiState.showOverlay = true;
+            uiState.showCheatSheet = false;
+            uiState.memoryStatisticsPanelOpen = false;
+            userSettings.ShowOverlay = false;
+            showFlags.DebugCVarPanel = false;
+            break;
+        case EWorkMode::Detail:
+            uiState.showSettings = true;
+            uiState.showCheatSheet = false;
+            uiState.memoryStatisticsPanelOpen = false;
+            userSettings.ShowOverlay = false;
+            showFlags.DebugCVarPanel = false;
+            break;
+        case EWorkMode::Profile:
+            uiState.showSettings = false;
+            uiState.showCheatSheet = false;
             uiState.memoryStatisticsPanelOpen = true;
+            userSettings.ShowOverlay = true;
+            showFlags.DebugCVarPanel = false;
             break;
-        case EWorkMode::Settings:
-            uiState.showSettings = true;
-            uiState.showOverlay = false;
-            uiState.memoryStatisticsPanelOpen = false;
-            break;
-        default:
+        case EWorkMode::CVar:
             uiState.showSettings = false;
-            uiState.showOverlay = false;
+            uiState.showCheatSheet = false;
             uiState.memoryStatisticsPanelOpen = false;
+            userSettings.ShowOverlay = false;
+            showFlags.DebugCVarPanel = true;
             break;
+        default: break;
         }
         uiState.lastWorkMode = uiState.workMode;
     }
-    else if (uiState.workMode == EWorkMode::Profiler && !uiState.showOverlay)
+    else if (uiState.workMode == EWorkMode::CVar &&
+             !GetEngine().GetShowFlags().DebugCVarPanel)
     {
-        uiState.workMode = EWorkMode::Renderer;
-        uiState.lastWorkMode = uiState.workMode;
-        uiState.showSettings = true;
-        uiState.showOverlay = false;
-        uiState.memoryStatisticsPanelOpen = false;
+        uiState.workMode = EWorkMode::Render;
+        uiState.lastWorkMode = EWorkMode::Count;
     }
 
     DrawTitleBar(context, uiState);
     DrawModeRail(uiState);
     DrawSettings(uiState);
     DrawViewportTopBar(context, uiState);
-    DrawViewportBottomBar(context);
+    DrawViewportCheatSheet(uiState);
     DrawBottomStatusBar(uiState);
     DrawMemoryStatisticsPanel(uiState);
 
@@ -1410,11 +1508,9 @@ void NextRendererGameInstance::DrawModeRail(FRendererUiState& uiState)
             const char* tooltip;
         };
         const ModeEntry topEntries[] = {
-            {EWorkMode::Renderer, ICON_FA_CAMERA_RETRO, "Renderer"},
-            {EWorkMode::Camera,   ICON_FA_CAMERA,       "Camera"},
-            {EWorkMode::World,    ICON_FA_GLOBE,        "World / Lighting"},
-            {EWorkMode::Mesh,     ICON_FA_CUBE,         "Scene Outliner"},
-            {EWorkMode::Profiler, ICON_FA_CHART_LINE,   "Profiler"},
+            {EWorkMode::Render,  ICON_FA_EYE,        "Render - Hide All Panels"},
+            {EWorkMode::Detail,  ICON_FA_SLIDERS,    "Detail - Renderer Settings"},
+            {EWorkMode::Profile, ICON_FA_CHART_LINE, "Profile - Memory & Stats"},
         };
 
         for (const auto& entry : topEntries)
@@ -1423,20 +1519,24 @@ void NextRendererGameInstance::DrawModeRail(FRendererUiState& uiState)
             if (NextUI::Theme::ModeRailButton(entry.icon, entry.tooltip, active, ModeRailButtonSize))
             {
                 uiState.workMode = entry.mode;
+                uiState.lastWorkMode = EWorkMode::Count;
             }
         }
 
-        // Push the gear button to the bottom.
-        const float gearSize = ModeRailButtonSize;
-        const float spaceUntilBottom = ImGui::GetContentRegionAvail().y - gearSize - 6.0f;
+        // Push the CVar editor button to the bottom.
+        const float cvarButtonSize = ModeRailButtonSize;
+        const float spaceUntilBottom = ImGui::GetContentRegionAvail().y - cvarButtonSize - 6.0f;
         if (spaceUntilBottom > 0.0f)
         {
             ImGui::Dummy(ImVec2(0.0f, spaceUntilBottom));
         }
-        const bool settingsActive = (uiState.workMode == EWorkMode::Settings);
-        if (NextUI::Theme::ModeRailButton(ICON_FA_GEAR, "Settings", settingsActive, gearSize))
+        const bool cvarActive = (uiState.workMode == EWorkMode::CVar) &&
+            GetEngine().GetShowFlags().DebugCVarPanel;
+        if (NextUI::Theme::ModeRailButton(
+                ICON_FA_TERMINAL, "CVars - Runtime Configuration", cvarActive, cvarButtonSize))
         {
-            uiState.workMode = EWorkMode::Settings;
+            uiState.workMode = cvarActive ? EWorkMode::Render : EWorkMode::CVar;
+            uiState.lastWorkMode = EWorkMode::Count;
         }
     }
     ImGui::End();
@@ -1444,117 +1544,395 @@ void NextRendererGameInstance::DrawModeRail(FRendererUiState& uiState)
     ImGui::PopStyleVar(3);
 }
 
-void NextRendererGameInstance::DrawViewportTopBar(const FGameUiFrameContext& context, const FRendererUiState& uiState)
+void NextRendererGameInstance::DrawViewportTopBar(
+    const FGameUiFrameContext&, FRendererUiState& uiState)
 {
     Runtime::Config::UserSettings& userSetting = GetEngine().GetUserSettings();
     ImGuiViewport* viewport = ImGui::GetMainViewport();
 
-    const float panelMargin = 10.0f;
+    constexpr float panelMargin = 10.0f;
+    constexpr float toolbarHeight = 38.0f;
+    constexpr float rightToolbarWidth = 168.0f;
     const float leftEdge = viewport->Pos.x + ModeRailWidth +
         (uiState.showSettings ? (360.0f + panelMargin * 2.0f) : panelMargin);
-    const float topEdge = viewport->Pos.y + TitlebarSize + 10.0f;
+    const float rightEdge = viewport->Pos.x + viewport->Size.x - panelMargin;
+    const float topEdge = viewport->Pos.y + TitlebarSize + panelMargin;
+    const float availableWidth = std::max(0.0f, rightEdge - leftEdge - rightToolbarWidth - panelMargin);
+    const bool showSceneSelector = availableWidth >= 650.0f;
+    const bool showUpscalerSelector = availableWidth >= 500.0f;
 
-    // Left badge: "Path Tracing | Live"
+    std::string sceneLabel = "Scene";
+    if (userSetting.SceneIndex >= 0 &&
+        userSetting.SceneIndex < static_cast<int>(Runtime::Scene::SceneList::AllScenes.size()))
     {
-        const char* rendererLabel = Runtime::GraphicsDebugPanel::GetCurrentRendererLabel(GetEngine(), userSetting);
-        const std::string rendererText = rendererLabel;
-        constexpr const char* liveText = "Live";
-        const float badgeHeight = 30.0f;
-        const float rendererWidth = ImGui::CalcTextSize(rendererText.c_str()).x + 24.0f;
-        const float liveWidth = ImGui::CalcTextSize(liveText).x + 20.0f;
-        const float badgeWidth = rendererWidth + liveWidth + 26.0f;
-
-        NextUI::Theme::FOverlayPanelConfig config{};
-        config.WindowId = "##ViewportTopLeftBadge";
-        config.Position = ImVec2(leftEdge, topEdge);
-        config.Size = ImVec2(badgeWidth, badgeHeight);
-        config.Padding = ImVec2(12.0f, 8.0f);
-        config.ItemSpacing = ImVec2(8.0f, 0.0f);
-        config.BackgroundColor = NextUI::Theme::EColor::Background;
-        config.BackgroundAlpha = 0.82f;
-        config.ExtraFlags = ImGuiWindowFlags_NoScrollbar;
-
-        if (NextUI::Theme::BeginOverlayPanel(config))
-        {
-            ImGui::TextUnformatted(rendererText.c_str());
-            ImGui::SameLine(0.0f, 12.0f);
-            NextUI::Theme::DrawVerticalSeparator(16.0f, 0.0f, 0.8f);
-            NextUI::Theme::DrawStatusDot(liveText, true);
-        }
-        NextUI::Theme::EndOverlayPanel();
+        sceneLabel = std::filesystem::path(
+            Runtime::Scene::SceneList::AllScenes[userSetting.SceneIndex]).stem().string();
     }
 
-    // Right cluster: screenshot / focus / 1:1
+    const auto& upscalerInfo = Rendering::Upscaler::GetUpscalerTypeInfo(
+        static_cast<uint32_t>(std::max(0, userSetting.UpscalerType)));
+    const auto& upscaleModeInfo = Rendering::Upscaler::GetUpscaleModeInfo(userSetting.SuperResolution);
+    const std::string upscalerLabel = fmt::format("{} · {}", upscalerInfo.name, upscaleModeInfo.name);
+
+    const float sceneWidth = showSceneSelector ? 150.0f : 0.0f;
+    constexpr float rendererWidth = 154.0f;
+    constexpr float renderModeWidth = 88.0f;
+    constexpr float samplesWidth = 108.0f;
+    const float upscalerWidth = showUpscalerSelector ? 188.0f : 0.0f;
+    const float leftToolbarWidth = 8.0f + sceneWidth + rendererWidth + renderModeWidth +
+        samplesWidth + upscalerWidth +
+        (showSceneSelector ? 4.0f : 0.0f) + (showUpscalerSelector ? 4.0f : 0.0f) + 12.0f;
+
+    NextUI::Theme::FOverlayPanelConfig leftConfig{};
+    leftConfig.WindowId = "##ViewportRenderToolbar";
+    leftConfig.Position = ImVec2(leftEdge, topEdge);
+    leftConfig.Size = ImVec2(std::min(leftToolbarWidth, availableWidth), toolbarHeight);
+    leftConfig.Padding = ImVec2(4.0f, 4.0f);
+    leftConfig.ItemSpacing = ImVec2(4.0f, 0.0f);
+    leftConfig.Rounding = 5.0f;
+    leftConfig.BackgroundAlpha = 0.74f;
+
+    if (NextUI::Theme::BeginOverlayPanel(leftConfig))
     {
-        const float clusterWidth = 138.0f;
-        const float rightEdge = viewport->Pos.x + viewport->Size.x - panelMargin - clusterWidth;
-        NextUI::Theme::FOverlayPanelConfig config{};
-        config.WindowId = "##ViewportTopRightCluster";
-        config.Position = ImVec2(rightEdge, topEdge);
-        config.Size = ImVec2(clusterWidth, 32.0f);
-        config.Padding = ImVec2(4.0f, 2.0f);
-        config.ItemSpacing = ImVec2(4.0f, 0.0f);
-        config.BackgroundAlpha = 0.80f;
-        if (NextUI::Theme::BeginOverlayPanel(config))
+        PushViewportToolbarStyle();
+        if (showSceneSelector)
         {
-            if (NextUI::Theme::ToolbarButton(ICON_FA_CAMERA, "Take Screenshot", false, ImVec2(28.0f, 26.0f)))
+            ImGui::SetNextItemWidth(sceneWidth);
+            PushViewportPopupStyle();
+            if (ImGui::BeginCombo("##ViewportScene", sceneLabel.c_str()))
             {
-                RequestScreenshot(false, "");
-            }
-            ImGui::SameLine();
-            if (NextUI::Theme::ToolbarButton(ICON_FA_EXPAND, "Focus Selected", false, ImVec2(28.0f, 26.0f)))
-            {
-                glm::vec3 focusCenter;
-                float radius;
-                if (GetEngine().GetScene().GetSelectedNodeBounds(focusCenter, radius))
+                ESceneListGroup currentGroup = ESceneListGroup::Other;
+                bool hasGroup = false;
+                for (int sceneIdx = 0;
+                     sceneIdx < static_cast<int>(Runtime::Scene::SceneList::AllScenes.size());
+                     ++sceneIdx)
                 {
-                    modelViewController_.Focus(focusCenter, radius);
+                    const std::string& scenePath = Runtime::Scene::SceneList::AllScenes[sceneIdx];
+                    const ESceneListGroup sceneGroup = GetSceneListGroup(scenePath);
+                    if (!hasGroup || sceneGroup != currentGroup)
+                    {
+                        if (hasGroup)
+                        {
+                            ImGui::Separator();
+                        }
+                        currentGroup = sceneGroup;
+                        hasGroup = true;
+                        ImGui::Dummy(ImVec2(0.0f, 2.0f));
+                        ImGui::TextDisabled("%s", GetSceneListGroupLabel(sceneGroup));
+                    }
+
+                    const bool selected = sceneIdx == userSetting.SceneIndex;
+                    const std::string label = std::filesystem::path(scenePath).filename().string();
+                    if (DrawViewportComboOption(label.c_str(), selected))
+                    {
+                        userSetting.SceneIndex = sceneIdx;
+                        GetEngine().RequestLoadScene({.filename = scenePath});
+                    }
+                    if (selected)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            PopViewportPopupStyle();
+            NextUI::Theme::DrawTooltip("Scene");
+            ImGui::SameLine();
+        }
+
+        const int rendererOptionCount = Runtime::GraphicsDebugPanel::GetRendererOptionCount(GetEngine());
+        int currentRendererIndex =
+            Runtime::GraphicsDebugPanel::ResolveRendererOptionIndex(userSetting, rendererOptionCount);
+        if (currentRendererIndex < 0)
+        {
+            currentRendererIndex = 0;
+            userSetting.RendererType = static_cast<int32_t>(
+                Runtime::GraphicsDebugPanel::RendererOptions[currentRendererIndex].type);
+        }
+        ImGui::SetNextItemWidth(rendererWidth);
+        PushViewportPopupStyle();
+        if (ImGui::BeginCombo(
+                "##ViewportRenderer",
+                Runtime::GraphicsDebugPanel::RendererOptions[currentRendererIndex].label))
+        {
+            for (int rendererIndex = 0; rendererIndex < rendererOptionCount; ++rendererIndex)
+            {
+                const bool selected = rendererIndex == currentRendererIndex;
+                if (DrawViewportComboOption(
+                        Runtime::GraphicsDebugPanel::RendererOptions[rendererIndex].label, selected))
+                {
+                    userSetting.RendererType = static_cast<int32_t>(
+                        Runtime::GraphicsDebugPanel::RendererOptions[rendererIndex].type);
+                }
+                if (selected)
+                {
+                    ImGui::SetItemDefaultFocus();
                 }
             }
-            ImGui::SameLine();
-            NextUI::Theme::ToolbarButton("1:1 " ICON_FA_CHEVRON_DOWN, "Native Resolution", false, ImVec2(46.0f, 26.0f));
+            ImGui::EndCombo();
         }
-        NextUI::Theme::EndOverlayPanel();
+        PopViewportPopupStyle();
+        NextUI::Theme::DrawTooltip("Renderer");
+        ImGui::SameLine();
+
+        const char* renderModeLabel = userSetting.ProgressiveRender ? "Progressive" : "Realtime";
+        if (DrawFlatViewportButton(
+                renderModeLabel, "Toggle realtime / progressive rendering",
+                userSetting.ProgressiveRender, ImVec2(renderModeWidth, 22.0f)))
+        {
+            userSetting.ProgressiveRender = !userSetting.ProgressiveRender;
+        }
+        ImGui::SameLine();
+
+        ImGui::SetNextItemWidth(samplesWidth);
+        const std::string sampleLabel = fmt::format("{} spp/frame", userSetting.NumberOfSamples);
+        PushViewportPopupStyle();
+        if (ImGui::BeginCombo("##ViewportSamples", sampleLabel.c_str()))
+        {
+            for (int samples = 1; samples <= 16; ++samples)
+            {
+                const bool selected = samples == userSetting.NumberOfSamples;
+                if (DrawViewportComboOption(
+                        fmt::format("{} spp/frame", samples).c_str(), selected))
+                {
+                    userSetting.NumberOfSamples = samples;
+                }
+                if (selected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+        PopViewportPopupStyle();
+        NextUI::Theme::DrawTooltip("Samples traced per pixel, per rendered frame");
+
+        if (showUpscalerSelector)
+        {
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(upscalerWidth);
+            PushViewportPopupStyle();
+            if (ImGui::BeginCombo("##ViewportUpscaler", upscalerLabel.c_str()))
+            {
+                ImGui::TextDisabled("Upscaler");
+                for (uint32_t rawType = 0;
+                     rawType < static_cast<uint32_t>(Rendering::Upscaler::EUpscalerType::Count);
+                     ++rawType)
+                {
+                    const auto& typeInfo = Rendering::Upscaler::GetUpscalerTypeInfo(rawType);
+                    const bool supported = typeInfo.type == Rendering::Upscaler::EUpscalerType::None ||
+                        GetEngine().GetRenderer().SupportsUpscaler(typeInfo.type);
+                    const bool selected = rawType == static_cast<uint32_t>(userSetting.UpscalerType);
+                    ImGui::BeginDisabled(!supported);
+                    if (DrawViewportComboOption(typeInfo.name, selected))
+                    {
+                        userSetting.UpscalerType = static_cast<int32_t>(rawType);
+                        if (!GetEngine().GetRenderer().SupportsFrameGeneration(typeInfo.type))
+                        {
+                            userSetting.FrameGeneration = false;
+                        }
+                        GetEngine().GetRenderer().RequestRecreateSwapChain();
+                    }
+                    ImGui::EndDisabled();
+                }
+
+                ImGui::Separator();
+                ImGui::TextDisabled("Quality");
+                for (uint32_t rawMode = 0;
+                     rawMode <= static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Auto);
+                     ++rawMode)
+                {
+                    const auto& modeInfo = Rendering::Upscaler::GetUpscaleModeInfo(rawMode);
+                    const bool selected = rawMode == userSetting.SuperResolution;
+                    if (DrawViewportComboOption(modeInfo.name, selected))
+                    {
+                        userSetting.SuperResolution = rawMode;
+                        GetEngine().GetRenderer().RequestRecreateSwapChain();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            PopViewportPopupStyle();
+            NextUI::Theme::DrawTooltip("Upscaler and quality mode");
+        }
+        PopViewportToolbarStyle();
     }
+    NextUI::Theme::EndOverlayPanel();
+
+    NextUI::Theme::FOverlayPanelConfig rightConfig{};
+    rightConfig.WindowId = "##ViewportActionToolbar";
+    rightConfig.Position = ImVec2(rightEdge - rightToolbarWidth, topEdge);
+    rightConfig.Size = ImVec2(rightToolbarWidth, toolbarHeight);
+    rightConfig.Padding = ImVec2(4.0f, 4.0f);
+    rightConfig.ItemSpacing = ImVec2(4.0f, 0.0f);
+    rightConfig.Rounding = 5.0f;
+    rightConfig.BackgroundAlpha = 0.74f;
+
+    if (NextUI::Theme::BeginOverlayPanel(rightConfig))
+    {
+        PushViewportToolbarStyle();
+        if (DrawFlatViewportButton(
+                ICON_FA_ROTATE_LEFT, "Reset camera to the scene view", false, ImVec2(28.0f, 22.0f)))
+        {
+            modelViewController_.Reset(GetEngine().GetScene().GetRenderCamera());
+        }
+        ImGui::SameLine();
+
+        glm::vec3 focusCenter;
+        float focusRadius = 0.0f;
+        const bool hasSelection = GetEngine().GetScene().GetSelectedNodeBounds(focusCenter, focusRadius);
+        ImGui::BeginDisabled(!hasSelection);
+        if (DrawFlatViewportButton(
+                ICON_FA_CROSSHAIRS, "Focus selected object", false, ImVec2(28.0f, 22.0f)))
+        {
+            modelViewController_.Focus(focusCenter, focusRadius);
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+
+        if (DrawFlatViewportButton(
+                ICON_FA_CAMERA, "Take screenshot", false, ImVec2(28.0f, 22.0f)))
+        {
+            RequestScreenshot(false, "");
+        }
+        ImGui::SameLine();
+        if (DrawFlatViewportButton(
+                ICON_FA_CHEVRON_DOWN, "More capture options", false, ImVec2(24.0f, 22.0f)))
+        {
+            ImGui::OpenPopup("##ViewportCaptureMenu");
+        }
+        ImGui::SameLine();
+        if (DrawFlatViewportButton(
+                ICON_FA_KEYBOARD, "Toggle shortcut cheat sheet",
+                uiState.showCheatSheet, ImVec2(28.0f, 22.0f)))
+        {
+            uiState.showCheatSheet = !uiState.showCheatSheet;
+        }
+
+        PushViewportPopupStyle();
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 5.0f));
+        if (ImGui::BeginPopup("##ViewportCaptureMenu"))
+        {
+            if (ImGui::MenuItem("Screenshot and Open Folder"))
+            {
+                RequestScreenshot(true, "");
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Record 3s GIF"))
+            {
+                RequestThreeSecondVideo(Runtime::FScreenShotService::EAnimationFormat::Gif);
+            }
+            if (ImGui::MenuItem("Record 3s Animated WebP"))
+            {
+                RequestThreeSecondVideo(Runtime::FScreenShotService::EAnimationFormat::AnimatedWebp);
+            }
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar();
+        PopViewportPopupStyle();
+        PopViewportToolbarStyle();
+    }
+    NextUI::Theme::EndOverlayPanel();
 }
 
-void NextRendererGameInstance::DrawViewportBottomBar(const FGameUiFrameContext& context)
+void NextRendererGameInstance::DrawViewportCheatSheet(FRendererUiState& uiState)
 {
-    ImGuiViewport* viewport = ImGui::GetMainViewport();
-    constexpr float bottomStatusBar = 30.0f;
+    if (!uiState.showCheatSheet)
+    {
+        return;
+    }
 
-    const auto extent = context.framebufferExtent.width > 0 && context.framebufferExtent.height > 0
-        ? context.framebufferExtent
-        : GetEngine().GetRenderer().SwapChain().OutputExtent();
-    const std::string frameText = fmt::format("Frame {}", GetEngine().GetTotalFrames());
-    const std::string sampleText = fmt::format("Samples {} spp", GetEngine().GetUserSettings().NumberOfSamples);
-    const std::string resolutionText = fmt::format("{} x {}", extent.width, extent.height);
-    const float textWidth = ImGui::CalcTextSize(frameText.c_str()).x +
-        ImGui::CalcTextSize(sampleText.c_str()).x +
-        ImGui::CalcTextSize(resolutionText.c_str()).x + 72.0f;
-    const ImVec2 padding(16.0f, 6.0f);
-    const ImVec2 windowSize(textWidth + padding.x * 2.0f + 18.0f,
-                            ImGui::GetTextLineHeight() + padding.y * 2.0f);
-    const ImVec2 windowPos(viewport->Pos.x + (viewport->Size.x - windowSize.x) * 0.5f,
-                           viewport->Pos.y + viewport->Size.y - bottomStatusBar - windowSize.y - 8.0f);
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    constexpr float panelMargin = 10.0f;
+    constexpr float toolbarHeight = 38.0f;
+    constexpr float panelGap = 8.0f;
+    constexpr float panelWidth = 390.0f;
+    constexpr float panelHeight = 450.0f;
+    const float rightEdge = viewport->Pos.x + viewport->Size.x - panelMargin;
+    const float topEdge = viewport->Pos.y + TitlebarSize + panelMargin + toolbarHeight + panelGap;
 
     NextUI::Theme::FOverlayPanelConfig config{};
-    config.WindowId = "##ViewportFrameInfo";
-    config.Position = windowPos;
-    config.Size = windowSize;
-    config.Padding = padding;
-    config.ItemSpacing = ImVec2(4.0f, 0.0f);
-    config.BackgroundAlpha = 0.80f;
+    config.WindowId = "##ViewportShortcutCheatSheet";
+    config.Position = ImVec2(rightEdge - panelWidth, topEdge);
+    config.Size = ImVec2(panelWidth, panelHeight);
+    config.Padding = ImVec2(14.0f, 10.0f);
+    config.ItemSpacing = ImVec2(6.0f, 5.0f);
+    config.Rounding = 6.0f;
+    config.BackgroundAlpha = 0.90f;
 
     if (NextUI::Theme::BeginOverlayPanel(config))
     {
-        ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted), "%s", frameText.c_str());
-        NextUI::Theme::DrawVerticalSeparator(14.0f, 10.0f, 0.72f);
-        ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted), "%s", sampleText.c_str());
-        NextUI::Theme::DrawVerticalSeparator(14.0f, 10.0f, 0.72f);
-        ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted), "%s", resolutionText.c_str());
-        NextUI::Theme::DrawVerticalSeparator(14.0f, 10.0f, 0.72f);
-        NextUI::Theme::ToolbarButton(ICON_FA_EXPAND, "Viewport Display Options", false, ImVec2(22.0f, 18.0f));
+        ImGui::TextColored(
+            NextUI::Theme::Color(NextUI::Theme::EColor::Text),
+            "%s  Keyboard & Mouse", ICON_FA_KEYBOARD);
+
+        const float closeButtonWidth = 24.0f;
+        ImGui::SameLine(ImGui::GetContentRegionMax().x - closeButtonWidth);
+        PushViewportToolbarStyle();
+        if (DrawFlatViewportButton(
+                ICON_FA_XMARK, "Close shortcut cheat sheet", false, ImVec2(closeButtonWidth, 22.0f)))
+        {
+            uiState.showCheatSheet = false;
+        }
+        PopViewportToolbarStyle();
+
+        NextUI::Theme::DrawThinSeparator();
+        ImGui::Dummy(ImVec2(0.0f, 3.0f));
+
+        const auto DrawSection = [](const char* title)
+        {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TableSetBgColor(
+                ImGuiTableBgTarget_RowBg0,
+                NextUI::Theme::ColorU32(NextUI::Theme::EColor::Surface, 0.55f));
+            ImGui::TextColored(
+                NextUI::Theme::Color(NextUI::Theme::EColor::TextDim), "%s", title);
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextUnformatted("");
+        };
+
+        const auto DrawShortcut = [](const char* shortcut, const char* action)
+        {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextColored(
+                NextUI::Theme::Color(NextUI::Theme::EColor::Text), "%s", shortcut);
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextColored(
+                NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted), "%s", action);
+        };
+
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 4.0f));
+        if (ImGui::BeginTable(
+                "##ViewportShortcuts", 2,
+                ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoSavedSettings))
+        {
+            ImGui::TableSetupColumn("Shortcut", ImGuiTableColumnFlags_WidthFixed, 136.0f);
+            ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);
+
+            DrawSection("NAVIGATION");
+            DrawShortcut("RMB + Drag", "Look around");
+            DrawShortcut("RMB + W A S D", "Move camera");
+            DrawShortcut("RMB + Q / E", "Move up / down");
+            DrawShortcut("Mouse Wheel", "Dolly forward / back");
+            DrawShortcut("Alt + RMB", "Orbit selected object");
+
+            DrawSection("SCENE & SELECTION");
+            DrawShortcut("LMB", "Select object / set focus");
+            DrawShortcut("F", "Focus selected object");
+            DrawShortcut("Space", "Launch a physics cube");
+            DrawShortcut("Esc", "Clear selection");
+            DrawShortcut("Ctrl / Cmd + D", "Duplicate selection");
+            DrawShortcut("Delete / Backspace", "Delete selection");
+
+            DrawSection("TRANSFORM GIZMO");
+            DrawShortcut("W / E / R", "Move / Rotate / Scale");
+            DrawShortcut("Q", "Toggle Local / World");
+
+            ImGui::EndTable();
+        }
+        ImGui::PopStyleVar();
     }
     NextUI::Theme::EndOverlayPanel();
 }
@@ -1604,7 +1982,7 @@ void NextRendererGameInstance::DrawTitleBar(const FGameUiFrameContext& context, 
             UpdateMenuRight();
             auto& showFlags = GetEngine().GetShowFlags();
             Utilities::UI::DrawShowFlagsCommon(showFlags);
-            ImGui::MenuItem("Profiler Overlay", nullptr, &uiState.showOverlay);
+            ImGui::MenuItem("Profiler Overlay", nullptr, &GetEngine().GetUserSettings().ShowOverlay);
             ImGui::EndMenu();
         }
         else
@@ -1654,7 +2032,7 @@ void NextRendererGameInstance::DrawTitleBar(const FGameUiFrameContext& context, 
         {
             UpdateMenuRight();
             ImGui::MenuItem("Render Settings", nullptr, &uiState.showSettings);
-            ImGui::MenuItem("Stats Overlay", nullptr, &uiState.showOverlay);
+            ImGui::MenuItem("Stats Overlay", nullptr, &GetEngine().GetUserSettings().ShowOverlay);
             ImGui::EndMenu();
         }
         else
@@ -1700,7 +2078,7 @@ void NextRendererGameInstance::DrawBottomStatusBar(FRendererUiState& uiState)
 
 void NextRendererGameInstance::DrawMemoryStatisticsPanel(FRendererUiState& uiState)
 {
-    const bool profilerMode = uiState.workMode == EWorkMode::Profiler;
+    const bool profilerMode = uiState.workMode == EWorkMode::Profile;
     if (!profilerMode && !uiState.memoryStatisticsPanelOpen)
     {
         return;
@@ -1749,7 +2127,8 @@ void NextRendererGameInstance::DrawMemoryStatisticsPanel(FRendererUiState& uiSta
             uiState.memoryStatisticsPanelOpen = false;
             if (profilerMode)
             {
-                uiState.workMode = EWorkMode::Renderer;
+                uiState.workMode = EWorkMode::Render;
+                uiState.lastWorkMode = EWorkMode::Count;
             }
         }
         return;
@@ -1866,7 +2245,8 @@ void NextRendererGameInstance::DrawMemoryStatisticsPanel(FRendererUiState& uiSta
         uiState.memoryStatisticsPanelOpen = false;
         if (profilerMode)
         {
-            uiState.workMode = EWorkMode::Renderer;
+            uiState.workMode = EWorkMode::Render;
+            uiState.lastWorkMode = EWorkMode::Count;
         }
     }
 }

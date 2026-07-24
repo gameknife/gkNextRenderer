@@ -43,12 +43,10 @@ public:
 
     enum class EWorkMode : uint8_t
     {
-        Renderer = 0,
-        Camera,
-        World,
-        Mesh,
-        Profiler,
-        Settings,
+        Render = 0,
+        Detail,
+        Profile,
+        CVar,
         Count,
     };
 
@@ -56,12 +54,12 @@ private:
     struct FRendererUiState
     {
         NextUI::GizmoController gizmoController;
-        EWorkMode workMode = EWorkMode::Renderer;
-        EWorkMode lastWorkMode = EWorkMode::Count;
+        EWorkMode workMode = EWorkMode::Render;
+        EWorkMode lastWorkMode = EWorkMode::Render;
         struct ImFont* bigFont {};
         struct ImFont* titleBarFont {};
-        bool showSettings = true;
-        bool showOverlay = false;
+        bool showSettings = false;
+        bool showCheatSheet = true;
         bool memoryStatisticsPanelOpen = false;
     };
 
@@ -84,8 +82,8 @@ private:
     void DrawBottomStatusBar(FRendererUiState& uiState);
     void DrawModeRail(FRendererUiState& uiState);
     void DrawMemoryStatisticsPanel(FRendererUiState& uiState);
-    void DrawViewportTopBar(const FGameUiFrameContext& context, const FRendererUiState& uiState);
-    void DrawViewportBottomBar(const FGameUiFrameContext& context);
+    void DrawViewportTopBar(const FGameUiFrameContext& context, FRendererUiState& uiState);
+    void DrawViewportCheatSheet(FRendererUiState& uiState);
     void RequestScreenshot(bool openFolder, const std::string& tag);
     void RequestThreeSecondVideo(Runtime::FScreenShotService::EAnimationFormat format);
     Runtime::Camera::ModelViewController modelViewController_;
