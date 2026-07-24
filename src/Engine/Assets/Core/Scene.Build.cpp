@@ -6,6 +6,7 @@
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Core/Model.hpp"
+#include "Engine/Assets/Core/LightObject.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
@@ -14,6 +15,7 @@
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/EnvironmentComponent.hpp"
+#include "Engine/Runtime/Components/LightComponent.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/Engine.hpp"
@@ -161,11 +163,24 @@ namespace Assets
                 }
             }
 
+            if (auto* lightComponent = node->GetComponentPtr<Runtime::LightComponent>())
+            {
+                for (LightObject& light : lightComponent->Lights())
+                {
+                    light.lightMatIdx += materialOffset;
+                }
+            }
+
             // Reparent roots (nodes that don't have a parent in the new scene hierarchy)
             if (node->GetParent() == nullptr)
             {
                 node->SetParent(rootNode);
             }
+        }
+
+        for (LightObject& light : lights)
+        {
+            light.lightMatIdx += materialOffset;
         }
 
         // Merge vectors

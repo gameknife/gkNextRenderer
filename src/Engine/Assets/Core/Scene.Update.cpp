@@ -6,12 +6,14 @@
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Core/Model.hpp"
+#include "Engine/Assets/Core/LightObject.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
 
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/LightComponent.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
@@ -28,9 +30,47 @@
 
 namespace Assets
 {
+    std::vector<LightObject> Scene::ResolveActiveLights() const
+    {
+        std::vector<LightObject> resolvedLights;
+        resolvedLights.reserve(std::min<size_t>(lights_.size(), kMaxLightCount));
+        for (const LightObject& light : lights_)
+        {
+            resolvedLights.push_back(light);
+            if (resolvedLights.size() == kMaxLightCount)
+            {
+                return resolvedLights;
+            }
+        }
+
+        for (const auto& node : nodes_)
+        {
+            const auto* lightComponent = node ? node->GetComponentPtr<Runtime::LightComponent>() : nullptr;
+            if (!lightComponent || !lightComponent->GetEnabled())
+            {
+                continue;
+            }
+            if (const auto* render = node->GetComponentPtr<Runtime::RenderComponent>();
+                render && !render->GetVisible())
+            {
+                continue;
+            }
+            for (const LightObject& localLight : lightComponent->Lights())
+            {
+                resolvedLights.push_back(LightObjects::Transform(localLight, node->WorldTransform()));
+                if (resolvedLights.size() == kMaxLightCount)
+                {
+                    return resolvedLights;
+                }
+            }
+        }
+        return resolvedLights;
+    }
+
     void Scene::UpdateLights()
     {
-        lightCount_ = std::min<uint32_t>(static_cast<uint32_t>(lights_.size()), kMaxLightCount);
+        std::vector<LightObject> uploadLights = ResolveActiveLights();
+        lightCount_ = static_cast<uint32_t>(uploadLights.size());
 
         // Light-set signature (count + type/material sequence, FNV-1a): a change means stored
         // light indices change meaning, so index-holding consumers must drop history.
@@ -40,8 +80,8 @@ namespace Assets
             signature ^= v;
             signature *= 1099511628211ull;
         };
-        mix(lights_.size());
-        for (const LightObject& light : lights_)
+        mix(uploadLights.size());
+        for (const LightObject& light : uploadLights)
         {
             mix(light.lightType);
             mix(light.lightMatIdx);
@@ -56,7 +96,6 @@ namespace Assets
         {
             return;
         }
-        std::vector<LightObject> uploadLights(lights_.begin(), lights_.begin() + lightCount_);
         std::vector<float> weights(lightCount_, 0.0f);
         float totalWeight = 0.0f;
         for (uint32_t i = 0; i < lightCount_; ++i)
@@ -100,7 +139,7 @@ namespace Assets
         constexpr glm::vec4 inactiveColor(1.0f, 0.18f, 0.12f, 1.0f);
         constexpr glm::vec4 normalColor(0.08f, 0.9f, 1.0f, 1.0f);
 
-        for (const LightObject& light : lights_)
+        for (const LightObject& light : ResolveActiveLights())
         {
             const bool isPoint = light.lightType == LightTypePoint;
             const glm::vec3 p0(light.p0);

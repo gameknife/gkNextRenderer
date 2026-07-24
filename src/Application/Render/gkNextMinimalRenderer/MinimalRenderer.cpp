@@ -8,6 +8,7 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
+#include "Engine/Runtime/Components/LightComponent.hpp"
 
 namespace
 {
@@ -36,11 +37,19 @@ namespace
         environment.HasSky = false;
         environment.HasSun = false;
 
+        const size_t firstLight = lights.size();
         const uint32_t cboxModel = static_cast<uint32_t>(
             Assets::FProcModel::CreateCornellBox(5.55f, models, materials, lights));
         nodes.push_back(Assets::SceneBuilder::CreateRenderNode(
             "CornellBox", glm::vec3(0.0f), glm::vec3(1.0f), static_cast<uint32_t>(nodes.size()), cboxModel,
             std::array<uint32_t, 16>{firstMaterial, firstMaterial + 1, firstMaterial + 2, firstMaterial + 3}));
+        auto lightComponent = std::make_shared<Runtime::LightComponent>();
+        for (size_t lightIndex = firstLight; lightIndex < lights.size(); ++lightIndex)
+        {
+            lightComponent->AddLight(lights[lightIndex]);
+        }
+        nodes.back()->AddComponent(lightComponent);
+        lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstLight), lights.end());
 
         const glm::vec3 spherePosition(1.30f, 1.01f, 0.80f);
         const glm::vec3 boxPosition(-1.30f, 0.0f, -0.80f);

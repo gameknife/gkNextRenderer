@@ -10,6 +10,7 @@
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/LightComponent.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <functional>
@@ -214,6 +215,7 @@ namespace
         cameraInit.HasSky = false;
         cameraInit.HasSun = false;
 
+        const size_t firstCornellLight = lights.size();
         int cboxModel = Assets::FProcModel::CreateCornellBox(5.55f, models, materials, lights);
         {
             auto newNode = Assets::SceneBuilder::CreateRenderNode(
@@ -224,6 +226,13 @@ namespace
                 static_cast<uint32_t>(cboxModel),
                 std::array<uint32_t, 16>{prevMatId + 0, prevMatId + 1, prevMatId + 2, prevMatId + 3});
             nodes.push_back(newNode);
+            auto lightComponent = std::make_shared<Runtime::LightComponent>();
+            for (size_t lightIndex = firstCornellLight; lightIndex < lights.size(); ++lightIndex)
+            {
+                lightComponent->AddLight(lights[lightIndex]);
+            }
+            newNode->AddComponent(lightComponent);
+            lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstCornellLight), lights.end());
         }
 
         auto spherePos = vec3(1.30, 1.01 + 2.00 * 0.0, 0.80);
@@ -366,8 +375,12 @@ namespace
         auto addAreaLight = [&](const std::string& name, const vec3& origin,
                                 const vec3& right, const vec3& up, uint32_t lightMat)
         {
+            const size_t firstLight = lights.size();
             models.push_back(Assets::FProcModel::CreateAreaLight(name, origin, right, up, lightMat, lights));
             addNode(name, vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), lightMat);
+            auto lightComponent = std::make_shared<Runtime::LightComponent>(lights.back());
+            nodes.back()->AddComponent(lightComponent);
+            lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstLight), lights.end());
         };
 
         // Main ceiling light (warm white), faces -Y.
@@ -669,10 +682,13 @@ namespace
             }
         }
 
+        const size_t firstKeyLight = lights.size();
         models.push_back(Assets::FProcModel::CreateAreaLight(
             "KeyLight", vec3(-3.0f, 5.5f, 1.5f), vec3(6.0f, 0.0f, 0.0f),
             vec3(0.0f, 0.0f, 3.0f), matLight, lights));
         addNode("KeyLight", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matLight);
+        nodes.back()->AddComponent(std::make_shared<Runtime::LightComponent>(lights.back()));
+        lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstKeyLight), lights.end());
     }
 
     void LightingShowcase(Assets::EnvironmentSetting& cameraInit,
@@ -748,23 +764,32 @@ namespace
         // Light 1: Point light (small sphere emitter above sphere 1)
         const vec3 pointLightPosition(-5.25f, 4.5f, -1.0f);
         constexpr float pointLightRadius = 0.2f;
+        size_t firstLight = lights.size();
         models.push_back(Assets::FProcModel::CreatePointLight(
             "PointLight", pointLightPosition, pointLightRadius, matPointLight, lights));
         const uint32_t pointLightModel = static_cast<uint32_t>(models.size() - 1);
         addNode("PointLight", vec3(0), pointLightModel, matPointLight);
+        nodes.back()->AddComponent(std::make_shared<Runtime::LightComponent>(lights.back()));
+        lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstLight), lights.end());
 
         // Light 2: Area light (rectangle above sphere 2)
+        firstLight = lights.size();
         models.push_back(Assets::FProcModel::CreateAreaLight(
             "AreaLight", vec3(-2.75f, 4.5f, -0.5f), vec3(2.0f, 0.0f, 0.0f),
             vec3(0.0f, 0.0f, 1.0f), matAreaLight, lights));
         addNode("AreaLight", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matAreaLight);
+        nodes.back()->AddComponent(std::make_shared<Runtime::LightComponent>(lights.back()));
+        lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstLight), lights.end());
 
         // Light 3: Uses global sun (directional) - no explicit light node needed
         // Light 4: Fill light (small area light near sphere 4)
+        firstLight = lights.size();
         models.push_back(Assets::FProcModel::CreateAreaLight(
             "FillLight", vec3(4.75f, 2.8f, 1.0f), vec3(1.0f, 0.0f, 0.0f),
             vec3(0.0f, -0.5f, 0.5f), matFillLight, lights));
         addNode("FillLight", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matFillLight);
+        nodes.back()->AddComponent(std::make_shared<Runtime::LightComponent>(lights.back()));
+        lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstLight), lights.end());
     }
 
     void CameraShowcase(Assets::EnvironmentSetting& cameraInit,
@@ -1094,12 +1119,15 @@ namespace
                 const float x = (col - (gridN - 1) * 0.5f) * spacing - lightSize * 0.5f;
                 const float z = (row - (gridN - 1) * 0.5f) * spacing - lightSize * 0.5f;
                 const uint32_t matIdx = lightMatBase + (row * 3 + col) % 8;
+                const size_t firstLight = lights.size();
                 models.push_back(Assets::FProcModel::CreateAreaLight(
                     "ml_light_quad_" + std::to_string(row) + "_" + std::to_string(col),
                     vec3(x, 3.5f, z), vec3(lightSize, 0, 0), vec3(0, 0, lightSize),
                     matIdx, lights));
                 addNode("Light_" + std::to_string(row) + "_" + std::to_string(col),
                         static_cast<uint32_t>(models.size() - 1), matIdx);
+                nodes.back()->AddComponent(std::make_shared<Runtime::LightComponent>(lights.back()));
+                lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstLight), lights.end());
             }
         }
 
@@ -1486,12 +1514,15 @@ namespace
             for (int index = -2; index <= 2; ++index)
             {
                 const float z = static_cast<float>(index) * 7.0f;
+                const size_t firstLight = lights.size();
                 models.push_back(Assets::FProcModel::CreateAreaLight(
                     fmt::format("NightLampMesh_{}_{}", side, index),
                     vec3(x - 0.4f, 4.8f, z - 0.4f), vec3(0.8f, 0, 0), vec3(0, 0, 0.8f),
                     materialBase + 6u, lights));
                 addNode(fmt::format("NightLamp_{}_{}", side, index), vec3(0), vec3(1),
                         static_cast<uint32_t>(models.size() - 1), 6);
+                nodes.back()->AddComponent(std::make_shared<Runtime::LightComponent>(lights.back()));
+                lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstLight), lights.end());
             }
         }
 

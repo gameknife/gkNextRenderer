@@ -7,6 +7,7 @@
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
+#include "Engine/Runtime/Components/LightComponent.hpp"
 
 using namespace Brotato3DUtil;
 
@@ -87,11 +88,12 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
                                                std::vector<Assets::AnimationTrack>& tracks)
 {
     (void)tracks;
+    (void)lights;
     sceneReady_ = false;
     ApplyLightingSettings();
     lightMaterialIds_.clear();
     tempLightPool_.clear();
-    playerLightIndex_ = -1;
+    playerLightComponent_.reset();
     playerLightNode_.reset();
 
     auto addLightMaterial = [&materials, this](const glm::vec3& color, float intensity) -> uint32_t
@@ -105,11 +107,11 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
         lightMaterialIds_[key] = materialId;
         return materialId;
     };
-    auto addAreaLight = [&models, &nodes, &lights](const std::string& name,
+    auto addAreaLight = [&models, &nodes](const std::string& name,
                                                    const glm::vec3& center,
                                                    float radius,
                                                    uint32_t materialId,
-                                                   bool visible) -> std::pair<int, std::shared_ptr<Assets::Node>>
+                                                   bool visible)
     {
         const glm::vec3 right(radius, 0.0f, 0.0f);
         const glm::vec3 up(0.0f, 0.0f, radius);
@@ -122,11 +124,9 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
                                                              createdLights));
         if (createdLights.empty())
         {
-            return {-1, nullptr};
+            return std::pair<std::shared_ptr<Runtime::LightComponent>, std::shared_ptr<Assets::Node>>{};
         }
 
-        lights.push_back(createdLights.front());
-        const int lightIndex = static_cast<int>(lights.size() - 1);
         auto node = Assets::SceneBuilder::CreateRenderNode(name,
                                      center,
                                      glm::vec3(1.0f),
@@ -134,8 +134,10 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
                                      static_cast<uint32_t>(models.size() - 1),
                                      materialId,
                                      visible);
+        auto lightComponent = std::make_shared<Runtime::LightComponent>(createdLights.front());
+        node->AddComponent(lightComponent);
         nodes.push_back(node);
-        return {lightIndex, node};
+        return std::pair{lightComponent, node};
     };
 
     const auto playerLight = addAreaLight("Brotato3D_PlayerEmissiveLight",
@@ -143,7 +145,7 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
                                           6.0f,
                                           addLightMaterial(glm::vec3(1.0f, 0.86f, 0.62f), 180.0f),
                                           true);
-    playerLightIndex_ = playerLight.first;
+    playerLightComponent_ = playerLight.first;
     playerLightNode_ = playerLight.second;
     tempLightPool_.reserve(32);
     for (int index = 0; index < 32; ++index)
@@ -153,7 +155,7 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
                                             1.0f,
                                             addLightMaterial(glm::vec3(1.0f), 0.0f),
                                             false);
-        tempLightPool_.push_back({.lightIndex = tempLight.first, .node = tempLight.second});
+        tempLightPool_.push_back({.lightComponent = tempLight.first, .node = tempLight.second});
     }
 
     models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0.0f), player_.radius));
@@ -585,7 +587,7 @@ void Brotato3DGameInstance::UpdateCombatEffects(double deltaSeconds)
                          muzzleFlashes_.end());
 
     const glm::vec3 playerLightPos = player_.worldPos + glm::vec3(0.0f, 3.2f, 0.0f);
-    UpdateLightArea(playerLightIndex_, playerLightPos, 6.0f, 1.0f);
+    UpdateLightArea(playerLightComponent_.get(), playerLightPos, 6.0f, 1.0f);
     playerLightNode_->SetTranslation(playerLightPos);
     for (auto& light : tempLightPool_)
     {
@@ -600,14 +602,14 @@ void Brotato3DGameInstance::UpdateCombatEffects(double deltaSeconds)
         {
             light.active = false;
             light.remainingMs = 0.0f;
-            UpdateLightArea(light.lightIndex, HiddenPosition, 0.01f, 0.0f);
+            UpdateLightArea(light.lightComponent.get(), HiddenPosition, 0.01f, 0.0f);
             light.node->SetTranslation(HiddenPosition);
             Assets::NodeUtils::SetVisible(light.node, false);
             continue;
         }
-        UpdateLightArea(light.lightIndex, light.worldPos, light.radiusMeters, intensityScale);
+        UpdateLightArea(light.lightComponent.get(), light.worldPos, light.radiusMeters, intensityScale);
         light.node->SetTranslation(light.worldPos);
-        light.node->SetScale(glm::vec3(std::max(0.05f, light.radiusMeters * intensityScale)));
+        light.node->SetScale(glm::vec3(1.0f));
     }
 }
 
@@ -729,25 +731,23 @@ void Brotato3DGameInstance::SpawnTempLight(const glm::vec3& worldPos,
     lightIt->durationMs = durationMs;
     lightIt->remainingMs = durationMs;
 
-    auto& lights = GetEngine().GetScene().Lights();
-    if (lightIt->lightIndex >= 0 && lightIt->lightIndex < static_cast<int>(lights.size()))
+    if (lightIt->lightComponent)
     {
-        lights[static_cast<size_t>(lightIt->lightIndex)].lightMatIdx = EnsureLightMaterial(color);
+        lightIt->lightComponent->SetMaterialIndex(EnsureLightMaterial(color));
     }
     Assets::NodeUtils::SetPrimaryMaterial(lightIt->node, EnsureLightMaterial(color));
     lightIt->node->SetTranslation(worldPos);
-    lightIt->node->SetScale(glm::vec3(radiusMeters));
+    lightIt->node->SetScale(glm::vec3(1.0f));
     Assets::NodeUtils::SetVisible(lightIt->node, true);
-    UpdateLightArea(lightIt->lightIndex, worldPos, radiusMeters, 1.0f);
+    UpdateLightArea(lightIt->lightComponent.get(), worldPos, radiusMeters, 1.0f);
 }
 
-void Brotato3DGameInstance::UpdateLightArea(int lightIndex,
+void Brotato3DGameInstance::UpdateLightArea(Runtime::LightComponent* lightComponent,
                                             const glm::vec3& worldPos,
                                             float radiusMeters,
                                             float intensityScale)
 {
-    auto& lights = GetEngine().GetScene().Lights();
-    if (lightIndex < 0 || lightIndex >= static_cast<int>(lights.size()))
+    if (!lightComponent || lightComponent->Lights().empty())
     {
         return;
     }
@@ -755,10 +755,11 @@ void Brotato3DGameInstance::UpdateLightArea(int lightIndex,
     const float radius = std::max(0.01f, radiusMeters);
     const glm::vec3 right(radius, 0.0f, 0.0f);
     const glm::vec3 up(0.0f, 0.0f, radius);
-    auto& light = lights[static_cast<size_t>(lightIndex)];
-    light.p0 = glm::vec4(worldPos - right * 0.5f - up * 0.5f, 1.0f);
-    light.p1 = glm::vec4(worldPos - right * 0.5f + up * 0.5f, 1.0f);
-    light.p3 = glm::vec4(worldPos + right * 0.5f - up * 0.5f, 1.0f);
+    auto& light = lightComponent->Lights().front();
+    (void)worldPos;
+    light.p0 = glm::vec4(-right * 0.5f - up * 0.5f, 1.0f);
+    light.p1 = glm::vec4(-right * 0.5f + up * 0.5f, 1.0f);
+    light.p3 = glm::vec4(right * 0.5f - up * 0.5f, 1.0f);
     light.normal_area = glm::vec4(0.0f, -1.0f, 0.0f, radius * radius * std::clamp(intensityScale, 0.0f, 1.0f));
 }
 

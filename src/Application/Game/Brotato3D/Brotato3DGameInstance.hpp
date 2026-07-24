@@ -16,6 +16,7 @@
 
 struct ImVec2;
 struct ImFont;
+namespace Runtime { class LightComponent; }
 
 namespace Brotato3D
 {
@@ -208,7 +209,8 @@ private:
     void SpawnPlayerDamageDebris(int damage);
     void PushMuzzleFlash(const glm::vec3& worldPos, const glm::vec3& color);
     void SpawnTempLight(const glm::vec3& worldPos, const glm::vec3& color, float radiusMeters, float durationMs);
-    void UpdateLightArea(int lightIndex, const glm::vec3& worldPos, float radiusMeters, float intensityScale);
+    void UpdateLightArea(Runtime::LightComponent* lightComponent, const glm::vec3& worldPos,
+                         float radiusMeters, float intensityScale);
     uint32_t EnsureLightMaterial(const glm::vec3& color);
     void StartScreenShake(float durationMs, float intensity);
     void PushExplosionRing(const glm::vec3& worldPos, const glm::vec4& color, float maxRadius);
@@ -328,7 +330,7 @@ private:
     std::map<std::string, uint32_t> lightMaterialIds_;
     struct FTempLightRuntime
     {
-        int lightIndex = -1;
+        std::shared_ptr<Runtime::LightComponent> lightComponent;
         glm::vec3 worldPos = glm::vec3(0.0f);
         float radiusMeters = 3.0f;
         float durationMs = 120.0f;
@@ -336,7 +338,7 @@ private:
         std::shared_ptr<::Assets::Node> node;
         bool active = false;
     };
-    int playerLightIndex_ = -1;
+    std::shared_ptr<Runtime::LightComponent> playerLightComponent_;
     std::shared_ptr<::Assets::Node> playerLightNode_;
     std::vector<FTempLightRuntime> tempLightPool_;
     uint32_t debrisTinyModelId_ = 0;

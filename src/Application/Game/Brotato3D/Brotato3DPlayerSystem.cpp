@@ -454,7 +454,7 @@ void Brotato3DGameInstance::ResetRuntimeState()
     {
         light.active = false;
         light.remainingMs = 0.0f;
-        UpdateLightArea(light.lightIndex, HiddenPosition, 0.01f, 0.0f);
+        UpdateLightArea(light.lightComponent.get(), HiddenPosition, 0.01f, 0.0f);
         light.node->SetTranslation(HiddenPosition);
         Assets::NodeUtils::SetVisible(light.node, false);
     }

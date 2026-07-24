@@ -2,6 +2,7 @@
 #include "Engine/Runtime/Reflection/GlmTypeSupport.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/EnvironmentComponent.hpp"
+#include "Engine/Runtime/Components/LightComponent.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Engine/Runtime/Components/SceneReferenceComponent.hpp"
@@ -30,6 +31,7 @@ namespace Reflection
         // Register all component types
         Runtime::RenderComponent::RegisterReflection();
         Runtime::EnvironmentComponent::RegisterReflection();
+        Runtime::LightComponent::RegisterReflection();
         Runtime::PhysicsComponent::RegisterReflection();
         Runtime::SkinnedMeshComponent::RegisterReflection();
         Runtime::SceneReferenceComponent::RegisterReflection();

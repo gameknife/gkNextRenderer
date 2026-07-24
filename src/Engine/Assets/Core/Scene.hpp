@@ -398,6 +398,7 @@ namespace Assets
 
         void MarkNodeIndexDirty() const { nodeIndexDirty_ = true; }
         void RebuildNodeIndex() const;
+        std::vector<LightObject> ResolveActiveLights() const;
         void UpdateLights();
         void DrawAreaLights() const;
         void RegisterNodeIndex(const std::shared_ptr<Node>& node) const;

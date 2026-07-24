@@ -1,6 +1,9 @@
 #include <catch2/catch_all.hpp>
 #include "Modules/GltfLoader/FSceneLoader.h"
+#include "Engine/Assets/Core/LightObject.hpp"
 #include "Engine/Assets/Core/Model.hpp"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/LightComponent.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include <chrono>
 #include <fstream>
@@ -40,7 +43,7 @@ namespace
     };
 }
 
-TEST_CASE("glTF area light uses emissive quad geometry and world transform", "[Assets][glTF][AreaLight]")
+TEST_CASE("glTF area light stays bound to its node transform", "[Assets][glTF][AreaLight]")
 {
     Utilities::Package::FPackageFileSystem pakSys(Utilities::Package::EPM_OsFile);
     ScopedGltfFile fixture;
@@ -83,16 +86,27 @@ TEST_CASE("glTF area light uses emissive quad geometry and world transform", "[A
 
     REQUIRE(Assets::FSceneLoader::LoadGLTFScene(filename.string(), camera, nodes, models, materials, lights,
                                                 tracks, skeletons));
-    REQUIRE(lights.size() == 1);
-    const Assets::LightObject& light = lights.front();
+    CHECK(lights.empty());
+    const auto areaNode = std::find_if(nodes.begin(), nodes.end(), [](const auto& node)
+    {
+        return node && node->GetName() == "area";
+    });
+    REQUIRE(areaNode != nodes.end());
+    const auto lightComponent = (*areaNode)->GetComponent<Runtime::LightComponent>();
+    REQUIRE(lightComponent);
+    REQUIRE(lightComponent->Lights().size() == 1);
+    const Assets::LightObject& light = lightComponent->Lights().front();
+
+    const Assets::LightObject worldLight =
+        Assets::LightObjects::Transform(light, (*areaNode)->WorldTransform());
     CHECK(light.lightMatIdx == 0);
-    CHECK(light.p0.x == Catch::Approx(10.79f));
-    CHECK(light.p0.y == Catch::Approx(2.0f));
-    CHECK(light.p0.z == Catch::Approx(3.49f));
-    CHECK(light.normal_area.x == Catch::Approx(0.0f).margin(1.0e-6f));
-    CHECK(light.normal_area.y == Catch::Approx(-1.0f).margin(1.0e-6f));
-    CHECK(light.normal_area.z == Catch::Approx(0.0f).margin(1.0e-6f));
-    CHECK(light.normal_area.w == Catch::Approx(0.4116f).margin(1.0e-5f));
+    CHECK(worldLight.p0.x == Catch::Approx(10.79f));
+    CHECK(worldLight.p0.y == Catch::Approx(2.0f));
+    CHECK(worldLight.p0.z == Catch::Approx(3.49f));
+    CHECK(worldLight.normal_area.x == Catch::Approx(0.0f).margin(1.0e-6f));
+    CHECK(worldLight.normal_area.y == Catch::Approx(-1.0f).margin(1.0e-6f));
+    CHECK(worldLight.normal_area.z == Catch::Approx(0.0f).margin(1.0e-6f));
+    CHECK(worldLight.normal_area.w == Catch::Approx(0.4116f).margin(1.0e-5f));
 }
 
 TEST_CASE("Load glTF Skinning Data", "[Assets][glTF]")

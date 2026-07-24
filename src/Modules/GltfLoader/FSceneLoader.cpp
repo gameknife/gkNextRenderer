@@ -22,7 +22,9 @@
 #include <tiny_gltf.h>
 
 #include "Engine/Assets/Data/Material.hpp"
+#include "Engine/Assets/Core/LightObject.hpp"
 #include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/LightComponent.hpp"
 #include "Engine/Runtime/Components/EnvironmentComponent.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/SceneReferenceComponent.hpp"
@@ -479,9 +481,15 @@ namespace Assets
                         continue;
                     }
                     LightObject light{};
-                    if (TryBuildAreaLight(model, primitive, sceneNode->WorldTransform(), materialOffset, light))
+                    if (TryBuildAreaLight(model, primitive, glm::mat4(1.0f), materialOffset, light))
                     {
-                        outLights.push_back(light);
+                        auto lightComponent = sceneNode->GetComponent<Runtime::LightComponent>();
+                        if (!lightComponent)
+                        {
+                            lightComponent = std::make_shared<Runtime::LightComponent>();
+                            sceneNode->AddComponent(lightComponent);
+                        }
+                        lightComponent->AddLight(light);
                         foundAreaLight = true;
                     }
                     else
