@@ -1374,6 +1374,16 @@ nlohmann::json NextEngine::HandleAgentControlCommand(const std::string& method, 
     {
         const std::string path = Utilities::FileHelper::GetPlatformFilePath(params.value("out", "screenshots/agent_validation").c_str());
         Utilities::FileHelper::EnsureDirectoryExists(std::filesystem::path(path).parent_path().string());
+        for (const char* extension : {".jpg", ".avif"})
+        {
+            std::error_code errorCode;
+            std::filesystem::remove(path + extension, errorCode);
+            if (errorCode)
+            {
+                throw std::runtime_error("failed to remove existing screenshot " + path + extension + ": " +
+                                         errorCode.message());
+            }
+        }
         RequestScreenShot({
             .filename = path,
             .accumulateFrames = params.value("accumulateFrames", 0u),

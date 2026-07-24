@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <string>
 #include <utility>
@@ -193,6 +194,17 @@ namespace Runtime::ScreenShot
             return destination;
         }
 
+        void RemoveExistingScreenshotFile(const std::string& filename)
+        {
+            std::error_code errorCode;
+            std::filesystem::remove(filename, errorCode);
+            if (errorCode)
+            {
+                spdlog::warn("Failed to remove existing screenshot {} before overwrite: {}",
+                             filename, errorCode.message());
+            }
+        }
+
         void EncodeAndWriteScreenshot(FRawScreenshot screenshot,
                                       const std::string& filePathWithoutExtension,
                                       const EFileFormat fileFormat)
@@ -309,7 +321,8 @@ namespace Runtime::ScreenShot
             }
 
             const std::string filename = filePathWithoutExtension + ".avif";
-            std::ofstream file(filename, std::ios::out | std::ios::binary);
+            RemoveExistingScreenshotFile(filename);
+            std::ofstream file(filename, std::ios::out | std::ios::binary | std::ios::trunc);
             if (file.is_open())
             {
                 file.write(reinterpret_cast<const char*>(output.data), static_cast<std::streamsize>(output.size));
@@ -327,6 +340,7 @@ namespace Runtime::ScreenShot
 #endif
             {
             const std::string filename = filePathWithoutExtension + ".jpg";
+            RemoveExistingScreenshotFile(filename);
             if (screenshot.hdr10)
             {
                 const uint16_t* hdrData = reinterpret_cast<const uint16_t*>(screenshot.pixels.data());
