@@ -1,0 +1,23 @@
+{
+  "name": "refactor-baseline",
+  "target": "gkNextRenderer",
+  "scene": "CornellBox.proc",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "cvar", "name": "r.restir.enable", "set": false },
+    { "type": "cvar", "name": "r.sharc.enable", "set": false },
+    { "type": "cvar", "name": "r.temporalFrames", "set": 16 },
+    { "type": "cvar", "name": "r.samples", "set": 8 },
+    { "type": "wait-frames", "n": 200 },
+    { "type": "screenshot", "out": "screenshots/refactor_ref" },
+    { "type": "quit" }
+  ]
+}

@@ -2,14 +2,13 @@ implementing PathTracing;
 
 #include "PreProcessor.slang"
 
-// IRayTracer implementations split out of Shading.slang.
-// Houses the four IRayTracer concrete strategies:
+// The four IRayTracer concrete strategies:
 //   - FHiVoxelDDARayTracer  : page-indexed voxel DDA + cascaded fallback
 //   - FAmbientCubeRayTracer : probe-only fake "trace" for cheap GI lookups
 //   - FHardwareRayTracer    : RayQuery hardware ray tracing
 //   - FSoftwareRayTracer    : screen-space + DDA hybrid
-// IPrimaryRayCaster impls and the IRayTracer/IDirectIlluminator/IRenderer
-// interfaces remain in Shading.slang.
+// IPrimaryRayCaster impls live in PrimaryRayCasters.slang; the IRayTracer /
+// IDirectIlluminator / IRenderer interfaces in Interfaces.slang.
 
 public struct FHiVoxelDDARayTracer : IRayTracer
 {

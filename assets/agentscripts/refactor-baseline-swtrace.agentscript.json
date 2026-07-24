@@ -1,0 +1,24 @@
+{
+  "name": "refactor-baseline-swtrace",
+  "target": "gkNextRenderer",
+  "scene": "GIBootcamp.proc",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "cvar", "name": "r.rendererType", "set": 1 },
+    { "type": "cvar", "name": "r.restir.enable", "set": false },
+    { "type": "cvar", "name": "r.temporalFrames", "set": 16 },
+    { "type": "cvar", "name": "r.samples", "set": 8 },
+    { "type": "wait-frames", "n": 220 },
+    { "type": "assert", "query": "engine.rendererType", "op": "eq", "value": 1 },
+    { "type": "screenshot", "out": "screenshots/refactor_ref_sw" },
+    { "type": "quit" }
+  ]
+}

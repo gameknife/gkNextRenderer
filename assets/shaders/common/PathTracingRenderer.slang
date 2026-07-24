@@ -2,572 +2,37 @@ implementing PathTracing;
 
 #include "PreProcessor.slang"
 
-// Direct illumination strategies + path-tracing renderer split out of Shading.slang.
-// Houses:
-//   - FHardwareDirectIlluminator   : sun shadow via RayQuery
-//   - FAmbientCubeIlluminator      : null illuminator (probe-only path)
-//   - FSoftwareDirectIlluminator   : cascade-aware DDA shadow
-//   - FShadowMapDirectIlluminator  : shadow-map sampling
-//   - FPathTracingRenderer         : multi-bounce path tracer driving any IRayTracer + IDirectIlluminator
-// IRayTracer impls live in RayTracers.slang; primary ray casters and interfaces stay in Shading.slang.
+// FPathTracingRenderer: the multi-bounce path tracer. Drives any IRayTracer +
+// IDirectIlluminator + IRadianceCache. Direct-lighting strategies and the sun/light
+// NEE helpers live in Lighting.slang; IRayTracer impls in RayTracers.slang.
 
-namespace Common
+// Outcome of scattering off the current surface and tracing the next path segment.
+// The scattered direction, hit vertex, throughput and random seed are threaded through
+// ScatterAndTrace as inout state; everything the caller needs to decide is returned here.
+struct FBounceResult
 {
-    // CDF light selection shared by classic light NEE and ReSTIR candidate generation
-    // (reserved1 carries the cdf built in Scene::UpdateLights).
-    public uint SelectLight(float lightSelector)
+    bool exited;             // segment terminates here (sky miss, emitter, or back-face)
+    bool hitMiss;            // escaped the scene into the sky
+    bool hitReflect;         // scattered through a specular/GGX lobe (vs diffuse hemisphere)
+    bool hitMetal;           // the metallic lobe was chosen
+    float hitDist;           // traced segment length
+    float3 terminalRadiance; // sky / emissive radiance when the segment terminates
+
+    __init()
     {
-        GPUScene gpuScene = Bindless.GetGpuscene();
-        UniformBufferObject Camera = gpuScene.Camera[0];
-        uint lightIndex = Camera.LightCount - 1;
-        for (uint i = 0; i < Camera.LightCount; ++i)
-        {
-            if (lightSelector < asfloat(gpuScene.Lights[i].reserved1))
-            {
-                lightIndex = i;
-                break;
-            }
-        }
-        return lightIndex;
+        exited = false;
+        hitMiss = false;
+        hitReflect = false;
+        hitMetal = false;
+        hitDist = 0.0f;
+        terminalRadiance = float3(0, 0, 0);
     }
+};
 
-    public float GetLightSampleMeasure(LightObject light)
-    {
-        if (light.lightType == LightTypePoint)
-        {
-            return 1.0f;
-        }
-        return light.lightType == LightTypeArea ? light.normal_area.w : 0.0f;
-    }
-
-    public float2 CanonicalizeLightUV(LightObject light, float2 uv)
-    {
-        return light.lightType == LightTypePoint ? float2(0, 0) : uv;
-    }
-
-    // The visible marker of an analytic point light is not an occluder of that light.
-    // Shorten only the visibility segment; illumination still uses the analytic center.
-    public float3 GetLightVisibilityTarget(uint lightIndex, float3 rayOrigin,
-                                           float3 lightPosition)
-    {
-        LightObject light = Bindless.GetGpuscene().Lights[lightIndex];
-        if (light.lightType != LightTypePoint || light.p0.w <= 0.0f)
-        {
-            return lightPosition;
-        }
-        const float3 segment = lightPosition - rayOrigin;
-        const float distance = length(segment);
-        if (distance <= EPS)
-        {
-            return lightPosition;
-        }
-        return lightPosition - segment * (min(light.p0.w, distance * 0.5f) / distance);
-    }
-
-    // BSDF-aware finite/delta-light sample. Diffuse stays albedo-demodulated while
-    // specular is complete radiance; lightPdf is the discrete light-selection probability.
-    public bool EvaluateLightDirectSample(uint lightIndex, float2 uv, FBSDFContext context,
-                                          out FDirectLighting direct,
-                                          out float3 lightPosition)
-    {
-        direct = FDirectLighting();
-        lightPosition = float3(0, 0, 0);
-        GPUScene gpuScene = Bindless.GetGpuscene();
-        LightObject light = gpuScene.Lights[lightIndex];
-        const float sampleMeasure = GetLightSampleMeasure(light);
-        const float lightPdf = asfloat(light.reserved2);
-        if (sampleMeasure <= 0.0f || lightPdf <= 0.0f)
-        {
-            return false;
-        }
-        Material lightMaterial = gpuScene.GetMaterial(light.lightMatIdx);
-        if (lightMaterial.MaterialModel != MaterialDiffuseLight)
-        {
-            return false;
-        }
-
-        if (light.lightType == LightTypePoint)
-        {
-            lightPosition = light.p0.xyz;
-        }
-        else
-        {
-            lightPosition = light.p0.xyz + uv.x * (light.p1.xyz - light.p0.xyz) +
-                            uv.y * (light.p3.xyz - light.p0.xyz);
-        }
-        const float3 toLight = lightPosition - context.Position;
-        const float distanceSquared = dot(toLight, toLight);
-        if (distanceSquared <= EPS * EPS)
-        {
-            return false;
-        }
-        const float3 wi = toLight * rsqrt(distanceSquared);
-        const float surfaceCosine = max(dot(context.Normal, wi), 0.0f);
-        if (surfaceCosine <= 0.0f)
-        {
-            return false;
-        }
-
-        FBSDFEval bsdf = EvaluateSurfaceBSDF(context, wi);
-        float geometryAndPdf;
-        float specularMis = 1.0f;
-        if (light.lightType == LightTypePoint)
-        {
-            // DiffuseLight RGB is radiant intensity for a point record. A point is a
-            // delta-direction proposal, so a finite-density BSDF proposal cannot overlap it.
-            geometryAndPdf = surfaceCosine / (distanceSquared * lightPdf);
-        }
-        else
-        {
-            const float lightCosine =
-                max(dot(normalize(light.normal_area.xyz), -wi), 0.0f);
-            if (lightCosine <= 0.0f)
-            {
-                return false;
-            }
-            const float lightPdfOmega =
-                (lightPdf / sampleMeasure) * distanceSquared / lightCosine;
-            specularMis = PowerHeuristic(
-                lightPdfOmega, EvaluateGlossyProposalPdf(context, wi));
-            geometryAndPdf = surfaceCosine * lightCosine * sampleMeasure /
-                             (distanceSquared * lightPdf);
-        }
-        direct.DiffuseDemodulated = lightMaterial.Diffuse.rgb *
-                                     bsdf.DiffuseDemodulated * geometryAndPdf;
-        // Exact/near-delta reflection is handled by a direction sample in the renderer.
-        if (context.PerceptualRoughness > BSDF_DELTA_ROUGHNESS)
-        {
-            direct.SpecularRadiance = lightMaterial.Diffuse.rgb * bsdf.Specular *
-                                      geometryAndPdf * specularMis;
-        }
-        return any(direct.DiffuseDemodulated > float3(0, 0, 0)) ||
-               any(direct.SpecularRadiance > float3(0, 0, 0));
-    }
-
-    // ReSTIR target/shading payload: BSDF-aware diffuse only, excluding the full
-    // source PDF (discrete light probability divided by finite sample measure).
-    public bool EvaluateLightDiffuseSample(uint lightIndex, float2 uv, FBSDFContext context,
-                                           out float3 f, out float3 lightPosition)
-    {
-        f = float3(0, 0, 0);
-        FDirectLighting direct;
-        if (!EvaluateLightDirectSample(lightIndex, uv, context, direct, lightPosition))
-        {
-            return false;
-        }
-        LightObject light = Bindless.GetGpuscene().Lights[lightIndex];
-        const float sampleMeasure = GetLightSampleMeasure(light);
-        const float lightPdf = asfloat(light.reserved2);
-        if (sampleMeasure <= 0.0f || lightPdf <= 0.0f)
-        {
-            return false;
-        }
-        f = direct.DiffuseDemodulated * (lightPdf / sampleMeasure);
-        return any(f > float3(0, 0, 0));
-    }
-
-    public float3 SampleSunDirection(inout uint4 randomSeed, float3 sunDirection)
-    {
-        const float cosRadius = cos(0.25f / 180.0f * M_PI);
-        return AlignWithNormal(RandomInCone(randomSeed, cosRadius), normalize(sunDirection));
-    }
-
-    public void AccumulateSunBSDF(FBSDFContext context, float3 wi, float visibility,
-                                  float3 sunColor, inout FDirectLighting direct)
-    {
-        if (visibility <= 0.0f)
-        {
-            return;
-        }
-        FBSDFEval bsdf = EvaluateSurfaceBSDF(context, wi);
-        const float NoL = max(dot(context.Normal, wi), 0.0f);
-        direct.DiffuseDemodulated += sunColor * bsdf.DiffuseDemodulated * NoL * visibility;
-        if (context.PerceptualRoughness > BSDF_DELTA_ROUGHNESS)
-        {
-            const float cosRadius = cos(0.25f / 180.0f * M_PI);
-            const float sunPdf = 1.0f / (M_TWO_PI * max(1.0f - cosRadius, 1e-7f));
-            const float specularMis = PowerHeuristic(
-                sunPdf, EvaluateGlossyProposalPdf(context, wi));
-            direct.SpecularRadiance += sunColor * bsdf.Specular * NoL * visibility * specularMis;
-        }
-    }
-
-    public float3 EvaluateAnalyticSunDisk(float3 rayDirection)
-    {
-        UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
-        if (!camera.HasSun)
-        {
-            return float3(0, 0, 0);
-        }
-        const float cosRadius = cos(0.25f / 180.0f * M_PI);
-        if (dot(normalize(rayDirection), normalize(camera.SunDirection.xyz)) < cosRadius)
-        {
-            return float3(0, 0, 0);
-        }
-        const float solidAngle = M_TWO_PI * max(1.0f - cosRadius, 1e-7f);
-        return camera.SunColor.rgb / solidAngle;
-    }
-}
-
-public struct FHardwareDirectIlluminator : IDirectIlluminator
-{
-    // Set on the primary view when ReSTIR is active: the primary-surface light term is
-    // then produced by reservoir resampling. Per-bounce DirectIlluminate keeps the classic
-    // single-sample estimator so SHARC cache accounting is unchanged.
-    public bool RestirPrimary;
-    // Primary-hit state for the ReSTIR temporal gates, set by the entry shader after
-    // PrimaryHit. Must come from renderer state: reading the freshly written G-buffer back
-    // inside the same invocation is not coherent.
-    public uint PrimaryInstanceId;
-    public float2 PrimaryMotionPixels;
-
-    // Explicit __init: a bare local declaration does not reliably apply field initializers,
-    // and an uninitialized RestirPrimary sent the SharcUpdate pass into the ReSTIR path with
-    // a null parameter table (GPU page fault / device lost on some GPUs).
-    public __init()
-    {
-        RestirPrimary = false;
-        PrimaryInstanceId = 0;
-        PrimaryMotionPixels = float2(0, 0);
-    }
-
-    void SunIlluminate(inout uint4 RandomSeed, FBSDFContext context,
-                       inout FDirectLighting directLighting)
-    {
-        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
-        float shadow = 0.0f;
-        float3 lightVector = normalize(Camera.SunDirection.xyz);
-        if (Camera.HasSun)
-        {
-            lightVector = Common.SampleSunDirection(RandomSeed, lightVector);
-            shadow = 1;
-            if (HWTracer.TraceOcclusion(context.Position, lightVector))
-            {
-                shadow = 0;
-            }
-        }
-        Common.AccumulateSunBSDF(context, lightVector, shadow, Camera.SunColor.rgb,
-                                 directLighting);
-    }
-
-    void LightIlluminate(inout uint4 RandomSeed, FBSDFContext context, bool includeDiffuse,
-                         inout FDirectLighting directLighting)
-    {
-        GPUScene gpuScene = Bindless.GetGpuscene();
-        UniformBufferObject Camera = gpuScene.Camera[0];
-        if (Camera.LightCount == 0 || gpuScene.SoftMeshShader.Lights == 0)
-        {
-            return;
-        }
-
-        const uint lightIndex = Common.SelectLight(RandomFloat(RandomSeed));
-        LightObject light = gpuScene.Lights[lightIndex];
-        const float lightPdf = asfloat(light.reserved2);
-        if (lightPdf <= 0.0f || Common.GetLightSampleMeasure(light) <= 0.0f)
-        {
-            return;
-        }
-
-        const float2 uv = Common.CanonicalizeLightUV(light, RandomFloat2(RandomSeed));
-        FDirectLighting sampleDirect;
-        float3 lightPosition;
-        if (!Common.EvaluateLightDirectSample(lightIndex, uv, context, sampleDirect,
-                                               lightPosition))
-        {
-            return;
-        }
-
-        const float3 shadowOrigin =
-            HWTracer.GetAreaLightShadowOrigin(context.Position, context.Normal, lightPosition, EPS2);
-        const float3 visibilityTarget =
-            Common.GetLightVisibilityTarget(lightIndex, shadowOrigin, lightPosition);
-        if (!HWTracer.TraceAreaLightSegment(shadowOrigin, visibilityTarget, EPS))
-        {
-            if (includeDiffuse)
-            {
-                directLighting.DiffuseDemodulated += sampleDirect.DiffuseDemodulated;
-            }
-            directLighting.SpecularRadiance += sampleDirect.SpecularRadiance;
-        }
-    }
-
-    public void DirectIlluminate(inout uint4 RandomSeed, FBSDFContext context,
-                                 inout FDirectLighting directLighting)
-    {
-        SunIlluminate(RandomSeed, context, directLighting);
-        LightIlluminate(RandomSeed, context, true, directLighting);
-    }
-
-    public void DirectIlluminatePrimary(inout uint4 RandomSeed, int2 pixel, FBSDFContext context,
-                                        inout FDirectLighting directLighting)
-    {
-        SunIlluminate(RandomSeed, context, directLighting);
-        // ReSTIR owns only material-aware diffuse. View-dependent specular stays in the
-        // primary tracing pass and never enters the reservoir/cache.
-        if (RestirPrimary && (context.MaterialModel == MaterialLambertian ||
-                              context.MaterialModel == MaterialMixture))
-        {
-            // ReSTIR replaces only diffuse light sampling. A non-delta Mixture still
-            // needs the light-sampled specular proposal paired with EvaluateGlossyDirect.
-            if (context.MaterialModel == MaterialMixture &&
-                context.PerceptualRoughness > BSDF_DELTA_ROUGHNESS)
-            {
-                LightIlluminate(RandomSeed, context, false, directLighting);
-            }
-            // Gather only: the light contribution is produced by the ReSTIR spatial /
-            // shade pass (Core.RestirSpatialShade.comp.slang) and added to the diffuse
-            // channel there, after this dispatch completes.
-            RestirPrimaryGather(RandomSeed, pixel, context,
-                                PrimaryInstanceId, PrimaryMotionPixels, HWTracer);
-        }
-        else
-        {
-            LightIlluminate(RandomSeed, context, true, directLighting);
-        }
-    }
-
-    FHardwareRayTracer HWTracer;
-}
-
-public struct FAmbientCubeIlluminator : IDirectIlluminator
-{
-    public void DirectIlluminate(inout uint4 RandomSeed, FBSDFContext context,
-                                 inout FDirectLighting directLighting)
-    {
-        directLighting = FDirectLighting();
-    }
-
-    public void DirectIlluminatePrimary(inout uint4 RandomSeed, int2 pixel, FBSDFContext context,
-                                        inout FDirectLighting directLighting)
-    {
-        DirectIlluminate(RandomSeed, context, directLighting);
-    }
-}
-
-public struct FSoftwareDirectIlluminator : IDirectIlluminator
-{
-    public void DirectIlluminate(inout uint4 RandomSeed, FBSDFContext context,
-                                 inout FDirectLighting directLighting)
-    {
-        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
-        float shadow = 0.0f;
-        float3 lightVector = normalize(Camera.SunDirection.xyz);
-        if (Camera.HasSun)
-        {
-            const uint cascadeIndex = GetAmbientCubeCascadeAtPosition(context.Position);
-            const float cascadeUnit = GetAmbientCubeUnitAtCascade(cascadeIndex);
-            lightVector = Common.SampleSunDirection(RandomSeed, lightVector);
-            shadow = 1;
-            float3 normalDir = context.Normal;
-            float normalOffset = max(cascadeUnit * 0.5f, 0.25f);
-            float rayOffset = cascadeUnit * 2.5f;
-            if (cascadeIndex > 0)
-            {
-                normalOffset = cascadeUnit * (1.0f + 0.5f * float(cascadeIndex));
-                rayOffset = cascadeUnit * (3.0f + float(cascadeIndex));
-            }
-            float3 shadowOrigin = context.Position + normalDir * normalOffset + lightVector * rayOffset;
-            if (HWTracer.TraceOcclusion(shadowOrigin, lightVector))
-            {
-                shadow = 0;
-            }
-        }
-        Common.AccumulateSunBSDF(context, lightVector, shadow, Camera.SunColor.rgb,
-                                 directLighting);
-    }
-
-    public void DirectIlluminatePrimary(inout uint4 RandomSeed, int2 pixel, FBSDFContext context,
-                                        inout FDirectLighting directLighting)
-    {
-        DirectIlluminate(RandomSeed, context, directLighting);
-    }
-
-    // all stuffs like pointers
-    FSoftwareRayTracer HWTracer;
-}
-
-namespace Common
-{
-    // 基于 view-space 距离选 cascade（CascadeSplits 为正向距离）
-    public uint SelectSunCascade(float viewDist, float4 splits)
-    {
-        if (viewDist < splits.x) return 0;
-        if (viewDist < splits.y) return 1;
-        if (viewDist < splits.z) return 2;
-        return 3;
-    }
-
-    // 3x3 PCF + slope-scaled bias，对 4 个 CSM cascade 都通用。
-    // 返回 [0,1]，1 = 完全无遮蔽，0 = 完全阴影。
-    public float SampleSunShadowCSM(float3 worldPos, float3 normal, float viewDist)
-    {
-        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
-        uint c = Common.SelectSunCascade(viewDist, Camera.CascadeSplits);
-
-        float4 lightPos = mul(Camera.SunCascadeViewProjection[c], float4(worldPos, 1.0));
-        float3 projCoords = lightPos.xyz / lightPos.w;
-        float2 uv = projCoords.xy * 0.5 + 0.5;
-
-        // 出 cascade 视椎视为无遮挡
-        if (any(uv < float2(0.0)) || any(uv > float2(1.0)))
-            return 1.0f;
-        if (projCoords.z < 0.0f || projCoords.z > 1.0f)
-            return 1.0f;
-
-        float NoL = max(dot(normalize(normal), Camera.SunDirection.xyz), 0.0f);
-        float bias = max(0.0008f * (1.0f - NoL), 0.0001f);
-
-        Sampler2D shadowMap = Bindless.GetShadowMap(int(c));
-        uint2 texSize;
-        shadowMap.GetDimensions(texSize.x, texSize.y);
-        float2 texelSize = 1.0f / float2(texSize);
-
-        float shadow = 0.0f;
-        [unroll]
-        for (int dy = -1; dy <= 1; ++dy)
-        {
-            [unroll]
-            for (int dx = -1; dx <= 1; ++dx)
-            {
-                float2 offset = float2(dx, dy) * texelSize;
-                float closestDepth = shadowMap.SampleLevel(uv + offset, 0).r;
-                shadow += (projCoords.z - bias) > closestDepth ? 0.0f : 1.0f;
-            }
-        }
-        return shadow * (1.0f / 9.0f);
-    }
-}
-
-public struct FShadowMapDirectIlluminator : IDirectIlluminator
-{
-    public void DirectIlluminate(inout uint4 RandomSeed, FBSDFContext context,
-                                 inout FDirectLighting directLighting)
-    {
-        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
-        const float3 lightVector = Camera.SunDirection.xyz;
-        const float3 d = max(dot(lightVector, context.Normal), 0.0) * M_1_PI;
-
-        float shadow = 0.0f;
-        if (Camera.HasSun)
-        {
-            float viewDist = -mul(Camera.ModelView, float4(context.Position, 1.0f)).z;
-            shadow = Common.SampleSunShadowCSM(context.Position, context.Normal, viewDist);
-        }
-        // Preserve SoftwareModern's existing Lambert-only contract.
-        directLighting.DiffuseDemodulated = Camera.SunColor.rgb * d * shadow;
-    }
-
-    public void DirectIlluminatePrimary(inout uint4 RandomSeed, int2 pixel, FBSDFContext context,
-                                        inout FDirectLighting directLighting)
-    {
-        DirectIlluminate(RandomSeed, context, directLighting);
-    }
-}
-
-// SoftwareTracing direct lighting keeps the existing CSM sun while adding finite/delta-light NEE
-// through finite voxel-DDA visibility. It is intentionally separate from
-// FShadowMapDirectIlluminator so SoftwareModern keeps its current sun-only contract.
-public struct FSoftwareTracingDirectIlluminator : IDirectIlluminator
-{
-    public bool RestirPrimary;
-    public uint PrimaryInstanceId;
-    public float2 PrimaryMotionPixels;
-
-    public __init()
-    {
-        RestirPrimary = false;
-        PrimaryInstanceId = 0;
-        PrimaryMotionPixels = float2(0, 0);
-    }
-
-    void SunIlluminate(inout uint4 randomSeed, FBSDFContext context,
-                       inout FDirectLighting directLighting)
-    {
-        UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
-        float3 lightVector = normalize(camera.SunDirection.xyz);
-        float shadow = 0.0f;
-        if (camera.HasSun)
-        {
-            lightVector = Common.SampleSunDirection(randomSeed, lightVector);
-            const float viewDistance = -mul(camera.ModelView, float4(context.Position, 1.0f)).z;
-            shadow = Common.SampleSunShadowCSM(context.Position, context.Normal, viewDistance);
-        }
-        Common.AccumulateSunBSDF(context, lightVector, shadow, camera.SunColor.rgb,
-                                 directLighting);
-    }
-
-    void LightIlluminate(inout uint4 randomSeed, FBSDFContext context, bool includeDiffuse,
-                         inout FDirectLighting directLighting)
-    {
-        GPUScene gpuScene = Bindless.GetGpuscene();
-        UniformBufferObject camera = gpuScene.Camera[0];
-        if (camera.LightCount == 0 || gpuScene.SoftMeshShader.Lights == 0)
-        {
-            return;
-        }
-
-        const uint lightIndex = Common.SelectLight(RandomFloat(randomSeed));
-        LightObject light = gpuScene.Lights[lightIndex];
-        const float lightPdf = asfloat(light.reserved2);
-        if (lightPdf <= 0.0f || Common.GetLightSampleMeasure(light) <= 0.0f)
-        {
-            return;
-        }
-
-        const float2 uv = Common.CanonicalizeLightUV(light, RandomFloat2(randomSeed));
-        FDirectLighting sampleDirect;
-        float3 lightPosition;
-        if (!Common.EvaluateLightDirectSample(lightIndex, uv, context, sampleDirect,
-                                               lightPosition))
-        {
-            return;
-        }
-
-        const float3 shadowOrigin =
-            SoftwareTracer.GetAreaLightShadowOrigin(context.Position, context.Normal,
-                                                    lightPosition, EPS2);
-        const float3 visibilityTarget =
-            Common.GetLightVisibilityTarget(lightIndex, shadowOrigin, lightPosition);
-        if (!SoftwareTracer.TraceAreaLightSegment(shadowOrigin, visibilityTarget, EPS))
-        {
-            if (includeDiffuse)
-            {
-                directLighting.DiffuseDemodulated += sampleDirect.DiffuseDemodulated;
-            }
-            directLighting.SpecularRadiance += sampleDirect.SpecularRadiance;
-        }
-    }
-
-    public void DirectIlluminate(inout uint4 randomSeed, FBSDFContext context,
-                                 inout FDirectLighting directLighting)
-    {
-        SunIlluminate(randomSeed, context, directLighting);
-        LightIlluminate(randomSeed, context, true, directLighting);
-    }
-
-    public void DirectIlluminatePrimary(inout uint4 randomSeed, int2 pixel, FBSDFContext context,
-                                        inout FDirectLighting directLighting)
-    {
-        SunIlluminate(randomSeed, context, directLighting);
-        if (RestirPrimary && (context.MaterialModel == MaterialLambertian ||
-                              context.MaterialModel == MaterialMixture))
-        {
-            if (context.MaterialModel == MaterialMixture &&
-                context.PerceptualRoughness > BSDF_DELTA_ROUGHNESS)
-            {
-                LightIlluminate(randomSeed, context, false, directLighting);
-            }
-            RestirPrimaryGather(randomSeed, pixel, context,
-                                PrimaryInstanceId, PrimaryMotionPixels, SoftwareTracer);
-        }
-        else
-        {
-            LightIlluminate(randomSeed, context, true, directLighting);
-        }
-    }
-
-    FSoftwareRayTracer SoftwareTracer;
-}
+// Secondary (post-first-bounce) direct-lighting strategy selector (FPathTracingRenderer.SecondaryDirectMode).
+static const uint kSecondaryDirectPlainSun = 0u;       // naive PT 50% random sun next-event estimation
+static const uint kSecondaryDirectTerminateIfLit = 1u; // terminate once the path sees direct light (cache = indirect)
+static const uint kSecondaryDirectNone = 2u;           // no secondary direct (already fed to the cache)
 
 public struct FPathTracingRenderer{
     public float ExitProbability = 0.5;
@@ -610,27 +75,37 @@ public struct FPathTracingRenderer{
         return float4(0, 0, 0, 1);
     }
 
-    bool IsRegisteredAreaLightHit(float3 position, uint materialIndex)
+    // Terminate a path on the local ambient cube: fold the terminal radiance into the
+    // throughput and, when the ambient-cube terminal is active, feed it to the cache as a miss.
+    void ApplyAmbientTerminal<TCache : IRadianceCache>(inout TCache cache, Vertex vertex,
+                                                       inout float4 rayColor)
     {
-        GPUScene gpuScene = Bindless.GetGpuscene();
-        UniformBufferObject Camera = gpuScene.Camera[0];
-        for (uint i = 0; i < Camera.LightCount; ++i)
+        const float4 terminalRadiance = ApplyTerminalRadiance(vertex);
+        rayColor *= terminalRadiance;
+        if (UseAmbientCubeTerminal)
         {
-            LightObject light = gpuScene.Lights[i];
-            if (light.lightType != LightTypeArea || light.lightMatIdx != materialIndex)
-            {
-                continue;
-            }
-
-            if (IsPointOnAreaLight(position, light, EPS10))
-            {
-                return true;
-            }
+            cache.OnMiss(terminalRadiance.rgb);
         }
-        return false;
     }
 
-    bool IsRegisteredLightHit(float3 position, uint materialIndex)
+    // Record a path vertex with the cache, evaluating its direct lighting only when the cache
+    // asks for it (SHARC update). Single source for the primary-vertex and per-bounce cache
+    // recording; returns whether the path should continue.
+    [mutating]
+    bool RecordSurfaceHit<TCache : IRadianceCache>(IDirectIlluminator directIllum, inout TCache cache,
+                                                   bool wantsDirect, Vertex vertex,
+                                                   float3 incomingRayDirection)
+    {
+        const float3 direct = wantsDirect
+            ? EvaluateDirectLighting(directIllum, vertex, incomingRayDirection).DiffuseDemodulated
+            : float3(0, 0, 0);
+        return cache.OnSurfaceHit(vertex.Position, vertex.Normal, direct, RandomSeed_);
+    }
+
+    // Does the point lie on a registered emitter surface with this material index?
+    // Area emitters test point-on-quad; point emitters test their radius. includePoint
+    // selects whether analytic point lights participate (area-only vs any emitter).
+    bool IsRegisteredEmitterHit(float3 position, uint materialIndex, bool includePoint)
     {
         GPUScene gpuScene = Bindless.GetGpuscene();
         UniformBufferObject camera = gpuScene.Camera[0];
@@ -646,7 +121,7 @@ public struct FPathTracingRenderer{
             {
                 return true;
             }
-            if (light.lightType == LightTypePoint && light.p0.w > 0.0f &&
+            if (includePoint && light.lightType == LightTypePoint && light.p0.w > 0.0f &&
                 distance(position, light.p0.xyz) <= light.p0.w + EPS10)
             {
                 return true;
@@ -763,12 +238,9 @@ public struct FPathTracingRenderer{
             }
             else if (proposalPdf > 0.0f && any(sunRadiance > float3(0, 0, 0)))
             {
-                const float cosRadius = cos(0.25f / 180.0f * M_PI);
-                const float sunPdf = 1.0f /
-                    (M_TWO_PI * max(1.0f - cosRadius, 1e-7f));
                 FBSDFEval bsdf = EvaluateSurfaceBSDF(context, reflected);
                 const float NoL = max(dot(context.Normal, reflected), 0.0f);
-                const float mis = PowerHeuristic(proposalPdf, sunPdf);
+                const float mis = PowerHeuristic(proposalPdf, Common.SunSamplePdf());
                 result += sunRadiance * bsdf.Specular * (NoL * mis / proposalPdf);
             }
         }
@@ -790,8 +262,8 @@ public struct FPathTracingRenderer{
                 if (tracer.TraceRay(transmissionOrigin, normalize(transmitted), PT_MAX_TRACE_DISTANCE,
                                     transmittedHit, transmittedNode, traceColor, hitDistance))
                 {
-                    if (IsRegisteredAreaLightHit(transmittedHit.Position,
-                                                 transmittedHit.MaterialIndex))
+                    if (IsRegisteredEmitterHit(transmittedHit.Position,
+                                               transmittedHit.MaterialIndex, false))
                     {
                         result += (1.0f - fresnel) * FetchEmitterRadiance(transmittedHit);
                     }
@@ -806,21 +278,20 @@ public struct FPathTracingRenderer{
         return result;
     }
 
-    bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor,
-                     inout uint4 RandomSeed, bool suppressDiffuseEmitter,
-                     bool suppressSpecularEmitter, inout bool hitReflect, inout bool hitMetal,
-                     out float outHitDist, out bool outHitMiss,
-                     out float3 outTerminalRadiance)
+    // Scatter off the current surface (choosing a diffuse / GGX / metal / dielectric lobe)
+    // and trace the next segment. inVertex/rayDir/rayColor/randomSeed are threaded inout;
+    // the bounce outcome is returned. RNG draw order defines the sampling and must be kept.
+    FBounceResult ScatterAndTrace(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir,
+                                  inout float4 rayColor, inout uint4 randomSeed,
+                                  bool suppressDiffuseEmitter, bool suppressSpecularEmitter)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
-        outHitMiss = false;
-        outTerminalRadiance = float3(0, 0, 0);
+        FBounceResult result = FBounceResult();
 
         Material mat = Bindless.GetGpuscene().GetMaterial(inVertex.MaterialIndex);
         const float startPosOffset = mat.MaterialModel == MaterialDielectric ? 0.0f : 1.0f;
         float roughness = mat.Fuzziness;
         float metalness = mat.Metalness;
-
         if (mat.MRATextureId >= 0)
         {
             float4 mra = Bindless.GetSampleTexture(mat.MRATextureId).SampleLevel(inVertex.TexCoord, 0);
@@ -828,106 +299,107 @@ public struct FPathTracingRenderer{
             metalness = metalness * mra.b;
         }
 
+        // --- Lobe selection + outgoing direction (RNG order is load-bearing) ---
         const float dotValue = dot(rayDir, inVertex.Normal);
-        const bool BackFace = dotValue > 0;
-        const float3 outwardNormal = BackFace ? -inVertex.Normal : inVertex.Normal;
-        const float niOverNt = BackFace ? mat.RefractionIndex2 : (1 / mat.RefractionIndex2);
+        const bool backFace = dotValue > 0;
+        const float3 outwardNormal = backFace ? -inVertex.Normal : inVertex.Normal;
+        const float niOverNt = backFace ? mat.RefractionIndex2 : (1 / mat.RefractionIndex2);
         const float cosine = dotValue > 0 ? mat.RefractionIndex * dotValue : -dotValue;
-        const float reflectProb = Schlick(cosine, mat.RefractionIndex);// * pow((1.0 - roughness), 4.0);
+        const float reflectProb = Schlick(cosine, mat.RefractionIndex);
         const float cosTheta = min(dot(-rayDir, outwardNormal), 1.0f);
         const float sinTheta = sqrt(max(0.0f, 1.0f - cosTheta * cosTheta));
         const bool cannotRefract = niOverNt * sinTheta > 1.0f;
-        const float metalProb = metalness;
 
-        bool chanceReflect = (RandomFloat(RandomSeed) < reflectProb);
-        bool chanceMetal = (RandomFloat(RandomSeed) < metalProb);
-        bool chanceGGX = chanceReflect || chanceMetal;
-        const float3 trace_next = chanceGGX ? reflect(rayDir, outwardNormal) : outwardNormal;
-        float3 trace_dir = chanceGGX ? ggxSampling(RandomSeed, sqrt(roughness), trace_next) : AlignWithNormal(RandomInHemiSphere1(RandomSeed), trace_next);
+        const bool chanceReflect = RandomFloat(randomSeed) < reflectProb;
+        const bool chanceMetal = RandomFloat(randomSeed) < metalness;
+        const bool chanceGGX = chanceReflect || chanceMetal;
+        const float3 traceNext = chanceGGX ? reflect(rayDir, outwardNormal) : outwardNormal;
+        float3 traceDir = chanceGGX ? ggxSampling(randomSeed, sqrt(roughness), traceNext)
+                                    : AlignWithNormal(RandomInHemiSphere1(randomSeed), traceNext);
+        result.hitReflect = chanceGGX;
+        result.hitMetal = chanceMetal;
 
-        hitReflect = chanceGGX;
-        hitMetal = chanceMetal;
-
-        if (mat.MaterialModel == MaterialDielectric)
+        if (mat.MaterialModel == MaterialDielectric && !chanceReflect)
         {
-            if (!chanceReflect)
+            if (cannotRefract)
             {
-                if (cannotRefract)
-                {
-                    trace_dir = ggxSampling(RandomSeed, sqrt(roughness), reflect(rayDir, outwardNormal));
-                    hitReflect = true;
-                }
-                else
-                {
-                    trace_dir = refract(rayDir, outwardNormal, niOverNt);
-                }
+                traceDir = ggxSampling(randomSeed, sqrt(roughness), reflect(rayDir, outwardNormal));
+                result.hitReflect = true;
+            }
+            else
+            {
+                traceDir = refract(rayDir, outwardNormal, niOverNt);
             }
         }
+        rayDir = traceDir;
 
-        rayDir = trace_dir;
-
+        // --- Trace the segment ---
         NodeProxy hitNode;
         float4 tempColor = float4(0, 0, 0, 1);
-        float3 cachePosition = inVertex.Position;
-        float3 cacheNormal = inVertex.Normal;
-        float surfaceOffset = HitNormalOffset;
-        if (EnableSoftTracingAdaptiveOffset)
-        {
-            surfaceOffset = max(HitNormalOffset, GetAmbientCubeUnitAtPosition(inVertex.Position) * 0.5f);
-        }
+        float surfaceOffset = EnableSoftTracingAdaptiveOffset
+            ? max(HitNormalOffset, GetAmbientCubeUnitAtPosition(inVertex.Position) * 0.5f)
+            : HitNormalOffset;
         const float3 traceOrigin = inVertex.Position + inVertex.Normal * surfaceOffset * startPosOffset;
-        if (tracer.TraceRay(traceOrigin, trace_dir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode, tempColor, outHitDist))
+        float hitDist = 0.0f;
+        if (!tracer.TraceRay(traceOrigin, traceDir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode,
+                             tempColor, hitDist))
         {
-            if(FuzzyTracing)
-            {
-                rayColor *= tempColor;
-                return false;
-            }
-            Material hitMat = Bindless.GetGpuscene().GetMaterial(inVertex.MaterialIndex);
-            float4 outAlbedo = hitMat.Diffuse;
-            if (hitMat.DiffuseTextureId >= 0)
-            {
-                float4 tex = Bindless.GetSampleTexture(hitMat.DiffuseTextureId).SampleLevel(inVertex.TexCoord, 0);
-                outAlbedo *= tex;
-            }
-            if (hitMat.MaterialModel == MaterialDiffuseLight || !chanceReflect)
-            {
-                rayColor *= outAlbedo;
-            }
-            if (BackFace && mat.MaterialModel != MaterialDielectric)
-            {
-                rayColor = float4(0.5f,0.5f,0.5f,0);
-                return true;
-            }
-            if (hitMat.MaterialModel == MaterialDiffuseLight)
-            {
-                const bool dielectricTransmission =
-                    mat.MaterialModel == MaterialDielectric && !chanceGGX;
-                const bool coveredByDirectEstimator = chanceGGX
-                    ? suppressSpecularEmitter
-                    : (suppressDiffuseEmitter && !dielectricTransmission);
-                if (coveredByDirectEstimator &&
-                    IsRegisteredLightHit(inVertex.Position, inVertex.MaterialIndex))
-                {
-                    // The same primary diffuse-light path is already represented by light NEE.
-                    rayColor = float4(0, 0, 0, 0);
-                    return true;
-                }
-                outTerminalRadiance = outAlbedo.rgb;
-                return true;
-            }
-            return false;
-        }
-        else
-        {
-            float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+            // Miss: escaped into the sky.
+            const float4 skyColor = Camera.HasSky
+                ? Common.SampleIBL(Camera.SkyIdx, traceDir, Camera.SkyRotation, 0) * Camera.SkyIntensity
+                : float4(0, 0, 0, 0);
             rayColor *= skyColor;
-            outHitMiss = true;
-            outTerminalRadiance = skyColor.rgb;
-            
-            outHitDist = PT_MAX_TRACE_DISTANCE;
-            return true;
+            result.hitMiss = true;
+            result.terminalRadiance = skyColor.rgb;
+            result.hitDist = PT_MAX_TRACE_DISTANCE;
+            result.exited = true;
+            return result;
         }
+        result.hitDist = hitDist;
+
+        // Fuzzy tracing short-circuits: the tracer already folded a color into tempColor.
+        if (FuzzyTracing)
+        {
+            rayColor *= tempColor;
+            return result;
+        }
+
+        // --- Classify the hit surface ---
+        Material hitMat = Bindless.GetGpuscene().GetMaterial(inVertex.MaterialIndex);
+        float4 hitAlbedo = hitMat.Diffuse;
+        if (hitMat.DiffuseTextureId >= 0)
+        {
+            hitAlbedo *= Bindless.GetSampleTexture(hitMat.DiffuseTextureId).SampleLevel(inVertex.TexCoord, 0);
+        }
+        if (hitMat.MaterialModel == MaterialDiffuseLight || !chanceReflect)
+        {
+            rayColor *= hitAlbedo;
+        }
+        if (backFace && mat.MaterialModel != MaterialDielectric)
+        {
+            rayColor = float4(0.5f, 0.5f, 0.5f, 0);
+            result.exited = true;
+            return result;
+        }
+        if (hitMat.MaterialModel == MaterialDiffuseLight)
+        {
+            const bool dielectricTransmission = mat.MaterialModel == MaterialDielectric && !chanceGGX;
+            const bool coveredByDirectEstimator = chanceGGX
+                ? suppressSpecularEmitter
+                : (suppressDiffuseEmitter && !dielectricTransmission);
+            if (coveredByDirectEstimator &&
+                IsRegisteredEmitterHit(inVertex.Position, inVertex.MaterialIndex, true))
+            {
+                // The same primary diffuse-light path is already represented by light NEE.
+                rayColor = float4(0, 0, 0, 0);
+                result.exited = true;
+                return result;
+            }
+            result.terminalRadiance = hitAlbedo.rgb;
+            result.exited = true;
+            return result;
+        }
+        return result;
     }
 
     [mutating]
@@ -969,61 +441,47 @@ public struct FPathTracingRenderer{
             float hitDist = 0;
 
             // Record the primary vertex as the path start.
-            FDirectLighting startLighting = wantsDirect
-                ? EvaluateDirectLighting(directIllum, vertexStart, direction)
-                : FDirectLighting();
-            float3 startDirect = startLighting.DiffuseDemodulated;
-            bool pathContinue = cache.OnSurfaceHit(vertexStart.Position, vertexStart.Normal, startDirect, RandomSeed_);
+            bool pathContinue = RecordSurfaceHit(directIllum, cache, wantsDirect, vertexStart, direction);
 
             for (uint b = 0; b < maxBounces && pathContinue; ++b)
             {
-                bool bHitReflect = false;
-                bool bHitMetal = false;
-                float bHitDist = 0;
-                bool bHitMiss = false;
-                float3 bTerminalRadiance = float3(0, 0, 0);
-                float3 rayColorBefore = RayColor.rgb;
+                const float3 rayColorBefore = RayColor.rgb;
                 const bool suppressDiffuseEmitter = (b == 0) || wantsDirect;
                 const bool suppressSpecularEmitter = (b == 0);
-                bool segmentExit = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed_,
-                                               suppressDiffuseEmitter, suppressSpecularEmitter,
-                                               bHitReflect, bHitMetal, bHitDist, bHitMiss,
-                                               bTerminalRadiance);
+                FBounceResult bounce = ScatterAndTrace(tracer, vertexStart, direction, RayColor,
+                                                       RandomSeed_, suppressDiffuseEmitter,
+                                                       suppressSpecularEmitter);
 
                 if (b == 0)
                 {
-                    hitReflect = bHitReflect;
-                    hitMetal = bHitMetal;
-                    hitDist = bHitDist;
+                    hitReflect = bounce.hitReflect;
+                    hitMetal = bounce.hitMetal;
+                    hitDist = bounce.hitDist;
                 }
 
-                if (segmentExit)
+                if (bounce.exited)
                 {
-                    if (bHitMiss)
+                    if (bounce.hitMiss)
                     {
-                        cache.OnMiss(bTerminalRadiance);
+                        cache.OnMiss(bounce.terminalRadiance);
                     }
-                    else if (any(bTerminalRadiance > float3(0, 0, 0)))
+                    else if (any(bounce.terminalRadiance > float3(0, 0, 0)))
                     {
                         // Emissive terminator: record it as a hit with emissive radiance.
-                        cache.OnSurfaceHit(vertexStart.Position, vertexStart.Normal, bTerminalRadiance, RandomSeed_);
+                        cache.OnSurfaceHit(vertexStart.Position, vertexStart.Normal, bounce.terminalRadiance, RandomSeed_);
                     }
                     break;
                 }
 
                 cache.OnSegmentThroughput(rayColorBefore, RayColor.rgb);
-                FDirectLighting segmentLighting = wantsDirect
-                    ? EvaluateDirectLighting(directIllum, vertexStart, direction)
-                    : FDirectLighting();
-                float3 segmentDirect = segmentLighting.DiffuseDemodulated;
-                pathContinue = cache.OnSurfaceHit(vertexStart.Position, vertexStart.Normal, segmentDirect, RandomSeed_);
+                pathContinue = RecordSurfaceHit(directIllum, cache, wantsDirect, vertexStart, direction);
                 if (!pathContinue)
                 {
                     break;
                 }
 
                 float4 cachedRadiance = float4(0, 0, 0, 0);
-                if (cache.TryQueryRadiance(vertexStart, bHitReflect, bHitMetal, b + 1u, bHitDist, cachedRadiance))
+                if (cache.TryQueryRadiance(vertexStart, bounce.hitReflect, bounce.hitMetal, b + 1u, bounce.hitDist, cachedRadiance))
                 {
                     RayColor *= cachedRadiance;
                     break;
@@ -1036,12 +494,7 @@ public struct FPathTracingRenderer{
                     {
                         if (!FuzzyTracing)
                         {
-                            float4 terminalRadiance = ApplyTerminalRadiance(vertexStart);
-                            RayColor *= terminalRadiance;
-                            if (UseAmbientCubeTerminal)
-                            {
-                                cache.OnMiss(terminalRadiance.rgb);
-                            }
+                            ApplyAmbientTerminal(cache, vertexStart, RayColor);
                         }
                         break;
                     }
@@ -1050,9 +503,9 @@ public struct FPathTracingRenderer{
                 else
                 {
                     // Secondary (post-first-bounce) direct lighting strategy.
-                    if (!bHitReflect)
+                    if (!bounce.hitReflect)
                     {
-                        if (SecondaryDirectMode == 1u)
+                        if (SecondaryDirectMode == kSecondaryDirectTerminateIfLit)
                         {
                             FDirectLighting directLighting =
                                 EvaluateDirectLighting(directIllum, vertexStart, direction);
@@ -1063,10 +516,10 @@ public struct FPathTracingRenderer{
                                 break;
                             }
                         }
-                        else if (SecondaryDirectMode == 0u && Camera.HasSun && (RandomFloat(RandomSeed_) < 0.5f))
+                        else if (SecondaryDirectMode == kSecondaryDirectPlainSun && Camera.HasSun && (RandomFloat(RandomSeed_) < 0.5f))
                         {
                             const float3 lightVector = Camera.SunDirection.xyz;
-                            const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed_, cos(0.25f / 180.f * M_PI)), lightVector);
+                            const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed_, Common.SunCosAngularRadius()), lightVector);
                             float shadowTraceOffset = TRACE_CORRECTION_OFFSET;
                             if (EnableSoftTracingAdaptiveOffset)
                             {
@@ -1092,12 +545,7 @@ public struct FPathTracingRenderer{
                         }
                         else
                         {
-                            float4 terminalRadiance = ApplyTerminalRadiance(vertexStart);
-                            RayColor *= terminalRadiance;
-                            if (UseAmbientCubeTerminal)
-                            {
-                                cache.OnMiss(terminalRadiance.rgb);
-                            }
+                            ApplyAmbientTerminal(cache, vertexStart, RayColor);
                         }
                         break;
                     }

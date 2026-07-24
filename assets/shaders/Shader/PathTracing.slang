@@ -4,12 +4,15 @@ module PathTracing;
 
 #include "common/BasicTypes.slang"
 __include "common/BSDF.slang";
-__include "common/Shading.slang";
+__include "common/Interfaces.slang";
+__include "common/SceneSampling.slang";
 __include "common/RayTracers.slang";
+__include "common/PrimaryRayCasters.slang";
 __include "common/RadianceCache.slang";
 __include "common/Sharc.slang";
 __include "common/Restir.slang";
 __include "common/RestirSpatialShade.slang";
+__include "common/Lighting.slang";
 __include "common/PathTracingRenderer.slang";
 #include "common/ConstFunc.slang"
 #include "common/Tonemap.slang"
