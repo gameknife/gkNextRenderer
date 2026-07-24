@@ -21,6 +21,8 @@ using json = nlohmann::json;
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Vulkan/Device.hpp"
 
+#include <imgui.h>
+
 // #include <spdlog/spdlog.h>
 
 #if WITH_AVIF
@@ -79,6 +81,37 @@ namespace
     {
         return count > 0 ? total / static_cast<double>(count) : 0.0;
     }
+}
+
+void DrawBenchmarkStatsOverlay(NextEngine& engine)
+{
+    const Assets::Scene& scene = engine.GetScene();
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(
+        ImVec2(viewport->GetCenter().x, viewport->Pos.y + 12.0f),
+        ImGuiCond_Always,
+        ImVec2(0.5f, 0.0f));
+    ImGui::SetNextWindowBgAlpha(0.72f);
+
+    constexpr ImGuiWindowFlags flags =
+        ImGuiWindowFlags_AlwaysAutoResize |
+        ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoInputs |
+        ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoFocusOnAppearing |
+        ImGuiWindowFlags_NoNav;
+
+    if (ImGui::Begin("##BenchmarkStats", nullptr, flags))
+    {
+        ImGui::Text(
+            "FPS %.0f  |  Nodes %zu  |  Models %zu  |  Materials %zu  |  Triangles %u",
+            engine.GetFrameRate(),
+            scene.GetNodeCount(),
+            scene.GetModelCount(),
+            scene.GetMaterialCount(),
+            scene.GetTriangleCount());
+    }
+    ImGui::End();
 }
 
 BenchMarker::BenchMarker() : BenchMarker(FBenchmarkSettings{})

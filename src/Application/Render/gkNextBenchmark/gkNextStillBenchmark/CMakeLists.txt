@@ -10,9 +10,9 @@ add_executable(gkNextStillBenchmark
     ${GK_APPLICATION_COMMON_SOURCES}
     ${GK_DESKTOP_MAIN_SOURCE}
 )
-gk_configure_application(gkNextStillBenchmark MODULES
-    ${GK_STANDARD_RUNTIME_MODULES}
-    LDrawLoader
-    ScadLoader
+# Intentionally mirrors the minimal renderer module footprint. DemoScenes need no asset loaders.
+gk_configure_application(gkNextStillBenchmark MINIMAL_LINK MODULES
+    NextPhysics
+    NextTemporalUpscaler
 )
 target_include_directories(gkNextStillBenchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)

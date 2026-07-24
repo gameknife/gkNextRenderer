@@ -41,6 +41,9 @@ namespace Runtime
         void SetSunRotation(float value) { SunRotation = value; }
         float GetSunRotation() const { return SunRotation; }
 
+        void SetSunElevation(float value) { SunElevation = value; }
+        float GetSunElevation() const { return SunElevation; }
+
         void SetSkyRotation(float value) { SkyRotation = value; }
         float GetSkyRotation() const { return SkyRotation; }
 

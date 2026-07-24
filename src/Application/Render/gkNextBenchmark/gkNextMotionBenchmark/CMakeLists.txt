@@ -10,10 +10,9 @@ add_executable(gkNextMotionBenchmark
     ${GK_APPLICATION_COMMON_SOURCES}
     ${GK_DESKTOP_MAIN_SOURCE}
 )
-gk_configure_application(gkNextMotionBenchmark MODULES
-    ${GK_STANDARD_RUNTIME_MODULES}
-    LDrawLoader
-    ScadLoader
+# Intentionally mirrors the minimal renderer module footprint. DemoScenes need no asset loaders.
+gk_configure_application(gkNextMotionBenchmark MINIMAL_LINK MODULES
+    NextPhysics
+    NextTemporalUpscaler
 )
 target_include_directories(gkNextMotionBenchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(gkNextMotionBenchmark PRIVATE NextGameplay)

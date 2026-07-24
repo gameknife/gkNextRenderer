@@ -192,6 +192,7 @@ namespace Assets
     }
 
     template glm::vec3 AnimationChannel<glm::vec3>::Sample(float time) const;
+    template float AnimationChannel<float>::Sample(float time) const;
 
     void AnimationTrack::Sample(float time, glm::vec3& translation, glm::quat& rotation, glm::vec3& scaling)
     {
@@ -206,6 +207,30 @@ namespace Assets
         if (!ScaleChannel.Keys.empty())
         {
             scaling = ScaleChannel.Sample(time);
+        }
+    }
+
+    void AnimationTrack::Sample(float time, EnvironmentSetting& environment)
+    {
+        if (!SunRotationChannel.Keys.empty())
+        {
+            environment.SunRotation = SunRotationChannel.Sample(time);
+        }
+        if (!SunElevationChannel.Keys.empty())
+        {
+            environment.SunElevation = SunElevationChannel.Sample(time);
+        }
+        if (!SkyRotationChannel.Keys.empty())
+        {
+            environment.SkyRotation = SkyRotationChannel.Sample(time);
+        }
+        if (!SunIntensityChannel.Keys.empty())
+        {
+            environment.SunIntensity = SunIntensityChannel.Sample(time);
+        }
+        if (!SkyIntensityChannel.Keys.empty())
+        {
+            environment.SkyIntensity = SkyIntensityChannel.Sample(time);
         }
     }
 

@@ -304,6 +304,10 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
     
+    // reconfigure
+    windowConfig.Width = options.Width;
+    windowConfig.Height = options.Height;
+    
     config_.userSettings = CreateUserSettings(options);
     
     // cvars

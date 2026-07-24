@@ -21,4 +21,6 @@ public:
     
 private:
     std::unique_ptr<BenchMarker> benchMarker_;
+    std::vector<std::string> demoScenes_;
+    size_t currentSceneIndex_ = 0;
 };

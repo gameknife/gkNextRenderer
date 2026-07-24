@@ -135,6 +135,10 @@ namespace Assets
         const uint32_t GetVertexCount() const { return vertexCount_; }
         const uint32_t GetIndirectDrawBatchCount() const { return indirectDrawBatchCount_; }
         const uint32_t GetMaxSceneTriangles() const { return maxSceneTriangles_; }
+        size_t GetNodeCount() const { return nodes_.size(); }
+        size_t GetModelCount() const { return models_.size(); }
+        size_t GetMaterialCount() const { return materials_.size(); }
+        uint32_t GetTriangleCount() const { return requiredGpuDrivenTriangleCapacity_; }
 
         int32_t FindNodeIdWithComponent(const std::string& componentType) const;
         Node* GetNodeById(uint32_t nodeId);

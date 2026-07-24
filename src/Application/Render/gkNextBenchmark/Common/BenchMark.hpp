@@ -3,6 +3,10 @@
 #include <fstream>
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 
+class NextEngine;
+
+void DrawBenchmarkStatsOverlay(NextEngine& engine);
+
 struct FBenchmarkSettings final
 {
     double warmupSeconds = 2.0;

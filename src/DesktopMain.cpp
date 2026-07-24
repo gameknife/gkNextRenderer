@@ -75,7 +75,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
     // Handle command line options.
 #if IOS
-    const char* argv1[] = { "gkNextRenderer", "--load-scene=assets/models/playground.glb" };
+    const char* argv1[] = { "gkNextRenderer", "--load-scene=assets/models/conf_room.glb" };
     GOptionPtr.reset(new Runtime::Config::Options(2, argv1));
 #else
     GOptionPtr.reset(new Runtime::Config::Options(argc, const_cast<const char**>(argv)));

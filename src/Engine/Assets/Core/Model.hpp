@@ -5,6 +5,7 @@
 #include <glm/ext.hpp>
 
 #include <array>
+#include <cmath>
 
 namespace Assets
 {
@@ -43,11 +44,17 @@ namespace Assets
             SkyIntensity = 100.0f;
             SkyRotation = 0;
             SunRotation = 0.5f;   
+            SunElevation = std::atan(0.75f);
         }
 
         glm::vec3 SunDirection() const 
         {
-            return glm::normalize(glm::vec3( sinf( SunRotation * glm::pi<float>() ), 0.75f, cosf(SunRotation * glm::pi<float>()) ));
+            const float azimuth = SunRotation * glm::pi<float>();
+            const float horizontalScale = std::cos(SunElevation);
+            return glm::normalize(glm::vec3(
+                std::sin(azimuth) * horizontalScale,
+                std::sin(SunElevation),
+                std::cos(azimuth) * horizontalScale));
         }
 
         // Deprecated: retained for the old CPU shadow-map path. GPU CSM uses ComputeSunCascades.
@@ -91,6 +98,7 @@ namespace Assets
         bool HasSun;
         int32_t SkyIdx;
         float SunRotation;
+        float SunElevation;
         float SkyRotation;
         
         float SkyIntensity = 100.0f;
@@ -119,18 +127,31 @@ namespace Assets
 
     struct AnimationTrack
     {
+        enum class Target
+        {
+            NodeTransform,
+            Environment
+        };
+
         bool Playing() const { return Playing_; }
         void Play() { Playing_ = true; }
         void Stop() { Playing_ = false; }
         
         void Sample(float time, glm::vec3& translation, glm::quat& rotation, glm::vec3& scaling);
+        void Sample(float time, EnvironmentSetting& environment);
         
         std::string AnimationName;
         std::string NodeName_;
+        Target Target_ = Target::NodeTransform;
         
         AnimationChannel<glm::vec3> TranslationChannel;
         AnimationChannel<glm::quat> RotationChannel;
         AnimationChannel<glm::vec3> ScaleChannel;
+        AnimationChannel<float> SunRotationChannel;
+        AnimationChannel<float> SunElevationChannel;
+        AnimationChannel<float> SkyRotationChannel;
+        AnimationChannel<float> SunIntensityChannel;
+        AnimationChannel<float> SkyIntensityChannel;
         
         float Time_;
         float Duration_;

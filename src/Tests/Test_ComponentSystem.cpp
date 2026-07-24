@@ -1,6 +1,7 @@
 #include <catch2/catch_all.hpp>
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Component.hpp"
+#include "Engine/Assets/Core/Model.hpp"
 #include <entt/meta/meta.hpp>
 #include <entt/meta/resolve.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -76,4 +77,35 @@ TEST_CASE("Node velocity tracks rigid rotation", "[Unit][Node][MotionVector]")
 
     CHECK_FALSE(node->TickVelocity(combined));
     CHECK(combined == identity);
+}
+
+TEST_CASE("Environment sun direction supports elevation", "[Unit][Environment]")
+{
+    Assets::EnvironmentSetting environment;
+
+    const glm::vec3 legacyDirection = glm::normalize(glm::vec3(1.0f, 0.75f, 0.0f));
+    CHECK(environment.SunDirection().x == Catch::Approx(legacyDirection.x).margin(0.0001f));
+    CHECK(environment.SunDirection().y == Catch::Approx(legacyDirection.y).margin(0.0001f));
+    CHECK(environment.SunDirection().z == Catch::Approx(legacyDirection.z).margin(0.0001f));
+
+    environment.SunElevation = glm::radians(-12.0f);
+    CHECK(environment.SunDirection().y < 0.0f);
+}
+
+TEST_CASE("Animation track samples environment channels", "[Unit][Environment][Animation]")
+{
+    Assets::EnvironmentSetting environment;
+    Assets::AnimationTrack track;
+    track.Target_ = Assets::AnimationTrack::Target::Environment;
+    track.SunRotationChannel.Keys = {{0.0f, -0.5f}, {10.0f, 0.5f}};
+    track.SunElevationChannel.Keys = {{0.0f, 0.0f}, {10.0f, glm::half_pi<float>()}};
+    track.SunIntensityChannel.Keys = {{0.0f, 0.0f}, {10.0f, 1000.0f}};
+    track.SkyIntensityChannel.Keys = {{0.0f, 4.0f}, {10.0f, 84.0f}};
+
+    track.Sample(5.0f, environment);
+
+    CHECK(environment.SunRotation == Catch::Approx(0.0f));
+    CHECK(environment.SunElevation == Catch::Approx(glm::quarter_pi<float>()));
+    CHECK(environment.SunIntensity == Catch::Approx(500.0f));
+    CHECK(environment.SkyIntensity == Catch::Approx(44.0f));
 }

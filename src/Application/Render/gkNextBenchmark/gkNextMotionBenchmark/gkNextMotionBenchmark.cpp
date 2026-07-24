@@ -3,9 +3,8 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
+#include "Engine/Assets/Loaders/LoaderRegistry.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
-#include "Modules/LDrawLoader/LDrawModule.hpp"
-#include "Modules/ScadLoader/ScadModule.hpp"
 #include "Application/Common/DemoScenes.hpp"
 
 #include <nlohmann/json.hpp>
@@ -52,10 +51,12 @@ namespace
         {
             return std::nullopt;
         }
+        
         if (std::all_of(value.begin(), value.end(), [](unsigned char ch) { return std::isdigit(ch) != 0; }))
         {
             return std::stoi(value);
         }
+        
         for (const Vulkan::ERendererType type : {Vulkan::ERT_PathTracing,
                                                  Vulkan::ERT_SoftwareTracing,
                                                  Vulkan::ERT_SoftwareModern,
@@ -170,8 +171,6 @@ namespace
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
                                                          NextEngine* engine)
 {
-    Modules::LDraw::Register();
-    Modules::Scad::Register();
     AppCommon::RegisterDemoScenes();
     return std::make_unique<BenchmarkGameInstance>(config, options, engine);
 }
@@ -181,6 +180,8 @@ BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Runti
 {
     config.Title = "gkNextMotionBenchmark";
     options.PresentMode = 0;
+    options.Width = 1280;
+    options.Height = 720;
     LoadConfig(options, config);
 }
 
@@ -232,27 +233,35 @@ void BenchmarkGameInstance::OnTick(double deltaSeconds)
             return true;
         });
     }
-    totalTime_ += deltaSeconds * 20.0;
-    modelViewController_.SetModelRotation( totalTime_, 0 );
+    modelRotationRadians_ += static_cast<float>(deltaSeconds) * glm::radians(6.0f);
 }
 
 void BenchmarkGameInstance::OnSceneLoaded()
 {
     benchMarker_->OnSceneStart(GetEngine().GetWindow().GetTime());
     GetEngine().GetScene().PlayAllTracks();
-    modelViewController_.Reset(GetEngine().GetScene().GetRenderCamera());
-    totalTime_ = 0;
+    const Assets::Camera& camera = GetEngine().GetScene().GetRenderCamera();
+    baseModelView_ = camera.ModelView;
+    baseFieldOfView_ = camera.FieldOfView;
+    modelRotationRadians_ = 0.0f;
+    cameraInitialized_ = true;
 }
 
 bool BenchmarkGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
 {
-    outRenderCamera.ModelView = modelViewController_.ModelView();
-    outRenderCamera.FieldOfView = modelViewController_.FieldOfView();
+    if (!cameraInitialized_)
+    {
+        return false;
+    }
+    outRenderCamera.ModelView = baseModelView_ * glm::rotate(
+        glm::mat4(1.0f), modelRotationRadians_, glm::vec3(0.0f, 1.0f, 0.0f));
+    outRenderCamera.FieldOfView = baseFieldOfView_;
     return true;
 }
 
 bool BenchmarkGameInstance::OnRenderUI()
 {
+    DrawBenchmarkStatsOverlay(GetEngine());
     return true;
 }
 
@@ -260,11 +269,7 @@ void BenchmarkGameInstance::LoadConfig(Runtime::Config::Options& options, Vulkan
 {
     benchmarkSettings_ = FBenchmarkSettings{};
     defaultCvars_ = {
-        {"r.samples", "4"},
-        {"r.temporalFrames", "16"},
-        {"r.bounces", "4"},
-        {"r.upscaler.qualityMode", "4"},
-        {"sys.tickAnimation", "0"},
+        {"sys.tickAnimation", "1"},
     };
 
     const std::filesystem::path configPath = ResolveConfigPath(options.BenchmarkConfig);
@@ -321,6 +326,11 @@ void BenchmarkGameInstance::LoadConfig(Runtime::Config::Options& options, Vulkan
         scenePath = Trim(std::move(scenePath));
         if (scenePath.empty())
         {
+            return;
+        }
+        if (!Assets::FLoaderRegistry::Get().FindProcScene(scenePath))
+        {
+            SPDLOG_WARN("[Benchmark] Ignoring non-DemoScene benchmark input: {}", scenePath);
             return;
         }
 
@@ -408,11 +418,18 @@ void BenchmarkGameInstance::BuildDefaultRuns(const Runtime::Config::Options& opt
     std::vector<std::string> scenes;
     if (!options.SceneName.empty())
     {
-        scenes.push_back(options.SceneName);
+        if (Assets::FLoaderRegistry::Get().FindProcScene(options.SceneName))
+        {
+            scenes.push_back(options.SceneName);
+        }
+        else
+        {
+            SPDLOG_WARN("[Benchmark] Ignoring non-DemoScene --scene value: {}", options.SceneName);
+        }
     }
     else
     {
-        scenes = Runtime::Scene::SceneList::AllScenes;
+        scenes = Assets::FLoaderRegistry::Get().ProcSceneNames();
     }
 
     for (const std::string& scene : scenes)

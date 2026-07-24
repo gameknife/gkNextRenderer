@@ -3,14 +3,11 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
-#include "Modules/LDrawLoader/LDrawModule.hpp"
-#include "Modules/ScadLoader/ScadModule.hpp"
+#include "Engine/Assets/Loaders/LoaderRegistry.hpp"
 #include "Application/Common/DemoScenes.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
-    Modules::LDraw::Register();
-    Modules::Scad::Register();
     AppCommon::RegisterDemoScenes();
     return std::make_unique<BenchmarkGameInstance>(config, options, engine);
 }
@@ -23,24 +20,26 @@ BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Runti
     options.Width = 1280;
     options.Height = 720;
     options.HighPrecisionProgressiveHistory = true;
-    
-    // config.Width = 1920;
-    // config.Height = 1080;
 }
 
 void BenchmarkGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
     cvars.SetDefaultFromString("r.samples", "1", &error);
-    cvars.SetDefaultFromString("r.temporalFrames", "2", &error);
-    cvars.SetDefaultFromString("r.bounces", "4", &error);
     cvars.SetDefaultFromString("r.upscaler.qualityMode", "4", &error);
 }
 
 void BenchmarkGameInstance::OnInit()
 {
     benchMarker_ = std::make_unique<BenchMarker>();
-    GetEngine().RequestLoadScene({.filename = Runtime::Scene::SceneList::AllScenes[0]});
+    demoScenes_ = Assets::FLoaderRegistry::Get().ProcSceneNames();
+    if (demoScenes_.empty())
+    {
+        SPDLOG_ERROR("[Benchmark] No DemoScenes are registered");
+        GetEngine().RequestClose();
+        return;
+    }
+    GetEngine().RequestLoadScene({.filename = demoScenes_.front()});
 }
 
 void BenchmarkGameInstance::OnTick(double deltaSeconds)
@@ -49,22 +48,21 @@ void BenchmarkGameInstance::OnTick(double deltaSeconds)
     if( benchMarker_ && benchMarker_->OnTick( GetEngine().GetWindow().GetTime(), &(GetEngine().GetRenderer()) ))
      {
          // Benchmark is done, report the results.
-         benchMarker_->OnReport( &(GetEngine().GetRenderer()) , Runtime::Scene::SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]);
+         benchMarker_->OnReport(&(GetEngine().GetRenderer()), demoScenes_[currentSceneIndex_]);
          GetEngine().AddTickedTask([this](double) {
              if (GetEngine().IsCapturingScreenShot())
              {
                  return false;
              }
 
-             if (static_cast<size_t>(GetEngine().GetUserSettings().SceneIndex) ==
-                 Runtime::Scene::SceneList::AllScenes.size() - 1)
+             currentSceneIndex_++;
+             if (currentSceneIndex_ >= demoScenes_.size())
              {
                  GetEngine().RequestClose();
              }
              else
              {
-                 GetEngine().GetUserSettings().SceneIndex += 1;
-                 GetEngine().RequestLoadScene({.filename = Runtime::Scene::SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]});
+                 GetEngine().RequestLoadScene({.filename = demoScenes_[currentSceneIndex_]});
              }
              return true;
          });
@@ -78,5 +76,6 @@ void BenchmarkGameInstance::OnSceneLoaded()
 
 bool BenchmarkGameInstance::OnRenderUI()
 {
+    DrawBenchmarkStatsOverlay(GetEngine());
     return true;
 }

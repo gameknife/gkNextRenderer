@@ -199,6 +199,12 @@ namespace Assets
                     {
                         track.PlaySpeed_ = 1.0f;
                     }
+                    if (track.Target_ == AnimationTrack::Target::Environment)
+                    {
+                        track.Sample(track.Time_, GetEnvSettings());
+                        MarkDirty();
+                        continue;
+                    }
                     Node* node = GetNode(track.NodeName_);
                     if (node)
                     {

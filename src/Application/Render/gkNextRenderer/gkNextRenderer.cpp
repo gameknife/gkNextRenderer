@@ -463,7 +463,7 @@ NextRendererGameInstance::NextRendererGameInstance(Vulkan::WindowConfig& config,
 
 void NextRendererGameInstance::OnInit()
 {
-    std::string initializedScene = Runtime::Scene::SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex];
+    std::string initializedScene = "assets/models/conf_room.glb";
     if (!GOption->SceneName.empty())
     {
         initializedScene = GOption->SceneName;

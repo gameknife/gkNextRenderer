@@ -47,7 +47,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
 #if ANDROID
-    const char* argv1[] = { "gkNextRenderer", "--renderer=0", "--forcesoftgen", "--load-scene=assets/models/playground.glb" };
+    const char* argv1[] = { "gkNextRenderer", "--renderer=0", "--forcesoftgen", "--load-scene=assets/models/conf_room.glb" };
     GOptionPtr.reset(new Runtime::Config::Options(4, argv1));
 #else
     // Handle command line options.

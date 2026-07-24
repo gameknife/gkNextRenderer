@@ -25,6 +25,8 @@ namespace Runtime
                 .custom<PropertyMeta>(PropertyPresets::Editable("Has Sun", "Environment", "Enable directional sunlight"))
             .data<&EnvironmentComponent::SetSunRotation, &EnvironmentComponent::GetSunRotation>("SunRotation")
                 .custom<PropertyMeta>(PropertyPresets::Editable("Sun Rotation", "Environment", "Sun azimuth rotation"))
+            .data<&EnvironmentComponent::SetSunElevation, &EnvironmentComponent::GetSunElevation>("SunElevation")
+                .custom<PropertyMeta>(PropertyPresets::Editable("Sun Elevation", "Environment", "Sun elevation in radians"))
             .data<&EnvironmentComponent::SetSunIntensity, &EnvironmentComponent::GetSunIntensity>("SunIntensity")
                 .custom<PropertyMeta>(PropertyPresets::Editable("Sun Intensity", "Environment", "Sun light intensity"))
             .data<&EnvironmentComponent::SetControlSpeed, &EnvironmentComponent::GetControlSpeed>("ControlSpeed")
