@@ -853,7 +853,7 @@ namespace
         const uint32_t matWhite = static_cast<uint32_t>(materials.size());
         materials.push_back({Material::Lambertian(vec3(0.78f, 0.78f, 0.78f)), "cs_white"});
         const uint32_t matDark = static_cast<uint32_t>(materials.size());
-        materials.push_back({Material::Lambertian(vec3(0.25f, 0.25f, 0.25f)), "cs_dark"});
+        materials.push_back({Material::Mixture(vec3(0.15f, 0.15f, 0.15f), 0.01f), "cs_dark"});
         const uint32_t matRed = static_cast<uint32_t>(materials.size());
         materials.push_back({Material::Lambertian(vec3(0.72f, 0.15f, 0.15f)), "cs_red"});
         const uint32_t matBlue = static_cast<uint32_t>(materials.size());

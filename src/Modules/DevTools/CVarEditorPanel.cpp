@@ -28,6 +28,69 @@ namespace DevTools
             return dot == std::string::npos ? "other" : name.substr(0, dot);
         }
 
+        struct FCVarNamespacePresentation
+        {
+            std::string_view title;
+            std::string_view description;
+        };
+
+        FCVarNamespacePresentation NamespacePresentation(std::string_view nameSpace)
+        {
+            if (nameSpace == "r")
+            {
+                return {"Rendering", "Renderer quality, lighting, tracing, upscaling and presentation."};
+            }
+            if (nameSpace == "sys")
+            {
+                return {"System", "Engine runtime, platform, simulation and asset-system behavior."};
+            }
+            if (nameSpace == "debug")
+            {
+                return {"Debug Tools", "Developer diagnostics, inspectors and debug overlays."};
+            }
+            if (nameSpace == "show")
+            {
+                return {"Viewport Display", "Scene visibility, helpers and viewport visualization."};
+            }
+            if (nameSpace == "ui")
+            {
+                return {"User Interface", "Application interface and overlay preferences."};
+            }
+            if (nameSpace == "game")
+            {
+                return {"Gameplay", "Game-specific runtime and simulation options."};
+            }
+            if (nameSpace == "physics")
+            {
+                return {"Physics", "Physics simulation and collision behavior."};
+            }
+            if (nameSpace == "audio")
+            {
+                return {"Audio", "Audio playback, mixing and diagnostics."};
+            }
+            if (nameSpace == "ai")
+            {
+                return {"AI", "Artificial-intelligence runtime and diagnostics."};
+            }
+            if (nameSpace == "net")
+            {
+                return {"Networking", "Network transport, replication and diagnostics."};
+            }
+            if (nameSpace == "editor")
+            {
+                return {"Editor", "Editor tools, interaction and authoring preferences."};
+            }
+            if (nameSpace == "camera")
+            {
+                return {"Camera", "Camera navigation, optics and view behavior."};
+            }
+            if (nameSpace == "other")
+            {
+                return {"General", "Runtime options without a dedicated namespace."};
+            }
+            return {nameSpace, "Module-specific runtime configuration."};
+        }
+
         void SetValue(NextCVar::FCVarSystem& cvars, const std::string& name, const std::string& value)
         {
             std::string error;
@@ -111,27 +174,51 @@ namespace DevTools
 
     void DrawCVarEditorPanel(NextEngine& engine, bool& panelVisible)
     {
-        ImGui::SetNextWindowSize(ImVec2(860.0f, 620.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(980.0f, 700.0f), ImGuiCond_FirstUseEver);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18.0f, 16.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 8.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 7.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 5.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.0f);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover));
+        ImGui::PushStyleColor(ImGuiCol_Header,
+                              NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated, 0.80f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                              NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.92f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                              NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.32f));
+        ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, NextUI::Theme::Color(NextUI::Theme::EColor::Surface, 0.56f));
+        ImGui::PushStyleColor(ImGuiCol_TableRowBg,
+                              NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.08f));
+        ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt,
+                              NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated, 0.32f));
         if (!ImGui::Begin("CVar Editor", &panelVisible))
         {
             ImGui::End();
+            ImGui::PopStyleColor(8);
+            ImGui::PopStyleVar(7);
             return;
         }
+        // Keep the roomier title bar while using medium-sized controls in the content area.
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 5.0f));
 
         auto& cvars = engine.GetCVarSystem();
         static char search[128]{};
-        ImGui::SetNextItemWidth(320.0f);
-        ImGui::InputTextWithHint("##CVarSearch", "Search name or description", search, sizeof(search));
+        const float toolbarActionsWidth = 210.0f;
+        ImGui::SetNextItemWidth(std::max(260.0f, ImGui::GetContentRegionAvail().x - toolbarActionsWidth));
+        ImGui::InputTextWithHint("##CVarSearch", "Search CVars by name or description", search, sizeof(search));
         ImGui::SameLine();
-        if (ImGui::Button("Save"))
+        if (ImGui::Button("Save User Settings"))
         {
             if (!cvars.SaveUserFiles())
             {
                 SPDLOG_ERROR("Failed to save user CVar files");
             }
         }
-        ImGui::SameLine();
-        ImGui::TextDisabled("F4 / cvar.editor");
+        ImGui::TextDisabled("Runtime configuration  /  F4 to toggle");
 
         std::map<std::string, std::vector<NextCVar::FCVarInfo>> groups;
         cvars.ForEach(
@@ -146,24 +233,30 @@ namespace DevTools
                 groups[NamespaceOf(info.name)].push_back(info);
             });
 
-        ImGui::Separator();
+        ImGui::Dummy(ImVec2(0.0f, 2.0f));
         for (auto& [nameSpace, entries] : groups)
         {
-            const std::string header = fmt::format("{} ({})", nameSpace, entries.size());
+            const FCVarNamespacePresentation presentation = NamespacePresentation(nameSpace);
+            const std::string header =
+                fmt::format("{}  \xC2\xB7  {}    ({})", presentation.title, nameSpace, entries.size());
             if (!ImGui::CollapsingHeader(header.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
             {
                 continue;
             }
+            ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted), "%.*s",
+                               static_cast<int>(presentation.description.size()), presentation.description.data());
+            ImGui::Dummy(ImVec2(0.0f, 2.0f));
+
             const std::string tableId = "##CVarTable_" + nameSpace;
             if (!ImGui::BeginTable(tableId.c_str(), 3,
-                                   ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
-                                   ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp))
+                                   ImGuiTableFlags_RowBg |
+                                   ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoBordersInBody))
             {
                 continue;
             }
-            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch, 0.42f);
-            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch, 0.43f);
-            ImGui::TableSetupColumn("Reset", ImGuiTableColumnFlags_WidthFixed, 62.0f);
+            ImGui::TableSetupColumn("Variable", ImGuiTableColumnFlags_WidthStretch, 0.40f);
+            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch, 0.48f);
+            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 72.0f);
             ImGui::TableHeadersRow();
 
             for (const NextCVar::FCVarInfo& info : entries)
@@ -195,7 +288,11 @@ namespace DevTools
                 ImGui::PopID();
             }
             ImGui::EndTable();
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
         }
+        ImGui::PopStyleVar();
         ImGui::End();
+        ImGui::PopStyleColor(8);
+        ImGui::PopStyleVar(7);
     }
 }
