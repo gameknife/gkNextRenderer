@@ -7,7 +7,6 @@
   "r.restir.enable": true,
   "r.upscaler.qualityMode": 5,
   "r.upscaler.type": 4,
-  "r.taa": true,
   "ui.showOverlay": true,
   "sys.tickPhysics": true,
   "sys.tickAnimation": true,

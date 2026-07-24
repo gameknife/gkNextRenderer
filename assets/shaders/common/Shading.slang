@@ -319,7 +319,7 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
     {
         float2 uvOffset = float2(0);
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
-        if (Camera.TAA)
+        if (Camera.PrimaryRayJitter)
         {
             uvOffset = Camera.Jitter.xy * 2.0 / float2(isize);
         }

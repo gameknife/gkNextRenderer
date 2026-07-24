@@ -1166,7 +1166,6 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
 
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Ray Tracing"), true))
     {
-        DrawSettingCheckboxRow(LOCTEXT("AntiAlias"), &userSetting.TAA);
         DrawSettingCheckboxRow(LOCTEXT("Progressive Render"), &userSetting.ProgressiveRender);
         DrawIntSetting(LOCTEXT("Samples"), &userSetting.NumberOfSamples, 1, 16);
         DrawSettingCheckboxRow(LOCTEXT("Exit After First"), &userSetting.ExitAfterFirst);

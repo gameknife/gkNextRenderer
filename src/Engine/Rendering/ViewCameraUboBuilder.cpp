@@ -85,7 +85,7 @@ namespace Vulkan
             ubo.NumberOfBounces = 2;
             ubo.TemporalFrames = 1;
             ubo.TotalFrames = totalFrames;
-            ubo.TAA = false;
+            ubo.PrimaryRayJitter = false;
             ubo.ProgressiveRender = false;
             ubo.HDR = false;
             ubo.HDROutputMode = 0;
@@ -127,7 +127,7 @@ namespace Vulkan
         {
             ubo.TemporalFrames = 1;
             ubo.TotalFrames = std::max(1u, request.baseUbo != nullptr ? request.baseUbo->TotalFrames : request.totalFrames);
-            ubo.TAA = false;
+            ubo.PrimaryRayJitter = false;
             ubo.ProgressiveRender = false;
         }
 

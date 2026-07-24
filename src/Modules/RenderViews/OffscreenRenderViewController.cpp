@@ -262,7 +262,7 @@ namespace Vulkan
         ubo.ViewportRect = glm::vec4(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height));
         ubo.Jitter = glm::vec4(0.0f);
         ubo.TemporalFrames = 1;
-        ubo.TAA = false;
+        ubo.PrimaryRayJitter = false;
         ubo.ProgressiveRender = false;
         renderer_.FinalizeTemporalUbo(view, ubo);
 

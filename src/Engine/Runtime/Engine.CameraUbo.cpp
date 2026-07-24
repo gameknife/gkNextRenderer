@@ -1,4 +1,4 @@
-// NextEngine per-frame camera UBO assembly: projection build, TAA Halton
+// NextEngine per-frame camera UBO assembly: projection build, temporal Halton
 // jitter, Android pre-rotation and sun shadow cascade caching.
 // Split from Engine.cpp; same class, separate TU.
 #include "Engine/Runtime/Engine.hpp"
@@ -83,16 +83,15 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
 
     glm::mat4x4 projectionUnJit = ubo.Projection;
     const bool noAmbientRenderer = renderer_->CurrentLogicRendererType() == Vulkan::ERT_SoftwareModernNoAmbient;
-    const bool enableTaa = config_.userSettings.TAA && !noAmbientRenderer;
-    const bool enableUpscalerJitter = renderer_->IsTemporalSuperResolutionActive();
+    const bool enablePrimaryRayJitter = renderer_->IsTemporalSuperResolutionActive();
 
-    if (enableTaa || enableUpscalerJitter)
+    if (enablePrimaryRayJitter)
     {
         const VkExtent2D renderExtent = renderer_->SwapChain().RenderExtent();
         const uint32_t providerJitterFrames = renderer_->TemporalJitterFrameCount();
-        const uint32_t jitterFrames = enableUpscalerJitter
-            ? (providerJitterFrames > 0 ? providerJitterFrames : config_.userSettings.UpscalerJitterFrames)
-            : config_.userSettings.TemporalFrames;
+        const uint32_t jitterFrames = providerJitterFrames > 0
+            ? providerJitterFrames
+            : config_.userSettings.UpscalerJitterFrames;
         glm::vec2 jitter = GetTemporalJitter(frameState_.totalFrames, jitterFrames);
         if (config_.userSettings.UpscalerJitterInvertY)
         {
@@ -195,7 +194,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.TotalFrames = frameState_.totalFrames;
     ubo.NumberOfSamples = config_.userSettings.NumberOfSamples;
     ubo.NumberOfBounces = config_.userSettings.NumberOfBounces;
-    ubo.TAA = enableTaa;
+    ubo.PrimaryRayJitter = enablePrimaryRayJitter;
     ubo.SunDirection = sunDirection;
     ubo.SunColor = glm::vec4(1, 1, 1, 0) * scene_->GetEnvSettings().SunIntensity;
     ubo.SkyIntensity = scene_->GetEnvSettings().SkyIntensity;

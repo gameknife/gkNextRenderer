@@ -20,7 +20,6 @@ struct UserSettings final
     uint32_t NumberOfBounces;
     uint32_t MaxNumberOfBounces;
     bool ProgressiveRender = false;
-    bool TAA {};
     bool ExitAfterFirst = false;
     uint32_t PresentMode = 3;
     uint32_t SuperResolution = 5;
