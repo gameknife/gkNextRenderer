@@ -127,6 +127,7 @@ namespace Assets
             light.p3 = vec4(vec3(x1, y1, z1) - offset, 1);
             light.normal_area = vec4(0, -1, 0, (x1 - x0) * (z0 - z1));
             light.lightMatIdx = prevMatId + 3;
+            light.lightType = LightTypeArea;
             lights.push_back(light);
         }
 
@@ -167,9 +168,28 @@ namespace Assets
         light.p3 = vec4(c1, 1);
         light.normal_area = vec4(normal, area);
         light.lightMatIdx = lightMatIdx;
+        light.lightType = LightTypeArea;
         lights.push_back(light);
 
         return Model(name, std::move(vertices), std::move(indices), true);
+    }
+
+    Model FProcModel::CreatePointLight(const std::string& name,
+                                       const vec3& position,
+                                       float radius,
+                                       uint32_t lightMatIdx,
+                                       std::vector<LightObject>& lights)
+    {
+        const float proxyRadius = std::max(radius, 0.0f);
+        LightObject light{};
+        light.p0 = vec4(position, proxyRadius);
+        light.lightMatIdx = lightMatIdx;
+        light.lightType = LightTypePoint;
+        lights.push_back(light);
+
+        Model sphere = CreateSphere(position, proxyRadius);
+        sphere.name_ = name;
+        return sphere;
     }
 
     Model FProcModel::CreateBox(const vec3& p0, const vec3& p1)

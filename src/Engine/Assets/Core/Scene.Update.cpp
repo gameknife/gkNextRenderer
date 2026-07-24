@@ -32,7 +32,7 @@ namespace Assets
     {
         lightCount_ = std::min<uint32_t>(static_cast<uint32_t>(lights_.size()), kMaxLightCount);
 
-        // Light-set signature (count + lightMatIdx sequence, FNV-1a): a change means stored
+        // Light-set signature (count + type/material sequence, FNV-1a): a change means stored
         // light indices change meaning, so index-holding consumers must drop history.
         uint64_t signature = 1469598103934665603ull;
         const auto mix = [&signature](uint64_t v)
@@ -43,6 +43,7 @@ namespace Assets
         mix(lights_.size());
         for (const LightObject& light : lights_)
         {
+            mix(light.lightType);
             mix(light.lightMatIdx);
         }
         if (signature != lightsSignature_)
@@ -72,7 +73,10 @@ namespace Assets
             }
             const glm::vec3 radiance = glm::max(glm::vec3(material.Diffuse), glm::vec3(0.0f));
             const float luminance = glm::dot(radiance, glm::vec3(0.2126f, 0.7152f, 0.0722f));
-            weights[i] = luminance * std::max(light.normal_area.w, 0.0f);
+            const float sampleMeasure = light.lightType == LightTypePoint
+                ? 1.0f
+                : (light.lightType == LightTypeArea ? std::max(light.normal_area.w, 0.0f) : 0.0f);
+            weights[i] = luminance * sampleMeasure;
             totalWeight += weights[i];
         }
 
@@ -98,6 +102,7 @@ namespace Assets
 
         for (const LightObject& light : lights_)
         {
+            const bool isPoint = light.lightType == LightTypePoint;
             const glm::vec3 p0(light.p0);
             const glm::vec3 p1(light.p1);
             const glm::vec3 p3(light.p3);
@@ -106,8 +111,14 @@ namespace Assets
                 materials_[light.lightMatIdx].gpuMaterial_.MaterialModel == Material::Enum::DiffuseLight &&
                 glm::any(glm::greaterThan(glm::vec3(materials_[light.lightMatIdx].gpuMaterial_.Diffuse),
                                           glm::vec3(0.0f))) &&
-                light.normal_area.w > 0.0f;
+                (isPoint || light.normal_area.w > 0.0f);
             const glm::vec4 outlineColor = active ? activeColor : inactiveColor;
+
+            if (isPoint)
+            {
+                Runtime::EngineHelper::DrawAuxPoint(p0, outlineColor, 7.0f, 0, false);
+                continue;
+            }
 
             Runtime::EngineHelper::DrawAuxLine(p0, p1, outlineColor, 2.5f, false);
             Runtime::EngineHelper::DrawAuxLine(p1, p2, outlineColor, 2.5f, false);

@@ -103,11 +103,11 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
     const float reconstructionOffset = max(EPS2, abs(centerView.z) * 1e-4f);
 
     // Verify center first; only this post-visibility center reservoir enters temporal history.
-    if (center.SampleType == RESTIR_SAMPLE_AREA_LIGHT && center.WeightW > 0.0f)
+    if (center.SampleType == RESTIR_SAMPLE_LIGHT && center.WeightW > 0.0f)
     {
         float3 centerF;
         float3 centerLightPosition;
-        if (!Common.EvaluateAreaLightDiffuseSample(
+        if (!Common.EvaluateLightDiffuseSample(
                 center.LightIndex, center.LightUV, context,
                 centerF, centerLightPosition))
         {
@@ -117,7 +117,9 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
         {
             const float3 shadowOrigin = tracer.GetAreaLightShadowOrigin(
                 context.Position, context.Normal, centerLightPosition, reconstructionOffset);
-            if (tracer.TraceAreaLightSegment(shadowOrigin, centerLightPosition, EPS))
+            const float3 visibilityTarget = Common.GetLightVisibilityTarget(
+                center.LightIndex, shadowOrigin, centerLightPosition);
+            if (tracer.TraceAreaLightSegment(shadowOrigin, visibilityTarget, EPS))
             {
                 center.WeightW = 0.0f;
             }
@@ -168,7 +170,7 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
 
             FRestirState other = RestirUnpackReservoir(
                 RestirGetIntermediateBuffer(params)[RestirReservoirIndex(neighbor, params)]);
-            if (other.SampleType != RESTIR_SAMPLE_AREA_LIGHT ||
+            if (other.SampleType != RESTIR_SAMPLE_LIGHT ||
                 other.LightIndex >= camera.LightCount)
             {
                 continue;
@@ -177,7 +179,7 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
             float3 otherF;
             float3 otherLightPosition;
             float otherTargetLum = 0.0f;
-            if (Common.EvaluateAreaLightDiffuseSample(
+            if (Common.EvaluateLightDiffuseSample(
                     other.LightIndex, other.LightUV, context,
                     otherF, otherLightPosition))
             {
@@ -189,11 +191,11 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
     combined.FinalizeW();
 
     float3 direct = float3(0, 0, 0);
-    if (combined.SampleType == RESTIR_SAMPLE_AREA_LIGHT && combined.WeightW > 0.0f)
+    if (combined.SampleType == RESTIR_SAMPLE_LIGHT && combined.WeightW > 0.0f)
     {
         float3 f;
         float3 lightPosition;
-        if (!Common.EvaluateAreaLightDiffuseSample(
+        if (!Common.EvaluateLightDiffuseSample(
                 combined.LightIndex, combined.LightUV, context, f, lightPosition))
         {
             combined.WeightW = 0.0f;
@@ -205,8 +207,10 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
                 all(combined.LightUV == center.LightUV);
             const float3 shadowOrigin = tracer.GetAreaLightShadowOrigin(
                 context.Position, context.Normal, lightPosition, reconstructionOffset);
+            const float3 visibilityTarget = Common.GetLightVisibilityTarget(
+                combined.LightIndex, shadowOrigin, lightPosition);
             if (!alreadyVerified &&
-                tracer.TraceAreaLightSegment(shadowOrigin, lightPosition, EPS))
+                tracer.TraceAreaLightSegment(shadowOrigin, visibilityTarget, EPS))
             {
                 combined.WeightW = 0.0f;
             }

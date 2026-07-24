@@ -689,7 +689,7 @@ namespace
         const uint32_t matGround = static_cast<uint32_t>(materials.size());
         materials.push_back({Material::Lambertian(vec3(0.45f, 0.45f, 0.46f)), "ls_ground_gray"});
         const uint32_t matSphere = static_cast<uint32_t>(materials.size());
-        materials.push_back({Material::Lambertian(vec3(0.72f, 0.72f, 0.72f)), "ls_sphere_neutral"});
+        materials.push_back({Material::Mixture(vec3(0.72f, 0.72f, 0.72f), 0.2f), "ls_sphere_neutral"});
 
         const uint32_t matPointLight = static_cast<uint32_t>(materials.size());
         materials.push_back({Material::DiffuseLight(vec3(1000.0f, 900.0f, 800.0f)), "ls_point_light"});
@@ -734,9 +734,12 @@ namespace
         }
 
         // Light 1: Point light (small sphere emitter above sphere 1)
-        models.push_back(Assets::FProcModel::CreateSphere(vec3(0, 0, 0), 0.2f));
+        const vec3 pointLightPosition(-5.25f, 4.5f, -1.0f);
+        constexpr float pointLightRadius = 0.2f;
+        models.push_back(Assets::FProcModel::CreatePointLight(
+            "PointLight", pointLightPosition, pointLightRadius, matPointLight, lights));
         const uint32_t pointLightModel = static_cast<uint32_t>(models.size() - 1);
-        addNode("PointLight", vec3(-5.25f, 4.5f, -1.0f), pointLightModel, matPointLight);
+        addNode("PointLight", vec3(0), pointLightModel, matPointLight);
 
         // Light 2: Area light (rectangle above sphere 2)
         models.push_back(Assets::FProcModel::CreateAreaLight(
@@ -1052,10 +1055,10 @@ namespace
         // Eight emitter colors with a wide intensity spread: the light CDF weights by
         // luminance * area, so this also exercises non-uniform light selection.
         const vec3 lightColors[8] = {
-            vec3(1200.0f, 30.0f, 12.0f), vec3(30.0f, 1200.0f, 20.0f),
-            vec3(20.0f, 35.0f, 1400.0f), vec3(1100.0f, 1000.0f, 25.0f),
-            vec3(1000.0f, 25.0f, 1000.0f), vec3(25.0f, 1000.0f, 1000.0f),
-            vec3(900.0f, 850.0f, 780.0f), vec3(1600.0f, 50.0f, 25.0f),
+            vec3(2200.0f, 30.0f, 12.0f), vec3(30.0f, 2200.0f, 20.0f),
+            vec3(20.0f, 35.0f, 2400.0f), vec3(2100.0f, 2000.0f, 25.0f),
+            vec3(1000.0f, 25.0f, 2000.0f), vec3(25.0f, 2000.0f, 2000.0f),
+            vec3(1900.0f, 1850.0f, 1780.0f), vec3(2600.0f, 50.0f, 25.0f),
         };
         const uint32_t lightMatBase = static_cast<uint32_t>(materials.size());
         for (int i = 0; i < 8; ++i)
@@ -1086,7 +1089,7 @@ namespace
                 const uint32_t matIdx = lightMatBase + (row * 3 + col) % 8;
                 models.push_back(Assets::FProcModel::CreateAreaLight(
                     "ml_light_quad_" + std::to_string(row) + "_" + std::to_string(col),
-                    vec3(x, 5.0f, z), vec3(lightSize, 0, 0), vec3(0, 0, lightSize),
+                    vec3(x, 3.5f, z), vec3(lightSize, 0, 0), vec3(0, 0, lightSize),
                     matIdx, lights));
                 addNode("Light_" + std::to_string(row) + "_" + std::to_string(col),
                         static_cast<uint32_t>(models.size() - 1), matIdx);

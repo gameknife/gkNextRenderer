@@ -3,6 +3,7 @@ set(unitTestSources
     Test_PhysicsSync.cpp
     Test_GpuTimerLogic.cpp
     Test_GltfSkinning.cpp
+    Test_LightObject.cpp
     Test_CameraFocus.cpp
     Test_HdrTextureCache.cpp
     Test_ComponentSystem.cpp

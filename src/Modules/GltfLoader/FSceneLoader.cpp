@@ -160,6 +160,7 @@ namespace Assets
             outLight.p3 = glm::vec4(p3, 1.0f);
             outLight.normal_area = glm::vec4(glm::normalize(crossEdges), area);
             outLight.lightMatIdx = static_cast<uint32_t>(primitive.material + materialOffset);
+            outLight.lightType = LightTypeArea;
             return true;
         }
     }

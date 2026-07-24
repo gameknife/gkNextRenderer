@@ -333,7 +333,7 @@ public struct ALIGN_16 FTracingExtras
 // world-space point so reuse follows animated lights and needs no Jacobian.
 public struct ALIGN_16 FRestirReservoir
 {
-    public uint LightData;      // low 24 bits: light index; high 8 bits: type (0 = empty, 1 = area light)
+    public uint LightData;      // low 24 bits: light index; high 8 bits: sample type (0 = empty, 1 = light)
     public uint PackedUV;       // sample uv on the light quad, 2x unorm16
     public float WeightW;       // unbiased contribution weight W
     public uint PackedMTarget;  // low 16 bits: clamped M; high 16 bits: fp16 target luminance
@@ -364,8 +364,13 @@ public struct ALIGN_16 SphericalHarmonics
     public float padding;
 };
 
+public static const uint LightTypeArea = 0;
+public static const uint LightTypePoint = 1;
+
 public struct ALIGN_16 LightObject
 {
+    // Area: p0/p1/p3 are three quad corners and normal_area.w is its area.
+    // Point: p0.xyz is the position and p0.w is the optional visible proxy radius.
     float4 p0;
     float4 p1;
     float4 p3;
@@ -374,7 +379,7 @@ public struct ALIGN_16 LightObject
     uint lightMatIdx;
     uint reserved1;
     uint reserved2;
-    uint reserved3;
+    uint lightType;
 };
 public const static uint MaterialLambertian = 0;
 public const static uint MaterialMetallic = 1;

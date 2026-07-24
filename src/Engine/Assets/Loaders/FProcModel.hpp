@@ -29,6 +29,14 @@ namespace Assets
                                      const glm::vec3& up,
                                      uint32_t lightMatIdx,
                                      std::vector<LightObject>& lights);
+
+        // Emissive sphere proxy plus analytic isotropic point light. The DiffuseLight
+        // material RGB is interpreted as radiant intensity; a LightObject is appended.
+        static Model CreatePointLight(const std::string& name,
+                                      const glm::vec3& position,
+                                      float radius,
+                                      uint32_t lightMatIdx,
+                                      std::vector<LightObject>& lights);
     };
 
 }

@@ -107,7 +107,7 @@ namespace Assets
         const std::vector<ModelData>& Offsets() const { return offsets_; }
         std::vector<LightObject>& Lights() { return lights_; }
         const std::vector<LightObject>& Lights() const { return lights_; }
-        // Bumped by UpdateLights whenever the light set is re-ordered (count or lightMatIdx
+        // Bumped by UpdateLights whenever the light set is re-ordered (count or type/material
         // sequence changed); consumers holding light indices across frames (ReSTIR reservoirs)
         // must drop history on a mismatch. Pure transforms / color edits do not bump it.
         uint64_t LightsGeneration() const { return lightsGeneration_; }

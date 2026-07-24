@@ -13,7 +13,7 @@ public static const uint RESTIR_FLAG_SPATIAL_ENABLE = 1u << 1;
 public static const uint RESTIR_FLAG_TEMPORAL_VALID = 1u << 2;
 
 public static const uint RESTIR_SAMPLE_NONE = 0u;
-public static const uint RESTIR_SAMPLE_AREA_LIGHT = 1u;
+public static const uint RESTIR_SAMPLE_LIGHT = 1u;
 
 // Explicit branch on purpose: scalar && does not guarantee short-circuiting, and the field
 // load must never execute against a null table pointer (see SharcIsAvailable).
@@ -91,7 +91,7 @@ public struct FRestirState
         if (WeightSum > 0.0f && risWeight > 0.0f && random * WeightSum <= risWeight)
         {
             LightIndex = lightIndex;
-            SampleType = RESTIR_SAMPLE_AREA_LIGHT;
+            SampleType = RESTIR_SAMPLE_LIGHT;
             LightUV = uv;
             TargetLum = targetLum;
             return true;
@@ -183,7 +183,7 @@ public void RestirStoreEmpty(int2 pixel)
 // initial-winner visibility, temporal merge from the previous frame's FINAL reservoirs,
 // then stores the post-temporal reservoir to the INTERMEDIATE buffer. Shading and spatial
 // reuse happen in Core.RestirSpatialShade.comp.slang, which also owns the final visibility
-// ray and writes the final buffer. Sampling shares Common.EvaluateAreaLightDiffuseSample with
+// ray and writes the final buffer. Sampling shares Common.EvaluateLightDiffuseSample with
 // classic NEE so the target function and shading can never drift apart.
 public void RestirPrimaryGather(inout uint4 randomSeed, int2 pixel, FBSDFContext context,
                                 uint primaryInstanceId, float2 motionPixels, IRayTracer tracer)
@@ -212,37 +212,38 @@ public void RestirPrimaryGather(inout uint4 randomSeed, int2 pixel, FBSDFContext
         return;
     }
 
-    // Initial candidates: CDF light selection + uniform uv on the light quad, streamed with
-    // RIS weight w = p-hat / p-source where p-source = lightPdf / area. Invalid candidates
-    // still count toward M (equivalent to streaming them with zero weight).
+    // Initial candidates: CDF light selection + a type-specific sample, streamed with
+    // RIS weight w = p-hat / p-source where p-source = lightPdf / sampleMeasure.
+    // A point light has unit discrete measure. Invalid candidates still count toward M
+    // (equivalent to streaming them with zero weight).
     for (uint c = 0; c < params.InitialCandidates; ++c)
     {
-        const uint lightIndex = Common.SelectAreaLight(RandomFloat(randomSeed));
+        const uint lightIndex = Common.SelectLight(RandomFloat(randomSeed));
         LightObject light = gpuScene.Lights[lightIndex];
         const float lightPdf = asfloat(light.reserved2);
-        const float lightArea = light.normal_area.w;
-        const float2 uv = RandomFloat2(randomSeed);
+        const float sampleMeasure = Common.GetLightSampleMeasure(light);
+        const float2 uv = Common.CanonicalizeLightUV(light, RandomFloat2(randomSeed));
         float3 f;
         float3 lightPosition;
-        if (lightPdf <= 0.0f || lightArea <= 0.0f ||
-            !Common.EvaluateAreaLightDiffuseSample(lightIndex, uv, context, f, lightPosition))
+        if (lightPdf <= 0.0f || sampleMeasure <= 0.0f ||
+            !Common.EvaluateLightDiffuseSample(lightIndex, uv, context, f, lightPosition))
         {
             reservoir.M += 1.0f;
             continue;
         }
         const float targetLum = dot(f, kRestirLumaWeights);
-        const float risWeight = targetLum * (lightArea / lightPdf);
+        const float risWeight = targetLum * (sampleMeasure / lightPdf);
         reservoir.Update(lightIndex, uv, risWeight, targetLum, RandomFloat(randomSeed));
     }
     reservoir.FinalizeW();
 
     // Initial-winner visibility (visibility reuse): an occluded winner keeps its M but drops
     // W to zero, so the W-form merges below never spread shadowed samples as light leaks.
-    if (reservoir.SampleType == RESTIR_SAMPLE_AREA_LIGHT && reservoir.WeightW > 0.0f)
+    if (reservoir.SampleType == RESTIR_SAMPLE_LIGHT && reservoir.WeightW > 0.0f)
     {
         float3 f;
         float3 lightPosition;
-        if (!Common.EvaluateAreaLightDiffuseSample(
+        if (!Common.EvaluateLightDiffuseSample(
                 reservoir.LightIndex, reservoir.LightUV, context, f, lightPosition))
         {
             reservoir.WeightW = 0.0f;
@@ -252,7 +253,9 @@ public void RestirPrimaryGather(inout uint4 randomSeed, int2 pixel, FBSDFContext
             const float3 shadowOrigin =
                 tracer.GetAreaLightShadowOrigin(context.Position, context.Normal,
                                                 lightPosition, EPS2);
-            if (tracer.TraceAreaLightSegment(shadowOrigin, lightPosition, EPS))
+            const float3 visibilityTarget = Common.GetLightVisibilityTarget(
+                reservoir.LightIndex, shadowOrigin, lightPosition);
+            if (tracer.TraceAreaLightSegment(shadowOrigin, visibilityTarget, EPS))
             {
                 reservoir.WeightW = 0.0f;
             }
@@ -290,14 +293,14 @@ public void RestirPrimaryGather(inout uint4 randomSeed, int2 pixel, FBSDFContext
             {
                 FRestirState prev = RestirUnpackReservoir(
                     RestirGetFinalBuffer(params)[RestirReservoirIndex(prevPixel, params)]);
-                if (prev.SampleType == RESTIR_SAMPLE_AREA_LIGHT && prev.LightIndex < Camera.LightCount)
+                if (prev.SampleType == RESTIR_SAMPLE_LIGHT && prev.LightIndex < Camera.LightCount)
                 {
                     prev.M = min(prev.M, float(params.TemporalMClamp));
                     float3 prevF;
                     float3 prevLightPosition;
                     float prevTargetLum = 0.0f;
-                    if (Common.EvaluateAreaLightDiffuseSample(prev.LightIndex, prev.LightUV, context,
-                                                             prevF, prevLightPosition))
+                    if (Common.EvaluateLightDiffuseSample(prev.LightIndex, prev.LightUV, context,
+                                                         prevF, prevLightPosition))
                     {
                         prevTargetLum = dot(prevF, kRestirLumaWeights);
                     }

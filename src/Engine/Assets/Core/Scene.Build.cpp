@@ -491,7 +491,7 @@ namespace Assets
         lightCount_ = std::min<uint32_t>(static_cast<uint32_t>(lights_.size()), kMaxLightCount);
         if (lights_.size() > kMaxLightCount)
         {
-            SPDLOG_WARN("Scene contains {} area lights; only the first {} are uploaded", lights_.size(), kMaxLightCount);
+            SPDLOG_WARN("Scene contains {} lights; only the first {} are uploaded", lights_.size(), kMaxLightCount);
         }
         UpdateLights();
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SkinWeights", flags, allWeights, skinWeightBuffer_,

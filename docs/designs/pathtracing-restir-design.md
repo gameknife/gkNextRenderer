@@ -4,21 +4,21 @@ category: design
 status: 现行
 owner: engine/rendering
 created: 2026-07-19
-last_updated: 2026-07-22
+last_updated: 2026-07-24
 ---
 
 # Tracing Direct Lighting 与 ReSTIR DI 架构
 
 PathTracing 与 SoftwareTracing 使用公共 BSDF-aware direct-lighting 层，并可为 primary 表面的
-**面光 diffuse lobe** 启用 ReSTIR DI（蓄水池时空重采样）。两者共享 BSDF、估计器、reservoir
+**有限/点光 diffuse lobe** 启用 ReSTIR DI（蓄水池时空重采样）。两者共享 BSDF、估计器、reservoir
 与复用算法，只在可见性实现上不同：PathTracing 使用 ray query，SoftwareTracing 使用有限长度的
-级联 voxel DDA。`r.restir.enable` 关闭时运行经典 BSDF-aware 单样本面光 NEE；开启后仅以
-material-aware ReSTIR 替换 Lambertian/Mixture 的 diffuse 面光项，specular 与解析太阳仍由主 tracing
+级联 voxel DDA。`r.restir.enable` 关闭时运行经典 BSDF-aware 单样本 light NEE；开启后仅以
+material-aware ReSTIR 替换 Lambertian/Mixture 的 diffuse light 项，specular 与解析太阳仍由主 tracing
 pass 独立估计。
 
 ## 1. 范围与边界
 
-**只替换 primary vertex 的面光源 diffuse NEE**：
+**只替换 primary vertex 的有限/点光源 diffuse NEE**：
 
 - `common/BSDF.slang` 是 Lambert、GGX reflection、Fresnel、roughness/PDF 的单一数学来源；
   `FDirectLighting` 将 albedo-demodulated diffuse 与完整 specular radiance 分开。
@@ -31,9 +31,9 @@ pass 独立估计。
 - 次级 bounce 的直接光策略（`SecondaryDirectMode`、SHARC update 的逐 hit 直接光记账）不变；**蓄水池样本不喂 SHARC**（相关样本会破坏缓存时域累积）。`Core.SharcUpdate` 入口显式 `RestirPrimary = false`。
 - Lambertian 与 Mixture 可进入 diffuse reservoir；Mixture 的目标使用方向相关
   `kD=(1-F)*(1-metalness)`。Metallic、Dielectric、Isotropic 与 DiffuseLight 的 diffuse target 为 0。
-- 面光 specular 使用 light proposal + glossy-direction proposal，并以 power heuristic MIS；near-delta
-  reflection 使用确定性方向。registered emitter 只按被覆盖的 lobe 抑制，dielectric transmission
-  命中不再被 diffuse NEE 误删。
+- 面光 specular 使用 light proposal + glossy-direction proposal，并以 power heuristic MIS；点光是
+  delta-direction proposal，不与有限密度 BSDF proposal 重叠。near-delta reflection 使用确定性方向。
+  registered emitter 只按被覆盖的 lobe 抑制，dielectric transmission 命中不再被 diffuse NEE 误删。
 - 当前 dielectric transmission direct 只覆盖 near-delta 确定性透射；rough dielectric microfacet BTDF、
   caustics 与 specular reservoir 不属于现行实现。
 - 仅 primary view：shader 侧以 `gpuScene.CustomData0 == 0`（view bank base）判定，非 primary / Transient view 走经典单样本 NEE。
@@ -45,7 +45,7 @@ pass 独立估计。
 主 tracing dispatch (PathTracing 或 Core.SwTracing)
   PrimaryHit → …path loop… → DirectIlluminatePrimary:
       有限太阳盘 diffuse/specular
-      面光 specular light/BSDF proposal + MIS
+      面光 specular light/BSDF proposal + MIS；点光 specular delta proposal
       Lambertian/Mixture diffuse:
         classic → BSDF-aware NEE
         ReSTIR → 初始 RIS + 初始可见性 + 时域合并 → 写 intermediate
@@ -56,10 +56,10 @@ Core.RestirSpatialShade / Core.SwRestirSpatialShade
   [之后进入 SamplePostChain：当前样本直接 compose → DLSS/FSR/native]
 ```
 
-两条第二阶段入口都调用 `common/RestirSpatialShade.slang` 的同一算法主体；硬件入口使用 `ZeroBindWithTLASPipeline + FHardwareRayTracer`，软件入口使用不含 TLAS descriptor 的 `ZeroBindPipeline + FSoftwareRayTracer`。`FSoftwareTracingDirectIlluminator` 单独承载 CSM sun + area NEE，不能把面光逻辑塞回 `FShadowMapDirectIlluminator`，否则会无意改变 SoftwareModern。
+两条第二阶段入口都调用 `common/RestirSpatialShade.slang` 的同一算法主体；硬件入口使用 `ZeroBindWithTLASPipeline + FHardwareRayTracer`，软件入口使用不含 TLAS descriptor 的 `ZeroBindPipeline + FSoftwareRayTracer`。`FSoftwareTracingDirectIlluminator` 单独承载 CSM sun + light NEE，不能把 tracing light 逻辑塞回 `FShadowMapDirectIlluminator`，否则会无意改变 SoftwareModern。
 
-经典 direct 使用 `Common.EvaluateAreaLightDirectSample`；ReSTIR gather、重评估和 final shading
-统一使用 `Common.EvaluateAreaLightDiffuseSample`。两者都调用 `EvaluateSurfaceBSDF`，不得重新内嵌
+经典 direct 使用 `Common.EvaluateLightDirectSample`；ReSTIR gather、重评估和 final shading
+统一使用 `Common.EvaluateLightDiffuseSample`。两者都调用 `EvaluateSurfaceBSDF`，不得重新内嵌
 Lambert/GGX 公式。
 
 ## 3. 数据契约
@@ -68,7 +68,7 @@ Lambert/GGX 公式。
 
 **所有权**：`VulkanBaseRenderer` 按需持有唯一 `PipelineCommon::RestirDI`，统一拥有双 reservoir、runtime parameters、extent、clear、barrier、frame stamp 和 history 连续性。PathTracing/SoftwareTracing 往返切换只复用这份内存；`historyGeneration` 与帧不连续会禁止首帧 temporal merge。`r.restir.enable=false` 时不会新分配或 dispatch 第二阶段；已经分配的资源保留到 renderer/device 生命周期结束，避免 CVar 抖动造成 allocation churn。
 
-**蓄水池**（`FRestirReservoir`，16B/px，双缓冲）：`LightData`（24 位灯索引 + 8 位类型）、`PackedUV`（灯面 uv，2×unorm16）、`WeightW`（fp32）、`PackedMTarget`（16 位 M + fp16 p̂）。存生成参数而非世界坐标点：复用跟随灯变换、无需 Jacobian。1080p 双缓冲 ≈ 63 MiB。
+**蓄水池**（`FRestirReservoir`，16B/px，双缓冲）：`LightData`（24 位灯索引 + 8 位样本类型）、`PackedUV`（面光 uv，点光固定为 0，2×unorm16）、`WeightW`（fp32）、`PackedMTarget`（16 位 M + fp16 p̂）。存生成参数而非世界坐标点：复用跟随灯变换、无需 Jacobian。1080p 双缓冲 ≈ 63 MiB。
 
 **固定角色双缓冲（无帧奇偶）**：intermediate 由 gather 写、spatial pass 读；final 由 spatial pass 写、**下一帧时域读**。每个 buffer 单一写者 pass，跨像素邻居读永远不会观察到半更新数据。
 
@@ -110,7 +110,7 @@ spatial gate 除 ObjectId/normal/depth 外还要求 material index 相同，避�
 
 | CVar | 默认 | 说明 |
 |---|---|---|
-| `r.restir.enable` | false | ReSTIR 总开关；关闭时使用经典单样本面光 NEE |
+| `r.restir.enable` | false | ReSTIR 总开关；关闭时使用经典单样本 light NEE |
 | `r.restir.candidates` | 8 | 初始候选数（时域健康时 2 即接近同质量） |
 | `r.restir.temporal` / `mClamp` | true / 160 | 时域复用 / M 上限 |
 | `r.restir.spatial` / `spatialSamples` / `spatialRadius` | true / 5 / 16 | 空间复用（关闭只影响邻居数，两个 pass 恒运行） |
@@ -134,7 +134,7 @@ Apple 数据来自 hidden immediate-mode 的 `engine.frameRate`，只能表示�
 2. **同一 invocation 内 storage image 写后读不可见**。当前像素的 primary 数据（instanceId/motion）从 renderer 状态传参；只有前置 pass 写的纹理（ObjectId1/MotionMoment/G-buffer）可读。
 3. **竞态关键的逐帧状态严禁放 host-visible buffer**（host 覆写与 in-flight GPU 帧竞争），必须走录进 command buffer 的 push constant。
 4. **空间复用结果不得回写时域历史**（§4）。
-5. p̂ / ReSTIR shading 共用 `Common.EvaluateAreaLightDiffuseSample`；经典 NEE 与它共享
+5. p̂ / ReSTIR shading 共用 `Common.EvaluateLightDiffuseSample`；经典 NEE 与它共享
    `EvaluateSurfaceBSDF`，修改材质 lobe 不得产生第二套 evaluator。
 6. 蓄水池是屏幕空间时序状态：新增失效条件必须体现在 RenderView `historyGeneration` 或 ReSTIR 自身 generation 检查中；不要依赖已删除的颜色 history。
 7. `RT_SINGLE_DIFFUSE` 的第二阶段既读又写，资源声明必须同时包含 `ShaderRead | ShaderWrite`；reservoir barrier 同时覆盖 intermediate/final 的 shader read/write。
@@ -143,7 +143,7 @@ Apple 数据来自 hidden immediate-mode 的 `engine.frameRate`，只能表示�
 
 - **无偏空间合并（Talbot/pairwise MIS）**：每邻居额外可见性光线或全对 p̂ 重估，实时预算不匹配；biased + 几何测试 + M 钳制已达肉眼不可辨。
 - **世界空间 ReSTIR（ReGIR）**：`kMaxLightCount=1024` 且典型场景灯数十级，屏幕空间足够；>10⁴ 灯再议。
-- **太阳并入候选池**：推迟。太阳是低方差 delta 光，进池稀释面光候选质量，且 SoftwareTracing/CSM 路径无法对齐；省 1 根 ray 的收益不抵。
+- **太阳并入候选池**：推迟。全局太阳已有低方差独立策略，进池会稀释局部面光/点光候选质量，且 SoftwareTracing/CSM 路径无法对齐；省 1 根 ray 的收益不抵。
 - **ReSTIR GI（未授权备忘）**：蓄水池存首个间接 bounce 重连点（位置/法线/出射辐射），reconnection shift + Jacobian；本项目特有协同点是 **SHARC 缓存作重连点辐射的廉价目标函数评估**（候选评估零光线，最终 shading 才验证）。需单独立项授权。
 
 ## 11. 验证方式

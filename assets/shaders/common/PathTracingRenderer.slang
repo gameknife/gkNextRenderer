@@ -13,9 +13,9 @@ implementing PathTracing;
 
 namespace Common
 {
-    // CDF light selection shared by classic area-light NEE and ReSTIR candidate generation
+    // CDF light selection shared by classic light NEE and ReSTIR candidate generation
     // (reserved1 carries the cdf built in Scene::UpdateLights).
-    public uint SelectAreaLight(float lightSelector)
+    public uint SelectLight(float lightSelector)
     {
         GPUScene gpuScene = Bindless.GetGpuscene();
         UniformBufferObject Camera = gpuScene.Camera[0];
@@ -31,19 +31,52 @@ namespace Common
         return lightIndex;
     }
 
-    // BSDF-aware area-light sample. Diffuse stays albedo-demodulated while specular is
-    // complete radiance; lightPdf is the discrete light-selection probability.
-    public bool EvaluateAreaLightDirectSample(uint lightIndex, float2 uv, FBSDFContext context,
-                                              out FDirectLighting direct,
-                                              out float3 lightPosition)
+    public float GetLightSampleMeasure(LightObject light)
+    {
+        if (light.lightType == LightTypePoint)
+        {
+            return 1.0f;
+        }
+        return light.lightType == LightTypeArea ? light.normal_area.w : 0.0f;
+    }
+
+    public float2 CanonicalizeLightUV(LightObject light, float2 uv)
+    {
+        return light.lightType == LightTypePoint ? float2(0, 0) : uv;
+    }
+
+    // The visible marker of an analytic point light is not an occluder of that light.
+    // Shorten only the visibility segment; illumination still uses the analytic center.
+    public float3 GetLightVisibilityTarget(uint lightIndex, float3 rayOrigin,
+                                           float3 lightPosition)
+    {
+        LightObject light = Bindless.GetGpuscene().Lights[lightIndex];
+        if (light.lightType != LightTypePoint || light.p0.w <= 0.0f)
+        {
+            return lightPosition;
+        }
+        const float3 segment = lightPosition - rayOrigin;
+        const float distance = length(segment);
+        if (distance <= EPS)
+        {
+            return lightPosition;
+        }
+        return lightPosition - segment * (min(light.p0.w, distance * 0.5f) / distance);
+    }
+
+    // BSDF-aware finite/delta-light sample. Diffuse stays albedo-demodulated while
+    // specular is complete radiance; lightPdf is the discrete light-selection probability.
+    public bool EvaluateLightDirectSample(uint lightIndex, float2 uv, FBSDFContext context,
+                                          out FDirectLighting direct,
+                                          out float3 lightPosition)
     {
         direct = FDirectLighting();
         lightPosition = float3(0, 0, 0);
         GPUScene gpuScene = Bindless.GetGpuscene();
         LightObject light = gpuScene.Lights[lightIndex];
-        const float lightArea = light.normal_area.w;
+        const float sampleMeasure = GetLightSampleMeasure(light);
         const float lightPdf = asfloat(light.reserved2);
-        if (lightArea <= 0.0f || lightPdf <= 0.0f)
+        if (sampleMeasure <= 0.0f || lightPdf <= 0.0f)
         {
             return false;
         }
@@ -53,8 +86,15 @@ namespace Common
             return false;
         }
 
-        lightPosition = light.p0.xyz + uv.x * (light.p1.xyz - light.p0.xyz) +
-                        uv.y * (light.p3.xyz - light.p0.xyz);
+        if (light.lightType == LightTypePoint)
+        {
+            lightPosition = light.p0.xyz;
+        }
+        else
+        {
+            lightPosition = light.p0.xyz + uv.x * (light.p1.xyz - light.p0.xyz) +
+                            uv.y * (light.p3.xyz - light.p0.xyz);
+        }
         const float3 toLight = lightPosition - context.Position;
         const float distanceSquared = dot(toLight, toLight);
         if (distanceSquared <= EPS * EPS)
@@ -63,18 +103,35 @@ namespace Common
         }
         const float3 wi = toLight * rsqrt(distanceSquared);
         const float surfaceCosine = max(dot(context.Normal, wi), 0.0f);
-        const float lightCosine = max(dot(normalize(light.normal_area.xyz), -wi), 0.0f);
-        if (surfaceCosine <= 0.0f || lightCosine <= 0.0f)
+        if (surfaceCosine <= 0.0f)
         {
             return false;
         }
 
         FBSDFEval bsdf = EvaluateSurfaceBSDF(context, wi);
-        const float lightPdfOmega = (lightPdf / lightArea) * distanceSquared / lightCosine;
-        const float specularMis = PowerHeuristic(
-            lightPdfOmega, EvaluateGlossyProposalPdf(context, wi));
-        const float geometryAndPdf = surfaceCosine * lightCosine * lightArea /
-                                     (distanceSquared * lightPdf);
+        float geometryAndPdf;
+        float specularMis = 1.0f;
+        if (light.lightType == LightTypePoint)
+        {
+            // DiffuseLight RGB is radiant intensity for a point record. A point is a
+            // delta-direction proposal, so a finite-density BSDF proposal cannot overlap it.
+            geometryAndPdf = surfaceCosine / (distanceSquared * lightPdf);
+        }
+        else
+        {
+            const float lightCosine =
+                max(dot(normalize(light.normal_area.xyz), -wi), 0.0f);
+            if (lightCosine <= 0.0f)
+            {
+                return false;
+            }
+            const float lightPdfOmega =
+                (lightPdf / sampleMeasure) * distanceSquared / lightCosine;
+            specularMis = PowerHeuristic(
+                lightPdfOmega, EvaluateGlossyProposalPdf(context, wi));
+            geometryAndPdf = surfaceCosine * lightCosine * sampleMeasure /
+                             (distanceSquared * lightPdf);
+        }
         direct.DiffuseDemodulated = lightMaterial.Diffuse.rgb *
                                      bsdf.DiffuseDemodulated * geometryAndPdf;
         // Exact/near-delta reflection is handled by a direction sample in the renderer.
@@ -87,24 +144,25 @@ namespace Common
                any(direct.SpecularRadiance > float3(0, 0, 0));
     }
 
-    // ReSTIR target/shading payload: BSDF-aware diffuse only, excluding source PDF.
-    public bool EvaluateAreaLightDiffuseSample(uint lightIndex, float2 uv, FBSDFContext context,
-                                               out float3 f, out float3 lightPosition)
+    // ReSTIR target/shading payload: BSDF-aware diffuse only, excluding the full
+    // source PDF (discrete light probability divided by finite sample measure).
+    public bool EvaluateLightDiffuseSample(uint lightIndex, float2 uv, FBSDFContext context,
+                                           out float3 f, out float3 lightPosition)
     {
         f = float3(0, 0, 0);
         FDirectLighting direct;
-        if (!EvaluateAreaLightDirectSample(lightIndex, uv, context, direct, lightPosition))
+        if (!EvaluateLightDirectSample(lightIndex, uv, context, direct, lightPosition))
         {
             return false;
         }
         LightObject light = Bindless.GetGpuscene().Lights[lightIndex];
-        const float lightArea = light.normal_area.w;
+        const float sampleMeasure = GetLightSampleMeasure(light);
         const float lightPdf = asfloat(light.reserved2);
-        if (lightArea <= 0.0f || lightPdf <= 0.0f)
+        if (sampleMeasure <= 0.0f || lightPdf <= 0.0f)
         {
             return false;
         }
-        f = direct.DiffuseDemodulated * (lightPdf / lightArea);
+        f = direct.DiffuseDemodulated * (lightPdf / sampleMeasure);
         return any(f > float3(0, 0, 0));
     }
 
@@ -153,7 +211,7 @@ namespace Common
 
 public struct FHardwareDirectIlluminator : IDirectIlluminator
 {
-    // Set on the primary view when ReSTIR is active: the primary-surface area-light term is
+    // Set on the primary view when ReSTIR is active: the primary-surface light term is
     // then produced by reservoir resampling. Per-bounce DirectIlluminate keeps the classic
     // single-sample estimator so SHARC cache accounting is unchanged.
     public bool RestirPrimary;
@@ -192,8 +250,8 @@ public struct FHardwareDirectIlluminator : IDirectIlluminator
                                  directLighting);
     }
 
-    void AreaIlluminate(inout uint4 RandomSeed, FBSDFContext context, bool includeDiffuse,
-                        inout FDirectLighting directLighting)
+    void LightIlluminate(inout uint4 RandomSeed, FBSDFContext context, bool includeDiffuse,
+                         inout FDirectLighting directLighting)
     {
         GPUScene gpuScene = Bindless.GetGpuscene();
         UniformBufferObject Camera = gpuScene.Camera[0];
@@ -202,27 +260,28 @@ public struct FHardwareDirectIlluminator : IDirectIlluminator
             return;
         }
 
-        const uint lightIndex = Common.SelectAreaLight(RandomFloat(RandomSeed));
+        const uint lightIndex = Common.SelectLight(RandomFloat(RandomSeed));
         LightObject light = gpuScene.Lights[lightIndex];
         const float lightPdf = asfloat(light.reserved2);
-        const float lightArea = light.normal_area.w;
-        if (lightPdf <= 0.0f || lightArea <= 0.0f)
+        if (lightPdf <= 0.0f || Common.GetLightSampleMeasure(light) <= 0.0f)
         {
             return;
         }
 
-        const float2 uv = RandomFloat2(RandomSeed);
+        const float2 uv = Common.CanonicalizeLightUV(light, RandomFloat2(RandomSeed));
         FDirectLighting sampleDirect;
         float3 lightPosition;
-        if (!Common.EvaluateAreaLightDirectSample(lightIndex, uv, context, sampleDirect,
-                                                   lightPosition))
+        if (!Common.EvaluateLightDirectSample(lightIndex, uv, context, sampleDirect,
+                                               lightPosition))
         {
             return;
         }
 
         const float3 shadowOrigin =
             HWTracer.GetAreaLightShadowOrigin(context.Position, context.Normal, lightPosition, EPS2);
-        if (!HWTracer.TraceAreaLightSegment(shadowOrigin, lightPosition, EPS))
+        const float3 visibilityTarget =
+            Common.GetLightVisibilityTarget(lightIndex, shadowOrigin, lightPosition);
+        if (!HWTracer.TraceAreaLightSegment(shadowOrigin, visibilityTarget, EPS))
         {
             if (includeDiffuse)
             {
@@ -236,7 +295,7 @@ public struct FHardwareDirectIlluminator : IDirectIlluminator
                                  inout FDirectLighting directLighting)
     {
         SunIlluminate(RandomSeed, context, directLighting);
-        AreaIlluminate(RandomSeed, context, true, directLighting);
+        LightIlluminate(RandomSeed, context, true, directLighting);
     }
 
     public void DirectIlluminatePrimary(inout uint4 RandomSeed, int2 pixel, FBSDFContext context,
@@ -248,14 +307,14 @@ public struct FHardwareDirectIlluminator : IDirectIlluminator
         if (RestirPrimary && (context.MaterialModel == MaterialLambertian ||
                               context.MaterialModel == MaterialMixture))
         {
-            // ReSTIR replaces only diffuse area-light sampling. A non-delta Mixture still
+            // ReSTIR replaces only diffuse light sampling. A non-delta Mixture still
             // needs the light-sampled specular proposal paired with EvaluateGlossyDirect.
             if (context.MaterialModel == MaterialMixture &&
                 context.PerceptualRoughness > BSDF_DELTA_ROUGHNESS)
             {
-                AreaIlluminate(RandomSeed, context, false, directLighting);
+                LightIlluminate(RandomSeed, context, false, directLighting);
             }
-            // Gather only: the area-light contribution is produced by the ReSTIR spatial /
+            // Gather only: the light contribution is produced by the ReSTIR spatial /
             // shade pass (Core.RestirSpatialShade.comp.slang) and added to the diffuse
             // channel there, after this dispatch completes.
             RestirPrimaryGather(RandomSeed, pixel, context,
@@ -263,7 +322,7 @@ public struct FHardwareDirectIlluminator : IDirectIlluminator
         }
         else
         {
-            AreaIlluminate(RandomSeed, context, true, directLighting);
+            LightIlluminate(RandomSeed, context, true, directLighting);
         }
     }
 
@@ -405,7 +464,7 @@ public struct FShadowMapDirectIlluminator : IDirectIlluminator
     }
 }
 
-// SoftwareTracing direct lighting keeps the existing CSM sun while adding area-light NEE
+// SoftwareTracing direct lighting keeps the existing CSM sun while adding finite/delta-light NEE
 // through finite voxel-DDA visibility. It is intentionally separate from
 // FShadowMapDirectIlluminator so SoftwareModern keeps its current sun-only contract.
 public struct FSoftwareTracingDirectIlluminator : IDirectIlluminator
@@ -437,8 +496,8 @@ public struct FSoftwareTracingDirectIlluminator : IDirectIlluminator
                                  directLighting);
     }
 
-    void AreaIlluminate(inout uint4 randomSeed, FBSDFContext context, bool includeDiffuse,
-                        inout FDirectLighting directLighting)
+    void LightIlluminate(inout uint4 randomSeed, FBSDFContext context, bool includeDiffuse,
+                         inout FDirectLighting directLighting)
     {
         GPUScene gpuScene = Bindless.GetGpuscene();
         UniformBufferObject camera = gpuScene.Camera[0];
@@ -447,20 +506,19 @@ public struct FSoftwareTracingDirectIlluminator : IDirectIlluminator
             return;
         }
 
-        const uint lightIndex = Common.SelectAreaLight(RandomFloat(randomSeed));
+        const uint lightIndex = Common.SelectLight(RandomFloat(randomSeed));
         LightObject light = gpuScene.Lights[lightIndex];
         const float lightPdf = asfloat(light.reserved2);
-        const float lightArea = light.normal_area.w;
-        if (lightPdf <= 0.0f || lightArea <= 0.0f)
+        if (lightPdf <= 0.0f || Common.GetLightSampleMeasure(light) <= 0.0f)
         {
             return;
         }
 
-        const float2 uv = RandomFloat2(randomSeed);
+        const float2 uv = Common.CanonicalizeLightUV(light, RandomFloat2(randomSeed));
         FDirectLighting sampleDirect;
         float3 lightPosition;
-        if (!Common.EvaluateAreaLightDirectSample(lightIndex, uv, context, sampleDirect,
-                                                   lightPosition))
+        if (!Common.EvaluateLightDirectSample(lightIndex, uv, context, sampleDirect,
+                                               lightPosition))
         {
             return;
         }
@@ -468,7 +526,9 @@ public struct FSoftwareTracingDirectIlluminator : IDirectIlluminator
         const float3 shadowOrigin =
             SoftwareTracer.GetAreaLightShadowOrigin(context.Position, context.Normal,
                                                     lightPosition, EPS2);
-        if (!SoftwareTracer.TraceAreaLightSegment(shadowOrigin, lightPosition, EPS))
+        const float3 visibilityTarget =
+            Common.GetLightVisibilityTarget(lightIndex, shadowOrigin, lightPosition);
+        if (!SoftwareTracer.TraceAreaLightSegment(shadowOrigin, visibilityTarget, EPS))
         {
             if (includeDiffuse)
             {
@@ -482,7 +542,7 @@ public struct FSoftwareTracingDirectIlluminator : IDirectIlluminator
                                  inout FDirectLighting directLighting)
     {
         SunIlluminate(randomSeed, context, directLighting);
-        AreaIlluminate(randomSeed, context, true, directLighting);
+        LightIlluminate(randomSeed, context, true, directLighting);
     }
 
     public void DirectIlluminatePrimary(inout uint4 randomSeed, int2 pixel, FBSDFContext context,
@@ -495,14 +555,14 @@ public struct FSoftwareTracingDirectIlluminator : IDirectIlluminator
             if (context.MaterialModel == MaterialMixture &&
                 context.PerceptualRoughness > BSDF_DELTA_ROUGHNESS)
             {
-                AreaIlluminate(randomSeed, context, false, directLighting);
+                LightIlluminate(randomSeed, context, false, directLighting);
             }
             RestirPrimaryGather(randomSeed, pixel, context,
                                 PrimaryInstanceId, PrimaryMotionPixels, SoftwareTracer);
         }
         else
         {
-            AreaIlluminate(randomSeed, context, true, directLighting);
+            LightIlluminate(randomSeed, context, true, directLighting);
         }
     }
 
@@ -557,12 +617,37 @@ public struct FPathTracingRenderer{
         for (uint i = 0; i < Camera.LightCount; ++i)
         {
             LightObject light = gpuScene.Lights[i];
-            if (light.lightMatIdx != materialIndex)
+            if (light.lightType != LightTypeArea || light.lightMatIdx != materialIndex)
             {
                 continue;
             }
 
             if (IsPointOnAreaLight(position, light, EPS10))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool IsRegisteredLightHit(float3 position, uint materialIndex)
+    {
+        GPUScene gpuScene = Bindless.GetGpuscene();
+        UniformBufferObject camera = gpuScene.Camera[0];
+        for (uint i = 0; i < camera.LightCount; ++i)
+        {
+            LightObject light = gpuScene.Lights[i];
+            if (light.lightMatIdx != materialIndex)
+            {
+                continue;
+            }
+            if (light.lightType == LightTypeArea &&
+                IsPointOnAreaLight(position, light, EPS10))
+            {
+                return true;
+            }
+            if (light.lightType == LightTypePoint && light.p0.w > 0.0f &&
+                distance(position, light.p0.xyz) <= light.p0.w + EPS10)
             {
                 return true;
             }
@@ -579,7 +664,8 @@ public struct FPathTracingRenderer{
         for (uint i = 0; i < camera.LightCount; ++i)
         {
             LightObject light = gpuScene.Lights[i];
-            if (light.lightMatIdx != materialIndex ||
+            if (light.lightType != LightTypeArea ||
+                light.lightMatIdx != materialIndex ||
                 !IsPointOnAreaLight(position, light, EPS10))
             {
                 continue;
@@ -821,9 +907,9 @@ public struct FPathTracingRenderer{
                     ? suppressSpecularEmitter
                     : (suppressDiffuseEmitter && !dielectricTransmission);
                 if (coveredByDirectEstimator &&
-                    IsRegisteredAreaLightHit(inVertex.Position, inVertex.MaterialIndex))
+                    IsRegisteredLightHit(inVertex.Position, inVertex.MaterialIndex))
                 {
-                    // The same primary diffuse-light path is already represented by area-light NEE.
+                    // The same primary diffuse-light path is already represented by light NEE.
                     rayColor = float4(0, 0, 0, 0);
                     return true;
                 }
