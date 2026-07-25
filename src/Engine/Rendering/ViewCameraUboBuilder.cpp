@@ -62,7 +62,9 @@ namespace Vulkan
             const Assets::EnvironmentSetting& env = scene.GetEnvSettings();
             const bool hasSun = env.HasSun && env.SunIntensity > 0.0f;
             ubo.SunDirection = glm::vec4(env.SunDirection(), 0.0f);
-            ubo.SunColor = hasSun ? glm::vec4(1.0f, 1.0f, 1.0f, 0.0f) * env.SunIntensity : glm::vec4(0.0f);
+            ubo.SunColor =
+                hasSun ? glm::vec4(env.SunColor, 0.0f) * env.SunIntensity : glm::vec4(0.0f);
+            ubo.SkyColor = glm::vec4(env.SkyColor, 1.0f);
             ubo.HasSun = hasSun;
             ubo.SkyRotation = env.SkyRotation;
             ubo.SkyIntensity = env.SkyIntensity;

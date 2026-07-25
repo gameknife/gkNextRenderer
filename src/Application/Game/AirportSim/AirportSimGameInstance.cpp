@@ -307,6 +307,26 @@ bool AirportSimGameInstance::OnKey(SDL_Event& event)
     }
 }
 
+bool AirportSimGameInstance::SupportsAppDebugShortcut(SDL_Keycode key) const
+{
+    return key == SDLK_F5;
+}
+
+bool AirportSimGameInstance::IsAppDebugShortcutActive(SDL_Keycode key) const
+{
+    return key == SDLK_F5 && ui_.State().showPoiMarkers;
+}
+
+bool AirportSimGameInstance::SetAppDebugShortcutActive(SDL_Keycode key, bool active)
+{
+    if (key != SDLK_F5)
+    {
+        return false;
+    }
+    ui_.State().showPoiMarkers = active;
+    return true;
+}
+
 int AirportSimGameInstance::PickAgentAtScreen(const glm::vec2& screenPos) const
 {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();

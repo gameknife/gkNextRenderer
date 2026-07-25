@@ -42,6 +42,8 @@ namespace Assets
             SkyIdx = 0;
             SunIntensity = 500.f;
             SkyIntensity = 100.0f;
+            SunColor = glm::vec3(1.0f);
+            SkyColor = glm::vec3(1.0f);
             SkyRotation = 0;
             SunRotation = 0.5f;   
             SunElevation = std::atan(0.75f);
@@ -103,6 +105,8 @@ namespace Assets
         
         float SkyIntensity = 100.0f;
         float SunIntensity = 500.0f;
+        glm::vec3 SunColor{1.0f};
+        glm::vec3 SkyColor{1.0f};
 
         std::vector<Camera> cameras;
     };
@@ -152,9 +156,11 @@ namespace Assets
         AnimationChannel<float> SkyRotationChannel;
         AnimationChannel<float> SunIntensityChannel;
         AnimationChannel<float> SkyIntensityChannel;
+        AnimationChannel<glm::vec3> SunColorChannel;
+        AnimationChannel<glm::vec3> SkyColorChannel;
         
-        float Time_;
-        float Duration_;
+        float Time_ = 0.0f;
+        float Duration_ = 0.0f;
         float PlaySpeed_ = 1.0f;
 
         bool Playing_{};

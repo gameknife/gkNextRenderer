@@ -651,12 +651,22 @@ namespace
 
     tinygltf::Value SerializeEnvironmentExtras(const EnvironmentSetting& env)
     {
+        const auto serializeColor = [](const glm::vec3& color)
+        {
+            return tinygltf::Value(tinygltf::Value::Array{
+                tinygltf::Value(static_cast<double>(color.r)),
+                tinygltf::Value(static_cast<double>(color.g)),
+                tinygltf::Value(static_cast<double>(color.b)),
+            });
+        };
         tinygltf::Value::Object extras;
         extras["SkyIdx"] = tinygltf::Value(static_cast<int>(env.SkyIdx));
         extras["SkyIntensity"] = tinygltf::Value(static_cast<double>(env.SkyIntensity));
         extras["SkyRotation"] = tinygltf::Value(static_cast<double>(env.SkyRotation));
+        extras["SkyColor"] = serializeColor(env.SkyColor);
         extras["SunIntensity"] = tinygltf::Value(static_cast<double>(env.SunIntensity));
         extras["SunRotation"] = tinygltf::Value(static_cast<double>(env.SunRotation));
+        extras["SunColor"] = serializeColor(env.SunColor);
         extras["HasSky"] = tinygltf::Value(env.HasSky);
         extras["HasSun"] = tinygltf::Value(env.HasSun);
         extras["ControlSpeed"] = tinygltf::Value(static_cast<double>(env.ControlSpeed));

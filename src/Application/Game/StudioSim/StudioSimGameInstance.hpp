@@ -38,6 +38,9 @@ public:
     void OnSceneUnloaded() override;
 
     bool OverrideRenderCamera(Assets::Camera& outRenderCamera) const override;
+    bool SupportsAppDebugShortcut(SDL_Keycode key) const override;
+    bool IsAppDebugShortcutActive(SDL_Keycode key) const override;
+    bool SetAppDebugShortcutActive(SDL_Keycode key, bool active) override;
     bool OnKey(SDL_Event& event) override;
     bool OnMouseButton(SDL_Event& event) override;
     bool OnScroll(double xoffset, double yoffset) override;

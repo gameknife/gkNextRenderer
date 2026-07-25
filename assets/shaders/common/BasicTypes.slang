@@ -119,6 +119,7 @@ public struct ALIGN_16 UniformBufferObject
     public float4 ViewportRect;
     public float4 SunDirection;
     public float4 SunColor;
+    public float4 SkyColor;
 
     public float4x4 SunCascadeViewProjection[4];
     public float4 CascadeSplits;      // view-space positive distance at the far edge of each cascade

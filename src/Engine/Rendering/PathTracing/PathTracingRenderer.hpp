@@ -43,6 +43,7 @@ namespace Vulkan::PathTracing
             bool hasLastCameraPosition = false;
             glm::vec4 lastSunDirection = glm::vec4(0.0f);
             glm::vec4 lastSunColor = glm::vec4(0.0f);
+            glm::vec4 lastSkyColor = glm::vec4(0.0f);
             uint32_t lastSkyIdx = 0;
             float lastSkyIntensity = 0.0f;
             float lastSkyRotation = 0.0f;

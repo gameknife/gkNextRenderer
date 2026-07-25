@@ -196,7 +196,9 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.NumberOfBounces = config_.userSettings.NumberOfBounces;
     ubo.PrimaryRayJitter = enablePrimaryRayJitter;
     ubo.SunDirection = sunDirection;
-    ubo.SunColor = glm::vec4(1, 1, 1, 0) * scene_->GetEnvSettings().SunIntensity;
+    ubo.SunColor = glm::vec4(scene_->GetEnvSettings().SunColor, 0.0f) *
+        scene_->GetEnvSettings().SunIntensity;
+    ubo.SkyColor = glm::vec4(scene_->GetEnvSettings().SkyColor, 1.0f);
     ubo.SkyIntensity = scene_->GetEnvSettings().SkyIntensity;
     ubo.SkyIdx = scene_->GetEnvSettings().SkyIdx;
     ubo.HasSky = scene_->GetEnvSettings().HasSky;

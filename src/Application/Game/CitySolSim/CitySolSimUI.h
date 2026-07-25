@@ -16,6 +16,7 @@ namespace CitySolSim
             int followVehicleId = -1;
             int followCitizenId = -1;
             bool showCitizenLabels = true;
+            bool showPoiMarkers = false;
             bool showHelp = true;
         };
 

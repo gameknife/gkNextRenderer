@@ -445,7 +445,7 @@ StudioSimGameInstance::StudioSimGameInstance(Vulkan::WindowConfig& config, Runti
                                              NextEngine* engine)
     : NextGameInstanceBase(config, options, engine)
 {
-    ConfigureWindow(config, options, "StudioSim", 1280, 720, false);
+    ConfigureWindow(config, options, "StudioSim", 1920, 1080, false);
 }
 
 void StudioSimGameInstance::OnInit()
@@ -1030,7 +1030,7 @@ bool StudioSimGameInstance::OnRenderUI()
     };
     ui_.DrawModals(modalContext);
 
-    if (sceneReady_ && ui_.ShowOverlay())
+    if (sceneReady_ && (ui_.ShowOverlay() || ui_.ShowPoiDebug()))
     {
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
         const float aspect = viewport != nullptr && viewport->Size.y > 1.0f
@@ -1085,6 +1085,26 @@ bool StudioSimGameInstance::OnKey(SDL_Event& event)
         return true;
     }
     return false;
+}
+
+bool StudioSimGameInstance::SupportsAppDebugShortcut(SDL_Keycode key) const
+{
+    return key == SDLK_F5;
+}
+
+bool StudioSimGameInstance::IsAppDebugShortcutActive(SDL_Keycode key) const
+{
+    return key == SDLK_F5 && ui_.ShowPoiDebug();
+}
+
+bool StudioSimGameInstance::SetAppDebugShortcutActive(SDL_Keycode key, bool active)
+{
+    if (key != SDLK_F5)
+    {
+        return false;
+    }
+    ui_.ShowPoiDebugMutable() = active;
+    return true;
 }
 
 bool StudioSimGameInstance::OnMouseButton(SDL_Event& event)

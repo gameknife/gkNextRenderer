@@ -1,5 +1,6 @@
 #include "StudioSimUI.h"
 #include "StudioSimLabels.hpp"
+#include "Gameplay/Sim/AnchorDebugOverlay.h"
 
 #include <fmt/format.h>
 #include <imgui.h>
@@ -36,7 +37,7 @@ namespace StudioSim
         float ModalWidth(float minWidth, float maxWidth)
         {
             const ImGuiViewport* viewport = ImGui::GetMainViewport();
-            const float viewportWidth = viewport != nullptr ? viewport->WorkSize.x : 1280.0f;
+            const float viewportWidth = viewport != nullptr ? viewport->WorkSize.x : 1920.0f;
             const float viewportLimit = std::max(360.0f, viewportWidth - 64.0f);
             const float maxAllowed = std::min(maxWidth, viewportLimit);
             const float minAllowed = std::min(minWidth, maxAllowed);
@@ -46,7 +47,7 @@ namespace StudioSim
         void PrepareModal(float minWidth, float maxWidth)
         {
             const ImGuiViewport* viewport = ImGui::GetMainViewport();
-            const float viewportHeight = viewport != nullptr ? viewport->WorkSize.y : 720.0f;
+            const float viewportHeight = viewport != nullptr ? viewport->WorkSize.y : 1080.0f;
             const float width = ModalWidth(minWidth, maxWidth);
             const float maxHeight = std::max(260.0f, viewportHeight * 0.82f);
             ImGui::SetNextWindowSizeConstraints(ImVec2(width, 0.0f), ImVec2(width, maxHeight));
@@ -102,15 +103,6 @@ namespace StudioSim
                 return static_cast<int>(std::clamp(value, 0.0f, 1.0f) * 255.0f);
             };
             return IM_COL32(channel(color.r), channel(color.g), channel(color.b), channel(color.a));
-        }
-
-        ImU32 CategoryColor(const std::string& category)
-        {
-            if (category == "desk") return IM_COL32(230, 150, 60, 255);
-            if (category == "meet") return IM_COL32(70, 140, 230, 255);
-            if (category == "pantry") return IM_COL32(220, 200, 80, 255);
-            if (category == "lounge") return IM_COL32(190, 120, 210, 255);
-            return IM_COL32(200, 200, 200, 255);
         }
 
         bool ProjectWorld(const glm::mat4& viewProjection, const ImVec2& viewportPosition,
@@ -504,7 +496,7 @@ namespace StudioSim
                                   const EmployeeSystem& employeeSystem,
                                   const FWorldState& worldState) const
     {
-        if (!showOverlay_)
+        if (!showOverlay_ && !showPoiDebug_)
         {
             return;
         }
@@ -514,54 +506,52 @@ namespace StudioSim
         const ImVec2 viewportSize = viewport->Size;
         ImDrawList* drawList = ImGui::GetBackgroundDrawList();
         ImVec2 screen;
-        for (const FPointOfInterest& point : officeMap.Points())
+        if (showPoiDebug_)
         {
-            if (ProjectWorld(viewProjection, viewportPosition, viewportSize,
-                             point.worldPos + glm::vec3(0.0f, 0.9f, 0.0f), screen))
-            {
-                const ImU32 color = CategoryColor(point.category);
-                drawList->AddCircleFilled(screen, 4.0f, color);
-                drawList->AddText(ImVec2(screen.x + 6.0f, screen.y - 6.0f), color, point.name.c_str());
-            }
+            NextGameplay::Sim::DrawAnchorDebugOverlay(viewProjection, officeMap.Points());
         }
 
-        for (const FEmployee& employee : employeeSystem.Employees())
+        if (showOverlay_)
         {
-            if (!ProjectWorld(viewProjection, viewportPosition, viewportSize,
-                              employee.position + glm::vec3(0.0f, 2.0f, 0.0f), screen))
+            for (const FEmployee& employee : employeeSystem.Employees())
             {
-                continue;
-            }
+                if (!ProjectWorld(viewProjection, viewportPosition, viewportSize,
+                                  employee.position + glm::vec3(0.0f, 2.0f, 0.0f), screen))
+                {
+                    continue;
+                }
 
-            const ImU32 color = ColorToImU32(employee.color);
-            drawList->AddText(ImVec2(screen.x - 12.0f, screen.y - 8.0f), color, employee.displayName.c_str());
-            const char* bubble = employee.decisionPending ? "..." : employee.bubbleText.c_str();
-            if (bubble == nullptr || bubble[0] == '\0')
-            {
-                continue;
-            }
+                const ImU32 color = ColorToImU32(employee.color);
+                drawList->AddText(ImVec2(screen.x - 12.0f, screen.y - 8.0f), color,
+                                  employee.displayName.c_str());
+                const char* bubble = employee.decisionPending ? "..." : employee.bubbleText.c_str();
+                if (bubble == nullptr || bubble[0] == '\0')
+                {
+                    continue;
+                }
 
-            constexpr float bubbleMaxWidth = 240.0f;
-            const ImVec2 padding(8.0f, 5.0f);
-            const ImVec2 textSize = ImGui::CalcTextSize(bubble, nullptr, false, bubbleMaxWidth);
-            const ImVec2 textPosition(screen.x - textSize.x * 0.5f, screen.y + 8.0f);
-            const ImVec2 bubbleMin(textPosition.x - padding.x, textPosition.y - padding.y);
-            const ImVec2 bubbleMax(textPosition.x + textSize.x + padding.x,
-                                   textPosition.y + textSize.y + padding.y);
-            float alphaScale = 1.0f;
-            if (employee.bubbleClearAt > worldState.gameClockMinutes)
-            {
-                const double remaining = employee.bubbleClearAt - worldState.gameClockMinutes;
-                alphaScale = static_cast<float>(std::clamp(remaining / kBubbleFadeMinutes, 0.0, 1.0));
+                constexpr float bubbleMaxWidth = 240.0f;
+                const ImVec2 padding(8.0f, 5.0f);
+                const ImVec2 textSize = ImGui::CalcTextSize(bubble, nullptr, false, bubbleMaxWidth);
+                const ImVec2 textPosition(screen.x - textSize.x * 0.5f, screen.y + 8.0f);
+                const ImVec2 bubbleMin(textPosition.x - padding.x, textPosition.y - padding.y);
+                const ImVec2 bubbleMax(textPosition.x + textSize.x + padding.x,
+                                       textPosition.y + textSize.y + padding.y);
+                float alphaScale = 1.0f;
+                if (employee.bubbleClearAt > worldState.gameClockMinutes)
+                {
+                    const double remaining = employee.bubbleClearAt - worldState.gameClockMinutes;
+                    alphaScale = static_cast<float>(std::clamp(remaining / kBubbleFadeMinutes, 0.0, 1.0));
+                }
+                const auto alpha = [alphaScale](int value)
+                {
+                    return static_cast<int>(static_cast<float>(value) * alphaScale);
+                };
+                drawList->AddRectFilled(bubbleMin, bubbleMax, IM_COL32(20, 24, 28, alpha(220)), 6.0f);
+                drawList->AddRect(bubbleMin, bubbleMax, IM_COL32(255, 255, 255, alpha(70)), 6.0f);
+                drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), textPosition,
+                                  IM_COL32(255, 255, 255, alpha(245)), bubble, nullptr, bubbleMaxWidth);
             }
-            const auto alpha = [alphaScale](int value)
-            {
-                return static_cast<int>(static_cast<float>(value) * alphaScale);
-            };
-            drawList->AddRectFilled(bubbleMin, bubbleMax, IM_COL32(20, 24, 28, alpha(220)), 6.0f);
-            drawList->AddRect(bubbleMin, bubbleMax, IM_COL32(255, 255, 255, alpha(70)), 6.0f);
-            drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), textPosition,
-                              IM_COL32(255, 255, 255, alpha(245)), bubble, nullptr, bubbleMaxWidth);
         }
 
         for (const FFloatingTextParticle& particle : floatingText_)
@@ -797,7 +787,8 @@ namespace StudioSim
         }
 
         ImGui::Separator();
-        ImGui::Checkbox("Show overlay", &showOverlay_);
+        ImGui::Checkbox("显示角色浮层", &showOverlay_);
+        ImGui::Checkbox("调试 POI 点位 (F5)", &showPoiDebug_);
         ImGui::TextDisabled("nodes %zu  POIs %zu  employees %zu", context.sceneNodeCount,
                             context.officeMap.Count(), context.employeeSystem.Count());
         ImGui::End();

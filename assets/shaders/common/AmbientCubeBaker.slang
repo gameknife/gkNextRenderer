@@ -132,7 +132,8 @@ public struct FGpuProbeGenerator : IProbeGenerator
             }
             else
             {
-                skyEmissiveDirect += Common.SampleIBLRough(Camera.SkyIdx, rayDir, Camera.SkyRotation) * (Camera.HasSky ? Camera.SkyIntensity : 0.0f);
+                skyEmissiveDirect += Common.SampleIBLRough(Camera.SkyIdx, rayDir, Camera.SkyRotation) *
+                    Camera.SkyColor * (Camera.HasSky ? Camera.SkyIntensity : 0.0f);
                 skyVisibility += 1.0f;
             }
         }

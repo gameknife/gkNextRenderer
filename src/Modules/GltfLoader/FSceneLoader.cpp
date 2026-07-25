@@ -204,6 +204,24 @@ namespace Assets
         return fallback;
     }
 
+    glm::vec3 ReadColorExtra(const tinygltf::Value& extras, const char* key, const glm::vec3& fallback)
+    {
+        if (!extras.Has(key) || !extras.Get(key).IsArray())
+        {
+            return fallback;
+        }
+        const auto& values = extras.Get(key).Get<tinygltf::Value::Array>();
+        if (values.size() < 3 || !values[0].IsNumber() || !values[1].IsNumber() || !values[2].IsNumber())
+        {
+            return fallback;
+        }
+        return {
+            static_cast<float>(values[0].GetNumberAsDouble()),
+            static_cast<float>(values[1].GetNumberAsDouble()),
+            static_cast<float>(values[2].GetNumberAsDouble()),
+        };
+    }
+
     void ReadEnvironmentExtras(const tinygltf::Value& extras, Assets::EnvironmentSetting& environment)
     {
         if (extras.Has("SkyIdx") && extras.Get("SkyIdx").IsNumber())
@@ -221,6 +239,7 @@ namespace Assets
             environment.HasSky = true;
             environment.SkyRotation = static_cast<float>(extras.Get("SkyRotation").GetNumberAsDouble());
         }
+        environment.SkyColor = ReadColorExtra(extras, "SkyColor", environment.SkyColor);
         if (extras.Has("SunIntensity") && extras.Get("SunIntensity").IsNumber())
         {
             environment.HasSun = true;
@@ -230,6 +249,7 @@ namespace Assets
         {
             environment.SunRotation = static_cast<float>(extras.Get("SunRotation").GetNumberAsDouble());
         }
+        environment.SunColor = ReadColorExtra(extras, "SunColor", environment.SunColor);
         if (extras.Has("CamSpeed") && extras.Get("CamSpeed").IsNumber())
         {
             environment.ControlSpeed = static_cast<float>(extras.Get("CamSpeed").GetNumberAsDouble());

@@ -1482,6 +1482,8 @@ namespace
         cameraInit.HasSun = true;
         cameraInit.SkyIntensity = 35.0f;
         cameraInit.SunIntensity = 140.0f;
+        cameraInit.SunColor = vec3(1.00f, 0.48f, 0.18f);
+        cameraInit.SkyColor = vec3(1.00f, 0.53f, 0.40f);
         cameraInit.SunRotation = -0.5f;
         cameraInit.SunElevation = glm::radians(6.0f);
 
@@ -1580,6 +1582,29 @@ namespace
             timeOfDay.SunIntensityChannel.Keys.push_back({times[index], sunIntensity[index]});
             timeOfDay.SkyIntensityChannel.Keys.push_back({times[index], skyIntensity[index]});
         }
+        timeOfDay.SunColorChannel.Keys = {
+            {0.0f, vec3(1.00f, 0.48f, 0.18f)},
+            {8.0f, vec3(1.00f, 0.86f, 0.68f)},
+            {30.0f, vec3(1.00f, 0.97f, 0.91f)},
+            {52.0f, vec3(1.00f, 0.88f, 0.68f)},
+            {60.0f, vec3(1.00f, 0.30f, 0.07f)},
+            {68.0f, vec3(1.00f, 0.22f, 0.05f)},
+            {112.0f, vec3(1.00f, 0.25f, 0.06f)},
+            {120.0f, vec3(1.00f, 0.48f, 0.18f)},
+        };
+        timeOfDay.SkyColorChannel.Keys = {
+            {0.0f, vec3(1.00f, 0.53f, 0.40f)},
+            {8.0f, vec3(1.00f, 0.84f, 0.72f)},
+            {30.0f, vec3(1.00f, 0.98f, 0.96f)},
+            {52.0f, vec3(1.00f, 0.96f, 0.90f)},
+            {60.0f, vec3(1.00f, 0.67f, 0.40f)},
+            {68.0f, vec3(0.76f, 0.38f, 0.52f)},
+            {78.0f, vec3(0.39f, 0.25f, 0.64f)},
+            {90.0f, vec3(0.34f, 0.22f, 0.62f)},
+            {108.0f, vec3(0.28f, 0.19f, 0.55f)},
+            {114.0f, vec3(0.55f, 0.30f, 0.62f)},
+            {120.0f, vec3(1.00f, 0.53f, 0.40f)},
+        };
         tracks.push_back(std::move(timeOfDay));
     }
 

@@ -96,11 +96,21 @@ TEST_CASE("Animation track samples environment channels", "[Unit][Environment][A
 {
     Assets::EnvironmentSetting environment;
     Assets::AnimationTrack track;
+    CHECK(track.Time_ == 0.0f);
+    CHECK(track.Duration_ == 0.0f);
     track.Target_ = Assets::AnimationTrack::Target::Environment;
     track.SunRotationChannel.Keys = {{0.0f, -0.5f}, {10.0f, 0.5f}};
     track.SunElevationChannel.Keys = {{0.0f, 0.0f}, {10.0f, glm::half_pi<float>()}};
     track.SunIntensityChannel.Keys = {{0.0f, 0.0f}, {10.0f, 1000.0f}};
     track.SkyIntensityChannel.Keys = {{0.0f, 4.0f}, {10.0f, 84.0f}};
+    track.SunColorChannel.Keys = {
+        {0.0f, glm::vec3(1.0f, 0.2f, 0.1f)},
+        {10.0f, glm::vec3(1.0f, 1.0f, 0.9f)},
+    };
+    track.SkyColorChannel.Keys = {
+        {0.0f, glm::vec3(0.3f, 0.2f, 0.6f)},
+        {10.0f, glm::vec3(1.0f, 0.9f, 0.8f)},
+    };
 
     track.Sample(5.0f, environment);
 
@@ -108,4 +118,10 @@ TEST_CASE("Animation track samples environment channels", "[Unit][Environment][A
     CHECK(environment.SunElevation == Catch::Approx(glm::quarter_pi<float>()));
     CHECK(environment.SunIntensity == Catch::Approx(500.0f));
     CHECK(environment.SkyIntensity == Catch::Approx(44.0f));
+    CHECK(environment.SunColor.r == Catch::Approx(1.0f));
+    CHECK(environment.SunColor.g == Catch::Approx(0.6f));
+    CHECK(environment.SunColor.b == Catch::Approx(0.5f));
+    CHECK(environment.SkyColor.r == Catch::Approx(0.65f));
+    CHECK(environment.SkyColor.g == Catch::Approx(0.55f));
+    CHECK(environment.SkyColor.b == Catch::Approx(0.7f));
 }

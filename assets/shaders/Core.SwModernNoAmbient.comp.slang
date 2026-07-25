@@ -73,7 +73,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     if (vBuffer.x == 0)
     {
         float4 skyColor = Camera.HasSky
-            ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir, Camera.SkyRotation, 0) * Camera.SkyIntensity
+            ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir, Camera.SkyRotation, 0) *
+                Camera.SkyColor * Camera.SkyIntensity
             : float4(0, 0, 0, 1);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, float4(0));
@@ -185,11 +186,12 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
             if (Camera.HasSky)
             {
-                float3 irr = Common.SampleIBLDiffuse(Camera.SkyIdx, N, Camera.SkyRotation).rgb * Camera.SkyIntensity;
+                float3 irr = Common.SampleIBLDiffuse(Camera.SkyIdx, N, Camera.SkyRotation).rgb *
+                    Camera.SkyColor.rgb * Camera.SkyIntensity;
                 ambient = kD * albedo * irr;
 
                 float3 skySpecular = Common.SampleIBL(Camera.SkyIdx, R, Camera.SkyRotation, roughness).rgb *
-                    Camera.SkyIntensity;
+                    Camera.SkyColor.rgb * Camera.SkyIntensity;
                 specularColor.rgb += skySpecular * kS;
             }
             ambientColor = float4(ambient, 1.0f);

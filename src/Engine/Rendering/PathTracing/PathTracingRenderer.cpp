@@ -168,6 +168,7 @@ namespace Vulkan::PathTracing
              currentUbo.SkyIdx != sharc_.lastSkyIdx ||
              currentUbo.SunDirection != sharc_.lastSunDirection ||
              currentUbo.SunColor != sharc_.lastSunColor ||
+             currentUbo.SkyColor != sharc_.lastSkyColor ||
              currentUbo.SkyIntensity != sharc_.lastSkyIntensity ||
              currentUbo.SkyRotation != sharc_.lastSkyRotation);
         if (frameCounterReset || lightingChanged)
@@ -198,6 +199,7 @@ namespace Vulkan::PathTracing
         sharc_.hasLastCameraPosition = true;
         sharc_.lastSunDirection = currentUbo.SunDirection;
         sharc_.lastSunColor = currentUbo.SunColor;
+        sharc_.lastSkyColor = currentUbo.SkyColor;
         sharc_.lastSkyIdx = currentUbo.SkyIdx;
         sharc_.lastSkyIntensity = currentUbo.SkyIntensity;
         sharc_.lastSkyRotation = currentUbo.SkyRotation;

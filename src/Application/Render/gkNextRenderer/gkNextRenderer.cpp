@@ -1393,6 +1393,7 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
             ImGui::SliderInt(LOCTEXT("SkyIdx"), &GetEngine().GetScene().GetEnvSettings().SkyIdx, 0, 10);
             ImGui::SliderFloat(LOCTEXT("SkyRotation"), &GetEngine().GetScene().GetEnvSettings().SkyRotation, 0.0f, 2.0f, "%.2f");
             ImGui::SliderFloat(LOCTEXT("SkyLum"), &GetEngine().GetScene().GetEnvSettings().SkyIntensity, 0.0f, 1000.0f, "%.0f");
+            ImGui::ColorEdit3(LOCTEXT("SkyColor"), &GetEngine().GetScene().GetEnvSettings().SkyColor.x);
         }
 
         DrawSettingCheckboxRow(LOCTEXT("HasSun"), &GetEngine().GetScene().GetEnvSettings().HasSun);
@@ -1400,6 +1401,7 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
         {
             ImGui::SliderFloat(LOCTEXT("SunRotation"), &GetEngine().GetScene().GetEnvSettings().SunRotation, 0.0f, 2.0f, "%.2f");
             ImGui::SliderFloat(LOCTEXT("SunLum"), &GetEngine().GetScene().GetEnvSettings().SunIntensity, 0.0f, 2000.0f, "%.0f");
+            ImGui::ColorEdit3(LOCTEXT("SunColor"), &GetEngine().GetScene().GetEnvSettings().SunColor.x);
         }
 
         ImGui::SliderFloat(LOCTEXT("PaperWhitNit"), &userSetting.PaperWhiteNit, 100.0f, 1600.0f, "%.1f");

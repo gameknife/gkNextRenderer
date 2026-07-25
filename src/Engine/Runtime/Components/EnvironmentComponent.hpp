@@ -50,7 +50,13 @@ namespace Runtime
         void SetSkyIntensity(float value) { SkyIntensity = value; }
         float GetSkyIntensity() const { return SkyIntensity; }
 
+        void SetSkyColor(const glm::vec3& value) { SkyColor = value; }
+        const glm::vec3& GetSkyColor() const { return SkyColor; }
+
         void SetSunIntensity(float value) { SunIntensity = value; }
         float GetSunIntensity() const { return SunIntensity; }
+
+        void SetSunColor(const glm::vec3& value) { SunColor = value; }
+        const glm::vec3& GetSunColor() const { return SunColor; }
     };
 }

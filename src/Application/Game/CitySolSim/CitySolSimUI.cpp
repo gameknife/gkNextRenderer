@@ -4,10 +4,12 @@
 #include "CitySolSimConfig.hpp"
 #include "CityTimeSystem.h"
 #include "TrafficSystem.h"
+#include "Gameplay/Sim/AnchorDebugOverlay.h"
 
 #include <algorithm>
 #include <cmath>
 #include <iterator>
+#include <vector>
 
 #include <imgui.h>
 
@@ -37,6 +39,29 @@ namespace CitySolSim
             };
             return true;
         }
+
+        const std::vector<NextGameplay::Sim::FAnchorDebugPoint>& CityDebugPoints()
+        {
+            static const std::vector<NextGameplay::Sim::FAnchorDebugPoint> points = []
+            {
+                std::vector<NextGameplay::Sim::FAnchorDebugPoint> result;
+                result.reserve(Config::kHomes.size() + Config::kWorkplaces.size() + Config::kLeisure.size());
+                for (const Config::FZone& zone : Config::kHomes)
+                {
+                    result.push_back({zone.label, "home", zone.position});
+                }
+                for (const Config::FZone& zone : Config::kWorkplaces)
+                {
+                    result.push_back({zone.label, "workplace", zone.position});
+                }
+                for (const Config::FZone& zone : Config::kLeisure)
+                {
+                    result.push_back({zone.label, "leisure", zone.position});
+                }
+                return result;
+            }();
+            return points;
+        }
     }
 
     void CitySolSimUI::Draw(const glm::mat4& viewProjection, const glm::vec3& cameraEye,
@@ -45,6 +70,12 @@ namespace CitySolSim
     {
         DrawHud(time, traffic, citizens);
         DrawSelection(traffic, citizens);
+        if (state_.showPoiMarkers)
+        {
+            NextGameplay::Sim::FAnchorDebugDrawConfig config;
+            config.labelHeight = 3.0f;
+            NextGameplay::Sim::DrawAnchorDebugOverlay(viewProjection, CityDebugPoints(), config);
+        }
         if (state_.showCitizenLabels)
         {
             DrawWorldLabels(viewProjection, cameraEye, citizens);
@@ -128,6 +159,8 @@ namespace CitySolSim
         ImGui::SameLine();
         ImGui::Checkbox("市民名牌", &state_.showCitizenLabels);
 
+        ImGui::Checkbox("调试城市点位 (F5)", &state_.showPoiMarkers);
+        ImGui::SameLine();
         ImGui::Checkbox("操作提示", &state_.showHelp);
         if (state_.showHelp)
         {

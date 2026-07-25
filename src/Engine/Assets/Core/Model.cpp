@@ -232,6 +232,14 @@ namespace Assets
         {
             environment.SkyIntensity = SkyIntensityChannel.Sample(time);
         }
+        if (!SunColorChannel.Keys.empty())
+        {
+            environment.SunColor = SunColorChannel.Sample(time);
+        }
+        if (!SkyColorChannel.Keys.empty())
+        {
+            environment.SkyColor = SkyColorChannel.Sample(time);
+        }
     }
 
     void Model::FreeMemory()

@@ -16,7 +16,7 @@ float4 AmbientCubeClearSky()
     sky += Common.SampleIBLRough(camera.SkyIdx, float3(0.0f, -1.0f, 0.0f), camera.SkyRotation);
     sky += Common.SampleIBLRough(camera.SkyIdx, float3(1.0f, 0.0f, 0.0f), camera.SkyRotation);
     sky += Common.SampleIBLRough(camera.SkyIdx, float3(-1.0f, 0.0f, 0.0f), camera.SkyRotation);
-    return sky * (camera.SkyIntensity / 6.0f);
+    return sky * camera.SkyColor * (camera.SkyIntensity / 6.0f);
 }
 
 [shader("compute")]

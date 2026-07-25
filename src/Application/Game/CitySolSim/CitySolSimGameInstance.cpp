@@ -305,6 +305,26 @@ bool CitySolSimGameInstance::OnKey(SDL_Event& event)
     }
 }
 
+bool CitySolSimGameInstance::SupportsAppDebugShortcut(SDL_Keycode key) const
+{
+    return key == SDLK_F5;
+}
+
+bool CitySolSimGameInstance::IsAppDebugShortcutActive(SDL_Keycode key) const
+{
+    return key == SDLK_F5 && ui_.State().showPoiMarkers;
+}
+
+bool CitySolSimGameInstance::SetAppDebugShortcutActive(SDL_Keycode key, bool active)
+{
+    if (key != SDLK_F5)
+    {
+        return false;
+    }
+    ui_.State().showPoiMarkers = active;
+    return true;
+}
+
 bool CitySolSimGameInstance::PickAtScreen(const glm::vec2& screenPosition)
 {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -379,6 +399,7 @@ void CitySolSimGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 void CitySolSimGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegistry& reg)
 {
     reg.Add("city.hour", [this]() { return time_.DayMinutes() / 60.0; });
+    reg.Add("city.dayIndex", [this]() { return static_cast<int64_t>(time_.DayIndex()); });
     reg.Add("city.isNight", [this]() { return time_.IsNight(); });
     reg.Add("city.vehicleCount", [this]() {
         return static_cast<int64_t>(traffic_.Vehicles().size());
