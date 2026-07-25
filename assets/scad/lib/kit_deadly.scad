@@ -475,12 +475,9 @@ module dd_prop_bench()
 // 警示路障（橙白条纹横杆 + A 字腿）
 module dd_prop_barricade()
 {
-    for (sx = [-1, 1])
-        color(dd_METALD()) translate([sx * 1.0, 0, 0])
-        {
-            rotate([18, 0, 0]) translate([0, 0, 0.45]) dd_boxc([0.08, 0.06, 0.9]);
-            rotate([-18, 0, 0]) translate([0, 0, 0.45]) dd_boxc([0.08, 0.06, 0.9]);
-        }
+    // A 字腿：顶端并拢、脚下叉开（X 角与 y 偏移同号）
+    for (sx = [-1, 1], sy = [-1, 1])
+        color(dd_METALD()) translate([sx * 1.0, sy * 0.139, 0.428]) rotate([sy * 18, 0, 0]) dd_boxc([0.08, 0.06, 0.9]);
     color(dd_CONEO()) translate([0, 0, 0.78]) dd_boxc([2.4, 0.1, 0.3]);
     color(dd_MARKW()) for (i = [0 : 2])
         translate([-0.75 + i * 0.75, -0.055, 0.78]) dd_boxc([0.28, 0.01, 0.3]);

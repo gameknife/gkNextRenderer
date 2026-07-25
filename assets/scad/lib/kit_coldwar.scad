@@ -534,18 +534,22 @@ module cw_bldg_gas_canopy(seed = 0)
     }
 }
 
-// 军用瞭望塔：四腿 + 平台 + 舱室环窗 + 攒尖顶 + 爬梯
+// 军用瞭望塔：四内倾腿 + 平台 + 舱室环窗 + 攒尖顶 + 爬梯
 module cw_bldg_guard_tower(seed = 0)
 {
     ph = 4.2;
+    tl = 4;      // 腿倾角：顶端内收
+    r0 = 1.0;    // 腿在杆件中点高度的半间距
+    // 顶端内收 = rotate 的 X 角与 y 偏移同号、Y 角与 x 偏移反号
     color(cw_WOODD()) for (sx = [-1, 1], sy = [-1, 1])
-        translate([sx * 1.0, sy * 1.0, ph / 2]) rotate([sy * -4, sx * 4, 0]) cw_boxc([0.18, 0.18, ph + 0.4]);
+        translate([sx * r0, sy * r0, ph / 2]) rotate([sy * tl, sx * -tl, 0]) cw_boxc([0.18, 0.18, ph + 0.4]);
     color(cw_WOODD()) for (z = [1.4, 2.8])
     {
-        translate([0, -1.05, z]) cw_boxc([2.3, 0.08, 0.12]);
-        translate([0, 1.05, z]) cw_boxc([2.3, 0.08, 0.12]);
-        translate([-1.05, 0, z]) cw_boxc([0.08, 2.3, 0.12]);
-        translate([1.05, 0, z]) cw_boxc([0.08, 2.3, 0.12]);
+        rz = r0 + (ph / 2 - z) * tan(tl) + 0.05;   // 横撑跟随腿的收分
+        translate([0, -rz, z]) cw_boxc([rz * 2 + 0.2, 0.08, 0.12]);
+        translate([0, rz, z]) cw_boxc([rz * 2 + 0.2, 0.08, 0.12]);
+        translate([-rz, 0, z]) cw_boxc([0.08, rz * 2 + 0.2, 0.12]);
+        translate([rz, 0, z]) cw_boxc([0.08, rz * 2 + 0.2, 0.12]);
     }
     color(cw_WOODC()) translate([0, 0, ph]) cw_slab(2.9, 2.9, 0.14);
     color(cw_OLIVED()) translate([0, 0, ph + 0.14]) cw_slab(2.6, 2.6, 1.0);
@@ -707,22 +711,27 @@ module cw_bldg_checkpoint(seed = 0)
     color(cw_DARKC()) translate([0, -1.13, 1.3]) cw_boxc([0.8, 0.06, 1.9]);
 }
 
-// 水塔：四腿桁架 + 柱身筒 + 锥顶罐
+// 水塔：四内倾腿桁架 + 柱身筒 + 锥顶罐
 module cw_bldg_water_tower(seed = 0)
 {
     lh = 6.5;
+    tl = 6;      // 腿倾角：顶端内收
+    r0 = 1.2;    // 腿在杆件中点高度的半间距
+    // 顶端内收 = rotate 的 X 角与 y 偏移同号、Y 角与 x 偏移反号
     color(cw_RUSTC()) for (sx = [-1, 1], sy = [-1, 1])
-        translate([sx * 1.2, sy * 1.2, lh / 2]) rotate([sy * -6, sx * 6, 0]) cw_boxc([0.2, 0.2, lh + 0.5]);
+        translate([sx * r0, sy * r0, lh / 2]) rotate([sy * tl, sx * -tl, 0]) cw_boxc([0.2, 0.2, lh + 0.5]);
     color(cw_METALD()) for (z = [2.0, 4.2])
     {
-        translate([0, -1.32, z]) cw_boxc([2.8, 0.08, 0.12]);
-        translate([0, 1.32, z]) cw_boxc([2.8, 0.08, 0.12]);
-        translate([-1.32, 0, z]) cw_boxc([0.08, 2.8, 0.12]);
-        translate([1.32, 0, z]) cw_boxc([0.08, 2.8, 0.12]);
+        rz = r0 + (lh / 2 - z) * tan(tl) + 0.12;   // 横撑跟随腿的收分
+        translate([0, -rz, z]) cw_boxc([rz * 2 + 0.16, 0.08, 0.12]);
+        translate([0, rz, z]) cw_boxc([rz * 2 + 0.16, 0.08, 0.12]);
+        translate([-rz, 0, z]) cw_boxc([0.08, rz * 2 + 0.16, 0.12]);
+        translate([rz, 0, z]) cw_boxc([0.08, rz * 2 + 0.16, 0.12]);
     }
     color(cw_rnd(seed, 2) == 0 ? [0.34, 0.38, 0.34] : cw_RUSTC()) translate([0, 0, lh]) cylinder(h = 2.8, r = 1.9, $fn = 9);
     color(cw_METALD()) translate([0, 0, lh + 2.8]) cylinder(h = 1.0, r1 = 2.0, r2 = 0.2, $fn = 9);
-    color(cw_METALD()) translate([0.9, 0.9, lh / 2]) rotate([0, 12, 45]) cw_boxc([0.06, 0.06, lh]);
+    // 角部斜撑：与腿同向内倾
+    color(cw_METALD()) translate([0.9, 0.9, lh / 2]) rotate([0, -12, 45]) cw_boxc([0.06, 0.06, lh]);
 }
 
 // 乡村小教堂：白墙 + 坡顶 + 鼓座洋葱顶 + 十字
@@ -1223,10 +1232,11 @@ module cw_prop_antenna(seed = 0)
     for (k = [0 : 2])
     {
         z0 = k == 0 ? 0 : (k == 1 ? 4.0 : 7.2);
+        // 顶端内收 = rotate 的 X 角与 y 偏移同号、Y 角与 x 偏移反号
         color(cw_METALD()) for (sx = [-1, 1], sy = [-1, 1])
         {
             w0 = ws[k];
-            translate([sx * w0 / 2, sy * w0 / 2, z0 + hs[k] / 2]) rotate([sy * -2.5, sx * 2.5, 0]) cw_boxc([0.1, 0.1, hs[k]]);
+            translate([sx * w0 / 2, sy * w0 / 2, z0 + hs[k] / 2]) rotate([sy * 2.5, sx * -2.5, 0]) cw_boxc([0.1, 0.1, hs[k]]);
         }
         color(cw_METALD())
         {
