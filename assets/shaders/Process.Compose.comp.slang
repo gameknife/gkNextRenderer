@@ -85,50 +85,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     const float exposure = max(camera.PaperWhiteNit / 40000.0, 1.0e-6);
     float3 total = max(LoadComposedRadiance(pixel, progressiveRender), 0.0) * exposure;
 
-    // Kill isolated Monte-Carlo energy before a temporal upscaler can spread it spatially
-    // or lock it into history. CustomData2 is zero when disabled, otherwise it stores k sigma.
-    const float fireflySigma = asfloat(Bindless.GetGpuscene().CustomData2);
-    if (!progressiveRender && fireflySigma > 0.0)
-    {
-        const int2 viewportMin = int2(camera.ViewportRect.xy);
-        const int2 viewportMax = min(
-            viewportMin + int2(camera.ViewportRect.zw) - int2(1, 1),
-            int2(outputSize) - int2(1, 1));
-        float neighborMean = 0.0;
-        float neighborSquareMean = 0.0;
-        uint neighborCount = 0;
-        [unroll]
-        for (int y = -1; y <= 1; ++y)
-        {
-            [unroll]
-            for (int x = -1; x <= 1; ++x)
-            {
-                if (x == 0 && y == 0)
-                {
-                    continue;
-                }
-                const int2 samplePixel = clamp(pixel + int2(x, y), viewportMin, viewportMax);
-                const float sampleLuma = Luminance(
-                    LoadComposedRadiance(samplePixel, false) * exposure);
-                neighborMean += sampleLuma;
-                neighborSquareMean += sampleLuma * sampleLuma;
-                ++neighborCount;
-            }
-        }
-        const float reciprocalCount = 1.0 / max(float(neighborCount), 1.0);
-        neighborMean *= reciprocalCount;
-        neighborSquareMean *= reciprocalCount;
-        const float neighborDeviation = sqrt(max(
-            neighborSquareMean - neighborMean * neighborMean, 0.0));
-        const float fireflyCeiling =
-            neighborMean + max(0.01, fireflySigma * neighborDeviation);
-        const float centerLuma = Luminance(total);
-        if (centerLuma > fireflyCeiling)
-        {
-            total *= fireflyCeiling / max(centerLuma, 1.0e-5);
-        }
-    }
-
     const bool noSkyBackground =
         !camera.HasSky && !HasObjectFlag(objectId0[pixel], OBJECT_ID_FLAG_VALID);
 
