@@ -9321,7 +9321,7 @@
               "default": "12"
             }
           ],
-          "line": 715,
+          "line": 719,
           "footprint": [
             10.49,
             12.9
@@ -9334,6 +9334,44 @@
           ],
           "triangles": 312,
           "colors": 26,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_bldg_block",
+          "category": "bldg",
+          "params": "seed = 0, L = 14, D = 10, floors = 2",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "L",
+              "default": "14"
+            },
+            {
+              "name": "D",
+              "default": "10"
+            },
+            {
+              "name": "floors",
+              "default": "2"
+            }
+          ],
+          "line": 1060,
+          "footprint": [
+            14.34,
+            11.69
+          ],
+          "height": 9.2,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.69
+          ],
+          "triangles": 756,
+          "colors": 50,
           "warnings": 0,
           "ok": true
         },
@@ -9355,7 +9393,7 @@
               "default": "12"
             }
           ],
-          "line": 200,
+          "line": 204,
           "footprint": [
             8.0,
             15.5
@@ -9368,6 +9406,58 @@
           ],
           "triangles": 292,
           "colors": 25,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_bldg_diner",
+          "category": "bldg",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1229,
+          "footprint": [
+            16.0,
+            11.0
+          ],
+          "height": 7.05,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 360,
+          "colors": 18,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_bldg_gasstation",
+          "category": "bldg",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1147,
+          "footprint": [
+            30.0,
+            24.0
+          ],
+          "height": 6.9,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            1.5
+          ],
+          "triangles": 504,
+          "colors": 42,
           "warnings": 0,
           "ok": true
         },
@@ -9393,7 +9483,7 @@
               "default": "0"
             }
           ],
-          "line": 145,
+          "line": 149,
           "footprint": [
             9.1,
             7.55
@@ -9427,7 +9517,7 @@
               "default": "6.5"
             }
           ],
-          "line": 186,
+          "line": 190,
           "footprint": [
             10.1,
             9.85
@@ -9440,6 +9530,70 @@
           ],
           "triangles": 440,
           "colors": 37,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_bldg_motel",
+          "category": "bldg",
+          "params": "seed = 0, units = 8",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "units",
+              "default": "8"
+            }
+          ],
+          "line": 1196,
+          "footprint": [
+            39.35,
+            11.0
+          ],
+          "height": 8.0,
+          "zMin": 0.0,
+          "center": [
+            -2.28,
+            0.2
+          ],
+          "triangles": 872,
+          "colors": 70,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_bldg_ruin",
+          "category": "bldg",
+          "params": "seed = 0, L = 9, D = 7",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "L",
+              "default": "9"
+            },
+            {
+              "name": "D",
+              "default": "7"
+            }
+          ],
+          "line": 1287,
+          "footprint": [
+            9.51,
+            7.4
+          ],
+          "height": 3.94,
+          "zMin": -0.01,
+          "center": [
+            0.05,
+            0.0
+          ],
+          "triangles": 408,
+          "colors": 16,
           "warnings": 0,
           "ok": true
         },
@@ -9461,7 +9615,7 @@
               "default": "2.8"
             }
           ],
-          "line": 189,
+          "line": 193,
           "footprint": [
             3.9,
             3.39
@@ -9495,7 +9649,7 @@
               "default": "6"
             }
           ],
-          "line": 228,
+          "line": 232,
           "footprint": [
             8.2,
             7.22
@@ -9508,6 +9662,206 @@
           ],
           "triangles": 204,
           "colors": 17,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_bldg_silo",
+          "category": "bldg",
+          "params": "seed = 0, s = 1.0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "s",
+              "default": "1.0"
+            }
+          ],
+          "line": 1376,
+          "footprint": [
+            6.55,
+            5.5
+          ],
+          "height": 14.4,
+          "zMin": -0.0,
+          "center": [
+            0.55,
+            -0.03
+          ],
+          "triangles": 636,
+          "colors": 20,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_bldg_trailer",
+          "category": "bldg",
+          "params": "seed = 0, L = 9, D = 3.6",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "L",
+              "default": "9"
+            },
+            {
+              "name": "D",
+              "default": "3.6"
+            }
+          ],
+          "line": 1264,
+          "footprint": [
+            10.18,
+            5.53
+          ],
+          "height": 3.25,
+          "zMin": 0.0,
+          "center": [
+            0.24,
+            -0.62
+          ],
+          "triangles": 332,
+          "colors": 25,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_bldg_warehouse",
+          "category": "bldg",
+          "params": "seed = 0, L = 26, D = 16",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "L",
+              "default": "26"
+            },
+            {
+              "name": "D",
+              "default": "16"
+            }
+          ],
+          "line": 1114,
+          "footprint": [
+            26.9,
+            20.4
+          ],
+          "height": 8.75,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -1.8
+          ],
+          "triangles": 552,
+          "colors": 35,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_bldg_watertower",
+          "category": "bldg",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1328,
+          "footprint": [
+            8.64,
+            8.65
+          ],
+          "height": 17.9,
+          "zMin": 0.06,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 852,
+          "colors": 47,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_ground_concrete",
+          "category": "ground",
+          "params": "L = 20, D = 14, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "20"
+            },
+            {
+              "name": "D",
+              "default": "14"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 949,
+          "footprint": [
+            20.0,
+            14.0
+          ],
+          "height": 0.13,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 108,
+          "colors": 9,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_ground_cracked",
+          "category": "ground",
+          "params": "L = 30, D = 20, seed = 0, c = [0.54, 0.45, 0.30]",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "30"
+            },
+            {
+              "name": "D",
+              "default": "20"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "c",
+              "default": "[0.54, 0.45, 0.30]"
+            }
+          ],
+          "line": 1641,
+          "footprint": [
+            30.0,
+            21.94
+          ],
+          "height": 0.11,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.88
+          ],
+          "triangles": 276,
+          "colors": 12,
           "warnings": 0,
           "ok": true
         },
@@ -9525,7 +9879,7 @@
               "default": "0"
             }
           ],
-          "line": 109,
+          "line": 112,
           "footprint": [
             7.0,
             7.0
@@ -9567,7 +9921,7 @@
               "default": "[0.30, 0.22, 0.15]"
             }
           ],
-          "line": 617,
+          "line": 621,
           "footprint": [
             9.95,
             7.94
@@ -9601,7 +9955,7 @@
               "default": "0"
             }
           ],
-          "line": 131,
+          "line": 135,
           "footprint": [
             20.0,
             20.0
@@ -9614,6 +9968,90 @@
           ],
           "triangles": 84,
           "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_ground_gravel",
+          "category": "ground",
+          "params": "L = 20, D = 14, seed = 0, c1 = [0.40, 0.38, 0.35], c2 = [0.36, 0.34, 0.31]",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "20"
+            },
+            {
+              "name": "D",
+              "default": "14"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "c1",
+              "default": "[0.40, 0.38, 0.35]"
+            },
+            {
+              "name": "c2",
+              "default": "[0.36, 0.34, 0.31]"
+            }
+          ],
+          "line": 931,
+          "footprint": [
+            20.0,
+            14.0
+          ],
+          "height": 0.17,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 384,
+          "colors": 9,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_ground_lot",
+          "category": "ground",
+          "params": "L = 30, D = 20, seed = 0, bands = 2, stall = 2.8",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "30"
+            },
+            {
+              "name": "D",
+              "default": "20"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "bands",
+              "default": "2"
+            },
+            {
+              "name": "stall",
+              "default": "2.8"
+            }
+          ],
+          "line": 906,
+          "footprint": [
+            30.0,
+            20.0
+          ],
+          "height": 0.14,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 372,
+          "colors": 31,
           "warnings": 0,
           "ok": true
         },
@@ -9631,7 +10069,7 @@
               "default": "0"
             }
           ],
-          "line": 636,
+          "line": 640,
           "footprint": [
             2.69,
             1.89
@@ -9665,7 +10103,7 @@
               "default": "0"
             }
           ],
-          "line": 94,
+          "line": 97,
           "footprint": [
             24.0,
             7.0
@@ -9695,7 +10133,7 @@
               "default": "1.8"
             }
           ],
-          "line": 122,
+          "line": 125,
           "footprint": [
             8.0,
             1.8
@@ -9706,8 +10144,42 @@
             0.0,
             0.0
           ],
-          "triangles": 60,
-          "colors": 5,
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_ground_track",
+          "category": "ground",
+          "params": "L = 30, W = 4, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "30"
+            },
+            {
+              "name": "W",
+              "default": "4"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 968,
+          "footprint": [
+            30.0,
+            4.0
+          ],
+          "height": 0.11,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 72,
+          "colors": 6,
           "warnings": 0,
           "ok": true
         },
@@ -9720,7 +10192,7 @@
               "name": "s"
             }
           ],
-          "line": 58,
+          "line": 61,
           "footprint": [
             1.0,
             1.0
@@ -9754,7 +10226,7 @@
               "default": "0.2"
             }
           ],
-          "line": 59,
+          "line": 62,
           "footprint": [
             4.0,
             4.0
@@ -9784,7 +10256,7 @@
               "default": "0"
             }
           ],
-          "line": 283,
+          "line": 287,
           "footprint": [
             1.47,
             1.1
@@ -9818,7 +10290,7 @@
               "default": "0"
             }
           ],
-          "line": 304,
+          "line": 308,
           "footprint": [
             4.5,
             3.5
@@ -9831,6 +10303,40 @@
           ],
           "triangles": 1092,
           "colors": 21,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_nature_field_big",
+          "category": "nature",
+          "params": "L = 40, D = 30, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "40"
+            },
+            {
+              "name": "D",
+              "default": "30"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1625,
+          "footprint": [
+            40.0,
+            30.0
+          ],
+          "height": 0.13,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 180,
+          "colors": 15,
           "warnings": 0,
           "ok": true
         },
@@ -9852,7 +10358,7 @@
               "default": "0"
             }
           ],
-          "line": 647,
+          "line": 651,
           "footprint": [
             12.0,
             9.0
@@ -9878,7 +10384,7 @@
               "default": "0"
             }
           ],
-          "line": 294,
+          "line": 298,
           "footprint": [
             0.5,
             0.5
@@ -9904,7 +10410,7 @@
               "default": "0"
             }
           ],
-          "line": 701,
+          "line": 705,
           "footprint": [
             2.48,
             0.73
@@ -9934,7 +10440,7 @@
               "default": "0"
             }
           ],
-          "line": 256,
+          "line": 260,
           "footprint": [
             3.1,
             3.1
@@ -9968,7 +10474,7 @@
               "default": "0"
             }
           ],
-          "line": 665,
+          "line": 669,
           "footprint": [
             10.0,
             8.0
@@ -9998,7 +10504,7 @@
               "default": "0"
             }
           ],
-          "line": 690,
+          "line": 694,
           "footprint": [
             0.78,
             0.68
@@ -10028,7 +10534,7 @@
               "default": "0"
             }
           ],
-          "line": 271,
+          "line": 275,
           "footprint": [
             3.1,
             3.0
@@ -10062,7 +10568,7 @@
               "default": "[0.33, 0.25, 0.19]"
             }
           ],
-          "line": 84,
+          "line": 87,
           "footprint": [
             1.24,
             0.2
@@ -10108,7 +10614,7 @@
               "default": "[0.28, 0.31, 0.36]"
             }
           ],
-          "line": 65,
+          "line": 68,
           "footprint": [
             9.0,
             7.0
@@ -10138,7 +10644,7 @@
               "default": "1.0"
             }
           ],
-          "line": 76,
+          "line": 79,
           "footprint": [
             0.9,
             0.19
@@ -10164,7 +10670,7 @@
               "default": "0"
             }
           ],
-          "line": 423,
+          "line": 427,
           "footprint": [
             0.63,
             0.63
@@ -10185,7 +10691,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 476,
+          "line": 480,
           "footprint": [
             2.4,
             0.61
@@ -10206,7 +10712,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 468,
+          "line": 472,
           "footprint": [
             1.7,
             0.54
@@ -10223,11 +10729,97 @@
           "ok": true
         },
         {
+          "name": "dd_prop_billboard",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1397,
+          "footprint": [
+            9.8,
+            3.81
+          ],
+          "height": 8.45,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.5
+          ],
+          "triangles": 120,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_campfire",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1521,
+          "footprint": [
+            3.0,
+            2.8
+          ],
+          "height": 1.7,
+          "zMin": -0.04,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 336,
+          "colors": 19,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_chainlink",
+          "category": "prop",
+          "params": "len = 8, h = 2.2, seed = 0",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "8"
+            },
+            {
+              "name": "h",
+              "default": "2.2"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 995,
+          "footprint": [
+            8.1,
+            0.1
+          ],
+          "height": 2.2,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 228,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
           "name": "dd_prop_cone",
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 460,
+          "line": 464,
           "footprint": [
             0.34,
             0.34
@@ -10244,6 +10836,36 @@
           "ok": true
         },
         {
+          "name": "dd_prop_container",
+          "category": "prop",
+          "params": "seed = 0, stack = 1",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "stack",
+              "default": "1"
+            }
+          ],
+          "line": 1415,
+          "footprint": [
+            6.26,
+            2.54
+          ],
+          "height": 2.61,
+          "zMin": -0.01,
+          "center": [
+            -0.06,
+            -0.04
+          ],
+          "triangles": 192,
+          "colors": 16,
+          "warnings": 0,
+          "ok": true
+        },
+        {
           "name": "dd_prop_crate",
           "category": "prop",
           "params": "s = 1.0",
@@ -10253,7 +10875,7 @@
               "default": "1.0"
             }
           ],
-          "line": 432,
+          "line": 436,
           "footprint": [
             0.89,
             0.89
@@ -10279,7 +10901,7 @@
               "default": "0"
             }
           ],
-          "line": 810,
+          "line": 814,
           "footprint": [
             0.76,
             1.3
@@ -10300,7 +10922,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 447,
+          "line": 451,
           "footprint": [
             2.2,
             1.37
@@ -10330,7 +10952,7 @@
               "default": "1.05"
             }
           ],
-          "line": 323,
+          "line": 327,
           "footprint": [
             4.0,
             0.06
@@ -10351,7 +10973,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 775,
+          "line": 779,
           "footprint": [
             0.35,
             0.2
@@ -10368,6 +10990,36 @@
           "ok": true
         },
         {
+          "name": "dd_prop_guardrail",
+          "category": "prop",
+          "params": "len = 8, seed = 0",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "8"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1042,
+          "footprint": [
+            8.12,
+            0.29
+          ],
+          "height": 0.79,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.02
+          ],
+          "triangles": 60,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
           "name": "dd_prop_haybale",
           "category": "prop",
           "params": "seed = 0",
@@ -10377,7 +11029,7 @@
               "default": "0"
             }
           ],
-          "line": 758,
+          "line": 762,
           "footprint": [
             1.62,
             1.15
@@ -10394,11 +11046,45 @@
           "ok": true
         },
         {
+          "name": "dd_prop_hedge",
+          "category": "prop",
+          "params": "len = 6, h = 1.2, seed = 0",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "6"
+            },
+            {
+              "name": "h",
+              "default": "1.2"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 982,
+          "footprint": [
+            6.12,
+            0.94
+          ],
+          "height": 1.31,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 48,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
           "name": "dd_prop_hydrant",
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 391,
+          "line": 395,
           "footprint": [
             0.38,
             0.44
@@ -10415,11 +11101,41 @@
           "ok": true
         },
         {
+          "name": "dd_prop_jersey",
+          "category": "prop",
+          "params": "len = 3.0, seed = 0",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "3.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1013,
+          "footprint": [
+            3.0,
+            0.62
+          ],
+          "height": 0.87,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 48,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
           "name": "dd_prop_lamp",
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 336,
+          "line": 340,
           "footprint": [
             0.32,
             1.25
@@ -10440,7 +11156,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 404,
+          "line": 408,
           "footprint": [
             0.4,
             0.57
@@ -10466,7 +11182,7 @@
               "default": "0"
             }
           ],
-          "line": 783,
+          "line": 787,
           "footprint": [
             1.48,
             1.45
@@ -10492,7 +11208,7 @@
               "default": "0"
             }
           ],
-          "line": 348,
+          "line": 352,
           "footprint": [
             0.3,
             2.0
@@ -10509,6 +11225,70 @@
           "ok": true
         },
         {
+          "name": "dd_prop_radiomast",
+          "category": "prop",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1465,
+          "footprint": [
+            4.81,
+            4.81
+          ],
+          "height": 25.84,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 744,
+          "colors": 50,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_sandbags",
+          "category": "prop",
+          "params": "len = 3.0, h = 0.9, seed = 0",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "3.0"
+            },
+            {
+              "name": "h",
+              "default": "0.9"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1027,
+          "footprint": [
+            3.16,
+            0.6
+          ],
+          "height": 0.85,
+          "zMin": 0.0,
+          "center": [
+            0.08,
+            0.01
+          ],
+          "triangles": 192,
+          "colors": 16,
+          "warnings": 0,
+          "ok": true
+        },
+        {
           "name": "dd_prop_sign",
           "category": "prop",
           "params": "seed = 0",
@@ -10518,7 +11298,7 @@
               "default": "0"
             }
           ],
-          "line": 359,
+          "line": 363,
           "footprint": [
             3.0,
             0.2
@@ -10544,7 +11324,7 @@
               "default": "0"
             }
           ],
-          "line": 374,
+          "line": 378,
           "footprint": [
             3.8,
             1.18
@@ -10561,6 +11341,66 @@
           "ok": true
         },
         {
+          "name": "dd_prop_tank",
+          "category": "prop",
+          "params": "seed = 0, s = 1.0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "s",
+              "default": "1.0"
+            }
+          ],
+          "line": 1439,
+          "footprint": [
+            8.06,
+            6.25
+          ],
+          "height": 7.75,
+          "zMin": 0.0,
+          "center": [
+            0.97,
+            -0.06
+          ],
+          "triangles": 552,
+          "colors": 14,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_tent",
+          "category": "prop",
+          "params": "seed = 0, s = 1.0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "s",
+              "default": "1.0"
+            }
+          ],
+          "line": 1505,
+          "footprint": [
+            3.4,
+            3.34
+          ],
+          "height": 1.56,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 92,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
           "name": "dd_prop_tires",
           "category": "prop",
           "params": "seed = 0",
@@ -10570,7 +11410,7 @@
               "default": "0"
             }
           ],
-          "line": 797,
+          "line": 801,
           "footprint": [
             0.81,
             0.83
@@ -10596,7 +11436,7 @@
               "default": "0"
             }
           ],
-          "line": 413,
+          "line": 417,
           "footprint": [
             0.64,
             0.64
@@ -10626,7 +11466,7 @@
               "default": "1.0"
             }
           ],
-          "line": 835,
+          "line": 839,
           "footprint": [
             17.93,
             8.04
@@ -10643,6 +11483,32 @@
           "ok": true
         },
         {
+          "name": "dd_veh_bus",
+          "category": "veh",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1543,
+          "footprint": [
+            10.88,
+            2.72
+          ],
+          "height": 3.14,
+          "zMin": 0.0,
+          "center": [
+            0.03,
+            0.0
+          ],
+          "triangles": 744,
+          "colors": 26,
+          "warnings": 0,
+          "ok": true
+        },
+        {
           "name": "dd_veh_flipped",
           "category": "veh",
           "params": "seed = 0",
@@ -10652,7 +11518,7 @@
               "default": "0"
             }
           ],
-          "line": 559,
+          "line": 563,
           "footprint": [
             5.76,
             3.22
@@ -10678,7 +11544,7 @@
               "default": "0"
             }
           ],
-          "line": 589,
+          "line": 593,
           "footprint": [
             5.75,
             4.84
@@ -10704,7 +11570,7 @@
               "default": "0"
             }
           ],
-          "line": 521,
+          "line": 525,
           "footprint": [
             4.34,
             2.22
@@ -10730,7 +11596,7 @@
               "default": "0"
             }
           ],
-          "line": 495,
+          "line": 499,
           "footprint": [
             4.07,
             2.14
@@ -10747,6 +11613,36 @@
           "ok": true
         },
         {
+          "name": "dd_veh_truck",
+          "category": "veh",
+          "params": "seed = 0, trailer = 1",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "trailer",
+              "default": "1"
+            }
+          ],
+          "line": 1579,
+          "footprint": [
+            17.66,
+            2.8
+          ],
+          "height": 4.2,
+          "zMin": 0.0,
+          "center": [
+            -1.0,
+            0.0
+          ],
+          "triangles": 1332,
+          "colors": 44,
+          "warnings": 0,
+          "ok": true
+        },
+        {
           "name": "dd_veh_van",
           "category": "veh",
           "params": "seed = 0",
@@ -10756,7 +11652,7 @@
               "default": "0"
             }
           ],
-          "line": 508,
+          "line": 512,
           "footprint": [
             4.83,
             2.22
@@ -10786,7 +11682,7 @@
               "default": "0.26"
             }
           ],
-          "line": 488,
+          "line": 492,
           "footprint": [
             0.68,
             0.3
@@ -10812,7 +11708,7 @@
               "default": "0"
             }
           ],
-          "line": 535,
+          "line": 539,
           "footprint": [
             4.59,
             2.23

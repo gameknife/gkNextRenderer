@@ -1,5 +1,6 @@
 // deadly_showcase.scad —— kit_deadly 零件总览（按类别排行，验收/选型用）
-// 行序（自北向南）：建筑 / 载具 / 植被 / 道具 / 地面 / 农场细节 / 大件。
+// 行序（自北向南）：建筑 / 载具 / 植被 / 道具 / 地面 / 农场细节 / 大件 /
+//                    v2 成片地面 / v2 线性件与营地 / v2 建筑 / v2 地标。
 // gnb shot --scene assets/scad/deadly_showcase.scad
 
 use <lib/kit_deadly.scad>
@@ -7,7 +8,7 @@ use <lib/kit_deadly.scad>
 $fn = 12;
 
 // 展台
-color([0.42, 0.47, 0.29]) translate([0, -6, -0.15]) cube([94, 80, 0.3], center = true);
+color([0.42, 0.47, 0.29]) translate([2, -58, -0.15]) cube([120, 190, 0.3], center = true);
 
 // ================= 建筑 =================
 translate([-24, 18, 0]) dd_bldg_house(seed = 3);
@@ -77,3 +78,40 @@ translate([28, -27, 0]) dd_prop_debris(seed = 9);
 
 // ================= 大件 =================
 translate([-34, -39, 0]) dd_prop_windturbine_fallen(seed = 1, s = 1.0);
+
+// ================= v2：成片地面 =================
+translate([-34, -52, 0]) dd_ground_lot(L = 26, D = 18, seed = 3);
+translate([-8, -52, 0]) dd_ground_gravel(L = 18, D = 14, seed = 4);
+translate([12, -52, 0]) dd_ground_concrete(L = 18, D = 14, seed = 5);
+translate([36, -52, 0]) dd_ground_track(L = 22, W = 4.5, seed = 6);
+
+// ================= v2：线性界定件 =================
+translate([-34, -64, 0]) dd_prop_hedge(len = 8, seed = 1);
+translate([-24, -64, 0]) dd_prop_chainlink(len = 8, seed = 2);
+translate([-14, -64, 0]) dd_prop_jersey(len = 3, seed = 3);
+translate([-8, -64, 0]) dd_prop_sandbags(len = 4, seed = 4);
+translate([0, -64, 0]) dd_prop_guardrail(len = 8, seed = 5);
+translate([12, -64, 0]) dd_prop_tent(seed = 2);
+translate([18, -64, 0]) dd_prop_campfire(seed = 3);
+translate([24, -64, 0]) dd_prop_container(seed = 4, stack = 1);
+translate([34, -64, 0]) dd_prop_container(seed = 7, stack = 2);
+
+// ================= v2：建筑 =================
+translate([-40, -80, 0]) dd_bldg_block(seed = 2, L = 16, D = 11, floors = 2);
+translate([-18, -80, 0]) dd_bldg_block(seed = 5, L = 12, D = 10, floors = 3);
+translate([5, -80, 0]) dd_bldg_diner(seed = 1);
+translate([28, -80, 0]) dd_bldg_trailer(seed = 3);
+translate([44, -80, 0]) dd_bldg_ruin(seed = 6);
+
+translate([-38, -102, 0]) dd_bldg_warehouse(seed = 1, L = 26, D = 16);
+translate([-2, -102, 0]) dd_bldg_gasstation(seed = 2);
+translate([36, -102, 0]) dd_bldg_motel(seed = 4, units = 7);
+
+// ================= v2：地标与大件 =================
+translate([-36, -124, 0]) dd_bldg_watertower(s = 1.0, seed = 1);
+translate([-18, -124, 0]) dd_bldg_silo(seed = 2, s = 1.0);
+translate([-6, -124, 0]) dd_prop_tank(seed = 3, s = 1.0);
+translate([8, -124, 0]) dd_prop_radiomast(s = 1.0, seed = 4);
+translate([24, -124, 0]) dd_prop_billboard(seed = 5);
+translate([40, -124, 0]) dd_veh_bus(seed = 1);
+translate([40, -132, 0]) dd_veh_truck(seed = 2);

@@ -184,6 +184,32 @@ glm::vec3 Brotato3DGameInstance::ResolveEnemyGroundedPosition(
 
 ---
 
+## 6.5 竞技场地图（`assets/scad/brotato3d/*.scad`）
+
+三张固定地图由 `assets/configs/brotato3d/arenas.json` 绑定，改地图前先记住这几条硬约束：
+
+| 事实 | 出处 | 对地图的意义 |
+|---|---|---|
+| `halfExtent` = town [260,160] / outskirts [320,200] / desert [340,220] | arenas.json | SCAD 的 x/y 直接对应；边界外有隐形墙 |
+| 相机 = 目标 + (0, 30, 11)，FOV 60°，target 被 clamp 到 `halfExtent - (32, 38)` | `OverrideRenderCamera` / `UpdateCameraTracking` | **`halfExtent` 之外永远看不见，往外堆几何是纯浪费** |
+| 世界 `z = -scad_y` | ScadLoader 的 Z-up→Y-up | 相机从 SCAD 的 -y 往 +y 看，**kit 的 front = -y 正对镜头** |
+| 单屏地面 ≈ 66 m (x) x 41 m (y) | 由上面两条推出 | 设计粒度：**每 66x41 m 至少要有一处结构** |
+| 建筑不参与碰撞（只有撤离车是障碍） | `ResolvePlayerObstacleCollision` | 街区的价值是**可读的规划 + 方位地标**，不是阻挡 |
+
+写地图的方法（三张图都按这个来的，改图/加图照抄）：
+
+1. **先画格子再写坐标**：town 是 65x58 m 的方格街坊（一街坊≈一屏），outskirts 是一条分离式公路 + 农田网格，desert 是公路 + 铺砖式地表分区。
+2. **每块空地都要有用途**：停车场 / 院子 / 球场 / 田块 / 碎石场，而不是裸草皮。`dd_ground_lot`、`dd_nature_field_big`、`dd_ground_gravel` 就是为此加的。
+3. **线性件划红线**：绿篱 / 铁丝网 / 栅栏 / 护栏 / 隔离墩，它们是俯视下"被规划过"的最强信号。
+4. **地标锚定方位**：水塔 / 教堂尖塔 / 信号塔 / 加油站雨棚 / 广告牌，跑图时每 1~2 屏能看到一个。
+5. **边界要看得见**：town/outskirts 用林带，desert 用岩带 + 沙丘，让玩家理解隐形墙在哪。
+6. **朝向**：面向镜头的一排用默认朝向（front = -y），背面排用 `rotate([0,0,180])`；注意 `lay_row` 永远沿 +x 生长，旋转 180° 的排必须从街坊**东端**起算。
+7. **地面叠层**：地面件重叠时上层要抬 `dd_layer(1)`，理由见 [SCAD 资产实战手册](ScadAssetPlaybook.md) 的"地面叠层"。
+
+验收用 `gnb shot --scene assets/scad/brotato3d/<map>.scad`；注意全图 shot 的相机在 ~600 m 外，薄板堆叠处会出现光线精度造成的黑斑，**那是远距离截图的 artifact，游戏内 32 m 机位不会有**——怀疑时把该区域单独摆成一个小场景再截一张。
+
+---
+
 ## 7. 改完怎么验证
 
 ```bash

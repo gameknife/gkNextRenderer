@@ -7,6 +7,9 @@
 //           电线杆/公路绿牌（含倒塌残骸）、油桶/锥桶/路障、轿车/厢式车/皮卡/烧毁残骸/
 //           翻覆车/联合收割机、泥地斑块/水洼、垄沟田/南瓜田/树桩/倒木、
 //           干草捆/木托盘/轮胎堆/油壶/地面杂物簇/倒塌风机。
+// v2 追加（街区规划词汇，见文件末尾分段）：停车场/碎石场/混凝土地坪/土路、
+//           绿篱/铁丝网/隔离墩/沙袋/护栏、联排商业楼/厂房/加油站/汽车旅馆/餐车/
+//           拖车房/废墟/水塔/筒仓、广告牌/集装箱/储罐/信号塔/帐篷/篝火、校车/半挂。
 
 // ================= 配色（低饱和末日郊区；PT 强日光下会整体提亮，故基色偏深偏饱和） =================
 function dd_ASPHC()  = [0.32, 0.32, 0.34];   // 沥青路面
@@ -122,9 +125,10 @@ module dd_ground_cross(W = 7, seed = 0)
 module dd_ground_sidewalk(L = 8, W = 1.8)
 {
     color(dd_WALKC()) dd_slab(L, W, 0.16);
-    nj = floor(L / 1.6);
+    // 伸缩缝 3.2 m 一道：1.6 m 时缝距接近板宽，俯视下整条人行道会读成"铁轨"
+    nj = floor(L / 3.2);
     color(dd_WALKD()) for (i = [1 : nj - 1])
-        translate([-L / 2 + i * 1.6, 0, 0.16]) dd_slab(0.07, W, 0.012);
+        translate([-L / 2 + i * 3.2, 0, 0.16]) dd_slab(0.07, W, 0.012);
 }
 
 // 草地块（带深色草斑，用于覆盖 spec ground 之上的院子）
@@ -859,4 +863,795 @@ module dd_prop_windturbine_fallen(seed = 0, s = 1.0)
                         rotate([0, 0, dd_rnd(seed + i, 180)]) dd_slab(0.8, 0.4, 0.12);
         }
     }
+}
+
+// =====================================================================================
+// v2 扩展：街区规划词汇
+// 起因：Brotato3D 三张地图是固定 70° 俯视、单屏约 66 x 41 m 的生存肉鸽战场。旧库只有
+// "房子 + 散点道具"，写出来的地图必然是"平板 + 噪点"。本段补三类词汇：
+//   1) 成片地面：停车场/碎石场/混凝土地坪/土路 —— 让每块地都有用途，从根上消灭纯色平地
+//   2) 线性界定件：绿篱/铁丝网/隔离墩/沙袋/护栏 —— 划出地块红线与街道节奏
+//   3) 地标与叙事件：水塔/筒仓/加油站/汽车旅馆/餐车/拖车/废墟/广告牌/货柜/储罐/信号塔/
+//      帐篷/篝火/校车/半挂 —— 俯视下提供轮廓、长阴影与方位感
+// 契约同上：落地件底面 z=0，带朝向件 front = -y（正对游戏相机），载具车头 +x。
+// =====================================================================================
+
+// ---- v2 配色补充 ----
+function dd_CONCC()  = [0.47, 0.46, 0.43];   // 浇筑混凝土
+function dd_CONCD()  = [0.41, 0.40, 0.38];   // 混凝土缝/深斑
+function dd_GRAVC()  = [0.40, 0.38, 0.35];   // 碎石场
+function dd_BRICKC() = [0.45, 0.24, 0.18];   // 红砖
+function dd_HEDGEC() = [0.21, 0.33, 0.16];   // 绿篱深
+function dd_HEDGEL() = [0.26, 0.38, 0.19];   // 绿篱浅
+function dd_SANDBC() = [0.46, 0.41, 0.27];   // 沙袋
+function dd_BUSY()   = [0.72, 0.55, 0.10];   // 校车黄
+
+// 商业招牌/雨棚彩色（低饱和，PT 下不过曝）
+function dd_sign_c(i) = [[0.58, 0.17, 0.12], [0.66, 0.48, 0.12], [0.19, 0.36, 0.52],
+                         [0.20, 0.42, 0.26], [0.40, 0.31, 0.22]][dd_rnd(i, 5)];
+function dd_blockwall_c(i) = [dd_BRICKC(), [0.50, 0.44, 0.35], [0.44, 0.42, 0.38],
+                              [0.52, 0.35, 0.25], [0.38, 0.35, 0.31]][dd_rnd(i, 5)];
+
+// ---- 地面叠层高度（必读的放置契约） ----
+// 所有 dd_ground_* 都是底面 z=0 的薄板，厚度 0.08~0.16 且表面还有 1~2 cm 的细节片。
+// 两块地面件平面重叠时，下层的细节会从上层表面钻出几毫米：那些面被包在上层实体里收不到光，
+// 在 PT 下渲染成黑斑（沙漠图的"黑洞"就是这么来的）。叠放时把上层抬到 dd_layer(n)，
+// 20 cm 的台阶在 70° 俯视下看不出来，却能彻底避免这个 artifact。
+function dd_layer(n = 1) = n * 0.2;
+
+// ================= v2 地面（成片铺装，底面 z=0） =================
+
+// 沥青停车场：底板 + 破损补丁 + bands 排车位白线（车位沿 y 停放）。
+// 街区里最有用的一块地：给空地一个用途，同时是俯视下可读的大面积节奏块。
+module dd_ground_lot(L = 30, D = 20, seed = 0, bands = 2, stall = 2.8)
+{
+    color(dd_ASPHC()) dd_slab(L, D, 0.12);
+    for (i = [0 : 3])
+        color(dd_ASPHD())
+            translate([dd_rndr(seed * 7 + i * 31, -(L - 4) / 2, (L - 4) / 2),
+                       dd_rndr(seed * 13 + i * 17 + 5, -(D - 4) / 2, (D - 4) / 2), 0.12])
+                dd_slab(dd_rndr(seed + i, 1.8, 4.4), dd_rndr(seed + i + 9, 1.2, 3.0), 0.014);
+    sd = min(5.0, D / max(1, bands) - 0.8);
+    n = max(1, floor((L - 1.2) / stall));
+    for (b = [0 : bands - 1])
+    {
+        by = bands == 1 ? 0 : -D / 2 + sd / 2 + 0.6 + b * (D - sd - 1.2) / (bands - 1);
+        color(dd_MARKW())
+        {
+            for (i = [0 : n])
+                translate([-n * stall / 2 + i * stall, by, 0.12]) dd_slab(0.12, sd, 0.02);
+            for (sy = [-1, 1])
+                translate([0, by + sy * sd / 2, 0.12]) dd_slab(n * stall, 0.11, 0.02);
+        }
+    }
+}
+
+// 碎石/矿渣场地：浅灰底 + 深色湿斑 + 零星石块（工业院子、货场、车场地面）。
+// c1/c2 可覆盖为沙色，沙漠场景里默认灰会在强日光下发白，读起来像雪地。
+module dd_ground_gravel(L = 20, D = 14, seed = 0, c1 = [0.40, 0.38, 0.35], c2 = [0.36, 0.34, 0.31])
+{
+    color(c1) dd_slab(L, D, 0.10);
+    for (i = [0 : 5])
+        color(c2)
+            translate([dd_rndr(seed * 7 + i * 23, -(L - 3) / 2, (L - 3) / 2),
+                       dd_rndr(seed * 13 + i * 41 + 5, -(D - 3) / 2, (D - 3) / 2), 0.10])
+                rotate([0, 0, dd_rnd(seed + i, 180)])
+                    scale([dd_rndr(seed + i, 1.0, 2.8), dd_rndr(seed + i + 7, 0.8, 2.0), 1])
+                        cylinder(h = 0.014, r = 1, $fn = 7);
+    for (i = [0 : 6])
+        color([c1[0] * 1.3, c1[1] * 1.3, c1[2] * 1.3])
+            translate([dd_rndr(seed * 11 + i * 37, -(L - 2) / 2, (L - 2) / 2),
+                       dd_rndr(seed * 17 + i * 29 + 3, -(D - 2) / 2, (D - 2) / 2), 0.10])
+                rotate([0, 0, dd_rnd(seed + i * 3, 180)]) dd_boxc([0.34, 0.28, 0.14]);
+}
+
+// 混凝土地坪：分缝网格 + 裂纹/油污（厂房前场、废弃基础、检查站）
+module dd_ground_concrete(L = 20, D = 14, seed = 0)
+{
+    color(dd_CONCC()) dd_slab(L, D, 0.12);
+    nx = max(1, floor(L / 5));
+    ny = max(1, floor(D / 5));
+    color(dd_CONCD())
+    {
+        if (nx > 1) for (i = [1 : nx - 1]) translate([-L / 2 + i * L / nx, 0, 0.12]) dd_slab(0.09, D, 0.014);
+        if (ny > 1) for (i = [1 : ny - 1]) translate([0, -D / 2 + i * D / ny, 0.12]) dd_slab(L, 0.09, 0.014);
+    }
+    for (i = [0 : 3])
+        color([0.32, 0.31, 0.29])
+            translate([dd_rndr(seed * 7 + i * 19, -(L - 3) / 2, (L - 3) / 2),
+                       dd_rndr(seed * 23 + i * 31 + 7, -(D - 3) / 2, (D - 3) / 2), 0.12])
+                rotate([0, 0, dd_rnd(seed + i * 5, 180)])
+                    dd_slab(dd_rndr(seed + i, 1.6, 4.5), 0.16, 0.014);
+}
+
+// 土路/车辙（沿 x）：压实土带 + 两道车辙 + 中间草脊。用来把散落的据点连成路网。
+module dd_ground_track(L = 30, W = 4, seed = 0)
+{
+    color([0.38, 0.31, 0.22]) dd_slab(L, W, 0.09);
+    color([0.29, 0.23, 0.16]) for (sy = [-1, 1])
+        translate([0, sy * W * 0.24, 0.09]) dd_slab(L, W * 0.26, 0.014);
+    for (i = [0 : 2])
+        color(dd_GRASSD())
+            translate([dd_rndr(seed * 7 + i * 29, -(L - 4) / 2, (L - 4) / 2), 0, 0.09])
+                dd_slab(dd_rndr(seed + i, 1.5, 4.5), W * 0.13, 0.02);
+}
+
+// ================= v2 线性界定件（沿 x 通长，底面 z=0） =================
+
+// 修剪绿篱：分段起伏，住宅红线/公园边界
+module dd_prop_hedge(len = 6, h = 1.2, seed = 0)
+{
+    n = max(1, floor(len / 1.3));
+    for (i = [0 : n - 1])
+    {
+        hh = h * dd_rndr(seed + i * 13, 0.86, 1.10);
+        color(dd_rnd(seed + i * 7, 2) == 0 ? dd_HEDGEC() : dd_HEDGEL())
+            translate([-len / 2 + (i + 0.5) * len / n, dd_rndr(seed + i * 11, -0.09, 0.09), hh / 2])
+                dd_boxc([len / n + 0.12, 0.9, hh]);
+    }
+}
+
+// 铁丝网（半透明网面 + 镀锌立柱，seed 偶尔给一段塌下来的破口）
+module dd_prop_chainlink(len = 8, h = 2.2, seed = 0)
+{
+    np = max(2, floor(len / 2.6) + 1);
+    color(dd_METALC())
+    {
+        for (i = [0 : np - 1])
+            translate([-len / 2 + i * len / (np - 1), 0, h / 2]) cylinder(h = h, r = 0.05, center = true, $fn = 5);
+        translate([0, 0, h - 0.07]) dd_boxc([len, 0.05, 0.06]);
+        translate([0, 0, 0.14]) dd_boxc([len, 0.04, 0.05]);
+    }
+    color([0.62, 0.64, 0.62, 0.45]) translate([0, 0, h / 2]) dd_boxc([len, 0.02, h - 0.2]);
+    if (dd_rnd(seed, 3) == 0)
+        color([0.62, 0.64, 0.62, 0.45])
+            translate([dd_rndr(seed + 3, -len * 0.28, len * 0.28), 0.55, 0.07])
+                rotate([74, 0, dd_rnd(seed + 5, 24) - 12]) dd_boxc([len * 0.22, 0.02, h * 0.85]);
+}
+
+// 混凝土隔离墩（新泽西护栏，检查站/封锁线）
+module dd_prop_jersey(len = 3.0, seed = 0)
+{
+    color(dd_CONCC())
+    {
+        translate([0, 0, 0.12]) dd_boxc([len, 0.62, 0.24]);
+        translate([0, 0, 0.42]) dd_boxc([len, 0.42, 0.36]);
+        translate([0, 0, 0.72]) dd_boxc([len, 0.28, 0.24]);
+    }
+    color(dd_CONCD()) translate([0, 0, 0.845]) dd_boxc([len, 0.3, 0.05]);
+    if (dd_rnd(seed, 3) == 0)
+        color(dd_CONEO()) translate([dd_rndr(seed + 7, -len * 0.3, len * 0.3), -0.15, 0.5]) dd_boxc([0.5, 0.02, 0.3]);
+}
+
+// 沙袋墙：错缝叠放（军队检查站/临时工事）
+module dd_prop_sandbags(len = 3.0, h = 0.9, seed = 0)
+{
+    rows = max(1, floor(h / 0.22));
+    n = max(2, floor(len / 0.62));
+    for (r = [0 : rows - 1], i = [0 : n - 1])
+    {
+        px = -len / 2 + 0.32 + i * (len - 0.64) / max(1, n - 1) + (r % 2) * 0.16;
+        color(dd_rnd(seed + r * 31 + i * 7, 2) == 0 ? dd_SANDBC() : [0.39, 0.34, 0.22])
+            translate([px, dd_rndr(seed + r * 13 + i * 5, -0.06, 0.06), 0.11 + r * 0.21])
+                rotate([0, 0, dd_rndr(seed + r * 3 + i * 11, -9, 9)])
+                    dd_boxc([0.62, 0.44, 0.22]);
+    }
+}
+
+// 公路波形护栏（沿 x，板面朝 -y）
+module dd_prop_guardrail(len = 8, seed = 0)
+{
+    np = max(2, floor(len / 4) + 1);
+    color(dd_METALD()) for (i = [0 : np - 1])
+        translate([-len / 2 + i * len / (np - 1), 0.05, 0.35]) dd_boxc([0.12, 0.14, 0.7]);
+    color(dd_METALC())
+    {
+        translate([0, -0.08, 0.62]) dd_boxc([len, 0.07, 0.34]);
+        translate([0, -0.14, 0.62]) dd_boxc([len, 0.05, 0.11]);
+    }
+    if (dd_rnd(seed, 4) == 0)   // 撞断的一段
+        color(dd_METALC()) translate([len * 0.3, -0.5, 0.3]) rotate([0, 0, 24]) dd_boxc([len * 0.25, 0.07, 0.34]);
+}
+
+// ================= v2 建筑（front = -y） =================
+
+// 镇中心联排商业楼（1–3 层，平顶）：底层橱窗 + 招牌带 + 雨棚 + 上层窗格 + 女儿墙 +
+// 屋面机组/楼梯间/通风管。俯视下屋面就是它的正脸，所以屋顶必须有东西。
+module dd_bldg_block(seed = 0, L = 14, D = 10, floors = 2)
+{
+    fh = 3.4;
+    h = floors * fh;
+    wc = dd_blockwall_c(seed);
+    wd = [wc[0] * 0.84, wc[1] * 0.84, wc[2] * 0.84];
+    ac = dd_sign_c(seed + 2);
+    color(wc) dd_slab(L, D, h);
+    color([0.25, 0.25, 0.26]) translate([0, 0, h]) dd_slab(L - 0.3, D - 0.3, 0.07);   // 屋面卷材
+    color(wd)                                                                        // 女儿墙
+    {
+        for (sy = [-1, 1]) translate([0, sy * (D / 2 - 0.14), h + 0.32]) dd_boxc([L + 0.16, 0.28, 0.64]);
+        for (sx = [-1, 1]) translate([sx * (L / 2 - 0.14), 0, h + 0.32]) dd_boxc([0.28, D + 0.16, 0.64]);
+    }
+    color(dd_CONCD())
+    {
+        for (sy = [-1, 1]) translate([0, sy * (D / 2 - 0.14), h + 0.68]) dd_boxc([L + 0.3, 0.4, 0.1]);
+        for (sx = [-1, 1]) translate([sx * (L / 2 - 0.14), 0, h + 0.68]) dd_boxc([0.4, D + 0.3, 0.1]);
+    }
+    // 底层橱窗 + 入口 + 招牌 + 雨棚
+    color(dd_DARKC()) translate([0, -D / 2 - 0.05, 1.65]) dd_boxc([L - 2.6, 0.12, 2.1]);
+    color(dd_TRIMW()) for (i = [0 : 3])
+        translate([-(L - 2.6) / 2 + i * (L - 2.6) / 3, -D / 2 - 0.11, 1.65]) dd_boxc([0.1, 0.1, 2.1]);
+    color([0.24, 0.24, 0.26]) translate([L / 2 - 1.5, -D / 2 - 0.1, 1.15]) dd_boxc([1.2, 0.1, 2.3]);
+    color(ac) translate([0, -D / 2 - 0.15, 3.05]) dd_boxc([L - 0.6, 0.26, 0.72]);
+    color(dd_TRIMW()) translate([-L * 0.1, -D / 2 - 0.3, 3.05]) dd_boxc([L * 0.42, 0.04, 0.34]);
+    color([ac[0] * 0.82, ac[1] * 0.82, ac[2] * 0.82])
+        translate([-0.6, -D / 2 - 0.75, 2.5]) rotate([13, 0, 0]) dd_boxc([L - 3.2, 1.6, 0.08]);
+    // 上层窗
+    if (floors > 1)
+    {
+        nw = max(2, floor(L / 3.4));
+        for (f = [1 : floors - 1], i = [0 : nw - 1])
+            translate([-L / 2 + (i + 0.5) * L / nw, -D / 2 - 0.05, f * fh + 1.6]) dd_part_window(1.05, 1.5);
+        nsw = max(1, floor(D / 4.0));
+        for (f = [1 : floors - 1], i = [0 : nsw - 1], sx = [-1, 1])
+            translate([sx * (L / 2 + 0.05), -D / 2 + (i + 0.5) * D / nsw, f * fh + 1.6])
+                rotate([0, 0, sx * 90]) dd_part_window(1.0, 1.4);
+    }
+    // 屋面设备（俯视焦点）
+    color(dd_METALC()) translate([L * 0.24, D * 0.2, h + 0.55]) dd_boxc([2.1, 1.5, 0.9]);
+    color(dd_METALD()) translate([L * 0.24, D * 0.2, h + 1.04]) cylinder(h = 0.14, r = 0.52, $fn = 8);
+    color(wd) translate([-L * 0.26, D * 0.12, h + 1.05]) dd_boxc([2.4, 2.1, 2.0]);
+    color(dd_ROOFD()) translate([-L * 0.26, D * 0.12, h + 2.11]) dd_boxc([2.7, 2.4, 0.14]);
+    color(dd_METALC()) for (i = [0 : 1])
+        translate([-L * 0.04 + i * 1.1, -D * 0.26, h + 0.45]) cylinder(h = 0.8, r = 0.17, $fn = 6);
+    if (dd_rnd(seed + 7, 2) == 0)
+    {
+        color(dd_WOODD()) translate([L * 0.06, -D * 0.3, h + 0.9]) cylinder(h = 1.5, r = 0.75, $fn = 8);
+        color(dd_METALD()) translate([L * 0.06, -D * 0.3, h + 0.2]) dd_boxc([1.4, 1.4, 0.16]);
+    }
+}
+
+// 工业厂房/仓库：波纹金属墙 + 缓坡顶带亮色天窗带 + 两樘卷帘门 + 装卸平台 + 屋顶通风球
+module dd_bldg_warehouse(seed = 0, L = 26, D = 16)
+{
+    wh = 6.4;
+    wc = [[0.46, 0.47, 0.45], [0.42, 0.44, 0.46], [0.48, 0.44, 0.38]][dd_rnd(seed, 3)];
+    wd = [wc[0] * 0.82, wc[1] * 0.82, wc[2] * 0.82];
+    color(dd_CONCD()) dd_slab(L + 0.8, D + 0.8, 0.3);
+    color(wc) translate([0, 0, 0.3]) dd_slab(L, D, wh - 0.3);
+    nr = max(2, floor(L / 2.4));
+    color(wd) for (i = [0 : nr - 1])
+        translate([-L / 2 + (i + 0.5) * L / nr, -D / 2 - 0.04, wh / 2 + 0.3]) dd_boxc([0.15, 0.1, wh - 0.6]);
+    // 缓坡双坡顶（脊沿 x）+ 天窗带
+    ra = atan(1.6 / (D / 2));
+    rl = sqrt(1.6 * 1.6 + (D / 2) * (D / 2)) + 0.6;
+    for (sy = [-1, 1])
+    {
+        color(dd_METALD()) translate([0, sy * D * 0.25, wh + 0.8]) rotate([sy * -ra, 0, 0]) dd_boxc([L + 0.9, rl, 0.16]);
+        color([0.74, 0.76, 0.72]) translate([0, sy * D * 0.25, wh + 0.89]) rotate([sy * -ra, 0, 0]) dd_boxc([L * 0.46, rl * 0.26, 0.05]);
+    }
+    color(dd_METALC()) translate([0, 0, wh + 1.66]) dd_boxc([L + 0.7, 0.55, 0.22]);
+    color(dd_METALC()) for (i = [-1, 0, 1]) translate([i * L * 0.3, 0, wh + 1.8]) cylinder(h = 0.55, r = 0.36, $fn = 7);
+    // 卷帘门 + 装卸平台
+    for (sx = [-1, 1])
+    {
+        color(dd_METALD()) translate([sx * L * 0.24, -D / 2 - 0.06, 2.3]) dd_boxc([4.2, 0.12, 4.4]);
+        color([0.56, 0.57, 0.55]) for (k = [0 : 5])
+            translate([sx * L * 0.24, -D / 2 - 0.13, 0.7 + k * 0.72]) dd_boxc([4.0, 0.04, 0.1]);
+    }
+    color(dd_CONCC()) translate([0, -D / 2 - 1.6, 0]) dd_slab(L * 0.72, 3.2, 1.2);
+    color(dd_CONCD()) translate([0, -D / 2 - 3.3, 0]) dd_slab(2.6, 1.4, 0.6);
+    color(dd_TRIMW()) translate([0, -D / 2 - 0.2, 5.6]) dd_boxc([L * 0.34, 0.1, 0.9]);   // 厂名牌
+}
+
+// 加油站：便利店 + 大雨棚 + 两组加油岛 + 价格牌。公路题材第一地标。
+module dd_bldg_gasstation(seed = 0)
+{
+    bc = [[0.52, 0.48, 0.42], [0.47, 0.45, 0.41]][dd_rnd(seed, 2)];
+    ac = dd_sign_c(seed + 3);
+    color(dd_CONCC()) translate([0, 1.5, 0]) dd_slab(30, 24, 0.12);
+    color(dd_CONCD()) translate([0, 1.5, 0.12]) dd_slab(29, 0.16, 0.014);
+    // 便利店
+    translate([0, 8.5, 0])
+    {
+        color(bc) dd_slab(12, 6.5, 3.4);
+        color(dd_CONCD()) translate([0, 0, 3.4]) dd_slab(12.4, 6.9, 0.4);
+        color(dd_DARKC()) translate([0, -3.3, 1.6]) dd_boxc([8.4, 0.12, 2.2]);
+        color(dd_TRIMW()) for (i = [0 : 2]) translate([-2.8 + i * 2.8, -3.38, 1.6]) dd_boxc([0.1, 0.1, 2.2]);
+        color([0.24, 0.24, 0.26]) translate([4.4, -3.3, 1.15]) dd_boxc([1.4, 0.12, 2.3]);
+        color(ac) translate([0, -3.5, 3.2]) dd_boxc([11, 0.22, 0.85]);
+        color(dd_TRIMW()) translate([-1.4, -3.63, 3.2]) dd_boxc([4.6, 0.04, 0.4]);
+        color(dd_METALC()) translate([3.6, 1.8, 3.9]) dd_boxc([1.7, 1.3, 0.7]);
+    }
+    // 雨棚
+    color(dd_METALC()) for (sx = [-1, 1], sy = [-1, 1])
+        translate([sx * 5.6, sy * 3.5, 2.45]) dd_boxc([0.44, 0.44, 4.9]);
+    color([0.80, 0.79, 0.74]) translate([0, 0, 4.9]) dd_slab(16, 11, 0.2);
+    color(ac) translate([0, 0, 5.1]) dd_slab(16.6, 11.6, 0.55);
+    color(dd_TRIMW()) translate([0, -5.85, 5.35]) dd_boxc([16.6, 0.06, 0.26]);
+    // 加油岛
+    for (sy = [-1, 1])
+        translate([0, sy * 2.8, 0])
+        {
+            color(dd_CONCD()) dd_slab(9.5, 1.7, 0.22);
+            for (sx = [-1, 1])
+                translate([sx * 2.7, 0, 0.22])
+                {
+                    color([0.70, 0.68, 0.64]) translate([0, 0, 0.78]) dd_boxc([1.05, 0.75, 1.56]);
+                    color(dd_DARKC()) translate([0, -0.4, 1.12]) dd_boxc([0.62, 0.06, 0.42]);
+                    color(dd_METALD()) translate([0, 0, 1.64]) dd_boxc([1.15, 0.85, 0.16]);
+                    color(ac) translate([0, 0, 1.76]) dd_boxc([0.9, 0.6, 0.1]);
+                }
+        }
+    // 价格牌
+    translate([-11.5, -8.0, 0])
+    {
+        color(dd_METALC()) for (sx = [-1, 1]) translate([sx * 0.75, 0, 2.7]) dd_boxc([0.17, 0.17, 5.4]);
+        color(ac) translate([0, 0, 5.9]) dd_boxc([3.4, 0.26, 2.0]);
+        color(dd_TRIMW()) translate([0, -0.15, 6.4]) dd_boxc([2.7, 0.04, 0.75]);
+        color(dd_TRIMW()) translate([0, -0.15, 5.4]) dd_boxc([2.3, 0.04, 0.45]);
+    }
+}
+
+// 汽车旅馆：单层长条 + 前廊 + 每单元门窗 + 端头竖招牌（roadtrip 味道的核心建筑）
+module dd_bldg_motel(seed = 0, units = 8)
+{
+    L = units * 4.2;
+    D = 7.0;
+    wc = [[0.55, 0.48, 0.38], [0.50, 0.45, 0.42], [0.52, 0.42, 0.32]][dd_rnd(seed, 3)];
+    ac = dd_sign_c(seed + 5);
+    color(dd_CONCD()) dd_slab(L + 1.0, D + 3.6, 0.25);
+    color(wc) translate([0, 1.6, 0.25]) dd_slab(L, D, 2.9);
+    translate([0, 1.6, 3.15]) dd_part_roof(L, D, 0.9, 0.6, 0, dd_roof_c(seed + 1));
+    color(wc) translate([0, -1.4, 3.05]) dd_boxc([L, 3.3, 0.18]);
+    color(dd_TRIMW()) for (i = [0 : units])
+        translate([-L / 2 + i * L / units, -2.9, 1.55]) dd_boxc([0.14, 0.14, 3.1]);
+    for (i = [0 : units - 1])
+    {
+        px = -L / 2 + (i + 0.5) * L / units;
+        translate([px - 1.0, -1.95, 0.25])
+            dd_part_door(0.95, 2.1, dd_rnd(seed + i * 7, 2) == 0 ? [0.30, 0.22, 0.16] : [0.23, 0.29, 0.33]);
+        translate([px + 1.0, -1.95, 1.75]) dd_part_window(1.3, 1.2);
+        if (dd_rnd(seed + i * 13, 3) == 0)
+            color(dd_METALC()) translate([px + 1.0, -2.0, 1.05]) dd_boxc([0.7, 0.4, 0.4]);   // 窗机空调
+    }
+    // 端头竖牌
+    translate([-L / 2 - 3.8, -2.2, 0])
+    {
+        color(dd_METALD()) cylinder(h = 7.4, r = 0.19, $fn = 6);
+        color(ac) translate([0, 0, 5.8]) dd_boxc([1.9, 0.32, 4.4]);
+        color(dd_TRIMW()) for (k = [0 : 3]) translate([0, -0.19, 7.2 - k * 0.95]) dd_boxc([1.15, 0.04, 0.62]);
+        color([0.78, 0.70, 0.30]) translate([0, -0.22, 3.3]) dd_boxc([2.6, 0.07, 0.75]);
+        color(dd_METALD()) translate([0, 0, 3.3]) dd_boxc([2.7, 0.14, 0.85]);
+    }
+}
+
+// 路边餐车（diner）：不锈钢车身 + 一端圆头 + 环窗带 + 彩色檐口 + 屋顶招牌
+module dd_bldg_diner(seed = 0)
+{
+    bc = [0.66, 0.66, 0.63];
+    ac = dd_sign_c(seed + 1);
+    color(dd_CONCD()) dd_slab(16, 11, 0.25);
+    color(bc) translate([-1, 0, 0.25]) dd_slab(10, 7.4, 3.2);
+    color(bc) translate([4, 0, 0.25]) cylinder(h = 3.2, r = 3.7, $fn = 12);
+    color(dd_GLASSC())
+    {
+        translate([-1, 0, 2.05]) dd_boxc([10.2, 7.6, 1.4]);
+        translate([4, 0, 2.05]) cylinder(h = 1.4, r = 3.8, center = true, $fn = 12);
+    }
+    color(ac)
+    {
+        translate([-1, 0, 3.6]) dd_boxc([10.6, 7.8, 0.55]);
+        translate([4, 0, 3.6]) cylinder(h = 0.55, r = 3.9, center = true, $fn = 12);
+    }
+    color([0.50, 0.50, 0.48])
+    {
+        translate([-1, 0, 3.92]) dd_boxc([10.4, 7.6, 0.14]);
+        translate([4, 0, 3.92]) cylinder(h = 0.14, r = 3.85, center = true, $fn = 12);
+    }
+    color(dd_TRIMW()) translate([-1, 0, 1.25]) dd_boxc([10.3, 7.7, 0.14]);
+    // 屋顶招牌
+    translate([-2.5, -1.2, 4.0])
+    {
+        color(dd_METALD()) for (sx = [-1, 1]) translate([sx * 1.7, 0, 0.9]) dd_boxc([0.15, 0.15, 1.8]);
+        color(ac) translate([0, 0, 2.25]) dd_boxc([4.6, 0.32, 1.6]);
+        color([0.82, 0.76, 0.42]) translate([0, -0.2, 2.25]) dd_boxc([3.7, 0.05, 0.85]);
+    }
+    translate([-1, -3.75, 0.25]) dd_part_door(1.2, 2.2, [0.26, 0.26, 0.28]);
+    color(dd_CONCC()) translate([-1, -4.6, 0]) dd_slab(2.6, 1.6, 0.25);
+}
+
+// 拖车房（mobile home）：砖垛支腿 + 金属底裙 + 浅坡顶 + 门廊台阶 + 遮阳篷 + 端部空调
+module dd_bldg_trailer(seed = 0, L = 9, D = 3.6)
+{
+    wc = [[0.58, 0.56, 0.50], [0.50, 0.52, 0.49], [0.56, 0.48, 0.38], [0.44, 0.48, 0.50]][dd_rnd(seed, 4)];
+    color(dd_CONCD()) for (sx = [-1, 1], sy = [-1, 1])
+        translate([sx * (L / 2 - 0.9), sy * (D / 2 - 0.5), 0.21]) dd_boxc([0.55, 0.55, 0.42]);
+    color([0.30, 0.30, 0.32]) translate([0, 0, 0.42]) dd_slab(L, D, 0.16);
+    color(wc) translate([0, 0, 0.58]) dd_slab(L, D, 2.1);
+    color(dd_METALC()) translate([0, 0, 0.5]) dd_slab(L + 0.08, D + 0.08, 0.12);
+    color([wc[0] * 0.8, wc[1] * 0.8, wc[2] * 0.8]) translate([0, 0, 2.6]) dd_slab(L + 0.1, D + 0.1, 0.1);
+    translate([0, 0, 2.7]) dd_part_roof(L, D, 0.55, 0.35, 0, dd_roof_c(seed + 2));
+    translate([-L * 0.26, -D / 2 - 0.05, 0.58]) dd_part_door(0.9, 1.95, [0.29, 0.23, 0.17]);
+    color(dd_METALD()) translate([-L * 0.26, -D / 2 - 0.6, 0.16]) dd_slab(1.3, 1.1, 0.42);
+    color(dd_rnd(seed + 3, 2) == 0 ? [0.52, 0.27, 0.17] : [0.28, 0.38, 0.44])
+        translate([-L * 0.26, -D / 2 - 0.75, 2.55]) rotate([14, 0, 0]) dd_boxc([2.6, 1.7, 0.07]);
+    translate([L * 0.16, -D / 2 - 0.05, 1.8]) dd_part_window(1.3, 0.95);
+    translate([L * 0.42, -D / 2 - 0.05, 1.8]) dd_part_window(0.85, 0.95);
+    translate([-L * 0.42, D / 2 + 0.05, 1.8]) rotate([0, 0, 180]) dd_part_window(1.0, 0.9);
+    color(dd_METALC()) translate([L / 2 + 0.12, 0, 1.75]) dd_boxc([0.55, 1.05, 0.85]);
+    color([0.70, 0.68, 0.60]) translate([L / 2 + 0.55, D * 0.28, 0.55]) cylinder(h = 1.0, r = 0.28, $fn = 7);
+}
+
+// 烧毁/坍塌的房屋：基础板 + 高低不齐的残墙 + 立着的砖烟囱 + 塌落屋面板 + 瓦砾与焦木。
+// 在整齐的住宅排里插一两栋，立刻把排屋阵列打成经历过灾难的街区。
+module dd_bldg_ruin(seed = 0, L = 9, D = 7)
+{
+    color(dd_PLINTH()) dd_slab(L + 0.4, D + 0.4, 0.3);
+    color([0.21, 0.19, 0.18]) translate([0, 0, 0.3]) dd_slab(L, D, 0.09);
+    wc = dd_wall_c(seed);
+    cc = [wc[0] * 0.5, wc[1] * 0.48, wc[2] * 0.46];
+    for (sy = [-1, 1])
+    {
+        hh = dd_rndr(seed + (sy + 2) * 17, 0.5, 2.6);
+        color(cc) translate([dd_rndr(seed + (sy + 2) * 7, -L * 0.16, L * 0.16), sy * D / 2, 0.3 + hh / 2])
+            dd_boxc([L * dd_rndr(seed + (sy + 2) * 11, 0.45, 0.95), 0.26, hh]);
+    }
+    for (sx = [-1, 1])
+    {
+        hh = dd_rndr(seed + (sx + 2) * 23 + 5, 0.6, 2.8);
+        color(cc) translate([sx * L / 2, dd_rndr(seed + (sx + 2) * 13, -D * 0.16, D * 0.16), 0.3 + hh / 2])
+            dd_boxc([0.26, D * dd_rndr(seed + (sx + 2) * 19, 0.4, 0.9), hh]);
+    }
+    color([0.38, 0.25, 0.20]) translate([L * 0.3, D * 0.22, 0.3]) dd_slab(0.75, 0.75, 3.5);
+    color(dd_PLINTH()) translate([L * 0.3, D * 0.22, 3.8]) dd_slab(0.9, 0.9, 0.14);
+    for (i = [0 : 2])
+        color(dd_ROOFD())
+            translate([dd_rndr(seed + i * 29, -L * 0.3, L * 0.3), dd_rndr(seed + i * 31 + 3, -D * 0.3, D * 0.3), 0.52])
+                rotate([dd_rndr(seed + i * 7, -22, 22), dd_rndr(seed + i * 11, -18, 18), dd_rnd(seed + i, 180)])
+                    dd_boxc([dd_rndr(seed + i, 2.2, 4.0), dd_rndr(seed + i + 9, 1.4, 2.6), 0.12]);
+    for (i = [0 : 4])
+        color(i % 2 == 0 ? [0.33, 0.31, 0.29] : [0.23, 0.20, 0.17])
+            translate([dd_rndr(seed * 3 + i * 13, -L * 0.42, L * 0.42),
+                       dd_rndr(seed * 5 + i * 17 + 7, -D * 0.42, D * 0.42), 0.3])
+                rotate([0, 0, dd_rnd(seed + i, 180)])
+                    scale([dd_rndr(seed + i, 0.7, 1.7), dd_rndr(seed + i + 3, 0.6, 1.2), 1])
+                        cylinder(h = dd_rndr(seed + i + 5, 0.25, 0.6), r = 1, $fn = 7);
+    for (i = [0 : 2])
+        color([0.16, 0.14, 0.13])
+            translate([dd_rndr(seed + i * 41, -L * 0.35, L * 0.35), dd_rndr(seed + i * 43 + 5, -D * 0.35, D * 0.35), 0.62])
+                rotate([0, dd_rndr(seed + i * 3, 72, 108), dd_rnd(seed + i, 180)])
+                    dd_boxc([0.16, 0.16, dd_rndr(seed + i + 7, 1.8, 3.4)]);
+}
+
+// 美式水塔（全高约 18*s）：外八字四腿（顶端内收）+ 两层圈梁 + 交叉斜撑 + 罐体 + 检修盘。
+// 一张图放一座，跑图时它就是玩家的方位锚。
+module dd_bldg_watertower(s = 1.0, seed = 0)
+{
+    scale([s, s, s])
+    {
+        lh = 11.0;
+        r0 = 3.4;
+        tl = 8;
+        for (sx = [-1, 1], sy = [-1, 1])
+            color(dd_METALD()) translate([sx * r0, sy * r0, lh / 2]) rotate([sy * tl, sx * -tl, 0]) dd_boxc([0.32, 0.32, lh]);
+        for (z = [3.4, 7.6])
+        {
+            rz = r0 + (lh / 2 - z) * tan(tl);
+            color(dd_METALD())
+            {
+                for (sy = [-1, 1]) translate([0, sy * rz, z]) dd_boxc([rz * 2, 0.16, 0.16]);
+                for (sx = [-1, 1]) translate([sx * rz, 0, z]) dd_boxc([0.16, rz * 2, 0.16]);
+            }
+        }
+        rz0 = r0 + (lh / 2 - 3.4) * tan(tl);
+        rz1 = r0 + (lh / 2 - 7.6) * tan(tl);
+        bl = sqrt((rz0 + rz1) * (rz0 + rz1) + 4.2 * 4.2);
+        ba = atan((rz0 + rz1) / 4.2);
+        for (a = [0, 90, 180, 270])
+            rotate([0, 0, a])
+                for (sd = [-1, 1])
+                    color(dd_METALD()) translate([0, (rz0 + rz1) / 2, 5.5]) rotate([0, sd * ba, 0]) dd_boxc([0.12, 0.12, bl]);
+        tr = 3.3;
+        color(dd_METALC())
+        {
+            translate([0, 0, lh - 1.5]) cylinder(h = 1.6, r1 = 0.7, r2 = 2.8, $fn = 10);
+            translate([0, 0, lh + 0.1]) cylinder(h = 4.6, r = tr, $fn = 10);
+            translate([0, 0, lh + 4.7]) cylinder(h = 1.7, r1 = tr, r2 = 1.0, $fn = 10);
+            translate([0, 0, lh + 6.4]) cylinder(h = 0.5, r = 0.42, $fn = 7);
+        }
+        color([0.54, 0.52, 0.49]) translate([0, 0, lh + 0.9]) cylinder(h = 0.45, r = tr + 0.04, $fn = 10);
+        color([0.58, 0.19, 0.14]) translate([0, 0, lh + 2.3]) cylinder(h = 1.3, r = tr + 0.05, $fn = 10);
+        color(dd_METALD()) translate([0, 0, lh + 0.05]) cylinder(h = 0.09, r = tr + 0.6, $fn = 10);
+        color(dd_METALD()) for (a = [0 : 45 : 315])
+            rotate([0, 0, a]) translate([tr + 0.5, 0, lh + 0.5]) dd_boxc([0.07, 0.07, 0.9]);
+        // 爬梯
+        color(dd_METALD()) for (sx = [-1, 1])
+            translate([sx * 0.24, -r0 - 0.5, lh / 2 + 0.1]) dd_boxc([0.07, 0.07, lh]);
+        color(dd_METALD()) for (i = [0 : 12])
+            translate([0, -r0 - 0.5, 0.8 + i * 0.85]) dd_boxc([0.5, 0.05, 0.05]);
+    }
+}
+
+// 谷物筒仓（全高约 14*s）：波纹罐身 + 锥顶 + 爬梯 + 卸料斗。与谷仓成组出现。
+module dd_bldg_silo(seed = 0, s = 1.0)
+{
+    scale([s, s, s])
+    {
+        r = 2.6;
+        h = 12;
+        color([0.58, 0.56, 0.51]) cylinder(h = h, r = r, $fn = 10);
+        color([0.50, 0.48, 0.44]) for (i = [0 : 5]) translate([0, 0, 1.2 + i * 1.9]) cylinder(h = 0.22, r = r + 0.05, $fn = 10);
+        color(dd_METALD()) translate([0, 0, h]) cylinder(h = 1.9, r1 = r + 0.12, r2 = 0.55, $fn = 10);
+        color(dd_METALD()) translate([0, 0, h + 1.9]) cylinder(h = 0.5, r = 0.45, $fn = 7);
+        color(dd_METALD()) for (sx = [-1, 1]) translate([sx * 0.22, -r - 0.14, h / 2]) dd_boxc([0.07, 0.07, h]);
+        color(dd_METALD()) for (i = [0 : 13]) translate([0, -r - 0.14, 0.6 + i * 0.85]) dd_boxc([0.46, 0.05, 0.05]);
+        color(dd_METALC()) translate([r + 0.45, 0, 1.4]) rotate([0, 22, 0]) dd_boxc([0.55, 0.75, 2.8]);
+        if (dd_rnd(seed, 3) == 0)
+            color(dd_RUSTC()) translate([0, 0, 3.0]) cylinder(h = 1.4, r = r + 0.03, $fn = 10);
+    }
+}
+
+// ================= v2 道具与载具 =================
+
+// 公路广告牌（front = -y）：双柱 + 牌面 + 检修走道，seed 偶尔给一角撕裂的画布
+module dd_prop_billboard(seed = 0)
+{
+    ac = dd_sign_c(seed);
+    color(dd_METALD()) for (sx = [-1, 1]) translate([sx * 2.5, 0, 3.0]) dd_boxc([0.3, 0.3, 6.0]);
+    color([0.48, 0.46, 0.43]) translate([0, 0.1, 6.7]) dd_boxc([9.8, 0.2, 3.5]);
+    color(ac) translate([0, -0.06, 6.7]) dd_boxc([9.5, 0.12, 3.3]);
+    color(dd_TRIMW())
+    {
+        translate([-1.6, -0.15, 7.4]) dd_boxc([5.4, 0.04, 0.95]);
+        translate([1.2, -0.15, 6.1]) dd_boxc([3.4, 0.04, 0.5]);
+    }
+    if (dd_rnd(seed + 3, 3) == 0)
+        color([0.42, 0.40, 0.37]) translate([3.6, -0.24, 5.5]) rotate([26, 0, 10]) dd_boxc([1.9, 0.05, 1.7]);
+    color(dd_METALD()) translate([0, 0.18, 4.85]) dd_boxc([9.2, 0.12, 0.14]);
+    color(dd_METALD()) for (sx = [-1, 1]) translate([sx * 2.5, 0.5, 3.6]) rotate([0, 0, 0]) rotate([32, 0, 0]) dd_boxc([0.12, 0.12, 7.0]);
+}
+
+// 海运集装箱（stack 层叠放，上层轻微错位）：货场/路障/临时仓库
+module dd_prop_container(seed = 0, stack = 1)
+{
+    for (k = [0 : stack - 1])
+    {
+        cc = [[0.52, 0.27, 0.12], [0.19, 0.35, 0.48], [0.23, 0.40, 0.27],
+              [0.46, 0.44, 0.40], [0.48, 0.16, 0.12]][dd_rnd(seed + k * 17, 5)];
+        translate([dd_rndr(seed + k * 7, -0.3, 0.3), dd_rndr(seed + k * 11, -0.18, 0.18), k * 2.64])
+            rotate([0, 0, k == 0 ? 0 : dd_rndr(seed + k * 13, -3, 3)])
+            {
+                color(cc) translate([0, 0, 1.3]) dd_boxc([6.1, 2.44, 2.6]);
+                color([cc[0] * 0.78, cc[1] * 0.78, cc[2] * 0.78])
+                {
+                    for (i = [0 : 7]) translate([-2.45 + i * 0.7, 0, 1.35]) dd_boxc([0.12, 2.5, 2.25]);
+                    translate([0, 0, 0.13]) dd_boxc([6.16, 2.5, 0.26]);
+                    translate([0, 0, 2.5]) dd_boxc([6.16, 2.5, 0.22]);
+                    translate([3.07, 0, 1.35]) dd_boxc([0.06, 2.2, 2.2]);
+                }
+                color([0.28, 0.28, 0.28]) for (sx = [-1, 1], sy = [-1, 1])
+                    translate([sx * 3.0, sy * 1.16, 0.14]) dd_boxc([0.26, 0.22, 0.3]);
+            }
+    }
+}
+
+// 立式储罐（全高约 8*s）：罐身 + 加强环 + 锥顶 + 爬梯 + 底部管路。工业区/加油站后场
+module dd_prop_tank(seed = 0, s = 1.0)
+{
+    scale([s, s, s])
+    {
+        color([0.56, 0.55, 0.51]) cylinder(h = 6.4, r = 3.0, $fn = 10);
+        color([0.48, 0.47, 0.44]) for (z = [1.6, 3.4, 5.2]) translate([0, 0, z]) cylinder(h = 0.2, r = 3.06, $fn = 10);
+        color(dd_METALD()) translate([0, 0, 6.4]) cylinder(h = 0.9, r1 = 3.0, r2 = 2.1, $fn = 10);
+        color(dd_METALD()) translate([0, 0, 7.3]) cylinder(h = 0.45, r = 0.4, $fn = 6);
+        if (dd_rnd(seed, 2) == 0)
+            color(dd_RUSTC()) translate([2.0, -1.8, 1.2]) rotate([0, 0, 0]) dd_boxc([1.4, 0.06, 2.6]);
+        color(dd_METALD())
+        {
+            for (sx = [-1, 1]) translate([sx * 0.24, -3.15, 3.2]) dd_boxc([0.07, 0.07, 6.4]);
+            for (i = [0 : 6]) translate([0, -3.15, 0.6 + i * 0.9]) dd_boxc([0.5, 0.05, 0.05]);
+            translate([0, 0, 6.42]) cylinder(h = 0.07, r = 2.2, $fn = 9);
+        }
+        color(dd_METALC())
+        {
+            translate([3.4, 0, 0.5]) rotate([0, 90, 0]) cylinder(h = 1.6, r = 0.2, $fn = 6);
+            translate([4.2, 0, 0.9]) cylinder(h = 0.9, r = 0.2, $fn = 6);
+            translate([4.2, 0, 1.85]) dd_boxc([0.5, 0.34, 0.3]);
+        }
+    }
+}
+
+// 格构信号塔（全高约 26*s）：收分四腿 + 层间横撑 + 天线板 + 塔顶航空障碍灯
+module dd_prop_radiomast(s = 1.0, seed = 0)
+{
+    scale([s, s, s])
+    {
+        h = 22;
+        r0 = 1.7;
+        tl = 3.2;
+        for (sx = [-1, 1], sy = [-1, 1])
+            color(dd_METALD()) translate([sx * r0, sy * r0, h / 2]) rotate([sy * tl, sx * -tl, 0]) dd_boxc([0.18, 0.18, h]);
+        for (k = [0 : 6])
+        {
+            z = 1.6 + k * 3.2;
+            rz = r0 + (h / 2 - z) * tan(tl);
+            color(dd_METALD())
+            {
+                for (sy = [-1, 1]) translate([0, sy * rz, z]) dd_boxc([rz * 2, 0.1, 0.1]);
+                for (sx = [-1, 1]) translate([sx * rz, 0, z]) dd_boxc([0.1, rz * 2, 0.1]);
+            }
+        }
+        for (k = [0 : 5])
+        {
+            z0 = 1.6 + k * 3.2;
+            zc = z0 + 1.6;
+            rz0 = r0 + (h / 2 - z0) * tan(tl);
+            rz1 = r0 + (h / 2 - z0 - 3.2) * tan(tl);
+            bl = sqrt((rz0 + rz1) * (rz0 + rz1) + 10.24);
+            ba = atan((rz0 + rz1) / 3.2);
+            for (sy = [-1, 1])
+                color(dd_METALD()) translate([0, sy * (rz0 + rz1) / 2, zc])
+                    rotate([0, (k % 2 == 0 ? 1 : -1) * ba, 0]) dd_boxc([0.08, 0.08, bl]);
+        }
+        color(dd_METALC()) translate([0, 0, h]) cylinder(h = 3.6, r = 0.13, $fn = 5);
+        color(dd_REDC()) translate([0, 0, h + 3.6]) sphere(r = 0.24, $fn = 6);
+        color(dd_METALC()) for (a = [0, 120, 240])
+            rotate([0, 0, a + dd_rnd(seed, 30)]) translate([1.6, 0, h - 3.4]) dd_boxc([0.5, 1.5, 1.0]);
+        color(dd_METALD()) dd_slab(4.6, 4.6, 0.5);
+    }
+}
+
+// 幸存者帐篷（front = -y）：地布 + 双坡篷面 + 门帘 + 地钉绳
+module dd_prop_tent(seed = 0, s = 1.0)
+{
+    tc = [[0.30, 0.35, 0.23], [0.40, 0.33, 0.20], [0.23, 0.29, 0.35], [0.47, 0.40, 0.22]][dd_rnd(seed, 4)];
+    scale([s, s, s])
+    {
+        color([0.27, 0.25, 0.21]) dd_slab(3.2, 2.8, 0.06);
+        translate([0, 0, 0.06]) dd_part_roof(2.5, 2.4, 1.5, 0.3, 0, tc);
+        color([tc[0] * 0.7, tc[1] * 0.7, tc[2] * 0.7]) translate([0, -1.28, 0.6]) dd_boxc([0.9, 0.06, 1.1]);
+        color([tc[0] * 1.05, tc[1] * 1.05, tc[2] * 1.05])
+            translate([0.72, -1.24, 0.75]) rotate([0, 0, 22]) dd_boxc([0.55, 0.05, 1.3]);
+        color(dd_METALD()) for (sx = [-1, 1], sy = [-1, 1])
+            translate([sx * 1.6, sy * 1.5, 0.24]) rotate([sy * 34, sx * -20, 0]) dd_boxc([0.04, 0.04, 0.55]);
+    }
+}
+
+// 营地篝火：灰烬圈 + 石头圈 + 交叉焦木 + 余烬（seed 决定要不要三脚架吊锅）
+module dd_prop_campfire(seed = 0)
+{
+    color([0.23, 0.21, 0.19]) scale([1.5, 1.4, 1]) cylinder(h = 0.04, r = 1, $fn = 9);
+    for (i = [0 : 7])
+        color([0.44, 0.42, 0.39])
+            rotate([0, 0, i * 45 + dd_rnd(seed, 22)]) translate([1.05, 0, 0.09]) dd_boxc([0.32, 0.26, 0.18]);
+    for (i = [0 : 3])
+        color([0.19, 0.16, 0.14])
+            rotate([0, 0, i * 45 + 20]) translate([0, 0, 0.2]) rotate([0, 72, 0]) dd_boxc([0.15, 0.15, 1.1]);
+    color([0.68, 0.32, 0.08]) translate([0, 0, 0.1]) cylinder(h = 0.26, r1 = 0.32, r2 = 0.05, $fn = 6);
+    if (dd_rnd(seed + 3, 2) == 0)
+    {
+        color(dd_METALD())
+        {
+            for (a = [0, 120, 240]) rotate([0, 0, a]) translate([0.62, 0, 0.85]) rotate([0, 22, 0]) dd_boxc([0.06, 0.06, 1.8]);
+            translate([0, 0, 1.12]) dd_boxc([0.5, 0.06, 0.06]);
+            translate([0, 0, 0.85]) cylinder(h = 0.34, r = 0.26, $fn = 8);
+        }
+    }
+}
+
+// 校车 / 城际巴士（车头 +x，seed 选黄校车或灰巴士）
+module dd_veh_bus(seed = 0)
+{
+    school = dd_rnd(seed, 3) != 0;
+    bc = school ? dd_BUSY() : [0.40, 0.42, 0.45];
+    color(bc)
+    {
+        translate([-0.6, 0, 1.8]) dd_boxc([9.4, 2.5, 1.9]);
+        translate([4.6, 0, 1.35]) dd_boxc([1.7, 2.3, 1.1]);
+        translate([-0.6, 0, 2.78]) dd_boxc([9.2, 2.4, 0.16]);
+    }
+    color(dd_GLASSC())
+    {
+        translate([-0.6, 0, 2.2]) dd_boxc([9.0, 2.54, 0.95]);
+        translate([4.1, 0, 2.3]) dd_boxc([0.5, 2.2, 0.85]);
+    }
+    color([0.14, 0.14, 0.14])
+    {
+        translate([-0.6, 0, 1.2]) dd_boxc([9.5, 2.54, 0.22]);
+        translate([1.0, 0, 0.62]) dd_boxc([8.0, 2.2, 0.44]);
+    }
+    color(school ? [0.12, 0.12, 0.12] : dd_METALC()) translate([-5.35, 0, 1.9]) dd_boxc([0.12, 2.2, 1.5]);
+    color(dd_REDC()) for (sy = [-1, 1])
+    {
+        translate([-5.36, sy * 0.9, 2.6]) dd_boxc([0.1, 0.32, 0.22]);
+        translate([-0.6, sy * 1.28, 3.0]) dd_boxc([0.5, 0.16, 0.28]);
+    }
+    color(dd_MARKW()) for (sy = [-1, 1]) translate([5.44, sy * 0.75, 1.1]) dd_boxc([0.06, 0.34, 0.2]);
+    for (sy = [-1, 1])
+    {
+        translate([3.4, sy * 1.15, 0.5]) dd_veh_wheel(0.5, 0.3);
+        translate([-2.6, sy * 1.15, 0.5]) dd_veh_wheel(0.5, 0.3);
+        translate([-3.7, sy * 1.15, 0.5]) dd_veh_wheel(0.5, 0.3);
+    }
+}
+
+// 半挂卡车（车头 +x，trailer=0 时只有牵引车）：公路上最大的一块可读体量
+module dd_veh_truck(seed = 0, trailer = 1)
+{
+    cc = dd_car_c(seed + 7);
+    color(cc)
+    {
+        translate([4.9, 0, 1.75]) dd_boxc([2.7, 2.5, 2.1]);
+        translate([6.9, 0, 1.15]) dd_boxc([1.5, 2.5, 1.2]);
+    }
+    color(dd_GLASSC()) translate([6.2, 0, 2.35]) dd_boxc([0.45, 2.3, 0.85]);
+    color(dd_METALC())
+    {
+        translate([7.7, 0, 0.75]) dd_boxc([0.26, 2.5, 0.55]);
+        for (sy = [-1, 1]) translate([3.7, sy * 1.2, 2.2]) cylinder(h = 2.0, r = 0.14, $fn = 6);
+    }
+    color([0.22, 0.22, 0.24]) translate([2.6, 0, 0.85]) dd_boxc([5.6, 2.2, 0.5]);
+    color(dd_MARKW()) for (sy = [-1, 1]) translate([7.66, sy * 0.8, 1.35]) dd_boxc([0.07, 0.36, 0.24]);
+    for (sy = [-1, 1])
+    {
+        translate([6.0, sy * 1.2, 0.55]) dd_veh_wheel(0.55, 0.32);
+        translate([3.4, sy * 1.2, 0.55]) dd_veh_wheel(0.55, 0.32);
+        translate([2.2, sy * 1.2, 0.55]) dd_veh_wheel(0.55, 0.32);
+    }
+    if (trailer == 1)
+    {
+        tc = [[0.60, 0.59, 0.55], [0.46, 0.48, 0.50], [0.55, 0.45, 0.32]][dd_rnd(seed + 11, 3)];
+        color(tc) translate([-4.0, 0, 2.7]) dd_boxc([11.6, 2.55, 2.9]);
+        color([tc[0] * 0.82, tc[1] * 0.82, tc[2] * 0.82])
+        {
+            for (i = [0 : 9]) translate([-9.4 + i * 1.2, 0, 2.7]) dd_boxc([0.1, 2.6, 2.8]);
+            translate([-9.78, 0, 2.7]) dd_boxc([0.1, 2.4, 2.6]);
+        }
+        color(dd_sign_c(seed + 5)) translate([-4.0, -1.3, 3.3]) dd_boxc([5.0, 0.06, 1.1]);
+        color([0.22, 0.22, 0.24]) translate([-4.0, 0, 1.15]) dd_boxc([11.4, 2.0, 0.34]);
+        color(dd_METALD()) for (sy = [-1, 1]) translate([-9.0, sy * 0.9, 0.55]) dd_boxc([0.14, 0.14, 1.1]);
+        for (sy = [-1, 1])
+        {
+            translate([-8.2, sy * 1.22, 0.55]) dd_veh_wheel(0.55, 0.32);
+            translate([-7.0, sy * 1.22, 0.55]) dd_veh_wheel(0.55, 0.32);
+        }
+    }
+}
+
+// ================= v2 大尺度地表（俯视地图用，成本 < 250 三角/块） =================
+
+// 大田块：土色底 + 犁沟条纹 + 草埂。dd_nature_crop_patch 逐株建模，铺 40x30 会到 2 万三角；
+// 这个模块专为"一屏一块田"的农业区设计，可以放心铺满北部农田。
+module dd_nature_field_big(L = 40, D = 30, seed = 0)
+{
+    c = [[0.42, 0.33, 0.20], [0.37, 0.34, 0.19], [0.33, 0.36, 0.21], [0.45, 0.40, 0.22]][dd_rnd(seed, 4)];
+    color(c) dd_slab(L, D, 0.10);
+    n = max(3, floor(D / 2.4));
+    for (i = [0 : n - 1])
+        color(dd_rnd(seed + i * 7, 3) == 0 ? [c[0] * 0.80, c[1] * 0.80, c[2] * 0.80]
+                                           : [c[0] * 1.10, c[1] * 1.08, c[2] * 1.02])
+            translate([0, -D / 2 + (i + 0.5) * D / n, 0.10]) dd_slab(L - 1.2, D / n * 0.55, 0.02);
+    color(dd_GRASSD()) for (sy = [-1, 1]) translate([0, sy * (D / 2 - 0.4), 0.10]) dd_slab(L, 0.8, 0.03);
+    if (dd_rnd(seed + 5, 3) == 0)   // 未收割的一角
+        color([0.55, 0.47, 0.22]) translate([dd_rndr(seed, -L * 0.25, L * 0.25), 0, 0.12])
+            dd_slab(L * 0.3, D * 0.7, 0.16);
+}
+
+// 干裂地表（旱地/干涸河床/盐碱滩）：浅色底 + 龟裂纹 + 风蚀深斑
+module dd_ground_cracked(L = 30, D = 20, seed = 0, c = [0.54, 0.45, 0.30])
+{
+    color(c) dd_slab(L, D, 0.09);
+    for (i = [0 : 9])
+        color([c[0] * 0.72, c[1] * 0.72, c[2] * 0.72])
+            translate([dd_rndr(seed * 7 + i * 31, -L * 0.42, L * 0.42),
+                       dd_rndr(seed * 13 + i * 17 + 5, -D * 0.42, D * 0.42), 0.09])
+                rotate([0, 0, dd_rnd(seed + i * 11, 180)])
+                    dd_slab(dd_rndr(seed + i, L * 0.14, L * 0.42), 0.18, 0.014);
+    for (i = [0 : 2])
+        color([c[0] * 0.86, c[1] * 0.84, c[2] * 0.80])
+            translate([dd_rndr(seed * 3 + i * 23, -L * 0.3, L * 0.3),
+                       dd_rndr(seed * 5 + i * 29 + 7, -D * 0.3, D * 0.3), 0.09])
+                rotate([0, 0, dd_rnd(seed + i * 5, 180)])
+                    scale([dd_rndr(seed + i, L * 0.1, L * 0.24), dd_rndr(seed + i + 3, D * 0.1, D * 0.22), 1])
+                        cylinder(h = 0.016, r = 1, $fn = 8);
 }
