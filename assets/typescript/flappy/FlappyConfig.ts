@@ -18,6 +18,8 @@ export function LoadGameplayConfig(path = gameplayConfigPath): FGameplayConfig {
             fieldOfView: raw.camera.fieldOfView,
         },
         world: raw.world,
+        environment: raw.environment,
+        parallax: raw.parallax,
         bird: {
             ...raw.bird,
             initialPosition: vec3FromArray(raw.bird.initialPosition),

@@ -55,6 +55,7 @@ private:
     void RestartScene();
     void StartOrFlap();
     void FixedStep(bool flapRequested);
+    void UpdateParallax(float deltaSeconds);
     void Die();
     void PlaySfx(const char* path);
     void RunReplayToCompletion();
@@ -65,6 +66,9 @@ private:
     Flappy::FXorShift32 rng_{0x00C0FFEEu};
     Flappy::FFlappyCppBird bird_;
     Flappy::FFlappyCppPipes pipes_;
+    std::vector<std::shared_ptr<Assets::Node>> mountainNodes_;
+    std::vector<std::shared_ptr<Assets::Node>> vegetationNodes_;
+    std::vector<std::shared_ptr<Assets::Node>> cloudNodes_;
     Flappy::EGameState state_ = Flappy::EGameState::Ready;
     int score_ = 0;
     float fixedAccumulator_ = 0.0f;

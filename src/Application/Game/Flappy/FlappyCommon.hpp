@@ -30,6 +30,32 @@ namespace Flappy
         float minY = -5.6f;
         float maxY = 5.6f;
         float gameplayZ = 0.0f;
+        float backdropZ = -40.0f;
+    };
+
+    struct FEnvironmentConfig
+    {
+        int skyIndex = 0;
+        float skyIntensity = 150.0f;
+        float sunIntensity = 600.0f;
+        float sunRotation = 0.0f;
+        float sunElevation = 0.65f;
+    };
+
+    struct FParallaxConfig
+    {
+        float mountainZ = -18.0f;
+        float mountainSpeed = 0.35f;
+        float mountainSpacing = 12.0f;
+        int mountainCount = 7;
+        float vegetationZ = -7.0f;
+        float vegetationSpeed = 1.0f;
+        float vegetationSpacing = 3.4f;
+        int vegetationCount = 12;
+        float cloudZ = -26.0f;
+        float cloudSpeed = 0.18f;
+        float cloudSpacing = 14.0f;
+        int cloudCount = 6;
     };
 
     struct FBirdConfig
@@ -59,6 +85,8 @@ namespace Flappy
     {
         FCameraConfig camera;
         FWorldConfig world;
+        FEnvironmentConfig environment;
+        FParallaxConfig parallax;
         FBirdConfig bird;
         FPipeConfig pipe;
         float fixedDeltaSeconds = 1.0f / 60.0f;

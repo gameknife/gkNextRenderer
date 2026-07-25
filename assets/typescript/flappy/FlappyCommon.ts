@@ -17,6 +17,30 @@ export interface FWorldConfig {
     minY: number;
     maxY: number;
     gameplayZ: number;
+    backdropZ: number;
+}
+
+export interface FEnvironmentConfig {
+    skyIndex: number;
+    skyIntensity: number;
+    sunIntensity: number;
+    sunRotation: number;
+    sunElevation: number;
+}
+
+export interface FParallaxConfig {
+    mountainZ: number;
+    mountainSpeed: number;
+    mountainSpacing: number;
+    mountainCount: number;
+    vegetationZ: number;
+    vegetationSpeed: number;
+    vegetationSpacing: number;
+    vegetationCount: number;
+    cloudZ: number;
+    cloudSpeed: number;
+    cloudSpacing: number;
+    cloudCount: number;
 }
 
 export interface FBirdConfig {
@@ -43,6 +67,8 @@ export interface FPipeConfig {
 export interface FGameplayConfig {
     camera: FCameraConfig;
     world: FWorldConfig;
+    environment: FEnvironmentConfig;
+    parallax: FParallaxConfig;
     bird: FBirdConfig;
     pipe: FPipeConfig;
     fixedDeltaSeconds: number;
