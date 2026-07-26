@@ -306,6 +306,9 @@ void Brotato3DGameInstance::UpdatePlayer(double deltaSeconds)
         Assets::NodeUtils::SetVisible(player_.shotgunWeaponNode, hasShotgun);
     }
 
+    const glm::vec3 playerFeet = player_.worldPos - glm::vec3(0.0f, player_.radius, 0.0f);
+    playerRig_.Update(playerFeet, playerVelocity_, player_.facingDir, static_cast<float>(deltaSeconds));
+
     if (player_.dashRemainingMs > 0.0f)
     {
         PushLaserBeam(previousPlayerPos + glm::vec3(0.0f, 0.18f, 0.0f),
@@ -479,6 +482,8 @@ void Brotato3DGameInstance::ResetRuntimeState()
     targetSkyIntensity_ = 30.0f;
     skyTransitionTotalMs_ = 0.0f;
     skyTransitionRemainingMs_ = 0.0f;
+    sunRotation_ = 0.28f;
+    sunLightingUpdateAccumMs_ = 0.0f;
     ApplyLightingSettings();
     weaponMergeBannerMs_ = 0.0f;
     weaponMergeBannerText_.clear();
@@ -510,6 +515,7 @@ void Brotato3DGameInstance::ResetRuntimeState()
     }
     ClearMovementInput();
     Assets::NodeUtils::SetVisible(player_.bodyNode, false);
+    playerRig_.SetVisible(false);
     Assets::NodeUtils::SetVisible(player_.facingNode, false);
     Assets::NodeUtils::SetVisible(player_.smgWeaponNode, false);
     Assets::NodeUtils::SetVisible(player_.shotgunWeaponNode, false);
@@ -554,6 +560,7 @@ void Brotato3DGameInstance::ApplySelectedCharacter()
     if (const auto materialIt = characterMaterialIds_.find(character->id); materialIt != characterMaterialIds_.end())
     {
         Assets::NodeUtils::SetPrimaryMaterial(player_.bodyNode, materialIt->second);
+        playerRig_.SetTintMaterial(materialIt->second);
     }
     playerDebrisMatId_ = Assets::SceneBuilder::AddLambertianMaterialToScene(GetEngine().GetScene(),
                                                                     character->color * 0.6f + glm::vec3(0.4f));

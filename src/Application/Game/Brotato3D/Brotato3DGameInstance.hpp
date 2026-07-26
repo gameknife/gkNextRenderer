@@ -6,6 +6,7 @@
 #include "Brotato3DDebris.hpp"
 #include "Brotato3DEnemy.hpp"
 #include "Brotato3DPlayer.hpp"
+#include "Brotato3DPlayerRigVisual.hpp"
 #include "Brotato3DProjectile.hpp"
 #include "Brotato3DShop.hpp"
 #include "Brotato3DWaveSystem.hpp"
@@ -72,6 +73,7 @@ public:
     bool OnRenderUI() override;
     bool OnKey(SDL_Event& event) override;
     void OnSceneLoaded() override;
+    void OnSceneUnloaded() override;
     bool OnGamepadInput(int16_t leftStickX,
                         int16_t leftStickY,
                         int16_t rightStickX,
@@ -267,6 +269,7 @@ private:
     void ApplyLightingSettings();
     void SetSkyIntensityTarget(float target, float transitionMs);
     void UpdateSkyTransition(double deltaSeconds);
+    void UpdateSunLighting(double deltaSeconds);
     void BeginDuskSurge();
     void UpdateExtractionVehicle(double deltaSeconds);
     void ResetExtractionVehicle();
@@ -295,6 +298,7 @@ private:
     Brotato3D::EAppState appState_ = Brotato3D::EAppState::MainMenu;
     glm::vec2 arenaHalfExtent_ = glm::vec2(12.0f, 8.0f);
     Brotato3D::FPlayerRuntime player_{};
+    Brotato3D::FPlayerRigVisual playerRig_{};
     std::map<std::string, Brotato3D::FEnemyDef> enemyDefs_;
     std::map<std::string, Brotato3D::FWeaponDef> weaponDefs_;
     std::vector<Brotato3D::FUpgradeCardDef> upgradeCards_;
@@ -379,6 +383,8 @@ private:
     float targetSkyIntensity_ = 30.0f;
     float skyTransitionTotalMs_ = 0.0f;
     float skyTransitionRemainingMs_ = 0.0f;
+    float sunRotation_ = 0.28f;
+    float sunLightingUpdateAccumMs_ = 0.0f;
     float screenShakeMs_ = 0.0f;
     float screenShakeIntensity_ = 0.0f;
     float damageFlashMs_ = 0.0f;

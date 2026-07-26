@@ -8,6 +8,7 @@
 
 #include "Brotato3DUI.hpp"
 #include "Engine/Runtime/Editor/FontLoader.hpp"
+#include "Engine/Options.hpp"
 #include "Engine/Runtime/Platform/UserPaths.hpp"
 #include "Engine/Runtime/Subsystems/NextLocalization.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
@@ -106,6 +107,12 @@ Brotato3DGameInstance::Brotato3DGameInstance(Vulkan::WindowConfig& config, Runti
 
 void Brotato3DGameInstance::OnInit()
 {
+    GOption->KeepCPUMeshData = true;
+    if (!playerRig_.LoadRig("assets/scad/characters/brotato_player.scad"))
+    {
+        spdlog::warn("[Brotato3D] ScadRig player unavailable; gameplay will continue without a player visual");
+    }
+
     if (!Brotato3D::LoadEnemies(EnemiesConfigPath, enemyDefs_) ||
         !Brotato3D::LoadWeapons(WeaponsConfigPath, weaponDefs_) ||
         !Brotato3D::LoadUpgrades(UpgradesConfigPath, upgradeCards_) ||
@@ -236,6 +243,7 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
     damageFlashMs_ = std::max(0.0f, damageFlashMs_ - deltaMs);
     weaponMergeBannerMs_ = std::max(0.0f, weaponMergeBannerMs_ - deltaMs);
     UpdateSkyTransition(deltaSeconds);
+    UpdateSunLighting(deltaSeconds);
     UpdateWaveBanner(deltaSeconds);
     UpdateCameraTracking(deltaSeconds);
 

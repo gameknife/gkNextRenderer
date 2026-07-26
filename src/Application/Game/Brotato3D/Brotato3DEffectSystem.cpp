@@ -18,6 +18,11 @@ namespace
     constexpr float ExtractionVehicleApproachDistance = 18.0f;
     constexpr float ExtractionVehicleStopDistance = 8.0f;
     constexpr float SegmentEpsilon = 0.0001f;
+    constexpr float NightSkyIntensity = 5.0f;
+    constexpr float DaySkyIntensity = 30.0f;
+    constexpr float DaySunIntensity = 360.0f;
+    constexpr float SunRotationPerSecond = 0.0035f;
+    constexpr float SunLightingUpdateIntervalMs = 100.0f;
 
     bool SegmentIntersectsAabb2D(const glm::vec2& from,
                                  const glm::vec2& to,
@@ -158,8 +163,6 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
         tempLightPool_.push_back({.lightComponent = tempLight.first, .node = tempLight.second});
     }
 
-    models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0.0f), player_.radius));
-    const uint32_t playerModelId = static_cast<uint32_t>(models.size() - 1);
     characterMaterialIds_.clear();
     for (const Brotato3D::FCharacterDef& character : characterDefs_)
     {
@@ -168,15 +171,19 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     const uint32_t playerMaterialId =
         characterMaterialIds_.contains(selectedCharacterId_) ? characterMaterialIds_[selectedCharacterId_] :
                                                                Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.20f, 0.75f, 0.30f));
-    player_.bodyNode = Assets::SceneBuilder::CreateRenderNode("Brotato3D_Player", player_.worldPos, glm::vec3(1.0f),
-                                        static_cast<uint32_t>(nodes.size()), playerModelId, playerMaterialId);
+    playerRig_.InjectAssets(models, materials, playerMaterialId);
+
+    // Collision, weapons, and gameplay queries retain a logical player root;
+    // the old visible sphere is replaced by the ScadRig instantiated after load.
+    player_.bodyNode = Assets::Node::CreateNode(
+        "Brotato3D_Player", player_.worldPos, glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+        glm::vec3(1.0f), static_cast<uint32_t>(nodes.size()));
     nodes.push_back(player_.bodyNode);
 
-    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.08f), glm::vec3(0.08f)));
-    const uint32_t facingModelId = static_cast<uint32_t>(models.size() - 1);
-    const uint32_t facingMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f));
-    player_.facingNode = Assets::SceneBuilder::CreateRenderNode("Brotato3D_PlayerFacing", glm::vec3(0.0f, 0.45f, -0.25f), glm::vec3(1.0f),
-                                          static_cast<uint32_t>(nodes.size()), facingModelId, facingMaterialId);
+    player_.facingNode = Assets::Node::CreateNode(
+        "Brotato3D_PlayerFacing", glm::vec3(0.0f, 0.45f, -0.25f),
+        glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f),
+        static_cast<uint32_t>(nodes.size()));
     player_.facingNode->SetParent(player_.bodyNode);
     nodes.push_back(player_.facingNode);
 
@@ -350,13 +357,16 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     if (appState_ == Brotato3D::EAppState::MainMenu || appState_ == Brotato3D::EAppState::CharacterSelect)
     {
         Assets::NodeUtils::SetVisible(player_.bodyNode, false);
+        playerRig_.SetVisible(false);
     }
 }
 
 bool Brotato3DGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
 {
     glm::vec3 cameraTarget = cameraSmoothedTarget_;
-    glm::vec3 cameraPosition = cameraTarget + glm::vec3(0.0f, 30.0f, 11.0f);
+    // A slightly flatter angle keeps the arena readable while exposing the
+    // ScadRig hero's upper/lower-body pose instead of collapsing it top-down.
+    glm::vec3 cameraPosition = cameraTarget + glm::vec3(0.0f, 14.0f, 11.0f);
     if (Brotato3D::ScreenShakeEnabled && screenShakeMs_ > 0.0f)
     {
         const float strength = std::min(0.25f, screenShakeIntensity_ * 0.05f);
@@ -373,6 +383,16 @@ bool Brotato3DGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera
 void Brotato3DGameInstance::OnSceneLoaded()
 {
     ApplyLightingSettings();
+    playerRig_.OnSceneLoaded(GetEngine().GetScene());
+    playerRig_.SetVisible(appState_ != Brotato3D::EAppState::MainMenu &&
+                          appState_ != Brotato3D::EAppState::CharacterSelect);
+    sceneReady_ = true;
+}
+
+void Brotato3DGameInstance::OnSceneUnloaded()
+{
+    sceneReady_ = false;
+    playerRig_.OnSceneUnloaded();
 }
 
 void Brotato3DGameInstance::SetExtractionVehicleVisible(bool visible)
@@ -439,7 +459,7 @@ void Brotato3DGameInstance::BeginDuskSurge()
         extractionVehicleRootNode_->SetTranslation(extractionVehiclePos_);
     }
     SetExtractionVehicleVisible(true);
-    SetSkyIntensityTarget(5.0f, 1500.0f);
+    SetSkyIntensityTarget(NightSkyIntensity, 1500.0f);
     waveBannerText_ = "NIGHTFALL";
     waveBannerMs_ = 1500.0f;
     StartScreenShake(260.0f, 2.2f);
@@ -810,9 +830,21 @@ void Brotato3DGameInstance::BeginWaveBanner()
 void Brotato3DGameInstance::ApplyLightingSettings()
 {
     auto& envSettings = GetEngine().GetScene().GetEnvSettings();
+    const float daylight = std::clamp(
+        (currentSkyIntensity_ - NightSkyIntensity) / (DaySkyIntensity - NightSkyIntensity),
+        0.0f,
+        1.0f);
+    const float sunArc = 0.5f + 0.5f * std::sin(sunRotation_ * glm::pi<float>());
+
     envSettings.HasSky = true;
-    envSettings.HasSun = false;
+    envSettings.HasSun = daylight > 0.01f;
     envSettings.SkyIntensity = currentSkyIntensity_;
+    envSettings.SunRotation = sunRotation_;
+    envSettings.SunElevation = glm::radians(38.0f + 14.0f * sunArc);
+    envSettings.SunIntensity = DaySunIntensity * daylight;
+    envSettings.SunColor = glm::mix(glm::vec3(1.0f, 0.72f, 0.48f),
+                                    glm::vec3(1.0f, 0.94f, 0.82f),
+                                    daylight);
     GetEngine().GetScene().MarkEnvDirty();
 }
 
@@ -840,6 +872,29 @@ void Brotato3DGameInstance::UpdateSkyTransition(double deltaSeconds)
     skyTransitionRemainingMs_ = std::max(0.0f, skyTransitionRemainingMs_ - static_cast<float>(deltaSeconds * 1000.0));
     const float t = 1.0f - skyTransitionRemainingMs_ / std::max(1.0f, skyTransitionTotalMs_);
     currentSkyIntensity_ = glm::mix(skyTransitionStartIntensity_, targetSkyIntensity_, std::clamp(t, 0.0f, 1.0f));
+    ApplyLightingSettings();
+}
+
+void Brotato3DGameInstance::UpdateSunLighting(double deltaSeconds)
+{
+    const float daylight = std::clamp(
+        (currentSkyIntensity_ - NightSkyIntensity) / (DaySkyIntensity - NightSkyIntensity),
+        0.0f,
+        1.0f);
+    if (daylight <= 0.01f)
+    {
+        return;
+    }
+
+    sunRotation_ = std::fmod(
+        sunRotation_ + static_cast<float>(deltaSeconds) * SunRotationPerSecond,
+        2.0f);
+    sunLightingUpdateAccumMs_ += static_cast<float>(deltaSeconds * 1000.0);
+    if (sunLightingUpdateAccumMs_ < SunLightingUpdateIntervalMs)
+    {
+        return;
+    }
+    sunLightingUpdateAccumMs_ = std::fmod(sunLightingUpdateAccumMs_, SunLightingUpdateIntervalMs);
     ApplyLightingSettings();
 }
 

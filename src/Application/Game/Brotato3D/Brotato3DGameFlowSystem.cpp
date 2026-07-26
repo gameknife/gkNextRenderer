@@ -24,6 +24,8 @@ void Brotato3DGameInstance::StartNewRun()
         player_.bodyNode->SetTranslation(player_.worldPos);
         Assets::NodeUtils::SetVisible(player_.bodyNode, true);
     }
+    playerRig_.ResetFacing(player_.facingDir);
+    playerRig_.SetVisible(true);
     if (player_.facingNode)
     {
         player_.facingNode->SetTranslation(glm::vec3(0.0f, 0.62f, -0.45f));
