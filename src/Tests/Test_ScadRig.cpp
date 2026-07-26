@@ -446,6 +446,116 @@ TEST_CASE("ScadRig loads the shipped NextRA soldier", "[Unit][ScadRig][NextRA]")
     CHECK(torso.bindT.y + head.bindT.y == Catch::Approx(1.44f).margin(0.02f));
 }
 
+TEST_CASE("ScadRig loads the articulated NextDayz survivor contract", "[Unit][ScadRig][NextDayz]")
+{
+    FRigAsset asset;
+    std::string err;
+    std::vector<std::string> warnings;
+    REQUIRE(FScadRigLoader::LoadRig("assets/scad/characters/nextdayz_survivor.scad",
+                                    ScadRigLoadOptions{}, asset, err, &warnings));
+
+    INFO("warnings: " << warnings.size());
+    CHECK(warnings.empty());
+    REQUIRE(asset.bones.size() == 17);
+    for (const char* bone : {
+             "bone_root", "bone_pelvis", "bone_torso", "bone_head",
+             "bone_upperarm_l", "bone_forearm_l", "bone_hand_l",
+             "bone_upperarm_r", "bone_forearm_r", "bone_hand_r", "bone_weapon_socket",
+             "bone_thigh_l", "bone_calf_l", "bone_foot_l",
+             "bone_thigh_r", "bone_calf_r", "bone_foot_r"})
+    {
+        CHECK(asset.FindBone(bone) >= 0);
+    }
+
+    const int32_t socket = asset.FindBone("bone_weapon_socket");
+    REQUIRE(socket >= 0);
+    CHECK(asset.bones[socket].parent == asset.FindBone("bone_hand_r"));
+    bool socketHasPart = false;
+    for (const FRigPart& part : asset.parts)
+    {
+        socketHasPart = socketHasPart || part.bone == socket;
+    }
+    CHECK_FALSE(socketHasPart);
+
+    const std::vector<std::string> loopClips = {
+        "stand_idle",
+        "stand_walk_f", "stand_walk_b", "stand_walk_l", "stand_walk_r",
+        "stand_run_f", "stand_run_b", "stand_run_l", "stand_run_r",
+        "stand_sprint_f", "stand_sprint_b", "stand_sprint_l", "stand_sprint_r",
+        "crouch_idle", "crouch_walk_f", "crouch_walk_b", "crouch_walk_l", "crouch_walk_r",
+        "aim_rifle_down", "aim_rifle_center", "aim_rifle_up"};
+    for (const std::string& clipName : loopClips)
+    {
+        const FRigClip* clip = asset.FindClip(clipName);
+        REQUIRE(clip != nullptr);
+        CHECK(clip->loop);
+        CHECK_FALSE(clip->channels.empty());
+    }
+    for (const char* clipName : {"recoil_rifle", "loot_ground"})
+    {
+        const FRigClip* clip = asset.FindClip(clipName);
+        REQUIRE(clip != nullptr);
+        CHECK_FALSE(clip->loop);
+        CHECK(clip->duration > 0.0f);
+    }
+
+    auto checkDirectionalDurations = [&asset](std::string_view prefix)
+    {
+        const FRigClip* forward = asset.FindClip(std::string(prefix) + "_f");
+        REQUIRE(forward != nullptr);
+        for (const char* direction : {"_b", "_l", "_r"})
+        {
+            const FRigClip* clip = asset.FindClip(std::string(prefix) + direction);
+            REQUIRE(clip != nullptr);
+            CHECK(clip->duration == Catch::Approx(forward->duration).epsilon(0.02));
+        }
+    };
+    checkDirectionalDurations("stand_walk");
+    checkDirectionalDurations("stand_run");
+    checkDirectionalDurations("stand_sprint");
+    checkDirectionalDurations("crouch_walk");
+
+    const int32_t root = asset.FindBone("bone_root");
+    for (const FRigClip& clip : asset.clips)
+    {
+        for (const FRigChannel& channel : clip.channels)
+        {
+            if (channel.bone != root)
+            {
+                continue;
+            }
+            for (const auto& key : channel.position.Keys)
+            {
+                CHECK(std::abs(key.Value.x) < 0.02f);
+                CHECK(std::abs(key.Value.z) < 0.02f);
+            }
+        }
+    }
+
+    const FRigClip* recoil = asset.FindClip("recoil_rifle");
+    REQUIRE(recoil != nullptr);
+    for (const FRigChannel& channel : recoil->channels)
+    {
+        if (channel.rotation.Keys.empty())
+        {
+            continue;
+        }
+        CHECK(glm::abs(glm::dot(channel.rotation.Keys.front().Value, glm::quat(1, 0, 0, 0))) ==
+              Catch::Approx(1.0f).margin(1.0e-5f));
+        CHECK(glm::abs(glm::dot(channel.rotation.Keys.back().Value, glm::quat(1, 0, 0, 0))) ==
+              Catch::Approx(1.0f).margin(1.0e-5f));
+    }
+
+    size_t triangles = 0;
+    for (const Model& model : asset.partModels)
+    {
+        triangles += model.NumberOfIndices() / 3;
+    }
+    INFO("NextDayz survivor triangles: " << triangles);
+    CHECK(triangles > 0);
+    CHECK(triangles < 1500);
+}
+
 // kit_char 组装角色：use <../lib/kit_char.scad> 闭包 + 库函数 clip 的完整链路。
 static void CheckKitCharacter(const char* path, int expectedTintable)
 {

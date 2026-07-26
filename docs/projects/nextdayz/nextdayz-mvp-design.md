@@ -1,7 +1,7 @@
 ---
 title: "NextDayz 类 DayZ 生存射击 MVP 设计与开发步骤"
 category: project
-status: 计划
+status: 已实现
 owner: NextDayz
 created: 2026-07-21
 last_updated: 2026-07-21
@@ -10,6 +10,9 @@ last_updated: 2026-07-21
 # NextDayz — 类 DayZ 生存射击 MVP 设计与开发步骤
 
 > 本文是把 `assets/scad/coldwar/riverland_1km.scad`（冷战开放地图）与 ScadRig（可自由组合的刚体骨骼角色/动作）当作既有基础设施，在其上搭建一个**最小可玩的类 DayZ 第一人称生存射击 demo**（target 名 `NextDayz`）的设计方案与分阶段开发步骤。文档面向后续接手的 AGENT，所有系统都给出落地文件、复用 API 与验收标准。
+>
+> MVP 与复杂 3C 均已实现。蹲姿、四方向三步态、分层瞄准/后坐力和 Loot 动作的现行架构
+> 以 [NextDayz 复杂 3C 与 ScadRig 分层动画设计](nextdayz-3c-scadrig-design.md) 为准。
 
 ## 0. MVP 范围界定
 

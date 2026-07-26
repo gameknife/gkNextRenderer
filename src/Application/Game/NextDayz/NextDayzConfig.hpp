@@ -12,11 +12,18 @@ namespace NextDayz
 {
     struct FPlayerConfig
     {
-        float EyeHeight = 1.65f;        // camera height above controller feet (FPS)
-        float WalkSpeed = 4.2f;         // m/s
-        float RunSpeed = 7.6f;          // m/s (Shift)
-        float AimMoveScale = 0.5f;      // speed multiplier while ADS
-        float ControllerHeight = 1.8f;
+        float StandingEyeHeight = 1.65f;
+        float CrouchedEyeHeight = 1.02f;
+        float EyeHeightLerpSpeed = 12.0f;
+        float StandWalkSpeed = 2.0f;
+        float StandRunSpeed = 4.2f;
+        float StandSprintSpeed = 7.6f;
+        float CrouchWalkSpeed = 1.55f;
+        float BackwardScale = 0.72f;
+        float StrafeScale = 0.82f;
+        float AimMoveScale = 0.65f;
+        float StandingHeight = 1.8f;
+        float CrouchedHeight = 1.18f;
         float ControllerRadius = 0.35f;
         float ControllerMass = 80.0f;
         float ControllerStrength = 4000.0f;
@@ -44,8 +51,27 @@ namespace NextDayz
         glm::vec3 ViewModelHipOffset{0.22f, -0.30f, 0.5f};
         glm::vec3 ViewModelAdsOffset{0.0f, -0.075f, 0.42f};
         float ViewModelLerpSpeed = 14.0f;
+        float CameraRecoilSpring = 90.0f;
+        float CameraRecoilDamping = 18.0f;
+        float ViewModelRecoilSpring = 120.0f;
+        float ViewModelRecoilDamping = 20.0f;
         float TracerLifetimeSeconds = 0.04f;
         float FireAnimSeconds = 0.22f;  // TPS fire clip hold
+    };
+
+    struct FAnimationConfig
+    {
+        float LocomotionFadeSeconds = 0.14f;
+        float MoveThreshold = 0.15f;
+        float StandWalkAuthoredSpeed = 2.0f;
+        float StandRunAuthoredSpeed = 4.2f;
+        float StandSprintAuthoredSpeed = 7.6f;
+        float CrouchWalkAuthoredSpeed = 1.55f;
+        float MinPlayRate = 0.75f;
+        float MaxPlayRate = 1.35f;
+        float AimFadeSeconds = 0.12f;
+        float AimPitchLimitDegrees = 80.0f;
+        float RecoilFadeOutSeconds = 0.04f;
     };
 
     struct FLootConfig
@@ -53,6 +79,13 @@ namespace NextDayz
         float ReachMeters = 3.0f;       // must be closer than this to interact
         float AimDotMin = 0.4f;         // crosshair-to-item alignment gate (cos angle)
         float SpawnRayHeight = 220.0f;  // downward raycast start height for spawn
+    };
+
+    struct FActionConfig
+    {
+        float LootDurationSeconds = 0.9f;
+        float LootCommitNormalizedTime = 0.55f;
+        float ActionFadeSeconds = 0.10f;
     };
 
     struct FTimeConfig
@@ -70,7 +103,9 @@ namespace NextDayz
         FPlayerConfig Player{};
         FCameraConfig Camera{};
         FWeaponFeelConfig Weapon{};
+        FAnimationConfig Animation{};
         FLootConfig Loot{};
+        FActionConfig Action{};
         FTimeConfig Time{};
 
         // Default spawn: bridge-west gas station (map centre, flat, stocked).

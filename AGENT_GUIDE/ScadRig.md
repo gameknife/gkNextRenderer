@@ -72,6 +72,20 @@ FRigAnimator                              // 每实例：Bind / Play(clip, fade)
    → Update(dt) 采样 →（可选 crossfade）→ 写骨骼 TRS（可变引用）→ root 一次 RecalcTransform(true)
 ```
 
+复杂角色可选择 `src/Gameplay/Rig/RigLayeredAnimator.*` 的 `FRigLayeredAnimator`；旧消费端无需迁移：
+
+- `FRigBoneMask::FullBody` / `FromSubtree` 创建逐骨骼权重遮罩，`SetBoneWeight` 可微调 torso/head 等过渡。
+- layer 按创建顺序求值，支持 `Override` 与相对绑定姿态的 `Additive`。
+- `SetLoopBlend` 接收多个 `FRigClipBlendSample`；同一 `syncGroup` 在方向或 gait clip 集切换时保留
+  normalized phase。
+- `SetStaticBlend` 用于 aim pose，`SetManualBlend` 用权威 gameplay 时间采样交互动作。
+- `PlayOneShot(..., restartIfSame=true)` 用于逐发 recoil；`IsOneShotComplete` 可查询收尾。
+- 采样只覆盖 clip 实际 authored 的 position/rotation/scale 分量；未 authored 分量不会错误覆盖底层 pose。
+
+NextDayz 是完整参考：Locomotion FullBody Override → Aim UpperBody Override → Recoil UpperBody
+Additive → Action FullBody Override。资产和运行时契约见
+`docs/projects/nextdayz/nextdayz-3c-scadrig-design.md`。
+
 - 关键帧容器复用 `Model.hpp` 的 `AnimationChannel<T>`（单 key 直接返回该 key；`Sample` 为 const）。
 - evaluator 侧唯一改动：`SceneEvalResult.topLevelVariables` 顶层变量快照（`anim_*` 由此读取）。
 - 坐标转换与场景加载共用 `FScadShared.h`：`ScadToWorldBasis/ScadLocalToEngineTRS/ScadToWorldPos/ScadRotateXYZ`。

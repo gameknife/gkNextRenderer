@@ -143,9 +143,13 @@ class INextCharacterControllerBackend
 public:
     virtual ~INextCharacterControllerBackend() = default;
     virtual void Update(const glm::vec3& inputDirection, float speed, bool jump, float deltaSeconds) = 0;
+    /// Changes the foot-anchored character height. Growing the shape fails when
+    /// the added volume is obstructed; on failure the previous shape is kept.
+    virtual bool TrySetHeight(float height) = 0;
     virtual glm::vec3 GetPosition() const = 0;
     virtual glm::vec3 GetLinearVelocity() const = 0;
     virtual ECharacterGroundState GetGroundState() const = 0;
+    virtual float GetHeight() const = 0;
     virtual bool IsValid() const = 0;
 };
 

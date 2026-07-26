@@ -9,6 +9,7 @@
 // ============================================================================
 
 #include <string>
+#include <optional>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -42,10 +43,26 @@ namespace NextDayz
 
     struct FLootEntry
     {
+        enum class EState
+        {
+            Available,
+            Reserved,
+            Looted,
+        };
+
         uint32_t nodeInstanceId = 0;
         glm::vec3 worldPos{0.0f};
         const FLootDef* def = nullptr;
-        bool looted = false;
+        EState state = EState::Available;
+    };
+
+    struct FLootHandle
+    {
+        uint32_t index = 0;
+        uint32_t nodeInstanceId = 0;
+        uint32_t generation = 0;
+
+        bool IsValid() const { return generation != 0; }
     };
 
     class LootSystem
@@ -67,9 +84,10 @@ namespace NextDayz
         const FLootEntry* Hovered() const;
         std::string HoveredPrompt() const; // "AK-74" (empty if none)
 
-        // Grants the hovered entry to the inventory and hides its node.
-        // Returns the def that was picked up (nullptr if nothing hovered).
-        const FLootDef* PickupHovered(Inventory& inventory, NextEngine& engine);
+        std::optional<FLootHandle> ReserveHovered();
+        const FLootDef* Commit(const FLootHandle& handle, Inventory& inventory, NextEngine& engine);
+        bool Cancel(const FLootHandle& handle);
+        bool IsReservedHandleValid(const FLootHandle& handle) const;
 
         int RemainingCount() const;
 
@@ -77,5 +95,6 @@ namespace NextDayz
         FLootConfig config_{};
         std::vector<FLootEntry> entries_;
         int hoveredIndex_ = -1;
+        uint32_t generation_ = 0;
     };
 }

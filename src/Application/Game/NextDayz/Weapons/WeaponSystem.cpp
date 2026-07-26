@@ -37,6 +37,11 @@ namespace NextDayz
     void WeaponSystem::OnSceneLoaded(NextEngine& engine)
     {
         viewModelOffset_ = config_.ViewModelHipOffset;
+        viewModelRecoil_ = 0.0f;
+        viewModelRecoilVelocity_ = 0.0f;
+        viewModelVisible_ = false;
+        viewModelInScene_ = false;
+        shotEvents_.clear();
         if (!viewModelAssetsSet_)
         {
             return;
@@ -50,12 +55,16 @@ namespace NextDayz
         physics->SetMobility(Runtime::ENodeMobility::Dynamic);
         viewModelNode_->AddComponent(physics);
         scene.AddNode(viewModelNode_);
+        viewModelInScene_ = true;
         scene.MarkDirty();
     }
 
     void WeaponSystem::OnSceneUnloaded()
     {
         viewModelNode_.reset();
+        viewModelVisible_ = false;
+        viewModelInScene_ = false;
+        shotEvents_.clear();
     }
 
     bool WeaponSystem::Equip(int slot, const std::string& weaponId)
@@ -152,11 +161,16 @@ namespace NextDayz
         return slots_[slot].weaponId;
     }
 
-    bool WeaponSystem::ConsumeFiredThisFrame()
+    std::vector<FShotEvent> WeaponSystem::ConsumeShotEvents()
     {
-        const bool fired = firedThisFrame_;
-        firedThisFrame_ = false;
-        return fired;
+        std::vector<FShotEvent> events;
+        events.swap(shotEvents_);
+        return events;
+    }
+
+    bool WeaponSystem::ViewModelRecoilActive() const
+    {
+        return std::abs(viewModelRecoil_) > 0.0001f || std::abs(viewModelRecoilVelocity_) > 0.001f;
     }
 
     void WeaponSystem::RefreshViewModelVisibility()
@@ -215,11 +229,22 @@ namespace NextDayz
                 draw->AddPoint(hitPoint, glm::vec4(1.0f, 0.6f, 0.15f, 1.0f), 6.0f, 40, true);
             }
         }
+
+        std::uniform_real_distribution<float> yawDist(-def->cameraYawDegrees, def->cameraYawDegrees);
+        FShotEvent event;
+        event.sequence = ++shotSequence_;
+        event.weaponId = std::string(def->id);
+        event.cameraImpulseRadians =
+            glm::radians(glm::vec2(yawDist(rng_), -def->cameraKickDegrees));
+        event.viewModelImpulse = def->viewModelKick;
+        event.rigRecoilScale = def->rigRecoilScale;
+        shotEvents_.push_back(event);
+        viewModelRecoilVelocity_ += event.viewModelImpulse;
     }
 
     void WeaponSystem::Update(float deltaSeconds, PlayerController& player, Inventory& inventory, NextEngine& engine)
     {
-        fireCooldown_ = std::max(0.0f, fireCooldown_ - deltaSeconds);
+        fireCooldown_ -= std::max(0.0f, deltaSeconds);
 
         if (reloading_)
         {
@@ -242,38 +267,71 @@ namespace NextDayz
         // Feed ADS target FOV to the camera controller.
         player.SetAimFov(def ? def->adsFov : player.CurrentFov());
 
-        firedThisFrame_ = false;
-        if (def && !reloading_ && fireCooldown_ <= 0.0f && triggerDown_)
+        if (def && !reloading_ && triggerDown_)
         {
-            const bool canPull = def->fullAuto || !triggerConsumed_;
-            if (canPull)
+            constexpr int kMaxShotsPerFrame = 8;
+            int shotsThisFrame = 0;
+            const bool newPull = !triggerConsumed_;
+            if (newPull && fireCooldown_ <= 0.0f)
             {
                 if (slots_[activeSlot_].ammoInMag > 0)
                 {
                     FireOneShot(player, engine);
                     slots_[activeSlot_].ammoInMag -= 1;
                     fireCooldown_ = def->fireInterval;
-                    firedThisFrame_ = true;
+                    ++shotsThisFrame;
                 }
-                triggerConsumed_ = true; // empty click also consumes for semi-auto
+                triggerConsumed_ = true;
+            }
+            while (def->fullAuto && triggerConsumed_ && fireCooldown_ <= 0.0f &&
+                   shotsThisFrame < kMaxShotsPerFrame && slots_[activeSlot_].ammoInMag > 0)
+            {
+                FireOneShot(player, engine);
+                slots_[activeSlot_].ammoInMag -= 1;
+                fireCooldown_ += def->fireInterval;
+                ++shotsThisFrame;
             }
         }
         if (!triggerDown_)
         {
             triggerConsumed_ = false;
+            fireCooldown_ = std::max(0.0f, fireCooldown_);
         }
 
         // View-model follows the camera; lerp offset toward hip/ADS pose.
         if (viewModelNode_)
         {
+            const float recoilDt = std::max(0.0f, deltaSeconds);
+            viewModelRecoilVelocity_ +=
+                (-config_.ViewModelRecoilSpring * viewModelRecoil_ -
+                 config_.ViewModelRecoilDamping * viewModelRecoilVelocity_) *
+                recoilDt;
+            viewModelRecoil_ += viewModelRecoilVelocity_ * recoilDt;
+
             const glm::vec3 targetOffset = player.IsAiming() ? config_.ViewModelAdsOffset : config_.ViewModelHipOffset;
             const float t = 1.0f - std::exp(-config_.ViewModelLerpSpeed * std::max(0.0f, deltaSeconds));
             viewModelOffset_ = glm::mix(viewModelOffset_, targetOffset, t);
 
-            const bool show = HasActiveWeapon() && player.IsFirstPerson();
-            if (auto render = viewModelNode_->GetComponent<Runtime::RenderComponent>())
+            const bool show = HasActiveWeapon() && player.IsFirstPerson() && !presentationSuppressed_;
+            if (show != viewModelVisible_)
             {
-                render->SetVisible(show);
+                viewModelVisible_ = show;
+                if (auto render = viewModelNode_->GetComponent<Runtime::RenderComponent>())
+                {
+                    render->SetVisible(show);
+                }
+                viewModelNode_->Scale() = show ? glm::vec3(1.0f) : glm::vec3(0.0f);
+                if (!show && viewModelInScene_)
+                {
+                    engine.GetScene().RemoveNodeByInstanceId(viewModelNode_->GetInstanceId());
+                    viewModelInScene_ = false;
+                }
+                else if (show && !viewModelInScene_)
+                {
+                    engine.GetScene().AddNode(viewModelNode_);
+                    viewModelInScene_ = true;
+                }
+                engine.GetScene().MarkDirty();
             }
             if (show)
             {
@@ -285,9 +343,12 @@ namespace NextDayz
                 // +X = up x forward (right() is left-handed w.r.t. forward/up).
                 const glm::vec3 xAxis = glm::normalize(glm::cross(up, forward));
                 const glm::vec3 pos =
-                    eye + right * viewModelOffset_.x + up * viewModelOffset_.y + forward * viewModelOffset_.z;
+                    eye + right * viewModelOffset_.x + up * viewModelOffset_.y +
+                    forward * (viewModelOffset_.z - viewModelRecoil_);
                 viewModelNode_->Translation() = pos;
-                viewModelNode_->Rotation() = glm::quat_cast(glm::mat3(xAxis, up, forward));
+                viewModelNode_->Rotation() =
+                    glm::quat_cast(glm::mat3(xAxis, up, forward)) *
+                    glm::angleAxis(-viewModelRecoil_ * 0.8f, glm::vec3(1.0f, 0.0f, 0.0f));
                 viewModelNode_->RecalcTransform(true);
             }
             else

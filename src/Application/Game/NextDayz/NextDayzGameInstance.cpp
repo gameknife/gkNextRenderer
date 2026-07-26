@@ -28,7 +28,7 @@
 namespace
 {
     constexpr const char* kDefaultScene = "assets/scad/coldwar/riverland_1km.scad";
-    constexpr const char* kSoldierRig = "assets/scad/characters/next_ra_soldier.scad";
+    constexpr const char* kSoldierRig = "assets/scad/characters/nextdayz_survivor.scad";
 }
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
@@ -53,6 +53,8 @@ void NextDayzGameInstance::OnInit()
 
     weapons_.Configure(config_.Weapon);
     loot_.Configure(config_.Loot);
+    rig_.Configure(config_.Animation);
+    actions_.Configure(config_.Action);
 
     if (!rig_.LoadRig(kSoldierRig))
     {
@@ -90,6 +92,7 @@ void NextDayzGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets
     viewModelModelId_ = static_cast<uint32_t>(models.size() - 1);
     viewModelMaterialId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.11f, 0.12f, 0.13f));
     weapons_.SetViewModelAssets(viewModelModelId_, viewModelMaterialId_);
+    rig_.SetWeaponAssets(viewModelModelId_, viewModelMaterialId_);
 }
 
 glm::vec3 NextDayzGameInstance::ResolveSpawnPosition() const
@@ -134,6 +137,7 @@ void NextDayzGameInstance::OnSceneLoaded()
 
     // Start armed with an AK and a couple of magazines to test shooting before looting.
     inventory_.Clear();
+    actions_.Reset();
     inventory_.Add("ak", "AK-74", NextDayz::EItemKind::Weapon, 1);
     inventory_.Add(std::string(NextDayz::AmmoItemId(NextDayz::EAmmoType::Rifle545)),
                    std::string(NextDayz::AmmoDisplayName(NextDayz::EAmmoType::Rifle545)), NextDayz::EItemKind::Ammo, 60);
@@ -155,26 +159,12 @@ void NextDayzGameInstance::OnSceneUnloaded()
     weapons_.OnSceneUnloaded();
     loot_.OnSceneUnloaded();
     inventory_.Clear();
+    actions_.Reset();
 }
 
 void NextDayzGameInstance::OnDestroy()
 {
     player_.Destroy();
-}
-
-NextDayz::EAnimState NextDayzGameInstance::CurrentAnimState() const
-{
-    if (fireAnimTimer_ > 0.0f)
-    {
-        return NextDayz::EAnimState::Fire;
-    }
-    switch (player_.MoveState())
-    {
-    case NextDayz::EMoveState::Run:  return NextDayz::EAnimState::Run;
-    case NextDayz::EMoveState::Walk: return NextDayz::EAnimState::Walk;
-    case NextDayz::EMoveState::Idle:
-    default:                         return NextDayz::EAnimState::Idle;
-    }
 }
 
 void NextDayzGameInstance::OnTick(double deltaSeconds)
@@ -185,23 +175,44 @@ void NextDayzGameInstance::OnTick(double deltaSeconds)
     }
     const float dt = static_cast<float>(deltaSeconds);
 
+    actions_.Update(dt);
+    if (const std::optional<NextDayz::FLootHandle> cancel = actions_.ConsumeCancelRequest())
+    {
+        loot_.Cancel(*cancel);
+    }
+    if (const std::optional<NextDayz::FLootHandle> commit = actions_.ConsumeCommitRequest())
+    {
+        loot_.Commit(*commit, inventory_, GetEngine());
+    }
+
+    const bool actionLocked = actions_.IsActive();
+    player_.SetMovementLocked(actionLocked || showInventory_);
+    weapons_.SetPresentationSuppressed(actionLocked);
+    if (actionLocked)
+    {
+        player_.SetAiming(false);
+        weapons_.SetTriggerDown(false);
+    }
     player_.Update(dt);
     weapons_.Update(dt, player_, inventory_, GetEngine());
-    if (weapons_.ConsumeFiredThisFrame())
+    for (const NextDayz::FShotEvent& shot : weapons_.ConsumeShotEvents())
     {
-        fireAnimTimer_ = config_.Weapon.FireAnimSeconds;
+        player_.ApplyCameraRecoil(shot.cameraImpulseRadians);
+        rig_.TriggerRecoil(shot.rigRecoilScale);
     }
 
     loot_.Update(player_.EyePosition(), player_.Forward());
     time_.Tick(deltaSeconds, GetEngine().GetScene());
 
     rig_.SetVisible(!player_.IsFirstPerson());
-    rig_.Update(player_.Position(), player_.Yaw(), CurrentAnimState(), player_.HorizontalSpeed(), dt);
-
-    if (fireAnimTimer_ > 0.0f)
-    {
-        fireAnimTimer_ = std::max(0.0f, fireAnimTimer_ - dt);
-    }
+    NextDayz::FPlayerPresentationState presentation;
+    presentation.locomotion = player_.LocomotionState();
+    presentation.aimWeight = player_.IsAiming() ? 1.0f : 0.0f;
+    presentation.aimPitchRadians = player_.Pitch();
+    presentation.hasWeapon = weapons_.HasActiveWeapon();
+    presentation.action = actions_.Action();
+    presentation.actionTime01 = actions_.NormalizedTime();
+    rig_.Update(player_.Position(), player_.Yaw(), presentation, dt);
 }
 
 bool NextDayzGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
@@ -213,6 +224,8 @@ bool NextDayzGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera)
     float fov = config_.Camera.BaseFov;
     player_.FillCamera(outRenderCamera.ModelView, fov);
     outRenderCamera.FieldOfView = fov;
+    outRenderCamera.NearPlane = 0.1f;
+    outRenderCamera.FarPlane = 1500.f;
     return true;
 }
 
@@ -232,7 +245,7 @@ bool NextDayzGameInstance::OnRenderUI()
     ctx.ammoReserve = weapons_.AmmoReserve(inventory_);
     ctx.reloading = weapons_.IsReloading();
     ctx.activeSlot = weapons_.ActiveSlot();
-    ctx.interactionPrompt = loot_.HoveredPrompt();
+    ctx.interactionPrompt = actions_.IsActive() ? "Looting..." : loot_.HoveredPrompt();
     ctx.hour = time_.HourInt();
     ctx.minute = time_.MinuteInt();
     ctx.overcast = time_.Overcast();
@@ -273,6 +286,7 @@ void NextDayzGameInstance::SetMouseCaptured(bool captured)
 void NextDayzGameInstance::SetInventoryOpen(bool open)
 {
     showInventory_ = open;
+    player_.SetMovementLocked(open);
     if (open)
     {
         player_.SetAiming(false);
@@ -292,6 +306,12 @@ bool NextDayzGameInstance::OnKey(SDL_Event& event)
         return false;
     }
     const bool pressed = (event.type == SDL_EVENT_KEY_DOWN);
+    if (pressed && actions_.IsActive() &&
+        (event.key.key == SDLK_W || event.key.key == SDLK_S || event.key.key == SDLK_A ||
+         event.key.key == SDLK_D || event.key.key == SDLK_SPACE))
+    {
+        actions_.RequestCancel();
+    }
     switch (event.key.key)
     {
     case SDLK_W: player_.SetMoveKey(0, pressed); return true;
@@ -300,7 +320,14 @@ bool NextDayzGameInstance::OnKey(SDL_Event& event)
     case SDLK_D: player_.SetMoveKey(3, pressed); return true;
     case SDLK_LSHIFT:
     case SDLK_RSHIFT:
-        player_.SetSprinting(pressed);
+        player_.SetSprintModifier(pressed);
+        return true;
+    case SDLK_LCTRL:
+    case SDLK_RCTRL:
+        player_.SetWalkModifier(pressed);
+        return true;
+    case SDLK_C:
+        if (pressed && !actions_.IsActive()) player_.QueueCrouchToggle();
         return true;
     case SDLK_SPACE:
         if (pressed) player_.QueueJump();
@@ -318,7 +345,23 @@ bool NextDayzGameInstance::OnKey(SDL_Event& event)
         if (pressed) weapons_.SwitchPrevious();
         return true;
     case SDLK_E:
-        if (pressed) loot_.PickupHovered(inventory_, GetEngine());
+        if (pressed && !actions_.IsActive())
+        {
+            if (const std::optional<NextDayz::FLootHandle> handle = loot_.ReserveHovered())
+            {
+                if (actions_.BeginLoot(*handle))
+                {
+                    player_.SetAiming(false);
+                    player_.SetMovementLocked(true);
+                    weapons_.SetTriggerDown(false);
+                    weapons_.SetPresentationSuppressed(true);
+                }
+                else
+                {
+                    loot_.Cancel(*handle);
+                }
+            }
+        }
         return true;
     case SDLK_V:
         if (pressed) player_.ToggleView();
@@ -382,6 +425,10 @@ bool NextDayzGameInstance::OnMouseButton(SDL_Event& event)
     if (showInventory_)
     {
         return false; // let ImGui handle panel interaction
+    }
+    if (actions_.IsActive())
+    {
+        return true;
     }
 
     if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
@@ -448,4 +495,42 @@ void NextDayzGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegis
     reg.Add("posX", [this]() -> Runtime::Agent::FAgentQueryValue { return static_cast<double>(player_.Position().x); });
     reg.Add("posY", [this]() -> Runtime::Agent::FAgentQueryValue { return static_cast<double>(player_.Position().y); });
     reg.Add("posZ", [this]() -> Runtime::Agent::FAgentQueryValue { return static_cast<double>(player_.Position().z); });
+    reg.Add("stance", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return std::string(NextDayz::StanceName(player_.LocomotionState().actualStance));
+    });
+    reg.Add("desiredStance", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return std::string(NextDayz::StanceName(player_.LocomotionState().desiredStance));
+    });
+    reg.Add("standBlocked",
+            [this]() -> Runtime::Agent::FAgentQueryValue { return player_.LocomotionState().standBlocked; });
+    reg.Add("controllerHeight",
+            [this]() -> Runtime::Agent::FAgentQueryValue { return static_cast<double>(player_.ControllerHeight()); });
+    reg.Add("gait", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return std::string(NextDayz::GaitName(player_.LocomotionState().gait));
+    });
+    reg.Add("localMoveX", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return static_cast<double>(player_.LocomotionState().localMove.x);
+    });
+    reg.Add("localMoveY", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return static_cast<double>(player_.LocomotionState().localMove.y);
+    });
+    reg.Add("baseAnim",
+            [this]() -> Runtime::Agent::FAgentQueryValue { return rig_.CurrentBaseClipName(); });
+    reg.Add("aimWeight",
+            [this]() -> Runtime::Agent::FAgentQueryValue { return static_cast<double>(rig_.AimWeight()); });
+    reg.Add("shotSequence", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return static_cast<int64_t>(weapons_.LastShotSequence());
+    });
+    reg.Add("recoilActive", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return player_.RecoilActive() || weapons_.ViewModelRecoilActive() || rig_.RecoilActive();
+    });
+    reg.Add("cameraRecoilPitch", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return static_cast<double>(player_.CameraRecoil().y);
+    });
+    reg.Add("action", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return std::string(NextDayz::ActionName(actions_.Action()));
+    });
+    reg.Add("actionTime", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return static_cast<double>(actions_.NormalizedTime());
+    });
 }

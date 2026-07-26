@@ -1250,19 +1250,22 @@ NextBodyID FJoltPhysicsBackend::GetVehicleBodyID(NextVehicleID id) const
 
 namespace
 {
+    RefConst<Shape> CreateFootAnchoredCharacterShape(float height, float radius)
+    {
+        const float cylinderHalfHeight = (height - 2.0f * radius) * 0.5f;
+        RefConst<Shape> capsule = new CapsuleShape(std::max(cylinderHalfHeight, 0.01f), radius);
+        return new RotatedTranslatedShape(Vec3(0, height * 0.5f, 0), Quat::sIdentity(), capsule);
+    }
+
     class FJoltCharacterControllerBackend final : public INextCharacterControllerBackend
     {
     public:
         FJoltCharacterControllerBackend(PhysicsSystem& physicsSystem, TempAllocator& tempAllocator,
                                         const FCharacterControllerSettings& settings)
-            : physicsSystem_(physicsSystem), tempAllocator_(tempAllocator)
+            : physicsSystem_(physicsSystem), tempAllocator_(tempAllocator), height_(settings.height),
+              radius_(settings.radius), padding_(settings.padding)
         {
-            const float cylinderHalfHeight =
-                (settings.height - 2.0f * settings.radius) * 0.5f;
-            RefConst<Shape> capsule = new CapsuleShape(std::max(cylinderHalfHeight, 0.01f), settings.radius);
-            const float shapeOffsetY = settings.height * 0.5f;
-            RefConst<Shape> shape = new RotatedTranslatedShape(
-                Vec3(0, shapeOffsetY, 0), Quat::sIdentity(), capsule);
+            RefConst<Shape> shape = CreateFootAnchoredCharacterShape(height_, radius_);
 
             CharacterVirtualSettings characterSettings;
             characterSettings.mShape = shape;
@@ -1314,6 +1317,37 @@ namespace
                                        broadPhaseFilter, objectLayerFilter, {}, {}, tempAllocator_);
         }
 
+        bool TrySetHeight(float height) override
+        {
+            constexpr float kMinCylinderHeight = 0.02f;
+            constexpr float kSameHeightEpsilon = 1.0e-4f;
+            if (!character_ || !std::isfinite(height) || height < 2.0f * radius_ + kMinCylinderHeight)
+            {
+                return false;
+            }
+            if (std::abs(height - height_) <= kSameHeightEpsilon)
+            {
+                return true;
+            }
+
+            RefConst<Shape> shape = CreateFootAnchoredCharacterShape(height, radius_);
+            const BroadPhaseLayerFilter& broadPhaseFilter =
+                physicsSystem_.GetDefaultBroadPhaseLayerFilter(NextLayers::MOVING);
+            const ObjectLayerFilter& objectLayerFilter =
+                physicsSystem_.GetDefaultLayerFilter(NextLayers::MOVING);
+            const float maxPenetrationDepth =
+                height < height_ ? std::numeric_limits<float>::max() : std::max(padding_, 1.0e-3f);
+            if (!character_->SetShape(shape, maxPenetrationDepth, broadPhaseFilter, objectLayerFilter, {}, {},
+                                      tempAllocator_))
+            {
+                return false;
+            }
+
+            height_ = height;
+            character_->RefreshContacts(broadPhaseFilter, objectLayerFilter, {}, {}, tempAllocator_);
+            return true;
+        }
+
         glm::vec3 GetPosition() const override
         {
             if (!character_)
@@ -1344,6 +1378,7 @@ namespace
             return ECharacterGroundState::InAir;
         }
 
+        float GetHeight() const override { return height_; }
         bool IsValid() const override { return character_ != nullptr; }
 
     private:
@@ -1352,6 +1387,9 @@ namespace
         Ref<CharacterVirtual> character_;
         CharacterVirtual::ExtendedUpdateSettings updateSettings_;
         glm::vec3 velocity_{0.0f};
+        float height_ = 0.0f;
+        float radius_ = 0.0f;
+        float padding_ = 0.0f;
     };
 }
 

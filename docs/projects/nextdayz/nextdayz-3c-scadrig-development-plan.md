@@ -1,7 +1,7 @@
 ---
 title: "NextDayz 复杂 3C 与 ScadRig 分层动画开发计划"
 category: project
-status: 待执行
+status: 已完成
 owner: NextDayz
 created: 2026-07-26
 last_updated: 2026-07-26
@@ -9,8 +9,23 @@ last_updated: 2026-07-26
 
 # NextDayz 复杂 3C 与 ScadRig 分层动画开发计划
 
-> 本计划只描述尚未实现的工作。架构、状态所有权和混合语义以
-> [复杂 3C 与 ScadRig 分层动画设计](nextdayz-3c-scadrig-design.md) 为准。后续 agent 应按阶段顺序交付，每阶段保持可编译、可测试、可回滚。
+> 本计划记录已经完成的 P0～P7 实施过程。现行架构、状态所有权和混合语义以
+> [复杂 3C 与 ScadRig 分层动画设计](nextdayz-3c-scadrig-design.md) 为准。
+
+## 0. 完成摘要（2026-07-26）
+
+- P1：Jolt 角色控制器支持足底锚定的动态高度，低顶起身失败保持蹲姿。
+- P2：新增兼容旧 `FRigAnimator` 的 `FRigLayeredAnimator`，支持 mask、override/additive、
+  同步方向 blend、手动采样和可重触发 one-shot。
+- P3：`nextdayz_survivor.scad` 提供 17 骨骼、15 parts、23 clips 和空 weapon socket。
+- P4：C 蹲姿切换、Ctrl Walk、默认 Run、Shift Sprint，站/蹲四方向连续混合。
+- P5：pitch aim blend、TPS socket 武器、逐发 shot event、camera/view-model/TPS recoil。
+- P6：Loot reserve/cancel/commit、0.9 秒权威动作、55% 提交点和输入锁。
+- P7：共享消费端定向构建、Rig/ScadRig/Physics 测试以及 smoke/locomotion/combat/loot
+  自动回放均通过。
+
+实际实现将 NextDayz 动画编排保留在 `PlayerRigVisual`，没有增加原计划中可选的
+`PlayerAnimationController`；职责边界不变，避免为单一消费端增加一层转发。
 
 ## 1. 执行原则
 

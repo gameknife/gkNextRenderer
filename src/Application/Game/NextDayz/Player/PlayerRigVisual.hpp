@@ -3,8 +3,8 @@
 // ============================================================================
 // PlayerRigVisual.hpp - ScadRig soldier visual for the player, following the
 // FRigPreview / FScadRigVisual single-instance pattern. The rig lives under a
-// world node whose TRS tracks the controller; the animator plays idle/walk/fire
-// clips. Injection lifecycle mirrors AirportSim/FRigPreview:
+// world node whose TRS tracks the controller; a layered animator combines
+// locomotion, aim, recoil and action poses. Injection lifecycle mirrors:
 //   OnInit LoadRig -> BeforeSceneRebuild InjectAssets -> OnSceneLoaded Instantiate
 // OnSceneUnloaded only clears runtime pointers (never the injected assets).
 // ============================================================================
@@ -17,7 +17,10 @@
 #include <glm/glm.hpp>
 
 #include "Engine/Assets/Data/RigAsset.hpp"
-#include "Gameplay/Rig/RigInstance.h"
+#include "Gameplay/Rig/RigLayeredAnimator.h"
+
+#include "Application/Game/NextDayz/NextDayzConfig.hpp"
+#include "Application/Game/NextDayz/Player/PlayerState.hpp"
 
 namespace Assets
 {
@@ -29,20 +32,14 @@ namespace Assets
 
 namespace NextDayz
 {
-    enum class EAnimState
-    {
-        Idle,
-        Walk,
-        Run,
-        Fire
-    };
-
     class PlayerRigVisual
     {
     public:
         bool LoadRig(const std::string& scadPath);
+        void Configure(const FAnimationConfig& config) { animationConfig_ = config; }
 
         void InjectAssets(std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials);
+        void SetWeaponAssets(uint32_t modelId, uint32_t materialId);
         void OnSceneLoaded(Assets::Scene& scene);
         void OnSceneUnloaded();
 
@@ -50,9 +47,14 @@ namespace NextDayz
         void SetClothing(const std::string& clothingId, bool on);
 
         // Drives world transform + animation for the frame.
-        void Update(const glm::vec3& feetPosition, float yaw, EAnimState state, float moveSpeed, float deltaSeconds);
+        void Update(const glm::vec3& feetPosition, float yaw, const FPlayerPresentationState& state,
+                    float deltaSeconds);
+        void TriggerRecoil(float scale);
 
         bool HasRig() const { return hasRig_; }
+        const std::string& CurrentBaseClipName() const { return baseClipName_; }
+        float AimWeight() const { return aimWeight_; }
+        bool RecoilActive() const;
 
     private:
         Assets::Node* BoneNode(std::string_view boneName);
@@ -75,11 +77,23 @@ namespace NextDayz
         std::vector<Assets::Node*> boneNodes_;
         std::shared_ptr<Assets::Node> helmetNode_;
         std::shared_ptr<Assets::Node> backpackNode_;
-        NextGameplay::FRigAnimator animator_;
+        std::shared_ptr<Assets::Node> weaponNode_;
+        NextGameplay::FRigLayeredAnimator animator_;
+        NextGameplay::FRigLayerHandle locomotionLayer_ = NextGameplay::invalidRigLayerHandle;
+        NextGameplay::FRigLayerHandle aimLayer_ = NextGameplay::invalidRigLayerHandle;
+        NextGameplay::FRigLayerHandle recoilLayer_ = NextGameplay::invalidRigLayerHandle;
+        NextGameplay::FRigLayerHandle actionLayer_ = NextGameplay::invalidRigLayerHandle;
         bool bound_ = false;
 
-        EAnimState state_ = EAnimState::Idle;
         bool visible_ = true;
-        float baseWalkClipSpeed_ = 1.5f; // metres/sec the walk clip is authored for
+        FAnimationConfig animationConfig_{};
+        std::string baseClipName_;
+        uint32_t weaponModelId_ = 0;
+        uint32_t weaponMaterialId_ = 0;
+        bool weaponAssetsSet_ = false;
+        bool weaponVisible_ = false;
+        float aimWeight_ = 0.0f;
+        float actionWeight_ = 0.0f;
+        bool recoilActive_ = false;
     };
 }

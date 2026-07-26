@@ -11,7 +11,7 @@
     { "type": "log", "message": "M3: start armed with an AK and a full magazine" },
     { "type": "assert", "query": "game.equippedWeapon", "op": "eq", "value": "ak" },
     { "type": "assert", "query": "game.ammoInMag", "op": "eq", "value": 30 },
-    { "type": "assert", "query": "game.lootRemaining", "op": "eq", "value": 39 },
+    { "type": "assert", "query": "game.lootRemaining", "op": "eq", "value": 59 },
     { "type": "screenshot", "out": "screenshots/nextdayz_fps" },
 
     { "type": "log", "message": "M3: fire a burst -> magazine decrements" },
@@ -40,8 +40,8 @@
     { "type": "mouse-move", "relative": true, "to": { "px": [0, 150] } },
     { "type": "wait-frames", "n": 5 },
     { "type": "key", "code": "E", "action": "press" },
-    { "type": "wait-frames", "n": 10 },
-    { "type": "assert", "query": "game.lootRemaining", "op": "lt", "value": 39 },
+    { "type": "wait-ms", "ms": 1000 },
+    { "type": "assert", "query": "game.lootRemaining", "op": "lt", "value": 59 },
     { "type": "assert", "query": "game.inventoryCount", "op": "ge", "value": 2 },
 
     { "type": "log", "message": "M2: third person shows the soldier rig" },

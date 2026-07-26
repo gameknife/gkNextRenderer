@@ -63,7 +63,7 @@
 - NextRA：[架构不变量](projects/nextra/architecture.md) · [现状与后续方向](projects/nextra/roadmap.md)
 - ScadStudio：[会话、生成与预览架构](projects/scad-studio/architecture.md)
 - StudioSim：[架构与 AI 边界](projects/studio-sim/architecture.md)
-- NextDayz：[MVP 基线设计](projects/nextdayz/nextdayz-mvp-design.md) · [复杂 3C 与 ScadRig 分层动画设计](projects/nextdayz/nextdayz-3c-scadrig-design.md) · [开发计划](projects/nextdayz/nextdayz-3c-scadrig-development-plan.md)
+- NextDayz：[MVP 基线设计](projects/nextdayz/nextdayz-mvp-design.md) · [复杂 3C 与 ScadRig 分层动画设计](projects/nextdayz/nextdayz-3c-scadrig-design.md)
 - TruckerDemo（迭代计划）：[SnowRunner 风格越野运输 Demo 迭代计划](projects/trucker-demo/trucker-demo-iteration-plan.md)
 
 ## 环境记录

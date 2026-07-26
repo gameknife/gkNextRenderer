@@ -90,6 +90,11 @@ namespace NextDayz
     {
         entries_.clear();
         hoveredIndex_ = -1;
+        ++generation_;
+        if (generation_ == 0)
+        {
+            ++generation_;
+        }
 
         const auto& table = LootTable();
         for (const auto& node : scene.Nodes())
@@ -117,6 +122,7 @@ namespace NextDayz
     {
         entries_.clear();
         hoveredIndex_ = -1;
+        ++generation_;
     }
 
     bool LootSystem::NearestLootPos(const glm::vec2& approxXZ, glm::vec3& outWorldPos) const
@@ -144,7 +150,7 @@ namespace NextDayz
         for (size_t i = 0; i < entries_.size(); ++i)
         {
             const FLootEntry& entry = entries_[i];
-            if (entry.looted)
+            if (entry.state != FLootEntry::EState::Available)
             {
                 continue;
             }
@@ -178,18 +184,40 @@ namespace NextDayz
         return (entry && entry->def) ? entry->def->displayName : std::string();
     }
 
-    const FLootDef* LootSystem::PickupHovered(Inventory& inventory, NextEngine& engine)
+    std::optional<FLootHandle> LootSystem::ReserveHovered()
     {
         if (hoveredIndex_ < 0 || hoveredIndex_ >= static_cast<int>(entries_.size()))
         {
-            return nullptr;
+            return std::nullopt;
         }
         FLootEntry& entry = entries_[hoveredIndex_];
-        if (entry.looted || !entry.def)
+        if (entry.state != FLootEntry::EState::Available || !entry.def)
+        {
+            return std::nullopt;
+        }
+        entry.state = FLootEntry::EState::Reserved;
+        const FLootHandle handle{static_cast<uint32_t>(hoveredIndex_), entry.nodeInstanceId, generation_};
+        hoveredIndex_ = -1;
+        return handle;
+    }
+
+    bool LootSystem::IsReservedHandleValid(const FLootHandle& handle) const
+    {
+        if (!handle.IsValid() || handle.generation != generation_ || handle.index >= entries_.size())
+        {
+            return false;
+        }
+        const FLootEntry& entry = entries_[handle.index];
+        return entry.nodeInstanceId == handle.nodeInstanceId && entry.state == FLootEntry::EState::Reserved;
+    }
+
+    const FLootDef* LootSystem::Commit(const FLootHandle& handle, Inventory& inventory, NextEngine& engine)
+    {
+        if (!IsReservedHandleValid(handle))
         {
             return nullptr;
         }
-
+        FLootEntry& entry = entries_[handle.index];
         for (const FLootGrant& grant : entry.def->grants)
         {
             inventory.Add(grant.id, grant.displayName, grant.kind, grant.count);
@@ -202,9 +230,19 @@ namespace NextDayz
             scene.MarkDirty();
         }
 
-        entry.looted = true;
+        entry.state = FLootEntry::EState::Looted;
         hoveredIndex_ = -1;
         return entry.def;
+    }
+
+    bool LootSystem::Cancel(const FLootHandle& handle)
+    {
+        if (!IsReservedHandleValid(handle))
+        {
+            return false;
+        }
+        entries_[handle.index].state = FLootEntry::EState::Available;
+        return true;
     }
 
     int LootSystem::RemainingCount() const
@@ -212,7 +250,7 @@ namespace NextDayz
         int remaining = 0;
         for (const FLootEntry& entry : entries_)
         {
-            if (!entry.looted)
+            if (entry.state != FLootEntry::EState::Looted)
             {
                 ++remaining;
             }

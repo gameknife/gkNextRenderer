@@ -15,6 +15,7 @@
 #include "Application/Game/NextDayz/Inventory/Inventory.hpp"
 #include "Application/Game/NextDayz/Inventory/LootSystem.hpp"
 #include "Application/Game/NextDayz/Player/PlayerController.hpp"
+#include "Application/Game/NextDayz/Player/PlayerActionController.hpp"
 #include "Application/Game/NextDayz/Player/PlayerRigVisual.hpp"
 #include "Application/Game/NextDayz/Weapons/WeaponSystem.hpp"
 #include "Application/Game/NextDayz/World/TimeSystem.hpp"
@@ -56,11 +57,11 @@ private:
     void ToggleClothing(const std::string& clothingId, bool on);
     void SetInventoryOpen(bool open);
     void SetMouseCaptured(bool captured);
-    NextDayz::EAnimState CurrentAnimState() const;
 
     NextDayz::FConfig config_{};
 
     NextDayz::PlayerController player_;
+    NextDayz::PlayerActionController actions_;
     NextDayz::PlayerRigVisual rig_;
     NextDayz::WeaponSystem weapons_;
     NextDayz::Inventory inventory_;
@@ -76,5 +77,4 @@ private:
     bool mouseCaptured_ = false;
     bool resetMouse_ = true;
     glm::dvec2 mousePos_{0.0, 0.0};
-    float fireAnimTimer_ = 0.0f;
 };

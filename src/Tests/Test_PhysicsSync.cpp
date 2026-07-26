@@ -3,6 +3,7 @@
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Gameplay/Character/NextCharacterController.h"
 #include <glm/gtc/epsilon.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -122,6 +123,53 @@ TEST_CASE_METHOD(EngineTestFixture, "SetBodyVelocity Reactivates Resting Dynamic
 
     physics->RemoveBody(boxBodyId);
     physics->RemoveBody(floorBodyId);
+}
+
+TEST_CASE_METHOD(EngineTestFixture, "Character stance resize keeps feet anchored and checks headroom",
+                 "[Integration][Physics][Character]")
+{
+    auto* physics = engine_->GetPhysicsEngine();
+    REQUIRE(physics != nullptr);
+
+    const NextBodyID floor =
+        physics->CreateBoxBody({0.0f, -0.5f, 0.0f}, {5.0f, 0.5f, 5.0f}, NextMotionType::Static);
+
+    FCharacterControllerSettings settings;
+    settings.height = 1.8f;
+    settings.radius = 0.3f;
+    settings.initialPosition = {0.0f, 0.02f, 0.0f};
+
+    NextCharacterController controller;
+    controller.Create(physics, settings);
+    REQUIRE(controller.IsValid());
+    CHECK(controller.GetHeight() == Catch::Approx(1.8f));
+
+    const glm::vec3 standingFeet = controller.GetPosition();
+    REQUIRE(controller.TrySetHeight(1.0f));
+    CHECK(controller.GetHeight() == Catch::Approx(1.0f));
+    CHECK(glm::distance(controller.GetPosition(), standingFeet) < 1.0e-4f);
+    CHECK_FALSE(controller.TrySetHeight(0.5f));
+    CHECK(controller.GetHeight() == Catch::Approx(1.0f));
+
+    const NextBodyID ceiling =
+        physics->CreateBoxBody({0.0f, 1.5f, 0.0f}, {2.0f, 0.1f, 2.0f}, NextMotionType::Static);
+    CHECK_FALSE(controller.TrySetHeight(1.8f));
+    CHECK(controller.GetHeight() == Catch::Approx(1.0f));
+    CHECK(glm::distance(controller.GetPosition(), standingFeet) < 1.0e-4f);
+
+    physics->RemoveBody(ceiling);
+    REQUIRE(controller.TrySetHeight(1.8f));
+    CHECK(controller.GetHeight() == Catch::Approx(1.8f));
+    CHECK(glm::distance(controller.GetPosition(), standingFeet) < 1.0e-4f);
+
+    for (int frame = 0; frame < 30; ++frame)
+    {
+        controller.Update(glm::vec3(1.0f, 0.0f, 0.0f), 2.0f, false, 1.0f / 60.0f);
+    }
+    CHECK(controller.GetPosition().x > standingFeet.x + 0.5f);
+
+    controller.Destroy();
+    physics->RemoveBody(floor);
 }
 
 TEST_CASE_METHOD(EngineTestFixture, "Wheeled vehicle suspension and drivetrain telemetry", "[Integration][Physics][Vehicle]")

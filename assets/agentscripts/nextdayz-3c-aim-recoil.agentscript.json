@@ -1,0 +1,41 @@
+{
+  "name": "nextdayz-3c-aim-recoil",
+  "target": "NextDayz",
+  "scene": "assets/scad/coldwar/riverland_1km.scad",
+  "defaults": { "waitFrames": 2, "stepTimeoutMs": 20000 },
+  "viewport": { "width": 1600, "height": 900 },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "wait-frames", "n": 60 },
+
+    { "type": "log", "message": "3C: ADS fades in and constrains moving gait to walk" },
+    { "type": "mouse-button", "button": "right", "action": "down" },
+    { "type": "key", "code": "W", "action": "down" },
+    { "type": "wait-frames", "n": 20 },
+    { "type": "assert", "query": "game.isAiming", "op": "eq", "value": true },
+    { "type": "assert", "query": "game.aimWeight", "op": "gt", "value": 0.9 },
+    { "type": "assert", "query": "game.gait", "op": "eq", "value": "walk" },
+
+    { "type": "log", "message": "3C: every full-auto shot advances sequence and retriggers recoil" },
+    { "type": "mouse-button", "button": "left", "action": "down" },
+    { "type": "wait-ms", "ms": 350 },
+    { "type": "assert", "query": "game.shotSequence", "op": "ge", "value": 3 },
+    { "type": "assert", "query": "game.recoilActive", "op": "eq", "value": true },
+    { "type": "assert", "query": "game.cameraRecoilPitch", "op": "lt", "value": 0.0 },
+    { "type": "mouse-button", "button": "left", "action": "up" },
+    { "type": "key", "code": "V", "action": "press" },
+    { "type": "wait-frames", "n": 4 },
+    { "type": "screenshot", "out": "screenshots/nextdayz_3c_aim_recoil_tps" },
+    { "type": "key", "code": "W", "action": "up" },
+    { "type": "mouse-button", "button": "right", "action": "up" },
+
+    { "type": "log", "message": "3C: aim and recoil return cleanly to locomotion" },
+    { "type": "wait-frames", "n": 120 },
+    { "type": "assert", "query": "game.isAiming", "op": "eq", "value": false },
+    { "type": "assert", "query": "game.aimWeight", "op": "lt", "value": 0.05 },
+    { "type": "assert", "query": "game.recoilActive", "op": "eq", "value": false },
+    { "type": "assert", "query": "game.baseAnim", "op": "eq", "value": "stand_idle" },
+
+    { "type": "quit" }
+  ]
+}

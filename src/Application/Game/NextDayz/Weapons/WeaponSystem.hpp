@@ -11,6 +11,7 @@
 #include <memory>
 #include <random>
 #include <string>
+#include <vector>
 
 #include <glm/glm.hpp>
 
@@ -26,6 +27,15 @@ namespace Assets
 
 namespace NextDayz
 {
+    struct FShotEvent
+    {
+        uint64_t sequence = 0;
+        std::string weaponId;
+        glm::vec2 cameraImpulseRadians{0.0f}; // x=yaw, y=pitch
+        float viewModelImpulse = 0.0f;
+        float rigRecoilScale = 1.0f;
+    };
+
     class PlayerController;
     class Inventory;
 
@@ -46,6 +56,7 @@ namespace NextDayz
         void SwitchPrevious();
 
         void SetTriggerDown(bool down) { triggerDown_ = down; }
+        void SetPresentationSuppressed(bool suppressed) { presentationSuppressed_ = suppressed; }
         void RequestReload(Inventory& inventory);
 
         void Update(float deltaSeconds, PlayerController& player, Inventory& inventory, NextEngine& engine);
@@ -61,8 +72,9 @@ namespace NextDayz
         int ActiveSlot() const { return activeSlot_; }
         const std::string& SlotWeaponId(int slot) const;
 
-        // True on the frame a shot was fired (drives the TPS fire clip + recoil).
-        bool ConsumeFiredThisFrame();
+        std::vector<FShotEvent> ConsumeShotEvents();
+        uint64_t LastShotSequence() const { return shotSequence_; }
+        bool ViewModelRecoilActive() const;
 
     private:
         struct FSlot
@@ -80,18 +92,24 @@ namespace NextDayz
         int previousSlot_ = 1;
 
         bool triggerDown_ = false;
+        bool presentationSuppressed_ = false;
         bool triggerConsumed_ = false; // semi-auto: needs a release between shots
         float fireCooldown_ = 0.0f;
         bool reloading_ = false;
         float reloadTimer_ = 0.0f;
-        bool firedThisFrame_ = false;
+        uint64_t shotSequence_ = 0;
+        std::vector<FShotEvent> shotEvents_;
 
         // view model
         uint32_t viewModelModelId_ = 0;
         uint32_t viewModelMaterialId_ = 0;
         bool viewModelAssetsSet_ = false;
         std::shared_ptr<Assets::Node> viewModelNode_;
+        bool viewModelVisible_ = false;
+        bool viewModelInScene_ = false;
         glm::vec3 viewModelOffset_{0.16f, -0.19f, 0.55f};
+        float viewModelRecoil_ = 0.0f;
+        float viewModelRecoilVelocity_ = 0.0f;
 
         std::mt19937 rng_{0xD00Du};
     };

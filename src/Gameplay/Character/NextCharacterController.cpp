@@ -24,6 +24,16 @@ void NextCharacterController::Update(const glm::vec3& inputDirection, float spee
     }
 }
 
+bool NextCharacterController::TrySetHeight(float height)
+{
+    if (!backend_ || !backend_->TrySetHeight(height))
+    {
+        return false;
+    }
+    settings_.height = backend_->GetHeight();
+    return true;
+}
+
 glm::vec3 NextCharacterController::GetPosition() const
 {
     return backend_ ? backend_->GetPosition() : glm::vec3(0.0f);
@@ -42,6 +52,11 @@ ECharacterGroundState NextCharacterController::GetGroundState() const
 bool NextCharacterController::IsOnGround() const
 {
     return GetGroundState() == ECharacterGroundState::OnGround;
+}
+
+float NextCharacterController::GetHeight() const
+{
+    return backend_ ? backend_->GetHeight() : settings_.height;
 }
 
 bool NextCharacterController::IsValid() const

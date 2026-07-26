@@ -25,11 +25,15 @@ public:
     /// @param deltaSeconds    Frame delta time.
     void Update(const glm::vec3& inputDirection, float speed, bool jump, float deltaSeconds);
 
+    /// Changes the controller height while keeping its foot position fixed.
+    /// Growing fails if the added volume is obstructed.
+    bool TrySetHeight(float height);
+
     glm::vec3 GetPosition() const;
     glm::vec3 GetLinearVelocity() const;
     ECharacterGroundState GetGroundState() const;
     bool IsOnGround() const;
-    float GetHeight() const { return settings_.height; }
+    float GetHeight() const;
     float GetRadius() const { return settings_.radius; }
 
     bool IsValid() const;
