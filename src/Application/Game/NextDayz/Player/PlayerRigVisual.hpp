@@ -21,6 +21,7 @@
 
 #include "Application/Game/NextDayz/NextDayzConfig.hpp"
 #include "Application/Game/NextDayz/Player/PlayerState.hpp"
+#include "Application/Game/NextDayz/Weapons/WeaponDefs.hpp"
 
 namespace Assets
 {
@@ -39,7 +40,8 @@ namespace NextDayz
         void Configure(const FAnimationConfig& config) { animationConfig_ = config; }
 
         void InjectAssets(std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials);
-        void SetWeaponAssets(uint32_t modelId, uint32_t materialId);
+        void SetWeaponAssets(const std::array<uint32_t, kWeapons.size()>& modelIds,
+                             const std::array<uint32_t, kWeapons.size()>& materialIds);
         void OnSceneLoaded(Assets::Scene& scene);
         void OnSceneUnloaded();
 
@@ -53,7 +55,9 @@ namespace NextDayz
 
         bool HasRig() const { return hasRig_; }
         const std::string& CurrentBaseClipName() const { return baseClipName_; }
+        const std::string& CurrentWeaponActionClipName() const { return weaponActionClipName_; }
         float AimWeight() const { return aimWeight_; }
+        float WeaponActionWeight() const { return weaponActionWeight_; }
         bool RecoilActive() const;
 
     private:
@@ -78,9 +82,11 @@ namespace NextDayz
         std::shared_ptr<Assets::Node> helmetNode_;
         std::shared_ptr<Assets::Node> backpackNode_;
         std::shared_ptr<Assets::Node> weaponNode_;
+        std::array<std::shared_ptr<Assets::Node>, 2> holsteredWeaponNodes_;
         NextGameplay::FRigLayeredAnimator animator_;
         NextGameplay::FRigLayerHandle locomotionLayer_ = NextGameplay::invalidRigLayerHandle;
         NextGameplay::FRigLayerHandle aimLayer_ = NextGameplay::invalidRigLayerHandle;
+        NextGameplay::FRigLayerHandle weaponActionLayer_ = NextGameplay::invalidRigLayerHandle;
         NextGameplay::FRigLayerHandle recoilLayer_ = NextGameplay::invalidRigLayerHandle;
         NextGameplay::FRigLayerHandle actionLayer_ = NextGameplay::invalidRigLayerHandle;
         bool bound_ = false;
@@ -88,11 +94,16 @@ namespace NextDayz
         bool visible_ = true;
         FAnimationConfig animationConfig_{};
         std::string baseClipName_;
-        uint32_t weaponModelId_ = 0;
-        uint32_t weaponMaterialId_ = 0;
+        std::string weaponActionClipName_;
+        std::array<uint32_t, kWeapons.size()> weaponModelIds_{};
+        std::array<uint32_t, kWeapons.size()> weaponMaterialIds_{};
+        int weaponVisualIndex_ = -1;
+        std::array<int, 2> holsteredWeaponVisualIndices_{{-1, -1}};
         bool weaponAssetsSet_ = false;
         bool weaponVisible_ = false;
+        std::array<bool, 2> holsteredWeaponVisible_{{false, false}};
         float aimWeight_ = 0.0f;
+        float weaponActionWeight_ = 0.0f;
         float actionWeight_ = 0.0f;
         bool recoilActive_ = false;
     };

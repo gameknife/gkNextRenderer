@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 #include "Engine/Assets/Core/Node.hpp"
@@ -22,15 +23,15 @@ namespace NextDayz
 {
     namespace
     {
-        constexpr float kReloadSeconds = 2.2f;
         constexpr float kHitscanRange = 400.0f;
         const std::string kEmptyId;
     }
 
-    void WeaponSystem::SetViewModelAssets(uint32_t modelId, uint32_t materialId)
+    void WeaponSystem::SetViewModelAssets(const std::array<uint32_t, kWeapons.size()>& modelIds,
+                                          const std::array<uint32_t, kWeapons.size()>& materialIds)
     {
-        viewModelModelId_ = modelId;
-        viewModelMaterialId_ = materialId;
+        viewModelModelIds_ = modelIds;
+        viewModelMaterialIds_ = materialIds;
         viewModelAssetsSet_ = true;
     }
 
@@ -41,6 +42,7 @@ namespace NextDayz
         viewModelRecoilVelocity_ = 0.0f;
         viewModelVisible_ = false;
         viewModelInScene_ = false;
+        viewModelWeaponIndex_ = -1;
         shotEvents_.clear();
         if (!viewModelAssetsSet_)
         {
@@ -50,7 +52,8 @@ namespace NextDayz
         // rayCastVisible = false so the player's own shots never hit the view model.
         viewModelNode_ = Assets::SceneBuilder::CreateRenderNode(
             "nd_viewmodel", glm::vec3(0.0f, -1000.0f, 0.0f), glm::vec3(1.0f), scene.GenerateInstanceId(),
-            viewModelModelId_, viewModelMaterialId_, false, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), false);
+            viewModelModelIds_[0], viewModelMaterialIds_[0], false,
+            glm::quat(1.0f, 0.0f, 0.0f, 0.0f), false);
         auto physics = std::make_shared<Runtime::PhysicsComponent>();
         physics->SetMobility(Runtime::ENodeMobility::Dynamic);
         viewModelNode_->AddComponent(physics);
@@ -64,6 +67,7 @@ namespace NextDayz
         viewModelNode_.reset();
         viewModelVisible_ = false;
         viewModelInScene_ = false;
+        viewModelWeaponIndex_ = -1;
         shotEvents_.clear();
     }
 
@@ -84,21 +88,26 @@ namespace NextDayz
         activeSlot_ = slot;
         reloading_ = false;
         reloadTimer_ = 0.0f;
+        switching_ = false;
+        switchCommitted_ = false;
+        switchTargetSlot_ = -1;
+        switchTimer_ = 0.0f;
         RefreshViewModelVisibility();
         return true;
     }
 
     void WeaponSystem::SwitchSlot(int slot)
     {
-        if (slot < 0 || slot >= static_cast<int>(slots_.size()) || slot == activeSlot_)
+        if (slot < 0 || slot >= static_cast<int>(slots_.size()) || slot == activeSlot_ || switching_)
         {
             return;
         }
-        previousSlot_ = activeSlot_;
-        activeSlot_ = slot;
         reloading_ = false;
         reloadTimer_ = 0.0f;
-        RefreshViewModelVisibility();
+        switching_ = true;
+        switchCommitted_ = false;
+        switchTargetSlot_ = slot;
+        switchTimer_ = std::max(config_.SwitchSeconds, 0.01f);
     }
 
     void WeaponSystem::SwitchPrevious()
@@ -109,7 +118,7 @@ namespace NextDayz
     void WeaponSystem::RequestReload(Inventory& inventory)
     {
         const FWeaponDef* def = ActiveWeapon();
-        if (!def || reloading_)
+        if (!def || reloading_ || switching_)
         {
             return;
         }
@@ -122,7 +131,7 @@ namespace NextDayz
             return;
         }
         reloading_ = true;
-        reloadTimer_ = kReloadSeconds;
+        reloadTimer_ = std::max(config_.ReloadSeconds, 0.01f);
     }
 
     const FWeaponDef* WeaponSystem::ActiveWeapon() const
@@ -173,6 +182,32 @@ namespace NextDayz
         return std::abs(viewModelRecoil_) > 0.0001f || std::abs(viewModelRecoilVelocity_) > 0.001f;
     }
 
+    EWeaponPresentationAction WeaponSystem::PresentationAction() const
+    {
+        if (switching_)
+        {
+            return EWeaponPresentationAction::Switch;
+        }
+        if (reloading_)
+        {
+            return EWeaponPresentationAction::Reload;
+        }
+        return EWeaponPresentationAction::None;
+    }
+
+    float WeaponSystem::PresentationActionTime() const
+    {
+        if (switching_)
+        {
+            return glm::clamp(1.0f - switchTimer_ / std::max(config_.SwitchSeconds, 0.01f), 0.0f, 1.0f);
+        }
+        if (reloading_)
+        {
+            return glm::clamp(1.0f - reloadTimer_ / std::max(config_.ReloadSeconds, 0.01f), 0.0f, 1.0f);
+        }
+        return 0.0f;
+    }
+
     void WeaponSystem::RefreshViewModelVisibility()
     {
         if (viewModelNode_)
@@ -192,10 +227,28 @@ namespace NextDayz
             return;
         }
 
-        const glm::vec3 origin = player.EyePosition();
-        glm::vec3 dir = player.Forward();
+        const glm::vec3 cameraOrigin = player.CameraPosition();
+        const glm::vec3 cameraDirection = player.Forward();
 
-        // Random cone spread around the view direction.
+        // Resolve the point under the centre-screen crosshair from the real
+        // render-camera origin. In TPS this is the offset shoulder camera, not
+        // the character eye position.
+        glm::vec3 aimPoint = cameraOrigin + cameraDirection * kHitscanRange;
+        engine.RayCast(cameraOrigin, cameraDirection, [&](Assets::RayCastResult result) {
+            if (result.Hit && result.T <= kHitscanRange)
+            {
+                aimPoint = glm::vec3(result.HitPoint);
+            }
+            return true;
+        });
+
+        const glm::vec3 playerUp =
+            glm::normalize(glm::cross(player.Right(), cameraDirection));
+        const glm::vec3 muzzle = player.EyePosition() + cameraDirection * 0.6f +
+                                 player.Right() * 0.12f - playerUp * 0.08f;
+        glm::vec3 dir = glm::normalize(aimPoint - muzzle);
+
+        // Random cone spread around the muzzle-to-crosshair direction.
         const float spread = player.IsAiming() ? def->spreadAds : def->spreadHip;
         if (spread > 0.0f)
         {
@@ -207,10 +260,10 @@ namespace NextDayz
             dir = glm::normalize(dir + right * std::tan(ax) + up * std::tan(ay));
         }
 
-        glm::vec3 hitPoint = origin + dir * kHitscanRange;
+        glm::vec3 hitPoint = muzzle + dir * kHitscanRange;
         bool hit = false;
-        engine.RayCast(origin, dir, [&](Assets::RayCastResult result) {
-            if (result.Hit)
+        engine.RayCast(muzzle, dir, [&](Assets::RayCastResult result) {
+            if (result.Hit && result.T <= kHitscanRange)
             {
                 hitPoint = glm::vec3(result.HitPoint);
                 hit = true;
@@ -218,9 +271,7 @@ namespace NextDayz
             return true;
         });
 
-        // Muzzle roughly at the view-model tip; tracer + impact marker feedback.
-        const glm::vec3 muzzle = origin + player.Forward() * 0.6f + player.Right() * 0.12f -
-                                 glm::normalize(glm::cross(player.Right(), player.Forward())) * 0.08f;
+        // Tracer + impact marker feedback follows the actual muzzle ray.
         if (Runtime::IDebugDraw* draw = engine.GetDebugDraw())
         {
             draw->AddLine(muzzle, hitPoint, glm::vec4(1.0f, 0.85f, 0.3f, 1.0f), 2.0f, true);
@@ -244,11 +295,12 @@ namespace NextDayz
 
     void WeaponSystem::Update(float deltaSeconds, PlayerController& player, Inventory& inventory, NextEngine& engine)
     {
-        fireCooldown_ -= std::max(0.0f, deltaSeconds);
+        const float dt = std::max(0.0f, deltaSeconds);
+        fireCooldown_ -= dt;
 
         if (reloading_)
         {
-            reloadTimer_ -= deltaSeconds;
+            reloadTimer_ -= dt;
             if (reloadTimer_ <= 0.0f)
             {
                 reloading_ = false;
@@ -262,12 +314,31 @@ namespace NextDayz
             }
         }
 
+        if (switching_)
+        {
+            switchTimer_ -= dt;
+            if (!switchCommitted_ && PresentationActionTime() >= 0.5f)
+            {
+                previousSlot_ = activeSlot_;
+                activeSlot_ = switchTargetSlot_;
+                switchCommitted_ = true;
+                RefreshViewModelVisibility();
+            }
+            if (switchTimer_ <= 0.0f)
+            {
+                switching_ = false;
+                switchCommitted_ = false;
+                switchTargetSlot_ = -1;
+                switchTimer_ = 0.0f;
+            }
+        }
+
         const FWeaponDef* def = ActiveWeapon();
 
         // Feed ADS target FOV to the camera controller.
         player.SetAimFov(def ? def->adsFov : player.CurrentFov());
 
-        if (def && !reloading_ && triggerDown_)
+        if (def && !reloading_ && !switching_ && triggerDown_)
         {
             constexpr int kMaxShotsPerFrame = 8;
             int shotsThisFrame = 0;
@@ -301,6 +372,20 @@ namespace NextDayz
         // View-model follows the camera; lerp offset toward hip/ADS pose.
         if (viewModelNode_)
         {
+            const int weaponIndex = WeaponIndex(ActiveWeaponId());
+            if (weaponIndex >= 0 && weaponIndex != viewModelWeaponIndex_)
+            {
+                viewModelWeaponIndex_ = weaponIndex;
+                if (auto render = viewModelNode_->GetComponent<Runtime::RenderComponent>())
+                {
+                    render->SetModelId(viewModelModelIds_[weaponIndex]);
+                    std::array<uint32_t, 16> materials = {0};
+                    materials[0] = viewModelMaterialIds_[weaponIndex];
+                    render->SetMaterials(materials);
+                }
+                engine.GetScene().MarkDirty();
+            }
+
             const float recoilDt = std::max(0.0f, deltaSeconds);
             viewModelRecoilVelocity_ +=
                 (-config_.ViewModelRecoilSpring * viewModelRecoil_ -
@@ -308,7 +393,19 @@ namespace NextDayz
                 recoilDt;
             viewModelRecoil_ += viewModelRecoilVelocity_ * recoilDt;
 
-            const glm::vec3 targetOffset = player.IsAiming() ? config_.ViewModelAdsOffset : config_.ViewModelHipOffset;
+            glm::vec3 targetOffset = player.IsAiming() ? config_.ViewModelAdsOffset : config_.ViewModelHipOffset;
+            const float actionTime = PresentationActionTime();
+            const float actionArc = std::sin(glm::pi<float>() * actionTime);
+            if (reloading_)
+            {
+                targetOffset.y -= actionArc * 0.18f;
+                targetOffset.x += actionArc * 0.08f;
+            }
+            else if (switching_)
+            {
+                targetOffset.y -= actionArc * 0.42f;
+                targetOffset.z -= actionArc * 0.18f;
+            }
             const float t = 1.0f - std::exp(-config_.ViewModelLerpSpeed * std::max(0.0f, deltaSeconds));
             viewModelOffset_ = glm::mix(viewModelOffset_, targetOffset, t);
 
@@ -320,7 +417,8 @@ namespace NextDayz
                 {
                     render->SetVisible(show);
                 }
-                viewModelNode_->Scale() = show ? glm::vec3(1.0f) : glm::vec3(0.0f);
+                viewModelNode_->Scale() =
+                    show ? glm::vec3(config_.ViewModelScale) : glm::vec3(0.0f);
                 if (!show && viewModelInScene_)
                 {
                     engine.GetScene().RemoveNodeByInstanceId(viewModelNode_->GetInstanceId());
@@ -348,6 +446,7 @@ namespace NextDayz
                 viewModelNode_->Translation() = pos;
                 viewModelNode_->Rotation() =
                     glm::quat_cast(glm::mat3(xAxis, up, forward)) *
+                    glm::angleAxis(reloading_ ? actionArc * 0.45f : 0.0f, glm::vec3(0.0f, 0.0f, 1.0f)) *
                     glm::angleAxis(-viewModelRecoil_ * 0.8f, glm::vec3(1.0f, 0.0f, 0.0f));
                 viewModelNode_->RecalcTransform(true);
             }

@@ -8,12 +8,53 @@
 // ============================================================================
 
 #include <functional>
+#include <cstdint>
 #include <string>
+
+#include <glm/glm.hpp>
 
 namespace NextDayz
 {
     class Inventory;
     class WeaponSystem;
+
+    struct FDebugHudState
+    {
+        glm::vec3 position{0.0f};
+        glm::vec3 eyePosition{0.0f};
+        glm::vec3 velocity{0.0f};
+        glm::vec2 localMove{0.0f};
+        glm::vec2 cameraRecoilRadians{0.0f};
+        float yawRadians = 0.0f;
+        float pitchRadians = 0.0f;
+        float fovDegrees = 0.0f;
+        float horizontalSpeed = 0.0f;
+        float controllerHeight = 0.0f;
+        float aimWeight = 0.0f;
+        float actionTime = 0.0f;
+        std::string stance;
+        std::string desiredStance;
+        std::string gait;
+        std::string jumpPhase;
+        std::string baseAnimation;
+        std::string action;
+        std::string weaponAction;
+        std::string weaponActionClip;
+        float weaponActionTime = 0.0f;
+        float weaponActionWeight = 0.0f;
+        float jumpPhaseTime = 0.0f;
+        int switchTargetSlot = -1;
+        bool onGround = false;
+        bool standBlocked = false;
+        bool sprinting = false;
+        bool actionCommitted = false;
+        bool cameraRecoilActive = false;
+        bool rigRecoilActive = false;
+        bool viewModelRecoilActive = false;
+        bool switchingWeapon = false;
+        bool switchCommitted = false;
+        uint64_t shotSequence = 0;
+    };
 
     struct FHudContext
     {
@@ -33,8 +74,10 @@ namespace NextDayz
         bool overcast = false;
 
         bool showInventory = false;
+        bool showDebugPanel = false;
         const Inventory* inventory = nullptr;
         const WeaponSystem* weapons = nullptr;
+        FDebugHudState debug;
 
         std::function<void(const std::string& weaponId, int slot)> equipWeapon;
         std::function<void(const std::string& clothingId, bool on)> toggleClothing;

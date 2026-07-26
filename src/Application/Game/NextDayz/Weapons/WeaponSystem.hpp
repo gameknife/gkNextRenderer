@@ -16,6 +16,7 @@
 #include <glm/glm.hpp>
 
 #include "Application/Game/NextDayz/NextDayzConfig.hpp"
+#include "Application/Game/NextDayz/Player/PlayerState.hpp"
 #include "Application/Game/NextDayz/Weapons/WeaponDefs.hpp"
 
 class NextEngine;
@@ -45,7 +46,8 @@ namespace NextDayz
         void Configure(const FWeaponFeelConfig& config) { config_ = config; }
 
         // View-model proc assets injected by the GameInstance (BeforeSceneRebuild).
-        void SetViewModelAssets(uint32_t modelId, uint32_t materialId);
+        void SetViewModelAssets(const std::array<uint32_t, kWeapons.size()>& modelIds,
+                                const std::array<uint32_t, kWeapons.size()>& materialIds);
 
         void OnSceneLoaded(NextEngine& engine);
         void OnSceneUnloaded();
@@ -69,7 +71,12 @@ namespace NextDayz
         int AmmoInMag() const;
         int AmmoReserve(const Inventory& inventory) const;
         bool IsReloading() const { return reloading_; }
+        bool IsSwitching() const { return switching_; }
+        EWeaponPresentationAction PresentationAction() const;
+        float PresentationActionTime() const;
         int ActiveSlot() const { return activeSlot_; }
+        int SwitchTargetSlot() const { return switchTargetSlot_; }
+        bool SwitchCommitted() const { return switchCommitted_; }
         const std::string& SlotWeaponId(int slot) const;
 
         std::vector<FShotEvent> ConsumeShotEvents();
@@ -97,13 +104,18 @@ namespace NextDayz
         float fireCooldown_ = 0.0f;
         bool reloading_ = false;
         float reloadTimer_ = 0.0f;
+        bool switching_ = false;
+        bool switchCommitted_ = false;
+        int switchTargetSlot_ = -1;
+        float switchTimer_ = 0.0f;
         uint64_t shotSequence_ = 0;
         std::vector<FShotEvent> shotEvents_;
 
         // view model
-        uint32_t viewModelModelId_ = 0;
-        uint32_t viewModelMaterialId_ = 0;
+        std::array<uint32_t, kWeapons.size()> viewModelModelIds_{};
+        std::array<uint32_t, kWeapons.size()> viewModelMaterialIds_{};
         bool viewModelAssetsSet_ = false;
+        int viewModelWeaponIndex_ = -1;
         std::shared_ptr<Assets::Node> viewModelNode_;
         bool viewModelVisible_ = false;
         bool viewModelInScene_ = false;

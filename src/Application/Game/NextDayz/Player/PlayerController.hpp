@@ -45,6 +45,7 @@ namespace NextDayz
         // --- queries ---
         glm::vec3 Position() const { return controller_.GetPosition(); }
         glm::vec3 EyePosition() const;
+        glm::vec3 CameraPosition() const;
         glm::vec3 Forward() const;   // full 3D view direction (yaw+pitch)
         glm::vec3 Right() const;     // horizontal right
         glm::vec3 Up() const;
@@ -87,5 +88,7 @@ namespace NextDayz
         glm::vec2 cameraRecoil_{0.0f};
         glm::vec2 cameraRecoilVelocity_{0.0f};
         FPlayerLocomotionState locomotion_{};
+        float jumpPhaseElapsed_ = 0.0f;
+        glm::vec3 airborneHorizontalVelocity_{0.0f};
     };
 }

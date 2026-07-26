@@ -68,12 +68,13 @@ private:
     NextDayz::LootSystem loot_;
     NextDayz::TimeSystem time_;
 
-    // injected view-model proc assets
-    uint32_t viewModelModelId_ = 0;
-    uint32_t viewModelMaterialId_ = 0;
+    // Injected weapon silhouettes shared by FPS view model and TPS attachment.
+    std::array<uint32_t, NextDayz::kWeapons.size()> weaponModelIds_{};
+    std::array<uint32_t, NextDayz::kWeapons.size()> weaponMaterialIds_{};
 
     bool sceneReady_ = false;
     bool showInventory_ = false;
+    bool showDebugPanel_ = true;
     bool mouseCaptured_ = false;
     bool resetMouse_ = true;
     glm::dvec2 mousePos_{0.0, 0.0};

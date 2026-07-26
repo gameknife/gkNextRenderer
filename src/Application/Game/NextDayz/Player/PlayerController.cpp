@@ -19,6 +19,8 @@ namespace NextDayz
         cameraRecoil_ = glm::vec2(0.0f);
         cameraRecoilVelocity_ = glm::vec2(0.0f);
         locomotion_ = {};
+        jumpPhaseElapsed_ = 0.0f;
+        airborneHorizontalVelocity_ = glm::vec3(0.0f);
         walkModifier_ = false;
         sprintModifier_ = false;
         movementLocked_ = false;
@@ -97,6 +99,22 @@ namespace NextDayz
     glm::vec3 PlayerController::EyePosition() const
     {
         return controller_.GetPosition() + glm::vec3(0.0f, currentEyeHeight_, 0.0f);
+    }
+
+    glm::vec3 PlayerController::CameraPosition() const
+    {
+        if (firstPerson_)
+        {
+            return EyePosition();
+        }
+
+        const glm::vec3 forward = Forward();
+        constexpr glm::vec3 worldUp(0.0f, 1.0f, 0.0f);
+        const glm::vec3 cameraRight = glm::normalize(glm::cross(forward, worldUp));
+        const glm::vec3 characterFocus =
+            controller_.GetPosition() + glm::vec3(0.0f, currentEyeHeight_ * 0.88f, 0.0f);
+        return characterFocus - forward * camDistance_ +
+               cameraRight * config_.Camera.TpsShoulderOffset;
     }
 
     float PlayerController::HorizontalSpeed() const
@@ -227,15 +245,107 @@ namespace NextDayz
             moveDir = glm::normalize(moveDir);
         }
 
-        const bool jump = jumpQueued_ && !movementLocked_ &&
+        const bool wasOnGround = locomotion_.onGround;
+        const bool jump = jumpQueued_ && !movementLocked_ && wasOnGround &&
                           locomotion_.actualStance == EPlayerStance::Standing;
-        controller_.Update(moveDir, speed, jump, deltaSeconds);
+        if (jump)
+        {
+            airborneHorizontalVelocity_ = moveDir * speed;
+        }
+
+        glm::vec3 physicsMoveDir = moveDir;
+        float physicsSpeed = speed;
+        if (!wasOnGround)
+        {
+            physicsSpeed = glm::length(glm::vec2(airborneHorizontalVelocity_.x,
+                                                 airborneHorizontalVelocity_.z));
+            physicsMoveDir = physicsSpeed > 0.001f
+                                 ? airborneHorizontalVelocity_ / physicsSpeed
+                                 : glm::vec3(0.0f);
+        }
+
+        controller_.Update(physicsMoveDir, physicsSpeed, jump, deltaSeconds);
         jumpQueued_ = false;
 
         locomotion_.worldVelocity = controller_.GetLinearVelocity();
         locomotion_.horizontalSpeed =
             glm::length(glm::vec2(locomotion_.worldVelocity.x, locomotion_.worldVelocity.z));
         locomotion_.onGround = controller_.IsOnGround();
+        if (wasOnGround && !locomotion_.onGround && !jump)
+        {
+            // Walking off an edge keeps the velocity from the final grounded
+            // physics step, just like an explicit jump.
+            airborneHorizontalVelocity_ =
+                glm::vec3(locomotion_.worldVelocity.x, 0.0f, locomotion_.worldVelocity.z);
+        }
+        else if (locomotion_.onGround)
+        {
+            airborneHorizontalVelocity_ = glm::vec3(0.0f);
+        }
+
+        const float jumpDt = std::max(deltaSeconds, 0.0f);
+        const auto beginJumpPhase = [this](EPlayerJumpPhase phase)
+        {
+            locomotion_.jumpPhase = phase;
+            locomotion_.jumpPhaseTime01 = 0.0f;
+            jumpPhaseElapsed_ = 0.0f;
+        };
+        if (jump)
+        {
+            beginJumpPhase(EPlayerJumpPhase::Up);
+        }
+        else
+        {
+            switch (locomotion_.jumpPhase)
+            {
+            case EPlayerJumpPhase::None:
+                if (!locomotion_.onGround)
+                {
+                    beginJumpPhase(locomotion_.worldVelocity.y > 0.15f
+                                       ? EPlayerJumpPhase::Up
+                                       : EPlayerJumpPhase::AirLoop);
+                }
+                break;
+            case EPlayerJumpPhase::Up:
+                jumpPhaseElapsed_ += jumpDt;
+                locomotion_.jumpPhaseTime01 =
+                    glm::clamp(jumpPhaseElapsed_ / std::max(config_.Animation.JumpUpSeconds, 0.01f),
+                               0.0f, 1.0f);
+                if (locomotion_.onGround && !wasOnGround)
+                {
+                    beginJumpPhase(EPlayerJumpPhase::Down);
+                }
+                else if (jumpPhaseElapsed_ >= config_.Animation.JumpUpSeconds ||
+                         locomotion_.worldVelocity.y <= 0.0f)
+                {
+                    beginJumpPhase(EPlayerJumpPhase::AirLoop);
+                }
+                break;
+            case EPlayerJumpPhase::AirLoop:
+                if (locomotion_.onGround)
+                {
+                    beginJumpPhase(EPlayerJumpPhase::Down);
+                }
+                break;
+            case EPlayerJumpPhase::Down:
+                if (!locomotion_.onGround)
+                {
+                    beginJumpPhase(EPlayerJumpPhase::AirLoop);
+                }
+                else
+                {
+                    jumpPhaseElapsed_ += jumpDt;
+                    locomotion_.jumpPhaseTime01 =
+                        glm::clamp(jumpPhaseElapsed_ / std::max(config_.Animation.JumpDownSeconds, 0.01f),
+                                   0.0f, 1.0f);
+                    if (jumpPhaseElapsed_ >= config_.Animation.JumpDownSeconds)
+                    {
+                        beginJumpPhase(EPlayerJumpPhase::None);
+                    }
+                }
+                break;
+            }
+        }
 
         const float eyeTarget = locomotion_.actualStance == EPlayerStance::Crouched
                                     ? config_.Player.CrouchedEyeHeight
@@ -260,22 +370,9 @@ namespace NextDayz
     void PlayerController::FillCamera(glm::mat4& outModelView, float& outFov) const
     {
         const glm::vec3 forward = Forward();
-        const glm::vec3 right = Right();
-        const glm::vec3 up = glm::normalize(glm::cross(right, forward));
-
-        glm::vec3 eye;
-        glm::vec3 target;
-        if (firstPerson_)
-        {
-            eye = EyePosition();
-            target = eye + forward;
-        }
-        else
-        {
-            target = controller_.GetPosition() + glm::vec3(0.0f, currentEyeHeight_, 0.0f);
-            eye = target - forward * camDistance_;
-        }
-        outModelView = glm::lookAt(eye, target, up);
+        constexpr glm::vec3 worldUp(0.0f, 1.0f, 0.0f);
+        const glm::vec3 eye = CameraPosition();
+        outModelView = glm::lookAt(eye, eye + forward, worldUp);
         outFov = currentFov_;
     }
 }

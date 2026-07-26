@@ -83,4 +83,16 @@ namespace NextDayz
         }
         return nullptr;
     }
+
+    inline int WeaponIndex(std::string_view id)
+    {
+        for (size_t i = 0; i < kWeapons.size(); ++i)
+        {
+            if (kWeapons[i].id == id)
+            {
+                return static_cast<int>(i);
+            }
+        }
+        return -1;
+    }
 }

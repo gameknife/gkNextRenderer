@@ -483,7 +483,8 @@ TEST_CASE("ScadRig loads the articulated NextDayz survivor contract", "[Unit][Sc
         "stand_run_f", "stand_run_b", "stand_run_l", "stand_run_r",
         "stand_sprint_f", "stand_sprint_b", "stand_sprint_l", "stand_sprint_r",
         "crouch_idle", "crouch_walk_f", "crouch_walk_b", "crouch_walk_l", "crouch_walk_r",
-        "aim_rifle_down", "aim_rifle_center", "aim_rifle_up"};
+        "jump_air_loop",
+        "weapon_ready", "aim_rifle_down", "aim_rifle_center", "aim_rifle_up"};
     for (const std::string& clipName : loopClips)
     {
         const FRigClip* clip = asset.FindClip(clipName);
@@ -491,7 +492,9 @@ TEST_CASE("ScadRig loads the articulated NextDayz survivor contract", "[Unit][Sc
         CHECK(clip->loop);
         CHECK_FALSE(clip->channels.empty());
     }
-    for (const char* clipName : {"recoil_rifle", "loot_ground"})
+    for (const char* clipName : {
+             "jump_up", "jump_down",
+             "reload_rifle", "switch_weapon", "recoil_rifle", "loot_ground"})
     {
         const FRigClip* clip = asset.FindClip(clipName);
         REQUIRE(clip != nullptr);

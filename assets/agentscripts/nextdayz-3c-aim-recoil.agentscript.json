@@ -7,6 +7,10 @@
   "steps": [
     { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
     { "type": "wait-frames", "n": 60 },
+    { "type": "key", "code": "S", "action": "down" },
+    { "type": "wait-ms", "ms": 1800 },
+    { "type": "key", "code": "S", "action": "up" },
+    { "type": "wait-frames", "n": 10 },
 
     { "type": "log", "message": "3C: ADS fades in and constrains moving gait to walk" },
     { "type": "mouse-button", "button": "right", "action": "down" },
@@ -23,6 +27,7 @@
     { "type": "assert", "query": "game.recoilActive", "op": "eq", "value": true },
     { "type": "assert", "query": "game.cameraRecoilPitch", "op": "lt", "value": 0.0 },
     { "type": "mouse-button", "button": "left", "action": "up" },
+    { "type": "screenshot", "out": "screenshots/nextdayz_3c_aim_recoil_fps" },
     { "type": "key", "code": "V", "action": "press" },
     { "type": "wait-frames", "n": 4 },
     { "type": "screenshot", "out": "screenshots/nextdayz_3c_aim_recoil_tps" },
@@ -30,11 +35,12 @@
     { "type": "mouse-button", "button": "right", "action": "up" },
 
     { "type": "log", "message": "3C: aim and recoil return cleanly to locomotion" },
-    { "type": "wait-frames", "n": 120 },
+    { "type": "wait-ms", "ms": 1500 },
     { "type": "assert", "query": "game.isAiming", "op": "eq", "value": false },
     { "type": "assert", "query": "game.aimWeight", "op": "lt", "value": 0.05 },
     { "type": "assert", "query": "game.recoilActive", "op": "eq", "value": false },
     { "type": "assert", "query": "game.baseAnim", "op": "eq", "value": "stand_idle" },
+    { "type": "screenshot", "out": "screenshots/nextdayz_3c_weapon_ready_tps" },
 
     { "type": "quit" }
   ]

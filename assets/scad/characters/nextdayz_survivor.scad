@@ -193,15 +193,33 @@ function nd_crouch_cycle(duration, swing_x, swing_y, torso_z) = [
     ["bone_upperarm_r", "rot", [[0, [8, 0, 3]], [duration/2, [-8, 0, -3]], [duration, [8, 0, 3]]]]
 ];
 
+function nd_weapon_ready_pose() = [
+    ["bone_torso", "rot", [[0, [2, 0, 0]]]],
+    // Both arms converge on the rifle: right hand on the grip, left hand
+    // supporting the receiver/fore-end. The rifle stays in a low-ready angle.
+    ["bone_upperarm_l", "rot", [[0, [-52, 0, 42]]]],
+    ["bone_forearm_l", "rot", [[0, [-14, 0, 14]]]],
+    ["bone_hand_l", "rot", [[0, [4, 0, 0]]]],
+    ["bone_upperarm_r", "rot", [[0, [-54, 0, -15]]]],
+    ["bone_forearm_r", "rot", [[0, [-12, 0, -5]]]],
+    ["bone_hand_r", "rot", [[0, [2, 0, 0]]]],
+    // Cancel the right-arm chain rotation so the rifle itself remains in a
+    // slight low-ready attitude instead of pointing upward with the forearm.
+    ["bone_weapon_socket", "rot", [[0, [71.4, 0, 48]]]]
+];
+
 function nd_aim_pose(pitch) = [
     ["bone_torso", "rot", [[0, [pitch * 0.28, 0, 0]]]],
-    ["bone_upperarm_l", "rot", [[0, [-72 + pitch * 0.70, 0, -12]]]],
-    ["bone_forearm_l", "rot", [[0, [-12 + pitch * 0.20, 0, 7]]]],
+    // Shoulder the stock while both arms close inward around the rifle.
+    ["bone_upperarm_l", "rot", [[0, [-72 + pitch * 0.70, 0, 42]]]],
+    ["bone_forearm_l", "rot", [[0, [-14 + pitch * 0.20, 0, 12]]]],
     ["bone_hand_l", "rot", [[0, [4, 0, 0]]]],
-    ["bone_upperarm_r", "rot", [[0, [-78 + pitch * 0.72, 0, 10]]]],
-    ["bone_forearm_r", "rot", [[0, [-8 + pitch * 0.18, 0, -5]]]],
+    ["bone_upperarm_r", "rot", [[0, [-74 + pitch * 0.72, 0, -15]]]],
+    ["bone_forearm_r", "rot", [[0, [-12 + pitch * 0.18, 0, -5]]]],
     ["bone_hand_r", "rot", [[0, [2, 0, 0]]]],
-    ["bone_weapon_socket", "rot", [[0, [pitch * 0.08, 0, 0]]]]
+    // Compensate the complete non-commutative right-arm chain, then preserve
+    // the requested camera pitch in the rifle's visible muzzle direction.
+    ["bone_weapon_socket", "rot", [[0, [75.8 + pitch * 0.06, 0, 70.2 + pitch * 0.44]]]]
 ];
 
 // --- Locomotion -------------------------------------------------------------
@@ -242,11 +260,78 @@ anim_crouch_walk_b = nd_crouch_cycle(1.10, -10,  0,  0);
 anim_crouch_walk_l = nd_crouch_cycle(1.10,   3,-12, -5);
 anim_crouch_walk_r = nd_crouch_cycle(1.10,   3, 12,  5);
 
+// --- Jump ------------------------------------------------------------------
+// World translation stays on the character controller. These clips only add
+// anticipation, an airborne silhouette and landing compression to the rig.
+
+anim_jump_up = [
+    ["loop", false],
+    ["bone_pelvis", "pos", [[0, [0, 0, -0.10]], [0.12, [0, 0, -0.04]], [0.24, [0, 0, 0.04]]]],
+    ["bone_torso", "rot", [[0, [10, 0, 0]], [0.12, [3, 0, 0]], [0.24, [-5, 0, 0]]]],
+    ["bone_thigh_l", "rot", [[0, [-30, 0, -3]], [0.12, [-12, 0, -2]], [0.24, [14, 0, -1]]]],
+    ["bone_thigh_r", "rot", [[0, [-30, 0, 3]], [0.12, [-12, 0, 2]], [0.24, [8, 0, 1]]]],
+    ["bone_calf_l", "rot", [[0, [58, 0, 0]], [0.12, [34, 0, 0]], [0.24, [12, 0, 0]]]],
+    ["bone_calf_r", "rot", [[0, [58, 0, 0]], [0.12, [34, 0, 0]], [0.24, [18, 0, 0]]]],
+    ["bone_foot_l", "rot", [[0, [-28, 0, 0]], [0.24, [-8, 0, 0]]]],
+    ["bone_foot_r", "rot", [[0, [-28, 0, 0]], [0.24, [-12, 0, 0]]]]
+];
+
+anim_jump_air_loop = [
+    ["bone_pelvis", "pos", [[0, [0, 0, 0.04]], [0.30, [0, 0, 0.025]], [0.60, [0, 0, 0.04]]]],
+    ["bone_torso", "rot", [[0, [-5, 0, 0]], [0.30, [-3, 0, 0]], [0.60, [-5, 0, 0]]]],
+    ["bone_thigh_l", "rot", [[0, [18, 0, -2]], [0.30, [14, 0, -1]], [0.60, [18, 0, -2]]]],
+    ["bone_thigh_r", "rot", [[0, [-8, 0, 2]], [0.30, [-12, 0, 1]], [0.60, [-8, 0, 2]]]],
+    ["bone_calf_l", "rot", [[0, [18, 0, 0]], [0.30, [22, 0, 0]], [0.60, [18, 0, 0]]]],
+    ["bone_calf_r", "rot", [[0, [38, 0, 0]], [0.30, [34, 0, 0]], [0.60, [38, 0, 0]]]],
+    ["bone_foot_l", "rot", [[0, [-10, 0, 0]], [0.60, [-10, 0, 0]]]],
+    ["bone_foot_r", "rot", [[0, [-20, 0, 0]], [0.60, [-20, 0, 0]]]]
+];
+
+anim_jump_down = [
+    ["loop", false],
+    ["bone_pelvis", "pos", [[0, [0, 0, 0.03]], [0.12, [0, 0, -0.13]], [0.32, [0, 0, 0]]]],
+    ["bone_torso", "rot", [[0, [-3, 0, 0]], [0.12, [12, 0, 0]], [0.32, [0, 0, 0]]]],
+    ["bone_thigh_l", "rot", [[0, [12, 0, -1]], [0.12, [-34, 0, 0]], [0.32, [0, 0, 0]]]],
+    ["bone_thigh_r", "rot", [[0, [-10, 0, 1]], [0.12, [-34, 0, 0]], [0.32, [0, 0, 0]]]],
+    ["bone_calf_l", "rot", [[0, [22, 0, 0]], [0.12, [62, 0, 0]], [0.32, [0, 0, 0]]]],
+    ["bone_calf_r", "rot", [[0, [36, 0, 0]], [0.12, [62, 0, 0]], [0.32, [0, 0, 0]]]],
+    ["bone_foot_l", "rot", [[0, [-12, 0, 0]], [0.12, [-30, 0, 0]], [0.32, [0, 0, 0]]]],
+    ["bone_foot_r", "rot", [[0, [-18, 0, 0]], [0.12, [-30, 0, 0]], [0.32, [0, 0, 0]]]]
+];
+
 // --- Upper-body layers ------------------------------------------------------
 
+anim_weapon_ready      = nd_weapon_ready_pose();
 anim_aim_rifle_down   = nd_aim_pose( 22);
 anim_aim_rifle_center = nd_aim_pose(  0);
 anim_aim_rifle_up     = nd_aim_pose(-24);
+
+anim_reload_rifle = [
+    ["loop", false],
+    ["bone_torso", "rot", [[0, [2, 0, 0]], [0.55, [5, 0, -3]], [1.45, [5, 0, -3]], [2.2, [2, 0, 0]]]],
+    ["bone_upperarm_l", "rot", [[0, [-52, 0, 42]], [0.45, [-34, 0, 55]],
+                                  [1.15, [-18, 0, 62]], [1.65, [-46, 0, 48]], [2.2, [-52, 0, 42]]]],
+    ["bone_forearm_l", "rot", [[0, [-14, 0, 14]], [0.45, [48, 0, 18]],
+                                 [1.15, [72, 0, 12]], [1.65, [8, 0, 14]], [2.2, [-14, 0, 14]]]],
+    ["bone_hand_l", "rot", [[0, [4, 0, 0]], [0.45, [18, 0, -10]],
+                              [1.15, [-12, 0, 8]], [1.65, [10, 0, 0]], [2.2, [4, 0, 0]]]],
+    ["bone_upperarm_r", "rot", [[0, [-54, 0, -15]], [1.1, [-58, 0, -13]], [2.2, [-54, 0, -15]]]],
+    ["bone_forearm_r", "rot", [[0, [-12, 0, -5]], [1.1, [-16, 0, -4]], [2.2, [-12, 0, -5]]]],
+    ["bone_hand_r", "rot", [[0, [2, 0, 0]], [1.1, [5, 0, 0]], [2.2, [2, 0, 0]]]],
+    ["bone_weapon_socket", "rot", [[0, [71.4, 0, 48]], [1.1, [75, 0, 50]], [2.2, [71.4, 0, 48]]]]
+];
+
+anim_switch_weapon = [
+    ["loop", false],
+    ["bone_torso", "rot", [[0, [2, 0, 0]], [0.45, [4, 0, 8]], [0.9, [2, 0, 0]]]],
+    ["bone_upperarm_l", "rot", [[0, [-52, 0, 42]], [0.45, [-20, 0, 28]], [0.9, [-52, 0, 42]]]],
+    ["bone_forearm_l", "rot", [[0, [-14, 0, 14]], [0.45, [35, 0, 8]], [0.9, [-14, 0, 14]]]],
+    ["bone_hand_l", "rot", [[0, [4, 0, 0]], [0.45, [12, 0, 0]], [0.9, [4, 0, 0]]]],
+    ["bone_upperarm_r", "rot", [[0, [-54, 0, -15]], [0.45, [32, 0, -38]], [0.9, [-54, 0, -15]]]],
+    ["bone_forearm_r", "rot", [[0, [-12, 0, -5]], [0.45, [28, 0, -18]], [0.9, [-12, 0, -5]]]],
+    ["bone_hand_r", "rot", [[0, [2, 0, 0]], [0.45, [-18, 0, 12]], [0.9, [2, 0, 0]]]],
+    ["bone_weapon_socket", "rot", [[0, [71.4, 0, 48]], [0.45, [8, 0, 12]], [0.9, [71.4, 0, 48]]]]
+];
 
 anim_recoil_rifle = [
     ["loop", false],

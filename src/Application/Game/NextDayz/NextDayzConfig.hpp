@@ -38,8 +38,9 @@ namespace NextDayz
         float FovLerpSpeed = 12.0f;     // exponential smoothing rate for ADS FOV
         float MaxPitchDegrees = 85.0f;
         // Third person
-        float TpsDistance = 4.5f;
+        float TpsDistance = 3.8f;
         float TpsHeight = 1.7f;
+        float TpsShoulderOffset = 0.90f;
         float TpsMinDistance = 1.5f;
         float TpsMaxDistance = 9.0f;
         float ScrollStep = 0.6f;
@@ -48,8 +49,9 @@ namespace NextDayz
     struct FWeaponFeelConfig
     {
         // FPS view-model placement, in camera space (right, up, forward).
-        glm::vec3 ViewModelHipOffset{0.22f, -0.30f, 0.5f};
-        glm::vec3 ViewModelAdsOffset{0.0f, -0.075f, 0.42f};
+        float ViewModelScale = 0.65f;
+        glm::vec3 ViewModelHipOffset{0.22f, -0.30f, 0.75f};
+        glm::vec3 ViewModelAdsOffset{0.0f, -0.060f, 0.75f};
         float ViewModelLerpSpeed = 14.0f;
         float CameraRecoilSpring = 90.0f;
         float CameraRecoilDamping = 18.0f;
@@ -57,6 +59,8 @@ namespace NextDayz
         float ViewModelRecoilDamping = 20.0f;
         float TracerLifetimeSeconds = 0.04f;
         float FireAnimSeconds = 0.22f;  // TPS fire clip hold
+        float ReloadSeconds = 2.2f;
+        float SwitchSeconds = 0.9f;
     };
 
     struct FAnimationConfig
@@ -69,9 +73,13 @@ namespace NextDayz
         float CrouchWalkAuthoredSpeed = 1.55f;
         float MinPlayRate = 0.75f;
         float MaxPlayRate = 1.35f;
+        float WeaponReadyPoseWeight = 1.0f;
         float AimFadeSeconds = 0.12f;
         float AimPitchLimitDegrees = 80.0f;
         float RecoilFadeOutSeconds = 0.04f;
+        float JumpUpSeconds = 0.24f;
+        float JumpDownSeconds = 0.32f;
+        float JumpFadeSeconds = 0.08f;
     };
 
     struct FLootConfig

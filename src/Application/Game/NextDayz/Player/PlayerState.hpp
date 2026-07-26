@@ -1,5 +1,8 @@
 #pragma once
 
+#include <array>
+#include <string>
+
 #include <glm/glm.hpp>
 
 namespace NextDayz
@@ -18,10 +21,25 @@ namespace NextDayz
         Sprint,
     };
 
+    enum class EPlayerJumpPhase
+    {
+        None,
+        Up,
+        AirLoop,
+        Down,
+    };
+
     enum class EPlayerAction
     {
         None,
         LootGround,
+    };
+
+    enum class EWeaponPresentationAction
+    {
+        None,
+        Reload,
+        Switch,
     };
 
     struct FPlayerLocomotionState
@@ -32,6 +50,8 @@ namespace NextDayz
         glm::vec2 localMove{0.0f}; // x=right, y=forward
         glm::vec3 worldVelocity{0.0f};
         float horizontalSpeed = 0.0f;
+        EPlayerJumpPhase jumpPhase = EPlayerJumpPhase::None;
+        float jumpPhaseTime01 = 0.0f;
         bool onGround = false;
         bool standBlocked = false;
     };
@@ -44,6 +64,11 @@ namespace NextDayz
         float aimWeight = 0.0f;
         float aimPitchRadians = 0.0f;
         bool hasWeapon = false;
+        std::string weaponId;
+        EWeaponPresentationAction weaponAction = EWeaponPresentationAction::None;
+        float weaponActionTime01 = 0.0f;
+        int activeWeaponSlot = 0;
+        std::array<std::string, 2> slotWeaponIds;
     };
 
     inline const char* StanceName(EPlayerStance stance)
@@ -63,8 +88,31 @@ namespace NextDayz
         }
     }
 
+    inline const char* JumpPhaseName(EPlayerJumpPhase phase)
+    {
+        switch (phase)
+        {
+        case EPlayerJumpPhase::Up: return "up";
+        case EPlayerJumpPhase::AirLoop: return "air_loop";
+        case EPlayerJumpPhase::Down: return "down";
+        case EPlayerJumpPhase::None:
+        default: return "none";
+        }
+    }
+
     inline const char* ActionName(EPlayerAction action)
     {
         return action == EPlayerAction::LootGround ? "loot_ground" : "none";
+    }
+
+    inline const char* WeaponActionName(EWeaponPresentationAction action)
+    {
+        switch (action)
+        {
+        case EWeaponPresentationAction::Reload: return "reload";
+        case EWeaponPresentationAction::Switch: return "switch";
+        case EWeaponPresentationAction::None:
+        default: return "none";
+        }
     }
 }
