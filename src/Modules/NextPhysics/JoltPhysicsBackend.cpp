@@ -1348,6 +1348,23 @@ namespace
             return true;
         }
 
+        void SetPosition(const glm::vec3& position) override
+        {
+            if (!character_)
+            {
+                return;
+            }
+            character_->SetPosition(RVec3(position.x, position.y, position.z));
+            character_->SetLinearVelocity(Vec3::sZero());
+            velocity_ = glm::vec3(0.0f);
+
+            const BroadPhaseLayerFilter& broadPhaseFilter =
+                physicsSystem_.GetDefaultBroadPhaseLayerFilter(NextLayers::MOVING);
+            const ObjectLayerFilter& objectLayerFilter =
+                physicsSystem_.GetDefaultLayerFilter(NextLayers::MOVING);
+            character_->RefreshContacts(broadPhaseFilter, objectLayerFilter, {}, {}, tempAllocator_);
+        }
+
         glm::vec3 GetPosition() const override
         {
             if (!character_)

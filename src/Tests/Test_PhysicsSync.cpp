@@ -162,6 +162,10 @@ TEST_CASE_METHOD(EngineTestFixture, "Character stance resize keeps feet anchored
     CHECK(controller.GetHeight() == Catch::Approx(1.8f));
     CHECK(glm::distance(controller.GetPosition(), standingFeet) < 1.0e-4f);
 
+    const glm::vec3 scriptedPosition = standingFeet + glm::vec3(0.75f, 0.0f, 0.5f);
+    controller.SetPosition(scriptedPosition);
+    CHECK(glm::distance(controller.GetPosition(), scriptedPosition) < 1.0e-4f);
+
     for (int frame = 0; frame < 30; ++frame)
     {
         controller.Update(glm::vec3(1.0f, 0.0f, 0.0f), 2.0f, false, 1.0f / 60.0f);

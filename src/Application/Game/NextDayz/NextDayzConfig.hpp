@@ -82,6 +82,23 @@ namespace NextDayz
         float JumpFadeSeconds = 0.08f;
     };
 
+    struct FTraversalConfig
+    {
+        float ProbeDistance = 1.15f;
+        float ProbeHeight = 0.52f;
+        float MinObstacleHeight = 0.32f;
+        float VaultMaxHeight = 0.88f;
+        float ClimbMaxHeight = 1.48f;
+        float TopProbeInset = 0.12f;
+        float MaxVaultDepth = 0.95f;
+        float PlatformStandDepth = 0.32f;
+        float SurfaceNormalMinY = 0.70f;
+        float StandingClearance = 0.10f;
+        float ArcClearance = 0.14f;
+        float VaultDurationSeconds = 0.52f;
+        float ClimbDurationSeconds = 0.86f;
+    };
+
     struct FLootConfig
     {
         float ReachMeters = 3.0f;       // must be closer than this to interact
@@ -112,6 +129,7 @@ namespace NextDayz
         FCameraConfig Camera{};
         FWeaponFeelConfig Weapon{};
         FAnimationConfig Animation{};
+        FTraversalConfig Traversal{};
         FLootConfig Loot{};
         FActionConfig Action{};
         FTimeConfig Time{};

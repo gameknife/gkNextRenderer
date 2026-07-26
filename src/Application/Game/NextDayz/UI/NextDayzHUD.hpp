@@ -36,6 +36,8 @@ namespace NextDayz
         std::string desiredStance;
         std::string gait;
         std::string jumpPhase;
+        std::string traversalAction;
+        std::string traversalProbeResult;
         std::string baseAnimation;
         std::string action;
         std::string weaponAction;
@@ -43,6 +45,8 @@ namespace NextDayz
         float weaponActionTime = 0.0f;
         float weaponActionWeight = 0.0f;
         float jumpPhaseTime = 0.0f;
+        float traversalTime = 0.0f;
+        float traversalHeight = 0.0f;
         int switchTargetSlot = -1;
         bool onGround = false;
         bool standBlocked = false;

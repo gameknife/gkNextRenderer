@@ -321,6 +321,7 @@ namespace NextDayz
 
         const float aimTarget =
             state.hasWeapon && state.action == EPlayerAction::None &&
+                    state.locomotion.traversalAction == EPlayerTraversalAction::None &&
                     state.weaponAction == EWeaponPresentationAction::None
                 ? glm::clamp(state.aimWeight, 0.0f, 1.0f)
                 : 0.0f;
@@ -328,7 +329,8 @@ namespace NextDayz
         const float aimT = 1.0f - std::exp(-aimRate * std::max(deltaSeconds, 0.0f));
         aimWeight_ = glm::mix(aimWeight_, aimTarget, aimT);
         const float readyPoseWeight =
-            state.hasWeapon && state.action == EPlayerAction::None
+            state.hasWeapon && state.action == EPlayerAction::None &&
+                    state.locomotion.traversalAction == EPlayerTraversalAction::None
                 ? glm::mix(glm::clamp(animationConfig_.WeaponReadyPoseWeight, 0.0f, 1.0f), 1.0f, aimWeight_)
                 : 0.0f;
         animator_.SetLayerWeight(aimLayer_, readyPoseWeight);
@@ -347,6 +349,7 @@ namespace NextDayz
 
         const float weaponActionTarget =
             state.action == EPlayerAction::None &&
+                    state.locomotion.traversalAction == EPlayerTraversalAction::None &&
                     state.weaponAction != EWeaponPresentationAction::None
                 ? 1.0f
                 : 0.0f;
@@ -458,7 +461,18 @@ namespace NextDayz
         const bool moving = locomotion.horizontalSpeed >= animationConfig_.MoveThreshold &&
                             glm::dot(locomotion.localMove, locomotion.localMove) > 0.001f;
 
-        if (locomotion.jumpPhase == EPlayerJumpPhase::Up ||
+        if (locomotion.traversalAction != EPlayerTraversalAction::None)
+        {
+            const char* traversalClipName =
+                locomotion.traversalAction == EPlayerTraversalAction::Vault
+                    ? "vault"
+                    : "climb_up";
+            animator_.SetManualBlend(
+                locomotionLayer_, {{asset_.FindClip(traversalClipName), 1.0f}},
+                locomotion.traversalTime01, animationConfig_.JumpFadeSeconds);
+            baseClipName_ = traversalClipName;
+        }
+        else if (locomotion.jumpPhase == EPlayerJumpPhase::Up ||
             locomotion.jumpPhase == EPlayerJumpPhase::Down)
         {
             const char* jumpClipName =

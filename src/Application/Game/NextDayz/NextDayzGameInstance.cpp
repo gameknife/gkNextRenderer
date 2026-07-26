@@ -273,9 +273,10 @@ void NextDayzGameInstance::OnTick(double deltaSeconds)
     }
 
     const bool actionLocked = actions_.IsActive();
-    player_.SetMovementLocked(actionLocked || showInventory_);
-    weapons_.SetPresentationSuppressed(actionLocked);
-    if (actionLocked)
+    const bool traversalLocked = player_.IsTraversing();
+    player_.SetMovementLocked(actionLocked || traversalLocked || showInventory_);
+    weapons_.SetPresentationSuppressed(actionLocked || traversalLocked);
+    if (actionLocked || traversalLocked)
     {
         player_.SetAiming(false);
         weapons_.SetTriggerDown(false);
@@ -370,6 +371,10 @@ bool NextDayzGameInstance::OnRenderUI()
     ctx.debug.gait = NextDayz::GaitName(locomotion.gait);
     ctx.debug.jumpPhase = NextDayz::JumpPhaseName(locomotion.jumpPhase);
     ctx.debug.jumpPhaseTime = locomotion.jumpPhaseTime01;
+    ctx.debug.traversalAction = NextDayz::TraversalActionName(locomotion.traversalAction);
+    ctx.debug.traversalProbeResult = player_.TraversalProbeResult();
+    ctx.debug.traversalTime = locomotion.traversalTime01;
+    ctx.debug.traversalHeight = locomotion.traversalHeight;
     ctx.debug.baseAnimation = rig_.CurrentBaseClipName();
     ctx.debug.action = NextDayz::ActionName(actions_.Action());
     ctx.debug.onGround = locomotion.onGround;
@@ -462,37 +467,41 @@ bool NextDayzGameInstance::OnKey(SDL_Event& event)
         player_.SetWalkModifier(pressed);
         return true;
     case SDLK_C:
-        if (pressed && !actions_.IsActive()) player_.QueueCrouchToggle();
+        if (pressed && !actions_.IsActive() && !player_.IsTraversing()) player_.QueueCrouchToggle();
         return true;
     case SDLK_SPACE:
-        if (pressed) player_.QueueJump();
+        if (pressed && !actions_.IsActive() &&
+            weapons_.PresentationAction() == NextDayz::EWeaponPresentationAction::None)
+        {
+            player_.QueueContextualJump(GetEngine());
+        }
         return true;
     case SDLK_R:
-        if (pressed)
+        if (pressed && !player_.IsTraversing())
         {
             weapons_.RequestReload(inventory_);
             if (weapons_.IsReloading()) player_.SetAiming(false);
         }
         return true;
     case SDLK_1:
-        if (pressed)
+        if (pressed && !player_.IsTraversing())
         {
             weapons_.SwitchSlot(0);
             if (weapons_.IsSwitching()) player_.SetAiming(false);
         }
         return true;
     case SDLK_2:
-        if (pressed)
+        if (pressed && !player_.IsTraversing())
         {
             weapons_.SwitchSlot(1);
             if (weapons_.IsSwitching()) player_.SetAiming(false);
         }
         return true;
     case SDLK_Q:
-        if (pressed) weapons_.SwitchPrevious();
+        if (pressed && !player_.IsTraversing()) weapons_.SwitchPrevious();
         return true;
     case SDLK_E:
-        if (pressed && !actions_.IsActive())
+        if (pressed && !actions_.IsActive() && !player_.IsTraversing())
         {
             if (const std::optional<NextDayz::FLootHandle> handle = loot_.ReserveHovered())
             {
@@ -524,7 +533,7 @@ bool NextDayzGameInstance::OnKey(SDL_Event& event)
         return true;
     case SDLK_TAB:
     case SDLK_I:
-        if (pressed) SetInventoryOpen(!showInventory_);
+        if (pressed && !player_.IsTraversing()) SetInventoryOpen(!showInventory_);
         return true;
     case SDLK_ESCAPE:
         if (pressed)
@@ -673,6 +682,19 @@ void NextDayzGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegis
     });
     reg.Add("jumpPhaseTime", [this]() -> Runtime::Agent::FAgentQueryValue {
         return static_cast<double>(player_.LocomotionState().jumpPhaseTime01);
+    });
+    reg.Add("traversalAction", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return std::string(NextDayz::TraversalActionName(
+            player_.LocomotionState().traversalAction));
+    });
+    reg.Add("traversalTime", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return static_cast<double>(player_.LocomotionState().traversalTime01);
+    });
+    reg.Add("traversalHeight", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return static_cast<double>(player_.LocomotionState().traversalHeight);
+    });
+    reg.Add("traversalProbe", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return player_.TraversalProbeResult();
     });
     reg.Add("onGround",
             [this]() -> Runtime::Agent::FAgentQueryValue { return player_.LocomotionState().onGround; });

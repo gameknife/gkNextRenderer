@@ -153,6 +153,11 @@ namespace NextDayz::NextDayzHUD
                             debug.sprinting ? "  (sprinting)" : "");
                 ImGui::Text("Jump            %s  %.3f", debug.jumpPhase.c_str(),
                             debug.jumpPhaseTime);
+                ImGui::Text("Traversal       %s  %.3f  height %.2f m",
+                            debug.traversalAction.c_str(), debug.traversalTime,
+                            debug.traversalHeight);
+                ImGui::Text("Traversal probe %s",
+                            debug.traversalProbeResult.c_str());
                 ImGui::Text("Grounded        %s", debug.onGround ? "yes" : "no");
                 ImGui::Text("Move input      %.2f  %.2f", debug.localMove.x, debug.localMove.y);
                 ImGui::Text("Velocity        %.2f  %.2f  %.2f",

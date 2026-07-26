@@ -29,6 +29,9 @@ public:
     /// Growing fails if the added volume is obstructed.
     bool TrySetHeight(float height);
 
+    /// Moves to an externally validated foot position (scripted traversal).
+    void SetPosition(const glm::vec3& position);
+
     glm::vec3 GetPosition() const;
     glm::vec3 GetLinearVelocity() const;
     ECharacterGroundState GetGroundState() const;

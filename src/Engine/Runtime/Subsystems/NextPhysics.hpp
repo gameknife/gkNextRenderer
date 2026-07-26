@@ -146,6 +146,9 @@ public:
     /// Changes the foot-anchored character height. Growing the shape fails when
     /// the added volume is obstructed; on failure the previous shape is kept.
     virtual bool TrySetHeight(float height) = 0;
+    /// Moves the foot-anchored character to an already validated position and
+    /// refreshes contacts. Intended for scripted traversal/teleport actions.
+    virtual void SetPosition(const glm::vec3& position) = 0;
     virtual glm::vec3 GetPosition() const = 0;
     virtual glm::vec3 GetLinearVelocity() const = 0;
     virtual ECharacterGroundState GetGroundState() const = 0;

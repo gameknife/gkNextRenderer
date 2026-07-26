@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 // ============================================================================
 // PlayerController.hpp - The "3C" core: a Jolt-backed NextCharacterController
 // plus first/third-person camera (yaw/pitch), WASD/sprint/jump movement and
@@ -15,6 +17,7 @@
 #include "Application/Game/NextDayz/Player/PlayerState.hpp"
 
 class NextPhysics;
+class NextEngine;
 
 namespace NextDayz
 {
@@ -30,7 +33,7 @@ namespace NextDayz
         void SetMoveKey(int dir, bool pressed); // 0=fwd 1=back 2=left 3=right
         void SetWalkModifier(bool pressed) { walkModifier_ = pressed; }
         void SetSprintModifier(bool pressed) { sprintModifier_ = pressed; }
-        void QueueJump() { jumpQueued_ = true; }
+        void QueueContextualJump(NextEngine& engine);
         void QueueCrouchToggle() { crouchToggleQueued_ = true; }
         void SetAiming(bool aiming) { aiming_ = aiming; }
         void SetMovementLocked(bool locked) { movementLocked_ = locked; }
@@ -55,6 +58,8 @@ namespace NextDayz
         bool IsFirstPerson() const { return firstPerson_; }
         bool IsAiming() const { return aiming_; }
         bool IsSprinting() const { return locomotion_.gait == EPlayerGait::Sprint; }
+        bool IsTraversing() const { return traversalAction_ != EPlayerTraversalAction::None; }
+        const std::string& TraversalProbeResult() const { return traversalProbeResult_; }
         const FPlayerLocomotionState& LocomotionState() const { return locomotion_; }
         float HorizontalSpeed() const;
         float ControllerHeight() const { return controller_.GetHeight(); }
@@ -66,6 +71,9 @@ namespace NextDayz
 
     private:
         glm::vec3 MoveForward() const; // horizontal (yaw only)
+        bool TryBeginTraversal(NextEngine& engine);
+        void UpdateTraversal(float deltaSeconds);
+        void UpdateView(float deltaSeconds);
 
         NextCharacterController controller_;
         FConfig config_{};
@@ -90,5 +98,12 @@ namespace NextDayz
         FPlayerLocomotionState locomotion_{};
         float jumpPhaseElapsed_ = 0.0f;
         glm::vec3 airborneHorizontalVelocity_{0.0f};
+        EPlayerTraversalAction traversalAction_ = EPlayerTraversalAction::None;
+        float traversalElapsed_ = 0.0f;
+        float traversalDuration_ = 0.0f;
+        float traversalTopY_ = 0.0f;
+        glm::vec3 traversalStart_{0.0f};
+        glm::vec3 traversalEnd_{0.0f};
+        std::string traversalProbeResult_{"not_tested"};
     };
 }

@@ -29,6 +29,13 @@ namespace NextDayz
         Down,
     };
 
+    enum class EPlayerTraversalAction
+    {
+        None,
+        Vault,
+        ClimbUp,
+    };
+
     enum class EPlayerAction
     {
         None,
@@ -52,6 +59,9 @@ namespace NextDayz
         float horizontalSpeed = 0.0f;
         EPlayerJumpPhase jumpPhase = EPlayerJumpPhase::None;
         float jumpPhaseTime01 = 0.0f;
+        EPlayerTraversalAction traversalAction = EPlayerTraversalAction::None;
+        float traversalTime01 = 0.0f;
+        float traversalHeight = 0.0f;
         bool onGround = false;
         bool standBlocked = false;
     };
@@ -96,6 +106,17 @@ namespace NextDayz
         case EPlayerJumpPhase::AirLoop: return "air_loop";
         case EPlayerJumpPhase::Down: return "down";
         case EPlayerJumpPhase::None:
+        default: return "none";
+        }
+    }
+
+    inline const char* TraversalActionName(EPlayerTraversalAction action)
+    {
+        switch (action)
+        {
+        case EPlayerTraversalAction::Vault: return "vault";
+        case EPlayerTraversalAction::ClimbUp: return "climb_up";
+        case EPlayerTraversalAction::None:
         default: return "none";
         }
     }

@@ -2,13 +2,42 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "Engine/Assets/GPU/UniformBuffer.hpp"
+#include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 
 namespace NextDayz
 {
+    namespace
+    {
+        std::optional<Assets::RayCastResult> RaycastWithin(NextEngine& engine,
+                                                           const glm::vec3& origin,
+                                                           const glm::vec3& direction,
+                                                           float maxDistance)
+        {
+            std::optional<Assets::RayCastResult> hit;
+            engine.RayCast(origin, glm::normalize(direction), [&](Assets::RayCastResult result)
+            {
+                if (result.Hit && result.T >= 0.0f && result.T <= maxDistance)
+                {
+                    hit = result;
+                }
+                return true;
+            });
+            return hit;
+        }
+
+        float Smooth01(float value)
+        {
+            value = glm::clamp(value, 0.0f, 1.0f);
+            return value * value * (3.0f - 2.0f * value);
+        }
+    }
+
     void PlayerController::Create(NextPhysics* physics, const glm::vec3& spawnPosition, const FConfig& config)
     {
         config_ = config;
@@ -21,6 +50,11 @@ namespace NextDayz
         locomotion_ = {};
         jumpPhaseElapsed_ = 0.0f;
         airborneHorizontalVelocity_ = glm::vec3(0.0f);
+        traversalAction_ = EPlayerTraversalAction::None;
+        traversalElapsed_ = 0.0f;
+        traversalDuration_ = 0.0f;
+        traversalTopY_ = 0.0f;
+        traversalProbeResult_ = "not_tested";
         walkModifier_ = false;
         sprintModifier_ = false;
         movementLocked_ = false;
@@ -134,8 +168,291 @@ namespace NextDayz
                glm::dot(cameraRecoilVelocity_, cameraRecoilVelocity_) > 0.0001f;
     }
 
+    void PlayerController::QueueContextualJump(NextEngine& engine)
+    {
+        if (IsTraversing())
+        {
+            return;
+        }
+        if (!TryBeginTraversal(engine))
+        {
+            jumpQueued_ = true;
+        }
+    }
+
+    bool PlayerController::TryBeginTraversal(NextEngine& engine)
+    {
+        traversalProbeResult_ = "checking";
+        if (!locomotion_.onGround || movementLocked_ ||
+            locomotion_.actualStance != EPlayerStance::Standing)
+        {
+            traversalProbeResult_ = !locomotion_.onGround
+                                        ? "rejected:not_grounded"
+                                    : movementLocked_
+                                        ? "rejected:movement_locked"
+                                        : "rejected:not_standing";
+            return false;
+        }
+
+        const FTraversalConfig& traversal = config_.Traversal;
+        const glm::vec3 feet = controller_.GetPosition();
+        const glm::vec3 forward = MoveForward();
+        const glm::vec3 right = Right();
+        const auto frontHit = RaycastWithin(
+            engine, feet + glm::vec3(0.0f, traversal.ProbeHeight, 0.0f),
+            forward, traversal.ProbeDistance);
+        if (!frontHit)
+        {
+            traversalProbeResult_ = "rejected:no_front_obstacle";
+            return false;
+        }
+
+        const glm::vec3 frontNormal = glm::vec3(frontHit->Normal);
+        if (frontNormal.y > 0.45f)
+        {
+            traversalProbeResult_ = "rejected:front_is_walkable";
+            return false;
+        }
+
+        const float frontDistance = frontHit->T;
+        const float downwardOriginY = feet.y + traversal.ClimbMaxHeight + 0.45f;
+        const float downwardDistance = traversal.ClimbMaxHeight + 0.65f;
+        const auto surfaceAt = [&](float distance, float lateral,
+                                   std::optional<uint32_t> expectedInstance = std::nullopt)
+            -> std::optional<Assets::RayCastResult>
+        {
+            const glm::vec3 origin =
+                feet + forward * distance + right * lateral;
+            auto hit = RaycastWithin(
+                engine, glm::vec3(origin.x, downwardOriginY, origin.z),
+                glm::vec3(0.0f, -1.0f, 0.0f), downwardDistance);
+            if (!hit || glm::vec3(hit->Normal).y < traversal.SurfaceNormalMinY ||
+                (expectedInstance && hit->InstanceId != *expectedInstance))
+            {
+                return std::nullopt;
+            }
+            return hit;
+        };
+
+        const auto topHit = surfaceAt(
+            frontDistance + traversal.TopProbeInset, 0.0f, frontHit->InstanceId);
+        if (!topHit)
+        {
+            traversalProbeResult_ = "rejected:no_matching_top_surface";
+            return false;
+        }
+
+        const float obstacleTopY = static_cast<float>(topHit->HitPoint.y);
+        const float obstacleHeight = obstacleTopY - feet.y;
+        if (obstacleHeight < traversal.MinObstacleHeight ||
+            obstacleHeight > traversal.ClimbMaxHeight)
+        {
+            traversalProbeResult_ = "rejected:height_out_of_range";
+            return false;
+        }
+
+        const auto hasStandingClearance = [&](const glm::vec3& targetFeet)
+        {
+            const float clearanceDistance =
+                config_.Player.StandingHeight + traversal.StandingClearance;
+            for (float lateral : {0.0f, -config_.Player.ControllerRadius * 0.65f,
+                                 config_.Player.ControllerRadius * 0.65f})
+            {
+                const glm::vec3 origin =
+                    targetFeet + right * lateral + glm::vec3(0.0f, 0.04f, 0.0f);
+                if (RaycastWithin(engine, origin, glm::vec3(0.0f, 1.0f, 0.0f),
+                                  clearanceDistance))
+                {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        EPlayerTraversalAction selectedAction = EPlayerTraversalAction::None;
+        glm::vec3 targetFeet(0.0f);
+
+        if (obstacleHeight <= traversal.VaultMaxHeight)
+        {
+            const float firstBehindDistance =
+                frontDistance + config_.Player.ControllerRadius * 2.0f + 0.10f;
+            const float lastBehindDistance =
+                frontDistance + traversal.MaxVaultDepth +
+                config_.Player.ControllerRadius + 0.15f;
+            for (float distance = firstBehindDistance;
+                 distance <= lastBehindDistance; distance += 0.15f)
+            {
+                const auto groundHit = surfaceAt(distance, 0.0f);
+                if (!groundHit)
+                {
+                    continue;
+                }
+                const float groundY = static_cast<float>(groundHit->HitPoint.y);
+                if (groundY <= feet.y + config_.Player.MaxStepHeight)
+                {
+                    targetFeet = glm::vec3(groundHit->HitPoint);
+                    if (hasStandingClearance(targetFeet))
+                    {
+                        selectedAction = EPlayerTraversalAction::Vault;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (selectedAction == EPlayerTraversalAction::None)
+        {
+            const float standDistance =
+                frontDistance + config_.Player.ControllerRadius +
+                traversal.PlatformStandDepth;
+            const auto center = surfaceAt(standDistance, 0.0f, frontHit->InstanceId);
+            const auto left = surfaceAt(
+                standDistance, -config_.Player.ControllerRadius * 0.65f,
+                frontHit->InstanceId);
+            const auto rightSurface = surfaceAt(
+                standDistance, config_.Player.ControllerRadius * 0.65f,
+                frontHit->InstanceId);
+            if (center && left && rightSurface)
+            {
+                const float centerY = static_cast<float>(center->HitPoint.y);
+                const float leftY = static_cast<float>(left->HitPoint.y);
+                const float rightY = static_cast<float>(rightSurface->HitPoint.y);
+                if (std::abs(centerY - obstacleTopY) <= 0.12f &&
+                    std::abs(leftY - obstacleTopY) <= 0.12f &&
+                    std::abs(rightY - obstacleTopY) <= 0.12f)
+                {
+                    targetFeet = glm::vec3(center->HitPoint);
+                    if (hasStandingClearance(targetFeet))
+                    {
+                        selectedAction = EPlayerTraversalAction::ClimbUp;
+                    }
+                }
+            }
+        }
+
+        if (selectedAction == EPlayerTraversalAction::None)
+        {
+            traversalProbeResult_ =
+                obstacleHeight <= traversal.VaultMaxHeight
+                    ? "rejected:no_vault_landing_or_clearance"
+                    : "rejected:no_climb_stand_area_or_clearance";
+            return false;
+        }
+
+        traversalAction_ = selectedAction;
+        traversalElapsed_ = 0.0f;
+        traversalDuration_ =
+            selectedAction == EPlayerTraversalAction::Vault
+                ? traversal.VaultDurationSeconds
+                : traversal.ClimbDurationSeconds;
+        traversalTopY_ = obstacleTopY;
+        traversalStart_ = feet;
+        traversalEnd_ = targetFeet;
+        traversalProbeResult_ =
+            selectedAction == EPlayerTraversalAction::Vault
+                ? "accepted:vault"
+                : "accepted:climb_up";
+        jumpQueued_ = false;
+        crouchToggleQueued_ = false;
+        aiming_ = false;
+        jumpPhaseElapsed_ = 0.0f;
+        locomotion_.jumpPhase = EPlayerJumpPhase::None;
+        locomotion_.jumpPhaseTime01 = 0.0f;
+        locomotion_.traversalAction = traversalAction_;
+        locomotion_.traversalTime01 = 0.0f;
+        locomotion_.traversalHeight = obstacleHeight;
+        return true;
+    }
+
+    void PlayerController::UpdateTraversal(float deltaSeconds)
+    {
+        const glm::vec3 previousPosition = controller_.GetPosition();
+        traversalElapsed_ += std::max(deltaSeconds, 0.0f);
+        const float time01 =
+            glm::clamp(traversalElapsed_ / std::max(traversalDuration_, 0.01f),
+                       0.0f, 1.0f);
+        const float riseEnd =
+            traversalAction_ == EPlayerTraversalAction::Vault ? 0.42f : 0.58f;
+        const float riseForwardFraction =
+            traversalAction_ == EPlayerTraversalAction::Vault ? 0.48f : 0.18f;
+        const float apexY =
+            std::max({traversalStart_.y, traversalEnd_.y, traversalTopY_}) +
+            config_.Traversal.ArcClearance;
+        const glm::vec3 riseEndPosition =
+            glm::mix(traversalStart_, traversalEnd_, riseForwardFraction);
+
+        glm::vec3 position;
+        if (time01 < riseEnd)
+        {
+            const float phase = Smooth01(time01 / riseEnd);
+            position = glm::mix(traversalStart_, riseEndPosition, phase);
+            position.y = glm::mix(traversalStart_.y, apexY, phase);
+        }
+        else
+        {
+            const float phase = Smooth01((time01 - riseEnd) / (1.0f - riseEnd));
+            position = glm::mix(
+                glm::vec3(riseEndPosition.x, apexY, riseEndPosition.z),
+                traversalEnd_, phase);
+        }
+        controller_.SetPosition(position);
+
+        locomotion_.localMove = glm::vec2(0.0f);
+        locomotion_.gait = EPlayerGait::Idle;
+        locomotion_.worldVelocity =
+            deltaSeconds > 0.0f ? (position - previousPosition) / deltaSeconds
+                                : glm::vec3(0.0f);
+        locomotion_.horizontalSpeed =
+            glm::length(glm::vec2(locomotion_.worldVelocity.x,
+                                  locomotion_.worldVelocity.z));
+        locomotion_.onGround = time01 >= 1.0f;
+        locomotion_.jumpPhase = EPlayerJumpPhase::None;
+        locomotion_.jumpPhaseTime01 = 0.0f;
+        locomotion_.traversalAction = traversalAction_;
+        locomotion_.traversalTime01 = time01;
+
+        if (time01 >= 1.0f)
+        {
+            traversalAction_ = EPlayerTraversalAction::None;
+            traversalElapsed_ = 0.0f;
+            airborneHorizontalVelocity_ = glm::vec3(0.0f);
+        }
+    }
+
+    void PlayerController::UpdateView(float deltaSeconds)
+    {
+        const float eyeTarget = locomotion_.actualStance == EPlayerStance::Crouched
+                                    ? config_.Player.CrouchedEyeHeight
+                                    : config_.Player.StandingEyeHeight;
+        const float eyeT = 1.0f - std::exp(-config_.Player.EyeHeightLerpSpeed *
+                                           std::max(0.0f, deltaSeconds));
+        currentEyeHeight_ = glm::mix(currentEyeHeight_, eyeTarget, eyeT);
+
+        const float targetFov = aiming_ ? aimFov_ : config_.Camera.BaseFov;
+        const float t = 1.0f - std::exp(-config_.Camera.FovLerpSpeed *
+                                        std::max(0.0f, deltaSeconds));
+        currentFov_ = glm::mix(currentFov_, targetFov, t);
+
+        const float recoilDt = std::max(0.0f, deltaSeconds);
+        cameraRecoilVelocity_ +=
+            (-config_.Weapon.CameraRecoilSpring * cameraRecoil_ -
+             config_.Weapon.CameraRecoilDamping * cameraRecoilVelocity_) *
+            recoilDt;
+        cameraRecoil_ += cameraRecoilVelocity_ * recoilDt;
+    }
+
     void PlayerController::Update(float deltaSeconds)
     {
+        if (IsTraversing())
+        {
+            UpdateTraversal(deltaSeconds);
+            UpdateView(deltaSeconds);
+            return;
+        }
+        locomotion_.traversalAction = EPlayerTraversalAction::None;
+        locomotion_.traversalTime01 = 0.0f;
+        locomotion_.traversalHeight = 0.0f;
+
         if (crouchToggleQueued_)
         {
             locomotion_.desiredStance = locomotion_.desiredStance == EPlayerStance::Standing
@@ -347,24 +664,7 @@ namespace NextDayz
             }
         }
 
-        const float eyeTarget = locomotion_.actualStance == EPlayerStance::Crouched
-                                    ? config_.Player.CrouchedEyeHeight
-                                    : config_.Player.StandingEyeHeight;
-        const float eyeT = 1.0f - std::exp(-config_.Player.EyeHeightLerpSpeed *
-                                           std::max(0.0f, deltaSeconds));
-        currentEyeHeight_ = glm::mix(currentEyeHeight_, eyeTarget, eyeT);
-
-        // Smoothly approach the target FOV (base or ADS).
-        const float targetFov = aiming_ ? aimFov_ : config_.Camera.BaseFov;
-        const float t = 1.0f - std::exp(-config_.Camera.FovLerpSpeed * std::max(0.0f, deltaSeconds));
-        currentFov_ = glm::mix(currentFov_, targetFov, t);
-
-        const float recoilDt = std::max(0.0f, deltaSeconds);
-        cameraRecoilVelocity_ +=
-            (-config_.Weapon.CameraRecoilSpring * cameraRecoil_ -
-             config_.Weapon.CameraRecoilDamping * cameraRecoilVelocity_) *
-            recoilDt;
-        cameraRecoil_ += cameraRecoilVelocity_ * recoilDt;
+        UpdateView(deltaSeconds);
     }
 
     void PlayerController::FillCamera(glm::mat4& outModelView, float& outFov) const

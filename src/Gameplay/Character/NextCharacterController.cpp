@@ -34,6 +34,14 @@ bool NextCharacterController::TrySetHeight(float height)
     return true;
 }
 
+void NextCharacterController::SetPosition(const glm::vec3& position)
+{
+    if (backend_)
+    {
+        backend_->SetPosition(position);
+    }
+}
+
 glm::vec3 NextCharacterController::GetPosition() const
 {
     return backend_ ? backend_->GetPosition() : glm::vec3(0.0f);
