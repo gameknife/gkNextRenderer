@@ -40,6 +40,7 @@ public:
 
     void CreateSphereAndPush();
     void CreateBoxAndPush();
+    void DropPhysicsSphereGrid();
 
     enum class EWorkMode : uint8_t
     {
@@ -94,6 +95,8 @@ private:
     uint32_t modelId_;
     uint32_t boxModelId_;
     std::vector<uint32_t> matIds_;
+    std::vector<uint32_t> dropSphereMatIds_;
+    uint32_t dropSphereSequence_ = 0;
 
     bool isTakingScreenshot_ = false;
     bool isRecordingVideo_ = false;

@@ -47,12 +47,14 @@ namespace Runtime
 
         // Requests the standard full-output screenshot. Returns false if another
         // screenshot is already queued or being saved.
-        bool Request(FRequest request = {});
+        bool Request(FRequest request);
+        bool Request() { return Request(FRequest{}); }
 
         // Captures exactly three seconds of frames and asynchronously encodes
         // them as a looping GIF or animated WebP. framesPerSecond == 0 uses
         // the format default (15 for GIF, 30 for animated WebP).
-        bool RequestThreeSecondVideo(FThreeSecondVideoRequest request = {});
+        bool RequestThreeSecondVideo(FThreeSecondVideoRequest request);
+        bool RequestThreeSecondVideo() { return RequestThreeSecondVideo(FThreeSecondVideoRequest{}); }
 
         bool IsBusy() const;
         std::string GetDirectory() const;

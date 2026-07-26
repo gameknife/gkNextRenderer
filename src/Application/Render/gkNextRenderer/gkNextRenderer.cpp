@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <random>
 #include <tuple>
 
 #include "Engine/Assets/Loaders/FProcModel.hpp"
@@ -39,6 +40,44 @@
 
 namespace
 {
+constexpr uint32_t dropSphereGridSize = 20;
+constexpr uint32_t dropSphereCount = dropSphereGridSize * dropSphereGridSize;
+
+uint32_t HashUint(uint32_t value)
+{
+    value ^= value >> 16;
+    value *= 0x7feb352du;
+    value ^= value >> 15;
+    value *= 0x846ca68bu;
+    value ^= value >> 16;
+    return value;
+}
+
+float HashToUnitFloat(uint32_t value)
+{
+    return static_cast<float>(HashUint(value) >> 8) * (1.0f / 16777216.0f);
+}
+
+glm::vec3 HsvToRgb(float hue, float saturation, float value)
+{
+    const float scaledHue = hue * 6.0f;
+    const int sector = static_cast<int>(std::floor(scaledHue)) % 6;
+    const float fraction = scaledHue - std::floor(scaledHue);
+    const float low = value * (1.0f - saturation);
+    const float falling = value * (1.0f - saturation * fraction);
+    const float rising = value * (1.0f - saturation * (1.0f - fraction));
+
+    switch (sector)
+    {
+    case 0: return {value, rising, low};
+    case 1: return {falling, value, low};
+    case 2: return {low, value, rising};
+    case 3: return {low, falling, value};
+    case 4: return {rising, low, value};
+    default: return {value, low, falling};
+    }
+}
+
 std::vector<uint32_t> SelectedNodeIds(Assets::Scene& scene)
 {
     std::vector<uint32_t> ids = scene.GetSelectedIds();
@@ -595,6 +634,29 @@ void NextRendererGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<As
     materials.push_back(MatPreparedForAdd.back());matIds_.push_back(uint32_t(materials.size() - 1));
     MatPreparedForAdd.push_back({Assets::Material::Mixture(glm::vec3(1.0f, 0.3f, 0.3f), 0.1f)});
     materials.push_back(MatPreparedForAdd.back());matIds_.push_back(uint32_t(materials.size() - 1));
+
+    dropSphereMatIds_.clear();
+    dropSphereMatIds_.reserve(dropSphereCount);
+    dropSphereSequence_ = 0;
+    for (uint32_t index = 0; index < dropSphereCount; ++index)
+    {
+        const float hue = HashToUnitFloat(index ^ 0xa511e9b3u);
+        const float saturation = 0.45f + 0.5f * HashToUnitFloat(index ^ 0x63d83595u);
+        const float value = 0.55f + 0.43f * HashToUnitFloat(index ^ 0xc2b2ae35u);
+        const float roughness = 0.04f + 0.92f * HashToUnitFloat(index ^ 0x27d4eb2fu);
+        const glm::vec3 color = HsvToRgb(hue, saturation, value);
+
+        Assets::Material material;
+        switch (HashUint(index ^ 0x9e3779b9u) % 3)
+        {
+        case 0: material = Assets::Material::Lambertian(color); break;
+        case 1: material = Assets::Material::Metallic(color, roughness); break;
+        default: material = Assets::Material::Mixture(color, roughness); break;
+        }
+
+        materials.push_back({material, fmt::format("dropSphere_{:03}", index)});
+        dropSphereMatIds_.push_back(static_cast<uint32_t>(materials.size() - 1));
+    }
 }
 
 void NextRendererGameInstance::OnSceneLoaded()
@@ -826,7 +888,7 @@ void NextRendererGameInstance::RequestThreeSecondVideo(
     {
         isRecordingVideo_ = false;
     };
-    request.onCompleted = [this](const std::string& path)
+    request.onCompleted = [](const std::string& path)
     {
         if (path.empty())
         {
@@ -880,7 +942,7 @@ bool NextRendererGameInstance::OnKey(SDL_Event& event)
             }
             break;
         case SDLK_SPACE: CreateBoxAndPush(); return true;
-            break;
+        case SDLK_B: DropPhysicsSphereGrid(); return true;
         case SDLK_DELETE:
         case SDLK_BACKSPACE:
         {
@@ -1087,6 +1149,75 @@ void NextRendererGameInstance::CreateBoxAndPushFromView(const FLaunchView& view)
     GetEngine().GetScene().MarkDirty();
 
     GetEngine().GetPhysicsEngine()->AddForceToBody(id, shotDir * 100000.f);
+}
+
+void NextRendererGameInstance::DropPhysicsSphereGrid()
+{
+    Assets::Scene& scene = GetEngine().GetScene();
+    NextPhysics* physicsEngine = GetEngine().GetPhysicsEngine();
+    if (physicsEngine == nullptr)
+    {
+        SPDLOG_WARN("gkNextRenderer: ignored sphere drop because physics is unavailable");
+        return;
+    }
+    if (modelId_ >= scene.Models().size())
+    {
+        SPDLOG_WARN("gkNextRenderer: ignored sphere drop before dynamic sphere model is ready");
+        return;
+    }
+    if (dropSphereMatIds_.size() != dropSphereCount)
+    {
+        SPDLOG_WARN("gkNextRenderer: ignored sphere drop before sphere materials are ready");
+        return;
+    }
+
+    const glm::vec3 boundsMin = scene.GetSceneAABBMin() * 0.5f;
+    const glm::vec3 boundsMax = scene.GetSceneAABBMax() * 0.5f;
+    const glm::vec3 boundsSize = glm::max(boundsMax - boundsMin, glm::vec3(0.0f));
+    const float fallbackSpan = std::max({boundsSize.x, boundsSize.y * 0.5f, boundsSize.z, 4.0f});
+    const float spanX = boundsSize.x > 0.01f ? boundsSize.x : fallbackSpan;
+    const float spanZ = boundsSize.z > 0.01f ? boundsSize.z : fallbackSpan;
+    const float stepX = spanX / static_cast<float>(dropSphereGridSize);
+    const float stepZ = spanZ / static_cast<float>(dropSphereGridSize);
+    const float radius = std::max(0.05f, std::min(stepX, stepZ) * 0.25f);
+    const float renderScale = radius / 0.2f;
+    const float startX = boundsSize.x > 0.01f ? boundsMin.x : (boundsMin.x + boundsMax.x - spanX) * 0.5f;
+    const float startZ = boundsSize.z > 0.01f ? boundsMin.z : (boundsMin.z + boundsMax.z - spanZ) * 0.5f;
+    const float spawnY = boundsMax.y + radius + std::max(0.05f, boundsSize.y * 0.02f);
+    std::vector<uint32_t> shuffledMaterialIds = dropSphereMatIds_;
+    std::mt19937 randomEngine(HashUint(0x6d2b79f5u ^ dropSphereSequence_++));
+    std::shuffle(shuffledMaterialIds.begin(), shuffledMaterialIds.end(), randomEngine);
+
+    for (uint32_t row = 0; row < dropSphereGridSize; ++row)
+    {
+        for (uint32_t column = 0; column < dropSphereGridSize; ++column)
+        {
+            const uint32_t sphereIndex = row * dropSphereGridSize + column;
+            const glm::vec3 position{
+                startX + (static_cast<float>(column) + 0.5f) * stepX,
+                spawnY,
+                startZ + (static_cast<float>(row) + 0.5f) * stepZ,
+            };
+            const uint32_t instanceId = static_cast<uint32_t>(scene.Nodes().size());
+            std::shared_ptr<Assets::Node> node = Assets::SceneBuilder::CreateRenderNode(
+                fmt::format("dropSphere_{:03}", sphereIndex),
+                position,
+                glm::vec3(renderScale),
+                instanceId,
+                modelId_,
+                shuffledMaterialIds[sphereIndex]);
+
+            auto physics = std::make_shared<Runtime::PhysicsComponent>();
+            physics->SetMobility(Runtime::ENodeMobility::Dynamic);
+            physics->BindPhysicsBody(
+                physicsEngine->CreateSphereBody(position, radius, NextMotionType::Dynamic));
+            node->AddComponent(physics);
+            scene.AddNode(std::move(node));
+        }
+    }
+
+    scene.MarkDirty();
+    SPDLOG_INFO("gkNextRenderer: dropped {} physics spheres above scene bounds", dropSphereCount);
 }
 
 void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
@@ -1924,6 +2055,7 @@ void NextRendererGameInstance::DrawViewportCheatSheet(FRendererUiState& uiState)
             DrawShortcut("LMB", "Select object / set focus");
             DrawShortcut("F", "Focus selected object");
             DrawShortcut("Space", "Launch a physics cube");
+            DrawShortcut("B", "Drop 400 physics spheres");
             DrawShortcut("Esc", "Clear selection");
             DrawShortcut("Ctrl / Cmd + D", "Duplicate selection");
             DrawShortcut("Delete / Backspace", "Delete selection");
