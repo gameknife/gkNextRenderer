@@ -27,7 +27,9 @@ namespace NextDayz
         float ControllerRadius = 0.35f;
         float ControllerMass = 80.0f;
         float ControllerStrength = 4000.0f;
-        float MaxStepHeight = 0.4f;
+        // Maximum obstacle height the character controller can step over.
+        // Bound to nextdayz.player.maxStepHeight in ConfigureCVars().
+        float MaxStepHeight = 0.25f;
         float MaxSlopeAngle = 52.0f;
     };
 

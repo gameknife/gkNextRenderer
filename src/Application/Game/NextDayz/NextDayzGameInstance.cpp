@@ -160,6 +160,11 @@ void NextDayzGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     // SoftwareModern rasteriser + software GI: lightest path for a 1km POI map.
     cvars.SetDefaultFromString("r.rendererType", "0", &error);
     cvars.SetDefaultFromString("r.upscaler.type", "2", &error);
+
+    cvars.RegisterFloat("nextdayz.player.maxStepHeight", config_.Player.MaxStepHeight,
+                        &config_.Player.MaxStepHeight, NextCVar::ECVarFlags::Archive,
+                        "Maximum obstacle height the player can step over; applied when the controller is created",
+                        nullptr, 0.05, 0.60);
 }
 
 void NextDayzGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& /*nodes*/,

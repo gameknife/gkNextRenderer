@@ -1179,7 +1179,7 @@ void NextRendererGameInstance::DropPhysicsSphereGrid()
     const float spanZ = boundsSize.z > 0.01f ? boundsSize.z : fallbackSpan;
     const float stepX = spanX / static_cast<float>(dropSphereGridSize);
     const float stepZ = spanZ / static_cast<float>(dropSphereGridSize);
-    const float radius = std::max(0.05f, std::min(stepX, stepZ) * 0.25f);
+    const float radius = std::max(0.05f, std::min(stepX, stepZ) * 0.3f);
     const float renderScale = radius / 0.2f;
     const float startX = boundsSize.x > 0.01f ? boundsMin.x : (boundsMin.x + boundsMax.x - spanX) * 0.5f;
     const float startZ = boundsSize.z > 0.01f ? boundsMin.z : (boundsMin.z + boundsMax.z - spanZ) * 0.5f;
