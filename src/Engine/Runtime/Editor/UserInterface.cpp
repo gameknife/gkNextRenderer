@@ -251,7 +251,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     defaultFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
             .filePath = "assets/fonts/Roboto-Regular.ttf",
             .pixelSize = fontSize * scaleFactor,
-            .includeChineseFull = false,
+            .includeChineseFull = true,
         });
     if (defaultFont_ == nullptr)
     {
