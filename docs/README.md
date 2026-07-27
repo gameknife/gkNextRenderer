@@ -31,6 +31,7 @@
 - [gnb 架构与代码导览](guides/gnb-architecture.md)
 - [gnb CLI](guides/gnb-cli.md)
 - [SCAD 场景生成指引](guides/scad-scene-authoring-guide.md)
+- [SCAD 资产目录与 ScadLibrary 场景组装约定](../assets/scad/README.md)
 - [SCAD Terrain 使用速查](../AGENT_GUIDE/ScadTerrain.md)
 - [Soft Mesh Shader GPU-Driven 提交路径](guides/soft-mesh-shader-gpu-driven-submit.md)
 - [TUI 终端模式](guides/tui-mode.md)

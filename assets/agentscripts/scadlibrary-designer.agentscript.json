@@ -12,7 +12,7 @@
   "steps": [
     { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
     { "type": "wait-frames", "n": 60 },
-    { "type": "mouse-move", "to": { "norm": [0.8229, 0.0787] } },
+    { "type": "mouse-move", "to": { "norm": [0.256, 0.025] } },
     { "type": "wait-frames", "n": 5 },
     { "type": "mouse-button", "button": "left", "action": "down" },
     { "type": "wait-frames", "n": 5 },

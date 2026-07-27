@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "rig": "nextdayz_survivor.scad",
+  "attachments": [
+    {
+      "id": "helmet",
+      "label": "军帽",
+      "bone": "bone_head",
+      "kit": "../lib/kit_coldwar.scad",
+      "module": "cw_item_helmet",
+      "args": "seed = 0",
+      "enabled": true,
+      "translation": [0.0, 0.0, 0.27],
+      "rotation": [0.0, 0.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+    {
+      "id": "backpack",
+      "label": "背包",
+      "bone": "bone_torso",
+      "kit": "../lib/kit_coldwar.scad",
+      "module": "cw_item_backpack",
+      "args": "seed = 0",
+      "enabled": true,
+      "translation": [0.0, 0.18, 0.3],
+      "rotation": [0.0, 0.0, 0.0],
+      "scale": [0.75, 0.75, 0.75]
+    },
+    {
+      "id": "primary",
+      "label": "主武器",
+      "bone": "bone_weapon_socket",
+      "kit": "../lib/kit_coldwar.scad",
+      "module": "cw_wpn_ak",
+      "args": "seed = 0",
+      "enabled": true,
+      "translation": [0.0, 0.0, 0.0],
+      "rotation": [0.0, 0.0, -90.0],
+      "scale": [1.0, 1.0, 1.0]
+    }
+  ]
+}

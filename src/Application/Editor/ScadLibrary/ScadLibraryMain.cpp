@@ -3,9 +3,9 @@
 
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Options.hpp"
+#include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
 
 #include <glm/glm.hpp>
@@ -13,16 +13,15 @@
 
 #include <algorithm>
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
-                                                         NextEngine* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config,
+                                                         Runtime::Config::Options& options, NextEngine* engine)
 {
     Modules::Scad::Register();
     return std::make_unique<ScadLibraryGameInstance>(config, options, engine);
 }
 
 ScadLibraryGameInstance::ScadLibraryGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
-                                                 NextEngine* engine) :
-    NextGameInstanceBase(config, options, engine)
+                                                 NextEngine* engine) : NextGameInstanceBase(config, options, engine)
 {
     ui_ = std::make_unique<ScadLibrary::ScadLibraryInterface>(*engine);
 
@@ -66,10 +65,7 @@ void ScadLibraryGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Ass
     ui_->RigPreview().InjectAssets(models, materials);
 }
 
-void ScadLibraryGameInstance::OnSceneUnloaded()
-{
-    ui_->RigPreview().OnSceneUnloaded();
-}
+void ScadLibraryGameInstance::OnSceneUnloaded() { ui_->RigPreview().OnSceneUnloaded(); }
 
 void ScadLibraryGameInstance::OnSceneLoaded()
 {
@@ -110,6 +106,31 @@ bool ScadLibraryGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCame
 
 bool ScadLibraryGameInstance::OnKey(SDL_Event& event)
 {
+    const bool modeShortcut = event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat &&
+        (event.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0 && !ImGui::GetIO().WantTextInput;
+    if (modeShortcut)
+    {
+        if (event.key.key == SDLK_S && ui_->WorkspaceMode() == ScadLibrary::EWorkspaceMode::SceneAssembly)
+        {
+            ui_->SaveCurrentAssembly();
+            return true;
+        }
+        if (event.key.key == SDLK_1)
+        {
+            ui_->SetWorkspaceMode(ScadLibrary::EWorkspaceMode::SceneAssembly);
+            return true;
+        }
+        if (event.key.key == SDLK_2)
+        {
+            ui_->SetWorkspaceMode(ScadLibrary::EWorkspaceMode::CharacterDesigner);
+            return true;
+        }
+        if (event.key.key == SDLK_3)
+        {
+            ui_->SetWorkspaceMode(ScadLibrary::EWorkspaceMode::CharacterWorkbench);
+            return true;
+        }
+    }
     cameraController_.OnKey(event);
     return true;
 }

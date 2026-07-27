@@ -1,13 +1,15 @@
 #pragma once
 
+#include "CharacterWorkbench.hpp"
 #include "KitCatalog.hpp"
 
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Assets/Data/RigAsset.hpp"
-#include "Gameplay/Rig/RigInstance.h"
+#include "Gameplay/Rig/RigLayeredAnimator.h"
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -67,23 +69,37 @@ namespace ScadLibrary
     class FRigPreview
     {
     public:
-        bool LoadRig(const std::string& scadPathAbs, std::string& outError,
-                     std::vector<std::string>* outWarnings);
+        bool LoadRig(const std::string& scadPathAbs, std::string& outError, std::vector<std::string>* outWarnings);
 
         // Only an active preview injects/instantiates; the browser and the
-        // compose bench must deactivate before loading their own scenes.
+        // scene assembly must deactivate before loading its own scenes.
         void SetActive(bool active) { active_ = active; }
         bool Active() const { return active_; }
         bool HasRig() const { return hasRig_; }
         const Assets::FRigAsset& Asset() const { return asset_; }
+        Assets::FRigAsset& MutableAsset() { return asset_; }
 
         void SetTint(const glm::vec3& tint); // live when the scene is bound
         void PlayClip(const std::string& clip); // "" = bind pose
         const std::string& CurrentClip() const { return clip_; }
+        void SetPaused(bool paused) { paused_ = paused; }
+        bool Paused() const { return paused_; }
+        void SetPlaySpeed(float speed) { playSpeed_ = speed; }
+        float PlaySpeed() const { return playSpeed_; }
+        void SetCurrentTime(float time);
+        float CurrentTime() const { return currentTime_; }
+        float CurrentDuration() const;
+        void RefreshPose();
+        Assets::Node* BoneNode(int boneIndex) const
+        {
+            return boneIndex >= 0 && boneIndex < static_cast<int>(boneNodes_.size()) ? boneNodes_[boneIndex] : nullptr;
+        }
+
+        bool SetEquipment(const std::vector<FEquipmentAttachment>& equipment, std::string& outError);
+        void UpdateEquipmentTransform(size_t index, const FEquipmentAttachment& equipment);
 
         // Engine hooks, forwarded by ScadLibraryGameInstance.
-        void InjectAssets(std::vector<Assets::Model>& models,
-                          std::vector<Assets::FMaterial>& materials);
+        void InjectAssets(std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials);
         void OnSceneLoaded(Assets::Scene& scene);
         void OnSceneUnloaded();
         void Tick(double deltaSeconds);
@@ -101,7 +117,23 @@ namespace ScadLibrary
         std::vector<std::array<uint32_t, 16>> partMaterialIds_;
         uint32_t tintMaterialId_ = 0;
         Assets::Scene* scene_ = nullptr;
-        NextGameplay::FRigAnimator animator_;
+        std::vector<Assets::Node*> boneNodes_;
+        std::shared_ptr<Assets::Node> rigRoot_;
+        NextGameplay::FRigLayeredAnimator animator_;
+        NextGameplay::FRigLayerHandle previewLayer_ = NextGameplay::invalidRigLayerHandle;
         bool animatorBound_ = false;
+        bool paused_ = false;
+        float playSpeed_ = 1.0f;
+        float currentTime_ = 0.0f;
+
+        struct FAttachmentPreview
+        {
+            FEquipmentAttachment desc;
+            Assets::FRigAsset asset;
+            std::vector<uint32_t> partModelIds;
+            std::vector<std::array<uint32_t, 16>> partMaterialIds;
+            std::shared_ptr<Assets::Node> root;
+        };
+        std::vector<FAttachmentPreview> attachments_;
     };
-}
+} // namespace ScadLibrary

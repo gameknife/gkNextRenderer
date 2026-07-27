@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Gameplay/Camera/ModelViewController.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
+#include "Gameplay/Camera/ModelViewController.hpp"
 
 #include <memory>
 
@@ -13,7 +13,7 @@ namespace ScadLibrary
 // SCAD parts library workbench: browse the kit_*.scad libraries under
 // assets/scad/lib/, preview individual modules in the central viewport, and
 // compose selected modules into a generated test scene (kit browser | viewport
-// | compose bench). Companion to ScadStudio, which generates .scad via AI.
+// | scene assembly). Companion to ScadStudio, which generates .scad via AI.
 class ScadLibraryGameInstance : public NextGameInstanceBase
 {
 public:
@@ -26,9 +26,8 @@ public:
     bool OnRenderUI() override;
     void OnPreConfigUI() override;
     void OnInitUI() override;
-    void BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
-                            std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
-                            std::vector<Assets::LightObject>& lights,
+    void BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Assets::Model>& models,
+                            std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights,
                             std::vector<Assets::AnimationTrack>& tracks) override;
     void OnSceneLoaded() override;
     void OnSceneUnloaded() override;

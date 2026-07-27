@@ -3,6 +3,7 @@
 #include "CharacterDesigner.hpp"
 #include "KitCatalog.hpp"
 
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -11,7 +12,14 @@ struct ImVec2;
 
 namespace ScadLibrary
 {
-    // One placed instance on the compose bench.
+    enum class EWorkspaceMode
+    {
+        SceneAssembly,
+        CharacterDesigner,
+        CharacterWorkbench,
+    };
+
+    // One placed instance in a scene assembly.
     struct FBenchItem
     {
         int kitIndex = -1;
@@ -23,18 +31,26 @@ namespace ScadLibrary
         char args[128] = {}; // extra call arguments, e.g. "seed = 3"
     };
 
-    // Kit browser + compose bench around the central viewport. Left pane lists
-    // the parts libraries under assets/scad/lib/ (click = isolated preview);
-    // the right pane composes selected modules into a generated bench .scad
-    // that reloads in the viewport.
+    struct FSceneAssemblyInfo
+    {
+        std::string relativePath;
+        std::string absolutePath;
+        std::vector<std::string> kitDependencies;
+        bool generated = false;
+    };
+
+    // Scene assembly + character authoring around the central viewport.
     class ScadLibraryInterface
     {
     public:
         explicit ScadLibraryInterface(NextEngine& engine);
 
         void Config(); // OnPreConfigUI: ImGui config flags
-        void Init();   // OnInitUI: fonts
+        void Init(); // OnInitUI: fonts
         void Render(); // OnRenderUI: title bar + panels + viewport mapping
+        void SetWorkspaceMode(EWorkspaceMode mode);
+        EWorkspaceMode WorkspaceMode() const { return workspaceMode_; }
+        void SaveCurrentAssembly() { SaveAssembly(false); }
 
         // Engine hooks forwarded by ScadLibraryGameInstance for the rig preview.
         FRigPreview& RigPreview() { return rigPreview_; }
@@ -43,20 +59,35 @@ namespace ScadLibrary
         void DrawTitleBar();
         void DrawBottomBar();
         void DrawBrowserPanel(const ImVec2& pos, const ImVec2& size);
-        void DrawBenchPanel(const ImVec2& pos, const ImVec2& size);
+        void DrawBoneHierarchyPanel(const ImVec2& pos, const ImVec2& size);
+        void DrawModePanel(const ImVec2& pos, const ImVec2& size);
         void DrawBenchContent();
         void DrawDesignerContent();
+        void DrawWorkbenchContent();
+        void DrawAnimationTimelinePanel(const ImVec2& pos, const ImVec2& size);
+        void DrawViewportToolbar(const ImVec2& viewportPos);
+        void DrawBoneGizmo(const ImVec2& viewportPos, const ImVec2& viewportSize);
+        void UpsertGizmoKey(EEditableRigChannel type, const glm::vec3& value);
+        void DrawEquipmentEditor();
         void RescanKits();
+        void RescanAssemblies();
         void PreviewModule(int kitIndex, const std::string& moduleName);
         void AddToBench(int kitIndex, const std::string& moduleName);
         void ReloadBench();
         void ExportBench();
+        bool OpenAssembly(const std::string& path);
+        void PreviewAssemblySource();
+        void SaveAssembly(bool saveAs);
+        bool ParseStructuredAssembly(const std::string& source);
+        std::string BuildAssemblyPreviewSource() const;
         void ReloadDesigner();
         void ExportCharacter();
+        void ReloadWorkbench();
+        void ReloadWorkbenchStage();
+        void ApplyWorkbenchRigEdit();
         std::string KitCharUsePath(bool relative) const;
-        std::string BuildBenchSource(bool relativeUses) const;
-        bool WriteWorkspaceFile(const std::string& fileName, const std::string& source,
-                                std::string& outAbsPath);
+        std::string BuildBenchSource(const std::filesystem::path& outputPath = {}) const;
+        bool WriteWorkspaceFile(const std::string& fileName, const std::string& source, std::string& outAbsPath);
         bool WriteAndLoad(const std::string& fileName, const std::string& source);
 
         NextEngine& engine_;
@@ -64,6 +95,7 @@ namespace ScadLibrary
 
         std::vector<FKitInfo> kits_;
         std::vector<FBenchItem> bench_;
+        std::vector<FSceneAssemblyInfo> assemblies_;
 
         // Character designer state.
         FCharacterDesigner designer_;
@@ -74,17 +106,45 @@ namespace ScadLibrary
         float designerTint_[3] = {0.30f, 0.52f, 0.75f};
         char characterNameBuf_[128] = "my_character";
 
+        // Rig action/equipment workbench state.
+        FCharacterWorkbench workbench_;
+        bool workbenchEverLoaded_ = false;
+        bool workbenchReloadRequested_ = false;
+        bool workbenchEquipmentRebuildRequested_ = false;
+        int workbenchClip_ = 0;
+        int workbenchBone_ = 0;
+        int timelineSelectedChannel_ = -1;
+        int timelineSelectedKey_ = -1;
+        bool timelineDraggingKey_ = false;
+        float timelineVisibleDuration_ = 0.0f;
+        int workbenchEditorTab_ = 0;
+        int boneGizmoOperation_ = 1;
+        char boneFilterBuf_[128] = {};
+        EWorkspaceMode workspaceMode_ = EWorkspaceMode::SceneAssembly;
+        char rigSourceBuf_[512] = "assets/scad/characters/nextdayz_survivor.scad";
+
         // Browser state.
         char filterBuf_[128] = {};
+        char assemblyFilterBuf_[128] = {};
         int selectedKit_ = -1;
         std::string selectedModule_;
+        int selectedAssembly_ = -1;
 
-        // Bench state.
+        // Scene assembly state. Arbitrary kit-based SCAD files are editable as
+        // source; files generated by ScadLibrary additionally round-trip through
+        // the structured item list.
         bool autoReload_ = true;
         bool benchDirty_ = false;
         bool showFloor_ = true;
         int fnSegments_ = 12;
-        char exportNameBuf_[128] = "bench_export";
+        char exportNameBuf_[128] = "my_scene";
+        char assemblyPathBuf_[512] = "assets/scad/scenes/my_scene.scad";
+        std::string openedAssemblyPath_;
+        std::string assemblySource_;
+        std::vector<std::string> openedAssemblyKits_;
+        bool assemblySourceDirty_ = false;
+        bool assemblyStructured_ = false;
+        int assemblyEditorTab_ = 0;
         // Placement cursor for newly added items (footprint-aware row layout).
         float benchCursorX_ = 0.0f;
         float benchCursorY_ = 0.0f;
@@ -97,4 +157,4 @@ namespace ScadLibrary
         bool browserCollapsed_ = false;
         bool benchCollapsed_ = false;
     };
-}
+} // namespace ScadLibrary

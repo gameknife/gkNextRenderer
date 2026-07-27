@@ -52,13 +52,58 @@ anim_sit = [ ["loop", false], ["bone_root","pos",[[0,[0,0,-0.42]]]] ];   // 单�
 - **范例角色**：`characters/worker.scad`（安全帽+反光背心+背包+工具腰带+靴）、
   `characters/citizen.scad`(马尾+连衣裙)；单测 `gkNextUnitTests "[KitChar]"`。
 
-**ScadLibrary 角色设计台**（右侧"角色台"tab，`CharacterDesigner.*`）：按分类选件 + 调
+**ScadLibrary 角色台**（顶栏应用模式，`CharacterDesigner.*`）：按分类选件 + 调
 肤色/发色/主色 → 生成角色 scad → `FRigPreview` 实机预览（rig 加载 → `BeforeSceneRebuild`
 注入部件模型/材质 → `OnSceneLoaded` RigInstance 实例化 + FRigAnimator 播 clip，可切动画/
 绑定姿态）→ 导出 `assets/scad/characters/<名>.scad`（`use <../lib/kit_char.scad>`，游戏直接
 加载）。**生命周期**：引擎顺序 BeforeSceneRebuild → OnSceneUnloaded → OnSceneLoaded，
 `FRigPreview::OnSceneUnloaded` 只清 animator/节点指针，不可清注入产物（同 AirportSim 教训）。
 回归脚本：`gnb validate --script assets/agentscripts/scadlibrary-designer.agentscript.json`。
+
+## ScadLibrary 角色工作室（动作 + 装备）
+
+ScadLibrary 顶栏把作者工具组织成三个应用级模式，每个模式拥有独立布局：
+
+- **场景组装（Ctrl+1）**：左侧浏览 `assets/scad` 组装场景与 Kit，中间预览，右侧提供
+  对象化摆放和完整 SCAD 源码编辑；
+- **角色台（Ctrl+2）**：隐藏通用 kit 浏览器，扩大角色预览，右侧集中造型与颜色；
+- **角色工作室（Ctrl+3）**：最大化动作预览区，并提供更宽的动作、骨架与装备编辑器。
+
+场景组装会递归发现所有引用 `kit_*.scad` 的场景。复杂手写场景保留完整源码编辑；
+ScadLibrary 生成的固定变换链平铺场景可重新解析成对象列表。未保存源码通过工作区副本
+预览，保存限制在 `assets/scad` 且禁止覆盖 `lib/`。新建通用场景写入 `assets/scad/scenes/`；
+`gen/` 仍视为可被规格重新生成覆盖的产物。完整目录约定见 `assets/scad/README.md`，
+回归脚本为 `assets/agentscripts/scadlibrary-assembly.agentscript.json`。
+
+角色工作室面向已有 ScadRig 资产，默认打开
+`assets/scad/characters/nextdayz_survivor.scad`，也可输入其他 `.scad` 路径：
+
+- **动作预览**：动作选择、播放/暂停、正反向速度、时间拖动和绑定姿态预览；
+- **角色工作室布局**：顶部以居中的大页签切换三个应用级模式；左侧是全高骨骼层级与
+  骨骼信息，中间是带变换工具条的角色视口，右侧是动作/装备属性，动画时间轴独立贴在
+  中央视口底边，切到装备页时自动收起；
+- **贴底时间轴动作修改**：骨骼层级按 rig 父子关系显示并标注该骨骼的轨道数，时间轴只
+  显示所选骨骼的 `pos` / `rot` / `scale` 轨道。关键帧显示为可拖动菱形；标尺和轨道空白可定位播放头，双击轨道按当前
+  插值创建关键帧，选中后可精调时间与 XYZ 数值，也可删除关键帧或整条轨道。编辑值始终
+  使用 SCAD 作者空间（Z-up、XYZ 角度），预览时转换为引擎空间。选择骨骼后，视口在该
+  骨骼枢轴显示移动/旋转/缩放 Gizmo；拖动时暂停播放，并在当前时间自动创建或更新对应的
+  `pos` / `rot` / `scale` 关键帧；
+- **安全回写**：保存时把加载器求值后的全部 clip 展开到原文件末尾
+  `SCADLIBRARY_RIG_EDITOR_BEGIN/END` 标记区。后续保存只替换该区域，不改骨架、几何和
+  helper function；因此 `nd_stand_cycle()` 一类函数生成的动作也可编辑；
+- **装备预览/修改**：任意 catalog kit 模块可挂到任意骨架，支持模块参数、启用状态及
+  SCAD 本地位置/旋转/缩放的实时调整。预览仍走真实的 model/material 注入和 bone parent，
+  不是独立摆在角色旁边的静态模型；
+- **装备数据**：保存到角色同名 `.equipment.json`。`kit` 写相对路径，记录稳定的 `id`、
+  显示名、目标骨架、模块、参数和 TRS；这是后续换装系统可直接消费/扩展的作者数据，
+  当前游戏运行时是否读取它仍由各产品决定。
+
+NextDayz 初始配置为 `characters/nextdayz_survivor.equipment.json`（军帽、背包、主武器）。
+交互回归：
+
+```bash
+gnb validate --script assets/agentscripts/scadlibrary-workbench.agentscript.json
+```
 
 ## 运行时管线
 

@@ -4,9 +4,14 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
+#include "Gameplay/Rig/RigInstance.h"
 #include "Modules/ScadLoader/FScadRig.h"
 
+#include <algorithm>
+#include <cmath>
+#include <filesystem>
 #include <fmt/format.h>
+#include <fstream>
 #include <spdlog/spdlog.h>
 
 namespace ScadLibrary
@@ -22,8 +27,8 @@ namespace ScadLibrary
             {
                 const bool startOk = pos == 0 || params[pos - 1] == ' ' || params[pos - 1] == ',';
                 const size_t end = pos + name.size();
-                const bool endOk = end >= params.size() || params[end] == ' ' || params[end] == '=' ||
-                                   params[end] == ',';
+                const bool endOk =
+                    end >= params.size() || params[end] == ' ' || params[end] == '=' || params[end] == ',';
                 if (startOk && endOk)
                 {
                     return true;
@@ -41,8 +46,7 @@ namespace ScadLibrary
         // Part call with the designer's skin (and, for hair, hair color) bound
         // to the module's named parameters; everything else keeps kit defaults
         // so ch_TINT() placeholders stay runtime-tintable.
-        std::string PartCall(const FKitModuleInfo& moduleInfo, const float skin[3],
-                             const float* hairColor = nullptr)
+        std::string PartCall(const FKitModuleInfo& moduleInfo, const float skin[3], const float* hairColor = nullptr)
         {
             std::vector<std::string> args;
             if (hairColor != nullptr && HasNamedParam(moduleInfo.params, "c"))
@@ -76,13 +80,20 @@ namespace ScadLibrary
         {
             for (const FKitModuleInfo& moduleInfo : kit->modules)
             {
-                if (moduleInfo.category == "head") heads_.push_back(moduleInfo);
-                else if (moduleInfo.category == "hair") hairs_.push_back(moduleInfo);
-                else if (moduleInfo.category == "hat") hats_.push_back(moduleInfo);
-                else if (moduleInfo.category == "torso") torsos_.push_back(moduleInfo);
-                else if (moduleInfo.category == "arm") arms_.push_back(moduleInfo);
-                else if (moduleInfo.category == "leg") legs_.push_back(moduleInfo);
-                else if (moduleInfo.category == "acc") accs_.push_back(moduleInfo);
+                if (moduleInfo.category == "head")
+                    heads_.push_back(moduleInfo);
+                else if (moduleInfo.category == "hair")
+                    hairs_.push_back(moduleInfo);
+                else if (moduleInfo.category == "hat")
+                    hats_.push_back(moduleInfo);
+                else if (moduleInfo.category == "torso")
+                    torsos_.push_back(moduleInfo);
+                else if (moduleInfo.category == "arm")
+                    arms_.push_back(moduleInfo);
+                else if (moduleInfo.category == "leg")
+                    legs_.push_back(moduleInfo);
+                else if (moduleInfo.category == "acc")
+                    accs_.push_back(moduleInfo);
             }
             hasKit_ = !heads_.empty() && !torsos_.empty() && !arms_.empty() && !legs_.empty();
         }
@@ -115,11 +126,9 @@ namespace ScadLibrary
         s += "}\n\n";
 
         s += fmt::format("module bone_arm_l() {{ {}; }}\n", PartCall(arms_[arm], skinColor));
-        s += fmt::format("module bone_arm_r() {{ mirror([1, 0, 0]) {}; }}\n\n",
-                         PartCall(arms_[arm], skinColor));
+        s += fmt::format("module bone_arm_r() {{ mirror([1, 0, 0]) {}; }}\n\n", PartCall(arms_[arm], skinColor));
         s += fmt::format("module bone_leg_l() {{ {}; }}\n", PartCall(legs_[leg], skinColor));
-        s += fmt::format("module bone_leg_r() {{ mirror([1, 0, 0]) {}; }}\n\n",
-                         PartCall(legs_[leg], skinColor));
+        s += fmt::format("module bone_leg_r() {{ mirror([1, 0, 0]) {}; }}\n\n", PartCall(legs_[leg], skinColor));
 
         s += "module bone_torso()\n{\n";
         s += fmt::format("    {};\n", PartCall(torsos_[torso], skinColor));
@@ -155,7 +164,20 @@ namespace ScadLibrary
     bool FRigPreview::LoadRig(const std::string& scadPathAbs, std::string& outError,
                               std::vector<std::string>* outWarnings)
     {
+        // The outgoing scene can remain live for a few frames while the next
+        // load is queued. Detach the animator before replacing its asset.
+        animator_ = NextGameplay::FRigLayeredAnimator{};
+        previewLayer_ = NextGameplay::invalidRigLayerHandle;
+        animatorBound_ = false;
+        scene_ = nullptr;
+        boneNodes_.clear();
+        rigRoot_.reset();
+        for (FAttachmentPreview& attachment : attachments_)
+        {
+            attachment.root.reset();
+        }
         hasRig_ = Assets::FScadRigLoader::LoadRig(scadPathAbs, {}, asset_, outError, outWarnings);
+        injected_ = false;
         return hasRig_;
     }
 
@@ -170,15 +192,139 @@ namespace ScadLibrary
 
     void FRigPreview::PlayClip(const std::string& clip)
     {
-        clip_ = clip;
-        if (animatorBound_)
+        const std::string resolved = !clip.empty() && asset_.FindClip(clip) != nullptr ? clip : "";
+        if (clip_ != resolved)
         {
-            animator_.Play(!clip_.empty() && asset_.FindClip(clip_) != nullptr ? clip_ : "");
+            clip_ = resolved;
+            currentTime_ = 0.0f;
+        }
+        RefreshPose();
+    }
+
+    float FRigPreview::CurrentDuration() const
+    {
+        const Assets::FRigClip* clip = asset_.FindClip(clip_);
+        return clip != nullptr ? clip->duration : 0.0f;
+    }
+
+    void FRigPreview::SetCurrentTime(float time)
+    {
+        currentTime_ = std::clamp(time, 0.0f, CurrentDuration());
+        RefreshPose();
+    }
+
+    void FRigPreview::RefreshPose()
+    {
+        if (!animatorBound_ || scene_ == nullptr)
+        {
+            return;
+        }
+        const Assets::FRigClip* current = asset_.FindClip(clip_);
+        if (current != nullptr)
+        {
+            const float normalized = current->duration > 0.0f ? currentTime_ / current->duration : 0.0f;
+            animator_.SetManualBlend(previewLayer_, {{current, 1.0f}}, normalized, 0.0f);
+            animator_.Update(0.0f);
+        }
+        else
+        {
+            for (size_t i = 0; i < boneNodes_.size() && i < asset_.bones.size(); ++i)
+            {
+                if (Assets::Node* node = boneNodes_[i])
+                {
+                    node->Translation() = asset_.bones[i].bindT;
+                    node->Rotation() = asset_.bones[i].bindR;
+                    node->Scale() = asset_.bones[i].bindS;
+                }
+            }
+            if (rigRoot_)
+            {
+                rigRoot_->RecalcTransform(true);
+            }
+        }
+        scene_->MarkTransformDirty();
+    }
+
+    bool FRigPreview::SetEquipment(const std::vector<FEquipmentAttachment>& equipment, std::string& outError)
+    {
+        attachments_.clear();
+        attachments_.reserve(equipment.size());
+        bool allLoaded = true;
+        std::vector<std::string> errors;
+        const std::filesystem::path workspace = std::filesystem::current_path() / "scad_library";
+        std::error_code ec;
+        std::filesystem::create_directories(workspace, ec);
+
+        for (size_t index = 0; index < equipment.size(); ++index)
+        {
+            FAttachmentPreview preview;
+            preview.desc = equipment[index];
+            if (!preview.desc.enabled || preview.desc.kitPath.empty() || preview.desc.moduleName.empty())
+            {
+                attachments_.push_back(std::move(preview));
+                continue;
+            }
+
+            std::string kitPath = preview.desc.kitPath;
+            std::replace(kitPath.begin(), kitPath.end(), '\\', '/');
+            const std::filesystem::path previewPath = workspace / fmt::format("equipment_preview_{}.scad", index);
+            std::ofstream out(previewPath, std::ios::binary | std::ios::trunc);
+            if (!out)
+            {
+                allLoaded = false;
+                errors.push_back(fmt::format("{}: 无法生成预览文件", preview.desc.label));
+                attachments_.push_back(std::move(preview));
+                continue;
+            }
+            out << "// generated by ScadLibrary equipment preview\n";
+            out << "$fn = 12;\n";
+            out << "use <" << kitPath << ">\n";
+            out << "module bone_root() { " << preview.desc.moduleName << "(" << preview.desc.arguments << "); }\n";
+            out << "bone_root();\n";
+            out.close();
+
+            std::string loadError;
+            std::vector<std::string> warnings;
+            if (!Assets::FScadRigLoader::LoadRig(std::filesystem::absolute(previewPath).string(), {}, preview.asset,
+                                                 loadError, &warnings))
+            {
+                allLoaded = false;
+                errors.push_back(fmt::format("{}: {}", preview.desc.label, loadError));
+            }
+            attachments_.push_back(std::move(preview));
+        }
+
+        outError.clear();
+        for (size_t i = 0; i < errors.size(); ++i)
+        {
+            outError += (i == 0 ? "" : "\n") + errors[i];
+        }
+        return allLoaded;
+    }
+
+    void FRigPreview::UpdateEquipmentTransform(size_t index, const FEquipmentAttachment& equipment)
+    {
+        if (index >= attachments_.size())
+        {
+            return;
+        }
+        FAttachmentPreview& preview = attachments_[index];
+        preview.desc = equipment;
+        if (!preview.root)
+        {
+            return;
+        }
+        preview.root->Translation() = FCharacterWorkbench::ScadPositionToEngine(equipment.translation);
+        preview.root->Rotation() = FCharacterWorkbench::ScadRotationToEngine(equipment.rotationDegrees);
+        preview.root->Scale() = FCharacterWorkbench::ScadScaleToEngine(equipment.scale);
+        preview.root->RecalcTransform(true);
+        if (scene_)
+        {
+            scene_->MarkTransformDirty();
         }
     }
 
-    void FRigPreview::InjectAssets(std::vector<Assets::Model>& models,
-                                   std::vector<Assets::FMaterial>& materials)
+    void FRigPreview::InjectAssets(std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials)
     {
         if (!active_ || !hasRig_)
         {
@@ -189,13 +335,13 @@ namespace ScadLibrary
         for (const Assets::FRigPart& part : asset_.parts)
         {
             std::array<uint32_t, 16> sectionMaterials = {0};
-            for (size_t section = 0;
-                 section < part.sectionColors.size() && section < sectionMaterials.size(); ++section)
+            for (size_t section = 0; section < part.sectionColors.size() && section < sectionMaterials.size();
+                 ++section)
             {
                 if (!part.sectionTintable[section])
                 {
-                    sectionMaterials[section] = Assets::SceneBuilder::AddLambertianMaterial(
-                        materials, glm::vec3(part.sectionColors[section]));
+                    sectionMaterials[section] =
+                        Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(part.sectionColors[section]));
                 }
             }
             partMaterialIds_.push_back(sectionMaterials);
@@ -203,6 +349,25 @@ namespace ScadLibrary
             partModelIds_.push_back(static_cast<uint32_t>(models.size() - 1));
         }
         tintMaterialId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, tint_);
+
+        for (FAttachmentPreview& attachment : attachments_)
+        {
+            attachment.partModelIds.clear();
+            attachment.partMaterialIds.clear();
+            for (const Assets::FRigPart& part : attachment.asset.parts)
+            {
+                std::array<uint32_t, 16> sectionMaterials = {0};
+                for (size_t section = 0; section < part.sectionColors.size() && section < sectionMaterials.size();
+                     ++section)
+                {
+                    sectionMaterials[section] =
+                        Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(part.sectionColors[section]));
+                }
+                attachment.partMaterialIds.push_back(sectionMaterials);
+                models.push_back(attachment.asset.partModels[part.modelIndex]);
+                attachment.partModelIds.push_back(static_cast<uint32_t>(models.size() - 1));
+            }
+        }
         injected_ = true;
     }
 
@@ -228,17 +393,43 @@ namespace ScadLibrary
             }
         }
 
-        std::vector<Assets::Node*> boneNodes;
-        auto root = NextGameplay::FRigInstance::Instantiate(scene, asset_, desc, boneNodes);
-        if (!root)
+        boneNodes_.clear();
+        rigRoot_ = NextGameplay::FRigInstance::Instantiate(scene, asset_, desc, boneNodes_);
+        if (!rigRoot_)
         {
             SPDLOG_WARN("[ScadLibrary] rig preview instantiation failed");
             return;
         }
-        animator_.Bind(&asset_, std::move(boneNodes), root.get());
+        animator_.Bind(&asset_, boneNodes_, rigRoot_.get());
+        previewLayer_ = animator_.CreateLayer("preview", NextGameplay::ERigLayerBlendMode::Override,
+                                              NextGameplay::FRigBoneMask::FullBody(asset_));
         animatorBound_ = true;
         scene_ = &scene;
-        PlayClip(clip_);
+
+        for (size_t index = 0; index < attachments_.size(); ++index)
+        {
+            FAttachmentPreview& attachment = attachments_[index];
+            const int32_t targetBone = asset_.FindBone(attachment.desc.bone);
+            if (!attachment.desc.enabled || attachment.asset.bones.empty() || targetBone < 0 ||
+                targetBone >= static_cast<int32_t>(boneNodes_.size()))
+            {
+                continue;
+            }
+            NextGameplay::FRigInstanceDesc attachmentDesc;
+            attachmentDesc.namePrefix = fmt::format("rig_equipment_{}", index);
+            attachmentDesc.partModelIds = attachment.partModelIds;
+            attachmentDesc.partMaterialIds = attachment.partMaterialIds;
+            std::vector<Assets::Node*> attachmentBones;
+            attachment.root =
+                NextGameplay::FRigInstance::Instantiate(scene, attachment.asset, attachmentDesc, attachmentBones);
+            if (attachment.root && boneNodes_[targetBone])
+            {
+                attachment.root->SetParent(boneNodes_[targetBone]->shared_from_this());
+                UpdateEquipmentTransform(index, attachment.desc);
+            }
+        }
+
+        RefreshPose();
         scene.MarkDirty();
     }
 
@@ -247,9 +438,16 @@ namespace ScadLibrary
         // Engine order is BeforeSceneRebuild -> OnSceneUnloaded -> OnSceneLoaded:
         // the injection results for the INCOMING scene are already recorded here,
         // so only the dead per-node state may be reset (the AirportSim lesson).
-        animator_ = NextGameplay::FRigAnimator{};
+        animator_ = NextGameplay::FRigLayeredAnimator{};
+        previewLayer_ = NextGameplay::invalidRigLayerHandle;
         animatorBound_ = false;
         scene_ = nullptr;
+        boneNodes_.clear();
+        rigRoot_.reset();
+        for (FAttachmentPreview& attachment : attachments_)
+        {
+            attachment.root.reset();
+        }
     }
 
     void FRigPreview::Tick(double deltaSeconds)
@@ -258,7 +456,34 @@ namespace ScadLibrary
         {
             return;
         }
-        animator_.Update(static_cast<float>(deltaSeconds));
-        scene_->MarkTransformDirty();
+        const Assets::FRigClip* current = asset_.FindClip(clip_);
+        if (current == nullptr)
+        {
+            return;
+        }
+        if (!paused_)
+        {
+            currentTime_ += static_cast<float>(deltaSeconds) * playSpeed_;
+            if (current->duration > 0.0f)
+            {
+                if (current->loop)
+                {
+                    currentTime_ = std::fmod(currentTime_, current->duration);
+                    if (currentTime_ < 0.0f)
+                    {
+                        currentTime_ += current->duration;
+                    }
+                }
+                else
+                {
+                    currentTime_ = std::clamp(currentTime_, 0.0f, current->duration);
+                    if (currentTime_ >= current->duration && playSpeed_ > 0.0f)
+                    {
+                        paused_ = true;
+                    }
+                }
+            }
+        }
+        RefreshPose();
     }
-}
+} // namespace ScadLibrary
