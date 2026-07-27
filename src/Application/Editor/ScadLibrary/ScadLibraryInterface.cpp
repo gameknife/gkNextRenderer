@@ -43,8 +43,8 @@ namespace ScadLibrary
 {
     namespace
     {
-        constexpr float kTitleBarHeight = 64.0f;
-        constexpr float kBottomBarHeight = 30.0f;
+        constexpr float kTitleBarHeight = 52.0f;
+        constexpr float kBottomBarHeight = 28.0f;
         constexpr float kCollapsedRailWidth = 46.0f;
         constexpr int kBenchGridColumns = 6;
         constexpr float kBenchGridStep = 14.0f;
@@ -447,6 +447,25 @@ namespace ScadLibrary
     void ScadLibraryInterface::Init()
     {
         NextUI::Theme::ApplyProfessionalTheme();
+        // ScadLibrary uses a deliberately flatter editor treatment than the
+        // general-purpose engine UI: restrained rounding, quiet borders and
+        // denser controls keep the scene itself visually dominant.
+        ImGuiStyle& style = ImGui::GetStyle();
+        style.WindowRounding = 0.0f;
+        style.ChildRounding = 3.0f;
+        style.FrameRounding = 3.0f;
+        style.PopupRounding = 4.0f;
+        style.ScrollbarRounding = 3.0f;
+        style.GrabRounding = 3.0f;
+        style.TabRounding = 3.0f;
+        style.FrameBorderSize = 0.0f;
+        style.ChildBorderSize = 1.0f;
+        style.ItemSpacing = ImVec2(7.0f, 6.0f);
+        style.FramePadding = ImVec2(8.0f, 5.0f);
+        style.Colors[ImGuiCol_WindowBg] = ImVec4(0.075f, 0.083f, 0.094f, 0.985f);
+        style.Colors[ImGuiCol_ChildBg] = ImVec4(0.045f, 0.050f, 0.058f, 0.52f);
+        style.Colors[ImGuiCol_FrameBg] = ImVec4(0.045f, 0.050f, 0.058f, 0.96f);
+        style.Colors[ImGuiCol_Border] = ImVec4(0.20f, 0.22f, 0.25f, 0.72f);
         ImGuiIO& io = ImGui::GetIO();
         // The vcpkg imgui is built with the FreeType feature, so the font atlas must
         // use the FreeType builder (matches ScadStudio/gkNextEditor).
@@ -624,7 +643,7 @@ namespace ScadLibrary
         config.RightWindowId = "ScadLibraryWindowControls";
         config.AppName = "SCAD Library";
         config.Height = kTitleBarHeight;
-        config.RightContentWidth = 210.0f;
+        config.RightContentWidth = 404.0f;
         config.DrawMenuBar = [&]() -> float
         {
             float menuRight = ImGui::GetCursorScreenPos().x;
@@ -675,13 +694,55 @@ namespace ScadLibrary
         };
         config.DrawRightContent = [&]()
         {
+            ImGui::SetCursorPos(ImVec2(8.0f, 10.0f));
+            if (workspaceMode_ == EWorkspaceMode::SceneAssembly)
+            {
+                ImGui::BeginDisabled(openedAssemblyPath_.empty());
+                if (NextUI::Theme::ToolbarButton(ICON_FA_FLOPPY_DISK " 保存", "保存当前场景", false,
+                                                 ImVec2(72.0f, 32.0f)))
+                {
+                    SaveAssembly(false);
+                }
+                ImGui::EndDisabled();
+                ImGui::SameLine();
+                ImGui::BeginDisabled(assemblySource_.empty() && bench_.empty());
+                if (NextUI::Theme::ToolbarButton(ICON_FA_PLAY " 预览", "预览当前未保存内容", false,
+                                                 ImVec2(72.0f, 32.0f)))
+                {
+                    PreviewAssemblySource();
+                }
+                ImGui::EndDisabled();
+            }
+            else if (workspaceMode_ == EWorkspaceMode::CharacterDesigner)
+            {
+                if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE_RIGHT " 刷新", "刷新角色预览", false,
+                                                 ImVec2(72.0f, 32.0f)))
+                {
+                    ReloadDesigner();
+                }
+                ImGui::SameLine();
+                if (NextUI::Theme::ToolbarButton(ICON_FA_FILE_EXPORT " 导出", "导出当前角色", true,
+                                                 ImVec2(72.0f, 32.0f)))
+                {
+                    ExportCharacter();
+                }
+            }
+            else
+            {
+                if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE_RIGHT " 刷新", "重新载入动作与装备", false,
+                                                 ImVec2(72.0f, 32.0f)))
+                {
+                    workbenchReloadRequested_ = true;
+                }
+            }
+            ImGui::SameLine(0.0f, 14.0f);
             ImGui::SetCursorPosY(std::floor((kTitleBarHeight - ImGui::GetTextLineHeight()) * 0.5f));
             size_t moduleCount = 0;
             for (const FKitInfo& kit : kits_)
             {
                 moduleCount += kit.modules.size();
             }
-            ImGui::TextDisabled("%zu kits / %zu modules", kits_.size(), moduleCount);
+            ImGui::TextDisabled("%zu Kits  ·  %zu 模块", kits_.size(), moduleCount);
         };
         config.IsMaximized = engine_.IsMaximized();
         config.OnMinimize = [&]() { engine_.RequestMinimize(); };
@@ -690,27 +751,38 @@ namespace ScadLibrary
         NextUI::Theme::DrawAppTitleBar(engine_, config);
 
         ImGuiViewport* viewport = ImGui::GetMainViewport();
-        const ImVec2 tabsSize(552.0f, 52.0f);
-        ImGui::SetNextWindowPos(
-            ImVec2(viewport->Pos.x + (viewport->Size.x - tabsSize.x) * 0.5f, viewport->Pos.y + 6.0f), ImGuiCond_Always);
+        const float availableTabWidth = std::max(360.0f, viewport->Size.x - 260.0f - 560.0f);
+        const ImVec2 tabsSize(std::min(492.0f, availableTabWidth), 46.0f);
+        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + 260.0f, viewport->Pos.y + 3.0f), ImGuiCond_Always);
         ImGui::SetNextWindowSize(tabsSize, ImGuiCond_Always);
         ImGui::SetNextWindowBgAlpha(0.0f);
         const ImGuiWindowFlags tabsFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking |
             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings;
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 0.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 0.0f));
         if (ImGui::Begin("##ScadLibraryWorkspaceTabs", nullptr, tabsFlags))
         {
+            const float buttonWidth = std::floor((tabsSize.x - 4.0f) / 3.0f);
             const auto modeButton = [&](const char* label, const char* shortcut, EWorkspaceMode mode)
             {
                 const bool active = workspaceMode_ == mode;
+                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
                 if (active)
                 {
-                    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.34f));
-                    ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover));
+                    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.30f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                          NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.42f));
+                    ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::Text));
                 }
-                if (ImGui::Button(label, ImVec2(180.0f, 48.0f)))
+                else
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                          NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.70f));
+                    ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted));
+                }
+                if (ImGui::Button(label, ImVec2(buttonWidth, 44.0f)))
                 {
                     SetWorkspaceMode(mode);
                 }
@@ -722,13 +794,14 @@ namespace ScadLibrary
                 {
                     const ImVec2 min = ImGui::GetItemRectMin();
                     const ImVec2 max = ImGui::GetItemRectMax();
-                    ImGui::GetWindowDrawList()->AddLine(
-                        ImVec2(min.x, max.y - 1.0f), ImVec2(max.x, max.y - 1.0f),
+                    ImGui::GetWindowDrawList()->AddRectFilled(
+                        ImVec2(min.x + 10.0f, max.y - 3.0f), ImVec2(max.x - 10.0f, max.y),
                         ImGui::GetColorU32(NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover)), 2.0f);
-                    ImGui::PopStyleColor(2);
                 }
+                ImGui::PopStyleColor(3);
+                ImGui::PopStyleVar();
             };
-            modeButton(ICON_FA_PERSON "  角色动作与装备", "Ctrl+3", EWorkspaceMode::CharacterWorkbench);
+            modeButton(ICON_FA_PERSON "  动作与装备", "Ctrl+3", EWorkspaceMode::CharacterWorkbench);
             ImGui::SameLine();
             modeButton(ICON_FA_CUBES_STACKED "  角色合成", "Ctrl+2", EWorkspaceMode::CharacterDesigner);
             ImGui::SameLine();
@@ -801,133 +874,152 @@ namespace ScadLibrary
             return;
         }
 
-        if (ImGui::Button(ICON_FA_CHEVRON_LEFT "##collapse_browser", ImVec2(30.0f, 30.0f)))
-        {
-            browserCollapsed_ = true;
-        }
-        ImGui::SameLine();
-        ImGui::TextUnformatted("场景与 Kit");
-        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 20.0f);
-        if (ImGui::Button(ICON_FA_ARROWS_ROTATE "##rescan", ImVec2(30.0f, 30.0f)))
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(ICON_FA_FOLDER_TREE "  资源库");
+        ImGui::SameLine(ImGui::GetWindowWidth() - 82.0f);
+        if (NextUI::Theme::IconButton(ICON_FA_ARROWS_ROTATE "##rescan", "重新扫描场景与 Kit", false,
+                                      ImVec2(28.0f, 28.0f)))
         {
             RescanKits();
             RescanAssemblies();
         }
-        if (ImGui::IsItemHovered())
+        ImGui::SameLine();
+        if (NextUI::Theme::IconButton(ICON_FA_CHEVRON_LEFT "##collapse_browser", "收起资源库", false,
+                                      ImVec2(28.0f, 28.0f)))
         {
-            ImGui::SetTooltip("重新扫描 assets/scad 下的组装场景与 Kit");
+            browserCollapsed_ = true;
         }
+        NextUI::Theme::DrawThinSeparator(0.72f);
 
-        ImGui::TextDisabled("组装场景  ·  %zu", assemblies_.size());
-        ImGui::SetNextItemWidth(-1.0f);
-        ImGui::InputTextWithHint("##assembly_filter", "搜索场景路径或 Kit…", assemblyFilterBuf_,
-                                 sizeof(assemblyFilterBuf_));
-        ImGui::BeginChild("##assembly_files", ImVec2(0.0f, 205.0f), ImGuiChildFlags_Borders);
-        for (int index = 0; index < static_cast<int>(assemblies_.size()); ++index)
+        if (ImGui::BeginTabBar("##library_tabs", ImGuiTabBarFlags_FittingPolicyResizeDown))
         {
-            const FSceneAssemblyInfo& assembly = assemblies_[index];
-            const std::string dependencies = fmt::format("{}", fmt::join(assembly.kitDependencies, ", "));
-            if (assemblyFilterBuf_[0] != '\0' && assembly.relativePath.find(assemblyFilterBuf_) == std::string::npos &&
-                dependencies.find(assemblyFilterBuf_) == std::string::npos)
+            if (ImGui::BeginTabItem(fmt::format(ICON_FA_CITY "  场景  {}", assemblies_.size()).c_str()))
             {
-                continue;
-            }
-            const char* tag = assembly.generated ? "[生成] " : "";
-            if (ImGui::Selectable(fmt::format("{}{}##assembly_{}", tag, assembly.relativePath, index).c_str(),
-                                  index == selectedAssembly_))
-            {
-                selectedAssembly_ = index;
-                OpenAssembly(assembly.relativePath);
-            }
-            if (ImGui::IsItemHovered())
-            {
-                ImGui::SetTooltip("Kit: %s%s", dependencies.c_str(),
-                                  assembly.generated ? "\n由规格或工具生成，手改可能被覆盖" : "");
-            }
-        }
-        if (assemblies_.empty())
-        {
-            ImGui::TextDisabled("未找到引用 kit_*.scad 的场景");
-        }
-        ImGui::EndChild();
-
-        ImGui::Spacing();
-        ImGui::TextDisabled("Kit 零件库");
-        ImGui::SetNextItemWidth(-1.0f);
-        ImGui::InputTextWithHint("##filter", "搜索模块…", filterBuf_, sizeof(filterBuf_));
-        ImGui::Spacing();
-
-        ImGui::BeginChild("##kit_tree", ImVec2(0, 0), ImGuiChildFlags_None);
-        for (size_t k = 0; k < kits_.size(); ++k)
-        {
-            const FKitInfo& kit = kits_[k];
-            if (!ImGui::CollapsingHeader(fmt::format("{} ({})##kit{}", kit.name, kit.modules.size(), k).c_str(),
-                                         k == 0 ? ImGuiTreeNodeFlags_DefaultOpen : 0))
-            {
-                continue;
-            }
-            std::string currentCategory;
-            bool categoryOpen = false;
-            for (const FKitModuleInfo& moduleInfo : kit.modules)
-            {
-                if (!PassesFilter(moduleInfo, filterBuf_))
+                ImGui::Spacing();
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputTextWithHint("##assembly_filter", ICON_FA_MAGNIFYING_GLASS " 搜索场景路径或 Kit…",
+                                         assemblyFilterBuf_, sizeof(assemblyFilterBuf_));
+                ImGui::Spacing();
+                ImGui::BeginChild("##assembly_files", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
+                for (int index = 0; index < static_cast<int>(assemblies_.size()); ++index)
                 {
-                    continue;
+                    const FSceneAssemblyInfo& assembly = assemblies_[index];
+                    const std::string dependencies = fmt::format("{}", fmt::join(assembly.kitDependencies, ", "));
+                    if (assemblyFilterBuf_[0] != '\0' &&
+                        assembly.relativePath.find(assemblyFilterBuf_) == std::string::npos &&
+                        dependencies.find(assemblyFilterBuf_) == std::string::npos)
+                    {
+                        continue;
+                    }
+                    const char* tag = assembly.generated ? ICON_FA_WAND_MAGIC_SPARKLES "  " : ICON_FA_FILE_CODE "  ";
+                    if (ImGui::Selectable(fmt::format("{}{}##assembly_{}", tag, assembly.relativePath, index).c_str(),
+                                          index == selectedAssembly_, 0, ImVec2(0.0f, 29.0f)))
+                    {
+                        selectedAssembly_ = index;
+                        OpenAssembly(assembly.relativePath);
+                    }
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("依赖: %s%s", dependencies.c_str(),
+                                          assembly.generated ? "\n由规格或工具生成，手改可能被覆盖" : "");
+                    }
                 }
-                if (moduleInfo.category != currentCategory)
+                if (assemblies_.empty())
                 {
+                    ImGui::TextDisabled("未找到引用 kit_*.scad 的场景");
+                }
+                ImGui::EndChild();
+                ImGui::EndTabItem();
+            }
+
+            if (ImGui::BeginTabItem(fmt::format(ICON_FA_CUBES_STACKED "  Kit  {}", kits_.size()).c_str()))
+            {
+                ImGui::Spacing();
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputTextWithHint("##filter", ICON_FA_MAGNIFYING_GLASS " 搜索模块…", filterBuf_,
+                                         sizeof(filterBuf_));
+                ImGui::Spacing();
+
+                ImGui::BeginChild("##kit_tree", ImVec2(0, 0), ImGuiChildFlags_None);
+                for (size_t k = 0; k < kits_.size(); ++k)
+                {
+                    const FKitInfo& kit = kits_[k];
+                    if (!ImGui::CollapsingHeader(
+                            fmt::format("{}  {} 个模块##kit{}", kit.name, kit.modules.size(), k).c_str(),
+                            k == 0 ? ImGuiTreeNodeFlags_DefaultOpen : 0))
+                    {
+                        continue;
+                    }
+                    std::string currentCategory;
+                    bool categoryOpen = false;
+                    for (const FKitModuleInfo& moduleInfo : kit.modules)
+                    {
+                        if (!PassesFilter(moduleInfo, filterBuf_))
+                        {
+                            continue;
+                        }
+                        if (moduleInfo.category != currentCategory)
+                        {
+                            if (categoryOpen)
+                            {
+                                ImGui::TreePop();
+                            }
+                            currentCategory = moduleInfo.category;
+                            categoryOpen = ImGui::TreeNodeEx(
+                                fmt::format("{}##cat_{}_{}", CategoryLabel(currentCategory), k, currentCategory)
+                                    .c_str(),
+                                filterBuf_[0] != '\0' ? ImGuiTreeNodeFlags_DefaultOpen : 0);
+                        }
+                        if (!categoryOpen)
+                        {
+                            continue;
+                        }
+                        const bool isSelected =
+                            selectedKit_ == static_cast<int>(k) && selectedModule_ == moduleInfo.name;
+                        if (ImGui::Selectable(
+                                fmt::format("{}##sel_{}_{}", moduleInfo.name, k, moduleInfo.name).c_str(), isSelected,
+                                0, ImVec2(ImGui::GetContentRegionAvail().x - 34.0f, 27.0f)))
+                        {
+                            PreviewModule(static_cast<int>(k), moduleInfo.name);
+                        }
+                        if (ImGui::IsItemHovered())
+                        {
+                            if (moduleInfo.hasMetrics)
+                            {
+                                ImGui::SetTooltip("%s(%s)\n脚印 %.1f x %.1f  高 %.1f  三角形 %d",
+                                                  moduleInfo.name.c_str(), moduleInfo.params.c_str(),
+                                                  moduleInfo.footprintX, moduleInfo.footprintY, moduleInfo.height,
+                                                  moduleInfo.triangles);
+                            }
+                            else if (!moduleInfo.params.empty())
+                            {
+                                ImGui::SetTooltip("%s(%s)", moduleInfo.name.c_str(), moduleInfo.params.c_str());
+                            }
+                        }
+                        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 24.0f);
+                        if (ImGui::SmallButton(fmt::format(ICON_FA_PLUS "##add_{}_{}", k, moduleInfo.name).c_str()))
+                        {
+                            AddToBench(static_cast<int>(k), moduleInfo.name);
+                        }
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::SetTooltip("加入场景组装");
+                        }
+                    }
                     if (categoryOpen)
                     {
                         ImGui::TreePop();
                     }
-                    currentCategory = moduleInfo.category;
-                    categoryOpen = ImGui::TreeNodeEx(
-                        fmt::format("{}##cat_{}_{}", CategoryLabel(currentCategory), k, currentCategory).c_str(),
-                        filterBuf_[0] != '\0' ? ImGuiTreeNodeFlags_DefaultOpen : 0);
                 }
-                if (!categoryOpen)
+                if (kits_.empty())
                 {
-                    continue;
+                    ImGui::TextDisabled("assets/scad/lib 下没有 kit_*.scad");
                 }
-                const bool isSelected = selectedKit_ == static_cast<int>(k) && selectedModule_ == moduleInfo.name;
-                if (ImGui::Selectable(fmt::format("{}##sel_{}_{}", moduleInfo.name, k, moduleInfo.name).c_str(),
-                                      isSelected, 0, ImVec2(ImGui::GetContentRegionAvail().x - 34.0f, 0.0f)))
-                {
-                    PreviewModule(static_cast<int>(k), moduleInfo.name);
-                }
-                if (ImGui::IsItemHovered())
-                {
-                    if (moduleInfo.hasMetrics)
-                    {
-                        ImGui::SetTooltip("%s(%s)\n脚印 %.1f x %.1f  高 %.1f  三角形 %d", moduleInfo.name.c_str(),
-                                          moduleInfo.params.c_str(), moduleInfo.footprintX, moduleInfo.footprintY,
-                                          moduleInfo.height, moduleInfo.triangles);
-                    }
-                    else if (!moduleInfo.params.empty())
-                    {
-                        ImGui::SetTooltip("%s(%s)", moduleInfo.name.c_str(), moduleInfo.params.c_str());
-                    }
-                }
-                ImGui::SameLine(ImGui::GetContentRegionAvail().x - 24.0f);
-                if (ImGui::SmallButton(fmt::format(ICON_FA_PLUS "##add_{}_{}", k, moduleInfo.name).c_str()))
-                {
-                    AddToBench(static_cast<int>(k), moduleInfo.name);
-                }
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::SetTooltip("加入场景组装");
-                }
+                ImGui::EndChild();
+                ImGui::EndTabItem();
             }
-            if (categoryOpen)
-            {
-                ImGui::TreePop();
-            }
+            ImGui::EndTabBar();
         }
-        if (kits_.empty())
-        {
-            ImGui::TextDisabled("assets/scad/lib 下没有 kit_*.scad");
-        }
-        ImGui::EndChild();
         ImGui::End();
     }
 
@@ -1102,32 +1194,35 @@ namespace ScadLibrary
             return;
         }
 
-        if (ImGui::Button(ICON_FA_CHEVRON_RIGHT "##collapse_bench", ImVec2(30.0f, 30.0f)))
-        {
-            benchCollapsed_ = true;
-        }
-        ImGui::SameLine();
+        ImGui::AlignTextToFramePadding();
         if (workspaceMode_ == EWorkspaceMode::SceneAssembly)
         {
             if (assemblyProcedural_)
             {
-                ImGui::Text("过程场景  ·  %zu 特征 / %zu 规则", terrainProcess_.Terrain().features.size(),
+                ImGui::Text(ICON_FA_SLIDERS "  过程场景  ·  %zu 特征 / %zu 规则",
+                            terrainProcess_.Terrain().features.size(),
                             terrainProcess_.ActiveRuleCount());
             }
             else
             {
-                ImGui::Text("场景组装  ·  %zu 对象", bench_.size());
+                ImGui::Text(ICON_FA_SLIDERS "  场景属性  ·  %zu 对象", bench_.size());
             }
         }
         else if (workspaceMode_ == EWorkspaceMode::CharacterDesigner)
         {
-            ImGui::TextUnformatted("角色设计");
+            ImGui::TextUnformatted(ICON_FA_SLIDERS "  角色属性");
         }
         else
         {
-            ImGui::TextUnformatted("角色动作与装备");
+            ImGui::TextUnformatted(ICON_FA_SLIDERS "  动作与装备属性");
         }
-        ImGui::Separator();
+        ImGui::SameLine(ImGui::GetWindowWidth() - 43.0f);
+        if (NextUI::Theme::IconButton(ICON_FA_CHEVRON_RIGHT "##collapse_bench", "收起属性面板", false,
+                                      ImVec2(28.0f, 28.0f)))
+        {
+            benchCollapsed_ = true;
+        }
+        NextUI::Theme::DrawThinSeparator(0.72f);
 
         if (workspaceMode_ == EWorkspaceMode::SceneAssembly)
         {
@@ -1635,20 +1730,14 @@ namespace ScadLibrary
             OpenAssembly(assemblyPathBuf_);
         }
         ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_PLAY " 预览") && (!assemblySource_.empty() || !bench_.empty()))
-        {
-            PreviewAssemblySource();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_FLOPPY_DISK " 保存") && !openedAssemblyPath_.empty())
-        {
-            SaveAssembly(false);
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("另存为") && (!assemblySource_.empty() || !bench_.empty()))
+        ImGui::BeginDisabled(assemblySource_.empty() && bench_.empty());
+        if (ImGui::Button(ICON_FA_COPY " 另存为"))
         {
             SaveAssembly(true);
         }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::TextDisabled("保存与预览位于顶部工具栏");
 
         if (!openedAssemblyPath_.empty())
         {
@@ -3242,38 +3331,30 @@ namespace ScadLibrary
     void ScadLibraryInterface::DrawViewportToolbar(const ImVec2& viewportPos)
     {
         ImGui::SetNextWindowPos(ImVec2(viewportPos.x + 12.0f, viewportPos.y + 12.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.88f);
+        ImGui::SetNextWindowBgAlpha(0.94f);
         const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking |
             ImGuiWindowFlags_AlwaysAutoResize;
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 6.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5.0f, 5.0f));
         if (ImGui::Begin("##ScadLibraryViewportToolbar", nullptr, flags))
         {
-            ImGui::TextDisabled(ICON_FA_ARROW_POINTER);
-            ImGui::SameLine();
-            if (ImGui::SmallButton(boneGizmoOperation_ == 0 ? "[移动]" : "移动"))
+            if (NextUI::Theme::ToolbarButton(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT, "移动骨骼", boneGizmoOperation_ == 0))
             {
                 boneGizmoOperation_ = 0;
             }
             ImGui::SameLine();
-            if (ImGui::SmallButton(boneGizmoOperation_ == 1 ? "[旋转]" : "旋转"))
+            if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE, "旋转骨骼", boneGizmoOperation_ == 1))
             {
                 boneGizmoOperation_ = 1;
             }
             ImGui::SameLine();
-            if (ImGui::SmallButton(boneGizmoOperation_ == 2 ? "[缩放]" : "缩放"))
+            if (NextUI::Theme::ToolbarButton(ICON_FA_EXPAND, "缩放骨骼", boneGizmoOperation_ == 2))
             {
                 boneGizmoOperation_ = 2;
             }
-            ImGui::SameLine();
-            ImGui::TextDisabled("|");
-            ImGui::SameLine();
-            ImGui::TextDisabled("本地");
-            ImGui::SameLine();
-            ImGui::TextDisabled("|");
-            ImGui::SameLine();
-            ImGui::TextDisabled("透视");
+            NextUI::Theme::DrawVerticalSeparator(20.0f, 8.0f, 0.65f);
+            ImGui::TextDisabled("本地  ·  透视");
         }
         ImGui::End();
         ImGui::PopStyleVar(2);
@@ -3347,34 +3428,36 @@ namespace ScadLibrary
     void ScadLibraryInterface::DrawSceneGizmoToolbar(const ImVec2& viewportPos)
     {
         ImGui::SetNextWindowPos(ImVec2(viewportPos.x + 12.0f, viewportPos.y + 12.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.88f);
+        ImGui::SetNextWindowBgAlpha(0.94f);
         const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
             ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoSavedSettings;
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5.0f, 5.0f));
         if (ImGui::Begin("##SceneObjectGizmoToolbar", nullptr, flags))
         {
-            if (ImGui::SmallButton(sceneGizmoOperation_ == 0 ? "[移动]" : "移动"))
+            if (NextUI::Theme::ToolbarButton(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT, "移动对象", sceneGizmoOperation_ == 0))
             {
                 sceneGizmoOperation_ = 0;
             }
             ImGui::SameLine();
-            if (ImGui::SmallButton(sceneGizmoOperation_ == 1 ? "[旋转]" : "旋转"))
+            if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE, "旋转对象", sceneGizmoOperation_ == 1))
             {
                 sceneGizmoOperation_ = 1;
             }
-            ImGui::SameLine();
+            NextUI::Theme::DrawVerticalSeparator(20.0f, 8.0f, 0.65f);
             if (selectedBenchItem_ >= 0 && selectedBenchItem_ < static_cast<int>(bench_.size()))
             {
-                ImGui::TextDisabled("%s  ·  松手写回 SCAD", bench_[selectedBenchItem_].moduleName.c_str());
+                ImGui::Text("%s", bench_[selectedBenchItem_].moduleName.c_str());
+                NextUI::Theme::DrawTooltip("松开鼠标后写回 SCAD");
             }
             else
             {
-                ImGui::TextDisabled("从右侧对象列表选择一个对象");
+                ImGui::TextDisabled("选择右侧对象以编辑");
             }
         }
         ImGui::End();
-        ImGui::PopStyleVar();
+        ImGui::PopStyleVar(2);
     }
 
     bool ScadLibraryInterface::TerrainFeatureConsumesMouse(double x, double y) const
