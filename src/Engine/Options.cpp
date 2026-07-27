@@ -23,7 +23,7 @@ Options::Options(const int argc, const char* argv[])
 
         ("width", "The framebuffer width.", cxxopts::value<uint32_t>(Width)->default_value("1920"))
         ("height", "The framebuffer height.", cxxopts::value<uint32_t>(Height)->default_value("1080"))
-        ("present-mode", "The present mode (0 = Immediate, 1 = MailBox, 2 = FIFO, 3 = FIFORelaxed).", cxxopts::value<uint32_t>(PresentMode)->default_value("3"))
+        ("present-mode", "The present mode (0 = Immediate, 1 = MailBox, 2 = FIFO, 3 = FIFORelaxed).", cxxopts::value<uint32_t>(PresentMode)->default_value("1"))
         ("fullscreen", "Toggle fullscreen vs windowed (default: windowed).", cxxopts::value<bool>(Fullscreen)->default_value("false"))
 
         ("savefile", "Save screenshot every benchmark finish.", cxxopts::value<bool>(SaveFile)->default_value("false"))
