@@ -36,7 +36,7 @@ namespace Assets::Scad
         glm::vec4 color = glm::vec4(0.78f, 0.78f, 0.78f, 1.0f);
         std::string groupName;
         std::vector<glm::dvec3> tris; // triangle soup (3N), SCAD world space (Z-up)
-        bool faceted = false;         // skip vertex-normal smoothing (terrain)
+        bool faceted = false; // skip vertex-normal smoothing (terrain)
     };
 
     struct BucketKey
@@ -71,9 +71,9 @@ namespace Assets::Scad
         glm::vec4 color = glm::vec4(0.78f, 0.78f, 0.78f, 1.0f);
         std::string materialName;
         std::vector<glm::dvec3> tris; // triangle soup (3N), local to the owning scene node
-        bool faceted = false;         // skip vertex-normal smoothing (terrain)
-        bool terrainWater = false;    // translucent terrain water surface (split to a
-                                      // dedicated node, no raycast visibility)
+        bool faceted = false; // skip vertex-normal smoothing (terrain)
+        bool terrainWater = false; // translucent terrain water surface (split to a
+                                   // dedicated node, no raycast visibility)
     };
 
     struct SceneNode
@@ -81,6 +81,10 @@ namespace Assets::Scad
         std::string name;
         uint64_t instanceId = 0;
         glm::dmat4 localTransform = glm::dmat4(1.0);
+        int sourceLine = 0;
+        std::vector<std::pair<std::string, Value>> parameters;
+        glm::dvec4 callColor = glm::dvec4(0.78, 0.78, 0.78, 1.0);
+        bool hasCallColor = false;
         std::vector<SceneMeshBucket> meshes;
         std::vector<SceneNode> children;
     };
@@ -113,18 +117,12 @@ namespace Assets::Scad
     public:
         // modules/functions are the merged definition tables from the use/include closure.
         // mainTopLevel is the executable top-level scope of the main file only.
-        static bool Evaluate(const Scope& mainTopLevel,
-                             const std::unordered_map<std::string, StmtPtr>& modules,
-                             const std::unordered_map<std::string, StmtPtr>& functions,
-                             const ScadLoadOptions& options,
-                             EvalResult& outResult,
-                             std::string& outError);
+        static bool Evaluate(const Scope& mainTopLevel, const std::unordered_map<std::string, StmtPtr>& modules,
+                             const std::unordered_map<std::string, StmtPtr>& functions, const ScadLoadOptions& options,
+                             EvalResult& outResult, std::string& outError);
 
-        static bool EvaluateScene(const Scope& mainTopLevel,
-                                  const std::unordered_map<std::string, StmtPtr>& modules,
+        static bool EvaluateScene(const Scope& mainTopLevel, const std::unordered_map<std::string, StmtPtr>& modules,
                                   const std::unordered_map<std::string, StmtPtr>& functions,
-                                  const ScadLoadOptions& options,
-                                  SceneEvalResult& outResult,
-                                  std::string& outError);
+                                  const ScadLoadOptions& options, SceneEvalResult& outResult, std::string& outError);
     };
 } // namespace Assets::Scad

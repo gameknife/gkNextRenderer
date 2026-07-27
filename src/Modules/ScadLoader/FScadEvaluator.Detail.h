@@ -35,7 +35,7 @@ namespace Assets::Scad
         {
             glm::dvec4 color = glm::dvec4(0.78, 0.78, 0.78, 1.0);
             bool hasColor = false;
-            bool faceted = false;      // terrain: keep flat shading in the loader
+            bool faceted = false; // terrain: keep flat shading in the loader
             bool terrainWater = false; // terrain water surface (dedicated node)
             std::string materialName;
             std::string groupName;
@@ -67,7 +67,8 @@ namespace Assets::Scad
             void Pop() { frames_.pop_back(); }
             void Set(const std::string& name, const Value& v)
             {
-                if (frames_.empty()) frames_.emplace_back();
+                if (frames_.empty())
+                    frames_.emplace_back();
                 frames_.back()[name] = v;
             }
             const std::unordered_map<std::string, Value>& TopFrame() const
@@ -80,7 +81,8 @@ namespace Assets::Scad
                 for (auto it = frames_.rbegin(); it != frames_.rend(); ++it)
                 {
                     auto found = it->find(name);
-                    if (found != it->end()) return &found->second;
+                    if (found != it->end())
+                        return &found->second;
                 }
                 return nullptr;
             }
@@ -98,18 +100,16 @@ namespace Assets::Scad
         {
         public:
             Evaluator(const std::unordered_map<std::string, StmtPtr>& modules,
-                      const std::unordered_map<std::string, StmtPtr>& functions,
-                      const ScadLoadOptions& options,
-                      EvalResult& result)
-                : modules_(modules), functions_(functions), options_(options), flatResult_(&result)
+                      const std::unordered_map<std::string, StmtPtr>& functions, const ScadLoadOptions& options,
+                      EvalResult& result) :
+                modules_(modules), functions_(functions), options_(options), flatResult_(&result)
             {
             }
 
             Evaluator(const std::unordered_map<std::string, StmtPtr>& modules,
-                      const std::unordered_map<std::string, StmtPtr>& functions,
-                      const ScadLoadOptions& options,
-                      SceneEvalResult& result)
-                : modules_(modules), functions_(functions), options_(options), sceneResult_(&result)
+                      const std::unordered_map<std::string, StmtPtr>& functions, const ScadLoadOptions& options,
+                      SceneEvalResult& result) :
+                modules_(modules), functions_(functions), options_(options), sceneResult_(&result)
             {
             }
 
@@ -123,7 +123,8 @@ namespace Assets::Scad
                 GeomList geom;
                 for (const StmtPtr& s : topLevel)
                 {
-                    if (!s) continue;
+                    if (!s)
+                        continue;
                     if (s->kind == StmtKind::Assign)
                     {
                         ctx_.Set(s->name, EvalExpr(s->value));
@@ -150,7 +151,8 @@ namespace Assets::Scad
 
                 for (const StmtPtr& s : topLevel)
                 {
-                    if (!s) continue;
+                    if (!s)
+                        continue;
                     if (s->kind == StmtKind::Assign)
                     {
                         ctx_.Set(s->name, EvalExpr(s->value));
@@ -210,6 +212,10 @@ namespace Assets::Scad
                 std::string name;
                 uint64_t instanceId = 0;
                 glm::dmat4 localTransform = glm::dmat4(1.0);
+                int sourceLine = 0;
+                std::vector<std::pair<std::string, Value>> parameters;
+                glm::dvec4 callColor = glm::dvec4(0.78, 0.78, 0.78, 1.0);
+                bool hasCallColor = false;
                 std::map<uint32_t, SceneMeshBucket> meshes;
                 std::vector<std::unique_ptr<SceneNodeBuild>> children;
             };
@@ -238,23 +244,19 @@ namespace Assets::Scad
 
             struct SuppressSceneNodeGuard
             {
-                explicit SuppressSceneNodeGuard(Evaluator& owner) : owner_(owner)
-                {
-                    ++owner_.suppressSceneNodes_;
-                }
+                explicit SuppressSceneNodeGuard(Evaluator& owner) : owner_(owner) { ++owner_.suppressSceneNodes_; }
 
-                ~SuppressSceneNodeGuard()
-                {
-                    --owner_.suppressSceneNodes_;
-                }
+                ~SuppressSceneNodeGuard() { --owner_.suppressSceneNodes_; }
 
                 Evaluator& owner_;
             };
 
             void Warn(const std::string& key, const std::string& msg)
             {
-                if (flatResult_) ++flatResult_->warningCount;
-                if (sceneResult_) ++sceneResult_->warningCount;
+                if (flatResult_)
+                    ++flatResult_->warningCount;
+                if (sceneResult_)
+                    ++sceneResult_->warningCount;
                 int& count = warnOnce_[key];
                 if (count < 3)
                 {
@@ -275,18 +277,22 @@ namespace Assets::Scad
 
             void AddTriangleCount(size_t triangleCount)
             {
-                if (flatResult_) flatResult_->triangleCount += triangleCount;
-                if (sceneResult_) sceneResult_->triangleCount += triangleCount;
+                if (flatResult_)
+                    flatResult_->triangleCount += triangleCount;
+                if (sceneResult_)
+                    sceneResult_->triangleCount += triangleCount;
             }
 
             void EmitFlat(const GeomList& geom)
             {
-                if (!flatResult_) return;
+                if (!flatResult_)
+                    return;
                 for (const ColoredSoup& cs : geom)
                 {
                     const glm::vec4 c = cs.hasColor ? glm::vec4(cs.color) : glm::vec4(0.78f, 0.78f, 0.78f, 1.0f);
                     const std::string groupName = cs.groupName.empty() ? std::string("part") : cs.groupName;
-                    const uint64_t groupInstanceId = cs.groupInstanceId == 0 ? nextGroupInstanceId_++ : cs.groupInstanceId;
+                    const uint64_t groupInstanceId =
+                        cs.groupInstanceId == 0 ? nextGroupInstanceId_++ : cs.groupInstanceId;
                     const BucketKey key{groupName, groupInstanceId, QuantizeColor(c)};
                     ColorBucket& bucket = flatResult_->buckets[key];
                     bucket.color = c;
@@ -297,27 +303,33 @@ namespace Assets::Scad
                 }
             }
 
-            bool IsSceneMode() const
-            {
-                return sceneResult_ != nullptr;
-            }
+            bool IsSceneMode() const { return sceneResult_ != nullptr; }
 
-            bool ShouldCreateSceneNodeForModule() const
-            {
-                return IsSceneMode() && suppressSceneNodes_ == 0;
-            }
+            bool ShouldCreateSceneNodeForModule() const { return IsSceneMode() && suppressSceneNodes_ == 0; }
 
             SceneNodeBuild* CurrentSceneOwner() const
             {
                 return sceneOwnerStack_.empty() ? nullptr : sceneOwnerStack_.back();
             }
 
-            SceneNodeBuild* CreateSceneNode(const std::string& name, const glm::dmat4& localTransform)
+            SceneNodeBuild* CreateSceneNode(const Stmt& definition, const Stmt& call, const glm::dmat4& localTransform,
+                                            const glm::dvec4& color, bool hasColor)
             {
                 auto node = std::make_unique<SceneNodeBuild>();
-                node->name = name.empty() ? "part" : name;
+                node->name = definition.name.empty() ? "part" : definition.name;
                 node->instanceId = nextGroupInstanceId_++;
                 node->localTransform = localTransform;
+                node->sourceLine = call.line;
+                node->callColor = color;
+                node->hasCallColor = hasColor;
+                node->parameters.reserve(definition.params.size());
+                for (const Param& parameter : definition.params)
+                {
+                    if (const Value* value = ctx_.Get(parameter.name))
+                    {
+                        node->parameters.emplace_back(parameter.name, *value);
+                    }
+                }
 
                 SceneNodeBuild* raw = node.get();
                 SceneNodeBuild* parent = CurrentSceneOwner();
@@ -341,7 +353,8 @@ namespace Assets::Scad
 
                 auto node = std::make_unique<SceneNodeBuild>();
                 node->name = topLevelFallbackLabel_.empty() ? "part" : topLevelFallbackLabel_;
-                node->instanceId = topLevelFallbackInstanceId_ != 0 ? topLevelFallbackInstanceId_ : nextGroupInstanceId_++;
+                node->instanceId =
+                    topLevelFallbackInstanceId_ != 0 ? topLevelFallbackInstanceId_ : nextGroupInstanceId_++;
                 node->localTransform = glm::dmat4(1.0);
                 currentTopLevelFallbackRoot_ = node.get();
                 sceneRoots_.push_back(std::move(node));
@@ -383,6 +396,10 @@ namespace Assets::Scad
                 node.name = build.name;
                 node.instanceId = build.instanceId;
                 node.localTransform = build.localTransform;
+                node.sourceLine = build.sourceLine;
+                node.parameters = build.parameters;
+                node.callColor = build.callColor;
+                node.hasCallColor = build.hasCallColor;
                 node.meshes.reserve(build.meshes.size());
                 for (const auto& entry : build.meshes)
                 {
@@ -448,7 +465,8 @@ namespace Assets::Scad
                 GeomList out;
                 for (const StmtPtr& s : scope)
                 {
-                    if (!s) continue;
+                    if (!s)
+                        continue;
                     if (s->kind == StmtKind::Assign)
                     {
                         ctx_.Set(s->name, EvalExpr(s->value));
@@ -465,7 +483,8 @@ namespace Assets::Scad
             {
                 for (const StmtPtr& s : scope)
                 {
-                    if (!s) continue;
+                    if (!s)
+                        continue;
                     if (s->kind == StmtKind::ModuleDef)
                     {
                         localModules_.back()[s->name] = s;
@@ -482,7 +501,8 @@ namespace Assets::Scad
                 for (auto it = localModules_.rbegin(); it != localModules_.rend(); ++it)
                 {
                     auto found = it->find(name);
-                    if (found != it->end()) return found->second;
+                    if (found != it->end())
+                        return found->second;
                 }
 
                 auto found = modules_.find(name);
@@ -494,7 +514,8 @@ namespace Assets::Scad
                 for (auto it = localFunctions_.rbegin(); it != localFunctions_.rend(); ++it)
                 {
                     auto found = it->find(name);
-                    if (found != it->end()) return found->second;
+                    if (found != it->end())
+                        return found->second;
                 }
 
                 auto found = functions_.find(name);
@@ -520,8 +541,10 @@ namespace Assets::Scad
                 {
                     glm::dvec3 s(1.0);
                     const Value v = Arg(inst, "v", 0);
-                    if (v.IsNumber()) s = glm::dvec3(v.num);
-                    else v.AsVec3(s);
+                    if (v.IsNumber())
+                        s = glm::dvec3(v.num);
+                    else
+                        v.AsVec3(s);
                     return EvalScope(inst.children, xform * glm::scale(glm::dmat4(1.0), s), color, hasColor);
                 }
                 if (name == "rotate")
@@ -586,7 +609,8 @@ namespace Assets::Scad
                     ctx_.Push();
                     for (const CallArg& a : inst.args)
                     {
-                        if (!a.name.empty()) ctx_.Set(a.name, EvalExpr(a.value));
+                        if (!a.name.empty())
+                            ctx_.Set(a.name, EvalExpr(a.value));
                     }
                     GeomList g = EvalScope(inst.children, xform, color, hasColor);
                     ctx_.Pop();
@@ -597,8 +621,10 @@ namespace Assets::Scad
                     std::string msg;
                     for (size_t i = 0; i < inst.args.size(); ++i)
                     {
-                        if (i) msg += ", ";
-                        if (!inst.args[i].name.empty()) msg += inst.args[i].name + " = ";
+                        if (i)
+                            msg += ", ";
+                        if (!inst.args[i].name.empty())
+                            msg += inst.args[i].name + " = ";
                         msg += ValueToString(EvalExpr(inst.args[i].value));
                     }
                     SPDLOG_INFO("SCAD: ECHO: {}", msg);
@@ -671,13 +697,15 @@ namespace Assets::Scad
                 int instIdx = 0;
                 for (const StmtPtr& s : inst.children)
                 {
-                    if (!s) continue;
+                    if (!s)
+                        continue;
                     if (s->kind == StmtKind::Assign)
                     {
                         ctx_.Set(s->name, EvalExpr(s->value));
                         continue;
                     }
-                    if (s->kind != StmtKind::Instance) continue;
+                    if (s->kind != StmtKind::Instance)
+                        continue;
                     GeomList g = EvalInstance(*s, xform, color, hasColor);
                     if (instIdx == 0)
                     {
@@ -697,15 +725,18 @@ namespace Assets::Scad
                     }
                     else
                     {
-                        for (ColoredSoup& cs : g) negatives.push_back(std::move(cs.soup));
+                        for (ColoredSoup& cs : g)
+                            negatives.push_back(std::move(cs.soup));
                     }
                     ++instIdx;
                 }
-                if (positives.empty()) return {};
+                if (positives.empty())
+                    return {};
 
                 // Union the positive parts into one solid, then subtract.
                 bool unionOk = false;
-                TriSoup positiveSolid = (positives.size() == 1) ? std::move(positives[0]) : ScadCsg::Union(positives, unionOk);
+                TriSoup positiveSolid =
+                    (positives.size() == 1) ? std::move(positives[0]) : ScadCsg::Union(positives, unionOk);
 
                 bool ok = false;
                 TriSoup r = ScadCsg::Difference(positiveSolid, negatives, ok);
@@ -740,13 +771,15 @@ namespace Assets::Scad
                 bool gotColor = false;
                 for (const StmtPtr& s : inst.children)
                 {
-                    if (!s) continue;
+                    if (!s)
+                        continue;
                     if (s->kind == StmtKind::Assign)
                     {
                         ctx_.Set(s->name, EvalExpr(s->value));
                         continue;
                     }
-                    if (s->kind != StmtKind::Instance) continue;
+                    if (s->kind != StmtKind::Instance)
+                        continue;
                     GeomList g = EvalInstance(*s, xform, color, hasColor);
                     std::vector<TriSoup> parts;
                     for (ColoredSoup& cs : g)
@@ -762,7 +795,8 @@ namespace Assets::Scad
                         }
                         parts.push_back(std::move(cs.soup));
                     }
-                    if (parts.empty()) continue;
+                    if (parts.empty())
+                        continue;
                     bool uok = false;
                     operands.push_back(parts.size() == 1 ? std::move(parts[0]) : ScadCsg::Union(parts, uok));
                 }
@@ -847,7 +881,8 @@ namespace Assets::Scad
                     const CallArg& binding = inst.args[argIndex];
                     std::vector<Value> values;
                     BindingValues(EvalExpr(binding.value), values);
-                    if (values.empty()) return;
+                    if (values.empty())
+                        return;
 
                     for (const Value& value : values)
                     {
@@ -865,7 +900,8 @@ namespace Assets::Scad
             static void EnumerateRange(const Value& r, std::vector<Value>& out)
             {
                 double step = r.rangeStep;
-                if (step == 0.0) step = 1.0;
+                if (step == 0.0)
+                    step = 1.0;
                 const double begin = r.rangeBegin;
                 const double end = r.rangeEnd;
                 const double eps = 1e-9;
@@ -886,7 +922,8 @@ namespace Assets::Scad
                 }
             }
 
-            GeomList CallUserModule(const Stmt& def, const Stmt& call, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor)
+            GeomList CallUserModule(const Stmt& def, const Stmt& call, const glm::dmat4& xform, const glm::dvec4& color,
+                                    bool hasColor)
             {
                 if (depth_ >= options_.maxRecursionDepth)
                 {
@@ -905,7 +942,7 @@ namespace Assets::Scad
                 GeomList g;
                 if (createSceneNode)
                 {
-                    SceneNodeBuild* node = CreateSceneNode(def.name, xform);
+                    SceneNodeBuild* node = CreateSceneNode(def, call, xform, color, hasColor);
                     sceneOwnerStack_.push_back(node);
                     g = EvalScope(def.body, glm::dmat4(1.0), color, hasColor);
                     EmitSceneGeometry(g);
@@ -929,7 +966,8 @@ namespace Assets::Scad
                 int count = 0;
                 for (const StmtPtr& s : scope)
                 {
-                    if (s && s->kind == StmtKind::Instance) ++count;
+                    if (s && s->kind == StmtKind::Instance)
+                        ++count;
                 }
                 return count;
             }
@@ -938,7 +976,8 @@ namespace Assets::Scad
             // popping the current level so nested children() resolves to the outer scope.
             GeomList EvalChildren(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor)
             {
-                if (childrenStack_.empty()) return {};
+                if (childrenStack_.empty())
+                    return {};
                 const Scope* level = childrenStack_.back();
                 childrenStack_.pop_back();
 
@@ -953,7 +992,8 @@ namespace Assets::Scad
                     int idx = 0;
                     for (const StmtPtr& s : *level)
                     {
-                        if (!s || s->kind != StmtKind::Instance) continue;
+                        if (!s || s->kind != StmtKind::Instance)
+                            continue;
                         if (idx == want)
                         {
                             AppendMove(result, EvalInstance(*s, xform, color, hasColor));
@@ -973,8 +1013,10 @@ namespace Assets::Scad
                 std::unordered_map<std::string, Value> named;
                 for (const CallArg& a : args)
                 {
-                    if (a.name.empty()) positional.push_back(EvalExpr(a.value));
-                    else named[a.name] = EvalExpr(a.value);
+                    if (a.name.empty())
+                        positional.push_back(EvalExpr(a.value));
+                    else
+                        named[a.name] = EvalExpr(a.value);
                 }
 
                 size_t posIdx = 0;
@@ -1018,7 +1060,8 @@ namespace Assets::Scad
 
             std::unordered_map<std::string, std::shared_ptr<const FTerrainData>> terrainCache_;
 
-            GeomList EvalLinearExtrude(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor);
+            GeomList EvalLinearExtrude(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color,
+                                       bool hasColor);
 
             // --------------------------------------------------------------
             // 2D sub-evaluation (for linear_extrude / rotate_extrude children)
@@ -1031,7 +1074,8 @@ namespace Assets::Scad
             // Collects closed 2D outlines (after nested 2D transforms) from a scope.
             void Collect2D(const Scope& children, const glm::dmat3& m, std::vector<std::vector<glm::dvec2>>& out);
 
-            GeomList EvalRotateExtrude(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor);
+            GeomList EvalRotateExtrude(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color,
+                                       bool hasColor);
 
             // --------------------------------------------------------------
             // Argument / transform helpers

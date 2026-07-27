@@ -4,10 +4,10 @@ $fn = 12;
 use <../lib/kit_old_city.scad>
 use <../lib/kit_city_hd.scad>
 
-color([0.50, 0.51, 0.53]) translate([0, 0, -0.15]) cube([80.0, 80.0, 0.3], center = true);
+color([0.50, 0.51, 0.53]) translate([0, 0, -0.15]) cube([98.0, 98.0, 0.3], center = true);
 
-translate([-14.00, 8.00, 0]) rotate([0, 0, 12]) scale([1.000, 1.000, 1.000]) oc_bldg_house(seed = 3);
-translate([12.00, 9.00, 0]) rotate([0, 0, -18]) scale([1.000, 1.000, 1.000]) oc_bldg_house(seed = 7);
-translate([0.00, -8.00, 0]) rotate([0, 0, 0]) scale([1.000, 1.000, 1.000]) oc_prop_well();
-translate([-9.00, -15.00, 0]) rotate([0, 0, 0]) scale([1.100, 1.100, 1.100]) hc_nature_tree(1.0, 4);
-translate([10.00, -15.00, 0]) rotate([0, 0, 0]) scale([1.200, 1.200, 1.200]) oc_nature_pine(1.0);
+translate([-14.0000, 8.0000, 0.0000]) rotate([0.0000, 0.0000, 12.0000]) scale([1.00000, 1.00000, 1.00000]) oc_bldg_house(seed = 3);
+translate([11.3407, 6.9709, 0.0000]) rotate([0.0000, 0.0000, -18.0000]) scale([1.00000, 1.00000, 1.00000]) oc_bldg_house(seed = 7);
+translate([11.6598, -8.0000, 0.0000]) rotate([0.0000, -0.0000, 0.0000]) scale([1.00000, 1.00000, 1.00000]) oc_prop_well();
+translate([-9.0000, -17.0456, 0.0000]) rotate([0.0000, -0.0000, 0.0000]) scale([1.10000, 1.10000, 1.10000]) hc_nature_tree(1.0, 4);
+translate([5.4065, -18.9976, 0.0000]) rotate([0.0000, -0.0000, 0.0000]) scale([1.20000, 1.20000, 1.20000]) oc_nature_pine(1.0);

@@ -69,9 +69,10 @@ ScadLibrary 顶栏把作者工具组织成三个应用级模式，每个模式�
 - **角色台（Ctrl+2）**：隐藏通用 kit 浏览器，扩大角色预览，右侧集中造型与颜色；
 - **角色工作室（Ctrl+3）**：最大化动作预览区，并提供更宽的动作、骨架与装备编辑器。
 
-场景组装会递归发现所有引用 `kit_*.scad` 的场景。复杂手写场景保留完整源码编辑；
-ScadLibrary 生成的固定变换链平铺场景可重新解析成对象列表。未保存源码通过工作区副本
-预览，保存限制在 `assets/scad` 且禁止覆盖 `lib/`。新建通用场景写入 `assets/scad/scenes/`；
+场景组装会递归发现所有引用 `kit_*.scad` 的场景。复杂手写场景通过 ScadLoader 求值
+变量、循环、条件和 module 引用，将最终 Kit 实例展开成可编辑对象；展开编辑必须另存副本，
+原文件仍保留完整源码。ScadLibrary 生成的固定变换链平铺场景可无损往返对象列表。未保存
+源码通过工作区副本预览，保存限制在 `assets/scad` 且禁止覆盖 `lib/`。新建通用场景写入 `assets/scad/scenes/`；
 `gen/` 仍视为可被规格重新生成覆盖的产物。完整目录约定见 `assets/scad/README.md`，
 回归脚本为 `assets/agentscripts/scadlibrary-assembly.agentscript.json`。
 

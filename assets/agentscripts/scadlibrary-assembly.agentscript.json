@@ -33,6 +33,84 @@
       "ui": true
     },
     {
+      "type": "click",
+      "at": {
+        "norm": [0.463, 0.484]
+      }
+    },
+    {
+      "type": "wait-frames",
+      "n": 4
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/scadlibrary_assembly_gizmo",
+      "ui": true
+    },
+    {
+      "type": "click",
+      "at": {
+        "norm": [0.12, 0.196]
+      }
+    },
+    {
+      "type": "wait-frames",
+      "n": 240
+    },
+    {
+      "type": "assert",
+      "query": "scene.nodeCount",
+      "op": "ge",
+      "value": 100
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/scadlibrary_assembly_evaluated",
+      "ui": true
+    },
+    {
+      "type": "click",
+      "at": {
+        "norm": [0.746, 0.396]
+      }
+    },
+    {
+      "type": "wait-frames",
+      "n": 240
+    },
+    {
+      "type": "assert",
+      "query": "scene.nodeCount",
+      "op": "ge",
+      "value": 100
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/scadlibrary_assembly_flat_preview",
+      "ui": true
+    },
+    {
+      "type": "click",
+      "at": {
+        "norm": [0.12, 0.264]
+      }
+    },
+    {
+      "type": "wait-frames",
+      "n": 300
+    },
+    {
+      "type": "assert",
+      "query": "scene.nodeCount",
+      "op": "ge",
+      "value": 50
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/scadlibrary_assembly_layout_evaluated",
+      "ui": true
+    },
+    {
       "type": "quit"
     }
   ]

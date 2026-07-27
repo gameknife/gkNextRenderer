@@ -3,13 +3,13 @@
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Data/Material.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/TerrainComponent.hpp"
 #include "Modules/ScadLoader/FScadEvaluator.h"
 #include "Modules/ScadLoader/FScadLexer.h"
 #include "Modules/ScadLoader/FScadLoader.h"
 #include "Modules/ScadLoader/FScadParser.h"
 #include "Modules/ScadLoader/FScadTerrain.h"
-#include "Engine/Runtime/Components/RenderComponent.hpp"
-#include "Engine/Runtime/Components/TerrainComponent.hpp"
 
 #include <chrono>
 #include <filesystem>
@@ -21,9 +21,7 @@ using namespace Assets::Scad;
 
 namespace
 {
-    void SplitProgram(const std::string& src,
-                      Scope& outTop,
-                      std::unordered_map<std::string, StmtPtr>& outModules,
+    void SplitProgram(const std::string& src, Scope& outTop, std::unordered_map<std::string, StmtPtr>& outModules,
                       std::unordered_map<std::string, StmtPtr>& outFunctions)
     {
         std::vector<Token> tokens;
@@ -35,9 +33,12 @@ namespace
 
         for (const StmtPtr& s : scope)
         {
-            if (s->kind == StmtKind::ModuleDef) outModules[s->name] = s;
-            else if (s->kind == StmtKind::FunctionDef) outFunctions[s->name] = s;
-            else outTop.push_back(s);
+            if (s->kind == StmtKind::ModuleDef)
+                outModules[s->name] = s;
+            else if (s->kind == StmtKind::FunctionDef)
+                outFunctions[s->name] = s;
+            else
+                outTop.push_back(s);
         }
     }
 
@@ -72,7 +73,8 @@ namespace
     size_t TotalTriangles(const EvalResult& result)
     {
         size_t tris = 0;
-        for (const auto& entry : result.buckets) tris += entry.second.tris.size() / 3;
+        for (const auto& entry : result.buckets)
+            tris += entry.second.tris.size() / 3;
         return tris;
     }
 
@@ -83,14 +85,13 @@ namespace
 
     // Shared test terrain: mountain + river + pad + road + lake + plateau.
     // The scad literal and the C++ spec below must stay in sync.
-    const char* kTerrScad =
-        "TERR = [\"gkterr1\", [120, 100], [60, 50], 7, [0, 1.2, 0.5], undef, \"temperate\",\n"
-        "  [[\"mountain\", [-30, 25], 28, 14, 0.5],\n"
-        "   [\"river\", [[-30, 25], [-10, 5], [0, -10], [5, -48]], 5, 1.4],\n"
-        "   [\"pad\", [25, -20], [18, 12], 0],\n"
-        "   [\"road\", [[-50, -30], [0, -25], [14, -22]], 3],\n"
-        "   [\"lake\", [35, 30], 12, 1.5],\n"
-        "   [\"plateau\", [-40, -30], 14, 5]]];\n";
+    const char* kTerrScad = "TERR = [\"gkterr1\", [120, 100], [60, 50], 7, [0, 1.2, 0.5], undef, \"temperate\",\n"
+                            "  [[\"mountain\", [-30, 25], 28, 14, 0.5],\n"
+                            "   [\"river\", [[-30, 25], [-10, 5], [0, -10], [5, -48]], 5, 1.4],\n"
+                            "   [\"pad\", [25, -20], [18, 12], 0],\n"
+                            "   [\"road\", [[-50, -30], [0, -25], [14, -22]], 3],\n"
+                            "   [\"lake\", [35, 30], 12, 1.5],\n"
+                            "   [\"plateau\", [-40, -30], 14, 5]]];\n";
 
     FTerrainSpec MakeTestSpec()
     {
@@ -359,26 +360,25 @@ TEST_CASE("ScadTerrain eval: gk_terrain_height matches the built mesh", "[Unit][
 {
     const auto data = ScadTerrain::Build(MakeTestSpec());
 
-    const EvalResult result = EvalProgram(
-        std::string(kTerrScad) +
-        "translate([12, 8, gk_terrain_height(TERR, 12, 8)]) cube(1);\n");
+    const EvalResult result =
+        EvalProgram(std::string(kTerrScad) + "translate([12, 8, gk_terrain_height(TERR, 12, 8)]) cube(1);\n");
     CHECK(result.warningCount == 0);
     REQUIRE(result.buckets.size() == 1);
 
     double minZ = 1e30;
     for (const auto& entry : result.buckets)
     {
-        for (const glm::dvec3& v : entry.second.tris) minZ = std::min(minZ, v.z);
+        for (const glm::dvec3& v : entry.second.tris)
+            minZ = std::min(minZ, v.z);
     }
     CHECK(minZ == Catch::Approx(data->HeightAt(12.0, 8.0)).margin(1e-6));
 }
 
 TEST_CASE("ScadTerrain scene: faceted + water flags and terrain payload", "[Unit][Scad][ScadTerrain]")
 {
-    const SceneEvalResult result = EvalSceneProgram(
-        std::string(kTerrScad) +
-        "module ground() { gk_terrain(TERR); }\n"
-        "ground();\n");
+    const SceneEvalResult result = EvalSceneProgram(std::string(kTerrScad) +
+                                                    "module ground() { gk_terrain(TERR); }\n"
+                                                    "ground();\n");
     CHECK(result.warningCount == 0);
     REQUIRE(result.terrains.size() == 1);
     REQUIRE(result.terrains[0].data != nullptr);
@@ -386,7 +386,8 @@ TEST_CASE("ScadTerrain scene: faceted + water flags and terrain payload", "[Unit
     const SceneNode* ground = nullptr;
     for (const SceneNode& root : result.roots)
     {
-        if (root.name == "ground") ground = &root;
+        if (root.name == "ground")
+            ground = &root;
     }
     REQUIRE(ground != nullptr);
 
@@ -417,8 +418,7 @@ TEST_CASE("ScadTerrain scene: non-terrain geometry keeps default flags", "[Unit]
 TEST_CASE("ScadTerrain loader: water splits to a raycast-invisible node", "[Unit][Scad][ScadTerrain]")
 {
     ScopedDir dir;
-    const std::filesystem::path mainPath = dir.Write("terrain.scad",
-        std::string(kTerrScad) + "gk_terrain(TERR);\n");
+    const std::filesystem::path mainPath = dir.Write("terrain.scad", std::string(kTerrScad) + "gk_terrain(TERR);\n");
 
     Assets::EnvironmentSetting environment;
     std::vector<std::shared_ptr<Assets::Node>> nodes;
@@ -428,15 +428,17 @@ TEST_CASE("ScadTerrain loader: water splits to a raycast-invisible node", "[Unit
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene(
-        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
 
     const std::shared_ptr<Assets::Node>* waterNode = nullptr;
     const std::shared_ptr<Assets::Node>* landNode = nullptr;
     for (const std::shared_ptr<Assets::Node>& node : nodes)
     {
-        if (node->GetName().find("__water") != std::string::npos) waterNode = &node;
-        else if (node->GetComponent<Runtime::RenderComponent>()) landNode = &node;
+        if (node->GetName().find("__water") != std::string::npos)
+            waterNode = &node;
+        else if (node->GetComponent<Runtime::RenderComponent>())
+            landNode = &node;
     }
     REQUIRE(waterNode != nullptr);
     REQUIRE(landNode != nullptr);
@@ -453,7 +455,8 @@ TEST_CASE("ScadTerrain loader: water splits to a raycast-invisible node", "[Unit
     bool sawWaterMaterial = false;
     for (const Assets::FMaterial& material : materials)
     {
-        if (material.name_ == "terrain_water") sawWaterMaterial = true;
+        if (material.name_ == "terrain_water")
+            sawWaterMaterial = true;
     }
     CHECK(sawWaterMaterial);
 }
@@ -461,8 +464,7 @@ TEST_CASE("ScadTerrain loader: water splits to a raycast-invisible node", "[Unit
 TEST_CASE("ScadTerrain loader: TerrainComponent matches the evaluated heightfield", "[Unit][Scad][ScadTerrain]")
 {
     ScopedDir dir;
-    const std::filesystem::path mainPath = dir.Write("terrain.scad",
-        std::string(kTerrScad) + "gk_terrain(TERR);\n");
+    const std::filesystem::path mainPath = dir.Write("terrain.scad", std::string(kTerrScad) + "gk_terrain(TERR);\n");
 
     Assets::EnvironmentSetting environment;
     std::vector<std::shared_ptr<Assets::Node>> nodes;
@@ -472,8 +474,8 @@ TEST_CASE("ScadTerrain loader: TerrainComponent matches the evaluated heightfiel
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene(
-        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
 
     std::shared_ptr<Runtime::TerrainComponent> terrain;
     for (const std::shared_ptr<Assets::Node>& node : nodes)

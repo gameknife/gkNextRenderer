@@ -30,6 +30,25 @@
 
 每个 user module 调用实例形成逻辑 Node；直属几何按量化 RGBA 分桶并尽量合并进多-section Model。材质槽超过引擎上限时拆成同名 render 子节点。alpha `< 0.99` 的 bucket 使用透明 Dielectric 路径。
 
+`SceneEvalResult::SceneNode` 同时保留 module 调用的源行、求值后的具名参数、调用点颜色和
+局部变换。ScadLibrary 使用这些作者元数据沿 module 调用树提取最终 Kit 实例；它不改变
+运行时 Node/Model 的装配语义。
+
+ScadLibrary 场景对象 Gizmo 在引擎 Y-up 与 SCAD Z-up 之间用 `ScadToWorldBasis` 双向转换。
+拖动期间直接更新匹配实例的运行时 Node，并用 `Scene::MarkTransformDirty()` 刷新 GPU 变换；
+松手只持久化文件，不触发 SCAD 重载。平铺场景会把三轴 `translate` / `rotate` 写回原 SCAD；
+复杂求值场景则写入 `assets/scad/scenes/*_editable.scad` 的确定实例副本，禁止用展开结果
+覆盖原程序结构。
+
+视口点选使用引擎 CPU Picking 返回的 render-node instance ID，再沿 `Node::GetParent()` 向上
+追溯 Kit 调用节点。求值场景优先匹配 evaluator 保留的稳定 instance ID；平铺场景以模块名
+和世界变换消除同名实例歧义。选中状态同步到对象列表和 Gizmo；首次点选的同一次鼠标按压
+不会立即抓取刚出现的 Gizmo。
+
+程序化场景扁平化时，ScadLibrary 会从原源码独立提取 TERR 声明与 `gk_terrain(...)` 语句，
+并在 Kit 实例列表之前原样写入预览/可编辑副本。Terrain 仍由原生 `gk_terrain` evaluator
+重建，不应被转换为普通 Kit 实例或在 Gizmo 保存时丢弃。
+
 ## 当前语言面
 
 - **图元 3D**：`cube`、`sphere`、`cylinder`(含 r1/r2 圆锥)、`polyhedron`

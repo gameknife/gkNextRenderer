@@ -6,12 +6,14 @@
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
+#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
 
 #include <glm/glm.hpp>
 #include <imgui.h>
 
 #include <algorithm>
+#include <limits>
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config,
                                                          Runtime::Config::Options& options, NextEngine* engine)
@@ -149,6 +151,21 @@ bool ScadLibraryGameInstance::OnMouseButton(SDL_Event& event)
         return true;
     }
     cameraController_.OnMouseButton(event);
+    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT &&
+        ui_->WorkspaceMode() == ScadLibrary::EWorkspaceMode::SceneAssembly)
+    {
+        const glm::vec2 mousePos = GetEngine().GetMousePos();
+        glm::vec3 origin;
+        glm::vec3 direction;
+        Runtime::EngineHelper::GetScreenToWorldRay(mousePos, origin, direction);
+        GetEngine().RayCast(origin, direction,
+                            [this](Assets::RayCastResult result)
+                            {
+                                ui_->SelectSceneObjectFromViewport(result.Hit ? result.InstanceId
+                                                                              : std::numeric_limits<uint32_t>::max());
+                                return true;
+                            });
+    }
     return true;
 }
 

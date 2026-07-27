@@ -9,6 +9,8 @@
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Modules/ScadLoader/FScadEvaluator.h"
+#include "Modules/ScadLoader/FScadShared.h"
 #include "ThirdParty/ImGuizmo/ImGuizmo.h"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
@@ -25,7 +27,9 @@
 #include <fstream>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/quaternion.hpp>
 #include <limits>
 #include <regex>
 #include <spdlog/spdlog.h>
@@ -40,6 +44,15 @@ namespace ScadLibrary
         constexpr float kCollapsedRailWidth = 46.0f;
         constexpr int kBenchGridColumns = 6;
         constexpr float kBenchGridStep = 14.0f;
+
+        glm::mat4 SceneObjectWorldMatrix(const FBenchItem& item)
+        {
+            const glm::dmat4 scadMatrix = glm::translate(glm::dmat4(1.0), glm::dvec3(item.x, item.y, item.z)) *
+                Assets::Scad::ScadRotateXYZ(glm::dvec3(item.rotX, item.rotY, item.rotZ)) *
+                glm::scale(glm::dmat4(1.0), glm::dvec3(item.scale, item.scaleY, item.scaleZ));
+            const glm::dmat4 basis = Assets::Scad::ScadToWorldBasis(1.0);
+            return glm::mat4(basis * scadMatrix * glm::inverse(basis));
+        }
 
         std::filesystem::path WorkspaceDir() { return std::filesystem::current_path() / "scad_library"; }
 
@@ -168,6 +181,213 @@ namespace ScadLibrary
                 }
             }
             return dependencies;
+        }
+
+        std::string ScadValueSource(const Assets::Scad::Value& value)
+        {
+            using Value = Assets::Scad::Value;
+            switch (value.type)
+            {
+            case Value::Type::Number:
+                return fmt::format("{:.9g}", value.num);
+            case Value::Type::Bool:
+                return value.boolean ? "true" : "false";
+            case Value::Type::Str:
+                {
+                    std::string escaped;
+                    escaped.reserve(value.str.size() + 2);
+                    for (const char character : value.str)
+                    {
+                        if (character == '\\' || character == '"')
+                        {
+                            escaped.push_back('\\');
+                        }
+                        escaped.push_back(character);
+                    }
+                    return fmt::format("\"{}\"", escaped);
+                }
+            case Value::Type::Vec:
+                {
+                    std::string result = "[";
+                    for (size_t index = 0; index < value.vec.size(); ++index)
+                    {
+                        if (index > 0)
+                        {
+                            result += ", ";
+                        }
+                        result += ScadValueSource(value.vec[index]);
+                    }
+                    result += "]";
+                    return result;
+                }
+            case Value::Type::Range:
+                return fmt::format("[{:.9g}:{:.9g}:{:.9g}]", value.rangeBegin, value.rangeStep, value.rangeEnd);
+            default:
+                return "undef";
+            }
+        }
+
+        std::vector<std::string> ExtractTerrainSources(const std::string& source)
+        {
+            // Preserve offsets while masking comments and strings so token
+            // positions still address the original source.
+            std::string searchable = source;
+            bool lineComment = false;
+            bool blockComment = false;
+            bool stringLiteral = false;
+            bool escaped = false;
+            for (size_t index = 0; index < searchable.size(); ++index)
+            {
+                const char character = searchable[index];
+                const char next = index + 1 < searchable.size() ? searchable[index + 1] : '\0';
+                if (lineComment)
+                {
+                    if (character == '\n')
+                    {
+                        lineComment = false;
+                    }
+                    else
+                    {
+                        searchable[index] = ' ';
+                    }
+                    continue;
+                }
+                if (blockComment)
+                {
+                    searchable[index] = character == '\n' ? '\n' : ' ';
+                    if (character == '*' && next == '/')
+                    {
+                        searchable[index + 1] = ' ';
+                        ++index;
+                        blockComment = false;
+                    }
+                    continue;
+                }
+                if (stringLiteral)
+                {
+                    if (!escaped && character == '"')
+                    {
+                        stringLiteral = false;
+                    }
+                    else
+                    {
+                        searchable[index] = character == '\n' ? '\n' : ' ';
+                    }
+                    escaped = !escaped && character == '\\';
+                    if (character != '\\')
+                    {
+                        escaped = false;
+                    }
+                    continue;
+                }
+                if (character == '/' && next == '/')
+                {
+                    searchable[index] = searchable[index + 1] = ' ';
+                    ++index;
+                    lineComment = true;
+                }
+                else if (character == '/' && next == '*')
+                {
+                    searchable[index] = searchable[index + 1] = ' ';
+                    ++index;
+                    blockComment = true;
+                }
+                else if (character == '"')
+                {
+                    stringLiteral = true;
+                }
+            }
+
+            std::vector<std::string> blocks;
+            static const std::regex terrainCallRegex(R"(\bgk_terrain\s*\()");
+            for (std::sregex_iterator it(searchable.begin(), searchable.end(), terrainCallRegex), terrainEnd;
+                 it != terrainEnd; ++it)
+            {
+                const size_t callPosition = static_cast<size_t>(it->position());
+                const size_t openParen = searchable.find('(', callPosition);
+                size_t closeParen = std::string::npos;
+                int depth = 0;
+                for (size_t cursor = openParen; cursor < searchable.size(); ++cursor)
+                {
+                    if (searchable[cursor] == '(')
+                    {
+                        ++depth;
+                    }
+                    else if (searchable[cursor] == ')' && --depth == 0)
+                    {
+                        closeParen = cursor;
+                        break;
+                    }
+                }
+                if (closeParen == std::string::npos)
+                {
+                    continue;
+                }
+                size_t statementEnd = closeParen + 1;
+                while (statementEnd < searchable.size() &&
+                       std::isspace(static_cast<unsigned char>(searchable[statementEnd])))
+                {
+                    ++statementEnd;
+                }
+                if (statementEnd < searchable.size() && searchable[statementEnd] == ';')
+                {
+                    ++statementEnd;
+                }
+
+                const size_t previousSemicolon =
+                    callPosition == 0 ? std::string::npos : searchable.rfind(';', callPosition - 1);
+                size_t statementStart = previousSemicolon == std::string::npos ? 0 : previousSemicolon + 1;
+                while (statementStart < callPosition &&
+                       std::isspace(static_cast<unsigned char>(source[statementStart])))
+                {
+                    ++statementStart;
+                }
+
+                size_t argumentStart = openParen + 1;
+                size_t argumentEnd = closeParen;
+                while (argumentStart < argumentEnd && std::isspace(static_cast<unsigned char>(source[argumentStart])))
+                {
+                    ++argumentStart;
+                }
+                while (argumentEnd > argumentStart && std::isspace(static_cast<unsigned char>(source[argumentEnd - 1])))
+                {
+                    --argumentEnd;
+                }
+                const std::string argument = source.substr(argumentStart, argumentEnd - argumentStart);
+
+                std::string block;
+                static const std::regex identifierRegex(R"([A-Za-z_][A-Za-z0-9_]*)");
+                if (std::regex_match(argument, identifierRegex))
+                {
+                    const std::regex assignmentRegex(fmt::format(R"((?:^|[;\n])\s*{}\s*=)", argument),
+                                                     std::regex_constants::ECMAScript);
+                    const std::string prefix = searchable.substr(0, callPosition);
+                    size_t assignmentStart = std::string::npos;
+                    size_t assignmentEnd = std::string::npos;
+                    for (std::sregex_iterator assignment(prefix.begin(), prefix.end(), assignmentRegex),
+                         assignmentEndIt;
+                         assignment != assignmentEndIt; ++assignment)
+                    {
+                        assignmentStart = static_cast<size_t>(assignment->position());
+                        if (prefix[assignmentStart] == ';' || prefix[assignmentStart] == '\n')
+                        {
+                            ++assignmentStart;
+                        }
+                        assignmentEnd = searchable.find(';', assignmentStart);
+                    }
+                    if (assignmentStart != std::string::npos && assignmentEnd != std::string::npos)
+                    {
+                        block = source.substr(assignmentStart, assignmentEnd - assignmentStart + 1);
+                        block += "\n";
+                    }
+                }
+                block += source.substr(statementStart, statementEnd - statementStart);
+                if (std::find(blocks.begin(), blocks.end(), block) == blocks.end())
+                {
+                    blocks.push_back(std::move(block));
+                }
+            }
+            return blocks;
         }
     } // namespace
 
@@ -299,6 +519,13 @@ namespace ScadLibrary
             DrawBoneGizmo(ImVec2(viewport->Pos.x + leftWidth, panelY),
                           ImVec2(std::max(1.0f, viewport->Size.x - leftWidth - rightWidth),
                                  std::max(1.0f, panelHeight - timelineHeight)));
+        }
+        else if (composeMode)
+        {
+            const ImVec2 sceneViewportPos(viewport->Pos.x + leftWidth, panelY);
+            const ImVec2 sceneViewportSize(std::max(1.0f, viewport->Size.x - leftWidth - rightWidth), panelHeight);
+            DrawSceneGizmoToolbar(sceneViewportPos);
+            DrawSceneObjectGizmo(sceneViewportPos, sceneViewportSize);
         }
 
         // Deferred bench reload: wait until the drag/edit is released so the scene
@@ -894,7 +1121,10 @@ namespace ScadLibrary
 
         if (ImGui::BeginTabBar("##assembly_editor_tabs"))
         {
-            if (ImGui::BeginTabItem(fmt::format("对象 ({})", bench_.size()).c_str()))
+            const std::string objectTabLabel = assemblyTerrainSources_.empty()
+                ? fmt::format("对象 ({})", bench_.size())
+                : fmt::format("对象 ({}) · 地形 {}", bench_.size(), assemblyTerrainSources_.size());
+            if (ImGui::BeginTabItem(objectTabLabel.c_str()))
             {
                 assemblyEditorTab_ = 0;
                 ImGui::Checkbox("自动刷新", &autoReload_);
@@ -906,7 +1136,14 @@ namespace ScadLibrary
                 {
                     benchDirty_ = true;
                 }
-                if (!assemblyStructured_ && !assemblySource_.empty())
+                if (assemblyEvaluated_)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::Warning));
+                    ImGui::TextWrapped(
+                        "已按 SCAD 求值结果展开。循环、条件和 module 引用已实例化；请“另存为”可编辑副本。");
+                    ImGui::PopStyleColor();
+                }
+                else if (!assemblyStructured_ && !assemblySource_.empty())
                 {
                     ImGui::TextDisabled("该场景包含自由 SCAD 结构；完整内容请在“源码”页编辑。");
                 }
@@ -919,9 +1156,13 @@ namespace ScadLibrary
                 if (ImGui::Button(ICON_FA_TRASH " 清空") && !bench_.empty())
                 {
                     bench_.clear();
+                    selectedBenchItem_ = -1;
                     benchDirty_ = true;
                 }
                 ImGui::Separator();
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputTextWithHint("##object_filter", "搜索对象模块或参数…", objectFilterBuf_,
+                                         sizeof(objectFilterBuf_));
 
                 int removeIndex = -1;
                 int duplicateIndex = -1;
@@ -929,11 +1170,47 @@ namespace ScadLibrary
                 for (size_t i = 0; i < bench_.size(); ++i)
                 {
                     FBenchItem& benchItem = bench_[i];
+                    if (objectFilterBuf_[0] != '\0' &&
+                        benchItem.moduleName.find(objectFilterBuf_) == std::string::npos &&
+                        std::string_view(benchItem.args).find(objectFilterBuf_) == std::string_view::npos)
+                    {
+                        continue;
+                    }
                     ImGui::PushID(static_cast<int>(i));
-                    const bool open =
-                        ImGui::TreeNodeEx(fmt::format("{} #{}", benchItem.moduleName, i).c_str(),
-                                          ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap |
-                                              ImGuiTreeNodeFlags_FramePadding);
+                    ImGuiTreeNodeFlags objectFlags = ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_FramePadding;
+                    if (bench_.size() <= 64)
+                    {
+                        objectFlags |= ImGuiTreeNodeFlags_DefaultOpen;
+                    }
+                    if (selectedBenchItem_ == static_cast<int>(i))
+                    {
+                        objectFlags |= ImGuiTreeNodeFlags_Selected;
+                        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.34f, 0.68f, 0.82f));
+                        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.14f, 0.42f, 0.80f, 0.92f));
+                        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.16f, 0.48f, 0.92f, 1.0f));
+                    }
+                    const std::string objectLabel = benchItem.sourceLine > 0
+                        ? fmt::format("{} #{}  ·  L{}", benchItem.moduleName, i, benchItem.sourceLine)
+                        : fmt::format("{} #{}", benchItem.moduleName, i);
+                    const bool open = ImGui::TreeNodeEx(objectLabel.c_str(), objectFlags);
+                    if (selectedBenchItem_ == static_cast<int>(i))
+                    {
+                        ImGui::PopStyleColor(3);
+                        if (scrollToSelectedBenchItem_)
+                        {
+                            ImGui::SetScrollHereY(0.35f);
+                            scrollToSelectedBenchItem_ = false;
+                        }
+                    }
+                    if (ImGui::IsItemClicked())
+                    {
+                        selectedBenchItem_ = static_cast<int>(i);
+                        if (Assets::Node* selectedNode =
+                                ResolveSceneObjectNode(benchItem, SceneObjectWorldMatrix(benchItem)))
+                        {
+                            engine_.GetScene().SetSelectedId(selectedNode->GetInstanceId());
+                        }
+                    }
                     ImGui::SameLine(ImGui::GetContentRegionAvail().x - 52.0f);
                     if (ImGui::SmallButton(ICON_FA_COPY "##dup"))
                     {
@@ -946,18 +1223,31 @@ namespace ScadLibrary
                     }
                     if (open)
                     {
-                        float position[2] = {benchItem.x, benchItem.y};
-                        if (ImGui::DragFloat2("位置", position, 0.5f))
+                        float position[3] = {benchItem.x, benchItem.y, benchItem.z};
+                        if (ImGui::DragFloat3("位置", position, 0.5f))
                         {
                             benchItem.x = position[0];
                             benchItem.y = position[1];
+                            benchItem.z = position[2];
                             benchDirty_ = true;
                         }
-                        if (ImGui::DragFloat("旋转", &benchItem.rotZ, 1.0f, -360.0f, 360.0f, "%.0f°"))
+                        float rotation[3] = {benchItem.rotX, benchItem.rotY, benchItem.rotZ};
+                        if (ImGui::DragFloat3("旋转", rotation, 1.0f, -360.0f, 360.0f, "%.1f°"))
                         {
+                            benchItem.rotX = rotation[0];
+                            benchItem.rotY = rotation[1];
+                            benchItem.rotZ = rotation[2];
                             benchDirty_ = true;
                         }
-                        if (ImGui::DragFloat("缩放", &benchItem.scale, 0.02f, 0.05f, 20.0f, "%.2f"))
+                        float scale[3] = {benchItem.scale, benchItem.scaleY, benchItem.scaleZ};
+                        if (ImGui::DragFloat3("缩放", scale, 0.02f, 0.001f, 100.0f, "%.3f"))
+                        {
+                            benchItem.scale = scale[0];
+                            benchItem.scaleY = scale[1];
+                            benchItem.scaleZ = scale[2];
+                            benchDirty_ = true;
+                        }
+                        if (benchItem.hasColor && ImGui::ColorEdit4("颜色", benchItem.color))
                         {
                             benchDirty_ = true;
                         }
@@ -979,6 +1269,14 @@ namespace ScadLibrary
                 if (removeIndex >= 0)
                 {
                     bench_.erase(bench_.begin() + removeIndex);
+                    if (selectedBenchItem_ == removeIndex)
+                    {
+                        selectedBenchItem_ = -1;
+                    }
+                    else if (selectedBenchItem_ > removeIndex)
+                    {
+                        --selectedBenchItem_;
+                    }
                     benchDirty_ = true;
                 }
                 if (duplicateIndex >= 0)
@@ -986,7 +1284,9 @@ namespace ScadLibrary
                     FBenchItem copy = bench_[duplicateIndex];
                     copy.x += kBenchGridStep * 0.5f;
                     copy.y += kBenchGridStep * 0.5f;
+                    copy.runtimeNodeId = std::numeric_limits<uint32_t>::max();
                     bench_.push_back(copy);
+                    selectedBenchItem_ = static_cast<int>(bench_.size()) - 1;
                     benchDirty_ = true;
                 }
 
@@ -1014,6 +1314,11 @@ namespace ScadLibrary
                 {
                     assemblySourceDirty_ = true;
                     assemblyStructured_ = false;
+                    assemblyEvaluated_ = false;
+                    bench_.clear();
+                    assemblyTerrainSources_.clear();
+                    selectedBenchItem_ = -1;
+                    benchDirty_ = false;
                     openedAssemblyKits_ = FindKitDependencies(assemblySource_);
                 }
                 ImGui::EndTabItem();
@@ -1021,7 +1326,7 @@ namespace ScadLibrary
             ImGui::EndTabBar();
         }
 
-        if (assemblyStructured_ && benchDirty_)
+        if ((assemblyStructured_ || assemblyEvaluated_) && benchDirty_)
         {
             assemblySourceDirty_ = true;
         }
@@ -1192,6 +1497,7 @@ namespace ScadLibrary
         benchColCount_++;
 
         bench_.push_back(std::move(benchItem));
+        selectedBenchItem_ = static_cast<int>(bench_.size()) - 1;
         benchDirty_ = true;
     }
 
@@ -1229,6 +1535,17 @@ namespace ScadLibrary
         }
         source += "\n";
 
+        if (!assemblyTerrainSources_.empty())
+        {
+            source += "// preserved terrain payloads\n";
+            for (const std::string& terrainSource : assemblyTerrainSources_)
+            {
+                source += terrainSource;
+                source += "\n";
+            }
+            source += "\n";
+        }
+
         if (showFloor_ && !bench_.empty())
         {
             float extent = 30.0f;
@@ -1244,10 +1561,15 @@ namespace ScadLibrary
         for (const FBenchItem& benchItem : bench_)
         {
             const char* args = benchItem.args;
-            source += fmt::format(
-                "translate([{:.2f}, {:.2f}, 0]) rotate([0, 0, {:.1f}]) scale([{:.3f}, {:.3f}, {:.3f}]) {}({});\n",
-                benchItem.x, benchItem.y, benchItem.rotZ, benchItem.scale, benchItem.scale, benchItem.scale,
-                benchItem.moduleName, args);
+            if (benchItem.hasColor)
+            {
+                source += fmt::format("color([{:.5f}, {:.5f}, {:.5f}, {:.5f}]) ", benchItem.color[0],
+                                      benchItem.color[1], benchItem.color[2], benchItem.color[3]);
+            }
+            source += fmt::format("translate([{:.4f}, {:.4f}, {:.4f}]) rotate([{:.4f}, {:.4f}, {:.4f}]) "
+                                  "scale([{:.5f}, {:.5f}, {:.5f}]) {}({});\n",
+                                  benchItem.x, benchItem.y, benchItem.z, benchItem.rotX, benchItem.rotY, benchItem.rotZ,
+                                  benchItem.scale, benchItem.scaleY, benchItem.scaleZ, benchItem.moduleName, args);
         }
         return source;
     }
@@ -1262,12 +1584,15 @@ namespace ScadLibrary
         }
 
         static const std::string number = R"([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)";
-        const std::regex itemRegex("^\\s*translate\\(\\[\\s*(" + number + ")\\s*,\\s*(" + number + ")\\s*,\\s*" +
-                                       number + "\\s*\\]\\)\\s*rotate\\(\\[\\s*" + number + "\\s*,\\s*" + number +
-                                       "\\s*,\\s*(" + number + ")\\s*\\]\\)\\s*scale\\(\\[\\s*(" + number +
-                                       ")\\s*,\\s*" + number + "\\s*,\\s*" + number +
-                                       "\\s*\\]\\)\\s*([A-Za-z_][A-Za-z0-9_]*)\\((.*)\\);\\s*$",
+        const std::regex itemRegex("^\\s*translate\\(\\[\\s*(" + number + ")\\s*,\\s*(" + number + ")\\s*,\\s*(" +
+                                       number + ")\\s*\\]\\)\\s*rotate\\(\\[\\s*(" + number + ")\\s*,\\s*(" + number +
+                                       ")\\s*,\\s*(" + number + ")\\s*\\]\\)\\s*scale\\(\\[\\s*(" + number +
+                                       ")\\s*,\\s*(" + number + ")\\s*,\\s*(" + number +
+                                       ")\\s*\\]\\)\\s*([A-Za-z_][A-Za-z0-9_]*)\\((.*)\\);\\s*$",
                                    std::regex_constants::icase);
+        const std::regex colorRegex("^\\s*color\\(\\[\\s*(" + number + ")\\s*,\\s*(" + number + ")\\s*,\\s*(" + number +
+                                        ")\\s*,\\s*(" + number + ")\\s*\\]\\)\\s*(.*)$",
+                                    std::regex_constants::icase);
         const std::regex fnRegex(R"(\$fn\s*=\s*(\d+)\s*;)");
         std::smatch fnMatch;
         if (std::regex_search(source, fnMatch, fnRegex))
@@ -1276,17 +1601,28 @@ namespace ScadLibrary
         }
         showFloor_ = source.find("cube([") != std::string::npos;
         bench_.clear();
+        selectedBenchItem_ = -1;
 
         std::istringstream lines(source);
         std::string line;
         while (std::getline(lines, line))
         {
+            bool hasColor = false;
+            glm::vec4 color(0.78f, 0.78f, 0.78f, 1.0f);
+            std::smatch colorMatch;
+            if (std::regex_match(line, colorMatch, colorRegex))
+            {
+                hasColor = true;
+                color = glm::vec4(std::stof(colorMatch[1].str()), std::stof(colorMatch[2].str()),
+                                  std::stof(colorMatch[3].str()), std::stof(colorMatch[4].str()));
+                line = colorMatch[5].str();
+            }
             std::smatch match;
             if (!std::regex_match(line, match, itemRegex))
             {
                 continue;
             }
-            const std::string moduleName = match[5].str();
+            const std::string moduleName = match[10].str();
             int kitIndex = -1;
             const auto hasModule = [&](int candidate)
             {
@@ -1328,13 +1664,153 @@ namespace ScadLibrary
             item.moduleName = moduleName;
             item.x = std::stof(match[1].str());
             item.y = std::stof(match[2].str());
-            item.rotZ = std::stof(match[3].str());
-            item.scale = std::stof(match[4].str());
-            std::snprintf(item.args, sizeof(item.args), "%s", match[6].str().c_str());
+            item.z = std::stof(match[3].str());
+            item.rotX = std::stof(match[4].str());
+            item.rotY = std::stof(match[5].str());
+            item.rotZ = std::stof(match[6].str());
+            item.scale = std::stof(match[7].str());
+            item.scaleY = std::stof(match[8].str());
+            item.scaleZ = std::stof(match[9].str());
+            item.hasColor = hasColor;
+            item.color[0] = color.r;
+            item.color[1] = color.g;
+            item.color[2] = color.b;
+            item.color[3] = color.a;
+            std::snprintf(item.args, sizeof(item.args), "%s", match[11].str().c_str());
             bench_.push_back(std::move(item));
         }
         benchDirty_ = false;
         return true;
+    }
+
+    bool ScadLibraryInterface::ImportEvaluatedAssembly(const std::string& sourcePath)
+    {
+        Assets::Scad::ScadProgram program;
+        std::string error;
+        if (!Assets::Scad::LoadScadProgram(sourcePath, program, error))
+        {
+            SPDLOG_WARN("[ScadLibrary] evaluated import parse failed for {}: {}", sourcePath, error);
+            return false;
+        }
+
+        showFloor_ = false;
+        Assets::ScadLoadOptions options;
+        Assets::Scad::SceneEvalResult result;
+        if (!Assets::Scad::ScadEvaluator::EvaluateScene(program.mainTopLevel, program.modules, program.functions,
+                                                        options, result, error))
+        {
+            SPDLOG_WARN("[ScadLibrary] evaluated import failed for {}: {}", sourcePath, error);
+            return false;
+        }
+
+        assemblyTerrainSources_ = ExtractTerrainSources(ReadAssemblyTextFile(sourcePath));
+
+        const auto findKitIndex = [&](const std::string& moduleName)
+        {
+            for (const std::string& dependency : openedAssemblyKits_)
+            {
+                for (int kitIndex = 0; kitIndex < static_cast<int>(kits_.size()); ++kitIndex)
+                {
+                    if (kits_[kitIndex].name != dependency)
+                    {
+                        continue;
+                    }
+                    const bool found =
+                        std::any_of(kits_[kitIndex].modules.begin(), kits_[kitIndex].modules.end(),
+                                    [&](const FKitModuleInfo& module) { return module.name == moduleName; });
+                    if (found)
+                    {
+                        return kitIndex;
+                    }
+                }
+            }
+            return -1;
+        };
+
+        constexpr size_t maxEditableObjects = 5000;
+        const auto collect = [&](auto&& self, const Assets::Scad::SceneNode& node, const glm::dmat4& parent) -> void
+        {
+            if (bench_.size() >= maxEditableObjects)
+            {
+                return;
+            }
+            const glm::dmat4 world = parent * node.localTransform;
+            const int kitIndex = findKitIndex(node.name);
+            const bool layoutContainer = node.name.starts_with("lay_");
+            if (kitIndex >= 0 && !layoutContainer)
+            {
+                glm::dvec3 scale(1.0);
+                glm::dquat orientation(1.0, 0.0, 0.0, 0.0);
+                glm::dvec3 translation(0.0);
+                glm::dvec3 skew(0.0);
+                glm::dvec4 perspective(0.0);
+                if (!glm::decompose(world, scale, orientation, translation, skew, perspective))
+                {
+                    return;
+                }
+                const glm::dvec3 euler = glm::degrees(glm::eulerAngles(orientation));
+
+                FBenchItem item;
+                item.kitIndex = kitIndex;
+                item.moduleName = node.name;
+                item.x = static_cast<float>(translation.x);
+                item.y = static_cast<float>(translation.y);
+                item.z = static_cast<float>(translation.z);
+                item.rotX = static_cast<float>(euler.x);
+                item.rotY = static_cast<float>(euler.y);
+                item.rotZ = static_cast<float>(euler.z);
+                item.scale = static_cast<float>(scale.x);
+                item.scaleY = static_cast<float>(scale.y);
+                item.scaleZ = static_cast<float>(scale.z);
+                item.hasColor = node.hasCallColor;
+                item.color[0] = static_cast<float>(node.callColor.r);
+                item.color[1] = static_cast<float>(node.callColor.g);
+                item.color[2] = static_cast<float>(node.callColor.b);
+                item.color[3] = static_cast<float>(node.callColor.a);
+                item.evaluated = true;
+                item.sourceLine = node.sourceLine;
+                item.runtimeNodeId = static_cast<uint32_t>(node.instanceId);
+
+                std::string arguments;
+                for (const auto& [name, value] : node.parameters)
+                {
+                    if (!arguments.empty())
+                    {
+                        arguments += ", ";
+                    }
+                    arguments += fmt::format("{} = {}", name, ScadValueSource(value));
+                }
+                std::snprintf(item.args, sizeof(item.args), "%s", arguments.c_str());
+                bench_.push_back(std::move(item));
+                return;
+            }
+
+            for (const Assets::Scad::SceneNode& child : node.children)
+            {
+                self(self, child, world);
+            }
+        };
+
+        bench_.clear();
+        selectedBenchItem_ = -1;
+        for (const Assets::Scad::SceneNode& root : result.roots)
+        {
+            collect(collect, root, glm::dmat4(1.0));
+        }
+        benchDirty_ = false;
+        SPDLOG_INFO("[ScadLibrary] evaluated import {} -> {} editable kit objects ({} evaluated nodes)", sourcePath,
+                    bench_.size(), result.roots.size());
+        return !bench_.empty();
+    }
+
+    bool ScadLibraryInterface::ImportAssemblyTerrains(const std::string& source)
+    {
+        assemblyTerrainSources_ = ExtractTerrainSources(source);
+        if (!assemblyTerrainSources_.empty())
+        {
+            SPDLOG_INFO("[ScadLibrary] preserved {} terrain source block(s)", assemblyTerrainSources_.size());
+        }
+        return !assemblyTerrainSources_.empty();
     }
 
     bool ScadLibraryInterface::OpenAssembly(const std::string& path)
@@ -1364,6 +1840,13 @@ namespace ScadLibrary
             return false;
         }
 
+        static const std::regex fnRegex(R"(\$fn\s*=\s*(\d+)\s*;)");
+        std::smatch fnMatch;
+        if (std::regex_search(source, fnMatch, fnRegex))
+        {
+            fnSegments_ = std::clamp(std::stoi(fnMatch[1].str()), 3, 128);
+        }
+
         rigPreview_.SetActive(false);
         openedAssemblyPath_ = sourcePath.string();
         assemblySource_ = source;
@@ -1371,9 +1854,27 @@ namespace ScadLibrary
         assemblySourceDirty_ = false;
         bench_.clear();
         assemblyStructured_ = ParseStructuredAssembly(source);
+        if (assemblyStructured_)
+        {
+            assemblyEvaluated_ = false;
+            ImportAssemblyTerrains(source);
+        }
+        else
+        {
+            assemblyEvaluated_ = ImportEvaluatedAssembly(openedAssemblyPath_);
+        }
         const std::filesystem::path repoRoot = scadRoot.parent_path().parent_path();
         const std::string relativePath = sourcePath.lexically_relative(repoRoot).generic_string();
-        std::snprintf(assemblyPathBuf_, sizeof(assemblyPathBuf_), "%s", relativePath.c_str());
+        if (assemblyEvaluated_)
+        {
+            const std::string suggested =
+                fmt::format("assets/scad/scenes/{}_editable.scad", sourcePath.stem().string());
+            std::snprintf(assemblyPathBuf_, sizeof(assemblyPathBuf_), "%s", suggested.c_str());
+        }
+        else
+        {
+            std::snprintf(assemblyPathBuf_, sizeof(assemblyPathBuf_), "%s", relativePath.c_str());
+        }
         for (int index = 0; index < static_cast<int>(assemblies_.size()); ++index)
         {
             if (std::filesystem::path(assemblies_[index].absolutePath) == sourcePath)
@@ -1383,15 +1884,17 @@ namespace ScadLibrary
             }
         }
         engine_.RequestLoadScene({.filename = openedAssemblyPath_});
-        statusLine_ = fmt::format("已打开 {} · {} 个 Kit{}", relativePath, openedAssemblyKits_.size(),
-                                  assemblyStructured_ ? " · 可视化对象编辑" : " · 源码编辑");
+        const char* editMode = assemblyStructured_
+            ? " · 可视化对象编辑"
+            : (assemblyEvaluated_ ? " · 求值对象编辑（另存副本）" : " · 源码编辑");
+        statusLine_ = fmt::format("已打开 {} · {} 个 Kit{}", relativePath, openedAssemblyKits_.size(), editMode);
         statusError_ = openedAssemblyKits_.empty();
         return true;
     }
 
     std::string ScadLibraryInterface::BuildAssemblyPreviewSource() const
     {
-        if (assemblyStructured_)
+        if (assemblyStructured_ || assemblyEvaluated_)
         {
             return BuildBenchSource();
         }
@@ -1426,14 +1929,20 @@ namespace ScadLibrary
         rigPreview_.SetActive(false);
         if (WriteAndLoad("assembly_preview.scad", BuildAssemblyPreviewSource()))
         {
-            statusLine_ =
-                assemblyStructured_ ? fmt::format("预览 {} 个场景对象", bench_.size()) : "预览未保存的 SCAD 源码";
+            statusLine_ = (assemblyStructured_ || assemblyEvaluated_) ? fmt::format("预览 {} 个场景对象", bench_.size())
+                                                                      : "预览未保存的 SCAD 源码";
             statusError_ = false;
         }
     }
 
-    void ScadLibraryInterface::SaveAssembly(bool saveAs)
+    void ScadLibraryInterface::SaveAssembly(bool saveAs, bool reloadScene)
     {
+        if (assemblyEvaluated_ && !saveAs)
+        {
+            statusLine_ = "求值展开的对象不能覆盖原始逻辑；请使用“另存为”创建可编辑副本";
+            statusError_ = true;
+            return;
+        }
         const std::filesystem::path scadRoot = AuthoringPath("assets/scad");
         std::filesystem::path targetPath =
             saveAs ? std::filesystem::path(assemblyPathBuf_) : std::filesystem::path(openedAssemblyPath_);
@@ -1464,7 +1973,8 @@ namespace ScadLibrary
 
         std::error_code ec;
         std::filesystem::create_directories(targetPath.parent_path(), ec);
-        const std::string source = assemblyStructured_ ? BuildBenchSource(targetPath) : assemblySource_;
+        const std::string source =
+            (assemblyStructured_ || assemblyEvaluated_) ? BuildBenchSource(targetPath) : assemblySource_;
         std::ofstream output(targetPath, std::ios::binary | std::ios::trunc);
         if (!output)
         {
@@ -1480,12 +1990,18 @@ namespace ScadLibrary
         openedAssemblyKits_ = FindKitDependencies(source);
         assemblySourceDirty_ = false;
         benchDirty_ = false;
+        assemblyStructured_ = assemblyStructured_ || assemblyEvaluated_;
+        assemblyEvaluated_ = false;
         const std::filesystem::path repoRoot = scadRoot.parent_path().parent_path();
         const std::string relativePath = targetPath.lexically_relative(repoRoot).generic_string();
         std::snprintf(assemblyPathBuf_, sizeof(assemblyPathBuf_), "%s", relativePath.c_str());
-        engine_.RequestLoadScene({.filename = openedAssemblyPath_});
+        if (reloadScene)
+        {
+            engine_.RequestLoadScene({.filename = openedAssemblyPath_});
+        }
         RescanAssemblies();
-        statusLine_ = fmt::format("已保存 {}", relativePath);
+        statusLine_ = reloadScene ? fmt::format("已保存并重载 {}", relativePath)
+                                  : fmt::format("已实时更新并写回 {}", relativePath);
         statusError_ = false;
         SPDLOG_INFO("[ScadLibrary] saved scene assembly -> {}", targetPath.string());
     }
@@ -2142,6 +2658,313 @@ namespace ScadLibrary
                 nearest = distance;
                 timelineSelectedKey_ = index;
             }
+        }
+    }
+
+    void ScadLibraryInterface::DrawSceneGizmoToolbar(const ImVec2& viewportPos)
+    {
+        ImGui::SetNextWindowPos(ImVec2(viewportPos.x + 12.0f, viewportPos.y + 12.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.88f);
+        const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoSavedSettings;
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
+        if (ImGui::Begin("##SceneObjectGizmoToolbar", nullptr, flags))
+        {
+            if (ImGui::SmallButton(sceneGizmoOperation_ == 0 ? "[移动]" : "移动"))
+            {
+                sceneGizmoOperation_ = 0;
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton(sceneGizmoOperation_ == 1 ? "[旋转]" : "旋转"))
+            {
+                sceneGizmoOperation_ = 1;
+            }
+            ImGui::SameLine();
+            if (selectedBenchItem_ >= 0 && selectedBenchItem_ < static_cast<int>(bench_.size()))
+            {
+                ImGui::TextDisabled("%s  ·  松手写回 SCAD", bench_[selectedBenchItem_].moduleName.c_str());
+            }
+            else
+            {
+                ImGui::TextDisabled("从右侧对象列表选择一个对象");
+            }
+        }
+        ImGui::End();
+        ImGui::PopStyleVar();
+    }
+
+    void ScadLibraryInterface::CommitSceneGizmoEdit()
+    {
+        engine_.GetScene().MarkDirty();
+        benchDirty_ = false;
+        assemblySourceDirty_ = true;
+        if (assemblyEvaluated_)
+        {
+            SaveAssembly(true, false);
+            return;
+        }
+        if (assemblyStructured_ && !openedAssemblyPath_.empty())
+        {
+            SaveAssembly(false, false);
+            return;
+        }
+
+        assemblyStructured_ = true;
+        if (std::string_view(assemblyPathBuf_).empty())
+        {
+            std::snprintf(assemblyPathBuf_, sizeof(assemblyPathBuf_), "%s", "assets/scad/scenes/my_scene.scad");
+        }
+        SaveAssembly(true, false);
+    }
+
+    bool ScadLibraryInterface::SelectSceneObjectFromViewport(uint32_t hitInstanceId)
+    {
+        if (workspaceMode_ != EWorkspaceMode::SceneAssembly || bench_.empty())
+        {
+            return false;
+        }
+
+        Assets::Scene& scene = engine_.GetScene();
+        Assets::Node* hitNode = scene.GetNodeByInstanceId(hitInstanceId);
+        if (hitNode == nullptr)
+        {
+            selectedBenchItem_ = -1;
+            scene.ClearSelection();
+            return false;
+        }
+
+        std::vector<Assets::Node*> ancestry;
+        for (Assets::Node* node = hitNode; node != nullptr; node = node->GetParent())
+        {
+            ancestry.push_back(node);
+        }
+        std::string ancestryNames;
+        for (const Assets::Node* ancestor : ancestry)
+        {
+            ancestryNames += ancestryNames.empty() ? ancestor->GetName() : fmt::format(" <- {}", ancestor->GetName());
+        }
+        SPDLOG_INFO("[ScadLibrary] viewport pick {} -> {}", hitInstanceId, ancestryNames);
+
+        // Evaluated files already carry deterministic loader instance IDs. This
+        // is the strongest match and handles Kit instances nested under layout
+        // modules without relying on names.
+        for (Assets::Node* ancestor : ancestry)
+        {
+            const auto found = std::find_if(bench_.begin(), bench_.end(), [&](const FBenchItem& item)
+                                            { return item.runtimeNodeId == ancestor->GetInstanceId(); });
+            if (found != bench_.end())
+            {
+                selectedBenchItem_ = static_cast<int>(std::distance(bench_.begin(), found));
+                scrollToSelectedBenchItem_ = true;
+                sceneGizmoAwaitingPickRelease_ = true;
+                scene.SetSelectedId(hitInstanceId);
+                statusLine_ = fmt::format("已从视口选择 {} #{}", found->moduleName, selectedBenchItem_);
+                statusError_ = false;
+                return true;
+            }
+        }
+
+        // Structured flat scenes do not carry evaluator IDs in their text
+        // parser. Walk from the root toward the hit render node, then identify
+        // the nearest same-name instance by its world transform.
+        for (auto ancestorIt = ancestry.rbegin(); ancestorIt != ancestry.rend(); ++ancestorIt)
+        {
+            Assets::Node* ancestor = *ancestorIt;
+            int nearestIndex = -1;
+            float nearestDistance = std::numeric_limits<float>::max();
+            for (int index = 0; index < static_cast<int>(bench_.size()); ++index)
+            {
+                FBenchItem& item = bench_[index];
+                if (item.moduleName != ancestor->GetName())
+                {
+                    continue;
+                }
+
+                const glm::mat4 expectedWorld = SceneObjectWorldMatrix(item);
+                float distance = 0.0f;
+                for (int column = 0; column < 4; ++column)
+                {
+                    const glm::vec4 delta = ancestor->WorldTransform()[column] - expectedWorld[column];
+                    distance += glm::dot(delta, delta);
+                }
+                if (distance < nearestDistance)
+                {
+                    nearestDistance = distance;
+                    nearestIndex = index;
+                }
+            }
+
+            if (nearestIndex >= 0)
+            {
+                FBenchItem& selected = bench_[nearestIndex];
+                selected.runtimeNodeId = ancestor->GetInstanceId();
+                selectedBenchItem_ = nearestIndex;
+                scrollToSelectedBenchItem_ = true;
+                sceneGizmoAwaitingPickRelease_ = true;
+                scene.SetSelectedId(hitInstanceId);
+                statusLine_ = fmt::format("已从视口选择 {} #{}", selected.moduleName, selectedBenchItem_);
+                statusError_ = false;
+                return true;
+            }
+        }
+
+        selectedBenchItem_ = -1;
+        scene.ClearSelection();
+        statusLine_ = "点选内容不属于可编辑 Kit 实例";
+        statusError_ = false;
+        return false;
+    }
+
+    Assets::Node* ScadLibraryInterface::ResolveSceneObjectNode(FBenchItem& item, const glm::mat4& expectedWorld)
+    {
+        Assets::Scene& scene = engine_.GetScene();
+        if (item.runtimeNodeId != std::numeric_limits<uint32_t>::max())
+        {
+            Assets::Node* resolved = scene.GetNodeByInstanceId(item.runtimeNodeId);
+            if (resolved != nullptr && resolved->GetName() == item.moduleName)
+            {
+                return resolved;
+            }
+            item.runtimeNodeId = std::numeric_limits<uint32_t>::max();
+        }
+
+        Assets::Node* nearest = nullptr;
+        float nearestDistance = std::numeric_limits<float>::max();
+        for (const std::shared_ptr<Assets::Node>& candidate : scene.Nodes())
+        {
+            if (candidate == nullptr || candidate->GetName() != item.moduleName)
+            {
+                continue;
+            }
+
+            float distance = 0.0f;
+            const glm::mat4& candidateWorld = candidate->WorldTransform();
+            for (int column = 0; column < 4; ++column)
+            {
+                const glm::vec4 delta = candidateWorld[column] - expectedWorld[column];
+                distance += glm::dot(delta, delta);
+            }
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = candidate.get();
+            }
+        }
+        if (nearest != nullptr)
+        {
+            item.runtimeNodeId = nearest->GetInstanceId();
+        }
+        return nearest;
+    }
+
+    void ScadLibraryInterface::ApplySceneObjectTransform(FBenchItem& item, const glm::mat4& worldMatrix)
+    {
+        Assets::Node* node = ResolveSceneObjectNode(item, worldMatrix);
+        if (node == nullptr)
+        {
+            return;
+        }
+
+        glm::mat4 parentWorld(1.0f);
+        if (Assets::Node* parent = node->GetParent())
+        {
+            parentWorld = parent->WorldTransform();
+        }
+        const glm::mat4 localMatrix = glm::inverse(parentWorld) * worldMatrix;
+
+        glm::vec3 scale(1.0f);
+        glm::quat rotation(1.0f, 0.0f, 0.0f, 0.0f);
+        glm::vec3 translation(0.0f);
+        glm::vec3 skew(0.0f);
+        glm::vec4 perspective(0.0f);
+        if (!glm::decompose(localMatrix, scale, rotation, translation, skew, perspective))
+        {
+            return;
+        }
+
+        node->SetTranslation(translation);
+        node->SetRotation(glm::normalize(rotation));
+        node->SetScale(scale);
+        engine_.GetScene().MarkTransformDirty();
+    }
+
+    void ScadLibraryInterface::DrawSceneObjectGizmo(const ImVec2& viewportPos, const ImVec2& viewportSize)
+    {
+        if (viewportSize.x <= 1.0f || viewportSize.y <= 1.0f || selectedBenchItem_ < 0 ||
+            selectedBenchItem_ >= static_cast<int>(bench_.size()))
+        {
+            sceneGizmoWasUsing_ = false;
+            return;
+        }
+
+        FBenchItem& item = bench_[selectedBenchItem_];
+        glm::mat4 worldMatrix = SceneObjectWorldMatrix(item);
+        ResolveSceneObjectNode(item, worldMatrix);
+        if (sceneGizmoAwaitingPickRelease_)
+        {
+            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+            {
+                sceneGizmoAwaitingPickRelease_ = false;
+            }
+            sceneGizmoWasUsing_ = false;
+            return;
+        }
+
+        const Assets::UniformBufferObject& ubo = engine_.GetLastUniformBufferObject();
+        const glm::mat4& view = ubo.ModelView;
+        glm::mat4 projection = ubo.Projection;
+        projection[1][1] *= -1.0f;
+
+        constexpr ImGuizmo::OPERATION operations[] = {ImGuizmo::TRANSLATE, ImGuizmo::ROTATE};
+        sceneGizmoOperation_ = std::clamp(sceneGizmoOperation_, 0, 1);
+        ImGuizmo::SetAlternativeWindow(nullptr);
+        ImGuizmo::SetOrthographic(false);
+        ImGuizmo::BeginFrame();
+        ImGuizmo::SetDrawlist(ImGui::GetForegroundDrawList());
+        ImGuizmo::SetRect(viewportPos.x, viewportPos.y, viewportSize.x, viewportSize.y);
+        ImGuizmo::GetStyle().Colors[ImGuizmo::COLOR::SELECTION] = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+        ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), operations[sceneGizmoOperation_],
+                             ImGuizmo::LOCAL, glm::value_ptr(worldMatrix));
+
+        const bool usingNow = ImGuizmo::IsUsing();
+        const bool interacting = ImGuizmo::IsOver() || usingNow;
+        ImGui::GetIO().WantCaptureMouse = ImGui::GetIO().WantCaptureMouse || interacting;
+        if (usingNow)
+        {
+            const glm::dmat4 basis = Assets::Scad::ScadToWorldBasis(1.0);
+            const glm::dmat4 editedScad = glm::inverse(basis) * glm::dmat4(worldMatrix) * basis;
+            glm::dvec3 scale(1.0);
+            glm::dquat orientation(1.0, 0.0, 0.0, 0.0);
+            glm::dvec3 translation(0.0);
+            glm::dvec3 skew(0.0);
+            glm::dvec4 perspective(0.0);
+            if (glm::decompose(editedScad, scale, orientation, translation, skew, perspective))
+            {
+                orientation = glm::normalize(orientation);
+                double angleZ = 0.0;
+                double angleY = 0.0;
+                double angleX = 0.0;
+                glm::extractEulerAngleZYX(glm::toMat4(orientation), angleZ, angleY, angleX);
+                item.x = static_cast<float>(translation.x);
+                item.y = static_cast<float>(translation.y);
+                item.z = static_cast<float>(translation.z);
+                item.rotX = static_cast<float>(glm::degrees(angleX));
+                item.rotY = static_cast<float>(glm::degrees(angleY));
+                item.rotZ = static_cast<float>(glm::degrees(angleZ));
+                item.scale = static_cast<float>(scale.x);
+                item.scaleY = static_cast<float>(scale.y);
+                item.scaleZ = static_cast<float>(scale.z);
+                ApplySceneObjectTransform(item, worldMatrix);
+                sceneGizmoWasUsing_ = true;
+            }
+            return;
+        }
+
+        if (sceneGizmoWasUsing_)
+        {
+            sceneGizmoWasUsing_ = false;
+            CommitSceneGizmoEdit();
         }
     }
 

@@ -3,14 +3,14 @@
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Data/Material.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
 #include "Modules/ScadLoader/FScadCsg.h"
 #include "Modules/ScadLoader/FScadEvaluator.h"
 #include "Modules/ScadLoader/FScadLexer.h"
 #include "Modules/ScadLoader/FScadLoader.h"
 #include "Modules/ScadLoader/FScadParser.h"
 #include "Modules/ScadLoader/FScadText.h"
-#include "Engine/Runtime/Components/RenderComponent.hpp"
-#include "Engine/Utilities/FileHelper.hpp"
 
 #include <chrono>
 #include <filesystem>
@@ -38,9 +38,12 @@ namespace
         Scope top;
         for (const StmtPtr& s : scope)
         {
-            if (s->kind == StmtKind::ModuleDef) modules[s->name] = s;
-            else if (s->kind == StmtKind::FunctionDef) functions[s->name] = s;
-            else top.push_back(s);
+            if (s->kind == StmtKind::ModuleDef)
+                modules[s->name] = s;
+            else if (s->kind == StmtKind::FunctionDef)
+                functions[s->name] = s;
+            else
+                top.push_back(s);
         }
 
         Assets::ScadLoadOptions options;
@@ -53,7 +56,8 @@ namespace
     size_t TotalTriangles(const EvalResult& result)
     {
         size_t tris = 0;
-        for (const auto& entry : result.buckets) tris += entry.second.tris.size() / 3;
+        for (const auto& entry : result.buckets)
+            tris += entry.second.tris.size() / 3;
         return tris;
     }
 
@@ -83,7 +87,7 @@ namespace
     private:
         std::filesystem::path dir_;
     };
-}
+} // namespace
 
 TEST_CASE("Scad lexer tokenizes primitives and keyword arguments", "[Unit][Scad]")
 {
@@ -114,11 +118,10 @@ TEST_CASE("Scad parser builds module, function and for AST", "[Unit][Scad]")
 {
     std::vector<Token> tokens;
     std::string err;
-    REQUIRE(ScadLexer::Tokenize(
-        "function f(x) = x * 2;\n"
-        "module m(n=3) { for (i = [0:n-1]) cube(1); }\n"
-        "m();\n",
-        tokens, err));
+    REQUIRE(ScadLexer::Tokenize("function f(x) = x * 2;\n"
+                                "module m(n=3) { for (i = [0:n-1]) cube(1); }\n"
+                                "m();\n",
+                                tokens, err));
 
     Scope scope;
     REQUIRE(ScadParser::Parse(tokens, scope, err));
@@ -142,18 +145,16 @@ TEST_CASE("Scad evaluator emits a centered cube", "[Unit][Scad]")
 
 TEST_CASE("Scad evaluator resolves user modules, functions and for-loops", "[Unit][Scad]")
 {
-    const EvalResult result = EvalProgram(
-        "function side() = 1;\n"
-        "module unit() { cube(side()); }\n"
-        "for (i = [0:3]) translate([i*2, 0, 0]) unit();\n");
+    const EvalResult result = EvalProgram("function side() = 1;\n"
+                                          "module unit() { cube(side()); }\n"
+                                          "for (i = [0:3]) translate([i*2, 0, 0]) unit();\n");
     // 4 iterations * one cube each = 48 triangles.
     CHECK(TotalTriangles(result) == 48);
 }
 
 TEST_CASE("Scad evaluator resolves dependent for bindings", "[Unit][Scad]")
 {
-    const EvalResult result = EvalProgram(
-        "for (i = [0:1], j = [0:i]) translate([i, j, 0]) cube([1,1,1]);\n");
+    const EvalResult result = EvalProgram("for (i = [0:1], j = [0:i]) translate([i, j, 0]) cube([1,1,1]);\n");
 
     CHECK(result.warningCount == 0);
     CHECK(TotalTriangles(result) == 36); // (i=0,j=0) + (i=1,j=0..1)
@@ -161,13 +162,12 @@ TEST_CASE("Scad evaluator resolves dependent for bindings", "[Unit][Scad]")
 
 TEST_CASE("Scad evaluator resolves local module and function definitions", "[Unit][Scad]")
 {
-    const EvalResult result = EvalProgram(
-        "module outer() {\n"
-        "  marker(3);\n"
-        "  function y(x) = x + 2;\n"
-        "  module marker(x) { translate([0, y(x), 0]) cube([1,1,1]); }\n"
-        "}\n"
-        "outer();\n");
+    const EvalResult result = EvalProgram("module outer() {\n"
+                                          "  marker(3);\n"
+                                          "  function y(x) = x + 2;\n"
+                                          "  module marker(x) { translate([0, y(x), 0]) cube([1,1,1]); }\n"
+                                          "}\n"
+                                          "outer();\n");
 
     CHECK(result.warningCount == 0);
     CHECK(TotalTriangles(result) == 12);
@@ -188,26 +188,26 @@ TEST_CASE("Scad evaluator resolves local module and function definitions", "[Uni
 
 TEST_CASE("Scad evaluator handles generated city helpers nested inside a module", "[Unit][Scad]")
 {
-    const EvalResult result = EvalProgram(
-        "$fn = 16;\n"
-        "module city() {\n"
-        "  function wave_y(x) = -14 + 5 * sin((x + 50) * 3.2);\n"
-        "  module _tree(x, y, s=1) {\n"
-        "    color([0.42,0.22,0.08]) translate([x, y, 0.9*s]) cylinder(r=0.16*s, h=1.8*s, center=true);\n"
-        "    color([0.05,0.45,0.16]) translate([x, y, 2.0*s]) sphere(r=0.72*s);\n"
-        "  }\n"
-        "  color([0.72,0.74,0.69]) translate([0, 0, -0.08]) cube([100, 80, 0.16], center=true);\n"
-        "  color([0.08,0.38,0.78,0.68]) translate([0,0,0.18]) linear_extrude(height=0.12)\n"
-        "    polygon(points = concat(\n"
-        "      [for (x = [-50:10:50]) [x, wave_y(x)+3.2]],\n"
-        "      [for (x = [50:-10:-50]) [x, wave_y(x)-3.2]]\n"
-        "    ));\n"
-        "  for (x = [-48:8:48]) {\n"
-        "    _tree(x, wave_y(x)+5.2, 0.55);\n"
-        "    _tree(x+3, wave_y(x)-5.0, 0.5);\n"
-        "  }\n"
-        "}\n"
-        "city();\n");
+    const EvalResult result =
+        EvalProgram("$fn = 16;\n"
+                    "module city() {\n"
+                    "  function wave_y(x) = -14 + 5 * sin((x + 50) * 3.2);\n"
+                    "  module _tree(x, y, s=1) {\n"
+                    "    color([0.42,0.22,0.08]) translate([x, y, 0.9*s]) cylinder(r=0.16*s, h=1.8*s, center=true);\n"
+                    "    color([0.05,0.45,0.16]) translate([x, y, 2.0*s]) sphere(r=0.72*s);\n"
+                    "  }\n"
+                    "  color([0.72,0.74,0.69]) translate([0, 0, -0.08]) cube([100, 80, 0.16], center=true);\n"
+                    "  color([0.08,0.38,0.78,0.68]) translate([0,0,0.18]) linear_extrude(height=0.12)\n"
+                    "    polygon(points = concat(\n"
+                    "      [for (x = [-50:10:50]) [x, wave_y(x)+3.2]],\n"
+                    "      [for (x = [50:-10:-50]) [x, wave_y(x)-3.2]]\n"
+                    "    ));\n"
+                    "  for (x = [-48:8:48]) {\n"
+                    "    _tree(x, wave_y(x)+5.2, 0.55);\n"
+                    "    _tree(x+3, wave_y(x)-5.0, 0.5);\n"
+                    "  }\n"
+                    "}\n"
+                    "city();\n");
 
     CHECK(result.warningCount == 0);
     CHECK(TotalTriangles(result) > 12);
@@ -239,11 +239,10 @@ TEST_CASE("Scad difference subtracts when a CSG backend is present", "[Unit][Sca
 {
     // Inner cube fully contained -> hollow shell when the boolean backend runs;
     // first-child approximation (no backend) leaves just the outer cube.
-    const EvalResult result = EvalProgram(
-        "difference() {\n"
-        "  cube([4,4,4], center=true);\n"
-        "  cube([2,2,2], center=true);\n"
-        "}\n");
+    const EvalResult result = EvalProgram("difference() {\n"
+                                          "  cube([4,4,4], center=true);\n"
+                                          "  cube([2,2,2], center=true);\n"
+                                          "}\n");
     CHECK(result.buckets.size() == 1);
     if (ScadCsg::BackendAvailable())
     {
@@ -263,11 +262,10 @@ TEST_CASE("Scad difference cuts a through-hole with the Manifold backend", "[Uni
     }
     // A box with a slab punched all the way through must stay non-empty and
     // gain geometry relative to the solid box (12 tris).
-    const EvalResult result = EvalProgram(
-        "difference() {\n"
-        "  cube([4,4,4], center=true);\n"
-        "  cube([10,2,2], center=true);\n"
-        "}\n");
+    const EvalResult result = EvalProgram("difference() {\n"
+                                          "  cube([4,4,4], center=true);\n"
+                                          "  cube([10,2,2], center=true);\n"
+                                          "}\n");
     CHECK(result.buckets.size() == 1);
     CHECK(TotalTriangles(result) > 12);
 }
@@ -279,15 +277,14 @@ TEST_CASE("Scad difference hollows a unioned tapered cup shell", "[Unit][Scad]")
         return;
     }
 
-    const EvalResult result = EvalProgram(
-        "$fn = 96;\n"
-        "difference() {\n"
-        "  union() {\n"
-        "    cylinder(h = 90, r1 = 28, r2 = 28 * 0.95);\n"
-        "    cylinder(h = 8, r = 28 * 1.02);\n"
-        "  }\n"
-        "  translate([0, 0, 8]) cylinder(h = 91, r1 = 24, r2 = 24 * 0.95);\n"
-        "}\n");
+    const EvalResult result = EvalProgram("$fn = 96;\n"
+                                          "difference() {\n"
+                                          "  union() {\n"
+                                          "    cylinder(h = 90, r1 = 28, r2 = 28 * 0.95);\n"
+                                          "    cylinder(h = 8, r = 28 * 1.02);\n"
+                                          "  }\n"
+                                          "  translate([0, 0, 8]) cylinder(h = 91, r1 = 24, r2 = 24 * 0.95);\n"
+                                          "}\n");
 
     REQUIRE(result.buckets.size() == 1);
     const auto& tris = result.buckets.begin()->second.tris;
@@ -317,17 +314,15 @@ TEST_CASE("Scad difference hollows a unioned tapered cup shell", "[Unit][Scad]")
 
 TEST_CASE("Scad color groups split geometry into buckets", "[Unit][Scad]")
 {
-    const EvalResult result = EvalProgram(
-        "color([1,0,0]) cube(1);\n"
-        "color([0,1,0]) translate([2,0,0]) cube(1);\n");
+    const EvalResult result = EvalProgram("color([1,0,0]) cube(1);\n"
+                                          "color([0,1,0]) translate([2,0,0]) cube(1);\n");
     CHECK(result.buckets.size() == 2);
     CHECK(TotalTriangles(result) == 24);
 }
 
 TEST_CASE("Scad linear_extrude of a triangle polygon builds a prism", "[Unit][Scad]")
 {
-    const EvalResult result = EvalProgram(
-        "linear_extrude(1) polygon(points=[[0,0],[2,0],[0,2]]);\n");
+    const EvalResult result = EvalProgram("linear_extrude(1) polygon(points=[[0,0],[2,0],[0,2]]);\n");
     // triangle: top + bottom caps (1 each) + 3 side walls (2 each) = 8 triangles.
     CHECK(TotalTriangles(result) == 8);
 }
@@ -344,14 +339,14 @@ TEST_CASE("Scad linear_extrude of text builds glyph geometry when FreeType is pr
     CHECK(ascii.buckets.size() == 1);
     CHECK(TotalTriangles(ascii) > 0);
 
-    const EvalResult cjk = EvalProgram("linear_extrude(0.1) text(\"\xE9\x85\x92\xE6\xA5\xBC\", size=2.2, halign=\"center\", valign=\"center\");\n");
+    const EvalResult cjk = EvalProgram(
+        "linear_extrude(0.1) text(\"\xE9\x85\x92\xE6\xA5\xBC\", size=2.2, halign=\"center\", valign=\"center\");\n");
     CHECK(TotalTriangles(cjk) > 0); // 酒楼
 }
 
 TEST_CASE("Scad rotate_extrude revolves a 2D profile into a solid", "[Unit][Scad]")
 {
-    const EvalResult result = EvalProgram(
-        "rotate_extrude(angle=360) translate([10,0,0]) circle(r=2);\n");
+    const EvalResult result = EvalProgram("rotate_extrude(angle=360) translate([10,0,0]) circle(r=2);\n");
     CHECK(result.buckets.size() == 1);
     CHECK(TotalTriangles(result) > 0); // a torus surface
 }
@@ -359,8 +354,7 @@ TEST_CASE("Scad rotate_extrude revolves a 2D profile into a solid", "[Unit][Scad
 TEST_CASE("Scad translucent color() becomes a dielectric material", "[Unit][Scad]")
 {
     ScopedDir dir;
-    const std::filesystem::path mainPath = dir.Write("glass.scad",
-              "color([0.8,0.9,1.0,0.3]) cube([2,2,2]);\n");
+    const std::filesystem::path mainPath = dir.Write("glass.scad", "color([0.8,0.9,1.0,0.3]) cube([2,2,2]);\n");
 
     Assets::EnvironmentSetting environment;
     std::vector<std::shared_ptr<Assets::Node>> nodes;
@@ -370,8 +364,8 @@ TEST_CASE("Scad translucent color() becomes a dielectric material", "[Unit][Scad
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene(
-        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
 
     REQUIRE(materials.size() == 1);
     CHECK(materials[0].gpuMaterial_.MaterialModel == Assets::Material::Enum::Dielectric);
@@ -382,11 +376,11 @@ TEST_CASE("Scad loader: recreates module hierarchy with module names", "[Unit][S
 {
     ScopedDir dir;
     const std::filesystem::path mainPath = dir.Write("main.scad",
-              "module helper() { cube([1,1,1]); }\n"
-              "module house() { helper(); }\n"
-              "module roof() { translate([3,0,0]) cube([1,1,1]); }\n"
-              "color([1,0,0]) house();\n"
-              "color([1,0,0]) roof();\n");
+                                                     "module helper() { cube([1,1,1]); }\n"
+                                                     "module house() { helper(); }\n"
+                                                     "module roof() { translate([3,0,0]) cube([1,1,1]); }\n"
+                                                     "color([1,0,0]) house();\n"
+                                                     "color([1,0,0]) roof();\n");
 
     Assets::EnvironmentSetting environment;
     std::vector<std::shared_ptr<Assets::Node>> nodes;
@@ -396,8 +390,8 @@ TEST_CASE("Scad loader: recreates module hierarchy with module names", "[Unit][S
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene(
-        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
 
     REQUIRE(nodes.size() == 3);
     Assets::Node* house = nullptr;
@@ -430,8 +424,8 @@ TEST_CASE("Scad loader: keeps repeated leaf-module instances as separate nodes",
 {
     ScopedDir dir;
     const std::filesystem::path mainPath = dir.Write("main.scad",
-              "module panel() { cube([1,1,1]); }\n"
-              "for (x = [0, 2]) translate([x,0,0]) panel();\n");
+                                                     "module panel() { cube([1,1,1]); }\n"
+                                                     "for (x = [0, 2]) translate([x,0,0]) panel();\n");
 
     Assets::EnvironmentSetting environment;
     std::vector<std::shared_ptr<Assets::Node>> nodes;
@@ -441,8 +435,8 @@ TEST_CASE("Scad loader: keeps repeated leaf-module instances as separate nodes",
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene(
-        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
 
     REQUIRE(nodes.size() == 2);
     CHECK(nodes[0]->GetName() == "panel");
@@ -455,10 +449,10 @@ TEST_CASE("Scad loader: reuses identical module meshes and materials", "[Unit][S
 {
     ScopedDir dir;
     const std::filesystem::path mainPath = dir.Write("main.scad",
-              "PANEL_BLUE = [0.2,0.4,0.8];\n"
-              "module panel() { color(PANEL_BLUE) cube([1,1,1]); }\n"
-              "translate([0,0,0]) panel();\n"
-              "translate([2,0,0]) panel();\n");
+                                                     "PANEL_BLUE = [0.2,0.4,0.8];\n"
+                                                     "module panel() { color(PANEL_BLUE) cube([1,1,1]); }\n"
+                                                     "translate([0,0,0]) panel();\n"
+                                                     "translate([2,0,0]) panel();\n");
 
     Assets::EnvironmentSetting environment;
     std::vector<std::shared_ptr<Assets::Node>> nodes;
@@ -468,8 +462,8 @@ TEST_CASE("Scad loader: reuses identical module meshes and materials", "[Unit][S
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene(
-        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
 
     REQUIRE(nodes.size() == 2);
     REQUIRE(models.size() == 1);
@@ -488,11 +482,11 @@ TEST_CASE("Scad loader: merges direct mesh buckets under one module node", "[Uni
 {
     ScopedDir dir;
     const std::filesystem::path mainPath = dir.Write("main.scad",
-              "module facade() {\n"
-              "  color([1,0,0]) cube([1,1,1]);\n"
-              "  color([0,1,0]) translate([2,0,0]) cube([1,1,1]);\n"
-              "}\n"
-              "facade();\n");
+                                                     "module facade() {\n"
+                                                     "  color([1,0,0]) cube([1,1,1]);\n"
+                                                     "  color([0,1,0]) translate([2,0,0]) cube([1,1,1]);\n"
+                                                     "}\n"
+                                                     "facade();\n");
 
     Assets::EnvironmentSetting environment;
     std::vector<std::shared_ptr<Assets::Node>> nodes;
@@ -502,8 +496,8 @@ TEST_CASE("Scad loader: merges direct mesh buckets under one module node", "[Uni
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene(
-        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
 
     REQUIRE(nodes.size() == 1);
     CHECK(nodes[0]->GetName() == "facade");
@@ -520,9 +514,9 @@ TEST_CASE("Scad loader: nested module calls keep translated child transforms", "
 {
     ScopedDir dir;
     const std::filesystem::path mainPath = dir.Write("main.scad",
-              "module leaf() { cube([1,1,1], center=true); }\n"
-              "module parent() { translate([0,-10,0]) leaf(); }\n"
-              "parent();\n");
+                                                     "module leaf() { cube([1,1,1], center=true); }\n"
+                                                     "module parent() { translate([0,-10,0]) leaf(); }\n"
+                                                     "parent();\n");
 
     Assets::EnvironmentSetting environment;
     std::vector<std::shared_ptr<Assets::Node>> nodes;
@@ -532,8 +526,8 @@ TEST_CASE("Scad loader: nested module calls keep translated child transforms", "
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene(
-        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
 
     Assets::Node* leaf = nullptr;
     for (const std::shared_ptr<Assets::Node>& node : nodes)
@@ -567,17 +561,17 @@ TEST_CASE("Scad loader: loads the bundled beer_cup sample when present", "[Unit]
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene(
-        "assets/scad/beer_cup.scad",
-        environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(Assets::FScadLoader::LoadScadScene("assets/scad/beer_cup.scad", environment, nodes, models, materials,
+                                               lights, tracks, skeletons));
 
-    CHECK(nodes.size() > 1);   // glass, beer, foam, bubbles, handle ...
+    CHECK(nodes.size() > 1); // glass, beer, foam, bubbles, handle ...
     CHECK(models.size() > 1);
     // At least one translucent (dielectric) material for the glass/liquid.
     bool anyDielectric = false;
     for (const auto& m : materials)
     {
-        if (m.gpuMaterial_.MaterialModel == Assets::Material::Enum::Dielectric) anyDielectric = true;
+        if (m.gpuMaterial_.MaterialModel == Assets::Material::Enum::Dielectric)
+            anyDielectric = true;
     }
     CHECK(anyDielectric);
 
@@ -628,9 +622,8 @@ TEST_CASE("Scad loader: bundled beer_cup glass body is hollow", "[Unit][Scad]")
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene(
-        "assets/scad/beer_cup.scad",
-        environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(Assets::FScadLoader::LoadScadScene("assets/scad/beer_cup.scad", environment, nodes, models, materials,
+                                               lights, tracks, skeletons));
 
     int glassBodyIndex = -1;
     for (size_t i = 0; i < materials.size(); ++i)
@@ -668,44 +661,40 @@ TEST_CASE("Scad loader: bundled beer_cup glass body is hollow", "[Unit][Scad]")
 
 TEST_CASE("Scad user module children() forwards child geometry", "[Unit][Scad]")
 {
-    const EvalResult all = EvalProgram(
-        "module wrap() { translate([0,0,1]) children(); }\n"
-        "wrap() cube([2,2,2]);\n");
+    const EvalResult all = EvalProgram("module wrap() { translate([0,0,1]) children(); }\n"
+                                       "wrap() cube([2,2,2]);\n");
     CHECK(all.buckets.size() == 1);
     CHECK(TotalTriangles(all) == 12); // the single cube, forwarded
 
-    const EvalResult pick = EvalProgram(
-        "module pick() { children(0); }\n"
-        "pick() { cube([1,1,1]); cube([2,2,2]); }\n");
+    const EvalResult pick = EvalProgram("module pick() { children(0); }\n"
+                                        "pick() { cube([1,1,1]); cube([2,2,2]); }\n");
     CHECK(TotalTriangles(pick) == 12); // only child 0
 }
 
 TEST_CASE("Scad list comprehension drives a for-loop", "[Unit][Scad]")
 {
-    const EvalResult gen = EvalProgram(
-        "for (x = [for (i = [1:3]) i * 2]) translate([x,0,0]) cube([1,1,1]);\n");
+    const EvalResult gen = EvalProgram("for (x = [for (i = [1:3]) i * 2]) translate([x,0,0]) cube([1,1,1]);\n");
     CHECK(TotalTriangles(gen) == 36); // 3 cubes
 
-    const EvalResult filtered = EvalProgram(
-        "for (x = [for (i = [0:5]) if (i % 2 == 0) i]) translate([x,0,0]) cube([1,1,1]);\n");
+    const EvalResult filtered =
+        EvalProgram("for (x = [for (i = [0:5]) if (i % 2 == 0) i]) translate([x,0,0]) cube([1,1,1]);\n");
     CHECK(TotalTriangles(filtered) == 36); // i = 0,2,4 -> 3 cubes
 
-    const EvalResult eached = EvalProgram(
-        "for (x = [each [0, 5], for (i = [1:2]) i]) translate([x,0,0]) cube([1,1,1]);\n");
+    const EvalResult eached =
+        EvalProgram("for (x = [each [0, 5], for (i = [1:2]) i]) translate([x,0,0]) cube([1,1,1]);\n");
     CHECK(TotalTriangles(eached) == 48); // 0,5,1,2 -> 4 cubes
 
-    const EvalResult dependent = EvalProgram(
-        "for (x = [for (i = [1:2], j = [0:i]) i + j]) translate([x,0,0]) cube([1,1,1]);\n");
+    const EvalResult dependent =
+        EvalProgram("for (x = [for (i = [1:2], j = [0:i]) i + j]) translate([x,0,0]) cube([1,1,1]);\n");
     CHECK(dependent.warningCount == 0);
     CHECK(TotalTriangles(dependent) == 60); // i=1 has 2 j values, i=2 has 3
 }
 
 TEST_CASE("Scad echo / assert / str are accepted", "[Unit][Scad]")
 {
-    const EvalResult result = EvalProgram(
-        "echo(str(\"size=\", 5));\n"
-        "assert(1 == 1);\n"
-        "cube([1,1,1]);\n");
+    const EvalResult result = EvalProgram("echo(str(\"size=\", 5));\n"
+                                          "assert(1 == 1);\n"
+                                          "cube([1,1,1]);\n");
     CHECK(TotalTriangles(result) == 12);
 }
 
@@ -732,8 +721,8 @@ TEST_CASE("Scad loader: use imports definitions without executing previews", "[U
               "module box1() { cube([1,1,1]); }\n"
               "box1(); // standalone preview, must be ignored when use'd\n");
     const std::filesystem::path mainPath = dir.Write("main.scad",
-              "use <lib.scad>\n"
-              "box1();\n");
+                                                     "use <lib.scad>\n"
+                                                     "box1();\n");
 
     Assets::EnvironmentSetting environment;
     std::vector<std::shared_ptr<Assets::Node>> nodes;
@@ -743,8 +732,8 @@ TEST_CASE("Scad loader: use imports definitions without executing previews", "[U
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene(
-        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
 
     REQUIRE(nodes.size() == 1);
     REQUIRE(models.size() == 1);
@@ -761,10 +750,10 @@ TEST_CASE("Scad loader: comments and strings do not create use/include directive
 {
     ScopedDir dir;
     const std::filesystem::path mainPath = dir.Write("main.scad",
-              "echo(\"use <missing_from_string.scad>\");\n"
-              "// include <missing_from_comment.scad>\n"
-              "/* use <missing_from_block_comment.scad> */\n"
-              "cube([1,1,1]);\n");
+                                                     "echo(\"use <missing_from_string.scad>\");\n"
+                                                     "// include <missing_from_comment.scad>\n"
+                                                     "/* use <missing_from_block_comment.scad> */\n"
+                                                     "cube([1,1,1]);\n");
 
     Assets::EnvironmentSetting environment;
     std::vector<std::shared_ptr<Assets::Node>> nodes;
@@ -774,8 +763,8 @@ TEST_CASE("Scad loader: comments and strings do not create use/include directive
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene(
-        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
     REQUIRE(models.size() == 1);
     CHECK(models[0].NumberOfVertices() == 36);
 }
@@ -787,9 +776,9 @@ TEST_CASE("Scad loader: include executes a file even if use imported it first", 
               "module box1() { cube([1,1,1]); }\n"
               "box1();\n");
     const std::filesystem::path mainPath = dir.Write("main.scad",
-              "use <lib.scad>\n"
-              "include <lib.scad>\n"
-              "box1();\n");
+                                                     "use <lib.scad>\n"
+                                                     "include <lib.scad>\n"
+                                                     "box1();\n");
 
     Assets::EnvironmentSetting environment;
     std::vector<std::shared_ptr<Assets::Node>> nodes;
@@ -799,8 +788,8 @@ TEST_CASE("Scad loader: include executes a file even if use imported it first", 
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene(
-        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
     REQUIRE(nodes.size() == 2);
     REQUIRE(models.size() == 1);
     CHECK(nodes[0]->GetName() == "box1");
@@ -826,8 +815,8 @@ TEST_CASE("Scad loader: parse errors fail the load", "[Unit][Scad]")
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    CHECK_FALSE(Assets::FScadLoader::LoadScadScene(
-        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+    CHECK_FALSE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights,
+                                                   tracks, skeletons));
 }
 
 TEST_CASE("Scad loader: Z-up converts to engine Y-up", "[Unit][Scad]")
@@ -844,8 +833,8 @@ TEST_CASE("Scad loader: Z-up converts to engine Y-up", "[Unit][Scad]")
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene(
-        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
 
     REQUIRE(models.size() == 1);
     CHECK(models[0].GetLocalAABBMin().y == Catch::Approx(0.0f).margin(1e-5f));
@@ -870,9 +859,8 @@ TEST_CASE("Scad loader: loads the bundled old_city sample when present", "[Unit]
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene(
-        "assets/scad/old_city.scad",
-        environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(Assets::FScadLoader::LoadScadScene("assets/scad/old_city.scad", environment, nodes, models, materials,
+                                               lights, tracks, skeletons));
 
     CHECK(nodes.size() > 1);
     CHECK(models.size() > 1);
@@ -919,9 +907,12 @@ namespace
         Scope top;
         for (const StmtPtr& s : scope)
         {
-            if (s->kind == StmtKind::ModuleDef) modules[s->name] = s;
-            else if (s->kind == StmtKind::FunctionDef) functions[s->name] = s;
-            else top.push_back(s);
+            if (s->kind == StmtKind::ModuleDef)
+                modules[s->name] = s;
+            else if (s->kind == StmtKind::FunctionDef)
+                functions[s->name] = s;
+            else
+                top.push_back(s);
         }
 
         Assets::ScadLoadOptions options;
@@ -930,15 +921,14 @@ namespace
         ScadEvaluator::EvaluateScene(top, modules, functions, options, result, evalErr);
         return result;
     }
-}
+} // namespace
 
 TEST_CASE("Scad scene eval exports top-level variables", "[Unit][Scad]")
 {
-    const SceneEvalResult result = EvalSceneProgram(
-        "answer = 42;\n"
-        "name = \"agent\";\n"
-        "rolecolor = [1, 0, 1];\n"
-        "cube(1);\n");
+    const SceneEvalResult result = EvalSceneProgram("answer = 42;\n"
+                                                    "name = \"agent\";\n"
+                                                    "rolecolor = [1, 0, 1];\n"
+                                                    "cube(1);\n");
 
     REQUIRE(result.topLevelVariables.count("answer") == 1);
     const Value& answer = result.topLevelVariables.at("answer");
@@ -956,17 +946,44 @@ TEST_CASE("Scad scene eval exports top-level variables", "[Unit][Scad]")
     CHECK(color.z == Catch::Approx(1.0));
 }
 
+TEST_CASE("Scad scene eval retains module call metadata for authoring", "[Unit][Scad]")
+{
+    const SceneEvalResult result =
+        EvalSceneProgram("module prop(seed = 1, dims = [2, 3, 4]) cube(dims);\n"
+                         "color([0.2, 0.4, 0.6, 0.8]) translate([5, 6, 7]) prop(seed = 9);\n");
+
+    REQUIRE(result.roots.size() == 1);
+    const SceneNode& node = result.roots[0];
+    CHECK(node.name == "prop");
+    CHECK(node.sourceLine == 2);
+    REQUIRE(node.parameters.size() == 2);
+    CHECK(node.parameters[0].first == "seed");
+    CHECK(node.parameters[0].second.AsNumber() == Catch::Approx(9.0));
+    CHECK(node.parameters[1].first == "dims");
+    glm::dvec3 dims(0.0);
+    REQUIRE(node.parameters[1].second.AsVec3(dims));
+    CHECK(dims.x == Catch::Approx(2.0));
+    CHECK(dims.y == Catch::Approx(3.0));
+    CHECK(dims.z == Catch::Approx(4.0));
+    CHECK(node.hasCallColor);
+    CHECK(node.callColor.r == Catch::Approx(0.2));
+    CHECK(node.callColor.a == Catch::Approx(0.8));
+    CHECK(node.localTransform[3].x == Catch::Approx(5.0));
+    CHECK(node.localTransform[3].y == Catch::Approx(6.0));
+    CHECK(node.localTransform[3].z == Catch::Approx(7.0));
+}
+
 TEST_CASE("Scad scene eval exports nested lists and generated keys", "[Unit][Scad]")
 {
-    const SceneEvalResult result = EvalSceneProgram(
-        "anim_walk = [\n"
-        "    [\"bone_leg_l\", \"rot\", [[0, [35, 0, 0]], [0.4, [-35, 0, 0]]]],\n"
-        "    [\"loop\", false],\n"
-        "];\n"
-        "anim_idle = [\n"
-        "    [\"bone_torso\", \"rot\", [for (t = [0 : 0.5 : 1]) [t, [2 * sin(180 * t), 0, 0]]]],\n"
-        "];\n"
-        "cube(1);\n");
+    const SceneEvalResult result =
+        EvalSceneProgram("anim_walk = [\n"
+                         "    [\"bone_leg_l\", \"rot\", [[0, [35, 0, 0]], [0.4, [-35, 0, 0]]]],\n"
+                         "    [\"loop\", false],\n"
+                         "];\n"
+                         "anim_idle = [\n"
+                         "    [\"bone_torso\", \"rot\", [for (t = [0 : 0.5 : 1]) [t, [2 * sin(180 * t), 0, 0]]]],\n"
+                         "];\n"
+                         "cube(1);\n");
 
     REQUIRE(result.topLevelVariables.count("anim_walk") == 1);
     const Value& walk = result.topLevelVariables.at("anim_walk");
@@ -1005,10 +1022,9 @@ TEST_CASE("Scad scene eval exports nested lists and generated keys", "[Unit][Sca
 
 TEST_CASE("Scad scene eval top-level snapshot ignores module-local bindings", "[Unit][Scad]")
 {
-    const SceneEvalResult result = EvalSceneProgram(
-        "anim_walk = 1;\n"
-        "module body() { anim_walk = 99; local_only = 5; cube(1); }\n"
-        "body();\n");
+    const SceneEvalResult result = EvalSceneProgram("anim_walk = 1;\n"
+                                                    "module body() { anim_walk = 99; local_only = 5; cube(1); }\n"
+                                                    "body();\n");
 
     REQUIRE(result.topLevelVariables.count("anim_walk") == 1);
     CHECK(result.topLevelVariables.at("anim_walk").num == Catch::Approx(1.0));
