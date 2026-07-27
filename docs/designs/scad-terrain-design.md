@@ -469,7 +469,8 @@ public:
 | **M2 spec/compose** | terrain 段 schema + 校验 + 展开 + `specs/overhill_valley.json` 样例 | ✅ 2026-07-17 |
 | **M3 可行走闭环** | TerrainComponent + loader 挂接 + 水面 rayCast 语义 + NavGrid MaskUnwalkable + Jolt 集成测试 | ✅ 2026-07-17 |
 | **M4 LLM 生成** | generate prompt/schema 扩展 + 一句话验收题（Gemma-4-E4B 3 轮通过） | ✅ 2026-07-17 |
-| M5（后续） | 编辑器集成 / 不透明水回退 / 分块大地图（>180² cells 物理分块）/ 侵蚀风格化 | 非本期 |
+| **M5a 过程编辑器** | ScadLibrary TERR feature + `ter_*` 类型化编辑、地表轮廓/折线控制点、增量源码往返、demo 自动验证 | ✅ 2026-07-27 |
+| M5b（后续） | 不透明水回退 / 分块大地图（>180² cells 物理分块）/ 侵蚀风格化 | 非本期 |
 
 执行细节、验收记录与偏差说明见 `docs/plans/scad-terrain-plan.md`；使用速查见
 `AGENT_GUIDE/ScadTerrain.md`。

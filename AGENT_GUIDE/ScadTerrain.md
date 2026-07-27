@@ -69,6 +69,30 @@ ter_ok(t, x, y, filt) / ter_biome(name)                   // 过滤谓词 / biom
 - 校验：`terrain`/`ground` 互斥、折线 ≥2 点且在域内、cells 4..256、biome 枚举、
   hMin≤hMax、pad 压河告警、blockGrids 不贴地告警。
 
+## ScadLibrary 过程编辑
+
+`ScadLibrary --scene assets/scad/terrain_layout_demo.scad` 会自动打开 Terrain“过程”页：
+
+- TERR 画布参数和 7 类有序 feature 均为类型化控件；折线 feature 可增删折点，feature 可调整顺序。
+- 中央视口会把 feature 直接画在地形表面：山峰/台地/湖泊显示半径轮廓，山峰/台地显示高度标尺，
+  ridge/river/road 显示中心折线、宽度边界和控制点，pad 显示旋转后的占地框。
+- 右侧列表与视口选择双向同步；拖动中心点或折线控制点可直接改 XY，选中圆形 feature 后还可拖动
+  半径手柄。覆盖层使用当前 TERR 的网格高度缓存，拖动时不重建，松手后一次性刷新预览。
+- Terrain 自动刷新、手动预览和保存后的场景重建会保留当前相机位置、方向与缩放；只有真正打开
+  另一个 SCAD 场景时才重新按场景边界取景。
+- 顶层 `ter_place/place_tilt/snap/along/scatter` 的语义参数可视化编辑，child SCAD 原样保留；
+  桥梁用的 `gk_terrain_height(TERR, sampleX, sampleY)` 高度锚点会拆分显示摆放点与岸上取样点。
+- 从左侧 Kit 浏览器添加模块时，过程场景会生成 `ter_place(TERR, x, y)`，而不是平地对象。
+- 保存采用源码增量改写：未识别的桥高表达式、自由 SCAD 和注释不会因过程编辑而丢失。
+- 非字面量组合子参数不强行结构化；面板提示后交给“源码”页维护。
+
+回归：
+
+```bash
+gkNextUnitTests "[TerrainProcess]"  # demo 解析、编辑、再解析、真实 Kit 求值 0 warning
+gnb validate --script assets/agentscripts/scadlibrary-terrain-process.agentscript.json
+```
+
 ## 引擎侧（可行走闭环）
 
 - **TerrainComponent**（`src/Engine/Runtime/Components/TerrainComponent.hpp`，loader 自动挂在

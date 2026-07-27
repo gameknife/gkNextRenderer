@@ -2,10 +2,12 @@
 
 #include "CharacterDesigner.hpp"
 #include "KitCatalog.hpp"
+#include "TerrainProcessDocument.hpp"
 
 #include <cstdint>
 #include <filesystem>
 #include <limits>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -60,7 +62,7 @@ namespace ScadLibrary
     class ScadLibraryInterface
     {
     public:
-        explicit ScadLibraryInterface(NextEngine& engine);
+        explicit ScadLibraryInterface(NextEngine& engine, std::string startupAssemblyPath = {});
 
         void Config(); // OnPreConfigUI: ImGui config flags
         void Init(); // OnInitUI: fonts
@@ -69,6 +71,13 @@ namespace ScadLibrary
         EWorkspaceMode WorkspaceMode() const { return workspaceMode_; }
         void SaveCurrentAssembly() { SaveAssembly(false); }
         bool SelectSceneObjectFromViewport(uint32_t hitInstanceId);
+        bool TerrainFeatureConsumesMouse(double x, double y) const;
+        bool IsTerrainFeatureDragging() const { return terrainFeatureDragging_; }
+        bool IsTerrainProcessAssembly() const
+        {
+            return workspaceMode_ == EWorkspaceMode::SceneAssembly && assemblyProcedural_;
+        }
+        bool ConsumePreserveCameraOnNextSceneLoad();
 
         // Engine hooks forwarded by ScadLibraryGameInstance for the rig preview.
         FRigPreview& RigPreview() { return rigPreview_; }
@@ -80,12 +89,16 @@ namespace ScadLibrary
         void DrawBoneHierarchyPanel(const ImVec2& pos, const ImVec2& size);
         void DrawModePanel(const ImVec2& pos, const ImVec2& size);
         void DrawBenchContent();
+        void DrawTerrainProcessContent();
         void DrawDesignerContent();
         void DrawWorkbenchContent();
         void DrawAnimationTimelinePanel(const ImVec2& pos, const ImVec2& size);
         void DrawViewportToolbar(const ImVec2& viewportPos);
         void DrawSceneGizmoToolbar(const ImVec2& viewportPos);
         void DrawSceneObjectGizmo(const ImVec2& viewportPos, const ImVec2& viewportSize);
+        void DrawTerrainFeatureToolbar(const ImVec2& viewportPos);
+        void DrawTerrainFeatureOverlay(const ImVec2& viewportPos, const ImVec2& viewportSize);
+        void RefreshTerrainFeatureOverlayCache();
         void CommitSceneGizmoEdit();
         Assets::Node* ResolveSceneObjectNode(FBenchItem& item, const glm::mat4& expectedWorld);
         void ApplySceneObjectTransform(FBenchItem& item, const glm::mat4& worldMatrix);
@@ -104,7 +117,11 @@ namespace ScadLibrary
         bool ParseStructuredAssembly(const std::string& source);
         bool ImportEvaluatedAssembly(const std::string& sourcePath);
         bool ImportAssemblyTerrains(const std::string& source);
+        bool ImportTerrainProcessAssembly(const std::string& sourcePath, const std::string& source);
         std::string BuildAssemblyPreviewSource() const;
+        std::string BuildTerrainProcessSource() const;
+        void ReloadTerrainProcess();
+        void MarkTerrainProcessDirty();
         void ReloadDesigner();
         void ExportCharacter();
         void ReloadWorkbench();
@@ -117,6 +134,7 @@ namespace ScadLibrary
 
         NextEngine& engine_;
         std::string imguiIniPath_;
+        std::string startupAssemblyPath_;
 
         std::vector<FKitInfo> kits_;
         std::vector<FBenchItem> bench_;
@@ -171,13 +189,34 @@ namespace ScadLibrary
         std::string assemblySource_;
         std::vector<std::string> openedAssemblyKits_;
         std::vector<std::string> assemblyTerrainSources_;
+        FTerrainProcessDocument terrainProcess_;
+        std::vector<std::string> terrainProcessWarnings_;
         bool assemblySourceDirty_ = false;
         bool assemblyStructured_ = false;
         bool assemblyEvaluated_ = false;
+        bool assemblyProcedural_ = false;
+        bool terrainProcessDirty_ = false;
+        bool preserveCameraOnNextSceneLoad_ = false;
         int assemblyEditorTab_ = 0;
         int sceneGizmoOperation_ = 0;
         bool sceneGizmoWasUsing_ = false;
         bool sceneGizmoAwaitingPickRelease_ = false;
+        struct FTerrainFeatureHandle
+        {
+            int featureIndex = -1;
+            // -1: feature center, -2: radius, >= 0: polyline control point.
+            int pointIndex = -1;
+            glm::vec2 screen{0.0f};
+            float worldHeight = 0.0f;
+        };
+        int selectedTerrainFeature_ = 0;
+        int terrainFeatureDragPoint_ = -1;
+        bool showTerrainFeatureOverlay_ = true;
+        bool terrainFeatureDragging_ = false;
+        float terrainFeatureDragPlaneHeight_ = 0.0f;
+        std::vector<FTerrainFeatureHandle> terrainFeatureHandles_;
+        std::string terrainFeatureOverlayCacheKey_;
+        std::shared_ptr<const Assets::Scad::FTerrainData> terrainFeatureOverlayData_;
         // Placement cursor for newly added items (footprint-aware row layout).
         float benchCursorX_ = 0.0f;
         float benchCursorY_ = 0.0f;

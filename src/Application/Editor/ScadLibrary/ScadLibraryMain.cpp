@@ -25,7 +25,7 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 ScadLibraryGameInstance::ScadLibraryGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
                                                  NextEngine* engine) : NextGameInstanceBase(config, options, engine)
 {
-    ui_ = std::make_unique<ScadLibrary::ScadLibraryInterface>(*engine);
+    ui_ = std::make_unique<ScadLibrary::ScadLibraryInterface>(*engine, options.SceneName);
 
     const glm::ivec2 monitorSize = GetEngine().GetMonitorSize();
     config.Title = "SCAD Library";
@@ -72,6 +72,10 @@ void ScadLibraryGameInstance::OnSceneUnloaded() { ui_->RigPreview().OnSceneUnloa
 void ScadLibraryGameInstance::OnSceneLoaded()
 {
     ui_->RigPreview().OnSceneLoaded(GetEngine().GetScene());
+    if (ui_->ConsumePreserveCameraOnNextSceneLoad())
+    {
+        return;
+    }
 
     // Re-frame whatever was just previewed/composed and orbit around it.
     Assets::Scene& scene = GetEngine().GetScene();
@@ -139,7 +143,10 @@ bool ScadLibraryGameInstance::OnKey(SDL_Event& event)
 
 bool ScadLibraryGameInstance::OnCursorPosition(double xpos, double ypos)
 {
-    cameraController_.OnCursorPosition(xpos, ypos);
+    if (!ui_->IsTerrainFeatureDragging())
+    {
+        cameraController_.OnCursorPosition(xpos, ypos);
+    }
     return true;
 }
 
@@ -150,11 +157,15 @@ bool ScadLibraryGameInstance::OnMouseButton(SDL_Event& event)
     {
         return true;
     }
+    const glm::vec2 mousePos = GetEngine().GetMousePos();
+    if (event.button.button == SDL_BUTTON_LEFT && ui_->TerrainFeatureConsumesMouse(mousePos.x, mousePos.y))
+    {
+        return true;
+    }
     cameraController_.OnMouseButton(event);
     if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT &&
-        ui_->WorkspaceMode() == ScadLibrary::EWorkspaceMode::SceneAssembly)
+        ui_->WorkspaceMode() == ScadLibrary::EWorkspaceMode::SceneAssembly && !ui_->IsTerrainProcessAssembly())
     {
-        const glm::vec2 mousePos = GetEngine().GetMousePos();
         glm::vec3 origin;
         glm::vec3 direction;
         Runtime::EngineHelper::GetScreenToWorldRay(mousePos, origin, direction);

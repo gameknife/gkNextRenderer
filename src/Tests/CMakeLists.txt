@@ -18,6 +18,7 @@ set(unitTestSources
     Test_SceneReference.cpp
     Test_ScadLoader.cpp
     Test_ScadTerrain.cpp
+    Test_ScadLibraryTerrainProcess.cpp
     Test_TerrainWalkable.cpp
     Test_SimKit.cpp
     Test_ScadRig.cpp
@@ -44,6 +45,7 @@ set(unitTestSources
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadOutline.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadPromptContext.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadSessionStore.cpp
+    ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/TerrainProcessDocument.cpp
     ${GK_SOURCE_ROOT}/Application/Game/BrickPlayer/BrickPlayerSnapLogic.cpp
     ${GK_SOURCE_ROOT}/Application/Game/BrickPlayer/BrickBuildPlan.cpp
     ${GK_SOURCE_ROOT}/Application/Game/MagicaLego/MagicaLegoStyle.cpp
@@ -71,6 +73,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 target_include_directories(gkNextUnitTests PRIVATE
     ${GK_SOURCE_ROOT}/Application/Game/NextRA
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio
+    ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary
     ${GK_SOURCE_ROOT}/Application/Game/BrickPlayer
     ${GK_SOURCE_ROOT}/Application/Game/MagicaLego
 )

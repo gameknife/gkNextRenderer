@@ -5,6 +5,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
@@ -20,15 +21,18 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 #include <fstream>
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/norm.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <limits>
 #include <regex>
@@ -181,6 +185,39 @@ namespace ScadLibrary
                 }
             }
             return dependencies;
+        }
+
+        std::string RewriteScadDependencyPaths(const std::string& source, const std::filesystem::path& sourceDir,
+                                               const std::filesystem::path& targetDir, bool absolute)
+        {
+            static const std::regex useRegex(R"(((?:use|include)\s*<)([^>]+)(>))", std::regex_constants::icase);
+            std::string result;
+            std::string::const_iterator cursor = source.begin();
+            std::smatch match;
+            while (std::regex_search(cursor, source.end(), match, useRegex))
+            {
+                result.append(cursor, match[0].first);
+                std::filesystem::path dependencyPath(match[2].str());
+                if (!dependencyPath.is_absolute())
+                {
+                    dependencyPath = sourceDir / dependencyPath;
+                }
+                dependencyPath = dependencyPath.lexically_normal();
+                if (!absolute)
+                {
+                    const std::filesystem::path relative = dependencyPath.lexically_relative(targetDir);
+                    if (!relative.empty())
+                    {
+                        dependencyPath = relative;
+                    }
+                }
+                result += match[1].str();
+                result += dependencyPath.generic_string();
+                result += match[3].str();
+                cursor = match[0].second;
+            }
+            result.append(cursor, source.end());
+            return result;
         }
 
         std::string ScadValueSource(const Assets::Scad::Value& value)
@@ -391,7 +428,8 @@ namespace ScadLibrary
         }
     } // namespace
 
-    ScadLibraryInterface::ScadLibraryInterface(NextEngine& engine) : engine_(engine)
+    ScadLibraryInterface::ScadLibraryInterface(NextEngine& engine, std::string startupAssemblyPath) :
+        engine_(engine), startupAssemblyPath_(std::move(startupAssemblyPath))
     {
         RescanKits();
         RescanAssemblies();
@@ -436,7 +474,11 @@ namespace ScadLibrary
         if (mode == EWorkspaceMode::SceneAssembly)
         {
             rigPreview_.SetActive(false);
-            if (!bench_.empty())
+            if (assemblyProcedural_)
+            {
+                ReloadTerrainProcess();
+            }
+            else if (!bench_.empty())
             {
                 ReloadBench();
             }
@@ -461,16 +503,22 @@ namespace ScadLibrary
         if (!welcomeLoaded_)
         {
             welcomeLoaded_ = true;
-            const auto preferred =
-                std::find_if(assemblies_.begin(), assemblies_.end(), [](const FSceneAssemblyInfo& info)
-                             { return info.relativePath == "assets/scad/scenes/scene_assembly_example.scad"; });
-            if (preferred != assemblies_.end())
+            const bool openedStartup = !startupAssemblyPath_.empty() &&
+                std::filesystem::path(startupAssemblyPath_).extension() == ".scad" &&
+                OpenAssembly(startupAssemblyPath_);
+            if (!openedStartup)
             {
-                OpenAssembly(preferred->relativePath);
-            }
-            else if (!assemblies_.empty())
-            {
-                OpenAssembly(assemblies_[0].relativePath);
+                const auto preferred =
+                    std::find_if(assemblies_.begin(), assemblies_.end(), [](const FSceneAssemblyInfo& info)
+                                 { return info.relativePath == "assets/scad/scenes/scene_assembly_example.scad"; });
+                if (preferred != assemblies_.end())
+                {
+                    OpenAssembly(preferred->relativePath);
+                }
+                else if (!assemblies_.empty())
+                {
+                    OpenAssembly(assemblies_[0].relativePath);
+                }
             }
         }
 
@@ -524,13 +572,26 @@ namespace ScadLibrary
         {
             const ImVec2 sceneViewportPos(viewport->Pos.x + leftWidth, panelY);
             const ImVec2 sceneViewportSize(std::max(1.0f, viewport->Size.x - leftWidth - rightWidth), panelHeight);
-            DrawSceneGizmoToolbar(sceneViewportPos);
-            DrawSceneObjectGizmo(sceneViewportPos, sceneViewportSize);
+            if (assemblyProcedural_)
+            {
+                DrawTerrainFeatureToolbar(sceneViewportPos);
+                DrawTerrainFeatureOverlay(sceneViewportPos, sceneViewportSize);
+            }
+            else
+            {
+                DrawSceneGizmoToolbar(sceneViewportPos);
+                DrawSceneObjectGizmo(sceneViewportPos, sceneViewportSize);
+            }
         }
 
         // Deferred bench reload: wait until the drag/edit is released so the scene
         // is not rebuilt on every mouse-move.
-        if (composeMode && benchDirty_ && autoReload_ && !ImGui::IsAnyItemActive())
+        if (composeMode && assemblyProcedural_ && terrainProcessDirty_ && autoReload_ && !ImGui::IsAnyItemActive() &&
+            !terrainFeatureDragging_)
+        {
+            ReloadTerrainProcess();
+        }
+        else if (composeMode && benchDirty_ && autoReload_ && !ImGui::IsAnyItemActive())
         {
             ReloadBench();
         }
@@ -1048,7 +1109,15 @@ namespace ScadLibrary
         ImGui::SameLine();
         if (workspaceMode_ == EWorkspaceMode::SceneAssembly)
         {
-            ImGui::Text("场景组装  ·  %zu 对象", bench_.size());
+            if (assemblyProcedural_)
+            {
+                ImGui::Text("过程场景  ·  %zu 特征 / %zu 规则", terrainProcess_.Terrain().features.size(),
+                            terrainProcess_.ActiveRuleCount());
+            }
+            else
+            {
+                ImGui::Text("场景组装  ·  %zu 对象", bench_.size());
+            }
         }
         else if (workspaceMode_ == EWorkspaceMode::CharacterDesigner)
         {
@@ -1073,6 +1142,437 @@ namespace ScadLibrary
             DrawWorkbenchContent();
         }
         ImGui::End();
+    }
+
+    void ScadLibraryInterface::DrawTerrainProcessContent()
+    {
+        bool changed = false;
+        Assets::Scad::FTerrainSpec& terrain = terrainProcess_.Terrain();
+
+        ImGui::Checkbox("自动刷新", &autoReload_);
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_ROTATE_RIGHT " 刷新预览"))
+        {
+            ReloadTerrainProcess();
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("只改写 TERR 与已识别的 ter_* 语句");
+
+        for (const std::string& warning : terrainProcessWarnings_)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::Warning));
+            ImGui::TextWrapped("%s", warning.c_str());
+            ImGui::PopStyleColor();
+        }
+
+        const auto editPoint = [&](const char* label, glm::dvec2& point, float speed = 0.5f)
+        {
+            double value[2] = {point.x, point.y};
+            if (ImGui::DragScalarN(label, ImGuiDataType_Double, value, 2, speed))
+            {
+                point = glm::dvec2(value[0], value[1]);
+                return true;
+            }
+            return false;
+        };
+        const auto editNumber = [](const char* label, double& value, float speed = 0.1f, const char* format = "%.3f")
+        { return ImGui::DragScalar(label, ImGuiDataType_Double, &value, speed, nullptr, nullptr, format); };
+        const auto editPoints = [&](std::vector<glm::dvec2>& points)
+        {
+            bool pointsChanged = false;
+            int removePoint = -1;
+            for (size_t pointIndex = 0; pointIndex < points.size(); ++pointIndex)
+            {
+                ImGui::PushID(static_cast<int>(pointIndex));
+                ImGui::SetNextItemWidth(-34.0f);
+                pointsChanged |= editPoint("##point", points[pointIndex]);
+                ImGui::SameLine();
+                if (ImGui::SmallButton(ICON_FA_XMARK))
+                {
+                    removePoint = static_cast<int>(pointIndex);
+                }
+                ImGui::PopID();
+            }
+            if (removePoint >= 0 && points.size() > 2)
+            {
+                points.erase(points.begin() + removePoint);
+                pointsChanged = true;
+            }
+            if (ImGui::SmallButton(ICON_FA_PLUS " 添加折点"))
+            {
+                points.push_back(points.empty() ? glm::dvec2(0.0) : points.back() + glm::dvec2(5.0, 0.0));
+                pointsChanged = true;
+            }
+            return pointsChanged;
+        };
+
+        if (ImGui::CollapsingHeader("地形画布", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            changed |= editPoint("尺寸 XY", terrain.size, 1.0f);
+            changed |= ImGui::DragInt2("网格 cells", &terrain.cells.x, 1.0f, 4, 256);
+            changed |= ImGui::InputScalar("Seed", ImGuiDataType_U64, &terrain.seed);
+            changed |= editNumber("基准高度", terrain.baseHeight);
+            changed |= editNumber("基础起伏", terrain.relief);
+            changed |= editNumber("噪声细节", terrain.roughness, 0.01f);
+            changed |= ImGui::InputText("调色板", &terrain.palette);
+            if (ImGui::Checkbox("全局水位", &terrain.hasWaterLevel))
+            {
+                changed = true;
+            }
+            if (terrain.hasWaterLevel)
+            {
+                changed |= editNumber("水位高度", terrain.waterLevel);
+            }
+        }
+
+        if (ImGui::CollapsingHeader("Terrain Features（按顺序作用）", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            int removeFeature = -1;
+            int moveFeature = -1;
+            int moveDirection = 0;
+            for (size_t featureIndex = 0; featureIndex < terrain.features.size(); ++featureIndex)
+            {
+                Assets::Scad::FTerrainFeature& feature = terrain.features[featureIndex];
+                ImGui::PushID(static_cast<int>(featureIndex));
+                const std::string label =
+                    fmt::format("{:02}  {}", featureIndex + 1, FTerrainProcessDocument::FeatureTypeName(feature.type));
+                ImGuiTreeNodeFlags featureFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap;
+                if (selectedTerrainFeature_ == static_cast<int>(featureIndex))
+                {
+                    featureFlags |= ImGuiTreeNodeFlags_Selected;
+                }
+                const bool open = ImGui::TreeNodeEx(label.c_str(), featureFlags);
+                if (ImGui::IsItemClicked())
+                {
+                    selectedTerrainFeature_ = static_cast<int>(featureIndex);
+                }
+                ImGui::SameLine(ImGui::GetContentRegionAvail().x - 76.0f);
+                if (ImGui::SmallButton(ICON_FA_ANGLE_UP) && featureIndex > 0)
+                {
+                    moveFeature = static_cast<int>(featureIndex);
+                    moveDirection = -1;
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton(ICON_FA_ANGLE_DOWN) && featureIndex + 1 < terrain.features.size())
+                {
+                    moveFeature = static_cast<int>(featureIndex);
+                    moveDirection = 1;
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton(ICON_FA_XMARK))
+                {
+                    removeFeature = static_cast<int>(featureIndex);
+                }
+                if (open)
+                {
+                    using EType = Assets::Scad::FTerrainFeature::EType;
+                    switch (feature.type)
+                    {
+                    case EType::Mountain:
+                        changed |= editPoint("中心", feature.at);
+                        changed |= editNumber("半径", feature.radius);
+                        changed |= editNumber("高度", feature.height);
+                        changed |= editNumber("扰动强度", feature.rugged, 0.01f);
+                        break;
+                    case EType::Ridge:
+                        ImGui::TextDisabled("山脊折线");
+                        changed |= editPoints(feature.pts);
+                        changed |= editNumber("宽度", feature.width);
+                        changed |= editNumber("高度", feature.height);
+                        break;
+                    case EType::Plateau:
+                        changed |= editPoint("中心", feature.at);
+                        changed |= editNumber("半径", feature.radius);
+                        changed |= editNumber("高度", feature.height);
+                        break;
+                    case EType::Lake:
+                        changed |= editPoint("中心", feature.at);
+                        changed |= editNumber("半径", feature.radius);
+                        changed |= editNumber("深度", feature.depth);
+                        break;
+                    case EType::River:
+                        ImGui::TextDisabled("河流折线（上游 → 下游）");
+                        changed |= editPoints(feature.pts);
+                        changed |= editNumber("宽度", feature.width);
+                        changed |= editNumber("深度", feature.depth);
+                        break;
+                    case EType::Road:
+                        ImGui::TextDisabled("道路折线");
+                        changed |= editPoints(feature.pts);
+                        changed |= editNumber("宽度", feature.width);
+                        break;
+                    case EType::Pad:
+                        changed |= editPoint("中心", feature.at);
+                        changed |= editPoint("尺寸", feature.size);
+                        changed |= editNumber("旋转", feature.rot, 1.0f, "%.1f°");
+                        break;
+                    }
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+            if (moveFeature >= 0)
+            {
+                std::swap(terrain.features[moveFeature], terrain.features[moveFeature + moveDirection]);
+                if (selectedTerrainFeature_ == moveFeature)
+                {
+                    selectedTerrainFeature_ += moveDirection;
+                }
+                else if (selectedTerrainFeature_ == moveFeature + moveDirection)
+                {
+                    selectedTerrainFeature_ = moveFeature;
+                }
+                changed = true;
+            }
+            if (removeFeature >= 0)
+            {
+                terrain.features.erase(terrain.features.begin() + removeFeature);
+                if (selectedTerrainFeature_ > removeFeature)
+                {
+                    --selectedTerrainFeature_;
+                }
+                else if (selectedTerrainFeature_ == removeFeature)
+                {
+                    selectedTerrainFeature_ = std::min(removeFeature, static_cast<int>(terrain.features.size()) - 1);
+                }
+                changed = true;
+            }
+
+            if (ImGui::Button(ICON_FA_PLUS " 添加 Feature"))
+            {
+                ImGui::OpenPopup("##add_terrain_feature");
+            }
+            if (ImGui::BeginPopup("##add_terrain_feature"))
+            {
+                using EType = Assets::Scad::FTerrainFeature::EType;
+                const auto addFeature = [&](const char* label, EType type)
+                {
+                    if (!ImGui::MenuItem(label))
+                    {
+                        return;
+                    }
+                    Assets::Scad::FTerrainFeature feature;
+                    feature.type = type;
+                    feature.radius = 20.0;
+                    feature.width = 6.0;
+                    feature.height = 8.0;
+                    feature.depth = 2.0;
+                    feature.rugged = 0.5;
+                    feature.size = glm::dvec2(24.0, 18.0);
+                    if (type == EType::Ridge || type == EType::River || type == EType::Road)
+                    {
+                        feature.pts = {{-10.0, 0.0}, {10.0, 0.0}};
+                    }
+                    terrain.features.push_back(std::move(feature));
+                    selectedTerrainFeature_ = static_cast<int>(terrain.features.size()) - 1;
+                    changed = true;
+                };
+                addFeature("山峰 mountain", EType::Mountain);
+                addFeature("山脊 ridge", EType::Ridge);
+                addFeature("台地 plateau", EType::Plateau);
+                addFeature("湖泊 lake", EType::Lake);
+                addFeature("河流 river", EType::River);
+                addFeature("道路 road", EType::Road);
+                addFeature("基座 pad", EType::Pad);
+                ImGui::EndPopup();
+            }
+        }
+
+        if (ImGui::CollapsingHeader("贴地过程规则", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            int removeRule = -1;
+            int duplicateRule = -1;
+            std::vector<FTerrainProcessRule>& rules = terrainProcess_.Rules();
+            for (size_t ruleIndex = 0; ruleIndex < rules.size(); ++ruleIndex)
+            {
+                FTerrainProcessRule& rule = rules[ruleIndex];
+                if (rule.removed)
+                {
+                    continue;
+                }
+                ImGui::PushID(static_cast<int>(ruleIndex));
+                const std::string label =
+                    fmt::format("{:02}  {}", ruleIndex + 1, FTerrainProcessDocument::RuleTypeName(rule.type));
+                const bool open =
+                    ImGui::TreeNodeEx(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
+                ImGui::SameLine(ImGui::GetContentRegionAvail().x - 52.0f);
+                if (ImGui::SmallButton(ICON_FA_COPY))
+                {
+                    duplicateRule = static_cast<int>(ruleIndex);
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton(ICON_FA_XMARK))
+                {
+                    removeRule = static_cast<int>(ruleIndex);
+                }
+                if (open)
+                {
+                    if (rule.type == ETerrainProcessRuleType::HeightAnchor)
+                    {
+                        glm::dvec2 position(rule.x, rule.y);
+                        if (editPoint("摆放位置 XY", position))
+                        {
+                            rule.x = position.x;
+                            rule.y = position.y;
+                            changed = true;
+                        }
+                        glm::dvec2 samplePoint(rule.sampleX, rule.sampleY);
+                        if (editPoint("高度取样 XY", samplePoint))
+                        {
+                            rule.sampleX = samplePoint.x;
+                            rule.sampleY = samplePoint.y;
+                            changed = true;
+                        }
+                        changed |= editNumber("离地 dz", rule.dz);
+                    }
+                    else if (rule.type == ETerrainProcessRuleType::Place ||
+                             rule.type == ETerrainProcessRuleType::PlaceTilt ||
+                             rule.type == ETerrainProcessRuleType::Snap)
+                    {
+                        glm::dvec2 position(rule.x, rule.y);
+                        if (editPoint(rule.type == ETerrainProcessRuleType::Snap ? "外层 at" : "位置 XY", position))
+                        {
+                            rule.x = position.x;
+                            rule.y = position.y;
+                            changed = true;
+                        }
+                        changed |= editNumber("离地 dz", rule.dz);
+                    }
+                    if (rule.type == ETerrainProcessRuleType::PlaceTilt)
+                    {
+                        changed |= editNumber("最大倾角", rule.maxTilt, 0.5f, "%.1f°");
+                        changed |= editNumber("探针距离", rule.probe);
+                    }
+                    else if (rule.type == ETerrainProcessRuleType::Along)
+                    {
+                        ImGui::TextDisabled("沿线折点");
+                        changed |= editPoints(rule.points);
+                        changed |= editNumber("步距", rule.step);
+                        changed |= ImGui::InputInt("Seed", &rule.seed);
+                        changed |= editNumber("起始偏移", rule.offset);
+                        changed |= editNumber("离地 dz", rule.dz);
+                    }
+                    else if (rule.type == ETerrainProcessRuleType::Scatter)
+                    {
+                        changed |= ImGui::InputInt("Seed", &rule.seed);
+                        changed |= ImGui::DragInt("数量", &rule.count, 1.0f, 0, 100000);
+                        double region[4] = {rule.region.x, rule.region.y, rule.region.z, rule.region.w};
+                        if (ImGui::DragScalarN("区域 x0/y0/x1/y1", ImGuiDataType_Double, region, 4, 0.5f))
+                        {
+                            rule.region = glm::dvec4(region[0], region[1], region[2], region[3]);
+                            changed = true;
+                        }
+                        changed |= editNumber("最低高度", rule.minHeight);
+                        changed |= editNumber("最高高度", rule.maxHeight);
+                        changed |= editNumber("最大坡度", rule.maxSlope, 0.5f, "%.1f°");
+                        changed |= editNumber("避水距离", rule.avoidWater);
+                        std::string biomeText = fmt::format("{}", fmt::join(rule.biomes, ", "));
+                        if (ImGui::InputTextWithHint("Biome 白名单", "grass, grass_dark", &biomeText))
+                        {
+                            rule.biomes.clear();
+                            std::istringstream input(biomeText);
+                            std::string biome;
+                            while (std::getline(input, biome, ','))
+                            {
+                                biome.erase(biome.begin(),
+                                            std::find_if_not(biome.begin(), biome.end(),
+                                                             [](unsigned char c) { return std::isspace(c); }));
+                                biome.erase(std::find_if_not(biome.rbegin(), biome.rend(),
+                                                             [](unsigned char c) { return std::isspace(c); })
+                                                .base(),
+                                            biome.end());
+                                if (!biome.empty())
+                                {
+                                    rule.biomes.push_back(std::move(biome));
+                                }
+                            }
+                            changed = true;
+                        }
+                        if (ImGui::Checkbox("随机旋转", &rule.randomRotation))
+                        {
+                            changed = true;
+                        }
+                        changed |= editNumber("离地 dz", rule.dz);
+                    }
+
+                    ImGui::TextDisabled("Child SCAD（模块调用、rotate 链或代码块）");
+                    if (ImGui::InputTextMultiline("##terrain_rule_child", &rule.childSource, ImVec2(-1.0f, 76.0f),
+                                                  ImGuiInputTextFlags_AllowTabInput))
+                    {
+                        changed = true;
+                    }
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+            if (duplicateRule >= 0)
+            {
+                terrainProcess_.DuplicateRule(static_cast<size_t>(duplicateRule));
+                changed = true;
+            }
+            if (removeRule >= 0)
+            {
+                terrainProcess_.RemoveRule(static_cast<size_t>(removeRule));
+                changed = true;
+            }
+
+            if (ImGui::Button(ICON_FA_PLUS " 添加贴地规则"))
+            {
+                ImGui::OpenPopup("##add_terrain_rule");
+            }
+            if (ImGui::BeginPopup("##add_terrain_rule"))
+            {
+                const auto addRule = [&](const char* label, ETerrainProcessRuleType type)
+                {
+                    if (ImGui::MenuItem(label))
+                    {
+                        terrainProcess_.AddRule(type);
+                        changed = true;
+                    }
+                };
+                addRule("高度锚点 gk_terrain_height", ETerrainProcessRuleType::HeightAnchor);
+                addRule("单件贴地 ter_place", ETerrainProcessRuleType::Place);
+                addRule("随坡贴地 ter_place_tilt", ETerrainProcessRuleType::PlaceTilt);
+                addRule("布局贴地 ter_snap", ETerrainProcessRuleType::Snap);
+                addRule("沿线放置 ter_along", ETerrainProcessRuleType::Along);
+                addRule("过滤散布 ter_scatter", ETerrainProcessRuleType::Scatter);
+                ImGui::EndPopup();
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("也可从左侧 Kit 浏览器“+”直接创建 ter_place");
+        }
+
+        if (changed)
+        {
+            terrain.size.x = std::max(1.0, terrain.size.x);
+            terrain.size.y = std::max(1.0, terrain.size.y);
+            terrain.cells.x = std::clamp(terrain.cells.x, 4, 256);
+            terrain.cells.y = std::clamp(terrain.cells.y, 4, 256);
+            terrain.relief = std::max(0.0, terrain.relief);
+            terrain.roughness = std::clamp(terrain.roughness, 0.0, 1.0);
+            for (Assets::Scad::FTerrainFeature& feature : terrain.features)
+            {
+                feature.radius = std::max(0.1, feature.radius);
+                feature.width = std::max(0.1, feature.width);
+                feature.depth = std::max(0.0, feature.depth);
+                feature.rugged = std::clamp(feature.rugged, 0.0, 1.0);
+                feature.size.x = std::max(0.1, feature.size.x);
+                feature.size.y = std::max(0.1, feature.size.y);
+            }
+            for (FTerrainProcessRule& rule : terrainProcess_.Rules())
+            {
+                rule.step = std::max(0.01, rule.step);
+                rule.probe = std::max(0.01, rule.probe);
+                rule.maxTilt = std::clamp(rule.maxTilt, 0.0, 90.0);
+                rule.count = std::max(0, rule.count);
+                if (rule.minHeight > rule.maxHeight)
+                {
+                    std::swap(rule.minHeight, rule.maxHeight);
+                }
+                rule.maxSlope = std::clamp(rule.maxSlope, 0.0, 90.0);
+            }
+            MarkTerrainProcessDirty();
+        }
     }
 
     void ScadLibraryInterface::DrawBenchContent()
@@ -1121,188 +1621,202 @@ namespace ScadLibrary
 
         if (ImGui::BeginTabBar("##assembly_editor_tabs"))
         {
-            const std::string objectTabLabel = assemblyTerrainSources_.empty()
-                ? fmt::format("对象 ({})", bench_.size())
-                : fmt::format("对象 ({}) · 地形 {}", bench_.size(), assemblyTerrainSources_.size());
-            if (ImGui::BeginTabItem(objectTabLabel.c_str()))
+            if (assemblyProcedural_ &&
+                ImGui::BeginTabItem(fmt::format("过程 ({} + {})", terrainProcess_.Terrain().features.size(),
+                                                terrainProcess_.ActiveRuleCount())
+                                        .c_str()))
             {
-                assemblyEditorTab_ = 0;
-                ImGui::Checkbox("自动刷新", &autoReload_);
-                ImGui::SameLine();
-                ImGui::Checkbox("地板", &showFloor_);
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(90.0f);
-                if (ImGui::SliderInt("$fn", &fnSegments_, 6, 32))
-                {
-                    benchDirty_ = true;
-                }
-                if (assemblyEvaluated_)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::Warning));
-                    ImGui::TextWrapped(
-                        "已按 SCAD 求值结果展开。循环、条件和 module 引用已实例化；请“另存为”可编辑副本。");
-                    ImGui::PopStyleColor();
-                }
-                else if (!assemblyStructured_ && !assemblySource_.empty())
-                {
-                    ImGui::TextDisabled("该场景包含自由 SCAD 结构；完整内容请在“源码”页编辑。");
-                }
+                assemblyEditorTab_ = 2;
+                DrawTerrainProcessContent();
+                ImGui::EndTabItem();
+            }
 
-                if (ImGui::Button(ICON_FA_ROTATE_RIGHT " 刷新对象"))
+            if (!assemblyProcedural_)
+            {
+                const std::string objectTabLabel = assemblyTerrainSources_.empty()
+                    ? fmt::format("对象 ({})", bench_.size())
+                    : fmt::format("对象 ({}) · 地形 {}", bench_.size(), assemblyTerrainSources_.size());
+                if (ImGui::BeginTabItem(objectTabLabel.c_str()))
                 {
-                    ReloadBench();
-                }
-                ImGui::SameLine();
-                if (ImGui::Button(ICON_FA_TRASH " 清空") && !bench_.empty())
-                {
-                    bench_.clear();
-                    selectedBenchItem_ = -1;
-                    benchDirty_ = true;
-                }
-                ImGui::Separator();
-                ImGui::SetNextItemWidth(-1.0f);
-                ImGui::InputTextWithHint("##object_filter", "搜索对象模块或参数…", objectFilterBuf_,
-                                         sizeof(objectFilterBuf_));
+                    assemblyEditorTab_ = 0;
+                    ImGui::Checkbox("自动刷新", &autoReload_);
+                    ImGui::SameLine();
+                    ImGui::Checkbox("地板", &showFloor_);
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(90.0f);
+                    if (ImGui::SliderInt("$fn", &fnSegments_, 6, 32))
+                    {
+                        benchDirty_ = true;
+                    }
+                    if (assemblyEvaluated_)
+                    {
+                        ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::Warning));
+                        ImGui::TextWrapped(
+                            "已按 SCAD 求值结果展开。循环、条件和 module 引用已实例化；请“另存为”可编辑副本。");
+                        ImGui::PopStyleColor();
+                    }
+                    else if (!assemblyStructured_ && !assemblySource_.empty())
+                    {
+                        ImGui::TextDisabled("该场景包含自由 SCAD 结构；完整内容请在“源码”页编辑。");
+                    }
 
-                int removeIndex = -1;
-                int duplicateIndex = -1;
-                ImGui::BeginChild("##bench_list", ImVec2(0, -62.0f), ImGuiChildFlags_None);
-                for (size_t i = 0; i < bench_.size(); ++i)
-                {
-                    FBenchItem& benchItem = bench_[i];
-                    if (objectFilterBuf_[0] != '\0' &&
-                        benchItem.moduleName.find(objectFilterBuf_) == std::string::npos &&
-                        std::string_view(benchItem.args).find(objectFilterBuf_) == std::string_view::npos)
+                    if (ImGui::Button(ICON_FA_ROTATE_RIGHT " 刷新对象"))
                     {
-                        continue;
-                    }
-                    ImGui::PushID(static_cast<int>(i));
-                    ImGuiTreeNodeFlags objectFlags = ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_FramePadding;
-                    if (bench_.size() <= 64)
-                    {
-                        objectFlags |= ImGuiTreeNodeFlags_DefaultOpen;
-                    }
-                    if (selectedBenchItem_ == static_cast<int>(i))
-                    {
-                        objectFlags |= ImGuiTreeNodeFlags_Selected;
-                        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.34f, 0.68f, 0.82f));
-                        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.14f, 0.42f, 0.80f, 0.92f));
-                        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.16f, 0.48f, 0.92f, 1.0f));
-                    }
-                    const std::string objectLabel = benchItem.sourceLine > 0
-                        ? fmt::format("{} #{}  ·  L{}", benchItem.moduleName, i, benchItem.sourceLine)
-                        : fmt::format("{} #{}", benchItem.moduleName, i);
-                    const bool open = ImGui::TreeNodeEx(objectLabel.c_str(), objectFlags);
-                    if (selectedBenchItem_ == static_cast<int>(i))
-                    {
-                        ImGui::PopStyleColor(3);
-                        if (scrollToSelectedBenchItem_)
-                        {
-                            ImGui::SetScrollHereY(0.35f);
-                            scrollToSelectedBenchItem_ = false;
-                        }
-                    }
-                    if (ImGui::IsItemClicked())
-                    {
-                        selectedBenchItem_ = static_cast<int>(i);
-                        if (Assets::Node* selectedNode =
-                                ResolveSceneObjectNode(benchItem, SceneObjectWorldMatrix(benchItem)))
-                        {
-                            engine_.GetScene().SetSelectedId(selectedNode->GetInstanceId());
-                        }
-                    }
-                    ImGui::SameLine(ImGui::GetContentRegionAvail().x - 52.0f);
-                    if (ImGui::SmallButton(ICON_FA_COPY "##dup"))
-                    {
-                        duplicateIndex = static_cast<int>(i);
+                        ReloadBench();
                     }
                     ImGui::SameLine();
-                    if (ImGui::SmallButton(ICON_FA_XMARK "##del"))
+                    if (ImGui::Button(ICON_FA_TRASH " 清空") && !bench_.empty())
                     {
-                        removeIndex = static_cast<int>(i);
-                    }
-                    if (open)
-                    {
-                        float position[3] = {benchItem.x, benchItem.y, benchItem.z};
-                        if (ImGui::DragFloat3("位置", position, 0.5f))
-                        {
-                            benchItem.x = position[0];
-                            benchItem.y = position[1];
-                            benchItem.z = position[2];
-                            benchDirty_ = true;
-                        }
-                        float rotation[3] = {benchItem.rotX, benchItem.rotY, benchItem.rotZ};
-                        if (ImGui::DragFloat3("旋转", rotation, 1.0f, -360.0f, 360.0f, "%.1f°"))
-                        {
-                            benchItem.rotX = rotation[0];
-                            benchItem.rotY = rotation[1];
-                            benchItem.rotZ = rotation[2];
-                            benchDirty_ = true;
-                        }
-                        float scale[3] = {benchItem.scale, benchItem.scaleY, benchItem.scaleZ};
-                        if (ImGui::DragFloat3("缩放", scale, 0.02f, 0.001f, 100.0f, "%.3f"))
-                        {
-                            benchItem.scale = scale[0];
-                            benchItem.scaleY = scale[1];
-                            benchItem.scaleZ = scale[2];
-                            benchDirty_ = true;
-                        }
-                        if (benchItem.hasColor && ImGui::ColorEdit4("颜色", benchItem.color))
-                        {
-                            benchDirty_ = true;
-                        }
-                        if (ImGui::InputTextWithHint("参数", "如 seed = 3", benchItem.args, sizeof(benchItem.args)))
-                        {
-                            benchDirty_ = true;
-                        }
-                        ImGui::TreePop();
-                    }
-                    ImGui::PopID();
-                }
-                if (bench_.empty())
-                {
-                    ImGui::TextDisabled("从左侧 Kit 零件库点 \"+\" 添加模块，");
-                    ImGui::TextDisabled("在这里调整位置、角度和参数。");
-                }
-                ImGui::EndChild();
-
-                if (removeIndex >= 0)
-                {
-                    bench_.erase(bench_.begin() + removeIndex);
-                    if (selectedBenchItem_ == removeIndex)
-                    {
+                        bench_.clear();
                         selectedBenchItem_ = -1;
+                        benchDirty_ = true;
                     }
-                    else if (selectedBenchItem_ > removeIndex)
-                    {
-                        --selectedBenchItem_;
-                    }
-                    benchDirty_ = true;
-                }
-                if (duplicateIndex >= 0)
-                {
-                    FBenchItem copy = bench_[duplicateIndex];
-                    copy.x += kBenchGridStep * 0.5f;
-                    copy.y += kBenchGridStep * 0.5f;
-                    copy.runtimeNodeId = std::numeric_limits<uint32_t>::max();
-                    bench_.push_back(copy);
-                    selectedBenchItem_ = static_cast<int>(bench_.size()) - 1;
-                    benchDirty_ = true;
-                }
+                    ImGui::Separator();
+                    ImGui::SetNextItemWidth(-1.0f);
+                    ImGui::InputTextWithHint("##object_filter", "搜索对象模块或参数…", objectFilterBuf_,
+                                             sizeof(objectFilterBuf_));
 
-                ImGui::Separator();
-                ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 116.0f);
-                ImGui::InputTextWithHint("##export_name", "新场景文件名", exportNameBuf_, sizeof(exportNameBuf_));
-                ImGui::SameLine();
-                if (ImGui::Button(ICON_FA_FILE_EXPORT " 导出场景") && !bench_.empty())
-                {
-                    ExportBench();
+                    int removeIndex = -1;
+                    int duplicateIndex = -1;
+                    ImGui::BeginChild("##bench_list", ImVec2(0, -62.0f), ImGuiChildFlags_None);
+                    for (size_t i = 0; i < bench_.size(); ++i)
+                    {
+                        FBenchItem& benchItem = bench_[i];
+                        if (objectFilterBuf_[0] != '\0' &&
+                            benchItem.moduleName.find(objectFilterBuf_) == std::string::npos &&
+                            std::string_view(benchItem.args).find(objectFilterBuf_) == std::string_view::npos)
+                        {
+                            continue;
+                        }
+                        ImGui::PushID(static_cast<int>(i));
+                        ImGuiTreeNodeFlags objectFlags =
+                            ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_FramePadding;
+                        if (bench_.size() <= 64)
+                        {
+                            objectFlags |= ImGuiTreeNodeFlags_DefaultOpen;
+                        }
+                        if (selectedBenchItem_ == static_cast<int>(i))
+                        {
+                            objectFlags |= ImGuiTreeNodeFlags_Selected;
+                            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.34f, 0.68f, 0.82f));
+                            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.14f, 0.42f, 0.80f, 0.92f));
+                            ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.16f, 0.48f, 0.92f, 1.0f));
+                        }
+                        const std::string objectLabel = benchItem.sourceLine > 0
+                            ? fmt::format("{} #{}  ·  L{}", benchItem.moduleName, i, benchItem.sourceLine)
+                            : fmt::format("{} #{}", benchItem.moduleName, i);
+                        const bool open = ImGui::TreeNodeEx(objectLabel.c_str(), objectFlags);
+                        if (selectedBenchItem_ == static_cast<int>(i))
+                        {
+                            ImGui::PopStyleColor(3);
+                            if (scrollToSelectedBenchItem_)
+                            {
+                                ImGui::SetScrollHereY(0.35f);
+                                scrollToSelectedBenchItem_ = false;
+                            }
+                        }
+                        if (ImGui::IsItemClicked())
+                        {
+                            selectedBenchItem_ = static_cast<int>(i);
+                            if (Assets::Node* selectedNode =
+                                    ResolveSceneObjectNode(benchItem, SceneObjectWorldMatrix(benchItem)))
+                            {
+                                engine_.GetScene().SetSelectedId(selectedNode->GetInstanceId());
+                            }
+                        }
+                        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 52.0f);
+                        if (ImGui::SmallButton(ICON_FA_COPY "##dup"))
+                        {
+                            duplicateIndex = static_cast<int>(i);
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton(ICON_FA_XMARK "##del"))
+                        {
+                            removeIndex = static_cast<int>(i);
+                        }
+                        if (open)
+                        {
+                            float position[3] = {benchItem.x, benchItem.y, benchItem.z};
+                            if (ImGui::DragFloat3("位置", position, 0.5f))
+                            {
+                                benchItem.x = position[0];
+                                benchItem.y = position[1];
+                                benchItem.z = position[2];
+                                benchDirty_ = true;
+                            }
+                            float rotation[3] = {benchItem.rotX, benchItem.rotY, benchItem.rotZ};
+                            if (ImGui::DragFloat3("旋转", rotation, 1.0f, -360.0f, 360.0f, "%.1f°"))
+                            {
+                                benchItem.rotX = rotation[0];
+                                benchItem.rotY = rotation[1];
+                                benchItem.rotZ = rotation[2];
+                                benchDirty_ = true;
+                            }
+                            float scale[3] = {benchItem.scale, benchItem.scaleY, benchItem.scaleZ};
+                            if (ImGui::DragFloat3("缩放", scale, 0.02f, 0.001f, 100.0f, "%.3f"))
+                            {
+                                benchItem.scale = scale[0];
+                                benchItem.scaleY = scale[1];
+                                benchItem.scaleZ = scale[2];
+                                benchDirty_ = true;
+                            }
+                            if (benchItem.hasColor && ImGui::ColorEdit4("颜色", benchItem.color))
+                            {
+                                benchDirty_ = true;
+                            }
+                            if (ImGui::InputTextWithHint("参数", "如 seed = 3", benchItem.args, sizeof(benchItem.args)))
+                            {
+                                benchDirty_ = true;
+                            }
+                            ImGui::TreePop();
+                        }
+                        ImGui::PopID();
+                    }
+                    if (bench_.empty())
+                    {
+                        ImGui::TextDisabled("从左侧 Kit 零件库点 \"+\" 添加模块，");
+                        ImGui::TextDisabled("在这里调整位置、角度和参数。");
+                    }
+                    ImGui::EndChild();
+
+                    if (removeIndex >= 0)
+                    {
+                        bench_.erase(bench_.begin() + removeIndex);
+                        if (selectedBenchItem_ == removeIndex)
+                        {
+                            selectedBenchItem_ = -1;
+                        }
+                        else if (selectedBenchItem_ > removeIndex)
+                        {
+                            --selectedBenchItem_;
+                        }
+                        benchDirty_ = true;
+                    }
+                    if (duplicateIndex >= 0)
+                    {
+                        FBenchItem copy = bench_[duplicateIndex];
+                        copy.x += kBenchGridStep * 0.5f;
+                        copy.y += kBenchGridStep * 0.5f;
+                        copy.runtimeNodeId = std::numeric_limits<uint32_t>::max();
+                        bench_.push_back(copy);
+                        selectedBenchItem_ = static_cast<int>(bench_.size()) - 1;
+                        benchDirty_ = true;
+                    }
+
+                    ImGui::Separator();
+                    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 116.0f);
+                    ImGui::InputTextWithHint("##export_name", "新场景文件名", exportNameBuf_, sizeof(exportNameBuf_));
+                    ImGui::SameLine();
+                    if (ImGui::Button(ICON_FA_FILE_EXPORT " 导出场景") && !bench_.empty())
+                    {
+                        ExportBench();
+                    }
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("写入 assets/scad/scenes/<名>.scad");
+                    }
+                    ImGui::EndTabItem();
                 }
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::SetTooltip("写入 assets/scad/scenes/<名>.scad");
-                }
-                ImGui::EndTabItem();
             }
 
             if (ImGui::BeginTabItem("源码"))
@@ -1315,6 +1829,9 @@ namespace ScadLibrary
                     assemblySourceDirty_ = true;
                     assemblyStructured_ = false;
                     assemblyEvaluated_ = false;
+                    assemblyProcedural_ = false;
+                    terrainProcessDirty_ = false;
+                    terrainProcessWarnings_.clear();
                     bench_.clear();
                     assemblyTerrainSources_.clear();
                     selectedBenchItem_ = -1;
@@ -1461,6 +1978,25 @@ namespace ScadLibrary
 
     void ScadLibraryInterface::AddToBench(int kitIndex, const std::string& moduleName)
     {
+        if (assemblyProcedural_)
+        {
+            FTerrainProcessRule& rule =
+                terrainProcess_.AddRule(ETerrainProcessRuleType::Place, fmt::format("{}();", moduleName));
+            rule.x = benchCursorX_;
+            rule.y = benchCursorY_;
+            benchCursorX_ += kBenchGridStep;
+            if (++benchColCount_ >= kBenchGridColumns)
+            {
+                benchCursorX_ = 0.0f;
+                benchCursorY_ += kBenchGridStep;
+                benchColCount_ = 0;
+            }
+            MarkTerrainProcessDirty();
+            statusLine_ = fmt::format("已添加 {} 为 ter_place 规则", moduleName);
+            statusError_ = false;
+            return;
+        }
+
         FBenchItem benchItem;
         benchItem.kitIndex = kitIndex;
         benchItem.moduleName = moduleName;
@@ -1813,6 +2349,46 @@ namespace ScadLibrary
         return !assemblyTerrainSources_.empty();
     }
 
+    bool ScadLibraryInterface::ImportTerrainProcessAssembly(const std::string& sourcePath, const std::string& source)
+    {
+        terrainProcessWarnings_.clear();
+        if (source.find("gk_terrain") == std::string::npos)
+        {
+            return false;
+        }
+        Assets::Scad::ScadProgram program;
+        std::string error;
+        if (!Assets::Scad::LoadScadProgram(sourcePath, program, error))
+        {
+            return false;
+        }
+
+        Assets::ScadLoadOptions options;
+        Assets::Scad::SceneEvalResult result;
+        if (!Assets::Scad::ScadEvaluator::EvaluateScene(program.mainTopLevel, program.modules, program.functions,
+                                                        options, result, error))
+        {
+            return false;
+        }
+
+        if (!terrainProcess_.Parse(source, program.mainTopLevel, result.topLevelVariables, error,
+                                   terrainProcessWarnings_))
+        {
+            SPDLOG_DEBUG("[ScadLibrary] terrain process import skipped for {}: {}", sourcePath, error);
+            return false;
+        }
+        assemblyTerrainSources_ = ExtractTerrainSources(source);
+        terrainProcessDirty_ = false;
+        terrainFeatureOverlayCacheKey_.clear();
+        terrainFeatureOverlayData_.reset();
+        terrainFeatureDragging_ = false;
+        selectedTerrainFeature_ = std::clamp(
+            selectedTerrainFeature_, 0, std::max(0, static_cast<int>(terrainProcess_.Terrain().features.size()) - 1));
+        SPDLOG_INFO("[ScadLibrary] terrain process import {} -> {} features / {} rules", sourcePath,
+                    terrainProcess_.Terrain().features.size(), terrainProcess_.ActiveRuleCount());
+        return true;
+    }
+
     bool ScadLibraryInterface::OpenAssembly(const std::string& path)
     {
         const std::filesystem::path scadRoot = AuthoringPath("assets/scad");
@@ -1853,8 +2429,21 @@ namespace ScadLibrary
         openedAssemblyKits_ = FindKitDependencies(source);
         assemblySourceDirty_ = false;
         bench_.clear();
+        benchCursorX_ = 0.0f;
+        benchCursorY_ = 0.0f;
+        benchRowDepth_ = 0.0f;
+        benchColCount_ = 0;
+        // Flat ScadLibrary assemblies keep their object-editor round trip even
+        // when they preserve a terrain payload. Hand-written/generated
+        // kit_terrain programs use the dedicated process editor.
         assemblyStructured_ = ParseStructuredAssembly(source);
-        if (assemblyStructured_)
+        assemblyProcedural_ = !assemblyStructured_ && ImportTerrainProcessAssembly(openedAssemblyPath_, source);
+        if (assemblyProcedural_)
+        {
+            assemblyEvaluated_ = false;
+            showFloor_ = false;
+        }
+        else if (assemblyStructured_)
         {
             assemblyEvaluated_ = false;
             ImportAssemblyTerrains(source);
@@ -1865,7 +2454,7 @@ namespace ScadLibrary
         }
         const std::filesystem::path repoRoot = scadRoot.parent_path().parent_path();
         const std::string relativePath = sourcePath.lexically_relative(repoRoot).generic_string();
-        if (assemblyEvaluated_)
+        if (assemblyEvaluated_ && !assemblyProcedural_)
         {
             const std::string suggested =
                 fmt::format("assets/scad/scenes/{}_editable.scad", sourcePath.stem().string());
@@ -1883,10 +2472,12 @@ namespace ScadLibrary
                 break;
             }
         }
+        preserveCameraOnNextSceneLoad_ = false;
         engine_.RequestLoadScene({.filename = openedAssemblyPath_});
         const char* editMode = assemblyStructured_
             ? " · 可视化对象编辑"
-            : (assemblyEvaluated_ ? " · 求值对象编辑（另存副本）" : " · 源码编辑");
+            : (assemblyProcedural_ ? " · Terrain 过程编辑"
+                                   : (assemblyEvaluated_ ? " · 求值对象编辑（另存副本）" : " · 源码编辑"));
         statusLine_ = fmt::format("已打开 {} · {} 个 Kit{}", relativePath, openedAssemblyKits_.size(), editMode);
         statusError_ = openedAssemblyKits_.empty();
         return true;
@@ -1894,6 +2485,16 @@ namespace ScadLibrary
 
     std::string ScadLibraryInterface::BuildAssemblyPreviewSource() const
     {
+        if (assemblyProcedural_)
+        {
+            const std::string source = BuildTerrainProcessSource();
+            if (openedAssemblyPath_.empty())
+            {
+                return source;
+            }
+            return RewriteScadDependencyPaths(source, std::filesystem::path(openedAssemblyPath_).parent_path(), {},
+                                              true);
+        }
         if (assemblyStructured_ || assemblyEvaluated_)
         {
             return BuildBenchSource();
@@ -1903,36 +2504,27 @@ namespace ScadLibrary
             return assemblySource_;
         }
 
-        static const std::regex useRegex(R"(((?:use|include)\s*<)([^>]+)(>))", std::regex_constants::icase);
-        std::string result;
-        std::string::const_iterator cursor = assemblySource_.begin();
-        std::smatch match;
-        while (std::regex_search(cursor, assemblySource_.end(), match, useRegex))
-        {
-            result.append(cursor, match[0].first);
-            std::filesystem::path dependencyPath(match[2].str());
-            if (!dependencyPath.is_absolute())
-            {
-                dependencyPath = std::filesystem::path(openedAssemblyPath_).parent_path() / dependencyPath;
-            }
-            result += match[1].str();
-            result += dependencyPath.lexically_normal().generic_string();
-            result += match[3].str();
-            cursor = match[0].second;
-        }
-        result.append(cursor, assemblySource_.end());
-        return result;
+        return RewriteScadDependencyPaths(assemblySource_, std::filesystem::path(openedAssemblyPath_).parent_path(), {},
+                                          true);
     }
+
+    std::string ScadLibraryInterface::BuildTerrainProcessSource() const { return terrainProcess_.BuildSource(); }
 
     void ScadLibraryInterface::PreviewAssemblySource()
     {
         rigPreview_.SetActive(false);
+        preserveCameraOnNextSceneLoad_ = assemblyProcedural_;
         if (WriteAndLoad("assembly_preview.scad", BuildAssemblyPreviewSource()))
         {
-            statusLine_ = (assemblyStructured_ || assemblyEvaluated_) ? fmt::format("预览 {} 个场景对象", bench_.size())
-                                                                      : "预览未保存的 SCAD 源码";
+            statusLine_ = assemblyProcedural_
+                ? fmt::format("预览 {} 个地形特征 / {} 条过程规则", terrainProcess_.Terrain().features.size(),
+                              terrainProcess_.ActiveRuleCount())
+                : ((assemblyStructured_ || assemblyEvaluated_) ? fmt::format("预览 {} 个场景对象", bench_.size())
+                                                               : "预览未保存的 SCAD 源码");
             statusError_ = false;
+            return;
         }
+        preserveCameraOnNextSceneLoad_ = false;
     }
 
     void ScadLibraryInterface::SaveAssembly(bool saveAs, bool reloadScene)
@@ -1973,8 +2565,20 @@ namespace ScadLibrary
 
         std::error_code ec;
         std::filesystem::create_directories(targetPath.parent_path(), ec);
-        const std::string source =
-            (assemblyStructured_ || assemblyEvaluated_) ? BuildBenchSource(targetPath) : assemblySource_;
+        std::string source;
+        if (assemblyProcedural_)
+        {
+            source = BuildTerrainProcessSource();
+            if (saveAs && !openedAssemblyPath_.empty())
+            {
+                source = RewriteScadDependencyPaths(source, std::filesystem::path(openedAssemblyPath_).parent_path(),
+                                                    targetPath.parent_path(), false);
+            }
+        }
+        else
+        {
+            source = (assemblyStructured_ || assemblyEvaluated_) ? BuildBenchSource(targetPath) : assemblySource_;
+        }
         std::ofstream output(targetPath, std::ios::binary | std::ios::trunc);
         if (!output)
         {
@@ -1990,13 +2594,19 @@ namespace ScadLibrary
         openedAssemblyKits_ = FindKitDependencies(source);
         assemblySourceDirty_ = false;
         benchDirty_ = false;
-        assemblyStructured_ = assemblyStructured_ || assemblyEvaluated_;
+        terrainProcessDirty_ = false;
+        assemblyStructured_ = !assemblyProcedural_ && (assemblyStructured_ || assemblyEvaluated_);
         assemblyEvaluated_ = false;
+        if (assemblyProcedural_)
+        {
+            assemblyProcedural_ = ImportTerrainProcessAssembly(openedAssemblyPath_, source);
+        }
         const std::filesystem::path repoRoot = scadRoot.parent_path().parent_path();
         const std::string relativePath = targetPath.lexically_relative(repoRoot).generic_string();
         std::snprintf(assemblyPathBuf_, sizeof(assemblyPathBuf_), "%s", relativePath.c_str());
         if (reloadScene)
         {
+            preserveCameraOnNextSceneLoad_ = assemblyProcedural_;
             engine_.RequestLoadScene({.filename = openedAssemblyPath_});
         }
         RescanAssemblies();
@@ -2004,6 +2614,31 @@ namespace ScadLibrary
                                   : fmt::format("已实时更新并写回 {}", relativePath);
         statusError_ = false;
         SPDLOG_INFO("[ScadLibrary] saved scene assembly -> {}", targetPath.string());
+    }
+
+    void ScadLibraryInterface::MarkTerrainProcessDirty()
+    {
+        terrainProcessDirty_ = true;
+        assemblySourceDirty_ = true;
+    }
+
+    void ScadLibraryInterface::ReloadTerrainProcess()
+    {
+        if (!assemblyProcedural_)
+        {
+            return;
+        }
+        rigPreview_.SetActive(false);
+        preserveCameraOnNextSceneLoad_ = true;
+        if (WriteAndLoad("terrain_process.scad", BuildAssemblyPreviewSource()))
+        {
+            terrainProcessDirty_ = false;
+            statusLine_ = fmt::format("已刷新 {} 个地形特征 / {} 条过程规则", terrainProcess_.Terrain().features.size(),
+                                      terrainProcess_.ActiveRuleCount());
+            statusError_ = false;
+            return;
+        }
+        preserveCameraOnNextSceneLoad_ = false;
     }
 
     void ScadLibraryInterface::ReloadBench()
@@ -2692,6 +3327,450 @@ namespace ScadLibrary
         }
         ImGui::End();
         ImGui::PopStyleVar();
+    }
+
+    bool ScadLibraryInterface::TerrainFeatureConsumesMouse(double x, double y) const
+    {
+        if (!IsTerrainProcessAssembly() || !showTerrainFeatureOverlay_)
+        {
+            return false;
+        }
+        if (terrainFeatureDragging_)
+        {
+            return true;
+        }
+
+        const glm::vec2 mouse(static_cast<float>(x), static_cast<float>(y));
+        for (const FTerrainFeatureHandle& handle : terrainFeatureHandles_)
+        {
+            if (glm::distance2(mouse, handle.screen) <= 144.0f)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool ScadLibraryInterface::ConsumePreserveCameraOnNextSceneLoad()
+    {
+        const bool preserve = preserveCameraOnNextSceneLoad_;
+        preserveCameraOnNextSceneLoad_ = false;
+        return preserve;
+    }
+
+    void ScadLibraryInterface::DrawTerrainFeatureToolbar(const ImVec2& viewportPos)
+    {
+        ImGui::SetNextWindowPos(ImVec2(viewportPos.x + 12.0f, viewportPos.y + 12.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.88f);
+        const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoSavedSettings;
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
+        if (ImGui::Begin("##TerrainFeatureToolbar", nullptr, flags))
+        {
+            ImGui::Checkbox("Feature 轮廓", &showTerrainFeatureOverlay_);
+            ImGui::SameLine();
+            const std::vector<Assets::Scad::FTerrainFeature>& features = terrainProcess_.Terrain().features;
+            if (selectedTerrainFeature_ >= 0 && selectedTerrainFeature_ < static_cast<int>(features.size()))
+            {
+                const Assets::Scad::FTerrainFeature& feature = features[selectedTerrainFeature_];
+                ImGui::TextDisabled("#%02d %s  ·  拖动圆点编辑中心/折点", selectedTerrainFeature_ + 1,
+                                    FTerrainProcessDocument::FeatureTypeName(feature.type));
+            }
+            else
+            {
+                ImGui::TextDisabled("从右侧 Feature 列表或视口圆点选择");
+            }
+        }
+        ImGui::End();
+        ImGui::PopStyleVar();
+    }
+
+    void ScadLibraryInterface::RefreshTerrainFeatureOverlayCache()
+    {
+        const Assets::Scad::FTerrainSpec& terrain = terrainProcess_.Terrain();
+        const std::string cacheKey = Assets::Scad::ScadTerrain::SpecCacheKey(terrain);
+        if (terrainFeatureOverlayData_ && terrainFeatureOverlayCacheKey_ == cacheKey)
+        {
+            return;
+        }
+        if (terrainFeatureOverlayData_ && (terrainFeatureDragging_ || ImGui::IsAnyItemActive()))
+        {
+            return;
+        }
+
+        terrainFeatureOverlayData_ = Assets::Scad::ScadTerrain::Build(terrain);
+        terrainFeatureOverlayCacheKey_ = cacheKey;
+    }
+
+    void ScadLibraryInterface::DrawTerrainFeatureOverlay(const ImVec2& viewportPos, const ImVec2& viewportSize)
+    {
+        terrainFeatureHandles_.clear();
+        if (!showTerrainFeatureOverlay_ || viewportSize.x <= 1.0f || viewportSize.y <= 1.0f)
+        {
+            terrainFeatureDragging_ = false;
+            return;
+        }
+
+        Assets::Scad::FTerrainSpec& terrain = terrainProcess_.Terrain();
+        if (terrain.features.empty())
+        {
+            selectedTerrainFeature_ = -1;
+            terrainFeatureDragging_ = false;
+            return;
+        }
+        selectedTerrainFeature_ = std::clamp(selectedTerrainFeature_, 0, static_cast<int>(terrain.features.size()) - 1);
+        RefreshTerrainFeatureOverlayCache();
+
+        const Assets::UniformBufferObject& ubo = engine_.GetLastUniformBufferObject();
+        ImDrawList* drawList = ImGui::GetForegroundDrawList();
+        drawList->PushClipRect(viewportPos, ImVec2(viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y),
+                               true);
+
+        const auto projectWorld = [&](const glm::vec3& world, ImVec2& screen)
+        {
+            const glm::vec4 clip = ubo.ViewProjection * glm::vec4(world, 1.0f);
+            if (clip.w <= 0.001f)
+            {
+                return false;
+            }
+            const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+            if (ndc.z < 0.0f || ndc.z > 1.0f || std::abs(ndc.x) > 1.2f || std::abs(ndc.y) > 1.2f)
+            {
+                return false;
+            }
+            screen.x = viewportPos.x + (ndc.x * 0.5f + 0.5f) * viewportSize.x;
+            screen.y = viewportPos.y + (ndc.y * 0.5f + 0.5f) * viewportSize.y;
+            return true;
+        };
+        const auto surfaceHeight = [&](const glm::dvec2& point)
+        {
+            return terrainFeatureOverlayData_ ? terrainFeatureOverlayData_->HeightAt(point.x, point.y)
+                                              : terrain.baseHeight;
+        };
+        const auto worldAt = [&](const glm::dvec2& point, double lift = 0.28)
+        { return Assets::Scad::ScadToWorldPos(glm::dvec3(point.x, point.y, surfaceHeight(point) + lift), 1.0); };
+        const auto colorForFeature = [](Assets::Scad::FTerrainFeature::EType type, int alpha)
+        {
+            using EType = Assets::Scad::FTerrainFeature::EType;
+            switch (type)
+            {
+            case EType::Mountain:
+                return IM_COL32(255, 132, 48, alpha);
+            case EType::Ridge:
+                return IM_COL32(255, 184, 72, alpha);
+            case EType::Plateau:
+                return IM_COL32(190, 116, 255, alpha);
+            case EType::Lake:
+                return IM_COL32(66, 205, 255, alpha);
+            case EType::River:
+                return IM_COL32(44, 139, 255, alpha);
+            case EType::Road:
+                return IM_COL32(255, 218, 84, alpha);
+            case EType::Pad:
+                return IM_COL32(255, 108, 196, alpha);
+            }
+            return IM_COL32(255, 255, 255, alpha);
+        };
+        const auto drawLabel = [&](const ImVec2& position, ImU32 color, const std::string& text)
+        {
+            const ImVec2 labelPos(position.x + 8.0f, position.y - 18.0f);
+            drawList->AddText(ImVec2(labelPos.x + 1.0f, labelPos.y + 1.0f), IM_COL32(0, 0, 0, 220), text.c_str());
+            drawList->AddText(labelPos, color, text.c_str());
+        };
+        const auto drawTerrainSegment = [&](const glm::dvec2& from, const glm::dvec2& to, ImU32 color, float thickness)
+        {
+            const int subdivisions = std::clamp(static_cast<int>(std::ceil(glm::distance(from, to) / 3.0)), 1, 64);
+            ImVec2 previous;
+            bool hasPrevious = false;
+            for (int step = 0; step <= subdivisions; ++step)
+            {
+                const double t = static_cast<double>(step) / subdivisions;
+                const glm::dvec2 point = glm::mix(from, to, t);
+                ImVec2 screen;
+                if (projectWorld(worldAt(point), screen))
+                {
+                    if (hasPrevious)
+                    {
+                        drawList->AddLine(previous, screen, color, thickness);
+                    }
+                    previous = screen;
+                    hasPrevious = true;
+                }
+                else
+                {
+                    hasPrevious = false;
+                }
+            }
+        };
+        const auto drawTerrainPolyline =
+            [&](const std::vector<glm::dvec2>& points, bool closed, ImU32 color, float thickness)
+        {
+            if (points.size() < 2)
+            {
+                return;
+            }
+            const size_t segmentCount = closed ? points.size() : points.size() - 1;
+            for (size_t segment = 0; segment < segmentCount; ++segment)
+            {
+                drawTerrainSegment(points[segment], points[(segment + 1) % points.size()], color, thickness);
+            }
+        };
+        const auto circlePoints = [](const glm::dvec2& center, double radius)
+        {
+            std::vector<glm::dvec2> points;
+            constexpr int segmentCount = 48;
+            points.reserve(segmentCount);
+            for (int segment = 0; segment < segmentCount; ++segment)
+            {
+                const double angle = glm::two_pi<double>() * static_cast<double>(segment) / segmentCount;
+                points.emplace_back(center + radius * glm::dvec2(std::cos(angle), std::sin(angle)));
+            }
+            return points;
+        };
+        const auto addHandle = [&](int featureIndex, int pointIndex, const glm::dvec2& point)
+        {
+            ImVec2 screen;
+            const glm::vec3 world = worldAt(point, 0.42);
+            if (projectWorld(world, screen))
+            {
+                terrainFeatureHandles_.push_back({featureIndex, pointIndex, glm::vec2(screen.x, screen.y), world.y});
+            }
+        };
+        const auto drawWidthBand =
+            [&](const std::vector<glm::dvec2>& points, double width, ImU32 lineColor, ImU32 fillColor, float thickness)
+        {
+            if (points.size() < 2)
+            {
+                return;
+            }
+            for (size_t segment = 0; segment + 1 < points.size(); ++segment)
+            {
+                const glm::dvec2 delta = points[segment + 1] - points[segment];
+                const double length = glm::length(delta);
+                if (length <= 1e-6)
+                {
+                    continue;
+                }
+                const glm::dvec2 side(-delta.y / length * width * 0.5, delta.x / length * width * 0.5);
+                const glm::dvec2 corners[] = {
+                    points[segment] + side,
+                    points[segment + 1] + side,
+                    points[segment + 1] - side,
+                    points[segment] - side,
+                };
+                ImVec2 projected[4];
+                bool allVisible = true;
+                for (int corner = 0; corner < 4; ++corner)
+                {
+                    allVisible &= projectWorld(worldAt(corners[corner], 0.18), projected[corner]);
+                }
+                if (allVisible)
+                {
+                    drawList->AddConvexPolyFilled(projected, 4, fillColor);
+                }
+                drawTerrainSegment(corners[0], corners[1], lineColor, thickness);
+                drawTerrainSegment(corners[3], corners[2], lineColor, thickness);
+            }
+            drawTerrainPolyline(points, false, lineColor, thickness + 0.5f);
+        };
+
+        using EType = Assets::Scad::FTerrainFeature::EType;
+        for (int featureIndex = 0; featureIndex < static_cast<int>(terrain.features.size()); ++featureIndex)
+        {
+            Assets::Scad::FTerrainFeature& feature = terrain.features[featureIndex];
+            const bool selected = featureIndex == selectedTerrainFeature_;
+            const ImU32 lineColor = colorForFeature(feature.type, selected ? 255 : 112);
+            const ImU32 fillColor = colorForFeature(feature.type, selected ? 46 : 18);
+            const float thickness = selected ? 2.4f : 1.25f;
+
+            if (feature.type == EType::Mountain || feature.type == EType::Plateau || feature.type == EType::Lake)
+            {
+                const std::vector<glm::dvec2> outline = circlePoints(feature.at, feature.radius);
+                drawTerrainPolyline(outline, true, lineColor, thickness);
+                drawTerrainSegment(feature.at, feature.at + glm::dvec2(feature.radius, 0.0), lineColor, thickness);
+                addHandle(featureIndex, -1, feature.at);
+                if (selected)
+                {
+                    addHandle(featureIndex, -2, feature.at + glm::dvec2(feature.radius, 0.0));
+                    ImVec2 centerScreen;
+                    if (projectWorld(worldAt(feature.at, 0.45), centerScreen))
+                    {
+                        if (feature.type == EType::Mountain)
+                        {
+                            drawLabel(centerScreen, lineColor,
+                                      fmt::format("山峰  r={:.1f}  h={:.1f}  rugged={:.2f}", feature.radius,
+                                                  feature.height, feature.rugged));
+                        }
+                        else if (feature.type == EType::Plateau)
+                        {
+                            drawLabel(centerScreen, lineColor,
+                                      fmt::format("台地  r={:.1f}  h={:.1f}", feature.radius, feature.height));
+                        }
+                        else
+                        {
+                            drawLabel(centerScreen, lineColor,
+                                      fmt::format("湖泊  r={:.1f}  depth={:.1f}", feature.radius, feature.depth));
+                        }
+                    }
+                }
+                if (selected && (feature.type == EType::Mountain || feature.type == EType::Plateau))
+                {
+                    const double base = surfaceHeight(feature.at) + 0.45;
+                    const glm::vec3 rulerBottom =
+                        Assets::Scad::ScadToWorldPos(glm::dvec3(feature.at.x, feature.at.y, base), 1.0);
+                    const glm::vec3 rulerTop = Assets::Scad::ScadToWorldPos(
+                        glm::dvec3(feature.at.x, feature.at.y, base + feature.height), 1.0);
+                    ImVec2 bottomScreen;
+                    ImVec2 topScreen;
+                    if (projectWorld(rulerBottom, bottomScreen) && projectWorld(rulerTop, topScreen))
+                    {
+                        drawList->AddLine(bottomScreen, topScreen, lineColor, 2.0f);
+                        drawList->AddCircleFilled(topScreen, 4.0f, lineColor);
+                        drawLabel(topScreen, lineColor, fmt::format("h={:.1f}", feature.height));
+                    }
+                }
+            }
+            else if (feature.type == EType::Ridge || feature.type == EType::River || feature.type == EType::Road)
+            {
+                drawWidthBand(feature.pts, feature.width, lineColor, fillColor, thickness);
+                for (int pointIndex = 0; pointIndex < static_cast<int>(feature.pts.size()); ++pointIndex)
+                {
+                    addHandle(featureIndex, pointIndex, feature.pts[pointIndex]);
+                }
+                if (selected && !feature.pts.empty())
+                {
+                    ImVec2 firstScreen;
+                    if (projectWorld(worldAt(feature.pts.front(), 0.45), firstScreen))
+                    {
+                        if (feature.type == EType::Ridge)
+                        {
+                            drawLabel(firstScreen, lineColor,
+                                      fmt::format("山脊  width={:.1f}  h={:.1f}", feature.width, feature.height));
+                        }
+                        else if (feature.type == EType::River)
+                        {
+                            drawLabel(firstScreen, lineColor,
+                                      fmt::format("河流  width={:.1f}  depth={:.1f}", feature.width, feature.depth));
+                        }
+                        else
+                        {
+                            drawLabel(firstScreen, lineColor, fmt::format("道路  width={:.1f}", feature.width));
+                        }
+                    }
+                }
+            }
+            else if (feature.type == EType::Pad)
+            {
+                const double angle = glm::radians(feature.rot);
+                const glm::dvec2 axisX(std::cos(angle), std::sin(angle));
+                const glm::dvec2 axisY(-axisX.y, axisX.x);
+                const glm::dvec2 halfX = axisX * feature.size.x * 0.5;
+                const glm::dvec2 halfY = axisY * feature.size.y * 0.5;
+                const std::vector<glm::dvec2> outline = {
+                    feature.at - halfX - halfY,
+                    feature.at + halfX - halfY,
+                    feature.at + halfX + halfY,
+                    feature.at - halfX + halfY,
+                };
+                drawTerrainPolyline(outline, true, lineColor, thickness);
+                addHandle(featureIndex, -1, feature.at);
+                if (selected)
+                {
+                    ImVec2 centerScreen;
+                    if (projectWorld(worldAt(feature.at, 0.45), centerScreen))
+                    {
+                        drawLabel(centerScreen, lineColor,
+                                  fmt::format("基座  {:.1f} × {:.1f}  rot={:.1f}°", feature.size.x, feature.size.y,
+                                              feature.rot));
+                    }
+                }
+            }
+        }
+
+        const glm::vec2 mouse(ImGui::GetIO().MousePos.x, ImGui::GetIO().MousePos.y);
+        int hoveredHandle = -1;
+        float nearestDistance = 144.0f;
+        for (int handleIndex = 0; handleIndex < static_cast<int>(terrainFeatureHandles_.size()); ++handleIndex)
+        {
+            const FTerrainFeatureHandle& handle = terrainFeatureHandles_[handleIndex];
+            const float distance = glm::distance2(mouse, handle.screen);
+            if (distance <= nearestDistance)
+            {
+                hoveredHandle = handleIndex;
+                nearestDistance = distance;
+            }
+        }
+
+        for (int handleIndex = 0; handleIndex < static_cast<int>(terrainFeatureHandles_.size()); ++handleIndex)
+        {
+            const FTerrainFeatureHandle& handle = terrainFeatureHandles_[handleIndex];
+            const bool selected = handle.featureIndex == selectedTerrainFeature_;
+            const bool hovered = handleIndex == hoveredHandle;
+            const Assets::Scad::FTerrainFeature& feature = terrain.features[handle.featureIndex];
+            const ImU32 color = colorForFeature(feature.type, selected ? 255 : 150);
+            const ImVec2 screen(handle.screen.x, handle.screen.y);
+            drawList->AddCircleFilled(screen, hovered ? 7.0f : (selected ? 5.5f : 3.5f),
+                                      hovered ? IM_COL32(255, 255, 255, 255) : color);
+            drawList->AddCircle(screen, hovered ? 7.0f : (selected ? 5.5f : 3.5f), IM_COL32(12, 18, 26, 230), 0, 1.5f);
+        }
+
+        const bool mouseInside = mouse.x >= viewportPos.x && mouse.y >= viewportPos.y &&
+            mouse.x < viewportPos.x + viewportSize.x && mouse.y < viewportPos.y + viewportSize.y;
+        if (hoveredHandle >= 0 || terrainFeatureDragging_)
+        {
+            ImGui::GetIO().WantCaptureMouse = true;
+        }
+        if (!terrainFeatureDragging_ && hoveredHandle >= 0 && mouseInside &&
+            ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            const FTerrainFeatureHandle& handle = terrainFeatureHandles_[hoveredHandle];
+            selectedTerrainFeature_ = handle.featureIndex;
+            terrainFeatureDragPoint_ = handle.pointIndex;
+            terrainFeatureDragPlaneHeight_ = handle.worldHeight;
+            terrainFeatureDragging_ = true;
+        }
+
+        if (terrainFeatureDragging_)
+        {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+            {
+                glm::vec3 rayOrigin;
+                glm::vec3 rayDirection;
+                Runtime::EngineHelper::GetScreenToWorldRay(mouse, rayOrigin, rayDirection);
+                if (std::abs(rayDirection.y) > 1e-5f)
+                {
+                    const float distance = (terrainFeatureDragPlaneHeight_ - rayOrigin.y) / rayDirection.y;
+                    if (distance > 0.0f && selectedTerrainFeature_ >= 0 &&
+                        selectedTerrainFeature_ < static_cast<int>(terrain.features.size()))
+                    {
+                        const glm::vec3 hit = rayOrigin + rayDirection * distance;
+                        const glm::dvec2 scadPoint(hit.x, -hit.z);
+                        Assets::Scad::FTerrainFeature& feature = terrain.features[selectedTerrainFeature_];
+                        if (terrainFeatureDragPoint_ == -2)
+                        {
+                            feature.radius = std::max(0.1, glm::distance(feature.at, scadPoint));
+                        }
+                        else if (terrainFeatureDragPoint_ == -1)
+                        {
+                            feature.at = scadPoint;
+                        }
+                        else if (terrainFeatureDragPoint_ >= 0 &&
+                                 terrainFeatureDragPoint_ < static_cast<int>(feature.pts.size()))
+                        {
+                            feature.pts[terrainFeatureDragPoint_] = scadPoint;
+                        }
+                        MarkTerrainProcessDirty();
+                    }
+                }
+            }
+            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+            {
+                terrainFeatureDragging_ = false;
+            }
+        }
+
+        drawList->PopClipRect();
     }
 
     void ScadLibraryInterface::CommitSceneGizmoEdit()

@@ -1,0 +1,172 @@
+{
+  "name": "scadlibrary-terrain-process",
+  "target": "ScadLibrary",
+  "scene": "assets/scad/terrain_layout_demo.scad",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1600,
+    "height": 900
+  },
+  "steps": [
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running",
+      "timeoutMs": 20000
+    },
+    {
+      "type": "wait-frames",
+      "n": 90
+    },
+    {
+      "type": "wait-frames",
+      "n": 300
+    },
+    {
+      "type": "assert",
+      "query": "scene.nodeCount",
+      "op": "ge",
+      "value": 100
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/scadlibrary_terrain_process",
+      "ui": true
+    },
+    {
+      "type": "mouse-move",
+      "to": {
+        "norm": [0.472, 0.419]
+      }
+    },
+    {
+      "type": "wait-frames",
+      "n": 2
+    },
+    {
+      "type": "mouse-button",
+      "button": "left",
+      "action": "down"
+    },
+    {
+      "type": "wait-frames",
+      "n": 2
+    },
+    {
+      "type": "mouse-move",
+      "to": {
+        "norm": [0.491, 0.439]
+      }
+    },
+    {
+      "type": "wait-frames",
+      "n": 3
+    },
+    {
+      "type": "mouse-button",
+      "button": "left",
+      "action": "up"
+    },
+    {
+      "type": "wait-frames",
+      "n": 45
+    },
+    {
+      "type": "wait-ms",
+      "ms": 500
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/scadlibrary_terrain_feature_drag",
+      "ui": true
+    },
+    {
+      "type": "mouse-move",
+      "to": {
+        "norm": [0.64, 0.78]
+      }
+    },
+    {
+      "type": "wait-frames",
+      "n": 3
+    },
+    {
+      "type": "scroll",
+      "y": 80
+    },
+    {
+      "type": "wait-frames",
+      "n": 30
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/scadlibrary_terrain_camera_before_rebuild",
+      "ui": true
+    },
+    {
+      "type": "mouse-move",
+      "to": {
+        "norm": [0.775, 0.699]
+      }
+    },
+    {
+      "type": "mouse-button",
+      "button": "left",
+      "action": "down"
+    },
+    {
+      "type": "wait-frames",
+      "n": 2
+    },
+    {
+      "type": "mouse-move",
+      "to": {
+        "norm": [0.795, 0.699]
+      }
+    },
+    {
+      "type": "wait-frames",
+      "n": 3
+    },
+    {
+      "type": "mouse-button",
+      "button": "left",
+      "action": "up"
+    },
+    {
+      "type": "wait-frames",
+      "n": 60
+    },
+    {
+      "type": "wait-ms",
+      "ms": 500
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/scadlibrary_terrain_camera_after_rebuild",
+      "ui": true
+    },
+    {
+      "type": "click",
+      "at": {
+        "norm": [0.84, 0.646]
+      }
+    },
+    {
+      "type": "wait-frames",
+      "n": 8
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/scadlibrary_terrain_process_rules",
+      "ui": true
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

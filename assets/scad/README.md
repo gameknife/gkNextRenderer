@@ -34,5 +34,32 @@
 `translate(...) rotate(...) scale(...) module(...);`。循环、条件、局部 module 和布局组合器
 会在副本中展开为确定实例；需要继续维护其生成逻辑时，应编辑原文件的“源码”页。
 
-含 `gk_terrain(TERR)` 的场景会额外保留 TERR 声明和地形调用源码。地形不作为普通 Kit
-实例进入对象列表，但在对象预览、另存可编辑副本以及后续 Gizmo 写回时始终保留。
+## Terrain 过程编辑
+
+含顶层 `gk_terrain(TERR)` 的场景会自动进入“过程”页，不再把求值结果展开成数百个普通对象：
+
+1. “地形画布”编辑 size、cells、seed、基底起伏、粗糙度、水位和 palette。
+2. “Terrain Features”按实际求值顺序编辑、增删和上下移动
+   `mountain/ridge/plateau/lake/river/road/pad`；ridge/river/road 的折点可逐点编辑。
+3. 中央视口同步显示 feature 的地表轮廓：圆形 feature 的半径、山峰/台地的高度标尺、
+   ridge/river/road 的中心折线和宽度边界，以及 pad 占地框。点击/拖动圆点可选择并移动
+   中心或折点；选中圆形 feature 后可拖动半径手柄。
+4. “贴地过程规则”结构化编辑 `ter_place`、`ter_place_tilt`、`ter_snap`、`ter_along` 和
+   `ter_scatter`；桥梁常用的
+   `translate([x,y,gk_terrain_height(TERR,sampleX,sampleY)+dz])` 也会显示为独立高度锚点。
+   组合子的 child 保持为一段 SCAD，可继续写模块参数、`rotate` 链、`lay_pick` 或代码块。
+5. 在左侧 Kit 浏览器点模块的“+”，会向当前过程场景追加一条以该模块为 child 的
+   `ter_place`。
+6. 自动刷新只生成工作区预览；“保存”才写回源文件。写回只替换 TERR 赋值和已识别的顶层
+   `ter_*` 语句，桥梁高度表达式、注释和其他自由 SCAD 原样保留。过程预览重建会保留当前
+   相机位置、方向和缩放，便于连续编辑控制点。
+
+过程参数必须是数值、布尔、字符串或数组字面量。使用变量/函数计算参数的 `ter_*` 语句会留在
+源码中并显示提示，不会被错误地结构化。需要编辑这类表达式时使用“源码”页。
+
+命令行可以直接打开过程场景，适合快速验证：
+
+```bash
+gnb run ScadLibrary --scene assets/scad/terrain_layout_demo.scad
+gnb validate --script assets/agentscripts/scadlibrary-terrain-process.agentscript.json
+```
