@@ -39,6 +39,7 @@ public:
     bool OnCursorPosition(double xpos, double ypos) override;
     bool OnMouseButton(SDL_Event& event) override;
     bool OnScroll(double xoffset, double yoffset) override;
+    bool WantsMouseInputWhenUiCaptures() const override { return true; }
 
 private:
     std::unique_ptr<ScadLibrary::ScadLibraryInterface> ui_;

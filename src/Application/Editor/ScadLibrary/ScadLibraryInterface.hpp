@@ -233,6 +233,8 @@ namespace ScadLibrary
         float terrainRuleDragPlaneHeight_ = 0.0f;
         glm::vec2 terrainDragStartMouse_{0.0f};
         double terrainDragStartValue_ = 0.0;
+        bool terrainDragCopyRequested_ = false;
+        bool terrainDragCopied_ = false;
         std::vector<FTerrainRuleHandle> terrainRuleHandles_;
         std::string terrainFeatureOverlayCacheKey_;
         std::shared_ptr<const Assets::Scad::FTerrainData> terrainFeatureOverlayData_;

@@ -3433,12 +3433,14 @@ namespace ScadLibrary
                 ImGui::TextColored(ImVec4(0.31f, 1.0f, 0.59f, 1.0f), "■ #%02d %s  ·  再次拖动方形手柄编辑",
                                    selectedTerrainRule_ + 1,
                                    FTerrainProcessDocument::RuleTypeName(rules[selectedTerrainRule_].type));
+                ImGui::SameLine();
+                ImGui::TextDisabled("· Shift 拖动复制");
             }
             else if (!terrainSelectionIsRule_ && selectedTerrainFeature_ >= 0 &&
                      selectedTerrainFeature_ < static_cast<int>(features.size()))
             {
                 const Assets::Scad::FTerrainFeature& feature = features[selectedTerrainFeature_];
-                ImGui::TextDisabled("#%02d %s  ·  再次拖动圆点编辑", selectedTerrainFeature_ + 1,
+                ImGui::TextDisabled("#%02d %s  ·  再次拖动圆点编辑  ·  Shift 拖动复制", selectedTerrainFeature_ + 1,
                                     FTerrainProcessDocument::FeatureTypeName(feature.type));
             }
             else
@@ -3496,7 +3498,7 @@ namespace ScadLibrary
 
         const auto projectWorld = [&](const glm::vec3& world, ImVec2& screen)
         {
-            const glm::vec4 clip = ubo.ViewProjection * glm::vec4(world, 1.0f);
+            const glm::vec4 clip = ubo.ViewProjectionUnJit * glm::vec4(world, 1.0f);
             if (clip.w <= 0.001f)
             {
                 return false;
@@ -4145,6 +4147,9 @@ namespace ScadLibrary
                 terrainRuleDragPoint_ = handle.pointIndex;
                 terrainRuleDragPlaneHeight_ = handle.worldHeight;
                 terrainDragStartMouse_ = mouse;
+                terrainDragCopyRequested_ =
+                    ImGui::IsKeyDown(ImGuiKey_LeftShift) || ImGui::IsKeyDown(ImGuiKey_RightShift);
+                terrainDragCopied_ = false;
                 if (handle.pointIndex == -5)
                 {
                     terrainDragStartValue_ = rules[handle.ruleIndex].count;
@@ -4165,6 +4170,9 @@ namespace ScadLibrary
                 terrainFeatureDragPoint_ = handle.pointIndex;
                 terrainFeatureDragPlaneHeight_ = handle.worldHeight;
                 terrainDragStartMouse_ = mouse;
+                terrainDragCopyRequested_ =
+                    ImGui::IsKeyDown(ImGuiKey_LeftShift) || ImGui::IsKeyDown(ImGuiKey_RightShift);
+                terrainDragCopied_ = false;
                 if (handle.pointIndex == -3)
                 {
                     const Assets::Scad::FTerrainFeature& feature = terrain.features[handle.featureIndex];
@@ -4179,6 +4187,15 @@ namespace ScadLibrary
         {
             if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && glm::distance2(mouse, terrainDragStartMouse_) > 4.0f)
             {
+                if (terrainDragCopyRequested_ && !terrainDragCopied_ && selectedTerrainFeature_ >= 0 &&
+                    selectedTerrainFeature_ < static_cast<int>(terrain.features.size()))
+                {
+                    terrain.features.push_back(terrain.features[selectedTerrainFeature_]);
+                    selectedTerrainFeature_ = static_cast<int>(terrain.features.size()) - 1;
+                    scrollToSelectedTerrainItem_ = true;
+                    terrainDragCopied_ = true;
+                    MarkTerrainProcessDirty();
+                }
                 if (selectedTerrainFeature_ >= 0 &&
                     selectedTerrainFeature_ < static_cast<int>(terrain.features.size()) &&
                     terrainFeatureDragPoint_ == -3)
@@ -4242,12 +4259,23 @@ namespace ScadLibrary
             if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
             {
                 terrainFeatureDragging_ = false;
+                terrainDragCopyRequested_ = false;
+                terrainDragCopied_ = false;
             }
         }
         if (terrainRuleDragging_)
         {
             if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && glm::distance2(mouse, terrainDragStartMouse_) > 4.0f)
             {
+                if (terrainDragCopyRequested_ && !terrainDragCopied_ && selectedTerrainRule_ >= 0 &&
+                    selectedTerrainRule_ < static_cast<int>(rules.size()))
+                {
+                    terrainProcess_.DuplicateRule(static_cast<size_t>(selectedTerrainRule_), false);
+                    selectedTerrainRule_ = static_cast<int>(rules.size()) - 1;
+                    scrollToSelectedTerrainItem_ = true;
+                    terrainDragCopied_ = true;
+                    MarkTerrainProcessDirty();
+                }
                 if (selectedTerrainRule_ >= 0 && selectedTerrainRule_ < static_cast<int>(rules.size()) &&
                     terrainRuleDragPoint_ == -5)
                 {
@@ -4314,6 +4342,8 @@ namespace ScadLibrary
             if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
             {
                 terrainRuleDragging_ = false;
+                terrainDragCopyRequested_ = false;
+                terrainDragCopied_ = false;
             }
         }
 
@@ -4539,7 +4569,7 @@ namespace ScadLibrary
 
         const Assets::UniformBufferObject& ubo = engine_.GetLastUniformBufferObject();
         const glm::mat4& view = ubo.ModelView;
-        glm::mat4 projection = ubo.Projection;
+        glm::mat4 projection = ubo.ProjectionUnJit;
         projection[1][1] *= -1.0f;
 
         constexpr ImGuizmo::OPERATION operations[] = {ImGuizmo::TRANSLATE, ImGuizmo::ROTATE};
@@ -4609,7 +4639,7 @@ namespace ScadLibrary
 
         const Assets::UniformBufferObject& ubo = engine_.GetLastUniformBufferObject();
         const glm::mat4& view = ubo.ModelView;
-        glm::mat4 projection = ubo.Projection;
+        glm::mat4 projection = ubo.ProjectionUnJit;
         projection[1][1] *= -1.0f;
         glm::mat4 worldMatrix = boneNode->WorldTransform();
 

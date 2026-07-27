@@ -996,7 +996,7 @@ namespace ScadLibrary
         return rules_.back();
     }
 
-    void FTerrainProcessDocument::DuplicateRule(size_t index)
+    void FTerrainProcessDocument::DuplicateRule(size_t index, bool offsetPosition)
     {
         if (index >= rules_.size())
         {
@@ -1006,8 +1006,11 @@ namespace ScadLibrary
         copy.sourceBegin = std::string::npos;
         copy.sourceEnd = std::string::npos;
         copy.removed = false;
-        copy.x += 2.0;
-        copy.y += 2.0;
+        if (offsetPosition)
+        {
+            copy.x += 2.0;
+            copy.y += 2.0;
+        }
         rules_.push_back(std::move(copy));
     }
 

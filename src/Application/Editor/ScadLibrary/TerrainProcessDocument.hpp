@@ -81,7 +81,7 @@ namespace ScadLibrary
         const std::string& TerrainVariable() const { return terrainVariable_; }
 
         FTerrainProcessRule& AddRule(ETerrainProcessRuleType type, std::string childSource = {});
-        void DuplicateRule(size_t index);
+        void DuplicateRule(size_t index, bool offsetPosition = true);
         void RemoveRule(size_t index);
         size_t ActiveRuleCount() const;
 

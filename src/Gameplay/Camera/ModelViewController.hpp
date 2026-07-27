@@ -1,127 +1,123 @@
 #pragma once
 
-#include "Engine/Assets/AssetsFwd.hpp"
-#include "Gameplay/Camera/FocusAnimation.hpp"
-#include "Engine/Utilities/Glm.hpp"
 #include <SDL3/SDL_keycode.h>
 #include <optional>
+#include "Engine/Assets/AssetsFwd.hpp"
+#include "Engine/Utilities/Glm.hpp"
+#include "Gameplay/Camera/FocusAnimation.hpp"
 
 union SDL_Event;
 
 namespace Runtime::Camera
 {
 
-struct MovementInput
-{
-    float forward = 0.0f;   // [-1, 1]
-    float right = 0.0f;     // [-1, 1]
-    float up = 0.0f;        // [-1, 1]
-
-    bool IsActive() const
+    struct MovementInput
     {
-        return forward != 0.0f || right != 0.0f || up != 0.0f;
-    }
+        float forward = 0.0f; // [-1, 1]
+        float right = 0.0f; // [-1, 1]
+        float up = 0.0f; // [-1, 1]
 
-    void Reset()
+        bool IsActive() const { return forward != 0.0f || right != 0.0f || up != 0.0f; }
+
+        void Reset() { forward = right = up = 0.0f; }
+    };
+
+    class ModelViewController final
     {
-        forward = right = up = 0.0f;
-    }
-};
+    public:
+        void Reset(const Assets::Camera& RenderCamera);
 
-class ModelViewController final
-{
-public:
+        glm::mat4 ModelView() const;
+        float FieldOfView() const { return fieldOfView_; }
+        glm::vec4 Position() const { return position_; }
 
-     void Reset(const Assets::Camera& RenderCamera);
+        bool OnKey(SDL_Event& event);
+        bool OnCursorPosition(double xpos, double ypos);
+        bool OnMouseButton(SDL_Event& event);
+        bool OnTouch(bool down, double xpos, double ypos);
+        void OnScroll(double xoffset, double yoffset);
 
-     glm::mat4 ModelView() const;
-     float FieldOfView() const { return fieldOfView_; }
-     glm::vec4 Position() const { return position_; }
+        void SetKeyHeld(SDL_Keycode key, bool held);
+        void ApplyMouseMove(double x, double y, bool relative);
+        void ApplyMouseButton(uint8_t button, bool down, double x, double y);
+        void ApplyWheel(double xoffset, double yoffset);
+        void SetLeftDragPans(bool enabled) { leftDragPans_ = enabled; }
+        void SetNavigationScale(float scale);
+        bool IsRightMousePressed() const { return mouseRightPressed_; }
 
-     bool OnKey(SDL_Event& event);
-     bool OnCursorPosition(double xpos, double ypos);
-     bool OnMouseButton(SDL_Event& event);
-     bool OnTouch(bool down, double xpos, double ypos);
-     void OnScroll(double xoffset, double yoffset);
+        bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY, int16_t rightStickX, int16_t rightStickY,
+                            int16_t leftTrigger, int16_t rightTrigger);
+        bool UpdateCamera(double speed, double timeDelta);
 
-     void SetKeyHeld(SDL_Keycode key, bool held);
-     void ApplyMouseMove(double x, double y, bool relative);
-     void ApplyMouseButton(uint8_t button, bool down, double x, double y);
-     void ApplyWheel(double xoffset, double yoffset);
+        void SetModelRotation(double x, double y)
+        {
+            modelRotX_ = x;
+            modelRotY_ = y;
+        }
 
-     bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY,
-                        int16_t rightStickX, int16_t rightStickY,
-                        int16_t leftTrigger, int16_t rightTrigger);
-     bool UpdateCamera(double speed, double timeDelta);
+        void SetOrbitTarget(std::optional<glm::vec3> target) { orbitTarget_ = target; }
+        void SetAltPressed(bool pressed) { altPressed_ = pressed; }
+        void Focus(const glm::vec3& focusPoint, float radius = 0.5f);
 
-    void SetModelRotation(double x, double y)
-    {
-        modelRotX_ = x;
-        modelRotY_ = y;
-    }
+        glm::vec3 GetRight() const;
+        glm::vec3 GetUp() const;
+        glm::vec3 GetForward() const;
+        glm::vec3 GetPosition() const;
 
-    void SetOrbitTarget(std::optional<glm::vec3> target) { orbitTarget_ = target; }
-    void SetAltPressed(bool pressed) { altPressed_ = pressed; }
-    void Focus(const glm::vec3& focusPoint, float radius = 0.5f);
+    private:
+        void MoveForward(float d);
+        void MoveRight(float d);
+        void MoveUp(float d);
+        void Rotate(float y, float x);
+        void Orbit(float x, float y);
+        void UpdateVectors();
 
-    glm::vec3 GetRight() const;
-    glm::vec3 GetUp() const;
-    glm::vec3 GetForward() const;
-    glm::vec3 GetPosition() const;
+        // Matrices and vectors.
+        glm::mat4 orientation_{};
 
-private:
+        glm::vec4 position_{};
+        glm::vec4 right_{1, 0, 0, 0};
+        glm::vec4 up_{0, 1, 0, 0};
+        glm::vec4 forward_{0, 0, -1, 0};
 
-    void MoveForward(float d);
-    void MoveRight(float d);
-    void MoveUp(float d);
-    void Rotate(float y, float x);
-    void Orbit(float x, float y);
-    void UpdateVectors();
+        // Orbit control
+        std::optional<glm::vec3> orbitTarget_;
+        bool altPressed_{};
 
-    // Matrices and vectors.
-    glm::mat4 orientation_{};
+        // Focus animation
+        FocusAnimation focusAnimation_;
 
-    glm::vec4 position_{};
-    glm::vec4 right_{ 1, 0, 0, 0 };
-    glm::vec4 up_{ 0, 1, 0, 0 };
-    glm::vec4 forward_{ 0, 0, -1, 0 };
+        // Movement input (replaces 12 bools)
+        MovementInput keyboardInput_;
+        MovementInput gamepadInput_;
 
-    // Orbit control
-    std::optional<glm::vec3> orbitTarget_;
-    bool altPressed_{};
+        // with smooth movement
+        double cameraRotX_{};
+        double cameraRotY_{};
+        double cameraRotXAbs_{};
+        double cameraRotYAbs_{};
+        double modelRotX_{};
+        double modelRotY_{};
 
-    // Focus animation
-    FocusAnimation focusAnimation_;
+        double rawCameraRotX_{};
+        double rawCameraRotY_{};
+        double rawModelRotX_{};
+        double rawModelRotY_{};
 
-    // Movement input (replaces 12 bools)
-    MovementInput keyboardInput_;
-    MovementInput gamepadInput_;
+        double mousePosX_{};
+        double mousePosY_{};
 
-    // with smooth movement
-    double cameraRotX_{};
-    double cameraRotY_{};
-    double cameraRotXAbs_{};
-    double cameraRotYAbs_{};
-    double modelRotX_{};
-    double modelRotY_{};
+        bool resetMousePos_{};
+        bool mouseLeftPressed_{};
+        bool mouseRightPressed_{};
+        bool leftDragPans_{};
 
-    double rawCameraRotX_ {};
-    double rawCameraRotY_ {};
-    double rawModelRotX_ {};
-    double rawModelRotY_ {};
-    
-    double mousePosX_{};
-    double mousePosY_{};
+        double mouseSensitive_{};
+        float navigationScale_{};
 
-    bool resetMousePos_{};
-    bool mouseLeftPressed_{};
-    bool mouseRightPressed_{};
+        float fieldOfView_{};
 
-    double mouseSensitive_ {};
+        bool movedByEvent_{};
+    };
 
-    float fieldOfView_ {};
-
-    bool movedByEvent_ {};
-};
-
-}
+} // namespace Runtime::Camera

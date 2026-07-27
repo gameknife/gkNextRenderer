@@ -159,6 +159,13 @@ TEST_CASE("ScadLibrary terrain process editor round-trips terrain_layout_demo",
     added.x = 12.0;
     added.y = -8.0;
 
+    FTerrainProcessDocument duplicationDocument = document;
+    const size_t duplicateSourceIndex = duplicationDocument.Rules().size() - 1;
+    duplicationDocument.DuplicateRule(duplicateSourceIndex, false);
+    REQUIRE(duplicationDocument.Rules().size() == document.Rules().size() + 1);
+    CHECK(duplicationDocument.Rules().back().x == Catch::Approx(12.0));
+    CHECK(duplicationDocument.Rules().back().y == Catch::Approx(-8.0));
+
     const std::string generated = document.BuildSource();
     CHECK(generated.find("// ---- 桥:横跨河道") != std::string::npos);
     CHECK(generated.find("gk_terrain_height(TERR, -8.5, -31)") != std::string::npos);

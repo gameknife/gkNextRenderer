@@ -10,7 +10,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     {
         return;
     }
-    FVisibilityBufferRayCaster rayCaster;
+    FHardwarePrimaryRayCaster rayCaster;
     FHardwareRayTracer tracer;
     FHardwareDirectIlluminator dIlluminator;
     // The update pass must keep the classic single-sample estimator: reservoir samples are

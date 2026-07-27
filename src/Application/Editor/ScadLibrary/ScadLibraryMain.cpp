@@ -26,6 +26,7 @@ ScadLibraryGameInstance::ScadLibraryGameInstance(Vulkan::WindowConfig& config, R
                                                  NextEngine* engine) : NextGameInstanceBase(config, options, engine)
 {
     ui_ = std::make_unique<ScadLibrary::ScadLibraryInterface>(*engine, options.SceneName);
+    cameraController_.SetLeftDragPans(true);
 
     const glm::ivec2 monitorSize = GetEngine().GetMonitorSize();
     config.Title = "SCAD Library";
@@ -72,25 +73,32 @@ void ScadLibraryGameInstance::OnSceneUnloaded() { ui_->RigPreview().OnSceneUnloa
 void ScadLibraryGameInstance::OnSceneLoaded()
 {
     ui_->RigPreview().OnSceneLoaded(GetEngine().GetScene());
-    if (ui_->ConsumePreserveCameraOnNextSceneLoad())
-    {
-        return;
-    }
 
-    // Re-frame whatever was just previewed/composed and orbit around it.
     Assets::Scene& scene = GetEngine().GetScene();
-    cameraController_.Reset(scene.GetRenderCamera());
-
     const glm::vec3 minBounds = scene.GetSceneAABBMin();
     const glm::vec3 maxBounds = scene.GetSceneAABBMax();
     if (glm::all(glm::lessThan(minBounds, maxBounds)))
     {
         const glm::vec3 center = (minBounds + maxBounds) * 0.5f;
         const float radius = std::max(glm::length(maxBounds - minBounds) * 0.5f, 0.5f);
+        cameraController_.SetNavigationScale(radius);
+        if (ui_->ConsumePreserveCameraOnNextSceneLoad())
+        {
+            return;
+        }
+
+        // Re-frame whatever was just previewed/composed and orbit around it.
+        cameraController_.Reset(scene.GetRenderCamera());
         cameraController_.SetOrbitTarget(center);
         cameraController_.SetAltPressed(true);
         cameraController_.Focus(center, radius);
+        return;
     }
+    if (ui_->ConsumePreserveCameraOnNextSceneLoad())
+    {
+        return;
+    }
+    cameraController_.Reset(scene.GetRenderCamera());
 }
 
 void ScadLibraryGameInstance::OnPreConfigUI() { ui_->Config(); }
@@ -143,7 +151,7 @@ bool ScadLibraryGameInstance::OnKey(SDL_Event& event)
 
 bool ScadLibraryGameInstance::OnCursorPosition(double xpos, double ypos)
 {
-    if (!ui_->IsTerrainFeatureDragging())
+    if (cameraController_.IsRightMousePressed() || !ui_->IsTerrainFeatureDragging())
     {
         cameraController_.OnCursorPosition(xpos, ypos);
     }
@@ -152,7 +160,13 @@ bool ScadLibraryGameInstance::OnCursorPosition(double xpos, double ypos)
 
 bool ScadLibraryGameInstance::OnMouseButton(SDL_Event& event)
 {
-    // Don't start an orbit drag when the cursor is over a panel/widget.
+    if (event.button.button == SDL_BUTTON_RIGHT)
+    {
+        cameraController_.OnMouseButton(event);
+        return true;
+    }
+
+    // Don't start a pan drag when the cursor is over a panel/widget.
     if (ImGui::GetIO().WantCaptureMouse && event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
     {
         return true;
