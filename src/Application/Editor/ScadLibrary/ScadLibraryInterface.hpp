@@ -72,7 +72,7 @@ namespace ScadLibrary
         void SaveCurrentAssembly() { SaveAssembly(false); }
         bool SelectSceneObjectFromViewport(uint32_t hitInstanceId);
         bool TerrainFeatureConsumesMouse(double x, double y) const;
-        bool IsTerrainFeatureDragging() const { return terrainFeatureDragging_; }
+        bool IsTerrainFeatureDragging() const { return terrainFeatureDragging_ || terrainRuleDragging_; }
         bool IsTerrainProcessAssembly() const
         {
             return workspaceMode_ == EWorkspaceMode::SceneAssembly && assemblyProcedural_;
@@ -204,17 +204,36 @@ namespace ScadLibrary
         struct FTerrainFeatureHandle
         {
             int featureIndex = -1;
-            // -1: feature center, -2: radius, >= 0: polyline control point.
+            // -1: feature center, -2: radius, -3: height/depth, -4: width,
+            // >= 0: polyline control point.
             int pointIndex = -1;
             glm::vec2 screen{0.0f};
             float worldHeight = 0.0f;
         };
         int selectedTerrainFeature_ = 0;
+        bool terrainSelectionIsRule_ = false;
+        bool scrollToSelectedTerrainItem_ = false;
         int terrainFeatureDragPoint_ = -1;
         bool showTerrainFeatureOverlay_ = true;
         bool terrainFeatureDragging_ = false;
         float terrainFeatureDragPlaneHeight_ = 0.0f;
         std::vector<FTerrainFeatureHandle> terrainFeatureHandles_;
+        struct FTerrainRuleHandle
+        {
+            int ruleIndex = -1;
+            // -1: position, -2: height sample, -3/-4: scatter region,
+            // -5: scatter count, >= 0: along point.
+            int pointIndex = -1;
+            glm::vec2 screen{0.0f};
+            float worldHeight = 0.0f;
+        };
+        int selectedTerrainRule_ = 0;
+        int terrainRuleDragPoint_ = -1;
+        bool terrainRuleDragging_ = false;
+        float terrainRuleDragPlaneHeight_ = 0.0f;
+        glm::vec2 terrainDragStartMouse_{0.0f};
+        double terrainDragStartValue_ = 0.0;
+        std::vector<FTerrainRuleHandle> terrainRuleHandles_;
         std::string terrainFeatureOverlayCacheKey_;
         std::shared_ptr<const Assets::Scad::FTerrainData> terrainFeatureOverlayData_;
         // Placement cursor for newly added items (footprint-aware row layout).

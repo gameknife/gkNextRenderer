@@ -77,9 +77,18 @@ ter_ok(t, x, y, filt) / ter_biome(name)                   // 过滤谓词 / biom
 - 中央视口会把 feature 直接画在地形表面：山峰/台地/湖泊显示半径轮廓，山峰/台地显示高度标尺，
   ridge/river/road 显示中心折线、宽度边界和控制点，pad 显示旋转后的占地框。
 - 右侧列表与视口选择双向同步；拖动中心点或折线控制点可直接改 XY，选中圆形 feature 后还可拖动
-  半径手柄。覆盖层使用当前 TERR 的网格高度缓存，拖动时不重建，松手后一次性刷新预览。
+  半径手柄。山峰/台地/山脊的竖直手柄编辑高度，湖泊/河流的竖直手柄编辑深度，
+  ridge/river/road 的横向手柄编辑宽度。覆盖层使用当前 TERR 的网格高度缓存，拖动时不重建，
+  松手后一次性刷新预览。
 - Terrain 自动刷新、手动预览和保存后的场景重建会保留当前相机位置、方向与缩放；只有真正打开
   另一个 SCAD 场景时才重新按场景边界取景。
+- 过程规则也显示在地形表面：`ter_place/place_tilt/snap` 为落点（tilt 另带 probe 圈），
+  `ter_along` 为折线和方形折点，`ter_scatter` 为区域轮廓；高度锚点同时连接摆放点与取样点。
+  方形手柄可拖动。按 `offset/step` 展开的 along 实例点，以及经过高度/坡度/水域/biome
+  过滤后的 scatter 确定性点集，仅在对应规则被选中时显示，避免过程结果遮挡场景。选中 scatter
+  后还会显示 `count` 竖直手柄，上下拖动可直接调整散布数量。
+- 视口采用两阶段编辑：首次点击未选中手柄只选择并定位右侧面板，再次按住已选中手柄并拖动才
+  修改参数；Feature 与规则共享单一选中态，右侧只展开当前项。
 - 顶层 `ter_place/place_tilt/snap/along/scatter` 的语义参数可视化编辑，child SCAD 原样保留；
   桥梁用的 `gk_terrain_height(TERR, sampleX, sampleY)` 高度锚点会拆分显示摆放点与岸上取样点。
 - 从左侧 Kit 浏览器添加模块时，过程场景会生成 `ter_place(TERR, x, y)`，而不是平地对象。
@@ -92,6 +101,7 @@ ter_ok(t, x, y, filt) / ter_biome(name)                   // 过滤谓词 / biom
 gkNextUnitTests "[TerrainProcess]"  # demo 解析、编辑、再解析、真实 Kit 求值 0 warning
 gnb validate --script assets/agentscripts/scadlibrary-terrain-process.agentscript.json
 ```
+`ter_scatter` 的 region 推荐 `[cx,cy,r]` 圆形区域；旧 `[x0,y0,x1,y1]` AABB 仍兼容。
 
 ## 引擎侧（可行走闭环）
 

@@ -43,11 +43,18 @@
    `mountain/ridge/plateau/lake/river/road/pad`；ridge/river/road 的折点可逐点编辑。
 3. 中央视口同步显示 feature 的地表轮廓：圆形 feature 的半径、山峰/台地的高度标尺、
    ridge/river/road 的中心折线和宽度边界，以及 pad 占地框。点击/拖动圆点可选择并移动
-   中心或折点；选中圆形 feature 后可拖动半径手柄。
+   中心或折点；选中圆形 feature 后可拖动半径手柄。竖直手柄可编辑山峰/台地/山脊高度和
+   湖泊/河流深度，横向手柄可编辑 ridge/river/road 宽度。
 4. “贴地过程规则”结构化编辑 `ter_place`、`ter_place_tilt`、`ter_snap`、`ter_along` 和
    `ter_scatter`；桥梁常用的
    `translate([x,y,gk_terrain_height(TERR,sampleX,sampleY)+dz])` 也会显示为独立高度锚点。
-   组合子的 child 保持为一段 SCAD，可继续写模块参数、`rotate` 链、`lay_pick` 或代码块。
+   组合子的 child 保持为一段 SCAD，可继续写模块参数、`rotate` 链、`lay_pick` 或代码块。视口
+   用绿色方形手柄显示规则落点/折点/区域角点；只有当前选中的规则会展开 `ter_along` 实例点或
+   `ter_scatter` 过滤后的确定性点集，未选中规则只保留编辑轮廓和手柄。scatter 推荐圆形
+   `[cx,cy,r]` 区域，可直接拖圆心和半径，并通过竖直 `count` 手柄调整数量；旧 AABB
+   `[x0,y0,x1,y1]` 可在面板中保留或切换。
+   第一次点击未选中手柄只负责选择；再次按住已选中手柄拖动才会改参数。右侧会自动滚动并只展开
+   当前选中的 Feature 或规则。
 5. 在左侧 Kit 浏览器点模块的“+”，会向当前过程场景追加一条以该模块为 child 的
    `ter_place`。
 6. 自动刷新只生成工作区预览；“保存”才写回源文件。写回只替换 TERR 赋值和已识别的顶层

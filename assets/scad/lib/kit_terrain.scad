@@ -106,18 +106,18 @@ module ter_along(t, pts, step = 6, seed = 0, offset = 0, dz = 0)
 }
 
 // ================= 过滤散布(拒绝采样) =================
-// 在 region = [x0, y0, x1, y1](min/max 角点)内确定性散布,候选上限 4n,
+// region = [cx,cy,r] 为圆形区域；旧 [x0,y0,x1,y1] AABB 继续兼容。
 // 逐点用 ter_ok 过滤后取前 n 件,贴地放置。rot=true 随机朝向。
 // 同 (t, seed, n, region, filt) → 同点集,可回归。
 module ter_scatter(t, seed = 0, n = 10, region = [-20, -20, 20, 20], filt = [], rot = true, dz = 0)
 {
     ter_sc_pts = [for (i = [0 : n * 4 - 1])
         if (ter_ok(t,
-                   lay_randr(seed * 8191 + i * 131, 1, region[0], region[2]),
-                   lay_randr(seed * 8191 + i * 131, 2, region[1], region[3]),
+                   len(region) == 3 ? region[0] + sqrt(lay_randf(seed * 8191 + i * 131, 1)) * region[2] * cos(lay_randr(seed * 8191 + i * 131, 2, 0, 360)) : lay_randr(seed * 8191 + i * 131, 1, region[0], region[2]),
+                   len(region) == 3 ? region[1] + sqrt(lay_randf(seed * 8191 + i * 131, 1)) * region[2] * sin(lay_randr(seed * 8191 + i * 131, 2, 0, 360)) : lay_randr(seed * 8191 + i * 131, 2, region[1], region[3]),
                    filt))
-            [lay_randr(seed * 8191 + i * 131, 1, region[0], region[2]),
-             lay_randr(seed * 8191 + i * 131, 2, region[1], region[3]),
+            [len(region) == 3 ? region[0] + sqrt(lay_randf(seed * 8191 + i * 131, 1)) * region[2] * cos(lay_randr(seed * 8191 + i * 131, 2, 0, 360)) : lay_randr(seed * 8191 + i * 131, 1, region[0], region[2]),
+             len(region) == 3 ? region[1] + sqrt(lay_randf(seed * 8191 + i * 131, 1)) * region[2] * sin(lay_randr(seed * 8191 + i * 131, 2, 0, 360)) : lay_randr(seed * 8191 + i * 131, 2, region[1], region[3]),
              seed * 8191 + i * 131]];
     ter_sc_cnt = min(n, len(ter_sc_pts));
     if (ter_sc_cnt > 0)

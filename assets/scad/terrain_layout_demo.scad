@@ -48,7 +48,7 @@ ter_along(TERR, [[-100, -42], [-44, -34.5]], step = 4.6, seed = 9)
     translate([0, 3.6, 0]) oh_prop_fence_log(len = 4.2);
 
 // ---- 松树:只长在缓坡草地(避水 3,坡度 ≤26°,草生物群系) ----
-ter_scatter(TERR, 21, 90, [-115, -95, 115, 95], [0.3, 13, 26, 3, ["grass", "grass_dark"]])
+ter_scatter(TERR, 21, 90, [0, 0, 115], [0.3, 13, 26, 3, ["grass", "grass_dark"]])
     lay_pick($seed)
     {
         oh_nature_pine(s = lay_randr($seed, 5, 0.8, 1.4), seed = $seed);

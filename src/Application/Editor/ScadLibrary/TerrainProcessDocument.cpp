@@ -655,11 +655,16 @@ namespace ScadLibrary
                 break;
             case ETerrainProcessRuleType::Scatter:
                 call = fmt::format(
-                    "ter_scatter({}, {}, {}, [{}, {}, {}, {}], [{}, {}, {}, {}, {}], rot = {}, dz = {})",
-                    terrainVariable, rule.seed, rule.count, FormatNumber(rule.region.x), FormatNumber(rule.region.y),
-                    FormatNumber(rule.region.z), FormatNumber(rule.region.w), FormatNumber(rule.minHeight),
-                    FormatNumber(rule.maxHeight), FormatNumber(rule.maxSlope), FormatNumber(rule.avoidWater),
-                    SerializeBiomes(rule.biomes), rule.randomRotation ? "true" : "false", FormatNumber(rule.dz));
+                    "ter_scatter({}, {}, {}, {}, [{}, {}, {}, {}, {}], rot = {}, dz = {})", terrainVariable, rule.seed,
+                    rule.count,
+                    rule.circularRegion
+                        ? fmt::format("[{}, {}, {}]", FormatNumber(rule.regionCenter.x),
+                                      FormatNumber(rule.regionCenter.y), FormatNumber(rule.regionRadius))
+                        : fmt::format("[{}, {}, {}, {}]", FormatNumber(rule.region.x), FormatNumber(rule.region.y),
+                                      FormatNumber(rule.region.z), FormatNumber(rule.region.w)),
+                    FormatNumber(rule.minHeight), FormatNumber(rule.maxHeight), FormatNumber(rule.maxSlope),
+                    FormatNumber(rule.avoidWater), SerializeBiomes(rule.biomes), rule.randomRotation ? "true" : "false",
+                    FormatNumber(rule.dz));
                 break;
             }
             const std::string child = Trim(rule.childSource);
@@ -817,16 +822,35 @@ namespace ScadLibrary
                 break;
             case ETerrainProcessRuleType::Scatter:
                 {
-                    double region[4] = {-20.0, -20.0, 20.0, 20.0};
                     parsed = ReadNumber(statement, 1, "seed", value, 0.0);
                     rule.seed = static_cast<int>(std::llround(value));
                     parsed = parsed && ReadNumber(statement, 2, "n", value, 10.0);
                     rule.count = std::max(0, static_cast<int>(std::llround(value)));
-                    parsed = parsed && ReadFixedVector(statement, 3, "region", 4, region) &&
-                        ReadScatterFilter(statement, rule) &&
+                    const ExprPtr* regionExpression = FindArgument(statement, 3, "region");
+                    const std::optional<Value> regionValue =
+                        regionExpression != nullptr ? LiteralValue(*regionExpression) : std::nullopt;
+                    parsed = parsed && regionValue && regionValue->type == Value::Type::Vec &&
+                        (regionValue->vec.size() == 3 || regionValue->vec.size() >= 4);
+                    if (parsed)
+                    {
+                        for (size_t index = 0; index < std::min<size_t>(4, regionValue->vec.size()); ++index)
+                            parsed = parsed && regionValue->vec[index].IsNumber();
+                    }
+                    parsed = parsed && ReadScatterFilter(statement, rule) &&
                         ReadBool(statement, 5, "rot", rule.randomRotation, true) &&
                         ReadNumber(statement, 6, "dz", rule.dz, 0.0);
-                    rule.region = glm::dvec4(region[0], region[1], region[2], region[3]);
+                    if (parsed && regionValue->vec.size() == 3)
+                    {
+                        rule.circularRegion = true;
+                        rule.regionCenter = {regionValue->vec[0].num, regionValue->vec[1].num};
+                        rule.regionRadius = std::max(0.1, regionValue->vec[2].num);
+                    }
+                    else if (parsed)
+                    {
+                        rule.circularRegion = false;
+                        rule.region = {regionValue->vec[0].num, regionValue->vec[1].num, regionValue->vec[2].num,
+                                       regionValue->vec[3].num};
+                    }
                     break;
                 }
             }

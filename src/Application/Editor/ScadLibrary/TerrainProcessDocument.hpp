@@ -45,6 +45,9 @@ namespace ScadLibrary
         // ter_scatter
         int count = 10;
         glm::dvec4 region{-20.0, -20.0, 20.0, 20.0};
+        bool circularRegion = true;
+        glm::dvec2 regionCenter{0.0, 0.0};
+        double regionRadius = 20.0;
         double minHeight = -1.0e9;
         double maxHeight = 1.0e9;
         double maxSlope = 90.0;

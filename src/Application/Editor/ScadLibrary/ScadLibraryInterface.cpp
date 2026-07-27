@@ -587,7 +587,7 @@ namespace ScadLibrary
         // Deferred bench reload: wait until the drag/edit is released so the scene
         // is not rebuilt on every mouse-move.
         if (composeMode && assemblyProcedural_ && terrainProcessDirty_ && autoReload_ && !ImGui::IsAnyItemActive() &&
-            !terrainFeatureDragging_)
+            !terrainFeatureDragging_ && !terrainRuleDragging_)
         {
             ReloadTerrainProcess();
         }
@@ -1236,15 +1236,24 @@ namespace ScadLibrary
                 ImGui::PushID(static_cast<int>(featureIndex));
                 const std::string label =
                     fmt::format("{:02}  {}", featureIndex + 1, FTerrainProcessDocument::FeatureTypeName(feature.type));
-                ImGuiTreeNodeFlags featureFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap;
-                if (selectedTerrainFeature_ == static_cast<int>(featureIndex))
+                const bool selected =
+                    !terrainSelectionIsRule_ && selectedTerrainFeature_ == static_cast<int>(featureIndex);
+                ImGuiTreeNodeFlags featureFlags = ImGuiTreeNodeFlags_AllowOverlap;
+                if (selected)
                 {
                     featureFlags |= ImGuiTreeNodeFlags_Selected;
                 }
+                ImGui::SetNextItemOpen(selected, ImGuiCond_Always);
                 const bool open = ImGui::TreeNodeEx(label.c_str(), featureFlags);
                 if (ImGui::IsItemClicked())
                 {
                     selectedTerrainFeature_ = static_cast<int>(featureIndex);
+                    terrainSelectionIsRule_ = false;
+                }
+                if (selected && scrollToSelectedTerrainItem_)
+                {
+                    ImGui::SetScrollHereY(0.35f);
+                    scrollToSelectedTerrainItem_ = false;
                 }
                 ImGui::SameLine(ImGui::GetContentRegionAvail().x - 76.0f);
                 if (ImGui::SmallButton(ICON_FA_ANGLE_UP) && featureIndex > 0)
@@ -1365,6 +1374,8 @@ namespace ScadLibrary
                     }
                     terrain.features.push_back(std::move(feature));
                     selectedTerrainFeature_ = static_cast<int>(terrain.features.size()) - 1;
+                    terrainSelectionIsRule_ = false;
+                    scrollToSelectedTerrainItem_ = true;
                     changed = true;
                 };
                 addFeature("山峰 mountain", EType::Mountain);
@@ -1393,8 +1404,24 @@ namespace ScadLibrary
                 ImGui::PushID(static_cast<int>(ruleIndex));
                 const std::string label =
                     fmt::format("{:02}  {}", ruleIndex + 1, FTerrainProcessDocument::RuleTypeName(rule.type));
-                const bool open =
-                    ImGui::TreeNodeEx(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
+                const bool selected = terrainSelectionIsRule_ && selectedTerrainRule_ == static_cast<int>(ruleIndex);
+                ImGuiTreeNodeFlags ruleFlags = ImGuiTreeNodeFlags_AllowOverlap;
+                if (selected)
+                {
+                    ruleFlags |= ImGuiTreeNodeFlags_Selected;
+                }
+                ImGui::SetNextItemOpen(selected, ImGuiCond_Always);
+                const bool open = ImGui::TreeNodeEx(label.c_str(), ruleFlags);
+                if (ImGui::IsItemClicked())
+                {
+                    selectedTerrainRule_ = static_cast<int>(ruleIndex);
+                    terrainSelectionIsRule_ = true;
+                }
+                if (selected && scrollToSelectedTerrainItem_)
+                {
+                    ImGui::SetScrollHereY(0.35f);
+                    scrollToSelectedTerrainItem_ = false;
+                }
                 ImGui::SameLine(ImGui::GetContentRegionAvail().x - 52.0f);
                 if (ImGui::SmallButton(ICON_FA_COPY))
                 {
@@ -1456,11 +1483,23 @@ namespace ScadLibrary
                     {
                         changed |= ImGui::InputInt("Seed", &rule.seed);
                         changed |= ImGui::DragInt("数量", &rule.count, 1.0f, 0, 100000);
-                        double region[4] = {rule.region.x, rule.region.y, rule.region.z, rule.region.w};
-                        if (ImGui::DragScalarN("区域 x0/y0/x1/y1", ImGuiDataType_Double, region, 4, 0.5f))
+                        if (ImGui::Checkbox("圆形区域", &rule.circularRegion))
                         {
-                            rule.region = glm::dvec4(region[0], region[1], region[2], region[3]);
                             changed = true;
+                        }
+                        if (rule.circularRegion)
+                        {
+                            changed |= editPoint("圆心 XY", rule.regionCenter);
+                            changed |= editNumber("半径", rule.regionRadius, 0.5f);
+                        }
+                        else
+                        {
+                            double region[4] = {rule.region.x, rule.region.y, rule.region.z, rule.region.w};
+                            if (ImGui::DragScalarN("区域 x0/y0/x1/y1", ImGuiDataType_Double, region, 4, 0.5f))
+                            {
+                                rule.region = glm::dvec4(region[0], region[1], region[2], region[3]);
+                                changed = true;
+                            }
                         }
                         changed |= editNumber("最低高度", rule.minHeight);
                         changed |= editNumber("最高高度", rule.maxHeight);
@@ -1508,11 +1547,16 @@ namespace ScadLibrary
             if (duplicateRule >= 0)
             {
                 terrainProcess_.DuplicateRule(static_cast<size_t>(duplicateRule));
+                selectedTerrainRule_ = static_cast<int>(terrainProcess_.Rules().size()) - 1;
+                terrainSelectionIsRule_ = true;
+                scrollToSelectedTerrainItem_ = true;
                 changed = true;
             }
             if (removeRule >= 0)
             {
                 terrainProcess_.RemoveRule(static_cast<size_t>(removeRule));
+                selectedTerrainRule_ = std::clamp(selectedTerrainRule_, 0,
+                                                  std::max(0, static_cast<int>(terrainProcess_.Rules().size()) - 1));
                 changed = true;
             }
 
@@ -1527,6 +1571,9 @@ namespace ScadLibrary
                     if (ImGui::MenuItem(label))
                     {
                         terrainProcess_.AddRule(type);
+                        selectedTerrainRule_ = static_cast<int>(terrainProcess_.Rules().size()) - 1;
+                        terrainSelectionIsRule_ = true;
+                        scrollToSelectedTerrainItem_ = true;
                         changed = true;
                     }
                 };
@@ -1565,6 +1612,7 @@ namespace ScadLibrary
                 rule.probe = std::max(0.01, rule.probe);
                 rule.maxTilt = std::clamp(rule.maxTilt, 0.0, 90.0);
                 rule.count = std::max(0, rule.count);
+                rule.regionRadius = std::max(0.1, rule.regionRadius);
                 if (rule.minHeight > rule.maxHeight)
                 {
                     std::swap(rule.minHeight, rule.maxHeight);
@@ -3335,13 +3383,20 @@ namespace ScadLibrary
         {
             return false;
         }
-        if (terrainFeatureDragging_)
+        if (terrainFeatureDragging_ || terrainRuleDragging_)
         {
             return true;
         }
 
         const glm::vec2 mouse(static_cast<float>(x), static_cast<float>(y));
         for (const FTerrainFeatureHandle& handle : terrainFeatureHandles_)
+        {
+            if (glm::distance2(mouse, handle.screen) <= 144.0f)
+            {
+                return true;
+            }
+        }
+        for (const FTerrainRuleHandle& handle : terrainRuleHandles_)
         {
             if (glm::distance2(mouse, handle.screen) <= 144.0f)
             {
@@ -3371,10 +3426,19 @@ namespace ScadLibrary
             ImGui::Checkbox("Feature 轮廓", &showTerrainFeatureOverlay_);
             ImGui::SameLine();
             const std::vector<Assets::Scad::FTerrainFeature>& features = terrainProcess_.Terrain().features;
-            if (selectedTerrainFeature_ >= 0 && selectedTerrainFeature_ < static_cast<int>(features.size()))
+            const std::vector<FTerrainProcessRule>& rules = terrainProcess_.Rules();
+            if (terrainSelectionIsRule_ && selectedTerrainRule_ >= 0 &&
+                selectedTerrainRule_ < static_cast<int>(rules.size()))
+            {
+                ImGui::TextColored(ImVec4(0.31f, 1.0f, 0.59f, 1.0f), "■ #%02d %s  ·  再次拖动方形手柄编辑",
+                                   selectedTerrainRule_ + 1,
+                                   FTerrainProcessDocument::RuleTypeName(rules[selectedTerrainRule_].type));
+            }
+            else if (!terrainSelectionIsRule_ && selectedTerrainFeature_ >= 0 &&
+                     selectedTerrainFeature_ < static_cast<int>(features.size()))
             {
                 const Assets::Scad::FTerrainFeature& feature = features[selectedTerrainFeature_];
-                ImGui::TextDisabled("#%02d %s  ·  拖动圆点编辑中心/折点", selectedTerrainFeature_ + 1,
+                ImGui::TextDisabled("#%02d %s  ·  再次拖动圆点编辑", selectedTerrainFeature_ + 1,
                                     FTerrainProcessDocument::FeatureTypeName(feature.type));
             }
             else
@@ -3406,9 +3470,11 @@ namespace ScadLibrary
     void ScadLibraryInterface::DrawTerrainFeatureOverlay(const ImVec2& viewportPos, const ImVec2& viewportSize)
     {
         terrainFeatureHandles_.clear();
+        terrainRuleHandles_.clear();
         if (!showTerrainFeatureOverlay_ || viewportSize.x <= 1.0f || viewportSize.y <= 1.0f)
         {
             terrainFeatureDragging_ = false;
+            terrainRuleDragging_ = false;
             return;
         }
 
@@ -3417,6 +3483,7 @@ namespace ScadLibrary
         {
             selectedTerrainFeature_ = -1;
             terrainFeatureDragging_ = false;
+            terrainRuleDragging_ = false;
             return;
         }
         selectedTerrainFeature_ = std::clamp(selectedTerrainFeature_, 0, static_cast<int>(terrain.features.size()) - 1);
@@ -3537,6 +3604,32 @@ namespace ScadLibrary
                 terrainFeatureHandles_.push_back({featureIndex, pointIndex, glm::vec2(screen.x, screen.y), world.y});
             }
         };
+        const auto addFeatureWorldHandle = [&](int featureIndex, int pointIndex, const glm::vec3& world)
+        {
+            ImVec2 screen;
+            if (projectWorld(world, screen))
+            {
+                terrainFeatureHandles_.push_back({featureIndex, pointIndex, glm::vec2(screen.x, screen.y), world.y});
+            }
+        };
+        const auto drawFeatureVerticalRuler =
+            [&](int featureIndex, const glm::dvec2& point, double value, const char* prefix, ImU32 color)
+        {
+            const double base = surfaceHeight(point) + 0.45;
+            const double rulerHeight = std::max(0.1, value);
+            const glm::vec3 rulerBottom = Assets::Scad::ScadToWorldPos(glm::dvec3(point.x, point.y, base), 1.0);
+            const glm::vec3 rulerTop =
+                Assets::Scad::ScadToWorldPos(glm::dvec3(point.x, point.y, base + rulerHeight), 1.0);
+            ImVec2 bottomScreen;
+            ImVec2 topScreen;
+            if (projectWorld(rulerBottom, bottomScreen) && projectWorld(rulerTop, topScreen))
+            {
+                drawList->AddLine(bottomScreen, topScreen, color, 2.0f);
+                drawList->AddCircleFilled(topScreen, 4.5f, color);
+                drawLabel(topScreen, color, fmt::format("{}={:.1f}", prefix, value));
+                addFeatureWorldHandle(featureIndex, -3, rulerTop);
+            }
+        };
         const auto drawWidthBand =
             [&](const std::vector<glm::dvec2>& points, double width, ImU32 lineColor, ImU32 fillColor, float thickness)
         {
@@ -3579,7 +3672,7 @@ namespace ScadLibrary
         for (int featureIndex = 0; featureIndex < static_cast<int>(terrain.features.size()); ++featureIndex)
         {
             Assets::Scad::FTerrainFeature& feature = terrain.features[featureIndex];
-            const bool selected = featureIndex == selectedTerrainFeature_;
+            const bool selected = !terrainSelectionIsRule_ && featureIndex == selectedTerrainFeature_;
             const ImU32 lineColor = colorForFeature(feature.type, selected ? 255 : 112);
             const ImU32 fillColor = colorForFeature(feature.type, selected ? 46 : 18);
             const float thickness = selected ? 2.4f : 1.25f;
@@ -3616,19 +3709,11 @@ namespace ScadLibrary
                 }
                 if (selected && (feature.type == EType::Mountain || feature.type == EType::Plateau))
                 {
-                    const double base = surfaceHeight(feature.at) + 0.45;
-                    const glm::vec3 rulerBottom =
-                        Assets::Scad::ScadToWorldPos(glm::dvec3(feature.at.x, feature.at.y, base), 1.0);
-                    const glm::vec3 rulerTop = Assets::Scad::ScadToWorldPos(
-                        glm::dvec3(feature.at.x, feature.at.y, base + feature.height), 1.0);
-                    ImVec2 bottomScreen;
-                    ImVec2 topScreen;
-                    if (projectWorld(rulerBottom, bottomScreen) && projectWorld(rulerTop, topScreen))
-                    {
-                        drawList->AddLine(bottomScreen, topScreen, lineColor, 2.0f);
-                        drawList->AddCircleFilled(topScreen, 4.0f, lineColor);
-                        drawLabel(topScreen, lineColor, fmt::format("h={:.1f}", feature.height));
-                    }
+                    drawFeatureVerticalRuler(featureIndex, feature.at, feature.height, "h", lineColor);
+                }
+                else if (selected && feature.type == EType::Lake)
+                {
+                    drawFeatureVerticalRuler(featureIndex, feature.at, feature.depth, "depth", lineColor);
                 }
             }
             else if (feature.type == EType::Ridge || feature.type == EType::River || feature.type == EType::Road)
@@ -3657,6 +3742,32 @@ namespace ScadLibrary
                         {
                             drawLabel(firstScreen, lineColor, fmt::format("道路  width={:.1f}", feature.width));
                         }
+                    }
+                }
+                if (selected && feature.pts.size() >= 2)
+                {
+                    const glm::dvec2 delta = feature.pts[1] - feature.pts[0];
+                    const double length = glm::length(delta);
+                    if (length > 1e-6)
+                    {
+                        const glm::dvec2 side(-delta.y / length, delta.x / length);
+                        const glm::dvec2 midpoint = (feature.pts[0] + feature.pts[1]) * 0.5;
+                        const glm::dvec2 widthPoint = midpoint + side * feature.width * 0.5;
+                        drawTerrainSegment(midpoint, widthPoint, lineColor, 2.0f);
+                        addHandle(featureIndex, -4, widthPoint);
+                        ImVec2 widthScreen;
+                        if (projectWorld(worldAt(widthPoint, 0.45), widthScreen))
+                        {
+                            drawLabel(widthScreen, lineColor, fmt::format("width={:.1f}", feature.width));
+                        }
+                    }
+                    if (feature.type == EType::Ridge)
+                    {
+                        drawFeatureVerticalRuler(featureIndex, feature.pts.front(), feature.height, "h", lineColor);
+                    }
+                    else if (feature.type == EType::River)
+                    {
+                        drawFeatureVerticalRuler(featureIndex, feature.pts.front(), feature.depth, "depth", lineColor);
                     }
                 }
             }
@@ -3688,6 +3799,282 @@ namespace ScadLibrary
             }
         }
 
+        const auto addRuleHandle = [&](int ruleIndex, int pointIndex, const glm::dvec2& point)
+        {
+            ImVec2 screen;
+            const glm::vec3 world = worldAt(point, 0.65);
+            if (projectWorld(world, screen))
+            {
+                terrainRuleHandles_.push_back({ruleIndex, pointIndex, glm::vec2(screen.x, screen.y), world.y});
+            }
+        };
+        const auto addRuleWorldHandle = [&](int ruleIndex, int pointIndex, const glm::vec3& world)
+        {
+            ImVec2 screen;
+            if (projectWorld(world, screen))
+            {
+                terrainRuleHandles_.push_back({ruleIndex, pointIndex, glm::vec2(screen.x, screen.y), world.y});
+            }
+        };
+        const auto drawRuleMarker = [&](const glm::dvec2& point, ImU32 color, float radius)
+        {
+            ImVec2 screen;
+            if (projectWorld(worldAt(point, 0.62), screen))
+            {
+                drawList->AddCircleFilled(screen, radius, IM_COL32(15, 22, 28, 210));
+                drawList->AddCircle(screen, radius, color, 0, 2.0f);
+                drawList->AddLine(ImVec2(screen.x - radius - 3.0f, screen.y),
+                                  ImVec2(screen.x + radius + 3.0f, screen.y), color, 1.4f);
+                drawList->AddLine(ImVec2(screen.x, screen.y - radius - 3.0f),
+                                  ImVec2(screen.x, screen.y + radius + 3.0f), color, 1.4f);
+            }
+        };
+        const auto childSummary = [](const std::string& child)
+        {
+            std::string summary = child;
+            summary.erase(std::remove(summary.begin(), summary.end(), '\n'), summary.end());
+            if (summary.size() > 38)
+            {
+                summary.resize(38);
+                summary += "…";
+            }
+            return summary;
+        };
+        const auto positiveMod = [](int64_t value, int64_t divisor)
+        {
+            const int64_t remainder = value % divisor;
+            return remainder < 0 ? remainder + divisor : remainder;
+        };
+        const auto layHash = [&](int64_t value)
+        {
+            const auto square = [&](int64_t x)
+            {
+                x = positiveMod(x, 65521);
+                return positiveMod(x * x + x * 587 + 41, 65521);
+            };
+            return square(square(positiveMod(value, 65521)) + 13);
+        };
+        const auto layRandF = [&](int64_t seed, int64_t index)
+        {
+            const int64_t value =
+                positiveMod(layHash(seed + index * 131) * 65521 + layHash(seed * 3 + index * 977 + 5), 9973);
+            return static_cast<double>(value) / 9972.0;
+        };
+        const auto biomeId = [](std::string_view name)
+        {
+            constexpr std::string_view names[] = {"grass",     "grass_dark", "dry_grass", "sand", "rock",
+                                                  "rock_high", "snow",       "bed",       "road", "pad"};
+            for (int index = 0; index < static_cast<int>(std::size(names)); ++index)
+            {
+                if (name == names[index])
+                {
+                    return index;
+                }
+            }
+            return -1;
+        };
+        const auto scatterAccepts = [&](const FTerrainProcessRule& rule, const glm::dvec2& point)
+        {
+            if (!terrainFeatureOverlayData_)
+            {
+                return true;
+            }
+            double height = 0.0;
+            double slope = 0.0;
+            bool water = false;
+            uint8_t biome = 0;
+            terrainFeatureOverlayData_->InfoAt(point.x, point.y, height, slope, water, biome);
+            const uint8_t pointBiome = biome;
+            if (height < rule.minHeight || height > rule.maxHeight || slope > rule.maxSlope)
+            {
+                return false;
+            }
+            if (rule.avoidWater >= 0.0)
+            {
+                if (water)
+                {
+                    return false;
+                }
+                if (rule.avoidWater > 0.0)
+                {
+                    for (const glm::dvec2& offset :
+                         {glm::dvec2(rule.avoidWater, 0.0), glm::dvec2(-rule.avoidWater, 0.0),
+                          glm::dvec2(0.0, rule.avoidWater), glm::dvec2(0.0, -rule.avoidWater)})
+                    {
+                        bool nearbyWater = false;
+                        terrainFeatureOverlayData_->InfoAt(point.x + offset.x, point.y + offset.y, height, slope,
+                                                           nearbyWater, biome);
+                        if (nearbyWater)
+                        {
+                            return false;
+                        }
+                    }
+                }
+            }
+            if (rule.biomes.empty())
+            {
+                return true;
+            }
+            return std::any_of(rule.biomes.begin(), rule.biomes.end(),
+                               [&](const std::string& name) { return biomeId(name) == pointBiome; });
+        };
+
+        std::vector<FTerrainProcessRule>& rules = terrainProcess_.Rules();
+        selectedTerrainRule_ = std::clamp(selectedTerrainRule_, 0, std::max(0, static_cast<int>(rules.size()) - 1));
+        for (int ruleIndex = 0; ruleIndex < static_cast<int>(rules.size()); ++ruleIndex)
+        {
+            FTerrainProcessRule& rule = rules[ruleIndex];
+            if (rule.removed)
+            {
+                continue;
+            }
+            const bool selected = terrainSelectionIsRule_ && ruleIndex == selectedTerrainRule_;
+            const ImU32 color = selected ? IM_COL32(80, 255, 150, 255) : IM_COL32(80, 255, 150, 105);
+            const ImU32 sampleColor = selected ? IM_COL32(255, 255, 255, 245) : IM_COL32(190, 255, 215, 130);
+            const float thickness = selected ? 2.2f : 1.1f;
+            const glm::dvec2 position(rule.x, rule.y);
+
+            if (rule.type == ETerrainProcessRuleType::HeightAnchor)
+            {
+                const glm::dvec2 sample(rule.sampleX, rule.sampleY);
+                drawTerrainSegment(position, sample, color, thickness);
+                drawRuleMarker(position, color, selected ? 7.0f : 5.0f);
+                drawRuleMarker(sample, IM_COL32(255, 255, 255, selected ? 255 : 120), selected ? 6.0f : 4.0f);
+                addRuleHandle(ruleIndex, -1, position);
+                addRuleHandle(ruleIndex, -2, sample);
+            }
+            else if (rule.type == ETerrainProcessRuleType::Place || rule.type == ETerrainProcessRuleType::PlaceTilt ||
+                     rule.type == ETerrainProcessRuleType::Snap)
+            {
+                drawRuleMarker(position, color, selected ? 7.0f : 5.0f);
+                addRuleHandle(ruleIndex, -1, position);
+                if (rule.type == ETerrainProcessRuleType::PlaceTilt)
+                {
+                    drawTerrainPolyline(circlePoints(position, rule.probe), true, color, thickness);
+                }
+            }
+            else if (rule.type == ETerrainProcessRuleType::Along)
+            {
+                drawTerrainPolyline(rule.points, false, color, thickness);
+                for (int pointIndex = 0; pointIndex < static_cast<int>(rule.points.size()); ++pointIndex)
+                {
+                    addRuleHandle(ruleIndex, pointIndex, rule.points[pointIndex]);
+                }
+                int sampleCount = 0;
+                for (size_t segment = 0; selected && segment + 1 < rule.points.size() && sampleCount < 1000; ++segment)
+                {
+                    const glm::dvec2 delta = rule.points[segment + 1] - rule.points[segment];
+                    const double length = glm::length(delta);
+                    if (length <= 1e-6 || rule.step <= 0.0)
+                    {
+                        continue;
+                    }
+                    const int count = static_cast<int>(std::floor((length - rule.offset) / rule.step));
+                    for (int sample = 0; sample <= count && sampleCount < 1000; ++sample, ++sampleCount)
+                    {
+                        const glm::dvec2 point =
+                            rule.points[segment] + delta * ((rule.offset + sample * rule.step) / length);
+                        ImVec2 screen;
+                        if (projectWorld(worldAt(point, 0.72), screen))
+                        {
+                            drawList->AddNgon(screen, 4.0f, sampleColor, 4, 1.7f);
+                        }
+                    }
+                }
+            }
+            else if (rule.type == ETerrainProcessRuleType::Scatter)
+            {
+                const glm::dvec2 regionCenter = rule.circularRegion
+                    ? rule.regionCenter
+                    : glm::dvec2((rule.region.x + rule.region.z) * 0.5, (rule.region.y + rule.region.w) * 0.5);
+                if (rule.circularRegion)
+                {
+                    drawTerrainPolyline(circlePoints(rule.regionCenter, rule.regionRadius), true, color, thickness);
+                    drawTerrainSegment(rule.regionCenter, rule.regionCenter + glm::dvec2(rule.regionRadius, 0.0), color,
+                                       thickness);
+                    addRuleHandle(ruleIndex, -3, rule.regionCenter);
+                    addRuleHandle(ruleIndex, -4, rule.regionCenter + glm::dvec2(rule.regionRadius, 0.0));
+                }
+                else
+                {
+                    const std::vector<glm::dvec2> region = {{rule.region.x, rule.region.y},
+                                                            {rule.region.z, rule.region.y},
+                                                            {rule.region.z, rule.region.w},
+                                                            {rule.region.x, rule.region.w}};
+                    drawTerrainPolyline(region, true, color, thickness);
+                    addRuleHandle(ruleIndex, -3, region[0]);
+                    addRuleHandle(ruleIndex, -4, region[2]);
+                }
+                if (selected)
+                {
+                    constexpr double itemsPerWorldUnit = 10.0;
+                    const double base = surfaceHeight(regionCenter) + 0.65;
+                    const double rulerHeight =
+                        std::clamp(static_cast<double>(rule.count) / itemsPerWorldUnit, 2.0, 60.0);
+                    const glm::vec3 rulerBottom =
+                        Assets::Scad::ScadToWorldPos(glm::dvec3(regionCenter.x, regionCenter.y, base), 1.0);
+                    const glm::vec3 rulerTop = Assets::Scad::ScadToWorldPos(
+                        glm::dvec3(regionCenter.x, regionCenter.y, base + rulerHeight), 1.0);
+                    ImVec2 bottomScreen;
+                    ImVec2 topScreen;
+                    if (projectWorld(rulerBottom, bottomScreen) && projectWorld(rulerTop, topScreen))
+                    {
+                        drawList->AddLine(bottomScreen, topScreen, color, 2.0f);
+                        const float halfSize = 4.5f;
+                        drawList->AddRectFilled(ImVec2(topScreen.x - halfSize, topScreen.y - halfSize),
+                                                ImVec2(topScreen.x + halfSize, topScreen.y + halfSize), color, 1.5f);
+                        drawLabel(topScreen, color, fmt::format("count={}", rule.count));
+                        addRuleWorldHandle(ruleIndex, -5, rulerTop);
+                    }
+                }
+                int accepted = 0;
+                const int candidateCount = selected ? std::min(std::max(0, rule.count) * 4, 20000) : 0;
+                for (int candidate = 0; candidate < candidateCount && accepted < std::min(rule.count, 1000);
+                     ++candidate)
+                {
+                    const int64_t candidateSeed = static_cast<int64_t>(rule.seed) * 8191 + candidate * 131;
+                    glm::dvec2 point;
+                    if (rule.circularRegion)
+                    {
+                        const double radius = std::sqrt(layRandF(candidateSeed, 1)) * rule.regionRadius;
+                        const double angle = glm::two_pi<double>() * layRandF(candidateSeed, 2);
+                        point = rule.regionCenter + radius * glm::dvec2(std::cos(angle), std::sin(angle));
+                    }
+                    else
+                    {
+                        point = {rule.region.x + (rule.region.z - rule.region.x) * layRandF(candidateSeed, 1),
+                                 rule.region.y + (rule.region.w - rule.region.y) * layRandF(candidateSeed, 2)};
+                    }
+                    if (!scatterAccepts(rule, point))
+                    {
+                        continue;
+                    }
+                    ++accepted;
+                    ImVec2 screen;
+                    if (projectWorld(worldAt(point, 0.7), screen))
+                    {
+                        drawList->AddCircleFilled(screen, selected ? 3.2f : 2.2f, sampleColor);
+                    }
+                }
+            }
+
+            if (selected)
+            {
+                glm::dvec2 labelPoint = position;
+                if (rule.type == ETerrainProcessRuleType::Along && !rule.points.empty())
+                    labelPoint = rule.points.front();
+                if (rule.type == ETerrainProcessRuleType::Scatter)
+                    labelPoint = rule.circularRegion ? rule.regionCenter : glm::dvec2(rule.region.x, rule.region.y);
+                ImVec2 screen;
+                if (projectWorld(worldAt(labelPoint, 0.8), screen))
+                {
+                    drawLabel(screen, color,
+                              fmt::format("{}  {}", FTerrainProcessDocument::RuleTypeName(rule.type),
+                                          childSummary(rule.childSource)));
+                }
+            }
+        }
+
         const glm::vec2 mouse(ImGui::GetIO().MousePos.x, ImGui::GetIO().MousePos.y);
         int hoveredHandle = -1;
         float nearestDistance = 144.0f;
@@ -3705,7 +4092,7 @@ namespace ScadLibrary
         for (int handleIndex = 0; handleIndex < static_cast<int>(terrainFeatureHandles_.size()); ++handleIndex)
         {
             const FTerrainFeatureHandle& handle = terrainFeatureHandles_[handleIndex];
-            const bool selected = handle.featureIndex == selectedTerrainFeature_;
+            const bool selected = !terrainSelectionIsRule_ && handle.featureIndex == selectedTerrainFeature_;
             const bool hovered = handleIndex == hoveredHandle;
             const Assets::Scad::FTerrainFeature& feature = terrain.features[handle.featureIndex];
             const ImU32 color = colorForFeature(feature.type, selected ? 255 : 150);
@@ -3714,59 +4101,219 @@ namespace ScadLibrary
                                       hovered ? IM_COL32(255, 255, 255, 255) : color);
             drawList->AddCircle(screen, hovered ? 7.0f : (selected ? 5.5f : 3.5f), IM_COL32(12, 18, 26, 230), 0, 1.5f);
         }
+        int hoveredRuleHandle = -1;
+        nearestDistance = 144.0f;
+        for (int handleIndex = 0; handleIndex < static_cast<int>(terrainRuleHandles_.size()); ++handleIndex)
+        {
+            const float distance = glm::distance2(mouse, terrainRuleHandles_[handleIndex].screen);
+            if (distance <= nearestDistance)
+            {
+                hoveredRuleHandle = handleIndex;
+                nearestDistance = distance;
+            }
+        }
+        for (int handleIndex = 0; handleIndex < static_cast<int>(terrainRuleHandles_.size()); ++handleIndex)
+        {
+            const FTerrainRuleHandle& handle = terrainRuleHandles_[handleIndex];
+            const bool selected = terrainSelectionIsRule_ && handle.ruleIndex == selectedTerrainRule_;
+            const bool hovered = handleIndex == hoveredRuleHandle;
+            const ImVec2 screen(handle.screen.x, handle.screen.y);
+            const float radius = hovered ? 7.0f : (selected ? 5.5f : 3.5f);
+            drawList->AddRectFilled(
+                ImVec2(screen.x - radius, screen.y - radius), ImVec2(screen.x + radius, screen.y + radius),
+                hovered ? IM_COL32(255, 255, 255, 255) : IM_COL32(80, 255, 150, selected ? 255 : 150), 1.5f);
+            drawList->AddRect(ImVec2(screen.x - radius, screen.y - radius),
+                              ImVec2(screen.x + radius, screen.y + radius), IM_COL32(12, 18, 26, 230), 1.5f, 0, 1.5f);
+        }
 
         const bool mouseInside = mouse.x >= viewportPos.x && mouse.y >= viewportPos.y &&
             mouse.x < viewportPos.x + viewportSize.x && mouse.y < viewportPos.y + viewportSize.y;
-        if (hoveredHandle >= 0 || terrainFeatureDragging_)
+        if (hoveredHandle >= 0 || hoveredRuleHandle >= 0 || terrainFeatureDragging_ || terrainRuleDragging_)
         {
             ImGui::GetIO().WantCaptureMouse = true;
         }
-        if (!terrainFeatureDragging_ && hoveredHandle >= 0 && mouseInside &&
+        if (!terrainFeatureDragging_ && !terrainRuleDragging_ && hoveredRuleHandle >= 0 && mouseInside &&
+            ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            const FTerrainRuleHandle& handle = terrainRuleHandles_[hoveredRuleHandle];
+            const bool alreadySelected = terrainSelectionIsRule_ && selectedTerrainRule_ == handle.ruleIndex;
+            selectedTerrainRule_ = handle.ruleIndex;
+            terrainSelectionIsRule_ = true;
+            scrollToSelectedTerrainItem_ = true;
+            if (alreadySelected)
+            {
+                terrainRuleDragPoint_ = handle.pointIndex;
+                terrainRuleDragPlaneHeight_ = handle.worldHeight;
+                terrainDragStartMouse_ = mouse;
+                if (handle.pointIndex == -5)
+                {
+                    terrainDragStartValue_ = rules[handle.ruleIndex].count;
+                }
+                terrainRuleDragging_ = true;
+            }
+        }
+        if (!terrainFeatureDragging_ && hoveredRuleHandle < 0 && hoveredHandle >= 0 && mouseInside &&
             ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
             const FTerrainFeatureHandle& handle = terrainFeatureHandles_[hoveredHandle];
+            const bool alreadySelected = !terrainSelectionIsRule_ && selectedTerrainFeature_ == handle.featureIndex;
             selectedTerrainFeature_ = handle.featureIndex;
-            terrainFeatureDragPoint_ = handle.pointIndex;
-            terrainFeatureDragPlaneHeight_ = handle.worldHeight;
-            terrainFeatureDragging_ = true;
+            terrainSelectionIsRule_ = false;
+            scrollToSelectedTerrainItem_ = true;
+            if (alreadySelected)
+            {
+                terrainFeatureDragPoint_ = handle.pointIndex;
+                terrainFeatureDragPlaneHeight_ = handle.worldHeight;
+                terrainDragStartMouse_ = mouse;
+                if (handle.pointIndex == -3)
+                {
+                    const Assets::Scad::FTerrainFeature& feature = terrain.features[handle.featureIndex];
+                    terrainDragStartValue_ =
+                        feature.type == EType::Lake || feature.type == EType::River ? feature.depth : feature.height;
+                }
+                terrainFeatureDragging_ = true;
+            }
         }
 
         if (terrainFeatureDragging_)
         {
-            if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && glm::distance2(mouse, terrainDragStartMouse_) > 4.0f)
             {
-                glm::vec3 rayOrigin;
-                glm::vec3 rayDirection;
-                Runtime::EngineHelper::GetScreenToWorldRay(mouse, rayOrigin, rayDirection);
-                if (std::abs(rayDirection.y) > 1e-5f)
+                if (selectedTerrainFeature_ >= 0 &&
+                    selectedTerrainFeature_ < static_cast<int>(terrain.features.size()) &&
+                    terrainFeatureDragPoint_ == -3)
                 {
-                    const float distance = (terrainFeatureDragPlaneHeight_ - rayOrigin.y) / rayDirection.y;
-                    if (distance > 0.0f && selectedTerrainFeature_ >= 0 &&
-                        selectedTerrainFeature_ < static_cast<int>(terrain.features.size()))
+                    Assets::Scad::FTerrainFeature& feature = terrain.features[selectedTerrainFeature_];
+                    const double value =
+                        std::max(0.0, terrainDragStartValue_ + (terrainDragStartMouse_.y - mouse.y) * 0.2);
+                    if (feature.type == EType::Lake || feature.type == EType::River)
                     {
-                        const glm::vec3 hit = rayOrigin + rayDirection * distance;
-                        const glm::dvec2 scadPoint(hit.x, -hit.z);
-                        Assets::Scad::FTerrainFeature& feature = terrain.features[selectedTerrainFeature_];
-                        if (terrainFeatureDragPoint_ == -2)
+                        feature.depth = value;
+                    }
+                    else
+                    {
+                        feature.height = value;
+                    }
+                    MarkTerrainProcessDirty();
+                }
+                else
+                {
+                    glm::vec3 rayOrigin;
+                    glm::vec3 rayDirection;
+                    Runtime::EngineHelper::GetScreenToWorldRay(mouse, rayOrigin, rayDirection);
+                    if (std::abs(rayDirection.y) > 1e-5f)
+                    {
+                        const float distance = (terrainFeatureDragPlaneHeight_ - rayOrigin.y) / rayDirection.y;
+                        if (distance > 0.0f && selectedTerrainFeature_ >= 0 &&
+                            selectedTerrainFeature_ < static_cast<int>(terrain.features.size()))
                         {
-                            feature.radius = std::max(0.1, glm::distance(feature.at, scadPoint));
+                            const glm::vec3 hit = rayOrigin + rayDirection * distance;
+                            const glm::dvec2 scadPoint(hit.x, -hit.z);
+                            Assets::Scad::FTerrainFeature& feature = terrain.features[selectedTerrainFeature_];
+                            if (terrainFeatureDragPoint_ == -2)
+                            {
+                                feature.radius = std::max(0.1, glm::distance(feature.at, scadPoint));
+                            }
+                            else if (terrainFeatureDragPoint_ == -1)
+                            {
+                                feature.at = scadPoint;
+                            }
+                            else if (terrainFeatureDragPoint_ == -4 && feature.pts.size() >= 2)
+                            {
+                                const glm::dvec2 delta = feature.pts[1] - feature.pts[0];
+                                const double length = glm::length(delta);
+                                if (length > 1e-6)
+                                {
+                                    const glm::dvec2 side(-delta.y / length, delta.x / length);
+                                    const glm::dvec2 midpoint = (feature.pts[0] + feature.pts[1]) * 0.5;
+                                    feature.width = std::max(0.1, 2.0 * std::abs(glm::dot(scadPoint - midpoint, side)));
+                                }
+                            }
+                            else if (terrainFeatureDragPoint_ >= 0 &&
+                                     terrainFeatureDragPoint_ < static_cast<int>(feature.pts.size()))
+                            {
+                                feature.pts[terrainFeatureDragPoint_] = scadPoint;
+                            }
+                            MarkTerrainProcessDirty();
                         }
-                        else if (terrainFeatureDragPoint_ == -1)
-                        {
-                            feature.at = scadPoint;
-                        }
-                        else if (terrainFeatureDragPoint_ >= 0 &&
-                                 terrainFeatureDragPoint_ < static_cast<int>(feature.pts.size()))
-                        {
-                            feature.pts[terrainFeatureDragPoint_] = scadPoint;
-                        }
-                        MarkTerrainProcessDirty();
                     }
                 }
             }
             if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
             {
                 terrainFeatureDragging_ = false;
+            }
+        }
+        if (terrainRuleDragging_)
+        {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && glm::distance2(mouse, terrainDragStartMouse_) > 4.0f)
+            {
+                if (selectedTerrainRule_ >= 0 && selectedTerrainRule_ < static_cast<int>(rules.size()) &&
+                    terrainRuleDragPoint_ == -5)
+                {
+                    FTerrainProcessRule& rule = rules[selectedTerrainRule_];
+                    rule.count = std::clamp(static_cast<int>(std::lround(terrainDragStartValue_ +
+                                                                         (terrainDragStartMouse_.y - mouse.y) * 2.0)),
+                                            0, 100000);
+                    MarkTerrainProcessDirty();
+                }
+                else
+                {
+                    glm::vec3 rayOrigin;
+                    glm::vec3 rayDirection;
+                    Runtime::EngineHelper::GetScreenToWorldRay(mouse, rayOrigin, rayDirection);
+                    if (std::abs(rayDirection.y) > 1e-5f)
+                    {
+                        const float distance = (terrainRuleDragPlaneHeight_ - rayOrigin.y) / rayDirection.y;
+                        if (distance > 0.0f && selectedTerrainRule_ >= 0 &&
+                            selectedTerrainRule_ < static_cast<int>(rules.size()))
+                        {
+                            const glm::vec3 hit = rayOrigin + rayDirection * distance;
+                            const glm::dvec2 point(hit.x, -hit.z);
+                            FTerrainProcessRule& rule = rules[selectedTerrainRule_];
+                            if (terrainRuleDragPoint_ == -1)
+                            {
+                                rule.x = point.x;
+                                rule.y = point.y;
+                            }
+                            else if (terrainRuleDragPoint_ == -2)
+                            {
+                                rule.sampleX = point.x;
+                                rule.sampleY = point.y;
+                            }
+                            else if (terrainRuleDragPoint_ == -3)
+                            {
+                                if (rule.circularRegion)
+                                    rule.regionCenter = point;
+                                else
+                                {
+                                    rule.region.x = point.x;
+                                    rule.region.y = point.y;
+                                }
+                            }
+                            else if (terrainRuleDragPoint_ == -4)
+                            {
+                                if (rule.circularRegion)
+                                    rule.regionRadius = std::max(0.1, glm::distance(rule.regionCenter, point));
+                                else
+                                {
+                                    rule.region.z = point.x;
+                                    rule.region.w = point.y;
+                                }
+                            }
+                            else if (terrainRuleDragPoint_ >= 0 &&
+                                     terrainRuleDragPoint_ < static_cast<int>(rule.points.size()))
+                            {
+                                rule.points[terrainRuleDragPoint_] = point;
+                            }
+                            MarkTerrainProcessDirty();
+                        }
+                    }
+                }
+            }
+            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+            {
+                terrainRuleDragging_ = false;
             }
         }
 
