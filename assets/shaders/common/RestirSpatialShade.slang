@@ -7,11 +7,11 @@ implementing PathTracing;
 
 static const float kRestirGoldenAngle = 2.39996323f;
 
-// Must mirror FVisibilityBufferRayCaster: no half-pixel offset.
+// Must mirror the visibility raster sample used by FVisibilityBufferRayCaster.
 public float3 RestirReconstructViewPosition(
     UniformBufferObject camera, int2 pixel, uint2 size, float depth)
 {
-    const float2 ndc = (float2(pixel) / float2(size)) * 2.0f - 1.0f;
+    const float2 ndc = ((float2(pixel) + 0.5f) / float2(size)) * 2.0f - 1.0f;
     const float4 view = mul(camera.ProjectionInverse, float4(ndc, depth, 1.0f));
     const float safeW = abs(view.w) > 1e-6f ? view.w : (view.w >= 0.0f ? 1e-6f : -1e-6f);
     return view.xyz / safeW;

@@ -65,7 +65,10 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
 
         const uint packedValue = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[ipos];
         const uint2 vBuffer = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF);
-        const float2 uv = (float2(ipos) / float2(isize)) * 2.0f - 1.0f;
+        // Vulkan raster coverage is evaluated at pixel centers. The reconstruction
+        // ray must use that exact sample or it can leave the stored triangle at
+        // grazing angles.
+        const float2 uv = ((float2(ipos) + 0.5f) / float2(isize)) * 2.0f - 1.0f;
         const float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
         const float4 target = mul(Camera.ProjectionInverse, float4(uv.x, uv.y, 1, 1));
         const float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
@@ -78,7 +81,11 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
             return false;
         }
 
-        outVertex = Common.get_material_data(vBuffer, origin.xyz, rayDir, nodes, models, vertices, indices);
+        if (!Common.get_material_data(
+                vBuffer, origin.xyz, rayDir, nodes, models, vertices, indices, outVertex))
+        {
+            return false;
+        }
         outNode = nodes[vBuffer.x - 1];
         outVertex.MaterialIndex = FetchMaterialId(outNode, outVertex.MaterialIndex);
         outRayLength = length(outVertex.Position - origin.xyz);

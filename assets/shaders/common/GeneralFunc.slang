@@ -4,9 +4,18 @@ implementing PathTracing;
 
 namespace Common
 {
-    public Vertex get_material_data(uint2 vBuffer, float3 ray_origin, float3 ray_direction, in NodeProxy* NodeProxies, in ModelData* Models, in GPUVertex* Vertices, in uint* PrimAddress)
+    public bool get_material_data(
+        uint2 vBuffer,
+        float3 ray_origin,
+        float3 ray_direction,
+        in NodeProxy* NodeProxies,
+        in ModelData* Models,
+        in GPUVertex* Vertices,
+        in uint* PrimAddress,
+        out Vertex result)
     {
-        // fetch primitive_index high 14bit as instance index and low 18bit as triangle index
+        // Fetch the triangle selected by the visibility pass, then reconstruct the
+        // perspective-correct attributes at the same camera sample.
         NodeProxy proxy = NodeProxies[vBuffer.x - 1];
         ModelData model = Models[proxy.modelId];
 
@@ -16,7 +25,7 @@ namespace Common
             currentVertices = Bindless.GetGpuscene().SkinnedVertices;
         }
 
-        Vertex result;
+        result = {};
         float3 positions[3], normals[3], tangents[3], localNormals[3];
         float4 localTangents[3];
         float2 tex_coords[3];
@@ -42,7 +51,14 @@ namespace Common
         };
 
         float3 ray_cross_edge_1 = cross(ray_direction, edges[1]);
-        float rcp_det_edges_direction = 1.0f / dot(edges[0], ray_cross_edge_1);
+        float det_edges_direction = dot(edges[0], ray_cross_edge_1);
+        float triangle_normal_length = length(cross(edges[0], edges[1]));
+        if (triangle_normal_length <= 1.0e-10f ||
+            abs(det_edges_direction) <= triangle_normal_length * 1.0e-7f)
+        {
+            return false;
+        }
+        float rcp_det_edges_direction = 1.0f / det_edges_direction;
         float3 ray_to_0 = ray_origin - positions[0];
         float det_0_dir_edge_1 = dot(ray_to_0, ray_cross_edge_1);
         barycentrics.y = rcp_det_edges_direction * det_0_dir_edge_1;
@@ -50,6 +66,17 @@ namespace Common
         float det_dir_edge_0_0 = dot(ray_direction, edge_0_cross_0);
         barycentrics.z = -rcp_det_edges_direction * det_dir_edge_0_0;
         barycentrics.x = 1.0f - (barycentrics.y + barycentrics.z);
+
+        // The visibility pass and this reconstruction must address the same sample.
+        // Reject a stale/mismatched primitive instead of extrapolating invalid G-buffer
+        // attributes. Tiny excursions are expected on shared raster edges.
+        if (any(isnan(barycentrics)) || any(isinf(barycentrics)) ||
+            any(barycentrics < float3(-0.01f)) || any(barycentrics > float3(1.01f)))
+        {
+            return false;
+        }
+        barycentrics = max(barycentrics, float3(0.0f));
+        barycentrics /= max(dot(barycentrics, float3(1.0f)), 1.0e-8f);
 
         result.Position = mad(float3(barycentrics.x), positions[0], mad(float3(barycentrics.y), positions[1], barycentrics.z * positions[2]));
         result.Normal = normalize(mad(float3(barycentrics.x), normals[0], mad(float3(barycentrics.y), normals[1], barycentrics.z * normals[2])));
@@ -59,6 +86,6 @@ namespace Common
         result.LocalTangent = mad(float4(barycentrics.x), localTangents[0], mad(float4(barycentrics.y), localTangents[1], barycentrics.z * localTangents[2]));
         result.MaterialIndex = matid;
 
-        return result;
+        return true;
     }
 }

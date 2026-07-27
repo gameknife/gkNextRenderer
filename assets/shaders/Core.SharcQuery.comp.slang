@@ -13,7 +13,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
     START_SHADERCLOCK()
 
-    FHardwarePrimaryRayCaster rayCaster;
+    FVisibilityBufferRayCaster rayCaster;
     FHardwareRayTracer tracer;
     FHardwareDirectIlluminator dIlluminator;
 

@@ -249,11 +249,19 @@ namespace Common
                 continue;
 
             float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
-            float4 target = mul(Camera.ProjectionInverse, float4(currentPosProj.x, currentPosProj.y, 1, 1));
+            const float2 sampleNdc =
+                ((float2(sampleCoord) + 0.5f) / float2(size)) * 2.0f - 1.0f;
+            float4 target = mul(Camera.ProjectionInverse, float4(sampleNdc, 1, 1));
             float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
             float3 ray_dir = normalize(dir.xyz);
 
-            Vertex sampleVertex = Common.get_material_data(vBufferSample, origin.xyz, ray_dir, NodeProxies, Models, Vertices, PrimAddress);
+            Vertex sampleVertex;
+            if (!Common.get_material_data(
+                    vBufferSample, origin.xyz, ray_dir, NodeProxies, Models,
+                    Vertices, PrimAddress, sampleVertex))
+            {
+                continue;
+            }
 
             float viewSpaceCurrentDepth = mul(Camera.ModelView, float4(currentPos, 1.0)).z;
             float viewSpaceSampleDepth = mul(Camera.ModelView, float4(sampleVertex.Position, 1.0)).z;

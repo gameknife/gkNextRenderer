@@ -62,7 +62,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    float2 uv = (float2(pixel) / float2(size)) * 2.0 - 1.0;
+    float2 uv = ((float2(pixel) + 0.5f) / float2(size)) * 2.0 - 1.0;
     float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
     float4 target = mul(Camera.ProjectionInverse, float4(uv.x, uv.y, 1, 1));
     float4 rayDir4 = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
@@ -93,48 +93,30 @@ void main(uint3 DTid : SV_DispatchThreadID)
     NodeProxy* nodes = Bindless.GetGpuscene().Nodes;
     ModelData* models = Bindless.GetGpuscene().Offsets;
 
-    NodeProxy hitNode = nodes[vBuffer.x - 1];
-    ModelData model = models[hitNode.modelId];
-    if (hitNode.skinId != 0xFFFFFFFF)
+    Vertex hitVertex;
+    if (!Common.get_material_data(
+            vBuffer, origin.xyz, primaryRayDir, nodes, models, vertices, indices, hitVertex))
     {
-        vertices = Bindless.GetGpuscene().SkinnedVertices;
+        // A stale or numerically degenerate visibility sample must not feed invalid
+        // attributes into the G-buffer. Treat it as an uncovered sample.
+        float4 skyColor = Camera.HasSky
+            ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir, Camera.SkyRotation, 0) *
+                Camera.SkyColor * Camera.SkyIntensity
+            : float4(0, 0, 0, 1);
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, float4(0));
+        Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_0).Store(pixel, 0);
+        Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, 1000);
+        float2 skyMotionPixels =
+            Common.CalculateSkyMotionVector(Camera, primaryRayDir) * float2(size);
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(
+            pixel, float4(skyMotionPixels, 0, 0));
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL).Store(pixel, float4(0));
+        return;
     }
 
-    uint indexBase = model.indexOffset + vBuffer.y * 3;
-    Vertex v0 = UnpackVertex(vertices[model.vertexOffset + indices[indexBase]]);
-    Vertex v1 = UnpackVertex(vertices[model.vertexOffset + indices[indexBase + 1]]);
-    Vertex v2 = UnpackVertex(vertices[model.vertexOffset + indices[indexBase + 2]]);
-
-    float3 p0 = mul(hitNode.worldTS, float4(v0.Position, 1)).xyz;
-    float3 p1 = mul(hitNode.worldTS, float4(v1.Position, 1)).xyz;
-    float3 p2 = mul(hitNode.worldTS, float4(v2.Position, 1)).xyz;
-    float3 n0 = mul(hitNode.worldTS, float4(v0.Normal, 0)).xyz;
-    float3 n1 = mul(hitNode.worldTS, float4(v1.Normal, 0)).xyz;
-    float3 n2 = mul(hitNode.worldTS, float4(v2.Normal, 0)).xyz;
-    float3 ln0 = v0.Normal;
-    float3 ln1 = v1.Normal;
-    float3 ln2 = v2.Normal;
-    float4 lt0 = v0.Tangent;
-    float4 lt1 = v1.Tangent;
-    float4 lt2 = v2.Tangent;
-
-    float3 edge0 = p1 - p0;
-    float3 edge1 = p2 - p0;
-    float3 rayCrossEdge1 = cross(primaryRayDir, edge1);
-    float inverseDet = 1.0f / dot(edge0, rayCrossEdge1);
-    float3 rayTo0 = origin.xyz - p0;
-    float baryY = inverseDet * dot(rayTo0, rayCrossEdge1);
-    float baryZ = -inverseDet * dot(primaryRayDir, cross(edge0, rayTo0));
-    float baryX = 1.0f - baryY - baryZ;
-
-    Vertex hitVertex = {};
-    hitVertex.Position = p0 * baryX + p1 * baryY + p2 * baryZ;
-    hitVertex.Normal = normalize(n0 * baryX + n1 * baryY + n2 * baryZ);
-    hitVertex.TexCoord = v0.TexCoord * baryX + v1.TexCoord * baryY + v2.TexCoord * baryZ;
-    hitVertex.LocalNormal = normalize(ln0 * baryX + ln1 * baryY + ln2 * baryZ);
-    float4 localTangent = lt0 * baryX + lt1 * baryY + lt2 * baryZ;
-    hitVertex.LocalTangent = float4(normalize(localTangent.xyz), localTangent.w < 0.5f ? -1.0f : 1.0f);
-    hitVertex.MaterialIndex = FetchMaterialId(hitNode, v0.MaterialIndex);
+    NodeProxy hitNode = nodes[vBuffer.x - 1];
+    hitVertex.MaterialIndex = FetchMaterialId(hitNode, hitVertex.MaterialIndex);
 
     float4 color;
     float4 specularColor = float4(0);
