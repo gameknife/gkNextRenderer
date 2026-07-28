@@ -1,7 +1,7 @@
 {
   "name": "nextdayz-smoke",
   "target": "NextDayz",
-  "scene": "assets/scad/coldwar/riverland_1km.scad",
+  "scene": "assets/scad/proc/coldwar/riverland_1km.scad",
   "defaults": { "waitFrames": 2, "stepTimeoutMs": 20000 },
   "viewport": { "width": 1600, "height": 900 },
   "steps": [

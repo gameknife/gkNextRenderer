@@ -56,6 +56,7 @@ namespace NextAI
                                          std::string jsonSchema, std::function<void(FAIResponse)> callback);
         FChatResponse Chat(const FChatRequest& request);
         FChatResponse ChatStream(const FChatRequest& request, FChatStreamCallback onDelta);
+        bool Cancel(const std::string& runId);
 
         std::string GetProviderName() const { return currentProviderId_; }
         const std::string& GetProviderId() const { return currentProviderId_; }

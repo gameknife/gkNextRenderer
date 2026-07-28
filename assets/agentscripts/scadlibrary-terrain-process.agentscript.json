@@ -1,7 +1,7 @@
 {
   "name": "scadlibrary-terrain-process",
   "target": "ScadLibrary",
-  "scene": "assets/scad/terrain_layout_demo.scad",
+  "scene": "assets/scad/proc/terrain_layout_demo.scad",
   "defaults": {
     "waitFrames": 2,
     "stepTimeoutMs": 30000

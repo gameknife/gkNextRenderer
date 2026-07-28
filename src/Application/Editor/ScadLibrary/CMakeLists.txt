@@ -12,4 +12,4 @@ gk_configure_application(ScadLibrary MODULES
     ${GK_STANDARD_RUNTIME_MODULES}
     ScadLoader
 )
-target_link_libraries(ScadLibrary PRIVATE NextGameplay)
+target_link_libraries(ScadLibrary PRIVATE NextGameplay NextAI)

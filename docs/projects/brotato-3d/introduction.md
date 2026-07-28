@@ -62,7 +62,7 @@ Brotato3D 的意义不只是“复刻一个玩法”，而是提供一个高频�
 | 商店 / 构筑 | `Brotato3DShopSystem.cpp`, `Brotato3DShop.cpp` | 升级卡、商店、被动物品、触发器 |
 | UI | `Brotato3DUI.cpp` | 菜单、HUD、Modal、结算、设置 |
 | 数据加载 | `Brotato3DDataLoader.cpp/.hpp` | JSON 到运行时结构体 |
-| 场景 | `assets/scad/brotato3d/*.scad`, `arenas.json` | 固定 SCAD 布景、场景路径和玩法边界 |
+| 场景 | `assets/scad/source/brotato3d/*.scad`, `arenas.json` | 固定 SCAD 布景、场景路径和玩法边界 |
 
 ## 配置入口
 

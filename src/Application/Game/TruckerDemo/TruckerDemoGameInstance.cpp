@@ -68,7 +68,7 @@ void TruckerDemoGameInstance::OnInit()
 {
     Modules::Scad::Register();
     fuel_ = fuelCapacity_ * 0.75f;
-    GetEngine().RequestLoadScene({.filename = "assets/scad/overhill_mission.scad"});
+    GetEngine().RequestLoadScene({.filename = "assets/scad/source/overhill_mission.scad"});
 }
 
 void TruckerDemoGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,

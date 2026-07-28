@@ -143,12 +143,12 @@ func TestShotRunArgsKeepsDefaultCaptureClean(t *testing.T) {
 func TestLoadValidateScriptHints(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "smoke.agentscript.json")
-	body := `{"name":"smoke","target":"ScadStudio","scene":"assets/scad/beer_cup.scad","viewport":{"width":1024,"height":768},"steps":[]}`
+	body := `{"name":"smoke","target":"ScadStudio","scene":"assets/scad/source/beer_cup.scad","viewport":{"width":1024,"height":768},"steps":[]}`
 	if err := os.WriteFile(path, []byte(body), 0644); err != nil {
 		t.Fatal(err)
 	}
 	hints := loadValidateScriptHints(path)
-	if hints.Name != "smoke" || hints.Target != "ScadStudio" || hints.Scene != "assets/scad/beer_cup.scad" {
+	if hints.Name != "smoke" || hints.Target != "ScadStudio" || hints.Scene != "assets/scad/source/beer_cup.scad" {
 		t.Fatalf("hints = %+v", hints)
 	}
 	if hints.Viewport.Width != 1024 || hints.Viewport.Height != 768 {

@@ -51,7 +51,7 @@ func TestComposePlacementOnly(t *testing.T) {
 	}
 	result := mustCompose(t, spec, testCatalog(t))
 	for _, want := range []string{
-		"use <../lib/kit_old_city.scad>",
+		"use <../../lib/kit_old_city.scad>",
 		"translate([5, -8, 0]) rotate([0, 0, 90]) oc_bldg_house(seed = 3);",
 	} {
 		if !strings.Contains(result.Source, want) {
@@ -98,7 +98,7 @@ func TestComposeBlockGrid(t *testing.T) {
 		"    [1, 0],",
 		"lay_grid(2, 2, 56, 50, seed = 5)",
 		"mini_block(MINI_L1[$row][$col], $seed);",
-		"use <../lib/kit_layout.scad>",
+		"use <../../lib/kit_layout.scad>",
 	} {
 		if !strings.Contains(result.Source, want) {
 			t.Errorf("missing %q in:\n%s", want, result.Source)
@@ -296,7 +296,7 @@ func TestComposeTerrainConstAndSnaps(t *testing.T) {
 
 	result := mustCompose(t, spec, testTerrainKit(t))
 	for _, want := range []string{
-		"use <../lib/kit_terrain.scad>",
+		"use <../../lib/kit_terrain.scad>",
 		`TERR = ["gkterr1", [240, 200], [120, 100], 11, [0, 1, 0.5], undef, "temperate", [`,
 		`["mountain", [-70, 62], 46, 24, 0.6],`,
 		`["river", [[-52, 52], [2, -52]], 7, 1.8],`,

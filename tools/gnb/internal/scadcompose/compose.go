@@ -23,7 +23,8 @@ type Result struct {
 
 // Compose validates the spec against the catalog and expands it into a
 // deterministic top-level .scad (same spec -> byte-identical output). The
-// output is written under assets/scad/gen/, so kit `use` paths are ../lib/.
+// output is written under assets/scad/{source,proc}/generated/, so kit `use`
+// paths are ../../lib/.
 func Compose(spec *Spec, catalog *Catalog, specPath string, specHash string) (*Result, error) {
 	result := &Result{}
 
@@ -264,13 +265,13 @@ func Compose(spec *Spec, catalog *Catalog, specPath string, specHash string) (*R
 		specHash)
 	fmt.Fprintf(&b, "$fn = %d;\n\n", spec.Fn)
 	if usesCombinators || spec.Terrain != nil {
-		b.WriteString("use <../lib/kit_layout.scad>\n")
+		b.WriteString("use <../../lib/kit_layout.scad>\n")
 	}
 	if spec.Terrain != nil {
-		b.WriteString("use <../lib/kit_terrain.scad>\n")
+		b.WriteString("use <../../lib/kit_terrain.scad>\n")
 	}
 	for _, file := range kitFiles {
-		fmt.Fprintf(&b, "use <../lib/%s>\n", file)
+		fmt.Fprintf(&b, "use <../../lib/%s>\n", file)
 	}
 	b.WriteString("\n")
 

@@ -72,7 +72,8 @@ ScadLibrary 顶栏把作者工具组织成三个应用级模式，每个模式�
 场景组装会递归发现所有引用 `kit_*.scad` 的场景。复杂手写场景通过 ScadLoader 求值
 变量、循环、条件和 module 引用，将最终 Kit 实例展开成可编辑对象；展开编辑必须另存副本，
 原文件仍保留完整源码。ScadLibrary 生成的固定变换链平铺场景可无损往返对象列表。未保存
-源码通过工作区副本预览，保存限制在 `assets/scad` 且禁止覆盖 `lib/`。新建通用场景写入 `assets/scad/scenes/`；
+源码通过工作区副本预览。新建对象场景写入 `assets/scad/evaluated/`，源码场景写入
+`assets/scad/source/`，过程场景写入 `assets/scad/proc/`；
 `gen/` 仍视为可被规格重新生成覆盖的产物。完整目录约定见 `assets/scad/README.md`，
 回归脚本为 `assets/agentscripts/scadlibrary-assembly.agentscript.json`。
 

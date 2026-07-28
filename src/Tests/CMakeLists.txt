@@ -37,6 +37,11 @@ set(unitTestSources
     Test_GnbAIClient.cpp
     Test_ScadPromptContext.cpp
     Test_ScadSessionStore.cpp
+    Test_ScadAIController.cpp
+    Test_ScadAIAdapters.cpp
+    Test_ScadSourceIndex.cpp
+    Test_ScadStudioSessionImporter.cpp
+    Test_CharacterWorkbenchAI.cpp
     Test_Rgb9e5Pack.cpp
     Test_UpscalerTypes.cpp
     Test_SogLoader.cpp
@@ -46,6 +51,16 @@ set(unitTestSources
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadPromptContext.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadSessionStore.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/TerrainProcessDocument.cpp
+    ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/CharacterWorkbench.cpp
+    ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/AI/ScadAIContracts.cpp
+    ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/AI/ScadAIController.cpp
+    ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/AI/ScadAIHistoryStore.cpp
+    ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/AI/ScadStudioSessionImporter.cpp
+    ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/AI/Adapters/KitModuleAIAdapter.cpp
+    ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/AI/Adapters/RigClipAIAdapter.cpp
+    ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/AI/Adapters/SceneObjectsAIAdapter.cpp
+    ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/AI/Adapters/SceneSourceAIAdapter.cpp
+    ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/AI/Adapters/TerrainProcessAIAdapter.cpp
     ${GK_SOURCE_ROOT}/Application/Game/BrickPlayer/BrickPlayerSnapLogic.cpp
     ${GK_SOURCE_ROOT}/Application/Game/BrickPlayer/BrickBuildPlan.cpp
     ${GK_SOURCE_ROOT}/Application/Game/MagicaLego/MagicaLegoStyle.cpp

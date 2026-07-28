@@ -332,7 +332,7 @@ crit   = round(damage * critMultiplier) when rng < (critChancePct + weapon.critC
 
 文件：[arenas.json](../../../assets/configs/brotato3d/arenas.json)
 
-`scene`: 固定 SCAD 场景路径，当前场景位于 `assets/scad/brotato3d/`，统一复用 `kit_deadly.scad` 末日素材。
+`scene`: 固定 SCAD 场景路径，当前场景位于 `assets/scad/source/brotato3d/`，统一复用 `kit_deadly.scad` 末日素材。
 `halfExtent`: `[halfX, halfZ]`，玩家和敌人的活动范围；SCAD 布景可以延伸到范围外作为远景。
 `baseGroundColor` / `borderColor`: 角色选择界面的场景色板，不参与生成场景几何。
 HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpness=8.0` 的 lerp（[Brotato3DGameInstance.cpp:26](../../../src/Application/Game/Brotato3D/Brotato3DGameInstance.cpp)）。

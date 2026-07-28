@@ -47,7 +47,7 @@ gnb 先占用一个随机 `127.0.0.1` 端口并生成一次性随机 token，再
 
 ```bash
 ./gnb.sh shot --scene assets/models/playground.glb
-./gnb.sh shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60 --ui
+./gnb.sh shot --target ScadStudio --scene assets/scad/source/beer_cup.scad --frames 60 --ui
 ./gnb.sh validate --script assets/agentscripts/smoke.agentscript.json
 ./gnb.sh validate --script assets/agentscripts/smoke.agentscript.json --visible
 ```

@@ -20,7 +20,7 @@ last_updated: 2026-07-21
 
 当前实现是**单文件** `TruckerDemoGameInstance.{hpp,cpp}`（约 260 行），已经具备：
 
-- 加载 [assets/scad/overhill_mission.scad](assets/scad/overhill_mission.scad)（`use lib/kit_overhill` + `include gen/overhill_vignette`，含玩家卡车锚点 `player_truck_body` / `player_wheel` / `cargo_crate`）。
+- 加载 [assets/scad/source/overhill_mission.scad](assets/scad/source/overhill_mission.scad)（`use lib/kit_overhill` + `include gen/overhill_vignette`，含玩家卡车锚点 `player_truck_body` / `player_wheel` / `cargo_crate`）。
 - Jolt `VehicleConstraint` 6 轮卡车（前轴转向、后双轴驱动 = 6×4），经 [NextPhysics](src/Engine/Runtime/Subsystems/NextPhysics.hpp:114) 抽象创建。
 - 路面摩擦系统：`bodyID → 表面类型` 表 + 每轮 `SetVehicleWheelFrictionScale` + 对车身施加附加阻力（[TruckerDemoGameInstance.cpp:128](src/Application/Game/TruckerDemo/TruckerDemoGameInstance.cpp:128)）。
 - 任务状态机：`Driving → AtPickup → Loaded → AtDropoff → Complete`，F 装/卸货、R 复位。
@@ -283,7 +283,7 @@ Windows 上 `gnb.bat run TruckerDemo`：
 | 当前实现 | [src/Application/Game/TruckerDemo/TruckerDemoGameInstance.cpp](src/Application/Game/TruckerDemo/TruckerDemoGameInstance.cpp) / [.hpp](src/Application/Game/TruckerDemo/TruckerDemoGameInstance.hpp) |
 | 物理抽象 / 后端 | [src/Engine/Runtime/Subsystems/NextPhysics.hpp](src/Engine/Runtime/Subsystems/NextPhysics.hpp) / [src/Modules/NextPhysics/JoltPhysicsBackend.cpp](src/Modules/NextPhysics/JoltPhysicsBackend.cpp) |
 | Jolt 载具头 | `out/build/<preset>/vcpkg_installed/x64-windows-static/include/Jolt/Physics/Vehicle/*.h` |
-| 场景 / 零件库 | [assets/scad/overhill_mission.scad](assets/scad/overhill_mission.scad)、`assets/scad/lib/kit_overhill.scad`、`assets/scad/specs/overhill_vignette.json` |
+| 场景 / 零件库 | [assets/scad/source/overhill_mission.scad](assets/scad/source/overhill_mission.scad)、`assets/scad/lib/kit_overhill.scad`、`assets/scad/specs/overhill_vignette.json` |
 | 锚点按名解析先例 | [src/Gameplay/Sim/AnchorMap.h](src/Gameplay/Sim/AnchorMap.h)、`src/Application/Game/AirportSim/AirportMap.cpp` |
 | 验证脚本 | `assets/agentscripts/trucker_{smoke,physics_debug,camera_orbit}.agentscript.json` |
 | 验证工具 | AGENTS.md "Agent Visual Validation" / "Agent Interactive Validation" 两节 |

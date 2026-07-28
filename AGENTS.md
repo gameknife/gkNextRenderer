@@ -101,7 +101,7 @@ Tests no longer require the current working directory to be `bin`; launch them v
 ```bash
 # 渲染一个场景到稳定帧 → 截一张图 → 自动退出。完成后会打印截图绝对路径。
 gnb shot --scene assets/models/playground.glb
-gnb shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60
+gnb shot --target ScadStudio --scene assets/scad/source/beer_cup.scad --frames 60
 gnb shot --target AirportSim --ui  # 截图包含 ImGui，适合验证 HUD / 面板
 ```
 

@@ -135,7 +135,8 @@ namespace NextAI
         nlohmann::json messages = nlohmann::json::array();
         for (const auto& message : request.messages) messages.push_back({{"role", ChatRoleToString(message.role)}, {"content", message.content}});
         static std::atomic<uint64_t> nextRun{1};
-        const std::string runId = fmt::format("chat-{}", nextRun++);
+        const std::string runId =
+            request.runId.empty() ? fmt::format("chat-{}", nextRun++) : request.runId;
         try
         {
             nlohmann::json params{{"sessionId", sessionId_}, {"runId", runId}, {"messages", messages},
@@ -163,6 +164,24 @@ namespace NextAI
             return response;
         }
         catch (const std::exception& exception) { return FChatResponse::Failure(exception.what()); }
+    }
+
+    bool FAIService::Cancel(const std::string& runId)
+    {
+        if (runId.empty() || !client_ || !client_->IsAvailable())
+        {
+            return false;
+        }
+        try
+        {
+            client_->Cancel(runId).get();
+            return true;
+        }
+        catch (const std::exception& exception)
+        {
+            statusMessage_ = exception.what();
+            return false;
+        }
     }
 
     FChatResponse FAIService::Chat(const FChatRequest& request)

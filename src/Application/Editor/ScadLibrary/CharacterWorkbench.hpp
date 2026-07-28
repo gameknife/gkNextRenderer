@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace ScadLibrary
@@ -62,6 +63,10 @@ namespace ScadLibrary
         bool CaptureRig(const std::string& sourcePath, const Assets::FRigAsset& asset, std::string& outError);
         bool ApplyToAsset(Assets::FRigAsset& asset, std::string& outError) const;
         bool SaveRig(std::string& outError);
+        int FindClipIndex(std::string_view name) const;
+        bool CreateClip(std::string name, bool loop, int& outIndex, std::string& outError);
+        bool ReplaceClip(std::string_view name, FEditableRigClip clip, std::string& outError);
+        bool RemoveClip(std::string_view name, std::string& outError);
 
         bool LoadEquipment(const std::string& equipmentPath, std::string& outError);
         bool SaveEquipment(std::string& outError);

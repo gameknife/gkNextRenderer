@@ -12,8 +12,9 @@
    不要自创格式。头注释、配色段、PRNG、工具模块、类别分段的组织方式照抄。
 3. 看 `assets/scad/lib/catalog.json` 里任一 kit 的模块 schema：category 由模块名第二段
    （`cw_bldg_barn` → `bldg`）推导，footprint/zMin/triangles 由工具自动求值。
-4. 场景组织参考对应 showcase（`assets/scad/coldwar_showcase.scad`）与
-   `assets/scad/coldwar/*.scad`；布局组合子见 `lib/kit_layout.scad`，贴地组合子见 `lib/kit_terrain.scad`。
+4. 场景组织参考对应 showcase（`assets/scad/source/coldwar_showcase.scad`）与
+   `assets/scad/source/coldwar/*.scad` 与 `assets/scad/proc/coldwar/*.scad`；布局组合子见
+   `lib/kit_layout.scad`，贴地组合子见 `lib/kit_terrain.scad`。
 
 ## 1. 组件库（kit）编写规范
 

@@ -54,7 +54,7 @@ ScadLibrary；但迁移的核心不是把 ScadStudio 的三栏 UI 和“整文�
 - 不恢复已经删除的通用 Agent Loop、repo/Git/Shell 工具或任意 Scene 写入。
 - 不让 NextAI 理解 SCAD、Kit、Terrain、Rig 或 ScadLibrary UI。
 - 不在首版中让模型同时修改多个 Kit 文件或重命名公开 module。
-- 不自动编辑 `assets/scad/gen/*.scad` 的生成结果；首版只能另存为人工场景副本。
+- 不自动编辑 `assets/scad/source/generated/*.scad 或 assets/scad/proc/generated/*.scad` 的生成结果；首版只能另存为人工场景副本。
 - 不以 parser 成功代替 evaluator、Manifold、Rig loader 和可视预览成功。
 - 不承诺让 AI 自动判断审美是否正确；用户仍通过 candidate preview 作最终判断。
 
@@ -329,7 +329,7 @@ module 必须来自当前 catalog；参数仍需经过 SCAD parser/evaluator，�
 - 大文件/聚焦定义：返回若干 `{expectedText, replacementText}`，每个 expected text 必须在
   base source 中唯一匹配，且总 candidate 通过完整校验。禁止执行模型提供的行号或 unified diff。
 
-新建 AI 场景以无路径 draft 开始，首次保存仍受现有 `assets/scad/scenes/` 路径策略保护。
+新建 AI 场景以无路径 draft 开始，首次保存仍受现有 `assets/scad/evaluated/` 路径策略保护。
 
 ### 7.3 Terrain 过程场景
 

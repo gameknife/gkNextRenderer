@@ -1,7 +1,7 @@
 ---
 title: "ScadLibrary AI 融合开发计划"
 category: plan
-status: 计划中
+status: 首版已落地，退役门槛待完成
 owner: ScadLibrary/NextAI
 created: 2026-07-28
 last_updated: 2026-07-28
@@ -9,6 +9,12 @@ design: ../designs/scadlibrary-ai-authoring-integration.md
 ---
 
 # ScadLibrary AI 融合开发计划
+
+> 2026-07-28 实施状态：M0–M4 的首版纵向链路已经落地，当前代码说明见
+> [ScadLibrary AI 创作实现](../projects/scadlibrary/ai-authoring.md)。ScadStudio 旧 session
+> importer 已落地，但 standalone target 仍按本计划的等价审计门槛保留；剩余工作主要是扩大
+> 四类 UI agentscript/真实 provider 质量覆盖，不能把本文剩余验收项误读成“已允许删除
+> ScadStudio”。
 
 ## 1. 交付目标
 
@@ -195,7 +201,7 @@ CRLF。不能用正则或单纯数大括号替代 parser-aware span。
 
 路径规则：
 
-- 新场景首次保存到 `assets/scad/scenes/`；
+- 新场景首次保存到 `assets/scad/evaluated/`；
 - 当前文件必须在 `assets/scad` 且不是 `lib/`；
 - `gen/` 只能另存副本；
 - 多文件一次只编辑一个 selected file，所有相对路径继续经过安全化。
@@ -240,7 +246,7 @@ CRLF。不能用正则或单纯数大括号替代 parser-aware span。
 ./gnb.sh build ScadLibrary gkNextUnitTests
 ./out/build/<preset>/bin/gkNextUnitTests "[AI][ScadLibrary][Scene]"
 ./gnb.sh validate --script assets/agentscripts/scadlibrary-ai-scene.agentscript.json
-./gnb.sh shot --target ScadLibrary --scene assets/scad/terrain_layout_demo.scad --ui
+./gnb.sh shot --target ScadLibrary --scene assets/scad/proc/terrain_layout_demo.scad --ui
 ```
 
 ## 5. M2：单 Kit module AI 编辑
@@ -360,7 +366,7 @@ Kit module row 增加 AI 入口；proposal card 增加 source diff、metrics、�
 ./gnb.sh build ScadLibrary gkNextUnitTests
 ./out/build/<preset>/bin/gkNextUnitTests "[AI][ScadLibrary][Terrain]"
 ./gnb.sh validate --script assets/agentscripts/scadlibrary-ai-terrain.agentscript.json
-./gnb.sh shot --target ScadLibrary --scene assets/scad/terrain_layout_demo.scad --ui
+./gnb.sh shot --target ScadLibrary --scene assets/scad/proc/terrain_layout_demo.scad --ui
 ```
 
 ## 7. M4：Rig 动作调整与新增

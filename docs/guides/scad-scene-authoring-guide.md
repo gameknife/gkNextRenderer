@@ -9,7 +9,9 @@ last_updated: 2026-07-17
 
 # SCAD 场景创作指南
 
-SCAD 资产有两种维护方式：直接手写顶层 `.scad`，或把 `assets/scad/specs/*.json` 作为源数据并生成 `assets/scad/gen/*.scad`。不要手改 `gen/` 后期待改动保留。
+SCAD 资产按结构放入 `evaluated / source / proc`。可以直接维护 `source/**/*.scad`，或把
+`assets/scad/specs/*.json` 作为源数据并生成到 `source/generated/` 或 `proc/generated/`。
+不要手改 `generated/` 后期待改动保留。
 
 ## 选哪条路径
 
@@ -17,7 +19,9 @@ SCAD 资产有两种维护方式：直接手写顶层 `.scad`，或把 `assets/s
 - 复用 kit、批量布局、城市矩阵、AI 生成或希望 JSON 易审查：使用 spec/compose。
 - 通用零件：放到 `assets/scad/lib/kit_*.scad`，补 catalog 元数据并重跑 catalog。
 
-当前可参考的手写场景包括 `beer_cup.scad`、`old_city.scad`、`airport.scad`、`office.scad`、`habor_city.scad`、`habor_city_v2.scad`、`overhill_mission.scad`、`overhill_showcase.scad` 和 `deadly_showcase.scad`。生成示例位于 `assets/scad/specs/` 与 `assets/scad/gen/`；不要再引用已删除的 `acient_city.scad` 或 `habor_city_hd.scad`。
+当前可参考的手写场景位于 `assets/scad/source/`，包括 `beer_cup.scad`、`old_city.scad`、
+`airport.scad`、`office.scad`、`habor_city*.scad` 和 showcase 场景。生成示例位于
+`assets/scad/specs/` 与两个分类的 `generated/` 目录。
 
 ## 坐标、材质与兼容子集
 
@@ -33,7 +37,7 @@ SCAD 资产有两种维护方式：直接手写顶层 `.scad`，或把 `assets/s
 ./gnb.sh build ScadCatalog
 ./gnb.sh scad catalog
 ./gnb.sh scad compose --spec assets/scad/specs/port_mini.json
-./gnb.sh shot --scene assets/scad/gen/port_mini.scad
+./gnb.sh shot --scene assets/scad/source/generated/port_mini.scad
 ```
 
 修改 kit 导出 module 后更新 `assets/scad/lib/catalog.json` 并提交。Spec 是严格 JSON，字段以 `tools/gnb/internal/scadcompose/spec.go` 为准；完整数据流见 [SCAD Scene Compose](../designs/scad-scene-compose-design.md)。
@@ -42,7 +46,7 @@ SCAD 资产有两种维护方式：直接手写顶层 `.scad`，或把 `assets/s
 
 ```bash
 ./gnb.sh build ScadStudio
-./gnb.sh shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60
+./gnb.sh shot --target ScadStudio --scene assets/scad/source/beer_cup.scad --frames 60
 ./out/build/<preset>/bin/gkNextUnitTests "[Scad]"
 ```
 

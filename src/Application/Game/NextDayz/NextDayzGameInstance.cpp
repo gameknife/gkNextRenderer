@@ -28,7 +28,7 @@
 
 namespace
 {
-    constexpr const char* kDefaultScene = "assets/scad/coldwar/riverland_1km.scad";
+    constexpr const char* kDefaultScene = "assets/scad/proc/coldwar/riverland_1km.scad";
     constexpr const char* kSoldierRig = "assets/scad/characters/nextdayz_survivor.scad";
 
     void AppendWeaponBox(std::vector<Assets::Vertex>& vertices, std::vector<uint32_t>& indices,

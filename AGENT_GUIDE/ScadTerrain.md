@@ -11,11 +11,11 @@ gnb scad generate "北面雪山，一条河流经桥入南边平原，西侧小�
 
 # 2. 手写 spec JSON → compose（推荐的创作路径）
 gnb scad compose --spec assets/scad/specs/overhill_valley.json
-gnb shot --scene assets/scad/gen/overhill_valley.scad
+gnb shot --scene assets/scad/proc/generated/overhill_valley.scad
 
 # 3. 手写 scad（直接用 builtin + 组合子）
-gnb shot --scene assets/scad/terrain_demo.scad          # 纯地形 7 特征 demo
-gnb shot --scene assets/scad/terrain_layout_demo.scad   # 地形 + kit 贴地混摆 demo
+gnb shot --scene assets/scad/proc/terrain_demo.scad          # 纯地形 7 特征 demo
+gnb shot --scene assets/scad/proc/terrain_layout_demo.scad   # 地形 + kit 贴地混摆 demo
 ```
 
 ## 语言面（engine 扩展，`gk_` 前缀，OpenSCAD 本体不认识）
@@ -26,7 +26,7 @@ h    = gk_terrain_height(TERR, x, y);    // 纯函数：地表高度（与渲染
 info = gk_terrain_info(TERR, x, y);      // [height, slopeDeg, water(0/1), biomeId]
 ```
 
-TERR 编码（compose 自动生成，手写参考 `assets/scad/terrain_demo.scad` 头注释）：
+TERR 编码（compose 自动生成，手写参考 `assets/scad/proc/terrain_demo.scad` 头注释）：
 
 ```scad
 TERR = ["gkterr1", [sizeX, sizeY], [cellsX, cellsY], seed,
@@ -71,7 +71,7 @@ ter_ok(t, x, y, filt) / ter_biome(name)                   // 过滤谓词 / biom
 
 ## ScadLibrary 过程编辑
 
-`ScadLibrary --scene assets/scad/terrain_layout_demo.scad` 会自动打开 Terrain“过程”页：
+`ScadLibrary --scene assets/scad/proc/terrain_layout_demo.scad` 会自动打开 Terrain“过程”页：
 
 - TERR 画布参数和 7 类有序 feature 均为类型化控件；折线 feature 可增删折点，feature 可调整顺序。
 - 中央视口会把 feature 直接画在地形表面：山峰/台地/湖泊显示半径轮廓，山峰/台地显示高度标尺，

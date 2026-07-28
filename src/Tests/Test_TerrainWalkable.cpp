@@ -18,7 +18,7 @@ TEST_CASE_METHOD(EngineTestFixture, "Terrain walkability: river blocks, bridge c
     Modules::Scad::Register();
     GOption->KeepCPUMeshData = true; // NavGrid raycasts the CPU BVH
 
-    engine_->RequestLoadScene({.filename = "assets/scad/gen/overhill_valley.scad"});
+    engine_->RequestLoadScene({.filename = "assets/scad/proc/generated/overhill_valley.scad"});
 
     // The fixture engine is already Running with its default scene, so poll
     // for the async load result (the terrain component) instead of the status.

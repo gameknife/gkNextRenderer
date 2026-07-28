@@ -85,7 +85,7 @@ void AirportSimGameInstance::OnInit()
     // NavGrid 从场景 CPU BVH 构建，需保留 CPU 网格数据。
     GOption->KeepCPUMeshData = true;
 
-    std::string initialScene = "assets/scad/airport.scad";
+    std::string initialScene = "assets/scad/source/airport.scad";
     if (!GOption->SceneName.empty())
     {
         initialScene = GOption->SceneName;

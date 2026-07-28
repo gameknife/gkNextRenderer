@@ -573,7 +573,7 @@ func newShotCommand(ctx appContext) *cobra.Command {
 			"The screenshot path is printed when finished.\n\n" +
 			"Examples:\n" +
 			"  gnb shot --scene assets/models/playground.glb\n" +
-			"  gnb shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60\n" +
+			"  gnb shot --target ScadStudio --scene assets/scad/source/beer_cup.scad --frames 60\n" +
 			"  gnb shot --target AirportSim --ui",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out := filepath.Join(filepath.Dir(platform.BinDir(ctx.repoRoot, ctx.preset)), "screenshots", "agent_validation")
@@ -708,7 +708,7 @@ func newTuiCommand(ctx appContext) *cobra.Command {
 			"current terminal using truecolor half-block characters.\n\n" +
 			"Examples:\n" +
 			"  gnb tui --scene assets/models/playground.glb\n" +
-			"  gnb tui --target ScadStudio --scene assets/scad/beer_cup.scad\n" +
+			"  gnb tui --target ScadStudio --scene assets/scad/source/beer_cup.scad\n" +
 			"  gnb tui --target gkNextRenderer --tui-fps 20",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			runArgs := []string{"--tui"}

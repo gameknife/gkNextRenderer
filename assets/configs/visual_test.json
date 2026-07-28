@@ -30,21 +30,21 @@
       "frames": 180
     },
     {
-      "path": "assets/scad/old_city.scad",
+      "path": "assets/scad/source/old_city.scad",
       "frames": 90
     },
     {
-      "path": "assets/scad/beer_cup.scad",
+      "path": "assets/scad/source/beer_cup.scad",
       "frames": 90
     }
   ],
   "sceneTimeouts": {
     "PhysicsShowcase.proc": 30.0,
-    "assets/scad/old_city.scad": 60.0,
-    "assets/scad/beer_cup.scad": 30.0
+    "assets/scad/source/old_city.scad": 60.0,
+    "assets/scad/source/beer_cup.scad": 30.0
   },
   "notes": {
     "PhysicsShowcase.proc": "Physics motion can have small platform-dependent variance; visual baseline is informational.",
-    "assets/scad/old_city.scad": "SCAD loader uses Manifold for CSG on desktop; mobile/no-backend builds may still fall back to approximations."
+    "assets/scad/source/old_city.scad": "SCAD loader uses Manifold for CSG on desktop; mobile/no-backend builds may still fall back to approximations."
   }
 }

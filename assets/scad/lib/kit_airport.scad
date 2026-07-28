@@ -679,7 +679,7 @@ module ap_veh_stairs_truck()
     color(ap_METALC()) translate([0, 1.75, 1.72]) cube([1.10, 0.65, 0.10], center = true);     // 顶部平台
     color(ap_DARKMETC()) for (sx = [-1, 1])
     {
-        translate([0.53 * sx, 0.45, 1.45]) rotate([-26, 0, 0]) cube([0.05, 2.6, 0.05], center = true);
+        translate([0.53 * sx, 0.45, 1.45]) rotate([26, 0, 0]) cube([0.05, 2.6, 0.05], center = true);
         translate([0.53 * sx, 1.75, 2.10]) cube([0.05, 0.65, 0.05], center = true);
     }
 }

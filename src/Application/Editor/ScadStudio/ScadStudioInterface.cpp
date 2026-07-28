@@ -524,7 +524,7 @@ namespace ScadStudio
             else
             {
                 const std::string example =
-                    Utilities::FileHelper::GetPlatformFilePath("assets/scad/beer_cup.scad");
+                    Utilities::FileHelper::GetPlatformFilePath("assets/scad/source/beer_cup.scad");
                 if (std::filesystem::exists(example, ec))
                 {
                     engine_.RequestLoadScene({.filename = example});

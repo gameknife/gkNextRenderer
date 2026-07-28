@@ -359,7 +359,7 @@ ter_scatter(TERR, 5, 120, [-110,-90,110,90], [0.5, 14, 28, 2.0, ["grass"]])
     oh_nature_pine(s = ter_rndr(0.8, 1.3), seed = $seed);
 ```
 
-产物仍是一等资产：可提交、可手改、`gnb shot --scene assets/scad/gen/overhill_valley.scad` 直接验收。
+产物仍是一等资产：可提交、可手改、`gnb shot --scene assets/scad/proc/generated/overhill_valley.scad` 直接验收。
 
 ---
 

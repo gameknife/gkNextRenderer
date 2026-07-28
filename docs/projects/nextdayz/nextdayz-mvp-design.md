@@ -9,7 +9,7 @@ last_updated: 2026-07-21
 
 # NextDayz — 类 DayZ 生存射击 MVP 设计与开发步骤
 
-> 本文是把 `assets/scad/coldwar/riverland_1km.scad`（冷战开放地图）与 ScadRig（可自由组合的刚体骨骼角色/动作）当作既有基础设施，在其上搭建一个**最小可玩的类 DayZ 第一人称生存射击 demo**（target 名 `NextDayz`）的设计方案与分阶段开发步骤。文档面向后续接手的 AGENT，所有系统都给出落地文件、复用 API 与验收标准。
+> 本文是把 `assets/scad/proc/coldwar/riverland_1km.scad`（冷战开放地图）与 ScadRig（可自由组合的刚体骨骼角色/动作）当作既有基础设施，在其上搭建一个**最小可玩的类 DayZ 第一人称生存射击 demo**（target 名 `NextDayz`）的设计方案与分阶段开发步骤。文档面向后续接手的 AGENT，所有系统都给出落地文件、复用 API 与验收标准。
 >
 > MVP 与复杂 3C 均已实现。蹲姿、四方向三步态、分层瞄准/后坐力和 Loot 动作的现行架构
 > 以 [NextDayz 复杂 3C 与 ScadRig 分层动画设计](nextdayz-3c-scadrig-design.md) 为准。
@@ -45,12 +45,12 @@ last_updated: 2026-07-21
 
 ### 2.1 地图与运行时加载
 
-- 地图：[assets/scad/coldwar/riverland_1km.scad](assets/scad/coldwar/riverland_1km.scad)。1km²、`176×176` 地形 cell（`<180²` 故地形是**单个** MeshShape，可行走/寻路）；主公路东西横贯、河 + 混凝土桥、8 个 POI（西部村庄 / 桥西加油站 / 桥东碉堡 / 东北军事基地 / 东南小镇 / 河畔工厂 / 西山通信站 / 北坡坠机点 / 西南湖畔营地）。
+- 地图：[assets/scad/proc/coldwar/riverland_1km.scad](assets/scad/proc/coldwar/riverland_1km.scad)。1km²、`176×176` 地形 cell（`<180²` 故地形是**单个** MeshShape，可行走/寻路）；主公路东西横贯、河 + 混凝土桥、8 个 POI（西部村庄 / 桥西加油站 / 桥东碉堡 / 东北军事基地 / 东南小镇 / 河畔工厂 / 西山通信站 / 北坡坠机点 / 西南湖畔营地）。
 - `.scad` **可运行时直接加载**：注册加载器后请求即可。AirportSim 就是这么做的（[AirportSimGameInstance.cpp:72-94](src/Application/Game/AirportSim/AirportSimGameInstance.cpp:72)）：
 
   ```cpp
   Modules::Scad::Register();                 // OnInit 里注册 .scad 场景加载器
-  GetEngine().RequestLoadScene({.filename = "assets/scad/coldwar/riverland_1km.scad"});
+  GetEngine().RequestLoadScene({.filename = "assets/scad/proc/coldwar/riverland_1km.scad"});
   ```
 
 ### 2.2 场景节点命名（拾取的基础）
@@ -303,7 +303,7 @@ MVP 不做容量/重量上限（可留一个大常量 `kMaxSlots` 防爆）。
 
 ## 7. 开发里程碑与步骤（交付给执行 AGENT）
 
-> 每个里程碑 = 独立可编译 + 可肉眼验证的一步。构建只针对本 target：`./gnb.sh build NextDayz`（引擎层没动就不用全量）。渲染验证用 `gnb shot --target NextDayz --scene assets/scad/coldwar/riverland_1km.scad [--ui]`；交互验证用 `gnb validate --script ...`。完成一个里程碑写一条 journal。
+> 每个里程碑 = 独立可编译 + 可肉眼验证的一步。构建只针对本 target：`./gnb.sh build NextDayz`（引擎层没动就不用全量）。渲染验证用 `gnb shot --target NextDayz --scene assets/scad/proc/coldwar/riverland_1km.scad [--ui]`；交互验证用 `gnb validate --script ...`。完成一个里程碑写一条 journal。
 
 ### M0 — 目标骨架 + 加载地图（半天）
 
@@ -311,7 +311,7 @@ MVP 不做容量/重量上限（可留一个大常量 `kMaxSlots` 防爆）。
 - `NextDayzMain.cpp` 实现 `CreateGameInstance`；`NextDayzGameInstance` 实现空的生命周期。
 - `OnInit`：`Modules::Scad::Register()` + `RequestLoadScene(riverland_1km.scad)`。
 - `ConfigureCVars`：设个默认渲染器（软件光追/SoftwareModern 更省，利于 demo 帧率）。
-- **验收**：`./gnb.sh build NextDayz` 通过；`gnb shot --target NextDayz --scene assets/scad/coldwar/riverland_1km.scad` 能出地图俯瞰图；日志出现 `uploaded scene [...] to gpu`。
+- **验收**：`./gnb.sh build NextDayz` 通过；`gnb shot --target NextDayz --scene assets/scad/proc/coldwar/riverland_1km.scad` 能出地图俯瞰图；日志出现 `uploaded scene [...] to gpu`。
 
 ### M1 — 3C 核心：控制器 + FPS 相机 + 移动（1–2 天）
 
@@ -355,7 +355,7 @@ MVP 不做容量/重量上限（可留一个大常量 `kMaxSlots` 防爆）。
 
 ## 8. 验证策略
 
-- **渲染肉眼验证**：`gnb shot --target NextDayz --scene assets/scad/coldwar/riverland_1km.scad --ui`（不弹窗、自动退出，读固定 `agent_validation.jpg`）。
+- **渲染肉眼验证**：`gnb shot --target NextDayz --scene assets/scad/proc/coldwar/riverland_1km.scad --ui`（不弹窗、自动退出，读固定 `agent_validation.jpg`）。
 - **交互 + 断言**：`gnb validate --script <script> [--visible]`。内建查询已够（`engine.totalFrames/frameRate`、`scene.nodeCount`、`cvar.*`），游戏侧再经 `RegisterAgentQueries` 暴露 `game.ammoInMag/ammoReserve/inventoryCount/equippedWeapon/hour/isAiming` 等。
 - **单测**：动 `Gameplay/Rig` 相关跑 `gkNextUnitTests "[Rig]"`；纯游戏逻辑（背包堆叠、换弹补给、映射表）可加轻量 Catch2（可选）。
 - **构建面**：只动 `src/Application/Game/NextDayz/**` → `./gnb.sh build NextDayz`；动到 `Gameplay` 共享层 → 额外 build `CharacterDemo AirportSim gkNextUnitTests` 验证未破坏其它 consumer。

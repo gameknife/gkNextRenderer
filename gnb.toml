@@ -24,6 +24,11 @@ provider = "localllm"
 temperature = 0.4
 max_output_tokens = 4096
 
+[ai.profiles.scad-authoring]
+provider = "localllm"
+temperature = 0.4
+max_output_tokens = 4096
+
 [ai.profiles.magicalego-script]
 provider = "localllm"
 temperature = 0.4

@@ -39,7 +39,7 @@ namespace
         std::filesystem::path cursor = std::filesystem::current_path();
         while (!cursor.empty())
         {
-            const std::filesystem::path candidate = cursor / "assets/scad/terrain_layout_demo.scad";
+            const std::filesystem::path candidate = cursor / "assets/scad/proc/terrain_layout_demo.scad";
             if (std::filesystem::is_regular_file(candidate))
             {
                 return candidate;
@@ -51,7 +51,7 @@ namespace
             }
             cursor = parent;
         }
-        return Utilities::FileHelper::GetPlatformFilePath("assets/scad/terrain_layout_demo.scad");
+        return Utilities::FileHelper::GetPlatformFilePath("assets/scad/proc/terrain_layout_demo.scad");
     }
 
     FParsedProcessSource ParseAndEvaluate(std::string source)

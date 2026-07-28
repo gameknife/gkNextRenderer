@@ -37,7 +37,7 @@ last_updated: 2026-07-17
 
 ## M0：地形核心（FScadTerrain + builtin）
 
-**目标**：手写一个 `assets/scad/terrain_demo.scad`（直接书写 TERR 常量 + `gk_terrain(TERR)`），
+**目标**：手写一个 `assets/scad/proc/terrain_demo.scad`（直接书写 TERR 常量 + `gk_terrain(TERR)`），
 `gnb shot` 出一张有山、河、湖、平原、道路、基座的 low-poly 地形图，0 warning。
 
 ### 任务
@@ -51,7 +51,7 @@ last_updated: 2026-07-17
 | 0.5 | evaluator 接入：module + function + 缓存 | `FScadEvaluator.Geometry.cpp`（`gk_terrain` 分发）、`FScadEvaluator.Expr.cpp`（`gk_terrain_height/info`）、`FScadEvaluator.h`（缓存成员） | 缓存 keyed by 0.1 的哈希；height/info 走三角化后网格重心插值（设计 §5.6） |
 | 0.6 | faceted 标志透传 | `FScadTypes.h`（GeomList 桶标志）、`FScadEvaluator.*`、`FScadLoader.cpp`（带标志的桶跳过法线平滑） | 默认 false；非地形路径逐字节不变是硬要求 |
 | 0.7 | 单测 `[ScadTerrain]` | `src/Tests/Test_ScadTerrain.cpp`（新增） | 见下"验收" |
-| 0.8 | 手写 demo 场景 | `assets/scad/terrain_demo.scad`（新增） | 覆盖全部七种 feature；文件头注释说明 TERR 编码格式（后续人手写的参考） |
+| 0.8 | 手写 demo 场景 | `assets/scad/proc/terrain_demo.scad`（新增） | 覆盖全部七种 feature；文件头注释说明 TERR 编码格式（后续人手写的参考） |
 
 ### 验收
 
@@ -59,7 +59,7 @@ last_updated: 2026-07-17
    `gk_terrain_height` 与生成网格在 1000 个随机采样点重心插值一致（误差 < 1e-6）；
    pad 域内高度为常数；river 走廊水面标高沿下游单调不增；着色调色板色数 ≤ 12；
    faceted=false 时既有 `[Scad]` 场景桶输出逐字节不变。
-2. `gnb shot --scene assets/scad/terrain_demo.scad` 出图：山体连续、河有下切+半透明水面、
+2. `gnb shot --scene assets/scad/proc/terrain_demo.scad` 出图：山体连续、河有下切+半透明水面、
    道路可辨、pad 平整、平直着色（无平滑渐变），0 warning。
 3. 回归红线（见通用规则）。
 
@@ -76,11 +76,11 @@ last_updated: 2026-07-17
 | 1.1 | `ter_place / ter_place_tilt / ter_along` | `assets/scad/lib/kit_terrain.scad`（新增） | 设计 §6.1；tilt 用 `gk_terrain_info` 的坡度+法线，上限角参数 |
 | 1.2 | `ter_scatter` 拒绝采样 | 同上 | 设计 §6.2；filt=[hMin,hMax,slopeMax,avoidWater,biomes]；候选上限 4n；`$idx/$seed/$t` 穿透 children |
 | 1.3 | catalog 扫描白名单 | `src/Application/Editor/ScadLibrary/KitCatalog.cpp`（kit_layout 跳过处） | kit_terrain 加入跳过清单，不进 catalog/浏览器 |
-| 1.4 | 贴地 demo 场景 | `assets/scad/terrain_layout_demo.scad`（新增） | terrain_demo 地形 + 桥横跨河 + 山坡松树 ter_scatter（草地/缓坡过滤生效：河里和陡壁上无树）+ pad 上 2–3 栋建筑 + ter_along 沿路路灯 |
+| 1.4 | 贴地 demo 场景 | `assets/scad/proc/terrain_layout_demo.scad`（新增） | terrain_demo 地形 + 桥横跨河 + 山坡松树 ter_scatter（草地/缓坡过滤生效：河里和陡壁上无树）+ pad 上 2–3 栋建筑 + ter_along 沿路路灯 |
 
 ### 验收
 
-1. `gnb shot --scene assets/scad/terrain_layout_demo.scad`：全部件底面贴合地表（无悬空/穿地）、
+1. `gnb shot --scene assets/scad/proc/terrain_layout_demo.scad`：全部件底面贴合地表（无悬空/穿地）、
    pad 上建筑共面、散布过滤肉眼可辨（水域/陡坡无树），0 warning。
 2. 同 seed 重开场景点位完全一致（截图 diff 或节点数核对）。
 3. `gnb scad catalog` 重跑：kit_terrain 未进 catalog，module 总数不含 ter_*。
@@ -99,7 +99,7 @@ last_updated: 2026-07-17
 | 2.2 | 校验器 | `tools/gnb/internal/scadcompose/compose.go` | 设计 §8.1 全部结构校验 + 语义告警；错误信息带"怎么改"（LLM 回喂友好） |
 | 2.3 | TERR 展开 + snap 缺省规则 | 同上 | canonical 数值格式化（字节稳定）；有 terrain 段时非 `ground_*` 类模块默认 snap=terrain，`"snap":"none"` 可关；placements/grids/rows/rings/alongs 包 `ter_place`，scatters 带 where 走 `ter_scatter` |
 | 2.4 | Go 单测 | `tools/gnb/internal/scadcompose/*_test.go` | terrain 段 golden file（spec→scad 字节比对）+ 校验错误用例（互斥/越界/折线 <2 点/pad 压河告警） |
-| 2.5 | 样例 spec | `assets/scad/specs/overhill_valley.json`（新增） | 设计 §4 示例的完整可跑版；产物 `assets/scad/gen/overhill_valley.scad` 一并提交 |
+| 2.5 | 样例 spec | `assets/scad/specs/overhill_valley.json`（新增） | 设计 §4 示例的完整可跑版；产物 `assets/scad/proc/generated/overhill_valley.scad` 一并提交 |
 
 ### 验收
 

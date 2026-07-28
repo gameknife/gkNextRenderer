@@ -1,0 +1,110 @@
+{
+  "name": "scadlibrary-ai-terrain",
+  "target": "ScadLibrary",
+  "scene": "assets/scad/proc/terrain_layout_demo.scad",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1600,
+    "height": 900
+  },
+  "steps": [
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running",
+      "timeoutMs": 20000
+    },
+    {
+      "type": "wait-frames",
+      "n": 180
+    },
+    {
+      "type": "click",
+      "at": {
+        "norm": [0.744, 0.030]
+      }
+    },
+    {
+      "type": "wait-frames",
+      "n": 8
+    },
+    {
+      "type": "click",
+      "at": {
+        "norm": [0.86, 0.40]
+      }
+    },
+    {
+      "type": "text",
+      "value": "保持当前过程场景参数，生成一个可验证提案"
+    },
+    {
+      "type": "click",
+      "at": {
+        "norm": [0.76, 0.513]
+      }
+    },
+    {
+      "type": "wait-ms",
+      "ms": 600
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/scadlibrary_ai_terrain_panel",
+      "ui": true
+    },
+    {
+      "type": "click",
+      "at": {
+        "norm": [0.78, 0.654]
+      }
+    },
+    {
+      "type": "wait-ms",
+      "ms": 600
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/scadlibrary_ai_terrain_original",
+      "ui": true
+    },
+    {
+      "type": "click",
+      "at": {
+        "norm": [0.745, 0.654]
+      }
+    },
+    {
+      "type": "wait-ms",
+      "ms": 600
+    },
+    {
+      "type": "click",
+      "at": {
+        "norm": [0.835, 0.654]
+      }
+    },
+    {
+      "type": "wait-frames",
+      "n": 90
+    },
+    {
+      "type": "assert",
+      "query": "scene.nodeCount",
+      "op": "ge",
+      "value": 100
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/scadlibrary_ai_terrain_applied",
+      "ui": true
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

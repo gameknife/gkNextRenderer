@@ -27,12 +27,14 @@ namespace Assets::Scad
         size_t i = 0;
         int line = 1;
 
-        auto push = [&](Tok kind, std::string text = std::string())
+        auto push = [&](Tok kind, size_t begin, size_t end, std::string text = std::string())
         {
             Token t;
             t.kind = kind;
             t.text = std::move(text);
             t.line = line;
+            t.begin = begin;
+            t.end = end;
             outTokens.push_back(std::move(t));
         };
 
@@ -81,6 +83,7 @@ namespace Assets::Scad
             // String literal.
             if (c == '"')
             {
+                const size_t start = i;
                 ++i;
                 std::string value;
                 while (i < n && source[i] != '"')
@@ -118,6 +121,8 @@ namespace Assets::Scad
                 t.kind = Tok::String;
                 t.text = std::move(value);
                 t.line = line;
+                t.begin = start;
+                t.end = i;
                 outTokens.push_back(std::move(t));
                 continue;
             }
@@ -159,6 +164,8 @@ namespace Assets::Scad
                 t.kind = Tok::Number;
                 t.number = std::strtod(source.substr(start, i - start).c_str(), nullptr);
                 t.line = line;
+                t.begin = start;
+                t.end = i;
                 outTokens.push_back(std::move(t));
                 continue;
             }
@@ -176,6 +183,8 @@ namespace Assets::Scad
                 t.kind = Tok::Special;
                 t.text = source.substr(start, i - start);
                 t.line = line;
+                t.begin = start;
+                t.end = i;
                 outTokens.push_back(std::move(t));
                 continue;
             }
@@ -192,42 +201,44 @@ namespace Assets::Scad
                 t.kind = Tok::Ident;
                 t.text = source.substr(start, i - start);
                 t.line = line;
+                t.begin = start;
+                t.end = i;
                 outTokens.push_back(std::move(t));
                 continue;
             }
 
             // Operators / punctuation.
             auto two = [&](char a, char b) { return c == a && i + 1 < n && source[i + 1] == b; };
-            if (two('<', '=')) { push(Tok::Le); i += 2; continue; }
-            if (two('>', '=')) { push(Tok::Ge); i += 2; continue; }
-            if (two('=', '=')) { push(Tok::EqEq); i += 2; continue; }
-            if (two('!', '=')) { push(Tok::NotEq); i += 2; continue; }
-            if (two('&', '&')) { push(Tok::AndAnd); i += 2; continue; }
-            if (two('|', '|')) { push(Tok::OrOr); i += 2; continue; }
+            if (two('<', '=')) { push(Tok::Le, i, i + 2); i += 2; continue; }
+            if (two('>', '=')) { push(Tok::Ge, i, i + 2); i += 2; continue; }
+            if (two('=', '=')) { push(Tok::EqEq, i, i + 2); i += 2; continue; }
+            if (two('!', '=')) { push(Tok::NotEq, i, i + 2); i += 2; continue; }
+            if (two('&', '&')) { push(Tok::AndAnd, i, i + 2); i += 2; continue; }
+            if (two('|', '|')) { push(Tok::OrOr, i, i + 2); i += 2; continue; }
 
             switch (c)
             {
-            case '(': push(Tok::LParen); break;
-            case ')': push(Tok::RParen); break;
-            case '{': push(Tok::LBrace); break;
-            case '}': push(Tok::RBrace); break;
-            case '[': push(Tok::LBracket); break;
-            case ']': push(Tok::RBracket); break;
-            case ',': push(Tok::Comma); break;
-            case ';': push(Tok::Semicolon); break;
-            case ':': push(Tok::Colon); break;
-            case '=': push(Tok::Assign); break;
-            case '.': push(Tok::Dot); break;
-            case '+': push(Tok::Plus); break;
-            case '-': push(Tok::Minus); break;
-            case '*': push(Tok::Star); break;
-            case '/': push(Tok::Slash); break;
-            case '%': push(Tok::Percent); break;
-            case '<': push(Tok::Lt); break;
-            case '>': push(Tok::Gt); break;
-            case '!': push(Tok::Not); break;
-            case '?': push(Tok::Question); break;
-            case '#': push(Tok::Hash); break;
+            case '(': push(Tok::LParen, i, i + 1); break;
+            case ')': push(Tok::RParen, i, i + 1); break;
+            case '{': push(Tok::LBrace, i, i + 1); break;
+            case '}': push(Tok::RBrace, i, i + 1); break;
+            case '[': push(Tok::LBracket, i, i + 1); break;
+            case ']': push(Tok::RBracket, i, i + 1); break;
+            case ',': push(Tok::Comma, i, i + 1); break;
+            case ';': push(Tok::Semicolon, i, i + 1); break;
+            case ':': push(Tok::Colon, i, i + 1); break;
+            case '=': push(Tok::Assign, i, i + 1); break;
+            case '.': push(Tok::Dot, i, i + 1); break;
+            case '+': push(Tok::Plus, i, i + 1); break;
+            case '-': push(Tok::Minus, i, i + 1); break;
+            case '*': push(Tok::Star, i, i + 1); break;
+            case '/': push(Tok::Slash, i, i + 1); break;
+            case '%': push(Tok::Percent, i, i + 1); break;
+            case '<': push(Tok::Lt, i, i + 1); break;
+            case '>': push(Tok::Gt, i, i + 1); break;
+            case '!': push(Tok::Not, i, i + 1); break;
+            case '?': push(Tok::Question, i, i + 1); break;
+            case '#': push(Tok::Hash, i, i + 1); break;
             default:
                 outError = "Unexpected character '" + std::string(1, c) + "' at line " + std::to_string(line);
                 return false;
@@ -238,6 +249,8 @@ namespace Assets::Scad
         Token eof;
         eof.kind = Tok::Eof;
         eof.line = line;
+        eof.begin = n;
+        eof.end = n;
         outTokens.push_back(eof);
         return true;
     }

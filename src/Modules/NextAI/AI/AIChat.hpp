@@ -44,6 +44,9 @@ namespace NextAI
     struct FChatRequest
     {
         std::vector<FChatMessage> messages;
+        // Optional caller-owned identity used for routing streamed events and
+        // cancelling an in-flight request. When empty, FAIService generates one.
+        std::string runId;
         std::string model;
         float temperature = 0.7f;
         int maxTokens = 0;

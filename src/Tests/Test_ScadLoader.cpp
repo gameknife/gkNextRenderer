@@ -546,10 +546,10 @@ TEST_CASE("Scad loader: nested module calls keep translated child transforms", "
 TEST_CASE("Scad loader: loads the bundled beer_cup sample when present", "[Unit][Scad]")
 {
     const std::filesystem::path samplePath =
-        std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets/scad/beer_cup.scad"));
+        std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets/scad/source/beer_cup.scad"));
     if (!std::filesystem::exists(samplePath))
     {
-        WARN("assets/scad/beer_cup.scad not present; skipping sample load");
+        WARN("assets/scad/source/beer_cup.scad not present; skipping sample load");
         return;
     }
 
@@ -561,7 +561,7 @@ TEST_CASE("Scad loader: loads the bundled beer_cup sample when present", "[Unit]
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene("assets/scad/beer_cup.scad", environment, nodes, models, materials,
+    REQUIRE(Assets::FScadLoader::LoadScadScene("assets/scad/source/beer_cup.scad", environment, nodes, models, materials,
                                                lights, tracks, skeletons));
 
     CHECK(nodes.size() > 1); // glass, beer, foam, bubbles, handle ...
@@ -607,10 +607,10 @@ TEST_CASE("Scad loader: bundled beer_cup glass body is hollow", "[Unit][Scad]")
     }
 
     const std::filesystem::path samplePath =
-        std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets/scad/beer_cup.scad"));
+        std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets/scad/source/beer_cup.scad"));
     if (!std::filesystem::exists(samplePath))
     {
-        WARN("assets/scad/beer_cup.scad not present; skipping sample load");
+        WARN("assets/scad/source/beer_cup.scad not present; skipping sample load");
         return;
     }
 
@@ -622,7 +622,7 @@ TEST_CASE("Scad loader: bundled beer_cup glass body is hollow", "[Unit][Scad]")
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene("assets/scad/beer_cup.scad", environment, nodes, models, materials,
+    REQUIRE(Assets::FScadLoader::LoadScadScene("assets/scad/source/beer_cup.scad", environment, nodes, models, materials,
                                                lights, tracks, skeletons));
 
     int glassBodyIndex = -1;
@@ -844,10 +844,10 @@ TEST_CASE("Scad loader: Z-up converts to engine Y-up", "[Unit][Scad]")
 TEST_CASE("Scad loader: loads the bundled old_city sample when present", "[Unit][Scad]")
 {
     const std::filesystem::path samplePath =
-        std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets/scad/old_city.scad"));
+        std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets/scad/source/old_city.scad"));
     if (!std::filesystem::exists(samplePath))
     {
-        WARN("assets/scad/old_city.scad not present in runtime root; skipping sample load");
+        WARN("assets/scad/source/old_city.scad not present in runtime root; skipping sample load");
         return;
     }
 
@@ -859,7 +859,7 @@ TEST_CASE("Scad loader: loads the bundled old_city sample when present", "[Unit]
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene("assets/scad/old_city.scad", environment, nodes, models, materials,
+    REQUIRE(Assets::FScadLoader::LoadScadScene("assets/scad/source/old_city.scad", environment, nodes, models, materials,
                                                lights, tracks, skeletons));
 
     CHECK(nodes.size() > 1);

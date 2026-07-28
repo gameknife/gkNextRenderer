@@ -11,7 +11,7 @@ last_updated: 2026-07-18
 
 > 状态：**📝 待实现**。本文定义 CitySolSim 下一轮迭代的**目标与目标架构**，配套的分阶段落地顺序见 [`management-loop-plan.md`](management-loop-plan.md)。
 >
-> 相关代码：`src/Application/Game/CitySolSim/`（当前 ~1.5k 行）；场景资产 `assets/scad/habor_city_v2.scad`；市民角色走 `Gameplay/Sim/CharacterPool`（NextGameplay 共享层）。
+> 相关代码：`src/Application/Game/CitySolSim/`（当前 ~1.5k 行）；场景资产 `assets/scad/source/habor_city_v2.scad`；市民角色走 `Gameplay/Sim/CharacterPool`（NextGameplay 共享层）。
 
 ---
 
@@ -241,6 +241,6 @@ struct FZone
 - `TrafficSystem.{h,cpp}` — 车辆数随人口缩放（P1）
 - `CitySolSimUI.{h,cpp}` — §8 全部
 - `CitySolSimGameInstance.{hpp,cpp}` — 系统接线 / CVar / agent queries
-- `assets/scad/habor_city_v2.scad` — 空地改造（§6.1）
+- `assets/scad/source/habor_city_v2.scad` — 空地改造（§6.1）
 
 **LOC 预算**：现有 ~1.5k，本轮增量控制在 **+2.0k 以内**（游戏侧 demo，超预算先砍 M4）。

@@ -233,27 +233,29 @@ namespace ScadLibrary
 
     bool FCharacterWorkbench::ApplyToAsset(Assets::FRigAsset& asset, std::string& outError) const
     {
-        if (asset.clips.size() != clips_.size())
+        std::vector<Assets::FRigClip> rebuiltClips;
+        rebuiltClips.reserve(clips_.size());
+        std::unordered_set<std::string> clipNames;
+        for (const FEditableRigClip& sourceClip : clips_)
         {
-            outError = "动作数量已变化，请从磁盘重新载入角色";
-            return false;
-        }
-
-        for (size_t clipIndex = 0; clipIndex < clips_.size(); ++clipIndex)
-        {
-            const FEditableRigClip& sourceClip = clips_[clipIndex];
-            Assets::FRigClip& clip = asset.clips[clipIndex];
-            if (clip.name != sourceClip.name)
+            if (sourceClip.name.empty() || !clipNames.insert(sourceClip.name).second)
             {
-                outError = "动作顺序已变化，请从磁盘重新载入角色";
+                outError = "动作名称不能为空或重复";
                 return false;
             }
+            Assets::FRigClip clip;
+            clip.name = sourceClip.name;
             clip.loop = sourceClip.loop;
             clip.duration = 0.0f;
-            clip.channels.clear();
 
             for (const FEditableRigChannel& sourceChannel : sourceClip.channels)
             {
+                if (sourceChannel.bone < 0 || sourceChannel.bone >= static_cast<int32_t>(asset.bones.size()))
+                {
+                    outError = fmt::format("动作 {} 引用了无效骨骼索引 {}", sourceClip.name,
+                                           sourceChannel.bone);
+                    return false;
+                }
                 auto found =
                     std::find_if(clip.channels.begin(), clip.channels.end(), [&](const Assets::FRigChannel& channel)
                                  { return channel.bone == sourceChannel.bone; });
@@ -288,7 +290,68 @@ namespace ScadLibrary
                     }
                 }
             }
+            rebuiltClips.push_back(std::move(clip));
         }
+        asset.clips = std::move(rebuiltClips);
+        outError.clear();
+        return true;
+    }
+
+    int FCharacterWorkbench::FindClipIndex(std::string_view name) const
+    {
+        const auto found = std::find_if(clips_.begin(), clips_.end(),
+                                        [name](const FEditableRigClip& clip) { return clip.name == name; });
+        return found == clips_.end() ? -1 : static_cast<int>(std::distance(clips_.begin(), found));
+    }
+
+    bool FCharacterWorkbench::CreateClip(std::string name, bool loop, int& outIndex, std::string& outError)
+    {
+        if (name.empty() || FindClipIndex(name) >= 0)
+        {
+            outError = "动作名称不能为空或重复";
+            return false;
+        }
+        FEditableRigClip clip;
+        clip.name = std::move(name);
+        clip.loop = loop;
+        clips_.push_back(std::move(clip));
+        outIndex = static_cast<int>(clips_.size() - 1);
+        rigDirty_ = true;
+        outError.clear();
+        return true;
+    }
+
+    bool FCharacterWorkbench::ReplaceClip(std::string_view name, FEditableRigClip clip, std::string& outError)
+    {
+        const int index = FindClipIndex(name);
+        if (index < 0)
+        {
+            outError = "找不到要替换的动作";
+            return false;
+        }
+        const int duplicate = FindClipIndex(clip.name);
+        if (clip.name.empty() || (duplicate >= 0 && duplicate != index))
+        {
+            outError = "替换后的动作名称不能为空或重复";
+            return false;
+        }
+        RecomputeDuration(clip);
+        clips_[index] = std::move(clip);
+        rigDirty_ = true;
+        outError.clear();
+        return true;
+    }
+
+    bool FCharacterWorkbench::RemoveClip(std::string_view name, std::string& outError)
+    {
+        const int index = FindClipIndex(name);
+        if (index < 0)
+        {
+            outError = "找不到要删除的动作";
+            return false;
+        }
+        clips_.erase(clips_.begin() + index);
+        rigDirty_ = true;
         outError.clear();
         return true;
     }

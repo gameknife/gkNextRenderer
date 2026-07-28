@@ -51,6 +51,8 @@ namespace Assets::Scad
         std::string text;   // identifier / string content / special name
         double number = 0.0;
         int line = 1;
+        size_t begin = 0; // byte offset in the tokenized source, inclusive
+        size_t end = 0;   // byte offset in the tokenized source, exclusive
     };
 
     class ScadLexer

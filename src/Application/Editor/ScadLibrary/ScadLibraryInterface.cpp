@@ -1,6 +1,15 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include "ScadLibraryInterface.hpp"
 
+#include "AI/Adapters/KitModuleAIAdapter.hpp"
+#include "AI/Adapters/RigClipAIAdapter.hpp"
+#include "AI/Adapters/SceneObjectsAIAdapter.hpp"
+#include "AI/Adapters/SceneSourceAIAdapter.hpp"
+#include "AI/Adapters/TerrainProcessAIAdapter.hpp"
+#include "AI/FixtureScadAITransport.hpp"
+#include "AI/NextAIScadTransport.hpp"
+#include "AI/ScadAIController.hpp"
+#include "AI/ScadAIPanel.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
@@ -11,7 +20,10 @@
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Modules/ScadLoader/FScadEvaluator.h"
+#include "Modules/ScadLoader/FScadLexer.h"
+#include "Modules/ScadLoader/FScadParser.h"
 #include "Modules/ScadLoader/FScadShared.h"
+#include "Modules/ScadLoader/FScadSourceIndex.h"
 #include "ThirdParty/ImGuizmo/ImGuizmo.h"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
@@ -35,6 +47,7 @@
 #include <glm/gtx/norm.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <limits>
+#include <optional>
 #include <regex>
 #include <spdlog/spdlog.h>
 #include <sstream>
@@ -48,6 +61,42 @@ namespace ScadLibrary
         constexpr float kCollapsedRailWidth = 46.0f;
         constexpr int kBenchGridColumns = 6;
         constexpr float kBenchGridStep = 14.0f;
+
+        std::optional<EScadSceneKind> SceneKindFromRelativePath(const std::filesystem::path& relativePath)
+        {
+            if (relativePath.empty())
+            {
+                return std::nullopt;
+            }
+            const std::string root = relativePath.begin()->string();
+            if (root == "evaluated")
+            {
+                return EScadSceneKind::Evaluated;
+            }
+            if (root == "source")
+            {
+                return EScadSceneKind::Source;
+            }
+            if (root == "proc")
+            {
+                return EScadSceneKind::Procedural;
+            }
+            return std::nullopt;
+        }
+
+        const char* SceneKindLabel(EScadSceneKind kind)
+        {
+            switch (kind)
+            {
+            case EScadSceneKind::Evaluated:
+                return "Evaluated";
+            case EScadSceneKind::Source:
+                return "Source";
+            case EScadSceneKind::Procedural:
+                return "Proc";
+            }
+            return "Scene";
+        }
 
         glm::mat4 SceneObjectWorldMatrix(const FBenchItem& item)
         {
@@ -431,9 +480,16 @@ namespace ScadLibrary
     ScadLibraryInterface::ScadLibraryInterface(NextEngine& engine, std::string startupAssemblyPath) :
         engine_(engine), startupAssemblyPath_(std::move(startupAssemblyPath))
     {
+        std::unique_ptr<AI::IScadAITransport> aiTransport = engine_.GetOptions().AgentValidation
+            ? std::unique_ptr<AI::IScadAITransport>(std::make_unique<AI::FFixtureScadAITransport>())
+            : std::unique_ptr<AI::IScadAITransport>(std::make_unique<AI::FNextAIScadTransport>());
+        aiController_ = std::make_unique<AI::FScadAIController>(std::move(aiTransport));
+        aiPanel_ = std::make_unique<AI::FScadAIPanel>();
         RescanKits();
         RescanAssemblies();
     }
+
+    ScadLibraryInterface::~ScadLibraryInterface() = default;
 
     void ScadLibraryInterface::Config()
     {
@@ -529,7 +585,7 @@ namespace ScadLibrary
             {
                 const auto preferred =
                     std::find_if(assemblies_.begin(), assemblies_.end(), [](const FSceneAssemblyInfo& info)
-                                 { return info.relativePath == "assets/scad/scenes/scene_assembly_example.scad"; });
+                                 { return info.relativePath == "assets/scad/evaluated/scene_assembly_example.scad"; });
                 if (preferred != assemblies_.end())
                 {
                     OpenAssembly(preferred->relativePath);
@@ -602,6 +658,10 @@ namespace ScadLibrary
                 DrawSceneObjectGizmo(sceneViewportPos, sceneViewportSize);
             }
         }
+        DrawViewportAxis(
+            ImVec2(viewport->Pos.x + leftWidth, panelY),
+            ImVec2(std::max(1.0f, viewport->Size.x - leftWidth - rightWidth),
+                   std::max(1.0f, panelHeight - timelineHeight)));
 
         // Deferred bench reload: wait until the drag/edit is released so the scene
         // is not rebuilt on every mouse-move.
@@ -643,7 +703,7 @@ namespace ScadLibrary
         config.RightWindowId = "ScadLibraryWindowControls";
         config.AppName = "SCAD Library";
         config.Height = kTitleBarHeight;
-        config.RightContentWidth = 404.0f;
+        config.RightContentWidth = 468.0f;
         config.DrawMenuBar = [&]() -> float
         {
             float menuRight = ImGui::GetCursorScreenPos().x;
@@ -734,6 +794,13 @@ namespace ScadLibrary
                 {
                     workbenchReloadRequested_ = true;
                 }
+            }
+            ImGui::SameLine();
+            if (NextUI::Theme::ToolbarButton(ICON_FA_WAND_MAGIC_SPARKLES " AI", "打开 AI 创作面板",
+                                             inspectorPrimaryTab_ == 1, ImVec2(58.0f, 32.0f)))
+            {
+                benchCollapsed_ = false;
+                aiOpenRequested_ = true;
             }
             ImGui::SameLine(0.0f, 14.0f);
             ImGui::SetCursorPosY(std::floor((kTitleBarHeight - ImGui::GetTextLineHeight()) * 0.5f));
@@ -899,6 +966,17 @@ namespace ScadLibrary
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::InputTextWithHint("##assembly_filter", ICON_FA_MAGNIFYING_GLASS " 搜索场景路径或 Kit…",
                                          assemblyFilterBuf_, sizeof(assemblyFilterBuf_));
+                const size_t evaluatedCount =
+                    std::count_if(assemblies_.begin(), assemblies_.end(), [](const FSceneAssemblyInfo& scene)
+                                  { return scene.kind == EScadSceneKind::Evaluated; });
+                const size_t sourceCount =
+                    std::count_if(assemblies_.begin(), assemblies_.end(), [](const FSceneAssemblyInfo& scene)
+                                  { return scene.kind == EScadSceneKind::Source; });
+                const size_t procCount =
+                    std::count_if(assemblies_.begin(), assemblies_.end(), [](const FSceneAssemblyInfo& scene)
+                                  { return scene.kind == EScadSceneKind::Procedural; });
+                ImGui::TextDisabled("Evaluated %zu  ·  Source %zu  ·  Proc %zu", evaluatedCount, sourceCount,
+                                    procCount);
                 ImGui::Spacing();
                 ImGui::BeginChild("##assembly_files", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
                 for (int index = 0; index < static_cast<int>(assemblies_.size()); ++index)
@@ -911,8 +989,10 @@ namespace ScadLibrary
                     {
                         continue;
                     }
-                    const char* tag = assembly.generated ? ICON_FA_WAND_MAGIC_SPARKLES "  " : ICON_FA_FILE_CODE "  ";
-                    if (ImGui::Selectable(fmt::format("{}{}##assembly_{}", tag, assembly.relativePath, index).c_str(),
+                    const char* icon = assembly.generated ? ICON_FA_WAND_MAGIC_SPARKLES : ICON_FA_FILE_CODE;
+                    if (ImGui::Selectable(fmt::format("{}  [{}] {}##assembly_{}", icon,
+                                                      SceneKindLabel(assembly.kind), assembly.relativePath, index)
+                                              .c_str(),
                                           index == selectedAssembly_, 0, ImVec2(0.0f, 29.0f)))
                     {
                         selectedAssembly_ = index;
@@ -995,6 +1075,18 @@ namespace ScadLibrary
                             {
                                 ImGui::SetTooltip("%s(%s)", moduleInfo.name.c_str(), moduleInfo.params.c_str());
                             }
+                        }
+                        if (ImGui::BeginPopupContextItem(
+                                fmt::format("##module_context_{}_{}", k, moduleInfo.name).c_str()))
+                        {
+                            if (ImGui::MenuItem("AI 编辑此模块"))
+                            {
+                                PreviewModule(static_cast<int>(k), moduleInfo.name);
+                                inspectorPrimaryTab_ = 1;
+                                aiOpenRequested_ = true;
+                                benchCollapsed_ = false;
+                            }
+                            ImGui::EndPopup();
                         }
                         ImGui::SameLine(ImGui::GetContentRegionAvail().x - 24.0f);
                         if (ImGui::SmallButton(fmt::format(ICON_FA_PLUS "##add_{}_{}", k, moduleInfo.name).c_str()))
@@ -1224,19 +1316,1099 @@ namespace ScadLibrary
         }
         NextUI::Theme::DrawThinSeparator(0.72f);
 
-        if (workspaceMode_ == EWorkspaceMode::SceneAssembly)
+        if (ImGui::BeginTabBar("##inspector_primary_tabs"))
         {
-            DrawBenchContent();
-        }
-        else if (workspaceMode_ == EWorkspaceMode::CharacterDesigner)
-        {
-            DrawDesignerContent();
-        }
-        else
-        {
-            DrawWorkbenchContent();
+            if (ImGui::BeginTabItem("属性"))
+            {
+                inspectorPrimaryTab_ = 0;
+                if (workspaceMode_ == EWorkspaceMode::SceneAssembly)
+                {
+                    DrawBenchContent();
+                }
+                else if (workspaceMode_ == EWorkspaceMode::CharacterDesigner)
+                {
+                    DrawDesignerContent();
+                }
+                else
+                {
+                    DrawWorkbenchContent();
+                }
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("AI", nullptr,
+                                    aiOpenRequested_ ? ImGuiTabItemFlags_SetSelected : 0))
+            {
+                inspectorPrimaryTab_ = 1;
+                DrawAIContent();
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
+            aiOpenRequested_ = false;
         }
         ImGui::End();
+    }
+
+    AI::FScadAIEditTarget ScadLibraryInterface::ResolveAITarget() const
+    {
+        AI::FScadAIEditTarget target;
+        if (workspaceMode_ == EWorkspaceMode::CharacterWorkbench)
+        {
+            target.kind = AI::EScadAIEditKind::RigClip;
+            target.documentKey = workbench_.SourcePath().empty() ? std::string(rigSourceBuf_) : workbench_.SourcePath();
+            target.displayName = std::filesystem::path(target.documentKey).filename().string();
+            if (!workbench_.Clips().empty())
+            {
+                const int clipIndex = std::clamp(workbenchClip_, 0, static_cast<int>(workbench_.Clips().size()) - 1);
+                target.primaryId = workbench_.Clips()[clipIndex].name;
+            }
+            if (rigPreview_.HasRig() && workbenchBone_ >= 0 &&
+                workbenchBone_ < static_cast<int>(rigPreview_.Asset().bones.size()))
+            {
+                target.secondaryIds.push_back(rigPreview_.Asset().bones[workbenchBone_].name);
+            }
+            return target;
+        }
+
+        if (workspaceMode_ != EWorkspaceMode::SceneAssembly)
+        {
+            target.kind = AI::EScadAIEditKind::SceneSource;
+            target.documentKey = "unsupported-character-designer";
+            target.displayName = "角色组装（暂不在本批范围）";
+            return target;
+        }
+
+        if (aiKitContextActive_ && selectedKit_ >= 0 && selectedKit_ < static_cast<int>(kits_.size()) &&
+            !selectedModule_.empty())
+        {
+            target.kind = AI::EScadAIEditKind::KitModule;
+            target.documentKey = kits_[selectedKit_].filePath;
+            target.displayName = kits_[selectedKit_].name;
+            target.primaryId = selectedModule_;
+            return target;
+        }
+        if (openedSceneKind_ == EScadSceneKind::Procedural)
+        {
+            target.kind = AI::EScadAIEditKind::TerrainProcess;
+            target.documentKey = openedAssemblyPath_.empty() ? "draft:terrain" : openedAssemblyPath_;
+            target.displayName = std::filesystem::path(target.documentKey).filename().string();
+            target.primaryId = terrainSelectionIsRule_ ? fmt::format("r{}", selectedTerrainRule_)
+                                                       : fmt::format("f{}", selectedTerrainFeature_);
+            return target;
+        }
+        target.kind = openedSceneKind_ == EScadSceneKind::Evaluated ? AI::EScadAIEditKind::SceneObjects
+                                                                   : AI::EScadAIEditKind::SceneSource;
+        target.documentKey = openedAssemblyPath_.empty() ? "draft:scene" : openedAssemblyPath_;
+        target.displayName = std::filesystem::path(target.documentKey).filename().string();
+        if (target.kind == AI::EScadAIEditKind::SceneObjects && selectedBenchItem_ >= 0 &&
+            selectedBenchItem_ < static_cast<int>(bench_.size()))
+        {
+            target.primaryId = fmt::format("o{}", selectedBenchItem_);
+        }
+        return target;
+    }
+
+    nlohmann::json ScadLibraryInterface::CaptureAISnapshot(const AI::FScadAIEditTarget& target) const
+    {
+        using Kind = AI::EScadAIEditKind;
+        if (target.kind == Kind::KitModule)
+        {
+            const std::string source = aiKitDraftDirty_ && aiKitDraftPath_ == target.documentKey
+                ? aiKitDraftSource_
+                : ReadAssemblyTextFile(target.documentKey);
+            return {{"source", source}, {"module", target.primaryId}};
+        }
+        if (target.kind == Kind::SceneSource)
+        {
+            return {{"source", assemblySource_}};
+        }
+        if (target.kind == Kind::SceneObjects)
+        {
+            nlohmann::json objects = nlohmann::json::array();
+            for (size_t index = 0; index < bench_.size(); ++index)
+            {
+                const FBenchItem& item = bench_[index];
+                nlohmann::json object{
+                    {"id", fmt::format("o{}", index)},
+                    {"kitIndex", item.kitIndex},
+                    {"module", item.moduleName},
+                    {"position", {item.x, item.y, item.z}},
+                    {"rotation", {item.rotX, item.rotY, item.rotZ}},
+                    {"scale", {item.scale, item.scaleY, item.scaleZ}},
+                    {"arguments", std::string(item.args)},
+                };
+                if (item.hasColor)
+                {
+                    object["color"] = {item.color[0], item.color[1], item.color[2], item.color[3]};
+                }
+                objects.push_back(std::move(object));
+            }
+            nlohmann::json catalog = nlohmann::json::array();
+            for (size_t kitIndex = 0; kitIndex < kits_.size(); ++kitIndex)
+            {
+                for (const FKitModuleInfo& module : kits_[kitIndex].modules)
+                {
+                    catalog.push_back(
+                        {{"kitIndex", static_cast<int>(kitIndex)}, {"kit", kits_[kitIndex].name},
+                         {"module", module.name}, {"params", module.params}});
+                }
+            }
+            nlohmann::json selectedObject = nullptr;
+            if (selectedBenchItem_ >= 0 && selectedBenchItem_ < static_cast<int>(objects.size()))
+            {
+                selectedObject = objects[static_cast<size_t>(selectedBenchItem_)];
+                const int kitIndex = selectedObject.value("kitIndex", -1);
+                if (kitIndex >= 0 && kitIndex < static_cast<int>(kits_.size()))
+                {
+                    selectedObject["kit"] = kits_[kitIndex].name;
+                }
+            }
+            return {{"objects", std::move(objects)}, {"catalog", std::move(catalog)},
+                    {"selectedId", target.primaryId}, {"selectedObject", std::move(selectedObject)},
+                    {"selectionScope", target.primaryId.empty() ? "scene" : "selected_instance"},
+                    {"showFloor", showFloor_}, {"fn", fnSegments_}};
+        }
+        if (target.kind == Kind::TerrainProcess)
+        {
+            const Assets::Scad::FTerrainSpec& terrain = terrainProcess_.Terrain();
+            nlohmann::json terrainJson{
+                {"size", {terrain.size.x, terrain.size.y}},
+                {"cells", {terrain.cells.x, terrain.cells.y}},
+                {"seed", terrain.seed},
+                {"baseHeight", terrain.baseHeight},
+                {"relief", terrain.relief},
+                {"roughness", terrain.roughness},
+                {"hasWaterLevel", terrain.hasWaterLevel},
+                {"waterLevel", terrain.waterLevel},
+                {"palette", terrain.palette},
+            };
+            nlohmann::json features = nlohmann::json::array();
+            for (size_t index = 0; index < terrain.features.size(); ++index)
+            {
+                const Assets::Scad::FTerrainFeature& feature = terrain.features[index];
+                nlohmann::json points = nlohmann::json::array();
+                for (const glm::dvec2& point : feature.pts) points.push_back({point.x, point.y});
+                features.push_back({
+                    {"id", fmt::format("f{}", index)},
+                    {"type", FTerrainProcessDocument::FeatureTypeName(feature.type)},
+                    {"at", {feature.at.x, feature.at.y}},
+                    {"size", {feature.size.x, feature.size.y}},
+                    {"rotation", feature.rot},
+                    {"radius", feature.radius},
+                    {"height", feature.height},
+                    {"depth", feature.depth},
+                    {"width", feature.width},
+                    {"rugged", feature.rugged},
+                    {"points", std::move(points)},
+                });
+            }
+            nlohmann::json rules = nlohmann::json::array();
+            for (size_t index = 0; index < terrainProcess_.Rules().size(); ++index)
+            {
+                const FTerrainProcessRule& rule = terrainProcess_.Rules()[index];
+                if (rule.removed) continue;
+                nlohmann::json points = nlohmann::json::array();
+                for (const glm::dvec2& point : rule.points) points.push_back({point.x, point.y});
+                rules.push_back({
+                    {"id", fmt::format("r{}", index)},
+                    {"type", FTerrainProcessDocument::RuleTypeName(rule.type)},
+                    {"x", rule.x}, {"y", rule.y}, {"dz", rule.dz},
+                    {"sampleX", rule.sampleX}, {"sampleY", rule.sampleY},
+                    {"maxTilt", rule.maxTilt}, {"probe", rule.probe},
+                    {"points", std::move(points)}, {"step", rule.step}, {"seed", rule.seed},
+                    {"offset", rule.offset}, {"count", rule.count},
+                    {"region", {rule.region.x, rule.region.y, rule.region.z, rule.region.w}},
+                    {"circularRegion", rule.circularRegion},
+                    {"regionCenter", {rule.regionCenter.x, rule.regionCenter.y}},
+                    {"regionRadius", rule.regionRadius}, {"minHeight", rule.minHeight},
+                    {"maxHeight", rule.maxHeight}, {"maxSlope", rule.maxSlope},
+                    {"avoidWater", rule.avoidWater}, {"biomes", rule.biomes},
+                    {"randomRotation", rule.randomRotation}, {"childSource", rule.childSource},
+                });
+            }
+            return {{"terrain", std::move(terrainJson)}, {"features", std::move(features)},
+                    {"rules", std::move(rules)}, {"selectedId", target.primaryId}};
+        }
+
+        nlohmann::json bones = nlohmann::json::array();
+        if (rigPreview_.HasRig())
+        {
+            for (const Assets::FRigBone& bone : rigPreview_.Asset().bones) bones.push_back(bone.name);
+        }
+        nlohmann::json clips = nlohmann::json::array();
+        for (const FEditableRigClip& clip : workbench_.Clips())
+        {
+            nlohmann::json channels = nlohmann::json::array();
+            for (const FEditableRigChannel& channel : clip.channels)
+            {
+                if (!rigPreview_.HasRig() || channel.bone < 0 ||
+                    channel.bone >= static_cast<int>(rigPreview_.Asset().bones.size()))
+                {
+                    continue;
+                }
+                const char* type = channel.type == EEditableRigChannel::Position
+                    ? "pos"
+                    : (channel.type == EEditableRigChannel::Rotation ? "rot" : "scale");
+                nlohmann::json keys = nlohmann::json::array();
+                for (const FEditableRigKey& key : channel.keys)
+                {
+                    keys.push_back({{"time", key.time}, {"value", {key.value.x, key.value.y, key.value.z}}});
+                }
+                channels.push_back({{"bone", rigPreview_.Asset().bones[channel.bone].name},
+                                    {"channel", type}, {"keys", std::move(keys)}});
+            }
+            clips.push_back({{"id", clip.name}, {"name", clip.name}, {"loop", clip.loop},
+                             {"duration", clip.duration}, {"channels", std::move(channels)}});
+        }
+        return {{"bones", std::move(bones)}, {"clips", std::move(clips)},
+                {"selectedClip", target.primaryId}, {"selectedBones", target.secondaryIds}};
+    }
+
+    AI::FScadDocumentRevision ScadLibraryInterface::CaptureAIRevision(
+        const AI::FScadAIEditTarget& target) const
+    {
+        const nlohmann::json snapshot = CaptureAISnapshot(target);
+        return {aiDocumentGeneration_, AI::HashCanonicalSnapshot(snapshot)};
+    }
+
+    void ScadLibraryInterface::DrawAIContent()
+    {
+        if (workspaceMode_ == EWorkspaceMode::CharacterDesigner)
+        {
+            ImGui::TextWrapped("本批融合覆盖 Kit、场景、过程场景和角色动作；角色部件组装继续使用属性编辑器。");
+            return;
+        }
+        const AI::FScadAIEditTarget target = ResolveAITarget();
+        const AI::FScadDocumentRevision revision = CaptureAIRevision(target);
+        const AI::FScadAIControllerSnapshot beforeRefresh = aiController_->Snapshot();
+        if (aiCandidatePreviewActive_ &&
+            (!(target == aiPreviewTarget_) || !beforeRefresh.proposal ||
+             !AI::IsProposalCurrent(*beforeRefresh.proposal, target, revision)))
+        {
+            EndAIProposalPreview();
+        }
+        aiController_->RefreshIdentity(target, revision);
+        std::string label = fmt::format("{} · {}{}{}", AI::EditKindName(target.kind), target.displayName,
+                                        target.primaryId.empty() ? "" : " · ", target.primaryId);
+        if (target.kind == AI::EScadAIEditKind::SceneObjects)
+        {
+            if (selectedBenchItem_ >= 0 && selectedBenchItem_ < static_cast<int>(bench_.size()))
+            {
+                const FBenchItem& selected = bench_[selectedBenchItem_];
+                const std::string kitName = selected.kitIndex >= 0 &&
+                        selected.kitIndex < static_cast<int>(kits_.size())
+                    ? kits_[selected.kitIndex].name
+                    : fmt::format("Kit {}", selected.kitIndex);
+                label += fmt::format(" · 已选实例 {}/{}", kitName, selected.moduleName);
+            }
+            else
+            {
+                label += " · 未选择实例（AI 将编辑整体场景）";
+            }
+        }
+        const AI::FScadAIControllerSnapshot controllerSnapshot = aiController_->Snapshot();
+        const bool canApply = controllerSnapshot.proposal &&
+            AI::IsProposalCurrent(*controllerSnapshot.proposal, target, revision) &&
+            !(target.kind == AI::EScadAIEditKind::KitModule &&
+              (selectedKit_ < 0 || selectedModule_.empty()));
+        AI::FScadAIPanelActions actions;
+        actions.submit = [this](const std::string& instruction) { SubmitAIRequest(instruction); };
+        actions.preview = [this]() { PreviewAIProposal(); };
+        actions.compareOriginal = [this]() { PreviewAIOriginal(); };
+        actions.apply = [this]() { ApplyAIProposal(); };
+        actions.reject = [this]() { RejectAIProposal(); };
+        actions.undo = [this]() { UndoLastAIEdit(); };
+        actions.regenerate = [this]() { SubmitAIRequest(aiLastInstruction_); };
+        aiPanel_->Draw(label, *aiController_, canApply, aiHasUndo_, aiCandidatePreviewActive_, actions);
+        if (aiKitDraftDirty_)
+        {
+            ImGui::Separator();
+            ImGui::TextWrapped("Kit 草稿尚未保存：%s", aiKitDraftPath_.c_str());
+            if (ImGui::Button("保存 Kit 草稿"))
+            {
+                SaveAIKitDraft();
+            }
+        }
+        if (ImGui::CollapsingHeader("ScadStudio 旧会话迁移"))
+        {
+            if (ImGui::Button("扫描旧会话"))
+            {
+                aiLegacySessions_ = AI::FScadStudioSessionImporter::Scan(
+                    std::filesystem::current_path() / "scad_studio", aiLegacyImportWarnings_);
+            }
+            for (const std::string& warning : aiLegacyImportWarnings_)
+            {
+                ImGui::TextWrapped("%s", warning.c_str());
+            }
+            for (size_t index = 0; index < aiLegacySessions_.size(); ++index)
+            {
+                const AI::FScadStudioImportCandidate& candidate = aiLegacySessions_[index];
+                ImGui::PushID(static_cast<int>(index));
+                ImGui::TextWrapped("%s · %zu file(s)", candidate.title.c_str(), candidate.fileCount);
+                ImGui::SameLine();
+                if (ImGui::SmallButton("导入为草稿"))
+                {
+                    assemblySource_ = candidate.source;
+                    openedAssemblyPath_.clear();
+                    openedAssemblyKits_ = FindKitDependencies(assemblySource_);
+                    assemblySourceDirty_ = true;
+                    assemblyStructured_ = false;
+                    assemblyEvaluated_ = false;
+                    assemblyProcedural_ = false;
+                    openedSceneKind_ = EScadSceneKind::Source;
+                    aiKitContextActive_ = false;
+                    terrainProcessDirty_ = false;
+                    bench_.clear();
+                    selectedBenchItem_ = -1;
+                    assemblyEditorTab_ = 1;
+                    const std::string safeId = candidate.id.empty() ? "legacy" : candidate.id;
+                    const std::string suggested = fmt::format("assets/scad/source/imported_{}.scad", safeId);
+                    std::snprintf(assemblyPathBuf_, sizeof(assemblyPathBuf_), "%s", suggested.c_str());
+                    ++aiDocumentGeneration_;
+                    aiController_->Reset();
+                    statusLine_ = fmt::format("已将旧会话“{}”导入为未保存草稿", candidate.title);
+                    statusError_ = false;
+                }
+                for (const std::string& warning : candidate.warnings)
+                {
+                    ImGui::TextDisabled("%s", warning.c_str());
+                }
+                ImGui::PopID();
+            }
+            if (aiLegacySessions_.empty())
+            {
+                ImGui::TextDisabled("未扫描到可导入会话；旧数据保持不变。");
+            }
+        }
+    }
+
+    void ScadLibraryInterface::SubmitAIRequest(const std::string& instruction)
+    {
+        EndAIProposalPreview();
+        const AI::FScadAIEditTarget target = ResolveAITarget();
+        if (workspaceMode_ == EWorkspaceMode::CharacterDesigner ||
+            (target.kind == AI::EScadAIEditKind::KitModule &&
+             (selectedKit_ < 0 || selectedKit_ >= static_cast<int>(kits_.size()) || selectedModule_.empty())))
+        {
+            return;
+        }
+        const nlohmann::json snapshot = CaptureAISnapshot(target);
+        const AI::FScadDocumentRevision revision{aiDocumentGeneration_, AI::HashCanonicalSnapshot(snapshot)};
+        AI::FScadAIRequestEnvelope request;
+        AI::FScadAIArtifactValidator validator;
+        switch (target.kind)
+        {
+        case AI::EScadAIEditKind::KitModule:
+        {
+            const std::string source = snapshot.value("source", "");
+            request = AI::FKitModuleAIAdapter::BuildRequest(target, revision, source, instruction);
+            const std::string module = target.primaryId;
+            validator = [source, module](std::string_view response)
+            { return AI::FKitModuleAIAdapter::Validate(source, module, response); };
+            break;
+        }
+        case AI::EScadAIEditKind::SceneSource:
+        {
+            const std::string source = snapshot.value("source", "");
+            request = AI::FSceneSourceAIAdapter::BuildRequest(target, revision, source, instruction);
+            validator = [source](std::string_view response)
+            { return AI::FSceneSourceAIAdapter::Validate(source, response); };
+            break;
+        }
+        case AI::EScadAIEditKind::SceneObjects:
+            request = AI::FSceneObjectsAIAdapter::BuildRequest(target, revision, snapshot, instruction);
+            validator = [snapshot](std::string_view response)
+            { return AI::FSceneObjectsAIAdapter::Validate(snapshot, response); };
+            break;
+        case AI::EScadAIEditKind::TerrainProcess:
+            request = AI::FTerrainProcessAIAdapter::BuildRequest(target, revision, snapshot, instruction);
+            validator = [snapshot](std::string_view response)
+            { return AI::FTerrainProcessAIAdapter::Validate(snapshot, response); };
+            break;
+        case AI::EScadAIEditKind::RigClip:
+            request = AI::FRigClipAIAdapter::BuildRequest(target, revision, snapshot, instruction);
+            validator = [snapshot](std::string_view response)
+            { return AI::FRigClipAIAdapter::Validate(snapshot, response); };
+            break;
+        }
+        if (aiController_->Submit(std::move(request), std::move(validator)))
+        {
+            aiLastInstruction_ = instruction;
+        }
+    }
+
+    bool ScadLibraryInterface::ApplyAISnapshot(const AI::FScadAIEditTarget& target,
+                                               const nlohmann::json& snapshot, bool markDirty)
+    {
+        using Kind = AI::EScadAIEditKind;
+        try
+        {
+            if (target.kind == Kind::KitModule)
+            {
+                aiKitDraftPath_ = target.documentKey;
+                aiKitDraftModule_ = target.primaryId;
+                aiKitDraftSource_ = snapshot.at("kitSource").get<std::string>();
+                aiKitDraftDirty_ = markDirty;
+                return true;
+            }
+            if (target.kind == Kind::SceneSource)
+            {
+                assemblySource_ = snapshot.at("source").get<std::string>();
+                if (markDirty)
+                {
+                    assemblySourceDirty_ = true;
+                    assemblyStructured_ = false;
+                    assemblyEvaluated_ = false;
+                    assemblyProcedural_ = false;
+                    terrainProcessDirty_ = false;
+                    bench_.clear();
+                    selectedBenchItem_ = -1;
+                    openedAssemblyKits_ = FindKitDependencies(assemblySource_);
+                }
+                return true;
+            }
+            if (target.kind == Kind::SceneObjects)
+            {
+                std::vector<FBenchItem> candidate;
+                for (const auto& object : snapshot.at("objects"))
+                {
+                    FBenchItem item;
+                    item.kitIndex = object.at("kitIndex").get<int>();
+                    item.moduleName = object.at("module").get<std::string>();
+                    item.x = object.at("position").at(0).get<float>();
+                    item.y = object.at("position").at(1).get<float>();
+                    item.z = object.at("position").at(2).get<float>();
+                    item.rotX = object.at("rotation").at(0).get<float>();
+                    item.rotY = object.at("rotation").at(1).get<float>();
+                    item.rotZ = object.at("rotation").at(2).get<float>();
+                    item.scale = object.at("scale").at(0).get<float>();
+                    item.scaleY = object.at("scale").at(1).get<float>();
+                    item.scaleZ = object.at("scale").at(2).get<float>();
+                    const std::string arguments = object.value("arguments", "");
+                    std::snprintf(item.args, sizeof(item.args), "%s", arguments.c_str());
+                    if (object.contains("color"))
+                    {
+                        item.hasColor = true;
+                        for (size_t component = 0; component < 4; ++component)
+                        {
+                            item.color[component] = object["color"][component].get<float>();
+                        }
+                    }
+                    candidate.push_back(std::move(item));
+                }
+                bench_ = std::move(candidate);
+                selectedBenchItem_ = bench_.empty() ? -1 : std::clamp(
+                    selectedBenchItem_, 0, static_cast<int>(bench_.size()) - 1);
+                if (markDirty)
+                {
+                    assemblyStructured_ = true;
+                    assemblyEvaluated_ = false;
+                    benchDirty_ = true;
+                    assemblySourceDirty_ = true;
+                }
+                return true;
+            }
+            if (target.kind == Kind::TerrainProcess)
+            {
+                Assets::Scad::FTerrainSpec& terrain = terrainProcess_.Terrain();
+                const auto& terrainJson = snapshot.at("terrain");
+                terrain.size = {terrainJson.at("size").at(0).get<double>(),
+                                terrainJson.at("size").at(1).get<double>()};
+                terrain.cells = {terrainJson.at("cells").at(0).get<int>(),
+                                 terrainJson.at("cells").at(1).get<int>()};
+                terrain.seed = terrainJson.at("seed").get<uint64_t>();
+                terrain.baseHeight = terrainJson.at("baseHeight").get<double>();
+                terrain.relief = terrainJson.at("relief").get<double>();
+                terrain.roughness = terrainJson.at("roughness").get<double>();
+                terrain.hasWaterLevel = terrainJson.at("hasWaterLevel").get<bool>();
+                terrain.waterLevel = terrainJson.at("waterLevel").get<double>();
+                terrain.palette = terrainJson.at("palette").get<std::string>();
+
+                const auto featureType = [](const std::string& name)
+                {
+                    using Type = Assets::Scad::FTerrainFeature::EType;
+                    if (name == "ridge") return Type::Ridge;
+                    if (name == "plateau") return Type::Plateau;
+                    if (name == "lake") return Type::Lake;
+                    if (name == "river") return Type::River;
+                    if (name == "road") return Type::Road;
+                    if (name == "pad") return Type::Pad;
+                    return Type::Mountain;
+                };
+                terrain.features.clear();
+                for (const auto& featureJson : snapshot.at("features"))
+                {
+                    Assets::Scad::FTerrainFeature feature;
+                    feature.type = featureType(featureJson.at("type").get<std::string>());
+                    feature.at = {featureJson.at("at").at(0).get<double>(),
+                                  featureJson.at("at").at(1).get<double>()};
+                    feature.size = {featureJson.at("size").at(0).get<double>(),
+                                    featureJson.at("size").at(1).get<double>()};
+                    feature.rot = featureJson.at("rotation").get<double>();
+                    feature.radius = featureJson.at("radius").get<double>();
+                    feature.height = featureJson.at("height").get<double>();
+                    feature.depth = featureJson.at("depth").get<double>();
+                    feature.width = featureJson.at("width").get<double>();
+                    feature.rugged = featureJson.at("rugged").get<double>();
+                    for (const auto& point : featureJson.at("points"))
+                    {
+                        feature.pts.emplace_back(point.at(0).get<double>(), point.at(1).get<double>());
+                    }
+                    terrain.features.push_back(std::move(feature));
+                }
+
+                const auto ruleType = [](const std::string& name)
+                {
+                    if (name == "terrain_height_anchor") return ETerrainProcessRuleType::HeightAnchor;
+                    if (name == "ter_place_tilt") return ETerrainProcessRuleType::PlaceTilt;
+                    if (name == "ter_snap") return ETerrainProcessRuleType::Snap;
+                    if (name == "ter_along") return ETerrainProcessRuleType::Along;
+                    if (name == "ter_scatter") return ETerrainProcessRuleType::Scatter;
+                    return ETerrainProcessRuleType::Place;
+                };
+                std::vector<FTerrainProcessRule> rules = terrainProcess_.Rules();
+                for (FTerrainProcessRule& existing : rules)
+                {
+                    existing.removed = true;
+                }
+                for (const auto& ruleJson : snapshot.at("rules"))
+                {
+                    FTerrainProcessRule rule;
+                    rule.type = ruleType(ruleJson.at("type").get<std::string>());
+                    rule.x = ruleJson.at("x").get<double>();
+                    rule.y = ruleJson.at("y").get<double>();
+                    rule.dz = ruleJson.at("dz").get<double>();
+                    rule.sampleX = ruleJson.at("sampleX").get<double>();
+                    rule.sampleY = ruleJson.at("sampleY").get<double>();
+                    rule.maxTilt = ruleJson.at("maxTilt").get<double>();
+                    rule.probe = ruleJson.at("probe").get<double>();
+                    for (const auto& point : ruleJson.at("points"))
+                    {
+                        rule.points.emplace_back(point.at(0).get<double>(), point.at(1).get<double>());
+                    }
+                    rule.step = ruleJson.at("step").get<double>();
+                    rule.seed = ruleJson.at("seed").get<int>();
+                    rule.offset = ruleJson.at("offset").get<double>();
+                    rule.count = ruleJson.at("count").get<int>();
+                    rule.region = {ruleJson.at("region").at(0).get<double>(),
+                                   ruleJson.at("region").at(1).get<double>(),
+                                   ruleJson.at("region").at(2).get<double>(),
+                                   ruleJson.at("region").at(3).get<double>()};
+                    rule.circularRegion = ruleJson.at("circularRegion").get<bool>();
+                    rule.regionCenter = {ruleJson.at("regionCenter").at(0).get<double>(),
+                                         ruleJson.at("regionCenter").at(1).get<double>()};
+                    rule.regionRadius = ruleJson.at("regionRadius").get<double>();
+                    rule.minHeight = ruleJson.at("minHeight").get<double>();
+                    rule.maxHeight = ruleJson.at("maxHeight").get<double>();
+                    rule.maxSlope = ruleJson.at("maxSlope").get<double>();
+                    rule.avoidWater = ruleJson.at("avoidWater").get<double>();
+                    rule.biomes = ruleJson.at("biomes").get<std::vector<std::string>>();
+                    rule.randomRotation = ruleJson.at("randomRotation").get<bool>();
+                    rule.childSource = ruleJson.at("childSource").get<std::string>();
+                    const std::string id = ruleJson.value("id", "");
+                    size_t existingIndex = std::string::npos;
+                    if (id.size() > 1 && id.front() == 'r' &&
+                        std::all_of(id.begin() + 1, id.end(), [](const char character)
+                                    { return std::isdigit(static_cast<unsigned char>(character)); }))
+                    {
+                        existingIndex = static_cast<size_t>(std::stoull(id.substr(1)));
+                    }
+                    if (existingIndex < terrainProcess_.Rules().size())
+                    {
+                        rule.sourceBegin = terrainProcess_.Rules()[existingIndex].sourceBegin;
+                        rule.sourceEnd = terrainProcess_.Rules()[existingIndex].sourceEnd;
+                        rule.removed = false;
+                        rules[existingIndex] = std::move(rule);
+                    }
+                    else
+                    {
+                        rule.removed = false;
+                        rules.push_back(std::move(rule));
+                    }
+                }
+                terrainProcess_.Rules() = std::move(rules);
+                selectedTerrainFeature_ = terrain.features.empty() ? 0 : std::clamp(
+                    selectedTerrainFeature_, 0, static_cast<int>(terrain.features.size()) - 1);
+                selectedTerrainRule_ = terrainProcess_.Rules().empty() ? 0 : std::clamp(
+                    selectedTerrainRule_, 0, static_cast<int>(terrainProcess_.Rules().size()) - 1);
+                if (markDirty)
+                {
+                    MarkTerrainProcessDirty();
+                    assemblySourceDirty_ = true;
+                }
+                return true;
+            }
+
+            if (!rigPreview_.HasRig())
+            {
+                return false;
+            }
+            std::vector<FEditableRigClip> clips;
+            for (const auto& clipJson : snapshot.at("clips"))
+            {
+                FEditableRigClip clip;
+                clip.name = clipJson.at("name").get<std::string>();
+                clip.loop = clipJson.at("loop").get<bool>();
+                clip.duration = clipJson.value("duration", 0.0f);
+                for (const auto& channelJson : clipJson.at("channels"))
+                {
+                    const std::string boneName = channelJson.at("bone").get<std::string>();
+                    const int bone = rigPreview_.Asset().FindBone(boneName);
+                    if (bone < 0)
+                    {
+                        return false;
+                    }
+                    FEditableRigChannel channel;
+                    channel.bone = bone;
+                    const std::string type = channelJson.at("channel").get<std::string>();
+                    channel.type = type == "pos" ? EEditableRigChannel::Position
+                        : (type == "rot" ? EEditableRigChannel::Rotation : EEditableRigChannel::Scale);
+                    for (const auto& keyJson : channelJson.at("keys"))
+                    {
+                        const auto& value = keyJson.at("value");
+                        channel.keys.push_back(
+                            {keyJson.at("time").get<float>(),
+                             glm::vec3(value.at(0).get<float>(), value.at(1).get<float>(), value.at(2).get<float>())});
+                    }
+                    clip.channels.push_back(std::move(channel));
+                }
+                clips.push_back(std::move(clip));
+            }
+            workbench_.Clips() = std::move(clips);
+            workbenchClip_ = workbench_.Clips().empty() ? 0 : std::clamp(
+                workbenchClip_, 0, static_cast<int>(workbench_.Clips().size()) - 1);
+            if (markDirty)
+            {
+                workbench_.CommitRigEdit();
+                std::string error;
+                if (!workbench_.ApplyToAsset(rigPreview_.MutableAsset(), error))
+                {
+                    statusLine_ = error;
+                    statusError_ = true;
+                    return false;
+                }
+                if (!workbench_.Clips().empty())
+                {
+                    rigPreview_.PlayClip(workbench_.Clips()[workbenchClip_].name);
+                }
+            }
+            return true;
+        }
+        catch (const std::exception& exception)
+        {
+            statusLine_ = fmt::format("AI candidate 应用失败: {}", exception.what());
+            statusError_ = true;
+            return false;
+        }
+    }
+
+    void ScadLibraryInterface::ApplyAIProposal()
+    {
+        const AI::FScadAIControllerSnapshot snapshot = aiController_->Snapshot();
+        if (!snapshot.proposal || snapshot.proposal->state != AI::EScadAIProposalState::Ready)
+        {
+            return;
+        }
+        const AI::FScadAIEditTarget currentTarget = ResolveAITarget();
+        const AI::FScadDocumentRevision currentRevision = CaptureAIRevision(currentTarget);
+        if (!AI::IsProposalCurrent(*snapshot.proposal, currentTarget, currentRevision))
+        {
+            aiController_->RefreshIdentity(currentTarget, currentRevision);
+            return;
+        }
+        aiCandidatePreviewActive_ = false;
+        aiPreviewTarget_ = {};
+        aiUndoTarget_ = currentTarget;
+        aiUndoSnapshot_ = CaptureAISnapshot(currentTarget);
+        if (!ApplyAISnapshot(currentTarget, snapshot.proposal->candidate, true))
+        {
+            aiUndoSnapshot_.clear();
+            return;
+        }
+        aiHasUndo_ = true;
+        ++aiDocumentGeneration_;
+        aiController_->MarkApplied();
+        statusLine_ = fmt::format("AI 提案已应用到 {} 的未保存草稿", currentTarget.displayName);
+        statusError_ = false;
+    }
+
+    void ScadLibraryInterface::UndoLastAIEdit()
+    {
+        EndAIProposalPreview();
+        if (!aiHasUndo_)
+        {
+            return;
+        }
+        if (ApplyAISnapshot(aiUndoTarget_, aiUndoSnapshot_, true))
+        {
+            ++aiDocumentGeneration_;
+            aiHasUndo_ = false;
+            aiUndoSnapshot_.clear();
+            aiController_->Reset();
+            statusLine_ = "已撤销上次 AI 修改";
+            statusError_ = false;
+        }
+    }
+
+    void ScadLibraryInterface::PreviewAIProposal()
+    {
+        const AI::FScadAIControllerSnapshot controllerSnapshot = aiController_->Snapshot();
+        if (!controllerSnapshot.proposal ||
+            controllerSnapshot.proposal->state != AI::EScadAIProposalState::Ready)
+        {
+            return;
+        }
+        const AI::FScadAIProposal& proposal = *controllerSnapshot.proposal;
+        const AI::FScadAIEditTarget currentTarget = ResolveAITarget();
+        if (!AI::IsProposalCurrent(proposal, currentTarget, CaptureAIRevision(currentTarget)))
+        {
+            return;
+        }
+        if (RenderAISnapshotPreview(proposal.target, proposal.candidate))
+        {
+            aiCandidatePreviewActive_ = true;
+            aiPreviewTarget_ = proposal.target;
+            statusLine_ = "Viewport 正在显示 AI 提案；可点击“对比原案”切回";
+            statusError_ = false;
+        }
+    }
+
+    void ScadLibraryInterface::PreviewAIOriginal()
+    {
+        const AI::FScadAIControllerSnapshot controllerSnapshot = aiController_->Snapshot();
+        if (!controllerSnapshot.proposal ||
+            controllerSnapshot.proposal->state != AI::EScadAIProposalState::Ready)
+        {
+            return;
+        }
+        const AI::FScadAIProposal& proposal = *controllerSnapshot.proposal;
+        const AI::FScadAIEditTarget currentTarget = ResolveAITarget();
+        if (!AI::IsProposalCurrent(proposal, currentTarget, CaptureAIRevision(currentTarget)))
+        {
+            return;
+        }
+        if (RenderAISnapshotPreview(proposal.target, CaptureAISnapshot(proposal.target)))
+        {
+            aiCandidatePreviewActive_ = false;
+            aiPreviewTarget_ = {};
+            statusLine_ = "Viewport 已切回原案；可再次点击“预览候选”进行 A/B 对比";
+            statusError_ = false;
+        }
+    }
+
+    void ScadLibraryInterface::RejectAIProposal()
+    {
+        EndAIProposalPreview();
+        aiController_->Reject();
+    }
+
+    void ScadLibraryInterface::EndAIProposalPreview()
+    {
+        if (!aiCandidatePreviewActive_)
+        {
+            return;
+        }
+        RenderAISnapshotPreview(aiPreviewTarget_, CaptureAISnapshot(aiPreviewTarget_));
+        aiCandidatePreviewActive_ = false;
+        aiPreviewTarget_ = {};
+    }
+
+    bool ScadLibraryInterface::RenderAISnapshotPreview(const AI::FScadAIEditTarget& target,
+                                                        const nlohmann::json& previewSnapshot)
+    {
+        using Kind = AI::EScadAIEditKind;
+        if (target.kind == Kind::KitModule)
+        {
+            const std::string source = previewSnapshot.value(
+                "kitSource", previewSnapshot.value("source", ""));
+            std::string kitPath;
+            const std::string rewrittenSource = RewriteScadDependencyPaths(
+                source, std::filesystem::path(target.documentKey).parent_path(), WorkspaceDir(), true);
+            if (source.empty() || !WriteWorkspaceFile("ai_compare_kit.scad", rewrittenSource, kitPath))
+            {
+                return false;
+            }
+            std::replace(kitPath.begin(), kitPath.end(), '\\', '/');
+            const std::string wrapper = fmt::format(
+                "// ScadLibrary AI Kit A/B preview\n$fn = {};\nuse <{}>\n{}();\n",
+                fnSegments_, kitPath, target.primaryId);
+            preserveCameraOnNextSceneLoad_ = true;
+            if (WriteAndLoad("ai_kit_preview.scad", wrapper))
+            {
+                return true;
+            }
+            preserveCameraOnNextSceneLoad_ = false;
+            return false;
+        }
+        if (target.kind == Kind::SceneSource)
+        {
+            std::string source = previewSnapshot.value("source", "");
+            if (!openedAssemblyPath_.empty())
+            {
+                source = RewriteScadDependencyPaths(
+                    source, std::filesystem::path(openedAssemblyPath_).parent_path(), WorkspaceDir(), true);
+            }
+            return !source.empty() && WriteAndLoad("ai_scene_source_preview.scad", source);
+        }
+        if (target.kind == Kind::SceneObjects)
+        {
+            const nlohmann::json liveSnapshot = CaptureAISnapshot(target);
+            if (!ApplyAISnapshot(target, previewSnapshot, false))
+            {
+                return false;
+            }
+            const std::string source = BuildBenchSource();
+            ApplyAISnapshot(target, liveSnapshot, false);
+            return WriteAndLoad("ai_scene_objects_preview.scad", source);
+        }
+        if (target.kind == Kind::TerrainProcess)
+        {
+            const nlohmann::json liveSnapshot = CaptureAISnapshot(target);
+            if (!ApplyAISnapshot(target, previewSnapshot, false))
+            {
+                return false;
+            }
+            const std::string source = BuildTerrainProcessSource();
+            ApplyAISnapshot(target, liveSnapshot, false);
+            preserveCameraOnNextSceneLoad_ = true;
+            return WriteAndLoad("ai_terrain_preview.scad", RewriteScadDependencyPaths(
+                source, std::filesystem::path(openedAssemblyPath_).parent_path(), WorkspaceDir(), true));
+        }
+
+        const nlohmann::json liveSnapshot = CaptureAISnapshot(target);
+        if (!ApplyAISnapshot(target, previewSnapshot, false))
+        {
+            return false;
+        }
+        std::string error;
+        const bool applied = workbench_.ApplyToAsset(rigPreview_.MutableAsset(), error);
+        if (applied)
+        {
+            const auto& clips = previewSnapshot.at("clips");
+            if (!clips.empty())
+            {
+                const auto selected = std::find_if(clips.begin(), clips.end(), [&target](const auto& clip)
+                { return clip.value("id", clip.value("name", "")) == target.primaryId; });
+                const auto& clip = selected == clips.end() ? clips.back() : *selected;
+                rigPreview_.PlayClip(clip.at("name").get<std::string>());
+            }
+        }
+        ApplyAISnapshot(target, liveSnapshot, false);
+        if (!applied)
+        {
+            statusLine_ = error;
+            statusError_ = true;
+        }
+        return applied;
+    }
+
+    void ScadLibraryInterface::SaveAIKitDraft()
+    {
+        if (!aiKitDraftDirty_ || aiKitDraftPath_.empty() || aiKitDraftSource_.empty())
+        {
+            return;
+        }
+        const std::filesystem::path libRoot = AuthoringPath("assets/scad/lib");
+        const std::filesystem::path kitPath = std::filesystem::path(aiKitDraftPath_).lexically_normal();
+        if (!IsPathWithin(kitPath, libRoot) || kitPath.extension() != ".scad")
+        {
+            statusLine_ = "Kit 草稿路径不在 assets/scad/lib";
+            statusError_ = true;
+            return;
+        }
+        Assets::Scad::FScadSourceIndex sourceIndex;
+        std::string error;
+        if (!Assets::Scad::BuildScadSourceIndex(aiKitDraftSource_, sourceIndex, error))
+        {
+            statusLine_ = fmt::format("Kit 保存前解析失败: {}", error);
+            statusError_ = true;
+            return;
+        }
+
+        const std::filesystem::path catalogPath = libRoot / "catalog.json";
+        const std::filesystem::path validationPath =
+            kitPath.parent_path() / (".ai_validate_" + kitPath.filename().string());
+        {
+            std::ofstream output(validationPath, std::ios::binary | std::ios::trunc);
+            if (!output)
+            {
+                statusLine_ = "无法写入 Kit 校验文件";
+                statusError_ = true;
+                return;
+            }
+            output << aiKitDraftSource_;
+        }
+        Assets::Scad::ScadProgram candidateProgram;
+        const bool programLoaded = Assets::Scad::LoadScadProgram(validationPath.string(), candidateProgram, error);
+        Assets::Scad::EvalResult evaluation;
+        bool evaluated = false;
+        if (programLoaded)
+        {
+            const std::string callSource = fmt::format("$fn = {};\n{}();\n", fnSegments_, aiKitDraftModule_);
+            std::vector<Assets::Scad::Token> tokens;
+            Assets::Scad::Scope scope;
+            Assets::ScadLoadOptions options;
+            evaluated = Assets::Scad::ScadLexer::Tokenize(callSource, tokens, error) &&
+                Assets::Scad::ScadParser::Parse(tokens, scope, error) &&
+                Assets::Scad::ScadEvaluator::Evaluate(scope, candidateProgram.modules,
+                                                       candidateProgram.functions, options, evaluation, error) &&
+                evaluation.triangleCount > 0;
+        }
+        std::error_code validationCleanupError;
+        std::filesystem::remove(validationPath, validationCleanupError);
+        if (!programLoaded)
+        {
+            statusLine_ = fmt::format("Kit 依赖闭包校验失败: {}", error);
+            statusError_ = true;
+            return;
+        }
+        nlohmann::json catalog;
+        try
+        {
+            std::ifstream input(catalogPath, std::ios::binary);
+            catalog = nlohmann::json::parse(input);
+            auto kit = std::find_if(catalog.at("kits").begin(), catalog.at("kits").end(), [&](const auto& item)
+            { return item.value("file", "") == kitPath.filename().string(); });
+            if (kit == catalog.at("kits").end())
+            {
+                throw std::runtime_error("catalog 中找不到目标 Kit");
+            }
+            for (auto& module : (*kit).at("modules"))
+            {
+                const std::string name = module.value("name", "");
+                const auto* span = sourceIndex.Find(Assets::Scad::EScadDefinitionKind::Module, name);
+                if (!span)
+                {
+                    throw std::runtime_error("候选 Kit 的公开 module 集合与 catalog 不一致");
+                }
+                module["line"] = span->line;
+                const std::string signature = aiKitDraftSource_.substr(
+                    span->signatureBegin, span->signatureEnd - span->signatureBegin);
+                const size_t open = signature.find('(');
+                const size_t close = signature.rfind(')');
+                module["params"] = open != std::string::npos && close > open
+                    ? signature.substr(open + 1, close - open - 1)
+                    : "";
+                if (name == aiKitDraftModule_)
+                {
+                    module.erase("error");
+                    module.erase("metricsStatus");
+                    if (evaluated)
+                    {
+                        glm::dvec3 minBounds(1e30);
+                        glm::dvec3 maxBounds(-1e30);
+                        for (const auto& [color, bucket] : evaluation.buckets)
+                        {
+                            (void)color;
+                            for (const glm::dvec3& point : bucket.tris)
+                            {
+                                minBounds = glm::min(minBounds, point);
+                                maxBounds = glm::max(maxBounds, point);
+                            }
+                        }
+                        const auto round2 = [](double value)
+                        { return std::round(value * 100.0) / 100.0; };
+                        module["footprint"] = {round2(maxBounds.x - minBounds.x),
+                                               round2(maxBounds.y - minBounds.y)};
+                        module["height"] = round2(maxBounds.z);
+                        module["zMin"] = round2(minBounds.z);
+                        module["center"] = {round2((minBounds.x + maxBounds.x) * 0.5),
+                                            round2((minBounds.y + maxBounds.y) * 0.5)};
+                        module["triangles"] = evaluation.triangleCount;
+                        module["colors"] = evaluation.buckets.size();
+                        module["warnings"] = evaluation.warningCount;
+                        module["ok"] = true;
+                    }
+                    else
+                    {
+                        module["ok"] = false;
+                        if (!error.empty()) module["error"] = error;
+                    }
+                }
+            }
+        }
+        catch (const std::exception& exception)
+        {
+            statusLine_ = fmt::format("Kit catalog 更新准备失败: {}", exception.what());
+            statusError_ = true;
+            return;
+        }
+
+        const std::filesystem::path kitTemporary = kitPath.string() + ".ai.tmp";
+        const std::filesystem::path catalogTemporary = catalogPath.string() + ".ai.tmp";
+        const std::filesystem::path kitBackup = kitPath.string() + ".ai.bak";
+        const std::filesystem::path catalogBackup = catalogPath.string() + ".ai.bak";
+        {
+            std::ofstream output(kitTemporary, std::ios::binary | std::ios::trunc);
+            if (!output)
+            {
+                statusLine_ = "无法写入 Kit 临时文件";
+                statusError_ = true;
+                return;
+            }
+            output << aiKitDraftSource_;
+        }
+        {
+            std::ofstream output(catalogTemporary, std::ios::binary | std::ios::trunc);
+            if (!output)
+            {
+                std::error_code cleanupError;
+                std::filesystem::remove(kitTemporary, cleanupError);
+                statusLine_ = "无法写入 catalog 临时文件";
+                statusError_ = true;
+                return;
+            }
+            output << catalog.dump(2) << '\n';
+        }
+        std::error_code ec;
+        std::filesystem::remove(kitBackup, ec);
+        ec.clear();
+        std::filesystem::remove(catalogBackup, ec);
+        ec.clear();
+        bool kitBackedUp = false;
+        bool catalogBackedUp = false;
+        bool kitInstalled = false;
+        bool catalogInstalled = false;
+        std::filesystem::rename(kitPath, kitBackup, ec);
+        kitBackedUp = !ec;
+        if (!ec)
+        {
+            std::filesystem::rename(catalogPath, catalogBackup, ec);
+            catalogBackedUp = !ec;
+        }
+        if (!ec)
+        {
+            std::filesystem::rename(kitTemporary, kitPath, ec);
+            kitInstalled = !ec;
+        }
+        if (!ec)
+        {
+            std::filesystem::rename(catalogTemporary, catalogPath, ec);
+            catalogInstalled = !ec;
+        }
+        if (ec)
+        {
+            std::error_code rollbackError;
+            if (kitInstalled)
+                std::filesystem::remove(kitPath, rollbackError);
+            if (catalogInstalled)
+                std::filesystem::remove(catalogPath, rollbackError);
+            if (kitBackedUp && std::filesystem::exists(kitBackup, rollbackError))
+                std::filesystem::rename(kitBackup, kitPath, rollbackError);
+            if (catalogBackedUp && std::filesystem::exists(catalogBackup, rollbackError))
+                std::filesystem::rename(catalogBackup, catalogPath, rollbackError);
+            std::filesystem::remove(kitTemporary, rollbackError);
+            std::filesystem::remove(catalogTemporary, rollbackError);
+            statusLine_ = fmt::format("Kit/catalog 原子保存失败，已尝试恢复: {}", ec.message());
+            statusError_ = true;
+            return;
+        }
+        std::filesystem::remove(kitBackup, ec);
+        std::filesystem::remove(catalogBackup, ec);
+        aiKitDraftDirty_ = false;
+        ++aiDocumentGeneration_;
+        RescanKits();
+        statusLine_ = "Kit 与重建后的 catalog entry 已原子保存";
+        statusError_ = false;
     }
 
     void ScadLibraryInterface::DrawTerrainProcessContent()
@@ -1723,7 +2895,7 @@ namespace ScadLibrary
         ImGui::Spacing();
         ImGui::TextDisabled("资源文件");
         ImGui::SetNextItemWidth(-1.0f);
-        ImGui::InputTextWithHint("##assembly_path", "assets/scad/scenes/my_scene.scad", assemblyPathBuf_,
+        ImGui::InputTextWithHint("##assembly_path", "assets/scad/evaluated/my_scene.scad", assemblyPathBuf_,
                                  sizeof(assemblyPathBuf_));
         if (ImGui::Button(ICON_FA_FOLDER_OPEN " 打开"))
         {
@@ -1747,12 +2919,23 @@ namespace ScadLibrary
         {
             ImGui::TextDisabled("依赖: %s", fmt::format("{}", fmt::join(openedAssemblyKits_, ", ")).c_str());
         }
-        if (openedAssemblyPath_.find("/gen/") != std::string::npos ||
-            openedAssemblyPath_.find("\\gen\\") != std::string::npos)
+        if (openedAssemblyPath_.find("/generated/") != std::string::npos ||
+            openedAssemblyPath_.find("\\generated\\") != std::string::npos)
         {
             ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::Warning));
-            ImGui::TextWrapped("gen/ 文件可能由 specs/ 重新生成；保存的手工修改可能被覆盖。");
+            ImGui::TextWrapped("generated/ 文件可能由 specs/ 重新生成；保存的手工修改可能被覆盖。");
             ImGui::PopStyleColor();
+        }
+        if (openedSceneKind_ == EScadSceneKind::Source && !openedAssemblyPath_.empty())
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::Warning));
+            ImGui::TextWrapped("Source 保留循环、条件和 module 调用，只使用源码 AI。转换为 Evaluated "
+                               "会把当前求值结果保存成结构不同的实例场景。");
+            ImGui::PopStyleColor();
+            if (ImGui::Button(ICON_FA_CODE_BRANCH " 转换为 Evaluated 副本"))
+            {
+                ConvertSourceToEvaluated();
+            }
         }
         ImGui::Separator();
 
@@ -1768,7 +2951,7 @@ namespace ScadLibrary
                 ImGui::EndTabItem();
             }
 
-            if (!assemblyProcedural_)
+            if (openedSceneKind_ == EScadSceneKind::Evaluated)
             {
                 const std::string objectTabLabel = assemblyTerrainSources_.empty()
                     ? fmt::format("对象 ({})", bench_.size())
@@ -1785,14 +2968,7 @@ namespace ScadLibrary
                     {
                         benchDirty_ = true;
                     }
-                    if (assemblyEvaluated_)
-                    {
-                        ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::Warning));
-                        ImGui::TextWrapped(
-                            "已按 SCAD 求值结果展开。循环、条件和 module 引用已实例化；请“另存为”可编辑副本。");
-                        ImGui::PopStyleColor();
-                    }
-                    else if (!assemblyStructured_ && !assemblySource_.empty())
+                    if (!assemblyStructured_ && !assemblySource_.empty())
                     {
                         ImGui::TextDisabled("该场景包含自由 SCAD 结构；完整内容请在“源码”页编辑。");
                     }
@@ -1950,13 +3126,13 @@ namespace ScadLibrary
                     }
                     if (ImGui::IsItemHovered())
                     {
-                        ImGui::SetTooltip("写入 assets/scad/scenes/<名>.scad");
+                        ImGui::SetTooltip("写入 assets/scad/evaluated/<名>.scad");
                     }
                     ImGui::EndTabItem();
                 }
             }
 
-            if (ImGui::BeginTabItem("源码"))
+            if (openedSceneKind_ == EScadSceneKind::Source && ImGui::BeginTabItem("源码"))
             {
                 assemblyEditorTab_ = 1;
                 ImGui::TextDisabled("支持完整 SCAD；预览不会先覆盖源文件。");
@@ -1967,6 +3143,7 @@ namespace ScadLibrary
                     assemblyStructured_ = false;
                     assemblyEvaluated_ = false;
                     assemblyProcedural_ = false;
+                    openedSceneKind_ = EScadSceneKind::Source;
                     terrainProcessDirty_ = false;
                     terrainProcessWarnings_.clear();
                     bench_.clear();
@@ -2042,35 +3219,37 @@ namespace ScadLibrary
                 continue;
             }
             const std::filesystem::path relative = it->path().lexically_relative(scadRoot);
-            const std::string firstPart = relative.empty() ? "" : relative.begin()->string();
+            const std::optional<EScadSceneKind> kind = SceneKindFromRelativePath(relative);
             if (it->is_directory())
             {
-                if (firstPart == "lib" || firstPart == "characters" || firstPart == "agents")
+                if (!kind && std::distance(relative.begin(), relative.end()) == 1)
                 {
                     it.disable_recursion_pending();
                 }
                 continue;
             }
-            if (!it->is_regular_file() || it->path().extension() != ".scad")
+            if (!kind || !it->is_regular_file() || it->path().extension() != ".scad")
             {
                 continue;
             }
             const std::string source = ReadAssemblyTextFile(it->path());
             std::vector<std::string> dependencies = FindKitDependencies(source);
-            if (dependencies.empty())
-            {
-                continue;
-            }
             FSceneAssemblyInfo info;
             info.relativePath = (std::filesystem::path("assets/scad") / relative).generic_string();
             info.absolutePath = std::filesystem::absolute(it->path(), ec).string();
             info.kitDependencies = std::move(dependencies);
-            info.generated = firstPart == "gen";
+            info.kind = *kind;
+            const auto secondPart = std::next(relative.begin());
+            info.generated = secondPart != relative.end() && secondPart->string() == "generated";
             assemblies_.push_back(std::move(info));
         }
         std::sort(assemblies_.begin(), assemblies_.end(),
                   [](const FSceneAssemblyInfo& a, const FSceneAssemblyInfo& b)
                   {
+                      if (a.kind != b.kind)
+                      {
+                          return static_cast<int>(a.kind) < static_cast<int>(b.kind);
+                      }
                       if (a.generated != b.generated)
                       {
                           return !a.generated;
@@ -2097,6 +3276,8 @@ namespace ScadLibrary
         }
         selectedKit_ = kitIndex;
         selectedModule_ = moduleName;
+        aiKitContextActive_ = true;
+        aiController_->Reset();
         rigPreview_.SetActive(false);
 
         std::string source;
@@ -2115,6 +3296,13 @@ namespace ScadLibrary
 
     void ScadLibraryInterface::AddToBench(int kitIndex, const std::string& moduleName)
     {
+        aiKitContextActive_ = false;
+        if (openedSceneKind_ == EScadSceneKind::Source && !openedAssemblyPath_.empty())
+        {
+            statusLine_ = "Source 场景不能直接添加实例；请先显式转换为 Evaluated";
+            statusError_ = true;
+            return;
+        }
         if (assemblyProcedural_)
         {
             FTerrainProcessRule& rule =
@@ -2545,6 +3733,14 @@ namespace ScadLibrary
             statusError_ = true;
             return false;
         }
+        const std::filesystem::path scadRelative = sourcePath.lexically_relative(scadRoot);
+        const std::optional<EScadSceneKind> sceneKind = SceneKindFromRelativePath(scadRelative);
+        if (!sceneKind)
+        {
+            statusLine_ = "场景必须位于 assets/scad/evaluated、source 或 proc 目录";
+            statusError_ = true;
+            return false;
+        }
         const std::string source = ReadAssemblyTextFile(sourcePath);
         if (source.empty())
         {
@@ -2562,6 +3758,9 @@ namespace ScadLibrary
 
         rigPreview_.SetActive(false);
         openedAssemblyPath_ = sourcePath.string();
+        openedSceneKind_ = *sceneKind;
+        aiKitContextActive_ = false;
+        aiController_->Reset();
         assemblySource_ = source;
         openedAssemblyKits_ = FindKitDependencies(source);
         assemblySourceDirty_ = false;
@@ -2570,37 +3769,34 @@ namespace ScadLibrary
         benchCursorY_ = 0.0f;
         benchRowDepth_ = 0.0f;
         benchColCount_ = 0;
-        // Flat ScadLibrary assemblies keep their object-editor round trip even
-        // when they preserve a terrain payload. Hand-written/generated
-        // kit_terrain programs use the dedicated process editor.
-        assemblyStructured_ = ParseStructuredAssembly(source);
-        assemblyProcedural_ = !assemblyStructured_ && ImportTerrainProcessAssembly(openedAssemblyPath_, source);
-        if (assemblyProcedural_)
+        assemblyStructured_ = false;
+        assemblyProcedural_ = false;
+        assemblyEvaluated_ = false;
+        if (openedSceneKind_ == EScadSceneKind::Evaluated)
         {
-            assemblyEvaluated_ = false;
-            showFloor_ = false;
-        }
-        else if (assemblyStructured_)
-        {
-            assemblyEvaluated_ = false;
+            assemblyStructured_ = ParseStructuredAssembly(source);
+            if (!assemblyStructured_)
+            {
+                statusLine_ = fmt::format("Evaluated 场景不是可往返的实例结构: {}", path);
+                statusError_ = true;
+                return false;
+            }
             ImportAssemblyTerrains(source);
         }
-        else
+        else if (openedSceneKind_ == EScadSceneKind::Procedural)
         {
-            assemblyEvaluated_ = ImportEvaluatedAssembly(openedAssemblyPath_);
+            assemblyProcedural_ = ImportTerrainProcessAssembly(openedAssemblyPath_, source);
+            if (!assemblyProcedural_)
+            {
+                statusLine_ = fmt::format("Proc 场景无法解析为过程文档: {}", path);
+                statusError_ = true;
+                return false;
+            }
+            showFloor_ = false;
         }
         const std::filesystem::path repoRoot = scadRoot.parent_path().parent_path();
         const std::string relativePath = sourcePath.lexically_relative(repoRoot).generic_string();
-        if (assemblyEvaluated_ && !assemblyProcedural_)
-        {
-            const std::string suggested =
-                fmt::format("assets/scad/scenes/{}_editable.scad", sourcePath.stem().string());
-            std::snprintf(assemblyPathBuf_, sizeof(assemblyPathBuf_), "%s", suggested.c_str());
-        }
-        else
-        {
-            std::snprintf(assemblyPathBuf_, sizeof(assemblyPathBuf_), "%s", relativePath.c_str());
-        }
+        std::snprintf(assemblyPathBuf_, sizeof(assemblyPathBuf_), "%s", relativePath.c_str());
         for (int index = 0; index < static_cast<int>(assemblies_.size()); ++index)
         {
             if (std::filesystem::path(assemblies_[index].absolutePath) == sourcePath)
@@ -2611,13 +3807,38 @@ namespace ScadLibrary
         }
         preserveCameraOnNextSceneLoad_ = false;
         engine_.RequestLoadScene({.filename = openedAssemblyPath_});
-        const char* editMode = assemblyStructured_
-            ? " · 可视化对象编辑"
-            : (assemblyProcedural_ ? " · Terrain 过程编辑"
-                                   : (assemblyEvaluated_ ? " · 求值对象编辑（另存副本）" : " · 源码编辑"));
+        const char* editMode = openedSceneKind_ == EScadSceneKind::Evaluated
+            ? " · Evaluated 对象编辑"
+            : (openedSceneKind_ == EScadSceneKind::Procedural ? " · Proc 过程编辑" : " · Source 源码编辑");
         statusLine_ = fmt::format("已打开 {} · {} 个 Kit{}", relativePath, openedAssemblyKits_.size(), editMode);
-        statusError_ = openedAssemblyKits_.empty();
+        statusError_ = false;
         return true;
+    }
+
+    void ScadLibraryInterface::ConvertSourceToEvaluated()
+    {
+        if (openedSceneKind_ != EScadSceneKind::Source || openedAssemblyPath_.empty())
+        {
+            statusLine_ = "只有已保存的 Source 场景可以转换为 Evaluated";
+            statusError_ = true;
+            return;
+        }
+        bench_.clear();
+        std::string conversionPath;
+        if (!WriteWorkspaceFile("source_conversion.scad", BuildAssemblyPreviewSource(), conversionPath) ||
+            !ImportEvaluatedAssembly(conversionPath))
+        {
+            statusLine_ = "Source 求值失败，未生成 Evaluated 副本";
+            statusError_ = true;
+            return;
+        }
+        assemblyEvaluated_ = true;
+        assemblyStructured_ = false;
+        const std::string suggested =
+            fmt::format("assets/scad/evaluated/{}_evaluated.scad",
+                        std::filesystem::path(openedAssemblyPath_).stem().string());
+        std::snprintf(assemblyPathBuf_, sizeof(assemblyPathBuf_), "%s", suggested.c_str());
+        SaveAssembly(true);
     }
 
     std::string ScadLibraryInterface::BuildAssemblyPreviewSource() const
@@ -2692,10 +3913,25 @@ namespace ScadLibrary
             targetPath += ".scad";
         }
         targetPath = targetPath.lexically_normal();
-        if (!IsPathWithin(targetPath, scadRoot) || targetPath.extension() != ".scad" ||
-            targetPath.lexically_relative(scadRoot).begin()->string() == "lib")
+        const std::filesystem::path targetRelative = targetPath.lexically_relative(scadRoot);
+        const std::optional<EScadSceneKind> targetKind = SceneKindFromRelativePath(targetRelative);
+        if (!IsPathWithin(targetPath, scadRoot) || targetPath.extension() != ".scad" || !targetKind)
         {
-            statusLine_ = "场景只能保存为 assets/scad 下、lib 目录外的 .scad 文件";
+            statusLine_ = "场景只能保存到 assets/scad/evaluated、source 或 proc 下";
+            statusError_ = true;
+            return;
+        }
+        const EScadSceneKind expectedKind = assemblyProcedural_
+            ? EScadSceneKind::Procedural
+            : ((assemblyStructured_ || assemblyEvaluated_) ? EScadSceneKind::Evaluated
+                                                           : EScadSceneKind::Source);
+        if (*targetKind != expectedKind)
+        {
+            statusLine_ = fmt::format("{} 编辑器只能保存到 assets/scad/{}/；Source 转换请使用显式转换按钮",
+                                      SceneKindLabel(expectedKind),
+                                      expectedKind == EScadSceneKind::Evaluated
+                                          ? "evaluated"
+                                          : (expectedKind == EScadSceneKind::Procedural ? "proc" : "source"));
             statusError_ = true;
             return;
         }
@@ -2732,6 +3968,8 @@ namespace ScadLibrary
         assemblySourceDirty_ = false;
         benchDirty_ = false;
         terrainProcessDirty_ = false;
+        openedSceneKind_ = *targetKind;
+        aiKitContextActive_ = false;
         assemblyStructured_ = !assemblyProcedural_ && (assemblyStructured_ || assemblyEvaluated_);
         assemblyEvaluated_ = false;
         if (assemblyProcedural_)
@@ -2814,7 +4052,7 @@ namespace ScadLibrary
         {
             cleanName = "my_scene";
         }
-        const std::filesystem::path sceneDir = AuthoringPath("assets/scad") / "scenes";
+        const std::filesystem::path sceneDir = AuthoringPath("assets/scad") / "evaluated";
         std::error_code ec;
         std::filesystem::create_directories(sceneDir, ec);
         const std::filesystem::path outPath = sceneDir / (cleanName + ".scad");
@@ -3458,6 +4696,71 @@ namespace ScadLibrary
         }
         ImGui::End();
         ImGui::PopStyleVar(2);
+    }
+
+    void ScadLibraryInterface::DrawViewportAxis(const ImVec2& viewportPos, const ImVec2& viewportSize)
+    {
+        if (viewportSize.x < 120.0f || viewportSize.y < 120.0f)
+        {
+            return;
+        }
+
+        struct FAxis
+        {
+            const char* label;
+            glm::vec3 scadDirection;
+            ImU32 color;
+            glm::vec3 cameraDirection{};
+        };
+        std::array<FAxis, 3> axes{{
+            {"X", {1.0f, 0.0f, 0.0f}, IM_COL32(238, 83, 83, 255)},
+            {"Y", {0.0f, 1.0f, 0.0f}, IM_COL32(94, 201, 112, 255)},
+            {"Z", {0.0f, 0.0f, 1.0f}, IM_COL32(80, 148, 255, 255)},
+        }};
+
+        const glm::mat3 scadToWorld = glm::mat3(Assets::Scad::ScadToWorldBasis(1.0));
+        const glm::mat3 viewRotation = glm::mat3(engine_.GetLastUniformBufferObject().ModelView);
+        for (FAxis& axis : axes)
+        {
+            axis.cameraDirection = viewRotation * scadToWorld * axis.scadDirection;
+        }
+        std::sort(axes.begin(), axes.end(), [](const FAxis& lhs, const FAxis& rhs)
+        { return lhs.cameraDirection.z < rhs.cameraDirection.z; });
+
+        ImDrawList* drawList = ImGui::GetForegroundDrawList();
+        const ImVec2 origin(viewportPos.x + 62.0f, viewportPos.y + viewportSize.y - 62.0f);
+        drawList->PushClipRect(viewportPos, viewportPos + viewportSize, true);
+        drawList->AddCircleFilled(origin, 45.0f, IM_COL32(18, 20, 24, 184), 32);
+        drawList->AddCircle(origin, 45.0f, IM_COL32(255, 255, 255, 42), 32, 1.0f);
+        drawList->AddText(ImVec2(origin.x - 36.0f, origin.y + 28.0f), IM_COL32(210, 214, 222, 190),
+                          "SCAD");
+
+        for (const FAxis& axis : axes)
+        {
+            glm::vec2 screen(axis.cameraDirection.x, -axis.cameraDirection.y);
+            const float visibility = glm::length(screen);
+            if (visibility > 1.0e-4f)
+            {
+                screen /= visibility;
+            }
+            else
+            {
+                screen = {0.0f, -1.0f};
+            }
+            const float length = 12.0f + 25.0f * std::clamp(visibility, 0.0f, 1.0f);
+            const ImVec2 end(origin.x + screen.x * length, origin.y + screen.y * length);
+            const ImVec2 perpendicular(-screen.y, screen.x);
+            const ImVec2 arrowBase(end.x - screen.x * 7.0f, end.y - screen.y * 7.0f);
+            drawList->AddLine(origin, end, axis.color, 3.0f);
+            drawList->AddTriangleFilled(
+                end, ImVec2(arrowBase.x + perpendicular.x * 4.0f, arrowBase.y + perpendicular.y * 4.0f),
+                ImVec2(arrowBase.x - perpendicular.x * 4.0f, arrowBase.y - perpendicular.y * 4.0f),
+                axis.color);
+            drawList->AddText(ImVec2(end.x + screen.x * 4.0f - 3.0f, end.y + screen.y * 4.0f - 7.0f),
+                              axis.color, axis.label);
+        }
+        drawList->AddCircleFilled(origin, 3.0f, IM_COL32(230, 233, 240, 255));
+        drawList->PopClipRect();
     }
 
     bool ScadLibraryInterface::TerrainFeatureConsumesMouse(double x, double y) const
@@ -4452,7 +5755,7 @@ namespace ScadLibrary
         assemblyStructured_ = true;
         if (std::string_view(assemblyPathBuf_).empty())
         {
-            std::snprintf(assemblyPathBuf_, sizeof(assemblyPathBuf_), "%s", "assets/scad/scenes/my_scene.scad");
+            std::snprintf(assemblyPathBuf_, sizeof(assemblyPathBuf_), "%s", "assets/scad/evaluated/my_scene.scad");
         }
         SaveAssembly(true, false);
     }

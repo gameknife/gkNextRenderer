@@ -3,7 +3,7 @@
     {
       "id": "deadly_town",
       "name": "小型城镇",
-      "scene": "assets/scad/brotato3d/deadly_town.scad",
+      "scene": "assets/scad/source/brotato3d/deadly_town.scad",
       "halfExtent": [260.0, 160.0],
       "baseGroundColor": [0.30, 0.34, 0.22],
       "borderColor": [0.66, 0.52, 0.28]
@@ -11,7 +11,7 @@
     {
       "id": "deadly_outskirts",
       "name": "公路郊外",
-      "scene": "assets/scad/brotato3d/deadly_outskirts.scad",
+      "scene": "assets/scad/source/brotato3d/deadly_outskirts.scad",
       "halfExtent": [320.0, 200.0],
       "baseGroundColor": [0.35, 0.40, 0.24],
       "borderColor": [0.58, 0.48, 0.30]
@@ -19,7 +19,7 @@
     {
       "id": "deadly_desert",
       "name": "沙漠荒野",
-      "scene": "assets/scad/brotato3d/deadly_desert.scad",
+      "scene": "assets/scad/source/brotato3d/deadly_desert.scad",
       "halfExtent": [340.0, 220.0],
       "baseGroundColor": [0.48, 0.35, 0.20],
       "borderColor": [0.72, 0.50, 0.25]

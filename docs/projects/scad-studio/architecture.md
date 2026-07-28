@@ -11,16 +11,17 @@ last_updated: 2026-07-28
 
 ScadStudio 是 Sessions | Viewport | Chat 三栏的 SCAD authoring application，实现在 `src/Application/Editor/ScadStudio/`。旧 model-generator plan 已完成；本文记录仍决定会话一致性、AI 安全和 live preview 的契约。
 
-## 已确认的迁移方向
+## 迁移状态
 
-ScadStudio 的自然语言创作能力将迁入 ScadLibrary，按 Kit module、场景、Terrain 过程节点和
-Rig 动作分别生成受约束 proposal；设计与开发顺序见
+ScadStudio 的自然语言创作能力已经以首版纵向链路迁入 ScadLibrary，按 Kit module、场景、
+Terrain 过程节点和 Rig 动作分别生成受约束 proposal；当前实现、设计与后续收口见
+[ScadLibrary AI 创作实现](../scadlibrary/ai-authoring.md)、
 [ScadLibrary AI 融合创作架构](../../designs/scadlibrary-ai-authoring-integration.md) 和
 [开发计划](../../plans/scadlibrary-ai-authoring-plan.md)。
 
-本文件描述的 standalone 实现目前仍是现行代码。只有 ScadLibrary 达到设计中的功能等价、
-旧 session 可导入且四类 adapter 均通过验收后，才能退役 ScadStudio；迁移期间不得把旧
-session workspace 当成 ScadLibrary 资产的事实来源。
+ScadLibrary 已能只读扫描旧 session 并导入为未保存场景草稿，但本文件描述的 standalone
+实现目前仍是现行代码。只有剩余功能等价审计和 UI/provider 覆盖通过后，才能退役
+ScadStudio；迁移期间不得把旧 session workspace 当成 ScadLibrary 资产的事实来源。
 
 ## 权威状态
 
@@ -71,7 +72,7 @@ validated session source/files
 
 ```bash
 ./gnb.sh build ScadStudio
-./gnb.sh shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60
+./gnb.sh shot --target ScadStudio --scene assets/scad/source/beer_cup.scad --frames 60
 ```
 
 修改生成链时还要测试：生成期间切换/删除 session、单文件与多文件、非法路径、parse repair、restore turn、focused module preview，以及 valid parse 但 evaluator warning 的可见错误反馈。

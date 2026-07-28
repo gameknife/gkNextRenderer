@@ -37,7 +37,7 @@
 ScadLibrary 场景对象 Gizmo 在引擎 Y-up 与 SCAD Z-up 之间用 `ScadToWorldBasis` 双向转换。
 拖动期间直接更新匹配实例的运行时 Node，并用 `Scene::MarkTransformDirty()` 刷新 GPU 变换；
 松手只持久化文件，不触发 SCAD 重载。平铺场景会把三轴 `translate` / `rotate` 写回原 SCAD；
-复杂求值场景则写入 `assets/scad/scenes/*_editable.scad` 的确定实例副本，禁止用展开结果
+复杂 Source 场景经显式转换后写入 `assets/scad/evaluated/*_evaluated.scad` 的确定实例副本，禁止用展开结果
 覆盖原程序结构。
 
 视口点选使用引擎 CPU Picking 返回的 render-node instance ID，再沿 `Node::GetParent()` 向上
@@ -77,15 +77,18 @@ ScadLibrary 场景对象 Gizmo 在引擎 Y-up 与 SCAD Z-up 之间用 `ScadToWor
 
 ## 资产与 compose
 
-现行手写验证场景使用 `assets/scad/beer_cup.scad`、`old_city.scad` 等。Kit 位于 `assets/scad/lib/`，严格 JSON spec 位于 `assets/scad/specs/`，派生场景位于 `assets/scad/gen/`。生成管线见 `docs/designs/scad-scene-compose-design.md`；不要引用已删除的 `acient_city.scad`、`habor_city_hd.scad` 或旧 loader 设计文档。
+现行手写验证场景使用 `assets/scad/source/beer_cup.scad`、`source/old_city.scad` 等。Kit 位于
+`assets/scad/lib/`，严格 JSON spec 位于 `assets/scad/specs/`，派生场景按结构位于
+`assets/scad/source/generated/` 或 `assets/scad/proc/generated/`。生成管线见
+`docs/designs/scad-scene-compose-design.md`。
 
 ## 验证
 
 ```bash
 ./gnb.sh build gkNextRenderer gkNextUnitTests
 ./out/build/<preset>/bin/gkNextUnitTests "[Scad]"
-./gnb.sh shot --scene assets/scad/old_city.scad
-./gnb.sh shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60
+./gnb.sh shot --scene assets/scad/source/old_city.scad
+./gnb.sh shot --target ScadStudio --scene assets/scad/source/beer_cup.scad --frames 60
 ```
 
 排查顺序：先看 `SCAD:` warning 与 include 路径，再看节点/三角形/颜色 bucket 数；几何黑面检查 face winding 和 normal smoothing；复杂 boolean 慢时缩小 CSG 范围，不要对整座场景做一次巨型 operation。

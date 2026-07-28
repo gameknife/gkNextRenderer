@@ -1,9 +1,12 @@
 #pragma once
 
 #include "CharacterDesigner.hpp"
+#include "AI/ScadAIContracts.hpp"
+#include "AI/ScadStudioSessionImporter.hpp"
 #include "KitCatalog.hpp"
 #include "TerrainProcessDocument.hpp"
 
+#include <nlohmann/json.hpp>
 #include <cstdint>
 #include <filesystem>
 #include <limits>
@@ -21,11 +24,24 @@ namespace Assets
 
 namespace ScadLibrary
 {
+    namespace AI
+    {
+        class FScadAIController;
+        class FScadAIPanel;
+    }
+
     enum class EWorkspaceMode
     {
         SceneAssembly,
         CharacterDesigner,
         CharacterWorkbench,
+    };
+
+    enum class EScadSceneKind
+    {
+        Evaluated,
+        Source,
+        Procedural,
     };
 
     // One placed instance in a scene assembly.
@@ -55,6 +71,7 @@ namespace ScadLibrary
         std::string relativePath;
         std::string absolutePath;
         std::vector<std::string> kitDependencies;
+        EScadSceneKind kind = EScadSceneKind::Source;
         bool generated = false;
     };
 
@@ -63,6 +80,7 @@ namespace ScadLibrary
     {
     public:
         explicit ScadLibraryInterface(NextEngine& engine, std::string startupAssemblyPath = {});
+        ~ScadLibraryInterface();
 
         void Config(); // OnPreConfigUI: ImGui config flags
         void Init(); // OnInitUI: fonts
@@ -88,11 +106,13 @@ namespace ScadLibrary
         void DrawBrowserPanel(const ImVec2& pos, const ImVec2& size);
         void DrawBoneHierarchyPanel(const ImVec2& pos, const ImVec2& size);
         void DrawModePanel(const ImVec2& pos, const ImVec2& size);
+        void DrawAIContent();
         void DrawBenchContent();
         void DrawTerrainProcessContent();
         void DrawDesignerContent();
         void DrawWorkbenchContent();
         void DrawAnimationTimelinePanel(const ImVec2& pos, const ImVec2& size);
+        void DrawViewportAxis(const ImVec2& viewportPos, const ImVec2& viewportSize);
         void DrawViewportToolbar(const ImVec2& viewportPos);
         void DrawSceneGizmoToolbar(const ImVec2& viewportPos);
         void DrawSceneObjectGizmo(const ImVec2& viewportPos, const ImVec2& viewportSize);
@@ -112,6 +132,7 @@ namespace ScadLibrary
         void ReloadBench();
         void ExportBench();
         bool OpenAssembly(const std::string& path);
+        void ConvertSourceToEvaluated();
         void PreviewAssemblySource();
         void SaveAssembly(bool saveAs, bool reloadScene = true);
         bool ParseStructuredAssembly(const std::string& source);
@@ -127,6 +148,21 @@ namespace ScadLibrary
         void ReloadWorkbench();
         void ReloadWorkbenchStage();
         void ApplyWorkbenchRigEdit();
+        AI::FScadAIEditTarget ResolveAITarget() const;
+        nlohmann::json CaptureAISnapshot(const AI::FScadAIEditTarget& target) const;
+        AI::FScadDocumentRevision CaptureAIRevision(const AI::FScadAIEditTarget& target) const;
+        void SubmitAIRequest(const std::string& instruction);
+        void PreviewAIProposal();
+        void PreviewAIOriginal();
+        void RejectAIProposal();
+        bool RenderAISnapshotPreview(const AI::FScadAIEditTarget& target,
+                                     const nlohmann::json& previewSnapshot);
+        void EndAIProposalPreview();
+        void ApplyAIProposal();
+        void UndoLastAIEdit();
+        bool ApplyAISnapshot(const AI::FScadAIEditTarget& target, const nlohmann::json& snapshot,
+                             bool markDirty);
+        void SaveAIKitDraft();
         std::string KitCharUsePath(bool relative) const;
         std::string BuildBenchSource(const std::filesystem::path& outputPath = {}) const;
         bool WriteWorkspaceFile(const std::string& fileName, const std::string& source, std::string& outAbsPath);
@@ -184,8 +220,9 @@ namespace ScadLibrary
         bool showFloor_ = true;
         int fnSegments_ = 12;
         char exportNameBuf_[128] = "my_scene";
-        char assemblyPathBuf_[512] = "assets/scad/scenes/my_scene.scad";
+        char assemblyPathBuf_[512] = "assets/scad/evaluated/my_scene.scad";
         std::string openedAssemblyPath_;
+        EScadSceneKind openedSceneKind_ = EScadSceneKind::Evaluated;
         std::string assemblySource_;
         std::vector<std::string> openedAssemblyKits_;
         std::vector<std::string> assemblyTerrainSources_;
@@ -198,6 +235,24 @@ namespace ScadLibrary
         bool terrainProcessDirty_ = false;
         bool preserveCameraOnNextSceneLoad_ = false;
         int assemblyEditorTab_ = 0;
+        int inspectorPrimaryTab_ = 0;
+        bool aiOpenRequested_ = false;
+        bool aiKitContextActive_ = false;
+        uint64_t aiDocumentGeneration_ = 1;
+        std::unique_ptr<AI::FScadAIController> aiController_;
+        std::unique_ptr<AI::FScadAIPanel> aiPanel_;
+        nlohmann::json aiUndoSnapshot_;
+        AI::FScadAIEditTarget aiUndoTarget_;
+        bool aiHasUndo_ = false;
+        bool aiCandidatePreviewActive_ = false;
+        AI::FScadAIEditTarget aiPreviewTarget_;
+        std::string aiLastInstruction_;
+        std::string aiKitDraftPath_;
+        std::string aiKitDraftModule_;
+        std::string aiKitDraftSource_;
+        bool aiKitDraftDirty_ = false;
+        std::vector<AI::FScadStudioImportCandidate> aiLegacySessions_;
+        std::vector<std::string> aiLegacyImportWarnings_;
         int sceneGizmoOperation_ = 0;
         bool sceneGizmoWasUsing_ = false;
         bool sceneGizmoAwaitingPickRelease_ = false;

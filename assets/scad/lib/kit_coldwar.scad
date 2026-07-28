@@ -1670,7 +1670,7 @@ module cw_wpn_ak(seed = 0)
         color(cw_METALD()) cw_boxc([0.42, 0.07, 0.09]);                                     // 机匣
         color(cw_WOODC()) translate([-0.4, 0, 0]) rotate([0, 0, 4]) cw_boxc([0.4, 0.07, 0.08]);   // 枪托
         color(cw_WOODC()) translate([0.32, 0, 0]) cw_boxc([0.22, 0.06, 0.08]);              // 护木
-        color(cw_METALD()) translate([0.62, 0, 0]) rotate([0, 90, 0]) cylinder(h = 0.4, r = 0.018, $fn = 5);   // 枪管
+        color(cw_METALD()) translate([0.43, 0, 0]) rotate([0, 90, 0]) cylinder(h = 0.4, r = 0.018, $fn = 5);   // 枪管：从护木前端连续伸向枪口
         color(cw_METALD()) translate([0.80, 0, 0.015]) cw_boxc([0.05, 0.03, 0.05]);         // 准星座
         color(cw_METALD()) translate([0.06, -0.1, 0]) rotate([0, 0, -18]) cw_boxc([0.07, 0.2, 0.07]);   // 弧形弹匣（平躺伸向 -y）
         color(cw_METALD()) translate([0.1, -0.24, 0]) rotate([0, 0, -38]) cw_boxc([0.06, 0.12, 0.07]);

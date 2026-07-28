@@ -47,7 +47,7 @@ Brotato3DGameInstance  (类声明集中在 Brotato3DGameInstance.hpp)
 | `Brotato3DProjectile.hpp` | 投射物/特效数据 | `FProjectileRuntime`、`FEnemyProjectileRuntime`、`FExpandingRing`、`FLaserBeam`、`FGroundIndicator` |
 | `Brotato3DWeapon.hpp` | 武器数据 | `FWeaponRuntime`（含 `tieredDef` 副本） |
 | `Brotato3DDebris.hpp` | 碎块数据 | `FDebrisRuntime`、`EDebrisKind/EPickupState/EDebrisPayload` |
-| `assets/scad/brotato3d/*.scad` | **固定竞技场** | 基于 `kit_deadly.scad` 的城镇、公路郊外、沙漠荒野场景，可直接人工修缮 |
+| `assets/scad/source/brotato3d/*.scad` | **固定竞技场** | 基于 `kit_deadly.scad` 的城镇、公路郊外、沙漠荒野场景，可直接人工修缮 |
 | `Brotato3DWaveSystem.{hpp,cpp}` | 波次状态机 | `FWaveSystem`：Active/DuskSurge/Intermission，事件用 `Consume*()` 拉取 |
 | `Brotato3DShop.{hpp,cpp}` | 商店抽卡 | `FShop`：按权重抽属性卡/被动/武器 |
 | `Brotato3DUI.{hpp,cpp}` | ImGui 界面 | 主菜单、HUD、升级/商店/暂停/结算/设置面板 + 本地化辅助 |
@@ -184,7 +184,7 @@ glm::vec3 Brotato3DGameInstance::ResolveEnemyGroundedPosition(
 
 ---
 
-## 6.5 竞技场地图（`assets/scad/brotato3d/*.scad`）
+## 6.5 竞技场地图（`assets/scad/source/brotato3d/*.scad`）
 
 三张固定地图由 `assets/configs/brotato3d/arenas.json` 绑定，改地图前先记住这几条硬约束：
 
@@ -206,7 +206,7 @@ glm::vec3 Brotato3DGameInstance::ResolveEnemyGroundedPosition(
 6. **朝向**：面向镜头的一排用默认朝向（front = -y），背面排用 `rotate([0,0,180])`；注意 `lay_row` 永远沿 +x 生长，旋转 180° 的排必须从街坊**东端**起算。
 7. **地面叠层**：地面件重叠时上层要抬 `dd_layer(1)`，理由见 [SCAD 资产实战手册](ScadAssetPlaybook.md) 的"地面叠层"。
 
-验收用 `gnb shot --scene assets/scad/brotato3d/<map>.scad`；注意全图 shot 的相机在 ~600 m 外，薄板堆叠处会出现光线精度造成的黑斑，**那是远距离截图的 artifact，游戏内 32 m 机位不会有**——怀疑时把该区域单独摆成一个小场景再截一张。
+验收用 `gnb shot --scene assets/scad/source/brotato3d/<map>.scad`；注意全图 shot 的相机在 ~600 m 外，薄板堆叠处会出现光线精度造成的黑斑，**那是远距离截图的 artifact，游戏内 32 m 机位不会有**——怀疑时把该区域单独摆成一个小场景再截一张。
 
 ---
 

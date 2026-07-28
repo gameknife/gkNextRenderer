@@ -26,7 +26,7 @@ type Adapter struct{ config Config }
 
 func New(c Config) *Adapter {
 	if c.HTTP == nil {
-		c.HTTP = &http.Client{Timeout: 5 * time.Minute}
+		c.HTTP = &http.Client{Timeout: 10 * time.Minute}
 	}
 	c.Endpoint = strings.TrimRight(c.Endpoint, "/")
 	return &Adapter{config: c}
