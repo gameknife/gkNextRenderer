@@ -43,7 +43,7 @@ namespace ScadLibrary::AI
         {
             return value.is_array() && value.size() == 3 &&
                 std::all_of(value.begin(), value.end(), [](const auto& item)
-                { return item.is_number() && std::isfinite(item.get<double>()); });
+                { return item.is_number() && std::isfinite(item.template get<double>()); });
         }
 
         nlohmann::json* FindClip(nlohmann::json& clips, const std::string& id)
@@ -117,7 +117,7 @@ namespace ScadLibrary::AI
                     }
                     if (type == "scale" &&
                         std::any_of(key["value"].begin(), key["value"].end(),
-                                    [](const auto& item) { return item.get<double>() <= 0.0; }))
+                                    [](const auto& item) { return item.template get<double>() <= 0.0; }))
                     {
                         error = "scale keys must be positive";
                         return false;
