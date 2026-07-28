@@ -101,8 +101,21 @@ namespace
         RefConst<MeshShapeSettings> settings_;
     };
 
-    constexpr float kSleepVelocityThreshold = 0.01f;
-    constexpr float kTimeBeforeSleep = 1.25f;
+    constexpr uint kMaxBodies = 65536;
+    constexpr uint kMaxBodyPairs = 131072;
+    constexpr uint kMaxContactConstraints = 32768;
+    constexpr uint kTempAllocatorSize = 16 * 1024 * 1024;
+    constexpr uint kVelocitySolverSteps = 10;
+    constexpr uint kPositionSolverSteps = 2;
+    constexpr float kSleepVelocityThreshold = 0.05f;
+    constexpr float kTimeBeforeSleep = 0.35f;
+    constexpr double kFixedDeltaTime = 1.0 / 60.0;
+    constexpr int kMaxCollisionStepsPerTick = 4;
+    constexpr uint32_t kBroadPhaseOptimizeBatchSize = 32;
+    constexpr float kDynamicSphereFriction = 0.8f;
+    constexpr float kDynamicSphereLinearDamping = 0.35f;
+    constexpr float kDynamicSphereAngularDamping = 0.5f;
+    constexpr float kDynamicSphereInertiaMultiplier = 2.0f;
     constexpr float kDynamicBoxFriction = 0.22f;
     constexpr float kDynamicBoxGravityFactor = 1.15f;
     constexpr float kDynamicBoxLinearDamping = 0.025f;
@@ -122,6 +135,15 @@ namespace
         settings.mLinearDamping = kDynamicBoxLinearDamping;
         settings.mAngularDamping = kDynamicBoxAngularDamping;
         settings.mInertiaMultiplier = kDynamicBoxInertiaMultiplier;
+        settings.mMotionQuality = EMotionQuality::LinearCast;
+    }
+
+    void ConfigureDynamicSphereSettings(BodyCreationSettings& settings)
+    {
+        settings.mFriction = kDynamicSphereFriction;
+        settings.mLinearDamping = kDynamicSphereLinearDamping;
+        settings.mAngularDamping = kDynamicSphereAngularDamping;
+        settings.mInertiaMultiplier = kDynamicSphereInertiaMultiplier;
         settings.mMotionQuality = EMotionQuality::LinearCast;
     }
 
@@ -392,30 +414,20 @@ public:
 struct FNextPhysicsContext
 {
     FNextPhysicsContext():
-        tempAllocator(10 * 1024 * 1024),
+        tempAllocator(kTempAllocatorSize),
         jobSystem(cMaxPhysicsJobs, cMaxPhysicsBarriers, std::thread::hardware_concurrency() - 1)
     {
-        // This is the max amount of rigid bodies that you can add to the physics system. If you try to add more you'll get an error.
-        // Note: This value is low because this is a simple test. For a real project use something in the order of 65536.
-        const uint cMaxBodies = 65535;//1024;
-
         // This determines how many mutexes to allocate to protect rigid bodies from concurrent access. Set it to 0 for the default settings.
         const uint cNumBodyMutexes = 0;
 
-        // This is the max amount of body pairs that can be queued at any time (the broad phase will detect overlapping
-        // body pairs based on their bounding boxes and will insert them into a queue for the narrowphase). If you make this buffer
-        // too small the queue will fill up and the broad phase jobs will start to do narrow phase work. This is slightly less efficient.
-        // Note: This value is low because this is a simple test. For a real project use something in the order of 65536.
-        const uint cMaxBodyPairs = 65535;//1024;
-
-        // This is the maximum size of the contact constraint buffer. If more contacts (collisions between bodies) are detected than this
-        // number then these contacts will be ignored and bodies will start interpenetrating / fall through the world.
-        // Note: This value is low because this is a simple test. For a real project use something in the order of 10240.
-        const uint cMaxContactConstraints = 10240;//1024;
-        
-        physicsSystem.Init(cMaxBodies, cNumBodyMutexes, cMaxBodyPairs, cMaxContactConstraints, broadPhaseLayerInterface, objectVsBroadphaseLayerFilter, objectVsObjectLayerFilter);
+        // Dense piles can produce several contacts per body. If either of these buffers fills,
+        // Jolt drops contacts and dynamic bodies can interpenetrate or fall through the world.
+        physicsSystem.Init(kMaxBodies, cNumBodyMutexes, kMaxBodyPairs, kMaxContactConstraints,
+                           broadPhaseLayerInterface, objectVsBroadphaseLayerFilter, objectVsObjectLayerFilter);
 
         PhysicsSettings settings = physicsSystem.GetPhysicsSettings();
+        settings.mNumVelocitySteps = kVelocitySolverSteps;
+        settings.mNumPositionSteps = kPositionSolverSteps;
         settings.mPointVelocitySleepThreshold = kSleepVelocityThreshold;
         settings.mTimeBeforeSleep = kTimeBeforeSleep;
         physicsSystem.SetPhysicsSettings(settings);
@@ -429,12 +441,9 @@ struct FNextPhysicsContext
     {
         
     }
-    // We need a temp allocator for temporary allocations during the physics update. We're
-    // pre-allocating 10 MB to avoid having to do allocations during the physics update.
-    // B.t.w. 10 MB is way too much for this example but it is a typical value you can use.
-    // If you don't want to pre-allocate you can also use TempAllocatorMalloc to fall back to
-    // malloc / free.
-    TempAllocatorImpl tempAllocator;
+    // Large contact islands can exceed the preallocated block. Falling back to malloc is slower
+    // than the normal path but avoids turning a temporary capacity spike into a fatal allocation.
+    TempAllocatorImplWithMallocFallback tempAllocator;
 
     // We need a job system that will execute physics jobs on multiple threads. Typically
     // you would implement the JobSystem interface yourself and let Jolt Physics run on top
@@ -519,51 +528,88 @@ void FJoltPhysicsBackend::Start()
 
 void FJoltPhysicsBackend::Tick(double deltaSeconds)
 {
-    if (paused_)
+    if (paused_ || deltaSeconds <= 0.0)
     {
         return;
     }
 
-    timeElapsed_ += deltaSeconds;
-    const float timeOffset = static_cast<float>(timeElapsed_ - timeSimulated_);
-    const float cDeltaTime = 1.0f / 60.0f;
-
-    float shouldTick = timeOffset / cDeltaTime;
-
-    if (shouldTick < 1.0f)
+    // Bound the backlog so a hitch cannot create a permanent spiral of death. The remainder
+    // below one fixed step is preserved to keep normal render/physics rates in sync.
+    const double maxAccumulatedTime = kFixedDeltaTime * kMaxCollisionStepsPerTick;
+    accumulatedTime_ = std::min(accumulatedTime_ + deltaSeconds, maxAccumulatedTime);
+    const int collisionSteps = std::min(
+        kMaxCollisionStepsPerTick,
+        static_cast<int>(std::floor(accumulatedTime_ / kFixedDeltaTime)));
+    if (collisionSteps == 0)
     {
         return;
     }
-    
-    // If you take larger steps than 1 / 60th of a second you need to do multiple collision steps in order to keep the simulation stable. Do 1 collision step per 1 / 60th of a second (round up).
-    const int cCollisionSteps = glm::min(4, glm::max(1, static_cast<int>(glm::floor(timeOffset / cDeltaTime))));
 
-    timeSimulated_ += cDeltaTime * cCollisionSteps;
+    const double simulatedDelta = kFixedDeltaTime * collisionSteps;
+    accumulatedTime_ -= simulatedDelta;
 
-    // Update bodies
-    BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
-    
-    for (auto& body : bodies_)
+    SCOPED_CPU_TIMER("physics solve");
+
+    // Body creation happens one at a time through the public API. Defer the expensive tree
+    // rebuild until the first simulation step so thousands of bodies only trigger it once.
+    if (pendingBodyAddCount_ >= kBroadPhaseOptimizeBatchSize)
     {
-        if (body.second.motionType == NextMotionType::Dynamic)
+        context_->physicsSystem.OptimizeBroadPhase();
+    }
+    pendingBodyAddCount_ = 0;
+
+    // inDeltaTime is the total simulated time; Jolt divides it into collisionSteps equal
+    // fixed steps. Passing only kFixedDeltaTime here would advance too little during catch-up.
+    const EPhysicsUpdateError updateError =
+        context_->physicsSystem.Update(static_cast<float>(simulatedDelta), collisionSteps,
+                                       &context_->tempAllocator, &context_->jobSystem);
+    ++updateCallCount_;
+    simulatedStepCount_ += static_cast<uint64_t>(collisionSteps);
+
+    const uint32_t updateErrorMask = static_cast<uint32_t>(updateError);
+    const uint32_t activeRigidBodyCount =
+        context_->physicsSystem.GetNumActiveBodies(EBodyType::RigidBody);
+    if (updateErrorMask != 0 && updateErrorMask != lastUpdateErrorMask_)
+    {
+        SPDLOG_ERROR("[Physics] Jolt update dropped contacts (error mask 0x{:x}, active rigid bodies {}, "
+                     "body-pair capacity {}, contact capacity {}). Increase physics capacities or reduce overlap.",
+                     updateErrorMask, activeRigidBodyCount, kMaxBodyPairs, kMaxContactConstraints);
+    }
+    else if (updateErrorMask == 0 && lastUpdateErrorMask_ != 0)
+    {
+        SPDLOG_INFO("[Physics] Jolt update capacity recovered");
+    }
+    lastUpdateErrorMask_ = updateErrorMask;
+
+    // Publish the state produced by this update, rather than the previous step's state.
+    // Once an island has gone to sleep its transforms no longer change. Synchronize once on
+    // the transition to zero active bodies, then avoid thousands of locked body reads per step.
+    if (activeRigidBodyCount > 0 || previousActiveRigidBodyCount_ > 0)
+    {
+        BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
+        for (auto& [bodyId, body] : bodies_)
         {
-            const BodyID bodyId = ToJoltBodyID(body.first);
-            RVec3 pos = bodyInterface.GetPosition(bodyId);
-            RVec3 vel = bodyInterface.GetLinearVelocity(bodyId);
-            Quat rot = bodyInterface.GetRotation(bodyId);
-            body.second.position = glm::vec3(pos.GetX(), pos.GetY(), pos.GetZ());
-            body.second.rotation = glm::quat(rot.GetW(), rot.GetX(), rot.GetY(), rot.GetZ());
-            body.second.velocity = glm::vec3(vel.GetX(), vel.GetY(), vel.GetZ());
-
-            if (vel.Length() > 0.001f)
+            if (body.motionType != NextMotionType::Dynamic)
             {
-                NextEngine::GetInstance()->GetScene().MarkTransformDirty();
+                continue;
             }
+
+            const BodyID joltBodyId = ToJoltBodyID(bodyId);
+            RVec3 position;
+            Quat rotation;
+            bodyInterface.GetPositionAndRotation(joltBodyId, position, rotation);
+            const Vec3 velocity = bodyInterface.GetLinearVelocity(joltBodyId);
+            body.position = glm::vec3(position.GetX(), position.GetY(), position.GetZ());
+            body.rotation = glm::quat(rotation.GetW(), rotation.GetX(), rotation.GetY(), rotation.GetZ());
+            body.velocity = glm::vec3(velocity.GetX(), velocity.GetY(), velocity.GetZ());
         }
     }
+    previousActiveRigidBodyCount_ = activeRigidBodyCount;
 
-    // Step the world
-    context_->physicsSystem.Update(cDeltaTime, cCollisionSteps, &context_->tempAllocator, &context_->jobSystem);
+    if (activeRigidBodyCount > 0)
+    {
+        NextEngine::GetInstance()->GetScene().MarkTransformDirty();
+    }
 }
 
 void FJoltPhysicsBackend::SetPaused(bool paused)
@@ -575,6 +621,8 @@ FNextPhysicsBodyStats FJoltPhysicsBackend::GetBodyStats() const
 {
     FNextPhysicsBodyStats stats{};
     stats.total = bodies_.size();
+    stats.updateCalls = updateCallCount_;
+    stats.simulatedSteps = simulatedStepCount_;
 
     for (const auto& [bodyId, body] : bodies_)
     {
@@ -613,10 +661,10 @@ void FJoltPhysicsBackend::Stop()
     context_.reset();
 }
 
-NextBodyID FJoltPhysicsBackend::AddBodyInternal(FNextPhysicsBody& body, bool optimizeBroadPhase)
+NextBodyID FJoltPhysicsBackend::AddBodyInternal(FNextPhysicsBody& body)
 {
     bodies_[body.bodyID] = body;
-    if (optimizeBroadPhase) context_->physicsSystem.OptimizeBroadPhase();
+    ++pendingBodyAddCount_;
     return body.bodyID;
 }
 
@@ -628,18 +676,22 @@ NextBodyID FJoltPhysicsBackend::CreateSphereBody(glm::vec3 position, float radiu
     // Note that this uses the shorthand version of creating and adding a body to the world
     BodyCreationSettings sphereSettings(new SphereShape(radius), RVec3(position.x, position.y, position.z),
                                         Quat::sIdentity(), ToJoltMotionType(motionType), NextLayers::MOVING);
-    sphereSettings.mFriction = 0.5f;
-    sphereSettings.mInertiaMultiplier = 2.0f;
-    //sphere_settings.mRestitution = 0.05f;
-    sphereSettings.mMotionQuality = EMotionQuality::LinearCast;
+    if (motionType == NextMotionType::Dynamic)
+    {
+        ConfigureDynamicSphereSettings(sphereSettings);
+    }
+    else
+    {
+        sphereSettings.mFriction = kDynamicSphereFriction;
+    }
     BodyID bodyId = bodyInterface.CreateAndAddBody(sphereSettings, EActivation::Activate);
 
     // Now you can interact with the dynamic body, in this case we're going to give it a velocity.
     // (note that if we had used CreateBody then we could have set the velocity straight on the body before adding it to the physics system)
     //body_interface.SetLinearVelocity(body_id, Vec3(0.0f, -5.0f, 0.0f));
-    FNextPhysicsBody body { position, glm::quat(1,0,0,0), glm::vec3(0.0f), ENextBodyShape::Box,
+    FNextPhysicsBody body { position, glm::quat(1,0,0,0), glm::vec3(0.0f), ENextBodyShape::Sphere,
                             FromJoltBodyID(bodyId), motionType };
-    return AddBodyInternal(body, true);
+    return AddBodyInternal(body);
 }
 
 NextBodyID FJoltPhysicsBackend::CreateBoxBody(glm::vec3 position, glm::vec3 extent, NextMotionType motionType)
@@ -672,7 +724,7 @@ NextBodyID FJoltPhysicsBackend::CreateBoxBody(glm::vec3 position, glm::quat rota
 
     FNextPhysicsBody body { position, rotation, glm::vec3(0.0f), ENextBodyShape::Box,
                             FromJoltBodyID(bodyId), motionType };
-    return AddBodyInternal(body, true);
+    return AddBodyInternal(body);
 }
 
 NextBodyID FJoltPhysicsBackend::CreateMeshBody(const NextMeshShapeHandle& meshShape, glm::vec3 position,
@@ -718,7 +770,7 @@ NextBodyID FJoltPhysicsBackend::CreateMeshBody(const NextMeshShapeHandle& meshSh
 
     FNextPhysicsBody body { position, rotation, glm::vec3(0.0f), ENextBodyShape::Mesh,
                             FromJoltBodyID(bodyId), motionType };
-    return AddBodyInternal(body, false);
+    return AddBodyInternal(body);
 }
 
 NextBodyID FJoltPhysicsBackend::CreatePlaneBody(glm::vec3 position, glm::vec3 normal, NextMotionType motionType)
@@ -745,7 +797,7 @@ NextBodyID FJoltPhysicsBackend::CreatePlaneBody(glm::vec3 position, glm::vec3 no
 
     FNextPhysicsBody body { position, glm::quat(1,0,0,0), glm::vec3(0.0f), ENextBodyShape::Box,
                             FromJoltBodyID(bodyId), NextMotionType::Static };
-    return AddBodyInternal(body, true);
+    return AddBodyInternal(body);
 }
 
 NextMeshShapeHandle FJoltPhysicsBackend::CreateMeshShape(Assets::Model& model)
@@ -891,8 +943,18 @@ glm::vec4 FJoltPhysicsBackend::GetBodyDebugColor(NextBodyID bodyID) const
 
 void FJoltPhysicsBackend::RemoveBody(NextBodyID bodyID)
 {
+    if (!context_ || bodyID.IsInvalid() || !bodies_.contains(bodyID))
+    {
+        return;
+    }
+
     BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
-    bodyInterface.RemoveBody(ToJoltBodyID(bodyID));
+    const BodyID joltBodyId = ToJoltBodyID(bodyID);
+    if (bodyInterface.IsAdded(joltBodyId))
+    {
+        bodyInterface.RemoveBody(joltBodyId);
+    }
+    bodyInterface.DestroyBody(joltBodyId);
     bodies_.erase(bodyID);
 }
 
@@ -1010,8 +1072,12 @@ void FJoltPhysicsBackend::DrawDebugBodies() const
 
 void FJoltPhysicsBackend::OnSceneStarted()
 {
-    timeElapsed_ = 0;
-    timeSimulated_ = 0;
+    accumulatedTime_ = 0.0;
+    updateCallCount_ = 0;
+    simulatedStepCount_ = 0;
+    lastUpdateErrorMask_ = 0;
+    pendingBodyAddCount_ = 0;
+    previousActiveRigidBodyCount_ = 0;
 }
 
 void FJoltPhysicsBackend::OnSceneDestroyed()
@@ -1155,10 +1221,11 @@ NextVehicleID FJoltPhysicsBackend::CreateWheeledVehicle(const FNextVehicleSettin
 void FJoltPhysicsBackend::RemoveVehicle(NextVehicleID id)
 {
     auto it = vehicles_.find(id); if (it == vehicles_.end()) return;
+    const NextBodyID bodyId = it->second->bodyID;
     context_->physicsSystem.RemoveStepListener(it->second->constraint);
     context_->physicsSystem.RemoveConstraint(it->second->constraint);
-    RemoveBody(it->second->bodyID);
     vehicles_.erase(it);
+    RemoveBody(bodyId);
 }
 
 void FJoltPhysicsBackend::SetVehicleInput(NextVehicleID id, const FNextVehicleInput& input)

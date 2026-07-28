@@ -63,12 +63,16 @@ namespace Modules::Physics
         NextBodyID GetVehicleBodyID(NextVehicleID vehicleID) const override;
 
     private:
-        NextBodyID AddBodyInternal(FNextPhysicsBody& body, bool optimizeBroadPhase);
+        NextBodyID AddBodyInternal(FNextPhysicsBody& body);
 
         std::unique_ptr<FNextPhysicsContext> context_;
         std::unordered_map<NextBodyID, FNextPhysicsBody> bodies_;
-        double timeElapsed_{};
-        double timeSimulated_{};
+        double accumulatedTime_{};
+        uint64_t updateCallCount_{};
+        uint64_t simulatedStepCount_{};
+        uint32_t lastUpdateErrorMask_{};
+        uint32_t pendingBodyAddCount_{};
+        uint32_t previousActiveRigidBodyCount_{};
         bool paused_ = false;
         struct FVehicleData;
         std::unordered_map<NextVehicleID, std::unique_ptr<FVehicleData>> vehicles_;

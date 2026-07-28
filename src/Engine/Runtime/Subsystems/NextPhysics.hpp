@@ -45,6 +45,8 @@ struct FNextPhysicsBodyStats
     size_t dynamic = 0;
     size_t kinematic = 0;
     size_t staticBodies = 0;
+    uint64_t updateCalls = 0;
+    uint64_t simulatedSteps = 0;
 };
 
 enum class ECharacterGroundState

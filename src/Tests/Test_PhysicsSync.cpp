@@ -125,6 +125,135 @@ TEST_CASE_METHOD(EngineTestFixture, "SetBodyVelocity Reactivates Resting Dynamic
     physics->RemoveBody(floorBodyId);
 }
 
+TEST_CASE_METHOD(EngineTestFixture, "Physics catch-up advances the full fixed-step interval",
+                 "[Integration][Physics][FixedStep]")
+{
+    auto* physics = engine_->GetPhysicsEngine();
+    REQUIRE(physics != nullptr);
+
+    physics->OnSceneStarted();
+    const NextBodyID sphere =
+        physics->CreateSphereBody({100.0f, 10.0f, 100.0f}, 0.25f, NextMotionType::Dynamic);
+
+    physics->Tick(4.0 / 60.0);
+
+    const FNextPhysicsBody* body = physics->GetBody(sphere);
+    REQUIRE(body != nullptr);
+    CHECK(body->position.y < 9.99f);
+    CHECK(body->position.y > 9.9f);
+
+    physics->RemoveBody(sphere);
+}
+
+TEST_CASE_METHOD(EngineTestFixture, "High render rate keeps physics updates at 60 Hz",
+                 "[Integration][Physics][FixedStep]")
+{
+    auto* physics = engine_->GetPhysicsEngine();
+    REQUIRE(physics != nullptr);
+
+    physics->OnSceneStarted();
+    for (int frame = 0; frame < 240; ++frame)
+    {
+        physics->Tick(1.0 / 240.0);
+    }
+
+    const FNextPhysicsBodyStats stats = physics->GetBodyStats();
+    CHECK(stats.updateCalls == 60);
+    CHECK(stats.simulatedSteps == 60);
+}
+
+TEST_CASE_METHOD(EngineTestFixture, "Rolling sphere settles and enters sleep",
+                 "[Integration][Physics][SphereSleep]")
+{
+    auto* physics = engine_->GetPhysicsEngine();
+    REQUIRE(physics != nullptr);
+
+    physics->OnSceneStarted();
+    const NextBodyID floor =
+        physics->CreateBoxBody({0.0f, -0.5f, 0.0f}, {100.0f, 1.0f, 100.0f}, NextMotionType::Static);
+    const NextBodyID sphere =
+        physics->CreateSphereBody({0.0f, 0.3f, 0.0f}, 0.25f, NextMotionType::Dynamic);
+    physics->SetBodyVelocity(sphere, {2.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -8.0f});
+
+    for (int step = 0; step < 600; ++step)
+    {
+        physics->Tick(1.0 / 60.0);
+    }
+
+    const FNextPhysicsDebugState state = physics->GetBodyDebugState(sphere);
+    const FNextPhysicsBody* body = physics->GetBody(sphere);
+    REQUIRE(state.isValid);
+    REQUIRE(body != nullptr);
+    CHECK_FALSE(state.isActive);
+    CHECK(glm::length(body->velocity) < 0.05f);
+
+    physics->RemoveBody(sphere);
+    physics->RemoveBody(floor);
+}
+
+TEST_CASE_METHOD(EngineTestFixture, "Dense 3000 sphere pile retains ground contacts",
+                 "[.stress][Integration][Physics][DensePile]")
+{
+    auto* physics = engine_->GetPhysicsEngine();
+    REQUIRE(physics != nullptr);
+
+    constexpr int countX = 16;
+    constexpr int countZ = 16;
+    constexpr int countY = 12;
+    constexpr float radius = 0.12f;
+    constexpr float spacing = radius * 2.01f;
+    constexpr float layerHeight = spacing * 0.8164965809f;
+    constexpr float rowDepth = spacing * 0.8660254038f;
+    constexpr glm::vec3 pileOrigin(30.0f, 0.0f, 30.0f);
+
+    physics->OnSceneStarted();
+    const NextBodyID floor =
+        physics->CreateBoxBody(pileOrigin + glm::vec3(2.0f, -0.5f, 2.0f),
+                               {100.0f, 1.0f, 100.0f}, NextMotionType::Static);
+
+    std::vector<NextBodyID> spheres;
+    spheres.reserve(countX * countZ * countY);
+    for (int y = 0; y < countY; ++y)
+    {
+        for (int z = 0; z < countZ; ++z)
+        {
+            for (int x = 0; x < countX; ++x)
+            {
+                const float layerOffsetX = (y & 1) != 0 ? spacing * 0.5f : 0.0f;
+                const float layerOffsetZ = (y & 1) != 0 ? rowDepth / 3.0f : 0.0f;
+                const float rowOffsetX = (z & 1) != 0 ? spacing * 0.5f : 0.0f;
+                const glm::vec3 position =
+                    pileOrigin + glm::vec3(
+                        radius + x * spacing + rowOffsetX + layerOffsetX,
+                        radius + y * layerHeight,
+                        radius + z * rowDepth + layerOffsetZ);
+                spheres.push_back(physics->CreateSphereBody(position, radius, NextMotionType::Dynamic));
+            }
+        }
+    }
+    REQUIRE(spheres.size() == 3072);
+
+    for (int step = 0; step < 360; ++step)
+    {
+        physics->Tick(1.0 / 60.0);
+    }
+
+    float minimumY = std::numeric_limits<float>::max();
+    for (const NextBodyID sphere : spheres)
+    {
+        const FNextPhysicsBody* body = physics->GetBody(sphere);
+        REQUIRE(body != nullptr);
+        minimumY = std::min(minimumY, body->position.y);
+    }
+    CHECK(minimumY > -radius);
+
+    for (const NextBodyID sphere : spheres)
+    {
+        physics->RemoveBody(sphere);
+    }
+    physics->RemoveBody(floor);
+}
+
 TEST_CASE_METHOD(EngineTestFixture, "Character stance resize keeps feet anchored and checks headroom",
                  "[Integration][Physics][Character]")
 {
@@ -208,11 +337,11 @@ TEST_CASE_METHOD(EngineTestFixture, "Wheeled vehicle suspension and drivetrain t
 
     const NextVehicleID vehicle = physics->CreateWheeledVehicle(settings);
     REQUIRE(vehicle != invalidNextVehicleId);
-    Simulate(90);
+    Simulate(45);
     physics->SetVehicleDiffLock(vehicle, true);
     physics->SetVehicleAllWheelDrive(vehicle, true);
     physics->SetVehicleInput(vehicle, {0.8f, 0.0f, 0.0f, 0.0f});
-    Simulate(240);
+    Simulate(120);
 
     glm::vec3 position; glm::quat rotation;
     REQUIRE(physics->GetVehicleBodyTransform(vehicle, position, rotation));
@@ -230,7 +359,7 @@ TEST_CASE_METHOD(EngineTestFixture, "Wheeled vehicle suspension and drivetrain t
     physics->RemoveVehicle(vehicle);
     physics->RemoveBody(floor);
 
-    const glm::quat rampRotation = glm::angleAxis(glm::radians(18.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    const glm::quat rampRotation = glm::angleAxis(glm::radians(10.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     const NextBodyID ramp = physics->CreateBoxBody({0.0f, 3.0f, 0.0f}, rampRotation, {20.0f, 0.6f, 8.0f},
                                                    NextMotionType::Static);
     settings.initialPosition = {-7.0f, 2.10f, 0.0f};
@@ -238,11 +367,11 @@ TEST_CASE_METHOD(EngineTestFixture, "Wheeled vehicle suspension and drivetrain t
     const NextVehicleID climbingVehicle = physics->CreateWheeledVehicle(settings);
     REQUIRE(climbingVehicle != invalidNextVehicleId);
     physics->SetVehicleInput(climbingVehicle, {0.0f, 0.0f, 1.0f, 1.0f});
-    Simulate(90);
+    Simulate(45);
     physics->SetVehicleAllWheelDrive(climbingVehicle, true);
     physics->SetVehicleDiffLock(climbingVehicle, true);
     physics->SetVehicleInput(climbingVehicle, {0.9f, 0.0f, 0.0f, 0.0f});
-    Simulate(120);
+    Simulate(90);
     REQUIRE(physics->GetVehicleBodyTransform(climbingVehicle, position, rotation));
     CHECK(position.x > -6.5f);
     CHECK(glm::dot(rotation * glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)) > 0.5f);

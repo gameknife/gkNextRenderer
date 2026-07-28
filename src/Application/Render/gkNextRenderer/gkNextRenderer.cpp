@@ -641,16 +641,17 @@ void NextRendererGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<As
     for (uint32_t index = 0; index < dropSphereCount; ++index)
     {
         const float hue = HashToUnitFloat(index ^ 0xa511e9b3u);
-        const float saturation = 0.45f + 0.5f * HashToUnitFloat(index ^ 0x63d83595u);
+        const float saturation = 0.25f + 0.25f * HashToUnitFloat(index ^ 0x63d83595u);
         const float value = 0.55f + 0.43f * HashToUnitFloat(index ^ 0xc2b2ae35u);
         const float roughness = 0.04f + 0.92f * HashToUnitFloat(index ^ 0x27d4eb2fu);
         const glm::vec3 color = HsvToRgb(hue, saturation, value);
 
         Assets::Material material;
-        switch (HashUint(index ^ 0x9e3779b9u) % 3)
+        switch (HashUint(index ^ 0x9e3779b9u) % 5)
         {
         case 0: material = Assets::Material::Lambertian(color); break;
         case 1: material = Assets::Material::Metallic(color, roughness); break;
+        case 3: material = Assets::Material::Dielectric(1.5f, 0.0f); break;
         default: material = Assets::Material::Mixture(color, roughness); break;
         }
 
@@ -1542,7 +1543,8 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Animation"), false))
     {
         DrawSettingCheckboxRow(LOCTEXT("Tick Animation"), &userSetting.TickAnimation);
-
+        DrawSettingCheckboxRow(LOCTEXT("TickPhysics"), &userSetting.TickPhysics);
+        
         ImGui::Separator();
         for (auto& node : GetEngine().GetScene().Nodes())
         {
@@ -1591,8 +1593,6 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
 
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Misc"), false))
     {
-        DrawSettingCheckboxRow(LOCTEXT("TickPhysics"), &userSetting.TickPhysics);
-
         ImGui::SliderFloat(LOCTEXT("Time Scaling"), &userSetting.HeatmapScale, 0.10f, 2.0f, "%.2f",
                            ImGuiSliderFlags_Logarithmic);
 
