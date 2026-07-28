@@ -92,6 +92,7 @@ public:
                                 VkExtent2D framebufferExtent, uint32_t hdrOutputMode, VkPipeline pipeline);
     ImFontAtlas* GetFontAtlas() const;
     ImFont* GetDefaultFont() const;
+    float UiScale() const { return uiScale_; }
     void AttachRendererBackendToCurrentContext() const;
 
 private:
@@ -122,6 +123,7 @@ private:
     std::unordered_map<std::string, ImVec2> uiTexturePixelSizeCache_;
     ImFontAtlas* fontAtlas_ = nullptr;
     ImFont* defaultFont_ = nullptr;
+    float uiScale_ = 1.0f;
     uint32_t fontTextureIndex_ = UINT32_MAX;
     std::vector< std::function<void ()> > auxDrawRequest_;
     bool hasPreparedDrawData_ = false;

@@ -84,6 +84,7 @@ public:
     uint32_t Height{};
     uint32_t PresentMode{};
     bool Fullscreen{};
+    bool SystemDpiScaling{};
 
     // Test options
     bool TestGltfRobustness{};

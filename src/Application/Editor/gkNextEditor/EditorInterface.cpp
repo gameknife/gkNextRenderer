@@ -383,10 +383,12 @@ void EditorInterface::Render(Editor::EditorUiState& uiState)
 
         if (uiState.viewportOnMainViewport && node->Size.x >= 1.0f && node->Size.y >= 1.0f)
         {
+            const float uiScale = ui->UiScale();
             editor_->GetEngine().GetRenderer().SwapChain().UpdateOutputViewport(
-                Utilities::Math::floorToInt(node->Pos.x - mainViewport->Pos.x),
-                Utilities::Math::floorToInt(node->Pos.y - mainViewport->Pos.y),
-                Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
+                Utilities::Math::floorToInt((node->Pos.x - mainViewport->Pos.x) * uiScale),
+                Utilities::Math::floorToInt((node->Pos.y - mainViewport->Pos.y) * uiScale),
+                Utilities::Math::ceilToInt(node->Size.x * uiScale),
+                Utilities::Math::ceilToInt(node->Size.y * uiScale));
 
             const ImGuiIO& io = ImGui::GetIO();
             const ImVec2 mousePos = io.MousePos;

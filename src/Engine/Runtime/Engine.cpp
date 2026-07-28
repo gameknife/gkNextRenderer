@@ -295,12 +295,13 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
         }
     }
 
-    Vulkan::Window::InitSDL();
+    Vulkan::Window::InitSDL(options.SystemDpiScaling);
     
     Vulkan::WindowConfig windowConfig{"gkNextEngine " + NextRenderer::GetBuildVersion(),
                                       options.Width,options.Height,
                                       false, options.Fullscreen,!options.Fullscreen,
                                       options.SaveFile,userdata,options.ForceSDR};
+    windowConfig.SystemDpiScaling = options.SystemDpiScaling;
     
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
     
@@ -914,9 +915,15 @@ void NextEngine::ConfigureCustomTitleBarDrag(bool enabled, float titleBarHeight,
         return;
     }
 
-    const int titleBarHeightInt = std::max(0, static_cast<int>(titleBarHeight));
-    const int leftReservedWidthInt = std::max(0, static_cast<int>(leftReservedWidth));
-    const int rightReservedWidthInt = std::max(0, static_cast<int>(rightReservedWidth));
+    float coordinateScale = 1.0f;
+#if WIN32
+    coordinateScale = std::max(1.0f, window_->ContentScale());
+#endif
+    const int titleBarHeightInt = std::max(0, static_cast<int>(std::lround(titleBarHeight * coordinateScale)));
+    const int leftReservedWidthInt =
+        std::max(0, static_cast<int>(std::lround(leftReservedWidth * coordinateScale)));
+    const int rightReservedWidthInt =
+        std::max(0, static_cast<int>(std::lround(rightReservedWidth * coordinateScale)));
     window_->ConfigureCustomTitleBarDrag(enabled, titleBarHeightInt, leftReservedWidthInt, rightReservedWidthInt);
 }
 

@@ -7,6 +7,7 @@
 #include "Engine/Options.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include <algorithm>
+#include <cmath>
 
 namespace Vulkan
 {
@@ -108,6 +109,24 @@ Window::Window(const WindowConfig& config) :
     if (!config.Fullscreen)
     {
         const SDL_DisplayID displayId = SDL_GetPrimaryDisplay();
+        float displayScale = 1.0f;
+#if WIN32
+        if (!config.SystemDpiScaling)
+        {
+            displayScale = SDL_GetDisplayContentScale(displayId);
+            if (!std::isfinite(displayScale) || displayScale <= 0.0f)
+            {
+                displayScale = 1.0f;
+            }
+
+            // WindowConfig dimensions are logical UI dimensions. In per-monitor DPI-aware mode
+            // Windows no longer bitmap-stretches the application for us, so allocate the matching
+            // physical window size explicitly. Vulkan and ImGui can then render every pixel sharply.
+            windowWidth = static_cast<uint32_t>(std::lround(static_cast<double>(windowWidth) * displayScale));
+            windowHeight = static_cast<uint32_t>(std::lround(static_cast<double>(windowHeight) * displayScale));
+        }
+#endif
+
         SDL_Rect bounds;
         if (!SDL_GetDisplayUsableBounds(displayId, &bounds))
         {
@@ -132,6 +151,18 @@ Window::Window(const WindowConfig& config) :
                 }
             }
         }
+
+#if WIN32
+        if (config.SystemDpiScaling)
+        {
+            SPDLOG_INFO("Creating legacy system-DPI-scaled window at {}x{}", windowWidth, windowHeight);
+        }
+        else
+        {
+            SPDLOG_INFO("Creating DPI-aware window at {}x{} (logical {}x{}, scale {:.2f})",
+                        windowWidth, windowHeight, config.Width, config.Height, displayScale);
+        }
+#endif
     }
 
     window_ = SDL_CreateWindow(config.Title.c_str(), windowWidth, windowHeight, flags);
@@ -172,6 +203,12 @@ Window::~Window()
 
 float Window::ContentScale() const
 {
+#if WIN32
+    if (config_.SystemDpiScaling)
+    {
+        return 1.0f;
+    }
+#endif
     float xscale = 1;
     xscale = SDL_GetWindowDisplayScale(window_);
     return xscale;
@@ -317,13 +354,16 @@ void Window::ConfigureCustomTitleBarDrag(bool enabled, int titleBarHeight, int l
     customTitleBarDrag_.rightReservedWidth = std::max(0, rightReservedWidth);
 }
 
-void Window::InitSDL()
+void Window::InitSDL(bool systemDpiScaling)
 {
 #if WIN32
-    if (!SDL_SetHintWithPriority("SDL_WINDOWS_DPI_AWARENESS", "unaware", SDL_HINT_OVERRIDE))
+    const char* dpiAwareness = systemDpiScaling ? "unaware" : "permonitorv2";
+    if (!SDL_SetHintWithPriority("SDL_WINDOWS_DPI_AWARENESS", dpiAwareness, SDL_HINT_OVERRIDE))
     {
-        SPDLOG_WARN("Failed to set SDL Windows DPI awareness to unaware: {}", SDL_GetError());
+        SPDLOG_WARN("Failed to set SDL Windows DPI awareness to {}: {}", dpiAwareness, SDL_GetError());
     }
+#else
+    (void)systemDpiScaling;
 #endif
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))

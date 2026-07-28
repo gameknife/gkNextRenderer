@@ -229,16 +229,23 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     // Window scaling and style.
 #if ANDROID
     const float scaleFactor = 0.75f / Vulkan::SwapChain::UiContentScale();
+#elif WIN32
+    // Keep ImGui in the scaleFactor=1 logical coordinate space used by all existing UI code.
+    // PreRender maps that coordinate space onto the DPI-sized framebuffer.
+    const float scaleFactor = std::max(1.0f, window.ContentScale());
 #else
     const float scaleFactor = 1.0f;
 #endif
+    uiScale_ = scaleFactor;
     constexpr float fontSize = 16.0f;
 
     if (Runtime::IDebugUiProvider* styleProvider = engine->GetDebugUiProvider())
     {
         styleProvider->ApplyUiStyle();
     }
+#if !WIN32
     ImGui::GetStyle().ScaleAllSizes(scaleFactor);
+#endif
 
     // Upload ImGui fonts (use ImGuiFreeType for better font rendering, see
     // https://github.com/ocornut/imgui/tree/master/misc/freetype).
@@ -250,8 +257,9 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
 
     defaultFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
             .filePath = "assets/fonts/Roboto-Regular.ttf",
-            .pixelSize = fontSize * scaleFactor,
+            .pixelSize = fontSize,
             .includeChineseFull = true,
+            .rasterizerDensity = scaleFactor,
         });
     if (defaultFont_ == nullptr)
     {
@@ -271,26 +279,29 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
 
     NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/fa-regular-400.ttf",
-        .pixelSize = (fontSize - 2) * scaleFactor,
+        .pixelSize = fontSize - 2,
         .includeChineseFull = false,
         .glyphRanges = iconRange,
         .fontConfig = &config,
+        .rasterizerDensity = scaleFactor,
         .warnOnFailure = false,
     });
     NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/fa-solid-900.ttf",
-        .pixelSize = (fontSize - 2) * scaleFactor,
+        .pixelSize = fontSize - 2,
         .includeChineseFull = false,
         .glyphRanges = iconRange,
         .fontConfig = &config,
+        .rasterizerDensity = scaleFactor,
         .warnOnFailure = false,
     });
     NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/fa-brands-400.ttf",
-        .pixelSize = (fontSize - 2) * scaleFactor,
+        .pixelSize = fontSize - 2,
         .includeChineseFull = false,
         .glyphRanges = iconRange,
         .fontConfig = &config,
+        .rasterizerDensity = scaleFactor,
         .warnOnFailure = false,
     });
 
@@ -298,9 +309,10 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     configLocale.MergeMode = true;
     NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/DroidSansFallback.ttf",
-        .pixelSize = fontSize * scaleFactor,
+        .pixelSize = fontSize,
         .glyphRanges = io.Fonts->GetGlyphRangesChineseSimplifiedCommon(),
         .fontConfig = &configLocale,
+        .rasterizerDensity = scaleFactor,
         .warnOnFailure = false,
     });
 
@@ -871,6 +883,40 @@ void UserInterface::PreRender()
     BeginRendererBackendFrame();
     ImGui_ImplSDL3_SetFramebufferScaleBias(Vulkan::SwapChain::UiContentScale());
     ImGui_ImplSDL3_NewFrame();
+#if WIN32
+    auto& io = ImGui::GetIO();
+    if (uiScale_ > 1.0f)
+    {
+        io.DisplaySize.x /= uiScale_;
+        io.DisplaySize.y /= uiScale_;
+        io.DisplayFramebufferScale.x *= uiScale_;
+        io.DisplayFramebufferScale.y *= uiScale_;
+
+        // SDL reports pointer coordinates in physical window pixels on a DPI-aware process.
+        // Convert the position back into the logical ImGui viewport coordinate space.
+        SDL_Window* mouseWindow = SDL_GetMouseFocus();
+        if (mouseWindow != nullptr && !SDL_GetWindowRelativeMouseMode(mouseWindow))
+        {
+            float globalX = 0.0f;
+            float globalY = 0.0f;
+            int windowX = 0;
+            int windowY = 0;
+            SDL_GetGlobalMouseState(&globalX, &globalY);
+            SDL_GetWindowPosition(mouseWindow, &windowX, &windowY);
+
+            ImVec2 logicalPosition(
+                (globalX - static_cast<float>(windowX)) / uiScale_,
+                (globalY - static_cast<float>(windowY)) / uiScale_);
+            if (ImGuiViewport* viewport = ImGui::FindViewportByPlatformHandle(
+                    reinterpret_cast<void*>(static_cast<intptr_t>(SDL_GetWindowID(mouseWindow)))))
+            {
+                logicalPosition.x += viewport->Pos.x;
+                logicalPosition.y += viewport->Pos.y;
+                io.AddMousePosEvent(logicalPosition.x, logicalPosition.y);
+            }
+        }
+    }
+#endif
 #if ANDROID
     auto& io = ImGui::GetIO();
     io.DisplayFramebufferScale.x *= Vulkan::SwapChain::UiContentScale();
@@ -951,6 +997,18 @@ void UserInterface::HandleEvent(const SDL_Event* event)
         }
     }
 
+#if WIN32
+    if (uiScale_ > 1.0f && event->type == SDL_EVENT_MOUSE_MOTION)
+    {
+        SDL_Event logicalEvent = *event;
+        logicalEvent.motion.x /= uiScale_;
+        logicalEvent.motion.y /= uiScale_;
+        logicalEvent.motion.xrel /= uiScale_;
+        logicalEvent.motion.yrel /= uiScale_;
+        ImGui_ImplSDL3_ProcessEvent(&logicalEvent);
+        return;
+    }
+#endif
     ImGui_ImplSDL3_ProcessEvent(event);
 }
 

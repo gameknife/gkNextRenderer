@@ -30,6 +30,8 @@ struct WindowConfig final
     // renders and can be captured; relax to SDL_WINDOW_NOT_FOCUSABLE if a driver refuses to
     // present a hidden swapchain.
     bool HiddenWindow {};
+    // Compatibility mode: let Windows bitmap-scale the whole application as a DPI-unaware process.
+    bool SystemDpiScaling {};
 };
 
 // ============================================================================
@@ -76,7 +78,7 @@ public:
     void ConfigureCustomTitleBarDrag(bool enabled, int titleBarHeight, int leftReservedWidth, int rightReservedWidth);
 
     // Static methods
-    static void InitSDL();
+    static void InitSDL(bool systemDpiScaling);
     static void TerminateGLFW();
 
 private:
