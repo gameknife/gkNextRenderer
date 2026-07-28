@@ -31,6 +31,13 @@ void BenchmarkGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 
 void BenchmarkGameInstance::OnInit()
 {
+    auto& userSettings = GetEngine().GetUserSettings();
+    previousTickAnimation_ = userSettings.TickAnimation;
+    previousTickPhysics_ = userSettings.TickPhysics;
+    userSettings.TickAnimation = false;
+    userSettings.TickPhysics = false;
+    tickSettingsOverridden_ = true;
+
     benchMarker_ = std::make_unique<BenchMarker>();
     demoScenes_ = Assets::FLoaderRegistry::Get().ProcSceneNames();
     if (demoScenes_.empty())
@@ -40,6 +47,18 @@ void BenchmarkGameInstance::OnInit()
         return;
     }
     GetEngine().RequestLoadScene({.filename = demoScenes_.front()});
+}
+
+void BenchmarkGameInstance::OnDestroy()
+{
+    if (!tickSettingsOverridden_)
+    {
+        return;
+    }
+
+    auto& userSettings = GetEngine().GetUserSettings();
+    userSettings.TickAnimation = previousTickAnimation_;
+    userSettings.TickPhysics = previousTickPhysics_;
 }
 
 void BenchmarkGameInstance::OnTick(double deltaSeconds)
