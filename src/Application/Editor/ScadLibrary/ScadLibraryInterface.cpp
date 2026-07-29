@@ -13,6 +13,7 @@
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
@@ -689,10 +690,15 @@ namespace ScadLibrary
             ReloadDesigner();
         }
 
+        const NextUI::UserInterface* ui = engine_.GetUserInterface();
+        const float uiScale = ui != nullptr ? ui->UiScale() : 1.0f;
         engine_.GetRenderer().SwapChain().UpdateOutputViewport(
-            Utilities::Math::floorToInt(leftWidth), Utilities::Math::floorToInt(kTitleBarHeight),
-            Utilities::Math::ceilToInt(std::max(1.0f, viewport->Size.x - leftWidth - rightWidth)),
-            Utilities::Math::ceilToInt(std::max(1.0f, panelHeight - timelineHeight)));
+            Utilities::Math::floorToInt(leftWidth * uiScale),
+            Utilities::Math::floorToInt(kTitleBarHeight * uiScale),
+            Utilities::Math::ceilToInt(
+                std::max(1.0f, viewport->Size.x - leftWidth - rightWidth) * uiScale),
+            Utilities::Math::ceilToInt(
+                std::max(1.0f, panelHeight - timelineHeight) * uiScale));
     }
 
     void ScadLibraryInterface::DrawTitleBar()
@@ -4774,7 +4780,11 @@ namespace ScadLibrary
             return true;
         }
 
-        const glm::vec2 mouse(static_cast<float>(x), static_cast<float>(y));
+        // Engine mouse events use framebuffer pixels, while the overlay handles
+        // are stored in ImGui's logical coordinate space.
+        const NextUI::UserInterface* ui = engine_.GetUserInterface();
+        const float uiScale = ui != nullptr ? ui->UiScale() : 1.0f;
+        const glm::vec2 mouse(static_cast<float>(x) / uiScale, static_cast<float>(y) / uiScale);
         for (const FTerrainFeatureHandle& handle : terrainFeatureHandles_)
         {
             if (glm::distance2(mouse, handle.screen) <= 144.0f)
@@ -5464,6 +5474,9 @@ namespace ScadLibrary
         }
 
         const glm::vec2 mouse(ImGui::GetIO().MousePos.x, ImGui::GetIO().MousePos.y);
+        const NextUI::UserInterface* ui = engine_.GetUserInterface();
+        const float uiScale = ui != nullptr ? ui->UiScale() : 1.0f;
+        const glm::vec2 framebufferMouse = mouse * uiScale;
         int hoveredHandle = -1;
         float nearestDistance = 144.0f;
         for (int handleIndex = 0; handleIndex < static_cast<int>(terrainFeatureHandles_.size()); ++handleIndex)
@@ -5603,7 +5616,7 @@ namespace ScadLibrary
                 {
                     glm::vec3 rayOrigin;
                     glm::vec3 rayDirection;
-                    Runtime::EngineHelper::GetScreenToWorldRay(mouse, rayOrigin, rayDirection);
+                    Runtime::EngineHelper::GetScreenToWorldRay(framebufferMouse, rayOrigin, rayDirection);
                     if (std::abs(rayDirection.y) > 1e-5f)
                     {
                         const float distance = (terrainFeatureDragPlaneHeight_ - rayOrigin.y) / rayDirection.y;
@@ -5675,7 +5688,7 @@ namespace ScadLibrary
                 {
                     glm::vec3 rayOrigin;
                     glm::vec3 rayDirection;
-                    Runtime::EngineHelper::GetScreenToWorldRay(mouse, rayOrigin, rayDirection);
+                    Runtime::EngineHelper::GetScreenToWorldRay(framebufferMouse, rayOrigin, rayDirection);
                     if (std::abs(rayDirection.y) > 1e-5f)
                     {
                         const float distance = (terrainRuleDragPlaneHeight_ - rayOrigin.y) / rayDirection.y;
