@@ -1387,6 +1387,9 @@ namespace
         cameraInit.SkyIntensity = 60.0f;
         cameraInit.SunIntensity = 850.0f;
         cameraInit.SunRotation = 0.34f;
+        cameraInit.AtmosphereEnabled = true;
+        cameraInit.AerialPerspectiveEnabled = true;
+        cameraInit.HeightFogEnabled = true;
 
         const std::array<vec3, 10> palette = {
             vec3(0.24f, 0.34f, 0.18f), vec3(0.35f, 0.43f, 0.21f), vec3(0.42f, 0.36f, 0.20f),
@@ -1482,10 +1485,19 @@ namespace
         cameraInit.HasSun = true;
         cameraInit.SkyIntensity = 35.0f;
         cameraInit.SunIntensity = 140.0f;
-        cameraInit.SunColor = vec3(1.00f, 0.48f, 0.18f);
-        cameraInit.SkyColor = vec3(1.00f, 0.53f, 0.40f);
+        cameraInit.SunColor = vec3(1.0f);
+        cameraInit.SkyColor = vec3(1.0f);
         cameraInit.SunRotation = -0.5f;
         cameraInit.SunElevation = glm::radians(6.0f);
+        cameraInit.AtmosphereEnabled = true;
+        cameraInit.AerialPerspectiveEnabled = true;
+        cameraInit.HeightFogEnabled = true;
+        cameraInit.Atmosphere.SkyLuminanceScale = 1.0f;
+        cameraInit.Atmosphere.AerialPerspectiveMaxDistance = 2000.0f;
+        cameraInit.Atmosphere.FogDensity = 0.004f;
+        cameraInit.Atmosphere.FogHeightFalloff = 0.08f;
+        cameraInit.Atmosphere.FogStartDistance = 12.0f;
+        cameraInit.Atmosphere.FogMaxOpacity = 0.75f;
 
         const std::array<Material, 8> sceneMaterials = {
             Material::Lambertian(vec3(0.56f, 0.52f, 0.43f)),
@@ -1582,84 +1594,7 @@ namespace
             timeOfDay.SunIntensityChannel.Keys.push_back({times[index], sunIntensity[index]});
             timeOfDay.SkyIntensityChannel.Keys.push_back({times[index], skyIntensity[index]});
         }
-        timeOfDay.SunColorChannel.Keys = {
-            {0.0f, vec3(1.00f, 0.48f, 0.18f)},
-            {8.0f, vec3(1.00f, 0.86f, 0.68f)},
-            {30.0f, vec3(1.00f, 0.97f, 0.91f)},
-            {52.0f, vec3(1.00f, 0.88f, 0.68f)},
-            {60.0f, vec3(1.00f, 0.30f, 0.07f)},
-            {68.0f, vec3(1.00f, 0.22f, 0.05f)},
-            {112.0f, vec3(1.00f, 0.25f, 0.06f)},
-            {120.0f, vec3(1.00f, 0.48f, 0.18f)},
-        };
-        timeOfDay.SkyColorChannel.Keys = {
-            {0.0f, vec3(1.00f, 0.53f, 0.40f)},
-            {8.0f, vec3(1.00f, 0.84f, 0.72f)},
-            {30.0f, vec3(1.00f, 0.98f, 0.96f)},
-            {52.0f, vec3(1.00f, 0.96f, 0.90f)},
-            {60.0f, vec3(1.00f, 0.67f, 0.40f)},
-            {68.0f, vec3(0.76f, 0.38f, 0.52f)},
-            {78.0f, vec3(0.39f, 0.25f, 0.64f)},
-            {90.0f, vec3(0.34f, 0.22f, 0.62f)},
-            {108.0f, vec3(0.28f, 0.19f, 0.55f)},
-            {114.0f, vec3(0.55f, 0.30f, 0.62f)},
-            {120.0f, vec3(1.00f, 0.53f, 0.40f)},
-        };
         tracks.push_back(std::move(timeOfDay));
-    }
-
-    void AtmosphereTimeOfDay(
-        Assets::EnvironmentSetting& cameraInit,
-        std::vector<std::shared_ptr<Assets::Node>>& nodes,
-        std::vector<Assets::Model>& models,
-        std::vector<Assets::FMaterial>& materials,
-        std::vector<Assets::LightObject>& lights,
-        std::vector<Assets::AnimationTrack>& tracks)
-    {
-        TimeOfDayObservatory(cameraInit, nodes, models, materials, lights, tracks);
-
-        cameraInit.SunRotation = -0.25f;
-        cameraInit.SunElevation = glm::radians(68.0f);
-        cameraInit.SunIntensity = 800.0f;
-        cameraInit.SunColor = vec3(1.0f);
-        cameraInit.SkyColor = vec3(1.0f);
-        cameraInit.Atmosphere.SkyLuminanceScale = 1.0f;
-        cameraInit.Atmosphere.AerialPerspectiveMaxDistance = 2000.0f;
-        cameraInit.Atmosphere.FogDensity = 0.004f;
-        cameraInit.Atmosphere.FogHeightFalloff = 0.08f;
-        cameraInit.Atmosphere.FogStartDistance = 12.0f;
-        cameraInit.Atmosphere.FogMaxOpacity = 0.75f;
-
-        auto& timeOfDay = tracks.back();
-        timeOfDay.Duration_ = 24.0f;
-        timeOfDay.Time_ = 0.0f;
-        timeOfDay.SunRotationChannel.Keys = {
-            {0.0f, -0.25f},
-            {6.0f, 0.0f},
-            {12.0f, 0.25f},
-            {18.0f, 0.5f},
-            {24.0f, 0.75f},
-        };
-        timeOfDay.SunElevationChannel.Keys = {
-            {0.0f, glm::radians(68.0f)},
-            {6.0f, glm::radians(4.0f)},
-            {12.0f, glm::radians(-18.0f)},
-            {18.0f, glm::radians(4.0f)},
-            {24.0f, glm::radians(68.0f)},
-        };
-        timeOfDay.SunIntensityChannel.Keys = {
-            {0.0f, 800.0f},
-            {24.0f, 800.0f},
-        };
-        timeOfDay.SkyIntensityChannel.Keys.clear();
-        timeOfDay.SunColorChannel.Keys = {
-            {0.0f, vec3(1.0f)},
-            {24.0f, vec3(1.0f)},
-        };
-        timeOfDay.SkyColorChannel.Keys = {
-            {0.0f, vec3(1.0f)},
-            {24.0f, vec3(1.0f)},
-        };
     }
 
     void KineticWave(Assets::EnvironmentSetting& cameraInit, std::vector<std::shared_ptr<Assets::Node>>& nodes,
@@ -1826,7 +1761,6 @@ namespace AppCommon
         registry.RegisterProcScene("AsteroidBelt.proc", AsteroidBelt);
         registry.RegisterProcScene("KilometerWorld.proc", KilometerWorld);
         registry.RegisterProcScene("TimeOfDayObservatory.proc", TimeOfDayObservatory);
-        registry.RegisterProcScene("AtmosphereTimeOfDay.proc", AtmosphereTimeOfDay);
         registry.RegisterProcScene("KineticWave.proc", KineticWave);
         registry.RegisterProcScene("RigidBodyAvalanche.proc", RigidBodyAvalanche);
         registry.RegisterProcScene("RTIO.proc", RayTracingInOneWeekend);

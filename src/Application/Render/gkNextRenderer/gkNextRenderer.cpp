@@ -1413,31 +1413,59 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
         NextUI::Theme::EndPanelSection();
     }
 
-    if (NextUI::Theme::BeginPanelSection("Atmosphere & Fog", true))
+    if (NextUI::Theme::BeginPanelSection(LOCTEXT("Environment"), true))
     {
         auto& scene = GetEngine().GetScene();
         auto& environment = scene.GetEnvSettings();
         auto& atmosphere = environment.Atmosphere;
-        bool atmosphereChanged = false;
+        bool environmentChanged = false;
 
-        atmosphereChanged |= DrawSettingCheckboxRow("Atmosphere Sky", &userSetting.AtmosphereEnable);
+        ImGui::SeparatorText(LOCTEXT("Lighting"));
+        environmentChanged |= DrawSettingCheckboxRow(LOCTEXT("HasSky"), &environment.HasSky);
+        if (environment.HasSky)
+        {
+            environmentChanged |= DrawIntSetting(LOCTEXT("SkyIdx"), &environment.SkyIdx, 0, 10);
+            environmentChanged |= DrawFloatSetting(
+                LOCTEXT("SkyRotation"), &environment.SkyRotation, 0.0f, 2.0f, "%.2f", 0.01f);
+            environmentChanged |= DrawFloatSetting(
+                LOCTEXT("SkyLum"), &environment.SkyIntensity, 0.0f, 1000.0f, "%.0f", 1.0f);
+            environmentChanged |= DrawColorSetting(
+                LOCTEXT("SkyColor"), "##EnvironmentSkyColor", &environment.SkyColor);
+        }
+
+        environmentChanged |= DrawSettingCheckboxRow(LOCTEXT("HasSun"), &environment.HasSun);
+        if (environment.HasSun)
+        {
+            environmentChanged |= DrawFloatSetting(
+                LOCTEXT("SunRotation"), &environment.SunRotation, 0.0f, 2.0f, "%.2f", 0.01f);
+            environmentChanged |= DrawFloatSetting(
+                LOCTEXT("SunLum"), &environment.SunIntensity, 0.0f, 2000.0f, "%.0f", 1.0f);
+            environmentChanged |= DrawColorSetting(
+                LOCTEXT("SunColor"), "##EnvironmentSunColor", &environment.SunColor);
+        }
+        DrawFloatSetting(
+            LOCTEXT("PaperWhitNit"), &userSetting.PaperWhiteNit, 100.0f, 1600.0f, "%.1f", 1.0f);
+
+        ImGui::SeparatorText("Atmosphere");
+        environmentChanged |= DrawSettingCheckboxRow(
+            "Enabled", &environment.AtmosphereEnabled);
 
         float sunElevationDegrees = glm::degrees(environment.SunElevation);
         if (DrawFloatSetting(
                 "Sun Elevation", &sunElevationDegrees, -24.0f, 90.0f, "%.1f deg", 0.25f))
         {
             environment.SunElevation = glm::radians(sunElevationDegrees);
-            atmosphereChanged = true;
+            environmentChanged = true;
         }
-        atmosphereChanged |= DrawFloatSetting(
+        environmentChanged |= DrawFloatSetting(
             "Sky Luminance", &atmosphere.SkyLuminanceScale, 0.0f, 10.0f, "%.2f", 0.01f);
-        atmosphereChanged |= DrawFloatSetting(
+        environmentChanged |= DrawFloatSetting(
             "Sky LUT Scale", &userSetting.AtmosphereSkyViewLutScale,
             0.25f, 2.0f, "%.2fx", 0.05f);
 
         static constexpr const char* debugModes[] = {
             "Off", "In-Scatter", "Transmittance", "SkyView LUT"};
-        atmosphereChanged |= DrawSettingRow(
+        environmentChanged |= DrawSettingRow(
             "Debug View",
             [&]()
             {
@@ -1449,74 +1477,74 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
 
         ImGui::SeparatorText("Aerial Perspective");
         ImGui::PushID("AerialPerspective");
-        atmosphereChanged |= DrawSettingCheckboxRow(
-            "Enabled", &userSetting.AtmosphereAerialPerspective);
+        environmentChanged |= DrawSettingCheckboxRow(
+            "Enabled", &environment.AerialPerspectiveEnabled);
         ImGui::PopID();
-        ImGui::BeginDisabled(!userSetting.AtmosphereEnable ||
-                             !userSetting.AtmosphereAerialPerspective);
-        atmosphereChanged |= DrawFloatSetting(
+        ImGui::BeginDisabled(!environment.AtmosphereEnabled ||
+                             !environment.AerialPerspectiveEnabled);
+        environmentChanged |= DrawFloatSetting(
             "Max Distance", &atmosphere.AerialPerspectiveMaxDistance,
             10.0f, 50000.0f, "%.0f", 10.0f);
         ImGui::EndDisabled();
 
         ImGui::SeparatorText("Height Fog");
         ImGui::PushID("HeightFog");
-        atmosphereChanged |= DrawSettingCheckboxRow(
-            "Enabled", &userSetting.AtmosphereHeightFog);
+        environmentChanged |= DrawSettingCheckboxRow(
+            "Enabled", &environment.HeightFogEnabled);
         ImGui::PopID();
-        ImGui::BeginDisabled(!userSetting.AtmosphereHeightFog);
-        atmosphereChanged |= DrawColorSetting(
+        ImGui::BeginDisabled(!environment.HeightFogEnabled);
+        environmentChanged |= DrawColorSetting(
             "Fog Color", "##AtmosphereFogColor", &atmosphere.FogInscatteringColor);
-        atmosphereChanged |= DrawFloatSetting(
+        environmentChanged |= DrawFloatSetting(
             "Density", &atmosphere.FogDensity, 0.0f, 0.1f, "%.4f", 0.0001f);
-        atmosphereChanged |= DrawFloatSetting(
+        environmentChanged |= DrawFloatSetting(
             "Height Falloff", &atmosphere.FogHeightFalloff, 0.0f, 2.0f, "%.3f", 0.005f);
-        atmosphereChanged |= DrawFloatSetting(
+        environmentChanged |= DrawFloatSetting(
             "Base Height", &atmosphere.FogBaseHeight, -2000.0f, 2000.0f, "%.1f", 0.5f);
-        atmosphereChanged |= DrawFloatSetting(
+        environmentChanged |= DrawFloatSetting(
             "Start Distance", &atmosphere.FogStartDistance, 0.0f, 10000.0f, "%.1f", 1.0f);
-        atmosphereChanged |= DrawFloatSetting(
+        environmentChanged |= DrawFloatSetting(
             "Max Opacity", &atmosphere.FogMaxOpacity, 0.0f, 1.0f, "%.2f", 0.01f);
         ImGui::EndDisabled();
 
         if (ImGui::TreeNodeEx("Advanced Atmosphere", ImGuiTreeNodeFlags_SpanAvailWidth))
         {
-            atmosphereChanged |= DrawFloat3Setting(
+            environmentChanged |= DrawFloat3Setting(
                 "Rayleigh", "##AtmosphereRayleigh", &atmosphere.RayleighScattering,
                 0.00001f, 0.0f, 0.1f, "%.6f");
-            atmosphereChanged |= DrawFloatSetting(
+            environmentChanged |= DrawFloatSetting(
                 "Rayleigh Height", &atmosphere.RayleighDensityH,
                 0.1f, 32.0f, "%.2f km", 0.05f);
-            atmosphereChanged |= DrawFloat3Setting(
+            environmentChanged |= DrawFloat3Setting(
                 "Mie Scatter", "##AtmosphereMieScatter", &atmosphere.MieScattering,
                 0.00001f, 0.0f, 0.1f, "%.6f");
-            atmosphereChanged |= DrawFloat3Setting(
+            environmentChanged |= DrawFloat3Setting(
                 "Mie Absorption", "##AtmosphereMieAbsorption", &atmosphere.MieAbsorption,
                 0.00001f, 0.0f, 0.1f, "%.6f");
-            atmosphereChanged |= DrawFloatSetting(
+            environmentChanged |= DrawFloatSetting(
                 "Mie Height", &atmosphere.MieDensityH,
                 0.1f, 16.0f, "%.2f km", 0.05f);
-            atmosphereChanged |= DrawFloatSetting(
+            environmentChanged |= DrawFloatSetting(
                 "Mie Anisotropy", &atmosphere.MiePhaseG,
                 0.0f, 0.99f, "%.3f", 0.005f);
-            atmosphereChanged |= DrawFloat3Setting(
+            environmentChanged |= DrawFloat3Setting(
                 "Ozone Absorption", "##AtmosphereOzone", &atmosphere.OzoneAbsorption,
                 0.00001f, 0.0f, 0.05f, "%.6f");
-            atmosphereChanged |= DrawFloatSetting(
+            environmentChanged |= DrawFloatSetting(
                 "Ozone Center", &atmosphere.OzoneCenterAltitude,
                 0.0f, 60.0f, "%.1f km", 0.1f);
-            atmosphereChanged |= DrawFloatSetting(
+            environmentChanged |= DrawFloatSetting(
                 "Ozone Width", &atmosphere.OzoneWidth,
                 0.1f, 40.0f, "%.1f km", 0.1f);
-            atmosphereChanged |= DrawColorSetting(
+            environmentChanged |= DrawColorSetting(
                 "Ground Albedo", "##AtmosphereGroundAlbedo", &atmosphere.GroundAlbedo);
-            atmosphereChanged |= DrawFloatSetting(
+            environmentChanged |= DrawFloatSetting(
                 "World Units / km", &atmosphere.WorldUnitsPerKm,
                 0.001f, 10000.0f, "%.3f", 1.0f);
-            atmosphereChanged |= DrawFloatSetting(
+            environmentChanged |= DrawFloatSetting(
                 "Origin Altitude", &atmosphere.WorldOriginAltitude,
                 -10.0f, 100.0f, "%.2f km", 0.05f);
-            atmosphereChanged |= DrawSettingRow(
+            environmentChanged |= DrawSettingRow(
                 "Preset",
                 [&]()
                 {
@@ -1534,7 +1562,7 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
         {
             ImGui::TextDisabled("Disable Tick Animation to hold a manual sun angle.");
         }
-        if (atmosphereChanged)
+        if (environmentChanged)
         {
             scene.MarkDirty();
         }
@@ -1665,29 +1693,6 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
         {
             ImGui::TextDisabled("Frame generation is unavailable for the selected upscaler.");
         }
-        NextUI::Theme::EndPanelSection();
-    }
-
-    if (NextUI::Theme::BeginPanelSection(LOCTEXT("Lighting"), false))
-    {
-        DrawSettingCheckboxRow(LOCTEXT("HasSky"), &GetEngine().GetScene().GetEnvSettings().HasSky);
-        if (GetEngine().GetScene().GetEnvSettings().HasSky)
-        {
-            ImGui::SliderInt(LOCTEXT("SkyIdx"), &GetEngine().GetScene().GetEnvSettings().SkyIdx, 0, 10);
-            ImGui::SliderFloat(LOCTEXT("SkyRotation"), &GetEngine().GetScene().GetEnvSettings().SkyRotation, 0.0f, 2.0f, "%.2f");
-            ImGui::SliderFloat(LOCTEXT("SkyLum"), &GetEngine().GetScene().GetEnvSettings().SkyIntensity, 0.0f, 1000.0f, "%.0f");
-            ImGui::ColorEdit3(LOCTEXT("SkyColor"), &GetEngine().GetScene().GetEnvSettings().SkyColor.x);
-        }
-
-        DrawSettingCheckboxRow(LOCTEXT("HasSun"), &GetEngine().GetScene().GetEnvSettings().HasSun);
-        if (GetEngine().GetScene().GetEnvSettings().HasSun)
-        {
-            ImGui::SliderFloat(LOCTEXT("SunRotation"), &GetEngine().GetScene().GetEnvSettings().SunRotation, 0.0f, 2.0f, "%.2f");
-            ImGui::SliderFloat(LOCTEXT("SunLum"), &GetEngine().GetScene().GetEnvSettings().SunIntensity, 0.0f, 2000.0f, "%.0f");
-            ImGui::ColorEdit3(LOCTEXT("SunColor"), &GetEngine().GetScene().GetEnvSettings().SunColor.x);
-        }
-
-        ImGui::SliderFloat(LOCTEXT("PaperWhitNit"), &userSetting.PaperWhiteNit, 100.0f, 1600.0f, "%.1f");
         NextUI::Theme::EndPanelSection();
     }
 

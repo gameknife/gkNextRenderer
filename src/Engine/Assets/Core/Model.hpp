@@ -96,6 +96,9 @@ namespace Assets
             GammaCorrection = true;
             HasSky = true;
             HasSun = false;
+            AtmosphereEnabled = false;
+            AerialPerspectiveEnabled = false;
+            HeightFogEnabled = false;
             SkyIdx = 0;
             SunIntensity = 500.f;
             SkyIntensity = 100.0f;
@@ -155,6 +158,9 @@ namespace Assets
         bool GammaCorrection;
         bool HasSky;
         bool HasSun;
+        bool AtmosphereEnabled;
+        bool AerialPerspectiveEnabled;
+        bool HeightFogEnabled;
         int32_t SkyIdx;
         float SunRotation;
         float SunElevation;

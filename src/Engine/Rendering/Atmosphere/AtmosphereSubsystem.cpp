@@ -192,8 +192,8 @@ namespace Rendering::Atmosphere
 
     bool AtmosphereSubsystem::Enabled() const
     {
-        const auto& settings = renderer_.FrameSettings().userSettings;
-        return settings.AtmosphereEnable || settings.AtmosphereHeightFog;
+        const auto& environment = renderer_.GetScene().GetEnvSettings();
+        return environment.AtmosphereEnabled || environment.HeightFogEnabled;
     }
 
     VkDeviceAddress AtmosphereSubsystem::ParamsAddress() const
@@ -204,7 +204,7 @@ namespace Rendering::Atmosphere
     Assets::FAtmosphereParams AtmosphereSubsystem::BuildParams() const
     {
         const auto& source = renderer_.GetScene().GetEnvSettings().Atmosphere;
-        const auto& runtime = renderer_.FrameSettings().userSettings;
+        const auto& environment = renderer_.GetScene().GetEnvSettings();
         Assets::FAtmosphereParams params{};
         params.RayleighScattering = source.RayleighScattering;
         params.RayleighDensityH = source.RayleighDensityH;
@@ -227,15 +227,15 @@ namespace Rendering::Atmosphere
         params.AerialPerspectiveMaxDistance = std::max(source.AerialPerspectiveMaxDistance, 1.0f);
         params.SkyLuminanceScale = std::max(source.SkyLuminanceScale, 0.0f);
         params.Flags = 0;
-        if (runtime.AtmosphereEnable)
+        if (environment.AtmosphereEnabled)
         {
             params.Flags |= Assets::ATMOSPHERE_FLAG_SKY;
-            if (runtime.AtmosphereAerialPerspective)
+            if (environment.AerialPerspectiveEnabled)
             {
                 params.Flags |= Assets::ATMOSPHERE_FLAG_AERIAL_PERSPECTIVE;
             }
         }
-        if (runtime.AtmosphereHeightFog)
+        if (environment.HeightFogEnabled)
         {
             params.Flags |= Assets::ATMOSPHERE_FLAG_HEIGHT_FOG;
         }

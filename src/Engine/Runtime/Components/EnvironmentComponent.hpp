@@ -35,6 +35,15 @@ namespace Runtime
         void SetHasSun(bool value) { HasSun = value; }
         bool GetHasSun() const { return HasSun; }
 
+        void SetAtmosphereEnabled(bool value) { AtmosphereEnabled = value; }
+        bool GetAtmosphereEnabled() const { return AtmosphereEnabled; }
+
+        void SetAerialPerspectiveEnabled(bool value) { AerialPerspectiveEnabled = value; }
+        bool GetAerialPerspectiveEnabled() const { return AerialPerspectiveEnabled; }
+
+        void SetHeightFogEnabled(bool value) { HeightFogEnabled = value; }
+        bool GetHeightFogEnabled() const { return HeightFogEnabled; }
+
         void SetSkyIdx(int32_t value) { SkyIdx = value; }
         int32_t GetSkyIdx() const { return SkyIdx; }
 

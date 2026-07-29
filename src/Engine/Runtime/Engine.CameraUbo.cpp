@@ -197,7 +197,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.PrimaryRayJitter = enablePrimaryRayJitter;
     ubo.SunDirection = sunDirection;
     glm::vec3 sunTransmittance(1.0f);
-    if (config_.userSettings.AtmosphereEnable)
+    if (scene_->GetEnvSettings().AtmosphereEnabled)
     {
         const glm::vec3 cameraPosition = glm::vec3(ubo.ModelViewInverse[3]);
         const auto& atmosphere = scene_->GetEnvSettings().Atmosphere;
@@ -211,7 +211,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.SkyColor = glm::vec4(scene_->GetEnvSettings().SkyColor, 1.0f);
     ubo.SkyIntensity = scene_->GetEnvSettings().SkyIntensity;
     ubo.SkyIdx = scene_->GetEnvSettings().SkyIdx;
-    if (config_.userSettings.AtmosphereEnable)
+    if (scene_->GetEnvSettings().AtmosphereEnabled)
     {
         ubo.SkyIdx = Assets::MAX_HDR_SH - 1;
         ubo.SkyIntensity = 1.0f;

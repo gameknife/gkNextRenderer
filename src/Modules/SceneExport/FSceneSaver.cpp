@@ -666,11 +666,50 @@ namespace
         extras["SkyColor"] = serializeColor(env.SkyColor);
         extras["SunIntensity"] = tinygltf::Value(static_cast<double>(env.SunIntensity));
         extras["SunRotation"] = tinygltf::Value(static_cast<double>(env.SunRotation));
+        extras["SunElevation"] = tinygltf::Value(static_cast<double>(env.SunElevation));
         extras["SunColor"] = serializeColor(env.SunColor);
         extras["HasSky"] = tinygltf::Value(env.HasSky);
         extras["HasSun"] = tinygltf::Value(env.HasSun);
         extras["ControlSpeed"] = tinygltf::Value(static_cast<double>(env.ControlSpeed));
         extras["GammaCorrection"] = tinygltf::Value(env.GammaCorrection);
+        extras["AtmosphereEnabled"] = tinygltf::Value(env.AtmosphereEnabled);
+        extras["AerialPerspectiveEnabled"] = tinygltf::Value(env.AerialPerspectiveEnabled);
+        extras["HeightFogEnabled"] = tinygltf::Value(env.HeightFogEnabled);
+
+        const auto& atmosphere = env.Atmosphere;
+        extras["RayleighScattering"] = serializeColor(atmosphere.RayleighScattering);
+        extras["RayleighDensityH"] =
+            tinygltf::Value(static_cast<double>(atmosphere.RayleighDensityH));
+        extras["MieScattering"] = serializeColor(atmosphere.MieScattering);
+        extras["MieDensityH"] =
+            tinygltf::Value(static_cast<double>(atmosphere.MieDensityH));
+        extras["MieAbsorption"] = serializeColor(atmosphere.MieAbsorption);
+        extras["MiePhaseG"] = tinygltf::Value(static_cast<double>(atmosphere.MiePhaseG));
+        extras["OzoneAbsorption"] = serializeColor(atmosphere.OzoneAbsorption);
+        extras["OzoneCenterAltitude"] =
+            tinygltf::Value(static_cast<double>(atmosphere.OzoneCenterAltitude));
+        extras["OzoneWidth"] = tinygltf::Value(static_cast<double>(atmosphere.OzoneWidth));
+        extras["GroundAlbedo"] = serializeColor(atmosphere.GroundAlbedo);
+        extras["BottomRadius"] = tinygltf::Value(static_cast<double>(atmosphere.BottomRadius));
+        extras["TopRadius"] = tinygltf::Value(static_cast<double>(atmosphere.TopRadius));
+        extras["WorldUnitsPerKm"] =
+            tinygltf::Value(static_cast<double>(atmosphere.WorldUnitsPerKm));
+        extras["WorldOriginAltitude"] =
+            tinygltf::Value(static_cast<double>(atmosphere.WorldOriginAltitude));
+        extras["AerialPerspectiveMaxDistance"] =
+            tinygltf::Value(static_cast<double>(atmosphere.AerialPerspectiveMaxDistance));
+        extras["SkyLuminanceScale"] =
+            tinygltf::Value(static_cast<double>(atmosphere.SkyLuminanceScale));
+        extras["FogInscatteringColor"] = serializeColor(atmosphere.FogInscatteringColor);
+        extras["FogDensity"] = tinygltf::Value(static_cast<double>(atmosphere.FogDensity));
+        extras["FogHeightFalloff"] =
+            tinygltf::Value(static_cast<double>(atmosphere.FogHeightFalloff));
+        extras["FogBaseHeight"] =
+            tinygltf::Value(static_cast<double>(atmosphere.FogBaseHeight));
+        extras["FogStartDistance"] =
+            tinygltf::Value(static_cast<double>(atmosphere.FogStartDistance));
+        extras["FogMaxOpacity"] =
+            tinygltf::Value(static_cast<double>(atmosphere.FogMaxOpacity));
         extras["WithSun"] = tinygltf::Value(env.HasSun ? 1 : 0);
         extras["CamSpeed"] = tinygltf::Value(static_cast<double>(env.ControlSpeed));
         if (!env.HasSky)

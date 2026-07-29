@@ -20,10 +20,10 @@ completed: 2026-07-29
 
 - 已交付程序化天空、大气透视、指数高度雾、五渲染器共用的合成路径，以及太阳直射与
   AmbientCube GI 的天空一致性。
-- `AtmosphereTimeOfDay.proc` 提供正午、日落、夜间连续演示；当前实现通过
-  Environment `AnimationTrack` 驱动太阳高度角，替代了计划草案中的 TypeScript 脚本形式。
-- `assets/agentscripts/atmosphere.agentscript.json` 提供太阳角度扫描、运行时断言与截图入口；
-  `gkNextRenderer` 的 Renderer Settings 提供 `Atmosphere & Fog` 人工调参区。
+- `TimeOfDayObservatory.proc` 提供连续昼夜演示；当前实现通过 Environment `AnimationTrack`
+  驱动太阳高度角，并由大气系统生成天空与太阳色彩，替代了计划草案中的 TypeScript 脚本形式。
+- `assets/agentscripts/atmosphere.agentscript.json` 提供运行时断言与截图入口；
+  `gkNextRenderer` 的 Renderer Settings 提供统一的 `Environment` 人工调参区。
 - 用户已接受上述 demo 与 Agent/人工验证作为 M3 验收闭环；原计划中的独立 visual-test baseline
   不再作为本次完成条件。下文保留原任务分解，供追溯设计取舍。
 
@@ -75,9 +75,9 @@ completed: 2026-07-29
    `Runtime::EnvironmentComponent` 持有 `AtmosphereSetting`，在
    `EnvironmentComponent.cpp` 的 `RegisterReflection()` 中按现有 `PropertyPresets::Editable`
    模式补齐属性，分组名用 `"Atmosphere"` / `"Height Fog"`。
-5. **cvar**
-   在 `Engine/Runtime/Config/EngineCVars.cpp` 补 `r.atmosphere.*` 五个开关，
-   对应字段加到 `UserSettings.hpp`。默认全部关闭。
+5. **开关与诊断项**
+   初版使用 `r.atmosphere.*` 运行时开关；后续开关已迁入 `EnvironmentSetting` 并参与场景
+   反射/序列化，默认全部关闭。仅 LUT 分辨率倍率与 debug mode 保留为运行时 cvar。
 6. **子系统骨架**
    新建 `src/Engine/Rendering/Atmosphere/AtmosphereSubsystem.{hpp,cpp}`：
    参数脏检测、GPU params buffer（host-visible，每帧写）、`BeginSceneFrame` / `ApplyToView` 空实现。

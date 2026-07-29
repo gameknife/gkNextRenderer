@@ -49,3 +49,12 @@ TEST_CASE("Atmosphere SH projection has positive finite L0", "[Unit][Atmosphere]
         REQUIRE(sh.coefficients[channel][0] > 0.0f);
     }
 }
+
+TEST_CASE("Environment atmosphere features are disabled by default", "[Unit][Atmosphere]")
+{
+    const Assets::EnvironmentSetting environment;
+
+    REQUIRE_FALSE(environment.AtmosphereEnabled);
+    REQUIRE_FALSE(environment.AerialPerspectiveEnabled);
+    REQUIRE_FALSE(environment.HeightFogEnabled);
+}

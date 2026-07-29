@@ -204,6 +204,13 @@ namespace Assets
         return fallback;
     }
 
+    float ReadFloatExtra(const tinygltf::Value& extras, const char* key, float fallback)
+    {
+        return extras.Has(key) && extras.Get(key).IsNumber()
+            ? static_cast<float>(extras.Get(key).GetNumberAsDouble())
+            : fallback;
+    }
+
     glm::vec3 ReadColorExtra(const tinygltf::Value& extras, const char* key, const glm::vec3& fallback)
     {
         if (!extras.Has(key) || !extras.Get(key).IsArray())
@@ -249,6 +256,8 @@ namespace Assets
         {
             environment.SunRotation = static_cast<float>(extras.Get("SunRotation").GetNumberAsDouble());
         }
+        environment.SunElevation =
+            ReadFloatExtra(extras, "SunElevation", environment.SunElevation);
         environment.SunColor = ReadColorExtra(extras, "SunColor", environment.SunColor);
         if (extras.Has("CamSpeed") && extras.Get("CamSpeed").IsNumber())
         {
@@ -278,6 +287,59 @@ namespace Assets
         {
             environment.GammaCorrection = ReadBoolExtra(extras, "GammaCorrection", environment.GammaCorrection);
         }
+
+        environment.AtmosphereEnabled =
+            ReadBoolExtra(extras, "AtmosphereEnabled", environment.AtmosphereEnabled);
+        environment.AerialPerspectiveEnabled =
+            ReadBoolExtra(extras, "AerialPerspectiveEnabled", environment.AerialPerspectiveEnabled);
+        environment.HeightFogEnabled =
+            ReadBoolExtra(extras, "HeightFogEnabled", environment.HeightFogEnabled);
+
+        auto& atmosphere = environment.Atmosphere;
+        atmosphere.RayleighScattering =
+            ReadColorExtra(extras, "RayleighScattering", atmosphere.RayleighScattering);
+        atmosphere.RayleighDensityH =
+            ReadFloatExtra(extras, "RayleighDensityH", atmosphere.RayleighDensityH);
+        atmosphere.MieScattering =
+            ReadColorExtra(extras, "MieScattering", atmosphere.MieScattering);
+        atmosphere.MieDensityH =
+            ReadFloatExtra(extras, "MieDensityH", atmosphere.MieDensityH);
+        atmosphere.MieAbsorption =
+            ReadColorExtra(extras, "MieAbsorption", atmosphere.MieAbsorption);
+        atmosphere.MiePhaseG =
+            ReadFloatExtra(extras, "MiePhaseG", atmosphere.MiePhaseG);
+        atmosphere.OzoneAbsorption =
+            ReadColorExtra(extras, "OzoneAbsorption", atmosphere.OzoneAbsorption);
+        atmosphere.OzoneCenterAltitude =
+            ReadFloatExtra(extras, "OzoneCenterAltitude", atmosphere.OzoneCenterAltitude);
+        atmosphere.OzoneWidth =
+            ReadFloatExtra(extras, "OzoneWidth", atmosphere.OzoneWidth);
+        atmosphere.GroundAlbedo =
+            ReadColorExtra(extras, "GroundAlbedo", atmosphere.GroundAlbedo);
+        atmosphere.BottomRadius =
+            ReadFloatExtra(extras, "BottomRadius", atmosphere.BottomRadius);
+        atmosphere.TopRadius =
+            ReadFloatExtra(extras, "TopRadius", atmosphere.TopRadius);
+        atmosphere.WorldUnitsPerKm =
+            ReadFloatExtra(extras, "WorldUnitsPerKm", atmosphere.WorldUnitsPerKm);
+        atmosphere.WorldOriginAltitude =
+            ReadFloatExtra(extras, "WorldOriginAltitude", atmosphere.WorldOriginAltitude);
+        atmosphere.AerialPerspectiveMaxDistance =
+            ReadFloatExtra(extras, "AerialPerspectiveMaxDistance", atmosphere.AerialPerspectiveMaxDistance);
+        atmosphere.SkyLuminanceScale =
+            ReadFloatExtra(extras, "SkyLuminanceScale", atmosphere.SkyLuminanceScale);
+        atmosphere.FogInscatteringColor =
+            ReadColorExtra(extras, "FogInscatteringColor", atmosphere.FogInscatteringColor);
+        atmosphere.FogDensity =
+            ReadFloatExtra(extras, "FogDensity", atmosphere.FogDensity);
+        atmosphere.FogHeightFalloff =
+            ReadFloatExtra(extras, "FogHeightFalloff", atmosphere.FogHeightFalloff);
+        atmosphere.FogBaseHeight =
+            ReadFloatExtra(extras, "FogBaseHeight", atmosphere.FogBaseHeight);
+        atmosphere.FogStartDistance =
+            ReadFloatExtra(extras, "FogStartDistance", atmosphere.FogStartDistance);
+        atmosphere.FogMaxOpacity =
+            ReadFloatExtra(extras, "FogMaxOpacity", atmosphere.FogMaxOpacity);
     }
     
     Assets::Camera ParseGltfCamera(const tinygltf::Camera& gltfCamera)

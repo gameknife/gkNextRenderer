@@ -22,10 +22,12 @@ M0–M3 已于 2026-07-29 实现并验收。历史任务分解见
 
 ## 当前实现与验证入口
 
-- `AtmosphereTimeOfDay.proc` 是昼夜效果演示场景，由 Environment `AnimationTrack` 连续驱动太阳高度角。
-- `assets/agentscripts/atmosphere.agentscript.json` 扫描正午、日落与夜间状态，执行运行时断言并截图。
-- `gkNextRenderer` 的 Renderer Settings 中提供 `Atmosphere & Fog` 面板，可人工调整大气、空中透视、
-  高度雾和 SkyView LUT 分辨率倍率。
+- `TimeOfDayObservatory.proc` 是昼夜效果演示场景，由 Environment `AnimationTrack` 连续驱动太阳高度角；
+  天空和太阳基础色保持白色，昼夜色彩由大气散射与透射统一产生。
+- `assets/agentscripts/atmosphere.agentscript.json` 验证场景大气开关、运行状态与 LUT 调试视图并截图。
+- `KilometerWorld.proc` 同样默认启用大气、空中透视与高度雾，用于大尺度世界距离效果验证。
+- `gkNextRenderer` 的 Renderer Settings 中提供统一的 `Environment` 面板，将天空/太阳光照、
+  大气、空中透视和高度雾放在同一处调整。
 - `FogStartDistance` 是**相对相机的射线距离**：介质积分从
   `cameraPosition + rayDirection * FogStartDistance` 开始，不依赖世界原点。
 - M4 的 froxel 体积雾光轴、PathTracing 真正介质散射和移动端降级留待明确需求后另行设计。
@@ -264,17 +266,19 @@ sceneColor.rgb = L2                        alpha 不变
 由 `Runtime::EnvironmentComponent` 持有并经 `REFLECT_COMPONENT` 暴露，从而自动获得：
 PropertyPanel 编辑 UI、undo/redo、QuickJS 绑定、场景序列化。
 
-运行时开关走 `GK_CVAR_*`（`EngineCVars.cpp`）：
+场景功能开关属于 `EnvironmentSetting`，并由 `EnvironmentComponent` 反射和序列化：
 
-- `r.atmosphere.enable` — 大气天空总开关（关闭时回落 HDR IBL）
-- `r.atmosphere.aerialPerspective` — 大气透视开关
-- `r.atmosphere.heightFog` — 高度雾开关
+- `AtmosphereEnabled` — 大气天空总开关（关闭时回落 HDR IBL）
+- `AerialPerspectiveEnabled` — 大气透视开关
+- `HeightFogEnabled` — 高度雾开关
+
+三个功能开关默认均关闭。以下性能/诊断选项仍是运行时 cvar：
+
 - `r.atmosphere.skyViewLutScale` — SkyView LUT 分辨率倍率（性能调试用）
 - `r.atmosphere.debugMode` — 0 关 / 1 只看 inScatter / 2 只看 transmittance / 3 只看 SkyView LUT
 
-`AtmosphereSetting` 是**场景数据**（存进 glb/scad），cvar 是**运行时覆盖**，与既有 GTAO 的划分一致。
-主程序的 Renderer Settings 同时暴露一组直接写入当前 Environment 的人工测试控件；它们是调试入口，
-不改变上述场景数据所有权。
+`AtmosphereSetting` 及其三个功能开关都是**场景数据**（存进 glb/scad）。主程序的
+Renderer Settings 直接编辑当前 Environment，因此切换场景时会恢复各场景自己的环境状态。
 
 ## 不变量
 

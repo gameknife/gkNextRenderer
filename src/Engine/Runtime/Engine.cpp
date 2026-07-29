@@ -1416,6 +1416,12 @@ std::optional<Runtime::Agent::FAgentQueryValue> NextEngine::QueryAgentControl(co
     if (query == "scene.nodeCount") return static_cast<int64_t>(GetScene().Nodes().size());
     if (query == "scene.sunElevation")
         return static_cast<double>(GetScene().GetEnvSettings().SunElevation);
+    if (query == "scene.atmosphereEnabled")
+        return GetScene().GetEnvSettings().AtmosphereEnabled;
+    if (query == "scene.aerialPerspectiveEnabled")
+        return GetScene().GetEnvSettings().AerialPerspectiveEnabled;
+    if (query == "scene.heightFogEnabled")
+        return GetScene().GetEnvSettings().HeightFogEnabled;
     if (query == "scene.selectedId") return static_cast<int64_t>(GetScene().GetSelectedId());
     if (query == "scene.selectedCount") return static_cast<int64_t>(GetScene().GetSelectedIds().size());
     if (query.rfind("cvar.", 0) == 0) { bool found = false; auto value = GetCVarSystem().GetValueString(query.substr(5), &found); if (found) return value; return std::nullopt; }
