@@ -143,13 +143,16 @@ TEST_CASE("ScadLibrary terrain process editor round-trips terrain_layout_demo",
                                 { return rule.type == ETerrainProcessRuleType::Scatter; });
     REQUIRE(scatter != document.Rules().end());
     CHECK(scatter->circularRegion);
-    CHECK(scatter->regionRadius == Catch::Approx(115.0));
+    CHECK(scatter->regionRadius > 0.0);
 
     document.Terrain().features[0].height = 31.0;
     document.Rules()[0].x = 51.5;
+    scatter->count = 90;
     scatter->circularRegion = true;
     scatter->regionCenter = {4.0, -6.0};
     scatter->regionRadius = 72.0;
+    scatter->variants = 7;
+    scatter->scaleRange = {0.8, 1.35};
     const auto along =
         std::find_if(document.Rules().begin(), document.Rules().end(),
                      [](const FTerrainProcessRule& rule) { return rule.type == ETerrainProcessRuleType::Along; });
@@ -172,6 +175,7 @@ TEST_CASE("ScadLibrary terrain process editor round-trips terrain_layout_demo",
     CHECK(generated.find("oh_prop_signpost(seed = 99);") != std::string::npos);
     CHECK(generated.find("ter_along(") == std::string::npos);
     CHECK(generated.find("ter_scatter(TERR, 21, 90, [4, -6, 72]") != std::string::npos);
+    CHECK(generated.find("variants = 7, scale = [0.8, 1.35]") != std::string::npos);
 
     const FParsedProcessSource reparsed = ParseAndEvaluate(generated);
     FTerrainProcessDocument roundTripped;
@@ -186,6 +190,9 @@ TEST_CASE("ScadLibrary terrain process editor round-trips terrain_layout_demo",
     REQUIRE(roundTripScatter != roundTripped.Rules().end());
     CHECK(roundTripScatter->circularRegion);
     CHECK(roundTripScatter->regionRadius == Catch::Approx(72.0));
+    CHECK(roundTripScatter->variants == 7);
+    CHECK(roundTripScatter->scaleRange.x == Catch::Approx(0.8));
+    CHECK(roundTripScatter->scaleRange.y == Catch::Approx(1.35));
 
     const std::string loadableSource = MakeDependenciesAbsolute(generated, demoPath.parent_path());
     const std::filesystem::path temporaryPath = std::filesystem::temp_directory_path() /

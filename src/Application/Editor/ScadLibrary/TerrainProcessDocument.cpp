@@ -655,8 +655,9 @@ namespace ScadLibrary
                 break;
             case ETerrainProcessRuleType::Scatter:
                 call = fmt::format(
-                    "ter_scatter({}, {}, {}, {}, [{}, {}, {}, {}, {}], rot = {}, dz = {})", terrainVariable, rule.seed,
-                    rule.count,
+                    "ter_scatter({}, {}, {}, {}, [{}, {}, {}, {}, {}], rot = {}, dz = {}, variants = {}, "
+                    "scale = [{}, {}])",
+                    terrainVariable, rule.seed, rule.count,
                     rule.circularRegion
                         ? fmt::format("[{}, {}, {}]", FormatNumber(rule.regionCenter.x),
                                       FormatNumber(rule.regionCenter.y), FormatNumber(rule.regionRadius))
@@ -664,7 +665,8 @@ namespace ScadLibrary
                                       FormatNumber(rule.region.z), FormatNumber(rule.region.w)),
                     FormatNumber(rule.minHeight), FormatNumber(rule.maxHeight), FormatNumber(rule.maxSlope),
                     FormatNumber(rule.avoidWater), SerializeBiomes(rule.biomes), rule.randomRotation ? "true" : "false",
-                    FormatNumber(rule.dz));
+                    FormatNumber(rule.dz), rule.variants, FormatNumber(rule.scaleRange.x),
+                    FormatNumber(rule.scaleRange.y));
                 break;
             }
             const std::string child = Trim(rule.childSource);
@@ -839,6 +841,14 @@ namespace ScadLibrary
                     parsed = parsed && ReadScatterFilter(statement, rule) &&
                         ReadBool(statement, 5, "rot", rule.randomRotation, true) &&
                         ReadNumber(statement, 6, "dz", rule.dz, 0.0);
+                    parsed = parsed && ReadNumber(statement, 7, "variants", value, 0.0);
+                    rule.variants = std::max(0, static_cast<int>(std::llround(value)));
+                    double scaleRange[2] = {1.0, 1.0};
+                    if (FindArgument(statement, 8, "scale") != nullptr)
+                    {
+                        parsed = parsed && ReadFixedVector(statement, 8, "scale", 2, scaleRange);
+                    }
+                    rule.scaleRange = {scaleRange[0], scaleRange[1]};
                     if (parsed && regionValue->vec.size() == 3)
                     {
                         rule.circularRegion = true;

@@ -116,6 +116,24 @@ namespace ScadLibrary::AI
                 error = "count must be an integer in [0, 10000]";
                 return false;
             }
+            if (node.contains("variants") &&
+                (!node["variants"].is_number_integer() || node["variants"].get<int>() < 0 ||
+                 node["variants"].get<int>() > 10000))
+            {
+                error = "variants must be an integer in [0, 10000]";
+                return false;
+            }
+            if (node.contains("scaleRange"))
+            {
+                const auto& scaleRange = node["scaleRange"];
+                if (!scaleRange.is_array() || scaleRange.size() != 2 ||
+                    !std::all_of(scaleRange.begin(), scaleRange.end(), [](const auto& value)
+                                 { return value.is_number() && value.get<double>() > 0.0; }))
+                {
+                    error = "scaleRange must contain two positive values";
+                    return false;
+                }
+            }
             if (node.contains("maxSlope") &&
                 (!node["maxSlope"].is_number() || node["maxSlope"].get<double>() < 0.0 ||
                  node["maxSlope"].get<double>() > 90.0))

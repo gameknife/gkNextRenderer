@@ -5,6 +5,7 @@
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/TerrainComponent.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
 #include "Modules/ScadLoader/FScadEvaluator.h"
 #include "Modules/ScadLoader/FScadLexer.h"
 #include "Modules/ScadLoader/FScadLoader.h"
@@ -15,6 +16,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <fmt/format.h>
 #include <map>
 #include <string>
 #include <unordered_map>
@@ -260,6 +262,26 @@ namespace
     private:
         std::filesystem::path dir_;
     };
+
+    std::filesystem::path FindSourceAsset(const std::filesystem::path& relativePath)
+    {
+        std::filesystem::path cursor = std::filesystem::current_path();
+        while (!cursor.empty())
+        {
+            const std::filesystem::path candidate = cursor / relativePath;
+            if (std::filesystem::is_regular_file(candidate))
+            {
+                return candidate;
+            }
+            const std::filesystem::path parent = cursor.parent_path();
+            if (parent == cursor)
+            {
+                break;
+            }
+            cursor = parent;
+        }
+        return Utilities::FileHelper::GetPlatformFilePath(relativePath.string().c_str());
+    }
 } // namespace
 
 TEST_CASE("ScadTerrain decode: rejects malformed TERR", "[Unit][Scad][ScadTerrain]")
@@ -622,6 +644,46 @@ TEST_CASE("ScadTerrain loader: water splits to a raycast-invisible node", "[Unit
             sawWaterMaterial = true;
     }
     CHECK(sawWaterMaterial);
+}
+
+TEST_CASE("ScadTerrain scatter: variants bound baked mesh diversity", "[Unit][Scad][ScadTerrain]")
+{
+    const std::filesystem::path kitPath = FindSourceAsset("assets/scad/lib/kit_terrain.scad");
+    REQUIRE(std::filesystem::is_regular_file(kitPath));
+
+    const auto LoadScatterModelCount = [&](int variants) {
+        ScopedDir dir;
+        const std::string source =
+            fmt::format("use <{}>\n"
+                        "TERR = [\"gkterr1\", [100,100], [10,10], 7, [0,0,0], undef, \"temperate\", []];\n"
+                        "module variant_probe(seed=0) {{ cube([1 + (seed % 97) / 100, 1, 1]); }}\n"
+                        "ter_scatter(TERR, seed=31, n=24, region=[-40,-40,40,40], rot=true,\n"
+                        "            variants={}, scale=[0.75,1.25])\n"
+                        "    variant_probe(seed=$seed);\n",
+                        kitPath.generic_string(),
+                        variants);
+        const std::filesystem::path mainPath = dir.Write("scatter.scad", source);
+
+        Assets::EnvironmentSetting environment;
+        std::vector<std::shared_ptr<Assets::Node>> nodes;
+        std::vector<Assets::Model> models;
+        std::vector<Assets::FMaterial> materials;
+        std::vector<Assets::LightObject> lights;
+        std::vector<Assets::AnimationTrack> tracks;
+        std::vector<Assets::Skeleton> skeletons;
+        REQUIRE(Assets::FScadLoader::LoadScadScene(
+            mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+        return models.size();
+    };
+
+    CHECK(LoadScatterModelCount(1) == 1);
+
+    const size_t boundedModels = LoadScatterModelCount(3);
+    CHECK(boundedModels > 1);
+    CHECK(boundedModels <= 3);
+
+    // variants=0 keeps the historical per-instance seed behavior.
+    CHECK(LoadScatterModelCount(0) == 24);
 }
 
 TEST_CASE("ScadTerrain loader: TerrainComponent matches the evaluated heightfield", "[Unit][Scad][ScadTerrain]")

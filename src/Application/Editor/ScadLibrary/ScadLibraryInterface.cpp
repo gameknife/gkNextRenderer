@@ -1528,7 +1528,8 @@ namespace ScadLibrary
                     {"regionRadius", rule.regionRadius}, {"minHeight", rule.minHeight},
                     {"maxHeight", rule.maxHeight}, {"maxSlope", rule.maxSlope},
                     {"avoidWater", rule.avoidWater}, {"biomes", rule.biomes},
-                    {"randomRotation", rule.randomRotation}, {"childSource", rule.childSource},
+                    {"randomRotation", rule.randomRotation}, {"variants", rule.variants},
+                    {"scaleRange", {rule.scaleRange.x, rule.scaleRange.y}}, {"childSource", rule.childSource},
                 });
             }
             return {{"terrain", std::move(terrainJson)}, {"features", std::move(features)},
@@ -1909,6 +1910,13 @@ namespace ScadLibrary
                     rule.avoidWater = ruleJson.at("avoidWater").get<double>();
                     rule.biomes = ruleJson.at("biomes").get<std::vector<std::string>>();
                     rule.randomRotation = ruleJson.at("randomRotation").get<bool>();
+                    rule.variants = ruleJson.value("variants", 0);
+                    if (ruleJson.contains("scaleRange") && ruleJson.at("scaleRange").is_array() &&
+                        ruleJson.at("scaleRange").size() >= 2)
+                    {
+                        rule.scaleRange = {ruleJson.at("scaleRange").at(0).get<double>(),
+                                           ruleJson.at("scaleRange").at(1).get<double>()};
+                    }
                     rule.childSource = ruleJson.at("childSource").get<std::string>();
                     const std::string id = ruleJson.value("id", "");
                     size_t existingIndex = std::string::npos;
@@ -2804,6 +2812,15 @@ namespace ScadLibrary
                         {
                             changed = true;
                         }
+                        changed |= ImGui::DragInt("Mesh 变体数", &rule.variants, 1.0f, 0, 100000);
+                        ImGui::SetItemTooltip("0 保持逐实例几何；大于 0 时限制模块产生的 mesh 变体数量");
+                        double scaleRange[2] = {rule.scaleRange.x, rule.scaleRange.y};
+                        if (ImGui::DragScalarN("实例缩放 min/max", ImGuiDataType_Double, scaleRange, 2, 0.01f,
+                                               nullptr, nullptr, "%.2f"))
+                        {
+                            rule.scaleRange = {scaleRange[0], scaleRange[1]};
+                            changed = true;
+                        }
                         changed |= editNumber("离地 dz", rule.dz);
                     }
 
@@ -2886,6 +2903,13 @@ namespace ScadLibrary
                 rule.maxTilt = std::clamp(rule.maxTilt, 0.0, 90.0);
                 rule.count = std::max(0, rule.count);
                 rule.regionRadius = std::max(0.1, rule.regionRadius);
+                rule.variants = std::max(0, rule.variants);
+                rule.scaleRange.x = std::max(0.01, rule.scaleRange.x);
+                rule.scaleRange.y = std::max(0.01, rule.scaleRange.y);
+                if (rule.scaleRange.x > rule.scaleRange.y)
+                {
+                    std::swap(rule.scaleRange.x, rule.scaleRange.y);
+                }
                 if (rule.minHeight > rule.maxHeight)
                 {
                     std::swap(rule.minHeight, rule.maxHeight);

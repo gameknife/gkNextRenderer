@@ -32,23 +32,31 @@ translate([2, -30.5, gk_terrain_height(TERR, -8.5, -31)])
     rotate([0, 0, 8]) oh_prop_bridge(L = 18);
 
 // ---- 村庄:pad 上共面建筑群 ----
-ter_place(TERR, 50, -20) rotate([0, 0, 172]) oh_bldg_cabin(seed = 1);
-ter_place(TERR, 64, -18) rotate([0, 0, 188]) oh_bldg_cabin(seed = 4, L = 5.5, D = 4.5);
-ter_place(TERR, 68, -30) rotate([0, 0, 262]) oh_bldg_tower(seed = 2);
-ter_place(TERR, 56, -29) oh_prop_campfire(seed = 3);
-ter_place(TERR, 49, -28) rotate([0, 0, 40]) oh_prop_log_pile(seed = 5);
-ter_place(TERR, 44, -26) rotate([0, 0, 100]) oh_prop_signpost(seed = 6);
+ter_place(TERR, 50, -20, dz = 0)
+    rotate([0, 0, 172]) oh_bldg_cabin(seed = 1);
+ter_place(TERR, 64, -18, dz = 0)
+    rotate([0, 0, 188]) oh_bldg_cabin(seed = 4, L = 5.5, D = 4.5);
+ter_place(TERR, 68, -30, dz = 0)
+    rotate([0, 0, 262]) oh_bldg_tower(seed = 2);
+ter_place(TERR, 56, -29, dz = 0)
+    oh_prop_campfire(seed = 3);
+ter_place(TERR, 49, -28, dz = 0)
+    rotate([0, 0, 40]) oh_prop_log_pile(seed = 5);
+ter_place(TERR, 44, -26, dz = 0)
+    rotate([0, 0, 100]) oh_prop_signpost(seed = 6);
 
 // ---- 营地:湖东岸缓坡 ----
-ter_place(TERR, -52, -14) rotate([0, 0, 250]) oh_prop_tent(seed = 7);
-ter_place(TERR, -48, -19) oh_prop_campfire(seed = 8);
+ter_place(TERR, -52, -14, dz = 0)
+    rotate([0, 0, 250]) oh_prop_tent(seed = 7);
+ter_place(TERR, -48, -19, dz = 0)
+    oh_prop_campfire(seed = 8);
 
 // ---- 沿路栅栏段(北侧) ----
-ter_along(TERR, [[-100, -42], [-44, -34.5]], step = 4.6, seed = 9)
+ter_along(TERR, [[-100, -42], [-44, -34.5]], step = 4.6, seed = 9, offset = 0, dz = 0)
     translate([0, 3.6, 0]) oh_prop_fence_log(len = 4.2);
 
 // ---- 松树:只长在缓坡草地(避水 3,坡度 ≤26°,草生物群系) ----
-ter_scatter(TERR, 21, 90, [0, 0, 115], [0.3, 13, 26, 3, ["grass", "grass_dark"]])
+ter_scatter(TERR, 21, 218, [0, 0, 115.068335], [0.3, 13, 26, 3, ["grass", "grass_dark"]], rot = true, dz = 0, variants = 1, scale = [1, 1])
     lay_pick($seed)
     {
         oh_nature_pine(s = lay_randr($seed, 5, 0.8, 1.4), seed = $seed);
@@ -58,9 +66,9 @@ ter_scatter(TERR, 21, 90, [0, 0, 115], [0.3, 13, 26, 3, ["grass", "grass_dark"]]
     }
 
 // ---- 岩块:随坡倾斜,只出现在岩石生物群系 ----
-ter_scatter(TERR, 33, 22, [-115, -95, 115, 95], [0.5, 30, 60, 0, ["rock", "rock_high"]], rot = true)
+ter_scatter(TERR, 33, 22, [-115, -95, 115, 95], [0.5, 30, 60, 0, ["rock", "rock_high"]], rot = true, dz = 0, variants = 0, scale = [1, 1])
     oh_rock_boulder(s = lay_randr($seed, 4, 0.7, 1.5), seed = $seed);
 
 // ---- 干草簇:高地枯草带 ----
-ter_scatter(TERR, 47, 40, [-115, -95, 115, 95], [0.3, 20, 24, 1, ["dry_grass"]])
+ter_scatter(TERR, 47, 40, [-115, -95, 115, 95], [0.3, 20, 24, 1, ["dry_grass"]], rot = true, dz = 0, variants = 0, scale = [1, 1])
     oh_nature_grass(seed = $seed);

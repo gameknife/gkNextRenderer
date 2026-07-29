@@ -54,6 +54,8 @@ namespace ScadLibrary
         double avoidWater = 0.0;
         std::vector<std::string> biomes;
         bool randomRotation = true;
+        int variants = 0;
+        glm::dvec2 scaleRange{1.0, 1.0};
 
         // The child statement is intentionally kept as SCAD. It can contain
         // rotate/translate chains, lay_pick, module arguments, or a block.

@@ -108,8 +108,12 @@ module ter_along(t, pts, step = 6, seed = 0, offset = 0, dz = 0)
 // ================= 过滤散布(拒绝采样) =================
 // region = [cx,cy,r] 为圆形区域；旧 [x0,y0,x1,y1] AABB 继续兼容。
 // 逐点用 ter_ok 过滤后取前 n 件,贴地放置。rot=true 随机朝向。
+// variants > 0 时,$seed/$variant/$variant_seed 只产生指定数量的几何变体；
+// $instance_seed 始终逐实例唯一。scale=[min,max] 在 children 外施加实例缩放，
+// 不应再把随机尺寸传进子 module 烘焙为不同 mesh。
 // 同 (t, seed, n, region, filt) → 同点集,可回归。
-module ter_scatter(t, seed = 0, n = 10, region = [-20, -20, 20, 20], filt = [], rot = true, dz = 0)
+module ter_scatter(t, seed = 0, n = 10, region = [-20, -20, 20, 20], filt = [], rot = true, dz = 0,
+                   variants = 0, scale = [1, 1])
 {
     ter_sc_pts = [for (i = [0 : n * 4 - 1])
         if (ter_ok(t,
@@ -120,16 +124,24 @@ module ter_scatter(t, seed = 0, n = 10, region = [-20, -20, 20, 20], filt = [], 
              len(region) == 3 ? region[1] + sqrt(lay_randf(seed * 8191 + i * 131, 1)) * region[2] * sin(lay_randr(seed * 8191 + i * 131, 2, 0, 360)) : lay_randr(seed * 8191 + i * 131, 2, region[1], region[3]),
              seed * 8191 + i * 131]];
     ter_sc_cnt = min(n, len(ter_sc_pts));
+    ter_sc_variant_count = max(1, floor(variants));
     if (ter_sc_cnt > 0)
     {
         for (i = [0 : ter_sc_cnt - 1])
         {
             $idx = i;
-            $seed = ter_sc_pts[i][2];
+            $instance_seed = ter_sc_pts[i][2];
+            $variant = variants > 0 ? lay_randi($instance_seed, 5, ter_sc_variant_count) : i;
+            $variant_seed = variants > 0 ? seed * 8191 + $variant * 131 : $instance_seed;
+            $instance_scale = lay_randr($instance_seed, 4, scale[0], scale[1]);
+            // Existing scatter children conventionally consume $seed. Bound it
+            // automatically when variants is enabled so UI-only edits work.
+            $seed = $variant_seed;
             translate([ter_sc_pts[i][0], ter_sc_pts[i][1],
                        gk_terrain_height(t, ter_sc_pts[i][0], ter_sc_pts[i][1]) + dz])
-                rotate([0, 0, rot ? lay_randi($seed, 3, 360) : 0])
-                    children();
+                rotate([0, 0, rot ? lay_randi($instance_seed, 3, 360) : 0])
+                    scale([$instance_scale, $instance_scale, $instance_scale])
+                        children();
         }
     }
 }
