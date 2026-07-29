@@ -77,6 +77,25 @@ namespace Vulkan
         float MipLodBias = 0.0f;
         float MinLod = 0.0f;
         float MaxLod = 0.0f;
+
+        // Preset for 3D LUT / froxel volume sampling. The defaults above are tuned for 2D material
+        // textures and are wrong for volumes: REPEAT wraps the LUT domain and anisotropy skews the
+        // border taps, both of which show up as seams. Volumes want plain trilinear filtering that
+        // clamps on all three axes and never touches a mip.
+        static SamplerConfig VolumeLut()
+        {
+            SamplerConfig config;
+            config.MagFilter = VK_FILTER_LINEAR;
+            config.MinFilter = VK_FILTER_LINEAR;
+            config.AddressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            config.AddressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            config.AddressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            config.AnisotropyEnable = false;
+            config.MipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+            config.MinLod = 0.0f;
+            config.MaxLod = 0.0f;
+            return config;
+        }
     };
 
     class Sampler final

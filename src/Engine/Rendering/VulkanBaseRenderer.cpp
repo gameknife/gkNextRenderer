@@ -328,6 +328,9 @@ namespace Vulkan
     {
         VulkanBaseRenderer::DeleteSwapChain();
         DeleteAccelerationStructures();
+        // Volume resources outlive the swapchain, so they are released here rather than in
+        // DeleteSwapChain -- but still before the device goes away.
+        bindless_.volumeImages.clear();
         rt_.reset();
         renderViewServices_.reset();
         logicRenderers_.renderers.clear();
@@ -503,6 +506,7 @@ namespace Vulkan
         }
         DeleteSwapChain();
         DeleteAccelerationStructures();
+        bindless_.volumeImages.clear();
         if (upscaler_)
         {
             upscaler_->Shutdown();
@@ -838,6 +842,96 @@ namespace Vulkan
     {
         assert(bindlessIdx < bindless_.images.size());
         return bindless_.images[bindlessIdx].get();
+    }
+
+    namespace
+    {
+        // 3D storage/sampled image support varies by driver and format, so probe before creating
+        // rather than letting vkCreateImage fail with a bare VK_ERROR_FORMAT_NOT_SUPPORTED.
+        void ValidateVolumeFormatSupport(const Device& device, VkExtent3D extent, VkFormat format,
+                                         VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName)
+        {
+            const char* name = debugName ? debugName : "<unnamed>";
+
+            VkFormatProperties formatProperties{};
+            vkGetPhysicalDeviceFormatProperties(device.PhysicalDevice(), format, &formatProperties);
+            const VkFormatFeatureFlags features = tiling == VK_IMAGE_TILING_LINEAR
+                ? formatProperties.linearTilingFeatures
+                : formatProperties.optimalTilingFeatures;
+
+            VkFormatFeatureFlags requiredFeatures = 0;
+            if (usage & VK_IMAGE_USAGE_STORAGE_BIT)
+            {
+                requiredFeatures |= VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;
+            }
+            if (usage & VK_IMAGE_USAGE_SAMPLED_BIT)
+            {
+                requiredFeatures |= VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+            }
+            if ((features & requiredFeatures) != requiredFeatures)
+            {
+                Throw(std::runtime_error(fmt::format(
+                    "3D image '{}' unsupported: format {} tiling {} lacks required features (have 0x{:x}, need 0x{:x})",
+                    name, static_cast<int>(format), static_cast<int>(tiling), features, requiredFeatures)));
+            }
+
+            VkImageFormatProperties imageFormatProperties{};
+            const VkResult result = vkGetPhysicalDeviceImageFormatProperties(
+                device.PhysicalDevice(), format, VK_IMAGE_TYPE_3D, tiling, usage, 0, &imageFormatProperties);
+            if (result != VK_SUCCESS)
+            {
+                Throw(std::runtime_error(fmt::format(
+                    "3D image '{}' unsupported: format {} tiling {} usage 0x{:x} rejected by the device (VkResult {})",
+                    name, static_cast<int>(format), static_cast<int>(tiling), usage, static_cast<int>(result))));
+            }
+
+            if (extent.width > imageFormatProperties.maxExtent.width ||
+                extent.height > imageFormatProperties.maxExtent.height ||
+                extent.depth > imageFormatProperties.maxExtent.depth)
+            {
+                Throw(std::runtime_error(fmt::format(
+                    "3D image '{}' too large: requested {}x{}x{}, device maximum {}x{}x{}",
+                    name, extent.width, extent.height, extent.depth,
+                    imageFormatProperties.maxExtent.width, imageFormatProperties.maxExtent.height,
+                    imageFormatProperties.maxExtent.depth)));
+            }
+        }
+    }
+
+    void VulkanBaseRenderer::CreateStorageImage3D(uint32_t bindlessIdx, VkExtent3D extent, VkFormat format,
+                                                  VkImageTiling tiling, VkImageUsageFlags usage,
+                                                  const char* debugName, const SamplerConfig& samplerConfig)
+    {
+        if (extent.width == 0 || extent.height == 0 || extent.depth == 0)
+        {
+            Throw(std::invalid_argument(fmt::format(
+                "3D image '{}' has a zero extent ({}x{}x{})", debugName ? debugName : "<unnamed>",
+                extent.width, extent.height, extent.depth)));
+        }
+        ValidateVolumeFormatSupport(Device(), extent, format, tiling, usage, debugName);
+
+        auto image = std::make_unique<RenderImage>(Device(), extent, VK_IMAGE_TYPE_3D, format, tiling, usage,
+                                                   debugName, samplerConfig);
+        if (usage & VK_IMAGE_USAGE_STORAGE_BIT)
+        {
+            ctx_.globalTexturePool->BindStorageTexture(bindlessIdx, image->GetImageView());
+        }
+        if (usage & VK_IMAGE_USAGE_SAMPLED_BIT)
+        {
+            ctx_.globalTexturePool->BindSampleTexture(bindlessIdx, image->GetImageView(), image->Sampler());
+        }
+        bindless_.volumeImages[bindlessIdx] = std::move(image);
+    }
+
+    void VulkanBaseRenderer::DestroyStorageImage3D(uint32_t bindlessIdx)
+    {
+        bindless_.volumeImages.erase(bindlessIdx);
+    }
+
+    const RenderImage* VulkanBaseRenderer::GetStorageImage3D(uint32_t bindlessIdx) const
+    {
+        const auto it = bindless_.volumeImages.find(bindlessIdx);
+        return it == bindless_.volumeImages.end() ? nullptr : it->second.get();
     }
 
 #define CREATE_STORAGE_IMAGE(idx, fmt, tiling, usage) CreateStorageImage(bankBase + Assets::Bindless::idx, extent, fmt, tiling, usage, #idx)

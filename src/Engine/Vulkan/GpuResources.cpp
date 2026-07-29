@@ -55,8 +55,23 @@ Image::Image(
     const VkImageTiling tiling,
     const VkImageUsageFlags usage,
     bool useForExternal) :
+    Image(device, VkExtent3D{extent.width, extent.height, 1}, VK_IMAGE_TYPE_2D, miplevel, format, tiling, usage,
+          useForExternal)
+{
+}
+
+Image::Image(
+    const class Device& device,
+    const VkExtent3D extent,
+    const VkImageType imageType,
+    const uint32_t miplevel,
+    const VkFormat format,
+    const VkImageTiling tiling,
+    const VkImageUsageFlags usage,
+    bool useForExternal) :
     device_(device),
     extent_(extent),
+    imageType_(imageType),
     format_(format),
     imageLayout_(VK_IMAGE_LAYOUT_UNDEFINED),
     mipLevel_(miplevel),
@@ -67,10 +82,8 @@ Image::Image(
     const uint32_t* queueFamilyIndices = nullptr;
     uint32_t queueFamilyIndexCount = 0;
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.extent.width = extent.width;
-    imageInfo.extent.height = extent.height;
-    imageInfo.extent.depth = 1;
+    imageInfo.imageType = imageType;
+    imageInfo.extent = extent;
     imageInfo.mipLevels = miplevel;
     imageInfo.arrayLayers = 1;
     imageInfo.format = format;
@@ -105,8 +118,11 @@ Image::Image(
 Image::Image(Image&& other) noexcept :
     device_(other.device_),
     extent_(other.extent_),
+    imageType_(other.imageType_),
     format_(other.format_),
     imageLayout_(other.imageLayout_),
+    mipLevel_(other.mipLevel_),
+    external_(other.external_),
     image_(other.image_)
 {
     other.image_ = nullptr;
@@ -236,7 +252,8 @@ void Image::CopyFrom(CommandPool& commandPool, const Buffer& buffer)
         region.imageSubresource.baseArrayLayer = 0;
         region.imageSubresource.layerCount = 1;
         region.imageOffset = { 0, 0, 0 };
-        region.imageExtent = { extent_.width, extent_.height, 1 };
+        // extent_.depth is 1 for 2D images, so this stays a full-image copy for both dimensions.
+        region.imageExtent = extent_;
 
         vkCmdCopyBufferToImage(commandBuffer, buffer.Handle(), image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
     });
@@ -283,13 +300,14 @@ ImageView::ImageView(const class Device& device,
                      const VkFormat format,
                      const VkImageAspectFlags aspectFlags,
                      const uint32_t miplevel,
-                     const VkComponentMapping components) :
+                     const VkComponentMapping components,
+                     const VkImageViewType viewType) :
     device_(device)
 {
     VkImageViewCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     createInfo.image = image;
-    createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    createInfo.viewType = viewType;
     createInfo.format = format;
     createInfo.components = components;
     createInfo.subresourceRange.aspectMask = aspectFlags;
@@ -492,6 +510,49 @@ RenderImage::RenderImage(const Device& device,
     }
 
     sampler_.reset(new Vulkan::Sampler(device, Vulkan::SamplerConfig()));
+}
+
+namespace
+{
+    VkImageViewType ViewTypeForImageType(const VkImageType imageType)
+    {
+        switch (imageType)
+        {
+        case VK_IMAGE_TYPE_1D: return VK_IMAGE_VIEW_TYPE_1D;
+        case VK_IMAGE_TYPE_2D: return VK_IMAGE_VIEW_TYPE_2D;
+        case VK_IMAGE_TYPE_3D: return VK_IMAGE_VIEW_TYPE_3D;
+        default:
+            Throw(std::invalid_argument("unsupported image type for render image view"));
+        }
+    }
+}
+
+RenderImage::RenderImage(const Device& device,
+    VkExtent3D extent,
+    VkImageType imageType,
+    VkFormat format,
+    VkImageTiling tiling,
+    VkImageUsageFlags usage,
+    const char* debugName,
+    const SamplerConfig& samplerConfig)
+{
+    image_.reset(new Image(device, extent, imageType, 1, format, tiling, usage, false));
+    imageMemory_.reset(
+        new DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, false, true)));
+    imageView_.reset(new ImageView(device, image_->Handle(), format, VK_IMAGE_ASPECT_COLOR_BIT, 1,
+                                   {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
+                                    VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY},
+                                   ViewTypeForImageType(imageType)));
+
+    if(debugName)
+    {
+        const auto& debugUtils = device.DebugUtils();
+        debugUtils.SetObjectName(image_->Handle(), debugName);
+        imageMemory_->SetName((std::string(debugName) + " Memory").c_str());
+        debugUtils.SetObjectName(imageView_->Handle(), (std::string(debugName) + " View").c_str());
+    }
+
+    sampler_.reset(new Vulkan::Sampler(device, samplerConfig));
 }
 
 RenderImage::~RenderImage()

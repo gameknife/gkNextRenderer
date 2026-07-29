@@ -163,11 +163,12 @@ namespace Assets
             SPDLOG_INFO("Texture uploads will run on the main thread because no dedicated transfer queue is available or validation mode is active");
         }
 
-        static const uint32_t kMaxBindlessResources = 65535u;// moltenVK returns a invalid value. std::min(65535u, device.DeviceProperties().limits.maxPerStageDescriptorSamplers);
+        // Sized from the slot registry rather than the raw device maximum: the arrays are allocated
+        // at their full declared count, so declaring 65535 would burn ~4 MB of descriptor pool for
+        // slots nothing can address. moltenVK also reports an unusable
+        // limits.maxPerStageDescriptorSamplers, which is why this is not derived from the device.
+        static const uint32_t kMaxBindlessResources = kMaxBindlessSlots;
         static const uint32_t kMaxBindlessShadowMaps = 16u;
-        // Last binding must have the most descriptors because DescriptorSetLayout
-        // puts VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT on the last binding,
-        // and DescriptorSets allocates with variableDescriptorCount = 65534.
         const std::vector<Vulkan::DescriptorBinding> descriptorBindings =
         {
             {2, kMaxBindlessShadowMaps, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_ALL},
@@ -278,6 +279,15 @@ namespace Assets
         else
         {
             textureIdx = static_cast<uint32_t>(textureImages_.size());
+            // Past this point the texture index would address the explicitly-bound region
+            // (thumbnails, view outputs, volumes) and silently overwrite those descriptors.
+            if (textureIdx >= kMaxSceneTextures)
+            {
+                Throw(std::runtime_error(fmt::format(
+                    "scene texture capacity exhausted ({} registered, limit {}) while registering '{}'. "
+                    "Raise Bindless::RES_SCENE_TEXTURE_CAPACITY in assets/shaders/common/BindlessTexture.slang.",
+                    textureIdx, kMaxSceneTextures, textureName)));
+            }
             textureNameMap_[textureName] = {textureIdx, ETextureStatus::ETS_Loaded, lifetime};
             textureImages_.push_back(std::move(textureImage));
         }

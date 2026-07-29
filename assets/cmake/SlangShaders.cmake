@@ -9,6 +9,7 @@ set(shader_files ${shader_source_files})
 set(shader_test_files
     "${CMAKE_CURRENT_SOURCE_DIR}/shaders/Remote.BgraToYuv.comp.slang"
     "${CMAKE_CURRENT_SOURCE_DIR}/shaders/Util.SharcCompileTest.comp.slang"
+    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/Util.Bindless3DCompileTest.comp.slang"
 )
 if(NOT GK_BUILD_SHADER_TESTS)
     list(REMOVE_ITEM shader_files ${shader_test_files})

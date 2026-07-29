@@ -27,11 +27,17 @@ namespace Vulkan
 
         Image(const Device& device, VkExtent2D extent, uint32_t miplevel, VkFormat format);
         Image(const Device& device, VkExtent2D extent, uint32_t miplevel, VkFormat format,VkImageTiling tiling, VkImageUsageFlags usage, bool useForExternal = false);
+        // Dimension-explicit form. VK_IMAGE_TYPE_3D takes extent.depth as the slice count; the 2D
+        // overloads above forward here with {width, height, 1}.
+        Image(const Device& device, VkExtent3D extent, VkImageType imageType, uint32_t miplevel, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, bool useForExternal = false);
         Image(Image&& other) noexcept;
         ~Image();
 
         const class Device& Device() const { return device_; }
-        VkExtent2D Extent() const { return extent_; }
+        // Unchanged 2D semantics: drops the depth slice count. Use Extent3D() for volumes.
+        VkExtent2D Extent() const { return {extent_.width, extent_.height}; }
+        VkExtent3D Extent3D() const { return extent_; }
+        VkImageType ImageType() const { return imageType_; }
         VkFormat Format() const { return format_; }
 
         DeviceMemory AllocateMemory(VkMemoryPropertyFlags properties, bool external = false, bool dedicated = false) const;
@@ -50,7 +56,8 @@ namespace Vulkan
     private:
 
         const class Device& device_;
-        const VkExtent2D extent_;
+        const VkExtent3D extent_;
+        const VkImageType imageType_;
         const VkFormat format_;
         VkImageLayout imageLayout_;
         uint32_t mipLevel_;
@@ -77,7 +84,9 @@ namespace Vulkan
                                VK_COMPONENT_SWIZZLE_IDENTITY,
                                VK_COMPONENT_SWIZZLE_IDENTITY,
                                VK_COMPONENT_SWIZZLE_IDENTITY,
-                               VK_COMPONENT_SWIZZLE_IDENTITY});
+                               VK_COMPONENT_SWIZZLE_IDENTITY},
+                           // Trailing so every existing 2D call site keeps compiling unchanged.
+                           VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_2D);
         ~ImageView();
 
         const class Device& Device() const { return device_; }
@@ -167,6 +176,11 @@ namespace Vulkan
         RenderImage& operator = (RenderImage&&) = delete;
 
         RenderImage(const Device& device,VkExtent2D extent, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, bool external = false, const char* debugName = nullptr);
+        // Dimension-explicit form. The image view type follows imageType, and samplerConfig lets
+        // volume resources opt out of the 2D material defaults (see SamplerConfig::VolumeLut).
+        RenderImage(const Device& device, VkExtent3D extent, VkImageType imageType, VkFormat format,
+                    VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName = nullptr,
+                    const SamplerConfig& samplerConfig = SamplerConfig());
         ~RenderImage();
 
         const Image& GetImage() const { return *image_; }

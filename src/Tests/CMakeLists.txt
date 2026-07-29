@@ -1,6 +1,8 @@
 set(unitTestSources
     TestCommon.cpp
     Test_PhysicsSync.cpp
+    Test_Bindless3DTexture.cpp
+    Test_BindlessSlotRegistry.cpp
     Test_GpuTimerLogic.cpp
     Test_GltfSkinning.cpp
     Test_LightObject.cpp

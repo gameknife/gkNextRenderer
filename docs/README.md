@@ -41,6 +41,7 @@
 
 - [Agent 输入驱动验证](designs/agent-validation-input-driver.md)
 - [AmbientCube 命中驱动驻留](designs/ambientcube-hit-driven-residency-design.md)
+- [大气散射与高度雾架构](designs/atmosphere-and-height-fog-design.md)（**提案**，未实现；执行顺序见 [开发计划](plans/atmosphere-and-height-fog-plan.md)。其 bindless 3D 纹理前置依赖已于 2026-07-29 完成，现行事实见[渲染运行时架构](designs/rendering-runtime-architecture.md)的「Bindless 资源维度」）
 - [Editor 材质创作架构](designs/editor-material-authoring.md)
 - [Editor Settings 与 CVar 架构](designs/editor-settings-and-cvars.md)
 - [GI 缓存与体素资源架构](designs/gi-cache-architecture.md)

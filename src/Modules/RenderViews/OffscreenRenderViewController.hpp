@@ -31,7 +31,11 @@ namespace Vulkan
 
         static constexpr uint32_t kMaxCameraSecondaryViews = 3;
         static constexpr uint32_t kMaxSecondaryViews = kMaxCameraSecondaryViews;
-        static constexpr uint32_t kSecondaryViewSampleSlotBase = 65000;
+        // From the bindless registry (assets/shaders/common/BindlessTexture.slang).
+        static constexpr uint32_t kSecondaryViewSampleSlotBase =
+            static_cast<uint32_t>(Assets::Bindless::RES_VIEW_SAMPLE_BASE);
+        static_assert(kMaxSecondaryViews <= static_cast<uint32_t>(Assets::Bindless::RES_VIEW_SAMPLE_COUNT),
+                      "secondary views exceed their reserved bindless range");
 
         explicit OffscreenRenderViewController(VulkanBaseRenderer& renderer);
         ~OffscreenRenderViewController();

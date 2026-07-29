@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Runtime/Interface/RenderFrameConsumer.hpp"
 #include "Gameplay/Camera/ModelViewController.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
@@ -48,7 +49,9 @@ namespace Runtime::Remote
             uint32_t height = 0;
             bool multiView = false;
             uint32_t maxClients = 2;
-            uint32_t encodeBindlessBase = 60;
+            // Base of this stream's 16 NV12 encode-plane slots; see the bindless registry in
+            // assets/shaders/common/BindlessTexture.slang. Multi-view overrides it per client view.
+            uint32_t encodeBindlessBase = static_cast<uint32_t>(Assets::Bindless::RES_REMOTE_ENCODE_BASE);
             EVideoEncoderBackend encoderBackend = EVideoEncoderBackend::Auto;
         };
 

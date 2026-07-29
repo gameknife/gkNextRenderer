@@ -40,9 +40,12 @@ namespace Assets
     class GlobalTexturePool final
     {
     public:
-        // Capacity of the bindless descriptor arrays (sample/storage). Slots above the registered
-        // texture count are valid targets for explicitly-bound render outputs (see BindSampleTexture).
-        static constexpr uint32_t kMaxBindlessSlots = 65535u;
+        // Capacity of the bindless descriptor arrays (sample/storage), and the ceiling on how many
+        // scene textures may be registered before they would collide with the explicitly-bound
+        // region. Both come from the slot registry in assets/shaders/common/BindlessTexture.slang;
+        // see the address-space comment there before changing either.
+        static constexpr uint32_t kMaxBindlessSlots = static_cast<uint32_t>(Bindless::RES_SLOT_COUNT);
+        static constexpr uint32_t kMaxSceneTextures = static_cast<uint32_t>(Bindless::RES_SCENE_TEXTURE_CAPACITY);
 
         enum class EHDRTextureResidency : uint8
         {

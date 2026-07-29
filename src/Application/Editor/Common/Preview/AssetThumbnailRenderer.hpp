@@ -31,11 +31,19 @@ namespace Vulkan
     class AssetThumbnailRenderer final : public IRenderViewProvider
     {
     public:
-        static constexpr uint32_t kMaterialThumbnailSampleSlotBase = 64000;
-        static constexpr uint32_t kMaterialThumbnailMaxSlots = 512;
-        static constexpr uint32_t kMeshThumbnailSampleSlotBase = 63200;
-        static constexpr uint32_t kMeshThumbnailMaxSlots = 512;
-        static constexpr uint32_t kMaterialPreviewSampleSlot = 64600;
+        // Slot ranges come from the bindless registry (assets/shaders/common/BindlessTexture.slang);
+        // do not reintroduce literals here -- that is how the old 64500 collision with the remote
+        // composite range happened.
+        static constexpr uint32_t kMaterialThumbnailSampleSlotBase =
+            static_cast<uint32_t>(Assets::Bindless::RES_MATERIAL_THUMBNAIL_BASE);
+        static constexpr uint32_t kMaterialThumbnailMaxSlots =
+            static_cast<uint32_t>(Assets::Bindless::RES_MATERIAL_THUMBNAIL_COUNT);
+        static constexpr uint32_t kMeshThumbnailSampleSlotBase =
+            static_cast<uint32_t>(Assets::Bindless::RES_MESH_THUMBNAIL_BASE);
+        static constexpr uint32_t kMeshThumbnailMaxSlots =
+            static_cast<uint32_t>(Assets::Bindless::RES_MESH_THUMBNAIL_COUNT);
+        static constexpr uint32_t kMaterialPreviewSampleSlot =
+            static_cast<uint32_t>(Assets::Bindless::RES_MATERIAL_PREVIEW);
 
         explicit AssetThumbnailRenderer(VulkanBaseRenderer& renderer);
         ~AssetThumbnailRenderer();

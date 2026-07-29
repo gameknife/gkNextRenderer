@@ -115,7 +115,8 @@ namespace Vulkan
     {
     public:
         // Total banks (including bank 0). Caps concurrent full-history views to bound VRAM.
-        static constexpr uint32_t kMaxConcurrentBanks = 8;
+        // Owned by the bindless registry so the storage array's low region is sized against it.
+        static constexpr uint32_t kMaxConcurrentBanks = static_cast<uint32_t>(Assets::Bindless::kMaxViewRtBanks);
 
         FBankAllocator()
         {

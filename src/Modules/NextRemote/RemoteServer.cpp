@@ -26,7 +26,10 @@ namespace Runtime::Remote
         constexpr auto remoteStatsLogInterval = std::chrono::seconds(10);
         constexpr auto remoteIdleFpsDelay = std::chrono::seconds(5);
         constexpr VkFormat remoteCompositeFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-        constexpr uint32_t remoteCompositeBindlessBase = 64500u;
+        // From the bindless registry (assets/shaders/common/BindlessTexture.slang). This used to be
+        // a literal 64500, which overlapped the tail of the material-thumbnail range.
+        constexpr uint32_t remoteCompositeBindlessBase =
+            static_cast<uint32_t>(Assets::Bindless::RES_REMOTE_COMPOSITE_BASE);
 
         uint32_t IdleTargetFps(const uint32_t activeFps)
         {
@@ -72,7 +75,9 @@ namespace Runtime::Remote
             for (uint32_t viewIndex = 0; viewIndex < requestedClients; ++viewIndex)
             {
                 RemoteServer::FConfig streamConfig = config_;
-                streamConfig.encodeBindlessBase = 60000u + viewIndex * 16u;
+                streamConfig.encodeBindlessBase =
+                    static_cast<uint32_t>(Assets::Bindless::RES_REMOTE_ENCODE_BASE) +
+                    viewIndex * static_cast<uint32_t>(Assets::Bindless::RES_REMOTE_ENCODE_STRIDE);
                 auto stream = std::make_unique<FVideoPipeline>(streamConfig);
                 if (!stream->Initialize(engine->GetRenderer()))
                 {

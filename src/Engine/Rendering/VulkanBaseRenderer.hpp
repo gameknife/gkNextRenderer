@@ -22,6 +22,7 @@
 #include <map>
 #include <array>
 #include <set>
+#include <unordered_map>
 
 namespace Rendering::Upscaler
 {
@@ -335,6 +336,23 @@ namespace Vulkan
                                   std::initializer_list<FViewImageUse> uses,
                                   std::string_view passName);
         const RenderImage* GetStorageImage(uint32_t bindlessIdx) const;
+
+        // --- Volume (3D) bindless resources ---
+        // Vulkan descriptors do not encode image dimensionality, so a 3D view is written into the
+        // very same bindless arrays as the 2D render targets; only the slot number differs (see the
+        // slot registry in assets/shaders/common/BindlessTexture.slang, RES_VOLUME_BASE range).
+        // Volumes are tracked separately from bindless_.images because that vector is wiped on every
+        // swapchain recreation, while froxel grids / 3D LUTs are resolution-independent and must
+        // survive a resize. Binds the storage view when usage has STORAGE_BIT and the sampled view
+        // when it has SAMPLED_BIT; the sampled descriptor declares SHADER_READ_ONLY_OPTIMAL, so the
+        // caller must transition the image out of GENERAL before sampling it.
+        // Throws if the physical device cannot back the requested 3D format/usage combination.
+        void CreateStorageImage3D(uint32_t bindlessIdx, VkExtent3D extent, VkFormat format, VkImageTiling tiling,
+                                  VkImageUsageFlags usage, const char* debugName,
+                                  const SamplerConfig& samplerConfig = SamplerConfig::VolumeLut());
+        void DestroyStorageImage3D(uint32_t bindlessIdx);
+        const RenderImage* GetStorageImage3D(uint32_t bindlessIdx) const;
+
         // Lazily creates the primary progressive history. Once created, it lives until the
         // current swapchain resources are destroyed.
         void EnsureProgressiveRenderTarget();
@@ -460,7 +478,11 @@ namespace Vulkan
 
         struct BindlessStorageImages
         {
+            // Swapchain-scoped 2D render targets: every entry is reset by DeleteSwapChain().
             std::vector<std::unique_ptr<RenderImage> > images;
+            // Volume resources, keyed by bindless slot. Sparse (slots live in the high registry
+            // range) and deliberately outside the swapchain lifecycle.
+            std::unordered_map<uint32_t, std::unique_ptr<RenderImage> > volumeImages;
         };
 
         struct OverlayPipelines
