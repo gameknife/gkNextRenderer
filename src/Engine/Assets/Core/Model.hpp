@@ -32,7 +32,7 @@ namespace Assets
             TopRadius = 6460.0f;
             WorldUnitsPerKm = 1000.0f;
             WorldOriginAltitude = 0.0f;
-            AerialPerspectiveMaxDistance = 20000.0f;
+            AerialPerspectiveMaxDistance = 2000.0f;
             SkyLuminanceScale = 1.0f;
             FogInscatteringColor = glm::vec3(0.55f, 0.65f, 0.75f);
             FogDensity = 0.01f;
