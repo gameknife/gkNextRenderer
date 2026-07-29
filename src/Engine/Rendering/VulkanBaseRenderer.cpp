@@ -1234,8 +1234,23 @@ namespace Vulkan
         frameSettings_.progressiveAccumulatedFrames = engine->GetProgressiveRenderAccumulatedFrames();
         frameSettings_.progressiveTargetFrames = engine->GetProgressiveRenderTargetFrames();
         const auto& settings = frameSettings_.userSettings;
-        const auto requestedUpscalerType = Rendering::Upscaler::GetUpscalerTypeInfo(
+        const auto configuredUpscalerType = Rendering::Upscaler::GetUpscalerTypeInfo(
             static_cast<uint32_t>(settings.UpscalerType)).type;
+        const bool agentValidationExternalUpscaler =
+            GOption->AgentValidation &&
+            (configuredUpscalerType == Rendering::Upscaler::EUpscalerType::DLSS ||
+             configuredUpscalerType == Rendering::Upscaler::EUpscalerType::DLSSRayReconstruction ||
+             configuredUpscalerType == Rendering::Upscaler::EUpscalerType::FidelityFXFSR);
+        const auto requestedUpscalerType = agentValidationExternalUpscaler
+            ? Rendering::Upscaler::EUpscalerType::NativeTAAU
+            : configuredUpscalerType;
+        if (agentValidationExternalUpscaler)
+        {
+            SPDLOG_INFO(
+                "Agent validation replaces unavailable {} with Native TAAU; temporal upscaling remains enabled",
+                Rendering::Upscaler::GetUpscalerTypeInfo(
+                    static_cast<uint32_t>(configuredUpscalerType)).name);
+        }
         const auto& requestedTypeInfo = Rendering::Upscaler::GetUpscalerTypeInfo(
             static_cast<uint32_t>(requestedUpscalerType));
         const FRendererContract& requestedContract = GetRendererContract(logicRenderers_.current);
