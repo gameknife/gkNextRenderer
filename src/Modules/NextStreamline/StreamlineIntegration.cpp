@@ -1465,7 +1465,7 @@ namespace
             options.qualityPreset = sl::DLSSPreset::ePresetK;
             options.balancedPreset = sl::DLSSPreset::ePresetK;
             options.performancePreset = sl::DLSSPreset::ePresetK;
-            options.ultraPerformancePreset = sl::DLSSPreset::ePresetF;
+            options.ultraPerformancePreset = sl::DLSSPreset::ePresetK;
 
             const sl::Result result = slDLSSSetOptions(viewport, options);
             if (result != sl::Result::eOk)

@@ -11,12 +11,7 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
     {
         let Camera = Bindless.GetGpuscene().Camera[0];
         float2 uvOffset = float2(0);
-        float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
-        if (Camera.PrimaryRayJitter)
-        {
-            uvOffset = Camera.Jitter.xy * 2.0 / float2(isize);
-        }
-        uv += uvOffset;
+        float2 uv = ((float2(ipos) + 0.5f) / float2(isize)) * 2.0f - 1.0f;
         float2 offset = Camera.Aperture / 2 * RandomInUnitDisk(RandomSeed);
         float4 origin = mul(Camera.ModelViewInverse, float4(offset, 0, 1));
         float4 target = mul(Camera.ProjectionInverse, float4(uv.x, uv.y, 1, 1));
@@ -99,7 +94,7 @@ public struct FVoxelRayCaster : IPrimaryRayCaster
     {
         let Camera = Bindless.GetGpuscene().Camera[0];
 
-        float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
+        float2 uv = ((float2(ipos) + 0.5f) / float2(isize)) * 2.0f - 1.0f;
         
         // construct ray
         float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));

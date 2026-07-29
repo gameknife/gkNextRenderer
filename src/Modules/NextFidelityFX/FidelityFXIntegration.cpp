@@ -820,7 +820,7 @@ namespace FidelityFXWrapper
                 dispatch.depth = ToFfxResource(inputs.depth, FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
                 dispatch.motionVectors = ToFfxResource(inputs.motionVectors, FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
                 dispatch.output = ToFfxResource(inputs.scalingOutputColor, FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
-                dispatch.jitterOffset = {-inputs.ubo->Jitter.x, -inputs.ubo->Jitter.y};
+                dispatch.jitterOffset = {inputs.ubo->Jitter.x, inputs.ubo->Jitter.y};
                 dispatch.motionVectorScale = {1.0f, 1.0f};
                 dispatch.renderSize = {inputs.renderExtent.width, inputs.renderExtent.height};
                 dispatch.upscaleSize = {inputs.outputExtent.width, inputs.outputExtent.height};

@@ -98,8 +98,8 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
             jitter.y = -jitter.y;
         }
 
-        ubo.Projection[2][0] = jitter.x / static_cast<float>(renderExtent.width) * 2.0f;
-        ubo.Projection[2][1] = jitter.y / static_cast<float>(renderExtent.height) * 2.0f;
+        ubo.Projection[2][0] = -jitter.x / static_cast<float>(renderExtent.width) * 2.0f;
+        ubo.Projection[2][1] = -jitter.y / static_cast<float>(renderExtent.height) * 2.0f;
 
         ubo.Jitter = glm::vec4(jitter.x, jitter.y, 0, 0);
     }

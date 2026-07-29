@@ -627,7 +627,7 @@ public struct FPathTracingRenderer{
             return false;
         }
 
-        float4 clipPos = mul(Camera.ViewProjection, float4(hitPrimaryVertex_.Position, 1.0));
+        float4 clipPos = mul(Camera.ViewProjectionUnJit, float4(hitPrimaryVertex_.Position, 1.0));
         float ndcDepth = clipPos.z / clipPos.w;
         float2 motion = Common.CalculateMotionVector(Camera, hitPrimaryNode_, hitPrimaryVertex_, pixel_);
         primaryMotionPixels_ = motion * size_;

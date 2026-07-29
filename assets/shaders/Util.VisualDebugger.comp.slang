@@ -199,7 +199,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 #ifdef SHADER_CLOCK
     DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SCENE_COLOR)), 0, 1, 4, ipos, isize, 1);
 #endif
-    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MOTIONVECTOR)), 0, 2, 4, ipos, isize, 1);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MOTIONVECTOR)), 0, 2, 4, ipos, isize, 100000);
 
     // line 2/3 right
     DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SINGLE_SPECULAR)), 3, 1, 4, ipos, isize, 0.005);
