@@ -1,7 +1,7 @@
 ---
 title: "大气散射与高度雾架构"
 category: design
-status: 提案
+status: 现行
 owner: engine/rendering
 created: 2026-07-29
 last_updated: 2026-07-29
@@ -13,10 +13,22 @@ last_updated: 2026-07-29
 核心约束是**与五条现有渲染路径解耦**：大气子系统只做"生产者"，渲染器通过既有抽象消费，
 不在任何 logic renderer 内部出现大气代码。
 
-实现入口（规划）：`src/Engine/Rendering/Atmosphere/`、`assets/shaders/Sky.*.comp.slang`、
+实现入口：`src/Engine/Rendering/Atmosphere/`、`assets/shaders/Sky.*.comp.slang`、
 `assets/shaders/common/Sky.slang`、`assets/shaders/Process.AtmosphereComposite.comp.slang`。
 
-配套开发计划见 [大气散射与高度雾开发计划](../plans/atmosphere-and-height-fog-plan.md)。
+M0–M3 已于 2026-07-29 实现并验收。历史任务分解见
+[大气散射与高度雾开发计划](../plans/atmosphere-and-height-fog-plan.md)；M4 是按需候选方向，
+不属于当前实现承诺。
+
+## 当前实现与验证入口
+
+- `AtmosphereTimeOfDay.proc` 是昼夜效果演示场景，由 Environment `AnimationTrack` 连续驱动太阳高度角。
+- `assets/agentscripts/atmosphere.agentscript.json` 扫描正午、日落与夜间状态，执行运行时断言并截图。
+- `gkNextRenderer` 的 Renderer Settings 中提供 `Atmosphere & Fog` 面板，可人工调整大气、空中透视、
+  高度雾和 SkyView LUT 分辨率倍率。
+- `FogStartDistance` 是**相对相机的射线距离**：介质积分从
+  `cameraPosition + rayDirection * FogStartDistance` 开始，不依赖世界原点。
+- M4 的 froxel 体积雾光轴、PathTracing 真正介质散射和移动端降级留待明确需求后另行设计。
 
 ## 目标与非目标
 
@@ -202,7 +214,7 @@ public uint64_t AtmosphereReserved0; // 保持 16 字节尾对齐
 |---|---|---|---|---|
 | Transmittance | 256 × 64 | RGBA16F | 仅介质参数 | 参数脏 |
 | MultiScattering | 32 × 32 | RGBA16F | 介质参数 + 地面反照率 | 参数脏 |
-| SkyView | 192 × 108 | RGBA16F | 太阳方向 + 相机海拔 | 每帧（scene-global） |
+| SkyView | 192 × 108 × `r.atmosphere.skyViewLutScale` | RGBA16F | 太阳方向 + 相机海拔 | 每帧（scene-global） |
 | AerialPerspective | 32 × 32 × 32 | RGBA16F | 相机视锥 + 太阳方向 | 每帧（仅 primary view） |
 
 参数化沿用 Hillaire 2020：Transmittance 用 `(cosViewZenith, altitude)`；SkyView 在地平线附近
@@ -261,6 +273,8 @@ PropertyPanel 编辑 UI、undo/redo、QuickJS 绑定、场景序列化。
 - `r.atmosphere.debugMode` — 0 关 / 1 只看 inScatter / 2 只看 transmittance / 3 只看 SkyView LUT
 
 `AtmosphereSetting` 是**场景数据**（存进 glb/scad），cvar 是**运行时覆盖**，与既有 GTAO 的划分一致。
+主程序的 Renderer Settings 同时暴露一组直接写入当前 Environment 的人工测试控件；它们是调试入口，
+不改变上述场景数据所有权。
 
 ## 不变量
 

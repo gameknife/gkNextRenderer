@@ -32,7 +32,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         normalize((sunHorizontal * azimuthCos + sunRight * azimuthSin) * horizontal +
                   float3(0.0f, elevation, 0.0f));
 
-    const float3 cameraWorld = camera.ModelViewInverse[3].xyz;
+    const float3 cameraWorld =
+        mul(camera.ModelViewInverse, float4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
     const float cameraAltitude =
         params.WorldOriginAltitude + cameraWorld.y / max(params.WorldUnitsPerKm, 1.0e-3f);
     const float3 origin = float3(0.0f, params.BottomRadius + max(cameraAltitude, 0.001f), 0.0f);

@@ -32,6 +32,7 @@ namespace Rendering::Atmosphere
         void DestroyDeviceResources();
         void CreateSwapChainPipelines();
         void DestroySwapChainPipelines();
+        void SyncRuntimeResources(bool deviceIsIdle = false);
 
         void BeginSceneFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex);
         void PrepareView(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool isPrimaryView,
@@ -46,6 +47,7 @@ namespace Rendering::Atmosphere
     private:
         Assets::FAtmosphereParams BuildParams() const;
         void WriteParams(const Assets::FAtmosphereParams& params);
+        void CreateSkyViewLut(VkExtent2D extent);
         void Dispatch2D(VkCommandBuffer commandBuffer, uint32_t imageIndex,
                         Vulkan::PipelineCommon::ZeroBindPipeline& pipeline,
                         Vulkan::RenderImage& target, uint32_t slot, VkExtent2D extent,
@@ -71,6 +73,7 @@ namespace Rendering::Atmosphere
         bool haveLastParams_ = false;
         bool staticLutsDirty_ = true;
         bool aerialPerspectiveReady_ = false;
+        VkExtent2D skyViewExtent_{};
         glm::vec3 lastProjectedSunDirection_{};
         bool haveProjectedSky_ = false;
     };

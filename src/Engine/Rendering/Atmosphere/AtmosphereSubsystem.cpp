@@ -29,8 +29,19 @@ namespace Rendering::Atmosphere
 
         constexpr VkExtent2D transmittanceExtent{256, 64};
         constexpr VkExtent2D multiScatterExtent{32, 32};
-        constexpr VkExtent2D skyViewExtent{192, 108};
+        constexpr VkExtent2D baseSkyViewExtent{192, 108};
         constexpr VkExtent3D aerialPerspectiveExtent{32, 32, 32};
+
+        VkExtent2D ScaledSkyViewExtent(float scale)
+        {
+            scale = std::clamp(scale, 0.25f, 2.0f);
+            return {
+                std::max(1u, static_cast<uint32_t>(
+                    std::lround(static_cast<float>(baseSkyViewExtent.width) * scale))),
+                std::max(1u, static_cast<uint32_t>(
+                    std::lround(static_cast<float>(baseSkyViewExtent.height) * scale))),
+            };
+        }
 
         std::unique_ptr<Vulkan::RenderImage> CreateLut2D(
             Vulkan::VulkanBaseRenderer& renderer, VkExtent2D extent, const char* name)
@@ -71,16 +82,14 @@ namespace Rendering::Atmosphere
 
         transmittanceLut_ = CreateLut2D(renderer_, transmittanceExtent, "Atmosphere Transmittance LUT");
         multiScatterLut_ = CreateLut2D(renderer_, multiScatterExtent, "Atmosphere Multi Scatter LUT");
-        skyViewLut_ = CreateLut2D(renderer_, skyViewExtent, "Atmosphere Sky View LUT");
+        CreateSkyViewLut(ScaledSkyViewExtent(
+            renderer_.FrameSettings().userSettings.AtmosphereSkyViewLutScale));
 
         auto* texturePool = Assets::GlobalTexturePool::GetInstance();
         texturePool->BindStorageTexture(transmittanceSlot, transmittanceLut_->GetImageView());
         texturePool->BindSampleTexture(transmittanceSlot, transmittanceLut_->GetImageView(), transmittanceLut_->Sampler());
         texturePool->BindStorageTexture(multiScatterSlot, multiScatterLut_->GetImageView());
         texturePool->BindSampleTexture(multiScatterSlot, multiScatterLut_->GetImageView(), multiScatterLut_->Sampler());
-        texturePool->BindStorageTexture(skyViewSlot, skyViewLut_->GetImageView());
-        texturePool->BindSampleTexture(skyViewSlot, skyViewLut_->GetImageView(), skyViewLut_->Sampler());
-
         renderer_.CreateStorageImage3D(
             aerialPerspectiveSlot, aerialPerspectiveExtent, VK_FORMAT_R16G16B16A16_SFLOAT,
             VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -90,6 +99,45 @@ namespace Rendering::Atmosphere
         aerialPerspectiveReady_ = false;
         haveLastParams_ = false;
         WriteParams(BuildParams());
+    }
+
+    void AtmosphereSubsystem::CreateSkyViewLut(VkExtent2D extent)
+    {
+        skyViewExtent_ = extent;
+        skyViewLut_ = CreateLut2D(renderer_, skyViewExtent_, "Atmosphere Sky View LUT");
+        auto* texturePool = Assets::GlobalTexturePool::GetInstance();
+        texturePool->BindStorageTexture(skyViewSlot, skyViewLut_->GetImageView());
+        texturePool->BindSampleTexture(
+            skyViewSlot, skyViewLut_->GetImageView(), skyViewLut_->Sampler());
+    }
+
+    void AtmosphereSubsystem::SyncRuntimeResources(bool deviceIsIdle)
+    {
+        if (!paramsBuffer_)
+        {
+            return;
+        }
+        const VkExtent2D desiredExtent = ScaledSkyViewExtent(
+            renderer_.FrameSettings().userSettings.AtmosphereSkyViewLutScale);
+        if (desiredExtent.width == skyViewExtent_.width &&
+            desiredExtent.height == skyViewExtent_.height)
+        {
+            return;
+        }
+
+        if (!deviceIsIdle)
+        {
+            renderer_.RequestRecreateSwapChain();
+            return;
+        }
+
+        skyViewLut_.reset();
+        lutStates_.Reset();
+        CreateSkyViewLut(desiredExtent);
+        staticLutsDirty_ = true;
+        aerialPerspectiveReady_ = false;
+        SPDLOG_INFO("Atmosphere SkyView LUT resized to {}x{}",
+                    skyViewExtent_.width, skyViewExtent_.height);
     }
 
     void AtmosphereSubsystem::DestroyDeviceResources()
@@ -103,6 +151,7 @@ namespace Rendering::Atmosphere
             renderer_.DestroyStorageImage3D(aerialPerspectiveSlot);
         }
         skyViewLut_.reset();
+        skyViewExtent_ = {};
         multiScatterLut_.reset();
         transmittanceLut_.reset();
         paramsBuffer_.reset();
@@ -313,7 +362,7 @@ namespace Rendering::Atmosphere
             staticLutsDirty_ = false;
         }
         Dispatch2D(commandBuffer, imageIndex, *skyViewPipeline_, *skyViewLut_,
-                   skyViewSlot, skyViewExtent, "Atmosphere Sky View");
+                   skyViewSlot, skyViewExtent_, "Atmosphere Sky View");
         aerialPerspectiveReady_ = false;
     }
 

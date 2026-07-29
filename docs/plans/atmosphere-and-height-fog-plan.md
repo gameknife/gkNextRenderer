@@ -1,29 +1,42 @@
 ---
 title: "大气散射与高度雾（开发计划）"
 category: plan
-status: 未开工
+status: 已完成
 owner: engine/rendering
 created: 2026-07-29
 last_updated: 2026-07-29
+completed: 2026-07-29
 ---
 
 # 大气散射与高度雾开发计划
 
 > 设计方案见 [`docs/designs/atmosphere-and-height-fog-design.md`](../designs/atmosphere-and-height-fog-design.md)。
 > 术语、数据契约、不变量、单位约定均以设计文档为准，本文只做任务分解与验收。
-> M0→M3 严格串行，每期产物是下一期输入；单个里程碑内的任务可并行。
-> 每完成一个里程碑必须先跑完该期"验收"再进入下一期。
+>
+> **完成状态（2026-07-29）**：M0–M3 已实现并由用户验收通过，本计划完成。
+> M4 不属于本次交付，后续出现明确需求时另立任务。
+
+## 完成摘要
+
+- 已交付程序化天空、大气透视、指数高度雾、五渲染器共用的合成路径，以及太阳直射与
+  AmbientCube GI 的天空一致性。
+- `AtmosphereTimeOfDay.proc` 提供正午、日落、夜间连续演示；当前实现通过
+  Environment `AnimationTrack` 驱动太阳高度角，替代了计划草案中的 TypeScript 脚本形式。
+- `assets/agentscripts/atmosphere.agentscript.json` 提供太阳角度扫描、运行时断言与截图入口；
+  `gkNextRenderer` 的 Renderer Settings 提供 `Atmosphere & Fog` 人工调参区。
+- 用户已接受上述 demo 与 Agent/人工验证作为 M3 验收闭环；原计划中的独立 visual-test baseline
+  不再作为本次完成条件。下文保留原任务分解，供追溯设计取舍。
 
 ## 总览
 
-| 里程碑 | 一句话 | 主要产出 | 依赖 |
-|---|---|---|---|
-| ~~**P**~~ | ~~前置：bindless 3D 纹理支持~~ **已完成（2026-07-29）** | 见 [前置计划](bindless-3d-texture-support-plan.md) | — |
-| M0 | 参数与骨架落地，画面零变化 | `FAtmosphereParams` + `AtmosphereSetting` 反射 + UBO 地址 + cvar + 空 subsystem | — |
-| M1 | 程序化天空替换 IBL，含日落红移与 GI 一致 | 3 张 LUT + `common/Sky.slang` + 7 处采样点 + CPU SH/透射率 | M0 |
-| M2 | 大气透视与高度雾，五渲染器统一 | AP volume + composite pass + `RenderViewToBank` 接入 | M1 + **P** |
-| M3 | 打磨、demo、回归基线与文档收口 | 日夜 demo 场景 + visual test baseline + design 转"现行" | M2 |
-| M4 | （未授权）体积雾光轴 / PT 介质散射 | — | M3 + 单独授权 |
+| 里程碑 | 状态 | 一句话 | 主要产出 | 依赖 |
+|---|---|---|---|---|
+| **P** | 已完成 | 前置：bindless 3D 纹理支持 | 见 [前置计划](bindless-3d-texture-support-plan.md) | — |
+| M0 | 已完成 | 参数与骨架落地，画面零变化 | `FAtmosphereParams` + `AtmosphereSetting` 反射 + UBO 地址 + cvar + subsystem | — |
+| M1 | 已完成并验收 | 程序化天空替换 IBL，含日落红移与 GI 一致 | 3 张 LUT + `common/Sky.slang` + 天空采样接入 + CPU SH/透射率 | M0 |
+| M2 | 已完成并验收 | 大气透视与高度雾，五渲染器统一 | AP volume + composite pass + `RenderViewToBank` 接入 | M1 + **P** |
+| M3 | 已完成并验收 | 打磨、demo、验证入口与文档收口 | 日夜 demo + Agent/人工验证入口 + design 转"现行" | M2 |
+| M4 | 后续按需 | 体积雾光轴 / PT 介质散射 | 本计划不含 | 另立任务 |
 
 **前置计划 P 已于 2026-07-29 完成**：引擎支持 bindless 3D 纹理，M2 的 AP volume 直接用真 3D 图像，
 2D tile atlas 退化路径已作废。用法见
@@ -41,7 +54,7 @@ last_updated: 2026-07-29
 
 ---
 
-## M0 — 参数与骨架
+## M0 — 参数与骨架（已完成）
 
 目标：把数据通路和开关全部打通，但一个像素都不改变。这一期做完，后续每期都能独立开关验证。
 
@@ -84,7 +97,7 @@ last_updated: 2026-07-29
 
 ---
 
-## M1 — 程序化天空
+## M1 — 程序化天空（已完成并验收）
 
 目标：天空由大气模型驱动，日落红移正确，GI 一致，五渲染器表现一致。
 
@@ -127,7 +140,7 @@ last_updated: 2026-07-29
 
 ---
 
-## M2 — 大气透视与高度雾
+## M2 — 大气透视与高度雾（已完成并验收）
 
 目标：远景消光与内散射、指数高度雾，一个 pass 覆盖全部渲染器。
 
@@ -161,7 +174,7 @@ last_updated: 2026-07-29
 
 ---
 
-## M3 — 打磨与收口
+## M3 — 打磨与收口（已完成并验收）
 
 ### 任务
 
@@ -184,7 +197,9 @@ last_updated: 2026-07-29
 
 ---
 
-## M4 — 后续方向（本计划不含，需单独授权）
+## M4 — 后续按需方向（本计划不含）
+
+以下内容仅保留为候选方向，不是当前待办；出现明确产品需求时重新立项、设计和验收。
 
 - **froxel 体积雾 + 体积阴影**：`Core.VolumetricFogInject/Scatter.comp.slang`，采 CSM 出光轴。
   composite pass 直接改采 froxel volume 替代解析 AP，对外契约不变。

@@ -17,20 +17,22 @@ float3 ReconstructWorldPosition(
 float HeightFogTransmittance(
     FAtmosphereParams params, float3 cameraPosition, float3 surfacePosition, float distance)
 {
-    const float activeDistance = max(distance - params.FogStartDistance, 0.0f);
+    const float startDistance = min(params.FogStartDistance, distance);
+    const float activeDistance = distance - startDistance;
     if (activeDistance <= 0.0f || params.FogDensity <= 0.0f)
     {
         return 1.0f;
     }
     const float3 direction = (surfacePosition - cameraPosition) / max(distance, 1.0e-5f);
-    const float cameraDensity =
-        params.FogDensity * exp(-params.FogHeightFalloff * (cameraPosition.y - params.FogBaseHeight));
+    const float3 fogStartPosition = cameraPosition + direction * startDistance;
+    const float startDensity =
+        params.FogDensity * exp(-params.FogHeightFalloff * (fogStartPosition.y - params.FogBaseHeight));
     const float heightDelta = direction.y * activeDistance;
     const float exponent = params.FogHeightFalloff * heightDelta;
     const float integralFactor = abs(exponent) < 1.0e-4f
         ? 1.0f
         : (1.0f - exp(-exponent)) / exponent;
-    const float opticalDepth = max(cameraDensity * activeDistance * integralFactor, 0.0f);
+    const float opticalDepth = max(startDensity * activeDistance * integralFactor, 0.0f);
     const float rawTransmittance = exp(-opticalDepth);
     return max(rawTransmittance, 1.0f - params.FogMaxOpacity);
 }
@@ -61,7 +63,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     const float4 originalColor =
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_SCENE_COLOR)[pixel];
-    const float3 cameraPosition = camera.ModelViewInverse[3].xyz;
+    const float3 cameraPosition =
+        mul(camera.ModelViewInverse, float4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
     const float3 worldPosition = ReconstructWorldPosition(camera, pixel, size, depth);
     const float distance = length(worldPosition - cameraPosition);
 

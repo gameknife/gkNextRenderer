@@ -38,7 +38,8 @@ namespace Common
         const float2 uv = SkyViewUv(direction, camera.SunDirection.xyz);
         const float3 lutRadiance =
             Bindless.GetSampleTexture(params.SkyViewLutId).SampleLevel(uv, 0.0f).rgb;
-        const float3 cameraWorld = camera.ModelViewInverse[3].xyz;
+        const float3 cameraWorld =
+            mul(camera.ModelViewInverse, float4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
         const float cameraAltitude =
             params.WorldOriginAltitude + cameraWorld.y / max(params.WorldUnitsPerKm, 1.0e-3f);
         const float altitudeUv =

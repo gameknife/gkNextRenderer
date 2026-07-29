@@ -23,7 +23,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     const float4 viewTarget = mul(camera.ProjectionInverseUnJit, float4(ndc, 1.0f, 1.0f));
     const float3 viewDirection = normalize(viewTarget.xyz / max(abs(viewTarget.w), 1.0e-6f));
     const float3 worldDirection = normalize(mul(camera.ModelViewInverse, float4(viewDirection, 0.0f)).xyz);
-    const float3 cameraWorld = camera.ModelViewInverse[3].xyz;
+    const float3 cameraWorld =
+        mul(camera.ModelViewInverse, float4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
     const float cameraAltitude =
         params.WorldOriginAltitude + cameraWorld.y / max(params.WorldUnitsPerKm, 1.0e-3f);
     const float3 origin = float3(0.0f, params.BottomRadius + max(cameraAltitude, 0.001f), 0.0f);

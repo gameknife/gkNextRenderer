@@ -1259,6 +1259,29 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
         return DrawSettingSliderRow(label, ImGuiDataType_S32, value, minValue, maxValue, format, 1.0f);
     };
 
+    auto DrawFloat3Setting = [&](const char* label, const char* id, glm::vec3* value,
+                                 float dragSpeed, float minValue, float maxValue,
+                                 const char* format)
+    {
+        return DrawSettingRow(label,
+                              [&]()
+                              {
+                                  ImGui::SetNextItemWidth(-FLT_MIN);
+                                  return ImGui::DragFloat3(
+                                      id, &value->x, dragSpeed, minValue, maxValue, format);
+                              });
+    };
+
+    auto DrawColorSetting = [&](const char* label, const char* id, glm::vec3* value)
+    {
+        return DrawSettingRow(label,
+                              [&]()
+                              {
+                                  ImGui::SetNextItemWidth(-FLT_MIN);
+                                  return ImGui::ColorEdit3(id, &value->x);
+                              });
+    };
+
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Renderer"), true))
     {
         DrawSettingRow(LOCTEXT("Renderer"),
@@ -1387,6 +1410,134 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
         auto& camera = GetEngine().GetScene().GetRenderCamera();
         DrawFloatSetting(LOCTEXT("Aperture"), &camera.Aperture, 0.0f, 1.0f, "%.2f", 0.01f);
         DrawFloatSetting(LOCTEXT("Focus(cm)"), &camera.FocalDistance, 0.001f, 1000.0f, "%.3f", 0.05f);
+        NextUI::Theme::EndPanelSection();
+    }
+
+    if (NextUI::Theme::BeginPanelSection("Atmosphere & Fog", true))
+    {
+        auto& scene = GetEngine().GetScene();
+        auto& environment = scene.GetEnvSettings();
+        auto& atmosphere = environment.Atmosphere;
+        bool atmosphereChanged = false;
+
+        atmosphereChanged |= DrawSettingCheckboxRow("Atmosphere Sky", &userSetting.AtmosphereEnable);
+
+        float sunElevationDegrees = glm::degrees(environment.SunElevation);
+        if (DrawFloatSetting(
+                "Sun Elevation", &sunElevationDegrees, -24.0f, 90.0f, "%.1f deg", 0.25f))
+        {
+            environment.SunElevation = glm::radians(sunElevationDegrees);
+            atmosphereChanged = true;
+        }
+        atmosphereChanged |= DrawFloatSetting(
+            "Sky Luminance", &atmosphere.SkyLuminanceScale, 0.0f, 10.0f, "%.2f", 0.01f);
+        atmosphereChanged |= DrawFloatSetting(
+            "Sky LUT Scale", &userSetting.AtmosphereSkyViewLutScale,
+            0.25f, 2.0f, "%.2fx", 0.05f);
+
+        static constexpr const char* debugModes[] = {
+            "Off", "In-Scatter", "Transmittance", "SkyView LUT"};
+        atmosphereChanged |= DrawSettingRow(
+            "Debug View",
+            [&]()
+            {
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                return ImGui::Combo(
+                    "##AtmosphereDebug", &userSetting.AtmosphereDebugMode,
+                    debugModes, IM_ARRAYSIZE(debugModes));
+            });
+
+        ImGui::SeparatorText("Aerial Perspective");
+        ImGui::PushID("AerialPerspective");
+        atmosphereChanged |= DrawSettingCheckboxRow(
+            "Enabled", &userSetting.AtmosphereAerialPerspective);
+        ImGui::PopID();
+        ImGui::BeginDisabled(!userSetting.AtmosphereEnable ||
+                             !userSetting.AtmosphereAerialPerspective);
+        atmosphereChanged |= DrawFloatSetting(
+            "Max Distance", &atmosphere.AerialPerspectiveMaxDistance,
+            10.0f, 50000.0f, "%.0f", 10.0f);
+        ImGui::EndDisabled();
+
+        ImGui::SeparatorText("Height Fog");
+        ImGui::PushID("HeightFog");
+        atmosphereChanged |= DrawSettingCheckboxRow(
+            "Enabled", &userSetting.AtmosphereHeightFog);
+        ImGui::PopID();
+        ImGui::BeginDisabled(!userSetting.AtmosphereHeightFog);
+        atmosphereChanged |= DrawColorSetting(
+            "Fog Color", "##AtmosphereFogColor", &atmosphere.FogInscatteringColor);
+        atmosphereChanged |= DrawFloatSetting(
+            "Density", &atmosphere.FogDensity, 0.0f, 0.1f, "%.4f", 0.0001f);
+        atmosphereChanged |= DrawFloatSetting(
+            "Height Falloff", &atmosphere.FogHeightFalloff, 0.0f, 2.0f, "%.3f", 0.005f);
+        atmosphereChanged |= DrawFloatSetting(
+            "Base Height", &atmosphere.FogBaseHeight, -2000.0f, 2000.0f, "%.1f", 0.5f);
+        atmosphereChanged |= DrawFloatSetting(
+            "Start Distance", &atmosphere.FogStartDistance, 0.0f, 10000.0f, "%.1f", 1.0f);
+        atmosphereChanged |= DrawFloatSetting(
+            "Max Opacity", &atmosphere.FogMaxOpacity, 0.0f, 1.0f, "%.2f", 0.01f);
+        ImGui::EndDisabled();
+
+        if (ImGui::TreeNodeEx("Advanced Atmosphere", ImGuiTreeNodeFlags_SpanAvailWidth))
+        {
+            atmosphereChanged |= DrawFloat3Setting(
+                "Rayleigh", "##AtmosphereRayleigh", &atmosphere.RayleighScattering,
+                0.00001f, 0.0f, 0.1f, "%.6f");
+            atmosphereChanged |= DrawFloatSetting(
+                "Rayleigh Height", &atmosphere.RayleighDensityH,
+                0.1f, 32.0f, "%.2f km", 0.05f);
+            atmosphereChanged |= DrawFloat3Setting(
+                "Mie Scatter", "##AtmosphereMieScatter", &atmosphere.MieScattering,
+                0.00001f, 0.0f, 0.1f, "%.6f");
+            atmosphereChanged |= DrawFloat3Setting(
+                "Mie Absorption", "##AtmosphereMieAbsorption", &atmosphere.MieAbsorption,
+                0.00001f, 0.0f, 0.1f, "%.6f");
+            atmosphereChanged |= DrawFloatSetting(
+                "Mie Height", &atmosphere.MieDensityH,
+                0.1f, 16.0f, "%.2f km", 0.05f);
+            atmosphereChanged |= DrawFloatSetting(
+                "Mie Anisotropy", &atmosphere.MiePhaseG,
+                0.0f, 0.99f, "%.3f", 0.005f);
+            atmosphereChanged |= DrawFloat3Setting(
+                "Ozone Absorption", "##AtmosphereOzone", &atmosphere.OzoneAbsorption,
+                0.00001f, 0.0f, 0.05f, "%.6f");
+            atmosphereChanged |= DrawFloatSetting(
+                "Ozone Center", &atmosphere.OzoneCenterAltitude,
+                0.0f, 60.0f, "%.1f km", 0.1f);
+            atmosphereChanged |= DrawFloatSetting(
+                "Ozone Width", &atmosphere.OzoneWidth,
+                0.1f, 40.0f, "%.1f km", 0.1f);
+            atmosphereChanged |= DrawColorSetting(
+                "Ground Albedo", "##AtmosphereGroundAlbedo", &atmosphere.GroundAlbedo);
+            atmosphereChanged |= DrawFloatSetting(
+                "World Units / km", &atmosphere.WorldUnitsPerKm,
+                0.001f, 10000.0f, "%.3f", 1.0f);
+            atmosphereChanged |= DrawFloatSetting(
+                "Origin Altitude", &atmosphere.WorldOriginAltitude,
+                -10.0f, 100.0f, "%.2f km", 0.05f);
+            atmosphereChanged |= DrawSettingRow(
+                "Preset",
+                [&]()
+                {
+                    if (!ImGui::Button("Earth Defaults", ImVec2(-FLT_MIN, 0.0f)))
+                    {
+                        return false;
+                    }
+                    atmosphere.Reset();
+                    return true;
+                });
+            ImGui::TreePop();
+        }
+
+        if (userSetting.TickAnimation)
+        {
+            ImGui::TextDisabled("Disable Tick Animation to hold a manual sun angle.");
+        }
+        if (atmosphereChanged)
+        {
+            scene.MarkDirty();
+        }
         NextUI::Theme::EndPanelSection();
     }
 

@@ -1512,6 +1512,7 @@ namespace Vulkan
         ctx_.device->WaitIdle();
         DeleteSwapChain();
         CreateSwapChain();
+        atmosphere_->SyncRuntimeResources(true);
         resetUpscalerHistory_ = true;
     }
 
@@ -1685,6 +1686,7 @@ namespace Vulkan
         frameSettings_.progressiveAccumulatedFrames = engine->GetProgressiveRenderAccumulatedFrames();
         frameSettings_.progressiveTargetFrames = engine->GetProgressiveRenderTargetFrames();
         const auto& settings = frameSettings_.userSettings;
+        atmosphere_->SyncRuntimeResources();
         const bool frameGenerationEnabled = !frameSettings_.progressiveRendering && settings.FrameGeneration &&
             SupportsFrameGeneration(activeUpscalerType_) && temporalSuperResolutionActive_ &&
             engine->GetEngineStatus() != NextRenderer::EApplicationStatus::Loading;
