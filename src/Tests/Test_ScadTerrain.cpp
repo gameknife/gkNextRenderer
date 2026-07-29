@@ -14,6 +14,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <string>
 #include <unordered_map>
 
@@ -168,6 +169,70 @@ namespace
         });
     }
 
+    size_t CountMaterialTips(const FTerrainData& data, const std::string& materialName)
+    {
+        struct Face
+        {
+            std::string material;
+            size_t vertex[3]{};
+        };
+        std::vector<Face> faces;
+        for (const FTerrainData::ColoredTris& bucket : data.landGeom)
+        {
+            if (bucket.materialName == "terrain_skirt") continue;
+            for (size_t tri = 0; tri + 2 < bucket.tris.size(); tri += 3)
+            {
+                Face face;
+                face.material = bucket.materialName;
+                for (int corner = 0; corner < 3; ++corner)
+                {
+                    const auto vertex = std::find(data.verts.begin(), data.verts.end(), bucket.tris[tri + corner]);
+                    REQUIRE(vertex != data.verts.end());
+                    face.vertex[corner] = static_cast<size_t>(vertex - data.verts.begin());
+                }
+                faces.push_back(std::move(face));
+            }
+        }
+
+        std::vector<std::vector<size_t>> neighbors(faces.size());
+        std::map<std::pair<size_t, size_t>, size_t> edgeOwner;
+        for (size_t faceIndex = 0; faceIndex < faces.size(); ++faceIndex)
+        {
+            for (int edge = 0; edge < 3; ++edge)
+            {
+                const auto key = std::minmax(faces[faceIndex].vertex[edge],
+                                             faces[faceIndex].vertex[(edge + 1) % 3]);
+                const auto [it, inserted] =
+                    edgeOwner.emplace(std::pair<size_t, size_t>(key.first, key.second), faceIndex);
+                if (!inserted)
+                {
+                    neighbors[faceIndex].push_back(it->second);
+                    neighbors[it->second].push_back(faceIndex);
+                }
+            }
+        }
+
+        size_t tips = 0;
+        for (size_t faceIndex = 0; faceIndex < faces.size(); ++faceIndex)
+        {
+            if (faces[faceIndex].material != materialName || neighbors[faceIndex].size() != 3) continue;
+            for (size_t neighbor : neighbors[faceIndex])
+            {
+                const std::string& candidate = faces[neighbor].material;
+                if (candidate == materialName) continue;
+                const int count = static_cast<int>(std::count_if(
+                    neighbors[faceIndex].begin(), neighbors[faceIndex].end(),
+                    [&](size_t other) { return faces[other].material == candidate; }));
+                if (count >= 2)
+                {
+                    ++tips;
+                    break;
+                }
+            }
+        }
+        return tips;
+    }
+
     class ScopedDir
     {
     public:
@@ -294,6 +359,60 @@ TEST_CASE("ScadTerrain features: pad is flat, mountain rises, plateau tops out",
 
     // Plateau: top plate close to its nominal height.
     CHECK(data->HeightAt(-40.0, -30.0) > 5.0 * 0.7);
+}
+
+TEST_CASE("ScadTerrain features: road and pad material boundaries use triangle miters",
+          "[Unit][Scad][ScadTerrain]")
+{
+    FTerrainSpec spec;
+    spec.size = {40.0, 40.0};
+    spec.cells = {10, 10};
+    spec.seed = 17;
+    spec.relief = 0.0;
+
+    FTerrainFeature road;
+    road.type = FTerrainFeature::EType::Road;
+    road.pts = {{-18.0, -13.0}, {18.0, 11.0}};
+    road.width = 4.0;
+    spec.features.push_back(road);
+
+    FTerrainFeature pad;
+    pad.type = FTerrainFeature::EType::Pad;
+    pad.at = {8.0, -8.0};
+    pad.size = {10.0, 7.0};
+    pad.rot = 31.0;
+    spec.features.push_back(pad);
+
+    const auto data = ScadTerrain::Build(spec);
+    std::vector<uint8_t> roadFaces(100, 0);
+    std::vector<uint8_t> padFaces(100, 0);
+    for (const FTerrainData::ColoredTris& bucket : data->landGeom)
+    {
+        std::vector<uint8_t>* faceCounts = nullptr;
+        if (bucket.materialName == "terrain_road")
+            faceCounts = &roadFaces;
+        else if (bucket.materialName == "terrain_pad")
+            faceCounts = &padFaces;
+        else
+            continue;
+
+        for (size_t tri = 0; tri + 2 < bucket.tris.size(); tri += 3)
+        {
+            const glm::dvec3 centroid =
+                (bucket.tris[tri] + bucket.tris[tri + 1] + bucket.tris[tri + 2]) / 3.0;
+            const int cell = data->CellIndexAt(centroid.x, centroid.y);
+            REQUIRE(cell >= 0);
+            ++(*faceCounts)[static_cast<size_t>(cell)];
+        }
+    }
+
+    // A boundary cell containing one feature face and one natural-biome face
+    // proves that the mask can follow the cell diagonal instead of filling an
+    // axis-aligned grid square.
+    CHECK(std::find(roadFaces.begin(), roadFaces.end(), 1) != roadFaces.end());
+    CHECK(std::find(padFaces.begin(), padFaces.end(), 1) != padFaces.end());
+    CHECK(CountMaterialTips(*data, "terrain_road") == 0);
+    CHECK(CountMaterialTips(*data, "terrain_pad") == 0);
 }
 
 TEST_CASE("ScadTerrain river: carves below a downstream-monotonic water line", "[Unit][Scad][ScadTerrain]")

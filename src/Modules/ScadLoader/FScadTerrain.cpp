@@ -1220,10 +1220,16 @@ namespace Assets::Scad
             const size_t cell = static_cast<size_t>(j) * cx + i;
             const uint8_t flags = data->cellFlags[cell];
             if (flags & FTerrainData::kFlagWater) return ETerrainBiome::Bed;
-            if (flags & FTerrainData::kFlagRoad) return ETerrainBiome::Road;
-            if (flags & FTerrainData::kFlagPad) return ETerrainBiome::Pad;
 
             const glm::dvec3 centroid = (a + b + c) / 3.0;
+            // Road and pad masks are sampled per face, like the natural
+            // biomes below.  Using the cell-center flags here made both
+            // triangles of every touched cell share one material, producing
+            // visibly axis-aligned, square feature boundaries.
+            const glm::dvec2 centroidXY(centroid.x, centroid.y);
+            if (field.OnRoad(centroidXY)) return ETerrainBiome::Road;
+            if (field.OnPad(centroidXY)) return ETerrainBiome::Pad;
+
             glm::dvec3 n = glm::cross(b - a, c - a);
             const double len = glm::length(n);
             double slopeDeg = 0.0;
@@ -1249,17 +1255,25 @@ namespace Assets::Scad
             return patch > 0.15 ? ETerrainBiome::GrassDark : ETerrainBiome::Grass;
         };
 
+        struct FClassifiedFace
+        {
+            size_t vertex[3]{};
+            ETerrainBiome biome = ETerrainBiome::Grass;
+        };
+        std::vector<FClassifiedFace> faces;
+        faces.reserve(static_cast<size_t>(cx) * cy * 2);
+
         for (int j = 0; j < cy; ++j)
         {
             for (int i = 0; i < cx; ++i)
             {
                 const size_t cell = static_cast<size_t>(j) * cx + i;
-                const glm::dvec3& a = data->verts[static_cast<size_t>(j) * vx + i];
-                const glm::dvec3& b = data->verts[static_cast<size_t>(j) * vx + i + 1];
-                const glm::dvec3& c = data->verts[(static_cast<size_t>(j) + 1) * vx + i + 1];
-                const glm::dvec3& d = data->verts[(static_cast<size_t>(j) + 1) * vx + i];
-                glm::dvec3 t0[3];
-                glm::dvec3 t1[3];
+                const size_t a = static_cast<size_t>(j) * vx + i;
+                const size_t b = a + 1;
+                const size_t d = static_cast<size_t>(j + 1) * vx + i;
+                const size_t c = d + 1;
+                size_t t0[3];
+                size_t t1[3];
                 if (data->cellDiagFlip[cell] == 0)
                 {
                     t0[0] = a; t0[1] = b; t0[2] = c;
@@ -1270,12 +1284,100 @@ namespace Assets::Scad
                     t0[0] = a; t0[1] = b; t0[2] = d;
                     t1[0] = b; t1[1] = c; t1[2] = d;
                 }
-                const ETerrainBiome biome0 = classifyFace(i, j, t0[0], t0[1], t0[2]);
-                const ETerrainBiome biome1 = classifyFace(i, j, t1[0], t1[1], t1[2]);
-                emitLand(biome0, t0[0], t0[1], t0[2]);
-                emitLand(biome1, t1[0], t1[1], t1[2]);
-                // Cell-level biome for queries: the first face's pick.
-                data->cellBiome[cell] = static_cast<uint8_t>(biome0);
+                faces.push_back({{t0[0], t0[1], t0[2]},
+                                 classifyFace(i, j, data->verts[t0[0]], data->verts[t0[1]], data->verts[t0[2]])});
+                faces.push_back({{t1[0], t1[1], t1[2]},
+                                 classifyFace(i, j, data->verts[t1[0]], data->verts[t1[1]], data->verts[t1[2]])});
+            }
+        }
+
+        // Remove one-triangle material spikes without straightening the
+        // low-poly boundary. A tip has three neighbors: one behind it and two
+        // matching neighbors along its sides. Replacing only that strict
+        // 2-to-1 case preserves ordinary diagonal miters and broad regions.
+        std::vector<std::vector<size_t>> faceNeighbors(faces.size());
+        std::map<std::pair<size_t, size_t>, size_t> edgeOwner;
+        for (size_t faceIndex = 0; faceIndex < faces.size(); ++faceIndex)
+        {
+            const FClassifiedFace& face = faces[faceIndex];
+            for (int edge = 0; edge < 3; ++edge)
+            {
+                const size_t v0 = face.vertex[edge];
+                const size_t v1 = face.vertex[(edge + 1) % 3];
+                const std::pair<size_t, size_t> key = std::minmax(v0, v1);
+                const auto [it, inserted] = edgeOwner.emplace(key, faceIndex);
+                if (!inserted)
+                {
+                    faceNeighbors[faceIndex].push_back(it->second);
+                    faceNeighbors[it->second].push_back(faceIndex);
+                }
+            }
+        }
+
+        std::vector<ETerrainBiome> regularized;
+        regularized.reserve(faces.size());
+        for (const FClassifiedFace& face : faces) regularized.push_back(face.biome);
+        bool changed = true;
+        while (changed)
+        {
+            changed = false;
+            for (size_t faceIndex = 0; faceIndex < faces.size(); ++faceIndex)
+            {
+                if (faceNeighbors[faceIndex].size() != 3) continue;
+
+                const ETerrainBiome current = regularized[faceIndex];
+                ETerrainBiome candidate = ETerrainBiome::Count;
+                int candidateCount = 0;
+                for (size_t neighbor : faceNeighbors[faceIndex])
+                {
+                    const ETerrainBiome neighborBiome = regularized[neighbor];
+                    if (neighborBiome == current || neighborBiome == ETerrainBiome::Bed) continue;
+                    int count = 0;
+                    for (size_t other : faceNeighbors[faceIndex])
+                    {
+                        if (regularized[other] == neighborBiome) ++count;
+                    }
+                    if (count > candidateCount)
+                    {
+                        candidate = neighborBiome;
+                        candidateCount = count;
+                    }
+                }
+                if (current != ETerrainBiome::Bed && candidateCount >= 2)
+                {
+                    // This changes two disagreeing edges into one, so the
+                    // total material-boundary length strictly decreases and
+                    // the in-place relaxation cannot oscillate.
+                    regularized[faceIndex] = candidate;
+                    changed = true;
+                }
+            }
+        }
+
+        for (size_t faceIndex = 0; faceIndex < faces.size(); ++faceIndex)
+        {
+            FClassifiedFace& face = faces[faceIndex];
+            face.biome = regularized[faceIndex];
+            emitLand(face.biome, data->verts[face.vertex[0]], data->verts[face.vertex[1]],
+                     data->verts[face.vertex[2]]);
+        }
+
+        for (int j = 0; j < cy; ++j)
+        {
+            for (int i = 0; i < cx; ++i)
+            {
+                const size_t cell = static_cast<size_t>(j) * cx + i;
+                // Queries intentionally keep cell-center semantics even
+                // though rendering classifies and regularizes per triangle.
+                const uint8_t flags = data->cellFlags[cell];
+                if (flags & FTerrainData::kFlagWater)
+                    data->cellBiome[cell] = static_cast<uint8_t>(ETerrainBiome::Bed);
+                else if (flags & FTerrainData::kFlagRoad)
+                    data->cellBiome[cell] = static_cast<uint8_t>(ETerrainBiome::Road);
+                else if (flags & FTerrainData::kFlagPad)
+                    data->cellBiome[cell] = static_cast<uint8_t>(ETerrainBiome::Pad);
+                else
+                    data->cellBiome[cell] = static_cast<uint8_t>(faces[cell * 2].biome);
             }
         }
 
