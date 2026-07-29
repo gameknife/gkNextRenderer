@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Assets/AssetsFwd.hpp"
+#include "Gameplay/Rig/RigInstance.h"
 
 #include <glm/vec3.hpp>
 #include <memory>
@@ -42,7 +43,8 @@ namespace NextTotalwar
         int slotIndex = -1;
         float phaseOffset = 0.0f;
         std::shared_ptr<Assets::Node> worldNode;
-        Assets::Node* renderNode = nullptr;
+        std::vector<Assets::Node*> renderNodes;
+        NextGameplay::FRigAnimator animator;
     };
 
     struct FRegiment

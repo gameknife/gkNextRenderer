@@ -2,7 +2,6 @@
 
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
@@ -13,6 +12,8 @@
 #include "Engine/Runtime/Interface/AgentQueries.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
+#include "Gameplay/Rig/RigInstance.h"
+#include "Modules/ScadLoader/FScadRig.h"
 #include "Modules/ScadLoader/ScadModule.hpp"
 
 #include <SDL3/SDL_events.h>
@@ -77,8 +78,8 @@ namespace NextTotalwar
         std::string error;
         // 尖刀 C：SoftwareModern 在大批动态实例的启动/帧时间上明显优于
         // SoftwareModernNoAmbient，且保留 low-poly 场景所需的光栅 + GI。
-        cvars.SetDefaultFromString("r.rendererType", "2", &error);
-        cvars.SetDefaultFromString("r.temporalFrames", "4", &error);
+        cvars.SetDefaultFromString("r.rendererType", "0", &error);
+        //cvars.SetDefaultFromString("r.temporalFrames", "4", &error);
     }
 
     void FGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>&,
@@ -89,13 +90,54 @@ namespace NextTotalwar
     {
         if (sceneInjected_) return;
 
-        // 尖刀方案：每兵种仅注入一份 mesh，所有 256 名同兵种士兵共享 modelId。
-        models.push_back(Assets::FProcModel::CreateBox({-0.24f, 0.0f, -0.17f}, {0.24f, 1.72f, 0.17f}));
-        soldierModelIds_[0] = static_cast<uint32_t>(models.size() - 1);
-        models.push_back(Assets::FProcModel::CreateBox({-0.28f, 0.0f, -0.20f}, {0.28f, 1.66f, 0.20f}));
-        soldierModelIds_[1] = static_cast<uint32_t>(models.size() - 1);
-        models.push_back(Assets::FProcModel::CreateBox({-0.22f, 0.0f, -0.16f}, {0.22f, 1.70f, 0.16f}));
-        soldierModelIds_[2] = static_cast<uint32_t>(models.size() - 1);
+        // 每兵种的每个 ScadRig part 只注入一次，256 名同兵种士兵共享
+        // modelId；实例自己的骨骼树负责姿态，逐节点材质负责部队换色。
+        static constexpr std::array<const char*, 3> rigPaths = {{
+            "assets/scad/characters/tw_spearman.scad",
+            "assets/scad/characters/tw_swordsman.scad",
+            "assets/scad/characters/tw_archer.scad",
+        }};
+        for (size_t typeIndex = 0; typeIndex < rigPaths.size(); ++typeIndex)
+        {
+            std::string error;
+            std::vector<std::string> warnings;
+            Assets::FRigAsset& rig = soldierRigAssets_[typeIndex];
+            if (!Assets::FScadRigLoader::LoadRig(rigPaths[typeIndex], {}, rig, error, &warnings))
+            {
+                throw std::runtime_error(fmt::format("NextTotalwar: failed to load ScadRig '{}': {}",
+                                                     rigPaths[typeIndex], error));
+            }
+            for (const std::string& warning : warnings)
+            {
+                SPDLOG_WARN("NextTotalwar/ScadRig: {}", warning);
+            }
+
+            auto& modelIds = soldierPartModelIds_[typeIndex];
+            auto& materialIds = soldierPartMaterialIds_[typeIndex];
+            modelIds.clear();
+            materialIds.clear();
+            modelIds.reserve(rig.parts.size());
+            materialIds.reserve(rig.parts.size());
+            for (const Assets::FRigPart& part : rig.parts)
+            {
+                models.push_back(rig.partModels[part.modelIndex]);
+                modelIds.push_back(static_cast<uint32_t>(models.size() - 1));
+
+                std::array<uint32_t, 16> sections{};
+                for (size_t section = 0;
+                     section < part.sectionColors.size() && section < sections.size(); ++section)
+                {
+                    if (!part.sectionTintable[section])
+                    {
+                        sections[section] = Assets::SceneBuilder::AddLambertianMaterial(
+                            materials, glm::vec3(part.sectionColors[section]));
+                    }
+                }
+                materialIds.push_back(sections);
+            }
+            SPDLOG_INFO("NextTotalwar: loaded ScadRig '{}' ({} bones / {} shared parts / {} clips)",
+                        rigPaths[typeIndex], rig.bones.size(), rig.parts.size(), rig.clips.size());
+        }
 
         const std::array<glm::vec3, 6> blue = {{
             {0.10f, 0.25f, 0.58f}, {0.12f, 0.32f, 0.70f}, {0.16f, 0.38f, 0.76f},
@@ -150,7 +192,7 @@ namespace NextTotalwar
         CreateSoldierVisuals();
         scene.MarkDirty();
         sceneReady_ = true;
-        SPDLOG_INFO("NextTotalwar: 12 regiments / 768 soldiers, shared meshes enabled");
+        SPDLOG_INFO("NextTotalwar: 12 regiments / 768 ScadRig soldiers, shared part meshes enabled");
     }
 
     void FGameInstance::OnSceneUnloaded()
@@ -204,7 +246,8 @@ namespace NextTotalwar
         for (FRegiment& regiment : regiments_)
         {
             const uint32_t typeIndex = static_cast<uint32_t>(regiment.def->type);
-            const uint32_t material = regimentMaterialIds_[regiment.faction][regiment.id % 6];
+            const Assets::FRigAsset& rig = soldierRigAssets_[typeIndex];
+            const uint32_t tintMaterial = regimentMaterialIds_[regiment.faction][regiment.id % 6];
             for (size_t index = 0; index < regiment.soldiers.size(); ++index)
             {
                 FSoldier& soldier = regiment.soldiers[index];
@@ -219,14 +262,45 @@ namespace NextTotalwar
                 soldier.worldNode->AddComponent(physics);
                 scene.AddNode(soldier.worldNode);
 
-                auto render = Assets::SceneBuilder::CreateRenderNode(
-                    fmt::format("NTW/R{}/S{}/Body", regiment.id, index),
-                    glm::vec3(0.0f), glm::vec3(1.0f),
-                    scene.GenerateInstanceId(), soldierModelIds_[typeIndex], material, true,
-                    glm::quat(1.0f, 0.0f, 0.0f, 0.0f), false);
-                render->SetParent(soldier.worldNode);
-                scene.AddNode(render);
-                soldier.renderNode = render.get();
+                NextGameplay::FRigInstanceDesc desc;
+                desc.namePrefix = fmt::format("NTW/R{}/S{}", regiment.id, index);
+                desc.partModelIds = soldierPartModelIds_[typeIndex];
+                desc.partMaterialIds = soldierPartMaterialIds_[typeIndex];
+                for (size_t partIndex = 0; partIndex < rig.parts.size(); ++partIndex)
+                {
+                    const Assets::FRigPart& part = rig.parts[partIndex];
+                    for (size_t section = 0;
+                         section < part.sectionTintable.size() && section < 16; ++section)
+                    {
+                        if (part.sectionTintable[section])
+                        {
+                            desc.partMaterialIds[partIndex][section] = tintMaterial;
+                        }
+                    }
+                }
+
+                const size_t firstRigNode = scene.Nodes().size();
+                std::vector<Assets::Node*> boneNodes;
+                auto rigRoot = NextGameplay::FRigInstance::Instantiate(scene, rig, desc, boneNodes);
+                if (!rigRoot)
+                {
+                    throw std::runtime_error(fmt::format(
+                        "NextTotalwar: failed to instantiate ScadRig for regiment {} soldier {}",
+                        regiment.id, index));
+                }
+                rigRoot->SetParent(soldier.worldNode);
+                soldier.renderNodes.clear();
+                for (size_t nodeIndex = firstRigNode; nodeIndex < scene.Nodes().size(); ++nodeIndex)
+                {
+                    Assets::Node* node = scene.Nodes()[nodeIndex].get();
+                    if (node->GetComponentPtr<Runtime::RenderComponent>())
+                    {
+                        soldier.renderNodes.push_back(node);
+                    }
+                }
+                soldier.animator.Bind(&rig, std::move(boneNodes), soldier.worldNode.get());
+                soldier.animator.SetPhaseOffset(soldier.phaseOffset);
+                soldier.animator.Play("idle", 0.0f);
                 soldier.worldNode->RecalcTransform(true);
             }
         }
@@ -376,15 +450,21 @@ namespace NextTotalwar
                 {
                     const bool animate = camera_.Distance() < 120.0f ||
                                          ((frameIndex_ + static_cast<uint64_t>(soldier.slotIndex)) % 3u == 0u);
-                    float bob = 0.0f;
-                    if (animate && regiment.state != ERegimentState::Idle)
+                    const bool moving = regiment.state != ERegimentState::Idle || distance > 0.035f;
+                    const Assets::FRigAsset& rig =
+                        soldierRigAssets_[static_cast<size_t>(regiment.def->type)];
+                    const char* clip = moving && rig.FindClip("march")
+                                           ? "march"
+                                           : (moving ? "walk" : "idle");
+                    soldier.animator.Play(clip);
+                    if (animate)
                     {
-                        bob = std::abs(std::sin(
-                                  static_cast<float>(frameIndex_) * 0.16f + soldier.phaseOffset * glm::two_pi<float>())) *
-                              0.045f;
+                        const float animationDelta =
+                            camera_.Distance() < 120.0f ? deltaSeconds : deltaSeconds * 3.0f;
+                        soldier.animator.Update(animationDelta);
                         ++animatorUpdates_;
                     }
-                    soldier.worldNode->Translation() = soldier.position + glm::vec3(0.0f, bob, 0.0f);
+                    soldier.worldNode->Translation() = soldier.position;
                     soldier.worldNode->Rotation() = glm::angleAxis(soldier.yaw, glm::vec3(0.0f, 1.0f, 0.0f));
                     soldier.worldNode->RecalcTransform(true);
                 }
@@ -487,11 +567,13 @@ namespace NextTotalwar
         {
             for (FSoldier& soldier : regiment.soldiers)
             {
-                if (!soldier.renderNode) continue;
-                if (auto render = soldier.renderNode->GetComponent<Runtime::RenderComponent>())
+                for (Assets::Node* renderNode : soldier.renderNodes)
                 {
-                    render->SetOutlineFlags(regiment.selected ? Runtime::RenderOutlineFlags::selected
-                                                             : Runtime::RenderOutlineFlags::none);
+                    if (auto render = renderNode->GetComponent<Runtime::RenderComponent>())
+                    {
+                        render->SetOutlineFlags(regiment.selected ? Runtime::RenderOutlineFlags::selected
+                                                                 : Runtime::RenderOutlineFlags::none);
+                    }
                 }
             }
         }
@@ -693,7 +775,9 @@ namespace NextTotalwar
                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
         ImGui::Text("Regiments: 12   Soldiers: 768");
         ImGui::Text("Selected: %zu   Moving: %zu", SelectedCount(), MarchingCount());
-        ImGui::Text("Shared meshes: 3 (256 instances each)");
+        size_t sharedParts = 0;
+        for (const auto& ids : soldierPartModelIds_) sharedParts += ids.size();
+        ImGui::Text("ScadRig shared part meshes: %zu", sharedParts);
         const float budget = static_cast<float>(batches) / 32767.0f;
         ImGui::TextColored(batches > 28000 ? ImVec4(1, 0.2f, 0.15f, 1) : ImVec4(0.3f, 1, 0.4f, 1),
                            "Node-sections: %u / 32767", batches);

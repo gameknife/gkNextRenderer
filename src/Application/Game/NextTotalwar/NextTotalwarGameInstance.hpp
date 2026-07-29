@@ -4,6 +4,7 @@
 #include "NextTotalwarTypes.h"
 #include "Render/BattleCamera.h"
 
+#include "Engine/Assets/Data/RigAsset.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Gameplay/AI/NavGrid.h"
 
@@ -67,7 +68,9 @@ namespace NextTotalwar
         Runtime::TerrainComponent* terrain_ = nullptr;
         std::array<FUnitDef, 3> unitDefs_{};
         std::vector<FRegiment> regiments_;
-        std::array<uint32_t, 3> soldierModelIds_{};
+        std::array<Assets::FRigAsset, 3> soldierRigAssets_{};
+        std::array<std::vector<uint32_t>, 3> soldierPartModelIds_{};
+        std::array<std::vector<std::array<uint32_t, 16>>, 3> soldierPartMaterialIds_{};
         std::array<std::array<uint32_t, 6>, 2> regimentMaterialIds_{};
         bool sceneInjected_ = false;
         bool sceneReady_ = false;
