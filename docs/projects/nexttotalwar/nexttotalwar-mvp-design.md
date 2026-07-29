@@ -1,13 +1,17 @@
 ---
 title: "NextTotalwar 类全面战争 lowpoly RTS MVP 设计与开发计划"
 category: project
-status: 计划中
+status: 已实现
 owner: NextTotalwar
 created: 2026-07-30
 last_updated: 2026-07-30
 ---
 
 # NextTotalwar — 类全面战争 lowpoly 实时战略 MVP
+
+> **实现状态（2026-07-30）**：MVP 已落地并通过定向构建、阵型/rig 单测、
+> SCAD catalog、截图和选择/行军 AgentScript。现行代码导览见
+> [AGENT_GUIDE/NextTotalwar.md](../../../AGENT_GUIDE/NextTotalwar.md)。
 
 > 本文把 **kit_overhill**（低模山地零件库）、**gk_terrain**（可行走过程地形）、**ScadRig**（刚体骨骼角色 + 动作）、**FNavGrid**（A\* 寻路）当作既有基础设施，在其上设计一个 target 名为 `NextTotalwar` 的新子项目：俯视视角、lowpoly 画风、"全面战争"战场玩法的实时战略游戏。
 >
@@ -500,3 +504,26 @@ gnb.bat validate --script assets/agentscripts/nexttotalwar-march.agentscript.jso
 战斗结算（近战贴脸 + 弓箭抛射）、士气与溃逃、单位卡/兵牌 UI、敌方 AI 指挥官、冲锋与冲击力、骑兵兵种（马 + 骑手同一 rig，`anim_gallop`）、攻城器械与城墙、战役地图层、多人（可参考 NextRA 的 lockstep 与 order 协议）。
 
 这些都要在 MVP 验收后各自立项、各自定验收标准，不要在 MVP 里"顺手做一半"。
+
+---
+
+## 10. MVP 实测记录（2026-07-30）
+
+- 尖刀 A：运行时采用“每兵种一份共享 mesh + 每士兵实例节点”，3 个 model
+  分别供 256 名士兵复用；阵营/部队色由逐节点 material 选择。
+- 尖刀 B：三份 SCAD rig 均为 7 bone / 6 part，包含 idle / walk / march / run；
+  单测约束每 rig 总三角形不超过 300。MVP 大军运行时选择一 part 共享 mesh，
+  以节点位移与相位 bob 表现行军，避免 768 个多 part animator 的 CPU/节点成本。
+- 尖刀 C：`SoftwareModernNoAmbient` 在当前 Windows/NVIDIA 环境首次管线启动超过
+  Agent Control 的 30 秒连接窗口；`SoftwareModern` 约 1–2 秒启动，故默认
+  `r.rendererType=2`。
+- 400×400 m Greenfield：176×176 cells、两座桥、双村庄、边缘林地；
+  SCAD loader 实测 442 个地图节点、95,418 triangles、0 warnings。
+- 全场：12 regiment / 768 soldiers，实测 1,072 node-sections（上限的 3%）；
+  `gnb shot --target NextTotalwar --ui` 截图样本约 92 FPS。
+- NavGrid：200×200（40,000 cells），38,395 geometry-walkable，水域语义屏蔽
+  940 cells。低模桥端若因 2m 网格离散化断连，游戏层按最近桥生成语义桥路线，
+  且桥廊高度采样使用桥面而不是 TerrainComponent 河床。
+- 自动验收：
+  `nexttotalwar-select.agentscript.json` 框选 6 队并下达定向命令；
+  `nexttotalwar-march.agentscript.json` 下达约 101.7 m 跨河命令并等待全部重整完成。

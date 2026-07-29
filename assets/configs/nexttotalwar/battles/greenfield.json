@@ -1,0 +1,18 @@
+{
+  "battle": "greenfield",
+  "soldiersPerRegiment": 64,
+  "regiments": [
+    {"faction": 0, "unit": "spearman",  "position": [-105, -48], "facingDegrees": 90},
+    {"faction": 0, "unit": "swordsman", "position": [ -77, -43], "facingDegrees": 90},
+    {"faction": 0, "unit": "archer",     "position": [ -49, -48], "facingDegrees": 90},
+    {"faction": 0, "unit": "spearman",  "position": [-105,   0], "facingDegrees": 90},
+    {"faction": 0, "unit": "swordsman", "position": [ -77,   5], "facingDegrees": 90},
+    {"faction": 0, "unit": "archer",     "position": [ -49,   0], "facingDegrees": 90},
+    {"faction": 1, "unit": "spearman",  "position": [ 105, -48], "facingDegrees": -90},
+    {"faction": 1, "unit": "swordsman", "position": [  77, -43], "facingDegrees": -90},
+    {"faction": 1, "unit": "archer",     "position": [  49, -48], "facingDegrees": -90},
+    {"faction": 1, "unit": "spearman",  "position": [ 105,   0], "facingDegrees": -90},
+    {"faction": 1, "unit": "swordsman", "position": [  77,   5], "facingDegrees": -90},
+    {"faction": 1, "unit": "archer",     "position": [  49,   0], "facingDegrees": -90}
+  ]
+}

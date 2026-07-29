@@ -37,6 +37,7 @@ set(unitTestSources
     Test_MagicaLegoPlacementRules.cpp
     Test_FlappyRng.cpp
     Test_NextRAFixed.cpp
+    Test_NextTotalwarFormation.cpp
     Test_GnbAIClient.cpp
     Test_ScadPromptContext.cpp
     Test_ScadSessionStore.cpp
@@ -78,6 +79,7 @@ set(unitTestSources
     ${GK_SOURCE_ROOT}/Application/Game/NextRA/Sim/SimWorld.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextRA/Sim/SyncHash.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextRA/Sim/Systems/OrderApplySystem.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Battle/FormationLayout.cpp
 )
 
 find_package(Catch2 3 REQUIRED)
@@ -94,6 +96,7 @@ target_include_directories(gkNextUnitTests PRIVATE
     ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary
     ${GK_SOURCE_ROOT}/Application/Game/BrickPlayer
     ${GK_SOURCE_ROOT}/Application/Game/MagicaLego
+    ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar
 )
 target_link_libraries(gkNextUnitTests PRIVATE
     gkNextEngine

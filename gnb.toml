@@ -168,6 +168,7 @@ all = [
   "AirportSim",
   "CitySolSim",
   "Voyage3D",
+  "NextTotalwar",
   "Packager",
   "ScadCatalog",
   "gkNextUnitTests"

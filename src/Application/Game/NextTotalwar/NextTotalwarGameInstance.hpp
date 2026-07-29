@@ -1,0 +1,86 @@
+#pragma once
+
+#include "Battle/FormationLayout.h"
+#include "NextTotalwarTypes.h"
+#include "Render/BattleCamera.h"
+
+#include "Engine/Runtime/GameInstance.hpp"
+#include "Gameplay/AI/NavGrid.h"
+
+#include <glm/vec2.hpp>
+
+namespace Runtime
+{
+    class TerrainComponent;
+}
+
+namespace NextTotalwar
+{
+    class FGameInstance final : public NextGameInstanceBase
+    {
+    public:
+        FGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine);
+
+        void OnInit() override;
+        void OnTick(double deltaSeconds) override;
+        void OnDestroy() override;
+        bool OnRenderUI() override;
+        bool ShouldRenderUiDuringScreenshot() const override { return true; }
+        void ConfigureCVars(NextCVar::FCVarSystem& cvars) override;
+        void RegisterAgentQueries(Runtime::Agent::FAgentQueryRegistry& registry) override;
+        bool OverrideRenderCamera(Assets::Camera& camera) const override;
+        void BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                                std::vector<Assets::Model>& models,
+                                std::vector<Assets::FMaterial>& materials,
+                                std::vector<Assets::LightObject>& lights,
+                                std::vector<Assets::AnimationTrack>& tracks) override;
+        void OnSceneLoaded() override;
+        void OnSceneUnloaded() override;
+        bool OnKey(SDL_Event& event) override;
+        bool OnCursorPosition(double x, double y) override;
+        bool OnMouseButton(SDL_Event& event) override;
+        bool OnScroll(double x, double y) override;
+
+    private:
+        void DeployArmies();
+        void CreateSoldierVisuals();
+        void TickRegiments(float deltaSeconds);
+        void TickSoldiers(float deltaSeconds);
+        float GroundHeight(float x, float z) const;
+        float UiScale() const;
+        glm::dvec2 ToLogicalMouse(double x, double y) const;
+        glm::vec2 ToFramebufferMouse(const glm::dvec2& logicalMouse) const;
+        bool TryGroundHit(const glm::dvec2& screen, glm::vec3& hit) const;
+        void SelectAt(const glm::dvec2& screen, bool additive);
+        void SelectAllTypeAt(const glm::dvec2& screen);
+        void SelectRect(const glm::dvec2& a, const glm::dvec2& b, bool additive);
+        void ClearSelection();
+        void RefreshSelectionFeedback();
+        void IssueMoveOrders(const glm::vec3& target, float facing);
+        void DrawWorldOverlay() const;
+        size_t SelectedCount() const;
+        size_t MarchingCount() const;
+        static const char* StateName(ERegimentState state);
+
+        FBattleCamera camera_;
+        NextGameplay::FNavGrid navGrid_;
+        Runtime::TerrainComponent* terrain_ = nullptr;
+        std::array<FUnitDef, 3> unitDefs_{};
+        std::vector<FRegiment> regiments_;
+        std::array<uint32_t, 3> soldierModelIds_{};
+        std::array<std::array<uint32_t, 6>, 2> regimentMaterialIds_{};
+        bool sceneInjected_ = false;
+        bool sceneReady_ = false;
+        bool showDebug_ = true;
+        glm::dvec2 mousePos_{};
+        glm::dvec2 leftStart_{};
+        glm::dvec2 rightStart_{};
+        glm::vec3 rightTarget_{};
+        bool leftDown_ = false;
+        bool rightDown_ = false;
+        bool hasMouse_ = false;
+        uint64_t frameIndex_ = 0;
+        int animatorUpdates_ = 0;
+        float lastOrderDistance_ = 0.0f;
+    };
+}

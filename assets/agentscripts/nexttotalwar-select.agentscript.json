@@ -1,0 +1,24 @@
+{
+  "name": "nexttotalwar-select",
+  "target": "NextTotalwar",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1600,
+    "height": 900
+  },
+  "steps": [
+    {"type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 30000},
+    {"type": "wait-until", "query": "game.regimentCount", "op": "eq", "value": 12, "timeoutMs": 30000},
+    {"type": "wait-frames", "n": 20},
+    {"type": "drag", "from": {"norm": [0.10, 0.20]}, "to": {"norm": [0.49, 0.72]}, "button": "left"},
+    {"type": "assert", "query": "game.selectedRegiments", "op": "ge", "value": 1},
+    {"type": "drag", "from": {"norm": [0.62, 0.48]}, "to": {"norm": [0.70, 0.48]}, "button": "right"},
+    {"type": "wait-frames", "n": 4},
+    {"type": "assert", "query": "game.marchingRegiments", "op": "ge", "value": 1},
+    {"type": "screenshot", "out": "screenshots/nexttotalwar-select", "ui": true},
+    {"type": "quit"}
+  ]
+}
