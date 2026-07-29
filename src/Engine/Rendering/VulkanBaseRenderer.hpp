@@ -29,6 +29,11 @@ namespace Rendering::Upscaler
     class IUpscaler;
 }
 
+namespace Rendering::Atmosphere
+{
+    class AtmosphereSubsystem;
+}
+
 namespace Vulkan::PipelineCommon
 {
     class RestirDI;
@@ -221,6 +226,8 @@ namespace Vulkan
         uint64_t CompletedSubmitSerial() const { return frame_.completedSubmitSerial; }
         const Assets::UniformBufferObject& LastUniformBufferObject() const { return frame_.lastUBO; }
         const FFrameRenderSettings& FrameSettings() const { return frameSettings_; }
+        VkDeviceAddress AtmosphereParamsAddress() const;
+        glm::vec3 AtmosphereTransmittanceToSun(float cameraAltitudeKm, float sunZenithCosine) const;
         DeviceMemory* GetScreenShotMemory() const {return screenshot_.imageMemory.get();}
         const Image* GetScreenShotImage() const { return screenshot_.image.get(); }
         bool IsScreenShotCaptureReady() const { return screenshot_.captureReady; }
@@ -581,6 +588,7 @@ namespace Vulkan
         Delegates delegates_;
         std::unique_ptr<Rendering::Upscaler::IUpscaler> upscaler_;
         std::unique_ptr<PipelineCommon::RestirDI> restirDI_;
+        std::unique_ptr<Rendering::Atmosphere::AtmosphereSubsystem> atmosphere_;
 
         FSceneRenderState sceneState_;
         FFrameRenderSettings frameSettings_;

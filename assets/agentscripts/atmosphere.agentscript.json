@@ -1,0 +1,44 @@
+{
+  "name": "atmosphere",
+  "target": "gkNextRenderer",
+  "scene": "assets/scad/proc/generated/overhill_valley.scad",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 12000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 12000 },
+    { "type": "cvar", "name": "r.rendererType", "set": 4 },
+    { "type": "cvar", "name": "r.atmosphere.enable", "set": true },
+    { "type": "cvar", "name": "r.atmosphere.aerialPerspective", "set": true },
+    { "type": "cvar", "name": "r.atmosphere.heightFog", "set": true },
+    { "type": "wait-frames", "n": 60 },
+    { "type": "assert", "query": "cvar.r.atmosphere.enable", "op": "eq", "value": true },
+    { "type": "assert", "query": "cvar.r.atmosphere.aerialPerspective", "op": "eq", "value": true },
+    { "type": "assert", "query": "engine.frameRate", "op": "gt", "value": 1 },
+    { "type": "screenshot", "out": "screenshots/atmosphere_noon" },
+    { "type": "cvar", "name": "r.atmosphere.debugMode", "set": 2 },
+    { "type": "wait-frames", "n": 4 },
+    { "type": "screenshot", "out": "screenshots/atmosphere_transmittance" },
+    { "type": "cvar", "name": "r.atmosphere.debugMode", "set": 3 },
+    { "type": "wait-frames", "n": 4 },
+    { "type": "screenshot", "out": "screenshots/atmosphere_sky_lut" },
+    { "type": "cvar", "name": "r.atmosphere.debugMode", "set": 0 },
+    { "type": "cvar", "name": "r.rendererType", "set": 0 },
+    { "type": "wait-frames", "n": 8 },
+    { "type": "cvar", "name": "r.rendererType", "set": 1 },
+    { "type": "wait-frames", "n": 8 },
+    { "type": "cvar", "name": "r.rendererType", "set": 2 },
+    { "type": "wait-frames", "n": 8 },
+    { "type": "cvar", "name": "r.rendererType", "set": 3 },
+    { "type": "wait-frames", "n": 8 },
+    { "type": "cvar", "name": "r.rendererType", "set": 4 },
+    { "type": "wait-frames", "n": 8 },
+    { "type": "assert", "query": "cvar.r.rendererType", "op": "eq", "value": 4 },
+    { "type": "quit" }
+  ]
+}

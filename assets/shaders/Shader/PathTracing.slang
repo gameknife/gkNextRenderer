@@ -6,6 +6,7 @@ module PathTracing;
 __include "common/BSDF.slang";
 __include "common/Interfaces.slang";
 __include "common/SceneSampling.slang";
+__include "common/Sky.slang";
 __include "common/RayTracers.slang";
 __include "common/PrimaryRayCasters.slang";
 __include "common/RadianceCache.slang";

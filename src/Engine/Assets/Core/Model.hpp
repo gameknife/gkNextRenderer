@@ -9,6 +9,63 @@
 
 namespace Assets
 {
+    struct AtmosphereSetting
+    {
+        AtmosphereSetting()
+        {
+            Reset();
+        }
+
+        void Reset()
+        {
+            RayleighScattering = glm::vec3(0.005802f, 0.013558f, 0.033100f);
+            RayleighDensityH = 8.0f;
+            MieScattering = glm::vec3(0.003996f);
+            MieDensityH = 1.2f;
+            MieAbsorption = glm::vec3(0.004440f);
+            MiePhaseG = 0.8f;
+            OzoneAbsorption = glm::vec3(0.000650f, 0.001881f, 0.000085f);
+            OzoneCenterAltitude = 25.0f;
+            GroundAlbedo = glm::vec3(0.3f);
+            OzoneWidth = 15.0f;
+            BottomRadius = 6360.0f;
+            TopRadius = 6460.0f;
+            WorldUnitsPerKm = 1000.0f;
+            WorldOriginAltitude = 0.0f;
+            AerialPerspectiveMaxDistance = 20000.0f;
+            SkyLuminanceScale = 1.0f;
+            FogInscatteringColor = glm::vec3(0.55f, 0.65f, 0.75f);
+            FogDensity = 0.01f;
+            FogHeightFalloff = 0.2f;
+            FogBaseHeight = 0.0f;
+            FogStartDistance = 0.0f;
+            FogMaxOpacity = 0.95f;
+        }
+
+        glm::vec3 RayleighScattering{};
+        float RayleighDensityH{};
+        glm::vec3 MieScattering{};
+        float MieDensityH{};
+        glm::vec3 MieAbsorption{};
+        float MiePhaseG{};
+        glm::vec3 OzoneAbsorption{};
+        float OzoneCenterAltitude{};
+        glm::vec3 GroundAlbedo{};
+        float OzoneWidth{};
+        float BottomRadius{};
+        float TopRadius{};
+        float WorldUnitsPerKm{};
+        float WorldOriginAltitude{};
+        float AerialPerspectiveMaxDistance{};
+        float SkyLuminanceScale{};
+        glm::vec3 FogInscatteringColor{};
+        float FogDensity{};
+        float FogHeightFalloff{};
+        float FogBaseHeight{};
+        float FogStartDistance{};
+        float FogMaxOpacity{};
+    };
+
     struct Camera final
     {
         std::string name;
@@ -107,6 +164,7 @@ namespace Assets
         float SunIntensity = 500.0f;
         glm::vec3 SunColor{1.0f};
         glm::vec3 SkyColor{1.0f};
+        AtmosphereSetting Atmosphere;
 
         std::vector<Camera> cameras;
     };

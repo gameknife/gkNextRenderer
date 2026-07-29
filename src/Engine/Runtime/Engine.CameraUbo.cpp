@@ -196,12 +196,29 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.NumberOfBounces = config_.userSettings.NumberOfBounces;
     ubo.PrimaryRayJitter = enablePrimaryRayJitter;
     ubo.SunDirection = sunDirection;
-    ubo.SunColor = glm::vec4(scene_->GetEnvSettings().SunColor, 0.0f) *
+    glm::vec3 sunTransmittance(1.0f);
+    if (config_.userSettings.AtmosphereEnable)
+    {
+        const glm::vec3 cameraPosition = glm::vec3(ubo.ModelViewInverse[3]);
+        const auto& atmosphere = scene_->GetEnvSettings().Atmosphere;
+        const float cameraAltitudeKm =
+            atmosphere.WorldOriginAltitude + cameraPosition.y / std::max(atmosphere.WorldUnitsPerKm, 0.001f);
+        sunTransmittance = renderer_->AtmosphereTransmittanceToSun(
+            cameraAltitudeKm, glm::dot(glm::normalize(glm::vec3(sunDirection)), glm::vec3(0, 1, 0)));
+    }
+    ubo.SunColor = glm::vec4(scene_->GetEnvSettings().SunColor * sunTransmittance, 0.0f) *
         scene_->GetEnvSettings().SunIntensity;
     ubo.SkyColor = glm::vec4(scene_->GetEnvSettings().SkyColor, 1.0f);
     ubo.SkyIntensity = scene_->GetEnvSettings().SkyIntensity;
     ubo.SkyIdx = scene_->GetEnvSettings().SkyIdx;
+    if (config_.userSettings.AtmosphereEnable)
+    {
+        ubo.SkyIdx = Assets::MAX_HDR_SH - 1;
+        ubo.SkyIntensity = 1.0f;
+    }
     ubo.HasSky = scene_->GetEnvSettings().HasSky;
+    ubo.AtmosphereParams = renderer_->AtmosphereParamsAddress();
+    ubo.AtmosphereReserved0 = 0;
     if (auto* texturePool = Assets::GlobalTexturePool::GetInstance())
     {
         texturePool->TickHDRTextureResidency(

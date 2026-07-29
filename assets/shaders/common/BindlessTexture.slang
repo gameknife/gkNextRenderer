@@ -74,6 +74,11 @@ namespace Bindless
     public static const int RES_VOLUME_BASE = RES_REMOTE_ENCODE_BASE + RES_REMOTE_ENCODE_COUNT;
     public static const int RES_VOLUME_COUNT = 8;
 
+    public static const int RES_ATMOSPHERE_TRANSMITTANCE = RES_VOLUME_BASE + 0;
+    public static const int RES_ATMOSPHERE_MULTI_SCATTER = RES_VOLUME_BASE + 1;
+    public static const int RES_ATMOSPHERE_SKY_VIEW = RES_VOLUME_BASE + 2;
+    public static const int RES_ATMOSPHERE_AERIAL_PERSPECTIVE = RES_VOLUME_BASE + 3;
+
     // Editor material preview (AssetThumbnailRenderer).
     public static const int RES_MATERIAL_PREVIEW = RES_VOLUME_BASE + RES_VOLUME_COUNT;
 

@@ -72,10 +72,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint2 vBuffer = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF);
     if (vBuffer.x == 0)
     {
-        float4 skyColor = Camera.HasSky
-            ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir, Camera.SkyRotation, 0) *
-                Camera.SkyColor * Camera.SkyIntensity
-            : float4(0, 0, 0, 1);
+        float4 skyColor = Common.SampleSkyRadiance(primaryRayDir, 0.0f);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, float4(0));
         Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_0).Store(pixel, 0);
@@ -99,10 +96,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     {
         // A stale or numerically degenerate visibility sample must not feed invalid
         // attributes into the G-buffer. Treat it as an uncovered sample.
-        float4 skyColor = Camera.HasSky
-            ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir, Camera.SkyRotation, 0) *
-                Camera.SkyColor * Camera.SkyIntensity
-            : float4(0, 0, 0, 1);
+        float4 skyColor = Common.SampleSkyRadiance(primaryRayDir, 0.0f);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, float4(0));
         Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_0).Store(pixel, 0);
@@ -168,12 +162,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
             if (Camera.HasSky)
             {
-                float3 irr = Common.SampleIBLDiffuse(Camera.SkyIdx, N, Camera.SkyRotation).rgb *
-                    Camera.SkyColor.rgb * Camera.SkyIntensity;
+                float3 irr = Common.SampleSkyIrradiance(N).rgb;
                 ambient = kD * albedo * irr;
 
-                float3 skySpecular = Common.SampleIBL(Camera.SkyIdx, R, Camera.SkyRotation, roughness).rgb *
-                    Camera.SkyColor.rgb * Camera.SkyIntensity;
+                float3 skySpecular = Common.SampleSkyRadiance(R, roughness).rgb;
                 specularColor.rgb += skySpecular * kS;
             }
             ambientColor = float4(ambient, 1.0f);

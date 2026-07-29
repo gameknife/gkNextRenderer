@@ -45,6 +45,7 @@
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Rendering/PipelineCommon/RestirDI.hpp"
 #include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
+#include "Engine/Rendering/Atmosphere/AtmosphereSubsystem.hpp"
 #include "Engine/Rendering/Upscaler/IUpscaler.hpp"
 #include "Engine/Rendering/Upscaler/UpscalerRegistry.hpp"
 
@@ -322,12 +323,14 @@ namespace Vulkan
         rayTracingSceneBackend_ = std::make_unique<RayTracingSceneBackend>(*this);
         ambientCubeBaker_ = std::make_unique<AmbientCubeBaker>(*this);
         gpuDrivenPasses_ = std::make_unique<GpuDrivenPasses>(*this);
+        atmosphere_ = std::make_unique<Rendering::Atmosphere::AtmosphereSubsystem>(*this);
     }
 
     VulkanBaseRenderer::~VulkanBaseRenderer()
     {
         VulkanBaseRenderer::DeleteSwapChain();
         DeleteAccelerationStructures();
+        atmosphere_.reset();
         // Volume resources outlive the swapchain, so they are released here rather than in
         // DeleteSwapChain -- but still before the device goes away.
         bindless_.volumeImages.clear();
@@ -479,6 +482,7 @@ namespace Vulkan
         ctx_.globalTexturePool.reset(new Assets::GlobalTexturePool(*ctx_.device, *ctx_.commandPool2, *ctx_.commandPool));
 
         OnDeviceSet();
+        atmosphere_->CreateDeviceResources();
         CreateSwapChain();
         // Keep hidden windows hidden (agent validation captures, unit-test engine fixture):
         // showing here would override SDL_WINDOW_HIDDEN and pop a window that steals focus.
@@ -1135,6 +1139,7 @@ namespace Vulkan
 
     void VulkanBaseRenderer::CreateSceneSwapChainResources()
     {
+        atmosphere_->CreateSwapChainPipelines();
         overlay_.wireframePipeline.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframeFrameBuffers.reserve(frame_.swapChain->ImageViews().size());
@@ -1417,6 +1422,7 @@ namespace Vulkan
         swapchainStateTracker_.Reset();
         auxiliaryImageStateTracker_.Reset();
         shadowCameraFamilyCache_ = {};
+        atmosphere_->DestroySwapChainPipelines();
 
         if (upscaler_)
         {
@@ -1528,6 +1534,7 @@ namespace Vulkan
     // Camera-independent, runs once per scene per frame (shared across all views).
     void VulkanBaseRenderer::BeginSceneFrame(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
+        atmosphere_->BeginSceneFrame(commandBuffer, imageIndex);
         rayTracingSceneBackend_->PrepareSceneFrame(commandBuffer, imageIndex);
         ambientCubeBaker_->PrepareSceneFrame(commandBuffer, imageIndex);
     }
@@ -1558,7 +1565,9 @@ namespace Vulkan
         }
 
         PreRenderPerView(commandBuffer, imageIndex, clearSwapchain, contract);
+        atmosphere_->PrepareView(commandBuffer, imageIndex, view.IsPrimary(), contract);
         logicRenderer.Render(commandBuffer, imageIndex);
+        atmosphere_->ApplyToView(commandBuffer, imageIndex, view.IsPrimary(), contract);
         if (view.CopyObjectIdHistory() && HasAny(contract.history, EHistoryChannel::ObjectId))
         {
             CopyObjectIdHistory(commandBuffer);
@@ -1643,6 +1652,19 @@ namespace Vulkan
                                               const bool isPrimaryView, const FRendererContract& contract)
     {
         gpuDrivenPasses_->RenderViewPrepasses(commandBuffer, imageIndex, isPrimaryView, contract);
+    }
+
+    VkDeviceAddress VulkanBaseRenderer::AtmosphereParamsAddress() const
+    {
+        return atmosphere_ ? atmosphere_->ParamsAddress() : 0;
+    }
+
+    glm::vec3 VulkanBaseRenderer::AtmosphereTransmittanceToSun(
+        float cameraAltitudeKm, float sunZenithCosine) const
+    {
+        return atmosphere_
+            ? atmosphere_->TransmittanceToSun(cameraAltitudeKm, sunZenithCosine)
+            : glm::vec3(1.0f);
     }
 
     void VulkanBaseRenderer::DrawFrame()

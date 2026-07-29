@@ -4,19 +4,19 @@ import Shader.PathTracing;
 float4 AmbientCubeClearSky()
 {
     UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
-    if (!camera.HasSky)
+    if (!camera.HasSky && !Common.AtmosphereEnabled(camera))
     {
         return float4(0.0f);
     }
 
     float4 sky = float4(0.0f);
-    sky += Common.SampleIBLRough(camera.SkyIdx, float3(0.0f, 0.0f, 1.0f), camera.SkyRotation);
-    sky += Common.SampleIBLRough(camera.SkyIdx, float3(0.0f, 0.0f, -1.0f), camera.SkyRotation);
-    sky += Common.SampleIBLRough(camera.SkyIdx, float3(0.0f, 1.0f, 0.0f), camera.SkyRotation);
-    sky += Common.SampleIBLRough(camera.SkyIdx, float3(0.0f, -1.0f, 0.0f), camera.SkyRotation);
-    sky += Common.SampleIBLRough(camera.SkyIdx, float3(1.0f, 0.0f, 0.0f), camera.SkyRotation);
-    sky += Common.SampleIBLRough(camera.SkyIdx, float3(-1.0f, 0.0f, 0.0f), camera.SkyRotation);
-    return sky * camera.SkyColor * (camera.SkyIntensity / 6.0f);
+    sky += Common.SampleSkyRadiance(float3(0.0f, 0.0f, 1.0f), 1.0f);
+    sky += Common.SampleSkyRadiance(float3(0.0f, 0.0f, -1.0f), 1.0f);
+    sky += Common.SampleSkyRadiance(float3(0.0f, 1.0f, 0.0f), 1.0f);
+    sky += Common.SampleSkyRadiance(float3(0.0f, -1.0f, 0.0f), 1.0f);
+    sky += Common.SampleSkyRadiance(float3(1.0f, 0.0f, 0.0f), 1.0f);
+    sky += Common.SampleSkyRadiance(float3(-1.0f, 0.0f, 0.0f), 1.0f);
+    return sky / 6.0f;
 }
 
 [shader("compute")]

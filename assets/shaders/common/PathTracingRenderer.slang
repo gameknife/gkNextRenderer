@@ -345,10 +345,7 @@ public struct FPathTracingRenderer{
                              tempColor, hitDist))
         {
             // Miss: escaped into the sky.
-            const float4 skyColor = Camera.HasSky
-                ? Common.SampleIBL(Camera.SkyIdx, traceDir, Camera.SkyRotation, 0) *
-                    Camera.SkyColor * Camera.SkyIntensity
-                : float4(0, 0, 0, 0);
+            const float4 skyColor = Common.SampleSkyRadiance(traceDir, 0.0f);
             rayColor *= skyColor;
             result.hitMiss = true;
             result.terminalRadiance = skyColor.rgb;
@@ -603,10 +600,7 @@ public struct FPathTracingRenderer{
 
         if (!primaryRayCaster.TracePrimaryRay(pixel_, size_, RandomSeed_, hitPrimaryVertex_, hitPrimaryNode_, primaryRayDir_, primaryRayLength_, primaryPixelOffset_))
         {
-            float4 skyColor = Camera.HasSky
-                ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir_, Camera.SkyRotation, 0) *
-                    Camera.SkyColor * Camera.SkyIntensity
-                : float4(0, 0, 0, 0);
+            float4 skyColor = Common.SampleSkyRadiance(primaryRayDir_, 0.0f);
             skyColor.rgb += Common.EvaluateAnalyticSunDisk(primaryRayDir_);
             float2 skyMotionPixels =
                 Common.CalculateSkyMotionVector(Camera, primaryRayDir_) * size_;

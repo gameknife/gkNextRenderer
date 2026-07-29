@@ -1,3 +1,5 @@
+#include "Atmosphere.slang"
+
 #ifdef __cplusplus
 #define ALIGN_16 alignas(16) 
 #define ALIGN_8 alignas(8)
@@ -174,6 +176,10 @@ public struct ALIGN_16 UniformBufferObject
     public uint GTAODebugMode;
     public bool GTAOEnable;
     public uint GTAOQuality;
+
+    // Stable extension point for procedural atmosphere. Zero preserves the legacy IBL path.
+    public uint64_t AtmosphereParams;
+    public uint64_t AtmosphereReserved0;
 };
 
 public struct ALIGN_16 NodeProxy

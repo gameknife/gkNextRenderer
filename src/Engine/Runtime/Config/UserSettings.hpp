@@ -60,6 +60,12 @@ struct UserSettings final
     float GTAOThickness = 0.5f;
     int GTAODebugMode = 0;
 
+    bool AtmosphereEnable = false;
+    bool AtmosphereAerialPerspective = false;
+    bool AtmosphereHeightFog = false;
+    float AtmosphereSkyViewLutScale = 1.0f;
+    int AtmosphereDebugMode = 0;
+
     float PaperWhiteNit;
 
     bool TickPhysics = true;

@@ -57,7 +57,8 @@ namespace Assets
 #define half4 glm::detail::hdata
 #define public
 #define bool uint32_t
-    
+
+    #include "../assets/shaders/common/Atmosphere.slang"
     #include "../assets/shaders/common/BasicTypes.slang"
     #include "../assets/shaders/common/BindlessTexture.slang"
 
