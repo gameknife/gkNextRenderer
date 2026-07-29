@@ -205,6 +205,7 @@ namespace Assets::Scad
             std::string topLevelFallbackLabel_;
             uint64_t topLevelFallbackInstanceId_ = 0;
             uint64_t nextGroupInstanceId_ = 1;
+            uint64_t nextValueIdentity_ = 1;
             int suppressSceneNodes_ = 0;
 
             struct SceneNodeBuild
@@ -1059,6 +1060,7 @@ namespace Assets::Scad
             std::shared_ptr<const FTerrainData> TerrainFromValue(const Value& value, const char* where);
 
             std::unordered_map<std::string, std::shared_ptr<const FTerrainData>> terrainCache_;
+            std::unordered_map<uint64_t, std::shared_ptr<const FTerrainData>> terrainIdentityCache_;
 
             GeomList EvalLinearExtrude(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color,
                                        bool hasColor);
@@ -1105,6 +1107,8 @@ namespace Assets::Scad
             // --------------------------------------------------------------
             Value EvalExpr(const ExprPtr& e);
 
+            Value MakeVector(std::vector<Value>&& values);
+
             static void BindingValues(const Value& v, std::vector<Value>& out);
 
             // Appends one vector-literal element (plain expr or comprehension generator).
@@ -1114,7 +1118,7 @@ namespace Assets::Scad
 
             Value EvalBinary(const ExprPtr& e);
 
-            static Value ScaleVec(const Value& v, double s);
+            Value ScaleVec(const Value& v, double s);
 
             static std::string NumToStr(double v);
 

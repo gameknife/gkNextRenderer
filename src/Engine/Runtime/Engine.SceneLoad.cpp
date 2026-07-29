@@ -133,11 +133,18 @@ void NextEngine::RequestAddSceneReference(std::string assetPath, glm::vec3 trans
                 scene_->SetSelectedId(proxy->GetInstanceId());
                 CommitSceneToRenderer({.createSwapChainIfMissing = !canRefreshExistingSwapChain});
 
-                const float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
-                                          std::chrono::high_resolution_clock::now() - timer)
-                                          .count();
-                SPDLOG_INFO("added scene reference [{}] to gpu in {:.2f}ms",
-                            std::filesystem::path(assetPath).filename().string(), elapsed * 1000.f);
+                const float elapsedMs =
+                    std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - timer)
+                        .count();
+                const Assets::SceneRebuildProfile& rebuild = scene_->LastRebuildProfile();
+                const float outsideRebuildMs = std::max(0.0f, elapsedMs - rebuild.totalMs);
+                SPDLOG_INFO(
+                    "committed scene reference [{}] in {:.2f}ms (GPU resource build {:.2f}ms; "
+                    "physics {:.2f}ms; mesh/scene CPU {:.2f}ms; reference/renderer other {:.2f}ms)",
+                    std::filesystem::path(assetPath).filename().string(), elapsedMs,
+                    rebuild.gpuResourceBuildMs,
+                    rebuild.physicsShapeCookingMs + rebuild.physicsBodyCreationMs,
+                    rebuild.cpuPreparationMs, outsideRebuildMs);
             }
 
             status_ = NextRenderer::EApplicationStatus::Running;
@@ -270,11 +277,18 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
                                        .refreshSwapChainResources = false});
             }
 
-            const float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
-                                      std::chrono::high_resolution_clock::now() - timer)
-                                      .count();
-            SPDLOG_INFO("uploaded scene [{}] to gpu in {:.2f}ms",
-                        std::filesystem::path(request.filename).filename().string(), elapsed * 1000.f);
+            const float elapsedMs =
+                std::chrono::duration<float, std::milli>(std::chrono::high_resolution_clock::now() - timer).count();
+            const Assets::SceneRebuildProfile& rebuild = scene_->LastRebuildProfile();
+            const float outsideRebuildMs = std::max(0.0f, elapsedMs - rebuild.totalMs);
+            SPDLOG_INFO(
+                "committed scene [{}] in {:.2f}ms (GPU resource build {:.2f}ms; physics {:.2f}ms: "
+                "shape cooking {:.2f}ms, body creation {:.2f}ms; mesh/scene CPU {:.2f}ms; callbacks/other {:.2f}ms)",
+                std::filesystem::path(request.filename).filename().string(), elapsedMs,
+                rebuild.gpuResourceBuildMs,
+                rebuild.physicsShapeCookingMs + rebuild.physicsBodyCreationMs,
+                rebuild.physicsShapeCookingMs, rebuild.physicsBodyCreationMs,
+                rebuild.cpuPreparationMs, outsideRebuildMs);
         });
 }
 

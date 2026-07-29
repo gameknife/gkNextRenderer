@@ -218,6 +218,9 @@ namespace Assets
 
     void Scene::RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing)
     {
+        using Clock = std::chrono::steady_clock;
+        const auto rebuildStart = Clock::now();
+        lastRebuildProfile_ = {};
 
         nodeProxies.clear();
         indirectDrawBatchCount_ = 0;
@@ -307,6 +310,7 @@ namespace Assets
         // static mesh to jolt mesh shape
         if (NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine())
         {
+            const auto shapeCookingStart = Clock::now();
             cachedMeshShapes_.clear();
             for (auto& model : models_)
             {
@@ -319,7 +323,10 @@ namespace Assets
                     cachedMeshShapes_.push_back(nullptr);
                 }
             }
+            lastRebuildProfile_.physicsShapeCookingMs =
+                std::chrono::duration<float, std::milli>(Clock::now() - shapeCookingStart).count();
 
+            const auto bodyCreationStart = Clock::now();
             for (auto& node : nodes_)
             {
                 auto render = node->GetComponent<Runtime::RenderComponent>();
@@ -370,6 +377,8 @@ namespace Assets
             {
                 physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0, 1, 0), NextMotionType::Static);
             }
+            lastRebuildProfile_.physicsBodyCreationMs =
+                std::chrono::duration<float, std::milli>(Clock::now() - bodyCreationStart).count();
             // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,-1,0), NextMotionType::Static);
             // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,0,1), NextMotionType::Static);
             // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,0,-1), NextMotionType::Static);
@@ -486,6 +495,7 @@ namespace Assets
         int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         int rtxFlags = supportRayTracing ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0;
 
+        const auto gpuResourceBuildStart = Clock::now();
         // this buffer now, no support extended
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Vertices",
                                                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtxFlags | flags, vertices,
@@ -575,6 +585,17 @@ namespace Assets
         {
             cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), false);
         }
+
+        const auto rebuildEnd = Clock::now();
+        lastRebuildProfile_.gpuResourceBuildMs =
+            std::chrono::duration<float, std::milli>(rebuildEnd - gpuResourceBuildStart).count();
+        lastRebuildProfile_.totalMs =
+            std::chrono::duration<float, std::milli>(rebuildEnd - rebuildStart).count();
+        lastRebuildProfile_.cpuPreparationMs =
+            std::max(0.0f, lastRebuildProfile_.totalMs -
+                               lastRebuildProfile_.physicsShapeCookingMs -
+                               lastRebuildProfile_.physicsBodyCreationMs -
+                               lastRebuildProfile_.gpuResourceBuildMs);
     }
 
 }

@@ -119,6 +119,15 @@ namespace Assets::Scad::EvalDetail
 
     std::shared_ptr<const FTerrainData> Evaluator::TerrainFromValue(const Value& value, const char* where)
     {
+        if (value.cacheIdentity != 0)
+        {
+            auto identityFound = terrainIdentityCache_.find(value.cacheIdentity);
+            if (identityFound != terrainIdentityCache_.end())
+            {
+                return identityFound->second;
+            }
+        }
+
         FTerrainSpec spec;
         std::string err;
         std::vector<std::string> warnings;
@@ -136,10 +145,18 @@ namespace Assets::Scad::EvalDetail
         auto found = terrainCache_.find(key);
         if (found != terrainCache_.end())
         {
+            if (value.cacheIdentity != 0)
+            {
+                terrainIdentityCache_.emplace(value.cacheIdentity, found->second);
+            }
             return found->second;
         }
         std::shared_ptr<const FTerrainData> data = ScadTerrain::Build(spec);
         terrainCache_.emplace(key, data);
+        if (value.cacheIdentity != 0)
+        {
+            terrainIdentityCache_.emplace(value.cacheIdentity, data);
+        }
         return data;
     }
 

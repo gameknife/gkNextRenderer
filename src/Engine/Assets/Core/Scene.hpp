@@ -18,6 +18,15 @@ namespace Runtime
 
 namespace Assets
 {
+    struct SceneRebuildProfile
+    {
+        float totalMs = 0.0f;
+        float physicsShapeCookingMs = 0.0f;
+        float physicsBodyCreationMs = 0.0f;
+        float gpuResourceBuildMs = 0.0f;
+        float cpuPreparationMs = 0.0f;
+    };
+
     class Scene final
     {
     public:
@@ -93,6 +102,7 @@ namespace Assets
                                      std::vector<LightObject>& lights, std::vector<AnimationTrack>& tracks,
                                      const std::vector<Skeleton>& skeletons);
         void RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing);
+        const SceneRebuildProfile& LastRebuildProfile() const { return lastRebuildProfile_; }
         bool EnsureGpuDrivenBufferCapacity(Vulkan::CommandPool& commandPool);
         void CleanUp();
         // void RebuildBVH();
@@ -371,6 +381,7 @@ namespace Assets
         bool sceneDirtyForCpuAS_ = false;
         bool sceneDirty_ = true;
         bool materialDirty_ = true;
+        SceneRebuildProfile lastRebuildProfile_{};
 
         std::vector<NodeProxy> nodeProxies;
 

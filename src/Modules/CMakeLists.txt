@@ -30,6 +30,8 @@ if(TARGET SceneExport)
 endif()
 
 if(TARGET ScadLoader)
+    target_link_libraries(ScadLoader PRIVATE xxHash::xxhash)
+
     find_package(manifold CONFIG QUIET)
     if(manifold_FOUND AND NOT GK_DISABLE_MANIFOLD)
         set_target_properties(manifold::manifold PROPERTIES

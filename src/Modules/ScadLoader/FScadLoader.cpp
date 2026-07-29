@@ -24,6 +24,7 @@
 
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
+#include <xxhash.h>
 
 namespace Assets
 {
@@ -81,30 +82,63 @@ namespace Assets
             return fmt::format("scad_rgba_{:08x}", QuantizeMaterialColor(color));
         }
 
-        void AppendBytes(std::string& key, const void* data, size_t size)
+        struct ScadMeshFingerprint
         {
-            key.append(static_cast<const char*>(data), size);
+            uint64_t vertexHash = 0;
+            uint64_t indexHash = 0;
+            uint64_t vertexCount = 0;
+            uint64_t indexCount = 0;
+            uint32_t sectionCount = 0;
+
+            bool operator==(const ScadMeshFingerprint&) const = default;
+        };
+
+        struct ScadMeshFingerprintHash
+        {
+            size_t operator()(const ScadMeshFingerprint& key) const
+            {
+                uint64_t hash = key.vertexHash;
+                hash ^= key.indexHash + 0x9e3779b97f4a7c15ULL + (hash << 6U) + (hash >> 2U);
+                hash ^= key.vertexCount + 0x9e3779b97f4a7c15ULL + (hash << 6U) + (hash >> 2U);
+                hash ^= key.indexCount + 0x9e3779b97f4a7c15ULL + (hash << 6U) + (hash >> 2U);
+                hash ^= key.sectionCount + 0x9e3779b97f4a7c15ULL + (hash << 6U) + (hash >> 2U);
+                return static_cast<size_t>(hash);
+            }
+        };
+
+        ScadMeshFingerprint FingerprintScadMesh(
+            const std::vector<Vertex>& vertices,
+            const std::vector<uint32_t>& indices,
+            uint32_t sectionCount)
+        {
+            ScadMeshFingerprint fingerprint;
+            fingerprint.vertexHash =
+                vertices.empty() ? 0 : XXH64(vertices.data(), vertices.size() * sizeof(Vertex), 0);
+            fingerprint.indexHash =
+                indices.empty() ? 0 : XXH64(indices.data(), indices.size() * sizeof(uint32_t), 0);
+            fingerprint.vertexCount = vertices.size();
+            fingerprint.indexCount = indices.size();
+            fingerprint.sectionCount = sectionCount;
+            return fingerprint;
         }
 
-        template <typename T>
-        void AppendValue(std::string& key, const T& value)
+        bool ScadMeshEquals(
+            const Model& model,
+            const std::vector<Vertex>& vertices,
+            const std::vector<uint32_t>& indices,
+            uint32_t sectionCount)
         {
-            AppendBytes(key, &value, sizeof(T));
-        }
-
-        void AppendVertexKey(std::string& key, const Vertex& vertex)
-        {
-            AppendValue(key, vertex.Position);
-            AppendValue(key, vertex.Normal);
-            AppendValue(key, vertex.Tangent);
-            AppendValue(key, vertex.TexCoord);
-            AppendValue(key, vertex.MaterialIndex);
+            return model.SectionCount() == sectionCount &&
+                   model.CPUVertices().size() == vertices.size() &&
+                   model.CPUIndices().size() == indices.size() &&
+                   std::equal(model.CPUVertices().begin(), model.CPUVertices().end(), vertices.begin()) &&
+                   model.CPUIndices() == indices;
         }
 
         struct ScadBuildCache
         {
             std::unordered_map<uint32_t, uint32_t> materialByColor;
-            std::unordered_map<std::string, uint32_t> modelByMesh;
+            std::unordered_map<ScadMeshFingerprint, std::vector<uint32_t>, ScadMeshFingerprintHash> modelByMesh;
             // Scene-eval instanceId -> engine node + accumulated engine-space
             // world transform (for the TerrainComponent hookup).
             std::unordered_map<uint64_t, std::pair<std::shared_ptr<Node>, glm::dmat4>> nodeByInstanceId;
@@ -190,29 +224,24 @@ namespace Assets
                 return false;
             }
 
-            std::string meshKey;
-            meshKey.reserve(vertices.size() * sizeof(Vertex) + indices.size() * sizeof(uint32_t) + 32);
-            AppendValue(meshKey, sectionIndex);
-            const uint64_t vertexCount = static_cast<uint64_t>(vertices.size());
-            const uint64_t indexCount = static_cast<uint64_t>(indices.size());
-            AppendValue(meshKey, vertexCount);
-            AppendValue(meshKey, indexCount);
-            for (const Vertex& vertex : vertices)
-            {
-                AppendVertexKey(meshKey, vertex);
-            }
-            if (!indices.empty())
-            {
-                AppendBytes(meshKey, indices.data(), indices.size() * sizeof(uint32_t));
-            }
-
+            const ScadMeshFingerprint fingerprint = FingerprintScadMesh(vertices, indices, sectionIndex);
             uint32_t modelIdx = 0;
-            auto cachedModel = cache.modelByMesh.find(meshKey);
-            if (cachedModel != cache.modelByMesh.end())
+            bool foundCachedModel = false;
+            auto cachedModels = cache.modelByMesh.find(fingerprint);
+            if (cachedModels != cache.modelByMesh.end())
             {
-                modelIdx = cachedModel->second;
+                for (uint32_t candidate : cachedModels->second)
+                {
+                    if (candidate < models.size() &&
+                        ScadMeshEquals(models[candidate], vertices, indices, sectionIndex))
+                    {
+                        modelIdx = candidate;
+                        foundCachedModel = true;
+                        break;
+                    }
+                }
             }
-            else
+            if (!foundCachedModel)
             {
                 Model model = FProcModel::CreateFromBuffers(
                     fmt::format("{}__mesh_{}_{}", baseName, startBucket, endBucket - 1),
@@ -223,7 +252,7 @@ namespace Assets
 
                 modelIdx = static_cast<uint32_t>(models.size());
                 models.push_back(std::move(model));
-                cache.modelByMesh.emplace(std::move(meshKey), modelIdx);
+                cache.modelByMesh[fingerprint].push_back(modelIdx);
             }
 
             auto renderComp = std::make_shared<Runtime::RenderComponent>();

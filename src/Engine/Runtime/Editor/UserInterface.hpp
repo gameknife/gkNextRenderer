@@ -98,7 +98,7 @@ public:
 private:
     NextEngine& GetEngine() {return *engine_;}
 
-    void DrawIndicator(uint32_t frameCount);
+    void DrawIndicator(uint32_t frameCount, bool show);
     void InitializeRendererBackend();
     void ShutdownRendererBackend();
     void BeginRendererBackendFrame();
@@ -127,6 +127,8 @@ private:
     uint32_t fontTextureIndex_ = UINT32_MAX;
     std::vector< std::function<void ()> > auxDrawRequest_;
     bool hasPreparedDrawData_ = false;
+    double loadingStartedAt_ = -1.0;
+    bool loadingIndicatorOpen_ = false;
     NextEngine* engine_;
 };
 

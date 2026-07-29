@@ -9,6 +9,7 @@
 #include "Modules/ScadLoader/FScadLexer.h"
 #include "Modules/ScadLoader/FScadLoader.h"
 #include "Modules/ScadLoader/FScadParser.h"
+#include "Modules/ScadLoader/FScadShared.h"
 #include "Modules/ScadLoader/FScadTerrain.h"
 
 #include <chrono>
@@ -491,6 +492,49 @@ TEST_CASE("ScadTerrain eval: gk_terrain_height matches the built mesh", "[Unit][
             minZ = std::min(minZ, v.z);
     }
     CHECK(minZ == Catch::Approx(data->HeightAt(12.0, 8.0)).margin(1e-6));
+}
+
+TEST_CASE("ScadTerrain eval: identity cache distinguishes multiple terrain values",
+          "[Unit][Scad][ScadTerrain]")
+{
+    const SceneEvalResult result = EvalSceneProgram(
+        "A = [\"gkterr1\", [4,4], [4,4], 1, [0,0,0], undef, \"temperate\", []];\n"
+        "B = [\"gkterr1\", [4,4], [4,4], 2, [10,0,0], undef, \"temperate\", []];\n"
+        "function sample(t) = gk_terrain_height(t, 0, 0);\n"
+        "ha0 = sample(A);\n"
+        "hb = sample(B);\n"
+        "ha1 = sample(A);\n");
+
+    REQUIRE(result.warningCount == 0);
+    REQUIRE(result.topLevelVariables.contains("ha0"));
+    REQUIRE(result.topLevelVariables.contains("hb"));
+    REQUIRE(result.topLevelVariables.contains("ha1"));
+    CHECK(result.topLevelVariables.at("ha0").AsNumber() == Catch::Approx(0.0));
+    CHECK(result.topLevelVariables.at("hb").AsNumber() == Catch::Approx(10.0));
+    CHECK(result.topLevelVariables.at("ha1").AsNumber() == Catch::Approx(0.0));
+}
+
+TEST_CASE("Scad normals: zero smoothing angle uses exact per-face normals", "[Unit][Scad]")
+{
+    const std::vector<glm::vec3> positions = {
+        {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f},
+        {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f},
+    };
+    const std::vector<glm::vec3> normals = ScadComputeSmoothNormals(positions, 0.0f);
+
+    REQUIRE(normals.size() == positions.size());
+    for (size_t i = 0; i < 3; ++i)
+    {
+        CHECK(normals[i].x == Catch::Approx(0.0f));
+        CHECK(normals[i].y == Catch::Approx(0.0f));
+        CHECK(normals[i].z == Catch::Approx(1.0f));
+    }
+    for (size_t i = 3; i < 6; ++i)
+    {
+        CHECK(normals[i].x == Catch::Approx(1.0f));
+        CHECK(normals[i].y == Catch::Approx(0.0f));
+        CHECK(normals[i].z == Catch::Approx(0.0f));
+    }
 }
 
 TEST_CASE("ScadTerrain scene: faceted + water flags and terrain payload", "[Unit][Scad][ScadTerrain]")

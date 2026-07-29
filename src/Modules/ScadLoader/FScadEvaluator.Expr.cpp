@@ -17,7 +17,7 @@ namespace Assets::Scad::EvalDetail
         {
             std::vector<Value> items;
             for (const ExprPtr& it : e->list) AppendElement(it, items);
-            return Value::MakeVec(std::move(items));
+            return MakeVector(std::move(items));
         }
         case ExprKind::RangeLit:
         {
@@ -164,7 +164,7 @@ namespace Assets::Scad::EvalDetail
                 std::vector<Value> out;
                 out.reserve(v.vec.size());
                 for (const Value& c : v.vec) out.push_back(Value::MakeNumber(-c.AsNumber(0.0)));
-                return Value::MakeVec(std::move(out));
+                return MakeVector(std::move(out));
             }
             return Value::MakeNumber(-v.AsNumber(0.0));
         }
@@ -203,7 +203,7 @@ namespace Assets::Scad::EvalDetail
                     const double y = b.vec[i].AsNumber(0.0);
                     out.push_back(Value::MakeNumber(op == "+" ? x + y : x - y));
                 }
-                return Value::MakeVec(std::move(out));
+                return MakeVector(std::move(out));
             }
             const double x = a.AsNumber(0.0);
             const double y = b.AsNumber(0.0);
@@ -228,12 +228,19 @@ namespace Assets::Scad::EvalDetail
         return Value();
     }
 
+    Value Evaluator::MakeVector(std::vector<Value>&& values)
+    {
+        Value result = Value::MakeVec(std::move(values));
+        result.cacheIdentity = nextValueIdentity_++;
+        return result;
+    }
+
     Value Evaluator::ScaleVec(const Value& v, double s)
     {
         std::vector<Value> out;
         out.reserve(v.vec.size());
         for (const Value& c : v.vec) out.push_back(Value::MakeNumber(c.AsNumber(0.0) * s));
-        return Value::MakeVec(std::move(out));
+        return MakeVector(std::move(out));
     }
 
     std::string Evaluator::NumToStr(double v)
@@ -376,7 +383,7 @@ namespace Assets::Scad::EvalDetail
                 if (v.type == Value::Type::Vec) out.insert(out.end(), v.vec.begin(), v.vec.end());
                 else out.push_back(v);
             }
-            return Value::MakeVec(std::move(out));
+            return MakeVector(std::move(out));
         }
         if (name == "str")
         {
@@ -412,7 +419,7 @@ namespace Assets::Scad::EvalDetail
             info.push_back(Value::MakeNumber(slopeDeg));
             info.push_back(Value::MakeNumber(waterFlag ? 1.0 : 0.0));
             info.push_back(Value::MakeNumber(static_cast<double>(biome)));
-            return Value::MakeVec(std::move(info));
+            return MakeVector(std::move(info));
         }
 
         Warn("unknownfn", "unknown function '" + name + "'");

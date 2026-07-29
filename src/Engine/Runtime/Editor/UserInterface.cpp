@@ -936,8 +936,27 @@ void UserInterface::Render(const Statistics& statistics, Runtime::FrameProfiler*
 
 void UserInterface::PrepareDrawData()
 {
-    if (GetEngine().GetEngineStatus() == NextRenderer::EApplicationStatus::Loading)
-        DrawIndicator(GetEngine().GetTotalFrames());
+    constexpr double loadingIndicatorDelaySeconds = 0.5;
+    const bool isLoading = GetEngine().GetEngineStatus() == NextRenderer::EApplicationStatus::Loading;
+    if (isLoading)
+    {
+        if (loadingStartedAt_ < 0.0)
+        {
+            loadingStartedAt_ = ImGui::GetTime();
+        }
+        if (ImGui::GetTime() - loadingStartedAt_ >= loadingIndicatorDelaySeconds)
+        {
+            DrawIndicator(GetEngine().GetTotalFrames(), true);
+        }
+    }
+    else
+    {
+        loadingStartedAt_ = -1.0;
+        if (loadingIndicatorOpen_)
+        {
+            DrawIndicator(GetEngine().GetTotalFrames(), false);
+        }
+    }
 
     // aux
     for (auto& req : auxDrawRequest_)
@@ -1018,21 +1037,33 @@ bool UserInterface::WantsToCaptureMouse() const { return ImGui::GetIO().WantCapt
 
 
 
-void UserInterface::DrawIndicator(uint32_t frameCount)
+void UserInterface::DrawIndicator(uint32_t frameCount, bool show)
 {
     frameCount /= 60;
-    ImGui::OpenPopup("Loading");
+    if (show)
+    {
+        ImGui::OpenPopup("Loading");
+        loadingIndicatorOpen_ = true;
+    }
     if (Utilities::UI::BeginAnchoredPopupModal(
             "Loading",
             NULL,
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize,
             Utilities::UI::FModalPopupOptions{.RequestedSize = ImVec2(200, 40)}))
     {
-        ImGui::Text("Loading%s",
-                    frameCount % 4 == 0       ? ""
-                        : frameCount % 4 == 1 ? "."
-                        : frameCount % 4 == 2 ? ".."
-                                              : "...");
+        if (show)
+        {
+            ImGui::Text("Loading%s",
+                        frameCount % 4 == 0       ? ""
+                            : frameCount % 4 == 1 ? "."
+                            : frameCount % 4 == 2 ? ".."
+                                                  : "...");
+        }
+        else
+        {
+            ImGui::CloseCurrentPopup();
+            loadingIndicatorOpen_ = false;
+        }
         ImGui::EndPopup();
     }
 }

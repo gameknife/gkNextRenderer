@@ -12,6 +12,7 @@
 // engine (right-handed, Y-up) via a -90 deg rotation about X.
 // ============================================================================
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -64,6 +65,11 @@ namespace Assets
             bool boolean = false;
             std::string str;
             std::vector<Value> vec;
+            // Evaluator-local immutable value identity. Copies retain it so
+            // expensive native decoders can memoize by provenance. Values
+            // created outside the evaluator leave it at zero and use the
+            // canonical fallback path.
+            uint64_t cacheIdentity = 0;
             double rangeBegin = 0.0;
             double rangeStep = 1.0;
             double rangeEnd = 0.0;
