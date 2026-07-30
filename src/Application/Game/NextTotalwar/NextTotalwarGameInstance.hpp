@@ -1,8 +1,12 @@
 #pragma once
 
 #include "Battle/FormationLayout.h"
+#include "Battle/BattleState.h"
+#include "Battle/CombatSystem.h"
+#include "NextTotalwarCombatConfig.hpp"
 #include "NextTotalwarTypes.h"
 #include "Render/BattleCamera.h"
+#include "Render/CombatFx.h"
 
 #include "Engine/Assets/Data/RigAsset.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
@@ -76,6 +80,7 @@ namespace NextTotalwar
         Runtime::TerrainComponent* terrain_ = nullptr;
         std::array<FUnitDef, 3> unitDefs_{};
         std::vector<FRegiment> regiments_;
+        std::vector<std::vector<FSoldierVisual>> soldierVisuals_;
         std::array<Assets::FRigAsset, 3> soldierRigAssets_{};
         std::array<std::vector<uint32_t>, 3> soldierPartModelIds_{};
         std::array<std::vector<std::array<uint32_t, 16>>, 3> soldierPartMaterialIds_{};
@@ -95,5 +100,17 @@ namespace NextTotalwar
         uint64_t frameIndex_ = 0;
         int animatorUpdates_ = 0;
         float lastOrderDistance_ = 0.0f;
+        FCombatTuning combatTuning_;
+        FBattleState battleState_;
+        FCombatSystem combatSystem_;
+        FCombatGrid movementGrid_;
+        FCombatFx combatFx_;
+        float combatAccumulator_ = 0.0f;
+        int battleSeed_ = 1337;
+        float battleDeployDistance_ = 125.0f;
+        bool deterministicCombat_ = false;
+        int combatTicksThisFrame_ = 0;
+        int lastCombatEventCount_ = 0;
+        float combatCpuMilliseconds_ = 0.0f;
     };
 }

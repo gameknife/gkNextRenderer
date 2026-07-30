@@ -8,6 +8,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
 
+#include <array>
 #include <set>
 #include <string>
 #include <vector>
@@ -80,6 +81,78 @@ TEST_CASE("NextTotalwar assigns selected regiments to minimum-travel destination
     CHECK(assignedDistance < indexOrderedDistance);
 }
 
+TEST_CASE("NextTotalwar repacks only surviving formation slots",
+          "[NextTotalwar][Formation]")
+{
+    NextTotalwar::FRegiment regiment;
+    regiment.soldiers.resize(6);
+    for (int index = 0; index < 6; ++index)
+    {
+        regiment.soldiers[index].slotIndex = index;
+        regiment.soldiers[index].health = 10;
+    }
+    regiment.soldiers[1].combatState = NextTotalwar::ESoldierState::Dead;
+    regiment.soldiers[4].combatState = NextTotalwar::ESoldierState::Dying;
+    regiment.strength = 4;
+
+    NextTotalwar::Formation::RepackSlots(regiment);
+
+    CHECK(regiment.strength == 4);
+    CHECK(regiment.soldiers[0].slotIndex == 0);
+    CHECK(regiment.soldiers[2].slotIndex == 1);
+    CHECK(regiment.soldiers[3].slotIndex == 2);
+    CHECK(regiment.soldiers[5].slotIndex == 3);
+    CHECK(regiment.soldiers[1].slotIndex == -1);
+    CHECK(regiment.soldiers[4].slotIndex == -1);
+}
+
+TEST_CASE("NextTotalwar reforms around the survivors instead of the old anchor",
+          "[NextTotalwar][Formation]")
+{
+    NextTotalwar::FUnitDef definition;
+    definition.fileSpacing = 1.1f;
+    definition.rankSpacing = 1.3f;
+
+    NextTotalwar::FRegiment regiment;
+    regiment.def = &definition;
+    regiment.anchor = {-80.0f, 0.0f, 40.0f};
+    regiment.facing = 0.0f;
+    regiment.ranks = 2;
+    regiment.strength = 4;
+    regiment.startStrength = 4;
+    regiment.soldiers.resize(4);
+    const std::array<glm::vec3, 4> survivorPositions = {{
+        {21.0f, 0.0f, -8.0f},
+        {19.0f, 0.0f, -6.0f},
+        {20.0f, 0.0f, -9.0f},
+        {22.0f, 0.0f, -7.0f},
+    }};
+    glm::vec3 survivorCenter{};
+    for (size_t index = 0; index < regiment.soldiers.size(); ++index)
+    {
+        regiment.soldiers[index].position = survivorPositions[index];
+        regiment.soldiers[index].slotIndex = static_cast<int>(index);
+        regiment.soldiers[index].health = 10;
+        survivorCenter += survivorPositions[index];
+    }
+    survivorCenter /= static_cast<float>(regiment.soldiers.size());
+
+    NextTotalwar::Formation::PrepareNearestReform(regiment);
+
+    glm::vec3 destinationCenter{};
+    for (const NextTotalwar::FSoldier& soldier : regiment.soldiers)
+    {
+        const glm::vec2 local = NextTotalwar::Formation::SlotLocalOffset(
+            soldier.slotIndex, regiment.strength, regiment.ranks,
+            definition.fileSpacing, definition.rankSpacing);
+        destinationCenter += NextTotalwar::Formation::SlotWorld(
+            regiment.anchor, regiment.facing, local);
+    }
+    destinationCenter /= static_cast<float>(regiment.soldiers.size());
+    CHECK(glm::distance(destinationCenter, survivorCenter) < 0.001f);
+    CHECK(glm::distance(regiment.anchor, glm::vec3(-80.0f, 0.0f, 40.0f)) > 50.0f);
+}
+
 TEST_CASE("NextTotalwar shipped rigs satisfy the six-part reusable mesh budget", "[NextTotalwar][ScadRig]")
 {
     for (const char* path : {
@@ -96,10 +169,12 @@ TEST_CASE("NextTotalwar shipped rigs satisfy the six-part reusable mesh budget",
         CHECK(asset.bones.size() == 7);
         CHECK(asset.parts.size() == 6);
         CHECK(asset.partModels.size() == 6);
-        for (const char* clip : {"idle", "walk", "march", "run"})
+        for (const char* clip : {"idle", "walk", "march", "run", "attack", "die"})
         {
             CHECK(asset.FindClip(clip) != nullptr);
         }
+        REQUIRE(asset.FindClip("die") != nullptr);
+        CHECK_FALSE(asset.FindClip("die")->loop);
 
         size_t triangles = 0;
         for (const Assets::Model& model : asset.partModels)

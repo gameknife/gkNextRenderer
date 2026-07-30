@@ -1,0 +1,48 @@
+{
+  "name": "nexttotalwar-battle",
+  "target": "NextTotalwar",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1600,
+    "height": 900
+  },
+  "steps": [
+    {"type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 30000},
+    {"type": "wait-until", "query": "game.navReady", "op": "eq", "value": true, "timeoutMs": 120000},
+    {"type": "wait-until", "query": "game.engagedRegiments", "op": "ge", "value": 2, "timeoutMs": 30000},
+    {"type": "wait-until", "query": "game.fightingSoldiers", "op": "ge", "value": 700, "timeoutMs": 30000},
+    {"type": "wait-until", "query": "game.totalKills", "op": "ge", "value": 20, "timeoutMs": 120000},
+    {"type": "wait-until", "query": "game.corpseCount", "op": "ge", "value": 20, "timeoutMs": 30000},
+    {"type": "assert", "query": "game.aliveSoldiers", "op": "le", "value": 2380},
+    {"type": "assert", "query": "game.renderProxyCount", "op": "le", "value": 30000},
+    {"type": "assert", "query": "game.debugVisible", "op": "eq", "value": true},
+    {"type": "mouse-move", "to": {"norm": [0.24, 0.95]}},
+    {"type": "wait-frames", "n": 2},
+    {"type": "mouse-button", "button": "left", "action": "down", "at": {"norm": [0.24, 0.95]}},
+    {"type": "mouse-button", "button": "left", "action": "up", "at": {"norm": [0.24, 0.95]}},
+    {"type": "wait-frames", "n": 2},
+    {"type": "assert", "query": "game.selectedRegiments", "op": "eq", "value": 1},
+    {"type": "key", "code": "F5", "action": "down"},
+    {"type": "key", "code": "F5", "action": "up"},
+    {"type": "wait-frames", "n": 2},
+    {"type": "assert", "query": "game.debugVisible", "op": "eq", "value": false},
+    {"type": "key", "code": "F5", "action": "down"},
+    {"type": "key", "code": "F5", "action": "up"},
+    {"type": "wait-frames", "n": 8},
+    {"type": "assert", "query": "game.debugVisible", "op": "eq", "value": true},
+    {"type": "key", "code": "F", "action": "down"},
+    {"type": "key", "code": "F", "action": "up"},
+    {"type": "mouse-move", "to": {"norm": [0.50, 0.50]}},
+    {"type": "scroll", "x": 0, "y": 20},
+    {"type": "wait-frames", "n": 10},
+    {"type": "screenshot", "out": "screenshots/nexttotalwar-battle-c1", "ui": true},
+    {"type": "drag", "from": {"norm": [0.76, 0.70]}, "to": {"norm": [0.82, 0.70]}, "button": "right"},
+    {"type": "wait-frames", "n": 2},
+    {"type": "assert", "query": "game.disengagingRegiments", "op": "ge", "value": 1},
+    {"type": "assert", "query": "game.pursuingRegiments", "op": "ge", "value": 1},
+    {"type": "quit"}
+  ]
+}

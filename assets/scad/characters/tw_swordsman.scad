@@ -22,3 +22,5 @@ anim_idle=ch_clip_idle();
 anim_walk=ch_clip_walk();
 anim_march=ch_clip_walk();
 anim_run=ch_clip_walk();
+anim_attack=tw_clip_attack_slash();
+anim_die=tw_clip_die_fall();

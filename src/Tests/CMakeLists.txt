@@ -39,6 +39,7 @@ set(unitTestSources
     Test_NextRAFixed.cpp
     Test_NextTotalwarCamera.cpp
     Test_NextTotalwarFormation.cpp
+    Test_NextTotalwarCombat.cpp
     Test_GnbAIClient.cpp
     Test_ScadPromptContext.cpp
     Test_ScadSessionStore.cpp
@@ -82,6 +83,9 @@ set(unitTestSources
     ${GK_SOURCE_ROOT}/Application/Game/NextRA/Sim/SyncHash.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextRA/Sim/Systems/OrderApplySystem.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Battle/FormationLayout.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Battle/CombatModel.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Battle/CombatGrid.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Battle/CombatSystem.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Render/BattleCamera.cpp
 )
 

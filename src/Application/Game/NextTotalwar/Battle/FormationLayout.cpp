@@ -61,6 +61,79 @@ namespace NextTotalwar::Formation
             static_cast<float>(rows - 1) * rankSpacing * 0.5f};
     }
 
+    void RepackSlots(FRegiment& regiment)
+    {
+        std::vector<FSoldier*> survivors;
+        survivors.reserve(static_cast<size_t>(std::max(regiment.strength, 0)));
+        for (FSoldier& soldier : regiment.soldiers)
+        {
+            if (soldier.combatState == ESoldierState::Dying ||
+                soldier.combatState == ESoldierState::Dead)
+            {
+                soldier.slotIndex = -1;
+                continue;
+            }
+            survivors.push_back(&soldier);
+        }
+        std::stable_sort(survivors.begin(), survivors.end(),
+                         [](const FSoldier* first, const FSoldier* second)
+                         {
+                             return first->slotIndex < second->slotIndex;
+                         });
+        for (size_t index = 0; index < survivors.size(); ++index)
+        {
+            survivors[index]->slotIndex = static_cast<int>(index);
+        }
+        regiment.strength = static_cast<int>(survivors.size());
+    }
+
+    void PrepareNearestReform(FRegiment& regiment)
+    {
+        RepackSlots(regiment);
+        if (!regiment.def || regiment.strength <= 0) return;
+
+        std::vector<FSoldier*> survivors;
+        std::vector<glm::vec3> starts;
+        survivors.reserve(static_cast<size_t>(regiment.strength));
+        starts.reserve(static_cast<size_t>(regiment.strength));
+        glm::vec3 currentCenter{};
+        glm::vec2 localCenter{};
+        for (FSoldier& soldier : regiment.soldiers)
+        {
+            if (soldier.slotIndex < 0) continue;
+            survivors.push_back(&soldier);
+            starts.push_back(soldier.position);
+            currentCenter += soldier.position;
+            localCenter += SlotLocalOffset(
+                soldier.slotIndex, regiment.strength, regiment.ranks,
+                regiment.def->fileSpacing, regiment.def->rankSpacing);
+        }
+        const float inverseCount = 1.0f / static_cast<float>(survivors.size());
+        currentCenter *= inverseCount;
+        localCenter *= inverseCount;
+        const glm::vec3 localCenterWorld =
+            SlotWorld({}, regiment.facing, localCenter);
+        regiment.anchor = currentCenter - localCenterWorld;
+
+        std::vector<glm::vec3> destinations;
+        destinations.reserve(survivors.size());
+        for (size_t slotIndex = 0; slotIndex < survivors.size(); ++slotIndex)
+        {
+            const glm::vec2 local = SlotLocalOffset(
+                static_cast<int>(slotIndex), regiment.strength, regiment.ranks,
+                regiment.def->fileSpacing, regiment.def->rankSpacing);
+            destinations.push_back(SlotWorld(regiment.anchor, regiment.facing, local));
+        }
+        const std::vector<size_t> assignment =
+            MinimumTravelAssignment(starts, destinations);
+        if (assignment.size() != survivors.size()) return;
+        for (size_t soldierIndex = 0; soldierIndex < survivors.size(); ++soldierIndex)
+        {
+            survivors[soldierIndex]->slotIndex =
+                static_cast<int>(assignment[soldierIndex]);
+        }
+    }
+
     std::vector<size_t> MinimumTravelAssignment(const std::vector<glm::vec3>& starts,
                                                 const std::vector<glm::vec3>& destinations)
     {

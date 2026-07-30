@@ -1,11 +1,7 @@
 #pragma once
 
-#include "Engine/Assets/AssetsFwd.hpp"
-#include "Gameplay/Rig/RigInstance.h"
-
 #include <glm/vec3.hpp>
-#include <memory>
-#include <string>
+#include <cstdint>
 #include <vector>
 
 namespace NextTotalwar
@@ -22,6 +18,18 @@ namespace NextTotalwar
         Idle,
         Marching,
         Reforming,
+        Engaged,
+        Charging,
+        Routing,
+        Destroyed,
+    };
+
+    enum class ESoldierState : uint8_t
+    {
+        Formation,
+        Fighting,
+        Dying,
+        Dead,
     };
 
     struct FUnitDef
@@ -42,9 +50,14 @@ namespace NextTotalwar
         float yaw = 0.0f;
         int slotIndex = -1;
         float phaseOffset = 0.0f;
-        std::shared_ptr<Assets::Node> worldNode;
-        std::vector<Assets::Node*> renderNodes;
-        NextGameplay::FRigAnimator animator;
+        ESoldierState combatState = ESoldierState::Formation;
+        int16_t health = 0;
+        int16_t targetRegiment = -1;
+        int16_t targetSoldier = -1;
+        int8_t engagementSlot = -1;
+        float attackTimer = 0.0f;
+        float flashTimer = 0.0f;
+        float deathTimer = 0.0f;
     };
 
     struct FRegiment
@@ -62,5 +75,20 @@ namespace NextTotalwar
         std::vector<glm::vec3> path;
         size_t pathCursor = 0;
         std::vector<FSoldier> soldiers;
+        int strength = 0;
+        int startStrength = 0;
+        int kills = 0;
+        float morale = 70.0f;
+        float chargeTimer = 0.0f;
+        float outOfContact = 0.0f;
+        float orderLock = 0.0f;
+        bool disengaging = false;
+        std::vector<int16_t> engagedWith;
     };
+
+    inline bool IsRegimentSelectable(const FRegiment& regiment)
+    {
+        return regiment.strength > 0 &&
+               regiment.state != ERegimentState::Destroyed;
+    }
 }
