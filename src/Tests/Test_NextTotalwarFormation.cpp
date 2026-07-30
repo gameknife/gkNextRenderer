@@ -14,8 +14,8 @@
 
 TEST_CASE("NextTotalwar formation layout is centered and deterministic", "[NextTotalwar][Formation]")
 {
-    constexpr int count = 64;
-    constexpr int ranks = 4;
+    constexpr int count = 100;
+    constexpr int ranks = 10;
     std::set<std::pair<int, int>> quantized;
     for (int index = 0; index < count; ++index)
     {
@@ -27,8 +27,8 @@ TEST_CASE("NextTotalwar formation layout is centered and deterministic", "[NextT
     CHECK(quantized.size() == count);
 
     const glm::vec2 extent = NextTotalwar::Formation::FormationHalfExtent(count, ranks, 1.15f, 1.35f);
-    CHECK_THAT(extent.x, Catch::Matchers::WithinAbs(8.625f, 0.001f));
-    CHECK_THAT(extent.y, Catch::Matchers::WithinAbs(2.025f, 0.001f));
+    CHECK_THAT(extent.x, Catch::Matchers::WithinAbs(5.175f, 0.001f));
+    CHECK_THAT(extent.y, Catch::Matchers::WithinAbs(6.075f, 0.001f));
 }
 
 TEST_CASE("NextTotalwar formation world transform rotates around anchor", "[NextTotalwar][Formation]")

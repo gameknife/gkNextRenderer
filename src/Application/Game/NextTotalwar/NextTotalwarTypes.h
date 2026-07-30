@@ -31,7 +31,7 @@ namespace NextTotalwar
         const char* displayName = "Spearmen";
         float marchSpeed = 8.0f;
         float catchUpFactor = 1.45f;
-        int defaultRanks = 4;
+        int defaultRanks = 10;
         float fileSpacing = 1.15f;
         float rankSpacing = 1.35f;
     };

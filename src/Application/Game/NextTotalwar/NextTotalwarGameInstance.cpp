@@ -33,9 +33,11 @@
 namespace
 {
     constexpr int regimentCountPerFaction = 12;
-    constexpr int soldiersPerRegiment = 128;
+    constexpr int soldiersPerRegiment = 100;
     constexpr int totalRegimentCount = regimentCountPerFaction * 2;
     constexpr int totalSoldierCount = totalRegimentCount * soldiersPerRegiment;
+    constexpr float regimentLateralSpacing = 18.0f;
+    constexpr float regimentDepthSpacing = 20.0f;
 
     float WrapAngle(float angle)
     {
@@ -45,6 +47,24 @@ namespace
     float ApproachAngle(float current, float target, float maxStep)
     {
         return current + glm::clamp(WrapAngle(target - current), -maxStep, maxStep);
+    }
+
+    glm::vec3 RegimentOrderOffset(size_t index, size_t regimentCount, float facing)
+    {
+        const glm::vec3 lateral(std::cos(facing), 0.0f, -std::sin(facing));
+        const glm::vec3 forward(std::sin(facing), 0.0f, std::cos(facing));
+        const size_t columns =
+            std::max<size_t>(1, static_cast<size_t>(std::ceil(std::sqrt(regimentCount * 1.35f))));
+        const size_t rows = (regimentCount + columns - 1) / columns;
+        const size_t row = index / columns;
+        const size_t column = index % columns;
+        const size_t columnsInRow = std::min(columns, regimentCount - row * columns);
+        const float columnOffset =
+            static_cast<float>(column) - static_cast<float>(columnsInRow - 1) * 0.5f;
+        const float rowOffset =
+            static_cast<float>(row) - static_cast<float>(rows - 1) * 0.5f;
+        return lateral * columnOffset * regimentLateralSpacing -
+               forward * rowOffset * regimentDepthSpacing;
     }
 }
 
@@ -65,9 +85,9 @@ namespace NextTotalwar
         ConfigureWindow(config, options, "NextTotalwar", 1600, 900, true);
         options.RenderCapacityMode = Runtime::Config::ERenderCapacityMode::Massive;
         unitDefs_ = {{
-            {EUnitType::Spearman, "spearman", "Spearmen", 8.0f, 1.45f, 16, 1.12f, 1.35f},
-            {EUnitType::Swordsman, "swordsman", "Swordsmen", 8.6f, 1.45f, 16, 1.08f, 1.30f},
-            {EUnitType::Archer, "archer", "Archers", 8.2f, 1.45f, 16, 1.20f, 1.42f},
+            {EUnitType::Spearman, "spearman", "Spearmen", 8.0f, 1.45f, 10, 1.12f, 1.35f},
+            {EUnitType::Swordsman, "swordsman", "Swordsmen", 8.6f, 1.45f, 10, 1.08f, 1.30f},
+            {EUnitType::Archer, "archer", "Archers", 8.2f, 1.45f, 10, 1.20f, 1.42f},
         }};
     }
 
@@ -395,6 +415,7 @@ namespace NextTotalwar
                 const float distance = glm::length(delta);
                 if (distance < 0.8f)
                 {
+                    regiment.anchor = target;
                     ++regiment.pathCursor;
                     continue;
                 }
@@ -609,6 +630,80 @@ namespace NextTotalwar
         GetEngine().GetScene().MarkDirty();
     }
 
+    float FGameInstance::ResolveOrderFacing(const glm::vec3& target, const glm::vec3& facingPoint) const
+    {
+        glm::vec3 direction = facingPoint - target;
+        direction.y = 0.0f;
+        if (glm::length(direction) > 2.0f)
+        {
+            return std::atan2(direction.x, direction.z);
+        }
+        for (const FRegiment& regiment : regiments_)
+        {
+            if (regiment.selected) return regiment.facing;
+        }
+        return 0.0f;
+    }
+
+    std::vector<glm::vec3> FGameInstance::BuildOrderPath(
+        const FRegiment& regiment, const glm::vec3& destination, float facing) const
+    {
+        const float approachDistance =
+            Formation::FormationHalfExtent(static_cast<int>(regiment.soldiers.size()),
+                                           regiment.ranks,
+                                           regiment.def->fileSpacing,
+                                           regiment.def->rankSpacing).y;
+        glm::vec3 approach =
+            Formation::SlotWorld(destination, facing, glm::vec2(0.0f, -approachDistance));
+        approach.y = GroundHeight(approach.x, approach.z);
+
+        std::vector<glm::vec3> path = navGrid_.IsBuilt()
+                                          ? navGrid_.FindPath(regiment.anchor, approach, regiment.anchor.y)
+                                          : std::vector<glm::vec3>{regiment.anchor};
+        if (path.empty())
+        {
+            // 河桥是独立 SCAD mesh；个别低模桥端在 2m NavGrid 上会因单格
+            // 台阶离散化断连。失败时仍按战场语义走最近的桥，而不是穿河直线。
+            const bool crossesRiver = (regiment.anchor.x < -15.0f && destination.x > -15.0f) ||
+                                      (regiment.anchor.x > -15.0f && destination.x < -15.0f);
+            if (crossesRiver)
+            {
+                const float averageZ = (regiment.anchor.z + destination.z) * 0.5f;
+                const float bridgeZ = std::abs(averageZ + 4.0f) <= std::abs(averageZ + 75.0f)
+                                          ? -4.0f
+                                          : -75.0f;
+                const bool westToEast = regiment.anchor.x < destination.x;
+                glm::vec3 entry(westToEast ? -31.0f : 2.0f, 0.0f, bridgeZ);
+                glm::vec3 exit(westToEast ? 2.0f : -31.0f, 0.0f, bridgeZ);
+                entry.y = GroundHeight(entry.x, entry.z);
+                exit.y = GroundHeight(exit.x, exit.z);
+                path = {regiment.anchor, entry, exit};
+                SPDLOG_INFO("NextTotalwar: regiment {} uses semantic bridge route", regiment.id);
+            }
+            else
+            {
+                path = {regiment.anchor};
+                SPDLOG_WARN("NextTotalwar: regiment {} path failed, using local direct fallback", regiment.id);
+            }
+        }
+
+        const auto appendDistinct = [&path](const glm::vec3& node)
+        {
+            if (path.empty() ||
+                glm::distance(glm::vec2(path.back().x, path.back().z), glm::vec2(node.x, node.z)) > 0.1f)
+            {
+                path.push_back(node);
+            }
+            else
+            {
+                path.back() = node;
+            }
+        };
+        appendDistinct(approach);
+        appendDistinct(destination);
+        return path;
+    }
+
     void FGameInstance::IssueMoveOrders(const glm::vec3& target, float facing)
     {
         std::vector<FRegiment*> selected;
@@ -618,58 +713,16 @@ namespace NextTotalwar
         }
         if (selected.empty()) return;
 
-        const glm::vec3 lateral(std::cos(facing), 0.0f, -std::sin(facing));
-        const glm::vec3 forward(std::sin(facing), 0.0f, std::cos(facing));
-        const size_t regimentColumns =
-            std::max<size_t>(1, static_cast<size_t>(std::ceil(std::sqrt(selected.size() * 1.35f))));
-        const size_t regimentRows = (selected.size() + regimentColumns - 1) / regimentColumns;
         for (size_t index = 0; index < selected.size(); ++index)
         {
             FRegiment& regiment = *selected[index];
-            const size_t row = index / regimentColumns;
-            const size_t column = index % regimentColumns;
-            const size_t columnsInRow =
-                std::min(regimentColumns, selected.size() - row * regimentColumns);
-            const float columnOffset =
-                static_cast<float>(column) - static_cast<float>(columnsInRow - 1) * 0.5f;
-            const float rowOffset =
-                static_cast<float>(row) - static_cast<float>(regimentRows - 1) * 0.5f;
-            glm::vec3 destination =
-                target + lateral * columnOffset * 40.0f - forward * rowOffset * 28.0f;
+            glm::vec3 destination = target + RegimentOrderOffset(index, selected.size(), facing);
             destination.x = glm::clamp(destination.x, -188.0f, 188.0f);
             destination.z = glm::clamp(destination.z, -188.0f, 188.0f);
             destination.y = GroundHeight(destination.x, destination.z);
             regiment.orderTarget = destination;
             regiment.orderFacing = facing;
-            regiment.path = navGrid_.IsBuilt()
-                                ? navGrid_.FindPath(regiment.anchor, destination, regiment.anchor.y)
-                                : std::vector<glm::vec3>{destination};
-            if (regiment.path.empty())
-            {
-                // 河桥是独立 SCAD mesh；个别低模桥端在 2m NavGrid 上会因单格
-                // 台阶离散化断连。失败时仍按战场语义走最近的桥，而不是穿河直线。
-                const bool crossesRiver = (regiment.anchor.x < -15.0f && destination.x > -15.0f) ||
-                                          (regiment.anchor.x > -15.0f && destination.x < -15.0f);
-                if (crossesRiver)
-                {
-                    const float averageZ = (regiment.anchor.z + destination.z) * 0.5f;
-                    const float bridgeZ = std::abs(averageZ + 4.0f) <= std::abs(averageZ + 75.0f)
-                                              ? -4.0f
-                                              : -75.0f;
-                    const bool westToEast = regiment.anchor.x < destination.x;
-                    glm::vec3 entry(westToEast ? -31.0f : 2.0f, 0.0f, bridgeZ);
-                    glm::vec3 exit(westToEast ? 2.0f : -31.0f, 0.0f, bridgeZ);
-                    entry.y = GroundHeight(entry.x, entry.z);
-                    exit.y = GroundHeight(exit.x, exit.z);
-                    regiment.path = {regiment.anchor, entry, exit, destination};
-                    SPDLOG_INFO("NextTotalwar: regiment {} uses semantic bridge route", regiment.id);
-                }
-                else
-                {
-                    regiment.path = {regiment.anchor, destination};
-                    SPDLOG_WARN("NextTotalwar: regiment {} path failed, using local direct fallback", regiment.id);
-                }
-            }
+            regiment.path = BuildOrderPath(regiment, destination, facing);
             regiment.pathCursor = regiment.path.size() > 1 ? 1 : 0;
             regiment.state = ERegimentState::Marching;
             lastOrderDistance_ = glm::distance(glm::vec2(regiment.anchor.x, regiment.anchor.z),
@@ -762,18 +815,7 @@ namespace NextTotalwar
                 glm::vec3 release{};
                 if (TryGroundHit(mousePos_, release))
                 {
-                    glm::vec3 direction = release - rightTarget_;
-                    direction.y = 0.0f;
-                    float facing = 0.0f;
-                    if (glm::length(direction) > 2.0f) facing = std::atan2(direction.x, direction.z);
-                    else
-                    {
-                        for (const FRegiment& regiment : regiments_)
-                        {
-                            if (regiment.selected) { facing = regiment.facing; break; }
-                        }
-                    }
-                    IssueMoveOrders(rightTarget_, facing);
+                    IssueMoveOrders(rightTarget_, ResolveOrderFacing(rightTarget_, release));
                 }
             }
             return true;
@@ -888,6 +930,51 @@ namespace NextTotalwar
     {
         ImDrawList* draw = ImGui::GetForegroundDrawList();
         if (!draw) return;
+        const auto drawFormationFrame =
+            [this, draw](const glm::vec3& anchor, float facing,
+                         const glm::vec2& localMin, const glm::vec2& localMax,
+                         ImU32 outlineColor, ImU32 fillColor)
+            {
+                const std::array<glm::vec2, 4> corners = {{
+                    {localMin.x, localMax.y}, {localMax.x, localMax.y},
+                    {localMax.x, localMin.y}, {localMin.x, localMin.y},
+                }};
+                std::array<ImVec2, 4> projected{};
+                bool valid = true;
+                for (size_t index = 0; index < corners.size(); ++index)
+                {
+                    glm::vec3 world = Formation::SlotWorld(anchor, facing, corners[index]);
+                    world.y = GroundHeight(world.x, world.z) + 0.08f;
+                    valid &= Runtime::EngineHelper::TryProjectWorldToScreenForGame(*this, world, projected[index]);
+                }
+                if (!valid) return;
+
+                if ((fillColor & IM_COL32_A_MASK) != 0)
+                {
+                    draw->AddConvexPolyFilled(projected.data(), static_cast<int>(projected.size()), fillColor);
+                }
+                draw->AddPolyline(projected.data(), static_cast<int>(projected.size()), outlineColor,
+                                  ImDrawFlags_Closed, 2.0f);
+
+                const float centerX = (localMin.x + localMax.x) * 0.5f;
+                const float frontY = localMax.y;
+                const std::array<glm::vec2, 4> arrowLocal = {{
+                    {centerX, frontY},
+                    {centerX, frontY + 3.2f},
+                    {centerX - 1.05f, frontY + 2.0f},
+                    {centerX + 1.05f, frontY + 2.0f},
+                }};
+                std::array<ImVec2, 4> arrow{};
+                for (size_t index = 0; index < arrowLocal.size(); ++index)
+                {
+                    glm::vec3 world = Formation::SlotWorld(anchor, facing, arrowLocal[index]);
+                    world.y = GroundHeight(world.x, world.z) + 0.1f;
+                    if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(*this, world, arrow[index])) return;
+                }
+                draw->AddLine(arrow[0], arrow[1], outlineColor, 2.5f);
+                draw->AddTriangleFilled(arrow[1], arrow[2], arrow[3], outlineColor);
+            };
+
         if (leftDown_ && hasMouse_ && glm::distance(leftStart_, mousePos_) > 6.0)
         {
             const ImVec2 a(static_cast<float>(leftStart_.x), static_cast<float>(leftStart_.y));
@@ -895,6 +982,83 @@ namespace NextTotalwar
             draw->AddRectFilled(a, b, IM_COL32(40, 170, 255, 38));
             draw->AddRect(a, b, IM_COL32(80, 210, 255, 235), 0.0f, 0, 2.0f);
         }
+
+        for (const FRegiment& regiment : regiments_)
+        {
+            if (regiment.state != ERegimentState::Marching ||
+                regiment.pathCursor >= regiment.path.size())
+            {
+                continue;
+            }
+
+            glm::vec3 previousWorld = regiment.anchor;
+            previousWorld.y = GroundHeight(previousWorld.x, previousWorld.z) + 0.14f;
+            ImVec2 previous{};
+            bool previousValid =
+                Runtime::EngineHelper::TryProjectWorldToScreenForGame(*this, previousWorld, previous);
+            const ImU32 routeColor = regiment.selected
+                                         ? IM_COL32(65, 220, 255, 235)
+                                         : (regiment.faction == 0
+                                                ? IM_COL32(65, 170, 255, 125)
+                                                : IM_COL32(255, 105, 80, 125));
+
+            for (size_t nodeIndex = regiment.pathCursor;
+                 nodeIndex < regiment.path.size(); ++nodeIndex)
+            {
+                glm::vec3 nodeWorld = regiment.path[nodeIndex];
+                nodeWorld.y = GroundHeight(nodeWorld.x, nodeWorld.z) + 0.14f;
+                ImVec2 node{};
+                const bool nodeValid =
+                    Runtime::EngineHelper::TryProjectWorldToScreenForGame(*this, nodeWorld, node);
+                const bool finalSegment = nodeIndex + 1 == regiment.path.size();
+                const ImU32 segmentColor =
+                    finalSegment ? IM_COL32(255, 220, 70, 245) : routeColor;
+                if (previousValid && nodeValid)
+                {
+                    draw->AddLine(previous, node, IM_COL32(10, 24, 34, 180), 5.0f);
+                    draw->AddLine(previous, node, segmentColor, finalSegment ? 3.0f : 2.2f);
+
+                    if (finalSegment)
+                    {
+                        const float dx = node.x - previous.x;
+                        const float dy = node.y - previous.y;
+                        const float length = std::sqrt(dx * dx + dy * dy);
+                        if (length > 12.0f)
+                        {
+                            const float ux = dx / length;
+                            const float uy = dy / length;
+                            const ImVec2 tip(previous.x + dx * 0.72f,
+                                             previous.y + dy * 0.72f);
+                            const ImVec2 base(tip.x - ux * 11.0f, tip.y - uy * 11.0f);
+                            const ImVec2 left(base.x - uy * 5.0f, base.y + ux * 5.0f);
+                            const ImVec2 right(base.x + uy * 5.0f, base.y - ux * 5.0f);
+                            draw->AddTriangleFilled(tip, left, right, segmentColor);
+                        }
+                    }
+                }
+
+                if (nodeValid)
+                {
+                    if (nodeIndex + 2 == regiment.path.size())
+                    {
+                        draw->AddCircleFilled(node, 4.5f, IM_COL32(255, 220, 70, 245), 12);
+                        draw->AddCircle(node, 7.0f, IM_COL32(40, 35, 12, 210), 16, 1.5f);
+                    }
+                    else if (nodeIndex + 1 == regiment.path.size())
+                    {
+                        draw->AddCircle(node, 6.0f, IM_COL32(255, 235, 115, 245), 18, 2.0f);
+                    }
+                    else
+                    {
+                        draw->AddCircleFilled(node, 3.0f, routeColor, 10);
+                    }
+                }
+
+                previous = node;
+                previousValid = nodeValid;
+            }
+        }
+
         for (const FRegiment& regiment : regiments_)
         {
             if (!regiment.selected || regiment.soldiers.empty()) continue;
@@ -910,26 +1074,41 @@ namespace NextTotalwar
             constexpr float selectionPadding = 0.7f;
             localMin -= glm::vec2(selectionPadding);
             localMax += glm::vec2(selectionPadding);
-            const std::array<glm::vec2, 4> corners = {{
-                {localMin.x, localMax.y}, {localMax.x, localMax.y},
-                {localMax.x, localMin.y}, {localMin.x, localMin.y},
-            }};
-            std::array<ImVec2, 4> projected{};
-            bool valid = true;
-            for (size_t index = 0; index < corners.size(); ++index)
-            {
-                glm::vec3 world = Formation::SlotWorld(regiment.anchor, regiment.facing, corners[index]);
-                world.y = GroundHeight(world.x, world.z) + 0.08f;
-                valid &= Runtime::EngineHelper::TryProjectWorldToScreenForGame(*this, world, projected[index]);
-            }
-            if (valid)
-            {
-                draw->AddPolyline(projected.data(), 4, IM_COL32(70, 235, 255, 240),
-                                  ImDrawFlags_Closed, 2.0f);
-            }
+            drawFormationFrame(regiment.anchor, regiment.facing, localMin, localMax,
+                               IM_COL32(70, 235, 255, 240), IM_COL32(40, 180, 220, 18));
         }
         if (rightDown_)
         {
+            glm::vec3 facingPoint{};
+            const bool hasFacingPoint = TryGroundHit(mousePos_, facingPoint);
+            const float previewFacing = ResolveOrderFacing(
+                rightTarget_, hasFacingPoint ? facingPoint : rightTarget_);
+            std::vector<const FRegiment*> selected;
+            for (const FRegiment& regiment : regiments_)
+            {
+                if (regiment.selected) selected.push_back(&regiment);
+            }
+            for (size_t index = 0; index < selected.size(); ++index)
+            {
+                const FRegiment& regiment = *selected[index];
+                glm::vec3 destination =
+                    rightTarget_ + RegimentOrderOffset(index, selected.size(), previewFacing);
+                destination.x = glm::clamp(destination.x, -188.0f, 188.0f);
+                destination.z = glm::clamp(destination.z, -188.0f, 188.0f);
+                destination.y = GroundHeight(destination.x, destination.z);
+                const glm::vec2 halfExtent =
+                    Formation::FormationHalfExtent(static_cast<int>(regiment.soldiers.size()),
+                                                   regiment.ranks,
+                                                   regiment.def->fileSpacing,
+                                                   regiment.def->rankSpacing);
+                constexpr float previewPadding = 0.7f;
+                const glm::vec2 localMin(-halfExtent.x - previewPadding,
+                                         -halfExtent.y * 2.0f - previewPadding);
+                const glm::vec2 localMax(halfExtent.x + previewPadding, previewPadding);
+                drawFormationFrame(destination, previewFacing, localMin, localMax,
+                                   IM_COL32(255, 225, 80, 245), IM_COL32(255, 205, 45, 34));
+            }
+
             ImVec2 target;
             if (Runtime::EngineHelper::TryProjectWorldToScreenForGame(*this, rightTarget_, target))
             {
@@ -966,6 +1145,38 @@ namespace NextTotalwar
         });
         registry.Add("navReady", [this]() { return navGrid_.IsBuilt(); });
         registry.Add("lastOrderDistance", [this]() { return static_cast<double>(lastOrderDistance_); });
+        registry.Add("routeNodeCount", [this]()
+        {
+            size_t count = 0;
+            for (const FRegiment& regiment : regiments_)
+            {
+                if (regiment.selected && regiment.state == ERegimentState::Marching &&
+                    regiment.pathCursor < regiment.path.size())
+                {
+                    count += regiment.path.size() - regiment.pathCursor;
+                }
+            }
+            return static_cast<int64_t>(count);
+        });
+        registry.Add("finalApproachAligned", [this]()
+        {
+            bool foundRoute = false;
+            for (const FRegiment& regiment : regiments_)
+            {
+                if (!regiment.selected || regiment.state != ERegimentState::Marching) continue;
+                if (regiment.path.size() < 2) return false;
+                const glm::vec3& approach = regiment.path[regiment.path.size() - 2];
+                const glm::vec3& destination = regiment.path.back();
+                const glm::vec2 delta(destination.x - approach.x, destination.z - approach.z);
+                const float length = glm::length(delta);
+                if (length < 0.1f) return false;
+                const glm::vec2 forward(std::sin(regiment.orderFacing),
+                                        std::cos(regiment.orderFacing));
+                if (glm::dot(delta / length, forward) < 0.999f) return false;
+                foundRoute = true;
+            }
+            return foundRoute;
+        });
     }
 
     void FGameInstance::OnDestroy()

@@ -57,6 +57,10 @@ namespace NextTotalwar
         void SelectRect(const glm::dvec2& a, const glm::dvec2& b, bool additive);
         void ClearSelection();
         void RefreshSelectionFeedback();
+        float ResolveOrderFacing(const glm::vec3& target, const glm::vec3& facingPoint) const;
+        std::vector<glm::vec3> BuildOrderPath(const FRegiment& regiment,
+                                              const glm::vec3& destination,
+                                              float facing) const;
         void IssueMoveOrders(const glm::vec3& target, float facing);
         void DrawWorldOverlay() const;
         size_t SelectedCount() const;
