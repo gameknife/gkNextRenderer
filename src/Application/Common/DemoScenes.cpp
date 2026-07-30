@@ -1284,17 +1284,55 @@ namespace
                            const uint32_t asteroidCount,
                            const bool overviewFirst)
     {
-        Assets::Camera camera;
-        camera.name = "CinematicBelt";
-        camera.ModelView = lookAt(vec3(0, 44, 182), vec3(112, -3, 258), vec3(0, 1, 0));
-        camera.FieldOfView = 56;
-        camera.Aperture = 0;
-        camera.FocalDistance = 142;
-        camera.FarPlane = 1400.0f;
-        if (!overviewFirst)
+        const std::array<float, 7> cameraTimes{0.0f, 3.5f, 7.0f, 10.5f, 14.0f, 17.5f, 21.0f};
+        const std::array<vec3, 7> cameraPositions{
+            overviewFirst ? vec3(820, 330, 960) : vec3(680, 250, 800),
+            vec3(540, 155, 625),
+            vec3(390, 72, 430),
+            vec3(285, 30, 270),
+            vec3(185, 9, 115),
+            vec3(45, -4, -35),
+            vec3(-175, 7, -205),
+        };
+        const std::array<vec3, 7> cameraTargets{
+            vec3(120, 0, 120),
+            vec3(170, 0, 180),
+            vec3(205, -3, 170),
+            vec3(155, 0, 75),
+            vec3(45, -2, -30),
+            vec3(-105, 2, -145),
+            vec3(-330, 8, -285),
+        };
+
+        Assets::Camera animatedCamera;
+        animatedCamera.name = "AsteroidBeltFlythrough";
+        animatedCamera.NodeName_ = "AsteroidBeltCamera";
+        animatedCamera.ModelView = lookAt(cameraPositions[0], cameraTargets[0], vec3(0, 1, 0));
+        animatedCamera.FieldOfView = 62;
+        animatedCamera.Aperture = 0;
+        animatedCamera.FocalDistance = glm::length(cameraTargets[0] - cameraPositions[0]);
+        animatedCamera.FarPlane = 2200.0f;
+        cameraInit.cameras.push_back(animatedCamera);
+
+        Assets::AnimationTrack cameraTrack;
+        cameraTrack.AnimationName = "AsteroidBeltFlythrough";
+        cameraTrack.NodeName_ = animatedCamera.NodeName_;
+        cameraTrack.Duration_ = cameraTimes.back();
+        for (size_t index = 0; index < cameraTimes.size(); ++index)
         {
-            cameraInit.cameras.push_back(camera);
+            const mat4 cameraWorld = glm::inverse(lookAt(cameraPositions[index], cameraTargets[index], vec3(0, 1, 0)));
+            cameraTrack.TranslationChannel.Keys.push_back({cameraTimes[index], cameraPositions[index]});
+            cameraTrack.RotationChannel.Keys.push_back(
+                {cameraTimes[index], glm::normalize(glm::quat_cast(glm::mat3(cameraWorld)))});
         }
+        tracks.push_back(std::move(cameraTrack));
+        const mat4 initialCameraWorld = glm::inverse(animatedCamera.ModelView);
+        nodes.push_back(Assets::Node::CreateNode(
+            animatedCamera.NodeName_,
+            cameraPositions[0],
+            glm::normalize(glm::quat_cast(glm::mat3(initialCameraWorld))),
+            vec3(1.0f),
+            static_cast<uint32_t>(nodes.size())));
 
         Assets::Camera overviewCamera;
         overviewCamera.name = "BeltOverview";
@@ -1304,10 +1342,15 @@ namespace
         overviewCamera.FocalDistance = 950;
         overviewCamera.FarPlane = 2000.0f;
         cameraInit.cameras.push_back(overviewCamera);
-        if (overviewFirst)
-        {
-            cameraInit.cameras.push_back(camera);
-        }
+
+        Assets::Camera cinematicCamera;
+        cinematicCamera.name = "CinematicBelt";
+        cinematicCamera.ModelView = lookAt(vec3(0, 44, 182), vec3(112, -3, 258), vec3(0, 1, 0));
+        cinematicCamera.FieldOfView = 56;
+        cinematicCamera.Aperture = 0;
+        cinematicCamera.FocalDistance = 142;
+        cinematicCamera.FarPlane = 1400.0f;
+        cameraInit.cameras.push_back(cinematicCamera);
         cameraInit.ControlSpeed = 35.0f;
         cameraInit.GammaCorrection = true;
         cameraInit.HasSky = true;

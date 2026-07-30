@@ -29,6 +29,8 @@ namespace NextTotalwar
         int16_t soldier = -1;
         glm::vec3 worldPos{};
         float yaw = 0.0f;
+        int16_t sourceRegiment = -1;
+        int16_t sourceSoldier = -1;
     };
 
     struct FBattleContext

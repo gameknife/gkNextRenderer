@@ -47,4 +47,5 @@ private:
     float baseFieldOfView_ = 45.0f;
     float modelRotationRadians_ = 0.0f;
     bool cameraInitialized_ = false;
+    bool sceneHasCameraAnimation_ = false;
 };

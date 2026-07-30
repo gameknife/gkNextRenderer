@@ -1,0 +1,29 @@
+{
+  "name": "nexttotalwar-battle-c2",
+  "target": "NextTotalwar",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1600,
+    "height": 900
+  },
+  "steps": [
+    {"type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 30000},
+    {"type": "wait-until", "query": "game.navReady", "op": "eq", "value": true, "timeoutMs": 120000},
+    {"type": "wait-until", "query": "game.fightingSoldiers", "op": "ge", "value": 700, "timeoutMs": 30000},
+    {"type": "wait-until", "query": "game.flashingSoldiers", "op": "ge", "value": 1, "timeoutMs": 30000},
+    {"type": "assert", "query": "game.bloodPoolCapacity", "op": "eq", "value": 256},
+    {"type": "wait-until", "query": "game.totalKills", "op": "ge", "value": 20, "timeoutMs": 120000},
+    {"type": "wait-until", "query": "game.corpseCount", "op": "ge", "value": 20, "timeoutMs": 30000},
+    {"type": "assert", "query": "game.bloodStainCount", "op": "ge", "value": 20},
+    {"type": "assert", "query": "game.flashingCorpses", "op": "eq", "value": 0},
+    {"type": "assert", "query": "game.renderProxyCount", "op": "le", "value": 30000},
+    {"type": "mouse-move", "to": {"norm": [0.50, 0.50]}},
+    {"type": "scroll", "x": 0, "y": 20},
+    {"type": "wait-until", "query": "game.flashingSoldiers", "op": "ge", "value": 1, "timeoutMs": 30000},
+    {"type": "screenshot", "out": "screenshots/nexttotalwar-battle-c2", "ui": true},
+    {"type": "quit"}
+  ]
+}

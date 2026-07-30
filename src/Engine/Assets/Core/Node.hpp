@@ -62,6 +62,7 @@ namespace Assets
         void SetParent(std::shared_ptr<Node> parent);
         void ClearParent();
         Node* GetParent() { return parent_.get(); }
+        const Node* GetParent() const { return parent_.get(); }
 
         void AddChild(std::shared_ptr<Node> child);
         void RemoveChild(std::shared_ptr<Node> child);

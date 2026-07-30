@@ -240,6 +240,11 @@ void BenchmarkGameInstance::OnSceneLoaded()
 {
     benchMarker_->OnSceneStart(GetEngine().GetWindow().GetTime());
     GetEngine().GetScene().PlayAllTracks();
+    sceneHasCameraAnimation_ = GetEngine().GetScene().HasCameraAnimation();
+    if (sceneHasCameraAnimation_)
+    {
+        SPDLOG_INFO("[Benchmark] Scene camera animation active; automatic benchmark camera disabled");
+    }
     const Assets::Camera& camera = GetEngine().GetScene().GetRenderCamera();
     baseModelView_ = camera.ModelView;
     baseFieldOfView_ = camera.FieldOfView;
@@ -249,7 +254,7 @@ void BenchmarkGameInstance::OnSceneLoaded()
 
 bool BenchmarkGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
 {
-    if (!cameraInitialized_)
+    if (!cameraInitialized_ || sceneHasCameraAnimation_)
     {
         return false;
     }
@@ -469,6 +474,8 @@ void BenchmarkGameInstance::LoadCurrentRun()
     }
 
     ApplyCurrentRunSettings();
+    cameraInitialized_ = false;
+    sceneHasCameraAnimation_ = false;
     const FBenchmarkRun& run = benchmarkRuns_[currentRunIndex_];
     SPDLOG_INFO("[Benchmark] Loading run {}/{}: scene={} renderer={}",
                 currentRunIndex_ + 1,

@@ -350,9 +350,12 @@ namespace NextTotalwar
                 if (!rng_.Chance(CombatModel::HitChance(attack, targetDef.defense, tuning))) continue;
 
                 target.health = static_cast<int16_t>(target.health - attackerDef.damage);
-                battleState.events.push_back({
+                FCombatEvent hitEvent{
                     ECombatEventType::Hit, soldier.targetRegiment, soldier.targetSoldier,
-                    target.position, target.yaw});
+                    target.position, target.yaw};
+                hitEvent.sourceRegiment = static_cast<int16_t>(regimentIndex);
+                hitEvent.sourceSoldier = static_cast<int16_t>(soldierIndex);
+                battleState.events.push_back(hitEvent);
                 if (target.health > 0) continue;
 
                 target.health = 0;
@@ -363,9 +366,12 @@ namespace NextTotalwar
                 target.engagementSlot = -1;
                 targetRegiment.strength = std::max(0, targetRegiment.strength - 1);
                 ++regiment.kills;
-                battleState.events.push_back({
+                FCombatEvent deathEvent{
                     ECombatEventType::Death, soldier.targetRegiment, soldier.targetSoldier,
-                    target.position, target.yaw + rng_.Jitter(glm::radians(25.0f))});
+                    target.position, target.yaw + rng_.Jitter(glm::radians(25.0f))};
+                deathEvent.sourceRegiment = static_cast<int16_t>(regimentIndex);
+                deathEvent.sourceSoldier = static_cast<int16_t>(soldierIndex);
+                battleState.events.push_back(deathEvent);
                 if (targetRegiment.strength == 0)
                 {
                     targetRegiment.state = ERegimentState::Destroyed;

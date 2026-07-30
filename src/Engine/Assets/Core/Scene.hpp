@@ -193,6 +193,7 @@ namespace Assets
         bool UpdateNodesGpuDriven();
 
         Node* GetNode(std::string name);
+        const Node* GetNode(const std::string& name) const;
         Node* GetNodeByInstanceId(uint32_t id);
         const Model* GetModel(uint32_t id) const;
         const FMaterial* GetMaterial(uint32_t id) const;
@@ -221,6 +222,7 @@ namespace Assets
         void SetRenderCamera(const Camera& camera) { renderCamera_ = camera; }
 
         void PlayAllTracks();
+        bool HasCameraAnimation() const;
 
         void MarkEnvDirty();
 

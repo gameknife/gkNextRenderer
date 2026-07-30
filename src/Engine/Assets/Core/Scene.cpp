@@ -875,6 +875,25 @@ namespace Assets
         }
     }
 
+    bool Scene::HasCameraAnimation() const
+    {
+        const Node* node = GetNode(renderCamera_.NodeName_);
+        while (node)
+        {
+            const bool hasTrack = std::any_of(tracks_.begin(), tracks_.end(), [node](const AnimationTrack& track)
+            {
+                return track.Target_ == AnimationTrack::Target::NodeTransform &&
+                       track.NodeName_ == node->GetName();
+            });
+            if (hasTrack)
+            {
+                return true;
+            }
+            node = node->GetParent();
+        }
+        return false;
+    }
+
     void Scene::MarkEnvDirty()
     {
         // cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), true);
@@ -883,6 +902,18 @@ namespace Assets
     Node* Scene::GetNode(std::string name)
     {
         for (auto& node : nodes_)
+        {
+            if (node->GetName() == name)
+            {
+                return node.get();
+            }
+        }
+        return nullptr;
+    }
+
+    const Node* Scene::GetNode(const std::string& name) const
+    {
+        for (const auto& node : nodes_)
         {
             if (node->GetName() == name)
             {

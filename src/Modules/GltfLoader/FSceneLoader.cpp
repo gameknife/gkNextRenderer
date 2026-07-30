@@ -448,6 +448,7 @@ namespace Assets
                 {
                     Assets::Camera camera = ParseGltfCamera(model.cameras[node.camera]);
                     camera.name = std::to_string(node.camera) + " " + node.name;
+                    camera.NodeName_ = node.name;
                     camera.ModelView = modelView;
                     outCamera.cameras.push_back(std::move(camera));
                 }

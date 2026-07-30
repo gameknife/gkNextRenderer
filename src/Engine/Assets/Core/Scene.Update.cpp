@@ -286,14 +286,19 @@ namespace Assets
                         };
                         UpdatePhysicsBodyRecursive(node);
 
-                        // temporal if camera node, request override
-                        if (node->GetName() == "Shot.BlueCar")
-                        {
-                            requestOverrideModelView = true;
-                            overrideModelView = glm::lookAtRH(translation, translation + rotation * glm::vec3(0, 0, -1),
-                                                              glm::vec3(0.0f, 1.0f, 0.0f));
-                        }
                     }
+                }
+
+                if (Node* cameraNode = GetNode(renderCamera_.NodeName_))
+                {
+                    const glm::vec3 translation = cameraNode->WorldTranslation();
+                    const glm::quat rotation = cameraNode->WorldRotation();
+                    overrideModelView = glm::lookAtRH(
+                        translation,
+                        translation + rotation * glm::vec3(0.0f, 0.0f, -1.0f),
+                        rotation * glm::vec3(0.0f, 1.0f, 0.0f));
+                    renderCamera_.ModelView = overrideModelView;
+                    requestOverrideModelView = true;
                 }
             }
         }

@@ -69,6 +69,7 @@ namespace Assets
     struct Camera final
     {
         std::string name;
+        std::string NodeName_;
         glm::mat4 ModelView;
         float FieldOfView;
         float Aperture;

@@ -29,9 +29,7 @@ MassiveBenchmarkGameInstance::MassiveBenchmarkGameInstance(
 
 void MassiveBenchmarkGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
-    std::string error;
-    cvars.SetDefaultFromString("r.rendererType", "4", &error);
-    cvars.SetDefaultFromString("r.samples", "1", &error);
+
 }
 
 void MassiveBenchmarkGameInstance::OnInit()
@@ -42,11 +40,12 @@ void MassiveBenchmarkGameInstance::OnInit()
 
 void MassiveBenchmarkGameInstance::OnSceneLoaded()
 {
-    const Assets::Scene& scene = GetEngine().GetScene();
+    Assets::Scene& scene = GetEngine().GetScene();
+    scene.PlayAllTracks();
     const auto& limits = scene.RenderCapacityLimits();
-    // Scene::PostLoad owns one non-renderable environment node in addition to the
-    // 131070 asteroid nodes. Render-proxy count is the capacity contract.
-    if (scene.GetNodeCount() != 131071 ||
+    // The scene owns one animated camera node and one non-renderable environment
+    // node in addition to 131070 asteroid nodes. Render-proxy count is the capacity contract.
+    if (scene.GetNodeCount() != 131072 ||
         scene.GetRenderProxyCount() != 131070 ||
         limits.renderProxyCapacity != 262140 ||
         limits.primitiveWordCount != 2 ||

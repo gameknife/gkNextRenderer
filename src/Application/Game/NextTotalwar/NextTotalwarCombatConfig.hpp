@@ -50,6 +50,9 @@ namespace NextTotalwar
         int flankBonus = 3;
         int rearBonus = 6;
         int waveringPenalty = 3;
+        float flashSeconds = 0.12f;
+        float attackerFlash = 0.06f;
         float deathClipSeconds = 0.8f;
+        int bloodPoolSize = 256;
     };
 }

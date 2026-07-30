@@ -141,6 +141,10 @@ namespace
 
     std::string CameraNodeName(const Camera& camera)
     {
+        if (!camera.NodeName_.empty())
+        {
+            return camera.NodeName_;
+        }
         if (HasPrefixCameraIndex(camera.name))
         {
             return camera.name.substr(camera.name.find(' ') + 1);

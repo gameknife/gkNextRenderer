@@ -201,6 +201,22 @@ TEST_CASE("NextTotalwar damage reaches the death boundary exactly",
     CHECK(regiments[1].strength == 0);
     CHECK(regiments[1].soldiers[0].combatState == ESoldierState::Dying);
     CHECK(regiments[0].kills == 1);
+    const auto hitEvent = std::find_if(
+        state.events.begin(), state.events.end(), [](const FCombatEvent& event)
+        {
+            return event.type == ECombatEventType::Hit;
+        });
+    REQUIRE(hitEvent != state.events.end());
+    CHECK(hitEvent->sourceRegiment == 0);
+    CHECK(hitEvent->sourceSoldier == 0);
+    const auto deathEvent = std::find_if(
+        state.events.begin(), state.events.end(), [](const FCombatEvent& event)
+        {
+            return event.type == ECombatEventType::Death;
+        });
+    REQUIRE(deathEvent != state.events.end());
+    CHECK(deathEvent->sourceRegiment == 0);
+    CHECK(deathEvent->sourceSoldier == 0);
     CHECK(std::count_if(state.events.begin(), state.events.end(), [](const FCombatEvent& event)
     {
         return event.type == ECombatEventType::Death;

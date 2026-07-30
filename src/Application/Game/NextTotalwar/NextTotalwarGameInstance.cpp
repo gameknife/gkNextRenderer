@@ -2,6 +2,7 @@
 
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
@@ -180,9 +181,18 @@ namespace NextTotalwar
                           "Flanking attack bonus.");
         cvars.RegisterInt("tw.combat.rearBonus", 6, &combatTuning_.rearBonus, ECVarFlags::None,
                           "Rear attack bonus.");
+        cvars.RegisterFloat("tw.fx.flashSeconds", 0.12f,
+                            &combatTuning_.flashSeconds, ECVarFlags::None,
+                            "Duration of the white hit flash in seconds.");
+        cvars.RegisterFloat("tw.fx.attackerFlash", 0.06f,
+                            &combatTuning_.attackerFlash, ECVarFlags::None,
+                            "Duration of the attacker's strike flash in seconds.");
         cvars.RegisterFloat("tw.fx.deathClipSeconds", 0.8f,
                             &combatTuning_.deathClipSeconds, ECVarFlags::None,
                             "Death animation duration before a corpse freezes.");
+        cvars.RegisterInt("tw.fx.bloodPoolSize", 256,
+                          &combatTuning_.bloodPoolSize, ECVarFlags::StartupOnly,
+                          "Fixed blood-stain render-node pool size.");
         cvars.RegisterInt("tw.battle.seed", 1337, &battleSeed_, ECVarFlags::StartupOnly,
                           "Deterministic battle random seed.");
         cvars.RegisterFloat("tw.battle.deployDistance", 125.0f, &battleDeployDistance_,
@@ -191,7 +201,7 @@ namespace NextTotalwar
                            ECVarFlags::None, "Advance exactly one combat tick per rendered frame.");
     }
 
-    void FGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>&,
+    void FGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
                                            std::vector<Assets::Model>& models,
                                            std::vector<Assets::FMaterial>& materials,
                                            std::vector<Assets::LightObject>&,
@@ -261,6 +271,33 @@ namespace NextTotalwar
             regimentMaterialIds_[0][regiment] = Assets::SceneBuilder::AddLambertianMaterial(materials, blue[regiment]);
             regimentMaterialIds_[1][regiment] = Assets::SceneBuilder::AddLambertianMaterial(materials, red[regiment]);
         }
+
+        // 闪白只切换发光材质；这里不创建 LightObject，避免 2400 名士兵的
+        // 高频命中给灯光列表和阴影链路增加任何负担。
+        const uint32_t flashMaterialId =
+            Assets::SceneBuilder::AddDiffuseLightMaterial(materials, glm::vec3(1.0f), 3.0f);
+        const uint32_t bloodMaterialId =
+            Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.22f, 0.008f, 0.006f));
+        models.push_back(Assets::FProcModel::CreateBox(
+            glm::vec3(-0.45f, -0.01f, -0.45f),
+            glm::vec3(0.45f, 0.01f, 0.45f)));
+        const uint32_t bloodModelId = static_cast<uint32_t>(models.size() - 1);
+        std::vector<std::shared_ptr<Assets::Node>> bloodPool;
+        bloodPool.reserve(static_cast<size_t>(std::max(0, combatTuning_.bloodPoolSize)));
+        for (int index = 0; index < std::max(0, combatTuning_.bloodPoolSize); ++index)
+        {
+            auto node = Assets::SceneBuilder::CreateRenderNode(
+                fmt::format("NTW/Blood/{}", index),
+                glm::vec3(0.0f, -1000.0f, 0.0f),
+                glm::vec3(1.0f),
+                static_cast<uint32_t>(nodes.size()),
+                bloodModelId,
+                bloodMaterialId,
+                false);
+            nodes.push_back(node);
+            bloodPool.push_back(std::move(node));
+        }
+        combatFx_.Initialize(flashMaterialId, std::move(bloodPool));
         sceneInjected_ = true;
     }
 
@@ -421,12 +458,15 @@ namespace NextTotalwar
                 }
                 rigRoot->SetParent(visual.worldNode);
                 visual.renderNodes.clear();
+                visual.baseMaterials.clear();
                 for (size_t nodeIndex = firstRigNode; nodeIndex < scene.Nodes().size(); ++nodeIndex)
                 {
                     Assets::Node* node = scene.Nodes()[nodeIndex].get();
-                    if (node->GetComponentPtr<Runtime::RenderComponent>())
+                    if (Runtime::RenderComponent* render =
+                            node->GetComponentPtr<Runtime::RenderComponent>())
                     {
                         visual.renderNodes.push_back(node);
+                        visual.baseMaterials.push_back(render->GetMaterials());
                     }
                 }
                 visual.animator.Bind(&rig, std::move(boneNodes), visual.worldNode.get());
@@ -519,7 +559,8 @@ namespace NextTotalwar
         combatCpuMilliseconds_ = std::chrono::duration<float, std::milli>(
             std::chrono::steady_clock::now() - combatStart).count();
         TickSoldiers(dt);
-        combatFx_.Tick(dt, regiments_, soldierVisuals_, battleState_.events);
+        combatFx_.Tick(dt, regiments_, soldierVisuals_, combatTuning_,
+                       battleState_.events);
         lastCombatEventCount_ = static_cast<int>(battleState_.events.size());
         battleState_.events.clear();
         GetEngine().GetScene().MarkTransformDirty();
@@ -1449,6 +1490,10 @@ namespace NextTotalwar
             ImGui::Text("Alive: %d / %d", aliveSoldiers, totalSoldierCount);
             ImGui::Text("Fighting: %d   Dying: %d   Corpses: %d",
                         fightingSoldiers, dyingSoldiers, combatFx_.CorpseCount());
+            ImGui::Text("Flashing: %d   Blood: %d / %zu",
+                        combatFx_.FlashingCount(),
+                        combatFx_.BloodStainCount(),
+                        combatFx_.BloodPoolCapacity());
             ImGui::SeparatorText("Ranges");
             ImGui::Text("Engage margin: %.2f m", combatTuning_.engageMargin);
             ImGui::Text("Regiment engage: %.2f m",
@@ -1869,6 +1914,41 @@ namespace NextTotalwar
         registry.Add("corpseCount", [this]()
         {
             return static_cast<int64_t>(combatFx_.CorpseCount());
+        });
+        registry.Add("flashingSoldiers", [this]()
+        {
+            return static_cast<int64_t>(combatFx_.FlashingCount());
+        });
+        registry.Add("flashingCorpses", [this]()
+        {
+            int64_t count = 0;
+            for (size_t regimentIndex = 0; regimentIndex < regiments_.size() &&
+                                                   regimentIndex < soldierVisuals_.size();
+                 ++regimentIndex)
+            {
+                const FRegiment& regiment = regiments_[regimentIndex];
+                const std::vector<FSoldierVisual>& visuals = soldierVisuals_[regimentIndex];
+                for (size_t soldierIndex = 0;
+                     soldierIndex < regiment.soldiers.size() && soldierIndex < visuals.size();
+                     ++soldierIndex)
+                {
+                    const ESoldierState state = regiment.soldiers[soldierIndex].combatState;
+                    if ((state == ESoldierState::Dying || state == ESoldierState::Dead) &&
+                        visuals[soldierIndex].flashApplied)
+                    {
+                        ++count;
+                    }
+                }
+            }
+            return count;
+        });
+        registry.Add("bloodStainCount", [this]()
+        {
+            return static_cast<int64_t>(combatFx_.BloodStainCount());
+        });
+        registry.Add("bloodPoolCapacity", [this]()
+        {
+            return static_cast<int64_t>(combatFx_.BloodPoolCapacity());
         });
         registry.Add("combatTicks", [this]()
         {
