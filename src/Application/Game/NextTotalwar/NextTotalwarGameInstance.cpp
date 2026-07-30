@@ -49,6 +49,22 @@ namespace
         return current + glm::clamp(WrapAngle(target - current), -maxStep, maxStep);
     }
 
+    bool PointInConvexQuad(const glm::vec2& point, const std::array<glm::vec2, 4>& quad)
+    {
+        bool hasPositive = false;
+        bool hasNegative = false;
+        for (size_t index = 0; index < quad.size(); ++index)
+        {
+            const glm::vec2 edge = quad[(index + 1) % quad.size()] - quad[index];
+            const glm::vec2 relative = point - quad[index];
+            const float cross = edge.x * relative.y - edge.y * relative.x;
+            hasPositive |= cross > 0.0f;
+            hasNegative |= cross < 0.0f;
+            if (hasPositive && hasNegative) return false;
+        }
+        return true;
+    }
+
     glm::vec3 RegimentOrderOffset(size_t index, size_t regimentCount, float facing)
     {
         const glm::vec3 lateral(std::cos(facing), 0.0f, -std::sin(facing));
@@ -548,42 +564,93 @@ namespace NextTotalwar
         for (FRegiment& regiment : regiments_) regiment.selected = false;
     }
 
+    bool FGameInstance::TryProjectRegimentBounds(
+        const FRegiment& regiment, std::array<glm::vec2, 4>& projected) const
+    {
+        if (regiment.soldiers.empty()) return false;
+
+        glm::vec2 localMin(std::numeric_limits<float>::max());
+        glm::vec2 localMax(std::numeric_limits<float>::lowest());
+        for (const FSoldier& soldier : regiment.soldiers)
+        {
+            const glm::vec2 local =
+                Formation::SlotLocal(regiment.anchor, regiment.facing, soldier.position);
+            localMin = glm::min(localMin, local);
+            localMax = glm::max(localMax, local);
+        }
+        constexpr float selectionPadding = 0.7f;
+        localMin -= glm::vec2(selectionPadding);
+        localMax += glm::vec2(selectionPadding);
+        const std::array<glm::vec2, 4> corners = {{
+            {localMin.x, localMax.y}, {localMax.x, localMax.y},
+            {localMax.x, localMin.y}, {localMin.x, localMin.y},
+        }};
+        for (size_t index = 0; index < corners.size(); ++index)
+        {
+            glm::vec3 world =
+                Formation::SlotWorld(regiment.anchor, regiment.facing, corners[index]);
+            world.y = GroundHeight(world.x, world.z) + 0.08f;
+            ImVec2 screen{};
+            if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(*this, world, screen))
+            {
+                return false;
+            }
+            projected[index] = {screen.x, screen.y};
+        }
+        return true;
+    }
+
+    FRegiment* FGameInstance::PickRegimentAt(const glm::dvec2& screen)
+    {
+        const glm::vec2 point(screen);
+        FRegiment* contained = nullptr;
+        float containedDistance = std::numeric_limits<float>::max();
+        FRegiment* nearby = nullptr;
+        float nearbyDistance = 32.0f;
+        for (FRegiment& regiment : regiments_)
+        {
+            std::array<glm::vec2, 4> bounds{};
+            if (TryProjectRegimentBounds(regiment, bounds) &&
+                PointInConvexQuad(point, bounds))
+            {
+                glm::vec2 center{};
+                for (const glm::vec2& corner : bounds) center += corner;
+                center /= static_cast<float>(bounds.size());
+                const float distance = glm::distance(point, center);
+                if (distance < containedDistance)
+                {
+                    containedDistance = distance;
+                    contained = &regiment;
+                }
+            }
+
+            ImVec2 anchor{};
+            if (Runtime::EngineHelper::TryProjectWorldToScreenForGame(*this, regiment.anchor, anchor))
+            {
+                const float distance = glm::distance(point, glm::vec2(anchor.x, anchor.y));
+                if (distance < nearbyDistance)
+                {
+                    nearbyDistance = distance;
+                    nearby = &regiment;
+                }
+            }
+        }
+        return contained ? contained : nearby;
+    }
+
     void FGameInstance::SelectAt(const glm::dvec2& screen, bool additive)
     {
         if (!additive) ClearSelection();
-        float best = 32.0f;
-        FRegiment* picked = nullptr;
-        for (FRegiment& regiment : regiments_)
-        {
-            ImVec2 projected;
-            if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(*this, regiment.anchor, projected)) continue;
-            const float distance = glm::distance(glm::vec2(projected.x, projected.y), glm::vec2(screen));
-            if (distance < best)
-            {
-                best = distance;
-                picked = &regiment;
-            }
-        }
+        FRegiment* picked = PickRegimentAt(screen);
         if (picked) picked->selected = additive ? !picked->selected : true;
         RefreshSelectionFeedback();
     }
 
     void FGameInstance::SelectAllTypeAt(const glm::dvec2& screen)
     {
-        float best = 32.0f;
-        const FUnitDef* pickedDef = nullptr;
-        for (const FRegiment& regiment : regiments_)
-        {
-            ImVec2 projected;
-            if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(*this, regiment.anchor, projected)) continue;
-            const float distance = glm::distance(glm::vec2(projected.x, projected.y), glm::vec2(screen));
-            if (distance < best)
-            {
-                best = distance;
-                pickedDef = regiment.def;
-            }
-        }
-        if (!pickedDef) return;
+        const FRegiment* picked = PickRegimentAt(screen);
+        if (!picked) return;
+        const FUnitDef* pickedDef = picked->def;
         ClearSelection();
         for (FRegiment& regiment : regiments_)
         {
@@ -621,8 +688,7 @@ namespace NextTotalwar
                 {
                     if (auto render = renderNode->GetComponent<Runtime::RenderComponent>())
                     {
-                        render->SetOutlineFlags(regiment.selected ? Runtime::RenderOutlineFlags::selected
-                                                                 : Runtime::RenderOutlineFlags::none);
+                        render->SetOutlineFlags(Runtime::RenderOutlineFlags::none);
                     }
                 }
             }
@@ -713,13 +779,26 @@ namespace NextTotalwar
         }
         if (selected.empty()) return;
 
+        std::vector<glm::vec3> starts;
+        std::vector<glm::vec3> destinations;
+        starts.reserve(selected.size());
+        destinations.reserve(selected.size());
         for (size_t index = 0; index < selected.size(); ++index)
         {
-            FRegiment& regiment = *selected[index];
+            starts.push_back(selected[index]->anchor);
             glm::vec3 destination = target + RegimentOrderOffset(index, selected.size(), facing);
             destination.x = glm::clamp(destination.x, -188.0f, 188.0f);
             destination.z = glm::clamp(destination.z, -188.0f, 188.0f);
             destination.y = GroundHeight(destination.x, destination.z);
+            destinations.push_back(destination);
+        }
+        const std::vector<size_t> assignment =
+            Formation::MinimumTravelAssignment(starts, destinations);
+
+        for (size_t index = 0; index < selected.size(); ++index)
+        {
+            FRegiment& regiment = *selected[index];
+            const glm::vec3& destination = destinations[assignment[index]];
             regiment.orderTarget = destination;
             regiment.orderFacing = facing;
             regiment.path = BuildOrderPath(regiment, destination, facing);

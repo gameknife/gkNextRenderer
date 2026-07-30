@@ -49,6 +49,37 @@ TEST_CASE("NextTotalwar formation world transform rotates around anchor", "[Next
     CHECK_THAT(restored.y, Catch::Matchers::WithinAbs(local.y, 0.001f));
 }
 
+TEST_CASE("NextTotalwar assigns selected regiments to minimum-travel destinations",
+          "[NextTotalwar][Formation]")
+{
+    const std::vector<glm::vec3> starts = {
+        {0.0f, 0.0f, 30.0f},
+        {0.0f, 0.0f, 10.0f},
+        {0.0f, 0.0f, -10.0f},
+        {0.0f, 0.0f, -30.0f},
+    };
+    const std::vector<glm::vec3> destinations = {
+        {100.0f, 0.0f, -30.0f},
+        {100.0f, 0.0f, -10.0f},
+        {100.0f, 0.0f, 10.0f},
+        {100.0f, 0.0f, 30.0f},
+    };
+
+    const std::vector<size_t> assignment =
+        NextTotalwar::Formation::MinimumTravelAssignment(starts, destinations);
+    REQUIRE(assignment.size() == starts.size());
+    CHECK(assignment == std::vector<size_t>{3, 2, 1, 0});
+
+    float assignedDistance = 0.0f;
+    float indexOrderedDistance = 0.0f;
+    for (size_t index = 0; index < starts.size(); ++index)
+    {
+        assignedDistance += glm::distance(starts[index], destinations[assignment[index]]);
+        indexOrderedDistance += glm::distance(starts[index], destinations[index]);
+    }
+    CHECK(assignedDistance < indexOrderedDistance);
+}
+
 TEST_CASE("NextTotalwar shipped rigs satisfy the six-part reusable mesh budget", "[NextTotalwar][ScadRig]")
 {
     for (const char* path : {

@@ -52,6 +52,9 @@ namespace NextTotalwar
         glm::dvec2 ToLogicalMouse(double x, double y) const;
         glm::vec2 ToFramebufferMouse(const glm::dvec2& logicalMouse) const;
         bool TryGroundHit(const glm::dvec2& screen, glm::vec3& hit) const;
+        bool TryProjectRegimentBounds(const FRegiment& regiment,
+                                      std::array<glm::vec2, 4>& projected) const;
+        FRegiment* PickRegimentAt(const glm::dvec2& screen);
         void SelectAt(const glm::dvec2& screen, bool additive);
         void SelectAllTypeAt(const glm::dvec2& screen);
         void SelectRect(const glm::dvec2& a, const glm::dvec2& b, bool additive);
