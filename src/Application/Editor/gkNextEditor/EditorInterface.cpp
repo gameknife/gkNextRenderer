@@ -23,6 +23,7 @@
 #include "EditorUtils.h"
 #include "Engine/Options.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
@@ -383,12 +384,13 @@ void EditorInterface::Render(Editor::EditorUiState& uiState)
 
         if (uiState.viewportOnMainViewport && node->Size.x >= 1.0f && node->Size.y >= 1.0f)
         {
-            const float uiScale = ui->UiScale();
+            const NextUI::Scaling::FViewportRect framebufferViewport =
+                NextUI::Scaling::ImGuiToMainFramebufferViewport(node->Pos, node->Size);
             editor_->GetEngine().GetRenderer().SwapChain().UpdateOutputViewport(
-                Utilities::Math::floorToInt((node->Pos.x - mainViewport->Pos.x) * uiScale),
-                Utilities::Math::floorToInt((node->Pos.y - mainViewport->Pos.y) * uiScale),
-                Utilities::Math::ceilToInt(node->Size.x * uiScale),
-                Utilities::Math::ceilToInt(node->Size.y * uiScale));
+                Utilities::Math::floorToInt(framebufferViewport.Position.x),
+                Utilities::Math::floorToInt(framebufferViewport.Position.y),
+                Utilities::Math::ceilToInt(framebufferViewport.Size.x),
+                Utilities::Math::ceilToInt(framebufferViewport.Size.y));
 
             const ImGuiIO& io = ImGui::GetIO();
             const ImVec2 mousePos = io.MousePos;

@@ -3,6 +3,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
@@ -561,11 +562,14 @@ namespace ScadStudio
         const float viewportY = panelY;
         const float viewportW = std::max(1.0f, viewport->Size.x - leftWidth - rightWidth);
         const float viewportH = panelHeight;
+        const NextUI::Scaling::FViewportRect framebufferViewport =
+            NextUI::Scaling::ImGuiToMainFramebufferViewport(
+                ImVec2(viewportX, viewportY), ImVec2(viewportW, viewportH));
         engine_.GetRenderer().SwapChain().UpdateOutputViewport(
-            Utilities::Math::floorToInt(viewportX - viewport->Pos.x),
-            Utilities::Math::floorToInt(viewportY - viewport->Pos.y),
-            Utilities::Math::ceilToInt(viewportW),
-            Utilities::Math::ceilToInt(viewportH));
+            Utilities::Math::floorToInt(framebufferViewport.Position.x),
+            Utilities::Math::floorToInt(framebufferViewport.Position.y),
+            Utilities::Math::ceilToInt(framebufferViewport.Size.x),
+            Utilities::Math::ceilToInt(framebufferViewport.Size.y));
     }
 
     void ScadStudioInterface::DrawTitleBar()

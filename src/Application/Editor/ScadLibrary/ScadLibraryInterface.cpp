@@ -13,6 +13,7 @@
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
@@ -690,15 +691,16 @@ namespace ScadLibrary
             ReloadDesigner();
         }
 
-        const NextUI::UserInterface* ui = engine_.GetUserInterface();
-        const float uiScale = ui != nullptr ? ui->UiScale() : 1.0f;
+        const NextUI::Scaling::FViewportRect framebufferViewport =
+            NextUI::Scaling::ImGuiToMainFramebufferViewport(
+                ImVec2(viewport->Pos.x + leftWidth, viewport->Pos.y + kTitleBarHeight),
+                ImVec2(std::max(1.0f, viewport->Size.x - leftWidth - rightWidth),
+                       std::max(1.0f, panelHeight - timelineHeight)));
         engine_.GetRenderer().SwapChain().UpdateOutputViewport(
-            Utilities::Math::floorToInt(leftWidth * uiScale),
-            Utilities::Math::floorToInt(kTitleBarHeight * uiScale),
-            Utilities::Math::ceilToInt(
-                std::max(1.0f, viewport->Size.x - leftWidth - rightWidth) * uiScale),
-            Utilities::Math::ceilToInt(
-                std::max(1.0f, panelHeight - timelineHeight) * uiScale));
+            Utilities::Math::floorToInt(framebufferViewport.Position.x),
+            Utilities::Math::floorToInt(framebufferViewport.Position.y),
+            Utilities::Math::ceilToInt(framebufferViewport.Size.x),
+            Utilities::Math::ceilToInt(framebufferViewport.Size.y));
     }
 
     void ScadLibraryInterface::DrawTitleBar()

@@ -17,6 +17,7 @@
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Editor/FontLoader.hpp"
+#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
 #include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
@@ -802,10 +803,12 @@ bool NextRendererGameInstance::DrawRendererUi(const FGameUiFrameContext& context
         auto& swapChain = GetEngine().GetRenderer().SwapChain();
         const auto offset = swapChain.OutputOffset();
         const auto extent = swapChain.OutputExtent();
-        const ImVec2 viewportOrigin = ImGui::GetMainViewport()->Pos;
+        const NextUI::Scaling::FViewportRect viewport = NextUI::Scaling::MainFramebufferToImGuiViewport(
+            ImVec2(static_cast<float>(offset.x), static_cast<float>(offset.y)),
+            ImVec2(static_cast<float>(extent.width), static_cast<float>(extent.height)));
         uiState.gizmoController.Draw(GetEngine(),
-            glm::vec2(viewportOrigin.x + static_cast<float>(offset.x), viewportOrigin.y + static_cast<float>(offset.y)),
-            glm::vec2(static_cast<float>(extent.width), static_cast<float>(extent.height)));
+            glm::vec2(viewport.Position.x, viewport.Position.y),
+            glm::vec2(viewport.Size.x, viewport.Size.y));
     }
     if (GOption->ReferenceMode)
     {
