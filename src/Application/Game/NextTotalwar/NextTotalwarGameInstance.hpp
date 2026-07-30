@@ -60,6 +60,7 @@ namespace NextTotalwar
         void SelectRect(const glm::dvec2& a, const glm::dvec2& b, bool additive);
         void ClearSelection();
         void RefreshSelectionFeedback();
+        bool TrySelectedCenter(glm::vec3& center) const;
         float ResolveOrderFacing(const glm::vec3& target, const glm::vec3& facingPoint) const;
         std::vector<glm::vec3> BuildOrderPath(const FRegiment& regiment,
                                               const glm::vec3& destination,
@@ -85,9 +86,11 @@ namespace NextTotalwar
         glm::dvec2 mousePos_{};
         glm::dvec2 leftStart_{};
         glm::dvec2 rightStart_{};
+        glm::dvec2 middleLast_{};
         glm::vec3 rightTarget_{};
         bool leftDown_ = false;
         bool rightDown_ = false;
+        bool middleDown_ = false;
         bool hasMouse_ = false;
         uint64_t frameIndex_ = 0;
         int animatorUpdates_ = 0;

@@ -24,14 +24,53 @@ namespace NextTotalwar
         if (glm::length(move) > 0.01f)
         {
             move = glm::normalize(move);
-            const glm::vec3 forward(std::sin(yaw_), 0.0f, -std::cos(yaw_));
-            const glm::vec3 right(std::cos(yaw_), 0.0f, std::sin(yaw_));
-            focus_ += (right * move.x + forward * move.y) * deltaSeconds * (18.0f + distance_ * 0.22f);
+            const glm::vec3 forward(-std::sin(yaw_), 0.0f, -std::cos(yaw_));
+            const glm::vec3 right(std::cos(yaw_), 0.0f, -std::sin(yaw_));
+            const glm::vec3 movement =
+                (right * move.x + forward * move.y) *
+                deltaSeconds * (18.0f + distance_ * 0.22f);
+            if (following_) followOffset_ += movement;
+            else focus_ += movement;
+        }
+        if (following_)
+        {
+            focus_.x = followTarget_.x + followOffset_.x;
+            focus_.z = followTarget_.z + followOffset_.z;
         }
         focus_.x = glm::clamp(focus_.x, -190.0f, 190.0f);
         focus_.z = glm::clamp(focus_.z, -190.0f, 190.0f);
         const float height = terrain ? terrain->SampleHeight(focus_.x, focus_.z) : 0.0f;
         focus_.y = glm::mix(focus_.y, height, 1.0f - std::exp(-deltaSeconds * 7.0f));
+    }
+
+    void FBattleCamera::PanByScreenDelta(const glm::vec2& delta)
+    {
+        const glm::vec3 forward(-std::sin(yaw_), 0.0f, -std::cos(yaw_));
+        const glm::vec3 right(std::cos(yaw_), 0.0f, -std::sin(yaw_));
+        const glm::vec3 movement =
+            (-right * delta.x + forward * delta.y) * (distance_ * 0.0022f);
+        if (following_) followOffset_ += movement;
+        else focus_ += movement;
+    }
+
+    void FBattleCamera::SetFollowTarget(const glm::vec3& target, bool centerImmediately)
+    {
+        if (!following_ || centerImmediately)
+        {
+            followOffset_ = {};
+        }
+        following_ = true;
+        followTarget_ = target;
+        if (centerImmediately)
+        {
+            focus_ = target;
+        }
+    }
+
+    void FBattleCamera::ClearFollowTarget()
+    {
+        following_ = false;
+        followOffset_ = {};
     }
 
     void FBattleCamera::AddZoom(float steps)

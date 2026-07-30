@@ -405,6 +405,12 @@ namespace NextTotalwar
     {
         if (!sceneReady_) return;
         const float dt = std::min(static_cast<float>(deltaSeconds), 0.05f);
+        if (camera_.IsFollowing())
+        {
+            glm::vec3 center{};
+            if (TrySelectedCenter(center)) camera_.SetFollowTarget(center, false);
+            else camera_.ClearFollowTarget();
+        }
         camera_.Tick(dt, terrain_);
         TickRegiments(dt);
         TickSoldiers(dt);
@@ -562,6 +568,7 @@ namespace NextTotalwar
     void FGameInstance::ClearSelection()
     {
         for (FRegiment& regiment : regiments_) regiment.selected = false;
+        camera_.ClearFollowTarget();
     }
 
     bool FGameInstance::TryProjectRegimentBounds(
@@ -693,7 +700,24 @@ namespace NextTotalwar
                 }
             }
         }
+        if (SelectedCount() == 0) camera_.ClearFollowTarget();
         GetEngine().GetScene().MarkDirty();
+    }
+
+    bool FGameInstance::TrySelectedCenter(glm::vec3& center) const
+    {
+        center = {};
+        size_t count = 0;
+        for (const FRegiment& regiment : regiments_)
+        {
+            if (!regiment.selected) continue;
+            center += regiment.anchor;
+            ++count;
+        }
+        if (count == 0) return false;
+        center /= static_cast<float>(count);
+        center.y = GroundHeight(center.x, center.z);
+        return true;
     }
 
     float FGameInstance::ResolveOrderFacing(const glm::vec3& target, const glm::vec3& facingPoint) const
@@ -821,6 +845,20 @@ namespace NextTotalwar
         case SDLK_D: case SDLK_RIGHT: camera_.SetMoveRight(down); return true;
         case SDLK_Q: camera_.SetRotateLeft(down); return true;
         case SDLK_E: camera_.SetRotateRight(down); return true;
+        case SDLK_F:
+            if (down)
+            {
+                if (camera_.IsFollowing())
+                {
+                    camera_.ClearFollowTarget();
+                }
+                else
+                {
+                    glm::vec3 center{};
+                    if (TrySelectedCenter(center)) camera_.SetFollowTarget(center, true);
+                }
+            }
+            return true;
         case SDLK_F1:
             if (down) showDebug_ = !showDebug_;
             return true;
@@ -845,9 +883,15 @@ namespace NextTotalwar
 
     bool FGameInstance::OnCursorPosition(double x, double y)
     {
-        mousePos_ = ToLogicalMouse(x, y);
+        const glm::dvec2 nextMouse = ToLogicalMouse(x, y);
+        if (middleDown_)
+        {
+            camera_.PanByScreenDelta(glm::vec2(nextMouse - middleLast_));
+            middleLast_ = nextMouse;
+        }
+        mousePos_ = nextMouse;
         hasMouse_ = true;
-        return leftDown_ || rightDown_;
+        return leftDown_ || rightDown_ || middleDown_;
     }
 
     bool FGameInstance::OnMouseButton(SDL_Event& event)
@@ -855,6 +899,12 @@ namespace NextTotalwar
         if (event.type != SDL_EVENT_MOUSE_BUTTON_DOWN && event.type != SDL_EVENT_MOUSE_BUTTON_UP) return false;
         mousePos_ = ToLogicalMouse(event.button.x, event.button.y);
         hasMouse_ = true;
+        if (event.button.button == SDL_BUTTON_MIDDLE)
+        {
+            middleDown_ = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
+            middleLast_ = mousePos_;
+            return true;
+        }
         if (event.button.button == SDL_BUTTON_LEFT)
         {
             if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
@@ -962,7 +1012,8 @@ namespace NextTotalwar
         ImGui::Separator();
         ImGui::TextUnformatted("LMB: point/box select   Shift: add");
         ImGui::TextUnformatted("RMB drag: destination + facing");
-        ImGui::TextUnformatted("WASD: pan  Q/E: rotate  Wheel: zoom");
+        ImGui::TextUnformatted("WASD/MMB drag: pan  Q/E: rotate  Wheel: zoom");
+        ImGui::TextUnformatted("F: follow selected regiments");
         ImGui::TextUnformatted("[/]: selected formation ranks");
         if (showDebug_)
         {
@@ -1224,6 +1275,18 @@ namespace NextTotalwar
         });
         registry.Add("navReady", [this]() { return navGrid_.IsBuilt(); });
         registry.Add("lastOrderDistance", [this]() { return static_cast<double>(lastOrderDistance_); });
+        registry.Add("cameraFollowing", [this]() { return camera_.IsFollowing(); });
+        registry.Add("cameraFocusX", [this]() { return static_cast<double>(camera_.Focus().x); });
+        registry.Add("cameraFocusZ", [this]() { return static_cast<double>(camera_.Focus().z); });
+        registry.Add("cameraYaw", [this]() { return static_cast<double>(camera_.Yaw()); });
+        registry.Add("cameraFollowError", [this]()
+        {
+            glm::vec3 center{};
+            if (!TrySelectedCenter(center)) return -1.0;
+            return static_cast<double>(
+                glm::distance(glm::vec2(camera_.Focus().x, camera_.Focus().z),
+                              glm::vec2(center.x, center.z)));
+        });
         registry.Add("routeNodeCount", [this]()
         {
             size_t count = 0;

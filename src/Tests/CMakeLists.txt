@@ -37,6 +37,7 @@ set(unitTestSources
     Test_MagicaLegoPlacementRules.cpp
     Test_FlappyRng.cpp
     Test_NextRAFixed.cpp
+    Test_NextTotalwarCamera.cpp
     Test_NextTotalwarFormation.cpp
     Test_GnbAIClient.cpp
     Test_ScadPromptContext.cpp
@@ -81,6 +82,7 @@ set(unitTestSources
     ${GK_SOURCE_ROOT}/Application/Game/NextRA/Sim/SyncHash.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextRA/Sim/Systems/OrderApplySystem.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Battle/FormationLayout.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Render/BattleCamera.cpp
 )
 
 find_package(Catch2 3 REQUIRED)
