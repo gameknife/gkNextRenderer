@@ -2,6 +2,8 @@
 
 `NextTotalwar` 是 400×400 m low-poly 阵型行军 RTS。MVP 边界是选择、定向移动、
 部队级寻路、阵型槽位跟随与地形贴合；没有战斗、伤害、士气或敌方 AI。
+战斗层的设计方案（尚未实现）见
+[docs/projects/nexttotalwar/nexttotalwar-battle-mvp-design.md](../docs/projects/nexttotalwar/nexttotalwar-battle-mvp-design.md)。
 
 ## 入口与数据流
 
@@ -14,7 +16,9 @@
 - 兵种 kit / rig：`assets/scad/lib/kit_tw.scad` 与
   `assets/scad/characters/tw_*.scad`
 
-当前规模是双方各 12 个 regiment、每队 512 人，共 24 队 / 12,288 人。每帧先推进
+当前规模是双方各 12 个 regiment、每队 100 人，共 24 队 / 2,400 人
+（`NextTotalwarGameInstance.cpp` 顶部的 `regimentCountPerFaction` /
+`soldiersPerRegiment` 是唯一事实来源）。每帧先推进
 regiment anchor 与朝向，再让行军中的士兵 seek 对应阵型槽位，最后分帧更新共享
 ScadRig 实例。寻路、选择和状态机都以 regiment 为粒度；士兵不做 A*、碰撞或 AI。
 
@@ -22,11 +26,11 @@ ScadRig 实例。寻路、选择和状态机都以 regiment 为粒度；士兵�
 
 扩军版固定启用 `ERenderCapacityMode::Massive`，并保持“每兵种共享 part model”：
 
-- 3 个兵种各有 6 个 ScadRig part model，共 18 个 mesh，被同兵种的 4,096 名士兵共享；
+- 3 个兵种各有 6 个 ScadRig part model，共 18 个 mesh，被同兵种的全部士兵共享；
 - 每名士兵有独立 world/bone node 树和 Animator，但不复制 mesh；
 - 24 个 regiment 的换色通过逐节点 material id 完成；
 - 不使用 `FCharacterPool`，也不为每个士兵复制 model；
-- 角色贡献 73,728 个 render proxy；HUD 使用运行时 capacity 显示占用，
+- 角色贡献约 6 个 render proxy/兵（全场 ≈ 14k）；HUD 使用运行时 capacity 显示占用，
   Massive 硬上限为 262,140。
 
 远景动画按八分之一分帧、中景按三分之一分帧、近景全量更新；跳帧时给 Animator

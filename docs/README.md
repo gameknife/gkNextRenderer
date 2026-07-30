@@ -70,7 +70,7 @@
 - ScadLibrary：[AI 创作当前实现](projects/scadlibrary/ai-authoring.md) · [架构契约](designs/scadlibrary-ai-authoring-integration.md) · [后续收口计划](plans/scadlibrary-ai-authoring-plan.md)
 - StudioSim：[架构与 AI 边界](projects/studio-sim/architecture.md)
 - NextDayz：[MVP 基线设计](projects/nextdayz/nextdayz-mvp-design.md) · [复杂 3C 与 ScadRig 分层动画设计](projects/nextdayz/nextdayz-3c-scadrig-design.md)
-- NextTotalwar：[MVP 设计、当前架构与实测记录](projects/nexttotalwar/nexttotalwar-mvp-design.md) · [代码导览](../AGENT_GUIDE/NextTotalwar.md)
+- NextTotalwar：[MVP 设计、当前架构与实测记录](projects/nexttotalwar/nexttotalwar-mvp-design.md) · [战斗 MVP 设计（计划中）](projects/nexttotalwar/nexttotalwar-battle-mvp-design.md) · [代码导览](../AGENT_GUIDE/NextTotalwar.md)
 - TruckerDemo（迭代计划）：[SnowRunner 风格越野运输 Demo 迭代计划](projects/trucker-demo/trucker-demo-iteration-plan.md)
 
 ## 环境记录
