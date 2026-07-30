@@ -96,7 +96,8 @@ namespace Vulkan::Shadow
             const VkExtent2D extent{Assets::Scene::kSunShadowResolution, Assets::Scene::kSunShadowResolution};
 
             const ShaderModule fragShader(device_, "assets/shaders/Rast.ShadowMap.frag.slang.spv");
-            const ShaderModule vertShader(device_, "assets/shaders/Rast.ShadowMapSoftMeshShader.vert.slang.spv");
+            const ShaderModule vertShader(
+                device_, "assets/shaders/Rast.ShadowMapSoftMeshShader.vert.slang.spv");
 
             pipeline_ = GraphicsPipelineBuilder(device_)
                 .SetShaders(vertShader, fragShader)

@@ -1,6 +1,7 @@
 implementing PathTracing;
 
 #include "PreProcessor.slang"
+#include "VisibilityBuffer.slang"
 
 // IPrimaryRayCaster implementations: hardware ray-query, visibility-buffer replay and
 // voxel DDA. Interfaces live in Interfaces.slang; ray tracers in RayTracers.slang.
@@ -58,8 +59,8 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         ModelData* models = Bindless.GetGpuscene().Offsets;
         uint* indices = Bindless.GetGpuscene().Indices;
 
-        const uint packedValue = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[ipos];
-        const uint2 vBuffer = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF);
+        const VisibilityId visibility = Visibility.Load(ipos);
+        const uint2 vBuffer = uint2(visibility.instanceIdx, visibility.triangleIdx);
         // Vulkan raster coverage is evaluated at pixel centers. The reconstruction
         // ray must use that exact sample or it can leave the stored triangle at
         // grazing angles.

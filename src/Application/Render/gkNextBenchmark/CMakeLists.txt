@@ -6,3 +6,4 @@ file(GLOB_RECURSE GK_BENCHMARK_COMMON_SOURCES CONFIGURE_DEPENDS
 
 add_subdirectory(gkNextStillBenchmark)
 add_subdirectory(gkNextMotionBenchmark)
+add_subdirectory(gkNextMassiveBenchmark)

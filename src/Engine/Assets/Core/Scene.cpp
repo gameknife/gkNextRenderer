@@ -98,7 +98,7 @@ namespace Assets
         static_assert(sizeof(Assets::Material) == Assets::GPU_SCENE_MATERIAL_SIZE);
         static_assert(sizeof(Assets::GPUDrivenStat) == Assets::GPU_SCENE_GPU_DRIVEN_STAT_SIZE);
         static_assert(sizeof(Assets::SoftMeshShaderVisibleItem) == 16);
-        static_assert(sizeof(Assets::SoftMeshShaderResources) == 64);
+        static_assert(sizeof(Assets::SoftMeshShaderResources) == 80);
         static_assert(sizeof(Assets::SphericalHarmonics) == Assets::GPU_SCENE_SPHERICAL_HARMONICS_SIZE);
         static_assert(sizeof(Assets::AmbientCube) == Assets::GPU_SCENE_AMBIENT_CUBE_SIZE);
         static_assert(sizeof(Assets::AmbientBrickResidency) == 16);
@@ -284,9 +284,11 @@ namespace Assets
     }
 
     Scene::Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing,
-                 const bool allocateAmbientResources, const bool enableCpuAcceleration) :
+                  const bool allocateAmbientResources, const bool enableCpuAcceleration) :
         allocateAmbientResources_(allocateAmbientResources),
-        enableCpuAcceleration_(enableCpuAcceleration)
+        enableCpuAcceleration_(enableCpuAcceleration),
+        renderCapacityLimits_(Runtime::Config::FRenderCapacityLimits::FromMode(
+            GOption ? GOption->RenderCapacityMode : Runtime::Config::ERenderCapacityMode::Default))
     {
         int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         const bool allocateAmbientCube =
@@ -324,6 +326,22 @@ namespace Assets
             commandPool, "SceneDynamic", flags,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             Assets::GPU_SCENE_DYNAMIC_SIZE, sceneDynamicBuffer_, sceneDynamicBufferMemory_);
+
+        if (renderCapacityLimits_.IsMassive())
+        {
+            const auto bytes = Runtime::Config::FRenderCapacityLimits::CheckedByteSize(
+                renderCapacityLimits_.renderProxyCapacity, sizeof(Assets::NodeProxy));
+            if (!bytes || *bytes > std::numeric_limits<VkDeviceSize>::max())
+            {
+                throw std::overflow_error("Massive NodeProxy buffer byte size overflow");
+            }
+            Vulkan::BufferUtil::CreateDeviceBufferLocal(
+                commandPool, "MassiveNodeProxies", flags,
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                static_cast<VkDeviceSize>(*bytes), massiveNodeProxyBuffer_, massiveNodeProxyBufferMemory_);
+            SPDLOG_INFO("Render capacity mode Massive: proxies={}, NodeProxy bytes={}",
+                        renderCapacityLimits_.renderProxyCapacity, *bytes);
+        }
 
         if (allocateAmbientResources_)
         {
@@ -513,6 +531,8 @@ namespace Assets
         softMeshShaderCounterBufferMemory_.reset();
         softMeshShaderResourcesBuffer_.reset();
         softMeshShaderResourcesBufferMemory_.reset();
+        massiveNodeProxyBuffer_.reset();
+        massiveNodeProxyBufferMemory_.reset();
 
         sceneDynamicBuffer_.reset();
         sceneDynamicBufferMemory_.reset();

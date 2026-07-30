@@ -1,4 +1,5 @@
 import Shader.Bindless;
+import Shader.Types;
 struct PushConsts
 {
     // Unified push-constant header (offset 0..15): aliases gpuScene's header so
@@ -13,6 +14,7 @@ struct PushConsts
     uint offset_y;
     uint output_w;
     uint output_h;
+    uint primitiveWordCount;
 };
 
 [[vk::push_constant]] ConstantBuffer<PushConsts> pushConsts;
@@ -124,7 +126,7 @@ float SampleBilinear(RWTexture2D<float> image, float2 uv)
         if (DrawQuad(quadx, quady, divider, ipos, isize, uv)) {                                                     \
             int2 ssize;                                       \
             IMAGE.GetDimensions(ssize.x, ssize.y);            \
-            uint icol = (IMAGE[uv * ssize / isize]  >> 17) & 0x7FFF;            \
+            uint icol = DecodeVisibilityPhysical(IMAGE[uv * ssize / isize], pushConsts.primitiveWordCount).instanceIdx; \
             float3 color = UintToStableColor(icol);           \
             Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = float4(color, 1.0);}                                                     \
     }
@@ -134,7 +136,7 @@ float SampleBilinear(RWTexture2D<float> image, float2 uv)
         if (DrawQuad(quadx, quady, divider, ipos, isize, uv)) {                                                      \
             int2 ssize;                                        \
             IMAGE.GetDimensions(ssize.x, ssize.y);             \
-            uint icol = (IMAGE[uv * ssize / isize] & 0x1FFFF);        \
+            uint icol = DecodeVisibilityPhysical(IMAGE[uv * ssize / isize], pushConsts.primitiveWordCount).triangleIdx; \
             float3 color = UintToStableColor(icol);           \
             Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = float4(color, 1.0);}                                                     \
     }
@@ -210,7 +212,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     // line back
     DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_DIFFUSE_HITDIST)), 0, 3, 4, ipos, isize, 0.005);
-    DRAWINTX(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MINIGBUFFER)), 1, 3, 4, ipos, isize);
-    DRAWINTY(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MINIGBUFFER)), 2, 3, 4, ipos, isize);
+    DRAWINTX(Bindless.GetStorageTexture<uint2>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MINIGBUFFER)), 1, 3, 4, ipos, isize);
+    DRAWINTY(Bindless.GetStorageTexture<uint2>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MINIGBUFFER)), 2, 3, 4, ipos, isize);
     DRAWINT(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MOTIONMOMENT)), 3, 3, 4, ipos, isize);
 }

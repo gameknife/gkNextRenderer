@@ -4,6 +4,7 @@
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"
+#include "Engine/Options.hpp"
 #include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Assets/Loaders/LoaderRegistry.hpp"
 #include "Engine/Runtime/Engine.hpp"
@@ -1274,9 +1275,14 @@ namespace
             fmt::format("faceted_asteroid_{}", seed), std::move(vertices), std::move(indices), false);
     }
 
-    void AsteroidBelt(Assets::EnvironmentSetting& cameraInit, std::vector<std::shared_ptr<Assets::Node>>& nodes,
-                      std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
-                      std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
+    void BuildAsteroidBelt(Assets::EnvironmentSetting& cameraInit,
+                           std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                           std::vector<Assets::Model>& models,
+                           std::vector<Assets::FMaterial>& materials,
+                           std::vector<Assets::LightObject>& lights,
+                           std::vector<Assets::AnimationTrack>& tracks,
+                           const uint32_t asteroidCount,
+                           const bool overviewFirst)
     {
         Assets::Camera camera;
         camera.name = "CinematicBelt";
@@ -1285,16 +1291,23 @@ namespace
         camera.Aperture = 0;
         camera.FocalDistance = 142;
         camera.FarPlane = 1400.0f;
-        cameraInit.cameras.push_back(camera);
+        if (!overviewFirst)
+        {
+            cameraInit.cameras.push_back(camera);
+        }
 
         Assets::Camera overviewCamera;
         overviewCamera.name = "BeltOverview";
-        overviewCamera.ModelView = lookAt(vec3(420, 260, 520), vec3(0, 0, 0), vec3(0, 1, 0));
-        overviewCamera.FieldOfView = 46;
+        overviewCamera.ModelView = lookAt(vec3(520, 420, 680), vec3(0, 0, 0), vec3(0, 1, 0));
+        overviewCamera.FieldOfView = 72;
         overviewCamera.Aperture = 0;
-        overviewCamera.FocalDistance = 710;
-        overviewCamera.FarPlane = 1600.0f;
+        overviewCamera.FocalDistance = 950;
+        overviewCamera.FarPlane = 2000.0f;
         cameraInit.cameras.push_back(overviewCamera);
+        if (overviewFirst)
+        {
+            cameraInit.cameras.push_back(camera);
+        }
         cameraInit.ControlSpeed = 35.0f;
         cameraInit.GammaCorrection = true;
         cameraInit.HasSky = true;
@@ -1305,7 +1318,6 @@ namespace
 
         constexpr uint32_t modelCount = 24;
         constexpr uint32_t materialCount = 12000;
-        constexpr uint32_t asteroidCount = 30000;
         for (uint32_t index = 0; index < modelCount; ++index)
         {
             models.push_back(CreateFacetedAsteroid(4100u + index));
@@ -1352,6 +1364,26 @@ namespace
                 fmt::format("Asteroid_{:05}", index), position, scale, static_cast<uint32_t>(nodes.size()),
                 index % modelCount, index % materialCount, true, rotation));
         }
+    }
+
+    void AsteroidBelt(Assets::EnvironmentSetting& cameraInit,
+                      std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                      std::vector<Assets::Model>& models,
+                      std::vector<Assets::FMaterial>& materials,
+                      std::vector<Assets::LightObject>& lights,
+                      std::vector<Assets::AnimationTrack>& tracks)
+    {
+        BuildAsteroidBelt(cameraInit, nodes, models, materials, lights, tracks, 30000, false);
+    }
+
+    void MassiveAsteroidBelt(Assets::EnvironmentSetting& cameraInit,
+                             std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                             std::vector<Assets::Model>& models,
+                             std::vector<Assets::FMaterial>& materials,
+                             std::vector<Assets::LightObject>& lights,
+                             std::vector<Assets::AnimationTrack>& tracks)
+    {
+        BuildAsteroidBelt(cameraInit, nodes, models, materials, lights, tracks, 131070, true);
     }
 
     float KilometerHeight(float x, float z)
@@ -1759,6 +1791,11 @@ namespace AppCommon
         registry.RegisterProcScene("AnimationShowcase.proc", AnimationShowcase);
         registry.RegisterProcScene("PhysicsShowcase.proc", PhysicsShowcase);
         registry.RegisterProcScene("AsteroidBelt.proc", AsteroidBelt);
+        if (GOption &&
+            GOption->RenderCapacityMode == Runtime::Config::ERenderCapacityMode::Massive)
+        {
+            registry.RegisterProcScene("MassiveAsteroidBelt.proc", MassiveAsteroidBelt);
+        }
         registry.RegisterProcScene("KilometerWorld.proc", KilometerWorld);
         registry.RegisterProcScene("TimeOfDayObservatory.proc", TimeOfDayObservatory);
         registry.RegisterProcScene("KineticWave.proc", KineticWave);

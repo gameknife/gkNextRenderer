@@ -220,7 +220,8 @@ namespace Vulkan
     void VulkanBaseRenderer::CreateTopLevelStructures(VkCommandBuffer commandBuffer)
     {
         const auto& debugUtils = Device().DebugUtils();
-        const uint64_t requestedCapacity = std::max<size_t>(1, Assets::Scene::kMaxIndirectDrawCount);
+        const uint64_t requestedCapacity =
+            std::max<uint64_t>(1, GetScene().RenderCapacityLimits().renderProxyCapacity);
         const uint64_t deviceLimit = rt_->properties->MaxInstanceCount();
         if (requestedCapacity > deviceLimit)
         {
@@ -230,6 +231,8 @@ namespace Vulkan
         const uint32_t instanceCapacity = static_cast<uint32_t>(std::min<uint64_t>(
             std::bit_ceil(requestedCapacity), deviceLimit));
         rt_->tlasInstanceCapacity = instanceCapacity;
+        SPDLOG_INFO("TLAS requested/allocated instance capacity: {}/{}",
+                    requestedCapacity, instanceCapacity);
 
         rt_->instancesBuffer.reset(new Buffer(Device(), instanceCapacity * sizeof(VkAccelerationStructureInstanceKHR),
                                           VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |

@@ -1,0 +1,23 @@
+{
+  "name": "massive-rendering-smoke",
+  "target": "gkNextMassiveBenchmark",
+  "scene": "MassiveAsteroidBelt.proc",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 15000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 15000 },
+    { "type": "wait-until", "query": "scene.nodeCount", "op": "eq", "value": 131071, "timeoutMs": 15000 },
+    { "type": "wait-until", "query": "engine.renderProxyCount", "op": "eq", "value": 131070, "timeoutMs": 15000 },
+    { "type": "assert", "query": "engine.renderCapacity", "op": "eq", "value": 262140 },
+    { "type": "assert", "query": "engine.visibilityWords", "op": "eq", "value": 2 },
+    { "type": "wait-until", "query": "engine.gpuDrivenVisibleCount", "op": "gt", "value": 65535, "timeoutMs": 15000 },
+    { "type": "screenshot", "out": "screenshots/massive_rendering_smoke" },
+    { "type": "quit" }
+  ]
+}

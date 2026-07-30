@@ -532,15 +532,28 @@ namespace Assets
                     std::max<uint32_t>(1u, static_cast<uint32_t>(expandedTriangleCapacity));
             }
 
+            if (nodeProxies.size() > renderCapacityLimits_.visibilityProxyCapacity)
+            {
+                throw std::overflow_error(fmt::format(
+                    "Render proxy count {} exceeds {} mode visibility capacity {} (logical nodes {})",
+                    nodeProxies.size(), renderCapacityLimits_.IsMassive() ? "Massive" : "Default",
+                    renderCapacityLimits_.visibilityProxyCapacity, nodes_.size()));
+            }
+
             if (!nodeProxies.empty())
             {
                 {
                     SCOPED_CPU_TIMER("upload nodeproxy");
+                    Vulkan::DeviceMemory* targetMemory = renderCapacityLimits_.IsMassive()
+                        ? massiveNodeProxyBufferMemory_.get()
+                        : sceneDynamicBufferMemory_.get();
+                    const VkDeviceSize targetOffset = renderCapacityLimits_.IsMassive()
+                        ? 0
+                        : Assets::GPU_SCENE_DYNAMIC_NODES_OFFSET;
                     NodeProxy* data = reinterpret_cast<NodeProxy*>(
-                        sceneDynamicBufferMemory_->Map(
-                            Assets::GPU_SCENE_DYNAMIC_NODES_OFFSET, sizeof(NodeProxy) * nodeProxies.size()));
+                        targetMemory->Map(targetOffset, sizeof(NodeProxy) * nodeProxies.size()));
                     std::memcpy(data, nodeProxies.data(), nodeProxies.size() * sizeof(NodeProxy));
-                    sceneDynamicBufferMemory_->Unmap();
+                    targetMemory->Unmap();
                 }
             }
             return true;

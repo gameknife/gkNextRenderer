@@ -18,7 +18,8 @@ SoftwareTracingRenderer::~SoftwareTracingRenderer()
 
 void SoftwareTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
 {
-    deferredShadingPipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Core.SwTracing.comp.slang.spv", GetScene()));
+    deferredShadingPipeline_.reset(new PipelineCommon::ZeroBindPipeline(
+        SwapChain(), "assets/shaders/Core.SwTracing.comp.slang.spv", GetScene()));
     samplePostChain_.CreateSwapChain(SwapChain(), GetScene());
 }
 

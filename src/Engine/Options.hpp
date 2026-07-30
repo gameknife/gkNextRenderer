@@ -2,11 +2,59 @@
 
 #include <cstdint>
 #include <exception>
+#include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace Runtime::Config
 {
+
+enum class ERenderCapacityMode : uint8_t
+{
+    Default,
+    Massive,
+};
+
+struct FRenderCapacityLimits
+{
+    static constexpr uint32_t defaultRenderProxyCapacity = 65535;
+    static constexpr uint32_t defaultVisibilityProxyCapacity = 32767;
+    static constexpr uint32_t massiveRenderProxyCapacity = defaultRenderProxyCapacity * 4;
+
+    ERenderCapacityMode mode = ERenderCapacityMode::Default;
+    uint32_t renderProxyCapacity = defaultRenderProxyCapacity;
+    uint32_t visibilityProxyCapacity = defaultVisibilityProxyCapacity;
+    uint32_t primitiveWordCount = 1;
+
+    static constexpr FRenderCapacityLimits FromMode(ERenderCapacityMode value)
+    {
+        return value == ERenderCapacityMode::Massive
+            ? FRenderCapacityLimits{value, massiveRenderProxyCapacity, massiveRenderProxyCapacity, 2}
+            : FRenderCapacityLimits{};
+    }
+
+    constexpr bool IsMassive() const { return mode == ERenderCapacityMode::Massive; }
+    constexpr bool IsValidOneBasedProxySlot(uint32_t slot) const
+    {
+        return slot != 0 && slot <= visibilityProxyCapacity;
+    }
+
+    static constexpr std::optional<uint64_t> CheckedByteSize(
+        uint64_t elementCount, uint64_t elementSize, uint64_t slotCount = 1)
+    {
+        if (elementSize != 0 && elementCount > std::numeric_limits<uint64_t>::max() / elementSize)
+        {
+            return std::nullopt;
+        }
+        const uint64_t bytes = elementCount * elementSize;
+        if (slotCount != 0 && bytes > std::numeric_limits<uint64_t>::max() / slotCount)
+        {
+            return std::nullopt;
+        }
+        return bytes * slotCount;
+    }
+};
 
 class Options final
 {
@@ -61,6 +109,7 @@ public:
     std::string RemoteEncoder{"auto"};
     bool KeepCPUMeshData{};  // Retain CPU mesh data for editor workflows.
     bool HighPrecisionProgressiveHistory{}; // Use high-precision buffers for progressive accumulation/history.
+    ERenderCapacityMode RenderCapacityMode{ERenderCapacityMode::Default};
     bool UpdateVisualTestBaseline{};
     bool FlappyReplay{};
     bool CppLiveCoding{true};

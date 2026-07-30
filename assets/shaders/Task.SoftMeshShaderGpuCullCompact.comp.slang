@@ -37,7 +37,7 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Lid : SV_GroupThreadID)
     uint* counters = (uint*)softMeshShader.Counters;
     uint cap = scene.CustomData2;
 
-    bool inRange = (DTid.x < scene.CustomData1) && (DTid.x < MAX_NODES);
+    bool inRange = (DTid.x < scene.CustomData1) && (DTid.x < softMeshShader.NodeCapacity);
 
     // ---- per-thread culling, expressed as predicates (no early-return before the barrier) ----
     bool emit = false;
@@ -115,7 +115,7 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Lid : SV_GroupThreadID)
         uint itemIdx  = g_blockItemBase + g_item[lid];
         // A block-wide reservation can cross the output cap. Drop only the
         // over-budget lanes instead of retrying the reservation with a CAS loop.
-        if (primBase + triangleCount <= cap && itemIdx < uint(MAX_NODES))
+        if (primBase + triangleCount <= cap && itemIdx < softMeshShader.NodeCapacity)
         {
             SoftMeshShaderVisibleItem item;
             item.primBase = primBase;
