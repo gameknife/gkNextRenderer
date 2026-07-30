@@ -60,8 +60,8 @@ namespace ScadLibrary::AI
                 const auto& cells = terrain["cells"];
                 if (!cells.is_array() || cells.size() != 2 ||
                     !std::all_of(cells.begin(), cells.end(), [](const auto& value)
-                                 { return value.is_number_integer() && value.get<int>() >= 4 &&
-                                     value.get<int>() <= 256; }))
+                                 { return value.is_number_integer() && value.template get<int>() >= 4 &&
+                                     value.template get<int>() <= 256; }))
                 {
                     error = "terrain cells must be two integers in [4, 256]";
                     return false;
@@ -72,7 +72,7 @@ namespace ScadLibrary::AI
                 const auto& size = terrain["size"];
                 if (!size.is_array() || size.size() != 2 ||
                     !std::all_of(size.begin(), size.end(), [](const auto& value)
-                                 { return value.is_number() && value.get<double>() > 0.0; }))
+                                 { return value.is_number() && value.template get<double>() > 0.0; }))
                 {
                     error = "terrain size must contain two positive values";
                     return false;
