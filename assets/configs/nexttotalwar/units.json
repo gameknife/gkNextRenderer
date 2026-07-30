@@ -5,7 +5,7 @@
       "rigPath": "assets/scad/characters/tw_spearman.scad",
       "marchSpeed": 8.0,
       "catchUpFactor": 1.45,
-      "defaultRanks": 4,
+      "defaultRanks": 16,
       "fileSpacing": 1.12,
       "rankSpacing": 1.35
     },
@@ -14,7 +14,7 @@
       "rigPath": "assets/scad/characters/tw_swordsman.scad",
       "marchSpeed": 8.6,
       "catchUpFactor": 1.45,
-      "defaultRanks": 4,
+      "defaultRanks": 16,
       "fileSpacing": 1.08,
       "rankSpacing": 1.30
     },
@@ -23,7 +23,7 @@
       "rigPath": "assets/scad/characters/tw_archer.scad",
       "marchSpeed": 8.2,
       "catchUpFactor": 1.45,
-      "defaultRanks": 4,
+      "defaultRanks": 16,
       "fileSpacing": 1.20,
       "rankSpacing": 1.42
     }

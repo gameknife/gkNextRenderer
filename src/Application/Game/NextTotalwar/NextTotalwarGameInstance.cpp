@@ -28,9 +28,15 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace
 {
+    constexpr int regimentCountPerFaction = 12;
+    constexpr int soldiersPerRegiment = 128;
+    constexpr int totalRegimentCount = regimentCountPerFaction * 2;
+    constexpr int totalSoldierCount = totalRegimentCount * soldiersPerRegiment;
+
     float WrapAngle(float angle)
     {
         return std::remainder(angle, glm::two_pi<float>());
@@ -46,6 +52,7 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
                                                          Runtime::Config::Options& options,
                                                          NextEngine* engine)
 {
+    options.RenderCapacityMode = Runtime::Config::ERenderCapacityMode::Massive;
     Modules::Scad::Register();
     return std::make_unique<NextTotalwar::FGameInstance>(config, options, engine);
 }
@@ -56,10 +63,11 @@ namespace NextTotalwar
         : NextGameInstanceBase(config, options, engine)
     {
         ConfigureWindow(config, options, "NextTotalwar", 1600, 900, true);
+        options.RenderCapacityMode = Runtime::Config::ERenderCapacityMode::Massive;
         unitDefs_ = {{
-            {EUnitType::Spearman, "spearman", "Spearmen", 8.0f, 1.45f, 4, 1.12f, 1.35f},
-            {EUnitType::Swordsman, "swordsman", "Swordsmen", 8.6f, 1.45f, 4, 1.08f, 1.30f},
-            {EUnitType::Archer, "archer", "Archers", 8.2f, 1.45f, 4, 1.20f, 1.42f},
+            {EUnitType::Spearman, "spearman", "Spearmen", 8.0f, 1.45f, 16, 1.12f, 1.35f},
+            {EUnitType::Swordsman, "swordsman", "Swordsmen", 8.6f, 1.45f, 16, 1.08f, 1.30f},
+            {EUnitType::Archer, "archer", "Archers", 8.2f, 1.45f, 16, 1.20f, 1.42f},
         }};
     }
 
@@ -90,7 +98,7 @@ namespace NextTotalwar
     {
         if (sceneInjected_) return;
 
-        // 每兵种的每个 ScadRig part 只注入一次，256 名同兵种士兵共享
+        // 每兵种的每个 ScadRig part 只注入一次，同兵种士兵共享
         // modelId；实例自己的骨骼树负责姿态，逐节点材质负责部队换色。
         static constexpr std::array<const char*, 3> rigPaths = {{
             "assets/scad/characters/tw_spearman.scad",
@@ -192,7 +200,8 @@ namespace NextTotalwar
         CreateSoldierVisuals();
         scene.MarkDirty();
         sceneReady_ = true;
-        SPDLOG_INFO("NextTotalwar: 12 regiments / 768 ScadRig soldiers, shared part meshes enabled");
+        SPDLOG_INFO("NextTotalwar: {} regiments / {} ScadRig soldiers, Massive shared-part rendering enabled",
+                    totalRegimentCount, totalSoldierCount);
     }
 
     void FGameInstance::OnSceneUnloaded()
@@ -207,30 +216,33 @@ namespace NextTotalwar
     void FGameInstance::DeployArmies()
     {
         regiments_.clear();
-        regiments_.reserve(12);
+        regiments_.reserve(totalRegimentCount);
         int id = 0;
         for (int faction = 0; faction < 2; ++faction)
         {
-            for (int index = 0; index < 6; ++index)
+            for (int index = 0; index < regimentCountPerFaction; ++index)
             {
                 FRegiment regiment;
                 regiment.id = id++;
                 regiment.faction = faction;
                 regiment.def = &unitDefs_[index % 3];
                 regiment.ranks = regiment.def->defaultRanks;
-                const float x = faction == 0 ? -105.0f + (index % 3) * 28.0f : 105.0f - (index % 3) * 28.0f;
-                const float z = -48.0f + (index / 3) * 48.0f + (index % 2) * 5.0f;
+                const int column = index % 3;
+                const int row = index / 3;
+                const float x = faction == 0 ? -125.0f + column * 30.0f : 125.0f - column * 30.0f;
+                const float z = -66.0f + row * 44.0f + (column % 2) * 3.0f;
                 regiment.anchor = {x, GroundHeight(x, z), z};
                 regiment.facing = faction == 0 ? glm::half_pi<float>() : -glm::half_pi<float>();
                 regiment.orderFacing = regiment.facing;
-                regiment.soldiers.resize(64);
-                for (int soldier = 0; soldier < 64; ++soldier)
+                regiment.soldiers.resize(soldiersPerRegiment);
+                for (int soldier = 0; soldier < soldiersPerRegiment; ++soldier)
                 {
                     FSoldier& item = regiment.soldiers[soldier];
                     item.slotIndex = soldier;
                     item.phaseOffset = static_cast<float>((regiment.id * 67 + soldier * 23) % 101) / 101.0f;
                     const glm::vec2 local = Formation::SlotLocalOffset(
-                        soldier, 64, regiment.ranks, regiment.def->fileSpacing, regiment.def->rankSpacing);
+                        soldier, soldiersPerRegiment, regiment.ranks,
+                        regiment.def->fileSpacing, regiment.def->rankSpacing);
                     item.position = Formation::SlotWorld(regiment.anchor, regiment.facing, local);
                     item.position.y = GroundHeight(item.position.x, item.position.z);
                     item.yaw = regiment.facing;
@@ -419,54 +431,71 @@ namespace NextTotalwar
     void FGameInstance::TickSoldiers(float deltaSeconds)
     {
         animatorUpdates_ = 0;
+        const uint32_t animationStride = camera_.Distance() < 90.0f
+                                             ? 1u
+                                             : (camera_.Distance() < 140.0f ? 3u : 8u);
         for (FRegiment& regiment : regiments_)
         {
+            const bool regimentMoving = regiment.state != ERegimentState::Idle;
             for (FSoldier& soldier : regiment.soldiers)
             {
-                const glm::vec2 local = Formation::SlotLocalOffset(
-                    soldier.slotIndex, static_cast<int>(regiment.soldiers.size()), regiment.ranks,
-                    regiment.def->fileSpacing, regiment.def->rankSpacing);
-                glm::vec3 target = Formation::SlotWorld(regiment.anchor, regiment.facing, local);
-                target.y = GroundHeight(target.x, target.z);
-                glm::vec3 delta = target - soldier.position;
-                const float distance = glm::length(glm::vec2(delta.x, delta.z));
-                const float speed = regiment.def->marchSpeed * regiment.def->catchUpFactor;
-                if (distance > 0.035f)
+                bool transformChanged = false;
+                float distance = 0.0f;
+                if (regimentMoving)
                 {
-                    const glm::vec3 direction(delta.x / distance, 0.0f, delta.z / distance);
-                    const float step = std::min(distance, speed * deltaSeconds);
-                    soldier.position += direction * step;
-                    soldier.position.y = GroundHeight(soldier.position.x, soldier.position.z);
-                    soldier.yaw = ApproachAngle(
-                        soldier.yaw, std::atan2(direction.x, direction.z), deltaSeconds * 5.0f);
-                }
-                else
-                {
-                    soldier.position = target;
-                    soldier.yaw = ApproachAngle(soldier.yaw, regiment.facing, deltaSeconds * 5.0f);
+                    const glm::vec2 local = Formation::SlotLocalOffset(
+                        soldier.slotIndex, static_cast<int>(regiment.soldiers.size()), regiment.ranks,
+                        regiment.def->fileSpacing, regiment.def->rankSpacing);
+                    glm::vec3 target = Formation::SlotWorld(regiment.anchor, regiment.facing, local);
+                    target.y = GroundHeight(target.x, target.z);
+                    const glm::vec3 delta = target - soldier.position;
+                    distance = glm::length(glm::vec2(delta.x, delta.z));
+                    const float speed = regiment.def->marchSpeed * regiment.def->catchUpFactor;
+                    if (distance > 0.035f)
+                    {
+                        const glm::vec3 direction(delta.x / distance, 0.0f, delta.z / distance);
+                        const float step = std::min(distance, speed * deltaSeconds);
+                        soldier.position += direction * step;
+                        soldier.position.y = GroundHeight(soldier.position.x, soldier.position.z);
+                        soldier.yaw = ApproachAngle(
+                            soldier.yaw, std::atan2(direction.x, direction.z), deltaSeconds * 5.0f);
+                    }
+                    else
+                    {
+                        soldier.position = target;
+                        soldier.yaw = ApproachAngle(soldier.yaw, regiment.facing, deltaSeconds * 5.0f);
+                    }
+                    transformChanged = true;
                 }
 
                 if (soldier.worldNode)
                 {
-                    const bool animate = camera_.Distance() < 120.0f ||
-                                         ((frameIndex_ + static_cast<uint64_t>(soldier.slotIndex)) % 3u == 0u);
-                    const bool moving = regiment.state != ERegimentState::Idle || distance > 0.035f;
+                    const bool animate =
+                        (frameIndex_ + static_cast<uint64_t>(regiment.id * 17 + soldier.slotIndex)) %
+                            animationStride ==
+                        0u;
+                    const bool moving = regimentMoving || distance > 0.035f;
                     const Assets::FRigAsset& rig =
                         soldierRigAssets_[static_cast<size_t>(regiment.def->type)];
                     const char* clip = moving && rig.FindClip("march")
                                            ? "march"
                                            : (moving ? "walk" : "idle");
                     soldier.animator.Play(clip);
+                    if (transformChanged)
+                    {
+                        soldier.worldNode->Translation() = soldier.position;
+                        soldier.worldNode->Rotation() =
+                            glm::angleAxis(soldier.yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                    }
                     if (animate)
                     {
-                        const float animationDelta =
-                            camera_.Distance() < 120.0f ? deltaSeconds : deltaSeconds * 3.0f;
-                        soldier.animator.Update(animationDelta);
+                        soldier.animator.Update(deltaSeconds * static_cast<float>(animationStride));
                         ++animatorUpdates_;
                     }
-                    soldier.worldNode->Translation() = soldier.position;
-                    soldier.worldNode->Rotation() = glm::angleAxis(soldier.yaw, glm::vec3(0.0f, 1.0f, 0.0f));
-                    soldier.worldNode->RecalcTransform(true);
+                    else if (transformChanged)
+                    {
+                        soldier.worldNode->RecalcTransform(true);
+                    }
                 }
             }
         }
@@ -590,11 +619,25 @@ namespace NextTotalwar
         if (selected.empty()) return;
 
         const glm::vec3 lateral(std::cos(facing), 0.0f, -std::sin(facing));
-        const float center = static_cast<float>(selected.size() - 1) * 0.5f;
+        const glm::vec3 forward(std::sin(facing), 0.0f, std::cos(facing));
+        const size_t regimentColumns =
+            std::max<size_t>(1, static_cast<size_t>(std::ceil(std::sqrt(selected.size() * 1.35f))));
+        const size_t regimentRows = (selected.size() + regimentColumns - 1) / regimentColumns;
         for (size_t index = 0; index < selected.size(); ++index)
         {
             FRegiment& regiment = *selected[index];
-            glm::vec3 destination = target + lateral * (static_cast<float>(index) - center) * 21.0f;
+            const size_t row = index / regimentColumns;
+            const size_t column = index % regimentColumns;
+            const size_t columnsInRow =
+                std::min(regimentColumns, selected.size() - row * regimentColumns);
+            const float columnOffset =
+                static_cast<float>(column) - static_cast<float>(columnsInRow - 1) * 0.5f;
+            const float rowOffset =
+                static_cast<float>(row) - static_cast<float>(regimentRows - 1) * 0.5f;
+            glm::vec3 destination =
+                target + lateral * columnOffset * 40.0f - forward * rowOffset * 28.0f;
+            destination.x = glm::clamp(destination.x, -188.0f, 188.0f);
+            destination.z = glm::clamp(destination.z, -188.0f, 188.0f);
             destination.y = GroundHeight(destination.x, destination.z);
             regiment.orderTarget = destination;
             regiment.orderFacing = facing;
@@ -656,7 +699,11 @@ namespace NextTotalwar
                 const int delta = event.key.key == SDLK_LEFTBRACKET ? -1 : 1;
                 for (FRegiment& regiment : regiments_)
                 {
-                    if (regiment.selected) regiment.ranks = glm::clamp(regiment.ranks + delta, 2, 8);
+                    if (regiment.selected)
+                    {
+                        regiment.ranks = glm::clamp(regiment.ranks + delta, 4, 32);
+                        regiment.state = ERegimentState::Reforming;
+                    }
                 }
             }
             return true;
@@ -768,19 +815,25 @@ namespace NextTotalwar
     bool FGameInstance::OnRenderUI()
     {
         if (!sceneReady_) return false;
-        const uint32_t batches = GetEngine().GetScene().GetIndirectDrawBatchCount();
+        const Assets::Scene& scene = GetEngine().GetScene();
+        const uint32_t batches = scene.GetIndirectDrawBatchCount();
+        const auto& capacity = scene.RenderCapacityLimits();
         ImGui::SetNextWindowPos({12.0f, 12.0f}, ImGuiCond_Always);
         ImGui::SetNextWindowSize({340.0f, 0.0f}, ImGuiCond_Always);
         ImGui::Begin("NextTotalwar", nullptr,
                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
-        ImGui::Text("Regiments: 12   Soldiers: 768");
+        ImGui::Text("Regiments: %zu   Soldiers: %d", regiments_.size(), totalSoldierCount);
         ImGui::Text("Selected: %zu   Moving: %zu", SelectedCount(), MarchingCount());
         size_t sharedParts = 0;
         for (const auto& ids : soldierPartModelIds_) sharedParts += ids.size();
         ImGui::Text("ScadRig shared part meshes: %zu", sharedParts);
-        const float budget = static_cast<float>(batches) / 32767.0f;
-        ImGui::TextColored(batches > 28000 ? ImVec4(1, 0.2f, 0.15f, 1) : ImVec4(0.3f, 1, 0.4f, 1),
-                           "Node-sections: %u / 32767", batches);
+        const float budget = static_cast<float>(batches) /
+                             static_cast<float>(capacity.visibilityProxyCapacity);
+        ImGui::TextColored(budget > 0.90f ? ImVec4(1, 0.2f, 0.15f, 1)
+                                         : ImVec4(0.3f, 1, 0.4f, 1),
+                           "Render proxies: %u / %u (%s)", batches,
+                           capacity.visibilityProxyCapacity,
+                           capacity.IsMassive() ? "Massive" : "Default");
         ImGui::ProgressBar(glm::clamp(budget, 0.0f, 1.0f), {-1.0f, 0.0f});
         ImGui::Text("FPS: %.1f   Animated this frame: %d", ImGui::GetIO().Framerate, animatorUpdates_);
         ImGui::Text("NavGrid: %s (%dx%d)", navGrid_.IsBuilt() ? "ready" : "not ready",
@@ -809,12 +862,15 @@ namespace NextTotalwar
                                 ImGuiCond_Always);
         ImGui::SetNextWindowSize({viewport->WorkSize.x - 360.0f, 66.0f}, ImGuiCond_Always);
         ImGui::Begin("Regiments", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
-                                            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
+                                            ImGuiWindowFlags_NoResize |
+                                            ImGuiWindowFlags_HorizontalScrollbar);
         for (FRegiment& regiment : regiments_)
         {
             if (regiment.id > 0) ImGui::SameLine();
             if (regiment.selected) ImGui::PushStyleColor(ImGuiCol_Button, {0.15f, 0.62f, 0.85f, 1.0f});
-            const std::string label = fmt::format("{}\n64##{}", regiment.def->displayName, regiment.id);
+            const std::string label =
+                fmt::format("{}\n{}##{}", regiment.def->displayName,
+                            regiment.soldiers.size(), regiment.id);
             if (ImGui::Button(label.c_str(), {76.0f, 48.0f}))
             {
                 ClearSelection();
@@ -841,13 +897,22 @@ namespace NextTotalwar
         }
         for (const FRegiment& regiment : regiments_)
         {
-            if (!regiment.selected) continue;
-            const glm::vec2 half = Formation::FormationHalfExtent(
-                static_cast<int>(regiment.soldiers.size()), regiment.ranks,
-                regiment.def->fileSpacing, regiment.def->rankSpacing);
+            if (!regiment.selected || regiment.soldiers.empty()) continue;
+            glm::vec2 localMin(std::numeric_limits<float>::max());
+            glm::vec2 localMax(std::numeric_limits<float>::lowest());
+            for (const FSoldier& soldier : regiment.soldiers)
+            {
+                const glm::vec2 local =
+                    Formation::SlotLocal(regiment.anchor, regiment.facing, soldier.position);
+                localMin = glm::min(localMin, local);
+                localMax = glm::max(localMax, local);
+            }
+            constexpr float selectionPadding = 0.7f;
+            localMin -= glm::vec2(selectionPadding);
+            localMax += glm::vec2(selectionPadding);
             const std::array<glm::vec2, 4> corners = {{
-                {-half.x - 0.7f, half.y + 0.7f}, {half.x + 0.7f, half.y + 0.7f},
-                {half.x + 0.7f, -half.y - 0.7f}, {-half.x - 0.7f, -half.y - 0.7f},
+                {localMin.x, localMax.y}, {localMax.x, localMax.y},
+                {localMax.x, localMin.y}, {localMin.x, localMin.y},
             }};
             std::array<ImVec2, 4> projected{};
             bool valid = true;
@@ -885,7 +950,20 @@ namespace NextTotalwar
         registry.Add("selectedRegiments", [this]() { return static_cast<int64_t>(SelectedCount()); });
         registry.Add("regimentCount", [this]() { return static_cast<int64_t>(regiments_.size()); });
         registry.Add("marchingRegiments", [this]() { return static_cast<int64_t>(MarchingCount()); });
-        registry.Add("soldierCount", [this]() { return static_cast<int64_t>(regiments_.size() * 64); });
+        registry.Add("soldierCount", [this]()
+        {
+            size_t count = 0;
+            for (const FRegiment& regiment : regiments_) count += regiment.soldiers.size();
+            return static_cast<int64_t>(count);
+        });
+        registry.Add("renderProxyCount", [this]()
+        {
+            return static_cast<int64_t>(GetEngine().GetScene().GetRenderProxyCount());
+        });
+        registry.Add("massiveMode", [this]()
+        {
+            return GetEngine().GetScene().RenderCapacityLimits().IsMassive();
+        });
         registry.Add("navReady", [this]() { return navGrid_.IsBuilt(); });
         registry.Add("lastOrderDistance", [this]() { return static_cast<double>(lastOrderDistance_); });
     }

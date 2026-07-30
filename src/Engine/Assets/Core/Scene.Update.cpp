@@ -50,7 +50,7 @@ namespace Assets
             {
                 continue;
             }
-            if (const auto* render = node->GetComponentPtr<Runtime::RenderComponent>();
+            if (const auto* render = node->GetRenderComponent();
                 render && !render->GetVisible())
             {
                 continue;
@@ -200,7 +200,7 @@ namespace Assets
                         if (skinnedMesh->IsPlaying())
                         {
                             MarkDirty();
-                            if (auto* renderComponent = node->GetComponentPtr<Runtime::RenderComponent>())
+                            if (auto* renderComponent = node->GetRenderComponent())
                             {
                                 if (renderComponent->GetModelId() != -1)
                                 {
@@ -302,7 +302,7 @@ namespace Assets
         {
             for (auto& node : nodes_)
             {
-                auto* render = node->GetComponentPtr<Runtime::RenderComponent>();
+                auto* render = node->GetRenderComponent();
                 if (!render || !render->GetVisible() || !render->IsDrawable())
                 {
                     continue;
@@ -461,10 +461,10 @@ namespace Assets
                 for (auto& node : nodes_)
                 {
                     // record all
-                    auto* render = node->GetComponentPtr<Runtime::RenderComponent>();
+                    auto* render = node->GetRenderComponent();
                     if (render && render->IsDrawable())
                     {
-                        glm::mat4 combined;
+                        glm::mat4 combined {};
                         if (node->TickVelocity(combined))
                         {
                             sceneDirty_ = true;

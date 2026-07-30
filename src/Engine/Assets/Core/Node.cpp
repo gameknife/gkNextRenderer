@@ -227,7 +227,7 @@ namespace Assets
         proxy.reserved1 = 0;
         proxy.reserved2 = 0;
         
-        auto renderComp = GetComponent<Runtime::RenderComponent>();
+        const Runtime::RenderComponent* renderComp = renderComponent_;
         if (renderComp)
         {
             proxy.modelId = renderComp->GetModelId();

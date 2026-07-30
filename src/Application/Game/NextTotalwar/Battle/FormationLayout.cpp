@@ -39,6 +39,16 @@ namespace NextTotalwar::Formation
             -sine * localOffset.x + cosine * localOffset.y);
     }
 
+    glm::vec2 SlotLocal(const glm::vec3& anchor, float facing, const glm::vec3& worldPosition)
+    {
+        const float sine = std::sin(facing);
+        const float cosine = std::cos(facing);
+        const glm::vec3 offset = worldPosition - anchor;
+        return {
+            cosine * offset.x - sine * offset.z,
+            sine * offset.x + cosine * offset.z};
+    }
+
     glm::vec2 FormationHalfExtent(int soldierCount, int ranks, float fileSpacing, float rankSpacing)
     {
         const int files = Files(soldierCount, ranks);
@@ -47,4 +57,5 @@ namespace NextTotalwar::Formation
             static_cast<float>(files - 1) * fileSpacing * 0.5f,
             static_cast<float>(rows - 1) * rankSpacing * 0.5f};
     }
+
 }

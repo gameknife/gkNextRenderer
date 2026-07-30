@@ -14,21 +14,23 @@
 - 兵种 kit / rig：`assets/scad/lib/kit_tw.scad` 与
   `assets/scad/characters/tw_*.scad`
 
-每帧先推进 regiment anchor 与朝向，再让士兵 seek 对应阵型槽位，最后更新共享
-mesh 实例节点。寻路、选择和状态机都以 regiment 为粒度；士兵不做 A*、碰撞或 AI。
+当前规模是双方各 12 个 regiment、每队 512 人，共 24 队 / 12,288 人。每帧先推进
+regiment anchor 与朝向，再让行军中的士兵 seek 对应阵型槽位，最后分帧更新共享
+ScadRig 实例。寻路、选择和状态机都以 regiment 为粒度；士兵不做 A*、碰撞或 AI。
 
 ## Mesh 复用契约
 
-MVP 尖刀选择“每兵种一份 model”：
+扩军版固定启用 `ERenderCapacityMode::Massive`，并保持“每兵种共享 part model”：
 
-- 3 个兵种各注入一个 `FProcModel`，每份被 256 名士兵共享；
-- 每个士兵只有 world node + 一个 render node；
-- 12 个 regiment 的换色通过逐节点 material id 完成；
+- 3 个兵种各有 6 个 ScadRig part model，共 18 个 mesh，被同兵种的 4,096 名士兵共享；
+- 每名士兵有独立 world/bone node 树和 Animator，但不复制 mesh；
+- 24 个 regiment 的换色通过逐节点 material id 完成；
 - 不使用 `FCharacterPool`，也不为每个士兵复制 model；
-- HUD 常驻显示 `GetIndirectDrawBatchCount()`，28,000 起报警，硬上限 32,767。
+- 角色贡献 73,728 个 render proxy；HUD 使用运行时 capacity 显示占用，
+  Massive 硬上限为 262,140。
 
-三份六 part SCAD rig 是角色资产与后续近景动画入口。若未来切换到完整 rig，
-仍必须让同兵种实例共享 partModelIds，不得回退到逐池位 model 拷贝。
+远景动画按八分之一分帧、中景按三分之一分帧、近景全量更新；跳帧时给 Animator
+补偿累计 delta。静止部队不再每帧重算槽位或刷新 world transform。
 
 ## 行军与桥
 
@@ -49,8 +51,8 @@ NavGrid 使用 2m cell、0.4m agent radius，并通过 `TerrainComponent::IsWate
 - `[` / `]`：调整选中部队排数
 
 查询：`game.selectedRegiments`、`game.regimentCount`、
-`game.marchingRegiments`、`game.soldierCount`、`game.navReady`、
-`game.lastOrderDistance`。
+`game.marchingRegiments`、`game.soldierCount`、`game.renderProxyCount`、
+`game.massiveMode`、`game.navReady`、`game.lastOrderDistance`。
 
 ## 定向验证
 

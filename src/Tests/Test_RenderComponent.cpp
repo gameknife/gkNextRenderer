@@ -55,6 +55,29 @@ TEST_CASE("RenderComponent Usage", "[Unit][RenderComponent]") {
     }
 }
 
+TEST_CASE("Node caches its RenderComponent", "[Unit][RenderComponent][Node]")
+{
+    auto node = Assets::Node::CreateNode(
+        "CachedRenderNode", glm::vec3(0), glm::quat(1, 0, 0, 0), glm::vec3(1), 0);
+    CHECK(node->GetRenderComponent() == nullptr);
+
+    auto first = std::make_shared<Runtime::RenderComponent>();
+    first->SetModelId(11);
+    node->AddComponent(first);
+    CHECK(node->GetRenderComponent() == first.get());
+    CHECK(node->GetComponentPtr<Runtime::RenderComponent>() == first.get());
+
+    auto replacement = std::make_shared<Runtime::RenderComponent>();
+    replacement->SetModelId(22);
+    node->AddComponent(replacement);
+    CHECK(node->GetRenderComponent() == replacement.get());
+    CHECK(node->GetRenderComponent()->GetModelId() == 22);
+
+    node->AddComponent(std::shared_ptr<Runtime::RenderComponent>{});
+    CHECK(node->GetRenderComponent() == nullptr);
+    CHECK(node->GetComponentPtr<Runtime::RenderComponent>() == nullptr);
+}
+
 TEST_CASE("Scene model section encoding is bounds checked", "[Unit][Scene]")
 {
     uint32_t encoded = 0;

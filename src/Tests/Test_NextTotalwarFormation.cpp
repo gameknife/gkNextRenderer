@@ -43,6 +43,10 @@ TEST_CASE("NextTotalwar formation world transform rotates around anchor", "[Next
     CHECK_THAT(rotated.x, Catch::Matchers::WithinAbs(8.0f, 0.001f));
     CHECK_THAT(rotated.z, Catch::Matchers::WithinAbs(-10.0f, 0.001f));
     CHECK_THAT(rotated.y, Catch::Matchers::WithinAbs(anchor.y, 0.001f));
+    const glm::vec2 restored =
+        NextTotalwar::Formation::SlotLocal(anchor, glm::half_pi<float>(), rotated);
+    CHECK_THAT(restored.x, Catch::Matchers::WithinAbs(local.x, 0.001f));
+    CHECK_THAT(restored.y, Catch::Matchers::WithinAbs(local.y, 0.001f));
 }
 
 TEST_CASE("NextTotalwar shipped rigs satisfy the six-part reusable mesh budget", "[NextTotalwar][ScadRig]")

@@ -9,7 +9,11 @@
 #include <limits>
 #include <type_traits>
 
-namespace Runtime { class SkinnedMeshComponent; }
+namespace Runtime
+{
+    class RenderComponent;
+    class SkinnedMeshComponent;
+}
 
 namespace Assets
 {
@@ -65,6 +69,7 @@ namespace Assets
         const std::set< std::shared_ptr<Node> >& Children() const { return children_; }
 
         NodeProxy GetNodeProxy() const;
+        Runtime::RenderComponent* GetRenderComponent() const { return renderComponent_; }
 
         // New Component System
         template <typename T>
@@ -76,6 +81,10 @@ namespace Assets
             if constexpr (std::is_same_v<T, Runtime::PhysicsComponent>)
             {
                 physicsComponent_ = nullptr;
+            }
+            else if constexpr (std::is_same_v<T, Runtime::RenderComponent>)
+            {
+                renderComponent_ = nullptr;
             }
             
             // Remove existing component of same type
@@ -101,6 +110,10 @@ namespace Assets
                 {
                     physicsComponent_ = component.get();
                 }
+                else if constexpr (std::is_same_v<T, Runtime::RenderComponent>)
+                {
+                    renderComponent_ = component.get();
+                }
             }
         }
 
@@ -108,6 +121,10 @@ namespace Assets
         T* GetComponentPtr() const
         {
             static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
+            if constexpr (std::is_same_v<T, Runtime::RenderComponent>)
+            {
+                return renderComponent_;
+            }
             if (!MayHaveComponent<T>())
             {
                 return nullptr;
@@ -186,6 +203,7 @@ namespace Assets
         std::vector<std::shared_ptr<Component>> components_;
         uint64_t componentTypeMask_ = 0;
         Runtime::PhysicsComponent* physicsComponent_ = nullptr;
+        Runtime::RenderComponent* renderComponent_ = nullptr;
         static constexpr uint32_t invalidNodeId = std::numeric_limits<uint32_t>::max();
         uint32_t sceneReferenceOwnerProxyId_ = invalidNodeId;
     };
