@@ -50,6 +50,20 @@ namespace
         return current + glm::clamp(WrapAngle(target - current), -maxStep, maxStep);
     }
 
+    ImU32 FactionOutlineColor(int faction, int alpha = 240)
+    {
+        return faction == 0
+                   ? IM_COL32(45, 165, 255, alpha)
+                   : IM_COL32(255, 68, 52, alpha);
+    }
+
+    ImU32 FactionFillColor(int faction, int alpha = 28)
+    {
+        return faction == 0
+                   ? IM_COL32(30, 125, 255, alpha)
+                   : IM_COL32(245, 45, 35, alpha);
+    }
+
     bool PointInConvexQuad(const glm::vec2& point, const std::array<glm::vec2, 4>& quad)
     {
         bool hasPositive = false;
@@ -235,12 +249,12 @@ namespace NextTotalwar
         }
 
         const std::array<glm::vec3, 6> blue = {{
-            {0.10f, 0.25f, 0.58f}, {0.12f, 0.32f, 0.70f}, {0.16f, 0.38f, 0.76f},
-            {0.10f, 0.29f, 0.66f}, {0.18f, 0.34f, 0.62f}, {0.12f, 0.37f, 0.58f},
+            {0.03f, 0.18f, 0.85f}, {0.04f, 0.28f, 0.95f}, {0.08f, 0.38f, 1.00f},
+            {0.02f, 0.22f, 0.72f}, {0.10f, 0.30f, 0.82f}, {0.04f, 0.35f, 0.72f},
         }};
         const std::array<glm::vec3, 6> red = {{
-            {0.58f, 0.12f, 0.09f}, {0.68f, 0.16f, 0.10f}, {0.74f, 0.22f, 0.12f},
-            {0.62f, 0.13f, 0.16f}, {0.65f, 0.23f, 0.12f}, {0.55f, 0.18f, 0.19f},
+            {0.85f, 0.035f, 0.025f}, {0.95f, 0.05f, 0.03f}, {1.00f, 0.10f, 0.05f},
+            {0.78f, 0.025f, 0.04f}, {0.90f, 0.09f, 0.03f}, {0.75f, 0.04f, 0.07f},
         }};
         for (int regiment = 0; regiment < 6; ++regiment)
         {
@@ -1354,8 +1368,14 @@ namespace NextTotalwar
             for (const FRegiment& regiment : regiments_)
             {
                 if (!regiment.selected || !IsRegimentSelectable(regiment)) continue;
-                ImGui::Text("#%d %s  %s  ranks=%d", regiment.id, regiment.def->displayName,
-                            StateName(regiment.state), regiment.ranks);
+                const ImVec4 factionColor = regiment.faction == 0
+                                                ? ImVec4(0.25f, 0.70f, 1.0f, 1.0f)
+                                                : ImVec4(1.0f, 0.30f, 0.22f, 1.0f);
+                ImGui::TextColored(
+                    factionColor, "%s #%d  %s  %s  ranks=%d",
+                    regiment.faction == 0 ? "BLUE" : "RED",
+                    regiment.id, regiment.def->displayName,
+                    StateName(regiment.state), regiment.ranks);
                 ImGui::Text("Strength %d/%d  Kills %d  Morale %.0f",
                             regiment.strength, regiment.startStrength,
                             regiment.kills, regiment.morale);
@@ -1461,19 +1481,35 @@ namespace NextTotalwar
             ImGui::BeginGroup();
             const bool selectable = IsRegimentSelectable(regiment);
             const bool wasSelected = selectable && regiment.selected;
-            if (wasSelected) ImGui::PushStyleColor(ImGuiCol_Button, {0.15f, 0.62f, 0.85f, 1.0f});
+            const bool blueFaction = regiment.faction == 0;
+            const ImVec4 baseColor = blueFaction
+                                         ? (wasSelected ? ImVec4(0.08f, 0.48f, 0.88f, 1.0f)
+                                                        : ImVec4(0.055f, 0.20f, 0.48f, 1.0f))
+                                         : (wasSelected ? ImVec4(0.82f, 0.16f, 0.10f, 1.0f)
+                                                        : ImVec4(0.48f, 0.075f, 0.055f, 1.0f));
+            const ImVec4 hoverColor = blueFaction
+                                          ? ImVec4(0.10f, 0.42f, 0.78f, 1.0f)
+                                          : ImVec4(0.76f, 0.13f, 0.09f, 1.0f);
+            const ImVec4 activeColor = blueFaction
+                                           ? ImVec4(0.14f, 0.58f, 1.0f, 1.0f)
+                                           : ImVec4(0.96f, 0.20f, 0.13f, 1.0f);
+            ImGui::PushStyleColor(ImGuiCol_Button, baseColor);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hoverColor);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, activeColor);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.96f, 0.97f, 1.0f, 1.0f));
             ImGui::BeginDisabled(!selectable);
             const std::string label =
-                fmt::format("{}\n{}##{}", regiment.def->displayName,
+                fmt::format("{} {}\n{}##{}",
+                            blueFaction ? "B" : "R", regiment.def->displayName,
                             regiment.strength, regiment.id);
-            if (ImGui::Button(label.c_str(), {76.0f, 36.0f}) && selectable)
+            if (ImGui::Button(label.c_str(), {88.0f, 36.0f}) && selectable)
             {
                 ClearSelection();
                 regiment.selected = true;
                 RefreshSelectionFeedback();
             }
             ImGui::EndDisabled();
-            if (wasSelected) ImGui::PopStyleColor();
+            ImGui::PopStyleColor(4);
             const float strengthRatio = regiment.startStrength > 0
                                             ? static_cast<float>(regiment.strength) /
                                                   static_cast<float>(regiment.startStrength)
@@ -1484,7 +1520,7 @@ namespace NextTotalwar
                                                   ? ImVec4(0.92f, 0.70f, 0.16f, 1.0f)
                                                   : ImVec4(0.86f, 0.20f, 0.15f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_PlotHistogram, healthColor);
-            ImGui::ProgressBar(strengthRatio, {76.0f, 6.0f}, "");
+            ImGui::ProgressBar(strengthRatio, {88.0f, 6.0f}, "");
             ImGui::PopStyleColor();
             ImGui::EndGroup();
         }
@@ -1563,11 +1599,8 @@ namespace NextTotalwar
             ImVec2 previous{};
             bool previousValid =
                 Runtime::EngineHelper::TryProjectWorldToScreenForGame(*this, previousWorld, previous);
-            const ImU32 routeColor = regiment.selected
-                                         ? IM_COL32(65, 220, 255, 235)
-                                         : (regiment.faction == 0
-                                                ? IM_COL32(65, 170, 255, 125)
-                                                : IM_COL32(255, 105, 80, 125));
+            const ImU32 routeColor =
+                FactionOutlineColor(regiment.faction, regiment.selected ? 235 : 125);
 
             for (size_t nodeIndex = regiment.pathCursor;
                  nodeIndex < regiment.path.size(); ++nodeIndex)
@@ -1650,7 +1683,8 @@ namespace NextTotalwar
             localMin -= glm::vec2(selectionPadding);
             localMax += glm::vec2(selectionPadding);
             drawFormationFrame(regiment.anchor, regiment.facing, localMin, localMax,
-                               IM_COL32(70, 235, 255, 240), IM_COL32(40, 180, 220, 18));
+                               FactionOutlineColor(regiment.faction),
+                               FactionFillColor(regiment.faction));
         }
         if (rightDown_)
         {
@@ -1684,7 +1718,8 @@ namespace NextTotalwar
                                          -halfExtent.y * 2.0f - previewPadding);
                 const glm::vec2 localMax(halfExtent.x + previewPadding, previewPadding);
                 drawFormationFrame(destination, previewFacing, localMin, localMax,
-                                   IM_COL32(255, 225, 80, 245), IM_COL32(255, 205, 45, 34));
+                                   FactionOutlineColor(regiment.faction, 245),
+                                   FactionFillColor(regiment.faction, 38));
             }
 
             ImVec2 target;
