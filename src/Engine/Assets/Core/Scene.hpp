@@ -2,7 +2,6 @@
 #include <glm/vec2.hpp>
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Options.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysicsTypes.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
@@ -150,12 +149,6 @@ namespace Assets
         size_t GetModelCount() const { return models_.size(); }
         size_t GetMaterialCount() const { return materials_.size(); }
         uint32_t GetTriangleCount() const { return requiredGpuDrivenTriangleCapacity_; }
-        const Runtime::Config::FRenderCapacityLimits& RenderCapacityLimits() const { return renderCapacityLimits_; }
-        uint32_t GetRenderProxyCount() const { return static_cast<uint32_t>(nodeProxies.size()); }
-        VkFormat VisibilityFormat() const
-        {
-            return renderCapacityLimits_.IsMassive() ? VK_FORMAT_R32G32_UINT : VK_FORMAT_R32_UINT;
-        }
 
         int32_t FindNodeIdWithComponent(const std::string& componentType) const;
         Node* GetNodeById(uint32_t nodeId);
@@ -311,8 +304,6 @@ namespace Assets
 
         std::unique_ptr<Vulkan::Buffer> sceneDynamicBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> sceneDynamicBufferMemory_;
-        std::unique_ptr<Vulkan::Buffer> massiveNodeProxyBuffer_;
-        std::unique_ptr<Vulkan::DeviceMemory> massiveNodeProxyBufferMemory_;
 
         std::unique_ptr<Vulkan::Buffer> offsetBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> offsetBufferMemory_;
@@ -404,7 +395,6 @@ namespace Assets
         Assets::CPU::FCPUAccelerationStructure cpuAccelerationStructure_;
         bool allocateAmbientResources_ = true;
         bool enableCpuAcceleration_ = true;
-        Runtime::Config::FRenderCapacityLimits renderCapacityLimits_{};
 
         Assets::GPUDrivenStat gpuDrivenStat_;
         std::array<Assets::GPUDrivenStat, kSunShadowCascadeCount> shadowGpuDrivenStats_{};

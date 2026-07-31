@@ -18,15 +18,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint itemCount = counters[slot * 2 + 1];
     uint triangleCapacity = scene.CustomData2;
     totalTri = min(totalTri, triangleCapacity);
-    itemCount = min(itemCount, softMeshShader.NodeCapacity);
-    if (slot == 0)
-    {
-        scene.GPUDrivenStats[0].VisibleCount = itemCount;
-    }
-    else
-    {
-        scene.ShadowGPUDrivenStats[slot - 1].VisibleCount = itemCount;
-    }
+    itemCount = min(itemCount, uint(MAX_NODES));
 
     drawArgs[slot].vertexCount = totalTri * 3;
     drawArgs[slot].instanceCount = 1;

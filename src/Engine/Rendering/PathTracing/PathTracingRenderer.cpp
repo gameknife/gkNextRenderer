@@ -57,8 +57,7 @@ namespace Vulkan::PathTracing
     void PathTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
     {
         rayTracingPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(
-            SwapChain(), "assets/shaders/Core.PathTracing.comp.slang.spv",
-            GetScene(), baseRender_.ActiveTLASHandle()));
+            SwapChain(), "assets/shaders/Core.PathTracing.comp.slang.spv", GetScene(), baseRender_.ActiveTLASHandle()));
         samplePostChain_.CreateSwapChain(SwapChain(), GetScene());
     }
 
@@ -77,8 +76,7 @@ namespace Vulkan::PathTracing
         if (!sharcUpdatePipeline_)
         {
             sharcUpdatePipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(
-                SwapChain(), "assets/shaders/Core.SharcUpdate.comp.slang.spv",
-                GetScene(), baseRender_.ActiveTLASHandle()));
+                SwapChain(), "assets/shaders/Core.SharcUpdate.comp.slang.spv", GetScene(), baseRender_.ActiveTLASHandle()));
         }
         if (!sharcResolvePipeline_)
         {
@@ -88,8 +86,7 @@ namespace Vulkan::PathTracing
         if (!sharcQueryPipeline_)
         {
             sharcQueryPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(
-                SwapChain(), "assets/shaders/Core.SharcQuery.comp.slang.spv",
-                GetScene(), baseRender_.ActiveTLASHandle()));
+                SwapChain(), "assets/shaders/Core.SharcQuery.comp.slang.spv", GetScene(), baseRender_.ActiveTLASHandle()));
         }
     }
 

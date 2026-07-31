@@ -1,7 +1,7 @@
 ---
 title: "Massive Rendering Mode 开发计划"
 category: plan
-status: 已完成
+status: 待实施
 owner: engine
 created: 2026-07-30
 last_updated: 2026-07-30
@@ -53,7 +53,7 @@ design: ../designs/massive-visibility-buffer-design.md
 - 超限场景稳定返回可诊断错误，不发生 mask 截断或 buffer overwrite；
 - 容量与 byte-size helper 有边界测试。
 
-## 阶段 1：Shader 双格式抽象与单 SPIR-V
+## 阶段 1：Shader 双格式抽象与构建变体
 
 ### 工作
 
@@ -68,10 +68,11 @@ design: ../designs/massive-visibility-buffer-design.md
    - SceneSampling；
    - SoftwareModernNoAmbient；
    - VisualDebugger。
-5. 所有入口只编译一份 SPIR-V，通过 `SoftMeshShaderResources.PrimitiveWordCount` 选择物理 record。
-6. visibility vertex/fragment 固定使用 `uint2` 接口，由 `R32_UINT` 或 `R32G32_UINT` attachment
-   决定保留的分量。
-7. LiveCoding shader hot reload 与 Default/Massive 共用同一个输出。
+5. 扩展 `assets/cmake/SlangShaders.cmake`，只为设计列出的入口编译 `.massive.spv`。
+6. 增加 shader compile smoke，确保 default 和 massive variants 都能由同一份 common contract 编译。
+7. 处理 LiveCoding shader hot reload：
+   - 优先让 watcher 同时生成 default/massive outputs；
+   - 若拆阶段，Massive benchmark 暂时强制关闭 hot reload并记录后续任务。
 
 ### 主要文件
 
@@ -89,9 +90,9 @@ design: ../designs/massive-visibility-buffer-design.md
 ### 完成标准
 
 - `rg` 不再在业务 shader 中找到 `>> 17`、`0x7FFF`、`0x1FFFF` visibility 编解码；
-- 不生成 `.massive.spv` 或容量模式宏；
-- 同一 SPIR-V 在 Default 下写/读 packed `uint`；
-- 同一 SPIR-V 在 Massive 下写/读 `uint2`。
+- 两套 SPIR-V 独立产出；
+- default SPIR-V 仍写/读单 uint；
+- massive SPIR-V 写/读 `uint2`。
 
 ## 阶段 2：模式化 GPU 资源与 pipeline 选择
 
@@ -131,7 +132,7 @@ design: ../designs/massive-visibility-buffer-design.md
 2. Massive Scene 创建 262140-capacity 独立 NodeProxy buffer；default 继续使用 SceneDynamic Nodes 区域。
 3. visible-item buffer 按 active capacity × 5 slots 分配。
 4. primitive 与 shadow primitive buffer 按 active record stride 分配和增长。
-5. Compact/Finalize/Expand 使用 runtime NodeCapacity/PrimitiveWordCount 计算 slot base、clamp 与 record stride。
+5. Compact/Finalize/Expand Massive variants 使用 runtime NodeCapacity 计算 slot base 和 clamp。
 6. Finalize 把钳制后的 item count 写入对应的 `GPUDrivenStat::VisibleCount`，定义为实际提交给 Expand 的
    visible-item 数。
 7. 所有资源尺寸使用 checked `VkDeviceSize`，在分配前记录预算。
@@ -221,7 +222,7 @@ design: ../designs/massive-visibility-buffer-design.md
 
 ### 构建
 
-新增 target/CMake/shader ABI 后执行：
+新增 target/CMake/shader variants 后执行：
 
 ```powershell
 gnb.bat build gkNextMassiveBenchmark gkNextUnitTests --reconfigure
@@ -244,7 +245,7 @@ gnb.bat shot --target gkNextMassiveBenchmark --scene MassiveAsteroidBelt.proc --
 
 增加专用 agent-validation script，至少断言：
 
-- `scene.nodeCount == 131071`（131070 个 asteroid nodes + 1 个引擎环境节点）；
+- `scene.nodeCount == 131070`；
 - 新增的 `engine.renderProxyCount == 131070`；
 - 新增的 `engine.renderCapacity == 262140`；
 - `engine.visibilityWords == 2`；
@@ -273,7 +274,7 @@ out\build\windows\bin\gkNextVisualTest.exe
 
 - 一台支持 ray query 的 Windows Vulkan GPU：Massive + TLAS；
 - 一台 `ForceNoRT`/SoftwareModernNoAmbient 路径：Massive 基础 smoke；
-- 若 CI 覆盖 macOS/Android，至少编译统一 shader 并验证不支持的 format/容量能清晰失败。
+- 若 CI 覆盖 macOS/Android，至少编译 massive variants并验证不支持的 format/容量能清晰失败。
 
 ### 文档
 
@@ -286,15 +287,15 @@ out\build\windows\bin\gkNextVisualTest.exe
 
 ## 最终验收清单
 
-- [x] Massive 默认关闭，普通应用无需修改参数。
-- [x] Default 仍是 15/17 packed uint + `R32_UINT`。
-- [x] Massive 是 `uint2` primitive + `R32G32_UINT`。
-- [x] Massive active proxy capacity 为 262140。
-- [x] SceneDynamic 默认布局未因 massive 扩容。
-- [x] 131070-node MassiveAsteroidBelt 可加载。
-- [x] GPU 实际处理/显示超过 65535 个 proxies。
-- [x] visibility、wireframe、CSM、object ID 和支持的 renderer 正确。
-- [x] TLAS 容量与 24-bit custom index 有显式检查。
-- [x] 所有 byte-size 计算和资源分配有溢出/预算诊断。
-- [x] `gkNextMassiveBenchmark` 成功返回 0，contract 失败返回非零。
-- [x] targeted build、unit tests、agent validation、visual regression 和最终 full build 通过。
+- [ ] Massive 默认关闭，普通应用无需修改参数。
+- [ ] Default 仍是 15/17 packed uint + `R32_UINT`。
+- [ ] Massive 是 `uint2` primitive + `R32G32_UINT`。
+- [ ] Massive active proxy capacity 为 262140。
+- [ ] SceneDynamic 默认布局未因 massive 扩容。
+- [ ] 131070-node MassiveAsteroidBelt 可加载。
+- [ ] GPU 实际处理/显示超过 65535 个 proxies。
+- [ ] visibility、wireframe、CSM、object ID 和支持的 renderer 正确。
+- [ ] TLAS 容量与 24-bit custom index 有显式检查。
+- [ ] 所有 byte-size 计算和资源分配有溢出/预算诊断。
+- [ ] `gkNextMassiveBenchmark` 成功返回 0，contract 失败返回非零。
+- [ ] targeted build、unit tests、agent validation、visual regression 和最终 full build 通过。

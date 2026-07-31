@@ -19,12 +19,11 @@ VertexOutput main(uint vertexIndex: SV_VertexID)
     uint slot = cascadeIdx + 1;
 
     SoftMeshShaderResources softMeshShader = scene.SoftMeshShader[0];
-    VisibilityId visibility = LoadExpandedPrimitive(
-        softMeshShader.ShadowPrim, scene.CustomData2 + vertexIndex / 3,
-        softMeshShader.PrimitiveWordCount);
+    uint* prims = (uint*)softMeshShader.ShadowPrim;
+    uint prim = prims[scene.CustomData2 + vertexIndex / 3];
     uint corner = vertexIndex % 3;
-    uint instanceIdx = visibility.instanceIdx;
-    uint triangleIdx = visibility.triangleIdx;
+    uint instanceIdx = (prim >> 17) & 0x7FFF;
+    uint triangleIdx = prim & 0x1FFFF;
 
     NodeProxy proxy = scene.Nodes[instanceIdx - 1];
     ModelData model = scene.Offsets[proxy.modelId];

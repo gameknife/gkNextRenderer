@@ -197,27 +197,19 @@ void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<vo
             {
                 SPDLOG_INFO("{}", taskContext.outputInfo.data());
 
-                try
+                const bool canRefreshExistingSwapChain = renderer_->HasSwapChain();
+                renderer_->Device().WaitIdle();
+                if (!canRefreshExistingSwapChain)
                 {
-                    const bool canRefreshExistingSwapChain = renderer_->HasSwapChain();
-                    renderer_->Device().WaitIdle();
-                    if (!canRefreshExistingSwapChain)
-                    {
-                        renderer_->DeleteSwapChain();
-                    }
-
-                    // Execute the specific GPU load logic
-                    onGpuLoad(ctx);
-
-                    CommitSceneToRenderer({.rebuildMeshBuffer = false,
-                                           .setRendererScene = false,
-                                           .createSwapChainIfMissing = !canRefreshExistingSwapChain});
+                    renderer_->DeleteSwapChain();
                 }
-                catch (const std::exception& exception)
-                {
-                    SPDLOG_ERROR("failed to commit scene [{}]: {}", sceneFileName, exception.what());
-                    RequestExit(1);
-                }
+
+                // Execute the specific GPU load logic
+                onGpuLoad(ctx);
+
+                CommitSceneToRenderer({.rebuildMeshBuffer = false,
+                                       .setRendererScene = false,
+                                       .createSwapChainIfMissing = !canRefreshExistingSwapChain});
             }
             else
             {

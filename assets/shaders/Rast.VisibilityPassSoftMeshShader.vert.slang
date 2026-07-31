@@ -6,7 +6,7 @@ import Shader.Math;
 struct VertexOutput
 {
     float4 position : SV_Position;
-    [[vk::location(0)]] nointerpolation uint2 primitive_index : PRIMITIVE_INDEX;
+    [[vk::location(0)]] nointerpolation uint primitive_index : PRIMITIVE_INDEX;
     [[vk::location(1)]] nointerpolation uint material_model : MATERIAL_MODEL;
 };
 
@@ -17,11 +17,11 @@ VertexOutput main(uint vertexIndex: SV_VertexID)
     let scene = Bindless.GetGpuscene();
 
     SoftMeshShaderResources softMeshShader = scene.SoftMeshShader[0];
-    VisibilityId visibility =
-        LoadExpandedPrimitive(softMeshShader.Prim, vertexIndex / 3, softMeshShader.PrimitiveWordCount);
+    uint* prims = (uint*)softMeshShader.Prim;
+    uint prim = prims[vertexIndex / 3];
     uint corner = vertexIndex % 3;
-    uint instanceIdx = visibility.instanceIdx;
-    uint triangleIdx = visibility.triangleIdx;
+    uint instanceIdx = (prim >> 17) & 0x7FFF;
+    uint triangleIdx = prim & 0x1FFFF;
 
     NodeProxy proxy = scene.Nodes[instanceIdx - 1];
     ModelData model = scene.Offsets[proxy.modelId];
@@ -40,6 +40,6 @@ VertexOutput main(uint vertexIndex: SV_VertexID)
     Vertex vertex = UnpackVertex(packedVertex);
     const uint materialId = FetchMaterialId(proxy, vertex.MaterialIndex);
     output.material_model = scene.GetMaterial(materialId).MaterialModel;
-    output.primitive_index = EncodeVisibilityPhysical(visibility, softMeshShader.PrimitiveWordCount);
+    output.primitive_index = prim;
     return output;
 }

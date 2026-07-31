@@ -10,6 +10,7 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
+#include "Engine/Vulkan/Device.hpp"
 
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
@@ -48,16 +49,23 @@ namespace Assets
         }
 
         maxSceneTriangles_ = static_cast<uint32_t>(grownCapacity);
+
+        // Growing destroys the current primitive/resource buffers in place. They are referenced
+        // by device address from command buffers that may still be executing (secondary render
+        // views, upscaler and transfer submissions do not share the caller's frame fence), so
+        // drain the device first. Growth is rare - a doubling step - so the stall does not show
+        // up in steady-state frames, while destroying a live allocation would page-fault the GPU
+        // on drivers that do not tolerate dangling buffer device addresses.
+        commandPool.Device().WaitIdle();
+
         const VkBufferUsageFlags flags =
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderPrim", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            sizeof(uint32_t) * renderCapacityLimits_.primitiveWordCount * maxSceneTriangles_,
-            softMeshShaderPrimBuffer_, softMeshShaderPrimBufferMemory_);
+            sizeof(uint32_t) * maxSceneTriangles_, softMeshShaderPrimBuffer_, softMeshShaderPrimBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderShadowPrim", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            sizeof(uint32_t) * renderCapacityLimits_.primitiveWordCount * maxSceneTriangles_ *
-                kSunShadowCascadeCount,
+            sizeof(uint32_t) * maxSceneTriangles_ * kSunShadowCascadeCount,
             softMeshShaderShadowPrimBuffer_, softMeshShaderShadowPrimBufferMemory_);
 
         const std::vector<Assets::SoftMeshShaderResources> resources = {
@@ -69,11 +77,6 @@ namespace Assets
                 softMeshShaderDispatchArgBuffer_->GetDeviceAddress(),
                 softMeshShaderCounterBuffer_->GetDeviceAddress(),
                 lightBuffer_ ? lightBuffer_->GetDeviceAddress() : 0,
-                massiveNodeProxyBuffer_ ? massiveNodeProxyBuffer_->GetDeviceAddress() : 0,
-                renderCapacityLimits_.renderProxyCapacity,
-                renderCapacityLimits_.primitiveWordCount,
-                0,
-                0,
             },
         };
         Vulkan::BufferUtil::CreateDeviceBuffer(
@@ -546,17 +549,14 @@ namespace Assets
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderPrim", softMeshShaderFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            sizeof(uint32_t) * renderCapacityLimits_.primitiveWordCount * maxSceneTriangles_,
-            softMeshShaderPrimBuffer_, softMeshShaderPrimBufferMemory_);
+            sizeof(uint32_t) * maxSceneTriangles_, softMeshShaderPrimBuffer_, softMeshShaderPrimBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderShadowPrim", softMeshShaderFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            sizeof(uint32_t) * renderCapacityLimits_.primitiveWordCount * maxSceneTriangles_ *
-                kSunShadowCascadeCount,
+            sizeof(uint32_t) * maxSceneTriangles_ * kSunShadowCascadeCount,
             softMeshShaderShadowPrimBuffer_, softMeshShaderShadowPrimBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderVisibleItems", softMeshShaderFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            sizeof(Assets::SoftMeshShaderVisibleItem) * renderCapacityLimits_.renderProxyCapacity *
-                kSoftMeshShaderDrawSlotCount,
+            sizeof(Assets::SoftMeshShaderVisibleItem) * kMaxIndirectDrawCount * kSoftMeshShaderDrawSlotCount,
             softMeshShaderVisibleItemBuffer_, softMeshShaderVisibleItemBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderDrawArgs", softMeshShaderFlags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
@@ -580,11 +580,6 @@ namespace Assets
                 softMeshShaderDispatchArgBuffer_->GetDeviceAddress(),
                 softMeshShaderCounterBuffer_->GetDeviceAddress(),
                 lightBuffer_->GetDeviceAddress(),
-                massiveNodeProxyBuffer_ ? massiveNodeProxyBuffer_->GetDeviceAddress() : 0,
-                renderCapacityLimits_.renderProxyCapacity,
-                renderCapacityLimits_.primitiveWordCount,
-                0,
-                0,
             },
         };
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SoftMeshShaderResources", softMeshShaderFlags, softMeshShaderResources,

@@ -215,12 +215,10 @@ namespace Vulkan::PipelineCommon
 
         // Create pipeline layout and render pass.
         pipelineLayout_.reset(new class PipelineLayout(device, managers, 1, &pushConstantRange, 1));
-        renderPass_.reset(new class RenderPass(swapChain, scene.VisibilityFormat(), depthBuffer,
-                                               VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
+        renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R32_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
         renderPass_->SetDebugName("Visibility Render Pass");
 
-        const ShaderModule vertShader(
-            device, "assets/shaders/Rast.VisibilityPassSoftMeshShader.vert.slang.spv");
+        const ShaderModule vertShader(device, "assets/shaders/Rast.VisibilityPassSoftMeshShader.vert.slang.spv");
         const ShaderModule fragShader(device, "assets/shaders/Rast.VisibilityPass.frag.slang.spv");
 
         pipeline_ = GraphicsPipelineBuilder(device)
@@ -277,8 +275,7 @@ namespace Vulkan::PipelineCommon
             colorInitialLayout, colorFinalLayout));
         renderPass_->SetDebugName("Wireframe Render Pass");
 
-        const ShaderModule vertShader(
-            device, "assets/shaders/Rast.WireframeSoftMeshShader.vert.slang.spv");
+        const ShaderModule vertShader(device, "assets/shaders/Rast.WireframeSoftMeshShader.vert.slang.spv");
         const ShaderModule fragShader(device, "assets/shaders/Rast.Wireframe.frag.slang.spv");
 
         pipeline_ = GraphicsPipelineBuilder(device)

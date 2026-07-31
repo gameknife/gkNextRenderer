@@ -13,7 +13,6 @@
     {"type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 30000},
     {"type": "wait-until", "query": "game.regimentCount", "op": "eq", "value": 24, "timeoutMs": 60000},
     {"type": "assert", "query": "game.soldierCount", "op": "eq", "value": 2400},
-    {"type": "assert", "query": "game.massiveMode", "op": "eq", "value": true},
     {"type": "assert", "query": "game.renderProxyCount", "op": "ge", "value": 14000},
     {"type": "wait-frames", "n": 20},
     {"type": "mouse-move", "to": {"norm": [0.295, 0.255]}},

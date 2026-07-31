@@ -263,8 +263,7 @@ namespace Vulkan
 
             BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, {
                 BufferMemoryBarrier::Make(scene.SoftMeshShaderDispatchArgBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT, 0, sizeof(VkDispatchIndirectCommand)),
-                BufferMemoryBarrier::Make(scene.SoftMeshShaderVisibleItemBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 0,
-                                          sizeof(Assets::SoftMeshShaderVisibleItem) * scene.RenderCapacityLimits().renderProxyCapacity),
+                BufferMemoryBarrier::Make(scene.SoftMeshShaderVisibleItemBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 0, sizeof(Assets::SoftMeshShaderVisibleItem) * Assets::Scene::kMaxIndirectDrawCount),
             });
             
             overlay_.softMeshShaderExpandPipeline->BindPipeline(
@@ -423,10 +422,6 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
 
         const auto* drawImage = GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW);
         const auto* storageImage = GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER);
-        if (drawImage->GetImage().Format() != storageImage->GetImage().Format())
-        {
-            Throw(std::runtime_error("Visibility draw/storage image formats do not match"));
-        }
         if (const auto barrier = visibilityStateTracker_.Use(
                 {.image = drawHandle,
                  .stages = PipelineCommon::ERenderStage::Transfer,
@@ -548,9 +543,8 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
                 BufferMemoryBarrier::Make(scene.SoftMeshShaderDispatchArgBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
                                           sizeof(VkDispatchIndirectCommand), sizeof(VkDispatchIndirectCommand) * Assets::Scene::kSunShadowCascadeCount),
                 BufferMemoryBarrier::Make(scene.SoftMeshShaderVisibleItemBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                                          sizeof(Assets::SoftMeshShaderVisibleItem) * scene.RenderCapacityLimits().renderProxyCapacity,
-                                          sizeof(Assets::SoftMeshShaderVisibleItem) * scene.RenderCapacityLimits().renderProxyCapacity *
-                                              Assets::Scene::kSunShadowCascadeCount),
+                                          sizeof(Assets::SoftMeshShaderVisibleItem) * Assets::Scene::kMaxIndirectDrawCount,
+                                          sizeof(Assets::SoftMeshShaderVisibleItem) * Assets::Scene::kMaxIndirectDrawCount * Assets::Scene::kSunShadowCascadeCount),
             });
 
             for (uint32_t cascade = 0; cascade < Assets::Scene::kSunShadowCascadeCount; ++cascade)
@@ -661,11 +655,10 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
              .layout = VK_IMAGE_LAYOUT_GENERAL},
             "visual debugger");
 
-        std::array<uint32_t, 6> pushConst = {
+        std::array<uint32_t, 5> pushConst = {
             imageIndex,
             uint32_t(SwapChain().OutputOffset().x), uint32_t(SwapChain().OutputOffset().y),
-            uint32_t(SwapChain().OutputExtent().width), uint32_t(SwapChain().OutputExtent().height),
-            GetScene().RenderCapacityLimits().primitiveWordCount
+            uint32_t(SwapChain().OutputExtent().width), uint32_t(SwapChain().OutputExtent().height)
         };
         overlay_.visualDebuggerPipeline->BindPipeline(commandBuffer, pushConst.data(), ActiveViewBankBase());
         vkCmdDispatch(

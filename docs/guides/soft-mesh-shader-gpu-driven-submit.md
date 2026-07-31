@@ -4,7 +4,7 @@ category: guide
 status: 现行
 owner: engine
 created: 2026-06-03
-last_updated: 2026-07-30
+last_updated: 2026-07-17
 ---
 
 # Soft Mesh Shader GPU-Driven 提交路径
@@ -13,19 +13,14 @@ last_updated: 2026-07-30
 
 ## 资源与 slot
 
-`SoftMeshShaderResources` 定义在 `assets/shaders/common/BasicTypes.slang`，保存主/shadow primitive、
-visible items、draw/dispatch args、counters、lights 与可选 Massive NodeProxy 地址，并携带
-`NodeCapacity`、`PrimitiveWordCount`。C++ 对应资源由
-`src/Engine/Assets/Core/Scene.Build.cpp` 创建。
+`SoftMeshShaderResources` 定义在 `assets/shaders/common/BasicTypes.slang`，保存六个 device address：主 primitive、shadow primitive、visible items、draw args、dispatch args、counters。C++ 对应资源由 `src/Engine/Assets/Core/Scene.Build.cpp` 创建。
 
 | Slot | 用途 |
 | ---: | --- |
 | 0 | 主 visibility 与 wireframe |
 | 1..4 | CSM cascade 0..3 |
 
-primitive buffer 按“实例展开后的三角形需求”定容，不是只看唯一模型 index 数；运行时节点增长超过容量时，
-Scene 会按需扩容。Visible item 每 slot 上限取 active render capacity：Default 为 65535，
-Massive 为 262140。
+primitive buffer 按“实例展开后的三角形需求”定容，不是只看唯一模型 index 数；运行时节点增长超过容量时，Scene 会按需扩容。Visible item 每 slot 上限为 `Scene::kMaxIndirectDrawCount`。
 
 ## 每帧流程
 
@@ -46,35 +41,14 @@ Compact 有两套等价 shader：
 
 不要根据旧 atomic-contention 计划恢复“每个可见 thread CAS 预留区间”的实现。当前 block/wave 聚合保持 gapless layout，并聚合 GPU-driven stats。
 
-Finalize 把每 slot 的 triangle/item counter 转成 `VkDrawIndirectCommand` 和
-`VkDispatchIndirectCommand`，按 active capacity 钳制，并把实际提交数写入
-`GPUDrivenStat::VisibleCount`。Expand 每个 workgroup 处理一个 visible item。
-
-Default（未传 `--massive`）写出 32-bit primitive：
+Finalize 把每 slot 的 triangle/item counter 转成 `VkDrawIndirectCommand` 和 `VkDispatchIndirectCommand`，并按实际 capacity 钳制。Expand 每个 workgroup 处理一个 visible item，写出 32-bit primitive：
 
 ```text
 bits 31..17: non-zero instance index（15 bit）
 bits 16..0 : section-local triangle index（17 bit）
 ```
 
-因此 Default 单 section 仍不得超过 131072 个三角形，可编码 non-zero instance 为 1..32767；
-Scene 在上传前显式拒绝越界。
-
-Massive（`--massive`）写出两个 uint：
-
-```text
-uint2(one-based render proxy index, section-local triangle index)
-```
-
-对应 visibility image 为 `R32G32_UINT`；Default 为 `R32_UINT`。所有业务 shader 通过
-`VisibilityId`、`LoadExpandedPrimitive`、`StoreExpandedPrimitive` 和 `Visibility.Load`
-访问，不能自行复制 15/17 bit 编解码。Massive NodeProxy 使用独立 buffer，默认
-SceneDynamic 布局不变。
-
-Default 与 Massive 共用同一套 SPIR-V。`SoftMeshShaderResources.PrimitiveWordCount` 在运行时选择
-packed `uint` 或 wide `uint2` 的 primitive/visibility 解码；visibility raster 接口固定输出 `uint2`，
-`R32_UINT` attachment 自动只保留 `.x`。因此不要恢复 `.massive.spv`、容量模式预处理宏或 pipeline
-shader-path 分支。
+因此单 section 仍不得超过 131072 个三角形，可编码 non-zero instance 为 1..32767。突破该边界必须改编码或拆分数据，不能静默依赖 mask 截断。
 
 Vertex shader 用 `SV_VertexID / 3` 取得 primitive，`% 3` 取得角点，再查 `scene.Nodes`、model offsets、index 与 static/skinned vertex。相关入口：
 
@@ -103,7 +77,6 @@ Soft-mesh scratch 当前属于 Scene，全 scheduled view 复用。多视图之�
 ```bash
 ./gnb.sh build gkNextRenderer gkNextUnitTests
 ./gnb.sh shot --scene assets/models/playground.glb
-./gnb.sh validate --script assets/agentscripts/massive-rendering-smoke.agentscript.json
 ./out/build/<preset>/bin/gkNextUnitTests
 ```
 

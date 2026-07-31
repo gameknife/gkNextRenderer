@@ -947,24 +947,6 @@ namespace Vulkan
 
     void VulkanBaseRenderer::CreateRenderTargetBank(uint32_t bankBase, const VkExtent2D extent)
     {
-        if (GetScene().RenderCapacityLimits().IsMassive())
-        {
-            VkFormatProperties properties{};
-            vkGetPhysicalDeviceFormatProperties(
-                Device().PhysicalDevice(), VK_FORMAT_R32G32_UINT, &properties);
-            constexpr VkFormatFeatureFlags required =
-                VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT |
-                VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT |
-                VK_FORMAT_FEATURE_TRANSFER_SRC_BIT |
-                VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
-            if ((properties.optimalTilingFeatures & required) != required)
-            {
-                Throw(std::runtime_error(fmt::format(
-                    "Massive mode requires R32G32_UINT optimal-tiling features {:#x}; device exposes {:#x}",
-                    required, properties.optimalTilingFeatures)));
-            }
-        }
-
         // Ensure the bindless image vector reaches into this bank's slot range.
         if (bindless_.images.size() < bankBase + Assets::Bindless::RT_COUNT)
         {
@@ -972,9 +954,8 @@ namespace Vulkan
         }
 
         CREATE_STORAGE_IMAGE(RT_SINGLE_DIFFUSE, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
-        const VkFormat visibilityFormat = GetScene().VisibilityFormat();
-        CREATE_STORAGE_IMAGE(RT_MINIGBUFFER, visibilityFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
-        CREATE_STORAGE_IMAGE(RT_MINIGBUFFER_DRAW, visibilityFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT );
+        CREATE_STORAGE_IMAGE(RT_MINIGBUFFER, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
+        CREATE_STORAGE_IMAGE(RT_MINIGBUFFER_DRAW, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT );
         CREATE_STORAGE_IMAGE(RT_OBJECTID_0, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT );
         CREATE_STORAGE_IMAGE(RT_OBJECTID_1, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
         // External temporal upscalers bind motion vectors as sampled images during their
@@ -1202,17 +1183,12 @@ namespace Vulkan
         const char* shadowGpuCullSpv = caps_.supportSubgroupCull
             ? "assets/shaders/Task.SoftMeshShaderShadowGpuCullCompactWave.comp.slang.spv"
             : "assets/shaders/Task.SoftMeshShaderShadowGpuCullCompact.comp.slang.spv";
-        overlay_.gpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(
-            *frame_.swapChain, gpuCullSpv, GetScene()));
-        overlay_.softMeshShaderFinalizePipeline.reset(new PipelineCommon::ZeroBindPipeline(
-            *frame_.swapChain, "assets/shaders/Task.SoftMeshShaderFinalize.comp.slang.spv", GetScene()));
-        overlay_.softMeshShaderExpandPipeline.reset(new PipelineCommon::ZeroBindPipeline(
-            *frame_.swapChain, "assets/shaders/Task.SoftMeshShaderExpand.comp.slang.spv", GetScene()));
-        overlay_.shadowGpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(
-            *frame_.swapChain, shadowGpuCullSpv, GetScene()));
+        overlay_.gpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, gpuCullSpv, GetScene()));
+        overlay_.softMeshShaderFinalizePipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderFinalize.comp.slang.spv", GetScene()));
+        overlay_.softMeshShaderExpandPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderExpand.comp.slang.spv", GetScene()));
+        overlay_.shadowGpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, shadowGpuCullSpv, GetScene()));
         skin_.pipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.Skinning.comp.slang.spv", GetScene()));
-        overlay_.visualDebuggerPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(
-            *frame_.swapChain, "assets/shaders/Util.VisualDebugger.comp.slang.spv", 24));
+        overlay_.visualDebuggerPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*frame_.swapChain, "assets/shaders/Util.VisualDebugger.comp.slang.spv", 20));
 
         for (const FExternalPassFactory& factory : ExternalPassFactories())
         {
@@ -3047,11 +3023,6 @@ namespace Vulkan
         for (size_t i = 0; i < nodeTrans.size(); i++)
         {
             auto& node = nodeTrans[i];
-            if (node.instanceId > 0x00FFFFFFu)
-            {
-                Throw(std::runtime_error(fmt::format(
-                    "TLAS instance custom index {} exceeds Vulkan 24-bit limit", node.instanceId)));
-            }
             const size_t blasIndex = Assets::Scene::DecodeModelIndex(node.modelId);
             if (blasIndex >= rt_->blas.size())
             {
@@ -3075,12 +3046,6 @@ namespace Vulkan
             SPDLOG_INFO("Growing TLAS instance capacity from {} for {} instances",
                         rt_->tlasInstanceCapacity, instances.size());
             CreateAccelerationStructures();
-            if (instances.size() > rt_->tlasInstanceCapacity)
-            {
-                Throw(std::runtime_error(fmt::format(
-                    "TLAS instance count {} still exceeds allocated capacity {}",
-                    instances.size(), rt_->tlasInstanceCapacity)));
-            }
         }
 
         const int instanceCount = static_cast<int>(instances.size());

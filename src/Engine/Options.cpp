@@ -65,8 +65,6 @@ Options::Options(const int argc, const char* argv[])
         ("remote-max-clients", "Maximum simultaneous Remote Play clients in --remote-multiview mode.", cxxopts::value<uint32_t>(RemoteMaxClients)->default_value("2"))
         ("remote-encoder", "Remote Play video encoder: auto or vulkan.", cxxopts::value<std::string>(RemoteEncoder)->default_value("auto"))
         ("keep-cpu-mesh-data", "Keep CPU mesh data for editor mode.", cxxopts::value<bool>(KeepCPUMeshData)->default_value("false"))
-        ("massive", "Enable Massive render capacity (wide visibility IDs; startup-only).",
-         cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
         ("update-baseline", "Update visual test baseline images from the current run.", cxxopts::value<bool>(UpdateVisualTestBaseline)->default_value("false")->implicit_value("true"))
         ("flappy-replay", "Run Flappy deterministic replay and write trace output.", cxxopts::value<bool>(FlappyReplay)->default_value("false")->implicit_value("true"))
         ("cpp-live-coding", "Enable Live++ C++ live coding when compiled in.", cxxopts::value<bool>(CppLiveCoding)->default_value("true")->implicit_value("true"))
@@ -100,11 +98,6 @@ Options::Options(const int argc, const char* argv[])
         if (result["no-shader-hotreload"].as<bool>())
         {
             ShaderHotReload = false;
-        }
-
-        if (result["massive"].as<bool>())
-        {
-            RenderCapacityMode = ERenderCapacityMode::Massive;
         }
 
         if (result["no-cpp-live-coding"].as<bool>() || AgentValidation)

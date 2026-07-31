@@ -4,7 +4,6 @@
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"
-#include "Engine/Options.hpp"
 #include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Assets/Loaders/LoaderRegistry.hpp"
 #include "Engine/Runtime/Engine.hpp"
@@ -1275,18 +1274,17 @@ namespace
             fmt::format("faceted_asteroid_{}", seed), std::move(vertices), std::move(indices), false);
     }
 
-    void BuildAsteroidBelt(Assets::EnvironmentSetting& cameraInit,
-                           std::vector<std::shared_ptr<Assets::Node>>& nodes,
-                           std::vector<Assets::Model>& models,
-                           std::vector<Assets::FMaterial>& materials,
-                           std::vector<Assets::LightObject>& lights,
-                           std::vector<Assets::AnimationTrack>& tracks,
-                           const uint32_t asteroidCount,
-                           const bool overviewFirst)
+    void AsteroidBelt(Assets::EnvironmentSetting& cameraInit,
+                      std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                      std::vector<Assets::Model>& models,
+                      std::vector<Assets::FMaterial>& materials,
+                      std::vector<Assets::LightObject>& lights,
+                      std::vector<Assets::AnimationTrack>& tracks)
     {
+        constexpr uint32_t asteroidCount = 30000;
         const std::array<float, 7> cameraTimes{0.0f, 3.5f, 7.0f, 10.5f, 14.0f, 17.5f, 21.0f};
         const std::array<vec3, 7> cameraPositions{
-            overviewFirst ? vec3(820, 330, 960) : vec3(680, 250, 800),
+            vec3(680, 250, 800),
             vec3(540, 155, 625),
             vec3(390, 72, 430),
             vec3(285, 30, 270),
@@ -1407,26 +1405,6 @@ namespace
                 fmt::format("Asteroid_{:05}", index), position, scale, static_cast<uint32_t>(nodes.size()),
                 index % modelCount, index % materialCount, true, rotation));
         }
-    }
-
-    void AsteroidBelt(Assets::EnvironmentSetting& cameraInit,
-                      std::vector<std::shared_ptr<Assets::Node>>& nodes,
-                      std::vector<Assets::Model>& models,
-                      std::vector<Assets::FMaterial>& materials,
-                      std::vector<Assets::LightObject>& lights,
-                      std::vector<Assets::AnimationTrack>& tracks)
-    {
-        BuildAsteroidBelt(cameraInit, nodes, models, materials, lights, tracks, 30000, false);
-    }
-
-    void MassiveAsteroidBelt(Assets::EnvironmentSetting& cameraInit,
-                             std::vector<std::shared_ptr<Assets::Node>>& nodes,
-                             std::vector<Assets::Model>& models,
-                             std::vector<Assets::FMaterial>& materials,
-                             std::vector<Assets::LightObject>& lights,
-                             std::vector<Assets::AnimationTrack>& tracks)
-    {
-        BuildAsteroidBelt(cameraInit, nodes, models, materials, lights, tracks, 131070, true);
     }
 
     float KilometerHeight(float x, float z)
@@ -1834,11 +1812,6 @@ namespace AppCommon
         registry.RegisterProcScene("AnimationShowcase.proc", AnimationShowcase);
         registry.RegisterProcScene("PhysicsShowcase.proc", PhysicsShowcase);
         registry.RegisterProcScene("AsteroidBelt.proc", AsteroidBelt);
-        if (GOption &&
-            GOption->RenderCapacityMode == Runtime::Config::ERenderCapacityMode::Massive)
-        {
-            registry.RegisterProcScene("MassiveAsteroidBelt.proc", MassiveAsteroidBelt);
-        }
         registry.RegisterProcScene("KilometerWorld.proc", KilometerWorld);
         registry.RegisterProcScene("TimeOfDayObservatory.proc", TimeOfDayObservatory);
         registry.RegisterProcScene("KineticWave.proc", KineticWave);

@@ -1,7 +1,7 @@
 ---
 title: "Massive Rendering Mode 与双 uint Visibility Buffer"
 category: design
-status: 现行
+status: 提案（未实现）
 owner: engine
 created: 2026-07-30
 last_updated: 2026-07-30
@@ -9,9 +9,6 @@ related_plan: ../plans/massive-rendering-mode-plan.md
 ---
 
 # Massive Rendering Mode 与双 uint Visibility Buffer
-
-> 实现状态：已落地。当前代码以 `FRenderCapacityLimits` 统一 Scene、GPU-driven、
-> visibility image 与 TLAS 容量；`gkNextMassiveBenchmark` 是宽索引路径的运行时契约测试。
 
 ## 目标
 
@@ -138,34 +135,40 @@ Massive:
 所有 shader 只能通过集中 helper 访问该数据：
 
 ```slang
-VisibilityId LoadExpandedPrimitive(uint64_t address, uint primitiveIndex, uint primitiveWordCount);
-void StoreExpandedPrimitive(
-    uint64_t address, uint primitiveIndex, VisibilityId value, uint primitiveWordCount);
+VisibilityId LoadExpandedPrimitive(uint primitiveIndex);
+void StoreExpandedPrimitive(uint primitiveIndex, VisibilityId value);
 VisibilityId LoadVisibility(int2 pixel);
 bool IsVisibilityValid(VisibilityId value);
 ```
 
-默认 helper 保持当前 15/17 编解码；Massive helper 直接 load/store `uint2`。两者由
-`SoftMeshShaderResources.PrimitiveWordCount` 在同一份 shader 中运行期选择。禁止在 renderer shader、
+默认 helper 保持当前 15/17 编解码；Massive helper 直接 load/store `uint2`。禁止在 renderer shader、
 SceneSampling、visual debugger 中继续出现手写的 `>> 17`、`0x7FFF` 或 `0x1FFFF`。
 
 `instanceIdx` 是 GPU `NodeProxy` 数组中的 one-based slot，不是持久 Scene instance ID。对象选择与 object ID
 仍从 `NodeProxy.instanceId` 取得，不改变编辑器、脚本或 Scene selection 的 ID 契约。
 
-## 单 Shader 契约
+## Shader 变体
 
-Default 与 Massive 共用同一套 SPIR-V，不生成 `.massive.spv`，也不使用容量模式相关的预处理宏。
-`SoftMeshShaderResources.PrimitiveWordCount` 是启动期写入、运行期只读的统一模式值：
+构建系统为受影响入口额外生成 `.massive.spv`，使用 `GK_MASSIVE_VISIBILITY=1`：
 
-- `1`：primitive stream 按 `uint` 访问，visibility `.x` 按 15/17 packed ID 解码；
-- `2`：primitive stream 按 `uint2` 访问，visibility `.xy` 直接作为 instance/triangle ID。
+- Compact / CompactWave 及其 shadow 版本；
+- Finalize；
+- Expand；
+- visibility vertex + fragment；
+- wireframe vertex；
+- shadow-map vertex；
+-直接读取 visibility 的 renderer entry：PathTracing、SoftwareTracing、SoftwareModern、
+  SoftwareModernNoAmbient、SHARC update/query；
+- VisualDebugger。
 
-Visibility vertex/fragment 接口固定为 `uint2`。Default 的 `R32_UINT` color attachment 只保存 `.x`，
-Massive 的 `R32G32_UINT` 保存 `.xy`；所有 storage consumer 固定通过 `RWTexture2D<uint2>` 读取，再根据
-`PrimitiveWordCount` 解码。资源格式仍由 `ERenderCapacityMode` 在启动期选择，不支持运行期切换。
+未读取 visibility 的 pass 继续复用默认 SPIR-V。CMake 的 variant 列表必须是显式清单，不能为所有 shader
+盲目构建 massive 副本。
 
-由于所有模式加载相同 SPIR-V，shader hot reload 无需维护 variant 输出，Massive benchmark 可使用正常的
-hot-reload 流程。
+renderer 初始化时按 `ERenderCapacityMode` 选择整套一致的资源格式和 shader。禁止把默认 Expand 与 massive
+visibility pipeline 混用；debug build 应用格式/stride assertion 尽早发现组合错误。
+
+Shader hot reload 需要识别同一 source 的 default/massive outputs。若首阶段暂未接入 variant-aware hot reload，
+`gkNextMassiveBenchmark` 必须显式关闭 shader hot reload 并打印原因，不能把默认 SPIR-V 热替换进 massive pipeline。
 
 ## GPU 资源布局
 
@@ -179,8 +182,8 @@ hot-reload 流程。
 二者之间仍用现有 transfer copy，barrier 状态机不改变。Massive 启动时必须查询并验证
 `VK_FORMAT_R32G32_UINT` 同时支持 color attachment、storage image、transfer source 和 transfer destination。
 
-Visibility render pass 的 attachment format 与 framebuffer image view 必须一起选择；fragment output 固定为
-`uint2`，由 attachment format 决定保留 `.x` 或 `.xy`。
+Visibility render pass 的 attachment format、fragment output 类型以及 framebuffer image view 必须一起选择，
+不可只修改 storage image。
 
 ### Primitive streams
 

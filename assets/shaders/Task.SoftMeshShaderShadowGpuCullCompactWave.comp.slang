@@ -27,7 +27,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint activeCascadeMask = scene.CustomData0;
     uint maxSceneTriangles = scene.CustomData2;
 
-    bool inRange = (DTid.x < scene.CustomData1) && (DTid.x < softMeshShader.NodeCapacity);
+    bool inRange = (DTid.x < scene.CustomData1) && (DTid.x < MAX_NODES);
     NodeProxy node;
     ModelData model;
     uint triangleCount = 0;
@@ -88,14 +88,14 @@ void main(uint3 DTid : SV_DispatchThreadID)
         {
             uint primBase = triBase  + laneTriPrefix;
             uint itemIdx  = itemBase + laneItemIndex;
-            if (primBase + triangleCount <= maxSceneTriangles && itemIdx < softMeshShader.NodeCapacity)
+            if (primBase + triangleCount <= maxSceneTriangles && itemIdx < uint(MAX_NODES))
             {
                 SoftMeshShaderVisibleItem item;
                 item.primBase = cascadeIdx * maxSceneTriangles + primBase;
                 item.instanceIdx = DTid.x + 1;
                 item.modelOffsetIdx = node.modelId;
                 item.triCount = triangleCount;
-                visibleItems[slot * softMeshShader.NodeCapacity + itemIdx] = item;
+                visibleItems[slot * MAX_NODES + itemIdx] = item;
             }
         }
     }

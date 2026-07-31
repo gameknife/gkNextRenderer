@@ -1413,14 +1413,6 @@ std::optional<Runtime::Agent::FAgentQueryValue> NextEngine::QueryAgentControl(co
         switch (GetEngineStatus()) { case NextRenderer::EApplicationStatus::Starting: return std::string("Starting"); case NextRenderer::EApplicationStatus::Running: return std::string("Running"); case NextRenderer::EApplicationStatus::Loading: return std::string("Loading"); default: return std::string("AsyncPreparing"); }
     }
     if (query == "engine.rendererType") return static_cast<int64_t>(renderer_->CurrentLogicRendererType());
-    if (query == "engine.renderProxyCount")
-        return static_cast<int64_t>(GetScene().GetRenderProxyCount());
-    if (query == "engine.renderCapacity")
-        return static_cast<int64_t>(GetScene().RenderCapacityLimits().renderProxyCapacity);
-    if (query == "engine.visibilityWords")
-        return static_cast<int64_t>(GetScene().RenderCapacityLimits().primitiveWordCount);
-    if (query == "engine.gpuDrivenVisibleCount")
-        return static_cast<int64_t>(GetScene().GetGpuDrivenStat().VisibleCount);
     if (query == "scene.nodeCount") return static_cast<int64_t>(GetScene().Nodes().size());
     if (query == "scene.sunElevation")
         return static_cast<double>(GetScene().GetEnvSettings().SunElevation);

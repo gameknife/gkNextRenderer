@@ -1,6 +1,5 @@
 {
   "battle": "greenfield",
-  "renderCapacityMode": "massive",
   "soldiersPerRegiment": 128,
   "regiments": [
     {"faction": 0, "unit": "spearman",  "position": [-125, -66], "facingDegrees": 90},

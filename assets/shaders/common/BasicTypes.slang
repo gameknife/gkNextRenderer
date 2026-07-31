@@ -93,55 +93,6 @@ public struct ALIGN_16 SoftMeshShaderVisibleItem
     public uint triCount;
 };
 
-#ifndef __cplusplus
-public struct VisibilityId
-{
-    public uint instanceIdx;
-    public uint triangleIdx;
-};
-
-public VisibilityId DecodeVisibilityPhysical(uint2 value, uint primitiveWordCount)
-{
-    if (primitiveWordCount == 2)
-    {
-        return VisibilityId(value.x, value.y);
-    }
-    return VisibilityId((value.x >> 17) & 0x7FFFu, value.x & 0x1FFFFu);
-}
-
-public uint2 EncodeVisibilityPhysical(VisibilityId value, uint primitiveWordCount)
-{
-    if (primitiveWordCount == 2)
-    {
-        return uint2(value.instanceIdx, value.triangleIdx);
-    }
-    return uint2(((value.instanceIdx & 0x7FFFu) << 17) | (value.triangleIdx & 0x1FFFFu), 0);
-}
-
-public VisibilityId LoadExpandedPrimitive(uint64_t address, uint primitiveIndex, uint primitiveWordCount)
-{
-    if (primitiveWordCount == 2)
-    {
-        return DecodeVisibilityPhysical(((uint2*)address)[primitiveIndex], primitiveWordCount);
-    }
-    return DecodeVisibilityPhysical(uint2(((uint*)address)[primitiveIndex], 0), primitiveWordCount);
-}
-
-public void StoreExpandedPrimitive(
-    uint64_t address, uint primitiveIndex, VisibilityId value, uint primitiveWordCount)
-{
-    const uint2 encoded = EncodeVisibilityPhysical(value, primitiveWordCount);
-    if (primitiveWordCount == 2)
-    {
-        ((uint2*)address)[primitiveIndex] = encoded;
-    }
-    else
-    {
-        ((uint*)address)[primitiveIndex] = encoded.x;
-    }
-}
-#endif
-
 public struct ALIGN_16 SoftMeshShaderResources
 {
     public uint64_t Prim;
@@ -151,11 +102,6 @@ public struct ALIGN_16 SoftMeshShaderResources
     public uint64_t DispatchArgs;
     public uint64_t Counters;
     public uint64_t Lights;
-    public uint64_t NodeProxies;
-    public uint NodeCapacity;
-    public uint PrimitiveWordCount;
-    public uint Reserved0;
-    public uint Reserved1;
 };
 
 public struct ALIGN_16 UniformBufferObject
@@ -569,12 +515,7 @@ public struct ALIGN_8 GPUScene
     /* Scene Node Tree */
     public property NodeProxy* Nodes
     {
-        get
-        {
-            return SoftMeshShader.NodeProxies != 0
-                ? (NodeProxy*)SoftMeshShader.NodeProxies
-                : (NodeProxy*)(SceneDynamicBase + GPU_SCENE_DYNAMIC_NODES_OFFSET);
-        }
+        get { return (NodeProxy*)(SceneDynamicBase + GPU_SCENE_DYNAMIC_NODES_OFFSET); }
     }
 
     public uint *Reorders;
@@ -685,12 +626,7 @@ public struct ALIGN_8 GPUScene
     /* Scene Node Tree */
     public property NodeProxy* Nodes
     {
-        get
-        {
-            return SoftMeshShader.NodeProxies != 0
-                ? (NodeProxy*)SoftMeshShader.NodeProxies
-                : (NodeProxy*)(Camera_SceneDynamicBase_Address.y + GPU_SCENE_DYNAMIC_NODES_OFFSET);
-        }
+        get { return (NodeProxy*)(Camera_SceneDynamicBase_Address.y + GPU_SCENE_DYNAMIC_NODES_OFFSET); }
     }
 
     /* Global Vertex Buffer */

@@ -29,7 +29,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint* counters = (uint*)softMeshShader.Counters;
     uint cap = scene.CustomData2;
 
-    bool inRange = (DTid.x < scene.CustomData1) && (DTid.x < softMeshShader.NodeCapacity);
+    bool inRange = (DTid.x < scene.CustomData1) && (DTid.x < MAX_NODES);
 
     bool shouldDraw = false;
     bool occluded = false;
@@ -79,7 +79,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     {
         uint primBase = triBase  + laneTriPrefix;
         uint itemIdx  = itemBase + laneItemIndex;
-        if (primBase + triangleCount <= cap && itemIdx < softMeshShader.NodeCapacity)
+        if (primBase + triangleCount <= cap && itemIdx < uint(MAX_NODES))
         {
             SoftMeshShaderVisibleItem item;
             item.primBase = primBase;

@@ -104,7 +104,6 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
                                                          Runtime::Config::Options& options,
                                                          NextEngine* engine)
 {
-    options.RenderCapacityMode = Runtime::Config::ERenderCapacityMode::Massive;
     Modules::Scad::Register();
     return std::make_unique<NextTotalwar::FGameInstance>(config, options, engine);
 }
@@ -115,7 +114,6 @@ namespace NextTotalwar
         : NextGameInstanceBase(config, options, engine)
     {
         ConfigureWindow(config, options, "NextTotalwar", 1600, 900, true);
-        options.RenderCapacityMode = Runtime::Config::ERenderCapacityMode::Massive;
         unitDefs_ = {{
             {EUnitType::Spearman, "spearman", "Spearmen", 8.0f, 1.45f, 10, 1.12f, 1.35f},
             {EUnitType::Swordsman, "swordsman", "Swordsmen", 8.6f, 1.45f, 10, 1.08f, 1.30f},
@@ -1372,7 +1370,6 @@ namespace NextTotalwar
         if (!sceneReady_) return false;
         const Assets::Scene& scene = GetEngine().GetScene();
         const uint32_t batches = scene.GetIndirectDrawBatchCount();
-        const auto& capacity = scene.RenderCapacityLimits();
         ImGui::SetNextWindowPos({12.0f, 12.0f}, ImGuiCond_Always);
         ImGui::SetNextWindowSize({340.0f, 0.0f}, ImGuiCond_Always);
         ImGui::Begin("NextTotalwar", nullptr,
@@ -1385,13 +1382,13 @@ namespace NextTotalwar
         size_t sharedParts = 0;
         for (const auto& ids : soldierPartModelIds_) sharedParts += ids.size();
         ImGui::Text("ScadRig shared part meshes: %zu", sharedParts);
-        const float budget = static_cast<float>(batches) /
-                             static_cast<float>(capacity.visibilityProxyCapacity);
+        // The visibility buffer packs the one-based proxy slot into 15 bits, so 32767 is the
+        // hard ceiling regardless of Scene::kMaxIndirectDrawCount.
+        constexpr uint32_t visibilityProxyBudget = 32767;
+        const float budget = static_cast<float>(batches) / static_cast<float>(visibilityProxyBudget);
         ImGui::TextColored(budget > 0.90f ? ImVec4(1, 0.2f, 0.15f, 1)
                                          : ImVec4(0.3f, 1, 0.4f, 1),
-                           "Render proxies: %u / %u (%s)", batches,
-                           capacity.visibilityProxyCapacity,
-                           capacity.IsMassive() ? "Massive" : "Default");
+                           "Render proxies: %u / %u", batches, visibilityProxyBudget);
         ImGui::ProgressBar(glm::clamp(budget, 0.0f, 1.0f), {-1.0f, 0.0f});
         ImGui::Text("FPS: %.1f   Animated this frame: %d", ImGui::GetIO().Framerate, animatorUpdates_);
         ImGui::Text("NavGrid: %s (%dx%d)", navGrid_.IsBuilt() ? "ready" : "not ready",
@@ -1795,11 +1792,7 @@ namespace NextTotalwar
         });
         registry.Add("renderProxyCount", [this]()
         {
-            return static_cast<int64_t>(GetEngine().GetScene().GetRenderProxyCount());
-        });
-        registry.Add("massiveMode", [this]()
-        {
-            return GetEngine().GetScene().RenderCapacityLimits().IsMassive();
+            return static_cast<int64_t>(GetEngine().GetScene().GetIndirectDrawBatchCount());
         });
         registry.Add("navReady", [this]() { return navGrid_.IsBuilt(); });
         registry.Add("debugVisible", [this]() { return showDebug_; });
