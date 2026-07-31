@@ -1757,7 +1757,7 @@ namespace Vulkan
         bool needAfterUpdateScene = false;
         {
             SCOPED_CPU_TIMER("update nodes");
-            needAfterUpdateScene = GetScene().NeedUpdateTLAS();
+            needAfterUpdateScene = GetScene().GPUUpdateNodes();
         }
         {
             SCOPED_CPU_TIMER("prepare gpudriven");

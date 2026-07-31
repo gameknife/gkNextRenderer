@@ -181,13 +181,13 @@ namespace Assets
         void Tick(float DeltaSeconds);
         void UpdateAllMaterials();
         void MarkMaterialsDirty() { materialDirty_ = true; }
-        bool UpdateNodes();
+        void SyncUpdateScene();
         void UpdateHDRSH();
         bool UpdateNodesGpuDriven();
         
         void StartUpdateNodes();
         bool EndUpdateNodes();
-        bool NeedUpdateTLAS();
+        bool GPUUpdateNodes();
 
         Node* GetNode(std::string name);
         const Node* GetNode(const std::string& name) const;

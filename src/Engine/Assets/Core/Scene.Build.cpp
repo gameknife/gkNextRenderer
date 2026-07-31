@@ -550,7 +550,7 @@ namespace Assets
         // the unique model geometry stored in the index buffer. Sizing them from indicesCount_
         // silently dropped later instances when several nodes shared a model.
         sceneDirty_ = true;
-        //UpdateNodesGpuDriven();
+        SyncUpdateScene();
         maxSceneTriangles_ = requiredGpuDrivenTriangleCapacity_;
 
         const VkBufferUsageFlags softMeshShaderFlags =
@@ -592,9 +592,7 @@ namespace Assets
         };
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SoftMeshShaderResources", softMeshShaderFlags, softMeshShaderResources,
                                                softMeshShaderResourcesBuffer_, softMeshShaderResourcesBufferMemory_);
-
-        UpdateAllMaterials();
-        //UpdateNodesGpuDriven();
+        
         MarkDirty();
 
         if (enableCpuAcceleration_ && ambientArenaBufferMemory_ &&

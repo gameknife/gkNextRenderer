@@ -454,7 +454,7 @@ namespace Assets
         return true;
     }
 
-    bool Scene::NeedUpdateTLAS()
+    bool Scene::GPUUpdateNodes()
     {
         if (!needUpdateTLAS)
         {
@@ -475,10 +475,11 @@ namespace Assets
         return true;
     }
     
-    bool Scene::UpdateNodes()
+    void Scene::SyncUpdateScene()
     {
         StartUpdateNodes();
-        return EndUpdateNodes();
+        EndUpdateNodes();
+        GPUUpdateNodes();
     }
 
     void Scene::UpdateHDRSH()

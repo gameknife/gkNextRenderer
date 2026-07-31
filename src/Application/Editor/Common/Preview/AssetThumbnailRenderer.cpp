@@ -333,7 +333,7 @@ namespace Vulkan
         Assets::Camera sceneCamera = camera;
         sceneCamera.name = cameraName;
         scene->SetRenderCamera(sceneCamera);
-        scene->UpdateNodes();
+        scene->SyncUpdateScene();
         return scene;
     }
 
@@ -499,7 +499,7 @@ namespace Vulkan
         camera.FarPlane = std::max(camera.NearPlane + 1.0f, distance + radius * 3.5f);
         camera.ModelView = glm::lookAt(eye, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
         thumbnailScene_->SetRenderCamera(camera);
-        thumbnailScene_->UpdateNodes();
+        thumbnailScene_->SyncUpdateScene();
         thumbnailSceneKind_ = EThumbnailKind::Mesh;
         thumbnailSceneReady_ = true;
     }
@@ -570,7 +570,7 @@ namespace Vulkan
                 materialPreviewScene_->Materials()[0] = materialPreview_;
             }
             materialPreviewScene_->UpdateAllMaterials();
-            materialPreviewScene_->UpdateNodes();
+            materialPreviewScene_->SyncUpdateScene();
             materialPreviewDirty_ = false;
         }
 
@@ -695,7 +695,7 @@ namespace Vulkan
         }
 
         thumbnailScene_->UpdateAllMaterials();
-        thumbnailScene_->UpdateNodes();
+        thumbnailScene_->SyncUpdateScene();
         thumbnailScene_->UpdateHDRSH();
         const Assets::UniformBufferObject previewCamera = BuildViewCameraUbo({
             .scene = *thumbnailScene_,
