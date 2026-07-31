@@ -4,21 +4,21 @@ category: project
 status: 已实现
 owner: NextTotalwar
 created: 2026-07-30
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 ---
 
 # NextTotalwar — 类全面战争 lowpoly 实时战略 MVP
 
-> **实现状态（2026-07-30）**：MVP 已落地并通过定向构建、阵型/rig 单测、
+> **实现状态（2026-07-31）**：行军 MVP 已落地并通过定向构建、阵型/rig 单测、
 > SCAD catalog、截图和选择/行军 AgentScript。现行代码导览见
 > [AGENT_GUIDE/NextTotalwar.md](../../../AGENT_GUIDE/NextTotalwar.md)。
-
-> **Massive 扩军修订（2026-07-30）**：引擎现已提供启动期 Massive render capacity，
-> NextTotalwar 固定启用该模式。当前运行规模从原始 MVP 基线升级为双方各 12 个 regiment、
-> 每 regiment 128 人，共 24 个 regiment / 3,072 名 ScadRig 士兵。每兵种仍只注入一份
-> 6-part mesh，预计角色 render proxy 为 73,728，加场景后仍低于 Massive 的 262,140 上限。
-> 下文保留的 768 人、32,767 proxy 内容是原始 MVP 决策背景；实现与验收以本修订及
-> [Massive Rendering Mode 设计](../../designs/massive-visibility-buffer-design.md)为准。
+>
+> **当前规模校准**：源代码为双方各 12 个 regiment、每队 100 人，共 24 队/2,400 人；
+> 当前没有启用旧扩军实验的 Massive mode，可见项仍受约 32,767 编码预算约束。下文保留的
+> 768 人估算和 §10 实测是原始 MVP 的历史决策背景，当前事实以代码导览和源码常量为准。
+> 固定步长近战、减员和战斗特效后来已部分实现；士气、AI、弓兵远程、胜负和产品 UI 的后续范围见
+> [基础战斗循环产品化设计](nexttotalwar-productization-design.md) 与
+> [开发计划](nexttotalwar-productization-development-plan.md)。
 
 > 本文把 **kit_overhill**（低模山地零件库）、**gk_terrain**（可行走过程地形）、**ScadRig**（刚体骨骼角色 + 动作）、**FNavGrid**（A\* 寻路）当作既有基础设施，在其上设计一个 target 名为 `NextTotalwar` 的新子项目：俯视视角、lowpoly 画风、"全面战争"战场玩法的实时战略游戏。
 >
@@ -514,7 +514,10 @@ gnb.bat validate --script assets/agentscripts/nexttotalwar-march.agentscript.jso
 
 ---
 
-## 10. MVP 实测记录（2026-07-30）
+## 10. 原始 MVP 实测记录（2026-07-30，历史基线）
+
+> 本节记录扩军和战斗实现之前的 12 队/768 人版本，只用于解释原始技术取舍，
+> 不是当前规模、渲染器或性能结论。
 
 - 尖刀 A：运行时采用“每兵种一份共享 mesh + 每士兵实例节点”，3 个 model
   分别供 256 名士兵复用；阵营/部队色由逐节点 material 选择。

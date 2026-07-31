@@ -4,7 +4,7 @@ category: project
 status: 已实现
 owner: NextDayz
 created: 2026-07-21
-last_updated: 2026-07-21
+last_updated: 2026-07-31
 ---
 
 # NextDayz — 类 DayZ 生存射击 MVP 设计与开发步骤
@@ -13,6 +13,9 @@ last_updated: 2026-07-21
 >
 > MVP 与复杂 3C 均已实现。蹲姿、四方向三步态、分层瞄准/后坐力和 Loot 动作的现行架构
 > 以 [NextDayz 复杂 3C 与 ScadRig 分层动画设计](nextdayz-3c-scadrig-design.md) 为准。
+> 僵尸、饥饿/口渴、容量衣物和物资刷新属于 MVP 之后的产品化范围，见
+> [PVE 生存循环产品化设计](nextdayz-productization-design.md) 与
+> [开发计划](nextdayz-productization-development-plan.md)。
 
 ## 0. MVP 范围界定
 

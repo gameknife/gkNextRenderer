@@ -1,13 +1,18 @@
 ---
 title: "NextTotalwar 战斗 MVP 设计（近战结算 / 士气溃逃 / 指挥官 AI）"
 category: project
-status: 计划中
+status: 部分实现（C0～C2）
 owner: NextTotalwar
 created: 2026-07-30
-last_updated: 2026-07-30
+last_updated: 2026-07-31
 ---
 
 # NextTotalwar — 战斗 MVP 设计
+
+> **2026-07-31 现状校准**：固定步长近战、接战/配对、伤害/死亡、闪白、尸体和血迹池已经实现，
+> 对应本文 C0～C2；士气推进/溃逃/胜负、指挥官 AI 和 C5 收口尚未实现。后续产品化范围、弓兵远程、
+> 玩家阵营边界和 UI 以 [基础战斗循环产品化设计](nexttotalwar-productization-design.md) 与
+> [开发计划](nexttotalwar-productization-development-plan.md) 为准，本文不再作为独立执行顺序。
 
 > **前置**：行军 MVP 已实现（选择、定向命令、部队级 A\*、阵型槽位跟随、地形贴合），
 > 见 [nexttotalwar-mvp-design.md](nexttotalwar-mvp-design.md) 与
