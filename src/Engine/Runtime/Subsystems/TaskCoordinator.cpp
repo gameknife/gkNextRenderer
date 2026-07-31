@@ -33,6 +33,11 @@ TaskThread::TaskThread(std::string threadName) : threadName_(std::move(threadNam
                 // sync add to mainthread complete queue
                 TaskCoordinator::GetInstance()->MarkTaskComplete(task);
                 busy_.store(false);
+                {
+                    std::lock_guard<std::mutex> lock(completedTaskMutex_);
+                    ++completedTaskCount_;
+                }
+                completedTaskCondition_.notify_all();
             }
             else
             {
@@ -58,6 +63,10 @@ TaskCoordinator::~TaskCoordinator()
         thread.reset();
     }
     for (auto& thread : lowThreads_)
+    {
+        thread.reset();
+    }
+    for (auto& thread : namedThreadPool_)
     {
         thread.reset();
     }
@@ -101,6 +110,22 @@ uint32_t TaskCoordinator::AddParralledTask(ResTask::TaskFunc taskFunc, ResTask::
     return task.task_id;
 }
 
+uint32_t TaskCoordinator::AddNamedTask(
+    ENamedTaskThread namedThread, ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc)
+{
+    static std::atomic<uint32_t> taskId = 0;
+    ResTask task;
+    task.task_id = taskId.fetch_add(1, std::memory_order_relaxed);
+    task.task_func = std::move(taskFunc);
+    task.complete_func = std::move(completeFunc);
+
+    const size_t namedThreadIndex = static_cast<size_t>(namedThread);
+    assert(namedThreadIndex < namedThreadPool_.size());
+    namedThreadPool_[namedThreadIndex]->EnqueueTask(std::move(task));
+
+    return task.task_id;
+}
+
 void TaskCoordinator::WaitForAllParralledTask()
 {
     while( parralledTaskQueue_.size() > 0 )
@@ -114,6 +139,13 @@ void TaskCoordinator::WaitForAllParralledTask()
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(0));
     }
+}
+
+void TaskCoordinator::WaitForNamedTask(ENamedTaskThread namedThread)
+{
+    const size_t namedThreadIndex = static_cast<size_t>(namedThread);
+    assert(namedThreadIndex < namedThreadPool_.size());
+    namedThreadPool_[namedThreadIndex]->WaitForAllTasks();
 }
 
 void TaskCoordinator::WaitForAllTasks()
@@ -212,6 +244,9 @@ TaskCoordinator::TaskCoordinator()
     {
         lowThreads_.push_back(std::make_unique<TaskThread>("TaskCoordinator Parallel " + std::to_string(i)));
     }
+
+    namedThreadPool_[static_cast<size_t>(ENamedTaskThread::SCENE_UPDATE)] =
+        std::make_unique<TaskThread>("TaskCoordinator Scene Update");
 }
 
 bool TaskCoordinator::IsAllParralledTaskComplete()
@@ -224,6 +259,13 @@ bool TaskCoordinator::IsAllParralledTaskComplete()
         }
     }
     return true;
+}
+
+bool TaskCoordinator::IsNamedTaskComplete(ENamedTaskThread namedThread) const
+{
+    const size_t namedThreadIndex = static_cast<size_t>(namedThread);
+    assert(namedThreadIndex < namedThreadPool_.size());
+    return namedThreadPool_[namedThreadIndex]->IsIdle();
 }
 
 bool TaskCoordinator::IsAllTaskComplete()
@@ -247,6 +289,14 @@ bool TaskCoordinator::IsAllTaskComplete()
     }
 
     for (auto& thread : lowThreads_)
+    {
+        if (!thread->IsIdle() || thread->taskQueue_.size() > 0)
+        {
+            return false;
+        }
+    }
+
+    for (auto& thread : namedThreadPool_)
     {
         if (!thread->IsIdle() || thread->taskQueue_.size() > 0)
         {

@@ -137,7 +137,7 @@ namespace Assets
         return scale;
     }
 
-    bool Node::TickVelocity()
+    void Node::SyncPhysics()
     {
         auto* physComp = physicsComponent_;
         if (physComp && physComp->GetMobility() == ENodeMobility::Dynamic)
@@ -159,7 +159,10 @@ namespace Assets
                 RecalcTransform(true);
             }
         }
-        
+    }
+
+    bool Node::TickVelocity()
+    {
         combinedPrevTransform_ = prevTransform_ * glm::inverse(transform_);
         prevTransform_ = transform_;
 

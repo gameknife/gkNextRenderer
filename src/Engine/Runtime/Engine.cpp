@@ -686,6 +686,10 @@ bool NextEngine::Tick(bool forcingDelta)
         }
 
         TickHotReload();
+        
+        
+        
+        // 这里是一帧tick的开始，这里开始scene nodes可能会被操纵，在这里要把所有nodes的线程更新完成并准备好提交GPU
 
         // Scene Update
         if (scene_)
@@ -754,6 +758,7 @@ bool NextEngine::Tick(bool forcingDelta)
             }
         }
 
+        // 到这里，这一帧的nodes操作已经结束，这里可以发起Scene Nodes的多线程更新
         {
             SCOPED_CPU_TIMER("draw frame");
             if (ShouldCaptureScreenShotThisFrame())

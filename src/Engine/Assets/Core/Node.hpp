@@ -57,6 +57,7 @@ namespace Assets
 
         uint32_t GetInstanceId() const { return instanceId_; }
         void SetInstanceId(uint32_t id) { instanceId_ = id; }
+        void SyncPhysics();
         bool TickVelocity();
 
         void SetParent(std::shared_ptr<Node> parent);
