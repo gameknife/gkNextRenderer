@@ -143,7 +143,7 @@ namespace Assets
         const uint32_t GetLightCount() const { return lightCount_; }
         const uint32_t GetIndicesCount() const { return indicesCount_; }
         const uint32_t GetVertexCount() const { return vertexCount_; }
-        const uint32_t GetIndirectDrawBatchCount() const { return indirectDrawBatchCount_; }
+        const uint32_t GetIndirectDrawBatchCount() const { return indirectDrawBatchCountBackup_; }
         const uint32_t GetMaxSceneTriangles() const { return maxSceneTriangles_; }
         size_t GetNodeCount() const { return nodes_.size(); }
         size_t GetModelCount() const { return models_.size(); }
@@ -184,6 +184,10 @@ namespace Assets
         bool UpdateNodes();
         void UpdateHDRSH();
         bool UpdateNodesGpuDriven();
+        
+        void StartUpdateNodes();
+        bool EndUpdateNodes();
+        bool NeedUpdateTLAS();
 
         Node* GetNode(std::string name);
         const Node* GetNode(const std::string& name) const;
@@ -198,7 +202,7 @@ namespace Assets
         void MarkTransformDirty();
         void MarkSelectionDirty();
 
-        std::vector<NodeProxy>& GetNodeProxies() { return nodeProxies; }
+        std::vector<NodeProxy>& GetNodeProxies() { return nodeProxiesBackup; }
 
         void OverrideModelView(glm::mat4& OutMatrix);
 
@@ -369,6 +373,7 @@ namespace Assets
         uint32_t indicesCount_{};
         uint32_t vertexCount_{};
         uint32_t indirectDrawBatchCount_{};
+        uint32_t indirectDrawBatchCountBackup_{};
         uint32_t maxSceneTriangles_{1};
         uint32_t requiredGpuDrivenTriangleCapacity_{1};
 
@@ -386,6 +391,8 @@ namespace Assets
         SceneRebuildProfile lastRebuildProfile_{};
 
         std::vector<NodeProxy> nodeProxies;
+        std::vector<NodeProxy> nodeProxiesBackup;
+        bool nodeProxyUpdatePending_ = false;
 
         glm::mat4 overrideModelView;
         bool requestOverrideModelView = false;
@@ -421,5 +428,7 @@ namespace Assets
         void CacheEnvironmentComponentFromNode(Node* node);
 
         Assets::GPUScene BuildGPUScene(uint32_t imageIndex, uint32_t viewBankBase) const;
+        
+        bool needUpdateTLAS = false;
     };
 } // namespace Assets

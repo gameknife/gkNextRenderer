@@ -403,7 +403,7 @@ namespace Assets
         NextEngine::GetInstance()->SetProgressiveRendering(false);
     }
 
-    bool Scene::UpdateNodes()
+    void Scene::StartUpdateNodes()
     {
         UpdateLights();
         if (NextEngine::GetInstance()->GetShowFlags().DebugDraw_AreaLights)
@@ -435,8 +435,50 @@ namespace Assets
             materialDirty_ = false;
             UpdateAllMaterials();
         }
+        
+        UpdateNodesGpuDriven();
+    }
 
-        return UpdateNodesGpuDriven();
+    bool Scene::EndUpdateNodes()
+    {
+        if (!nodeProxyUpdatePending_)
+        {
+            return false;
+        }
+
+        Tasks::TaskCoordinator::GetInstance()->WaitForNamedTask(Tasks::ENamedTaskThread::SCENE_UPDATE);
+        nodeProxyUpdatePending_ = false;
+        nodeProxies.swap(nodeProxiesBackup);
+        std::swap(indirectDrawBatchCount_, indirectDrawBatchCountBackup_);
+        needUpdateTLAS = true;
+        return true;
+    }
+
+    bool Scene::NeedUpdateTLAS()
+    {
+        if (!needUpdateTLAS)
+        {
+            return false;
+        }
+
+        if (!nodeProxiesBackup.empty())
+        {
+            SCOPED_CPU_TIMER("upload nodeproxy");
+            NodeProxy* data = reinterpret_cast<NodeProxy*>(
+                sceneDynamicBufferMemory_->Map(
+                    Assets::GPU_SCENE_DYNAMIC_NODES_OFFSET, sizeof(NodeProxy) * nodeProxiesBackup.size()));
+            std::memcpy(data, nodeProxiesBackup.data(), nodeProxiesBackup.size() * sizeof(NodeProxy));
+            sceneDynamicBufferMemory_->Unmap();
+        }
+
+        needUpdateTLAS = false;
+        return true;
+    }
+    
+    bool Scene::UpdateNodes()
+    {
+        StartUpdateNodes();
+        return EndUpdateNodes();
     }
 
     void Scene::UpdateHDRSH()
@@ -464,6 +506,9 @@ namespace Assets
                 nodeProxies.clear();
                 indirectDrawBatchCount_ = 0;
 
+                auto sceneNodesUpdateTask =
+            [this](Tasks::ResTask& task)
+            {
                 uint64_t expandedTriangleCapacity = 0;
                 uint32_t currentJointOffset = 0;
                 for (auto& node : nodes_)
@@ -537,22 +582,14 @@ namespace Assets
                 }
                 requiredGpuDrivenTriangleCapacity_ =
                     std::max<uint32_t>(1u, static_cast<uint32_t>(expandedTriangleCapacity));
-            }
-
-            if (!nodeProxies.empty())
-            {
-                {
-                    SCOPED_CPU_TIMER("upload nodeproxy");
-                    NodeProxy* data = reinterpret_cast<NodeProxy*>(
-                        sceneDynamicBufferMemory_->Map(
-                            Assets::GPU_SCENE_DYNAMIC_NODES_OFFSET, sizeof(NodeProxy) * nodeProxies.size()));
-                    std::memcpy(data, nodeProxies.data(), nodeProxies.size() * sizeof(NodeProxy));
-                    sceneDynamicBufferMemory_->Unmap();
-                }
+            };
+                
+                nodeProxyUpdatePending_ = true;
+                Tasks::TaskCoordinator::GetInstance()->AddNamedTask(
+                    Tasks::ENamedTaskThread::SCENE_UPDATE, sceneNodesUpdateTask);
             }
             return true;
         }
         return false;
     }
-
 }

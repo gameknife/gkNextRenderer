@@ -101,7 +101,11 @@ namespace Assets
         hoveredId_ = SceneSelectionState::invalidNodeId;
         lockedIds_.clear();
         nodeProxies.clear();
+        nodeProxiesBackup.clear();
+        nodeProxyUpdatePending_ = false;
+        needUpdateTLAS = false;
         indirectDrawBatchCount_ = 0;
+        indirectDrawBatchCountBackup_ = 0;
         indicesCount_ = 0;
         vertexCount_ = 0;
         lightCount_ = 0;
@@ -233,7 +237,11 @@ namespace Assets
         lastRebuildProfile_ = {};
 
         nodeProxies.clear();
+        nodeProxiesBackup.clear();
+        nodeProxyUpdatePending_ = false;
+        needUpdateTLAS = false;
         indirectDrawBatchCount_ = 0;
+        indirectDrawBatchCountBackup_ = 0;
         indicesCount_ = 0;
         vertexCount_ = 0;
         lightCount_ = 0;
@@ -542,7 +550,7 @@ namespace Assets
         // the unique model geometry stored in the index buffer. Sizing them from indicesCount_
         // silently dropped later instances when several nodes shared a model.
         sceneDirty_ = true;
-        UpdateNodesGpuDriven();
+        //UpdateNodesGpuDriven();
         maxSceneTriangles_ = requiredGpuDrivenTriangleCapacity_;
 
         const VkBufferUsageFlags softMeshShaderFlags =
@@ -586,7 +594,7 @@ namespace Assets
                                                softMeshShaderResourcesBuffer_, softMeshShaderResourcesBufferMemory_);
 
         UpdateAllMaterials();
-        UpdateNodesGpuDriven();
+        //UpdateNodesGpuDriven();
         MarkDirty();
 
         if (enableCpuAcceleration_ && ambientArenaBufferMemory_ &&

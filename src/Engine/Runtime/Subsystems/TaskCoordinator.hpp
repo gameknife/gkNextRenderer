@@ -239,7 +239,7 @@ class TaskCoordinator;
 class TaskThread
 {
 public:
-    explicit TaskThread(std::string threadName = {});
+    explicit TaskThread(std::string threadName = {}, bool highPriority = false);
    
     ~TaskThread()
     {
@@ -275,6 +275,7 @@ public:
     std::unique_ptr<event_signal> complete_;
     std::unique_ptr<std::thread> thread_;
     std::string threadName_;
+    bool highPriority_ = false;
     tsqueue<ResTask> taskQueue_;
     Tasks::Detail::atomic_acq_rel<bool> busy_{ false };
     std::atomic<uint64_t> submittedTaskCount_{ 0 };

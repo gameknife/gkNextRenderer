@@ -238,7 +238,8 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
         [this, request](SceneLoadContext& ctx)
         {
             const auto timer = std::chrono::high_resolution_clock::now();
-
+            
+            Tasks::TaskCoordinator::GetInstance()->WaitForAllTasks();
             PrepareRendererForSceneMutation();
             gameInstance_->BeforeSceneRebuild(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
 

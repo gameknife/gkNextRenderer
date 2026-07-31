@@ -1,16 +1,22 @@
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 
 #include <chrono>
+#include <SDL3/SDL_thread.h>
 
 namespace Tasks
 {
 
-TaskThread::TaskThread(std::string threadName) : threadName_(std::move(threadName))
+TaskThread::TaskThread(std::string threadName, bool highPriority)
+    : threadName_(std::move(threadName)), highPriority_(highPriority)
 {
     complete_.reset(new event_signal());
     terminate_.reset(new event_signal());
     complete_->set();
     thread_.reset(new std::thread([this] {
+        if (highPriority_ && !SDL_SetCurrentThreadPriority(SDL_THREAD_PRIORITY_HIGH))
+        {
+            spdlog::warn("Failed to set high priority for thread '{}': {}", threadName_, SDL_GetError());
+        }
 #if WITH_SUPERLUMINAL
         if (!threadName_.empty())
         {
@@ -246,7 +252,7 @@ TaskCoordinator::TaskCoordinator()
     }
 
     namedThreadPool_[static_cast<size_t>(ENamedTaskThread::SCENE_UPDATE)] =
-        std::make_unique<TaskThread>("TaskCoordinator Scene Update");
+        std::make_unique<TaskThread>("TaskCoordinator Scene Update", true);
 }
 
 bool TaskCoordinator::IsAllParralledTaskComplete()

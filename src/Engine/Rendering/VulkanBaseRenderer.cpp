@@ -1753,6 +1753,24 @@ namespace Vulkan
         // completed so the stats readback reflects finished primitives. Runtime
         // node creation can grow the expanded primitive count, so capacity is
         // re-checked against the freshly computed requirement right after.
+        
+        bool needAfterUpdateScene = false;
+        {
+            SCOPED_CPU_TIMER("update nodes");
+            needAfterUpdateScene = GetScene().NeedUpdateTLAS();
+        }
+        {
+            SCOPED_CPU_TIMER("prepare gpudriven");
+            if (GetScene().EnsureGpuDrivenBufferCapacity(*ctx_.commandPool))
+            {
+                needAfterUpdateScene = true;
+            }
+        }
+        if (needAfterUpdateScene)
+        {
+            AfterUpdateScene();
+        }        
+        
         {
             SCOPED_CPU_TIMER("update uniform");
             UpdateUniformBuffer(frame_.currentImageIndex);
@@ -1904,24 +1922,7 @@ namespace Vulkan
             upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::PresentStart,
                                  frame_.streamlineFrameToken);
         }
-        
-        bool needAfterUpdateScene = false;
-        {
-            SCOPED_CPU_TIMER("update nodes");
-            needAfterUpdateScene = GetScene().UpdateNodes();
-        }
-        {
-            SCOPED_CPU_TIMER("prepare gpudriven");
-            if (GetScene().EnsureGpuDrivenBufferCapacity(*ctx_.commandPool))
-            {
-                needAfterUpdateScene = true;
-            }
-        }
-        if (needAfterUpdateScene)
-        {
-            AfterUpdateScene();
-        }        
-        
+
         {
             SCOPED_CPU_TIMER("present");
             if (!FrameSubmission::Present(*this, renderFinishedSemaphore))
