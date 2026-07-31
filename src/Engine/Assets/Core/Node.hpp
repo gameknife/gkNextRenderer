@@ -57,7 +57,7 @@ namespace Assets
 
         uint32_t GetInstanceId() const { return instanceId_; }
         void SetInstanceId(uint32_t id) { instanceId_ = id; }
-        bool TickVelocity(glm::mat4& combinedTS);
+        bool TickVelocity();
 
         void SetParent(std::shared_ptr<Node> parent);
         void ClearParent();
@@ -69,7 +69,7 @@ namespace Assets
 
         const std::set< std::shared_ptr<Node> >& Children() const { return children_; }
 
-        NodeProxy GetNodeProxy() const;
+        void GetNodeProxy(NodeProxy& proxy) const;
         Runtime::RenderComponent* GetRenderComponent() const { return renderComponent_; }
 
         // New Component System
@@ -195,6 +195,7 @@ namespace Assets
         glm::mat4 localTransform_;
         glm::mat4 transform_;
         glm::mat4 prevTransform_;
+        glm::mat4 combinedPrevTransform_;
 
         uint32_t instanceId_;
 

@@ -137,7 +137,7 @@ namespace Assets
         return scale;
     }
 
-    bool Node::TickVelocity(glm::mat4& combinedTS)
+    bool Node::TickVelocity()
     {
         auto* physComp = physicsComponent_;
         if (physComp && physComp->GetMobility() == ENodeMobility::Dynamic)
@@ -160,7 +160,7 @@ namespace Assets
             }
         }
         
-        combinedTS = prevTransform_ * glm::inverse(transform_);
+        combinedPrevTransform_ = prevTransform_ * glm::inverse(transform_);
         prevTransform_ = transform_;
 
         constexpr float transformEpsilon = 0.001f;
@@ -170,7 +170,7 @@ namespace Assets
         {
             for (glm::length_t row = 0; row < 4; ++row)
             {
-                if (glm::abs(combinedTS[column][row] - identity[column][row]) > transformEpsilon)
+                if (glm::abs(combinedPrevTransform_[column][row] - identity[column][row]) > transformEpsilon)
                 {
                     moving = true;
                     break;
@@ -182,7 +182,7 @@ namespace Assets
             return true;
         }
 
-        combinedTS = identity;
+        combinedPrevTransform_ = identity;
         return false;
     }
 
@@ -219,25 +219,24 @@ namespace Assets
         children_.erase(child);
     }
 
-    NodeProxy Node::GetNodeProxy() const
+    void Node::GetNodeProxy(NodeProxy& proxy) const
     {
-        NodeProxy proxy;
         proxy.instanceId = instanceId_;
-        proxy.worldTS = WorldTransform();
+        proxy.worldTS = transform_;
+        proxy.combinedPrevTS = combinedPrevTransform_;
         proxy.reserved1 = 0;
         proxy.reserved2 = 0;
         
-        const Runtime::RenderComponent* renderComp = renderComponent_;
-        if (renderComp)
+        if (renderComponent_)
         {
-            proxy.modelId = renderComp->GetModelId();
-            proxy.visible = renderComp->GetRenderParticipationMask();
-            const auto& mats = renderComp->GetMaterials();
+            proxy.modelId = renderComponent_->GetModelId();
+            proxy.visible = renderComponent_->GetRenderParticipationMask();
+            const auto& mats = renderComponent_->GetMaterials();
             for ( int i = 0; i < 16; i++ )
             {
                 proxy.matId[i] = mats[i];
             }
-            proxy.skinId = renderComp->GetSkinIndex();
+            proxy.skinId = renderComponent_->GetSkinIndex();
         }
         else
         {
@@ -246,11 +245,8 @@ namespace Assets
              for ( int i = 0; i < 16; i++ ) proxy.matId[i] = 0;
              proxy.skinId = -1;
         }
-
         proxy.jointMatrixOffset = 0; // Default
         proxy.excludeFromAS = 0; // Default
-
-        return proxy;
     }
 
     Node::Node(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t instanceId):

@@ -289,16 +289,19 @@ namespace Assets
                     }
                 }
 
-                if (Node* cameraNode = GetNode(renderCamera_.NodeName_))
+                if (HasCameraAnimation())
                 {
-                    const glm::vec3 translation = cameraNode->WorldTranslation();
-                    const glm::quat rotation = cameraNode->WorldRotation();
-                    overrideModelView = glm::lookAtRH(
-                        translation,
-                        translation + rotation * glm::vec3(0.0f, 0.0f, -1.0f),
-                        rotation * glm::vec3(0.0f, 1.0f, 0.0f));
-                    renderCamera_.ModelView = overrideModelView;
-                    requestOverrideModelView = true;
+                    if (Node* cameraNode = GetNode(renderCamera_.NodeName_))
+                    {
+                        const glm::vec3 translation = cameraNode->WorldTranslation();
+                        const glm::quat rotation = cameraNode->WorldRotation();
+                        overrideModelView = glm::lookAtRH(
+                            translation,
+                            translation + rotation * glm::vec3(0.0f, 0.0f, -1.0f),
+                            rotation * glm::vec3(0.0f, 1.0f, 0.0f));
+                        renderCamera_.ModelView = overrideModelView;
+                        requestOverrideModelView = true;
+                    }
                 }
             }
         }
@@ -469,11 +472,9 @@ namespace Assets
                     auto* render = node->GetRenderComponent();
                     if (render && render->IsDrawable())
                     {
-                        glm::mat4 combined {};
-                        if (node->TickVelocity(combined))
+                        if (node->TickVelocity())
                         {
                             sceneDirty_ = true;
-                            // MarkDirty();
                         }
 
                         auto model = GetModel(render->GetModelId());
@@ -487,8 +488,8 @@ namespace Assets
                                 : instanceId;
                             const uint32_t outlineFlags = render->GetOutlineFlags();
                             const uint32_t selectedBit =
-                                (selectionState_.IsSelected(editableInstanceId) ||
-                                 (outlineFlags & Runtime::RenderOutlineFlags::selected) != 0u) ? 1u : 0u;
+                            (selectionState_.IsSelected(editableInstanceId) ||
+                             (outlineFlags & Runtime::RenderOutlineFlags::selected) != 0u) ? 1u : 0u;
                             const uint32_t hoveredBit =
                                 (hoveredId_ == editableInstanceId || (outlineFlags & Runtime::RenderOutlineFlags::hovered) != 0u) ? 1u : 0u;
                             const uint32_t lockedBit =
@@ -497,6 +498,7 @@ namespace Assets
                             const uint32_t dangerBit =
                                 ((outlineFlags & Runtime::RenderOutlineFlags::danger) != 0u) ? 1u : 0u;
                             const uint32_t stateBits = hoveredBit | (lockedBit << 1u) | (dangerBit << 2u);
+                            
                             if (auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
                             {
                                 nodeJointOffset = currentJointOffset;
@@ -515,14 +517,14 @@ namespace Assets
                                 }
                                 expandedTriangleCapacity += offsets_[encodedModelSection].indexCount / 3u;
 
-                                NodeProxy proxy = node->GetNodeProxy();
-                                proxy.combinedPrevTS = combined;
+                                NodeProxy proxy;
+                                node->GetNodeProxy(proxy);
                                 proxy.modelId = encodedModelSection;
                                 proxy.excludeFromAS = section == 0 ? 0 : 1;
                                 proxy.reserved1 = selectedBit;
                                 proxy.reserved2 = stateBits;
                                 proxy.jointMatrixOffset = nodeJointOffset;
-                                nodeProxies.push_back(proxy);
+                                nodeProxies.emplace_back(std::move(proxy));
                                 indirectDrawBatchCount_++;
                             }
                         }
