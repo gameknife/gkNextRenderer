@@ -369,8 +369,10 @@ private:
     std::vector< std::unique_ptr<TaskThread> > threads_;
     // low-level thread, use for parallel task
     std::vector< std::unique_ptr<TaskThread> > lowThreads_;
-    // One serial worker per named workload that must not contend with the general worker pools.
-    std::array<std::unique_ptr<TaskThread>, static_cast<size_t>(ENamedTaskThread::COUNT)> namedThreadPool_;
+    // Dedicated worker groups for named workloads that must not contend with the general worker pools.
+    std::array<std::vector<std::unique_ptr<TaskThread>>, static_cast<size_t>(ENamedTaskThread::COUNT)>
+        namedThreadPools_;
+    std::array<std::atomic<uint32_t>, static_cast<size_t>(ENamedTaskThread::COUNT)> namedThreadCursors_{};
     tsqueue<ResTask> mainthreadTaskQueue_;
     tsqueue<ResTask> completeTaskQueue_;
     tsqueue<ResTask> parralledTaskQueue_;

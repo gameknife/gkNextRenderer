@@ -535,12 +535,10 @@ namespace Assets
             return false;
         }
 
-        auto* taskCoordinator = Tasks::TaskCoordinator::GetInstance();
         while (nodeProxyTasksRemaining_.load(std::memory_order_acquire) != 0)
         {
-            // Parallel work is dispatched from Tick(). Only wait for this Scene batch instead of
-            // draining unrelated parallel work owned by texture streaming or CPU acceleration.
-            taskCoordinator->Tick();
+            // Scene-update tasks run immediately on their dedicated worker group. Do not tick the
+            // coordinator here, because that can dispatch or complete unrelated shared-pool work.
             std::this_thread::yield();
         }
 
@@ -703,7 +701,8 @@ namespace Assets
                         static_cast<uint32_t>(nodeProxyWorkItems_.size()) * taskIndex / taskCount;
                     const uint32_t end =
                         static_cast<uint32_t>(nodeProxyWorkItems_.size()) * (taskIndex + 1u) / taskCount;
-                    taskCoordinator->AddParralledTask(
+                    taskCoordinator->AddNamedTask(
+                        Tasks::ENamedTaskThread::SCENE_UPDATE,
                         [this, begin, end](Tasks::ResTask&)
                         {
                             uint64_t localExpandedTriangleCount = 0;

@@ -72,9 +72,9 @@ TaskCoordinator::~TaskCoordinator()
     {
         thread.reset();
     }
-    for (auto& thread : namedThreadPool_)
+    for (auto& threadPool : namedThreadPools_)
     {
-        thread.reset();
+        threadPool.clear();
     }
 }
 
@@ -126,8 +126,12 @@ uint32_t TaskCoordinator::AddNamedTask(
     task.complete_func = std::move(completeFunc);
 
     const size_t namedThreadIndex = static_cast<size_t>(namedThread);
-    assert(namedThreadIndex < namedThreadPool_.size());
-    namedThreadPool_[namedThreadIndex]->EnqueueTask(std::move(task));
+    assert(namedThreadIndex < namedThreadPools_.size());
+    auto& threadPool = namedThreadPools_[namedThreadIndex];
+    assert(!threadPool.empty());
+    const size_t threadIndex =
+        namedThreadCursors_[namedThreadIndex].fetch_add(1, std::memory_order_relaxed) % threadPool.size();
+    threadPool[threadIndex]->EnqueueTask(std::move(task));
 
     return task.task_id;
 }
@@ -150,8 +154,11 @@ void TaskCoordinator::WaitForAllParralledTask()
 void TaskCoordinator::WaitForNamedTask(ENamedTaskThread namedThread)
 {
     const size_t namedThreadIndex = static_cast<size_t>(namedThread);
-    assert(namedThreadIndex < namedThreadPool_.size());
-    namedThreadPool_[namedThreadIndex]->WaitForAllTasks();
+    assert(namedThreadIndex < namedThreadPools_.size());
+    for (auto& thread : namedThreadPools_[namedThreadIndex])
+    {
+        thread->WaitForAllTasks();
+    }
 }
 
 void TaskCoordinator::WaitForAllTasks()
@@ -251,10 +258,17 @@ TaskCoordinator::TaskCoordinator()
         lowThreads_.push_back(std::make_unique<TaskThread>("TaskCoordinator Parallel " + std::to_string(i)));
     }
 
-    namedThreadPool_[static_cast<size_t>(ENamedTaskThread::SCENE_UPDATE)] =
-        std::make_unique<TaskThread>("TaskCoordinator Scene Update", true);
-    namedThreadPool_[static_cast<size_t>(ENamedTaskThread::CPU_AS_BUILD)] =
-        std::make_unique<TaskThread>("TaskCoordinator CPU AS Build");
+    constexpr uint32_t sceneUpdateThreadCount = 4;
+    auto& sceneUpdateThreads = namedThreadPools_[static_cast<size_t>(ENamedTaskThread::SCENE_UPDATE)];
+    sceneUpdateThreads.reserve(sceneUpdateThreadCount);
+    for (uint32_t i = 0; i < sceneUpdateThreadCount; ++i)
+    {
+        sceneUpdateThreads.push_back(
+            std::make_unique<TaskThread>("TaskCoordinator Scene Update " + std::to_string(i), true));
+    }
+
+    namedThreadPools_[static_cast<size_t>(ENamedTaskThread::CPU_AS_BUILD)].push_back(
+        std::make_unique<TaskThread>("TaskCoordinator CPU AS Build"));
 }
 
 bool TaskCoordinator::IsAllParralledTaskComplete()
@@ -272,8 +286,15 @@ bool TaskCoordinator::IsAllParralledTaskComplete()
 bool TaskCoordinator::IsNamedTaskComplete(ENamedTaskThread namedThread) const
 {
     const size_t namedThreadIndex = static_cast<size_t>(namedThread);
-    assert(namedThreadIndex < namedThreadPool_.size());
-    return namedThreadPool_[namedThreadIndex]->IsIdle();
+    assert(namedThreadIndex < namedThreadPools_.size());
+    for (const auto& thread : namedThreadPools_[namedThreadIndex])
+    {
+        if (!thread->IsIdle())
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool TaskCoordinator::IsAllTaskComplete()
@@ -304,11 +325,14 @@ bool TaskCoordinator::IsAllTaskComplete()
         }
     }
 
-    for (auto& thread : namedThreadPool_)
+    for (auto& threadPool : namedThreadPools_)
     {
-        if (!thread->IsIdle() || thread->taskQueue_.size() > 0)
+        for (auto& thread : threadPool)
         {
-            return false;
+            if (!thread->IsIdle() || thread->taskQueue_.size() > 0)
+            {
+                return false;
+            }
         }
     }
 
