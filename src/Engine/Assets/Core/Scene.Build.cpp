@@ -90,7 +90,21 @@ namespace Assets
                        std::vector<FMaterial>& materials, std::vector<LightObject>& lights,
                        std::vector<AnimationTrack>& tracks)
     {
+        for (const auto& node : nodes_)
+        {
+            if (node)
+            {
+                node->SetComponentAddedCallback({});
+            }
+        }
         nodes_ = std::move(nodes);
+        allocatedJointCount_ = 0;
+        jointMatrixUploadDirty_ = false;
+        skinUpdateRequests_.clear();
+        for (const auto& node : nodes_)
+        {
+            BindNode(node);
+        }
         RebuildNodeIndex();
         RefreshEnvironmentComponentCache();
         models_ = std::move(models);
@@ -214,6 +228,7 @@ namespace Assets
         {
             if (node->GetComponentPtr<Runtime::EnvironmentComponent>() == nullptr)
             {
+                BindNode(node);
                 nodes_.push_back(node);
                 RegisterNodeIndex(node);
             }
@@ -221,6 +236,7 @@ namespace Assets
 
         // Add root node to scene
         CacheEnvironmentComponentFromNode(rootNode.get());
+        BindNode(rootNode);
         nodes_.push_back(rootNode);
         RegisterNodeIndex(rootNode);
 
@@ -541,6 +557,22 @@ namespace Assets
                                                skinWeightBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SkinJoints", flags, allJoints, skinJointBuffer_,
                                                skinJointBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "SkinnedVertices", flags | rtxFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            std::max<size_t>(sizeof(GPUVertex), vertices.size() * sizeof(GPUVertex)),
+            skinnedVertexBuffer_, skinnedVertexBufferMemory_);
+        EnsureJointMatrixCapacity();
+        skinUpdateRequests_.clear();
+        for (const auto& node : nodes_)
+        {
+            if (node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
+            {
+                if (const auto* render = node->GetRenderComponent(); render && render->GetModelId() != -1)
+                {
+                    RequestSkinUpdate(render->GetModelId());
+                }
+            }
+        }
 
         // Auxiliary scene data.
         indicesCount_ = static_cast<uint32_t>(indices.size());

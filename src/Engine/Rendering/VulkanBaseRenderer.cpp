@@ -1415,10 +1415,6 @@ namespace Vulkan
         overlay_.softMeshShaderExpandPipeline.reset();
         overlay_.shadowGpuCullCompactPipeline.reset();
         skin_.pipeline.reset();
-        skin_.vertexBuffer.reset();
-        skin_.vertexMemory.reset();
-        skin_.jointBuffer.reset();
-        skin_.jointMemory.reset();
         overlay_.temporalPostFilterPipeline.reset();
         overlay_.toneMappingPipeline.reset();
         overlay_.visualDebuggerPipeline.reset();
@@ -1501,11 +1497,6 @@ namespace Vulkan
         overlay_.softMeshShaderExpandPipeline.reset();
         overlay_.shadowGpuCullCompactPipeline.reset();
         skin_.pipeline.reset();
-
-        skin_.vertexBuffer.reset();
-        skin_.vertexMemory.reset();
-        skin_.jointBuffer.reset();
-        skin_.jointMemory.reset();
 
         overlay_.temporalPostFilterPipeline.reset();
         overlay_.toneMappingPipeline.reset();
@@ -1786,7 +1777,7 @@ namespace Vulkan
                 SCOPED_CPU_TIMER("begin scene");
                 SCOPED_GPU_TIMER("[pre-render]");
                 BeginSceneFrame(commandBuffer, frame_.currentImageIndex);
-                skin_.updateRequests.clear();
+                GetScene().ClearSkinUpdateRequests();
             }
 
             {
@@ -2997,7 +2988,6 @@ namespace Vulkan
 
     void VulkanBaseRenderer::OnPostLoadScene()
     {
-        skin_.updateRequests.clear();
         if (caps_.supportRayTracing)
         {
             CreateAccelerationStructures();

@@ -30,6 +30,8 @@ namespace Runtime
         void DrawDebugSkeleton(const glm::mat4& worldTransform);
 
         const std::vector<glm::mat4>& GetJointMatrices() const { return jointMatrices_; }
+        uint32_t GetJointMatrixOffset() const { return jointMatrixOffset_; }
+        void SetJointMatrixOffset(uint32_t offset) { jointMatrixOffset_ = offset; }
         const Assets::Skeleton& GetSkeleton() const { return skeleton_; }
         std::vector<std::string> GetAnimationNames() const;
         std::string GetCurrentAnimationName() const { return currentState_.Playing ? currentState_.Name : ""; }
@@ -48,6 +50,7 @@ namespace Runtime
         };
         std::vector<RuntimeJoint> runtimeJoints_;
         std::vector<glm::mat4> jointMatrices_; 
+        uint32_t jointMatrixOffset_ = std::numeric_limits<uint32_t>::max();
         
         struct AnimationState
         {

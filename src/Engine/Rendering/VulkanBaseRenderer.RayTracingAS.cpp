@@ -54,10 +54,9 @@ namespace Vulkan
         }
         SCOPED_GPU_TIMER("BLAS Update");
         VkDeviceSize scratchOffset = 0;
-        for (size_t i = 0; i < skin_.updateRequests.size(); i++)
+        for (const uint32_t modelId : GetScene().SkinUpdateRequests())
         {
-            int32_t modelId = skin_.updateRequests[i];
-            if (modelId != -1)
+            if (modelId < rt_->blas.size())
             {
                 rt_->blas[modelId].Update(commandBuffer, *rt_->blasScratch, scratchOffset);
                 scratchOffset += rt_->blas[modelId].BuildSizes().updateScratchSize;
@@ -138,8 +137,6 @@ namespace Vulkan
         const auto& scene = GetScene();
         const auto& debugUtils = Device().DebugUtils();
 
-        UpdateSkinningBuffers();
-
         uint32_t vertexOffset = 0;
         uint32_t indexOffset = 0;
         uint32_t aabbOffset = 0;
@@ -169,9 +166,9 @@ namespace Vulkan
             RayTracing::BottomLevelGeometry geometries;
 
             VkDeviceAddress vertexAddr = 0;
-            if (hasSkin && skin_.vertexBuffer)
+            if (hasSkin && scene.SkinnedVertexBuffer())
             {
-                vertexAddr = skin_.vertexBuffer->GetDeviceAddress();
+                vertexAddr = scene.SkinnedVertexBuffer()->GetDeviceAddress();
             }
 
             geometries.AddGeometryTriangles(scene, vertexOffset, vertexCount, indexOffset, indexCount, true, vertexAddr);

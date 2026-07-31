@@ -10,6 +10,7 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
+#include "Engine/Vulkan/Device.hpp"
 
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
@@ -30,6 +31,90 @@
 
 namespace Assets
 {
+    void Scene::BindNode(const std::shared_ptr<Node>& node)
+    {
+        if (!node)
+        {
+            return;
+        }
+
+        node->SetComponentAddedCallback([this](Component& component)
+        {
+            if (component.GetTypeId() == ComponentTypeId<Runtime::SkinnedMeshComponent>())
+            {
+                RegisterSkinComponent(static_cast<Runtime::SkinnedMeshComponent&>(component));
+            }
+        });
+
+        if (auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
+        {
+            RegisterSkinComponent(*skinnedMesh);
+        }
+    }
+
+    void Scene::RegisterSkinComponent(Runtime::SkinnedMeshComponent& component)
+    {
+        const uint32_t jointCount = static_cast<uint32_t>(component.GetJointMatrices().size());
+        component.SetJointMatrixOffset(allocatedJointCount_);
+        allocatedJointCount_ += jointCount;
+        jointMatrixUploadDirty_ = true;
+        sceneDirty_ = true;
+
+        EnsureJointMatrixCapacity();
+
+        if (const Node* owner = component.GetOwner())
+        {
+            if (const auto* render = owner->GetRenderComponent(); render && render->GetModelId() != -1)
+            {
+                RequestSkinUpdate(render->GetModelId());
+            }
+        }
+    }
+
+    void Scene::EnsureJointMatrixCapacity()
+    {
+        if (allocatedJointCount_ == 0 || allocatedJointCount_ <= jointMatrixCapacity_)
+        {
+            return;
+        }
+
+        uint32_t newCapacity = std::max(allocatedJointCount_, std::max(64u, jointMatrixCapacity_ * 2u));
+        if (jointMatrixBuffer_)
+        {
+            commandPool_->Device().WaitIdle();
+        }
+
+        const VkBufferUsageFlags flags =
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            *commandPool_, "JointMatrices", flags,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            static_cast<size_t>(newCapacity) * sizeof(glm::mat4),
+            jointMatrixBuffer_, jointMatrixBufferMemory_);
+        jointMatrixCapacity_ = newCapacity;
+        jointMatrixUploadDirty_ = true;
+    }
+
+    void Scene::RequestSkinUpdate(uint32_t modelId)
+    {
+        if (GetModel(modelId) == nullptr)
+        {
+            SPDLOG_WARN("Ignoring skin update for invalid model {}", modelId);
+            return;
+        }
+        if (std::find(skinUpdateRequests_.begin(), skinUpdateRequests_.end(), modelId) ==
+            skinUpdateRequests_.end())
+        {
+            skinUpdateRequests_.push_back(modelId);
+        }
+        jointMatrixUploadDirty_ = true;
+    }
+
+    void Scene::ClearSkinUpdateRequests()
+    {
+        skinUpdateRequests_.clear();
+    }
+
     std::vector<LightObject> Scene::ResolveActiveLights() const
     {
         std::vector<LightObject> resolvedLights;
@@ -204,8 +289,7 @@ namespace Assets
                             {
                                 if (renderComponent->GetModelId() != -1)
                                 {
-                                    NextEngine::GetInstance()->GetRenderer().RequestSkinUpdate(
-                                        renderComponent->GetModelId());
+                                    RequestSkinUpdate(renderComponent->GetModelId());
                                 }
                             }
                         }
@@ -456,12 +540,13 @@ namespace Assets
 
     bool Scene::GPUUpdateNodes()
     {
-        if (!needUpdateTLAS)
+        const bool updateNodeProxies = needUpdateTLAS;
+        if (!updateNodeProxies && !jointMatrixUploadDirty_)
         {
             return false;
         }
 
-        if (!nodeProxiesBackup.empty())
+        if (updateNodeProxies && !nodeProxiesBackup.empty())
         {
             SCOPED_CPU_TIMER("upload nodeproxy");
             NodeProxy* data = reinterpret_cast<NodeProxy*>(
@@ -471,8 +556,26 @@ namespace Assets
             sceneDynamicBufferMemory_->Unmap();
         }
 
+        if (jointMatrixUploadDirty_ && jointMatrixBufferMemory_ && allocatedJointCount_ > 0)
+        {
+            SCOPED_CPU_TIMER("upload joint matrices");
+            glm::mat4* data = static_cast<glm::mat4*>(jointMatrixBufferMemory_->Map(
+                0, static_cast<size_t>(allocatedJointCount_) * sizeof(glm::mat4)));
+            for (const auto& node : nodes_)
+            {
+                if (const auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
+                {
+                    const auto& matrices = skinnedMesh->GetJointMatrices();
+                    std::memcpy(data + skinnedMesh->GetJointMatrixOffset(), matrices.data(),
+                                matrices.size() * sizeof(glm::mat4));
+                }
+            }
+            jointMatrixBufferMemory_->Unmap();
+            jointMatrixUploadDirty_ = false;
+        }
+
         needUpdateTLAS = false;
-        return true;
+        return updateNodeProxies;
     }
     
     void Scene::SyncUpdateScene()
@@ -511,7 +614,6 @@ namespace Assets
             [this](Tasks::ResTask& task)
             {
                 uint64_t expandedTriangleCapacity = 0;
-                uint32_t currentJointOffset = 0;
                 for (auto& node : nodes_)
                 {
                     // record all
@@ -547,8 +649,7 @@ namespace Assets
                             
                             if (auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
                             {
-                                nodeJointOffset = currentJointOffset;
-                                currentJointOffset += (uint32_t)skinnedMesh->GetJointMatrices().size();
+                                nodeJointOffset = skinnedMesh->GetJointMatrixOffset();
                             }
 
                             for (uint32_t section = 0; section < model->SectionCount(); ++section)

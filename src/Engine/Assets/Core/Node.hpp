@@ -116,7 +116,17 @@ namespace Assets
                 {
                     renderComponent_ = component.get();
                 }
+
+                if (componentAddedCallback_)
+                {
+                    componentAddedCallback_(*component);
+                }
             }
+        }
+
+        void SetComponentAddedCallback(std::function<void(Component&)> callback)
+        {
+            componentAddedCallback_ = std::move(callback);
         }
 
         template <typename T>
@@ -204,6 +214,7 @@ namespace Assets
         std::set< std::shared_ptr<Node> > children_;
 
         std::vector<std::shared_ptr<Component>> components_;
+        std::function<void(Component&)> componentAddedCallback_;
         uint64_t componentTypeMask_ = 0;
         Runtime::PhysicsComponent* physicsComponent_ = nullptr;
         Runtime::RenderComponent* renderComponent_ = nullptr;

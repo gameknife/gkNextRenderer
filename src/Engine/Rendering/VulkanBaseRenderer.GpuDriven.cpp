@@ -28,100 +28,22 @@
 
 namespace Vulkan
 {
-    void VulkanBaseRenderer::RequestSkinUpdate(const uint32_t modelId)
-    {
-        const Assets::Scene& scene = GetScene();
-        if (scene.GetModel(modelId) == nullptr)
-        {
-            SPDLOG_WARN("Ignoring skin update for invalid model {}", modelId);
-            return;
-        }
-        if (std::find(skin_.updateRequests.begin(), skin_.updateRequests.end(), modelId) ==
-            skin_.updateRequests.end())
-        {
-            skin_.updateRequests.push_back(modelId);
-        }
-    }
-
-    void VulkanBaseRenderer::UpdateSkinningBuffers()
-    {
-        auto& scene = GetScene();
-        uint32_t vertCount = scene.GetVertexCount();
-        if (vertCount == 0) return;
-
-        int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-        int rtxFlags = caps_.supportRayTracing ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0;
-
-        size_t requiredVertexSize = vertCount * sizeof(Assets::GPUVertex);
-        if (!skin_.vertexBuffer || skin_.vertexBufferSize < requiredVertexSize)
-        {
-            Vulkan::BufferUtil::CreateDeviceBufferLocal(*ctx_.commandPool, "SkinnedVertices", flags | rtxFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, requiredVertexSize, skin_.vertexBuffer, skin_.vertexMemory);
-            skin_.vertexBufferSize = (uint32_t)requiredVertexSize;
-        }
-
-        uint32_t totalJoints = 0;
-        for (auto& node : scene.Nodes())
-        {
-            if (auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
-            {
-                totalJoints += (uint32_t)skinnedMesh->GetJointMatrices().size();
-            }
-        }
-
-        if (totalJoints > 0)
-        {
-            size_t requiredJointSize = totalJoints * sizeof(glm::mat4);
-            if (!skin_.jointBuffer || skin_.jointBufferSize < requiredJointSize)
-            {
-                Vulkan::BufferUtil::CreateDeviceBufferLocal(
-                    *ctx_.commandPool, "JointMatrices", flags,
-                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                    requiredJointSize, skin_.jointBuffer, skin_.jointMemory);
-                skin_.jointBufferSize = (uint32_t)requiredJointSize;
-            }
-
-            // Map and upload
-            glm::mat4* data = (glm::mat4*)skin_.jointMemory->Map(0, requiredJointSize);
-            uint32_t offset = 0;
-            for (auto& node : scene.Nodes())
-            {
-                if (auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
-                {
-                    const auto& matrices = skinnedMesh->GetJointMatrices();
-                    std::memcpy(data + offset, matrices.data(), matrices.size() * sizeof(glm::mat4));
-                    offset += (uint32_t)matrices.size();
-                }
-            }
-            skin_.jointMemory->Unmap();
-        }
-    }
-
     void VulkanBaseRenderer::DispatchSkinning(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         SCOPED_GPU_TIMER("skinning pass");
         auto& scene = GetScene();
 
-        if (skin_.vertexBuffer)
-        {
-            scene.SetSkinningBuffers(skin_.vertexBuffer->GetDeviceAddress(),
-                                     skin_.jointBuffer ? skin_.jointBuffer->GetDeviceAddress() : 0);
-        }
-        else
-        {
-            scene.SetSkinningBuffers(0, 0);
-        }
-
         skin_.pipeline->BindPipeline(commandBuffer, scene, imageIndex);
 
         Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex, ActiveViewBankBase());
-        if (!skin_.vertexBuffer)
+        Vulkan::Buffer* skinnedVertexBuffer = scene.SkinnedVertexBuffer();
+        if (!skinnedVertexBuffer)
         {
             return;
         }
 
-        for (size_t i = 0; i < skin_.updateRequests.size(); i++)
+        for (const uint32_t modelId : scene.SkinUpdateRequests())
         {
-            uint32_t modelId = skin_.updateRequests[i];
             if (modelId == static_cast<uint32_t>(-1))
             {
                 continue;
@@ -178,7 +100,7 @@ namespace Vulkan
             skinnedDstStages |= VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
         }
         BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, skinnedDstStages,
-                                    skin_.vertexBuffer->Handle(), VK_ACCESS_SHADER_WRITE_BIT, skinnedDstAccess);
+                                    skinnedVertexBuffer->Handle(), VK_ACCESS_SHADER_WRITE_BIT, skinnedDstAccess);
     }
 
     void VulkanBaseRenderer::DispatchGpuCulling(VkCommandBuffer commandBuffer, uint32_t imageIndex)

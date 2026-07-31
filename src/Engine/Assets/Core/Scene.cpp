@@ -242,6 +242,7 @@ namespace Assets
                                      glm::vec3(1.0f), GenerateInstanceId());
         auto environment = std::make_shared<Runtime::EnvironmentComponent>();
         node->AddComponent(environment);
+        BindNode(node);
         nodes_.push_back(node);
         RegisterNodeIndex(node);
         environmentComponent_ = environment.get();
@@ -286,7 +287,8 @@ namespace Assets
     Scene::Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing,
                  const bool allocateAmbientResources, const bool enableCpuAcceleration) :
         allocateAmbientResources_(allocateAmbientResources),
-        enableCpuAcceleration_(enableCpuAcceleration)
+        enableCpuAcceleration_(enableCpuAcceleration),
+        commandPool_(&commandPool)
     {
         int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         const bool allocateAmbientCube =
@@ -485,6 +487,14 @@ namespace Assets
 
     Scene::~Scene()
     {
+        for (const auto& node : nodes_)
+        {
+            if (node)
+            {
+                node->SetComponentAddedCallback({});
+            }
+        }
+
         offsetBuffer_.reset();
         offsetBufferMemory_.reset(); // release memory after bound buffer has been destroyed
 
@@ -525,6 +535,10 @@ namespace Assets
         skinWeightBufferMemory_.reset();
         skinJointBuffer_.reset();
         skinJointBufferMemory_.reset();
+        skinnedVertexBuffer_.reset();
+        skinnedVertexBufferMemory_.reset();
+        jointMatrixBuffer_.reset();
+        jointMatrixBufferMemory_.reset();
 
         cpuShadowMap_.reset();
 
@@ -593,6 +607,7 @@ namespace Assets
     void Scene::AddNode(std::shared_ptr<Node> node)
     {
         CacheEnvironmentComponentFromNode(node.get());
+        BindNode(node);
         nodes_.push_back(node);
         RegisterNodeIndex(node);
         EnsureNodePhysicsBody(node.get());
@@ -679,6 +694,7 @@ namespace Assets
                 }
                 lockedIds_.erase(id);
                 node->ClearParent();
+                node->SetComponentAddedCallback({});
                 UnregisterNodeIndex(id);
                 nodes_.erase(it);
                 if (node->GetComponentPtr<Runtime::EnvironmentComponent>() == environmentComponent_)
@@ -751,6 +767,7 @@ namespace Assets
         removeIds.reserve(nodesToRemove.size());
         for (const auto& node : nodesToRemove)
         {
+            node->SetComponentAddedCallback({});
             removeIds.insert(node->GetInstanceId());
         }
 
@@ -790,6 +807,7 @@ namespace Assets
         {
             const size_t index = std::min(it->index, nodes_.size());
             nodes_.insert(nodes_.begin() + index, it->node);
+            BindNode(it->node);
             RegisterNodeIndex(it->node);
             CacheEnvironmentComponentFromNode(it->node.get());
         }
@@ -817,8 +835,8 @@ namespace Assets
 
         gpuScene.SkinWeights = skinWeightBuffer_->GetDeviceAddress();
         gpuScene.SkinJoints = skinJointBuffer_->GetDeviceAddress();
-        gpuScene.SkinnedVertices = skinnedVerticesAddr_;
-        gpuScene.JointMatrices = jointMatricesAddr_;
+        gpuScene.SkinnedVertices = skinnedVertexBuffer_ ? skinnedVertexBuffer_->GetDeviceAddress() : 0;
+        gpuScene.JointMatrices = jointMatrixBuffer_ ? jointMatrixBuffer_->GetDeviceAddress() : 0;
         gpuScene.SoftMeshShaderResourcesAddress =
             softMeshShaderResourcesBuffer_ ? softMeshShaderResourcesBuffer_->GetDeviceAddress() : 0;
 
@@ -1118,12 +1136,6 @@ namespace Assets
             requestOverrideModelView = false;
             outMatrix = overrideModelView;
         }
-    }
-
-    void Scene::SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress jointMatrices)
-    {
-        skinnedVerticesAddr_ = skinnedVertices;
-        jointMatricesAddr_ = jointMatrices;
     }
 
 } // namespace Assets

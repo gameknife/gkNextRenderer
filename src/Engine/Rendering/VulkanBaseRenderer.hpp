@@ -367,7 +367,6 @@ namespace Vulkan
         // of the shader-side Bindless::GetViewStorageTexture; resolves slot through the active
         // view's bank base. Primary view (base 0) == GetStorageImage (legacy absolute).
         const RenderImage* GetViewStorageImage(uint32_t slot) const { return GetStorageImage(ActiveViewBankBase() + slot); }
-        void RequestSkinUpdate(uint32_t modelId);
         std::vector<RayTracing::TopLevelAccelerationStructure>& TLAS();
         VkAccelerationStructureKHR ActiveTLASHandle() const;
         PipelineCommon::RestirDI& RestirDIResources();
@@ -436,13 +435,6 @@ namespace Vulkan
 
         struct SkinnedMeshResources
         {
-            std::unique_ptr<Buffer> vertexBuffer;
-            std::unique_ptr<DeviceMemory> vertexMemory;
-            std::unique_ptr<Buffer> jointBuffer;
-            std::unique_ptr<DeviceMemory> jointMemory;
-            uint32_t vertexBufferSize = 0;
-            uint32_t jointBufferSize = 0;
-            std::vector<uint32_t> updateRequests;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> pipeline;
         };
 
@@ -667,7 +659,6 @@ namespace Vulkan
             VkImageLayout swapchainLayout);
 
         // Pre-render passes
-        void UpdateSkinningBuffers();
         void UpdateAccelerationStructuresTop(VkCommandBuffer commandBuffer);
         void UpdateAccelerationStructuresBottom(VkCommandBuffer commandBuffer);
         void HandleAmbientCubeCacheInvalidation(VkCommandBuffer commandBuffer, uint32_t imageIndex);

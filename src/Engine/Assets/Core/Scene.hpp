@@ -14,6 +14,7 @@
 namespace Runtime
 {
     class EnvironmentComponent;
+    class SkinnedMeshComponent;
 }
 
 namespace Assets
@@ -225,6 +226,9 @@ namespace Assets
 
 
         void AddNode(std::shared_ptr<Node> node);
+        void RequestSkinUpdate(uint32_t modelId);
+        void ClearSkinUpdateRequests();
+        const std::vector<uint32_t>& SkinUpdateRequests() const { return skinUpdateRequests_; }
         void EnsureNodePhysicsBody(Node* node);
         std::shared_ptr<Node> RemoveNodeByInstanceId(uint32_t id);
         std::shared_ptr<Node> GetNodeSharedByInstanceId(uint32_t id) const;
@@ -239,7 +243,7 @@ namespace Assets
         void RestoreNodes(const std::vector<RemovedNodeEntry>& entries, const std::shared_ptr<Node>& parent,
                           const std::shared_ptr<Node>& root);
 
-        void SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress jointMatrices);
+        Vulkan::Buffer* SkinnedVertexBuffer() const { return skinnedVertexBuffer_.get(); }
 
         // Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 
@@ -362,6 +366,15 @@ namespace Assets
         std::unique_ptr<Vulkan::Buffer> skinJointBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> skinJointBufferMemory_;
 
+        std::unique_ptr<Vulkan::Buffer> skinnedVertexBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> skinnedVertexBufferMemory_;
+        std::unique_ptr<Vulkan::Buffer> jointMatrixBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> jointMatrixBufferMemory_;
+        uint32_t jointMatrixCapacity_ = 0;
+        uint32_t allocatedJointCount_ = 0;
+        bool jointMatrixUploadDirty_ = false;
+        std::vector<uint32_t> skinUpdateRequests_;
+
         std::unique_ptr<TextureImage> cpuShadowMap_;
 
         std::array<std::unique_ptr<Vulkan::Image>, 4> sunShadowImages_;
@@ -411,8 +424,11 @@ namespace Assets
         glm::vec3 sceneAABBMax_{-FLT_MAX, -FLT_MAX, -FLT_MAX};
         std::vector<NextMeshShapeHandle> cachedMeshShapes_;
 
-        VkDeviceAddress skinnedVerticesAddr_ = 0;
-        VkDeviceAddress jointMatricesAddr_ = 0;
+        Vulkan::CommandPool* commandPool_ = nullptr;
+
+        void BindNode(std::shared_ptr<Node> const& node);
+        void RegisterSkinComponent(Runtime::SkinnedMeshComponent& component);
+        void EnsureJointMatrixCapacity();
 
         Runtime::EnvironmentComponent* environmentComponent_ = nullptr;
 

@@ -8,7 +8,6 @@ namespace Vulkan
     void RayTracingSceneBackend::PrepareSceneFrame(
         const VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        renderer_.UpdateSkinningBuffers();
         renderer_.DispatchSkinning(commandBuffer, imageIndex);
         renderer_.UpdateAccelerationStructuresBottom(commandBuffer);
         renderer_.UpdateAccelerationStructuresTop(commandBuffer);
