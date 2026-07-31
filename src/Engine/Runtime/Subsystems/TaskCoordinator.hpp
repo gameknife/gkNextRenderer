@@ -96,6 +96,7 @@ namespace Tasks
 enum class ENamedTaskThread : uint8_t
 {
     SCENE_UPDATE,
+    CPU_AS_BUILD,
     COUNT
 };
 

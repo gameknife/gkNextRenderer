@@ -267,6 +267,11 @@ namespace Assets
 
     void Scene::Tick(float deltaSeconds)
     {
+        if (enableCpuAcceleration_)
+        {
+            cpuAccelerationStructure_.PollBVHBuild();
+        }
+
         if (NextEngine::GetInstance()->GetUserSettings().TickAnimation)
         {
             {
@@ -452,7 +457,7 @@ namespace Assets
                 const bool voxelUploadCompleted = cpuAccelerationStructure_.Tick(
                     *this, ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get());
 
-                if (sceneDirtyForCpuAS_ && !cpuAccelerationStructure_.HasPendingWork())
+                if (sceneDirtyForCpuAS_)
                 {
                     if (cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), true))
                     {

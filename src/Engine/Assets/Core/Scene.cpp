@@ -487,6 +487,8 @@ namespace Assets
 
     Scene::~Scene()
     {
+        cpuAccelerationStructure_.ClearAllTasks();
+
         for (const auto& node : nodes_)
         {
             if (node)

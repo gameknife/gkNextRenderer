@@ -253,6 +253,8 @@ TaskCoordinator::TaskCoordinator()
 
     namedThreadPool_[static_cast<size_t>(ENamedTaskThread::SCENE_UPDATE)] =
         std::make_unique<TaskThread>("TaskCoordinator Scene Update", true);
+    namedThreadPool_[static_cast<size_t>(ENamedTaskThread::CPU_AS_BUILD)] =
+        std::make_unique<TaskThread>("TaskCoordinator CPU AS Build");
 }
 
 bool TaskCoordinator::IsAllParralledTaskComplete()

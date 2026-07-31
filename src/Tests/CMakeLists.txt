@@ -53,6 +53,7 @@ set(unitTestSources
     Test_SogLoader.cpp
     Test_TerminalBlitter.cpp
     Test_PhysicsComponent.cpp
+    Test_CPUAccelerationSnapshot.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadOutline.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadPromptContext.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadSessionStore.cpp

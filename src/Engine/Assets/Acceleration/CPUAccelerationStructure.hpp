@@ -64,6 +64,86 @@ struct FCPUBLASContext
     std::vector<FCPUBLASVertInfo> extinfos;
 };
 
+struct FCPUBLASSet
+{
+    FCPUBLASSet() = default;
+    FCPUBLASSet(const FCPUBLASSet&) = delete;
+    FCPUBLASSet& operator=(const FCPUBLASSet&) = delete;
+    FCPUBLASSet(FCPUBLASSet&&) = delete;
+    FCPUBLASSet& operator=(FCPUBLASSet&&) = delete;
+
+    uint64_t generation = 0;
+    std::vector<FCPUBLASContext> contexts;
+    std::vector<tinybvh::BVHBase*> list;
+};
+
+struct FCPUMaterialView
+{
+    Material::Enum materialModel = Material::Enum::Lambertian;
+};
+
+struct FCPUMaterialTable
+{
+    uint64_t generation = 0;
+    std::vector<FCPUMaterialView> entries;
+};
+
+// A TLAS is built directly in its final heap allocation. tinybvh keeps pointers
+// into instances and the BLAS list, so snapshots must never be copied or moved.
+struct FCPUTLASSnapshot
+{
+    FCPUTLASSnapshot() = default;
+    FCPUTLASSnapshot(const FCPUTLASSnapshot&) = delete;
+    FCPUTLASSnapshot& operator=(const FCPUTLASSnapshot&) = delete;
+    FCPUTLASSnapshot(FCPUTLASSnapshot&&) = delete;
+    FCPUTLASSnapshot& operator=(FCPUTLASSnapshot&&) = delete;
+
+    uint64_t sceneRevision = 0;
+    std::shared_ptr<const FCPUBLASSet> blasSet;
+    std::shared_ptr<const FCPUMaterialTable> materialTable;
+    std::vector<tinybvh::BLASInstance> instances;
+    std::vector<FCPUTLASInstanceInfo> contexts;
+    tinybvh::BVH tlas;
+};
+
+struct FCPUTLASBuildInput
+{
+    uint64_t epoch = 0;
+    uint64_t sceneRevision = 0;
+    std::chrono::steady_clock::time_point requestTime;
+    double captureMilliseconds = 0.0;
+    std::shared_ptr<const FCPUBLASSet> blasSet;
+    std::shared_ptr<const FCPUMaterialTable> materialTable;
+    std::shared_ptr<const FCPUTLASSnapshot> previousSnapshot;
+    std::vector<tinybvh::BLASInstance> instances;
+    std::vector<FCPUTLASInstanceInfo> contexts;
+};
+
+struct FCPUTLASBuildResult
+{
+    uint64_t epoch = 0;
+    std::shared_ptr<FCPUTLASSnapshot> snapshot;
+    std::chrono::steady_clock::time_point requestTime;
+    std::chrono::steady_clock::time_point buildStartTime;
+    std::chrono::steady_clock::time_point buildEndTime;
+    bool hasNavDirtyBounds = false;
+    glm::vec3 navDirtyWorldMin{0.0f};
+    glm::vec3 navDirtyWorldMax{0.0f};
+};
+
+struct FCPUTLASBuildStats
+{
+    uint64_t publishedRevision = 0;
+    uint64_t latestRequestedRevision = 0;
+    uint64_t coalescedRequestCount = 0;
+    uint64_t completedBuildCount = 0;
+    uint64_t snapshotStaleness = 0;
+    double lastBuildMilliseconds = 0.0;
+    double lastCaptureMilliseconds = 0.0;
+    double lastBuildToPublishMilliseconds = 0.0;
+    double buildToPublishP95Milliseconds = 0.0;
+};
+
 // A CPU baker owns an independent context and task-dispatch mechanism.
 // Its lifetime and execution are controlled by CpuAS.
 struct FCPUProbeBaker
@@ -76,7 +156,8 @@ struct FCPUProbeBaker
     std::vector<uint8_t> distanceToSolidSeeds;
 
     void Init(uint32_t cascadeIdx, float unitSize, glm::vec3 offset);
-    void ProcessCube(int x, int y, int z, ECubeProcType procType);
+    void ProcessCube(int x, int y, int z, ECubeProcType procType,
+                     const std::shared_ptr<const FCPUTLASSnapshot>& snapshot);
     void RebuildDistanceField();
     void UploadGPU(Vulkan::DeviceMemory& voxelDeviceMemory);
     void UploadGPU(Vulkan::DeviceMemory& voxelDeviceMemory, size_t byteBaseOffset, uint32_t elementOffset);
@@ -121,8 +202,14 @@ struct FCPUBrickTable
 class FCPUAccelerationStructure
 {
 public:
+    using SnapshotPtr = std::shared_ptr<const FCPUTLASSnapshot>;
+
     void InitBVH(Assets::Scene& scene);
     void RebuildBVHOnly(Assets::Scene& scene);
+    void PollBVHBuild();
+
+    SnapshotPtr AcquireSnapshot() const;
+    FCPUTLASBuildStats GetBuildStats() const;
 
     
     Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
@@ -142,15 +229,41 @@ public:
     void ClearAllTasks();
 
 private:
+    friend struct FCPUAccelerationStructureTestAccess;
+
     bool InitCascadeBakers(const Runtime::Config::UserSettings& settings, uint32_t maxCascadeCapacity);
     uint32_t GetActiveCascadeCount() const { return static_cast<uint32_t>(cascadeBakers.size()); }
 
     void UpdateBVH(Assets::Scene& scene);
-    
-    std::vector<FCPUBLASContext> bvhBLASContexts;
-    std::vector<tinybvh::BLASInstance> bvhInstanceList;
-    std::vector<FCPUTLASInstanceInfo> bvhTLASContexts;
-    std::vector<tinybvh::BVHBase*> bvhBLASList;
+    void PublishSnapshot(SnapshotPtr snapshot);
+    std::shared_ptr<FCPUTLASBuildInput> CaptureBuildInput(Assets::Scene& scene);
+    static std::shared_ptr<FCPUTLASBuildResult> BuildSnapshot(FCPUTLASBuildInput& input);
+    uint64_t RequestRuntimeBuild(Assets::Scene& scene);
+    uint64_t QueueBuildInput(std::shared_ptr<FCPUTLASBuildInput> input);
+    void StartBuild(std::shared_ptr<FCPUTLASBuildInput> input);
+    void CancelRuntimeBuilds();
+    void MergeNavDirtyBounds(const FCPUTLASBuildResult& result);
+    void QueueFullProbeBake();
+
+    std::atomic<SnapshotPtr> activeSnapshot_;
+    std::shared_ptr<const FCPUBLASSet> blasSet_;
+    uint64_t blasGeneration_ = 0;
+    uint64_t materialGeneration_ = 0;
+    uint64_t sceneRevision_ = 0;
+    std::atomic<uint64_t> buildEpoch_{1};
+    std::atomic<uint64_t> publishedRevision_{0};
+    std::atomic<uint64_t> latestRequestedRevision_{0};
+    mutable std::mutex buildMutex_;
+    bool buildInFlight_ = false;
+    std::shared_ptr<FCPUTLASBuildInput> latestBuildInput_;
+    std::shared_ptr<FCPUTLASBuildResult> completedBuildResult_;
+    uint64_t coalescedRequestCount_ = 0;
+    uint64_t completedBuildCount_ = 0;
+    double lastBuildMilliseconds_ = 0.0;
+    double lastCaptureMilliseconds_ = 0.0;
+    double lastBuildToPublishMilliseconds_ = 0.0;
+    std::vector<double> buildToPublishSamples_;
+    uint64_t pendingProbeRevision_ = 0;
         
     std::vector<uint32_t> lastBatchTasks;
     std::vector<uint32_t> distanceFieldRebuildTasks;
