@@ -243,7 +243,7 @@ TaskCoordinator::TaskCoordinator()
 
     // Get the number of CPU cores (use half of available cores for low-priority threads)
     unsigned int numCores = std::thread::hardware_concurrency();
-    unsigned int lowThreadCount = std::max(1u, numCores / 1);
+    unsigned int lowThreadCount = std::max(1u, numCores / 2);
 
     // Create low-priority threads based on CPU cores
     for (unsigned int i = 0; i < lowThreadCount; i++)

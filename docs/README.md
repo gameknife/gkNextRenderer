@@ -73,6 +73,10 @@
 - NextTotalwar：[MVP 设计、当前架构与实测记录](projects/nexttotalwar/nexttotalwar-mvp-design.md) · [战斗 MVP 设计（计划中）](projects/nexttotalwar/nexttotalwar-battle-mvp-design.md) · [代码导览](../AGENT_GUIDE/NextTotalwar.md)
 - TruckerDemo（迭代计划）：[SnowRunner 风格越野运输 Demo 迭代计划](projects/trucker-demo/trucker-demo-iteration-plan.md)
 
+## Plans（待实施）
+
+- [CPU TLAS 异步与并行更新计划](plans/cpu-tlas-parallel-update-plan.md)
+
 ## 环境记录
 
 - [Steam Deck / Arch Linux 部署注意事项](notes/steamdeck-deployment-notes.md)

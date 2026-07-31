@@ -405,6 +405,17 @@ namespace Assets
 
         std::vector<NodeProxy> nodeProxies;
         std::vector<NodeProxy> nodeProxiesBackup;
+        struct NodeProxyUpdateWorkItem
+        {
+            Node* node = nullptr;
+            uint32_t modelId = 0;
+            uint32_t outputOffset = 0;
+            uint32_t proxyCount = 0;
+        };
+        std::vector<NodeProxyUpdateWorkItem> nodeProxyWorkItems_;
+        std::atomic<uint32_t> nodeProxyTasksRemaining_{0};
+        std::atomic<uint64_t> nodeProxyExpandedTriangleCount_{0};
+        std::atomic<bool> nodeProxyMovingNodeDetected_{false};
         bool nodeProxyUpdatePending_ = false;
 
         glm::mat4 overrideModelView;

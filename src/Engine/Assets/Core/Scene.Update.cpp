@@ -530,7 +530,29 @@ namespace Assets
             return false;
         }
 
-        Tasks::TaskCoordinator::GetInstance()->WaitForNamedTask(Tasks::ENamedTaskThread::SCENE_UPDATE);
+        auto* taskCoordinator = Tasks::TaskCoordinator::GetInstance();
+        while (nodeProxyTasksRemaining_.load(std::memory_order_acquire) != 0)
+        {
+            // Parallel work is dispatched from Tick(). Only wait for this Scene batch instead of
+            // draining unrelated parallel work owned by texture streaming or CPU acceleration.
+            taskCoordinator->Tick();
+            std::this_thread::yield();
+        }
+
+        const uint64_t expandedTriangleCount =
+            nodeProxyExpandedTriangleCount_.load(std::memory_order_acquire);
+        if (expandedTriangleCount > std::numeric_limits<uint32_t>::max())
+        {
+            throw std::overflow_error("GPU-driven scene triangle capacity exceeds uint32_t");
+        }
+        requiredGpuDrivenTriangleCapacity_ =
+            std::max<uint32_t>(1u, static_cast<uint32_t>(expandedTriangleCount));
+        if (nodeProxyMovingNodeDetected_.load(std::memory_order_acquire))
+        {
+            sceneDirty_ = true;
+        }
+
+        nodeProxyWorkItems_.clear();
         nodeProxyUpdatePending_ = false;
         nodeProxies.swap(nodeProxiesBackup);
         std::swap(indirectDrawBatchCount_, indirectDrawBatchCountBackup_);
@@ -607,88 +629,154 @@ namespace Assets
             {
                 SCOPED_CPU_TIMER("update nodeproxy");
 
-                nodeProxies.clear();
+                nodeProxyWorkItems_.clear();
                 indirectDrawBatchCount_ = 0;
 
-                auto sceneNodesUpdateTask =
-            [this](Tasks::ResTask& task)
-            {
-                uint64_t expandedTriangleCapacity = 0;
-                for (auto& node : nodes_)
+                // First pass stays on the main thread: determine the exact output range owned by
+                // every node. Workers can then write directly into a resized vector without locks.
+                uint32_t proxyCount = 0;
+                nodeProxyWorkItems_.reserve(nodes_.size());
+                for (const auto& node : nodes_)
                 {
-                    // record all
                     auto* render = node->GetRenderComponent();
-                    if (render && render->IsDrawable())
+                    if (!render || !render->IsDrawable())
                     {
-                        if (node->TickVelocity())
+                        continue;
+                    }
+
+                    const uint32_t modelId = render->GetModelId();
+                    const auto* model = GetModel(modelId);
+                    if (!model)
+                    {
+                        continue;
+                    }
+
+                    uint32_t validSectionCount = 0;
+                    for (uint32_t section = 0; section < model->SectionCount(); ++section)
+                    {
+                        uint32_t encodedModelSection = 0;
+                        if (!TryEncodeModelSection(modelId, section, encodedModelSection) ||
+                            encodedModelSection >= offsets_.size())
                         {
-                            sceneDirty_ = true;
+                            SPDLOG_ERROR("Skipping model {} section {}: invalid encoded offset (offset count {})",
+                                         modelId, section, offsets_.size());
+                            continue;
                         }
+                        ++validSectionCount;
+                    }
 
-                        auto model = GetModel(render->GetModelId());
-                        if (model)
-                        {
-                            const uint32_t modelId = render->GetModelId();
-                            uint32_t nodeJointOffset = 0;
-                            const uint32_t instanceId = node->GetInstanceId();
-                            const uint32_t editableInstanceId = node->IsSceneReferenceInternal()
-                                ? node->GetSceneReferenceOwnerProxyId()
-                                : instanceId;
-                            const uint32_t outlineFlags = render->GetOutlineFlags();
-                            const uint32_t selectedBit =
-                            (selectionState_.IsSelected(editableInstanceId) ||
-                             (outlineFlags & Runtime::RenderOutlineFlags::selected) != 0u) ? 1u : 0u;
-                            const uint32_t hoveredBit =
-                                (hoveredId_ == editableInstanceId || (outlineFlags & Runtime::RenderOutlineFlags::hovered) != 0u) ? 1u : 0u;
-                            const uint32_t lockedBit =
-                                (lockedIds_.find(editableInstanceId) != lockedIds_.end() ||
-                                 (outlineFlags & Runtime::RenderOutlineFlags::locked) != 0u) ? 1u : 0u;
-                            const uint32_t dangerBit =
-                                ((outlineFlags & Runtime::RenderOutlineFlags::danger) != 0u) ? 1u : 0u;
-                            const uint32_t stateBits = hoveredBit | (lockedBit << 1u) | (dangerBit << 2u);
-                            
-                            if (auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
-                            {
-                                nodeJointOffset = skinnedMesh->GetJointMatrixOffset();
-                            }
-
-                            for (uint32_t section = 0; section < model->SectionCount(); ++section)
-                            {
-                                uint32_t encodedModelSection = 0;
-                                if (!TryEncodeModelSection(modelId, section, encodedModelSection) ||
-                                    encodedModelSection >= offsets_.size())
-                                {
-                                    SPDLOG_ERROR("Skipping model {} section {}: invalid encoded offset (offset count {})",
-                                                 modelId, section, offsets_.size());
-                                    continue;
-                                }
-                                expandedTriangleCapacity += offsets_[encodedModelSection].indexCount / 3u;
-
-                                NodeProxy proxy;
-                                node->GetNodeProxy(proxy);
-                                proxy.modelId = encodedModelSection;
-                                proxy.excludeFromAS = section == 0 ? 0 : 1;
-                                proxy.reserved1 = selectedBit;
-                                proxy.reserved2 = stateBits;
-                                proxy.jointMatrixOffset = nodeJointOffset;
-                                nodeProxies.emplace_back(std::move(proxy));
-                                indirectDrawBatchCount_++;
-                            }
-                        }
+                    if (validSectionCount > 0)
+                    {
+                        nodeProxyWorkItems_.push_back(
+                            {node.get(), modelId, proxyCount, validSectionCount});
+                        proxyCount += validSectionCount;
                     }
                 }
 
-                if (expandedTriangleCapacity > std::numeric_limits<uint32_t>::max())
-                {
-                    throw std::overflow_error("GPU-driven scene triangle capacity exceeds uint32_t");
-                }
-                requiredGpuDrivenTriangleCapacity_ =
-                    std::max<uint32_t>(1u, static_cast<uint32_t>(expandedTriangleCapacity));
-            };
-                
+                nodeProxies.clear();
+                nodeProxies.resize(proxyCount);
+                indirectDrawBatchCount_ = proxyCount;
+                nodeProxyExpandedTriangleCount_.store(0, std::memory_order_relaxed);
+                nodeProxyMovingNodeDetected_.store(false, std::memory_order_relaxed);
+
+                const uint32_t availableCores = std::max(1u, std::thread::hardware_concurrency());
+                const uint32_t requestedWorkerCount = std::max(1u, availableCores / 2u);
+                const uint32_t taskCount = std::min<uint32_t>(
+                    requestedWorkerCount, static_cast<uint32_t>(nodeProxyWorkItems_.size()));
+                nodeProxyTasksRemaining_.store(taskCount, std::memory_order_release);
                 nodeProxyUpdatePending_ = true;
-                Tasks::TaskCoordinator::GetInstance()->AddNamedTask(
-                    Tasks::ENamedTaskThread::SCENE_UPDATE, sceneNodesUpdateTask);
+
+                if (taskCount == 0)
+                {
+                    return true;
+                }
+
+                auto* taskCoordinator = Tasks::TaskCoordinator::GetInstance();
+                for (uint32_t taskIndex = 0; taskIndex < taskCount; ++taskIndex)
+                {
+                    const uint32_t begin =
+                        static_cast<uint32_t>(nodeProxyWorkItems_.size()) * taskIndex / taskCount;
+                    const uint32_t end =
+                        static_cast<uint32_t>(nodeProxyWorkItems_.size()) * (taskIndex + 1u) / taskCount;
+                    taskCoordinator->AddParralledTask(
+                        [this, begin, end](Tasks::ResTask&)
+                        {
+                            uint64_t localExpandedTriangleCount = 0;
+                            bool localMovingNodeDetected = false;
+
+                            for (uint32_t itemIndex = begin; itemIndex < end; ++itemIndex)
+                            {
+                                const NodeProxyUpdateWorkItem& item = nodeProxyWorkItems_[itemIndex];
+                                Node* node = item.node;
+                                const Model* model = GetModel(item.modelId);
+                                if (!node || !model)
+                                {
+                                    continue;
+                                }
+
+                                localMovingNodeDetected |= node->TickVelocity();
+
+                                const auto* render = node->GetRenderComponent();
+                                const uint32_t instanceId = node->GetInstanceId();
+                                const uint32_t editableInstanceId = node->IsSceneReferenceInternal()
+                                    ? node->GetSceneReferenceOwnerProxyId()
+                                    : instanceId;
+                                const uint32_t outlineFlags = render->GetOutlineFlags();
+                                const uint32_t selectedBit =
+                                    (selectionState_.IsSelected(editableInstanceId) ||
+                                     (outlineFlags & Runtime::RenderOutlineFlags::selected) != 0u) ? 1u : 0u;
+                                const uint32_t hoveredBit =
+                                    (hoveredId_ == editableInstanceId ||
+                                     (outlineFlags & Runtime::RenderOutlineFlags::hovered) != 0u) ? 1u : 0u;
+                                const uint32_t lockedBit =
+                                    (lockedIds_.find(editableInstanceId) != lockedIds_.end() ||
+                                     (outlineFlags & Runtime::RenderOutlineFlags::locked) != 0u) ? 1u : 0u;
+                                const uint32_t dangerBit =
+                                    (outlineFlags & Runtime::RenderOutlineFlags::danger) != 0u ? 1u : 0u;
+                                const uint32_t stateBits =
+                                    hoveredBit | (lockedBit << 1u) | (dangerBit << 2u);
+
+                                uint32_t nodeJointOffset = 0;
+                                if (const auto* skinnedMesh =
+                                        node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
+                                {
+                                    nodeJointOffset = skinnedMesh->GetJointMatrixOffset();
+                                }
+
+                                NodeProxy baseProxy;
+                                node->GetNodeProxy(baseProxy);
+                                uint32_t outputIndex = item.outputOffset;
+                                for (uint32_t section = 0; section < model->SectionCount(); ++section)
+                                {
+                                    uint32_t encodedModelSection = 0;
+                                    if (!TryEncodeModelSection(item.modelId, section, encodedModelSection) ||
+                                        encodedModelSection >= offsets_.size())
+                                    {
+                                        continue;
+                                    }
+
+                                    NodeProxy proxy = baseProxy;
+                                    proxy.modelId = encodedModelSection;
+                                    proxy.excludeFromAS = section == 0 ? 0 : 1;
+                                    proxy.reserved1 = selectedBit;
+                                    proxy.reserved2 = stateBits;
+                                    proxy.jointMatrixOffset = nodeJointOffset;
+                                    nodeProxies[outputIndex++] = std::move(proxy);
+                                    localExpandedTriangleCount +=
+                                        offsets_[encodedModelSection].indexCount / 3u;
+                                }
+                            }
+
+                            nodeProxyExpandedTriangleCount_.fetch_add(
+                                localExpandedTriangleCount, std::memory_order_relaxed);
+                            if (localMovingNodeDetected)
+                            {
+                                nodeProxyMovingNodeDetected_.store(true, std::memory_order_relaxed);
+                            }
+                            nodeProxyTasksRemaining_.fetch_sub(1, std::memory_order_acq_rel);
+                        },
+                        {});
+                }
             }
             return true;
         }
