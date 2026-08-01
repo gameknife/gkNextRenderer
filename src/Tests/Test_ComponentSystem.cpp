@@ -59,13 +59,14 @@ TEST_CASE("Node velocity tracks rigid rotation", "[Unit][Node][MotionVector]")
     auto node = Assets::Node::CreateNode(
         "RotatingNode", glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f), 0);
 
-    glm::mat4 combined(1.0f);
-    CHECK_FALSE(node->TickVelocity(combined));
+    CHECK_FALSE(node->TickVelocity());
 
     node->SetRotation(glm::angleAxis(glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
-    REQUIRE(node->TickVelocity(combined));
+    REQUIRE(node->TickVelocity());
 
-    const glm::mat4 mappedPrevious = combined * node->WorldTransform();
+    Assets::NodeProxy proxy{};
+    node->GetNodeProxy(proxy);
+    const glm::mat4 mappedPrevious = proxy.combinedPrevTS * node->WorldTransform();
     const glm::mat4 identity(1.0f);
     for (glm::length_t column = 0; column < 4; ++column)
     {
@@ -75,8 +76,9 @@ TEST_CASE("Node velocity tracks rigid rotation", "[Unit][Node][MotionVector]")
         }
     }
 
-    CHECK_FALSE(node->TickVelocity(combined));
-    CHECK(combined == identity);
+    CHECK_FALSE(node->TickVelocity());
+    node->GetNodeProxy(proxy);
+    CHECK(proxy.combinedPrevTS == identity);
 }
 
 TEST_CASE("Environment sun direction supports elevation", "[Unit][Environment]")

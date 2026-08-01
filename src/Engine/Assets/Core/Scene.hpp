@@ -180,6 +180,7 @@ namespace Assets
         bool GetNodeBounds(uint32_t nodeId, glm::vec3& center, float& radius) const;
 
         void Tick(float DeltaSeconds);
+        void SyncPhysics();
         void UpdateAllMaterials();
         void MarkMaterialsDirty() { materialDirty_ = true; }
         void SyncUpdateScene();

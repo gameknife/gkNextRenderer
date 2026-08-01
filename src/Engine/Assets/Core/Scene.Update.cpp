@@ -492,6 +492,14 @@ namespace Assets
         NextEngine::GetInstance()->SetProgressiveRendering(false);
     }
 
+    void Scene::SyncPhysics()
+    {
+        for (const auto& node : nodes_)
+        {
+            node->SyncPhysics();
+        }
+    }
+
     void Scene::StartUpdateNodes()
     {
         UpdateLights();

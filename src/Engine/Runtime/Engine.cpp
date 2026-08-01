@@ -703,6 +703,7 @@ bool NextEngine::Tick(bool forcingDelta)
         {
             SCOPED_CPU_TIMER("physics");
             services_.physics->Tick(frameState_.deltaSeconds);
+            if (scene_) scene_->SyncPhysics();
         }
 
         if (scriptRuntime_)

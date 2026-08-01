@@ -85,7 +85,8 @@ TEST_CASE_METHOD(EngineTestFixture, "Dynamic Physics Offset Uses Local Space", "
     glm::vec3 bodyPosition = meshTranslation + meshRotation * (localOffset * meshScale);
 
     auto bodyId = physics->CreateBoxBody(bodyPosition, meshRotation, bodyExtent, NextMotionType::Dynamic);
-    auto node = Assets::Node::CreateNode("DynamicOffsetNode", meshTranslation, meshRotation, meshScale, 1);
+    auto node = Assets::Node::CreateNode("DynamicOffsetNode", meshTranslation, meshRotation, meshScale,
+                                         engine_->GetScene().GenerateInstanceId());
 
     auto physComp = std::make_shared<Runtime::PhysicsComponent>();
     physComp->BindPhysicsBody(bodyId);
@@ -93,12 +94,17 @@ TEST_CASE_METHOD(EngineTestFixture, "Dynamic Physics Offset Uses Local Space", "
     physComp->SetPhysicsOffset(localOffset);
     node->AddComponent(physComp);
 
-    glm::mat4 combined(1.0f);
-    node->TickVelocity(combined);
-    CHECK(glm::all(glm::epsilonEqual(node->WorldTranslation(), meshTranslation, 0.0001f)));
+    engine_->GetScene().AddNode(node);
+    physics->SetBodyTransform(bodyId, bodyPosition + glm::vec3(0.4f, 0.8f, -0.2f), meshRotation, true);
+    Simulate(1);
+
+    const FNextPhysicsBody* body = physics->GetBody(bodyId);
+    REQUIRE(body != nullptr);
+    const glm::vec3 expectedTranslation = body->position - body->rotation * (localOffset * meshScale);
+    CHECK(glm::all(glm::epsilonEqual(node->WorldTranslation(), expectedTranslation, 0.0001f)));
     CHECK(glm::abs(glm::dot(node->WorldRotation(), meshRotation)) > 0.9999f);
 
-    physics->RemoveBody(bodyId);
+    engine_->GetScene().RemoveNodeByInstanceId(node->GetInstanceId());
 }
 
 TEST_CASE_METHOD(EngineTestFixture, "SetBodyVelocity Reactivates Resting Dynamic Body", "[Integration][Physics]") {

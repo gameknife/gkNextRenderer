@@ -217,7 +217,7 @@ std::shared_ptr<FCPUTLASBuildInput> FCPUAccelerationStructure::CaptureBuildInput
     input->contexts.reserve(scene.Nodes().size());
     for (auto& node : scene.Nodes())
     {
-        auto render = node->GetComponent<Runtime::RenderComponent>();
+        auto render = node->GetRenderComponent();
         if (!render) continue;
         const uint32_t modelId = render->GetModelId();
         if (modelId == -1) continue;
@@ -228,7 +228,7 @@ std::shared_ptr<FCPUTLASBuildInput> FCPUAccelerationStructure::CaptureBuildInput
             continue;
         }
 
-        node->RecalcTransform(true);
+        //node->RecalcTransform(true);
         const glm::mat4 nodeWorldTransform = node->WorldTransform();
         const FWorldBounds worldBounds = ComputeWorldBounds(scene.Models()[modelId], nodeWorldTransform);
 
@@ -236,29 +236,22 @@ std::shared_ptr<FCPUTLASBuildInput> FCPUAccelerationStructure::CaptureBuildInput
         tinybvh::BLASInstance instance;
         instance.blasIdx = modelId;
         std::memcpy(instance.transform, &worldTS[0], sizeof(instance.transform));
-        input->instances.push_back(instance);
+        input->instances.emplace_back(std::move(instance));
 
         FCPUTLASInstanceInfo info;
         info.matIdxs.fill(0);
-        info.nodeId = scene.ResolveEditableNodeId(node->GetInstanceId());
+        info.nodeId = node->GetInstanceId();
         info.rayCastVisible = render->GetRayCastVisible();
         info.worldBoundsMin = worldBounds.min;
         info.worldBoundsMax = worldBounds.max;
-        if (const auto physics = node->GetComponent<Runtime::PhysicsComponent>())
-        {
-            info.navRelevant = physics->GetMobility() != Runtime::ENodeMobility::Dynamic;
-        }
-        else
-        {
-            info.navRelevant = true;
-        }
+        info.navRelevant = true;
 
         const auto& mats = render->GetMaterials();
         for (int i = 0; i < mats.size() && i < static_cast<int>(info.matIdxs.size()); ++i)
         {
             info.matIdxs[i] = mats[i];
         }
-        input->contexts.push_back(info);
+        input->contexts.emplace_back(std::move(info));
     }
 
     input->captureMilliseconds =
