@@ -530,7 +530,6 @@ void FJoltPhysicsBackend::Start()
 
 void FJoltPhysicsBackend::KickTick(double deltaSeconds)
 {
-    CompleteTick();
     if (paused_ || deltaSeconds <= 0.0)
     {
         return;
@@ -540,6 +539,11 @@ void FJoltPhysicsBackend::KickTick(double deltaSeconds)
     // below one fixed step is preserved to keep normal render/physics rates in sync.
     const double maxAccumulatedTime = kFixedDeltaTime * kMaxCollisionStepsPerTick;
     accumulatedTime_ = std::min(accumulatedTime_ + deltaSeconds, maxAccumulatedTime);
+    if (updatePending_)
+    {
+        return;
+    }
+
     const int collisionSteps = std::min(
         kMaxCollisionStepsPerTick,
         static_cast<int>(std::floor(accumulatedTime_ / kFixedDeltaTime)));
@@ -551,15 +555,7 @@ void FJoltPhysicsBackend::KickTick(double deltaSeconds)
     const double simulatedDelta = kFixedDeltaTime * collisionSteps;
     accumulatedTime_ -= simulatedDelta;
 
-    pendingDynamicBodyIds_.clear();
-    pendingDynamicBodyIds_.reserve(bodies_.size());
-    for (const auto& [bodyId, body] : bodies_)
-    {
-        if (body.motionType == NextMotionType::Dynamic)
-        {
-            pendingDynamicBodyIds_.push_back(bodyId);
-        }
-    }
+    pendingDynamicBodyIds_ = dynamicBodyIds_;
 
     const bool optimizeBroadPhase = pendingBodyAddCount_ >= kBroadPhaseOptimizeBatchSize;
     const bool publishSleepingTransition = previousActiveRigidBodyCount_ > 0;
@@ -607,6 +603,19 @@ void FJoltPhysicsBackend::KickTick(double deltaSeconds)
         });
 }
 
+bool FJoltPhysicsBackend::TryCompleteTick()
+{
+    if (updatePending_)
+    {
+        if (!Tasks::TaskCoordinator::GetInstance()->IsNamedTaskComplete(Tasks::ENamedTaskThread::PHYSICS))
+        {
+            return false;
+        }
+        CompleteTick();
+    }
+    return std::exchange(updatePublished_, false);
+}
+
 void FJoltPhysicsBackend::CompleteTick()
 {
     if (!updatePending_)
@@ -616,6 +625,7 @@ void FJoltPhysicsBackend::CompleteTick()
 
     Tasks::TaskCoordinator::GetInstance()->WaitForNamedTask(Tasks::ENamedTaskThread::PHYSICS);
     updatePending_ = false;
+    updatePublished_ = true;
     ++updateCallCount_;
     simulatedStepCount_ += pendingUpdate_.collisionSteps;
 
@@ -703,6 +713,10 @@ void FJoltPhysicsBackend::Stop()
 NextBodyID FJoltPhysicsBackend::AddBodyInternal(FNextPhysicsBody& body)
 {
     bodies_[body.bodyID] = body;
+    if (body.motionType == NextMotionType::Dynamic)
+    {
+        dynamicBodyIds_.push_back(body.bodyID);
+    }
     ++pendingBodyAddCount_;
     return body.bodyID;
 }
@@ -1004,6 +1018,10 @@ void FJoltPhysicsBackend::RemoveBody(NextBodyID bodyID)
         bodyInterface.RemoveBody(joltBodyId);
     }
     bodyInterface.DestroyBody(joltBodyId);
+    if (bodies_.at(bodyID).motionType == NextMotionType::Dynamic)
+    {
+        std::erase(dynamicBodyIds_, bodyID);
+    }
     bodies_.erase(bodyID);
 }
 
@@ -1157,6 +1175,7 @@ void FJoltPhysicsBackend::OnSceneDestroyed()
     }
     
     bodies_.clear();
+    dynamicBodyIds_.clear();
 }
 
 NextVehicleID FJoltPhysicsBackend::CreateWheeledVehicle(const FNextVehicleSettings& settings)
@@ -1267,7 +1286,7 @@ NextVehicleID FJoltPhysicsBackend::CreateWheeledVehicle(const FNextVehicleSettin
     context_->physicsSystem.AddStepListener(constraint);
     FNextPhysicsBody info{settings.initialPosition, settings.initialRotation, {}, ENextBodyShape::Box,
                           data->bodyID, NextMotionType::Dynamic};
-    bodies_[data->bodyID] = info;
+    AddBodyInternal(info);
     vehicles_[id] = std::move(data);
     return id;
 }

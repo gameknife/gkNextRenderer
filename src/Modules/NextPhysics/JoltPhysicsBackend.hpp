@@ -14,6 +14,7 @@ namespace Modules::Physics
 
         void Start() override;
         void KickTick(double deltaSeconds) override;
+        bool TryCompleteTick() override;
         void CompleteTick() override;
         void Stop() override;
         void SetPaused(bool paused) override;
@@ -90,9 +91,11 @@ namespace Modules::Physics
         uint32_t lastUpdateErrorMask_{};
         uint32_t pendingBodyAddCount_{};
         uint32_t previousActiveRigidBodyCount_{};
+        std::vector<NextBodyID> dynamicBodyIds_;
         std::vector<NextBodyID> pendingDynamicBodyIds_;
         FPendingUpdate pendingUpdate_;
         bool updatePending_ = false;
+        bool updatePublished_ = false;
         bool paused_ = false;
         struct FVehicleData;
         std::unordered_map<NextVehicleID, std::unique_ptr<FVehicleData>> vehicles_;

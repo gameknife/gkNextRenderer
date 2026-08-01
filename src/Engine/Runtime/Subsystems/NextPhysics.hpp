@@ -168,9 +168,11 @@ public:
 
     virtual void Start() = 0;
     virtual void KickTick(double deltaSeconds) = 0;
+    virtual bool TryCompleteTick() = 0;
     virtual void CompleteTick() = 0;
     void Tick(double deltaSeconds)
     {
+        CompleteTick();
         KickTick(deltaSeconds);
         CompleteTick();
     }

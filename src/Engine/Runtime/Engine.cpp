@@ -694,9 +694,16 @@ bool NextEngine::Tick(bool forcingDelta)
 
         if (services_.physics)
         {
-            SCOPED_CPU_TIMER("physics complete");
-            services_.physics->CompleteTick();
-            if (scene_) scene_->SyncPhysics();
+            SCOPED_CPU_TIMER("physics collect");
+            if (forcingDelta)
+            {
+                services_.physics->CompleteTick();
+                if (services_.physics->TryCompleteTick() && scene_) scene_->SyncPhysics();
+            }
+            else if (services_.physics->TryCompleteTick() && scene_)
+            {
+                scene_->SyncPhysics();
+            }
         }
 
         // Scene Update
@@ -763,6 +770,7 @@ bool NextEngine::Tick(bool forcingDelta)
         if (config_.userSettings.TickPhysics && services_.physics)
         {
             SCOPED_CPU_TIMER("physics kick");
+            if (services_.physics->TryCompleteTick() && scene_) scene_->SyncPhysics();
             services_.physics->KickTick(frameState_.deltaSeconds);
         }
 
