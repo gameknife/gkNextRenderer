@@ -1705,9 +1705,9 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
         DrawSettingCheckboxRow(LOCTEXT("TickPhysics"), &userSetting.TickPhysics);
         
         ImGui::Separator();
-        for (auto& node : GetEngine().GetScene().Nodes())
+        for (auto* skinnedMesh : GetEngine().GetScene().Components<Runtime::SkinnedMeshComponent>())
         {
-            if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
+            if (Assets::Node* node = skinnedMesh->GetOwner())
             {
                 ImGui::PushID(node->GetName().c_str());
                 ImGui::Text("%s", node->GetName().c_str());

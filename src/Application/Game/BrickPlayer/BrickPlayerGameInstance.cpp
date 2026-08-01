@@ -344,12 +344,12 @@ void BrickPlayerGameInstance::FocusCameraOnLoadedScene()
     glm::vec3 center{0.0f};
     int count = 0;
 
-    auto& nodes = GetEngine().GetScene().Nodes();
-    auto& models = GetEngine().GetScene().Models();
-    for (auto& node : nodes)
+    auto& scene = GetEngine().GetScene();
+    const auto& models = scene.Models();
+    for (auto* render : scene.Components<Runtime::RenderComponent>())
     {
-        auto render = node->GetComponent<Runtime::RenderComponent>();
-        if (!render || !render->IsDrawable())
+        Assets::Node* node = render->GetOwner();
+        if (!node || !render->IsDrawable())
         {
             continue;
         }
@@ -467,8 +467,11 @@ void BrickPlayerGameInstance::OnSceneLoaded()
     if (isFreeBuildMode_)
     {
         auto& scene = GetEngine().GetScene();
-        for (auto& node : scene.Nodes())
+        for (auto* render : scene.Components<Runtime::RenderComponent>())
         {
+            Assets::Node* node = render->GetOwner();
+            if (!node)
+                continue;
             uint32_t instanceId = node->GetInstanceId();
             auto stepIt = nodeStepMap_.find(instanceId);
             if (stepIt == nodeStepMap_.end())
@@ -490,7 +493,7 @@ void BrickPlayerGameInstance::OnSceneLoaded()
                 node->RecalcTransform(true);
             }
 
-            auto bodyResult = CreateDynamicPhysicsBody(node.get(), worldScale, worldRotation);
+            auto bodyResult = CreateDynamicPhysicsBody(node, worldScale, worldRotation);
             if (!bodyResult.created)
                 continue;
             auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
@@ -1824,16 +1827,18 @@ void BrickPlayerGameInstance::BuildPerPartOrder()
     };
     std::vector<PartEntry> entries;
 
-    auto& nodes = GetEngine().GetScene().Nodes();
-    for (auto& node : nodes)
+    auto& scene = GetEngine().GetScene();
+    for (auto* render : scene.Components<Runtime::RenderComponent>())
     {
+        Assets::Node* node = render->GetOwner();
+        if (!node)
+            continue;
         uint32_t instanceId = node->GetInstanceId();
         auto it = nodeStepMap_.find(instanceId);
         if (it == nodeStepMap_.end())
             continue;
 
-        auto render = node->GetComponent<Runtime::RenderComponent>();
-        if (!render || !render->IsDrawable())
+        if (!render->IsDrawable())
             continue;
 
         entries.push_back({instanceId, it->second});
@@ -1862,16 +1867,20 @@ void BrickPlayerGameInstance::CaptureOriginalAssemblyState()
     auto& scene = GetEngine().GetScene();
     const auto& models = scene.Models();
 
-    for (const auto& node : scene.Nodes())
+    for (const auto* render : scene.Components<Runtime::RenderComponent>())
     {
+        const Assets::Node* node = render->GetOwner();
+        if (!node)
+        {
+            continue;
+        }
         const uint32_t instanceId = node->GetInstanceId();
         if (nodeStepMap_.find(instanceId) == nodeStepMap_.end())
         {
             continue;
         }
 
-        auto render = node->GetComponent<Runtime::RenderComponent>();
-        if (!render || !render->IsDrawable())
+        if (!render->IsDrawable())
         {
             continue;
         }
@@ -1915,17 +1924,17 @@ void BrickPlayerGameInstance::StepBackward()
 
 void BrickPlayerGameInstance::UpdateVisibilityForStep(int32_t step, bool playPlacementSound)
 {
-    auto& nodes = GetEngine().GetScene().Nodes();
+    auto& scene = GetEngine().GetScene();
     bool changed = false;
     int32_t revealedCount = 0;
     auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
 
     const auto& lookupMap = perPartMode_ ? nodePartOrder_ : nodeStepMap_;
 
-    for (auto& node : nodes)
+    for (auto* render : scene.Components<Runtime::RenderComponent>())
     {
-        auto render = node->GetComponent<Runtime::RenderComponent>();
-        if (!render)
+        Assets::Node* node = render->GetOwner();
+        if (!node)
             continue;
 
         uint32_t instanceId = node->GetInstanceId();
@@ -1942,8 +1951,8 @@ void BrickPlayerGameInstance::UpdateVisibilityForStep(int32_t step, bool playPla
             auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
             if (wasVisible != shouldBeVisible)
             {
-                Assets::NodeUtils::SetVisible(node, shouldBeVisible);
-                Assets::NodeUtils::SetRayCastVisible(node, shouldBeVisible);
+                render->SetVisible(shouldBeVisible);
+                render->SetRayCastVisible(shouldBeVisible);
                 if (physComp && physics)
                 {
                     const NextBodyID bodyId = physComp->GetPhysicsBody();
@@ -2081,8 +2090,11 @@ void BrickPlayerGameInstance::BuildFreeBuildInventory()
     freeBuildInventory_.clear();
     auto& scene = GetEngine().GetScene();
 
-    for (auto& node : scene.Nodes())
+    for (auto* render : scene.Components<Runtime::RenderComponent>())
     {
+        Assets::Node* node = render->GetOwner();
+        if (!node)
+            continue;
         uint32_t instanceId = node->GetInstanceId();
 
         // Only include inventory bricks (step > 0), skip baseplates (step 0)
@@ -2090,8 +2102,7 @@ void BrickPlayerGameInstance::BuildFreeBuildInventory()
         if (stepIt == nodeStepMap_.end() || stepIt->second <= 0)
             continue;
 
-        auto render = node->GetComponent<Runtime::RenderComponent>();
-        if (!render || !render->IsDrawable())
+        if (!render->IsDrawable())
             continue;
 
         auto partIt = nodePartFileMap_.find(instanceId);
@@ -2200,13 +2211,13 @@ void BrickPlayerGameInstance::CreateFloorPhysicsBody()
         return;
 
     float minY = FLT_MAX;
-    auto& nodes = GetEngine().GetScene().Nodes();
-    auto& models = GetEngine().GetScene().Models();
+    auto& scene = GetEngine().GetScene();
+    const auto& models = scene.Models();
 
-    for (auto& node : nodes)
+    for (auto* render : scene.Components<Runtime::RenderComponent>())
     {
-        auto render = node->GetComponent<Runtime::RenderComponent>();
-        if (!render || !render->IsDrawable())
+        Assets::Node* node = render->GetOwner();
+        if (!node || !render->IsDrawable())
             continue;
 
         uint32_t modelIdx = render->GetModelId();

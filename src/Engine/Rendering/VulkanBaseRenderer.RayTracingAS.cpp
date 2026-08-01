@@ -151,10 +151,9 @@ namespace Vulkan
         {
             auto& model = scene.Models()[modelIdx];
             bool hasSkin = false;
-            for (const auto& node : scene.Nodes())
+            for (const auto* render : scene.Components<Runtime::RenderComponent>())
             {
-                auto render = node->GetComponent<Runtime::RenderComponent>();
-                if (render && render->GetModelId() == modelIdx && render->GetSkinIndex() != -1)
+                if (render->GetModelId() == modelIdx && render->GetSkinIndex() != -1)
                 {
                     hasSkin = true;
                     break;

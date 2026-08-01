@@ -7,9 +7,12 @@
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include "Engine/Assets/Acceleration/CPUAccelerationStructure.hpp"
+#include "Engine/Assets/Core/Component.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/SceneSelectionState.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"
+
+#include <span>
 
 namespace Runtime
 {
@@ -31,6 +34,38 @@ namespace Assets
     class Scene final
     {
     public:
+        template <typename T>
+        class ComponentView
+        {
+        public:
+            class Iterator
+            {
+            public:
+                Iterator(std::span<Component* const> components, size_t index)
+                    : components_(components), index_(index) {}
+                T* operator*() const { return static_cast<T*>(components_[index_]); }
+                Iterator& operator++()
+                {
+                    ++index_;
+                    return *this;
+                }
+                bool operator!=(const Iterator& other) const { return index_ != other.index_; }
+
+            private:
+                std::span<Component* const> components_;
+                size_t index_ = 0;
+            };
+
+            explicit ComponentView(std::span<Component* const> components) : components_(components) {}
+            Iterator begin() const { return Iterator(components_, 0); }
+            Iterator end() const { return Iterator(components_, components_.size()); }
+            bool empty() const { return components_.empty(); }
+            size_t size() const { return components_.size(); }
+
+        private:
+            std::span<Component* const> components_;
+        };
+
         static void RegisterReflection();
         static constexpr uint32_t kSunShadowCascadeCount = 4;
         static constexpr uint32_t kSunShadowResolution = 1024;
@@ -109,8 +144,17 @@ namespace Assets
         // void RebuildBVH();
 
         const Assets::GPUScene& FetchGPUScene(uint32_t imageIndex, uint32_t viewBankBase) const;
-        std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
         const std::vector<std::shared_ptr<Node>>& Nodes() const { return nodes_; }
+        template <typename T>
+        ComponentView<T> Components()
+        {
+            return ComponentView<T>(GetComponentsByType(ComponentTypeId<T>()));
+        }
+        template <typename T>
+        ComponentView<const T> Components() const
+        {
+            return ComponentView<const T>(GetComponentsByType(ComponentTypeId<T>()));
+        }
         const std::vector<Model>& Models() const { return models_; }
         std::vector<Model>& MutableModels() { return models_; }
         std::vector<FMaterial>& Materials() { return materials_; }
@@ -227,11 +271,13 @@ namespace Assets
 
 
         void AddNode(std::shared_ptr<Node> node);
+        void AddNodes(std::span<const std::shared_ptr<Node>> nodes);
         void RequestSkinUpdate(uint32_t modelId);
         void ClearSkinUpdateRequests();
         const std::vector<uint32_t>& SkinUpdateRequests() const { return skinUpdateRequests_; }
         void EnsureNodePhysicsBody(Node* node);
         std::shared_ptr<Node> RemoveNodeByInstanceId(uint32_t id);
+        std::vector<std::shared_ptr<Node>> RemoveNodesByInstanceId(std::span<const uint32_t> ids);
         std::shared_ptr<Node> GetNodeSharedByInstanceId(uint32_t id) const;
         uint32_t GenerateInstanceId() const;
 
@@ -293,6 +339,14 @@ namespace Assets
         std::vector<Material> gpuMaterials_;
         std::vector<Model> models_;
         std::vector<std::shared_ptr<Node>> nodes_;
+        struct ComponentBucket
+        {
+            std::vector<Component*> components;
+            std::unordered_map<Node*, size_t> slotByOwner;
+            std::string typeName;
+        };
+        std::unordered_map<entt::id_type, ComponentBucket> componentBuckets_;
+        std::unordered_map<std::string, entt::id_type> componentTypeByName_;
         std::vector<LightObject> lights_;
         uint64_t lightsGeneration_ = 0;
         uint64_t lightsSignature_ = 0;
@@ -435,10 +489,18 @@ namespace Assets
         glm::vec3 sceneAABBMin_{FLT_MAX, FLT_MAX, FLT_MAX};
         glm::vec3 sceneAABBMax_{-FLT_MAX, -FLT_MAX, -FLT_MAX};
         std::vector<NextMeshShapeHandle> cachedMeshShapes_;
+        // Static mesh bodies are scene implementation details. Keep their handles here so a
+        // PhysicsComponent is only required for nodes with explicit (kinematic/dynamic) behavior.
+        std::unordered_map<Node*, NextBodyID> staticPhysicsBodies_;
 
         Vulkan::CommandPool* commandPool_ = nullptr;
 
         void BindNode(std::shared_ptr<Node> const& node);
+        void UnbindNode(Node& node);
+        void OnNodeComponentChanged(Node& node, entt::id_type componentTypeId, Component* component);
+        void RegisterComponent(Node& node, Component& component);
+        void UnregisterComponent(Node& node, entt::id_type componentTypeId);
+        std::span<Component* const> GetComponentsByType(entt::id_type componentTypeId) const;
         void RegisterSkinComponent(Runtime::SkinnedMeshComponent& component);
         void EnsureJointMatrixCapacity();
 

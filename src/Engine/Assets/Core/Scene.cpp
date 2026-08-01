@@ -174,23 +174,15 @@ namespace Assets
 
     int32_t Scene::FindNodeIdWithComponent(const std::string& componentType) const
     {
-        for (const auto& node : nodes_)
+        const auto typeIt = componentTypeByName_.find(componentType);
+        if (typeIt == componentTypeByName_.end())
         {
-            if (!node)
-            {
-                continue;
-            }
-
-            for (const auto& component : node->GetComponents())
-            {
-                if (component && component->GetTypeName() == componentType)
-                {
-                    return static_cast<int32_t>(node->GetInstanceId());
-                }
-            }
+            return -1;
         }
-
-        return -1;
+        const auto components = GetComponentsByType(typeIt->second);
+        return components.empty() || components.front()->GetOwner() == nullptr
+                   ? -1
+                   : static_cast<int32_t>(components.front()->GetOwner()->GetInstanceId());
     }
 
     Node* Scene::GetNodeById(uint32_t nodeId)
@@ -493,7 +485,7 @@ namespace Assets
         {
             if (node)
             {
-                node->SetComponentAddedCallback({});
+                node->SetComponentChangedCallback({});
             }
         }
 
@@ -591,10 +583,10 @@ namespace Assets
 
     void Scene::PostLoad(const std::vector<Skeleton>& skeletons)
     {
-        for (auto& node : nodes_)
+        for (auto* render : Components<Runtime::RenderComponent>())
         {
-            auto render = node->GetComponent<Runtime::RenderComponent>();
-            if (render && render->GetSkinIndex() != -1 && render->GetSkinIndex() < skeletons.size())
+            Node* node = render->GetOwner();
+            if (node && render->GetSkinIndex() != -1 && render->GetSkinIndex() < skeletons.size())
             {
                 auto comp = std::make_shared<Runtime::SkinnedMeshComponent>(skeletons[render->GetSkinIndex()]);
                 comp->AddAnimations(tracks_);
@@ -615,6 +607,14 @@ namespace Assets
         EnsureNodePhysicsBody(node.get());
     }
 
+    void Scene::AddNodes(std::span<const std::shared_ptr<Node>> nodes)
+    {
+        for (const auto& node : nodes)
+        {
+            AddNode(node);
+        }
+    }
+
     void Scene::EnsureNodePhysicsBody(Node* node)
     {
         if (!node)
@@ -631,6 +631,12 @@ namespace Assets
             {
                 auto phys = node->GetComponent<Runtime::PhysicsComponent>();
                 Node::ENodeMobility mobility = phys ? phys->GetMobility() : Node::ENodeMobility::Static;
+
+                if (auto staticBody = staticPhysicsBodies_.find(node); staticBody != staticPhysicsBodies_.end())
+                {
+                    physicsEngine->RemoveBody(staticBody->second);
+                    staticPhysicsBodies_.erase(staticBody);
+                }
 
                 if (mobility == Node::ENodeMobility::Dynamic)
                 {
@@ -657,13 +663,20 @@ namespace Assets
                                                                   node->WorldTranslation(), node->WorldRotation(),
                                                                   node->WorldScale(), motionType, layer);
 
-                    if (!phys)
+                    if (mobility == Node::ENodeMobility::Static && !phys)
+                    {
+                        staticPhysicsBodies_[node] = id;
+                    }
+                    else if (!phys)
                     {
                         phys = std::make_shared<Runtime::PhysicsComponent>();
                         phys->SetMobility(mobility);
                         node->AddComponent(phys);
                     }
-                    phys->BindPhysicsBody(id);
+                    if (phys)
+                    {
+                        phys->BindPhysicsBody(id);
+                    }
 
                     physicsEngine->SetBodyActive(id, render->GetVisible());
                 }
@@ -673,40 +686,70 @@ namespace Assets
 
     std::shared_ptr<Node> Scene::RemoveNodeByInstanceId(uint32_t id)
     {
-        for (auto it = nodes_.begin(); it != nodes_.end(); ++it)
+        const std::array<uint32_t, 1> ids = {id};
+        auto removedNodes = RemoveNodesByInstanceId(ids);
+        return removedNodes.empty() ? nullptr : std::move(removedNodes.front());
+    }
+
+    std::vector<std::shared_ptr<Node>> Scene::RemoveNodesByInstanceId(std::span<const uint32_t> ids)
+    {
+        std::vector<std::shared_ptr<Node>> removedNodes;
+        if (ids.empty())
         {
-            if ((*it)->GetInstanceId() == id)
+            return removedNodes;
+        }
+
+        std::unordered_set<uint32_t> removeIds(ids.begin(), ids.end());
+        removedNodes.reserve(removeIds.size());
+        bool refreshEnvironment = false;
+        for (auto it = nodes_.begin(); it != nodes_.end();)
+        {
+            const auto& node = *it;
+            const uint32_t id = node->GetInstanceId();
+            if (!removeIds.contains(id))
             {
-                auto node = *it;
-                if (NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine())
+                ++it;
+                continue;
+            }
+
+            if (NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine())
+            {
+                if (auto staticBody = staticPhysicsBodies_.find(node.get());
+                    staticBody != staticPhysicsBodies_.end())
                 {
-                    if (auto phys = node->GetComponent<Runtime::PhysicsComponent>())
+                    physicsEngine->RemoveBody(staticBody->second);
+                    staticPhysicsBodies_.erase(staticBody);
+                }
+                if (auto phys = node->GetComponent<Runtime::PhysicsComponent>())
+                {
+                    const NextBodyID bodyId = phys->GetPhysicsBody();
+                    if (!bodyId.IsInvalid())
                     {
-                        const NextBodyID bodyId = phys->GetPhysicsBody();
-                        if (!bodyId.IsInvalid())
-                        {
-                            physicsEngine->RemoveBody(bodyId);
-                        }
+                        physicsEngine->RemoveBody(bodyId);
                     }
                 }
-                selectionState_.Remove(id);
-                if (hoveredId_ == id)
-                {
-                    hoveredId_ = SceneSelectionState::invalidNodeId;
-                }
-                lockedIds_.erase(id);
-                node->ClearParent();
-                node->SetComponentAddedCallback({});
-                UnregisterNodeIndex(id);
-                nodes_.erase(it);
-                if (node->GetComponentPtr<Runtime::EnvironmentComponent>() == environmentComponent_)
-                {
-                    RefreshEnvironmentComponentCache();
-                }
-                return node;
             }
+
+            selectionState_.Remove(id);
+            if (hoveredId_ == id)
+            {
+                hoveredId_ = SceneSelectionState::invalidNodeId;
+            }
+            lockedIds_.erase(id);
+            node->ClearParent();
+            refreshEnvironment |= node->GetComponentPtr<Runtime::EnvironmentComponent>() == environmentComponent_;
+            UnbindNode(*node);
+            UnregisterNodeIndex(id);
+            removedNodes.push_back(node);
+            it = nodes_.erase(it);
         }
-        return nullptr;
+
+        indexedNodeCount_ = nodes_.size();
+        if (refreshEnvironment)
+        {
+            RefreshEnvironmentComponentCache();
+        }
+        return removedNodes;
     }
 
     std::shared_ptr<Node> Scene::GetNodeSharedByInstanceId(uint32_t id) const
@@ -769,7 +812,21 @@ namespace Assets
         removeIds.reserve(nodesToRemove.size());
         for (const auto& node : nodesToRemove)
         {
-            node->SetComponentAddedCallback({});
+            if (NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine())
+            {
+                if (auto staticBody = staticPhysicsBodies_.find(node.get());
+                    staticBody != staticPhysicsBodies_.end())
+                {
+                    physicsEngine->RemoveBody(staticBody->second);
+                    staticPhysicsBodies_.erase(staticBody);
+                }
+                if (auto* physics = node->GetComponentPtr<Runtime::PhysicsComponent>())
+                {
+                    physicsEngine->RemoveBody(physics->GetPhysicsBody());
+                    physics->BindPhysicsBody({});
+                }
+            }
+            UnbindNode(*node);
             removeIds.insert(node->GetInstanceId());
         }
 
@@ -812,6 +869,7 @@ namespace Assets
             BindNode(it->node);
             RegisterNodeIndex(it->node);
             CacheEnvironmentComponentFromNode(it->node.get());
+            EnsureNodePhysicsBody(it->node.get());
         }
 
         if (parent && root)
@@ -1070,18 +1128,8 @@ namespace Assets
         }
 
         const uint32_t replacement = id == 0 ? 1u : 0u;
-        for (const auto& node : nodes_)
+        for (auto* render : Components<Runtime::RenderComponent>())
         {
-            if (!node)
-            {
-                continue;
-            }
-            auto* render = node->GetComponentPtr<Runtime::RenderComponent>();
-            if (render == nullptr)
-            {
-                continue;
-            }
-
             auto materialRefs = render->GetMaterials();
             bool changed = false;
             for (uint32_t& materialRef : materialRefs)

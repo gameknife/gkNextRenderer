@@ -79,6 +79,7 @@ namespace Assets
         {
             static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
             const auto componentTypeId = ComponentTypeId<T>();
+            std::shared_ptr<Component> replacedComponent;
 
             if constexpr (std::is_same_v<T, Runtime::PhysicsComponent>)
             {
@@ -94,6 +95,7 @@ namespace Assets
             {
                 if ((*it)->GetTypeId() == componentTypeId)
                 {
+                    replacedComponent = *it;
                     it = components_.erase(it);
                 }
                 else
@@ -106,7 +108,6 @@ namespace Assets
             {
                 component->SetOwner(this);
                 components_.push_back(component);
-                componentTypeMask_ |= ComponentTypeMask<T>();
 
                 if constexpr (std::is_same_v<T, Runtime::PhysicsComponent>)
                 {
@@ -116,17 +117,31 @@ namespace Assets
                 {
                     renderComponent_ = component.get();
                 }
+            }
 
-                if (componentAddedCallback_)
-                {
-                    componentAddedCallback_(*component);
-                }
+            RebuildComponentTypeMask();
+            if (componentChangedCallback_)
+            {
+                componentChangedCallback_(*this, componentTypeId, component.get());
+            }
+            if (replacedComponent && replacedComponent.get() != component.get())
+            {
+                replacedComponent->SetOwner(nullptr);
             }
         }
 
-        void SetComponentAddedCallback(std::function<void(Component&)> callback)
+        template <typename T>
+        void RemoveComponent()
         {
-            componentAddedCallback_ = std::move(callback);
+            AddComponent<T>({});
+        }
+
+        using ComponentChangedCallback =
+            std::function<void(Node&, entt::id_type, Component*)>;
+
+        void SetComponentChangedCallback(ComponentChangedCallback callback)
+        {
+            componentChangedCallback_ = std::move(callback);
         }
 
         template <typename T>
@@ -186,7 +201,21 @@ namespace Assets
         template <typename T>
         static constexpr uint64_t ComponentTypeMask()
         {
-            return 1ull << (ComponentTypeId<T>() & 63u);
+            return ComponentTypeMask(ComponentTypeId<T>());
+        }
+
+        static constexpr uint64_t ComponentTypeMask(entt::id_type componentTypeId)
+        {
+            return 1ull << (componentTypeId & 63u);
+        }
+
+        void RebuildComponentTypeMask()
+        {
+            componentTypeMask_ = 0;
+            for (const auto& component : components_)
+            {
+                componentTypeMask_ |= ComponentTypeMask(component->GetTypeId());
+            }
         }
 
         template <typename T>
@@ -214,7 +243,7 @@ namespace Assets
         std::set< std::shared_ptr<Node> > children_;
 
         std::vector<std::shared_ptr<Component>> components_;
-        std::function<void(Component&)> componentAddedCallback_;
+        ComponentChangedCallback componentChangedCallback_;
         uint64_t componentTypeMask_ = 0;
         Runtime::PhysicsComponent* physicsComponent_ = nullptr;
         Runtime::RenderComponent* renderComponent_ = nullptr;

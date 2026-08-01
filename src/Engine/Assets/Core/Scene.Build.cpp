@@ -94,9 +94,13 @@ namespace Assets
         {
             if (node)
             {
-                node->SetComponentAddedCallback({});
+                node->SetComponentChangedCallback({});
             }
         }
+        componentBuckets_.clear();
+        componentTypeByName_.clear();
+        // The physics backend is reset before Reload, so these handles no longer refer to bodies.
+        staticPhysicsBodies_.clear();
         nodes_ = std::move(nodes);
         allocatedJointCount_ = 0;
         jointMatrixUploadDirty_ = false;
@@ -300,10 +304,10 @@ namespace Assets
         sceneAABBMin_ = {FLT_MAX, FLT_MAX, FLT_MAX};
         sceneAABBMax_ = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
         bool hasSceneBounds = false;
-        for (auto& node : nodes_)
+        for (auto* render : Components<Runtime::RenderComponent>())
         {
-            auto render = node->GetComponent<Runtime::RenderComponent>();
-            if (render && render->GetVisible() && render->GetModelId() != -1)
+            Node* node = render->GetOwner();
+            if (node && render->GetVisible() && render->GetModelId() != -1)
             {
                 glm::vec3 localaabbMin = models_[render->GetModelId()].GetLocalAABBMin();
                 glm::vec3 localaabbMax = models_[render->GetModelId()].GetLocalAABBMax();
@@ -345,6 +349,15 @@ namespace Assets
         if (NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine())
         {
             const auto shapeCookingStart = Clock::now();
+            // RebuildMeshBuffer is also used after appending content. Remove the previous scene-owned
+            // static bodies before recreating them for the rebuilt mesh/model tables.
+            for (const auto& [node, bodyId] : staticPhysicsBodies_)
+            {
+                (void)node;
+                physicsEngine->RemoveBody(bodyId);
+            }
+            staticPhysicsBodies_.clear();
+
             cachedMeshShapes_.clear();
             for (auto& model : models_)
             {
@@ -361,11 +374,11 @@ namespace Assets
                 std::chrono::duration<float, std::milli>(Clock::now() - shapeCookingStart).count();
 
             const auto bodyCreationStart = Clock::now();
-            for (auto& node : nodes_)
+            for (auto* render : Components<Runtime::RenderComponent>())
             {
-                auto render = node->GetComponent<Runtime::RenderComponent>();
+                Node* node = render->GetOwner();
                 // bind the mesh shape to the node
-                if (render && render->GetRayCastVisible() &&
+                if (node && render->GetRayCastVisible() &&
                     render->GetModelId() < cachedMeshShapes_.size() &&
                     cachedMeshShapes_[render->GetModelId()])
                 {
@@ -389,13 +402,20 @@ namespace Assets
                                     cachedMeshShapes_[render->GetModelId()], node->WorldTranslation(),
                                     node->WorldRotation(), node->WorldScale(), motionType, layer);
 
-                                if (!phys)
+                                if (mobility == Node::ENodeMobility::Static && !phys)
+                                {
+                                    staticPhysicsBodies_[node] = id;
+                                }
+                                else if (!phys)
                                 {
                                     phys = std::make_shared<Runtime::PhysicsComponent>();
                                     phys->SetMobility(mobility);
                                     node->AddComponent(phys);
                                 }
-                                phys->BindPhysicsBody(id);
+                                if (phys)
+                                {
+                                    phys->BindPhysicsBody(id);
+                                }
 
                                 physicsEngine->SetBodyActive(id, render->GetVisible());
                             }
@@ -563,9 +583,9 @@ namespace Assets
             skinnedVertexBuffer_, skinnedVertexBufferMemory_);
         EnsureJointMatrixCapacity();
         skinUpdateRequests_.clear();
-        for (const auto& node : nodes_)
+        for (auto* skinnedMesh : Components<Runtime::SkinnedMeshComponent>())
         {
-            if (node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
+            if (const Node* node = skinnedMesh->GetOwner())
             {
                 if (const auto* render = node->GetRenderComponent(); render && render->GetModelId() != -1)
                 {

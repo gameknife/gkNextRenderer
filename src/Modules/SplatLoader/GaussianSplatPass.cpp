@@ -40,12 +40,12 @@ namespace Vulkan::GaussianSplat
         std::vector<FSplatModel> GatherSplatModels(const Assets::Scene& scene)
         {
             std::vector<FSplatModel> result;
-            for (const auto& node : scene.Nodes())
+            for (const auto* component : scene.Components<Runtime::GaussianSplatComponent>())
             {
-                const auto* component = node ? node->GetComponentPtr<Runtime::GaussianSplatComponent>() : nullptr;
-                if (component && component->GetData())
+                const Assets::Node* node = component->GetOwner();
+                if (node && component->GetData())
                 {
-                    result.push_back({node.get(), component, component->GetData().get()});
+                    result.push_back({node, component, component->GetData().get()});
                 }
             }
             return result;

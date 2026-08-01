@@ -14,6 +14,7 @@
 
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/EnvironmentComponent.hpp"
 #include "Engine/Runtime/Components/LightComponent.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
@@ -38,18 +39,130 @@ namespace Assets
             return;
         }
 
-        node->SetComponentAddedCallback([this](Component& component)
+        node->SetComponentChangedCallback([this](Node& owner, entt::id_type componentTypeId, Component* component)
         {
-            if (component.GetTypeId() == ComponentTypeId<Runtime::SkinnedMeshComponent>())
-            {
-                RegisterSkinComponent(static_cast<Runtime::SkinnedMeshComponent&>(component));
-            }
+            OnNodeComponentChanged(owner, componentTypeId, component);
         });
 
-        if (auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
+        for (const auto& component : node->GetComponents())
         {
-            RegisterSkinComponent(*skinnedMesh);
+            if (component)
+            {
+                OnNodeComponentChanged(*node, component->GetTypeId(), component.get());
+            }
         }
+    }
+
+    void Scene::UnbindNode(Node& node)
+    {
+        for (const auto& component : node.GetComponents())
+        {
+            if (component)
+            {
+                UnregisterComponent(node, component->GetTypeId());
+            }
+        }
+        node.SetComponentChangedCallback({});
+    }
+
+    void Scene::OnNodeComponentChanged(Node& node, entt::id_type componentTypeId, Component* component)
+    {
+        if (component)
+        {
+            RegisterComponent(node, *component);
+        }
+        else
+        {
+            UnregisterComponent(node, componentTypeId);
+        }
+
+        if (componentTypeId == ComponentTypeId<Runtime::SkinnedMeshComponent>() && component)
+        {
+            // A replacement needs a fresh joint-matrix range just like a newly attached skin.
+            RegisterSkinComponent(static_cast<Runtime::SkinnedMeshComponent&>(*component));
+        }
+
+        if (componentTypeId == ComponentTypeId<Runtime::EnvironmentComponent>())
+        {
+            if (component)
+            {
+                if (environmentComponent_ == nullptr || environmentComponent_->GetOwner() == &node)
+                {
+                    environmentComponent_ = static_cast<Runtime::EnvironmentComponent*>(component);
+                }
+            }
+            else if (environmentComponent_ && environmentComponent_->GetOwner() == &node)
+            {
+                RefreshEnvironmentComponentCache();
+            }
+        }
+    }
+
+    void Scene::RegisterComponent(Node& node, Component& component)
+    {
+        const entt::id_type componentTypeId = component.GetTypeId();
+        const std::string typeName(component.GetTypeName());
+        auto& bucket = componentBuckets_[componentTypeId];
+        if (!bucket.typeName.empty() && bucket.typeName != typeName)
+        {
+            Throw(std::logic_error(fmt::format(
+                "Component type id collision between '{}' and '{}'", bucket.typeName, typeName)));
+        }
+        bucket.typeName = typeName;
+
+        const auto [nameIt, nameInserted] = componentTypeByName_.try_emplace(typeName, componentTypeId);
+        if (!nameInserted && nameIt->second != componentTypeId)
+        {
+            Throw(std::logic_error(fmt::format(
+                "Component type name '{}' is registered with multiple type ids", typeName)));
+        }
+
+        const auto [slotIt, inserted] = bucket.slotByOwner.try_emplace(&node, bucket.components.size());
+        if (inserted)
+        {
+            bucket.components.push_back(&component);
+        }
+        else
+        {
+            bucket.components[slotIt->second] = &component;
+        }
+    }
+
+    void Scene::UnregisterComponent(Node& node, entt::id_type componentTypeId)
+    {
+        const auto bucketIt = componentBuckets_.find(componentTypeId);
+        if (bucketIt == componentBuckets_.end())
+        {
+            return;
+        }
+
+        ComponentBucket& bucket = bucketIt->second;
+        const auto slotIt = bucket.slotByOwner.find(&node);
+        if (slotIt == bucket.slotByOwner.end())
+        {
+            return;
+        }
+
+        const size_t removedSlot = slotIt->second;
+        const size_t lastSlot = bucket.components.size() - 1;
+        if (removedSlot != lastSlot)
+        {
+            Component* movedComponent = bucket.components[lastSlot];
+            bucket.components[removedSlot] = movedComponent;
+            bucket.slotByOwner[movedComponent->GetOwner()] = removedSlot;
+        }
+        bucket.components.pop_back();
+        bucket.slotByOwner.erase(slotIt);
+    }
+
+    std::span<Component* const> Scene::GetComponentsByType(entt::id_type componentTypeId) const
+    {
+        const auto bucketIt = componentBuckets_.find(componentTypeId);
+        if (bucketIt == componentBuckets_.end())
+        {
+            return {};
+        }
+        return bucketIt->second.components;
     }
 
     void Scene::RegisterSkinComponent(Runtime::SkinnedMeshComponent& component)
@@ -128,10 +241,10 @@ namespace Assets
             }
         }
 
-        for (const auto& node : nodes_)
+        for (const auto* lightComponent : Components<Runtime::LightComponent>())
         {
-            const auto* lightComponent = node ? node->GetComponentPtr<Runtime::LightComponent>() : nullptr;
-            if (!lightComponent || !lightComponent->GetEnabled())
+            const Node* node = lightComponent->GetOwner();
+            if (!node || !lightComponent->GetEnabled())
             {
                 continue;
             }
@@ -277,9 +390,10 @@ namespace Assets
             {
                 SCOPED_CPU_TIMER("skinned mesh");
 
-                for (auto& node : nodes_)
+                for (auto* skinnedMesh : Components<Runtime::SkinnedMeshComponent>())
                 {
-                    if (auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
+                    Node* node = skinnedMesh->GetOwner();
+                    if (node)
                     {
                         skinnedMesh->Update(deltaSeconds);
                         if (NextEngine::GetInstance()->GetShowFlags().ShowDebugSkeleton)
@@ -397,10 +511,10 @@ namespace Assets
 
         if (NextEngine::GetInstance()->GetShowFlags().DebugDraw_BoundingBox)
         {
-            for (auto& node : nodes_)
+            for (auto* render : Components<Runtime::RenderComponent>())
             {
-                auto* render = node->GetRenderComponent();
-                if (!render || !render->GetVisible() || !render->IsDrawable())
+                Node* node = render->GetOwner();
+                if (!node || !render->GetVisible() || !render->IsDrawable())
                 {
                     continue;
                 }
@@ -494,9 +608,12 @@ namespace Assets
 
     void Scene::SyncPhysics()
     {
-        for (const auto& node : nodes_)
+        for (auto* physics : Components<Runtime::PhysicsComponent>())
         {
-            node->SyncPhysics();
+            if (Node* node = physics->GetOwner())
+            {
+                node->SyncPhysics();
+            }
         }
     }
 
@@ -594,14 +711,11 @@ namespace Assets
             SCOPED_CPU_TIMER("upload joint matrices");
             glm::mat4* data = static_cast<glm::mat4*>(jointMatrixBufferMemory_->Map(
                 0, static_cast<size_t>(allocatedJointCount_) * sizeof(glm::mat4)));
-            for (const auto& node : nodes_)
+            for (const auto* skinnedMesh : Components<Runtime::SkinnedMeshComponent>())
             {
-                if (const auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
-                {
-                    const auto& matrices = skinnedMesh->GetJointMatrices();
-                    std::memcpy(data + skinnedMesh->GetJointMatrixOffset(), matrices.data(),
-                                matrices.size() * sizeof(glm::mat4));
-                }
+                const auto& matrices = skinnedMesh->GetJointMatrices();
+                std::memcpy(data + skinnedMesh->GetJointMatrixOffset(), matrices.data(),
+                            matrices.size() * sizeof(glm::mat4));
             }
             jointMatrixBufferMemory_->Unmap();
             jointMatrixUploadDirty_ = false;
@@ -646,11 +760,12 @@ namespace Assets
                 // First pass stays on the main thread: determine the exact output range owned by
                 // every node. Workers can then write directly into a resized vector without locks.
                 uint32_t proxyCount = 0;
-                nodeProxyWorkItems_.reserve(nodes_.size());
-                for (const auto& node : nodes_)
+                const auto renderComponents = Components<Runtime::RenderComponent>();
+                nodeProxyWorkItems_.reserve(renderComponents.size());
+                for (auto* render : renderComponents)
                 {
-                    auto* render = node->GetRenderComponent();
-                    if (!render || !render->IsDrawable())
+                    Node* node = render->GetOwner();
+                    if (!node || !render->IsDrawable())
                     {
                         continue;
                     }
@@ -679,7 +794,7 @@ namespace Assets
                     if (validSectionCount > 0)
                     {
                         nodeProxyWorkItems_.push_back(
-                            {node.get(), modelId, proxyCount, validSectionCount});
+                            {node, modelId, proxyCount, validSectionCount});
                         proxyCount += validSectionCount;
                     }
                 }

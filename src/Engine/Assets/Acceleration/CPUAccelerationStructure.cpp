@@ -213,12 +213,13 @@ std::shared_ptr<FCPUTLASBuildInput> FCPUAccelerationStructure::CaptureBuildInput
     }
     input->materialTable = std::move(materialTable);
 
-    input->instances.reserve(scene.Nodes().size());
-    input->contexts.reserve(scene.Nodes().size());
-    for (auto& node : scene.Nodes())
+    const auto renderComponents = scene.Components<Runtime::RenderComponent>();
+    input->instances.reserve(renderComponents.size());
+    input->contexts.reserve(renderComponents.size());
+    for (auto* render : renderComponents)
     {
-        auto render = node->GetRenderComponent();
-        if (!render) continue;
+        Node* node = render->GetOwner();
+        if (!node) continue;
         const uint32_t modelId = render->GetModelId();
         if (modelId == -1) continue;
         if (!render->GetVisible()) continue;

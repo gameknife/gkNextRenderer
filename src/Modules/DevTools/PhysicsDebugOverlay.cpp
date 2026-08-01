@@ -135,15 +135,10 @@ void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::
     };
     static constexpr bool physicsDebugDepthTest = true;
 
-    for (const auto& node : scene.Nodes())
+    for (const auto* physComp : scene.Components<Runtime::PhysicsComponent>())
     {
+        const Assets::Node* node = physComp->GetOwner();
         if (!node)
-        {
-            continue;
-        }
-
-        auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
-        if (!physComp)
         {
             continue;
         }

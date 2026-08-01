@@ -304,13 +304,10 @@ namespace NextTotalwar
         NextGameInstanceBase::OnSceneLoaded();
         Assets::Scene& scene = GetEngine().GetScene();
         terrain_ = nullptr;
-        for (const auto& node : scene.Nodes())
+        for (auto* terrain : scene.Components<Runtime::TerrainComponent>())
         {
-            if (auto* terrain = node->GetComponentPtr<Runtime::TerrainComponent>())
-            {
-                terrain_ = terrain;
-                break;
-            }
+            terrain_ = terrain;
+            break;
         }
 
         NextGameplay::FNavGridSettings settings;

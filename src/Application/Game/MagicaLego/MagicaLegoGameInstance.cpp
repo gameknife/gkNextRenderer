@@ -661,7 +661,7 @@ void MagicaLegoGameInstance::TestSpawnPhysicsBlock()
     phys->SetPhysicsOffset(physicsOffset);
     newNode->AddComponent(phys);
     
-    GetEngine().GetScene().Nodes().push_back(newNode);
+    GetEngine().GetScene().AddNode(newNode);
     GetEngine().GetScene().MarkDirty();
     
     //GetEngine().GetPhysicsEngine()->AddForceToBody(id, shotDir * 70000.f);
@@ -1164,7 +1164,18 @@ void MagicaLegoGameInstance::LoadRecord(std::string filename)
 
 void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBlock>& source, uint32_t newhash)
 {
-    GetEngine().GetScene().Nodes().erase(GetEngine().GetScene().Nodes().begin() + instanceCountBeforeDynamics_, GetEngine().GetScene().Nodes().end());
+    auto& scene = GetEngine().GetScene();
+    std::vector<uint32_t> removedNodeIds;
+    const auto& nodes = scene.Nodes();
+    if (instanceCountBeforeDynamics_ < static_cast<int>(nodes.size()))
+    {
+        removedNodeIds.reserve(nodes.size() - static_cast<size_t>(instanceCountBeforeDynamics_));
+        for (size_t nodeIndex = static_cast<size_t>(instanceCountBeforeDynamics_); nodeIndex < nodes.size(); ++nodeIndex)
+        {
+            removedNodeIds.push_back(nodes[nodeIndex]->GetInstanceId());
+        }
+    }
+    scene.RemoveNodesByInstanceId(removedNodeIds);
 
     for (auto& block : source)
     {
@@ -1186,7 +1197,7 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
                     basicBlock->matType,
                     true,
                     glm::quat(orientation));
-                GetEngine().GetScene().Nodes().push_back(newNode);
+                scene.AddNode(newNode);
             }
         }
     }

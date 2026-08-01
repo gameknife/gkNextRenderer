@@ -36,7 +36,7 @@ namespace
         std::unordered_map<uint32_t, int> MaterialIndexMap;
         std::unordered_map<uint32_t, int> MeshIndexMap;
         std::unordered_map<uint32_t, int> TextureIndexMap;
-        std::unordered_map<uint32_t, Runtime::RenderComponent*> ModelRenderComponents;
+        std::unordered_map<uint32_t, const Runtime::RenderComponent*> ModelRenderComponents;
         std::unordered_map<const Node*, int> NodeIndexMap;
         std::unordered_map<std::string, int> CameraNodeNameToIndex;
         int FallbackMaterialIndex = -1;
@@ -154,14 +154,18 @@ namespace
 
     void CollectRenderComponents(FSceneSaverContext& ctx, const Scene& scene)
     {
-        for (const auto& node : scene.Nodes())
+        for (const auto* renderComp : scene.Components<Runtime::RenderComponent>())
         {
+            const Node* node = renderComp->GetOwner();
+            if (!node)
+            {
+                continue;
+            }
             if (node->IsSceneReferenceInternal())
             {
                 continue;
             }
-            auto renderComp = node->GetComponent<Runtime::RenderComponent>();
-            if (!renderComp || !renderComp->IsDrawable())
+            if (!renderComp->IsDrawable())
             {
                 continue;
             }
@@ -169,7 +173,7 @@ namespace
             const uint32_t modelId = renderComp->GetModelId();
             if (!ctx.ModelRenderComponents.contains(modelId))
             {
-                ctx.ModelRenderComponents[modelId] = renderComp.get();
+                ctx.ModelRenderComponents[modelId] = renderComp;
             }
         }
     }
@@ -488,7 +492,7 @@ namespace
             tinygltf::Mesh mesh;
             mesh.name = assetModel.Name();
 
-            Runtime::RenderComponent* renderComp = nullptr;
+            const Runtime::RenderComponent* renderComp = nullptr;
             if (auto found = ctx.ModelRenderComponents.find(modelIdx); found != ctx.ModelRenderComponents.end())
             {
                 renderComp = found->second;

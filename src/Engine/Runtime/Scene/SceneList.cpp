@@ -617,8 +617,12 @@ std::shared_ptr<Assets::Node> SceneList::AddSceneReferenceToScene(
     std::vector<Assets::AnimationTrack> ignoredTracks;
     std::vector<Assets::Skeleton> ignoredSkeletons;
     FSceneReferenceLoadContext context;
-    ResolveSceneReferenceProxy(proxy, ignoredCamera, scene.Nodes(), scene.MutableModels(), scene.Materials(),
+    std::vector<std::shared_ptr<Assets::Node>> resolvedNodes = scene.Nodes();
+    const size_t originalNodeCount = resolvedNodes.size();
+    ResolveSceneReferenceProxy(proxy, ignoredCamera, resolvedNodes, scene.MutableModels(), scene.Materials(),
                                ignoredLights, ignoredTracks, ignoredSkeletons, context);
+    scene.AddNodes(std::span<const std::shared_ptr<Assets::Node>>(
+        resolvedNodes.data() + originalNodeCount, resolvedNodes.size() - originalNodeCount));
     scene.MarkDirty();
     return proxy;
 }

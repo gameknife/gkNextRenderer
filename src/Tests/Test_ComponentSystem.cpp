@@ -1,4 +1,5 @@
 #include <catch2/catch_all.hpp>
+#include "TestCommon.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Component.hpp"
 #include "Engine/Assets/Core/Model.hpp"
@@ -52,6 +53,46 @@ TEST_CASE("Component System Basics", "[Unit][Component]") {
         auto retrieved = node->GetComponent<TestComponent>();
         CHECK(retrieved == nullptr);
     }
+}
+
+TEST_CASE_METHOD(EngineTestFixture, "Scene component index follows component and node lifetime",
+                 "[Integration][ComponentIndex]")
+{
+    Assets::Scene& scene = engine_->GetScene();
+    auto firstNode = Assets::Node::CreateNode(
+        "IndexedFirst", glm::vec3(0), glm::quat(1, 0, 0, 0), glm::vec3(1), scene.GenerateInstanceId());
+    auto firstComponent = std::make_shared<TestComponent>();
+    firstNode->AddComponent(firstComponent);
+    scene.AddNode(firstNode);
+
+    REQUIRE(scene.Components<TestComponent>().size() == 1);
+    CHECK(*scene.Components<TestComponent>().begin() == firstComponent.get());
+    CHECK(scene.FindNodeIdWithComponent("TestComponent") == static_cast<int32_t>(firstNode->GetInstanceId()));
+
+    auto replacement = std::make_shared<TestComponent>();
+    firstNode->AddComponent(replacement);
+    REQUIRE(scene.Components<TestComponent>().size() == 1);
+    CHECK(*scene.Components<TestComponent>().begin() == replacement.get());
+    CHECK(firstComponent->GetOwner() == nullptr);
+
+    auto secondNode = Assets::Node::CreateNode(
+        "IndexedSecond", glm::vec3(0), glm::quat(1, 0, 0, 0), glm::vec3(1), scene.GenerateInstanceId());
+    scene.AddNode(secondNode);
+    auto secondComponent = std::make_shared<TestComponent>();
+    secondNode->AddComponent(secondComponent);
+    CHECK(scene.Components<TestComponent>().size() == 2);
+
+    firstNode->RemoveComponent<TestComponent>();
+    REQUIRE(scene.Components<TestComponent>().size() == 1);
+    CHECK(*scene.Components<TestComponent>().begin() == secondComponent.get());
+    CHECK(replacement->GetOwner() == nullptr);
+
+    const uint32_t secondId = secondNode->GetInstanceId();
+    scene.RemoveNodeByInstanceId(secondId);
+    CHECK(scene.Components<TestComponent>().empty());
+    CHECK(secondComponent->GetOwner() == secondNode.get());
+
+    scene.RemoveNodeByInstanceId(firstNode->GetInstanceId());
 }
 
 TEST_CASE("Node velocity tracks rigid rotation", "[Unit][Node][MotionVector]")
