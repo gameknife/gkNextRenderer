@@ -269,6 +269,8 @@ TaskCoordinator::TaskCoordinator()
 
     namedThreadPools_[static_cast<size_t>(ENamedTaskThread::CPU_AS_BUILD)].push_back(
         std::make_unique<TaskThread>("TaskCoordinator CPU AS Build"));
+    namedThreadPools_[static_cast<size_t>(ENamedTaskThread::PHYSICS)].push_back(
+        std::make_unique<TaskThread>("TaskCoordinator Physics", true));
 }
 
 bool TaskCoordinator::IsAllParralledTaskComplete()

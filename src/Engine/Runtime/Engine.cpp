@@ -692,18 +692,18 @@ bool NextEngine::Tick(bool forcingDelta)
         // 这里是一帧tick的开始，这里开始scene nodes可能会被操纵，在这里要把所有nodes的线程更新完成并准备好提交GPU
         if (scene_) scene_->EndUpdateNodes();
 
+        if (services_.physics)
+        {
+            SCOPED_CPU_TIMER("physics complete");
+            services_.physics->CompleteTick();
+            if (scene_) scene_->SyncPhysics();
+        }
+
         // Scene Update
         if (scene_)
         {
             SCOPED_CPU_TIMER("scene tick");
             scene_->Tick(static_cast<float>(frameState_.deltaSeconds));
-        }
-
-        if (config_.userSettings.TickPhysics && services_.physics)
-        {
-            SCOPED_CPU_TIMER("physics");
-            services_.physics->Tick(frameState_.deltaSeconds);
-            if (scene_) scene_->SyncPhysics();
         }
 
         if (scriptRuntime_)
@@ -760,6 +760,12 @@ bool NextEngine::Tick(bool forcingDelta)
             }
         }
 
+        if (config_.userSettings.TickPhysics && services_.physics)
+        {
+            SCOPED_CPU_TIMER("physics kick");
+            services_.physics->KickTick(frameState_.deltaSeconds);
+        }
+
         // 到这里，这一帧的nodes操作已经结束，这里可以发起Scene Nodes的多线程更新
         if (scene_) scene_->StartUpdateNodes();
         
@@ -810,6 +816,11 @@ bool NextEngine::Tick(bool forcingDelta)
 void NextEngine::End()
 {
     if (agentControl_) { agentControl_->Stop(); agentControl_.reset(); }
+
+    if (services_.physics)
+    {
+        services_.physics->CompleteTick();
+    }
     
     //if (!GOption->FastExit)
     {

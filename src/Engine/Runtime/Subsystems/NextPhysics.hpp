@@ -167,7 +167,13 @@ public:
     virtual ~NextPhysics() = default;
 
     virtual void Start() = 0;
-    virtual void Tick(double deltaSeconds) = 0;
+    virtual void KickTick(double deltaSeconds) = 0;
+    virtual void CompleteTick() = 0;
+    void Tick(double deltaSeconds)
+    {
+        KickTick(deltaSeconds);
+        CompleteTick();
+    }
     virtual void Stop() = 0;
     virtual void SetPaused(bool paused) = 0;
     virtual bool IsPaused() const = 0;

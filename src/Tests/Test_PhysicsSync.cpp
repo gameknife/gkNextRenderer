@@ -151,6 +151,27 @@ TEST_CASE_METHOD(EngineTestFixture, "Physics catch-up advances the full fixed-st
     physics->RemoveBody(sphere);
 }
 
+TEST_CASE_METHOD(EngineTestFixture, "Async physics publishes only after completion",
+                 "[Integration][Physics][Async]")
+{
+    auto* physics = engine_->GetPhysicsEngine();
+    REQUIRE(physics != nullptr);
+
+    const NextBodyID bodyId = physics->CreateSphereBody(
+        glm::vec3(0.0f, 5.0f, 0.0f), 0.25f, NextMotionType::Dynamic);
+    physics->SetBodyVelocity(bodyId, glm::vec3(6.0f, 0.0f, 0.0f), glm::vec3(0.0f));
+
+    const FNextPhysicsBody* publishedBody = physics->GetBody(bodyId);
+    REQUIRE(publishedBody != nullptr);
+    const glm::vec3 publishedBefore = publishedBody->position;
+    physics->KickTick(1.0 / 60.0);
+    CHECK(physics->GetBody(bodyId)->position == publishedBefore);
+
+    physics->CompleteTick();
+    CHECK(physics->GetBody(bodyId)->position.x > publishedBefore.x);
+    physics->RemoveBody(bodyId);
+}
+
 TEST_CASE_METHOD(EngineTestFixture, "High render rate keeps physics updates at 60 Hz",
                  "[Integration][Physics][FixedStep]")
 {

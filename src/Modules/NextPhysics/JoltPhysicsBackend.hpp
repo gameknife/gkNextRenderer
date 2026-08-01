@@ -13,7 +13,8 @@ namespace Modules::Physics
         ~FJoltPhysicsBackend() override;
 
         void Start() override;
-        void Tick(double deltaSeconds) override;
+        void KickTick(double deltaSeconds) override;
+        void CompleteTick() override;
         void Stop() override;
         void SetPaused(bool paused) override;
         bool IsPaused() const override { return paused_; }
@@ -63,6 +64,22 @@ namespace Modules::Physics
         NextBodyID GetVehicleBodyID(NextVehicleID vehicleID) const override;
 
     private:
+        struct FPendingBodyState
+        {
+            NextBodyID id;
+            glm::vec3 position;
+            glm::quat rotation;
+            glm::vec3 velocity;
+        };
+
+        struct FPendingUpdate
+        {
+            std::vector<FPendingBodyState> bodies;
+            uint32_t errorMask{};
+            uint32_t activeBodyCount{};
+            uint32_t collisionSteps{};
+        };
+
         NextBodyID AddBodyInternal(FNextPhysicsBody& body);
 
         std::unique_ptr<FNextPhysicsContext> context_;
@@ -73,6 +90,9 @@ namespace Modules::Physics
         uint32_t lastUpdateErrorMask_{};
         uint32_t pendingBodyAddCount_{};
         uint32_t previousActiveRigidBodyCount_{};
+        std::vector<NextBodyID> pendingDynamicBodyIds_;
+        FPendingUpdate pendingUpdate_;
+        bool updatePending_ = false;
         bool paused_ = false;
         struct FVehicleData;
         std::unordered_map<NextVehicleID, std::unique_ptr<FVehicleData>> vehicles_;

@@ -42,6 +42,9 @@ public:
     bool IsValid() const;
 
 private:
+    void CompletePhysics() const;
+
+    NextPhysics* physics_ = nullptr;
     std::unique_ptr<INextCharacterControllerBackend> backend_;
     FCharacterControllerSettings settings_{};
 };

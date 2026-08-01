@@ -36,6 +36,7 @@
 #include <glm/ext.hpp>
 
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 
@@ -121,6 +122,7 @@ namespace
     constexpr float kDynamicBoxLinearDamping = 0.025f;
     constexpr float kDynamicBoxAngularDamping = 0.02f;
     constexpr float kDynamicBoxInertiaMultiplier = 1.0f;
+    constexpr uint kMaxJobThreads = 8;
 
     float ComputeBoxConvexRadius(const Vec3& halfExtent)
     {
@@ -415,7 +417,7 @@ struct FNextPhysicsContext
 {
     FNextPhysicsContext():
         tempAllocator(kTempAllocatorSize),
-        jobSystem(cMaxPhysicsJobs, cMaxPhysicsBarriers, std::thread::hardware_concurrency() - 1)
+        jobSystem(cMaxPhysicsJobs, cMaxPhysicsBarriers, std::min(kMaxJobThreads, std::thread::hardware_concurrency() - 1))
     {
         // This determines how many mutexes to allocate to protect rigid bodies from concurrent access. Set it to 0 for the default settings.
         const uint cNumBodyMutexes = 0;
@@ -526,8 +528,9 @@ void FJoltPhysicsBackend::Start()
     // Instead insert all new objects in batches instead of 1 at a time to keep the broad phase efficient.
 }
 
-void FJoltPhysicsBackend::Tick(double deltaSeconds)
+void FJoltPhysicsBackend::KickTick(double deltaSeconds)
 {
+    CompleteTick();
     if (paused_ || deltaSeconds <= 0.0)
     {
         return;
@@ -548,65 +551,99 @@ void FJoltPhysicsBackend::Tick(double deltaSeconds)
     const double simulatedDelta = kFixedDeltaTime * collisionSteps;
     accumulatedTime_ -= simulatedDelta;
 
-    SCOPED_CPU_TIMER("physics solve");
-
-    // Body creation happens one at a time through the public API. Defer the expensive tree
-    // rebuild until the first simulation step so thousands of bodies only trigger it once.
-    if (pendingBodyAddCount_ >= kBroadPhaseOptimizeBatchSize)
+    pendingDynamicBodyIds_.clear();
+    pendingDynamicBodyIds_.reserve(bodies_.size());
+    for (const auto& [bodyId, body] : bodies_)
     {
-        context_->physicsSystem.OptimizeBroadPhase();
+        if (body.motionType == NextMotionType::Dynamic)
+        {
+            pendingDynamicBodyIds_.push_back(bodyId);
+        }
     }
+
+    const bool optimizeBroadPhase = pendingBodyAddCount_ >= kBroadPhaseOptimizeBatchSize;
+    const bool publishSleepingTransition = previousActiveRigidBodyCount_ > 0;
     pendingBodyAddCount_ = 0;
+    updatePending_ = true;
 
-    // inDeltaTime is the total simulated time; Jolt divides it into collisionSteps equal
-    // fixed steps. Passing only kFixedDeltaTime here would advance too little during catch-up.
-    const EPhysicsUpdateError updateError =
-        context_->physicsSystem.Update(static_cast<float>(simulatedDelta), collisionSteps,
-                                       &context_->tempAllocator, &context_->jobSystem);
+    Tasks::TaskCoordinator::GetInstance()->AddNamedTask(
+        Tasks::ENamedTaskThread::PHYSICS,
+        [this, simulatedDelta, collisionSteps, optimizeBroadPhase,
+         publishSleepingTransition](Tasks::ResTask&)
+        {
+            if (optimizeBroadPhase)
+            {
+                context_->physicsSystem.OptimizeBroadPhase();
+            }
+
+            // Jolt waits for its internal jobs, but this outer task remains asynchronous to the frame.
+            const EPhysicsUpdateError updateError =
+                context_->physicsSystem.Update(static_cast<float>(simulatedDelta), collisionSteps,
+                                               &context_->tempAllocator, &context_->jobSystem);
+            pendingUpdate_.errorMask = static_cast<uint32_t>(updateError);
+            pendingUpdate_.activeBodyCount =
+                context_->physicsSystem.GetNumActiveBodies(EBodyType::RigidBody);
+            pendingUpdate_.collisionSteps = static_cast<uint32_t>(collisionSteps);
+            pendingUpdate_.bodies.clear();
+
+            if (pendingUpdate_.activeBodyCount > 0 || publishSleepingTransition)
+            {
+                BodyInterface& bodyInterface = context_->physicsSystem.GetBodyInterface();
+                pendingUpdate_.bodies.reserve(pendingDynamicBodyIds_.size());
+                for (NextBodyID bodyId : pendingDynamicBodyIds_)
+                {
+                    const BodyID joltBodyId = ToJoltBodyID(bodyId);
+                    RVec3 position;
+                    Quat rotation;
+                    bodyInterface.GetPositionAndRotation(joltBodyId, position, rotation);
+                    const Vec3 velocity = bodyInterface.GetLinearVelocity(joltBodyId);
+                    pendingUpdate_.bodies.push_back({
+                        bodyId,
+                        glm::vec3(position.GetX(), position.GetY(), position.GetZ()),
+                        glm::quat(rotation.GetW(), rotation.GetX(), rotation.GetY(), rotation.GetZ()),
+                        glm::vec3(velocity.GetX(), velocity.GetY(), velocity.GetZ())});
+                }
+            }
+        });
+}
+
+void FJoltPhysicsBackend::CompleteTick()
+{
+    if (!updatePending_)
+    {
+        return;
+    }
+
+    Tasks::TaskCoordinator::GetInstance()->WaitForNamedTask(Tasks::ENamedTaskThread::PHYSICS);
+    updatePending_ = false;
     ++updateCallCount_;
-    simulatedStepCount_ += static_cast<uint64_t>(collisionSteps);
+    simulatedStepCount_ += pendingUpdate_.collisionSteps;
 
-    const uint32_t updateErrorMask = static_cast<uint32_t>(updateError);
-    const uint32_t activeRigidBodyCount =
-        context_->physicsSystem.GetNumActiveBodies(EBodyType::RigidBody);
-    if (updateErrorMask != 0 && updateErrorMask != lastUpdateErrorMask_)
+    for (const FPendingBodyState& state : pendingUpdate_.bodies)
+    {
+        if (auto it = bodies_.find(state.id); it != bodies_.end())
+        {
+            it->second.position = state.position;
+            it->second.rotation = state.rotation;
+            it->second.velocity = state.velocity;
+        }
+    }
+
+    if (pendingUpdate_.errorMask != 0 && pendingUpdate_.errorMask != lastUpdateErrorMask_)
     {
         SPDLOG_ERROR("[Physics] Jolt update dropped contacts (error mask 0x{:x}, active rigid bodies {}, "
                      "body-pair capacity {}, contact capacity {}). Increase physics capacities or reduce overlap.",
-                     updateErrorMask, activeRigidBodyCount, kMaxBodyPairs, kMaxContactConstraints);
+                     pendingUpdate_.errorMask, pendingUpdate_.activeBodyCount,
+                     kMaxBodyPairs, kMaxContactConstraints);
     }
-    else if (updateErrorMask == 0 && lastUpdateErrorMask_ != 0)
+    else if (pendingUpdate_.errorMask == 0 && lastUpdateErrorMask_ != 0)
     {
         SPDLOG_INFO("[Physics] Jolt update capacity recovered");
     }
-    lastUpdateErrorMask_ = updateErrorMask;
+    lastUpdateErrorMask_ = pendingUpdate_.errorMask;
+    previousActiveRigidBodyCount_ = pendingUpdate_.activeBodyCount;
 
-    // Publish the state produced by this update, rather than the previous step's state.
-    // Once an island has gone to sleep its transforms no longer change. Synchronize once on
-    // the transition to zero active bodies, then avoid thousands of locked body reads per step.
-    if (activeRigidBodyCount > 0 || previousActiveRigidBodyCount_ > 0)
-    {
-        BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
-        for (auto& [bodyId, body] : bodies_)
-        {
-            if (body.motionType != NextMotionType::Dynamic)
-            {
-                continue;
-            }
-
-            const BodyID joltBodyId = ToJoltBodyID(bodyId);
-            RVec3 position;
-            Quat rotation;
-            bodyInterface.GetPositionAndRotation(joltBodyId, position, rotation);
-            const Vec3 velocity = bodyInterface.GetLinearVelocity(joltBodyId);
-            body.position = glm::vec3(position.GetX(), position.GetY(), position.GetZ());
-            body.rotation = glm::quat(rotation.GetW(), rotation.GetX(), rotation.GetY(), rotation.GetZ());
-            body.velocity = glm::vec3(velocity.GetX(), velocity.GetY(), velocity.GetZ());
-        }
-    }
-    previousActiveRigidBodyCount_ = activeRigidBodyCount;
-
-    if (activeRigidBodyCount > 0)
+    if (pendingUpdate_.activeBodyCount > 0)
     {
         NextEngine::GetInstance()->GetScene().MarkTransformDirty();
     }
@@ -614,6 +651,7 @@ void FJoltPhysicsBackend::Tick(double deltaSeconds)
 
 void FJoltPhysicsBackend::SetPaused(bool paused)
 {
+    CompleteTick();
     paused_ = paused;
 }
 
@@ -649,6 +687,7 @@ FNextPhysicsBodyStats FJoltPhysicsBackend::GetBodyStats() const
 
 void FJoltPhysicsBackend::Stop()
 {
+    CompleteTick();
     OnSceneDestroyed();
     
     // Unregisters all types with the factory and cleans up the default material
@@ -670,6 +709,7 @@ NextBodyID FJoltPhysicsBackend::AddBodyInternal(FNextPhysicsBody& body)
 
 NextBodyID FJoltPhysicsBackend::CreateSphereBody(glm::vec3 position, float radius, NextMotionType motionType)
 {
+    CompleteTick();
     BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
 
     // Now create a dynamic body to bounce on the floor
@@ -702,6 +742,7 @@ NextBodyID FJoltPhysicsBackend::CreateBoxBody(glm::vec3 position, glm::vec3 exte
 NextBodyID FJoltPhysicsBackend::CreateBoxBody(glm::vec3 position, glm::quat rotation, glm::vec3 extent,
                                              NextMotionType motionType)
 {
+    CompleteTick();
     BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
     BodyID bodyId(-1);
 
@@ -731,6 +772,7 @@ NextBodyID FJoltPhysicsBackend::CreateMeshBody(const NextMeshShapeHandle& meshSh
                                               glm::quat rotation, glm::vec3 scale,
                                               NextMotionType motionType, NextObjectLayer layer)
 {
+    CompleteTick();
     BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
     BodyID bodyId(-1);
     const auto joltMeshShape = std::dynamic_pointer_cast<const FJoltMeshShape>(meshShape);
@@ -775,6 +817,7 @@ NextBodyID FJoltPhysicsBackend::CreateMeshBody(const NextMeshShapeHandle& meshSh
 
 NextBodyID FJoltPhysicsBackend::CreatePlaneBody(glm::vec3 position, glm::vec3 normal, NextMotionType motionType)
 {
+    CompleteTick();
     BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
     BodyID bodyId(-1);
 
@@ -826,6 +869,7 @@ NextMeshShapeHandle FJoltPhysicsBackend::CreateMeshShape(Assets::Model& model)
 
 void FJoltPhysicsBackend::AddForceToBody(NextBodyID bodyID, const glm::vec3& force)
 {
+    CompleteTick();
     BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
 
     bodyInterface.AddForce(ToJoltBodyID(bodyID), Vec3(force.x, force.y, force.z), EActivation::Activate);
@@ -834,6 +878,7 @@ void FJoltPhysicsBackend::AddForceToBody(NextBodyID bodyID, const glm::vec3& for
 void FJoltPhysicsBackend::MoveKinematicBody(NextBodyID bodyID, const glm::vec3& position,
                                            const glm::quat& rotation, float deltaSeconds)
 {
+    CompleteTick();
     BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
     bodyInterface.MoveKinematic(ToJoltBodyID(bodyID), RVec3(position.x, position.y, position.z),
                                Quat(rotation.x, rotation.y, rotation.z, rotation.w), deltaSeconds);
@@ -847,6 +892,7 @@ void FJoltPhysicsBackend::MoveKinematicBody(NextBodyID bodyID, const glm::vec3& 
 void FJoltPhysicsBackend::SetBodyTransform(NextBodyID bodyID, const glm::vec3& position,
                                           const glm::quat& rotation, bool resetVelocity)
 {
+    CompleteTick();
     if (bodyID.IsInvalid())
     {
         return;
@@ -880,6 +926,7 @@ void FJoltPhysicsBackend::SetBodyTransform(NextBodyID bodyID, const glm::vec3& p
 void FJoltPhysicsBackend::SetBodyVelocity(NextBodyID bodyID, const glm::vec3& linearVelocity,
                                          const glm::vec3& angularVelocity)
 {
+    CompleteTick();
     if (bodyID.IsInvalid())
     {
         return;
@@ -915,6 +962,7 @@ FNextPhysicsBody* FJoltPhysicsBackend::GetBody(NextBodyID bodyID)
 
 FNextPhysicsDebugState FJoltPhysicsBackend::GetBodyDebugState(NextBodyID bodyID) const
 {
+    const_cast<FJoltPhysicsBackend*>(this)->CompleteTick();
     FNextPhysicsDebugState state;
     if (!context_ || bodyID.IsInvalid())
     {
@@ -943,6 +991,7 @@ glm::vec4 FJoltPhysicsBackend::GetBodyDebugColor(NextBodyID bodyID) const
 
 void FJoltPhysicsBackend::RemoveBody(NextBodyID bodyID)
 {
+    CompleteTick();
     if (!context_ || bodyID.IsInvalid() || !bodies_.contains(bodyID))
     {
         return;
@@ -960,6 +1009,7 @@ void FJoltPhysicsBackend::RemoveBody(NextBodyID bodyID)
 
 void FJoltPhysicsBackend::SetBodyActive(NextBodyID bodyID, bool active)
 {
+    CompleteTick();
     if (bodyID.IsInvalid()) return;
 
     BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
@@ -982,6 +1032,7 @@ void FJoltPhysicsBackend::SetBodyActive(NextBodyID bodyID, bool active)
 
 void FJoltPhysicsBackend::DrawDebugBodies() const
 {
+    const_cast<FJoltPhysicsBackend*>(this)->CompleteTick();
     if (!context_)
     {
         return;
@@ -1072,6 +1123,7 @@ void FJoltPhysicsBackend::DrawDebugBodies() const
 
 void FJoltPhysicsBackend::OnSceneStarted()
 {
+    CompleteTick();
     accumulatedTime_ = 0.0;
     updateCallCount_ = 0;
     simulatedStepCount_ = 0;
@@ -1082,6 +1134,7 @@ void FJoltPhysicsBackend::OnSceneStarted()
 
 void FJoltPhysicsBackend::OnSceneDestroyed()
 {
+    CompleteTick();
     if (!context_)
     {
         return;
@@ -1108,6 +1161,7 @@ void FJoltPhysicsBackend::OnSceneDestroyed()
 
 NextVehicleID FJoltPhysicsBackend::CreateWheeledVehicle(const FNextVehicleSettings& settings)
 {
+    CompleteTick();
     if (!context_ || settings.wheels.empty()) return invalidNextVehicleId;
     BodyInterface& bi = context_->physicsSystem.GetBodyInterface();
     RefConst<Shape> chassis = new BoxShape(Vec3(settings.chassisHalfExtent.x, settings.chassisHalfExtent.y,
@@ -1220,6 +1274,7 @@ NextVehicleID FJoltPhysicsBackend::CreateWheeledVehicle(const FNextVehicleSettin
 
 void FJoltPhysicsBackend::RemoveVehicle(NextVehicleID id)
 {
+    CompleteTick();
     auto it = vehicles_.find(id); if (it == vehicles_.end()) return;
     const NextBodyID bodyId = it->second->bodyID;
     context_->physicsSystem.RemoveStepListener(it->second->constraint);
@@ -1230,6 +1285,7 @@ void FJoltPhysicsBackend::RemoveVehicle(NextVehicleID id)
 
 void FJoltPhysicsBackend::SetVehicleInput(NextVehicleID id, const FNextVehicleInput& input)
 {
+    CompleteTick();
     auto it = vehicles_.find(id); if (it == vehicles_.end()) return;
     it->second->lastThrottle = glm::clamp(input.throttle, -1.0f, 1.0f);
     static_cast<WheeledVehicleController*>(it->second->constraint->GetController())->SetDriverInput(
@@ -1240,6 +1296,7 @@ void FJoltPhysicsBackend::SetVehicleInput(NextVehicleID id, const FNextVehicleIn
 
 void FJoltPhysicsBackend::SetVehicleDiffLock(NextVehicleID id, bool locked)
 {
+    CompleteTick();
     auto it = vehicles_.find(id); if (it == vehicles_.end()) return;
     auto* controller = static_cast<WheeledVehicleController*>(it->second->constraint->GetController());
     for (auto& diff : controller->GetDifferentials()) diff.mLimitedSlipRatio = locked ? 1.02f : 1.4f;
@@ -1248,6 +1305,7 @@ void FJoltPhysicsBackend::SetVehicleDiffLock(NextVehicleID id, bool locked)
 
 void FJoltPhysicsBackend::SetVehicleAllWheelDrive(NextVehicleID id, bool enabled)
 {
+    CompleteTick();
     auto it = vehicles_.find(id); if (it == vehicles_.end()) return;
     auto& diffs = static_cast<WheeledVehicleController*>(it->second->constraint->GetController())->GetDifferentials();
     const size_t active = enabled ? diffs.size() : static_cast<size_t>(std::count(it->second->differentialDriven.begin(),
@@ -1259,6 +1317,7 @@ void FJoltPhysicsBackend::SetVehicleAllWheelDrive(NextVehicleID id, bool enabled
 
 bool FJoltPhysicsBackend::GetVehicleTelemetry(NextVehicleID id, FNextVehicleTelemetry& telemetry) const
 {
+    const_cast<FJoltPhysicsBackend*>(this)->CompleteTick();
     auto it = vehicles_.find(id); if (it == vehicles_.end() || !context_) return false;
     const auto* controller = static_cast<const WheeledVehicleController*>(it->second->constraint->GetController());
     telemetry.gear = controller->GetTransmission().GetCurrentGear();
@@ -1282,6 +1341,7 @@ bool FJoltPhysicsBackend::GetVehicleTelemetry(NextVehicleID id, FNextVehicleTele
 
 bool FJoltPhysicsBackend::GetVehicleBodyTransform(NextVehicleID id, glm::vec3& position, glm::quat& rotation)
 {
+    CompleteTick();
     auto it = vehicles_.find(id); if (it == vehicles_.end()) return false;
     BodyInterface& bi = context_->physicsSystem.GetBodyInterface();
     RVec3 p = bi.GetPosition(ToJoltBodyID(it->second->bodyID)); Quat q = bi.GetRotation(ToJoltBodyID(it->second->bodyID));
@@ -1290,6 +1350,7 @@ bool FJoltPhysicsBackend::GetVehicleBodyTransform(NextVehicleID id, glm::vec3& p
 
 bool FJoltPhysicsBackend::GetVehicleWheelLocalTransform(NextVehicleID id, int wheel, glm::vec3& position, glm::quat& rotation)
 {
+    CompleteTick();
     auto it = vehicles_.find(id); if (it == vehicles_.end() || wheel < 0 || static_cast<uint>(wheel) >= it->second->constraint->GetWheels().size()) return false;
     Mat44 m = it->second->constraint->GetWheelLocalTransform(static_cast<uint>(wheel), Vec3::sAxisZ(), Vec3::sAxisY());
     Vec3 p = m.GetTranslation(); Quat q = m.GetQuaternion(); position = {p.GetX(), p.GetY(), p.GetZ()};
@@ -1298,6 +1359,7 @@ bool FJoltPhysicsBackend::GetVehicleWheelLocalTransform(NextVehicleID id, int wh
 
 NextBodyID FJoltPhysicsBackend::GetVehicleWheelContactBody(NextVehicleID id, int wheel)
 {
+    CompleteTick();
     auto it = vehicles_.find(id); if (it == vehicles_.end() || wheel < 0 || static_cast<uint>(wheel) >= it->second->constraint->GetWheels().size()) return {};
     const Wheel* value = it->second->constraint->GetWheel(static_cast<uint>(wheel));
     return value->HasContact() ? FromJoltBodyID(value->GetContactBodyID()) : NextBodyID{};
@@ -1305,6 +1367,7 @@ NextBodyID FJoltPhysicsBackend::GetVehicleWheelContactBody(NextVehicleID id, int
 
 void FJoltPhysicsBackend::SetVehicleWheelFrictionScale(NextVehicleID id, int wheel, float longitudinal, float lateral)
 {
+    CompleteTick();
     auto it = vehicles_.find(id); if (it != vehicles_.end() && wheel >= 0 && static_cast<size_t>(wheel) < it->second->frictionScales.size())
         it->second->frictionScales[wheel] = {std::max(0.0f, longitudinal), std::max(0.0f, lateral)};
 }
@@ -1480,6 +1543,7 @@ namespace
 std::unique_ptr<INextCharacterControllerBackend> FJoltPhysicsBackend::CreateCharacterController(
     const FCharacterControllerSettings& settings)
 {
+    CompleteTick();
     if (!context_)
     {
         return nullptr;
