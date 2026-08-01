@@ -87,6 +87,20 @@ RenderPass::RenderPass(const Vulkan::SwapChain& swapChain, VkFormat format, VkFo
           .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT});
 }
 
+RenderPass::RenderPass(const Vulkan::SwapChain& swapChain, std::span<const VkFormat> colorFormats,
+                       const Vulkan::DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp,
+                       VkAttachmentLoadOp depthBufferLoadOp) : swapChain_(swapChain), depthBuffer_(depthBuffer)
+{
+    FRenderPassSpec spec;
+    spec.colorFormats.assign(colorFormats.begin(), colorFormats.end());
+    spec.hasDepth = true;
+    spec.colorLoadOp = colorBufferLoadOp;
+    spec.depthLoadOp = depthBufferLoadOp;
+    spec.depthStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+    spec.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    Init(spec);
+}
+
 void RenderPass::Init(const FRenderPassSpec& spec)
 {
     std::vector<VkAttachmentDescription> attachments;
@@ -234,6 +248,35 @@ const Vulkan::ImageView& imageView2, const Vulkan::RenderPass& renderPass): devi
 
     Check(vkCreateFramebuffer(imageView.Device().Handle(), &framebufferInfo, nullptr, &framebuffer_),
         "create framebuffer");
+}
+
+FrameBuffer::FrameBuffer(const VkExtent2D& extent,
+                         std::span<const Vulkan::ImageView* const> colorImageViews,
+                         const Vulkan::RenderPass& renderPass, bool withDS) :
+    device_(colorImageViews.front()->Device())
+{
+    std::vector<VkImageView> attachments;
+    attachments.reserve(colorImageViews.size() + (withDS ? 1u : 0u));
+    for (const Vulkan::ImageView* imageView : colorImageViews)
+    {
+        attachments.push_back(imageView->Handle());
+    }
+    if (withDS)
+    {
+        attachments.push_back(renderPass.DepthBuffer().ImageView().Handle());
+    }
+
+    VkFramebufferCreateInfo framebufferInfo{};
+    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.renderPass = renderPass.Handle();
+    framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+    framebufferInfo.pAttachments = attachments.data();
+    framebufferInfo.width = extent.width;
+    framebufferInfo.height = extent.height;
+    framebufferInfo.layers = 1;
+
+    Check(vkCreateFramebuffer(device_.Handle(), &framebufferInfo, nullptr, &framebuffer_),
+          "create framebuffer");
 }
 
 FrameBuffer::FrameBuffer(FrameBuffer&& other) noexcept :

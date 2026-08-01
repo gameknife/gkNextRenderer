@@ -9,6 +9,14 @@
 #include <memory>
 #include <array>
 
+TEST_CASE("Visibility buffer capacity contract", "[Unit][Rendering][Visibility]")
+{
+    STATIC_REQUIRE(sizeof(Assets::VisibilityId) == sizeof(uint32_t) * 2);
+    STATIC_REQUIRE(Assets::Scene::kRenderProxyCapacity == 131072);
+    STATIC_REQUIRE(Assets::Scene::kMaxTrianglesPerSection == 65535);
+    STATIC_REQUIRE(Assets::Scene::kRenderProxyCapacity <= 0x00FFFFFFu);
+}
+
 TEST_CASE("Mixture material keeps a valid dielectric IOR", "[Unit][Material]")
 {
     const Assets::Material material = Assets::Material::Mixture(glm::vec3(0.5f), 0.1f);

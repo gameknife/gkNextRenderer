@@ -62,10 +62,10 @@ namespace Assets
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderPrim", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            sizeof(uint32_t) * maxSceneTriangles_, softMeshShaderPrimBuffer_, softMeshShaderPrimBufferMemory_);
+            sizeof(VisibilityId) * maxSceneTriangles_, softMeshShaderPrimBuffer_, softMeshShaderPrimBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderShadowPrim", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            sizeof(uint32_t) * maxSceneTriangles_ * kSunShadowCascadeCount,
+            sizeof(VisibilityId) * maxSceneTriangles_ * kSunShadowCascadeCount,
             softMeshShaderShadowPrimBuffer_, softMeshShaderShadowPrimBufferMemory_);
 
         const std::vector<Assets::SoftMeshShaderResources> resources = {
@@ -477,9 +477,9 @@ namespace Assets
             const std::vector<uint32_t>& localIndices = model.CPUIndices();
 
             std::vector<std::vector<uint32_t>> slicedIndices;
-            constexpr uint32_t maxIndicesPerSlice = 65535 * 3;
+            constexpr uint32_t maxIndicesPerSlice = kMaxTrianglesPerSection * 3;
 
-            // Split localIndices into chunks of at most 65535 * 3 indices.
+            // Split localIndices into chunks whose zero-based triangle ID fits R16_UINT.
             for (size_t i = 0; i < localIndices.size(); i += maxIndicesPerSlice)
             {
                 size_t endIndex = std::min(i + maxIndicesPerSlice, localIndices.size());
@@ -609,14 +609,14 @@ namespace Assets
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderPrim", softMeshShaderFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            sizeof(uint32_t) * maxSceneTriangles_, softMeshShaderPrimBuffer_, softMeshShaderPrimBufferMemory_);
+            sizeof(VisibilityId) * maxSceneTriangles_, softMeshShaderPrimBuffer_, softMeshShaderPrimBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderShadowPrim", softMeshShaderFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            sizeof(uint32_t) * maxSceneTriangles_ * kSunShadowCascadeCount,
+            sizeof(VisibilityId) * maxSceneTriangles_ * kSunShadowCascadeCount,
             softMeshShaderShadowPrimBuffer_, softMeshShaderShadowPrimBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderVisibleItems", softMeshShaderFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            sizeof(Assets::SoftMeshShaderVisibleItem) * kMaxIndirectDrawCount * kSoftMeshShaderDrawSlotCount,
+            sizeof(Assets::SoftMeshShaderVisibleItem) * kRenderProxyCapacity * kSoftMeshShaderDrawSlotCount,
             softMeshShaderVisibleItemBuffer_, softMeshShaderVisibleItemBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderDrawArgs", softMeshShaderFlags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,

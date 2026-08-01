@@ -8,7 +8,9 @@
 #define ALIGN_8
 #endif
 
-public static const int MAX_NODES = 65535;
+// RenderComponent sections are expanded into one NodeProxy each. Visibility IDs are one-based,
+// with zero reserved for the background.
+public static const int MAX_RENDER_PROXIES = 131072;
 public static const int MAX_MATERIALS = 16384;
 public static const int MAX_HDR_SH = 100;
 
@@ -29,7 +31,7 @@ public static const int GPU_SCENE_SPHERICAL_HARMONICS_SIZE = 112;
 
 public static const int GPU_SCENE_DYNAMIC_NODES_OFFSET = 0;
 public static const int GPU_SCENE_DYNAMIC_MATERIALS_OFFSET =
-    GPU_SCENE_DYNAMIC_NODES_OFFSET + GPU_SCENE_NODE_PROXY_SIZE * MAX_NODES;
+    GPU_SCENE_DYNAMIC_NODES_OFFSET + GPU_SCENE_NODE_PROXY_SIZE * MAX_RENDER_PROXIES;
 public static const int GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET =
     GPU_SCENE_DYNAMIC_MATERIALS_OFFSET + GPU_SCENE_MATERIAL_SIZE * MAX_MATERIALS;
 public static const int GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET =
@@ -80,9 +82,18 @@ public struct ALIGN_16 GPUDrivenStat
     public uint CulledCount;
     public uint TriangleCount;
     public uint CulledTriangleCount;
-    public uint ReservedAlign1;
+    public uint MaxVisibleProxyIndex;
     public uint ReservedAlign2;
     public uint ReservedAlign3;
+};
+
+// Logical visibility identity shared by the expanded primitive stream and visibility consumers.
+// Pixel storage uses two physical planes (R32_UINT instance + R16_UINT triangle), while primitive
+// records intentionally stay two uints to avoid 16-bit storage-buffer feature/alignment branches.
+public struct ALIGN_8 VisibilityId
+{
+    public uint instanceIdx;
+    public uint triangleIdx;
 };
 
 public struct ALIGN_16 SoftMeshShaderVisibleItem

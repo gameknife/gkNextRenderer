@@ -37,7 +37,7 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Lid : SV_GroupThreadID)
     uint* counters = (uint*)softMeshShader.Counters;
     uint cap = scene.CustomData2;
 
-    bool inRange = (DTid.x < scene.CustomData1) && (DTid.x < MAX_NODES);
+    bool inRange = (DTid.x < scene.CustomData1) && (DTid.x < MAX_RENDER_PROXIES);
 
     // ---- per-thread culling, expressed as predicates (no early-return before the barrier) ----
     bool emit = false;
@@ -76,11 +76,15 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Lid : SV_GroupThreadID)
     // ---- lane 0 serial scan (64 iterations) + one global atomic per counter ----
     if (lid == 0)
     {
-        uint accTri = 0, accItem = 0;
+        uint accTri = 0, accItem = 0, maxVisibleProxyIndex = 0;
         for (uint i = 0; i < GROUP_SIZE; ++i)
         {
             uint t = g_tri[i];
             uint e = g_item[i];
+            if (t > 0u)
+            {
+                maxVisibleProxyIndex = max(maxVisibleProxyIndex, DTid.x + i + 1u);
+            }
             g_tri[i]  = accTri;   // exclusive prefix of triangles
             g_item[i] = accItem;  // exclusive prefix of items
             accTri  += t;
@@ -105,6 +109,8 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Lid : SV_GroupThreadID)
         if (sPT > 0) InterlockedAdd(scene.GPUDrivenStats[0].TriangleCount,       sPT);
         if (sC  > 0) InterlockedAdd(scene.GPUDrivenStats[0].CulledCount,         sC);
         if (sCT > 0) InterlockedAdd(scene.GPUDrivenStats[0].CulledTriangleCount, sCT);
+        if (maxVisibleProxyIndex > 0u)
+            InterlockedMax(scene.GPUDrivenStats[0].MaxVisibleProxyIndex, maxVisibleProxyIndex);
     }
     GroupMemoryBarrierWithGroupSync();
 
@@ -115,7 +121,7 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Lid : SV_GroupThreadID)
         uint itemIdx  = g_blockItemBase + g_item[lid];
         // A block-wide reservation can cross the output cap. Drop only the
         // over-budget lanes instead of retrying the reservation with a CAS loop.
-        if (primBase + triangleCount <= cap && itemIdx < uint(MAX_NODES))
+        if (primBase + triangleCount <= cap && itemIdx < uint(MAX_RENDER_PROXIES))
         {
             SoftMeshShaderVisibleItem item;
             item.primBase = primBase;

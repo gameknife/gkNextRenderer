@@ -1,4 +1,5 @@
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
+#include "Engine/Rendering/PipelineCommon/VisibilityBufferLayout.hpp"
 
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/DescriptorSystem.hpp"
@@ -215,7 +216,13 @@ namespace Vulkan::PipelineCommon
 
         // Create pipeline layout and render pass.
         pipelineLayout_.reset(new class PipelineLayout(device, managers, 1, &pushConstantRange, 1));
-        renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R32_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
+        const std::array visibilityFormats = {
+            kVisibilityPlanes[0].format,
+            kVisibilityPlanes[1].format,
+        };
+        renderPass_.reset(new class RenderPass(
+            swapChain, std::span<const VkFormat>(visibilityFormats), depthBuffer,
+            VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
         renderPass_->SetDebugName("Visibility Render Pass");
 
         const ShaderModule vertShader(device, "assets/shaders/Rast.VisibilityPassSoftMeshShader.vert.slang.spv");
@@ -225,6 +232,7 @@ namespace Vulkan::PipelineCommon
             .SetShaders(vertShader, fragShader)
             .SetDynamicViewportAndScissor()
             .SetDepth(true, true, VK_COMPARE_OP_LESS)
+            .SetColorAttachmentCount(static_cast<uint32_t>(kVisibilityPlanes.size()))
             .Build(pipelineLayout_->Handle(), renderPass_->Handle(), "create graphics pipeline");
     }
 

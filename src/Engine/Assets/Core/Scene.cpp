@@ -97,6 +97,7 @@ namespace Assets
         static_assert(sizeof(Assets::NodeProxy) == Assets::GPU_SCENE_NODE_PROXY_SIZE);
         static_assert(sizeof(Assets::Material) == Assets::GPU_SCENE_MATERIAL_SIZE);
         static_assert(sizeof(Assets::GPUDrivenStat) == Assets::GPU_SCENE_GPU_DRIVEN_STAT_SIZE);
+        static_assert(sizeof(Assets::VisibilityId) == 8);
         static_assert(sizeof(Assets::SoftMeshShaderVisibleItem) == 16);
         static_assert(sizeof(Assets::SoftMeshShaderResources) == 64);
         static_assert(sizeof(Assets::SphericalHarmonics) == Assets::GPU_SCENE_SPHERICAL_HARMONICS_SIZE);

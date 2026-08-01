@@ -144,12 +144,15 @@ namespace Vulkan
         colorBlendAttachment.dstAlphaBlendFactor = dstAlphaBlendFactor_;
         colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
 
+        std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments(
+            colorAttachmentCount_, colorBlendAttachment);
+
         VkPipelineColorBlendStateCreateInfo colorBlending = {};
         colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
         colorBlending.logicOpEnable = VK_FALSE;
         colorBlending.logicOp = VK_LOGIC_OP_COPY;
         colorBlending.attachmentCount = colorAttachmentCount_;
-        colorBlending.pAttachments = colorAttachmentCount_ > 0 ? &colorBlendAttachment : nullptr;
+        colorBlending.pAttachments = colorBlendAttachments.empty() ? nullptr : colorBlendAttachments.data();
 
         const VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
         VkPipelineDynamicStateCreateInfo dynamicState = {};

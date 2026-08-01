@@ -56,7 +56,7 @@ last_updated: 2026-07-31
 1. **部队是一等公民，士兵只是它的表现单元。**
    寻路、命令、选择、状态机的粒度全部是 regiment（约 12 支），不是士兵（约 768 个）。士兵没有个体寻路、没有个体避让、没有个体决策，只按阵型槽位做 seek/arrive。这一条同时决定了"看起来像全面战争"和"CPU 预算成立"。
 2. **渲染实例预算是硬约束，不是优化项。**
-   引擎 GPU-driven 提交路径用 15 bit 编码实例索引（§2.1），全场景可绘制 node-section 上限 **32767**。士兵数量、rig 部件数、植被密度全部要在这个预算里做加减法，且运行时有守卫面板。
+   引擎 GPU-driven 提交路径的全场景 render-proxy 工程容量为 **131072**（§2.1）。士兵数量、rig 部件数、植被密度全部要在这个预算里做加减法，且运行时有守卫面板。
 3. **资产走既有 SCAD 管线，不引入新格式。**
    地图 = spec JSON → `gnb scad compose` → proc scad（之后人工维护）；兵种 = `kit_tw.scad` 组件库 + 薄 rig 文件，沿用 `kit_char` 的 pivot 标准以复用/派生动作 clip。
 4. **只写游戏规则，不重造引擎能力。**
@@ -70,21 +70,19 @@ last_updated: 2026-07-31
 
 > 下列都是动手前已在代码中核实的事实，AGENT 可直接依赖；引用位置为当前分支实测。
 
-### 2.1 渲染实例编码上限：32767 个 node-section（最重要）
+### 2.1 渲染实例工程容量：131072 个 node-section（最重要）
 
-GPU-driven 展开阶段把"可见项索引 + section 内三角形索引"压进一个 uint32：
+GPU-driven 展开阶段使用共享 `VisibilityId`，像素 visibility buffer 分为两个 plane：
 
 ```text
-assets/shaders/Task.SoftMeshShaderExpand.comp.slang:17
-    uint encBase = (item.instanceIdx & 0x7FFF) << 17;
-assets/shaders/Rast.VisibilityPassSoftMeshShader.vert.slang:23
-    uint instanceIdx = (prim >> 17) & 0x7FFF;   // proxy = scene.Nodes[instanceIdx - 1]
+instance: R32_UINT，one-based render proxy index，0 表示背景
+triangle: R16_UINT，section-local triangle index
 ```
 
-- `instanceIdx` = **nodeProxy 索引 + 1**（`Task.SoftMeshShaderGpuCullCompact.comp.slang:122`）。nodeProxy 是**每个可绘制节点的每个 section 一条**（`src/Engine/Assets/Core/Scene.Update.cpp:501-521`）。
-- 因此**全场景可绘制 node-section 数必须 ≤ 32767**。超出后高位被 mask 截断，表现为几何错乱，**引擎当前不报警**。
-- 相关次级上限：可见项缓冲每 slot 65535 条（`Scene::kMaxIndirectDrawCount`，`src/Engine/Assets/Core/Scene.hpp:36`）；单 section 三角形 ≤ 131072；单 model 最多 10 个 section（`kModelSectionStride`，`Scene.hpp:38`）。
-- **本项目对策**：`Scene::GetIndirectDrawBatchCount()`（`Scene.hpp:146`）返回当前 node-section 数，HUD 常驻显示；超过 **28000** 变红并打日志。预算分配见 §5。
+- `instanceIdx` = **nodeProxy 索引 + 1**。nodeProxy 是每个可绘制节点的每个 section 一条。
+- 全场景可绘制 node-section 数必须 ≤ `Scene::kRenderProxyCapacity`（当前 131072）；引擎在 GPU upload 前检查并明确报错。
+- 单 section 三角形必须 ≤ 65535；model 会按这个限制切 section；单 model 最多 10 个 section。
+- **本项目对策**：HUD 常驻显示 `GetIndirectDrawBatchCount()` / `kRenderProxyCapacity`，预算分配见 §5。
 
 ### 2.2 每帧 nodeProxy 全量重建
 
@@ -365,7 +363,7 @@ L2 需要一个"把 rig 各 part 按某一姿势烘成单个 Model"的工具函�
 
 - 底部部队条：每支部队一格（兵种图标色块 + 人数 + 状态），点击选中。
 - 左上：选中部队信息（兵种、人数、状态、阵型排数，`[`/`]` 调排数）。
-- 调试面板（F1 开关）：`GetIndirectDrawBatchCount()` / 32767 进度条（>28000 变红）、士兵数、animator 更新数、帧率、NavGrid 就绪状态、当前渲染器。
+- 调试面板（F1 开关）：`GetIndirectDrawBatchCount()` / `Scene::kRenderProxyCapacity` 进度条、士兵数、animator 更新数、帧率、NavGrid 就绪状态、当前渲染器。
 
 ---
 

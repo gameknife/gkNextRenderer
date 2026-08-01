@@ -1,6 +1,7 @@
 import Shader.Bindless;
 import Shader.Types;
 import Shader.GpuScene;
+import Shader.VisibilityBuffer;
 
 [shader("compute")]
 [numthreads(64, 1, 1)]
@@ -11,12 +12,12 @@ void main(uint3 Gid : SV_GroupID, uint3 Lid : SV_GroupThreadID)
 
     SoftMeshShaderResources softMeshShader = scene.SoftMeshShader[0];
     SoftMeshShaderVisibleItem* visibleItems = (SoftMeshShaderVisibleItem*)softMeshShader.VisibleItems;
-    uint* prims = slot == 0 ? (uint*)softMeshShader.Prim : (uint*)softMeshShader.ShadowPrim;
+    uint64_t primitiveAddress = slot == 0 ? softMeshShader.Prim : softMeshShader.ShadowPrim;
 
-    SoftMeshShaderVisibleItem item = visibleItems[slot * MAX_NODES + Gid.x];
-    uint encBase = (item.instanceIdx & 0x7FFF) << 17;
+    SoftMeshShaderVisibleItem item = visibleItems[slot * MAX_RENDER_PROXIES + Gid.x];
     for (uint t = Lid.x; t < item.triCount; t += 64)
     {
-        prims[item.primBase + t] = encBase | (t & 0x1FFFF);
+        Visibility.StoreExpandedPrimitive(
+            primitiveAddress, item.primBase + t, Visibility.MakeId(item.instanceIdx, t));
     }
 }

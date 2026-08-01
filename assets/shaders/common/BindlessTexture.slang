@@ -97,7 +97,7 @@ namespace Bindless
     // Single linear scene-color history used only by offline progressive rendering.
     public static const int RT_PROGRESSIVE_SCENE_COLOR = 0;
     public static const int RT_SINGLE_DIFFUSE = 1;
-    public static const int RT_MINIGBUFFER = 2;
+    public static const int RT_VISIBILITY_INSTANCE = 2;
     public static const int RT_OBJECTID_0 = 3;
     public static const int RT_OBJECTID_1 = 4;
     public static const int RT_MOTIONVECTOR = 5;
@@ -114,8 +114,10 @@ namespace Bindless
     public static const int RT_DIFFUSE_HITDIST = 15;
     public static const int RT_SPECULAR_HITDIST = 16;
     public static const int RT_SPECULAR_ALBEDO = 17;
+    public static const int RT_VISIBILITY_TRIANGLE = 18;
 
-    public static const int RT_MINIGBUFFER_DRAW = 23;
+    public static const int RT_VISIBILITY_INSTANCE_DRAW = 23;
+    public static const int RT_VISIBILITY_TRIANGLE_DRAW = 24;
 
     // Splat accumulation, ambient & AO
     public static const int RT_SPLAT_ACCUM = 26;

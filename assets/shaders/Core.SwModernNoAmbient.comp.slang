@@ -1,5 +1,6 @@
 import Shader.Bindless;
 import Shader.PathTracing;
+import Shader.VisibilityBuffer;
 #include "common/PreProcessor.slang"
 
 float3 FresnelSchlick(float cosTheta, float3 f0)
@@ -68,9 +69,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 rayDir4 = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
     float3 primaryRayDir = normalize(rayDir4.xyz);
 
-    uint packedValue = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[pixel];
-    uint2 vBuffer = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF);
-    if (vBuffer.x == 0)
+    uint2 vBuffer = Visibility.Load(pixel, Bindless.GetGpuscene().CustomData0);
+    if (!Visibility.IsValid(vBuffer))
     {
         float4 skyColor = Common.SampleSkyRadiance(primaryRayDir, 0.0f);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);

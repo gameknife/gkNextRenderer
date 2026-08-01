@@ -9,6 +9,7 @@
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
+#include "Engine/Rendering/PipelineCommon/VisibilityBufferLayout.hpp"
 #include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
@@ -185,7 +186,7 @@ namespace Vulkan
 
             BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, {
                 BufferMemoryBarrier::Make(scene.SoftMeshShaderDispatchArgBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT, 0, sizeof(VkDispatchIndirectCommand)),
-                BufferMemoryBarrier::Make(scene.SoftMeshShaderVisibleItemBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 0, sizeof(Assets::SoftMeshShaderVisibleItem) * Assets::Scene::kMaxIndirectDrawCount),
+                BufferMemoryBarrier::Make(scene.SoftMeshShaderVisibleItemBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 0, sizeof(Assets::SoftMeshShaderVisibleItem) * Assets::Scene::kRenderProxyCapacity),
             });
             
             overlay_.softMeshShaderExpandPipeline->BindPipeline(
@@ -256,10 +257,6 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         SCOPED_GPU_TIMER("visibility pass");
 
         const uint32_t viewBase = ActiveViewBankBase();
-        const uint32_t drawId = viewBase + Assets::Bindless::RT_MINIGBUFFER_DRAW;
-        const uint32_t storageId = viewBase + Assets::Bindless::RT_MINIGBUFFER;
-        const PipelineCommon::FImageHandle drawHandle{static_cast<uint64_t>(drawId) + 1u};
-        const PipelineCommon::FImageHandle storageHandle{static_cast<uint64_t>(storageId) + 1u};
         const auto emitTrackedBarrier = [commandBuffer](
             VkImage image, const PipelineCommon::FImageBarrier& barrier)
         {
@@ -268,9 +265,10 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
                                        barrier.oldLayout, barrier.newLayout);
         };
 
-        std::array<VkClearValue, 2> clearValues = {};
-        clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-        clearValues[1].depthStencil = {1.0f, 0};
+        std::array<VkClearValue, 3> clearValues = {};
+        clearValues[0].color.uint32[0] = 0u;
+        clearValues[1].color.uint32[0] = 0u;
+        clearValues[2].depthStencil = {1.0f, 0};
 
         VkRenderPassBeginInfo renderPassInfo = {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -324,14 +322,20 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         }
         vkCmdEndRenderPass(commandBuffer);
 
-        // The render pass explicitly clears/discards the attachment and leaves it in PRESENT_SRC.
-        visibilityStateTracker_.Import(drawHandle, {
-            .initialized = true,
-            .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-            .stages = PipelineCommon::ERenderStage::ColorAttachment,
-            .access = PipelineCommon::EResourceAccess::ColorWrite,
-            .lastPass = "visibility render pass",
-        });
+        // The render pass explicitly clears/discards both attachments and leaves them in
+        // PRESENT_SRC. Track each physical plane independently for the transfer copies below.
+        for (const PipelineCommon::FVisibilityPlaneDesc& plane : PipelineCommon::kVisibilityPlanes)
+        {
+            const uint32_t drawId = viewBase + plane.drawSlot;
+            const PipelineCommon::FImageHandle drawHandle{static_cast<uint64_t>(drawId) + 1u};
+            visibilityStateTracker_.Import(drawHandle, {
+                .initialized = true,
+                .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .stages = PipelineCommon::ERenderStage::ColorAttachment,
+                .access = PipelineCommon::EResourceAccess::ColorWrite,
+                .lastPass = "visibility render pass",
+            });
+        }
 
         // Copy the depth/id render target into the storage-image variant for later passes.
         VkImageCopy copyRegion;
@@ -339,44 +343,53 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         copyRegion.srcOffset = {0, 0, 0};
         copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
         copyRegion.dstOffset = {0, 0, 0};
-        copyRegion.extent = {GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER)->GetImage().Extent().width,
-                             GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER)->GetImage().Extent().height, 1};
+        const auto* extentImage = GetViewStorageImage(PipelineCommon::kVisibilityPlanes[0].storageSlot);
+        copyRegion.extent = {extentImage->GetImage().Extent().width,
+                             extentImage->GetImage().Extent().height, 1};
 
-        const auto* drawImage = GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW);
-        const auto* storageImage = GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER);
-        if (const auto barrier = visibilityStateTracker_.Use(
-                {.image = drawHandle,
-                 .stages = PipelineCommon::ERenderStage::Transfer,
-                 .access = PipelineCommon::EResourceAccess::TransferRead,
-                 .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL},
-                "visibility copy source"))
+        for (const PipelineCommon::FVisibilityPlaneDesc& plane : PipelineCommon::kVisibilityPlanes)
         {
-            emitTrackedBarrier(drawImage->GetImage().Handle(), *barrier);
-        }
-        if (const auto barrier = visibilityStateTracker_.Use(
-                {.image = storageHandle,
-                 .stages = PipelineCommon::ERenderStage::Transfer,
-                 .access = PipelineCommon::EResourceAccess::TransferWrite,
-                 .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                 .discardPreviousContents = true},
-                "visibility copy destination"))
-        {
-            emitTrackedBarrier(storageImage->GetImage().Handle(), *barrier);
-        }
+            const uint32_t drawId = viewBase + plane.drawSlot;
+            const uint32_t storageId = viewBase + plane.storageSlot;
+            const PipelineCommon::FImageHandle drawHandle{static_cast<uint64_t>(drawId) + 1u};
+            const PipelineCommon::FImageHandle storageHandle{static_cast<uint64_t>(storageId) + 1u};
+            const auto* drawImage = GetViewStorageImage(plane.drawSlot);
+            const auto* storageImage = GetViewStorageImage(plane.storageSlot);
 
-        vkCmdCopyImage(commandBuffer,
-            drawImage->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            storageImage->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1, &copyRegion);
+            if (const auto barrier = visibilityStateTracker_.Use(
+                    {.image = drawHandle,
+                     .stages = PipelineCommon::ERenderStage::Transfer,
+                     .access = PipelineCommon::EResourceAccess::TransferRead,
+                     .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL},
+                    "visibility copy source"))
+            {
+                emitTrackedBarrier(drawImage->GetImage().Handle(), *barrier);
+            }
+            if (const auto barrier = visibilityStateTracker_.Use(
+                    {.image = storageHandle,
+                     .stages = PipelineCommon::ERenderStage::Transfer,
+                     .access = PipelineCommon::EResourceAccess::TransferWrite,
+                     .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                     .discardPreviousContents = true},
+                    "visibility copy destination"))
+            {
+                emitTrackedBarrier(storageImage->GetImage().Handle(), *barrier);
+            }
 
-        if (const auto barrier = visibilityStateTracker_.Use(
-                {.image = storageHandle,
-                 .stages = PipelineCommon::ERenderStage::Compute,
-                 .access = PipelineCommon::EResourceAccess::ShaderRead,
-                 .layout = VK_IMAGE_LAYOUT_GENERAL},
-                "visibility compute read"))
-        {
-            emitTrackedBarrier(storageImage->GetImage().Handle(), *barrier);
+            vkCmdCopyImage(commandBuffer,
+                drawImage->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                storageImage->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1, &copyRegion);
+
+            if (const auto barrier = visibilityStateTracker_.Use(
+                    {.image = storageHandle,
+                     .stages = PipelineCommon::ERenderStage::Compute,
+                     .access = PipelineCommon::EResourceAccess::ShaderRead,
+                     .layout = VK_IMAGE_LAYOUT_GENERAL},
+                    "visibility compute read"))
+            {
+                emitTrackedBarrier(storageImage->GetImage().Handle(), *barrier);
+            }
         }
     }
 
@@ -465,8 +478,8 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
                 BufferMemoryBarrier::Make(scene.SoftMeshShaderDispatchArgBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
                                           sizeof(VkDispatchIndirectCommand), sizeof(VkDispatchIndirectCommand) * Assets::Scene::kSunShadowCascadeCount),
                 BufferMemoryBarrier::Make(scene.SoftMeshShaderVisibleItemBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                                          sizeof(Assets::SoftMeshShaderVisibleItem) * Assets::Scene::kMaxIndirectDrawCount,
-                                          sizeof(Assets::SoftMeshShaderVisibleItem) * Assets::Scene::kMaxIndirectDrawCount * Assets::Scene::kSunShadowCascadeCount),
+                                          sizeof(Assets::SoftMeshShaderVisibleItem) * Assets::Scene::kRenderProxyCapacity,
+                                          sizeof(Assets::SoftMeshShaderVisibleItem) * Assets::Scene::kRenderProxyCapacity * Assets::Scene::kSunShadowCascadeCount),
             });
 
             for (uint32_t cascade = 0; cascade < Assets::Scene::kSunShadowCascadeCount; ++cascade)

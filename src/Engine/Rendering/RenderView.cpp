@@ -3,6 +3,7 @@
 
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
+#include "Engine/Rendering/PipelineCommon/VisibilityBufferLayout.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
@@ -159,10 +160,14 @@ namespace Vulkan
         const VkExtent2D extent)
     {
         renderer_.CreateRenderTargetBank(view.RtBankBase(), extent);
+        const std::array<const ImageView*, PipelineCommon::kVisibilityPlanes.size()> visibilityViews = {
+            &renderer_.GetStorageImage(
+                view.RtBankBase() + PipelineCommon::kVisibilityPlanes[0].drawSlot)->GetImageView(),
+            &renderer_.GetStorageImage(
+                view.RtBankBase() + PipelineCommon::kVisibilityPlanes[1].drawSlot)->GetImageView(),
+        };
         auto frameBuffer = std::make_unique<FrameBuffer>(
-            extent,
-            renderer_.GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(),
-            renderer_.overlay_.visibilityPipeline->RenderPass());
+            extent, visibilityViews, renderer_.overlay_.visibilityPipeline->RenderPass());
         view.SetAllocatedVisibilityFramebuffer(frameBuffer.get(), extent);
         return frameBuffer;
     }

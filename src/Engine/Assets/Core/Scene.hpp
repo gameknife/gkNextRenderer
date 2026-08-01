@@ -69,7 +69,8 @@ namespace Assets
         static void RegisterReflection();
         static constexpr uint32_t kSunShadowCascadeCount = 4;
         static constexpr uint32_t kSunShadowResolution = 1024;
-        static constexpr uint32_t kMaxIndirectDrawCount = 65535;
+        static constexpr uint32_t kRenderProxyCapacity = MAX_RENDER_PROXIES;
+        static constexpr uint32_t kMaxTrianglesPerSection = 65535;
         static constexpr uint32_t kMaxLightCount = 1024;
         static constexpr uint32_t kModelSectionStride = 10;
         static constexpr uint32_t kSoftMeshShaderDrawSlotCount = 1 + kSunShadowCascadeCount;

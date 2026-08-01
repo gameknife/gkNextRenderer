@@ -29,7 +29,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint* counters = (uint*)softMeshShader.Counters;
     uint cap = scene.CustomData2;
 
-    bool inRange = (DTid.x < scene.CustomData1) && (DTid.x < MAX_NODES);
+    bool inRange = (DTid.x < scene.CustomData1) && (DTid.x < MAX_RENDER_PROXIES);
 
     bool shouldDraw = false;
     bool occluded = false;
@@ -55,6 +55,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint sPT = WaveActiveSum(shouldDraw ? triangleCount : 0u);
     uint sC  = WaveActiveSum(occluded ? 1u : 0u);
     uint sCT = WaveActiveSum(occluded ? triangleCount : 0u);
+    uint maxVisibleProxyIndex = WaveActiveMax(emit ? DTid.x + 1u : 0u);
 
     uint myTri = emit ? triangleCount : 0u;
     uint laneTriPrefix = WavePrefixSum(myTri);
@@ -71,6 +72,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         if (sPT > 0) InterlockedAdd(scene.GPUDrivenStats[0].TriangleCount,       sPT);
         if (sC  > 0) InterlockedAdd(scene.GPUDrivenStats[0].CulledCount,         sC);
         if (sCT > 0) InterlockedAdd(scene.GPUDrivenStats[0].CulledTriangleCount, sCT);
+        if (maxVisibleProxyIndex > 0u)
+            InterlockedMax(scene.GPUDrivenStats[0].MaxVisibleProxyIndex, maxVisibleProxyIndex);
     }
     triBase  = WaveReadLaneFirst(triBase);
     itemBase = WaveReadLaneFirst(itemBase);
@@ -79,7 +82,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     {
         uint primBase = triBase  + laneTriPrefix;
         uint itemIdx  = itemBase + laneItemIndex;
-        if (primBase + triangleCount <= cap && itemIdx < uint(MAX_NODES))
+        if (primBase + triangleCount <= cap && itemIdx < uint(MAX_RENDER_PROXIES))
         {
             SoftMeshShaderVisibleItem item;
             item.primBase = primBase;

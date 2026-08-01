@@ -1,6 +1,7 @@
 implementing PathTracing;
 
 #include "PreProcessor.slang"
+import Shader.VisibilityBuffer;
 
 // Scene-space sampling helpers shared across the renderer: object-id encoding, page
 // index, motion vectors, spherical-harmonic / IBL evaluation, G-buffer fetch and the
@@ -240,12 +241,11 @@ namespace Common
             if (any(currentUV < float2(0.0)) || any(currentUV > float2(1.0)))
                 continue;
 
-            int2 size = Bindless.GetViewStorageTextureDimensions<uint>(Bindless.RT_MINIGBUFFER);
+            int2 size = int2(Visibility.Dimensions(gpuScene.CustomData0));
 
             int2 sampleCoord = int2(currentUV * float2(size));
-            uint packedValue = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MINIGBUFFER).Load(sampleCoord).r;
-            uint2 vBufferSample = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF);
-            if (vBufferSample.r == 0)
+            uint2 vBufferSample = Visibility.Load(sampleCoord, gpuScene.CustomData0);
+            if (!Visibility.IsValid(vBufferSample))
                 continue;
 
             float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));

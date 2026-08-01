@@ -1379,9 +1379,7 @@ namespace NextTotalwar
         size_t sharedParts = 0;
         for (const auto& ids : soldierPartModelIds_) sharedParts += ids.size();
         ImGui::Text("ScadRig shared part meshes: %zu", sharedParts);
-        // The visibility buffer packs the one-based proxy slot into 15 bits, so 32767 is the
-        // hard ceiling regardless of Scene::kMaxIndirectDrawCount.
-        constexpr uint32_t visibilityProxyBudget = 32767;
+        constexpr uint32_t visibilityProxyBudget = Assets::Scene::kRenderProxyCapacity;
         const float budget = static_cast<float>(batches) / static_cast<float>(visibilityProxyBudget);
         ImGui::TextColored(budget > 0.90f ? ImVec4(1, 0.2f, 0.15f, 1)
                                          : ImVec4(0.3f, 1, 0.4f, 1),

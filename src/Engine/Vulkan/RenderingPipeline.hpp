@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <span>
 
 namespace Vulkan
 {
@@ -31,6 +32,9 @@ namespace Vulkan
                    VkImageLayout colorInitialLayout, VkImageLayout colorFinalLayout);
         RenderPass(const SwapChain& swapChain, VkFormat format, const DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp, VkAttachmentLoadOp depthBufferLoadOp);
         RenderPass(const SwapChain& swapChain, VkFormat format,  VkFormat format1,  VkFormat format2, const DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp, VkAttachmentLoadOp depthBufferLoadOp);
+        RenderPass(const SwapChain& swapChain, std::span<const VkFormat> colorFormats,
+                   const DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp,
+                   VkAttachmentLoadOp depthBufferLoadOp);
         ~RenderPass();
 
         const class SwapChain& SwapChain() const { return swapChain_; }
@@ -73,6 +77,8 @@ namespace Vulkan
 
         explicit FrameBuffer(const VkExtent2D& extent, const ImageView& imageView, const RenderPass& renderPass, bool withDS = true);
         explicit FrameBuffer(const VkExtent2D& extent, const ImageView& imageView, const ImageView& imageView1, const ImageView& imageView2,const RenderPass& renderPass);
+        FrameBuffer(const VkExtent2D& extent, std::span<const ImageView* const> colorImageViews,
+                    const RenderPass& renderPass, bool withDS = true);
         FrameBuffer(FrameBuffer&& other) noexcept;
         ~FrameBuffer();
 

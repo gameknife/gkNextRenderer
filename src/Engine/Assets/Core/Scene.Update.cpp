@@ -699,6 +699,12 @@ namespace Assets
         if (updateNodeProxies && !nodeProxiesBackup.empty())
         {
             SCOPED_CPU_TIMER("upload nodeproxy");
+            if (nodeProxiesBackup.size() > kRenderProxyCapacity)
+            {
+                throw std::length_error(fmt::format(
+                    "Scene contains {} render proxies, exceeding capacity {}",
+                    nodeProxiesBackup.size(), kRenderProxyCapacity));
+            }
             NodeProxy* data = reinterpret_cast<NodeProxy*>(
                 sceneDynamicBufferMemory_->Map(
                     Assets::GPU_SCENE_DYNAMIC_NODES_OFFSET, sizeof(NodeProxy) * nodeProxiesBackup.size()));
@@ -759,7 +765,7 @@ namespace Assets
 
                 // First pass stays on the main thread: determine the exact output range owned by
                 // every node. Workers can then write directly into a resized vector without locks.
-                uint32_t proxyCount = 0;
+                uint64_t proxyCount = 0;
                 const auto renderComponents = Components<Runtime::RenderComponent>();
                 nodeProxyWorkItems_.reserve(renderComponents.size());
                 for (auto* render : renderComponents)
@@ -793,15 +799,22 @@ namespace Assets
 
                     if (validSectionCount > 0)
                     {
+                        const uint64_t nextProxyCount = proxyCount + validSectionCount;
+                        if (nextProxyCount > kRenderProxyCapacity)
+                        {
+                            throw std::length_error(fmt::format(
+                                "Scene render proxy count exceeds capacity {} while expanding {} render components",
+                                kRenderProxyCapacity, renderComponents.size()));
+                        }
                         nodeProxyWorkItems_.push_back(
-                            {node, modelId, proxyCount, validSectionCount});
-                        proxyCount += validSectionCount;
+                            {node, modelId, static_cast<uint32_t>(proxyCount), validSectionCount});
+                        proxyCount = nextProxyCount;
                     }
                 }
 
                 nodeProxies.clear();
-                nodeProxies.resize(proxyCount);
-                indirectDrawBatchCount_ = proxyCount;
+                nodeProxies.resize(static_cast<size_t>(proxyCount));
+                indirectDrawBatchCount_ = static_cast<uint32_t>(proxyCount);
                 nodeProxyExpandedTriangleCount_.store(0, std::memory_order_relaxed);
                 nodeProxyMovingNodeDetected_.store(false, std::memory_order_relaxed);
 
