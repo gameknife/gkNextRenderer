@@ -128,10 +128,10 @@ namespace Assets
             .type("Scene"_hs)
             .func<&Assets::Scene::GetIndicesCount>("GetIndicesCount")
             .func<&Assets::Scene::FindNodeIdWithComponent>("FindNodeIdWithComponent")
-            .func<&Assets::Scene::GetNodeById>("GetNodeById");
+            .func<&Assets::Scene::GetNodeByInstanceId>("GetNodeById");
     }
 
-    void Scene::RebuildNodeIndex() const
+    void Scene::RebuildNodeIndex()
     {
         nodeByInstanceId_.clear();
         nodeByInstanceId_.reserve(nodes_.size());
@@ -142,11 +142,9 @@ namespace Assets
             RegisterNodeIndex(node);
         }
 
-        indexedNodeCount_ = nodes_.size();
-        nodeIndexDirty_ = false;
     }
 
-    void Scene::RegisterNodeIndex(const std::shared_ptr<Node>& node) const
+    void Scene::RegisterNodeIndex(const std::shared_ptr<Node>& node)
     {
         if (!node)
         {
@@ -159,18 +157,11 @@ namespace Assets
         {
             nextInstanceId_ = std::max(nextInstanceId_, instanceId + 1u);
         }
-        indexedNodeCount_ = nodes_.size();
     }
 
-    void Scene::UnregisterNodeIndex(uint32_t id) const
+    void Scene::UnregisterNodeIndex(uint32_t id)
     {
-        if (nodeIndexDirty_)
-        {
-            return;
-        }
-
         nodeByInstanceId_.erase(id);
-        indexedNodeCount_ = nodes_.size();
     }
 
     int32_t Scene::FindNodeIdWithComponent(const std::string& componentType) const
@@ -184,11 +175,6 @@ namespace Assets
         return components.empty() || components.front()->GetOwner() == nullptr
                    ? -1
                    : static_cast<int32_t>(components.front()->GetOwner()->GetInstanceId());
-    }
-
-    Node* Scene::GetNodeById(uint32_t nodeId)
-    {
-        return GetNodeByInstanceId(nodeId);
     }
 
     void Scene::RefreshEnvironmentComponentCache()
@@ -211,7 +197,7 @@ namespace Assets
             return;
         }
 
-        environmentComponent_ = node->GetComponentPtr<Runtime::EnvironmentComponent>();
+        environmentComponent_ = node->GetComponent<Runtime::EnvironmentComponent>();
     }
 
     Runtime::EnvironmentComponent* Scene::GetEnvironmentComponent()
@@ -235,7 +221,7 @@ namespace Assets
                                      glm::vec3(1.0f), GenerateInstanceId());
         auto environment = std::make_shared<Runtime::EnvironmentComponent>();
         node->AddComponent(environment);
-        BindNode(node);
+        BindNode(*node);
         nodes_.push_back(node);
         RegisterNodeIndex(node);
         environmentComponent_ = environment.get();
@@ -249,32 +235,6 @@ namespace Assets
             return *environment;
         }
         return DefaultEnvironmentSettings();
-    }
-
-    void Scene::SetEnvSettings(const EnvironmentSetting& envSettings)
-    {
-        auto& environment = GetEnvSettings();
-        environment = envSettings;
-    }
-
-    const glm::vec3 Scene::GetSunDir() const
-    {
-        return GetEnvSettings().SunDirection();
-    }
-
-    const bool Scene::HasSun() const
-    {
-        return GetEnvSettings().HasSun;
-    }
-
-    const std::vector<Assets::Camera>& Scene::GetCameras() const
-    {
-        return GetEnvSettings().cameras;
-    }
-
-    const Assets::EnvironmentSetting& Scene::GetEnvironmentStrings() const
-    {
-        return GetEnvSettings();
     }
 
     Scene::Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing,
@@ -486,7 +446,7 @@ namespace Assets
         {
             if (node)
             {
-                node->SetComponentChangedCallback({});
+                node->scene_ = nullptr;
             }
         }
 
@@ -601,8 +561,12 @@ namespace Assets
 
     void Scene::AddNode(std::shared_ptr<Node> node)
     {
+        if (!node)
+        {
+            return;
+        }
         CacheEnvironmentComponentFromNode(node.get());
-        BindNode(node);
+        BindNode(*node);
         nodes_.push_back(node);
         RegisterNodeIndex(node);
         EnsureNodePhysicsBody(node.get());
@@ -630,7 +594,7 @@ namespace Assets
             if (render && render->GetRayCastVisible() &&
                 render->GetModelId() < cachedMeshShapes_.size() && cachedMeshShapes_[render->GetModelId()])
             {
-                auto phys = node->GetComponent<Runtime::PhysicsComponent>();
+                auto* phys = node->GetComponent<Runtime::PhysicsComponent>();
                 Node::ENodeMobility mobility = phys ? phys->GetMobility() : Node::ENodeMobility::Static;
 
                 if (auto staticBody = staticPhysicsBodies_.find(node); staticBody != staticPhysicsBodies_.end())
@@ -670,9 +634,10 @@ namespace Assets
                     }
                     else if (!phys)
                     {
-                        phys = std::make_shared<Runtime::PhysicsComponent>();
-                        phys->SetMobility(mobility);
-                        node->AddComponent(phys);
+                        auto newPhysics = std::make_shared<Runtime::PhysicsComponent>();
+                        newPhysics->SetMobility(mobility);
+                        phys = newPhysics.get();
+                        node->AddComponent(std::move(newPhysics));
                     }
                     if (phys)
                     {
@@ -738,14 +703,13 @@ namespace Assets
             }
             lockedIds_.erase(id);
             node->ClearParent();
-            refreshEnvironment |= node->GetComponentPtr<Runtime::EnvironmentComponent>() == environmentComponent_;
+            refreshEnvironment |= node->GetComponent<Runtime::EnvironmentComponent>() == environmentComponent_;
             UnbindNode(*node);
             UnregisterNodeIndex(id);
             removedNodes.push_back(node);
             it = nodes_.erase(it);
         }
 
-        indexedNodeCount_ = nodes_.size();
         if (refreshEnvironment)
         {
             RefreshEnvironmentComponentCache();
@@ -755,21 +719,12 @@ namespace Assets
 
     std::shared_ptr<Node> Scene::GetNodeSharedByInstanceId(uint32_t id) const
     {
-        if (nodeIndexDirty_ || indexedNodeCount_ != nodes_.size())
-        {
-            RebuildNodeIndex();
-        }
-
         const auto it = nodeByInstanceId_.find(id);
         return it != nodeByInstanceId_.end() ? it->second : nullptr;
     }
 
     uint32_t Scene::GenerateInstanceId() const
     {
-        if (nodeIndexDirty_ || indexedNodeCount_ != nodes_.size())
-        {
-            RebuildNodeIndex();
-        }
         return nextInstanceId_;
     }
 
@@ -821,7 +776,7 @@ namespace Assets
                     physicsEngine->RemoveBody(staticBody->second);
                     staticPhysicsBodies_.erase(staticBody);
                 }
-                if (auto* physics = node->GetComponentPtr<Runtime::PhysicsComponent>())
+                if (auto* physics = node->GetComponent<Runtime::PhysicsComponent>())
                 {
                     physicsEngine->RemoveBody(physics->GetPhysicsBody());
                     physics->BindPhysicsBody({});
@@ -867,7 +822,7 @@ namespace Assets
         {
             const size_t index = std::min(it->index, nodes_.size());
             nodes_.insert(nodes_.begin() + index, it->node);
-            BindNode(it->node);
+            BindNode(*it->node);
             RegisterNodeIndex(it->node);
             CacheEnvironmentComponentFromNode(it->node.get());
             EnsureNodePhysicsBody(it->node.get());
@@ -953,21 +908,9 @@ namespace Assets
         return false;
     }
 
-    void Scene::MarkEnvDirty()
+    Node* Scene::GetNode(const std::string& name)
     {
-        // cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), true);
-    }
-
-    Node* Scene::GetNode(std::string name)
-    {
-        for (auto& node : nodes_)
-        {
-            if (node->GetName() == name)
-            {
-                return node.get();
-            }
-        }
-        return nullptr;
+        return const_cast<Node*>(std::as_const(*this).GetNode(name));
     }
 
     const Node* Scene::GetNode(const std::string& name) const
@@ -1089,7 +1032,7 @@ namespace Assets
         return nullptr;
     }
 
-    const uint32_t Scene::AddMaterial(const FMaterial& material)
+    uint32_t Scene::AddMaterial(const FMaterial& material)
     {
         materials_.push_back(material);
         materialDirty_ = true;

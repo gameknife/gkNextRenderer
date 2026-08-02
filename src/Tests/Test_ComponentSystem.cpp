@@ -32,6 +32,7 @@ TEST_CASE("Component System Basics", "[Unit][Component]") {
         auto retrieved = node->GetComponent<TestComponent>();
         REQUIRE(retrieved != nullptr);
         CHECK(retrieved->value == 42);
+        CHECK(node->GetComponent("TestComponent") == retrieved);
     }
     
     SECTION("Uniqueness Constraint") {
@@ -46,13 +47,47 @@ TEST_CASE("Component System Basics", "[Unit][Component]") {
         auto retrieved = node->GetComponent<TestComponent>();
         REQUIRE(retrieved != nullptr);
         CHECK(retrieved->value == 2);
-        CHECK(retrieved == comp2);
+        CHECK(retrieved == comp2.get());
     }
 
     SECTION("Get Non-existent Component") {
         auto retrieved = node->GetComponent<TestComponent>();
         CHECK(retrieved == nullptr);
     }
+
+    SECTION("A component has one owner") {
+        auto otherNode = Assets::Node::CreateNode(
+            "OtherNode", glm::vec3(0), glm::quat(1, 0, 0, 0), glm::vec3(1), 1);
+        auto component = std::make_shared<TestComponent>();
+        node->AddComponent(component);
+
+        CHECK_THROWS_AS(otherNode->AddComponent(component), std::logic_error);
+        CHECK(component->GetOwner() == node.get());
+        CHECK(node->GetComponent<TestComponent>() == component.get());
+        CHECK(otherNode->GetComponent<TestComponent>() == nullptr);
+    }
+}
+
+TEST_CASE("Node hierarchy uses non-owning parent links", "[Unit][Node][Hierarchy]")
+{
+    std::weak_ptr<Assets::Node> weakParent;
+    std::weak_ptr<Assets::Node> weakChild;
+    {
+        auto parent = Assets::Node::CreateNode(
+            "Parent", glm::vec3(0), glm::quat(1, 0, 0, 0), glm::vec3(1), 1);
+        auto child = Assets::Node::CreateNode(
+            "Child", glm::vec3(0), glm::quat(1, 0, 0, 0), glm::vec3(1), 2);
+        child->SetParent(parent);
+
+        weakParent = parent;
+        weakChild = child;
+        CHECK(child->GetParent() == parent.get());
+        REQUIRE(parent->Children().size() == 1);
+        CHECK_THROWS_AS(parent->SetParent(child), std::logic_error);
+    }
+
+    CHECK(weakParent.expired());
+    CHECK(weakChild.expired());
 }
 
 TEST_CASE_METHOD(EngineTestFixture, "Scene component index follows component and node lifetime",

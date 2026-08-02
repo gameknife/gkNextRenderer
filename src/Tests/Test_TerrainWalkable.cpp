@@ -22,7 +22,7 @@ TEST_CASE_METHOD(EngineTestFixture, "Terrain walkability: river blocks, bridge c
 
     // The fixture engine is already Running with its default scene, so poll
     // for the async load result (the terrain component) instead of the status.
-    std::shared_ptr<Runtime::TerrainComponent> terrain;
+    Runtime::TerrainComponent* terrain = nullptr;
     for (int i = 0; i < 2400 && !terrain; ++i)
     {
         Simulate(1);

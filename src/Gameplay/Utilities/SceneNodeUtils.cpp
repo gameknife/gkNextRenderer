@@ -90,7 +90,7 @@ namespace NextGameplay
 
             if (auto component = node->GetComponent<Runtime::SkinnedMeshComponent>())
             {
-                components.push_back(component.get());
+                components.push_back(component);
             }
 
             for (const auto& child : node->Children())

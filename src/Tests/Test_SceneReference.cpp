@@ -93,7 +93,7 @@ namespace
         {
             if (node)
             {
-                if (auto* environment = node->GetComponentPtr<Runtime::EnvironmentComponent>())
+                if (auto* environment = node->GetComponent<Runtime::EnvironmentComponent>())
                 {
                     return environment;
                 }

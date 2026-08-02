@@ -492,7 +492,7 @@ namespace NextTotalwar
                 {
                     Assets::Node* node = scene.Nodes()[nodeIndex].get();
                     if (Runtime::RenderComponent* render =
-                            node->GetComponentPtr<Runtime::RenderComponent>())
+                            node->GetComponent<Runtime::RenderComponent>())
                     {
                         visual.renderNodes.push_back(node);
                         visual.baseMaterials.push_back(render->GetMaterials());

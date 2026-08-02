@@ -49,7 +49,7 @@ namespace
         auto* body = physics->GetBody(comp->GetPhysicsBody());
         if (!body)
             return {};
-        return {comp.get(), body};
+        return {comp, body};
     }
 
     struct PlaySpeedPreset
@@ -1567,7 +1567,7 @@ bool BrickPlayerGameInstance::ReattachDraggedPart()
             physics->RemoveBody(bodyId);
         }
     }
-    node->AddComponent(std::shared_ptr<Runtime::PhysicsComponent>{});
+    node->RemoveComponent<Runtime::PhysicsComponent>();
 
     if (activeSnapCandidate_.restoreOriginalHierarchy)
     {

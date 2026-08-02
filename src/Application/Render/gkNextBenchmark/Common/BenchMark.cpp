@@ -106,9 +106,9 @@ void DrawBenchmarkStatsOverlay(NextEngine& engine)
         ImGui::Text(
             "FPS %.0f  |  Nodes %zu  |  Models %zu  |  Materials %zu  |  Triangles %u",
             engine.GetFrameRate(),
-            scene.GetNodeCount(),
-            scene.GetModelCount(),
-            scene.GetMaterialCount(),
+            scene.Nodes().size(),
+            scene.Models().size(),
+            scene.Materials().size(),
             scene.GetTriangleCount());
     }
     ImGui::End();

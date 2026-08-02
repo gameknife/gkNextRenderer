@@ -12,6 +12,7 @@
 #include "Engine/Assets/Core/SceneSelectionState.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"
 
+#include <ranges>
 #include <span>
 
 namespace Runtime
@@ -34,38 +35,6 @@ namespace Assets
     class Scene final
     {
     public:
-        template <typename T>
-        class ComponentView
-        {
-        public:
-            class Iterator
-            {
-            public:
-                Iterator(std::span<Component* const> components, size_t index)
-                    : components_(components), index_(index) {}
-                T* operator*() const { return static_cast<T*>(components_[index_]); }
-                Iterator& operator++()
-                {
-                    ++index_;
-                    return *this;
-                }
-                bool operator!=(const Iterator& other) const { return index_ != other.index_; }
-
-            private:
-                std::span<Component* const> components_;
-                size_t index_ = 0;
-            };
-
-            explicit ComponentView(std::span<Component* const> components) : components_(components) {}
-            Iterator begin() const { return Iterator(components_, 0); }
-            Iterator end() const { return Iterator(components_, components_.size()); }
-            bool empty() const { return components_.empty(); }
-            size_t size() const { return components_.size(); }
-
-        private:
-            std::span<Component* const> components_;
-        };
-
         static void RegisterReflection();
         static constexpr uint32_t kSunShadowCascadeCount = 4;
         static constexpr uint32_t kSunShadowResolution = 1024;
@@ -142,22 +111,25 @@ namespace Assets
         const SceneRebuildProfile& LastRebuildProfile() const { return lastRebuildProfile_; }
         bool EnsureGpuDrivenBufferCapacity(Vulkan::CommandPool& commandPool);
         void CleanUp();
-        // void RebuildBVH();
 
         const Assets::GPUScene& FetchGPUScene(uint32_t imageIndex, uint32_t viewBankBase) const;
         const std::vector<std::shared_ptr<Node>>& Nodes() const { return nodes_; }
         template <typename T>
-        ComponentView<T> Components()
+        auto Components()
         {
-            return ComponentView<T>(GetComponentsByType(ComponentTypeId<T>()));
+            static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
+            return GetComponentsByType(ComponentTypeId<T>()) |
+                   std::views::transform([](Component* component) { return static_cast<T*>(component); });
         }
         template <typename T>
-        ComponentView<const T> Components() const
+        auto Components() const
         {
-            return ComponentView<const T>(GetComponentsByType(ComponentTypeId<T>()));
+            static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
+            return GetComponentsByType(ComponentTypeId<T>()) |
+                   std::views::transform([](Component* component) { return static_cast<const T*>(component); });
         }
+        std::vector<Model>& Models() { return models_; }
         const std::vector<Model>& Models() const { return models_; }
-        std::vector<Model>& MutableModels() { return models_; }
         std::vector<FMaterial>& Materials() { return materials_; }
         const std::vector<FMaterial>& Materials() const { return materials_; }
         const std::vector<ModelData>& Offsets() const { return offsets_; }
@@ -168,10 +140,6 @@ namespace Assets
         // must drop history on a mismatch. Pure transforms / color edits do not bump it.
         uint64_t LightsGeneration() const { return lightsGeneration_; }
         const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
-        const Vulkan::Buffer& IndexBuffer() const { return *indexBuffer_; }
-        const Vulkan::Buffer& MaterialBuffer() const { return *sceneDynamicBuffer_; }
-        const Vulkan::Buffer& OffsetsBuffer() const { return *offsetBuffer_; }
-        const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
         const Vulkan::Buffer& NodeMatrixBuffer() const { return *sceneDynamicBuffer_; }
         const Vulkan::Buffer& SoftMeshShaderPrimBuffer() const { return *softMeshShaderPrimBuffer_; }
         const Vulkan::Buffer& SoftMeshShaderShadowPrimBuffer() const { return *softMeshShaderShadowPrimBuffer_; }
@@ -181,23 +149,15 @@ namespace Assets
         const Vulkan::Buffer& SoftMeshShaderCounterBuffer() const { return *softMeshShaderCounterBuffer_; }
         VkDeviceSize SoftMeshShaderDrawArgByteOffset(uint32_t slot) const;
         uint32_t SoftMeshShaderDrawSlotForShadowCascade(uint32_t cascade) const;
-        const Vulkan::Buffer& ReorderBuffer() const { return *reorderBuffer_; }
         const Vulkan::Buffer& PrimAddressBuffer() const { return *primAddressBuffer_; }
-        const glm::vec3 GetSunDir() const;
-        const bool HasSun() const;
 
-        const uint32_t GetLightCount() const { return lightCount_; }
-        const uint32_t GetIndicesCount() const { return indicesCount_; }
-        const uint32_t GetVertexCount() const { return vertexCount_; }
-        const uint32_t GetIndirectDrawBatchCount() const { return indirectDrawBatchCountBackup_; }
-        const uint32_t GetMaxSceneTriangles() const { return maxSceneTriangles_; }
-        size_t GetNodeCount() const { return nodes_.size(); }
-        size_t GetModelCount() const { return models_.size(); }
-        size_t GetMaterialCount() const { return materials_.size(); }
+        uint32_t GetLightCount() const { return lightCount_; }
+        uint32_t GetIndicesCount() const { return indicesCount_; }
+        uint32_t GetIndirectDrawBatchCount() const { return indirectDrawBatchCountBackup_; }
+        uint32_t GetMaxSceneTriangles() const { return maxSceneTriangles_; }
         uint32_t GetTriangleCount() const { return requiredGpuDrivenTriangleCapacity_; }
 
         int32_t FindNodeIdWithComponent(const std::string& componentType) const;
-        Node* GetNodeById(uint32_t nodeId);
 
         const Assets::GPUDrivenStat& GetGpuDrivenStat() const { return gpuDrivenStat_; }
         const std::array<Assets::GPUDrivenStat, kSunShadowCascadeCount>& GetShadowGpuDrivenStats() const
@@ -207,20 +167,20 @@ namespace Assets
 
         uint32_t GetSelectedId() const { return selectionState_.GetPrimaryId(); }
         const std::vector<uint32_t>& GetSelectedIds() const { return selectionState_.GetIds(); }
-        void SetSelectedId(uint32_t id) const;
-        void SetSelection(const std::vector<uint32_t>& ids) const;
-        void ClearSelection() const;
-        void AddToSelection(uint32_t id) const;
-        void RemoveFromSelection(uint32_t id) const;
-        void ToggleSelection(uint32_t id) const;
+        void SetSelectedId(uint32_t id);
+        void SetSelection(const std::vector<uint32_t>& ids);
+        void ClearSelection();
+        void AddToSelection(uint32_t id);
+        void RemoveFromSelection(uint32_t id);
+        void ToggleSelection(uint32_t id);
         bool IsSelected(uint32_t id) const;
         uint32_t ResolveEditableNodeId(uint32_t id) const;
         uint32_t GetHoveredId() const { return hoveredId_; }
-        void SetHoveredId(uint32_t id) const;
-        void ClearHoveredId() const;
+        void SetHoveredId(uint32_t id);
+        void ClearHoveredId();
         bool IsLocked(uint32_t id) const;
-        void SetLocked(uint32_t id, bool locked) const;
-        void ToggleLocked(uint32_t id) const;
+        void SetLocked(uint32_t id, bool locked);
+        void ToggleLocked(uint32_t id);
         bool GetSelectedNodeBounds(glm::vec3& center, float& radius) const;
         bool GetNodeBounds(uint32_t nodeId, glm::vec3& center, float& radius) const;
 
@@ -230,18 +190,16 @@ namespace Assets
         void MarkMaterialsDirty() { materialDirty_ = true; }
         void SyncUpdateScene();
         void UpdateHDRSH();
-        bool UpdateNodesGpuDriven();
-        
         void StartUpdateNodes();
         bool EndUpdateNodes();
         bool GPUUpdateNodes();
 
-        Node* GetNode(std::string name);
+        Node* GetNode(const std::string& name);
         const Node* GetNode(const std::string& name) const;
         Node* GetNodeByInstanceId(uint32_t id);
         const Model* GetModel(uint32_t id) const;
         const FMaterial* GetMaterial(uint32_t id) const;
-        const uint32_t AddMaterial(const FMaterial& material);
+        uint32_t AddMaterial(const FMaterial& material);
         uint32_t DuplicateMaterial(uint32_t id);
         bool RemoveMaterial(uint32_t id, uint32_t* outSelectedMaterialId = nullptr);
 
@@ -253,27 +211,17 @@ namespace Assets
 
         void OverrideModelView(glm::mat4& OutMatrix);
 
-        const std::vector<Assets::Camera>& GetCameras() const;
-        const Assets::EnvironmentSetting& GetEnvironmentStrings() const;
-
         Assets::EnvironmentSetting& GetEnvSettings();
         const Assets::EnvironmentSetting& GetEnvSettings() const;
-        void SetEnvSettings(const Assets::EnvironmentSetting& envSettings);
-        Runtime::EnvironmentComponent* GetEnvironmentComponent();
-        const Runtime::EnvironmentComponent* GetEnvironmentComponent() const;
 
         Camera& GetRenderCamera() { return renderCamera_; }
-        void SetRenderCamera(const Camera& camera) { renderCamera_ = camera; }
+        const Camera& GetRenderCamera() const { return renderCamera_; }
 
         void PlayAllTracks();
         bool HasCameraAnimation() const;
 
-        void MarkEnvDirty();
-
-
         void AddNode(std::shared_ptr<Node> node);
         void AddNodes(std::span<const std::shared_ptr<Node>> nodes);
-        void RequestSkinUpdate(uint32_t modelId);
         void ClearSkinUpdateRequests();
         const std::vector<uint32_t>& SkinUpdateRequests() const { return skinUpdateRequests_; }
         void EnsureNodePhysicsBody(Node* node);
@@ -293,12 +241,7 @@ namespace Assets
 
         Vulkan::Buffer* SkinnedVertexBuffer() const { return skinnedVertexBuffer_.get(); }
 
-        // Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
-
-        Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientArenaBuffer_; }
-        Vulkan::Buffer& AmbientCubePongBuffer() const { return *ambientArenaBuffer_; }
-        Vulkan::Buffer& FarAmbientCubeBuffer() const { return *ambientArenaBuffer_; }
-        Vulkan::Buffer& PageIndexBuffer() const { return *ambientArenaBuffer_; }
+        const Vulkan::Buffer& AmbientArenaBuffer() const { return *ambientArenaBuffer_; }
         // Runtime byte offsets into the arena, sized to the actual allocated cascade capacity (Phase 2)
         // rather than the compile-time GPU_SCENE_AMBIENT_*_OFFSET constants (which assume CASCADE_MAX).
         size_t AmbientCubesByteOffset() const { return 0; }
@@ -318,16 +261,10 @@ namespace Assets
         uint32_t AmbientActiveBrickCount(uint32_t cascade) const;
         void SetAmbientActiveBrickCounts(const std::vector<uint32_t>& counts);
 
-        Vulkan::Buffer& SkinWeightBuffer() const { return *skinWeightBuffer_; }
-        Vulkan::Buffer& SkinJointBuffer() const { return *skinJointBuffer_; }
-
-        Vulkan::Buffer& HDRSHBuffer() const { return *sceneDynamicBuffer_; }
-
         TextureImage& ShadowMap() const;
         TextureImage& EnsureCpuShadowMap(Vulkan::CommandPool& commandPool);
 
         // GPU CSM resources: four cascades, each backed by a separate single-layer D32_SFLOAT image.
-        Vulkan::Image& SunShadowImage(uint32_t cascade) const { return *sunShadowImages_[cascade]; }
         const Vulkan::ImageView& SunShadowImageView(uint32_t cascade) const { return *sunShadowViews_[cascade]; }
         const Vulkan::Sampler& SunShadowSampler() const { return *sunShadowSampler_; }
 
@@ -336,6 +273,8 @@ namespace Assets
         glm::vec3 GetSceneAABBMax() const { return sceneAABBMax_; }
 
     private:
+        friend class Node;
+
         std::vector<FMaterial> materials_;
         std::vector<Material> gpuMaterials_;
         std::vector<Model> models_;
@@ -446,13 +385,11 @@ namespace Assets
         uint32_t maxSceneTriangles_{1};
         uint32_t requiredGpuDrivenTriangleCapacity_{1};
 
-        mutable SceneSelectionState selectionState_;
-        mutable uint32_t hoveredId_ = SceneSelectionState::invalidNodeId;
-        mutable std::unordered_set<uint32_t> lockedIds_;
-        mutable std::unordered_map<uint32_t, std::shared_ptr<Node>> nodeByInstanceId_;
-        mutable bool nodeIndexDirty_ = true;
-        mutable size_t indexedNodeCount_ = 0;
-        mutable uint32_t nextInstanceId_ = 0;
+        SceneSelectionState selectionState_;
+        uint32_t hoveredId_ = SceneSelectionState::invalidNodeId;
+        std::unordered_set<uint32_t> lockedIds_;
+        std::unordered_map<uint32_t, std::shared_ptr<Node>> nodeByInstanceId_;
+        uint32_t nextInstanceId_ = 0;
 
         bool sceneDirtyForCpuAS_ = false;
         bool sceneDirty_ = true;
@@ -496,29 +433,32 @@ namespace Assets
 
         Vulkan::CommandPool* commandPool_ = nullptr;
 
-        void BindNode(std::shared_ptr<Node> const& node);
+        void BindNode(Node& node);
         void UnbindNode(Node& node);
         void OnNodeComponentChanged(Node& node, entt::id_type componentTypeId, Component* component);
         void RegisterComponent(Node& node, Component& component);
         void UnregisterComponent(Node& node, entt::id_type componentTypeId);
         std::span<Component* const> GetComponentsByType(entt::id_type componentTypeId) const;
         void RegisterSkinComponent(Runtime::SkinnedMeshComponent& component);
+        void RequestSkinUpdate(uint32_t modelId);
         void EnsureJointMatrixCapacity();
 
         Runtime::EnvironmentComponent* environmentComponent_ = nullptr;
+        Runtime::EnvironmentComponent* GetEnvironmentComponent();
+        const Runtime::EnvironmentComponent* GetEnvironmentComponent() const;
 
-        void MarkNodeIndexDirty() const { nodeIndexDirty_ = true; }
-        void RebuildNodeIndex() const;
+        void RebuildNodeIndex();
         std::vector<LightObject> ResolveActiveLights() const;
         void UpdateLights();
         void DrawAreaLights() const;
-        void RegisterNodeIndex(const std::shared_ptr<Node>& node) const;
-        void UnregisterNodeIndex(uint32_t id) const;
+        void RegisterNodeIndex(const std::shared_ptr<Node>& node);
+        void UnregisterNodeIndex(uint32_t id);
 
         void RefreshEnvironmentComponentCache();
         void CacheEnvironmentComponentFromNode(Node* node);
 
         Assets::GPUScene BuildGPUScene(uint32_t imageIndex, uint32_t viewBankBase) const;
+        bool UpdateNodesGpuDriven();
         
         bool needUpdateTLAS = false;
     };

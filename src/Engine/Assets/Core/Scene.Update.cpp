@@ -32,23 +32,15 @@
 
 namespace Assets
 {
-    void Scene::BindNode(const std::shared_ptr<Node>& node)
+    void Scene::BindNode(Node& node)
     {
-        if (!node)
-        {
-            return;
-        }
+        node.scene_ = this;
 
-        node->SetComponentChangedCallback([this](Node& owner, entt::id_type componentTypeId, Component* component)
-        {
-            OnNodeComponentChanged(owner, componentTypeId, component);
-        });
-
-        for (const auto& component : node->GetComponents())
+        for (const auto& component : node.GetComponents())
         {
             if (component)
             {
-                OnNodeComponentChanged(*node, component->GetTypeId(), component.get());
+                OnNodeComponentChanged(node, component->GetTypeId(), component.get());
             }
         }
     }
@@ -62,7 +54,7 @@ namespace Assets
                 UnregisterComponent(node, component->GetTypeId());
             }
         }
-        node.SetComponentChangedCallback({});
+        node.scene_ = nullptr;
     }
 
     void Scene::OnNodeComponentChanged(Node& node, entt::id_type componentTypeId, Component* component)
@@ -177,7 +169,8 @@ namespace Assets
 
         if (const Node* owner = component.GetOwner())
         {
-            if (const auto* render = owner->GetRenderComponent(); render && render->GetModelId() != -1)
+            if (const auto* render = owner->GetComponent<Runtime::RenderComponent>();
+                render && render->GetModelId() != -1)
             {
                 RequestSkinUpdate(render->GetModelId());
             }
@@ -248,7 +241,7 @@ namespace Assets
             {
                 continue;
             }
-            if (const auto* render = node->GetRenderComponent();
+            if (const auto* render = node->GetComponent<Runtime::RenderComponent>();
                 render && !render->GetVisible())
             {
                 continue;
@@ -404,7 +397,7 @@ namespace Assets
                         if (skinnedMesh->IsPlaying())
                         {
                             MarkDirty();
-                            if (auto* renderComponent = node->GetRenderComponent())
+                            if (auto* renderComponent = node->GetComponent<Runtime::RenderComponent>())
                             {
                                 if (renderComponent->GetModelId() != -1)
                                 {
@@ -468,7 +461,7 @@ namespace Assets
                         {
                             if (!n)
                                 return;
-                            auto* phys = n->GetComponentPtr<Runtime::PhysicsComponent>();
+                            auto* phys = n->GetComponent<Runtime::PhysicsComponent>();
                             if (phys)
                             {
                                 NextBodyID bodyID = phys->GetPhysicsBody();
@@ -635,7 +628,7 @@ namespace Assets
         std::memcpy(shadowGpuDrivenStats_.data(), gpuData + 1,
                     sizeof(Assets::GPUDrivenStat) * Assets::Scene::kSunShadowCascadeCount);
         gpuData[0] = zero;
-        if (!HasSun())
+        if (!GetEnvSettings().HasSun)
         {
             std::fill(shadowGpuDrivenStats_.begin(), shadowGpuDrivenStats_.end(), zero);
             std::fill_n(gpuData + 1, Assets::Scene::kSunShadowCascadeCount, zero);
@@ -856,7 +849,7 @@ namespace Assets
 
                                 localMovingNodeDetected |= node->TickVelocity();
 
-                                const auto* render = node->GetRenderComponent();
+                                const auto* render = node->GetComponent<Runtime::RenderComponent>();
                                 const uint32_t instanceId = node->GetInstanceId();
                                 const uint32_t editableInstanceId = node->IsSceneReferenceInternal()
                                     ? node->GetSceneReferenceOwnerProxyId()
@@ -878,7 +871,7 @@ namespace Assets
 
                                 uint32_t nodeJointOffset = 0;
                                 if (const auto* skinnedMesh =
-                                        node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
+                                        node->GetComponent<Runtime::SkinnedMeshComponent>())
                                 {
                                     nodeJointOffset = skinnedMesh->GetJointMatrixOffset();
                                 }

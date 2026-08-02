@@ -76,7 +76,7 @@ namespace NextTotalwar
             Assets::Node* node = visual.renderNodes[index];
             if (!node) continue;
             Runtime::RenderComponent* render =
-                node->GetComponentPtr<Runtime::RenderComponent>();
+                node->GetComponent<Runtime::RenderComponent>();
             if (!render) continue;
 
             if (flashing)

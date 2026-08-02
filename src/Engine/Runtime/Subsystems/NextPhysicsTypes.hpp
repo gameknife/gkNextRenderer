@@ -41,6 +41,15 @@ public:
 
 using NextMeshShapeHandle = std::shared_ptr<const NextMeshShape>;
 
+namespace Runtime
+{
+    enum class ENodeMobility
+    {
+        Static,
+        Dynamic,
+        Kinematic
+    };
+}
 
 namespace NextLayers {
     static constexpr NextObjectLayer NON_MOVING = 0;

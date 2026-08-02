@@ -84,9 +84,9 @@ TEST_CASE_METHOD(EngineTestFixture, "SOG scene loads and renders on Vulkan", "[.
 
     REQUIRE(loaded);
     const int32_t nodeId = engine_->GetScene().FindNodeIdWithComponent("GaussianSplatComponent");
-    const auto* node = engine_->GetScene().GetNodeById(static_cast<uint32_t>(nodeId));
+    const auto* node = engine_->GetScene().GetNodeByInstanceId(static_cast<uint32_t>(nodeId));
     REQUIRE(node != nullptr);
-    const auto* splat = node->GetComponentPtr<Runtime::GaussianSplatComponent>();
+    const auto* splat = node->GetComponent<Runtime::GaussianSplatComponent>();
     REQUIRE(splat != nullptr);
     CHECK(splat->GetData()->splats.size() == 309008);
 

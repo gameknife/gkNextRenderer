@@ -1391,7 +1391,7 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Camera"), true))
     {
         std::vector<const char*> camerasList;
-        for (const auto& cam : GetEngine().GetScene().GetCameras())
+        for (const auto& cam : GetEngine().GetScene().GetEnvSettings().cameras)
         {
             camerasList.emplace_back(cam.name.c_str());
         }
@@ -1406,7 +1406,8 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
                        });
         if (prevCameraIdx != userSetting.CameraIdx)
         {
-            GetEngine().GetScene().SetRenderCamera(GetEngine().GetScene().GetCameras()[userSetting.CameraIdx]);
+            GetEngine().GetScene().GetRenderCamera() =
+                GetEngine().GetScene().GetEnvSettings().cameras[userSetting.CameraIdx];
             modelViewController_.Reset(GetEngine().GetScene().GetRenderCamera());
         }
 

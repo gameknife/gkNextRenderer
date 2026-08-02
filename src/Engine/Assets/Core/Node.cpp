@@ -1,4 +1,5 @@
 #include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
@@ -6,6 +7,7 @@
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Reflection/PropertyMeta.hpp"
+#include "Engine/Utilities/Exception.hpp"
 #include <entt/meta/factory.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
@@ -36,10 +38,10 @@ namespace Assets
                 .custom<PropertyMeta>(PropertyPresets::Editable("Scale", "Transform", "Local scale"))
             .func<&Node::GetName>("GetName")
             .func<&Node::GetInstanceId>("GetInstanceId")
-            .func<&Node::GetComponentByTypeName>("GetComponent");
+            .func<static_cast<Component* (Node::*)(const std::string&) const>(&Node::GetComponent)>("GetComponent");
     }
 
-    Component* Node::GetComponentByTypeName(const std::string& componentType) const
+    Component* Node::GetComponent(const std::string& componentType) const
     {
         for (const auto& component : components_)
         {
@@ -55,6 +57,89 @@ namespace Assets
         }
 
         return nullptr;
+    }
+
+    Component* Node::FindComponent(entt::id_type componentTypeId) const
+    {
+        if (componentTypeId == ComponentTypeId<Runtime::RenderComponent>())
+        {
+            return renderComponent_;
+        }
+        if (componentTypeId == ComponentTypeId<Runtime::PhysicsComponent>())
+        {
+            return physicsComponent_;
+        }
+
+        const auto component = std::ranges::find_if(components_, [componentTypeId](const auto& candidate)
+        {
+            return candidate->GetTypeId() == componentTypeId;
+        });
+        return component != components_.end() ? component->get() : nullptr;
+    }
+
+    void Node::SetComponent(entt::id_type componentTypeId, std::shared_ptr<Component> component)
+    {
+        if (component && component->GetTypeId() != componentTypeId)
+        {
+            Throw(std::logic_error("Component static and dynamic types do not match"));
+        }
+        if (component && component->GetOwner() && component->GetOwner() != this)
+        {
+            Throw(std::logic_error("Component is already attached to another node"));
+        }
+
+        const auto existing = std::ranges::find_if(components_, [componentTypeId](const auto& candidate)
+        {
+            return candidate->GetTypeId() == componentTypeId;
+        });
+        if (existing == components_.end() && !component)
+        {
+            return;
+        }
+        if (existing != components_.end() && existing->get() == component.get())
+        {
+            return;
+        }
+
+        std::shared_ptr<Component> replaced;
+        if (existing != components_.end())
+        {
+            replaced = std::move(*existing);
+            if (component)
+            {
+                *existing = component;
+            }
+            else
+            {
+                components_.erase(existing);
+            }
+        }
+        else
+        {
+            components_.push_back(component);
+        }
+
+        if (component)
+        {
+            component->SetOwner(this);
+        }
+        if (componentTypeId == ComponentTypeId<Runtime::RenderComponent>())
+        {
+            renderComponent_ = static_cast<Runtime::RenderComponent*>(component.get());
+        }
+        else if (componentTypeId == ComponentTypeId<Runtime::PhysicsComponent>())
+        {
+            physicsComponent_ = static_cast<Runtime::PhysicsComponent*>(component.get());
+        }
+
+        if (scene_)
+        {
+            scene_->OnNodeComponentChanged(*this, componentTypeId, component.get());
+        }
+        if (replaced)
+        {
+            replaced->SetOwner(nullptr);
+        }
     }
 
     std::shared_ptr<Node> Node::CreateNode(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t instanceId)
@@ -93,9 +178,9 @@ namespace Assets
     void Node::RecalcTransform(bool full)
     {
         RecalcLocalTransform();
-        if(parent_)
+        if (const auto parent = parent_.lock())
         {
-            transform_ = parent_->transform_ * localTransform_;
+            transform_ = parent->transform_ * localTransform_;
         }
         else
         {
@@ -189,37 +274,39 @@ namespace Assets
         return false;
     }
 
-    void Node::SetParent(std::shared_ptr<Node> parent)
+    void Node::SetParent(const std::shared_ptr<Node>& parent)
     {
-        // remove form previous parent
-        if(parent_)
+        if (!parent)
         {
-            parent_->RemoveChild( shared_from_this() );
+            ClearParent();
+            return;
+        }
+        for (const Node* ancestor = parent.get(); ancestor; ancestor = ancestor->GetParent())
+        {
+            if (ancestor == this)
+            {
+                Throw(std::logic_error("Node hierarchy cannot contain a cycle"));
+            }
+        }
+
+        if (const auto previousParent = parent_.lock())
+        {
+            previousParent->children_.erase(shared_from_this());
         }
         parent_ = parent;
-        parent_->AddChild( shared_from_this() );
+        parent->children_.insert(shared_from_this());
 
         RecalcTransform();
     }
 
     void Node::ClearParent()
     {
-        if (parent_)
+        if (const auto parent = parent_.lock())
         {
-            parent_->RemoveChild(shared_from_this());
-            parent_.reset();
-            RecalcTransform();
+            parent->children_.erase(shared_from_this());
         }
-    }
-
-    void Node::AddChild(std::shared_ptr<Node> child)
-    {
-        children_.insert(child);
-    }
-
-    void Node::RemoveChild(std::shared_ptr<Node> child)
-    {
-        children_.erase(child);
+        parent_.reset();
+        RecalcTransform();
     }
 
     void Node::GetNodeProxy(NodeProxy& proxy) const

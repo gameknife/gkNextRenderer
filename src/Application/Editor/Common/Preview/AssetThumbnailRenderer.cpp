@@ -161,7 +161,7 @@ namespace Vulkan
         materialPreviewDistance_ = distance;
         if (materialPreviewScene_)
         {
-            materialPreviewScene_->SetRenderCamera(BuildMaterialPreviewCamera());
+            materialPreviewScene_->GetRenderCamera() = BuildMaterialPreviewCamera();
         }
         if (RenderView* view = MaterialPreviewView())
         {
@@ -328,11 +328,11 @@ namespace Vulkan
         env.SunIntensity = sunEnabled ? 500.0f : 1000.0f;
         env.SunRotation = 0.35f;
         env.SkyIntensity = 300.0f;
-        scene->SetEnvSettings(env);
+        scene->GetEnvSettings() = env;
 
         Assets::Camera sceneCamera = camera;
         sceneCamera.name = cameraName;
-        scene->SetRenderCamera(sceneCamera);
+        scene->GetRenderCamera() = sceneCamera;
         scene->SyncUpdateScene();
         return scene;
     }
@@ -484,7 +484,7 @@ namespace Vulkan
         env.SunIntensity = 500.0f;
         env.SunRotation = 0.35f;
         env.SkyIntensity = 300.0f;
-        thumbnailScene_->SetEnvSettings(env);
+        thumbnailScene_->GetEnvSettings() = env;
 
         Assets::Camera camera{};
         camera.name = "Mesh Thumbnail";
@@ -498,7 +498,7 @@ namespace Vulkan
         camera.NearPlane = std::max(0.001f, distance - radius * 2.5f);
         camera.FarPlane = std::max(camera.NearPlane + 1.0f, distance + radius * 3.5f);
         camera.ModelView = glm::lookAt(eye, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        thumbnailScene_->SetRenderCamera(camera);
+        thumbnailScene_->GetRenderCamera() = camera;
         thumbnailScene_->SyncUpdateScene();
         thumbnailSceneKind_ = EThumbnailKind::Mesh;
         thumbnailSceneReady_ = true;

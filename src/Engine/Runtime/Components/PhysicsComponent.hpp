@@ -7,13 +7,6 @@
 
 namespace Runtime
 {
-    enum class ENodeMobility
-    {
-        Static,
-        Dynamic,
-        Kinematic
-    };
-
     class PhysicsComponent : public Assets::Component
     {
     public:

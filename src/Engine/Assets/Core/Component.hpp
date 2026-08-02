@@ -1,6 +1,5 @@
 #pragma once
 #include "Engine/Assets/AssetsFwd.hpp"
-#include <memory>
 #include <string>
 #include <string_view>
 #include <entt/meta/meta.hpp>
@@ -13,7 +12,7 @@ namespace Assets
         return entt::type_hash<T>::value();
     }
 
-    class Component : public std::enable_shared_from_this<Component>
+    class Component
     {
     public:
         virtual ~Component() = default;
@@ -27,10 +26,13 @@ namespace Assets
         // Get entt meta type for property access
         virtual entt::meta_type GetMetaType() const = 0;
         
-        void SetOwner(Node* owner) { owner_ = owner; }
-        Node* GetOwner() const { return owner_; }
+        Node* GetOwner() { return owner_; }
+        const Node* GetOwner() const { return owner_; }
 
-    protected:
+    private:
+        friend class Node;
+
+        void SetOwner(Node* owner) { owner_ = owner; }
         Node* owner_ = nullptr;
     };
 }

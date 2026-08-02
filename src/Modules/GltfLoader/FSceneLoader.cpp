@@ -566,11 +566,12 @@ namespace Assets
                     LightObject light{};
                     if (TryBuildAreaLight(model, primitive, glm::mat4(1.0f), materialOffset, light))
                     {
-                        auto lightComponent = sceneNode->GetComponent<Runtime::LightComponent>();
+                        auto* lightComponent = sceneNode->GetComponent<Runtime::LightComponent>();
                         if (!lightComponent)
                         {
-                            lightComponent = std::make_shared<Runtime::LightComponent>();
-                            sceneNode->AddComponent(lightComponent);
+                            auto newLightComponent = std::make_shared<Runtime::LightComponent>();
+                            lightComponent = newLightComponent.get();
+                            sceneNode->AddComponent(std::move(newLightComponent));
                         }
                         lightComponent->AddLight(light);
                         foundAreaLight = true;

@@ -109,7 +109,7 @@ namespace
             {
                 continue;
             }
-            if (auto* environment = node->GetComponentPtr<Runtime::EnvironmentComponent>())
+            if (auto* environment = node->GetComponent<Runtime::EnvironmentComponent>())
             {
                 return environment;
             }
@@ -619,7 +619,7 @@ std::shared_ptr<Assets::Node> SceneList::AddSceneReferenceToScene(
     FSceneReferenceLoadContext context;
     std::vector<std::shared_ptr<Assets::Node>> resolvedNodes = scene.Nodes();
     const size_t originalNodeCount = resolvedNodes.size();
-    ResolveSceneReferenceProxy(proxy, ignoredCamera, resolvedNodes, scene.MutableModels(), scene.Materials(),
+    ResolveSceneReferenceProxy(proxy, ignoredCamera, resolvedNodes, scene.Models(), scene.Materials(),
                                ignoredLights, ignoredTracks, ignoredSkeletons, context);
     scene.AddNodes(std::span<const std::shared_ptr<Assets::Node>>(
         resolvedNodes.data() + originalNodeCount, resolvedNodes.size() - originalNodeCount));

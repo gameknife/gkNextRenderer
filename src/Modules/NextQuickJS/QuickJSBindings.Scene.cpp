@@ -513,7 +513,7 @@ namespace NextQuickJSBindings
             return JS_UNDEFINED;
         }
 
-        Assets::Component* component = node->GetComponentByTypeName(componentType);
+        Assets::Component* component = node->GetComponent(componentType);
         JSValue result = CreateComponentObject(ctx, component, nodeId, componentType);
         JS_FreeCString(ctx, componentType);
         return result;

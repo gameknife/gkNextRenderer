@@ -108,7 +108,7 @@ void TruckerDemoGameInstance::OnSceneLoaded()
         else if (name == "player_wheel") wheels.push_back(node);
         else if (name == "cargo_crate") cargoNode_ = node;
 
-        auto* physics = node->GetComponentPtr<Runtime::PhysicsComponent>();
+        auto* physics = node->GetComponent<Runtime::PhysicsComponent>();
         if (!physics || physics->GetPhysicsBody().IsInvalid()) continue;
         ESurface type = ESurface::Grass;
         if (name.starts_with("oh_ground_mud")) type = ESurface::Mud;
@@ -199,7 +199,7 @@ void TruckerDemoGameInstance::CreateVehicle()
     vehicle_ = physics->CreateWheeledVehicle(settings);
     if (bodyNode_ && vehicle_ != invalidNextVehicleId)
     {
-        if (auto* component = bodyNode_->GetComponentPtr<Runtime::PhysicsComponent>())
+        if (auto* component = bodyNode_->GetComponent<Runtime::PhysicsComponent>())
             component->BindPhysicsBody(physics->GetVehicleBodyID(vehicle_));
     }
 }

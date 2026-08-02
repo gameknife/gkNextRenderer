@@ -702,7 +702,7 @@ TEST_CASE("ScadTerrain loader: TerrainComponent matches the evaluated heightfiel
     REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
                                                skeletons));
 
-    std::shared_ptr<Runtime::TerrainComponent> terrain;
+    Runtime::TerrainComponent* terrain = nullptr;
     for (const std::shared_ptr<Assets::Node>& node : nodes)
     {
         if (auto comp = node->GetComponent<Runtime::TerrainComponent>())

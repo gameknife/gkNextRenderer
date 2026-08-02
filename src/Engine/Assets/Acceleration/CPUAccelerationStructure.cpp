@@ -653,9 +653,9 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Sc
         lightPos.push_back(mix(light.p1, light.p3, 0.5f));
     }
 
-    if (scene.HasSun())
+    if (scene.GetEnvSettings().HasSun)
     {
-        sunDir.push_back( scene.GetSunDir() );
+        sunDir.push_back(scene.GetEnvSettings().SunDirection());
     }
 
     uint32_t taskId = Tasks::TaskCoordinator::GetInstance()->AddParralledTask(

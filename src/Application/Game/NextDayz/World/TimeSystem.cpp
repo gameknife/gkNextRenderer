@@ -66,6 +66,5 @@ namespace NextDayz
         env.SunIntensity = config_.DaySunIntensity * daylight_ * weather;
         env.SkyIntensity = config_.DaySkyIntensity *
                            (config_.NightSkyFraction + (1.0f - config_.NightSkyFraction) * daylight_) * weather;
-        scene.MarkEnvDirty();
     }
 }

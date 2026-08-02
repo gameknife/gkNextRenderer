@@ -102,7 +102,7 @@ namespace NextQuickJSBindings
             return nullptr;
         }
 
-        return node->GetComponentByTypeName(componentType);
+        return node->GetComponent(componentType);
     }
 
     FQuickJSInputState GQuickJSInput;

@@ -657,7 +657,7 @@ namespace Editor
             return;
         }
 
-        auto* component = node->GetComponentByTypeName(tokens[2]);
+        auto* component = node->GetComponent(tokens[2]);
         if (!component)
         {
             LogError(fmt::format("set_property: component '{}' not found on node '{}'", tokens[2], tokens[1]));
@@ -1197,7 +1197,7 @@ namespace Editor
                 return JS_UNDEFINED;
             }
 
-            auto* component = node->GetComponentByTypeName(compName);
+            auto* component = node->GetComponent(compName);
             if (!component)
             {
                 JS_FreeCString(ctx, compName);

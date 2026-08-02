@@ -530,7 +530,7 @@ namespace
 
     void SerializeCameras(FSceneSaverContext& ctx, const Scene& scene)
     {
-        const auto& cameras = scene.GetCameras();
+        const auto& cameras = scene.GetEnvSettings().cameras;
         for (const Camera& camera : cameras)
         {
             tinygltf::Camera gltfCamera;

@@ -814,7 +814,7 @@ bool NextDayzGameInstance::OnRenderUI()
     {
         if (!zombieVisualOwners_[index].IsValid() || !zombieNodes_[index]) continue;
         if (const Runtime::RenderComponent* render =
-                zombieNodes_[index]->GetComponentPtr<Runtime::RenderComponent>())
+                zombieNodes_[index]->GetComponent<Runtime::RenderComponent>())
         {
             const uint32_t participation = render->GetRenderParticipationMask();
             if (render->GetVisible() && render->GetRayCastVisible() &&
@@ -1319,7 +1319,7 @@ void NextDayzGameInstance::DrawDebugWorldOverlay() const
             if (debugHitProxyOverlay_ && index < zombieNodes_.size() && zombieNodes_[index])
             {
                 const std::shared_ptr<Assets::Node>& proxyNode = zombieNodes_[index];
-                const Runtime::RenderComponent* render = proxyNode->GetComponentPtr<Runtime::RenderComponent>();
+                const Runtime::RenderComponent* render = proxyNode->GetComponent<Runtime::RenderComponent>();
                 const uint32_t participation = render ? render->GetRenderParticipationMask() : 0u;
                 const bool cpuEligible = render && render->GetVisible() && render->GetRayCastVisible() &&
                     (participation & (Runtime::RenderParticipation::giBake |
@@ -1841,7 +1841,7 @@ void NextDayzGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegis
         {
             if (!zombieVisualOwners_[index].IsValid() || !zombieNodes_[index]) continue;
             const Runtime::RenderComponent* render =
-                zombieNodes_[index]->GetComponentPtr<Runtime::RenderComponent>();
+                zombieNodes_[index]->GetComponent<Runtime::RenderComponent>();
             if (!render) continue;
             const uint32_t participation = render->GetRenderParticipationMask();
             if (render->GetVisible() && render->GetRayCastVisible() &&

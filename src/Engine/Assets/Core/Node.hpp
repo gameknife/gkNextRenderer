@@ -2,7 +2,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Assets/Core/Component.hpp"
-#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysicsTypes.hpp"
 
 #include "glm/ext.hpp"
 
@@ -11,8 +11,8 @@
 
 namespace Runtime
 {
+    class PhysicsComponent;
     class RenderComponent;
-    class SkinnedMeshComponent;
 }
 
 namespace Assets
@@ -34,7 +34,6 @@ namespace Assets
         glm::quat& Rotation() const { return rotation_; }
         glm::vec3& Scale() const { return scaling_; }
 
-        void RecalcLocalTransform();
         void RecalcTransform(bool full = true);
         const glm::mat4& WorldTransform() const { return transform_; }
         glm::vec3 WorldTranslation() const;
@@ -51,141 +50,42 @@ namespace Assets
         bool IsSceneReferenceInternal() const { return sceneReferenceOwnerProxyId_ != invalidNodeId; }
         uint32_t GetSceneReferenceOwnerProxyId() const { return sceneReferenceOwnerProxyId_; }
         void SetSceneReferenceOwnerProxyId(uint32_t id) { sceneReferenceOwnerProxyId_ = id; }
-        void ClearSceneReferenceOwner() { sceneReferenceOwnerProxyId_ = invalidNodeId; }
 
-        Component* GetComponentByTypeName(const std::string& componentType) const;
+        Component* GetComponent(const std::string& componentType) const;
 
         uint32_t GetInstanceId() const { return instanceId_; }
         void SetInstanceId(uint32_t id) { instanceId_ = id; }
         void SyncPhysics();
         bool TickVelocity();
 
-        void SetParent(std::shared_ptr<Node> parent);
+        void SetParent(const std::shared_ptr<Node>& parent);
         void ClearParent();
-        Node* GetParent() { return parent_.get(); }
-        const Node* GetParent() const { return parent_.get(); }
-
-        void AddChild(std::shared_ptr<Node> child);
-        void RemoveChild(std::shared_ptr<Node> child);
+        Node* GetParent() { return parent_.lock().get(); }
+        const Node* GetParent() const { return parent_.lock().get(); }
 
         const std::set< std::shared_ptr<Node> >& Children() const { return children_; }
 
         void GetNodeProxy(NodeProxy& proxy) const;
-        Runtime::RenderComponent* GetRenderComponent() const { return renderComponent_; }
 
-        // New Component System
         template <typename T>
         void AddComponent(std::shared_ptr<T> component)
         {
-            static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
-            const auto componentTypeId = ComponentTypeId<T>();
-            std::shared_ptr<Component> replacedComponent;
-
-            if constexpr (std::is_same_v<T, Runtime::PhysicsComponent>)
-            {
-                physicsComponent_ = nullptr;
-            }
-            else if constexpr (std::is_same_v<T, Runtime::RenderComponent>)
-            {
-                renderComponent_ = nullptr;
-            }
-            
-            // Remove existing component of same type
-            for (auto it = components_.begin(); it != components_.end(); )
-            {
-                if ((*it)->GetTypeId() == componentTypeId)
-                {
-                    replacedComponent = *it;
-                    it = components_.erase(it);
-                }
-                else
-                {
-                    ++it;
-                }
-            }
-            
-            if (component)
-            {
-                component->SetOwner(this);
-                components_.push_back(component);
-
-                if constexpr (std::is_same_v<T, Runtime::PhysicsComponent>)
-                {
-                    physicsComponent_ = component.get();
-                }
-                else if constexpr (std::is_same_v<T, Runtime::RenderComponent>)
-                {
-                    renderComponent_ = component.get();
-                }
-            }
-
-            RebuildComponentTypeMask();
-            if (componentChangedCallback_)
-            {
-                componentChangedCallback_(*this, componentTypeId, component.get());
-            }
-            if (replacedComponent && replacedComponent.get() != component.get())
-            {
-                replacedComponent->SetOwner(nullptr);
-            }
+            static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
+            SetComponent(ComponentTypeId<T>(), std::move(component));
         }
 
         template <typename T>
         void RemoveComponent()
         {
-            AddComponent<T>({});
-        }
-
-        using ComponentChangedCallback =
-            std::function<void(Node&, entt::id_type, Component*)>;
-
-        void SetComponentChangedCallback(ComponentChangedCallback callback)
-        {
-            componentChangedCallback_ = std::move(callback);
+            static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
+            SetComponent(ComponentTypeId<T>(), {});
         }
 
         template <typename T>
-        T* GetComponentPtr() const
+        T* GetComponent() const
         {
-            static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
-            if constexpr (std::is_same_v<T, Runtime::RenderComponent>)
-            {
-                return renderComponent_;
-            }
-            if (!MayHaveComponent<T>())
-            {
-                return nullptr;
-            }
-            const auto componentTypeId = ComponentTypeId<T>();
-
-            for (const auto& comp : components_)
-            {
-                if (comp->GetTypeId() == componentTypeId)
-                {
-                    return static_cast<T*>(comp.get());
-                }
-            }
-            return nullptr;
-        }
-
-        template <typename T>
-        std::shared_ptr<T> GetComponent() const
-        {
-            static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
-            if (!MayHaveComponent<T>())
-            {
-                return nullptr;
-            }
-            const auto componentTypeId = ComponentTypeId<T>();
-            
-            for (const auto& comp : components_)
-            {
-                if (comp->GetTypeId() == componentTypeId)
-                {
-                    return std::static_pointer_cast<T>(comp);
-                }
-            }
-            return nullptr;
+            static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
+            return static_cast<T*>(FindComponent(ComponentTypeId<T>()));
         }
 
         /**
@@ -198,31 +98,11 @@ namespace Assets
         }
 
     private:
-        template <typename T>
-        static constexpr uint64_t ComponentTypeMask()
-        {
-            return ComponentTypeMask(ComponentTypeId<T>());
-        }
+        friend class Scene;
 
-        static constexpr uint64_t ComponentTypeMask(entt::id_type componentTypeId)
-        {
-            return 1ull << (componentTypeId & 63u);
-        }
-
-        void RebuildComponentTypeMask()
-        {
-            componentTypeMask_ = 0;
-            for (const auto& component : components_)
-            {
-                componentTypeMask_ |= ComponentTypeMask(component->GetTypeId());
-            }
-        }
-
-        template <typename T>
-        bool MayHaveComponent() const
-        {
-            return (componentTypeMask_ & ComponentTypeMask<T>()) != 0;
-        }
+        void RecalcLocalTransform();
+        void SetComponent(entt::id_type componentTypeId, std::shared_ptr<Component> component);
+        Component* FindComponent(entt::id_type componentTypeId) const;
 
         std::string name_;
         std::string tag_ = "Untagged";
@@ -239,12 +119,11 @@ namespace Assets
 
         uint32_t instanceId_;
 
-        std::shared_ptr<Node> parent_;
+        std::weak_ptr<Node> parent_;
         std::set< std::shared_ptr<Node> > children_;
 
         std::vector<std::shared_ptr<Component>> components_;
-        ComponentChangedCallback componentChangedCallback_;
-        uint64_t componentTypeMask_ = 0;
+        Scene* scene_ = nullptr;
         Runtime::PhysicsComponent* physicsComponent_ = nullptr;
         Runtime::RenderComponent* renderComponent_ = nullptr;
         static constexpr uint32_t invalidNodeId = std::numeric_limits<uint32_t>::max();

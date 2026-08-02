@@ -845,7 +845,6 @@ void Brotato3DGameInstance::ApplyLightingSettings()
     envSettings.SunColor = glm::mix(glm::vec3(1.0f, 0.72f, 0.48f),
                                     glm::vec3(1.0f, 0.94f, 0.82f),
                                     daylight);
-    GetEngine().GetScene().MarkEnvDirty();
 }
 
 void Brotato3DGameInstance::SetSkyIntensityTarget(float target, float transitionMs)

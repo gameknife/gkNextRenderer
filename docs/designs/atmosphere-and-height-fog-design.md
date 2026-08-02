@@ -70,7 +70,7 @@ M0–M3 已于 2026-07-29 实现并验收。历史任务分解见
   "所有渲染器都跑完、upscale/resolve 之前"的统一位置，且天然按 RenderView bank 工作。
 - `UniformBufferObject` 在 `assets/shaders/common/BasicTypes.slang` 中由 C++ 与 Slang 共享
   （C++ 侧经 `Engine/Assets/GPU/UniformBuffer.hpp` include）。
-- `Scene::MarkEnvDirty()` 当前是空实现；AmbientCube 每帧逐 cascade 持续烘焙，因此天空变化会渐进收敛。
+- AmbientCube 每帧逐 cascade 持续烘焙，因此天空变化无需显式失效接口，会自然渐进收敛。
 - `VoxelTracing` 的 contract 只声明 `ERenderOutput::Color`，不含 `Depth`。
 
 ## 架构总览

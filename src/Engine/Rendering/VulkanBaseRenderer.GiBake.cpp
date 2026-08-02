@@ -82,9 +82,9 @@ namespace Vulkan
         vkCmdDispatch(commandBuffer, groupCount, 1, 1);
 
         BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, {
-            BufferMemoryBarrier::Make(GetScene().AmbientCubeBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+            BufferMemoryBarrier::Make(GetScene().AmbientArenaBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
                                       GetScene().AmbientCubesByteOffset(), static_cast<VkDeviceSize>(cubePoolTotal) * sizeof(Assets::AmbientCube)),
-            BufferMemoryBarrier::Make(GetScene().AmbientCubeBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+            BufferMemoryBarrier::Make(GetScene().AmbientArenaBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
                                       GetScene().AmbientResidencyByteOffset(), static_cast<VkDeviceSize>(residencyTotal) * sizeof(Assets::AmbientBrickResidency)),
         });
     }
@@ -134,8 +134,8 @@ namespace Vulkan
 
         const int dispatchGroupCount = std::min(groupPerFrame, group - offset);
         const int offsetInActiveProbes = offset * cubesPerGroup;
-        VkBuffer cubeBuffer = GetScene().AmbientCubeBuffer().Handle();
-        VkBuffer pongBuffer = GetScene().AmbientCubePongBuffer().Handle();
+        const VkBuffer cubeBuffer = GetScene().AmbientArenaBuffer().Handle();
+        const VkBuffer pongBuffer = cubeBuffer;
         // The cube pool is laid out per cascade with poolCubesPerCascade cubes; the ping-pong copy and
         // its barriers operate on that pool stride, not the dense per-cascade probe count.
         const VkDeviceSize poolCubesPerCascade =

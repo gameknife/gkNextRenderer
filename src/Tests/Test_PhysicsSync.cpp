@@ -2,6 +2,7 @@
 #include "TestCommon.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Gameplay/Character/NextCharacterController.h"
 #include <glm/gtc/epsilon.hpp>

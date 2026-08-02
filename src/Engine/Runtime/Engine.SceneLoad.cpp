@@ -252,7 +252,7 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
                 }
 
                 scene_->Reload(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
-                scene_->SetEnvSettings(*ctx.cameraState);
+                scene_->GetEnvSettings() = *ctx.cameraState;
                 scene_->PostLoad(*ctx.skeletons);
                 CommitSceneToRenderer({.resetFrameCounter = false,
                                        .postLoadRenderer = false,
@@ -260,7 +260,7 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
 
                 config_.userSettings.CameraIdx = 0;
                 assert(!scene_->GetEnvSettings().cameras.empty());
-                scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
+                scene_->GetRenderCamera() = scene_->GetEnvSettings().cameras[0];
                 gameInstance_->OnSceneLoaded();
             }
             else

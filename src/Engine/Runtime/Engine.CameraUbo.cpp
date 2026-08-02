@@ -226,12 +226,6 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     }
     ubo.HasSun = hasSun;
 
-    if (ubo.HasSun != viewState.previousUniformBuffer.HasSun ||
-        ubo.SunDirection != viewState.previousUniformBuffer.SunDirection)
-    {
-        scene_->MarkEnvDirty();
-    }
-
     ubo.ShowHeatmap = config_.showFlags.ShowVisualDebug;
     ubo.HeatmapScale = config_.userSettings.HeatmapScale;
     ubo.DebugDraw_Lighting = config_.showFlags.DebugDraw_Lighting;

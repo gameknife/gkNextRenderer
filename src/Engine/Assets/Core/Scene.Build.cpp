@@ -94,7 +94,7 @@ namespace Assets
         {
             if (node)
             {
-                node->SetComponentChangedCallback({});
+                node->scene_ = nullptr;
             }
         }
         componentBuckets_.clear();
@@ -107,7 +107,7 @@ namespace Assets
         skinUpdateRequests_.clear();
         for (const auto& node : nodes_)
         {
-            BindNode(node);
+            BindNode(*node);
         }
         RebuildNodeIndex();
         RefreshEnvironmentComponentCache();
@@ -159,7 +159,7 @@ namespace Assets
         // Update IDs for all new nodes (assuming nodes is a flat list of all new nodes)
         for (auto& node : nodes)
         {
-            if (auto* environment = node->GetComponentPtr<Runtime::EnvironmentComponent>())
+            if (auto* environment = node->GetComponent<Runtime::EnvironmentComponent>())
             {
                 if (environmentComponent_ == nullptr)
                 {
@@ -195,7 +195,7 @@ namespace Assets
                 }
             }
 
-            if (auto* lightComponent = node->GetComponentPtr<Runtime::LightComponent>())
+            if (auto* lightComponent = node->GetComponent<Runtime::LightComponent>())
             {
                 for (LightObject& light : lightComponent->Lights())
                 {
@@ -230,9 +230,9 @@ namespace Assets
         // Add new nodes to scene nodes
         for (auto& node : nodes)
         {
-            if (node->GetComponentPtr<Runtime::EnvironmentComponent>() == nullptr)
+            if (node->GetComponent<Runtime::EnvironmentComponent>() == nullptr)
             {
-                BindNode(node);
+                BindNode(*node);
                 nodes_.push_back(node);
                 RegisterNodeIndex(node);
             }
@@ -240,7 +240,7 @@ namespace Assets
 
         // Add root node to scene
         CacheEnvironmentComponentFromNode(rootNode.get());
-        BindNode(rootNode);
+        BindNode(*rootNode);
         nodes_.push_back(rootNode);
         RegisterNodeIndex(rootNode);
 
@@ -382,7 +382,7 @@ namespace Assets
                     render->GetModelId() < cachedMeshShapes_.size() &&
                     cachedMeshShapes_[render->GetModelId()])
                 {
-                    auto phys = node->GetComponent<Runtime::PhysicsComponent>();
+                    auto* phys = node->GetComponent<Runtime::PhysicsComponent>();
                     Node::ENodeMobility mobility = phys ? phys->GetMobility() : Node::ENodeMobility::Static;
 
                     if (mobility != Node::ENodeMobility::Dynamic)
@@ -408,9 +408,10 @@ namespace Assets
                                 }
                                 else if (!phys)
                                 {
-                                    phys = std::make_shared<Runtime::PhysicsComponent>();
-                                    phys->SetMobility(mobility);
-                                    node->AddComponent(phys);
+                                    auto newPhysics = std::make_shared<Runtime::PhysicsComponent>();
+                                    newPhysics->SetMobility(mobility);
+                                    phys = newPhysics.get();
+                                    node->AddComponent(std::move(newPhysics));
                                 }
                                 if (phys)
                                 {
@@ -587,7 +588,8 @@ namespace Assets
         {
             if (const Node* node = skinnedMesh->GetOwner())
             {
-                if (const auto* render = node->GetRenderComponent(); render && render->GetModelId() != -1)
+                if (const auto* render = node->GetComponent<Runtime::RenderComponent>();
+                    render && render->GetModelId() != -1)
                 {
                     RequestSkinUpdate(render->GetModelId());
                 }

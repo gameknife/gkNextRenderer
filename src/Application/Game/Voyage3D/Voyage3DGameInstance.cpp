@@ -1102,7 +1102,6 @@ void Voyage3DGameInstance::ApplyLightingSettings()
     envSettings.SkyIntensity = 7.0f;
     envSettings.SunIntensity = 350.0f;
     envSettings.SunRotation = 0.35f;
-    GetEngine().GetScene().MarkEnvDirty();
 }
 
 void Voyage3DGameInstance::SetTradeMessage(std::string message)
