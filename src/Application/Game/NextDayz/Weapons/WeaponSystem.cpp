@@ -51,6 +51,7 @@ namespace NextDayz
         viewModelWeaponIndex_ = -1;
         shotEvents_.clear();
         hitEvents_.clear();
+        traceEvents_.clear();
         if (!viewModelAssetsSet_)
         {
             return;
@@ -77,6 +78,7 @@ namespace NextDayz
         viewModelWeaponIndex_ = -1;
         shotEvents_.clear();
         hitEvents_.clear();
+        traceEvents_.clear();
     }
 
     void WeaponSystem::ResetRuntime()
@@ -97,6 +99,7 @@ namespace NextDayz
         shotSequence_ = 0;
         shotEvents_.clear();
         hitEvents_.clear();
+        traceEvents_.clear();
         RefreshViewModelVisibility();
     }
 
@@ -213,6 +216,13 @@ namespace NextDayz
         return events;
     }
 
+    std::vector<FWeaponTraceEvent> WeaponSystem::ConsumeTraceEvents()
+    {
+        std::vector<FWeaponTraceEvent> events;
+        events.swap(traceEvents_);
+        return events;
+    }
+
     bool WeaponSystem::ViewModelRecoilActive() const
     {
         return std::abs(viewModelRecoil_) > 0.0001f || std::abs(viewModelRecoilVelocity_) > 0.001f;
@@ -325,6 +335,7 @@ namespace NextDayz
                 hitEvents_.push_back({sequence, std::string(def->id), muzzle, pelletDirection, hitInstanceId,
                                       hitPoint, def->baseDamage});
             }
+            traceEvents_.push_back({sequence, pellet, muzzle, pelletDirection, hitPoint, hitInstanceId, hit});
             if (Runtime::IDebugDraw* draw = engine.GetDebugDraw())
             {
                 draw->AddLine(muzzle, hitPoint, glm::vec4(1.0f, 0.85f, 0.3f, 1.0f), 2.0f, true);

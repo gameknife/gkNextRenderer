@@ -9,6 +9,7 @@
 #include <fmt/format.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <imgui.h>
 #include <spdlog/spdlog.h>
 
 #include "Engine/Assets/Core/Model.hpp"
@@ -24,6 +25,7 @@
 #include "Engine/Runtime/Scene/NodeUtils.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 #include "Modules/ScadLoader/FScadRig.h"
 #include "Modules/ScadLoader/ScadModule.hpp"
@@ -134,6 +136,67 @@ namespace
         if (weaponId == "mosin") return {0.31f, 0.20f, 0.10f};
         if (weaponId == "shotgun") return {0.14f, 0.12f, 0.10f};
         return {0.10f, 0.11f, 0.12f};
+    }
+
+    const char* ZombieStateName(NextDayz::EZombieState state)
+    {
+        using enum NextDayz::EZombieState;
+        switch (state)
+        {
+        case Dormant: return "Dormant";
+        case Wander: return "Wander";
+        case Investigate: return "Investigate";
+        case Chase: return "Chase";
+        case Attack: return "Attack";
+        case Stagger: return "Stagger";
+        case Dead: return "Dead";
+        }
+        return "Unknown";
+    }
+
+    ImU32 ZombieStateColor(NextDayz::EZombieState state)
+    {
+        using enum NextDayz::EZombieState;
+        switch (state)
+        {
+        case Wander: return IM_COL32(90, 235, 120, 245);
+        case Investigate: return IM_COL32(255, 220, 70, 245);
+        case Chase: return IM_COL32(255, 145, 45, 250);
+        case Attack: return IM_COL32(255, 55, 45, 255);
+        case Stagger: return IM_COL32(230, 80, 255, 250);
+        case Dead: return IM_COL32(115, 115, 115, 210);
+        default: return IM_COL32(160, 185, 195, 230);
+        }
+    }
+
+    const char* LootCategoryName(NextDayz::ELootCategory category)
+    {
+        using enum NextDayz::ELootCategory;
+        switch (category)
+        {
+        case FoodWater: return "Food/Water";
+        case Medical: return "Medical";
+        case Ammo: return "Ammo";
+        case Weapon: return "Weapon";
+        case Clothing: return "Clothing";
+        case Misc: return "Misc";
+        }
+        return "Unknown";
+    }
+
+    ImU32 LootCategoryColor(NextDayz::ELootCategory category)
+    {
+        using enum NextDayz::ELootCategory;
+        switch (category)
+        {
+        case FoodWater: return IM_COL32(80, 220, 255, 240);
+        case Medical: return IM_COL32(255, 85, 110, 240);
+        case Ammo: return IM_COL32(255, 190, 55, 240);
+        case Weapon: return IM_COL32(255, 90, 40, 245);
+        case Clothing: return IM_COL32(170, 105, 255, 240);
+        case Misc: return IM_COL32(205, 215, 220, 220);
+        }
+        return IM_COL32_WHITE;
     }
 }
 
@@ -402,6 +465,7 @@ void NextDayzGameInstance::OnSceneLoaded()
     inventory_.Clear();
     actions_.Reset();
     survival_.Reset();
+    recentWeaponTraces_.clear();
     inventory_.TryAdd("bandage", "Bandage", NextDayz::EItemKind::Consumable, 1);
     inventory_.TryAdd("water_bottle_empty", "Empty Bottle", NextDayz::EItemKind::Misc, 1);
     if (validationLoadout_ && GOption->AgentValidation)
@@ -439,6 +503,7 @@ void NextDayzGameInstance::OnSceneUnloaded()
     zombieNodes_.clear();
     zombieVisualOwners_.clear();
     zombieRigVisuals_.clear();
+    recentWeaponTraces_.clear();
 }
 
 void NextDayzGameInstance::OnDestroy()
@@ -462,6 +527,14 @@ void NextDayzGameInstance::OnTick(double deltaSeconds)
     {
         survivalSeconds_ += deltaSeconds;
     }
+    for (FRecentWeaponTrace& trace : recentWeaponTraces_)
+    {
+        trace.remainingSeconds -= dt;
+    }
+    std::erase_if(recentWeaponTraces_, [](const FRecentWeaponTrace& trace)
+    {
+        return trace.remainingSeconds <= 0.0f;
+    });
 
     actions_.Update(dt);
     if (const std::optional<NextDayz::FLootHandle> cancel = actions_.ConsumeCancelRequest())
@@ -511,6 +584,16 @@ void NextDayzGameInstance::OnTick(double deltaSeconds)
         {
             combat_.ProcessHit(hit, definition->damageFalloffDistance);
         }
+    }
+    for (NextDayz::FWeaponTraceEvent& trace : weapons_.ConsumeTraceEvents())
+    {
+        recentWeaponTraces_.push_back({std::move(trace), 4.0f});
+    }
+    if (recentWeaponTraces_.size() > 64)
+    {
+        recentWeaponTraces_.erase(recentWeaponTraces_.begin(),
+                                  recentWeaponTraces_.begin() +
+                                      static_cast<std::ptrdiff_t>(recentWeaponTraces_.size() - 64));
     }
     for (const NextDayz::FShotEvent& shot : weapons_.ConsumeShotEvents())
     {
@@ -713,6 +796,91 @@ bool NextDayzGameInstance::OnRenderUI()
     ctx.debug.switchingWeapon = weapons_.IsSwitching();
     ctx.debug.switchTargetSlot = weapons_.SwitchTargetSlot();
     ctx.debug.switchCommitted = weapons_.SwitchCommitted();
+    ctx.debug.activeZombies = zombies_.ActiveCount();
+    ctx.debug.alertedZombies = zombies_.AlertedCount();
+    ctx.debug.zombieKills = zombies_.KillCount();
+    ctx.debug.hitProxyRegistered = static_cast<int>(combat_.HitProxies().Size());
+    ctx.debug.zombieOverlay = debugZombieOverlay_;
+    ctx.debug.lootOverlay = debugLootOverlay_;
+    ctx.debug.hitProxyOverlay = debugHitProxyOverlay_;
+    for (const NextDayz::FZombieRuntime& zombie : zombies_.Slots())
+    {
+        if (zombie.active && zombie.pathWaypoint < zombie.path.size())
+        {
+            ctx.debug.zombiePathSegments += static_cast<int>(zombie.path.size() - zombie.pathWaypoint);
+        }
+    }
+    for (size_t index = 0; index < zombieNodes_.size() && index < zombieVisualOwners_.size(); ++index)
+    {
+        if (!zombieVisualOwners_[index].IsValid() || !zombieNodes_[index]) continue;
+        if (const Runtime::RenderComponent* render =
+                zombieNodes_[index]->GetComponentPtr<Runtime::RenderComponent>())
+        {
+            const uint32_t participation = render->GetRenderParticipationMask();
+            if (render->GetVisible() && render->GetRayCastVisible() &&
+                (participation & (Runtime::RenderParticipation::giBake |
+                                  Runtime::RenderParticipation::gpuAs)) != 0u)
+            {
+                ++ctx.debug.hitProxyCpuEligible;
+            }
+        }
+    }
+    for (const NextDayz::FLootEntry& entry : loot_.Entries())
+    {
+        const NextDayz::FLootSlot* slot = loot_.ResolveSlot(entry.directorHandle);
+        if (!slot) continue;
+        const size_t category = static_cast<size_t>(slot->category);
+        if (category < ctx.debug.lootTotalByCategory.size())
+        {
+            ++ctx.debug.lootTotalByCategory[category];
+        }
+        if (entry.state == NextDayz::FLootEntry::EState::Available)
+        {
+            ++ctx.debug.lootAvailable;
+            if (category < ctx.debug.lootAvailableByCategory.size())
+            {
+                ++ctx.debug.lootAvailableByCategory[category];
+            }
+        }
+        else if (entry.state == NextDayz::FLootEntry::EState::Reserved)
+        {
+            ++ctx.debug.lootReserved;
+        }
+        else
+        {
+            ++ctx.debug.lootCooldown;
+        }
+        if (!entry.def) continue;
+        for (const NextDayz::FLootGrant& grant : entry.def->grants)
+        {
+            if (grant.id == "food_can") ctx.debug.criticalFood += grant.count;
+            if (grant.id == "bandage" || grant.id == "medkit") ctx.debug.criticalMedical += grant.count;
+            if (grant.id == "backpack") ctx.debug.criticalBackpack += grant.count;
+            if (grant.kind == NextDayz::EItemKind::Weapon || grant.kind == NextDayz::EItemKind::Melee)
+                ctx.debug.criticalWeapons += grant.count;
+            if (grant.kind == NextDayz::EItemKind::Ammo) ctx.debug.criticalAmmo += grant.count;
+        }
+    }
+    ctx.debug.criticalWaterSources = static_cast<int>(
+        worldAnchors_.Count(NextDayz::EWorldAnchorType::Well));
+    ctx.debug.recentWeaponTraces = static_cast<int>(recentWeaponTraces_.size());
+    if (!recentWeaponTraces_.empty())
+    {
+        const NextDayz::FWeaponTraceEvent& trace = recentWeaponTraces_.back().trace;
+        ctx.debug.lastTraceInstanceId = trace.hitInstanceId;
+        if (!trace.hit)
+        {
+            ctx.debug.lastTraceResult = "MISS";
+        }
+        else if (combat_.HitProxies().Resolve(trace.hitInstanceId))
+        {
+            ctx.debug.lastTraceResult = "ZOMBIE PROXY";
+        }
+        else
+        {
+            ctx.debug.lastTraceResult = "WORLD/BLOCKER";
+        }
+    }
     ctx.equipWeapon = [this](const std::string& weaponId, int slot) {
         const_cast<NextDayzGameInstance*>(this)->EquipFromInventory(weaponId, slot);
     };
@@ -725,6 +893,10 @@ bool NextDayzGameInstance::OnRenderUI()
     ctx.restartSession = [this]() {
         const_cast<NextDayzGameInstance*>(this)->ResetSession();
     };
+    if (showDebugPanel_)
+    {
+        DrawDebugWorldOverlay();
+    }
     NextDayz::NextDayzHUD::Draw(ctx);
     return true;
 }
@@ -851,6 +1023,7 @@ void NextDayzGameInstance::ResetSession()
     zombieSpawns_.Reset(sessionRng_.Derive(0x5A4F4D42ULL).Seed());
     ConfigureZombieSpawnPoints();
     zombieVisuals_.Reset();
+    recentWeaponTraces_.clear();
     loot_.ResetSession(GetEngine());
     time_.Reset(config_.Time);
     player_.Destroy();
@@ -1052,6 +1225,214 @@ void NextDayzGameInstance::SyncZombieVisuals(float deltaSeconds)
     }
 }
 
+void NextDayzGameInstance::DrawDebugWorldOverlay() const
+{
+    ImDrawList* draw = ImGui::GetForegroundDrawList();
+    if (!draw) return;
+
+    const auto project = [this](const glm::vec3& world, ImVec2& screen)
+    {
+        return Runtime::EngineHelper::TryProjectWorldToScreenForGame(*this, world, screen);
+    };
+    const auto line = [draw](const ImVec2& from, const ImVec2& to, ImU32 color, float thickness = 2.0f)
+    {
+        draw->AddLine(from, to, IM_COL32(5, 8, 12, 220), thickness + 2.5f);
+        draw->AddLine(from, to, color, thickness);
+    };
+    const auto label = [draw](const ImVec2& position, ImU32 color, const std::string& text)
+    {
+        const ImVec2 size = ImGui::CalcTextSize(text.c_str());
+        const ImVec2 min(position.x - 3.0f, position.y - 2.0f);
+        const ImVec2 max(position.x + size.x + 3.0f, position.y + size.y + 2.0f);
+        draw->AddRectFilled(min, max, IM_COL32(8, 11, 15, 205), 3.0f);
+        draw->AddRect(min, max, color, 3.0f, 0, 1.0f);
+        draw->AddText(position, color, text.c_str());
+    };
+
+    if (debugZombieOverlay_ || debugHitProxyOverlay_)
+    {
+        const auto& zombieSlots = zombies_.Slots();
+        for (size_t index = 0; index < zombieSlots.size(); ++index)
+        {
+            const NextDayz::FZombieRuntime& zombie = zombieSlots[index];
+            if (!zombie.active || glm::distance(zombie.position, player_.Position()) > 220.0f) continue;
+            const ImU32 stateColor = ZombieStateColor(zombie.state);
+
+            if (debugZombieOverlay_)
+            {
+                ImVec2 feet;
+                ImVec2 head;
+                if (project(zombie.position, feet) &&
+                    project(zombie.position + glm::vec3(0.0f, 2.0f, 0.0f), head))
+                {
+                    line(feet, head, stateColor, 2.0f);
+                    draw->AddCircle(head, 7.0f, stateColor, 16, 2.0f);
+                    label({head.x + 10.0f, head.y - 9.0f}, stateColor,
+                          fmt::format("Z{}:{} {} {} HP {:.0f} repath {:.2f}s stuck {:.2f}s",
+                                      zombie.handle.index, zombie.handle.generation,
+                                      NextDayz::ZombieDef(zombie.profile).id,
+                                      ZombieStateName(zombie.state), zombie.health,
+                                      zombie.repathSeconds, zombie.stuckSeconds));
+                }
+
+                ImVec2 forwardFrom;
+                ImVec2 forwardTo;
+                if (project(zombie.position + glm::vec3(0.0f, 1.0f, 0.0f), forwardFrom) &&
+                    project(zombie.position + zombie.forward * 2.0f + glm::vec3(0.0f, 1.0f, 0.0f), forwardTo))
+                {
+                    line(forwardFrom, forwardTo, stateColor, 2.5f);
+                    draw->AddCircleFilled(forwardTo, 3.5f, stateColor);
+                }
+
+                ImVec2 previousScreen;
+                bool previousValid = project(zombie.position + glm::vec3(0.0f, 0.18f, 0.0f), previousScreen);
+                for (size_t waypoint = zombie.pathWaypoint; waypoint < zombie.path.size(); ++waypoint)
+                {
+                    ImVec2 waypointScreen;
+                    const bool waypointValid = project(
+                        zombie.path[waypoint] + glm::vec3(0.0f, 0.18f, 0.0f), waypointScreen);
+                    if (previousValid && waypointValid)
+                    {
+                        line(previousScreen, waypointScreen, IM_COL32(65, 225, 255, 245), 2.5f);
+                        draw->AddCircleFilled(waypointScreen, 4.0f, IM_COL32(65, 225, 255, 245));
+                    }
+                    previousScreen = waypointScreen;
+                    previousValid = waypointValid;
+                }
+
+                if (zombie.state == NextDayz::EZombieState::Investigate ||
+                    zombie.state == NextDayz::EZombieState::Chase ||
+                    zombie.state == NextDayz::EZombieState::Attack)
+                {
+                    ImVec2 known;
+                    if (project(zombie.lastKnownPlayerPosition + glm::vec3(0.0f, 0.25f, 0.0f), known))
+                    {
+                        draw->AddCircle(known, 9.0f, IM_COL32(255, 210, 55, 240), 16, 2.0f);
+                        draw->AddLine({known.x - 7.0f, known.y - 7.0f}, {known.x + 7.0f, known.y + 7.0f},
+                                      IM_COL32(255, 210, 55, 240), 2.0f);
+                        draw->AddLine({known.x - 7.0f, known.y + 7.0f}, {known.x + 7.0f, known.y - 7.0f},
+                                      IM_COL32(255, 210, 55, 240), 2.0f);
+                    }
+                }
+            }
+
+            if (debugHitProxyOverlay_ && index < zombieNodes_.size() && zombieNodes_[index])
+            {
+                const std::shared_ptr<Assets::Node>& proxyNode = zombieNodes_[index];
+                const Runtime::RenderComponent* render = proxyNode->GetComponentPtr<Runtime::RenderComponent>();
+                const uint32_t participation = render ? render->GetRenderParticipationMask() : 0u;
+                const bool cpuEligible = render && render->GetVisible() && render->GetRayCastVisible() &&
+                    (participation & (Runtime::RenderParticipation::giBake |
+                                      Runtime::RenderParticipation::gpuAs)) != 0u;
+                const ImU32 proxyColor = cpuEligible
+                    ? IM_COL32(80, 255, 135, 255) : IM_COL32(255, 40, 170, 255);
+                static constexpr std::array<glm::vec3, 8> localCorners = {{
+                    {-0.35f, 0.05f, -0.14f}, {0.35f, 0.05f, -0.14f},
+                    {-0.35f, 1.78f, -0.14f}, {0.35f, 1.78f, -0.14f},
+                    {-0.35f, 0.05f, 0.14f}, {0.35f, 0.05f, 0.14f},
+                    {-0.35f, 1.78f, 0.14f}, {0.35f, 1.78f, 0.14f},
+                }};
+                static constexpr std::array<std::array<size_t, 2>, 12> edges = {{
+                    {{0, 1}}, {{1, 3}}, {{3, 2}}, {{2, 0}},
+                    {{4, 5}}, {{5, 7}}, {{7, 6}}, {{6, 4}},
+                    {{0, 4}}, {{1, 5}}, {{2, 6}}, {{3, 7}},
+                }};
+                std::array<ImVec2, 8> corners{};
+                std::array<bool, 8> valid{};
+                for (size_t corner = 0; corner < localCorners.size(); ++corner)
+                {
+                    const glm::vec3 world = glm::vec3(
+                        proxyNode->WorldTransform() * glm::vec4(localCorners[corner], 1.0f));
+                    valid[corner] = project(world, corners[corner]);
+                }
+                for (const auto& edge : edges)
+                {
+                    if (valid[edge[0]] && valid[edge[1]])
+                    {
+                        line(corners[edge[0]], corners[edge[1]], proxyColor, 2.5f);
+                    }
+                }
+                ImVec2 proxyLabel;
+                if (project(zombie.position + glm::vec3(0.0f, 2.2f, 0.0f), proxyLabel))
+                {
+                    label({proxyLabel.x + 10.0f, proxyLabel.y + 10.0f}, proxyColor,
+                          fmt::format("HIT PROXY instance #{} {}", proxyNode->GetInstanceId(),
+                                      cpuEligible ? "CPU-AS OK" : "CPU-AS EXCLUDED"));
+                }
+            }
+        }
+    }
+
+    if (debugLootOverlay_)
+    {
+        for (size_t index = 0; index < loot_.Entries().size(); ++index)
+        {
+            const NextDayz::FLootEntry& entry = loot_.Entries()[index];
+            const NextDayz::FLootSlot* slot = loot_.ResolveSlot(entry.directorHandle);
+            if (!slot || glm::distance(entry.worldPos, player_.Position()) > 220.0f) continue;
+            ImU32 color = LootCategoryColor(slot->category);
+            const char* state = "Available";
+            double cooldownRemaining = 0.0;
+            if (entry.state == NextDayz::FLootEntry::EState::Reserved)
+            {
+                color = IM_COL32(255, 230, 70, 245);
+                state = "Reserved";
+            }
+            else if (entry.state == NextDayz::FLootEntry::EState::Cooldown)
+            {
+                color = IM_COL32(130, 140, 150, 210);
+                state = "Cooldown";
+                cooldownRemaining = std::max(0.0, slot->cooldownUntil - loot_.WorldSeconds());
+            }
+            ImVec2 ground;
+            ImVec2 marker;
+            if (!project(entry.worldPos, ground) ||
+                !project(entry.worldPos + glm::vec3(0.0f, 1.4f, 0.0f), marker)) continue;
+            line(ground, marker, color, 1.5f);
+            draw->AddQuadFilled({marker.x, marker.y - 6.0f}, {marker.x + 6.0f, marker.y},
+                                {marker.x, marker.y + 6.0f}, {marker.x - 6.0f, marker.y}, color);
+            if (glm::distance(entry.worldPos, player_.Position()) <= 100.0f)
+            {
+                const std::string suffix = entry.state == NextDayz::FLootEntry::EState::Cooldown
+                    ? fmt::format(" {:.0f}s", cooldownRemaining) : std::string();
+                label({marker.x + 9.0f, marker.y - 8.0f}, color,
+                      fmt::format("L{} {} | {} | {}{} | node #{}", index,
+                                  entry.def ? entry.def->displayName : "Unknown",
+                                  LootCategoryName(slot->category), state, suffix,
+                                  entry.nodeInstanceId));
+            }
+        }
+    }
+
+    if (debugHitProxyOverlay_)
+    {
+        for (const FRecentWeaponTrace& recent : recentWeaponTraces_)
+        {
+            const NextDayz::FWeaponTraceEvent& trace = recent.trace;
+            const bool zombieHit = trace.hit && combat_.HitProxies().Resolve(trace.hitInstanceId).has_value();
+            const ImU32 color = zombieHit ? IM_COL32(70, 255, 115, 255)
+                : trace.hit ? IM_COL32(255, 75, 55, 255) : IM_COL32(255, 220, 65, 245);
+            ImVec2 from;
+            ImVec2 to;
+            if (project(trace.origin, from) && project(trace.endPoint, to))
+            {
+                line(from, to, color, 2.0f);
+                draw->AddCircleFilled(to, trace.hit ? 5.0f : 3.0f, color);
+                label({to.x + 7.0f, to.y + 4.0f}, color,
+                      fmt::format("shot {} pellet {}: {}{}", trace.sequence, trace.pellet,
+                                  zombieHit ? "ZOMBIE PROXY #" : trace.hit ? "BLOCKER #" : "MISS",
+                                  trace.hit ? std::to_string(trace.hitInstanceId) : std::string()));
+            }
+            Runtime::EngineHelper::DrawAuxLine(
+                trace.origin, trace.endPoint,
+                zombieHit ? glm::vec4(0.2f, 1.0f, 0.35f, 1.0f)
+                          : trace.hit ? glm::vec4(1.0f, 0.2f, 0.1f, 1.0f)
+                                      : glm::vec4(1.0f, 0.8f, 0.1f, 1.0f),
+                2.0f, false);
+        }
+    }
+}
+
 void NextDayzGameInstance::SetMouseCaptured(bool captured)
 {
     mouseCaptured_ = captured;
@@ -1178,6 +1559,15 @@ bool NextDayzGameInstance::OnKey(SDL_Event& event)
         return true;
     case SDLK_F5:
         if (pressed) showDebugPanel_ = !showDebugPanel_;
+        return true;
+    case SDLK_F6:
+        if (pressed) debugZombieOverlay_ = !debugZombieOverlay_;
+        return true;
+    case SDLK_F7:
+        if (pressed) debugLootOverlay_ = !debugLootOverlay_;
+        return true;
+    case SDLK_F8:
+        if (pressed) debugHitProxyOverlay_ = !debugHitProxyOverlay_;
         return true;
     case SDLK_G:
         if (pressed) time_.ToggleOvercast();
@@ -1437,5 +1827,62 @@ void NextDayzGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegis
     });
     reg.Add("actionTime", [this]() -> Runtime::Agent::FAgentQueryValue {
         return static_cast<double>(actions_.NormalizedTime());
+    });
+    reg.Add("debugVisible", [this]() -> Runtime::Agent::FAgentQueryValue { return showDebugPanel_; });
+    reg.Add("debugZombieOverlay", [this]() -> Runtime::Agent::FAgentQueryValue { return debugZombieOverlay_; });
+    reg.Add("debugLootOverlay", [this]() -> Runtime::Agent::FAgentQueryValue { return debugLootOverlay_; });
+    reg.Add("debugHitProxyOverlay", [this]() -> Runtime::Agent::FAgentQueryValue { return debugHitProxyOverlay_; });
+    reg.Add("hitProxyRegistered", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return static_cast<int64_t>(combat_.HitProxies().Size());
+    });
+    reg.Add("hitProxyCpuEligible", [this]() -> Runtime::Agent::FAgentQueryValue {
+        int64_t eligible = 0;
+        for (size_t index = 0; index < zombieNodes_.size() && index < zombieVisualOwners_.size(); ++index)
+        {
+            if (!zombieVisualOwners_[index].IsValid() || !zombieNodes_[index]) continue;
+            const Runtime::RenderComponent* render =
+                zombieNodes_[index]->GetComponentPtr<Runtime::RenderComponent>();
+            if (!render) continue;
+            const uint32_t participation = render->GetRenderParticipationMask();
+            if (render->GetVisible() && render->GetRayCastVisible() &&
+                (participation & (Runtime::RenderParticipation::giBake |
+                                  Runtime::RenderParticipation::gpuAs)) != 0u)
+            {
+                ++eligible;
+            }
+        }
+        return eligible;
+    });
+    reg.Add("zombiePathSegments", [this]() -> Runtime::Agent::FAgentQueryValue {
+        int64_t segments = 0;
+        for (const NextDayz::FZombieRuntime& zombie : zombies_.Slots())
+        {
+            if (zombie.active && zombie.pathWaypoint < zombie.path.size())
+                segments += static_cast<int64_t>(zombie.path.size() - zombie.pathWaypoint);
+        }
+        return segments;
+    });
+    reg.Add("lootDebugEntries", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return static_cast<int64_t>(loot_.Entries().size());
+    });
+    reg.Add("lootMissingCategories", [this]() -> Runtime::Agent::FAgentQueryValue {
+        std::array<bool, 6> present{};
+        for (const NextDayz::FLootEntry& entry : loot_.Entries())
+        {
+            if (entry.state != NextDayz::FLootEntry::EState::Available) continue;
+            if (const NextDayz::FLootSlot* slot = loot_.ResolveSlot(entry.directorHandle))
+                present[static_cast<size_t>(slot->category)] = true;
+        }
+        return static_cast<int64_t>(std::count(present.begin(), present.end(), false));
+    });
+    reg.Add("recentWeaponTraces", [this]() -> Runtime::Agent::FAgentQueryValue {
+        return static_cast<int64_t>(recentWeaponTraces_.size());
+    });
+    reg.Add("lastTraceResult", [this]() -> Runtime::Agent::FAgentQueryValue {
+        if (recentWeaponTraces_.empty()) return std::string("none");
+        const NextDayz::FWeaponTraceEvent& trace = recentWeaponTraces_.back().trace;
+        if (!trace.hit) return std::string("miss");
+        return combat_.HitProxies().Resolve(trace.hitInstanceId)
+            ? std::string("zombie-proxy") : std::string("world-blocker");
     });
 }

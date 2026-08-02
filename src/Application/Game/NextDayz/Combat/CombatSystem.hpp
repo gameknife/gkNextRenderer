@@ -20,6 +20,7 @@ namespace NextDayz
         void Unregister(FZombieHandle zombie);
         void Clear();
         std::optional<FHitProxy> Resolve(uint32_t instanceId) const;
+        size_t Size() const { return proxies_.size(); }
 
     private:
         std::unordered_map<uint32_t, FHitProxy> proxies_;
@@ -31,6 +32,7 @@ namespace NextDayz
         explicit CombatSystem(ZombieSystem& zombies) : zombies_(zombies) {}
 
         FHitProxyRegistry& HitProxies() { return hitProxies_; }
+        const FHitProxyRegistry& HitProxies() const { return hitProxies_; }
         bool ProcessHit(const FWeaponHitEvent& event, float maximumDistance, float minimumDamageScale = 0.55f);
         bool ProcessMelee(uint64_t attackSequence, FZombieHandle target, float damage, EHitZone zone);
         void Reset();

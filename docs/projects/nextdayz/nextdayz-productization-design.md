@@ -356,6 +356,12 @@ game.currentObjective
 
 测试钩子可以设置生存值、传送到命名测试点或强制导演评估，但只能在 agent-validation 下注册为命令，正常游戏不能暴露作弊入口。
 
+### 11.1 运行时调试视图
+
+`F5` 打开总调试面板和世界叠加层；`F6`、`F7`、`F8` 分别切换感染者 AI、物资刷新和命中代理/射线。感染者视图显示状态、生命、朝向、剩余路径、目标点、repath 与 stuck 计数；物资视图显示槽位类别、Available/Reserved/Cooldown 状态和冷却秒数，并在面板中按类别及关键物资报告 `MISSING`；命中视图按实际代理世界变换绘制包围盒，并区分代理是否进入 CPU acceleration structure，最近射线用绿色（感染者代理）、红色（世界阻挡）和黄色（未命中）显示。
+
+自动化验证使用 `assets/agentscripts/nextdayz-debug-visualization.agentscript.json`，相关查询包括 `game.debugZombieOverlay`、`game.debugLootOverlay`、`game.debugHitProxyOverlay`、`game.hitProxyRegistered`、`game.hitProxyCpuEligible`、`game.zombiePathSegments`、`game.lootMissingCategories`、`game.recentWeaponTraces` 和 `game.lastTraceResult`。
+
 ## 12. 性能预算
 
 | 项目 | 首版预算 |

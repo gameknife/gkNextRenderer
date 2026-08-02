@@ -166,7 +166,7 @@ namespace NextDayz::NextDayzHUD
             const ImGuiViewport* viewport = ImGui::GetMainViewport();
             ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + 16.0f, viewport->Pos.y + 16.0f),
                                     ImGuiCond_Always);
-            ImGui::SetNextWindowSize(ImVec2(390.0f, 0.0f), ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2(460.0f, 0.0f), ImGuiCond_Always);
             ImGui::SetNextWindowBgAlpha(0.88f);
             ImGui::Begin("NextDayz Debug", nullptr,
                          ImGuiWindowFlags_AlwaysAutoResize |
@@ -177,9 +177,9 @@ namespace NextDayz::NextDayzHUD
                              ImGuiWindowFlags_NoNav |
                              ImGuiWindowFlags_NoFocusOnAppearing |
                              ImGuiWindowFlags_NoBringToFrontOnFocus);
-            ImGui::TextDisabled("F5 hide");
+            ImGui::TextDisabled("F5 hide | F6 zombies | F7 loot | F8 hit proxies");
 
-            if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::CollapsingHeader("Camera"))
             {
                 ImGui::Text("View            %s", context.firstPerson ? "FPS" : "TPS");
                 ImGui::Text("Position        %.2f  %.2f  %.2f",
@@ -195,7 +195,7 @@ namespace NextDayz::NextDayzHUD
                             debug.cameraRecoilActive ? "  active" : "");
             }
 
-            if (ImGui::CollapsingHeader("Character", ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::CollapsingHeader("Character"))
             {
                 ImGui::Text("Stance          %s -> %s",
                             debug.stance.c_str(), debug.desiredStance.c_str());
@@ -217,7 +217,7 @@ namespace NextDayz::NextDayzHUD
                             debug.standBlocked ? "  STAND BLOCKED" : "");
             }
 
-            if (ImGui::CollapsingHeader("Animation", ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::CollapsingHeader("Animation"))
             {
                 ImGui::Text("Base clip       %s",
                             debug.baseAnimation.empty() ? "-" : debug.baseAnimation.c_str());
@@ -259,6 +259,58 @@ namespace NextDayz::NextDayzHUD
                 }
                 ImGui::Text("Shot sequence   %llu",
                             static_cast<unsigned long long>(debug.shotSequence));
+                ImGui::Text("Recent traces   %d", debug.recentWeaponTraces);
+                ImGui::Text("Last trace      %s  instance #%u",
+                            debug.lastTraceResult.empty() ? "-" : debug.lastTraceResult.c_str(),
+                            debug.lastTraceInstanceId);
+            }
+
+            if (ImGui::CollapsingHeader("Zombie AI", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                ImGui::Text("Overlay         %s", debug.zombieOverlay ? "on (F6)" : "off (F6)");
+                ImGui::Text("Active/alerted  %d / %d", debug.activeZombies, debug.alertedZombies);
+                ImGui::Text("Kills           %d", debug.zombieKills);
+                ImGui::Text("Path segments   %d", debug.zombiePathSegments);
+                ImGui::Text("Hit proxies     %d registered / %d CPU-AS eligible",
+                            debug.hitProxyRegistered, debug.hitProxyCpuEligible);
+                if (debug.hitProxyRegistered > debug.hitProxyCpuEligible)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.28f, 0.20f, 1.0f));
+                    ImGui::TextWrapped("WARNING: proxy render state excludes it from CPU raycast AS");
+                    ImGui::PopStyleColor();
+                }
+            }
+
+            if (ImGui::CollapsingHeader("Loot coverage", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                static constexpr std::array<const char*, 6> categoryNames = {{
+                    "Food/Water", "Medical", "Ammo", "Weapon", "Clothing", "Misc"
+                }};
+                ImGui::Text("Overlay         %s", debug.lootOverlay ? "on (F7)" : "off (F7)");
+                ImGui::Text("Available       %d  reserved %d  cooldown %d",
+                            debug.lootAvailable, debug.lootReserved, debug.lootCooldown);
+                for (size_t index = 0; index < categoryNames.size(); ++index)
+                {
+                    const bool missing = debug.lootAvailableByCategory[index] == 0;
+                    if (missing) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.30f, 0.20f, 1.0f));
+                    ImGui::Text("%-12s %2d / %2d%s", categoryNames[index],
+                                debug.lootAvailableByCategory[index], debug.lootTotalByCategory[index],
+                                missing ? "  MISSING" : "");
+                    if (missing) ImGui::PopStyleColor();
+                }
+                ImGui::SeparatorText("Critical world coverage");
+                const auto critical = [](const char* name, int count)
+                {
+                    if (count <= 0) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.30f, 0.20f, 1.0f));
+                    ImGui::Text("%-12s %d%s", name, count, count <= 0 ? "  MISSING" : "");
+                    if (count <= 0) ImGui::PopStyleColor();
+                };
+                critical("Food", debug.criticalFood);
+                critical("Medical", debug.criticalMedical);
+                critical("Backpack", debug.criticalBackpack);
+                critical("Weapons", debug.criticalWeapons);
+                critical("Ammo", debug.criticalAmmo);
+                critical("Wells", debug.criticalWaterSources);
             }
 
             ImGui::End();

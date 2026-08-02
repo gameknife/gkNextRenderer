@@ -9,6 +9,7 @@
 
 #include <functional>
 #include <cstdint>
+#include <array>
 #include <string>
 
 #include <glm/glm.hpp>
@@ -60,6 +61,29 @@ namespace NextDayz
         bool switchingWeapon = false;
         bool switchCommitted = false;
         uint64_t shotSequence = 0;
+        int activeZombies = 0;
+        int alertedZombies = 0;
+        int zombieKills = 0;
+        int zombiePathSegments = 0;
+        int hitProxyRegistered = 0;
+        int hitProxyCpuEligible = 0;
+        int lootAvailable = 0;
+        int lootReserved = 0;
+        int lootCooldown = 0;
+        std::array<int, 6> lootAvailableByCategory{};
+        std::array<int, 6> lootTotalByCategory{};
+        int criticalFood = 0;
+        int criticalMedical = 0;
+        int criticalBackpack = 0;
+        int criticalWeapons = 0;
+        int criticalAmmo = 0;
+        int criticalWaterSources = 0;
+        int recentWeaponTraces = 0;
+        uint32_t lastTraceInstanceId = 0;
+        std::string lastTraceResult;
+        bool zombieOverlay = true;
+        bool lootOverlay = true;
+        bool hitProxyOverlay = true;
     };
 
     struct FHudContext

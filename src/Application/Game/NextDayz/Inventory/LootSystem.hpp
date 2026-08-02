@@ -97,6 +97,12 @@ namespace NextDayz
         int RemainingCount() const;
         int CooldownCount() const;
 
+        // Read-only diagnostics used by the F5 world overlay. Gameplay code
+        // still mutates slots exclusively through LootSystem transactions.
+        const std::vector<FLootEntry>& Entries() const { return entries_; }
+        const FLootSlot* ResolveSlot(FLootSlotHandle handle) const { return director_.Resolve(handle); }
+        double WorldSeconds() const { return worldSeconds_; }
+
     private:
         FLootConfig config_{};
         std::vector<FLootEntry> entries_;

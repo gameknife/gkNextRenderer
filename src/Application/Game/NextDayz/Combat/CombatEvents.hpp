@@ -35,6 +35,17 @@ namespace NextDayz
         float baseDamage = 0.0f;
     };
 
+    struct FWeaponTraceEvent
+    {
+        uint64_t sequence = 0;
+        int pellet = 0;
+        glm::vec3 origin{};
+        glm::vec3 direction{};
+        glm::vec3 endPoint{};
+        uint32_t hitInstanceId = 0;
+        bool hit = false;
+    };
+
     struct FDamageEvent
     {
         uint64_t sequence = 0;

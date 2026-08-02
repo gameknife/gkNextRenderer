@@ -83,6 +83,7 @@ namespace NextDayz
 
         std::vector<FShotEvent> ConsumeShotEvents();
         std::vector<FWeaponHitEvent> ConsumeHitEvents();
+        std::vector<FWeaponTraceEvent> ConsumeTraceEvents();
         uint64_t LastShotSequence() const { return shotSequence_; }
         bool ViewModelRecoilActive() const;
 
@@ -114,6 +115,7 @@ namespace NextDayz
         uint64_t shotSequence_ = 0;
         std::vector<FShotEvent> shotEvents_;
         std::vector<FWeaponHitEvent> hitEvents_;
+        std::vector<FWeaponTraceEvent> traceEvents_;
 
         // view model
         std::array<uint32_t, kWeapons.size()> viewModelModelIds_{};

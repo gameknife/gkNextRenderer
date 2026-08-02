@@ -71,6 +71,7 @@ private:
     void SyncZombieVisuals(float deltaSeconds = 0.0f);
     void ConfigureZombieSpawnPoints();
     void BuildZombieNavigation();
+    void DrawDebugWorldOverlay() const;
     void ResetSession();
     std::string CurrentObjective() const;
     void SetInventoryOpen(bool open);
@@ -113,12 +114,22 @@ private:
         bool visible = false;
     };
     std::vector<FZombieRigVisual> zombieRigVisuals_;
+
+    struct FRecentWeaponTrace
+    {
+        NextDayz::FWeaponTraceEvent trace;
+        float remainingSeconds = 0.0f;
+    };
+    std::vector<FRecentWeaponTrace> recentWeaponTraces_;
     std::vector<std::shared_ptr<Assets::Node>> zombieNodes_;
     std::vector<NextDayz::FZombieHandle> zombieVisualOwners_;
 
     bool sceneReady_ = false;
     bool showInventory_ = false;
     bool showDebugPanel_ = false;
+    bool debugZombieOverlay_ = true;
+    bool debugLootOverlay_ = true;
+    bool debugHitProxyOverlay_ = true;
     bool validationLoadout_ = false;
     bool validationAddBackpack_ = false;
     bool validationAddSupplies_ = false;
