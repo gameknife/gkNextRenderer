@@ -162,7 +162,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
             if (Camera.HasSky)
             {
-                float3 irr = Common.SampleSkyIrradiance(N).rgb;
+                float3 irr = Common.SampleSkyRadiance(N, 1).rgb;
                 ambient = kD * albedo * irr;
 
                 float3 skySpecular = Common.SampleSkyRadiance(R, roughness).rgb;
