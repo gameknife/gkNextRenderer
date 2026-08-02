@@ -229,7 +229,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.ShowHeatmap = config_.showFlags.ShowVisualDebug;
     ubo.HeatmapScale = config_.userSettings.HeatmapScale;
     ubo.DebugDraw_Lighting = config_.showFlags.DebugDraw_Lighting;
-    ubo.DebugDrawPadding0 = 0;
+    ubo.ForceBlackBackground = false;
     ubo.TemporalFrames = noAmbientRenderer
         ? 1u
         : (progressiveRender_.enabled ? FProgressiveRenderState::TargetFrames : config_.userSettings.TemporalFrames);

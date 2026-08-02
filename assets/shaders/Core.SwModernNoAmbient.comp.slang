@@ -51,6 +51,14 @@ float3 MaterialF0(Material material, float3 albedo, float metalness)
     return lerp(dielectricF0, albedo, metalness);
 }
 
+float4 VisibleBackground(float3 direction)
+{
+    const UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
+    return camera.ForceBlackBackground
+        ? float4(0.0f, 0.0f, 0.0f, 1.0f)
+        : Common.SampleSkyRadiance(direction, 0.0f);
+}
+
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
@@ -72,7 +80,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint2 vBuffer = Visibility.Load(pixel, Bindless.GetGpuscene().CustomData0);
     if (!Visibility.IsValid(vBuffer))
     {
-        float4 skyColor = Common.SampleSkyRadiance(primaryRayDir, 0.0f);
+        float4 skyColor = VisibleBackground(primaryRayDir);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, float4(0));
         Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_0).Store(pixel, 0);
@@ -96,7 +104,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     {
         // A stale or numerically degenerate visibility sample must not feed invalid
         // attributes into the G-buffer. Treat it as an uncovered sample.
-        float4 skyColor = Common.SampleSkyRadiance(primaryRayDir, 0.0f);
+        float4 skyColor = VisibleBackground(primaryRayDir);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, float4(0));
         Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_0).Store(pixel, 0);

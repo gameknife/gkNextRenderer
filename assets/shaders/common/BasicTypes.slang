@@ -164,7 +164,7 @@ public struct ALIGN_16 UniformBufferObject
     public bool ExitAfterFirst;
 
     public bool DebugDraw_Lighting;
-    public uint DebugDrawPadding0;
+    public bool ForceBlackBackground;
     public uint SuperResolution;
     public float SceneEpsilonScale;
 

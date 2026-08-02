@@ -96,7 +96,7 @@ namespace Vulkan
             ubo.HeatmapScale = 1.0f;
             ubo.ShowHeatmap = false;
             ubo.DebugDraw_Lighting = false;
-            ubo.DebugDrawPadding0 = 0;
+            ubo.ForceBlackBackground = false;
             ubo.GTAORadius = 1.0f;
             ubo.GTAOStrength = 0.0f;
             ubo.GTAOThickness = 0.1f;

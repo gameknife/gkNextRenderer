@@ -697,7 +697,7 @@ namespace Vulkan
         thumbnailScene_->UpdateAllMaterials();
         thumbnailScene_->SyncUpdateScene();
         thumbnailScene_->UpdateHDRSH();
-        const Assets::UniformBufferObject previewCamera = BuildViewCameraUbo({
+        Assets::UniformBufferObject previewCamera = BuildViewCameraUbo({
             .scene = *thumbnailScene_,
             .camera = thumbnailScene_->GetRenderCamera(),
             .extent = kThumbnailExtent,
@@ -706,6 +706,7 @@ namespace Vulkan
             .fillSceneLighting = true,
             .thumbnailDefaults = true,
         });
+        previewCamera.ForceBlackBackground = true;
 
         thumbnailRenderView->SetDebugName(viewDebugName);
         thumbnailRenderView->SetRenderExtent(kThumbnailExtent);
