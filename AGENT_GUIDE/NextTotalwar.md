@@ -1,8 +1,8 @@
 # NextTotalwar 代码导览
 
-`NextTotalwar` 是运行在 400×400 m low-poly 战场上的军团级即时战术 Demo。当前代码已经具备
-选择、定向行军、部队级寻路、阵型跟随、固定步长近战、减员、死亡和战斗特效；尚未实现会实际
-变化的士气/溃逃、敌方 Commander AI、弓兵远程、胜负 session 和产品化 UI。产品化目标见
+`NextTotalwar` 是运行在 400×400 m low-poly 战场上的军团级即时战术产品切片。当前代码具备
+蓝军指挥、数据驱动部署、统一订单、敌方 Commander AI、定向行军、固定步长近战、弓兵齐射、
+士气/溃逃/重整、胜负与同进程重赛，以及默认隐藏诊断信息的产品 UI。设计依据见
 [基础战斗循环产品化设计](../docs/projects/nexttotalwar/nexttotalwar-productization-design.md)。
 
 ## 入口与文件地图
@@ -16,10 +16,18 @@
 - 命中和攻击弧纯函数：`Battle/CombatModel.{h,cpp}`
 - 士兵空间索引：`Battle/CombatGrid.{h,cpp}`
 - 战斗事件与确定性 RNG：`Battle/BattleState.h`
+- 战役阶段和胜负：`Battle/BattleSession.{h,cpp}`
+- 统一玩家/AI 订单：`Battle/BattleOrderSystem.{h,cpp}`
+- 士气、溃逃与重整：`Battle/MoraleSystem.{h,cpp}`
+- 弓兵齐射、弹药与压制：`Battle/RangedCombatSystem.{h,cpp}`
+- 红军指挥 AI：`AI/CommanderAI.{h,cpp}`
+- 兵种与战役配置加载：`Data/BattleData.{h,cpp}`
 - 相机：`Render/BattleCamera.{h,cpp}`
 - 闪白、死亡和血迹：`Render/CombatFx.{h,cpp}`
+- 固定 96 槽代表箭矢弧线池：`Render/RangedVolleyFx.{h,cpp}`
 - 战场：`assets/scad/proc/nexttotalwar/greenfield_400.scad`
 - 兵种 kit/rig：`assets/scad/lib/kit_tw.scad` 与 `assets/scad/characters/tw_*.scad`
+- 产品数据：`assets/configs/nexttotalwar/units.json` 与 `battles/greenfield.json`
 
 ## 当前规模与视觉契约
 
@@ -45,10 +53,12 @@ RMB 按下确定目标、拖拽确定最终阵面朝向。多选军团先生成�
 `Formation::MinimumTravelAssignment` 减少交叉。`Reforming` 只有在朝向到位且活士兵距槽位小于
 0.12 m 后结束，因此 `game.marchingRegiments == 0` 同时表示 anchor 与阵型完成。
 
-## 当前战斗数据流
+## 战斗数据流
 
-`OnTick` 的有效顺序是：相机 → regiment anchor/path → 20 Hz `CombatSystem` → soldier 位置/动画 →
-`CombatFx`。AgentValidation 可启用“一渲染帧一战斗 tick”的确定性模式。
+`OnTick` 的有效顺序是：验证请求 → 相机 → session/time scale → regiment anchor/path → 20 Hz 固定步进
+（CommanderAI 产生命令 → BattleOrderSystem 执行 → RangedCombatSystem → CombatSystem → MoraleSystem →
+BattleSession 胜负）→ soldier 位置/动画 → CombatFx → 清空当帧事件。AgentValidation 保持“一渲染帧
+一战斗 tick”，相同 seed、订单序列和 tick 数得到相同结果。
 
 `CombatSystem` 当前实现：
 
@@ -59,8 +69,15 @@ RMB 按下确定目标、拖拽确定最终阵面朝向。多选军团先生成�
 5. 生命归零进入 Dying/Dead、军团 strength 递减，产生 Hit/Death/RegimentDestroyed 事件；
 6. `CombatFx` 做攻击/受击闪白、死亡定格和固定 256 槽血迹池。
 
-`morale` 当前只初始化和显示，低于 40 的惩罚代码没有正常输入来源；Routing/Charging/Rout/Rally
-大多只是预留状态。弓兵当前按弱近战兵作战。代码中没有 Commander AI，也没有统一 BattleResult。
+`MoraleSystem` 消费死亡事件、远程压制、侧后威胁、局部兵力差和友军溃逃；带迟滞地进入
+Steady/Wavering/Routing/Rallying/Eliminated。溃军向本方边界撤退，可在脱离威胁后重整，离开战场
+则计为消灭。弓兵按数据配置的射程、最小射程、齐射间隔、命中率和弹药作战，近战仍使用较弱的
+Archer combat def。远程结算用少量地形高度采样拒绝隔山齐射；表现使用 96 槽循环箭矢池，每轮只
+显示六支代表箭，不影响数值命中，也不会随齐射次数增长 scene node。
+
+所有 Move/Attack/Charge/Halt/Withdraw/SetFormation 都先提交 `FBattleOrder`，校验阵营所有权、目标、
+状态和序列，再由唯一执行口修改军团。玩家只能选择/指挥蓝军；红军 AI 只读取合法战场快照并通过
+同一订单系统下令。正常难度 AI 按 Advance/Engage/Press/Recover 阶段使用战线、侧翼、远程和撤退行为。
 
 ## 输入与 UI
 
@@ -68,12 +85,13 @@ RMB 按下确定目标、拖拽确定最终阵面朝向。多选军团先生成�
 - RMB 拖拽：目标点 + 阵面朝向
 - WASD/方向键/MMB 拖拽：平移；Q/E：旋转；滚轮：缩放
 - F：跟随选中军团
+- X/C/H/V：攻击/冲锋/停止/撤退
 - `[`/`]`：调整选中军团排数
-- F1/F5：显示/隐藏战斗调试
+- Space/P：推进简报或暂停；1/2/3：0.5x/1x/2x；F1/F5：显示/隐藏战斗诊断
 
-当前世界选择和底部单位条都允许选择蓝红双方，这是技术 Demo 行为，不是产品阵营边界。左上
-`NextTotalwar` 和右上 `Battle Debug` 主要展示 proxy、FPS、NavGrid、战斗 tick 等开发信息；产品 UI
-尚未拆出独立文件。
+普通启动依次进入 Briefing → Deployment → Active；暂停进入 Paused，任一方无可作战军团后进入
+Finished，展示 Victory/Defeat/Draw 与 Rematch。左上显示阶段、时间、速度和双方兵力，底部只显示
+蓝军卡片（兵力、士气、弓兵弹药）。诊断面板默认隐藏，仅 F5 打开。
 
 ## Agent 查询
 
@@ -81,6 +99,10 @@ RMB 按下确定目标、拖拽确定最终阵面朝向。多选军团先生成�
 
 - 选择/移动：`selectedRegiments`、`marchingRegiments`、`lastOrderDistance`、`routeNodeCount`、
   `finalApproachAligned`
+- 产品循环：`battlePhase`、`battleResult`、`battleSeconds`、`acceptedOrders`、`rejectedOrders`、
+  `aiDecisions`、`playerAttackOrders`、`enemyMarchingRegiments`
+- 士气/远程：`routingRegiments`、`waveringRegiments`、`rangedVolleys`、`remainingAmmo`、
+  `activeArrows`、`arrowPoolCapacity`
 - 场景/相机：`regimentCount`、`soldierCount`、`renderProxyCount`、`navReady`、`camera*`
 - 战斗：`aliveSoldiers`、`factionStrength0/1`、`engagedRegiments`、`fightingSoldiers`、
   `destroyedRegiments`、`disengagingRegiments`、`pursuingRegiments`、`totalKills`、`combatTicks`
@@ -98,4 +120,6 @@ gnb.bat validate --script assets\agentscripts\nexttotalwar-march.agentscript.jso
 gnb.bat validate --script assets\agentscripts\nexttotalwar-camera.agentscript.json
 gnb.bat validate --script assets\agentscripts\nexttotalwar-battle.agentscript.json
 gnb.bat validate --script assets\agentscripts\nexttotalwar-battle-c2.agentscript.json
+gnb.bat validate --script assets\agentscripts\nexttotalwar-ai-idle-player.agentscript.json
+gnb.bat validate --script assets\agentscripts\nexttotalwar-product-loop.agentscript.json
 ```

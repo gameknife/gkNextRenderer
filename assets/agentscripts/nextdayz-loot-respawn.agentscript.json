@@ -1,0 +1,24 @@
+{
+  "name": "nextdayz-loot-respawn",
+  "target": "NextDayz",
+  "scene": "assets/scad/proc/coldwar/riverland_1km.scad",
+  "defaults": { "waitFrames": 2, "stepTimeoutMs": 20000 },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "cvar", "name": "nextdayz.validation.loadout", "set": true },
+    { "type": "wait-frames", "n": 60 },
+    { "type": "assert", "query": "game.lootRemaining", "op": "eq", "value": 59 },
+    { "type": "key", "code": "W", "action": "down" },
+    { "type": "wait-ms", "ms": 650 },
+    { "type": "key", "code": "W", "action": "up" },
+    { "type": "wait-frames", "n": 15 },
+    { "type": "mouse-move", "relative": true, "to": { "px": [0, 0] } },
+    { "type": "mouse-move", "relative": true, "to": { "px": [0, 150] } },
+    { "type": "wait-frames", "n": 5 },
+    { "type": "key", "code": "E", "action": "press" },
+    { "type": "wait-ms", "ms": 1100 },
+    { "type": "assert", "query": "game.lootCooldown", "op": "ge", "value": 1 },
+    { "type": "assert", "query": "game.lootRemaining", "op": "lt", "value": 59 },
+    { "type": "quit" }
+  ]
+}

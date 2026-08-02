@@ -12,9 +12,10 @@
   "steps": [
     {"type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 30000},
     {"type": "wait-until", "query": "game.navReady", "op": "eq", "value": true, "timeoutMs": 120000},
-    {"type": "wait-until", "query": "game.fightingSoldiers", "op": "ge", "value": 700, "timeoutMs": 30000},
+    {"type": "wait-until", "query": "game.fightingSoldiers", "op": "ge", "value": 300, "timeoutMs": 30000},
     {"type": "wait-until", "query": "game.flashingSoldiers", "op": "ge", "value": 1, "timeoutMs": 30000},
     {"type": "assert", "query": "game.bloodPoolCapacity", "op": "eq", "value": 256},
+    {"type": "assert", "query": "game.arrowPoolCapacity", "op": "eq", "value": 96},
     {"type": "wait-until", "query": "game.totalKills", "op": "ge", "value": 20, "timeoutMs": 120000},
     {"type": "wait-until", "query": "game.corpseCount", "op": "ge", "value": 20, "timeoutMs": 30000},
     {"type": "assert", "query": "game.bloodStainCount", "op": "ge", "value": 20},

@@ -40,6 +40,8 @@ set(unitTestSources
     Test_NextTotalwarCamera.cpp
     Test_NextTotalwarFormation.cpp
     Test_NextTotalwarCombat.cpp
+    Test_NextTotalwarProductization.cpp
+    Test_NextDayzProductization.cpp
     Test_GnbAIClient.cpp
     Test_ScadPromptContext.cpp
     Test_ScadSessionStore.cpp
@@ -86,7 +88,23 @@ set(unitTestSources
     ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Battle/CombatModel.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Battle/CombatGrid.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Battle/CombatSystem.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Battle/BattleSession.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Battle/BattleOrderSystem.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Battle/MoraleSystem.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Battle/RangedCombatSystem.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/AI/CommanderAI.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Data/BattleData.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Render/BattleCamera.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextDayz/Data/ItemDefs.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextDayz/Inventory/Inventory.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextDayz/Player/PlayerActionController.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextDayz/Player/SurvivalSystem.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextDayz/World/LootDirector.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextDayz/Combat/NoiseSystem.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextDayz/Combat/CombatSystem.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextDayz/Zombies/ZombieSystem.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextDayz/World/ZombieSpawnDirector.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextDayz/Zombies/ZombieVisualPool.cpp
 )
 
 find_package(Catch2 3 REQUIRED)
@@ -104,6 +122,7 @@ target_include_directories(gkNextUnitTests PRIVATE
     ${GK_SOURCE_ROOT}/Application/Game/BrickPlayer
     ${GK_SOURCE_ROOT}/Application/Game/MagicaLego
     ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar
+    ${GK_SOURCE_ROOT}/Application/Game/NextDayz
 )
 target_link_libraries(gkNextUnitTests PRIVATE
     gkNextEngine

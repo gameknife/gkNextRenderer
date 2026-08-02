@@ -1,13 +1,17 @@
 ---
 title: "NextDayz PVE 生存循环产品化开发计划"
 category: project
-status: 待实施
+status: 已完成
 owner: NextDayz
 created: 2026-07-31
-last_updated: 2026-07-31
+last_updated: 2026-08-02
 ---
 
 # NextDayz PVE 生存循环产品化开发计划
+
+> 完成记录（2026-08-02）：D0～D7 已落地。实现覆盖容量化库存与事务、代谢/消耗品/水源、语义感染者刷新与池、命中/噪声/近远战、物资冷却刷新、产品 HUD、死亡与同进程重开；纯规则测试及 survival/capacity/zombie/loot/product-loop Agent 验收已建立。本文件保留为历史实施顺序，不再作为待办入口。
+>
+> 最终尖刀结果：Riverland 使用 2.0 m、510×510 的感染者 NavGrid，实测 237,853 个可走格并语义屏蔽 5,194 个水面格；追击路径按 0.6 秒/目标位移缓存重算，包含卡住恢复和远距冷静回收。32 槽视觉池使用 `nextdayz_infected.scad` 的 idle/walk/run/attack/hit/die 六段 ScadRig，数值命中由不可见动态代理稳定承载。
 
 本计划实现 [NextDayz PVE 生存循环产品化设计](nextdayz-productization-design.md)。估算按一名熟悉本仓库的工程师计算，为 30～40 人日；资产精修、音频和额外平衡轮次不在估算内。阶段必须按依赖顺序交付，不允许先做刷新数量再补稳定 handle、事务和确定性。
 

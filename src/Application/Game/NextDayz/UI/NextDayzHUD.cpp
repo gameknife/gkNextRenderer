@@ -1,5 +1,6 @@
 #include "NextDayzHUD.hpp"
 
+#include <algorithm>
 #include <cstdio>
 
 #include <imgui.h>
@@ -18,6 +19,8 @@ namespace NextDayz::NextDayzHUD
             case EItemKind::Weapon:   return "Weapon";
             case EItemKind::Ammo:     return "Ammo";
             case EItemKind::Clothing: return "Clothing";
+            case EItemKind::Consumable: return "Consumable";
+            case EItemKind::Melee: return "Melee";
             case EItemKind::Misc:
             default:                  return "Misc";
             }
@@ -56,6 +59,25 @@ namespace NextDayz::NextDayzHUD
             ImGui::SameLine();
             ImGui::TextColored(context.overcast ? ImVec4(0.7f, 0.75f, 0.8f, 1.0f) : ImVec4(1.0f, 0.9f, 0.5f, 1.0f),
                                context.overcast ? "Overcast" : "Clear");
+            ImGui::End();
+        }
+
+        void DrawObjective(const FHudContext& context)
+        {
+            if (context.objective.empty())
+            {
+                return;
+            }
+            const ImGuiViewport* viewport = ImGui::GetMainViewport();
+            ImGui::SetNextWindowPos(ImVec2(viewport->GetCenter().x, viewport->Pos.y + 16.0f), ImGuiCond_Always,
+                                    ImVec2(0.5f, 0.0f));
+            ImGui::SetNextWindowBgAlpha(0.30f);
+            ImGui::Begin("##nd_objective", nullptr,
+                         ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove |
+                         ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoNav);
+            ImGui::TextDisabled("SURVIVAL GOAL");
+            ImGui::SameLine();
+            ImGui::TextUnformatted(context.objective.c_str());
             ImGui::End();
         }
 
@@ -101,7 +123,35 @@ namespace NextDayz::NextDayzHUD
             ImGui::Begin("##nd_interact", nullptr,
                          ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove |
                              ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoNav);
-            ImGui::Text("[E] Pick up %s", context.interactionPrompt.c_str());
+            ImGui::TextUnformatted(context.interactionPrompt.c_str());
+            ImGui::End();
+        }
+
+        void DrawSurvival(const FHudContext& context)
+        {
+            const ImGuiViewport* viewport = ImGui::GetMainViewport();
+            ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + 16.0f, viewport->Pos.y + viewport->Size.y - 16.0f),
+                                    ImGuiCond_Always, ImVec2(0.0f, 1.0f));
+            ImGui::SetNextWindowBgAlpha(0.30f);
+            ImGui::Begin("##nd_survival", nullptr,
+                         ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove |
+                         ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoNav);
+            const auto bar = [](const char* label, float value, const ImVec4& color)
+            {
+                ImGui::TextUnformatted(label);
+                ImGui::SameLine(78.0f);
+                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
+                ImGui::ProgressBar(value / 100.0f, ImVec2(145.0f, 12.0f), "");
+                ImGui::PopStyleColor();
+            };
+            bar("Health", context.survival.health, ImVec4(0.78f, 0.18f, 0.16f, 1.0f));
+            bar("Hunger", context.survival.hunger, ImVec4(0.82f, 0.60f, 0.16f, 1.0f));
+            bar("Hydration", context.survival.hydration, ImVec4(0.18f, 0.52f, 0.88f, 1.0f));
+            if (context.survival.lifeState == EPlayerLifeState::Dead)
+            {
+                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.25f, 1.0f), "DEAD - %s",
+                                   context.survival.lastDamageSource.c_str());
+            }
             ImGui::End();
         }
 
@@ -234,6 +284,19 @@ namespace NextDayz::NextDayzHUD
             }
             ImGui::Separator();
 
+            ImGui::Text("Storage: %d / %d", context.inventory->UsedCapacity(),
+                        context.inventory->TotalCapacity());
+            for (const FInventoryContainer& container : context.inventory->Containers())
+            {
+                if (!container.active || container.weaponOnly)
+                {
+                    continue;
+                }
+                ImGui::TextDisabled("%s  %d/%d", container.displayName.c_str(),
+                                    context.inventory->ContainerUsed(container.containerId), container.capacity);
+            }
+            ImGui::Separator();
+
             ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Items");
             const auto& items = context.inventory->Items();
             for (size_t itemIndex = 0; itemIndex < items.size(); ++itemIndex)
@@ -265,12 +328,67 @@ namespace NextDayz::NextDayzHUD
                         context.toggleClothing(stack.id, !worn);
                     }
                 }
+                else if (stack.kind == EItemKind::Consumable && context.useItem)
+                {
+                    const auto instance = std::find_if(context.inventory->Instances().begin(),
+                                                       context.inventory->Instances().end(),
+                        [&stack](const FItemInstance& item) { return item.defId == stack.id; });
+                    if (instance != context.inventory->Instances().end())
+                    {
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton("Use##use"))
+                        {
+                            context.useItem(instance->instanceId);
+                        }
+                    }
+                }
                 ImGui::PopID();
                 ImGui::PopID();
             }
 
             ImGui::Separator();
             ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Tab/I close  |  1/2 switch  |  R reload  |  V view");
+            ImGui::End();
+        }
+
+        void DrawSessionOverlay(const FHudContext& context)
+        {
+            if (!context.paused && context.survival.lifeState != EPlayerLifeState::Dead)
+            {
+                return;
+            }
+            const ImGuiViewport* viewport = ImGui::GetMainViewport();
+            ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(360.0f, 0.0f), ImGuiCond_Always);
+            ImGui::SetNextWindowBgAlpha(0.94f);
+            ImGui::Begin("##nd_session", nullptr,
+                         ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize);
+            if (context.survival.lifeState == EPlayerLifeState::Dead)
+            {
+                ImGui::SetWindowFontScale(1.35f);
+                ImGui::TextUnformatted("YOU DIED");
+                ImGui::SetWindowFontScale(1.0f);
+                ImGui::Separator();
+                ImGui::Text("Cause: %s", context.survival.lastDamageSource.empty()
+                    ? "unknown" : context.survival.lastDamageSource.c_str());
+                ImGui::Text("Survived: %02d:%02d", static_cast<int>(context.survivalSeconds) / 60,
+                            static_cast<int>(context.survivalSeconds) % 60);
+                if (context.restartSession && ImGui::Button("Restart", ImVec2(-1.0f, 36.0f)))
+                {
+                    context.restartSession();
+                }
+            }
+            else
+            {
+                ImGui::SetWindowFontScale(1.25f);
+                ImGui::TextUnformatted("PAUSED");
+                ImGui::SetWindowFontScale(1.0f);
+                ImGui::TextDisabled("Press Esc to resume");
+                if (context.restartSession && ImGui::Button("Restart run", ImVec2(-1.0f, 34.0f)))
+                {
+                    context.restartSession();
+                }
+            }
             ImGui::End();
         }
     }
@@ -282,9 +400,12 @@ namespace NextDayz::NextDayzHUD
             DrawCrosshair(context);
         }
         DrawClock(context);
+        DrawObjective(context);
         DrawWeaponReadout(context);
+        DrawSurvival(context);
         DrawInteractionPrompt(context);
         DrawDebugPanel(context);
         DrawInventoryPanel(context);
+        DrawSessionOverlay(context);
     }
 }

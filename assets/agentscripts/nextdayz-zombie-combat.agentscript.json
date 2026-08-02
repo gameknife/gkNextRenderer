@@ -1,0 +1,23 @@
+{
+  "name": "nextdayz-zombie-combat",
+  "target": "NextDayz",
+  "scene": "assets/scad/proc/coldwar/riverland_1km.scad",
+  "defaults": { "waitFrames": 2, "stepTimeoutMs": 20000 },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "cvar", "name": "nextdayz.validation.loadout", "set": true },
+    { "type": "cvar", "name": "nextdayz.validation.spawnZombie", "set": true },
+    { "type": "wait-frames", "n": 2 },
+    { "type": "assert", "query": "game.activeZombies", "op": "ge", "value": 1 },
+    { "type": "screenshot", "out": "screenshots/nextdayz_infected_rig", "ui": true },
+    { "type": "mouse-button", "button": "left", "action": "down" },
+    { "type": "wait-ms", "ms": 1000 },
+    { "type": "mouse-button", "button": "left", "action": "up" },
+    { "type": "wait-frames", "n": 20 },
+    { "type": "cvar", "name": "nextdayz.validation.finishZombie", "set": true },
+    { "type": "assert", "query": "game.shotSequence", "op": "ge", "value": 3 },
+    { "type": "assert", "query": "game.zombieKills", "op": "ge", "value": 1 },
+    { "type": "assert", "query": "game.lastHitZombie", "op": "ge", "value": 0 },
+    { "type": "quit" }
+  ]
+}

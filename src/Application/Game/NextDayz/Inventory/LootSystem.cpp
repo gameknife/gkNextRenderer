@@ -84,6 +84,51 @@ namespace NextDayz
                 HideNodeTree(child.get(), physics);
             }
         }
+
+        void ShowNodeTree(Assets::Node* node, NextPhysics* physics)
+        {
+            if (!node)
+            {
+                return;
+            }
+            if (auto render = node->GetComponent<Runtime::RenderComponent>())
+            {
+                render->SetVisible(true);
+            }
+            if (auto phys = node->GetComponent<Runtime::PhysicsComponent>(); phys && physics)
+            {
+                physics->SetBodyActive(phys->GetPhysicsBody(), true);
+            }
+            for (const auto& child : node->Children())
+            {
+                ShowNodeTree(child.get(), physics);
+            }
+        }
+
+        ELootCategory CategoryFor(const FLootDef& definition)
+        {
+            if (definition.grants.empty())
+            {
+                return ELootCategory::Misc;
+            }
+            const FLootGrant& grant = definition.grants.front();
+            const FItemDef* item = FindItemDef(grant.id);
+            const EItemKind kind = item ? item->kind : grant.kind;
+            if (grant.id == "food_can" || grant.id == "water_bottle") return ELootCategory::FoodWater;
+            if (grant.id == "medkit" || grant.id == "bandage") return ELootCategory::Medical;
+            if (kind == EItemKind::Weapon || kind == EItemKind::Melee) return ELootCategory::Weapon;
+            if (kind == EItemKind::Ammo) return ELootCategory::Ammo;
+            if (kind == EItemKind::Clothing) return ELootCategory::Clothing;
+            return ELootCategory::Misc;
+        }
+
+        ELootProfile ProfileFor(const FLootDef& definition)
+        {
+            const ELootCategory category = CategoryFor(definition);
+            if (category == ELootCategory::Medical) return ELootProfile::Medical;
+            if (category == ELootCategory::Ammo || category == ELootCategory::Weapon) return ELootProfile::Military;
+            return ELootProfile::Residential;
+        }
     }
 
     void LootSystem::OnSceneLoaded(Assets::Scene& scene)
@@ -95,6 +140,8 @@ namespace NextDayz
         {
             ++generation_;
         }
+        worldSeconds_ = 0.0;
+        director_.Reset(generation_, seed_);
 
         const auto& table = LootTable();
         for (const auto& node : scene.Nodes())
@@ -113,6 +160,7 @@ namespace NextDayz
             entry.nodeInstanceId = node->GetInstanceId();
             entry.worldPos = node->WorldTranslation();
             entry.def = &it->second;
+            entry.directorHandle = director_.AddSlot(entry.worldPos, ProfileFor(*entry.def), CategoryFor(*entry.def));
             entries_.push_back(entry);
         }
         SPDLOG_INFO("[NextDayz] registered {} loot entries", entries_.size());
@@ -123,6 +171,20 @@ namespace NextDayz
         entries_.clear();
         hoveredIndex_ = -1;
         ++generation_;
+        director_.Reset(generation_, seed_);
+    }
+
+    void LootSystem::ResetSession(NextEngine& engine)
+    {
+        for (const FLootEntry& entry : entries_)
+        {
+            if (Assets::Node* node = engine.GetScene().GetNodeByInstanceId(entry.nodeInstanceId))
+            {
+                ShowNodeTree(node, engine.GetPhysicsEngine());
+            }
+        }
+        engine.GetScene().MarkDirty();
+        OnSceneLoaded(engine.GetScene());
     }
 
     bool LootSystem::NearestLootPos(const glm::vec2& approxXZ, glm::vec3& outWorldPos) const
@@ -143,19 +205,50 @@ namespace NextDayz
         return found;
     }
 
-    void LootSystem::Update(const glm::vec3& eyePosition, const glm::vec3& viewForward)
+    void LootSystem::Update(float deltaSeconds, const glm::vec3& eyePosition, const glm::vec3& viewForward,
+                            NextEngine& engine)
     {
+        worldSeconds_ += std::max(deltaSeconds, 0.0f);
         hoveredIndex_ = -1;
         float bestDot = config_.AimDotMin;
         for (size_t i = 0; i < entries_.size(); ++i)
         {
-            const FLootEntry& entry = entries_[i];
+            FLootEntry& entry = entries_[i];
+            const glm::vec3 delta = entry.worldPos - eyePosition;
+            const float distance = glm::length(delta);
+            const float viewDot = distance > 0.01f ? glm::dot(delta / distance, viewForward) : 1.0f;
+            if (entry.state == FLootEntry::EState::Cooldown)
+            {
+                int categoryAvailable = 0;
+                const FLootSlot* current = director_.Resolve(entry.directorHandle);
+                if (current)
+                {
+                    for (const FLootEntry& other : entries_)
+                    {
+                        const FLootSlot* otherSlot = director_.Resolve(other.directorHandle);
+                        if (other.state == FLootEntry::EState::Available && otherSlot &&
+                            otherSlot->category == current->category)
+                        {
+                            ++categoryAvailable;
+                        }
+                    }
+                }
+                const bool visible = viewDot > config_.AimDotMin && distance < 140.0f;
+                if (director_.EvaluateRespawn(entry.directorHandle, worldSeconds_, distance, visible,
+                                              categoryAvailable, 24))
+                {
+                    entry.state = FLootEntry::EState::Available;
+                    if (Assets::Node* node = engine.GetScene().GetNodeByInstanceId(entry.nodeInstanceId))
+                    {
+                        ShowNodeTree(node, engine.GetPhysicsEngine());
+                        engine.GetScene().MarkDirty();
+                    }
+                }
+            }
             if (entry.state != FLootEntry::EState::Available)
             {
                 continue;
             }
-            const glm::vec3 delta = entry.worldPos - eyePosition;
-            const float distance = glm::length(delta);
             if (distance > config_.ReachMeters || distance < 0.01f)
             {
                 continue;
@@ -196,6 +289,11 @@ namespace NextDayz
             return std::nullopt;
         }
         entry.state = FLootEntry::EState::Reserved;
+        if (!director_.Reserve(entry.directorHandle))
+        {
+            entry.state = FLootEntry::EState::Available;
+            return std::nullopt;
+        }
         const FLootHandle handle{static_cast<uint32_t>(hoveredIndex_), entry.nodeInstanceId, generation_};
         hoveredIndex_ = -1;
         return handle;
@@ -208,7 +306,9 @@ namespace NextDayz
             return false;
         }
         const FLootEntry& entry = entries_[handle.index];
-        return entry.nodeInstanceId == handle.nodeInstanceId && entry.state == FLootEntry::EState::Reserved;
+        const FLootSlot* slot = director_.Resolve(entry.directorHandle);
+        return entry.nodeInstanceId == handle.nodeInstanceId && entry.state == FLootEntry::EState::Reserved &&
+               slot && slot->state == ELootSlotState::Reserved;
     }
 
     const FLootDef* LootSystem::Commit(const FLootHandle& handle, Inventory& inventory, NextEngine& engine)
@@ -218,9 +318,17 @@ namespace NextDayz
             return nullptr;
         }
         FLootEntry& entry = entries_[handle.index];
+        std::vector<FInventoryAddRequest> requests;
+        requests.reserve(entry.def->grants.size());
         for (const FLootGrant& grant : entry.def->grants)
         {
-            inventory.Add(grant.id, grant.displayName, grant.kind, grant.count);
+            requests.push_back({grant.id, grant.displayName, grant.kind, grant.count});
+        }
+        if (!inventory.TryAddBatch(requests))
+        {
+            entry.state = FLootEntry::EState::Available;
+            director_.Cancel(entry.directorHandle);
+            return nullptr;
         }
 
         Assets::Scene& scene = engine.GetScene();
@@ -230,7 +338,11 @@ namespace NextDayz
             scene.MarkDirty();
         }
 
-        entry.state = FLootEntry::EState::Looted;
+        if (!director_.Commit(entry.directorHandle, worldSeconds_))
+        {
+            return nullptr;
+        }
+        entry.state = FLootEntry::EState::Cooldown;
         hoveredIndex_ = -1;
         return entry.def;
     }
@@ -242,7 +354,7 @@ namespace NextDayz
             return false;
         }
         entries_[handle.index].state = FLootEntry::EState::Available;
-        return true;
+        return director_.Cancel(entries_[handle.index].directorHandle);
     }
 
     int LootSystem::RemainingCount() const
@@ -250,11 +362,19 @@ namespace NextDayz
         int remaining = 0;
         for (const FLootEntry& entry : entries_)
         {
-            if (entry.state != FLootEntry::EState::Looted)
+            if (entry.state == FLootEntry::EState::Available || entry.state == FLootEntry::EState::Reserved)
             {
                 ++remaining;
             }
         }
         return remaining;
+    }
+
+    int LootSystem::CooldownCount() const
+    {
+        return static_cast<int>(std::count_if(entries_.begin(), entries_.end(), [](const FLootEntry& entry)
+        {
+            return entry.state == FLootEntry::EState::Cooldown;
+        }));
     }
 }

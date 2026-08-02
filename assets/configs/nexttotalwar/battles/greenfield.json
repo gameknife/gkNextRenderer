@@ -1,6 +1,12 @@
 {
   "battle": "greenfield",
-  "soldiersPerRegiment": 128,
+  "scene": "assets/scad/proc/nexttotalwar/greenfield_400.scad",
+  "seed": 1337,
+  "playerFaction": 0,
+  "aiFaction": 1,
+  "aiDifficulty": "normal",
+  "victoryRule": "eliminate-or-rout",
+  "soldiersPerRegiment": 100,
   "regiments": [
     {"faction": 0, "unit": "spearman",  "position": [-125, -66], "facingDegrees": 90},
     {"faction": 0, "unit": "swordsman", "position": [ -95, -63], "facingDegrees": 90},

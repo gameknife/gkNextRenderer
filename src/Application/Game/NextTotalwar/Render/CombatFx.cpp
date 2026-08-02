@@ -54,6 +54,19 @@ namespace NextTotalwar
         bloodStainCount_ = 0;
     }
 
+    void FCombatFx::ResetBattle()
+    {
+        for (const std::shared_ptr<Assets::Node>& node : bloodPool_)
+        {
+            Assets::NodeUtils::SetVisible(node, false);
+        }
+        nextBloodSlot_ = 0;
+        bloodSpawnCount_ = 0;
+        corpseCount_ = 0;
+        flashingCount_ = 0;
+        bloodStainCount_ = 0;
+    }
+
     void FCombatFx::SetFlashing(FSoldierVisual& visual, bool flashing) const
     {
         if (visual.flashApplied == flashing) return;

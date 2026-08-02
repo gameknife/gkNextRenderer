@@ -25,6 +25,7 @@ namespace NextTotalwar
         void Initialize(uint32_t flashMaterialId,
                         std::vector<std::shared_ptr<Assets::Node>> bloodPool);
         void Reset();
+        void ResetBattle();
         void Tick(float deltaSeconds, std::vector<FRegiment>& regiments,
                   std::vector<std::vector<FSoldierVisual>>& visuals,
                   const FCombatTuning& tuning,

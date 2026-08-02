@@ -37,6 +37,12 @@ namespace NextDayz
 
     void WeaponSystem::OnSceneLoaded(NextEngine& engine)
     {
+        slots_ = {};
+        activeSlot_ = 0;
+        previousSlot_ = 1;
+        reloading_ = false;
+        switching_ = false;
+        shotSequence_ = 0;
         viewModelOffset_ = config_.ViewModelHipOffset;
         viewModelRecoil_ = 0.0f;
         viewModelRecoilVelocity_ = 0.0f;
@@ -44,6 +50,7 @@ namespace NextDayz
         viewModelInScene_ = false;
         viewModelWeaponIndex_ = -1;
         shotEvents_.clear();
+        hitEvents_.clear();
         if (!viewModelAssetsSet_)
         {
             return;
@@ -69,6 +76,28 @@ namespace NextDayz
         viewModelInScene_ = false;
         viewModelWeaponIndex_ = -1;
         shotEvents_.clear();
+        hitEvents_.clear();
+    }
+
+    void WeaponSystem::ResetRuntime()
+    {
+        slots_ = {};
+        activeSlot_ = 0;
+        previousSlot_ = 1;
+        triggerDown_ = false;
+        presentationSuppressed_ = false;
+        triggerConsumed_ = false;
+        fireCooldown_ = 0.0f;
+        reloading_ = false;
+        reloadTimer_ = 0.0f;
+        switching_ = false;
+        switchCommitted_ = false;
+        switchTargetSlot_ = -1;
+        switchTimer_ = 0.0f;
+        shotSequence_ = 0;
+        shotEvents_.clear();
+        hitEvents_.clear();
+        RefreshViewModelVisibility();
     }
 
     bool WeaponSystem::Equip(int slot, const std::string& weaponId)
@@ -177,6 +206,13 @@ namespace NextDayz
         return events;
     }
 
+    std::vector<FWeaponHitEvent> WeaponSystem::ConsumeHitEvents()
+    {
+        std::vector<FWeaponHitEvent> events;
+        events.swap(hitEvents_);
+        return events;
+    }
+
     bool WeaponSystem::ViewModelRecoilActive() const
     {
         return std::abs(viewModelRecoil_) > 0.0001f || std::abs(viewModelRecoilVelocity_) > 0.001f;
@@ -260,30 +296,48 @@ namespace NextDayz
             dir = glm::normalize(dir + right * std::tan(ax) + up * std::tan(ay));
         }
 
-        glm::vec3 hitPoint = muzzle + dir * kHitscanRange;
-        bool hit = false;
-        engine.RayCast(muzzle, dir, [&](Assets::RayCastResult result) {
-            if (result.Hit && result.T <= kHitscanRange)
-            {
-                hitPoint = glm::vec3(result.HitPoint);
-                hit = true;
-            }
-            return true;
-        });
-
-        // Tracer + impact marker feedback follows the actual muzzle ray.
-        if (Runtime::IDebugDraw* draw = engine.GetDebugDraw())
+        const uint64_t sequence = ++shotSequence_;
+        std::uniform_real_distribution<float> pelletSpread(-1.0f, 1.0f);
+        for (int pellet = 0; pellet < std::max(def->pellets, 1); ++pellet)
         {
-            draw->AddLine(muzzle, hitPoint, glm::vec4(1.0f, 0.85f, 0.3f, 1.0f), 2.0f, true);
+            glm::vec3 pelletDirection = dir;
+            if (pellet > 0)
+            {
+                const glm::vec3 right = player.Right();
+                const glm::vec3 up = glm::normalize(glm::cross(right, dir));
+                pelletDirection = glm::normalize(dir + right * std::tan(pelletSpread(rng_) * spread) +
+                                                 up * std::tan(pelletSpread(rng_) * spread));
+            }
+            glm::vec3 hitPoint = muzzle + pelletDirection * kHitscanRange;
+            uint32_t hitInstanceId = 0;
+            bool hit = false;
+            engine.RayCast(muzzle, pelletDirection, [&](Assets::RayCastResult result) {
+                if (result.Hit && result.T <= kHitscanRange)
+                {
+                    hitPoint = glm::vec3(result.HitPoint);
+                    hitInstanceId = result.InstanceId;
+                    hit = true;
+                }
+                return true;
+            });
             if (hit)
             {
-                draw->AddPoint(hitPoint, glm::vec4(1.0f, 0.6f, 0.15f, 1.0f), 6.0f, 40, true);
+                hitEvents_.push_back({sequence, std::string(def->id), muzzle, pelletDirection, hitInstanceId,
+                                      hitPoint, def->baseDamage});
+            }
+            if (Runtime::IDebugDraw* draw = engine.GetDebugDraw())
+            {
+                draw->AddLine(muzzle, hitPoint, glm::vec4(1.0f, 0.85f, 0.3f, 1.0f), 2.0f, true);
+                if (hit)
+                {
+                    draw->AddPoint(hitPoint, glm::vec4(1.0f, 0.6f, 0.15f, 1.0f), 6.0f, 40, true);
+                }
             }
         }
 
         std::uniform_real_distribution<float> yawDist(-def->cameraYawDegrees, def->cameraYawDegrees);
         FShotEvent event;
-        event.sequence = ++shotSequence_;
+        event.sequence = sequence;
         event.weaponId = std::string(def->id);
         event.cameraImpulseRadians =
             glm::radians(glm::vec2(yawDist(rng_), -def->cameraKickDegrees));

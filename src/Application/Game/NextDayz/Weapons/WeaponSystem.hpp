@@ -16,6 +16,7 @@
 #include <glm/glm.hpp>
 
 #include "Application/Game/NextDayz/NextDayzConfig.hpp"
+#include "Application/Game/NextDayz/Combat/CombatEvents.hpp"
 #include "Application/Game/NextDayz/Player/PlayerState.hpp"
 #include "Application/Game/NextDayz/Weapons/WeaponDefs.hpp"
 
@@ -51,6 +52,7 @@ namespace NextDayz
 
         void OnSceneLoaded(NextEngine& engine);
         void OnSceneUnloaded();
+        void ResetRuntime();
 
         // Loads a weapon into a slot with a fresh magazine. Returns false if id unknown.
         bool Equip(int slot, const std::string& weaponId);
@@ -80,6 +82,7 @@ namespace NextDayz
         const std::string& SlotWeaponId(int slot) const;
 
         std::vector<FShotEvent> ConsumeShotEvents();
+        std::vector<FWeaponHitEvent> ConsumeHitEvents();
         uint64_t LastShotSequence() const { return shotSequence_; }
         bool ViewModelRecoilActive() const;
 
@@ -110,6 +113,7 @@ namespace NextDayz
         float switchTimer_ = 0.0f;
         uint64_t shotSequence_ = 0;
         std::vector<FShotEvent> shotEvents_;
+        std::vector<FWeaponHitEvent> hitEvents_;
 
         // view model
         std::array<uint32_t, kWeapons.size()> viewModelModelIds_{};

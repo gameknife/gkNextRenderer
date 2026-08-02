@@ -32,6 +32,25 @@ namespace NextTotalwar
         Dead,
     };
 
+    enum class EBattleOrderType : uint8_t
+    {
+        Move,
+        Attack,
+        Charge,
+        Halt,
+        Withdraw,
+        SetFormation,
+    };
+
+    enum class EMoraleState : uint8_t
+    {
+        Steady,
+        Wavering,
+        Routing,
+        Rallying,
+        Eliminated,
+    };
+
     struct FUnitDef
     {
         EUnitType type = EUnitType::Spearman;
@@ -42,6 +61,14 @@ namespace NextTotalwar
         int defaultRanks = 10;
         float fileSpacing = 1.15f;
         float rankSpacing = 1.35f;
+        bool canRangedAttack = false;
+        float rangedRange = 0.0f;
+        float rangedMinRange = 0.0f;
+        float volleyInterval = 0.0f;
+        int startingAmmo = 0;
+        float rangedAccuracy = 0.0f;
+        float rangedDamage = 0.0f;
+        float baseMorale = 70.0f;
     };
 
     struct FSoldier
@@ -84,6 +111,16 @@ namespace NextTotalwar
         float orderLock = 0.0f;
         bool disengaging = false;
         std::vector<int16_t> engagedWith;
+        EMoraleState moraleState = EMoraleState::Steady;
+        float moraleStateTimer = 0.0f;
+        float recentCasualtyPressure = 0.0f;
+        float suppression = 0.0f;
+        int ammo = 0;
+        float volleyTimer = 0.0f;
+        bool fireAtWill = true;
+        EBattleOrderType currentOrder = EBattleOrderType::Halt;
+        int orderTargetRegiment = -1;
+        uint64_t lastOrderSequence = 0;
     };
 
     inline bool IsRegimentSelectable(const FRegiment& regiment)

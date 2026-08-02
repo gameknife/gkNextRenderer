@@ -6,6 +6,7 @@
   "viewport": { "width": 1600, "height": 900 },
   "steps": [
     { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "cvar", "name": "nextdayz.validation.loadout", "set": true },
     { "type": "wait-frames", "n": 60 },
 
     { "type": "log", "message": "M3: start armed with an AK and a full magazine" },

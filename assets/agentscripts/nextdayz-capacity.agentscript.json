@@ -1,0 +1,19 @@
+{
+  "name": "nextdayz-capacity",
+  "target": "NextDayz",
+  "scene": "assets/scad/proc/coldwar/riverland_1km.scad",
+  "defaults": { "waitFrames": 2, "stepTimeoutMs": 20000 },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "wait-frames", "n": 60 },
+    { "type": "assert", "query": "game.inventoryCapacity", "op": "eq", "value": 10 },
+    { "type": "cvar", "name": "nextdayz.validation.addBackpack", "set": true },
+    { "type": "wait-frames", "n": 2 },
+    { "type": "assert", "query": "game.inventoryCapacity", "op": "eq", "value": 38 },
+    { "type": "assert", "query": "game.currentObjective", "op": "contains", "value": "water" },
+    { "type": "key", "code": "I", "action": "press" },
+    { "type": "wait-frames", "n": 5 },
+    { "type": "screenshot", "out": "screenshots/nextdayz_capacity", "ui": true },
+    { "type": "quit" }
+  ]
+}

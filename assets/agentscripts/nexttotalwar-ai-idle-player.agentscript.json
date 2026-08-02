@@ -1,0 +1,21 @@
+{
+  "name": "nexttotalwar-ai-idle-player",
+  "target": "NextTotalwar",
+  "defaults": { "waitFrames": 2, "stepTimeoutMs": 30000 },
+  "viewport": { "width": 1600, "height": 900 },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 30000 },
+    { "type": "wait-until", "query": "game.navReady", "op": "eq", "value": true, "timeoutMs": 120000 },
+    { "type": "assert", "query": "game.battlePhase", "op": "eq", "value": "Battle" },
+    { "type": "assert", "query": "game.debugVisible", "op": "eq", "value": false },
+    { "type": "assert", "query": "game.selectedRegiments", "op": "eq", "value": 0 },
+    { "type": "wait-until", "query": "game.aiDecisions", "op": "ge", "value": 1, "timeoutMs": 30000 },
+    { "type": "wait-until", "query": "game.enemyMarchingRegiments", "op": "ge", "value": 1, "timeoutMs": 30000 },
+    { "type": "assert", "query": "game.acceptedOrders", "op": "ge", "value": 1 },
+    { "type": "assert", "query": "game.selectedEnemyRegiments", "op": "eq", "value": 0 },
+    { "type": "screenshot", "out": "screenshots/nexttotalwar_ai_idle_player", "ui": true },
+    { "type": "wait-until", "query": "game.battlePhase", "op": "eq", "value": "Finished", "timeoutMs": 120000 },
+    { "type": "assert", "query": "game.battleResult", "op": "ne", "value": "Undecided" },
+    { "type": "quit" }
+  ]
+}

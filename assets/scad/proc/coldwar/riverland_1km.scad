@@ -10,6 +10,19 @@ use <../../lib/kit_coldwar.scad>
 
 $fn = 12;
 
+// NextDayz runtime semantic anchors. The tiny geometry guarantees that the
+// module survives scene import; WorldAnchorRegistry hides it and disables its
+// raycast body before the first playable frame.
+module nd_spawn_player_safe() { color([0.1, 0.8, 0.2]) sphere(r = 0.18, $fn = 6); }
+module nd_spawn_zombie_civilian() { color([0.8, 0.2, 0.2]) sphere(r = 0.18, $fn = 6); }
+module nd_spawn_zombie_military() { color([0.5, 0.1, 0.1]) sphere(r = 0.18, $fn = 6); }
+module nd_spawn_zombie_industrial() { color([0.8, 0.4, 0.1]) sphere(r = 0.18, $fn = 6); }
+module nd_spawn_zombie_wilderness() { color([0.4, 0.25, 0.15]) sphere(r = 0.18, $fn = 6); }
+module nd_spawn_loot_residential() { color([0.2, 0.4, 0.9]) sphere(r = 0.15, $fn = 6); }
+module nd_spawn_loot_medical() { color([0.9, 0.9, 0.9]) sphere(r = 0.15, $fn = 6); }
+module nd_spawn_loot_military() { color([0.2, 0.35, 0.15]) sphere(r = 0.15, $fn = 6); }
+module nd_spawn_loot_industrial() { color([0.9, 0.65, 0.1]) sphere(r = 0.15, $fn = 6); }
+
 TERR = ["gkterr1", [1000, 1000], [176, 176], 7, [0, 2.6, 0.5], undef, "temperate",
     [
         ["mountain", [-260, 380], 190, 52, 0.6],
@@ -36,6 +49,35 @@ TERR = ["gkterr1", [1000, 1000], [176, 176], 7, [0, 2.6, 0.5], undef, "temperate
     ]];
 
 gk_terrain(TERR);
+
+// Product-loop semantic anchors by POI. Coordinates remain authored in SCAD;
+// runtime code never hard-codes POI positions.
+ter_place(TERR, -320, -165) nd_spawn_player_safe();
+ter_place(TERR, -44, -190) nd_spawn_player_safe();
+ter_place(TERR, -310, -164) nd_spawn_zombie_civilian();
+ter_place(TERR, -288, -185) nd_spawn_zombie_civilian();
+ter_place(TERR, -26, -194) nd_spawn_zombie_civilian();
+ter_place(TERR, 224, -238) nd_spawn_zombie_civilian();
+ter_place(TERR, 255, -258) nd_spawn_zombie_civilian();
+ter_place(TERR, 45, -190) nd_spawn_zombie_military();
+ter_place(TERR, 58, -164) nd_spawn_zombie_military();
+ter_place(TERR, 318, 150) nd_spawn_zombie_military();
+ter_place(TERR, 350, 170) nd_spawn_zombie_military();
+ter_place(TERR, 368, 185) nd_spawn_zombie_military();
+ter_place(TERR, 82, -320) nd_spawn_zombie_industrial();
+ter_place(TERR, 108, -340) nd_spawn_zombie_industrial();
+ter_place(TERR, -345, 105) nd_spawn_zombie_military();
+ter_place(TERR, -135, 232) nd_spawn_zombie_military();
+ter_place(TERR, -252, -310) nd_spawn_zombie_wilderness();
+ter_place(TERR, -280, -340) nd_spawn_zombie_wilderness();
+ter_place(TERR, -300, -174) nd_spawn_loot_residential();
+ter_place(TERR, -30, -177) nd_spawn_loot_medical();
+ter_place(TERR, 50, -176) nd_spawn_loot_military();
+ter_place(TERR, 340, 165) nd_spawn_loot_military();
+ter_place(TERR, 240, -246) nd_spawn_loot_residential();
+ter_place(TERR, 95, -332) nd_spawn_loot_industrial();
+ter_place(TERR, -345, 112) nd_spawn_loot_military();
+ter_place(TERR, -140, 240) nd_spawn_loot_military();
 
 // ================= 公路桥（跨河点 ~(17,-154)，锚下切带外路面） =================
 translate([17, -154, gk_terrain_height(TERR, 40, -152)])

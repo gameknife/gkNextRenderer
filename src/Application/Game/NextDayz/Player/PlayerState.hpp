@@ -40,6 +40,17 @@ namespace NextDayz
     {
         None,
         LootGround,
+        Eat,
+        Drink,
+        Heal,
+        DrinkFromWell,
+        FillBottle,
+    };
+
+    enum class EPlayerLifeState
+    {
+        Alive,
+        Dead,
     };
 
     enum class EWeaponPresentationAction
@@ -123,7 +134,17 @@ namespace NextDayz
 
     inline const char* ActionName(EPlayerAction action)
     {
-        return action == EPlayerAction::LootGround ? "loot_ground" : "none";
+        switch (action)
+        {
+        case EPlayerAction::LootGround: return "loot_ground";
+        case EPlayerAction::Eat: return "eat";
+        case EPlayerAction::Drink: return "drink";
+        case EPlayerAction::Heal: return "heal";
+        case EPlayerAction::DrinkFromWell: return "drink_from_well";
+        case EPlayerAction::FillBottle: return "fill_bottle";
+        case EPlayerAction::None:
+        default: return "none";
+        }
     }
 
     inline const char* WeaponActionName(EWeaponPresentationAction action)

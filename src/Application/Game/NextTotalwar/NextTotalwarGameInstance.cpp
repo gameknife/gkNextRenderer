@@ -31,13 +31,10 @@
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 namespace
 {
-    constexpr int regimentCountPerFaction = 12;
-    constexpr int soldiersPerRegiment = 100;
-    constexpr int totalRegimentCount = regimentCountPerFaction * 2;
-    constexpr int totalSoldierCount = totalRegimentCount * soldiersPerRegiment;
     constexpr float regimentLateralSpacing = 18.0f;
     constexpr float regimentDepthSpacing = 20.0f;
 
@@ -117,15 +114,20 @@ namespace NextTotalwar
         unitDefs_ = {{
             {EUnitType::Spearman, "spearman", "Spearmen", 8.0f, 1.45f, 10, 1.12f, 1.35f},
             {EUnitType::Swordsman, "swordsman", "Swordsmen", 8.6f, 1.45f, 10, 1.08f, 1.30f},
-            {EUnitType::Archer, "archer", "Archers", 8.2f, 1.45f, 10, 1.20f, 1.42f},
+            {EUnitType::Archer, "archer", "Archers", 8.2f, 1.45f, 10, 1.20f, 1.42f,
+             true, 55.0f, 5.0f, 4.2f, 18, 0.58f, 100.0f},
         }};
     }
 
     void FGameInstance::OnInit()
     {
         GOption->KeepCPUMeshData = true;
+        scenario_ = LoadBattleProductData(unitDefs_);
+        battleSeed_ = static_cast<int>(scenario_.seed);
+        playerFaction_ = scenario_.playerFaction;
+        aiFaction_ = scenario_.aiFaction;
         const std::string scene = GOption->SceneName.empty()
-                                      ? "assets/scad/proc/nexttotalwar/greenfield_400.scad"
+                                      ? scenario_.scene
                                       : GOption->SceneName;
         SPDLOG_INFO("NextTotalwar: loading '{}'", scene);
         GetEngine().RequestLoadScene({.filename = scene});
@@ -193,10 +195,23 @@ namespace NextTotalwar
                           "Fixed blood-stain render-node pool size.");
         cvars.RegisterInt("tw.battle.seed", 1337, &battleSeed_, ECVarFlags::StartupOnly,
                           "Deterministic battle random seed.");
-        cvars.RegisterFloat("tw.battle.deployDistance", 125.0f, &battleDeployDistance_,
-                            ECVarFlags::None, "Army deployment distance from the battlefield centre.");
         cvars.RegisterBool("tw.determinism", GOption->AgentValidation, &deterministicCombat_,
                            ECVarFlags::None, "Advance exactly one combat tick per rendered frame.");
+        cvars.RegisterBool("tw.validation.issuePlayerAttack", false,
+                           &validationIssuePlayerAttack_, ECVarFlags::None,
+                           "Agent-only deterministic player attack fixture.");
+        cvars.RegisterBool("tw.validation.selectPlayer", false,
+                           &validationSelectPlayer_, ECVarFlags::None,
+                           "Agent-only deterministic player selection fixture.");
+        cvars.RegisterBool("tw.validation.moraleShock", false,
+                           &validationMoraleShock_, ECVarFlags::None,
+                           "Agent-only deterministic morale fixture.");
+        cvars.RegisterBool("tw.validation.finishEnemy", false,
+                           &validationFinishEnemy_, ECVarFlags::None,
+                           "Agent-only battle completion fixture.");
+        cvars.RegisterBool("tw.validation.restart", false,
+                           &validationRestart_, ECVarFlags::None,
+                           "Agent-only same-process rematch fixture.");
     }
 
     void FGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
@@ -296,6 +311,26 @@ namespace NextTotalwar
             bloodPool.push_back(std::move(node));
         }
         combatFx_.Initialize(flashMaterialId, std::move(bloodPool));
+
+        constexpr int arrowPoolSize = 96;
+        const uint32_t arrowMaterialId =
+            Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.24f, 0.12f, 0.035f));
+        models.push_back(Assets::FProcModel::CreateBox(
+            glm::vec3(-0.025f, -0.025f, -0.34f),
+            glm::vec3(0.025f, 0.025f, 0.34f)));
+        const uint32_t arrowModelId = static_cast<uint32_t>(models.size() - 1);
+        std::vector<std::shared_ptr<Assets::Node>> arrowPool;
+        arrowPool.reserve(arrowPoolSize);
+        for (int index = 0; index < arrowPoolSize; ++index)
+        {
+            auto node = Assets::SceneBuilder::CreateRenderNode(
+                fmt::format("NTW/Arrow/{}", index), glm::vec3(0.0f, -1000.0f, 0.0f),
+                glm::vec3(1.0f), static_cast<uint32_t>(nodes.size()),
+                arrowModelId, arrowMaterialId, false);
+            nodes.push_back(node);
+            arrowPool.push_back(std::move(node));
+        }
+        rangedVolleyFx_.Initialize(std::move(arrowPool));
         sceneInjected_ = true;
     }
 
@@ -331,6 +366,11 @@ namespace NextTotalwar
         }
         DeployArmies();
         combatSystem_.Reset(static_cast<uint64_t>(battleSeed_));
+        rangedCombatSystem_.Reset(static_cast<uint64_t>(battleSeed_));
+        moraleSystem_.Reset();
+        orderSystem_.Reset();
+        commanderAI_.Reset(static_cast<uint64_t>(battleSeed_), aiFaction_);
+        session_.Reset(static_cast<uint64_t>(battleSeed_), GOption->AgentValidation);
         battleState_.events.clear();
         battleState_.combatTicks = 0;
         combatAccumulator_ = 0.0f;
@@ -338,7 +378,7 @@ namespace NextTotalwar
         scene.MarkDirty();
         sceneReady_ = true;
         SPDLOG_INFO("NextTotalwar: {} regiments / {} ScadRig soldiers, Massive shared-part rendering enabled",
-                    totalRegimentCount, totalSoldierCount);
+                    regiments_.size(), regiments_.size() * static_cast<size_t>(scenario_.soldiersPerRegiment));
     }
 
     void FGameInstance::OnSceneUnloaded()
@@ -354,46 +394,40 @@ namespace NextTotalwar
     void FGameInstance::DeployArmies()
     {
         regiments_.clear();
-        regiments_.reserve(totalRegimentCount);
+        regiments_.reserve(scenario_.regiments.size());
         int id = 0;
-        for (int faction = 0; faction < 2; ++faction)
+        for (const FRegimentDeployment& deployment : scenario_.regiments)
         {
-            for (int index = 0; index < regimentCountPerFaction; ++index)
+            FRegiment regiment;
+            regiment.id = id++;
+            regiment.faction = deployment.faction;
+            regiment.def = &unitDefs_[deployment.unitIndex];
+            regiment.ranks = regiment.def->defaultRanks;
+            const float x = deployment.position.x;
+            const float z = deployment.position.z;
+            regiment.anchor = {x, GroundHeight(x, z), z};
+            regiment.facing = deployment.facing;
+            regiment.orderFacing = regiment.facing;
+            regiment.soldiers.resize(static_cast<size_t>(scenario_.soldiersPerRegiment));
+            regiment.strength = scenario_.soldiersPerRegiment;
+            regiment.startStrength = scenario_.soldiersPerRegiment;
+            regiment.morale = regiment.def->baseMorale;
+            regiment.ammo = regiment.def->startingAmmo;
+            for (int soldier = 0; soldier < scenario_.soldiersPerRegiment; ++soldier)
             {
-                FRegiment regiment;
-                regiment.id = id++;
-                regiment.faction = faction;
-                regiment.def = &unitDefs_[index % 3];
-                regiment.ranks = regiment.def->defaultRanks;
-                const int column = index % 3;
-                const int row = index / 3;
-                const float x = faction == 0
-                                    ? -battleDeployDistance_ + column * 30.0f
-                                    : battleDeployDistance_ - column * 30.0f;
-                const float z = -66.0f + row * 44.0f + (column % 2) * 3.0f;
-                regiment.anchor = {x, GroundHeight(x, z), z};
-                regiment.facing = faction == 0 ? glm::half_pi<float>() : -glm::half_pi<float>();
-                regiment.orderFacing = regiment.facing;
-                regiment.soldiers.resize(soldiersPerRegiment);
-                regiment.strength = soldiersPerRegiment;
-                regiment.startStrength = soldiersPerRegiment;
-                regiment.morale = CombatDef(regiment.def->type).baseMorale;
-                for (int soldier = 0; soldier < soldiersPerRegiment; ++soldier)
-                {
-                    FSoldier& item = regiment.soldiers[soldier];
-                    item.slotIndex = soldier;
-                    item.phaseOffset = static_cast<float>((regiment.id * 67 + soldier * 23) % 101) / 101.0f;
-                    const glm::vec2 local = Formation::SlotLocalOffset(
-                        soldier, soldiersPerRegiment, regiment.ranks,
-                        regiment.def->fileSpacing, regiment.def->rankSpacing);
-                    item.position = Formation::SlotWorld(regiment.anchor, regiment.facing, local);
-                    item.position.y = GroundHeight(item.position.x, item.position.z);
-                    item.yaw = regiment.facing;
-                    item.health = static_cast<int16_t>(CombatDef(regiment.def->type).maxHealth);
-                    item.attackTimer = CombatDef(regiment.def->type).attackInterval * item.phaseOffset;
-                }
-                regiments_.push_back(std::move(regiment));
+                FSoldier& item = regiment.soldiers[static_cast<size_t>(soldier)];
+                item.slotIndex = soldier;
+                item.phaseOffset = static_cast<float>((regiment.id * 67 + soldier * 23) % 101) / 101.0f;
+                const glm::vec2 local = Formation::SlotLocalOffset(
+                    soldier, scenario_.soldiersPerRegiment, regiment.ranks,
+                    regiment.def->fileSpacing, regiment.def->rankSpacing);
+                item.position = Formation::SlotWorld(regiment.anchor, regiment.facing, local);
+                item.position.y = GroundHeight(item.position.x, item.position.z);
+                item.yaw = regiment.facing;
+                item.health = static_cast<int16_t>(CombatDef(regiment.def->type).maxHealth);
+                item.attackTimer = CombatDef(regiment.def->type).attackInterval * item.phaseOffset;
             }
+            regiments_.push_back(std::move(regiment));
         }
     }
 
@@ -522,6 +556,71 @@ namespace NextTotalwar
     void FGameInstance::OnTick(double deltaSeconds)
     {
         if (!sceneReady_) return;
+        if (GOption->AgentValidation)
+        {
+            if (validationRestart_)
+            {
+                validationRestart_ = false;
+                RestartBattle();
+            }
+            if (validationIssuePlayerAttack_)
+            {
+                validationIssuePlayerAttack_ = false;
+                ClearSelection();
+                for (FRegiment& regiment : regiments_)
+                {
+                    if (regiment.faction == playerFaction_ && IsRegimentSelectable(regiment))
+                    {
+                        regiment.selected = true;
+                        break;
+                    }
+                }
+                IssueSelectedTargetOrder(EBattleOrderType::Attack);
+            }
+            if (validationSelectPlayer_)
+            {
+                validationSelectPlayer_ = false;
+                ClearSelection();
+                FRegiment* fallback = nullptr;
+                for (FRegiment& regiment : regiments_)
+                {
+                    if (regiment.faction != playerFaction_ || !IsRegimentSelectable(regiment)) continue;
+                    if (!fallback) fallback = &regiment;
+                    if (regiment.state == ERegimentState::Engaged || !regiment.engagedWith.empty())
+                    {
+                        regiment.selected = true;
+                        fallback = nullptr;
+                        break;
+                    }
+                }
+                if (fallback) fallback->selected = true;
+                RefreshSelectionFeedback();
+            }
+            if (validationMoraleShock_)
+            {
+                validationMoraleShock_ = false;
+                for (FRegiment& regiment : regiments_)
+                {
+                    if (regiment.faction == aiFaction_ && IsRegimentSelectable(regiment))
+                    {
+                        regiment.morale = 10.0f;
+                        break;
+                    }
+                }
+            }
+            if (validationFinishEnemy_)
+            {
+                validationFinishEnemy_ = false;
+                for (FRegiment& regiment : regiments_)
+                {
+                    if (regiment.faction != aiFaction_) continue;
+                    regiment.strength = 0;
+                    regiment.state = ERegimentState::Destroyed;
+                    regiment.moraleState = EMoraleState::Eliminated;
+                    regiment.selected = false;
+                }
+            }
+        }
         const float dt = std::min(static_cast<float>(deltaSeconds), 0.05f);
         if (camera_.IsFollowing())
         {
@@ -530,36 +629,60 @@ namespace NextTotalwar
             else camera_.ClearFollowTarget();
         }
         camera_.Tick(dt, terrain_);
-        TickRegiments(dt);
         const auto combatStart = std::chrono::steady_clock::now();
         const uint64_t combatTicksBefore = battleState_.combatTicks;
         const float combatStep = 1.0f / std::max(combatTuning_.tickRate, 1.0f);
-        if (deterministicCombat_)
+        if (session_.IsSimulationRunning())
         {
-            combatSystem_.Tick(combatStep, regiments_, combatTuning_, battleState_);
-        }
-        else
-        {
-            combatAccumulator_ += dt;
-            int substeps = 0;
-            while (combatAccumulator_ >= combatStep && substeps < 3)
+            const float simulationDelta = dt * session_.TimeScale();
+            TickRegiments(deterministicCombat_ ? combatStep : simulationDelta);
+            if (deterministicCombat_)
             {
-                combatSystem_.Tick(combatStep, regiments_, combatTuning_, battleState_);
-                combatAccumulator_ -= combatStep;
-                ++substeps;
+                TickBattleSimulation(combatStep);
+            }
+            else
+            {
+                combatAccumulator_ += simulationDelta;
+                int substeps = 0;
+                while (combatAccumulator_ >= combatStep && substeps < 3)
+                {
+                    TickBattleSimulation(combatStep);
+                    combatAccumulator_ -= combatStep;
+                    ++substeps;
+                }
             }
         }
         combatTicksThisFrame_ =
             static_cast<int>(battleState_.combatTicks - combatTicksBefore);
         combatCpuMilliseconds_ = std::chrono::duration<float, std::milli>(
             std::chrono::steady_clock::now() - combatStart).count();
-        TickSoldiers(dt);
-        combatFx_.Tick(dt, regiments_, soldierVisuals_, combatTuning_,
+        const float animationDelta = session_.IsSimulationRunning() ? dt : 0.0f;
+        TickSoldiers(animationDelta);
+        combatFx_.Tick(animationDelta, regiments_, soldierVisuals_, combatTuning_,
                        battleState_.events);
+        rangedVolleyFx_.Tick(animationDelta, regiments_, battleState_.events);
         lastCombatEventCount_ = static_cast<int>(battleState_.events.size());
         battleState_.events.clear();
         GetEngine().GetScene().MarkTransformDirty();
         ++frameIndex_;
+    }
+
+    void FGameInstance::TickBattleSimulation(float step)
+    {
+        const std::vector<FBattleOrder> aiOrders = commanderAI_.Tick(
+            step, battleState_.combatTicks, session_.BattleSeconds(), regiments_);
+        for (FBattleOrder order : aiOrders) SubmitBattleOrder(std::move(order));
+        orderSystem_.ExecuteReady(battleState_.combatTicks, [this](const FBattleOrder& order)
+        {
+            ExecuteBattleOrder(order);
+        });
+        FBattleContext battleContext;
+        battleContext.navGrid = &navGrid_;
+        battleContext.sampleGround = [this](float x, float z) { return GroundHeight(x, z); };
+        rangedCombatSystem_.Tick(step, regiments_, battleState_, {}, &battleContext);
+        combatSystem_.Tick(step, regiments_, combatTuning_, battleState_);
+        moraleSystem_.Tick(step, regiments_, battleState_);
+        session_.Tick(step, regiments_, playerFaction_);
     }
 
     void FGameInstance::TickRegiments(float deltaSeconds)
@@ -578,7 +701,9 @@ namespace NextTotalwar
                 if (regiment.pathCursor >= regiment.path.size())
                 {
                     Formation::RepackSlots(regiment);
-                    regiment.state = ERegimentState::Reforming;
+                    regiment.state = regiment.currentOrder == EBattleOrderType::Charge
+                                         ? ERegimentState::Charging
+                                         : ERegimentState::Reforming;
                     continue;
                 }
                 glm::vec3 target = regiment.path[regiment.pathCursor];
@@ -959,7 +1084,7 @@ namespace NextTotalwar
         float nearbyDistance = 32.0f;
         for (FRegiment& regiment : regiments_)
         {
-            if (!IsRegimentSelectable(regiment)) continue;
+            if (regiment.faction != playerFaction_ || !IsRegimentSelectable(regiment)) continue;
             std::array<glm::vec2, 4> bounds{};
             if (TryProjectRegimentBounds(regiment, bounds) &&
                 PointInConvexQuad(point, bounds))
@@ -1005,7 +1130,8 @@ namespace NextTotalwar
         ClearSelection();
         for (FRegiment& regiment : regiments_)
         {
-            regiment.selected = IsRegimentSelectable(regiment) && regiment.def == pickedDef;
+            regiment.selected = regiment.faction == playerFaction_ &&
+                                IsRegimentSelectable(regiment) && regiment.def == pickedDef;
         }
         RefreshSelectionFeedback();
     }
@@ -1019,7 +1145,7 @@ namespace NextTotalwar
         const float maxY = static_cast<float>(std::max(a.y, b.y));
         for (FRegiment& regiment : regiments_)
         {
-            if (!IsRegimentSelectable(regiment)) continue;
+            if (regiment.faction != playerFaction_ || !IsRegimentSelectable(regiment)) continue;
             ImVec2 projected;
             if (Runtime::EngineHelper::TryProjectWorldToScreenForGame(*this, regiment.anchor, projected) &&
                 projected.x >= minX && projected.x <= maxX && projected.y >= minY && projected.y <= maxY)
@@ -1034,7 +1160,8 @@ namespace NextTotalwar
     {
         for (size_t regimentIndex = 0; regimentIndex < regiments_.size(); ++regimentIndex)
         {
-            if (!IsRegimentSelectable(regiments_[regimentIndex]))
+            if (regiments_[regimentIndex].faction != playerFaction_ ||
+                !IsRegimentSelectable(regiments_[regimentIndex]))
             {
                 regiments_[regimentIndex].selected = false;
             }
@@ -1117,7 +1244,7 @@ namespace NextTotalwar
                 entry.y = GroundHeight(entry.x, entry.z);
                 exit.y = GroundHeight(exit.x, exit.z);
                 path = {regiment.anchor, entry, exit};
-                SPDLOG_INFO("NextTotalwar: regiment {} uses semantic bridge route", regiment.id);
+                SPDLOG_DEBUG("NextTotalwar: regiment {} uses semantic bridge route", regiment.id);
             }
             else
             {
@@ -1158,7 +1285,6 @@ namespace NextTotalwar
         destinations.reserve(selected.size());
         for (size_t index = 0; index < selected.size(); ++index)
         {
-            Formation::PrepareNearestReform(*selected[index]);
             starts.push_back(selected[index]->anchor);
             glm::vec3 destination = target + RegimentOrderOffset(index, selected.size(), facing);
             destination.x = glm::clamp(destination.x, -188.0f, 188.0f);
@@ -1171,34 +1297,190 @@ namespace NextTotalwar
 
         for (size_t index = 0; index < selected.size(); ++index)
         {
-            FRegiment& regiment = *selected[index];
-            const bool leavingCombat =
-                regiment.state == ERegimentState::Engaged ||
-                !regiment.engagedWith.empty();
-            const glm::vec3& destination = destinations[assignment[index]];
-            regiment.orderTarget = destination;
-            regiment.orderFacing = facing;
-            regiment.path = BuildOrderPath(regiment, destination, facing);
-            regiment.pathCursor = regiment.path.size() > 1 ? 1 : 0;
-            regiment.state = ERegimentState::Marching;
-            regiment.disengaging = leavingCombat;
-            if (leavingCombat)
-            {
-                regiment.engagedWith.clear();
-                for (FSoldier& soldier : regiment.soldiers)
-                {
-                    soldier.targetRegiment = -1;
-                    soldier.targetSoldier = -1;
-                    soldier.engagementSlot = -1;
-                    if (soldier.combatState == ESoldierState::Fighting)
-                    {
-                        soldier.combatState = ESoldierState::Formation;
-                    }
-                }
-            }
-            lastOrderDistance_ = glm::distance(glm::vec2(regiment.anchor.x, regiment.anchor.z),
-                                               glm::vec2(destination.x, destination.z));
+            FBattleOrder order;
+            order.type = EBattleOrderType::Move;
+            order.issuerFaction = playerFaction_;
+            order.regimentId = selected[index]->id;
+            order.targetPosition = destinations[assignment[index]];
+            order.targetFacing = facing;
+            order.issuedTick = battleState_.combatTicks;
+            SubmitBattleOrder(order);
         }
+        orderSystem_.ExecuteReady(battleState_.combatTicks, [this](const FBattleOrder& order)
+        {
+            ExecuteBattleOrder(order);
+        });
+    }
+
+    bool FGameInstance::SubmitBattleOrder(FBattleOrder order)
+    {
+        return orderSystem_.Submit(std::move(order), regiments_).accepted;
+    }
+
+    int FGameInstance::FindNearestEnemyRegiment(const FRegiment& regiment) const
+    {
+        int target = -1;
+        float nearest = std::numeric_limits<float>::max();
+        for (const FRegiment& candidate : regiments_)
+        {
+            if (candidate.faction == regiment.faction || !IsRegimentSelectable(candidate)) continue;
+            const float distance = glm::distance(glm::vec2(regiment.anchor.x, regiment.anchor.z),
+                                                 glm::vec2(candidate.anchor.x, candidate.anchor.z));
+            if (distance < nearest)
+            {
+                nearest = distance;
+                target = candidate.id;
+            }
+        }
+        return target;
+    }
+
+    void FGameInstance::IssueSelectedTargetOrder(EBattleOrderType type)
+    {
+        for (const FRegiment& regiment : regiments_)
+        {
+            if (!regiment.selected || regiment.faction != playerFaction_ ||
+                !IsRegimentSelectable(regiment))
+                continue;
+            const int target = FindNearestEnemyRegiment(regiment);
+            if (target < 0) continue;
+            FBattleOrder order;
+            order.type = type;
+            order.issuerFaction = playerFaction_;
+            order.regimentId = regiment.id;
+            order.targetRegimentId = target;
+            order.targetPosition = regiments_[static_cast<size_t>(target)].anchor;
+            order.targetFacing = std::atan2(order.targetPosition.x - regiment.anchor.x,
+                                            order.targetPosition.z - regiment.anchor.z);
+            order.issuedTick = battleState_.combatTicks;
+            SubmitBattleOrder(order);
+        }
+        orderSystem_.ExecuteReady(battleState_.combatTicks, [this](const FBattleOrder& order)
+        {
+            ExecuteBattleOrder(order);
+        });
+    }
+
+    void FGameInstance::IssueSelectedSimpleOrder(EBattleOrderType type, int ranks)
+    {
+        for (const FRegiment& regiment : regiments_)
+        {
+            if (!regiment.selected || regiment.faction != playerFaction_ ||
+                !IsRegimentSelectable(regiment))
+                continue;
+            FBattleOrder order;
+            order.type = type;
+            order.issuerFaction = playerFaction_;
+            order.regimentId = regiment.id;
+            order.targetFacing = regiment.facing;
+            order.targetPosition = regiment.anchor;
+            order.ranks = ranks;
+            if (type == EBattleOrderType::Withdraw)
+                order.targetPosition.x += playerFaction_ == 0 ? -45.0f : 45.0f;
+            order.issuedTick = battleState_.combatTicks;
+            SubmitBattleOrder(order);
+        }
+        orderSystem_.ExecuteReady(battleState_.combatTicks, [this](const FBattleOrder& order)
+        {
+            ExecuteBattleOrder(order);
+        });
+    }
+
+    void FGameInstance::ExecuteBattleOrder(const FBattleOrder& order)
+    {
+        if (order.regimentId < 0 || static_cast<size_t>(order.regimentId) >= regiments_.size()) return;
+        FRegiment& regiment = regiments_[static_cast<size_t>(order.regimentId)];
+        regiment.currentOrder = order.type;
+        regiment.orderTargetRegiment = order.targetRegimentId;
+        regiment.lastOrderSequence = order.sequence;
+        lastExecutedOrder_ = order.sequence;
+
+        if (order.type == EBattleOrderType::Halt)
+        {
+            regiment.path.clear();
+            regiment.pathCursor = 0;
+            regiment.orderTarget = regiment.anchor;
+            regiment.state = ERegimentState::Reforming;
+            regiment.disengaging = false;
+            return;
+        }
+        if (order.type == EBattleOrderType::SetFormation)
+        {
+            regiment.ranks = glm::clamp(order.ranks, 4, 32);
+            Formation::RepackSlots(regiment);
+            regiment.state = ERegimentState::Reforming;
+            return;
+        }
+
+        glm::vec3 destination = order.targetPosition;
+        if ((order.type == EBattleOrderType::Attack || order.type == EBattleOrderType::Charge) &&
+            order.targetRegimentId >= 0 &&
+            static_cast<size_t>(order.targetRegimentId) < regiments_.size())
+        {
+            const FRegiment& target = regiments_[static_cast<size_t>(order.targetRegimentId)];
+            destination = target.anchor;
+            if (regiment.def->canRangedAttack && order.type == EBattleOrderType::Attack)
+            {
+                const glm::vec3 delta = regiment.anchor - target.anchor;
+                const float distance = glm::length(glm::vec2(delta.x, delta.z));
+                if (distance <= regiment.def->rangedRange * 0.82f &&
+                    distance >= regiment.def->rangedMinRange)
+                {
+                    regiment.path.clear();
+                    regiment.pathCursor = 0;
+                    regiment.state = ERegimentState::Idle;
+                    return;
+                }
+                if (distance > 0.1f)
+                    destination = target.anchor + delta / distance * (regiment.def->rangedRange * 0.72f);
+            }
+        }
+        destination.x = glm::clamp(destination.x, -188.0f, 188.0f);
+        destination.z = glm::clamp(destination.z, -188.0f, 188.0f);
+        destination.y = GroundHeight(destination.x, destination.z);
+        const bool leavingCombat = regiment.state == ERegimentState::Engaged ||
+                                   !regiment.engagedWith.empty();
+        Formation::PrepareNearestReform(regiment);
+        regiment.orderTarget = destination;
+        regiment.orderFacing = order.targetFacing;
+        regiment.path = BuildOrderPath(regiment, destination, order.targetFacing);
+        regiment.pathCursor = regiment.path.size() > 1 ? 1 : 0;
+        regiment.state = ERegimentState::Marching;
+        regiment.disengaging = leavingCombat || order.type == EBattleOrderType::Withdraw;
+        if (leavingCombat)
+        {
+            regiment.engagedWith.clear();
+            for (FSoldier& soldier : regiment.soldiers)
+            {
+                soldier.targetRegiment = -1;
+                soldier.targetSoldier = -1;
+                soldier.engagementSlot = -1;
+                if (soldier.combatState == ESoldierState::Fighting)
+                    soldier.combatState = ESoldierState::Formation;
+            }
+        }
+        lastOrderDistance_ = glm::distance(glm::vec2(regiment.anchor.x, regiment.anchor.z),
+                                           glm::vec2(destination.x, destination.z));
+    }
+
+    void FGameInstance::RestartBattle()
+    {
+        DeployArmies();
+        combatSystem_.Reset(static_cast<uint64_t>(battleSeed_));
+        rangedCombatSystem_.Reset(static_cast<uint64_t>(battleSeed_));
+        moraleSystem_.Reset();
+        orderSystem_.Reset();
+        commanderAI_.Reset(static_cast<uint64_t>(battleSeed_), aiFaction_);
+        battleState_.events.clear();
+        battleState_.combatTicks = 0;
+        combatAccumulator_ = 0.0f;
+        lastOrderDistance_ = 0.0f;
+        lastExecutedOrder_ = 0;
+        combatFx_.ResetBattle();
+        rangedVolleyFx_.ResetBattle();
+        session_.Reset(static_cast<uint64_t>(battleSeed_), GOption->AgentValidation);
+        if (!GOption->AgentValidation) session_.BeginDeployment();
+        GetEngine().GetScene().MarkDirty();
     }
 
     bool FGameInstance::OnKey(SDL_Event& event)
@@ -1231,20 +1513,53 @@ namespace NextTotalwar
         case SDLK_F5:
             if (down) showDebug_ = !showDebug_;
             return true;
+        case SDLK_SPACE:
+            if (down)
+            {
+                if (session_.Phase() == EBattlePhase::Briefing) session_.BeginDeployment();
+                else if (session_.Phase() == EBattlePhase::Deployment) session_.BeginBattle();
+                else session_.TogglePause();
+            }
+            return true;
+        case SDLK_P:
+            if (down) session_.TogglePause();
+            return true;
+        case SDLK_X:
+            if (down) IssueSelectedTargetOrder(EBattleOrderType::Attack);
+            return true;
+        case SDLK_C:
+            if (down) IssueSelectedTargetOrder(EBattleOrderType::Charge);
+            return true;
+        case SDLK_H:
+            if (down) IssueSelectedSimpleOrder(EBattleOrderType::Halt);
+            return true;
+        case SDLK_V:
+            if (down) IssueSelectedSimpleOrder(EBattleOrderType::Withdraw);
+            return true;
+        case SDLK_1:
+        case SDLK_2:
+        case SDLK_3:
+            if (down) session_.SetTimeScale(event.key.key == SDLK_1 ? 0.5f :
+                                             (event.key.key == SDLK_2 ? 1.0f : 2.0f));
+            return true;
+        case SDLK_R:
+            if (down && session_.Phase() == EBattlePhase::Finished) RestartBattle();
+            return true;
         case SDLK_LEFTBRACKET:
         case SDLK_RIGHTBRACKET:
             if (down)
             {
                 const int delta = event.key.key == SDLK_LEFTBRACKET ? -1 : 1;
-                for (FRegiment& regiment : regiments_)
+                int ranks = 0;
+                for (const FRegiment& regiment : regiments_)
                 {
                     if (regiment.selected && IsRegimentSelectable(regiment))
                     {
-                        regiment.ranks = glm::clamp(regiment.ranks + delta, 4, 32);
-                        Formation::RepackSlots(regiment);
-                        regiment.state = ERegimentState::Reforming;
+                        ranks = glm::clamp(regiment.ranks + delta, 4, 32);
+                        break;
                     }
                 }
+                if (ranks > 0) IssueSelectedSimpleOrder(EBattleOrderType::SetFormation, ranks);
             }
             return true;
         default: return false;
@@ -1365,37 +1680,40 @@ namespace NextTotalwar
     bool FGameInstance::OnRenderUI()
     {
         if (!sceneReady_) return false;
-        const Assets::Scene& scene = GetEngine().GetScene();
-        const uint32_t batches = scene.GetIndirectDrawBatchCount();
         ImGui::SetNextWindowPos({12.0f, 12.0f}, ImGuiCond_Always);
-        ImGui::SetNextWindowSize({340.0f, 0.0f}, ImGuiCond_Always);
-        ImGui::Begin("NextTotalwar", nullptr,
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+        ImGui::SetNextWindowSize({430.0f, 0.0f}, ImGuiCond_Always);
+        ImGui::Begin("Battle Command", nullptr, ImGuiWindowFlags_NoMove |
+                     ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
         int aliveSoldiers = 0;
-        for (const FRegiment& regiment : regiments_) aliveSoldiers += regiment.strength;
-        ImGui::Text("Regiments: %zu   Soldiers: %d / %d",
-                    regiments_.size(), aliveSoldiers, totalSoldierCount);
-        ImGui::Text("Selected: %zu   Moving: %zu", SelectedCount(), MarchingCount());
-        size_t sharedParts = 0;
-        for (const auto& ids : soldierPartModelIds_) sharedParts += ids.size();
-        ImGui::Text("ScadRig shared part meshes: %zu", sharedParts);
-        constexpr uint32_t visibilityProxyBudget = Assets::Scene::kRenderProxyCapacity;
-        const float budget = static_cast<float>(batches) / static_cast<float>(visibilityProxyBudget);
-        ImGui::TextColored(budget > 0.90f ? ImVec4(1, 0.2f, 0.15f, 1)
-                                         : ImVec4(0.3f, 1, 0.4f, 1),
-                           "Render proxies: %u / %u", batches, visibilityProxyBudget);
-        ImGui::ProgressBar(glm::clamp(budget, 0.0f, 1.0f), {-1.0f, 0.0f});
-        ImGui::Text("FPS: %.1f   Animated this frame: %d", ImGui::GetIO().Framerate, animatorUpdates_);
-        ImGui::Text("NavGrid: %s (%dx%d)", navGrid_.IsBuilt() ? "ready" : "not ready",
-                    navGrid_.GetWidth(), navGrid_.GetHeight());
+        std::array<int, 2> armyStrength{};
+        for (const FRegiment& regiment : regiments_)
+        {
+            aliveSoldiers += regiment.strength;
+            if (regiment.faction >= 0 && regiment.faction < 2)
+                armyStrength[regiment.faction] += regiment.strength;
+        }
+        ImGui::Text("%s   %02d:%02d   Speed %.1fx",
+                    FBattleSession::PhaseName(session_.Phase()),
+                    static_cast<int>(session_.BattleSeconds()) / 60,
+                    static_cast<int>(session_.BattleSeconds()) % 60,
+                    session_.TimeScale());
+        ImGui::TextColored({0.30f, 0.72f, 1.0f, 1.0f}, "BLUE %d", armyStrength[0]);
+        ImGui::SameLine();
+        ImGui::TextColored({1.0f, 0.30f, 0.22f, 1.0f}, "     RED %d", armyStrength[1]);
+        ImGui::Text("Selected %zu   Moving %zu", SelectedCount(), MarchingCount());
         ImGui::Separator();
-        ImGui::TextUnformatted("LMB: point/box select   Shift: add");
-        ImGui::TextUnformatted("RMB drag: destination + facing");
-        ImGui::TextUnformatted("WASD/MMB drag: pan  Q/E: rotate  Wheel: zoom");
-        ImGui::TextUnformatted("F: follow selected regiments");
-        ImGui::TextUnformatted("F5: toggle battle debug");
-        ImGui::TextUnformatted("[/]: selected formation ranks");
-        if (showDebug_)
+        ImGui::BeginDisabled(SelectedCount() == 0 || !session_.IsSimulationRunning());
+        if (ImGui::Button("Attack [X]")) IssueSelectedTargetOrder(EBattleOrderType::Attack);
+        ImGui::SameLine();
+        if (ImGui::Button("Charge [C]")) IssueSelectedTargetOrder(EBattleOrderType::Charge);
+        ImGui::SameLine();
+        if (ImGui::Button("Halt [H]")) IssueSelectedSimpleOrder(EBattleOrderType::Halt);
+        ImGui::SameLine();
+        if (ImGui::Button("Withdraw [V]")) IssueSelectedSimpleOrder(EBattleOrderType::Withdraw);
+        ImGui::EndDisabled();
+        ImGui::TextUnformatted("LMB select | RMB move/facing | X attack | C charge");
+        ImGui::TextUnformatted("P/Space pause | 1/2/3 speed | F5 diagnostics");
+        if (showDebug_ && SelectedCount() > 0)
         {
             ImGui::Separator();
             for (const FRegiment& regiment : regiments_)
@@ -1418,6 +1736,40 @@ namespace NextTotalwar
         ImGui::End();
 
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        if (session_.Phase() == EBattlePhase::Briefing ||
+            session_.Phase() == EBattlePhase::Deployment ||
+            session_.Phase() == EBattlePhase::Paused ||
+            session_.Phase() == EBattlePhase::Finished)
+        {
+            ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Always, {0.5f, 0.5f});
+            ImGui::SetNextWindowSize({390.0f, 0.0f}, ImGuiCond_Always);
+            ImGui::Begin("Battle Status", nullptr, ImGuiWindowFlags_NoMove |
+                         ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+            if (session_.Phase() == EBattlePhase::Briefing)
+            {
+                ImGui::TextUnformatted("GREENFIELD — HOLD THE RIVER CROSSINGS");
+                ImGui::TextWrapped("You command the Blue army. Red is controlled by the field commander AI. Review the field, then deploy.");
+                if (ImGui::Button("Review Deployment")) session_.BeginDeployment();
+            }
+            else if (session_.Phase() == EBattlePhase::Deployment)
+            {
+                ImGui::TextUnformatted("DEPLOYMENT READY");
+                ImGui::TextWrapped("Select blue regiments and adjust ranks with [ / ]. Press Space or begin when ready.");
+                if (ImGui::Button("Begin Battle")) session_.BeginBattle();
+            }
+            else if (session_.Phase() == EBattlePhase::Paused)
+            {
+                ImGui::TextUnformatted("BATTLE PAUSED");
+                if (ImGui::Button("Resume")) session_.TogglePause();
+            }
+            else
+            {
+                ImGui::Text("%s", FBattleSession::ResultName(session_.Result()));
+                ImGui::Text("Blue %d   Red %d", armyStrength[0], armyStrength[1]);
+                if (ImGui::Button("Rematch")) RestartBattle();
+            }
+            ImGui::End();
+        }
         if (showDebug_)
         {
             int engagedRegiments = 0;
@@ -1479,7 +1831,8 @@ namespace NextTotalwar
             ImGui::Text("Blue: %d alive / %d kills", factionStrength[0], factionKills[0]);
             ImGui::Text("Red:  %d alive / %d kills", factionStrength[1], factionKills[1]);
             ImGui::SeparatorText("Soldiers");
-            ImGui::Text("Alive: %d / %d", aliveSoldiers, totalSoldierCount);
+            ImGui::Text("Alive: %d / %zu", aliveSoldiers,
+                        regiments_.size() * static_cast<size_t>(scenario_.soldiersPerRegiment));
             ImGui::Text("Fighting: %d   Dying: %d   Corpses: %d",
                         fightingSoldiers, dyingSoldiers, combatFx_.CorpseCount());
             ImGui::Text("Flashing: %d   Blood: %d / %zu",
@@ -1514,9 +1867,10 @@ namespace NextTotalwar
                                             ImGuiWindowFlags_HorizontalScrollbar);
         for (FRegiment& regiment : regiments_)
         {
+            if (regiment.faction != playerFaction_) continue;
             if (regiment.id > 0) ImGui::SameLine();
             ImGui::BeginGroup();
-            const bool selectable = IsRegimentSelectable(regiment);
+            const bool selectable = regiment.faction == playerFaction_ && IsRegimentSelectable(regiment);
             const bool wasSelected = selectable && regiment.selected;
             const bool blueFaction = regiment.faction == 0;
             const ImVec4 baseColor = blueFaction
@@ -1535,11 +1889,29 @@ namespace NextTotalwar
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, activeColor);
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.96f, 0.97f, 1.0f, 1.0f));
             ImGui::BeginDisabled(!selectable);
+            std::string rangedStatus;
+            if (regiment.def->canRangedAttack)
+            {
+                const int targetId = FindNearestEnemyRegiment(regiment);
+                char rangeState = '-';
+                if (targetId >= 0)
+                {
+                    const FRegiment& target = regiments_[static_cast<size_t>(targetId)];
+                    const float distance = glm::distance(glm::vec2(regiment.anchor.x, regiment.anchor.z),
+                                                         glm::vec2(target.anchor.x, target.anchor.z));
+                    rangeState = distance < regiment.def->rangedMinRange ? 'C' :
+                                 (distance <= regiment.def->rangedRange ? 'R' : 'F');
+                }
+                rangedStatus = fmt::format(" A{}{}", regiment.ammo, rangeState);
+            }
             const std::string label =
-                fmt::format("{} {}\n{}##{}",
-                            blueFaction ? "B" : "R", regiment.def->displayName,
-                            regiment.strength, regiment.id);
-            if (ImGui::Button(label.c_str(), {88.0f, 36.0f}) && selectable)
+                fmt::format("{}\n{}  M{:.0f}{}##{}",
+                            regiment.def->type == EUnitType::Spearman ? "Spears" :
+                            (regiment.def->type == EUnitType::Swordsman ? "Swords" : "Archers"),
+                            regiment.strength, regiment.morale,
+                            rangedStatus,
+                            regiment.id);
+            if (ImGui::Button(label.c_str(), {108.0f, 36.0f}) && selectable)
             {
                 ClearSelection();
                 regiment.selected = true;
@@ -1557,7 +1929,7 @@ namespace NextTotalwar
                                                   ? ImVec4(0.92f, 0.70f, 0.16f, 1.0f)
                                                   : ImVec4(0.86f, 0.20f, 0.15f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_PlotHistogram, healthColor);
-            ImGui::ProgressBar(strengthRatio, {88.0f, 6.0f}, "");
+            ImGui::ProgressBar(strengthRatio, {108.0f, 6.0f}, "");
             ImGui::PopStyleColor();
             ImGui::EndGroup();
         }
@@ -1568,6 +1940,7 @@ namespace NextTotalwar
 
     void FGameInstance::DrawWorldOverlay() const
     {
+        if (session_.Phase() == EBattlePhase::Finished) return;
         ImDrawList* draw = ImGui::GetForegroundDrawList();
         if (!draw) return;
         const auto drawFormationFrame =
@@ -1625,6 +1998,7 @@ namespace NextTotalwar
 
         for (const FRegiment& regiment : regiments_)
         {
+            if (!regiment.selected && !showDebug_) continue;
             if (regiment.state != ERegimentState::Marching ||
                 regiment.pathCursor >= regiment.path.size())
             {
@@ -1776,9 +2150,100 @@ namespace NextTotalwar
 
     void FGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegistry& registry)
     {
+        registry.Add("battlePhase", [this]()
+        {
+            return std::string(FBattleSession::PhaseName(session_.Phase()));
+        });
+        registry.Add("battleResult", [this]()
+        {
+            return std::string(FBattleSession::ResultName(session_.Result()));
+        });
+        registry.Add("battleSeconds", [this]() { return static_cast<double>(session_.BattleSeconds()); });
         registry.Add("selectedRegiments", [this]() { return static_cast<int64_t>(SelectedCount()); });
+        registry.Add("selectedEnemyRegiments", [this]()
+        {
+            return static_cast<int64_t>(std::count_if(
+                regiments_.begin(), regiments_.end(), [this](const FRegiment& regiment)
+                {
+                    return regiment.selected && regiment.faction != playerFaction_;
+                }));
+        });
         registry.Add("regimentCount", [this]() { return static_cast<int64_t>(regiments_.size()); });
         registry.Add("marchingRegiments", [this]() { return static_cast<int64_t>(MarchingCount()); });
+        registry.Add("enemyMarchingRegiments", [this]()
+        {
+            return static_cast<int64_t>(std::count_if(
+                regiments_.begin(), regiments_.end(), [this](const FRegiment& regiment)
+                {
+                    return regiment.faction == aiFaction_ &&
+                           regiment.state == ERegimentState::Marching;
+                }));
+        });
+        registry.Add("playerMarchingRegiments", [this]()
+        {
+            return static_cast<int64_t>(std::count_if(
+                regiments_.begin(), regiments_.end(), [this](const FRegiment& regiment)
+                {
+                    return regiment.faction == playerFaction_ &&
+                           regiment.state == ERegimentState::Marching;
+                }));
+        });
+        registry.Add("playerAttackOrders", [this]()
+        {
+            return static_cast<int64_t>(std::count_if(
+                regiments_.begin(), regiments_.end(), [this](const FRegiment& regiment)
+                {
+                    return regiment.faction == playerFaction_ &&
+                           (regiment.currentOrder == EBattleOrderType::Attack ||
+                            regiment.currentOrder == EBattleOrderType::Charge);
+                }));
+        });
+        registry.Add("acceptedOrders", [this]()
+        {
+            return static_cast<int64_t>(orderSystem_.AcceptedCount());
+        });
+        registry.Add("rejectedOrders", [this]()
+        {
+            return static_cast<int64_t>(orderSystem_.RejectedCount());
+        });
+        registry.Add("aiDecisions", [this]()
+        {
+            return static_cast<int64_t>(commanderAI_.DecisionCount());
+        });
+        registry.Add("rangedVolleys", [this]()
+        {
+            return static_cast<int64_t>(rangedCombatSystem_.VolleyCount());
+        });
+        registry.Add("remainingAmmo", [this]()
+        {
+            int64_t ammo = 0;
+            for (const FRegiment& regiment : regiments_) ammo += regiment.ammo;
+            return ammo;
+        });
+        registry.Add("activeArrows", [this]()
+        {
+            return static_cast<int64_t>(rangedVolleyFx_.ActiveCount());
+        });
+        registry.Add("arrowPoolCapacity", [this]()
+        {
+            return static_cast<int64_t>(rangedVolleyFx_.PoolCapacity());
+        });
+        registry.Add("routingRegiments", [this]()
+        {
+            return static_cast<int64_t>(std::count_if(
+                regiments_.begin(), regiments_.end(), [](const FRegiment& regiment)
+                {
+                    return regiment.moraleState == EMoraleState::Routing;
+                }));
+        });
+        registry.Add("waveringRegiments", [this]()
+        {
+            return static_cast<int64_t>(std::count_if(
+                regiments_.begin(), regiments_.end(), [](const FRegiment& regiment)
+                {
+                    return regiment.moraleState == EMoraleState::Wavering;
+                }));
+        });
         registry.Add("soldierCount", [this]()
         {
             size_t count = 0;

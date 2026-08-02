@@ -71,12 +71,10 @@
 - StudioSim：[架构与 AI 边界](projects/studio-sim/architecture.md)
 - NextDayz：[MVP 基线设计](projects/nextdayz/nextdayz-mvp-design.md) ·
   [复杂 3C 与 ScadRig 分层动画设计](projects/nextdayz/nextdayz-3c-scadrig-design.md) ·
-  [PVE 生存循环产品化设计](projects/nextdayz/nextdayz-productization-design.md) ·
-  [开发计划](projects/nextdayz/nextdayz-productization-development-plan.md)
+  [PVE 生存循环现行架构](projects/nextdayz/nextdayz-productization-design.md)
 - NextTotalwar：[行军 MVP 设计与历史实测](projects/nexttotalwar/nexttotalwar-mvp-design.md) ·
   [战斗 MVP 设计（C0～C2 部分实现）](projects/nexttotalwar/nexttotalwar-battle-mvp-design.md) ·
-  [基础战斗循环产品化设计](projects/nexttotalwar/nexttotalwar-productization-design.md) ·
-  [开发计划](projects/nexttotalwar/nexttotalwar-productization-development-plan.md) ·
+  [基础战斗循环现行架构](projects/nexttotalwar/nexttotalwar-productization-design.md) ·
   [代码导览](../AGENT_GUIDE/NextTotalwar.md)
 - TruckerDemo（迭代计划）：[SnowRunner 风格越野运输 Demo 迭代计划](projects/trucker-demo/trucker-demo-iteration-plan.md)
 

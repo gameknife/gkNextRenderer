@@ -1,13 +1,17 @@
 ---
 title: "NextTotalwar 基础战斗循环产品化开发计划"
 category: project
-status: 待实施
+status: 已完成
 owner: NextTotalwar
 created: 2026-07-31
-last_updated: 2026-07-31
+last_updated: 2026-08-02
 ---
 
 # NextTotalwar 基础战斗循环产品化开发计划
+
+> 完成记录（2026-08-02）：T0～T6 已落地。实现覆盖数据驱动 scenario、BattleSession、统一 Order、阵营所有权、士气/溃逃/重整、弓兵远程、Commander AI、产品 HUD、胜负和同进程重赛；纯规则测试及 idle-player/product-loop Agent 验收已建立。本文件保留为历史实施顺序，不再作为待办入口。
+>
+> 最终尖刀结果：弓兵按 5～55 m 射程、弹药和地形遮挡结算，96 槽循环池每轮显示六支代表箭且不增长 scene node；Routing 按“eliminate-or-rout”计入胜负。Normal Commander AI 在玩家完全不下令的 Agent 场景中可自行调度并自然结束战局，随后可同进程重赛。
 
 本计划实现 [NextTotalwar 基础战斗循环产品化设计](nexttotalwar-productization-design.md)。估算按一名熟悉本仓库的工程师计算，为 29～37 人日；UI 美术、额外场景和音频精修不在估算内。旧战斗 MVP 的 C0～C2 视为已有基线，C3/C4 的有效设计被纳入 T2/T4，不再单独按旧计划推进。
 

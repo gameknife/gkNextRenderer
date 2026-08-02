@@ -112,7 +112,24 @@ namespace NextDayz
     {
         float LootDurationSeconds = 0.9f;
         float LootCommitNormalizedTime = 0.55f;
+        float UseDurationSeconds = 1.35f;
+        float WellDurationSeconds = 2.0f;
+        float UseCommitNormalizedTime = 0.65f;
         float ActionFadeSeconds = 0.10f;
+    };
+
+    struct FSurvivalConfig
+    {
+        float StartingHealth = 100.0f;
+        float StartingHunger = 82.0f;
+        float StartingHydration = 76.0f;
+        float HungerDrainPerSecond = 100.0f / (45.0f * 60.0f);
+        float HydrationDrainPerSecond = 100.0f / (30.0f * 60.0f);
+        float SprintHungerMultiplier = 1.25f;
+        float SprintHydrationMultiplier = 1.60f;
+        float StarvationDamagePerSecond = 1.25f;
+        float DehydrationDamagePerSecond = 2.0f;
+        float DamageProtectionSeconds = 0.35f;
     };
 
     struct FTimeConfig
@@ -127,6 +144,7 @@ namespace NextDayz
 
     struct FConfig
     {
+        uint32_t Seed = 1337;
         FPlayerConfig Player{};
         FCameraConfig Camera{};
         FWeaponFeelConfig Weapon{};
@@ -134,6 +152,7 @@ namespace NextDayz
         FTraversalConfig Traversal{};
         FLootConfig Loot{};
         FActionConfig Action{};
+        FSurvivalConfig Survival{};
         FTimeConfig Time{};
 
         // Default spawn: bridge-west gas station (map centre, flat, stocked).

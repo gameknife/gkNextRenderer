@@ -16,6 +16,7 @@
 
 #include "Application/Game/NextDayz/Inventory/Inventory.hpp"
 #include "Application/Game/NextDayz/NextDayzConfig.hpp"
+#include "Application/Game/NextDayz/World/LootDirector.hpp"
 
 class NextEngine;
 
@@ -47,13 +48,14 @@ namespace NextDayz
         {
             Available,
             Reserved,
-            Looted,
+            Cooldown,
         };
 
         uint32_t nodeInstanceId = 0;
         glm::vec3 worldPos{0.0f};
         const FLootDef* def = nullptr;
         EState state = EState::Available;
+        FLootSlotHandle directorHandle{};
     };
 
     struct FLootHandle
@@ -69,12 +71,15 @@ namespace NextDayz
     {
     public:
         void Configure(const FLootConfig& config) { config_ = config; }
+        void SetSeed(uint64_t seed) { seed_ = seed; }
 
         void OnSceneLoaded(Assets::Scene& scene);
         void OnSceneUnloaded();
+        void ResetSession(NextEngine& engine);
 
         // Recomputes the hovered entry from player position + view direction.
-        void Update(const glm::vec3& eyePosition, const glm::vec3& viewForward);
+        void Update(float deltaSeconds, const glm::vec3& eyePosition, const glm::vec3& viewForward,
+                    NextEngine& engine);
 
         // Nearest registered loot to an approximate XZ (used to derive a safe
         // spawn on real ground next to supplies). Returns false if no loot.
@@ -90,11 +95,15 @@ namespace NextDayz
         bool IsReservedHandleValid(const FLootHandle& handle) const;
 
         int RemainingCount() const;
+        int CooldownCount() const;
 
     private:
         FLootConfig config_{};
         std::vector<FLootEntry> entries_;
         int hoveredIndex_ = -1;
         uint32_t generation_ = 0;
+        uint64_t seed_ = 1337;
+        double worldSeconds_ = 0.0;
+        LootDirector director_;
     };
 }

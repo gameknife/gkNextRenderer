@@ -3,10 +3,17 @@
 #include "Battle/FormationLayout.h"
 #include "Battle/BattleState.h"
 #include "Battle/CombatSystem.h"
+#include "Battle/BattleOrderSystem.h"
+#include "Battle/BattleSession.h"
+#include "Battle/MoraleSystem.h"
+#include "Battle/RangedCombatSystem.h"
+#include "AI/CommanderAI.h"
+#include "Data/BattleData.h"
 #include "NextTotalwarCombatConfig.hpp"
 #include "NextTotalwarTypes.h"
 #include "Render/BattleCamera.h"
 #include "Render/CombatFx.h"
+#include "Render/RangedVolleyFx.h"
 
 #include "Engine/Assets/Data/RigAsset.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
@@ -70,6 +77,13 @@ namespace NextTotalwar
                                               const glm::vec3& destination,
                                               float facing) const;
         void IssueMoveOrders(const glm::vec3& target, float facing);
+        void IssueSelectedTargetOrder(EBattleOrderType type);
+        void IssueSelectedSimpleOrder(EBattleOrderType type, int ranks = 0);
+        bool SubmitBattleOrder(FBattleOrder order);
+        void ExecuteBattleOrder(const FBattleOrder& order);
+        int FindNearestEnemyRegiment(const FRegiment& regiment) const;
+        void TickBattleSimulation(float step);
+        void RestartBattle();
         void DrawWorldOverlay() const;
         size_t SelectedCount() const;
         size_t MarchingCount() const;
@@ -79,6 +93,7 @@ namespace NextTotalwar
         NextGameplay::FNavGrid navGrid_;
         Runtime::TerrainComponent* terrain_ = nullptr;
         std::array<FUnitDef, 3> unitDefs_{};
+        FBattleScenario scenario_;
         std::vector<FRegiment> regiments_;
         std::vector<std::vector<FSoldierVisual>> soldierVisuals_;
         std::array<Assets::FRigAsset, 3> soldierRigAssets_{};
@@ -87,7 +102,7 @@ namespace NextTotalwar
         std::array<std::array<uint32_t, 6>, 2> regimentMaterialIds_{};
         bool sceneInjected_ = false;
         bool sceneReady_ = false;
-        bool showDebug_ = true;
+        bool showDebug_ = false;
         glm::dvec2 mousePos_{};
         glm::dvec2 leftStart_{};
         glm::dvec2 rightStart_{};
@@ -103,14 +118,27 @@ namespace NextTotalwar
         FCombatTuning combatTuning_;
         FBattleState battleState_;
         FCombatSystem combatSystem_;
+        FBattleOrderSystem orderSystem_;
+        FBattleSession session_;
+        FMoraleSystem moraleSystem_;
+        FRangedCombatSystem rangedCombatSystem_;
+        FCommanderAI commanderAI_;
         FCombatGrid movementGrid_;
         FCombatFx combatFx_;
+        FRangedVolleyFx rangedVolleyFx_;
         float combatAccumulator_ = 0.0f;
         int battleSeed_ = 1337;
-        float battleDeployDistance_ = 125.0f;
         bool deterministicCombat_ = false;
         int combatTicksThisFrame_ = 0;
         int lastCombatEventCount_ = 0;
         float combatCpuMilliseconds_ = 0.0f;
+        uint64_t lastExecutedOrder_ = 0;
+        int playerFaction_ = 0;
+        int aiFaction_ = 1;
+        bool validationIssuePlayerAttack_ = false;
+        bool validationSelectPlayer_ = false;
+        bool validationMoraleShock_ = false;
+        bool validationFinishEnemy_ = false;
+        bool validationRestart_ = false;
     };
 }

@@ -20,6 +20,7 @@ namespace NextTotalwar
         Rout,
         Rally,
         RegimentDestroyed,
+        Volley,
     };
 
     struct FCombatEvent

@@ -1,15 +1,15 @@
 ---
 title: "NextTotalwar 基础战斗循环产品化设计"
 category: project
-status: 提案
+status: 现行
 owner: NextTotalwar
 created: 2026-07-31
-last_updated: 2026-07-31
+last_updated: 2026-08-02
 ---
 
 # NextTotalwar 基础战斗循环产品化设计
 
-本文以 2026-07-31 的代码为基线，定义 `NextTotalwar` 从大规模编队/近战技术演示推进到可独立游玩的单场战斗纵切。旧 [行军 MVP 设计](nexttotalwar-mvp-design.md) 解释已实现的地图、编队和渲染约束；旧 [战斗 MVP 设计](nexttotalwar-battle-mvp-design.md) 中 C0～C2 已部分落地，士气、AI 与产品流程尚未完成。后续实施以本文和配套 [开发计划](nexttotalwar-productization-development-plan.md) 为准。
+本文记录 `NextTotalwar` 可独立游玩的单场战斗纵切之现行产品边界、运行时架构和验收契约。2026-08-02 已完成配套开发计划：数据驱动 scenario、蓝军所有权、统一订单、士气/溃逃/重整、弓兵齐射、Commander AI、BattleSession、产品 HUD、胜负与同进程重赛均已接入。旧 [行军 MVP 设计](nexttotalwar-mvp-design.md) 继续解释地图、编队和渲染约束；代码地图与当前数据流见 [NextTotalwar 代码导览](../../../AGENT_GUIDE/NextTotalwar.md)。
 
 ## 1. 决策摘要
 
@@ -17,7 +17,9 @@ last_updated: 2026-07-31
 
 本期不做战役地图、城镇经营、外交、攻城、骑兵、多人联机、录像系统和复杂弹道物理。弓兵远程齐射属于基础兵种闭环，必须纳入本期。
 
-## 2. 当前实现现状
+## 2. 实施基线（2026-07-31 历史快照）
+
+本节保留产品化前的差距快照，用于解释后续架构取舍；不代表 2026-08-02 之后的当前能力。现行实现以本设计后续契约、代码导览和 `[NextTotalwar]` 测试为准。
 
 ### 2.1 已经完成的基础
 

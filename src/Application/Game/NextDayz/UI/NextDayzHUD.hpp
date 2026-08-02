@@ -13,9 +13,11 @@
 
 #include <glm/glm.hpp>
 
+#include "Application/Game/NextDayz/Inventory/Inventory.hpp"
+#include "Application/Game/NextDayz/Player/SurvivalSystem.hpp"
+
 namespace NextDayz
 {
-    class Inventory;
     class WeaponSystem;
 
     struct FDebugHudState
@@ -81,10 +83,16 @@ namespace NextDayz
         bool showDebugPanel = false;
         const Inventory* inventory = nullptr;
         const WeaponSystem* weapons = nullptr;
+        FSurvivalSnapshot survival;
+        bool paused = false;
+        double survivalSeconds = 0.0;
+        std::string objective;
         FDebugHudState debug;
 
         std::function<void(const std::string& weaponId, int slot)> equipWeapon;
         std::function<void(const std::string& clothingId, bool on)> toggleClothing;
+        std::function<void(FItemInstanceId instanceId)> useItem;
+        std::function<void()> restartSession;
     };
 
     namespace NextDayzHUD

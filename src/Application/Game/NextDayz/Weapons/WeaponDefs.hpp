@@ -60,15 +60,19 @@ namespace NextDayz
         float cameraYawDegrees;       // deterministic signed horizontal impulse range
         float viewModelKick;          // backward local offset velocity impulse
         float rigRecoilScale;         // TPS additive layer weight
+        float baseDamage;
+        int pellets;
+        float damageFalloffDistance;
+        float noiseRadius;
     };
 
     inline constexpr std::array<FWeaponDef, 5> kWeapons = {{
         // id        display     ammo                    mag interval auto hip      ads      fov   camUp yaw vm   rig
-        {"ak",      "AK-74",    EAmmoType::Rifle545,     30, 0.092f, true, 0.035f, 0.006f, 55.0f, 1.7f, 0.35f, 0.12f, 1.0f},
-        {"svd",     "SVD",      EAmmoType::Rifle762,     10, 0.28f,  false,0.020f, 0.0015f,40.0f, 3.2f, 0.55f, 0.20f, 1.25f},
-        {"mosin",   "Mosin",    EAmmoType::Rifle762,      5, 0.95f,  false,0.018f, 0.0012f,38.0f, 4.0f, 0.45f, 0.24f, 1.35f},
-        {"shotgun", "Shotgun",  EAmmoType::Shotgun12,     6, 0.80f,  false,0.090f, 0.055f, 62.0f, 5.0f, 0.65f, 0.30f, 1.5f},
-        {"pistol",  "Makarov",  EAmmoType::Pistol9,       12, 0.18f,  false,0.045f, 0.020f, 60.0f, 1.3f, 0.40f, 0.09f, 0.8f},
+        {"ak",      "AK-74",    EAmmoType::Rifle545,     30, 0.092f, true, 0.035f, 0.006f, 55.0f, 1.7f, 0.35f, 0.12f, 1.0f, 34.0f, 1, 110.0f, 110.0f},
+        {"svd",     "SVD",      EAmmoType::Rifle762,     10, 0.28f,  false,0.020f, 0.0015f,40.0f, 3.2f, 0.55f, 0.20f, 1.25f, 72.0f, 1, 180.0f, 120.0f},
+        {"mosin",   "Mosin",    EAmmoType::Rifle762,      5, 0.95f,  false,0.018f, 0.0012f,38.0f, 4.0f, 0.45f, 0.24f, 1.35f, 86.0f, 1, 170.0f, 125.0f},
+        {"shotgun", "Shotgun",  EAmmoType::Shotgun12,     6, 0.80f,  false,0.090f, 0.055f, 62.0f, 5.0f, 0.65f, 0.30f, 1.5f, 18.0f, 8, 45.0f, 130.0f},
+        {"pistol",  "Makarov",  EAmmoType::Pistol9,       12, 0.18f,  false,0.045f, 0.020f, 60.0f, 1.3f, 0.40f, 0.09f, 0.8f, 26.0f, 1, 65.0f, 55.0f},
     }};
 
     // Returns nullptr for an unknown id.
