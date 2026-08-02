@@ -39,14 +39,11 @@ export interface Scene {
 }
 export class RenderComponent {
     CastShadows: boolean;
-    LayerMask: number;
-    LightmapUV: boolean;
     MainVisible: boolean;
     Materials: number[];
     readonly ModelId: number;
     RayCastVisible: boolean;
     RayTraceVisible: boolean;
-    RaycastVisible: boolean;
     ReceiveGI: boolean;
     readonly SkinIndex: number;
     Visible: boolean;

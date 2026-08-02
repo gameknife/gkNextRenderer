@@ -622,7 +622,6 @@ namespace
                 extras["visible"] = tinygltf::Value(renderComp->GetVisible());
                 extras["castShadows"] = tinygltf::Value(renderComp->GetCastShadows());
                 extras["receiveGI"] = tinygltf::Value(renderComp->GetReceiveGI());
-                extras["layerMask"] = tinygltf::Value(static_cast<double>(renderComp->GetLayerMask()));
             }
             gltfNode.extras = tinygltf::Value(extras);
 

@@ -56,12 +56,6 @@ namespace Runtime
         void SetReceiveGI(bool receiveGI) { receiveGI_ = receiveGI; }
         bool GetReceiveGI() const { return receiveGI_; }
 
-        void SetLightmapUV(bool lightmapUV) { lightmapUV_ = lightmapUV; }
-        bool GetLightmapUV() const { return lightmapUV_; }
-
-        void SetLayerMask(uint32_t layerMask) { layerMask_ = layerMask; }
-        uint32_t GetLayerMask() const { return layerMask_; }
-
         void SetOutlineFlags(uint32_t outlineFlags) { outlineFlags_ = outlineFlags; }
         uint32_t GetOutlineFlags() const { return outlineFlags_; }
         void ClearOutlineFlags() { outlineFlags_ = RenderOutlineFlags::none; }
@@ -107,8 +101,6 @@ namespace Runtime
         bool rayTraceVisible_ = true;
         bool castShadows_ = true;
         bool receiveGI_ = true;
-        bool lightmapUV_ = false;
-        uint32_t layerMask_ = 0xFFFFFFFFu;
         int32_t skinIndex_ = -1;
         uint32_t outlineFlags_ = RenderOutlineFlags::none;
     };

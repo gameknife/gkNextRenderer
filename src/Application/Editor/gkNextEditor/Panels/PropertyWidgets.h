@@ -9,6 +9,7 @@
 #include <imgui.h>
 #include <string>
 #include <functional>
+#include <limits>
 #include <entt/meta/meta.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -34,6 +35,7 @@ namespace Editor
             float maxValue;
             bool readOnly;
             const char* format;
+            size_t arrayDisplayLimit;
             
             WidgetConfig()
                 : dragSpeed(0.1f)
@@ -41,6 +43,7 @@ namespace Editor
                 , maxValue(FLT_MAX)
                 , readOnly(false)
                 , format(nullptr)
+                , arrayDisplayLimit(std::numeric_limits<size_t>::max())
             {}
         };
         
@@ -103,7 +106,8 @@ namespace Editor
             const char* label,
             const Reflection::PropertyInfo& propInfo,
             entt::meta_any& arrayValue,
-            bool readOnly = false
+            bool readOnly = false,
+            size_t displayLimit = std::numeric_limits<size_t>::max()
         );
         
     private:

@@ -257,6 +257,7 @@ namespace Assets
 
         uint32_t NumberOfVertices() const { return vertexCount; }
         uint32_t NumberOfIndices() const { return indiceCount; }
+        uint32_t MaterialSlotCount() const { return materialSlotCount; }
         uint32_t SectionCount() const { return sectionCount; }
         void SetSectionCount(uint32_t count) { sectionCount = count; }
 
@@ -288,6 +289,7 @@ namespace Assets
 
         uint32_t vertexCount;
         uint32_t indiceCount;
+        uint32_t materialSlotCount = 0;
 
         uint32_t sectionCount;
 

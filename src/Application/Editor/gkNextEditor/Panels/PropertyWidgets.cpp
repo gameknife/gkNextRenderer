@@ -403,7 +403,7 @@ namespace Editor
 
             case PropertyType::Array:
             {
-                if (DrawArray(label, propInfo, currentValue, isReadOnly))
+                if (DrawArray(label, propInfo, currentValue, isReadOnly, config.arrayDisplayLimit))
                     changed = true;
                 break;
             }
@@ -851,7 +851,8 @@ namespace Editor
         const char* label,
         const PropertyInfo& propInfo,
         entt::meta_any& arrayValue,
-        bool readOnly
+        bool readOnly,
+        size_t displayLimit
     )
     {
         bool changed = false;
@@ -864,7 +865,7 @@ namespace Editor
         if (auto* arr = arrayValue.try_cast<std::array<uint32_t, 16>>())
         {
             return DrawContainerElements<std::array<uint32_t, 16>, uint32_t>(
-                label, *arr, 16, readOnly,
+                label, *arr, std::min(arr->size(), displayLimit), readOnly,
                 [](const char* lbl, uint32_t& val, bool ro) {
                     return DrawUInt(lbl, val, 1.0f, 0, UINT_MAX, ro);
                 });
@@ -874,7 +875,7 @@ namespace Editor
         if (auto* vec = arrayValue.try_cast<std::vector<uint32_t>>())
         {
             return DrawContainerElements<std::vector<uint32_t>, uint32_t>(
-                label, *vec, vec->size(), readOnly,
+                label, *vec, std::min(vec->size(), displayLimit), readOnly,
                 [](const char* lbl, uint32_t& val, bool ro) {
                     return DrawUInt(lbl, val, 1.0f, 0, UINT_MAX, ro);
                 });
@@ -884,7 +885,7 @@ namespace Editor
         if (auto* vec = arrayValue.try_cast<std::vector<int32_t>>())
         {
             return DrawContainerElements<std::vector<int32_t>, int32_t>(
-                label, *vec, vec->size(), readOnly,
+                label, *vec, std::min(vec->size(), displayLimit), readOnly,
                 [](const char* lbl, int32_t& val, bool ro) {
                     return DrawInt(lbl, val, 1.0f, INT_MIN, INT_MAX, ro);
                 });
@@ -894,7 +895,7 @@ namespace Editor
         if (auto* vec = arrayValue.try_cast<std::vector<float>>())
         {
             return DrawContainerElements<std::vector<float>, float>(
-                label, *vec, vec->size(), readOnly,
+                label, *vec, std::min(vec->size(), displayLimit), readOnly,
                 [](const char* lbl, float& val, bool ro) {
                     return DrawFloat(lbl, val, 0.1f, -FLT_MAX, FLT_MAX, ro);
                 });
@@ -904,7 +905,7 @@ namespace Editor
         if (auto* vec = arrayValue.try_cast<std::vector<std::string>>())
         {
             return DrawContainerElements<std::vector<std::string>, std::string>(
-                label, *vec, vec->size(), readOnly,
+                label, *vec, std::min(vec->size(), displayLimit), readOnly,
                 [](const char* lbl, std::string& val, bool ro) {
                     return DrawString(lbl, val, ro);
                 });
@@ -919,7 +920,7 @@ namespace Editor
             return false;
         }
         
-        size_t size = container.size();
+        size_t size = std::min(container.size(), displayLimit);
         std::string headerLabel = std::string(label) + " [" + std::to_string(size) + "]";
         
         if (ImGui::TreeNodeEx(headerLabel.c_str(), ImGuiTreeNodeFlags_DefaultOpen))

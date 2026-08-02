@@ -263,6 +263,7 @@ namespace Assets
         {
             local_aabb_min = glm::min(local_aabb_min, vertex.Position);
             local_aabb_max = glm::max(local_aabb_max, vertex.Position);
+            materialSlotCount = std::max(materialSlotCount, vertex.MaterialIndex + 1);
         }
         
         if(needGenTSpace)

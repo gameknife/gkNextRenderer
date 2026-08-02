@@ -525,10 +525,6 @@ namespace Assets
             renderComp->SetVisible(readNodeBoolExtra("visible", renderComp->GetVisible()));
             renderComp->SetCastShadows(readNodeBoolExtra("castShadows", renderComp->GetCastShadows()));
             renderComp->SetReceiveGI(readNodeBoolExtra("receiveGI", renderComp->GetReceiveGI()));
-            if (node.extras.Has("layerMask") && node.extras.Get("layerMask").IsNumber())
-            {
-                renderComp->SetLayerMask(static_cast<uint32_t>(node.extras.Get("layerMask").GetNumberAsDouble()));
-            }
 
             sceneNode->AddComponent(renderComp);
         }

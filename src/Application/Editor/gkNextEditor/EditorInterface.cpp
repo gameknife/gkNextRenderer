@@ -309,7 +309,11 @@ void EditorInterface::Render(Editor::EditorUiState& uiState)
     if (uiState.sidebar)
         Editor::DrawOutlinerPanel(ctx, uiState);
     if (uiState.properties)
+    {
+        if (firstRun_)
+            ImGui::SetNextWindowFocus();
         Editor::DrawPropertiesPanel(ctx, uiState);
+    }
     if (uiState.contentBrowser || uiState.materialBrowser || uiState.textureBrowser || uiState.meshBrowser)
         Editor::DrawContentBrowserPanel(ctx, uiState);
     if (uiState.logPanel)

@@ -16,7 +16,6 @@
 #include <imgui_stdlib.h>
 
 #include <cmath>
-#include <fmt/format.h>
 #include <functional>
 #include <glm/gtc/quaternion.hpp>
 
@@ -24,6 +23,11 @@ namespace Editor
 {
     namespace
     {
+        size_t MaterialSlotCount(const Assets::Model& model, size_t capacity)
+        {
+            return std::min(static_cast<size_t>(model.MaterialSlotCount()), capacity);
+        }
+
         bool DrawAxisFloat3(const char* label, glm::vec3& value, float speed)
         {
             bool changed = false;
@@ -327,87 +331,6 @@ namespace Editor
                 NextUI::Theme::EndSection();
             }
             int modelId = render ? render->GetModelId() : -1;
-            if (NextUI::Theme::BeginSection(ICON_FA_CUBE, "Mesh", true))
-            {
-                if (render != nullptr)
-                {
-                    const std::string preview = modelId >= 0 && modelId < static_cast<int>(ctx.scene.Models().size())
-                        ? ctx.scene.Models()[modelId].Name()
-                        : "None";
-                    if (ImGui::BeginCombo("Model", preview.c_str()))
-                    {
-                        if (ImGui::Selectable("None", modelId == -1))
-                        {
-                            render->SetModelId(static_cast<uint32_t>(-1));
-                            ctx.scene.MarkDirty();
-                        }
-                        for (int i = 0; i < static_cast<int>(ctx.scene.Models().size()); ++i)
-                        {
-                            const std::string itemName = fmt::format("{}: {}", i, ctx.scene.Models()[i].Name());
-                            if (ImGui::Selectable(itemName.c_str(), modelId == i))
-                            {
-                                render->SetModelId(static_cast<uint32_t>(i));
-                                ctx.scene.MarkDirty();
-                            }
-                        }
-                        ImGui::EndCombo();
-                    }
-                }
-                else
-                {
-                    ImGui::TextDisabled("No RenderComponent");
-                }
-                NextUI::Theme::EndSection();
-            }
-
-            if (NextUI::Theme::BeginSection(ICON_FA_CIRCLE_HALF_STROKE, "Material", true))
-            {
-                if (modelId != -1 && render)
-                {
-                    auto mats = render->GetMaterials();
-                    bool materialsChanged = false;
-                    for (int elementIndex = 0; elementIndex < static_cast<int>(mats.size()); ++elementIndex)
-                    {
-                        uint32_t& mat = mats[elementIndex];
-                        const std::string comboLabel = fmt::format("Element {}", elementIndex);
-                        const std::string preview = mat < ctx.scene.Materials().size()
-                            ? ctx.scene.Materials()[mat].name_
-                            : "None";
-                        ImGui::PushID(elementIndex);
-                        if (ImGui::BeginCombo(comboLabel.c_str(), preview.c_str()))
-                        {
-                            for (int materialIndex = 0; materialIndex < static_cast<int>(ctx.scene.Materials().size());
-                                 ++materialIndex)
-                            {
-                                const std::string itemName =
-                                    fmt::format("{}: {}", materialIndex, ctx.scene.Materials()[materialIndex].name_);
-                                if (ImGui::Selectable(itemName.c_str(), mat == static_cast<uint32_t>(materialIndex)))
-                                {
-                                    mat = static_cast<uint32_t>(materialIndex);
-                                    materialsChanged = true;
-                                }
-                            }
-                            ImGui::EndCombo();
-                        }
-                        ImGui::SameLine();
-                        if (NextUI::Theme::IconButton(ICON_FA_PEN_TO_SQUARE, "Edit Material", false,
-                                                      ImVec2(28.0f, 24.0f)) &&
-                            mat < ctx.scene.Materials().size())
-                        {
-                            ui.selected_material = &(ctx.scene.Materials()[mat]);
-                            ui.ed_material = true;
-                            OpenMaterialEditor(ctx, ui);
-                        }
-                        ImGui::PopID();
-                    }
-                    if (materialsChanged)
-                    {
-                        render->SetMaterials(mats);
-                        ctx.scene.MarkDirty();
-                    }
-                }
-                NextUI::Theme::EndSection();
-            }
 
             if (NextUI::Theme::BeginSection(ICON_FA_PUZZLE_PIECE, "Components", true))
             {
@@ -444,8 +367,15 @@ namespace Editor
                     if (ImGui::CollapsingHeader(headerName.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
                     {
                         ImGui::Indent();
+                        PropertyWidgets::WidgetConfig widgetConfig;
+                        if (component.get() == render && modelId >= 0 &&
+                            modelId < static_cast<int>(ctx.scene.Models().size()))
+                        {
+                            widgetConfig.arrayDisplayLimit = MaterialSlotCount(
+                                ctx.scene.Models()[modelId], render->GetMaterials().size());
+                        }
                         if (PropertyWidgets::DrawComponentProperties(component.get(), &ctx.engine.GetCommandHistory(),
-                                                                     PropertyWidgets::WidgetConfig(),
+                                                                     widgetConfig,
                                                                      &ui.propertiesState.propertyFilter))
                         {
                             ctx.scene.MarkDirty();
