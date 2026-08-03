@@ -104,6 +104,7 @@ namespace Runtime::Tui
         void QueueKeyPress(SDL_Scancode scancode, SDL_Keycode key, SDL_Keymod mod = SDL_KMOD_NONE);
         void RequestScreenshot();
         std::string BuildStatusLine(uint32_t columns, uint32_t rows) const;
+        FRenderTargetSize ComputeOutputSize(FTerminalSize terminalSize) const;
         FRenderTargetSize ComputeRenderTargetSize(FTerminalSize terminalSize) const;
         std::optional<FKeyboardInput> MapCharacter(char value) const;
         void PushKeyEvent(SDL_Scancode scancode, SDL_Keycode key, SDL_Keymod mod, bool down) const;
