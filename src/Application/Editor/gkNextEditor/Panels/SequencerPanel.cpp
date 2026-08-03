@@ -15,6 +15,7 @@ namespace Editor
         using EChannel = EditorUiState::SequencerState::EChannel;
 
         constexpr float kTrackColumnWidth = 230.0f;
+        constexpr float kInspectorColumnWidth = 270.0f;
         constexpr float kRulerHeight = 30.0f;
         constexpr float kRowHeight = 24.0f;
         constexpr float kKeyRadius = 5.0f;
@@ -199,6 +200,75 @@ namespace Editor
             }
         }
 
+        int DuplicateKeyAt(Assets::AnimationTrack& track, const EChannel channel, const int keyIndex,
+                           const float time)
+        {
+            const auto duplicate = [keyIndex, time](auto& typedChannel)
+            {
+                if (keyIndex < 0 || keyIndex >= static_cast<int>(typedChannel.Keys.size())) return -1;
+                return InsertKey(typedChannel, time, typedChannel.Keys[keyIndex].Value);
+            };
+            switch (channel)
+            {
+            case EChannel::Translation: return duplicate(track.TranslationChannel);
+            case EChannel::Rotation: return duplicate(track.RotationChannel);
+            case EChannel::Scale: return duplicate(track.ScaleChannel);
+            case EChannel::SunRotation: return duplicate(track.SunRotationChannel);
+            case EChannel::SunElevation: return duplicate(track.SunElevationChannel);
+            case EChannel::SkyRotation: return duplicate(track.SkyRotationChannel);
+            case EChannel::SunIntensity: return duplicate(track.SunIntensityChannel);
+            case EChannel::SkyIntensity: return duplicate(track.SkyIntensityChannel);
+            case EChannel::SunColor: return duplicate(track.SunColorChannel);
+            case EChannel::SkyColor: return duplicate(track.SkyColorChannel);
+            }
+            return -1;
+        }
+
+        bool Contains(const std::vector<int>& values, const int value)
+        {
+            return std::ranges::find(values, value) != values.end();
+        }
+
+        void Toggle(std::vector<int>& values, const int value)
+        {
+            const auto found = std::ranges::find(values, value);
+            if (found == values.end()) values.push_back(value);
+            else values.erase(found);
+        }
+
+        bool IsSelected(const EditorUiState::SequencerState& state, const int track,
+                        const EChannel channel, const int key)
+        {
+            return std::ranges::find(state.selectedKeys,
+                EditorUiState::SequencerState::KeySelection{track, channel, key}) != state.selectedKeys.end();
+        }
+
+        void SelectOnly(EditorUiState::SequencerState& state, const int track,
+                        const EChannel channel, const int key)
+        {
+            state.selectedTrack = track;
+            state.selectedChannel = channel;
+            state.selectedKey = key;
+            state.selectedKeys.clear();
+            if (key >= 0) state.selectedKeys.push_back({track, channel, key});
+        }
+
+        bool MatchesSearch(const Assets::AnimationTrack& track, const char* search)
+        {
+            if (!search || search[0] == '\0') return true;
+            std::string haystack = track.NodeName_ + " " + track.AnimationName;
+            std::string needle = search;
+            std::ranges::transform(haystack, haystack.begin(), [](const unsigned char value)
+            {
+                return static_cast<char>(std::tolower(value));
+            });
+            std::ranges::transform(needle, needle.begin(), [](const unsigned char value)
+            {
+                return static_cast<char>(std::tolower(value));
+            });
+            return haystack.find(needle) != std::string::npos;
+        }
+
         float TrackKeyDuration(const Assets::AnimationTrack& track)
         {
             float duration = 0.0f;
@@ -333,12 +403,42 @@ namespace Editor
             return std::max(0.0f, time);
         }
 
+        void SelectTimeRange(const std::vector<Assets::AnimationTrack>& tracks,
+                             EditorUiState::SequencerState& state)
+        {
+            const float start = std::min(state.rangeStartTime, state.rangeEndTime);
+            const float end = std::max(state.rangeStartTime, state.rangeEndTime);
+            state.selectedKeys.clear();
+            for (int trackIndex = 0; trackIndex < static_cast<int>(tracks.size()); ++trackIndex)
+            {
+                if (Contains(state.hiddenTracks, trackIndex)) continue;
+                for (const EChannel channel : ChannelsForTrack(tracks[trackIndex]))
+                {
+                    ForEachKeyTime(tracks[trackIndex], channel, [&](const int keyIndex, const float keyTime)
+                    {
+                        if (keyTime >= start && keyTime <= end)
+                        {
+                            state.selectedKeys.push_back({trackIndex, channel, keyIndex});
+                        }
+                    });
+                }
+            }
+            if (!state.selectedKeys.empty())
+            {
+                const auto& primary = state.selectedKeys.back();
+                state.selectedTrack = primary.track;
+                state.selectedChannel = primary.channel;
+                state.selectedKey = primary.key;
+            }
+        }
+
         bool DrawTimelineRow(EditorContext& ctx, EditorUiState& ui, const int trackIndex,
                              const EChannel channel, const float timelineWidth, const float duration)
         {
             auto& state = ui.sequencer;
             auto& tracks = ctx.scene.Tracks();
             auto& track = tracks[trackIndex];
+            const bool trackLocked = Contains(state.lockedTracks, trackIndex);
 
             ImGui::PushID(trackIndex * 32 + static_cast<int>(channel));
             ImGui::InvisibleButton("row", ImVec2(timelineWidth, kRowHeight));
@@ -362,10 +462,19 @@ namespace Editor
                     hoveredKey = keyIndex;
                     nearestDistance = distance;
                 }
-                const bool selected = state.selectedTrack == trackIndex && state.selectedChannel == channel &&
-                    state.selectedKey == keyIndex;
+                const bool selected = IsSelected(state, trackIndex, channel, keyIndex) ||
+                    (state.selectedTrack == trackIndex && state.selectedChannel == channel &&
+                     state.selectedKey == keyIndex);
                 DrawDiamond(drawList, center, ChannelColor(channel, selected), selected ? kKeyRadius + 1.5f : kKeyRadius);
             });
+
+            if (state.rangeSelecting)
+            {
+                const float x0 = min.x + std::min(state.rangeStartTime, state.rangeEndTime) * state.pixelsPerSecond;
+                const float x1 = min.x + std::max(state.rangeStartTime, state.rangeEndTime) * state.pixelsPerSecond;
+                drawList->AddRectFilled(ImVec2(x0, min.y), ImVec2(x1, max.y), IM_COL32(55, 132, 255, 38));
+                drawList->AddRect(ImVec2(x0, min.y), ImVec2(x1, max.y), IM_COL32(80, 155, 255, 180));
+            }
 
             if (hoveredKey >= 0)
             {
@@ -376,24 +485,59 @@ namespace Editor
             {
                 state.selectedTrack = trackIndex;
                 state.selectedChannel = channel;
-                state.selectedKey = hoveredKey;
-                if (hoveredKey >= 0)
+                if (ImGui::GetIO().KeyShift && hoveredKey < 0)
+                {
+                    state.rangeSelecting = true;
+                    state.rangeStartTime = SnapTime(state,
+                        (ImGui::GetIO().MousePos.x - min.x) / state.pixelsPerSecond);
+                    state.rangeEndTime = state.rangeStartTime;
+                }
+                else if (hoveredKey >= 0 && !trackLocked)
                 {
                     state.editBefore = tracks;
-                    state.dragOriginalTime = *KeyTime(track, channel, hoveredKey);
+                    state.duplicateOnDrag = ImGui::GetIO().KeyAlt;
+                    if (state.duplicateOnDrag)
+                    {
+                        const float frame = 1.0f / std::max(state.framesPerSecond, 1.0f);
+                        hoveredKey = DuplicateKeyAt(track, channel, hoveredKey,
+                            SnapTime(state, *KeyTime(track, channel, hoveredKey) + frame));
+                    }
+                    SelectOnly(state, trackIndex, channel, hoveredKey);
+                    state.dragOriginalTime = *KeyTime(track, channel, state.selectedKey);
                     state.draggingKey = true;
                 }
                 else if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
                 {
+                    if (trackLocked)
+                    {
+                        ImGui::PopID();
+                        return false;
+                    }
                     const auto before = tracks;
                     state.currentTime = SnapTime(state, (ImGui::GetIO().MousePos.x - min.x) / state.pixelsPerSecond);
                     state.selectedKey = AddKeyAt(ctx, track, channel, state.currentTime);
+                    SelectOnly(state, trackIndex, channel, state.selectedKey);
                     track.Duration_ = std::max(track.Duration_, state.currentTime);
                     Preview(ctx, state);
                     CommitEdit(ctx, before, state.currentTime, "Add animation key");
                     ImGui::PopID();
                     return true;
                 }
+                else if (!ImGui::GetIO().KeyShift)
+                {
+                    SelectOnly(state, trackIndex, channel, -1);
+                }
+            }
+
+            if (active && state.rangeSelecting)
+            {
+                state.rangeEndTime = SnapTime(state,
+                    (ImGui::GetIO().MousePos.x - min.x) / state.pixelsPerSecond);
+            }
+            if (state.rangeSelecting && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+            {
+                state.rangeSelecting = false;
+                SelectTimeRange(tracks, state);
             }
 
             if (active && state.draggingKey && state.selectedTrack == trackIndex &&
@@ -419,14 +563,18 @@ namespace Editor
             {
                 state.draggingKey = false;
                 const float* keyTime = KeyTime(track, channel, state.selectedKey);
-                if (keyTime && std::abs(*keyTime - state.dragOriginalTime) > 0.00001f)
+                if (keyTime && (state.duplicateOnDrag ||
+                    std::abs(*keyTime - state.dragOriginalTime) > 0.00001f))
                 {
-                    CommitEdit(ctx, std::move(state.editBefore), state.currentTime, "Move animation key");
+                    CommitEdit(ctx, std::move(state.editBefore), state.currentTime,
+                        state.duplicateOnDrag ? "Duplicate animation key" : "Move animation key");
                     state.editBefore.clear();
+                    state.duplicateOnDrag = false;
                     ImGui::PopID();
                     return true;
                 }
                 state.editBefore.clear();
+                state.duplicateOnDrag = false;
             }
 
             ImGui::PopID();
@@ -484,36 +632,165 @@ namespace Editor
                 state.selectedKey < KeyCount(tracks[state.selectedTrack], state.selectedChannel);
         }
 
+        void TogglePlayback(EditorContext& ctx, EditorUiState::SequencerState& state, const float duration)
+        {
+            auto& tracks = ctx.scene.Tracks();
+            const bool playing = std::ranges::any_of(tracks, [](const auto& track) { return track.Playing(); });
+            if (playing)
+            {
+                ctx.scene.SetTracksPlaying(false);
+                return;
+            }
+            if (state.currentTime >= duration) state.currentTime = 0.0f;
+            ctx.scene.EvaluateTracks(state.currentTime);
+            ctx.scene.SetTracksPlaying(true);
+        }
+
+        void AddSelectedKey(EditorContext& ctx, EditorUiState::SequencerState& state)
+        {
+            auto& tracks = ctx.scene.Tracks();
+            if (state.selectedTrack < 0 || state.selectedTrack >= static_cast<int>(tracks.size()) ||
+                Contains(state.lockedTracks, state.selectedTrack)) return;
+            const auto before = tracks;
+            auto& track = tracks[state.selectedTrack];
+            state.selectedKey = AddKeyAt(ctx, track, state.selectedChannel, state.currentTime);
+            SelectOnly(state, state.selectedTrack, state.selectedChannel, state.selectedKey);
+            track.Duration_ = std::max(track.Duration_, state.currentTime);
+            Preview(ctx, state);
+            CommitEdit(ctx, before, state.currentTime, "Add animation key");
+        }
+
+        void DeleteSelectedKeys(EditorContext& ctx, EditorUiState::SequencerState& state)
+        {
+            auto& tracks = ctx.scene.Tracks();
+            if (!HasValidKeySelection(tracks, state)) return;
+            auto selections = state.selectedKeys;
+            if (selections.empty()) selections.push_back({state.selectedTrack, state.selectedChannel, state.selectedKey});
+            std::ranges::sort(selections, [](const auto& left, const auto& right)
+            {
+                if (left.track != right.track) return left.track > right.track;
+                if (left.channel != right.channel) return left.channel > right.channel;
+                return left.key > right.key;
+            });
+            const auto before = tracks;
+            bool deleted = false;
+            for (const auto& selection : selections)
+            {
+                if (selection.track < 0 || selection.track >= static_cast<int>(tracks.size()) ||
+                    Contains(state.lockedTracks, selection.track)) continue;
+                EraseKey(tracks[selection.track], selection.channel, selection.key);
+                deleted = true;
+            }
+            if (!deleted) return;
+            state.selectedKey = -1;
+            state.selectedKeys.clear();
+            Preview(ctx, state);
+            CommitEdit(ctx, before, state.currentTime, "Delete animation keys");
+        }
+
+        void DuplicateSelectedKey(EditorContext& ctx, EditorUiState::SequencerState& state)
+        {
+            auto& tracks = ctx.scene.Tracks();
+            if (!HasValidKeySelection(tracks, state) || Contains(state.lockedTracks, state.selectedTrack)) return;
+            auto& track = tracks[state.selectedTrack];
+            const auto before = tracks;
+            const float* sourceTime = KeyTime(track, state.selectedChannel, state.selectedKey);
+            const float frame = 1.0f / std::max(state.framesPerSecond, 1.0f);
+            const float duplicateTime = SnapTime(state, (sourceTime ? *sourceTime : state.currentTime) + frame);
+            state.selectedKey = DuplicateKeyAt(track, state.selectedChannel, state.selectedKey, duplicateTime);
+            SelectOnly(state, state.selectedTrack, state.selectedChannel, state.selectedKey);
+            state.currentTime = duplicateTime;
+            track.Duration_ = std::max(track.Duration_, duplicateTime);
+            Preview(ctx, state);
+            CommitEdit(ctx, before, state.currentTime, "Duplicate animation key");
+        }
+
+        void HandleShortcuts(EditorContext& ctx, EditorUiState::SequencerState& state, const float duration)
+        {
+            const ImGuiIO& io = ImGui::GetIO();
+            if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) || io.WantTextInput) return;
+            const bool command = io.KeyCtrl || io.KeySuper;
+            if (ImGui::IsKeyPressed(ImGuiKey_Space, false)) TogglePlayback(ctx, state, duration);
+            if (!command && ImGui::IsKeyPressed(ImGuiKey_K, false)) AddSelectedKey(ctx, state);
+            if (!command && ImGui::IsKeyPressed(ImGuiKey_S, false)) state.snapToFrames = !state.snapToFrames;
+            if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) DeleteSelectedKeys(ctx, state);
+            if (command && ImGui::IsKeyPressed(ImGuiKey_D, false)) DuplicateSelectedKey(ctx, state);
+            if (ImGui::IsKeyPressed(ImGuiKey_Home, false))
+            {
+                state.currentTime = 0.0f;
+                Preview(ctx, state);
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_End, false))
+            {
+                state.currentTime = duration;
+                Preview(ctx, state);
+            }
+
+            auto& tracks = ctx.scene.Tracks();
+            if (!command && ImGui::IsKeyPressed(ImGuiKey_G, false) &&
+                HasValidKeySelection(tracks, state) && !Contains(state.lockedTracks, state.selectedTrack))
+            {
+                state.keyboardGrab = true;
+                state.keyboardGrabMouseX = io.MousePos.x;
+                state.keyboardGrabOriginalTime = *KeyTime(
+                    tracks[state.selectedTrack], state.selectedChannel, state.selectedKey);
+                state.editBefore = tracks;
+            }
+            if (!state.keyboardGrab) return;
+
+            float* time = KeyTime(tracks[state.selectedTrack], state.selectedChannel, state.selectedKey);
+            if (time)
+            {
+                *time = ClampKeyTime(tracks[state.selectedTrack], state.selectedChannel, state.selectedKey,
+                    SnapTime(state, state.keyboardGrabOriginalTime +
+                        (io.MousePos.x - state.keyboardGrabMouseX) / state.pixelsPerSecond));
+                state.currentTime = *time;
+                Preview(ctx, state);
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+            {
+                tracks = state.editBefore;
+                state.keyboardGrab = false;
+                state.editBefore.clear();
+                Preview(ctx, state);
+            }
+            else if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsKeyPressed(ImGuiKey_Enter, false))
+            {
+                state.keyboardGrab = false;
+                CommitEdit(ctx, std::move(state.editBefore), state.currentTime, "Move animation key");
+                state.editBefore.clear();
+            }
+        }
+
         void DrawToolbar(EditorContext& ctx, EditorUiState& ui, const float duration)
         {
             auto& state = ui.sequencer;
             auto& tracks = ctx.scene.Tracks();
             const bool playing = std::ranges::any_of(tracks, [](const auto& track) { return track.Playing(); });
 
-            if (ImGui::Button(playing ? ICON_FA_PAUSE : ICON_FA_PLAY))
-            {
-                if (playing)
-                {
-                    ctx.scene.SetTracksPlaying(false);
-                }
-                else
-                {
-                    if (state.currentTime >= duration) state.currentTime = 0.0f;
-                    ctx.scene.EvaluateTracks(state.currentTime);
-                    ctx.scene.SetTracksPlaying(true);
-                }
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(ICON_FA_STOP))
+            if (ImGui::Button(ICON_FA_BACKWARD_FAST))
             {
                 state.currentTime = 0.0f;
                 Preview(ctx, state);
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Start (Home)");
             ImGui::SameLine();
             if (ImGui::Button(ICON_FA_BACKWARD_STEP))
             {
                 const float time = FindAdjacentKeyTime(tracks, state.currentTime, false);
                 state.currentTime = time >= 0.0f ? time : 0.0f;
+                Preview(ctx, state);
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Previous key");
+            ImGui::SameLine();
+            if (ImGui::Button(playing ? ICON_FA_PAUSE : ICON_FA_PLAY))
+            {
+                TogglePlayback(ctx, state, duration);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_STOP))
+            {
+                state.currentTime = 0.0f;
                 Preview(ctx, state);
             }
             ImGui::SameLine();
@@ -523,6 +800,14 @@ namespace Editor
                 state.currentTime = time == std::numeric_limits<float>::max() ? duration : time;
                 Preview(ctx, state);
             }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Next key");
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_FORWARD_FAST))
+            {
+                state.currentTime = duration;
+                Preview(ctx, state);
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("End (End)");
 
             ImGui::SameLine(0.0f, 12.0f);
             ImGui::SetNextItemWidth(100.0f);
@@ -626,17 +911,13 @@ namespace Editor
                 ImGui::EndPopup();
             }
 
-            const bool canAddKey = state.selectedTrack >= 0 && state.selectedTrack < static_cast<int>(tracks.size());
+            const bool canAddKey = state.selectedTrack >= 0 && state.selectedTrack < static_cast<int>(tracks.size()) &&
+                !Contains(state.lockedTracks, state.selectedTrack);
             ImGui::SameLine();
             ImGui::BeginDisabled(!canAddKey);
             if (ImGui::Button(ICON_FA_DIAMOND " Key"))
             {
-                const auto before = tracks;
-                auto& track = tracks[state.selectedTrack];
-                state.selectedKey = AddKeyAt(ctx, track, state.selectedChannel, state.currentTime);
-                track.Duration_ = std::max(track.Duration_, state.currentTime);
-                Preview(ctx, state);
-                CommitEdit(ctx, before, state.currentTime, "Add animation key");
+                AddSelectedKey(ctx, state);
             }
             ImGui::EndDisabled();
 
@@ -644,13 +925,35 @@ namespace Editor
             ImGui::BeginDisabled(!HasValidKeySelection(tracks, state));
             if (ImGui::Button(ICON_FA_TRASH " Key"))
             {
-                const auto before = tracks;
-                EraseKey(tracks[state.selectedTrack], state.selectedChannel, state.selectedKey);
-                state.selectedKey = -1;
-                Preview(ctx, state);
-                CommitEdit(ctx, before, state.currentTime, "Delete animation key");
+                DeleteSelectedKeys(ctx, state);
             }
             ImGui::EndDisabled();
+
+            ImGui::SameLine(0.0f, 12.0f);
+            ImGui::SetNextItemWidth(180.0f);
+            ImGui::InputTextWithHint("##SequencerSearch", ICON_FA_MAGNIFYING_GLASS "  Search tracks...",
+                                     state.search, std::size(state.search));
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_KEYBOARD "##SequencerShortcuts"))
+            {
+                ImGui::OpenPopup("SequencerShortcutsPopup");
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Keyboard shortcuts");
+            if (ImGui::BeginPopup("SequencerShortcutsPopup"))
+            {
+                ImGui::SeparatorText("Sequencer Shortcuts");
+                ImGui::Text("Space    Play / Pause");
+                ImGui::Text("K        Add key at playhead");
+                ImGui::Text("S        Toggle frame snapping");
+                ImGui::Text("Delete   Delete selected keys");
+                ImGui::Text("Ctrl+D   Duplicate selected key");
+                ImGui::Text("G        Grab key (click to confirm, Esc to cancel)");
+                ImGui::Text("Ctrl+Wheel  Zoom timeline");
+                ImGui::Text("Shift+Drag  Select a time range");
+                ImGui::Text("Alt+Drag    Duplicate and move key");
+                ImGui::Text("Home / End  Jump to sequence bounds");
+                ImGui::EndPopup();
+            }
         }
 
         void BeginValueEdit(EditorUiState::SequencerState& state,
@@ -677,25 +980,61 @@ namespace Editor
         {
             auto& tracks = ctx.scene.Tracks();
             auto& state = ui.sequencer;
+            ImGui::SeparatorText("KEY PROPERTIES");
             if (state.selectedTrack < 0 || state.selectedTrack >= static_cast<int>(tracks.size()))
             {
-                ImGui::TextDisabled("Select a track or channel to edit keys.");
+                ImGui::TextDisabled("Select a track or key to inspect it.");
                 return;
             }
 
             auto& track = tracks[state.selectedTrack];
-            ImGui::SeparatorText("Selection");
-            ImGui::Text("%s  /  %s", track.AnimationName.empty() ? "Sequence" : track.AnimationName.c_str(),
-                        ChannelLabel(state.selectedChannel));
-            ImGui::SameLine();
-            ImGui::TextDisabled("Target: %s", track.Target_ == Assets::AnimationTrack::Target::Environment
-                ? "Environment" : track.NodeName_.c_str());
+            const bool locked = Contains(state.lockedTracks, state.selectedTrack);
+            ImGui::TextDisabled("Selected track");
+            ImGui::TextWrapped("%s / %s", track.Target_ == Assets::AnimationTrack::Target::Environment
+                ? "Environment" : track.NodeName_.c_str(), ChannelLabel(state.selectedChannel));
+            ImGui::Spacing();
+            ImGui::BeginDisabled(locked);
+            const auto beforeDuration = tracks;
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::DragFloat("##TrackDuration", &track.Duration_, 0.01f, TrackKeyDuration(track), 3600.0f,
+                             "Duration  %.3f s");
+            BeginValueEdit(state, beforeDuration);
+            FinishValueEdit(ctx, state, "Edit animation track duration");
+            const auto beforeSpeed = tracks;
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::DragFloat("##TrackSpeed", &track.PlaySpeed_, 0.01f, 0.01f, 16.0f, "Speed  %.2fx");
+            BeginValueEdit(state, beforeSpeed);
+            FinishValueEdit(ctx, state, "Edit animation track speed");
+            ImGui::EndDisabled();
+            if (locked) ImGui::TextColored(ImVec4(1.0f, 0.67f, 0.25f, 1.0f), ICON_FA_LOCK " Track is locked");
 
             if (!HasValidKeySelection(tracks, state))
             {
-                ImGui::TextDisabled("Double-click the dope sheet or press + Key to create a key at the playhead.");
+                ImGui::Spacing();
+                ImGui::TextWrapped("Double-click the timeline or press K to create a key at the playhead.");
+                ImGui::Spacing();
+                ImGui::BeginDisabled(locked);
+                if (ImGui::Button(ICON_FA_TRASH "  Delete Track", ImVec2(-1.0f, 0.0f)))
+                {
+                    const auto before = tracks;
+                    tracks.erase(tracks.begin() + state.selectedTrack);
+                    state.selectedTrack = -1;
+                    state.selectedKey = -1;
+                    state.selectedKeys.clear();
+                    state.lockedTracks.clear();
+                    state.hiddenTracks.clear();
+                    CommitEdit(ctx, before, state.currentTime, "Delete animation track");
+                }
+                ImGui::EndDisabled();
                 return;
             }
+
+            if (state.selectedKeys.size() > 1)
+            {
+                ImGui::TextColored(ImVec4(0.35f, 0.68f, 1.0f, 1.0f), "%zu keys selected", state.selectedKeys.size());
+            }
+
+            ImGui::BeginDisabled(locked);
 
             float* time = KeyTime(track, state.selectedChannel, state.selectedKey);
             if (time)
@@ -759,6 +1098,16 @@ namespace Editor
             case EChannel::SunColor: drawVec3(track.SunColorChannel, "Value", true); break;
             case EChannel::SkyColor: drawVec3(track.SkyColorChannel, "Value", true); break;
             }
+            ImGui::SeparatorText("EDIT");
+            if (ImGui::Button(ICON_FA_COPY "  Duplicate", ImVec2(-1.0f, 0.0f)))
+            {
+                DuplicateSelectedKey(ctx, state);
+            }
+            if (ImGui::Button(ICON_FA_TRASH "  Delete", ImVec2(-1.0f, 0.0f)))
+            {
+                DeleteSelectedKeys(ctx, state);
+            }
+            ImGui::EndDisabled();
         }
     } // namespace
 
@@ -794,7 +1143,20 @@ namespace Editor
         {
             state.currentTime = std::clamp(state.currentTime, 0.0f, duration);
         }
+        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows) &&
+            (ImGui::GetIO().KeyCtrl || ImGui::GetIO().KeySuper) && ImGui::GetIO().MouseWheel != 0.0f)
+        {
+            state.pixelsPerSecond = std::clamp(state.pixelsPerSecond *
+                std::pow(1.12f, ImGui::GetIO().MouseWheel), 35.0f, 600.0f);
+        }
+        HandleShortcuts(ctx, state, duration);
         DrawToolbar(ctx, ui, duration);
+        if (state.keyboardGrab)
+        {
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.35f, 0.68f, 1.0f, 1.0f),
+                               "Moving key - click/Enter to confirm, Esc to cancel");
+        }
         ImGui::Separator();
 
         if (tracks.empty())
@@ -810,9 +1172,20 @@ namespace Editor
             return;
         }
 
+        const float workAreaWidth = std::max(320.0f, ImGui::GetContentRegionAvail().x - kInspectorColumnWidth - 8.0f);
         const float timelineWidth = std::max(duration * state.pixelsPerSecond + 80.0f,
-                                             ImGui::GetContentRegionAvail().x - kTrackColumnWidth);
-        const float tableHeight = std::clamp(ImGui::GetContentRegionAvail().y * 0.68f, 130.0f, 430.0f);
+                                             workAreaWidth - kTrackColumnWidth);
+        const float tableHeight = std::max(150.0f, ImGui::GetContentRegionAvail().y);
+        constexpr ImGuiTableFlags layoutFlags = ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp;
+        if (!ImGui::BeginTable("SequencerLayout", 2, layoutFlags, ImVec2(0.0f, tableHeight)))
+        {
+            ImGui::End();
+            return;
+        }
+        ImGui::TableSetupColumn("Workspace", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Key Properties", ImGuiTableColumnFlags_WidthFixed, kInspectorColumnWidth);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
         constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersInnerH |
             ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit |
             ImGuiTableFlags_RowBg;
@@ -837,6 +1210,9 @@ namespace Editor
             for (int trackIndex = 0; trackIndex < static_cast<int>(tracks.size()) && !timelineMutated; ++trackIndex)
             {
                 auto& track = tracks[trackIndex];
+                if (!MatchesSearch(track, state.search)) continue;
+                const bool hidden = Contains(state.hiddenTracks, trackIndex);
+                const bool locked = Contains(state.lockedTracks, trackIndex);
                 ImGui::TableNextRow(ImGuiTableRowFlags_None, kRowHeight);
                 ImGui::TableSetColumnIndex(0);
                 ImGui::PushID(trackIndex);
@@ -852,7 +1228,20 @@ namespace Editor
                 {
                     state.selectedTrack = trackIndex;
                     state.selectedKey = -1;
+                    state.selectedKeys.clear();
                 }
+                ImGui::SameLine(kTrackColumnWidth - 58.0f);
+                if (ImGui::SmallButton(hidden ? ICON_FA_EYE_SLASH : ICON_FA_EYE))
+                {
+                    Toggle(state.hiddenTracks, trackIndex);
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip(hidden ? "Show track keys" : "Hide track keys");
+                ImGui::SameLine(0.0f, 3.0f);
+                if (ImGui::SmallButton(locked ? ICON_FA_LOCK : ICON_FA_LOCK_OPEN))
+                {
+                    Toggle(state.lockedTracks, trackIndex);
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip(locked ? "Unlock track editing" : "Lock track editing");
                 ImGui::PopID();
 
                 ImGui::TableSetColumnIndex(1);
@@ -862,7 +1251,7 @@ namespace Editor
                 ImDrawList* drawList = ImGui::GetWindowDrawList();
                 drawList->AddRectFilled(rowMin, rowMax, IM_COL32(46, 50, 58, 130));
                 DrawGrid(drawList, rowMin, rowMax, state.pixelsPerSecond, duration);
-                for (const EChannel channel : ChannelsForTrack(track))
+                if (!hidden) for (const EChannel channel : ChannelsForTrack(track))
                 {
                     ForEachKeyTime(track, channel, [&](int, const float keyTime)
                     {
@@ -872,7 +1261,7 @@ namespace Editor
                     });
                 }
 
-                if (!open) continue;
+                if (!open || hidden) continue;
                 for (const EChannel channel : ChannelsForTrack(track))
                 {
                     ImGui::TableNextRow(ImGuiTableRowFlags_None, kRowHeight);
@@ -898,7 +1287,9 @@ namespace Editor
             ImGui::EndTable();
         }
 
+        ImGui::TableSetColumnIndex(1);
         DrawKeyInspector(ctx, ui);
+        ImGui::EndTable();
         ImGui::End();
     }
 } // namespace Editor

@@ -128,6 +128,15 @@ namespace Editor
                 SkyColor,
             };
 
+            struct KeySelection
+            {
+                int track = -1;
+                EChannel channel = EChannel::Translation;
+                int key = -1;
+
+                bool operator==(const KeySelection&) const = default;
+            };
+
             float currentTime = 0.0f;
             float pixelsPerSecond = 120.0f;
             float framesPerSecond = 30.0f;
@@ -138,6 +147,17 @@ namespace Editor
             bool initialized = false;
             bool draggingKey = false;
             float dragOriginalTime = 0.0f;
+            bool rangeSelecting = false;
+            float rangeStartTime = 0.0f;
+            float rangeEndTime = 0.0f;
+            bool keyboardGrab = false;
+            float keyboardGrabMouseX = 0.0f;
+            float keyboardGrabOriginalTime = 0.0f;
+            bool duplicateOnDrag = false;
+            char search[96]{};
+            std::vector<KeySelection> selectedKeys;
+            std::vector<int> lockedTracks;
+            std::vector<int> hiddenTracks;
             std::vector<Assets::AnimationTrack> editBefore;
             bool trackingValueEdit = false;
         };
