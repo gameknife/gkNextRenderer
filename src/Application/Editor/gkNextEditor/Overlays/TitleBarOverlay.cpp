@@ -31,6 +31,7 @@ namespace Editor
         };
         constexpr SDL_DialogFileFilter kSceneSaveFilters[] = {
             {"GLB Scene", "glb"},
+            {"glTF Scene", "gltf"},
             {"All Files", "*"},
         };
 
@@ -47,9 +48,9 @@ namespace Editor
 
         void SaveSceneToPath(EditorContext& ctx, EditorUiState& ui, const std::string& filename)
         {
-            if (!IsGlbScenePath(filename))
+            if (!IsWritableGltfScenePath(filename))
             {
-                SPDLOG_ERROR("Scene save target must be a .glb file: {}", filename);
+                SPDLOG_ERROR("Scene save target must be a .glb or .gltf file: {}", filename);
                 return;
             }
 
@@ -172,7 +173,7 @@ namespace Editor
                 {
                     auto* dialogContext = new FSaveSceneDialogContext{&ui, DefaultSceneSaveDirectory().string()};
                     SDL_ShowSaveFileDialog(
-                        [](void* userdata, const char* const* filelist, int /*filter*/)
+                        [](void* userdata, const char* const* filelist, int filter)
                         {
                             std::unique_ptr<FSaveSceneDialogContext> dialogContext(
                                 static_cast<FSaveSceneDialogContext*>(userdata));
@@ -183,7 +184,8 @@ namespace Editor
 
                             if (filelist && filelist[0])
                             {
-                                std::string filename = NormalizeSaveAsScenePath(filelist[0]);
+                                const std::string_view defaultExtension = filter == 1 ? ".gltf" : ".glb";
+                                std::string filename = NormalizeSaveAsScenePath(filelist[0], defaultExtension);
                                 std::scoped_lock lock(dialogContext->Ui->sceneDialogMutex);
                                 dialogContext->Ui->pendingSaveScenePath = std::move(filename);
                             }
@@ -194,7 +196,7 @@ namespace Editor
                         },
                         dialogContext,
                         ctx.engine.GetWindow().Handle(),
-                        kSceneSaveFilters, 2, dialogContext->DefaultLocation.c_str());
+                        kSceneSaveFilters, 3, dialogContext->DefaultLocation.c_str());
                 }
 
                 ImGui::Separator();
@@ -311,6 +313,7 @@ namespace Editor
                 ImGui::MenuItem("Script Console", nullptr, &ui.scriptConsolePanel);
                 ImGui::MenuItem("Log", nullptr, &ui.logPanel);
                 ImGui::MenuItem("Material Editor", nullptr, &ui.child_mat_editor);
+                ImGui::MenuItem("Sequencer", nullptr, &ui.sequencerPanel);
                 ImGui::EndMenu();
             }
 
@@ -337,6 +340,7 @@ namespace Editor
                     DevTools::FUiDevPanels::Get().ToggleConsole();
                 }
                 ImGui::MenuItem("Material Editor", nullptr, &ui.child_mat_editor);
+                ImGui::MenuItem("Sequencer", nullptr, &ui.sequencerPanel);
 
                 ImGui::Separator();
                 ImGui::MenuItem("Material Browser", nullptr, &ui.materialBrowser);

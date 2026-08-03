@@ -130,6 +130,43 @@ TEST_CASE_METHOD(EngineTestFixture, "Scene component index follows component and
     scene.RemoveNodeByInstanceId(firstNode->GetInstanceId());
 }
 
+TEST_CASE_METHOD(EngineTestFixture, "Scene evaluates editable animation tracks at an explicit time",
+                 "[Integration][Animation][Sequencer]")
+{
+    Assets::Scene& scene = engine_->GetScene();
+    auto node = Assets::Node::CreateNode(
+        "SequencerTarget", glm::vec3(0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f), scene.GenerateInstanceId());
+    scene.AddNode(node);
+
+    Assets::AnimationTrack transformTrack;
+    transformTrack.AnimationName = "EditorPreview";
+    transformTrack.NodeName_ = node->GetName();
+    transformTrack.Duration_ = 2.0f;
+    transformTrack.TranslationChannel.Keys = {
+        {0.0f, glm::vec3(0.0f)},
+        {2.0f, glm::vec3(4.0f, 2.0f, -2.0f)},
+    };
+
+    Assets::AnimationTrack environmentTrack;
+    environmentTrack.AnimationName = "Daylight";
+    environmentTrack.Target_ = Assets::AnimationTrack::Target::Environment;
+    environmentTrack.Duration_ = 2.0f;
+    environmentTrack.SunIntensityChannel.Keys = {{0.0f, 100.0f}, {2.0f, 500.0f}};
+
+    scene.Tracks() = {transformTrack, environmentTrack};
+    scene.EvaluateTracks(1.0f);
+
+    CHECK(node->Translation().x == Catch::Approx(2.0f));
+    CHECK(node->Translation().y == Catch::Approx(1.0f));
+    CHECK(node->Translation().z == Catch::Approx(-1.0f));
+    CHECK(scene.GetEnvSettings().SunIntensity == Catch::Approx(300.0f));
+    CHECK(scene.Tracks()[0].Time_ == Catch::Approx(1.0f));
+    CHECK(scene.Tracks()[1].Time_ == Catch::Approx(1.0f));
+
+    scene.RemoveNodeByInstanceId(node->GetInstanceId());
+    scene.Tracks().clear();
+}
+
 TEST_CASE("Node velocity tracks rigid rotation", "[Unit][Node][MotionVector]")
 {
     auto node = Assets::Node::CreateNode(

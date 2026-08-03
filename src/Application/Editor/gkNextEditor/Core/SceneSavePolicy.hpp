@@ -5,10 +5,11 @@
 
 namespace Editor
 {
-    inline bool IsGlbScenePath(const std::filesystem::path& path)
+    inline bool IsWritableGltfScenePath(const std::filesystem::path& path)
     {
         const std::string extension = path.extension().string();
-        return extension == ".glb" || extension == ".GLB";
+        return extension == ".glb" || extension == ".GLB" ||
+            extension == ".gltf" || extension == ".GLTF";
     }
 
     inline bool IsPakScenePath(const std::string& path)
@@ -47,7 +48,7 @@ namespace Editor
 
     inline bool CanOverwriteCurrentScene(const std::string& path)
     {
-        if (path.empty() || !IsGlbScenePath(path))
+        if (path.empty() || !IsWritableGltfScenePath(path))
         {
             return false;
         }
@@ -79,7 +80,7 @@ namespace Editor
         return Utilities::FileHelper::GetWritableRuntimeRoot() / "assets";
     }
 
-    inline std::string NormalizeSaveAsScenePath(std::string path)
+    inline std::string NormalizeSaveAsScenePath(std::string path, const std::string_view defaultExtension = ".glb")
     {
         if (path.empty())
         {
@@ -89,7 +90,7 @@ namespace Editor
         std::filesystem::path filesystemPath(path);
         if (!filesystemPath.has_extension())
         {
-            filesystemPath.replace_extension(".glb");
+            filesystemPath.replace_extension(defaultExtension);
         }
         return filesystemPath.string();
     }

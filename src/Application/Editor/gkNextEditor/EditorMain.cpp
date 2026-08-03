@@ -329,7 +329,7 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
             }
             else
             {
-                SPDLOG_INFO("Current scene is not writable as GLB; use File > Save Scene As...");
+                SPDLOG_INFO("Current scene is not writable as GLB/glTF; use File > Save Scene As...");
             }
             break;
         }

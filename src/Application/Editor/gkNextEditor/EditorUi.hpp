@@ -24,6 +24,7 @@ namespace Editor
     void DrawHotReloadPanel(EditorContext& ctx, EditorUiState& ui);
     void DrawCameraViewPanel(EditorContext& ctx, EditorUiState& ui);
     void DrawSettingsPanel(EditorContext& ctx, EditorUiState& ui);
+    void DrawSequencerPanel(EditorContext& ctx, EditorUiState& ui);
 
     // Viewport overlay widgets (stats/tools)
     void DrawViewportOverlay(EditorContext& ctx, EditorUiState& ui);

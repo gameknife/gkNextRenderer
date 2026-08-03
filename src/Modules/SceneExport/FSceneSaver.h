@@ -21,6 +21,7 @@ namespace Assets
      * - Mesh几何数据（顶点、法线、纹理坐标、切线、索引）
      * - Material PBR参数和纹理引用
      * - 原始纹理数据（从sourceModel复制）
+     * - 标准节点动画与gkNext环境动画extras
      */
     class FSceneSaver
     {

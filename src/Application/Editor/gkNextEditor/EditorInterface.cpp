@@ -172,6 +172,7 @@ void EditorInterface::RebuildDefaultDockLayout(ImGuiID id)
     ImGui::DockBuilderDockWindow("Script Console", dock2);
     ImGui::DockBuilderDockWindow("Hot Reload", dock2);
     ImGui::DockBuilderDockWindow("Content Browser", dock3);
+    ImGui::DockBuilderDockWindow("Sequencer", dock3);
     ImGui::DockBuilderDockWindow("Log", dock3);
     ImGui::DockBuilderDockWindow("Material Browser", dock3);
     ImGui::DockBuilderDockWindow("Texture Browser", dock3);
@@ -325,6 +326,8 @@ void EditorInterface::Render(Editor::EditorUiState& uiState)
     Editor::DrawCameraViewPanel(ctx, uiState);
     if (uiState.scriptConsolePanel)
         Editor::DrawScriptConsolePanel(ctx, uiState);
+    if (uiState.sequencerPanel)
+        Editor::DrawSequencerPanel(ctx, uiState);
 
     DevTools::FUiDevPanels::Get().RenderConsoleOverlay();
 

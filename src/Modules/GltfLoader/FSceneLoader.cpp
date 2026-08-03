@@ -341,6 +341,83 @@ namespace Assets
         atmosphere.FogMaxOpacity =
             ReadFloatExtra(extras, "FogMaxOpacity", atmosphere.FogMaxOpacity);
     }
+
+    template <typename T, typename ReadValueFn>
+    void ReadEnvironmentAnimationChannel(const tinygltf::Value& trackValue, const char* channelName,
+                                         AnimationChannel<T>& channel, ReadValueFn&& readValue)
+    {
+        if (!trackValue.Has(channelName) || !trackValue.Get(channelName).IsArray())
+        {
+            return;
+        }
+        for (const tinygltf::Value& keyValue : trackValue.Get(channelName).Get<tinygltf::Value::Array>())
+        {
+            if (!keyValue.IsObject() || !keyValue.Has("time") || !keyValue.Get("time").IsNumber() ||
+                !keyValue.Has("value"))
+            {
+                continue;
+            }
+            T value{};
+            if (!readValue(keyValue.Get("value"), value))
+            {
+                continue;
+            }
+            channel.Keys.push_back({static_cast<float>(keyValue.Get("time").GetNumberAsDouble()), value});
+        }
+        std::ranges::sort(channel.Keys, {}, &AnimationKey<T>::Time);
+    }
+
+    void ReadEnvironmentAnimationTracks(const tinygltf::Value& extras, std::vector<AnimationTrack>& tracks)
+    {
+        if (!extras.Has("gkEnvironmentTracks") || !extras.Get("gkEnvironmentTracks").IsArray())
+        {
+            return;
+        }
+        const auto readFloat = [](const tinygltf::Value& value, float& result)
+        {
+            if (!value.IsNumber()) return false;
+            result = static_cast<float>(value.GetNumberAsDouble());
+            return true;
+        };
+        const auto readVec3 = [](const tinygltf::Value& value, glm::vec3& result)
+        {
+            if (!value.IsArray()) return false;
+            const auto& values = value.Get<tinygltf::Value::Array>();
+            if (values.size() < 3 || !values[0].IsNumber() || !values[1].IsNumber() || !values[2].IsNumber())
+            {
+                return false;
+            }
+            result = glm::vec3(static_cast<float>(values[0].GetNumberAsDouble()),
+                               static_cast<float>(values[1].GetNumberAsDouble()),
+                               static_cast<float>(values[2].GetNumberAsDouble()));
+            return true;
+        };
+
+        for (const tinygltf::Value& trackValue : extras.Get("gkEnvironmentTracks").Get<tinygltf::Value::Array>())
+        {
+            if (!trackValue.IsObject())
+            {
+                continue;
+            }
+            AnimationTrack track;
+            track.Target_ = AnimationTrack::Target::Environment;
+            track.NodeName_ = "Environment";
+            if (trackValue.Has("name") && trackValue.Get("name").IsString())
+            {
+                track.AnimationName = trackValue.Get("name").Get<std::string>();
+            }
+            track.Duration_ = ReadFloatExtra(trackValue, "duration", 0.0f);
+            track.PlaySpeed_ = ReadFloatExtra(trackValue, "playSpeed", 1.0f);
+            ReadEnvironmentAnimationChannel(trackValue, "sunRotation", track.SunRotationChannel, readFloat);
+            ReadEnvironmentAnimationChannel(trackValue, "sunElevation", track.SunElevationChannel, readFloat);
+            ReadEnvironmentAnimationChannel(trackValue, "skyRotation", track.SkyRotationChannel, readFloat);
+            ReadEnvironmentAnimationChannel(trackValue, "sunIntensity", track.SunIntensityChannel, readFloat);
+            ReadEnvironmentAnimationChannel(trackValue, "skyIntensity", track.SkyIntensityChannel, readFloat);
+            ReadEnvironmentAnimationChannel(trackValue, "sunColor", track.SunColorChannel, readVec3);
+            ReadEnvironmentAnimationChannel(trackValue, "skyColor", track.SkyColorChannel, readVec3);
+            tracks.push_back(std::move(track));
+        }
+    }
     
     Assets::Camera ParseGltfCamera(const tinygltf::Camera& gltfCamera)
     {
@@ -1350,6 +1427,8 @@ namespace Assets
                 tracks.push_back(track.second);
             }
         }
+
+        ReadEnvironmentAnimationTracks(model.scenes[0].extras, tracks);
 
         return true;
     }

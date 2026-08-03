@@ -45,6 +45,7 @@
   昼夜 Demo 与人工/Agent 验证入口均已完成。体积雾光轴与 PathTracing 介质散射按需另立任务）
 - [Editor 材质创作架构](designs/editor-material-authoring.md)
 - [Editor Settings 与 CVar 架构](designs/editor-settings-and-cvars.md)
+- [Editor Sequencer 与动画轨道编辑](designs/editor-sequencer.md)
 - [GI 缓存与体素资源架构](designs/gi-cache-architecture.md)
 - [Gaussian Splat / SOG v2 格式与集成](designs/gaussian-splatting-sog-design.md)
 - [gnb AI Bridge Protocol v2](designs/gnb-ai-bridge-protocol-v2.md)

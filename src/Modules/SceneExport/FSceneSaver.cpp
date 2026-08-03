@@ -656,6 +656,156 @@ namespace
         }
     }
 
+    template <typename T, typename AppendValueFn>
+    void SerializeAnimationChannel(FSceneSaverContext& ctx, tinygltf::Animation& animation,
+                                   const AnimationChannel<T>& channel, const int nodeIndex,
+                                   const char* targetPath, const char* accessorType,
+                                   AppendValueFn&& appendValue)
+    {
+        if (channel.Keys.empty())
+        {
+            return;
+        }
+
+        std::vector<float> times;
+        std::vector<float> values;
+        times.reserve(channel.Keys.size());
+        for (const auto& key : channel.Keys)
+        {
+            times.push_back(key.Time);
+            appendValue(values, key.Value);
+        }
+
+        const auto [minTime, maxTime] = std::minmax_element(times.begin(), times.end());
+        const int timeOffset = AppendToBuffer(ctx.Buffer, times.data(), times.size() * sizeof(float));
+        const int timeView = CreateBufferView(ctx.Gltf, 0, timeOffset, times.size() * sizeof(float), 0);
+        const int timeAccessor = CreateAccessor(ctx.Gltf, timeView, TINYGLTF_COMPONENT_TYPE_FLOAT,
+                                                static_cast<int>(times.size()), "SCALAR",
+                                                {static_cast<double>(*minTime)}, {static_cast<double>(*maxTime)});
+
+        const int valueOffset = AppendToBuffer(ctx.Buffer, values.data(), values.size() * sizeof(float));
+        const int valueView = CreateBufferView(ctx.Gltf, 0, valueOffset, values.size() * sizeof(float), 0);
+        const int valueAccessor = CreateAccessor(ctx.Gltf, valueView, TINYGLTF_COMPONENT_TYPE_FLOAT,
+                                                 static_cast<int>(channel.Keys.size()), accessorType);
+
+        tinygltf::AnimationSampler sampler;
+        sampler.input = timeAccessor;
+        sampler.output = valueAccessor;
+        sampler.interpolation = "LINEAR";
+        animation.samplers.push_back(std::move(sampler));
+
+        tinygltf::AnimationChannel gltfChannel;
+        gltfChannel.sampler = static_cast<int>(animation.samplers.size()) - 1;
+        gltfChannel.target_node = nodeIndex;
+        gltfChannel.target_path = targetPath;
+        animation.channels.push_back(std::move(gltfChannel));
+    }
+
+    void SerializeAnimations(FSceneSaverContext& ctx, const Scene& scene)
+    {
+        std::unordered_map<std::string, size_t> animationIndices;
+        for (const AnimationTrack& track : scene.Tracks())
+        {
+            if (track.Target_ != AnimationTrack::Target::NodeTransform)
+            {
+                continue;
+            }
+
+            const Node* node = scene.GetNode(track.NodeName_);
+            const auto nodeIt = node ? ctx.NodeIndexMap.find(node) : ctx.NodeIndexMap.end();
+            if (nodeIt == ctx.NodeIndexMap.end())
+            {
+                SPDLOG_WARN("Animation track '{}' targets missing or non-exported node '{}'", track.AnimationName,
+                            track.NodeName_);
+                continue;
+            }
+
+            const std::string animationName = track.AnimationName.empty() ? "Default" : track.AnimationName;
+            const auto [animationIt, inserted] = animationIndices.try_emplace(animationName, ctx.Gltf.animations.size());
+            if (inserted)
+            {
+                tinygltf::Animation animation;
+                animation.name = animationName;
+                ctx.Gltf.animations.push_back(std::move(animation));
+            }
+            tinygltf::Animation& animation = ctx.Gltf.animations[animationIt->second];
+
+            SerializeAnimationChannel(ctx, animation, track.TranslationChannel, nodeIt->second,
+                "translation", "VEC3", [](std::vector<float>& values, const glm::vec3 value)
+                {
+                    values.insert(values.end(), {value.x, value.y, value.z});
+                });
+            SerializeAnimationChannel(ctx, animation, track.RotationChannel, nodeIt->second,
+                "rotation", "VEC4", [](std::vector<float>& values, const glm::quat value)
+                {
+                    values.insert(values.end(), {value.x, value.y, value.z, value.w});
+                });
+            SerializeAnimationChannel(ctx, animation, track.ScaleChannel, nodeIt->second,
+                "scale", "VEC3", [](std::vector<float>& values, const glm::vec3 value)
+                {
+                    values.insert(values.end(), {value.x, value.y, value.z});
+                });
+        }
+
+        std::erase_if(ctx.Gltf.animations, [](const tinygltf::Animation& animation)
+        {
+            return animation.channels.empty();
+        });
+    }
+
+    tinygltf::Value SerializeAnimationValue(const float value)
+    {
+        return tinygltf::Value(static_cast<double>(value));
+    }
+
+    tinygltf::Value SerializeAnimationValue(const glm::vec3 value)
+    {
+        return tinygltf::Value(tinygltf::Value::Array{
+            tinygltf::Value(static_cast<double>(value.x)), tinygltf::Value(static_cast<double>(value.y)),
+            tinygltf::Value(static_cast<double>(value.z)),
+        });
+    }
+
+    template <typename T>
+    tinygltf::Value SerializeEnvironmentChannel(const AnimationChannel<T>& channel)
+    {
+        tinygltf::Value::Array keys;
+        keys.reserve(channel.Keys.size());
+        for (const auto& key : channel.Keys)
+        {
+            keys.emplace_back(tinygltf::Value::Object{
+                {"time", tinygltf::Value(static_cast<double>(key.Time))},
+                {"value", SerializeAnimationValue(key.Value)},
+            });
+        }
+        return tinygltf::Value(std::move(keys));
+    }
+
+    tinygltf::Value SerializeEnvironmentTracks(const Scene& scene)
+    {
+        tinygltf::Value::Array tracks;
+        for (const AnimationTrack& track : scene.Tracks())
+        {
+            if (track.Target_ != AnimationTrack::Target::Environment)
+            {
+                continue;
+            }
+            tracks.emplace_back(tinygltf::Value::Object{
+                {"name", tinygltf::Value(track.AnimationName)},
+                {"duration", tinygltf::Value(static_cast<double>(track.Duration_))},
+                {"playSpeed", tinygltf::Value(static_cast<double>(track.PlaySpeed_))},
+                {"sunRotation", SerializeEnvironmentChannel(track.SunRotationChannel)},
+                {"sunElevation", SerializeEnvironmentChannel(track.SunElevationChannel)},
+                {"skyRotation", SerializeEnvironmentChannel(track.SkyRotationChannel)},
+                {"sunIntensity", SerializeEnvironmentChannel(track.SunIntensityChannel)},
+                {"skyIntensity", SerializeEnvironmentChannel(track.SkyIntensityChannel)},
+                {"sunColor", SerializeEnvironmentChannel(track.SunColorChannel)},
+                {"skyColor", SerializeEnvironmentChannel(track.SkyColorChannel)},
+            });
+        }
+        return tinygltf::Value(std::move(tracks));
+    }
+
     tinygltf::Value SerializeEnvironmentExtras(const EnvironmentSetting& env)
     {
         const auto serializeColor = [](const glm::vec3& color)
@@ -740,6 +890,13 @@ namespace
                 }
             }
         }
+        const tinygltf::Value environmentTracks = SerializeEnvironmentTracks(scene);
+        if (environmentTracks.IsArray() && !environmentTracks.Get<tinygltf::Value::Array>().empty())
+        {
+            gltfScene.extras = tinygltf::Value(tinygltf::Value::Object{
+                {"gkEnvironmentTracks", environmentTracks},
+            });
+        }
         ctx.Gltf.scenes.push_back(gltfScene);
         ctx.Gltf.defaultScene = 0;
     }
@@ -756,6 +913,7 @@ namespace
         SerializeMeshes(ctx, scene);
         SerializeCameras(ctx, scene);
         SerializeNodes(ctx, scene);
+        SerializeAnimations(ctx, scene);
         SerializeSceneObject(ctx, scene);
 
         ctx.Gltf.buffers.push_back(std::move(ctx.Buffer));

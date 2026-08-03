@@ -214,6 +214,11 @@ namespace Assets
         Assets::EnvironmentSetting& GetEnvSettings();
         const Assets::EnvironmentSetting& GetEnvSettings() const;
 
+        std::vector<AnimationTrack>& Tracks() { return tracks_; }
+        const std::vector<AnimationTrack>& Tracks() const { return tracks_; }
+        void SetTracksPlaying(bool playing);
+        void EvaluateTracks(float time);
+
         Camera& GetRenderCamera() { return renderCamera_; }
         const Camera& GetRenderCamera() const { return renderCamera_; }
 

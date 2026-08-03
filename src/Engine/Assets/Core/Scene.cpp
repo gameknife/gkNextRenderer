@@ -883,9 +883,50 @@ namespace Assets
 
     void Scene::PlayAllTracks()
     {
+        SetTracksPlaying(true);
+    }
+
+    void Scene::SetTracksPlaying(const bool playing)
+    {
         for (auto& track : tracks_)
         {
-            track.Play();
+            playing ? track.Play() : track.Stop();
+        }
+    }
+
+    void Scene::EvaluateTracks(const float time)
+    {
+        bool evaluated = false;
+        for (auto& track : tracks_)
+        {
+            track.Time_ = std::max(0.0f, time);
+            if (track.Target_ == AnimationTrack::Target::Environment)
+            {
+                track.Sample(track.Time_, GetEnvSettings());
+                evaluated = true;
+                continue;
+            }
+
+            Node* node = GetNode(track.NodeName_);
+            if (!node)
+            {
+                continue;
+            }
+
+            glm::vec3 translation = node->Translation();
+            glm::quat rotation = node->Rotation();
+            glm::vec3 scaling = node->Scale();
+            track.Sample(track.Time_, translation, rotation, scaling);
+            node->SetTranslation(translation);
+            node->SetRotation(rotation);
+            node->SetScale(scaling);
+            node->RecalcTransform(true);
+            evaluated = true;
+        }
+
+        if (evaluated)
+        {
+            MarkDirty();
         }
     }
 

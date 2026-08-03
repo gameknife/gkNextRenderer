@@ -168,6 +168,54 @@ TEST_CASE("glTF cameras use node camera indices and standard FOV", "[Assets][glT
     CHECK(camera.cameras[1].FieldOfView == Catch::Approx(glm::degrees(0.5f)));
 }
 
+TEST_CASE("glTF scene extras restore environment animation tracks", "[Assets][glTF][Animation][Sequencer]")
+{
+    Utilities::Package::FPackageFileSystem pakSys(Utilities::Package::EPM_OsFile);
+    ScopedGltfFile fixture;
+    const std::filesystem::path filename = fixture.Write(R"json({
+        "asset":{"version":"2.0"},
+        "scene":0,
+        "scenes":[{
+            "nodes":[0],
+            "extras":{"gkEnvironmentTracks":[{
+                "name":"Daylight",
+                "duration":4.0,
+                "playSpeed":0.5,
+                "sunRotation":[{"time":4.0,"value":1.0},{"time":0.0,"value":-1.0}],
+                "sunElevation":[{"time":0.0,"value":0.2}],
+                "skyRotation":[],
+                "sunIntensity":[{"time":0.0,"value":100.0},{"time":4.0,"value":900.0}],
+                "skyIntensity":[],
+                "sunColor":[{"time":0.0,"value":[1.0,0.5,0.25]}],
+                "skyColor":[{"time":4.0,"value":[0.2,0.4,0.8]}]
+            }]}
+        }],
+        "nodes":[{"name":"root"}]
+    })json");
+
+    Assets::EnvironmentSetting camera;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FSceneLoader::LoadGLTFScene(filename.string(), camera, nodes, models, materials, lights,
+                                                tracks, skeletons));
+    REQUIRE(tracks.size() == 1);
+    const Assets::AnimationTrack& track = tracks.front();
+    CHECK(track.Target_ == Assets::AnimationTrack::Target::Environment);
+    CHECK(track.AnimationName == "Daylight");
+    CHECK(track.Duration_ == Catch::Approx(4.0f));
+    CHECK(track.PlaySpeed_ == Catch::Approx(0.5f));
+    REQUIRE(track.SunRotationChannel.Keys.size() == 2);
+    CHECK(track.SunRotationChannel.Keys[0].Time == Catch::Approx(0.0f));
+    CHECK(track.SunRotationChannel.Keys[1].Time == Catch::Approx(4.0f));
+    CHECK(track.SunColorChannel.Keys.front().Value.g == Catch::Approx(0.5f));
+    CHECK(track.SkyColorChannel.Keys.front().Value.b == Catch::Approx(0.8f));
+}
+
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 
 TEST_CASE("SkinnedMeshComponent Animation Playback", "[Runtime][Animation]") {
