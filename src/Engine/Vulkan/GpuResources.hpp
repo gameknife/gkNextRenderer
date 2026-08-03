@@ -90,11 +90,13 @@ namespace Vulkan
         ~ImageView();
 
         const class Device& Device() const { return device_; }
+        VkImageViewType ViewType() const { return viewType_; }
 
 
     private:
 
         const class Device& device_;
+        const VkImageViewType viewType_;
 
         VULKAN_HANDLE(VkImageView, imageView_)
     };

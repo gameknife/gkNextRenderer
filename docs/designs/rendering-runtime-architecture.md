@@ -61,15 +61,16 @@ NoAmbient 的光照拆分、GTAO 与无 history 语义见 [SoftwareModernNoAmbie
 
 ## Bindless 资源维度
 
-Vulkan 描述符不编码图像维度：binding 0（`COMBINED_IMAGE_SAMPLER`）和 binding 1（`STORAGE_IMAGE`）各是一个扁平数组，
-2D 与 3D view 可以并排写进同一个数组，维度只在 shader 的访问点由 `.as<Sampler3D>()` / `.as<RWTexture3D<T>>()` 决定。
-因此 3D 资源不需要新 binding、新 descriptor set 或新 pool，只需要一个未被占用的槽位号。
+Vulkan 描述符本身不编码图像维度，但 shader 模块和跨 API 转译器需要明确的资源类型。
+因此 binding 0（`COMBINED_IMAGE_SAMPLER`）和 binding 1（`STORAGE_IMAGE`）专用于 2D 资源，binding 3/4
+分别是紧凑的 3D sampled/storage 数组。3D 资源仍使用 `RES_VOLUME_BASE` 的全局槽位号，但 shader 访问器会
+将其转换为 binding 3/4 内的相对索引；这样同一个 shader 内不会出现同 binding 的 2D/3D 资源别名。
 
 **地址空间分两半**（登记表在 `assets/shaders/common/BindlessTexture.slang` 顶部，是唯一事实源）：
 
-- `[0, RES_HIGH_BASE)` 动态索引，**两个 binding 含义不同**：binding 0 是场景贴图（按 texture index，
+- `[0, RES_HIGH_BASE)` 动态索引，**两个 2D binding 含义不同**：binding 0 是场景贴图（按 texture index，
   容量 `RES_SCENE_TEXTURE_CAPACITY = 16384`），binding 1 是 RenderView RT bank（8 bank × 256 = 2048）。
-  两者在不同 binding 里，天然不冲突。
+  两者在不同 binding 里，天然不冲突；binding 3/4 不参与动态区域，只服务 volume 区间。
 - `[RES_HIGH_BASE, RES_SLOT_COUNT)` 显式绑定的静态分区：view 输出、remote composite / encode、
   volume、材质预览、缩略图。**每个区间的 base 都由前一个推导得出**，所以手改一个 base 不可能造成重叠或空洞；
   新增区间要插进这条链，绝不允许再写魔法数字。C++ 侧对整个分区有 `static_assert`。
@@ -78,8 +79,8 @@ owner（`AssetThumbnailRenderer`、`RemoteServer`、`OffscreenRenderViewControll
 一律引用登记表常量，不得自建 base —— 早先 remote composite 的字面量 `64500` 压在材质缩略图
 `64000..64511` 尾部的重叠，正是自建 base 造成的。
 
-两个数组都按 `RES_SLOT_COUNT` **全量**分配（没有 `VARIABLE_DESCRIPTOR_COUNT` 机制），
-所以登记表直接决定描述符池大小：当前 17481 × 2，而不是过去的 65535 × 2。
+两个 2D 数组都按 `RES_SLOT_COUNT` **全量**分配（没有 `VARIABLE_DESCRIPTOR_COUNT` 机制），另有两个各 8 项的
+volume 数组；所以登记表直接决定描述符池大小：当前 `17481 × 2 + 8 × 2`，而不是过去的 `65535 × 2`。
 场景贴图超过 `RES_SCENE_TEXTURE_CAPACITY` 时 `GlobalTexturePool::RegisterTexture` 明确 `Throw`
 并提示要调哪个常量，而不是像过去那样静默踩坏高位描述符。
 - **volume 槽位（`RES_VOLUME_BASE` 起 8 个）是全局的，绝不能经 `ViewRT()` 重映射**。froxel 网格 / 3D LUT
@@ -99,7 +100,7 @@ owner（`AssetThumbnailRenderer`、`RemoteServer`、`OffscreenRenderViewControll
 回归护栏：
 
 - `Util.Bindless3DCompileTest.comp.slang`（`GK_BUILD_SHADER_TESTS` 门控）—— slangc 仍能从
-  `__DynamicResource` 转出 3D 类型，且 2D/3D 别名可在同一 binding 共存。
+  `__DynamicResource` 转出 3D 类型，且同一 shader 中的 2D/3D 资源落在独立 binding。
 - `gkNextUnitTests "[Unit][Bindless3D]"` —— 写 → barrier → 采样的运行时闭环，含三线性与 W 轴寻址断言。
 - `gkNextUnitTests "[Unit][Bindless]"` —— 登记表分区不重叠，且实际分配的描述符数组覆盖每个已登记区间的
   首尾槽位（在 validation layer 下跑可捕获越界写）。

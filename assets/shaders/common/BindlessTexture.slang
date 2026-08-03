@@ -3,22 +3,28 @@
 // ============================================================================
 // Bindless slot registry -- THE single source of truth for slot ownership
 // ============================================================================
-// Bindings 0 (COMBINED_IMAGE_SAMPLER) and 1 (STORAGE_IMAGE) are one flat array each, both sized
-// RES_SLOT_COUNT. A slot number means the same thing in both, so one resource can be readable at
-// slot N through binding 0 and writable at slot N through binding 1.
+// Bindings 0 (COMBINED_IMAGE_SAMPLER) and 1 (STORAGE_IMAGE) are the flat 2D arrays, both sized
+// RES_SLOT_COUNT. A slot number means the same thing in both, so one 2D resource can be readable
+// at slot N through binding 0 and writable at slot N through binding 1.
 //
-// Vulkan descriptors do NOT encode image dimensionality: the same array happily holds 2D and 3D
-// views side by side, and the shader picks the dimension at the access site via `.as<...>()`.
-// Nothing about a slot number tells you its dimension -- this registry is the only record.
+// Bindings 3 and 4 are compact, volume-only arrays for 3D sampled/storage images. They use the
+// same global RES_VOLUME_BASE slot range, but are indexed relative to that range. Keeping 2D and
+// 3D resources in distinct descriptor bindings is intentional: Vulkan permits dimension aliases,
+// but Metal translation of a shader containing both aliases is not reliable.
 //
 // The address space has two halves:
 //
 //   [0, RES_HIGH_BASE)              dynamically indexed, and it means something DIFFERENT per array:
-//                                     binding 0 -> scene textures, indexed by GlobalTexturePool
+//                                     binding 0 -> 2D scene textures, indexed by GlobalTexturePool
 //                                                  texture index. Capacity RES_SCENE_TEXTURE_CAPACITY.
-//                                     binding 1 -> RenderView RT banks, bank k at k*kViewRtBankStride
+//                                     binding 1 -> 2D RenderView RT banks, bank k at k*kViewRtBankStride
 //                                                  (8 banks x 256 = 2048; RT_* constants below).
-//                                   The two never collide because they live in different bindings.
+//                                     binding 3 -> 3D volume sampled images, indexed from
+//                                                  RES_VOLUME_BASE, capacity RES_VOLUME_COUNT.
+//                                     binding 4 -> 3D volume storage images, indexed from
+//                                                  RES_VOLUME_BASE, capacity RES_VOLUME_COUNT.
+//                                   These arrays never collide because each resource dimension has
+//                                   an explicit binding and volume indices are translated locally.
 //
 //   [RES_HIGH_BASE, RES_SLOT_COUNT) explicitly bound, statically partitioned, RES_* constants below.
 //                                   Every range here is derived from the previous one, so the
@@ -38,11 +44,11 @@
 //   16384..16391       8  0        OffscreenRenderViewController   secondary view outputs (3 used)
 //   16392..16399       8  0+1      NextRemote RemoteServer         session composites (3 used)
 //   16400..16447      48  1        NextRemote VideoPipeline        NV12 encode planes (3 x 16)
-//   16448..16455       8  0+1      volume resources                3D froxel grids / LUTs
+//   16448..16455       8  3+4      volume resources                3D froxel grids / LUTs
 //   16456              1  0        AssetThumbnailRenderer          material preview
 //   16457..16968     512  0        AssetThumbnailRenderer          mesh thumbnails
 //   16969..17480     512  0        AssetThumbnailRenderer          material thumbnails
-//   -> RES_SLOT_COUNT = 17481 descriptors per array (was 65535)
+//   -> RES_SLOT_COUNT = 17481 descriptors in each 2D array (3D arrays have 8 descriptors)
 
 namespace Bindless
 {
@@ -199,6 +205,8 @@ namespace Bindless
 [[vk::binding(0, 0)]] __DynamicResource SampleTextureArray[];
 [[vk::binding(1, 0)]] __DynamicResource StorageTextureArray[];
 [[vk::binding(2, 0)]] __DynamicResource ShadowMapArray[];
+[[vk::binding(3, 0)]] __DynamicResource VolumeSampleTextureArray[];
+[[vk::binding(4, 0)]] __DynamicResource VolumeStorageTextureArray[];
 
 namespace Bindless
 {
@@ -220,23 +228,23 @@ namespace Bindless
     }
 
     // --- Volume (3D) accessors ---
-    // Same descriptor arrays as the 2D accessors above; only the requested type differs. Volume
-    // slots are global (see RES_VOLUME_BASE), so they are passed absolutely and never through
-    // ViewRT().
+    // Volume slots are global (see RES_VOLUME_BASE), so callers pass absolute slot ids and these
+    // accessors translate them to the compact, dimension-specific descriptor arrays. They never
+    // pass through ViewRT().
     public Sampler3D GetSampleTexture3D(int index)
     {
-        return SampleTextureArray[NonUniformResourceIndex(index)].as<Sampler3D>();
+        return VolumeSampleTextureArray[NonUniformResourceIndex(index - RES_VOLUME_BASE)].as<Sampler3D>();
     }
 
     public RWTexture3D<T> GetStorageTexture3D<T : ITexelElement>(int index)
     {
-        return StorageTextureArray[NonUniformResourceIndex(index)].as<RWTexture3D<T>>();
+        return VolumeStorageTextureArray[NonUniformResourceIndex(index - RES_VOLUME_BASE)].as<RWTexture3D<T>>();
     }
 
     public uint3 GetStorageTexture3DDimensions<T : ITexelElement>(int index)
     {
         uint3 dim;
-        StorageTextureArray[NonUniformResourceIndex(index)].as<RWTexture3D<T>>().GetDimensions(dim.x, dim.y, dim.z);
+        VolumeStorageTextureArray[NonUniformResourceIndex(index - RES_VOLUME_BASE)].as<RWTexture3D<T>>().GetDimensions(dim.x, dim.y, dim.z);
         return dim;
     }
 

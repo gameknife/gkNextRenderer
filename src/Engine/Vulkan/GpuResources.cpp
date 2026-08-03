@@ -302,7 +302,8 @@ ImageView::ImageView(const class Device& device,
                      const uint32_t miplevel,
                      const VkComponentMapping components,
                      const VkImageViewType viewType) :
-    device_(device)
+    device_(device),
+    viewType_(viewType)
 {
     VkImageViewCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;

@@ -128,7 +128,7 @@ namespace ScadLibrary::AI
                 const auto& scaleRange = node["scaleRange"];
                 if (!scaleRange.is_array() || scaleRange.size() != 2 ||
                     !std::all_of(scaleRange.begin(), scaleRange.end(), [](const auto& value)
-                                 { return value.is_number() && value.get<double>() > 0.0; }))
+                                 { return value.is_number() && value.template get<double>() > 0.0; }))
                 {
                     error = "scaleRange must contain two positive values";
                     return false;

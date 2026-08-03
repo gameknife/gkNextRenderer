@@ -345,9 +345,8 @@ namespace Vulkan
         const RenderImage* GetStorageImage(uint32_t bindlessIdx) const;
 
         // --- Volume (3D) bindless resources ---
-        // Vulkan descriptors do not encode image dimensionality, so a 3D view is written into the
-        // very same bindless arrays as the 2D render targets; only the slot number differs (see the
-        // slot registry in assets/shaders/common/BindlessTexture.slang, RES_VOLUME_BASE range).
+        // Volume views use compact, dimension-specific descriptor arrays rather than the 2D
+        // bindless arrays. The shader accessors still take the global RES_VOLUME_BASE slot ids.
         // Volumes are tracked separately from bindless_.images because that vector is wiped on every
         // swapchain recreation, while froxel grids / 3D LUTs are resolution-independent and must
         // survive a resize. Binds the storage view when usage has STORAGE_BIT and the sampled view

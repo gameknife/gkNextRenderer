@@ -23,6 +23,30 @@
 
 namespace
 {
+    constexpr uint32_t kSampleTextureBinding = 0;
+    constexpr uint32_t kStorageTextureBinding = 1;
+    constexpr uint32_t kShadowMapBinding = 2;
+    constexpr uint32_t kVolumeSampleTextureBinding = 3;
+    constexpr uint32_t kVolumeStorageTextureBinding = 4;
+
+    bool IsVolumeImage(const Vulkan::ImageView& view)
+    {
+        return view.ViewType() == VK_IMAGE_VIEW_TYPE_3D;
+    }
+
+    uint32_t VolumeDescriptorIndex(uint32_t bindlessIdx)
+    {
+        const uint32_t volumeBase = static_cast<uint32_t>(Assets::Bindless::RES_VOLUME_BASE);
+        const uint32_t volumeEnd = volumeBase + Assets::GlobalTexturePool::kMaxVolumeBindlessSlots;
+        if (bindlessIdx < volumeBase || bindlessIdx >= volumeEnd)
+        {
+            Throw(std::invalid_argument(fmt::format(
+                "3D bindless slot {} is outside the volume range [{}..{})",
+                bindlessIdx, volumeBase, volumeEnd)));
+        }
+        return bindlessIdx - volumeBase;
+    }
+
     bool ShouldEnableTextureWorkerUpload(const Vulkan::Device& device)
     {
         if (device.TransferFamilyIndex() == static_cast<int32_t>(device.GraphicsFamilyIndex()))
@@ -171,9 +195,11 @@ namespace Assets
         static const uint32_t kMaxBindlessShadowMaps = 16u;
         const std::vector<Vulkan::DescriptorBinding> descriptorBindings =
         {
-            {2, kMaxBindlessShadowMaps, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_ALL},
-            {0, kMaxBindlessResources, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_ALL},
-            {1, kMaxBindlessResources, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_ALL},
+            {kShadowMapBinding, kMaxBindlessShadowMaps, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_ALL},
+            {kSampleTextureBinding, kMaxBindlessResources, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_ALL},
+            {kStorageTextureBinding, kMaxBindlessResources, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_ALL},
+            {kVolumeSampleTextureBinding, kMaxVolumeBindlessSlots, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_ALL},
+            {kVolumeStorageTextureBinding, kMaxVolumeBindlessSlots, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_ALL},
         };
         descriptorSetManager_.reset(new Vulkan::DescriptorSetManager(device, descriptorBindings, 1, true));
 
@@ -194,23 +220,14 @@ namespace Assets
 
     void GlobalTexturePool::BindTexture(uint32_t textureIdx, const TextureImage& textureImage)
     {
-        auto& descriptorSets = descriptorSetManager_->DescriptorSets();
-        const VkDescriptorImageInfo imageInfo{
-            textureImage.Sampler().Handle(),
-            textureImage.ImageView().Handle(),
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        };
-        std::vector<VkWriteDescriptorSet> descriptorWrites =
-        {
-            descriptorSets.Bind(0, 0, imageInfo, textureIdx, 1),
-        };
-        descriptorSets.UpdateDescriptors(0, descriptorWrites);
+        BindSampleTexture(textureIdx, textureImage.ImageView(), textureImage.Sampler());
     }
 
     void GlobalTexturePool::BindSampleTexture(uint32_t textureIdx, const Vulkan::ImageView& view,
                                               const Vulkan::Sampler& sampler)
     {
         auto& descriptorSets = descriptorSetManager_->DescriptorSets();
+        const bool isVolume = IsVolumeImage(view);
         const VkDescriptorImageInfo imageInfo{
             sampler.Handle(),
             view.Handle(),
@@ -218,7 +235,8 @@ namespace Assets
         };
         std::vector<VkWriteDescriptorSet> descriptorWrites =
         {
-            descriptorSets.Bind(0, 0, imageInfo, textureIdx, 1),
+            descriptorSets.Bind(0, isVolume ? kVolumeSampleTextureBinding : kSampleTextureBinding,
+                                imageInfo, isVolume ? VolumeDescriptorIndex(textureIdx) : textureIdx, 1),
         };
         descriptorSets.UpdateDescriptors(0, descriptorWrites);
     }
@@ -226,6 +244,7 @@ namespace Assets
     void GlobalTexturePool::BindStorageTexture(uint32_t textureIdx, const Vulkan::ImageView& textureImage)
     {
         auto& descriptorSets = descriptorSetManager_->DescriptorSets();
+        const bool isVolume = IsVolumeImage(textureImage);
         const VkDescriptorImageInfo imageInfo{
             VK_NULL_HANDLE,
             textureImage.Handle(),
@@ -233,7 +252,8 @@ namespace Assets
         };
         std::vector<VkWriteDescriptorSet> descriptorWrites =
         {
-            descriptorSets.Bind(0, 1, imageInfo, textureIdx, 1),
+            descriptorSets.Bind(0, isVolume ? kVolumeStorageTextureBinding : kStorageTextureBinding,
+                                imageInfo, isVolume ? VolumeDescriptorIndex(textureIdx) : textureIdx, 1),
         };
         descriptorSets.UpdateDescriptors(0, descriptorWrites);
     }
@@ -248,7 +268,7 @@ namespace Assets
         };
         std::vector<VkWriteDescriptorSet> descriptorWrites =
         {
-            descriptorSets.Bind(0, 2, imageInfo, slot, 1),
+            descriptorSets.Bind(0, kShadowMapBinding, imageInfo, slot, 1),
         };
         descriptorSets.UpdateDescriptors(0, descriptorWrites);
     }

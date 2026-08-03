@@ -245,7 +245,10 @@ private:
     void MergeNavDirtyBounds(const FCPUTLASBuildResult& result);
     void QueueFullProbeBake();
 
-    std::atomic<SnapshotPtr> activeSnapshot_;
+    // std::atomic<std::shared_ptr<T>> is not available on all C++20 standard
+    // libraries (notably libc++). Use the standard atomic shared_ptr free
+    // functions in AcquireSnapshot/PublishSnapshot instead.
+    SnapshotPtr activeSnapshot_;
     std::shared_ptr<const FCPUBLASSet> blasSet_;
     uint64_t blasGeneration_ = 0;
     uint64_t materialGeneration_ = 0;

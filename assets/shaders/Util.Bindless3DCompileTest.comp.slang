@@ -1,12 +1,12 @@
 // Compile-only probe for the 3D bindless path (GK_BUILD_SHADER_TESTS).
 //
 // Guards the one thing the runtime path cannot check for itself: that slangc still lowers
-// `__DynamicResource.as<RWTexture3D<T>>()` / `.as<Sampler3D>()` into valid SPIR-V, and that a
-// 3D and a 2D alias of the *same* descriptor binding can coexist in one module. This is not
+// `__DynamicResource.as<RWTexture3D<T>>()` / `.as<Sampler3D>()` into valid SPIR-V, and that 3D
+// and 2D resources use separate descriptor bindings in one module. This is not
 // dispatched by anything -- Test_Bindless3DTexture.cpp covers runtime behaviour.
 //
-// Expected SPIR-V: two OpTypeImage aliases (Dim2D and Dim3D) on each of (set=0, binding=0) and
-// (set=0, binding=1), all decorated NonUniform.
+// Expected SPIR-V: 2D resources remain on bindings 0/1, while 3D resources use bindings 3/4,
+// all decorated NonUniform.
 
 import Shader.Bindless;
 
@@ -41,7 +41,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     Bindless.GetStorageTexture3D<float4>(volumeSlot)[dispatchThreadId] = sampled;
 
-    // 2D alias of the very same descriptor arrays, in the same module.
+    // 2D access in the same module uses the regular 2D descriptor arrays.
     const uint2 dim2d = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_SCENE_COLOR);
     if (all(dispatchThreadId.xy < dim2d))
     {
