@@ -295,13 +295,16 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
         }
     }
 
-    Vulkan::Window::InitSDL(options.SystemDpiScaling);
+    // TUI dimensions are terminal/logical pixels. Keep the hidden render window at
+    // a fixed scale so high-DPI monitors do not enlarge the terminal UI.
+    const bool useSystemDpiScaling = options.SystemDpiScaling || options.Tui;
+    Vulkan::Window::InitSDL(useSystemDpiScaling);
     
     Vulkan::WindowConfig windowConfig{"gkNextEngine " + NextRenderer::GetBuildVersion(),
                                       options.Width,options.Height,
                                       false, options.Fullscreen,!options.Fullscreen,
                                       options.SaveFile,userdata,options.ForceSDR};
-    windowConfig.SystemDpiScaling = options.SystemDpiScaling;
+    windowConfig.SystemDpiScaling = useSystemDpiScaling;
     
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
     
@@ -971,6 +974,11 @@ void NextEngine::ToggleMaximize()
 
 void NextEngine::RequestScreenShot(FScreenShotSpec spec)
 {
+#if __linux__
+    (void)spec;
+    spdlog::warn("Screenshot capture is disabled on Linux");
+    return;
+#else
     ++screenShot_.queuedRequests;
     AddTickedTask([this, spec = std::move(spec)](double) mutable {
         if (screenShot_.hasPending ||
@@ -1003,6 +1011,7 @@ void NextEngine::RequestScreenShot(FScreenShotSpec spec)
         screenShot_.hasPending = true;
         return true;
     });
+#endif
 }
 
 bool NextEngine::ShouldCaptureScreenShotThisFrame() const
