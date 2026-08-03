@@ -23,7 +23,7 @@ Options::Options(const int argc, const char* argv[])
 
         ("width", "The framebuffer width.", cxxopts::value<uint32_t>(Width)->default_value("1920"))
         ("height", "The framebuffer height.", cxxopts::value<uint32_t>(Height)->default_value("1080"))
-        ("present-mode", "The present mode (0 = Immediate, 1 = MailBox, 2 = FIFO, 3 = FIFORelaxed).", cxxopts::value<uint32_t>(PresentMode)->default_value("1"))
+        ("present-mode", "The present mode (0 = Immediate, 1 = MailBox, 2 = FIFO, 3 = FIFORelaxed).", cxxopts::value<uint32_t>(PresentMode)->default_value("2"))
         ("fullscreen", "Toggle fullscreen vs windowed (default: windowed).", cxxopts::value<bool>(Fullscreen)->default_value("false"))
         ("system-dpi-scaling", "Use legacy Windows system bitmap DPI scaling instead of engine-native DPI scaling.",
          cxxopts::value<bool>(SystemDpiScaling)->default_value("false")->implicit_value("true"))
@@ -137,8 +137,7 @@ Options::Options(const int argc, const char* argv[])
             }
             if (RemoteFps == 0)
             {
-                RemoteFps = 60;
-            }
+                RemoteFps = 60;          }
             if (RemoteHttpPort > 65535 || RemotePort > 65535)
             {
                 Throw(std::out_of_range("Remote Play ports must be in range 0..65535."));
