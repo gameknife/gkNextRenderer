@@ -49,7 +49,8 @@ Options::Options(const int argc, const char* argv[])
         ("tui-fps", "Maximum terminal refresh rate for --tui.", cxxopts::value<uint32_t>(TuiFps)->default_value("30"))
         ("tui-max-cols", "Optional column cap for --tui (0 = auto).", cxxopts::value<uint32_t>(TuiMaxCols)->default_value("0"))
         ("tui-max-rows", "Optional row cap for --tui (0 = auto).", cxxopts::value<uint32_t>(TuiMaxRows)->default_value("0"))
-        ("tui-ssaa", "Supersample factor for --tui hidden rendering (1-16).", cxxopts::value<uint32_t>(TuiSsaa)->default_value("8"))
+        ("tui-ssaa", "Supersample factor for --tui hidden rendering (1-16).", cxxopts::value<uint32_t>(TuiSsaa)->default_value("4"))
+        ("tui-cell-mode", "TUI character layout: half or quadrant.", cxxopts::value<std::string>(TuiCellMode)->default_value("half"))
         ("tui-no-input", "Do not capture stdin in --tui mode.", cxxopts::value<bool>(TuiNoInput)->default_value("false")->implicit_value("true"))
         ("disable-streamline", "Disable NVIDIA Streamline/DLSS integration for this process.", cxxopts::value<bool>(DisableStreamline)->default_value("false")->implicit_value("true"))
         ("disable-fidelityfx", "Disable AMD FidelityFX FSR integration for this process.", cxxopts::value<bool>(DisableFidelityFX)->default_value("false")->implicit_value("true"))
@@ -165,6 +166,14 @@ Options::Options(const int argc, const char* argv[])
                 TuiFps = 30;
             }
             TuiSsaa = std::clamp(TuiSsaa, 1u, 16u);
+            if (TuiCellMode == "half-block")
+            {
+                TuiCellMode = "half";
+            }
+            if (TuiCellMode != "half" && TuiCellMode != "quadrant")
+            {
+                Throw(std::out_of_range("Invalid --tui-cell-mode. Expected half or quadrant."));
+            }
         }
 
         if (PresentMode > 3)

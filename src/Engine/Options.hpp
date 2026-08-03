@@ -44,6 +44,7 @@ public:
     uint32_t TuiMaxCols{};
     uint32_t TuiMaxRows{};
     uint32_t TuiSsaa{1};
+    std::string TuiCellMode{"half"};
     bool TuiNoInput{};
     bool DisableStreamline{};
     bool DisableFidelityFX{};

@@ -7,6 +7,12 @@
 
 namespace Runtime::Tui
 {
+    enum class ECellMode
+    {
+        HalfBlock,
+        Quadrant,
+    };
+
     struct FRgb8
     {
         uint8_t r{};
@@ -23,12 +29,21 @@ namespace Runtime::Tui
         {
             uint32_t MaxColumns = 0;
             uint32_t MaxRows = 0;
+            ECellMode CellMode = ECellMode::HalfBlock;
+        };
+
+        struct FSourceExtent
+        {
+            uint32_t Width = 0;
+            uint32_t Height = 0;
         };
 
         TerminalBlitter() : TerminalBlitter(FOptions{}) {}
         explicit TerminalBlitter(FOptions options);
 
         void Reset();
+        FSourceExtent GetSourceExtent(uint32_t terminalColumns, uint32_t terminalRows) const;
+        FSourceExtent GetRenderExtent(uint32_t terminalColumns, uint32_t terminalRows) const;
         std::string EncodeFrame(const std::vector<FRgb8>& sourcePixels,
                                 uint32_t sourceWidth,
                                 uint32_t sourceHeight,
@@ -39,8 +54,9 @@ namespace Runtime::Tui
     private:
         struct FCell
         {
-            FRgb8 upper{};
-            FRgb8 lower{};
+            FRgb8 Foreground{};
+            FRgb8 Background{};
+            uint32_t Glyph = 0x20;
 
             bool operator==(const FCell& other) const = default;
         };
@@ -62,6 +78,8 @@ namespace Runtime::Tui
                                                uint32_t sourceHeight,
                                                uint32_t targetWidth,
                                                uint32_t targetHeight);
+        uint32_t PixelsPerCellX() const;
+        uint32_t PixelsPerCellY() const;
 
         FOptions options_{};
         uint32_t previousColumns_{};

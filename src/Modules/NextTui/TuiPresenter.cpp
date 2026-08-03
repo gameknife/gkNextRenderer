@@ -82,7 +82,13 @@ namespace Runtime::Tui
     TuiPresenter::TuiPresenter(NextEngine& engine, const Runtime::Config::Options& options)
         : engine_(engine)
         , options_(options)
-        , blitter_({.MaxColumns = options.TuiMaxCols, .MaxRows = options.TuiMaxRows})
+        , blitter_({
+            .MaxColumns = options.TuiMaxCols,
+            .MaxRows = options.TuiMaxRows,
+            .CellMode = options.TuiCellMode == "quadrant"
+                ? ECellMode::Quadrant
+                : ECellMode::HalfBlock,
+        })
         , terminal_(!options.TuiNoInput)
         , readback_(std::make_unique<FReadbackState>())
     {
@@ -673,35 +679,42 @@ namespace Runtime::Tui
 
     TuiPresenter::FRenderTargetSize TuiPresenter::ComputeRenderTargetSize(const FTerminalSize terminalSize) const
     {
-        const FRenderTargetSize outputSize = ComputeOutputSize(terminalSize);
-        if (outputSize.Width == 0 || outputSize.Height == 0)
+        if (terminalSize.Columns < TuiMinColumns || terminalSize.Rows < TuiMinRows)
+        {
+            return {};
+        }
+
+        const TerminalBlitter::FSourceExtent renderExtent =
+            blitter_.GetRenderExtent(terminalSize.Columns, terminalSize.Rows);
+        if (renderExtent.Width == 0 || renderExtent.Height == 0)
         {
             return {};
         }
 
         const uint32_t ssaa = std::max(1u, options_.TuiSsaa);
         return {
-            .Width = outputSize.Width * ssaa,
-            .Height = outputSize.Height * ssaa,
+            .Width = renderExtent.Width * ssaa,
+            .Height = renderExtent.Height * ssaa,
         };
     }
 
     TuiPresenter::FRenderTargetSize TuiPresenter::ComputeOutputSize(const FTerminalSize terminalSize) const
     {
-        const uint32_t cappedColumns = options_.TuiMaxCols > 0
-            ? std::min(terminalSize.Columns, options_.TuiMaxCols)
-            : terminalSize.Columns;
-        const uint32_t cappedRows = options_.TuiMaxRows > 0
-            ? std::min(terminalSize.Rows, options_.TuiMaxRows)
-            : terminalSize.Rows;
-        if (cappedColumns < TuiMinColumns || cappedRows < TuiMinRows)
+        if (terminalSize.Columns < TuiMinColumns || terminalSize.Rows < TuiMinRows)
+        {
+            return {};
+        }
+
+        const TerminalBlitter::FSourceExtent sourceExtent =
+            blitter_.GetSourceExtent(terminalSize.Columns, terminalSize.Rows);
+        if (sourceExtent.Width == 0 || sourceExtent.Height == 0)
         {
             return {};
         }
 
         return {
-            .Width = cappedColumns,
-            .Height = (cappedRows - 1) * 2,
+            .Width = sourceExtent.Width,
+            .Height = sourceExtent.Height,
         };
     }
 
