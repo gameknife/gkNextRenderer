@@ -125,6 +125,7 @@ if command -v go >/dev/null 2>&1; then
     NEED_BUILD=1
   fi
   if [ "$NEED_BUILD" -eq 1 ]; then
+    echo "[gnb] building gnb ..."
     (cd "$ROOT/tools/gnb" && go build -tags "$GO_BUILD_TAGS" -trimpath -ldflags="-s -w -X main.version=$LOCAL_VERSION" -o "$LOCAL_GNB" ./cmd/gnb)
   fi
   GNB="$LOCAL_GNB"
