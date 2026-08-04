@@ -245,10 +245,14 @@ private:
     void MergeNavDirtyBounds(const FCPUTLASBuildResult& result);
     void QueueFullProbeBake();
 
-    // std::atomic<std::shared_ptr<T>> is not available on all C++20 standard
-    // libraries (notably libc++). Use the standard atomic shared_ptr free
-    // functions in AcquireSnapshot/PublishSnapshot instead.
+#if defined(__cpp_lib_atomic_shared_ptr) && __cpp_lib_atomic_shared_ptr >= 201711L
+    std::atomic<SnapshotPtr> activeSnapshot_;
+#else
+    // Keep a mutex fallback for C++20 standard libraries that do not yet
+    // provide the std::atomic<std::shared_ptr<T>> specialization.
     SnapshotPtr activeSnapshot_;
+    mutable std::mutex snapshotMutex_;
+#endif
     std::shared_ptr<const FCPUBLASSet> blasSet_;
     uint64_t blasGeneration_ = 0;
     uint64_t materialGeneration_ = 0;

@@ -425,12 +425,22 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
 
 FCPUAccelerationStructure::SnapshotPtr FCPUAccelerationStructure::AcquireSnapshot() const
 {
-    return std::atomic_load_explicit(&activeSnapshot_, std::memory_order_acquire);
+#if defined(__cpp_lib_atomic_shared_ptr) && __cpp_lib_atomic_shared_ptr >= 201711L
+    return activeSnapshot_.load(std::memory_order_acquire);
+#else
+    std::lock_guard<std::mutex> lock(snapshotMutex_);
+    return activeSnapshot_;
+#endif
 }
 
 void FCPUAccelerationStructure::PublishSnapshot(SnapshotPtr snapshot)
 {
-    std::atomic_store_explicit(&activeSnapshot_, std::move(snapshot), std::memory_order_release);
+#if defined(__cpp_lib_atomic_shared_ptr) && __cpp_lib_atomic_shared_ptr >= 201711L
+    activeSnapshot_.store(std::move(snapshot), std::memory_order_release);
+#else
+    std::lock_guard<std::mutex> lock(snapshotMutex_);
+    activeSnapshot_ = std::move(snapshot);
+#endif
 }
 
 uint64_t FCPUAccelerationStructure::RequestRuntimeBuild(Scene& scene)
