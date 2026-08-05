@@ -1,6 +1,7 @@
 #include "Engine/Vulkan/WindowSurface.hpp"
 #include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Vulkan/VulkanInterposer.hpp"
+#include "Engine/Vulkan/VulkanLoaderBypass.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Utilities/StbImage.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
@@ -17,9 +18,11 @@ namespace Vulkan
 namespace
 {
 #if WIN32
-    std::filesystem::path FindLvpManifest()
+    std::filesystem::path FindIcdManifest(const std::string& vulkanDriver)
     {
-        if (const char* overridePath = std::getenv("GK_NEXT_LVP_ICD");
+        const bool isDozen = vulkanDriver == "dozen";
+        const char* overrideVariable = isDozen ? "GK_NEXT_DOZEN_ICD" : "GK_NEXT_LVP_ICD";
+        if (const char* overridePath = std::getenv(overrideVariable);
             overridePath != nullptr && overridePath[0] != '\0')
         {
             std::error_code errorCode;
@@ -39,22 +42,25 @@ namespace
 #else
         const std::filesystem::path sourceRoot;
 #endif
-        const std::array<std::filesystem::path, 14> candidates =
+        const std::string manifestPrefix = isDozen ? "dzn_icd" : "lvp_icd";
+        const std::array<std::filesystem::path, 16> candidates =
         {
-            sourceRoot / "external" / "Dozen" / "x64" / "lvp_icd.x86_64.json",
-            sourceRoot / "external" / "Dozen" / "x64" / "lvp_icd.x64.json",
-            sourceRoot / "external" / "mesa" / "x64" / "lvp_icd.x86_64.json",
-            sourceRoot / "external" / "mesa" / "x64" / "lvp_icd.x64.json",
-            executableDirectory / "lvp_icd.x86_64.json",
-            executableDirectory / "lvp_icd.x64.json",
-            executableDirectory / "lvp_icd.json",
-            executableDirectory / "lvp" / "lvp_icd.x86_64.json",
-            executableDirectory / "mesa" / "lvp_icd.x86_64.json",
-            executableDirectory / "dozen" / "lvp_icd.x86_64.json",
-            runtimeRoot / "lvp_icd.x86_64.json",
-            runtimeRoot / "lvp" / "lvp_icd.x86_64.json",
-            runtimeRoot / "mesa" / "lvp_icd.x86_64.json",
-            runtimeRoot / "dozen" / "lvp_icd.x86_64.json",
+            sourceRoot / "external" / "Dozen" / "x64" / (manifestPrefix + ".x86_64.json"),
+            sourceRoot / "external" / "Dozen" / "x64" / (manifestPrefix + ".x64.json"),
+            sourceRoot / "external" / "mesa" / "x64" / (manifestPrefix + ".x86_64.json"),
+            sourceRoot / "external" / "mesa" / "x64" / (manifestPrefix + ".x64.json"),
+            executableDirectory / (manifestPrefix + ".x86_64.json"),
+            executableDirectory / (manifestPrefix + ".x64.json"),
+            executableDirectory / (manifestPrefix + ".json"),
+            executableDirectory / (isDozen ? "dozen" : "lvp") / (manifestPrefix + ".x86_64.json"),
+            executableDirectory / "mesa" / (manifestPrefix + ".x86_64.json"),
+            runtimeRoot / (manifestPrefix + ".x86_64.json"),
+            runtimeRoot / (isDozen ? "dozen" : "lvp") / (manifestPrefix + ".x86_64.json"),
+            runtimeRoot / "mesa" / (manifestPrefix + ".x86_64.json"),
+            runtimeRoot / "Vulkan" / (manifestPrefix + ".x86_64.json"),
+            sourceRoot / "external" / "Vulkan" / "x64" / (manifestPrefix + ".x86_64.json"),
+            executableDirectory / "Vulkan" / (manifestPrefix + ".x86_64.json"),
+            runtimeRoot / "Vulkan" / (manifestPrefix + ".x64.json"),
         };
 
         std::error_code errorCode;
@@ -102,12 +108,12 @@ namespace
             return;
         }
 
-        const std::filesystem::path manifest = FindLvpManifest();
+        const std::filesystem::path manifest = FindIcdManifest(vulkanDriver);
         if (manifest.empty())
         {
-            Throw(std::runtime_error(
-                "LVP Vulkan ICD manifest was not found; expected lvp_icd.x86_64.json under the executable, "
-                "runtime, or external/Dozen/x64 directory (or set GK_NEXT_LVP_ICD)"));
+            Throw(std::runtime_error(vulkanDriver == "dozen"
+                ? "Dozen Vulkan ICD manifest was not found; expected dzn_icd.x86_64.json or set GK_NEXT_DOZEN_ICD"
+                : "LVP Vulkan ICD manifest was not found; expected lvp_icd.x86_64.json or set GK_NEXT_LVP_ICD"));
         }
 
         const std::filesystem::path driverDirectory = manifest.parent_path();
@@ -121,14 +127,15 @@ namespace
             Throw(std::runtime_error("failed to configure the LVP Vulkan ICD"));
         }
 
-        SPDLOG_INFO("Vulkan driver mode: LVP; using ICD manifest {}", manifestPath);
+        SPDLOG_INFO("Vulkan driver mode: {}; using ICD manifest {}",
+                    vulkanDriver == "dozen" ? "Dozen" : "LVP", manifestPath);
     }
 #else
     void ConfigureVulkanDriver(const std::string& vulkanDriver)
     {
         if (vulkanDriver != "native")
         {
-            Throw(std::runtime_error("--vulkan-driver lvp is only supported on Windows"));
+            Throw(std::runtime_error("--vulkan-driver lvp and dozen are only supported on Windows"));
         }
     }
 #endif
@@ -493,6 +500,19 @@ void Window::InitSDL(bool systemDpiScaling, const std::string& vulkanDriver)
         Throw(std::runtime_error("failed to init SDL."));
     }
     ConfigureVulkanDriver(vulkanDriver);
+
+    // Software / translation ICDs cannot go through the Streamline interposer (see
+    // VulkanLoaderBypass.hpp), so both the engine and SDL talk to the loader directly.
+    if (vulkanDriver != "native")
+    {
+        Vulkan::RedirectVulkanImportsToSystemLoader();
+        if (!SDL_Vulkan_LoadLibrary(nullptr))
+        {
+            Throw(std::runtime_error("failed to init SDL Vulkan."));
+        }
+        return;
+    }
+
     const char* vulkanLoaderPath = Vulkan::Interposer().PreferredVulkanLoaderPath();
     if (!SDL_Vulkan_LoadLibrary(vulkanLoaderPath))
     {

@@ -62,9 +62,15 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
     AppendUniqueExtension(extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif
     
-    AppendUniqueExtension(extensions, VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME);
+    if (hasInstanceExtension(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME))
+    {
+        AppendUniqueExtension(extensions, VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME);
+    }
 #if WIN32
-    AppendUniqueExtension(extensions, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
+    if (hasInstanceExtension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME))
+    {
+        AppendUniqueExtension(extensions, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
+    }
 #endif
     
 #if __APPLE__

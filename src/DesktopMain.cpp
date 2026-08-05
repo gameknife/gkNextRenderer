@@ -73,6 +73,28 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
+    // std::set_terminate([]()
+    // {
+    //     try
+    //     {
+    //         if (const std::exception_ptr active = std::current_exception())
+    //         {
+    //             std::rethrow_exception(active);
+    //         }
+    //         SPDLOG_ERROR("TERMINATE: no active exception");
+    //     }
+    //     catch (const std::exception& error)
+    //     {
+    //         SPDLOG_ERROR("TERMINATE: {}", error.what());
+    //     }
+    //     catch (...)
+    //     {
+    //         SPDLOG_ERROR("TERMINATE: unknown exception");
+    //     }
+    //     spdlog::default_logger()->flush();
+    //     std::abort();
+    // });
+
     // Handle command line options.
 #if IOS
     const char* argv1[] = { "gkNextRenderer", "--load-scene=assets/models/conf_room.glb" };

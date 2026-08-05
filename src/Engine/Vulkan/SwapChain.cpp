@@ -7,6 +7,7 @@
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 #include "Engine/Vulkan/VulkanInterposer.hpp"
+#include "Engine/Options.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include <algorithm>
 #include <limits>
@@ -136,9 +137,17 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
             "surface usage 0x{:x} lacks required COLOR_ATTACHMENT/TRANSFER_DST flags 0x{:x}",
             details.Capabilities.supportedUsageFlags, requiredUsage));
     }
-    const VkImageUsageFlags optionalUsage =
+    VkImageUsageFlags optionalUsage =
         details.Capabilities.supportedUsageFlags &
         (VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT);
+    // Dozen advertises STORAGE on its surfaces but hands out DXGI back buffers, which cannot
+    // be typed UAVs for BGRA8 in D3D12. Creating such a swapchain leaves its D3D12 device in
+    // a state where every later allocation fails with VK_ERROR_OUT_OF_DEVICE_MEMORY, so drop
+    // the flag here: the renderer already falls back to an intermediate target plus a blit.
+    if (GOption != nullptr && GOption->VulkanDriver == "dozen")
+    {
+        optionalUsage &= ~VK_IMAGE_USAGE_STORAGE_BIT;
+    }
     createInfo.imageUsage = requiredUsage | optionalUsage;
     createInfo.preTransform = details.Capabilities.currentTransform;
     createInfo.compositeAlpha = ChooseCompositeAlpha(details.Capabilities.supportedCompositeAlpha);

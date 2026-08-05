@@ -715,29 +715,35 @@ namespace Vulkan
         deviceFeatures.shaderInt16 = supportedFeatures.shaderInt16;
         deviceFeatures.shaderInt64 = supportedFeatures.shaderInt64;
 
-        // Optional heatmap instrumentation.
-#if WIN32 && GK_ENABLE_SHADER_CLOCK
-        requiredExtensions.insert(requiredExtensions.end(),
-                                  {
-                                      VK_KHR_SHADER_CLOCK_EXTENSION_NAME,
-                                      VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME
-                                  });
-
-        // Opt-in into mandatory device features.
+        // Optional heatmap instrumentation. Software / translation ICDs (lvp, dozen) do not
+        // always expose these, so the chain only picks them up when the device has both.
         VkPhysicalDeviceShaderClockFeaturesKHR shaderClockFeatures = {};
-        shaderClockFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CLOCK_FEATURES_KHR;
-        shaderClockFeatures.pNext = nextDeviceFeatures;
-        shaderClockFeatures.shaderSubgroupClock = true;
+#if WIN32 && GK_ENABLE_SHADER_CLOCK
+        if (HasDeviceExtension(physicalDevice, VK_KHR_SHADER_CLOCK_EXTENSION_NAME) &&
+            HasDeviceExtension(physicalDevice, VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME))
+        {
+            requiredExtensions.insert(requiredExtensions.end(),
+                                      {
+                                          VK_KHR_SHADER_CLOCK_EXTENSION_NAME,
+                                          VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME
+                                      });
+
+            // Opt-in into mandatory device features.
+            shaderClockFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CLOCK_FEATURES_KHR;
+            shaderClockFeatures.pNext = nextDeviceFeatures;
+            shaderClockFeatures.shaderSubgroupClock = true;
+            nextDeviceFeatures = &shaderClockFeatures;
+        }
+        else
+        {
+            SPDLOG_INFO("Shader clock heatmap instrumentation unavailable on this device");
+        }
 #endif
-        
+
         // support bindless material
         VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures = {};
         indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
-#if WIN32 && GK_ENABLE_SHADER_CLOCK
-        indexingFeatures.pNext = &shaderClockFeatures;
-#else
-    indexingFeatures.pNext = nextDeviceFeatures;
-#endif
+        indexingFeatures.pNext = nextDeviceFeatures;
         indexingFeatures.runtimeDescriptorArray = supportedIndexingFeatures.runtimeDescriptorArray;
         indexingFeatures.shaderSampledImageArrayNonUniformIndexing = supportedIndexingFeatures.shaderSampledImageArrayNonUniformIndexing;
         indexingFeatures.descriptorBindingPartiallyBound = supportedIndexingFeatures.descriptorBindingPartiallyBound;
