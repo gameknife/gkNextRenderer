@@ -6,8 +6,6 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/gameknife/gkNextEngine)
 ![Desktop CI](https://github.com/gameknife/gkNextEngine/actions/workflows/desktop.yml/badge.svg)
-![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android.yml/badge.svg)
-![iOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/ios.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ![Play ground](docs/gallery/4_playground.avif)
@@ -16,7 +14,7 @@
 
 gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎 / 渲染实验场，核心目标始终是两件事：
 
-- 用 **实时路径追踪、Hybrid Rendering 与 HDR 光照** 做出真正有展示力、且能稳定跑在运行时里的画面
+- 用 **实时路径追踪、Hybrid Rendering 与 TrueHDR** 做出真正有展示力、且能稳定跑在运行时里的画面
 - 用 **可运行、可扩展、可用于玩法原型验证与 AI Native 工作流的引擎能力** 支撑长期演进，而不是停留在单点 demo
 
 项目以渲染器能力为核心，同时持续扩展编辑器、脚本、物理、内容导入与多游戏原型。当前的 MagicaLego、Brotato3D、KongLie3D、BrickPlayer、CharacterDemo、Flappy等原型，以及 SCAD、LDraw、Gaussian Splat 等结构化内容管线，并不是孤立功能点；它们都在为后续 AI Native 的内容生成、场景理解、玩法迭代和自动化验证打基础。
@@ -35,13 +33,13 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 ## 项目特性
 
 - **实时路径追踪与 Hybrid Rendering**
-  围绕 1spp + temporal reuse、降噪、重投影和多管线切换持续推进，让路径追踪不只停留在离线效果演示，而是面向真实运行时表现。
+  围绕 1/2spp + temporal reuse、降噪、重投影和多管线切换持续推进，让路径追踪不只停留在离线效果演示，而是面向真实运行时表现。
 
 - **以性能为约束的渲染管线**
-  世界辐射缓存复用、稀疏显存布局、GPU-Driven 海量提交、按需驻留与多档上采，目标是在固定 GPU 预算下尽量多出画面、少占显存，而不是为单帧画质无限堆资源。
+  世界辐射缓存复用、稀疏显存布局、GPU-Driven 海量提交，目标是在固定 GPU 预算下尽量多出画面、少占显存，而不是为单帧画质无限堆资源。
 
 - **游戏级取向的 GPU 架构**
-  通过 Visibility Buffer、全 Bindless、GPU-Driven 单 draw 提交等设计，尽量把 CPU 开销留给内容与玩法，把 GPU 算力用在真正影响画面的地方。
+  通过 Visibility Buffer、全 Bindless、GPU-Driven 单 draw 提交等设计，最小化状态切换和command编排，尽量把 CPU 开销留给内容与玩法，把 GPU 算力用在真正影响画面的地方。
 
 - **引擎能力服务于内容与玩法原型**
   包括 ECS、反射、编辑器、脚本热重载、物理同步、运行时导入和稳定的渲染行为。这些能力共同支撑更完整的可玩内容系统。
@@ -50,7 +48,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
   多个游戏原型用于验证玩法循环、输入、物理、脚本和渲染在真实运行时里的协作；SCAD、LDraw 与 Gaussian Splat 导入让 AI 可以生成、修改、理解并验证结构化 3D 内容，而不是只输出静态资源。
 
 - **多格式内容导入与互操作**
-  完整支持 glTF 运行时导入与部分导出；同时可直接导入 `.ldr` / `.mpd`、OpenSCAD `.scad` DSL 与 PlayCanvas `.sog` 高斯溅射资产，把结构化场景纳入统一的 Runtime、渲染与交互系统。
+  完整支持 glTF 运行时导入与部分导出；同时可直接导入 LDraw `.ldr` / `.mpd`、OpenSCAD `.scad` DSL 与 PlayCanvas `.sog` 高斯溅射资产，把结构化场景纳入统一的 Runtime、渲染与交互系统。
 
 ---
 
@@ -95,10 +93,10 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 
 ### 1. 面向运行时的高质量渲染
 
-- **实时路径追踪与 Hybrid Rendering**：围绕 1spp + temporal reuse、降噪、重投影和多管线切换持续推进，让路径追踪在真实运行时条件下可用
+- **实时路径追踪与 Hybrid Rendering**：围绕 1/2spp + temporal reuse、降噪、重投影和多管线切换持续推进，让路径追踪在真实运行时条件下可用
 - **现代 GPU 光栅管线**：Visibility Buffer、全 Bindless、GPU-Driven 单 draw 提交、Soft Mesh Shader 和 GPU CSM 阴影服务于高密度场景与游戏级工况
 - **多套渲染器热切换**：同一套资产与场景可切换 PathTracing、SoftwareTracing、SoftwareModern / NoAmbient 等管线，便于画质、性能与平台适配对比
-- **GI、降噪与上采**：SHARC 世界辐射缓存、AmbientCube 稀疏显存 / 命中驱动残留、RGB9E5 间接光、GTAO、à-trous / JBF 降噪，以及 FSR / DLSS SR / RR / Frame Generation
+- **GI、降噪与上采**：SHARC 世界辐射缓存、RESTIR DI，以及 FSR / DLSS / DLSS RR / Native TAAU / SGSR2
 - **高斯溅射共渲染**：支持 PlayCanvas SOG v2 Gaussian Splatting，以硬件 billboard 路径和 mesh 场景共存
 
 ### 2. 运行时、编辑器与验证工具链
@@ -129,41 +127,9 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 
 ### 5. 代码规模可控，适合学习和扩展
 
-- **第一方 Engine core 目标 < 50k LOC**：核心刻意保持在便于理解和持续演进的区间；2026-07-17 实测 Engine 约 31k 行，连同 Modules、Gameplay、全部应用与测试共 141,421 行。数字会变化，以 `gnb loc` 为准
+- **第一方 Engine core 目标 < 50k LOC**：核心刻意保持在便于理解和持续演进的区间
 - **优先清晰实现而非过度设计**：尽量用明确的数据流、职责边界和成熟三方库解决问题，避免把实验性功能过早抽象成沉重框架
 - **适合阅读现代引擎实现**：从 Vulkan 渲染、资源管理、脚本、编辑器、反射、内容导入到测试 / benchmark / agent validation，都能看到完整的工程组织方式
-
----
-
-## 技术方向
-
-### 渲染与 GPU 架构
-
-- **Visibility Buffer**
-- **全 Bindless + GPU-Driven**
-- **Single-Draw GPU-Driven Submit（Soft Mesh Shader）**
-- **Hardware / Software Ray Tracing（ray query）**
-- **SHARC 世界辐射缓存 / 间接光 RGB9E5**
-- **AmbientCube GI：稀疏显存 + 命中驱动残留**
-- **降噪：ReLAX 风格方差引导 / à-trous / JBF**
-- **Temporal Reprojection / Sky Occlusion（GTAO）**
-- **Upscaler：FSR / Windows 上的 NVIDIA Streamline DLSS SR / RR / Frame Generation**
-- **Gaussian Splatting（SOG v2 + 硬件 billboard）**
-
-### 引擎与工具链
-
-- **现代 CMake Presets + vcpkg**
-- **跨平台运行时：桌面 / Android / iOS**
-- **ImGui Editor + Node-based Material Workflow**
-- **QuickJS Runtime Scripting**
-- **TUI 终端渲染 / Remote Play / Visual Test / Benchmark / Packager**
-- **`gnb` 项目 CLI（构建 / 运行 / 截图验证 / dashboard / 本地 LLM）**
-
-### AI Native
-
-- **内置 AI Agent 基础设施，可扩展运行时 LLM 能力**
-- **使用 Codex / agentic coding 进行引擎基础设施与示例 Demo 的原生开发**
-- **放弃 low-code 叙事，转向更直接的 agentic coding 工作流**
 
 ---
 
@@ -187,6 +153,11 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 ---
 
 ## 快速开始
+
+对于墙内开发者，请首先确保网络的稳定性，个人推荐常年使用工具
+
+[带邀请码链接](https://nxonearth.com/signupbyemail.aspx?MemberCode=93e1edc92a95412dbc7ff38c8288951920240913095147)
+[不带邀请码链接](https://nxonearth.com/signupbyemail.aspx)
 
 项目使用 CMake + Ninja，依赖由 vcpkg 管理。除了宿主机本身必须具备的基础工具（编译器 / IDE、CMake、平台 SDK 等），项目级依赖、外部工具链和可选资源包现在都尽量交给 `gnb` 准备。构建依赖下载阶段需要可访问 GitHub 的网络环境。
 
@@ -273,22 +244,6 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 
 </details>
 
-<details>
-<summary><b>Android (Windows 构建)</b></summary>
-
-**前置条件：** JDK 17+、Android SDK，以及通过 `ANDROID_NDK_HOME` 指定的已安装 NDK（仓库当前不固定具体 NDK 版本）
-
-```bat
-set ANDROID_HOME=C:\Android\Sdk
-set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\YOUR_NDK_VERSION
-./gnb.bat setup --vcpkg-only
-./gnb.bat android
-```
-
-Android 主机侧仍需要提供 JDK / SDK / NDK；项目内的 vcpkg 依赖与外部工具链则继续由 `gnb` 处理。
-
-</details>
-
 ### 运行示例
 
 ```shell
@@ -298,40 +253,11 @@ Android 主机侧仍需要提供 JDK / SDK / NDK；项目内的 vcpkg 依赖与�
 # Editor
 ./gnb.sh run gkNextEditor
 
-# BrickPlayer（数字乐高 / LDraw 搭建原型）
-./gnb.sh run BrickPlayer
-
-# CharacterDemo（角色控制 / AI / 导航实验）
-./gnb.sh run CharacterDemo
-
 # TUI 终端模式（无窗口，画面刷到终端）
 ./gnb.sh tui --scene assets/models/playground.glb
 
 # Remote Play（浏览器 WebRTC 远程游玩 host）
 ./gnb.sh remote --target gkNextRenderer --scene assets/models/playground.glb --res 1280x720
-```
-
-### 可选资源包（optional assets）
-
-部分较大的二进制资源不随仓库提交，需要按需拉取：
-
-| 选择器 | 内容 | 落盘位置 | 缺失影响 |
-|------|------|------|------|
-| `ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer 缺 LDraw 零件库 |
-| `optional` | `optional.pak` | `assets/paks/` | 主渲染器 / Editor / CharacterDemo / MagicaLego 缺场景资源 |
-| `magicalego` | `magicalego.pak`（BGM / 放置音效） | `assets/paks/` | MagicaLego / BrickPlayer 静音 |
-| `ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows 下 MagicaLego 视频录制不可用 |
-
-```bash
-# Linux / macOS / Git Bash：默认拉取全部可选资源
-./gnb.sh paks fetch
-
-# 或只拉指定资源
-./gnb.sh paks fetch optional ldraw
-./gnb.sh paks fetch ffmpeg magicalego
-
-# Windows
-./gnb.bat paks fetch
 ```
 
 ## 子项目
@@ -386,4 +312,4 @@ cpptrace · cxxopts · sdl3 · glm · imgui · stb · curl · nlohmann-json · t
 
 ## 许可协议
 
-gkNextEngine 以 [MIT 协议](LICENSE) 开源。源自 [RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan) 的部分代码仍遵循 BSD 3-Clause 协议,详见 [LICENSE](LICENSE) 中的第三方声明。
+gkNextEngine 以 [MIT 协议](LICENSE) 开源。第三方库的源代码详见 [LICENSE](LICENSE) 中的第三方声明。

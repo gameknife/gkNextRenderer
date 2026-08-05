@@ -6,11 +6,9 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/gameknife/gkNextEngine)
 ![Desktop CI](https://github.com/gameknife/gkNextEngine/actions/workflows/desktop.yml/badge.svg)
-![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android.yml/badge.svg)
-![iOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/ios.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-![Kitchen Scene](docs/gallery/4_playground.avif)
+![Play ground](docs/gallery/4_playground.avif)
 
 ---
 
@@ -19,7 +17,7 @@ gkNextEngine is a cross-platform 3D game engine and rendering playground built w
 - deliver visually compelling results with **real-time path tracing, hybrid rendering, and HDR lighting** that actually hold up inside a runtime, not just offline renders
 - build **runtime systems that are usable, extensible, and suitable for gameplay prototyping and AI-native workflows**, instead of stopping at isolated rendering demos
 
-The project is renderer-first, but it keeps expanding around editor tooling, scripting, physics, asset import, and multiple gameplay prototypes. Current prototypes such as MagicaLego, Brotato3D, KongLie3D, BrickPlayer, CharacterDemo, Flappy, and others, together with structured content pipelines such as SCAD, LDraw, and Gaussian Splat, are not isolated features; they are groundwork for AI-native content generation, scene understanding, gameplay iteration, and automated validation. **Recent work has clearly centered on rendering efficiency and image quality**: a world-space radiance cache (SHARC), AmbientCube memory reduction with hit-driven residency, RGB9E5 indirect-light encoding, atomic-contention treatment in GPU-driven culling, denoising, and reprojection stability — all aimed at producing the same frame with less VRAM and less GPU time. See [Performance & Rendering Efficiency](#performance--rendering-efficiency) below.
+The project is renderer-first, but it keeps expanding around editor tooling, scripting, physics, asset import, and multiple gameplay prototypes. Current prototypes such as MagicaLego, Brotato3D, KongLie3D, BrickPlayer, CharacterDemo, Flappy, and others, together with structured content pipelines such as SCAD, LDraw, and Gaussian Splat, are not isolated features; they are groundwork for AI-native content generation, scene understanding, gameplay iteration, and automated validation.
 
 This project is especially relevant if you are interested in:
 
@@ -35,7 +33,7 @@ This project is especially relevant if you are interested in:
 ## Project Highlights
 
 - **Real-time path tracing and hybrid rendering**
-  The project keeps pushing on 1spp + temporal reuse, denoising, reprojection, and multi-pipeline switching so path tracing becomes part of a practical runtime workflow instead of a pure offline showcase.
+  The project keeps pushing on 1/2spp + temporal reuse, denoising, reprojection, and multi-pipeline switching so path tracing becomes part of a practical runtime workflow instead of a pure offline showcase.
 
 - **A performance-constrained rendering pipeline**
   Radiance-cache reuse, sparse VRAM layouts, GPU-driven mass submission, on-demand residency, and multi-tier upscaling all aim to produce more frame for a fixed GPU budget while keeping memory in check — rather than throwing unlimited resources at a single still.
@@ -50,7 +48,7 @@ This project is especially relevant if you are interested in:
   Multiple game prototypes validate gameplay loops, input, physics, scripting, and rendering under real runtime conditions. SCAD, LDraw, and Gaussian Splat import give AI systems structured 3D content that can be generated, modified, understood, and validated instead of only producing static assets.
 
 - **Multi-format asset import and interoperability**
-  Full runtime glTF import with partial export, plus direct import of `.ldr` / `.mpd`, OpenSCAD `.scad` DSL, and PlayCanvas `.sog` Gaussian-splat assets, bringing structured scenes into a unified runtime, rendering, and interaction pipeline.
+  Full runtime glTF import with partial export, plus direct import of LDraw `.ldr` / `.mpd`, OpenSCAD `.scad` DSL, and PlayCanvas `.sog` Gaussian-splat assets, bringing structured scenes into a unified runtime, rendering, and interaction pipeline.
 
 ---
 
@@ -75,6 +73,12 @@ Performance is one of the project's core constraints. The engine leans on radian
 | complex | 1280x720 | PathTracing | 3.041 | 2.446 | 329 | 925 MiB | 3,373 / 19,715 | 40,683 / 237,561 |
 | complex | 1280x720 | SoftwareModernNoAmbient | 0.702 | 0.261 | 1,424 | 952 MiB | 3,219 / 18,662 | 37,963 / 224,852 |
 
+> The figures above can be reproduced using `gkNextMotionBenchmark` under unified hardware / drivers; fetch optional models first with `./gnb paks fetch`. Pass a single orchestration JSON at launch:
+>
+> ```bash
+> ./gnb run gkNextMotionBenchmark --benchmark-config assets/configs/motion_benchmark.example.json
+> ```
+
 ### Built-in Profiler
 
 The engine ships a CPU / GPU per-pass timing system: every render pass is annotated with a named scope, `VulkanGpuTimer` collects per-pass GPU-side timings, and an ImGui overlay (`ProfileDebugOverlay`) shows per-pass frame time and statistics live at runtime. You can locate rendering hotspots and compare the cost of different pipelines and settings without any external tooling.
@@ -89,10 +93,10 @@ On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is i
 
 ### 1. High-quality rendering designed for runtime use
 
-- **Real-time path tracing and hybrid rendering**: built around 1spp + temporal reuse, denoising, reprojection, and multi-pipeline switching so path tracing remains usable under real runtime constraints
+- **Real-time path tracing and hybrid rendering**: built around 1/2spp + temporal reuse, denoising, reprojection, and multi-pipeline switching so path tracing remains usable under real runtime constraints
 - **Modern GPU raster pipeline**: Visibility Buffer, fully bindless resources, single-draw GPU-driven submission, Soft Mesh Shader, and GPU CSM shadows support dense scenes and game-like workloads
 - **Hot-swappable renderers**: the same scene and asset set can switch across PathTracing, SoftwareTracing, SoftwareModern / NoAmbient, and related pipelines for image-quality, performance, and platform comparisons
-- **GI, denoising, and upscaling**: SHARC world radiance cache, sparse / hit-resident AmbientCube data, RGB9E5 indirect light, GTAO, à-trous / JBF denoising, plus FSR and DLSS SR / RR / Frame Generation on Windows
+- **GI, denoising, and upscaling**: SHARC world radiance cache, ReSTIR DI, as well as FSR / DLSS / DLSS RR / Native TAAU / SGSR2
 - **Gaussian Splat co-rendering**: PlayCanvas SOG v2 Gaussian Splatting runs through a hardware-billboard path and can coexist with mesh scenes
 
 ### 2. Runtime, editor, and validation tooling
@@ -123,42 +127,9 @@ On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is i
 
 ### 5. Controlled codebase size for learning and extension
 
-- **First-party Engine core targeted under 50k LOC**: the core stays intentionally understandable and maintainable. On 2026-07-17, Engine was about 31k lines and all first-party Engine, Modules, Gameplay, applications, and tests totaled 141,421 lines; use `gnb loc` for the live count
+- **First-party Engine core targeted under 50k LOC**: the core stays intentionally understandable and maintainable
 - **Clarity over over-engineering**: favors explicit data flow, clear ownership, and mature third-party libraries, without turning experimental systems into heavy frameworks too early
 - **A good engine codebase to study**: from Vulkan rendering, resource management, scripting, editor integration, reflection, and content import to testing, benchmarking, and agent validation
-
----
-
-## Technical Direction
-
-### Rendering and GPU architecture
-
-- **Visibility Buffer**
-- **Fully Bindless + GPU-Driven**
-- **Single-Draw GPU-Driven Submit (Soft Mesh Shader)**
-- **Hardware / Software Ray Tracing (ray query)**
-- **SHARC world radiance cache / RGB9E5 indirect light**
-- **AmbientCube GI: sparse VRAM + hit-driven residency**
-- **Denoising: ReLAX-style variance-guided / à-trous / JBF**
-- **Temporal Reprojection / Sky Occlusion (GTAO)**
-- **Upscaler: FSR / NVIDIA Streamline DLSS SR / RR / Frame Generation on Windows**
-- **Gaussian Splatting (SOG v2 + hardware billboards)**
-
-### Engine and tooling
-
-- **Modern CMake Presets + vcpkg**
-- **Cross-platform runtime: desktop / Android / iOS**
-- **ImGui Editor + node-based material workflow**
-- **QuickJS runtime scripting with bundled TypeScript hot reload via `tools/tsc/tsc[.exe]`, no Node/npm dependency**
-- **TUI terminal rendering / Remote Play / Visual Test / Benchmark / Packager**
-- **`gnb` project CLI (build / run / screenshot validation / dashboard / local LLM)**
-
-### Product-focused AI
-
-- **Unified provider, profile, streaming, structured-output, cancellation, and local-model infrastructure**
-- **Domain workflows for SCAD and MagicaLego generation, with local validation and one bounded repair attempt**
-- **Structured single-request runtime decisions with deterministic fallback in StudioSim and AirportSim**
-- **Dashboard capability lab for ordinary Chat and one isolated in-memory Tool Call smoke probe**
 
 ---
 
@@ -182,6 +153,11 @@ On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is i
 ---
 
 ## Quick Start
+
+For developers in mainland China, please ensure your network stability first. Recommended tools:
+
+[Link with referral code](https://nxonearth.com/signupbyemail.aspx?MemberCode=93e1edc92a95412dbc7ff38c8288951920240913095147)
+[Link without referral code](https://nxonearth.com/signupbyemail.aspx)
 
 The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond the host-side basics you must already have installed (compiler / IDE, CMake, platform SDKs, and similar tools), project-specific dependencies, external toolchains, and optional assets are now prepared by `gnb` whenever possible. You will need a network environment that can access GitHub during dependency setup.
 
@@ -268,22 +244,6 @@ Notes:
 
 </details>
 
-<details>
-<summary><b>Android (Build on Windows)</b></summary>
-
-**Prerequisites:** JDK 17+, Android SDK, and an installed NDK selected through `ANDROID_NDK_HOME` (the repository does not currently pin one NDK release)
-
-```bat
-set ANDROID_HOME=C:\Android\Sdk
-set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\YOUR_NDK_VERSION
-./gnb.bat setup --vcpkg-only
-./gnb.bat android
-```
-
-Android still depends on the host machine to provide JDK / SDK / NDK, while project-local vcpkg dependencies and external toolchains continue to be prepared by `gnb`.
-
-</details>
-
 ### Run Examples
 
 ```shell
@@ -293,40 +253,11 @@ Android still depends on the host machine to provide JDK / SDK / NDK, while proj
 # Editor
 ./gnb.sh run gkNextEditor
 
-# BrickPlayer (digital LEGO / LDraw building prototype)
-./gnb.sh run BrickPlayer
-
-# CharacterDemo (character control / AI / navigation experiment)
-./gnb.sh run CharacterDemo
-
 # TUI terminal mode (headless, frame streamed to the terminal)
 ./gnb.sh tui --scene assets/models/playground.glb
 
 # Remote Play (browser-based WebRTC host)
 ./gnb.sh remote --target gkNextRenderer --scene assets/models/playground.glb --res 1280x720
-```
-
-### Optional Assets
-
-Some larger binary assets are not committed to the repo. Fetch them as needed:
-
-| Selector | Contents | Lands at | If missing |
-|------|------|------|------|
-| `ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer loses its LDraw parts library |
-| `optional` | `optional.pak` | `assets/paks/` | Main renderer / Editor / CharacterDemo / MagicaLego lose their scene assets |
-| `magicalego` | `magicalego.pak` (BGM / placement SFX) | `assets/paks/` | MagicaLego / BrickPlayer go silent |
-| `ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows MagicaLego video capture disabled |
-
-```bash
-# Linux / macOS / Git Bash: fetch every optional asset by default
-./gnb.sh paks fetch
-
-# Or fetch specific groups
-./gnb.sh paks fetch optional ldraw
-./gnb.sh paks fetch ffmpeg magicalego
-
-# Windows
-./gnb.bat paks fetch
 ```
 
 ## Subprojects
@@ -381,6 +312,4 @@ cpptrace · cxxopts · sdl3 · glm · imgui · stb · curl · nlohmann-json · t
 
 ## License
 
-gkNextEngine is released under the [MIT License](LICENSE). Portions derived from
-[RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan) remain under the
-BSD 3-Clause License; see the third-party notices in [LICENSE](LICENSE).
+gkNextEngine is released under the [MIT License](LICENSE). Source code for third-party libraries is detailed in the third-party notices in [LICENSE](LICENSE).
