@@ -170,7 +170,7 @@ namespace Runtime
             encoderOptions.anim_params.loop_count = 0;
 
             WebPConfig config{};
-            if (!WebPConfigPreset(&config, WEBP_PRESET_DEFAULT, 80.0f) ||
+            if (!WebPConfigPreset(&config, WEBP_PRESET_DEFAULT, 90.0f) ||
                 !WebPValidateConfig(&config))
             {
                 spdlog::error("Failed to initialize animated WebP encoder config");
@@ -377,10 +377,6 @@ namespace Runtime
 
     bool FScreenShotService::Request(FRequest request)
     {
-#if __linux__
-        (void)request;
-        return false;
-#else
         if (IsBusy())
         {
             return false;
@@ -411,15 +407,10 @@ namespace Runtime
             return true;
         });
         return true;
-#endif
     }
 
     bool FScreenShotService::RequestThreeSecondVideo(FThreeSecondVideoRequest request)
     {
-#if __linux__
-        (void)request;
-        return false;
-#else
         if (IsBusy() || videoCapture_)
         {
             return false;
@@ -507,7 +498,6 @@ namespace Runtime
             .allowOverlappingExports = true,
         });
         return false;
-#endif
     }
 
     void FScreenShotService::QueueVideoEncoding(std::shared_ptr<FVideoCaptureState> capture)

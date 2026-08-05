@@ -228,8 +228,8 @@ namespace Vulkan
         const FFrameRenderSettings& FrameSettings() const { return frameSettings_; }
         VkDeviceAddress AtmosphereParamsAddress() const;
         glm::vec3 AtmosphereTransmittanceToSun(float cameraAltitudeKm, float sunZenithCosine) const;
-        DeviceMemory* GetScreenShotMemory() const {return screenshot_.imageMemory.get();}
-        const Image* GetScreenShotImage() const { return screenshot_.image.get(); }
+        DeviceMemory* GetScreenShotMemory() const { return screenshot_.bufferMemory.get(); }
+        const Buffer* GetScreenShotBuffer() const { return screenshot_.buffer.get(); }
         bool IsScreenShotCaptureReady() const { return screenshot_.captureReady; }
         uint64_t ScreenShotCaptureSubmitSerial() const { return screenshot_.captureSubmitSerial; }
 
@@ -526,9 +526,8 @@ namespace Vulkan
 
         struct ScreenshotResources
         {
-            std::unique_ptr<Image> image;
-            std::unique_ptr<DeviceMemory> imageMemory;
-            std::unique_ptr<ImageView> imageView;
+            std::unique_ptr<Buffer> buffer;
+            std::unique_ptr<DeviceMemory> bufferMemory;
             bool captureRequested = false;
             bool captureReady = false;
             bool initialized = false;

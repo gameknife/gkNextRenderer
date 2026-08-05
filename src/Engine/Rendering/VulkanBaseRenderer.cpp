@@ -1008,21 +1008,25 @@ namespace Vulkan
 
     void VulkanBaseRenderer::CreateRenderImages()
     {
-#if __linux__
-        // Linux screenshot readback is disabled because linear-tiling images are not
-        // consistently supported by the target Vulkan drivers. Do not create a
-        // screenshot image on this platform at all.
-        screenshot_.image.reset();
-        screenshot_.imageMemory.reset();
-#else
-        screenshot_.image.reset(new Image(*ctx_.device, frame_.swapChain->Extent(), 1, frame_.swapChain->Format(),
-                                         VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT));
-        screenshot_.imageMemory.reset(new DeviceMemory(
-            screenshot_.image->
-            AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
-        ctx_.device->DebugUtils().SetObjectName(screenshot_.image->Handle(), "Screenshot Image");
-        screenshot_.imageMemory->SetName("Screenshot Memory");
-#endif
+        const VkDeviceSize bufferSize = static_cast<VkDeviceSize>(frame_.swapChain->Extent().width) *
+                                        frame_.swapChain->Extent().height *
+                                        (frame_.swapChain->Format() == VK_FORMAT_R16G16B16A16_SFLOAT ? 8 : 4);
+        screenshot_.buffer.reset(new Buffer(*ctx_.device, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT));
+
+        uint32_t memProps = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+        try
+        {
+            screenshot_.bufferMemory.reset(new DeviceMemory(*ctx_.device, *screenshot_.buffer, memProps));
+        }
+        catch (...)
+        {
+            memProps = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+            screenshot_.bufferMemory.reset(new DeviceMemory(*ctx_.device, *screenshot_.buffer, memProps));
+        }
+
+        ctx_.device->DebugUtils().SetObjectName(screenshot_.buffer->Handle(), "Screenshot Buffer");
+        screenshot_.bufferMemory->SetName("Screenshot Memory");
+
         screenshot_.captureRequested = false;
         screenshot_.captureReady = false;
         screenshot_.initialized = false;
@@ -1485,8 +1489,8 @@ namespace Vulkan
         }
         overlay_.sunShadowPass.reset();
         
-        screenshot_.image.reset();
-        screenshot_.imageMemory.reset();
+        screenshot_.buffer.reset();
+        screenshot_.bufferMemory.reset();
         screenshot_.captureRequested = false;
         screenshot_.captureReady = false;
         screenshot_.initialized = false;
@@ -1872,30 +1876,26 @@ namespace Vulkan
             if (screenshot_.captureRequested)
             {
                 SCOPED_GPU_TIMER("screenshot");
-                VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
                 TransitionSwapchainImage(
                     commandBuffer, frame_.currentImageIndex,
                     {.stages = PipelineCommon::ERenderStage::Transfer,
                      .access = PipelineCommon::EResourceAccess::TransferRead,
                      .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL},
                     "screenshot source");
-                ImageMemoryBarrier::Insert(
-                    commandBuffer,
-                    screenshot_.initialized ? VK_PIPELINE_STAGE_TRANSFER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                    VK_PIPELINE_STAGE_TRANSFER_BIT, screenshot_.image->Handle(), range,
-                    screenshot_.initialized ? VK_ACCESS_TRANSFER_WRITE_BIT : 0,
-                    VK_ACCESS_TRANSFER_WRITE_BIT,
-                    screenshot_.initialized ? VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
-                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-                VkImageCopy copyRegion{};
-                copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-                copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-                copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
-                vkCmdCopyImage(commandBuffer, frame_.swapChain->Images()[frame_.currentImageIndex],
-                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                               screenshot_.image->Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                               1, &copyRegion);
+                VkBufferImageCopy copyRegion{};
+                copyRegion.bufferOffset = 0;
+                copyRegion.bufferRowLength = 0;
+                copyRegion.bufferImageHeight = 0;
+                copyRegion.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                copyRegion.imageOffset = {0, 0, 0};
+                copyRegion.imageExtent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
+
+                vkCmdCopyImageToBuffer(commandBuffer, frame_.swapChain->Images()[frame_.currentImageIndex],
+                                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                       screenshot_.buffer->Handle(),
+                                       1, &copyRegion);
+
                 TransitionSwapchainImage(
                     commandBuffer, frame_.currentImageIndex,
                     {.stages = PipelineCommon::ERenderStage::Present,

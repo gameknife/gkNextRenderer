@@ -92,23 +92,6 @@ namespace Runtime::ScreenShot
             return static_cast<uint8_t>(std::clamp(srgb * 255.0f, 0.0f, 255.0f));
         }
 
-        VkSubresourceLayout GetScreenShotImageLayout(Vulkan::VulkanBaseRenderer* renderer)
-        {
-            VkSubresourceLayout layout{};
-            const Vulkan::Image* image = renderer->GetScreenShotImage();
-            if (!image)
-            {
-                return layout;
-            }
-
-            VkImageSubresource subresource{};
-            subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            subresource.mipLevel = 0;
-            subresource.arrayLayer = 0;
-            vkGetImageSubresourceLayout(renderer->Device().Handle(), image->Handle(), &subresource, &layout);
-            return layout;
-        }
-
         FCaptureRect ResolveCaptureRect(const VkExtent2D fullExtent,
                                         const int inX,
                                         const int inY,
@@ -139,12 +122,6 @@ namespace Runtime::ScreenShot
                                           const FCaptureRect& rect,
                                           const Vulkan::ESwapChainOutputMode outputMode)
         {
-            const VkSubresourceLayout imageLayout = GetScreenShotImageLayout(renderer);
-            if (imageLayout.rowPitch == 0)
-            {
-                Throw(std::runtime_error("screenshot image layout is unavailable"));
-            }
-
             FRawScreenshot screenshot;
             screenshot.extent = rect.extent;
             screenshot.hdr10 = outputMode == Vulkan::ESwapChainOutputMode::HDR10_ST2084;
@@ -156,18 +133,28 @@ namespace Runtime::ScreenShot
             Vulkan::DeviceMemory* memory = renderer->GetScreenShotMemory();
             if (!memory)
             {
-                Throw(std::runtime_error("screenshot image memory is unavailable"));
+                Throw(std::runtime_error("screenshot buffer memory is unavailable"));
             }
 
+            const uint32_t fullWidth = renderer->SwapChain().Extent().width;
+            const size_t fullRowPitch = static_cast<size_t>(fullWidth) * screenshot.sourcePixelBytes;
+
             const uint8_t* mappedData = static_cast<const uint8_t*>(memory->Map(0, VK_WHOLE_SIZE));
-            const uint8_t* imageData = mappedData + imageLayout.offset;
-            for (uint32_t y = 0; y < rect.extent.height; ++y)
+            if (rect.x == 0 && rect.extent.width == fullWidth)
             {
-                const uint8_t* sourceRow = imageData + (rect.y + y) * imageLayout.rowPitch +
-                    rect.x * screenshot.sourcePixelBytes;
-                uint8_t* destinationRow = screenshot.pixels.data() +
-                    static_cast<size_t>(y) * screenshot.sourceRowBytes;
-                std::memcpy(destinationRow, sourceRow, screenshot.sourceRowBytes);
+                const uint8_t* sourceStart = mappedData + static_cast<size_t>(rect.y) * fullRowPitch;
+                std::memcpy(screenshot.pixels.data(), sourceStart, screenshot.pixels.size());
+            }
+            else
+            {
+                for (uint32_t y = 0; y < rect.extent.height; ++y)
+                {
+                    const uint8_t* sourceRow = mappedData + static_cast<size_t>(rect.y + y) * fullRowPitch +
+                        static_cast<size_t>(rect.x) * screenshot.sourcePixelBytes;
+                    uint8_t* destinationRow = screenshot.pixels.data() +
+                        static_cast<size_t>(y) * screenshot.sourceRowBytes;
+                    std::memcpy(destinationRow, sourceRow, screenshot.sourceRowBytes);
+                }
             }
             memory->Unmap();
             return screenshot;
