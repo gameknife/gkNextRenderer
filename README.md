@@ -8,8 +8,8 @@
 ![Desktop CI](https://github.com/gameknife/gkNextEngine/actions/workflows/desktop.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-![CornellBox Motion](docs/gallery/7_cornellbox.webp)
-![Play ground](docs/gallery/4_playground.avif)
+<img src="docs/gallery/7_cornellbox.webp" alt="CornellBox Motion" width="100%">
+<img src="docs/gallery/4_playground.avif" alt="Play ground" width="100%">
 
 ---
 
