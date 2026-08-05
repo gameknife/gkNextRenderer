@@ -78,7 +78,7 @@ public:
     void ConfigureCustomTitleBarDrag(bool enabled, int titleBarHeight, int leftReservedWidth, int rightReservedWidth);
 
     // Static methods
-    static void InitSDL(bool systemDpiScaling);
+    static void InitSDL(bool systemDpiScaling, const std::string& vulkanDriver);
     static void TerminateGLFW();
 
 private:

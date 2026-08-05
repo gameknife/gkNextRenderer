@@ -20,6 +20,8 @@ Options::Options(const int argc, const char* argv[])
         ("hdri", "The HDRI file to load.", cxxopts::value<std::string>(HDRIfile)->default_value(""))
 
         ("gpu", "Explicitly set the usage gpu idx.", cxxopts::value<uint32_t>(GpuIdx)->default_value("0"))
+        ("vulkan-driver", "Vulkan driver selection: native or lvp (Windows).",
+         cxxopts::value<std::string>(VulkanDriver)->default_value("native"))
 
         ("width", "The framebuffer width.", cxxopts::value<uint32_t>(Width)->default_value("1920"))
         ("height", "The framebuffer height.", cxxopts::value<uint32_t>(Height)->default_value("1080"))
@@ -89,6 +91,18 @@ Options::Options(const int argc, const char* argv[])
         }
         DisableStreamline = DisableStreamline || disableStreamlineForApplication || AgentValidation;
         DisableFidelityFX = DisableFidelityFX || AgentValidation;
+
+        if (VulkanDriver != "native" && VulkanDriver != "lvp")
+        {
+            Throw(std::out_of_range("Invalid --vulkan-driver. Expected native or lvp."));
+        }
+        if (VulkanDriver == "lvp")
+        {
+            // These integrations expect a native vendor driver and their device
+            // augmenters are not part of the software-ICD path.
+            DisableStreamline = true;
+            DisableFidelityFX = true;
+        }
 
         if (result.count("help"))
         {

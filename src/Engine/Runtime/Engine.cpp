@@ -298,7 +298,7 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     // TUI dimensions are terminal/logical pixels. Keep the hidden render window at
     // a fixed scale so high-DPI monitors do not enlarge the terminal UI.
     const bool useSystemDpiScaling = options.SystemDpiScaling || options.Tui;
-    Vulkan::Window::InitSDL(useSystemDpiScaling);
+    Vulkan::Window::InitSDL(useSystemDpiScaling, options.VulkanDriver);
     
     Vulkan::WindowConfig windowConfig{"gkNextEngine " + NextRenderer::GetBuildVersion(),
                                       options.Width,options.Height,

@@ -26,7 +26,7 @@ namespace Common
     public float4 SampleSkyRadiance(float3 direction, float roughness)
     {
         const UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
-        if (!AtmosphereEnabled(camera))
+        //if (!AtmosphereEnabled(camera))
         {
             return camera.HasSky
                 ? Common.SampleIBL(camera.SkyIdx, direction, camera.SkyRotation, roughness) *
@@ -34,35 +34,35 @@ namespace Common
                 : float4(0.0f, 0.0f, 0.0f, 1.0f);
         }
 
-        const FAtmosphereParams params = ((FAtmosphereParams*)camera.AtmosphereParams)[0];
-        const float2 uv = SkyViewUv(direction, camera.SunDirection.xyz);
-        const float3 lutRadiance =
-            Bindless.GetSampleTexture(params.SkyViewLutId).SampleLevel(uv, 0.0f).rgb;
-        const float3 cameraWorld =
-            mul(camera.ModelViewInverse, float4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
-        const float cameraAltitude =
-            params.WorldOriginAltitude + cameraWorld.y / max(params.WorldUnitsPerKm, 1.0e-3f);
-        const float altitudeUv =
-            saturate(cameraAltitude / max(params.TopRadius - params.BottomRadius, 1.0f));
-        const float3 viewTransmittance =
-            Bindless.GetSampleTexture(params.TransmittanceLutId).SampleLevel(
-                float2(saturate(direction.y * 0.5f + 0.5f), altitudeUv), 0.0f).rgb;
-        const float3 sunTransmittance =
-            Bindless.GetSampleTexture(params.TransmittanceLutId).SampleLevel(
-                float2(saturate(camera.SunDirection.y * 0.5f + 0.5f), altitudeUv), 0.0f).rgb;
-        const float3 scattering = params.RayleighScattering + params.MieScattering;
-        const float3 extinction = scattering + params.MieAbsorption + params.OzoneAbsorption;
-        const float cosTheta = dot(normalize(direction), normalize(camera.SunDirection.xyz));
-        const float phase =
-            Atmosphere.RayleighPhase(cosTheta) + Atmosphere.MiePhase(cosTheta, params.MiePhaseG);
-        const float3 analyticSingleScatter =
-            (1.0f - viewTransmittance) * (scattering / max(extinction, float3(1.0e-4f))) *
-            sunTransmittance * phase;
-        const float3 unitRadiance = max(lutRadiance, analyticSingleScatter);
-        return float4(
-            max(unitRadiance, float3(0.0f)) * camera.SunColor.rgb *
-                camera.SkyColor.rgb * params.SkyLuminanceScale,
-            1.0f);
+        // const FAtmosphereParams params = ((FAtmosphereParams*)camera.AtmosphereParams)[0];
+        // const float2 uv = SkyViewUv(direction, camera.SunDirection.xyz);
+        // const float3 lutRadiance =
+        //     Bindless.GetSampleTexture(params.SkyViewLutId).SampleLevel(uv, 0.0f).rgb;
+        // const float3 cameraWorld =
+        //     mul(camera.ModelViewInverse, float4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
+        // const float cameraAltitude =
+        //     params.WorldOriginAltitude + cameraWorld.y / max(params.WorldUnitsPerKm, 1.0e-3f);
+        // const float altitudeUv =
+        //     saturate(cameraAltitude / max(params.TopRadius - params.BottomRadius, 1.0f));
+        // const float3 viewTransmittance =
+        //     Bindless.GetSampleTexture(params.TransmittanceLutId).SampleLevel(
+        //         float2(saturate(direction.y * 0.5f + 0.5f), altitudeUv), 0.0f).rgb;
+        // const float3 sunTransmittance =
+        //     Bindless.GetSampleTexture(params.TransmittanceLutId).SampleLevel(
+        //         float2(saturate(camera.SunDirection.y * 0.5f + 0.5f), altitudeUv), 0.0f).rgb;
+        // const float3 scattering = params.RayleighScattering + params.MieScattering;
+        // const float3 extinction = scattering + params.MieAbsorption + params.OzoneAbsorption;
+        // const float cosTheta = dot(normalize(direction), normalize(camera.SunDirection.xyz));
+        // const float phase =
+        //     Atmosphere.RayleighPhase(cosTheta) + Atmosphere.MiePhase(cosTheta, params.MiePhaseG);
+        // const float3 analyticSingleScatter =
+        //     (1.0f - viewTransmittance) * (scattering / max(extinction, float3(1.0e-4f))) *
+        //     sunTransmittance * phase;
+        // const float3 unitRadiance = max(lutRadiance, analyticSingleScatter);
+        // return float4(
+        //     max(unitRadiance, float3(0.0f)) * camera.SunColor.rgb *
+        //         camera.SkyColor.rgb * params.SkyLuminanceScale,
+        //     1.0f);
     }
 
     public float4 SampleSkyIrradiance(float3 normal)

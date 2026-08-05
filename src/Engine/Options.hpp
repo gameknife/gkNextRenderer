@@ -79,6 +79,8 @@ public:
     std::string HDRIfile{};
     // Vulkan options
     uint32_t GpuIdx{};
+    // Select the Vulkan ICD before SDL loads the Vulkan loader.
+    std::string VulkanDriver{"native"};
 
     // Window options
     uint32_t Width{};

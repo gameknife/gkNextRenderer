@@ -7,10 +7,132 @@
 #include "Engine/Options.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdlib>
 
 namespace Vulkan
 {
+
+namespace
+{
+#if WIN32
+    std::filesystem::path FindLvpManifest()
+    {
+        if (const char* overridePath = std::getenv("GK_NEXT_LVP_ICD");
+            overridePath != nullptr && overridePath[0] != '\0')
+        {
+            std::error_code errorCode;
+            const std::filesystem::path path = std::filesystem::absolute(
+                std::filesystem::path(overridePath), errorCode);
+            if (!errorCode && std::filesystem::is_regular_file(path, errorCode))
+            {
+                return path;
+            }
+            return {};
+        }
+
+        const std::filesystem::path executableDirectory = NextRenderer::GetExecutableDirectory();
+        const std::filesystem::path runtimeRoot = Utilities::FileHelper::GetRuntimeRoot();
+#if defined(GK_NEXT_SOURCE_DIR)
+        const std::filesystem::path sourceRoot = GK_NEXT_SOURCE_DIR;
+#else
+        const std::filesystem::path sourceRoot;
+#endif
+        const std::array<std::filesystem::path, 14> candidates =
+        {
+            sourceRoot / "external" / "Dozen" / "x64" / "lvp_icd.x86_64.json",
+            sourceRoot / "external" / "Dozen" / "x64" / "lvp_icd.x64.json",
+            sourceRoot / "external" / "mesa" / "x64" / "lvp_icd.x86_64.json",
+            sourceRoot / "external" / "mesa" / "x64" / "lvp_icd.x64.json",
+            executableDirectory / "lvp_icd.x86_64.json",
+            executableDirectory / "lvp_icd.x64.json",
+            executableDirectory / "lvp_icd.json",
+            executableDirectory / "lvp" / "lvp_icd.x86_64.json",
+            executableDirectory / "mesa" / "lvp_icd.x86_64.json",
+            executableDirectory / "dozen" / "lvp_icd.x86_64.json",
+            runtimeRoot / "lvp_icd.x86_64.json",
+            runtimeRoot / "lvp" / "lvp_icd.x86_64.json",
+            runtimeRoot / "mesa" / "lvp_icd.x86_64.json",
+            runtimeRoot / "dozen" / "lvp_icd.x86_64.json",
+        };
+
+        std::error_code errorCode;
+        for (const std::filesystem::path& candidate : candidates)
+        {
+            if (!candidate.empty() && std::filesystem::is_regular_file(candidate, errorCode))
+            {
+                return std::filesystem::absolute(candidate, errorCode);
+            }
+            errorCode.clear();
+        }
+
+        return {};
+    }
+
+    bool SetVulkanEnvironmentVariable(const char* name, const char* value)
+    {
+        if (SetEnvironmentVariableA(name, value) != TRUE)
+        {
+            SPDLOG_ERROR("Failed to set Vulkan environment variable {}: {}", name, GetLastError());
+            return false;
+        }
+        return true;
+    }
+
+    bool PrependPathEntry(const std::filesystem::path& directory)
+    {
+        if (directory.empty())
+        {
+            return false;
+        }
+
+        const std::string directoryString = directory.string();
+        const char* existingPath = std::getenv("PATH");
+        const std::string pathValue = existingPath != nullptr && existingPath[0] != '\0'
+            ? directoryString + ";" + existingPath
+            : directoryString;
+        return SetVulkanEnvironmentVariable("PATH", pathValue.c_str());
+    }
+
+    void ConfigureVulkanDriver(const std::string& vulkanDriver)
+    {
+        if (vulkanDriver == "native")
+        {
+            return;
+        }
+
+        const std::filesystem::path manifest = FindLvpManifest();
+        if (manifest.empty())
+        {
+            Throw(std::runtime_error(
+                "LVP Vulkan ICD manifest was not found; expected lvp_icd.x86_64.json under the executable, "
+                "runtime, or external/Dozen/x64 directory (or set GK_NEXT_LVP_ICD)"));
+        }
+
+        const std::filesystem::path driverDirectory = manifest.parent_path();
+        const std::string manifestPath = manifest.string();
+        if (!SetVulkanEnvironmentVariable("VK_DRIVER_FILES", manifestPath.c_str()) ||
+            !SetVulkanEnvironmentVariable("VK_ICD_FILENAMES", manifestPath.c_str()) ||
+            !SetVulkanEnvironmentVariable("VK_LOADER_DRIVERS_SELECT", nullptr) ||
+            !SetVulkanEnvironmentVariable("VK_LOADER_LAYERS_DISABLE", "~implicit~") ||
+            !PrependPathEntry(driverDirectory))
+        {
+            Throw(std::runtime_error("failed to configure the LVP Vulkan ICD"));
+        }
+
+        SPDLOG_INFO("Vulkan driver mode: LVP; using ICD manifest {}", manifestPath);
+    }
+#else
+    void ConfigureVulkanDriver(const std::string& vulkanDriver)
+    {
+        if (vulkanDriver != "native")
+        {
+            Throw(std::runtime_error("--vulkan-driver lvp is only supported on Windows"));
+        }
+    }
+#endif
+}
 
 // ============================================================================
 // Window Implementation
@@ -354,7 +476,7 @@ void Window::ConfigureCustomTitleBarDrag(bool enabled, int titleBarHeight, int l
     customTitleBarDrag_.rightReservedWidth = std::max(0, rightReservedWidth);
 }
 
-void Window::InitSDL(bool systemDpiScaling)
+void Window::InitSDL(bool systemDpiScaling, const std::string& vulkanDriver)
 {
 #if WIN32
     const char* dpiAwareness = systemDpiScaling ? "unaware" : "permonitorv2";
@@ -370,6 +492,7 @@ void Window::InitSDL(bool systemDpiScaling)
     {
         Throw(std::runtime_error("failed to init SDL."));
     }
+    ConfigureVulkanDriver(vulkanDriver);
     const char* vulkanLoaderPath = Vulkan::Interposer().PreferredVulkanLoaderPath();
     if (!SDL_Vulkan_LoadLibrary(vulkanLoaderPath))
     {
