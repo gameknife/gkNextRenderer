@@ -20,6 +20,13 @@ struct PushConsts
     uint StepWidth;
     uint ApplyFireflyClamp;
     uint FinalPass;
+    // Render-pixel projection jitter of the frame that produced the normal/albedo guides.
+    float JitterX;
+    float JitterY;
+    // Pre-exposure for the Reinhard round trip below, matching the temporal upscaler's.
+    float CompressionScale;
+    // Not every renderer contract writes RT_ALBEDO; SoftwareModernNoAmbient does not.
+    uint UseAlbedoGuide;
 };
 
 [[vk::push_constant]]
@@ -36,16 +43,20 @@ float3 ClampLuminance(float3 color, float ceiling)
     return luma > ceiling ? color * (ceiling / max(luma, 1e-5f)) : color;
 }
 
+// The pre-exposure keeps this round trip on the compression curve's knee. Without it the inverse's
+// 1 / (1 - L) gain turns the additive firefly ceiling below into a multiplicative jump on any
+// pixel near paper white, which is where the surviving outliers actually sit.
 float3 CompressHdr(float3 color)
 {
-    color = max(color, float3(0.0f));
+    color = max(color, float3(0.0f)) * pushConsts.CompressionScale;
     return color / (1.0f + Luminance(color));
 }
 
 float3 DecompressHdr(float3 color)
 {
-    return max(color, float3(0.0f)) /
+    const float3 decompressed = max(color, float3(0.0f)) /
         max(1.0f - Luminance(color), 6.1e-5f);
+    return decompressed / max(pushConsts.CompressionScale, 1.0e-6f);
 }
 
 float AtrousKernelWeight(int offset)
@@ -76,6 +87,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     }
     float neighborMean = 0.0f;
     float neighborSquareMean = 0.0f;
+    float neighborMaxLuma = -1e20f;
+    float neighborSecondMaxLuma = -1e20f;
     uint neighborCount = 0;
 
     // Local variance makes the color gate tolerant of Monte-Carlo noise while the stable
@@ -95,6 +108,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
                 sampleColor = CompressHdr(sampleColor);
             }
             const float sampleLuma = Luminance(sampleColor);
+            neighborSecondMaxLuma = max(neighborSecondMaxLuma, min(neighborMaxLuma, sampleLuma));
+            neighborMaxLuma = max(neighborMaxLuma, sampleLuma);
             neighborMean += sampleLuma;
             neighborSquareMean += sampleLuma * sampleLuma;
             ++neighborCount;
@@ -110,9 +125,14 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     {
         // The center does not contribute to this threshold, so an isolated bright sample
         // cannot inflate its own acceptance range.
-        const float fireflyCeiling =
+        const float statisticalCeiling =
             neighborMean + max(0.025f, pushConsts.FireflySigma * neighborDeviation);
-        center = ClampLuminance(center, fireflyCeiling);
+        // On a silhouette the neighbour deviation is geometric contrast rather than noise, and
+        // this ceiling goes slack exactly where the temporal pass leaves the most residual noise.
+        // The second-largest neighbour is immune to that: across an edge it is still a legitimate
+        // foreground luminance, and in a flat region it tracks the local level.
+        const float orderCeiling = neighborSecondMaxLuma * 1.25f + 0.025f;
+        center = ClampLuminance(center, min(statisticalCeiling, orderCeiling));
     }
 
     const float centerLuma = Luminance(center);
@@ -129,12 +149,21 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     const uint2 guideDimensions = Bindless.GetStorageTextureDimensions<float4>(normalIndex);
     const float2 outputDimensions = float2(pushConsts.OutputWidth, pushConsts.OutputHeight);
     const int2 guideMax = int2(guideDimensions) - int2(1, 1);
+    const float2 guideScale = float2(guideDimensions) / outputDimensions;
+    // The guides are rendered jittered at render resolution while this pass runs on the resolved
+    // display image, so their edges sit up to half a render pixel away from the colour edges.
+    // Shifting the lookup by the frame's jitter puts the guide edge back onto the colour edge;
+    // without it the normal/albedo terms below reject the wrong pixels along every contour.
+    const float2 guideJitter = float2(pushConsts.JitterX, pushConsts.JitterY);
     const int2 centerGuidePixel = clamp(
-        int2((float2(pixel) + float2(0.5f)) * float2(guideDimensions) / outputDimensions),
+        int2(floor((float2(pixel) + float2(0.5f)) * guideScale + guideJitter)),
         int2(0, 0),
         guideMax);
+    const bool useAlbedoGuide = pushConsts.UseAlbedoGuide != 0u;
     const float3 centerNormal = normalTexture[centerGuidePixel].xyz;
-    const float3 centerAlbedo = albedoTexture[centerGuidePixel].rgb;
+    const float3 centerAlbedo = useAlbedoGuide
+        ? albedoTexture[centerGuidePixel].rgb
+        : float3(0.0f);
     const float centerNormalLengthSquared = dot(centerNormal, centerNormal);
 
     // B3-spline a-trous kernel. Successive passes increase StepWidth (1, 2, 4, ...),
@@ -157,7 +186,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             const float spatialWeight = AtrousKernelWeight(x) * AtrousKernelWeight(y);
             const float rangeWeight = exp2(-0.7213475f * rangeDelta * rangeDelta * inverseSigmaSquared);
             const int2 sampleGuidePixel = clamp(
-                int2((float2(samplePixel) + float2(0.5f)) * float2(guideDimensions) / outputDimensions),
+                int2(floor((float2(samplePixel) + float2(0.5f)) * guideScale + guideJitter)),
                 int2(0, 0),
                 guideMax);
             const float3 sampleNormal = normalTexture[sampleGuidePixel].xyz;
@@ -166,12 +195,19 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             if (centerNormalLengthSquared > 0.01f || sampleNormalLengthSquared > 0.01f)
             {
                 normalWeight = centerNormalLengthSquared > 0.01f && sampleNormalLengthSquared > 0.01f
-                    ? pow(saturate(dot(normalize(centerNormal), normalize(sampleNormal))), 32.0f)
+                    ? pow(saturate(dot(normalize(centerNormal), normalize(sampleNormal))), 12.0f)
                     : 0.0f;
             }
-            const float3 albedoDelta = albedoTexture[sampleGuidePixel].rgb - centerAlbedo;
+            const float3 albedoDelta = useAlbedoGuide
+                ? albedoTexture[sampleGuidePixel].rgb - centerAlbedo
+                : float3(0.0f);
             const float albedoWeight = exp2(-8.0f * dot(albedoDelta, albedoDelta));
-            const float weight = spatialWeight * rangeWeight * normalWeight * albedoWeight;
+            // A hard geometric cutoff collapses the kernel onto its center tap along every
+            // silhouette, which is where the residual fireflies actually survive. Keep a floor so
+            // a little energy still crosses the edge. The range weight above stays the sharp
+            // edge-preserving term, so this does not smear geometry on its own.
+            const float guideWeight = max(normalWeight * albedoWeight, 0.05f);
+            const float weight = spatialWeight * rangeWeight * guideWeight;
             accumulated += sampleColor * weight;
             accumulatedWeight += weight;
         }

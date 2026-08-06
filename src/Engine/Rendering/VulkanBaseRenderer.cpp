@@ -1182,7 +1182,7 @@ namespace Vulkan
         if (temporalPostFilterActive)
         {
             overlay_.temporalPostFilterPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(
-                SwapChain(), "assets/shaders/Process.TemporalPostFilter.comp.slang.spv", 48));
+                SwapChain(), "assets/shaders/Process.TemporalPostFilter.comp.slang.spv", 64));
         }
         overlay_.toneMappingPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(
             SwapChain(), "assets/shaders/Process.TonemapAfterUpscaler.comp.slang.spv", 52));
@@ -2197,8 +2197,26 @@ namespace Vulkan
             uint32_t stepWidth;
             uint32_t applyFireflyClamp;
             uint32_t finalPass;
+            // Jitter of the frame that produced the normal/albedo guides, so the guide lookup can
+            // be realigned onto the resolved display image.
+            float jitterX;
+            float jitterY;
+            float compressionScale;
+            uint32_t useAlbedoGuide;
         };
-        static_assert(sizeof(FPushConstants) == 48);
+        static_assert(sizeof(FPushConstants) == 64);
+
+        const float guideJitterX = inputs.ubo != nullptr ? inputs.ubo->Jitter.x : 0.0f;
+        const float guideJitterY = inputs.ubo != nullptr ? inputs.ubo->Jitter.y : 0.0f;
+        const float compressionScale = inputs.ubo != nullptr
+            ? Rendering::Upscaler::ComputeHdrCompressionScale(
+                  inputs.ubo->PaperWhiteNit, inputs.ubo->HDR)
+            : 1.0f;
+        // Not every renderer contract writes RT_ALBEDO. SoftwareModernNoAmbient declares only
+        // Color/Depth/Motion/ObjectId/Normal, so guiding on that image would weight the kernel by
+        // whatever another renderer last left there.
+        const bool useAlbedoGuide = HasAny(
+            GetRendererContract(logicRenderers_.current).outputs, ERenderOutput::Albedo);
 
         RenderImage* sourceImage = temporalPostFilter_.pingImages[imageIndex].get();
         uint32_t sourceIndex = Assets::Bindless::RT_TEMPORAL_POST_PING0 + imageIndex;
@@ -2290,6 +2308,10 @@ namespace Vulkan
                 1u << pass,
                 pass == 0u ? 1u : 0u,
                 finalPass ? 1u : 0u,
+                guideJitterX,
+                guideJitterY,
+                compressionScale,
+                useAlbedoGuide ? 1u : 0u,
             };
             overlay_.temporalPostFilterPipeline->BindPipeline(commandBuffer, &pushConstants);
             vkCmdDispatch(commandBuffer,

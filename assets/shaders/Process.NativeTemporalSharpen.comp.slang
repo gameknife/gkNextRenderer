@@ -21,7 +21,9 @@ struct PushConstants
     uint reset;
     float sharpness;
     float historyWeight;
-    float padding;
+    float nearPlane;
+    float farPlane;
+    float compressionScale;
 };
 
 [[vk::push_constant]]
@@ -38,10 +40,12 @@ float Luminance(float3 color)
     return dot(color, float3(0.2126, 0.7152, 0.0722));
 }
 
+// Inverse of the reproject pass's compression, including its pre-exposure.
 float3 DecompressHdr(float3 color)
 {
-    return max(color, float3(0.0)) /
+    const float3 decompressed = max(color, float3(0.0)) /
         max(1.0 - Luminance(color), 6.1e-5);
+    return decompressed / max(constants.compressionScale, 1.0e-6);
 }
 
 [shader("compute")]
@@ -65,7 +69,12 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     const float3 blur = (north + south + west + east) * 0.25;
     const float contrast = (Luminance(localMaximum) - Luminance(localMinimum)) /
                            max(Luminance(localMaximum), 0.05);
-    const float adaptiveStrength = constants.sharpness * saturate(1.0 - contrast * 0.65);
+    // Sharpening runs in compressed space, where the inverse's gain is 1 / (1 - L). Pushing a
+    // near-saturated pixel up by a hair therefore lands as a large HDR overshoot, so fade the
+    // strength out as the centre approaches the singular end of the curve.
+    const float decompressionHeadroom = saturate(1.0 - Luminance(center));
+    const float adaptiveStrength =
+        constants.sharpness * saturate(1.0 - contrast * 0.65) * decompressionHeadroom;
     const float3 sharpened = clamp(
         center + (center - blur) * adaptiveStrength,
         localMinimum,

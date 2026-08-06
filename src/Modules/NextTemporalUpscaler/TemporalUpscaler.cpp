@@ -31,9 +31,13 @@ namespace Modules::NextTemporalUpscaler
             uint32_t reset = 0;
             float sharpness = 0.25f;
             float historyWeight = 0.97f;
-            float padding = 0.0f;
+            // Disocclusion rejection compares linear view depth, so the reproject pass needs the
+            // projection's near/far to invert the hardware depth buffer.
+            float nearPlane = 0.1f;
+            float farPlane = 1000.0f;
+            float compressionScale = 1.0f;
         };
-        static_assert(sizeof(FPushConstants) == 48);
+        static_assert(sizeof(FPushConstants) == 64);
 
         uint32_t FindMemoryType(
             VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties)
@@ -217,6 +221,11 @@ namespace Modules::NextTemporalUpscaler
                 constants.sharpness = std::clamp(inputs.nativeTemporalSharpness, 0.0f, 1.0f);
                 constants.historyWeight = std::clamp(
                     inputs.nativeTemporalHistoryWeight, 0.5f, 0.98f);
+                constants.nearPlane = std::max(inputs.camera.nearPlane, 1.0e-4f);
+                constants.farPlane = std::max(
+                    inputs.camera.farPlane, constants.nearPlane * 1.001f);
+                constants.compressionScale = Rendering::Upscaler::ComputeHdrCompressionScale(
+                    inputs.ubo->PaperWhiteNit, inputs.ubo->HDR);
                 vkCmdBindDescriptorSets(inputs.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                         pipelineLayout_, 0, 1, &descriptorSet_, 0, nullptr);
                 vkCmdPushConstants(inputs.commandBuffer, pipelineLayout_, VK_SHADER_STAGE_COMPUTE_BIT,

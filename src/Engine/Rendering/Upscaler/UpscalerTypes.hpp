@@ -38,6 +38,24 @@ namespace Rendering::Upscaler
         return (supportedTypes & UpscalerTypeBit(type)) != 0;
     }
 
+    // Pre-scale for the reversible Reinhard compression the temporal chain operates in.
+    // CompressHdr(c) = c / (1 + L(c)); its inverse c / (1 - L) has unbounded gain as L approaches
+    // 1, so an additive clamp applied in compressed space turns into a multiplicative jump once
+    // decompressed. Holding the working point on the curve's knee rather than in its saturated
+    // tail keeps the firefly ceilings additive on both sides of the round trip.
+    // Tonemap.slang maps scene linear 230 * (PaperWhiteNit / 40000) to paper white on the HDR
+    // path, so dividing by that lands paper white at L = 0.5. The SDR path feeds GT_Tonemapping
+    // directly and its white point already sits near linear 1.
+    inline float ComputeHdrCompressionScale(const float paperWhiteNit, const bool hdrOutput)
+    {
+        if (!hdrOutput)
+        {
+            return 1.0f;
+        }
+        const float exposure = std::max(paperWhiteNit / 40000.0f, 1.0e-6f);
+        return std::clamp(1.0f / std::max(230.0f * exposure, 1.0e-3f), 0.05f, 4.0f);
+    }
+
     inline void SetUpscalerTypeSupport(
         FUpscalerTypeMask& supportedTypes, EUpscalerType type, bool supported)
     {
