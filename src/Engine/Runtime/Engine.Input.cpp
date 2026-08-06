@@ -155,7 +155,7 @@ bool NextEngine::HandleGlobalCaptureShortcut(const SDL_Event& event)
         (void)GetScreenShotService().RequestThreeSecondVideo(Runtime::FScreenShotService::FThreeSecondVideoRequest{
             .tag = tag,
             .format = Runtime::FScreenShotService::EAnimationFormat::Both,
-            .outputScale = Runtime::FScreenShotService::EVideoOutputScale::Full,
+            .outputScale = Runtime::FScreenShotService::EVideoOutputScale::Half,
             .includeUi = hasShift,
             .forceUiHidden = !hasShift,
         });

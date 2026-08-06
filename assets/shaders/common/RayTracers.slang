@@ -449,7 +449,9 @@ public struct FHardwareRayTracer : IRayTracer
         q.TraceRayInline(
             Bindless.GetGpuscene().GetTLAS(),
             rayFlags,
-            0xff,
+            // Mask 0x01 contains only geometry that participates in sun shadows. The
+            // ordinary 0xff mask remains used by primary and area-light visibility rays.
+            0x01,
             ray);
 
         q.Proceed();

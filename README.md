@@ -8,8 +8,13 @@
 ![Desktop CI](https://github.com/gameknife/gkNextEngine/actions/workflows/desktop.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-<img src="docs/gallery/7_cornellbox.webp" alt="CornellBox Motion" width="100%">
-<img src="docs/gallery/4_playground.avif" alt="Play ground" width="100%">
+<p align="center">
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/confroom.webp" width="49%" alt="Conference Room" />
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/luxball.webp" width="49%" alt="Luxball" />
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/playground.webp" width="49%" alt="Playground" />
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/still.webp" width="49%" alt="Still" />
+</p>
+
 
 ---
 
@@ -262,6 +267,18 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 ```
 
 ## 子项目
+
+<p align="center">
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/airportsim.webp" width="32%" alt="AirportSim" />
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/brickplayer.webp" width="32%" alt="BrickPlayer" />
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/brotato3d.webp" width="32%" alt="Brotato3D" />
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/citysim.webp" width="32%" alt="CitySim" />
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="32%" alt="FlappyJs" />
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/magicalego.webp" width="32%" alt="MagicaLego" />
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/nextdayz.webp" width="32%" alt="NextDayZ" />
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/nexttotalwar.webp" width="32%" alt="NextTotalWar" />
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/procscad.webp" width="32%" alt="ProcScad" />
+</p>
 
 | 项目 | 说明 |
 |------|------|

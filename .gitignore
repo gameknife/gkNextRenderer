@@ -23,6 +23,7 @@
 .vcpkg/
 .vcpkg_bincache/
 external/
+docs/external/
 build/
 build-*/
 /out/

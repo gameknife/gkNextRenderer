@@ -12,6 +12,7 @@
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Scene/NodeUtils.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <SDL3/SDL_dialog.h>
@@ -23,6 +24,8 @@
 
 namespace
 {
+    constexpr const char* kLDrawBaseDiscName = "BrickPlayer_LDrawBaseDisc";
+
     struct WorldBounds
     {
         glm::vec3 min{FLT_MAX};
@@ -115,6 +118,33 @@ namespace
             bounds.max = glm::max(bounds.max, worldPoint);
         }
 
+        return bounds;
+    }
+
+    WorldBounds CalculateDrawableWorldBounds(
+        const std::vector<std::shared_ptr<Assets::Node>>& nodes,
+        const std::vector<Assets::Model>& models)
+    {
+        WorldBounds bounds;
+        for (const auto& node : nodes)
+        {
+            if (!node)
+            {
+                continue;
+            }
+
+            const auto* render = node->GetComponent<Runtime::RenderComponent>();
+            if (!render || !render->IsDrawable() || render->GetModelId() >= models.size())
+            {
+                continue;
+            }
+
+            const Assets::Model& model = models[render->GetModelId()];
+            const WorldBounds worldBounds = TransformLocalBounds(
+                node->WorldTransform(), model.GetLocalAABBMin(), model.GetLocalAABBMax());
+            bounds.min = glm::min(bounds.min, worldBounds.min);
+            bounds.max = glm::max(bounds.max, worldBounds.max);
+        }
         return bounds;
     }
 
@@ -256,10 +286,10 @@ BrickPlayerGameInstance::BrickPlayerGameInstance(Vulkan::WindowConfig& config, R
 void BrickPlayerGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
-    cvars.SetDefaultFromString("r.samples", "16", &error);
-    cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
+    // cvars.SetDefaultFromString("r.samples", "16", &error);
+    // cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
     cvars.SetDefaultFromString("r.rendererType", "0", &error);
-    // cvars.SetDefaultFromString("r.upscaler.type", "2", &error);
+    cvars.SetDefaultFromString("r.upscaler.type", "2", &error);
 }
 
 void BrickPlayerGameInstance::InitializeDefaultBGMPlaylist()
@@ -349,7 +379,7 @@ void BrickPlayerGameInstance::FocusCameraOnLoadedScene()
     for (auto* render : scene.Components<Runtime::RenderComponent>())
     {
         Assets::Node* node = render->GetOwner();
-        if (!node || !render->IsDrawable())
+        if (!node || node->GetName() == kLDrawBaseDiscName || !render->IsDrawable())
         {
             continue;
         }
@@ -511,6 +541,70 @@ void BrickPlayerGameInstance::OnSceneLoaded()
                 totalSteps_, totalParts_, perPartMode_ ? "on" : "off", isFreeBuildMode_ ? "on" : "off");
 }
 
+void BrickPlayerGameInstance::BeforeSceneRebuild(
+    std::vector<std::shared_ptr<Assets::Node>>& nodes,
+    std::vector<Assets::Model>& models,
+    std::vector<Assets::FMaterial>& materials,
+    std::vector<Assets::LightObject>& /*lights*/,
+    std::vector<Assets::AnimationTrack>& /*tracks*/)
+{
+    const std::string extension = std::filesystem::path(currentScenePath_).extension().string();
+    if (extension != ".ldr" && extension != ".mpd")
+    {
+        return;
+    }
+
+    constexpr float discRadius = 15.f;
+    constexpr float discThickness = 0.5f;
+    constexpr uint32_t discSegments = 64;
+
+    const WorldBounds bounds = CalculateDrawableWorldBounds(nodes, models);
+    if (bounds.min.x == FLT_MAX)
+    {
+        return;
+    }
+
+    std::vector<glm::vec2> polygon;
+    polygon.reserve(discSegments);
+    for (uint32_t segment = 0; segment < discSegments; ++segment)
+    {
+        const float angle = glm::two_pi<float>() * static_cast<float>(segment) /
+                            static_cast<float>(discSegments);
+        polygon.emplace_back(std::cos(angle) * discRadius, std::sin(angle) * discRadius);
+    }
+
+    const uint32_t modelId = static_cast<uint32_t>(models.size());
+    models.push_back(Assets::FProcModel::CreateExtrudedConvexPolygon(
+        kLDrawBaseDiscName, polygon, -discThickness, 0.0f));
+    const uint32_t materialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f));
+
+    const glm::vec3 discCenter = (bounds.min + bounds.max) * 0.5f;
+    uint32_t nextInstanceId = 0;
+    for (const auto& node : nodes)
+    {
+        if (node)
+        {
+            nextInstanceId = std::max(nextInstanceId, node->GetInstanceId());
+        }
+    }
+    if (!nodes.empty())
+    {
+        ++nextInstanceId;
+    }
+
+    const auto discNode = Assets::SceneBuilder::CreateRenderNode(
+        kLDrawBaseDiscName,
+        glm::vec3(discCenter.x, bounds.min.y, discCenter.z),
+        glm::vec3(1.0f),
+        nextInstanceId,
+        modelId,
+        materialId,
+        true,
+        glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+        false);
+    nodes.push_back(discNode);
+}
+
 void BrickPlayerGameInstance::OnTick(double deltaSeconds)
 {
     if (!sceneLoaded_)
@@ -573,6 +667,9 @@ bool BrickPlayerGameInstance::OverrideRenderCamera(Assets::Camera& OutRenderCame
 
     OutRenderCamera.ModelView = glm::lookAtRH(cameraPos, realCameraCenter_, glm::vec3(0.0f, 1.0f, 0.0f));
     OutRenderCamera.FieldOfView = cameraFOV_;
+    
+    
+    OutRenderCamera.FarPlane = 200.f;
 
     return true;
 }
@@ -2217,7 +2314,7 @@ void BrickPlayerGameInstance::CreateFloorPhysicsBody()
     for (auto* render : scene.Components<Runtime::RenderComponent>())
     {
         Assets::Node* node = render->GetOwner();
-        if (!node || !render->IsDrawable())
+        if (!node || node->GetName() == kLDrawBaseDiscName || !render->IsDrawable())
             continue;
 
         uint32_t modelIdx = render->GetModelId();

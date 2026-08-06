@@ -3,7 +3,6 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "Engine/Runtime/ScreenShot.hpp"
-#include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/StbImage.hpp"
 
@@ -14,6 +13,7 @@
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <system_error>
 
 #include <fmt/chrono.h>
@@ -33,13 +33,13 @@ namespace Runtime
         double elapsedSeconds = 0.0;
         double nextFrameTime = 0.0;
         bool frameInFlight = false;
-        bool succeeded = false;
         FScreenShotService::EVideoOutputScale outputScale = FScreenShotService::EVideoOutputScale::Half;
         bool includeUi = false;
         bool forceUiHidden = false;
         std::filesystem::path temporaryDirectory;
         std::string outputStem;
         std::string outputPath;
+        std::future<bool> encodingFuture;
         std::function<void()> onCaptureFinished;
         std::function<void(const std::string& path)> onCompleted;
     };
@@ -513,6 +513,14 @@ namespace Runtime
             return true;
         }
 
+        // Scene loading mutates renderer resources and can wait for its own task
+        // pipeline. Do not submit new capture requests while that transition is
+        // in progress; resume the three-second timeline once the scene is running.
+        if (engine_.GetEngineStatus() != NextRenderer::EApplicationStatus::Running)
+        {
+            return false;
+        }
+
         videoCapture_->elapsedSeconds += std::max(deltaSeconds, 0.0);
         if (videoCapture_->frameInFlight)
         {
@@ -559,21 +567,55 @@ namespace Runtime
             capture->onCaptureFinished();
         }
 
-        std::shared_ptr<FVideoCaptureState> completionCapture = capture;
-        Tasks::TaskCoordinator::GetInstance()->AddTask(
-            [capture = std::move(capture)](Tasks::ResTask&) mutable
+        capture->encodingFuture = std::async(
+            std::launch::async,
+            [capture]()
             {
-                capture->succeeded = EncodeVideo(*capture);
-            },
-            [this, capture = std::move(completionCapture)](Tasks::ResTask&) mutable
+                try
+                {
+                    return EncodeVideo(*capture);
+                }
+                catch (const std::exception& exception)
+                {
+                    spdlog::error("Three-second video encoding failed: {}", exception.what());
+                }
+                catch (...)
+                {
+                    spdlog::error("Three-second video encoding failed: unknown error");
+                }
+                return false;
+            });
+
+        engine_.AddTickedTask(
+            [this, capture = std::move(capture)](double) mutable
             {
+                if (capture->encodingFuture.wait_for(std::chrono::milliseconds(0)) !=
+                    std::future_status::ready)
+                {
+                    return false;
+                }
+
+                bool succeeded = false;
+                try
+                {
+                    succeeded = capture->encodingFuture.get();
+                }
+                catch (const std::exception& exception)
+                {
+                    spdlog::error("Three-second video encoding completion failed: {}", exception.what());
+                }
+                catch (...)
+                {
+                    spdlog::error("Three-second video encoding completion failed: unknown error");
+                }
+
                 requestPending_ = false;
                 if (capture->onCompleted)
                 {
-                    capture->onCompleted(capture->succeeded ? capture->outputPath : std::string{});
+                    capture->onCompleted(succeeded ? capture->outputPath : std::string{});
                 }
-            },
-            1);
+                return true;
+            });
     }
 
     bool FScreenShotService::IsBusy() const

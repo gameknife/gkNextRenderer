@@ -139,6 +139,12 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
                                      static_cast<uint32_t>(models.size() - 1),
                                      materialId,
                                      visible);
+        // The emitter is a gameplay light proxy, not world geometry. Keep the glowing
+        // panel visible and ray-traceable, but do not let it darken characters via sun shadows.
+        if (auto render = node->GetComponent<Runtime::RenderComponent>())
+        {
+            render->SetCastShadows(false);
+        }
         auto lightComponent = std::make_shared<Runtime::LightComponent>(createdLights.front());
         node->AddComponent(lightComponent);
         nodes.push_back(node);

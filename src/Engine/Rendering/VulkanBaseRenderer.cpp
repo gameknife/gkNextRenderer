@@ -3086,8 +3086,17 @@ namespace Vulkan
             }
             const bool includeInGpuAs =
                 (node.visible & Runtime::RenderParticipation::gpuAs) != 0u && !node.excludeFromAS;
+            // Keep non-shadowing geometry available to primary and area-light rays, but keep it
+            // out of the dedicated sun-occlusion mask used by the hardware path tracer.
+            constexpr uint8_t rayMaskAll = 0xFF;
+            constexpr uint8_t rayMaskNonShadowCaster = 0x02;
+            const uint8_t rayMask = includeInGpuAs
+                ? ((node.visible & Runtime::RenderParticipation::shadowCaster) != 0u
+                       ? rayMaskAll
+                       : rayMaskNonShadowCaster)
+                : 0u;
             instances.push_back(RayTracing::TopLevelAccelerationStructure::CreateInstance(
-                rt_->blas[blasIndex], glm::transpose(node.worldTS), node.instanceId, includeInGpuAs));
+                rt_->blas[blasIndex], glm::transpose(node.worldTS), node.instanceId, rayMask));
         }
 
         if (instances.size() > rt_->properties->MaxInstanceCount())
