@@ -61,6 +61,9 @@ namespace NextCVar
         GK_CVAR_INT("r.gtao.debugMode", settings, GTAODebugMode, 0, ECVarFlags::Archive, "GTAO debug mode (0=off,1=occlusion,2=unoccluded sky lighting)");
         GK_CVAR_BOOL("r.lightObject.screenSpaceShadow", settings, LightObjectScreenSpaceShadow, false, ECVarFlags::Archive, "Enable coarse screen-space shadows for LightObjects in SoftwareModernNoAmbient");
         GK_CVAR_FLOAT_RANGE("r.lightObject.screenSpaceShadowDistance", settings, LightObjectShadowDistance, 6.0f, ECVarFlags::Archive, "World-space distance the screen-space LightObject shadow marches; shorter is cheaper and leaks more", 0.0, 64.0);
+        GK_CVAR_INT_RANGE("r.lightGrid.cascades", settings, LightGridCascadeCount, 3, ECVarFlags::Archive, "Cascaded world-space light grid cascade count (0 = disabled, fall back to the global light CDF)", 0, 3);
+        GK_CVAR_FLOAT_RANGE("r.lightGrid.cellSize", settings, LightGridBaseCellSize, 2.0f, ECVarFlags::Archive, "Cascade 0 cell size in world units; each further cascade is 4x coarser", 0.25, 32.0);
+        GK_CVAR_FLOAT("r.lightGrid.cullThreshold", settings, LightGridCullThreshold, 1.0e-4f, ECVarFlags::Archive, "Minimum contribution a light must reach in a cell to be stored there");
         GK_CVAR_FLOAT_RANGE("r.atmosphere.skyViewLutScale", settings, AtmosphereSkyViewLutScale, 1.0f, ECVarFlags::Archive, "Sky-view LUT resolution scale", 0.25, 2.0);
         GK_CVAR_INT_RANGE("r.atmosphere.debugMode", settings, AtmosphereDebugMode, 0, ECVarFlags::None, "Atmosphere debug mode (0=off,1=in-scatter,2=transmittance,3=sky LUT)", 0, 3);
         GK_CVAR_UINT_CB("r.upscaler.qualityMode", settings, SuperResolution, 5, ECVarFlags::Archive, "Upscaler quality mode (0=Quality,1=Balanced,2=Performance,3=Ultra Performance,4=Native/DLAA,5=Auto)", std::bind(RequestSwapChainIfPossible, engine));

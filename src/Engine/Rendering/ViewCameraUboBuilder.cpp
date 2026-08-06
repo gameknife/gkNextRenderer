@@ -105,6 +105,11 @@ namespace Vulkan
             ubo.GTAOQuality = 0;
             ubo.LightObjectScreenSpaceShadow = false;
             ubo.LightObjectShadowDistance = 0.0f;
+            // Thumbnails render off the primary camera's grid anchor, so disable the grid for them
+            // and let every light query take the global-CDF fallback.
+            ubo.LightGridCascadeCount = 0;
+            ubo.LightGridCullThreshold = 0.0f;
+            ubo.LightGridAnchor = glm::vec4(0.0f);
         }
     }
 

@@ -248,6 +248,15 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.LightObjectScreenSpaceShadow = config_.userSettings.LightObjectScreenSpaceShadow;
     ubo.LightObjectShadowDistance = std::max(config_.userSettings.LightObjectShadowDistance, 0.0f);
 
+    // The light grid anchors to the camera, but the anchor is uploaded rather than re-derived in
+    // each shader: the build pass and every query must agree on cell boundaries to the bit, and a
+    // shader that recomputed the camera position from its own view matrix would not.
+    ubo.LightGridCascadeCount = Assets::ResolveLightGridCascadeCount(
+        config_.userSettings.LightGridCascadeCount, scene_->GetLightCount());
+    ubo.LightGridCullThreshold = std::max(config_.userSettings.LightGridCullThreshold, 0.0f);
+    ubo.LightGridAnchor = glm::vec4(glm::vec3(ubo.ModelViewInverse[3]),
+                                    std::max(config_.userSettings.LightGridBaseCellSize, 0.01f));
+
     ubo.ProgressiveRender = progressiveRender_.enabled;
     ubo.SceneEpsilonScale = config_.userSettings.SceneEpsilonScale;
     const float ambientCubeUnit = Assets::SanitizeAmbientCubeUnit(config_.userSettings.AmbientCubeUnit);

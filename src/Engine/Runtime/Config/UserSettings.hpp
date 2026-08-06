@@ -62,6 +62,12 @@ struct UserSettings final
     bool LightObjectScreenSpaceShadow = false;
     float LightObjectShadowDistance = 6.0f;
 
+    // Cascaded world-space light grid. 0 cascades disables it: every light query falls back to the
+    // global CDF, which restores the pre-grid behaviour exactly.
+    int LightGridCascadeCount = 3;
+    float LightGridBaseCellSize = 2.0f;
+    float LightGridCullThreshold = 1.0e-4f;
+
     float AtmosphereSkyViewLutScale = 1.0f;
     int AtmosphereDebugMode = 0;
 

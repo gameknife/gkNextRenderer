@@ -211,22 +211,28 @@ void main(uint3 DTid : SV_DispatchThreadID)
                 const bool traceShadow =
                     Camera.LightObjectScreenSpaceShadow && shadowDistance > 0.0f;
 
-                // The trace dominates the cost of this loop and the loop covers every light in the
-                // scene, so bound it: find the strongest contributor at this pixel first, then
-                // trace only lights within a fraction of it. A light far below the strongest is
-                // washed out here, so its shadow edge would not be visible anyway.
+                // Resolve the lights that matter here once. Inside the light grid this is a
+                // bounded set; outside every cascade the cell reports a global fallback and both
+                // loops below degrade to the full scene, which stays correct but unaccelerated.
+                const Common.FLightCell lightCell = Common.GetLightCell(hitVertex.Position);
+
+                // The trace dominates the cost of this loop, so bound it: find the strongest
+                // contributor at this pixel first, then trace only lights within a fraction of it.
+                // A light far below the strongest is washed out here, so its shadow edge would not
+                // be visible anyway. The ranking is per pixel, not per cell, because a 2m cell is
+                // coarse enough that cell-centre ordering picks the wrong light near cell borders.
                 float shadowThreshold = 0.0f;
                 if (traceShadow)
                 {
                     float strongest = 0.0f;
-                    for (uint probeIndex = 0; probeIndex < Camera.LightCount; ++probeIndex)
+                    for (uint probeSlot = 0; probeSlot < lightCell.Count; ++probeSlot)
                     {
                         float3 probeL;
                         float3 probeIncident;
                         float3 probePosition;
-                        if (Common.EvaluateLightIncident(probeIndex, float2(0.5f, 0.5f),
-                                                         hitVertex.Position, probeL, probeIncident,
-                                                         probePosition))
+                        if (Common.EvaluateLightIncident(lightCell.GetLightIndex(probeSlot),
+                                                         float2(0.5f, 0.5f), hitVertex.Position,
+                                                         probeL, probeIncident, probePosition))
                         {
                             strongest = max(strongest,
                                             LightContribution(probeIncident, max(dot(N, probeL), 0.0f)));
@@ -235,8 +241,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
                     shadowThreshold = strongest * 0.2f;
                 }
 
-                for (uint lightIndex = 0; lightIndex < Camera.LightCount; ++lightIndex)
+                for (uint lightSlot = 0; lightSlot < lightCell.Count; ++lightSlot)
                 {
+                    const uint lightIndex = lightCell.GetLightIndex(lightSlot);
                     float3 L;
                     float3 incident;
                     float3 lightPosition;

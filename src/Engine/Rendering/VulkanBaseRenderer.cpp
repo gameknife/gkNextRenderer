@@ -245,7 +245,7 @@ namespace Vulkan
                                    EHistoryChannel::None, false}, 0, 1,
                                &CreateLogicRenderer<VoxelTracing::VoxelTracingRenderer>},
             RendererDescriptor{ERT_SoftwareModernNoAmbient, "SoftwareModernNoAmbient", {
-                                   ESceneResource::None,
+                                   ESceneResource::LightGrid,
                                    EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility | EViewPrepass::CSM,
                                    ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion |
                                        ERenderOutput::ObjectId | ERenderOutput::Normal,
@@ -269,6 +269,7 @@ namespace Vulkan
         const FRendererContract& contract = GetRendererDescriptor(type).contract;
         return {
             .requestAmbientCube = HasAny(contract.sceneResources, ESceneResource::Ambient),
+            .requestLightGrid = HasAny(contract.sceneResources, ESceneResource::LightGrid),
             .requestRayTracing = HasAny(contract.sceneResources, ESceneResource::TLAS),
             .requestVoxelGeometry = HasAny(contract.sceneResources, ESceneResource::Voxel),
         };
@@ -324,6 +325,7 @@ namespace Vulkan
         rayTracingSceneBackend_ = std::make_unique<RayTracingSceneBackend>(*this);
         ambientCubeBaker_ = std::make_unique<AmbientCubeBaker>(*this);
         gpuDrivenPasses_ = std::make_unique<GpuDrivenPasses>(*this);
+        lightGridBuilder_ = std::make_unique<LightGridBuilder>(*this);
         atmosphere_ = std::make_unique<Rendering::Atmosphere::AtmosphereSubsystem>(*this);
     }
 
@@ -1207,6 +1209,7 @@ namespace Vulkan
         overlay_.gpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, gpuCullSpv, GetScene()));
         overlay_.softMeshShaderFinalizePipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderFinalize.comp.slang.spv", GetScene()));
         overlay_.softMeshShaderExpandPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderExpand.comp.slang.spv", GetScene()));
+        overlay_.lightGridBuildPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.LightGridBuild.comp.slang.spv", GetScene()));
         overlay_.shadowGpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, shadowGpuCullSpv, GetScene()));
         skin_.pipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.Skinning.comp.slang.spv", GetScene()));
         overlay_.visualDebuggerPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*frame_.swapChain, "assets/shaders/Util.VisualDebugger.comp.slang.spv", 20));
@@ -1439,6 +1442,7 @@ namespace Vulkan
         overlay_.gpuCullCompactPipeline.reset();
         overlay_.softMeshShaderFinalizePipeline.reset();
         overlay_.softMeshShaderExpandPipeline.reset();
+        overlay_.lightGridBuildPipeline.reset();
         overlay_.shadowGpuCullCompactPipeline.reset();
         skin_.pipeline.reset();
         overlay_.temporalPostFilterPipeline.reset();
@@ -1521,6 +1525,7 @@ namespace Vulkan
         overlay_.gpuCullCompactPipeline.reset();
         overlay_.softMeshShaderFinalizePipeline.reset();
         overlay_.softMeshShaderExpandPipeline.reset();
+        overlay_.lightGridBuildPipeline.reset();
         overlay_.shadowGpuCullCompactPipeline.reset();
         skin_.pipeline.reset();
 
@@ -1570,6 +1575,7 @@ namespace Vulkan
         atmosphere_->BeginSceneFrame(commandBuffer, imageIndex);
         rayTracingSceneBackend_->PrepareSceneFrame(commandBuffer, imageIndex);
         ambientCubeBaker_->PrepareSceneFrame(commandBuffer, imageIndex);
+        lightGridBuilder_->PrepareSceneFrame(commandBuffer, imageIndex);
     }
 
     void VulkanBaseRenderer::RenderViewToBank(

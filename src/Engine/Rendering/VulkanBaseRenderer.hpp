@@ -55,6 +55,7 @@ namespace Vulkan
     class RayTracingSceneBackend;
     class AmbientCubeBaker;
     class GpuDrivenPasses;
+    class LightGridBuilder;
     class LogicRendererBase;
     class RenderViewResourceFactory;
     class RenderViewServices;
@@ -75,6 +76,7 @@ namespace Vulkan
         Ambient = 1u << 1u,
         TLAS = 1u << 2u,
         SHARC = 1u << 3u,
+        LightGrid = 1u << 4u,
     };
 
     enum class EViewPrepass : uint32_t
@@ -146,6 +148,7 @@ namespace Vulkan
     struct FRendererRequirements
     {
         bool requestAmbientCube = false;
+        bool requestLightGrid = false;
         bool requestRayTracing = false;
         // Needs voxel SDF geometry (matId + per-axis distance field) but not necessarily ambient cubes.
         bool requestVoxelGeometry = false;
@@ -153,6 +156,7 @@ namespace Vulkan
         void Merge(const FRendererRequirements& other)
         {
             requestAmbientCube = requestAmbientCube || other.requestAmbientCube;
+            requestLightGrid = requestLightGrid || other.requestLightGrid;
             requestRayTracing = requestRayTracing || other.requestRayTracing;
             requestVoxelGeometry = requestVoxelGeometry || other.requestVoxelGeometry;
         }
@@ -386,6 +390,7 @@ namespace Vulkan
         friend class RayTracingSceneBackend;
         friend class AmbientCubeBaker;
         friend class GpuDrivenPasses;
+        friend class LightGridBuilder;
         friend class RenderViewResourceFactory;
 
         // Internal resource groups
@@ -496,6 +501,7 @@ namespace Vulkan
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> gpuCullCompactPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> softMeshShaderFinalizePipeline;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> softMeshShaderExpandPipeline;
+            std::unique_ptr<PipelineCommon::ZeroBindPipeline> lightGridBuildPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> shadowGpuCullCompactPipeline;
             std::unique_ptr<FrameBuffer> visibilityFrameBuffer;
             std::vector<FrameBuffer> wireframeFrameBuffers;
@@ -564,6 +570,7 @@ namespace Vulkan
         std::unique_ptr<RayTracingSceneBackend> rayTracingSceneBackend_;
         std::unique_ptr<AmbientCubeBaker> ambientCubeBaker_;
         std::unique_ptr<GpuDrivenPasses> gpuDrivenPasses_;
+        std::unique_ptr<LightGridBuilder> lightGridBuilder_;
         ScreenshotResources screenshot_;
         FrameGenerationResources frameGeneration_;
         TemporalPostFilterResources temporalPostFilter_;
@@ -662,6 +669,7 @@ namespace Vulkan
         void HandleAmbientCubeCacheInvalidation(VkCommandBuffer commandBuffer, uint32_t imageIndex);
         void DispatchSkinning(VkCommandBuffer commandBuffer, uint32_t imageIndex);
         void DispatchGpuCulling(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+        void DispatchLightGridBuild(VkCommandBuffer commandBuffer, uint32_t imageIndex);
         void DispatchClearPass(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool clearSwapchain = true);
         void DispatchVisibilityPass(VkCommandBuffer commandBuffer, uint32_t imageIndex);
         void DispatchSunShadow(VkCommandBuffer commandBuffer, uint32_t imageIndex);

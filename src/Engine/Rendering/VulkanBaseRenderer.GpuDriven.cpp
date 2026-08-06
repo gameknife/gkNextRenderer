@@ -104,6 +104,37 @@ namespace Vulkan
                                     skinnedVertexBuffer->Handle(), VK_ACCESS_SHADER_WRITE_BIT, skinnedDstAccess);
     }
 
+    void VulkanBaseRenderer::DispatchLightGridBuild(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    {
+        auto& scene = GetScene();
+        if (!ActiveRendererRequirements().requestLightGrid || !scene.HasLightGridBuffer() ||
+            Assets::ResolveLightGridCascadeCount(
+                FrameSettings().userSettings.LightGridCascadeCount, scene.GetLightCount()) == 0)
+        {
+            return;
+        }
+
+        SCOPED_GPU_TIMER("light grid build");
+
+        // The grid is rebuilt from scratch every frame, so the only ordering that matters is
+        // against last frame's readers in the shading passes.
+        BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                    scene.LightGridBuffer().Handle(),
+                                    VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT);
+
+        const Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex, ActiveViewBankBase());
+        overlay_.lightGridBuildPipeline->BindPipeline(commandBuffer, gpuScene);
+        vkCmdDispatch(commandBuffer,
+                      Utilities::Math::GetSafeDispatchCount(Assets::GPU_SCENE_LIGHT_GRID_CELLS, 64),
+                      1, 1);
+
+        BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                    scene.LightGridBuffer().Handle(),
+                                    VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
+    }
+
     void VulkanBaseRenderer::DispatchGpuCulling(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         TransitionActiveViewImages(commandBuffer, {

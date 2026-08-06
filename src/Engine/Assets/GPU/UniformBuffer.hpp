@@ -69,6 +69,23 @@ namespace Assets
 #undef float4
 #undef float4x4
 #undef uint8_t4_packed
+
+    // The light grid only earns its build cost once the scene holds more lights than a single cell
+    // can, because below that every query returns the whole light set anyway and the global
+    // fallback is exactly equivalent and free. Returning 0 disables the grid.
+    //
+    // The UBO fill and the build dispatch must both resolve the count through here: if they
+    // disagree, shading samples a grid nobody rebuilt that frame.
+    inline uint32_t ResolveLightGridCascadeCount(int configuredCascades, uint32_t lightCount)
+    {
+        const int clamped = std::clamp(configuredCascades, 0, GPU_SCENE_LIGHT_GRID_CASCADE_MAX);
+        if (clamped <= 0 || lightCount <= static_cast<uint32_t>(GPU_SCENE_LIGHT_GRID_CAPACITY))
+        {
+            return 0;
+        }
+        return static_cast<uint32_t>(clamped);
+    }
+
     class UniformBuffer
     {
     public:

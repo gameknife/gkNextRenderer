@@ -165,7 +165,11 @@ TEST_CASE("Renderer contracts describe prepasses outputs and history", "[Unit][R
                                   EPostProcess::DebugGBuffer));
 
     const auto& noAmbient = GetRendererContract(ERT_SoftwareModernNoAmbient);
-    CHECK(noAmbient.sceneResources == ESceneResource::None);
+    // Shades finite lights through the world-space light grid, but wants none of the heavier
+    // scene resources: no ambient cubes, no voxels, no acceleration structure.
+    CHECK(noAmbient.sceneResources == ESceneResource::LightGrid);
+    CHECK_FALSE(HasAny(noAmbient.sceneResources,
+                       ESceneResource::Ambient | ESceneResource::Voxel | ESceneResource::TLAS));
     CHECK(HasAny(noAmbient.outputs, ERenderOutput::Depth | ERenderOutput::Motion |
                                     ERenderOutput::ObjectId | ERenderOutput::Normal));
     CHECK(HasAny(noAmbient.post, EPostProcess::Upscale));

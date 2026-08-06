@@ -463,6 +463,8 @@ namespace Assets
         primAddressBufferMemory_.reset(); // release memory after bound buffer has been destroyed
         lightBuffer_.reset();
         lightBufferMemory_.reset();
+        lightGridBuffer_.reset();
+        lightGridBufferMemory_.reset();
 
         softMeshShaderPrimBuffer_.reset();
         softMeshShaderPrimBufferMemory_.reset();

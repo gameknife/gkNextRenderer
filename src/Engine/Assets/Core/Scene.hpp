@@ -150,6 +150,8 @@ namespace Assets
         VkDeviceSize SoftMeshShaderDrawArgByteOffset(uint32_t slot) const;
         uint32_t SoftMeshShaderDrawSlotForShadowCascade(uint32_t cascade) const;
         const Vulkan::Buffer& PrimAddressBuffer() const { return *primAddressBuffer_; }
+        const Vulkan::Buffer& LightGridBuffer() const { return *lightGridBuffer_; }
+        bool HasLightGridBuffer() const { return lightGridBuffer_ != nullptr; }
 
         uint32_t GetLightCount() const { return lightCount_; }
         uint32_t GetIndicesCount() const { return indicesCount_; }
@@ -318,6 +320,9 @@ namespace Assets
 
         std::unique_ptr<Vulkan::Buffer> lightBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> lightBufferMemory_;
+
+        std::unique_ptr<Vulkan::Buffer> lightGridBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> lightGridBufferMemory_;
 
         std::unique_ptr<Vulkan::Buffer> softMeshShaderPrimBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> softMeshShaderPrimBufferMemory_;

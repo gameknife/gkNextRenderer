@@ -19,6 +19,12 @@ namespace Vulkan
         renderer_.HandleAmbientCubeCacheInvalidation(commandBuffer, imageIndex);
     }
 
+    void LightGridBuilder::PrepareSceneFrame(
+        const VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+    {
+        renderer_.DispatchLightGridBuild(commandBuffer, imageIndex);
+    }
+
     void GpuDrivenPasses::RenderViewPrepasses(
         const VkCommandBuffer commandBuffer,
         const uint32_t imageIndex,

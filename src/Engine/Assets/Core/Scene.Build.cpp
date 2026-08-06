@@ -77,6 +77,7 @@ namespace Assets
                 softMeshShaderDispatchArgBuffer_->GetDeviceAddress(),
                 softMeshShaderCounterBuffer_->GetDeviceAddress(),
                 lightBuffer_ ? lightBuffer_->GetDeviceAddress() : 0,
+                lightGridBuffer_ ? lightGridBuffer_->GetDeviceAddress() : 0,
             },
         };
         Vulkan::BufferUtil::CreateDeviceBuffer(
@@ -568,6 +569,9 @@ namespace Assets
             commandPool, "Lights", flags,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             sizeof(LightObject) * kMaxLightCount, lightBuffer_, lightBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "LightGrid", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            GPU_SCENE_LIGHT_GRID_SIZE, lightGridBuffer_, lightGridBufferMemory_);
         lightCount_ = std::min<uint32_t>(static_cast<uint32_t>(lights_.size()), kMaxLightCount);
         if (lights_.size() > kMaxLightCount)
         {
@@ -642,6 +646,7 @@ namespace Assets
                 softMeshShaderDispatchArgBuffer_->GetDeviceAddress(),
                 softMeshShaderCounterBuffer_->GetDeviceAddress(),
                 lightBuffer_->GetDeviceAddress(),
+                lightGridBuffer_->GetDeviceAddress(),
             },
         };
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SoftMeshShaderResources", softMeshShaderFlags, softMeshShaderResources,

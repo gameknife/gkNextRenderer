@@ -50,6 +50,29 @@ public static const int GPU_SCENE_PAGE_INDEX_SIZE = 16;
 public static const int GPU_SCENE_AMBIENT_SEED_SIZE = 16;
 public static const int GPU_SCENE_ACGI_PAGE_COUNT = 64;
 
+// Cascaded world-space light grid. Every light-sampling path resolves "which lights matter at this
+// world position" through it, so it must be world-space: a view-frustum cluster grid cannot answer
+// for path-tracer bounce points, SHARC cache updates or ambient-cube baking, which is exactly what
+// would force each renderer back onto its own light loop.
+// Cascades are camera-anchored with a geometric cell-size ratio; a position outside every cascade
+// falls back to the global CDF, so the structure is an accelerator and never a correctness gate.
+public static const int GPU_SCENE_LIGHT_GRID_SIZE_XZ = 32;
+public static const int GPU_SCENE_LIGHT_GRID_SIZE_Y = 16;
+public static const int GPU_SCENE_LIGHT_GRID_CASCADE_MAX = 3;
+public static const float GPU_SCENE_LIGHT_GRID_CASCADE_RATIO = 4.0f;
+// Per-cell capacity. Overflow keeps the most important lights and drops the rest: unbiased for the
+// path tracer (it divides by the pdf actually used) but a genuine approximation for forward paths.
+public static const int GPU_SCENE_LIGHT_GRID_CAPACITY = 32;
+public static const int GPU_SCENE_LIGHT_GRID_CASCADE_CELLS =
+    GPU_SCENE_LIGHT_GRID_SIZE_XZ * GPU_SCENE_LIGHT_GRID_SIZE_Y * GPU_SCENE_LIGHT_GRID_SIZE_XZ;
+public static const int GPU_SCENE_LIGHT_GRID_CELLS =
+    GPU_SCENE_LIGHT_GRID_CASCADE_CELLS * GPU_SCENE_LIGHT_GRID_CASCADE_MAX;
+// Layout: [uint count per cell][uint entry per cell slot]. An entry packs the light index in the
+// low 16 bits and the unorm16 CDF upper bound in the high 16, so a selection walk reads one dword.
+public static const int GPU_SCENE_LIGHT_GRID_ENTRY_OFFSET = GPU_SCENE_LIGHT_GRID_CELLS * 4;
+public static const int GPU_SCENE_LIGHT_GRID_SIZE =
+    GPU_SCENE_LIGHT_GRID_ENTRY_OFFSET + GPU_SCENE_LIGHT_GRID_CELLS * GPU_SCENE_LIGHT_GRID_CAPACITY * 4;
+
 public static const int GPU_SCENE_AMBIENT_CUBES_OFFSET = 0;
 public static const int GPU_SCENE_AMBIENT_VOXELS_OFFSET =
     GPU_SCENE_AMBIENT_CUBES_OFFSET +
@@ -113,6 +136,7 @@ public struct ALIGN_16 SoftMeshShaderResources
     public uint64_t DispatchArgs;
     public uint64_t Counters;
     public uint64_t Lights;
+    public uint64_t LightGrid;
 };
 
 public struct ALIGN_16 UniformBufferObject
@@ -189,6 +213,10 @@ public struct ALIGN_16 UniformBufferObject
     public uint GTAOQuality;
     public bool LightObjectScreenSpaceShadow;
     public float LightObjectShadowDistance; // world units the screen-space light shadow marches
+
+    public uint LightGridCascadeCount;   // 0 disables the grid: every query falls back to the global CDF
+    public float LightGridCullThreshold; // minimum per-cell contribution a light must reach to be stored
+    public float4 LightGridAnchor;       // xyz = cascade anchor (snapped camera), w = cascade 0 cell size
 
     // Stable extension point for procedural atmosphere. Zero preserves the legacy IBL path.
     public uint64_t AtmosphereParams;
