@@ -13,8 +13,10 @@ __include "common/RadianceCache.slang";
 __include "common/Sharc.slang";
 __include "common/Restir.slang";
 __include "common/RestirSpatialShade.slang";
-__include "common/Lighting.slang";
+// LightGrid before Lighting: Slang resolves unqualified names within a module in include order, and
+// the NEE evaluators in Lighting.slang call the grid's pdf authority.
 __include "common/LightGrid.slang";
+__include "common/Lighting.slang";
 __include "common/PathTracingRenderer.slang";
 #include "common/ConstFunc.slang"
 #include "common/Tonemap.slang"

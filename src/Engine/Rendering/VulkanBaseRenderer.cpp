@@ -210,7 +210,8 @@ namespace Vulkan
 
         const std::array RendererDescriptors{
             RendererDescriptor{ERT_PathTracing, "PathTracing", {
-                                   ESceneResource::Voxel | ESceneResource::Ambient | ESceneResource::TLAS | ESceneResource::SHARC,
+                                   ESceneResource::Voxel | ESceneResource::Ambient | ESceneResource::TLAS | ESceneResource::SHARC |
+                                       ESceneResource::LightGrid,
                                    EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility,
                                    ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion | ERenderOutput::ObjectId |
                                        ERenderOutput::Normal | ERenderOutput::Albedo | ERenderOutput::Diffuse | ERenderOutput::Specular,
@@ -220,7 +221,7 @@ namespace Vulkan
                                    EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 1, 1,
                                &CreateLogicRenderer<PathTracing::PathTracingRenderer>},
             RendererDescriptor{ERT_SoftwareTracing, "SoftwareTracing", {
-                                   ESceneResource::Voxel | ESceneResource::Ambient,
+                                   ESceneResource::Voxel | ESceneResource::Ambient | ESceneResource::LightGrid,
                                    EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility | EViewPrepass::CSM,
                                    ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion | ERenderOutput::ObjectId |
                                        ERenderOutput::Normal | ERenderOutput::Albedo | ERenderOutput::Diffuse | ERenderOutput::Specular,

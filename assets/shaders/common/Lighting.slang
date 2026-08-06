@@ -15,32 +15,10 @@ implementing PathTracing;
 
 namespace Common
 {
-    // CDF light selection shared by classic light NEE and ReSTIR candidate generation
-    // (reserved1 carries the cdf built in Scene::UpdateLights).
-    public uint SelectLight(float lightSelector)
-    {
-        GPUScene gpuScene = Bindless.GetGpuscene();
-        UniformBufferObject Camera = gpuScene.Camera[0];
-        uint lightIndex = Camera.LightCount - 1;
-        for (uint i = 0; i < Camera.LightCount; ++i)
-        {
-            if (lightSelector < asfloat(gpuScene.Lights[i].reserved1))
-            {
-                lightIndex = i;
-                break;
-            }
-        }
-        return lightIndex;
-    }
-
-    public float GetLightSampleMeasure(LightObject light)
-    {
-        if (light.lightType == LightTypePoint)
-        {
-            return 1.0f;
-        }
-        return light.lightType == LightTypeArea ? light.normal_area.w : 0.0f;
-    }
+    // SelectLight, GetLightSampleMeasure and GetLightSelectionPdf live in LightGrid.slang: light
+    // *selection* and its pdf are the grid's responsibility, and this file consumes them to decide how
+    // much light arrives. Calls into them stay Common-qualified - unqualified lookup inside a
+    // namespace does not reach declarations from another file of the same module.
 
     public float2 CanonicalizeLightUV(LightObject light, float2 uv)
     {
@@ -71,7 +49,7 @@ namespace Common
 
         GPUScene gpuScene = Bindless.GetGpuscene();
         LightObject light = gpuScene.Lights[lightIndex];
-        const float sampleMeasure = GetLightSampleMeasure(light);
+        const float sampleMeasure = Common.GetLightSampleMeasure(light);
         if (sampleMeasure <= 0.0f)
         {
             return false;
@@ -135,16 +113,19 @@ namespace Common
 
     // BSDF-aware finite/delta-light sample. Diffuse stays albedo-demodulated while
     // specular is complete radiance; lightPdf is the discrete light-selection probability.
-    public bool EvaluateLightDirectSample(uint lightIndex, float2 uv, FBSDFContext context,
-                                          out FDirectLighting direct,
-                                          out float3 lightPosition)
+    // Entry point for callers that just selected this light and therefore already hold its
+    // selection probability. Re-deriving it would mean a second light-grid lookup per sample, and
+    // SelectLightAt returns exactly what GetLightSelectionPdf reports for the same position and
+    // light, so passing it through is the same number by construction rather than a second opinion.
+    public bool EvaluateLightDirectSampleWithPdf(uint lightIndex, float lightPdf, float2 uv,
+                                                 FBSDFContext context, out FDirectLighting direct,
+                                                 out float3 lightPosition)
     {
         direct = FDirectLighting();
         lightPosition = float3(0, 0, 0);
         GPUScene gpuScene = Bindless.GetGpuscene();
         LightObject light = gpuScene.Lights[lightIndex];
-        const float sampleMeasure = GetLightSampleMeasure(light);
-        const float lightPdf = asfloat(light.reserved2);
+        const float sampleMeasure = Common.GetLightSampleMeasure(light);
         if (sampleMeasure <= 0.0f || lightPdf <= 0.0f)
         {
             return false;
@@ -205,26 +186,49 @@ namespace Common
                any(direct.SpecularRadiance > float3(0, 0, 0));
     }
 
+    // Entry point for callers holding only a light index - a stored ReSTIR reservoir, or a BSDF ray
+    // that landed on an emitter. Resolves the selection probability at the shading point itself.
+    public bool EvaluateLightDirectSample(uint lightIndex, float2 uv, FBSDFContext context,
+                                          out FDirectLighting direct,
+                                          out float3 lightPosition)
+    {
+        return EvaluateLightDirectSampleWithPdf(
+            lightIndex, Common.GetLightSelectionPdf(lightIndex, context.Position), uv, context,
+            direct, lightPosition);
+    }
+
     // ReSTIR target/shading payload: BSDF-aware diffuse only, excluding the full
     // source PDF (discrete light probability divided by finite sample measure).
-    public bool EvaluateLightDiffuseSample(uint lightIndex, float2 uv, FBSDFContext context,
-                                           out float3 f, out float3 lightPosition)
+    public bool EvaluateLightDiffuseSampleWithPdf(uint lightIndex, float lightPdf, float2 uv,
+                                                  FBSDFContext context, out float3 f,
+                                                  out float3 lightPosition)
     {
         f = float3(0, 0, 0);
         FDirectLighting direct;
-        if (!EvaluateLightDirectSample(lightIndex, uv, context, direct, lightPosition))
+        if (!EvaluateLightDirectSampleWithPdf(lightIndex, lightPdf, uv, context, direct,
+                                              lightPosition))
         {
             return false;
         }
         LightObject light = Bindless.GetGpuscene().Lights[lightIndex];
-        const float sampleMeasure = GetLightSampleMeasure(light);
-        const float lightPdf = asfloat(light.reserved2);
-        if (sampleMeasure <= 0.0f || lightPdf <= 0.0f)
+        const float sampleMeasure = Common.GetLightSampleMeasure(light);
+        if (sampleMeasure <= 0.0f)
         {
             return false;
         }
+        // Cancels the pdf the evaluator divided out, so the target function stays a pure
+        // property of the surface and the light - identical whichever pixel's cell produced the
+        // sample, which is what makes a reservoir safe to reuse across pixels.
         f = direct.DiffuseDemodulated * (lightPdf / sampleMeasure);
         return any(f > float3(0, 0, 0));
+    }
+
+    public bool EvaluateLightDiffuseSample(uint lightIndex, float2 uv, FBSDFContext context,
+                                           out float3 f, out float3 lightPosition)
+    {
+        return EvaluateLightDiffuseSampleWithPdf(
+            lightIndex, Common.GetLightSelectionPdf(lightIndex, context.Position), uv, context, f,
+            lightPosition);
     }
 
     // The sun is modeled as a finite disk of angular radius 0.25 degrees. Sun sampling is
@@ -441,10 +445,14 @@ public struct FTracingDirectIlluminator<TTracer : IRayTracer, TSun : ISunShadowP
             return;
         }
 
-        const uint lightIndex = Common.SelectLight(RandomFloat(randomSeed));
+        uint lightIndex;
+        float lightPdf;
+        if (!Common.SelectLightAt(context.Position, RandomFloat(randomSeed), lightIndex, lightPdf))
+        {
+            return;
+        }
         LightObject light = gpuScene.Lights[lightIndex];
-        const float lightPdf = asfloat(light.reserved2);
-        if (lightPdf <= 0.0f || Common.GetLightSampleMeasure(light) <= 0.0f)
+        if (Common.GetLightSampleMeasure(light) <= 0.0f)
         {
             return;
         }
@@ -452,8 +460,8 @@ public struct FTracingDirectIlluminator<TTracer : IRayTracer, TSun : ISunShadowP
         const float2 uv = Common.CanonicalizeLightUV(light, RandomFloat2(randomSeed));
         FDirectLighting sampleDirect;
         float3 lightPosition;
-        if (!Common.EvaluateLightDirectSample(lightIndex, uv, context, sampleDirect,
-                                               lightPosition))
+        if (!Common.EvaluateLightDirectSampleWithPdf(lightIndex, lightPdf, uv, context,
+                                                      sampleDirect, lightPosition))
         {
             return;
         }

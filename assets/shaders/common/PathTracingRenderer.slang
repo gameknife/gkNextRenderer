@@ -102,63 +102,101 @@ public struct FPathTracingRenderer{
         return cache.OnSurfaceHit(vertex.Position, vertex.Normal, direct, RandomSeed_);
     }
 
-    // Does the point lie on a registered emitter surface with this material index?
-    // Area emitters test point-on-quad; point emitters test their radius. includePoint
-    // selects whether analytic point lights participate (area-only vs any emitter).
-    bool IsRegisteredEmitterHit(float3 position, uint materialIndex, bool includePoint)
+    // Does this light's surface contain the point, for this material index? Area emitters test
+    // point-on-quad; point emitters test their radius. includePoint selects whether analytic point
+    // lights participate (area-only vs any emitter).
+    bool MatchesRegisteredEmitter(uint lightIndex, float3 position, uint materialIndex,
+                                  bool includePoint, bool areaOnly)
     {
-        GPUScene gpuScene = Bindless.GetGpuscene();
-        UniformBufferObject camera = gpuScene.Camera[0];
-        for (uint i = 0; i < camera.LightCount; ++i)
+        LightObject light = Bindless.GetGpuscene().Lights[lightIndex];
+        if (light.lightMatIdx != materialIndex)
         {
-            LightObject light = gpuScene.Lights[i];
-            if (light.lightMatIdx != materialIndex)
+            return false;
+        }
+        if (light.lightType == LightTypeArea)
+        {
+            return IsPointOnAreaLight(position, light, EPS10);
+        }
+        return !areaOnly && includePoint && light.lightType == LightTypePoint &&
+               light.p0.w > 0.0f && distance(position, light.p0.xyz) <= light.p0.w + EPS10;
+    }
+
+    bool FindRegisteredEmitterIn(Common.FLightCell cell, float3 position, uint materialIndex,
+                                 bool includePoint, bool areaOnly, out uint outLightIndex)
+    {
+        outLightIndex = 0u;
+        for (uint slot = 0u; slot < cell.Count; ++slot)
+        {
+            const uint lightIndex = cell.GetLightIndex(slot);
+            if (MatchesRegisteredEmitter(lightIndex, position, materialIndex, includePoint, areaOnly))
             {
-                continue;
-            }
-            if (light.lightType == LightTypeArea &&
-                IsPointOnAreaLight(position, light, EPS10))
-            {
-                return true;
-            }
-            if (includePoint && light.lightType == LightTypePoint && light.p0.w > 0.0f &&
-                distance(position, light.p0.xyz) <= light.p0.w + EPS10)
-            {
+                outLightIndex = lightIndex;
                 return true;
             }
         }
         return false;
     }
 
+    // Which registered emitter does this point sit on? Identification is deliberately independent
+    // of whether light sampling would pick that emitter anywhere: when the grid culls a light, the
+    // BSDF strategy carries all of its energy at MIS weight one, so failing to recognise it here
+    // would delete the light from the image entirely.
+    //
+    // The hit point's own cell answers virtually every query - a light is all but guaranteed to be
+    // in the cell its surface occupies - and the full-list scan is the rare correctness backstop.
+    bool FindRegisteredEmitter(float3 position, uint materialIndex, bool includePoint,
+                               bool areaOnly, out uint outLightIndex)
+    {
+        const Common.FLightCell cell = Common.GetLightCell(position);
+        if (FindRegisteredEmitterIn(cell, position, materialIndex, includePoint, areaOnly,
+                                    outLightIndex))
+        {
+            return true;
+        }
+        if (cell.UsesGlobalFallback)
+        {
+            return false;
+        }
+        return FindRegisteredEmitterIn(Common.GetGlobalLightCell(), position, materialIndex,
+                                       includePoint, areaOnly, outLightIndex);
+    }
+
+    bool IsRegisteredEmitterHit(float3 position, uint materialIndex, bool includePoint)
+    {
+        uint lightIndex;
+        return FindRegisteredEmitter(position, materialIndex, includePoint, false, lightIndex);
+    }
+
     bool GetRegisteredAreaLightPdf(float3 position, uint materialIndex, float3 shadingPosition,
                                    out float pdfOmega)
     {
         pdfOmega = 0.0f;
-        GPUScene gpuScene = Bindless.GetGpuscene();
-        UniformBufferObject camera = gpuScene.Camera[0];
-        for (uint i = 0; i < camera.LightCount; ++i)
+        uint lightIndex;
+        if (!FindRegisteredEmitter(position, materialIndex, false, true, lightIndex))
         {
-            LightObject light = gpuScene.Lights[i];
-            if (light.lightType != LightTypeArea ||
-                light.lightMatIdx != materialIndex ||
-                !IsPointOnAreaLight(position, light, EPS10))
-            {
-                continue;
-            }
-            const float3 toLight = position - shadingPosition;
-            const float distanceSquared = dot(toLight, toLight);
-            const float lightCosine = max(dot(normalize(light.normal_area.xyz),
-                                               -normalize(toLight)), 0.0f);
-            const float area = light.normal_area.w;
-            const float lightSelectionPdf = asfloat(light.reserved2);
-            if (distanceSquared > EPS * EPS && lightCosine > 0.0f && area > 0.0f &&
-                lightSelectionPdf > 0.0f)
-            {
-                pdfOmega = (lightSelectionPdf / area) * distanceSquared / lightCosine;
-                return true;
-            }
+            return false;
         }
-        return false;
+
+        LightObject light = Bindless.GetGpuscene().Lights[lightIndex];
+        const float3 toLight = position - shadingPosition;
+        const float distanceSquared = dot(toLight, toLight);
+        const float lightCosine =
+            max(dot(normalize(light.normal_area.xyz), -normalize(toLight)), 0.0f);
+        const float area = light.normal_area.w;
+        // Two different positions, and swapping them is silent: the emitter is identified where the
+        // ray landed, but the pdf must be the one light sampling would have used *from the shading
+        // point*, because that is the strategy this MIS weight is balancing against.
+        const float lightSelectionPdf = Common.GetLightSelectionPdf(lightIndex, shadingPosition);
+        if (distanceSquared <= EPS * EPS || lightCosine <= 0.0f || area <= 0.0f ||
+            lightSelectionPdf <= 0.0f)
+        {
+            // A culled light reports no light-sampling density, so the caller's PowerHeuristic
+            // collapses to one and the BSDF strategy takes the whole contribution. Returning true
+            // with pdfOmega zero is what keeps that light in the image.
+            return distanceSquared > EPS * EPS && lightCosine > 0.0f && area > 0.0f;
+        }
+        pdfOmega = (lightSelectionPdf / area) * distanceSquared / lightCosine;
+        return true;
     }
 
     float3 FetchEmitterRadiance(Vertex vertex)

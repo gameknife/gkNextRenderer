@@ -76,10 +76,14 @@ namespace Assets
     //
     // The UBO fill and the build dispatch must both resolve the count through here: if they
     // disagree, shading samples a grid nobody rebuilt that frame.
-    inline uint32_t ResolveLightGridCascadeCount(int configuredCascades, uint32_t lightCount)
+    inline uint32_t ResolveLightGridCascadeCount(int configuredCascades, uint32_t lightCount,
+                                                 bool rendererRequestsGrid)
     {
         const int clamped = std::clamp(configuredCascades, 0, GPU_SCENE_LIGHT_GRID_CASCADE_MAX);
-        if (clamped <= 0 || lightCount <= static_cast<uint32_t>(GPU_SCENE_LIGHT_GRID_CAPACITY))
+        // A renderer that never declared the grid does not get it built, so it must not be told one
+        // exists: its shaders would sample whatever the buffer held from a previous renderer.
+        if (!rendererRequestsGrid || clamped <= 0 ||
+            lightCount <= static_cast<uint32_t>(GPU_SCENE_LIGHT_GRID_CAPACITY))
         {
             return 0;
         }

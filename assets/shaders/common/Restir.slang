@@ -218,15 +218,21 @@ public void RestirPrimaryGather(inout uint4 randomSeed, int2 pixel, FBSDFContext
     // (equivalent to streaming them with zero weight).
     for (uint c = 0; c < params.InitialCandidates; ++c)
     {
-        const uint lightIndex = Common.SelectLight(RandomFloat(randomSeed));
+        uint lightIndex;
+        float lightPdf;
+        if (!Common.SelectLightAt(context.Position, RandomFloat(randomSeed), lightIndex, lightPdf))
+        {
+            reservoir.M += 1.0f;
+            continue;
+        }
         LightObject light = gpuScene.Lights[lightIndex];
-        const float lightPdf = asfloat(light.reserved2);
         const float sampleMeasure = Common.GetLightSampleMeasure(light);
         const float2 uv = Common.CanonicalizeLightUV(light, RandomFloat2(randomSeed));
         float3 f;
         float3 lightPosition;
-        if (lightPdf <= 0.0f || sampleMeasure <= 0.0f ||
-            !Common.EvaluateLightDiffuseSample(lightIndex, uv, context, f, lightPosition))
+        if (sampleMeasure <= 0.0f ||
+            !Common.EvaluateLightDiffuseSampleWithPdf(lightIndex, lightPdf, uv, context, f,
+                                                      lightPosition))
         {
             reservoir.M += 1.0f;
             continue;

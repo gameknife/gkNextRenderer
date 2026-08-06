@@ -107,9 +107,10 @@ namespace Vulkan
     void VulkanBaseRenderer::DispatchLightGridBuild(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         auto& scene = GetScene();
-        if (!ActiveRendererRequirements().requestLightGrid || !scene.HasLightGridBuffer() ||
+        if (!scene.HasLightGridBuffer() ||
             Assets::ResolveLightGridCascadeCount(
-                FrameSettings().userSettings.LightGridCascadeCount, scene.GetLightCount()) == 0)
+                FrameSettings().userSettings.LightGridCascadeCount, scene.GetLightCount(),
+                ActiveRendererRequirements().requestLightGrid) == 0)
         {
             return;
         }
