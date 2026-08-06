@@ -103,6 +103,8 @@ namespace Vulkan
             ubo.GTAODebugMode = 0;
             ubo.GTAOEnable = false;
             ubo.GTAOQuality = 0;
+            ubo.LightObjectScreenSpaceShadow = false;
+            ubo.LightObjectShadowDistance = 0.0f;
         }
     }
 

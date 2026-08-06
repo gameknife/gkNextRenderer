@@ -59,6 +59,8 @@ namespace NextCVar
         GK_CVAR_FLOAT("r.gtao.strength", settings, GTAOStrength, 5.0f, ECVarFlags::Archive, "Master sky-occlusion strength: scales GTAO sky darkening (1=natural, lower=lighter)");
         GK_CVAR_FLOAT("r.gtao.thickness", settings, GTAOThickness, 0.5f, ECVarFlags::Archive, "GTAO depth-discontinuity thickness heuristic in world units");
         GK_CVAR_INT("r.gtao.debugMode", settings, GTAODebugMode, 0, ECVarFlags::Archive, "GTAO debug mode (0=off,1=occlusion,2=unoccluded sky lighting)");
+        GK_CVAR_BOOL("r.lightObject.screenSpaceShadow", settings, LightObjectScreenSpaceShadow, false, ECVarFlags::Archive, "Enable coarse screen-space shadows for LightObjects in SoftwareModernNoAmbient");
+        GK_CVAR_FLOAT_RANGE("r.lightObject.screenSpaceShadowDistance", settings, LightObjectShadowDistance, 6.0f, ECVarFlags::Archive, "World-space distance the screen-space LightObject shadow marches; shorter is cheaper and leaks more", 0.0, 64.0);
         GK_CVAR_FLOAT_RANGE("r.atmosphere.skyViewLutScale", settings, AtmosphereSkyViewLutScale, 1.0f, ECVarFlags::Archive, "Sky-view LUT resolution scale", 0.25, 2.0);
         GK_CVAR_INT_RANGE("r.atmosphere.debugMode", settings, AtmosphereDebugMode, 0, ECVarFlags::None, "Atmosphere debug mode (0=off,1=in-scatter,2=transmittance,3=sky LUT)", 0, 3);
         GK_CVAR_UINT_CB("r.upscaler.qualityMode", settings, SuperResolution, 5, ECVarFlags::Archive, "Upscaler quality mode (0=Quality,1=Balanced,2=Performance,3=Ultra Performance,4=Native/DLAA,5=Auto)", std::bind(RequestSwapChainIfPossible, engine));

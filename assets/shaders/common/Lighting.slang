@@ -47,6 +47,73 @@ namespace Common
         return light.lightType == LightTypePoint ? float2(0, 0) : uv;
     }
 
+    public float3 SampleLightPosition(LightObject light, float2 uv)
+    {
+        return light.lightType == LightTypePoint
+            ? light.p0.xyz
+            : light.p0.xyz + uv.x * (light.p1.xyz - light.p0.xyz) +
+                             uv.y * (light.p3.xyz - light.p0.xyz);
+    }
+
+    // BSDF-independent evaluation of one finite light, for forward renderers that shade every
+    // light deterministically instead of importance-sampling one of them. Returns the incident
+    // direction and L_e * dOmega arriving at the shading point, so the caller applies its own
+    // BRDF and receiver cosine. This is the same radiometry EvaluateLightDirectSample integrates
+    // with the discrete selection PDF divided out, so summing it over all lights matches what the
+    // path tracer converges to.
+    public bool EvaluateLightIncident(uint lightIndex, float2 uv, float3 position,
+                                      out float3 wi, out float3 incidentWeight,
+                                      out float3 lightPosition)
+    {
+        wi = float3(0, 0, 1);
+        incidentWeight = float3(0, 0, 0);
+        lightPosition = float3(0, 0, 0);
+
+        GPUScene gpuScene = Bindless.GetGpuscene();
+        LightObject light = gpuScene.Lights[lightIndex];
+        const float sampleMeasure = GetLightSampleMeasure(light);
+        if (sampleMeasure <= 0.0f)
+        {
+            return false;
+        }
+        Material lightMaterial = gpuScene.GetMaterial(light.lightMatIdx);
+        if (lightMaterial.MaterialModel != MaterialDiffuseLight)
+        {
+            return false;
+        }
+
+        lightPosition = SampleLightPosition(light, CanonicalizeLightUV(light, uv));
+        const float3 toLight = lightPosition - position;
+        const float distanceSquared = dot(toLight, toLight);
+        if (distanceSquared <= EPS * EPS)
+        {
+            return false;
+        }
+        wi = toLight * rsqrt(distanceSquared);
+
+        float solidAngle;
+        if (light.lightType == LightTypePoint)
+        {
+            // DiffuseLight RGB is radiant intensity for a point record, so the inverse-square
+            // term alone converts it to irradiance per unit projected area.
+            solidAngle = 1.0f / distanceSquared;
+        }
+        else
+        {
+            const float lightCosine = max(dot(normalize(light.normal_area.xyz), -wi), 0.0f);
+            if (lightCosine <= 0.0f)
+            {
+                return false;
+            }
+            // A single centre sample stands in for the whole emitter. Clamping to the hemisphere
+            // keeps a receiver that sits almost on a large quad from producing an unbounded
+            // highlight, which a deterministic forward pass has no filtering to hide.
+            solidAngle = min(sampleMeasure * lightCosine / distanceSquared, M_TWO_PI);
+        }
+        incidentWeight = lightMaterial.Diffuse.rgb * solidAngle;
+        return any(incidentWeight > float3(0, 0, 0));
+    }
+
     // The visible marker of an analytic point light is not an occluder of that light.
     // Shorten only the visibility segment; illumination still uses the analytic center.
     public float3 GetLightVisibilityTarget(uint lightIndex, float3 rayOrigin,
@@ -88,15 +155,7 @@ namespace Common
             return false;
         }
 
-        if (light.lightType == LightTypePoint)
-        {
-            lightPosition = light.p0.xyz;
-        }
-        else
-        {
-            lightPosition = light.p0.xyz + uv.x * (light.p1.xyz - light.p0.xyz) +
-                            uv.y * (light.p3.xyz - light.p0.xyz);
-        }
+        lightPosition = SampleLightPosition(light, uv);
         const float3 toLight = lightPosition - context.Position;
         const float distanceSquared = dot(toLight, toLight);
         if (distanceSquared <= EPS * EPS)

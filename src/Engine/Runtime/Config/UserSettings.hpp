@@ -59,6 +59,8 @@ struct UserSettings final
     float GTAOStrength = 5.0f; // master sky-occlusion strength
     float GTAOThickness = 0.5f;
     int GTAODebugMode = 0;
+    bool LightObjectScreenSpaceShadow = false;
+    float LightObjectShadowDistance = 6.0f;
 
     float AtmosphereSkyViewLutScale = 1.0f;
     int AtmosphereDebugMode = 0;

@@ -216,7 +216,8 @@ namespace Common
         return min(float4(10, 10, 10, 1), Bindless.GetSampleTexture(skyIdx).SampleLevel(t, roughness * 8.0f));
     };
 
-    bool traceInScreenSpace(float3 position, float3 rayDir, float maxDistance, float depthTolerance, out float3 outPosition, out float3 outNormal, out uint outMaterialIdx)
+    public bool TraceInScreenSpace(float3 position, float3 rayDir, float maxDistance, float depthTolerance,
+                                   out float3 outPosition, out float3 outNormal, out uint outMaterialIdx)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
         GPUVertex* Vertices = Bindless.GetGpuscene().Vertices;
@@ -243,7 +244,7 @@ namespace Common
 
             int2 size = int2(Visibility.Dimensions(gpuScene.CustomData0));
 
-            int2 sampleCoord = int2(currentUV * float2(size));
+            int2 sampleCoord = clamp(int2(currentUV * float2(size)), int2(0), size - 1);
             uint2 vBufferSample = Visibility.Load(sampleCoord, gpuScene.CustomData0);
             if (!Visibility.IsValid(vBufferSample))
                 continue;
@@ -277,4 +278,185 @@ namespace Common
         }
         return false;
     };
+
+    // Interleaved-gradient spatial hash, decorrelated per frame by the golden ratio so a temporal
+    // resolve sees a genuinely new offset every frame. Core.GTAO deliberately drifts far slower
+    // because it has a spatial filter to lean on; a dithered binary shadow has none, so its
+    // sequence has to move fast enough for TAA to average it back out.
+    float ScreenSpaceHash(uint2 pixel, uint frame)
+    {
+        const float seed = dot(float2(pixel), float2(0.06711056f, 0.00583715f));
+        return frac(52.9829189f * frac(seed) + float(frame) * 0.6180339887f);
+    }
+
+    // World position and camera-facing geometric plane of the surface the visibility buffer holds
+    // at a pixel. An occlusion query needs only those, so it must not pay for the attribute
+    // interpolation get_material_data performs: the pixel's primary ray provably hits the stored
+    // triangle, which makes a plane intersection exact and a barycentric solve redundant.
+    bool LoadVisibilitySurfacePlane(int2 pixel, int2 size, out float3 worldPosition,
+                                    out float3 worldNormal)
+    {
+        worldPosition = float3(0, 0, 0);
+        worldNormal = float3(0, 0, 1);
+        GPUScene scene = Bindless.GetGpuscene();
+        const uint2 vBuffer = Visibility.Load(pixel, scene.CustomData0);
+        if (!Visibility.IsValid(vBuffer))
+        {
+            return false;
+        }
+
+        UniformBufferObject Camera = scene.Camera[0];
+        NodeProxy proxy = scene.Nodes[vBuffer.x - 1];
+        ModelData model = scene.Offsets[proxy.modelId];
+        GPUVertex* vertices = proxy.skinId != 0xFFFFFFFF ? scene.SkinnedVertices : scene.Vertices;
+
+        float3 corners[3];
+        [unroll]
+        for (uint i = 0u; i < 3u; ++i)
+        {
+            const uint vertexIndex = scene.Indices[model.indexOffset + vBuffer.y * 3u + i];
+            const float3 local = float3(vertices[model.vertexOffset + vertexIndex].Position_Tx.xyz);
+            corners[i] = mul(proxy.worldTS, float4(local, 1.0f)).xyz;
+        }
+
+        const float3 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1)).xyz;
+        const float2 ndc = ((float2(pixel) + 0.5f) / float2(size)) * 2.0f - 1.0f;
+        const float4 target = mul(Camera.ProjectionInverse, float4(ndc, 1.0f, 1.0f));
+        const float3 rayDir = normalize(mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0.0f)).xyz);
+
+        const float3 planeNormal = cross(corners[1] - corners[0], corners[2] - corners[0]);
+        const float denominator = dot(planeNormal, rayDir);
+        if (abs(denominator) <= 1e-12f)
+        {
+            return false;
+        }
+        const float t = dot(planeNormal, corners[0] - origin) / denominator;
+        if (t <= 0.0f)
+        {
+            return false;
+        }
+        worldPosition = origin + rayDir * t;
+        // Orient the plane toward the camera: the visibility buffer stores the face the camera
+        // sees, and callers reason about what lies in front of or behind that face.
+        worldNormal = normalize(planeNormal) * (denominator > 0.0f ? -1.0f : 1.0f);
+        return true;
+    }
+
+    // Coarse contact shadow between a shading point and a finite light, marched against the
+    // visibility buffer. The visibility buffer only holds what the camera can see, so every
+    // uncertain path here fails *open*: a missed occluder is a light leak that reads as soft
+    // lighting, while a false occluder is a black blotch that reads as a bug.
+    //
+    // Known limits, inherent to screen-space data: occluders outside the frame or hidden behind
+    // nearer geometry cast nothing, and the fixed step count cannot resolve an occluder thinner
+    // than the local step. Callers must treat this as an approximation, never as a shadow test.
+    public float ScreenSpaceShadowVisibility(float3 position, float3 normal, float3 lightPosition,
+                                             float maxTraceDistance, uint2 screenPixel,
+                                             bool temporalDither)
+    {
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+        const float3 toLight = lightPosition - position;
+        const float lightDistance = length(toLight);
+        if (lightDistance <= EPS || maxTraceDistance <= EPS)
+        {
+            return 1.0f;
+        }
+        const float3 wi = toLight / lightDistance;
+
+        // The emitter's own geometry is in the visibility buffer. Marching all the way to it makes
+        // every light shadow the very surfaces it illuminates, so stop short of the emitter.
+        const float traceLength = min(maxTraceDistance, lightDistance) * 0.95f;
+        if (traceLength <= EPS)
+        {
+            return 1.0f;
+        }
+
+        const float receiverViewZ = mul(Camera.ModelView, float4(position, 1.0f)).z;
+        // Biases scale with view depth so they stay a roughly constant number of pixels instead of
+        // a constant world distance, which is what actually governs reconstruction error here.
+        const float depthScale = max(abs(receiverViewZ), 1.0f);
+        const float planeBias = 0.004f * depthScale;
+        const float3 rayOrigin = position + normal * planeBias;
+        const float3 rayEnd = rayOrigin + wi * traceLength;
+
+        const float4 clipStart = mul(Camera.ViewProjection, float4(rayOrigin, 1.0f));
+        const float4 clipEnd = mul(Camera.ViewProjection, float4(rayEnd, 1.0f));
+        // A shading point behind the near plane has no screen-space neighbourhood to march.
+        const float minClipW = 0.05f;
+        if (clipStart.w <= minClipW)
+        {
+            return 1.0f;
+        }
+        // A light toward the camera pushes the far end behind the near plane; clip the segment
+        // there rather than dropping the shadow, since w is affine along the world-space segment.
+        float endFraction = 1.0f;
+        if (clipEnd.w < minClipW)
+        {
+            endFraction = saturate((minClipW - clipStart.w) / (clipEnd.w - clipStart.w));
+        }
+        if (endFraction <= 0.01f)
+        {
+            return 1.0f;
+        }
+
+        const int2 size = int2(Visibility.Dimensions(gpuScene.CustomData0));
+        const float dither = ScreenSpaceHash(screenPixel, temporalDither ? Camera.TotalFrames : 0u);
+
+        const uint stepCount = 12u;
+        for (uint i = 0u; i < stepCount; ++i)
+        {
+            // Quadratic spacing concentrates the budget near the receiver, where contact shadows
+            // carry the contact cue and where a missed step is most visible.
+            const float s = (float(i) + dither) / float(stepCount);
+            const float fraction = endFraction * s * s;
+
+            const float4 clip = lerp(clipStart, clipEnd, fraction);
+            if (clip.w < minClipW)
+            {
+                break;
+            }
+            const float2 uv = (clip.xy / clip.w) * 0.5f + 0.5f;
+            if (any(uv < float2(0.0f)) || any(uv >= float2(1.0f)))
+            {
+                // The ray left the frame; nothing further along it is knowable.
+                break;
+            }
+
+            float3 occluderPosition;
+            float3 occluderNormal;
+            const int2 sampleCoord = clamp(int2(uv * float2(size)), int2(0), size - 1);
+            if (!LoadVisibilitySurfacePlane(sampleCoord, size, occluderPosition, occluderNormal))
+            {
+                continue;
+            }
+
+            // Every point of a shadow ray leaving a lit surface lies above that surface's tangent
+            // plane, so anything at or below the plane cannot occlude it. Skipping those is exact,
+            // not a bias hack, and it is what keeps a flat surface from shadowing itself: under
+            // grazing light the ray rides its own plane, where any depth comparison there is pure
+            // reconstruction noise and dithers into a stipple pattern.
+            if (dot(occluderPosition - position, normal) <= planeBias)
+            {
+                continue;
+            }
+
+            // Measure against the occluder's own plane rather than comparing view depths at the
+            // sampled texel. Both describe the same geometry, but a texel of a surface seen
+            // near edge-on spans a large depth range, so a depth comparison there is dominated by
+            // texel slope - which is what banded the wall/ceiling junction. The plane distance
+            // has no such error. The thickness bound remains a guess: the visibility buffer
+            // records a front face, never the depth of the solid behind it.
+            const float3 rayPosition = lerp(rayOrigin, rayEnd, fraction);
+            const float behindSurface = -dot(occluderNormal, rayPosition - occluderPosition);
+            const float thickness = max(0.2f, depthScale * 0.03f);
+            if (behindSurface > planeBias && behindSurface < thickness)
+            {
+                // Fade a hit found near the frame border: the occluder is about to scroll out of
+                // the visibility buffer, and a hard cutoff there pops as the camera turns.
+                const float2 borderDistance = min(uv, 1.0f - uv);
+                return 1.0f - saturate(min(borderDistance.x, borderDistance.y) / 0.08f);
+            }
+        }
+        return 1.0f;
+    }
 }

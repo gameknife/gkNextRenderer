@@ -245,6 +245,8 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.GTAODebugMode = static_cast<uint32_t>(std::clamp(config_.userSettings.GTAODebugMode, 0, 2));
     ubo.GTAOEnable = config_.userSettings.GTAOEnable;
     ubo.GTAOQuality = static_cast<uint32_t>(std::clamp(config_.userSettings.GTAOQuality, 0, 3));
+    ubo.LightObjectScreenSpaceShadow = config_.userSettings.LightObjectScreenSpaceShadow;
+    ubo.LightObjectShadowDistance = std::max(config_.userSettings.LightObjectShadowDistance, 0.0f);
 
     ubo.ProgressiveRender = progressiveRender_.enabled;
     ubo.SceneEpsilonScale = config_.userSettings.SceneEpsilonScale;

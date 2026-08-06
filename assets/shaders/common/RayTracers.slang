@@ -608,7 +608,7 @@ public struct FSoftwareRayTracer : IRayTracer
         const bool allowScreenSpaceTrace = (viewRayDir.z < -0.05f);
 
         if (allowScreenSpaceTrace &&
-            Common.traceInScreenSpace(offsetPos, rayDir, min(longDistanceInit, clampedTraceDistance), depthToleration, outVertex.Position, outVertex.Normal, outVertex.MaterialIndex))
+            Common.TraceInScreenSpace(offsetPos, rayDir, min(longDistanceInit, clampedTraceDistance), depthToleration, outVertex.Position, outVertex.Normal, outVertex.MaterialIndex))
         {
             outVertex.TexCoord = float2(0.5, 0.5);
             outHitDist = distance(outVertex.Position, rayOrigin);

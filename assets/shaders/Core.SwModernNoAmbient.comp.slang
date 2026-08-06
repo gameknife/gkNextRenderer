@@ -43,6 +43,26 @@ float3 DielectricF0(float refractionIndex)
     return float3(f * f);
 }
 
+// Cook-Torrance specular, shared by the sun and every finite light so both analytic light types
+// reflect off a surface the same way.
+float3 SpecularBRDF(float3 N, float3 V, float3 L, float NoV, float NoL, float roughness, float3 f0)
+{
+    const float3 H = normalize(V + L);
+    const float NoH = max(dot(N, H), 0.0f);
+    const float VoH = max(dot(V, H), 0.0f);
+    const float D = DistributionGGX(NoH, roughness);
+    const float G = GeometrySmith(NoV, NoL, roughness);
+    const float3 F = FresnelSchlick(VoH, f0);
+    return (D * G * F) / max(4.0f * NoV * NoL, 1e-5f);
+}
+
+// Perceived brightness a light lands on the receiver before shadowing, used both to skip lights
+// that cannot change the pixel and to rank which ones deserve a screen-space shadow trace.
+float LightContribution(float3 incidentWeight, float NoL)
+{
+    return dot(incidentWeight * NoL, float3(0.2126f, 0.7152f, 0.0722f));
+}
+
 float3 MaterialF0(Material material, float3 albedo, float metalness)
 {
     float3 dielectricF0 = material.MaterialModel == MaterialDielectric
@@ -178,8 +198,76 @@ void main(uint3 DTid : SV_DispatchThreadID)
             }
             ambientColor = float4(ambient, 1.0f);
 
-            // 太阳：Lambert + CSM 阴影
             float3 direct = float3(0);
+
+            // Finite lights (GPUScene LightObjects, point or quad emitters). This renderer has
+            // neither a ray tracer nor a reservoir, so every light is evaluated deterministically
+            // from its centre and shaded with the same Lambert + GGX pair the sun uses below.
+            // Visibility is the optional coarse screen-space contact shadow.
+            GPUScene lightScene = Bindless.GetGpuscene();
+            if (Camera.LightCount > 0 && lightScene.SoftMeshShader.Lights != 0)
+            {
+                const float shadowDistance = max(Camera.LightObjectShadowDistance, 0.0f);
+                const bool traceShadow =
+                    Camera.LightObjectScreenSpaceShadow && shadowDistance > 0.0f;
+
+                // The trace dominates the cost of this loop and the loop covers every light in the
+                // scene, so bound it: find the strongest contributor at this pixel first, then
+                // trace only lights within a fraction of it. A light far below the strongest is
+                // washed out here, so its shadow edge would not be visible anyway.
+                float shadowThreshold = 0.0f;
+                if (traceShadow)
+                {
+                    float strongest = 0.0f;
+                    for (uint probeIndex = 0; probeIndex < Camera.LightCount; ++probeIndex)
+                    {
+                        float3 probeL;
+                        float3 probeIncident;
+                        float3 probePosition;
+                        if (Common.EvaluateLightIncident(probeIndex, float2(0.5f, 0.5f),
+                                                         hitVertex.Position, probeL, probeIncident,
+                                                         probePosition))
+                        {
+                            strongest = max(strongest,
+                                            LightContribution(probeIncident, max(dot(N, probeL), 0.0f)));
+                        }
+                    }
+                    shadowThreshold = strongest * 0.2f;
+                }
+
+                for (uint lightIndex = 0; lightIndex < Camera.LightCount; ++lightIndex)
+                {
+                    float3 L;
+                    float3 incident;
+                    float3 lightPosition;
+                    if (!Common.EvaluateLightIncident(lightIndex, float2(0.5f, 0.5f),
+                                                      hitVertex.Position, L, incident, lightPosition))
+                    {
+                        continue;
+                    }
+
+                    const float NoL = max(dot(N, L), 0.0f);
+                    const float contribution = LightContribution(incident, NoL);
+                    if (contribution < 1e-4f)
+                    {
+                        continue;
+                    }
+
+                    float3 radiance = incident * NoL;
+                    if (traceShadow && contribution >= shadowThreshold)
+                    {
+                        radiance *= Common.ScreenSpaceShadowVisibility(
+                            hitVertex.Position, N, lightPosition, shadowDistance, uint2(pixel),
+                            Camera.PrimaryRayJitter);
+                    }
+
+                    direct += kD * albedo * radiance * M_1_PI;
+                    specularColor.rgb +=
+                        SpecularBRDF(N, V, L, NoV, NoL, roughness, f0) * radiance;
+                }
+            }
+
+            // 太阳：Lambert + CSM 阴影
             if (Camera.HasSun)
             {
                 float3 L = normalize(Camera.SunDirection.xyz);
@@ -188,16 +276,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
                 float shadow = Common.SampleSunShadowCSM(hitVertex.Position, N, viewDist);
                 float3 sunRadiance = Camera.SunColor.rgb * (NoL * shadow);
 
-                float3 H = normalize(V + L);
-                float NoH = max(dot(N, H), 0.0f);
-                float VoH = max(dot(V, H), 0.0f);
-                float D = DistributionGGX(NoH, roughness);
-                float G = GeometrySmith(NoV, NoL, roughness);
-                float3 F = FresnelSchlick(VoH, f0);
-                float3 specularBrdf = (D * G * F) / max(4.0f * NoV * NoL, 1e-5f);
-
-                direct = kD * albedo * sunRadiance * M_1_PI;
-                specularColor.rgb += specularBrdf * sunRadiance;
+                direct += kD * albedo * sunRadiance * M_1_PI;
+                specularColor.rgb += SpecularBRDF(N, V, L, NoV, NoL, roughness, f0) * sunRadiance;
             }
 
             // GTAO is applied only to the sky term in Process.GTAOCompose. Direct sun,

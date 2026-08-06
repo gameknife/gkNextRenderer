@@ -187,6 +187,8 @@ public struct ALIGN_16 UniformBufferObject
     public uint GTAODebugMode;
     public bool GTAOEnable;
     public uint GTAOQuality;
+    public bool LightObjectScreenSpaceShadow;
+    public float LightObjectShadowDistance; // world units the screen-space light shadow marches
 
     // Stable extension point for procedural atmosphere. Zero preserves the legacy IBL path.
     public uint64_t AtmosphereParams;
