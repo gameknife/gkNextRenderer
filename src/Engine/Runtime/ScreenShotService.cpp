@@ -26,7 +26,7 @@ namespace Runtime
 {
     struct FVideoCaptureState final
     {
-        FScreenShotService::EAnimationFormat format = FScreenShotService::EAnimationFormat::Gif;
+        FScreenShotService::EAnimationFormat format = FScreenShotService::EAnimationFormat::Both;
         uint32_t framesPerSecond = 15;
         uint32_t frameCount = 45;
         uint32_t nextFrameIndex = 0;
@@ -34,8 +34,11 @@ namespace Runtime
         double nextFrameTime = 0.0;
         bool frameInFlight = false;
         bool succeeded = false;
+        FScreenShotService::EVideoOutputScale outputScale = FScreenShotService::EVideoOutputScale::Half;
         bool includeUi = false;
+        bool forceUiHidden = false;
         std::filesystem::path temporaryDirectory;
+        std::string outputStem;
         std::string outputPath;
         std::function<void()> onCaptureFinished;
         std::function<void(const std::string& path)> onCompleted;
@@ -45,8 +48,6 @@ namespace Runtime
     {
         constexpr double kThreeSecondVideoDuration = 3.0;
         constexpr uint32_t kMaximumVideoFramesPerSecond = 120;
-        constexpr int kMaximumAnimationWidth = 640;
-        constexpr int kMaximumAnimationHeight = 360;
 
         struct FVideoDimensions final
         {
@@ -74,7 +75,7 @@ namespace Runtime
 
         uint32_t DefaultFramesPerSecond(const FScreenShotService::EAnimationFormat format)
         {
-            return format == FScreenShotService::EAnimationFormat::AnimatedWebp ? 30u : 15u;
+            return format == FScreenShotService::EAnimationFormat::Gif ? 15u : 30u;
         }
 
         const char* AnimationExtension(const FScreenShotService::EAnimationFormat format)
@@ -114,9 +115,21 @@ namespace Runtime
             return {};
         }
 
+        double GetVideoOutputScale(const FScreenShotService::EVideoOutputScale outputScale)
+        {
+            switch (outputScale)
+            {
+            case FScreenShotService::EVideoOutputScale::Half:
+                return 0.5;
+            case FScreenShotService::EVideoOutputScale::Quarter:
+                return 0.25;
+            case FScreenShotService::EVideoOutputScale::Full:
+            default:
+                return 1.0;
+            }
+        }
+
         bool ResolveVideoDimensions(const FVideoCaptureState& capture,
-                                    const int maximumWidth,
-                                    const int maximumHeight,
                                     FVideoDimensions& outDimensions)
         {
             const std::filesystem::path firstFramePath = capture.temporaryDirectory / "frame_000000.jpg";
@@ -128,21 +141,18 @@ namespace Runtime
                 return false;
             }
 
-            const double scale = std::min({
-                1.0,
-                static_cast<double>(maximumWidth) / static_cast<double>(inputWidth),
-                static_cast<double>(maximumHeight) / static_cast<double>(inputHeight),
-            });
-            outDimensions.width = std::clamp(
-                static_cast<int>(std::floor(static_cast<double>(inputWidth) * scale)), 1, maximumWidth);
-            outDimensions.height = std::clamp(
-                static_cast<int>(std::floor(static_cast<double>(inputHeight) * scale)), 1, maximumHeight);
+            const double scale = GetVideoOutputScale(capture.outputScale);
+            outDimensions.width = std::max(
+                1, static_cast<int>(std::floor(static_cast<double>(inputWidth) * scale)));
+            outDimensions.height = std::max(
+                1, static_cast<int>(std::floor(static_cast<double>(inputHeight) * scale)));
             return true;
         }
 
         std::string BuildFfmpegCommand(const FVideoCaptureState& capture,
                                        const std::filesystem::path& ffmpegPath,
-                                       const FVideoDimensions dimensions)
+                                       const FVideoDimensions dimensions,
+                                       const std::string& outputPath)
         {
             const std::filesystem::path inputPattern = capture.temporaryDirectory / "frame_%06d.jpg";
             const std::string commonArguments = QuoteProcessArgument(ffmpegPath) +
@@ -155,11 +165,12 @@ namespace Runtime
                 " -vf \"scale=" + std::to_string(dimensions.width) + ":" +
                 std::to_string(dimensions.height) +
                 ",split[s0][s1];[s0]palettegen=stats_mode=diff[p];[s1][p]paletteuse=dither=sierra2_4a\""
-                " -loop -1 -an " + QuoteProcessArgument(capture.outputPath);
+                " -loop -1 -an " + QuoteProcessArgument(outputPath);
         }
 
         bool EncodeAnimatedWebpWithLibwebp(const FVideoCaptureState& capture,
-                                           const FVideoDimensions dimensions)
+                                           const FVideoDimensions dimensions,
+                                           const std::string& outputPath)
         {
             WebPAnimEncoderOptions encoderOptions{};
             if (!WebPAnimEncoderOptionsInit(&encoderOptions))
@@ -295,7 +306,7 @@ namespace Runtime
 
             if (succeeded && outputData.bytes && outputData.size > 0)
             {
-                std::ofstream output(capture.outputPath, std::ios::binary | std::ios::trunc);
+                std::ofstream output(outputPath, std::ios::binary | std::ios::trunc);
                 if (output.is_open())
                 {
                     output.write(reinterpret_cast<const char*>(outputData.bytes),
@@ -308,7 +319,7 @@ namespace Runtime
                 }
                 if (!succeeded)
                 {
-                    spdlog::error("Failed to write animated WebP {}", capture.outputPath);
+                    spdlog::error("Failed to write animated WebP {}", outputPath);
                 }
             }
 
@@ -320,56 +331,91 @@ namespace Runtime
             return succeeded;
         }
 
+        std::string BuildAnimationPath(const FVideoCaptureState& capture,
+                                       const FScreenShotService::EAnimationFormat format)
+        {
+            return capture.outputStem + AnimationExtension(format);
+        }
+
+        bool EncodeVideoFormat(const FVideoCaptureState& capture,
+                               const FScreenShotService::EAnimationFormat format,
+                               const FVideoDimensions dimensions,
+                               const std::string& outputPath)
+        {
+            if (format == FScreenShotService::EAnimationFormat::AnimatedWebp)
+            {
+                return EncodeAnimatedWebpWithLibwebp(capture, dimensions, outputPath);
+            }
+
+            const std::filesystem::path ffmpegPath = ResolveFfmpegPath();
+            if (ffmpegPath.empty())
+            {
+                spdlog::error("Cannot encode three-second GIF: ffmpeg.exe is missing from the application directory");
+                return false;
+            }
+
+            const std::string command = BuildFfmpegCommand(capture, ffmpegPath, dimensions, outputPath);
+            const int exitCode = NextRenderer::OSProcess(command.data());
+            std::error_code errorCode;
+            const bool succeeded = exitCode == 0 && std::filesystem::is_regular_file(outputPath, errorCode);
+            if (!succeeded)
+            {
+                spdlog::error("ffmpeg failed to encode {} (exit code {})", outputPath, exitCode);
+            }
+            return succeeded;
+        }
+
         bool EncodeVideo(const FVideoCaptureState& capture)
         {
-            bool succeeded = false;
             FVideoDimensions dimensions;
-            const bool isAnimatedWebp = capture.format == FScreenShotService::EAnimationFormat::AnimatedWebp;
-            if (!ResolveVideoDimensions(
-                    capture, kMaximumAnimationWidth, kMaximumAnimationHeight, dimensions))
+            if (!ResolveVideoDimensions(capture, dimensions))
             {
                 std::error_code errorCode;
                 std::filesystem::remove_all(capture.temporaryDirectory, errorCode);
                 return false;
             }
 
-            if (isAnimatedWebp)
+            const bool wantsGif = capture.format == FScreenShotService::EAnimationFormat::Gif ||
+                capture.format == FScreenShotService::EAnimationFormat::Both;
+            const bool wantsWebp = capture.format == FScreenShotService::EAnimationFormat::AnimatedWebp ||
+                capture.format == FScreenShotService::EAnimationFormat::Both;
+
+            bool gifSucceeded = !wantsGif;
+            bool webpSucceeded = !wantsWebp;
+            if (wantsGif)
             {
-                succeeded = EncodeAnimatedWebpWithLibwebp(capture, dimensions);
-            }
-            else
-            {
-                const std::filesystem::path ffmpegPath = ResolveFfmpegPath();
-                if (ffmpegPath.empty())
+                const std::string outputPath = BuildAnimationPath(
+                    capture, FScreenShotService::EAnimationFormat::Gif);
+                gifSucceeded = EncodeVideoFormat(
+                    capture, FScreenShotService::EAnimationFormat::Gif, dimensions, outputPath);
+                if (!gifSucceeded)
                 {
-                    spdlog::error("Cannot encode three-second GIF: ffmpeg.exe is missing from the application directory");
-                }
-                else
-                {
-                    std::string command = BuildFfmpegCommand(capture, ffmpegPath, dimensions);
-                    const int exitCode = NextRenderer::OSProcess(command.data());
                     std::error_code errorCode;
-                    succeeded = exitCode == 0 && std::filesystem::is_regular_file(capture.outputPath, errorCode);
-                    if (!succeeded)
-                    {
-                        spdlog::error("ffmpeg failed to encode {} (exit code {})", capture.outputPath, exitCode);
-                    }
+                    std::filesystem::remove(outputPath, errorCode);
+                }
+            }
+
+            if (wantsWebp)
+            {
+                const std::string outputPath = BuildAnimationPath(
+                    capture, FScreenShotService::EAnimationFormat::AnimatedWebp);
+                webpSucceeded = EncodeVideoFormat(
+                    capture, FScreenShotService::EAnimationFormat::AnimatedWebp, dimensions, outputPath);
+                if (!webpSucceeded)
+                {
+                    std::error_code errorCode;
+                    std::filesystem::remove(outputPath, errorCode);
                 }
             }
 
             std::error_code errorCode;
-            if (!succeeded)
-            {
-                std::filesystem::remove(capture.outputPath, errorCode);
-            }
-            errorCode.clear();
             std::filesystem::remove_all(capture.temporaryDirectory, errorCode);
             if (errorCode)
             {
                 spdlog::warn("Failed to remove temporary video frames {}: {}",
                              capture.temporaryDirectory.string(), errorCode.message());
             }
-            return succeeded;
+            return gifSucceeded && webpSucceeded;
         }
     } // namespace
 
@@ -390,6 +436,7 @@ namespace Runtime
             .filename = filename,
             .accumulateFrames = request.accumulateFrames,
             .includeUi = request.includeUi,
+            .forceUiHidden = request.forceUiHidden,
         });
 
         engine_.AddTickedTask([this, filename, onCompleted = std::move(request.onCompleted)](double) mutable
@@ -430,8 +477,12 @@ namespace Runtime
         capture->format = request.format;
         capture->framesPerSecond = framesPerSecond;
         capture->frameCount = static_cast<uint32_t>(kThreeSecondVideoDuration * framesPerSecond);
+        capture->outputScale = request.outputScale;
         capture->includeUi = request.includeUi;
-        capture->outputPath = stem + AnimationExtension(request.format);
+        capture->forceUiHidden = request.forceUiHidden;
+        capture->outputStem = stem;
+        capture->outputPath = stem +
+            (request.format == FScreenShotService::EAnimationFormat::AnimatedWebp ? ".webp" : ".gif");
         capture->temporaryDirectory = std::filesystem::path(GetDirectory()) /
             (".tmp_" + std::filesystem::path(stem).filename().string());
         capture->onCaptureFinished = std::move(request.onCaptureFinished);
@@ -496,6 +547,7 @@ namespace Runtime
             .includeUi = videoCapture_->includeUi,
             .fileFormat = ScreenShot::EFileFormat::Jpeg,
             .allowOverlappingExports = true,
+            .forceUiHidden = videoCapture_->forceUiHidden,
         });
         return false;
     }

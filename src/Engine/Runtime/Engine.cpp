@@ -527,6 +527,8 @@ bool NextEngine::HandleEvent(SDL_Event& event)
         SDL_SetModState(static_cast<SDL_Keymod>(event.key.mod));
     }
 
+    const bool globalCaptureShortcut = HandleGlobalCaptureShortcut(event);
+
     userInterface_->HandleEvent(&event);
     const bool rmlUiConsumed = uiOverlay_ && uiOverlay_->HandleEvent(event);
 
@@ -575,7 +577,7 @@ bool NextEngine::HandleEvent(SDL_Event& event)
     case SDL_EVENT_KEY_UP:
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
     case SDL_EVENT_GAMEPAD_BUTTON_UP:
-        if (!rmlUiConsumed)
+        if (!rmlUiConsumed && !globalCaptureShortcut)
         {
             OnKey(event);
         }
@@ -1241,7 +1243,8 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
 {
     SCOPED_CPU_TIMER("post render");
     const bool suppressAllUi = ShouldCaptureScreenShotThisFrame() && !screenShot_.pending.includeUi &&
-        (!gameInstance_ || !gameInstance_->ShouldRenderUiDuringScreenshot());
+        (screenShot_.pending.forceUiHidden ||
+         !gameInstance_ || !gameInstance_->ShouldRenderUiDuringScreenshot());
 
     if (userInterface_)
     {
@@ -1308,12 +1311,15 @@ void NextEngine::OnRendererAfterSubmit()
             uiOverlay_->BeginFrame();
         }
     }
+    const bool suppressAllUi = ShouldCaptureScreenShotThisFrame() && !screenShot_.pending.includeUi &&
+        (screenShot_.pending.forceUiHidden ||
+         !gameInstance_ || !gameInstance_->ShouldRenderUiDuringScreenshot());
     bool uiHandled = false;
     {
         SCOPED_CPU_TIMER("game ui");
         uiHandled = gameInstance_->OnRenderUI();
     }
-    if (uiOverlay_)
+    if (uiOverlay_ && !suppressAllUi)
     {
         SCOPED_CPU_TIMER("overlay render");
         uiOverlay_->RenderFrame();

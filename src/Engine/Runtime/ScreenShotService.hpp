@@ -20,6 +20,14 @@ namespace Runtime
         {
             Gif,
             AnimatedWebp,
+            Both,
+        };
+
+        enum class EVideoOutputScale
+        {
+            Full,
+            Half,
+            Quarter,
         };
 
         struct FRequest
@@ -28,14 +36,17 @@ namespace Runtime
             uint32_t accumulateFrames = 0;
             bool includeUi = false;
             std::function<void(const std::string& path)> onCompleted;
+            bool forceUiHidden = false;
         };
 
         struct FThreeSecondVideoRequest
         {
             std::string tag;
-            EAnimationFormat format = EAnimationFormat::Gif;
+            EAnimationFormat format = EAnimationFormat::Both;
             uint32_t framesPerSecond = 0;
+            EVideoOutputScale outputScale = EVideoOutputScale::Half;
             bool includeUi = false;
+            bool forceUiHidden = false;
             // Called on the engine thread after the three-second frame capture
             // is complete and before GIF/WebP encoding starts.
             std::function<void()> onCaptureFinished;
@@ -51,8 +62,9 @@ namespace Runtime
         bool Request() { return Request(FRequest{}); }
 
         // Captures exactly three seconds of frames and asynchronously encodes
-        // them as a looping GIF or animated WebP. framesPerSecond == 0 uses
-        // the format default (15 for GIF, 30 for animated WebP).
+        // them as a looping GIF, animated WebP, or both. Both formats reuse the
+        // same temporary JPEG frame sequence. framesPerSecond == 0 uses the
+        // format default (15 for GIF, 30 for animated WebP and Both).
         bool RequestThreeSecondVideo(FThreeSecondVideoRequest request);
         bool RequestThreeSecondVideo() { return RequestThreeSecondVideo(FThreeSecondVideoRequest{}); }
 

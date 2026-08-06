@@ -86,7 +86,8 @@ private:
     void DrawViewportTopBar(const FGameUiFrameContext& context, FRendererUiState& uiState);
     void DrawViewportCheatSheet(FRendererUiState& uiState);
     void RequestScreenshot(bool openFolder, const std::string& tag);
-    void RequestThreeSecondVideo(Runtime::FScreenShotService::EAnimationFormat format);
+    void DrawVideoCaptureMenuItems();
+    void RequestThreeSecondVideo(Runtime::FScreenShotService::EVideoOutputScale outputScale);
     Runtime::Camera::ModelViewController modelViewController_;
 
     FRendererUiState mainUiState_;
@@ -100,6 +101,8 @@ private:
 
     bool isTakingScreenshot_ = false;
     bool isRecordingVideo_ = false;
+    Runtime::FScreenShotService::EVideoOutputScale videoOutputScale_ =
+        Runtime::FScreenShotService::EVideoOutputScale::Half;
     bool playbackPaused_ = false;
     bool stepRequested_ = false;
 };

@@ -878,7 +878,7 @@ void NextRendererGameInstance::RequestScreenshot(bool openFolder, const std::str
 }
 
 void NextRendererGameInstance::RequestThreeSecondVideo(
-    const Runtime::FScreenShotService::EAnimationFormat format)
+    const Runtime::FScreenShotService::EVideoOutputScale outputScale)
 {
     if (isTakingScreenshot_ || isRecordingVideo_ || GetEngine().GetScreenShotService().IsBusy())
     {
@@ -887,7 +887,8 @@ void NextRendererGameInstance::RequestThreeSecondVideo(
 
     isRecordingVideo_ = true;
     Runtime::FScreenShotService::FThreeSecondVideoRequest request;
-    request.format = format;
+    request.format = Runtime::FScreenShotService::EAnimationFormat::Both;
+    request.outputScale = outputScale;
     request.onCaptureFinished = [this]()
     {
         isRecordingVideo_ = false;
@@ -900,13 +901,62 @@ void NextRendererGameInstance::RequestThreeSecondVideo(
         }
         else
         {
-            spdlog::info("Three-second video saved: {}", path);
+            std::filesystem::path webpPath(path);
+            webpPath.replace_extension(".webp");
+            spdlog::info("Three-second GIF/WebP saved: {} and {}", path, webpPath.string());
         }
     };
 
     if (!GetEngine().GetScreenShotService().RequestThreeSecondVideo(std::move(request)))
     {
         isRecordingVideo_ = false;
+    }
+}
+
+void NextRendererGameInstance::DrawVideoCaptureMenuItems()
+{
+    const auto outputScaleLabel = [](const Runtime::FScreenShotService::EVideoOutputScale outputScale)
+    {
+        switch (outputScale)
+        {
+        case Runtime::FScreenShotService::EVideoOutputScale::Half:
+            return "50% Swapchain";
+        case Runtime::FScreenShotService::EVideoOutputScale::Quarter:
+            return "25% Swapchain";
+        case Runtime::FScreenShotService::EVideoOutputScale::Full:
+        default:
+            return "100% Swapchain";
+        }
+    };
+
+    const std::string outputScaleMenuLabel = fmt::format(
+        "Recording size ({})", outputScaleLabel(videoOutputScale_));
+    if (ImGui::BeginMenu(outputScaleMenuLabel.c_str()))
+    {
+        struct FVideoOutputScaleOption
+        {
+            Runtime::FScreenShotService::EVideoOutputScale scale;
+            const char* label;
+        };
+        static constexpr std::array<FVideoOutputScaleOption, 3> options{{
+            {Runtime::FScreenShotService::EVideoOutputScale::Full, "100% Swapchain"},
+            {Runtime::FScreenShotService::EVideoOutputScale::Half, "50% Swapchain"},
+            {Runtime::FScreenShotService::EVideoOutputScale::Quarter, "25% Swapchain"},
+        }};
+
+        for (const FVideoOutputScaleOption& option : options)
+        {
+            if (ImGui::MenuItem(option.label, nullptr, videoOutputScale_ == option.scale))
+            {
+                videoOutputScale_ = option.scale;
+            }
+        }
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::MenuItem("Record 3s GIF + Animated WebP"))
+    {
+        RequestThreeSecondVideo(videoOutputScale_);
     }
 }
 
@@ -2111,14 +2161,7 @@ void NextRendererGameInstance::DrawViewportTopBar(
                 RequestScreenshot(true, "");
             }
             ImGui::Separator();
-            if (ImGui::MenuItem("Record 3s GIF"))
-            {
-                RequestThreeSecondVideo(Runtime::FScreenShotService::EAnimationFormat::Gif);
-            }
-            if (ImGui::MenuItem("Record 3s Animated WebP"))
-            {
-                RequestThreeSecondVideo(Runtime::FScreenShotService::EAnimationFormat::AnimatedWebp);
-            }
+            DrawVideoCaptureMenuItems();
             ImGui::EndPopup();
         }
         ImGui::PopStyleVar();
@@ -2295,14 +2338,8 @@ void NextRendererGameInstance::DrawTitleBar(const FGameUiFrameContext& context, 
             {
                 RequestScreenshot(true, "");
             }
-            if (ImGui::MenuItem("Record 3s GIF"))
-            {
-                RequestThreeSecondVideo(Runtime::FScreenShotService::EAnimationFormat::Gif);
-            }
-            if (ImGui::MenuItem("Record 3s Animated WebP"))
-            {
-                RequestThreeSecondVideo(Runtime::FScreenShotService::EAnimationFormat::AnimatedWebp);
-            }
+            ImGui::Separator();
+            DrawVideoCaptureMenuItems();
             ImGui::EndMenu();
         }
         else

@@ -10,6 +10,7 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/RemoteProtocol.hpp"
+#include "Engine/Runtime/ScreenShotService.hpp"
 #include "Engine/Runtime/Interface/DebugUiProvider.hpp"
 #include "Engine/Runtime/Interface/UiOverlay.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
@@ -122,6 +123,44 @@ void NextEngine::OnKey(SDL_Event& event)
             return;
         }
     }
+}
+
+bool NextEngine::HandleGlobalCaptureShortcut(const SDL_Event& event)
+{
+    if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat)
+    {
+        return false;
+    }
+
+    const SDL_Keymod modifiers = static_cast<SDL_Keymod>(event.key.mod);
+    const bool hasCtrl = (modifiers & SDL_KMOD_CTRL) != 0;
+    const bool hasShift = (modifiers & SDL_KMOD_SHIFT) != 0;
+    const bool hasOtherModifier = (modifiers & (SDL_KMOD_ALT | SDL_KMOD_GUI)) != 0;
+    if (!hasCtrl || hasOtherModifier || (event.key.key != SDLK_F9 && event.key.key != SDLK_F10))
+    {
+        return false;
+    }
+
+    const std::string tag = hasShift ? "global-hotkey-ui" : "global-hotkey";
+    if (event.key.key == SDLK_F9)
+    {
+        (void)GetScreenShotService().Request(Runtime::FScreenShotService::FRequest{
+            .tag = tag,
+            .includeUi = hasShift,
+            .forceUiHidden = !hasShift,
+        });
+    }
+    else
+    {
+        (void)GetScreenShotService().RequestThreeSecondVideo(Runtime::FScreenShotService::FThreeSecondVideoRequest{
+            .tag = tag,
+            .format = Runtime::FScreenShotService::EAnimationFormat::Both,
+            .outputScale = Runtime::FScreenShotService::EVideoOutputScale::Full,
+            .includeUi = hasShift,
+            .forceUiHidden = !hasShift,
+        });
+    }
+    return true;
 }
 
 bool NextEngine::HandleDebugShortcut(SDL_Keycode key)

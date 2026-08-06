@@ -74,6 +74,7 @@ public:
         bool includeUi = false;
         Runtime::ScreenShot::EFileFormat fileFormat = Runtime::ScreenShot::EFileFormat::Automatic;
         bool allowOverlappingExports = false;
+        bool forceUiHidden = false;
     };
 
     using FHotReloadStatus = Runtime::FShaderHotReloadStatus;
@@ -291,6 +292,7 @@ private:
     void TickGamepadInput();
     nlohmann::json HandleAgentControlCommand(const std::string& method, const nlohmann::json& params);
     std::optional<Runtime::Agent::FAgentQueryValue> QueryAgentControl(const std::string& query) const;
+    bool HandleGlobalCaptureShortcut(const SDL_Event& event);
     bool HandleDebugShortcut(SDL_Keycode key);
 
     // Lifecycle helpers
