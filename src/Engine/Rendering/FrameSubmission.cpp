@@ -17,6 +17,12 @@ namespace Vulkan
         VkSemaphore& renderFinished)
     {
         auto& frame = renderer.frame_;
+        if (renderer.ctx_.window->IsMinimized())
+        {
+            renderer.RequestRecreateSwapChain();
+            return false;
+        }
+
         if (frame.currentFrame >= frame.imageAvailableSemaphores.size() ||
             frame.currentFrame >= frame.inFlightFences.size())
         {
@@ -44,12 +50,32 @@ namespace Vulkan
         }
         frame.currentFence = frameSlotFence;
 
+        // The window can be minimized while waiting for the previous frame's
+        // fence. Re-check before entering the potentially unbounded acquire.
+        if (renderer.ctx_.window->IsMinimized())
+        {
+            renderer.RequestRecreateSwapChain();
+            return false;
+        }
+
+        // A minimized WSI surface may never make an image available. Keep the
+        // acquire bounded so a minimize race cannot strand the main loop in
+        // the driver forever.
+        constexpr uint64_t acquireTimeout = 100'000'000; // 100 ms in nanoseconds
         VkResult result = VK_SUCCESS;
         {
             SCOPED_CPU_TIMER("acquire-frame");
             result = Interposer().AcquireNextImageKHR(
-                renderer.ctx_.device->Handle(), frame.swapChain->Handle(), timeout,
+                renderer.ctx_.device->Handle(), frame.swapChain->Handle(), acquireTimeout,
                 imageAvailable, nullptr, &frame.currentImageIndex);
+        }
+        if (result == VK_TIMEOUT)
+        {
+            if (renderer.ctx_.window->IsMinimized())
+            {
+                renderer.RequestRecreateSwapChain();
+            }
+            return false;
         }
         if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
         {

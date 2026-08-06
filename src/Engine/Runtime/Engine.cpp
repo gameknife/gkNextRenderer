@@ -77,6 +77,7 @@ namespace
 {
     // Older Android NDK Vulkan headers do not name this newer registry value yet.
     constexpr VkDriverId kMesaKosmicKrispDriverId = static_cast<VkDriverId>(28);
+    constexpr double minimizedTickIntervalSeconds = 1.0 / 60.0;
 
     VkDriverId GetDriverId(VkPhysicalDevice physicalDevice)
     {
@@ -679,7 +680,20 @@ bool NextEngine::Tick(bool forcingDelta)
         // delta time calc
         {
             const auto prevTime = frameState_.time;
-            frameState_.time = GetWindow().GetTime();
+            double currentTime = GetWindow().GetTime();
+            if (!forcingDelta && window_ && window_->IsMinimized())
+            {
+                const double elapsed = currentTime - prevTime;
+                if (elapsed < minimizedTickIntervalSeconds)
+                {
+                    const double remainingSeconds = minimizedTickIntervalSeconds - std::max(0.0, elapsed);
+                    const auto delayMilliseconds = static_cast<Uint32>(std::max(
+                        1.0, std::ceil(remainingSeconds * 1000.0)));
+                    SDL_Delay(delayMilliseconds);
+                    currentTime = GetWindow().GetTime();
+                }
+            }
+            frameState_.time = currentTime;
             frameState_.deltaSeconds = frameState_.time - prevTime;
             if (forcingDelta)
                 frameState_.deltaSeconds = 1.0 / 30.0;

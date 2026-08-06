@@ -1249,12 +1249,6 @@ namespace Vulkan
 
     void VulkanBaseRenderer::CreateSwapChain()
     {
-        // Wait for the window.
-        while (ctx_.window->IsMinimized())
-        {
-            ctx_.window->WaitForEvents();
-        }
-
         // SwapChain
         auto* engine = NextEngine::GetInstance();
         frameSettings_.userSettings = engine->GetUserSettings();
@@ -1547,6 +1541,15 @@ namespace Vulkan
 
     void VulkanBaseRenderer::RecreateSwapChain()
     {
+        // SDL drives the application through callbacks. Never block in the
+        // renderer waiting for a restore event: defer the recreation until
+        // the next frame after the window becomes visible again.
+        if (ctx_.window->IsMinimized())
+        {
+            requestRecreateSwapChain_ = true;
+            return;
+        }
+
         ctx_.device->WaitIdle();
         DeleteSwapChain();
         CreateSwapChain();
@@ -1709,6 +1712,14 @@ namespace Vulkan
 
     void VulkanBaseRenderer::DrawFrame()
     {
+        // A minimized window has no presentable extent. In particular, do not
+        // enter swapchain recreation or vkAcquireNextImageKHR while it is
+        // minimized; both paths may wait indefinitely on some WSI drivers.
+        if (ctx_.window->IsMinimized())
+        {
+            return;
+        }
+
         if (requestRecreateSwapChain_)
         {
             RecreateSwapChain();

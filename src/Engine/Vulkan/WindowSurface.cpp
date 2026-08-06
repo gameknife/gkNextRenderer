@@ -388,16 +388,6 @@ bool Window::IsMaximumed() const
     return SDL_GetWindowFlags(window_) & SDL_WINDOW_MAXIMIZED;
 }
 
-void Window::WaitForEvents() const
-{
-    //glfwWaitEvents();
-    SDL_Event event;
-    while (SDL_WaitEvent(&event))
-    {
-
-    }
-}
-
 void Window::Show() const
 {
     SDL_ShowWindow(window_);

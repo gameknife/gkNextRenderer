@@ -64,7 +64,6 @@ public:
     void Close();
     bool IsMinimized() const;
     bool IsMaximumed() const;
-    void WaitForEvents() const;
     void Show() const;
     bool SetSize(uint32_t width, uint32_t height) const;
 
