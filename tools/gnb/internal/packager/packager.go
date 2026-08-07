@@ -22,15 +22,15 @@ func Package(repoRoot string, preset string, variant string, version string) err
 	switch variant {
 	case "windows":
 		return zipPaths(repoRoot, filepath.Join(repoRoot, "gkNextRenderer-windows.zip"), filepath.Join(repoRoot, "out", "build", preset), []string{
-			"bin", "assets/locale", "assets/shaders", "assets/textures", "assets/fonts", "assets/models", "assets/paks",
+			"bin", "assets/brand", "assets/locale", "assets/shaders", "assets/textures", "assets/fonts", "assets/models", "assets/paks",
 		})
 	case "linux":
 		return zipPaths(repoRoot, filepath.Join(repoRoot, "gknextrenderer_linux64_"+fallbackVersion(version)+".zip"), filepath.Join(repoRoot, "out", "build", preset), []string{
-			"bin", "assets/locale", "assets/shaders", "assets/textures", "assets/fonts", "assets/models", "assets/paks",
+			"bin", "assets/brand", "assets/locale", "assets/shaders", "assets/textures", "assets/fonts", "assets/models", "assets/paks",
 		})
 	case "macos":
 		return zipPaths(repoRoot, filepath.Join(repoRoot, "gknextrenderer_macos_"+fallbackVersion(version)+".zip"), filepath.Join(repoRoot, "out", "build", preset), []string{
-			"bin", "assets/locale", "assets/shaders", "assets/textures", "assets/fonts", "assets/models", "assets/paks",
+			"bin", "assets/brand", "assets/locale", "assets/shaders", "assets/textures", "assets/fonts", "assets/models", "assets/paks",
 		})
 	case "magicalego":
 		if version == "" {

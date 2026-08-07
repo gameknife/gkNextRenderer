@@ -58,7 +58,6 @@ private:
         EWorkMode workMode = EWorkMode::Render;
         EWorkMode lastWorkMode = EWorkMode::Render;
         struct ImFont* bigFont {};
-        struct ImFont* titleBarFont {};
         bool showSettings = false;
         bool showCheatSheet = true;
         bool memoryStatisticsPanelOpen = false;

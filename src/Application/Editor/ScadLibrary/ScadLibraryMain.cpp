@@ -29,6 +29,7 @@ ScadLibraryGameInstance::ScadLibraryGameInstance(Vulkan::WindowConfig& config, R
     cameraController_.SetLeftDragPans(true);
 
     const glm::ivec2 monitorSize = GetEngine().GetMonitorSize();
+    config.HideTitleBar = true;
     config.Title = "SCAD Library";
     config.Width = static_cast<uint32_t>(monitorSize.x * 0.75f);
     config.Height = static_cast<uint32_t>(monitorSize.y * 0.75f);

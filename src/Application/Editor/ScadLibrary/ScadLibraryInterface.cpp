@@ -58,7 +58,7 @@ namespace ScadLibrary
 {
     namespace
     {
-        constexpr float kTitleBarHeight = 52.0f;
+        constexpr float kTitleBarHeight = 48.0f;
         constexpr float kBottomBarHeight = 28.0f;
         constexpr float kCollapsedRailWidth = 46.0f;
         constexpr int kBenchGridColumns = 6;

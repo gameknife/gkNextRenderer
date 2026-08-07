@@ -14,6 +14,12 @@
 namespace NextUI
 {
 
+enum class EUiTextureLifetime
+{
+    Transient,
+    Persistent,
+};
+
 struct Statistics final
 {
     VkExtent2D FramebufferSize;
@@ -81,7 +87,8 @@ public:
         ImVec2 pixelSize{0.0f, 0.0f};
         bool valid = false;
     };
-    FUiTextureHandle RequestUiTexture(const std::string& path, bool srgb = true);
+    FUiTextureHandle RequestUiTexture(const std::string& path, bool srgb = true,
+                                      EUiTextureLifetime lifetime = EUiTextureLifetime::Transient);
     
     void DrawPoint(float x, float y, float size, glm::vec4 color);
     void DrawLine(float fromx, float fromy,float tox, float toy, float size, glm::vec4 color);
@@ -92,6 +99,7 @@ public:
                                 VkExtent2D framebufferExtent, uint32_t hdrOutputMode, VkPipeline pipeline);
     ImFontAtlas* GetFontAtlas() const;
     ImFont* GetDefaultFont() const;
+    ImFont* GetTitleBarFont() const { return titleBarFont_; }
     float UiScale() const { return uiScale_; }
     void AttachRendererBackendToCurrentContext() const;
 
@@ -123,6 +131,7 @@ private:
     std::unordered_map<std::string, ImVec2> uiTexturePixelSizeCache_;
     ImFontAtlas* fontAtlas_ = nullptr;
     ImFont* defaultFont_ = nullptr;
+    ImFont* titleBarFont_ = nullptr;
     float uiScale_ = 1.0f;
     uint32_t fontTextureIndex_ = UINT32_MAX;
     std::vector< std::function<void ()> > auxDrawRequest_;

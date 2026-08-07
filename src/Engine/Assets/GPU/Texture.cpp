@@ -73,6 +73,11 @@ namespace Assets
     
     uint32_t GlobalTexturePool::LoadTexture(const std::string& filename, bool srgb)
     {
+        return LoadTexture(filename, srgb, ETextureLifetime::ETL_Transient);
+    }
+
+    uint32_t GlobalTexturePool::LoadTexture(const std::string& filename, bool srgb, ETextureLifetime lifetime)
+    {
         auto& pakSystem = Utilities::Package::FPackageFileSystem::GetInstance();
         const bool hasMountedEntry = pakSystem.HasMountedEntry(filename);
         const std::string absPath = Utilities::FileHelper::GetPlatformFilePath(filename.c_str());
@@ -91,7 +96,7 @@ namespace Assets
         std::filesystem::path path(filename);
         std::string mime = std::string("image/") + path.extension().string().substr(1);
         return GetInstance()->RequestNewTextureMemAsync(
-            filename, mime, false, data.data(), data.size(), srgb, ETextureLifetime::ETL_Transient);
+            filename, mime, false, data.data(), data.size(), srgb, lifetime);
     }
 
     uint32_t GlobalTexturePool::LoadTexture(const std::string& texname, const std::string& mime,

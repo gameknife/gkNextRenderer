@@ -7,6 +7,7 @@ endif()
 
 set(ASSET_DIRS
     anims
+    brand
     configs
     fonts
     legos

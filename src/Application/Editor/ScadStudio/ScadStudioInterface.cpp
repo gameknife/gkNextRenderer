@@ -29,7 +29,7 @@ namespace ScadStudio
 {
     namespace
     {
-        constexpr float kTitleBarHeight = 44.0f;
+        constexpr float kTitleBarHeight = 48.0f;
         constexpr float kBottomBarHeight = 30.0f;
         constexpr float kCollapsedRailWidth = 46.0f;
         constexpr size_t kMaxSessionTitleBytes = 28;

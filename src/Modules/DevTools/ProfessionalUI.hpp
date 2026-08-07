@@ -37,10 +37,10 @@ namespace NextUI::Theme
         const char* MenuWindowId = "AppTitleBarMenu";
         const char* RightWindowId = "AppTitleBarRight";
         const char* AppName = "";
-        float Height = 44.0f;
+        float Height = 48.0f;
         float RightContentWidth = 0.0f;
         float BrandHorizontalPadding = 14.0f;
-        float BrandIconSize = 22.0f;
+        float BrandIconSize = 48.0f;
         float BrandTextSpacing = 10.0f;
         float MenuHitPadding = 28.0f;
         float MenuTrailingPadding = 8.0f;

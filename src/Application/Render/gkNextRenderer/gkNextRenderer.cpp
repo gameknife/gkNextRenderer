@@ -504,7 +504,7 @@ void DrawMemoryBlockDetails(const Vulkan::MemoryStatsSnapshot& memoryStats)
 } // namespace
 
 // should use 1em instead of 1px
-constexpr float constTitlebarSize = 44;
+constexpr float constTitlebarSize = 48;
 constexpr float constTitlebarRightInfoWidth = 0;
 constexpr float constIconSize = 64;
 constexpr float constPaletteSize = 46;
@@ -709,7 +709,6 @@ void NextRendererGameInstance::EnsureUiFonts(FRendererUiState& uiState, const bo
     if (!allowLoad)
     {
         uiState.bigFont = mainUiState_.bigFont;
-        uiState.titleBarFont = mainUiState_.titleBarFont;
         return;
     }
 
@@ -723,15 +722,6 @@ void NextRendererGameInstance::EnsureUiFonts(FRendererUiState& uiState, const bo
         });
     }
 
-    if (uiState.titleBarFont == nullptr)
-    {
-        uiState.titleBarFont = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
-            .filePath = "assets/fonts/Roboto-BoldCondensed.ttf",
-            .pixelSize = 18.0f,
-            .includeChineseFull = false,
-            .extraGlyphsUtf8 = "gkNextRenderer",
-        });
-    }
 }
 
 bool NextRendererGameInstance::DrawRendererUi(const FGameUiFrameContext& context, FRendererUiState& uiState)
@@ -2283,7 +2273,6 @@ void NextRendererGameInstance::DrawTitleBar(const FGameUiFrameContext& context, 
     config.AppName = "gkNextRenderer";
     config.Height = TitlebarSize;
     config.RightContentWidth = TitlebarRightInfoWidth;
-    config.TitleFont = uiState.titleBarFont;
     config.IsMaximized = GetEngine().IsMaximized();
     config.DrawMenuBar = [&]() -> float
     {

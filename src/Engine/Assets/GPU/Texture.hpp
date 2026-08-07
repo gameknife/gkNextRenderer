@@ -88,6 +88,7 @@ namespace Assets
         static uint32_t LoadTexture(const std::string& texname, const std::string& mime, const unsigned char* data,
                                     size_t bytelength, bool srgb);
         static uint32_t LoadTexture(const std::string& filename, bool srgb);
+        static uint32_t LoadTexture(const std::string& filename, bool srgb, ETextureLifetime lifetime);
         static uint32_t LoadHDRTexture(const std::string& filename);
 
         static TextureImage* GetTextureImage(uint32_t idx);

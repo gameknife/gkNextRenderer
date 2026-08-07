@@ -316,6 +316,13 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
         .warnOnFailure = false,
     });
 
+    titleBarFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
+        .filePath = "assets/fonts/Roboto-BoldCondensed.ttf",
+        .pixelSize = 18.0f,
+        .includeChineseFull = false,
+        .extraGlyphsUtf8 = "gkNextRenderer gkNextEditor SCAD Studio SCAD Library",
+    });
+
     if (funcInit != nullptr)
     {
         funcInit();
@@ -486,7 +493,8 @@ ImTextureID UserInterface::RequestImTextureByName(const std::string& name)
     return RequestImTextureId(id);
 }
 
-UserInterface::FUiTextureHandle UserInterface::RequestUiTexture(const std::string& path, bool srgb)
+UserInterface::FUiTextureHandle UserInterface::RequestUiTexture(const std::string& path, bool srgb,
+                                                                EUiTextureLifetime lifetime)
 {
     FUiTextureHandle handle{};
     if (path.empty() || !Utilities::FileHelper::IsAssetAvailable(path))
@@ -494,13 +502,26 @@ UserInterface::FUiTextureHandle UserInterface::RequestUiTexture(const std::strin
         return handle;
     }
 
+    const Assets::ETextureLifetime textureLifetime = lifetime == EUiTextureLifetime::Persistent
+        ? Assets::ETextureLifetime::ETL_Persistent
+        : Assets::ETextureLifetime::ETL_Transient;
+
     if (uiTextureLoadRequests_.insert(path).second)
     {
-        Assets::GlobalTexturePool::LoadTexture(path, srgb);
+        Assets::GlobalTexturePool::LoadTexture(path, srgb, textureLifetime);
     }
 
     handle.textureId = RequestImTextureByName(path);
     handle.valid = handle.textureId != 0;
+
+    // Scene transitions release transient textures. Retry the request when the name is still
+    // known but its image has been unloaded, so persistent and transient UI callers both recover.
+    if (!handle.valid)
+    {
+        Assets::GlobalTexturePool::LoadTexture(path, srgb, textureLifetime);
+        handle.textureId = RequestImTextureByName(path);
+        handle.valid = handle.textureId != 0;
+    }
 
     if (const auto sizeIt = uiTexturePixelSizeCache_.find(path); sizeIt != uiTexturePixelSizeCache_.end())
     {

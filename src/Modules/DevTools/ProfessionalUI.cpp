@@ -18,6 +18,32 @@ namespace NextUI::Theme
         constexpr float kTitleBarControlButtonWidth = 46.0f;
         constexpr float kTitleBarControlButtonCount = 3.0f;
         constexpr float kTitleBarControlsWidth = kTitleBarControlButtonWidth * kTitleBarControlButtonCount;
+        constexpr const char* kBrandIconAssetPath = "assets/brand/gknext_logo_icon.png";
+        constexpr const char* kBrandIconAssetPath125 = "assets/brand/gknext_logo_icon_125.png";
+        constexpr const char* kBrandIconAssetPath150 = "assets/brand/gknext_logo_icon_150.png";
+        constexpr const char* kBrandIconAssetPath175 = "assets/brand/gknext_logo_icon_175.png";
+        constexpr const char* kBrandIconAssetPath200 = "assets/brand/gknext_logo_icon_200.png";
+
+        const char* GetBrandIconAssetPath(float uiScale)
+        {
+            if (uiScale >= 1.875f)
+            {
+                return kBrandIconAssetPath200;
+            }
+            if (uiScale >= 1.625f)
+            {
+                return kBrandIconAssetPath175;
+            }
+            if (uiScale >= 1.375f)
+            {
+                return kBrandIconAssetPath150;
+            }
+            if (uiScale >= 1.125f)
+            {
+                return kBrandIconAssetPath125;
+            }
+            return kBrandIconAssetPath;
+        }
 
         ImVec4 WithAlpha(ImVec4 color, float alpha)
         {
@@ -49,6 +75,46 @@ namespace NextUI::Theme
             ImGui::PopStyleVar(2);
             DrawTooltip(tooltip);
             return pressed;
+        }
+
+        void DrawBrandIcon(NextEngine& engine, ImDrawList* drawList, ImVec2 min, float size)
+        {
+            if (drawList == nullptr)
+            {
+                return;
+            }
+
+            UserInterface* userInterface = engine.GetUserInterface();
+            if (userInterface == nullptr)
+            {
+                DrawBrandMark(drawList, min, size);
+                return;
+            }
+
+            const UserInterface::FUiTextureHandle texture =
+                userInterface->RequestUiTexture(GetBrandIconAssetPath(userInterface->UiScale()), false,
+                                                 EUiTextureLifetime::Persistent);
+            if (!texture.valid || texture.pixelSize.x <= 0.0f || texture.pixelSize.y <= 0.0f)
+            {
+                DrawBrandMark(drawList, min, size);
+                return;
+            }
+
+            const float aspect = texture.pixelSize.x / texture.pixelSize.y;
+            float drawWidth = size;
+            float drawHeight = drawWidth / aspect;
+            if (drawHeight > size)
+            {
+                drawHeight = size;
+                drawWidth = drawHeight * aspect;
+            }
+
+            const ImVec2 drawMin(
+                min.x + std::floor((size - drawWidth) * 0.5f),
+                min.y + std::floor((size - drawHeight) * 0.5f));
+            const ImVec2 drawMax(drawMin.x + drawWidth, drawMin.y + drawHeight);
+            drawList->AddImage(texture.textureId, drawMin, drawMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f),
+                               ImGui::GetColorU32(ImGuiCol_Text));
         }
 
         float CalcFormLabelWidth(float contentWidth, float ratio, float minLabelWidth, float maxLabelWidth)
@@ -245,7 +311,18 @@ namespace NextUI::Theme
         const ImVec2 titleMax = viewport->Pos + ImVec2(viewport->Size.x, config.Height);
         background->AddRectFilled(titleMin, titleMax, ColorU32(EColor::Background), 0.0f);
 
-        ImFont* titleFont = config.TitleFont != nullptr ? config.TitleFont : ImGui::GetFont();
+        ImFont* titleFont = config.TitleFont;
+        if (titleFont == nullptr)
+        {
+            if (UserInterface* userInterface = engine.GetUserInterface())
+            {
+                titleFont = userInterface->GetTitleBarFont();
+            }
+        }
+        if (titleFont == nullptr)
+        {
+            titleFont = ImGui::GetFont();
+        }
         const float brandTextWidth = CalcFontTextWidth(titleFont, config.AppName);
         const float brandWidth =
             config.BrandHorizontalPadding * 2.0f + config.BrandIconSize + config.BrandTextSpacing + brandTextWidth;
@@ -269,7 +346,7 @@ namespace NextUI::Theme
                          ImGuiWindowFlags_NoDocking);
         ImGui::SetCursorPos(
             ImVec2(config.BrandHorizontalPadding, std::floor((config.Height - config.BrandIconSize) * 0.5f)));
-        DrawBrandMark(ImGui::GetWindowDrawList(), ImGui::GetCursorScreenPos(), config.BrandIconSize);
+        DrawBrandIcon(engine, ImGui::GetWindowDrawList(), ImGui::GetCursorScreenPos(), config.BrandIconSize);
         ImGui::Dummy(ImVec2(config.BrandIconSize, config.BrandIconSize));
         ImGui::SameLine(0.0f, config.BrandTextSpacing);
         if (titleFont != nullptr)
