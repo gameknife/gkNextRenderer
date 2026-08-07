@@ -479,7 +479,7 @@ Rig 视觉验收由 agentscript 驱动到角色工作室并在 candidate 播放�
 
 - 删除或改造 `src/Application/Editor/ScadStudio/`；
 - 更新 `src/Application/Editor/CMakeLists.txt`、`gnb.toml` target/profile；
-- 将仍通用的 tests/fixtures 改名并归属 ScadLibrary/ScadLoader；
+- 将仍通用的 tools/tests/fixtures 改名并归属 ScadLibrary/ScadLoader；
 - 更新 `docs/projects/scad-studio/architecture.md`、`docs/README.md`、相关 guide；
 - 保留清晰的旧数据迁移说明。
 

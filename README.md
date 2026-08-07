@@ -2,7 +2,7 @@
 
 **面向实时路径追踪、游戏原型与高质量视觉表现的跨平台 3D 引擎**
 
-[English](README.en.md) | [简体中文](README.md)
+[English](docs/README.en.md) | [简体中文](README.md)
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/gameknife/gkNextEngine)
 ![Desktop CI](https://github.com/gameknife/gkNextEngine/actions/workflows/desktop.yml/badge.svg)

@@ -12,7 +12,7 @@ echo "Running tests for CMake Validator..."
 
 # Test 1: Invalid CMakeLists.txt (should fail)
 echo "Test 1: Checking invalid CMakeLists.txt (expecting failure)..."
-$VALIDATOR_SCRIPT tests/build_system/fixtures/invalid_globals/CMakeLists.txt
+$VALIDATOR_SCRIPT tools/tests/build_system/fixtures/invalid_globals/CMakeLists.txt
 EXIT_CODE=$?
 if [ $EXIT_CODE -eq 0 ]; then
     echo "FAILED: Validator passed on invalid file."
@@ -23,7 +23,7 @@ fi
 
 # Test 2: Valid CMakeLists.txt (should pass)
 echo "Test 2: Checking valid CMakeLists.txt (expecting success)..."
-$VALIDATOR_SCRIPT tests/build_system/fixtures/valid_targets/CMakeLists.txt
+$VALIDATOR_SCRIPT tools/tests/build_system/fixtures/valid_targets/CMakeLists.txt
 EXIT_CODE=$?
 if [ $EXIT_CODE -ne 0 ]; then
     echo "FAILED: Validator failed on valid file."

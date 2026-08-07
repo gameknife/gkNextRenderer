@@ -357,6 +357,7 @@ tools/gnb-bin/
 cmake-build-*/
 .DS_Store
 .VSCodeCounter/
+.vscode/
 
 # Runtime-generated files (ImGui layout, profiler traces)
 /imgui.ini

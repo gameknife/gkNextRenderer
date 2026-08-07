@@ -23,4 +23,4 @@ AI bridge 使用 stdin/stdout 上的 NDJSON JSON-RPC 2.0。它是 NextAI 的轻�
 
 流式增量以 `run.event` 通知返回。普通 Chat 请求不附加 tools。Bridge 不支持 `agent.run`、远程工具注册或反向工具执行。
 
-共享协议夹具位于 `tests/fixtures/gnb-ai-protocol/v2/`，由 Go bridge tests 和 C++ NextAI tests 共同校验。
+共享协议夹具位于 `tools/tests/fixtures/gnb-ai-protocol/v2/`，由 Go bridge tests 和 C++ NextAI tests 共同校验。

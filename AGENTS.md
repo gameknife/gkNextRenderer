@@ -220,7 +220,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 - Provides auto-generated editor UI via PropertyPanel
 - Exposes component properties to QuickJS JavaScript bindings
 - Supports undo/redo for property modifications
-- See `AGENT_GUIDE/ReflectionSystem.md` for detailed documentation
+- See `docs/AGENT_GUIDE/ReflectionSystem.md` for detailed documentation
 - Register components using `REFLECT_COMPONENT` macro in component's .cpp file
 - TypeScript definitions in `assets/typescript/Engine.d.ts` mirror reflected properties
 
@@ -231,7 +231,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 - Global namespace: `Global.GetEngine()`, `Global.GetScene()`, `Global.spdlog()`
 - Scripted games should extend `assets/typescript/NextGameInstanceBase.ts` and call `RunGameInstance(new YourGameInstance())`
 - Scene API: `Scene.FindNodeIdWithComponent()`, `Scene.GetNodeById()`, `SceneBuild.*` for rebuild-time procedural scene construction, `Scene.AddRenderNode()` for runtime nodes
-- See `AGENT_GUIDE/QuickJSBindings.md`; `FlappyCpp` / `FlappyJs` replay parity is the binding regression demo
+- See `docs/AGENT_GUIDE/QuickJSBindings.md`; `FlappyCpp` / `FlappyJs` replay parity is the binding regression demo
 
 **Component System:**
 - ECS via entt library
@@ -271,7 +271,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 ## Key References
 
 - **`docs/README.md`** - 现行文档索引与生命周期规则；架构设计、项目说明和仍有效计划从这里进入
-- **AGENT_GUIDE/** - Layered documentation:
+- **`docs/AGENT_GUIDE/`** - Layered documentation:
   - `core-patterns.md` / `contextual-rules.md` / `coding-standards.md` / `quick-commands.md` - General rules
   - `ReflectionSystem.md` - entt::meta reflection (editor UI + JS bindings)
   - `QuickJSBindings.md` - JS/TS engine bindings and replay parity demo
@@ -284,7 +284,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
   - `MagicaLego.md` - MagicaLego subproject notes
   - `Brotato3D.md` - Brotato3D code structure (god-class + per-system split, runtime data model, object pools)
   - `CharacterDemo.md` - CharacterDemo + NextGameplay shared layer (CharacterActor facade, ECS components, NavGrid A*, AI behavior tree)
-- **README.en.md** - Project overview and quick start
+- **`docs/README.en.md`** - Project overview and quick start
 - **.clang-tidy** - Naming conventions (source of truth)
 
 ## gnb Dashboard

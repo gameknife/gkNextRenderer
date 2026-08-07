@@ -32,7 +32,7 @@
 - [gnb CLI](guides/gnb-cli.md)
 - [SCAD 场景生成指引](guides/scad-scene-authoring-guide.md)
 - [SCAD 资产目录与 ScadLibrary 场景组装约定](../assets/scad/README.md)
-- [SCAD Terrain 使用速查](../AGENT_GUIDE/ScadTerrain.md)
+- [SCAD Terrain 使用速查](AGENT_GUIDE/ScadTerrain.md)
 - [Soft Mesh Shader GPU-Driven 提交路径](guides/soft-mesh-shader-gpu-driven-submit.md)
 - [TUI 终端模式](guides/tui-mode.md)
 - [TypeScript 整合](guides/typescript-integration.md)
@@ -76,7 +76,7 @@
 - NextTotalwar：[行军 MVP 设计与历史实测](projects/nexttotalwar/nexttotalwar-mvp-design.md) ·
   [战斗 MVP 设计（C0～C2 部分实现）](projects/nexttotalwar/nexttotalwar-battle-mvp-design.md) ·
   [基础战斗循环现行架构](projects/nexttotalwar/nexttotalwar-productization-design.md) ·
-  [代码导览](../AGENT_GUIDE/NextTotalwar.md)
+  [代码导览](AGENT_GUIDE/NextTotalwar.md)
 - TruckerDemo（迭代计划）：[SnowRunner 风格越野运输 Demo 迭代计划](projects/trucker-demo/trucker-demo-iteration-plan.md)
 
 ## Plans（待实施）
