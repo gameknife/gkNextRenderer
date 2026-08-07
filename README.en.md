@@ -16,8 +16,6 @@
 </p>
 
 
----
-
 gkNextEngine is a cross-platform 3D game engine and rendering playground built with modern C++20 and Vulkan. The project is renderer-first, while continuously expanding around editor tooling, scripting, physics, asset import, and multiple gameplay prototypes (such as MagicaLego, Brotato3D, KongLie3D, BrickPlayer), alongside SCAD, LDraw, and Gaussian Splat structured pipelines — forming the groundwork for AI-native content generation, scene understanding, gameplay iteration, and automated validation.
 
 > [!NOTE]
@@ -34,7 +32,7 @@ gkNextEngine is a cross-platform 3D game engine and rendering playground built w
 
 **Supported platforms:** Windows x86_64 · Linux x86_64 · macOS arm64 · Android arm64 · iOS arm64
 
----
+<p align="center">✦</p>
 
 ## ✨ Project Highlights
 
@@ -44,7 +42,7 @@ gkNextEngine is a cross-platform 3D game engine and rendering playground built w
 - **Full Engine Stack & Gameplay Prototypes**: Integrated ECS, reflection, ImGui editor, QuickJS/TS hot reload, and Jolt Physics to support interactive prototyping.
 - **Multi-Format Structured Asset Pipelines**: Direct runtime import for glTF 2.0, LDraw (LEGO), OpenSCAD DSL, and PlayCanvas Gaussian Splatting.
 
----
+<p align="center">✦</p>
 
 ## ⚡ Performance & Rendering Efficiency
 
@@ -53,7 +51,7 @@ Performance is one of the project's core constraints. The engine leans on radian
 ### 📊 Performance Reference Data
 
 <details>
-<summary><b>Click to expand typical scene performance reference data (RTX 5070 Ti / 720p Benchmark)</b></summary>
+<summary style="cursor: pointer; padding: 8px 14px; background-color: rgba(125, 125, 125, 0.08); border-radius: 6px; margin-bottom: 8px;"><b>Typical Scene Performance Benchmark Data (RTX 5070 Ti / 720p)</b> <small style="color: #888;">(Expand ▾)</small></summary>
 
 > The figures below come from `out/build/windows/bin/motion_benchmark_report.csv`, measured on an NVIDIA GeForce RTX 5070 Ti with NVIDIA 610.47.0 at 1280x720. Each scene was sampled for roughly 3 seconds; DLSS, FSR, and denoising were disabled.
 
@@ -86,7 +84,7 @@ The engine ships a CPU / GPU per-pass timing system: every render pass is annota
 
 On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is installed (probed by default at `C:/Program Files/Superluminal/Performance/API`), the build automatically enables `WITH_SUPERLUMINAL` and forwards the engine's named CPU and GPU events to the Superluminal timeline (GPU events emitted from a dedicated replay thread), enabling fine-grained sampling profiles and cross-frame analysis. When it is not installed, the integration is skipped and the build is unaffected.
 
----
+<p align="center">✦</p>
 
 ## 🛠️ Core Capabilities
 
@@ -130,7 +128,7 @@ On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is i
 - **Clarity over over-engineering**: favors explicit data flow, clear ownership, and mature third-party libraries, without turning experimental systems into heavy frameworks too early
 - **A good engine codebase to study**: from Vulkan rendering, resource management, scripting, editor integration, reflection, and content import to testing, benchmarking, and agent validation
 
----
+<p align="center">✦</p>
 
 ## 🖼️ Visual Preview
 
@@ -143,7 +141,7 @@ On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is i
   <img src="docs/gallery/7_brick_player.avif" width="32%" alt="Brick Player" />
 </p>
 
----
+<p align="center">✦</p>
 
 ## 🚀 Quick Start
 
@@ -164,28 +162,28 @@ The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond 
 ### 💻 Platform Builds
 
 <details>
-<summary><b>Windows (Visual Studio 2022)</b></summary>
+<summary style="cursor: pointer; padding: 8px 14px; background-color: rgba(125, 125, 125, 0.08); border-radius: 6px; margin-bottom: 8px;"><b>Windows (Visual Studio 2022)</b> <small style="color: #888;">(Show steps ▾)</small></summary>
 
 **Prerequisites:**
 
 - CMake 3.26+
-- Visual Studio 2022 with C++ workload
-- Vulkan SDK 1.4.341.1 (downloaded into the repository by default; if `VULKAN_SDK` is set, that SDK is used first)
-- Enable "Use Unicode UTF-8 for worldwide language support"
+- Visual Studio 2022 (C++ workload)
+- Vulkan SDK 1.4.341.1 (downloaded into repository by `gnb` by default; setting `VULKAN_SDK` uses the environment SDK instead)
+- System language setting: enable "Use Unicode UTF-8 for worldwide language support"
 
 ```bat
 ./gnb.bat setup
-./gnb.bat build        # Builds core targets by default (gkNextRenderer + gkNextUnitTests)
-./gnb.bat build --all  # Full build of all 15+ subprojects
+./gnb.bat build        # Default core build (gkNextRenderer + gkNextUnitTests)
+./gnb.bat build --all  # Full build (all 15+ subprojects)
 ./gnb.bat run gkNextRenderer
 ```
 
-Aside from host-side requirements such as Visual Studio, the rest of the project dependencies are usually prepared by `gnb`, including the pinned Vulkan SDK, Slang, and TypeScript toolchains. `gnb` defaults to the **Ninja** generator on Windows (with automatic MSVC & SDK environment resolution). NVIDIA Streamline (DLSS) is enabled by default on Windows.
+Beyond host tools such as Visual Studio, remaining project dependencies are handled by `gnb`; the default workflow pulls project-versioned Vulkan SDK, Slang, and TypeScript toolchains directly into the workspace. On Windows, `gnb` uses **Ninja** as the generator (automatically discovering MSVC/SDK environments), with NVIDIA Streamline (DLSS) enabled by default.
 
 </details>
 
 <details>
-<summary><b>Linux (Ubuntu)</b></summary>
+<summary style="cursor: pointer; padding: 8px 14px; background-color: rgba(125, 125, 125, 0.08); border-radius: 6px; margin-bottom: 8px;"><b>Linux (Ubuntu)</b> <small style="color: #888;">(Show steps ▾)</small></summary>
 
 ```shell
 ./gnb.sh setup
@@ -193,14 +191,14 @@ Aside from host-side requirements such as Visual Studio, the rest of the project
 ./gnb.sh run gkNextRenderer
 ```
 
-- On apt / pacman hosts, `gnb setup` and the first Linux `gnb build` automatically install the required desktop build packages before vcpkg bootstrap
-- If automatic installation is unavailable, install them manually: `sudo apt install build-essential cmake ninja-build curl zip unzip tar pkg-config libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev`
-- Non apt/pacman distributions still stop with an explicit missing desktop dependency hint
+- Under apt / pacman environments, `gnb setup` and the first `gnb build` automatically install host system packages before bootstrapping vcpkg
+- If auto-installation is unavailable, install packages manually: `sudo apt install build-essential cmake ninja-build curl zip unzip tar pkg-config libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev`
+- Non-apt/pacman distros will report missing desktop dependencies if needed
 
 </details>
 
 <details>
-<summary><b>Steam Deck / Arch Linux</b></summary>
+<summary style="cursor: pointer; padding: 8px 14px; background-color: rgba(125, 125, 125, 0.08); border-radius: 6px; margin-bottom: 8px;"><b>Steam Deck / Arch Linux</b> <small style="color: #888;">(Show steps ▾)</small></summary>
 
 ```shell
 ./gnb.sh setup
@@ -210,16 +208,16 @@ Aside from host-side requirements such as Visual Studio, the rest of the project
 
 Notes:
 
-- if no usable `VULKAN_SDK` is available, `gnb setup` automatically downloads the pinned LunarG Vulkan SDK into `external/VulkanSDK/`
-- if `slangc` is not installed yet, `gnb setup` automatically fetches the project-managed Slang toolchain into `external/`
-- on pacman hosts, `gnb setup` and the first Linux `gnb build` automatically install the required system packages before vcpkg bootstrap; if that is unavailable, run `sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libx11 libxft libxext libxi libxinerama libxcursor libxrandr wayland-protocols libxkbcommon` manually
-- if a GitHub archive download fails during vcpkg setup, rerun the same build command once before doing deeper troubleshooting
-- deployment notes from a real Steam Deck setup are available in [docs/notes/steamdeck-deployment-notes.md](docs/notes/steamdeck-deployment-notes.md)
+- If `VULKAN_SDK` is missing, `gnb setup` automatically downloads the project-specified LunarG Vulkan SDK into `external/VulkanSDK/`
+- If `slangc` is missing, `gnb setup` automatically downloads the Slang toolchain into `external/`
+- Under pacman environments, `gnb setup` / first `gnb build` auto-installs system packages before bootstrapping vcpkg; otherwise install manually via `sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libx11 libxft libxext libxi libxinerama libxcursor libxrandr wayland-protocols libxkbcommon`
+- If vcpkg hits a GitHub archive download failure, retry the same command
+- A real Steam Deck deployment postmortem is available in [docs/notes/steamdeck-deployment-notes.md](docs/notes/steamdeck-deployment-notes.md)
 
 </details>
 
 <details>
-<summary><b>macOS</b></summary>
+<summary style="cursor: pointer; padding: 8px 14px; background-color: rgba(125, 125, 125, 0.08); border-radius: 6px; margin-bottom: 8px;"><b>macOS</b> <small style="color: #888;">(Show steps ▾)</small></summary>
 
 **Prerequisites:**
 
@@ -253,46 +251,97 @@ Notes:
 ./gnb.sh remote --target gkNextRenderer --scene assets/models/playground.glb --res 1280x720
 ```
 
----
+<p align="center">✦</p>
 
 ## 🧩 Subprojects
 
-<p align="center">
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/airportsim.webp" width="32%" alt="AirportSim" />
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/brickplayer.webp" width="32%" alt="BrickPlayer" />
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/brotato3d.webp" width="32%" alt="Brotato3D" />
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/citysim.webp" width="32%" alt="CitySim" />
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="32%" alt="FlappyJs" />
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/magicalego.webp" width="32%" alt="MagicaLego" />
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/nextdayz.webp" width="32%" alt="NextDayZ" />
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/nexttotalwar.webp" width="32%" alt="NextTotalWar" />
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/procscad.webp" width="32%" alt="ProcScad" />
-</p>
+<table>
+  <tr>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/airportsim.webp" width="100%" alt="AirportSim" />
+      <br><strong>✈️ AirportSim</strong><br>
+      <sub>Airport ecosystem simulation validating SCAD POIs, queues, A* pathfinding, and LLM decisions</sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/magicalego.webp" width="100%" alt="MagicaLego" />
+      <br><strong>🧱 MagicaLego</strong><br>
+      <sub>LEGO / voxel-style scene building and physics gameplay playground</sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/brotato3d.webp" width="100%" alt="Brotato3D" />
+      <br><strong>🥔 Brotato3D</strong><br>
+      <sub>Top-down 3D survival shooter validating wave spawns, object pooling, and Jolt Physics</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/brickplayer.webp" width="100%" alt="BrickPlayer" />
+      <br><strong>🧩 BrickPlayer</strong><br>
+      <sub>Digital LEGO building prototype based on LDraw library and brick interaction</sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="100%" alt="FlappyJs" />
+      <br><strong>🐤 FlappyCpp / FlappyJs</strong><br>
+      <sub>Dual C++ & QuickJS/TS implementations validating engine replay parity</sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/procscad.webp" width="100%" alt="ScadStudio" />
+      <br><strong>📐 ScadStudio</strong><br>
+      <sub>OpenSCAD DSL modeling, evaluation, scene generation, and ScadRig character binding</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/citysim.webp" width="100%" alt="StudioSim" />
+      <br><strong>🏢 StudioSim / CitySolSim</strong><br>
+      <sub>Studio management and city simulation validating local LLM events and ScadRig characters</sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/nextdayz.webp" width="100%" alt="NextDayZ" />
+      <br><strong>🧟 NextDayZ / CharacterDemo</strong><br>
+      <sub>Character control, NavGrid A* pathfinding, AI behavior tree, and survival combat</sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/nexttotalwar.webp" width="100%" alt="NextTotalWar" />
+      <br><strong>⚔️ NextTotalWar / NextRA</strong><br>
+      <sub>Massive army tactical simulation and lockstep deterministic RTS validation</sub>
+    </td>
+  </tr>
+</table>
 
-| Project | Description |
-|------|------|
-| `gkNextRenderer` | Main renderer for path tracing / hybrid rendering / multi-pipeline comparison |
-| `gkNextStillBenchmark` | Static-scene rendering benchmark |
-| `gkNextMotionBenchmark` | Dynamic-camera / multi-scene rendering benchmark with CSV profile reports |
-| `gkNextVisualTest` | Automated visual testing and screenshot reports |
-| `RmlUiDemo` | RmlUi runtime UI integration and interaction demo |
-| `gkNextEditor` | ImGui editor for materials, scenes, and runtime-oriented tooling |
-| `ScadStudio` | OpenSCAD (`.scad`) DSL modeling / character-rig experiment editor |
-| `BrickPlayer` | Digital LEGO building prototype based on LDraw |
-| `MagicaLego` | A lighter LEGO / voxel-style gameplay playground |
-| `Brotato3D` | Top-down 3D survival shooter prototype, intro in [docs/projects/brotato-3d/introduction.md](docs/projects/brotato-3d/introduction.md) |
-| `KongLie3D` | Board deployment / synergy / round-combat prototype |
-| `NextRA` | Deterministic RTS / lockstep / replay prototype |
-| `CharacterDemo` | Character control, AI behavior, navigation, and combat interaction experiments |
-| `AirportSim` | Airport ecosystem simulation for SCAD POIs, queues, pathfinding, LLM decisions, and ScadRig characters |
-| `StudioSim` | Studio-management simulation for local LLM events, employee goals, SCAD offices, and ScadRig presentation |
-| `FlappyCpp` / `FlappyJs` | Flappy Bird dual implementation used to verify C++/QuickJS behavior parity, intro in [docs/projects/flappy-bird-parity/introduction.md](docs/projects/flappy-bird-parity/introduction.md) |
-| `gkNextUnitTests` | Catch2 unit tests |
-| `Packager` | Packs assets into `.pkg` archives |
+<details>
+<summary style="cursor: pointer; padding: 10px 16px; background-color: rgba(125, 125, 125, 0.08); border-radius: 8px; margin: 12px 0;"><b>Complete List of 15+ Subprojects & Categories</b> <small style="color: #888;">(Expand list ▾)</small></summary>
 
-> Desktop targets can usually be launched through `gnb remote --target <Target>` as Remote Play hosts. The mode currently targets Windows / Linux desktop systems with Vulkan Video H.264 support. `src/Application/Game/Voyage3D` remains in the tree as a sailing trade / port / naval-combat source prototype, but it is not currently exposed as a standalone CMake target.
+#### 🎨 Render & Editor Tooling
+- **`gkNextRenderer`**: Main renderer supporting real-time path tracing, hybrid rendering, denoising, and multi-pipeline comparison.
+- **`gkNextEditor`**: ImGui editor for scenes, material node workflow, and runtime cvar tuning.
+- **`ScadStudio`**: OpenSCAD (`.scad`) procedural DSL modeling, evaluation, scene generation, and ScadRig character binding.
+- **`RmlUiDemo`**: RmlUi runtime HTML/CSS UI engine integration and interactive demo.
 
----
+#### 🎮 Gameplay & Simulation Prototypes
+- **`AirportSim`**: Airport ecosystem simulation for SCAD POIs, queues, A* pathfinding, LLM decisions, and ScadRig characters.
+- **`StudioSim`**: Studio-management simulation for local LLM events, employee goals, SCAD offices, and ScadRig character roles.
+- **`MagicaLego`**: Voxel / LEGO-style gameplay prototype and physics building playground.
+- **`BrickPlayer`**: Digital LEGO brick interaction and assembly prototype based on LDraw standard.
+- **`Brotato3D`**: Top-down 3D survival shooter prototype validating wave spawns, monster AI, object pooling, and Jolt Physics.
+- **`KongLie3D`**: Auto-chess / synergy / round-based combat simulation prototype.
+- **`NextRA`**: Deterministic RTS simulation prototype validating lockstep synchronization and replay.
+- **`CharacterDemo`**: Character actor mounting, NavGrid A* navigation, AI behavior tree, and combat interaction.
+- **`FlappyCpp` / `FlappyJs`**: Dual C++ and QuickJS/TS Flappy Bird implementations for verifying engine replay parity.
+- **`TruckerDemo` / `CitySolSim` / `NextDayz` / `NextTotalWar`**: Vehicle driving, city traffic, survival tactics, and army simulation prototypes.
+
+#### 🛠️ Benchmarks & Developer Utilities
+- **`gkNextStillBenchmark`**: Static-scene frame-rate and image-quality benchmark.
+- **`gkNextMotionBenchmark`**: Dynamic-camera / multi-scene rendering benchmark generating CSV profile reports.
+- **`gkNextVisualTest`**: Automated visual regression testing generating scene comparison reports.
+- **`gkNextUnitTests`**: Catch2 unit test suite.
+- **`Packager`**: Asset packaging tool bundling scenes and textures into `.pkg` archives.
+
+> Desktop targets can be launched via `./gnb remote --target <Target>` as Remote Play hosts (zero-install WebRTC browser play). `src/Application/Game/Voyage3D` remains in tree as a sailing / port / naval-combat source prototype.
+
+</details>
+
+<p align="center">✦</p>
 
 ## 📚 References & Thanks
 
@@ -300,7 +349,7 @@ Notes:
 - [Vulkan Tutorial](https://vulkan-tutorial.com/)
 - [Vulkan-Samples](https://github.com/KhronosGroup/Vulkan-Samples)
 
----
+<p align="center">✦</p>
 
 ## 🤝 Contributing
 
@@ -309,13 +358,13 @@ Issues and PRs are welcome.
 - See `AGENTS.md` for collaboration guidelines
 - If you are interested in real-time path tracing, modern rendering architecture, rendering performance optimization, LDraw, editor tooling, AI-native workflows, or gameplay prototyping, feel free to reach out
 
----
+<p align="center">✦</p>
 
 ## 📦 Third-Party Dependencies
 
 cpptrace · cxxopts · sdl3 · glm · imgui · stb · curl · nlohmann-json · tinygltf · draco · fmt · meshoptimizer · ktx · joltphysics · xxhash · spdlog · cpp-base64 · catch2 · entt · libwebp · vulkan-loader · libavif
 
----
+<p align="center">✦</p>
 
 ## 📜 License
 

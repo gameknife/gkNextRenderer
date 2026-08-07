@@ -16,8 +16,6 @@
 </p>
 
 
----
-
 gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎 / 渲染实验场。项目以渲染器能力为核心，同时持续扩展编辑器、脚本、物理、内容导入与多游戏原型（如 MagicaLego、Brotato3D、KongLie3D、BrickPlayer 等），以及 SCAD、LDraw、Gaussian Splat 等结构化内容管线，为 AI Native 的内容生成、场景理解、玩法迭代和自动化验证打下基础。
 
 > [!NOTE]
@@ -34,7 +32,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 **支持平台：** Windows x86_64 · Linux x86_64 · macOS arm64 · Android arm64 · iOS arm64
 
----
+<p align="center">✦</p>
 
 ## ✨ 项目特性
 
@@ -45,7 +43,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 - **AI Native 基础设施**：配合自动化 Agent 验证与结构化内容管线，让 AI 可直接生成、理解并修改 3D 资产与脚本。
 - **多格式结构化资产导入**：原生支持 glTF 2.0、LDraw（乐高）、OpenSCAD DSL 与 PlayCanvas 高斯溅射（Gaussian Splatting）。
 
----
+<p align="center">✦</p>
 
 ## ⚡ 性能与渲染效率
 
@@ -54,7 +52,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 ### 📊 性能参考数据
 
 <details>
-<summary><b>点击展开典型场景性能参考数据（RTX 5070 Ti / 720p Benchmark）</b></summary>
+<summary style="cursor: pointer; padding: 8px 14px; background-color: rgba(125, 125, 125, 0.08); border-radius: 6px; margin-bottom: 8px;"><b>典型场景性能参考数据（RTX 5070 Ti / 720p Benchmark）</b> <small style="color: #888;">(展开详情 ▾)</small></summary>
 
 > 下面数据来自 `out/build/windows/bin/motion_benchmark_report.csv`，测试环境为 NVIDIA GeForce RTX 5070 Ti / NVIDIA 610.47.0，1280x720，单场景约 3 秒采样；DLSS、FSR 与 denoiser 均关闭。
 
@@ -87,7 +85,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API（默认探测 `C:/Program Files/Superluminal/Performance/API`），构建会自动启用 `WITH_SUPERLUMINAL`，把引擎的 CPU 与 GPU 命名事件投递到 Superluminal 时间线（GPU 事件经独立回放线程标注），便于做细粒度采样剖析与跨帧分析。未安装时自动跳过，不影响构建。
 
----
+<p align="center">✦</p>
 
 ## 🛠️ 核心能力
 
@@ -131,7 +129,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 - **优先清晰实现而非过度设计**：尽量用明确的数据流、职责边界和成熟三方库解决问题，避免把实验性功能过早抽象成沉重框架
 - **适合阅读现代引擎实现**：从 Vulkan 渲染、资源管理、脚本、编辑器、反射、内容导入到测试 / benchmark / agent validation，都能看到完整的工程组织方式
 
----
+<p align="center">✦</p>
 
 ## 🖼️ 视觉预览
 
@@ -144,13 +142,14 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
   <img src="docs/gallery/7_brick_player.avif" width="32%" alt="Brick Player" />
 </p>
 
----
+<p align="center">✦</p>
 
 ## 🚀 快速开始
 
-对于墙内开发者，请首先确保网络的稳定性，个人推荐常年使用工具
+对于墙内开发者，请首先确保网络的稳定性，依赖库和依赖资产的下载需要稳定连接，推荐个人常年使用工具
 
 [带邀请码链接](https://nxonearth.com/signupbyemail.aspx?MemberCode=93e1edc92a95412dbc7ff38c8288951920240913095147)
+
 [不带邀请码链接](https://nxonearth.com/signupbyemail.aspx)
 
 项目使用 CMake + Ninja，依赖由 vcpkg 管理。除了宿主机本身必须具备的基础工具（编译器 / IDE、CMake、平台 SDK 等），项目级依赖、外部工具链和可选资源包现在都尽量交给 `gnb` 准备。构建依赖下载阶段需要可访问 GitHub 的网络环境。
@@ -165,7 +164,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 ### 💻 平台构建
 
 <details>
-<summary><b>Windows (Visual Studio 2022)</b></summary>
+<summary style="cursor: pointer; padding: 8px 14px; background-color: rgba(125, 125, 125, 0.08); border-radius: 6px; margin-bottom: 8px;"><b>Windows (Visual Studio 2022)</b> <small style="color: #888;">(展开步骤 ▾)</small></summary>
 
 **前置条件：**
 
@@ -186,7 +185,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 </details>
 
 <details>
-<summary><b>Linux (Ubuntu)</b></summary>
+<summary style="cursor: pointer; padding: 8px 14px; background-color: rgba(125, 125, 125, 0.08); border-radius: 6px; margin-bottom: 8px;"><b>Linux (Ubuntu)</b> <small style="color: #888;">(展开步骤 ▾)</small></summary>
 
 ```shell
 ./gnb.sh setup
@@ -201,7 +200,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 </details>
 
 <details>
-<summary><b>Steam Deck / Arch Linux</b></summary>
+<summary style="cursor: pointer; padding: 8px 14px; background-color: rgba(125, 125, 125, 0.08); border-radius: 6px; margin-bottom: 8px;"><b>Steam Deck / Arch Linux</b> <small style="color: #888;">(展开步骤 ▾)</small></summary>
 
 ```shell
 ./gnb.sh setup
@@ -220,7 +219,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 </details>
 
 <details>
-<summary><b>macOS</b></summary>
+<summary style="cursor: pointer; padding: 8px 14px; background-color: rgba(125, 125, 125, 0.08); border-radius: 6px; margin-bottom: 8px;"><b>macOS</b> <small style="color: #888;">(展开步骤 ▾)</small></summary>
 
 **前置条件：**
 
@@ -254,46 +253,97 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 ./gnb.sh remote --target gkNextRenderer --scene assets/models/playground.glb --res 1280x720
 ```
 
----
+<p align="center">✦</p>
 
 ## 🧩 子项目
 
-<p align="center">
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/airportsim.webp" width="32%" alt="AirportSim" />
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/brickplayer.webp" width="32%" alt="BrickPlayer" />
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/brotato3d.webp" width="32%" alt="Brotato3D" />
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/citysim.webp" width="32%" alt="CitySim" />
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="32%" alt="FlappyJs" />
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/magicalego.webp" width="32%" alt="MagicaLego" />
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/nextdayz.webp" width="32%" alt="NextDayZ" />
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/nexttotalwar.webp" width="32%" alt="NextTotalWar" />
-  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/procscad.webp" width="32%" alt="ProcScad" />
-</p>
+<table>
+  <tr>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/airportsim.webp" width="100%" alt="AirportSim" />
+      <br><strong>✈️ AirportSim</strong><br>
+      <sub>机场生态模拟，验证 SCAD POI、角色队列、A* 寻路与 LLM 智能决策</sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/magicalego.webp" width="100%" alt="MagicaLego" />
+      <br><strong>🧱 MagicaLego</strong><br>
+      <sub>乐高 / Voxel 风格体素场景搭建与物理玩法实验场</sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/brotato3d.webp" width="100%" alt="Brotato3D" />
+      <br><strong>🥔 Brotato3D</strong><br>
+      <sub>俯视角 3D 生存射击原型，验证技能波次、对象池与 Jolt 物理</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/brickplayer.webp" width="100%" alt="BrickPlayer" />
+      <br><strong>🧩 BrickPlayer</strong><br>
+      <sub>基于 LDraw 标准的数字乐高积木交互与搭建原型</sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="100%" alt="FlappyJs" />
+      <br><strong>🐤 FlappyCpp / FlappyJs</strong><br>
+      <sub>C++ 与 QuickJS/TS 双实现，验证引擎确定性 replay parity</sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/procscad.webp" width="100%" alt="ScadStudio" />
+      <br><strong>📐 ScadStudio</strong><br>
+      <sub>OpenSCAD DSL 建模求值、场景生成与 ScadRig 刚体绑定</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/citysim.webp" width="100%" alt="StudioSim" />
+      <br><strong>🏢 StudioSim / CitySolSim</strong><br>
+      <sub>工作室经营与城市模拟，验证本地 LLM 事件与 ScadRig 职业表现</sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/nextdayz.webp" width="100%" alt="NextDayZ" />
+      <br><strong>🧟 NextDayZ / CharacterDemo</strong><br>
+      <sub>角色控制、NavGrid A* 寻路、AI 行为树与生存战斗原型</sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/nexttotalwar.webp" width="100%" alt="NextTotalWar" />
+      <br><strong>⚔️ NextTotalWar / NextRA</strong><br>
+      <sub>大规模军团战术模拟与 Lockstep 确定性 RTS 验证</sub>
+    </td>
+  </tr>
+</table>
 
-| 项目 | 说明 |
-|------|------|
-| `gkNextRenderer` | 主渲染器，路径追踪 / Hybrid Rendering / 多管线对比 |
-| `gkNextStillBenchmark` | 静态场景渲染基准测试 |
-| `gkNextMotionBenchmark` | 动态镜头 / 多场景渲染性能基准，输出 CSV profile 报告 |
-| `gkNextVisualTest` | 自动化视觉测试与截图报告 |
-| `RmlUiDemo` | RmlUi 运行时 UI 集成与交互验证 demo |
-| `gkNextEditor` | ImGui 编辑器，服务于材质、场景与运行时工具链 |
-| `ScadStudio` | OpenSCAD（`.scad`）DSL 建模 / 角色绑定实验编辑器 |
-| `BrickPlayer` | 基于 LDraw 的数字乐高搭建原型 |
-| `MagicaLego` | 更轻量的乐高 / voxel 风格玩法实验场 |
-| `Brotato3D` | 俯视角 3D 生存射击原型，介绍见 [docs/projects/brotato-3d/introduction.md](docs/projects/brotato-3d/introduction.md) |
-| `KongLie3D` | 棋盘布阵 / 羁绊 / 战斗回合原型 |
-| `NextRA` | RTS / lockstep / replay 方向的确定性模拟原型 |
-| `CharacterDemo` | 角色控制、AI 行为、导航与战斗交互实验 |
-| `AirportSim` | 机场生态模拟，验证 SCAD POI、角色队列、寻路、LLM 决策与 ScadRig 角色 |
-| `StudioSim` | 工作室经营模拟，验证本地 LLM 事件、员工目标、SCAD 办公室与 ScadRig 表现 |
-| `FlappyCpp` / `FlappyJs` | Flappy Bird 双实现回归样例，用于验证 C++ 与 QuickJS/TypeScript 行为一致性，介绍见 [docs/projects/flappy-bird-parity/introduction.md](docs/projects/flappy-bird-parity/introduction.md) |
-| `gkNextUnitTests` | Catch2 单元测试 |
-| `Packager` | 资产打包为 `.pkg` |
+<details>
+<summary style="cursor: pointer; padding: 10px 16px; background-color: rgba(125, 125, 125, 0.08); border-radius: 8px; margin: 12px 0;"><b>全量 15+ 子项目与工程分类详解清单</b> <small style="color: #888;">(展开清单 ▾)</small></summary>
 
-> 桌面 target 通常都可以配合 `gnb remote --target <Target>` 进入 Remote Play host 模式；该模式目前面向 Windows / Linux 桌面 Vulkan Video H.264 设备。`src/Application/Game/Voyage3D` 仍保留为航海贸易 / 港口 / 海战方向源码原型，当前未暴露独立 CMake target。
+#### 🎨 渲染与编辑器 (Render & Editor)
+- **`gkNextRenderer`**：主渲染器，支持实时路径追踪 / Hybrid Rendering / 降噪与多管线对比。
+- **`gkNextEditor`**：ImGui 综合编辑器，面向场景、材质节点工作流（material node editor）与运行时 cvar 调优。
+- **`ScadStudio`**：OpenSCAD（`.scad`）程序化 DSL 建模求值、场景生成与 ScadRig 角色绑定实验场。
+- **`RmlUiDemo`**：RmlUi 运行时 HTML/CSS UI 引擎集成与交互验证 demo。
 
----
+#### 🎮 玩法与生态模拟 (Game & Simulation)
+- **`AirportSim`**：机场生态模拟，验证 SCAD POI、角色队列、A* 寻路、LLM 决策与 ScadRig 角色。
+- **`StudioSim`**：工作室经营模拟，验证本地 LLM 事件、员工目标、SCAD 办公室与 ScadRig 职业配色。
+- **`MagicaLego`**：体素 / 乐高风格玩法原型与场景物理搭建。
+- **`BrickPlayer`**：基于 LDraw 标准的数字乐高交互与搭建原型。
+- **`Brotato3D`**：俯视角 3D 生存射击原型，验证技能波次、怪物 AI、对象池与 Jolt 物理。
+- **`KongLie3D`**：自走棋 / 羁绊 / 战斗回合模拟原型。
+- **`NextRA`**：确定性 RTS 模拟原型，验证 Lockstep 帧同步与 Replay 回放。
+- **`CharacterDemo`**：角色 Actor 挂载、NavGrid A* 导航、AI 行为树与战斗交互实验。
+- **`FlappyCpp` / `FlappyJs`**：Flappy Bird C++ / QuickJS TS 双实现，验证引擎重播与脚本行为一致性（Parity）。
+- **`TruckerDemo` / `CitySolSim` / `NextDayz` / `NextTotalWar`**：车辆驾驶、城市交通、生存战术与军团模拟原型。
+
+#### 🛠️ 基准测试与自动化工具 (Benchmark & Tools)
+- **`gkNextStillBenchmark`**：静态场景帧率与画质基准测试。
+- **`gkNextMotionBenchmark`**：动态镜头 / 多场景渲染性能基准，自动输出 CSV profile 报告。
+- **`gkNextVisualTest`**：自动化视觉回归测试，渲染场景并生成对比截图报告。
+- **`gkNextUnitTests`**：Catch2 单元测试套件。
+- **`Packager`**：资产打包工具，将场景与纹理打包为 `.pkg` 归档文件。
+
+> 所有桌面 Target 均可配合 `./gnb remote --target <Target>` 进入 Remote Play host 模式（WebRTC 浏览器零安装游玩）。`src/Application/Game/Voyage3D` 仍保留为航海/港口/海战源码原型。
+
+</details>
+
+<p align="center">✦</p>
 
 ## 📚 参考与感谢
 
@@ -301,7 +351,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 - [Vulkan Tutorial](https://vulkan-tutorial.com/)
 - [Vulkan-Samples](https://github.com/KhronosGroup/Vulkan-Samples)
 
----
+<p align="center">✦</p>
 
 ## 🤝 参与贡献
 
@@ -310,13 +360,13 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 - 开发协作说明见 `AGENTS.md`
 - 如果你对实时路径追踪、现代渲染架构、渲染性能优化、LDraw、编辑器工具链、AI Native 工作流或玩法原型验证感兴趣，欢迎交流
 
----
+<p align="center">✦</p>
 
 ## 📦 第三方依赖
 
 cpptrace · cxxopts · sdl3 · glm · imgui · stb · curl · nlohmann-json · tinygltf · draco · fmt · meshoptimizer · ktx · joltphysics · xxhash · spdlog · cpp-base64 · catch2 · entt · libwebp · vulkan-loader · libavif
 
----
+<p align="center">✦</p>
 
 ## 📜 许可协议
 
