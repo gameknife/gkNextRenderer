@@ -54,21 +54,17 @@ public float3 EncodeHdrOutput(float3 color, float paperWhiteNit, uint outputMode
     return LinearSrgbToHdr10(linearSrgbNits);
 }
 
-// Display-space middle gray for camera-visible misses in scenes without a skylight.
-// This is applied after lighting so it never contributes environment radiance.
-public float3 EncodeNoSkyBackground(bool hdr, float paperWhiteNit, uint outputMode)
+// Pre-tonemap clear color for camera-visible misses in scenes without a sky.
+// It resolves to display 0.5 in SDR or 18% of paper white in HDR, while remaining
+// real scene data for external passes and temporal upscaling.
+public float3 NoSkyClearSceneColor(bool hdr, float paperWhiteNit)
 {
-    if (!hdr)
-    {
-        return float3(0.5f);
-    }
-
-    const float3 middleGrayNits = float3(paperWhiteNit * 0.18f);
-    if (outputMode == HDR_OUTPUT_MODE_EXTENDED_SRGB_LINEAR)
-    {
-        return middleGrayNits / 203.0f;
-    }
-    return LinearSrgbToHdr10(middleGrayNits);
+    // GT_Tonemapping(0.62) = 0.5 for SDR. In HDR, 0.0316466 is the inverse GT
+    // value which maps to 18% of paper white through SceneColorToLinearSrgbNits.
+    const float value = hdr
+        ? 0.0316466f * max(paperWhiteNit, 1.0f) / 20.0f
+        : 0.62f;
+    return float3(value);
 }
 
 public float3 CODTonemapping(float3 color)

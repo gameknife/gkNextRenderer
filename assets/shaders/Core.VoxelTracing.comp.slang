@@ -2,10 +2,10 @@ import Shader.Bindless;
 import Shader.PathTracing;
 #include "common/ShaderClock.slang"
 
-void OutputColor(int2 ipos, float3 Total, bool noSkyBackground)
+void OutputColor(int2 ipos, float3 total)
 {
     Bindless.GetViewStorageTexture<float4>(Bindless.RT_SCENE_COLOR)[ipos] =
-        float4(Total, noSkyBackground ? 0.0 : 1.0);
+        float4(total, 1.0);
 }
 
 [shader("compute")]
@@ -65,7 +65,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     const float exposure = max(Camera.PaperWhiteNit / 40000.0, 1.0e-6);
-    OutputColor(ipos, max(outColor.rgb, 0.0) * exposure, noSkyBackground);
+    const float3 sceneColor = noSkyBackground
+        ? NoSkyClearSceneColor(Camera.HDR, Camera.PaperWhiteNit)
+        : max(outColor.rgb, 0.0) * exposure;
+    OutputColor(ipos, sceneColor);
 
     END_SHADERCLOCK(ipos)
 }

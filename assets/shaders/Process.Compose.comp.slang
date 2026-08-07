@@ -1,6 +1,7 @@
 import Shader.Bindless;
 import Shader.Types;
 import Shader.GpuScene;
+import Shader.Tonemap;
 
 // Direct sample compose. Realtime rendering reads the current diffuse/specular sample;
 // explicit offline progressive rendering reads the running-average linear scene color instead.
@@ -87,6 +88,10 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     const bool noSkyBackground =
         !camera.HasSky && !HasObjectFlag(objectId0[pixel], OBJECT_ID_FLAG_VALID);
+    if (noSkyBackground)
+    {
+        total = NoSkyClearSceneColor(camera.HDR, camera.PaperWhiteNit);
+    }
 
     const float selectedEdge = saturate(
         ComputeEdgeStrengthTwoSided(objectId0, pixel, OBJECT_ID_FLAG_SELECTED) * 0.80 +
@@ -118,5 +123,5 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         total = lerp(total, float3(80, 220, 120) * exposure, hoveredEdge);
     }
 
-    sceneColor[pixel] = float4(total, noSkyBackground ? 0.0 : 1.0);
+    sceneColor[pixel] = float4(total, 1.0);
 }

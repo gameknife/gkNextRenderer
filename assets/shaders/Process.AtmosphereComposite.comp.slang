@@ -120,7 +120,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         color = Bindless.GetSampleTexture(params.SkyViewLutId).SampleLevel(skyUv, 0.0f).rgb;
     }
 
-    // Alpha carries noSkyBackground through the post chain and must remain untouched.
+    // Preserve scene coverage for downstream consumers; background color is already real data.
     Bindless.GetViewStorageTexture<float4>(Bindless.RT_SCENE_COLOR)[pixel] =
         float4(max(color, float3(0.0f)), originalColor.a);
 }

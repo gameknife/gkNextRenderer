@@ -1,6 +1,7 @@
 import Shader.Bindless;
 import Shader.Types;
 import Shader.GpuScene;
+import Shader.Tonemap;
 
 static const uint OBJECT_ID_FLAG_VALID = 0x80000000u;
 static const uint OBJECT_ID_FLAG_SELECTED = 0x40000000u;
@@ -178,5 +179,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     const bool noSkyBackground = !camera.HasSky && !surface;
-    OutImage[pixel] = float4(total, noSkyBackground ? 0.0 : 1.0);
+    if (noSkyBackground)
+    {
+        total = NoSkyClearSceneColor(camera.HDR, camera.PaperWhiteNit);
+    }
+    OutImage[pixel] = float4(total, 1.0);
 }
