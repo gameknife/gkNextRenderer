@@ -1,5 +1,3 @@
-# gkNextEngine
-
 <!-- The transparent SVG switches between black and white to match the active GitHub theme. -->
 <p align="center">
   <picture>
