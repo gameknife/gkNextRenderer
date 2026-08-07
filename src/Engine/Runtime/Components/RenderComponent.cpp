@@ -25,9 +25,9 @@ namespace Runtime
                 .custom<PropertyMeta>(PropertyPresets::Editable("Cast Shadows", "Rendering", "Whether the object casts shadows"))
             .data<&RenderComponent::SetReceiveGI, &RenderComponent::GetReceiveGI>("ReceiveGI")
                 .custom<PropertyMeta>(PropertyPresets::Editable("Receive GI", "Rendering", "Whether the object receives global illumination"))
-            // ModelId property - read-only (set through scene loading)
-            .data<nullptr, &RenderComponent::GetModelId>("ModelId")
-                .custom<PropertyMeta>(PropertyPresets::ReadOnly("Model ID", "Mesh", "The model resource ID"))
+            // ModelId property - editable through the editor asset picker
+            .data<&RenderComponent::SetModelId, &RenderComponent::GetModelId>("ModelId")
+                .custom<PropertyMeta>(PropertyPresets::Editable("Model", "Mesh", "The model resource"))
             // SkinIndex property - read-only
             .data<nullptr, &RenderComponent::GetSkinIndex>("SkinIndex")
                 .custom<PropertyMeta>(PropertyPresets::ReadOnly("Skin Index", "Animation", "Skinning data index for skeletal animation"))

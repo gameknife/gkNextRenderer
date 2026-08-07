@@ -94,6 +94,51 @@ namespace Editor
         ImGui::GetWindowDrawList()->AddRect(min, max, IM_COL32(75, 80, 90, 255), 4.0f);
     }
 
+    static bool DrawAssetWidget(uint32_t& value, const bool readOnly, const float thumbnailSize,
+                                const PropertyWidgets::AssetWidgetConfig& config)
+    {
+        DrawAssetThumbnail(config.thumbnail ? config.thumbnail(value) : 0, thumbnailSize);
+        ImGui::SameLine();
+        ImGui::BeginGroup();
+
+        const std::string assetName = config.name ? config.name(value) : fmt::format("Missing asset #{}", value);
+        ImGui::TextWrapped("%s", assetName.c_str());
+
+        bool changed = false;
+        constexpr uint32_t invalidId = std::numeric_limits<uint32_t>::max();
+        const uint32_t selected = config.selectedAsset ? config.selectedAsset() : invalidId;
+        if (readOnly || selected == invalidId) ImGui::BeginDisabled();
+        if (ImGui::SmallButton(ICON_FA_ARROW_POINTER))
+        {
+            value = selected;
+            changed = true;
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            ImGui::SetTooltip("Assign the asset selected in Content Browser");
+        }
+        if (readOnly || selected == invalidId) ImGui::EndDisabled();
+
+        ImGui::SameLine();
+        if (!config.locateAsset) ImGui::BeginDisabled();
+        if (ImGui::SmallButton(ICON_FA_MAGNIFYING_GLASS)) config.locateAsset(value);
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            ImGui::SetTooltip("Locate this asset in Content Browser");
+        }
+        if (!config.locateAsset) ImGui::EndDisabled();
+
+        if (config.editAsset)
+        {
+            ImGui::SameLine();
+            if (ImGui::SmallButton(ICON_FA_PEN_TO_SQUARE)) config.editAsset(value);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Open this material in Material Editor");
+        }
+
+        ImGui::EndGroup();
+        return changed;
+    }
+
     // Draw a category header with distinctive style
     static bool DrawCategoryHeader(const char* category)
     {
@@ -213,17 +258,15 @@ namespace Editor
                     int intVal = static_cast<int>(val);
                     int intMin = static_cast<int>(std::min(static_cast<uint32_t>(std::max(0.0f, config.minValue)), static_cast<uint32_t>(INT_MAX)));
                     int intMax = static_cast<int>(std::min(static_cast<uint32_t>(config.maxValue), static_cast<uint32_t>(INT_MAX)));
-                    if (propInfo.name == "ModelId" && config.modelThumbnail)
+                    if (propInfo.name == "ModelId" && config.modelAsset.thumbnail)
                     {
-                        DrawPropertyRow(label, [&]() -> bool {
-                            DrawAssetThumbnail(config.modelThumbnail(val), 48.0f);
-                            ImGui::SameLine();
-                            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-                            ImGui::BeginDisabled();
-                            ImGui::DragInt("##v", &intVal, config.dragSpeed, intMin, intMax);
-                            ImGui::EndDisabled();
-                            return false;
-                        });
+                        if (DrawPropertyRow(label, [&]() {
+                                return DrawAssetWidget(val, isReadOnly, 52.0f, config.modelAsset);
+                            }))
+                        {
+                            changed = true;
+                            currentValue = entt::meta_any{val};
+                        }
                         break;
                     }
                     auto drawWidget = [&]() -> bool {
@@ -431,10 +474,10 @@ namespace Editor
 
             case PropertyType::Array:
             {
-                const auto& thumbnail = propInfo.name == "Materials"
-                    ? config.materialThumbnail
-                    : std::function<ImTextureID(uint32_t)>{};
-                if (DrawArray(label, propInfo, currentValue, isReadOnly, config.arrayDisplayLimit, thumbnail))
+                const AssetWidgetConfig asset = propInfo.name == "Materials"
+                    ? config.materialAsset
+                    : AssetWidgetConfig{};
+                if (DrawArray(label, propInfo, currentValue, isReadOnly, config.arrayDisplayLimit, asset))
                     changed = true;
                 break;
             }
@@ -884,7 +927,7 @@ namespace Editor
         entt::meta_any& arrayValue,
         bool readOnly,
         size_t displayLimit,
-        const std::function<ImTextureID(uint32_t)>& elementThumbnail
+        const AssetWidgetConfig& elementAsset
     )
     {
         bool changed = false;
@@ -898,23 +941,11 @@ namespace Editor
         {
             return DrawContainerElements<std::array<uint32_t, 16>, uint32_t>(
                 label, *arr, std::min(arr->size(), displayLimit), readOnly,
-                [&elementThumbnail](const char* lbl, uint32_t& val, bool ro) {
-                    if (elementThumbnail)
+                [&elementAsset](const char* lbl, uint32_t& val, bool ro) {
+                    if (elementAsset.thumbnail)
                     {
-                        bool elementChanged = false;
                         BeginPropertyRow(lbl);
-                        DrawAssetThumbnail(elementThumbnail(val), 40.0f);
-                        ImGui::SameLine();
-                        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-                        int intValue = static_cast<int>(std::min(val, static_cast<uint32_t>(INT_MAX)));
-                        if (ro) ImGui::BeginDisabled();
-                        if (ImGui::DragInt("##v", &intValue, 1.0f, 0, INT_MAX) && !ro)
-                        {
-                            val = static_cast<uint32_t>(std::max(0, intValue));
-                            elementChanged = true;
-                        }
-                        if (ro) ImGui::EndDisabled();
-                        return elementChanged;
+                        return DrawAssetWidget(val, ro, 44.0f, elementAsset);
                     }
                     return DrawUInt(lbl, val, 1.0f, 0, UINT_MAX, ro);
                 });

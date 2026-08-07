@@ -745,14 +745,18 @@ namespace Editor
                 continue;
             }
 
-            uint32_t dummySelection = InvalidId;
             const ImTextureID previewTexture = RequestMeshPreviewTexture(ctx, i, model);
-            DrawGeneralContentBrowser(ctx, ui, dummySelection, true, i, name, ICON_FA_BOXES_PACKING,
+            DrawGeneralContentBrowser(ctx, ui, ui.selectedMeshId, true, i, name, ICON_FA_BOXES_PACKING,
                                       IM_COL32(132, 182, 255, 255),
                                       ContentBrowserCallbacks{},
                                       nullptr,
                                       IM_COL32(0, 0, 0, 0),
                                       previewTexture);
+            if (ui.contentBrowserState.pendingRevealMeshId == i)
+            {
+                ImGui::SetScrollHereY(0.5f);
+                ui.contentBrowserState.pendingRevealMeshId = InvalidId;
+            }
             grid.Next();
             ++itemCount;
         }
@@ -797,6 +801,11 @@ namespace Editor
                                       nullptr,
                                       IM_COL32(0, 0, 0, 0),
                                       previewTexture);
+            if (ui.contentBrowserState.pendingRevealMaterialId == i)
+            {
+                ImGui::SetScrollHereY(0.5f);
+                ui.contentBrowserState.pendingRevealMaterialId = InvalidId;
+            }
 
             grid.Next();
             ++itemCount;
@@ -1070,7 +1079,8 @@ namespace Editor
                     ImGui::BeginChild("Mesh Items", ImVec2(0.0f, -24.0f), true);
                     itemCount = DrawMeshBrowserContents(ctx, ui, &browserState.meshFilter);
                     ImGui::EndChild();
-                    ImGui::Text("%d items", itemCount);
+                    selectedCount = ui.selectedMeshId != InvalidId ? 1 : 0;
+                    ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
                 }
                 ImGui::EndChild();
             }

@@ -25,6 +25,15 @@ namespace Editor
     class PropertyWidgets
     {
     public:
+        struct AssetWidgetConfig
+        {
+            std::function<ImTextureID(uint32_t)> thumbnail;
+            std::function<std::string(uint32_t)> name;
+            std::function<uint32_t()> selectedAsset;
+            std::function<void(uint32_t)> locateAsset;
+            std::function<void(uint32_t)> editAsset;
+        };
+
         /**
          * Configuration for property widget rendering.
          */
@@ -36,8 +45,8 @@ namespace Editor
             bool readOnly;
             const char* format;
             size_t arrayDisplayLimit;
-            std::function<ImTextureID(uint32_t)> modelThumbnail;
-            std::function<ImTextureID(uint32_t)> materialThumbnail;
+            AssetWidgetConfig modelAsset;
+            AssetWidgetConfig materialAsset;
             
             WidgetConfig()
                 : dragSpeed(0.1f)
@@ -110,7 +119,7 @@ namespace Editor
             entt::meta_any& arrayValue,
             bool readOnly = false,
             size_t displayLimit = std::numeric_limits<size_t>::max(),
-            const std::function<ImTextureID(uint32_t)>& elementThumbnail = {}
+            const AssetWidgetConfig& elementAsset = {}
         );
         
     private:

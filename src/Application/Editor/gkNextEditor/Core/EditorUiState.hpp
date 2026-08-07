@@ -77,6 +77,8 @@ namespace Editor
             ImGuiTextFilter materialFilter;
             ImGuiTextFilter textureFilter;
             ImGuiTextFilter meshFilter;
+            uint32_t pendingRevealMaterialId = InvalidId;
+            uint32_t pendingRevealMeshId = InvalidId;
         };
 
         struct ViewportOverlayState
@@ -197,6 +199,7 @@ namespace Editor
 
         // Cross-panel asset selections (avoid mixing ids from different sources)
         uint32_t selectedMaterialId = InvalidId;
+        uint32_t selectedMeshId = InvalidId;
         uint32_t selectedTextureId = InvalidId;
         uint32_t selectedContentItemId = InvalidId;
 

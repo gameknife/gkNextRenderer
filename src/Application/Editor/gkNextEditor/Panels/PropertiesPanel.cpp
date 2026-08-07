@@ -18,6 +18,7 @@
 
 #include <cmath>
 #include <functional>
+#include <fmt/format.h>
 #include <glm/gtc/quaternion.hpp>
 
 namespace Editor
@@ -376,7 +377,7 @@ namespace Editor
                                 widgetConfig.arrayDisplayLimit = MaterialSlotCount(
                                     ctx.scene.Models()[modelId], render->GetMaterials().size());
                             }
-                            widgetConfig.modelThumbnail = [&ctx](const uint32_t id) -> ImTextureID
+                            widgetConfig.modelAsset.thumbnail = [&ctx](const uint32_t id) -> ImTextureID
                             {
                                 if (id >= ctx.scene.Models().size()) return 0;
                                 const uint32_t sampleSlot = EditorPreview::AssetThumbnails(ctx.engine.GetRenderer())
@@ -385,7 +386,28 @@ namespace Editor
                                     ? 0
                                     : ctx.ui.RequestImTextureIdRaw(sampleSlot);
                             };
-                            widgetConfig.materialThumbnail = [&ctx](const uint32_t id) -> ImTextureID
+                            widgetConfig.modelAsset.name = [&ctx](const uint32_t id)
+                            {
+                                return id < ctx.scene.Models().size()
+                                    ? ctx.scene.Models()[id].Name()
+                                    : fmt::format("Missing model #{}", id);
+                            };
+                            widgetConfig.modelAsset.selectedAsset = [&ui, &ctx]()
+                            {
+                                return ui.selectedMeshId < ctx.scene.Models().size()
+                                    ? ui.selectedMeshId
+                                    : InvalidId;
+                            };
+                            widgetConfig.modelAsset.locateAsset = [&ui, &ctx](const uint32_t id)
+                            {
+                                if (id >= ctx.scene.Models().size()) return;
+                                ui.contentBrowser = true;
+                                ui.selectedMeshId = id;
+                                ui.contentBrowserState.currentSection = 3;
+                                ui.contentBrowserState.meshFilter.Clear();
+                                ui.contentBrowserState.pendingRevealMeshId = id;
+                            };
+                            widgetConfig.materialAsset.thumbnail = [&ctx](const uint32_t id) -> ImTextureID
                             {
                                 if (id >= ctx.scene.Materials().size()) return 0;
                                 const uint32_t sampleSlot = EditorPreview::AssetThumbnails(ctx.engine.GetRenderer())
@@ -393,6 +415,35 @@ namespace Editor
                                 return sampleSlot == std::numeric_limits<uint32_t>::max()
                                     ? 0
                                     : ctx.ui.RequestImTextureIdRaw(sampleSlot);
+                            };
+                            widgetConfig.materialAsset.name = [&ctx](const uint32_t id)
+                            {
+                                return id < ctx.scene.Materials().size()
+                                    ? ctx.scene.Materials()[id].name_
+                                    : fmt::format("Missing material #{}", id);
+                            };
+                            widgetConfig.materialAsset.selectedAsset = [&ui, &ctx]()
+                            {
+                                return ui.selectedMaterialId < ctx.scene.Materials().size()
+                                    ? ui.selectedMaterialId
+                                    : InvalidId;
+                            };
+                            widgetConfig.materialAsset.locateAsset = [&ui, &ctx](const uint32_t id)
+                            {
+                                if (id >= ctx.scene.Materials().size()) return;
+                                ui.contentBrowser = true;
+                                ui.selectedMaterialId = id;
+                                ui.contentBrowserState.currentSection = 1;
+                                ui.contentBrowserState.materialFilter.Clear();
+                                ui.contentBrowserState.pendingRevealMaterialId = id;
+                            };
+                            widgetConfig.materialAsset.editAsset = [&ctx, &ui](const uint32_t id)
+                            {
+                                if (id >= ctx.scene.Materials().size()) return;
+                                ui.selectedMaterialId = id;
+                                ui.selected_material = &ctx.scene.Materials()[id];
+                                ui.ed_material = true;
+                                OpenMaterialEditor(ctx, ui);
                             };
                         }
                         if (PropertyWidgets::DrawComponentProperties(component.get(), &ctx.engine.GetCommandHistory(),
