@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 240" role="img" aria-labelledby="title desc">
+  <title id="title">gkNextEngine horizontal logo</title>
+  <desc id="desc">Transparent geometric gkNextEngine logo mark and wordmark that switch between black and white for the active color theme.</desc>
+
+  <style>
+    .logo-fill { fill: #000000; }
+    @media (prefers-color-scheme: dark) {
+      .logo-fill { fill: #FFFFFF; }
+    }
+  </style>
+
+  <!-- Geometric mark -->
+  <g class="logo-fill" transform="translate(-50.5 55.8) scale(0.3)" shape-rendering="geometricPrecision">
+    <!-- Left diagonal blade -->
+    <path d="M 496 109 H 544 L 417 319 H 369 Z" />
+
+    <!-- K-shaped center blade -->
+    <path d="M 567 109 H 615 L 548 223 L 605 319 H 557 L 522 263 L 488 319 H 441 Z" />
+
+    <!-- Outlined right blade -->
+    <path d="M 636 109 H 721 L 608 292 L 570 224 Z
+             M 646 118 H 705 L 606 274 L 581 224 Z" fill-rule="evenodd" />
+  </g>
+
+  <!-- Horizontal wordmark -->
+  <text class="logo-fill" x="205" y="146"
+        text-anchor="start"
+        font-family="Arial Black, Arial, Helvetica, sans-serif"
+        font-size="74"
+        font-weight="900"
+        textLength="654"
+        lengthAdjust="spacingAndGlyphs"
+        style="word-spacing:-9px">GKNEXT ENGINE</text>
+</svg>

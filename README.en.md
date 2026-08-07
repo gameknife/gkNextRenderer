@@ -8,6 +8,15 @@
 ![Desktop CI](https://github.com/gameknife/gkNextEngine/actions/workflows/desktop.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+<!-- The transparent SVG switches between black and white to match the active GitHub theme. -->
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/brand/gknext_logo_vertical.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="./assets/brand/gknext_logo_vertical.svg" />
+    <img src="./assets/brand/gknext_logo_vertical.svg" width="480" alt="gkNextEngine" />
+  </picture>
+</p>
+
 <p align="center">
   <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/confroom.webp" width="49%" alt="Conference Room" />
   <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/luxball.webp" width="49%" alt="Luxball" />
@@ -230,6 +239,8 @@ Notes:
 ./gnb.sh build
 ./gnb.sh run gkNextRenderer
 ```
+
+`gnb setup` automatically downloads the project-specified Vulkan SDK, Slang, and TypeScript toolchains, removing the need to manually prepare these dependencies. If `VULKAN_SDK` is explicitly set, that environment SDK takes precedence.
 
 </details>
 

@@ -2,11 +2,20 @@
 
 **面向实时路径追踪、游戏原型与高质量视觉表现的跨平台 3D 引擎**
 
-[English](docs/README.en.md) | [简体中文](README.md)
+[English](README.en.md) | [简体中文](README.md)
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/gameknife/gkNextEngine)
 ![Desktop CI](https://github.com/gameknife/gkNextEngine/actions/workflows/desktop.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+<!-- The transparent SVG switches between black and white to match the active GitHub theme. -->
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/brand/gknext_logo_vertical.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="./assets/brand/gknext_logo_vertical.svg" />
+    <img src="./assets/brand/gknext_logo_vertical.svg" width="480" alt="gkNextEngine" />
+  </picture>
+</p>
 
 <p align="center">
   <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/confroom.webp" width="49%" alt="Conference Room" />
