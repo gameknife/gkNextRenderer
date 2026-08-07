@@ -913,8 +913,26 @@ void UserInterface::PreRender()
         io.DisplayFramebufferScale.x *= uiScale_;
         io.DisplayFramebufferScale.y *= uiScale_;
 
-        // SDL reports pointer coordinates in physical window pixels on a DPI-aware process.
-        // Convert the position back into the logical ImGui viewport coordinate space.
+        // SDL reports Windows display bounds in physical screen coordinates, while
+        // the editor keeps Dear ImGui in logical coordinates. Normalize monitor
+        // work areas as well so popup and tooltip clamping uses the same space.
+        auto& monitors = ImGui::GetPlatformIO().Monitors;
+        for (int monitorIndex = 0; monitorIndex < monitors.Size; ++monitorIndex)
+        {
+            ImGuiPlatformMonitor& monitor = monitors[monitorIndex];
+            monitor.MainPos.x /= uiScale_;
+            monitor.MainPos.y /= uiScale_;
+            monitor.MainSize.x /= uiScale_;
+            monitor.MainSize.y /= uiScale_;
+            monitor.WorkPos.x /= uiScale_;
+            monitor.WorkPos.y /= uiScale_;
+            monitor.WorkSize.x /= uiScale_;
+            monitor.WorkSize.y /= uiScale_;
+        }
+
+        // SDL input events and global mouse state are also in physical pixels on
+        // Windows. Feed ImGui the logical position after the platform backend has
+        // updated its event queue.
         SDL_Window* mouseWindow = SDL_GetMouseFocus();
         if (mouseWindow != nullptr && !SDL_GetWindowRelativeMouseMode(mouseWindow))
         {
@@ -923,18 +941,25 @@ void UserInterface::PreRender()
             int windowX = 0;
             int windowY = 0;
             SDL_GetGlobalMouseState(&globalX, &globalY);
-            SDL_GetWindowPosition(mouseWindow, &windowX, &windowY);
 
-            ImVec2 logicalPosition(
-                (globalX - static_cast<float>(windowX)) / uiScale_,
-                (globalY - static_cast<float>(windowY)) / uiScale_);
-            if (ImGuiViewport* viewport = ImGui::FindViewportByPlatformHandle(
-                    reinterpret_cast<void*>(static_cast<intptr_t>(SDL_GetWindowID(mouseWindow)))))
+            ImVec2 logicalPosition;
+            if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
             {
-                logicalPosition.x += viewport->Pos.x;
-                logicalPosition.y += viewport->Pos.y;
-                io.AddMousePosEvent(logicalPosition.x, logicalPosition.y);
+                // During an OS title-bar drag the window position and the mouse
+                // focus window are updated asynchronously. Use the global cursor
+                // position directly instead of reconstructing it from a moving
+                // window origin, which otherwise feeds a one-frame feedback loop
+                // into ImGui's viewport move handling.
+                logicalPosition = ImVec2(globalX / uiScale_, globalY / uiScale_);
             }
+            else
+            {
+                SDL_GetWindowPosition(mouseWindow, &windowX, &windowY);
+                logicalPosition = ImVec2(
+                    (globalX - static_cast<float>(windowX)) / uiScale_,
+                    (globalY - static_cast<float>(windowY)) / uiScale_);
+            }
+            io.AddMousePosEvent(logicalPosition.x, logicalPosition.y);
         }
     }
 #endif
@@ -1040,13 +1065,28 @@ void UserInterface::HandleEvent(const SDL_Event* event)
 #if WIN32
     if (uiScale_ > 1.0f && event->type == SDL_EVENT_MOUSE_MOTION)
     {
-        SDL_Event logicalEvent = *event;
-        logicalEvent.motion.x /= uiScale_;
-        logicalEvent.motion.y /= uiScale_;
-        logicalEvent.motion.xrel /= uiScale_;
-        logicalEvent.motion.yrel /= uiScale_;
-        ImGui_ImplSDL3_ProcessEvent(&logicalEvent);
-        return;
+        SDL_Window* window = SDL_GetWindowFromID(event->motion.windowID);
+        ImGuiViewport* viewport = ImGui::FindViewportByPlatformHandle(
+            reinterpret_cast<void*>(static_cast<intptr_t>(event->motion.windowID)));
+        if (window != nullptr && viewport != nullptr && !SDL_GetWindowRelativeMouseMode(window))
+        {
+            ImVec2 logicalPosition(event->motion.x / uiScale_, event->motion.y / uiScale_);
+            if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+            {
+                int windowX = 0;
+                int windowY = 0;
+                SDL_GetWindowPosition(window, &windowX, &windowY);
+                logicalPosition.x += static_cast<float>(windowX) / uiScale_;
+                logicalPosition.y += static_cast<float>(windowY) / uiScale_;
+            }
+
+            auto& io = ImGui::GetIO();
+            io.AddMouseSourceEvent(event->motion.which == SDL_TOUCH_MOUSEID
+                                       ? ImGuiMouseSource_TouchScreen
+                                       : ImGuiMouseSource_Mouse);
+            io.AddMousePosEvent(logicalPosition.x, logicalPosition.y);
+            return;
+        }
     }
 #endif
     ImGui_ImplSDL3_ProcessEvent(event);

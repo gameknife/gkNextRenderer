@@ -444,18 +444,20 @@ void MultiViewportBackend::Initialize(UserInterface& userInterface)
         }
 
 #if WIN32
-        if (userInterface.UiScale() > 1.0f)
-        {
-            platformCreateWindow_ = platformIo.Platform_CreateWindow;
-            platformSetWindowSize_ = platformIo.Platform_SetWindowSize;
-            platformGetWindowSize_ = platformIo.Platform_GetWindowSize;
-            platformGetWindowFramebufferScale_ = platformIo.Platform_GetWindowFramebufferScale;
-            platformIo.Platform_CreateWindow = &MultiViewportBackend::CreateDpiScaledPlatformWindowCallback;
-            platformIo.Platform_SetWindowSize = &MultiViewportBackend::SetDpiScaledPlatformWindowSizeCallback;
-            platformIo.Platform_GetWindowSize = &MultiViewportBackend::GetDpiScaledPlatformWindowSizeCallback;
-            platformIo.Platform_GetWindowFramebufferScale =
-                &MultiViewportBackend::GetDpiScaledPlatformFramebufferScaleCallback;
-        }
+        // UserInterface computes uiScale_ immediately after the renderer backend is
+        // initialized. Install this callback unconditionally and read the scale when
+        // ImGui queries the viewport, rather than during this initialization phase.
+        platformCreateWindow_ = platformIo.Platform_CreateWindow;
+        platformSetWindowPos_ = platformIo.Platform_SetWindowPos;
+        platformGetWindowPos_ = platformIo.Platform_GetWindowPos;
+        platformSetWindowSize_ = platformIo.Platform_SetWindowSize;
+        platformGetWindowSize_ = platformIo.Platform_GetWindowSize;
+        platformIo.Platform_CreateWindow = &MultiViewportBackend::CreateDpiScaledPlatformWindowCallback;
+        platformIo.Platform_SetWindowPos = &MultiViewportBackend::SetDpiScaledPlatformWindowPosCallback;
+        platformIo.Platform_GetWindowPos = &MultiViewportBackend::GetDpiScaledPlatformWindowPosCallback;
+        platformIo.Platform_SetWindowSize = &MultiViewportBackend::SetDpiScaledPlatformWindowSizeCallback;
+        platformIo.Platform_GetWindowSize = &MultiViewportBackend::GetDpiScaledPlatformWindowSizeCallback;
+        platformDpiCallbacksOverridden_ = true;
 #endif
     }
 
@@ -498,16 +500,19 @@ void MultiViewportBackend::Shutdown()
     platformIo.Renderer_RenderWindow = nullptr;
     platformIo.Renderer_SwapBuffers = nullptr;
     platformIo.Renderer_RenderState = nullptr;
-    if (platformCreateWindow_ != nullptr)
+    if (platformDpiCallbacksOverridden_)
     {
         platformIo.Platform_CreateWindow = platformCreateWindow_;
+        platformIo.Platform_SetWindowPos = platformSetWindowPos_;
+        platformIo.Platform_GetWindowPos = platformGetWindowPos_;
         platformIo.Platform_SetWindowSize = platformSetWindowSize_;
         platformIo.Platform_GetWindowSize = platformGetWindowSize_;
-        platformIo.Platform_GetWindowFramebufferScale = platformGetWindowFramebufferScale_;
         platformCreateWindow_ = nullptr;
+        platformSetWindowPos_ = nullptr;
+        platformGetWindowPos_ = nullptr;
         platformSetWindowSize_ = nullptr;
         platformGetWindowSize_ = nullptr;
-        platformGetWindowFramebufferScale_ = nullptr;
+        platformDpiCallbacksOverridden_ = false;
     }
 
     io.BackendRendererUserData = userInterface_;
@@ -569,17 +574,54 @@ MultiViewportBackend* MultiViewportBackend::GetRendererBackendOwner()
 void MultiViewportBackend::CreateDpiScaledPlatformWindowCallback(ImGuiViewport* viewport)
 {
     MultiViewportBackend* owner = GetRendererBackendOwner();
-    if (owner == nullptr || owner->platformCreateWindow_ == nullptr)
+    if (owner == nullptr || owner->platformCreateWindow_ == nullptr || owner->userInterface_ == nullptr)
     {
         return;
     }
 
     owner->platformCreateWindow_(viewport);
-    if (owner->platformSetWindowSize_ != nullptr && owner->userInterface_ != nullptr)
+    const float scale = owner->userInterface_->UiScale();
+    if (owner->platformSetWindowPos_ != nullptr)
     {
-        const float scale = owner->userInterface_->UiScale();
+        owner->platformSetWindowPos_(viewport, ImVec2(viewport->Pos.x * scale, viewport->Pos.y * scale));
+    }
+    if (owner->platformSetWindowSize_ != nullptr)
+    {
         owner->platformSetWindowSize_(viewport, ImVec2(viewport->Size.x * scale, viewport->Size.y * scale));
     }
+}
+
+void MultiViewportBackend::SetDpiScaledPlatformWindowPosCallback(ImGuiViewport* viewport, ImVec2 pos)
+{
+    MultiViewportBackend* owner = GetRendererBackendOwner();
+    if (owner == nullptr || owner->platformSetWindowPos_ == nullptr || owner->userInterface_ == nullptr)
+    {
+        return;
+    }
+
+    const float scale = owner->userInterface_->UiScale();
+    owner->platformSetWindowPos_(viewport, ImVec2(pos.x * scale, pos.y * scale));
+    if (viewport->PlatformHandle != nullptr)
+    {
+        const SDL_WindowID windowId = static_cast<SDL_WindowID>(reinterpret_cast<intptr_t>(viewport->PlatformHandle));
+        if (SDL_Window* window = SDL_GetWindowFromID(windowId))
+        {
+            SDL_SyncWindow(window);
+        }
+    }
+}
+
+ImVec2 MultiViewportBackend::GetDpiScaledPlatformWindowPosCallback(ImGuiViewport* viewport)
+{
+    MultiViewportBackend* owner = GetRendererBackendOwner();
+    if (owner == nullptr || owner->platformGetWindowPos_ == nullptr || owner->userInterface_ == nullptr)
+    {
+        return viewport != nullptr ? viewport->Pos : ImVec2(0.0f, 0.0f);
+    }
+
+    const float scale = owner->userInterface_->UiScale();
+    const ImVec2 physicalPos = owner->platformGetWindowPos_(viewport);
+    return ImVec2(physicalPos.x / scale, physicalPos.y / scale);
 }
 
 void MultiViewportBackend::SetDpiScaledPlatformWindowSizeCallback(ImGuiViewport* viewport, ImVec2 size)
@@ -605,13 +647,6 @@ ImVec2 MultiViewportBackend::GetDpiScaledPlatformWindowSizeCallback(ImGuiViewpor
     const float scale = owner->userInterface_->UiScale();
     const ImVec2 physicalSize = owner->platformGetWindowSize_(viewport);
     return ImVec2(physicalSize.x / scale, physicalSize.y / scale);
-}
-
-ImVec2 MultiViewportBackend::GetDpiScaledPlatformFramebufferScaleCallback(ImGuiViewport*)
-{
-    MultiViewportBackend* owner = GetRendererBackendOwner();
-    const float scale = owner != nullptr && owner->userInterface_ != nullptr ? owner->userInterface_->UiScale() : 1.0f;
-    return ImVec2(scale, scale);
 }
 
 void MultiViewportBackend::CreatePlatformViewportWindowCallback(ImGuiViewport* viewport)
