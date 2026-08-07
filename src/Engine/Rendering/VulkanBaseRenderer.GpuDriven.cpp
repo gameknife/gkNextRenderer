@@ -458,6 +458,37 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
 
         if (activeCascadeMask != 0)
         {
+            // Shadow scratch is scene-global and reused after the main cull as well as by every
+            // scheduled RenderView. Finish the previous fill/compute/indirect consumers before
+            // clearing the per-cascade statistics and arguments for this shadow pass.
+            BufferMemoryBarrier::Insert(
+                commandBuffer,
+                VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT |
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT |
+                    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                {
+                    BufferMemoryBarrier::Make(
+                        scene.NodeMatrixBuffer().Handle(),
+                        VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT |
+                            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                        VK_ACCESS_TRANSFER_WRITE_BIT,
+                        Assets::GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET,
+                        sizeof(Assets::GPUDrivenStat) * Assets::Scene::kSunShadowCascadeCount),
+                    BufferMemoryBarrier::Make(
+                        scene.SoftMeshShaderCounterBuffer().Handle(),
+                        VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT |
+                            VK_ACCESS_SHADER_WRITE_BIT,
+                        VK_ACCESS_TRANSFER_WRITE_BIT),
+                    BufferMemoryBarrier::Make(
+                        scene.SoftMeshShaderDrawArgBuffer().Handle(),
+                        VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT |
+                            VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
+                        VK_ACCESS_TRANSFER_WRITE_BIT,
+                        sizeof(VkDrawIndirectCommand),
+                        sizeof(VkDrawIndirectCommand) * Assets::Scene::kSunShadowCascadeCount),
+                });
+
             vkCmdFillBuffer(commandBuffer, scene.NodeMatrixBuffer().Handle(),
                             Assets::GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET,
                             sizeof(Assets::GPUDrivenStat) * Assets::Scene::kSunShadowCascadeCount, 0);

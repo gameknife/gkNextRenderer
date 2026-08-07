@@ -36,6 +36,8 @@ namespace Editor
             bool readOnly;
             const char* format;
             size_t arrayDisplayLimit;
+            std::function<ImTextureID(uint32_t)> modelThumbnail;
+            std::function<ImTextureID(uint32_t)> materialThumbnail;
             
             WidgetConfig()
                 : dragSpeed(0.1f)
@@ -107,7 +109,8 @@ namespace Editor
             const Reflection::PropertyInfo& propInfo,
             entt::meta_any& arrayValue,
             bool readOnly = false,
-            size_t displayLimit = std::numeric_limits<size_t>::max()
+            size_t displayLimit = std::numeric_limits<size_t>::max(),
+            const std::function<ImTextureID(uint32_t)>& elementThumbnail = {}
         );
         
     private:

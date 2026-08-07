@@ -246,6 +246,14 @@ namespace Assets
         descriptorSets.UpdateDescriptors(0, descriptorWrites);
     }
 
+    void GlobalTexturePool::BindDefaultSampleTexture(const uint32_t textureIdx)
+    {
+        if (defaultWhiteTexture_)
+        {
+            BindTexture(textureIdx, *defaultWhiteTexture_);
+        }
+    }
+
     void GlobalTexturePool::BindStorageTexture(uint32_t textureIdx, const Vulkan::ImageView& textureImage)
     {
         auto& descriptorSets = descriptorSetManager_->DescriptorSets();
@@ -332,10 +340,7 @@ namespace Assets
         device_.WaitIdle();
 
         textureImages_[textureIdx].reset();
-        if (defaultWhiteTexture_)
-        {
-            BindTexture(textureIdx, *defaultWhiteTexture_);
-        }
+        BindDefaultSampleTexture(textureIdx);
         if (textureIdx < textureCpuSources_.size())
         {
             textureCpuSources_[textureIdx] = {};

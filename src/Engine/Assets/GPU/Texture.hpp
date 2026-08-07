@@ -65,6 +65,9 @@ namespace Assets
         // sample-texture array (set0,binding0) so it can be shown via ImGui::Image. Caller keeps the
         // image in SHADER_READ_ONLY_OPTIMAL when sampled.
         void BindSampleTexture(uint32_t textureIdx, const Vulkan::ImageView& view, const Vulkan::Sampler& sampler);
+        // Replace an explicitly-bound sampled slot with the persistent fallback before the
+        // original image view is destroyed.
+        void BindDefaultSampleTexture(uint32_t textureIdx);
         void BindStorageTexture(uint32_t textureIdx, const Vulkan::ImageView& textureImage);
         void BindShadowMap(uint32_t slot, const Vulkan::ImageView& view, const Vulkan::Sampler& sampler);
         uint32_t RegisterTexture(const std::string& textureName, std::unique_ptr<TextureImage> textureImage,

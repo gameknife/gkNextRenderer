@@ -49,7 +49,9 @@ namespace Vulkan
         ~AssetThumbnailRenderer();
 
         uint32_t RequestMaterialThumbnail(uint32_t materialIndex, uint64_t materialHash);
+        uint32_t RequestMaterialThumbnail(uint32_t materialIndex, const Assets::FMaterial& material);
         uint32_t RequestMeshThumbnail(uint32_t modelIndex, uint64_t modelHash);
+        uint32_t RequestMeshThumbnail(uint32_t modelIndex, const Assets::Model& model);
 
         void BeforeNextFrame() override;
         void OnMainSceneChanged() override;
@@ -98,6 +100,8 @@ namespace Vulkan
 
         FThumbnailCache& ThumbnailCache(EThumbnailKind kind);
         const FThumbnailCache& ThumbnailCache(EThumbnailKind kind) const;
+        static uint64_t HashMaterialThumbnail(const Assets::FMaterial& material);
+        static uint64_t HashMeshThumbnail(const Assets::Model& model);
         uint32_t RequestThumbnail(EThumbnailKind kind, uint32_t assetIndex, uint64_t assetHash);
         void ClearThumbnailCaches();
         void EnqueueExistingThumbnailImages(FThumbnailCache& cache);

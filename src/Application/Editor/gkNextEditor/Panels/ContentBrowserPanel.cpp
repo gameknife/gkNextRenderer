@@ -596,95 +596,20 @@ namespace Editor
             return IM_COL32(64, 64, 64, 220);
         }
 
-        uint64_t HashMaterialPreview(const Assets::FMaterial& material)
-        {
-            uint64_t hash = 1469598103934665603ull;
-            auto mixBytes = [&](const void* data, size_t size)
-            {
-                const auto* bytes = static_cast<const uint8_t*>(data);
-                for (size_t i = 0; i < size; ++i)
-                {
-                    hash ^= bytes[i];
-                    hash *= 1099511628211ull;
-                }
-            };
-
-            const Assets::Material& gpu = material.gpuMaterial_;
-            mixBytes(&gpu.Diffuse, sizeof(gpu.Diffuse));
-            mixBytes(&gpu.DiffuseTextureId, sizeof(gpu.DiffuseTextureId));
-            mixBytes(&gpu.MRATextureId, sizeof(gpu.MRATextureId));
-            mixBytes(&gpu.NormalTextureId, sizeof(gpu.NormalTextureId));
-            mixBytes(&gpu.EmissiveTextureId, sizeof(gpu.EmissiveTextureId));
-            mixBytes(&gpu.Fuzziness, sizeof(gpu.Fuzziness));
-            mixBytes(&gpu.RefractionIndex, sizeof(gpu.RefractionIndex));
-            mixBytes(&gpu.MaterialModel, sizeof(gpu.MaterialModel));
-            mixBytes(&gpu.Metalness, sizeof(gpu.Metalness));
-            return hash;
-        }
-
         ImTextureID RequestMaterialPreviewTexture(EditorContext& ctx, uint32_t materialIndex, const Assets::FMaterial& material)
         {
-            const uint64_t materialHash = HashMaterialPreview(material);
             const uint32_t sampleSlot =
                 EditorPreview::AssetThumbnails(ctx.engine.GetRenderer()).RequestMaterialThumbnail(
-                    materialIndex, materialHash);
+                    materialIndex, material);
             return sampleSlot == std::numeric_limits<uint32_t>::max()
                 ? 0
                 : ctx.ui.RequestImTextureIdRaw(sampleSlot);
         }
 
-        uint64_t HashMeshPreview(const Assets::Model& model)
-        {
-            uint64_t hash = 1469598103934665603ull;
-            auto mixBytes = [&](const void* data, size_t size)
-            {
-                const auto* bytes = static_cast<const uint8_t*>(data);
-                for (size_t i = 0; i < size; ++i)
-                {
-                    hash ^= bytes[i];
-                    hash *= 1099511628211ull;
-                }
-            };
-
-            const std::string& name = model.Name();
-            mixBytes(name.data(), name.size());
-            const uint32_t vertexCount = model.NumberOfVertices();
-            const uint32_t indexCount = model.NumberOfIndices();
-            const uint32_t sectionCount = model.SectionCount();
-            const glm::vec3 aabbMin = model.GetLocalAABBMin();
-            const glm::vec3 aabbMax = model.GetLocalAABBMax();
-            mixBytes(&vertexCount, sizeof(vertexCount));
-            mixBytes(&indexCount, sizeof(indexCount));
-            mixBytes(&sectionCount, sizeof(sectionCount));
-            mixBytes(&aabbMin, sizeof(aabbMin));
-            mixBytes(&aabbMax, sizeof(aabbMax));
-
-            const auto& vertices = model.CPUVertices();
-            const auto& indices = model.CPUIndices();
-            if (!vertices.empty())
-            {
-                const size_t sampleIndices[] = {0u, vertices.size() / 2u, vertices.size() - 1u};
-                for (const size_t sampleIndex : sampleIndices)
-                {
-                    mixBytes(&vertices[sampleIndex], sizeof(vertices[sampleIndex]));
-                }
-            }
-            if (!indices.empty())
-            {
-                const size_t sampleIndices[] = {0u, indices.size() / 2u, indices.size() - 1u};
-                for (const size_t sampleIndex : sampleIndices)
-                {
-                    mixBytes(&indices[sampleIndex], sizeof(indices[sampleIndex]));
-                }
-            }
-            return hash;
-        }
-
         ImTextureID RequestMeshPreviewTexture(EditorContext& ctx, uint32_t modelIndex, const Assets::Model& model)
         {
-            const uint64_t meshHash = HashMeshPreview(model);
             const uint32_t sampleSlot =
-                EditorPreview::AssetThumbnails(ctx.engine.GetRenderer()).RequestMeshThumbnail(modelIndex, meshHash);
+                EditorPreview::AssetThumbnails(ctx.engine.GetRenderer()).RequestMeshThumbnail(modelIndex, model);
             return sampleSlot == std::numeric_limits<uint32_t>::max()
                 ? 0
                 : ctx.ui.RequestImTextureIdRaw(sampleSlot);

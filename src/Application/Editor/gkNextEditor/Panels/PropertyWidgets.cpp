@@ -79,6 +79,21 @@ namespace Editor
         return changed;
     }
 
+    static void DrawAssetThumbnail(const ImTextureID textureId, const float size)
+    {
+        if (textureId != 0)
+        {
+            ImGui::Image(textureId, ImVec2(size, size));
+            return;
+        }
+
+        const ImVec2 min = ImGui::GetCursorScreenPos();
+        ImGui::Dummy(ImVec2(size, size));
+        const ImVec2 max = min + ImVec2(size, size);
+        ImGui::GetWindowDrawList()->AddRectFilled(min, max, IM_COL32(38, 41, 47, 255), 4.0f);
+        ImGui::GetWindowDrawList()->AddRect(min, max, IM_COL32(75, 80, 90, 255), 4.0f);
+    }
+
     // Draw a category header with distinctive style
     static bool DrawCategoryHeader(const char* category)
     {
@@ -198,6 +213,19 @@ namespace Editor
                     int intVal = static_cast<int>(val);
                     int intMin = static_cast<int>(std::min(static_cast<uint32_t>(std::max(0.0f, config.minValue)), static_cast<uint32_t>(INT_MAX)));
                     int intMax = static_cast<int>(std::min(static_cast<uint32_t>(config.maxValue), static_cast<uint32_t>(INT_MAX)));
+                    if (propInfo.name == "ModelId" && config.modelThumbnail)
+                    {
+                        DrawPropertyRow(label, [&]() -> bool {
+                            DrawAssetThumbnail(config.modelThumbnail(val), 48.0f);
+                            ImGui::SameLine();
+                            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+                            ImGui::BeginDisabled();
+                            ImGui::DragInt("##v", &intVal, config.dragSpeed, intMin, intMax);
+                            ImGui::EndDisabled();
+                            return false;
+                        });
+                        break;
+                    }
                     auto drawWidget = [&]() -> bool {
                         if (isReadOnly) { ImGui::BeginDisabled(); ImGui::DragInt("##v", &intVal, config.dragSpeed, intMin, intMax); ImGui::EndDisabled(); return false; }
                         if (ImGui::DragInt("##v", &intVal, config.dragSpeed, intMin, intMax)) { val = static_cast<uint32_t>(std::max(0, intVal)); return true; }
@@ -403,7 +431,10 @@ namespace Editor
 
             case PropertyType::Array:
             {
-                if (DrawArray(label, propInfo, currentValue, isReadOnly, config.arrayDisplayLimit))
+                const auto& thumbnail = propInfo.name == "Materials"
+                    ? config.materialThumbnail
+                    : std::function<ImTextureID(uint32_t)>{};
+                if (DrawArray(label, propInfo, currentValue, isReadOnly, config.arrayDisplayLimit, thumbnail))
                     changed = true;
                 break;
             }
@@ -852,7 +883,8 @@ namespace Editor
         const PropertyInfo& propInfo,
         entt::meta_any& arrayValue,
         bool readOnly,
-        size_t displayLimit
+        size_t displayLimit,
+        const std::function<ImTextureID(uint32_t)>& elementThumbnail
     )
     {
         bool changed = false;
@@ -866,7 +898,24 @@ namespace Editor
         {
             return DrawContainerElements<std::array<uint32_t, 16>, uint32_t>(
                 label, *arr, std::min(arr->size(), displayLimit), readOnly,
-                [](const char* lbl, uint32_t& val, bool ro) {
+                [&elementThumbnail](const char* lbl, uint32_t& val, bool ro) {
+                    if (elementThumbnail)
+                    {
+                        bool elementChanged = false;
+                        BeginPropertyRow(lbl);
+                        DrawAssetThumbnail(elementThumbnail(val), 40.0f);
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+                        int intValue = static_cast<int>(std::min(val, static_cast<uint32_t>(INT_MAX)));
+                        if (ro) ImGui::BeginDisabled();
+                        if (ImGui::DragInt("##v", &intValue, 1.0f, 0, INT_MAX) && !ro)
+                        {
+                            val = static_cast<uint32_t>(std::max(0, intValue));
+                            elementChanged = true;
+                        }
+                        if (ro) ImGui::EndDisabled();
+                        return elementChanged;
+                    }
                     return DrawUInt(lbl, val, 1.0f, 0, UINT_MAX, ro);
                 });
         }

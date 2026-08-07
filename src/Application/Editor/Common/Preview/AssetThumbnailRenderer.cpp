@@ -65,9 +65,96 @@ namespace Vulkan
         return RequestThumbnail(EThumbnailKind::Material, materialIndex, materialHash);
     }
 
+    uint32_t AssetThumbnailRenderer::RequestMaterialThumbnail(
+        const uint32_t materialIndex,
+        const Assets::FMaterial& material)
+    {
+        return RequestMaterialThumbnail(materialIndex, HashMaterialThumbnail(material));
+    }
+
     uint32_t AssetThumbnailRenderer::RequestMeshThumbnail(const uint32_t modelIndex, const uint64_t modelHash)
     {
         return RequestThumbnail(EThumbnailKind::Mesh, modelIndex, modelHash);
+    }
+
+    uint32_t AssetThumbnailRenderer::RequestMeshThumbnail(
+        const uint32_t modelIndex,
+        const Assets::Model& model)
+    {
+        return RequestMeshThumbnail(modelIndex, HashMeshThumbnail(model));
+    }
+
+    uint64_t AssetThumbnailRenderer::HashMaterialThumbnail(const Assets::FMaterial& material)
+    {
+        uint64_t hash = 1469598103934665603ull;
+        const auto mixBytes = [&hash](const void* data, const size_t size)
+        {
+            const auto* bytes = static_cast<const uint8_t*>(data);
+            for (size_t i = 0; i < size; ++i)
+            {
+                hash ^= bytes[i];
+                hash *= 1099511628211ull;
+            }
+        };
+
+        const Assets::Material& gpu = material.gpuMaterial_;
+        mixBytes(&gpu.Diffuse, sizeof(gpu.Diffuse));
+        mixBytes(&gpu.DiffuseTextureId, sizeof(gpu.DiffuseTextureId));
+        mixBytes(&gpu.MRATextureId, sizeof(gpu.MRATextureId));
+        mixBytes(&gpu.NormalTextureId, sizeof(gpu.NormalTextureId));
+        mixBytes(&gpu.EmissiveTextureId, sizeof(gpu.EmissiveTextureId));
+        mixBytes(&gpu.Fuzziness, sizeof(gpu.Fuzziness));
+        mixBytes(&gpu.RefractionIndex, sizeof(gpu.RefractionIndex));
+        mixBytes(&gpu.MaterialModel, sizeof(gpu.MaterialModel));
+        mixBytes(&gpu.Metalness, sizeof(gpu.Metalness));
+        return hash;
+    }
+
+    uint64_t AssetThumbnailRenderer::HashMeshThumbnail(const Assets::Model& model)
+    {
+        uint64_t hash = 1469598103934665603ull;
+        const auto mixBytes = [&hash](const void* data, const size_t size)
+        {
+            const auto* bytes = static_cast<const uint8_t*>(data);
+            for (size_t i = 0; i < size; ++i)
+            {
+                hash ^= bytes[i];
+                hash *= 1099511628211ull;
+            }
+        };
+
+        const std::string& name = model.Name();
+        mixBytes(name.data(), name.size());
+        const uint32_t vertexCount = model.NumberOfVertices();
+        const uint32_t indexCount = model.NumberOfIndices();
+        const uint32_t sectionCount = model.SectionCount();
+        const glm::vec3 aabbMin = model.GetLocalAABBMin();
+        const glm::vec3 aabbMax = model.GetLocalAABBMax();
+        mixBytes(&vertexCount, sizeof(vertexCount));
+        mixBytes(&indexCount, sizeof(indexCount));
+        mixBytes(&sectionCount, sizeof(sectionCount));
+        mixBytes(&aabbMin, sizeof(aabbMin));
+        mixBytes(&aabbMax, sizeof(aabbMax));
+
+        const auto& vertices = model.CPUVertices();
+        const auto& indices = model.CPUIndices();
+        if (!vertices.empty())
+        {
+            const size_t sampleIndices[] = {0u, vertices.size() / 2u, vertices.size() - 1u};
+            for (const size_t sampleIndex : sampleIndices)
+            {
+                mixBytes(&vertices[sampleIndex], sizeof(vertices[sampleIndex]));
+            }
+        }
+        if (!indices.empty())
+        {
+            const size_t sampleIndices[] = {0u, indices.size() / 2u, indices.size() - 1u};
+            for (const size_t sampleIndex : sampleIndices)
+            {
+                mixBytes(&indices[sampleIndex], sizeof(indices[sampleIndex]));
+            }
+        }
+        return hash;
     }
 
     uint32_t AssetThumbnailRenderer::RequestThumbnail(
@@ -263,6 +350,14 @@ namespace Vulkan
     {
         for (FThumbnailCache& cache : thumbnailCaches_)
         {
+            for (uint32_t index = 0; index < cache.images.size(); ++index)
+            {
+                if (cache.images[index] != nullptr)
+                {
+                    Assets::GlobalTexturePool::GetInstance()->BindDefaultSampleTexture(
+                        cache.sampleSlotBase + index);
+                }
+            }
             cache.images.clear();
             cache.hashes.clear();
             cache.pending.clear();

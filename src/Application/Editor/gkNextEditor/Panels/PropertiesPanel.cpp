@@ -6,6 +6,7 @@
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
+#include "Application/Editor/Common/Preview/AssetThumbnailRenderer.hpp"
 #include "Modules/DevTools/Command/RenameNodeCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Modules/DevTools/ProfessionalUI.hpp"
@@ -368,11 +369,31 @@ namespace Editor
                     {
                         ImGui::Indent();
                         PropertyWidgets::WidgetConfig widgetConfig;
-                        if (component.get() == render && modelId >= 0 &&
-                            modelId < static_cast<int>(ctx.scene.Models().size()))
+                        if (component.get() == render)
                         {
-                            widgetConfig.arrayDisplayLimit = MaterialSlotCount(
-                                ctx.scene.Models()[modelId], render->GetMaterials().size());
+                            if (modelId >= 0 && modelId < static_cast<int>(ctx.scene.Models().size()))
+                            {
+                                widgetConfig.arrayDisplayLimit = MaterialSlotCount(
+                                    ctx.scene.Models()[modelId], render->GetMaterials().size());
+                            }
+                            widgetConfig.modelThumbnail = [&ctx](const uint32_t id) -> ImTextureID
+                            {
+                                if (id >= ctx.scene.Models().size()) return 0;
+                                const uint32_t sampleSlot = EditorPreview::AssetThumbnails(ctx.engine.GetRenderer())
+                                    .RequestMeshThumbnail(id, ctx.scene.Models()[id]);
+                                return sampleSlot == std::numeric_limits<uint32_t>::max()
+                                    ? 0
+                                    : ctx.ui.RequestImTextureIdRaw(sampleSlot);
+                            };
+                            widgetConfig.materialThumbnail = [&ctx](const uint32_t id) -> ImTextureID
+                            {
+                                if (id >= ctx.scene.Materials().size()) return 0;
+                                const uint32_t sampleSlot = EditorPreview::AssetThumbnails(ctx.engine.GetRenderer())
+                                    .RequestMaterialThumbnail(id, ctx.scene.Materials()[id]);
+                                return sampleSlot == std::numeric_limits<uint32_t>::max()
+                                    ? 0
+                                    : ctx.ui.RequestImTextureIdRaw(sampleSlot);
+                            };
                         }
                         if (PropertyWidgets::DrawComponentProperties(component.get(), &ctx.engine.GetCommandHistory(),
                                                                      widgetConfig,
