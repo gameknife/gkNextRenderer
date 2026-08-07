@@ -48,10 +48,10 @@ gkNextEngine is a cross-platform 3D game engine and rendering playground built w
 
 Performance is one of the project's core constraints. The engine leans on radiance-cache reuse, sparse VRAM layouts, GPU-driven mass submission, on-demand residency, and multi-tier upscaling to produce more frame for a fixed GPU budget while keeping memory in check. Below is a set of **runtime performance references** for typical scenes, backed by a built-in per-pass profiler and a Superluminal integration for deeper analysis.
 
-### 📊 Performance Reference Data
+### Performance Reference Data
 
 <details>
-<summary style="cursor: pointer; padding: 8px 14px; background-color: rgba(125, 125, 125, 0.08); border-radius: 6px; margin-bottom: 8px;"><b>Typical Scene Performance Benchmark Data (RTX 5070 Ti / 720p)</b> <small style="color: #888;">(Expand ▾)</small></summary>
+<summary><b>Typical Scene Performance Benchmark Data (RTX 5070 Ti / 720p)</b> — <i>Click to expand ▾</i></summary>
 
 > The figures below come from `out/build/windows/bin/motion_benchmark_report.csv`, measured on an NVIDIA GeForce RTX 5070 Ti with NVIDIA 610.47.0 at 1280x720. Each scene was sampled for roughly 3 seconds; DLSS, FSR, and denoising were disabled.
 
@@ -152,17 +152,17 @@ For developers in mainland China, please ensure your network stability first. Re
 
 The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond the host-side basics you must already have installed (compiler / IDE, CMake, platform SDKs, and similar tools), project-specific dependencies, external toolchains, and optional assets are now prepared by `gnb` whenever possible. You will need a network environment that can access GitHub during dependency setup.
 
-### 📌 General Notes
+### General Notes
 
-- Start with `./gnb.sh doctor` (Windows: `gnb.bat doctor`) to see which host-side tools are still missing
-- `./gnb.sh setup` (Windows: `gnb.bat setup`) prepares vcpkg, project external toolchains, and optional pak assets; if you go straight to `./gnb.sh build`, the first build will also bootstrap the core toolchain when needed
-- Desktop binaries are now built and launched through `gnb`, so you usually no longer need to `cd` into `out/build/<platform>/bin`
-- CMake presets are now: `windows`, `linux`, `macos-arm64`, `ios`
+- First run `./gnb.sh doctor` (Windows: `gnb.bat doctor`) to check host tool readiness
+- `./gnb.sh setup` (Windows: `gnb.bat setup`) prepares vcpkg, external toolchains, and optional pak assets; running `./gnb.sh build` automatically fetches core toolchains on first build if missing
+- Desktop platforms build and run through `gnb` directly; no `cd out/build/<platform>/bin` is needed
+- Consolidated CMake presets: `windows`, `linux`, `macos-arm64`, `ios`
 
-### 💻 Platform Builds
+### Platform Builds
 
 <details>
-<summary style="cursor: pointer; padding: 8px 14px; background-color: rgba(125, 125, 125, 0.08); border-radius: 6px; margin-bottom: 8px;"><b>Windows (Visual Studio 2022)</b> <small style="color: #888;">(Show steps ▾)</small></summary>
+<summary><b>Windows (Visual Studio 2022)</b> — <i>Click to show steps ▾</i></summary>
 
 **Prerequisites:**
 
@@ -183,7 +183,7 @@ Beyond host tools such as Visual Studio, remaining project dependencies are hand
 </details>
 
 <details>
-<summary style="cursor: pointer; padding: 8px 14px; background-color: rgba(125, 125, 125, 0.08); border-radius: 6px; margin-bottom: 8px;"><b>Linux (Ubuntu)</b> <small style="color: #888;">(Show steps ▾)</small></summary>
+<summary><b>Linux (Ubuntu)</b> — <i>Click to show steps ▾</i></summary>
 
 ```shell
 ./gnb.sh setup
@@ -198,7 +198,7 @@ Beyond host tools such as Visual Studio, remaining project dependencies are hand
 </details>
 
 <details>
-<summary style="cursor: pointer; padding: 8px 14px; background-color: rgba(125, 125, 125, 0.08); border-radius: 6px; margin-bottom: 8px;"><b>Steam Deck / Arch Linux</b> <small style="color: #888;">(Show steps ▾)</small></summary>
+<summary><b>Steam Deck / Arch Linux</b> — <i>Click to show steps ▾</i></summary>
 
 ```shell
 ./gnb.sh setup
@@ -217,13 +217,13 @@ Notes:
 </details>
 
 <details>
-<summary style="cursor: pointer; padding: 8px 14px; background-color: rgba(125, 125, 125, 0.08); border-radius: 6px; margin-bottom: 8px;"><b>macOS</b> <small style="color: #888;">(Show steps ▾)</small></summary>
+<summary><b>macOS</b> — <i>Click to show steps ▾</i></summary>
 
 **Prerequisites:**
 
 - Xcode / Command Line Tools
 - CMake 3.26+
-- Ninja (if your local CMake distribution does not already provide it)
+- Ninja (if CMake distribution does not include it)
 
 ```shell
 ./gnb.sh setup
@@ -231,11 +231,9 @@ Notes:
 ./gnb.sh run gkNextRenderer
 ```
 
-`gnb setup` automatically downloads the Vulkan SDK, Slang, and TypeScript toolchains used by the project, so those project-level dependencies no longer need to be installed separately. If `VULKAN_SDK` is explicitly set, that SDK takes precedence.
-
 </details>
 
-### 🎮 Run Examples
+### Running Examples
 
 ```shell
 # Main renderer
@@ -257,68 +255,86 @@ Notes:
 
 <table>
   <tr>
-    <td width="33%" align="center" valign="top">
-      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/airportsim.webp" width="100%" alt="AirportSim" />
-      <br><strong>✈️ AirportSim</strong><br>
-      <sub>Airport ecosystem simulation validating SCAD POIs, queues, A* pathfinding, and LLM decisions</sub>
+    <td width="33%" align="center" valign="top" style="padding: 0;">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/airportsim.webp" width="100%" style="display: block; width: 100%;" alt="AirportSim" />
+      <div style="padding: 10px 8px 12px 8px;">
+        <strong>✈️ AirportSim</strong><br>
+        <sub>Airport ecosystem simulation validating SCAD POIs, queues, A* pathfinding, and LLM decisions</sub>
+      </div>
     </td>
-    <td width="33%" align="center" valign="top">
-      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/magicalego.webp" width="100%" alt="MagicaLego" />
-      <br><strong>🧱 MagicaLego</strong><br>
-      <sub>LEGO / voxel-style scene building and physics gameplay playground</sub>
+    <td width="33%" align="center" valign="top" style="padding: 0;">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/magicalego.webp" width="100%" style="display: block; width: 100%;" alt="MagicaLego" />
+      <div style="padding: 10px 8px 12px 8px;">
+        <strong>🧱 MagicaLego</strong><br>
+        <sub>LEGO / voxel-style scene building and physics gameplay playground</sub>
+      </div>
     </td>
-    <td width="33%" align="center" valign="top">
-      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/brotato3d.webp" width="100%" alt="Brotato3D" />
-      <br><strong>🥔 Brotato3D</strong><br>
-      <sub>Top-down 3D survival shooter validating wave spawns, object pooling, and Jolt Physics</sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="33%" align="center" valign="top">
-      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/brickplayer.webp" width="100%" alt="BrickPlayer" />
-      <br><strong>🧩 BrickPlayer</strong><br>
-      <sub>Digital LEGO building prototype based on LDraw library and brick interaction</sub>
-    </td>
-    <td width="33%" align="center" valign="top">
-      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="100%" alt="FlappyJs" />
-      <br><strong>🐤 FlappyCpp / FlappyJs</strong><br>
-      <sub>Dual C++ & QuickJS/TS implementations validating engine replay parity</sub>
-    </td>
-    <td width="33%" align="center" valign="top">
-      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/procscad.webp" width="100%" alt="ScadStudio" />
-      <br><strong>📐 ScadStudio</strong><br>
-      <sub>OpenSCAD DSL modeling, evaluation, scene generation, and ScadRig character binding</sub>
+    <td width="33%" align="center" valign="top" style="padding: 0;">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/brotato3d.webp" width="100%" style="display: block; width: 100%;" alt="Brotato3D" />
+      <div style="padding: 10px 8px 12px 8px;">
+        <strong>🥔 Brotato3D</strong><br>
+        <sub>Top-down 3D survival shooter validating wave spawns, object pooling, and Jolt Physics</sub>
+      </div>
     </td>
   </tr>
   <tr>
-    <td width="33%" align="center" valign="top">
-      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/citysim.webp" width="100%" alt="StudioSim" />
-      <br><strong>🏢 StudioSim / CitySolSim</strong><br>
-      <sub>Studio management and city simulation validating local LLM events and ScadRig characters</sub>
+    <td width="33%" align="center" valign="top" style="padding: 0;">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/brickplayer.webp" width="100%" style="display: block; width: 100%;" alt="BrickPlayer" />
+      <div style="padding: 10px 8px 12px 8px;">
+        <strong>🧩 BrickPlayer</strong><br>
+        <sub>Digital LEGO building prototype based on LDraw library and brick interaction</sub>
+      </div>
     </td>
-    <td width="33%" align="center" valign="top">
-      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/nextdayz.webp" width="100%" alt="NextDayZ" />
-      <br><strong>🧟 NextDayZ / CharacterDemo</strong><br>
-      <sub>Character control, NavGrid A* pathfinding, AI behavior tree, and survival combat</sub>
+    <td width="33%" align="center" valign="top" style="padding: 0;">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="100%" style="display: block; width: 100%;" alt="FlappyJs" />
+      <div style="padding: 10px 8px 12px 8px;">
+        <strong>🐤 FlappyCpp / FlappyJs</strong><br>
+        <sub>Dual C++ & QuickJS/TS implementations validating engine replay parity</sub>
+      </div>
     </td>
-    <td width="33%" align="center" valign="top">
-      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/nexttotalwar.webp" width="100%" alt="NextTotalWar" />
-      <br><strong>⚔️ NextTotalWar / NextRA</strong><br>
-      <sub>Massive army tactical simulation and lockstep deterministic RTS validation</sub>
+    <td width="33%" align="center" valign="top" style="padding: 0;">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/procscad.webp" width="100%" style="display: block; width: 100%;" alt="ScadStudio" />
+      <div style="padding: 10px 8px 12px 8px;">
+        <strong>📐 ScadStudio</strong><br>
+        <sub>OpenSCAD DSL modeling, evaluation, scene generation, and ScadRig character binding</sub>
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" align="center" valign="top" style="padding: 0;">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/citysim.webp" width="100%" style="display: block; width: 100%;" alt="StudioSim" />
+      <div style="padding: 10px 8px 12px 8px;">
+        <strong>🏢 StudioSim / CitySolSim</strong><br>
+        <sub>Studio management and city simulation validating local LLM events and ScadRig characters</sub>
+      </div>
+    </td>
+    <td width="33%" align="center" valign="top" style="padding: 0;">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/nextdayz.webp" width="100%" style="display: block; width: 100%;" alt="NextDayZ" />
+      <div style="padding: 10px 8px 12px 8px;">
+        <strong>🧟 NextDayZ / CharacterDemo</strong><br>
+        <sub>Character control, NavGrid A* pathfinding, AI behavior tree, and survival combat</sub>
+      </div>
+    </td>
+    <td width="33%" align="center" valign="top" style="padding: 0;">
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/nexttotalwar.webp" width="100%" style="display: block; width: 100%;" alt="NextTotalWar" />
+      <div style="padding: 10px 8px 12px 8px;">
+        <strong>⚔️ NextTotalWar / NextRA</strong><br>
+        <sub>Massive army tactical simulation and lockstep deterministic RTS validation</sub>
+      </div>
     </td>
   </tr>
 </table>
 
 <details>
-<summary style="cursor: pointer; padding: 10px 16px; background-color: rgba(125, 125, 125, 0.08); border-radius: 8px; margin: 12px 0;"><b>Complete List of 15+ Subprojects & Categories</b> <small style="color: #888;">(Expand list ▾)</small></summary>
+<summary><b>Complete List of 15+ Subprojects & Categories</b> — <i>Click to expand ▾</i></summary>
 
-#### 🎨 Render & Editor Tooling
+#### Render & Editor Tooling
 - **`gkNextRenderer`**: Main renderer supporting real-time path tracing, hybrid rendering, denoising, and multi-pipeline comparison.
 - **`gkNextEditor`**: ImGui editor for scenes, material node workflow, and runtime cvar tuning.
 - **`ScadStudio`**: OpenSCAD (`.scad`) procedural DSL modeling, evaluation, scene generation, and ScadRig character binding.
 - **`RmlUiDemo`**: RmlUi runtime HTML/CSS UI engine integration and interactive demo.
 
-#### 🎮 Gameplay & Simulation Prototypes
+#### Gameplay & Simulation Prototypes
 - **`AirportSim`**: Airport ecosystem simulation for SCAD POIs, queues, A* pathfinding, LLM decisions, and ScadRig characters.
 - **`StudioSim`**: Studio-management simulation for local LLM events, employee goals, SCAD offices, and ScadRig character roles.
 - **`MagicaLego`**: Voxel / LEGO-style gameplay prototype and physics building playground.
@@ -330,7 +346,7 @@ Notes:
 - **`FlappyCpp` / `FlappyJs`**: Dual C++ and QuickJS/TS Flappy Bird implementations for verifying engine replay parity.
 - **`TruckerDemo` / `CitySolSim` / `NextDayz` / `NextTotalWar`**: Vehicle driving, city traffic, survival tactics, and army simulation prototypes.
 
-#### 🛠️ Benchmarks & Developer Utilities
+#### Benchmarks & Developer Utilities
 - **`gkNextStillBenchmark`**: Static-scene frame-rate and image-quality benchmark.
 - **`gkNextMotionBenchmark`**: Dynamic-camera / multi-scene rendering benchmark generating CSV profile reports.
 - **`gkNextVisualTest`**: Automated visual regression testing generating scene comparison reports.
