@@ -177,6 +177,7 @@ void EditorInterface::RebuildDefaultDockLayout(ImGuiID id)
     ImGui::DockBuilderDockWindow("Material Browser", dock3);
     ImGui::DockBuilderDockWindow("Texture Browser", dock3);
     ImGui::DockBuilderDockWindow("Mesh Browser", dock3);
+    
     ImGui::DockBuilderFinish(id);
 }
 
@@ -307,49 +308,32 @@ void EditorInterface::Render(Editor::EditorUiState& uiState)
 
     Editor::DrawTitleBarOverlay(ctx, uiState);
 
-    if (uiState.sidebar)
-        Editor::DrawOutlinerPanel(ctx, uiState);
-    if (uiState.properties)
-    {
-        if (firstRun_)
-            ImGui::SetNextWindowFocus();
-        Editor::DrawPropertiesPanel(ctx, uiState);
-    }
-    if (uiState.contentBrowser || uiState.materialBrowser || uiState.textureBrowser || uiState.meshBrowser)
-        Editor::DrawContentBrowserPanel(ctx, uiState);
-    if (uiState.logPanel)
-        Editor::DrawConsoleLogPanel(ctx, uiState);
-    if (uiState.commandHistoryPanel)
-        Editor::DrawCommandHistoryPanel(ctx, uiState);
-    if (uiState.hotReloadPanel)
-        Editor::DrawHotReloadPanel(ctx, uiState);
+    // default left
+    if (uiState.sidebar) Editor::DrawOutlinerPanel(ctx, uiState);
+    
+    // default right
+    if (uiState.commandHistoryPanel) Editor::DrawCommandHistoryPanel(ctx, uiState);
+    if (uiState.hotReloadPanel) Editor::DrawHotReloadPanel(ctx, uiState);
+    if (uiState.scriptConsolePanel) Editor::DrawScriptConsolePanel(ctx, uiState);
+    if (uiState.properties) Editor::DrawPropertiesPanel(ctx, uiState);
+    
+    // default bottom
+    if (uiState.logPanel) Editor::DrawConsoleLogPanel(ctx, uiState);
+    if (uiState.sequencerPanel) Editor::DrawSequencerPanel(ctx, uiState);
+    if (uiState.contentBrowser || uiState.materialBrowser || uiState.textureBrowser || uiState.meshBrowser) Editor::DrawContentBrowserPanel(ctx, uiState);
+    
     Editor::DrawCameraViewPanel(ctx, uiState);
-    if (uiState.scriptConsolePanel)
-        Editor::DrawScriptConsolePanel(ctx, uiState);
-    if (uiState.sequencerPanel)
-        Editor::DrawSequencerPanel(ctx, uiState);
-
     DevTools::FUiDevPanels::Get().RenderConsoleOverlay();
 
-    if (uiState.child_style)
-        utils::ShowStyleEditorWindow(&uiState.child_style);
-    if (uiState.child_demo)
-        ImGui::ShowDemoWindow(&uiState.child_demo);
-    if (uiState.child_metrics)
-        ImGui::ShowMetricsWindow(&uiState.child_metrics);
-    if (uiState.child_debug_log)
-        ImGui::ShowDebugLogWindow(&uiState.child_debug_log);
-    if (uiState.child_stack)
-        ImGui::ShowIDStackToolWindow(&uiState.child_stack);
-    if (uiState.child_color)
-        utils::ShowColorExportWindow(&uiState.child_color);
-    if (uiState.child_resources)
-        utils::ShowResourcesWindow(&uiState.child_resources);
-    if (uiState.child_about)
-        utils::ShowAboutWindow(&uiState.child_about);
-
-    if (uiState.ed_material)
-        Editor::DrawMaterialEditorPanel(ctx, uiState);
+    if (uiState.child_style) utils::ShowStyleEditorWindow(&uiState.child_style);
+    if (uiState.child_demo) ImGui::ShowDemoWindow(&uiState.child_demo);
+    if (uiState.child_metrics) ImGui::ShowMetricsWindow(&uiState.child_metrics);
+    if (uiState.child_debug_log) ImGui::ShowDebugLogWindow(&uiState.child_debug_log);
+    if (uiState.child_stack) ImGui::ShowIDStackToolWindow(&uiState.child_stack);
+    if (uiState.child_color) utils::ShowColorExportWindow(&uiState.child_color);
+    if (uiState.child_resources) utils::ShowResourcesWindow(&uiState.child_resources);
+    if (uiState.child_about) utils::ShowAboutWindow(&uiState.child_about);
+    if (uiState.ed_material) Editor::DrawMaterialEditorPanel(ctx, uiState);
 
     bool activeCameraViewOpen = true;
     switch (uiState.activeViewport)

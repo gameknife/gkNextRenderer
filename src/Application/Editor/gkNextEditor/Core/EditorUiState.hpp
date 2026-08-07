@@ -174,11 +174,11 @@ namespace Editor
         bool textureBrowser = true;
         bool meshBrowser = true;
         bool logPanel = true;
-        bool scriptConsolePanel = true;
+        bool scriptConsolePanel = false;
         bool hotReloadPanel = false;
         bool settingsPanel = false;
-        bool cameraViewPanel = false; // legacy alias for cameraViews[0].open
-        bool sequencerPanel = true;
+        bool cameraViewPanel = false;
+        bool sequencerPanel = false;
         uint32_t pendingExpandTargetId = InvalidId;
         uint32_t pendingCollapseTargetId = InvalidId;
         bool dockResetRequested = false;
