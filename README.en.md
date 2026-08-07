@@ -130,15 +130,15 @@ On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is i
 
 <p align="center">✦</p>
 
-## 🖼️ Visual Preview
+## 🖼️ HDR Screenshots
 
 <p align="center">
-  <img src="docs/gallery/1_still.avif" width="32%" alt="Still Scene" />
-  <img src="docs/gallery/2_living_room.avif" width="32%" alt="Living Room" />
-  <img src="docs/gallery/3_lego_ldraw.avif" width="32%" alt="LDraw Lego" />
-  <img src="docs/gallery/5_luxball.avif" width="32%" alt="Luxball" />
-  <img src="docs/gallery/6_debug_draw.avif" width="32%" alt="Debug Draw" />
-  <img src="docs/gallery/7_brick_player.avif" width="32%" alt="Brick Player" />
+  <img src="docs/gallery/1_still.avif" width="49%" alt="Still Scene" />
+  <img src="docs/gallery/2_living_room.avif" width="49%" alt="Living Room" />
+  <img src="docs/gallery/3_lego_ldraw.avif" width="49%" alt="LDraw Lego" />
+  <img src="docs/gallery/4_playground.avif" width="49%" alt="Playground Scene" />
+  <img src="docs/gallery/5_luxball.avif" width="49%" alt="Luxball" />
+  <img src="docs/gallery/6_debug_draw.avif" width="49%" alt="Debug Draw" />
 </p>
 
 <p align="center">✦</p>
