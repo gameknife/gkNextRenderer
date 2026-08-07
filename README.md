@@ -18,51 +18,43 @@
 
 ---
 
-gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎 / 渲染实验场，核心目标始终是两件事：
+gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎 / 渲染实验场。项目以渲染器能力为核心，同时持续扩展编辑器、脚本、物理、内容导入与多游戏原型（如 MagicaLego、Brotato3D、KongLie3D、BrickPlayer 等），以及 SCAD、LDraw、Gaussian Splat 等结构化内容管线，为 AI Native 的内容生成、场景理解、玩法迭代和自动化验证打下基础。
 
-- 用 **实时路径追踪、Hybrid Rendering 与 TrueHDR** 做出真正有展示力、且能稳定跑在运行时里的画面
-- 用 **可运行、可扩展、可用于玩法原型验证与 AI Native 工作流的引擎能力** 支撑长期演进，而不是停留在单点 demo
+> [!NOTE]
+> **引擎核心目标**
+> - **实时视觉表现**：用实时路径追踪、Hybrid Rendering 与 TrueHDR 做出真正有展示力、且能稳定运行的画面。
+> - **全栈架构演进**：用可运行、可扩展、可用于玩法原型验证与 AI Native 工作流的引擎能力支撑长期演进。
 
-项目以渲染器能力为核心，同时持续扩展编辑器、脚本、物理、内容导入与多游戏原型。当前的 MagicaLego、Brotato3D、KongLie3D、BrickPlayer、CharacterDemo、Flappy等原型，以及 SCAD、LDraw、Gaussian Splat 等结构化内容管线，并不是孤立功能点；它们都在为后续 AI Native 的内容生成、场景理解、玩法迭代和自动化验证打基础。
-
-如果你关注以下方向，这个项目会比较值得参考：
-
-- 想看实时路径追踪、金属 / 玻璃 / 塑料材质、HDR 环境光和高密度场景的实际画面
-- 想研究一套**真正以运行时性能为约束**的 Vulkan 渲染架构，而不是只会离线出图的 demo
-- 想看一个引擎如何把 **渲染、编辑器、脚本、物理、内容导入与玩法原型** 串成完整系统
-- 想读一套规模可控、强调工程清晰度、适合学习现代 Vulkan 渲染与引擎实现的代码库
+> [!TIP]
+> **适用关注方向**
+> - **实时渲染效果**：观察实时路径追踪、金属 / 玻璃 / 塑料材质、HDR 环境光和高密度场景的实际表现
+> - **运行时性能架构**：研究真正以运行时性能为约束的 Vulkan 渲染管线，而非离线 Demo
+> - **完整引擎系统**：理解渲染、编辑器、脚本、物理、内容导入与玩法原型如何紧密协作
+> - **工程学习参考**：阅读规模可控（Core < 50k LOC）、强调代码清晰度的现代 Vulkan 引擎源码
 
 **支持平台：** Windows x86_64 · Linux x86_64 · macOS arm64 · Android arm64 · iOS arm64
 
 ---
 
-## 项目特性
+## ✨ 项目特性
 
-- **实时路径追踪与 Hybrid Rendering**
-  围绕 1/2spp + temporal reuse、降噪、重投影和多管线切换持续推进，让路径追踪不只停留在离线效果演示，而是面向真实运行时表现。
-
-- **以性能为约束的渲染管线**
-  世界辐射缓存复用、稀疏显存布局、GPU-Driven 海量提交，目标是在固定 GPU 预算下尽量多出画面、少占显存，而不是为单帧画质无限堆资源。
-
-- **游戏级取向的 GPU 架构**
-  通过 Visibility Buffer、全 Bindless、GPU-Driven 单 draw 提交等设计，最小化状态切换和command编排，尽量把 CPU 开销留给内容与玩法，把 GPU 算力用在真正影响画面的地方。
-
-- **引擎能力服务于内容与玩法原型**
-  包括 ECS、反射、编辑器、脚本热重载、物理同步、运行时导入和稳定的渲染行为。这些能力共同支撑更完整的可玩内容系统。
-
-- **AI Native 的基础设施**
-  多个游戏原型用于验证玩法循环、输入、物理、脚本和渲染在真实运行时里的协作；SCAD、LDraw 与 Gaussian Splat 导入让 AI 可以生成、修改、理解并验证结构化 3D 内容，而不是只输出静态资源。
-
-- **多格式内容导入与互操作**
-  完整支持 glTF 运行时导入与部分导出；同时可直接导入 LDraw `.ldr` / `.mpd`、OpenSCAD `.scad` DSL 与 PlayCanvas `.sog` 高斯溅射资产，把结构化场景纳入统一的 Runtime、渲染与交互系统。
+- **实时路径追踪与 Hybrid 渲染**：面向真实运行时的 1/2spp 路径追踪、降噪与多管线无缝切换。
+- **高性能 GPU 架构**：全 Bindless、Visibility Buffer 与 GPU-Driven 单 Draw 提交，最小化 CPU 开销。
+- **辐射缓存与稀疏显存**：借助 SHARC 缓存复用与按需驻留，在固定 GPU 预算下最大化渲染效率。
+- **全栈引擎与玩法原型**：整合 ECS、反射、ImGui 编辑器、QuickJS/TS 热重载与 Jolt 物理，支撑丰富玩法验证。
+- **AI Native 基础设施**：配合自动化 Agent 验证与结构化内容管线，让 AI 可直接生成、理解并修改 3D 资产与脚本。
+- **多格式结构化资产导入**：原生支持 glTF 2.0、LDraw（乐高）、OpenSCAD DSL 与 PlayCanvas 高斯溅射（Gaussian Splatting）。
 
 ---
 
-## 性能与渲染效率
+## ⚡ 性能与渲染效率
 
 性能是当前的核心约束之一。引擎围绕世界辐射缓存复用、稀疏显存布局、GPU-Driven 海量提交、按需驻留与多档上采等手段，在固定 GPU 预算下尽量多出画面、少占显存。下面给出一组**典型场景的运行时性能参考**，并配套内置的逐 pass profiler 与 Superluminal 集成做剖析。
 
-### 性能参考数据
+### 📊 性能参考数据
+
+<details>
+<summary><b>点击展开典型场景性能参考数据（RTX 5070 Ti / 720p Benchmark）</b></summary>
 
 > 下面数据来自 `out/build/windows/bin/motion_benchmark_report.csv`，测试环境为 NVIDIA GeForce RTX 5070 Ti / NVIDIA 610.47.0，1280x720，单场景约 3 秒采样；DLSS、FSR 与 denoiser 均关闭。
 
@@ -85,19 +77,21 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 > ./gnb run gkNextMotionBenchmark --benchmark-config assets/configs/motion_benchmark.example.json
 > ```
 
-### 内置 Profiler
+</details>
+
+### 🔍 内置 Profiler
 
 引擎内置一套 CPU / GPU 逐 pass 计时系统：每个渲染 pass 由命名 scope 标注，`VulkanGpuTimer` 采集各 pass 的 GPU 端耗时，运行时以 ImGui 叠加层（`ProfileDebugOverlay`）实时显示逐 pass 帧时间与统计。无需外部工具即可定位渲染热点、对比不同管线与设置的开销。
 
-### Superluminal 集成
+### ⏱️ Superluminal 集成
 
 Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API（默认探测 `C:/Program Files/Superluminal/Performance/API`），构建会自动启用 `WITH_SUPERLUMINAL`，把引擎的 CPU 与 GPU 命名事件投递到 Superluminal 时间线（GPU 事件经独立回放线程标注），便于做细粒度采样剖析与跨帧分析。未安装时自动跳过，不影响构建。
 
 ---
 
-## 核心能力
+## 🛠️ 核心能力
 
-### 1. 面向运行时的高质量渲染
+### 1️⃣ 面向运行时的高质量渲染
 
 - **实时路径追踪与 Hybrid Rendering**：围绕 1/2spp + temporal reuse、降噪、重投影和多管线切换持续推进，让路径追踪在真实运行时条件下可用
 - **现代 GPU 光栅管线**：Visibility Buffer、全 Bindless、GPU-Driven 单 draw 提交、Soft Mesh Shader 和 GPU CSM 阴影服务于高密度场景与游戏级工况
@@ -105,7 +99,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 - **GI、降噪与上采**：SHARC 世界辐射缓存、RESTIR DI，以及 FSR / DLSS / DLSS RR / Native TAAU / SGSR2
 - **高斯溅射共渲染**：支持 PlayCanvas SOG v2 Gaussian Splatting，以硬件 billboard 路径和 mesh 场景共存
 
-### 2. 运行时、编辑器与验证工具链
+### 2️⃣ 运行时、编辑器与验证工具链
 
 - **ECS + Reflection**：基于 entt 的组件系统，加上反射层，统一服务于运行时、编辑器属性面板、撤销 / 重做和 QuickJS 绑定
 - **ImGui 编辑器与材质工作流**：`gkNextEditor` 面向场景、材质和运行时内容编辑，支持数据驱动设置、cvar 面板和 node-based material workflow
@@ -116,14 +110,14 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 - **Remote Play 模式**：`gnb remote` / `--remote` 可把任意桌面 target 作为 WebRTC host 运行，浏览器零安装接入画面，并通过键盘、鼠标和虚拟手柄回传输入；视频路径走 Vulkan Video H.264 硬件编码
 - **gnb Dashboard 与本地 LLM**：`gnb dashboard` 提供 TODO、Build、Run、Test、Git、Chat、LOC 等本地工作台；`gnb llm` 集成 llama.cpp / Gemma，本地 OpenAI 兼容服务可复用于工具链和运行时 AI
 
-### 3. AI Native 与多游戏原型
+### 3️⃣ AI Native 与多游戏原型
 
 - **多原型验证真实需求**：MagicaLego、BrickPlayer、Brotato3D、KongLie3D、CharacterDemo、Flappy、AirportSim、StudioSim、NextRA 等应用，以及 Voyage3D 源码原型，覆盖搭建、动作、物理、脚本、UI、战斗、模拟和 AI 交互场景
 - **结构化内容面向 AI 生成**：SCAD、LDraw、Gaussian Splat 与 glTF 管线让 AI 能处理可解析、可修改、可验证的 3D 内容，而不是只生成不可控的静态素材
 - **AI 辅助玩法迭代**：本地 LLM、QuickJS 脚本、反射组件、agent validation 和 dashboard 形成闭环，为后续“生成内容 -> 运行验证 -> 迭代修改”的 AI Native 工作流铺底
 - **脚本 parity 与确定性验证**：Flappy C++ / JS parity、输入脚本、隐藏窗口截图和 benchmark report 用于约束 AI 修改后的行为回归
 
-### 4. glTF、LDraw、OpenSCAD 与高斯溅射的内容导入能力
+### 4️⃣ glTF、LDraw、OpenSCAD 与高斯溅射的内容导入能力
 
 - **glTF 完整导入 / 部分导出**：面向运行时支持 glTF 场景、材质、动画、骨骼蒙皮等内容导入，并可将部分运行时内容回写到 glTF 工作流
 - **LDraw 直接导入 Runtime**：`.ldr` / `.mpd` 可直接进入 Runtime，从 `LDConfig.ldr`、LGEO realistic color 到引擎 PBR 材质的完整颜色与材质映射，并把零件连接语义转换成搭建系统可理解的数据
@@ -131,7 +125,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 - **ScadRig 刚体角色**：用 SCAD 描述刚体骨骼层级和动画片段，已用于 AirportSim / StudioSim 方向的角色可视化与职业配色实验
 - **Gaussian Splat 资产**：直接加载 PlayCanvas `.sog`（打包 ZIP 或 `meta.json` + `.webp`），与 mesh、材质、相机和运行时场景共渲染
 
-### 5. 代码规模可控，适合学习和扩展
+### 5️⃣ 代码规模可控，适合学习和扩展
 
 - **第一方 Engine core 目标 < 50k LOC**：核心刻意保持在便于理解和持续演进的区间
 - **优先清晰实现而非过度设计**：尽量用明确的数据流、职责边界和成熟三方库解决问题，避免把实验性功能过早抽象成沉重框架
@@ -139,26 +133,20 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 
 ---
 
-## 视觉预览
+## 🖼️ 视觉预览
 
-![BrickPlayer Gameplay](docs/gallery/6_debug_draw.avif)
-
-<details>
-<summary><b>示例截图</b></summary>
-
-| 场景 | 截图 |
-|------|------|
-| still | ![still](docs/gallery/1_still.avif) |
-| livingroom | ![livingroom](docs/gallery/2_living_room.avif) |
-| ldrawlego | ![ldrawlego](docs/gallery/3_lego_ldraw.avif) |
-| luxball | ![luxball](docs/gallery/5_luxball.avif) |
-| brickplayer | ![brickplayer](docs/gallery/7_brick_player.avif) |
-
-</details>
+<p align="center">
+  <img src="docs/gallery/1_still.avif" width="32%" alt="Still Scene" />
+  <img src="docs/gallery/2_living_room.avif" width="32%" alt="Living Room" />
+  <img src="docs/gallery/3_lego_ldraw.avif" width="32%" alt="LDraw Lego" />
+  <img src="docs/gallery/5_luxball.avif" width="32%" alt="Luxball" />
+  <img src="docs/gallery/6_debug_draw.avif" width="32%" alt="Debug Draw" />
+  <img src="docs/gallery/7_brick_player.avif" width="32%" alt="Brick Player" />
+</p>
 
 ---
 
-## 快速开始
+## 🚀 快速开始
 
 对于墙内开发者，请首先确保网络的稳定性，个人推荐常年使用工具
 
@@ -167,14 +155,14 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 
 项目使用 CMake + Ninja，依赖由 vcpkg 管理。除了宿主机本身必须具备的基础工具（编译器 / IDE、CMake、平台 SDK 等），项目级依赖、外部工具链和可选资源包现在都尽量交给 `gnb` 准备。构建依赖下载阶段需要可访问 GitHub 的网络环境。
 
-### 通用说明
+### 📌 通用说明
 
 - 推荐先执行 `./gnb.sh doctor`（Windows: `gnb.bat doctor`）检查宿主机缺失的基础工具
 - `./gnb.sh setup`（Windows: `gnb.bat setup`）会准备 vcpkg、项目外部工具链与可选资源包；如果直接执行 `./gnb.sh build`，首次缺少 toolchain 时也会自动补齐核心依赖
 - 桌面平台现在通过 `gnb` 统一构建和运行，通常不再需要先 `cd` 到 `out/build/<platform>/bin`
 - 可用 CMake 预设收敛为：`windows`、`linux`、`macos-arm64`、`ios`
 
-### 平台构建
+### 💻 平台构建
 
 <details>
 <summary><b>Windows (Visual Studio 2022)</b></summary>
@@ -250,7 +238,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 
 </details>
 
-### 运行示例
+### 🎮 运行示例
 
 ```shell
 # 主渲染器
@@ -266,7 +254,9 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 ./gnb.sh remote --target gkNextRenderer --scene assets/models/playground.glb --res 1280x720
 ```
 
-## 子项目
+---
+
+## 🧩 子项目
 
 <p align="center">
   <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/airportsim.webp" width="32%" alt="AirportSim" />
@@ -305,7 +295,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 
 ---
 
-## 参考与感谢
+## 📚 参考与感谢
 
 - [RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan)
 - [Vulkan Tutorial](https://vulkan-tutorial.com/)
@@ -313,7 +303,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 
 ---
 
-## 参与贡献
+## 🤝 参与贡献
 
 欢迎 Issue / PR。
 
@@ -322,12 +312,12 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 
 ---
 
-## 第三方依赖
+## 📦 第三方依赖
 
 cpptrace · cxxopts · sdl3 · glm · imgui · stb · curl · nlohmann-json · tinygltf · draco · fmt · meshoptimizer · ktx · joltphysics · xxhash · spdlog · cpp-base64 · catch2 · entt · libwebp · vulkan-loader · libavif
 
 ---
 
-## 许可协议
+## 📜 许可协议
 
 gkNextEngine 以 [MIT 协议](LICENSE) 开源。第三方库的源代码详见 [LICENSE](LICENSE) 中的第三方声明。
