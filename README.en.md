@@ -1,13 +1,3 @@
-# gkNextEngine
-
-**A cross-platform 3D engine for real-time path tracing, gameplay prototyping, and high-end visual quality**
-
-[English](README.en.md) | [简体中文](README.md)
-
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/gameknife/gkNextEngine)
-![Desktop CI](https://github.com/gameknife/gkNextEngine/actions/workflows/desktop.yml/badge.svg)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
 <!-- The transparent SVG switches between black and white to match the active GitHub theme. -->
 <p align="center">
   <picture>
@@ -17,6 +7,26 @@
   </picture>
 </p>
 
+<h3 align="center">A cross-platform C++20 & Vulkan engine for real-time path tracing, gameplay prototyping, and AI-native workflows.</h3>
+
+<p align="center">
+  <em>A personal R&D engine playground · No commercial compromises · High-end visual fidelity under strict performance constraints · Empowering AI-native content generation & automated validation.</em>
+</p>
+
+<p align="center">
+  <a href="https://github.com/gameknife/gkNextEngine/actions/workflows/desktop.yml"><img src="https://github.com/gameknife/gkNextEngine/actions/workflows/desktop.yml/badge.svg" alt="Desktop CI" /></a>
+  <a href="https://deepwiki.com/gameknife/gkNextEngine"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
+</p>
+
+<p align="center">
+  <a href="README.en.md">English</a> &nbsp;·&nbsp;
+  <a href="README.md">简体中文</a> &nbsp;·&nbsp;
+  <a href="https://deepwiki.com/gameknife/gkNextEngine">DeepWiki</a> &nbsp;·&nbsp;
+  <a href="AGENTS.md">AGENTS.md</a> &nbsp;·&nbsp;
+  <a href="https://github.com/gameknife/gkNextEngine/issues">Issues</a>
+</p>
+
 <p align="center">
   <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/confroom.webp" width="49%" alt="Conference Room" />
   <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/luxball.webp" width="49%" alt="Luxball" />
@@ -24,8 +34,17 @@
   <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/still.webp" width="49%" alt="Still" />
 </p>
 
+<p align="center">
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/magicalego.webp" width="24%" alt="MagicaLego" />
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/brotato3d.webp" width="24%" alt="Brotato3D" />
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/brickplayer.webp" width="24%" alt="BrickPlayer" />
+  <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/nextdayz.webp" width="24%" alt="NextDayZ" />
+</p>
+
 
 gkNextEngine is a cross-platform 3D game engine and rendering playground built with modern C++20 and Vulkan. The project is renderer-first, while continuously expanding around editor tooling, scripting, physics, asset import, and multiple gameplay prototypes (such as MagicaLego, Brotato3D, KongLie3D, BrickPlayer), alongside SCAD, LDraw, and Gaussian Splat structured pipelines — forming the groundwork for AI-native content generation, scene understanding, gameplay iteration, and automated validation.
+
+<hr>
 
 > [!NOTE]
 > **Core Goals**
