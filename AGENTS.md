@@ -9,7 +9,7 @@ Always communicate with the user in Chinese (中文).
 
 ## Project Overview
 
-gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vulkan, featuring hardware/software ray tracing, real-time global illumination, GPU-driven rendering, and GPU CSM shadows. The Engine core remains below the 50k LOC target (~31k on 2026-07-17); all first-party Engine, Modules, Gameplay, applications and tests total 141,421 lines. Treat these as snapshots and use `gnb loc` for the current count.
+gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vulkan, featuring hardware/software ray tracing, real-time global illumination, GPU-driven rendering, and GPU CSM shadows. The Engine core remains below the 50k LOC target (36,492 on 2026-08-08); all first-party Engine, Modules, Gameplay, applications and tests total 183,437 lines across 933 files. Treat these as snapshots and use `gnb loc` for the current count.
 
 **Key Technologies:**
 - C++20/C11, Vulkan API, Slang shader language (ray query, not ray pipeline)
@@ -18,10 +18,15 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 - Multi-platform: Windows x86_64 / Linux x86_64 / macOS arm64 / Android arm64 / iOS arm64
 
 **Subprojects (under `src/Application/`):**
-- Render: gkNextRenderer (main), gkNextMinimalRenderer, gkNextStillBenchmark, gkNextMotionBenchmark, gkNextVisualTest, RmlUiDemo
+- Render: gkNextRenderer (main), gkNextMinimalRenderer, gkNextVisualTest, RmlUiDemo, plus
+  gkNextStillBenchmark and gkNextMotionBenchmark (both under the `Render/gkNextBenchmark/` directory)
 - Editor: gkNextEditor (ImGui editor + node-based material editor), ScadStudio, ScadLibrary
-- Game: MagicaLego, Brotato3D, KongLie3D, NextRA, BrickPlayer, CharacterDemo, FlappyCpp/FlappyJs, TruckerDemo, StudioSim, AirportSim, CitySolSim, Voyage3D
-- Util: Packager (release packaging), ScadCatalog
+- Game: MagicaLego, Brotato3D, KongLie3D, NextRA, NextDayz, NextTotalwar, BrickPlayer, CharacterDemo,
+  FlappyCpp/FlappyJs (`Game/Flappy/`), TruckerDemo, StudioSim, AirportSim, CitySolSim, Voyage3D
+- Util: Packager (asset paking), ScadCatalog
+
+**Release targets:** the desktop release ships exactly three of these —
+`gkNextRenderer`, `gkNextEditor`, `gkNextMotionBenchmark`. See `docs/guides/release-process.md`.
 
 ## Build Commands
 
@@ -47,7 +52,7 @@ because concurrent Windows builds can lock `.obj`, executables, or vcpkg state f
 - **大型 engine 重构、改动 ABI/广泛 header、不确定影响面，或用户明确要求**：才执行全量 `./gnb.sh build --all --reconfigure`，确认所有 program 都能编译。
 - 增量构建无需 `--reconfigure`；仅在改了 CMake/preset/新增文件未被 glob 收录时才加 `--reconfigure`。
 
-**CMake presets:** `windows` (默认使用 Ninja 极速生成器，带 MSVC/SDK 环境自动发现), `windows-vs`, `linux`, `macos-arm64`, `ios`.
+**CMake presets:** `windows` (默认使用 Ninja 极速生成器，带 MSVC/SDK 环境自动发现), `windows-vcproj`, `windows-no-unity`, `linux`, `macos-arm64`, `ios`.
 
 **Optional Features:**
 - AVIF is manual: `cmake --preset windows -DENABLE_AVIF=ON -DVCPKG_MANIFEST_FEATURES=avif` then `./gnb.sh build`
@@ -70,7 +75,7 @@ because concurrent Windows builds can lock `.obj`, executables, or vcpkg state f
 
 Desktop binaries can be launched from any working directory; no `cd out/build/<preset>/bin` is required.
 
-**Runtime success indicator:** Log shows `uploaded scene [...] to gpu`
+**Runtime success indicator:** Log shows `committed scene [...]`
 
 ## Testing
 
@@ -193,10 +198,11 @@ src/
 │   │   ├── Preview/         # RenderView services (thumbnails, offscreen cameras)
 │   │   └── Upscaler/        # IUpscaler abstraction (impl injected by NextStreamline)
 │   └── Utilities/           # Misc helpers
-├── Modules/                 # 16 optional engine modules (static libs, linked per app; see src/Modules/README.md)
+├── Modules/                 # 18 optional engine modules (static libs, linked per app; see src/Modules/README.md)
 │   ├── GltfLoader/, LDrawLoader/, ScadLoader/, SplatLoader/, SceneExport/  # Content pipelines
 │   ├── NextQuickJS/, NextPhysics/, NextAudio/, NextAI/, NextRmlUi/         # Runtime capabilities
-│   ├── NextRemote/, NextStreamline/, NextTui/, RenderViews/                # Presentation / streaming
+│   ├── NextRemote/, NextStreamline/, NextFidelityFX/, NextTemporalUpscaler/,
+│   │   NextTui/, RenderViews/                                              # Presentation / streaming
 │   └── DevTools/, LiveCoding/                                              # Development tooling
 ├── Gameplay/                # Gameplay primitives shared across games (CharacterActor, NavGrid A*, AI, rig, sim)
 ├── Application/             # Subproject entry points (per role)
@@ -262,7 +268,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
    - Engine 层改动：`./gnb.sh build gkNextRenderer gkNextUnitTests`（Windows: `gnb.bat build ...`）
    - 单个 program 改动：`./gnb.sh build <该 target>`
    - 仅大型重构 / 广泛 header / ABI 改动 / 用户要求时才用 `./gnb.sh build --reconfigure` 全量验证
-2. **Run:** Verify application starts and logs `uploaded scene [...] to gpu`
+2. **Run:** Verify application starts and logs `committed scene [...]`
 3. **Test:** Run unit tests if touching core systems
 4. **Visual:** 渲染类改动 → `gnb shot --scene <X>` 截一张图肉眼验证（不弹窗、自动退出，见上文 "Agent Visual Validation"）；需要 baseline 回归再跑 `gkNextVisualTest`
 

@@ -1,4 +1,4 @@
-#include <catch2/catch_test_macros.hpp>
+﻿#include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 
 #include "TestCommon.hpp"
@@ -83,7 +83,7 @@ namespace
 }
 
 TEST_CASE_METHOD(EngineTestFixture, "Bindless 3D storage image round-trips through Sampler3D",
-                 "[Unit][Bindless3D]")
+                 "[GPU][Unit][Bindless3D]")
 {
     auto& renderer = engine_->GetRenderer();
     const auto& device = renderer.Device();

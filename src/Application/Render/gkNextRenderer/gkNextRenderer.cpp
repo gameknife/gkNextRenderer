@@ -27,7 +27,10 @@
 #include "Modules/DevTools/Command/DuplicateNodesCommand.hpp"
 #include "Modules/LiveCoding/LiveCodingModule.hpp"
 #include "Engine/Utilities/Localization.hpp"
+#include "Engine/Utilities/AboutDialog.hpp"
 #include "Engine/Utilities/ImGui.hpp"
+
+#include <SDL3/SDL_misc.h>
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
@@ -578,7 +581,9 @@ void NextRendererGameInstance::OnInit()
     GetEngine().GetUserSettings().ShowOverlay = false;
     GetEngine().GetShowFlags().DebugCVarPanel = false;
 
-    std::string initializedScene = "CornellBox.proc";
+    // First-run scene. CornellBox.proc is a near-square box that letterboxes badly on a
+    // 16:9 window; playground fills the frame and shows GI, shadows and materials at once.
+    std::string initializedScene = "assets/models/playground.glb";
     if (!GOption->SceneName.empty())
     {
         initializedScene = GOption->SceneName;
@@ -787,6 +792,7 @@ bool NextRendererGameInstance::DrawRendererUi(const FGameUiFrameContext& context
     DrawViewportCheatSheet(uiState);
     DrawBottomStatusBar(uiState);
     DrawMemoryStatisticsPanel(uiState);
+    Utilities::UI::ShowAboutDialog(uiState.showAbout);
 
     if (context.surfaceKind == FGameUiFrameContext::ESurfaceKind::MainWindow && ImGui::GetCurrentContext() != nullptr)
     {
@@ -877,7 +883,11 @@ void NextRendererGameInstance::RequestThreeSecondVideo(
 
     isRecordingVideo_ = true;
     Runtime::FScreenShotService::FThreeSecondVideoRequest request;
-    request.format = Runtime::FScreenShotService::EAnimationFormat::Both;
+    // Without ffmpeg only the libwebp path can produce output; asking for Both would
+    // just log an encoding error for the GIF half.
+    request.format = Runtime::FScreenShotService::IsGifEncodingAvailable()
+        ? Runtime::FScreenShotService::EAnimationFormat::Both
+        : Runtime::FScreenShotService::EAnimationFormat::AnimatedWebp;
     request.outputScale = outputScale;
     request.onCaptureFinished = [this]()
     {
@@ -944,9 +954,16 @@ void NextRendererGameInstance::DrawVideoCaptureMenuItems()
         ImGui::EndMenu();
     }
 
-    if (ImGui::MenuItem("Record 3s GIF + Animated WebP"))
+    // GIF encoding needs ffmpeg next to the executable, which release packages do not
+    // ship. Say so in the menu instead of failing silently into the log.
+    const bool gifAvailable = Runtime::FScreenShotService::IsGifEncodingAvailable();
+    if (ImGui::MenuItem(gifAvailable ? "Record 3s GIF + Animated WebP" : "Record 3s Animated WebP"))
     {
         RequestThreeSecondVideo(videoOutputScale_);
+    }
+    if (!gifAvailable && ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("GIF output is unavailable: ffmpeg was not found next to the executable.");
     }
 }
 
@@ -1884,7 +1901,8 @@ void NextRendererGameInstance::DrawViewportTopBar(
     ImGuiViewport* viewport = ImGui::GetMainViewport();
 
     constexpr float panelMargin = 10.0f;
-    constexpr float toolbarHeight = 38.0f;
+    // Derived from the font so the bar keeps its proportions when the UI is scaled.
+    const float toolbarHeight = std::ceil(ImGui::GetFontSize() + 22.0f);
     constexpr float rightToolbarWidth = 168.0f;
     const float leftEdge = viewport->Pos.x + ModeRailWidth +
         (uiState.showSettings ? (360.0f + panelMargin * 2.0f) : panelMargin);
@@ -1907,11 +1925,46 @@ void NextRendererGameInstance::DrawViewportTopBar(
     const auto& upscaleModeInfo = Rendering::Upscaler::GetUpscaleModeInfo(userSetting.SuperResolution);
     const std::string upscalerLabel = fmt::format("{} · {}", upscalerInfo.name, upscaleModeInfo.name);
 
-    const float sceneWidth = showSceneSelector ? 150.0f : 0.0f;
-    constexpr float rendererWidth = 154.0f;
-    constexpr float renderModeWidth = 88.0f;
-    constexpr float samplesWidth = 108.0f;
-    const float upscalerWidth = showUpscalerSelector ? 188.0f : 0.0f;
+    // Item widths follow the widest label each control can display instead of magic
+    // numbers, so nothing clips when the font size, DPI scale or locale changes.
+    // The padding constants mirror PushViewportToolbarStyle's FramePadding.
+    constexpr float toolbarFramePaddingX = 7.0f;
+    constexpr float toolbarFramePaddingY = 3.0f;
+    const float comboArrowWidth = ImGui::GetFontSize() + toolbarFramePaddingY * 2.0f;
+
+    auto widestLabel = [](std::initializer_list<const char*> labels)
+    {
+        float widest = 0.0f;
+        for (const char* label : labels)
+        {
+            widest = std::max(widest, ImGui::CalcTextSize(label).x);
+        }
+        return widest;
+    };
+    auto comboWidth = [&](const float textWidth)
+    {
+        return std::ceil(textWidth + toolbarFramePaddingX * 2.0f + comboArrowWidth);
+    };
+    auto buttonWidth = [&](const float textWidth)
+    {
+        return std::ceil(textWidth + toolbarFramePaddingX * 2.0f);
+    };
+
+    float widestRendererLabel = 0.0f;
+    for (const auto& option : Runtime::GraphicsDebugPanel::RendererOptions)
+    {
+        widestRendererLabel = std::max(widestRendererLabel, ImGui::CalcTextSize(option.label).x);
+    }
+
+    const float sceneWidth = showSceneSelector
+        ? comboWidth(std::max(ImGui::CalcTextSize(sceneLabel.c_str()).x, ImGui::CalcTextSize("CornellBox").x))
+        : 0.0f;
+    const float rendererWidth = comboWidth(widestRendererLabel);
+    const float renderModeWidth = buttonWidth(widestLabel({"Progressive", "Realtime"}));
+    const float samplesWidth = comboWidth(widestLabel({"16 spp/frame"}));
+    const float upscalerWidth = showUpscalerSelector
+        ? comboWidth(ImGui::CalcTextSize(upscalerLabel.c_str()).x)
+        : 0.0f;
     const float leftToolbarWidth = 8.0f + sceneWidth + rendererWidth + renderModeWidth +
         samplesWidth + upscalerWidth +
         (showSceneSelector ? 4.0f : 0.0f) + (showUpscalerSelector ? 4.0f : 0.0f) + 12.0f;
@@ -2011,7 +2064,7 @@ void NextRendererGameInstance::DrawViewportTopBar(
         const char* renderModeLabel = userSetting.ProgressiveRender ? "Progressive" : "Realtime";
         if (DrawFlatViewportButton(
                 renderModeLabel, "Toggle realtime / progressive rendering",
-                userSetting.ProgressiveRender, ImVec2(renderModeWidth, 22.0f)))
+                userSetting.ProgressiveRender, ImVec2(renderModeWidth, ImGui::GetFrameHeight())))
         {
             userSetting.ProgressiveRender = !userSetting.ProgressiveRender;
         }
@@ -2161,6 +2214,37 @@ void NextRendererGameInstance::DrawViewportTopBar(
     NextUI::Theme::EndOverlayPanel();
 }
 
+namespace
+{
+    // One row of the shortcut cheat sheet. A null action marks a section header.
+    // Kept as data so the panel can size itself from the row count.
+    struct FCheatSheetRow
+    {
+        const char* shortcut;
+        const char* action;
+    };
+
+    constexpr std::array<FCheatSheetRow, 17> CheatSheetRows = {{
+        {"NAVIGATION", nullptr},
+        {"RMB + Drag", "Look around"},
+        {"RMB + W A S D", "Move camera"},
+        {"RMB + Q / E", "Move up / down"},
+        {"Mouse Wheel", "Dolly forward / back"},
+        {"Alt + RMB", "Orbit selected object"},
+        {"SCENE & SELECTION", nullptr},
+        {"LMB", "Select object / set focus"},
+        {"F", "Focus selected object"},
+        {"Space", "Launch a physics cube"},
+        {"B", "Drop 400 physics spheres"},
+        {"Esc", "Clear selection"},
+        {"Ctrl / Cmd + D", "Duplicate selection"},
+        {"Delete / Backspace", "Delete selection"},
+        {"TRANSFORM GIZMO", nullptr},
+        {"W / E / R", "Move / Rotate / Scale"},
+        {"Q", "Toggle Local / World"},
+    }};
+}
+
 void NextRendererGameInstance::DrawViewportCheatSheet(FRendererUiState& uiState)
 {
     if (!uiState.showCheatSheet)
@@ -2170,12 +2254,25 @@ void NextRendererGameInstance::DrawViewportCheatSheet(FRendererUiState& uiState)
 
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     constexpr float panelMargin = 10.0f;
-    constexpr float toolbarHeight = 38.0f;
     constexpr float panelGap = 8.0f;
     constexpr float panelWidth = 390.0f;
-    constexpr float panelHeight = 450.0f;
+    constexpr float bottomBarHeight = 30.0f;
+    constexpr float cellPaddingY = 4.0f;
+    const float toolbarHeight = std::ceil(ImGui::GetFontSize() + 22.0f);
     const float rightEdge = viewport->Pos.x + viewport->Size.x - panelMargin;
     const float topEdge = viewport->Pos.y + TitlebarSize + panelMargin + toolbarHeight + panelGap;
+
+    // Height follows the row count and the current font, and is clamped to what the
+    // viewport can show; the rows themselves live in a scrolling child so a short
+    // window truncates nothing.
+    const float rowHeight = ImGui::GetTextLineHeight() + cellPaddingY * 2.0f;
+    const float headerHeight = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y * 2.0f + 8.0f;
+    const float naturalHeight = std::ceil(
+        10.0f * 2.0f + headerHeight + rowHeight * static_cast<float>(CheatSheetRows.size()));
+    const float availableHeight = std::max(
+        120.0f,
+        viewport->Pos.y + viewport->Size.y - bottomBarHeight - panelMargin - topEdge);
+    const float panelHeight = std::min(naturalHeight, availableHeight);
 
     NextUI::Theme::FOverlayPanelConfig config{};
     config.WindowId = "##ViewportShortcutCheatSheet";
@@ -2229,36 +2326,34 @@ void NextRendererGameInstance::DrawViewportCheatSheet(FRendererUiState& uiState)
                 NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted), "%s", action);
         };
 
-        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 4.0f));
-        if (ImGui::BeginTable(
-                "##ViewportShortcuts", 2,
-                ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoSavedSettings))
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, cellPaddingY));
+        // The overlay panel itself is created with NoScrollbar; a child region gets its
+        // own scrollbar so the last rows stay reachable in a short window.
+        if (ImGui::BeginChild("##ViewportShortcutScroll", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None))
         {
-            ImGui::TableSetupColumn("Shortcut", ImGuiTableColumnFlags_WidthFixed, 136.0f);
-            ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);
+            if (ImGui::BeginTable(
+                    "##ViewportShortcuts", 2,
+                    ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoSavedSettings))
+            {
+                ImGui::TableSetupColumn("Shortcut", ImGuiTableColumnFlags_WidthFixed, 136.0f);
+                ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);
 
-            DrawSection("NAVIGATION");
-            DrawShortcut("RMB + Drag", "Look around");
-            DrawShortcut("RMB + W A S D", "Move camera");
-            DrawShortcut("RMB + Q / E", "Move up / down");
-            DrawShortcut("Mouse Wheel", "Dolly forward / back");
-            DrawShortcut("Alt + RMB", "Orbit selected object");
+                for (const FCheatSheetRow& row : CheatSheetRows)
+                {
+                    if (row.action == nullptr)
+                    {
+                        DrawSection(row.shortcut);
+                    }
+                    else
+                    {
+                        DrawShortcut(row.shortcut, row.action);
+                    }
+                }
 
-            DrawSection("SCENE & SELECTION");
-            DrawShortcut("LMB", "Select object / set focus");
-            DrawShortcut("F", "Focus selected object");
-            DrawShortcut("Space", "Launch a physics cube");
-            DrawShortcut("B", "Drop 400 physics spheres");
-            DrawShortcut("Esc", "Clear selection");
-            DrawShortcut("Ctrl / Cmd + D", "Duplicate selection");
-            DrawShortcut("Delete / Backspace", "Delete selection");
-
-            DrawSection("TRANSFORM GIZMO");
-            DrawShortcut("W / E / R", "Move / Rotate / Scale");
-            DrawShortcut("Q", "Toggle Local / World");
-
-            ImGui::EndTable();
+                ImGui::EndTable();
+            }
         }
+        ImGui::EndChild();
         ImGui::PopStyleVar();
     }
     NextUI::Theme::EndOverlayPanel();
@@ -2363,8 +2458,23 @@ void NextRendererGameInstance::DrawTitleBar(const FGameUiFrameContext& context, 
         if (ImGui::BeginMenu("Help"))
         {
             UpdateMenuRight();
-            ImGui::MenuItem("Documentation", nullptr, false, false);
-            ImGui::MenuItem("About gkNextRenderer", nullptr, false, false);
+            if (ImGui::MenuItem("Keyboard & Mouse"))
+            {
+                uiState.showCheatSheet = true;
+            }
+            if (ImGui::MenuItem("Documentation"))
+            {
+                SDL_OpenURL(Utilities::UI::ProjectDocsUrl);
+            }
+            if (ImGui::MenuItem("Report an Issue"))
+            {
+                SDL_OpenURL(Utilities::UI::ProjectIssuesUrl);
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("About gkNextRenderer"))
+            {
+                uiState.showAbout = true;
+            }
             ImGui::EndMenu();
         }
         else

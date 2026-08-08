@@ -1,4 +1,4 @@
-#include <catch2/catch_test_macros.hpp>
+﻿#include <catch2/catch_test_macros.hpp>
 
 #include "TestCommon.hpp"
 
@@ -81,7 +81,7 @@ TEST_CASE("Bindless slot registry partitions the address space", "[Unit][Bindles
 }
 
 TEST_CASE_METHOD(EngineTestFixture, "Bindless descriptor arrays cover every registered slot",
-                 "[Unit][Bindless]")
+                 "[GPU][Unit][Bindless]")
 {
     auto* texturePool = Assets::GlobalTexturePool::GetInstance();
     REQUIRE(texturePool != nullptr);

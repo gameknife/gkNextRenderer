@@ -537,6 +537,16 @@ namespace Assets
         Vulkan::CommandPool& commandPool, const FHDRTexturePayload& payload,
         GlobalTexturePool::EHDRTextureResidency residency)
     {
+        // A missing or undecodable HDR yields a default-constructed payload. Creating a
+        // 0x0 VK_FORMAT_UNDEFINED image from it fails inside VMA and throws off a worker
+        // thread, so report the failure and let the caller install its placeholder.
+        if (payload.Width <= 0 || payload.Height <= 0
+            || payload.Format == VK_FORMAT_UNDEFINED
+            || payload.BasePixels.empty())
+        {
+            return nullptr;
+        }
+
         const uint32_t baseSize = static_cast<uint32_t>(payload.BasePixels.size() * sizeof(float));
         if (residency == GlobalTexturePool::EHDRTextureResidency::FullMip
             && payload.MipLevelData.size() > 1

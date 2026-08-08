@@ -64,6 +64,16 @@ jobs:
           } else {
             ./gnb.sh build
           }
+      # CI runners have no Vulkan device, so tests that build a real swapchain
+      # (tagged [GPU]) are excluded. Run the full suite locally before a release.
+      - name: Test
+        shell: pwsh
+        run: |
+          if ("${{ runner.os }}" -eq "Windows") {
+            .\gnb.bat test "~[GPU]"
+          } else {
+            ./gnb.sh test "~[GPU]"
+          }
       - uses: actions/cache/save@v6
         if: steps.cache-vcpkg-restore.outputs.cache-hit != 'true'
         with:

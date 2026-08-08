@@ -8,7 +8,7 @@ Application 显式链接；核心层 `src/Engine` 不得反向依赖本目录。
 Android 平台模块源直接并入单一 SHARED target；`NextTui` 仅桌面 + `GK_WITH_TUI`，
 `NextQuickJS` 在 Android 之外的平台可用。
 
-当前模块（17 个）：
+当前模块（18 个）：
 
 | 模块 | 职责 |
 |---|---|

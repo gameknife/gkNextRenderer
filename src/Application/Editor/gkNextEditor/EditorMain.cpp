@@ -20,6 +20,8 @@
 #include "Engine/Runtime/Scene/SceneList.hpp"
 
 #include <spdlog/spdlog.h>
+
+#include "Engine/Utilities/FileHelper.hpp"
 #include "Modules/LDrawLoader/LDrawModule.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
 #include "Modules/NextQuickJS/NextQuickJSModule.hpp"
@@ -199,11 +201,27 @@ void EditorGameInstance::OnInit()
     }
 
     // Open the scene passed on the command line (--load-scene) so the editor can start directly on a
-    // scene (and supports automated --agent-validation screenshots). Without it the editor is empty.
-    if (GOption != nullptr && !GOption->SceneName.empty())
+    // scene (and supports automated --agent-validation screenshots). Without a command line scene,
+    // fall back to a sample so a first launch shows a populated viewport and outliner instead of a
+    // black void with a lone Environment node.
+    std::string startupScene = GOption != nullptr ? GOption->SceneName : std::string();
+    if (startupScene.empty())
     {
-        GetEngine().RequestLoadScene({.filename = GOption->SceneName});
-        GetEditorInterface().GetEditorUiState().currentScenePath = GOption->SceneName;
+        constexpr const char* defaultScene = "assets/models/playground.glb";
+        if (Utilities::FileHelper::IsAssetAvailable(defaultScene))
+        {
+            startupScene = defaultScene;
+        }
+        else
+        {
+            SPDLOG_WARN("Default editor scene '{}' is unavailable; starting with an empty scene.", defaultScene);
+        }
+    }
+
+    if (!startupScene.empty())
+    {
+        GetEngine().RequestLoadScene({.filename = startupScene});
+        GetEditorInterface().GetEditorUiState().currentScenePath = startupScene;
     }
 }
 

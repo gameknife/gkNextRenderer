@@ -1,4 +1,4 @@
-#include <catch2/catch_test_macros.hpp>
+﻿#include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 
 #include "Modules/SplatLoader/FSplatQuant.hpp"
@@ -59,7 +59,7 @@ TEST_CASE("Gaussian splat component properties", "[Unit][SOG][GaussianSplatCompo
     CHECK_FALSE(retrieved->ToggleVisible());
 }
 
-TEST_CASE_METHOD(EngineTestFixture, "SOG scene loads and renders on Vulkan", "[.Integration][SOG]")
+TEST_CASE_METHOD(EngineTestFixture, "SOG scene loads and renders on Vulkan", "[GPU][.Integration][SOG]")
 {
     const std::filesystem::path samplePath =
         std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets/sog/Grape.sog"));

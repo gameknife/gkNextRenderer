@@ -406,9 +406,8 @@ tools/brotato3d-pak/output/
 tools/magicalego-pak/output/
 
 # third party libraries
+# ffmpeg binaries are fetched locally and never committed; release packages ship without them.
 src/ThirdParty/*/bin/
-src/ThirdParty/oidn/
-src/ThirdParty/Streamline/
 # AI assistant local files
 .claude/
 .mimocode/

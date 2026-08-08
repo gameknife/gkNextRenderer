@@ -2,6 +2,8 @@ include_guard(GLOBAL)
 
 option(ENABLE_UNITY_BUILD "Enable unity builds for engine/modules/app targets" ON)
 option(GK_FAST_DEV_LINK "Prefer faster MSVC executable links for development builds" ON)
+option(GK_NATIVE_ARCH "Compile for the build machine's CPU (-march=native); never use for distributable builds" OFF)
+set(GK_ARCH_BASELINE "x86-64-v2" CACHE STRING "Baseline x86 instruction set for non-native Linux builds")
 
 function(gk_enable_unity_build target batchSize)
     if(ENABLE_UNITY_BUILD AND NOT ANDROID)
@@ -136,7 +138,14 @@ function(gk_apply_target_defaults target)
             )
         endif()
         if(UNIX AND NOT APPLE AND NOT ANDROID)
-            target_compile_options(${target} PRIVATE -march=native -mavx)
+            # Distributable builds must run on any CPU meeting the documented baseline.
+            # -march=native bakes in the build machine's instruction set and makes the
+            # binary SIGILL on older CPUs, so it stays opt-in for local development.
+            if(GK_NATIVE_ARCH)
+                target_compile_options(${target} PRIVATE -march=native -mavx)
+            else()
+                target_compile_options(${target} PRIVATE -march=${GK_ARCH_BASELINE})
+            endif()
         endif()
     endif()
 endfunction()

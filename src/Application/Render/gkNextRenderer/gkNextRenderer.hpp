@@ -60,6 +60,7 @@ private:
         struct ImFont* bigFont {};
         bool showSettings = false;
         bool showCheatSheet = true;
+        bool showAbout = false;
         bool memoryStatisticsPanelOpen = false;
     };
 

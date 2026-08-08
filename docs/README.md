@@ -30,7 +30,9 @@
 - [AMD FidelityFX FSR 3.1 / Frame Generation](guides/fidelityfx-fsr.md)
 - [gnb 架构与代码导览](guides/gnb-architecture.md)
 - [gnb CLI](guides/gnb-cli.md)
+- [发布流程（打 tag → CI → 验收 → release notes → 回滚）](guides/release-process.md)
 - [SCAD 场景生成指引](guides/scad-scene-authoring-guide.md)
+- [Windows Dozen Vulkan 后端排障](guides/dozen-vulkan-backend-troubleshooting.md)
 - [SCAD 资产目录与 ScadLibrary 场景组装约定](../assets/scad/README.md)
 - [SCAD Terrain 使用速查](AGENT_GUIDE/ScadTerrain.md)
 - [Soft Mesh Shader GPU-Driven 提交路径](guides/soft-mesh-shader-gpu-driven-submit.md)
@@ -57,6 +59,7 @@
 - [NextAI 产品化边界](designs/nextai-product-focused-architecture.md)
 - [ScadLibrary AI 融合创作架构](designs/scadlibrary-ai-authoring-integration.md)
 - [SCAD Scene Compose](designs/scad-scene-compose-design.md)
+- [SCAD Terrain 地形架构](designs/scad-terrain-design.md)（M0–M4 已落地）
 - [SoftwareModernNoAmbient 渲染与 GTAO](designs/software-modern-noambient-rendering.md)
 - [直接样本后处理与 Upscaler 输入链](designs/direct-sample-post-chain.md)
 - [WebRTC Remote Play](designs/webrtc-remoteplay-design.md)
@@ -81,7 +84,29 @@
 
 ## Plans（待实施）
 
+- [阶段性 Release 准备计划](plans/release-readiness-plan.md)（现行；发布流水线、崩溃兜底、UI 收口、
+  合规与文档一致性的问题清单与分批任务，覆盖 gkNextRenderer / gkNextEditor / gkNextMotionBenchmark）
 - [CPU TLAS 异步与并行更新计划](plans/cpu-tlas-parallel-update-plan.md)
+- [PathTracing Slang Shader 库重构计划](plans/shader-library-refactor-plan.md)（计划中）
+- [PathTracing 材质模型统一（Stage 3 设计增量）](plans/shader-material-model-unification-plan.md)（待审阅）
+- CitySolSim 经营循环：[架构设计](projects/citysolsim/management-loop-design.md) ·
+  [开发计划](projects/citysolsim/management-loop-plan.md)（待实现）
+- NextRA 经济与建造：[架构设计](projects/nextra/economy-build-design.md) ·
+  [开发计划](projects/nextra/economy-build-plan.md)（待实现）
+
+## 已完成计划（保留作为实现依据，待下次文档清理时归档）
+
+这些 plan 的 `status` 已是“已完成 / 已实施”。按本页的生命周期规则它们应退出现行文档面；
+在把其中仍成立的契约提炼进对应 design 之前先在此列出，避免成为无人索引的游离文档。
+
+- [大气散射与高度雾开发计划](plans/atmosphere-and-height-fog-plan.md)（已完成 → [design](designs/atmosphere-and-height-fog-design.md)）
+- [Bindless 3D 纹理支持计划](plans/bindless-3d-texture-support-plan.md)（已完成）
+- [BSDF-aware Direct Lighting 计划](plans/bsdf-aware-direct-lighting-plan.md)（已实施 → [design](designs/pathtracing-restir-design.md)）
+- [SoftwareTracing Direct Lighting 与 ReSTIR DI 同步计划](plans/softwaretracing-direct-lighting-restir-plan.md)（已实施）
+- [SCAD Terrain 开发计划](plans/scad-terrain-plan.md)（M0–M4 已完成 → [design](designs/scad-terrain-design.md)）
+- [NextDayz 复杂 3C 与 ScadRig 分层动画开发计划](projects/nextdayz/nextdayz-3c-scadrig-development-plan.md)（已完成）
+- [NextDayz PVE 生存循环产品化开发计划](projects/nextdayz/nextdayz-productization-development-plan.md)（已完成）
+- [NextTotalwar 基础战斗循环产品化开发计划](projects/nexttotalwar/nexttotalwar-productization-development-plan.md)（已完成）
 
 ## 环境记录
 

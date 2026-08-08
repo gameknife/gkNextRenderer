@@ -105,10 +105,16 @@ namespace NextCVar
     }
 
     // Iterates a { "name": value } JSON config; values are passed on as text.
+    // User configs live in the per-user writable root, shipped defaults in the
+    // read-only runtime root.
     static bool ForEachJsonConfigEntry(const std::string& path,
-                                       const std::function<void(const std::string&, const std::string&)>& apply)
+                                       const std::function<void(const std::string&, const std::string&)>& apply,
+                                       const bool userConfig = false)
     {
-        std::ifstream file(Utilities::FileHelper::GetPlatformFilePath(path.c_str()));
+        const std::string resolvedPath = userConfig
+            ? Utilities::FileHelper::ResolveWritableFileForRead(path.c_str())
+            : Utilities::FileHelper::GetPlatformFilePath(path.c_str());
+        std::ifstream file(resolvedPath);
         if (!file.is_open())
         {
             return false;
@@ -147,7 +153,7 @@ namespace NextCVar
         {
             std::string error;
             (void)SetValueFromString(name, valueText, ECVarSetBy::UserFile, &error);
-        });
+        }, true);
     }
 
     bool FCVarSystem::SaveUserFile(const std::string& path) const
@@ -226,7 +232,7 @@ namespace NextCVar
             std::visit([&](const auto& value) { j[name] = value; }, GetEntryValue(entry));
         }
 
-        std::string configPath = Utilities::FileHelper::GetPlatformFilePath(outputPath.c_str());
+        std::string configPath = Utilities::FileHelper::GetWritableFilePath(outputPath.c_str());
         Utilities::FileHelper::EnsureDirectoryExists(std::filesystem::path(configPath).parent_path());
 
         std::ofstream file(configPath);

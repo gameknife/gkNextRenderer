@@ -56,6 +56,11 @@ namespace Runtime
 
         explicit FScreenShotService(NextEngine& engine);
 
+        // GIF encoding shells out to ffmpeg, which is not redistributed with release
+        // packages. Animated WebP is always available (libwebp is linked in). UI that
+        // offers GIF recording must gate on this.
+        static bool IsGifEncodingAvailable();
+
         // Requests the standard full-output screenshot. Returns false if another
         // screenshot is already queued or being saved.
         bool Request(FRequest request);

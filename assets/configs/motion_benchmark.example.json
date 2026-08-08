@@ -15,11 +15,11 @@
     "sys.tickAnimation": false
   },
   "scenes": [
-    "assets/models/pbr.glb",
-    "assets/models/playground.glb",
-    "assets/models/livingroom.glb",
-    "assets/models/castle.glb",
-    "assets/models/complex.glb"
+    "MaterialShowcase.proc",
+    "LightingShowcase.proc",
+    "GIBootcamp.proc",
+    "KilometerWorld.proc",
+    "MassiveAsteroidBelt.proc"
   ],
   "renderers": [
     "PathTracing",

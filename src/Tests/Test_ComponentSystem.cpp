@@ -1,4 +1,4 @@
-#include <catch2/catch_all.hpp>
+﻿#include <catch2/catch_all.hpp>
 #include "TestCommon.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Component.hpp"
@@ -91,7 +91,7 @@ TEST_CASE("Node hierarchy uses non-owning parent links", "[Unit][Node][Hierarchy
 }
 
 TEST_CASE_METHOD(EngineTestFixture, "Scene component index follows component and node lifetime",
-                 "[Integration][ComponentIndex]")
+                 "[GPU][Integration][ComponentIndex]")
 {
     Assets::Scene& scene = engine_->GetScene();
     auto firstNode = Assets::Node::CreateNode(
@@ -131,7 +131,7 @@ TEST_CASE_METHOD(EngineTestFixture, "Scene component index follows component and
 }
 
 TEST_CASE_METHOD(EngineTestFixture, "Scene evaluates editable animation tracks at an explicit time",
-                 "[Integration][Animation][Sequencer]")
+                 "[GPU][Integration][Animation][Sequencer]")
 {
     Assets::Scene& scene = engine_->GetScene();
     auto node = Assets::Node::CreateNode(

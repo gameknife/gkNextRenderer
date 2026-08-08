@@ -1,4 +1,4 @@
-#include <catch2/catch_all.hpp>
+﻿#include <catch2/catch_all.hpp>
 
 #include "TestCommon.hpp"
 #include "Application/Editor/gkNextEditor/Core/SceneSavePolicy.hpp"
@@ -21,7 +21,7 @@ TEST_CASE("Sequencer scenes can be saved as GLB or glTF", "[Unit][Editor][Sequen
 }
 
 TEST_CASE_METHOD(EngineTestFixture, "Sequencer tracks round-trip through glTF scene export",
-                 "[Integration][Animation][Sequencer][SceneExport]")
+                 "[GPU][Integration][Animation][Sequencer][SceneExport]")
 {
     Assets::Scene& scene = engine_->GetScene();
     auto node = Assets::Node::CreateNode(

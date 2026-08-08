@@ -1,6 +1,8 @@
 #include "Core/RecentScenes.hpp"
 #include "Core/EditorUiState.hpp"
 
+#include "Engine/Utilities/FileHelper.hpp"
+
 #include <spdlog/spdlog.h>
 #include <fstream>
 #include <filesystem>
@@ -9,7 +11,7 @@ namespace Editor
 {
     std::string RecentScenesFilePath()
     {
-        return "recent_scenes.txt";
+        return Utilities::FileHelper::GetWritableFilePath("recent_scenes.txt");
     }
 
     void LoadRecentScenes(EditorUiState& ui)

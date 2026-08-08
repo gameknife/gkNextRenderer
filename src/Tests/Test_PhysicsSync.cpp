@@ -1,4 +1,4 @@
-#include <catch2/catch_all.hpp>
+﻿#include <catch2/catch_all.hpp>
 #include "TestCommon.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Assets/Core/Node.hpp"
@@ -10,7 +10,7 @@
 
 // Note: TestCommon.hpp provides EngineTestFixture and the necessary CreateGameInstance implementation
 
-TEST_CASE_METHOD(EngineTestFixture, "Physical Simulation of Static Body Visibility", "[Integration][Physics]") {
+TEST_CASE_METHOD(EngineTestFixture, "Physical Simulation of Static Body Visibility", "[GPU][Integration][Physics]") {
     
     // Engine is already started by Fixture constructor
     // engine_ and options_ are available
@@ -74,7 +74,7 @@ TEST_CASE_METHOD(EngineTestFixture, "Physical Simulation of Static Body Visibili
     }
 }
 
-TEST_CASE_METHOD(EngineTestFixture, "Dynamic Physics Offset Uses Local Space", "[Integration][Physics]") {
+TEST_CASE_METHOD(EngineTestFixture, "Dynamic Physics Offset Uses Local Space", "[GPU][Integration][Physics]") {
     auto physics = engine_->GetPhysicsEngine();
     REQUIRE(physics != nullptr);
 
@@ -108,7 +108,7 @@ TEST_CASE_METHOD(EngineTestFixture, "Dynamic Physics Offset Uses Local Space", "
     engine_->GetScene().RemoveNodeByInstanceId(node->GetInstanceId());
 }
 
-TEST_CASE_METHOD(EngineTestFixture, "SetBodyVelocity Reactivates Resting Dynamic Body", "[Integration][Physics]") {
+TEST_CASE_METHOD(EngineTestFixture, "SetBodyVelocity Reactivates Resting Dynamic Body", "[GPU][Integration][Physics]") {
     auto physics = engine_->GetPhysicsEngine();
     REQUIRE(physics != nullptr);
 
@@ -133,7 +133,7 @@ TEST_CASE_METHOD(EngineTestFixture, "SetBodyVelocity Reactivates Resting Dynamic
 }
 
 TEST_CASE_METHOD(EngineTestFixture, "Physics catch-up advances the full fixed-step interval",
-                 "[Integration][Physics][FixedStep]")
+                 "[GPU][Integration][Physics][FixedStep]")
 {
     auto* physics = engine_->GetPhysicsEngine();
     REQUIRE(physics != nullptr);
@@ -153,7 +153,7 @@ TEST_CASE_METHOD(EngineTestFixture, "Physics catch-up advances the full fixed-st
 }
 
 TEST_CASE_METHOD(EngineTestFixture, "Async physics publishes only after completion",
-                 "[Integration][Physics][Async]")
+                 "[GPU][Integration][Physics][Async]")
 {
     auto* physics = engine_->GetPhysicsEngine();
     REQUIRE(physics != nullptr);
@@ -174,7 +174,7 @@ TEST_CASE_METHOD(EngineTestFixture, "Async physics publishes only after completi
 }
 
 TEST_CASE_METHOD(EngineTestFixture, "High render rate keeps physics updates at 60 Hz",
-                 "[Integration][Physics][FixedStep]")
+                 "[GPU][Integration][Physics][FixedStep]")
 {
     auto* physics = engine_->GetPhysicsEngine();
     REQUIRE(physics != nullptr);
@@ -191,7 +191,7 @@ TEST_CASE_METHOD(EngineTestFixture, "High render rate keeps physics updates at 6
 }
 
 TEST_CASE_METHOD(EngineTestFixture, "Rolling sphere settles and enters sleep",
-                 "[Integration][Physics][SphereSleep]")
+                 "[GPU][Integration][Physics][SphereSleep]")
 {
     auto* physics = engine_->GetPhysicsEngine();
     REQUIRE(physics != nullptr);
@@ -220,7 +220,7 @@ TEST_CASE_METHOD(EngineTestFixture, "Rolling sphere settles and enters sleep",
 }
 
 TEST_CASE_METHOD(EngineTestFixture, "Dense 3000 sphere pile retains ground contacts",
-                 "[.stress][Integration][Physics][DensePile]")
+                 "[GPU][.stress][Integration][Physics][DensePile]")
 {
     auto* physics = engine_->GetPhysicsEngine();
     REQUIRE(physics != nullptr);
@@ -283,7 +283,7 @@ TEST_CASE_METHOD(EngineTestFixture, "Dense 3000 sphere pile retains ground conta
 }
 
 TEST_CASE_METHOD(EngineTestFixture, "Character stance resize keeps feet anchored and checks headroom",
-                 "[Integration][Physics][Character]")
+                 "[GPU][Integration][Physics][Character]")
 {
     auto* physics = engine_->GetPhysicsEngine();
     REQUIRE(physics != nullptr);
@@ -333,7 +333,7 @@ TEST_CASE_METHOD(EngineTestFixture, "Character stance resize keeps feet anchored
     physics->RemoveBody(floor);
 }
 
-TEST_CASE_METHOD(EngineTestFixture, "Wheeled vehicle suspension and drivetrain telemetry", "[Integration][Physics][Vehicle]")
+TEST_CASE_METHOD(EngineTestFixture, "Wheeled vehicle suspension and drivetrain telemetry", "[GPU][Integration][Physics][Vehicle]")
 {
     auto* physics = engine_->GetPhysicsEngine();
     REQUIRE(physics != nullptr);

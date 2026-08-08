@@ -17,7 +17,7 @@ namespace
 
 TEST_CASE("Gnb AI bridge v2 shared fixtures contain valid JSON-RPC frames", "[Unit][AI][Bridge]")
 {
-    const auto fixtureDir = SourceRoot() / "tests" / "fixtures" / "gnb-ai-protocol" / "v2";
+    const auto fixtureDir = SourceRoot() / "tools" / "tests" / "fixtures" / "gnb-ai-protocol" / "v2";
     REQUIRE(std::filesystem::is_directory(fixtureDir));
     size_t fixtureCount = 0;
     for (const auto& entry : std::filesystem::directory_iterator(fixtureDir))

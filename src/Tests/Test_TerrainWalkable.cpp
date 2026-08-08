@@ -1,4 +1,4 @@
-#include <catch2/catch_all.hpp>
+﻿#include <catch2/catch_all.hpp>
 #include "TestCommon.hpp"
 
 #include "Engine/Assets/Core/Node.hpp"
@@ -13,7 +13,7 @@
 // overhill_valley sample (assets/scad/specs/overhill_valley.json):
 //   * bridge deck centered around engine-world (2, ~, 30.5)
 //   * river runs roughly north-south through x ~= 0..5 (engine z = -scad y)
-TEST_CASE_METHOD(EngineTestFixture, "Terrain walkability: river blocks, bridge connects", "[Integration][Terrain]")
+TEST_CASE_METHOD(EngineTestFixture, "Terrain walkability: river blocks, bridge connects", "[GPU][Integration][Terrain]")
 {
     Modules::Scad::Register();
     GOption->KeepCPUMeshData = true; // NavGrid raycasts the CPU BVH

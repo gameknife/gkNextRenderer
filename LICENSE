@@ -22,5 +22,7 @@ SOFTWARE.
 
 --------------------------------------------------------------------------------
 
-Third-party libraries under src/ThirdParty/ and dependencies managed through
-vcpkg (see vcpkg.json) are subject to their respective licenses.
+Third-party libraries under src/ThirdParty/, dependencies managed through vcpkg
+(see vcpkg.json), and the fonts and vendor runtime libraries redistributed with
+the release packages are subject to their respective licenses. The complete
+attribution list is in THIRD-PARTY-NOTICES.md, which ships alongside this file.

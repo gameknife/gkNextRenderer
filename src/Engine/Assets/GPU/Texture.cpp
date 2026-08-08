@@ -452,7 +452,9 @@ namespace Assets
 
                 auto createHdrPlaceholderTexture = [&]()
                 {
-                    static constexpr std::array<float, 4> kPlaceholderHdrPixel = {0.0f, 0.0f, 0.0f, 1.0f};
+                    // Dim neutral grey rather than black: a missing environment map still
+                    // leaves the scene lit well enough to see what is going on.
+                    static constexpr std::array<float, 4> kPlaceholderHdrPixel = {0.18f, 0.18f, 0.18f, 1.0f};
 
                     width = 1;
                     height = 1;
@@ -763,6 +765,18 @@ namespace Assets
                 const uint8_t* data = sourceData->empty() ? nullptr : sourceData->data();
                 const FHDRTexturePayload payload = LoadHDRTexturePayload(textureName, data, sourceData->size());
                 auto textureImage = CreateHDRTextureImage(commandPool_, payload, targetResidency);
+                if (!textureImage)
+                {
+                    // The source went missing between load and streaming; keep whatever
+                    // image is currently bound instead of unbinding the slot.
+                    SPDLOG_WARN("HDR texture '{}' could not be re-created for residency change; keeping current image.",
+                                textureName);
+                    if (textureIdx < hdrTextureResidency_.size())
+                    {
+                        hdrTextureResidency_[textureIdx].Pending = false;
+                    }
+                    return;
+                }
                 textureImage->SetDebugName(fmt::format("Texture {}", textureName));
 
                 device_.WaitIdle();

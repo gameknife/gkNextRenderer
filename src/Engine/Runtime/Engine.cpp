@@ -39,6 +39,7 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Utilities/Localization.hpp"
+#include "Engine/Utilities/LogFile.hpp"
 
 #define _USE_MATH_DEFINES
 
@@ -169,7 +170,7 @@ namespace
 
         const auto now = std::time(nullptr);
         const std::string filename = fmt::format("{}_{:%Y-%m-%d-%H-%M-%S}", defaultPrefix, *std::localtime(&now));
-        const std::string directory = Utilities::FileHelper::GetPlatformFilePath("screenshots");
+        const std::string directory = Utilities::FileHelper::GetWritableFilePath("screenshots");
         Utilities::FileHelper::EnsureDirectoryExists(directory);
         return (std::filesystem::path(directory) / filename).string();
     }
@@ -267,6 +268,10 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     spdlog::set_level(spdlog::level::info);
     spdlog::flush_on(spdlog::level::debug);
     spdlog::flush_every(std::chrono::seconds(1));
+
+    // Idempotent: DesktopMain installs this before the engine exists so early failures
+    // are captured too. This covers entry points that do not go through DesktopMain.
+    Utilities::Logging::InstallFileSink();
 
 #if ANDROID
     std::string tag = "gknext";

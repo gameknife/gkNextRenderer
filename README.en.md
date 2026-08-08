@@ -1,4 +1,4 @@
-<!-- The transparent SVG switches between black and white to match the active GitHub theme. -->
+﻿<!-- The transparent SVG switches between black and white to match the active GitHub theme. -->
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./assets/brand/gknext_logo_vertical.svg" />
@@ -81,26 +81,41 @@ Performance is one of the project's core constraints. The engine leans on radian
 <details>
 <summary><b>Typical Scene Performance Benchmark Data (RTX 5070 Ti / 720p)</b> — <i>Click to expand ▾</i></summary>
 
-> The figures below come from `out/build/windows/bin/motion_benchmark_report.csv`, measured on an NVIDIA GeForce RTX 5070 Ti with NVIDIA 610.47.0 at 1280x720. Each scene was sampled for roughly 3 seconds; DLSS, FSR, and denoising were disabled.
+**Baseline environment** (state the same fields when reproducing):
+>
+> | Item | Value |
+> |---|---|
+> | GPU | NVIDIA GeForce RTX 5070 Ti |
+> | Driver | NVIDIA 596.49.0 |
+> | Engine build | dev @ 2026-08-08 |
+> | Orchestration | `assets/configs/motion_benchmark.example.json` |
+> | Resolution | 1280x720 |
+> | Sampling | 3 s warmup + 3 s measurement per scene |
+> | Disabled | DLSS / FSR / GTAO / animation tick (pinned by the config cvars) |
 
-| Scene | Resolution | Pipeline | Frame time (ms) | GPU time (ms) | FPS | VRAM | Draw AfterCull / View | Triangles AfterCull / View |
-|------|------------|----------|-----------------|---------------|-----|------|---------------------------|--------------------------|
-| pbr | 1280x720 | PathTracing | 1.714 | 1.300 | 583 | 884 MiB | 10 / 10 | 8,754 / 8,754 |
-| pbr | 1280x720 | SoftwareModernNoAmbient | 0.547 | 0.157 | 1,827 | 857 MiB | 10 / 10 | 8,753 / 8,753 |
-| playground | 1280x720 | PathTracing | 2.432 | 1.924 | 411 | 857 MiB | 82 / 84 | 10,384 / 10,465 |
-| playground | 1280x720 | SoftwareModernNoAmbient | 0.586 | 0.213 | 1,708 | 859 MiB | 83 / 85 | 10,479 / 10,561 |
-| livingroom | 1280x720 | PathTracing | 1.408 | 0.948 | 710 | 893 MiB | 10 / 146 | 57,843 / 560,308 |
-| livingroom | 1280x720 | SoftwareModernNoAmbient | 0.614 | 0.217 | 1,628 | 893 MiB | 10 / 141 | 56,086 / 537,628 |
-| castle | 1280x720 | PathTracing | 3.695 | 3.224 | 271 | 859 MiB | 1,448 / 2,313 | 96,640 / 155,867 |
-| castle | 1280x720 | SoftwareModernNoAmbient | 0.779 | 0.368 | 1,284 | 925 MiB | 1,426 / 2,276 | 94,235 / 152,691 |
-| complex | 1280x720 | PathTracing | 3.041 | 2.446 | 329 | 925 MiB | 3,373 / 19,715 | 40,683 / 237,561 |
-| complex | 1280x720 | SoftwareModernNoAmbient | 0.702 | 0.261 | 1,424 | 952 MiB | 3,219 / 18,662 | 37,963 / 224,852 |
+| Scene | Pipeline | Frame time (ms) | GPU time (ms) | FPS | VRAM | Draw AfterCull / View | Triangles AfterCull / View |
+|------|----------|-----------------|---------------|-----|------|---------------------------|--------------------------|
+| MaterialShowcase | PathTracing | 2.342 | 1.846 | 427 | 978 MiB | 15 / 15 | 13,862 / 13,862 |
+| MaterialShowcase | SoftwareModernNoAmbient | 0.619 | 0.249 | 1,614 | 925 MiB | 15 / 15 | 13,542 / 13,542 |
+| LightingShowcase | PathTracing | 2.836 | 2.408 | 353 | 978 MiB | 9 / 9 | 4,953 / 4,953 |
+| LightingShowcase | SoftwareModernNoAmbient | 0.707 | 0.275 | 1,414 | 925 MiB | 5 / 5 | 2,881 / 2,881 |
+| GIBootcamp | PathTracing | 4.950 | 4.455 | 202 | 925 MiB | 30 / 36 | 4,741 / 4,952 |
+| GIBootcamp | SoftwareModernNoAmbient | 0.994 | 0.547 | 1,006 | 925 MiB | 33 / 40 | 5,175 / 5,388 |
+| KilometerWorld | PathTracing | 1.651 | 1.255 | 606 | 925 MiB | 401 / 1,780 | 4,789 / 21,362 |
+| KilometerWorld | SoftwareModernNoAmbient | 0.991 | 0.496 | 1,009 | 925 MiB | 405 / 1,798 | 4,851 / 21,580 |
+| MassiveAsteroidBelt | PathTracing | 2.089 | 1.598 | 479 | 1,192 MiB | 34,265 / 67,786 | 2,733,342 / 5,422,850 |
+| MassiveAsteroidBelt | SoftwareModernNoAmbient | 0.987 | 0.595 | 1,013 | 1,139 MiB | 32,977 / 65,197 | 2,620,345 / 5,215,602 |
 
-> The figures above can be reproduced using `gkNextMotionBenchmark` under unified hardware / drivers; fetch optional models first with `./gnb paks fetch`. Pass a single orchestration JSON at launch:
+> To reproduce (no optional asset packs needed - every scene is a built-in proc demo):
 >
 > ```bash
 > ./gnb run gkNextMotionBenchmark --benchmark-config assets/configs/motion_benchmark.example.json
 > ```
+>
+> Results are written to `out/build/<preset>/bin/motion_benchmark_report.csv`.
+> Note: the orchestration JSON's `scenes` list only accepts built-in proc demo scene names
+> (for example `GIBootcamp.proc`); `.glb` paths are ignored and the run silently falls back
+> to the built-in scene list.
 
 </details>
 
@@ -173,10 +188,9 @@ On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is i
 
 ## 🚀 Quick Start
 
-For developers in mainland China, please ensure your network stability first. Recommended tools:
-
-[Link with referral code](https://nxonearth.com/signupbyemail.aspx?MemberCode=93e1edc92a95412dbc7ff38c8288951920240913095147)
-[Link without referral code](https://nxonearth.com/signupbyemail.aspx)
+> **Network prerequisite**: the build downloads dependencies, external toolchains and optional asset
+> packs from GitHub and the vcpkg upstream. Make sure those hosts are reachable, or configure a vcpkg
+> mirror, before running `gnb setup`.
 
 The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond the host-side basics you must already have installed (compiler / IDE, CMake, platform SDKs, and similar tools), project-specific dependencies, external toolchains, and optional assets are now prepared by `gnb` whenever possible. You will need a network environment that can access GitHub during dependency setup.
 

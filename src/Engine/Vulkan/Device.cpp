@@ -100,7 +100,11 @@ Device::Device(
 
     if (presentFamily == queueFamilies.end())
     {
-        Throw(std::runtime_error("found no presentation queue"));
+        Throw(std::runtime_error(
+            "The selected graphics device cannot present to a window.\n\n"
+            "This usually means the display is driven by a different GPU than the one in use. "
+            "Select the other device with --gpu <index>, or plug the display into the card "
+            "running the renderer."));
     }
 
     graphicsFamilyIndex_ = static_cast<uint32_t>(graphicsFamily - queueFamilies.begin());
@@ -298,7 +302,24 @@ void Device::CheckRequiredExtensions(VkPhysicalDevice physicalDevice, const std:
             first = false;
         }
 
-        Throw(std::runtime_error("missing required extensions: " + extensions));
+        // This message reaches end users through the startup error dialog, so it names
+        // the device and the exact missing capability rather than only the extension.
+        VkPhysicalDeviceProperties properties = {};
+        vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+
+        Throw(std::runtime_error(fmt::format(
+            "Your graphics device does not support everything this renderer needs.\n\n"
+            "Device: {}\n"
+            "Driver: {}.{}.{} (Vulkan {}.{}.{})\n"
+            "Missing Vulkan extensions: {}\n\n"
+            "Update to the latest driver from your GPU vendor. If the device is older than "
+            "the Vulkan 1.3 baseline, it cannot run this build.",
+            properties.deviceName,
+            VK_VERSION_MAJOR(properties.driverVersion), VK_VERSION_MINOR(properties.driverVersion),
+            VK_VERSION_PATCH(properties.driverVersion),
+            VK_VERSION_MAJOR(properties.apiVersion), VK_VERSION_MINOR(properties.apiVersion),
+            VK_VERSION_PATCH(properties.apiVersion),
+            extensions)));
     }
 }
 

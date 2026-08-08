@@ -117,6 +117,7 @@ func main() {
 	root.AddCommand(newIOSCommand(ctx))
 	root.AddCommand(newPaksCommand(ctx))
 	root.AddCommand(newPackageCommand(ctx))
+	root.AddCommand(newSmokeCommand(ctx))
 	root.AddCommand(newCleanCommand(ctx))
 	root.AddCommand(newInstallCommand(ctx))
 	root.AddCommand(newTodoCommand(ctx))
@@ -854,6 +855,29 @@ func newPackageCommand(ctx appContext) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&versionFlag, "version", "", "package version")
+	return cmd
+}
+
+func newSmokeCommand(ctx appContext) *cobra.Command {
+	opts := packager.SmokeOptions{}
+	timeoutSeconds := 90
+	cmd := &cobra.Command{
+		Use:   "smoke <package.zip>",
+		Short: "Extract a release zip into a clean directory and verify it runs out of the box",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			archive := args[0]
+			if !filepath.IsAbs(archive) {
+				archive = filepath.Join(ctx.repoRoot, archive)
+			}
+			opts.LaunchTimeout = time.Duration(timeoutSeconds) * time.Second
+			return packager.Smoke(archive, opts)
+		},
+	}
+	cmd.Flags().BoolVar(&opts.Launch, "launch", false, "also launch each target and wait for the scene-ready log (needs a Vulkan device)")
+	cmd.Flags().BoolVar(&opts.Keep, "keep", false, "keep the extracted staging directory")
+	cmd.Flags().StringVar(&opts.StagingDir, "staging", "", "extraction directory (default: a temp directory)")
+	cmd.Flags().IntVar(&timeoutSeconds, "timeout", 90, "per-target launch timeout in seconds")
 	return cmd
 }
 

@@ -65,11 +65,21 @@ if(IOS)
             XCODE_ATTRIBUTE_PROVISIONING_PROFILE_SPECIFIER ""
         )
     else()
+        # Signing identity is per-developer and must not be committed. Supply it at
+        # configure time, e.g.:
+        #   cmake --preset ios -DIOS_SKIP_CODE_SIGN=OFF \
+        #         -DIOS_DEVELOPMENT_TEAM=ABCDE12345 \
+        #         -DIOS_PROVISIONING_PROFILE=my.profile.name
+        if(NOT IOS_DEVELOPMENT_TEAM)
+            message(WARNING
+                "IOS_SKIP_CODE_SIGN=OFF but IOS_DEVELOPMENT_TEAM is empty; "
+                "Xcode will not be able to sign gkNextRenderer.")
+        endif()
         set_target_properties(gkNextRenderer PROPERTIES
             XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Manual"
-            XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "LWJL2YZH4A"
-            XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "Apple Development"
-            XCODE_ATTRIBUTE_PROVISIONING_PROFILE_SPECIFIER "nz.new.dev.wildcard"
+            XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "${IOS_DEVELOPMENT_TEAM}"
+            XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "${IOS_CODE_SIGN_IDENTITY}"
+            XCODE_ATTRIBUTE_PROVISIONING_PROFILE_SPECIFIER "${IOS_PROVISIONING_PROFILE}"
         )
     endif()
 

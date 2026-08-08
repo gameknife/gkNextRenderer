@@ -44,11 +44,64 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include "Engine/Utilities/LogFile.hpp"
+
 #include <cstdlib>
+#include <exception>
+#include <string>
 #include <spdlog/spdlog.h>
 
 std::unique_ptr<NextEngine> GApplication;
 std::unique_ptr<Runtime::Config::Options> GOptionPtr;
+
+namespace
+{
+    // Last-resort handler for exceptions that escape a thread or a noexcept context.
+    // Without it the process dies through std::terminate with no log line at all.
+    void InstallTerminateHandler()
+    {
+        std::set_terminate([]()
+        {
+            try
+            {
+                if (const std::exception_ptr active = std::current_exception())
+                {
+                    std::rethrow_exception(active);
+                }
+                SPDLOG_ERROR("TERMINATE: no active exception");
+            }
+            catch (const std::exception& error)
+            {
+                SPDLOG_ERROR("TERMINATE: {}", error.what());
+            }
+            catch (...)
+            {
+                SPDLOG_ERROR("TERMINATE: unknown exception");
+            }
+            spdlog::default_logger()->flush();
+            std::abort();
+        });
+    }
+
+    // Startup failures reach an end user who has no console attached, so state the
+    // cause and where to find the log instead of letting Windows show a crash box.
+    void ReportStartupFailure(const std::string& reason)
+    {
+        SPDLOG_ERROR("startup failed: {}", reason);
+        spdlog::default_logger()->flush();
+
+        std::string message = reason;
+        const std::string& logPath = Utilities::Logging::GetLogFilePath();
+        if (!logPath.empty())
+        {
+            message += "\n\nA full log was written to:\n" + logPath;
+        }
+        message += "\n\nPlease report this at:\nhttps://github.com/gameknife/gkNextRenderer/issues";
+
+        const std::string title = NextRenderer::GetApplicationIdentity() + " failed to start";
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title.c_str(), message.c_str(), nullptr);
+    }
+}
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
@@ -71,30 +124,8 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     return SDL_APP_CONTINUE;
 }
 
-SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
+static SDL_AppResult InitializeApplication(int argc, char *argv[])
 {
-    // std::set_terminate([]()
-    // {
-    //     try
-    //     {
-    //         if (const std::exception_ptr active = std::current_exception())
-    //         {
-    //             std::rethrow_exception(active);
-    //         }
-    //         SPDLOG_ERROR("TERMINATE: no active exception");
-    //     }
-    //     catch (const std::exception& error)
-    //     {
-    //         SPDLOG_ERROR("TERMINATE: {}", error.what());
-    //     }
-    //     catch (...)
-    //     {
-    //         SPDLOG_ERROR("TERMINATE: unknown exception");
-    //     }
-    //     spdlog::default_logger()->flush();
-    //     std::abort();
-    // });
-
     // Handle command line options.
 #if IOS
     const char* argv1[] = { "gkNextRenderer", "--load-scene=assets/models/conf_room.glb" };
@@ -184,26 +215,66 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     }
 #endif
 
-    if (GOption->TestGltfRobustness)
+    GApplication->Start();
+
+    return SDL_APP_CONTINUE;
+}
+
+SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
+{
+    if (argc > 0 && argv[0] != nullptr)
     {
-        SPDLOG_WARN("--test-gltf is not linked into desktop applications; run a dedicated robustness runner instead.");
+        NextRenderer::SetApplicationIdentity(argv[0]);
+    }
+    InstallTerminateHandler();
+    Utilities::Logging::InstallFileSink();
+
+    // Everything below can throw: missing Vulkan extensions, no present queue, out of
+    // device memory, missing assets. Returning SDL_APP_FAILURE gives SDL a clean
+    // shutdown and the process a non-zero exit code.
+    try
+    {
+        return InitializeApplication(argc, argv);
+    }
+    catch (const std::exception& error)
+    {
+        ReportStartupFailure(error.what());
+    }
+    catch (...)
+    {
+        ReportStartupFailure("Unknown fatal error during startup.");
     }
 
-    GApplication->Start();
-    
-    return SDL_APP_CONTINUE;
+    try
+    {
+        // Tearing down a half-initialised engine can fail in turn; the startup error
+        // has already been reported, so never let cleanup mask it.
+        GApplication.reset();
+    }
+    catch (...)
+    {
+        SPDLOG_ERROR("cleanup after failed startup threw; exiting anyway");
+    }
+    return SDL_APP_FAILURE;
 }
 
 void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
-    const int exitCode = GApplication ? GApplication->GetRequestedExitCode() : 0;
+    if (!GApplication)
+    {
+        // Startup failed before the engine existed; nothing to tear down.
+        spdlog::default_logger()->flush();
+        return;
+    }
+
+    const int exitCode = GApplication->GetRequestedExitCode();
     // Shutdown
 #if GK_MODULE_LIVECODING
     Modules::LiveCoding::Shutdown();
 #endif
     GApplication->End();
-    
-    if (GOption->FastExit)
+
+    if (GOption && GOption->FastExit)
     {
 #if __APPLE__
         std::exit(exitCode);

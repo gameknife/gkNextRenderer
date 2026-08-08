@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp" // vulkan.h; this header uses VkExtent2D/VkAccessFlags by value
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 namespace Vulkan

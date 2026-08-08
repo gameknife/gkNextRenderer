@@ -211,7 +211,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
 
     auto& io = ImGui::GetIO();
     fontAtlas_ = io.Fonts;
-    imguiIniPath_ = Utilities::FileHelper::GetPlatformFilePath("imgui.ini");
+    imguiIniPath_ = Utilities::FileHelper::GetWritableFilePath("imgui.ini");
     io.IniFilename = imguiIniPath_.c_str();
     io.WantCaptureMouse = false;
     io.WantCaptureKeyboard = false;

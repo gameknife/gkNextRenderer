@@ -36,10 +36,55 @@
 #include "Engine/Vulkan/SwapChain.hpp"
 
 #include <SDL3/SDL_dialog.h>
+#include <SDL3/SDL_process.h>
 
 
 namespace
 {
+    // Starts gkNextRenderer next to the editor executable without blocking the UI.
+    // std::system() froze the editor until the renderer exited and broke on install
+    // paths containing spaces; SDL_CreateProcess takes an argv array, so no quoting
+    // is involved and the child runs detached.
+    void LaunchRendererDetached()
+    {
+#if WIN32
+        const char* executableName = "gkNextRenderer.exe";
+#else
+        const char* executableName = "gkNextRenderer";
+#endif
+        const std::filesystem::path executable = NextRenderer::GetExecutableDirectory() / executableName;
+        std::error_code existsError;
+        if (!std::filesystem::exists(executable, existsError))
+        {
+            SPDLOG_ERROR("Play: {} was not found next to the editor.", executable.string());
+            SDL_ShowSimpleMessageBox(
+                SDL_MESSAGEBOX_WARNING, "gkNextRenderer not found",
+                ("Expected the renderer at:\n" + executable.string()).c_str(), nullptr);
+            return;
+        }
+
+        const std::string executablePath = executable.string();
+        std::vector<const char*> args;
+        args.push_back(executablePath.c_str());
+        if (GOption->ForceSDR)
+        {
+            args.push_back("--forcesdr");
+        }
+        args.push_back(nullptr);
+
+        SDL_Process* process = SDL_CreateProcess(args.data(), false);
+        if (process == nullptr)
+        {
+            SPDLOG_ERROR("Play: failed to launch {}: {}", executablePath, SDL_GetError());
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "Could not start gkNextRenderer",
+                                     SDL_GetError(), nullptr);
+            return;
+        }
+        // The editor does not wait for or read from the renderer; releasing the handle
+        // leaves the child running on its own.
+        SDL_DestroyProcess(process);
+    }
+
     void CheckVulkanResultCallback(const VkResult err)
     {
         if (err != VK_SUCCESS)
@@ -209,39 +254,19 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 0.0f));
     ImGui::SetCursorPosY((kToolbarSize - kToolbarIconHeight) * 0.5f);
 
-    ImGui::SetNextItemWidth(138.0f);
-    ImGui::Combo("##ProjectSelector", &uiState.toolbar.projectIndex,
-                 ICON_FA_CUBE " RayQuery\0" ICON_FA_CUBE " Playground\0\0");
-    NextUI::Theme::DrawTooltip("Project");
-    ImGui::SameLine();
-
-    ImGui::SetNextItemWidth(108.0f);
-    ImGui::Combo("##BackendSelector", &uiState.toolbar.backendIndex, "Vulkan\0Metal\0DirectX 12\0\0");
-    NextUI::Theme::DrawTooltip("Backend");
-    ImGui::SameLine(0.0f, 12.0f);
-    
+    const float playButtonWidth =
+        std::ceil(ImGui::CalcTextSize(ICON_FA_PLAY " Play").x + ImGui::GetStyle().FramePadding.x * 2.0f + 16.0f);
     ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Success, 0.92f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::Success));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, NextUI::Theme::Color(NextUI::Theme::EColor::Success, 0.75f));
-    if (ImGui::Button(ICON_FA_PLAY " Play", ImVec2(88.0f, kToolbarIconHeight)))
+    if (ImGui::Button(ICON_FA_PLAY " Play", ImVec2(playButtonWidth, kToolbarIconHeight)))
     {
-        std::filesystem::path currentPath = std::filesystem::current_path();
-        std::string cmdline = (currentPath / "gkNextRenderer").string() + (GOption->ForceSDR ? " --forcesdr" : "");
-        std::system(cmdline.c_str());
+        LaunchRendererDetached();
     }
-    NextUI::Theme::DrawTooltip("Run in gkNextRenderer");
+    NextUI::Theme::DrawTooltip("Run the current scene in gkNextRenderer");
     ImGui::PopStyleColor(3);
-    ImGui::SameLine(0.0f, 12.0f);
 
-    ImGui::SetNextItemWidth(116.0f);
-    ImGui::Combo("##PlatformSelector", &uiState.toolbar.platformIndex, ICON_FA_DESKTOP " Desktop\0Android\0iOS\0\0");
-    NextUI::Theme::DrawTooltip("Target Platform");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(134.0f);
-    ImGui::Combo("##BuildConfigSelector", &uiState.toolbar.buildConfigIndex, "Development\0Debug\0Shipping\0\0");
-    NextUI::Theme::DrawTooltip("Build Configuration");
-
-    const float rightStart = viewport->Size.x - 104.0f;
+    const float rightStart = viewport->Size.x - kToolbarIconWidth - 12.0f;
     if (ImGui::GetCursorPosX() < rightStart)
     {
         ImGui::SameLine(rightStart);
@@ -251,20 +276,6 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
     {
         uiState.settingsPanel = !uiState.settingsPanel;
     }
-    ImGui::SameLine(0.0f, 8.0f);
-
-    ImDrawList* drawList = ImGui::GetWindowDrawList();
-    const ImVec2 avatarPos = ImGui::GetCursorScreenPos();
-    const float avatarRadius = kToolbarIconHeight * 0.5f;
-    drawList->AddCircleFilled(avatarPos + ImVec2(avatarRadius, avatarRadius), avatarRadius,
-                              NextUI::Theme::ColorU32(NextUI::Theme::EColor::Accent, 0.55f), 24);
-    drawList->AddCircle(avatarPos + ImVec2(avatarRadius, avatarRadius), avatarRadius,
-                        NextUI::Theme::ColorU32(NextUI::Theme::EColor::BorderStrong), 24, 1.0f);
-    const ImVec2 initialsSize = ImGui::CalcTextSize("GK");
-    drawList->AddText(avatarPos + ImVec2(avatarRadius - initialsSize.x * 0.5f, avatarRadius - initialsSize.y * 0.5f),
-                      NextUI::Theme::ColorU32(NextUI::Theme::EColor::Text), "GK");
-    ImGui::Dummy(ImVec2(kToolbarIconHeight, kToolbarIconHeight));
-    NextUI::Theme::DrawTooltip("User");
 
     ImGui::PopStyleVar();
     ImGui::End();

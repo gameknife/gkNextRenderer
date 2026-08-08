@@ -40,14 +40,6 @@ namespace Editor
 
     struct EditorUiState
     {
-        struct ToolbarState
-        {
-            int projectIndex = 0;
-            int backendIndex = 0;
-            int platformIndex = 0;
-            int buildConfigIndex = 0;
-        };
-
         struct OutlinerState
         {
             uint32_t renameTargetId = InvalidId;
@@ -79,15 +71,6 @@ namespace Editor
             ImGuiTextFilter meshFilter;
             uint32_t pendingRevealMaterialId = InvalidId;
             uint32_t pendingRevealMeshId = InvalidId;
-        };
-
-        struct ViewportOverlayState
-        {
-            int projectionMode = 0;
-            int displayMode = 0;
-            int cameraIndex = 0;
-            float angleSnap = 10.0f;
-            float distanceSnap = 0.25f;
         };
 
         struct SettingsPanelState
@@ -219,11 +202,9 @@ namespace Editor
         SequencerState sequencer;
 
         // Per-surface UI state
-        ToolbarState toolbar;
         OutlinerState outliner;
         PropertiesState propertiesState;
         ContentBrowserState contentBrowserState;
-        ViewportOverlayState viewportOverlay;
         SettingsPanelState settings;
 
         // Tools/children

@@ -31,6 +31,43 @@ namespace Utilities
 #endif
         }
 
+        // Portable mode keeps every writable artifact next to the executable. It is
+        // opt-in through a `portable.txt` marker in the runtime root, because the usual
+        // install location for a release build (Program Files, a read-only mount, a
+        // network share) cannot be written to.
+        inline bool IsPortableMode()
+        {
+            static const bool portable = []
+            {
+                std::error_code errorCode;
+                return std::filesystem::exists(GetDesktopRuntimeRoot() / "portable.txt", errorCode);
+            }();
+            return portable;
+        }
+
+        inline std::filesystem::path GetDesktopWritableRoot()
+        {
+            if (IsPortableMode())
+            {
+                return GetDesktopRuntimeRoot();
+            }
+
+            static const std::filesystem::path preferencesRoot = []
+            {
+                char* preferences = SDL_GetPrefPath("gkNext", NextRenderer::GetApplicationIdentity().c_str());
+                if (preferences == nullptr)
+                {
+                    // Nothing else is writable for certain, so fall back to the install
+                    // directory; individual writes still fail gracefully.
+                    return GetDesktopRuntimeRoot();
+                }
+                std::filesystem::path resolved = std::filesystem::path(preferences).lexically_normal();
+                SDL_free(preferences);
+                return resolved;
+            }();
+            return preferencesRoot;
+        }
+
         static std::filesystem::path GetWritableRuntimeRoot()
         {
 #if ANDROID
@@ -38,7 +75,7 @@ namespace Utilities
 #elif IOS
             return std::filesystem::path(SDL_GetPrefPath("gknext", "renderer"));
 #else
-            return GetDesktopRuntimeRoot();
+            return GetDesktopWritableRoot();
 #endif
         }
 
@@ -71,6 +108,30 @@ namespace Utilities
         static std::string GetPlatformFilePath( const char* srcPath )
         {
             return GetRuntimeRoot().append(srcPath).string();
+        }
+
+        // Path for data the application produces (settings, logs, screenshots, layout).
+        // Always use this instead of GetPlatformFilePath for writes: the runtime root is
+        // read-only for an installed release.
+        static std::string GetWritableFilePath( const char* srcPath )
+        {
+            std::filesystem::path fullPath = GetWritableRuntimeRoot() / srcPath;
+            std::error_code errorCode;
+            std::filesystem::create_directories(fullPath.parent_path(), errorCode);
+            return fullPath.string();
+        }
+
+        // Reads user data written by GetWritableFilePath, falling back to the runtime
+        // root so existing portable installs and in-repo development keep working.
+        static std::string ResolveWritableFileForRead( const char* srcPath )
+        {
+            const std::filesystem::path writablePath = GetWritableRuntimeRoot() / srcPath;
+            std::error_code errorCode;
+            if (std::filesystem::exists(writablePath, errorCode))
+            {
+                return writablePath.string();
+            }
+            return GetPlatformFilePath(srcPath);
         }
 
         static std::string GetNormalizedFilePath( const char* srcPath )

@@ -1,11 +1,36 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
 #include <system_error>
 #include <SDL3/SDL.h>
 
 namespace NextRenderer
 {
+    // Short, filesystem-safe name of the running application. It names the per-user
+    // data directory (see Utilities::FileHelper::GetWritableRuntimeRoot) and the log
+    // file, so each shipped target keeps its own settings and layout.
+    inline std::string& ApplicationIdentityStorage()
+    {
+        static std::string identity = "gkNextRenderer";
+        return identity;
+    }
+
+    inline const std::string& GetApplicationIdentity()
+    {
+        return ApplicationIdentityStorage();
+    }
+
+    // Call once at process start, before any writable path is resolved.
+    inline void SetApplicationIdentity(const std::filesystem::path& executablePath)
+    {
+        const std::string stem = executablePath.stem().string();
+        if (!stem.empty())
+        {
+            ApplicationIdentityStorage() = stem;
+        }
+    }
+
     inline std::filesystem::path GetExecutableDirectory()
     {
         if (const char* basePath = SDL_GetBasePath(); basePath != nullptr && basePath[0] != '\0')

@@ -317,15 +317,9 @@ namespace Editor
                 ImGui::EndMenu();
             }
 
-            bool buildMenuOpen = ImGui::BeginMenu("Build");
-            menuRight = std::max(menuRight, ImGui::GetItemRectMax().x);
-            if (buildMenuOpen)
-            {
-                ImGui::MenuItem("Cook Assets", nullptr, false, false);
-                ImGui::MenuItem("Package Project", nullptr, false, false);
-                ImGui::MenuItem("Launch Renderer", nullptr, false, false);
-                ImGui::EndMenu();
-            }
+            // The Build menu is intentionally absent: cooking and packaging are driven by
+            // `gnb`, and "Launch Renderer" is the Play button in the toolbar. A menu of
+            // permanently greyed items reads as a broken feature.
 
             bool windowsMenuOpen = ImGui::BeginMenu("Windows");
             menuRight = std::max(menuRight, ImGui::GetItemRectMax().x);

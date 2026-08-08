@@ -106,7 +106,12 @@ namespace Runtime
 
         std::filesystem::path ResolveFfmpegPath()
         {
-            const std::filesystem::path executablePath = NextRenderer::GetExecutableDirectory() / "ffmpeg.exe";
+#if WIN32
+            constexpr const char* ffmpegName = "ffmpeg.exe";
+#else
+            constexpr const char* ffmpegName = "ffmpeg";
+#endif
+            const std::filesystem::path executablePath = NextRenderer::GetExecutableDirectory() / ffmpegName;
             std::error_code errorCode;
             if (std::filesystem::is_regular_file(executablePath, errorCode))
             {
@@ -421,6 +426,11 @@ namespace Runtime
 
     FScreenShotService::FScreenShotService(NextEngine& engine) : engine_(engine) {}
 
+    bool FScreenShotService::IsGifEncodingAvailable()
+    {
+        return !ResolveFfmpegPath().empty();
+    }
+
     bool FScreenShotService::Request(FRequest request)
     {
         if (IsBusy())
@@ -625,7 +635,7 @@ namespace Runtime
 
     std::string FScreenShotService::GetDirectory() const
     {
-        return Utilities::FileHelper::GetPlatformFilePath("screenshots");
+        return Utilities::FileHelper::GetWritableFilePath("screenshots");
     }
 
     void FScreenShotService::EnsureDirectory() const

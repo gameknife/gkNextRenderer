@@ -182,18 +182,8 @@ namespace Editor
         }
 
         constexpr float padding = 8.0f;
+        constexpr float toolbarItemSpacing = 6.0f;
 
-        NextUI::Theme::FOverlayPanelConfig toolbarConfig{};
-        toolbarConfig.WindowId = "ViewportToolbar";
-        toolbarConfig.Position = pos + ImVec2(padding, padding);
-        toolbarConfig.Size = ImVec2(std::min(700.0f, size.x - padding * 2.0f), 36.0f);
-        toolbarConfig.Padding = ImVec2(0.0f, 4.0f);
-        toolbarConfig.ItemSpacing = ImVec2(6.0f, 0.0f);
-        toolbarConfig.BackgroundAlpha = 0.0f;
-
-        NextUI::Theme::BeginOverlayPanel(toolbarConfig);
-
-        auto& overlayState = ui.viewportOverlay;
         Runtime::Config::UserSettings& userSettings = ctx.engine.GetUserSettings();
         auto& renderer = ctx.engine.GetRenderer();
         const auto supportedRenderers = BuildSupportedRendererList(ctx.engine);
@@ -205,7 +195,33 @@ namespace Editor
                                                              : supportedRenderers.front();
         }
 
-        ImGui::SetNextItemWidth(170.0f);
+        // Size the toolbar from the widest renderer name it can display rather than a
+        // fixed pixel budget, so nothing clips at a different DPI, font or locale.
+        float widestRendererName = 0.0f;
+        for (Vulkan::ERendererType rendererType : supportedRenderers)
+        {
+            widestRendererName =
+                std::max(widestRendererName, ImGui::CalcTextSize(Vulkan::GetRendererName(rendererType)).x);
+        }
+        const ImGuiStyle& style = ImGui::GetStyle();
+        const float rendererComboWidth =
+            std::ceil(widestRendererName + style.FramePadding.x * 2.0f + ImGui::GetFrameHeight());
+        const float showButtonWidth =
+            std::ceil(ImGui::CalcTextSize(ICON_FA_EYE " Show").x + style.FramePadding.x * 2.0f + 12.0f);
+        const float toolbarWidth = rendererComboWidth + toolbarItemSpacing + showButtonWidth;
+
+        NextUI::Theme::FOverlayPanelConfig toolbarConfig{};
+        toolbarConfig.WindowId = "ViewportToolbar";
+        toolbarConfig.Position = pos + ImVec2(padding, padding);
+        toolbarConfig.Size = ImVec2(std::min(toolbarWidth, size.x - padding * 2.0f),
+                                    std::ceil(ImGui::GetFrameHeight() + 14.0f));
+        toolbarConfig.Padding = ImVec2(0.0f, 4.0f);
+        toolbarConfig.ItemSpacing = ImVec2(toolbarItemSpacing, 0.0f);
+        toolbarConfig.BackgroundAlpha = 0.0f;
+
+        NextUI::Theme::BeginOverlayPanel(toolbarConfig);
+
+        ImGui::SetNextItemWidth(rendererComboWidth);
         if (ImGui::BeginCombo("##ViewportRenderer", Vulkan::GetRendererName(currentRendererType)))
         {
             for (Vulkan::ERendererType rendererType : supportedRenderers)
@@ -229,30 +245,11 @@ namespace Editor
         NextUI::Theme::DrawTooltip("Active Renderer");
         ImGui::SameLine();
 
-        ImGui::SetNextItemWidth(126.0f);
-        ImGui::Combo("##ViewportProjection", &overlayState.projectionMode, "Perspective\0Orthographic\0\0");
-        NextUI::Theme::DrawTooltip("Camera Projection");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(110.0f);
-        ImGui::Combo("##ViewportDisplayMode", &overlayState.displayMode, "Lit\0Lighting\0Wireframe\0\0");
-        NextUI::Theme::DrawTooltip("Display Mode");
-        ImGui::SameLine();
-        if (NextUI::Theme::ToolbarButton(ICON_FA_EYE " Show", "Show Flags", false, ImVec2(72.0f, 26.0f)))
+        if (NextUI::Theme::ToolbarButton(ICON_FA_EYE " Show", "Show Flags", false,
+                                        ImVec2(showButtonWidth, ImGui::GetFrameHeight())))
         {
             ImGui::OpenPopup("ViewportShowFlags");
         }
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(80.0f);
-        ImGui::DragFloat("##AngleSnap", &overlayState.angleSnap, 1.0f, 1.0f, 90.0f, "%.0f deg");
-        NextUI::Theme::DrawTooltip("Angle Snap");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(80.0f);
-        ImGui::DragFloat("##DistanceSnap", &overlayState.distanceSnap, 0.01f, 0.01f, 10.0f, "%.2f");
-        NextUI::Theme::DrawTooltip("Distance Snap");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(100.0f);
-        ImGui::Combo("##ViewportCamera", &overlayState.cameraIndex, "Camera 0\0Editor Cam\0\0");
-        NextUI::Theme::DrawTooltip("Active Camera");
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 12));
         if (ImGui::BeginPopup("ViewportShowFlags"))
@@ -306,7 +303,10 @@ namespace Editor
         ImGui::PopStyleColor();
         NextUI::Theme::EndOverlayPanel();
 
-        if (renderer.CurrentRendererRequirements().requestAmbientCube)
+        // AmbientCube brick residency is an engine-internal diagnostic; it stays behind
+        // the graphics debug flag so the default viewport is free of internal counters.
+        if (renderer.CurrentRendererRequirements().requestAmbientCube &&
+            ctx.engine.GetShowFlags().DebugGraphicsPanel)
         {
             uint32_t activeAmbientBricks = 0u;
             const uint32_t ambientCascadeCapacity = ctx.scene.AmbientCubeCascadeCapacity();
