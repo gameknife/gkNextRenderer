@@ -57,6 +57,8 @@ namespace Editor
         {
             uint32_t editingNodeId = InvalidId;
             std::string editingName;
+            bool renamingName = false;
+            bool focusNameInput = false;
             ImGuiTextFilter propertyFilter;
         };
 

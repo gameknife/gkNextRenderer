@@ -316,12 +316,48 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
         .warnOnFailure = false,
     });
 
+    constexpr float titleFontSize = 18.0f;
     titleBarFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/Roboto-BoldCondensed.ttf",
-        .pixelSize = 18.0f,
+        .pixelSize = titleFontSize,
         .includeChineseFull = false,
         .extraGlyphsUtf8 = "gkNextRenderer gkNextEditor SCAD Studio SCAD Library",
     });
+    if (titleBarFont_ != nullptr)
+    {
+        ImFontConfig titleIconConfig;
+        titleIconConfig.MergeMode = true;
+        titleIconConfig.GlyphMinAdvanceX = titleFontSize;
+        titleIconConfig.GlyphOffset = ImVec2(0, 0);
+
+        NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
+            .filePath = "assets/fonts/fa-regular-400.ttf",
+            .pixelSize = titleFontSize - 2.0f,
+            .includeChineseFull = false,
+            .glyphRanges = iconRange,
+            .fontConfig = &titleIconConfig,
+            .rasterizerDensity = scaleFactor,
+            .warnOnFailure = false,
+        });
+        NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
+            .filePath = "assets/fonts/fa-solid-900.ttf",
+            .pixelSize = titleFontSize - 2.0f,
+            .includeChineseFull = false,
+            .glyphRanges = iconRange,
+            .fontConfig = &titleIconConfig,
+            .rasterizerDensity = scaleFactor,
+            .warnOnFailure = false,
+        });
+        NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
+            .filePath = "assets/fonts/fa-brands-400.ttf",
+            .pixelSize = titleFontSize - 2.0f,
+            .includeChineseFull = false,
+            .glyphRanges = iconRange,
+            .fontConfig = &titleIconConfig,
+            .rasterizerDensity = scaleFactor,
+            .warnOnFailure = false,
+        });
+    }
 
     if (funcInit != nullptr)
     {

@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <fmt/format.h>
@@ -471,26 +472,16 @@ namespace Editor
                 currentPath = rootPath;
             }
 
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 4));
-
-            if (ImGui::Button(ICON_FA_HOUSE))
+            if (NextUI::Theme::GhostButton(ICON_FA_HOUSE, "Assets Root"))
             {
                 currentPath = rootPath;
             }
-            if (ImGui::IsItemHovered())
-            {
-                ImGui::SetTooltip("Assets Root");
-            }
 
             ImGui::SameLine();
-            if (ImGui::Button(ICON_FA_ROTATE))
+            if (NextUI::Theme::GhostButton(ICON_FA_ROTATE, "Refresh Current Folder"))
             {
                 directoryCache.clear();
                 visibilityCache.clear();
-            }
-            if (ImGui::IsItemHovered())
-            {
-                ImGui::SetTooltip("Refresh Current Folder");
             }
 
             const std::filesystem::path rel = currentPath.lexically_relative(rootPath);
@@ -511,15 +502,50 @@ namespace Editor
 
                     crumbPath /= part;
                     ImGui::PushID(label.c_str());
-                    if (ImGui::Button(label.c_str()))
+                    if (NextUI::Theme::GhostButton(label.c_str()))
                     {
                         currentPath = crumbPath;
                     }
                     ImGui::PopID();
                 }
             }
+        }
 
-            ImGui::PopStyleVar();
+        void DrawContentBrowserStatus(int itemCount, int selectedCount)
+        {
+            static constexpr std::array<const char*, 3> thumbnailLabels = {"Small", "Medium", "Large"};
+            static constexpr std::array<float, 3> thumbnailSizes = {56.0f, 82.0f, 108.0f};
+            constexpr float thumbnailControlWidth = 148.0f;
+
+            int thumbnailIndex = 0;
+            float closestDistance = std::numeric_limits<float>::max();
+            for (int i = 0; i < static_cast<int>(thumbnailSizes.size()); ++i)
+            {
+                const float distance = std::abs(GContentBrowserIconSize - thumbnailSizes[i]);
+                if (distance < closestDistance)
+                {
+                    thumbnailIndex = i;
+                    closestDistance = distance;
+                }
+            }
+
+            ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(),
+                                          ImGui::GetWindowContentRegionMax().x - thumbnailControlWidth));
+            ImGui::SetNextItemWidth(thumbnailControlWidth);
+            const std::string preview = fmt::format("Thumbnail: {}", thumbnailLabels[thumbnailIndex]);
+            if (ImGui::BeginCombo("##ContentBrowserThumbnailSize", preview.c_str()))
+            {
+                for (int i = 0; i < static_cast<int>(thumbnailSizes.size()); ++i)
+                {
+                    if (ImGui::Selectable(thumbnailLabels[i], thumbnailIndex == i))
+                    {
+                        GContentBrowserIconSize = thumbnailSizes[i];
+                    }
+                }
+                ImGui::EndCombo();
+            }
         }
 
         void DrawBrowserSectionSidebar(EBrowserSection& section)
@@ -907,38 +933,12 @@ namespace Editor
                 ImGui::BeginChild("ContentRightFrame", ImVec2(0.0f, 0.0f), 0, ImGuiWindowFlags_NoBackground);
                 if (currentSection == EBrowserSection::Content)
                 {
-                    ImGui::BeginChild("ContentBrowserMain", ImVec2(0.0f, -24.0f), true);
+                    ImGui::BeginChild("ContentBrowserMain", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), true);
 
-                    if (ImGui::Button(ICON_FA_PLUS " Add"))
-                    {
-                        ImGui::OpenPopup("ContentAddPopup");
-                    }
-                    if (ImGui::BeginPopup("ContentAddPopup"))
-                    {
-                        ImGui::MenuItem("Material", nullptr, false, false);
-                        ImGui::MenuItem("Texture", nullptr, false, false);
-                        ImGui::MenuItem("Scene", nullptr, false, false);
-                        ImGui::MenuItem("Script", nullptr, false, false);
-                        ImGui::EndPopup();
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button(ICON_FA_FILE_IMPORT " Import"))
-                    {
-                        SPDLOG_INFO("Content Browser import placeholder");
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button(ICON_FA_FLOPPY_DISK " Save All"))
-                    {
-                        SPDLOG_INFO("Content Browser save all placeholder");
-                    }
-                    ImGui::SameLine();
                     DrawContentBrowserNavigation(rootPath, browserState.currentPath, directoryCache, visibilityCache);
                     ImGui::SameLine();
                     ImGui::SetNextItemWidth(190.0f);
                     browserState.contentFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##ContentBrowserFilter", 190.0f);
-                    ImGui::SameLine();
-                    ImGui::SetNextItemWidth(104.0f);
-                    ImGui::SliderFloat("Thumbnail", &GContentBrowserIconSize, 52.0f, 108.0f, "%.0f");
 
                     NextUI::Theme::DrawThinSeparator(0.70f);
                     ImGui::BeginChild("Content Items", ImVec2(0.0f, 0.0f));
@@ -1047,40 +1047,40 @@ namespace Editor
                     
                     ImGui::EndChild();
                     selectedCount = ui.selectedContentItemId != InvalidId ? 1 : 0;
-                    ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
+                    DrawContentBrowserStatus(itemCount, selectedCount);
                 }
                 else if (currentSection == EBrowserSection::Material)
                 {
                     ImGui::SetNextItemWidth(220.0f);
                     browserState.materialFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##MaterialBrowserFilter", 220.0f);
                     NextUI::Theme::DrawThinSeparator(0.70f);
-                    ImGui::BeginChild("Material Items", ImVec2(0.0f, -24.0f), true);
+                    ImGui::BeginChild("Material Items", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), true);
                     itemCount = DrawMaterialBrowserContents(ctx, ui, &browserState.materialFilter);
                     ImGui::EndChild();
                     selectedCount = ui.selectedMaterialId != InvalidId ? 1 : 0;
-                    ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
+                    DrawContentBrowserStatus(itemCount, selectedCount);
                 }
                 else if (currentSection == EBrowserSection::Texture)
                 {
                     ImGui::SetNextItemWidth(220.0f);
                     browserState.textureFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##TextureBrowserFilter", 220.0f);
                     NextUI::Theme::DrawThinSeparator(0.70f);
-                    ImGui::BeginChild("Texture Items", ImVec2(0.0f, -24.0f), true);
+                    ImGui::BeginChild("Texture Items", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), true);
                     itemCount = DrawTextureBrowserContents(ctx, ui, &browserState.textureFilter);
                     ImGui::EndChild();
                     selectedCount = ui.selectedTextureId != InvalidId ? 1 : 0;
-                    ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
+                    DrawContentBrowserStatus(itemCount, selectedCount);
                 }
                 else if (currentSection == EBrowserSection::Mesh)
                 {
                     ImGui::SetNextItemWidth(220.0f);
                     browserState.meshFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##MeshBrowserFilter", 220.0f);
                     NextUI::Theme::DrawThinSeparator(0.70f);
-                    ImGui::BeginChild("Mesh Items", ImVec2(0.0f, -24.0f), true);
+                    ImGui::BeginChild("Mesh Items", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), true);
                     itemCount = DrawMeshBrowserContents(ctx, ui, &browserState.meshFilter);
                     ImGui::EndChild();
                     selectedCount = ui.selectedMeshId != InvalidId ? 1 : 0;
-                    ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
+                    DrawContentBrowserStatus(itemCount, selectedCount);
                 }
                 ImGui::EndChild();
             }

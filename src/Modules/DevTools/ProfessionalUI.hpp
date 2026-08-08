@@ -30,6 +30,8 @@ namespace NextUI::Theme
 
     ImVec4 Color(EColor color, float alpha = 1.0f);
     ImU32 ColorU32(EColor color, float alpha = 1.0f);
+    ImFont* GetDefaultFont(NextEngine& engine);
+    ImFont* GetTitleFont(NextEngine& engine);
 
     struct FAppTitleBarConfig
     {
@@ -89,7 +91,9 @@ namespace NextUI::Theme
                                std::function<void()> onCppReloadClicked = {}, bool cppLiveCodingAvailable = false,
                                std::function<void()> onCaptureClicked = {});
     void DrawTooltip(const char* text);
-    bool IconButton(const char* label, const char* tooltip, bool active = false, ImVec2 size = ImVec2(30.0f, 30.0f));
+    // A non-positive size component is fitted to the active font and theme padding.
+    bool IconButton(const char* label, const char* tooltip, bool active = false, ImVec2 size = ImVec2(0.0f, 0.0f));
+    bool GhostButton(const char* label, const char* tooltip = nullptr, ImVec2 size = ImVec2(0.0f, 0.0f));
     bool ToolbarButton(const char* label, const char* tooltip, bool active = false, ImVec2 size = ImVec2(34.0f, 30.0f));
     bool ModeRailButton(const char* icon, const char* tooltip, bool active, float buttonSize);
     bool BeginSection(const char* icon, const char* label, bool defaultOpen = true);

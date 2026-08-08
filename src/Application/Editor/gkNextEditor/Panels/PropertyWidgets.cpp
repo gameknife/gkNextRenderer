@@ -2,6 +2,7 @@
 #include "Modules/DevTools/Command/PropertyCommand.hpp"
 #include "Engine/Runtime/Reflection/ReflectionMacros.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
+#include "Modules/DevTools/ProfessionalUI.hpp"
 
 #include <imgui_stdlib.h>
 #include <imgui_internal.h>
@@ -11,6 +12,8 @@
 #include <array>
 #include <vector>
 
+#include "Engine/Runtime/Engine.hpp"
+
 namespace Editor
 {
     using namespace Reflection;
@@ -19,19 +22,34 @@ namespace Editor
     // UI Helper functions for consistent property panel styling
     // ============================================================================
     
-    // Begin a property row with label on left (50:50 ratio)
+    // Begin a property row with the label in the first table column when called
+    // from DrawComponentProperties, or fall back to the inline layout used by
+    // standalone property widgets.
     // trailingWidth: reserve space for a trailing widget (e.g., reset button)
     static void BeginPropertyRow(const char* label, float trailingWidth = 0.0f)
     {
-        const float contentWidth = ImGui::GetContentRegionAvail().x;
-        const float labelWidth = std::clamp(contentWidth * 0.42f, 92.0f, 138.0f);
-
         // Draw label
+        if (ImGui::GetCurrentTable())
+        {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+        }
+
         ImGui::AlignTextToFramePadding();
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.63f, 0.67f, 0.73f, 1.0f));
         ImGui::TextUnformatted(label);
         ImGui::PopStyleColor();
-        ImGui::SameLine(labelWidth);
+
+        if (ImGui::GetCurrentTable())
+        {
+            ImGui::TableSetColumnIndex(1);
+        }
+        else
+        {
+            const float contentWidth = ImGui::GetContentRegionAvail().x;
+            const float labelWidth = std::clamp(contentWidth * 0.42f, 92.0f, 138.0f);
+            ImGui::SameLine(labelWidth);
+        }
 
         // Set width for the value widget, reserving space for trailing
         float avail = ImGui::GetContentRegionAvail().x;
@@ -97,18 +115,58 @@ namespace Editor
     static bool DrawAssetWidget(uint32_t& value, const bool readOnly, const float thumbnailSize,
                                 const PropertyWidgets::AssetWidgetConfig& config)
     {
-        DrawAssetThumbnail(config.thumbnail ? config.thumbnail(value) : 0, thumbnailSize);
-        ImGui::SameLine();
-        ImGui::BeginGroup();
-
         const std::string assetName = config.name ? config.name(value) : fmt::format("Missing asset #{}", value);
+        const ImGuiStyle& style = ImGui::GetStyle();
+        const float size = std::max(thumbnailSize, 1.0f);
+        const float padding = std::clamp(size * 0.10f, 6.0f, 10.0f);
+        const float spacing = std::max(style.ItemSpacing.x, padding * 0.5f);
+        const float preferredButtonSize = std::min(ImGui::GetFrameHeight() * 2.0f, size * 0.4f);
+        const float contentHeight = std::max(size, preferredButtonSize);
+        const float cardWidth = std::max(ImGui::GetContentRegionAvail().x, size + padding * 2.0f);
+        const float cardHeight = contentHeight + padding * 2.0f;
+        const ImVec2 cardMin = ImGui::GetCursorScreenPos();
+        const ImVec2 cardMax = cardMin + ImVec2(cardWidth, cardHeight);
+
+        // Reserve the whole card first so the flat background and the custom layout
+        // do not change the height of the surrounding property row.
+        ImGui::Dummy(ImVec2(cardWidth, cardHeight));
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        drawList->AddRectFilled(cardMin, cardMax, ImGui::GetColorU32(ImGuiCol_FrameBg, 0.72f), 4.0f);
+        drawList->AddRect(cardMin, cardMax, ImGui::GetColorU32(ImGuiCol_Border, 0.45f), 4.0f);
+
+        const ImVec2 thumbnailMin = cardMin + ImVec2(padding, padding + (contentHeight - size) * 0.5f);
+        ImGui::SetCursorScreenPos(thumbnailMin);
+        DrawAssetThumbnail(config.thumbnail ? config.thumbnail(value) : 0, size);
+
+        const float panelWidth = std::max(cardWidth - size - padding * 2.0f - spacing, 1.0f);
+        const float panelMinX = thumbnailMin.x + size + spacing;
+        const float panelMaxX = panelMinX + panelWidth;
+        const ImVec2 panelMin(panelMinX, cardMin.y + padding);
+
+        const int actionCount = config.editAsset ? 3 : 2;
+        const float actionSpacing = std::max(style.ItemSpacing.x, padding * 0.5f);
+        const float availableButtonWidth = std::max(panelWidth - actionSpacing * (actionCount - 1), 1.0f);
+        const float buttonSize = std::min(preferredButtonSize, availableButtonWidth / actionCount);
+        const float buttonRowY = panelMin.y + contentHeight - buttonSize;
+
+        // Give the name the upper part of the thumbnail's height and keep the
+        // action row aligned to the bottom, regardless of the thumbnail size.
+        ImGui::SetCursorScreenPos(panelMin);
+        ImGui::PushClipRect(panelMin, ImVec2(panelMaxX, buttonRowY - style.ItemSpacing.y), true);
+        ImGui::PushTextWrapPos(panelMaxX);
+        ImGui::PushFont(NextUI::Theme::GetTitleFont(*NextEngine::GetInstance()));
         ImGui::TextWrapped("%s", assetName.c_str());
+        ImGui::PopFont();
+        ImGui::PopTextWrapPos();
+        ImGui::PopClipRect();
 
         bool changed = false;
         constexpr uint32_t invalidId = std::numeric_limits<uint32_t>::max();
         const uint32_t selected = config.selectedAsset ? config.selectedAsset() : invalidId;
+
+        ImGui::SetCursorScreenPos(ImVec2(panelMinX, buttonRowY));
         if (readOnly || selected == invalidId) ImGui::BeginDisabled();
-        if (ImGui::SmallButton(ICON_FA_ARROW_POINTER))
+        if (ImGui::Button(ICON_FA_ARROW_POINTER, ImVec2(buttonSize, buttonSize)))
         {
             value = selected;
             changed = true;
@@ -119,9 +177,9 @@ namespace Editor
         }
         if (readOnly || selected == invalidId) ImGui::EndDisabled();
 
-        ImGui::SameLine();
+        ImGui::SameLine(0.0f, actionSpacing);
         if (!config.locateAsset) ImGui::BeginDisabled();
-        if (ImGui::SmallButton(ICON_FA_MAGNIFYING_GLASS)) config.locateAsset(value);
+        if (ImGui::Button(ICON_FA_MAGNIFYING_GLASS, ImVec2(buttonSize, buttonSize))) config.locateAsset(value);
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         {
             ImGui::SetTooltip("Locate this asset in Content Browser");
@@ -130,21 +188,23 @@ namespace Editor
 
         if (config.editAsset)
         {
-            ImGui::SameLine();
-            if (ImGui::SmallButton(ICON_FA_PEN_TO_SQUARE)) config.editAsset(value);
+            ImGui::SameLine(0.0f, actionSpacing);
+            if (ImGui::Button(ICON_FA_PEN_TO_SQUARE, ImVec2(buttonSize, buttonSize))) config.editAsset(value);
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("Open this material in Material Editor");
         }
 
-        ImGui::EndGroup();
+        // Return the cursor to the reserved card bounds before the next property.
+        ImGui::SetCursorScreenPos(ImVec2(cardMin.x, cardMax.y));
+        ImGui::Dummy(ImVec2(0.0f, 0.0f));
         return changed;
     }
 
     // Draw a category header with distinctive style
     static bool DrawCategoryHeader(const char* category)
     {
-        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.25f, 0.25f, 0.25f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.2f, 0.2f, 0.2f, 0.2f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.3f, 0.3f, 0.3f, 0.2f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.25f, 0.25f, 0.25f, 0.2f));
         
         bool open = ImGui::CollapsingHeader(category, ImGuiTreeNodeFlags_DefaultOpen);
         
@@ -185,17 +245,19 @@ namespace Editor
         bool isReadOnly = config.readOnly || propInfo.meta.IsReadOnly();
 
         auto metaType = component->GetMetaType();
+        const char* label = propInfo.meta.displayName.empty()
+            ? propInfo.name.c_str()
+            : propInfo.meta.displayName.c_str();
         auto currentValue = PropertyAccessor::GetPropertyValue(metaType, component, propInfo.name);
 
         if (!currentValue)
         {
-            ImGui::Text("%s: <unable to read>", propInfo.name.c_str());
+            DrawPropertyRow(label, []() {
+                ImGui::TextUnformatted("<unable to read>");
+                return false;
+            });
             return false;
         }
-
-        const char* label = propInfo.meta.displayName.empty()
-            ? propInfo.name.c_str()
-            : propInfo.meta.displayName.c_str();
 
         entt::meta_any oldValue = currentValue;
 
@@ -261,7 +323,7 @@ namespace Editor
                     if (propInfo.name == "ModelId" && config.modelAsset.thumbnail)
                     {
                         if (DrawPropertyRow(label, [&]() {
-                                return DrawAssetWidget(val, isReadOnly, 52.0f, config.modelAsset);
+                                return DrawAssetWidget(val, isReadOnly, 64.0f, config.modelAsset);
                             }))
                         {
                             changed = true;
@@ -467,7 +529,10 @@ namespace Editor
                 }
                 else
                 {
-                    ImGui::Text("%s: <enum type unknown>", label);
+                    DrawPropertyRow(label, []() {
+                        ImGui::TextUnformatted("<enum type unknown>");
+                        return false;
+                    });
                 }
                 break;
             }
@@ -483,7 +548,10 @@ namespace Editor
             }
 
             default:
-                ImGui::Text("%s: <unsupported type>", label);
+                DrawPropertyRow(label, []() {
+                    ImGui::TextUnformatted("<unsupported type>");
+                    return false;
+                });
                 break;
         }
 
@@ -553,24 +621,45 @@ namespace Editor
 
             if (DrawCategoryHeader(category.c_str()))
             {
-                ImGui::Indent();
-                for (const auto& prop : props)
+                constexpr ImGuiTableFlags tableFlags =
+                    ImGuiTableFlags_Resizable |
+                    ImGuiTableFlags_SizingStretchProp |
+                    ImGuiTableFlags_BordersInnerV |
+                    ImGuiTableFlags_BordersInnerH;
+                ImGui::PushStyleColor(ImGuiCol_TableBorderLight,
+                                      ImGui::GetColorU32(ImGuiCol_Border, 0.35f));
+                if (ImGui::BeginTable("##Properties", 2, tableFlags))
                 {
-                    // Skip individual properties that don't pass the filter
-                    if (filter && filter->IsActive())
-                    {
-                        const char* displayName = prop.meta.displayName.empty()
-                            ? prop.name.c_str() : prop.meta.displayName.c_str();
-                        if (!filter->PassFilter(displayName))
-                            continue;
-                    }
+                    ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthStretch, 0.42f);
+                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch, 0.58f);
 
-                    if (DrawProperty(prop, component, history, config, &defaultInstance))
+                    // All category tables intentionally share the same table ID so ImGui
+                    // synchronizes their column sizing. Keep property widget IDs scoped by
+                    // component and category to avoid collisions between identical names.
+                    ImGui::PushID(component);
+                    ImGui::PushID(category.c_str());
+                    for (const auto& prop : props)
                     {
-                        anyChanged = true;
+                        // Skip individual properties that don't pass the filter
+                        if (filter && filter->IsActive())
+                        {
+                            const char* displayName = prop.meta.displayName.empty()
+                                ? prop.name.c_str() : prop.meta.displayName.c_str();
+                            if (!filter->PassFilter(displayName))
+                                continue;
+                        }
+
+                        if (DrawProperty(prop, component, history, config, &defaultInstance))
+                        {
+                            anyChanged = true;
+                        }
                     }
+                    ImGui::PopID();
+                    ImGui::PopID();
+
+                    ImGui::EndTable();
                 }
-                ImGui::Unindent();
+                ImGui::PopStyleColor();
             }
         }
 
@@ -875,9 +964,13 @@ namespace Editor
     )
     {
         bool changed = false;
-        std::string headerLabel = std::string(label) + " [" + std::to_string(size) + "]";
-        
-        if (ImGui::TreeNodeEx(headerLabel.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+        BeginPropertyRow(label);
+        ImGui::PushID(label);
+        const bool open = ImGui::TreeNodeEx("##Array", ImGuiTreeNodeFlags_DefaultOpen,
+                                            "%zu items", size);
+        ImGui::PopID();
+
+        if (open)
         {
             for (size_t i = 0; i < size; ++i)
             {
@@ -945,7 +1038,7 @@ namespace Editor
                     if (elementAsset.thumbnail)
                     {
                         BeginPropertyRow(lbl);
-                        return DrawAssetWidget(val, ro, 44.0f, elementAsset);
+                        return DrawAssetWidget(val, ro, 64.0f, elementAsset);
                     }
                     return DrawUInt(lbl, val, 1.0f, 0, UINT_MAX, ro);
                 });
@@ -1001,9 +1094,13 @@ namespace Editor
         }
         
         size_t size = std::min(container.size(), displayLimit);
-        std::string headerLabel = std::string(label) + " [" + std::to_string(size) + "]";
-        
-        if (ImGui::TreeNodeEx(headerLabel.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+        BeginPropertyRow(label);
+        ImGui::PushID(label);
+        const bool open = ImGui::TreeNodeEx("##Array", ImGuiTreeNodeFlags_DefaultOpen,
+                                            "%zu items", size);
+        ImGui::PopID();
+
+        if (open)
         {
             for (size_t i = 0; i < size; ++i)
             {

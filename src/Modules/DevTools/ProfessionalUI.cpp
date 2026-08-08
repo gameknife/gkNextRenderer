@@ -129,6 +129,24 @@ namespace NextUI::Theme
         }
     } // namespace
 
+    ImFont* GetDefaultFont(NextEngine& engine)
+    {
+        if (UserInterface* userInterface = engine.GetUserInterface())
+        {
+            return userInterface->GetDefaultFont();
+        }
+        return nullptr;
+    }
+
+    ImFont* GetTitleFont(NextEngine& engine)
+    {
+        if (UserInterface* userInterface = engine.GetUserInterface())
+        {
+            return userInterface->GetTitleBarFont();
+        }
+        return nullptr;
+    }
+
     ImVec4 Color(EColor color, float alpha)
     {
         ImVec4 result;
@@ -314,10 +332,11 @@ namespace NextUI::Theme
         ImFont* titleFont = config.TitleFont;
         if (titleFont == nullptr)
         {
-            if (UserInterface* userInterface = engine.GetUserInterface())
-            {
-                titleFont = userInterface->GetTitleBarFont();
-            }
+            titleFont = GetTitleFont(engine);
+        }
+        if (titleFont == nullptr)
+        {
+            titleFont = GetDefaultFont(engine);
         }
         if (titleFont == nullptr)
         {
@@ -672,6 +691,16 @@ namespace NextUI::Theme
 
     bool IconButton(const char* label, const char* tooltip, bool active, ImVec2 size)
     {
+        const ImGuiStyle& style = ImGui::GetStyle();
+        if (size.x <= 0.0f)
+        {
+            size.x = ImGui::CalcTextSize(label != nullptr ? label : "").x + style.FramePadding.x * 2.0f;
+        }
+        if (size.y <= 0.0f)
+        {
+            size.y = ImGui::GetFrameHeight();
+        }
+
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
         if (active)
@@ -691,6 +720,20 @@ namespace NextUI::Theme
 
         const bool pressed = ImGui::Button(label, size);
         ImGui::PopStyleColor(4);
+        ImGui::PopStyleVar(2);
+        DrawTooltip(tooltip);
+        return pressed;
+    }
+
+    bool GhostButton(const char* label, const char* tooltip, ImVec2 size)
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Color(EColor::SurfaceHover, 0.52f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, Color(EColor::SurfaceHover, 0.78f));
+        const bool pressed = ImGui::Button(label, size);
+        ImGui::PopStyleColor(3);
         ImGui::PopStyleVar(2);
         DrawTooltip(tooltip);
         return pressed;
@@ -762,9 +805,9 @@ namespace NextUI::Theme
     {
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 4.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-        ImGui::PushStyleColor(ImGuiCol_Header, Color(EColor::Background, 0.86f));
-        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, Color(EColor::SurfaceHover, 0.94f));
-        ImGui::PushStyleColor(ImGuiCol_HeaderActive, Color(EColor::Accent, 0.48f));
+        ImGui::PushStyleColor(ImGuiCol_Header, Color(EColor::Background, 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, Color(EColor::SurfaceHover, 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, Color(EColor::Accent, 0.5f));
         ImGui::PushStyleColor(ImGuiCol_Border, Color(EColor::Border, 0.84f));
 
         const std::string header = fmt::format("{} {}", icon ? icon : "", label ? label : "");
