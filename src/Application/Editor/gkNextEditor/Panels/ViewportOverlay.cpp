@@ -1,6 +1,7 @@
 #include "EditorUi.hpp"
 
 #include "EditorDragDrop.hpp"
+#include "EditorMain.h"
 
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
@@ -184,7 +185,8 @@ namespace Editor
 
         constexpr float padding = 8.0f;
         constexpr float toolbarItemSpacing = 4.0f;
-        const float toolH = kToolIconWidth;
+        const float toolbarHeight = std::ceil(ImGui::GetFontSize() + 22.0f);
+        const float toolH = toolbarHeight;
         const float toolW = std::max(60.0f, std::min(kToolIconWidth + 16.0f, size.x - padding * 2.0f));
 
         Runtime::Config::UserSettings& userSettings = ctx.engine.GetUserSettings();
@@ -236,8 +238,7 @@ namespace Editor
         NextUI::Theme::FOverlayPanelConfig toolbarConfig{};
         toolbarConfig.WindowId = "ViewportToolbar";
         toolbarConfig.Position = pos + ImVec2(padding, padding);
-        toolbarConfig.Size = ImVec2(std::min(toolbarWidth, availableToolbarWidth),
-                                    std::ceil(ImGui::GetFontSize() + 22.0f));
+        toolbarConfig.Size = ImVec2(std::min(toolbarWidth, availableToolbarWidth), toolbarHeight);
         toolbarConfig.Padding = ImVec2(4.0f, 4.0f);
         toolbarConfig.ItemSpacing = ImVec2(toolbarItemSpacing, 0.0f);
         toolbarConfig.Rounding = 5.0f;
@@ -437,39 +438,154 @@ namespace Editor
             NextUI::Theme::EndOverlayPanel();
         }
         
-        const ImVec2 axisOrigin = pos + ImVec2(26.0f, size.y - 42.0f);
+        const ImVec2 axisOrigin = pos + ImVec2(38.0f, size.y - 42.0f);
         ImDrawList* foreground = ImGui::GetForegroundDrawList(viewport);
-        foreground->AddCircleFilled(axisOrigin, 4.0f, NextUI::Theme::ColorU32(NextUI::Theme::EColor::TextMuted));
-        foreground->AddLine(axisOrigin, axisOrigin + ImVec2(28.0f, 0.0f),
-                            NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger), 2.0f);
-        foreground->AddLine(axisOrigin, axisOrigin + ImVec2(0.0f, -28.0f),
-                            NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success), 2.0f);
-        foreground->AddLine(axisOrigin, axisOrigin + ImVec2(-18.0f, 18.0f),
-                            NextUI::Theme::ColorU32(NextUI::Theme::EColor::Blue), 2.0f);
-        foreground->AddText(axisOrigin + ImVec2(32.0f, -7.0f), NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger),
-                            "X");
-        foreground->AddText(axisOrigin + ImVec2(-4.0f, -44.0f), NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success),
-                            "Y");
-        foreground->AddText(axisOrigin + ImVec2(-34.0f, 18.0f), NextUI::Theme::ColorU32(NextUI::Theme::EColor::Blue),
-                            "Z");
+        const Assets::Camera viewportCamera = ctx.editor
+            ? ctx.editor->BuildSceneViewportCamera()
+            : ctx.scene.GetRenderCamera();
+        const glm::mat3 viewRotation(viewportCamera.ModelView);
+        struct FPreviewAxis
+        {
+            const char* label;
+            ImU32 color;
+            glm::vec3 projected;
+        };
+        std::array<FPreviewAxis, 3> previewAxes = {{
+            {"X", NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger),
+             viewRotation * glm::vec3(1.0f, 0.0f, 0.0f)},
+            {"Y", NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success),
+             viewRotation * glm::vec3(0.0f, 1.0f, 0.0f)},
+            {"Z", NextUI::Theme::ColorU32(NextUI::Theme::EColor::Blue),
+             viewRotation * glm::vec3(0.0f, 0.0f, 1.0f)},
+        }};
+        // Draw the axes pointing farther into the view first so nearer axes remain legible.
+        std::sort(previewAxes.begin(), previewAxes.end(),
+                  [](const FPreviewAxis& lhs, const FPreviewAxis& rhs)
+                  {
+                      return lhs.projected.z < rhs.projected.z;
+                  });
+
+        constexpr float axisLength = 28.0f;
+        for (const FPreviewAxis& axis : previewAxes)
+        {
+            const ImVec2 screenDirection(axis.projected.x, -axis.projected.y);
+            const float projectedLength = std::sqrt(
+                screenDirection.x * screenDirection.x + screenDirection.y * screenDirection.y);
+            if (projectedLength < 0.08f)
+            {
+                foreground->AddCircleFilled(axisOrigin, 3.0f, axis.color);
+                continue;
+            }
+
+            const ImVec2 axisEnd = axisOrigin + screenDirection * axisLength;
+            const ImVec2 labelDirection = screenDirection * (1.0f / projectedLength);
+            const ImVec2 labelSize = ImGui::CalcTextSize(axis.label);
+            const ImVec2 labelPos = axisEnd + labelDirection * 6.0f - labelSize * 0.5f;
+            foreground->AddLine(axisOrigin, axisEnd, axis.color, 2.0f);
+            foreground->AddCircleFilled(axisEnd, 2.5f, axis.color);
+            foreground->AddText(labelPos, axis.color, axis.label);
+        }
+        foreground->AddCircleFilled(
+            axisOrigin, 4.0f, NextUI::Theme::ColorU32(NextUI::Theme::EColor::TextMuted));
 
         NextUI::Theme::FOverlayPanelConfig toolConfig{};
         toolConfig.WindowId = "ViewportTool";
         toolConfig.Position = pos + ImVec2(std::max(padding, size.x - toolW - padding), padding);
         toolConfig.Size = ImVec2(toolW, toolH);
-        toolConfig.Padding = ImVec2(3.0f, 3.0f);
-        toolConfig.ItemSpacing = ImVec2(0.0f, 0.0f);
+        toolConfig.Padding = ImVec2(4.0f, 4.0f);
+        toolConfig.ItemSpacing = ImVec2(toolbarItemSpacing, 0.0f);
         toolConfig.Rounding = 5.0f;
         toolConfig.BackgroundAlpha = 0.74f;
 
         NextUI::Theme::BeginOverlayPanel(toolConfig);
         NextUI::Theme::PushViewportToolbarStyle();
 
-        const float startX = ImGui::GetCursorPosX();
-        const float availW = ImGui::GetContentRegionAvail().x;
-        ImGui::SetCursorPosX(startX + std::max(0.0f, availW - kToolIconWidth));
-        NextUI::Theme::DrawFlatViewportButton(ICON_FA_CAMERA, "Camera Options (placeholder)", false,
-                                               ImVec2(kToolIconWidth, kToolIconWidth));
+        const float cameraButtonWidth = std::max(1.0f, ImGui::GetContentRegionAvail().x);
+        if (NextUI::Theme::DrawFlatViewportButton(
+                ICON_FA_CAMERA, "Camera Options", false,
+                ImVec2(cameraButtonWidth, ImGui::GetFrameHeight())))
+        {
+            ImGui::OpenPopup("ViewportCameraOptions");
+        }
+
+        NextUI::Theme::PushViewportPopupStyle();
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 0.0f));
+        if (ImGui::BeginPopup("ViewportCameraOptions"))
+        {
+            auto& cameras = ctx.scene.GetEnvSettings().cameras;
+            const int currentCameraIndex = ctx.engine.GetUserSettings().CameraIdx;
+            const char* currentCameraName = "No Camera";
+            if (currentCameraIndex >= 0 && currentCameraIndex < static_cast<int>(cameras.size()))
+            {
+                const std::string& name = cameras[static_cast<size_t>(currentCameraIndex)].name;
+                currentCameraName = name.empty() ? "Unnamed Camera" : name.c_str();
+            }
+
+            const std::string sceneCameraMenuLabel = fmt::format(
+                "{} Scene Cameras    {}    {}", ICON_FA_CAMERA, currentCameraName, ICON_FA_CHEVRON_RIGHT);
+            ImGui::BeginDisabled(cameras.empty());
+            const bool openSceneCameraMenu = ImGui::Selectable(
+                sceneCameraMenuLabel.c_str(), false,
+                ImGuiSelectableFlags_DontClosePopups, ImVec2(0.0f, 28.0f));
+            const ImVec2 sceneCameraMenuMin = ImGui::GetItemRectMin();
+            const ImVec2 sceneCameraMenuMax = ImGui::GetItemRectMax();
+            ImGui::EndDisabled();
+            if (openSceneCameraMenu)
+            {
+                ImGui::OpenPopup("ViewportSceneCameras");
+            }
+
+            ImGui::SetNextWindowPos(ImVec2(sceneCameraMenuMax.x, sceneCameraMenuMin.y), ImGuiCond_Appearing);
+            ImGui::SetNextWindowSize(ImVec2(260.0f, 0.0f));
+            if (ImGui::BeginPopup("ViewportSceneCameras"))
+            {
+                for (size_t cameraIndex = 0; cameraIndex < cameras.size(); ++cameraIndex)
+                {
+                    const Assets::Camera& camera = cameras[cameraIndex];
+                    const std::string cameraLabel = fmt::format(
+                        "{} {}", ICON_FA_CAMERA, camera.name.empty()
+                            ? fmt::format("Camera {}", cameraIndex + 1)
+                            : camera.name);
+                    const bool selected = currentCameraIndex == static_cast<int>(cameraIndex);
+                    if (NextUI::Theme::DrawViewportComboOption(cameraLabel.c_str(), selected) && ctx.editor)
+                    {
+                        ctx.editor->SelectSceneCamera(cameraIndex);
+                    }
+                }
+                ImGui::EndPopup();
+            }
+
+            if (NextUI::Theme::DrawViewportComboOption(
+                    ICON_FA_ROTATE_LEFT " Restore Scene Default", false) && ctx.editor)
+            {
+                ctx.editor->ResetToDefaultSceneCamera();
+            }
+            NextUI::Theme::DrawTooltip("Restore the scene's default camera");
+
+            ImGui::Separator();
+            ImGui::TextDisabled("Lens & Exposure");
+
+            float fieldOfView = ctx.editor
+                ? ctx.editor->BuildSceneViewportCamera().FieldOfView
+                : ctx.scene.GetRenderCamera().FieldOfView;
+            ImGui::TextUnformatted("Field of View");
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::SliderFloat("##ViewportCameraFov", &fieldOfView, 10.0f, 140.0f, "%.1f deg") && ctx.editor)
+            {
+                ctx.editor->SetSceneViewportFieldOfView(fieldOfView);
+            }
+
+            ImGui::TextUnformatted("Paper White");
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::SliderFloat("##ViewportPaperWhite", &userSettings.PaperWhiteNit,
+                                   100.0f, 1600.0f, "%.0f nit"))
+            {
+                ctx.engine.ResetProgressiveRenderingAccumulation();
+            }
+
+            ImGui::EndPopup();
+        }
+        NextUI::Theme::PopViewportPopupStyle();
 
         NextUI::Theme::PopViewportToolbarStyle();
         NextUI::Theme::EndOverlayPanel();

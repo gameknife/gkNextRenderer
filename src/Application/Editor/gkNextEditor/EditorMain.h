@@ -59,6 +59,9 @@ public:
     const EditorInterface& GetEditorInterface() const { return *editorUserInterface_; }
     NextUI::GizmoController& GetGizmoController() { return gizmoController_; }
     Editor::EditorSettings& GetEditorSettings() { return settings_; }
+    void SelectSceneCamera(size_t cameraIndex);
+    void ResetToDefaultSceneCamera();
+    void SetSceneViewportFieldOfView(float fieldOfView);
     Assets::Camera BuildSceneViewportCamera() const;
     Assets::Camera BuildCameraViewCamera(size_t viewIndex) const;
     void SyncCameraViewRendererCamera(size_t viewIndex, const glm::vec2& viewportSize);

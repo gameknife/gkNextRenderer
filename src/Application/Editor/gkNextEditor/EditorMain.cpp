@@ -270,6 +270,38 @@ void EditorGameInstance::OnSceneLoaded()
     }
 }
 
+void EditorGameInstance::SelectSceneCamera(const size_t cameraIndex)
+{
+    auto& scene = GetEngine().GetScene();
+    const auto& cameras = scene.GetEnvSettings().cameras;
+    if (cameraIndex >= cameras.size())
+    {
+        return;
+    }
+
+    GetEngine().GetUserSettings().CameraIdx = static_cast<int>(cameraIndex);
+    scene.GetRenderCamera() = cameras[cameraIndex];
+    modelViewController_.Reset(scene.GetRenderCamera());
+    GetEngine().ResetProgressiveRenderingAccumulation();
+    GetEngine().GetRenderer().PrimaryView().InvalidateTemporalHistory(
+        Vulkan::EHistoryInvalidationReason::CameraCut);
+}
+
+void EditorGameInstance::ResetToDefaultSceneCamera()
+{
+    SelectSceneCamera(0);
+}
+
+void EditorGameInstance::SetSceneViewportFieldOfView(const float fieldOfView)
+{
+    const float clampedFieldOfView = std::clamp(fieldOfView, 10.0f, 140.0f);
+    GetEngine().GetScene().GetRenderCamera().FieldOfView = clampedFieldOfView;
+    modelViewController_.SetFieldOfView(clampedFieldOfView);
+    GetEngine().ResetProgressiveRenderingAccumulation();
+    GetEngine().GetRenderer().PrimaryView().InvalidateTemporalHistory(
+        Vulkan::EHistoryInvalidationReason::CameraCut);
+}
+
 void EditorGameInstance::OnPreConfigUI() { editorUserInterface_->Config(); }
 
 bool EditorGameInstance::OnRenderUI()

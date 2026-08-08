@@ -783,6 +783,7 @@ namespace NextUI::Theme
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 4.0f));
         ImGui::PushStyleColor(ImGuiCol_PopupBg, Color(EColor::Background, 0.96f));
         ImGui::PushStyleColor(ImGuiCol_Header, Color(EColor::SurfaceHover, 0.46f));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, Color(EColor::SurfaceHover, 0.78f));
@@ -793,7 +794,7 @@ namespace NextUI::Theme
     void PopViewportPopupStyle()
     {
         ImGui::PopStyleColor(5);
-        ImGui::PopStyleVar(4);
+        ImGui::PopStyleVar(5);
     }
 
     bool DrawViewportComboOption(const char* label, bool selected)

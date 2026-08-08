@@ -29,6 +29,7 @@ namespace Runtime::Camera
 
         glm::mat4 ModelView() const;
         float FieldOfView() const { return fieldOfView_; }
+        void SetFieldOfView(float fieldOfView) { fieldOfView_ = fieldOfView; }
         glm::vec4 Position() const { return position_; }
 
         bool OnKey(SDL_Event& event);
