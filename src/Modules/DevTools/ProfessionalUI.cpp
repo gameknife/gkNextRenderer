@@ -747,6 +747,60 @@ namespace NextUI::Theme
         return pressed;
     }
 
+    void PushViewportToolbarStyle()
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(7.0f, 3.0f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, Color(EColor::Surface, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, Color(EColor::SurfaceHover, 0.72f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgActive, Color(EColor::Accent, 0.24f));
+        ImGui::PushStyleColor(ImGuiCol_Button, Color(EColor::Surface, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Color(EColor::SurfaceHover, 0.72f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, Color(EColor::Accent, 0.28f));
+        ImGui::PushStyleColor(ImGuiCol_Border, Color(EColor::Border, 0.0f));
+    }
+
+    void PopViewportToolbarStyle()
+    {
+        ImGui::PopStyleColor(7);
+        ImGui::PopStyleVar(3);
+    }
+
+    bool DrawFlatViewportButton(const char* label, const char* tooltip, bool active, ImVec2 size)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Button, active ? Color(EColor::Accent, 0.28f) : Color(EColor::Surface, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, active ? Color(EColor::Text) : Color(EColor::TextMuted));
+        const bool pressed = ImGui::Button(label, size);
+        ImGui::PopStyleColor(2);
+        DrawTooltip(tooltip);
+        return pressed;
+    }
+
+    void PushViewportPopupStyle()
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_PopupBg, Color(EColor::Background, 0.96f));
+        ImGui::PushStyleColor(ImGuiCol_Header, Color(EColor::SurfaceHover, 0.46f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, Color(EColor::SurfaceHover, 0.78f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, Color(EColor::Accent, 0.26f));
+        ImGui::PushStyleColor(ImGuiCol_Border, Color(EColor::Border, 0.0f));
+    }
+
+    void PopViewportPopupStyle()
+    {
+        ImGui::PopStyleColor(5);
+        ImGui::PopStyleVar(4);
+    }
+
+    bool DrawViewportComboOption(const char* label, bool selected)
+    {
+        return ImGui::Selectable(label, selected, ImGuiSelectableFlags_None, ImVec2(0.0f, 28.0f));
+    }
+
     void BeginFormRow(const char* label, float ratio, float minLabelWidth, float maxLabelWidth)
     {
         ImGui::AlignTextToFramePadding();

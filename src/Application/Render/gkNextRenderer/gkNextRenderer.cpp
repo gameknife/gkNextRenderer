@@ -44,6 +44,13 @@
 
 namespace
 {
+using NextUI::Theme::DrawFlatViewportButton;
+using NextUI::Theme::DrawViewportComboOption;
+using NextUI::Theme::PopViewportPopupStyle;
+using NextUI::Theme::PopViewportToolbarStyle;
+using NextUI::Theme::PushViewportPopupStyle;
+using NextUI::Theme::PushViewportToolbarStyle;
+
 constexpr uint32_t dropSphereGridSize = 20;
 constexpr uint32_t dropSphereCount = dropSphereGridSize * dropSphereGridSize;
 
@@ -213,76 +220,6 @@ bool DrawSettingComboRow(const char* label, const char* preview, DrawComboBody&&
                        return changed;
                    });
     return changed;
-}
-
-void PushViewportToolbarStyle()
-{
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(7.0f, 3.0f));
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, NextUI::Theme::Color(NextUI::Theme::EColor::Surface, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered,
-                          NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.72f));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive,
-                          NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.24f));
-    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Surface, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.72f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.28f));
-    ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.0f));
-}
-
-void PopViewportToolbarStyle()
-{
-    ImGui::PopStyleColor(7);
-    ImGui::PopStyleVar(3);
-}
-
-bool DrawFlatViewportButton(
-    const char* label, const char* tooltip, bool active, const ImVec2 size)
-{
-    ImGui::PushStyleColor(
-        ImGuiCol_Button,
-        active ? NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.28f)
-               : NextUI::Theme::Color(NextUI::Theme::EColor::Surface, 0.0f));
-    ImGui::PushStyleColor(
-        ImGuiCol_Text,
-        active ? NextUI::Theme::Color(NextUI::Theme::EColor::Text)
-               : NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted));
-    const bool pressed = ImGui::Button(label, size);
-    ImGui::PopStyleColor(2);
-    NextUI::Theme::DrawTooltip(tooltip);
-    return pressed;
-}
-
-void PushViewportPopupStyle()
-{
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
-    ImGui::PushStyleColor(
-        ImGuiCol_PopupBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.96f));
-    ImGui::PushStyleColor(
-        ImGuiCol_Header, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.46f));
-    ImGui::PushStyleColor(
-        ImGuiCol_HeaderHovered, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.78f));
-    ImGui::PushStyleColor(
-        ImGuiCol_HeaderActive, NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.26f));
-    ImGui::PushStyleColor(
-        ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.0f));
-}
-
-void PopViewportPopupStyle()
-{
-    ImGui::PopStyleColor(5);
-    ImGui::PopStyleVar(4);
-}
-
-bool DrawViewportComboOption(const char* label, const bool selected)
-{
-    return ImGui::Selectable(label, selected, ImGuiSelectableFlags_None, ImVec2(0.0f, 28.0f));
 }
 
 std::string FormatBytes(VkDeviceSize bytes)
@@ -1633,7 +1570,13 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Ray Tracing"), true))
     {
         DrawSettingCheckboxRow(LOCTEXT("Progressive Render"), &userSetting.ProgressiveRender);
+        ImGui::BeginDisabled(userSetting.ProgressiveRender);
         DrawIntSetting(LOCTEXT("Samples"), &userSetting.NumberOfSamples, 1, 16);
+        ImGui::EndDisabled();
+        if (userSetting.ProgressiveRender)
+        {
+            NextUI::Theme::DrawTooltip("Progressive rendering always uses 1 spp per frame");
+        }
         DrawSettingCheckboxRow(LOCTEXT("Exit After First"), &userSetting.ExitAfterFirst);
         DrawIntSetting(LOCTEXT("Ambient Speed"), &userSetting.BakeSpeedLevel, 0, 2);
         NextUI::Theme::EndPanelSection();
@@ -2071,8 +2014,10 @@ void NextRendererGameInstance::DrawViewportTopBar(
         ImGui::SameLine();
 
         ImGui::SetNextItemWidth(samplesWidth);
-        const std::string sampleLabel = fmt::format("{} spp/frame", userSetting.NumberOfSamples);
+        const int effectiveSamples = userSetting.ProgressiveRender ? 1 : userSetting.NumberOfSamples;
+        const std::string sampleLabel = fmt::format("{} spp/frame", effectiveSamples);
         PushViewportPopupStyle();
+        ImGui::BeginDisabled(userSetting.ProgressiveRender);
         if (ImGui::BeginCombo("##ViewportSamples", sampleLabel.c_str()))
         {
             for (int samples = 1; samples <= 16; ++samples)
@@ -2090,8 +2035,11 @@ void NextRendererGameInstance::DrawViewportTopBar(
             }
             ImGui::EndCombo();
         }
+        ImGui::EndDisabled();
         PopViewportPopupStyle();
-        NextUI::Theme::DrawTooltip("Samples traced per pixel, per rendered frame");
+        NextUI::Theme::DrawTooltip(userSetting.ProgressiveRender
+            ? "Progressive rendering always uses 1 spp per frame"
+            : "Samples traced per pixel, per rendered frame");
 
         if (showUpscalerSelector)
         {

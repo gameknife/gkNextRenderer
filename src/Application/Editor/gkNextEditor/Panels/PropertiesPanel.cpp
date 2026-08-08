@@ -38,31 +38,37 @@ namespace Editor
                 ImVec4(0.22f, 0.78f, 0.34f, 1.0f),
                 ImVec4(0.24f, 0.48f, 0.95f, 1.0f),
             };
-            constexpr const char* axisNames[] = {"X", "Y", "Z"};
             constexpr const char* axisIds[] = {"##X", "##Y", "##Z"};
+            constexpr float axisAccentWidth = 3.0f;
+            constexpr float axisAccentInset = 3.0f;
+            constexpr float axisAccentGap = 4.0f;
 
             ImGui::PushID(label);
             NextUI::Theme::BeginFormRow(label, 0.22f, 70.0f, 70.0f);
 
-            const float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
-            const float labelWidth = 14.0f;
-            const float width =
-                std::max(54.0f, (ImGui::GetContentRegionAvail().x - spacing * 2.0f - labelWidth * 3.0f) / 3.0f);
+            const ImGuiStyle& style = ImGui::GetStyle();
+            const float spacing = style.ItemSpacing.x;
+            const float width = std::max(54.0f, (ImGui::GetContentRegionAvail().x - spacing * 2.0f) / 3.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                                ImVec2(style.FramePadding.x + axisAccentWidth + axisAccentGap, style.FramePadding.y));
 
             for (int axis = 0; axis < 3; ++axis)
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, axisColors[axis]);
-                ImGui::TextUnformatted(axisNames[axis]);
-                ImGui::PopStyleColor();
-                ImGui::SameLine(0.0f, 4.0f);
                 ImGui::SetNextItemWidth(width);
                 changed = ImGui::DragFloat(axisIds[axis], &value[axis], speed, 0.0f, 0.0f, "%.3f") || changed;
+                const ImVec2 itemMin = ImGui::GetItemRectMin();
+                const ImVec2 itemMax = ImGui::GetItemRectMax();
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    itemMin + ImVec2(axisAccentInset, axisAccentInset),
+                    ImVec2(itemMin.x + axisAccentInset + axisAccentWidth, itemMax.y - axisAccentInset),
+                    ImGui::GetColorU32(axisColors[axis]), 1.5f);
                 if (axis < 2)
                 {
                     ImGui::SameLine(0.0f, spacing);
                 }
             }
 
+            ImGui::PopStyleVar();
             ImGui::PopID();
             return changed;
         }

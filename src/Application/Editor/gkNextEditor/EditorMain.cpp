@@ -72,6 +72,7 @@ void EditorGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     std::string error;
     //cvars.SetDefaultFromString("r.samples", "4", &error);
     //cvars.SetDefaultFromString("r.temporalFrames", "16", &error);
+    cvars.SetDefaultFromString("r.progressiveRender", "true", &error);
     cvars.SetDefaultFromString("r.upscaler.qualityMode", "4", &error);
     cvars.RegisterBool("ed.hoverHighlight", true, &settings_.hoverHighlight, NextCVar::ECVarFlags::Archive,
                        "Raycast under the cursor and highlight the hovered object");
@@ -227,6 +228,7 @@ void EditorGameInstance::OnInit()
 
 void EditorGameInstance::OnTick(double deltaSeconds)
 {
+    const bool progressiveEnabled = GetEngine().GetUserSettings().ProgressiveRender;
     bool moving = modelViewController_.UpdateCamera(1.0f, deltaSeconds);
     for (auto& cameraViewController : cameraViewControllers_)
     {
@@ -242,7 +244,7 @@ void EditorGameInstance::OnTick(double deltaSeconds)
 
     const uint32_t progressiveRenderResumeFrames =
         static_cast<uint32_t>(std::max(settings_.progressiveRenderResumeFrames, 0));
-    if (moving || gizmoController_.IsUsing())
+    if (!progressiveEnabled || moving || gizmoController_.IsUsing())
     {
         progressiveRenderResumeFramesRemaining_ = progressiveRenderResumeFrames;
         GetEngine().SetProgressiveRendering(false);
@@ -256,7 +258,7 @@ void EditorGameInstance::OnTick(double deltaSeconds)
         return;
     }
 
-    GetEngine().SetProgressiveRendering(true);
+    GetEngine().SetProgressiveRendering(progressiveEnabled);
 }
 
 void EditorGameInstance::OnSceneLoaded()

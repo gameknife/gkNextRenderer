@@ -95,6 +95,12 @@ namespace NextUI::Theme
     bool IconButton(const char* label, const char* tooltip, bool active = false, ImVec2 size = ImVec2(0.0f, 0.0f));
     bool GhostButton(const char* label, const char* tooltip = nullptr, ImVec2 size = ImVec2(0.0f, 0.0f));
     bool ToolbarButton(const char* label, const char* tooltip, bool active = false, ImVec2 size = ImVec2(34.0f, 30.0f));
+    void PushViewportToolbarStyle();
+    void PopViewportToolbarStyle();
+    bool DrawFlatViewportButton(const char* label, const char* tooltip, bool active, ImVec2 size);
+    void PushViewportPopupStyle();
+    void PopViewportPopupStyle();
+    bool DrawViewportComboOption(const char* label, bool selected);
     bool ModeRailButton(const char* icon, const char* tooltip, bool active, float buttonSize);
     bool BeginSection(const char* icon, const char* label, bool defaultOpen = true);
     void EndSection();

@@ -515,7 +515,7 @@ namespace Editor
         {
             static constexpr std::array<const char*, 3> thumbnailLabels = {"Small", "Medium", "Large"};
             static constexpr std::array<float, 3> thumbnailSizes = {56.0f, 82.0f, 108.0f};
-            constexpr float thumbnailControlWidth = 148.0f;
+            const char* settingsButtonLabel = ICON_FA_GEAR " Settings##ContentBrowserSettings";
 
             int thumbnailIndex = 0;
             float closestDistance = std::numeric_limits<float>::max();
@@ -530,21 +530,33 @@ namespace Editor
             }
 
             ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(),
-                                          ImGui::GetWindowContentRegionMax().x - thumbnailControlWidth));
-            ImGui::SetNextItemWidth(thumbnailControlWidth);
-            const std::string preview = fmt::format("Thumbnail: {}", thumbnailLabels[thumbnailIndex]);
-            if (ImGui::BeginCombo("##ContentBrowserThumbnailSize", preview.c_str()))
+            const ImGuiStyle& style = ImGui::GetStyle();
+            const float settingsButtonWidth =
+                ImGui::CalcTextSize(" Settings").x + style.FramePadding.x * 2.0f;
+            const float statusRight =
+                ImGui::GetWindowPos().x + ImGui::GetWindowSize().x - style.WindowPadding.x;
+            const ImVec2 settingsPosition(
+                statusRight - settingsButtonWidth,
+                ImGui::GetItemRectMin().y);
+            ImGui::SetCursorScreenPos(settingsPosition);
+            if (NextUI::Theme::GhostButton(settingsButtonLabel, "Content Browser Settings"))
             {
-                for (int i = 0; i < static_cast<int>(thumbnailSizes.size()); ++i)
+                ImGui::OpenPopup("ContentBrowserSettingsPopup");
+            }
+            if (ImGui::BeginPopup("ContentBrowserSettingsPopup"))
+            {
+                if (ImGui::BeginMenu("Thumbnail Size"))
                 {
-                    if (ImGui::Selectable(thumbnailLabels[i], thumbnailIndex == i))
+                    for (int i = 0; i < static_cast<int>(thumbnailSizes.size()); ++i)
                     {
-                        GContentBrowserIconSize = thumbnailSizes[i];
+                        if (ImGui::MenuItem(thumbnailLabels[i], nullptr, thumbnailIndex == i))
+                        {
+                            GContentBrowserIconSize = thumbnailSizes[i];
+                        }
                     }
+                    ImGui::EndMenu();
                 }
-                ImGui::EndCombo();
+                ImGui::EndPopup();
             }
         }
 

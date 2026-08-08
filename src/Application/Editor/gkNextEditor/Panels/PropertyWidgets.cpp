@@ -166,31 +166,22 @@ namespace Editor
 
         ImGui::SetCursorScreenPos(ImVec2(panelMinX, buttonRowY));
         if (readOnly || selected == invalidId) ImGui::BeginDisabled();
-        if (ImGui::Button(ICON_FA_ARROW_POINTER, ImVec2(buttonSize, buttonSize)))
+        if (NextUI::Theme::IconButton(ICON_FA_ARROW_LEFT, "Assign the asset selected in Content Browser"))
         {
             value = selected;
             changed = true;
-        }
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        {
-            ImGui::SetTooltip("Assign the asset selected in Content Browser");
         }
         if (readOnly || selected == invalidId) ImGui::EndDisabled();
 
         ImGui::SameLine(0.0f, actionSpacing);
         if (!config.locateAsset) ImGui::BeginDisabled();
-        if (ImGui::Button(ICON_FA_MAGNIFYING_GLASS, ImVec2(buttonSize, buttonSize))) config.locateAsset(value);
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        {
-            ImGui::SetTooltip("Locate this asset in Content Browser");
-        }
+        if (NextUI::Theme::IconButton(ICON_FA_MAGNIFYING_GLASS, "Locate this asset in Content Browser")) config.locateAsset(value);
         if (!config.locateAsset) ImGui::EndDisabled();
 
         if (config.editAsset)
         {
             ImGui::SameLine(0.0f, actionSpacing);
-            if (ImGui::Button(ICON_FA_PEN_TO_SQUARE, ImVec2(buttonSize, buttonSize))) config.editAsset(value);
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Open this material in Material Editor");
+            if (NextUI::Theme::IconButton(ICON_FA_PEN_TO_SQUARE, "Open this material in Material Editor")) config.editAsset(value);
         }
 
         // Return the cursor to the reserved card bounds before the next property.
@@ -323,7 +314,7 @@ namespace Editor
                     if (propInfo.name == "ModelId" && config.modelAsset.thumbnail)
                     {
                         if (DrawPropertyRow(label, [&]() {
-                                return DrawAssetWidget(val, isReadOnly, 64.0f, config.modelAsset);
+                                return DrawAssetWidget(val, isReadOnly, 52.0f, config.modelAsset);
                             }))
                         {
                             changed = true;
@@ -1038,7 +1029,7 @@ namespace Editor
                     if (elementAsset.thumbnail)
                     {
                         BeginPropertyRow(lbl);
-                        return DrawAssetWidget(val, ro, 64.0f, elementAsset);
+                        return DrawAssetWidget(val, ro, 52.0f, elementAsset);
                     }
                     return DrawUInt(lbl, val, 1.0f, 0, UINT_MAX, ro);
                 });

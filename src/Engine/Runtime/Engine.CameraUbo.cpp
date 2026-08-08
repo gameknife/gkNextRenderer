@@ -192,7 +192,10 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.SkyRotation = scene_->GetEnvSettings().SkyRotation;
     ubo.MaxNumberOfBounces = config_.userSettings.MaxNumberOfBounces;
     ubo.TotalFrames = frameState_.totalFrames;
-    ubo.NumberOfSamples = config_.userSettings.NumberOfSamples;
+    // Progressive accumulation advances one independent sample per frame. Keep the
+    // configured realtime SPP untouched so it is restored when progressive mode ends.
+    const bool progressiveSampling = config_.userSettings.ProgressiveRender || progressiveRender_.enabled;
+    ubo.NumberOfSamples = progressiveSampling ? 1 : config_.userSettings.NumberOfSamples;
     ubo.NumberOfBounces = config_.userSettings.NumberOfBounces;
     ubo.PrimaryRayJitter = enablePrimaryRayJitter;
     ubo.SunDirection = sunDirection;
