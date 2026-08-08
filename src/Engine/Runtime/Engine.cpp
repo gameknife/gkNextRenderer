@@ -1140,6 +1140,11 @@ void NextEngine::SetProgressiveRendering(bool enable)
     progressiveRender_.accumulatedFrames = 0;
 }
 
+void NextEngine::ResetProgressiveRenderingAccumulation()
+{
+    progressiveRender_.accumulatedFrames = 0;
+}
+
 VkDeviceAddress NextEngine::TryGetGPUAccelerationStructureAddress() const
 {
     if (renderer_ && renderer_->SupportsRayTracing() && !renderer_->TLAS().empty())

@@ -1555,6 +1555,7 @@ namespace Vulkan
         CreateSwapChain();
         atmosphere_->SyncRuntimeResources(true);
         resetUpscalerHistory_ = true;
+        NextEngine::GetInstance()->ResetProgressiveRenderingAccumulation();
     }
 
     void VulkanBaseRenderer::ReloadShaders()

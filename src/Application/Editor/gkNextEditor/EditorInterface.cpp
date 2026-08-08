@@ -388,11 +388,21 @@ void EditorInterface::Render(Editor::EditorUiState& uiState)
         {
             const NextUI::Scaling::FViewportRect framebufferViewport =
                 NextUI::Scaling::ImGuiToMainFramebufferViewport(node->Pos, node->Size);
-            editor_->GetEngine().GetRenderer().SwapChain().UpdateOutputViewport(
-                Utilities::Math::floorToInt(framebufferViewport.Position.x),
-                Utilities::Math::floorToInt(framebufferViewport.Position.y),
-                Utilities::Math::ceilToInt(framebufferViewport.Size.x),
-                Utilities::Math::ceilToInt(framebufferViewport.Size.y));
+            const int32_t outputX = Utilities::Math::floorToInt(framebufferViewport.Position.x);
+            const int32_t outputY = Utilities::Math::floorToInt(framebufferViewport.Position.y);
+            const uint32_t outputWidth = Utilities::Math::ceilToInt(framebufferViewport.Size.x);
+            const uint32_t outputHeight = Utilities::Math::ceilToInt(framebufferViewport.Size.y);
+            const Vulkan::SwapChain& swapChain = editor_->GetEngine().GetRenderer().SwapChain();
+            const bool outputViewportChanged =
+                swapChain.OutputOffset().x != outputX || swapChain.OutputOffset().y != outputY ||
+                swapChain.OutputExtent().width != outputWidth || swapChain.OutputExtent().height != outputHeight;
+            swapChain.UpdateOutputViewport(outputX, outputY, outputWidth, outputHeight);
+            if (outputViewportChanged)
+            {
+                editor_->GetEngine().ResetProgressiveRenderingAccumulation();
+                editor_->GetEngine().GetRenderer().PrimaryView().InvalidateTemporalHistory(
+                    Vulkan::EHistoryInvalidationReason::ExtentChanged);
+            }
 
             const ImGuiIO& io = ImGui::GetIO();
             const ImVec2 mousePos = io.MousePos;

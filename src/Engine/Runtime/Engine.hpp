@@ -168,6 +168,7 @@ public:
     
     // Rendering helpers
     void SetProgressiveRendering(bool enable);
+    void ResetProgressiveRenderingAccumulation();
     bool IsProgressiveRendering() const { return progressiveRender_.enabled; }
     bool IsOfflineProgressivePathTracing() const
     {
