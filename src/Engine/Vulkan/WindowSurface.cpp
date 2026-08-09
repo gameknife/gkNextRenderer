@@ -519,7 +519,7 @@ void Window::InitSDL(bool systemDpiScaling, const std::string& vulkanDriver)
     }
 }
 
-void Window::TerminateGLFW()
+void Window::TerminateSDL()
 {
     SDL_Vulkan_UnloadLibrary();
     SDL_Quit();

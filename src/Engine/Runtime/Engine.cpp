@@ -259,6 +259,12 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     // are captured too. This covers entry points that do not go through DesktopMain.
     Utilities::Logging::InstallFileSink();
 
+#if defined(__APPLE__) && !IOS
+    options.PresentMode = static_cast<uint32_t>(VK_PRESENT_MODE_IMMEDIATE_KHR);
+    options.ForceSDR = true;
+    SPDLOG_INFO("macOS display policy: forcing Immediate present mode and SDR output");
+#endif
+
 #if ANDROID
     std::string tag = "gknext";
     auto android_logger = spdlog::android_logger_mt("android", tag);
@@ -388,23 +394,13 @@ void NextEngine::RequestShaderHotReload()
 
 NextEngine::~NextEngine()
 {
-    if (services_.cvarSystem)
-    {
-        services_.cvarSystem->SaveUserFile("assets/configs/cvar_user.json");
-    }
-
-    if (services_.localization)
-    {
-        services_.localization->SaveToTxt(fmt::format("assets/locale/{}.txt", options_->locale));
-    }
-
     uiOverlay_.reset();
     userInterface_.reset();
     scene_.reset();
     renderer_.reset();
     window_.reset();
 
-    Vulkan::Window::TerminateGLFW();
+    Vulkan::Window::TerminateSDL();
 }
 
 void NextEngine::Start()
@@ -834,6 +830,20 @@ bool NextEngine::Tick(bool forcingDelta)
 
 void NextEngine::End()
 {
+    // Persist user data while SDL and the process-wide application state are still
+    // alive. Fast exit may either skip destructors (quick_exit) or run this engine's
+    // destructor during static teardown (exit), where writable-path statics and
+    // options may already have been destroyed.
+    if (services_.cvarSystem)
+    {
+        services_.cvarSystem->SaveUserFile("assets/configs/cvar_user.json");
+    }
+
+    if (services_.localization)
+    {
+        services_.localization->SaveToTxt(fmt::format("assets/locale/{}.txt", options_->locale));
+    }
+
     if (agentControl_) { agentControl_->Stop(); agentControl_.reset(); }
 
     if (services_.physics)

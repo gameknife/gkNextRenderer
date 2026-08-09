@@ -242,7 +242,8 @@ namespace NextCVar
         }
 
         file << j.dump(2);
-        return true;
+        file.flush();
+        return file.good();
     }
 
     std::string FCVarSystem::ChannelPathForName(const std::string& name) const

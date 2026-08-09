@@ -78,7 +78,7 @@ public:
 
     // Static methods
     static void InitSDL(bool systemDpiScaling, const std::string& vulkanDriver);
-    static void TerminateGLFW();
+    static void TerminateSDL();
 
 private:
     static SDL_HitTestResult SDLCALL TitleBarHitTestCallback(SDL_Window* win, const SDL_Point* area, void* data);
