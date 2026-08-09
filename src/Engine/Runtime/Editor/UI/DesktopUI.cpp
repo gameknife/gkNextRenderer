@@ -533,10 +533,22 @@ namespace NextUI::Theme
     }
 
     bool BeginFloatingPanel(const char* id, const char* icon, const char* title, bool* pOpen,
-                             ImVec2 position, ImVec2 size, ImVec2 pivot)
+                             ImVec2 position, ImVec2 size, ImVec2 pivot, const bool detachedViewport)
     {
-        ImGui::SetNextWindowPos(position, ImGuiCond_Always, pivot);
-        ImGui::SetNextWindowSize(size, ImGuiCond_Always);
+        if (detachedViewport && (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) != 0)
+        {
+            ImGuiWindowClass windowClass;
+            windowClass.ParentViewportId = 0;
+            windowClass.ViewportFlagsOverrideSet = ImGuiViewportFlags_NoAutoMerge;
+            ImGui::SetNextWindowClass(&windowClass);
+            ImGui::SetNextWindowPos(position, ImGuiCond_Appearing, pivot);
+            ImGui::SetNextWindowSize(size, ImGuiCond_Appearing);
+        }
+        else
+        {
+            ImGui::SetNextWindowPos(position, ImGuiCond_Always, pivot);
+            ImGui::SetNextWindowSize(size, ImGuiCond_Always);
+        }
         ImGui::SetNextWindowBgAlpha(0.99f);
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
@@ -545,9 +557,12 @@ namespace NextUI::Theme
         ImGui::PushStyleColor(ImGuiCol_Border, Color(EColor::Border, 0.85f));
         ImGui::PushStyleColor(ImGuiCol_WindowBg, Color(EColor::Surface, 0.99f));
 
-        constexpr ImGuiWindowFlags flags =
-            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoNavInputs;
+        if (!detachedViewport)
+        {
+            flags |= ImGuiWindowFlags_NoMove;
+        }
 
         const bool visible = ImGui::Begin(id, nullptr, flags);
         if (!visible)

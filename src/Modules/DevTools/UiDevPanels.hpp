@@ -51,6 +51,7 @@ namespace DevTools
 
         // Statistics overlay
         void DrawOverlay(const NextUI::Statistics& statistics, Runtime::FrameProfiler* profiler);
+        void SetStatisticsDetachedViewport(bool detached) { statisticsDetachedViewport_ = detached; }
 
         // Memory statistics
         void ToggleMemoryStatistics();
@@ -99,6 +100,7 @@ namespace DevTools
         bool consoleSkipEditReset_ = false;
         bool showConsole_ = false;
         bool showMemoryStatistics_ = false;
+        bool statisticsDetachedViewport_ = false;
         bool consoleInteractiveMode_ = false;
         bool consoleScrollToBottom_ = false;
         bool requestConsoleFocus_ = false;

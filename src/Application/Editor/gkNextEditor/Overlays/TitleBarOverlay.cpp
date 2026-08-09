@@ -384,6 +384,6 @@ namespace Editor
         Runtime::DevToolsUI::DrawDeveloperStatusBar(
             ctx.engine, "Footer", kFooterHeight,
             []() { Modules::LiveCoding::RequestCppReload(); },
-            Modules::LiveCoding::IsCppLiveCodingAvailable());
+            Modules::LiveCoding::IsCppLiveCodingAvailable(), true);
     }
 } // namespace Editor

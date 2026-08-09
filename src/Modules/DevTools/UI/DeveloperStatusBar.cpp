@@ -30,7 +30,7 @@ namespace Runtime::DevToolsUI
         bool StatusButton(const char* label, const char* tooltip, const bool active, const ImVec2 size)
         {
             NextUI::Foundation::FButtonOptions options;
-            options.variant = NextUI::Foundation::EButtonVariant::Toolbar;
+            options.variant = NextUI::Foundation::EButtonVariant::Ghost;
             options.size = size;
             options.tooltip = tooltip;
             options.active = active;
@@ -42,7 +42,8 @@ namespace Runtime::DevToolsUI
                                 const char* windowId,
                                 const float height,
                                 std::function<void()> onCppReloadClicked,
-                                const bool cppLiveCodingAvailable)
+                                const bool cppLiveCodingAvailable,
+                                const bool detachedStatisticsViewport)
     {
         const NextEngine::FHotReloadStatus hotReload = engine.GetHotReloadStatus();
         const auto memory = engine.GetRenderer().Device().CaptureMemoryStats();
@@ -53,12 +54,11 @@ namespace Runtime::DevToolsUI
             Utilities::FormatBytes(memory.deviceLocalBudgetBytes));
 
         constexpr float consoleWidth = 74.0f;
-        constexpr float statsWidth = 58.0f;
         constexpr float buttonHeight = 22.0f;
         constexpr float toolWidth = 24.0f;
+        const float fpsWidth = ImGui::CalcTextSize(fpsText.c_str()).x + 12.0f;
         const float memoryWidth = ImGui::CalcTextSize(memoryText.c_str()).x + 12.0f;
-        const float rightWidth = consoleWidth + statsWidth + toolWidth * 2.0f +
-            ImGui::CalcTextSize(fpsText.c_str()).x + memoryWidth + 104.0f;
+        const float rightWidth = consoleWidth + toolWidth * 2.0f + fpsWidth + memoryWidth + 98.0f;
 
         NextUI::Foundation::FBottomBarOptions options;
         options.windowId = windowId;
@@ -78,18 +78,12 @@ namespace Runtime::DevToolsUI
         options.drawRightContent = [&]()
         {
             DevTools::FUiDevPanels& panels = DevTools::FUiDevPanels::Get();
+            panels.SetStatisticsDetachedViewport(detachedStatisticsViewport);
             if (StatusButton("Console", "Toggle Console", panels.IsConsoleOpen(),
                              ImVec2(consoleWidth, buttonHeight)))
             {
                 panels.ToggleConsole();
             }
-            ImGui::SameLine();
-            if (StatusButton("Stats", "Toggle Stats Overlay", engine.GetUserSettings().ShowOverlay,
-                             ImVec2(statsWidth, buttonHeight)))
-            {
-                engine.GetUserSettings().ShowOverlay = !engine.GetUserSettings().ShowOverlay;
-            }
-
             DrawSeparator();
             if (StatusButton(ICON_FA_WAND_MAGIC_SPARKLES "##BottomBarRebuildShaders",
                              shaderLive ? "Rebuild shaders now (hot reload ready)" : "Rebuild shaders now",
@@ -109,17 +103,17 @@ namespace Runtime::DevToolsUI
             }
 
             DrawSeparator();
-            ImGui::TextColored(NextUI::Foundation::Color(NextUI::Foundation::EColor::TextMuted),
-                               "%s", fpsText.c_str());
+            if (StatusButton(fpsText.c_str(), "Toggle Stats Overlay", engine.GetUserSettings().ShowOverlay,
+                             ImVec2(fpsWidth, buttonHeight)))
+            {
+                engine.GetUserSettings().ShowOverlay = !engine.GetUserSettings().ShowOverlay;
+            }
             DrawSeparator();
-            NextUI::Foundation::FScopedStyle memoryStyle;
-            memoryStyle.Add(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
-            if (ImGui::Selectable(memoryText.c_str(), panels.IsMemoryStatisticsOpen(),
-                                  ImGuiSelectableFlags_None, ImVec2(memoryWidth, buttonHeight)))
+            if (StatusButton(memoryText.c_str(), "Show VRAM details", panels.IsMemoryStatisticsOpen(),
+                             ImVec2(memoryWidth, buttonHeight)))
             {
                 panels.ToggleMemoryStatistics();
             }
-            NextUI::Foundation::Tooltip("Show VRAM details");
         };
         NextUI::Foundation::DrawBottomBar(options);
     }

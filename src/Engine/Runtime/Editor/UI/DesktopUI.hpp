@@ -100,7 +100,8 @@ namespace NextUI::Theme
     // Floating panel matching the new design language: rounded surface, single-line title with optional close X.
     // pOpen may be null. Returns true when the panel body is visible (matches ImGui::Begin semantics).
     bool BeginFloatingPanel(const char* id, const char* icon, const char* title, bool* pOpen,
-                             ImVec2 position, ImVec2 size, ImVec2 pivot = ImVec2(0.0f, 0.0f));
+                             ImVec2 position, ImVec2 size, ImVec2 pivot = ImVec2(0.0f, 0.0f),
+                             bool detachedViewport = false);
     void EndFloatingPanel();
 
     // Collapsible section inside a floating panel: chevron + title row, no border background.

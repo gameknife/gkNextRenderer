@@ -573,15 +573,16 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, Runtime::Fr
     }
     overlaySampleStrideCounter_ = (overlaySampleStrideCounter_ + 1) % kOverlaySparklineSampleStride;
 
-    const auto& io = ImGui::GetIO();
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
     constexpr float distance = 12.0f;
     constexpr float panelWidth = 380.0f;
-    const ImVec2 pos = ImVec2(io.DisplaySize.x - distance - panelWidth, distance + 44.0f);
-    const float panelHeight = std::max(420.0f, io.DisplaySize.y - pos.y - 42.0f);
+    const ImVec2 pos = ImVec2(viewport->Pos.x + viewport->Size.x - distance - panelWidth,
+                              viewport->Pos.y + distance + 44.0f);
+    const float panelHeight = std::max(420.0f, viewport->Size.y - distance - 86.0f);
 
     if (!NextUI::Theme::BeginFloatingPanel(
             "##ProfilerPanel", ICON_FA_CHART_LINE, "Profiler", &Engine().GetUserSettings().ShowOverlay,
-            pos, ImVec2(panelWidth, panelHeight)))
+            pos, ImVec2(panelWidth, panelHeight), ImVec2(0.0f, 0.0f), statisticsDetachedViewport_))
     {
         return;
     }
