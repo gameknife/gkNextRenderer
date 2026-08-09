@@ -1,5 +1,6 @@
 #include "Engine/Common/CoreMinimal.hpp"
 
+#include "Engine/Runtime/Editor/UI/AppChrome.hpp"
 #include "Engine/Runtime/Editor/UI/UiContext.hpp"
 #include "Engine/Runtime/Editor/UI/UiContainers.hpp"
 #include "Engine/Runtime/Editor/UiFrame.hpp"
@@ -69,4 +70,40 @@ TEST_CASE("UI frame layers are explicit and policy composable", "[Unit][UI]")
           EUiDeveloperLayer::None);
     CHECK(FUiFrameResult::FromLegacyHandled(false).requestedDeveloperLayers == EUiDeveloperLayer::All);
     CHECK(FUiFrameResult::FromLegacyHandled(true).requestedDeveloperLayers == EUiDeveloperLayer::None);
+}
+
+TEST_CASE("Bottom bar stays attached to the main viewport", "[Unit][UI]")
+{
+    ImGuiContext* previousContext = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    ImGui::SetCurrentContext(context);
+    ImGuiIO& io = ImGui::GetIO();
+    io.DisplaySize = ImVec2(1280.0f, 720.0f);
+    io.DeltaTime = 1.0f / 60.0f;
+    unsigned char* fontPixels = nullptr;
+    int fontWidth = 0;
+    int fontHeight = 0;
+    io.Fonts->GetTexDataAsRGBA32(&fontPixels, &fontWidth, &fontHeight);
+    REQUIRE(fontPixels != nullptr);
+    ImGui::NewFrame();
+
+    bool contentDrawn = false;
+    NextUI::Foundation::FBottomBarOptions options;
+    options.windowId = "BottomBarViewportTest";
+    options.height = 30.0f;
+    options.drawLeftContent = [&contentDrawn]() { contentDrawn = true; };
+    NextUI::Foundation::DrawBottomBar(options);
+
+    ImGuiWindow* window = ImGui::FindWindowByName(options.windowId);
+    REQUIRE(window != nullptr);
+    CHECK(contentDrawn);
+    CHECK(window->Viewport == ImGui::GetMainViewport());
+    CHECK((window->Flags & ImGuiWindowFlags_NoDocking) != 0);
+    CHECK((window->Flags & ImGuiWindowFlags_NoScrollbar) != 0);
+    CHECK(window->Pos.y == 690.0f);
+    CHECK(window->Size.y == 30.0f);
+
+    ImGui::EndFrame();
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previousContext);
 }

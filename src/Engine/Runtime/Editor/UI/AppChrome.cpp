@@ -193,13 +193,17 @@ namespace NextUI::Foundation
         ImGui::SetNextWindowPos(
             ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - options.height), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, options.height), ImGuiCond_Always);
+        ImGui::SetNextWindowViewport(viewport->ID);
+        ImGui::SetNextWindowBgAlpha(1.0f);
         FScopedStyle style;
         style.Add(ImGuiStyleVar_WindowPadding, ImVec2(options.horizontalPadding, options.verticalPadding))
+            .Add(ImGuiStyleVar_WindowMinSize, ImVec2(0.0f, 0.0f))
             .Add(ImGuiStyleVar_WindowBorderSize, 0.0f)
             .Add(ImGuiStyleVar_WindowRounding, 0.0f)
             .Add(ImGuiCol_WindowBg, Color(EColor::Background, 0.98f));
         constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav;
+            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoDocking;
         FScopedWindow window(options.windowId, nullptr, flags);
         if (!window)
         {

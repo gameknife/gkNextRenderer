@@ -12,6 +12,5 @@ namespace Runtime::DevToolsUI
                                 std::function<void()> onMemoryClicked = {},
                                 bool memoryActive = false,
                                 std::function<void()> onCppReloadClicked = {},
-                                bool cppLiveCodingAvailable = false,
-                                std::function<void()> onCaptureClicked = {});
+                                bool cppLiveCodingAvailable = false);
 }

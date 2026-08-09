@@ -32,6 +32,8 @@ namespace NextUI::Foundation
             : options.tone == EButtonTone::Warning ? EColor::Warning
             : EColor::Accent;
         style.Add(ImGuiStyleVar_FrameRounding, options.variant == EButtonVariant::Toolbar ? 4.0f : 5.0f)
+             .Add(ImGuiStyleVar_FrameBorderSize, options.variant == EButtonVariant::Ghost ? 0.0f
+                                                                                         : ImGui::GetStyle().FrameBorderSize)
              .Add(ImGuiCol_Button, options.active ? Color(activeColor, 0.72f)
                                                   : transparent ? ImVec4(0, 0, 0, 0)
                                                                 : Color(EColor::SurfaceElevated, 0.94f))

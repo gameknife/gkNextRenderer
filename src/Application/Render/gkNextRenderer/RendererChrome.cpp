@@ -190,6 +190,5 @@ void NextRendererGameInstance::DrawBottomStatusBar(FRendererUiState& uiState)
                                          },
                                          uiState.memoryStatisticsPanelOpen,
                                          []() { Modules::LiveCoding::RequestCppReload(); },
-                                         Modules::LiveCoding::IsCppLiveCodingAvailable(),
-                                         [this]() { RequestScreenshot(false, ""); });
+                                         Modules::LiveCoding::IsCppLiveCodingAvailable());
 }

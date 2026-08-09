@@ -7,7 +7,6 @@
 #include "Engine/Runtime/Editor/UI/UiTheme.hpp"
 #include "Engine/Runtime/Editor/UI/UiWidgets.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/ScreenShotService.hpp"
 #include "Engine/Utilities/Format.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
@@ -45,8 +44,7 @@ namespace Runtime::DevToolsUI
                                 std::function<void()> onMemoryClicked,
                                 const bool memoryActive,
                                 std::function<void()> onCppReloadClicked,
-                                const bool cppLiveCodingAvailable,
-                                std::function<void()> onCaptureClicked)
+                                const bool cppLiveCodingAvailable)
     {
         const NextEngine::FHotReloadStatus hotReload = engine.GetHotReloadStatus();
         const auto memory = engine.GetRenderer().Device().CaptureMemoryStats();
@@ -58,11 +56,10 @@ namespace Runtime::DevToolsUI
 
         constexpr float consoleWidth = 74.0f;
         constexpr float statsWidth = 58.0f;
-        constexpr float screenshotWidth = 82.0f;
         constexpr float buttonHeight = 22.0f;
         constexpr float toolWidth = 24.0f;
         const float memoryWidth = ImGui::CalcTextSize(memoryText.c_str()).x + (onMemoryClicked ? 12.0f : 0.0f);
-        const float rightWidth = consoleWidth + statsWidth + screenshotWidth + toolWidth * 2.0f +
+        const float rightWidth = consoleWidth + statsWidth + toolWidth * 2.0f +
             ImGui::CalcTextSize(fpsText.c_str()).x + memoryWidth + 104.0f;
 
         NextUI::Foundation::FBottomBarOptions options;
@@ -93,18 +90,6 @@ namespace Runtime::DevToolsUI
                              ImVec2(statsWidth, buttonHeight)))
             {
                 engine.GetUserSettings().ShowOverlay = !engine.GetUserSettings().ShowOverlay;
-            }
-            ImGui::SameLine();
-            if (StatusButton("Screenshot", "Take Screenshot", false, ImVec2(screenshotWidth, buttonHeight)))
-            {
-                if (onCaptureClicked)
-                {
-                    onCaptureClicked();
-                }
-                else
-                {
-                    engine.GetScreenShotService().Request();
-                }
             }
 
             DrawSeparator();
