@@ -5,6 +5,15 @@
 #include "Engine/Runtime/RuntimeFwd.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 #include <glm/glm.hpp>
+
+// tinybvh selects its x86 AVX implementation from the target architecture
+// alone. Keep the scalar implementation available when the build baseline does
+// not enable AVX (for example, Linux x86-64-v2 with GK_NATIVE_ARCH=OFF).
+#if (defined(__x86_64__) || defined(_M_X64)) && \
+    !defined(__AVX__) && !defined(__AVX2__) && \
+    !defined(_M_AVX) && !defined(_M_AVX2)
+#define TINYBVH_NO_SIMD
+#endif
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 #include <queue>
 
