@@ -8,6 +8,7 @@
 #include "FlightBoard.h"
 #include "QueueSystem.h"
 #include "TimeSystem.h"
+#include "Gameplay/Sim/AnchorDebugOverlay.h"
 
 #include <algorithm>
 #include <cmath>
@@ -778,7 +779,7 @@ namespace AirportSim
 
         ImGui::Checkbox("名牌/气泡", &state_.showOverlay);
         ImGui::SameLine();
-        ImGui::Checkbox("POI 标记", &state_.showPoiMarkers);
+        ImGui::Checkbox("调试 POI 点位 (F5)", &state_.showPoiMarkers);
         ImGui::SameLine();
         ImGui::Checkbox("LLM 决策", &state_.llmEnabled);
         if (ImGui::Button("跳 1 小时"))
@@ -1002,18 +1003,10 @@ namespace AirportSim
 
         if (state_.showPoiMarkers)
         {
-            for (const auto& poi : map.Points())
-            {
-                if (ProjectWorld(viewProjection, vpPos, vpSize, poi.worldPos + glm::vec3(0.0f, 0.6f, 0.0f), screen))
-                {
-                    drawList->AddCircleFilled(screen, 3.0f, IM_COL32(255, 210, 80, 220));
-                    drawList->AddText(ImVec2(screen.x + 5.0f, screen.y - 6.0f), IM_COL32(255, 210, 80, 220),
-                                      poi.name.c_str());
-                }
-            }
+            NextGameplay::Sim::DrawAnchorDebugOverlay(viewProjection, map.Points());
         }
 
-        // 气泡按距相机排序，同屏上限 8（§7.5）。
+        // 气泡按距相机排序，同屏上限 8。
         struct FBubbleEntry
         {
             const FAgent* agent;

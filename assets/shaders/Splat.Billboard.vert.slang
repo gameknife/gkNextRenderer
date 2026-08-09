@@ -224,8 +224,8 @@ AmbientCube SplatZeroAmbientCube()
     cube.NegX = 0;
     cube.SunDirect = 0;
     cube.SkyEmissiveDirect = 0;
-    cube.skyVisibility_pznzpyny = 0;
-    cube.skyVisibility_pxnxs0s1 = 0;
+    cube.SkyVisibilityPZNZPYNY = 0;
+    cube.SkyVisibilityPXNXS0S1 = 0;
     return cube;
 }
 
@@ -251,8 +251,8 @@ float SplatAmbientCubeSkyVisibility(AmbientCube cube, float3 normal)
     const float wnz = max(-normal.z, 0.0);
     const float sum = wx + wnx + wy + wny + wz + wnz;
 
-    const uint4 unpacked0 = UnpackBytes(cube.skyVisibility_pznzpyny);
-    const uint4 unpacked1 = UnpackBytes(cube.skyVisibility_pxnxs0s1);
+    const uint4 unpacked0 = UnpackBytes(cube.SkyVisibilityPZNZPYNY);
+    const uint4 unpacked1 = UnpackBytes(cube.SkyVisibilityPXNXS0S1);
     float skyvis = 0.0;
     skyvis += float(unpacked0.x) * wz;
     skyvis += float(unpacked0.y) * wnz;
@@ -355,7 +355,7 @@ VertexOutput main(uint vertexIndex : SV_VertexID, uint instanceIndex : SV_Instan
     UniformBufferObject* camera = push.gpuScene.Camera;
     const float3 worldPosition = mul(model.world, float4(splat.positionOpacity.xyz, 1.0)).xyz;
     const float4 viewPosition = mul(camera[0].ModelView, float4(worldPosition, 1.0));
-    float4 clip = mul(camera[0].ProjectionUnJit, viewPosition);
+    float4 clip = mul(camera[0].Projection, viewPosition);
     clip.z = clamp(clip.z, 0.0, abs(clip.w));
 
     float3 right = float3(camera[0].ModelView[0][0], camera[0].ModelView[0][1], camera[0].ModelView[0][2]);

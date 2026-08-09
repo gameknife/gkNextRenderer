@@ -18,14 +18,14 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
-#include "Engine/Rendering/PipelineCommon/AtrousDenoiser.hpp"
-#include "Engine/Rendering/PipelineCommon/TemporalResolve.hpp"
+#include "Engine/Rendering/PipelineCommon/ResourceStateTracker.hpp"
 
 #include <vulkan/vulkan.h>
 
 #include <cstdint>
 #include <functional>
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -36,7 +36,10 @@ namespace Vulkan
     class Device;
     class FrameBuffer;
     class LogicRendererBase;
+    class RenderImage;
+    class Sampler;
     class SwapChain;
+    class VulkanBaseRenderer;
 
     // How a view's composed result is delivered.
     enum class EViewOutputKind
@@ -52,6 +55,20 @@ namespace Vulkan
         OnDemand,    // only when camera/scene/selection is dirty (static preview)
         Transient,   // render to convergence (or N frames) then recycle the bank (thumbnails)
     };
+
+    enum class EHistoryInvalidationReason
+    {
+        Initial,
+        SceneChanged,
+        RendererChanged,
+        ExtentChanged,
+        CameraCut,
+        TemporalConfigChanged,
+        ViewReused,
+        SwapchainRecreated,
+    };
+
+    const char* GetHistoryInvalidationReasonName(EHistoryInvalidationReason reason);
 
     // Per-view temporal history. Everything here used to live as a single global instance in
     // NextEngine::FRenderState; with multiple views each needs its own copy so views never share
@@ -76,6 +93,8 @@ namespace Vulkan
 
         // Camera jumped / view resized / scene swapped -> drop temporal history next frame.
         mutable bool resetHistory = true;
+        mutable uint64_t historyGeneration = 1;
+        mutable EHistoryInvalidationReason historyInvalidationReason = EHistoryInvalidationReason::Initial;
     };
 
     // Description used to create a RenderView.
@@ -91,12 +110,13 @@ namespace Vulkan
     //
     // Bank 0 is reserved for the primary view == the legacy global layout (absolute slots
     // unchanged). Banks 1..kMaxConcurrentBanks-1 are handed out for secondary / offscreen views.
-    // A view's bank base (k * Assets::Bindless::kViewRtBankStride) travels in GPUScene.custom_data_0.
+    // A view's bank base (k * Assets::Bindless::kViewRtBankStride) travels in GPUScene.CustomData0.
     class FBankAllocator
     {
     public:
         // Total banks (including bank 0). Caps concurrent full-history views to bound VRAM.
-        static constexpr uint32_t kMaxConcurrentBanks = 8;
+        // Owned by the bindless registry so the storage array's low region is sized against it.
+        static constexpr uint32_t kMaxConcurrentBanks = static_cast<uint32_t>(Assets::Bindless::kMaxViewRtBanks);
 
         FBankAllocator()
         {
@@ -140,18 +160,28 @@ namespace Vulkan
         std::vector<bool> used_;
     };
 
+    struct FRenderViewHandle
+    {
+        uint32_t bankBase = FBankAllocator::kInvalidBase;
+        uint32_t generation = 0;
+
+        bool IsValid() const { return bankBase != FBankAllocator::kInvalidBase && generation != 0; }
+        auto operator<=>(const FRenderViewHandle&) const = default;
+    };
+
     // One independent view of a scene. Owns the per-view temporal history and the identity
     // (RT bank base, render extent/offset, output kind, schedule). Vulkan resources are still
     // owned by VulkanBaseRenderer, but their per-view handles are tracked here.
     class RenderView
     {
     public:
-        RenderView(uint32_t bankBase, const FViewDesc& desc, std::string debugName)
-            : bankBase_(bankBase), desc_(desc), debugName_(std::move(debugName))
+        RenderView(uint32_t bankBase, const FViewDesc& desc, std::string debugName, uint32_t generation = 1)
+            : bankBase_(bankBase), generation_(generation), desc_(desc), debugName_(std::move(debugName))
         {
         }
 
         uint32_t              RtBankBase() const { return bankBase_; }
+        FRenderViewHandle     Handle() const { return {bankBase_, generation_}; }
         const char*           DebugName() const { return debugName_.c_str(); }
         const FViewDesc&      Desc() const { return desc_; }
         VkExtent2D            RenderExtent() const { return desc_.renderExtent; }
@@ -176,10 +206,7 @@ namespace Vulkan
 
         FViewRenderState&       State() { return state_; }
         const FViewRenderState& State() const { return state_; }
-        PipelineCommon::AtrousDenoiser& AtrousDenoiser() { return atrousDenoiser_; }
-        const PipelineCommon::AtrousDenoiser& AtrousDenoiser() const { return atrousDenoiser_; }
-        PipelineCommon::TemporalResolve& TemporalResolve() { return temporalResolve_; }
-        const PipelineCommon::TemporalResolve& TemporalResolve() const { return temporalResolve_; }
+        PipelineCommon::FResourceStateTracker& ResourceStates() { return resourceStates_; }
 
         void SetDebugName(std::string debugName) { debugName_ = std::move(debugName); }
         void SetRenderExtent(VkExtent2D extent)
@@ -187,7 +214,7 @@ namespace Vulkan
             if (desc_.renderExtent.width != extent.width || desc_.renderExtent.height != extent.height)
             {
                 desc_.renderExtent = extent;
-                InvalidateTemporalHistory();
+                InvalidateTemporalHistory(EHistoryInvalidationReason::ExtentChanged);
             }
         }
         void SetRenderOffset(VkOffset2D offset) { renderOffset_ = offset; }
@@ -224,27 +251,31 @@ namespace Vulkan
             visibilityFramebuffer_ = nullptr;
             prevDepthValid_ = false;
             ResetCameraUbo();
+            // Swapchain recreation replaces every image in this view's RT bank while keeping
+            // the same logical bindless IDs. Old states therefore cannot be carried over to
+            // the new VkImage handles; their first use must transition from UNDEFINED again.
+            resourceStates_.Reset();
         }
-        void InvalidateTemporalHistory()
+        void InvalidateTemporalHistory(
+            EHistoryInvalidationReason reason = EHistoryInvalidationReason::CameraCut)
         {
             state_.resetHistory = true;
+            ++state_.historyGeneration;
+            state_.historyInvalidationReason = reason;
             prevDepthValid_ = false;
-            temporalResolve_.InvalidateHistory();
+            resourceStates_.Reset();
         }
         void CreateSwapChain(const SwapChain& swapChain)
         {
-            atrousDenoiser_.CreateSwapChain(swapChain);
-            temporalResolve_.SetupDefaultHistory();
-            temporalResolve_.InvalidateHistory();
+            (void)swapChain;
         }
         void DeleteSwapChain()
         {
-            atrousDenoiser_.DeleteSwapChain();
-            temporalResolve_.InvalidateHistory();
         }
 
     private:
         uint32_t         bankBase_ = 0;
+        uint32_t         generation_ = 0;
         FViewDesc        desc_{};
         std::string      debugName_;
         VkOffset2D       renderOffset_{};
@@ -256,15 +287,14 @@ namespace Vulkan
         bool             prevDepthValid_ = false;
         FViewRenderState state_{};
         std::vector<Assets::UniformBuffer> cameraUboRing_;
-        PipelineCommon::AtrousDenoiser atrousDenoiser_;
-        PipelineCommon::TemporalResolve temporalResolve_;
+        PipelineCommon::FResourceStateTracker resourceStates_;
     };
 
     using FRenderViewPostCallback = std::function<void(RenderView&)>;
 
     struct FRenderViewScheduleItem
     {
-        RenderView* view = nullptr;
+        FRenderViewHandle view;
         LogicRendererBase* logicRenderer = nullptr;
         bool clearSwapchain = false;
         FRenderViewPostCallback postRender;
@@ -280,7 +310,9 @@ namespace Vulkan
             FViewDesc desc{};
             desc.outputKind = EViewOutputKind::SwapchainSubrect;
             desc.schedule   = EViewSchedule::Persistent;
-            primary_ = std::make_unique<RenderView>(FBankAllocator::PrimaryBankBase(), desc, "primary view");
+            generations_.fill(0);
+            generations_[0] = 1;
+            primary_ = std::make_unique<RenderView>(FBankAllocator::PrimaryBankBase(), desc, "primary view", 1);
         }
 
         RenderView&       Primary() { return *primary_; }
@@ -297,8 +329,38 @@ namespace Vulkan
                 return nullptr;
             }
 
-            additional_.push_back(std::make_unique<RenderView>(bankBase, desc, std::move(debugName)));
+            const uint32_t bankIndex = bankBase / Assets::Bindless::kViewRtBankStride;
+            const uint32_t generation = ++generations_[bankIndex];
+            additional_.push_back(std::make_unique<RenderView>(bankBase, desc, std::move(debugName), generation));
             return additional_.back().get();
+        }
+
+        RenderView* Resolve(const FRenderViewHandle handle) const
+        {
+            if (!handle.IsValid()) return nullptr;
+            if (primary_->Handle() == handle) return primary_.get();
+            const auto found = std::find_if(additional_.begin(), additional_.end(),
+                [handle](const auto& view) { return view->Handle() == handle; });
+            return found == additional_.end() ? nullptr : found->get();
+        }
+
+        bool DestroyView(RenderView& view)
+        {
+            if (view.IsPrimary())
+            {
+                return false;
+            }
+            schedule_.erase(std::remove_if(schedule_.begin(), schedule_.end(),
+                [&view](const FRenderViewScheduleItem& item) { return item.view == view.Handle(); }), schedule_.end());
+            const auto found = std::find_if(additional_.begin(), additional_.end(),
+                [&view](const auto& candidate) { return candidate.get() == &view; });
+            if (found == additional_.end())
+            {
+                return false;
+            }
+            banks_.Release(view.RtBankBase());
+            additional_.erase(found);
+            return true;
         }
 
         void ScheduleView(RenderView& view,
@@ -307,7 +369,7 @@ namespace Vulkan
                           FRenderViewPostCallback postRender = {})
         {
             schedule_.push_back(FRenderViewScheduleItem{
-                &view,
+                view.Handle(),
                 &logicRenderer,
                 clearSwapchain,
                 std::move(postRender)});
@@ -354,10 +416,99 @@ namespace Vulkan
             additional_.clear();
         }
 
+        void InvalidateAllTemporalHistory(EHistoryInvalidationReason reason)
+        {
+            primary_->InvalidateTemporalHistory(reason);
+            for (const auto& view : additional_)
+            {
+                view->InvalidateTemporalHistory(reason);
+            }
+        }
+
     private:
         FBankAllocator                          banks_;
+        std::array<uint32_t, FBankAllocator::kMaxConcurrentBanks> generations_{};
         std::unique_ptr<RenderView>             primary_;
         std::vector<std::unique_ptr<RenderView>> additional_;
         std::vector<FRenderViewScheduleItem>     schedule_;
+    };
+
+    struct FViewRenderContext
+    {
+        RenderView* view = nullptr;
+        Assets::Scene* sceneOverride = nullptr;
+        uint32_t bankBase = 0;
+        VkExtent2D renderExtent{0, 0};
+        VkDeviceAddress cameraAddress = 0;
+        FrameBuffer* visibilityFramebuffer = nullptr;
+    };
+
+    struct FRenderViewTargetResources
+    {
+        FRenderViewTargetResources() = default;
+        ~FRenderViewTargetResources();
+
+        FRenderViewTargetResources(const FRenderViewTargetResources&) = delete;
+        FRenderViewTargetResources& operator=(const FRenderViewTargetResources&) = delete;
+        FRenderViewTargetResources(FRenderViewTargetResources&&) noexcept;
+        FRenderViewTargetResources& operator=(FRenderViewTargetResources&&) noexcept;
+
+        void ResetSwapChainResources(bool releaseSampledOutput);
+
+        std::unique_ptr<FrameBuffer> visibilityFramebuffer;
+        std::unique_ptr<RenderImage> offscreenImage;
+        std::unique_ptr<Sampler> offscreenSampler;
+        uint32_t outputSampleSlot = std::numeric_limits<uint32_t>::max();
+    };
+
+    class RenderViewResourceFactory final
+    {
+    public:
+        explicit RenderViewResourceFactory(VulkanBaseRenderer& renderer);
+
+        RenderView& EnsureView(
+            RenderView*& view,
+            const FViewDesc& desc,
+            std::string debugName,
+            bool copyObjectIdHistory);
+        bool DestroyView(RenderView*& view);
+        RenderView& EnsureView(
+            FRenderViewHandle& handle,
+            const FViewDesc& desc,
+            std::string debugName,
+            bool copyObjectIdHistory);
+        bool DestroyView(FRenderViewHandle& handle);
+        std::unique_ptr<FrameBuffer> RebuildVisibilityFramebuffer(RenderView& view, VkExtent2D extent);
+        std::unique_ptr<RenderImage> CreateSampledColorImage(VkExtent2D extent, const char* debugName);
+        std::unique_ptr<Sampler> CreateClampSampler();
+        void BindSampledColorImage(uint32_t sampleSlot, RenderImage& image, Sampler& sampler);
+        void EnsureSampledOffscreenTarget(
+            RenderView& view,
+            FRenderViewTargetResources& target,
+            VkExtent2D extent,
+            uint32_t sampleSlot,
+            const char* debugName);
+        bool CopyRenderOutputToImage(
+            VkCommandBuffer commandBuffer,
+            RenderView& view,
+            RenderImage& dst,
+            VkFilter filter = VK_FILTER_LINEAR);
+
+    private:
+        VulkanBaseRenderer& renderer_;
+    };
+
+    class FActiveRenderViewScope final
+    {
+    public:
+        FActiveRenderViewScope(VulkanBaseRenderer& renderer, RenderView& view);
+        ~FActiveRenderViewScope();
+
+        FActiveRenderViewScope(const FActiveRenderViewScope&) = delete;
+        FActiveRenderViewScope& operator=(const FActiveRenderViewScope&) = delete;
+
+    private:
+        VulkanBaseRenderer& renderer_;
+        FViewRenderContext previousContext_{};
     };
 }

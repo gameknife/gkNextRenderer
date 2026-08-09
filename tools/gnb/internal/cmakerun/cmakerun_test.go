@@ -88,6 +88,35 @@ func TestBuildTraversalProject(t *testing.T) {
 	}
 }
 
+func TestFindVSProjectForTargetPrefersCurrentSolutionProject(t *testing.T) {
+	buildDir := t.TempDir()
+	legacyProject := filepath.Join(buildDir, "src", "gkNextEngine.vcxproj")
+	currentProject := filepath.Join(buildDir, "src", "Engine", "gkNextEngine.vcxproj")
+	if err := os.MkdirAll(filepath.Dir(legacyProject), 0o755); err != nil {
+		t.Fatalf("create legacy project directory: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(currentProject), 0o755); err != nil {
+		t.Fatalf("create current project directory: %v", err)
+	}
+	for _, project := range []string{legacyProject, currentProject} {
+		if err := os.WriteFile(project, nil, 0o644); err != nil {
+			t.Fatalf("create project %s: %v", project, err)
+		}
+	}
+	solution := `<?xml version="1.0"?><Solution><Folder><Project Path="src/Engine/gkNextEngine.vcxproj"/></Folder></Solution>`
+	if err := os.WriteFile(filepath.Join(buildDir, "gkNextRenderer.slnx"), []byte(solution), 0o644); err != nil {
+		t.Fatalf("create solution: %v", err)
+	}
+
+	got, ok := findVSProjectForTarget(buildDir, "gkNextEngine")
+	if !ok {
+		t.Fatal("findVSProjectForTarget() did not find a project")
+	}
+	if filepath.Clean(got) != filepath.Clean(currentProject) {
+		t.Fatalf("findVSProjectForTarget() = %q, want %q", got, currentProject)
+	}
+}
+
 func TestMSBuildParallelArg(t *testing.T) {
 	if got := msbuildParallelArg(0); got != "/m" {
 		t.Fatalf("msbuildParallelArg(0) = %q, want /m", got)

@@ -34,7 +34,6 @@ private:
     ImGuiID DockSpaceUI(Editor::EditorUiState& uiState);
     void RebuildDefaultDockLayout(ImGuiID id);
     void ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiState);
-    void DrawIndicator(uint32_t frameCount);
 
     EditorGameInstance* editor_;
     Editor::EditorUiState uiState_{};

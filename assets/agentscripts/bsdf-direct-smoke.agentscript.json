@@ -1,0 +1,26 @@
+{
+  "name": "bsdf-direct-smoke",
+  "target": "gkNextRenderer",
+  "scene": "MaterialShowcase.proc",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 30000 },
+    { "type": "cvar", "name": "r.temporalFrames", "set": 32 },
+    { "type": "cvar", "name": "r.restir.enable", "set": true },
+    { "type": "cvar", "name": "r.restir.temporal", "set": true },
+    { "type": "cvar", "name": "r.restir.spatial", "set": true },
+    { "type": "wait-frames", "n": 240 },
+    { "type": "wait-ms", "ms": 1000 },
+    { "type": "screenshot", "out": "screenshots/bsdf_direct_smoke" },
+    { "type": "wait-ms", "ms": 1000 },
+    { "type": "wait-frames", "n": 10 },
+    { "type": "quit" }
+  ]
+}

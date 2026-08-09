@@ -10,7 +10,7 @@
 #include "Modules/ScadLoader/FScadLexer.h"
 #include "Modules/ScadLoader/FScadTypes.h"
 
-namespace Assets::scad
+namespace Assets::Scad
 {
     class ScadParser
     {
@@ -19,4 +19,4 @@ namespace Assets::scad
         // Returns false on a fatal parse error (outError filled with line info).
         static bool Parse(const std::vector<Token>& tokens, Scope& outScope, std::string& outError);
     };
-} // namespace Assets::scad
+} // namespace Assets::Scad

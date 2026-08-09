@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Runtime/Command/CommandHistory.hpp"
 
@@ -39,14 +40,6 @@ namespace Editor
 
     struct EditorUiState
     {
-        struct ToolbarState
-        {
-            int projectIndex = 0;
-            int backendIndex = 0;
-            int platformIndex = 0;
-            int buildConfigIndex = 0;
-        };
-
         struct OutlinerState
         {
             uint32_t renameTargetId = InvalidId;
@@ -64,6 +57,8 @@ namespace Editor
         {
             uint32_t editingNodeId = InvalidId;
             std::string editingName;
+            bool renamingName = false;
+            bool focusNameInput = false;
             ImGuiTextFilter propertyFilter;
         };
 
@@ -76,15 +71,8 @@ namespace Editor
             ImGuiTextFilter materialFilter;
             ImGuiTextFilter textureFilter;
             ImGuiTextFilter meshFilter;
-        };
-
-        struct ViewportOverlayState
-        {
-            int projectionMode = 0;
-            int displayMode = 0;
-            int cameraIndex = 0;
-            float angleSnap = 10.0f;
-            float distanceSnap = 0.25f;
+            uint32_t pendingRevealMaterialId = InvalidId;
+            uint32_t pendingRevealMeshId = InvalidId;
         };
 
         struct SettingsPanelState
@@ -111,6 +99,56 @@ namespace Editor
             std::optional<TrackedEdit> trackedEdit;
         };
 
+        struct SequencerState
+        {
+            enum class EChannel
+            {
+                Translation,
+                Rotation,
+                Scale,
+                SunRotation,
+                SunElevation,
+                SkyRotation,
+                SunIntensity,
+                SkyIntensity,
+                SunColor,
+                SkyColor,
+            };
+
+            struct KeySelection
+            {
+                int track = -1;
+                EChannel channel = EChannel::Translation;
+                int key = -1;
+
+                bool operator==(const KeySelection&) const = default;
+            };
+
+            float currentTime = 0.0f;
+            float pixelsPerSecond = 120.0f;
+            float framesPerSecond = 30.0f;
+            int selectedTrack = -1;
+            int selectedKey = -1;
+            EChannel selectedChannel = EChannel::Translation;
+            bool snapToFrames = true;
+            bool initialized = false;
+            bool draggingKey = false;
+            float dragOriginalTime = 0.0f;
+            bool rangeSelecting = false;
+            float rangeStartTime = 0.0f;
+            float rangeEndTime = 0.0f;
+            bool keyboardGrab = false;
+            float keyboardGrabMouseX = 0.0f;
+            float keyboardGrabOriginalTime = 0.0f;
+            bool duplicateOnDrag = false;
+            char search[96]{};
+            std::vector<KeySelection> selectedKeys;
+            std::vector<int> lockedTracks;
+            std::vector<int> hiddenTracks;
+            std::vector<Assets::AnimationTrack> editBefore;
+            bool trackingValueEdit = false;
+        };
+
         bool state = true;
 
         // Panels
@@ -123,10 +161,11 @@ namespace Editor
         bool textureBrowser = true;
         bool meshBrowser = true;
         bool logPanel = true;
-        bool aiPanel = true;
+        bool scriptConsolePanel = false;
         bool hotReloadPanel = false;
         bool settingsPanel = false;
-        bool cameraViewPanel = false; // legacy alias for cameraViews[0].open
+        bool cameraViewPanel = false;
+        bool sequencerPanel = false;
         uint32_t pendingExpandTargetId = InvalidId;
         uint32_t pendingCollapseTargetId = InvalidId;
         bool dockResetRequested = false;
@@ -145,6 +184,7 @@ namespace Editor
 
         // Cross-panel asset selections (avoid mixing ids from different sources)
         uint32_t selectedMaterialId = InvalidId;
+        uint32_t selectedMeshId = InvalidId;
         uint32_t selectedTextureId = InvalidId;
         uint32_t selectedContentItemId = InvalidId;
 
@@ -161,13 +201,12 @@ namespace Editor
         bool ed_material = false;
         Assets::FMaterial* selected_material = nullptr;
         MaterialEditorState materialEditor;
+        SequencerState sequencer;
 
         // Per-surface UI state
-        ToolbarState toolbar;
         OutlinerState outliner;
         PropertiesState propertiesState;
         ContentBrowserState contentBrowserState;
-        ViewportOverlayState viewportOverlay;
         SettingsPanelState settings;
 
         // Tools/children

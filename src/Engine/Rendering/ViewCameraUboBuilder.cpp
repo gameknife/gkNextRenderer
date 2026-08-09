@@ -1,8 +1,6 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Rendering/ViewCameraUboBuilder.hpp"
-
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Assets/GPU/Texture.hpp"
 
 namespace Vulkan
 {
@@ -64,7 +62,9 @@ namespace Vulkan
             const Assets::EnvironmentSetting& env = scene.GetEnvSettings();
             const bool hasSun = env.HasSun && env.SunIntensity > 0.0f;
             ubo.SunDirection = glm::vec4(env.SunDirection(), 0.0f);
-            ubo.SunColor = hasSun ? glm::vec4(1.0f, 1.0f, 1.0f, 0.0f) * env.SunIntensity : glm::vec4(0.0f);
+            ubo.SunColor =
+                hasSun ? glm::vec4(env.SunColor, 0.0f) * env.SunIntensity : glm::vec4(0.0f);
+            ubo.SkyColor = glm::vec4(env.SkyColor, 1.0f);
             ubo.HasSun = hasSun;
             ubo.SkyRotation = env.SkyRotation;
             ubo.SkyIntensity = env.SkyIntensity;
@@ -80,14 +80,14 @@ namespace Vulkan
         {
             ubo.Aperture = camera.Aperture;
             ubo.FocusDistance = camera.FocalDistance;
-            ubo.FastGather = false;
+            ubo.ExitAfterFirst = false;
             ubo.SuperResolution = 0;
             ubo.MaxNumberOfBounces = 1;
             ubo.NumberOfSamples = 64;
             ubo.NumberOfBounces = 2;
             ubo.TemporalFrames = 1;
             ubo.TotalFrames = totalFrames;
-            ubo.TAA = false;
+            ubo.PrimaryRayJitter = false;
             ubo.ProgressiveRender = false;
             ubo.HDR = false;
             ubo.HDROutputMode = 0;
@@ -96,23 +96,20 @@ namespace Vulkan
             ubo.HeatmapScale = 1.0f;
             ubo.ShowHeatmap = false;
             ubo.DebugDraw_Lighting = false;
-            ubo.DebugDrawPadding0 = 0;
-            ubo.DenoiseDiffuseSourceSlot = static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_DIFFUSE);
-            ubo.DenoiseSpecularSourceSlot = static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_SPECULAR);
+            ubo.ForceBlackBackground = false;
             ubo.GTAORadius = 1.0f;
             ubo.GTAOStrength = 0.0f;
             ubo.GTAOThickness = 0.1f;
             ubo.GTAODebugMode = 0;
             ubo.GTAOEnable = false;
             ubo.GTAOQuality = 0;
-            ubo.GTAOPadding3 = 0;
-            ubo.GTAOPadding4 = 0;
-            ubo.GTAOPadding5 = 0;
-            ubo.GTAOPadding6 = 0;
-            ubo.GTAOPadding7 = 0;
-            ubo.GTAOPadding8 = 0;
-            ubo.GTAOPadding9 = 0;
-            ubo.GTAOPadding10 = 0;
+            ubo.LightObjectScreenSpaceShadow = false;
+            ubo.LightObjectShadowDistance = 0.0f;
+            // Thumbnails render off the primary camera's grid anchor, so disable the grid for them
+            // and let every light query take the global-CDF fallback.
+            ubo.LightGridCascadeCount = 0;
+            ubo.LightGridCullThreshold = 0.0f;
+            ubo.LightGridAnchor = glm::vec4(0.0f);
         }
     }
 
@@ -139,7 +136,7 @@ namespace Vulkan
         {
             ubo.TemporalFrames = 1;
             ubo.TotalFrames = std::max(1u, request.baseUbo != nullptr ? request.baseUbo->TotalFrames : request.totalFrames);
-            ubo.TAA = false;
+            ubo.PrimaryRayJitter = false;
             ubo.ProgressiveRender = false;
         }
 

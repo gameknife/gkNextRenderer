@@ -1,14 +1,14 @@
 #include "KongLie3DBattleSystem.hpp"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Data/Material.hpp"
-#include "Engine/Assets/Loaders/FProcModel.h"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "KongLie3DAudio.hpp"
 #include "KongLie3DSkills.hpp"
-#include "Engine/Runtime/Scene/NodeUtils.h"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
 
 #include <spdlog/spdlog.h>

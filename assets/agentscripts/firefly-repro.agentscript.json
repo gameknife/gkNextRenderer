@@ -1,0 +1,92 @@
+{
+  "name": "firefly-repro",
+  "target": "gkNextRenderer",
+  "scene": "assets/models/conf_room.glb",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running",
+      "timeoutMs": 30000
+    },
+    {
+      "type": "cvar",
+      "name": "r.restir.enable",
+      "set": false
+    },
+    {
+      "type": "wait-frames",
+      "n": 90
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/ff_steady"
+    },
+    {
+      "type": "mouse-move",
+      "to": {
+        "norm": [
+          0.5,
+          0.5
+        ]
+      }
+    },
+    {
+      "type": "mouse-button",
+      "button": "right",
+      "action": "down",
+      "at": {
+        "norm": [
+          0.5,
+          0.5
+        ]
+      }
+    },
+    {
+      "type": "mouse-move",
+      "relative": true,
+      "to": [
+        400,
+        0
+      ],
+      "durationFrames": 12
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/ff_during_rot"
+    },
+    {
+      "type": "mouse-button",
+      "button": "right",
+      "action": "up"
+    },
+    {
+      "type": "wait-frames",
+      "n": 2
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/ff_after_rot"
+    },
+    {
+      "type": "wait-frames",
+      "n": 8
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/ff_after_rot8"
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

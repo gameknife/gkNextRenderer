@@ -2080,6 +2080,18 @@
         </h2>
 
         <div class="form-field">
+          <label>provider</label>
+          <select id="chat-provider" class="select" name="provider" form="chat-send-form"
+                  hx-get="/chat/session?id={{.SessionID}}" hx-include="#chat-provider"
+                  hx-trigger="change" hx-target="#chat-panel" hx-swap="outerHTML">
+            {{range .Providers}}
+            <option value="{{.ID}}" {{if .Active}}selected{{end}} {{if not .Configured}}disabled{{end}}>{{.DisplayName}} ({{.ID}})</option>
+            {{end}}
+          </select>
+          <input type="hidden" id="chat-profile" name="profile" value="{{.SelectedProfile}}" form="chat-send-form">
+        </div>
+
+        <div class="form-field">
           <label>model</label>
           <select id="chat-model" class="select" name="model" form="chat-send-form">
             {{range .Models}}
@@ -2090,13 +2102,13 @@
 
         <div class="chat-server-actions">
           <form hx-post="/chat/serve"
-                hx-include="#chat-model,#chat-session-id"
+                hx-include="#chat-provider,#chat-profile,#chat-model,#chat-session-id"
                 hx-target="#chat-panel"
                 hx-swap="outerHTML">
             <button class="btn-secondary" type="submit" title="启动或切换到当前选择的模型">Serve</button>
           </form>
           <form hx-post="/chat/stop"
-                hx-include="#chat-model,#chat-session-id"
+                hx-include="#chat-provider,#chat-profile,#chat-model,#chat-session-id"
                 hx-target="#chat-panel"
                 hx-swap="outerHTML">
             <button class="btn-secondary danger" type="submit" title="停止后台 llama-server" {{if not .ServerRunning}}disabled{{end}}>Stop</button>
@@ -2124,7 +2136,7 @@
           Sessions
           <form class="chat-title-action"
                 hx-post="/chat/new"
-                hx-include="#chat-model"
+                hx-include="#chat-provider,#chat-profile,#chat-model"
                 hx-target="#chat-panel"
                 hx-swap="outerHTML">
             <button class="icon-btn" type="submit" title="新建对话" aria-label="新建对话">+</button>
@@ -2148,6 +2160,8 @@
                     hx-swap="outerHTML">
                 <input type="hidden" name="session_id" value="{{.ID}}">
                 <input type="hidden" name="model" value="{{$.SelectedModel}}">
+				<input type="hidden" name="provider" value="{{$.SelectedProvider}}">
+				<input type="hidden" name="profile" value="{{$.SelectedProfile}}">
                 <button class="icon-btn" type="submit" title="归档对话" aria-label="归档对话">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>
                 </button>
@@ -2169,7 +2183,7 @@
           </span>
           Chat
         </div>
-        <span class="target-pill">{{.SelectedModel}}</span>
+        <span class="target-pill">{{.SelectedProvider}} / {{.SelectedModel}}</span>
         <span class="spacer"></span>
         <span class="chat-status">{{len .Messages}} messages</span>
       </div>
@@ -2186,7 +2200,7 @@
             </div>
           {{end}}
         {{else}}
-          <div class="chat-empty">选择模型后直接提问；首次请求会按需启动 llama-server。</div>
+          <div class="chat-empty">选择 provider 和模型后直接提问；LocalLlama 会按需启动。</div>
         {{end}}
       </div>
 
@@ -2207,6 +2221,10 @@
           <label class="chat-thinking-opt">
             <input id="chat-thinking" type="checkbox" name="thinking" value="1">
             <span>思考模式</span>
+          </label>
+          <label class="chat-thinking-opt" title="仅调用固定内存诊断工具，不访问仓库、Shell、网络或场景">
+            <input id="chat-tool-probe" type="checkbox" name="tool_probe" value="1">
+            <span>Tool Call Smoke</span>
           </label>
           <label class="chat-token-opt">
             <span>输出上限</span>
@@ -2926,11 +2944,19 @@
     }
     .loc-table tbody td.num { text-align: right; color: var(--fg); }
     .loc-table tr.cat-row td { background: var(--bg-card-hover); color: var(--fg); font-weight: 650; }
-    .loc-table tr.sub-row td.name { padding-left: 22px; color: var(--fg-mute); }
-    .loc-table tr.leaf-row td.name { padding-left: 38px; color: var(--fg-dim); font-style: italic; }
+    .loc-table tr.dir-row td.name { color: var(--fg-mute); }
     .loc-toolbar { display: flex; align-items: center; gap: 12px; }
     .loc-toolbar .tp-opt { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-mute); font-size: 12px; cursor: pointer; }
     .loc-toolbar .tp-opt input { accent-color: var(--accent); width: 13px; height: 13px; }
+    .loc-toolbar select {
+      min-width: 112px;
+      background: var(--bg-elev);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--fg);
+      padding: 6px 10px;
+      font-size: 12px;
+    }
     .loc-error { color: var(--red); background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.32); border-radius: var(--radius-md); padding: 10px 12px; font-size: 12.5px; }
   </style>
 
@@ -3005,13 +3031,17 @@
             </span>
             类别行数对比
             <span style="margin-left:auto; display:inline-flex; gap:12px; align-items:center;">
-              <label class="tp-opt" style="display:inline-flex;align-items:center;gap:6px;color:var(--fg-mute);font-size:12px;cursor:pointer;">
-                <input type="checkbox" {{if .IncludeThirdParty}}checked{{end}}
-                       hx-get="/tab/loc{{if not .IncludeThirdParty}}?thirdparty=1{{end}}"
-                       hx-target="#tab-content" hx-swap="innerHTML"
-                       hx-trigger="change">
-                <span>包含 ThirdParty</span>
-              </label>
+              <form class="loc-toolbar" hx-get="/tab/loc" hx-target="#tab-content" hx-swap="innerHTML" hx-trigger="change">
+                <select name="depth" aria-label="LOC 目录深度">
+                  {{range .DepthOptions}}
+                    <option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>
+                  {{end}}
+                </select>
+                <label class="tp-opt" style="display:inline-flex;align-items:center;gap:6px;color:var(--fg-mute);font-size:12px;cursor:pointer;">
+                  <input type="checkbox" name="thirdparty" value="1" {{if .IncludeThirdParty}}checked{{end}}>
+                  <span>包含 ThirdParty</span>
+                </label>
+              </form>
             </span>
           </h2>
           <div class="loc-chart-rows">
@@ -3045,7 +3075,7 @@
           <table class="loc-table">
             <thead>
               <tr>
-                <th>类别 / 子项</th>
+                <th>目录</th>
                 <th class="num" style="text-align:right;">文件</th>
                 <th class="num" style="text-align:right;">行数</th>
                 <th class="num" style="text-align:right;">占比</th>
@@ -3053,29 +3083,13 @@
             </thead>
             <tbody>
               {{$total := .Snapshot.TotalLines}}
-              {{range .Snapshot.Categories}}
-                <tr class="cat-row">
-                  <td class="name">{{.Name}}</td>
+              {{range .TableRows}}
+                <tr class="{{if eq .Depth 0}}cat-row{{else}}dir-row{{end}}">
+                  <td class="name" style="padding-left: {{locIndent .Depth}}px;" title="{{.Path}}">{{.Name}}</td>
                   <td class="num">{{intCommas .Files}}</td>
                   <td class="num">{{intCommas .Lines}}</td>
                   <td class="num">{{locShare .Lines $total}}%</td>
                 </tr>
-                {{range .Subs}}
-                  <tr class="sub-row">
-                    <td class="name">{{.Name}}</td>
-                    <td class="num">{{intCommas .Files}}</td>
-                    <td class="num">{{intCommas .Lines}}</td>
-                    <td class="num">{{locShare .Lines $total}}%</td>
-                  </tr>
-                  {{range .Leaves}}
-                    <tr class="leaf-row">
-                      <td class="name">{{.Name}}</td>
-                      <td class="num">{{intCommas .Files}}</td>
-                      <td class="num">{{intCommas .Lines}}</td>
-                      <td class="num">{{locShare .Lines $total}}%</td>
-                    </tr>
-                  {{end}}
-                {{end}}
               {{end}}
             </tbody>
           </table>

@@ -29,7 +29,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install autoconf autoconf-archive automake libtool curl unzip tar libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev ninja-build
+          sudo apt-get install curl unzip tar ninja-build libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev
       - name: Cache key
         id: gnb
         shell: pwsh
@@ -63,6 +63,16 @@ jobs:
             .\gnb.bat build
           } else {
             ./gnb.sh build
+          }
+      # CI runners have no Vulkan device, so tests that build a real swapchain
+      # (tagged [GPU]) are excluded. Run the full suite locally before a release.
+      - name: Test
+        shell: pwsh
+        run: |
+          if ("${{ runner.os }}" -eq "Windows") {
+            .\gnb.bat test "~[GPU]"
+          } else {
+            ./gnb.sh test "~[GPU]"
           }
       - uses: actions/cache/save@v6
         if: steps.cache-vcpkg-restore.outputs.cache-hit != 'true'

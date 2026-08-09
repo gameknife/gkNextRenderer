@@ -9,5 +9,6 @@ namespace Editor
         bool gizmoSnap = false;
         float gizmoSnapTranslate = 1.0f;
         int32_t gizmoDefaultMode = 0;
+        int32_t progressiveRenderResumeFrames = 8;
     };
 }

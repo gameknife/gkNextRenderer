@@ -1,4 +1,5 @@
 #include "ScadAIService.hpp"
+#include "ScadOutline.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Modules/NextAI/AIService.hpp"
@@ -87,7 +88,13 @@ namespace ScadStudio
         if (auto* ai = NextAI::GetAIService(engine_))
         {
             ai->LoadConfig();
+            ai->SetProfile("scad-studio");
         }
+    }
+
+    ScadAIService::~ScadAIService()
+    {
+        if (worker_.joinable()) { worker_.request_stop(); worker_.join(); }
     }
 
     bool ScadAIService::IsConfigured() const
@@ -102,27 +109,27 @@ namespace ScadStudio
         return ai ? ai->GetProviderName() : std::string("None");
     }
 
-    NextAI::EAIProviderType ScadAIService::ProviderType() const
+    std::string ScadAIService::ProviderId() const
     {
         auto* ai = NextAI::GetAIService(engine_);
-        return ai ? ai->GetProviderType() : NextAI::EAIProviderType::Gemini;
+        return ai ? ai->GetProviderId() : std::string();
     }
 
-    std::vector<std::pair<NextAI::EAIProviderType, std::string>> ScadAIService::Providers() const
+    std::vector<NextAI::FAIProviderDescriptor> ScadAIService::Providers() const
     {
-        return NextAI::FAIService::GetAvailableProviders();
+        auto* ai = NextAI::GetAIService(engine_); return ai ? ai->GetAvailableProviders() : std::vector<NextAI::FAIProviderDescriptor>{};
     }
 
-    bool ScadAIService::IsProviderConfigured(NextAI::EAIProviderType type) const
-    {
-        auto* ai = NextAI::GetAIService(engine_);
-        return ai && ai->IsProviderConfigured(type);
-    }
-
-    bool ScadAIService::SwitchProvider(NextAI::EAIProviderType type)
+    bool ScadAIService::IsProviderConfigured(const std::string& providerId) const
     {
         auto* ai = NextAI::GetAIService(engine_);
-        if (!ai || !ai->SwitchProvider(type))
+        return ai && ai->IsProviderConfigured(providerId);
+    }
+
+    bool ScadAIService::SwitchProvider(const std::string& providerId)
+    {
+        auto* ai = NextAI::GetAIService(engine_);
+        if (!ai || !ai->SwitchProvider(providerId))
         {
             return false;
         }
@@ -133,7 +140,7 @@ namespace ScadStudio
     std::vector<std::string> ScadAIService::CurrentProviderModels() const
     {
         auto* ai = NextAI::GetAIService(engine_);
-        return ai ? ai->GetProviderModels(ai->GetProviderType()) : std::vector<std::string>{};
+        return ai ? ai->GetProviderModels(ai->GetProviderId()) : std::vector<std::string>{};
     }
 
     std::string ScadAIService::CurrentModel() const
@@ -304,7 +311,7 @@ namespace ScadStudio
             std::lock_guard<std::mutex> lock(mutex_);
             pending_ = FScadGenResult{};
             pending_.success = false;
-            pending_.error = "AI service not configured. Check assets/configs/ai_config.json";
+            pending_.error = "gnb bridge/provider not configured";
             hasPending_.store(true);
             return;
         }
@@ -331,7 +338,8 @@ namespace ScadStudio
             streamingText_.clear();
         }
 
-        std::thread([this, request = std::move(request)]() mutable
+        if (worker_.joinable()) worker_.join();
+        worker_ = std::jthread([this, request = std::move(request)](std::stop_token) mutable
         {
             auto* svc = NextAI::GetAIService(engine_);
             NextAI::FChatResponse response = svc->ChatStream(request, [this](const std::string& delta)
@@ -340,28 +348,66 @@ namespace ScadStudio
                 streamingText_ += delta;
             });
 
-            FScadGenResult result;
-            if (response.success)
+            auto parseAndValidate = [](const NextAI::FChatResponse& candidate)
             {
-                result.success = true;
-                result.assistantText = response.content;
-                result.files = ExtractProjectFiles(response.content);
+                FScadGenResult result;
+                if (!candidate.success)
+                {
+                    result.error = candidate.errorMessage.empty() ? "generation failed" : candidate.errorMessage;
+                    return result;
+                }
+                result.assistantText = candidate.content;
+                result.files = ExtractProjectFiles(candidate.content);
                 if (!result.files.empty())
                 {
                     const auto root = std::find_if(result.files.begin(), result.files.end(), [](const FScadProjectFile& file) {
                         return ToLower(file.path) == "main.scad";
                     });
                     result.scadSource = (root != result.files.end()) ? root->source : result.files.front().source;
+                    for (const auto& file : result.files)
+                    {
+                        const auto outline = BuildScadOutline(file.source);
+                        if (!outline.ok)
+                        {
+                            result.error = file.path + ": " + outline.error;
+                            return result;
+                        }
+                    }
                 }
                 else
                 {
-                    result.scadSource = ExtractScadBlock(response.content);
+                    result.scadSource = ExtractScadBlock(candidate.content);
+                    if (result.scadSource.empty())
+                    {
+                        result.error = "response contains no scad or scad-project fenced artifact";
+                        return result;
+                    }
+                    const auto outline = BuildScadOutline(result.scadSource);
+                    if (!outline.ok)
+                    {
+                        result.error = outline.error;
+                        return result;
+                    }
                 }
-            }
-            else
+                result.success = true;
+                return result;
+            };
+
+            FScadGenResult result = parseAndValidate(response);
+            if (!result.success && response.success)
             {
-                result.success = false;
-                result.error = response.errorMessage.empty() ? "generation failed" : response.errorMessage;
+                const std::string validationError = result.error;
+                request.messages.push_back(NextAI::FChatMessage::Assistant(response.content));
+                request.messages.push_back(NextAI::FChatMessage::User(
+                    "The generated artifact failed local SCAD validation. Return one complete corrected artifact. "
+                    "Do not explain. Exact validator error: " + validationError));
+                const NextAI::FChatResponse repaired = svc->Chat(request);
+                result = parseAndValidate(repaired);
+                result.repairAttempted = true;
+                if (!result.success)
+                {
+                    result.error = "repair failed after one attempt: " + result.error;
+                }
             }
 
             {
@@ -370,7 +416,7 @@ namespace ScadStudio
                 hasPending_.store(true);
             }
             generating_.store(false);
-        }).detach();
+        });
     }
 
     FScadGenResult ScadAIService::TakePendingResult()

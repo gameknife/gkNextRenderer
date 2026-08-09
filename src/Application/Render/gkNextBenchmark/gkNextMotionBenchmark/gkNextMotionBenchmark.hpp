@@ -1,7 +1,6 @@
 #pragma once
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Camera/ModelViewController.hpp"
 #include "Common/BenchMark.hpp"
 
 #include <map>
@@ -39,11 +38,14 @@ private:
     bool AdvanceRun();
 
     std::unique_ptr<BenchMarker> benchMarker_;
-    Runtime::Camera::ModelViewController modelViewController_;
     FBenchmarkSettings benchmarkSettings_{};
     std::vector<FBenchmarkRun> benchmarkRuns_;
     std::map<std::string, std::string> defaultCvars_;
     size_t currentRunIndex_ = 0;
 
-    double totalTime_ = 0.0;
+    glm::mat4 baseModelView_{1.0f};
+    float baseFieldOfView_ = 45.0f;
+    float modelRotationRadians_ = 0.0f;
+    bool cameraInitialized_ = false;
+    bool sceneHasCameraAnimation_ = false;
 };

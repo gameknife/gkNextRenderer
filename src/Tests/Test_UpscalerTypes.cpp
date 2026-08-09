@@ -12,7 +12,33 @@ TEST_CASE("Upscaler mode mapping is centralized", "[Unit][Upscaler]")
     CHECK(GetUpscaleModeInfo(2).mode == EUpscaleMode::Performance);
     CHECK(GetUpscaleModeInfo(3).mode == EUpscaleMode::UltraPerformance);
     CHECK(GetUpscaleModeInfo(4).mode == EUpscaleMode::Native);
+    CHECK(GetUpscaleModeInfo(5).mode == EUpscaleMode::Auto);
     CHECK(GetUpscaleModeInfo(99).mode == EUpscaleMode::Quality);
+}
+
+TEST_CASE("Upscaler auto mode favors DLAA at Full HD", "[Unit][Upscaler]")
+{
+    using namespace Rendering::Upscaler;
+
+    const auto fullHd = ResolveUpscaleMode(5, {1920, 1080});
+    CHECK(fullHd.enabled);
+    CHECK(fullHd.mode == static_cast<uint32_t>(EUpscaleMode::Native));
+
+    const auto smallWindow = ResolveUpscaleMode(5, {1600, 900});
+    CHECK(smallWindow.enabled);
+    CHECK(smallWindow.mode == static_cast<uint32_t>(EUpscaleMode::Native));
+
+    const auto ultrawideBelowFullHdPixels = ResolveUpscaleMode(5, {2560, 720});
+    CHECK(ultrawideBelowFullHdPixels.enabled);
+    CHECK(ultrawideBelowFullHdPixels.mode == static_cast<uint32_t>(EUpscaleMode::Native));
+
+    const auto quadHd = ResolveUpscaleMode(5, {2560, 1440});
+    CHECK(quadHd.enabled);
+    CHECK(quadHd.mode == static_cast<uint32_t>(EUpscaleMode::Quality));
+
+    const auto explicitQuality = ResolveUpscaleMode(0, {1280, 720});
+    CHECK(explicitQuality.enabled);
+    CHECK(explicitQuality.mode == static_cast<uint32_t>(EUpscaleMode::Quality));
 }
 
 TEST_CASE("Upscaler fallback render extent stays valid", "[Unit][Upscaler]")
@@ -86,4 +112,25 @@ TEST_CASE("Upscaler motion vectors use pixel-space normalization", "[Unit][Upsca
     const glm::vec2 clampedScale = CalculateMotionVectorScale({0, 0});
     CHECK(clampedScale.x == 1.0f);
     CHECK(clampedScale.y == 1.0f);
+}
+TEST_CASE("Upscaler types have one stable ordered selection", "[Unit][Upscaler]")
+{
+    using namespace Rendering::Upscaler;
+
+    CHECK(GetUpscalerTypeInfo(0).type == EUpscalerType::None);
+    CHECK(GetUpscalerTypeInfo(1).type == EUpscalerType::DLSS);
+    CHECK(GetUpscalerTypeInfo(2).type == EUpscalerType::DLSSRayReconstruction);
+    CHECK(GetUpscalerTypeInfo(3).type == EUpscalerType::FidelityFXFSR);
+    CHECK(GetUpscalerTypeInfo(4).type == EUpscalerType::NativeTAAU);
+    CHECK(GetUpscalerTypeInfo(5).type == EUpscalerType::SnapdragonGSR2);
+    CHECK(GetUpscalerTypeInfo(99).type == EUpscalerType::None);
+    CHECK(std::string_view(GetUpscalerTypeInfo(4).stableId) == "native-taau");
+    CHECK(std::string_view(GetUpscaleModeInfo(5).stableId) == "auto");
+
+    const FUpscalerTypeMask nativeTypes =
+        UpscalerTypeBit(EUpscalerType::NativeTAAU) |
+        UpscalerTypeBit(EUpscalerType::SnapdragonGSR2);
+    CHECK(SupportsUpscalerType(nativeTypes, EUpscalerType::NativeTAAU));
+    CHECK(SupportsUpscalerType(nativeTypes, EUpscalerType::SnapdragonGSR2));
+    CHECK_FALSE(SupportsUpscalerType(nativeTypes, EUpscalerType::FidelityFXFSR));
 }

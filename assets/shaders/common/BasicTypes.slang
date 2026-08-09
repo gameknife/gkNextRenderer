@@ -1,3 +1,5 @@
+#include "Atmosphere.slang"
+
 #ifdef __cplusplus
 #define ALIGN_16 alignas(16) 
 #define ALIGN_8 alignas(8)
@@ -6,7 +8,9 @@
 #define ALIGN_8
 #endif
 
-public static const int MAX_NODES = 65535; // 256;
+// RenderComponent sections are expanded into one NodeProxy each. Visibility IDs are one-based,
+// with zero reserved for the background.
+public static const int MAX_RENDER_PROXIES = 131072;
 public static const int MAX_MATERIALS = 16384;
 public static const int MAX_HDR_SH = 100;
 
@@ -27,7 +31,7 @@ public static const int GPU_SCENE_SPHERICAL_HARMONICS_SIZE = 112;
 
 public static const int GPU_SCENE_DYNAMIC_NODES_OFFSET = 0;
 public static const int GPU_SCENE_DYNAMIC_MATERIALS_OFFSET =
-    GPU_SCENE_DYNAMIC_NODES_OFFSET + GPU_SCENE_NODE_PROXY_SIZE * MAX_NODES;
+    GPU_SCENE_DYNAMIC_NODES_OFFSET + GPU_SCENE_NODE_PROXY_SIZE * MAX_RENDER_PROXIES;
 public static const int GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET =
     GPU_SCENE_DYNAMIC_MATERIALS_OFFSET + GPU_SCENE_MATERIAL_SIZE * MAX_MATERIALS;
 public static const int GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET =
@@ -45,6 +49,29 @@ public static const int GPU_SCENE_VOXEL_DATA_SIZE = 8;
 public static const int GPU_SCENE_PAGE_INDEX_SIZE = 16;
 public static const int GPU_SCENE_AMBIENT_SEED_SIZE = 16;
 public static const int GPU_SCENE_ACGI_PAGE_COUNT = 64;
+
+// Cascaded world-space light grid. Every light-sampling path resolves "which lights matter at this
+// world position" through it, so it must be world-space: a view-frustum cluster grid cannot answer
+// for path-tracer bounce points, SHARC cache updates or ambient-cube baking, which is exactly what
+// would force each renderer back onto its own light loop.
+// Cascades are camera-anchored with a geometric cell-size ratio; a position outside every cascade
+// falls back to the global CDF, so the structure is an accelerator and never a correctness gate.
+public static const int GPU_SCENE_LIGHT_GRID_SIZE_XZ = 32;
+public static const int GPU_SCENE_LIGHT_GRID_SIZE_Y = 16;
+public static const int GPU_SCENE_LIGHT_GRID_CASCADE_MAX = 3;
+public static const float GPU_SCENE_LIGHT_GRID_CASCADE_RATIO = 4.0f;
+// Per-cell capacity. Overflow keeps the most important lights and drops the rest: unbiased for the
+// path tracer (it divides by the pdf actually used) but a genuine approximation for forward paths.
+public static const int GPU_SCENE_LIGHT_GRID_CAPACITY = 32;
+public static const int GPU_SCENE_LIGHT_GRID_CASCADE_CELLS =
+    GPU_SCENE_LIGHT_GRID_SIZE_XZ * GPU_SCENE_LIGHT_GRID_SIZE_Y * GPU_SCENE_LIGHT_GRID_SIZE_XZ;
+public static const int GPU_SCENE_LIGHT_GRID_CELLS =
+    GPU_SCENE_LIGHT_GRID_CASCADE_CELLS * GPU_SCENE_LIGHT_GRID_CASCADE_MAX;
+// Layout: [uint count per cell][uint entry per cell slot]. An entry packs the light index in the
+// low 16 bits and the unorm16 CDF upper bound in the high 16, so a selection walk reads one dword.
+public static const int GPU_SCENE_LIGHT_GRID_ENTRY_OFFSET = GPU_SCENE_LIGHT_GRID_CELLS * 4;
+public static const int GPU_SCENE_LIGHT_GRID_SIZE =
+    GPU_SCENE_LIGHT_GRID_ENTRY_OFFSET + GPU_SCENE_LIGHT_GRID_CELLS * GPU_SCENE_LIGHT_GRID_CAPACITY * 4;
 
 public static const int GPU_SCENE_AMBIENT_CUBES_OFFSET = 0;
 public static const int GPU_SCENE_AMBIENT_VOXELS_OFFSET =
@@ -78,9 +105,18 @@ public struct ALIGN_16 GPUDrivenStat
     public uint CulledCount;
     public uint TriangleCount;
     public uint CulledTriangleCount;
-    public uint ReservedAlign1;
+    public uint MaxVisibleProxyIndex;
     public uint ReservedAlign2;
     public uint ReservedAlign3;
+};
+
+// Logical visibility identity shared by the expanded primitive stream and visibility consumers.
+// Pixel storage uses two physical planes (R32_UINT instance + R16_UINT triangle), while primitive
+// records intentionally stay two uints to avoid 16-bit storage-buffer feature/alignment branches.
+public struct ALIGN_8 VisibilityId
+{
+    public uint instanceIdx;
+    public uint triangleIdx;
 };
 
 public struct ALIGN_16 SoftMeshShaderVisibleItem
@@ -99,6 +135,8 @@ public struct ALIGN_16 SoftMeshShaderResources
     public uint64_t DrawArgs;
     public uint64_t DispatchArgs;
     public uint64_t Counters;
+    public uint64_t Lights;
+    public uint64_t LightGrid;
 };
 
 public struct ALIGN_16 UniformBufferObject
@@ -118,6 +156,7 @@ public struct ALIGN_16 UniformBufferObject
     public float4 ViewportRect;
     public float4 SunDirection;
     public float4 SunColor;
+    public float4 SkyColor;
 
     public float4x4 SunCascadeViewProjection[4];
     public float4 CascadeSplits;      // view-space positive distance at the far edge of each cascade
@@ -144,12 +183,12 @@ public struct ALIGN_16 UniformBufferObject
 
     public bool HDR;
     public uint HDROutputMode;
-    public bool TAA;
+    public bool PrimaryRayJitter;
     public bool ProgressiveRender;
-    public bool FastGather;
+    public bool ExitAfterFirst;
 
     public bool DebugDraw_Lighting;
-    public uint DebugDrawPadding0;
+    public bool ForceBlackBackground;
     public uint SuperResolution;
     public float SceneEpsilonScale;
 
@@ -163,31 +202,25 @@ public struct ALIGN_16 UniformBufferObject
 
     public float4 AmbientCubeCascadeParams;
 
-    // Denoiser: bindless slots holding the final diffuse / specular the compose pass should read
-    // (a-trous outputs when enabled, else the temporal accumulation buffers).
-    public uint DenoiseDiffuseSourceSlot;
-    public uint DenoiseSpecularSourceSlot;
-
-    // SwModernNoAmbient GTAO. Kept in the camera UBO so both GTAO compute stages can
-    // use the regular GPUScene push constant without introducing another pipeline ABI.
+    public bool UpscalerInvalidMotionMask;
+    public bool RayReconstruction;
     public float GTAORadius;
     public float GTAOStrength;
+
     public float GTAOThickness;
     public uint GTAODebugMode;
-
     public bool GTAOEnable;
     public uint GTAOQuality;
-    public uint GTAOPadding1;
-    public uint GTAOPadding2;
+    public bool LightObjectScreenSpaceShadow;
+    public float LightObjectShadowDistance; // world units the screen-space light shadow marches
 
-    public uint GTAOPadding3;
-    public uint GTAOPadding4;
-    public uint GTAOPadding5;
-    public uint GTAOPadding6;
-    public uint GTAOPadding7;
-    public uint GTAOPadding8;
-    public uint GTAOPadding9;
-    public uint GTAOPadding10;
+    public uint LightGridCascadeCount;   // 0 disables the grid: every query falls back to the global CDF
+    public float LightGridCullThreshold; // minimum per-cell contribution a light must reach to be stored
+    public float4 LightGridAnchor;       // xyz = cascade anchor (snapped camera), w = cascade 0 cell size
+
+    // Stable extension point for procedural atmosphere. Zero preserves the legacy IBL path.
+    public uint64_t AtmosphereParams;
+    public uint64_t AtmosphereReserved0;
 };
 
 public struct ALIGN_16 NodeProxy
@@ -201,9 +234,10 @@ public struct ALIGN_16 NodeProxy
     public float4x4 combinedPrevTS;
 
     public uint matId[16];
-    
-    public uint visible;
-    public uint nort;
+
+    public uint visible;        // RenderParticipation bit mask
+    public uint excludeFromAS;  // 1 for non-first sections of multi-section models: only
+                                // section 0 becomes a TLAS instance (its BLAS covers the model)
     public uint reserved1;
     public uint reserved2;
 };
@@ -240,8 +274,8 @@ public struct ALIGN_8 AmbientCube
  
     public uint SunDirect;
     public uint SkyEmissiveDirect;
-    public uint skyVisibility_pznzpyny;
-    public uint skyVisibility_pxnxs0s1;
+    public uint SkyVisibilityPZNZPYNY; // 8-bit sky visibility per face: +Z / -Z / +Y / -Y
+    public uint SkyVisibilityPXNXS0S1; // +X / -X + two spare lanes
 };
 
 // 8 bytes per voxel. matId stays a full uint; distanceToSolid stores 8 packed 4-bit channels:
@@ -327,16 +361,48 @@ public struct ALIGN_16 SharcRuntimeParameters
     public float4 CameraPositionPrev;
 };
 
-public struct ALIGN_16 SharcResources
+// Tracing extension resource table reached via GPUScene.ReservedAddress0. PathTracing may
+// expose SHARC and ReSTIR together; SoftwareTracing exposes ReSTIR only. Per-feature
+// availability is judged by its field being non-zero, never by the table pointer itself.
+public struct ALIGN_16 FTracingExtras
 {
-    public uint64_t HashEntries;
-    public uint64_t LockBuffer;
-    public uint64_t Accumulation;
-    public uint64_t Resolved;
-    public uint64_t Parameters;
-    public uint64_t Reserved0;
-    public uint64_t Reserved1;
-    public uint64_t Reserved2;
+    public uint64_t HashEntries;          // SHARC hash keys
+    public uint64_t LockBuffer;           // SHARC bucket locks
+    public uint64_t Accumulation;         // SHARC accumulation entries
+    public uint64_t Resolved;             // SHARC resolved entries
+    public uint64_t Parameters;           // SharcRuntimeParameters
+    public uint64_t RestirReservoirPing;  // FRestirReservoir[], buffer A
+    public uint64_t RestirReservoirPong;  // FRestirReservoir[], buffer B
+    public uint64_t RestirParameters;     // FRestirRuntimeParameters
+};
+
+// Screen-space ReSTIR DI reservoir, 16 bytes per pixel, double buffered (ping/pong).
+// Stores the sample's generation parameters (light index + light-surface uv) instead of a
+// world-space point so reuse follows animated lights and needs no Jacobian.
+public struct ALIGN_16 FRestirReservoir
+{
+    public uint LightData;      // low 24 bits: light index; high 8 bits: sample type (0 = empty, 1 = light)
+    public uint PackedUV;       // sample uv on the light quad, 2x unorm16
+    public float WeightW;       // unbiased contribution weight W
+    public uint PackedMTarget;  // low 16 bits: clamped M; high 16 bits: fp16 target luminance
+};
+
+public struct ALIGN_16 FRestirRuntimeParameters
+{
+    public uint FrameIndex;       // parity selects the current write buffer (ping on even)
+    public uint DebugMode;
+    public uint Flags;            // bit0 temporal enable, bit1 spatial enable, bit2 temporal history valid this frame
+    public uint LightsGeneration; // bumped when the light set is re-ordered; mismatched history resets M
+
+    public uint ReservoirWidth;
+    public uint ReservoirHeight;
+    public uint InitialCandidates;
+    public uint TemporalMClamp;
+
+    public float SpatialRadius;
+    public uint SpatialSamples;
+    public uint Pad0;
+    public uint Pad1;
 };
 
 public struct ALIGN_16 SphericalHarmonics
@@ -346,8 +412,13 @@ public struct ALIGN_16 SphericalHarmonics
     public float padding;
 };
 
+public static const uint LightTypeArea = 0;
+public static const uint LightTypePoint = 1;
+
 public struct ALIGN_16 LightObject
 {
+    // Area: p0/p1/p3 are three quad corners and normal_area.w is its area.
+    // Point: p0.xyz is the position and p0.w is the optional visible proxy radius.
     float4 p0;
     float4 p1;
     float4 p3;
@@ -356,7 +427,7 @@ public struct ALIGN_16 LightObject
     uint lightMatIdx;
     uint reserved1;
     uint reserved2;
-    uint reserved3;
+    uint lightType;
 };
 public const static uint MaterialLambertian = 0;
 public const static uint MaterialMetallic = 1;
@@ -372,15 +443,15 @@ public struct ALIGN_16 RayCastContext
     public float4 Direction;
     public float TMin;
     public float TMax;
-    public float Reversed0;
-    public float Reversed1;
+    public float Reserved0;
+    public float Reserved1;
     // out
     public float4 HitPoint;
     public float4 Normal;
     public float T;
     public uint InstanceId;
     public uint MaterialId;
-    public uint Hitted;
+    public uint Hit;
 };
 
 #ifndef __cplusplus
@@ -414,8 +485,8 @@ public struct ALIGN_16 Material
     
     public float RefractionIndex2;
     public float NormalTextureScale;
-    public float Reserverd2;
-    public float Reserverd3;
+    public float Reserved2;
+    public float Reserved3;
 };
 
 public struct ALIGN_16 Vertex
@@ -443,12 +514,12 @@ public struct ALIGN_16 GPUVertex
 public struct ALIGN_16 GPUScene
 {
     // Unified push-constant header: kept FIRST so it aliases the header of every custom push
-    // constant (see ZeroBindCustomPushConstantPipeline). custom_data_0 == active RenderView RT
-    // bank base, readable via gpuScene.custom_data_0 in *all* passes regardless of which pipeline.
+    // constant (see ZeroBindCustomPushConstantPipeline). CustomData0 == active RenderView RT
+    // bank base, readable via gpuScene.CustomData0 in *all* passes regardless of which pipeline.
     uint32_t SwapChainIndex;
-    uint32_t custom_data_0;
-    uint32_t custom_data_1;
-    uint32_t custom_data_2;
+    uint32_t CustomData0;
+    uint32_t CustomData1;
+    uint32_t CustomData2;
 
     uint64_t Camera;
     uint64_t SceneDynamicBase;
@@ -474,9 +545,9 @@ public struct ALIGN_8 GPUScene
 {
     // Unified push-constant header (FIRST; aliases every custom push constant's header).
     public uint SwapChainIndex;
-    public uint custom_data_0;
-    public uint custom_data_1;
-    public uint custom_data_2;
+    public uint CustomData0;
+    public uint CustomData1;
+    public uint CustomData2;
 
     /* Scene Info */
     public UniformBufferObject *Camera;
@@ -503,9 +574,9 @@ public struct ALIGN_8 GPUScene
     public uint64_t ReservedAddress0;
 
     public uint64_t AmbientBase; // -> AmbientResources table (see BasicTypes.slang AmbientResources)
-    public property SharcResources* Sharc
+    public property FTracingExtras* TracingExtras
     {
-        get { return (SharcResources*)ReservedAddress0; }
+        get { return (FTracingExtras*)ReservedAddress0; }
     }
     public property AmbientCube* Cubes
     {
@@ -568,6 +639,10 @@ public struct ALIGN_8 GPUScene
     {
         get { return (SoftMeshShaderResources*)SoftMeshShaderResourcesAddress; }
     }
+    public property LightObject* Lights
+    {
+        get { return (LightObject*)SoftMeshShader.Lights; }
+    }
 
     public RaytracingAccelerationStructure GetTLAS() {
 		return RaytracingAccelerationStructure(TLAS);
@@ -578,9 +653,9 @@ public struct ALIGN_8 GPUScene
 {
     // Unified push-constant header (FIRST; aliases every custom push constant's header).
     public uint32_t SwapChainIndex;
-    public uint32_t custom_data_0;
-    public uint32_t custom_data_1;
-    public uint32_t custom_data_2;
+    public uint32_t CustomData0;
+    public uint32_t CustomData1;
+    public uint32_t CustomData2;
 
     /* Scene Info */
     uint64_t2 Camera_SceneDynamicBase_Address;
@@ -595,7 +670,7 @@ public struct ALIGN_8 GPUScene
         get { return (NodeProxy*)(Camera_SceneDynamicBase_Address.y + GPU_SCENE_DYNAMIC_NODES_OFFSET); }
     }
 
-    /* Global Vertice Buffer */
+    /* Global Vertex Buffer */
     uint64_t2 Reorders_Vertices_Address;
     public property uint* Reorders
     {
@@ -629,9 +704,9 @@ public struct ALIGN_8 GPUScene
     /* Others */
     uint64_t2 Reserved_AmbientBase_Address;
 
-    public property SharcResources* Sharc
+    public property FTracingExtras* TracingExtras
     {
-        get { return (SharcResources*)Reserved_AmbientBase_Address.x; }
+        get { return (FTracingExtras*)Reserved_AmbientBase_Address.x; }
     }
 
     public property AmbientCube* Cubes
@@ -715,6 +790,10 @@ public struct ALIGN_8 GPUScene
     public property SoftMeshShaderResources* SoftMeshShader
     {
         get { return (SoftMeshShaderResources*)JointMatrices_Reserved_Address.y; }
+    }
+    public property LightObject* Lights
+    {
+        get { return (LightObject*)SoftMeshShader.Lights; }
     }
 
     public RaytracingAccelerationStructure GetTLAS() {

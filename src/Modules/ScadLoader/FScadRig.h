@@ -2,7 +2,7 @@
 
 // ============================================================================
 // FScadRig.h - Loads a rigid-body rig (bones + parts + clips) from a .scad
-// file following the ScadRig conventions (see docs/ScadRig-Design.md):
+// file following the ScadRig conventions (see AGENT_GUIDE/ScadRig.md):
 //   * user modules named "bone_*" are bones; nesting = hierarchy; the
 //     translate/rotate wrapped around a bone call is its bind-pose pivot.
 //   * geometry directly inside a bone module (including non-bone helper
@@ -22,7 +22,7 @@
 
 namespace Assets
 {
-    namespace scad
+    namespace Scad
     {
         struct SceneEvalResult;
     }
@@ -48,7 +48,7 @@ namespace Assets
 
         // Builds a rig from an already-evaluated scene (unit-test entry point).
         static bool BuildRig(
-            const scad::SceneEvalResult& evalResult,
+            const Scad::SceneEvalResult& evalResult,
             const ScadRigLoadOptions& options,
             FRigAsset& outAsset,
             std::string& outError,

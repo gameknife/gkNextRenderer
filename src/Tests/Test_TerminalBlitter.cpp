@@ -56,3 +56,37 @@ TEST_CASE("Terminal blitter falls back to full redraw for heavy frame changes", 
     REQUIRE(output.rfind("\x1b[H", 0) == 0);
     CHECK(output.find("\x1b[1;1H") == std::string::npos);
 }
+
+TEST_CASE("Terminal blitter encodes quadrant cells and reuses unchanged cells", "[Tui][TerminalBlitter]")
+{
+    Runtime::Tui::TerminalBlitter blitter({
+        .CellMode = Runtime::Tui::ECellMode::Quadrant,
+    });
+    const std::vector<Runtime::Tui::FRgb8> pixels = {
+        {255, 0, 0}, {0, 0, 255},
+        {0, 0, 255}, {0, 0, 255},
+    };
+
+    const std::string first = blitter.EncodeFrame(pixels, 2, 2, 1, 2, "status");
+    REQUIRE(first.find("\xE2\x96\x98") != std::string::npos);
+
+    const std::string second = blitter.EncodeFrame(pixels, 2, 2, 1, 2, "status");
+    CHECK(second.empty());
+}
+
+TEST_CASE("Terminal blitter reports quadrant source extent", "[Tui][TerminalBlitter]")
+{
+    Runtime::Tui::TerminalBlitter blitter({
+        .MaxColumns = 10,
+        .MaxRows = 5,
+        .CellMode = Runtime::Tui::ECellMode::Quadrant,
+    });
+
+    const auto extent = blitter.GetSourceExtent(80, 24);
+    CHECK(extent.Width == 20);
+    CHECK(extent.Height == 8);
+
+    const auto renderExtent = blitter.GetRenderExtent(80, 24);
+    CHECK(renderExtent.Width == 20);
+    CHECK(renderExtent.Height == 16);
+}

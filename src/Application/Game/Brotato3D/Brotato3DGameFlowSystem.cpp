@@ -1,15 +1,10 @@
 #include "Brotato3DGameInstance.hpp"
 #include "Brotato3DCommon.hpp"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Brotato3DAudio.hpp"
 
 using namespace Brotato3DUtil;
-
-namespace
-{
-    constexpr const char* EmptySceneName = "Empty.proc";
-}
 
 void Brotato3DGameInstance::RestartGame()
 {
@@ -22,13 +17,15 @@ void Brotato3DGameInstance::StartNewRun()
     Brotato3D::StopBgm();
     ResetRuntimeState();
     ApplySelectedCharacter();
-    player_.worldPos.y = 0.5f + SampleArenaGroundY(player_.worldPos);
+    player_.worldPos.y = player_.radius;
     SetSkyIntensityTarget(30.0f, 0.0f);
     if (player_.bodyNode)
     {
         player_.bodyNode->SetTranslation(player_.worldPos);
         Assets::NodeUtils::SetVisible(player_.bodyNode, true);
     }
+    playerRig_.ResetFacing(player_.facingDir);
+    playerRig_.SetVisible(true);
     if (player_.facingNode)
     {
         player_.facingNode->SetTranslation(glm::vec3(0.0f, 0.62f, -0.45f));
@@ -204,7 +201,7 @@ void Brotato3DGameInstance::ApplySelectedArena()
 
     if (sceneReady_)
     {
-        GetEngine().RequestLoadScene({.filename = EmptySceneName});
+        GetEngine().RequestLoadScene({.filename = arenaDef->scenePath});
     }
 }
 

@@ -1,29 +1,36 @@
 #include "EditorUi.hpp"
 #include "Panels/PropertyWidgets.h"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
-#include "Engine/Runtime/Command/RenameNodeCommand.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
+#include "Application/Editor/Common/Preview/AssetThumbnailRenderer.hpp"
+#include "Modules/DevTools/Command/RenameNodeCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Modules/DevTools/ProfessionalUI.hpp"
-#include "Engine/Runtime/Reflection/PropertyAccessor.h"
+#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Engine/Runtime/Reflection/PropertyAccessor.hpp"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include <imgui_stdlib.h>
 
 #include <cmath>
-#include <fmt/format.h>
 #include <functional>
+#include <fmt/format.h>
 #include <glm/gtc/quaternion.hpp>
 
 namespace Editor
 {
     namespace
     {
+        size_t MaterialSlotCount(const Assets::Model& model, size_t capacity)
+        {
+            return std::min(static_cast<size_t>(model.MaterialSlotCount()), capacity);
+        }
+
         bool DrawAxisFloat3(const char* label, glm::vec3& value, float speed)
         {
             bool changed = false;
@@ -32,31 +39,37 @@ namespace Editor
                 ImVec4(0.22f, 0.78f, 0.34f, 1.0f),
                 ImVec4(0.24f, 0.48f, 0.95f, 1.0f),
             };
-            constexpr const char* axisNames[] = {"X", "Y", "Z"};
             constexpr const char* axisIds[] = {"##X", "##Y", "##Z"};
+            constexpr float axisAccentWidth = 3.0f;
+            constexpr float axisAccentInset = 3.0f;
+            constexpr float axisAccentGap = 4.0f;
 
             ImGui::PushID(label);
             NextUI::Theme::BeginFormRow(label, 0.22f, 70.0f, 70.0f);
 
-            const float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
-            const float labelWidth = 14.0f;
-            const float width =
-                std::max(54.0f, (ImGui::GetContentRegionAvail().x - spacing * 2.0f - labelWidth * 3.0f) / 3.0f);
+            const ImGuiStyle& style = ImGui::GetStyle();
+            const float spacing = style.ItemSpacing.x;
+            const float width = std::max(54.0f, (ImGui::GetContentRegionAvail().x - spacing * 2.0f) / 3.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                                ImVec2(style.FramePadding.x + axisAccentWidth + axisAccentGap, style.FramePadding.y));
 
             for (int axis = 0; axis < 3; ++axis)
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, axisColors[axis]);
-                ImGui::TextUnformatted(axisNames[axis]);
-                ImGui::PopStyleColor();
-                ImGui::SameLine(0.0f, 4.0f);
                 ImGui::SetNextItemWidth(width);
                 changed = ImGui::DragFloat(axisIds[axis], &value[axis], speed, 0.0f, 0.0f, "%.3f") || changed;
+                const ImVec2 itemMin = ImGui::GetItemRectMin();
+                const ImVec2 itemMax = ImGui::GetItemRectMax();
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    itemMin + ImVec2(axisAccentInset, axisAccentInset),
+                    ImVec2(itemMin.x + axisAccentInset + axisAccentWidth, itemMax.y - axisAccentInset),
+                    ImGui::GetColorU32(axisColors[axis]), 1.5f);
                 if (axis < 2)
                 {
                     ImGui::SameLine(0.0f, spacing);
                 }
             }
 
+            ImGui::PopStyleVar();
             ImGui::PopID();
             return changed;
         }
@@ -222,27 +235,74 @@ namespace Editor
             {
                 ui.propertiesState.editingNodeId = selectedObj->GetInstanceId();
                 ui.propertiesState.editingName = selectedObj->GetName();
+                ui.propertiesState.renamingName = false;
+                ui.propertiesState.focusNameInput = false;
             }
 
-            NextUI::Theme::BeginInsetPanel("##InspectorSummary", ImVec2(0.0f, 98.0f), true, 0,
-                                           ImVec2(10.0f, 9.0f), 0.26f);
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 6.0f));
 
+            ImGui::PushFont(NextUI::Theme::GetTitleFont(ctx.engine));
             bool enabled = render == nullptr || render->GetVisible();
-            if (ImGui::Checkbox("##ObjectEnabled", &enabled) && render != nullptr)
+            const char* visibilityIcon = enabled ? ICON_FA_EYE : ICON_FA_EYE_SLASH;
+            if (render == nullptr) ImGui::BeginDisabled();
+            if (NextUI::Theme::IconButton(visibilityIcon, enabled ? "Visible" : "Hidden", false,
+                                          ImVec2(0.0f, ImGui::GetFrameHeight())) && render != nullptr)
             {
+                enabled = !enabled;
                 render->SetVisible(enabled);
                 ctx.scene.MarkDirty();
             }
+            if (render == nullptr) ImGui::EndDisabled();
+
             ImGui::SameLine();
-            ImGui::TextUnformatted(selectedObj->GetName().c_str());
-            ImGui::SameLine(std::max(ImGui::GetCursorPosX(), ImGui::GetContentRegionMax().x - 72.0f));
-            bool isStatic = physics == nullptr || physics->GetMobility() == Runtime::ENodeMobility::Static;
-            if (ImGui::Checkbox("Static", &isStatic) && physics != nullptr)
+            if (ui.propertiesState.renamingName)
             {
-                physics->SetMobility(isStatic ? Runtime::ENodeMobility::Static : Runtime::ENodeMobility::Dynamic);
-                ctx.scene.MarkDirty();
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (ui.propertiesState.focusNameInput)
+                {
+                    ImGui::SetKeyboardFocusHere();
+                    ui.propertiesState.focusNameInput = false;
+                }
+
+                const bool nameSubmitted =
+                    ImGui::InputText("##NodeRenameInput", &ui.propertiesState.editingName,
+                                     ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+                const bool cancelRename = ImGui::IsKeyPressed(ImGuiKey_Escape);
+                const bool nameEditFinished = nameSubmitted || ImGui::IsItemDeactivated();
+                if (cancelRename)
+                {
+                    ui.propertiesState.editingName = selectedObj->GetName();
+                    ui.propertiesState.renamingName = false;
+                }
+                else if (nameEditFinished)
+                {
+                    if (ui.propertiesState.editingName.empty())
+                    {
+                        ui.propertiesState.editingName = selectedObj->GetName();
+                    }
+                    else if (ui.propertiesState.editingName != selectedObj->GetName())
+                    {
+                        ctx.engine.GetCommandHistory().Execute(std::make_unique<Runtime::Command::RenameNodeCommand>(
+                            ctx.scene, selectedObj->GetInstanceId(), ui.propertiesState.editingName));
+                    }
+                    ui.propertiesState.renamingName = false;
+                }
             }
+            else
+            {
+                const std::string title = fmt::format("{}###ObjectTitle", selectedObj->GetName());
+                if (ImGui::Selectable(title.c_str(), false, ImGuiSelectableFlags_None,
+                                      ImVec2(0.0f, ImGui::GetFrameHeight())))
+                {
+                    ui.propertiesState.editingName = selectedObj->GetName();
+                    ui.propertiesState.renamingName = true;
+                    ui.propertiesState.focusNameInput = true;
+                }
+                NextUI::Theme::DrawTooltip("Click to rename");
+            }
+            ImGui::PopFont();
+
+            bool isStatic = physics == nullptr || physics->GetMobility() == Runtime::ENodeMobility::Static;
 
             static constexpr const char* tagItems[] = {"Untagged", "Player", "Environment", "Interactable"};
             static constexpr const char* layerItems[] = {"Default", "Gameplay", "Props", "Colliders", "Lighting"};
@@ -259,47 +319,74 @@ namespace Editor
             };
             int tagIndex = findItemIndex(tagItems, IM_ARRAYSIZE(tagItems), selectedObj->GetTag());
             int layerIndex = findItemIndex(layerItems, IM_ARRAYSIZE(layerItems), selectedObj->GetLayer());
-            ImGui::SetNextItemWidth((ImGui::GetContentRegionAvail().x - 8.0f) * 0.5f);
-            if (ImGui::Combo("##TagSelector", &tagIndex, "Untagged\0Player\0Environment\0Interactable\0\0"))
-            {
-                selectedObj->SetTag(tagItems[tagIndex]);
-                ctx.scene.MarkDirty();
-            }
-            NextUI::Theme::DrawTooltip("Tag");
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            if (ImGui::Combo("##LayerSelector", &layerIndex, "Default\0Gameplay\0Props\0Colliders\0Lighting\0\0"))
-            {
-                selectedObj->SetLayer(layerItems[layerIndex]);
-                ctx.scene.MarkDirty();
-            }
-            NextUI::Theme::DrawTooltip("Layer");
 
-            ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted));
-            ImGui::TextUnformatted("Name");
-            ImGui::PopStyleColor();
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            const bool nameSubmitted =
-                ImGui::InputText("##NodeRenameInput",
-                                  &ui.propertiesState.editingName,
-                                  ImGuiInputTextFlags_EnterReturnsTrue);
-            const bool nameEditFinished = nameSubmitted || ImGui::IsItemDeactivatedAfterEdit();
-            if (nameEditFinished)
+            constexpr ImGuiTableFlags summaryFlags =
+                ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoSavedSettings;
+            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(2.0f, 2.0f));
+            if (ImGui::BeginTable("##ObjectClassification", 3, summaryFlags))
             {
-                if (ui.propertiesState.editingName.empty())
+                ImGui::TableSetupColumn("Mobility", ImGuiTableColumnFlags_WidthStretch, 0.75f);
+                ImGui::TableSetupColumn("Tag", ImGuiTableColumnFlags_WidthStretch, 1.15f);
+                ImGui::TableSetupColumn("Layer", ImGuiTableColumnFlags_WidthStretch, 0.90f);
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (physics == nullptr) ImGui::BeginDisabled();
+                if (ImGui::BeginCombo("##MobilitySelector", isStatic ? "Static" : "Dynamic"))
                 {
-                    ui.propertiesState.editingName = selectedObj->GetName();
+                    if (ImGui::Selectable(ICON_FA_LOCK " Static", isStatic))
+                    {
+                        physics->SetMobility(Runtime::ENodeMobility::Static);
+                        ctx.scene.MarkDirty();
+                    }
+                    if (ImGui::Selectable(ICON_FA_PERSON_RUNNING " Dynamic", !isStatic))
+                    {
+                        physics->SetMobility(Runtime::ENodeMobility::Dynamic);
+                        ctx.scene.MarkDirty();
+                    }
+                    ImGui::EndCombo();
                 }
-                else if (ui.propertiesState.editingName != selectedObj->GetName())
+                NextUI::Theme::DrawTooltip("Mobility");
+                if (physics == nullptr) ImGui::EndDisabled();
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (ImGui::BeginCombo("##TagSelector", tagItems[tagIndex]))
                 {
-                    ctx.engine.GetCommandHistory().Execute(std::make_unique<Runtime::Command::RenameNodeCommand>(
-                        ctx.scene, selectedObj->GetInstanceId(), ui.propertiesState.editingName));
+                    for (int i = 0; i < IM_ARRAYSIZE(tagItems); ++i)
+                    {
+                        if (ImGui::Selectable(tagItems[i], tagIndex == i))
+                        {
+                            selectedObj->SetTag(tagItems[i]);
+                            ctx.scene.MarkDirty();
+                        }
+                    }
+                    ImGui::EndCombo();
                 }
+                NextUI::Theme::DrawTooltip("Tag");
+
+                ImGui::TableSetColumnIndex(2);
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (ImGui::BeginCombo("##LayerSelector", layerItems[layerIndex]))
+                {
+                    for (int i = 0; i < IM_ARRAYSIZE(layerItems); ++i)
+                    {
+                        if (ImGui::Selectable(layerItems[i], layerIndex == i))
+                        {
+                            selectedObj->SetLayer(layerItems[i]);
+                            ctx.scene.MarkDirty();
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+                NextUI::Theme::DrawTooltip("Layer");
+
+                ImGui::EndTable();
             }
+            ImGui::PopStyleVar();
 
             ImGui::PopStyleVar();
-            NextUI::Theme::EndInsetPanel();
 
             NextUI::Theme::DrawThinSeparator();
 
@@ -327,87 +414,6 @@ namespace Editor
                 NextUI::Theme::EndSection();
             }
             int modelId = render ? render->GetModelId() : -1;
-            if (NextUI::Theme::BeginSection(ICON_FA_CUBE, "Mesh", true))
-            {
-                if (render != nullptr)
-                {
-                    const std::string preview = modelId >= 0 && modelId < static_cast<int>(ctx.scene.Models().size())
-                        ? ctx.scene.Models()[modelId].Name()
-                        : "None";
-                    if (ImGui::BeginCombo("Model", preview.c_str()))
-                    {
-                        if (ImGui::Selectable("None", modelId == -1))
-                        {
-                            render->SetModelId(static_cast<uint32_t>(-1));
-                            ctx.scene.MarkDirty();
-                        }
-                        for (int i = 0; i < static_cast<int>(ctx.scene.Models().size()); ++i)
-                        {
-                            const std::string itemName = fmt::format("{}: {}", i, ctx.scene.Models()[i].Name());
-                            if (ImGui::Selectable(itemName.c_str(), modelId == i))
-                            {
-                                render->SetModelId(static_cast<uint32_t>(i));
-                                ctx.scene.MarkDirty();
-                            }
-                        }
-                        ImGui::EndCombo();
-                    }
-                }
-                else
-                {
-                    ImGui::TextDisabled("No RenderComponent");
-                }
-                NextUI::Theme::EndSection();
-            }
-
-            if (NextUI::Theme::BeginSection(ICON_FA_CIRCLE_HALF_STROKE, "Material", true))
-            {
-                if (modelId != -1 && render)
-                {
-                    auto mats = render->GetMaterials();
-                    bool materialsChanged = false;
-                    for (int elementIndex = 0; elementIndex < static_cast<int>(mats.size()); ++elementIndex)
-                    {
-                        uint32_t& mat = mats[elementIndex];
-                        const std::string comboLabel = fmt::format("Element {}", elementIndex);
-                        const std::string preview = mat < ctx.scene.Materials().size()
-                            ? ctx.scene.Materials()[mat].name_
-                            : "None";
-                        ImGui::PushID(elementIndex);
-                        if (ImGui::BeginCombo(comboLabel.c_str(), preview.c_str()))
-                        {
-                            for (int materialIndex = 0; materialIndex < static_cast<int>(ctx.scene.Materials().size());
-                                 ++materialIndex)
-                            {
-                                const std::string itemName =
-                                    fmt::format("{}: {}", materialIndex, ctx.scene.Materials()[materialIndex].name_);
-                                if (ImGui::Selectable(itemName.c_str(), mat == static_cast<uint32_t>(materialIndex)))
-                                {
-                                    mat = static_cast<uint32_t>(materialIndex);
-                                    materialsChanged = true;
-                                }
-                            }
-                            ImGui::EndCombo();
-                        }
-                        ImGui::SameLine();
-                        if (NextUI::Theme::IconButton(ICON_FA_PEN_TO_SQUARE, "Edit Material", false,
-                                                      ImVec2(28.0f, 24.0f)) &&
-                            mat < ctx.scene.Materials().size())
-                        {
-                            ui.selected_material = &(ctx.scene.Materials()[mat]);
-                            ui.ed_material = true;
-                            OpenMaterialEditor(ctx, ui);
-                        }
-                        ImGui::PopID();
-                    }
-                    if (materialsChanged)
-                    {
-                        render->SetMaterials(mats);
-                        ctx.scene.MarkDirty();
-                    }
-                }
-                NextUI::Theme::EndSection();
-            }
 
             if (NextUI::Theme::BeginSection(ICON_FA_PUZZLE_PIECE, "Components", true))
             {
@@ -443,14 +449,93 @@ namespace Editor
                     std::string headerName = std::string(component->GetTypeName());
                     if (ImGui::CollapsingHeader(headerName.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
                     {
-                        ImGui::Indent();
+                        //ImGui::Indent();
+                        PropertyWidgets::WidgetConfig widgetConfig;
+                        widgetConfig.modelAsset.titleFont = ctx.ui.GetTitleBarFont();
+                        widgetConfig.materialAsset.titleFont = ctx.ui.GetTitleBarFont();
+                        if (component.get() == render)
+                        {
+                            if (modelId >= 0 && modelId < static_cast<int>(ctx.scene.Models().size()))
+                            {
+                                widgetConfig.arrayDisplayLimit = MaterialSlotCount(
+                                    ctx.scene.Models()[modelId], render->GetMaterials().size());
+                            }
+                            widgetConfig.modelAsset.thumbnail = [&ctx](const uint32_t id) -> ImTextureID
+                            {
+                                if (id >= ctx.scene.Models().size()) return 0;
+                                const uint32_t sampleSlot = EditorPreview::AssetThumbnails(ctx.engine.GetRenderer())
+                                    .RequestMeshThumbnail(id, ctx.scene.Models()[id]);
+                                return sampleSlot == std::numeric_limits<uint32_t>::max()
+                                    ? 0
+                                    : ctx.ui.RequestImTextureIdRaw(sampleSlot);
+                            };
+                            widgetConfig.modelAsset.name = [&ctx](const uint32_t id)
+                            {
+                                return id < ctx.scene.Models().size()
+                                    ? ctx.scene.Models()[id].Name()
+                                    : fmt::format("Missing model #{}", id);
+                            };
+                            widgetConfig.modelAsset.selectedAsset = [&ui, &ctx]()
+                            {
+                                return ui.selectedMeshId < ctx.scene.Models().size()
+                                    ? ui.selectedMeshId
+                                    : InvalidId;
+                            };
+                            widgetConfig.modelAsset.locateAsset = [&ui, &ctx](const uint32_t id)
+                            {
+                                if (id >= ctx.scene.Models().size()) return;
+                                ui.contentBrowser = true;
+                                ui.selectedMeshId = id;
+                                ui.contentBrowserState.currentSection = 3;
+                                ui.contentBrowserState.meshFilter.Clear();
+                                ui.contentBrowserState.pendingRevealMeshId = id;
+                            };
+                            widgetConfig.materialAsset.thumbnail = [&ctx](const uint32_t id) -> ImTextureID
+                            {
+                                if (id >= ctx.scene.Materials().size()) return 0;
+                                const uint32_t sampleSlot = EditorPreview::AssetThumbnails(ctx.engine.GetRenderer())
+                                    .RequestMaterialThumbnail(id, ctx.scene.Materials()[id]);
+                                return sampleSlot == std::numeric_limits<uint32_t>::max()
+                                    ? 0
+                                    : ctx.ui.RequestImTextureIdRaw(sampleSlot);
+                            };
+                            widgetConfig.materialAsset.name = [&ctx](const uint32_t id)
+                            {
+                                return id < ctx.scene.Materials().size()
+                                    ? ctx.scene.Materials()[id].name_
+                                    : fmt::format("Missing material #{}", id);
+                            };
+                            widgetConfig.materialAsset.selectedAsset = [&ui, &ctx]()
+                            {
+                                return ui.selectedMaterialId < ctx.scene.Materials().size()
+                                    ? ui.selectedMaterialId
+                                    : InvalidId;
+                            };
+                            widgetConfig.materialAsset.locateAsset = [&ui, &ctx](const uint32_t id)
+                            {
+                                if (id >= ctx.scene.Materials().size()) return;
+                                ui.contentBrowser = true;
+                                ui.selectedMaterialId = id;
+                                ui.contentBrowserState.currentSection = 1;
+                                ui.contentBrowserState.materialFilter.Clear();
+                                ui.contentBrowserState.pendingRevealMaterialId = id;
+                            };
+                            widgetConfig.materialAsset.editAsset = [&ctx, &ui](const uint32_t id)
+                            {
+                                if (id >= ctx.scene.Materials().size()) return;
+                                ui.selectedMaterialId = id;
+                                ui.selected_material = &ctx.scene.Materials()[id];
+                                ui.ed_material = true;
+                                OpenMaterialEditor(ctx, ui);
+                            };
+                        }
                         if (PropertyWidgets::DrawComponentProperties(component.get(), &ctx.engine.GetCommandHistory(),
-                                                                     PropertyWidgets::WidgetConfig(),
+                                                                     widgetConfig,
                                                                      &ui.propertiesState.propertyFilter))
                         {
                             ctx.scene.MarkDirty();
                         }
-                        ImGui::Unindent();
+                        //ImGui::Unindent();
                     }
                 }
                 if (ImGui::Button(ICON_FA_PLUS " Add Component", ImVec2(-FLT_MIN, 0.0f)))

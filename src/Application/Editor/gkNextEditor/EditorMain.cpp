@@ -1,27 +1,29 @@
 #include "EditorMain.h"
-#include <Engine/Runtime/Platform/PlatformCommon.h>
-#include "Engine/Assets/Core/Node.h"
+#include <Engine/Runtime/Platform/PlatformCommon.hpp>
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "EditorInterface.hpp"
-#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
-#include "Engine/Runtime/Utilities/NextEngineHelper.h"
-#include "Engine/Rendering/Preview/RenderViewServices.hpp"
+#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
+#include "Modules/RenderViews/OffscreenRenderViewController.hpp"
+#include "Modules/SceneExport/FSceneSaver.h"
 
 #include "EditorActionDispatcher.hpp"
 #include "EditorContext.hpp"
 #include "Core/RecentScenes.hpp"
 #include "Core/SceneSavePolicy.hpp"
-#include "Engine/Runtime/Command/DeleteNodesCommand.hpp"
-#include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
+#include "Modules/DevTools/Command/DeleteNodesCommand.hpp"
+#include "Modules/DevTools/Command/DuplicateNodesCommand.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 
 #include <spdlog/spdlog.h>
+
+#include "Engine/Utilities/FileHelper.hpp"
 #include "Modules/LDrawLoader/LDrawModule.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
-#include "Modules/SplatLoader/SplatModule.hpp"
 #include "Modules/NextQuickJS/NextQuickJSModule.hpp"
 #include "Application/Common/DemoScenes.hpp"
 #include "Application/Editor/Common/MultiViewportBackend.hpp"
@@ -35,7 +37,6 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 {
     Modules::LDraw::Register();
     Modules::Scad::Register();
-    Modules::Splat::Register();
     AppCommon::RegisterDemoScenes();
     return std::make_unique<EditorGameInstance>(config, options, engine);
 }
@@ -56,6 +57,8 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Runtime::Co
     uint32_t computedHeight = static_cast<uint32_t>(monitorSize.y * 0.75f);
     config.Width = computedWidth < 1920u ? static_cast<uint32_t>(monitorSize.x) : computedWidth;
     config.Height = computedHeight < 1080u ? static_cast<uint32_t>(monitorSize.y) : computedHeight;
+    options.Width = config.Width;
+    options.Height = config.Height;
     config.HideTitleBar = true;
     options.KeepCPUMeshData = true; // 编辑器模式保留CPU网格数据用于场景保存
     options.HighPrecisionProgressiveHistory = true;
@@ -69,10 +72,10 @@ std::unique_ptr<NextUI::IMultiViewportBackend> EditorGameInstance::CreateMultiVi
 void EditorGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
-    cvars.SetDefaultFromString("r.samples", "4", &error);
-    cvars.SetDefaultFromString("r.temporalFrames", "16", &error);
-    cvars.SetDefaultFromString("r.denoiser", "0", &error);
-    cvars.SetDefaultFromString("r.superResolution", "2", &error);
+    //cvars.SetDefaultFromString("r.samples", "4", &error);
+    //cvars.SetDefaultFromString("r.temporalFrames", "16", &error);
+    cvars.SetDefaultFromString("r.progressiveRender", "true", &error);
+    cvars.SetDefaultFromString("r.upscaler.qualityMode", "4", &error);
     cvars.RegisterBool("ed.hoverHighlight", true, &settings_.hoverHighlight, NextCVar::ECVarFlags::Archive,
                        "Raycast under the cursor and highlight the hovered object");
     cvars.RegisterBool("ed.outlinerAutoScroll", true, &settings_.outlinerAutoScroll, NextCVar::ECVarFlags::Archive,
@@ -83,6 +86,9 @@ void EditorGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
                         NextCVar::ECVarFlags::Archive, "Translation gizmo snap distance", nullptr, 0.001, 1000.0);
     cvars.RegisterInt("ed.gizmoDefaultMode", 0, &settings_.gizmoDefaultMode, NextCVar::ECVarFlags::Archive,
                       "Default gizmo operation (0=translate,1=rotate,2=scale)", nullptr, 0, 2);
+    cvars.RegisterInt("ed.progressiveRenderResumeFrames", 8, &settings_.progressiveRenderResumeFrames,
+                      NextCVar::ECVarFlags::Archive,
+                      "Frames to wait after gizmo interaction before resuming progressive rendering", nullptr, 0, 120);
     cvars.RegisterUserFileChannel("ed.", "assets/configs/cvar_user.editor.json");
 }
 
@@ -198,16 +204,33 @@ void EditorGameInstance::OnInit()
     }
 
     // Open the scene passed on the command line (--load-scene) so the editor can start directly on a
-    // scene (and supports automated --agent-validation screenshots). Without it the editor is empty.
-    if (GOption != nullptr && !GOption->SceneName.empty())
+    // scene (and supports automated --agent-validation screenshots). Without a command line scene,
+    // fall back to a sample so a first launch shows a populated viewport and outliner instead of a
+    // black void with a lone Environment node.
+    std::string startupScene = GOption != nullptr ? GOption->SceneName : std::string();
+    if (startupScene.empty())
     {
-        GetEngine().RequestLoadScene({.filename = GOption->SceneName});
-        GetEditorInterface().GetEditorUiState().currentScenePath = GOption->SceneName;
+        constexpr const char* defaultScene = "assets/models/playground.glb";
+        if (Utilities::FileHelper::IsAssetAvailable(defaultScene))
+        {
+            startupScene = defaultScene;
+        }
+        else
+        {
+            SPDLOG_WARN("Default editor scene '{}' is unavailable; starting with an empty scene.", defaultScene);
+        }
+    }
+
+    if (!startupScene.empty())
+    {
+        GetEngine().RequestLoadScene({.filename = startupScene});
+        GetEditorInterface().GetEditorUiState().currentScenePath = startupScene;
     }
 }
 
 void EditorGameInstance::OnTick(double deltaSeconds)
 {
+    const bool progressiveEnabled = GetEngine().GetUserSettings().ProgressiveRender;
     bool moving = modelViewController_.UpdateCamera(1.0f, deltaSeconds);
     for (auto& cameraViewController : cameraViewControllers_)
     {
@@ -215,10 +238,29 @@ void EditorGameInstance::OnTick(double deltaSeconds)
     }
     if (GOption != nullptr && GOption->RemoteMode && GOption->RemoteMultiView)
     {
-        GetEngine().SetProgressiveRendering(false, false);
+        progressiveRenderResumeFramesRemaining_ =
+            static_cast<uint32_t>(std::max(settings_.progressiveRenderResumeFrames, 0));
+        GetEngine().SetProgressiveRendering(false);
         return;
     }
-    GetEngine().SetProgressiveRendering(!moving, false);
+
+    const uint32_t progressiveRenderResumeFrames =
+        static_cast<uint32_t>(std::max(settings_.progressiveRenderResumeFrames, 0));
+    if (!progressiveEnabled || moving || gizmoController_.IsUsing())
+    {
+        progressiveRenderResumeFramesRemaining_ = progressiveRenderResumeFrames;
+        GetEngine().SetProgressiveRendering(false);
+        return;
+    }
+
+    if (progressiveRenderResumeFramesRemaining_ > 0)
+    {
+        --progressiveRenderResumeFramesRemaining_;
+        GetEngine().SetProgressiveRendering(false);
+        return;
+    }
+
+    GetEngine().SetProgressiveRendering(progressiveEnabled);
 }
 
 void EditorGameInstance::OnSceneLoaded()
@@ -228,6 +270,38 @@ void EditorGameInstance::OnSceneLoaded()
     {
         cameraViewController.Reset(GetEngine().GetScene().GetRenderCamera());
     }
+}
+
+void EditorGameInstance::SelectSceneCamera(const size_t cameraIndex)
+{
+    auto& scene = GetEngine().GetScene();
+    const auto& cameras = scene.GetEnvSettings().cameras;
+    if (cameraIndex >= cameras.size())
+    {
+        return;
+    }
+
+    GetEngine().GetUserSettings().CameraIdx = static_cast<int>(cameraIndex);
+    scene.GetRenderCamera() = cameras[cameraIndex];
+    modelViewController_.Reset(scene.GetRenderCamera());
+    GetEngine().ResetProgressiveRenderingAccumulation();
+    GetEngine().GetRenderer().PrimaryView().InvalidateTemporalHistory(
+        Vulkan::EHistoryInvalidationReason::CameraCut);
+}
+
+void EditorGameInstance::ResetToDefaultSceneCamera()
+{
+    SelectSceneCamera(0);
+}
+
+void EditorGameInstance::SetSceneViewportFieldOfView(const float fieldOfView)
+{
+    const float clampedFieldOfView = std::clamp(fieldOfView, 10.0f, 140.0f);
+    GetEngine().GetScene().GetRenderCamera().FieldOfView = clampedFieldOfView;
+    modelViewController_.SetFieldOfView(clampedFieldOfView);
+    GetEngine().ResetProgressiveRenderingAccumulation();
+    GetEngine().GetRenderer().PrimaryView().InvalidateTemporalHistory(
+        Vulkan::EHistoryInvalidationReason::CameraCut);
 }
 
 void EditorGameInstance::OnPreConfigUI() { editorUserInterface_->Config(); }
@@ -242,6 +316,12 @@ bool EditorGameInstance::OnRenderUI(const FGameUiFrameContext& context)
 {
     editorUserInterface_->Render(context);
     return true;
+}
+
+NextUI::FUiFrameResult EditorGameInstance::RenderUiFrame(const FGameUiFrameContext& context)
+{
+    editorUserInterface_->Render(context);
+    return {NextUI::EUiDeveloperLayer::All};
 }
 
 void EditorGameInstance::OnInitUI() { editorUserInterface_->Init(); }
@@ -298,7 +378,7 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
             if (Editor::CanOverwriteCurrentScene(ui.currentScenePath))
             {
                 const std::string savePath = Editor::ResolveSceneFilesystemPath(ui.currentScenePath).string();
-                if (GetEngine().GetScene().Save(savePath))
+                if (SceneExport::SaveScene(GetEngine().GetScene(), savePath))
                 {
                     SPDLOG_INFO("Scene saved: {}", savePath);
                 }
@@ -309,7 +389,7 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
             }
             else
             {
-                SPDLOG_INFO("Current scene is not writable as GLB; use File > Save Scene As...");
+                SPDLOG_INFO("Current scene is not writable as GLB/glTF; use File > Save Scene As...");
             }
             break;
         }
@@ -363,7 +443,7 @@ bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
         RayCastFromViewport(*target, mousePos,
                             [this](Assets::RayCastResult result)
                             {
-                                if (result.Hitted)
+                                if (result.Hit)
                                 {
                                     GetEngine().GetScene().SetHoveredId(result.InstanceId);
                                 }
@@ -432,7 +512,7 @@ bool EditorGameInstance::OnMouseButton(SDL_Event& event)
         RayCastFromViewport(*eventTarget, mousePos,
                             [this, toggleSelection](Assets::RayCastResult result)
                             {
-                                if (result.Hitted)
+                                if (result.Hit)
                                 {
                                     if (GetEngine().GetScene().IsLocked(result.InstanceId))
                                     {
@@ -651,7 +731,7 @@ void EditorGameInstance::SyncCameraViewRendererCamera(size_t viewIndex, const gl
     }
 
     viewIndex = std::min(viewIndex, cameraViewControllers_.size() - 1);
-    GetEngine().GetRenderer().ViewServices().OffscreenViews().SetCameraOverride(
+    RenderViews::OffscreenViews(GetEngine().GetRenderer()).SetCameraOverride(
         static_cast<uint32_t>(viewIndex), BuildCameraViewCamera(viewIndex));
 }
 
@@ -677,7 +757,7 @@ void EditorGameInstance::RayCastFromViewport(EViewportInputTarget target, const 
         Runtime::EngineHelper::GetScreenToWorldRay(mousePos, org, dir);
     }
 
-    GetEngine().RayCastGPU(org, dir, std::move(callback));
+    GetEngine().RayCast(org, dir, std::move(callback));
 }
 
 void EditorGameInstance::DrawGizmo(const glm::vec2& viewportPos, const glm::vec2& viewportSize)

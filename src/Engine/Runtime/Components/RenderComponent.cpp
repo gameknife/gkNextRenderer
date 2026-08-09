@@ -1,5 +1,5 @@
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Reflection/PropertyMeta.h"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Reflection/PropertyMeta.hpp"
 #include <entt/meta/factory.hpp>
 
 namespace Runtime
@@ -19,21 +19,15 @@ namespace Runtime
             // RayCastVisible property - editable  
             .data<&RenderComponent::SetRayCastVisible, &RenderComponent::GetRayCastVisible>("RayCastVisible")
                 .custom<PropertyMeta>(PropertyPresets::Editable("Raycast Visible", "Rendering", "Whether the object is visible to raycasts"))
-            .data<&RenderComponent::SetRayCastVisible, &RenderComponent::GetRayCastVisible>("RaycastVisible")
-                .custom<PropertyMeta>(PropertyPresets::Editable("Raycast Visible", "Rendering", "Whether the object is visible to raycasts"))
             .data<&RenderComponent::SetRayTraceVisible, &RenderComponent::GetRayTraceVisible>("RayTraceVisible")
                 .custom<PropertyMeta>(PropertyPresets::Editable("Ray Trace Visible", "Rendering", "Whether the object participates in GPU ray tracing acceleration structures"))
             .data<&RenderComponent::SetCastShadows, &RenderComponent::GetCastShadows>("CastShadows")
                 .custom<PropertyMeta>(PropertyPresets::Editable("Cast Shadows", "Rendering", "Whether the object casts shadows"))
             .data<&RenderComponent::SetReceiveGI, &RenderComponent::GetReceiveGI>("ReceiveGI")
                 .custom<PropertyMeta>(PropertyPresets::Editable("Receive GI", "Rendering", "Whether the object receives global illumination"))
-            .data<&RenderComponent::SetLightmapUV, &RenderComponent::GetLightmapUV>("LightmapUV")
-                .custom<PropertyMeta>(PropertyPresets::Editable("Lightmap UV", "Rendering", "Use the secondary UV set for baked lighting"))
-            .data<&RenderComponent::SetLayerMask, &RenderComponent::GetLayerMask>("LayerMask")
-                .custom<PropertyMeta>(PropertyPresets::Editable("Layer Mask", "Rendering", "Render visibility layer mask"))
-            // ModelId property - read-only (set through scene loading)
-            .data<nullptr, &RenderComponent::GetModelId>("ModelId")
-                .custom<PropertyMeta>(PropertyPresets::ReadOnly("Model ID", "Mesh", "The model resource ID"))
+            // ModelId property - editable through the editor asset picker
+            .data<&RenderComponent::SetModelId, &RenderComponent::GetModelId>("ModelId")
+                .custom<PropertyMeta>(PropertyPresets::Editable("Model", "Mesh", "The model resource"))
             // SkinIndex property - read-only
             .data<nullptr, &RenderComponent::GetSkinIndex>("SkinIndex")
                 .custom<PropertyMeta>(PropertyPresets::ReadOnly("Skin Index", "Animation", "Skinning data index for skeletal animation"))

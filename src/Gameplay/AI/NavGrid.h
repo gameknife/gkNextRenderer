@@ -2,6 +2,7 @@
 
 #include "Engine/Common/CoreMinimal.hpp"
 
+#include <functional>
 #include <glm/glm.hpp>
 #include <vector>
 
@@ -37,6 +38,14 @@ namespace NextGameplay
     public:
         void Build(Assets::CPU::FCPUAccelerationStructure& bvh, const FNavGridSettings& settings);
         void RebuildDirtyRegion(Assets::CPU::FCPUAccelerationStructure& bvh, const glm::vec3& dirtyWorldMin, const glm::vec3& dirtyWorldMax);
+
+        // Marks cells whose predicate returns true as unwalkable — semantic
+        // vetoes the geometry raycast cannot see (e.g. river water: rays hit
+        // the dry bed below the raycast-invisible water surface). Predicate
+        // gets the cell world position with the sampled ground height, so a
+        // bridge deck above the water line stays walkable. Call after Build();
+        // RebuildDirtyRegion() re-samples geometry only, so re-apply after it.
+        void MaskUnwalkable(const std::function<bool(const glm::vec3&)>& predicate);
 
         std::vector<glm::vec3> FindPath(const glm::vec3& from, const glm::vec3& to, float referenceHeight) const;
 

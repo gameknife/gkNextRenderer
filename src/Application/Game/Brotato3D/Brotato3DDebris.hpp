@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
+#include "Engine/Runtime/Subsystems/NextPhysicsTypes.hpp"
 
 #include <glm/glm.hpp>
 

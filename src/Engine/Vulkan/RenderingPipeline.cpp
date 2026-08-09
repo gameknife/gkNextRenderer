@@ -2,7 +2,6 @@
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
-#include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/DescriptorSystem.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include <array>
@@ -88,6 +87,20 @@ RenderPass::RenderPass(const Vulkan::SwapChain& swapChain, VkFormat format, VkFo
           .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT});
 }
 
+RenderPass::RenderPass(const Vulkan::SwapChain& swapChain, std::span<const VkFormat> colorFormats,
+                       const Vulkan::DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp,
+                       VkAttachmentLoadOp depthBufferLoadOp) : swapChain_(swapChain), depthBuffer_(depthBuffer)
+{
+    FRenderPassSpec spec;
+    spec.colorFormats.assign(colorFormats.begin(), colorFormats.end());
+    spec.hasDepth = true;
+    spec.colorLoadOp = colorBufferLoadOp;
+    spec.depthLoadOp = depthBufferLoadOp;
+    spec.depthStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+    spec.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    Init(spec);
+}
+
 void RenderPass::Init(const FRenderPassSpec& spec)
 {
     std::vector<VkAttachmentDescription> attachments;
@@ -144,6 +157,20 @@ void RenderPass::Init(const FRenderPassSpec& spec)
     dependency.srcAccessMask = 0;
     dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dependency.dstAccessMask = spec.dstAccessMask;
+    if (spec.colorLoadOp == VK_ATTACHMENT_LOAD_OP_LOAD)
+    {
+        dependency.dstAccessMask |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+    }
+    if (spec.hasDepth)
+    {
+        dependency.srcStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+        dependency.dstStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+        dependency.dstAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        if (spec.depthLoadOp == VK_ATTACHMENT_LOAD_OP_LOAD)
+        {
+            dependency.dstAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+        }
+    }
 
     VkRenderPassCreateInfo renderPassInfo = {};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -179,64 +206,93 @@ void RenderPass::SetDebugName(const std::string& name)
 
 FrameBuffer::FrameBuffer(const VkExtent2D& extent, const class ImageView& imageView, const class RenderPass& renderPass, bool withDS ) : device_(imageView.Device())
 {
-	std::vector<VkImageView> attachments;
-	attachments.push_back(imageView.Handle());
-	if(withDS)
-	{
-		attachments.push_back( renderPass.DepthBuffer().ImageView().Handle() );
-	}
+    std::vector<VkImageView> attachments;
+    attachments.push_back(imageView.Handle());
+    if(withDS)
+    {
+        attachments.push_back( renderPass.DepthBuffer().ImageView().Handle() );
+    }
 
-	VkFramebufferCreateInfo framebufferInfo = {};
-	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-	framebufferInfo.renderPass = renderPass.Handle();
-	framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-	framebufferInfo.pAttachments = attachments.data();
-	framebufferInfo.width = extent.width;
-	framebufferInfo.height = extent.height;
-	framebufferInfo.layers = 1;
+    VkFramebufferCreateInfo framebufferInfo = {};
+    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.renderPass = renderPass.Handle();
+    framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+    framebufferInfo.pAttachments = attachments.data();
+    framebufferInfo.width = extent.width;
+    framebufferInfo.height = extent.height;
+    framebufferInfo.layers = 1;
 
-	Check(vkCreateFramebuffer(imageView.Device().Handle(), &framebufferInfo, nullptr, &framebuffer_),
-		"create framebuffer");
+    Check(vkCreateFramebuffer(imageView.Device().Handle(), &framebufferInfo, nullptr, &framebuffer_),
+        "create framebuffer");
 }
 
 FrameBuffer::FrameBuffer(const VkExtent2D& extent, const Vulkan::ImageView& imageView, const Vulkan::ImageView& imageView1,
 const Vulkan::ImageView& imageView2, const Vulkan::RenderPass& renderPass): device_(imageView.Device())
 {
-	std::array<VkImageView, 4> attachments =
-	{
-		imageView.Handle(),
-		imageView1.Handle(),
-		imageView2.Handle(),
-		renderPass.DepthBuffer().ImageView().Handle()
-	};
+    std::array<VkImageView, 4> attachments =
+    {
+        imageView.Handle(),
+        imageView1.Handle(),
+        imageView2.Handle(),
+        renderPass.DepthBuffer().ImageView().Handle()
+    };
 
-	VkFramebufferCreateInfo framebufferInfo = {};
-	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-	framebufferInfo.renderPass = renderPass.Handle();
-	framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-	framebufferInfo.pAttachments = attachments.data();
-	framebufferInfo.width = extent.width;
-	framebufferInfo.height = extent.height;
-	framebufferInfo.layers = 1;
+    VkFramebufferCreateInfo framebufferInfo = {};
+    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.renderPass = renderPass.Handle();
+    framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+    framebufferInfo.pAttachments = attachments.data();
+    framebufferInfo.width = extent.width;
+    framebufferInfo.height = extent.height;
+    framebufferInfo.layers = 1;
 
-	Check(vkCreateFramebuffer(imageView.Device().Handle(), &framebufferInfo, nullptr, &framebuffer_),
-		"create framebuffer");
+    Check(vkCreateFramebuffer(imageView.Device().Handle(), &framebufferInfo, nullptr, &framebuffer_),
+        "create framebuffer");
+}
+
+FrameBuffer::FrameBuffer(const VkExtent2D& extent,
+                         std::span<const Vulkan::ImageView* const> colorImageViews,
+                         const Vulkan::RenderPass& renderPass, bool withDS) :
+    device_(colorImageViews.front()->Device())
+{
+    std::vector<VkImageView> attachments;
+    attachments.reserve(colorImageViews.size() + (withDS ? 1u : 0u));
+    for (const Vulkan::ImageView* imageView : colorImageViews)
+    {
+        attachments.push_back(imageView->Handle());
+    }
+    if (withDS)
+    {
+        attachments.push_back(renderPass.DepthBuffer().ImageView().Handle());
+    }
+
+    VkFramebufferCreateInfo framebufferInfo{};
+    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.renderPass = renderPass.Handle();
+    framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+    framebufferInfo.pAttachments = attachments.data();
+    framebufferInfo.width = extent.width;
+    framebufferInfo.height = extent.height;
+    framebufferInfo.layers = 1;
+
+    Check(vkCreateFramebuffer(device_.Handle(), &framebufferInfo, nullptr, &framebuffer_),
+          "create framebuffer");
 }
 
 FrameBuffer::FrameBuffer(FrameBuffer&& other) noexcept :
-	device_(other.device_),
-	framebuffer_(other.framebuffer_)
+    device_(other.device_),
+    framebuffer_(other.framebuffer_)
 {
-	other.framebuffer_ = nullptr;
+    other.framebuffer_ = nullptr;
 }
 
 FrameBuffer::~FrameBuffer()
 {
-	if (framebuffer_ != nullptr)
-	{
-		vkDestroyFramebuffer(device_.Handle(), framebuffer_, nullptr);
-		framebuffer_ = nullptr;
-	}
+    if (framebuffer_ != nullptr)
+    {
+        vkDestroyFramebuffer(device_.Handle(), framebuffer_, nullptr);
+        framebuffer_ = nullptr;
+    }
 }
 
 // ============================================================================
@@ -244,66 +300,66 @@ FrameBuffer::~FrameBuffer()
 // ============================================================================
 
 PipelineLayout::PipelineLayout(const Device& device, const std::vector<DescriptorSetManager*> managers, uint32_t maxSets, const VkPushConstantRange* pushConstantRanges,
-	uint32_t pushConstantRangeCount) : device_(device)
+    uint32_t pushConstantRangeCount) : device_(device)
 {
-	for ( DescriptorSetManager* manager : managers )
-	{
-		cachedDescriptorSetLayouts_.push_back(manager->DescriptorSetLayout().Handle());
-	}
+    for ( DescriptorSetManager* manager : managers )
+    {
+        cachedDescriptorSetLayouts_.push_back(manager->DescriptorSetLayout().Handle());
+    }
 
-	cachedDescriptorSets_.resize(maxSets);
-	for( uint32_t i = 0; i < maxSets; ++i )
-	{
-		for ( DescriptorSetManager* manager : managers )
-		{
-			cachedDescriptorSets_[i].push_back(manager->DescriptorSets().Handle(i));
-		}
-	}
-	CreateLayout(pushConstantRanges, pushConstantRangeCount);
+    cachedDescriptorSets_.resize(maxSets);
+    for( uint32_t i = 0; i < maxSets; ++i )
+    {
+        for ( DescriptorSetManager* manager : managers )
+        {
+            cachedDescriptorSets_[i].push_back(manager->DescriptorSets().Handle(i));
+        }
+    }
+    CreateLayout(pushConstantRanges, pushConstantRangeCount);
 }
 
 PipelineLayout::PipelineLayout(const Device & device, const DescriptorSetLayout& descriptorSetLayout, const VkPushConstantRange* pushConstantRanges, uint32_t pushConstantRangeCount) :
-	device_(device)
+    device_(device)
 {
-	// add the global texture set with set = 1, currently an ugly impl
-	Assets::GlobalTexturePool* gPool = Assets::GlobalTexturePool::GetInstance();
-	cachedDescriptorSetLayouts_ = { descriptorSetLayout.Handle(), gPool->Layout() };
+    // add the global texture set with set = 1, currently an ugly impl
+    Assets::GlobalTexturePool* gPool = Assets::GlobalTexturePool::GetInstance();
+    cachedDescriptorSetLayouts_ = { descriptorSetLayout.Handle(), gPool->Layout() };
 
-	CreateLayout(pushConstantRanges, pushConstantRangeCount);
+    CreateLayout(pushConstantRanges, pushConstantRangeCount);
 }
 
 PipelineLayout::PipelineLayout(const Device& device, const VkPushConstantRange* pushConstantRanges,
-	uint32_t pushConstantRangeCount) : device_(device)
+    uint32_t pushConstantRangeCount) : device_(device)
 {
-	CreateLayout(pushConstantRanges, pushConstantRangeCount);
+    CreateLayout(pushConstantRanges, pushConstantRangeCount);
 }
 
 void PipelineLayout::CreateLayout(const VkPushConstantRange* pushConstantRanges, uint32_t pushConstantRangeCount)
 {
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(cachedDescriptorSetLayouts_.size());
-	pipelineLayoutInfo.pSetLayouts = cachedDescriptorSetLayouts_.empty() ? nullptr : cachedDescriptorSetLayouts_.data();
-	pipelineLayoutInfo.pushConstantRangeCount = pushConstantRangeCount;
-	pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges;
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(cachedDescriptorSetLayouts_.size());
+    pipelineLayoutInfo.pSetLayouts = cachedDescriptorSetLayouts_.empty() ? nullptr : cachedDescriptorSetLayouts_.data();
+    pipelineLayoutInfo.pushConstantRangeCount = pushConstantRangeCount;
+    pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges;
 
-	Check(vkCreatePipelineLayout(device_.Handle(), &pipelineLayoutInfo, nullptr, &pipelineLayout_),
-		"create pipeline layout");
+    Check(vkCreatePipelineLayout(device_.Handle(), &pipelineLayoutInfo, nullptr, &pipelineLayout_),
+        "create pipeline layout");
 }
 
 PipelineLayout::~PipelineLayout()
 {
-	if (pipelineLayout_ != nullptr)
-	{
-		vkDestroyPipelineLayout(device_.Handle(), pipelineLayout_, nullptr);
-		pipelineLayout_ = nullptr;
-	}
+    if (pipelineLayout_ != nullptr)
+    {
+        vkDestroyPipelineLayout(device_.Handle(), pipelineLayout_, nullptr);
+        pipelineLayout_ = nullptr;
+    }
 }
 
 void PipelineLayout::BindDescriptorSets(VkCommandBuffer commandBuffer, uint32_t idx, VkPipelineBindPoint bindPoint) const
 {
-	vkCmdBindDescriptorSets( commandBuffer, bindPoint,Handle(), 0,
-						 static_cast<uint32_t>(cachedDescriptorSets_[idx].size()), cachedDescriptorSets_[idx].data(), 0, nullptr );
+    vkCmdBindDescriptorSets( commandBuffer, bindPoint,Handle(), 0,
+                         static_cast<uint32_t>(cachedDescriptorSets_[idx].size()), cachedDescriptorSets_[idx].data(), 0, nullptr );
 
 }
 

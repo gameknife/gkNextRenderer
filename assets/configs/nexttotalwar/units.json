@@ -1,0 +1,43 @@
+{
+  "units": [
+    {
+      "id": "spearman",
+      "rigPath": "assets/scad/characters/tw_spearman.scad",
+      "marchSpeed": 8.0,
+      "catchUpFactor": 1.45,
+      "defaultRanks": 16,
+      "fileSpacing": 1.12,
+      "rankSpacing": 1.35,
+      "baseMorale": 72,
+      "canRangedAttack": false
+    },
+    {
+      "id": "swordsman",
+      "rigPath": "assets/scad/characters/tw_swordsman.scad",
+      "marchSpeed": 8.6,
+      "catchUpFactor": 1.45,
+      "defaultRanks": 16,
+      "fileSpacing": 1.08,
+      "rankSpacing": 1.30,
+      "baseMorale": 76,
+      "canRangedAttack": false
+    },
+    {
+      "id": "archer",
+      "rigPath": "assets/scad/characters/tw_archer.scad",
+      "marchSpeed": 8.2,
+      "catchUpFactor": 1.45,
+      "defaultRanks": 16,
+      "fileSpacing": 1.20,
+      "rankSpacing": 1.42,
+      "baseMorale": 55,
+      "canRangedAttack": true,
+      "rangedRange": 55,
+      "rangedMinRange": 5,
+      "volleyInterval": 4.2,
+      "startingAmmo": 18,
+      "rangedAccuracy": 0.58,
+      "rangedDamage": 100
+    }
+  ]
+}

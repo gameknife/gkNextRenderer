@@ -1,12 +1,13 @@
 #include "Brotato3DGameInstance.hpp"
 #include "Brotato3DCommon.hpp"
 
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Assets/Loaders/FProcModel.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Brotato3DAudio.hpp"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
 
 #include <spdlog/spdlog.h>
 
@@ -297,7 +298,6 @@ void Brotato3DGameInstance::BuildArenaWallBodies()
     arenaWallBodyIds_[3] = physics->CreateBoxBody(glm::vec3(arenaHalfExtent_.x + ArenaWallHalfThickness, ArenaWallHalfHeight, 0.0f),
                                                   eastWestExtent,
                                                   NextMotionType::Static);
-    BuildArenaPropBodies();
 }
 
 void Brotato3DGameInstance::ClearArenaWallBodies()
@@ -317,69 +317,6 @@ void Brotato3DGameInstance::ClearArenaWallBodies()
         }
         bodyId = {};
     }
-    ClearArenaPropBodies();
-}
-
-void Brotato3DGameInstance::BuildArenaPropBodies()
-{
-    NextPhysics* physics = GetEngine().GetPhysicsEngine();
-    if (!physics)
-    {
-        return;
-    }
-
-    ClearArenaPropBodies();
-    arenaPropBodyIds_.reserve(arenaResources_.propColliders.size());
-    for (size_t index = 0; index < arenaResources_.propColliders.size(); ++index)
-    {
-        const Brotato3D::FArenaResources::FBoxCollider& collider = arenaResources_.propColliders[index];
-        if (glm::length(collider.extent) <= 0.001f)
-        {
-            arenaPropBodyIds_.push_back({});
-            continue;
-        }
-        const NextBodyID bodyId = physics->CreateBoxBody(collider.center, collider.rotation, collider.extent, NextMotionType::Dynamic);
-        arenaPropBodyIds_.push_back(bodyId);
-        if (index < arenaResources_.propNodes.size())
-        {
-            const std::shared_ptr<Assets::Node>& node = arenaResources_.propNodes[index];
-            if (node)
-            {
-                auto physicsComponent = node->GetComponent<Runtime::PhysicsComponent>();
-                if (!physicsComponent)
-                {
-                    physicsComponent = std::make_shared<Runtime::PhysicsComponent>();
-                    node->AddComponent(physicsComponent);
-                }
-                physicsComponent->SetMobility(Runtime::ENodeMobility::Dynamic);
-                physicsComponent->SetPhysicsOffset(glm::vec3(0.0f, collider.extent.y * 0.5f, 0.0f));
-                physicsComponent->BindPhysicsBody(bodyId);
-            }
-        }
-    }
-    if (!arenaPropBodyIds_.empty())
-    {
-        spdlog::info("[Brotato3DPcg] dynamic prop bodies created: {}", arenaPropBodyIds_.size());
-    }
-}
-
-void Brotato3DGameInstance::ClearArenaPropBodies()
-{
-    NextPhysics* physics = GetEngine().GetPhysicsEngine();
-    if (!physics)
-    {
-        arenaPropBodyIds_.clear();
-        return;
-    }
-
-    for (NextBodyID& bodyId : arenaPropBodyIds_)
-    {
-        if (!bodyId.IsInvalid() && physics->GetBody(bodyId))
-        {
-            physics->RemoveBody(bodyId);
-        }
-    }
-    arenaPropBodyIds_.clear();
 }
 
 void Brotato3DGameInstance::SpawnDebris(Brotato3D::EDebrisKind kind,
@@ -795,17 +732,6 @@ void Brotato3DGameInstance::SyncEnemyKinematicBody(Brotato3D::FEnemyRuntime& ene
     NextPhysics* physics = GetEngine().GetPhysicsEngine();
     if (!physics || enemy.kinematicBodyId.IsInvalid() || !enemy.alive || !enemy.def)
     {
-        return;
-    }
-
-    if (!arenaResources_.propColliders.empty())
-    {
-        if (enemy.kinematicBodyActive)
-        {
-            physics->SetBodyActive(enemy.kinematicBodyId, false);
-            physics->SetBodyTransform(enemy.kinematicBodyId, HiddenPosition, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), true);
-            enemy.kinematicBodyActive = false;
-        }
         return;
     }
 

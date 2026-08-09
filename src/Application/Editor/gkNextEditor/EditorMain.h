@@ -4,7 +4,7 @@
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Modules/DevTools/GizmoController.hpp"
-#include "Engine/Runtime/Camera/ModelViewController.hpp"
+#include "Gameplay/Camera/ModelViewController.hpp"
 #include "Core/EditorSettings.hpp"
 #include "Core/EditorUiState.hpp"
 
@@ -38,6 +38,7 @@ public:
     void OnPreConfigUI() override;
     bool OnRenderUI() override;
     bool OnRenderUI(const FGameUiFrameContext& context) override;
+    NextUI::FUiFrameResult RenderUiFrame(const FGameUiFrameContext& context) override;
     void OnInitUI() override;
     void OnRemoteUiSessionClosed(std::string_view sessionId) override;
     std::unique_ptr<NextUI::IMultiViewportBackend> CreateMultiViewportBackend() override;
@@ -59,6 +60,9 @@ public:
     const EditorInterface& GetEditorInterface() const { return *editorUserInterface_; }
     NextUI::GizmoController& GetGizmoController() { return gizmoController_; }
     Editor::EditorSettings& GetEditorSettings() { return settings_; }
+    void SelectSceneCamera(size_t cameraIndex);
+    void ResetToDefaultSceneCamera();
+    void SetSceneViewportFieldOfView(float fieldOfView);
     Assets::Camera BuildSceneViewportCamera() const;
     Assets::Camera BuildCameraViewCamera(size_t viewIndex) const;
     void SyncCameraViewRendererCamera(size_t viewIndex, const glm::vec2& viewportSize);
@@ -95,6 +99,7 @@ private:
     std::optional<EViewportInputTarget> capturedInputViewport_{};
     NextUI::GizmoController gizmoController_;
     Editor::EditorSettings settings_{};
+    uint32_t progressiveRenderResumeFramesRemaining_ = 0;
 };
 
 inline bool EditorGameInstance::OverrideRenderCamera(Assets::Camera& OutRenderCamera) const

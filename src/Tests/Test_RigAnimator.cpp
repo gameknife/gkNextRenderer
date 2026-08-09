@@ -1,8 +1,9 @@
 #include <catch2/catch_all.hpp>
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Data/RigAsset.hpp"
 #include "Gameplay/Rig/RigInstance.h"
+#include "Gameplay/Rig/RigLayeredAnimator.h"
 
 #include <memory>
 #include <vector>
@@ -64,6 +65,114 @@ namespace
             arm = Node::CreateNode("bone_arm", glm::vec3(0.0f, 1.0f, 0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f), 2);
             arm->SetParent(root);
             animator.Bind(&asset, {root.get(), arm.get()}, root.get());
+        }
+    };
+
+    FRigAsset MakeLayeredAsset()
+    {
+        FRigAsset asset;
+
+        FRigBone root;
+        root.name = "bone_root";
+        root.children = {1, 2};
+        asset.bones.push_back(root);
+
+        FRigBone arm;
+        arm.name = "bone_arm";
+        arm.parent = 0;
+        arm.bindT = glm::vec3(0.0f, 1.0f, 0.0f);
+        asset.bones.push_back(arm);
+
+        FRigBone leg;
+        leg.name = "bone_leg";
+        leg.parent = 0;
+        leg.bindT = glm::vec3(0.0f, -1.0f, 0.0f);
+        asset.bones.push_back(leg);
+
+        auto addRootMove = [&asset](std::string name, float end)
+        {
+            FRigClip clip;
+            clip.name = std::move(name);
+            clip.duration = 1.0f;
+            FRigChannel channel;
+            channel.bone = 0;
+            channel.position.Keys = {{0.0f, glm::vec3(0.0f)},
+                                     {1.0f, glm::vec3(0.0f, end, 0.0f)}};
+            clip.channels.push_back(channel);
+            asset.clips.push_back(std::move(clip));
+        };
+        addRootMove("move_a", 1.0f);
+        addRootMove("move_b", 2.0f);
+
+        FRigClip base;
+        base.name = "base";
+        FRigChannel baseArm;
+        baseArm.bone = 1;
+        baseArm.position.Keys = {{0.0f, glm::vec3(0.2f, 0.0f, 0.0f)}};
+        base.channels.push_back(baseArm);
+        FRigChannel baseLeg;
+        baseLeg.bone = 2;
+        baseLeg.rotation.Keys = {{0.0f, glm::angleAxis(glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f))}};
+        base.channels.push_back(baseLeg);
+        asset.clips.push_back(base);
+
+        auto addArmPose = [&asset](std::string name, const glm::quat& rotation, float x)
+        {
+            FRigClip clip;
+            clip.name = std::move(name);
+            FRigChannel channel;
+            channel.bone = 1;
+            channel.position.Keys = {{0.0f, glm::vec3(x, 0.0f, 0.0f)}};
+            channel.rotation.Keys = {{0.0f, rotation}};
+            clip.channels.push_back(channel);
+            asset.clips.push_back(std::move(clip));
+        };
+        const glm::quat aimRotation =
+            glm::angleAxis(glm::radians(45.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        FRigClip aim;
+        aim.name = "aim";
+        FRigChannel aimArm;
+        aimArm.bone = 1;
+        aimArm.rotation.Keys = {{0.0f, aimRotation}};
+        aim.channels.push_back(aimArm);
+        asset.clips.push_back(aim);
+        addArmPose("aim_positive", aimRotation, 1.0f);
+        addArmPose("aim_negative", -aimRotation, -1.0f);
+
+        FRigClip recoil;
+        recoil.name = "recoil";
+        recoil.duration = 0.2f;
+        recoil.loop = false;
+        FRigChannel recoilArm;
+        recoilArm.bone = 1;
+        recoilArm.rotation.Keys = {
+            {0.0f, glm::quat(1.0f, 0.0f, 0.0f, 0.0f)},
+            {0.1f, glm::angleAxis(glm::radians(20.0f), glm::vec3(1.0f, 0.0f, 0.0f))},
+            {0.2f, glm::quat(1.0f, 0.0f, 0.0f, 0.0f)}};
+        recoil.channels.push_back(recoilArm);
+        asset.clips.push_back(recoil);
+
+        return asset;
+    }
+
+    struct LayeredTestRig
+    {
+        FRigAsset asset = MakeLayeredAsset();
+        std::shared_ptr<Node> root;
+        std::shared_ptr<Node> arm;
+        std::shared_ptr<Node> leg;
+        NextGameplay::FRigLayeredAnimator animator;
+
+        LayeredTestRig()
+        {
+            root = Node::CreateNode("bone_root", glm::vec3(0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f), 10);
+            arm = Node::CreateNode("bone_arm", glm::vec3(0.0f, 1.0f, 0.0f), glm::quat(1, 0, 0, 0),
+                                   glm::vec3(1.0f), 11);
+            leg = Node::CreateNode("bone_leg", glm::vec3(0.0f, -1.0f, 0.0f), glm::quat(1, 0, 0, 0),
+                                   glm::vec3(1.0f), 12);
+            arm->SetParent(root);
+            leg->SetParent(root);
+            animator.Bind(&asset, {root.get(), arm.get(), leg.get()}, root.get());
         }
     };
 }
@@ -145,6 +254,108 @@ TEST_CASE("RigAnimator treats same-clip Play and unknown clips as no-ops", "[Uni
     rig.animator.Update(0.25f);
     CHECK(rig.animator.CurrentClip() == "move");
     CHECK(rig.root->Translation().y == Catch::Approx(0.5f));
+}
+
+TEST_CASE("RigLayeredAnimator masks upper-body overrides and preserves unauthored components", "[Unit][Rig][Layered]")
+{
+    LayeredTestRig rig;
+    const auto baseLayer = rig.animator.CreateLayer(
+        "base", NextGameplay::ERigLayerBlendMode::Override,
+        NextGameplay::FRigBoneMask::FullBody(rig.asset));
+    const auto aimLayer = rig.animator.CreateLayer(
+        "aim", NextGameplay::ERigLayerBlendMode::Override,
+        NextGameplay::FRigBoneMask::FromSubtree(rig.asset, "bone_arm"));
+    REQUIRE(baseLayer != NextGameplay::invalidRigLayerHandle);
+    REQUIRE(aimLayer != NextGameplay::invalidRigLayerHandle);
+
+    REQUIRE(rig.animator.SetStaticBlend(baseLayer, {{rig.asset.FindClip("base"), 1.0f}}, 0.0f));
+    REQUIRE(rig.animator.SetStaticBlend(aimLayer, {{rig.asset.FindClip("aim"), 1.0f}}, 0.0f));
+    rig.animator.Update(0.0f);
+
+    CHECK(rig.arm->Translation().x == Catch::Approx(0.2f));
+    const glm::vec3 armUp = rig.arm->Rotation() * glm::vec3(0.0f, 1.0f, 0.0f);
+    CHECK(armUp.x == Catch::Approx(-0.707106f).margin(1.0e-4f));
+    const glm::vec3 legForward = rig.leg->Rotation() * glm::vec3(0.0f, 1.0f, 0.0f);
+    CHECK(legForward.z == Catch::Approx(0.5f).margin(1.0e-4f));
+}
+
+TEST_CASE("RigLayeredAnimator blends clip samples and handles quaternion hemispheres", "[Unit][Rig][Layered]")
+{
+    LayeredTestRig rig;
+    const auto layer = rig.animator.CreateLayer(
+        "base", NextGameplay::ERigLayerBlendMode::Override,
+        NextGameplay::FRigBoneMask::FullBody(rig.asset));
+
+    REQUIRE(rig.animator.SetStaticBlend(
+        layer,
+        {{rig.asset.FindClip("aim_positive"), 0.5f}, {rig.asset.FindClip("aim_negative"), 0.5f}},
+        0.0f));
+    rig.animator.Update(0.0f);
+
+    CHECK(rig.arm->Translation().x == Catch::Approx(0.0f).margin(1.0e-5f));
+    const glm::vec3 armUp = rig.arm->Rotation() * glm::vec3(0.0f, 1.0f, 0.0f);
+    CHECK(armUp.x == Catch::Approx(-0.707106f).margin(1.0e-4f));
+}
+
+TEST_CASE("RigLayeredAnimator preserves synchronized phase across loop clip sets", "[Unit][Rig][Layered]")
+{
+    LayeredTestRig rig;
+    const auto layer = rig.animator.CreateLayer(
+        "locomotion", NextGameplay::ERigLayerBlendMode::Override,
+        NextGameplay::FRigBoneMask::FullBody(rig.asset));
+
+    REQUIRE(rig.animator.SetLoopBlend(layer, {{rig.asset.FindClip("move_a"), 1.0f}},
+                                      "locomotion", 1.0f, 0.0f));
+    rig.animator.Update(0.25f);
+    CHECK(rig.root->Translation().y == Catch::Approx(0.25f));
+
+    REQUIRE(rig.animator.SetLoopBlend(layer, {{rig.asset.FindClip("move_b"), 1.0f}},
+                                      "locomotion", 1.0f, 0.0f));
+    rig.animator.Update(0.0f);
+    CHECK(rig.root->Translation().y == Catch::Approx(0.5f));
+}
+
+TEST_CASE("RigLayeredAnimator composes additive recoil over an aim pose", "[Unit][Rig][Layered]")
+{
+    LayeredTestRig rig;
+    const auto aimLayer = rig.animator.CreateLayer(
+        "aim", NextGameplay::ERigLayerBlendMode::Override,
+        NextGameplay::FRigBoneMask::FromSubtree(rig.asset, "bone_arm"));
+    const auto recoilLayer = rig.animator.CreateLayer(
+        "recoil", NextGameplay::ERigLayerBlendMode::Additive,
+        NextGameplay::FRigBoneMask::FromSubtree(rig.asset, "bone_arm"));
+
+    REQUIRE(rig.animator.SetStaticBlend(aimLayer, {{rig.asset.FindClip("aim"), 1.0f}}, 0.0f));
+    REQUIRE(rig.animator.PlayOneShot(recoilLayer, rig.asset.FindClip("recoil"), 1.0f, 0.0f, 0.0f, true));
+    rig.animator.Update(0.1f);
+
+    const glm::quat aim = rig.asset.FindClip("aim")->channels[0].rotation.Keys[0].Value;
+    const glm::quat kick = rig.asset.FindClip("recoil")->channels[0].rotation.Keys[1].Value;
+    CHECK(glm::abs(glm::dot(rig.arm->Rotation(), glm::normalize(aim * kick))) ==
+          Catch::Approx(1.0f).margin(1.0e-4f));
+}
+
+TEST_CASE("RigLayeredAnimator supports manual action time and restartable one-shots", "[Unit][Rig][Layered]")
+{
+    LayeredTestRig rig;
+    const auto actionLayer = rig.animator.CreateLayer(
+        "action", NextGameplay::ERigLayerBlendMode::Override,
+        NextGameplay::FRigBoneMask::FullBody(rig.asset));
+    REQUIRE(rig.animator.SetManualBlend(actionLayer, {{rig.asset.FindClip("move_a"), 1.0f}},
+                                        0.6f, 0.0f));
+    rig.animator.Update(0.0f);
+    CHECK(rig.root->Translation().y == Catch::Approx(0.6f));
+
+    REQUIRE(rig.animator.PlayOneShot(actionLayer, rig.asset.FindClip("move_a"), 1.0f, 0.0f, 0.0f, true));
+    rig.animator.Update(0.4f);
+    CHECK(rig.root->Translation().y == Catch::Approx(0.4f));
+
+    REQUIRE(rig.animator.PlayOneShot(actionLayer, rig.asset.FindClip("move_a"), 1.0f, 0.0f, 0.0f, true));
+    rig.animator.Update(0.0f);
+    CHECK(rig.root->Translation().y == Catch::Approx(0.0f));
+    rig.animator.Update(1.0f);
+    CHECK(rig.animator.IsOneShotComplete(actionLayer));
+    CHECK(rig.root->Translation().y == Catch::Approx(0.0f));
 }
 
 #include "Modules/ScadLoader/FScadRig.h"

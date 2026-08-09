@@ -1,9 +1,9 @@
 #include "Brotato3DGameInstance.hpp"
 #include "Brotato3DCommon.hpp"
 
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
 #include <spdlog/spdlog.h>
 
 #include "Brotato3DAudio.hpp"
@@ -200,7 +200,7 @@ void Brotato3DGameInstance::SpawnEnemy(const std::string& enemyId, const glm::ve
 
     const Brotato3D::FEnemyDef& def = defIt->second;
     const FEnemyVisualResource& visual = visualIt->second;
-    const glm::vec3 spawnPos(worldPos.x, def.size.y * 0.5f + SampleArenaGroundY(worldPos), worldPos.z);
+    const glm::vec3 spawnPos(worldPos.x, def.size.y * 0.5f, worldPos.z);
     auto reusableEnemy = std::find_if(enemies_.begin(), enemies_.end(),
                                       [&def](const Brotato3D::FEnemyRuntime& enemy)
                                       {

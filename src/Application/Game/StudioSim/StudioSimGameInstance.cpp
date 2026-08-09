@@ -445,7 +445,7 @@ StudioSimGameInstance::StudioSimGameInstance(Vulkan::WindowConfig& config, Runti
                                              NextEngine* engine)
     : NextGameInstanceBase(config, options, engine)
 {
-    ConfigureWindow(config, options, "StudioSim", 1280, 720, false);
+    ConfigureWindow(config, options, "StudioSim", 1920, 1080, false);
 }
 
 void StudioSimGameInstance::OnInit()
@@ -453,7 +453,7 @@ void StudioSimGameInstance::OnInit()
     // NavGrid is built from the scene CPU BVH, so keep CPU mesh data alive.
     GOption->KeepCPUMeshData = true;
 
-    std::string initialScene = "assets/scad/office.scad";
+    std::string initialScene = "assets/scad/source/office.scad";
     if (!GOption->SceneName.empty())
     {
         initialScene = GOption->SceneName;
@@ -462,14 +462,8 @@ void StudioSimGameInstance::OnInit()
     SPDLOG_INFO("StudioSim: loading scene '{}'", initialScene);
     GetEngine().RequestLoadScene({.filename = initialScene});
 
-    // M4 self-test: switch to the local LLM and fire one async probe to confirm the
-    // engine -> llama-server link before wiring up the decision scheduler.
     // Prefer the local llama-server for employee decisions.
-    if (auto* ai = NextAI::GetAIService(GetEngine()))
-    {
-        const bool ok = ai->SwitchProvider(NextAI::EAIProviderType::LocalLlama);
-        SPDLOG_INFO("StudioSim: SwitchProvider(LocalLlama) -> {} (provider='{}')", ok, ai->GetProviderName());
-    }
+    if (auto* ai = NextAI::GetAIService(GetEngine())) ai->SetProfile("simulation");
 }
 
 void StudioSimGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& /*nodes*/,
@@ -1036,7 +1030,7 @@ bool StudioSimGameInstance::OnRenderUI()
     };
     ui_.DrawModals(modalContext);
 
-    if (sceneReady_ && ui_.ShowOverlay())
+    if (sceneReady_ && (ui_.ShowOverlay() || ui_.ShowPoiDebug()))
     {
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
         const float aspect = viewport != nullptr && viewport->Size.y > 1.0f
@@ -1091,6 +1085,26 @@ bool StudioSimGameInstance::OnKey(SDL_Event& event)
         return true;
     }
     return false;
+}
+
+bool StudioSimGameInstance::SupportsAppDebugShortcut(SDL_Keycode key) const
+{
+    return key == SDLK_F5;
+}
+
+bool StudioSimGameInstance::IsAppDebugShortcutActive(SDL_Keycode key) const
+{
+    return key == SDLK_F5 && ui_.ShowPoiDebug();
+}
+
+bool StudioSimGameInstance::SetAppDebugShortcutActive(SDL_Keycode key, bool active)
+{
+    if (key != SDLK_F5)
+    {
+        return false;
+    }
+    ui_.ShowPoiDebugMutable() = active;
+    return true;
 }
 
 bool StudioSimGameInstance::OnMouseButton(SDL_Event& event)

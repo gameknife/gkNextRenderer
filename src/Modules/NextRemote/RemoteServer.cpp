@@ -4,7 +4,7 @@
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/RemoteProtocol.hpp"
-#include "Engine/Rendering/Preview/RenderViewServices.hpp"
+#include "Modules/RenderViews/OffscreenRenderViewController.hpp"
 #include "Modules/NextRemote/RemoteServer.hpp"
 
 #include "Modules/NextRemote/SignalingServer.hpp"
@@ -26,7 +26,10 @@ namespace Runtime::Remote
         constexpr auto remoteStatsLogInterval = std::chrono::seconds(10);
         constexpr auto remoteIdleFpsDelay = std::chrono::seconds(5);
         constexpr VkFormat remoteCompositeFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-        constexpr uint32_t remoteCompositeBindlessBase = 64500u;
+        // From the bindless registry (assets/shaders/common/BindlessTexture.slang). This used to be
+        // a literal 64500, which overlapped the tail of the material-thumbnail range.
+        constexpr uint32_t remoteCompositeBindlessBase =
+            static_cast<uint32_t>(Assets::Bindless::RES_REMOTE_COMPOSITE_BASE);
 
         uint32_t IdleTargetFps(const uint32_t activeFps)
         {
@@ -72,7 +75,9 @@ namespace Runtime::Remote
             for (uint32_t viewIndex = 0; viewIndex < requestedClients; ++viewIndex)
             {
                 RemoteServer::FConfig streamConfig = config_;
-                streamConfig.encodeBindlessBase = 60000u + viewIndex * 16u;
+                streamConfig.encodeBindlessBase =
+                    static_cast<uint32_t>(Assets::Bindless::RES_REMOTE_ENCODE_BASE) +
+                    viewIndex * static_cast<uint32_t>(Assets::Bindless::RES_REMOTE_ENCODE_STRIDE);
                 auto stream = std::make_unique<FVideoPipeline>(streamConfig);
                 if (!stream->Initialize(engine->GetRenderer()))
                 {
@@ -88,7 +93,7 @@ namespace Runtime::Remote
                 return false;
             }
             config_.maxClients = static_cast<uint32_t>(cloudVideoPipelines_.size());
-            engine->GetRenderer().ViewServices().OffscreenViews().SetViewRenderedCallback(
+            RenderViews::OffscreenViews(engine->GetRenderer()).SetViewRenderedCallback(
                 [this](uint32_t viewIndex, VkCommandBuffer commandBuffer, uint32_t imageIndex, Vulkan::RenderView& view)
                 {
                     RecordCloudViewFrame(viewIndex, commandBuffer, imageIndex, view);
@@ -159,7 +164,7 @@ namespace Runtime::Remote
         {
             if (NextEngine* engine = NextEngine::GetInstance())
             {
-                engine->GetRenderer().ViewServices().OffscreenViews().SetViewRenderedCallback({});
+                RenderViews::OffscreenViews(engine->GetRenderer()).SetViewRenderedCallback({});
             }
         }
         for (auto& stream : cloudVideoPipelines_)
@@ -360,7 +365,7 @@ namespace Runtime::Remote
             }
             for (const uint32_t viewIndex : disabledViewIndices)
             {
-                auto& offscreenViews = engine->GetRenderer().ViewServices().OffscreenViews();
+                auto& offscreenViews = RenderViews::OffscreenViews(engine->GetRenderer());
                 offscreenViews.SetEnabled(viewIndex, false);
                 offscreenViews.ClearCameraOverride(viewIndex);
                 SPDLOG_INFO("RemotePlay: disabled cloud RenderView slot {}", viewIndex);
@@ -506,7 +511,7 @@ namespace Runtime::Remote
             }
             ApplyClientTargetFps(clientView, now);
             {
-                auto& offscreenViews = engine->GetRenderer().ViewServices().OffscreenViews();
+                auto& offscreenViews = RenderViews::OffscreenViews(engine->GetRenderer());
                 offscreenViews.SetEnabled(clientView.viewIndex, true);
                 offscreenViews.SetRenderExtent(clientView.viewIndex, VkExtent2D{config_.width, config_.height});
                 offscreenViews.SetCameraOverride(clientView.viewIndex, BuildClientCamera(clientView));
@@ -654,7 +659,7 @@ namespace Runtime::Remote
                                            Vulkan::VulkanBaseRenderer& renderer,
                                            Vulkan::RenderView& view)
     {
-        const Vulkan::RenderImage* src = renderer.GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_DENOISED);
+        const Vulkan::RenderImage* src = renderer.GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_SCENE_COLOR);
         if (!src || !clientView.compositeImage)
         {
             return;

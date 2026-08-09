@@ -1,51 +1,47 @@
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/Editor/UserInterface.Internal.hpp"
+#include "Engine/Runtime/Editor/UI/UiTheme.hpp"
 
-#include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/DebugUiProvider.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/Config/UserSettings.hpp"
-#include "Engine/Runtime/Editor/FontLoader.h"
-#include "ThirdParty/imgui-custom/imgui_impl_sdl3_custom.h"
-#include "Engine/Utilities/Exception.hpp"
-#include "Engine/Utilities/FileHelper.hpp"
-#include "Engine/Vulkan/Device.hpp"
-#include "Engine/Vulkan/MemoryAndShader.hpp"
-#include "Engine/Vulkan/Instance.hpp"
-#include "Engine/Vulkan/GraphicsPipelineBuilder.hpp"
-#include "Engine/Vulkan/RenderingPipeline.hpp"
-#include "Engine/Vulkan/CommandExecution.hpp"
-#include "Engine/Vulkan/SwapChain.hpp"
-#include "Engine/Vulkan/WindowSurface.hpp"
-
-#include <imgui.h>
-#include <imgui_freetype.h>
-#include <imgui_stdlib.h>
-#include <SDL3/SDL.h>
-
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <cmath>
-#include <cstring>
-#include <filesystem>
-#include <fmt/chrono.h>
-#include <fmt/format.h>
-
-#include "Engine/Assets/GPU/TextureImage.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
+#include "Engine/Assets/GPU/TextureImage.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Runtime/Config/UserSettings.hpp"
+#include "Engine/Runtime/Editor/FontLoader.hpp"
+#include "Engine/Runtime/Editor/ImGuiContextHost.hpp"
+#include "Engine/Runtime/Editor/ImGuiVulkanRenderer.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Interface/DebugUiProvider.hpp"
+#include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
-#include "ThirdParty/fontawesome/IconsFontAwesome6.h"
+#include "Engine/Utilities/Exception.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/ImGui.hpp"
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Utilities/StbImage.hpp"
+#include "Engine/Vulkan/CommandExecution.hpp"
+#include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
+#include "Engine/Vulkan/Instance.hpp"
+#include "Engine/Vulkan/MemoryAndShader.hpp"
+#include "Engine/Vulkan/RenderingPipeline.hpp"
+#include "Engine/Vulkan/SwapChain.hpp"
+#include "Engine/Vulkan/WindowSurface.hpp"
 
-extern float GAndroidMagicScale;
-extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
+#include "ThirdParty/fontawesome/IconsFontAwesome6.h"
+#include "ThirdParty/imgui-custom/imgui_impl_sdl3_custom.h"
+
+#include <SDL3/SDL.h>
+#include <fmt/chrono.h>
+#include <fmt/format.h>
+#include <imgui.h>
+#include <imgui_freetype.h>
+#include <imgui_stdlib.h>
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstddef>
+#include <cstring>
 
 namespace NextUI
 {
@@ -86,8 +82,6 @@ UiRenderBuffer& UiRenderBuffer::operator=(UiRenderBuffer&&) noexcept = default;
 namespace
 {
 
-    constexpr const char* kUiVertexShaderPath = "assets/shaders/UI.ImGui.vert.slang.spv";
-    constexpr const char* kUiFragmentShaderPath = "assets/shaders/UI.ImGui.frag.slang.spv";
     constexpr const char* kUiFontAtlasTextureName = "__imgui_font_atlas__";
     constexpr float kUiHdrReferenceWhiteNit = 203.0f;
     constexpr uint32_t kUiTextureFlagRawOutput = 1u << 0u;
@@ -118,25 +112,6 @@ namespace
         VkPipeline pipeline = VK_NULL_HANDLE;
         VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     };
-
-    std::string ShaderFilename(const std::string& shaderFile)
-    {
-        return std::filesystem::path(shaderFile).filename().string();
-    }
-
-    bool MarkChangedShaderFile(
-        const std::string& shaderFile,
-        const std::set<std::string>& changedShaderFiles,
-        std::set<std::string>& handledShaderFiles)
-    {
-        const std::string filename = ShaderFilename(shaderFile);
-        if (changedShaderFiles.find(filename) == changedShaderFiles.end())
-        {
-            return false;
-        }
-        handledShaderFiles.insert(filename);
-        return true;
-    }
 
     ImVec2 TransformUiPointToFramebuffer(const ImVec2 point, const UiPushConstants& pushConsts, const VkExtent2D& extent)
     {
@@ -171,57 +146,14 @@ namespace
     }
 
 } // namespace
-
-VkPipeline CreateUiGraphicsPipeline(const Vulkan::Device& device, VkPipelineLayout pipelineLayout,
-                                    VkRenderPass renderPass)
-{
-    const Vulkan::ShaderModule vertShader(device, kUiVertexShaderPath);
-    const Vulkan::ShaderModule fragShader(device, kUiFragmentShaderPath);
-
-    VkVertexInputBindingDescription vertexBinding{};
-    vertexBinding.binding = 0;
-    vertexBinding.stride = sizeof(UiBatchedVertex);
-    vertexBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-    std::array<VkVertexInputAttributeDescription, 6> vertexAttributes{};
-    vertexAttributes[0].location = 0;
-    vertexAttributes[0].binding = 0;
-    vertexAttributes[0].format = VK_FORMAT_R32G32_SFLOAT;
-    vertexAttributes[0].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, position));
-    vertexAttributes[1].location = 1;
-    vertexAttributes[1].binding = 0;
-    vertexAttributes[1].format = VK_FORMAT_R32G32_SFLOAT;
-    vertexAttributes[1].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, uv));
-    vertexAttributes[2].location = 2;
-    vertexAttributes[2].binding = 0;
-    vertexAttributes[2].format = VK_FORMAT_R8G8B8A8_UNORM;
-    vertexAttributes[2].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, color));
-    vertexAttributes[3].location = 3;
-    vertexAttributes[3].binding = 0;
-    vertexAttributes[3].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-    vertexAttributes[3].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, clipRect));
-    vertexAttributes[4].location = 4;
-    vertexAttributes[4].binding = 0;
-    vertexAttributes[4].format = VK_FORMAT_R32_UINT;
-    vertexAttributes[4].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, textureIndex));
-    vertexAttributes[5].location = 5;
-    vertexAttributes[5].binding = 0;
-    vertexAttributes[5].format = VK_FORMAT_R32_UINT;
-    vertexAttributes[5].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, textureFlags));
-
-    return Vulkan::GraphicsPipelineBuilder(device)
-        .SetShaders(vertShader, fragShader)
-        .SetVertexInput(vertexBinding, vertexAttributes.data(), static_cast<uint32_t>(vertexAttributes.size()))
-        .SetDynamicViewportAndScissor()
-        .SetAlphaBlend(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
-        .Build(pipelineLayout, renderPass, "create ui pipeline");
-}
-
 UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPool, const Vulkan::SwapChain& swapChain,
                              const Vulkan::DepthBuffer& depthBuffer, Runtime::Config::UserSettings& userSettings,
                              std::function<void()> funcPreConfig, std::function<void()> funcInit,
                              std::unique_ptr<IMultiViewportBackend> multiViewportBackend) :
-    userSettings_(userSettings), multiViewportBackend_(std::move(multiViewportBackend)), engine_(engine)
+    userSettings_(userSettings), multiViewportBackend_(std::move(multiViewportBackend)),
+    textureResolver_(std::make_unique<FUiTextureResolver>()),
+    contextHost_(std::make_unique<FImGuiContextHost>()),
+    vulkanRenderer_(std::make_unique<FImGuiVulkanRenderer>()), engine_(engine)
 {
     const auto& window = swapChain.Device().Surface().Instance().Window();
 
@@ -230,12 +162,11 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     CreateUiPipeline(swapChain);
 
     // Initialise ImGui
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
+    contextHost_->Create();
 
     auto& io = ImGui::GetIO();
     fontAtlas_ = io.Fonts;
-    imguiIniPath_ = Utilities::FileHelper::GetPlatformFilePath("imgui.ini");
+    imguiIniPath_ = Utilities::FileHelper::GetWritableFilePath("imgui.ini");
     io.IniFilename = imguiIniPath_.c_str();
     io.WantCaptureMouse = false;
     io.WantCaptureKeyboard = false;
@@ -252,17 +183,21 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
 
     // Window scaling and style.
 #if ANDROID
-    const float scaleFactor = 0.75f / static_cast<float>(GAndroidMagicScale);
+    const float scaleFactor = 0.75f / Vulkan::SwapChain::UiContentScale();
+#elif WIN32
+    // Keep ImGui in the scaleFactor=1 logical coordinate space used by all existing UI code.
+    // PreRender maps that coordinate space onto the DPI-sized framebuffer.
+    const float scaleFactor = std::max(1.0f, window.ContentScale());
 #else
     const float scaleFactor = 1.0f;
 #endif
+    uiScale_ = scaleFactor;
     constexpr float fontSize = 16.0f;
 
-    if (Runtime::IDebugUiProvider* styleProvider = engine->GetDebugUiProvider())
-    {
-        styleProvider->ApplyUiStyle();
-    }
+    NextUI::Foundation::ApplyTheme();
+#if !WIN32
     ImGui::GetStyle().ScaleAllSizes(scaleFactor);
+#endif
 
     // Upload ImGui fonts (use ImGuiFreeType for better font rendering, see
     // https://github.com/ocornut/imgui/tree/master/misc/freetype).
@@ -274,8 +209,9 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
 
     defaultFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
             .filePath = "assets/fonts/Roboto-Regular.ttf",
-            .pixelSize = fontSize * scaleFactor,
-            .includeChineseFull = false,
+            .pixelSize = fontSize,
+            .includeChineseFull = true,
+            .rasterizerDensity = scaleFactor,
         });
     if (defaultFont_ == nullptr)
     {
@@ -295,26 +231,29 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
 
     NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/fa-regular-400.ttf",
-        .pixelSize = (fontSize - 2) * scaleFactor,
+        .pixelSize = fontSize - 2,
         .includeChineseFull = false,
         .glyphRanges = iconRange,
         .fontConfig = &config,
+        .rasterizerDensity = scaleFactor,
         .warnOnFailure = false,
     });
     NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/fa-solid-900.ttf",
-        .pixelSize = (fontSize - 2) * scaleFactor,
+        .pixelSize = fontSize - 2,
         .includeChineseFull = false,
         .glyphRanges = iconRange,
         .fontConfig = &config,
+        .rasterizerDensity = scaleFactor,
         .warnOnFailure = false,
     });
     NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/fa-brands-400.ttf",
-        .pixelSize = (fontSize - 2) * scaleFactor,
+        .pixelSize = fontSize - 2,
         .includeChineseFull = false,
         .glyphRanges = iconRange,
         .fontConfig = &config,
+        .rasterizerDensity = scaleFactor,
         .warnOnFailure = false,
     });
 
@@ -322,11 +261,55 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     configLocale.MergeMode = true;
     NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/DroidSansFallback.ttf",
-        .pixelSize = fontSize * scaleFactor,
+        .pixelSize = fontSize,
         .glyphRanges = io.Fonts->GetGlyphRangesChineseSimplifiedCommon(),
         .fontConfig = &configLocale,
+        .rasterizerDensity = scaleFactor,
         .warnOnFailure = false,
     });
+
+    constexpr float titleFontSize = 18.0f;
+    titleBarFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
+        .filePath = "assets/fonts/Roboto-BoldCondensed.ttf",
+        .pixelSize = titleFontSize,
+        .includeChineseFull = false,
+        .extraGlyphsUtf8 = "gkNextRenderer gkNextEditor SCAD Studio SCAD Library",
+    });
+    if (titleBarFont_ != nullptr)
+    {
+        ImFontConfig titleIconConfig;
+        titleIconConfig.MergeMode = true;
+        titleIconConfig.GlyphMinAdvanceX = titleFontSize;
+        titleIconConfig.GlyphOffset = ImVec2(0, 0);
+
+        NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
+            .filePath = "assets/fonts/fa-regular-400.ttf",
+            .pixelSize = titleFontSize - 2.0f,
+            .includeChineseFull = false,
+            .glyphRanges = iconRange,
+            .fontConfig = &titleIconConfig,
+            .rasterizerDensity = scaleFactor,
+            .warnOnFailure = false,
+        });
+        NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
+            .filePath = "assets/fonts/fa-solid-900.ttf",
+            .pixelSize = titleFontSize - 2.0f,
+            .includeChineseFull = false,
+            .glyphRanges = iconRange,
+            .fontConfig = &titleIconConfig,
+            .rasterizerDensity = scaleFactor,
+            .warnOnFailure = false,
+        });
+        NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
+            .filePath = "assets/fonts/fa-brands-400.ttf",
+            .pixelSize = titleFontSize - 2.0f,
+            .includeChineseFull = false,
+            .glyphRanges = iconRange,
+            .fontConfig = &titleIconConfig,
+            .rasterizerDensity = scaleFactor,
+            .warnOnFailure = false,
+        });
+    }
 
     if (funcInit != nullptr)
     {
@@ -343,7 +326,7 @@ UserInterface::~UserInterface()
     uiRenderBuffers_.clear();
 
     ImGui_ImplSDL3_Shutdown();
-    ImGui::DestroyContext();
+    contextHost_->Destroy();
 }
 
 void UserInterface::InitializeRendererBackend()
@@ -498,38 +481,11 @@ ImTextureID UserInterface::RequestImTextureByName(const std::string& name)
     return RequestImTextureId(id);
 }
 
-UserInterface::FUiTextureHandle UserInterface::RequestUiTexture(const std::string& path, bool srgb)
+UserInterface::FUiTextureHandle UserInterface::RequestUiTexture(const std::string& path, bool srgb,
+                                                                EUiTextureLifetime lifetime)
 {
-    FUiTextureHandle handle{};
-    if (path.empty() || !Utilities::FileHelper::IsAssetAvailable(path))
-    {
-        return handle;
-    }
-
-    if (uiTextureLoadRequests_.insert(path).second)
-    {
-        Assets::GlobalTexturePool::LoadTexture(path, srgb);
-    }
-
-    handle.textureId = RequestImTextureByName(path);
-    handle.valid = handle.textureId != 0;
-
-    if (const auto sizeIt = uiTexturePixelSizeCache_.find(path); sizeIt != uiTexturePixelSizeCache_.end())
-    {
-        handle.pixelSize = sizeIt->second;
-        return handle;
-    }
-
-    int width = 0;
-    int height = 0;
-    int comp = 0;
-    const std::string platformPath = Utilities::FileHelper::GetPlatformFilePath(path.c_str());
-    if (stbi_info(platformPath.c_str(), &width, &height, &comp) != 0 && width > 0 && height > 0)
-    {
-        handle.pixelSize = ImVec2(static_cast<float>(width), static_cast<float>(height));
-    }
-    uiTexturePixelSizeCache_[path] = handle.pixelSize;
-    return handle;
+    return textureResolver_->Request(
+        path, srgb, lifetime, [this](const std::string& name) { return RequestImTextureByName(name); });
 }
 
 void UserInterface::CreateUiPipeline(const Vulkan::SwapChain& swapChain)
@@ -563,7 +519,7 @@ void UserInterface::CreateUiPipeline(const Vulkan::SwapChain& swapChain)
 
     Vulkan::Check(vkCreatePipelineLayout(device.Handle(), &pipelineLayoutInfo, nullptr, &uiPipelineLayout_),
                   "create ui pipeline layout");
-    uiPipeline_ = CreateUiGraphicsPipeline(device, uiPipelineLayout_, renderPass_->Handle());
+    uiPipeline_ = vulkanRenderer_->CreateGraphicsPipeline(device, uiPipelineLayout_, renderPass_->Handle());
 }
 
 void UserInterface::DestroyUiPipeline()
@@ -590,44 +546,13 @@ void UserInterface::DestroyUiPipeline()
     }
 }
 
-void UserInterface::ReloadShaders(
-    const std::set<std::string>& changedShaderFiles,
-    std::set<std::string>& handledShaderFiles)
-{
-    const bool reloadVertex = changedShaderFiles.find(ShaderFilename(kUiVertexShaderPath)) != changedShaderFiles.end();
-    const bool reloadFragment = changedShaderFiles.find(ShaderFilename(kUiFragmentShaderPath)) != changedShaderFiles.end();
-    if (!reloadVertex && !reloadFragment)
-    {
-        return;
-    }
-    if (renderPass_ == nullptr || uiPipelineLayout_ == VK_NULL_HANDLE)
-    {
-        return;
-    }
-
-    const auto& device = engine_->GetRenderer().Device();
-    if (multiViewportBackend_)
-    {
-        multiViewportBackend_->OnUiPipelineDestroyed();
-    }
-    if (uiPipeline_ != VK_NULL_HANDLE)
-    {
-        vkDestroyPipeline(device.Handle(), uiPipeline_, nullptr);
-        uiPipeline_ = VK_NULL_HANDLE;
-    }
-    uiPipeline_ = CreateUiGraphicsPipeline(device, uiPipelineLayout_, renderPass_->Handle());
-
-    MarkChangedShaderFile(kUiVertexShaderPath, changedShaderFiles, handledShaderFiles);
-    MarkChangedShaderFile(kUiFragmentShaderPath, changedShaderFiles, handledShaderFiles);
-}
-
 VkPipeline UserInterface::CreateViewportPipeline(VkRenderPass renderPass) const
 {
     if (renderPass == VK_NULL_HANDLE)
     {
         return VK_NULL_HANDLE;
     }
-    return CreateUiGraphicsPipeline(engine_->GetRenderer().Device(), uiPipelineLayout_, renderPass);
+    return vulkanRenderer_->CreateGraphicsPipeline(engine_->GetRenderer().Device(), uiPipelineLayout_, renderPass);
 }
 
 void UserInterface::DestroyViewportPipeline(VkPipeline pipeline) const
@@ -924,28 +849,98 @@ void UserInterface::DrawLine(float fromx, float fromy, float tox, float toy, flo
 void UserInterface::PreRender()
 {
     BeginRendererBackendFrame();
+    ImGui_ImplSDL3_SetFramebufferScaleBias(Vulkan::SwapChain::UiContentScale());
     ImGui_ImplSDL3_NewFrame();
+#if WIN32
+    auto& io = ImGui::GetIO();
+    if (uiScale_ > 1.0f)
+    {
+        io.DisplaySize.x /= uiScale_;
+        io.DisplaySize.y /= uiScale_;
+        io.DisplayFramebufferScale.x *= uiScale_;
+        io.DisplayFramebufferScale.y *= uiScale_;
+
+        // SDL reports Windows display bounds in physical screen coordinates, while
+        // the editor keeps Dear ImGui in logical coordinates. Normalize monitor
+        // work areas as well so popup and tooltip clamping uses the same space.
+        auto& monitors = ImGui::GetPlatformIO().Monitors;
+        for (int monitorIndex = 0; monitorIndex < monitors.Size; ++monitorIndex)
+        {
+            ImGuiPlatformMonitor& monitor = monitors[monitorIndex];
+            monitor.MainPos.x /= uiScale_;
+            monitor.MainPos.y /= uiScale_;
+            monitor.MainSize.x /= uiScale_;
+            monitor.MainSize.y /= uiScale_;
+            monitor.WorkPos.x /= uiScale_;
+            monitor.WorkPos.y /= uiScale_;
+            monitor.WorkSize.x /= uiScale_;
+            monitor.WorkSize.y /= uiScale_;
+        }
+
+        // SDL input events and global mouse state are also in physical pixels on
+        // Windows. Feed ImGui the logical position after the platform backend has
+        // updated its event queue.
+        SDL_Window* mouseWindow = SDL_GetMouseFocus();
+        if (mouseWindow != nullptr && !SDL_GetWindowRelativeMouseMode(mouseWindow))
+        {
+            float globalX = 0.0f;
+            float globalY = 0.0f;
+            int windowX = 0;
+            int windowY = 0;
+            SDL_GetGlobalMouseState(&globalX, &globalY);
+
+            ImVec2 logicalPosition;
+            if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+            {
+                // During an OS title-bar drag the window position and the mouse
+                // focus window are updated asynchronously. Use the global cursor
+                // position directly instead of reconstructing it from a moving
+                // window origin, which otherwise feeds a one-frame feedback loop
+                // into ImGui's viewport move handling.
+                logicalPosition = ImVec2(globalX / uiScale_, globalY / uiScale_);
+            }
+            else
+            {
+                SDL_GetWindowPosition(mouseWindow, &windowX, &windowY);
+                logicalPosition = ImVec2(
+                    (globalX - static_cast<float>(windowX)) / uiScale_,
+                    (globalY - static_cast<float>(windowY)) / uiScale_);
+            }
+            io.AddMousePosEvent(logicalPosition.x, logicalPosition.y);
+        }
+    }
+#endif
 #if ANDROID
     auto& io = ImGui::GetIO();
-    io.DisplayFramebufferScale.x *= GAndroidMagicScale;
-    io.DisplayFramebufferScale.y *= GAndroidMagicScale;
+    io.DisplayFramebufferScale.x *= Vulkan::SwapChain::UiContentScale();
+    io.DisplayFramebufferScale.y *= Vulkan::SwapChain::UiContentScale();
 #endif
-    ImGui::NewFrame();
-}
-
-void UserInterface::Render(const Statistics& statistics, VulkanGpuTimer* gpuTimer, Assets::Scene* scene,
-                           bool suppressStatisticsOverlay)
-{
-    if (Runtime::IDebugUiProvider* provider = GetEngine().GetDebugUiProvider())
-    {
-        provider->DrawUiPanels(GetEngine(), statistics, gpuTimer, suppressStatisticsOverlay);
-    }
+    contextHost_->BeginFrame();
 }
 
 void UserInterface::PrepareDrawData()
 {
-    if (GetEngine().GetEngineStatus() == NextRenderer::EApplicationStatus::Loading)
-        DrawIndicator(GetEngine().GetTotalFrames());
+    constexpr double loadingIndicatorDelaySeconds = 0.5;
+    const bool isLoading = GetEngine().GetEngineStatus() == NextRenderer::EApplicationStatus::Loading;
+    if (isLoading)
+    {
+        if (loadingStartedAt_ < 0.0)
+        {
+            loadingStartedAt_ = ImGui::GetTime();
+        }
+        if (ImGui::GetTime() - loadingStartedAt_ >= loadingIndicatorDelaySeconds)
+        {
+            DrawIndicator(GetEngine().GetTotalFrames(), true);
+        }
+    }
+    else
+    {
+        loadingStartedAt_ = -1.0;
+        if (loadingIndicatorOpen_)
+        {
+            DrawIndicator(GetEngine().GetTotalFrames(), false);
+        }
+    }
 
     // aux
     for (auto& req : auxDrawRequest_)
@@ -1005,30 +1000,69 @@ void UserInterface::HandleEvent(const SDL_Event* event)
         }
     }
 
+#if WIN32
+    if (uiScale_ > 1.0f && event->type == SDL_EVENT_MOUSE_MOTION)
+    {
+        SDL_Window* window = SDL_GetWindowFromID(event->motion.windowID);
+        ImGuiViewport* viewport = ImGui::FindViewportByPlatformHandle(
+            reinterpret_cast<void*>(static_cast<intptr_t>(event->motion.windowID)));
+        if (window != nullptr && viewport != nullptr && !SDL_GetWindowRelativeMouseMode(window))
+        {
+            ImVec2 logicalPosition(event->motion.x / uiScale_, event->motion.y / uiScale_);
+            if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+            {
+                int windowX = 0;
+                int windowY = 0;
+                SDL_GetWindowPosition(window, &windowX, &windowY);
+                logicalPosition.x += static_cast<float>(windowX) / uiScale_;
+                logicalPosition.y += static_cast<float>(windowY) / uiScale_;
+            }
+
+            auto& io = ImGui::GetIO();
+            io.AddMouseSourceEvent(event->motion.which == SDL_TOUCH_MOUSEID
+                                       ? ImGuiMouseSource_TouchScreen
+                                       : ImGuiMouseSource_Mouse);
+            io.AddMousePosEvent(logicalPosition.x, logicalPosition.y);
+            return;
+        }
+    }
+#endif
     ImGui_ImplSDL3_ProcessEvent(event);
 }
 
-bool UserInterface::WantsToCaptureKeyboard() const { return ImGui::GetIO().WantCaptureKeyboard; }
+bool UserInterface::WantsToCaptureKeyboard() const { return contextHost_->WantsToCaptureKeyboard(); }
 
-bool UserInterface::WantsToCaptureMouse() const { return ImGui::GetIO().WantCaptureMouse; }
+bool UserInterface::WantsToCaptureMouse() const { return contextHost_->WantsToCaptureMouse(); }
 
 
 
-void UserInterface::DrawIndicator(uint32_t frameCount)
+void UserInterface::DrawIndicator(uint32_t frameCount, bool show)
 {
     frameCount /= 60;
-    ImGui::OpenPopup("Loading");
+    if (show)
+    {
+        ImGui::OpenPopup("Loading");
+        loadingIndicatorOpen_ = true;
+    }
     if (Utilities::UI::BeginAnchoredPopupModal(
             "Loading",
             NULL,
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize,
             Utilities::UI::FModalPopupOptions{.RequestedSize = ImVec2(200, 40)}))
     {
-        ImGui::Text("Loading%s",
-                    frameCount % 4 == 0       ? ""
-                        : frameCount % 4 == 1 ? "."
-                        : frameCount % 4 == 2 ? ".."
-                                              : "...");
+        if (show)
+        {
+            ImGui::Text("Loading%s",
+                        frameCount % 4 == 0       ? ""
+                            : frameCount % 4 == 1 ? "."
+                            : frameCount % 4 == 2 ? ".."
+                                                  : "...");
+        }
+        else
+        {
+            ImGui::CloseCurrentPopup();
+            loadingIndicatorOpen_ = false;
+        }
         ImGui::EndPopup();
     }
 }

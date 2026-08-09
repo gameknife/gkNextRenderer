@@ -93,6 +93,14 @@ namespace Tasks::Detail
 namespace Tasks
 {
 
+enum class ENamedTaskThread : uint8_t
+{
+    SCENE_UPDATE,
+    CPU_AS_BUILD,
+    PHYSICS,
+    COUNT
+};
+
 struct event_signal final
 {
     event_signal() noexcept : m_signaled{ false } {}
@@ -174,7 +182,7 @@ public:
     }
     
     // Get the front element.
-    // If the queue is empty, wait till a element is avaiable.
+    // If the queue is empty, wait till a element is available.
     bool dequeue(T& result, bool wait)
     {
         std::unique_lock<std::mutex> lock(m);
@@ -182,7 +190,7 @@ public:
         {
             while (q.empty())
             {
-                // release lock as long as the wait and reaquire it afterwards.
+                // release lock as long as the wait and reacquire it afterwards.
                 c.wait(lock);
             }     
         }
@@ -233,11 +241,11 @@ class TaskCoordinator;
 class TaskThread
 {
 public:
-    explicit TaskThread(std::string threadName = {});
+    explicit TaskThread(std::string threadName = {}, bool highPriority = false);
    
     ~TaskThread()
     {
-        complete_->wait();
+        WaitForAllTasks();
         terminate_->set();
         thread_->join();
         //thread_->detach();
@@ -245,21 +253,37 @@ public:
 
     bool IsIdle()
     {
-        return !busy_.load() && taskQueue_.size() == 0 && complete_->is_set();
+        std::lock_guard<std::mutex> lock(completedTaskMutex_);
+        return completedTaskCount_ >= submittedTaskCount_.load(std::memory_order_acquire);
     }
 
     void EnqueueTask(ResTask task)
     {
+        submittedTaskCount_.fetch_add(1, std::memory_order_release);
         complete_->reset();
         taskQueue_.enqueue(std::move(task));
+    }
+
+    void WaitForAllTasks()
+    {
+        const uint64_t targetTaskCount = submittedTaskCount_.load(std::memory_order_acquire);
+        std::unique_lock<std::mutex> lock(completedTaskMutex_);
+        completedTaskCondition_.wait(lock, [this, targetTaskCount] {
+            return completedTaskCount_ >= targetTaskCount;
+        });
     }
 
     std::unique_ptr<event_signal> terminate_;
     std::unique_ptr<event_signal> complete_;
     std::unique_ptr<std::thread> thread_;
     std::string threadName_;
+    bool highPriority_ = false;
     tsqueue<ResTask> taskQueue_;
     Tasks::Detail::atomic_acq_rel<bool> busy_{ false };
+    std::atomic<uint64_t> submittedTaskCount_{ 0 };
+    std::mutex completedTaskMutex_;
+    std::condition_variable completedTaskCondition_;
+    uint64_t completedTaskCount_ = 0;
 };
 
 class TaskCoordinator
@@ -285,6 +309,8 @@ public:
     uint32_t AddTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func, uint8_t priority = 0);
     uint32_t AddMainThreadTask(ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func, uint8_t priority = 0);
     uint32_t AddParralledTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func );
+    uint32_t AddNamedTask(
+        ENamedTaskThread namedThread, ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc = {});
 
     void WaitForTask(uint32_t task_id)
     {
@@ -293,9 +319,12 @@ public:
     }
 
     void WaitForAllParralledTask();
+    // Waits for work submitted to this named thread before the call. Completion callbacks still run from Tick().
+    void WaitForNamedTask(ENamedTaskThread namedThread);
     void WaitForAllTasks();
     
     bool IsAllParralledTaskComplete();
+    bool IsNamedTaskComplete(ENamedTaskThread namedThread) const;
 
     bool IsAllTaskComplete();
 
@@ -314,7 +343,7 @@ public:
 
     uint32_t GetMainTaskCount();
 
-    uint32_t GetComleteTaskQueueCount()
+    uint32_t GetCompleteTaskQueueCount()
     {
         return uint32_t(completeTaskQueue_.size());
     }
@@ -339,8 +368,12 @@ public:
 
 private:
     std::vector< std::unique_ptr<TaskThread> > threads_;
-    // low-level thread, use for parrallel task
+    // low-level thread, use for parallel task
     std::vector< std::unique_ptr<TaskThread> > lowThreads_;
+    // Dedicated worker groups for named workloads that must not contend with the general worker pools.
+    std::array<std::vector<std::unique_ptr<TaskThread>>, static_cast<size_t>(ENamedTaskThread::COUNT)>
+        namedThreadPools_;
+    std::array<std::atomic<uint32_t>, static_cast<size_t>(ENamedTaskThread::COUNT)> namedThreadCursors_{};
     tsqueue<ResTask> mainthreadTaskQueue_;
     tsqueue<ResTask> completeTaskQueue_;
     tsqueue<ResTask> parralledTaskQueue_;

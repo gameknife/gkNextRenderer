@@ -7,6 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/protocol"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/router"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/config"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/llm"
@@ -24,6 +27,7 @@ func newLLMCommand(ctx appContext) *cobra.Command {
 	root.AddCommand(newLLMStatusCommand(ctx))
 	root.AddCommand(newLLMChatCommand(ctx))
 	root.AddCommand(newLLMModelsCommand(ctx))
+	root.AddCommand(newLLMProvidersCommand(ctx))
 	return root
 }
 
@@ -141,49 +145,81 @@ func newLLMStatusCommand(ctx appContext) *cobra.Command {
 func newLLMChatCommand(ctx appContext) *cobra.Command {
 	system := ""
 	modelID := ""
+	providerID := ""
+	profileID := ""
 	cmd := &cobra.Command{
 		Use:   "chat <prompt>",
-		Short: "Send a one-shot prompt to the local LLM",
+		Short: "Send a one-shot prompt through the configured AI provider",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := selectLLMModel(ctx.cfg.External.LLM, modelID)
-			if err != nil {
-				return err
-			}
-			srv := llm.NewServer(ctx.repoRoot, cfg)
 			c, cancel := context.WithTimeout(cmd.Context(), 5*time.Minute)
 			defer cancel()
-			if _, err := srv.EnsureRunning(c); err != nil {
-				return err
-			}
-			client := llm.NewClient(srv.BaseURL())
-			msgs := []llm.ChatMessage{}
-			if system != "" {
-				msgs = append(msgs, llm.ChatMessage{Role: "system", Content: system})
-			}
-			msgs = append(msgs, llm.ChatMessage{Role: "user", Content: strings.Join(args, " ")})
-			reply, err := client.Chat(c, llm.ChatRequest{
-				Messages:    msgs,
-				Temperature: 0.7,
-				MaxTokens:   512,
-			})
+			runtime, err := ai.NewRuntime(ctx.repoRoot, ctx.cfg)
 			if err != nil {
 				return err
 			}
-			fmt.Println(strings.TrimSpace(reply))
+			msgs := []protocol.Message{}
+			if system != "" {
+				msgs = append(msgs, protocol.Message{Role: protocol.RoleSystem, Content: system})
+			}
+			msgs = append(msgs, protocol.Message{Role: protocol.RoleUser, Content: strings.Join(args, " ")})
+			reply, _, err := runtime.Router.Chat(c, router.Overrides{Profile: profileID, Provider: providerID, Model: modelID}, protocol.ChatRequest{Messages: msgs}, nil)
+			if err != nil {
+				return err
+			}
+			fmt.Println(strings.TrimSpace(reply.Content))
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&system, "system", "", "optional system prompt")
 	cmd.Flags().StringVar(&modelID, "model", "", "override the active LLM model (id from [[external.llm.models]])")
+	cmd.Flags().StringVar(&providerID, "provider", "", "override the AI provider id")
+	cmd.Flags().StringVar(&profileID, "profile", "", "AI profile (default: ai.default_profile)")
 	return cmd
 }
 
+func newLLMProvidersCommand(ctx appContext) *cobra.Command {
+	return &cobra.Command{Use: "providers", Short: "List configured AI providers and capabilities", RunE: func(cmd *cobra.Command, args []string) error {
+		runtime, err := ai.NewRuntime(ctx.repoRoot, ctx.cfg)
+		if err != nil {
+			return err
+		}
+		for _, d := range runtime.Registry.Descriptors() {
+			status := "configured"
+			if !d.Configured {
+				status = "not configured: " + d.ConfiguredReason
+			}
+			fmt.Printf("%-16s %-20s %-18s %s\n", d.ID, d.DisplayName, d.Kind, status)
+		}
+		return nil
+	}}
+}
+
 func newLLMModelsCommand(ctx appContext) *cobra.Command {
-	return &cobra.Command{
+	var providerID string
+	cmd := &cobra.Command{
 		Use:   "models",
 		Short: "List configured LLM models and mark the active one",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if providerID != "" && providerID != "localllm" {
+				runtime, err := ai.NewRuntime(ctx.repoRoot, ctx.cfg)
+				if err != nil {
+					return err
+				}
+				p, ok := runtime.Registry.Get(providerID)
+				if !ok {
+					return fmt.Errorf("unknown AI provider %q", providerID)
+				}
+				d := p.Descriptor()
+				for _, model := range d.Models {
+					marker := "  "
+					if model == d.DefaultModel {
+						marker = "* "
+					}
+					fmt.Printf("%s%s\n", marker, model)
+				}
+				return nil
+			}
 			cfg := ctx.cfg.External.LLM
 			if len(cfg.Models) == 0 {
 				console.Warn("no models configured in [[external.llm.models]]")
@@ -205,4 +241,6 @@ func newLLMModelsCommand(ctx appContext) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&providerID, "provider", "localllm", "AI provider id")
+	return cmd
 }

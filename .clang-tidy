@@ -1,9 +1,9 @@
 # 启用命名规范检查与头文件清理；其他检查默认关闭
 Checks: '-*,readability-identifier-naming,llvm-include-cleaner'
 WarningsAsErrors: ''
-# 仅分析仓库内头文件，排除 ThirdParty / external
-# 仅匹配 src/ 下的头文件，避免 assets/slang 等特殊语法文件触发编译错误
-HeaderFilterRegex: '^(?!.*(ThirdParty|external)/).*/src/.*\\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$'
+# 仅分析仓库内第一方头文件。LLVM 正则不支持负向前瞻，因此用白名单目录
+# 正向匹配来排除 ThirdParty / external / assets 等目录。
+HeaderFilterRegex: 'src/(Engine|Modules|Gameplay|Application|Tests)/.*\\.(h|hh|hpp|hxx)$'
 FormatStyle: file
 CheckOptions:
   # 忽略 main 入口或类似函数的命名偏差

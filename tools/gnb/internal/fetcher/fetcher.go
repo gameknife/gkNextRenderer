@@ -35,7 +35,7 @@ func EnsureExternal(repoRoot string, cfg config.Config) error {
 
 func EnsureNamedExternal(repoRoot string, cfg config.Config, names []string) error {
 	if len(names) == 0 {
-		names = []string{"tsc", "vulkan", "streamline"}
+		names = []string{"tsc", "vulkan", "streamline", "fidelityfx"}
 	}
 
 	for _, name := range names {
@@ -53,6 +53,19 @@ func EnsureNamedExternal(repoRoot string, cfg config.Config, names []string) err
 		case "streamline":
 			if runtime.GOOS == "windows" {
 				if err := ensureArchive(repoRoot, cfg.External.Streamline.URL, filepath.Join(repoRoot, "external", "streamline-2.10.0"), "include/sl.h"); err != nil {
+					return err
+				}
+			}
+		case "fidelityfx", "fsr":
+			if runtime.GOOS == "windows" {
+				version := cfg.External.FidelityFX.Version
+				if version == "" {
+					version = "1.1.4"
+				}
+				dstDir := filepath.Join(repoRoot, "external", "fidelityfx-sdk-"+version)
+				rootDir := "FidelityFX-SDK-" + version
+				sentinel := filepath.ToSlash(filepath.Join(rootDir, "ffx-api", "include", "ffx_api", "ffx_api.h"))
+				if err := ensureArchive(repoRoot, cfg.External.FidelityFX.URL, dstDir, sentinel); err != nil {
 					return err
 				}
 			}

@@ -31,11 +31,24 @@ function CreateNode(name: string,
     });
 }
 
+interface EnvironmentComponent {
+    HasSky: boolean;
+    SkyIdx: number;
+    SkyIntensity: number;
+    HasSun: boolean;
+    SunIntensity: number;
+    SunRotation: number;
+    SunElevation: number;
+}
+
 class FlappyJsGameInstance extends NextGameInstanceBase {
     private config: FGameplayConfig = LoadGameplayConfig();
     private rng = new FXorShift32(0x00C0FFEE);
     private bird = new FFlappyJsBird();
     private pipes = new FFlappyJsPipes();
+    private mountainNodeIds: number[] = [];
+    private vegetationNodeIds: number[] = [];
+    private cloudNodeIds: number[] = [];
     private state: EGameState = "Ready";
     private score = 0;
     private fixedAccumulator = 0.0;
@@ -179,13 +192,18 @@ class FlappyJsGameInstance extends NextGameInstanceBase {
             min: Vec3(-0.5, -0.5, -0.02),
             max: Vec3(0.5, 0.5, 0.02),
         });
-
         const birdMaterialId = NE.SceneBuild.AddLambertianMaterial(Vec3(1.0, 0.82, 0.12));
         const pipeMaterialId = NE.SceneBuild.AddLambertianMaterial(Vec3(0.52, 0.58, 0.62));
         const boundaryMaterialId = NE.SceneBuild.AddLambertianMaterial(Vec3(0.30, 0.78, 0.32));
         const backgroundMaterialId = NE.SceneBuild.AddLambertianMaterial(Vec3(0.30, 0.62, 0.94));
+        const mountainMaterialId = NE.SceneBuild.AddLambertianMaterial(Vec3(0.38, 0.42, 0.46));
+        const vegetationMaterialId = NE.SceneBuild.AddLambertianMaterial(Vec3(0.24, 0.68, 0.22));
+        const cloudMaterialId = NE.SceneBuild.AddLambertianMaterial(Vec3(0.92, 0.94, 0.96));
 
         const worldWidth = this.config.world.maxX - this.config.world.minX;
+        const gameplayDepth = this.config.camera.position.z - this.config.world.gameplayZ;
+        const backdropDepth = this.config.camera.position.z - this.config.world.backdropZ;
+        const backdropScale = gameplayDepth > 0.0 ? Math.max(1.0, backdropDepth / gameplayDepth) : 1.0;
         const birdNodeId = CreateNode("FlappyJs_Bird",
                                       birdModelId,
                                       birdMaterialId,
@@ -207,8 +225,51 @@ class FlappyJsGameInstance extends NextGameInstanceBase {
         CreateNode("FlappyJs_Background",
                    backgroundModelId,
                    backgroundMaterialId,
-                   Vec3(0.0, 0.0, -2.0),
-                   Vec3(worldWidth + 8.0, this.config.world.maxY - this.config.world.minY + 2.0, 1.0));
+                   Vec3(0.0, 0.0, this.config.world.backdropZ),
+                   Vec3((worldWidth + 8.0) * backdropScale,
+                        (this.config.world.maxY - this.config.world.minY + 2.0) * backdropScale,
+                        1.0));
+
+        this.mountainNodeIds = [];
+        const mountainCount = Math.max(1, this.config.parallax.mountainCount);
+        for (let index = 0; index < mountainCount; index += 1) {
+            const x = (index - (mountainCount - 1) * 0.5) * this.config.parallax.mountainSpacing;
+            const width = 7.0 + (index % 3) * 1.0;
+            const height = 10.0 + ((index + 1) % 3) * 1.1;
+            const nodeId = CreateNode(`FlappyJs_Mountain_${index}`,
+                                      backgroundModelId,
+                                      mountainMaterialId,
+                                      Vec3(x, -10.5, this.config.parallax.mountainZ),
+                                      Vec3(width, height, 1.0));
+            this.mountainNodeIds.push(nodeId);
+        }
+
+        this.vegetationNodeIds = [];
+        const vegetationCount = Math.max(1, this.config.parallax.vegetationCount);
+        for (let index = 0; index < vegetationCount; index += 1) {
+            const x = (index - (vegetationCount - 1) * 0.5) * this.config.parallax.vegetationSpacing;
+            const width = 2.7 + (index % 3) * 0.35;
+            const height = 5.6 + ((index + 2) % 4) * 0.35;
+            this.vegetationNodeIds.push(CreateNode(`FlappyJs_Vegetation_${index}`,
+                                                   backgroundModelId,
+                                                   vegetationMaterialId,
+                                                   Vec3(x, -8.0, this.config.parallax.vegetationZ),
+                                                   Vec3(width, height, 1.0)));
+        }
+
+        this.cloudNodeIds = [];
+        const cloudCount = Math.max(1, this.config.parallax.cloudCount);
+        for (let index = 0; index < cloudCount; index += 1) {
+            const x = (index - (cloudCount - 1) * 0.5) * this.config.parallax.cloudSpacing;
+            const y = 5.5 + (index % 3) * 2.4;
+            const width = 7.0 + ((index + 1) % 3) * 1.2;
+            const height = 1.3 + (index % 2) * 0.35;
+            this.cloudNodeIds.push(CreateNode(`FlappyJs_Cloud_${index}`,
+                                              backgroundModelId,
+                                              cloudMaterialId,
+                                              Vec3(x, y, this.config.parallax.cloudZ),
+                                              Vec3(width, height, 1.0)));
+        }
 
         for (let index = 0; index < Math.max(1, this.config.pipe.poolSize); index += 1) {
             const topNodeId = CreateNode(`FlappyJs_PipeTop_${index}`,
@@ -228,6 +289,20 @@ class FlappyJsGameInstance extends NextGameInstanceBase {
     }
 
     OnSceneLoaded(): void {
+        const scene = NE.Global.GetScene();
+        const environmentNodeId = scene.FindNodeIdWithComponent("EnvironmentComponent");
+        if (environmentNodeId >= 0) {
+            const environmentNode = scene.GetNodeById(environmentNodeId);
+            const environment = environmentNode.GetComponent("EnvironmentComponent") as EnvironmentComponent;
+            environment.HasSky = true;
+            environment.SkyIdx = this.config.environment.skyIndex;
+            environment.SkyIntensity = this.config.environment.skyIntensity;
+            environment.HasSun = true;
+            environment.SunIntensity = this.config.environment.sunIntensity;
+            environment.SunRotation = this.config.environment.sunRotation;
+            environment.SunElevation = this.config.environment.sunElevation;
+        }
+
         this.sceneReady = true;
         this.ResetRuntime();
     }
@@ -292,6 +367,7 @@ class FlappyJsGameInstance extends NextGameInstanceBase {
 
         this.bird.Update(this.config.fixedDeltaSeconds, this.config.bird);
         this.pipes.Update(this.config.fixedDeltaSeconds, this.config.pipe, this.config.world, this.rng);
+        this.UpdateParallax(this.config.fixedDeltaSeconds);
 
         const scored = this.pipes.ConsumeScoreEvents(this.config.bird.initialPosition.x);
         if (scored > 0) {
@@ -306,6 +382,29 @@ class FlappyJsGameInstance extends NextGameInstanceBase {
             this.pipes.CheckCollision(birdPosition, this.config.bird.radius, this.config.pipe)) {
             this.Die();
         }
+    }
+
+    private UpdateParallax(deltaSeconds: number): void {
+        const updateLayer = (nodeIds: number[], speed: number, spacing: number): void => {
+            const wrapWidth = nodeIds.length * spacing;
+            const wrapMinX = -0.5 * wrapWidth;
+            for (const nodeId of nodeIds) {
+                const node = NE.Global.GetScene().GetNodeById(nodeId);
+                let x = node.Translation.x - speed * deltaSeconds;
+                if (x < wrapMinX) {
+                    x += wrapWidth;
+                }
+                node.Translation = { x, y: node.Translation.y, z: node.Translation.z };
+            }
+        };
+
+        updateLayer(this.mountainNodeIds,
+                    this.config.parallax.mountainSpeed,
+                    this.config.parallax.mountainSpacing);
+        updateLayer(this.vegetationNodeIds,
+                    this.config.parallax.vegetationSpeed,
+                    this.config.parallax.vegetationSpacing);
+        updateLayer(this.cloudNodeIds, this.config.parallax.cloudSpeed, this.config.parallax.cloudSpacing);
     }
 
     private Die(): void {

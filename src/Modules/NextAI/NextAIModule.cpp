@@ -2,6 +2,7 @@
 #include "Modules/NextAI/NextAIModule.hpp"
 #include "Modules/NextAI/AIService.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 
 namespace NextAI
 {
@@ -21,4 +22,5 @@ namespace NextAI
         engine.SetExternalService(kServiceKey, std::move(service));
         return raw;
     }
+
 }

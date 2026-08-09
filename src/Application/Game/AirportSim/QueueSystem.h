@@ -12,7 +12,7 @@ namespace AirportSim
 {
     class AgentSystem;
 
-    // 服务点队列：slot 链生成/占用/推进 + 队首服务计时（§7.3）。
+    // 服务点队列：slot 链生成/占用/推进 + 队首服务计时。
     // 队列从服务点沿 queueDir（POI front 方向）向外延伸。
     class QueueSystem
     {

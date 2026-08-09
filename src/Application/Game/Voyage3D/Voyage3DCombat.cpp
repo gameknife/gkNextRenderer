@@ -1,7 +1,7 @@
 #include "Voyage3DCombat.hpp"
 
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Scene/NodeUtils.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
 #include "Voyage3DGameInstance.hpp"
 #include "Voyage3DSailing.hpp"
 

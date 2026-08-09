@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/UiOverlay.hpp"
+#include "Engine/Runtime/Interface/UiOverlay.hpp"
 
 #include <functional>
 #include <string>

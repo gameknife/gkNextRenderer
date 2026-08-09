@@ -1,6 +1,6 @@
 #include "Modules/ScadLoader/FScadParser.h"
 
-namespace Assets::scad
+namespace Assets::Scad
 {
     namespace
     {
@@ -657,4 +657,4 @@ namespace Assets::scad
         Parser parser(tokens);
         return parser.ParseProgram(outScope, outError);
     }
-} // namespace Assets::scad
+} // namespace Assets::Scad

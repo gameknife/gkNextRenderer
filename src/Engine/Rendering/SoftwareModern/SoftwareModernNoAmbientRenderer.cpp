@@ -1,11 +1,8 @@
 #include "Engine/Rendering/SoftwareModern/SoftwareModernNoAmbientRenderer.hpp"
-
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
-#include "Engine/Runtime/Engine.hpp"
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
-#include "Engine/Vulkan/SwapChain.hpp"
 
 namespace Vulkan::SoftwareModernNoAmbient
 {
@@ -37,73 +34,60 @@ namespace Vulkan::SoftwareModernNoAmbient
         composePipeline_.reset();
     }
 
-    void SoftwareModernNoAmbientRenderer::ReloadShaders(
-        const std::set<std::string>& changedShaderFiles,
-        std::set<std::string>& handledShaderFiles)
-    {
-        if (shadingPipeline_)
-        {
-            shadingPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-        if (gtaoPipeline_)
-        {
-            gtaoPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-        if (composePipeline_)
-        {
-            composePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-    }
-
     void SoftwareModernNoAmbientRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
-        baseRender_.InitializeBarriers(commandBuffer);
         const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
 
         {
             SCOPED_GPU_TIMER("shadingpass");
-            shadingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+            baseRender_.TransitionActiveViewImages(commandBuffer, {
+                {Assets::Bindless::RT_SINGLE_DIFFUSE, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+                {Assets::Bindless::RT_AMBIENT, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+                {Assets::Bindless::RT_OBJECTID_0, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+                {Assets::Bindless::RT_PREV_DEPTHBUFFER, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+                {Assets::Bindless::RT_MOTIONVECTOR, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+                {Assets::Bindless::RT_NORMAL, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+            }, "software modern no ambient shading");
+            shadingPipeline_->BindPipeline(commandBuffer,
+                GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase()));
             vkCmdDispatch(commandBuffer,
                           Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
                           Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
-
-            const auto transition = [this, commandBuffer](uint32_t bindlessId)
-            {
-                baseRender_.GetViewStorageImage(bindlessId)->InsertBarrier(commandBuffer,
-                    VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                    VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-            };
-            transition(Assets::Bindless::RT_SINGLE_DIFFUSE);
-            transition(Assets::Bindless::RT_OBJEDCTID_0);
-            transition(Assets::Bindless::RT_PREV_DEPTHBUFFER);
-            transition(Assets::Bindless::RT_MOTIONVECTOR);
-            transition(Assets::Bindless::RT_NORMAL);
-            transition(Assets::Bindless::RT_AMBIENT);
         }
 
         {
-            
-            const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+            const auto& settings = baseRender_.FrameSettings().userSettings;
             if (settings.GTAOEnable)
             {
                 SCOPED_GPU_TIMER("gtao pass");
-                baseRender_.GetViewStorageImage(Assets::Bindless::RT_GTAO)->InsertBarrier(
-                    commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                    VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-                gtaoPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+                baseRender_.TransitionActiveViewImages(commandBuffer, {
+                    {Assets::Bindless::RT_PREV_DEPTHBUFFER, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
+                    {Assets::Bindless::RT_NORMAL, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
+                    {Assets::Bindless::RT_GTAO, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+                }, "gtao");
+                gtaoPipeline_->BindPipeline(commandBuffer,
+                    GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase()));
                 const VkExtent2D extent = baseRender_.ActiveViewRenderExtent();
                 vkCmdDispatch(commandBuffer,
                               Utilities::Math::GetSafeDispatchCount((extent.width + 1u) / 2u, 8),
                               Utilities::Math::GetSafeDispatchCount((extent.height + 1u) / 2u, 8), 1);
-
-                baseRender_.GetViewStorageImage(Assets::Bindless::RT_GTAO)->InsertBarrier(
-                    commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                    VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
             }
 
             {
                 SCOPED_GPU_TIMER("simplecompose pass");
-                composePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+                baseRender_.TransitionActiveViewImages(commandBuffer, {
+                    {Assets::Bindless::RT_SINGLE_DIFFUSE, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
+                    {Assets::Bindless::RT_AMBIENT, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
+                    {Assets::Bindless::RT_OBJECTID_0, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
+                    {Assets::Bindless::RT_PREV_DEPTHBUFFER, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
+                    {Assets::Bindless::RT_NORMAL, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
+                    {Assets::Bindless::RT_GTAO, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
+                    {Assets::Bindless::RT_SCENE_COLOR, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+                }, "gtao compose");
+                composePipeline_->BindPipeline(commandBuffer,
+                    GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase()),
+                    baseRender_.ActiveViewBankBase(),
+                    0u, 0u);
                 vkCmdDispatch(commandBuffer,
                               Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
                               Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);

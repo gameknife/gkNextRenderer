@@ -1,0 +1,51 @@
+{
+  "name": "restir-m3-confroom",
+  "target": "gkNextRenderer",
+  "scene": "assets/models/conf_room.glb",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running",
+      "timeoutMs": 30000
+    },
+    {
+      "type": "wait-frames",
+      "n": 30
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/restir_m3_confroom_off"
+    },
+    {
+      "type": "cvar",
+      "name": "r.restir.enable",
+      "set": true
+    },
+    {
+      "type": "wait-frames",
+      "n": 60
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/restir_m3_confroom_on"
+    },
+    {
+      "type": "cvar",
+      "name": "r.restir.enable",
+      "set": false
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

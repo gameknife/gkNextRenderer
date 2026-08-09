@@ -8,10 +8,11 @@ import (
 )
 
 // Layout describes the on-disk locations used by the LLM subsystem.
-//   external/llm/
-//     llama.cpp-<version>/   -- extracted llama.cpp release (binaries + libs)
-//     models/<file>.gguf     -- downloaded GGUF model
-//     run/server.pid         -- PID file written when llama-server is running
+//
+//	external/llm/
+//	  llama.cpp-<version>/   -- extracted llama.cpp release (binaries + libs)
+//	  models/<file>.gguf     -- downloaded GGUF model
+//	  run/server.pid         -- PID file written when llama-server is running
 type Layout struct {
 	Root      string // external/llm
 	BinDir    string // external/llm/llama.cpp-<ver>

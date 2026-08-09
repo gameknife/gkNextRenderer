@@ -2,7 +2,7 @@
     "version": 3,
     "cmakeMinimumRequired": {
         "major": 3,
-        "minor": 20,
+        "minor": 26,
         "patch": 0
     },
     "configurePresets": [
@@ -25,8 +25,8 @@
         {
             "name": "windows",
             "inherits": "base",
-            "displayName": "Windows",
-            "architecture": "x64",
+            "displayName": "Windows (Ninja)",
+            "generator": "Ninja",
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
@@ -36,6 +36,29 @@
                 "VCPKG_TARGET_TRIPLET": "x64-windows-static",
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo",
                 "ENABLE_STREAMLINE": "ON"
+            }
+        },
+        {
+            "name": "windows-vcproj",
+            "inherits": "base",
+            "displayName": "Windows (VCProj)",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "ENABLE_STREAMLINE": "ON"
+            }
+        },
+        {
+            "name": "windows-no-unity",
+            "inherits": "windows",
+            "displayName": "Windows (No Unity)",
+            "cacheVariables": {
+                "ENABLE_UNITY_BUILD": "OFF"
             }
         },
         {
@@ -91,6 +114,11 @@
         {
             "name": "windows",
             "configurePreset": "windows",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "windows-no-unity",
+            "configurePreset": "windows-no-unity",
             "configuration": "RelWithDebInfo"
         },
         {

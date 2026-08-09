@@ -1,34 +1,32 @@
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Rendering/RendererChoices.hpp"
 #include "Engine/Assets/Core/Model.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
-#include "Engine/Runtime/AgentDriver/AgentDriver.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/RemoteProtocol.hpp"
-#include "Engine/Runtime/RenderFrameConsumer.hpp"
+#include "Engine/Runtime/Interface/RenderFrameConsumer.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Config/EngineCVars.hpp"
-#include "Engine/Runtime/Subsystems/NextLocalization.h"
-#include "Engine/Runtime/Command/DeleteNodesCommand.hpp"
-#include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
+#include "Engine/Runtime/Subsystems/NextLocalization.hpp"
 #include "Engine/Runtime/ScreenShot.hpp"
+#include "Engine/Runtime/ScreenShotService.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/UiOverlay.hpp"
+#include "Engine/Runtime/Editor/UiFrameDispatcher.hpp"
+#include "Engine/Runtime/Interface/UiOverlay.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/DebugUiProvider.hpp"
-#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
+#include "Engine/Runtime/Input/SyntheticInput.hpp"
+#include "Engine/Runtime/Interface/DebugUiProvider.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/Instance.hpp"
-#include "Engine/Vulkan/SyncAndTiming.hpp"
+#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
-#include "Engine/Vulkan/ShaderHotReloader.hpp"
 
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <fmt/chrono.h>
@@ -36,84 +34,32 @@
 #include <initializer_list>
 #include <optional>
 #include <system_error>
-#include <vector>
+#include <nlohmann/json.hpp>
 
-#include "Engine/Runtime/Subsystems/NextAudio.h"
+#include "Engine/Runtime/Subsystems/NextAudio.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Utilities/Localization.hpp"
+#include "Engine/Utilities/LogFile.hpp"
 
 #define _USE_MATH_DEFINES
 
-namespace
-{
-    class FStartupProfile
-    {
-    public:
-        explicit FStartupProfile(bool enabled)
-            : enabled_(enabled)
-        {
-        }
-
-        void Mark(std::string label)
-        {
-            if (!enabled_)
-            {
-                return;
-            }
-
-            const auto now = std::chrono::steady_clock::now();
-            marks_.push_back({std::move(label), now});
-        }
-
-        void Log(const char* name) const
-        {
-            if (!enabled_ || marks_.size() < 2)
-            {
-                return;
-            }
-
-            SPDLOG_INFO("[StartupProfile] {}:", name);
-            const auto start = marks_.front().time;
-            for (size_t i = 1; i < marks_.size(); ++i)
-            {
-                const double deltaMs = std::chrono::duration<double, std::milli>(
-                                           marks_[i].time - marks_[i - 1].time)
-                                           .count();
-                const double totalMs = std::chrono::duration<double, std::milli>(
-                                           marks_[i].time - start)
-                                           .count();
-                SPDLOG_INFO("[StartupProfile]   {:>7.2f}ms (+{:>7.2f}ms) {}",
-                            totalMs, deltaMs, marks_[i].label);
-            }
-        }
-
-    private:
-        struct FMark
-        {
-            std::string label;
-            std::chrono::steady_clock::time_point time;
-        };
-
-        bool enabled_{};
-        std::vector<FMark> marks_{};
-    };
-}
 #include <math.h>
 
 #include <entt/meta/factory.hpp>
 
 #define BUILDVER(X) std::string buildver(#X);
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "build.version"
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/Reflection/ReflectionRegistry.h"
+#include "Engine/Runtime/Reflection/ReflectionRegistry.hpp"
 
 // spdlog logging
 #include <spdlog/stopwatch.h>
+
 
 #if ANDROID
 #include <spdlog/sinks/android_sink.h>
@@ -134,6 +80,7 @@ namespace
 {
     // Older Android NDK Vulkan headers do not name this newer registry value yet.
     constexpr VkDriverId kMesaKosmicKrispDriverId = static_cast<VkDriverId>(28);
+    constexpr double minimizedTickIntervalSeconds = 1.0 / 60.0;
 
     VkDriverId GetDriverId(VkPhysicalDevice physicalDevice)
     {
@@ -150,22 +97,6 @@ namespace
     bool IsKosmicKrispDriver(VkPhysicalDevice physicalDevice)
     {
         return GetDriverId(physicalDevice) == kMesaKosmicKrispDriverId;
-    }
-
-    Vulkan::ERendererType ResolveRendererType(
-        Vulkan::ERendererType requestedType,
-        bool supportsRayTracing,
-        bool hasFullAmbientCubeBudget)
-    {
-        if (!supportsRayTracing && Vulkan::GetRendererRequirements(requestedType).requestRayTracing)
-        {
-            requestedType = Vulkan::ERT_SoftwareTracing;
-        }
-        if (!hasFullAmbientCubeBudget && Vulkan::GetRendererRequirements(requestedType).requestAmbientCube)
-        {
-            return Vulkan::ERT_SoftwareModernNoAmbient;
-        }
-        return requestedType;
     }
 
     bool HasFullAmbientCubeBudget(VkPhysicalDevice physicalDevice)
@@ -224,7 +155,10 @@ namespace
         }
 
         const auto now = std::time(nullptr);
-        return fmt::format("{}_{:%Y-%m-%d-%H-%M-%S}", defaultPrefix, *std::localtime(&now));
+        const std::string filename = fmt::format("{}_{:%Y-%m-%d-%H-%M-%S}", defaultPrefix, *std::localtime(&now));
+        const std::string directory = Utilities::FileHelper::GetWritableFilePath("screenshots");
+        Utilities::FileHelper::EnsureDirectoryExists(directory);
+        return (std::filesystem::path(directory) / filename).string();
     }
 } // namespace
 
@@ -242,15 +176,9 @@ namespace NextRenderer
         {
             validationLayers.push_back("VK_LAYER_KHRONOS_validation");
         }
-#if WITH_STREAMLINE
-        if ((GOption == nullptr || !GOption->DisableStreamline) &&
-            !StreamlineWrapper::IsInitialized() &&
-            StreamlineWrapper::ShouldInitialize())
-        {
-            StreamlineWrapper::Initialize();
-        }
-#endif
-        Vulkan::Instance* instance = new Vulkan::Instance(*window, validationLayers, VK_API_VERSION_1_2);
+
+        Vulkan::Instance* instance = new Vulkan::Instance(
+            *window, validationLayers, VK_API_VERSION_1_2, GOption->SyncValidation);
 
         const auto& physicalDevices = instance->PhysicalDevices();
         const uint32_t selectedGpuIdx = GOption->GpuIdx < physicalDevices.size() ? GOption->GpuIdx : 0;
@@ -287,8 +215,8 @@ namespace NextRenderer
         }
 
         auto requestedType =
-            ResolveRendererType(static_cast<Vulkan::ERendererType>(rendererType), useRayTracingRenderer,
-                                hasFullAmbientCubeBudget);
+            Rendering::ResolveRendererChoice(static_cast<Vulkan::ERendererType>(rendererType),
+                                             {useRayTracingRenderer, hasFullAmbientCubeBudget});
         if (std::find(supportedTypes.begin(), supportedTypes.end(), requestedType) == supportedTypes.end())
         {
             requestedType = *supportedTypes.begin();
@@ -306,84 +234,10 @@ namespace
 
 Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options& options)
 {
-    (void)options;
     Runtime::Scene::SceneList::ScanScenes();
 
     Runtime::Config::UserSettings userSettings{};
-
-    userSettings.RendererType = 0;
-    userSettings.SceneIndex = 0;
-    userSettings.CameraIdx = 0;
-
-    userSettings.NumberOfSamples = 4;
-    userSettings.NumberOfBounces = 8;
-    userSettings.MaxNumberOfBounces = 10;
-
-    userSettings.TAA = true;
-
-    userSettings.ShowSettings = true;
-    userSettings.ShowOverlay = true;
     userSettings.BorderlessFullscreen = options.Fullscreen;
-
-    userSettings.HeatmapScale = 1.0f;
-
-    userSettings.TemporalFrames = 16;
-
-    userSettings.Denoiser = false;
-    userSettings.DenoiseAtrousIterations = 5;
-    userSettings.DenoiseAtrousSpecularIterations = 3;
-    userSettings.DenoiseAtrousSigmaLuma = 4.0f;
-    userSettings.DenoiseAtrousNormalPower = 64.0f;
-    userSettings.DenoiseSigmaDepth = 2.0f;
-    userSettings.DenoiseSpecFootprint = 32.0f;
-    userSettings.GTAOEnable = true;
-    userSettings.GTAOQuality = 1;
-    userSettings.GTAORadius = 1.0f;
-    userSettings.GTAOStrength = 5.0f;
-    userSettings.GTAOThickness = 0.5f;
-    userSettings.GTAODebugMode = 0;
-
-    userSettings.PaperWhiteNit = 600.f;
-    
-    userSettings.SuperResolution = 0;
-    userSettings.DLSS = false;
-    userSettings.FSR = false;
-    userSettings.DLSSRR = false;
-    userSettings.DLSSG = false;
-    userSettings.DLSSJitterFrames = 16;
-    userSettings.DLSSJitterInvertY = false;
-    userSettings.DLSSGFrameMultiplier = 2;
-
-    userSettings.BakeSpeedLevel = 1;
-
-    userSettings.TickPhysics = true;
-    userSettings.TickAnimation = true;
-    userSettings.SceneEpsilonScale = 1.0f;
-    userSettings.AmbientCubeUnit = Assets::CUBE_UNIT;
-    userSettings.AmbientCubeOffsetX = 0.0f;
-    userSettings.AmbientCubeOffsetY = 0.0f;
-    userSettings.AmbientCubeOffsetZ = 0.0f;
-    userSettings.AmbientCubeCascadeCount = 3;
-    userSettings.AmbientCubeCascadeRatio = 2.0f;
-    userSettings.AmbientCubePoolBrickRatio = 0.5f;
-    userSettings.AmbientCubeHitDrivenResidency = false;
-    userSettings.AmbientCubeBounceHitAffectsResidency = false;
-    userSettings.AmbientCubeEvictFrames = 180;
-    userSettings.AmbientCubeGraceFrames = 30;
-    userSettings.AmbientCubeHitMarkTileRatio = 0.25f;
-    userSettings.AmbientCubeResidencyDebug = 0;
-    userSettings.SharcEnable = false;
-    userSettings.SharcEntriesPow2 = 21;
-    userSettings.SharcUpdateSampleRatio = 0.25f;
-    userSettings.SharcDebugMode = 0;
-    userSettings.SharcQueryMinBounce = 1;
-    userSettings.SharcQueryRoughnessMin = 0.35f;
-    userSettings.SharcSceneScale = 100.0f;
-    userSettings.SharcLevelBias = 0.0f;
-    userSettings.SharcRadianceScale = 1000.0f;
-    userSettings.SharcAccumulatedFrameMax = 64;
-    userSettings.SharcResponsiveFrameMax = 8;
-    userSettings.SharcStaleFrameMax = 180;
 
     return userSettings;
 }
@@ -401,6 +255,16 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     spdlog::flush_on(spdlog::level::debug);
     spdlog::flush_every(std::chrono::seconds(1));
 
+    // Idempotent: DesktopMain installs this before the engine exists so early failures
+    // are captured too. This covers entry points that do not go through DesktopMain.
+    Utilities::Logging::InstallFileSink();
+
+#if defined(__APPLE__) && !IOS
+    options.PresentMode = static_cast<uint32_t>(VK_PRESENT_MODE_IMMEDIATE_KHR);
+    options.ForceSDR = true;
+    SPDLOG_INFO("macOS display policy: forcing Immediate present mode and SDR output");
+#endif
+
 #if ANDROID
     std::string tag = "gknext";
     auto android_logger = spdlog::android_logger_mt("android", tag);
@@ -410,27 +274,16 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
 
     SPDLOG_INFO("---- Next Engine Initializing...");
     spdlog::stopwatch stopwatch;
-    FStartupProfile startupProfile(options.AgentValidation || !options.AgentScript.empty());
-    startupProfile.Mark("begin");
 
     instance_ = this;
     
     // Initialize reflection system first
     Reflection::RegisterAllReflection();
-    startupProfile.Mark("reflection registered");
 
     status_ = NextRenderer::EApplicationStatus::Starting;
-
-    agentValidation_.active = options.AgentValidation && options.AgentScript.empty();
-    agentValidation_.includeUi = options.AgentValidationUI;
-    agentValidation_.waitFrames = options.AgentValidationFrames;
-    agentValidation_.outputPath = options.AgentValidationOutput;
+    screenShotService_ = std::make_unique<Runtime::FScreenShotService>(*this);
 
     services_.packageFileSystem.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
-    startupProfile.Mark("package fs created");
-
-    // Optional pak: assets moved out of the repo to reduce its size. Mounted automatically when present
-    // so LoadFile can fall back to it for files missing on disk (see FileHelper::LoadFile).
     {
         const std::string optionalPakPath = Utilities::FileHelper::GetPlatformFilePath("assets/paks/optional.pak");
         std::error_code ec;
@@ -439,44 +292,33 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
             services_.packageFileSystem->MountPak(optionalPakPath);
         }
     }
-    startupProfile.Mark("optional pak mounted");
 
-
-#if WITH_STREAMLINE
-    if (options.DisableStreamline)
-    {
-        SPDLOG_INFO("Streamline DLSS plugins disabled for this application");
-    }
-    else if (StreamlineWrapper::ShouldInitialize())
-    {
-        StreamlineWrapper::Initialize();
-    }
-    else
-    {
-        SPDLOG_INFO("Streamline DLSS plugins disabled because no NVIDIA adapter is present");
-    }
-#endif
-    Vulkan::Window::InitGLFW();
-    startupProfile.Mark("window backend initialized");
-    // Create Window
-    Vulkan::WindowConfig windowConfig{"gkNextRenderer " + NextRenderer::GetBuildVersion(),
-                                      options.Width,
-                                      options.Height,
-                                      options.Fullscreen,
-                                      options.Fullscreen,
-                                      !options.Fullscreen,
-                                      options.SaveFile,
-                                      userdata,
-                                      options.ForceSDR};
+    // TUI dimensions are terminal/logical pixels. Keep the hidden render window at
+    // a fixed scale so high-DPI monitors do not enlarge the terminal UI.
+    const bool useSystemDpiScaling = options.SystemDpiScaling || options.Tui;
+    Vulkan::Window::InitSDL(useSystemDpiScaling, options.VulkanDriver);
+    
+    Vulkan::WindowConfig windowConfig{"gkNextEngine " + NextRenderer::GetBuildVersion(),
+                                      options.Width,options.Height,
+                                      false, options.Fullscreen,!options.Fullscreen,
+                                      options.SaveFile,userdata,options.ForceSDR};
+    windowConfig.SystemDpiScaling = useSystemDpiScaling;
+    
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
-    startupProfile.Mark("game instance created");
+    
+    // reconfigure
+    windowConfig.Width = options.Width;
+    windowConfig.Height = options.Height;
+    
     config_.userSettings = CreateUserSettings(options);
+    
+    // cvars
     services_.cvarSystem = std::make_unique<NextCVar::FCVarSystem>();
     NextCVar::RegisterEngineCVars(*services_.cvarSystem, config_.userSettings, config_.showFlags, this);
     services_.cvarSystem->LoadDefaultFile("assets/configs/cvar_default.json");
     gameInstance_->ConfigureCVars(*services_.cvarSystem);
     services_.cvarSystem->LoadUserFiles();
-    startupProfile.Mark("cvars loaded");
+    
     for (const std::string& overrideCommand : options_->CVarOverrides)
     {
         const auto result = services_.cvarSystem->ExecuteCommand(overrideCommand);
@@ -485,18 +327,19 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
             SPDLOG_WARN("Startup CVar override failed '{}': {}", overrideCommand, result.message);
         }
     }
+    
+    // window config tweaks
     windowConfig.Fullscreen = config_.userSettings.BorderlessFullscreen;
-    // Hide the window for agent validation captures and for any caller that asked for it (e.g. the
-    // unit-test engine fixture). The capture+auto-exit state machine stays gated on AgentValidation.
     windowConfig.HiddenWindow =
         (options.AgentValidation && !options.AgentVisibleWindow) || options.HiddenWindow || options.Tui;
+    
+    // create windows
     window_.reset(new Vulkan::Window(windowConfig));
-    startupProfile.Mark("window created");
     SetBorderlessFullscreen(config_.userSettings.BorderlessFullscreen);
+    
+    // localization
     services_.localization = std::make_unique<NextLocalization>();
     services_.localization->LoadFromTxt(fmt::format("assets/locale/{}.txt", options_->locale), options_->locale);
-    startupProfile.Mark("localization loaded");
-    startupProfile.Log("Engine::Init");
 
     SPDLOG_INFO("---- Next Engine Initialized in {}", stopwatch.elapsed_ms());
 }
@@ -527,12 +370,12 @@ NextEngine::FHotReloadStatus NextEngine::GetHotReloadStatus() const
     if (services_.shaderHotReloader)
     {
         const auto shaderStatus = services_.shaderHotReloader->GetStatus();
-        status.shaderHotReloadEnabled = shaderStatus.enabled;
-        status.shaderInitialized = shaderStatus.initialized;
-        status.shaderPollIntervalSeconds = shaderStatus.pollIntervalSeconds;
-        status.shaderSourceRoot = shaderStatus.sourceRoot;
-        status.shaderOutputRoot = shaderStatus.outputRoot;
-        status.shaderCompiler = shaderStatus.slangExecutable;
+        status.shaderHotReloadEnabled = shaderStatus.shaderHotReloadEnabled;
+        status.shaderInitialized = shaderStatus.shaderInitialized;
+        status.shaderPollIntervalSeconds = shaderStatus.shaderPollIntervalSeconds;
+        status.shaderSourceRoot = shaderStatus.shaderSourceRoot;
+        status.shaderOutputRoot = shaderStatus.shaderOutputRoot;
+        status.shaderCompiler = shaderStatus.shaderCompiler;
     }
 #endif
 
@@ -551,23 +394,13 @@ void NextEngine::RequestShaderHotReload()
 
 NextEngine::~NextEngine()
 {
-    if (services_.cvarSystem)
-    {
-        services_.cvarSystem->SaveUserFile("assets/configs/cvar_user.json");
-    }
-
-    if (services_.localization)
-    {
-        services_.localization->SaveToTxt(fmt::format("assets/locale/{}.txt", options_->locale));
-    }
-
     uiOverlay_.reset();
     userInterface_.reset();
     scene_.reset();
     renderer_.reset();
     window_.reset();
 
-    Vulkan::Window::TerminateGLFW();
+    Vulkan::Window::TerminateSDL();
 }
 
 void NextEngine::Start()
@@ -576,21 +409,14 @@ void NextEngine::Start()
 
     SPDLOG_INFO("---- Next Engine Starting...");
     spdlog::stopwatch stopwatch;
-    FStartupProfile startupProfile(options_->AgentValidation || !options_->AgentScript.empty());
-    startupProfile.Mark("begin");
 
     // Initialize Renderer
-    bool shouldEnableValidation = GOption->Validation;
-    
-    const bool useFastAgentPresent = options_->AgentValidation || options_->Tui;
-    const VkPresentModeKHR presentMode = useFastAgentPresent
-                                             ? VK_PRESENT_MODE_IMMEDIATE_KHR
+    const VkPresentModeKHR presentMode = options_->AgentValidation || options_->Tui ? VK_PRESENT_MODE_IMMEDIATE_KHR
                                              : static_cast<VkPresentModeKHR>(options_->PresentMode);
     config_.userSettings.PresentMode = static_cast<uint32_t>(presentMode);
     renderer_.reset(NextRenderer::CreateRenderer(static_cast<uint32_t>(config_.userSettings.RendererType), window_.get(),
-                                                 presentMode,
-                                                 shouldEnableValidation));
-    startupProfile.Mark("renderer object created");
+                                                 presentMode, GOption->Validation));
+    
     config_.userSettings.RendererType = static_cast<int32_t>(renderer_->CurrentLogicRendererType());
 
     auto& rendererDelegates = renderer_->GetDelegates();
@@ -598,15 +424,12 @@ void NextEngine::Start()
     rendererDelegates.createSwapChain = [this]() -> void { OnRendererCreateSwapChain(); };
     rendererDelegates.deleteSwapChain = [this]() -> void { OnRendererDeleteSwapChain(); };
     rendererDelegates.beforeNextTick = [this]() -> void { OnRendererBeforeNextFrame(); };
-    rendererDelegates.getUniformBufferObject = [this](VkOffset2D offset,
-                                                      VkExtent2D extend) -> Assets::UniformBufferObject
-    { return GetUniformBufferObject(offset, extend); };
-    rendererDelegates.postRender = [this](VkCommandBuffer commandBuffer, uint32_t imageIndex) -> void
-    { OnRendererPostRender(commandBuffer, imageIndex); };
-    rendererDelegates.afterSubmit = [this]() -> void { OnRendererAfterSubmit(); };
+    rendererDelegates.getUniformBufferObject = [this](VkOffset2D offset, VkExtent2D extend) -> Assets::UniformBufferObject { return GetUniformBufferObject(offset, extend); };
+    rendererDelegates.postRender = [this](VkCommandBuffer commandBuffer, uint32_t imageIndex) -> void { OnRendererPostRender(commandBuffer, imageIndex); };
+    rendererDelegates.afterSubmit = [this]() -> void  { OnRendererAfterSubmit(); };
 
     renderer_->Start();
-    startupProfile.Mark("renderer started");
+    
     for (auto it = renderFrameConsumers_.begin(); it != renderFrameConsumers_.end();)
     {
         if ((*it)->Start())
@@ -614,54 +437,47 @@ void NextEngine::Start()
             ++it;
             continue;
         }
-
-        SPDLOG_WARN("Render frame consumer '{}' failed to start; disabling it", (*it)->Name());
         it = renderFrameConsumers_.erase(it);
     }
-    startupProfile.Mark("render frame consumers started");
 
-    // Assets layer hooks (GlobalTexturePool must not depend on Runtime).
-    if (auto* texturePool = Assets::GlobalTexturePool::GetInstance())
-    {
-        texturePool->SetHdrStreamingPolicy([this]() { return config_.userSettings.StreamHDRTextures; });
-        texturePool->SetHdrShUpdatedCallback([this]()
-        {
-            if (scene_)
-            {
-                scene_->UpdateHDRSH();
-            }
-            if (renderer_)
-            {
-                renderer_->OnHdrShUpdated();
-            }
-        });
-    }
-    auto resolvedRendererType = ResolveRendererType(
-        renderer_->CurrentLogicRendererType(), renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget());
+    auto resolvedRendererType = Rendering::ResolveRendererChoice(
+        renderer_->CurrentLogicRendererType(),
+        {renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget()});
     if (resolvedRendererType != renderer_->CurrentLogicRendererType())
     {
         renderer_->SwitchLogicRenderer(resolvedRendererType);
         config_.userSettings.RendererType = static_cast<int32_t>(resolvedRendererType);
     }
-    startupProfile.Mark("renderer type resolved");
 
+    // shader hot-reload
 #if GK_ENABLE_HOT_RELOAD
-    if (options_->ShaderHotReload)
+    if (options_->ShaderHotReload && shaderHotReloaderFactory_)
     {
-        services_.shaderHotReloader = std::make_unique<Vulkan::ShaderHotReloader>();
-        services_.shaderHotReloader->Initialize(*renderer_);
+        services_.shaderHotReloader = shaderHotReloaderFactory_(*this);
     }
 #endif
-    startupProfile.Mark("shader hot reload initialized");
+    
+    // Optional physics module.
+    if (physicsFactory_)
+    {
+        services_.physics = physicsFactory_();
+        if (services_.physics)
+        {
+            services_.physics->Start();
+        }
+    }
 
-    services_.physics.reset(new NextPhysics());
-    services_.physics->Start();
-    startupProfile.Mark("physics started");
+    // Optional audio module.
+    if (audioFactory_)
+    {
+        services_.audio = audioFactory_();
+        if (services_.audio)
+        {
+            services_.audio->Start();
+        }
+    }
 
-    services_.audio = std::make_unique<NextAudio>();
-    services_.audio->Start();
-    startupProfile.Mark("audio started");
-
+    // script
     if (scriptRuntimeFactory_)
     {
         scriptRuntime_ = scriptRuntimeFactory_(*this);
@@ -670,16 +486,24 @@ void NextEngine::Start()
     {
         scriptRuntime_->Initialize();
     }
-    startupProfile.Mark("script runtime initialized");
 
+    // gameinstance init
     gameInstance_->OnInit();
-    startupProfile.Mark("game instance initialized");
-    if (!options_->AgentScript.empty())
+    
+    if (!options_->AgentControl.empty())
     {
-        agentDriver_ = std::make_unique<Runtime::Agent::FAgentDriver>(*this);
+        agentControl_ = std::make_unique<Runtime::Agent::FAgentControlServer>();
+        std::string error;
+        if (!agentControl_->Start(options_->AgentControl, options_->AgentControlToken, error))
+        {
+            SPDLOG_ERROR("[AgentControl] failed to start: {}", error); RequestExit(3);
+        }
+        else
+        {
+            gameInstance_->RegisterAgentQueries(agentQueries_);
+            SPDLOG_INFO("[AgentControl] listening on {}", options_->AgentControl);
+        }
     }
-    startupProfile.Mark("agent driver initialized");
-    startupProfile.Log("Engine::Start");
 
     SPDLOG_INFO("---- Next Engine Started in {}", stopwatch.elapsed_ms());
 }
@@ -690,6 +514,8 @@ bool NextEngine::HandleEvent(SDL_Event& event)
     {
         SDL_SetModState(static_cast<SDL_Keymod>(event.key.mod));
     }
+
+    const bool globalCaptureShortcut = HandleGlobalCaptureShortcut(event);
 
     userInterface_->HandleEvent(&event);
     const bool rmlUiConsumed = uiOverlay_ && uiOverlay_->HandleEvent(event);
@@ -739,7 +565,7 @@ bool NextEngine::HandleEvent(SDL_Event& event)
     case SDL_EVENT_KEY_UP:
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
     case SDL_EVENT_GAMEPAD_BUTTON_UP:
-        if (!rmlUiConsumed)
+        if (!rmlUiConsumed && !globalCaptureShortcut)
         {
             OnKey(event);
         }
@@ -809,13 +635,19 @@ bool NextEngine::Tick(bool forcingDelta)
 {
     PERFORMANCEAPI_INSTRUMENT_FUNCTION();
 
-    if (GpuTimer())
+    if (Profiler())
     {
-        GpuTimer()->CpuFrameBegin();
+        Profiler()->BeginCpuFrame();
     }
 
     {
         SCOPED_CPU_TIMER("engine");
+
+        taskQueues_.ticked.insert(
+            taskQueues_.ticked.end(),
+            std::make_move_iterator(taskQueues_.pendingTicked.begin()),
+            std::make_move_iterator(taskQueues_.pendingTicked.end()));
+        taskQueues_.pendingTicked.clear();
 
         // make sure the output is flushed
         std::cout << std::flush;
@@ -823,8 +655,8 @@ bool NextEngine::Tick(bool forcingDelta)
         // Hot change renderer
         {
             auto requestedRendererType =
-                ResolveRendererType(static_cast<Vulkan::ERendererType>(config_.userSettings.RendererType),
-                                    renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget());
+                Rendering::ResolveRendererChoice(static_cast<Vulkan::ERendererType>(config_.userSettings.RendererType),
+                                                 {renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget()});
             if (requestedRendererType != static_cast<Vulkan::ERendererType>(config_.userSettings.RendererType))
             {
                 config_.userSettings.RendererType = static_cast<int32_t>(requestedRendererType);
@@ -838,7 +670,20 @@ bool NextEngine::Tick(bool forcingDelta)
         // delta time calc
         {
             const auto prevTime = frameState_.time;
-            frameState_.time = GetWindow().GetTime();
+            double currentTime = GetWindow().GetTime();
+            if (!forcingDelta && window_ && window_->IsMinimized())
+            {
+                const double elapsed = currentTime - prevTime;
+                if (elapsed < minimizedTickIntervalSeconds)
+                {
+                    const double remainingSeconds = minimizedTickIntervalSeconds - std::max(0.0, elapsed);
+                    const auto delayMilliseconds = static_cast<Uint32>(std::max(
+                        1.0, std::ceil(remainingSeconds * 1000.0)));
+                    SDL_Delay(delayMilliseconds);
+                    currentTime = GetWindow().GetTime();
+                }
+            }
+            frameState_.time = currentTime;
             frameState_.deltaSeconds = frameState_.time - prevTime;
             if (forcingDelta)
                 frameState_.deltaSeconds = 1.0 / 30.0;
@@ -848,18 +693,31 @@ bool NextEngine::Tick(bool forcingDelta)
         }
 
         TickHotReload();
+        
+        
+        
+        // 这里是一帧tick的开始，这里开始scene nodes可能会被操纵，在这里要把所有nodes的线程更新完成并准备好提交GPU
+        if (scene_) scene_->EndUpdateNodes();
+
+        if (services_.physics)
+        {
+            SCOPED_CPU_TIMER("physics collect");
+            if (forcingDelta)
+            {
+                services_.physics->CompleteTick();
+                if (services_.physics->TryCompleteTick() && scene_) scene_->SyncPhysics();
+            }
+            else if (services_.physics->TryCompleteTick() && scene_)
+            {
+                scene_->SyncPhysics();
+            }
+        }
 
         // Scene Update
         if (scene_)
         {
             SCOPED_CPU_TIMER("scene tick");
             scene_->Tick(static_cast<float>(frameState_.deltaSeconds));
-        }
-
-        if (config_.userSettings.TickPhysics && services_.physics)
-        {
-            SCOPED_CPU_TIMER("physics");
-            services_.physics->Tick(frameState_.deltaSeconds);
         }
 
         if (scriptRuntime_)
@@ -916,34 +774,25 @@ bool NextEngine::Tick(bool forcingDelta)
             }
         }
 
+        if (config_.userSettings.TickPhysics && services_.physics)
+        {
+            SCOPED_CPU_TIMER("physics kick");
+            if (services_.physics->TryCompleteTick() && scene_) scene_->SyncPhysics();
+            services_.physics->KickTick(frameState_.deltaSeconds);
+        }
+
+        // 到这里，这一帧的nodes操作已经结束，这里可以发起Scene Nodes的多线程更新
+        if (scene_) scene_->StartUpdateNodes();
+        
         {
             SCOPED_CPU_TIMER("draw frame");
+            if (ShouldCaptureScreenShotThisFrame())
+            {
+                renderer_->RequestScreenShotCapture();
+            }
             renderer_->DrawFrame();
         }
         frameState_.totalFrames = renderer_->FrameCount();
-
-        if (screenShot_.hasPending)
-        {
-            renderer_->Device().WaitIdle();
-            Runtime::ScreenShot::SaveSwapChainToFile(renderer_.get(),
-                                           screenShot_.pending.filename,
-                                           screenShot_.pending.x,
-                                           screenShot_.pending.y,
-                                           screenShot_.pending.width,
-                                           screenShot_.pending.height);
-            screenShot_.hasPending = false;
-            screenShot_.pending = {};
-        }
-
-        if (progressiveRender_.warmupFramesRemaining > 0)
-        {
-            progressiveRender_.warmupFramesRemaining--;
-            if (progressiveRender_.warmupFramesRemaining == 0)
-            {
-                progressiveRender_.enabled = true;
-                progressiveRender_.accumulatedFrames = 0;
-            }
-        }
 
         if (progressiveRender_.enabled)
         {
@@ -951,40 +800,16 @@ bool NextEngine::Tick(bool forcingDelta)
                 std::min(progressiveRender_.accumulatedFrames + 1, FProgressiveRenderState::TargetFrames);
         }
 
-        // High quality capture: count down accumulated frames after DrawFrame
-        if (screenShot_.captureFramesRemaining > 0)
-        {
-            screenShot_.captureFramesRemaining--;
-            if (screenShot_.captureFramesRemaining == 0)
-            {
-                renderer_->Device().WaitIdle();
-                Runtime::ScreenShot::SaveSwapChainToFile(renderer_.get(),
-                                               screenShot_.captureSpec.filename,
-                                               screenShot_.captureSpec.x,
-                                               screenShot_.captureSpec.y,
-                                               screenShot_.captureSpec.width,
-                                               screenShot_.captureSpec.height);
-                spdlog::info("High quality capture saved: {} ({} frames accumulated)",
-                             screenShot_.captureSpec.filename, screenShot_.captureTotalFrames);
-
-                progressiveRender_.enabled = screenShot_.previousProgressiveEnabled;
-                progressiveRender_.warmupFramesRemaining = screenShot_.previousProgressiveWarmupFrames;
-                screenShot_.captureSpec = {};
-            }
-        }
+        AdvanceScreenShotCapture();
 
         // sample gamepad stats
         {
             TickGamepadInput();
         }
 
-        if (agentValidation_.active)
+        if (agentControl_)
         {
-            TickAgentValidation();
-        }
-        if (agentDriver_)
-        {
-            agentDriver_->Tick(frameState_.deltaSeconds);
+            agentControl_->Pump([this](const std::string& method, const nlohmann::json& params) { return HandleAgentControlCommand(method, params); });
         }
 
         if (!renderFrameConsumers_.empty())
@@ -996,18 +821,37 @@ bool NextEngine::Tick(bool forcingDelta)
         }
     }
 
-    if (GpuTimer())
+    if (Profiler())
     {
-        GpuTimer()->CpuFrameEnd();
+        Profiler()->EndCpuFrame();
     }
     return false;
 }
 
 void NextEngine::End()
 {
-    agentDriver_.reset();
+    // Persist user data while SDL and the process-wide application state are still
+    // alive. Fast exit may either skip destructors (quick_exit) or run this engine's
+    // destructor during static teardown (exit), where writable-path statics and
+    // options may already have been destroyed.
+    if (services_.cvarSystem)
+    {
+        services_.cvarSystem->SaveUserFile("assets/configs/cvar_user.json");
+    }
 
-    if (!GOption->FastExit)
+    if (services_.localization)
+    {
+        services_.localization->SaveToTxt(fmt::format("assets/locale/{}.txt", options_->locale));
+    }
+
+    if (agentControl_) { agentControl_->Stop(); agentControl_.reset(); }
+
+    if (services_.physics)
+    {
+        services_.physics->CompleteTick();
+    }
+    
+    //if (!GOption->FastExit)
     {
         Tasks::TaskCoordinator::GetInstance()->CancelAllParralledTasks();
         Tasks::TaskCoordinator::GetInstance()->WaitForAllTasks();
@@ -1120,9 +964,15 @@ void NextEngine::ConfigureCustomTitleBarDrag(bool enabled, float titleBarHeight,
         return;
     }
 
-    const int titleBarHeightInt = std::max(0, static_cast<int>(titleBarHeight));
-    const int leftReservedWidthInt = std::max(0, static_cast<int>(leftReservedWidth));
-    const int rightReservedWidthInt = std::max(0, static_cast<int>(rightReservedWidth));
+    float coordinateScale = 1.0f;
+#if WIN32
+    coordinateScale = std::max(1.0f, window_->ContentScale());
+#endif
+    const int titleBarHeightInt = std::max(0, static_cast<int>(std::lround(titleBarHeight * coordinateScale)));
+    const int leftReservedWidthInt =
+        std::max(0, static_cast<int>(std::lround(leftReservedWidth * coordinateScale)));
+    const int rightReservedWidthInt =
+        std::max(0, static_cast<int>(std::lround(rightReservedWidth * coordinateScale)));
     window_->ConfigureCustomTitleBarDrag(enabled, titleBarHeightInt, leftReservedWidthInt, rightReservedWidthInt);
 }
 
@@ -1142,39 +992,114 @@ void NextEngine::ToggleMaximize()
 
 void NextEngine::RequestScreenShot(FScreenShotSpec spec)
 {
-    if (spec.accumulateFrames > 0)
-    {
-        if (screenShot_.captureFramesRemaining > 0)
+    ++screenShot_.queuedRequests;
+    AddTickedTask([this, spec = std::move(spec)](double) mutable {
+        if (screenShot_.hasPending ||
+            (!spec.allowOverlappingExports &&
+             (screenShot_.exportPending || screenShot_.asyncExportsInFlight > 0)))
         {
-            spdlog::warn("High quality capture already in progress, ignoring request");
-            return;
+            return false;
         }
 
-        screenShot_.previousProgressiveEnabled = progressiveRender_.enabled;
-        screenShot_.previousProgressiveWarmupFrames = progressiveRender_.warmupFramesRemaining;
-        screenShot_.captureTotalFrames = spec.accumulateFrames;
-        screenShot_.captureFramesRemaining = spec.accumulateFrames;
-        screenShot_.captureSpec = std::move(spec);
-        screenShot_.captureSpec.filename =
-            ResolveScreenShotFilename(screenShot_.captureSpec.filename, "hq_screenshot");
+        --screenShot_.queuedRequests;
+        if (spec.accumulateFrames > 0)
+        {
+            screenShot_.previousProgressiveEnabled = progressiveRender_.enabled;
+            screenShot_.captureFramesRemaining = spec.accumulateFrames;
+            spec.filename = ResolveScreenShotFilename(spec.filename, "hq_screenshot");
 
-        progressiveRender_.enabled = true;
-        progressiveRender_.warmupFramesRemaining = 0;
-        spdlog::info("High quality capture started: accumulating {} frames...",
-                     screenShot_.captureTotalFrames);
-        return;
-    }
+            progressiveRender_.enabled = true;
+            progressiveRender_.accumulatedFrames = 0;
+            spdlog::info("High quality capture started: accumulating {} frames...",
+                         spec.accumulateFrames);
+        }
+        else
+        {
+            spec.filename = ResolveScreenShotFilename(spec.filename, "screenshot");
+            screenShot_.captureFramesRemaining = 0;
+        }
+        screenShot_.pending = std::move(spec);
+        screenShot_.captureSubmitted = false;
+        screenShot_.captureSubmitSerial = 0;
+        screenShot_.hasPending = true;
+        return true;
+    });
+}
 
-    spec.filename = ResolveScreenShotFilename(spec.filename, "screenshot");
-    if (spec.sync)
+bool NextEngine::ShouldCaptureScreenShotThisFrame() const
+{
+    return screenShot_.hasPending && !screenShot_.captureSubmitted &&
+        screenShot_.captureFramesRemaining <= 1;
+}
+
+void NextEngine::AdvanceScreenShotCapture()
+{
+    if (!screenShot_.hasPending)
     {
-        renderer_->Device().WaitIdle();
-        Runtime::ScreenShot::SaveSwapChainToFile(renderer_.get(), spec.filename, spec.x, spec.y, spec.width, spec.height);
         return;
     }
 
-    screenShot_.pending = std::move(spec);
-    screenShot_.hasPending = true;
+    if (screenShot_.captureFramesRemaining > 1)
+    {
+        --screenShot_.captureFramesRemaining;
+        return;
+    }
+
+    screenShot_.captureFramesRemaining = 0;
+    if (!screenShot_.captureSubmitted)
+    {
+        if (renderer_->IsScreenShotCaptureReady())
+        {
+            screenShot_.captureSubmitted = true;
+            screenShot_.captureSubmitSerial = renderer_->ScreenShotCaptureSubmitSerial();
+        }
+        return;
+    }
+
+    if (renderer_->CompletedSubmitSerial() < screenShot_.captureSubmitSerial)
+    {
+        return;
+    }
+
+    screenShot_.exportPending = true;
+    ++screenShot_.asyncExportsInFlight;
+    SaveScreenShot(screenShot_.pending);
+    if (screenShot_.pending.accumulateFrames > 0)
+    {
+        spdlog::info("High quality capture queued: {} ({} frames accumulated)",
+                     screenShot_.pending.filename, screenShot_.pending.accumulateFrames);
+
+        progressiveRender_.enabled = screenShot_.previousProgressiveEnabled;
+    }
+    screenShot_.hasPending = false;
+    screenShot_.pending = {};
+}
+
+void NextEngine::SaveScreenShot(const FScreenShotSpec& spec)
+{
+    const bool allowOverlappingExports = spec.allowOverlappingExports;
+    Runtime::ScreenShot::SaveSwapChainToFile(
+        renderer_.get(), spec.filename, spec.x, spec.y, spec.width, spec.height,
+        spec.fileFormat,
+        spec.sync,
+        [this, allowOverlappingExports]()
+        {
+            if (!allowOverlappingExports)
+            {
+                screenShot_.exportPending = false;
+            }
+            if (screenShot_.asyncExportsInFlight > 0)
+            {
+                --screenShot_.asyncExportsInFlight;
+            }
+        },
+        [this, allowOverlappingExports]()
+        {
+            if (allowOverlappingExports)
+            {
+                screenShot_.exportPending = false;
+            }
+        });
 }
 
 glm::ivec2 NextEngine::GetMonitorSize() const
@@ -1193,47 +1118,93 @@ glm::ivec2 NextEngine::GetMonitorSize() const
     return size;
 }
 
-void NextEngine::RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir,
+void NextEngine::RayCast(glm::vec3 rayOrigin, glm::vec3 rayDir,
                             std::function<bool(Assets::RayCastResult rayResult)> callback)
 {
     // CPU Raycast in scene
     Assets::RayCastResult result = scene_->GetCPUAccelerationStructure().RayCastInCPU(rayOrigin, rayDir);
-    scene_->RayCastGaussianSplats(rayOrigin, rayDir, result);
     callback(result);
 }
 
-void NextEngine::SetProgressiveRendering(bool enable, bool directly)
+void NextEngine::SetProgressiveRendering(bool enable)
 {
-    if (directly)
+    if (progressiveRender_.enabled == enable)
     {
-        if (enable && !progressiveRender_.enabled)
-        {
-            progressiveRender_.accumulatedFrames = 0;
-            progressiveRender_.warmupFramesRemaining = 0;
-        }
-        else if (!enable)
-        {
-            progressiveRender_.accumulatedFrames = 0;
-            progressiveRender_.warmupFramesRemaining = 0;
-        }
-        progressiveRender_.enabled = enable;
         return;
     }
 
-    if (enable)
+    progressiveRender_.enabled = enable;
+    progressiveRender_.accumulatedFrames = 0;
+}
+
+void NextEngine::ResetProgressiveRenderingAccumulation()
+{
+    progressiveRender_.accumulatedFrames = 0;
+}
+
+bool NextEngine::RequestRendererType(const Vulkan::ERendererType type)
+{
+    if (!renderer_)
     {
-        if (!progressiveRender_.enabled && progressiveRender_.warmupFramesRemaining == 0)
-        {
-            progressiveRender_.accumulatedFrames = 0;
-            progressiveRender_.warmupFramesRemaining = config_.userSettings.TemporalFrames * 2;
-        }
+        return false;
     }
-    else
+
+    const Vulkan::ERendererType resolved = Rendering::ResolveRendererChoice(
+        type, {renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget()});
+    const bool changed = config_.userSettings.RendererType != static_cast<int32_t>(resolved) ||
+        renderer_->CurrentLogicRendererType() != resolved;
+    config_.userSettings.RendererType = static_cast<int32_t>(resolved);
+    if (renderer_->CurrentLogicRendererType() != resolved)
     {
-        progressiveRender_.warmupFramesRemaining = 0;
-        progressiveRender_.enabled = false;
-        progressiveRender_.accumulatedFrames = 0;
+        renderer_->SwitchLogicRenderer(resolved);
     }
+    return changed;
+}
+
+bool NextEngine::SetUpscalerConfiguration(Rendering::Upscaler::EUpscalerType type, uint32_t mode)
+{
+    Runtime::Config::UserSettings& settings = config_.userSettings;
+    const bool changed = settings.UpscalerType != static_cast<int32_t>(type) || settings.SuperResolution != mode;
+    if (!changed)
+    {
+        return false;
+    }
+
+    settings.UpscalerType = static_cast<int32_t>(type);
+    settings.SuperResolution = mode;
+    ApplyUpscalerConfigurationFromSettings();
+    return true;
+}
+
+bool NextEngine::ApplyUpscalerConfigurationFromSettings()
+{
+    if (!renderer_)
+    {
+        return false;
+    }
+
+    Runtime::Config::UserSettings& settings = config_.userSettings;
+    auto type = static_cast<Rendering::Upscaler::EUpscalerType>(settings.UpscalerType);
+    uint32_t mode = settings.SuperResolution;
+    if (type >= Rendering::Upscaler::EUpscalerType::Count ||
+        (type != Rendering::Upscaler::EUpscalerType::None && !renderer_->SupportsUpscaler(type)))
+    {
+        type = renderer_->SupportsUpscaler(Rendering::Upscaler::EUpscalerType::NativeTAAU)
+            ? Rendering::Upscaler::EUpscalerType::NativeTAAU
+            : Rendering::Upscaler::EUpscalerType::None;
+    }
+    if (mode > static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Auto))
+    {
+        mode = static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Quality);
+    }
+    settings.UpscalerType = static_cast<int32_t>(type);
+    settings.SuperResolution = mode;
+    if (!renderer_->SupportsFrameGeneration(type))
+    {
+        settings.FrameGeneration = false;
+    }
+    renderer_->RequestRecreateSwapChain();
+    return true;
 }
 
 VkDeviceAddress NextEngine::TryGetGPUAccelerationStructureAddress() const
@@ -1256,6 +1227,25 @@ VkAccelerationStructureKHR NextEngine::TryGetGPUAccelerationStructureHandle() co
 
 void NextEngine::OnRendererDeviceSet()
 {
+    // Configure the texture policy before the initial HDR textures are queued. The
+    // GlobalTexturePool is created immediately before this callback, so HDR loads
+    // can start at their lowest mip instead of being demoted one per tick later.
+    if (auto* texturePool = Assets::GlobalTexturePool::GetInstance())
+    {
+        texturePool->SetHdrStreamingPolicy([this]() { return config_.userSettings.StreamHDRTextures; });
+        texturePool->SetHdrShUpdatedCallback([this]()
+        {
+            if (scene_)
+            {
+                scene_->UpdateHDRSH();
+            }
+            if (renderer_)
+            {
+                renderer_->OnHdrShUpdated();
+            }
+        });
+    }
+
     // global textures
     // texture id 0: dynamic hdri sky
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/river_road_2.hdr");
@@ -1296,6 +1286,13 @@ void NextEngine::OnRendererCreateSwapChain()
 
 void NextEngine::OnRendererDeleteSwapChain()
 {
+    if (screenShot_.hasPending)
+    {
+        // Swapchain recreation invalidates the capture image and its submit
+        // serial. Keep the request alive and retry it on the new swapchain.
+        screenShot_.captureSubmitted = false;
+        screenShot_.captureSubmitSerial = 0;
+    }
     if (userInterface_.get() != nullptr)
     {
         userInterface_->OnDestroySurface();
@@ -1317,8 +1314,9 @@ void NextEngine::OnRendererPostLoadScene()
 void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
     SCOPED_CPU_TIMER("post render");
-    const bool suppressAllUi = screenShot_.hasPending && !screenShot_.pending.includeUi &&
-        (!gameInstance_ || !gameInstance_->ShouldRenderUiDuringScreenshot());
+    const bool suppressAllUi = ShouldCaptureScreenShotThisFrame() && !screenShot_.pending.includeUi &&
+        (screenShot_.pending.forceUiHidden ||
+         !gameInstance_ || !gameInstance_->ShouldRenderUiDuringScreenshot());
 
     if (userInterface_)
     {
@@ -1369,7 +1367,7 @@ void NextEngine::OnRendererAfterSubmit()
     stats.RenderTime = GetTime();
 
     stats.TotalFrames = frameState_.totalFrames;
-    stats.InstanceCount = static_cast<uint32_t>(scene_->GetNodeProxys().size());
+    stats.InstanceCount = static_cast<uint32_t>(scene_->GetNodeProxies().size());
     stats.NodeCount = static_cast<uint32_t>(scene_->Nodes().size());
     stats.TriCount = scene_->GetIndicesCount() / 3;
     stats.TextureCount = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
@@ -1385,12 +1383,25 @@ void NextEngine::OnRendererAfterSubmit()
             uiOverlay_->BeginFrame();
         }
     }
-    bool uiHandled = false;
+    const bool suppressAllUi = ShouldCaptureScreenShotThisFrame() && !screenShot_.pending.includeUi &&
+        (screenShot_.pending.forceUiHidden ||
+         !gameInstance_ || !gameInstance_->ShouldRenderUiDuringScreenshot());
+    NextUI::FUiFrameResult uiResult{NextUI::EUiDeveloperLayer::None};
+    NextGameInstanceBase::FGameUiFrameContext uiContext;
+    uiContext.surfaceKind = NextGameInstanceBase::FGameUiFrameContext::ESurfaceKind::MainWindow;
+    uiContext.framebufferExtent = renderer_->SwapChain().OutputExtent();
+    uiContext.viewCamera = &scene_->GetRenderCamera();
+    uiContext.allowWindowCommands = true;
+    uiContext.policy.allowApplicationUi = !suppressAllUi;
+    uiContext.policy.allowedDeveloperLayers = suppressAllUi
+        ? NextUI::EUiDeveloperLayer::None
+        : NextUI::EUiDeveloperLayer::All;
+    if (uiContext.policy.allowApplicationUi)
     {
         SCOPED_CPU_TIMER("game ui");
-        uiHandled = gameInstance_->OnRenderUI();
+        uiResult = gameInstance_->RenderUiFrame(uiContext);
     }
-    if (uiOverlay_)
+    if (uiOverlay_ && !suppressAllUi)
     {
         SCOPED_CPU_TIMER("overlay render");
         uiOverlay_->RenderFrame();
@@ -1415,14 +1426,17 @@ void NextEngine::OnRendererAfterSubmit()
         if (debugUiProvider_ && config_.showFlags.DebugProfileOverlay)
         {
             SCOPED_CPU_TIMER("profile debug ui");
-            debugUiProvider_->DrawProfileOverlay(*this, stats, renderer_->GpuTimer(),
+            debugUiProvider_->DrawProfileOverlay(*this, stats, renderer_->Profiler(),
                                                  gameInstance_->GetGraphicsDebugPanelTopOffset());
         }
     }
-    if (!uiHandled)
+    const NextUI::EUiDeveloperLayer developerLayers =
+        uiResult.requestedDeveloperLayers & uiContext.policy.allowedDeveloperLayers;
+    if (developerLayers != NextUI::EUiDeveloperLayer::None)
     {
         SCOPED_CPU_TIMER("overlay ui");
-        userInterface_->Render(stats, renderer_->GpuTimer(), scene_.get(), config_.showFlags.DebugProfileOverlay);
+        NextUI::FUiFrameDispatcher::DrawDeveloperLayers(
+            *this, stats, renderer_->Profiler(), developerLayers, config_.showFlags.DebugProfileOverlay);
     }
     if (debugUiProvider_)
     {
@@ -1430,57 +1444,129 @@ void NextEngine::OnRendererAfterSubmit()
         debugUiProvider_->DrawGraphicsPanel(*this, config_.showFlags.DebugGraphicsPanel,
                                             gameInstance_->GetGraphicsDebugPanelTopOffset());
     }
-    if (agentDriver_)
-    {
-        SCOPED_CPU_TIMER("agent overlay");
-        agentDriver_->DrawStatusOverlay();
-    }
     {
         SCOPED_CPU_TIMER("imgui prepare draw data");
         userInterface_->PrepareDrawData();
     }
 }
 
-void NextEngine::TickAgentValidation()
+nlohmann::json NextEngine::HandleAgentControlCommand(const std::string& method, const nlohmann::json& params)
 {
-    // Only act once a scene is live and rendering. GetTotalFrames() resets to 0 on every scene
-    // load, so this naturally waits for the loaded scene to settle before capturing.
-    if (status_ != NextRenderer::EApplicationStatus::Running)
+    using Runtime::Input::Synthetic::FPoint;
+    SDL_Window* window = GetWindow().Handle();
+    const SDL_WindowID windowId = SDL_GetWindowID(window);
+    const FPoint current{static_cast<float>(GetMousePos().x), static_cast<float>(GetMousePos().y)};
+    auto point = [](const nlohmann::json& value) -> FPoint
     {
-        return;
+        if (!value.is_array() || value.size() < 2) throw std::runtime_error("point must be [x,y]");
+        return {value[0].get<float>(), value[1].get<float>()};
+    };
+    if (method == "handshake") return {{"protocolVersion", 1}, {"capabilities", {"input", "query", "cvar", "exec", "screenshot", "quit"}}};
+    if (method == "query")
+    {
+        const auto value = QueryAgentControl(params.value("query", ""));
+        if (!value) throw std::runtime_error("query not found");
+        return std::visit([](const auto& item) { return nlohmann::json(item); }, *value);
     }
-
-    if (!agentValidation_.captured)
+    if (method == "key")
     {
-        if (GetTotalFrames() < agentValidation_.waitFrames)
+        const std::string code = params.value("code", ""); const auto key = Runtime::Input::Synthetic::ResolveKeyCode(code);
+        if (key == SDLK_UNKNOWN) throw std::runtime_error("unknown key");
+        const auto scan = Runtime::Input::Synthetic::ResolveScanCode(key, code);
+        const auto modifiers = Runtime::Input::Synthetic::ResolveModifiers(params.value("mods", std::vector<std::string>{}));
+        const std::string action = params.value("action", "press");
+        if (action == "down") Runtime::Input::Synthetic::PushKey(windowId, key, scan, modifiers, true);
+        else if (action == "up") Runtime::Input::Synthetic::PushKey(windowId, key, scan, modifiers, false);
+        else Runtime::Input::Synthetic::PushKeyPress(windowId, key, scan, modifiers);
+        return {{"ok", true}};
+    }
+    if (method == "text") { Runtime::Input::Synthetic::PushText(windowId, params.value("value", "")); return {{"ok", true}}; }
+    if (method == "mouse-move")
+    {
+        const auto to = point(params.at("to"));
+        if (params.value("relative", false)) InjectRelativeMouse(to.x, to.y); else Runtime::Input::Synthetic::PushMouseMove(window, current, to);
+        return {{"ok", true}};
+    }
+    if (method == "mouse-button" || method == "click")
+    {
+        const auto at = params.contains("at") ? point(params["at"]) : current;
+        if (params.contains("at")) Runtime::Input::Synthetic::PushMouseMove(window, current, at);
+        const auto button = Runtime::Input::Synthetic::ResolveMouseButton(params.value("button", "left"));
+        const auto clicks = static_cast<Uint8>(std::max(1, params.value("count", 1)));
+        const std::string action = method == "click" ? "press" : params.value("action", "press");
+        if (action != "up") Runtime::Input::Synthetic::PushMouseButton(windowId, at, button, true, clicks);
+        if (action != "down") Runtime::Input::Synthetic::PushMouseButton(windowId, at, button, false, clicks);
+        return {{"ok", true}};
+    }
+    if (method == "drag")
+    {
+        const auto from = point(params.at("from")); const auto to = point(params.at("to"));
+        const auto button = Runtime::Input::Synthetic::ResolveMouseButton(params.value("button", "left"));
+        Runtime::Input::Synthetic::PushMouseMove(window, current, from); Runtime::Input::Synthetic::PushMouseButton(windowId, from, button, true);
+        Runtime::Input::Synthetic::PushMouseMove(window, from, to); Runtime::Input::Synthetic::PushMouseButton(windowId, to, button, false); return {{"ok", true}};
+    }
+    if (method == "scroll") { Runtime::Input::Synthetic::PushMouseWheel(windowId, current, params.value("x", 0.0f), params.value("y", 0.0f)); return {{"ok", true}}; }
+    if (method == "cvar")
+    {
+        const std::string name = params.value("name", "");
+        if (params.contains("set")) { std::string error; const std::string value = params["set"].is_string() ? params["set"].get<std::string>() : params["set"].dump(); if (!GetCVarSystem().SetValueFromString(name, value, NextCVar::ECVarSetBy::Console, &error)) throw std::runtime_error(error); return {{"value", value}}; }
+        bool found = false; const auto value = GetCVarSystem().GetValueString(name, &found); if (!found) throw std::runtime_error("cvar not found"); return {{"value", value}};
+    }
+    if (method == "exec") { const auto result = GetCVarSystem().ExecuteCommand(params.value("line", "")); if (!result.success) throw std::runtime_error(result.message); return {{"message", result.message}, {"output", result.output}}; }
+    if (method == "screenshot")
+    {
+        const std::string path = Utilities::FileHelper::GetPlatformFilePath(params.value("out", "screenshots/agent_validation").c_str());
+        Utilities::FileHelper::EnsureDirectoryExists(std::filesystem::path(path).parent_path().string());
+        for (const char* extension : {".jpg", ".avif"})
         {
-            return;
+            std::error_code errorCode;
+            std::filesystem::remove(path + extension, errorCode);
+            if (errorCode)
+            {
+                throw std::runtime_error("failed to remove existing screenshot " + path + extension + ": " +
+                                         errorCode.message());
+            }
         }
-
-        // Resolve against the runtime root so both the directory we create and the file the
-        // screenshot writer emits land in the same place (matches RequestScreenshot convention).
-        const std::string resolvedPath =
-            Utilities::FileHelper::GetPlatformFilePath(agentValidation_.outputPath.c_str());
-        const std::string outputDir = std::filesystem::path(resolvedPath).parent_path().string();
-        if (!outputDir.empty())
-        {
-            Utilities::FileHelper::EnsureDirectoryExists(outputDir);
-        }
-
-        RequestScreenShot({.filename = resolvedPath, .includeUi = agentValidation_.includeUi});
-        agentValidation_.captured = true;
-        SPDLOG_INFO("[AgentValidation] capturing screenshot -> {}.jpg ({} frames)",
-                    resolvedPath, GetTotalFrames());
-        return;
+        RequestScreenShot({
+            .filename = path,
+            .accumulateFrames = params.value("accumulateFrames", 0u),
+            .sync = true,
+            .includeUi = params.value("ui", false),
+        });
+        return {{"path", path + ".jpg"}};
     }
+    if (method == "quit") { RequestExit(params.value("exitCode", 0)); return {{"ok", true}}; }
+    throw std::runtime_error("unknown agent control method: " + method);
+}
 
-    // The pending screenshot is flushed at the top of the next frame; give it a couple of frames
-    // to land on disk before closing so the file is guaranteed to exist for the agent to inspect.
-    if (++agentValidation_.postCaptureFrames >= 3)
+std::optional<Runtime::Agent::FAgentQueryValue> NextEngine::QueryAgentControl(const std::string& query) const
+{
+    if (query == "engine.totalFrames") return static_cast<int64_t>(GetTotalFrames());
+    if (query == "engine.frameRate") return static_cast<double>(GetFrameRate());
+    if (query == "engine.time") return GetTime();
+    if (query == "engine.status")
     {
-        SPDLOG_INFO("[AgentValidation] screenshot saved -> {}.jpg, exiting", agentValidation_.outputPath);
-        RequestClose();
+        switch (GetEngineStatus()) { case NextRenderer::EApplicationStatus::Starting: return std::string("Starting"); case NextRenderer::EApplicationStatus::Running: return std::string("Running"); case NextRenderer::EApplicationStatus::Loading: return std::string("Loading"); default: return std::string("AsyncPreparing"); }
     }
+    if (query == "engine.rendererType") return static_cast<int64_t>(renderer_->CurrentLogicRendererType());
+    if (query == "scene.nodeCount") return static_cast<int64_t>(GetScene().Nodes().size());
+    if (query == "scene.renderProxyCount")
+        return static_cast<int64_t>(GetScene().GetIndirectDrawBatchCount());
+    if (query == "scene.maxVisibleProxyIndex")
+        return static_cast<int64_t>(GetScene().GetGpuDrivenStat().MaxVisibleProxyIndex);
+    if (query == "scene.sunElevation")
+        return static_cast<double>(GetScene().GetEnvSettings().SunElevation);
+    if (query == "scene.atmosphereEnabled")
+        return GetScene().GetEnvSettings().AtmosphereEnabled;
+    if (query == "scene.aerialPerspectiveEnabled")
+        return GetScene().GetEnvSettings().AerialPerspectiveEnabled;
+    if (query == "scene.heightFogEnabled")
+        return GetScene().GetEnvSettings().HeightFogEnabled;
+    if (query == "scene.selectedId") return static_cast<int64_t>(GetScene().GetSelectedId());
+    if (query == "scene.selectedCount") return static_cast<int64_t>(GetScene().GetSelectedIds().size());
+    if (query.rfind("cvar.", 0) == 0) { bool found = false; auto value = GetCVarSystem().GetValueString(query.substr(5), &found); if (found) return value; return std::nullopt; }
+    if (query.rfind("game.", 0) == 0) return agentQueries_.Query(query.substr(5));
+    return std::nullopt;
 }
 
 void NextEngine::OnRendererBeforeNextFrame()

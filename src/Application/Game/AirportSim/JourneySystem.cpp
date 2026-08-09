@@ -204,7 +204,7 @@ namespace AirportSim
         UpdateQueueStaffing(agents, queues);
     }
 
-    // ---------------- 员工（§5.2） ----------------
+    // ---------------- 员工 ----------------
 
     void JourneySystem::TickStaff(double gameMinutes, double dayMinutes, AgentSystem& agents, AirportMap& map,
                                   QueueSystem& queues, FlightBoard& flights, const TimeSystem& time)
@@ -449,7 +449,7 @@ namespace AirportSim
         }
     }
 
-    // ---------------- 旅客（§5.1） ----------------
+    // ---------------- 旅客 ----------------
 
     void JourneySystem::SpawnPassengers(double dayMinutes, AgentSystem& agents, FlightBoard& flights)
     {
@@ -568,7 +568,7 @@ namespace AirportSim
             return;
         }
 
-        // 规则 fallback 活动选择（§5.1 AirsideFree）：LLM 结果会通过 ApplyAirsideChoice 覆盖下一轮。
+        // 空侧自由活动的规则 fallback；LLM 结果会通过 ApplyAirsideChoice 覆盖下一轮。
         // 权重：坐下 37 / 餐饮 24 / 零售街 18 / 售货机·ATM 13 / 如厕 8——空侧消费区要有人气。
         const int roll = static_cast<int>(rng_() % 100);
         std::string category;
@@ -722,7 +722,7 @@ namespace AirportSim
                     });
             }
 
-            // 起飞：未登机旅客直接"传送登机"（§4.3，MVP 不做误机）。
+            // 起飞：未登机旅客直接“传送登机”；当前模型不处理误机。
             if (flight.state == EFlightState::Departed)
             {
                 SPDLOG_INFO("AirportSim/Journey: {} teleport-boarded departed {}", agent.name, flight.number);
@@ -765,7 +765,7 @@ namespace AirportSim
                 else if (agents.Arrived(agent))
                 {
                     agent.targetPoi.clear();
-                    // 30% 自助 kiosk，70% 人工值机（§5.1）。
+                    // 30% 自助 kiosk，70% 人工值机。
                     FPointOfInterest* kiosk = nullptr;
                     if (!agent.IsGroupedPassenger() && Rand(0.0, 1.0) < Config::kKioskFraction)
                     {
@@ -842,7 +842,7 @@ namespace AirportSim
                     }
                     else if (agent.pstate == EPassengerState::QueueSecurity)
                     {
-                        // 安检通过：脚本走点南进北出（§7.2 单向流）。
+                        // 安检通过：脚本走点保持南进北出的单向流。
                         if (const FPointOfInterest* lane = map.FindByName(doneQueue))
                         {
                             std::vector<glm::vec3> wps;

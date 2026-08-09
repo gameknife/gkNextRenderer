@@ -2,32 +2,63 @@
 #include <glm/vec2.hpp>
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
+#include "Engine/Runtime/Subsystems/NextPhysicsTypes.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
-#include "Engine/Assets/Acceleration/CPUAccelerationStructure.h"
+#include "Engine/Assets/Acceleration/CPUAccelerationStructure.hpp"
+#include "Engine/Assets/Core/Component.hpp"
 #include "Engine/Assets/Core/Model.hpp"
-#include "Engine/Assets/Core/GaussianSplat.hpp"
 #include "Engine/Assets/Core/SceneSelectionState.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"
+
+#include <ranges>
+#include <span>
 
 namespace Runtime
 {
     class EnvironmentComponent;
+    class SkinnedMeshComponent;
 }
 
 namespace Assets
 {
+    struct SceneRebuildProfile
+    {
+        float totalMs = 0.0f;
+        float physicsShapeCookingMs = 0.0f;
+        float physicsBodyCreationMs = 0.0f;
+        float gpuResourceBuildMs = 0.0f;
+        float cpuPreparationMs = 0.0f;
+    };
+
     class Scene final
     {
     public:
         static void RegisterReflection();
         static constexpr uint32_t kSunShadowCascadeCount = 4;
         static constexpr uint32_t kSunShadowResolution = 1024;
-        static constexpr uint32_t kMaxIndirectDrawCount = 65535;
+        static constexpr uint32_t kRenderProxyCapacity = MAX_RENDER_PROXIES;
+        static constexpr uint32_t kMaxTrianglesPerSection = 65535;
+        static constexpr uint32_t kMaxLightCount = 1024;
+        static constexpr uint32_t kModelSectionStride = 10;
         static constexpr uint32_t kSoftMeshShaderDrawSlotCount = 1 + kSunShadowCascadeCount;
         static constexpr uint32_t kSunShadowCascadeMask = (1u << kSunShadowCascadeCount) - 1u;
+        static constexpr uint32_t DecodeModelIndex(uint32_t encodedModelSection)
+        {
+            return encodedModelSection / kModelSectionStride;
+        }
+        static constexpr bool TryEncodeModelSection(
+            uint32_t modelIndex, uint32_t sectionIndex, uint32_t& encodedModelSection)
+        {
+            if (sectionIndex >= kModelSectionStride ||
+                modelIndex > (std::numeric_limits<uint32_t>::max() - sectionIndex) / kModelSectionStride)
+            {
+                return false;
+            }
+            encodedModelSection = modelIndex * kModelSectionStride + sectionIndex;
+            return true;
+        }
         static constexpr std::array<int32_t, 16> kSunShadowHighCascadeSchedule = {
             1, -1, 2, -1, 1, -1, 3, -1,
             1, -1, 2, -1, 1, -1, -1, -1,
@@ -77,29 +108,38 @@ namespace Assets
                                      std::vector<LightObject>& lights, std::vector<AnimationTrack>& tracks,
                                      const std::vector<Skeleton>& skeletons);
         void RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing);
+        const SceneRebuildProfile& LastRebuildProfile() const { return lastRebuildProfile_; }
         bool EnsureGpuDrivenBufferCapacity(Vulkan::CommandPool& commandPool);
         void CleanUp();
-        // void RebuildBVH();
 
-        const Assets::GPUScene& FetchGPUScene(const uint32_t imageIndex) const;
-        std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
+        const Assets::GPUScene& FetchGPUScene(uint32_t imageIndex, uint32_t viewBankBase) const;
         const std::vector<std::shared_ptr<Node>>& Nodes() const { return nodes_; }
+        template <typename T>
+        auto Components()
+        {
+            static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
+            return GetComponentsByType(ComponentTypeId<T>()) |
+                   std::views::transform([](Component* component) { return static_cast<T*>(component); });
+        }
+        template <typename T>
+        auto Components() const
+        {
+            static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
+            return GetComponentsByType(ComponentTypeId<T>()) |
+                   std::views::transform([](Component* component) { return static_cast<const T*>(component); });
+        }
+        std::vector<Model>& Models() { return models_; }
         const std::vector<Model>& Models() const { return models_; }
-        std::vector<Model>& MutableModels() { return models_; }
-        const std::vector<FGaussianSplatData>& GaussianSplats() const { return gaussianSplats_; }
-        std::vector<FGaussianSplatData>& MutableGaussianSplats() { return gaussianSplats_; }
-        bool HasGaussianSplats() const { return !gaussianSplats_.empty(); }
-        void SetGaussianSplats(std::vector<FGaussianSplatData>&& splats) { gaussianSplats_ = std::move(splats); }
         std::vector<FMaterial>& Materials() { return materials_; }
         const std::vector<FMaterial>& Materials() const { return materials_; }
         const std::vector<ModelData>& Offsets() const { return offsets_; }
         std::vector<LightObject>& Lights() { return lights_; }
         const std::vector<LightObject>& Lights() const { return lights_; }
+        // Bumped by UpdateLights whenever the light set is re-ordered (count or type/material
+        // sequence changed); consumers holding light indices across frames (ReSTIR reservoirs)
+        // must drop history on a mismatch. Pure transforms / color edits do not bump it.
+        uint64_t LightsGeneration() const { return lightsGeneration_; }
         const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
-        const Vulkan::Buffer& IndexBuffer() const { return *indexBuffer_; }
-        const Vulkan::Buffer& MaterialBuffer() const { return *sceneDynamicBuffer_; }
-        const Vulkan::Buffer& OffsetsBuffer() const { return *offsetBuffer_; }
-        const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
         const Vulkan::Buffer& NodeMatrixBuffer() const { return *sceneDynamicBuffer_; }
         const Vulkan::Buffer& SoftMeshShaderPrimBuffer() const { return *softMeshShaderPrimBuffer_; }
         const Vulkan::Buffer& SoftMeshShaderShadowPrimBuffer() const { return *softMeshShaderShadowPrimBuffer_; }
@@ -109,19 +149,17 @@ namespace Assets
         const Vulkan::Buffer& SoftMeshShaderCounterBuffer() const { return *softMeshShaderCounterBuffer_; }
         VkDeviceSize SoftMeshShaderDrawArgByteOffset(uint32_t slot) const;
         uint32_t SoftMeshShaderDrawSlotForShadowCascade(uint32_t cascade) const;
-        const Vulkan::Buffer& ReorderBuffer() const { return *reorderBuffer_; }
         const Vulkan::Buffer& PrimAddressBuffer() const { return *primAddressBuffer_; }
-        const glm::vec3 GetSunDir() const;
-        const bool HasSun() const;
+        const Vulkan::Buffer& LightGridBuffer() const { return *lightGridBuffer_; }
+        bool HasLightGridBuffer() const { return lightGridBuffer_ != nullptr; }
 
-        const uint32_t GetLightCount() const { return lightCount_; }
-        const uint32_t GetIndicesCount() const { return indicesCount_; }
-        const uint32_t GetVerticeCount() const { return verticeCount_; }
-        const uint32_t GetIndirectDrawBatchCount() const { return indirectDrawBatchCount_; }
-        const uint32_t GetMaxSceneTriangles() const { return maxSceneTriangles_; }
+        uint32_t GetLightCount() const { return lightCount_; }
+        uint32_t GetIndicesCount() const { return indicesCount_; }
+        uint32_t GetIndirectDrawBatchCount() const { return indirectDrawBatchCountBackup_; }
+        uint32_t GetMaxSceneTriangles() const { return maxSceneTriangles_; }
+        uint32_t GetTriangleCount() const { return requiredGpuDrivenTriangleCapacity_; }
 
         int32_t FindNodeIdWithComponent(const std::string& componentType) const;
-        Node* GetNodeById(uint32_t nodeId);
 
         const Assets::GPUDrivenStat& GetGpuDrivenStat() const { return gpuDrivenStat_; }
         const std::array<Assets::GPUDrivenStat, kSunShadowCascadeCount>& GetShadowGpuDrivenStats() const
@@ -131,37 +169,39 @@ namespace Assets
 
         uint32_t GetSelectedId() const { return selectionState_.GetPrimaryId(); }
         const std::vector<uint32_t>& GetSelectedIds() const { return selectionState_.GetIds(); }
-        void SetSelectedId(uint32_t id) const;
-        void SetSelection(const std::vector<uint32_t>& ids) const;
-        void ClearSelection() const;
-        void AddToSelection(uint32_t id) const;
-        void RemoveFromSelection(uint32_t id) const;
-        void ToggleSelection(uint32_t id) const;
+        void SetSelectedId(uint32_t id);
+        void SetSelection(const std::vector<uint32_t>& ids);
+        void ClearSelection();
+        void AddToSelection(uint32_t id);
+        void RemoveFromSelection(uint32_t id);
+        void ToggleSelection(uint32_t id);
         bool IsSelected(uint32_t id) const;
         uint32_t ResolveEditableNodeId(uint32_t id) const;
         uint32_t GetHoveredId() const { return hoveredId_; }
-        void SetHoveredId(uint32_t id) const;
-        void ClearHoveredId() const;
+        void SetHoveredId(uint32_t id);
+        void ClearHoveredId();
         bool IsLocked(uint32_t id) const;
-        void SetLocked(uint32_t id, bool locked) const;
-        void ToggleLocked(uint32_t id) const;
+        void SetLocked(uint32_t id, bool locked);
+        void ToggleLocked(uint32_t id);
         bool GetSelectedNodeBounds(glm::vec3& center, float& radius) const;
         bool GetNodeBounds(uint32_t nodeId, glm::vec3& center, float& radius) const;
-        bool GetGaussianSplatWorldBounds(uint32_t nodeId, glm::vec3& boundsMin, glm::vec3& boundsMax) const;
-        void RayCastGaussianSplats(glm::vec3 rayOrigin, glm::vec3 rayDir, RayCastResult& result) const;
 
         void Tick(float DeltaSeconds);
+        void SyncPhysics();
         void UpdateAllMaterials();
         void MarkMaterialsDirty() { materialDirty_ = true; }
-        bool UpdateNodes();
+        void SyncUpdateScene();
         void UpdateHDRSH();
-        bool UpdateNodesGpuDriven();
+        void StartUpdateNodes();
+        bool EndUpdateNodes();
+        bool GPUUpdateNodes();
 
-        Node* GetNode(std::string name);
+        Node* GetNode(const std::string& name);
+        const Node* GetNode(const std::string& name) const;
         Node* GetNodeByInstanceId(uint32_t id);
         const Model* GetModel(uint32_t id) const;
         const FMaterial* GetMaterial(uint32_t id) const;
-        const uint32_t AddMaterial(const FMaterial& material);
+        uint32_t AddMaterial(const FMaterial& material);
         uint32_t DuplicateMaterial(uint32_t id);
         bool RemoveMaterial(uint32_t id, uint32_t* outSelectedMaterialId = nullptr);
 
@@ -169,31 +209,31 @@ namespace Assets
         void MarkTransformDirty();
         void MarkSelectionDirty();
 
-        std::vector<NodeProxy>& GetNodeProxys() { return nodeProxys; }
+        std::vector<NodeProxy>& GetNodeProxies() { return nodeProxiesBackup; }
 
         void OverrideModelView(glm::mat4& OutMatrix);
 
-        const std::vector<Assets::Camera>& GetCameras() const;
-        const Assets::EnvironmentSetting& GetEnvironmentStrings() const;
-
         Assets::EnvironmentSetting& GetEnvSettings();
         const Assets::EnvironmentSetting& GetEnvSettings() const;
-        void SetEnvSettings(const Assets::EnvironmentSetting& envSettings);
-        Runtime::EnvironmentComponent* GetEnvironmentComponent();
-        const Runtime::EnvironmentComponent* GetEnvironmentComponent() const;
+
+        std::vector<AnimationTrack>& Tracks() { return tracks_; }
+        const std::vector<AnimationTrack>& Tracks() const { return tracks_; }
+        void SetTracksPlaying(bool playing);
+        void EvaluateTracks(float time);
 
         Camera& GetRenderCamera() { return renderCamera_; }
-        void SetRenderCamera(const Camera& camera) { renderCamera_ = camera; }
+        const Camera& GetRenderCamera() const { return renderCamera_; }
 
         void PlayAllTracks();
-
-        void MarkEnvDirty();
-
-        void EnsureGaussianSplatProxyMeshes();
+        bool HasCameraAnimation() const;
 
         void AddNode(std::shared_ptr<Node> node);
+        void AddNodes(std::span<const std::shared_ptr<Node>> nodes);
+        void ClearSkinUpdateRequests();
+        const std::vector<uint32_t>& SkinUpdateRequests() const { return skinUpdateRequests_; }
         void EnsureNodePhysicsBody(Node* node);
         std::shared_ptr<Node> RemoveNodeByInstanceId(uint32_t id);
+        std::vector<std::shared_ptr<Node>> RemoveNodesByInstanceId(std::span<const uint32_t> ids);
         std::shared_ptr<Node> GetNodeSharedByInstanceId(uint32_t id) const;
         uint32_t GenerateInstanceId() const;
 
@@ -206,14 +246,9 @@ namespace Assets
         void RestoreNodes(const std::vector<RemovedNodeEntry>& entries, const std::shared_ptr<Node>& parent,
                           const std::shared_ptr<Node>& root);
 
-        void SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress jointMatrices);
+        Vulkan::Buffer* SkinnedVertexBuffer() const { return skinnedVertexBuffer_.get(); }
 
-        // Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
-
-        Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientArenaBuffer_; }
-        Vulkan::Buffer& AmbientCubePongBuffer() const { return *ambientArenaBuffer_; }
-        Vulkan::Buffer& FarAmbientCubeBuffer() const { return *ambientArenaBuffer_; }
-        Vulkan::Buffer& PageIndexBuffer() const { return *ambientArenaBuffer_; }
+        const Vulkan::Buffer& AmbientArenaBuffer() const { return *ambientArenaBuffer_; }
         // Runtime byte offsets into the arena, sized to the actual allocated cascade capacity (Phase 2)
         // rather than the compile-time GPU_SCENE_AMBIENT_*_OFFSET constants (which assume CASCADE_MAX).
         size_t AmbientCubesByteOffset() const { return 0; }
@@ -233,34 +268,35 @@ namespace Assets
         uint32_t AmbientActiveBrickCount(uint32_t cascade) const;
         void SetAmbientActiveBrickCounts(const std::vector<uint32_t>& counts);
 
-        Vulkan::Buffer& SkinWeightBuffer() const { return *skinWeightBuffer_; }
-        Vulkan::Buffer& SkinJointBuffer() const { return *skinJointBuffer_; }
-
-        Vulkan::Buffer& HDRSHBuffer() const { return *sceneDynamicBuffer_; }
-
         TextureImage& ShadowMap() const;
         TextureImage& EnsureCpuShadowMap(Vulkan::CommandPool& commandPool);
 
-        // GPU CSM 资源（4 个 cascade，单层 D32_SFLOAT，独立 image）。
-        Vulkan::Image& SunShadowImage(uint32_t cascade) const { return *sunShadowImages_[cascade]; }
+        // GPU CSM resources: four cascades, each backed by a separate single-layer D32_SFLOAT image.
         const Vulkan::ImageView& SunShadowImageView(uint32_t cascade) const { return *sunShadowViews_[cascade]; }
         const Vulkan::Sampler& SunShadowSampler() const { return *sunShadowSampler_; }
 
         Assets::CPU::FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
         glm::vec3 GetSceneAABBMin() const { return sceneAABBMin_; }
         glm::vec3 GetSceneAABBMax() const { return sceneAABBMax_; }
-        // Scene saving功能
-        bool Save(const std::string& filename) const;
-        bool SaveAsGLB(const std::string& filename) const;
-        bool SaveAsGLTF(const std::string& filename) const;
 
     private:
+        friend class Node;
+
         std::vector<FMaterial> materials_;
         std::vector<Material> gpuMaterials_;
         std::vector<Model> models_;
-        std::vector<FGaussianSplatData> gaussianSplats_;
         std::vector<std::shared_ptr<Node>> nodes_;
+        struct ComponentBucket
+        {
+            std::vector<Component*> components;
+            std::unordered_map<Node*, size_t> slotByOwner;
+            std::string typeName;
+        };
+        std::unordered_map<entt::id_type, ComponentBucket> componentBuckets_;
+        std::unordered_map<std::string, entt::id_type> componentTypeByName_;
         std::vector<LightObject> lights_;
+        uint64_t lightsGeneration_ = 0;
+        uint64_t lightsSignature_ = 0;
         std::vector<AnimationTrack> tracks_;
         std::vector<ModelData> offsets_;
 
@@ -284,6 +320,9 @@ namespace Assets
 
         std::unique_ptr<Vulkan::Buffer> lightBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> lightBufferMemory_;
+
+        std::unique_ptr<Vulkan::Buffer> lightGridBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> lightGridBufferMemory_;
 
         std::unique_ptr<Vulkan::Buffer> softMeshShaderPrimBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> softMeshShaderPrimBufferMemory_;
@@ -332,6 +371,15 @@ namespace Assets
         std::unique_ptr<Vulkan::Buffer> skinJointBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> skinJointBufferMemory_;
 
+        std::unique_ptr<Vulkan::Buffer> skinnedVertexBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> skinnedVertexBufferMemory_;
+        std::unique_ptr<Vulkan::Buffer> jointMatrixBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> jointMatrixBufferMemory_;
+        uint32_t jointMatrixCapacity_ = 0;
+        uint32_t allocatedJointCount_ = 0;
+        bool jointMatrixUploadDirty_ = false;
+        std::vector<uint32_t> skinUpdateRequests_;
+
         std::unique_ptr<TextureImage> cpuShadowMap_;
 
         std::array<std::unique_ptr<Vulkan::Image>, 4> sunShadowImages_;
@@ -341,24 +389,37 @@ namespace Assets
 
         uint32_t lightCount_{};
         uint32_t indicesCount_{};
-        uint32_t verticeCount_{};
+        uint32_t vertexCount_{};
         uint32_t indirectDrawBatchCount_{};
+        uint32_t indirectDrawBatchCountBackup_{};
         uint32_t maxSceneTriangles_{1};
         uint32_t requiredGpuDrivenTriangleCapacity_{1};
 
-        mutable SceneSelectionState selectionState_;
-        mutable uint32_t hoveredId_ = SceneSelectionState::invalidNodeId;
-        mutable std::unordered_set<uint32_t> lockedIds_;
-        mutable std::unordered_map<uint32_t, std::shared_ptr<Node>> nodeByInstanceId_;
-        mutable bool nodeIndexDirty_ = true;
-        mutable size_t indexedNodeCount_ = 0;
-        mutable uint32_t nextInstanceId_ = 0;
+        SceneSelectionState selectionState_;
+        uint32_t hoveredId_ = SceneSelectionState::invalidNodeId;
+        std::unordered_set<uint32_t> lockedIds_;
+        std::unordered_map<uint32_t, std::shared_ptr<Node>> nodeByInstanceId_;
+        uint32_t nextInstanceId_ = 0;
 
         bool sceneDirtyForCpuAS_ = false;
         bool sceneDirty_ = true;
         bool materialDirty_ = true;
+        SceneRebuildProfile lastRebuildProfile_{};
 
-        std::vector<NodeProxy> nodeProxys;
+        std::vector<NodeProxy> nodeProxies;
+        std::vector<NodeProxy> nodeProxiesBackup;
+        struct NodeProxyUpdateWorkItem
+        {
+            Node* node = nullptr;
+            uint32_t modelId = 0;
+            uint32_t outputOffset = 0;
+            uint32_t proxyCount = 0;
+        };
+        std::vector<NodeProxyUpdateWorkItem> nodeProxyWorkItems_;
+        std::atomic<uint32_t> nodeProxyTasksRemaining_{0};
+        std::atomic<uint64_t> nodeProxyExpandedTriangleCount_{0};
+        std::atomic<bool> nodeProxyMovingNodeDetected_{false};
+        bool nodeProxyUpdatePending_ = false;
 
         glm::mat4 overrideModelView;
         bool requestOverrideModelView = false;
@@ -375,21 +436,40 @@ namespace Assets
 
         glm::vec3 sceneAABBMin_{FLT_MAX, FLT_MAX, FLT_MAX};
         glm::vec3 sceneAABBMax_{-FLT_MAX, -FLT_MAX, -FLT_MAX};
-        std::vector<NextRefConst<NextMeshShapeSettings>> cachedMeshShapes_;
+        std::vector<NextMeshShapeHandle> cachedMeshShapes_;
+        // Static mesh bodies are scene implementation details. Keep their handles here so a
+        // PhysicsComponent is only required for nodes with explicit (kinematic/dynamic) behavior.
+        std::unordered_map<Node*, NextBodyID> staticPhysicsBodies_;
 
-        VkDeviceAddress skinnedVerticesAddr_ = 0;
-        VkDeviceAddress jointMatricesAddr_ = 0;
+        Vulkan::CommandPool* commandPool_ = nullptr;
+
+        void BindNode(Node& node);
+        void UnbindNode(Node& node);
+        void OnNodeComponentChanged(Node& node, entt::id_type componentTypeId, Component* component);
+        void RegisterComponent(Node& node, Component& component);
+        void UnregisterComponent(Node& node, entt::id_type componentTypeId);
+        std::span<Component* const> GetComponentsByType(entt::id_type componentTypeId) const;
+        void RegisterSkinComponent(Runtime::SkinnedMeshComponent& component);
+        void RequestSkinUpdate(uint32_t modelId);
+        void EnsureJointMatrixCapacity();
 
         Runtime::EnvironmentComponent* environmentComponent_ = nullptr;
+        Runtime::EnvironmentComponent* GetEnvironmentComponent();
+        const Runtime::EnvironmentComponent* GetEnvironmentComponent() const;
 
-        void MarkNodeIndexDirty() const { nodeIndexDirty_ = true; }
-        void RebuildNodeIndex() const;
-        void RegisterNodeIndex(const std::shared_ptr<Node>& node) const;
-        void UnregisterNodeIndex(uint32_t id) const;
+        void RebuildNodeIndex();
+        std::vector<LightObject> ResolveActiveLights() const;
+        void UpdateLights();
+        void DrawAreaLights() const;
+        void RegisterNodeIndex(const std::shared_ptr<Node>& node);
+        void UnregisterNodeIndex(uint32_t id);
 
         void RefreshEnvironmentComponentCache();
         void CacheEnvironmentComponentFromNode(Node* node);
 
-        Assets::GPUScene BuildGPUScene(uint32_t imageIndex) const;
+        Assets::GPUScene BuildGPUScene(uint32_t imageIndex, uint32_t viewBankBase) const;
+        bool UpdateNodesGpuDriven();
+        
+        bool needUpdateTLAS = false;
     };
 } // namespace Assets

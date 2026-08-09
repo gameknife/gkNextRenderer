@@ -1,7 +1,7 @@
 // ============================================================================
 // agent_basic.scad - ScadRig 基础角色（AirportSim 角色代理）
 //
-// 约定（docs/ScadRig-Design.md）：
+// 约定（AGENT_GUIDE/ScadRig.md）：
 //   * 1 unit = 1 m，Z-up；根骨骼原点 = 两脚间地面投影（z=0）
 //   * bone_ 前缀 module = 骨骼；调用点外层 translate/rotate = 绑定 pivot
 //   * 顶层 anim_<name> 变量 = 动画 clip（时间秒，rot 为度，OpenSCAD rotate 语义）

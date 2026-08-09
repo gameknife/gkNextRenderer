@@ -1,5 +1,10 @@
 #include "TestCommon.hpp"
 
+#include "Modules/GltfLoader/GltfModule.hpp"
+#include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
+#include "Modules/NextPhysics/NextPhysicsModule.hpp"
+#include "Modules/SplatLoader/SplatModule.hpp"
+
 #include <thread>
 #include <vector>
 
@@ -12,6 +17,9 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 
 EngineTestFixture::EngineTestFixture()
 {
+    // Scene formats are module-provided; tests need glTF for their fixtures.
+    Modules::Gltf::Register();
+
     // Mock arguments
     // Using a minimal resolution to speed up tests, renderer=0 (usually path tracer or default)
     const char* argv[] = {
@@ -30,6 +38,9 @@ EngineTestFixture::EngineTestFixture()
     GOption = options_.get();
 
     engine_ = std::make_unique<NextEngine>(*GOption);
+    DevTools::Install(*engine_);
+    Modules::Splat::Install(*engine_);
+    Modules::Physics::Install(*engine_);
     engine_->Start();
     
     // Warm up a bit to ensure resources are initialized

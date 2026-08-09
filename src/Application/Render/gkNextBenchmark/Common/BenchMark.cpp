@@ -17,10 +17,11 @@ using json = nlohmann::json;
 #include <utility>
 
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/ScreenShot.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Vulkan/Device.hpp"
+
+#include <imgui.h>
 
 // #include <spdlog/spdlog.h>
 
@@ -82,6 +83,37 @@ namespace
     }
 }
 
+void DrawBenchmarkStatsOverlay(NextEngine& engine)
+{
+    const Assets::Scene& scene = engine.GetScene();
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(
+        ImVec2(viewport->GetCenter().x, viewport->Pos.y + 12.0f),
+        ImGuiCond_Always,
+        ImVec2(0.5f, 0.0f));
+    ImGui::SetNextWindowBgAlpha(0.72f);
+
+    constexpr ImGuiWindowFlags flags =
+        ImGuiWindowFlags_AlwaysAutoResize |
+        ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoInputs |
+        ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoFocusOnAppearing |
+        ImGuiWindowFlags_NoNav;
+
+    if (ImGui::Begin("##BenchmarkStats", nullptr, flags))
+    {
+        ImGui::Text(
+            "FPS %.0f  |  Nodes %zu  |  Models %zu  |  Materials %zu  |  Triangles %u",
+            engine.GetFrameRate(),
+            scene.Nodes().size(),
+            scene.Models().size(),
+            scene.Materials().size(),
+            scene.GetTriangleCount());
+    }
+    ImGui::End();
+}
+
 BenchMarker::BenchMarker() : BenchMarker(FBenchmarkSettings{})
 {
 }
@@ -97,7 +129,7 @@ BenchMarker::BenchMarker(FBenchmarkSettings settings) : settings_(std::move(sett
 
     benchmarkCsvReportFile.open(reportFilename);
     benchmarkCsvReportFile << fmt::format(
-        "#,scene,renderer,gpu,driver,resolution,frame_time_ms,gpu_time_ms,fps,vram_mib,draw_calls_actual,draw_calls_total,tris_actual,tris_total,frames,duration_s,dlss,fsr,denoiser,super_resolution\n");
+        "#,scene,renderer,gpu,driver,resolution,frame_time_ms,gpu_time_ms,fps,vram_mib,draw_calls_actual,draw_calls_total,tris_actual,tris_total,frames,duration_s,upscaler_type,super_resolution\n");
 }
 
 BenchMarker::~BenchMarker() { benchmarkCsvReportFile.close(); }
@@ -118,10 +150,16 @@ void BenchMarker::OnSceneStart(double nowInSeconds)
     measurementInitialTime_ = 0.0;
     previousMeasurementTime_ = 0.0;
     measurementStarted_ = false;
+    reportCompleted_ = false;
 }
 
 bool BenchMarker::OnTick(double nowInSeconds, Vulkan::VulkanBaseRenderer* renderer)
 {
+    if (reportCompleted_)
+    {
+        return false;
+    }
+
     double prevTime = time_;
     time_ = nowInSeconds;
     // Initialise scene benchmark timers
@@ -169,9 +207,9 @@ bool BenchMarker::OnTick(double nowInSeconds, Vulkan::VulkanBaseRenderer* render
     frameTimeTotalMilliseconds_ += frameSeconds * 1000.0;
     benchmarkTotalFrames_++;
 
-    if (renderer != nullptr && renderer->GpuTimer() != nullptr)
+    if (renderer != nullptr && renderer->Profiler() != nullptr)
     {
-        const float gpuMilliseconds = renderer->GpuTimer()->GetGpuTime("[gpu]");
+        const float gpuMilliseconds = renderer->Profiler()->GetGpuTime("[gpu]");
         if (gpuMilliseconds > 0.0f)
         {
             gpuTimeTotalMilliseconds_ += gpuMilliseconds;
@@ -199,6 +237,7 @@ bool BenchMarker::OnTick(double nowInSeconds, Vulkan::VulkanBaseRenderer* render
 
 void BenchMarker::OnReport(Vulkan::VulkanBaseRenderer* renderer, const std::string& sceneName)
 {
+    reportCompleted_ = true;
     Report(renderer, std::filesystem::path(sceneName).filename().replace_extension().string(), false, GOption->SaveFile);
 }
 
@@ -228,7 +267,7 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, const std::string
     vkGetPhysicalDeviceProperties(renderer->Device().PhysicalDevice(), &deviceProp1);
     const std::string driverInfo = GetPhysicalDeviceDriverInfo(renderer->Device().PhysicalDevice(), deviceProp1);
 
-    benchmarkCsvReportFile << fmt::format("{},{},{},{},{},{},{:.3f},{:.3f},{:.2f},{:.1f},{:.2f},{:.2f},{:.2f},{:.2f},{},{:.3f},{},{},{},{}\n",
+    benchmarkCsvReportFile << fmt::format("{},{},{},{},{},{},{:.3f},{:.3f},{:.2f},{:.1f},{:.2f},{:.2f},{:.2f},{:.2f},{},{:.3f},{},{}\n",
                                           benchUnit_++,
                                           sceneName,
                                           rendererName,
@@ -245,9 +284,7 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, const std::string
                                           trisTotal,
                                           benchmarkTotalFrames_,
                                           totalTime,
-                                          userSettings.DLSS ? 1 : 0,
-                                          userSettings.FSR ? 1 : 0,
-                                          userSettings.Denoiser ? 1 : 0,
+                                          userSettings.UpscalerType,
                                           userSettings.SuperResolution);
     benchmarkCsvReportFile.flush();
 
@@ -258,7 +295,7 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, const std::string
     std::string imgEncoded{};
     if (uploadScreen || saveScreen)
     {
-        Runtime::ScreenShot::SaveSwapChainToFile(renderer, sceneName, 0, 0, 0, 0);
+        NextEngine::GetInstance()->RequestScreenShot({.filename = sceneName});
     }
 
     // perf server upload

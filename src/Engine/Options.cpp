@@ -7,172 +7,224 @@
 namespace Runtime::Config
 {
 
+namespace
+{
+    // Groups shown by --help. Automation options exist for gnb and CI drivers and only
+    // appear with --help-all, so the default usage text stays readable for end users.
+    const std::vector<std::string> UserFacingGroups = {"", "Display", "Rendering", "Remote Play", "Terminal", "Diagnostics"};
+    const std::vector<std::string> AllGroups = {"", "Display", "Rendering", "Remote Play", "Terminal", "Diagnostics", "Automation"};
+}
+
 Options::Options(const int argc, const char* argv[])
 {
-	const bool disableStreamlineForApplication =
-		argc > 0 && argv[0] != nullptr &&
-		std::filesystem::path(argv[0]).stem().string() == "gkNextEditor";
+    const bool disableStreamlineForApplication =
+        argc > 0 && argv[0] != nullptr &&
+        std::filesystem::path(argv[0]).stem().string() == "gkNextEditor";
 
-	cxxopts::Options options("options", "");
-	std::string remoteResolution;
-	options.add_options()
-		("load-scene", "The scene to load. absolute path or relative path to project root.", cxxopts::value<std::string>(SceneName)->default_value(""))
-		("hdri", "The HDRI file to load.", cxxopts::value<std::string>(HDRIfile)->default_value(""))
+    cxxopts::Options options("gkNextRenderer", "A cross-platform Vulkan renderer and engine.");
+    std::string remoteResolution;
 
-		("gpu", "Explicitly set the usage gpu idx.", cxxopts::value<uint32_t>(GpuIdx)->default_value("0"))
+    options.add_options()
+        ("load-scene", "Scene to load. Absolute path, or relative to the application directory.", cxxopts::value<std::string>(SceneName)->default_value(""))
+        ("hdri", "HDR environment map to load.", cxxopts::value<std::string>(HDRIfile)->default_value(""))
+        ("locale", "User interface language: en or zhCN. The interface is predominantly English; zhCN covers a subset.", cxxopts::value<std::string>(locale)->default_value("en"))
+        ("h,help", "Print the common options.")
+        ("help-all", "Print every option, including automation and test hooks.");
 
-		("width", "The framebuffer width.", cxxopts::value<uint32_t>(Width)->default_value("1920"))
-		("height", "The framebuffer height.", cxxopts::value<uint32_t>(Height)->default_value("1080"))
-		("present-mode", "The present mode (0 = Immediate, 1 = MailBox, 2 = FIFO, 3 = FIFORelaxed).", cxxopts::value<uint32_t>(PresentMode)->default_value("3"))
-		("fullscreen", "Toggle fullscreen vs windowed (default: windowed).", cxxopts::value<bool>(Fullscreen)->default_value("false"))
+    options.add_options("Display")
+        ("width", "Framebuffer width in pixels.", cxxopts::value<uint32_t>(Width)->default_value("1920"))
+        ("height", "Framebuffer height in pixels.", cxxopts::value<uint32_t>(Height)->default_value("1080"))
+        ("fullscreen", "Start borderless fullscreen instead of windowed.", cxxopts::value<bool>(Fullscreen)->default_value("false"))
+        ("present-mode", "Presentation mode (0 = Immediate, 1 = MailBox, 2 = FIFO, 3 = FIFO relaxed).", cxxopts::value<uint32_t>(PresentMode)->default_value("2"))
+        ("forcesdr", "Force SDR output even when the display supports HDR.", cxxopts::value<bool>(ForceSDR)->default_value("false"))
+        ("system-dpi-scaling", "Use legacy Windows bitmap DPI scaling instead of engine-native DPI scaling.",
+         cxxopts::value<bool>(SystemDpiScaling)->default_value("false")->implicit_value("true"));
 
-		("savefile", "Save screenshot every benchmark finish.", cxxopts::value<bool>(SaveFile)->default_value("false"))
-		("renderdoc", "Attach renderdoc if available.", cxxopts::value<bool>(RenderDoc)->default_value("false"))
-		("forcesdr", "Force use SDR Display even supported.", cxxopts::value<bool>(ForceSDR)->default_value("false"))
-		("locale", "Locale: en, zhCN, RU.", cxxopts::value<std::string>(locale)->default_value("en"))
-		("reference", "Reference Renderer Compare Mode.", cxxopts::value<bool>(ReferenceMode)->default_value("false"))
-		("forcenort", "Forcing hardware raytracing not supported.", cxxopts::value<bool>(ForceNoRT)->default_value("false"))
-		("forcesoftgen", "Forcing software raytracing for ambient cube gen.", cxxopts::value<bool>(ForceSoftGen)->default_value("false"))
-		
-		("hwquery", "Forcing hardware raytracing not supported.", cxxopts::value<bool>(HardwareQuery)->default_value("true"))
-		("validation", "Force enable validation layers.", cxxopts::value<bool>(Validation)->default_value("false"))
-		("fastexit", "Enable fast exit by skipping task wait.", cxxopts::value<bool>(FastExit)->default_value("true"))
-		("agent-validation", "Enable agent validation: render to a stable frame, capture one screenshot to a fixed path, then auto-exit. Window does not steal focus.", cxxopts::value<bool>(AgentValidation)->default_value("false")->implicit_value("true"))
-		("agent-validation-ui", "Include ImGui UI in the agent validation screenshot.", cxxopts::value<bool>(AgentValidationUI)->default_value("false")->implicit_value("true"))
-		("agent-visible-window", "Keep the desktop window visible while running agent validation or an agent script.", cxxopts::value<bool>(AgentVisibleWindow)->default_value("false")->implicit_value("true"))
-		("agent-validation-frames", "Frames to render before the agent validation screenshot.", cxxopts::value<uint32_t>(AgentValidationFrames)->default_value("90"))
-		("agent-validation-out", "Output path (without extension) for the agent validation screenshot.", cxxopts::value<std::string>(AgentValidationOutput)->default_value("screenshots/agent_validation"))
-		("agent-script", "Run an agent input validation script (.agentscript.json). Implies hidden agent validation mode.", cxxopts::value<std::string>(AgentScript)->default_value(""))
-		("agent-report", "Output JSON report path for --agent-script.", cxxopts::value<std::string>(AgentReport)->default_value(""))
-		("hidden-window", "Create the window hidden (no focus steal / no popup). Implied by --agent-validation; useful for unit tests.", cxxopts::value<bool>(HiddenWindow)->default_value("false")->implicit_value("true"))
-		("tui", "Render the hidden swapchain into the current terminal using truecolor block characters.", cxxopts::value<bool>(Tui)->default_value("false")->implicit_value("true"))
-		("tui-fps", "Maximum terminal refresh rate for --tui.", cxxopts::value<uint32_t>(TuiFps)->default_value("30"))
-		("tui-max-cols", "Optional column cap for --tui (0 = auto).", cxxopts::value<uint32_t>(TuiMaxCols)->default_value("0"))
-		("tui-max-rows", "Optional row cap for --tui (0 = auto).", cxxopts::value<uint32_t>(TuiMaxRows)->default_value("0"))
-		("tui-ssaa", "Supersample factor for --tui hidden rendering (1-4).", cxxopts::value<uint32_t>(TuiSsaa)->default_value("1"))
-		("tui-no-input", "Do not capture stdin in --tui mode.", cxxopts::value<bool>(TuiNoInput)->default_value("false")->implicit_value("true"))
-		("disable-streamline", "Disable NVIDIA Streamline/DLSS integration for this process.", cxxopts::value<bool>(DisableStreamline)->default_value("false")->implicit_value("true"))
-		("remote", "Enable WebRTC Remote Play host mode. Implies --hidden-window and --forcesdr unless --remote-show-window is set.", cxxopts::value<bool>(RemoteMode)->default_value("false")->implicit_value("true"))
-		("remote-show-window", "Keep the desktop window visible while --remote is active.", cxxopts::value<bool>(RemoteShowWindow)->default_value("false")->implicit_value("true"))
-		("remote-multiview", "Enable Cloud Play multi-client multi-view mode. Each browser owns an independent remote camera/input context.", cxxopts::value<bool>(RemoteMultiView)->default_value("false")->implicit_value("true"))
-		("remote-bind", "Remote Play bind address.", cxxopts::value<std::string>(RemoteBind)->default_value("0.0.0.0"))
-		("remote-http-port", "Remote Play HTTP client port.", cxxopts::value<uint32_t>(RemoteHttpPort)->default_value("8088"))
-		("remote-port", "Remote Play signaling WebSocket port.", cxxopts::value<uint32_t>(RemotePort)->default_value("8089"))
-		("remote-bitrate", "Remote Play starting video bitrate in kbps. 0 = auto.", cxxopts::value<uint32_t>(RemoteBitrateKbps)->default_value("0"))
-		("remote-fps", "Remote Play target stream frame rate.", cxxopts::value<uint32_t>(RemoteFps)->default_value("60"))
-		("remote-res", "Remote Play encode resolution, e.g. 1280x720. Empty means source resolution.", cxxopts::value<std::string>(remoteResolution)->default_value(""))
-		("remote-max-clients", "Maximum simultaneous Remote Play clients in --remote-multiview mode.", cxxopts::value<uint32_t>(RemoteMaxClients)->default_value("2"))
-		("remote-encoder", "Remote Play video encoder: auto or vulkan.", cxxopts::value<std::string>(RemoteEncoder)->default_value("auto"))
-		("keep-cpu-mesh-data", "Keep CPU mesh data for editor mode.", cxxopts::value<bool>(KeepCPUMeshData)->default_value("false"))
-		("update-baseline", "Update visual test baseline images from the current run.", cxxopts::value<bool>(UpdateVisualTestBaseline)->default_value("false")->implicit_value("true"))
-		("flappy-replay", "Run Flappy deterministic replay and write trace output.", cxxopts::value<bool>(FlappyReplay)->default_value("false")->implicit_value("true"))
-		("shader-hotreload", "Enable Slang shader hot reload.", cxxopts::value<bool>(ShaderHotReload)->default_value("true")->implicit_value("true"))
-		("no-shader-hotreload", "Disable Slang shader hot reload.", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
-		("shader-hotreload-interval", "Slang shader hot reload poll interval in seconds.", cxxopts::value<float>(ShaderHotReloadInterval)->default_value("0.5"))
-		("cvar", "Apply a startup CVar override, e.g. --cvar \"r.dlss 1\". Can be repeated.", cxxopts::value<std::vector<std::string>>(CVarOverrides))
-		("benchmark-config", "Load gkNextMotionBenchmark orchestration JSON.", cxxopts::value<std::string>(BenchmarkConfig)->default_value(""))
+    options.add_options("Rendering")
+        ("gpu", "Index of the GPU to render on. Use --hwquery to list capabilities.", cxxopts::value<uint32_t>(GpuIdx)->default_value("0"))
+        ("forcenort", "Disable hardware ray tracing and fall back to the software renderers.", cxxopts::value<bool>(ForceNoRT)->default_value("false"))
+        ("forcesoftgen", "Force software ray tracing for ambient cube generation.", cxxopts::value<bool>(ForceSoftGen)->default_value("false"))
+        ("disable-streamline", "Disable NVIDIA Streamline (DLSS, Reflex, Frame Generation).", cxxopts::value<bool>(DisableStreamline)->default_value("false")->implicit_value("true"))
+        ("disable-fidelityfx", "Disable AMD FidelityFX (FSR).", cxxopts::value<bool>(DisableFidelityFX)->default_value("false")->implicit_value("true"))
+        ("cvar", "Apply a startup CVar override, e.g. --cvar \"r.upscaler.type 1\". Repeatable.", cxxopts::value<std::vector<std::string>>(CVarOverrides))
+        ("shader-hotreload", "Enable Slang shader hot reload.", cxxopts::value<bool>(ShaderHotReload)->default_value("true")->implicit_value("true"))
+        ("no-shader-hotreload", "Disable Slang shader hot reload.", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+        ("shader-hotreload-interval", "Shader hot reload poll interval in seconds.", cxxopts::value<float>(ShaderHotReloadInterval)->default_value("0.5"))
+        ("reference", "Reference renderer comparison mode.", cxxopts::value<bool>(ReferenceMode)->default_value("false"))
+        ("savefile", "Save a screenshot after each benchmark run.", cxxopts::value<bool>(SaveFile)->default_value("false"));
 
-		("test-gltf", "Run glTF robustness test from Khronos Sample Assets.", cxxopts::value<bool>(TestGltfRobustness)->default_value("false"))
-		("test-gltf-filter", "Filter for glTF robustness test (partial name match).", cxxopts::value<std::string>(TestGltfFilter)->default_value(""))
+    options.add_options("Remote Play")
+        ("remote", "Enable WebRTC Remote Play host mode. Implies --hidden-window and --forcesdr unless --remote-show-window is set.", cxxopts::value<bool>(RemoteMode)->default_value("false")->implicit_value("true"))
+        ("remote-show-window", "Keep the desktop window visible while --remote is active.", cxxopts::value<bool>(RemoteShowWindow)->default_value("false")->implicit_value("true"))
+        ("remote-multiview", "Give each browser client its own camera and input context. Requires --remote.", cxxopts::value<bool>(RemoteMultiView)->default_value("false")->implicit_value("true"))
+        ("remote-bind", "Bind address.", cxxopts::value<std::string>(RemoteBind)->default_value("0.0.0.0"))
+        ("remote-http-port", "HTTP port serving the browser client.", cxxopts::value<uint32_t>(RemoteHttpPort)->default_value("8088"))
+        ("remote-port", "Signaling WebSocket port.", cxxopts::value<uint32_t>(RemotePort)->default_value("8089"))
+        ("remote-bitrate", "Starting video bitrate in kbps. 0 = automatic.", cxxopts::value<uint32_t>(RemoteBitrateKbps)->default_value("0"))
+        ("remote-fps", "Target stream frame rate.", cxxopts::value<uint32_t>(RemoteFps)->default_value("60"))
+        ("remote-res", "Encode resolution, e.g. 1280x720. Empty means the source resolution.", cxxopts::value<std::string>(remoteResolution)->default_value(""))
+        ("remote-max-clients", "Maximum simultaneous clients in --remote-multiview mode.", cxxopts::value<uint32_t>(RemoteMaxClients)->default_value("2"))
+        ("remote-encoder", "Video encoder: auto or vulkan.", cxxopts::value<std::string>(RemoteEncoder)->default_value("auto"));
 
-		("h,help", "Print usage");
-	try
-	{
-		auto result = options.parse(argc, argv);
-		if (!AgentScript.empty())
-		{
-			AgentValidation = true;
-			if (!AgentVisibleWindow)
-			{
-				HiddenWindow = true;
-			}
-		}
-		DisableStreamline = DisableStreamline || disableStreamlineForApplication || AgentValidation;
+    options.add_options("Terminal")
+        ("tui", "Render into the current terminal using truecolor block characters.", cxxopts::value<bool>(Tui)->default_value("false")->implicit_value("true"))
+        ("tui-fps", "Maximum terminal refresh rate.", cxxopts::value<uint32_t>(TuiFps)->default_value("30"))
+        ("tui-max-cols", "Column cap (0 = auto).", cxxopts::value<uint32_t>(TuiMaxCols)->default_value("0"))
+        ("tui-max-rows", "Row cap (0 = auto).", cxxopts::value<uint32_t>(TuiMaxRows)->default_value("0"))
+        ("tui-ssaa", "Supersample factor for hidden rendering (1-16).", cxxopts::value<uint32_t>(TuiSsaa)->default_value("4"))
+        ("tui-cell-mode", "Character layout: half or quadrant.", cxxopts::value<std::string>(TuiCellMode)->default_value("half"))
+        ("tui-no-input", "Do not capture stdin.", cxxopts::value<bool>(TuiNoInput)->default_value("false")->implicit_value("true"));
 
-		if (result.count("help"))
-		{
-			std::cout << options.help() << std::endl;
-			exit(0);
-		}
+    options.add_options("Diagnostics")
+        ("hwquery", "Log the selected device's ray tracing and feature support at startup.", cxxopts::value<bool>(HardwareQuery)->default_value("true"))
+        ("validation", "Enable Vulkan validation layers.", cxxopts::value<bool>(Validation)->default_value("false"))
+        ("sync-validation", "Enable Vulkan synchronization validation. Implies --validation.", cxxopts::value<bool>(SyncValidation)->default_value("false")->implicit_value("true"))
+        ("vulkan-driver", "Vulkan driver selection: native, lvp, or dozen (Windows).", cxxopts::value<std::string>(VulkanDriver)->default_value("native"))
+        ("renderdoc", "Attach RenderDoc if available.", cxxopts::value<bool>(RenderDoc)->default_value("false"))
+        ("hidden-window", "Create the window hidden: no popup and no focus steal.", cxxopts::value<bool>(HiddenWindow)->default_value("false")->implicit_value("true"))
+        ("benchmark-config", "Load a gkNextMotionBenchmark orchestration JSON.", cxxopts::value<std::string>(BenchmarkConfig)->default_value(""));
 
-		if (result["no-shader-hotreload"].as<bool>())
-		{
-			ShaderHotReload = false;
-		}
+    options.add_options("Automation")
+        ("agent-validation", "Agent validation mode: hidden window, immediate present, deterministic pacing. Driven by gnb (see `gnb shot` / `gnb validate`).", cxxopts::value<bool>(AgentValidation)->default_value("false")->implicit_value("true"))
+        ("agent-visible-window", "Keep the window visible during agent validation.", cxxopts::value<bool>(AgentVisibleWindow)->default_value("false")->implicit_value("true"))
+        ("agent-control", "Loopback endpoint for gnb runtime control (host:port).", cxxopts::value<std::string>(AgentControl)->default_value(""))
+        ("agent-control-token", "One-time token for gnb runtime control.", cxxopts::value<std::string>(AgentControlToken)->default_value(""))
+        ("fastexit", "Skip task teardown on exit.", cxxopts::value<bool>(FastExit)->default_value("true"))
+        ("update-baseline", "Update visual test baseline images from the current run.", cxxopts::value<bool>(UpdateVisualTestBaseline)->default_value("false")->implicit_value("true"))
+        ("flappy-replay", "Run the Flappy deterministic replay and write trace output.", cxxopts::value<bool>(FlappyReplay)->default_value("false")->implicit_value("true"))
+        ("cpp-live-coding", "Enable Live++ C++ live coding when compiled in.", cxxopts::value<bool>(CppLiveCoding)->default_value("true")->implicit_value("true"))
+        ("no-cpp-live-coding", "Disable Live++ C++ live coding.", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+        ("test-gltf", "Run the glTF robustness test from the Khronos Sample Assets (test runner only).", cxxopts::value<bool>(TestGltfRobustness)->default_value("false"))
+        ("test-gltf-filter", "Filter for the glTF robustness test (partial name match).", cxxopts::value<std::string>(TestGltfFilter)->default_value(""));
 
-		if (ShaderHotReloadInterval < 0.1f)
-		{
-			ShaderHotReloadInterval = 0.1f;
-		}
+    try
+    {
+        auto result = options.parse(argc, argv);
 
-		if (!remoteResolution.empty())
-		{
-			const size_t separator = remoteResolution.find('x');
-			if (separator == std::string::npos || separator == 0 || separator + 1 >= remoteResolution.size())
-			{
-				Throw(std::out_of_range("Invalid --remote-res. Expected WIDTHxHEIGHT."));
-			}
-			try
-			{
-				RemoteWidth = static_cast<uint32_t>(std::stoul(remoteResolution.substr(0, separator)));
-				RemoteHeight = static_cast<uint32_t>(std::stoul(remoteResolution.substr(separator + 1)));
-			}
-			catch (const std::exception&)
-			{
-				Throw(std::out_of_range("Invalid --remote-res. Expected WIDTHxHEIGHT."));
-			}
-		}
+        if (result.count("help-all"))
+        {
+            std::cout << options.help(AllGroups) << std::endl;
+            exit(0);
+        }
+        if (result.count("help"))
+        {
+            std::cout << options.help(UserFacingGroups) << std::endl;
+            std::cout << "Run with --help-all to also list automation and test options." << std::endl;
+            exit(0);
+        }
 
-		if (RemoteMode)
-		{
-			ForceSDR = true;
-			if (!RemoteShowWindow)
-			{
-				HiddenWindow = true;
-			}
-			if (RemoteFps == 0)
-			{
-				RemoteFps = 60;
-			}
-			if (RemoteHttpPort > 65535 || RemotePort > 65535)
-			{
-				Throw(std::out_of_range("Remote Play ports must be in range 0..65535."));
-			}
-			if (RemoteEncoder != "auto" && RemoteEncoder != "vulkan")
-			{
-				Throw(std::out_of_range("Invalid --remote-encoder. Expected auto or vulkan."));
-			}
-			if (RemoteMaxClients == 0)
-			{
-				Throw(std::out_of_range("Remote Play --remote-max-clients must be at least 1."));
-			}
-		}
-		else if (RemoteMultiView)
-		{
-			Throw(std::out_of_range("--remote-multiview requires --remote."));
-		}
+        if (SyncValidation)
+        {
+            Validation = true;
+        }
+        DisableStreamline = DisableStreamline || disableStreamlineForApplication || AgentValidation;
+        DisableFidelityFX = DisableFidelityFX || AgentValidation;
 
-		if (Tui)
-		{
-			ForceSDR = true;
-			HiddenWindow = true;
-			if (TuiFps == 0)
-			{
-				TuiFps = 30;
-			}
-			TuiSsaa = std::clamp(TuiSsaa, 1u, 4u);
-		}
+        if (VulkanDriver != "native" && VulkanDriver != "lvp" && VulkanDriver != "dozen")
+        {
+            Throw(std::out_of_range("Invalid --vulkan-driver. Expected native, lvp, or dozen."));
+        }
+        if (VulkanDriver == "lvp" || VulkanDriver == "dozen")
+        {
+            // These integrations expect a native vendor driver and their device
+            // augmenters are not part of the software-ICD path.
+            DisableStreamline = true;
+            DisableFidelityFX = true;
+        }
 
-		if (PresentMode > 3)
-		{
-			Throw(std::out_of_range("Invalid present mode."));
-		}
-	}
-	catch ( const cxxopts::exceptions::exception& e)
-	{
-		std::cerr << e.what() << std::endl;
-		exit(0);
-	}
+        if (result["no-shader-hotreload"].as<bool>())
+        {
+            ShaderHotReload = false;
+        }
+
+        if (result["no-cpp-live-coding"].as<bool>() || AgentValidation)
+        {
+            CppLiveCoding = false;
+        }
+
+        if (ShaderHotReloadInterval < 0.1f)
+        {
+            ShaderHotReloadInterval = 0.1f;
+        }
+
+        if (!remoteResolution.empty())
+        {
+            const size_t separator = remoteResolution.find('x');
+            if (separator == std::string::npos || separator == 0 || separator + 1 >= remoteResolution.size())
+            {
+                Throw(std::out_of_range("Invalid --remote-res. Expected WIDTHxHEIGHT."));
+            }
+            try
+            {
+                RemoteWidth = static_cast<uint32_t>(std::stoul(remoteResolution.substr(0, separator)));
+                RemoteHeight = static_cast<uint32_t>(std::stoul(remoteResolution.substr(separator + 1)));
+            }
+            catch (const std::exception&)
+            {
+                Throw(std::out_of_range("Invalid --remote-res. Expected WIDTHxHEIGHT."));
+            }
+        }
+
+        if (RemoteMode)
+        {
+            ForceSDR = true;
+            if (!RemoteShowWindow)
+            {
+                HiddenWindow = true;
+            }
+            if (RemoteFps == 0)
+            {
+                RemoteFps = 60;
+            }
+            if (RemoteHttpPort > 65535 || RemotePort > 65535)
+            {
+                Throw(std::out_of_range("Remote Play ports must be in range 0..65535."));
+            }
+            if (RemoteEncoder != "auto" && RemoteEncoder != "vulkan")
+            {
+                Throw(std::out_of_range("Invalid --remote-encoder. Expected auto or vulkan."));
+            }
+            if (RemoteMaxClients == 0)
+            {
+                Throw(std::out_of_range("Remote Play --remote-max-clients must be at least 1."));
+            }
+        }
+        else if (RemoteMultiView)
+        {
+            Throw(std::out_of_range("--remote-multiview requires --remote."));
+        }
+
+        if (Tui)
+        {
+            ForceSDR = true;
+            HiddenWindow = true;
+            if (TuiFps == 0)
+            {
+                TuiFps = 30;
+            }
+            TuiSsaa = std::clamp(TuiSsaa, 1u, 16u);
+            if (TuiCellMode == "half-block")
+            {
+                TuiCellMode = "half";
+            }
+            if (TuiCellMode != "half" && TuiCellMode != "quadrant")
+            {
+                Throw(std::out_of_range("Invalid --tui-cell-mode. Expected half or quadrant."));
+            }
+        }
+
+        if (PresentMode > 3)
+        {
+            Throw(std::out_of_range("Invalid present mode."));
+        }
+    }
+    catch (const cxxopts::exceptions::exception& e)
+    {
+        // A bad command line is a failure: exiting 0 made scripts and CI treat a typo
+        // as a successful run.
+        std::cerr << e.what() << "\n\nRun with --help for the available options." << std::endl;
+        exit(2);
+    }
 }
 
 }

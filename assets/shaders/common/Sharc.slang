@@ -1,11 +1,24 @@
+implementing PathTracing;
+
+#include "PreProcessor.slang"
+
+// Availability is judged per-feature on the extras table fields, not on the table pointer:
+// the table also exists when only ReSTIR is enabled (see FTracingExtras). The null check
+// is an explicit branch on purpose — scalar && does not guarantee short-circuiting here, and
+// the field load must never execute against a null table pointer.
 public bool SharcIsAvailable()
 {
-    return Bindless.GetGpuscene().Sharc != (SharcResources*)0;
+    FTracingExtras* extras = Bindless.GetGpuscene().TracingExtras;
+    if (extras == (FTracingExtras*)0)
+    {
+        return false;
+    }
+    return extras[0].HashEntries != 0;
 }
 
 public SharcRuntimeParameters SharcGetRuntimeParameters()
 {
-    SharcResources* resources = Bindless.GetGpuscene().Sharc;
+    FTracingExtras* resources = Bindless.GetGpuscene().TracingExtras;
     return ((SharcRuntimeParameters*)resources[0].Parameters)[0];
 }
 
@@ -30,7 +43,7 @@ public SharcRuntimeParameters SharcGetRuntimeParameters()
 
 SharcParameters SharcBuildParameters()
 {
-    SharcResources* resources = Bindless.GetGpuscene().Sharc;
+    FTracingExtras* resources = Bindless.GetGpuscene().TracingExtras;
     SharcRuntimeParameters runtime = SharcGetRuntimeParameters();
 
     UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];

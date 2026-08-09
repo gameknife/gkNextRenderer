@@ -1,16 +1,19 @@
 #include "EditorUi.hpp"
 
 #include "EditorDragDrop.hpp"
+#include "EditorMain.h"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "EditorActionDispatcher.hpp"
-#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
 #include "Modules/DevTools/GizmoController.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
+#include "Engine/Rendering/RendererChoices.hpp"
+#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/ImGui.hpp"
 
@@ -25,32 +28,6 @@ namespace Editor
     namespace
     {
         constexpr float kToolIconWidth = 34.0f;
-
-        std::vector<Vulkan::ERendererType> BuildSupportedRendererList(NextEngine& engine)
-        {
-            std::vector<Vulkan::ERendererType> supportedTypes;
-            const bool hasFullAmbientCubeBudget = engine.GetRenderer().HasFullAmbientCubeBudget();
-            if (hasFullAmbientCubeBudget)
-            {
-                supportedTypes = {
-                    Vulkan::ERT_SoftwareTracing,
-                    Vulkan::ERT_SoftwareModern,
-                    Vulkan::ERT_VoxelTracing,
-                    Vulkan::ERT_SoftwareModernNoAmbient,
-                };
-            }
-            else
-            {
-                supportedTypes = {Vulkan::ERT_SoftwareModernNoAmbient};
-            }
-
-            if (engine.GetRenderer().SupportsRayTracing() && hasFullAmbientCubeBudget)
-            {
-                supportedTypes.emplace_back(Vulkan::ERT_PathTracing);
-            }
-
-            return supportedTypes;
-        }
 
         bool CanAuthorSceneReferences(const std::string& currentScenePath)
         {
@@ -124,11 +101,11 @@ namespace Editor
                                                                                origin, dir);
 
                                     NextEngine* engine = &ctx.engine;
-                                    engine->RayCastGPU(origin, dir,
+                                    engine->RayCast(origin, dir,
                                                        [engine, path](Assets::RayCastResult result) mutable
                                                        {
                                                            const glm::vec3 translation =
-                                                               result.Hitted ? result.HitPoint : glm::vec3(0.0f);
+                                                               result.Hit ? result.HitPoint : glm::vec3(0.0f);
                                                            engine->RequestAddSceneReference(path, translation);
                                                            return true;
                                                        });
@@ -148,10 +125,10 @@ namespace Editor
                             Runtime::EngineHelper::GetScreenToWorldRay(glm::vec2(mousePos.x, mousePos.y), origin, dir);
 
                             Assets::Scene* scene = &ctx.scene;
-                            ctx.engine.RayCastGPU(origin, dir,
+                            ctx.engine.RayCast(origin, dir,
                                                   [scene, materialId](Assets::RayCastResult result)
                                                   {
-                                                      if (result.Hitted)
+                                                      if (result.Hit)
                                                       {
                                                           Assets::Node* node =
                                                               scene->GetNodeByInstanceId(result.InstanceId);
@@ -182,77 +159,170 @@ namespace Editor
         }
 
         constexpr float padding = 8.0f;
+        constexpr float toolbarItemSpacing = 4.0f;
+        const float toolbarHeight = std::ceil(ImGui::GetFontSize() + 22.0f);
+        const float toolH = toolbarHeight;
+        const float toolW = std::max(60.0f, std::min(kToolIconWidth + 16.0f, size.x - padding * 2.0f));
+
+        Runtime::Config::UserSettings& userSettings = ctx.engine.GetUserSettings();
+        auto& renderer = ctx.engine.GetRenderer();
+        const auto supportedRenderers = Rendering::AvailableRendererChoices({
+            renderer.SupportsRayTracing(), renderer.HasFullAmbientCubeBudget()});
+        Vulkan::ERendererType currentRendererType = renderer.CurrentLogicRendererType();
+        const auto currentChoice = std::find_if(
+            supportedRenderers.begin(), supportedRenderers.end(),
+            [currentRendererType](const Rendering::FRendererChoice* choice)
+            {
+                return choice->type == currentRendererType;
+            });
+        if (currentChoice == supportedRenderers.end())
+        {
+            currentRendererType = supportedRenderers.empty() ? Vulkan::ERT_SoftwareModernNoAmbient
+                                                             : supportedRenderers.front()->type;
+        }
+
+        // Match gkNextRenderer's viewport toolbar metrics and flat-control styling.
+        float widestRendererName = 0.0f;
+        for (const Rendering::FRendererChoice* choice : supportedRenderers)
+        {
+            widestRendererName =
+                std::max(widestRendererName, ImGui::CalcTextSize(choice->displayName).x);
+        }
+        constexpr float toolbarFramePaddingX = 7.0f;
+        constexpr float toolbarFramePaddingY = 3.0f;
+        const float comboArrowWidth = ImGui::GetFontSize() + toolbarFramePaddingY * 2.0f;
+        const auto comboWidth = [&](float textWidth)
+        {
+            return std::ceil(textWidth + toolbarFramePaddingX * 2.0f + comboArrowWidth);
+        };
+        const auto buttonWidth = [&](float textWidth)
+        {
+            return std::ceil(textWidth + toolbarFramePaddingX * 2.0f);
+        };
+        const float rendererComboWidth = comboWidth(widestRendererName);
+        const float progressiveButtonWidth = buttonWidth(std::max(
+            ImGui::CalcTextSize("Progressive").x, ImGui::CalcTextSize("Realtime").x));
+        const auto& upscalerInfo = Rendering::Upscaler::GetUpscalerTypeInfo(
+            static_cast<uint32_t>(std::max(0, userSettings.UpscalerType)));
+        const auto& upscaleModeInfo = Rendering::Upscaler::GetUpscaleModeInfo(userSettings.SuperResolution);
+        const std::string upscalerLabel = fmt::format("{} · {}", upscalerInfo.name, upscaleModeInfo.name);
+        const float upscalerComboWidth = comboWidth(ImGui::CalcTextSize(upscalerLabel.c_str()).x);
+        const float showButtonWidth =
+            buttonWidth(ImGui::CalcTextSize(ICON_FA_EYE " Show").x);
+        const float availableToolbarWidth = std::max(0.0f, size.x - padding * 3.0f - toolW);
+        const float fullToolbarWidth = rendererComboWidth + progressiveButtonWidth + upscalerComboWidth +
+            showButtonWidth + toolbarItemSpacing * 3.0f + 8.0f;
+        const bool showUpscalerSelector = fullToolbarWidth <= availableToolbarWidth;
+        const float toolbarWidth = fullToolbarWidth -
+            (showUpscalerSelector ? 0.0f : upscalerComboWidth + toolbarItemSpacing);
 
         NextUI::Theme::FOverlayPanelConfig toolbarConfig{};
         toolbarConfig.WindowId = "ViewportToolbar";
         toolbarConfig.Position = pos + ImVec2(padding, padding);
-        toolbarConfig.Size = ImVec2(std::min(700.0f, size.x - padding * 2.0f), 36.0f);
-        toolbarConfig.Padding = ImVec2(0.0f, 4.0f);
-        toolbarConfig.ItemSpacing = ImVec2(6.0f, 0.0f);
-        toolbarConfig.BackgroundAlpha = 0.0f;
+        toolbarConfig.Size = ImVec2(std::min(toolbarWidth, availableToolbarWidth), toolbarHeight);
+        toolbarConfig.Padding = ImVec2(4.0f, 8.0f);
+        toolbarConfig.ItemSpacing = ImVec2(toolbarItemSpacing, 0.0f);
+        toolbarConfig.Rounding = 5.0f;
+        toolbarConfig.BackgroundAlpha = 0.74f;
 
-        NextUI::Theme::BeginOverlayPanel(toolbarConfig);
-
-        auto& overlayState = ui.viewportOverlay;
-        Runtime::Config::UserSettings& userSettings = ctx.engine.GetUserSettings();
-        auto& renderer = ctx.engine.GetRenderer();
-        const auto supportedRenderers = BuildSupportedRendererList(ctx.engine);
-        Vulkan::ERendererType currentRendererType = renderer.CurrentLogicRendererType();
-        if (std::find(supportedRenderers.begin(), supportedRenderers.end(), currentRendererType) ==
-            supportedRenderers.end())
+        if (NextUI::Theme::BeginOverlayPanel(toolbarConfig))
         {
-            currentRendererType = supportedRenderers.empty() ? Vulkan::ERT_SoftwareModernNoAmbient
-                                                             : supportedRenderers.front();
-        }
+            NextUI::Theme::PushViewportToolbarStyle();
 
-        ImGui::SetNextItemWidth(170.0f);
-        if (ImGui::BeginCombo("##ViewportRenderer", Vulkan::GetRendererName(currentRendererType)))
-        {
-            for (Vulkan::ERendererType rendererType : supportedRenderers)
+            ImGui::SetNextItemWidth(rendererComboWidth);
+            NextUI::Theme::PushViewportPopupStyle();
+            const Rendering::FRendererChoice* selectedRendererChoice =
+                Rendering::FindRendererChoice(currentRendererType);
+            if (ImGui::BeginCombo("##ViewportRenderer",
+                                  selectedRendererChoice != nullptr ? selectedRendererChoice->displayName
+                                                                    : "Renderer"))
             {
-                const bool isSelected = rendererType == currentRendererType;
-                if (ImGui::Selectable(Vulkan::GetRendererName(rendererType), isSelected))
+                for (const Rendering::FRendererChoice* choice : supportedRenderers)
                 {
-                    userSettings.RendererType = static_cast<int32_t>(rendererType);
-                    if (renderer.CurrentLogicRendererType() != rendererType)
+                    const Vulkan::ERendererType rendererType = choice->type;
+                    const bool isSelected = rendererType == currentRendererType;
+                    if (NextUI::Theme::DrawViewportComboOption(choice->displayName, isSelected))
                     {
-                        renderer.SwitchLogicRenderer(rendererType);
+                        ctx.engine.RequestRendererType(rendererType);
+                    }
+                    if (isSelected)
+                    {
+                        ImGui::SetItemDefaultFocus();
                     }
                 }
-                if (isSelected)
+                ImGui::EndCombo();
+            }
+            NextUI::Theme::PopViewportPopupStyle();
+            NextUI::Theme::DrawTooltip("Active Renderer");
+            ImGui::SameLine();
+
+            const char* renderModeLabel = userSettings.ProgressiveRender ? "Progressive" : "Realtime";
+            if (NextUI::Theme::DrawFlatViewportButton(
+                    renderModeLabel, "Toggle realtime / progressive rendering",
+                    userSettings.ProgressiveRender,
+                    ImVec2(progressiveButtonWidth, ImGui::GetFrameHeight())))
+            {
+                userSettings.ProgressiveRender = !userSettings.ProgressiveRender;
+                if (!userSettings.ProgressiveRender)
                 {
-                    ImGui::SetItemDefaultFocus();
+                    ctx.engine.SetProgressiveRendering(false);
                 }
             }
-            ImGui::EndCombo();
-        }
-        NextUI::Theme::DrawTooltip("Active Renderer");
-        ImGui::SameLine();
+            ImGui::SameLine();
 
-        ImGui::SetNextItemWidth(126.0f);
-        ImGui::Combo("##ViewportProjection", &overlayState.projectionMode, "Perspective\0Orthographic\0\0");
-        NextUI::Theme::DrawTooltip("Camera Projection");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(110.0f);
-        ImGui::Combo("##ViewportDisplayMode", &overlayState.displayMode, "Lit\0Lighting\0Wireframe\0\0");
-        NextUI::Theme::DrawTooltip("Display Mode");
-        ImGui::SameLine();
-        if (NextUI::Theme::ToolbarButton(ICON_FA_EYE " Show", "Show Flags", false, ImVec2(72.0f, 26.0f)))
-        {
-            ImGui::OpenPopup("ViewportShowFlags");
+            if (showUpscalerSelector)
+            {
+                ImGui::SetNextItemWidth(upscalerComboWidth);
+                NextUI::Theme::PushViewportPopupStyle();
+                if (ImGui::BeginCombo("##ViewportUpscaler", upscalerLabel.c_str()))
+                {
+                    ImGui::TextDisabled("Upscaler");
+                    for (uint32_t rawType = 0;
+                         rawType < static_cast<uint32_t>(Rendering::Upscaler::EUpscalerType::Count);
+                         ++rawType)
+                    {
+                        const auto& typeInfo = Rendering::Upscaler::GetUpscalerTypeInfo(rawType);
+                        const bool supported = typeInfo.type == Rendering::Upscaler::EUpscalerType::None ||
+                            renderer.SupportsUpscaler(typeInfo.type);
+                        const bool selected = rawType == static_cast<uint32_t>(userSettings.UpscalerType);
+                        ImGui::BeginDisabled(!supported);
+                        if (NextUI::Theme::DrawViewportComboOption(typeInfo.name, selected))
+                        {
+                            ctx.engine.SetUpscalerConfiguration(typeInfo.type, userSettings.SuperResolution);
+                        }
+                        ImGui::EndDisabled();
+                    }
+
+                    ImGui::Separator();
+                    ImGui::TextDisabled("Quality");
+                    for (uint32_t rawMode = 0;
+                         rawMode <= static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Auto);
+                         ++rawMode)
+                    {
+                        const auto& modeInfo = Rendering::Upscaler::GetUpscaleModeInfo(rawMode);
+                        const bool selected = rawMode == userSettings.SuperResolution;
+                        if (NextUI::Theme::DrawViewportComboOption(modeInfo.name, selected))
+                        {
+                            ctx.engine.SetUpscalerConfiguration(
+                                static_cast<Rendering::Upscaler::EUpscalerType>(userSettings.UpscalerType), rawMode);
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+                NextUI::Theme::PopViewportPopupStyle();
+                NextUI::Theme::DrawTooltip("Upscaler and quality mode");
+                ImGui::SameLine();
+            }
+
+            if (NextUI::Theme::DrawFlatViewportButton(
+                    ICON_FA_EYE " Show", "Show Flags", false,
+                    ImVec2(showButtonWidth, ImGui::GetFrameHeight())))
+            {
+                ImGui::OpenPopup("ViewportShowFlags");
+            }
+
+            NextUI::Theme::PopViewportToolbarStyle();
         }
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(80.0f);
-        ImGui::DragFloat("##AngleSnap", &overlayState.angleSnap, 1.0f, 1.0f, 90.0f, "%.0f deg");
-        NextUI::Theme::DrawTooltip("Angle Snap");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(80.0f);
-        ImGui::DragFloat("##DistanceSnap", &overlayState.distanceSnap, 0.01f, 0.01f, 10.0f, "%.2f");
-        NextUI::Theme::DrawTooltip("Distance Snap");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(100.0f);
-        ImGui::Combo("##ViewportCamera", &overlayState.cameraIndex, "Camera 0\0Editor Cam\0\0");
-        NextUI::Theme::DrawTooltip("Active Camera");
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 12));
         if (ImGui::BeginPopup("ViewportShowFlags"))
@@ -267,8 +337,6 @@ namespace Editor
         ImGui::PopStyleVar();
 
         NextUI::Theme::EndOverlayPanel();
-
-        const float toolH = kToolIconWidth;
 
         const uint32_t progressiveAccumulatedFrames = ctx.engine.GetProgressiveRenderAccumulatedFrames();
         const uint32_t progressiveTargetFrames = ctx.engine.GetProgressiveRenderTargetFrames();
@@ -306,7 +374,10 @@ namespace Editor
         ImGui::PopStyleColor();
         NextUI::Theme::EndOverlayPanel();
 
-        if (renderer.CurrentRendererRequirements().requestAmbientCube)
+        // AmbientCube brick residency is an engine-internal diagnostic; it stays behind
+        // the graphics debug flag so the default viewport is free of internal counters.
+        if (renderer.CurrentRendererRequirements().requestAmbientCube &&
+            ctx.engine.GetShowFlags().DebugGraphicsPanel)
         {
             uint32_t activeAmbientBricks = 0u;
             const uint32_t ambientCascadeCapacity = ctx.scene.AmbientCubeCascadeCapacity();
@@ -344,43 +415,156 @@ namespace Editor
             NextUI::Theme::EndOverlayPanel();
         }
         
-        const ImVec2 axisOrigin = pos + ImVec2(26.0f, size.y - 42.0f);
+        const ImVec2 axisOrigin = pos + ImVec2(38.0f, size.y - 42.0f);
         ImDrawList* foreground = ImGui::GetForegroundDrawList(viewport);
-        foreground->AddCircleFilled(axisOrigin, 4.0f, NextUI::Theme::ColorU32(NextUI::Theme::EColor::TextMuted));
-        foreground->AddLine(axisOrigin, axisOrigin + ImVec2(28.0f, 0.0f),
-                            NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger), 2.0f);
-        foreground->AddLine(axisOrigin, axisOrigin + ImVec2(0.0f, -28.0f),
-                            NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success), 2.0f);
-        foreground->AddLine(axisOrigin, axisOrigin + ImVec2(-18.0f, 18.0f),
-                            NextUI::Theme::ColorU32(NextUI::Theme::EColor::Blue), 2.0f);
-        foreground->AddText(axisOrigin + ImVec2(32.0f, -7.0f), NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger),
-                            "X");
-        foreground->AddText(axisOrigin + ImVec2(-4.0f, -44.0f), NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success),
-                            "Y");
-        foreground->AddText(axisOrigin + ImVec2(-34.0f, 18.0f), NextUI::Theme::ColorU32(NextUI::Theme::EColor::Blue),
-                            "Z");
+        const Assets::Camera viewportCamera = ctx.editor
+            ? ctx.editor->BuildSceneViewportCamera()
+            : ctx.scene.GetRenderCamera();
+        const glm::mat3 viewRotation(viewportCamera.ModelView);
+        struct FPreviewAxis
+        {
+            const char* label;
+            ImU32 color;
+            glm::vec3 projected;
+        };
+        std::array<FPreviewAxis, 3> previewAxes = {{
+            {"X", NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger),
+             viewRotation * glm::vec3(1.0f, 0.0f, 0.0f)},
+            {"Y", NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success),
+             viewRotation * glm::vec3(0.0f, 1.0f, 0.0f)},
+            {"Z", NextUI::Theme::ColorU32(NextUI::Theme::EColor::Blue),
+             viewRotation * glm::vec3(0.0f, 0.0f, 1.0f)},
+        }};
+        // Draw the axes pointing farther into the view first so nearer axes remain legible.
+        std::sort(previewAxes.begin(), previewAxes.end(),
+                  [](const FPreviewAxis& lhs, const FPreviewAxis& rhs)
+                  {
+                      return lhs.projected.z < rhs.projected.z;
+                  });
 
-        float toolW = kToolIconWidth + 16.0f;
-        toolW = std::max(60.0f, std::min(toolW, size.x - padding * 2.0f));
+        constexpr float axisLength = 28.0f;
+        for (const FPreviewAxis& axis : previewAxes)
+        {
+            const ImVec2 screenDirection(axis.projected.x, -axis.projected.y);
+            const float projectedLength = std::sqrt(
+                screenDirection.x * screenDirection.x + screenDirection.y * screenDirection.y);
+            if (projectedLength < 0.08f)
+            {
+                foreground->AddCircleFilled(axisOrigin, 3.0f, axis.color);
+                continue;
+            }
+
+            const ImVec2 axisEnd = axisOrigin + screenDirection * axisLength;
+            const ImVec2 labelDirection = screenDirection * (1.0f / projectedLength);
+            const ImVec2 labelSize = ImGui::CalcTextSize(axis.label);
+            const ImVec2 labelPos = axisEnd + labelDirection * 6.0f - labelSize * 0.5f;
+            foreground->AddLine(axisOrigin, axisEnd, axis.color, 2.0f);
+            foreground->AddCircleFilled(axisEnd, 2.5f, axis.color);
+            foreground->AddText(labelPos, axis.color, axis.label);
+        }
+        foreground->AddCircleFilled(
+            axisOrigin, 4.0f, NextUI::Theme::ColorU32(NextUI::Theme::EColor::TextMuted));
 
         NextUI::Theme::FOverlayPanelConfig toolConfig{};
         toolConfig.WindowId = "ViewportTool";
         toolConfig.Position = pos + ImVec2(std::max(padding, size.x - toolW - padding), padding);
         toolConfig.Size = ImVec2(toolW, toolH);
-        toolConfig.Padding = ImVec2(3.0f, 3.0f);
-        toolConfig.ItemSpacing = ImVec2(0.0f, 0.0f);
-        toolConfig.BackgroundAlpha = 0.0f;
+        toolConfig.Padding = ImVec2(4.0f, 8.0f);
+        toolConfig.ItemSpacing = ImVec2(toolbarItemSpacing, 0.0f);
+        toolConfig.Rounding = 5.0f;
+        toolConfig.BackgroundAlpha = 0.74f;
 
         NextUI::Theme::BeginOverlayPanel(toolConfig);
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+        NextUI::Theme::PushViewportToolbarStyle();
 
-        const float startX = ImGui::GetCursorPosX();
-        const float availW = ImGui::GetContentRegionAvail().x;
-        ImGui::SetCursorPosX(startX + std::max(0.0f, availW - kToolIconWidth));
-        NextUI::Theme::IconButton(ICON_FA_CAMERA, "Camera Options (placeholder)", false,
-                                     ImVec2(kToolIconWidth, kToolIconWidth));
+        const float cameraButtonWidth = std::max(1.0f, ImGui::GetContentRegionAvail().x);
+        if (NextUI::Theme::DrawFlatViewportButton(
+                ICON_FA_CAMERA, "Camera Options", false,
+                ImVec2(cameraButtonWidth, ImGui::GetFrameHeight())))
+        {
+            ImGui::OpenPopup("ViewportCameraOptions");
+        }
 
-        ImGui::PopStyleVar();
+        NextUI::Theme::PushViewportPopupStyle();
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 0.0f));
+        if (ImGui::BeginPopup("ViewportCameraOptions"))
+        {
+            auto& cameras = ctx.scene.GetEnvSettings().cameras;
+            const int currentCameraIndex = ctx.engine.GetUserSettings().CameraIdx;
+            const char* currentCameraName = "No Camera";
+            if (currentCameraIndex >= 0 && currentCameraIndex < static_cast<int>(cameras.size()))
+            {
+                const std::string& name = cameras[static_cast<size_t>(currentCameraIndex)].name;
+                currentCameraName = name.empty() ? "Unnamed Camera" : name.c_str();
+            }
+
+            const std::string sceneCameraMenuLabel = fmt::format(
+                "{} Scene Cameras    {}    {}", ICON_FA_CAMERA, currentCameraName, ICON_FA_CHEVRON_RIGHT);
+            ImGui::BeginDisabled(cameras.empty());
+            const bool openSceneCameraMenu = ImGui::Selectable(
+                sceneCameraMenuLabel.c_str(), false,
+                ImGuiSelectableFlags_DontClosePopups, ImVec2(0.0f, 28.0f));
+            const ImVec2 sceneCameraMenuMin = ImGui::GetItemRectMin();
+            const ImVec2 sceneCameraMenuMax = ImGui::GetItemRectMax();
+            ImGui::EndDisabled();
+            if (openSceneCameraMenu)
+            {
+                ImGui::OpenPopup("ViewportSceneCameras");
+            }
+
+            ImGui::SetNextWindowPos(ImVec2(sceneCameraMenuMax.x, sceneCameraMenuMin.y), ImGuiCond_Appearing);
+            ImGui::SetNextWindowSize(ImVec2(260.0f, 0.0f));
+            if (ImGui::BeginPopup("ViewportSceneCameras"))
+            {
+                for (size_t cameraIndex = 0; cameraIndex < cameras.size(); ++cameraIndex)
+                {
+                    const Assets::Camera& camera = cameras[cameraIndex];
+                    const std::string cameraLabel = fmt::format(
+                        "{} {}", ICON_FA_CAMERA, camera.name.empty()
+                            ? fmt::format("Camera {}", cameraIndex + 1)
+                            : camera.name);
+                    const bool selected = currentCameraIndex == static_cast<int>(cameraIndex);
+                    if (NextUI::Theme::DrawViewportComboOption(cameraLabel.c_str(), selected) && ctx.editor)
+                    {
+                        ctx.editor->SelectSceneCamera(cameraIndex);
+                    }
+                }
+                ImGui::EndPopup();
+            }
+
+            if (NextUI::Theme::DrawViewportComboOption(
+                    ICON_FA_ROTATE_LEFT " Restore Scene Default", false) && ctx.editor)
+            {
+                ctx.editor->ResetToDefaultSceneCamera();
+            }
+            NextUI::Theme::DrawTooltip("Restore the scene's default camera");
+
+            ImGui::Separator();
+            ImGui::TextDisabled("Lens & Exposure");
+
+            float fieldOfView = ctx.editor
+                ? ctx.editor->BuildSceneViewportCamera().FieldOfView
+                : ctx.scene.GetRenderCamera().FieldOfView;
+            ImGui::TextUnformatted("Field of View");
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::SliderFloat("##ViewportCameraFov", &fieldOfView, 10.0f, 140.0f, "%.1f deg") && ctx.editor)
+            {
+                ctx.editor->SetSceneViewportFieldOfView(fieldOfView);
+            }
+
+            ImGui::TextUnformatted("Paper White");
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::SliderFloat("##ViewportPaperWhite", &userSettings.PaperWhiteNit,
+                                   100.0f, 1600.0f, "%.0f nit"))
+            {
+                ctx.engine.ResetProgressiveRenderingAccumulation();
+            }
+
+            ImGui::EndPopup();
+        }
+        NextUI::Theme::PopViewportPopupStyle();
+
+        NextUI::Theme::PopViewportToolbarStyle();
         NextUI::Theme::EndOverlayPanel();
     }
 } // namespace Editor

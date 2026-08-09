@@ -5,7 +5,7 @@ import Shader.GpuScene;
 import Shader.SoftMeshShaderCull; // IsAABBInFrustum (IsOccludedVolume unused here)
 
 // ---------------------------------------------------------------------------
-// Block-level aggregation, per cascade (see plan: softmeshshader-gpucull-atomic-contention).
+// Block-level aggregation per cascade; see docs/guides/soft-mesh-shader-gpu-driven-submit.md.
 //
 // The original code had every surviving thread spin on a per-cascade CAS and fire
 // up to 4 stats atomics per candidate. The shadow loop iterates all 4 cascades, so
@@ -36,11 +36,11 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Lid : SV_GroupThreadID)
     SoftMeshShaderVisibleItem* visibleItems = (SoftMeshShaderVisibleItem*)softMeshShader.VisibleItems;
     uint* counters = (uint*)softMeshShader.Counters;
 
-    uint activeCascadeMask = scene.custom_data_0;
-    uint maxSceneTriangles = scene.custom_data_2;
+    uint activeCascadeMask = scene.CustomData0;
+    uint maxSceneTriangles = scene.CustomData2;
 
     // node-invariant data, computed once (predicate, no early-return before the cascade barriers)
-    bool inRange = (DTid.x < scene.custom_data_1) && (DTid.x < MAX_NODES);
+    bool inRange = (DTid.x < scene.CustomData1) && (DTid.x < MAX_RENDER_PROXIES);
     NodeProxy node;
     ModelData model;
     uint triangleCount = 0;
@@ -121,14 +121,14 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Lid : SV_GroupThreadID)
         {
             uint primBase = g_blockTriBase  + g_tri[lid];
             uint itemIdx  = g_blockItemBase + g_item[lid];
-            if (primBase + triangleCount <= maxSceneTriangles && itemIdx < uint(MAX_NODES))
+            if (primBase + triangleCount <= maxSceneTriangles && itemIdx < uint(MAX_RENDER_PROXIES))
             {
                 SoftMeshShaderVisibleItem item;
                 item.primBase = cascadeIdx * maxSceneTriangles + primBase;
                 item.instanceIdx = DTid.x + 1;
                 item.modelOffsetIdx = node.modelId;
                 item.triCount = triangleCount;
-                visibleItems[slot * MAX_NODES + itemIdx] = item;
+                visibleItems[slot * MAX_RENDER_PROXIES + itemIdx] = item;
             }
         }
     }

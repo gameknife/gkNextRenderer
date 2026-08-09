@@ -13,7 +13,7 @@ public:
     // overrides
     void OnInit() override;
     void OnTick(double deltaSeconds) override;
-    void OnDestroy() override {};
+    void OnDestroy() override;
     void OnSceneLoaded() override;
     void ConfigureCVars(NextCVar::FCVarSystem& cvars) override;
     
@@ -21,4 +21,9 @@ public:
     
 private:
     std::unique_ptr<BenchMarker> benchMarker_;
+    std::vector<std::string> demoScenes_;
+    size_t currentSceneIndex_ = 0;
+    bool previousTickAnimation_ = true;
+    bool previousTickPhysics_ = true;
+    bool tickSettingsOverridden_ = false;
 };

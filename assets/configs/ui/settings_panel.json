@@ -12,19 +12,11 @@
               "cvar": "r.rendererType",
               "label": "Renderer",
               "widget": "combo",
-              "options": ["Path Tracing", "Software Tracing", "Software Modern", "Voxel Tracing", "Modern No Ambient"]
+              "optionsProvider": "renderer"
             },
             {"cvar": "r.samples", "label": "Samples", "widget": "slider_int", "min": 1, "max": 16},
-            {"cvar": "r.temporalFrames", "label": "Temporal Frames", "widget": "slider_int", "min": 1, "max": 64},
+            {"cvar": "r.temporalFrames", "label": "Motion History", "widget": "slider_int", "min": 1, "max": 64},
             {"cvar": "r.bounces", "label": "Ray Bounces", "widget": "slider_int", "min": 1, "max": 16}
-          ]
-        },
-        {
-          "label": "Denoising",
-          "items": [
-            {"cvar": "r.denoiser", "label": "Denoiser", "widget": "checkbox"},
-            {"cvar": "r.denoiseAtrousIterations", "label": "Diffuse Iterations", "widget": "slider_int", "min": 0, "max": 6},
-            {"cvar": "r.denoiseAtrousSpecularIterations", "label": "Specular Iterations", "widget": "slider_int", "min": 0, "max": 6}
           ]
         }
       ]
@@ -37,15 +29,25 @@
           "label": "Super Resolution",
           "items": [
             {
-              "cvar": "r.superResolution",
+              "cvar": "r.upscaler.qualityMode",
               "label": "Quality Mode",
               "widget": "combo",
-              "options": ["Native", "Ultra Quality", "Quality", "Balanced", "Performance"]
+              "optionsProvider": "upscaler.quality"
             },
-            {"cvar": "r.dlss", "label": "DLSS", "widget": "checkbox"},
-            {"cvar": "r.fsr", "label": "FSR", "widget": "checkbox"},
-            {"cvar": "r.dlssrr", "label": "Ray Reconstruction", "widget": "checkbox", "advanced": true},
-            {"cvar": "r.dlssg", "label": "Frame Generation", "widget": "checkbox", "advanced": true}
+            {
+              "cvar": "r.upscaler.type",
+              "label": "Upscaler",
+              "widget": "combo",
+              "optionsProvider": "upscaler.type"
+            },
+            {"cvar": "r.taau.historyWeight", "label": "TAAU History Weight", "widget": "slider_float", "min": 0.5, "max": 0.98, "step": 0.01, "format": "%.2f", "advanced": true},
+            {"cvar": "r.taau.sharpness", "label": "TAAU Sharpness", "widget": "slider_float", "min": 0.0, "max": 1.0, "step": 0.01, "format": "%.2f", "advanced": true},
+            {"cvar": "r.upscaler.postFilter", "label": "Temporal Noise Filter", "widget": "checkbox", "advanced": true},
+            {"cvar": "r.upscaler.postFilterPasses", "label": "A-Trous Passes", "widget": "slider_int", "min": 1, "max": 4, "advanced": true},
+            {"cvar": "r.upscaler.postFilterStrength", "label": "Filter Strength", "widget": "slider_float", "min": 0.0, "max": 1.0, "step": 0.01, "format": "%.2f", "advanced": true},
+            {"cvar": "r.upscaler.postFilterLumaSigma", "label": "Edge Sigma", "widget": "slider_float", "min": 0.01, "max": 0.5, "step": 0.01, "format": "%.2f", "advanced": true},
+            {"cvar": "r.upscaler.fireflySigma", "label": "Firefly Sigma", "widget": "slider_float", "min": 0.1, "max": 8.0, "step": 0.1, "format": "%.1f", "advanced": true},
+            {"cvar": "r.frameGeneration", "label": "Frame Generation", "widget": "checkbox", "advanced": true}
           ]
         }
       ]
@@ -90,6 +92,7 @@
             {"cvar": "ed.outlinerAutoScroll", "label": "Auto-scroll Outliner", "widget": "checkbox"},
             {"cvar": "ed.gizmoSnap", "label": "Gizmo Snap", "widget": "checkbox"},
             {"cvar": "ed.gizmoSnapTranslate", "label": "Translation Snap", "widget": "drag_float", "min": 0.001, "max": 1000.0, "step": 0.1, "format": "%.3f"},
+            {"cvar": "ed.progressiveRenderResumeFrames", "label": "Progressive Render Delay", "widget": "slider_int", "min": 0, "max": 120},
             {
               "cvar": "ed.gizmoDefaultMode",
               "label": "Default Gizmo",

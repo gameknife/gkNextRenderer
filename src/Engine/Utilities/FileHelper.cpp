@@ -1,3 +1,4 @@
+#include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include <optional>
 #include <system_error>

@@ -2,10 +2,26 @@
 
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
+#include <functional>
 #include <string>
 
 namespace Runtime::ScreenShot
 {
-	void SaveSwapChainToFileFast(Vulkan::VulkanBaseRenderer* renderer_, const std::string& filePathWithoutExtension, int x, int y, int width, int height);
-	void SaveSwapChainToFile(Vulkan::VulkanBaseRenderer* renderer_, const std::string& filePathWithoutExtension, int x, int y, int width, int height);
+    enum class EFileFormat
+    {
+        Automatic,
+        Jpeg,
+    };
+
+    void SaveSwapChainToFile(Vulkan::VulkanBaseRenderer* renderer_,
+                             const std::string& filePathWithoutExtension,
+                             int x,
+                             int y,
+                             int width,
+                             int height,
+                             EFileFormat fileFormat = EFileFormat::Automatic,
+                             // Synchronous captures encode and close the image before returning.
+                             bool synchronous = false,
+                             std::function<void()> onCompleted = {},
+                             std::function<void()> onReadbackCompleted = {});
 };

@@ -8,9 +8,9 @@ import Shader.Math;
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     GPUScene scene = Bindless.GetGpuscene();
-    uint nodeIdx = scene.custom_data_0;
-    uint vertexOffset = scene.custom_data_1;
-    uint vertexCount = scene.custom_data_2;
+    uint nodeIdx = scene.CustomData0;
+    uint vertexOffset = scene.CustomData1;
+    uint vertexCount = scene.CustomData2;
 
     if (DTid.x >= vertexCount) return;
 

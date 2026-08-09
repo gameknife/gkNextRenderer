@@ -1,0 +1,2 @@
+{"jsonrpc":"2.0","id":"1","method":"initialize","params":{"protocolVersion":2,"client":{"name":"fixture","version":"2"},"capabilities":{"streaming":true,"structuredOutput":true}}}
+{"jsonrpc":"2.0","id":"1","result":{"protocolVersion":2,"server":{"name":"gnb-ai-bridge","version":"2"},"capabilities":{"streaming":true,"structuredOutput":true,"cancellation":true}}}

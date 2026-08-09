@@ -1,7 +1,7 @@
-#include "Engine/Runtime/Scene/NodeUtils.h"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
 
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
 
 namespace Assets::NodeUtils
 {

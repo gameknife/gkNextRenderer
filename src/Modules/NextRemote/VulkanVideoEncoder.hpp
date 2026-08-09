@@ -2,7 +2,7 @@
 
 #include "Modules/NextRemote/VideoEncoder.hpp"
 
-#include "Engine/Vulkan/VulkanVideoCaps.hpp"
+#include "Modules/NextRemote/VulkanVideoCaps.hpp"
 
 #include <vulkan/vulkan.h>
 

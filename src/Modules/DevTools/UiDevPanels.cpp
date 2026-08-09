@@ -1,7 +1,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
 #include "Modules/DevTools/ConsoleLogBuffer.hpp"
-#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
@@ -71,6 +71,16 @@ namespace
         const std::string driverName = GetPhysicalDeviceDriverName(physicalDevice);
         const std::string driverVersion = DriverVersionToString(properties);
         return driverName.empty() ? driverVersion : fmt::format("{} {}", driverName, driverVersion);
+    }
+}
+
+void FUiDevPanels::RegisterCVars(NextCVar::FCVarSystem& cvars)
+{
+    NextCVar::FCVarInfo existing;
+    if (!cvars.TryGetInfo("ui.memoryStats", existing))
+    {
+        cvars.RegisterBool("ui.memoryStats", false, &showMemoryStatistics_, NextCVar::ECVarFlags::None,
+                           "Open the shared developer memory statistics panel");
     }
 }
 
@@ -547,7 +557,7 @@ void FUiDevPanels::RenderConsoleOverlay()
     DrawConsoleWindow();
 }
 
-void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, VulkanGpuTimer* gpuTimer)
+void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, Runtime::FrameProfiler* profiler)
 {
     if (!Engine().GetUserSettings().ShowOverlay)
     {
@@ -563,15 +573,16 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, VulkanGpuTi
     }
     overlaySampleStrideCounter_ = (overlaySampleStrideCounter_ + 1) % kOverlaySparklineSampleStride;
 
-    const auto& io = ImGui::GetIO();
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
     constexpr float distance = 12.0f;
     constexpr float panelWidth = 380.0f;
-    const ImVec2 pos = ImVec2(io.DisplaySize.x - distance - panelWidth, distance + 44.0f);
-    const float panelHeight = std::max(420.0f, io.DisplaySize.y - pos.y - 42.0f);
+    const ImVec2 pos = ImVec2(viewport->Pos.x + viewport->Size.x - distance - panelWidth,
+                              viewport->Pos.y + distance + 44.0f);
+    const float panelHeight = std::max(420.0f, viewport->Size.y - distance - 86.0f);
 
     if (!NextUI::Theme::BeginFloatingPanel(
             "##ProfilerPanel", ICON_FA_CHART_LINE, "Profiler", &Engine().GetUserSettings().ShowOverlay,
-            pos, ImVec2(panelWidth, panelHeight)))
+            pos, ImVec2(panelWidth, panelHeight), ImVec2(0.0f, 0.0f), statisticsDetachedViewport_))
     {
         return;
     }
@@ -699,7 +710,7 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, VulkanGpuTi
         : 0;
     const uint32_t mainTasks = Tasks::TaskCoordinator::GetInstance()->GetMainTaskCount();
     const uint32_t lowTasks = Tasks::TaskCoordinator::GetInstance()->GetParralledTaskCount();
-    const uint32_t completeTasks = Tasks::TaskCoordinator::GetInstance()->GetComleteTaskQueueCount();
+    const uint32_t completeTasks = Tasks::TaskCoordinator::GetInstance()->GetCompleteTaskQueueCount();
 
     auto FormatVisibleOverTotal = [](uint32_t visibleCount, uint32_t totalCount)
     {
@@ -791,7 +802,7 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, VulkanGpuTi
     constexpr double timingStaleSeconds = 3.0;
     const double now = ImGui::GetTime();
 
-    auto BuildTimingRows = [&](const std::vector<VulkanGpuTimer::TimerStat>& times,
+    auto BuildTimingRows = [&](const std::vector<Runtime::ProfileTimerStat>& times,
                                std::unordered_map<std::string, TimingHistory>& historyMap)
     {
         uint32_t currentDisplayOrder = 0;
@@ -949,10 +960,10 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, VulkanGpuTi
 
     const float timingCardHeight = std::max(220.0f, ImGui::GetContentRegionAvail().y - 42.0f);
     BeginCard("##ProfilerTimingCard", timingCardHeight, ImGuiWindowFlags_HorizontalScrollbar);
-    if (gpuTimer)
+    if (profiler)
     {
-        const auto gpuTimingRows = BuildTimingRows(gpuTimer->FetchAllTimes(4), gpuTimeHistory_);
-        const auto cpuTimingRows = BuildTimingRows(gpuTimer->FetchAllCpuTimes(5), cpuTimeHistory_);
+        const auto gpuTimingRows = BuildTimingRows(profiler->FetchGpuTimes(4), gpuTimeHistory_);
+        const auto cpuTimingRows = BuildTimingRows(profiler->FetchCpuTimes(5), cpuTimeHistory_);
 
         // Build both timing data sets up front so tab switching is free of
         // the 2s history window hitch on first switch.

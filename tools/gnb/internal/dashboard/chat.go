@@ -16,7 +16,7 @@ import (
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/llm"
 )
 
-const chatStoreVersion = 1
+const chatStoreVersion = 2
 const chatStandardContextMaxChars = 64000
 
 type ChatStore struct {
@@ -26,13 +26,15 @@ type ChatStore struct {
 }
 
 type ChatSession struct {
-	ID        string            `json:"id"`
-	Title     string            `json:"title,omitempty"`
-	ModelID   string            `json:"model_id"`
-	Messages  []llm.ChatMessage `json:"messages,omitempty"`
-	CreatedAt time.Time         `json:"created_at"`
-	UpdatedAt time.Time         `json:"updated_at"`
-	Archived  bool              `json:"archived,omitempty"`
+	ID         string            `json:"id"`
+	Title      string            `json:"title,omitempty"`
+	ModelID    string            `json:"model_id"`
+	ProfileID  string            `json:"profile_id,omitempty"`
+	ProviderID string            `json:"provider_id,omitempty"`
+	Messages   []llm.ChatMessage `json:"messages,omitempty"`
+	CreatedAt  time.Time         `json:"created_at"`
+	UpdatedAt  time.Time         `json:"updated_at"`
+	Archived   bool              `json:"archived,omitempty"`
 }
 
 type chatStoreFile struct {
@@ -80,14 +82,21 @@ func (s *ChatStore) Latest(defaultModel string) *ChatSession {
 }
 
 func (s *ChatStore) Create(modelID string) *ChatSession {
+	return s.CreateSelection("general", "localllm", modelID)
+}
+func (s *ChatStore) CreateSelection(profileID, providerID, modelID string) *ChatSession {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	sess := s.createLocked(modelID)
+	sess := s.createSelectionLocked(profileID, providerID, modelID)
 	_ = s.saveLocked()
 	return cloneChatSession(sess)
 }
 
 func (s *ChatStore) Reset(id string, modelID string) *ChatSession {
+	return s.ResetSelection(id, "general", "localllm", modelID)
+}
+
+func (s *ChatStore) ResetSelection(id, profileID, providerID, modelID string) *ChatSession {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now()
@@ -95,10 +104,12 @@ func (s *ChatStore) Reset(id string, modelID string) *ChatSession {
 		id = newChatSessionID()
 	}
 	sess := &ChatSession{
-		ID:        id,
-		ModelID:   modelID,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:         id,
+		ModelID:    modelID,
+		ProfileID:  profileID,
+		ProviderID: providerID,
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	}
 	s.sessions[id] = sess
 	_ = s.saveLocked()
@@ -106,6 +117,10 @@ func (s *ChatStore) Reset(id string, modelID string) *ChatSession {
 }
 
 func (s *ChatStore) Archive(id string, defaultModel string) *ChatSession {
+	return s.ArchiveSelection(id, "general", "localllm", defaultModel)
+}
+
+func (s *ChatStore) ArchiveSelection(id, profileID, providerID, defaultModel string) *ChatSession {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if sess, ok := s.sessions[id]; ok {
@@ -116,12 +131,15 @@ func (s *ChatStore) Archive(id string, defaultModel string) *ChatSession {
 	if sess := s.latestLocked(); sess != nil {
 		return cloneChatSession(sess)
 	}
-	sess := s.createLocked(defaultModel)
+	sess := s.createSelectionLocked(profileID, providerID, defaultModel)
 	_ = s.saveLocked()
 	return cloneChatSession(sess)
 }
 
 func (s *ChatStore) AppendExchange(id string, modelID string, userText string, assistantText string) *ChatSession {
+	return s.AppendExchangeSelection(id, "general", "localllm", modelID, userText, assistantText)
+}
+func (s *ChatStore) AppendExchangeSelection(id, profileID, providerID, modelID, userText, assistantText string) *ChatSession {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sess, ok := s.sessions[id]
@@ -134,6 +152,8 @@ func (s *ChatStore) AppendExchange(id string, modelID string, userText string, a
 		}
 	}
 	sess.ModelID = modelID
+	sess.ProfileID = profileID
+	sess.ProviderID = providerID
 	sess.Archived = false
 	if sess.CreatedAt.IsZero() {
 		sess.CreatedAt = time.Now()
@@ -167,12 +187,17 @@ func (s *ChatStore) List() []ChatSession {
 }
 
 func (s *ChatStore) createLocked(modelID string) *ChatSession {
+	return s.createSelectionLocked("general", "localllm", modelID)
+}
+func (s *ChatStore) createSelectionLocked(profileID, providerID, modelID string) *ChatSession {
 	now := time.Now()
 	sess := &ChatSession{
-		ID:        newChatSessionID(),
-		ModelID:   modelID,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:         newChatSessionID(),
+		ModelID:    modelID,
+		ProfileID:  profileID,
+		ProviderID: providerID,
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	}
 	s.sessions[sess.ID] = sess
 	return sess
@@ -214,6 +239,12 @@ func (s *ChatStore) load() error {
 		}
 		if sess.UpdatedAt.IsZero() {
 			sess.UpdatedAt = sess.CreatedAt
+		}
+		if sess.ProfileID == "" {
+			sess.ProfileID = "general"
+		}
+		if sess.ProviderID == "" {
+			sess.ProviderID = "localllm"
 		}
 		if first := firstUserMessage(sess.Messages); first != "" && shouldRegenerateChatTitle(sess.Title, first) {
 			sess.Title = chatTitleFromText(first)

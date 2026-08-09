@@ -7,16 +7,17 @@
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "EditorActionDispatcher.hpp"
-#include "Engine/Rendering/Preview/RenderViewServices.hpp"
+#include "Application/Editor/Common/Preview/AssetThumbnailRenderer.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <fmt/format.h>
@@ -471,26 +472,16 @@ namespace Editor
                 currentPath = rootPath;
             }
 
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 4));
-
-            if (ImGui::Button(ICON_FA_HOUSE))
+            if (NextUI::Theme::GhostButton(ICON_FA_HOUSE, "Assets Root"))
             {
                 currentPath = rootPath;
             }
-            if (ImGui::IsItemHovered())
-            {
-                ImGui::SetTooltip("Assets Root");
-            }
 
             ImGui::SameLine();
-            if (ImGui::Button(ICON_FA_ROTATE))
+            if (NextUI::Theme::GhostButton(ICON_FA_ROTATE, "Refresh Current Folder"))
             {
                 directoryCache.clear();
                 visibilityCache.clear();
-            }
-            if (ImGui::IsItemHovered())
-            {
-                ImGui::SetTooltip("Refresh Current Folder");
             }
 
             const std::filesystem::path rel = currentPath.lexically_relative(rootPath);
@@ -511,15 +502,62 @@ namespace Editor
 
                     crumbPath /= part;
                     ImGui::PushID(label.c_str());
-                    if (ImGui::Button(label.c_str()))
+                    if (NextUI::Theme::GhostButton(label.c_str()))
                     {
                         currentPath = crumbPath;
                     }
                     ImGui::PopID();
                 }
             }
+        }
 
-            ImGui::PopStyleVar();
+        void DrawContentBrowserStatus(int itemCount, int selectedCount)
+        {
+            static constexpr std::array<const char*, 3> thumbnailLabels = {"Small", "Medium", "Large"};
+            static constexpr std::array<float, 3> thumbnailSizes = {56.0f, 82.0f, 108.0f};
+            const char* settingsButtonLabel = ICON_FA_GEAR " Settings##ContentBrowserSettings";
+
+            int thumbnailIndex = 0;
+            float closestDistance = std::numeric_limits<float>::max();
+            for (int i = 0; i < static_cast<int>(thumbnailSizes.size()); ++i)
+            {
+                const float distance = std::abs(GContentBrowserIconSize - thumbnailSizes[i]);
+                if (distance < closestDistance)
+                {
+                    thumbnailIndex = i;
+                    closestDistance = distance;
+                }
+            }
+
+            ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
+            const ImGuiStyle& style = ImGui::GetStyle();
+            const float settingsButtonWidth =
+                ImGui::CalcTextSize(" Settings").x + style.FramePadding.x * 2.0f;
+            const float statusRight =
+                ImGui::GetWindowPos().x + ImGui::GetWindowSize().x - style.WindowPadding.x;
+            const ImVec2 settingsPosition(
+                statusRight - settingsButtonWidth,
+                ImGui::GetItemRectMin().y);
+            ImGui::SetCursorScreenPos(settingsPosition);
+            if (NextUI::Theme::GhostButton(settingsButtonLabel, "Content Browser Settings"))
+            {
+                ImGui::OpenPopup("ContentBrowserSettingsPopup");
+            }
+            if (ImGui::BeginPopup("ContentBrowserSettingsPopup"))
+            {
+                if (ImGui::BeginMenu("Thumbnail Size"))
+                {
+                    for (int i = 0; i < static_cast<int>(thumbnailSizes.size()); ++i)
+                    {
+                        if (ImGui::MenuItem(thumbnailLabels[i], nullptr, thumbnailIndex == i))
+                        {
+                            GContentBrowserIconSize = thumbnailSizes[i];
+                        }
+                    }
+                    ImGui::EndMenu();
+                }
+                ImGui::EndPopup();
+            }
         }
 
         void DrawBrowserSectionSidebar(EBrowserSection& section)
@@ -545,7 +583,7 @@ namespace Editor
             {
                 const bool selected = section == entry.section;
                 const float rowWidth = ImGui::GetContentRegionAvail().x;
-                if (ImGui::Selectable(entry.label, selected, ImGuiSelectableFlags_SpanAvailWidth,
+                if (ImGui::Selectable(entry.label, selected, ImGuiSelectableFlags_None,
                                       ImVec2(rowWidth, 20.0f)))
                 {
                     section = entry.section;
@@ -596,95 +634,20 @@ namespace Editor
             return IM_COL32(64, 64, 64, 220);
         }
 
-        uint64_t HashMaterialPreview(const Assets::FMaterial& material)
-        {
-            uint64_t hash = 1469598103934665603ull;
-            auto mixBytes = [&](const void* data, size_t size)
-            {
-                const auto* bytes = static_cast<const uint8_t*>(data);
-                for (size_t i = 0; i < size; ++i)
-                {
-                    hash ^= bytes[i];
-                    hash *= 1099511628211ull;
-                }
-            };
-
-            const Assets::Material& gpu = material.gpuMaterial_;
-            mixBytes(&gpu.Diffuse, sizeof(gpu.Diffuse));
-            mixBytes(&gpu.DiffuseTextureId, sizeof(gpu.DiffuseTextureId));
-            mixBytes(&gpu.MRATextureId, sizeof(gpu.MRATextureId));
-            mixBytes(&gpu.NormalTextureId, sizeof(gpu.NormalTextureId));
-            mixBytes(&gpu.EmissiveTextureId, sizeof(gpu.EmissiveTextureId));
-            mixBytes(&gpu.Fuzziness, sizeof(gpu.Fuzziness));
-            mixBytes(&gpu.RefractionIndex, sizeof(gpu.RefractionIndex));
-            mixBytes(&gpu.MaterialModel, sizeof(gpu.MaterialModel));
-            mixBytes(&gpu.Metalness, sizeof(gpu.Metalness));
-            return hash;
-        }
-
         ImTextureID RequestMaterialPreviewTexture(EditorContext& ctx, uint32_t materialIndex, const Assets::FMaterial& material)
         {
-            const uint64_t materialHash = HashMaterialPreview(material);
             const uint32_t sampleSlot =
-                ctx.engine.GetRenderer().ViewServices().AssetThumbnails().RequestMaterialThumbnail(
-                    materialIndex, materialHash);
+                EditorPreview::AssetThumbnails(ctx.engine.GetRenderer()).RequestMaterialThumbnail(
+                    materialIndex, material);
             return sampleSlot == std::numeric_limits<uint32_t>::max()
                 ? 0
                 : ctx.ui.RequestImTextureIdRaw(sampleSlot);
         }
 
-        uint64_t HashMeshPreview(const Assets::Model& model)
-        {
-            uint64_t hash = 1469598103934665603ull;
-            auto mixBytes = [&](const void* data, size_t size)
-            {
-                const auto* bytes = static_cast<const uint8_t*>(data);
-                for (size_t i = 0; i < size; ++i)
-                {
-                    hash ^= bytes[i];
-                    hash *= 1099511628211ull;
-                }
-            };
-
-            const std::string& name = model.Name();
-            mixBytes(name.data(), name.size());
-            const uint32_t vertexCount = model.NumberOfVertices();
-            const uint32_t indexCount = model.NumberOfIndices();
-            const uint32_t sectionCount = model.SectionCount();
-            const glm::vec3 aabbMin = model.GetLocalAABBMin();
-            const glm::vec3 aabbMax = model.GetLocalAABBMax();
-            mixBytes(&vertexCount, sizeof(vertexCount));
-            mixBytes(&indexCount, sizeof(indexCount));
-            mixBytes(&sectionCount, sizeof(sectionCount));
-            mixBytes(&aabbMin, sizeof(aabbMin));
-            mixBytes(&aabbMax, sizeof(aabbMax));
-
-            const auto& vertices = model.CPUVertices();
-            const auto& indices = model.CPUIndices();
-            if (!vertices.empty())
-            {
-                const size_t sampleIndices[] = {0u, vertices.size() / 2u, vertices.size() - 1u};
-                for (const size_t sampleIndex : sampleIndices)
-                {
-                    mixBytes(&vertices[sampleIndex], sizeof(vertices[sampleIndex]));
-                }
-            }
-            if (!indices.empty())
-            {
-                const size_t sampleIndices[] = {0u, indices.size() / 2u, indices.size() - 1u};
-                for (const size_t sampleIndex : sampleIndices)
-                {
-                    mixBytes(&indices[sampleIndex], sizeof(indices[sampleIndex]));
-                }
-            }
-            return hash;
-        }
-
         ImTextureID RequestMeshPreviewTexture(EditorContext& ctx, uint32_t modelIndex, const Assets::Model& model)
         {
-            const uint64_t meshHash = HashMeshPreview(model);
             const uint32_t sampleSlot =
-                ctx.engine.GetRenderer().ViewServices().AssetThumbnails().RequestMeshThumbnail(modelIndex, meshHash);
+                EditorPreview::AssetThumbnails(ctx.engine.GetRenderer()).RequestMeshThumbnail(modelIndex, model);
             return sampleSlot == std::numeric_limits<uint32_t>::max()
                 ? 0
                 : ctx.ui.RequestImTextureIdRaw(sampleSlot);
@@ -820,14 +783,18 @@ namespace Editor
                 continue;
             }
 
-            uint32_t dummySelection = InvalidId;
             const ImTextureID previewTexture = RequestMeshPreviewTexture(ctx, i, model);
-            DrawGeneralContentBrowser(ctx, ui, dummySelection, true, i, name, ICON_FA_BOXES_PACKING,
+            DrawGeneralContentBrowser(ctx, ui, ui.selectedMeshId, true, i, name, ICON_FA_BOXES_PACKING,
                                       IM_COL32(132, 182, 255, 255),
                                       ContentBrowserCallbacks{},
                                       nullptr,
                                       IM_COL32(0, 0, 0, 0),
                                       previewTexture);
+            if (ui.contentBrowserState.pendingRevealMeshId == i)
+            {
+                ImGui::SetScrollHereY(0.5f);
+                ui.contentBrowserState.pendingRevealMeshId = InvalidId;
+            }
             grid.Next();
             ++itemCount;
         }
@@ -872,6 +839,11 @@ namespace Editor
                                       nullptr,
                                       IM_COL32(0, 0, 0, 0),
                                       previewTexture);
+            if (ui.contentBrowserState.pendingRevealMaterialId == i)
+            {
+                ImGui::SetScrollHereY(0.5f);
+                ui.contentBrowserState.pendingRevealMaterialId = InvalidId;
+            }
 
             grid.Next();
             ++itemCount;
@@ -973,38 +945,12 @@ namespace Editor
                 ImGui::BeginChild("ContentRightFrame", ImVec2(0.0f, 0.0f), 0, ImGuiWindowFlags_NoBackground);
                 if (currentSection == EBrowserSection::Content)
                 {
-                    ImGui::BeginChild("ContentBrowserMain", ImVec2(0.0f, -24.0f), true);
+                    ImGui::BeginChild("ContentBrowserMain", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), true);
 
-                    if (ImGui::Button(ICON_FA_PLUS " Add"))
-                    {
-                        ImGui::OpenPopup("ContentAddPopup");
-                    }
-                    if (ImGui::BeginPopup("ContentAddPopup"))
-                    {
-                        ImGui::MenuItem("Material", nullptr, false, false);
-                        ImGui::MenuItem("Texture", nullptr, false, false);
-                        ImGui::MenuItem("Scene", nullptr, false, false);
-                        ImGui::MenuItem("Script", nullptr, false, false);
-                        ImGui::EndPopup();
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button(ICON_FA_FILE_IMPORT " Import"))
-                    {
-                        SPDLOG_INFO("Content Browser import placeholder");
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button(ICON_FA_FLOPPY_DISK " Save All"))
-                    {
-                        SPDLOG_INFO("Content Browser save all placeholder");
-                    }
-                    ImGui::SameLine();
                     DrawContentBrowserNavigation(rootPath, browserState.currentPath, directoryCache, visibilityCache);
                     ImGui::SameLine();
                     ImGui::SetNextItemWidth(190.0f);
                     browserState.contentFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##ContentBrowserFilter", 190.0f);
-                    ImGui::SameLine();
-                    ImGui::SetNextItemWidth(104.0f);
-                    ImGui::SliderFloat("Thumbnail", &GContentBrowserIconSize, 52.0f, 108.0f, "%.0f");
 
                     NextUI::Theme::DrawThinSeparator(0.70f);
                     ImGui::BeginChild("Content Items", ImVec2(0.0f, 0.0f));
@@ -1113,39 +1059,40 @@ namespace Editor
                     
                     ImGui::EndChild();
                     selectedCount = ui.selectedContentItemId != InvalidId ? 1 : 0;
-                    ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
+                    DrawContentBrowserStatus(itemCount, selectedCount);
                 }
                 else if (currentSection == EBrowserSection::Material)
                 {
                     ImGui::SetNextItemWidth(220.0f);
                     browserState.materialFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##MaterialBrowserFilter", 220.0f);
                     NextUI::Theme::DrawThinSeparator(0.70f);
-                    ImGui::BeginChild("Material Items", ImVec2(0.0f, -24.0f), true);
+                    ImGui::BeginChild("Material Items", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), true);
                     itemCount = DrawMaterialBrowserContents(ctx, ui, &browserState.materialFilter);
                     ImGui::EndChild();
                     selectedCount = ui.selectedMaterialId != InvalidId ? 1 : 0;
-                    ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
+                    DrawContentBrowserStatus(itemCount, selectedCount);
                 }
                 else if (currentSection == EBrowserSection::Texture)
                 {
                     ImGui::SetNextItemWidth(220.0f);
                     browserState.textureFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##TextureBrowserFilter", 220.0f);
                     NextUI::Theme::DrawThinSeparator(0.70f);
-                    ImGui::BeginChild("Texture Items", ImVec2(0.0f, -24.0f), true);
+                    ImGui::BeginChild("Texture Items", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), true);
                     itemCount = DrawTextureBrowserContents(ctx, ui, &browserState.textureFilter);
                     ImGui::EndChild();
                     selectedCount = ui.selectedTextureId != InvalidId ? 1 : 0;
-                    ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
+                    DrawContentBrowserStatus(itemCount, selectedCount);
                 }
                 else if (currentSection == EBrowserSection::Mesh)
                 {
                     ImGui::SetNextItemWidth(220.0f);
                     browserState.meshFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##MeshBrowserFilter", 220.0f);
                     NextUI::Theme::DrawThinSeparator(0.70f);
-                    ImGui::BeginChild("Mesh Items", ImVec2(0.0f, -24.0f), true);
+                    ImGui::BeginChild("Mesh Items", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), true);
                     itemCount = DrawMeshBrowserContents(ctx, ui, &browserState.meshFilter);
                     ImGui::EndChild();
-                    ImGui::Text("%d items", itemCount);
+                    selectedCount = ui.selectedMeshId != InvalidId ? 1 : 0;
+                    DrawContentBrowserStatus(itemCount, selectedCount);
                 }
                 ImGui::EndChild();
             }

@@ -1,6 +1,6 @@
 #include <catch2/catch_all.hpp>
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Gameplay/Sim/AnchorMap.h"
 #include "Gameplay/Sim/CharacterPool.h"
 #include "Gameplay/Sim/ScadRigVisual.h"

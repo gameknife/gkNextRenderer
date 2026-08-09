@@ -6,7 +6,7 @@
 #include "Gameplay/Components/CharacterControlComponent.h"
 #include "Gameplay/Components/CharacterGameplayComponent.h"
 #include "Engine/Runtime/RuntimeFwd.hpp"
-#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Gameplay/Character/NextCharacterController.h"
 
 namespace NextGameplay

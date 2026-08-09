@@ -114,6 +114,24 @@ func EnsureLinuxDesktopPackages() error {
 }
 
 func ensureLinuxAptPackages() error {
+	// System packages required on Debian/Ubuntu.
+	//
+	// Grouping:
+	//   - build toolchain: vcpkg bootstrap + cmake/ninja
+	//   - X11/Wayland dev headers: required at vcpkg *compile time* for the sdl3
+	//     (X11/Wayland backends) and vulkan-loader (xcb/xlib/wayland) ports.
+	//     The engine itself only links SDL3 and never touches Xlib/Wayland
+	//     directly; these dev packages exist so vcpkg can build SDL3 against
+	//     the system display stack. xorg-dev is the metapackage that covers the
+	//     full X11 dev header set SDL3's X11 backend pulls in at configure time;
+	//     the discrete libx11/libxft/libxext subset listed by the upstream sdl3
+	//     portfile is NOT sufficient in practice.
+	//
+	// Notably NOT included (vs. historical list):
+	//   - autoconf / autoconf-archive / automake / libtool: every Linux port in
+	//     vcpkg.json is cmake-based; no autoreconf-style port remains.
+	//   - libsystemd-dev: no reference anywhere in src/, cmake/, or gnb; the
+	//     vcpkg dbus port pulls its own deps.
 	packages := []string{
 		"build-essential",
 		"cmake",
@@ -127,14 +145,10 @@ func ensureLinuxAptPackages() error {
 		"libxinerama-dev",
 		"libxcursor-dev",
 		"libxrandr-dev",
+		"libxtst-dev",
 		"wayland-protocols",
 		"libxkbcommon-dev",
 		"xorg-dev",
-		"autoconf",
-		"autoconf-archive",
-		"automake",
-		"libtool",
-		"libsystemd-dev",
 	}
 	missing := make([]string, 0)
 	for _, pkg := range packages {
@@ -153,6 +167,9 @@ func ensureLinuxAptPackages() error {
 }
 
 func ensureLinuxPacmanPackages() error {
+	// See ensureLinuxAptPackages for the rationale on what is/isn't included.
+	// base-devel already covers autotools on Arch; libxrandr pulls the rest of
+	// the X11 dev headers transitively.
 	packages := []string{
 		"base-devel",
 		"cmake",
@@ -163,9 +180,9 @@ func ensureLinuxPacmanPackages() error {
 		"tar",
 		"pkgconf",
 		"libxrandr",
+		"libxtst",
 		"wayland-protocols",
 		"libxkbcommon",
-		"systemd-libs",
 	}
 	missing := make([]string, 0)
 	for _, pkg := range packages {
@@ -199,4 +216,105 @@ func runSystemPrepare(name string, args ...string) error {
 		return fmt.Errorf("%s failed: %w", name, err)
 	}
 	return nil
+}
+
+func EnsureMSVCEnvironment() error {
+	if runtime.GOOS != "windows" {
+		return nil
+	}
+
+	vswhere := filepath.Join(os.Getenv("ProgramFiles(x86)"), "Microsoft Visual Studio", "Installer", "vswhere.exe")
+	if _, err := os.Stat(vswhere); err != nil {
+		return nil
+	}
+
+	cmd := exec.Command(vswhere, "-latest", "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	vsPath := strings.TrimSpace(string(output))
+	if vsPath == "" {
+		return nil
+	}
+
+	msvcToolsDir := filepath.Join(vsPath, "VC", "Tools", "MSVC")
+	entries, err := os.ReadDir(msvcToolsDir)
+	if err != nil || len(entries) == 0 {
+		return nil
+	}
+
+	var latestVer string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			latestVer = entry.Name()
+		}
+	}
+	if latestVer == "" {
+		return nil
+	}
+
+	msvcRoot := filepath.Join(msvcToolsDir, latestVer)
+	clDir := filepath.Join(msvcRoot, "bin", "Hostx64", "x64")
+	if _, err := os.Stat(filepath.Join(clDir, "cl.exe")); err == nil {
+		if !CommandExists("cl.exe") {
+			os.Setenv("PATH", clDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+		}
+
+		// 设置 MSVC INCLUDE & LIB
+		appendEnvPath("INCLUDE", filepath.Join(msvcRoot, "include"))
+		appendEnvPath("LIB", filepath.Join(msvcRoot, "lib", "x64"))
+
+		console.Info("已自动加载 MSVC 编译工具链环境: %s", clDir)
+	}
+
+	// 补全 Windows SDK 工具链 (rc.exe, mt.exe, include, lib)
+	sdkDir := filepath.Join(os.Getenv("ProgramFiles(x86)"), "Windows Kits", "10")
+	sdkBinDir := filepath.Join(sdkDir, "bin")
+	if sdkEntries, err := os.ReadDir(sdkBinDir); err == nil {
+		var latestSDKVer string
+		for _, entry := range sdkEntries {
+			if entry.IsDir() && strings.HasPrefix(entry.Name(), "10.") {
+				latestSDKVer = entry.Name()
+			}
+		}
+		if latestSDKVer != "" {
+			rcDir := filepath.Join(sdkBinDir, latestSDKVer, "x64")
+			if _, err := os.Stat(filepath.Join(rcDir, "rc.exe")); err == nil {
+				if !CommandExists("rc.exe") {
+					os.Setenv("PATH", rcDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+				}
+			}
+
+			// 设置 SDK INCLUDE
+			sdkIncludeBase := filepath.Join(sdkDir, "Include", latestSDKVer)
+			appendEnvPath("INCLUDE", filepath.Join(sdkIncludeBase, "ucrt"))
+			appendEnvPath("INCLUDE", filepath.Join(sdkIncludeBase, "um"))
+			appendEnvPath("INCLUDE", filepath.Join(sdkIncludeBase, "shared"))
+			appendEnvPath("INCLUDE", filepath.Join(sdkIncludeBase, "winrt"))
+
+			// 设置 SDK LIB (kernel32.lib 等)
+			sdkLibBase := filepath.Join(sdkDir, "Lib", latestSDKVer)
+			appendEnvPath("LIB", filepath.Join(sdkLibBase, "ucrt", "x64"))
+			appendEnvPath("LIB", filepath.Join(sdkLibBase, "um", "x64"))
+		}
+	}
+	return nil
+}
+
+func appendEnvPath(envName string, dir string) {
+	if _, err := os.Stat(dir); err != nil {
+		return
+	}
+	curr := os.Getenv(envName)
+	if curr == "" {
+		os.Setenv(envName, dir)
+		return
+	}
+	for _, p := range strings.Split(curr, string(os.PathListSeparator)) {
+		if strings.EqualFold(p, dir) {
+			return
+		}
+	}
+	os.Setenv(envName, curr+string(os.PathListSeparator)+dir)
 }

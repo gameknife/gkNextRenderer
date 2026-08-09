@@ -1,8 +1,8 @@
+#include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
-#include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
-#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
+#include "Engine/Vulkan/VulkanInterposer.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include <algorithm>
 #include <cstring>
@@ -32,15 +32,16 @@ namespace
 
 }
 
-Instance::Instance(const class Window& window, const std::vector<const char*>& validationLayers, uint32_t vulkanVersion) :
-	window_(window),
-	validationLayers_(validationLayers)
+Instance::Instance(const class Window& window, const std::vector<const char*>& validationLayers, uint32_t vulkanVersion,
+                   const bool enableSynchronizationValidation) :
+    window_(window),
+    validationLayers_(validationLayers)
 {
-	// Check the minimum version.
-	CheckVulkanMinimumVersion(vulkanVersion);
+    // Check the minimum version.
+    CheckVulkanMinimumVersion(vulkanVersion);
 
-	// Get the list of required extensions.
-	auto extensions = window.GetRequiredInstanceExtensions();
+    // Get the list of required extensions.
+    auto extensions = window.GetRequiredInstanceExtensions();
     const auto availableExtensions = GetEnumerateVector(static_cast<const char*>(nullptr), vkEnumerateInstanceExtensionProperties);
 
     const auto hasInstanceExtension = [&availableExtensions](const char* extensionName)
@@ -52,26 +53,28 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
             });
     };
 
-	// Check the validation layers and add them to the list of required extensions.
-	CheckVulkanValidationLayerSupport(validationLayers);
+    // Check the validation layers and add them to the list of required extensions.
+    CheckVulkanValidationLayerSupport(validationLayers);
 
-#if WITH_STREAMLINE
-    AppendUniqueExtension(extensions, VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME);
-    AppendUniqueExtension(extensions, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
-    StreamlineWrapper::AppendRequiredInstanceExtensions(extensions);
-#endif
+    Interposer().AppendRequiredInstanceExtensions(extensions);
     
 #if !ANDROID
-	AppendUniqueExtension(extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    AppendUniqueExtension(extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif
-	
-	AppendUniqueExtension(extensions, VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME);
+    
+    if (hasInstanceExtension(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME))
+    {
+        AppendUniqueExtension(extensions, VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME);
+    }
 #if WIN32
-	AppendUniqueExtension(extensions, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
-#endif	
+    if (hasInstanceExtension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME))
+    {
+        AppendUniqueExtension(extensions, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
+    }
+#endif
     
 #if __APPLE__
-	AppendUniqueExtension(extensions, "VK_EXT_swapchain_colorspace");
+    AppendUniqueExtension(extensions, "VK_EXT_swapchain_colorspace");
 #endif
 
     VkInstanceCreateFlags createFlags = 0;
@@ -83,141 +86,156 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
     }
 #endif
 
-	// Create the Vulkan instance.
-	VkApplicationInfo appInfo = {};
-	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	appInfo.pApplicationName = "gkNextRenderer";
-	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-	appInfo.pEngineName = "No Engine";
-	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-	appInfo.apiVersion = vulkanVersion;
+    // Create the Vulkan instance.
+    VkApplicationInfo appInfo = {};
+    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    appInfo.pApplicationName = "gkNextRenderer";
+    appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+    appInfo.pEngineName = "No Engine";
+    appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+    appInfo.apiVersion = vulkanVersion;
 
-	VkInstanceCreateInfo createInfo = {};
-	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	createInfo.flags = createFlags;
-	createInfo.pApplicationInfo = &appInfo;
-	createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-	createInfo.ppEnabledExtensionNames = extensions.data();
-	createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-	createInfo.ppEnabledLayerNames = validationLayers.data();
+    VkInstanceCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    createInfo.flags = createFlags;
+    createInfo.pApplicationInfo = &appInfo;
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+    createInfo.ppEnabledExtensionNames = extensions.data();
+    createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+    createInfo.ppEnabledLayerNames = validationLayers.data();
+
+    VkValidationFeatureEnableEXT validationFeature = VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
+    VkValidationFeaturesEXT validationFeatures{};
+    if (enableSynchronizationValidation)
+    {
+        validationFeatures.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+        validationFeatures.enabledValidationFeatureCount = 1;
+        validationFeatures.pEnabledValidationFeatures = &validationFeature;
+        createInfo.pNext = &validationFeatures;
+        SPDLOG_INFO("Vulkan synchronization validation enabled");
+    }
     
-	Check(StreamlineWrapper::CreateInstance(&createInfo, nullptr, &instance_),
-		"create instance");
+    Check(Interposer().CreateInstance(&createInfo, nullptr, &instance_),
+        "create instance");
 
-	GetVulkanPhysicalDevices();
-	GetVulkanLayers();
-	GetVulkanExtensions();
+    GetVulkanPhysicalDevices();
+    GetVulkanLayers();
+    GetVulkanExtensions();
 }
 
 Instance::~Instance()
 {
-	if (instance_ != nullptr)
-	{
-		StreamlineWrapper::DestroyInstance(instance_, nullptr);
-		instance_ = nullptr;
-	}
+    if (instance_ != nullptr)
+    {
+        Interposer().DestroyInstance(instance_, nullptr);
+        instance_ = nullptr;
+    }
 }
 
 void Instance::GetVulkanExtensions()
 {
-	GetEnumerateVector(static_cast<const char*>(nullptr), vkEnumerateInstanceExtensionProperties, extensions_);
+    GetEnumerateVector(static_cast<const char*>(nullptr), vkEnumerateInstanceExtensionProperties, extensions_);
 }
 
 void Instance::GetVulkanLayers()
 {
-	GetEnumerateVector(vkEnumerateInstanceLayerProperties, layers_);
+    GetEnumerateVector(vkEnumerateInstanceLayerProperties, layers_);
 }
 
 void Instance::GetVulkanPhysicalDevices()
 {
-	GetEnumerateVector(instance_, StreamlineWrapper::EnumeratePhysicalDevices, physicalDevices_);
+    GetEnumerateVector(instance_,
+        +[](VkInstance instance, uint32_t* count, VkPhysicalDevice* devices)
+        { return Interposer().EnumeratePhysicalDevices(instance, count, devices); },
+        physicalDevices_);
 
-	if (physicalDevices_.empty())
-	{
-		Throw(std::runtime_error("found no Vulkan physical devices"));
-	}
+    if (physicalDevices_.empty())
+    {
+        Throw(std::runtime_error("found no Vulkan physical devices"));
+    }
 }
 
 bool Instance::SupportsRayQuery() const
 {
-	for (const auto& device : physicalDevices_)
-	{
-		if (SupportsRayQuery(device))
-		{
-			return true;
-		}
-	}
-	return false;
+    for (const auto& device : physicalDevices_)
+    {
+        if (SupportsRayQuery(device))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool Instance::SupportsRayQuery(VkPhysicalDevice physicalDevice) const
 {
-	const auto extensions = GetEnumerateVector(physicalDevice, static_cast<const char*>(nullptr),
-	                                           vkEnumerateDeviceExtensionProperties);
+    const auto extensions = GetEnumerateVector(physicalDevice, static_cast<const char*>(nullptr),
+                                               vkEnumerateDeviceExtensionProperties);
 
-	const auto hasExtension = [&extensions](const char* requiredExtension)
-	{
-		return std::any_of(extensions.begin(), extensions.end(),
-			[requiredExtension](const VkExtensionProperties& extension)
-			{
-				return std::strcmp(extension.extensionName, requiredExtension) == 0;
-			});
-	};
+    const auto hasExtension = [&extensions](const char* requiredExtension)
+    {
+        return std::any_of(extensions.begin(), extensions.end(),
+            [requiredExtension](const VkExtensionProperties& extension)
+            {
+                return std::strcmp(extension.extensionName, requiredExtension) == 0;
+            });
+    };
 
-	if (!hasExtension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME) ||
-	    !hasExtension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) ||
-	    !hasExtension(VK_KHR_RAY_QUERY_EXTENSION_NAME))
-	{
-		return false;
-	}
+    if (!hasExtension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME) ||
+        !hasExtension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) ||
+        !hasExtension(VK_KHR_RAY_QUERY_EXTENSION_NAME))
+    {
+        return false;
+    }
 
-	VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = {};
-	accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = {};
+    accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
 
-	VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = {};
-	rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
-	rayQueryFeatures.pNext = &accelerationStructureFeatures;
+    VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = {};
+    rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+    rayQueryFeatures.pNext = &accelerationStructureFeatures;
 
-	VkPhysicalDeviceFeatures2 features = {};
-	features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-	features.pNext = &rayQueryFeatures;
-	vkGetPhysicalDeviceFeatures2(physicalDevice, &features);
+    VkPhysicalDeviceFeatures2 features = {};
+    features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    features.pNext = &rayQueryFeatures;
+    vkGetPhysicalDeviceFeatures2(physicalDevice, &features);
 
-	return rayQueryFeatures.rayQuery && accelerationStructureFeatures.accelerationStructure;
+    return rayQueryFeatures.rayQuery && accelerationStructureFeatures.accelerationStructure;
 }
 
 void Instance::CheckVulkanMinimumVersion(const uint32_t minVersion)
 {
-	#if !ANDROID
-	uint32_t version;
-	Check(vkEnumerateInstanceVersion(&version),
-		"query instance version");
+    #if !ANDROID
+    uint32_t version;
+    Check(vkEnumerateInstanceVersion(&version),
+        "query instance version");
 
-	if (minVersion > version)
-	{
-		std::string out = fmt::format("minimum required version not found (required {}, found {})", to_string(Version(minVersion)), to_string(Version(version)));
+    if (minVersion > version)
+    {
+        std::string out = fmt::format("minimum required version not found (required {}, found {})", to_string(Version(minVersion)), to_string(Version(version)));
 
-		Throw(std::runtime_error(out));
-	}
-	#endif
+        Throw(std::runtime_error(out));
+    }
+    #endif
 }
 
 void Instance::CheckVulkanValidationLayerSupport(const std::vector<const char*>& validationLayers)
 {
-	const auto availableLayers = GetEnumerateVector(vkEnumerateInstanceLayerProperties);
+    const auto availableLayers = GetEnumerateVector(vkEnumerateInstanceLayerProperties);
 
-	for (const char* layer : validationLayers)
-	{
-		auto result = std::find_if(availableLayers.begin(), availableLayers.end(), [layer](const VkLayerProperties& layerProperties)
-		{
-			return strcmp(layer, layerProperties.layerName) == 0;
-		});
+    for (const char* layer : validationLayers)
+    {
+        auto result = std::find_if(availableLayers.begin(), availableLayers.end(), [layer](const VkLayerProperties& layerProperties)
+        {
+            return strcmp(layer, layerProperties.layerName) == 0;
+        });
 
-		if (result == availableLayers.end())
-		{
-			Throw(std::runtime_error("could not find the requested validation layer: '" + std::string(layer) + "'"));
-		}
-	}
+        if (result == availableLayers.end())
+        {
+            SPDLOG_CRITICAL("Requested Vulkan validation layer '{}' is not installed; validation cannot start", layer);
+            Throw(std::runtime_error("could not find the requested validation layer: '" + std::string(layer) + "'"));
+        }
+    }
 }
 
 }

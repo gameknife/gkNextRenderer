@@ -1,11 +1,11 @@
 #include "Gameplay/Utilities/SceneNodeUtils.hpp"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
-#include "Engine/Runtime/Scene/NodeUtils.h"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 
 namespace NextGameplay
 {
@@ -90,7 +90,7 @@ namespace NextGameplay
 
             if (auto component = node->GetComponent<Runtime::SkinnedMeshComponent>())
             {
-                components.push_back(component.get());
+                components.push_back(component);
             }
 
             for (const auto& child : node->Children())

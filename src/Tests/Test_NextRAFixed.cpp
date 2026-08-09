@@ -3,6 +3,7 @@
 #include "Application/Game/NextRA/Net/LoopbackTransport.h"
 #include "Application/Game/NextRA/Net/OrderManager.h"
 #include "Application/Game/NextRA/Net/Replay.h"
+#include "Application/Game/NextRA/Sim/OccupancyGrid.h"
 #include "Application/Game/NextRA/Sim/PathfindGrid.h"
 #include "Application/Game/NextRA/Sim/SimWorld.h"
 #include "Application/Game/NextRA/Sim/SyncHash.h"
@@ -171,6 +172,51 @@ TEST_CASE("NextRA angle lookup uses fixed deterministic cardinal values", "[Unit
     REQUIRE(Sin(WAngle::FromRaw(-angleUnits / 4)).raw == -FFixed::oneRaw);
 }
 
+TEST_CASE("NextRA atan and turn helpers are deterministic around wrap", "[Unit][NextRA]")
+{
+    using namespace NextRA::Sim;
+
+    REQUIRE(Atan2FromVec2(FFixed::FromInt(0), FFixed::FromInt(1)).value == 0);
+    REQUIRE(Atan2FromVec2(FFixed::FromInt(1), FFixed::FromInt(0)).value == angleUnits / 4);
+    REQUIRE(Atan2FromVec2(FFixed::FromInt(0), FFixed::FromInt(-1)).value == angleUnits / 2);
+    REQUIRE(Atan2FromVec2(FFixed::FromInt(-1), FFixed::FromInt(0)).value == angleUnits * 3 / 4);
+    REQUIRE(Atan2FromVec2(FFixed::FromInt(1), FFixed::FromInt(1)).value == angleUnits / 8);
+
+    REQUIRE(TurnToward(WAngle::FromRaw(100), WAngle::FromRaw(100), WAngle::FromRaw(8)).value == 100);
+    REQUIRE(TurnToward(WAngle::FromRaw(100), WAngle::FromRaw(200), WAngle::FromRaw(32)).value == 132);
+    REQUIRE(TurnToward(WAngle::FromRaw(4080), WAngle::FromRaw(16), WAngle::FromRaw(16)).value == 0);
+    REQUIRE(TurnToward(WAngle::FromRaw(16), WAngle::FromRaw(4080), WAngle::FromRaw(16)).value == 0);
+    REQUIRE(TurnToward(WAngle::FromRaw(16), WAngle::FromRaw(4080), WAngle::FromRaw(0)).value == 16);
+}
+
+TEST_CASE("NextRA damage multipliers encode armor and weapon counters", "[Unit][NextRA]")
+{
+    REQUIRE(NextRA::DamageMultiplier(NextRA::EWeaponType::Bullet, NextRA::EArmorType::Heavy) == 25);
+    REQUIRE(NextRA::DamageMultiplier(NextRA::EWeaponType::Shell, NextRA::EArmorType::Heavy) == 150);
+    REQUIRE(NextRA::DamageMultiplier(NextRA::EWeaponType::Rocket, NextRA::EArmorType::Building) == 140);
+    REQUIRE(NextRA::ApplyDamageMultiplier(20, NextRA::EWeaponType::Bullet, NextRA::EArmorType::Heavy) == 5);
+    REQUIRE(NextRA::ApplyDamageMultiplier(34, NextRA::EWeaponType::Shell, NextRA::EArmorType::Heavy) == 51);
+    REQUIRE(NextRA::ApplyDamageMultiplier(24, NextRA::EWeaponType::Rocket, NextRA::EArmorType::Building) == 33);
+}
+
+TEST_CASE("NextRA occupancy grid stores actors by cell deterministically", "[Unit][NextRA]")
+{
+    using namespace NextRA::Sim;
+
+    FOccupancyGrid grid;
+    grid.Add(7, CPos{1, -2});
+    grid.Add(3, CPos{1, -2});
+    grid.Add(9, CPos{-1, 0});
+
+    REQUIRE(grid.IsOccupied(CPos{1, -2}));
+    REQUIRE(grid.IsOccupiedByOther(CPos{1, -2}, 7));
+    REQUIRE_FALSE(grid.IsOccupiedByOther(CPos{-1, 0}, 9));
+    const std::span<const FActorId> actors = grid.ActorsAt(CPos{1, -2});
+    REQUIRE(actors.size() == 2);
+    REQUIRE(actors[0] == 3);
+    REQUIRE(actors[1] == 7);
+}
+
 TEST_CASE("NextRA sim world moves actor with stable actor list", "[Unit][NextRA]")
 {
     using namespace NextRA::Sim;
@@ -187,6 +233,7 @@ TEST_CASE("NextRA sim world moves actor with stable actor list", "[Unit][NextRA]
     REQUIRE(transform != nullptr);
     REQUIRE(transform->pos.x == WPos::FromCells(1, 0).x);
     REQUIRE(transform->pos.z == WPos::FromCells(1, 0).z);
+    REQUIRE(transform->facing.value > 0);
     REQUIRE(world.Actors().front() == actor);
 }
 
@@ -313,6 +360,138 @@ TEST_CASE("NextRA order manager applies move orders through path following", "[U
     REQUIRE(transform != nullptr);
     REQUIRE(transform->pos.x == WPos::FromCells(2, 0).x);
     REQUIRE(transform->pos.z == WPos::FromCells(2, 0).z);
+}
+
+TEST_CASE("NextRA occupied path cell pauses movement without clearing the goal", "[Unit][NextRA]")
+{
+    using namespace NextRA::Sim;
+
+    FSimWorld world;
+    FPathfindGrid grid(16, 16, CPos{-8, -8});
+    world.SetPathGrid(&grid);
+    const FActorId mover =
+        world.SpawnMobile(0, NextRA::infantryTypeId, WPos::FromCells(0, 0), WPos::FromCells(0, 0), FFixed::FromInt(1024));
+    world.SpawnMobile(0, NextRA::infantryTypeId, WPos::FromCells(1, 0), WPos::FromCells(1, 0), FFixed::FromInt(1024));
+
+    REQUIRE(world.IssueMove(mover, WPos::FromCells(2, 0), grid));
+    world.Step(0);
+
+    const FSimTransform* transform = world.TryGetTransform(mover);
+    const FMobile* mobile = world.TryGetMobile(mover);
+    REQUIRE(transform != nullptr);
+    REQUIRE(mobile != nullptr);
+    REQUIRE(transform->pos.x == WPos::FromCells(0, 0).x);
+    REQUIRE(mobile->hasGoal);
+}
+
+TEST_CASE("NextRA separation moves overlapping mobiles deterministically", "[Unit][NextRA]")
+{
+    using namespace NextRA::Sim;
+
+    FSimWorld world;
+    const FActorId first =
+        world.SpawnMobile(0, NextRA::infantryTypeId, WPos::FromCells(0, 0), WPos::FromCells(0, 0), FFixed::FromInt(512));
+    const FActorId second =
+        world.SpawnMobile(0, NextRA::infantryTypeId, WPos::FromCells(0, 0), WPos::FromCells(0, 0), FFixed::FromInt(512));
+
+    world.Step(0);
+
+    const FSimTransform* firstTransform = world.TryGetTransform(first);
+    const FSimTransform* secondTransform = world.TryGetTransform(second);
+    REQUIRE(firstTransform != nullptr);
+    REQUIRE(secondTransform != nullptr);
+    REQUIRE(secondTransform->pos.x > firstTransform->pos.x);
+    REQUIRE(secondTransform->pos.z == firstTransform->pos.z);
+}
+
+TEST_CASE("NextRA separation remains deterministic across double run hashes", "[Unit][NextRA]")
+{
+    using namespace NextRA::Sim;
+
+    FSimWorld first;
+    FSimWorld second;
+    for (int32_t index = 0; index < 4; ++index)
+    {
+        first.SpawnMobile(0, NextRA::infantryTypeId, WPos::FromCells(0, 0), WPos::FromCells(0, 0), FFixed::FromInt(512));
+        second.SpawnMobile(0, NextRA::infantryTypeId, WPos::FromCells(0, 0), WPos::FromCells(0, 0), FFixed::FromInt(512));
+    }
+
+    for (uint32_t tick = 0; tick < 16; ++tick)
+    {
+        first.Step(tick);
+        second.Step(tick);
+        REQUIRE(ComputeSyncHash(first) == ComputeSyncHash(second));
+    }
+}
+
+TEST_CASE("NextRA turret component turns toward acquired target", "[Unit][NextRA]")
+{
+    using namespace NextRA::Sim;
+
+    FSimWorld world;
+    const FActorId tank =
+        world.SpawnMobile(0, NextRA::tankTypeId, WPos::FromCells(0, 0), WPos::FromCells(0, 0), NextRA::UnitSpeedPerTick(NextRA::tankTypeId));
+    const FActorId target =
+        world.SpawnMobile(1, NextRA::infantryTypeId, WPos::FromCells(3, 0), WPos::FromCells(3, 0), NextRA::UnitSpeedPerTick(NextRA::infantryTypeId));
+
+    REQUIRE(world.IssueAttack(tank, target));
+    world.Step(0);
+
+    const FTurret* turret = world.TryGetTurret(tank);
+    REQUIRE(turret != nullptr);
+    REQUIRE(turret->targetActor == target);
+    REQUIRE(turret->facing.value > 0);
+}
+
+TEST_CASE("NextRA rocketeer damage is multiplied against heavy armor", "[Unit][NextRA]")
+{
+    using namespace NextRA::Sim;
+
+    FSimWorld world;
+    const FActorId attacker = world.SpawnMobile(
+        0,
+        NextRA::rocketeerTypeId,
+        WPos::FromCells(0, 0),
+        WPos::FromCells(0, 0),
+        NextRA::UnitSpeedPerTick(NextRA::rocketeerTypeId));
+    const FActorId target =
+        world.SpawnMobile(1, NextRA::tankTypeId, WPos::FromCells(2, 0), WPos::FromCells(2, 0), NextRA::UnitSpeedPerTick(NextRA::tankTypeId));
+
+    REQUIRE(world.IssueAttack(attacker, target));
+    world.Step(0);
+
+    const FHealth* health = world.TryGetHealth(target);
+    REQUIRE(health != nullptr);
+    REQUIRE(health->hp == NextRA::UnitMaxHp(NextRA::tankTypeId) -
+                              NextRA::ApplyDamageMultiplier(NextRA::UnitDamage(NextRA::rocketeerTypeId),
+                                                            NextRA::EWeaponType::Rocket,
+                                                            NextRA::EArmorType::Heavy));
+}
+
+TEST_CASE("NextRA destroyed building footprint releases path grid cells", "[Unit][NextRA]")
+{
+    using namespace NextRA::Sim;
+
+    FSimWorld world;
+    FPathfindGrid grid(8, 8, CPos{-4, -4});
+    world.SetPathGrid(&grid);
+    const FActorId wall = world.SpawnBuilding(
+        0,
+        NextRA::wallTypeId,
+        WPos::FromCells(0, 0),
+        NextRA::UnitMaxHp(NextRA::wallTypeId),
+        false,
+        false,
+        WPos::FromCells(0, 0));
+    REQUIRE_FALSE(grid.IsPassable(CPos{0, 0}));
+
+    FHealth* health = world.TryGetHealth(wall);
+    REQUIRE(health != nullptr);
+    health->hp = 0;
+    world.Step(0);
+
+    REQUIRE_FALSE(world.IsAlive(wall));
+    REQUIRE(grid.IsPassable(CPos{0, 0}));
 }
 
 TEST_CASE("NextRA attack order damages and kills enemy", "[Unit][NextRA]")

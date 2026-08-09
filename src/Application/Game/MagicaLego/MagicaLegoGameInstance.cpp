@@ -4,17 +4,18 @@
 #include "MagicaLegoConstants.hpp"
 #include "MagicaLegoPlacementRules.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "MagicaLegoUserInterface.hpp"
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
-#include "Engine/Runtime/Scene/NodeUtils.h"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
-#include "Engine/Runtime/Subsystems/NextAudio.h"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
+#include "Engine/Runtime/Subsystems/NextAudio.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 
 #include <glm/gtc/quaternion.hpp>
@@ -105,7 +106,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Run
     options.ForceSDR = true;
     options.locale = "zhCN";
     //options.SuperResolution = 0;
-    //options.DLSS = true;
+    // Select r.upscaler.type=1 to prefer DLSS when supported.
 
     // mode init
     SetBuildMode(ELegoMode::ELM_Place);
@@ -343,8 +344,8 @@ void MagicaLegoGameInstance::OnInit()
         const char* message =
             "MagicaLego needs legobricks.glb (shipped via the optional asset pack).\n\n"
             "Run one of the following from the repo root, then relaunch:\n"
-            "  scripts/fetch-paks.sh --optional      (Linux / macOS / Git Bash)\n"
-            "  scripts\\fetch-paks.bat --optional    (Windows)";
+            "  ./gnb.sh paks fetch optional      (Linux / macOS / Git Bash)\n"
+            "  gnb.bat paks fetch optional       (Windows)";
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "MagicaLego - Missing Optional Assets",
                                  message, GetEngine().GetWindow().Handle());
         SPDLOG_ERROR("MagicaLego: legobricks.glb not found in disk or any mounted pak; aborting OnInit");
@@ -660,7 +661,7 @@ void MagicaLegoGameInstance::TestSpawnPhysicsBlock()
     phys->SetPhysicsOffset(physicsOffset);
     newNode->AddComponent(phys);
     
-    GetEngine().GetScene().Nodes().push_back(newNode);
+    GetEngine().GetScene().AddNode(newNode);
     GetEngine().GetScene().MarkDirty();
     
     //GetEngine().GetPhysicsEngine()->AddForceToBody(id, shotDir * 70000.f);
@@ -1163,7 +1164,18 @@ void MagicaLegoGameInstance::LoadRecord(std::string filename)
 
 void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBlock>& source, uint32_t newhash)
 {
-    GetEngine().GetScene().Nodes().erase(GetEngine().GetScene().Nodes().begin() + instanceCountBeforeDynamics_, GetEngine().GetScene().Nodes().end());
+    auto& scene = GetEngine().GetScene();
+    std::vector<uint32_t> removedNodeIds;
+    const auto& nodes = scene.Nodes();
+    if (instanceCountBeforeDynamics_ < static_cast<int>(nodes.size()))
+    {
+        removedNodeIds.reserve(nodes.size() - static_cast<size_t>(instanceCountBeforeDynamics_));
+        for (size_t nodeIndex = static_cast<size_t>(instanceCountBeforeDynamics_); nodeIndex < nodes.size(); ++nodeIndex)
+        {
+            removedNodeIds.push_back(nodes[nodeIndex]->GetInstanceId());
+        }
+    }
+    scene.RemoveNodesByInstanceId(removedNodeIds);
 
     for (auto& block : source)
     {
@@ -1185,7 +1197,7 @@ void MagicaLegoGameInstance::RebuildScene(std::unordered_map<uint32_t, FPlacedBl
                     basicBlock->matType,
                     true,
                     glm::quat(orientation));
-                GetEngine().GetScene().Nodes().push_back(newNode);
+                scene.AddNode(newNode);
             }
         }
     }
@@ -1236,9 +1248,9 @@ void MagicaLegoGameInstance::CPURaycast()
     glm::vec3 dir;
     Runtime::EngineHelper::GetScreenToWorldRay(mousePos_, rayOrigin, dir);
     isTracingObject_ = false;
-    GetEngine().RayCastGPU(rayOrigin, dir, [this](Assets::RayCastResult result)
+    GetEngine().RayCast(rayOrigin, dir, [this](Assets::RayCastResult result)
         {
-            if (result.Hitted)
+            if (result.Hit)
             {
                 this->isTracingObject_ = true;
                 this->OnRayHitResponse(result);
@@ -1330,7 +1342,6 @@ void MagicaLegoGameInstance::GenerateThumbnail()
     realCameraCenter_ = cameraCenter_;
     GetEngine().GetUserSettings().TemporalFrames = 8;
     GetEngine().GetUserSettings().NumberOfSamples = 256;
-    GetEngine().GetUserSettings().Denoiser = false;
     GetEngine().GetRenderer().SwapChain().UpdateRenderViewport(1920 / 2 - thumbSize / 2, 960 / 2 - thumbSize / 2, thumbSize, thumbSize);
     PlaceDynamicBlock({{0, 0, 0}, EOrientation::EO_North, 0, BasicNodes[0].brushId_, 0, 0});
 
@@ -1363,7 +1374,6 @@ void MagicaLegoGameInstance::GenerateThumbnail()
             PlaceDynamicBlock({{0, 0, 0}, EOrientation::EO_North, 0, -1, 0, 0});
             GetEngine().GetUserSettings().TemporalFrames = 16;
             GetEngine().GetUserSettings().NumberOfSamples = 8;
-            GetEngine().GetUserSettings().Denoiser = true;
             cameraArm_ = 5.0f;
             cameraCenter_ = glm::vec3(0, 0.0f, 0);
             realCameraCenter_ = cameraCenter_;
@@ -1382,9 +1392,9 @@ void MagicaLegoGameInstance::PerformLeftClickCheck()
     Runtime::EngineHelper::GetScreenToWorldRay(mousePos_, rayOrigin, dir);
 
     bool hitObject = false;
-    GetEngine().RayCastGPU(rayOrigin, dir, [&hitObject](Assets::RayCastResult result) -> bool
+    GetEngine().RayCast(rayOrigin, dir, [&hitObject](Assets::RayCastResult result) -> bool
     {
-        if (result.Hitted)
+        if (result.Hit)
         {
             hitObject = true;
         }
@@ -1413,9 +1423,9 @@ void MagicaLegoGameInstance::UpdateFocusToScreenCenter()
     Runtime::EngineHelper::GetScreenToWorldRay(screenCenter, rayOrigin, centerDir);
 
     glm::vec3 newFocus = glm::vec3(0, 0, 0);
-    GetEngine().RayCastGPU(rayOrigin, centerDir, [&newFocus](Assets::RayCastResult result) -> bool
+    GetEngine().RayCast(rayOrigin, centerDir, [&newFocus](Assets::RayCastResult result) -> bool
     {
-        if (result.Hitted)
+        if (result.Hit)
         {
             newFocus = glm::vec3(result.HitPoint);
         }
@@ -1624,4 +1634,3 @@ void MagicaLegoGameInstance::UpdateMouseCursor()
         SDL_SetCursor(cursor);
     }
 }
-

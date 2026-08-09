@@ -1,0 +1,2 @@
+add_executable(Packager PackagerMain.cpp)
+gk_configure_application(Packager NO_UNITY NO_FAST_LINK)

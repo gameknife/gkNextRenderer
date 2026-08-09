@@ -1,0 +1,18 @@
+{
+  "name": "nextdayz-weapon-ui",
+  "target": "NextDayz",
+  "scene": "assets/scad/proc/coldwar/riverland_1km.scad",
+  "defaults": { "waitFrames": 2, "stepTimeoutMs": 20000 },
+  "viewport": { "width": 1600, "height": 900 },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "cvar", "name": "nextdayz.validation.loadout", "set": true },
+    { "type": "wait-frames", "n": 60 },
+    { "type": "key", "code": "I", "action": "press" },
+    { "type": "wait-frames", "n": 10 },
+    { "type": "assert", "query": "game.inventoryCount", "op": "ge", "value": 2 },
+    { "type": "screenshot", "out": "screenshots/nextdayz_weapon_inventory" },
+    { "type": "key", "code": "I", "action": "press" },
+    { "type": "quit" }
+  ]
+}

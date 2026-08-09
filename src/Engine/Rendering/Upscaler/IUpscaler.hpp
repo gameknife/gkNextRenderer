@@ -10,12 +10,18 @@ namespace Rendering::Upscaler
         virtual ~IUpscaler() = default;
 
         virtual void OnDeviceCreated(const FDeviceInfo& deviceInfo, FFeatureCaps& caps) = 0;
+        // Called after swapchain selection resolves. Providers must keep GPU
+        // resources only while one of their types is active.
+        virtual void SetActiveType(EUpscalerType type) {}
         virtual void OnSwapChainDestroyed() = 0;
         virtual void Shutdown() = 0;
         virtual FOptimalRenderSettings GetOptimalRenderSettings(
             uint32_t superResolutionMode,
             VkExtent2D outputExtent,
-            bool dlssEnabled) = 0;
+            bool upscalerEnabled,
+            bool hdrOutput,
+            EUpscalerType type = EUpscalerType::None) = 0;
+        virtual uint32_t JitterPhaseCount() const { return 0; }
 
         virtual FFrameToken BeginFrame(
             uint32_t frameIndex,
@@ -31,6 +37,4 @@ namespace Rendering::Upscaler
 
         virtual FFrameGenerationState FrameGenerationState() const = 0;
     };
-
-    std::unique_ptr<IUpscaler> CreateStreamlineUpscaler();
 }

@@ -1,14 +1,15 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/Reflection/PropertyTypes.h"
-#include "Engine/Runtime/Reflection/PropertyAccessor.h"
+#include "Engine/Runtime/Reflection/PropertyTypes.hpp"
+#include "Engine/Runtime/Reflection/PropertyAccessor.hpp"
 #include "Engine/Runtime/Command/CommandHistory.hpp"
-#include "Engine/Assets/Core/Component.h"
+#include "Engine/Assets/Core/Component.hpp"
 
 #include <imgui.h>
 #include <string>
 #include <functional>
+#include <limits>
 #include <entt/meta/meta.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -24,6 +25,18 @@ namespace Editor
     class PropertyWidgets
     {
     public:
+        struct AssetWidgetConfig
+        {
+            ImFont* titleFont;
+            std::function<ImTextureID(uint32_t)> thumbnail;
+            std::function<std::string(uint32_t)> name;
+            std::function<uint32_t()> selectedAsset;
+            std::function<void(uint32_t)> locateAsset;
+            std::function<void(uint32_t)> editAsset;
+
+            AssetWidgetConfig() : titleFont(nullptr) {}
+        };
+
         /**
          * Configuration for property widget rendering.
          */
@@ -34,6 +47,9 @@ namespace Editor
             float maxValue;
             bool readOnly;
             const char* format;
+            size_t arrayDisplayLimit;
+            AssetWidgetConfig modelAsset;
+            AssetWidgetConfig materialAsset;
             
             WidgetConfig()
                 : dragSpeed(0.1f)
@@ -41,6 +57,7 @@ namespace Editor
                 , maxValue(FLT_MAX)
                 , readOnly(false)
                 , format(nullptr)
+                , arrayDisplayLimit(std::numeric_limits<size_t>::max())
             {}
         };
         
@@ -103,7 +120,9 @@ namespace Editor
             const char* label,
             const Reflection::PropertyInfo& propInfo,
             entt::meta_any& arrayValue,
-            bool readOnly = false
+            bool readOnly = false,
+            size_t displayLimit = std::numeric_limits<size_t>::max(),
+            const AssetWidgetConfig& elementAsset = {}
         );
         
     private:

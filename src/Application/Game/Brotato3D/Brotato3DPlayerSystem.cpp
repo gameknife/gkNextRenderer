@@ -1,8 +1,9 @@
 #include "Brotato3DGameInstance.hpp"
 #include "Brotato3DCommon.hpp"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include <spdlog/spdlog.h>
 
 #include "Brotato3DAudio.hpp"
@@ -265,7 +266,7 @@ void Brotato3DGameInstance::UpdatePlayer(double deltaSeconds)
         player_.worldPos = ResolvePlayerObstacleCollision(player_.worldPos, player_.radius);
         player_.worldPos = ClampToArena(player_.worldPos, player_.radius, arenaHalfExtent_);
     }
-    player_.worldPos.y = 0.5f + SampleArenaGroundY(player_.worldPos);
+    player_.worldPos.y = player_.radius;
     playerVelocity_ = deltaSeconds > 0.0 ? (player_.worldPos - previousPlayerPos) / static_cast<float>(deltaSeconds) :
                                            glm::vec3(0.0f);
     if (player_.bodyNode)
@@ -304,6 +305,9 @@ void Brotato3DGameInstance::UpdatePlayer(double deltaSeconds)
         player_.shotgunWeaponNode->SetRotation(weaponRotation);
         Assets::NodeUtils::SetVisible(player_.shotgunWeaponNode, hasShotgun);
     }
+
+    const glm::vec3 playerFeet = player_.worldPos - glm::vec3(0.0f, player_.radius, 0.0f);
+    playerRig_.Update(playerFeet, playerVelocity_, player_.facingDir, static_cast<float>(deltaSeconds));
 
     if (player_.dashRemainingMs > 0.0f)
     {
@@ -453,7 +457,7 @@ void Brotato3DGameInstance::ResetRuntimeState()
     {
         light.active = false;
         light.remainingMs = 0.0f;
-        UpdateLightArea(light.lightIndex, HiddenPosition, 0.01f, 0.0f);
+        UpdateLightArea(light.lightComponent.get(), HiddenPosition, 0.01f, 0.0f);
         light.node->SetTranslation(HiddenPosition);
         Assets::NodeUtils::SetVisible(light.node, false);
     }
@@ -478,6 +482,8 @@ void Brotato3DGameInstance::ResetRuntimeState()
     targetSkyIntensity_ = 30.0f;
     skyTransitionTotalMs_ = 0.0f;
     skyTransitionRemainingMs_ = 0.0f;
+    sunRotation_ = 0.28f;
+    sunLightingUpdateAccumMs_ = 0.0f;
     ApplyLightingSettings();
     weaponMergeBannerMs_ = 0.0f;
     weaponMergeBannerText_.clear();
@@ -509,6 +515,7 @@ void Brotato3DGameInstance::ResetRuntimeState()
     }
     ClearMovementInput();
     Assets::NodeUtils::SetVisible(player_.bodyNode, false);
+    playerRig_.SetVisible(false);
     Assets::NodeUtils::SetVisible(player_.facingNode, false);
     Assets::NodeUtils::SetVisible(player_.smgWeaponNode, false);
     Assets::NodeUtils::SetVisible(player_.shotgunWeaponNode, false);
@@ -553,6 +560,7 @@ void Brotato3DGameInstance::ApplySelectedCharacter()
     if (const auto materialIt = characterMaterialIds_.find(character->id); materialIt != characterMaterialIds_.end())
     {
         Assets::NodeUtils::SetPrimaryMaterial(player_.bodyNode, materialIt->second);
+        playerRig_.SetTintMaterial(materialIt->second);
     }
     playerDebrisMatId_ = Assets::SceneBuilder::AddLambertianMaterialToScene(GetEngine().GetScene(),
                                                                     character->color * 0.6f + glm::vec3(0.4f));
@@ -587,20 +595,13 @@ int Brotato3DGameInstance::GetDashMaxCharges() const
 
 glm::vec3 Brotato3DGameInstance::RandomDebugSpawnPosition()
 {
-    std::uniform_int_distribution<int> sideDist(0, 3);
-    std::uniform_real_distribution<float> xDist(-arenaHalfExtent_.x, arenaHalfExtent_.x);
-    std::uniform_real_distribution<float> zDist(-arenaHalfExtent_.y, arenaHalfExtent_.y);
-    switch (sideDist(rng_))
-    {
-    case 0:
-        return glm::vec3(xDist(rng_), 0.3f, -arenaHalfExtent_.y);
-    case 1:
-        return glm::vec3(xDist(rng_), 0.3f, arenaHalfExtent_.y);
-    case 2:
-        return glm::vec3(-arenaHalfExtent_.x, 0.3f, zDist(rng_));
-    default:
-        return glm::vec3(arenaHalfExtent_.x, 0.3f, zDist(rng_));
-    }
+    constexpr float twoPi = 6.28318530718f;
+    const float angle = std::uniform_real_distribution<float>(0.0f, twoPi)(rng_);
+    const float distance = std::uniform_real_distribution<float>(12.0f, 18.0f)(rng_);
+    glm::vec3 spawnPos = player_.worldPos +
+        glm::vec3(std::cos(angle), 0.0f, std::sin(angle)) * distance;
+    spawnPos.y = 0.3f;
+    return ClampToArena(spawnPos, 0.0f, arenaHalfExtent_);
 }
 
 

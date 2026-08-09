@@ -1,16 +1,22 @@
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 
 #include <chrono>
+#include <SDL3/SDL_thread.h>
 
 namespace Tasks
 {
 
-TaskThread::TaskThread(std::string threadName) : threadName_(std::move(threadName))
+TaskThread::TaskThread(std::string threadName, bool highPriority)
+    : threadName_(std::move(threadName)), highPriority_(highPriority)
 {
     complete_.reset(new event_signal());
     terminate_.reset(new event_signal());
     complete_->set();
     thread_.reset(new std::thread([this] {
+        if (highPriority_ && !SDL_SetCurrentThreadPriority(SDL_THREAD_PRIORITY_HIGH))
+        {
+            spdlog::warn("Failed to set high priority for thread '{}': {}", threadName_, SDL_GetError());
+        }
 #if WITH_SUPERLUMINAL
         if (!threadName_.empty())
         {
@@ -33,6 +39,11 @@ TaskThread::TaskThread(std::string threadName) : threadName_(std::move(threadNam
                 // sync add to mainthread complete queue
                 TaskCoordinator::GetInstance()->MarkTaskComplete(task);
                 busy_.store(false);
+                {
+                    std::lock_guard<std::mutex> lock(completedTaskMutex_);
+                    ++completedTaskCount_;
+                }
+                completedTaskCondition_.notify_all();
             }
             else
             {
@@ -60,6 +71,10 @@ TaskCoordinator::~TaskCoordinator()
     for (auto& thread : lowThreads_)
     {
         thread.reset();
+    }
+    for (auto& threadPool : namedThreadPools_)
+    {
+        threadPool.clear();
     }
 }
 
@@ -101,6 +116,26 @@ uint32_t TaskCoordinator::AddParralledTask(ResTask::TaskFunc taskFunc, ResTask::
     return task.task_id;
 }
 
+uint32_t TaskCoordinator::AddNamedTask(
+    ENamedTaskThread namedThread, ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc)
+{
+    static std::atomic<uint32_t> taskId = 0;
+    ResTask task;
+    task.task_id = taskId.fetch_add(1, std::memory_order_relaxed);
+    task.task_func = std::move(taskFunc);
+    task.complete_func = std::move(completeFunc);
+
+    const size_t namedThreadIndex = static_cast<size_t>(namedThread);
+    assert(namedThreadIndex < namedThreadPools_.size());
+    auto& threadPool = namedThreadPools_[namedThreadIndex];
+    assert(!threadPool.empty());
+    const size_t threadIndex =
+        namedThreadCursors_[namedThreadIndex].fetch_add(1, std::memory_order_relaxed) % threadPool.size();
+    threadPool[threadIndex]->EnqueueTask(std::move(task));
+
+    return task.task_id;
+}
+
 void TaskCoordinator::WaitForAllParralledTask()
 {
     while( parralledTaskQueue_.size() > 0 )
@@ -113,6 +148,16 @@ void TaskCoordinator::WaitForAllParralledTask()
     while( !IsAllParralledTaskComplete() )
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(0));
+    }
+}
+
+void TaskCoordinator::WaitForNamedTask(ENamedTaskThread namedThread)
+{
+    const size_t namedThreadIndex = static_cast<size_t>(namedThread);
+    assert(namedThreadIndex < namedThreadPools_.size());
+    for (auto& thread : namedThreadPools_[namedThreadIndex])
+    {
+        thread->WaitForAllTasks();
     }
 }
 
@@ -205,13 +250,27 @@ TaskCoordinator::TaskCoordinator()
 
     // Get the number of CPU cores (use half of available cores for low-priority threads)
     unsigned int numCores = std::thread::hardware_concurrency();
-    unsigned int lowThreadCount = std::max(1u, numCores / 1);
+    unsigned int lowThreadCount = std::max(1u, numCores / 2);
 
     // Create low-priority threads based on CPU cores
     for (unsigned int i = 0; i < lowThreadCount; i++)
     {
         lowThreads_.push_back(std::make_unique<TaskThread>("TaskCoordinator Parallel " + std::to_string(i)));
     }
+
+    constexpr uint32_t sceneUpdateThreadCount = 4;
+    auto& sceneUpdateThreads = namedThreadPools_[static_cast<size_t>(ENamedTaskThread::SCENE_UPDATE)];
+    sceneUpdateThreads.reserve(sceneUpdateThreadCount);
+    for (uint32_t i = 0; i < sceneUpdateThreadCount; ++i)
+    {
+        sceneUpdateThreads.push_back(
+            std::make_unique<TaskThread>("TaskCoordinator Scene Update " + std::to_string(i), true));
+    }
+
+    namedThreadPools_[static_cast<size_t>(ENamedTaskThread::CPU_AS_BUILD)].push_back(
+        std::make_unique<TaskThread>("TaskCoordinator CPU AS Build"));
+    namedThreadPools_[static_cast<size_t>(ENamedTaskThread::PHYSICS)].push_back(
+        std::make_unique<TaskThread>("TaskCoordinator Physics", true));
 }
 
 bool TaskCoordinator::IsAllParralledTaskComplete()
@@ -219,6 +278,20 @@ bool TaskCoordinator::IsAllParralledTaskComplete()
     for ( auto& thread : lowThreads_ )
     {
         if( !thread->IsIdle() )
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool TaskCoordinator::IsNamedTaskComplete(ENamedTaskThread namedThread) const
+{
+    const size_t namedThreadIndex = static_cast<size_t>(namedThread);
+    assert(namedThreadIndex < namedThreadPools_.size());
+    for (const auto& thread : namedThreadPools_[namedThreadIndex])
+    {
+        if (!thread->IsIdle())
         {
             return false;
         }
@@ -251,6 +324,17 @@ bool TaskCoordinator::IsAllTaskComplete()
         if (!thread->IsIdle() || thread->taskQueue_.size() > 0)
         {
             return false;
+        }
+    }
+
+    for (auto& threadPool : namedThreadPools_)
+    {
+        for (auto& thread : threadPool)
+        {
+            if (!thread->IsIdle() || thread->taskQueue_.size() > 0)
+            {
+                return false;
+            }
         }
     }
 

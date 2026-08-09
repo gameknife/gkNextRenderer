@@ -1,0 +1,2 @@
+{"jsonrpc":"2.0","id":"2","method":"llm.chat","params":{"sessionId":"session-fixture","runId":"run-chat","messages":[{"role":"user","content":"hello"}]}}
+{"jsonrpc":"2.0","id":"2","result":{"runId":"run-chat","sessionId":"session-fixture","content":"hello","finishReason":"stop","usage":{"promptTokens":1,"completionTokens":1}}}

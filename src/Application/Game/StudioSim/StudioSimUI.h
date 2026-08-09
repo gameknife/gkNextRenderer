@@ -80,6 +80,8 @@ namespace StudioSim
 
         bool ShowOverlay() const { return showOverlay_; }
         bool& ShowOverlayMutable() { return showOverlay_; }
+        bool ShowPoiDebug() const { return showPoiDebug_; }
+        bool& ShowPoiDebugMutable() { return showPoiDebug_; }
         const std::vector<FFloatingTextParticle>& FloatingText() const { return floatingText_; }
         EGameGenre SelectedGenre() const;
         EGameTheme SelectedTheme() const;
@@ -96,6 +98,7 @@ namespace StudioSim
         void DrawReviewModal(const FModalContext& context);
 
         bool showOverlay_ = true;
+        bool showPoiDebug_ = false;
         std::array<char, 128> customGoalBuffer_{};
         int pitchGenreIndex_ = 0;
         int pitchThemeIndex_ = 0;

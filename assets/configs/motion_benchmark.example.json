@@ -9,19 +9,17 @@
   "cvars": {
     "r.samples": 4,
     "r.temporalFrames": 16,
-    "r.denoiser": false,
-    "r.dlss": false,
-    "r.fsr": false,
-    "r.superResolution": 4,
+    "r.upscaler.type": 0,
+    "r.upscaler.qualityMode": 4,
     "r.gtao.enable": false,
     "sys.tickAnimation": false
   },
   "scenes": [
-    "assets/models/pbr.glb",
-    "assets/models/playground.glb",
-    "assets/models/livingroom.glb",
-    "assets/models/castle.glb",
-    "assets/models/complex.glb"
+    "MaterialShowcase.proc",
+    "LightingShowcase.proc",
+    "GIBootcamp.proc",
+    "KilometerWorld.proc",
+    "MassiveAsteroidBelt.proc"
   ],
   "renderers": [
     "PathTracing",

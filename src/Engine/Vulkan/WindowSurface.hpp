@@ -30,6 +30,8 @@ struct WindowConfig final
     // renders and can be captured; relax to SDL_WINDOW_NOT_FOCUSABLE if a driver refuses to
     // present a hidden swapchain.
     bool HiddenWindow {};
+    // Compatibility mode: let Windows bitmap-scale the whole application as a DPI-unaware process.
+    bool SystemDpiScaling {};
 };
 
 // ============================================================================
@@ -62,7 +64,6 @@ public:
     void Close();
     bool IsMinimized() const;
     bool IsMaximumed() const;
-    void WaitForEvents() const;
     void Show() const;
     bool SetSize(uint32_t width, uint32_t height) const;
 
@@ -76,8 +77,8 @@ public:
     void ConfigureCustomTitleBarDrag(bool enabled, int titleBarHeight, int leftReservedWidth, int rightReservedWidth);
 
     // Static methods
-    static void InitGLFW();
-    static void TerminateGLFW();
+    static void InitSDL(bool systemDpiScaling, const std::string& vulkanDriver);
+    static void TerminateSDL();
 
 private:
     static SDL_HitTestResult SDLCALL TitleBarHitTestCallback(SDL_Window* win, const SDL_Point* area, void* data);

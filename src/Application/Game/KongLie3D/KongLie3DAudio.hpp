@@ -2,8 +2,8 @@
 
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Subsystems/NextLocalization.h"
-#include "Engine/Runtime/Subsystems/NextAudio.h"
+#include "Engine/Runtime/Subsystems/NextLocalization.hpp"
+#include "Engine/Runtime/Subsystems/NextAudio.hpp"
 
 namespace KongLie3D
 {

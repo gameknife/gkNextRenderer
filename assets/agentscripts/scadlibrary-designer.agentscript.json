@@ -1,0 +1,26 @@
+{
+  "name": "scadlibrary-designer",
+  "target": "ScadLibrary",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 20000
+  },
+  "viewport": {
+    "width": 1440,
+    "height": 864
+  },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "wait-frames", "n": 60 },
+    { "type": "mouse-move", "to": { "norm": [0.256, 0.025] } },
+    { "type": "wait-frames", "n": 5 },
+    { "type": "mouse-button", "button": "left", "action": "down" },
+    { "type": "wait-frames", "n": 5 },
+    { "type": "mouse-button", "button": "left", "action": "up" },
+    { "type": "wait-frames", "n": 240 },
+    { "type": "assert", "query": "scene.nodeCount", "op": "ge", "value": 8 },
+    { "type": "screenshot", "out": "screenshots/scadlibrary_designer", "ui": true },
+    { "type": "wait-frames", "n": 10 },
+    { "type": "quit" }
+  ]
+}

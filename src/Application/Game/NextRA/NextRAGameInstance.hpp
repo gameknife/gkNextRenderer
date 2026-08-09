@@ -41,6 +41,15 @@ private:
     void RebindRenderNodes();
     glm::vec3 GetFirstActorRenderNodePos() const;
     void CreateRenderNodeForActor(NextRA::Sim::FActorId actor);
+    std::shared_ptr<Assets::Node> CreateActorRenderNode(
+        NextRA::Sim::FActorId actor,
+        const NextRA::Sim::FSimTransform& transform,
+        const NextRA::Sim::FOwner& owner,
+        const NextRA::Sim::FUnitType& unitType,
+        uint32_t renderNodeId,
+        std::vector<std::shared_ptr<Assets::Node>>* sceneNodes,
+        uint32_t& nextSceneNodeId,
+        uint32_t& outTurretNodeId);
     void SyncSpawnedRenderNodes();
     bool TryGetGroundHit(const glm::dvec2& screenPos, NextRA::Sim::WPos& outPos) const;
     void SelectAt(const glm::dvec2& screenPos, bool additive);
@@ -107,9 +116,20 @@ private:
     bool showOrderLog_ = true;
     bool sceneInjected_ = false;
     uint32_t infantryModelId_ = 0;
-    uint32_t tankModelId_ = 0;
+    uint32_t rocketeerModelId_ = 0;
+    uint32_t tankBodyModelId_ = 0;
+    uint32_t tankTurretModelId_ = 0;
+    uint32_t tankBarrelModelId_ = 0;
     uint32_t barracksModelId_ = 0;
     uint32_t baseModelId_ = 0;
+    uint32_t turretBaseModelId_ = 0;
+    uint32_t turretHeadModelId_ = 0;
+    uint32_t turretBarrelModelId_ = 0;
+    uint32_t wallModelId_ = 0;
     uint32_t playerMatId_ = 0;
     uint32_t enemyMatId_ = 0;
+    uint32_t playerRocketMatId_ = 0;
+    uint32_t enemyRocketMatId_ = 0;
+    uint32_t metalMatId_ = 0;
+    uint32_t wallMatId_ = 0;
 };

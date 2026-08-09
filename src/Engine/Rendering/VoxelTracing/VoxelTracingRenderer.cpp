@@ -29,31 +29,22 @@ namespace Vulkan::VoxelTracing
         deferredShadingPipeline_.reset();
     }
 
-    void VoxelTracingRenderer::ReloadShaders(
-        const std::set<std::string>& changedShaderFiles,
-        std::set<std::string>& handledShaderFiles)
-    {
-        if (deferredShadingPipeline_)
-        {
-            deferredShadingPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-    }
-
     void VoxelTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
-        baseRender_.InitializeBarriers(commandBuffer);
+        const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
 
         {
             SCOPED_GPU_TIMER("shadingpass");
-            deferredShadingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+            baseRender_.TransitionActiveViewImages(commandBuffer, {
+                {Assets::Bindless::RT_SCENE_COLOR, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+            }, "voxel tracing shading");
+            deferredShadingPipeline_->BindPipeline(
+                commandBuffer,
+                GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase()));
             vkCmdDispatch(
                 commandBuffer,
-                Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
-                Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
-
-            baseRender_.GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
-                commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+                Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
         }
     }
 }

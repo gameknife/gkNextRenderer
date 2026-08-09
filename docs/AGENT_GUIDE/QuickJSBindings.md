@@ -1,0 +1,69 @@
+# QuickJS Bindings Cookbook
+
+This note documents the binding path used by the Flappy parity demo. Keep it aligned with `src/Modules/NextQuickJS/QuickJSEngine.cpp`.
+
+For a higher-level overview of the TypeScript source, compile, hot reload, and runtime loading pipeline, see `docs/guides/typescript-integration.md`.
+
+## TypeScript Entry And Modules
+
+- TypeScript sources live under `assets/typescript`.
+- `QuickJSEngine` compiles the root `assets/typescript/tsconfig.json` into the runtime asset tree `out/build/<preset>/assets/scripts` when sources are newer than that output directory's `.tsc.stamp`. It does not normally write generated JavaScript into the source-tree `assets/scripts` directory.
+- Runtime hot reload uses the bundled compiler at `tools/tsc/tsc[.exe]` (`tsc.exe` on Windows, `tsc` on macOS/Linux), copied by CMake to `out/build/<preset>/tools/tsc/tsc[.exe]`. Do not require Node, npm, npx, or a globally installed `tsc`.
+- Applications opt in with `Modules::NextQuickJS::Install(engine, config)`. Targets that do not link/install `NextQuickJS` create no JS runtime and do not compile TypeScript.
+- The runtime module loader resolves relative ESM imports from the compiled runtime `assets/scripts` tree and appends `.js` when needed.
+- Use `import * as NE from "../Engine"` or `import * as NE from "Engine"` depending on the compiled module depth. The loader maps `./Engine`, `../Engine`, and `assets/scripts/Engine` style imports back to the built-in `Engine` module.
+- Scripted game targets should extend `NextGameInstanceBase` from `assets/typescript/NextGameInstanceBase.ts` and call `RunGameInstance(new YourGameInstance())` from their entry module. That keeps `OnInit`, `BeforeSceneRebuild`, `OnSceneLoaded`, `OnTick`, `OnRenderUI`, input, and camera override responsibilities aligned with native game instances.
+
+## Adding A Binding
+
+1. Add the C++ function under `src/Modules/NextQuickJS/`.
+2. Register it in `ResetContextAndLoadScript()` on the `Engine` module or one of its namespace objects.
+3. Add matching declarations in `BuildTypeScriptDefinitions()`.
+4. Add a minimal call in `assets/typescript/test.ts` unless the binding is only meaningful for a dedicated host.
+5. Build the affected target (for example `./gnb.sh build FlappyJs`) and start it until the log reaches `uploaded scene [...] to gpu`. Add `--reconfigure` only for CMake/target changes.
+
+Prefer raw `JS_NewCFunction` for object-shaped arguments, JSON values, optional arguments, or functions returning ad-hoc JS objects. Use `quickjspp` member bindings for simple C++ classes with stable signatures.
+
+## Current Engine Module Surface
+
+- `Global.GetEngine()`, `Global.GetScene()`, `Global.spdlog(...)`
+- `NextEngine.GetTotalFrames()`, `GetTime()`, `GetDeltaSeconds()`, `GetSmoothDeltaSeconds()`
+- `RegisterTickCallback(...)`
+- `Input.IsKeyDown()`, `IsKeyPressed()`, `IsMouseButtonDown()`, `IsMouseButtonPressed()`, `GetGamepadButton()`
+- `Audio.PlaySfx()`, `PlayMusic()`, `StopMusic()`
+- `UI.Begin()`, `End()`, `Text()`, `SetCursorPos()`, `GetWindowSize()`, `SetWindowFontScale()`, `GetScreenSize()`
+- `LoadJson()`, `RequestLoadScene()`, `RequestClose()`, `GetScreenSize()`, `SetOverrideCamera()`, `IsReplayMode()`, `WriteFile()`
+- Lifecycle hooks include `onInit`, `onDestroy`, `onBeforeSceneRebuild`, `onSceneLoaded`, `onRenderUI`, and `onInputEvent(event)` for event-driven input parity with native game instances
+- Scene build helpers: `SceneBuild.AddProceduralModel()`, `AddLambertianMaterial()`, `AddDiffuseLightMaterial()`, `AddRenderNode()`
+- Dynamic scene helpers: `Scene.AddLambertianMaterial()`, `AddDiffuseLightMaterial()`, `AddRenderNode()`, `RemoveNodeById()`, `MarkTransformDirty()`, `GetNodeById()`
+- Dynamic node helper: `Node.RecalcTransform()`
+
+## Scene And Node Notes
+
+`Global.GetScene()` returns the engine-owned scene as a non-owning pointer wrapped by quickjspp. Dynamic scene methods are attached to the shared quickjspp scene prototype after `module.class_<Assets::Scene>("Scene")` registers the class.
+
+`SceneBuild.*` is only valid while an `onBeforeSceneRebuild` hook is running. Use it to build procedural resources and initial render nodes in the same lifecycle phase as native `NextGameInstanceBase::BeforeSceneRebuild`. Do not add Flappy-style shortcut wrappers; compose `AddProceduralModel`, `AddLambertianMaterial`, and `AddRenderNode` instead.
+
+`Scene.GetNodeById()` returns a lightweight JS object backed by a node id. Property reads/writes go through reflection each time, so script code can safely assign whole values like:
+
+```ts
+node.Translation = { x, y, z };
+node.Scale = { x, y, z };
+node.RecalcTransform(true);
+```
+
+Do not mutate nested fields on a returned vector object, such as `node.Translation.x = 1`; that mutates a temporary JS object, not the C++ node.
+
+## Flappy Parity Regression
+
+`FlappyCpp` and `FlappyJs` exercise the binding set with deterministic replay:
+
+```bash
+./gnb.sh run FlappyCpp --flappy-replay
+./gnb.sh run FlappyJs --flappy-replay
+python3 tools/flappy/diff_traces.py
+```
+
+Windows 使用对应的 `gnb.bat` 命令。不要依赖固定 build 目录或从历史 `parity-report.md` 读取结果；报告文件已不再提交。
+
+The replay traces must match exactly for `birdY`, `birdVelocityY`, `score`, `state`, frame count, and death frame.

@@ -1,3 +1,7 @@
+implementing PathTracing;
+
+#include "PreProcessor.slang"
+
 // Generic radiance-cache abstraction used by FPathTracingRenderer.
 // The renderer drives any IRadianceCache implementation without knowing whether
 // a cache is active. Concrete implementations:

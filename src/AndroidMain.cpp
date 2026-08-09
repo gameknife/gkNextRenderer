@@ -2,11 +2,16 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
+#include "Modules/GltfLoader/GltfModule.hpp"
+#include "Modules/LiveCoding/LiveCodingModule.hpp"
+#include "Modules/NextAudio/NextAudioModule.hpp"
+#include "Modules/NextPhysics/NextPhysicsModule.hpp"
 #include "Modules/NextRemote/NextRemoteModule.hpp"
+#include "Modules/NextTemporalUpscaler/NextTemporalUpscalerModule.hpp"
 
 #include <fmt/format.h>
 #include <filesystem>
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 
 #if WIN32
 #include "ThirdParty/renderdoc/renderdoc_app.h"
@@ -42,7 +47,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
 #if ANDROID
-    const char* argv1[] = { "gkNextRenderer", "--renderer=0", "--forcesoftgen", "--load-scene=assets/models/playground.glb" };
+    const char* argv1[] = { "gkNextRenderer", "--renderer=0", "--forcesoftgen", "--load-scene=assets/models/conf_room.glb" };
     GOptionPtr.reset(new Runtime::Config::Options(4, argv1));
 #else
     // Handle command line options.
@@ -88,8 +93,13 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     // Create the DevTools provider first: its constructor attaches the console
     // log sink so engine startup logs are captured.
     Runtime::IDebugUiProvider& debugUiProvider = DevTools::DefaultDebugUiProvider();
+    Modules::NextTemporalUpscaler::Install(*GOption);
     GApplication.reset( new NextEngine(*GOption) );
     GApplication->SetDebugUiProvider(&debugUiProvider);
+    Modules::Audio::Install(*GApplication);
+    Modules::Physics::Install(*GApplication);
+    Modules::LiveCoding::Install(*GApplication);
+    Modules::Gltf::Register();
     if (GOption->RemoteMode)
     {
         GApplication->AddRenderFrameConsumer(Modules::NextRemote::CreateRemoteServer(*GOption));

@@ -23,6 +23,7 @@
 .vcpkg/
 .vcpkg_bincache/
 external/
+docs/external/
 build/
 build-*/
 /out/
@@ -356,6 +357,7 @@ tools/gnb-bin/
 cmake-build-*/
 .DS_Store
 .VSCodeCounter/
+.vscode/
 
 # Runtime-generated files (ImGui layout, profiler traces)
 /imgui.ini
@@ -404,14 +406,13 @@ tools/brotato3d-pak/output/
 tools/magicalego-pak/output/
 
 # third party libraries
+# ffmpeg binaries are fetched locally and never committed; release packages ship without them.
 src/ThirdParty/*/bin/
-src/ThirdParty/oidn/
-src/ThirdParty/Streamline/
 # AI assistant local files
 .claude/
 .mimocode/
 .skills/
-lib/
+/lib/
 
 tools/ldraw/source/ldraw/
 tools/ldraw/source/ldrawShadow/
@@ -420,7 +421,7 @@ assets/paks/ldraw.pak
 
 assets/models/KayKit_Platformer_Pack/
 
-# Optional binary assets — fetched via scripts/fetch-paks.{sh,ps1,bat}.
+# Optional binary assets — fetched via gnb paks fetch.
 assets/sog/
 assets/sfx/*.mp3
 assets/sfx/*.wav
@@ -441,3 +442,4 @@ assets/paks/magicalego.pak
 
 # 本地草稿、宣传材料 — 不入库，仅本地保留
 marketing/
+assets/omr/outer

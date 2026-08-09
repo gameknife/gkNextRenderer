@@ -3,15 +3,15 @@
 // Split from VulkanBaseRenderer.cpp; same class, separate TU.
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
@@ -22,7 +22,8 @@
 #include "Engine/Vulkan/RayTracing/RayTracingProperties.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
-#include "Engine/Vulkan/SyncAndTiming.hpp"
+#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Utilities/Exception.hpp"
 
 namespace Vulkan
 {
@@ -53,13 +54,12 @@ namespace Vulkan
         }
         SCOPED_GPU_TIMER("BLAS Update");
         VkDeviceSize scratchOffset = 0;
-        for (size_t i = 0; i < skin_.updateRequests.size(); i++)
+        for (const uint32_t modelId : GetScene().SkinUpdateRequests())
         {
-            int32_t modelId = skin_.updateRequests[i];
-            if (modelId != -1)
+            if (modelId < rt_->blas.size())
             {
                 rt_->blas[modelId].Update(commandBuffer, *rt_->blasScratch, scratchOffset);
-                scratchOffset += rt_->blas[modelId].BuildSizes().buildScratchSize;
+                scratchOffset += rt_->blas[modelId].BuildSizes().updateScratchSize;
             }
         }
         RayTracing::AccelerationStructure::InsertMemoryBarrier(commandBuffer);
@@ -69,6 +69,15 @@ namespace Vulkan
     {
         static std::vector<RayTracing::TopLevelAccelerationStructure> empty;
         return rt_ ? rt_->tlas : empty;
+    }
+
+    VkAccelerationStructureKHR VulkanBaseRenderer::ActiveTLASHandle() const
+    {
+        if (!rt_ || rt_->tlas.empty())
+        {
+            return VK_NULL_HANDLE;
+        }
+        return rt_->tlas.front().Handle();
     }
 
     namespace
@@ -128,8 +137,6 @@ namespace Vulkan
         const auto& scene = GetScene();
         const auto& debugUtils = Device().DebugUtils();
 
-        UpdateSkinningBuffers();
-
         uint32_t vertexOffset = 0;
         uint32_t indexOffset = 0;
         uint32_t aabbOffset = 0;
@@ -144,10 +151,9 @@ namespace Vulkan
         {
             auto& model = scene.Models()[modelIdx];
             bool hasSkin = false;
-            for (const auto& node : scene.Nodes())
+            for (const auto* render : scene.Components<Runtime::RenderComponent>())
             {
-                auto render = node->GetComponent<Runtime::RenderComponent>();
-                if (render && render->GetModelId() == modelIdx && render->GetSkinIndex() != -1)
+                if (render->GetModelId() == modelIdx && render->GetSkinIndex() != -1)
                 {
                     hasSkin = true;
                     break;
@@ -159,9 +165,9 @@ namespace Vulkan
             RayTracing::BottomLevelGeometry geometries;
 
             VkDeviceAddress vertexAddr = 0;
-            if (hasSkin && skin_.vertexBuffer)
+            if (hasSkin && scene.SkinnedVertexBuffer())
             {
-                vertexAddr = skin_.vertexBuffer->GetDeviceAddress();
+                vertexAddr = scene.SkinnedVertexBuffer()->GetDeviceAddress();
             }
 
             geometries.AddGeometryTriangles(scene, vertexOffset, vertexCount, indexOffset, indexCount, true, vertexAddr);
@@ -181,7 +187,7 @@ namespace Vulkan
             rt_->blasBuffer->AllocateMemory(
                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                 {.AllocateFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT})));
-        rt_->blasScratch.reset(new Buffer(Device(), total.buildScratchSize,
+        rt_->blasScratch.reset(new Buffer(Device(), std::max(total.buildScratchSize, total.updateScratchSize),
                                               VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
                                               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
@@ -210,9 +216,18 @@ namespace Vulkan
     void VulkanBaseRenderer::CreateTopLevelStructures(VkCommandBuffer commandBuffer)
     {
         const auto& debugUtils = Device().DebugUtils();
-        const uint32_t kMaxInstanceCount = 65535;
+        const uint64_t requestedCapacity = std::max<size_t>(1, Assets::Scene::kRenderProxyCapacity);
+        const uint64_t deviceLimit = rt_->properties->MaxInstanceCount();
+        if (requestedCapacity > deviceLimit)
+        {
+            Throw(std::runtime_error(fmt::format(
+                "TLAS instance requirement {} exceeds device limit {}", requestedCapacity, deviceLimit)));
+        }
+        const uint32_t instanceCapacity = static_cast<uint32_t>(std::min<uint64_t>(
+            std::bit_ceil(requestedCapacity), deviceLimit));
+        rt_->tlasInstanceCapacity = instanceCapacity;
 
-        rt_->instancesBuffer.reset(new Buffer(Device(), kMaxInstanceCount * sizeof(VkAccelerationStructureInstanceKHR),
+        rt_->instancesBuffer.reset(new Buffer(Device(), instanceCapacity * sizeof(VkAccelerationStructureInstanceKHR),
                                           VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
                                           VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
         rt_->instancesMemory.reset(new DeviceMemory(
@@ -223,7 +238,7 @@ namespace Vulkan
         RayTracing::AccelerationStructure::InsertMemoryBarrier(commandBuffer);
 
         rt_->tlas.emplace_back(Device().GetDeviceProcedures(), *rt_->properties,
-                            rt_->instancesBuffer->GetDeviceAddress(), kMaxInstanceCount);
+                            rt_->instancesBuffer->GetDeviceAddress(), instanceCapacity);
 
         const auto total = GetTotalRequirements(rt_->tlas);
 

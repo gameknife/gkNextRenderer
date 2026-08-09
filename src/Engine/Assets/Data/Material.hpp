@@ -19,7 +19,7 @@ namespace Assets
 
         static Material Mixture(const glm::vec3& diffuse, const float fuzziness, const int32_t textureId = -1)
         {
-            return Material{glm::vec4(diffuse, 1), textureId, -1, -1, -1, fuzziness, 1.45f, Enum::Mixture, 0};
+            return Material{glm::vec4(diffuse, 1), textureId, -1, -1, -1, fuzziness, 1.45f, Enum::Mixture, 0, 1.45f};
         }
 
         static Material Dielectric(const float refractionIndex, const float fuzziness, const int32_t textureId = -1)
@@ -72,8 +72,8 @@ namespace Assets
         // Second IOR for calculating refraction
         float RefractionIndex2;
         float NormalTextureScale;
-        float Reserverd2;
-        float Reserverd3;
+        float Reserved2;
+        float Reserved3;
     };
 
     // For upper usage

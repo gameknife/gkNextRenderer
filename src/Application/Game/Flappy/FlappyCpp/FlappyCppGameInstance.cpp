@@ -2,13 +2,13 @@
 #include "FlappyCpp/FlappyCppGameInstance.hpp"
 
 #include "FlappyConfig.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Data/Material.hpp"
-#include "Engine/Assets/Loaders/FProcModel.h"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
-#include "Engine/Runtime/Scene/NodeUtils.h"
-#include "Engine/Runtime/Subsystems/NextAudio.h"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
+#include "Engine/Runtime/Subsystems/NextAudio.hpp"
 
 #include <glm/ext.hpp>
 #include <imgui.h>
@@ -300,6 +300,12 @@ void FlappyCppGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     const uint32_t pipeMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.52f, 0.58f, 0.62f));
     const uint32_t boundaryMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.30f, 0.78f, 0.32f));
     const uint32_t backgroundMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.30f, 0.62f, 0.94f));
+    const uint32_t mountainMaterialId =
+        Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.38f, 0.42f, 0.46f));
+    const uint32_t vegetationMaterialId =
+        Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.24f, 0.68f, 0.22f));
+    const uint32_t cloudMaterialId =
+        Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.92f, 0.94f, 0.96f));
 
     auto birdNode = CreateNode(nodes,
                                "FlappyCpp_Bird",
@@ -311,6 +317,9 @@ void FlappyCppGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     bird_.Reset(config_.bird);
 
     const float worldWidth = config_.world.maxX - config_.world.minX;
+    const float gameplayDepth = config_.camera.position.z - config_.world.gameplayZ;
+    const float backdropDepth = config_.camera.position.z - config_.world.backdropZ;
+    const float backdropScale = gameplayDepth > 0.0f ? std::max(1.0f, backdropDepth / gameplayDepth) : 1.0f;
     CreateNode(nodes,
                "FlappyCpp_Floor",
                glm::vec3(0.0f, config_.world.minY - 0.2f, config_.world.gameplayZ),
@@ -325,10 +334,62 @@ void FlappyCppGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
                boundaryMaterialId);
     CreateNode(nodes,
                "FlappyCpp_Background",
-               glm::vec3(0.0f, 0.0f, -2.0f),
-               glm::vec3(worldWidth + 8.0f, config_.world.maxY - config_.world.minY + 2.0f, 1.0f),
+               glm::vec3(0.0f, 0.0f, config_.world.backdropZ),
+               glm::vec3((worldWidth + 8.0f) * backdropScale,
+                         (config_.world.maxY - config_.world.minY + 2.0f) * backdropScale,
+                         1.0f),
                backgroundModelId,
                backgroundMaterialId);
+
+    mountainNodes_.clear();
+    const int mountainCount = std::max(1, config_.parallax.mountainCount);
+    for (int index = 0; index < mountainCount; ++index)
+    {
+        const float x = (static_cast<float>(index) - static_cast<float>(mountainCount - 1) * 0.5f) *
+                        config_.parallax.mountainSpacing;
+        const float width = 7.0f + static_cast<float>(index % 3) * 1.0f;
+        const float height = 10.0f + static_cast<float>((index + 1) % 3) * 1.1f;
+        auto mountain = CreateNode(nodes,
+                                   fmt::format("FlappyCpp_Mountain_{}", index),
+                                   glm::vec3(x, -10.5f, config_.parallax.mountainZ),
+                                   glm::vec3(width, height, 1.0f),
+                                   backgroundModelId,
+                                   mountainMaterialId);
+        mountainNodes_.push_back(mountain);
+    }
+
+    vegetationNodes_.clear();
+    const int vegetationCount = std::max(1, config_.parallax.vegetationCount);
+    for (int index = 0; index < vegetationCount; ++index)
+    {
+        const float x = (static_cast<float>(index) - static_cast<float>(vegetationCount - 1) * 0.5f) *
+                        config_.parallax.vegetationSpacing;
+        const float width = 2.7f + static_cast<float>(index % 3) * 0.35f;
+        const float height = 5.6f + static_cast<float>((index + 2) % 4) * 0.35f;
+        vegetationNodes_.push_back(CreateNode(nodes,
+                                              fmt::format("FlappyCpp_Vegetation_{}", index),
+                                              glm::vec3(x, -8.0f, config_.parallax.vegetationZ),
+                                              glm::vec3(width, height, 1.0f),
+                                              backgroundModelId,
+                                              vegetationMaterialId));
+    }
+
+    cloudNodes_.clear();
+    const int cloudCount = std::max(1, config_.parallax.cloudCount);
+    for (int index = 0; index < cloudCount; ++index)
+    {
+        const float x = (static_cast<float>(index) - static_cast<float>(cloudCount - 1) * 0.5f) *
+                        config_.parallax.cloudSpacing;
+        const float y = 5.5f + static_cast<float>(index % 3) * 2.4f;
+        const float width = 7.0f + static_cast<float>((index + 1) % 3) * 1.2f;
+        const float height = 1.3f + static_cast<float>(index % 2) * 0.35f;
+        cloudNodes_.push_back(CreateNode(nodes,
+                                        fmt::format("FlappyCpp_Cloud_{}", index),
+                                        glm::vec3(x, y, config_.parallax.cloudZ),
+                                        glm::vec3(width, height, 1.0f),
+                                        backgroundModelId,
+                                        cloudMaterialId));
+    }
 
     for (int index = 0; index < std::max(1, config_.pipe.poolSize); ++index)
     {
@@ -352,6 +413,15 @@ void FlappyCppGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
 
 void FlappyCppGameInstance::OnSceneLoaded()
 {
+    auto& environment = GetEngine().GetScene().GetEnvSettings();
+    environment.HasSky = true;
+    environment.SkyIdx = config_.environment.skyIndex;
+    environment.SkyIntensity = config_.environment.skyIntensity;
+    environment.HasSun = true;
+    environment.SunIntensity = config_.environment.sunIntensity;
+    environment.SunRotation = config_.environment.sunRotation;
+    environment.SunElevation = config_.environment.sunElevation;
+
     sceneReady_ = true;
     ResetRuntime();
 }
@@ -427,6 +497,7 @@ void FlappyCppGameInstance::FixedStep(bool flapRequested)
 
     bird_.Update(config_.fixedDeltaSeconds, config_.bird);
     pipes_.Update(config_.fixedDeltaSeconds, config_.pipe, config_.world, rng_);
+    UpdateParallax(config_.fixedDeltaSeconds);
 
     const int scored = pipes_.ConsumeScoreEvents(config_.bird.initialPosition.x);
     if (scored > 0)
@@ -443,6 +514,36 @@ void FlappyCppGameInstance::FixedStep(bool flapRequested)
     {
         Die();
     }
+}
+
+void FlappyCppGameInstance::UpdateParallax(float deltaSeconds)
+{
+    auto updateLayer = [deltaSeconds](std::vector<std::shared_ptr<Assets::Node>>& layer,
+                                      float speed,
+                                      float spacing)
+    {
+        const float wrapWidth = static_cast<float>(layer.size()) * spacing;
+        const float wrapMinX = -0.5f * wrapWidth;
+        for (const auto& node : layer)
+        {
+            if (!node)
+            {
+                continue;
+            }
+
+            glm::vec3 translation = node->Translation();
+            translation.x -= speed * deltaSeconds;
+            if (translation.x < wrapMinX)
+            {
+                translation.x += wrapWidth;
+            }
+            node->SetTranslation(translation);
+        }
+    };
+
+    updateLayer(mountainNodes_, config_.parallax.mountainSpeed, config_.parallax.mountainSpacing);
+    updateLayer(vegetationNodes_, config_.parallax.vegetationSpeed, config_.parallax.vegetationSpacing);
+    updateLayer(cloudNodes_, config_.parallax.cloudSpeed, config_.parallax.cloudSpacing);
 }
 
 void FlappyCppGameInstance::Die()

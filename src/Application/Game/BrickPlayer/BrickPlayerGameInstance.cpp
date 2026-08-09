@@ -3,15 +3,16 @@
 #include "BrickPlayerSnapLogic.hpp"
 #include "BrickPlayerUserInterface.hpp"
 #include "Modules/LDrawLoader/FLDrawLoader.h"
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
-#include "Engine/Runtime/Subsystems/NextAudio.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Subsystems/NextAudio.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
-#include "Engine/Runtime/Scene/NodeUtils.h"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <SDL3/SDL_dialog.h>
@@ -23,6 +24,8 @@
 
 namespace
 {
+    constexpr const char* kLDrawBaseDiscName = "BrickPlayer_LDrawBaseDisc";
+
     struct WorldBounds
     {
         glm::vec3 min{FLT_MAX};
@@ -49,7 +52,7 @@ namespace
         auto* body = physics->GetBody(comp->GetPhysicsBody());
         if (!body)
             return {};
-        return {comp.get(), body};
+        return {comp, body};
     }
 
     struct PlaySpeedPreset
@@ -115,6 +118,33 @@ namespace
             bounds.max = glm::max(bounds.max, worldPoint);
         }
 
+        return bounds;
+    }
+
+    WorldBounds CalculateDrawableWorldBounds(
+        const std::vector<std::shared_ptr<Assets::Node>>& nodes,
+        const std::vector<Assets::Model>& models)
+    {
+        WorldBounds bounds;
+        for (const auto& node : nodes)
+        {
+            if (!node)
+            {
+                continue;
+            }
+
+            const auto* render = node->GetComponent<Runtime::RenderComponent>();
+            if (!render || !render->IsDrawable() || render->GetModelId() >= models.size())
+            {
+                continue;
+            }
+
+            const Assets::Model& model = models[render->GetModelId()];
+            const WorldBounds worldBounds = TransformLocalBounds(
+                node->WorldTransform(), model.GetLocalAABBMin(), model.GetLocalAABBMax());
+            bounds.min = glm::min(bounds.min, worldBounds.min);
+            bounds.max = glm::max(bounds.max, worldBounds.max);
+        }
         return bounds;
     }
 
@@ -256,11 +286,10 @@ BrickPlayerGameInstance::BrickPlayerGameInstance(Vulkan::WindowConfig& config, R
 void BrickPlayerGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
-    cvars.SetDefaultFromString("r.samples", "16", &error);
-    cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
+    // cvars.SetDefaultFromString("r.samples", "16", &error);
+    // cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
     cvars.SetDefaultFromString("r.rendererType", "0", &error);
-    // cvars.SetDefaultFromString("r.dlss", "true", &error);
-    // cvars.SetDefaultFromString("r.dlssrr", "true", &error);
+    cvars.SetDefaultFromString("r.upscaler.type", "2", &error);
 }
 
 void BrickPlayerGameInstance::InitializeDefaultBGMPlaylist()
@@ -345,12 +374,12 @@ void BrickPlayerGameInstance::FocusCameraOnLoadedScene()
     glm::vec3 center{0.0f};
     int count = 0;
 
-    auto& nodes = GetEngine().GetScene().Nodes();
-    auto& models = GetEngine().GetScene().Models();
-    for (auto& node : nodes)
+    auto& scene = GetEngine().GetScene();
+    const auto& models = scene.Models();
+    for (auto* render : scene.Components<Runtime::RenderComponent>())
     {
-        auto render = node->GetComponent<Runtime::RenderComponent>();
-        if (!render || !render->IsDrawable())
+        Assets::Node* node = render->GetOwner();
+        if (!node || node->GetName() == kLDrawBaseDiscName || !render->IsDrawable())
         {
             continue;
         }
@@ -468,8 +497,11 @@ void BrickPlayerGameInstance::OnSceneLoaded()
     if (isFreeBuildMode_)
     {
         auto& scene = GetEngine().GetScene();
-        for (auto& node : scene.Nodes())
+        for (auto* render : scene.Components<Runtime::RenderComponent>())
         {
+            Assets::Node* node = render->GetOwner();
+            if (!node)
+                continue;
             uint32_t instanceId = node->GetInstanceId();
             auto stepIt = nodeStepMap_.find(instanceId);
             if (stepIt == nodeStepMap_.end())
@@ -491,7 +523,7 @@ void BrickPlayerGameInstance::OnSceneLoaded()
                 node->RecalcTransform(true);
             }
 
-            auto bodyResult = CreateDynamicPhysicsBody(node.get(), worldScale, worldRotation);
+            auto bodyResult = CreateDynamicPhysicsBody(node, worldScale, worldRotation);
             if (!bodyResult.created)
                 continue;
             auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
@@ -507,6 +539,70 @@ void BrickPlayerGameInstance::OnSceneLoaded()
 
     SPDLOG_INFO("BrickPlayer: loaded scene with {} steps, {} parts, per-part mode: {}, freebuild: {}",
                 totalSteps_, totalParts_, perPartMode_ ? "on" : "off", isFreeBuildMode_ ? "on" : "off");
+}
+
+void BrickPlayerGameInstance::BeforeSceneRebuild(
+    std::vector<std::shared_ptr<Assets::Node>>& nodes,
+    std::vector<Assets::Model>& models,
+    std::vector<Assets::FMaterial>& materials,
+    std::vector<Assets::LightObject>& /*lights*/,
+    std::vector<Assets::AnimationTrack>& /*tracks*/)
+{
+    const std::string extension = std::filesystem::path(currentScenePath_).extension().string();
+    if (extension != ".ldr" && extension != ".mpd")
+    {
+        return;
+    }
+
+    constexpr float discRadius = 15.f;
+    constexpr float discThickness = 0.5f;
+    constexpr uint32_t discSegments = 64;
+
+    const WorldBounds bounds = CalculateDrawableWorldBounds(nodes, models);
+    if (bounds.min.x == FLT_MAX)
+    {
+        return;
+    }
+
+    std::vector<glm::vec2> polygon;
+    polygon.reserve(discSegments);
+    for (uint32_t segment = 0; segment < discSegments; ++segment)
+    {
+        const float angle = glm::two_pi<float>() * static_cast<float>(segment) /
+                            static_cast<float>(discSegments);
+        polygon.emplace_back(std::cos(angle) * discRadius, std::sin(angle) * discRadius);
+    }
+
+    const uint32_t modelId = static_cast<uint32_t>(models.size());
+    models.push_back(Assets::FProcModel::CreateExtrudedConvexPolygon(
+        kLDrawBaseDiscName, polygon, -discThickness, 0.0f));
+    const uint32_t materialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f));
+
+    const glm::vec3 discCenter = (bounds.min + bounds.max) * 0.5f;
+    uint32_t nextInstanceId = 0;
+    for (const auto& node : nodes)
+    {
+        if (node)
+        {
+            nextInstanceId = std::max(nextInstanceId, node->GetInstanceId());
+        }
+    }
+    if (!nodes.empty())
+    {
+        ++nextInstanceId;
+    }
+
+    const auto discNode = Assets::SceneBuilder::CreateRenderNode(
+        kLDrawBaseDiscName,
+        glm::vec3(discCenter.x, bounds.min.y, discCenter.z),
+        glm::vec3(1.0f),
+        nextInstanceId,
+        modelId,
+        materialId,
+        true,
+        glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+        false);
+    nodes.push_back(discNode);
 }
 
 void BrickPlayerGameInstance::OnTick(double deltaSeconds)
@@ -571,6 +667,9 @@ bool BrickPlayerGameInstance::OverrideRenderCamera(Assets::Camera& OutRenderCame
 
     OutRenderCamera.ModelView = glm::lookAtRH(cameraPos, realCameraCenter_, glm::vec3(0.0f, 1.0f, 0.0f));
     OutRenderCamera.FieldOfView = cameraFOV_;
+    
+    
+    OutRenderCamera.FarPlane = 200.f;
 
     return true;
 }
@@ -777,7 +876,7 @@ void BrickPlayerGameInstance::PerformRaycast()
     glm::vec3 rayDir;
     Runtime::EngineHelper::GetScreenToWorldRay(mousePos_, rayOrigin, rayDir);
     bool handled = false;
-    GetEngine().RayCastGPU(rayOrigin, rayDir, [this, &handled](Assets::RayCastResult result)
+    GetEngine().RayCast(rayOrigin, rayDir, [this, &handled](Assets::RayCastResult result)
     {
         handled = this->UpdateHitStateFromRaycast(result);
         return true;
@@ -791,7 +890,7 @@ void BrickPlayerGameInstance::PerformRaycast()
 
 bool BrickPlayerGameInstance::UpdateHitStateFromRaycast(const Assets::RayCastResult& result)
 {
-    if (!result.Hitted)
+    if (!result.Hit)
     {
         return false;
     }
@@ -1565,7 +1664,7 @@ bool BrickPlayerGameInstance::ReattachDraggedPart()
             physics->RemoveBody(bodyId);
         }
     }
-    node->AddComponent(std::shared_ptr<Runtime::PhysicsComponent>{});
+    node->RemoveComponent<Runtime::PhysicsComponent>();
 
     if (activeSnapCandidate_.restoreOriginalHierarchy)
     {
@@ -1825,16 +1924,18 @@ void BrickPlayerGameInstance::BuildPerPartOrder()
     };
     std::vector<PartEntry> entries;
 
-    auto& nodes = GetEngine().GetScene().Nodes();
-    for (auto& node : nodes)
+    auto& scene = GetEngine().GetScene();
+    for (auto* render : scene.Components<Runtime::RenderComponent>())
     {
+        Assets::Node* node = render->GetOwner();
+        if (!node)
+            continue;
         uint32_t instanceId = node->GetInstanceId();
         auto it = nodeStepMap_.find(instanceId);
         if (it == nodeStepMap_.end())
             continue;
 
-        auto render = node->GetComponent<Runtime::RenderComponent>();
-        if (!render || !render->IsDrawable())
+        if (!render->IsDrawable())
             continue;
 
         entries.push_back({instanceId, it->second});
@@ -1863,16 +1964,20 @@ void BrickPlayerGameInstance::CaptureOriginalAssemblyState()
     auto& scene = GetEngine().GetScene();
     const auto& models = scene.Models();
 
-    for (const auto& node : scene.Nodes())
+    for (const auto* render : scene.Components<Runtime::RenderComponent>())
     {
+        const Assets::Node* node = render->GetOwner();
+        if (!node)
+        {
+            continue;
+        }
         const uint32_t instanceId = node->GetInstanceId();
         if (nodeStepMap_.find(instanceId) == nodeStepMap_.end())
         {
             continue;
         }
 
-        auto render = node->GetComponent<Runtime::RenderComponent>();
-        if (!render || !render->IsDrawable())
+        if (!render->IsDrawable())
         {
             continue;
         }
@@ -1916,17 +2021,17 @@ void BrickPlayerGameInstance::StepBackward()
 
 void BrickPlayerGameInstance::UpdateVisibilityForStep(int32_t step, bool playPlacementSound)
 {
-    auto& nodes = GetEngine().GetScene().Nodes();
+    auto& scene = GetEngine().GetScene();
     bool changed = false;
     int32_t revealedCount = 0;
     auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
 
     const auto& lookupMap = perPartMode_ ? nodePartOrder_ : nodeStepMap_;
 
-    for (auto& node : nodes)
+    for (auto* render : scene.Components<Runtime::RenderComponent>())
     {
-        auto render = node->GetComponent<Runtime::RenderComponent>();
-        if (!render)
+        Assets::Node* node = render->GetOwner();
+        if (!node)
             continue;
 
         uint32_t instanceId = node->GetInstanceId();
@@ -1943,8 +2048,8 @@ void BrickPlayerGameInstance::UpdateVisibilityForStep(int32_t step, bool playPla
             auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
             if (wasVisible != shouldBeVisible)
             {
-                Assets::NodeUtils::SetVisible(node, shouldBeVisible);
-                Assets::NodeUtils::SetRayCastVisible(node, shouldBeVisible);
+                render->SetVisible(shouldBeVisible);
+                render->SetRayCastVisible(shouldBeVisible);
                 if (physComp && physics)
                 {
                     const NextBodyID bodyId = physComp->GetPhysicsBody();
@@ -2082,8 +2187,11 @@ void BrickPlayerGameInstance::BuildFreeBuildInventory()
     freeBuildInventory_.clear();
     auto& scene = GetEngine().GetScene();
 
-    for (auto& node : scene.Nodes())
+    for (auto* render : scene.Components<Runtime::RenderComponent>())
     {
+        Assets::Node* node = render->GetOwner();
+        if (!node)
+            continue;
         uint32_t instanceId = node->GetInstanceId();
 
         // Only include inventory bricks (step > 0), skip baseplates (step 0)
@@ -2091,8 +2199,7 @@ void BrickPlayerGameInstance::BuildFreeBuildInventory()
         if (stepIt == nodeStepMap_.end() || stepIt->second <= 0)
             continue;
 
-        auto render = node->GetComponent<Runtime::RenderComponent>();
-        if (!render || !render->IsDrawable())
+        if (!render->IsDrawable())
             continue;
 
         auto partIt = nodePartFileMap_.find(instanceId);
@@ -2201,13 +2308,13 @@ void BrickPlayerGameInstance::CreateFloorPhysicsBody()
         return;
 
     float minY = FLT_MAX;
-    auto& nodes = GetEngine().GetScene().Nodes();
-    auto& models = GetEngine().GetScene().Models();
+    auto& scene = GetEngine().GetScene();
+    const auto& models = scene.Models();
 
-    for (auto& node : nodes)
+    for (auto* render : scene.Components<Runtime::RenderComponent>())
     {
-        auto render = node->GetComponent<Runtime::RenderComponent>();
-        if (!render || !render->IsDrawable())
+        Assets::Node* node = render->GetOwner();
+        if (!node || node->GetName() == kLDrawBaseDiscName || !render->IsDrawable())
             continue;
 
         uint32_t modelIdx = render->GetModelId();

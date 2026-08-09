@@ -1,0 +1,26 @@
+{
+  "name": "nextdayz-survival",
+  "target": "NextDayz",
+  "scene": "assets/scad/proc/coldwar/riverland_1km.scad",
+  "defaults": { "waitFrames": 2, "stepTimeoutMs": 20000 },
+  "viewport": { "width": 1600, "height": 900 },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "wait-frames", "n": 60 },
+    { "type": "assert", "query": "game.runState", "op": "eq", "value": "playing" },
+    { "type": "cvar", "name": "nextdayz.validation.hydration", "set": 10 },
+    { "type": "assert", "query": "game.hydration", "op": "le", "value": 10 },
+    { "type": "cvar", "name": "nextdayz.validation.addSupplies", "set": true },
+    { "type": "cvar", "name": "nextdayz.validation.useWater", "set": true },
+    { "type": "wait-ms", "ms": 1800 },
+    { "type": "assert", "query": "game.hydration", "op": "gt", "value": 40 },
+    { "type": "cvar", "name": "nextdayz.validation.damagePlayer", "set": 200 },
+    { "type": "wait-frames", "n": 2 },
+    { "type": "assert", "query": "game.runState", "op": "eq", "value": "dead" },
+    { "type": "cvar", "name": "nextdayz.validation.restart", "set": true },
+    { "type": "wait-frames", "n": 10 },
+    { "type": "assert", "query": "game.runState", "op": "eq", "value": "playing" },
+    { "type": "assert", "query": "game.health", "op": "eq", "value": 100 },
+    { "type": "quit" }
+  ]
+}

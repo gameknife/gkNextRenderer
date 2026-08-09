@@ -1,0 +1,2 @@
+{"jsonrpc":"2.0","id":"5","method":"workflow.run","params":{"name":"scad.generate","runId":"run-workflow","input":{"prompt":"cube"}}}
+{"jsonrpc":"2.0","id":"5","result":{"runId":"run-workflow","output":{"status":"ok"}}}

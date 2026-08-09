@@ -1,0 +1,17 @@
+{
+  "name": "trucker_camera_orbit",
+  "target": "TruckerDemo",
+  "scene": "assets/scad/source/overhill_mission.scad",
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 8000 },
+    { "type": "wait-frames", "n": 90 },
+    { "type": "mouse-move", "to": { "norm": [0.5, 0.5] } },
+    { "type": "mouse-move", "to": { "norm": [0.72, 0.42] }, "durationFrames": 20 },
+    { "type": "scroll", "y": 3 },
+    { "type": "wait-frames", "n": 30 },
+    { "type": "screenshot", "out": "screenshots/trucker_camera_orbit" },
+    { "type": "key", "code": "C", "action": "press" },
+    { "type": "wait-frames", "n": 10 },
+    { "type": "quit" }
+  ]
+}

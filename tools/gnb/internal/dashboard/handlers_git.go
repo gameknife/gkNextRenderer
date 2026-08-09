@@ -5,14 +5,16 @@ package dashboard
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/workflow/commitmessage"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/gitops"
-	"github.com/gameknife/gknextrenderer/tools/gnb/internal/llm"
 )
 
 func (s *Server) buildGitVM(flash string) gitVM {
@@ -280,7 +282,16 @@ func firstLine(s string) string {
 func (s *Server) handleGitCommitMessage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
-	res, err := llm.GenerateCommitMessageReuseRunning(ctx, s.opts.RepoRoot, s.opts.Config.External.LLM, 16000, 0.2)
+	runtime, err := ai.NewRuntime(s.opts.RepoRoot, s.opts.Config)
+	if err != nil {
+		writeCommitTextarea(w, "[AI error] "+err.Error())
+		return
+	}
+	rawResult, err := runtime.Workflows.Run(ctx, commitmessage.Name, commitmessage.Input{MaxDiffChars: 16000, Temperature: .2, Profile: "general"}, nil)
+	var res commitmessage.Output
+	if err == nil {
+		err = json.Unmarshal(rawResult, &res)
+	}
 	if err != nil {
 		// Surface error inside the textarea so the user can see what went wrong
 		// without breaking the rest of the page.

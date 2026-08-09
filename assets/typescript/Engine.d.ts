@@ -11,9 +11,11 @@ export class NextEngine {
 }
 export class Node {
     readonly InstanceId: number;
+    Layer: string;
     readonly Name: string;
     Rotation: Quat;
     Scale: Vec3;
+    Tag: string;
     Translation: Vec3;
     GetComponent(arg0: string): any;
     GetInstanceId(): number;
@@ -37,23 +39,15 @@ export interface Scene {
 }
 export class RenderComponent {
     CastShadows: boolean;
-    LayerMask: number;
-    LightmapUV: boolean;
+    MainVisible: boolean;
     Materials: number[];
     readonly ModelId: number;
     RayCastVisible: boolean;
-    RaycastVisible: boolean;
+    RayTraceVisible: boolean;
     ReceiveGI: boolean;
     readonly SkinIndex: number;
     Visible: boolean;
     ToggleRayCastVisible(): boolean;
-    ToggleVisible(): boolean;
-}
-export class GaussianSplatComponent {
-    readonly SplatModelId: number;
-    Visible: boolean;
-    RayCastVisible: boolean;
-    OpacityScale: number;
     ToggleVisible(): boolean;
 }
 export class PhysicsComponent {

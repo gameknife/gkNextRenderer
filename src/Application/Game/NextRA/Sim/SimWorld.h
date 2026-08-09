@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Sim/OccupancyGrid.h"
 #include "Sim/PathfindGrid.h"
 #include "Sim/SimRandom.h"
 #include "Sim/SimComponents.h"
@@ -18,6 +19,7 @@ namespace NextRA::Sim
                                bool isBase, bool hasProduction, const WPos& rallyPoint);
 
         void Step(uint32_t tick);
+        void SetPathGrid(FPathfindGrid* grid) { pathGrid_ = grid; }
         uint32_t CurrentTick() const { return currentTick_; }
         int WinnerPlayerId() const { return winnerPlayerId_; }
         uint64_t RandomState() const { return random_.State(); }
@@ -32,11 +34,12 @@ namespace NextRA::Sim
         const FHealth* TryGetHealth(FActorId actor) const;
         FHealth* TryGetHealth(FActorId actor);
         const FAttack* TryGetAttack(FActorId actor) const;
+        const FTurret* TryGetTurret(FActorId actor) const;
         const FUnitType* TryGetUnitType(FActorId actor) const;
         const FMobile* TryGetMobile(FActorId actor) const;
         const FProduction* TryGetProduction(FActorId actor) const;
         bool IsBase(FActorId actor) const;
-        void SetRenderLink(FActorId actor, uint32_t renderNodeId);
+        void SetRenderLink(FActorId actor, uint32_t renderNodeId, uint32_t turretNodeId = 0);
         const FRenderLink* TryGetRenderLink(FActorId actor) const;
         bool IssueMove(FActorId actor, const WPos& target, const FPathfindGrid& grid);
         bool IssueAttackMove(FActorId actor, const WPos& target, const FPathfindGrid& grid);
@@ -50,9 +53,14 @@ namespace NextRA::Sim
     private:
         void ProductionSystem();
         void MovementSystem();
+        void TurretSystem();
+        void SeparationSystem();
         void TargetingSystem();
         void CombatSystem();
         void DeathSystem();
+        void RebuildOccupancy();
+        std::vector<CPos> FootprintCellsAt(const WPos& pos, CPos footprint) const;
+        void BlockFootprint(const FFootprint& footprint, bool blocked);
         void SetMovePath(FMobile& mobile, const WPos& target, std::vector<CPos> path);
         bool IsEnemy(FActorId lhs, FActorId rhs) const;
         bool IsAliveEnemyTarget(FActorId actor, FActorId target) const;
@@ -61,6 +69,8 @@ namespace NextRA::Sim
         std::vector<FActorId> actors_;
         std::vector<uint32_t> destroyedRenderNodeIds_;
         std::vector<FActorId> spawnedActorIds_;
+        FPathfindGrid* pathGrid_ = nullptr;
+        FOccupancyGrid occupancy_;
         FSimRandom random_;
         uint32_t currentTick_ = 0;
         int winnerPlayerId_ = -1;

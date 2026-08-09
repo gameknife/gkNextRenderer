@@ -1,6 +1,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Modules/NextRemote/NextRemoteModule.hpp"
 #include "Modules/NextRemote/RemoteServer.hpp"
+#include "Modules/NextRemote/VideoEncodeDeviceAugmenter.hpp"
 #include "Engine/Options.hpp"
 
 #include <algorithm>
@@ -55,6 +56,9 @@ namespace Modules::NextRemote
 
     std::unique_ptr<Runtime::IRenderFrameConsumer> CreateRemoteServer(const Runtime::Config::Options& options)
     {
+        // Must run before device creation so the encode extensions/queue get enabled.
+        RegisterVideoEncodeAugmenter();
+
         uint32_t remoteWidth = options.RemoteWidth != 0 ? options.RemoteWidth : options.Width;
         uint32_t remoteHeight = options.RemoteHeight != 0 ? options.RemoteHeight : options.Height;
         if (options.RemoteWidth == 0 && options.RemoteHeight == 0 && remoteWidth > 0 && remoteHeight > 0)

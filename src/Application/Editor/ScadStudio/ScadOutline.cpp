@@ -8,7 +8,7 @@
 
 namespace ScadStudio
 {
-    using namespace Assets::scad;
+    using namespace Assets::Scad;
 
     namespace
     {

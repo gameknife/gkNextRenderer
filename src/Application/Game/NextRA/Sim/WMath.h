@@ -167,4 +167,85 @@ namespace NextRA::Sim
         return FFixed::FromInt(cells * cellSubUnits);
     }
 
+    namespace Detail
+    {
+        constexpr int64_t AbsRaw(int64_t value)
+        {
+            return value < 0 ? -value : value;
+        }
+
+        constexpr int32_t AtanUnitsFromRatio(int64_t numerator, int64_t denominator)
+        {
+            if (numerator <= 0 || denominator <= 0)
+            {
+                return 0;
+            }
+
+            constexpr int64_t q = FFixed::oneRaw;
+            const int64_t ratio = (numerator << FFixed::shift) / denominator;
+            const int64_t curve = int64_t{512} * q + int64_t{178} * (q - ratio);
+            return static_cast<int32_t>((ratio * curve) >> (FFixed::shift * 2));
+        }
+    }
+
+    inline constexpr WAngle Atan2FromVec2(FFixed x, FFixed z)
+    {
+        const int64_t ax = Detail::AbsRaw(x.raw);
+        const int64_t az = Detail::AbsRaw(z.raw);
+        if (ax == 0 && az == 0)
+        {
+            return WAngle{};
+        }
+
+        int32_t base = 0;
+        if (ax <= az)
+        {
+            base = Detail::AtanUnitsFromRatio(ax, az);
+        }
+        else
+        {
+            base = angleUnits / 4 - Detail::AtanUnitsFromRatio(az, ax);
+        }
+
+        if (z.raw >= 0)
+        {
+            return WAngle::FromRaw(x.raw >= 0 ? base : angleUnits - base);
+        }
+        return WAngle::FromRaw(x.raw >= 0 ? angleUnits / 2 - base : angleUnits / 2 + base);
+    }
+
+    inline constexpr int32_t ShortestAngleDiff(WAngle target, WAngle current)
+    {
+        int32_t delta = WAngle::FromRaw(target.value).value - WAngle::FromRaw(current.value).value;
+        if (delta > angleUnits / 2)
+        {
+            delta -= angleUnits;
+        }
+        else if (delta < -angleUnits / 2)
+        {
+            delta += angleUnits;
+        }
+        return delta;
+    }
+
+    inline constexpr WAngle TurnToward(WAngle current, WAngle target, WAngle maxStep)
+    {
+        const int32_t step = WAngle::FromRaw(maxStep.value).value;
+        if (step <= 0)
+        {
+            return WAngle::FromRaw(current.value);
+        }
+
+        const int32_t delta = ShortestAngleDiff(target, current);
+        if (delta > step)
+        {
+            return WAngle::FromRaw(current.value + step);
+        }
+        if (delta < -step)
+        {
+            return WAngle::FromRaw(current.value - step);
+        }
+        return WAngle::FromRaw(target.value);
+    }
+
 }

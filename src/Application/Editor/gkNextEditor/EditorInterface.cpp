@@ -3,6 +3,7 @@
 #include "Engine/Utilities/Exception.hpp"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <imgui_freetype.h>
 
 #include <array>
@@ -23,10 +24,11 @@
 #include "EditorUtils.h"
 #include "Engine/Options.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Engine/Runtime/Editor/UI/UiWidgets.hpp"
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
-#include "Modules/DevTools/UiDevPanels.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/ImGui.hpp"
@@ -35,11 +37,55 @@
 #include "Engine/Vulkan/SwapChain.hpp"
 
 #include <SDL3/SDL_dialog.h>
+#include <SDL3/SDL_process.h>
 
-extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
 
 namespace
 {
+    // Starts gkNextRenderer next to the editor executable without blocking the UI.
+    // std::system() froze the editor until the renderer exited and broke on install
+    // paths containing spaces; SDL_CreateProcess takes an argv array, so no quoting
+    // is involved and the child runs detached.
+    void LaunchRendererDetached()
+    {
+#if WIN32
+        const char* executableName = "gkNextRenderer.exe";
+#else
+        const char* executableName = "gkNextRenderer";
+#endif
+        const std::filesystem::path executable = NextRenderer::GetExecutableDirectory() / executableName;
+        std::error_code existsError;
+        if (!std::filesystem::exists(executable, existsError))
+        {
+            SPDLOG_ERROR("Play: {} was not found next to the editor.", executable.string());
+            SDL_ShowSimpleMessageBox(
+                SDL_MESSAGEBOX_WARNING, "gkNextRenderer not found",
+                ("Expected the renderer at:\n" + executable.string()).c_str(), nullptr);
+            return;
+        }
+
+        const std::string executablePath = executable.string();
+        std::vector<const char*> args;
+        args.push_back(executablePath.c_str());
+        if (GOption->ForceSDR)
+        {
+            args.push_back("--forcesdr");
+        }
+        args.push_back(nullptr);
+
+        SDL_Process* process = SDL_CreateProcess(args.data(), false);
+        if (process == nullptr)
+        {
+            SPDLOG_ERROR("Play: failed to launch {}: {}", executablePath, SDL_GetError());
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "Could not start gkNextRenderer",
+                                     SDL_GetError(), nullptr);
+            return;
+        }
+        // The editor does not wait for or read from the renderer; releasing the handle
+        // leaves the child running on its own.
+        SDL_DestroyProcess(process);
+    }
+
     void CheckVulkanResultCallback(const VkResult err)
     {
         if (err != VK_SUCCESS)
@@ -162,20 +208,23 @@ void EditorInterface::RebuildDefaultDockLayout(ImGuiID id)
     ImGui::DockBuilderSetNodeSize(id, viewport->Size);
 
     ImGuiID dockMain = id;
-    ImGuiID dock1 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.155f, nullptr, &dockMain);
-    ImGuiID dock2 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.205f, nullptr, &dockMain);
+    
+    ImGuiID dock2 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.25f, nullptr, &dockMain);
     ImGuiID dock3 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Down, 0.25f, nullptr, &dockMain);
+    ImGuiID dock1 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.2f, nullptr, &dockMain);
 
     ImGui::DockBuilderDockWindow("Outliner", dock1);
     ImGui::DockBuilderDockWindow("Properties", dock2);
     ImGui::DockBuilderDockWindow("Command History", dock2);
-    ImGui::DockBuilderDockWindow("AI Assistant", dock2);
+    ImGui::DockBuilderDockWindow("Script Console", dock2);
     ImGui::DockBuilderDockWindow("Hot Reload", dock2);
     ImGui::DockBuilderDockWindow("Content Browser", dock3);
+    ImGui::DockBuilderDockWindow("Sequencer", dock3);
     ImGui::DockBuilderDockWindow("Log", dock3);
     ImGui::DockBuilderDockWindow("Material Browser", dock3);
     ImGui::DockBuilderDockWindow("Texture Browser", dock3);
     ImGui::DockBuilderDockWindow("Mesh Browser", dock3);
+    
     ImGui::DockBuilderFinish(id);
 }
 
@@ -207,39 +256,19 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 0.0f));
     ImGui::SetCursorPosY((kToolbarSize - kToolbarIconHeight) * 0.5f);
 
-    ImGui::SetNextItemWidth(138.0f);
-    ImGui::Combo("##ProjectSelector", &uiState.toolbar.projectIndex,
-                 ICON_FA_CUBE " RayQuery\0" ICON_FA_CUBE " Playground\0\0");
-    NextUI::Theme::DrawTooltip("Project");
-    ImGui::SameLine();
-
-    ImGui::SetNextItemWidth(108.0f);
-    ImGui::Combo("##BackendSelector", &uiState.toolbar.backendIndex, "Vulkan\0Metal\0DirectX 12\0\0");
-    NextUI::Theme::DrawTooltip("Backend");
-    ImGui::SameLine(0.0f, 12.0f);
-    
-    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Success, 0.92f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::Success));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, NextUI::Theme::Color(NextUI::Theme::EColor::Success, 0.75f));
-    if (ImGui::Button(ICON_FA_PLAY " Play", ImVec2(88.0f, kToolbarIconHeight)))
+    const float playButtonWidth =
+        std::ceil(ImGui::CalcTextSize(ICON_FA_PLAY " Play").x + ImGui::GetStyle().FramePadding.x * 2.0f + 16.0f);
+    if (NextUI::Foundation::Button(
+            ICON_FA_PLAY " Play",
+            {.variant = NextUI::Foundation::EButtonVariant::Primary,
+             .tone = NextUI::Foundation::EButtonTone::Success,
+             .size = ImVec2(playButtonWidth, kToolbarIconHeight),
+             .tooltip = "Run the current scene in gkNextRenderer"}))
     {
-        std::filesystem::path currentPath = std::filesystem::current_path();
-        std::string cmdline = (currentPath / "gkNextRenderer").string() + (GOption->ForceSDR ? " --forcesdr" : "");
-        std::system(cmdline.c_str());
+        LaunchRendererDetached();
     }
-    NextUI::Theme::DrawTooltip("Run in gkNextRenderer");
-    ImGui::PopStyleColor(3);
-    ImGui::SameLine(0.0f, 12.0f);
 
-    ImGui::SetNextItemWidth(116.0f);
-    ImGui::Combo("##PlatformSelector", &uiState.toolbar.platformIndex, ICON_FA_DESKTOP " Desktop\0Android\0iOS\0\0");
-    NextUI::Theme::DrawTooltip("Target Platform");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(134.0f);
-    ImGui::Combo("##BuildConfigSelector", &uiState.toolbar.buildConfigIndex, "Development\0Debug\0Shipping\0\0");
-    NextUI::Theme::DrawTooltip("Build Configuration");
-
-    const float rightStart = viewport->Size.x - 104.0f;
+    const float rightStart = viewport->Size.x - kToolbarIconWidth - 12.0f;
     if (ImGui::GetCursorPosX() < rightStart)
     {
         ImGui::SameLine(rightStart);
@@ -249,20 +278,6 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
     {
         uiState.settingsPanel = !uiState.settingsPanel;
     }
-    ImGui::SameLine(0.0f, 8.0f);
-
-    ImDrawList* drawList = ImGui::GetWindowDrawList();
-    const ImVec2 avatarPos = ImGui::GetCursorScreenPos();
-    const float avatarRadius = kToolbarIconHeight * 0.5f;
-    drawList->AddCircleFilled(avatarPos + ImVec2(avatarRadius, avatarRadius), avatarRadius,
-                              NextUI::Theme::ColorU32(NextUI::Theme::EColor::Accent, 0.55f), 24);
-    drawList->AddCircle(avatarPos + ImVec2(avatarRadius, avatarRadius), avatarRadius,
-                        NextUI::Theme::ColorU32(NextUI::Theme::EColor::BorderStrong), 24, 1.0f);
-    const ImVec2 initialsSize = ImGui::CalcTextSize("GK");
-    drawList->AddText(avatarPos + ImVec2(avatarRadius - initialsSize.x * 0.5f, avatarRadius - initialsSize.y * 0.5f),
-                      NextUI::Theme::ColorU32(NextUI::Theme::EColor::Text), "GK");
-    ImGui::Dummy(ImVec2(kToolbarIconHeight, kToolbarIconHeight));
-    NextUI::Theme::DrawTooltip("User");
 
     ImGui::PopStyleVar();
     ImGui::End();
@@ -306,47 +321,30 @@ void EditorInterface::Render(Editor::EditorUiState& uiState)
 
     Editor::DrawTitleBarOverlay(ctx, uiState);
 
-    if (uiState.sidebar)
-        Editor::DrawOutlinerPanel(ctx, uiState);
-    if (uiState.properties)
-        Editor::DrawPropertiesPanel(ctx, uiState);
-    if (uiState.contentBrowser || uiState.materialBrowser || uiState.textureBrowser || uiState.meshBrowser)
-        Editor::DrawContentBrowserPanel(ctx, uiState);
-    if (uiState.logPanel)
-        Editor::DrawConsoleLogPanel(ctx, uiState);
-    if (uiState.commandHistoryPanel)
-        Editor::DrawCommandHistoryPanel(ctx, uiState);
-    if (uiState.hotReloadPanel)
-        Editor::DrawHotReloadPanel(ctx, uiState);
+    // default left
+    if (uiState.sidebar) Editor::DrawOutlinerPanel(ctx, uiState);
+    
+    // default right
+    if (uiState.commandHistoryPanel) Editor::DrawCommandHistoryPanel(ctx, uiState);
+    if (uiState.hotReloadPanel) Editor::DrawHotReloadPanel(ctx, uiState);
+    if (uiState.scriptConsolePanel) Editor::DrawScriptConsolePanel(ctx, uiState);
+    if (uiState.properties) Editor::DrawPropertiesPanel(ctx, uiState);
+    
+    // default bottom
+    if (uiState.logPanel) Editor::DrawConsoleLogPanel(ctx, uiState);
+    if (uiState.sequencerPanel) Editor::DrawSequencerPanel(ctx, uiState);
+    if (uiState.contentBrowser || uiState.materialBrowser || uiState.textureBrowser || uiState.meshBrowser) Editor::DrawContentBrowserPanel(ctx, uiState);
+    
     Editor::DrawCameraViewPanel(ctx, uiState);
-    // Pump the AI agent main-thread queue every frame, regardless of panel
-    // visibility, so in-flight agent tool calls never stall (and the user-confirm
-    // UI can appear) when the panel is hidden, collapsed, or on an inactive tab.
-    Editor::TickAIAgentMainThread(ctx);
-    if (uiState.aiPanel)
-        Editor::DrawAIPanel(ctx, uiState);
-
-    DevTools::FUiDevPanels::Get().RenderConsoleOverlay();
-
-    if (uiState.child_style)
-        utils::ShowStyleEditorWindow(&uiState.child_style);
-    if (uiState.child_demo)
-        ImGui::ShowDemoWindow(&uiState.child_demo);
-    if (uiState.child_metrics)
-        ImGui::ShowMetricsWindow(&uiState.child_metrics);
-    if (uiState.child_debug_log)
-        ImGui::ShowDebugLogWindow(&uiState.child_debug_log);
-    if (uiState.child_stack)
-        ImGui::ShowIDStackToolWindow(&uiState.child_stack);
-    if (uiState.child_color)
-        utils::ShowColorExportWindow(&uiState.child_color);
-    if (uiState.child_resources)
-        utils::ShowResourcesWindow(&uiState.child_resources);
-    if (uiState.child_about)
-        utils::ShowAboutWindow(&uiState.child_about);
-
-    if (uiState.ed_material)
-        Editor::DrawMaterialEditorPanel(ctx, uiState);
+    if (uiState.child_style) utils::ShowStyleEditorWindow(&uiState.child_style);
+    if (uiState.child_demo) ImGui::ShowDemoWindow(&uiState.child_demo);
+    if (uiState.child_metrics) ImGui::ShowMetricsWindow(&uiState.child_metrics);
+    if (uiState.child_debug_log) ImGui::ShowDebugLogWindow(&uiState.child_debug_log);
+    if (uiState.child_stack) ImGui::ShowIDStackToolWindow(&uiState.child_stack);
+    if (uiState.child_color) utils::ShowColorExportWindow(&uiState.child_color);
+    if (uiState.child_resources) utils::ShowResourcesWindow(&uiState.child_resources);
+    if (uiState.child_about) utils::ShowAboutWindow(&uiState.child_about);
+    if (uiState.ed_material) Editor::DrawMaterialEditorPanel(ctx, uiState);
 
     bool activeCameraViewOpen = true;
     switch (uiState.activeViewport)
@@ -388,10 +386,23 @@ void EditorInterface::Render(Editor::EditorUiState& uiState)
 
         if (uiState.viewportOnMainViewport && node->Size.x >= 1.0f && node->Size.y >= 1.0f)
         {
-            editor_->GetEngine().GetRenderer().SwapChain().UpdateOutputViewport(
-                Utilities::Math::floorToInt(node->Pos.x - mainViewport->Pos.x),
-                Utilities::Math::floorToInt(node->Pos.y - mainViewport->Pos.y),
-                Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
+            const NextUI::Scaling::FViewportRect framebufferViewport =
+                NextUI::Scaling::ImGuiToMainFramebufferViewport(node->Pos, node->Size);
+            const int32_t outputX = Utilities::Math::floorToInt(framebufferViewport.Position.x);
+            const int32_t outputY = Utilities::Math::floorToInt(framebufferViewport.Position.y);
+            const uint32_t outputWidth = Utilities::Math::ceilToInt(framebufferViewport.Size.x);
+            const uint32_t outputHeight = Utilities::Math::ceilToInt(framebufferViewport.Size.y);
+            const Vulkan::SwapChain& swapChain = editor_->GetEngine().GetRenderer().SwapChain();
+            const bool outputViewportChanged =
+                swapChain.OutputOffset().x != outputX || swapChain.OutputOffset().y != outputY ||
+                swapChain.OutputExtent().width != outputWidth || swapChain.OutputExtent().height != outputHeight;
+            swapChain.UpdateOutputViewport(outputX, outputY, outputWidth, outputHeight);
+            if (outputViewportChanged)
+            {
+                editor_->GetEngine().ResetProgressiveRenderingAccumulation();
+                editor_->GetEngine().GetRenderer().PrimaryView().InvalidateTemporalHistory(
+                    Vulkan::EHistoryInvalidationReason::ExtentChanged);
+            }
 
             const ImGuiIO& io = ImGui::GetIO();
             const ImVec2 mousePos = io.MousePos;
@@ -433,22 +444,4 @@ void EditorInterface::Render(Editor::EditorUiState& uiState)
 
     firstRun_ = false;
     ImGui::GetIO().UserData = previousUserData;
-}
-
-void EditorInterface::DrawIndicator(uint32_t frameCount)
-{
-    ImGui::OpenPopup("Loading");
-    if (Utilities::UI::BeginAnchoredPopupModal(
-            "Loading",
-            NULL,
-            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar,
-            Utilities::UI::FModalPopupOptions{.RequestedSize = ImVec2(100, 40)}))
-    {
-        ImGui::Text("Loading%s   ",
-                    frameCount % 4 == 0       ? ""
-                        : frameCount % 4 == 1 ? "."
-                        : frameCount % 4 == 2 ? ".."
-                                              : "...");
-        ImGui::EndPopup();
-    }
 }

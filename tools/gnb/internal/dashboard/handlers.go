@@ -112,6 +112,23 @@ type locVM struct {
 	Error             string
 	MaxCategoryLines  int
 	Contributions     contributionGraphVM
+	DepthOptions      []locDepthOption
+	SelectedDepth     string
+	TableRows         []locTableRowVM
+}
+
+type locDepthOption struct {
+	Value    string
+	Label    string
+	Selected bool
+}
+
+type locTableRowVM struct {
+	Name  string
+	Path  string
+	Files int
+	Lines int
+	Depth int
 }
 
 type contributionDayVM struct {
@@ -183,23 +200,28 @@ type testVM struct {
 }
 
 type chatVM struct {
-	SessionID     string
-	Models        []chatModelVM
-	Sessions      []chatSessionVM
-	SelectedModel string
-	Messages      []llm.ChatMessage
-	Context       chatContextVM
-	Error         string
-	Flash         string
-	ServerRunning bool
-	RunningModel  string
-	Endpoint      string
+	SessionID        string
+	Models           []chatModelVM
+	Sessions         []chatSessionVM
+	SelectedModel    string
+	SelectedProvider string
+	SelectedProfile  string
+	Providers        []chatProviderVM
+	Messages         []llm.ChatMessage
+	Context          chatContextVM
+	Error            string
+	Flash            string
+	ServerRunning    bool
+	RunningModel     string
+	Endpoint         string
 }
 
 type chatSessionVM struct {
 	ID             string
 	Title          string
 	ModelID        string
+	ProviderID     string
+	ProfileID      string
 	UpdatedAt      time.Time
 	RelativeTime   string
 	MessageCount   int
@@ -221,6 +243,14 @@ type chatModelVM struct {
 	Downloaded bool
 	Active     bool
 	Running    bool
+}
+
+type chatProviderVM struct {
+	ID          string
+	DisplayName string
+	Kind        string
+	Configured  bool
+	Active      bool
 }
 
 const (
@@ -377,7 +407,7 @@ func (s *Server) buildRemoteVM() remoteVM {
 	return vm
 }
 
-func (s *Server) buildLocVM(includeThirdParty bool) locVM {
+func (s *Server) buildLocVM(includeThirdParty bool, selectedDepth string) locVM {
 	snap, err := loc.Scan(loc.Options{
 		Root:              s.opts.RepoRoot,
 		IncludeThirdParty: includeThirdParty,
@@ -393,6 +423,10 @@ func (s *Server) buildLocVM(includeThirdParty bool) locVM {
 			vm.MaxCategoryLines = c.Lines
 		}
 	}
+	maxDepth := locMaxSelectableDepth(snap)
+	vm.SelectedDepth = normalizeLocDepth(selectedDepth, maxDepth)
+	vm.DepthOptions = buildLocDepthOptions(maxDepth, vm.SelectedDepth)
+	vm.TableRows = buildLocTableRows(snap, vm.SelectedDepth)
 	today := time.Now()
 	chartStart := contributionChartStart(today)
 	counts, err := gitops.DailyCommitCounts(s.opts.RepoRoot, chartStart)
@@ -402,6 +436,90 @@ func (s *Server) buildLocVM(includeThirdParty bool) locVM {
 		vm.Contributions = buildContributionGraph(counts, today)
 	}
 	return vm
+}
+
+func locMaxSelectableDepth(snap *loc.Snapshot) int {
+	if snap == nil {
+		return 1
+	}
+	maxDepth := snap.MaxFolderDepth + 1
+	if maxDepth < 1 {
+		maxDepth = 1
+	}
+	return maxDepth
+}
+
+func normalizeLocDepth(value string, maxDepth int) string {
+	if maxDepth < 1 {
+		maxDepth = 1
+	}
+	defaultDepth := 3
+	if maxDepth < defaultDepth {
+		defaultDepth = maxDepth
+	}
+	if value == "" {
+		return strconv.Itoa(defaultDepth)
+	}
+	depth, err := strconv.Atoi(value)
+	if err != nil {
+		return strconv.Itoa(defaultDepth)
+	}
+	if depth < 1 {
+		depth = 1
+	}
+	if depth > maxDepth {
+		depth = maxDepth
+	}
+	return strconv.Itoa(depth)
+}
+
+func buildLocDepthOptions(maxDepth int, selected string) []locDepthOption {
+	if maxDepth < 1 {
+		maxDepth = 1
+	}
+	options := make([]locDepthOption, 0, maxDepth)
+	for depth := 1; depth <= maxDepth; depth++ {
+		options = append(options, locDepthOption{
+			Value:    strconv.Itoa(depth),
+			Label:    fmt.Sprintf("展开 %d 层", depth),
+			Selected: selected == strconv.Itoa(depth),
+		})
+	}
+	return options
+}
+
+func buildLocTableRows(snap *loc.Snapshot, selectedDepth string) []locTableRowVM {
+	if snap == nil || snap.Tree == nil {
+		return nil
+	}
+	rows := []locTableRowVM{}
+	depthLimit, _ := strconv.Atoi(selectedDepth)
+	if depthLimit < 1 {
+		depthLimit = 1
+	}
+	for _, category := range snap.Tree.Children {
+		appendLocTableRows(&rows, category, depthLimit)
+	}
+	return rows
+}
+
+func appendLocTableRows(rows *[]locTableRowVM, node *loc.TreeNodeSummary, depthLimit int) {
+	if node == nil || node.IsFile {
+		return
+	}
+	*rows = append(*rows, locTableRowVM{
+		Name:  node.Name,
+		Path:  node.Path,
+		Files: node.Files,
+		Lines: node.Lines,
+		Depth: max(0, node.Depth-1),
+	})
+	if node.Depth >= depthLimit {
+		return
+	}
+	for _, child := range node.Children {
+		appendLocTableRows(rows, child, depthLimit)
+	}
 }
 
 func contributionChartStart(today time.Time) time.Time {
@@ -595,7 +713,7 @@ func (s *Server) handleTab(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "tab_chat", vm)
 	case "loc":
 		vm := s.buildHeader("loc")
-		vm.LocVM = s.buildLocVM(r.URL.Query().Get("thirdparty") == "1")
+		vm.LocVM = s.buildLocVM(r.URL.Query().Get("thirdparty") != "", r.URL.Query().Get("depth"))
 		s.render(w, "tab_loc", vm)
 	case "graph":
 		vm := s.buildHeader("graph")

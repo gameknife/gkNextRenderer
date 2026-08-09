@@ -5,8 +5,8 @@
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
-#include "Engine/Vulkan/VulkanVideoCaps.hpp"
+#include "Engine/Vulkan/VulkanInterposer.hpp"
+#include "Engine/Vulkan/DeviceCreationAugmenter.hpp"
 #include <algorithm>
 #include <cstring>
 #include <set>
@@ -16,253 +16,311 @@ namespace Vulkan {
 
 namespace
 {
-	std::vector<VkQueueFamilyProperties>::const_iterator FindQueue(
-		const std::vector<VkQueueFamilyProperties>& queueFamilies,
-		const std::string& name,
-		const VkQueueFlags requiredBits,
-		const VkQueueFlags excludedBits,
-		uint32_t minCount)
-	{
-		const auto family = std::find_if(queueFamilies.begin(), queueFamilies.end(), [requiredBits, excludedBits, minCount](const VkQueueFamilyProperties& queueFamily)
-		{
-			return 
-				queueFamily.queueCount >= minCount && 
-				queueFamily.queueFlags & requiredBits &&
-				!(queueFamily.queueFlags & excludedBits);
-		});
+    std::vector<VkQueueFamilyProperties>::const_iterator FindQueue(
+        const std::vector<VkQueueFamilyProperties>& queueFamilies,
+        const std::string& name,
+        const VkQueueFlags requiredBits,
+        const VkQueueFlags excludedBits,
+        uint32_t minCount)
+    {
+        const auto family = std::find_if(queueFamilies.begin(), queueFamilies.end(), [requiredBits, excludedBits, minCount](const VkQueueFamilyProperties& queueFamily)
+        {
+            return 
+                queueFamily.queueCount >= minCount && 
+                queueFamily.queueFlags & requiredBits &&
+                !(queueFamily.queueFlags & excludedBits);
+        });
 
-		if (family == queueFamilies.end())
-		{
-			Throw(std::runtime_error(fmt::format("found no matching {} queue", name)));
-		}
+        if (family == queueFamilies.end())
+        {
+            Throw(std::runtime_error(fmt::format("found no matching {} queue", name)));
+        }
 
-		return family;
-	}
+        return family;
+    }
 }
 
 Device::Device(
-	VkPhysicalDevice physicalDevice, 
-	const class Surface& surface, 
-	const std::vector<const char*>& requiredExtensions,
-	const VkPhysicalDeviceFeatures& deviceFeatures,
-	const void* nextDeviceFeatures) :
-	physicalDevice_(physicalDevice),
-	surface_(surface),
-	debugUtils_(surface.Instance().Handle())
+    VkPhysicalDevice physicalDevice, 
+    const class Surface& surface, 
+    const std::vector<const char*>& requiredExtensions,
+    const VkPhysicalDeviceFeatures& deviceFeatures,
+    const void* nextDeviceFeatures) :
+    physicalDevice_(physicalDevice),
+    surface_(surface),
+    debugUtils_(surface.Instance().Handle())
 {
-	CheckRequiredExtensions(physicalDevice, requiredExtensions);
+    CheckRequiredExtensions(physicalDevice, requiredExtensions);
 
-	const auto queueFamilies = GetEnumerateVector(physicalDevice, vkGetPhysicalDeviceQueueFamilyProperties);
+    const auto queueFamilies = GetEnumerateVector(physicalDevice, vkGetPhysicalDeviceQueueFamilyProperties);
 
-	// for ( auto queue : queueFamilies )
-	// {
-	// 	std::cout << "Queue Family: " << queue.queueFlags << " count: " << queue.queueCount << std::endl;
-	// }
-	
 
-	// Find the graphics queue.
-	const auto graphicsFamily = FindQueue(queueFamilies, "graphics", VK_QUEUE_GRAPHICS_BIT, 0, 1);
+    // Find the graphics queue.
+    const auto graphicsFamily = FindQueue(queueFamilies, "graphics", VK_QUEUE_GRAPHICS_BIT, 0, 1);
 
-	// USE SPARSE BINDING AS THREAD LOAD QUEUE
-	// On MoltenVK, the total queue count is 1, cannot create more than 1 queue.
+    // USE SPARSE BINDING AS THREAD LOAD QUEUE
+    // On MoltenVK, the total queue count is 1, cannot create more than 1 queue.
 #if __APPLE__
-	const auto transferFamily = graphicsFamily;
+    const auto transferFamily = graphicsFamily;
 #else
 #if ANDROID
     //const auto transferFamily = graphicsFamily;
-	auto transferFamily = std::find_if(queueFamilies.begin(), queueFamilies.end(), [](const VkQueueFamilyProperties& queueFamily)
-	{
-		return queueFamily.queueCount >= 1 &&
-			(queueFamily.queueFlags & VK_QUEUE_SPARSE_BINDING_BIT) &&
-			!(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT);
-	});
+    auto transferFamily = std::find_if(queueFamilies.begin(), queueFamilies.end(), [](const VkQueueFamilyProperties& queueFamily)
+    {
+        return queueFamily.queueCount >= 1 &&
+            (queueFamily.queueFlags & VK_QUEUE_SPARSE_BINDING_BIT) &&
+            !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT);
+    });
 #else
-	auto transferFamily = std::find_if(queueFamilies.begin(), queueFamilies.end(), [](const VkQueueFamilyProperties& queueFamily)
-	{
-		return queueFamily.queueCount >= 1 &&
-			(queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) &&
-			!(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT);
-	});
+    auto transferFamily = std::find_if(queueFamilies.begin(), queueFamilies.end(), [](const VkQueueFamilyProperties& queueFamily)
+    {
+        return queueFamily.queueCount >= 1 &&
+            (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) &&
+            !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT);
+    });
 #endif
-	if (transferFamily == queueFamilies.end())
-	{
-		SPDLOG_INFO("No dedicated transfer queue found; using graphics queue for transfers");
-		transferFamily = graphicsFamily;
-	}
+    if (transferFamily == queueFamilies.end())
+    {
+        SPDLOG_INFO("No dedicated transfer queue found; using graphics queue for transfers");
+        transferFamily = graphicsFamily;
+    }
 #endif
-	
-	//Commented out for Macos compatibility, and this queue is not in use actually
-	//const auto computeFamily = FindQueue(queueFamilies, "compute", VK_QUEUE_COMPUTE_BIT, VK_QUEUE_GRAPHICS_BIT);
-	
-	// Find the presentation queue (usually the same as graphics queue).
-	const auto presentFamily = std::find_if(queueFamilies.begin(), queueFamilies.end(), [&](const VkQueueFamilyProperties& queueFamily)
-	{
-		VkBool32 presentSupport = false;
-		const uint32_t i = static_cast<uint32_t>(&queueFamily - queueFamilies.data());
-		vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface.Handle(), &presentSupport);
-		return queueFamily.queueCount > 0 && presentSupport;
-	});
+    
+    //Commented out for Macos compatibility, and this queue is not in use actually
+    //const auto computeFamily = FindQueue(queueFamilies, "compute", VK_QUEUE_COMPUTE_BIT, VK_QUEUE_GRAPHICS_BIT);
+    
+    // Find the presentation queue (usually the same as graphics queue).
+    const auto presentFamily = std::find_if(queueFamilies.begin(), queueFamilies.end(), [&](const VkQueueFamilyProperties& queueFamily)
+    {
+        VkBool32 presentSupport = false;
+        const uint32_t i = static_cast<uint32_t>(&queueFamily - queueFamilies.data());
+        vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface.Handle(), &presentSupport);
+        return queueFamily.queueCount > 0 && presentSupport;
+    });
 
-	if (presentFamily == queueFamilies.end())
-	{
-		Throw(std::runtime_error("found no presentation queue"));
-	}
+    if (presentFamily == queueFamilies.end())
+    {
+        Throw(std::runtime_error(
+            "The selected graphics device cannot present to a window.\n\n"
+            "This usually means the display is driven by a different GPU than the one in use. "
+            "Select the other device with --gpu <index>, or plug the display into the card "
+            "running the renderer."));
+    }
 
-	graphicsFamilyIndex_ = static_cast<uint32_t>(graphicsFamily - queueFamilies.begin());
-	computeFamilyIndex_ = graphicsFamilyIndex_;
-	presentFamilyIndex_ = static_cast<uint32_t>(presentFamily - queueFamilies.begin());
-	transferFamilyIndex_ = static_cast<uint32_t>(transferFamily - queueFamilies.begin());
+    graphicsFamilyIndex_ = static_cast<uint32_t>(graphicsFamily - queueFamilies.begin());
+    computeFamilyIndex_ = graphicsFamilyIndex_;
+    presentFamilyIndex_ = static_cast<uint32_t>(presentFamily - queueFamilies.begin());
+    transferFamilyIndex_ = static_cast<uint32_t>(transferFamily - queueFamilies.begin());
 
-	// Video encode queue, only when the encode extensions were requested (RemoteMode probe).
-	const bool videoEncodeRequested = std::any_of(requiredExtensions.begin(), requiredExtensions.end(),
-		[](const char* extension)
-		{
-			return std::strcmp(extension, VK_KHR_VIDEO_ENCODE_H264_EXTENSION_NAME) == 0;
-		});
-	if (videoEncodeRequested)
-	{
-		videoEncodeFamilyIndex_ = FVulkanVideoCaps::FindEncodeH264QueueFamily(physicalDevice);
-		if (videoEncodeFamilyIndex_ == UINT32_MAX)
-		{
-			SPDLOG_WARN("Video encode extensions requested but no H.264 encode queue family was found");
-		}
-	}
+    // Queues can be the same
+    std::set<uint32_t> uniqueQueueFamilies =
+    {
+        graphicsFamilyIndex_,
+        //computeFamilyIndex_,
+        presentFamilyIndex_,
+        transferFamilyIndex_
+    };
 
-	// Queues can be the same
-	std::set<uint32_t> uniqueQueueFamilies =
-	{
-		graphicsFamilyIndex_,
-		//computeFamilyIndex_,
-		presentFamilyIndex_,
-		transferFamilyIndex_
-	};
-	if (videoEncodeFamilyIndex_ != UINT32_MAX)
-	{
-		uniqueQueueFamilies.insert(videoEncodeFamilyIndex_);
-	}
+    // Extra queue families requested by modules (e.g. NextRemote video encode).
+    for (IDeviceCreationAugmenter* augmenter : DeviceCreationAugmenters())
+    {
+        const uint32_t extraFamily = augmenter->AdditionalQueueFamily(physicalDevice);
+        if (extraFamily != UINT32_MAX)
+        {
+            uniqueQueueFamilies.insert(extraFamily);
+            extraQueues_[extraFamily] = VK_NULL_HANDLE;
+        }
+    }
 
-	// Create queues
-	std::vector<float> queuePriority = {1.0f};
-	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+    std::map<uint32_t, uint32_t> requestedQueueCounts;
+    for (uint32_t queueFamilyIndex : uniqueQueueFamilies)
+    {
+        requestedQueueCounts[queueFamilyIndex] = 1;
+    }
+    for (IDeviceCreationAugmenter* augmenter : DeviceCreationAugmenters())
+    {
+        augmenter->AugmentQueueRequests(physicalDevice, surface.Handle(), requestedQueueCounts);
+    }
+    for (auto& [queueFamilyIndex, queueCount] : requestedQueueCounts)
+    {
+        if (queueFamilyIndex >= queueFamilies.size())
+        {
+            Throw(std::runtime_error(fmt::format("module requested invalid queue family {}", queueFamilyIndex)));
+        }
+        queueCount = std::clamp(queueCount, 1u, queueFamilies[queueFamilyIndex].queueCount);
+        uniqueQueueFamilies.insert(queueFamilyIndex);
+    }
 
-	for (uint32_t queueFamilyIndex : uniqueQueueFamilies)
-	{
-		VkDeviceQueueCreateInfo queueCreateInfo = {};
-		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
-		queueCreateInfo.queueCount = 1;
-		queueCreateInfo.pQueuePriorities = queuePriority.data();
+    // Create queues
+    uint32_t maxRequestedQueueCount = 1;
+    for (const auto& [queueFamilyIndex, queueCount] : requestedQueueCounts)
+    {
+        maxRequestedQueueCount = std::max(maxRequestedQueueCount, queueCount);
+    }
+    std::vector<float> queuePriority(maxRequestedQueueCount, 1.0f);
+    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 
-		queueCreateInfos.push_back(queueCreateInfo);
-	}
+    for (uint32_t queueFamilyIndex : uniqueQueueFamilies)
+    {
+        VkDeviceQueueCreateInfo queueCreateInfo = {};
+        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfo.queueFamilyIndex = queueFamilyIndex;
+        queueCreateInfo.queueCount = requestedQueueCounts[queueFamilyIndex];
+        queueCreateInfo.pQueuePriorities = queuePriority.data();
 
-	// Create device
-	VkDeviceCreateInfo createInfo = {};
-	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	createInfo.pNext = nextDeviceFeatures;
-	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-	createInfo.pQueueCreateInfos = queueCreateInfos.data();
-	createInfo.pEnabledFeatures = &deviceFeatures;
-	createInfo.enabledLayerCount = static_cast<uint32_t>(surface_.Instance().ValidationLayers().size());
-	createInfo.ppEnabledLayerNames = surface_.Instance().ValidationLayers().data();
-	createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
-	createInfo.ppEnabledExtensionNames = requiredExtensions.data();
+        queueCreateInfos.push_back(queueCreateInfo);
+    }
 
-	Check(StreamlineWrapper::CreateDevice(physicalDevice, &createInfo, nullptr, &device_),
-		"create logical device");
+    // Create device
+    VkDeviceCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    createInfo.pNext = nextDeviceFeatures;
+    createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+    createInfo.pQueueCreateInfos = queueCreateInfos.data();
+    createInfo.pEnabledFeatures = &deviceFeatures;
+    createInfo.enabledLayerCount = static_cast<uint32_t>(surface_.Instance().ValidationLayers().size());
+    createInfo.ppEnabledLayerNames = surface_.Instance().ValidationLayers().data();
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
+    createInfo.ppEnabledExtensionNames = requiredExtensions.data();
 
-	debugUtils_.SetDevice(device_);
+    Check(Interposer().CreateDevice(physicalDevice, &createInfo, nullptr, &device_),
+        "create logical device");
 
-	vkGetDeviceQueue(device_, graphicsFamilyIndex_, 0, &graphicsQueue_);
-	vkGetDeviceQueue(device_, computeFamilyIndex_, 0, &computeQueue_);
-	vkGetDeviceQueue(device_, presentFamilyIndex_, 0, &presentQueue_);
-	vkGetDeviceQueue(device_, transferFamilyIndex_, 0, &transferQueue_);
-	if (videoEncodeFamilyIndex_ != UINT32_MAX)
-	{
-		vkGetDeviceQueue(device_, videoEncodeFamilyIndex_, 0, &videoEncodeQueue_);
-	}
+    debugUtils_.SetDevice(device_);
+
+    vkGetDeviceQueue(device_, graphicsFamilyIndex_, 0, &graphicsQueue_);
+    vkGetDeviceQueue(device_, computeFamilyIndex_, 0, &computeQueue_);
+    vkGetDeviceQueue(device_, presentFamilyIndex_, 0, &presentQueue_);
+    vkGetDeviceQueue(device_, transferFamilyIndex_, 0, &transferQueue_);
+    for (auto& [familyIndex, queue] : extraQueues_)
+    {
+        vkGetDeviceQueue(device_, familyIndex, 0, &queue);
+    }
+    for (const auto& [familyIndex, queueCount] : requestedQueueCounts)
+    {
+        auto& queues = createdQueues_[familyIndex];
+        queues.resize(queueCount);
+        for (uint32_t queueIndex = 0; queueIndex < queueCount; ++queueIndex)
+        {
+            vkGetDeviceQueue(device_, familyIndex, queueIndex, &queues[queueIndex]);
+        }
+    }
 
     vkGetPhysicalDeviceProperties(PhysicalDevice(), &deviceProp_);
-	
-	deviceProcedures_.reset(new DeviceProcedures(*this, true, true));
-	memoryAllocator_.reset(new MemoryAllocator(*this));
+    
+    deviceProcedures_.reset(new DeviceProcedures(*this, true, true));
+    memoryAllocator_.reset(new MemoryAllocator(*this));
 }
 
 Device::~Device()
 {
-	if (device_ != nullptr)
-	{
-		memoryAllocator_.reset();
-		deviceProcedures_.reset();
-		StreamlineWrapper::DestroyDevice(device_, nullptr);
-		device_ = nullptr;
-	}
+    if (device_ != nullptr)
+    {
+        memoryAllocator_.reset();
+        deviceProcedures_.reset();
+        Interposer().DestroyDevice(device_, nullptr);
+        device_ = nullptr;
+    }
 }
 
 MemoryStatsSnapshot Device::CaptureMemoryStats(bool includeDetails) const
 {
-	return memoryAllocator_->CaptureStats(includeDetails);
+    return memoryAllocator_->CaptureStats(includeDetails);
 }
 
 void Device::WaitIdle() const
 {
-	Check(StreamlineWrapper::DeviceWaitIdle(device_),
-		"wait for device idle");
+    Check(Interposer().DeviceWaitIdle(device_),
+        "wait for device idle");
 }
 
 VkQueue Device::QueueForFamilyIndex(uint32_t queueFamilyIndex) const
 {
-	if (queueFamilyIndex == graphicsFamilyIndex_)
-	{
-		return graphicsQueue_;
-	}
-	if (queueFamilyIndex == computeFamilyIndex_)
-	{
-		return computeQueue_;
-	}
-	if (queueFamilyIndex == presentFamilyIndex_)
-	{
-		return presentQueue_;
-	}
-	if (queueFamilyIndex == static_cast<uint32_t>(transferFamilyIndex_))
-	{
-		return transferQueue_;
-	}
-	if (queueFamilyIndex == videoEncodeFamilyIndex_)
-	{
-		return videoEncodeQueue_;
-	}
-	Throw(std::runtime_error(fmt::format("queue family {} is not available on this device", queueFamilyIndex)));
+    if (queueFamilyIndex == graphicsFamilyIndex_)
+    {
+        return graphicsQueue_;
+    }
+    if (queueFamilyIndex == computeFamilyIndex_)
+    {
+        return computeQueue_;
+    }
+    if (queueFamilyIndex == presentFamilyIndex_)
+    {
+        return presentQueue_;
+    }
+    if (queueFamilyIndex == static_cast<uint32_t>(transferFamilyIndex_))
+    {
+        return transferQueue_;
+    }
+    if (const auto extraQueue = extraQueues_.find(queueFamilyIndex); extraQueue != extraQueues_.end())
+    {
+        return extraQueue->second;
+    }
+    Throw(std::runtime_error(fmt::format("queue family {} is not available on this device", queueFamilyIndex)));
+}
+
+VkQueue Device::QueueForFamilyIndex(uint32_t queueFamilyIndex, uint32_t queueIndex) const
+{
+    const auto family = createdQueues_.find(queueFamilyIndex);
+    if (family == createdQueues_.end() || queueIndex >= family->second.size())
+    {
+        Throw(std::runtime_error(fmt::format("queue family {} index {} is not available on this device",
+                                             queueFamilyIndex, queueIndex)));
+    }
+    return family->second[queueIndex];
+}
+
+uint32_t Device::CreatedQueueCount(uint32_t queueFamilyIndex) const
+{
+    const auto family = createdQueues_.find(queueFamilyIndex);
+    return family != createdQueues_.end() ? static_cast<uint32_t>(family->second.size()) : 0;
 }
 
 void Device::CheckRequiredExtensions(VkPhysicalDevice physicalDevice, const std::vector<const char*>& requiredExtensions) const
 {
-	const auto availableExtensions = GetEnumerateVector(physicalDevice, static_cast<const char*>(nullptr), vkEnumerateDeviceExtensionProperties);
-	std::set<std::string> required(requiredExtensions.begin(), requiredExtensions.end());
+    const auto availableExtensions = GetEnumerateVector(physicalDevice, static_cast<const char*>(nullptr), vkEnumerateDeviceExtensionProperties);
+    std::set<std::string> required(requiredExtensions.begin(), requiredExtensions.end());
 
-	for (const auto& extension : availableExtensions) 
-	{
-		required.erase(extension.extensionName);
-	}
+    for (const auto& extension : availableExtensions) 
+    {
+        required.erase(extension.extensionName);
+    }
 
-	if (!required.empty())
-	{
-		bool first = true;
-		std::string extensions;
+    if (!required.empty())
+    {
+        bool first = true;
+        std::string extensions;
 
-		for (const auto& extension : required)
-		{
-			if (!first)
-			{
-				extensions += ", ";
-			}
+        for (const auto& extension : required)
+        {
+            if (!first)
+            {
+                extensions += ", ";
+            }
 
-			extensions += extension;
-			first = false;
-		}
+            extensions += extension;
+            first = false;
+        }
 
-		Throw(std::runtime_error("missing required extensions: " + extensions));
-	}
+        // This message reaches end users through the startup error dialog, so it names
+        // the device and the exact missing capability rather than only the extension.
+        VkPhysicalDeviceProperties properties = {};
+        vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+
+        Throw(std::runtime_error(fmt::format(
+            "Your graphics device does not support everything this renderer needs.\n\n"
+            "Device: {}\n"
+            "Driver: {}.{}.{} (Vulkan {}.{}.{})\n"
+            "Missing Vulkan extensions: {}\n\n"
+            "Update to the latest driver from your GPU vendor. If the device is older than "
+            "the Vulkan 1.3 baseline, it cannot run this build.",
+            properties.deviceName,
+            VK_VERSION_MAJOR(properties.driverVersion), VK_VERSION_MINOR(properties.driverVersion),
+            VK_VERSION_PATCH(properties.driverVersion),
+            VK_VERSION_MAJOR(properties.apiVersion), VK_VERSION_MINOR(properties.apiVersion),
+            VK_VERSION_PATCH(properties.apiVersion),
+            extensions)));
+    }
 }
 
 }

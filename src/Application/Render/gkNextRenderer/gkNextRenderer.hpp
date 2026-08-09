@@ -1,8 +1,9 @@
 #pragma once
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
+#include "Engine/Runtime/ScreenShotService.hpp"
 #include "Modules/DevTools/GizmoController.hpp"
-#include "Engine/Runtime/Camera/ModelViewController.hpp"
+#include "Gameplay/Camera/ModelViewController.hpp"
 
 class NextRendererGameInstance : public NextGameInstanceBase
 {
@@ -22,6 +23,7 @@ public:
     void OnPreConfigUI() override;
     bool OnRenderUI() override;
     bool OnRenderUI(const FGameUiFrameContext& context) override;
+    NextUI::FUiFrameResult RenderUiFrame(const FGameUiFrameContext& context) override;
     void OnInitUI() override;
     void OnRemoteUiSessionClosed(std::string_view sessionId) override;
 
@@ -39,15 +41,14 @@ public:
 
     void CreateSphereAndPush();
     void CreateBoxAndPush();
+    void DropPhysicsSphereGrid();
 
     enum class EWorkMode : uint8_t
     {
-        Renderer = 0,
-        Camera,
-        World,
-        Mesh,
-        Profiler,
-        Settings,
+        Render = 0,
+        Detail,
+        Profile,
+        CVar,
         Count,
     };
 
@@ -55,13 +56,11 @@ private:
     struct FRendererUiState
     {
         NextUI::GizmoController gizmoController;
-        EWorkMode workMode = EWorkMode::Renderer;
-        EWorkMode lastWorkMode = EWorkMode::Count;
-        struct ImFont* bigFont {};
-        struct ImFont* titleBarFont {};
-        bool showSettings = true;
-        bool showOverlay = false;
-        bool memoryStatisticsPanelOpen = false;
+        EWorkMode workMode = EWorkMode::Render;
+        EWorkMode lastWorkMode = EWorkMode::Render;
+        bool showSettings = false;
+        bool showCheatSheet = true;
+        bool showAbout = false;
     };
 
     struct FLaunchView
@@ -77,15 +76,15 @@ private:
 
     bool DrawRendererUi(const FGameUiFrameContext& context, FRendererUiState& uiState);
     FRendererUiState& GetRemoteUiState(std::string_view sessionId);
-    void EnsureUiFonts(FRendererUiState& uiState, bool allowLoad);
     void DrawSettings(FRendererUiState& uiState);
     void DrawTitleBar(const FGameUiFrameContext& context, FRendererUiState& uiState);
-    void DrawBottomStatusBar(FRendererUiState& uiState);
+    void DrawBottomStatusBar();
     void DrawModeRail(FRendererUiState& uiState);
-    void DrawMemoryStatisticsPanel(FRendererUiState& uiState);
-    void DrawViewportTopBar(const FGameUiFrameContext& context, const FRendererUiState& uiState);
-    void DrawViewportBottomBar(const FGameUiFrameContext& context);
+    void DrawViewportTopBar(const FGameUiFrameContext& context, FRendererUiState& uiState);
+    void DrawViewportCheatSheet(FRendererUiState& uiState);
     void RequestScreenshot(bool openFolder, const std::string& tag);
+    void DrawVideoCaptureMenuItems();
+    void RequestThreeSecondVideo(Runtime::FScreenShotService::EVideoOutputScale outputScale);
     Runtime::Camera::ModelViewController modelViewController_;
 
     FRendererUiState mainUiState_;
@@ -94,8 +93,13 @@ private:
     uint32_t modelId_;
     uint32_t boxModelId_;
     std::vector<uint32_t> matIds_;
+    std::vector<uint32_t> dropSphereMatIds_;
+    uint32_t dropSphereSequence_ = 0;
 
     bool isTakingScreenshot_ = false;
+    bool isRecordingVideo_ = false;
+    Runtime::FScreenShotService::EVideoOutputScale videoOutputScale_ =
+        Runtime::FScreenShotService::EVideoOutputScale::Half;
     bool playbackPaused_ = false;
     bool stepRequested_ = false;
 };

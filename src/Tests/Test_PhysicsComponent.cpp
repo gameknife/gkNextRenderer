@@ -1,6 +1,6 @@
 #include <catch2/catch_all.hpp>
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include <memory>
 
 TEST_CASE("PhysicsComponent Usage", "[Unit][PhysicsComponent]") {

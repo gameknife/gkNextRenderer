@@ -1,12 +1,12 @@
 # gnb
 
 `gnb` is the gkNextEngine build helper. It wraps setup, CMake presets, running,
-tests, optional pak assets, packaging, mobile build entry points, and a Wails
-desktop dashboard.
+tests, optional pak assets, packaging, mobile build entry points, and a
+dashboard (native Wails window on Windows/macOS; browser/server-only on Linux).
 
-Architecture and stack overview: [`docs/guides/gnb-tech-stack.md`](../../docs/guides/gnb-tech-stack.md)
+CLI overview: [`docs/guides/gnb-cli.md`](../../docs/guides/gnb-cli.md)
 
-Source-level code & architecture guide (for editing `gnb` itself): [`docs/guides/gnb-architecture.md`](../../docs/guides/gnb-architecture.md)
+Source-level architecture guide (for editing `gnb` itself): [`docs/guides/gnb-architecture.md`](../../docs/guides/gnb-architecture.md)
 
 Build locally from the repository root:
 
@@ -33,6 +33,8 @@ Common commands:
 ./gnb dashboard
 ```
 
-Bare `gnb` and `gnb dashboard` open the native Wails window. Use
-`gnb dashboard --browser` for the external-browser fallback or
-`gnb dashboard --no-open` for server-only mode.
+Bare `gnb` and `gnb dashboard` open the native Wails window on Windows/macOS.
+On Linux the Wails native window is not built; `gnb`/`gnb dashboard` fall back
+to opening the dashboard in the system browser, and `gnb dashboard --no-open`
+runs the server without opening anything (full CLI mode, interact via
+`curl 127.0.0.1:7777`).

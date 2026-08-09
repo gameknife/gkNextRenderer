@@ -2,11 +2,12 @@
 #include <imgui.h>
 #include "Modules/DevTools/GizmoController.hpp"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
+#include "Modules/DevTools/Command/DuplicateNodesCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Command/TransformNodesCommand.hpp"
+#include "Engine/Runtime/Editor/UI/UiWidgets.hpp"
+#include "Modules/DevTools/Command/TransformNodesCommand.hpp"
 #include "ThirdParty/ImGuizmo/ImGuizmo.h"
 
 #include <algorithm>
@@ -199,19 +200,19 @@ void GizmoController::DrawToolbar()
     {
         operation_ = static_cast<int>(ImGuizmo::TRANSLATE);
     }
-    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Translate (W)"); }
+    Foundation::Tooltip("Translate (W)");
     ImGui::SameLine();
     if (ImGui::RadioButton("Rotate", operation_ == static_cast<int>(ImGuizmo::ROTATE)))
     {
         operation_ = static_cast<int>(ImGuizmo::ROTATE);
     }
-    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Rotate (E)"); }
+    Foundation::Tooltip("Rotate (E)");
     ImGui::SameLine();
     if (ImGui::RadioButton("Scale", operation_ == static_cast<int>(ImGuizmo::SCALE)))
     {
         operation_ = static_cast<int>(ImGuizmo::SCALE);
     }
-    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Scale (R)"); }
+    Foundation::Tooltip("Scale (R)");
     ImGui::SameLine();
     ImGui::TextUnformatted("|");
     ImGui::SameLine();
@@ -219,13 +220,13 @@ void GizmoController::DrawToolbar()
     {
         pivotMode_ = static_cast<int>(EGizmoPivotMode::Pivot);
     }
-    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Use individual pivot for each selected node"); }
+    Foundation::Tooltip("Use individual pivot for each selected node");
     ImGui::SameLine();
     if (ImGui::RadioButton("Bounds", pivotMode_ == static_cast<int>(EGizmoPivotMode::SelectionBounds)))
     {
         pivotMode_ = static_cast<int>(EGizmoPivotMode::SelectionBounds);
     }
-    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Use combined selection bounds as pivot"); }
+    Foundation::Tooltip("Use combined selection bounds as pivot");
     ImGui::SameLine();
     ImGui::TextUnformatted("|");
     ImGui::SameLine();
@@ -233,13 +234,13 @@ void GizmoController::DrawToolbar()
     {
         mode_ = static_cast<int>(ImGuizmo::LOCAL);
     }
-    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Local axes (Q)"); }
+    Foundation::Tooltip("Local axes (Q)");
     ImGui::SameLine();
     if (ImGui::RadioButton("World", mode_ == static_cast<int>(ImGuizmo::WORLD)))
     {
         mode_ = static_cast<int>(ImGuizmo::WORLD);
     }
-    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("World axes (Q)"); }
+    Foundation::Tooltip("World axes (Q)");
 
     ImGui::End();
     ImGui::PopStyleColor();

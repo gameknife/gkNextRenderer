@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace Assets::scad
+namespace Assets::Scad
 {
     namespace
     {
@@ -328,4 +328,4 @@ namespace Assets::scad
             out.push_back(top(i));
         }
     }
-} // namespace Assets::scad
+} // namespace Assets::Scad

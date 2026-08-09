@@ -1,13 +1,14 @@
+implementing PathTracing;
+
 #include "PreProcessor.slang"
 
-// IRayTracer implementations split out of Shading.slang.
-// Houses the four IRayTracer concrete strategies:
+// The four IRayTracer concrete strategies:
 //   - FHiVoxelDDARayTracer  : page-indexed voxel DDA + cascaded fallback
 //   - FAmbientCubeRayTracer : probe-only fake "trace" for cheap GI lookups
 //   - FHardwareRayTracer    : RayQuery hardware ray tracing
 //   - FSoftwareRayTracer    : screen-space + DDA hybrid
-// IPrimaryRayCaster impls and the IRayTracer/IDirectIlluminator/IRenderer
-// interfaces remain in Shading.slang.
+// IPrimaryRayCaster impls live in PrimaryRayCasters.slang; the IRayTracer /
+// IDirectIlluminator / IRenderer interfaces in Interfaces.slang.
 
 public struct FHiVoxelDDARayTracer : IRayTracer
 {
@@ -148,14 +149,26 @@ public struct FHiVoxelDDARayTracer : IRayTracer
     {
         return TraceOcclusionDDA(rayOrigin, rayDir, 80.0f);
     }
-    public bool TraceSegment(float3 rayOrigin, float3 rayTaget, float epsilon)
+    public bool TraceSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
     {
-        float rayLength = length(rayTaget - rayOrigin);
+        float rayLength = length(rayTarget - rayOrigin);
         Vertex outVertex;
         NodeProxy outNode;
         float4 tempColor;
         float hitDist = 0;
-        return TraceRay(rayOrigin, (rayTaget - rayOrigin) / rayLength, rayLength - epsilon, outVertex, outNode, tempColor, hitDist);
+        return TraceRay(rayOrigin, (rayTarget - rayOrigin) / rayLength, rayLength - epsilon, outVertex, outNode, tempColor, hitDist);
+    }
+    public float3 GetAreaLightShadowOrigin(float3 position, float3 normal, float3 lightPosition,
+                                           float minimumNormalOffset)
+    {
+        const float cubeUnit = max(GetAmbientCubeUnitAtPosition(position), 0.0001f);
+        const float3 lightDirection = normalize(lightPosition - position);
+        const float normalOffset = max(cubeUnit, minimumNormalOffset);
+        return position + normalize(normal) * normalOffset + lightDirection * cubeUnit;
+    }
+    public bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
+    {
+        return TraceSegment(rayOrigin, rayTarget, epsilon);
     }
     public bool TraceRayDDA(float3 rayOrigin, float3 rayDir, float maxDistance, float3 boxMin, float3 boxMax, bool useBounds, inout Vertex outVertex, inout NodeProxy outNode)
     {
@@ -345,6 +358,15 @@ public struct FAmbientCubeRayTracer : IRayTracer
     {
         return false;
     }
+    public float3 GetAreaLightShadowOrigin(float3 position, float3 normal, float3 lightPosition,
+                                           float minimumNormalOffset)
+    {
+        return position;
+    }
+    public bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
+    {
+        return false;
+    }
 
     public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor, out float outHitDist)
     {
@@ -368,6 +390,15 @@ public struct FAmbientCubeRayTracerIndirect : IRayTracer
     {
         return false;
     }
+    public float3 GetAreaLightShadowOrigin(float3 position, float3 normal, float3 lightPosition,
+                                           float minimumNormalOffset)
+    {
+        return position;
+    }
+    public bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
+    {
+        return false;
+    }
 
     public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor, out float outHitDist)
     {
@@ -377,6 +408,30 @@ public struct FAmbientCubeRayTracerIndirect : IRayTracer
         return probeData.a < 0.5;
     }
 }
+public bool IsPointOnAreaLight(float3 position, LightObject light, float planeTolerance)
+{
+    const float3 edge1 = light.p1.xyz - light.p0.xyz;
+    const float3 edge3 = light.p3.xyz - light.p0.xyz;
+    const float3 relative = position - light.p0.xyz;
+    const float d00 = dot(edge1, edge1);
+    const float d01 = dot(edge1, edge3);
+    const float d11 = dot(edge3, edge3);
+    const float d20 = dot(relative, edge1);
+    const float d21 = dot(relative, edge3);
+    const float denominator = d00 * d11 - d01 * d01;
+    const float normalLengthSquared = dot(light.normal_area.xyz, light.normal_area.xyz);
+    if (abs(denominator) <= EPS * EPS || normalLengthSquared <= EPS * EPS)
+    {
+        return false;
+    }
+
+    const float u = (d11 * d20 - d01 * d21) / denominator;
+    const float v = (d00 * d21 - d01 * d20) / denominator;
+    const float planeDistance = abs(dot(relative, light.normal_area.xyz)) * rsqrt(normalLengthSquared);
+    return u >= -EPS && u <= 1.0f + EPS && v >= -EPS && v <= 1.0f + EPS &&
+           planeDistance <= planeTolerance;
+}
+
 public struct FHardwareRayTracer : IRayTracer
 {
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
@@ -394,7 +449,9 @@ public struct FHardwareRayTracer : IRayTracer
         q.TraceRayInline(
             Bindless.GetGpuscene().GetTLAS(),
             rayFlags,
-            0xff,
+            // Mask 0x01 contains only geometry that participates in sun shadows. The
+            // ordinary 0xff mask remains used by primary and area-light visibility rays.
+            0x01,
             ray);
 
         q.Proceed();
@@ -422,6 +479,41 @@ public struct FHardwareRayTracer : IRayTracer
             0xff,
             ray);
 
+        q.Proceed();
+        return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+    }
+
+    public float3 GetAreaLightShadowOrigin(float3 position, float3 normal, float3 lightPosition,
+                                           float minimumNormalOffset)
+    {
+        return position + normalize(normal) * max(EPS2, minimumNormalOffset);
+    }
+
+    public bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
+    {
+        const float3 segment = rayTarget - rayOrigin;
+        const float segmentLength = length(segment);
+        // Visibility is evaluated on the open segment between the shading point and the sampled
+        // emitter point.  A slightly wider endpoint margin absorbs ray/triangle rounding without
+        // ever classifying an in-segment hit by material or projected position.
+        const float endpointEpsilon = max(epsilon * 4.0f, segmentLength * 1.0e-5f);
+        if (segmentLength <= epsilon + endpointEpsilon)
+        {
+            return false;
+        }
+
+        RayDesc ray;
+        ray.Origin = rayOrigin;
+        ray.TMin = epsilon;
+        ray.TMax = segmentLength - endpointEpsilon;
+        ray.Direction = segment / segmentLength;
+
+        RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
+                 RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> q;
+        let rayFlags = RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
+                       RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
+
+        q.TraceRayInline(Bindless.GetGpuscene().GetTLAS(), rayFlags, 0xff, ray);
         q.Proceed();
         return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
     }
@@ -485,9 +577,19 @@ public struct FSoftwareRayTracer : IRayTracer
 
         return false;
     }
-    public bool TraceSegment(float3 rayOrigin, float3 rayTaget, float epsilon)
+    public bool TraceSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
     {
-        return false;
+        return DDARayTracer.TraceSegment(rayOrigin, rayTarget, epsilon);
+    }
+    public float3 GetAreaLightShadowOrigin(float3 position, float3 normal, float3 lightPosition,
+                                           float minimumNormalOffset)
+    {
+        return DDARayTracer.GetAreaLightShadowOrigin(
+            position, normal, lightPosition, minimumNormalOffset);
+    }
+    public bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
+    {
+        return DDARayTracer.TraceAreaLightSegment(rayOrigin, rayTarget, epsilon);
     }
     public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor, out float outHitDist)
     {
@@ -508,7 +610,7 @@ public struct FSoftwareRayTracer : IRayTracer
         const bool allowScreenSpaceTrace = (viewRayDir.z < -0.05f);
 
         if (allowScreenSpaceTrace &&
-            Common.traceInScreenSpace(offsetPos, rayDir, min(longDistanceInit, clampedTraceDistance), depthToleration, outVertex.Position, outVertex.Normal, outVertex.MaterialIndex))
+            Common.TraceInScreenSpace(offsetPos, rayDir, min(longDistanceInit, clampedTraceDistance), depthToleration, outVertex.Position, outVertex.Normal, outVertex.MaterialIndex))
         {
             outVertex.TexCoord = float2(0.5, 0.5);
             outHitDist = distance(outVertex.Position, rayOrigin);

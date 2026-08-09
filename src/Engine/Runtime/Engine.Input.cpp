@@ -3,27 +3,24 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Core/Model.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/RemoteProtocol.hpp"
-#include "Engine/Runtime/DebugUiProvider.hpp"
-#include "Engine/Runtime/UiOverlay.hpp"
+#include "Engine/Runtime/ScreenShotService.hpp"
+#include "Engine/Runtime/Interface/DebugUiProvider.hpp"
+#include "Engine/Runtime/Interface/UiOverlay.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
-#include "Engine/Runtime/Command/DeleteNodesCommand.hpp"
-#include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/Subsystems/NextAudio.h"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
-#include "Engine/Vulkan/SyncAndTiming.hpp"
+#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 #include "Engine/Utilities/Localization.hpp"
 
 #include <SDL3/SDL.h>
@@ -48,13 +45,15 @@ void NextEngine::OnKey(SDL_Event& event)
         const bool altPressed = (modifiers & SDL_KMOD_ALT) != 0;
         const bool isAltEnter =
             altPressed && (event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER);
-        const bool isF11 = event.key.key == SDLK_F11;
+        const bool hasShortcutModifier =
+            (modifiers & (SDL_KMOD_CTRL | SDL_KMOD_ALT | SDL_KMOD_SHIFT | SDL_KMOD_GUI)) != 0;
+        const bool isF11 = event.key.key == SDLK_F11 && !hasShortcutModifier;
 
         if (isAltEnter || isF11)
         {
             if (services_.cvarSystem)
             {
-                auto result = services_.cvarSystem->ExecuteCommand("cvar.toggle sys.fullscreen");
+                auto result = services_.cvarSystem->ExecuteCommand("cvar.toggle sys.borderlessFullscreen");
                 if (!result.success)
                 {
                     ToggleBorderlessFullscreen();
@@ -94,81 +93,16 @@ void NextEngine::OnKey(SDL_Event& event)
         if (hasCtrlOrCmd)
         {
             const bool hasShift = (modifiers & SDL_KMOD_SHIFT) != 0;
-            std::vector<uint32_t> selectedIds;
-            const auto& currentSelection = GetScene().GetSelectedIds();
-            selectedIds.reserve(currentSelection.size() + 1);
-            for (uint32_t id : currentSelection)
-            {
-                selectedIds.push_back(id);
-            }
-            if (selectedIds.empty())
-            {
-                const uint32_t selectedId = GetScene().GetSelectedId();
-                if (selectedId != static_cast<uint32_t>(-1))
-                {
-                    selectedIds.push_back(selectedId);
-                }
-            }
-
             if (event.key.key == SDLK_Z)
             {
-                if (hasShift)
+                if (hasShift ? commandHistory_.Redo() : commandHistory_.Undo())
                 {
-                    if (commandHistory_.Redo())
-                    {
-                        return;
-                    }
-                }
-                else
-                {
-                    if (commandHistory_.Undo())
-                    {
-                        return;
-                    }
+                    return;
                 }
             }
             else if (event.key.key == SDLK_Y)
             {
                 if (commandHistory_.Redo())
-                {
-                    return;
-                }
-            }
-            else if (event.key.key == SDLK_D)
-            {
-                if (!selectedIds.empty())
-                {
-                    auto command = std::make_unique<Runtime::Command::DuplicateNodesCommand>(GetScene(), selectedIds);
-                    if (commandHistory_.Execute(std::move(command)))
-                    {
-                        return;
-                    }
-                }
-            }
-        }
-
-        if (event.key.key == SDLK_DELETE || event.key.key == SDLK_BACKSPACE)
-        {
-            std::vector<uint32_t> selectedIds;
-            const auto& currentSelection = GetScene().GetSelectedIds();
-            selectedIds.reserve(currentSelection.size() + 1);
-            for (uint32_t id : currentSelection)
-            {
-                selectedIds.push_back(id);
-            }
-            if (selectedIds.empty())
-            {
-                const uint32_t selectedId = GetScene().GetSelectedId();
-                if (selectedId != static_cast<uint32_t>(-1))
-                {
-                    selectedIds.push_back(selectedId);
-                }
-            }
-
-            if (!selectedIds.empty())
-            {
-                auto command = std::make_unique<Runtime::Command::DeleteNodesCommand>(GetScene(), selectedIds);
-                if (commandHistory_.Execute(std::move(command)))
                 {
                     return;
                 }
@@ -189,6 +123,44 @@ void NextEngine::OnKey(SDL_Event& event)
             return;
         }
     }
+}
+
+bool NextEngine::HandleGlobalCaptureShortcut(const SDL_Event& event)
+{
+    if (event.type != SDL_EVENT_KEY_DOWN || event.key.repeat)
+    {
+        return false;
+    }
+
+    const SDL_Keymod modifiers = static_cast<SDL_Keymod>(event.key.mod);
+    const bool hasCtrl = (modifiers & SDL_KMOD_CTRL) != 0;
+    const bool hasShift = (modifiers & SDL_KMOD_SHIFT) != 0;
+    const bool hasOtherModifier = (modifiers & (SDL_KMOD_ALT | SDL_KMOD_GUI)) != 0;
+    if (!hasCtrl || hasOtherModifier || (event.key.key != SDLK_F9 && event.key.key != SDLK_F10))
+    {
+        return false;
+    }
+
+    const std::string tag = hasShift ? "global-hotkey-ui" : "global-hotkey";
+    if (event.key.key == SDLK_F9)
+    {
+        (void)GetScreenShotService().Request(Runtime::FScreenShotService::FRequest{
+            .tag = tag,
+            .includeUi = hasShift,
+            .forceUiHidden = !hasShift,
+        });
+    }
+    else
+    {
+        (void)GetScreenShotService().RequestThreeSecondVideo(Runtime::FScreenShotService::FThreeSecondVideoRequest{
+            .tag = tag,
+            .format = Runtime::FScreenShotService::EAnimationFormat::Both,
+            .outputScale = Runtime::FScreenShotService::EVideoOutputScale::Half,
+            .includeUi = hasShift,
+            .forceUiHidden = !hasShift,
+        });
+    }
+    return true;
 }
 
 bool NextEngine::HandleDebugShortcut(SDL_Keycode key)
@@ -372,4 +344,3 @@ void NextEngine::TickGamepadInput()
 
     SDL_free(gamepads);
 }
-

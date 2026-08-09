@@ -3,26 +3,26 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include <glm/detail/type_half.hpp>
 #include <meshoptimizer.h>
-#include <tiny_gltf.h>
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Assets/Savers/FSceneSaver.h"
 #include "Engine/Assets/Core/Model.hpp"
+#include "Engine/Assets/Core/LightObject.hpp"
 #include "Engine/Options.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
+#include "Engine/Vulkan/Device.hpp"
 
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/EnvironmentComponent.h"
-#include "Engine/Runtime/Components/GaussianSplatComponent.h"
-#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/EnvironmentComponent.hpp"
+#include "Engine/Runtime/Components/LightComponent.hpp"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
-#include "Engine/Vulkan/SyncAndTiming.hpp"
+#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 #include "Engine/Utilities/Exception.hpp"
 
 #include <algorithm>
@@ -33,356 +33,6 @@
 
 namespace Assets
 {
-    namespace
-    {
-        constexpr uint32_t kInvalidId = std::numeric_limits<uint32_t>::max();
-
-        struct FProxyBuildConfig
-        {
-            bool enable = true;
-            bool shadowEnable = true;
-            bool rayOcclusionEnable = true;
-            bool debugVisible = false;
-            uint32_t gridMax = 64;
-            float sigma = 2.5f;
-            float isoThreshold = 0.35f;
-        };
-
-        FProxyBuildConfig ResolveProxyBuildConfig()
-        {
-            FProxyBuildConfig config{};
-            if (NextEngine::GetInstance())
-            {
-                const Runtime::Config::UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
-                config.enable = settings.SplatProxyEnable;
-                config.shadowEnable = settings.SplatShadowEnable;
-                config.rayOcclusionEnable = settings.SplatRayOcclusionEnable;
-                config.debugVisible = settings.SplatProxyDebugVisible;
-                config.gridMax = std::clamp(settings.SplatProxyGridMax, 8u, 128u);
-                config.sigma = std::clamp(settings.SplatProxySigma, 1.0f, 4.0f);
-                config.isoThreshold = std::clamp(settings.SplatProxyIsoThreshold, 0.01f, 0.95f);
-            }
-            return config;
-        }
-
-        glm::mat3 DecodeSplatCovariance(const FGaussianSplatGpu& splat)
-        {
-            glm::mat3 covariance(0.0f);
-            covariance[0][0] = splat.covariance0.x;
-            covariance[1][0] = covariance[0][1] = splat.covariance0.y;
-            covariance[2][0] = covariance[0][2] = splat.covariance0.z;
-            covariance[1][1] = splat.covariance0.w;
-            covariance[2][1] = covariance[1][2] = splat.covariance1.x;
-            covariance[2][2] = splat.covariance1.y;
-            return covariance;
-        }
-
-        glm::uvec3 ResolveProxyGridDim(const glm::vec3& extent, uint32_t gridMax)
-        {
-            const float maxExtent = std::max({extent.x, extent.y, extent.z, 1e-3f});
-            glm::uvec3 dims(8u);
-            for (uint32_t axis = 0; axis < 3; ++axis)
-            {
-                const float ratio = std::max(extent[axis], 1e-3f) / maxExtent;
-                dims[axis] = std::clamp(static_cast<uint32_t>(std::ceil(ratio * static_cast<float>(gridMax))), 8u, gridMax);
-            }
-            return dims;
-        }
-
-        size_t DensityIndex(glm::uvec3 p, glm::uvec3 dims)
-        {
-            return static_cast<size_t>(p.x) + static_cast<size_t>(dims.x) *
-                (static_cast<size_t>(p.y) + static_cast<size_t>(dims.y) * static_cast<size_t>(p.z));
-        }
-
-        void AddProxyFace(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices,
-                          const glm::vec3 corners[4], const glm::vec3& normal)
-        {
-            const uint32_t base = static_cast<uint32_t>(vertices.size());
-            const glm::vec4 tangent = glm::abs(normal.y) > 0.9f ? glm::vec4(1, 0, 0, 1) : glm::vec4(0, 1, 0, 1);
-            for (uint32_t i = 0; i < 4; ++i)
-            {
-                Vertex vertex{};
-                vertex.Position = corners[i];
-                vertex.Normal = normal;
-                vertex.Tangent = tangent;
-                vertex.TexCoord = glm::vec2(0.0f);
-                vertex.MaterialIndex = 0;
-                vertices.push_back(vertex);
-            }
-            indices.insert(indices.end(), {base, base + 1, base + 2, base, base + 2, base + 3});
-        }
-
-        void AddVoxelProxyFaces(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices,
-                                const glm::uvec3& p, const glm::vec3& minBounds, const glm::vec3& cellSize,
-                                bool negX, bool posX, bool negY, bool posY, bool negZ, bool posZ)
-        {
-            const glm::vec3 v0 = minBounds + glm::vec3(p) * cellSize;
-            const glm::vec3 v1 = v0 + cellSize;
-
-            glm::vec3 corners[4];
-            if (negX)
-            {
-                corners[0] = {v0.x, v0.y, v0.z}; corners[1] = {v0.x, v0.y, v1.z};
-                corners[2] = {v0.x, v1.y, v1.z}; corners[3] = {v0.x, v1.y, v0.z};
-                AddProxyFace(vertices, indices, corners, {-1, 0, 0});
-            }
-
-            if (posX)
-            {
-                corners[0] = {v1.x, v0.y, v1.z}; corners[1] = {v1.x, v0.y, v0.z};
-                corners[2] = {v1.x, v1.y, v0.z}; corners[3] = {v1.x, v1.y, v1.z};
-                AddProxyFace(vertices, indices, corners, {1, 0, 0});
-            }
-
-            if (negY)
-            {
-                corners[0] = {v1.x, v0.y, v0.z}; corners[1] = {v1.x, v0.y, v1.z};
-                corners[2] = {v0.x, v0.y, v1.z}; corners[3] = {v0.x, v0.y, v0.z};
-                AddProxyFace(vertices, indices, corners, {0, -1, 0});
-            }
-
-            if (posY)
-            {
-                corners[0] = {v0.x, v1.y, v0.z}; corners[1] = {v0.x, v1.y, v1.z};
-                corners[2] = {v1.x, v1.y, v1.z}; corners[3] = {v1.x, v1.y, v0.z};
-                AddProxyFace(vertices, indices, corners, {0, 1, 0});
-            }
-
-            if (negZ)
-            {
-                corners[0] = {v1.x, v0.y, v0.z}; corners[1] = {v0.x, v0.y, v0.z};
-                corners[2] = {v0.x, v1.y, v0.z}; corners[3] = {v1.x, v1.y, v0.z};
-                AddProxyFace(vertices, indices, corners, {0, 0, -1});
-            }
-
-            if (posZ)
-            {
-                corners[0] = {v0.x, v0.y, v1.z}; corners[1] = {v1.x, v0.y, v1.z};
-                corners[2] = {v1.x, v1.y, v1.z}; corners[3] = {v0.x, v1.y, v1.z};
-                AddProxyFace(vertices, indices, corners, {0, 0, 1});
-            }
-        }
-
-        Model BuildSplatProxyMesh(const FGaussianSplatData& splatData,
-                                  const Runtime::GaussianSplatComponent& component,
-                                  const FProxyBuildConfig& config,
-                                  glm::uvec3& outGridDim)
-        {
-            const glm::vec3 minBounds = splatData.aabbMin;
-            const glm::vec3 maxBounds = splatData.aabbMax;
-            const glm::vec3 extent = glm::max(maxBounds - minBounds, glm::vec3(1e-3f));
-            const glm::uvec3 dims = ResolveProxyGridDim(extent, config.gridMax);
-            const glm::vec3 cellSize = extent / glm::vec3(dims);
-            outGridDim = dims;
-
-            std::vector<float> density(static_cast<size_t>(dims.x) * dims.y * dims.z, 0.0f);
-            const float sigmaRadius = config.sigma;
-            const float sigmaRadiusSq = sigmaRadius * sigmaRadius;
-            const float densityScale = component.GetProxyDensityScale() * component.GetOpacityScale();
-            if (densityScale <= 0.0f)
-            {
-                return Model::CreateFromGeometry(splatData.name + "_splat_proxy", std::vector<Vertex>{},
-                                                 std::vector<uint32_t>{}, false);
-            }
-
-            for (const FGaussianSplatGpu& splat : splatData.splats)
-            {
-                const glm::vec3 center = glm::vec3(splat.positionOpacity);
-                const float opacity = std::clamp(splat.positionOpacity.w * densityScale, 0.0f, 1.0f);
-                if (opacity <= 0.0f)
-                {
-                    continue;
-                }
-
-                const glm::mat3 covariance = DecodeSplatCovariance(splat);
-                const float determinant = glm::determinant(covariance);
-                if (std::abs(determinant) < 1e-12f || !std::isfinite(determinant))
-                {
-                    continue;
-                }
-                const glm::mat3 invCovariance = glm::inverse(covariance);
-                const glm::vec3 sigma = glm::sqrt(glm::max(
-                    glm::vec3(covariance[0][0], covariance[1][1], covariance[2][2]), glm::vec3(1e-8f)));
-                const glm::vec3 radius = sigma * sigmaRadius;
-
-                glm::ivec3 voxelMin = glm::ivec3(glm::floor((center - radius - minBounds) / cellSize));
-                glm::ivec3 voxelMax = glm::ivec3(glm::ceil((center + radius - minBounds) / cellSize));
-                voxelMin = glm::clamp(voxelMin, glm::ivec3(0), glm::ivec3(dims) - glm::ivec3(1));
-                voxelMax = glm::clamp(voxelMax, glm::ivec3(0), glm::ivec3(dims) - glm::ivec3(1));
-
-                constexpr int maxCellsPerSplatAxis = 24;
-                for (uint32_t axis = 0; axis < 3; ++axis)
-                {
-                    if (voxelMax[axis] - voxelMin[axis] + 1 > maxCellsPerSplatAxis)
-                    {
-                        const int centerCell = std::clamp(
-                            static_cast<int>(std::floor((center[axis] - minBounds[axis]) / cellSize[axis])),
-                            0, static_cast<int>(dims[axis]) - 1);
-                        voxelMin[axis] = std::max(0, centerCell - maxCellsPerSplatAxis / 2);
-                        voxelMax[axis] = std::min(static_cast<int>(dims[axis]) - 1,
-                                                  voxelMin[axis] + maxCellsPerSplatAxis - 1);
-                    }
-                }
-
-                for (int z = voxelMin.z; z <= voxelMax.z; ++z)
-                {
-                    for (int y = voxelMin.y; y <= voxelMax.y; ++y)
-                    {
-                        for (int x = voxelMin.x; x <= voxelMax.x; ++x)
-                        {
-                            const glm::uvec3 p(x, y, z);
-                            const glm::vec3 samplePos = minBounds + (glm::vec3(p) + glm::vec3(0.5f)) * cellSize;
-                            const glm::vec3 d = samplePos - center;
-                            const float q = glm::dot(d, invCovariance * d);
-                            if (!std::isfinite(q) || q > sigmaRadiusSq)
-                            {
-                                continue;
-                            }
-                            density[DensityIndex(p, dims)] += opacity * std::exp(-0.5f * q);
-                        }
-                    }
-                }
-            }
-
-            const float threshold = std::clamp(component.GetProxyAlphaThreshold(), 0.01f, 0.95f);
-            std::vector<uint8_t> solid(density.size(), 0u);
-            for (size_t i = 0; i < density.size(); ++i)
-            {
-                const float alpha = 1.0f - std::exp(-density[i]);
-                solid[i] = alpha >= std::max(threshold, config.isoThreshold) ? 1u : 0u;
-            }
-
-            auto isSolid = [&](int x, int y, int z) -> bool
-            {
-                if (x < 0 || y < 0 || z < 0 ||
-                    x >= static_cast<int>(dims.x) || y >= static_cast<int>(dims.y) || z >= static_cast<int>(dims.z))
-                {
-                    return false;
-                }
-                return solid[DensityIndex(glm::uvec3(x, y, z), dims)] != 0u;
-            };
-
-            std::vector<Vertex> vertices;
-            std::vector<uint32_t> indices;
-            for (uint32_t z = 0; z < dims.z; ++z)
-            {
-                for (uint32_t y = 0; y < dims.y; ++y)
-                {
-                    for (uint32_t x = 0; x < dims.x; ++x)
-                    {
-                        if (!isSolid(static_cast<int>(x), static_cast<int>(y), static_cast<int>(z)))
-                        {
-                            continue;
-                        }
-
-                        const bool negX = !isSolid(static_cast<int>(x) - 1, y, z);
-                        const bool posX = !isSolid(static_cast<int>(x) + 1, y, z);
-                        const bool negY = !isSolid(x, static_cast<int>(y) - 1, z);
-                        const bool posY = !isSolid(x, static_cast<int>(y) + 1, z);
-                        const bool negZ = !isSolid(x, y, static_cast<int>(z) - 1);
-                        const bool posZ = !isSolid(x, y, static_cast<int>(z) + 1);
-                        if (negX || posX || negY || posY || negZ || posZ)
-                        {
-                            AddVoxelProxyFaces(vertices, indices, {x, y, z}, minBounds, cellSize,
-                                               negX, posX, negY, posY, negZ, posZ);
-                        }
-                    }
-                }
-            }
-
-            return Model::CreateFromGeometry(splatData.name + "_splat_proxy", std::move(vertices), std::move(indices), false);
-        }
-
-        uint32_t EnsureSplatProxyMaterial(std::vector<FMaterial>& materials)
-        {
-            for (uint32_t i = 0; i < materials.size(); ++i)
-            {
-                if (materials[i].name_ == "__splat_proxy_material")
-                {
-                    return i;
-                }
-            }
-            materials.push_back({Material::Lambertian(glm::vec3(0.65f, 0.68f, 0.72f)), "__splat_proxy_material"});
-            return static_cast<uint32_t>(materials.size() - 1);
-        }
-    }
-
-    void Scene::EnsureGaussianSplatProxyMeshes()
-    {
-        const FProxyBuildConfig config = ResolveProxyBuildConfig();
-        if (!config.enable || gaussianSplats_.empty())
-        {
-            return;
-        }
-
-        uint32_t proxyMaterialId = kInvalidId;
-        for (FGaussianSplatData& splat : gaussianSplats_)
-        {
-            if (splat.proxyModelId != kInvalidId && splat.proxyNodeInstanceId != kInvalidId &&
-                splat.proxyModelId < models_.size() && GetNodeSharedByInstanceId(splat.proxyNodeInstanceId))
-            {
-                continue;
-            }
-
-            auto sourceNode = GetNodeSharedByInstanceId(splat.nodeInstanceId);
-            auto* component = sourceNode ? sourceNode->GetComponentPtr<Runtime::GaussianSplatComponent>() : nullptr;
-            if (!sourceNode || !component)
-            {
-                continue;
-            }
-
-            glm::uvec3 gridDim(0u);
-            Model proxyModel = BuildSplatProxyMesh(splat, *component, config, gridDim);
-            if (proxyModel.NumberOfIndices() == 0 || proxyModel.NumberOfVertices() == 0)
-            {
-                SPDLOG_WARN("[SplatProxy] skipped {}: empty proxy mesh at grid {}x{}x{}",
-                            splat.name, gridDim.x, gridDim.y, gridDim.z);
-                continue;
-            }
-
-            if (proxyMaterialId == kInvalidId)
-            {
-                proxyMaterialId = EnsureSplatProxyMaterial(materials_);
-            }
-
-            const uint32_t proxyModelId = static_cast<uint32_t>(models_.size());
-            models_.push_back(std::move(proxyModel));
-
-            const uint32_t proxyNodeId = GenerateInstanceId();
-            auto proxyNode = Node::CreateNode(splat.name + "_splat_proxy",
-                                              glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
-                                              glm::vec3(1.0f), proxyNodeId);
-            auto render = std::make_shared<Runtime::RenderComponent>();
-            render->SetModelId(proxyModelId);
-            render->SetVisible(component->GetVisible());
-            render->SetMainVisible(config.debugVisible);
-            render->SetCastShadows(component->GetCastShadow() && config.shadowEnable);
-            render->SetRayTraceVisible(component->GetRayTraceOccluder() && config.rayOcclusionEnable);
-            render->SetReceiveGI(component->GetRayTraceOccluder() && config.rayOcclusionEnable);
-            render->SetRayCastVisible(false);
-            std::array<uint32_t, 16> materials{};
-            materials.fill(proxyMaterialId);
-            render->SetMaterials(materials);
-            proxyNode->AddComponent(render);
-            proxyNode->SetTag("__splat_proxy");
-            proxyNode->SetLayer("__internal");
-            proxyNode->SetSceneReferenceOwnerProxyId(sourceNode->GetInstanceId());
-            proxyNode->SetParent(sourceNode);
-            CacheEnvironmentComponentFromNode(proxyNode.get());
-            nodes_.push_back(proxyNode);
-            RegisterNodeIndex(proxyNode);
-
-            splat.proxyModelId = proxyModelId;
-            splat.proxyNodeInstanceId = proxyNodeId;
-            splat.proxyGridDim = gridDim;
-            SPDLOG_INFO("[SplatProxy] {} grid {}x{}x{} -> {} vertices, {} triangles, model {}, node {}",
-                        splat.name, gridDim.x, gridDim.y, gridDim.z,
-                        models_[proxyModelId].NumberOfVertices(),
-                        models_[proxyModelId].NumberOfIndices() / 3u, proxyModelId, proxyNodeId);
-        }
-    }
-
     bool Scene::EnsureGpuDrivenBufferCapacity(Vulkan::CommandPool& commandPool)
     {
         const uint32_t requiredCapacity = requiredGpuDrivenTriangleCapacity_;
@@ -399,14 +49,23 @@ namespace Assets
         }
 
         maxSceneTriangles_ = static_cast<uint32_t>(grownCapacity);
+
+        // Growing destroys the current primitive/resource buffers in place. They are referenced
+        // by device address from command buffers that may still be executing (secondary render
+        // views, upscaler and transfer submissions do not share the caller's frame fence), so
+        // drain the device first. Growth is rare - a doubling step - so the stall does not show
+        // up in steady-state frames, while destroying a live allocation would page-fault the GPU
+        // on drivers that do not tolerate dangling buffer device addresses.
+        commandPool.Device().WaitIdle();
+
         const VkBufferUsageFlags flags =
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderPrim", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            sizeof(uint32_t) * maxSceneTriangles_, softMeshShaderPrimBuffer_, softMeshShaderPrimBufferMemory_);
+            sizeof(VisibilityId) * maxSceneTriangles_, softMeshShaderPrimBuffer_, softMeshShaderPrimBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderShadowPrim", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            sizeof(uint32_t) * maxSceneTriangles_ * kSunShadowCascadeCount,
+            sizeof(VisibilityId) * maxSceneTriangles_ * kSunShadowCascadeCount,
             softMeshShaderShadowPrimBuffer_, softMeshShaderShadowPrimBufferMemory_);
 
         const std::vector<Assets::SoftMeshShaderResources> resources = {
@@ -417,6 +76,8 @@ namespace Assets
                 softMeshShaderDrawArgBuffer_->GetDeviceAddress(),
                 softMeshShaderDispatchArgBuffer_->GetDeviceAddress(),
                 softMeshShaderCounterBuffer_->GetDeviceAddress(),
+                lightBuffer_ ? lightBuffer_->GetDeviceAddress() : 0,
+                lightGridBuffer_ ? lightGridBuffer_->GetDeviceAddress() : 0,
             },
         };
         Vulkan::BufferUtil::CreateDeviceBuffer(
@@ -430,21 +91,42 @@ namespace Assets
                        std::vector<FMaterial>& materials, std::vector<LightObject>& lights,
                        std::vector<AnimationTrack>& tracks)
     {
+        for (const auto& node : nodes_)
+        {
+            if (node)
+            {
+                node->scene_ = nullptr;
+            }
+        }
+        componentBuckets_.clear();
+        componentTypeByName_.clear();
+        // The physics backend is reset before Reload, so these handles no longer refer to bodies.
+        staticPhysicsBodies_.clear();
         nodes_ = std::move(nodes);
+        allocatedJointCount_ = 0;
+        jointMatrixUploadDirty_ = false;
+        skinUpdateRequests_.clear();
+        for (const auto& node : nodes_)
+        {
+            BindNode(*node);
+        }
         RebuildNodeIndex();
         RefreshEnvironmentComponentCache();
         models_ = std::move(models);
-        gaussianSplats_.clear();
         materials_ = std::move(materials);
         lights_ = std::move(lights);
         tracks_ = std::move(tracks);
         selectionState_.Clear();
         hoveredId_ = SceneSelectionState::invalidNodeId;
         lockedIds_.clear();
-        nodeProxys.clear();
+        nodeProxies.clear();
+        nodeProxiesBackup.clear();
+        nodeProxyUpdatePending_ = false;
+        needUpdateTLAS = false;
         indirectDrawBatchCount_ = 0;
+        indirectDrawBatchCountBackup_ = 0;
         indicesCount_ = 0;
-        verticeCount_ = 0;
+        vertexCount_ = 0;
         lightCount_ = 0;
         gpuDrivenStat_ = {};
         shadowGpuDrivenStats_.fill({});
@@ -478,7 +160,7 @@ namespace Assets
         // Update IDs for all new nodes (assuming nodes is a flat list of all new nodes)
         for (auto& node : nodes)
         {
-            if (auto* environment = node->GetComponentPtr<Runtime::EnvironmentComponent>())
+            if (auto* environment = node->GetComponent<Runtime::EnvironmentComponent>())
             {
                 if (environmentComponent_ == nullptr)
                 {
@@ -514,11 +196,24 @@ namespace Assets
                 }
             }
 
+            if (auto* lightComponent = node->GetComponent<Runtime::LightComponent>())
+            {
+                for (LightObject& light : lightComponent->Lights())
+                {
+                    light.lightMatIdx += materialOffset;
+                }
+            }
+
             // Reparent roots (nodes that don't have a parent in the new scene hierarchy)
             if (node->GetParent() == nullptr)
             {
                 node->SetParent(rootNode);
             }
+        }
+
+        for (LightObject& light : lights)
+        {
+            light.lightMatIdx += materialOffset;
         }
 
         // Merge vectors
@@ -536,8 +231,9 @@ namespace Assets
         // Add new nodes to scene nodes
         for (auto& node : nodes)
         {
-            if (node->GetComponentPtr<Runtime::EnvironmentComponent>() == nullptr)
+            if (node->GetComponent<Runtime::EnvironmentComponent>() == nullptr)
             {
+                BindNode(*node);
                 nodes_.push_back(node);
                 RegisterNodeIndex(node);
             }
@@ -545,6 +241,7 @@ namespace Assets
 
         // Add root node to scene
         CacheEnvironmentComponentFromNode(rootNode.get());
+        BindNode(*rootNode);
         nodes_.push_back(rootNode);
         RegisterNodeIndex(rootNode);
 
@@ -556,12 +253,18 @@ namespace Assets
 
     void Scene::RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing)
     {
-        EnsureGaussianSplatProxyMeshes();
+        using Clock = std::chrono::steady_clock;
+        const auto rebuildStart = Clock::now();
+        lastRebuildProfile_ = {};
 
-        nodeProxys.clear();
+        nodeProxies.clear();
+        nodeProxiesBackup.clear();
+        nodeProxyUpdatePending_ = false;
+        needUpdateTLAS = false;
         indirectDrawBatchCount_ = 0;
+        indirectDrawBatchCountBackup_ = 0;
         indicesCount_ = 0;
-        verticeCount_ = 0;
+        vertexCount_ = 0;
         lightCount_ = 0;
         gpuDrivenStat_ = {};
         shadowGpuDrivenStats_.fill({});
@@ -602,10 +305,10 @@ namespace Assets
         sceneAABBMin_ = {FLT_MAX, FLT_MAX, FLT_MAX};
         sceneAABBMax_ = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
         bool hasSceneBounds = false;
-        for (auto& node : nodes_)
+        for (auto* render : Components<Runtime::RenderComponent>())
         {
-            auto render = node->GetComponent<Runtime::RenderComponent>();
-            if (render && render->GetVisible() && render->GetModelId() != -1)
+            Node* node = render->GetOwner();
+            if (node && render->GetVisible() && render->GetModelId() != -1)
             {
                 glm::vec3 localaabbMin = models_[render->GetModelId()].GetLocalAABBMin();
                 glm::vec3 localaabbMax = models_[render->GetModelId()].GetLocalAABBMax();
@@ -646,29 +349,41 @@ namespace Assets
         // static mesh to jolt mesh shape
         if (NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine())
         {
+            const auto shapeCookingStart = Clock::now();
+            // RebuildMeshBuffer is also used after appending content. Remove the previous scene-owned
+            // static bodies before recreating them for the rebuilt mesh/model tables.
+            for (const auto& [node, bodyId] : staticPhysicsBodies_)
+            {
+                (void)node;
+                physicsEngine->RemoveBody(bodyId);
+            }
+            staticPhysicsBodies_.clear();
+
             cachedMeshShapes_.clear();
             for (auto& model : models_)
             {
                 if (model.NumberOfIndices() < 65535 * 3 && model.NumberOfIndices() > 0)
                 {
-                    cachedMeshShapes_.push_back(
-                        NextRefConst<NextMeshShapeSettings>(physicsEngine->CreateMeshShape(model)));
+                    cachedMeshShapes_.push_back(physicsEngine->CreateMeshShape(model));
                 }
                 else
                 {
-                    cachedMeshShapes_.push_back(NextRefConst<NextMeshShapeSettings>(nullptr));
+                    cachedMeshShapes_.push_back(nullptr);
                 }
             }
+            lastRebuildProfile_.physicsShapeCookingMs =
+                std::chrono::duration<float, std::milli>(Clock::now() - shapeCookingStart).count();
 
-            for (auto& node : nodes_)
+            const auto bodyCreationStart = Clock::now();
+            for (auto* render : Components<Runtime::RenderComponent>())
             {
-                auto render = node->GetComponent<Runtime::RenderComponent>();
+                Node* node = render->GetOwner();
                 // bind the mesh shape to the node
-                if (render && render->GetRayCastVisible() &&
+                if (node && render->GetRayCastVisible() &&
                     render->GetModelId() < cachedMeshShapes_.size() &&
                     cachedMeshShapes_[render->GetModelId()])
                 {
-                    auto phys = node->GetComponent<Runtime::PhysicsComponent>();
+                    auto* phys = node->GetComponent<Runtime::PhysicsComponent>();
                     Node::ENodeMobility mobility = phys ? phys->GetMobility() : Node::ENodeMobility::Static;
 
                     if (mobility != Node::ENodeMobility::Dynamic)
@@ -678,12 +393,7 @@ namespace Assets
                         NextObjectLayer layer =
                             mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
 
-                        bool validShape = false;
-                        if (cachedMeshShapes_[render->GetModelId()].GetPtr() &&
-                            cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0)
-                            validShape = true;
-
-                        if (validShape)
+                        if (cachedMeshShapes_[render->GetModelId()])
                         {
                             glm::vec3 worldScale = node->WorldScale();
                             if (glm::length(worldScale) > 0.01f && glm::abs(worldScale.x) > 0.001 &&
@@ -693,13 +403,21 @@ namespace Assets
                                     cachedMeshShapes_[render->GetModelId()], node->WorldTranslation(),
                                     node->WorldRotation(), node->WorldScale(), motionType, layer);
 
-                                if (!phys)
+                                if (mobility == Node::ENodeMobility::Static && !phys)
                                 {
-                                    phys = std::make_shared<Runtime::PhysicsComponent>();
-                                    phys->SetMobility(mobility);
-                                    node->AddComponent(phys);
+                                    staticPhysicsBodies_[node] = id;
                                 }
-                                phys->BindPhysicsBody(id);
+                                else if (!phys)
+                                {
+                                    auto newPhysics = std::make_shared<Runtime::PhysicsComponent>();
+                                    newPhysics->SetMobility(mobility);
+                                    phys = newPhysics.get();
+                                    node->AddComponent(std::move(newPhysics));
+                                }
+                                if (phys)
+                                {
+                                    phys->BindPhysicsBody(id);
+                                }
 
                                 physicsEngine->SetBodyActive(id, render->GetVisible());
                             }
@@ -708,19 +426,21 @@ namespace Assets
                 }
             }
 
-            // create 6 plane bodys, it makes negtive space, so keep the bottom plane only
+            // create 6 plane bodies, it makes negative space, so keep the bottom plane only
             // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(1,0,0), NextMotionType::Static);
             // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(-1,0,0), NextMotionType::Static);
             if (hasSceneBounds)
             {
                 physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0, 1, 0), NextMotionType::Static);
             }
+            lastRebuildProfile_.physicsBodyCreationMs =
+                std::chrono::duration<float, std::milli>(Clock::now() - bodyCreationStart).count();
             // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,-1,0), NextMotionType::Static);
             // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,0,1), NextMotionType::Static);
             // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,0,-1), NextMotionType::Static);
         }
 
-        // 重建universe mesh buffer, 这个可以比较静态
+        // Rebuild the universe mesh buffer; this data is relatively static.
         std::vector<GPUVertex> vertices;
         std::vector<uint32_t> indices;
         std::vector<glm::vec4> allWeights;
@@ -759,9 +479,9 @@ namespace Assets
             const std::vector<uint32_t>& localIndices = model.CPUIndices();
 
             std::vector<std::vector<uint32_t>> slicedIndices;
-            constexpr uint32_t maxIndicesPerSlice = 65535 * 3;
+            constexpr uint32_t maxIndicesPerSlice = kMaxTrianglesPerSection * 3;
 
-            // 将localIndices分片，每片最多65535*3个索引
+            // Split localIndices into chunks whose zero-based triangle ID fits R16_UINT.
             for (size_t i = 0; i < localIndices.size(); i += maxIndicesPerSlice)
             {
                 size_t endIndex = std::min(i + maxIndicesPerSlice, localIndices.size());
@@ -821,7 +541,7 @@ namespace Assets
 
             model.SetSectionCount(processSection);
 
-            // 在编辑器模式下保留CPU网格数据用于场景保存功能
+            // Retain CPU mesh data in editor mode for scene saving.
             if (!GOption->KeepCPUMeshData)
             {
                 model.FreeMemory();
@@ -831,6 +551,7 @@ namespace Assets
         int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         int rtxFlags = supportRayTracing ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0;
 
+        const auto gpuResourceBuildStart = Clock::now();
         // this buffer now, no support extended
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Vertices",
                                                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtxFlags | flags, vertices,
@@ -844,36 +565,64 @@ namespace Assets
                                                primAddressBuffer_, primAddressBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Offsets", flags, offsets_, offsetBuffer_,
                                                offsetBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Lights", flags, lights_, lightBuffer_, lightBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "Lights", flags,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            sizeof(LightObject) * kMaxLightCount, lightBuffer_, lightBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "LightGrid", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            GPU_SCENE_LIGHT_GRID_SIZE, lightGridBuffer_, lightGridBufferMemory_);
+        lightCount_ = std::min<uint32_t>(static_cast<uint32_t>(lights_.size()), kMaxLightCount);
+        if (lights_.size() > kMaxLightCount)
+        {
+            SPDLOG_WARN("Scene contains {} lights; only the first {} are uploaded", lights_.size(), kMaxLightCount);
+        }
+        UpdateLights();
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SkinWeights", flags, allWeights, skinWeightBuffer_,
                                                skinWeightBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SkinJoints", flags, allJoints, skinJointBuffer_,
                                                skinJointBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "SkinnedVertices", flags | rtxFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            std::max<size_t>(sizeof(GPUVertex), vertices.size() * sizeof(GPUVertex)),
+            skinnedVertexBuffer_, skinnedVertexBufferMemory_);
+        EnsureJointMatrixCapacity();
+        skinUpdateRequests_.clear();
+        for (auto* skinnedMesh : Components<Runtime::SkinnedMeshComponent>())
+        {
+            if (const Node* node = skinnedMesh->GetOwner())
+            {
+                if (const auto* render = node->GetComponent<Runtime::RenderComponent>();
+                    render && render->GetModelId() != -1)
+                {
+                    RequestSkinUpdate(render->GetModelId());
+                }
+            }
+        }
 
-        // 一些数据
-        lightCount_ = static_cast<uint32_t>(lights_.size());
+        // Auxiliary scene data.
         indicesCount_ = static_cast<uint32_t>(indices.size());
-        verticeCount_ = static_cast<uint32_t>(vertices.size());
+        vertexCount_ = static_cast<uint32_t>(vertices.size());
 
         // The GPU-driven primitive buffers contain expanded triangles per instance, not just
         // the unique model geometry stored in the index buffer. Sizing them from indicesCount_
         // silently dropped later instances when several nodes shared a model.
         sceneDirty_ = true;
-        UpdateNodesGpuDriven();
+        SyncUpdateScene();
         maxSceneTriangles_ = requiredGpuDrivenTriangleCapacity_;
 
         const VkBufferUsageFlags softMeshShaderFlags =
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderPrim", softMeshShaderFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            sizeof(uint32_t) * maxSceneTriangles_, softMeshShaderPrimBuffer_, softMeshShaderPrimBufferMemory_);
+            sizeof(VisibilityId) * maxSceneTriangles_, softMeshShaderPrimBuffer_, softMeshShaderPrimBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderShadowPrim", softMeshShaderFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            sizeof(uint32_t) * maxSceneTriangles_ * kSunShadowCascadeCount,
+            sizeof(VisibilityId) * maxSceneTriangles_ * kSunShadowCascadeCount,
             softMeshShaderShadowPrimBuffer_, softMeshShaderShadowPrimBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderVisibleItems", softMeshShaderFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            sizeof(Assets::SoftMeshShaderVisibleItem) * kMaxIndirectDrawCount * kSoftMeshShaderDrawSlotCount,
+            sizeof(Assets::SoftMeshShaderVisibleItem) * kRenderProxyCapacity * kSoftMeshShaderDrawSlotCount,
             softMeshShaderVisibleItemBuffer_, softMeshShaderVisibleItemBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SoftMeshShaderDrawArgs", softMeshShaderFlags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
@@ -896,13 +645,13 @@ namespace Assets
                 softMeshShaderDrawArgBuffer_->GetDeviceAddress(),
                 softMeshShaderDispatchArgBuffer_->GetDeviceAddress(),
                 softMeshShaderCounterBuffer_->GetDeviceAddress(),
+                lightBuffer_->GetDeviceAddress(),
+                lightGridBuffer_->GetDeviceAddress(),
             },
         };
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SoftMeshShaderResources", softMeshShaderFlags, softMeshShaderResources,
                                                softMeshShaderResourcesBuffer_, softMeshShaderResourcesBufferMemory_);
-
-        UpdateAllMaterials();
-        UpdateNodesGpuDriven();
+        
         MarkDirty();
 
         if (enableCpuAcceleration_ && ambientArenaBufferMemory_ &&
@@ -911,6 +660,17 @@ namespace Assets
         {
             cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), false);
         }
+
+        const auto rebuildEnd = Clock::now();
+        lastRebuildProfile_.gpuResourceBuildMs =
+            std::chrono::duration<float, std::milli>(rebuildEnd - gpuResourceBuildStart).count();
+        lastRebuildProfile_.totalMs =
+            std::chrono::duration<float, std::milli>(rebuildEnd - rebuildStart).count();
+        lastRebuildProfile_.cpuPreparationMs =
+            std::max(0.0f, lastRebuildProfile_.totalMs -
+                               lastRebuildProfile_.physicsShapeCookingMs -
+                               lastRebuildProfile_.physicsBodyCreationMs -
+                               lastRebuildProfile_.gpuResourceBuildMs);
     }
 
 }

@@ -28,9 +28,9 @@ namespace Brotato3D
 
     struct FPlayerRuntime
     {
-        glm::vec3 worldPos = glm::vec3(0.0f, 0.5f, 0.0f);
+        glm::vec3 worldPos = glm::vec3(0.0f, 0.6f, 0.0f);
         glm::vec3 facingDir = glm::vec3(0.0f, 0.0f, -1.0f);
-        float radius = 0.4f;
+        float radius = 0.6f;
         int currentHp = 50;
         int maxHp = 50;
         int currentXp = 0;

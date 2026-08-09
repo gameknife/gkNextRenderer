@@ -14,12 +14,12 @@ const (
 	specDir     = "specs"
 )
 
-func Root(repoRoot string) string         { return filepath.Join(repoRoot, dirName) }
-func TODOPath(repoRoot string) string     { return filepath.Join(Root(repoRoot), todoFile) }
-func ArchivePath(repoRoot string) string  { return filepath.Join(Root(repoRoot), archiveFile) }
-func JournalDir(repoRoot string) string   { return filepath.Join(Root(repoRoot), journalDir) }
-func BlockerDir(repoRoot string) string   { return filepath.Join(Root(repoRoot), blockerDir) }
-func SpecsDir(repoRoot string) string     { return filepath.Join(Root(repoRoot), specDir) }
+func Root(repoRoot string) string        { return filepath.Join(repoRoot, dirName) }
+func TODOPath(repoRoot string) string    { return filepath.Join(Root(repoRoot), todoFile) }
+func ArchivePath(repoRoot string) string { return filepath.Join(Root(repoRoot), archiveFile) }
+func JournalDir(repoRoot string) string  { return filepath.Join(Root(repoRoot), journalDir) }
+func BlockerDir(repoRoot string) string  { return filepath.Join(Root(repoRoot), blockerDir) }
+func SpecsDir(repoRoot string) string    { return filepath.Join(Root(repoRoot), specDir) }
 func JournalPath(repoRoot string, id int) string {
 	return filepath.Join(JournalDir(repoRoot), fmt.Sprintf("%05d.md", id))
 }

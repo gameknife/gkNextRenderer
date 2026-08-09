@@ -70,6 +70,7 @@ func TestParseDotGraph(t *testing.T) {
 	writeFile(t, path, `digraph "test" {
     "node0" [ label = "A\nAlias", shape = egg ];
     "node1" [ label = "B", shape = octagon ];
+    "node0" -> "node0" // graphviz utility dependency noise
     "node0" -> "node1" [ style = dotted ] // A -> B
 }`)
 	graph, err := parseDotGraph(path)

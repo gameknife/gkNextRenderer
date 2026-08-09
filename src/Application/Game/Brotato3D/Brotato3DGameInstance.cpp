@@ -7,11 +7,13 @@
 #include <spdlog/spdlog.h>
 
 #include "Brotato3DUI.hpp"
-#include "Engine/Runtime/Editor/FontLoader.h"
-#include "Engine/Runtime/Platform/UserPaths.h"
-#include "Engine/Runtime/Subsystems/NextLocalization.h"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
+#include "Engine/Runtime/Editor/FontLoader.hpp"
+#include "Engine/Options.hpp"
+#include "Engine/Runtime/Platform/UserPaths.hpp"
+#include "Engine/Runtime/Subsystems/NextLocalization.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
+#include "Modules/ScadLoader/ScadModule.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -24,8 +26,10 @@ namespace
     constexpr const char* ArenasConfigPath = "assets/configs/brotato3d/arenas.json";
     constexpr const char* I18nConfigPath = "assets/configs/brotato3d/i18n.json";
     constexpr float CameraFollowSharpness = 8.0f;
-    constexpr float CameraClampHalfViewX = 12.0f;
-    constexpr float CameraClampHalfViewZ = 8.0f;
+    constexpr float CameraClampHalfViewX = 32.0f;
+    constexpr float CameraClampHalfViewZ = 38.0f;
+    constexpr float WaveSpawnDistanceMin = 42.0f;
+    constexpr float WaveSpawnDistanceMax = 50.0f;
 
     void AppendJsonStrings(const nlohmann::json& value, std::string& text)
     {
@@ -91,6 +95,7 @@ namespace
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
+    Modules::Scad::Register();
     return std::make_unique<Brotato3DGameInstance>(config, options, engine);
 }
 
@@ -102,6 +107,12 @@ Brotato3DGameInstance::Brotato3DGameInstance(Vulkan::WindowConfig& config, Runti
 
 void Brotato3DGameInstance::OnInit()
 {
+    GOption->KeepCPUMeshData = true;
+    if (!playerRig_.LoadRig("assets/scad/characters/brotato_player.scad"))
+    {
+        spdlog::warn("[Brotato3D] ScadRig player unavailable; gameplay will continue without a player visual");
+    }
+
     if (!Brotato3D::LoadEnemies(EnemiesConfigPath, enemyDefs_) ||
         !Brotato3D::LoadWeapons(WeaponsConfigPath, weaponDefs_) ||
         !Brotato3D::LoadUpgrades(UpgradesConfigPath, upgradeCards_) ||
@@ -134,7 +145,8 @@ void Brotato3DGameInstance::OnInit()
     SetWorldPhysicsPaused(true);
     GetEngine().GetShowFlags().DebugGraphicsPanel = false;
     GetEngine().GetUserSettings().ShowOverlay = false;
-    GetEngine().RequestLoadScene({.filename = "Empty.proc"});
+    const Brotato3D::FArenaDef* initialArena = FindArenaDef(selectedArenaId_);
+    GetEngine().RequestLoadScene({.filename = initialArena ? initialArena->scenePath : arenaDefs_.front().scenePath});
 
     // Mount brotato3d.pak (SFX + UI icons). Missing is non-fatal: FPackageFileSystem
     // will fall back to the on-disk copies under assets/sounds/brotato3d and
@@ -231,6 +243,7 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
     damageFlashMs_ = std::max(0.0f, damageFlashMs_ - deltaMs);
     weaponMergeBannerMs_ = std::max(0.0f, weaponMergeBannerMs_ - deltaMs);
     UpdateSkyTransition(deltaSeconds);
+    UpdateSunLighting(deltaSeconds);
     UpdateWaveBanner(deltaSeconds);
     UpdateCameraTracking(deltaSeconds);
 
@@ -270,7 +283,23 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
             const double waveDt = bossVictoryDelayMs_ <= 0.0f ? deltaSeconds : 0.0;
             waveSystem_.Update(waveDt, [this](const std::string& enemyId, glm::vec3 pos)
             {
-                SpawnEnemy(enemyId, pos);
+                glm::vec2 spawnDirection(pos.x, pos.z);
+                if (glm::length(spawnDirection) < 0.001f)
+                {
+                    spawnDirection = glm::vec2(1.0f, 0.0f);
+                }
+                else
+                {
+                    spawnDirection = glm::normalize(spawnDirection);
+                }
+
+                const float spawnDistance = std::uniform_real_distribution<float>(
+                    WaveSpawnDistanceMin,
+                    WaveSpawnDistanceMax)(rng_);
+                glm::vec3 encounterPos = player_.worldPos +
+                    glm::vec3(spawnDirection.x, 0.0f, spawnDirection.y) * spawnDistance;
+                encounterPos.y = pos.y;
+                SpawnEnemy(enemyId, ClampToArena(encounterPos, 0.0f, arenaHalfExtent_));
             });
 
             if (waveSystem_.ConsumeDuskBegan())
@@ -321,7 +350,6 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
 void Brotato3DGameInstance::OnDestroy()
 {
     SetWorldPhysicsPaused(false);
-    ClearArenaPropBodies();
     ClearArenaWallBodies();
     enemies_.clear();
     projectilePool_.clear();

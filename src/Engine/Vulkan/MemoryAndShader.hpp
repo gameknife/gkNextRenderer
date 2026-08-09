@@ -8,120 +8,139 @@
 
 namespace Vulkan
 {
-	// ============================================================================
-	// DeviceMemory
-	// ============================================================================
+    // ============================================================================
+    // DeviceMemory
+    // ============================================================================
 
-	class DeviceMemory final
-	{
-	public:
+    class DeviceMemory final
+    {
+    public:
 
-		struct BufferAllocationOptions final
-		{
-			VkMemoryAllocateFlags AllocateFlags = 0;
-			bool Dedicated = false;
-			bool Passthrough = false;
-		};
+        struct BufferAllocationOptions final
+        {
+            VkMemoryAllocateFlags AllocateFlags = 0;
+            bool Dedicated = false;
+            bool Passthrough = false;
+        };
 
-		DeviceMemory(const DeviceMemory&) = delete;
-		DeviceMemory& operator = (const DeviceMemory&) = delete;
-		DeviceMemory& operator = (DeviceMemory&&) = delete;
+        DeviceMemory(const DeviceMemory&) = delete;
+        DeviceMemory& operator = (const DeviceMemory&) = delete;
+        DeviceMemory& operator = (DeviceMemory&&) = delete;
 
-		DeviceMemory(
-			const Device& device,
-			const Buffer& buffer,
-			VkMemoryPropertyFlags propertyFlags);
-		DeviceMemory(
-			const Device& device,
-			const Buffer& buffer,
-			VkMemoryPropertyFlags propertyFlags,
-			const BufferAllocationOptions& options);
-		DeviceMemory(const Device& device, const Image& image, VkMemoryPropertyFlags propertyFlags, bool external = false, bool dedicated = false);
-		DeviceMemory(DeviceMemory&& other) noexcept;
-		~DeviceMemory();
+        DeviceMemory(
+            const Device& device,
+            const Buffer& buffer,
+            VkMemoryPropertyFlags propertyFlags);
+        DeviceMemory(
+            const Device& device,
+            const Buffer& buffer,
+            VkMemoryPropertyFlags propertyFlags,
+            const BufferAllocationOptions& options);
+        DeviceMemory(const Device& device, const Image& image, VkMemoryPropertyFlags propertyFlags, bool external = false, bool dedicated = false);
+        DeviceMemory(DeviceMemory&& other) noexcept;
+        ~DeviceMemory();
 
-		const class Device& Device() const { return device_; }
+        const class Device& Device() const { return device_; }
 
-		void* Map(size_t offset, size_t size);
-		void Unmap();
-		void SetName(const char* name);
+        void* Map(size_t offset, size_t size);
+        void Unmap();
+        void SetName(const char* name);
 
-	private:
+    private:
 
-		uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
+        uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
 
-		const class Device& device_;
-		VmaAllocationHandle allocation_ = nullptr;
+        const class Device& device_;
+        VmaAllocationHandle allocation_ = nullptr;
 
-		VULKAN_HANDLE(VkDeviceMemory, memory_)
-	};
+        VULKAN_HANDLE(VkDeviceMemory, memory_)
+    };
 
-	// ============================================================================
-	// Sampler
-	// ============================================================================
+    // ============================================================================
+    // Sampler
+    // ============================================================================
 
-	struct SamplerConfig final
-	{
-		VkFilter MagFilter = VK_FILTER_LINEAR;
-		VkFilter MinFilter = VK_FILTER_LINEAR;
-		VkSamplerAddressMode AddressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		VkSamplerAddressMode AddressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		VkSamplerAddressMode AddressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		bool AnisotropyEnable = true;
-		float MaxAnisotropy = 16;
-		VkBorderColor BorderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-		bool UnnormalizedCoordinates = false;
-		bool CompareEnable = false;
-		VkCompareOp CompareOp = VK_COMPARE_OP_ALWAYS;
-		VkSamplerMipmapMode MipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-		float MipLodBias = 0.0f;
-		float MinLod = 0.0f;
-		float MaxLod = 0.0f;
-	};
+    struct SamplerConfig final
+    {
+        VkFilter MagFilter = VK_FILTER_LINEAR;
+        VkFilter MinFilter = VK_FILTER_LINEAR;
+        VkSamplerAddressMode AddressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        VkSamplerAddressMode AddressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        VkSamplerAddressMode AddressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        bool AnisotropyEnable = true;
+        float MaxAnisotropy = 16;
+        VkBorderColor BorderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+        bool UnnormalizedCoordinates = false;
+        bool CompareEnable = false;
+        VkCompareOp CompareOp = VK_COMPARE_OP_ALWAYS;
+        VkSamplerMipmapMode MipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        float MipLodBias = 0.0f;
+        float MinLod = 0.0f;
+        float MaxLod = 0.0f;
 
-	class Sampler final
-	{
-	public:
+        // Preset for 3D LUT / froxel volume sampling. The defaults above are tuned for 2D material
+        // textures and are wrong for volumes: REPEAT wraps the LUT domain and anisotropy skews the
+        // border taps, both of which show up as seams. Volumes want plain trilinear filtering that
+        // clamps on all three axes and never touches a mip.
+        static SamplerConfig VolumeLut()
+        {
+            SamplerConfig config;
+            config.MagFilter = VK_FILTER_LINEAR;
+            config.MinFilter = VK_FILTER_LINEAR;
+            config.AddressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            config.AddressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            config.AddressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            config.AnisotropyEnable = false;
+            config.MipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+            config.MinLod = 0.0f;
+            config.MaxLod = 0.0f;
+            return config;
+        }
+    };
 
-		VULKAN_NON_COPIABLE(Sampler)
+    class Sampler final
+    {
+    public:
 
-		Sampler(const Device& device, const SamplerConfig& config);
-		~Sampler();
+        VULKAN_NON_COPIABLE(Sampler)
 
-		const class Device& Device() const { return device_; }
+        Sampler(const Device& device, const SamplerConfig& config);
+        ~Sampler();
 
-	private:
+        const class Device& Device() const { return device_; }
 
-		const class Device& device_;
+    private:
 
-		VULKAN_HANDLE(VkSampler, sampler_)
-	};
+        const class Device& device_;
 
-	// ============================================================================
-	// ShaderModule
-	// ============================================================================
+        VULKAN_HANDLE(VkSampler, sampler_)
+    };
 
-	class ShaderModule final
-	{
-	public:
+    // ============================================================================
+    // ShaderModule
+    // ============================================================================
 
-		VULKAN_NON_COPIABLE(ShaderModule)
+    class ShaderModule final
+    {
+    public:
 
-		ShaderModule(const Device& device, const std::string& filename);
-		ShaderModule(const Device& device, const std::vector<uint8_t>& code);
-		~ShaderModule();
+        VULKAN_NON_COPIABLE(ShaderModule)
 
-		const class Device& Device() const { return device_; }
+        ShaderModule(const Device& device, const std::string& filename);
+        ShaderModule(const Device& device, const std::vector<uint8_t>& code);
+        ~ShaderModule();
 
-		VkPipelineShaderStageCreateInfo CreateShaderStage(VkShaderStageFlagBits stage) const;
+        const class Device& Device() const { return device_; }
 
-	private:
+        VkPipelineShaderStageCreateInfo CreateShaderStage(VkShaderStageFlagBits stage) const;
 
-		static std::vector<uint8_t> ReadFile(const std::string& filename);
+    private:
 
-		const class Device& device_;
+        static std::vector<uint8_t> ReadFile(const std::string& filename);
 
-		VULKAN_HANDLE(VkShaderModule, shaderModule_)
-	};
+        const class Device& device_;
+
+        VULKAN_HANDLE(VkShaderModule, shaderModule_)
+    };
 
 }

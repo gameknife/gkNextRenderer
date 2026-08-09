@@ -1,4 +1,4 @@
-// NextEngine per-frame camera UBO assembly: projection build, TAA Halton
+// NextEngine per-frame camera UBO assembly: projection build, temporal Halton
 // jitter, Android pre-rotation and sun shadow cascade caching.
 // Split from Engine.cpp; same class, separate TU.
 #include "Engine/Runtime/Engine.hpp"
@@ -13,14 +13,13 @@
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 
-#include <array>
 #include <cstdlib>
 
 namespace
 {
     constexpr uint32_t maxJitterFrameCount = 256;
 
-    // 生成Halton序列的单一维度
+    // Generate one dimension of a Halton sequence.
     float HaltonSequence(int index, int base)
     {
         float f = 1.0f;
@@ -77,27 +76,30 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         .fillSceneLighting = false,
     });
 
-    ubo.FastGather = config_.userSettings.FastGather;
-    ubo.SuperResolution = GOption->ReferenceMode ? 2 : config_.userSettings.SuperResolution;
+    ubo.ExitAfterFirst = config_.userSettings.ExitAfterFirst;
+    ubo.SuperResolution = GOption->ReferenceMode ? 2 : renderer_->EffectiveSuperResolutionMode();
+    ubo.UpscalerInvalidMotionMask = renderer_->RequiresInvalidMotionMask();
+    ubo.RayReconstruction = renderer_->IsRayReconstructionActive();
 
     glm::mat4x4 projectionUnJit = ubo.Projection;
     const bool noAmbientRenderer = renderer_->CurrentLogicRendererType() == Vulkan::ERT_SoftwareModernNoAmbient;
-    const bool enableTaa = config_.userSettings.TAA && !noAmbientRenderer;
+    const bool enablePrimaryRayJitter = renderer_->IsTemporalSuperResolutionActive();
 
-    if (enableTaa || config_.userSettings.DLSS)
+    if (enablePrimaryRayJitter)
     {
         const VkExtent2D renderExtent = renderer_->SwapChain().RenderExtent();
-        const uint32_t jitterFrames = config_.userSettings.DLSS
-            ? config_.userSettings.DLSSJitterFrames
-            : config_.userSettings.TemporalFrames;
+        const uint32_t providerJitterFrames = renderer_->TemporalJitterFrameCount();
+        const uint32_t jitterFrames = providerJitterFrames > 0
+            ? providerJitterFrames
+            : config_.userSettings.UpscalerJitterFrames;
         glm::vec2 jitter = GetTemporalJitter(frameState_.totalFrames, jitterFrames);
-        if (config_.userSettings.DLSSJitterInvertY)
+        if (config_.userSettings.UpscalerJitterInvertY)
         {
             jitter.y = -jitter.y;
         }
 
-        ubo.Projection[2][0] = jitter.x / static_cast<float>(renderExtent.width) * 2.0f;
-        ubo.Projection[2][1] = jitter.y / static_cast<float>(renderExtent.height) * 2.0f;
+        ubo.Projection[2][0] = -jitter.x / static_cast<float>(renderExtent.width) * 2.0f;
+        ubo.Projection[2][1] = -jitter.y / static_cast<float>(renderExtent.height) * 2.0f;
 
         ubo.Jitter = glm::vec4(jitter.x, jitter.y, 0, 0);
     }
@@ -146,7 +148,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         {
             if (!viewState.cachedSunCascadesValid)
             {
-                // 未初始化 cascade 对应的贴图已经被清成 depth=1，先给 UBO 一个有效矩阵。
+                // The uninitialized cascade image is already cleared to depth=1; provide the UBO a valid matrix.
                 viewState.cachedSunCascades = cascades;
             }
             if (forceRefresh)
@@ -190,14 +192,36 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.SkyRotation = scene_->GetEnvSettings().SkyRotation;
     ubo.MaxNumberOfBounces = config_.userSettings.MaxNumberOfBounces;
     ubo.TotalFrames = frameState_.totalFrames;
-    ubo.NumberOfSamples = config_.userSettings.NumberOfSamples;
+    // Progressive accumulation advances one independent sample per frame. Keep the
+    // configured realtime SPP untouched so it is restored when progressive mode ends.
+    const bool progressiveSampling = config_.userSettings.ProgressiveRender || progressiveRender_.enabled;
+    ubo.NumberOfSamples = progressiveSampling ? 1 : config_.userSettings.NumberOfSamples;
     ubo.NumberOfBounces = config_.userSettings.NumberOfBounces;
-    ubo.TAA = enableTaa;
+    ubo.PrimaryRayJitter = enablePrimaryRayJitter;
     ubo.SunDirection = sunDirection;
-    ubo.SunColor = glm::vec4(1, 1, 1, 0) * scene_->GetEnvSettings().SunIntensity;
+    glm::vec3 sunTransmittance(1.0f);
+    if (scene_->GetEnvSettings().AtmosphereEnabled)
+    {
+        const glm::vec3 cameraPosition = glm::vec3(ubo.ModelViewInverse[3]);
+        const auto& atmosphere = scene_->GetEnvSettings().Atmosphere;
+        const float cameraAltitudeKm =
+            atmosphere.WorldOriginAltitude + cameraPosition.y / std::max(atmosphere.WorldUnitsPerKm, 0.001f);
+        sunTransmittance = renderer_->AtmosphereTransmittanceToSun(
+            cameraAltitudeKm, glm::dot(glm::normalize(glm::vec3(sunDirection)), glm::vec3(0, 1, 0)));
+    }
+    ubo.SunColor = glm::vec4(scene_->GetEnvSettings().SunColor * sunTransmittance, 0.0f) *
+        scene_->GetEnvSettings().SunIntensity;
+    ubo.SkyColor = glm::vec4(scene_->GetEnvSettings().SkyColor, 1.0f);
     ubo.SkyIntensity = scene_->GetEnvSettings().SkyIntensity;
     ubo.SkyIdx = scene_->GetEnvSettings().SkyIdx;
+    if (scene_->GetEnvSettings().AtmosphereEnabled)
+    {
+        ubo.SkyIdx = Assets::MAX_HDR_SH - 1;
+        ubo.SkyIntensity = 1.0f;
+    }
     ubo.HasSky = scene_->GetEnvSettings().HasSky;
+    ubo.AtmosphereParams = renderer_->AtmosphereParamsAddress();
+    ubo.AtmosphereReserved0 = 0;
     if (auto* texturePool = Assets::GlobalTexturePool::GetInstance())
     {
         texturePool->TickHDRTextureResidency(
@@ -205,16 +229,10 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     }
     ubo.HasSun = hasSun;
 
-    if (ubo.HasSun != viewState.previousUniformBuffer.HasSun ||
-        ubo.SunDirection != viewState.previousUniformBuffer.SunDirection)
-    {
-        scene_->MarkEnvDirty();
-    }
-
     ubo.ShowHeatmap = config_.showFlags.ShowVisualDebug;
     ubo.HeatmapScale = config_.userSettings.HeatmapScale;
     ubo.DebugDraw_Lighting = config_.showFlags.DebugDraw_Lighting;
-    ubo.DebugDrawPadding0 = 0;
+    ubo.ForceBlackBackground = false;
     ubo.TemporalFrames = noAmbientRenderer
         ? 1u
         : (progressiveRender_.enabled ? FProgressiveRenderState::TargetFrames : config_.userSettings.TemporalFrames);
@@ -223,33 +241,25 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
 
     ubo.PaperWhiteNit = config_.userSettings.PaperWhiteNit;
     ubo.LightCount = scene_->GetLightCount();
-
-    // Denoiser routing: when the variance-guided a-trous path is active (denoiser on with a
-    // positive iteration count) the compose pass reads the a-trous output; otherwise it reads
-    // the temporal accumulation buffers directly (no spatial filtering).
-    const bool denoiserOn = IsEffectiveDenoiserEnabled();
-    const int diffuseAtrousIterations = denoiserOn ? std::clamp(config_.userSettings.DenoiseAtrousIterations, 0, 6) : 0;
-    const int specularAtrousIterations = denoiserOn ? std::clamp(config_.userSettings.DenoiseAtrousSpecularIterations, 0, 6) : 0;
-    ubo.DenoiseDiffuseSourceSlot = (diffuseAtrousIterations > 0)
-        ? static_cast<uint32_t>(Assets::Bindless::RT_ATROUS_OUT)
-        : static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_DIFFUSE);
-    ubo.DenoiseSpecularSourceSlot = (specularAtrousIterations > 0)
-        ? static_cast<uint32_t>(Assets::Bindless::RT_ATROUS_SPEC_OUT)
-        : static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_SPECULAR);
+    
     ubo.GTAORadius = std::max(config_.userSettings.GTAORadius, 0.01f);
     ubo.GTAOStrength = std::max(config_.userSettings.GTAOStrength, 0.0f);
     ubo.GTAOThickness = std::max(config_.userSettings.GTAOThickness, 0.01f);
     ubo.GTAODebugMode = static_cast<uint32_t>(std::clamp(config_.userSettings.GTAODebugMode, 0, 2));
     ubo.GTAOEnable = config_.userSettings.GTAOEnable;
     ubo.GTAOQuality = static_cast<uint32_t>(std::clamp(config_.userSettings.GTAOQuality, 0, 3));
-    ubo.GTAOPadding3 = 0;
-    ubo.GTAOPadding4 = 0;
-    ubo.GTAOPadding5 = 0;
-    ubo.GTAOPadding6 = 0;
-    ubo.GTAOPadding7 = 0;
-    ubo.GTAOPadding8 = 0;
-    ubo.GTAOPadding9 = 0;
-    ubo.GTAOPadding10 = 0;
+    ubo.LightObjectScreenSpaceShadow = config_.userSettings.LightObjectScreenSpaceShadow;
+    ubo.LightObjectShadowDistance = std::max(config_.userSettings.LightObjectShadowDistance, 0.0f);
+
+    // The light grid anchors to the camera, but the anchor is uploaded rather than re-derived in
+    // each shader: the build pass and every query must agree on cell boundaries to the bit, and a
+    // shader that recomputed the camera position from its own view matrix would not.
+    ubo.LightGridCascadeCount = Assets::ResolveLightGridCascadeCount(
+        config_.userSettings.LightGridCascadeCount, scene_->GetLightCount(),
+        renderer_->ActiveRendererRequirements().requestLightGrid);
+    ubo.LightGridCullThreshold = std::max(config_.userSettings.LightGridCullThreshold, 0.0f);
+    ubo.LightGridAnchor = glm::vec4(glm::vec3(ubo.ModelViewInverse[3]),
+                                    std::max(config_.userSettings.LightGridBaseCellSize, 0.01f));
 
     ubo.ProgressiveRender = progressiveRender_.enabled;
     ubo.SceneEpsilonScale = config_.userSettings.SceneEpsilonScale;
@@ -274,7 +284,6 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
                   static_cast<float>(std::clamp(config_.userSettings.AmbientCubeResidencyDebug, 0, 2)));
 
     // Other Setup
-    renderer_->SetDenoiserEnabled(denoiserOn);
     renderer_->SetVisualDebugEnabled(config_.showFlags.ShowVisualDebug);
     // UBO Backup, for motion vector calc
     viewState.previousUniformBuffer = ubo;

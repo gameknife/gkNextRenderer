@@ -1,12 +1,14 @@
-#include <catch2/catch_test_macros.hpp>
+﻿#include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 
 #include "Modules/SplatLoader/FSplatQuant.hpp"
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/GaussianSplatComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Modules/SplatLoader/GaussianSplatComponent.h"
 #include "Modules/SplatLoader/SplatModule.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
 #include "TestCommon.hpp"
 
+#include <filesystem>
 #include <glm/gtc/quaternion.hpp>
 #include <thread>
 
@@ -41,12 +43,13 @@ TEST_CASE("Gaussian splat component properties", "[Unit][SOG][GaussianSplatCompo
 {
     auto node = Assets::Node::CreateNode("Splat", glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
                                          glm::vec3(1.0f), 7);
-    auto component = std::make_shared<Runtime::GaussianSplatComponent>(3);
+    auto data = std::make_shared<Assets::FGaussianSplatData>();
+    auto component = std::make_shared<Runtime::GaussianSplatComponent>(data);
     node->AddComponent(component);
 
     const auto retrieved = node->GetComponent<Runtime::GaussianSplatComponent>();
     REQUIRE(retrieved != nullptr);
-    CHECK(retrieved->GetSplatModelId() == 3);
+    CHECK(retrieved->GetData() == data);
     CHECK(retrieved->GetVisible());
     CHECK(retrieved->GetRayCastVisible());
     CHECK(retrieved->GetOpacityScale() == Catch::Approx(1.0f));
@@ -56,16 +59,23 @@ TEST_CASE("Gaussian splat component properties", "[Unit][SOG][GaussianSplatCompo
     CHECK_FALSE(retrieved->ToggleVisible());
 }
 
-TEST_CASE_METHOD(EngineTestFixture, "SOG scene loads and renders on Vulkan", "[.Integration][SOG]")
+TEST_CASE_METHOD(EngineTestFixture, "SOG scene loads and renders on Vulkan", "[GPU][.Integration][SOG]")
 {
-    Modules::Splat::Register();
+    const std::filesystem::path samplePath =
+        std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets/sog/Grape.sog"));
+    if (!std::filesystem::exists(samplePath))
+    {
+        WARN("assets/sog/Grape.sog not present (optional sample); skipping integration load");
+        return;
+    }
+
     engine_->RequestLoadScene({.filename = "assets/sog/Grape.sog"});
 
     bool loaded = false;
     for (int attempt = 0; attempt < 300 && !loaded; ++attempt)
     {
         Simulate(1);
-        loaded = engine_->GetScene().HasGaussianSplats();
+        loaded = engine_->GetScene().FindNodeIdWithComponent("GaussianSplatComponent") >= 0;
         if (!loaded)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -73,8 +83,12 @@ TEST_CASE_METHOD(EngineTestFixture, "SOG scene loads and renders on Vulkan", "[.
     }
 
     REQUIRE(loaded);
-    REQUIRE(engine_->GetScene().GaussianSplats().size() == 1);
-    CHECK(engine_->GetScene().GaussianSplats()[0].splats.size() == 309008);
+    const int32_t nodeId = engine_->GetScene().FindNodeIdWithComponent("GaussianSplatComponent");
+    const auto* node = engine_->GetScene().GetNodeByInstanceId(static_cast<uint32_t>(nodeId));
+    REQUIRE(node != nullptr);
+    const auto* splat = node->GetComponent<Runtime::GaussianSplatComponent>();
+    REQUIRE(splat != nullptr);
+    CHECK(splat->GetData()->splats.size() == 309008);
 
     Simulate(5);
 }

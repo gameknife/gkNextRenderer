@@ -10,7 +10,29 @@
     "maxX": 10.0,
     "minY": -5.6,
     "maxY": 5.6,
-    "gameplayZ": 0.0
+    "gameplayZ": 0.0,
+    "backdropZ": -30.0
+  },
+  "environment": {
+    "skyIndex": 0,
+    "skyIntensity": 300.0,
+    "sunIntensity": 300.0,
+    "sunRotation": 0.0,
+    "sunElevation": 0.45
+  },
+  "parallax": {
+    "mountainZ": -18.0,
+    "mountainSpeed": 0.35,
+    "mountainSpacing": 12.0,
+    "mountainCount": 7,
+    "vegetationZ": -7.0,
+    "vegetationSpeed": 1.0,
+    "vegetationSpacing": 3.4,
+    "vegetationCount": 12,
+    "cloudZ": -26.0,
+    "cloudSpeed": 0.18,
+    "cloudSpacing": 14.0,
+    "cloudCount": 6
   },
   "bird": {
     "initialPosition": [-3.0, 0.0, 0.0],

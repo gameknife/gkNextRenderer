@@ -2,7 +2,8 @@
 
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
@@ -28,7 +29,7 @@ namespace ScadStudio
 {
     namespace
     {
-        constexpr float kTitleBarHeight = 44.0f;
+        constexpr float kTitleBarHeight = 48.0f;
         constexpr float kBottomBarHeight = 30.0f;
         constexpr float kCollapsedRailWidth = 46.0f;
         constexpr size_t kMaxSessionTitleBytes = 28;
@@ -524,7 +525,7 @@ namespace ScadStudio
             else
             {
                 const std::string example =
-                    Utilities::FileHelper::GetPlatformFilePath("assets/scad/beer_cup.scad");
+                    Utilities::FileHelper::GetPlatformFilePath("assets/scad/source/beer_cup.scad");
                 if (std::filesystem::exists(example, ec))
                 {
                     engine_.RequestLoadScene({.filename = example});
@@ -561,11 +562,14 @@ namespace ScadStudio
         const float viewportY = panelY;
         const float viewportW = std::max(1.0f, viewport->Size.x - leftWidth - rightWidth);
         const float viewportH = panelHeight;
+        const NextUI::Scaling::FViewportRect framebufferViewport =
+            NextUI::Scaling::ImGuiToMainFramebufferViewport(
+                ImVec2(viewportX, viewportY), ImVec2(viewportW, viewportH));
         engine_.GetRenderer().SwapChain().UpdateOutputViewport(
-            Utilities::Math::floorToInt(viewportX - viewport->Pos.x),
-            Utilities::Math::floorToInt(viewportY - viewport->Pos.y),
-            Utilities::Math::ceilToInt(viewportW),
-            Utilities::Math::ceilToInt(viewportH));
+            Utilities::Math::floorToInt(framebufferViewport.Position.x),
+            Utilities::Math::floorToInt(framebufferViewport.Position.y),
+            Utilities::Math::ceilToInt(framebufferViewport.Size.x),
+            Utilities::Math::ceilToInt(framebufferViewport.Size.y));
     }
 
     void ScadStudioInterface::DrawTitleBar()
@@ -1163,7 +1167,7 @@ namespace ScadStudio
         }
         else
         {
-            ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Not configured (assets/configs/ai_config.json)");
+            ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "gnb bridge/provider not configured");
         }
         const bool controlsDisabled = ai_.IsGenerating();
         if (controlsDisabled)
@@ -1175,18 +1179,18 @@ namespace ScadStudio
         ImGui::SetNextItemWidth(115.0f);
         if (ImGui::BeginCombo("##provider", ai_.ProviderName().c_str()))
         {
-            const NextAI::EAIProviderType currentType = ai_.ProviderType();
-            for (const auto& [type, name] : ai_.Providers())
+            const std::string currentId = ai_.ProviderId();
+            for (const auto& provider : ai_.Providers())
             {
-                const bool configured = ai_.IsProviderConfigured(type);
-                const bool selected = (type == currentType);
+                const bool configured = provider.configured && provider.available;
+                const bool selected = provider.id == currentId;
                 if (!configured)
                 {
                     ImGui::BeginDisabled();
                 }
-                if (ImGui::Selectable(name.c_str(), selected))
+                if (ImGui::Selectable(provider.displayName.c_str(), selected))
                 {
-                    ai_.SwitchProvider(type);
+                    ai_.SwitchProvider(provider.id);
                 }
                 if (!configured)
                 {

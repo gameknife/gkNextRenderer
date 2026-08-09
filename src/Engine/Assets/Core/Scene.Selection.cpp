@@ -1,3 +1,5 @@
+#include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 
 #include <algorithm>
@@ -31,13 +33,13 @@ namespace Assets
         }
     } // namespace
 
-    void Scene::SetSelectedId(uint32_t id) const
+    void Scene::SetSelectedId(uint32_t id)
     {
         selectionState_.SetSingle(ResolveEditableNodeId(id));
-        const_cast<Scene*>(this)->MarkSelectionDirty();
+        MarkSelectionDirty();
     }
 
-    void Scene::SetSelection(const std::vector<uint32_t>& ids) const
+    void Scene::SetSelection(const std::vector<uint32_t>& ids)
     {
         std::vector<uint32_t> validIds;
         validIds.reserve(ids.size());
@@ -57,16 +59,16 @@ namespace Assets
         }
 
         selectionState_.SetMany(validIds);
-        const_cast<Scene*>(this)->MarkSelectionDirty();
+        MarkSelectionDirty();
     }
 
-    void Scene::ClearSelection() const
+    void Scene::ClearSelection()
     {
         selectionState_.Clear();
-        const_cast<Scene*>(this)->MarkSelectionDirty();
+        MarkSelectionDirty();
     }
 
-    void Scene::AddToSelection(uint32_t id) const
+    void Scene::AddToSelection(uint32_t id)
     {
         const uint32_t resolvedId = ResolveEditableNodeId(id);
         if (!IsValidSelectionId(*this, resolvedId))
@@ -75,16 +77,16 @@ namespace Assets
         }
 
         selectionState_.Add(resolvedId);
-        const_cast<Scene*>(this)->MarkSelectionDirty();
+        MarkSelectionDirty();
     }
 
-    void Scene::RemoveFromSelection(uint32_t id) const
+    void Scene::RemoveFromSelection(uint32_t id)
     {
         selectionState_.Remove(ResolveEditableNodeId(id));
-        const_cast<Scene*>(this)->MarkSelectionDirty();
+        MarkSelectionDirty();
     }
 
-    void Scene::ToggleSelection(uint32_t id) const
+    void Scene::ToggleSelection(uint32_t id)
     {
         const uint32_t resolvedId = ResolveEditableNodeId(id);
         if (!IsValidSelectionId(*this, resolvedId))
@@ -121,7 +123,7 @@ namespace Assets
         return id;
     }
 
-    void Scene::SetHoveredId(uint32_t id) const
+    void Scene::SetHoveredId(uint32_t id)
     {
         const uint32_t resolvedId = ResolveEditableNodeId(id);
         if (!IsValidSelectionId(*this, resolvedId))
@@ -129,23 +131,23 @@ namespace Assets
             if (hoveredId_ != SceneSelectionState::invalidNodeId)
             {
                 hoveredId_ = SceneSelectionState::invalidNodeId;
-                const_cast<Scene*>(this)->MarkSelectionDirty();
+                MarkSelectionDirty();
             }
             return;
         }
         if (hoveredId_ != resolvedId)
         {
             hoveredId_ = resolvedId;
-            const_cast<Scene*>(this)->MarkSelectionDirty();
+            MarkSelectionDirty();
         }
     }
 
-    void Scene::ClearHoveredId() const
+    void Scene::ClearHoveredId()
     {
         if (hoveredId_ != SceneSelectionState::invalidNodeId)
         {
             hoveredId_ = SceneSelectionState::invalidNodeId;
-            const_cast<Scene*>(this)->MarkSelectionDirty();
+            MarkSelectionDirty();
         }
     }
 
@@ -154,7 +156,7 @@ namespace Assets
         return lockedIds_.find(ResolveEditableNodeId(id)) != lockedIds_.end();
     }
 
-    void Scene::SetLocked(uint32_t id, bool locked) const
+    void Scene::SetLocked(uint32_t id, bool locked)
     {
         const uint32_t resolvedId = ResolveEditableNodeId(id);
         if (!IsValidSelectionId(*this, resolvedId))
@@ -171,7 +173,7 @@ namespace Assets
         lockedIds_.erase(resolvedId);
     }
 
-    void Scene::ToggleLocked(uint32_t id) const
+    void Scene::ToggleLocked(uint32_t id)
     {
         const uint32_t resolvedId = ResolveEditableNodeId(id);
         if (!IsValidSelectionId(*this, resolvedId))

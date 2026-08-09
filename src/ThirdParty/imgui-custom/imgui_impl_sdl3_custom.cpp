@@ -60,10 +60,16 @@
 //  2023-02-23: Accept SDL_GetPerformanceCounter() not returning a monotonically increasing value. (#6189, #6114, #3644)
 //  2023-02-07: Forked "imgui_impl_sdl2" into "imgui_impl_sdl3". Removed version checks for old feature. Refer to imgui_impl_sdl2.cpp for older changelog.
 
-extern float GAndroidMagicScale; // global trick scale on same executable
 
 #include "imgui.h"
 #ifndef IMGUI_DISABLE
+
+static float g_FramebufferScaleBias = 1.0f;
+
+void ImGui_ImplSDL3_SetFramebufferScaleBias(float scale)
+{
+    g_FramebufferScaleBias = scale > 0.0f ? scale : 1.0f;
+}
 #include "imgui_impl_sdl3_custom.h"
 
 // Clang warnings with -Weverything
@@ -500,7 +506,7 @@ static bool ImGui_ImplSDL3_Init(SDL_Window* window, SDL_Renderer* renderer, void
     bool mouse_can_use_global_state = false;
 #if SDL_HAS_CAPTURE_AND_GLOBAL_MOUSE
     const char* sdl_backend = SDL_GetCurrentVideoDriver();
-    const char* global_mouse_whitelist[] = { "windows", "cocoa", "x11", "DIVE", "VMAN" };
+    const char* global_mouse_whitelist[] = { "windows", "cocoa", "x11", "DIVE", "VMAN", "wayland" };
     for (int n = 0; n < IM_ARRAYSIZE(global_mouse_whitelist); n++)
         if (strncmp(sdl_backend, global_mouse_whitelist[n], strlen(global_mouse_whitelist[n])) == 0)
             mouse_can_use_global_state = true;
@@ -894,7 +900,7 @@ void ImGui_ImplSDL3_NewFrame()
     SDL_GetWindowSizeInPixels(bd->Window, &display_w, &display_h);
     io.DisplaySize = ImVec2((float)w, (float)h);
     if (w > 0 && h > 0)
-        io.DisplayFramebufferScale = ImVec2((float)display_w / w * GAndroidMagicScale, (float)display_h / h * GAndroidMagicScale);
+        io.DisplayFramebufferScale = ImVec2((float)display_w / w * g_FramebufferScaleBias, (float)display_h / h * g_FramebufferScaleBias);
 
     // Update monitors
     ImGui_ImplSDL3_UpdateMonitors();

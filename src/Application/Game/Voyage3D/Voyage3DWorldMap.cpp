@@ -1,7 +1,7 @@
 #include "Voyage3DWorldMap.hpp"
 
-#include "Engine/Assets/Loaders/FProcModel.h"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
 
 namespace Voyage3D::WorldMap
 {

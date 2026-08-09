@@ -1,6 +1,6 @@
 #include "FlappyConfig.hpp"
 
-#include "Engine/Runtime/Utilities/JsonHelpers.h"
+#include "Engine/Runtime/Utilities/JsonHelpers.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -64,6 +64,51 @@ namespace Flappy
             config.world.minY = NextJson::GetOptional<float>(world, "minY", config.world.minY);
             config.world.maxY = NextJson::GetOptional<float>(world, "maxY", config.world.maxY);
             config.world.gameplayZ = NextJson::GetOptional<float>(world, "gameplayZ", config.world.gameplayZ);
+            config.world.backdropZ = NextJson::GetOptional<float>(world, "backdropZ", config.world.backdropZ);
+        }
+
+        if (document.contains("environment") && document.at("environment").is_object())
+        {
+            const nlohmann::json& environment = document.at("environment");
+            config.environment.skyIndex =
+                NextJson::GetOptional<int>(environment, "skyIndex", config.environment.skyIndex);
+            config.environment.skyIntensity =
+                NextJson::GetOptional<float>(environment, "skyIntensity", config.environment.skyIntensity);
+            config.environment.sunIntensity =
+                NextJson::GetOptional<float>(environment, "sunIntensity", config.environment.sunIntensity);
+            config.environment.sunRotation =
+                NextJson::GetOptional<float>(environment, "sunRotation", config.environment.sunRotation);
+            config.environment.sunElevation =
+                NextJson::GetOptional<float>(environment, "sunElevation", config.environment.sunElevation);
+        }
+
+        if (document.contains("parallax") && document.at("parallax").is_object())
+        {
+            const nlohmann::json& parallax = document.at("parallax");
+            config.parallax.mountainZ =
+                NextJson::GetOptional<float>(parallax, "mountainZ", config.parallax.mountainZ);
+            config.parallax.mountainSpeed =
+                NextJson::GetOptional<float>(parallax, "mountainSpeed", config.parallax.mountainSpeed);
+            config.parallax.mountainSpacing =
+                NextJson::GetOptional<float>(parallax, "mountainSpacing", config.parallax.mountainSpacing);
+            config.parallax.mountainCount =
+                NextJson::GetOptional<int>(parallax, "mountainCount", config.parallax.mountainCount);
+            config.parallax.vegetationZ =
+                NextJson::GetOptional<float>(parallax, "vegetationZ", config.parallax.vegetationZ);
+            config.parallax.vegetationSpeed =
+                NextJson::GetOptional<float>(parallax, "vegetationSpeed", config.parallax.vegetationSpeed);
+            config.parallax.vegetationSpacing =
+                NextJson::GetOptional<float>(parallax, "vegetationSpacing", config.parallax.vegetationSpacing);
+            config.parallax.vegetationCount =
+                NextJson::GetOptional<int>(parallax, "vegetationCount", config.parallax.vegetationCount);
+            config.parallax.cloudZ =
+                NextJson::GetOptional<float>(parallax, "cloudZ", config.parallax.cloudZ);
+            config.parallax.cloudSpeed =
+                NextJson::GetOptional<float>(parallax, "cloudSpeed", config.parallax.cloudSpeed);
+            config.parallax.cloudSpacing =
+                NextJson::GetOptional<float>(parallax, "cloudSpacing", config.parallax.cloudSpacing);
+            config.parallax.cloudCount =
+                NextJson::GetOptional<int>(parallax, "cloudCount", config.parallax.cloudCount);
         }
 
         if (document.contains("bird") && document.at("bird").is_object())

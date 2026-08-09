@@ -8,86 +8,70 @@ namespace Runtime::Config
 
 struct UserSettings final
 {
-	int32_t RendererType;
-	
-	// Scene
-	int SceneIndex {};
-    float LDrawLduToWorldScale = 0.001f;
+    int32_t RendererType;
+    
+    // Scene
+    int SceneIndex {};
+    float LDrawLduToWorldScale = 0.02f;
     float ScadToWorldScale = 1.0f;
 
-	// Renderer
-	int32_t NumberOfSamples;
-	uint32_t NumberOfBounces;
-	uint32_t MaxNumberOfBounces;
-	bool TAA {};
-	bool FastGather = false;
-	uint32_t PresentMode = 3;
-	uint32_t SuperResolution = 1;
-	bool DLSS = false;
-    bool FSR = false;
-	bool DLSSRR = false;
-	bool DLSSG = false;
-	uint32_t DLSSGFrameMultiplier = 2;
-	uint32_t DLSSGFrameLimitFps = 0;
-    uint32_t DLSSJitterFrames = 16;
-    bool DLSSJitterInvertY = false;
-	int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low
+    // Renderer
+    int32_t NumberOfSamples = 2;
+    uint32_t NumberOfBounces;
+    uint32_t MaxNumberOfBounces;
+    bool ProgressiveRender = false;
+    bool ExitAfterFirst = false;
+    uint32_t PresentMode = 3;
+    uint32_t SuperResolution = 5;
+    int32_t UpscalerType = 4;
+    float NativeTAAUHistoryWeight = 0.97f;
+    float NativeTAAUSharpness = 0.25f;
+    bool TemporalUpscalerPostFilter = true;
+    uint32_t TemporalUpscalerPostFilterPasses = 3;
+    float TemporalUpscalerPostFilterStrength = 0.65f;
+    float TemporalUpscalerPostFilterLumaSigma = 0.10f;
+    float TemporalUpscalerFireflySigma = 2.5f;
+    bool ComposeFireflyClamp = true;
+    bool FrameGeneration = false;
+    uint32_t FrameGenerationMultiplier = 2;
+    uint32_t FrameGenerationFrameLimitFps = 0;
+    uint32_t UpscalerJitterFrames = 16;
+    bool UpscalerJitterInvertY = false;
+    int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low
 
-	// Camera
-	int CameraIdx;
+    // Camera
+    int CameraIdx;
 
-	// Profiler
-	float HeatmapScale;
+    // Profiler
+    float HeatmapScale;
 
-	// UI
-	bool ShowSettings;
-	bool ShowOverlay;
+    // UI
+    bool ShowOverlay;
     bool BorderlessFullscreen = false;
 
-	// Performance
-	uint32_t TemporalFrames;
-    uint32_t SplatBucketCount = 4096;
-    uint32_t SplatMaxCount = 0;
-    bool SplatSortCache = true;
-    float SplatSigma = 3.0f;
-    bool SplatForceAA = true;
-    float SplatAAStrength = 0.5f;
-    bool SplatProxyEnable = true;
-    uint32_t SplatProxyGridMax = 64;
-    uint32_t SplatProxyBrickSize = 8;
-    float SplatProxySigma = 2.5f;
-    float SplatProxyIsoThreshold = 0.35f;
-    float SplatProxySimplifyRatio = 0.0f;
-    bool SplatShadowEnable = true;
-    bool SplatRayOcclusionEnable = true;
-    bool SplatProxyDebugVisible = false;
-    bool SplatReceiveLighting = true;
-    float SplatLightingStrength = 0.35f;
-    int SplatProxyDebug = 0;
-
-	// Denoise (variance-guided a-trous wavelet; see PipelineCommon::AtrousDenoiser)
-	bool Denoiser;
-	int DenoiseAtrousIterations;    // diffuse wavelet iterations: quality/perf knob (higher = smoother, slower)
-	int DenoiseAtrousSpecularIterations; // specular wavelet iterations (usually lower than diffuse)
-	float DenoiseAtrousSigmaLuma;   // variance-guided luminance edge-stop (lower = sharper, noisier)
-	float DenoiseAtrousNormalPower; // a-trous normal edge-stop exponent
-	float DenoiseSigmaDepth;        // planar depth tolerance (multiples of local depth slope)
-	float DenoiseSpecFootprint;     // specular filter radius (pixels) per unit roughness
+    // Performance
+    uint32_t TemporalFrames;
 
     // SwModernNoAmbient screen-space sky occlusion.
     bool GTAOEnable = true;
     int GTAOQuality = 1;
     float GTAORadius = 1.0f;
-    float GTAOStrength = 1.5f; // master sky-occlusion strength
+    float GTAOStrength = 5.0f; // master sky-occlusion strength
     float GTAOThickness = 0.5f;
     int GTAODebugMode = 0;
+    bool LightObjectScreenSpaceShadow = false;
+    float LightObjectShadowDistance = 6.0f;
 
-	// ReProject history clamp (Phase A black-dot fix; see Process.ReProject.comp.slang).
-	float ReprojectClampGammaHi = 2.5f;    // tight (low-confidence) upper YCoCg luma box half-width in sigmas
-	float ReprojectClampGammaLo = 5.0f;    // tight lower box half-width (kept looser than upper to avoid black dots)
-	float ReprojectClampFloor = 0.5f;      // relative luma floor (history luma >= floor * filtered mean)
+    // Cascaded world-space light grid. 0 cascades disables it: every light query falls back to the
+    // global CDF, which restores the pre-grid behaviour exactly.
+    int LightGridCascadeCount = 3;
+    float LightGridBaseCellSize = 2.0f;
+    float LightGridCullThreshold = 1.0e-4f;
 
-	float PaperWhiteNit;
+    float AtmosphereSkyViewLutScale = 1.0f;
+    int AtmosphereDebugMode = 0;
+
+    float PaperWhiteNit;
 
     bool TickPhysics = true;
     bool TickAnimation = true;
@@ -118,6 +102,15 @@ struct UserSettings final
     uint32_t SharcAccumulatedFrameMax = 64;
     uint32_t SharcResponsiveFrameMax = 8;
     uint32_t SharcStaleFrameMax = 180;
+    // PathTracing/SoftwareTracing ReSTIR DI (docs/designs/pathtracing-restir-design.md)
+    bool RestirEnable = false;
+    uint32_t RestirCandidates = 8;
+    bool RestirTemporal = true;
+    uint32_t RestirMClamp = 160;
+    bool RestirSpatial = true;
+    uint32_t RestirSpatialSamples = 5;
+    float RestirSpatialRadius = 16.0f;
+    int RestirDebugMode = 0;
 };
 
 }

@@ -442,6 +442,23 @@ void MultiViewportBackend::Initialize(UserInterface& userInterface)
         {
             Throw(std::runtime_error("imgui platform backend does not provide Platform_CreateVkSurface"));
         }
+
+#if WIN32
+        // UserInterface computes uiScale_ immediately after the renderer backend is
+        // initialized. Install this callback unconditionally and read the scale when
+        // ImGui queries the viewport, rather than during this initialization phase.
+        platformCreateWindow_ = platformIo.Platform_CreateWindow;
+        platformSetWindowPos_ = platformIo.Platform_SetWindowPos;
+        platformGetWindowPos_ = platformIo.Platform_GetWindowPos;
+        platformSetWindowSize_ = platformIo.Platform_SetWindowSize;
+        platformGetWindowSize_ = platformIo.Platform_GetWindowSize;
+        platformIo.Platform_CreateWindow = &MultiViewportBackend::CreateDpiScaledPlatformWindowCallback;
+        platformIo.Platform_SetWindowPos = &MultiViewportBackend::SetDpiScaledPlatformWindowPosCallback;
+        platformIo.Platform_GetWindowPos = &MultiViewportBackend::GetDpiScaledPlatformWindowPosCallback;
+        platformIo.Platform_SetWindowSize = &MultiViewportBackend::SetDpiScaledPlatformWindowSizeCallback;
+        platformIo.Platform_GetWindowSize = &MultiViewportBackend::GetDpiScaledPlatformWindowSizeCallback;
+        platformDpiCallbacksOverridden_ = true;
+#endif
     }
 
     platformIo.Renderer_CreateWindow = &MultiViewportBackend::CreatePlatformViewportWindowCallback;
@@ -483,6 +500,20 @@ void MultiViewportBackend::Shutdown()
     platformIo.Renderer_RenderWindow = nullptr;
     platformIo.Renderer_SwapBuffers = nullptr;
     platformIo.Renderer_RenderState = nullptr;
+    if (platformDpiCallbacksOverridden_)
+    {
+        platformIo.Platform_CreateWindow = platformCreateWindow_;
+        platformIo.Platform_SetWindowPos = platformSetWindowPos_;
+        platformIo.Platform_GetWindowPos = platformGetWindowPos_;
+        platformIo.Platform_SetWindowSize = platformSetWindowSize_;
+        platformIo.Platform_GetWindowSize = platformGetWindowSize_;
+        platformCreateWindow_ = nullptr;
+        platformSetWindowPos_ = nullptr;
+        platformGetWindowPos_ = nullptr;
+        platformSetWindowSize_ = nullptr;
+        platformGetWindowSize_ = nullptr;
+        platformDpiCallbacksOverridden_ = false;
+    }
 
     io.BackendRendererUserData = userInterface_;
     io.BackendFlags &= ~ImGuiBackendFlags_RendererHasViewports;
@@ -538,6 +569,84 @@ MultiViewportBackend* MultiViewportBackend::GetRendererBackendOwner()
     }
 
     return static_cast<MultiViewportBackend*>(ImGui::GetIO().BackendRendererUserData);
+}
+
+void MultiViewportBackend::CreateDpiScaledPlatformWindowCallback(ImGuiViewport* viewport)
+{
+    MultiViewportBackend* owner = GetRendererBackendOwner();
+    if (owner == nullptr || owner->platformCreateWindow_ == nullptr || owner->userInterface_ == nullptr)
+    {
+        return;
+    }
+
+    owner->platformCreateWindow_(viewport);
+    const float scale = owner->userInterface_->UiScale();
+    if (owner->platformSetWindowPos_ != nullptr)
+    {
+        owner->platformSetWindowPos_(viewport, ImVec2(viewport->Pos.x * scale, viewport->Pos.y * scale));
+    }
+    if (owner->platformSetWindowSize_ != nullptr)
+    {
+        owner->platformSetWindowSize_(viewport, ImVec2(viewport->Size.x * scale, viewport->Size.y * scale));
+    }
+}
+
+void MultiViewportBackend::SetDpiScaledPlatformWindowPosCallback(ImGuiViewport* viewport, ImVec2 pos)
+{
+    MultiViewportBackend* owner = GetRendererBackendOwner();
+    if (owner == nullptr || owner->platformSetWindowPos_ == nullptr || owner->userInterface_ == nullptr)
+    {
+        return;
+    }
+
+    const float scale = owner->userInterface_->UiScale();
+    owner->platformSetWindowPos_(viewport, ImVec2(pos.x * scale, pos.y * scale));
+    if (viewport->PlatformHandle != nullptr)
+    {
+        const SDL_WindowID windowId = static_cast<SDL_WindowID>(reinterpret_cast<intptr_t>(viewport->PlatformHandle));
+        if (SDL_Window* window = SDL_GetWindowFromID(windowId))
+        {
+            SDL_SyncWindow(window);
+        }
+    }
+}
+
+ImVec2 MultiViewportBackend::GetDpiScaledPlatformWindowPosCallback(ImGuiViewport* viewport)
+{
+    MultiViewportBackend* owner = GetRendererBackendOwner();
+    if (owner == nullptr || owner->platformGetWindowPos_ == nullptr || owner->userInterface_ == nullptr)
+    {
+        return viewport != nullptr ? viewport->Pos : ImVec2(0.0f, 0.0f);
+    }
+
+    const float scale = owner->userInterface_->UiScale();
+    const ImVec2 physicalPos = owner->platformGetWindowPos_(viewport);
+    return ImVec2(physicalPos.x / scale, physicalPos.y / scale);
+}
+
+void MultiViewportBackend::SetDpiScaledPlatformWindowSizeCallback(ImGuiViewport* viewport, ImVec2 size)
+{
+    MultiViewportBackend* owner = GetRendererBackendOwner();
+    if (owner == nullptr || owner->platformSetWindowSize_ == nullptr || owner->userInterface_ == nullptr)
+    {
+        return;
+    }
+
+    const float scale = owner->userInterface_->UiScale();
+    owner->platformSetWindowSize_(viewport, ImVec2(size.x * scale, size.y * scale));
+}
+
+ImVec2 MultiViewportBackend::GetDpiScaledPlatformWindowSizeCallback(ImGuiViewport* viewport)
+{
+    MultiViewportBackend* owner = GetRendererBackendOwner();
+    if (owner == nullptr || owner->platformGetWindowSize_ == nullptr || owner->userInterface_ == nullptr)
+    {
+        return viewport != nullptr ? viewport->Size : ImVec2(0.0f, 0.0f);
+    }
+
+    const float scale = owner->userInterface_->UiScale();
+    const ImVec2 physicalSize = owner->platformGetWindowSize_(viewport);
+    return ImVec2(physicalSize.x / scale, physicalSize.y / scale);
 }
 
 void MultiViewportBackend::CreatePlatformViewportWindowCallback(ImGuiViewport* viewport)
@@ -631,9 +740,10 @@ void MultiViewportBackend::CreatePlatformViewportWindow(ImGuiViewport* viewport)
     window.clearEnable = (viewport->Flags & ImGuiViewportFlags_NoRendererClear) == 0;
     window.useDynamicRendering = false;
 
+    const VkExtent2D framebufferExtent = GetPlatformFramebufferExtent(viewport, viewport->Size);
     CreateOrResizePlatformWindow(device.PhysicalDevice(), device.Handle(), window, device.GraphicsFamilyIndex(),
-                                 static_cast<int>(viewport->Size.x),
-                                 static_cast<int>(viewport->Size.y), renderer.SwapChain().MinImageCount());
+                                  static_cast<int>(framebufferExtent.width),
+                                  static_cast<int>(framebufferExtent.height), renderer.SwapChain().MinImageCount());
     viewportData->windowOwned = true;
 }
 
@@ -669,11 +779,34 @@ void MultiViewportBackend::ResizePlatformViewportWindow(ImGuiViewport* viewport,
     const auto& device = renderer.Device();
 
     window.clearEnable = (viewport->Flags & ImGuiViewportFlags_NoRendererClear) == 0;
+    const VkExtent2D framebufferExtent = GetPlatformFramebufferExtent(viewport, size);
     CreateOrResizePlatformWindow(device.PhysicalDevice(), device.Handle(), window, device.GraphicsFamilyIndex(),
-                                 static_cast<int>(size.x), static_cast<int>(size.y),
-                                 renderer.SwapChain().MinImageCount());
+                                  static_cast<int>(framebufferExtent.width), static_cast<int>(framebufferExtent.height),
+                                  renderer.SwapChain().MinImageCount());
     viewportData->swapChainNeedRebuild = false;
     viewportData->swapChainSuboptimal = false;
+}
+
+VkExtent2D MultiViewportBackend::GetPlatformFramebufferExtent(ImGuiViewport* viewport, ImVec2 logicalSize) const
+{
+    if (viewport != nullptr && viewport->PlatformHandle != nullptr)
+    {
+        const SDL_WindowID windowId = static_cast<SDL_WindowID>(reinterpret_cast<intptr_t>(viewport->PlatformHandle));
+        if (SDL_Window* window = SDL_GetWindowFromID(windowId))
+        {
+            int width = 0;
+            int height = 0;
+            if (SDL_GetWindowSizeInPixels(window, &width, &height) && width > 0 && height > 0)
+            {
+                return VkExtent2D{static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+            }
+        }
+    }
+
+    const float scale = userInterface_ != nullptr ? userInterface_->UiScale() : 1.0f;
+    return VkExtent2D{
+        static_cast<uint32_t>(std::max(1.0f, std::round(logicalSize.x * scale))),
+        static_cast<uint32_t>(std::max(1.0f, std::round(logicalSize.y * scale)))};
 }
 
 void MultiViewportBackend::RenderPlatformViewportWindow(ImGuiViewport* viewport)

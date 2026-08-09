@@ -1,6 +1,11 @@
 package dashboard
 
 import (
+	"html/template"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -79,4 +84,102 @@ func TestContributionLevel(t *testing.T) {
 			t.Fatalf("contributionLevel(%d, %d) = %d, want %d", test.count, test.max, got, test.want)
 		}
 	}
+}
+
+func TestBuildLocVMProvidesFolderDepthOptionsOnly(t *testing.T) {
+	s := setupLocRepo(t)
+
+	vm := s.buildLocVM(false, "file")
+
+	if vm.SelectedDepth != "3" {
+		t.Fatalf("SelectedDepth = %q, want fallback depth 3", vm.SelectedDepth)
+	}
+	if len(vm.DepthOptions) != 4 {
+		t.Fatalf("len(DepthOptions) = %d, want 4", len(vm.DepthOptions))
+	}
+	if containsLocRow(vm.TableRows, "Engine/Runtime/Scripting/ScriptContext.cpp") {
+		t.Fatalf("folder rows unexpectedly contain a file: %+v", vm.TableRows)
+	}
+	if !containsLocRow(vm.TableRows, "Engine/Runtime/Scripting") {
+		t.Fatalf("folder rows missing Scripting: %+v", vm.TableRows)
+	}
+}
+
+func TestBuildLocVMNumericDepthStillExcludesFiles(t *testing.T) {
+	s := setupLocRepo(t)
+
+	vm := s.buildLocVM(false, "4")
+
+	if containsLocRow(vm.TableRows, "Engine/Runtime/Scripting/ScriptContext.cpp") ||
+		containsLocRow(vm.TableRows, "Engine/Runtime/Reflection/Meta.cpp") {
+		t.Fatalf("depth=4 should not include files: %+v", vm.TableRows)
+	}
+}
+
+func TestHandleTabLocRendersFolderDepthSelector(t *testing.T) {
+	s := setupLocRepo(t)
+	req := httptest.NewRequest("GET", "/tab/loc?depth=file&thirdparty=1", nil)
+	req.SetPathValue("kind", "loc")
+	rec := httptest.NewRecorder()
+
+	s.handleTab(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d (%s), want 200", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`name="depth"`,
+		`<option value="3" selected>展开 3 层</option>`,
+		`name="thirdparty" value="1" checked`,
+		`<th>目录</th>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("loc response missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "ScriptContext.cpp") || strings.Contains(body, `value="file"`) {
+		t.Fatalf("loc response should render folders only:\n%s", body)
+	}
+}
+
+func setupLocRepo(t *testing.T) *Server {
+	t.Helper()
+	dir := t.TempDir()
+	for path, body := range map[string]string{
+		"src/Engine/Runtime/Scripting/ScriptContext.cpp": "int a = 1;\nint b = 2;\n",
+		"src/Engine/Runtime/Reflection/Meta.cpp":         "int c = 3;\n",
+		"src/Application/Game/Flappy/main.cpp":           "int game = 1;\n",
+		"src/ThirdParty/lib/foo.cpp":                     "int third = 1;\n",
+		".spec/TODO.md":                                  "# TODO\n\n## Milestone: 测试  <!-- status: active -->\n\n### 下一步\n\n(暂无)\n\n### 待规划\n\n(暂无)\n\n### 最近完成\n\n(暂无)\n",
+	} {
+		full := filepath.Join(dir, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tpl, err := template.New("dashboard").
+		Funcs(templateFuncs()).
+		ParseFS(templateFS, "templates/*.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &Server{
+		opts:  Options{RepoRoot: dir},
+		tpl:   tpl,
+		jobs:  NewJobManager(),
+		chats: NewChatStore(),
+	}
+}
+
+func containsLocRow(rows []locTableRowVM, path string) bool {
+	for _, row := range rows {
+		if row.Path == path {
+			return true
+		}
+	}
+	return false
 }

@@ -29,6 +29,7 @@ ScadStudioGameInstance::ScadStudioGameInstance(Vulkan::WindowConfig& config, Run
     ui_ = std::make_unique<ScadStudio::ScadStudioInterface>(*engine);
 
     const glm::ivec2 monitorSize = GetEngine().GetMonitorSize();
+    config.HideTitleBar = true;
     config.Title = "SCAD Studio";
     config.Width = static_cast<uint32_t>(monitorSize.x * 0.75f);
     config.Height = static_cast<uint32_t>(monitorSize.y * 0.75f);
@@ -45,7 +46,6 @@ void ScadStudioGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     std::string error;
     cvars.SetDefaultFromString("r.samples", "4", &error);
     cvars.SetDefaultFromString("r.temporalFrames", "16", &error);
-    cvars.SetDefaultFromString("r.denoiser", "0", &error);
 }
 
 void ScadStudioGameInstance::OnInit() {}

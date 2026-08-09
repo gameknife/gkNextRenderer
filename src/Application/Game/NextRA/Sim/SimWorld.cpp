@@ -6,6 +6,8 @@ namespace NextRA::Sim
 {
     namespace
     {
+        constexpr FActorId invalidActor = static_cast<FActorId>(-1);
+
         entt::entity ToEntity(FActorId actor)
         {
             return static_cast<entt::entity>(actor);
@@ -20,6 +22,7 @@ namespace NextRA::Sim
     FActorId FSimWorld::SpawnMobile(uint8_t playerId, uint16_t typeId, const WPos& pos, const WPos& goal,
                                     FFixed speedPerTick, bool pingPong, bool notifySpawn)
     {
+        const NextRA::FUnitDef& def = NextRA::UnitDef(typeId);
         const entt::entity entity = registry_.create();
         const FActorId actor = ToActorId(entity);
         actors_.push_back(actor);
@@ -27,13 +30,19 @@ namespace NextRA::Sim
         registry_.emplace<FSimTransform>(entity, FSimTransform{pos, pos, WAngle{}, WAngle{}});
         registry_.emplace<FOwner>(entity, FOwner{playerId});
         registry_.emplace<FUnitType>(entity, FUnitType{typeId});
-        const int32_t maxHp = NextRA::UnitMaxHp(typeId);
-        registry_.emplace<FHealth>(entity, FHealth{maxHp, maxHp});
-        registry_.emplace<FAttack>(
-            entity,
-            FAttack{NextRA::UnitAttackRange(typeId), CellDistance(5), NextRA::UnitDamage(typeId), 12, 0});
+        registry_.emplace<FHealth>(entity, FHealth{def.maxHp, def.maxHp});
+        if (def.damage > 0 && def.attackRange.raw > 0)
+        {
+            registry_.emplace<FAttack>(
+                entity,
+                FAttack{def.attackRange, def.acquireRange, def.damage, def.cooldownTicks, 0});
+        }
+        if (def.hasTurret)
+        {
+            registry_.emplace<FTurret>(entity, FTurret{WAngle{}, WAngle{}, def.turretTurnSpeed, invalidActor});
+        }
         auto& mobile = registry_.emplace<FMobile>(entity);
-        mobile.speedPerTick = speedPerTick;
+        mobile.speedPerTick = speedPerTick.raw > 0 ? speedPerTick : def.speedPerTick;
         mobile.pointA = pos;
         mobile.pointB = goal;
         mobile.goal = goal;
@@ -50,6 +59,7 @@ namespace NextRA::Sim
     FActorId FSimWorld::SpawnBuilding(uint8_t playerId, uint16_t typeId, const WPos& pos, int32_t hp,
                                       bool isBase, bool hasProduction, const WPos& rallyPoint)
     {
+        const NextRA::FUnitDef& def = NextRA::UnitDef(typeId);
         const entt::entity entity = registry_.create();
         const FActorId actor = ToActorId(entity);
         actors_.push_back(actor);
@@ -57,13 +67,27 @@ namespace NextRA::Sim
         registry_.emplace<FSimTransform>(entity, FSimTransform{pos, pos, WAngle{}, WAngle{}});
         registry_.emplace<FOwner>(entity, FOwner{playerId});
         registry_.emplace<FUnitType>(entity, FUnitType{typeId});
-        registry_.emplace<FHealth>(entity, FHealth{hp, hp});
+        const int32_t maxHp = hp > 0 ? hp : def.maxHp;
+        registry_.emplace<FHealth>(entity, FHealth{maxHp, maxHp});
         registry_.emplace<FBuildingTag>(entity);
-        if (isBase)
+        auto& footprint = registry_.emplace<FFootprint>(entity);
+        footprint.cells = FootprintCellsAt(pos, def.footprint);
+        BlockFootprint(footprint, true);
+        if (def.damage > 0 && def.attackRange.raw > 0)
+        {
+            registry_.emplace<FAttack>(
+                entity,
+                FAttack{def.attackRange, def.acquireRange, def.damage, def.cooldownTicks, 0});
+        }
+        if (def.hasTurret)
+        {
+            registry_.emplace<FTurret>(entity, FTurret{WAngle{}, WAngle{}, def.turretTurnSpeed, invalidActor});
+        }
+        if (isBase || def.base)
         {
             registry_.emplace<FBaseTag>(entity);
         }
-        if (hasProduction)
+        if (hasProduction || def.production)
         {
             registry_.emplace<FProduction>(entity, FProduction{0, 0, rallyPoint});
         }
@@ -75,10 +99,14 @@ namespace NextRA::Sim
         currentTick_ = tick;
         ProductionSystem();
         TargetingSystem();
+        TurretSystem();
         CombatSystem();
         DeathSystem();
+        RebuildOccupancy();
         MovementSystem();
+        SeparationSystem();
         TargetingSystem();
+        TurretSystem();
         CombatSystem();
         DeathSystem();
     }
@@ -124,6 +152,12 @@ namespace NextRA::Sim
         return registry_.valid(entity) ? registry_.try_get<FAttack>(entity) : nullptr;
     }
 
+    const FTurret* FSimWorld::TryGetTurret(FActorId actor) const
+    {
+        const entt::entity entity = ToEntity(actor);
+        return registry_.valid(entity) ? registry_.try_get<FTurret>(entity) : nullptr;
+    }
+
     const FUnitType* FSimWorld::TryGetUnitType(FActorId actor) const
     {
         const entt::entity entity = ToEntity(actor);
@@ -148,7 +182,7 @@ namespace NextRA::Sim
         return registry_.valid(entity) && registry_.all_of<FBaseTag>(entity);
     }
 
-    void FSimWorld::SetRenderLink(FActorId actor, uint32_t renderNodeId)
+    void FSimWorld::SetRenderLink(FActorId actor, uint32_t renderNodeId, uint32_t turretNodeId)
     {
         const entt::entity entity = ToEntity(actor);
         if (!registry_.valid(entity))
@@ -156,7 +190,7 @@ namespace NextRA::Sim
             return;
         }
 
-        registry_.emplace_or_replace<FRenderLink>(entity, FRenderLink{renderNodeId});
+        registry_.emplace_or_replace<FRenderLink>(entity, FRenderLink{renderNodeId, turretNodeId});
     }
 
     const FRenderLink* FSimWorld::TryGetRenderLink(FActorId actor) const
@@ -180,16 +214,48 @@ namespace NextRA::Sim
             return false;
         }
 
-        std::vector<CPos> path = grid.FindPath(transform->pos.ToCell(), target.ToCell());
+        const CPos startCell = transform->pos.ToCell();
+        const CPos targetCell = target.ToCell();
+        WPos pathGoal = target;
+        std::vector<CPos> path = grid.FindPath(startCell, targetCell);
+        if (path.empty() && !grid.IsPassable(targetCell))
+        {
+            for (int32_t radius = 1; radius <= 4 && path.empty(); ++radius)
+            {
+                for (int32_t dz = -radius; dz <= radius && path.empty(); ++dz)
+                {
+                    for (int32_t dx = -radius; dx <= radius; ++dx)
+                    {
+                        if (dx != -radius && dx != radius && dz != -radius && dz != radius)
+                        {
+                            continue;
+                        }
+
+                        const CPos candidate{targetCell.x + dx, targetCell.z + dz};
+                        if (!grid.IsPassable(candidate))
+                        {
+                            continue;
+                        }
+
+                        path = grid.FindPath(startCell, candidate);
+                        if (!path.empty())
+                        {
+                            pathGoal = WPos::FromCells(candidate.x, candidate.z);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
         if (path.empty())
         {
             return false;
         }
 
-        SetMovePath(*mobile, target, std::move(path));
+        SetMovePath(*mobile, pathGoal, std::move(path));
         if (auto* attack = registry_.try_get<FAttack>(entity))
         {
-            attack->targetActor = static_cast<FActorId>(-1);
+            attack->targetActor = invalidActor;
             attack->attackMove = false;
         }
         return true;
@@ -231,7 +297,9 @@ namespace NextRA::Sim
 
     bool FSimWorld::IssueProduce(FActorId actor, uint16_t produceTypeId)
     {
-        if (produceTypeId != NextRA::infantryTypeId && produceTypeId != NextRA::tankTypeId)
+        const NextRA::FUnitDef& produceDef = NextRA::UnitDef(produceTypeId);
+        if (!NextRA::IsKnownUnitType(produceTypeId) || !produceDef.mobile || produceDef.building ||
+            produceDef.productionBuildTicks <= 0)
         {
             return false;
         }
@@ -265,6 +333,65 @@ namespace NextRA::Sim
         std::vector<FActorId> ids = std::move(spawnedActorIds_);
         spawnedActorIds_.clear();
         return ids;
+    }
+
+    void FSimWorld::RebuildOccupancy()
+    {
+        occupancy_.Clear();
+        for (FActorId actor : actors_)
+        {
+            const entt::entity entity = ToEntity(actor);
+            if (!registry_.valid(entity))
+            {
+                continue;
+            }
+
+            const auto* transform = registry_.try_get<FSimTransform>(entity);
+            const auto* unitType = registry_.try_get<FUnitType>(entity);
+            const auto* health = registry_.try_get<FHealth>(entity);
+            if (!transform || !unitType || (health && health->hp <= 0))
+            {
+                continue;
+            }
+
+            for (CPos cell : FootprintCellsAt(transform->pos, NextRA::UnitDef(unitType->typeId).footprint))
+            {
+                occupancy_.Add(actor, cell);
+            }
+        }
+    }
+
+    std::vector<CPos> FSimWorld::FootprintCellsAt(const WPos& pos, CPos footprint) const
+    {
+        const int32_t width = footprint.x <= 0 ? 1 : footprint.x;
+        const int32_t height = footprint.z <= 0 ? 1 : footprint.z;
+        const CPos center = pos.ToCell();
+        const int32_t startX = center.x - width / 2;
+        const int32_t startZ = center.z - height / 2;
+
+        std::vector<CPos> cells;
+        cells.reserve(static_cast<size_t>(width * height));
+        for (int32_t dz = 0; dz < height; ++dz)
+        {
+            for (int32_t dx = 0; dx < width; ++dx)
+            {
+                cells.push_back(CPos{startX + dx, startZ + dz});
+            }
+        }
+        return cells;
+    }
+
+    void FSimWorld::BlockFootprint(const FFootprint& footprint, bool blocked)
+    {
+        if (!pathGrid_)
+        {
+            return;
+        }
+
+        for (CPos cell : footprint.cells)
+        {
+            pathGrid_->SetBlocked(cell, blocked);
+        }
     }
 
     void FSimWorld::SetMovePath(FMobile& mobile, const WPos& target, std::vector<CPos> path)
@@ -323,7 +450,7 @@ namespace NextRA::Sim
                         producedType,
                         production->rallyPoint,
                         production->rallyPoint,
-                        NextRA::UnitSpeedPerTick(producedType),
+                        NextRA::UnitDef(producedType).speedPerTick,
                         false,
                         true);
         }
@@ -347,20 +474,20 @@ namespace NextRA::Sim
                 continue;
             }
 
-            if (attack->targetActor != static_cast<FActorId>(-1) &&
+            if (attack->targetActor != invalidActor &&
                 IsAliveEnemyTarget(actor, attack->targetActor))
             {
                 continue;
             }
 
-            attack->targetActor = static_cast<FActorId>(-1);
+            attack->targetActor = invalidActor;
             const bool canAcquire = attack->attackMove || (mobile && mobile->hasGoal) || !mobile;
             if (!canAcquire)
             {
                 continue;
             }
 
-            FActorId bestTarget = static_cast<FActorId>(-1);
+            FActorId bestTarget = invalidActor;
             FFixed bestDistance = FFixed::FromInt(999999);
             for (FActorId target : actors_)
             {
@@ -377,7 +504,7 @@ namespace NextRA::Sim
 
                 const FFixed distance = Length2D(targetTransform->pos - transform->pos);
                 if (distance <= attack->acquireRange &&
-                    (bestTarget == static_cast<FActorId>(-1) || distance < bestDistance ||
+                    (bestTarget == invalidActor || distance < bestDistance ||
                      (distance == bestDistance && target < bestTarget)))
                 {
                     bestDistance = distance;
@@ -386,6 +513,44 @@ namespace NextRA::Sim
             }
 
             attack->targetActor = bestTarget;
+        }
+    }
+
+    void FSimWorld::TurretSystem()
+    {
+        for (FActorId actor : actors_)
+        {
+            const entt::entity entity = ToEntity(actor);
+            if (!registry_.valid(entity))
+            {
+                continue;
+            }
+
+            auto* turret = registry_.try_get<FTurret>(entity);
+            const auto* transform = registry_.try_get<FSimTransform>(entity);
+            if (!turret || !transform)
+            {
+                continue;
+            }
+
+            turret->prevFacing = turret->facing;
+            turret->targetActor = invalidActor;
+
+            const auto* attack = registry_.try_get<FAttack>(entity);
+            if (!attack || attack->targetActor == invalidActor || !IsAliveEnemyTarget(actor, attack->targetActor))
+            {
+                continue;
+            }
+
+            const FSimTransform* targetTransform = TryGetTransform(attack->targetActor);
+            if (!targetTransform)
+            {
+                continue;
+            }
+
+            const WVec toTarget = targetTransform->pos - transform->pos;
+            turret->targetActor = attack->targetActor;
+            turret->facing = TurnToward(turret->facing, Atan2FromVec2(toTarget.x, toTarget.z), turret->turnSpeed);
         }
     }
 
@@ -411,7 +576,7 @@ namespace NextRA::Sim
                 --attack->cooldownLeft;
             }
 
-            if (attack->targetActor == static_cast<FActorId>(-1) ||
+            if (attack->targetActor == invalidActor ||
                 !IsAliveEnemyTarget(actor, attack->targetActor))
             {
                 continue;
@@ -429,7 +594,13 @@ namespace NextRA::Sim
                 continue;
             }
 
-            targetHealth->hp -= attack->damage;
+            const FUnitType* attackerType = registry_.try_get<FUnitType>(entity);
+            const FUnitType* targetType = TryGetUnitType(attack->targetActor);
+            const NextRA::EWeaponType weapon =
+                attackerType ? NextRA::UnitDef(attackerType->typeId).weapon : NextRA::EWeaponType::Bullet;
+            const NextRA::EArmorType armor =
+                targetType ? NextRA::UnitDef(targetType->typeId).armor : NextRA::EArmorType::Flesh;
+            targetHealth->hp -= NextRA::ApplyDamageMultiplier(attack->damage, weapon, armor);
             attack->cooldownLeft = attack->cooldownTicks;
         }
     }
@@ -462,6 +633,10 @@ namespace NextRA::Sim
                     winnerPlayerId_ = owner->playerId == 0 ? 1 : 0;
                 }
             }
+            if (const auto* footprint = registry_.try_get<FFootprint>(entity))
+            {
+                BlockFootprint(*footprint, false);
+            }
             registry_.destroy(entity);
         }
     }
@@ -492,7 +667,7 @@ namespace NextRA::Sim
             }
 
             if (const auto* attack = registry_.try_get<FAttack>(entity);
-                attack && attack->targetActor != static_cast<FActorId>(-1))
+                attack && attack->targetActor != invalidActor)
             {
                 const FSimTransform* targetTransform = TryGetTransform(attack->targetActor);
                 if (targetTransform && Length2D(targetTransform->pos - transform->pos) <= attack->range)
@@ -507,7 +682,23 @@ namespace NextRA::Sim
                 stepGoal = WPos::FromCells(mobile->path[mobile->pathCursor].x, mobile->path[mobile->pathCursor].z);
             }
 
+            const CPos currentCell = transform->pos.ToCell();
+            const CPos stepCell = stepGoal.ToCell();
+            if (stepCell != currentCell && occupancy_.IsOccupiedByOther(stepCell, actor))
+            {
+                continue;
+            }
+
+            const WPos previousPos = transform->pos;
             transform->pos = MoveTowards2D(transform->pos, stepGoal, mobile->speedPerTick);
+            const WVec moved = transform->pos - previousPos;
+            if (!SamePos2D(transform->pos, previousPos))
+            {
+                const FUnitType* unitType = registry_.try_get<FUnitType>(entity);
+                const WAngle turnSpeed =
+                    unitType ? NextRA::UnitDef(unitType->typeId).bodyTurnSpeed : WAngle::FromRaw(64);
+                transform->facing = TurnToward(transform->facing, Atan2FromVec2(moved.x, moved.z), turnSpeed);
+            }
             if (!SamePos2D(transform->pos, stepGoal))
             {
                 continue;
@@ -533,6 +724,90 @@ namespace NextRA::Sim
                     mobile->hasGoal = false;
                     mobile->path.clear();
                     mobile->pathCursor = 0;
+                }
+            }
+        }
+    }
+
+    void FSimWorld::SeparationSystem()
+    {
+        RebuildOccupancy();
+        constexpr FFixed minSpacing = FFixed::FromInt(cellSubUnits * 3 / 4);
+        constexpr FFixed pushDistance = FFixed::FromInt(cellSubUnits / 8);
+        const FFixed minSpacingSq = minSpacing * minSpacing;
+
+        for (FActorId actor : actors_)
+        {
+            const entt::entity entity = ToEntity(actor);
+            if (!registry_.valid(entity))
+            {
+                continue;
+            }
+
+            auto* transform = registry_.try_get<FSimTransform>(entity);
+            const auto* mobile = registry_.try_get<FMobile>(entity);
+            const auto* health = registry_.try_get<FHealth>(entity);
+            if (!transform || !mobile || (health && health->hp <= 0))
+            {
+                continue;
+            }
+
+            const CPos cell = transform->pos.ToCell();
+            bool pushed = false;
+            for (int32_t dz = -1; dz <= 1 && !pushed; ++dz)
+            {
+                for (int32_t dx = -1; dx <= 1 && !pushed; ++dx)
+                {
+                    const CPos neighbor{cell.x + dx, cell.z + dz};
+                    for (FActorId other : occupancy_.ActorsAt(neighbor))
+                    {
+                        if (other >= actor)
+                        {
+                            continue;
+                        }
+
+                        const FSimTransform* otherTransform = TryGetTransform(other);
+                        const FMobile* otherMobile = TryGetMobile(other);
+                        if (!otherTransform || !otherMobile)
+                        {
+                            continue;
+                        }
+
+                        if (LengthSquared2D(transform->pos - otherTransform->pos) >= minSpacingSq)
+                        {
+                            continue;
+                        }
+
+                        const CPos otherCell = otherTransform->pos.ToCell();
+                        const int32_t diffX = cell.x - otherCell.x;
+                        const int32_t diffZ = cell.z - otherCell.z;
+                        int32_t pushX = 0;
+                        int32_t pushZ = 0;
+                        if (diffX == 0 && diffZ == 0)
+                        {
+                            pushX = 1;
+                        }
+                        else if ((diffX < 0 ? -diffX : diffX) >= (diffZ < 0 ? -diffZ : diffZ))
+                        {
+                            pushX = diffX < 0 ? -1 : 1;
+                        }
+                        else
+                        {
+                            pushZ = diffZ < 0 ? -1 : 1;
+                        }
+
+                        WPos nextPos = transform->pos;
+                        nextPos.x += pushDistance * FFixed::FromInt(pushX);
+                        nextPos.z += pushDistance * FFixed::FromInt(pushZ);
+                        if (pathGrid_ && !pathGrid_->IsPassable(nextPos.ToCell()))
+                        {
+                            continue;
+                        }
+
+                        transform->pos = nextPos;
+                        pushed = true;
+                        break;
+                    }
                 }
             }
         }

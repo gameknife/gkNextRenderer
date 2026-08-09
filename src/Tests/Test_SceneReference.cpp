@@ -1,14 +1,14 @@
 #include <catch2/catch_all.hpp>
 
-#include "Engine/Assets/Core/GaussianSplat.hpp"
 #include "Engine/Assets/Core/Model.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"
-#include "Engine/Runtime/Components/EnvironmentComponent.h"
-#include "Engine/Runtime/Components/SceneReferenceComponent.h"
+#include "Engine/Runtime/Components/EnvironmentComponent.hpp"
+#include "Engine/Runtime/Components/SceneReferenceComponent.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Modules/GltfLoader/GltfModule.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <fmt/format.h>
@@ -75,15 +75,15 @@ namespace
 
     bool LoadSceneForTest(const std::string& path, std::vector<std::shared_ptr<Assets::Node>>& nodes)
     {
+        Modules::Gltf::Register();
         Assets::EnvironmentSetting camera;
         std::vector<Assets::Model> models;
         std::vector<Assets::FMaterial> materials;
         std::vector<Assets::LightObject> lights;
         std::vector<Assets::AnimationTrack> tracks;
         std::vector<Assets::Skeleton> skeletons;
-        std::vector<Assets::FGaussianSplatData> splats;
         return Runtime::Scene::SceneList::LoadScene(path, camera, nodes, models, materials, lights,
-                                                    tracks, skeletons, &splats);
+                                                    tracks, skeletons);
     }
 
     Runtime::EnvironmentComponent* FindEnvironmentComponent(
@@ -93,7 +93,7 @@ namespace
         {
             if (node)
             {
-                if (auto* environment = node->GetComponentPtr<Runtime::EnvironmentComponent>())
+                if (auto* environment = node->GetComponent<Runtime::EnvironmentComponent>())
                 {
                     return environment;
                 }

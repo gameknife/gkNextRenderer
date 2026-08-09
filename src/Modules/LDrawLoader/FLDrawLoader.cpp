@@ -1,10 +1,10 @@
 #include "Modules/LDrawLoader/FLDrawLoader.h"
 #include "Modules/LDrawLoader/FLDrawGeometry.h"
 #include "Modules/LDrawLoader/FLDrawParser.h"
-#include "Engine/Assets/Loaders/FSceneLoader.h"
+#include "Engine/Assets/Loaders/LoaderUtils.hpp"
 #include "Engine/Assets/Data/Material.hpp"
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <spdlog/spdlog.h>
@@ -726,8 +726,9 @@ namespace Assets
         cameraInit.SunRotation = 0.5f;
         cameraInit.SunIntensity = 500.0f;
         cameraInit.SkyIntensity = 100.0f;
+        cameraInit.SkyIdx = 2; // daylight sky (kloppenheim_01_puresky) instead of dusk default
 
-        Camera defaultCam = FSceneLoader::AutoFocusCamera(cameraInit, nodes, models, true);
+        Camera defaultCam = AutoFocusCamera(cameraInit, nodes, models, true);
 
         SPDLOG_INFO("LDraw: created {} models, {} materials, {} nodes",
                      models.size() - initialModelCount,

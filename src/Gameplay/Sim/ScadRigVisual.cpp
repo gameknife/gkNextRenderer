@@ -1,8 +1,8 @@
 #include "ScadRigVisual.h"
 
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
 
 #include <glm/gtc/quaternion.hpp>
 

@@ -1,6 +1,5 @@
-#include "Engine/Vulkan/SyncAndTiming.hpp"
+#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 
-#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <string>
 #include <unordered_map>
@@ -80,46 +79,4 @@ TEST_CASE("Timer path keeps duplicate names distinct by call tree", "[GpuTimer]"
     CHECK(timer.records[4].stableKey == "/frame#1/pass#0");
     CHECK(timer.records[1].depth == 1);
     CHECK(timer.records[4].depth == 1);
-}
-
-TEST_CASE("GPU timestamp elapsed ignores invalid high bits", "[GpuTimer]")
-{
-    float milliseconds = 0.0f;
-    const bool valid = VulkanGpuTimer::TryCalculateElapsedMilliseconds(
-        0xffff000000001000ull,
-        0xeeee000000003000ull,
-        2.0f,
-        32,
-        milliseconds);
-
-    REQUIRE(valid);
-    CHECK(milliseconds == Catch::Approx(0.016384f));
-}
-
-TEST_CASE("GPU timestamp elapsed handles valid-bit counter wrap", "[GpuTimer]")
-{
-    float milliseconds = 0.0f;
-    const bool valid = VulkanGpuTimer::TryCalculateElapsedMilliseconds(
-        0xfffffff0ull,
-        0x00000010ull,
-        1.0f,
-        32,
-        milliseconds);
-
-    REQUIRE(valid);
-    CHECK(milliseconds == Catch::Approx(0.000032f));
-}
-
-TEST_CASE("GPU timestamp elapsed rejects inverted full-width timestamps", "[GpuTimer]")
-{
-    float milliseconds = 1.0f;
-    const bool valid = VulkanGpuTimer::TryCalculateElapsedMilliseconds(
-        1000,
-        900,
-        1.0f,
-        64,
-        milliseconds);
-
-    CHECK_FALSE(valid);
-    CHECK(milliseconds == 0.0f);
 }

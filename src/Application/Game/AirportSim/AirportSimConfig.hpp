@@ -8,18 +8,18 @@
 // 坐标均为引擎世界系：scad(x,y,z) → world(x, z, −y)，地面顶面 y=0.15。
 namespace AirportSim::Config
 {
-    // ---- 时钟（§4.1）：一律游戏分钟 ----
+    // ---- 时钟：一律使用游戏分钟 ----
     constexpr double kDayStartMinutes = 5.0 * 60.0;  // 模拟从 05:00 开始
     constexpr float  kDefaultTimeScale = 2.0f;       // 1 真实秒 = 2 游戏分钟（1 日 = 12 真实分钟）
     constexpr float  kMinTimeScale = 0.5f;
     constexpr float  kMaxTimeScale = 16.0f;          // 8× 默认速度
 
-    // ---- 日夜光照（§4.2）----
+    // ---- 日夜光照 ----
     constexpr float kDaySunIntensity = 500.0f;
     constexpr float kDaySkyIntensity = 100.0f;
     constexpr float kNightSkyFraction = 0.15f;
 
-    // ---- 班次（§3.1）----
+    // ---- 班次 ----
     constexpr double kMorningShiftStart = 5.5 * 60.0;   // 05:30
     constexpr double kMorningShiftEnd = 13.5 * 60.0;    // 13:30
     constexpr double kEveningShiftEnd = 21.5 * 60.0;    // 21:30
@@ -29,7 +29,7 @@ namespace AirportSim::Config
     constexpr double kCommuteLeadMinutes = 20.0;        // 班前 20 分钟生成
     constexpr double kHandoverGraceMinutes = 30.0;      // 接班者迟迟未到时旧员工最多多等 30 分钟
 
-    // ---- 航班表（§4.3）----
+    // ---- 航班表 ----
     constexpr int    kMinFlightsPerDay = 8;
     constexpr int    kMaxFlightsPerDay = 12;
     constexpr double kFirstDeparture = 7.0 * 60.0;
@@ -45,7 +45,7 @@ namespace AirportSim::Config
     constexpr double kSpawnWindowStart = 240.0;
     constexpr double kSpawnWindowEnd = 160.0;
 
-    // ---- 旅客（§3.2）----
+    // ---- 旅客 ----
     constexpr int   kMaxConcurrentPassengers = 24;
     constexpr float kKioskFraction = 0.30f;     // 30% 走自助值机
     constexpr float kPassengerGroupFraction = 0.60f;
@@ -79,20 +79,20 @@ namespace AirportSim::Config
     constexpr double kVendingUseMin = 0.8,      kVendingUseMax = 1.5;
     constexpr double kSitMin = 10.0,            kSitMax = 25.0;
 
-    // ---- 排队（§7.3）----
+    // ---- 排队 ----
     constexpr float kQueueFirstSlotOffset = 0.9f;
     constexpr float kQueueSlotSpacing = 0.8f;
     constexpr int   kQueueMaxSlots = 8;
     constexpr int   kLongQueueThreshold = 6;    // 触发"抱怨"决策时刻
 
-    // ---- 移动（§7.2）----
+    // ---- 移动 ----
     constexpr float kNavCellSize = 0.45f;
     constexpr float kAgentRadius = 0.28f;
     constexpr float kSeparationRadius = 0.6f;
     constexpr float kSeparationStrength = 1.2f;
     constexpr float kGroundY = 0.15f;
 
-    // ---- 决策（§5.3）----
+    // ---- 决策 ----
     constexpr double kDecisionCooldownMinutes = 20.0;
     constexpr double kBubbleDurationMinutes = 10.0;   // 游戏分钟（默认速度约 5 真实秒）
     constexpr double kPerceptionIntervalSeconds = 0.5;
@@ -116,7 +116,7 @@ namespace AirportSim::Config
     constexpr float kSeatSpacing = 0.8f;           // 4 联座座距
     constexpr float kSeatFrontOffset = 0.35f;
 
-    // ---- 员工 roster（§3.1）----
+    // ---- 员工 roster ----
     struct FStaffDef
     {
         const char* name;
@@ -168,7 +168,7 @@ namespace AirportSim::Config
 
     constexpr int kMaxAgents = kStaffCount + kMaxConcurrentPassengers; // 视觉池上限
 
-    // ---- 角色表现（§3.3 / docs/ScadRig-Design.md §5）----
+    // ---- 角色表现（现行约定见 AGENT_GUIDE/ScadRig.md）----
     // true = ScadRig 骨骼角色（assets/scad/characters/agent_basic.scad）；
     // false 或 rig 加载失败 = 回退 Sim Kit 的直立 box 视觉。
     constexpr bool kUseScadRigVisual = true;

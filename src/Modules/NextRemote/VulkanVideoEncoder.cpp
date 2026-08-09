@@ -273,7 +273,7 @@ namespace Runtime::Remote
         createInfo.sType = VK_STRUCTURE_TYPE_VIDEO_SESSION_CREATE_INFO_KHR;
         createInfo.pNext = &h264SessionInfo;
         createInfo.pVideoProfile = &profileInfo_;
-        createInfo.queueFamilyIndex = device_.VideoEncodeFamilyIndex();
+        createInfo.queueFamilyIndex = caps_.encodeQueueFamily;
         createInfo.pictureFormat = videoInputFormat;
         createInfo.maxCodedExtent = {codedWidth_, codedHeight_};
         createInfo.referencePictureFormat = supportsInterFrames_ ? videoInputFormat : VK_FORMAT_UNDEFINED;
@@ -607,7 +607,7 @@ namespace Runtime::Remote
         VkCommandPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        poolInfo.queueFamilyIndex = device_.VideoEncodeFamilyIndex();
+        poolInfo.queueFamilyIndex = caps_.encodeQueueFamily;
         if (vkCreateCommandPool(device_.Handle(), &poolInfo, nullptr, &commandPool_) != VK_SUCCESS)
         {
             SPDLOG_ERROR("RemotePlay: failed to create Vulkan Video command pool");
@@ -1216,7 +1216,7 @@ namespace Runtime::Remote
         submitInfo.commandBufferCount = 1;
         submitInfo.pCommandBuffers = &commandBuffer;
         std::lock_guard lock(GVideoEncodeQueueMutex);
-        if (vkQueueSubmit(device_.VideoEncodeQueue(), 1, &submitInfo, encodeFence_) != VK_SUCCESS)
+        if (vkQueueSubmit(device_.QueueForFamilyIndex(caps_.encodeQueueFamily), 1, &submitInfo, encodeFence_) != VK_SUCCESS)
         {
             return false;
         }

@@ -6,15 +6,20 @@ import Shader.PathTracing;
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
+    const uint2 size = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
+    if (any(DTid.xy >= size))
+    {
+        return;
+    }
     START_SHADERCLOCK()
 
     FVisibilityBufferRayCaster rayCaster;
     FSoftwareRayTracer tracer;
-    FShadowMapDirectIlluminator dIlluminator;
+    FSoftwareTracingDirectIlluminator dIlluminator;
 
     FPathTracingRenderer renderer;
     renderer.ExitProbability = 0.5f;
-    renderer.ExitAfterFirst = Bindless.GetGpuscene().Camera->FastGather;
+    renderer.ExitAfterFirst = Bindless.GetGpuscene().Camera->ExitAfterFirst;
     renderer.HitNormalOffset = max(Bindless.GetGpuscene().Camera->AmbientCubeUnit, 0.0001f) * 0.5;
     renderer.SampleDownscale = 2;
     renderer.FuzzyTracing = false;
@@ -23,10 +28,28 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.SecondaryDirectMode = 0;
     renderer.Init(DTid.xy);
 
+    const bool restirActive = RestirIsAvailable() && Bindless.GetGpuscene().CustomData0 == 0;
+    dIlluminator.RestirPrimary = restirActive;
+
     if( !renderer.PrimaryHit(rayCaster) )
     {
+        if (restirActive)
+        {
+            RestirStoreEmpty(int2(DTid.xy));
+        }
         END_SHADERCLOCK(DTid.xy)
         return;
+    }
+
+    dIlluminator.PrimaryInstanceId = renderer.GetPrimaryInstanceId();
+    dIlluminator.PrimaryMotionPixels = renderer.GetPrimaryMotionPixels();
+    if (restirActive)
+    {
+        Material primaryMat = Bindless.GetGpuscene().GetMaterial(renderer.GetPrimaryVertex().MaterialIndex);
+        if (primaryMat.MaterialModel == MaterialDiffuseLight)
+        {
+            RestirStoreEmpty(int2(DTid.xy));
+        }
     }
 
     float4 residencyDebugColor;

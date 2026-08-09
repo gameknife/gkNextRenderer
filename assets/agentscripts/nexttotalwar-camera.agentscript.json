@@ -1,0 +1,31 @@
+{
+  "name": "nexttotalwar-camera",
+  "target": "NextTotalwar",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1600,
+    "height": 900
+  },
+  "steps": [
+    {"type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 30000},
+    {"type": "wait-until", "query": "game.regimentCount", "op": "eq", "value": 24, "timeoutMs": 60000},
+    {"type": "mouse-move", "to": {"norm": [0.50, 0.50]}},
+    {"type": "mouse-button", "button": "middle", "action": "down", "at": {"norm": [0.50, 0.50]}},
+    {"type": "mouse-move", "to": {"norm": [0.60, 0.50]}},
+    {"type": "mouse-button", "button": "middle", "action": "up", "at": {"norm": [0.60, 0.50]}},
+    {"type": "assert", "query": "game.cameraFocusX", "op": "lt", "value": -40.0},
+    {"type": "key", "code": "Q", "action": "down"},
+    {"type": "wait-ms", "ms": 1800},
+    {"type": "key", "code": "Q", "action": "up"},
+    {"type": "assert", "query": "game.cameraYaw", "op": "gt", "value": 1.2},
+    {"type": "key", "code": "W", "action": "down"},
+    {"type": "wait-ms", "ms": 800},
+    {"type": "key", "code": "W", "action": "up"},
+    {"type": "assert", "query": "game.cameraFocusX", "op": "lt", "value": -80.0},
+    {"type": "screenshot", "out": "screenshots/nexttotalwar-camera", "ui": true},
+    {"type": "quit"}
+  ]
+}

@@ -10,6 +10,7 @@ struct ShowFlags final
     bool DebugCVarPanel = false;
     bool DebugProfileOverlay = false;
     bool DebugDraw_Lighting = false;
+    bool DebugDraw_AreaLights = false;
     bool DebugDraw_BoundingBox = false;
     bool DebugDraw_PhysicsBodies = false;
     bool ShowVisualDebug = false;
@@ -17,7 +18,6 @@ struct ShowFlags final
     bool ShowDebugSkeleton = false;
     bool ShowGrid = true;
     bool ShowWireframe = false;
-    bool ShowGaussianSplats = true;
 };
 
 }

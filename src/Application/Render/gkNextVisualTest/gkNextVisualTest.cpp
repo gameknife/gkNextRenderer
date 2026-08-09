@@ -2,7 +2,6 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
-#include "Engine/Runtime/ScreenShot.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Utilities/StbImage.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
@@ -19,7 +18,6 @@
 #include <unordered_set>
 #include "Modules/LDrawLoader/LDrawModule.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
-#include "Modules/SplatLoader/SplatModule.hpp"
 #include "Application/Common/DemoScenes.hpp"
 
 using json = nlohmann::json;
@@ -89,7 +87,6 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 {
     Modules::LDraw::Register();
     Modules::Scad::Register();
-    Modules::Splat::Register();
     AppCommon::RegisterDemoScenes();
     return std::make_unique<VisualTestGameInstance>(config, options, engine);
 }
@@ -112,8 +109,7 @@ void VisualTestGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     cvars.SetDefaultFromString("r.samples", "1", &error);
     cvars.SetDefaultFromString("r.temporalFrames", "1", &error);
     cvars.SetDefaultFromString("r.bounces", "2", &error);
-    cvars.SetDefaultFromString("r.denoiser", "0", &error);
-    cvars.SetDefaultFromString("r.superResolution", "4", &error);
+    cvars.SetDefaultFromString("r.upscaler.qualityMode", "4", &error);
 }
 
 void VisualTestGameInstance::OnInit()
@@ -217,7 +213,7 @@ void VisualTestGameInstance::OnSceneLoaded()
             currentSceneIndex_ + 1, scenes_.size(),
             GetSceneName(scenes_[currentSceneIndex_].path));
         
-        GetEngine().SetProgressiveRendering(false, true);
+        GetEngine().SetProgressiveRendering(false);
         frameCounter_ = 0;
         sceneStartTime_ = std::chrono::steady_clock::now();
         state_ = State::Rendering;
@@ -293,11 +289,6 @@ bool VisualTestGameInstance::LoadConfig()
         if (config.contains("diffThreshold"))
         {
             diffThreshold_ = config["diffThreshold"].get<int>();
-        }
-
-        if (config.contains("useFastCapture"))
-        {
-            useFastCapture_ = config["useFastCapture"].get<bool>();
         }
 
         if (config.contains("useSceneList"))
@@ -444,24 +435,25 @@ bool VisualTestGameInstance::ShouldIncludeScene(const std::string& scenePath) co
 
 void VisualTestGameInstance::CaptureAndAdvance()
 {
-    // Calculate render time
-    auto endTime = std::chrono::steady_clock::now();
-    double elapsed = std::chrono::duration<double>(endTime - sceneStartTime_).count();
-    
     // Generate screenshot filename
     std::string screenshotName = GetScreenshotFilename();
     std::string fullOutputDir = Utilities::FileHelper::GetPlatformFilePath(outputDir_.c_str());
     std::string screenshotPath = fullOutputDir + "/" + screenshotName;
-    
-    // Take screenshot
-    if (useFastCapture_)
+
+    if (!captureRequested_)
     {
-        Runtime::ScreenShot::SaveSwapChainToFileFast(&GetEngine().GetRenderer(), screenshotPath, 0, 0, 0, 0);
+        captureRenderTimeSeconds_ = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - sceneStartTime_).count();
+        captureRequested_ = true;
+        GetEngine().RequestScreenShot({.filename = screenshotPath});
+        return;
     }
-    else
+
+    if (GetEngine().IsCapturingScreenShot())
     {
-        Runtime::ScreenShot::SaveSwapChainToFile(&GetEngine().GetRenderer(), screenshotPath, 0, 0, 0, 0);
+        return;
     }
+
     Tasks::TaskCoordinator::GetInstance()->WaitForAllTasks();
     
     // Record result
@@ -471,15 +463,16 @@ void VisualTestGameInstance::CaptureAndAdvance()
     result.sceneCategory = GetSceneCategory(scenes_[currentSceneIndex_].path);
     result.rendererName = GetRendererName();
     result.screenshotPath = screenshotName + ".jpg";
-    result.renderTimeSeconds = elapsed;
+    result.renderTimeSeconds = captureRenderTimeSeconds_;
     result.framesWaited = scenes_[currentSceneIndex_].framesToWait;
     result.success = true;
     EvaluateBaseline(result, screenshotPath + ".jpg");
     results_.push_back(result);
+    captureRequested_ = false;
     
     SPDLOG_INFO("[VisualTest] {}/{} - {} captured ({:.2f}s, {} frames)", 
         currentSceneIndex_ + 1, scenes_.size(),
-        result.sceneName, elapsed, scenes_[currentSceneIndex_].framesToWait);
+        result.sceneName, captureRenderTimeSeconds_, scenes_[currentSceneIndex_].framesToWait);
     
     // Advance to next scene
     currentSceneIndex_++;
@@ -692,7 +685,7 @@ void VisualTestGameInstance::GenerateReport()
 #endif
     report << fmt::format("**GPU**: {}  \n", deviceProp.deviceName);
     report << fmt::format("**Renderer**: {}  \n\n", GetRendererName());
-    report << fmt::format("**Capture Mode**: {}  \n", useFastCapture_ ? "Fast JPG" : "Standard JPG");
+    report << "**Capture Mode**: Asynchronous screenshot export  \n";
     report << fmt::format("**Default Frames**: {}  \n", defaultFrames_);
     report << fmt::format("**Baseline Directory**: `{}`  \n", baselineDir_);
     report << fmt::format("**Diff Threshold**: {}  \n", diffThreshold_);
@@ -780,7 +773,7 @@ void VisualTestGameInstance::GenerateHtmlReport()
     report << "<h1>Visual Test Report</h1>";
     report << "<div class=\"meta\">";
     report << "<div><b>Renderer:</b> " << HtmlEscape(GetRendererName()) << "</div>";
-    report << "<div><b>Capture Mode:</b> " << (useFastCapture_ ? "Fast JPG" : "Standard JPG") << "</div>";
+    report << "<div><b>Capture Mode:</b> Asynchronous screenshot export</div>";
     report << "<div><b>Baseline Directory:</b> <code>" << HtmlEscape(baselineDir_) << "</code></div>";
     report << "<div><b>Diff Threshold:</b> " << diffThreshold_ << "</div>";
     report << "<div><b>Update Baseline:</b> " << (updateBaseline_ ? "true" : "false") << "</div>";
@@ -899,7 +892,6 @@ void VisualTestGameInstance::GenerateAgentManifest()
     manifest["renderer"] = GetRendererName();
     manifest["outputDir"] = outputDir_;
     manifest["defaultFramesToWait"] = defaultFrames_;
-    manifest["useFastCapture"] = useFastCapture_;
     manifest["baselineDir"] = baselineDir_;
     manifest["diffThreshold"] = diffThreshold_;
     manifest["updateBaseline"] = updateBaseline_;

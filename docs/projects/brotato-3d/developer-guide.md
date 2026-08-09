@@ -332,11 +332,12 @@ crit   = round(damage * critMultiplier) when rng < (critChancePct + weapon.critC
 
 文件：[arenas.json](../../../assets/configs/brotato3d/arenas.json)
 
-`halfExtent`: `[halfX, halfZ]`，玩家活动范围。
-`groundTiles`: 程序化生成地面斑块的"调色板"。`kind` ∈ `lambertian / metallic / mixture`。`coverage` 是该色块占地面积比（0~1）。
+`scene`: 固定 SCAD 场景路径，当前场景位于 `assets/scad/source/brotato3d/`，统一复用 `kit_deadly.scad` 末日素材。
+`halfExtent`: `[halfX, halfZ]`，玩家和敌人的活动范围；SCAD 布景可以延伸到范围外作为远景。
+`baseGroundColor` / `borderColor`: 角色选择界面的场景色板，不参与生成场景几何。
 HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpness=8.0` 的 lerp（[Brotato3DGameInstance.cpp:26](../../../src/Application/Game/Brotato3D/Brotato3DGameInstance.cpp)）。
 
-> 当前角色选择界面默认锁定 `grassland`，如要让玩家能选场景需要扩 UI，参考 `SelectArena()`。
+> 角色选择界面可在小型城镇、公路郊外、沙漠荒野之间切换，选择后会立即加载对应 SCAD 场景。
 
 ---
 

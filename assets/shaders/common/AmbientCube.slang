@@ -1,3 +1,5 @@
+implementing PathTracing;
+
 #include "PreProcessor.slang"
 
 public static const int SHADOWMAP_SIZE = 4096;
@@ -209,8 +211,8 @@ float AmbientCubeSkyVisibility(AmbientCube cube, float3 normal)
     float wnz = max(-normal.z, 0.0);
     float sum = wx + wnx + wy + wny + wz + wnz;
 
-    uint4 unpacked0 = UnpackBytes(cube.skyVisibility_pznzpyny);
-    uint4 unpacked1 = UnpackBytes(cube.skyVisibility_pxnxs0s1);
+    uint4 unpacked0 = UnpackBytes(cube.SkyVisibilityPZNZPYNY);
+    uint4 unpacked1 = UnpackBytes(cube.SkyVisibilityPXNXS0S1);
 
     float skyvis = 0.0;
     skyvis += float(unpacked0.x) * wz;
@@ -304,7 +306,7 @@ public AmbientCube ZeroAmbientCube()
     AmbientCube c;
     c.PosZ = 0; c.NegZ = 0; c.PosY = 0; c.NegY = 0; c.PosX = 0; c.NegX = 0;
     c.SunDirect = 0; c.SkyEmissiveDirect = 0;
-    c.skyVisibility_pznzpyny = 0; c.skyVisibility_pxnxs0s1 = 0;
+    c.SkyVisibilityPZNZPYNY = 0; c.SkyVisibilityPXNXS0S1 = 0;
     return c;
 }
 
@@ -756,15 +758,15 @@ public float4 interpolateAmbientCubesStable<T : IAmbientCubeSampler>(float3 inPo
     return float4(0.0, 0.0, 0.0, 1.0);
 }
 
-public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipSetp,
+public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipStep,
                       in VoxelData* Cubes, uint baseOffset, float cubeUnit)
 {
-    skipSetp = 1;
+    skipStep = 1;
     // Early out if position is outside the probe grid
     if (pos.x <= 0 || pos.y <= 0 || pos.z <= 0 ||
         pos.x > CUBE_SIZE_XY - 2 || pos.y > CUBE_SIZE_Z - 2 || pos.z > CUBE_SIZE_XY - 2)
     {
-        skipSetp = 1;
+        skipStep = 1;
         return false;
     }
 
@@ -815,22 +817,22 @@ public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uin
 
     if (unpack0.x > 1)
     {
-        skipSetp = max(1, unpack0.x);
+        skipStep = max(1, unpack0.x);
     }
 
     return false;
 }
 
-public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipSetp,
+public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipStep,
                       in VoxelData* Cubes)
 {
-    return inSolid(pos, rayDir, offsetDist, matId, skipSetp, Cubes, 0, GetAmbientCubeUnit());
+    return inSolid(pos, rayDir, offsetDist, matId, skipStep, Cubes, 0, GetAmbientCubeUnit());
 }
 
-public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipSetp,
+public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipStep,
                       in VoxelData* Cubes, uint baseOffset)
 {
-    return inSolid(pos, rayDir, offsetDist, matId, skipSetp, Cubes, baseOffset, GetAmbientCubeUnit());
+    return inSolid(pos, rayDir, offsetDist, matId, skipStep, Cubes, baseOffset, GetAmbientCubeUnit());
 }
 
 public interface IProbeGenerator

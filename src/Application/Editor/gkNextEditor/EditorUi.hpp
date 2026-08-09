@@ -24,18 +24,13 @@ namespace Editor
     void DrawHotReloadPanel(EditorContext& ctx, EditorUiState& ui);
     void DrawCameraViewPanel(EditorContext& ctx, EditorUiState& ui);
     void DrawSettingsPanel(EditorContext& ctx, EditorUiState& ui);
+    void DrawSequencerPanel(EditorContext& ctx, EditorUiState& ui);
 
     // Viewport overlay widgets (stats/tools)
     void DrawViewportOverlay(EditorContext& ctx, EditorUiState& ui);
 
-    // AI panel
-    void DrawAIPanel(EditorContext& ctx, EditorUiState& ui);
-
-    // Pump the AI agent's main-thread tool queue. Must be called every frame,
-    // independent of the AI panel's visibility, so a hidden/collapsed/inactive
-    // panel does not stall in-flight agent tool calls (which marshal back onto the
-    // main thread via the dispatcher and otherwise time out).
-    void TickAIAgentMainThread(EditorContext& ctx);
+    // Explicit, non-AI EditorScript/JavaScript console.
+    void DrawScriptConsolePanel(EditorContext& ctx, EditorUiState& ui);
 
     // Floating panels
     void DrawMaterialEditorPanel(EditorContext& ctx, EditorUiState& ui);

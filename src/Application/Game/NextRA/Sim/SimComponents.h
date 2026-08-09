@@ -44,6 +44,11 @@ namespace NextRA::Sim
     {
     };
 
+    struct FFootprint
+    {
+        std::vector<CPos> cells;
+    };
+
     struct FBaseTag
     {
     };
@@ -66,6 +71,14 @@ namespace NextRA::Sim
         bool attackMove = false;
     };
 
+    struct FTurret
+    {
+        WAngle facing;
+        WAngle prevFacing;
+        WAngle turnSpeed;
+        FActorId targetActor = static_cast<FActorId>(-1);
+    };
+
     struct FUnitType
     {
         uint16_t typeId = 0;
@@ -74,5 +87,6 @@ namespace NextRA::Sim
     struct FRenderLink
     {
         uint32_t renderNodeId = 0;
+        uint32_t turretNodeId = 0;
     };
 }

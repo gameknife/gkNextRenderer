@@ -1,7 +1,7 @@
 ﻿#pragma once
 
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Subsystems/NextLocalization.h"
+#include "Engine/Runtime/Subsystems/NextLocalization.hpp"
 
 namespace Utilities
 {

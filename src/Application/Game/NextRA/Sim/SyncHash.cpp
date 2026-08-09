@@ -72,6 +72,11 @@ namespace NextRA::Sim
                 MixI64(hash, attack->cooldownLeft);
                 MixBool(hash, attack->attackMove);
             }
+            if (const FTurret* turret = world.TryGetTurret(actor))
+            {
+                MixI64(hash, turret->facing.value);
+                MixI64(hash, turret->targetActor);
+            }
             if (const FMobile* mobile = world.TryGetMobile(actor))
             {
                 MixBool(hash, mobile->hasGoal);

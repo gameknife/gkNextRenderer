@@ -20,7 +20,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 
-namespace Assets::scad
+namespace Assets::Scad
 {
     namespace
     {
@@ -336,6 +336,22 @@ namespace Assets::scad
     std::vector<glm::vec3> ScadComputeSmoothNormals(const std::vector<glm::vec3>& pos, float angleThresholdDeg)
     {
         const size_t triCount = pos.size() / 3;
+        if (angleThresholdDeg <= 0.0f)
+        {
+            std::vector<glm::vec3> out(pos.size(), glm::vec3(0.0f, 1.0f, 0.0f));
+            for (size_t t = 0; t < triCount; ++t)
+            {
+                const glm::vec3 cross =
+                    glm::cross(pos[t * 3 + 1] - pos[t * 3 + 0], pos[t * 3 + 2] - pos[t * 3 + 0]);
+                const float len = glm::length(cross);
+                const glm::vec3 normal = len > 1e-12f ? cross / len : glm::vec3(0.0f, 1.0f, 0.0f);
+                out[t * 3 + 0] = normal;
+                out[t * 3 + 1] = normal;
+                out[t * 3 + 2] = normal;
+            }
+            return out;
+        }
+
         std::vector<glm::vec3> weighted(triCount, glm::vec3(0.0f)); // raw cross (area weighted)
         std::vector<glm::vec3> unit(triCount, glm::vec3(0.0f, 1.0f, 0.0f));
         for (size_t t = 0; t < triCount; ++t)
@@ -372,4 +388,4 @@ namespace Assets::scad
         }
         return out;
     }
-} // namespace Assets::scad
+} // namespace Assets::Scad

@@ -1,6 +1,7 @@
 // Chat tab: the local-LLM conversation UI — building the chat view model,
 // session lifecycle (new/clear/archive/switch), and the send / streaming
-// endpoints. Tool-calling logic lives in chat_tools.go.
+// endpoints. The optional tool-call smoke probe is deliberately local to the
+// dashboard and never exposes repository or engine capabilities.
 package dashboard
 
 import (
@@ -14,11 +15,25 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/protocol"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/router"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/config"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/llm"
 )
 
+type chatToolEvent struct {
+	Step    int    `json:"step"`
+	Phase   string `json:"phase"`
+	Name    string `json:"name"`
+	Summary string `json:"summary,omitempty"`
+	Detail  string `json:"detail,omitempty"`
+}
+
 func (s *Server) buildChatVM(sessionID string, selectedOverride string, errText string, flashText string) chatVM {
+	return s.buildChatVMSelection(sessionID, selectedOverride, "", errText, flashText)
+}
+func (s *Server) buildChatVMSelection(sessionID, selectedOverride, providerOverride, errText, flashText string) chatVM {
 	if s.chats == nil {
 		s.chats = NewChatStore(chatStorePath(s.opts))
 	}
@@ -31,6 +46,17 @@ func (s *Server) buildChatVM(sessionID string, selectedOverride string, errText 
 		sess = s.chats.Get(sessionID, active)
 	}
 	selected := sess.ModelID
+	selectedProvider := sess.ProviderID
+	if selectedProvider == "" {
+		selectedProvider = "localllm"
+	}
+	selectedProfile := sess.ProfileID
+	if selectedProfile == "" {
+		selectedProfile = "general"
+	}
+	if providerOverride != "" {
+		selectedProvider = providerOverride
+	}
 	if selected == "" {
 		selected = active
 	}
@@ -42,9 +68,11 @@ func (s *Server) buildChatVM(sessionID string, selectedOverride string, errText 
 	status := llm.NewServer(s.opts.RepoRoot, cfg).Status()
 	layout := llm.ResolveLayout(s.opts.RepoRoot, cfg)
 	vm := chatVM{
-		SessionID:     sess.ID,
-		SelectedModel: selected,
-		Messages:      sess.Messages,
+		SessionID:        sess.ID,
+		SelectedModel:    selected,
+		SelectedProvider: selectedProvider,
+		SelectedProfile:  selectedProfile,
+		Messages:         sess.Messages,
 		Context: chatContextVM{
 			Used:    contextUsed,
 			Limit:   contextLimit,
@@ -56,15 +84,28 @@ func (s *Server) buildChatVM(sessionID string, selectedOverride string, errText 
 		RunningModel:  status.Model,
 		Endpoint:      fmt.Sprintf("%s:%d", status.Host, status.Port),
 	}
-	for _, model := range cfg.Models {
-		_, statErr := os.Stat(layout.ModelPath(model))
-		vm.Models = append(vm.Models, chatModelVM{
-			ID:         model.ID,
-			ContextN:   model.ContextN,
-			Downloaded: statErr == nil,
-			Active:     model.ID == selected,
-			Running:    status.Running && status.Model == model.ID,
-		})
+	runtime, runtimeErr := ai.NewRuntime(s.opts.RepoRoot, s.opts.Config)
+	if runtimeErr == nil {
+		for _, descriptor := range runtime.Registry.Descriptors() {
+			vm.Providers = append(vm.Providers, chatProviderVM{ID: descriptor.ID, DisplayName: descriptor.DisplayName, Kind: descriptor.Kind, Configured: descriptor.Configured, Active: descriptor.ID == selectedProvider})
+			if descriptor.ID == selectedProvider && descriptor.ID != "localllm" {
+				for _, model := range descriptor.Models {
+					vm.Models = append(vm.Models, chatModelVM{ID: model, Downloaded: true, Active: model == selected})
+				}
+			}
+		}
+	}
+	if selectedProvider == "localllm" {
+		for _, model := range cfg.Models {
+			_, statErr := os.Stat(layout.ModelPath(model))
+			vm.Models = append(vm.Models, chatModelVM{
+				ID:         model.ID,
+				ContextN:   model.ContextN,
+				Downloaded: statErr == nil,
+				Active:     model.ID == selected,
+				Running:    status.Running && status.Model == model.ID,
+			})
+		}
 	}
 	for _, item := range s.chats.List() {
 		title := item.Title
@@ -77,6 +118,8 @@ func (s *Server) buildChatVM(sessionID string, selectedOverride string, errText 
 			ID:             item.ID,
 			Title:          title,
 			ModelID:        item.ModelID,
+			ProviderID:     item.ProviderID,
+			ProfileID:      item.ProfileID,
 			UpdatedAt:      item.UpdatedAt,
 			RelativeTime:   relativeTime(item.UpdatedAt),
 			MessageCount:   len(item.Messages),
@@ -106,18 +149,18 @@ func (s *Server) handleChatClear(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	modelID := strings.TrimSpace(r.FormValue("model"))
-	cfg, err := llm.SelectModel(s.opts.Config.External.LLM, modelID)
+	profileID, providerID, modelID, err := s.resolveChatSelection(r.FormValue("profile"), r.FormValue("provider"), modelID)
 	if err != nil {
 		s.renderChatPanel(w, r.FormValue("session_id"), err.Error())
 		return
 	}
-	sess := s.chats.Reset(strings.TrimSpace(r.FormValue("session_id")), cfg.ActiveModel().ID)
+	sess := s.chats.ResetSelection(strings.TrimSpace(r.FormValue("session_id")), profileID, providerID, modelID)
 	s.renderChatPanel(w, sess.ID, "")
 }
 
 func (s *Server) handleChatSession(w http.ResponseWriter, r *http.Request) {
 	sessionID := strings.TrimSpace(r.URL.Query().Get("id"))
-	s.renderChatPanel(w, sessionID, "")
+	s.render(w, "chat_panel", s.buildChatVMSelection(sessionID, "", strings.TrimSpace(r.URL.Query().Get("provider")), "", ""))
 }
 
 func (s *Server) handleChatNew(w http.ResponseWriter, r *http.Request) {
@@ -129,12 +172,12 @@ func (s *Server) handleChatNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	modelID := strings.TrimSpace(r.FormValue("model"))
-	cfg, err := llm.SelectModel(s.opts.Config.External.LLM, modelID)
+	profileID, providerID, modelID, err := s.resolveChatSelection(r.FormValue("profile"), r.FormValue("provider"), modelID)
 	if err != nil {
 		s.renderChatPanel(w, r.FormValue("session_id"), err.Error())
 		return
 	}
-	sess := s.chats.Create(cfg.ActiveModel().ID)
+	sess := s.chats.CreateSelection(profileID, providerID, modelID)
 	s.renderChatPanel(w, sess.ID, "")
 }
 
@@ -147,12 +190,12 @@ func (s *Server) handleChatArchive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	modelID := strings.TrimSpace(r.FormValue("model"))
-	cfg, err := llm.SelectModel(s.opts.Config.External.LLM, modelID)
+	profileID, providerID, modelID, err := s.resolveChatSelection(r.FormValue("profile"), r.FormValue("provider"), modelID)
 	if err != nil {
 		s.renderChatPanel(w, r.FormValue("session_id"), err.Error())
 		return
 	}
-	sess := s.chats.Archive(strings.TrimSpace(r.FormValue("session_id")), cfg.ActiveModel().ID)
+	sess := s.chats.ArchiveSelection(strings.TrimSpace(r.FormValue("session_id")), profileID, providerID, modelID)
 	s.renderChatPanel(w, sess.ID, "")
 }
 
@@ -163,6 +206,17 @@ func (s *Server) handleChatServe(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID := strings.TrimSpace(r.FormValue("session_id"))
 	modelID := strings.TrimSpace(r.FormValue("model"))
+	providerID := strings.TrimSpace(r.FormValue("provider"))
+	profileID := strings.TrimSpace(r.FormValue("profile"))
+	profileID, providerID, modelID, err := s.resolveChatSelection(profileID, providerID, modelID)
+	if err != nil {
+		s.renderChatPanel(w, sessionID, err.Error())
+		return
+	}
+	if providerID != "localllm" {
+		s.renderChatPanel(w, sessionID, "Serve 仅适用于 LocalLlama provider")
+		return
+	}
 	cfg, err := llm.SelectModel(s.opts.Config.External.LLM, modelID)
 	if err != nil {
 		s.renderChatPanel(w, sessionID, err.Error())
@@ -204,19 +258,21 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID := strings.TrimSpace(r.FormValue("session_id"))
 	modelID := strings.TrimSpace(r.FormValue("model"))
+	providerID := strings.TrimSpace(r.FormValue("provider"))
+	profileID := strings.TrimSpace(r.FormValue("profile"))
 	userText := strings.TrimSpace(r.FormValue("message"))
 	thinking := r.FormValue("thinking") == "1"
+	toolProbe := r.FormValue("tool_probe") == "1"
 	maxTokens := parseChatMaxTokens(r.FormValue("max_tokens"))
 	if userText == "" {
 		s.renderChatPanel(w, sessionID, "请输入要发送的内容")
 		return
 	}
-	cfg, err := llm.SelectModel(s.opts.Config.External.LLM, modelID)
+	profileID, providerID, modelID, err := s.resolveChatSelection(profileID, providerID, modelID)
 	if err != nil {
 		s.renderChatPanel(w, sessionID, err.Error())
 		return
 	}
-	modelID = cfg.ActiveModel().ID
 	sess := s.chats.Get(sessionID, modelID)
 	visibleMessages := append([]llm.ChatMessage(nil), sess.Messages...)
 	visibleMessages = append(visibleMessages, llm.ChatMessage{Role: "user", Content: userText})
@@ -224,31 +280,27 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
-	srv := llm.NewServer(s.opts.RepoRoot, cfg)
-	if _, err := srv.EnsureRunning(ctx); err != nil {
-		s.renderChatPanel(w, sess.ID, "启动 LLM 失败: "+err.Error())
-		return
-	}
-	client := llm.NewClient(srv.BaseURL())
-	messages, _, err = s.runChatToolLoop(ctx, client, modelID, messages, nil)
+	runtime, err := ai.NewRuntime(s.opts.RepoRoot, s.opts.Config)
 	if err != nil {
-		s.renderChatPanel(w, sess.ID, "工具调用失败: "+err.Error())
+		s.renderChatPanel(w, sess.ID, "AI runtime 失败: "+err.Error())
 		return
 	}
-	reply, err := client.Chat(ctx, llm.ChatRequest{
-		Model:       modelID,
-		Messages:    messages,
-		Temperature: 0.7,
-		MaxTokens:   maxTokens,
-		ChatTemplateKwargs: map[string]any{
-			"enable_thinking": thinking,
-		},
-	})
+	converted := make([]protocol.Message, len(messages))
+	for i, message := range messages {
+		converted[i] = protocol.Message{Role: protocol.Role(message.Role), Content: message.Content}
+	}
+	request := protocol.ChatRequest{Messages: converted, Temperature: .7, MaxOutputTokens: maxTokens, EnableThinking: thinking}
+	var result protocol.ChatResponse
+	if toolProbe {
+		result, err = runToolCallSmoke(ctx, runtime.Router, router.Overrides{Profile: profileID, Provider: providerID, Model: modelID}, request, nil)
+	} else {
+		result, _, err = runtime.Router.Chat(ctx, router.Overrides{Profile: profileID, Provider: providerID, Model: modelID}, request, nil)
+	}
 	if err != nil {
 		s.renderChatPanel(w, sess.ID, "LLM 请求失败: "+err.Error())
 		return
 	}
-	sess = s.chats.AppendExchange(sess.ID, modelID, userText, strings.TrimSpace(reply))
+	sess = s.chats.AppendExchangeSelection(sess.ID, profileID, providerID, modelID, userText, strings.TrimSpace(result.Content))
 	s.renderChatPanel(w, sess.ID, "")
 }
 
@@ -288,19 +340,21 @@ func (s *Server) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 
 	sessionID := strings.TrimSpace(r.FormValue("session_id"))
 	modelID := strings.TrimSpace(r.FormValue("model"))
+	providerID := strings.TrimSpace(r.FormValue("provider"))
+	profileID := strings.TrimSpace(r.FormValue("profile"))
 	userText := strings.TrimSpace(r.FormValue("message"))
 	thinking := r.FormValue("thinking") == "1"
+	toolProbe := r.FormValue("tool_probe") == "1"
 	maxTokens := parseChatMaxTokens(r.FormValue("max_tokens"))
 	if userText == "" {
 		emit("error", map[string]string{"message": "请输入要发送的内容"})
 		return
 	}
-	cfg, err := llm.SelectModel(s.opts.Config.External.LLM, modelID)
+	profileID, providerID, modelID, err := s.resolveChatSelection(profileID, providerID, modelID)
 	if err != nil {
 		emit("error", map[string]string{"message": err.Error()})
 		return
 	}
-	modelID = cfg.ActiveModel().ID
 	sess := s.chats.Get(sessionID, modelID)
 	if !emit("start", map[string]string{"session_id": sess.ID, "model": modelID}) {
 		return
@@ -312,69 +366,70 @@ func (s *Server) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
-	srv := llm.NewServer(s.opts.RepoRoot, cfg)
-	emit("status", map[string]string{"message": "正在准备本地模型..."})
-	if _, err := srv.EnsureRunning(ctx); err != nil {
-		emit("error", map[string]string{"message": "启动 LLM 失败: " + err.Error()})
-		return
-	}
-	client := llm.NewClient(srv.BaseURL())
-	messages, _, err = s.runChatToolLoop(ctx, client, modelID, messages, func(event chatToolEvent) {
-		emit("tool", event)
-	})
-	if err != nil {
-		emit("error", map[string]string{"message": "工具调用失败: " + err.Error()})
-		return
-	}
-	emit("status", map[string]string{"message": "模型已就绪，正在生成..."})
+	emit("status", map[string]string{"message": "正在请求模型..."})
 	reasoningEmitted := false
 	if thinking {
 		emit("thinking", map[string]string{"message": "正在思考..."})
 		reasoningEmitted = true
 	}
 
-	var reply strings.Builder
-	finishReason := ""
-	err = client.ChatStream(ctx, llm.ChatRequest{
-		Model:       modelID,
-		Messages:    messages,
-		Temperature: 0.7,
-		MaxTokens:   maxTokens,
-		ChatTemplateKwargs: map[string]any{
-			"enable_thinking": thinking,
-		},
-	}, func(delta llm.StreamDelta) error {
-		if delta.FinishReason != "" {
-			finishReason = delta.FinishReason
-			return nil
-		}
-		if delta.Reasoning != "" {
+	runtime, err := ai.NewRuntime(s.opts.RepoRoot, s.opts.Config)
+	if err != nil {
+		emit("error", map[string]string{"message": "AI runtime 失败: " + err.Error()})
+		return
+	}
+	converted := make([]protocol.Message, len(messages))
+	for i, message := range messages {
+		converted[i] = protocol.Message{Role: protocol.Role(message.Role), Content: message.Content}
+	}
+	request := protocol.ChatRequest{Messages: converted, Temperature: .7, MaxOutputTokens: maxTokens, EnableThinking: thinking}
+	sink := func(_ context.Context, event protocol.Event) error {
+		switch event.Type {
+		case protocol.EventReasoningDelta:
 			if !reasoningEmitted {
 				if !emit("thinking", map[string]string{"message": "正在思考..."}) {
 					return fmt.Errorf("client disconnected")
 				}
 				reasoningEmitted = true
 			}
-			return nil
-		}
-		reply.WriteString(delta.Text)
-		if !emit("delta", map[string]string{"text": delta.Text}) {
-			return fmt.Errorf("client disconnected")
+		case protocol.EventContentDelta:
+			if !emit("delta", map[string]string{"text": event.Content}) {
+				return fmt.Errorf("client disconnected")
+			}
 		}
 		return nil
-	})
+	}
+	var result protocol.ChatResponse
+	var route router.Route
+	if toolProbe {
+		route, err = runtime.Router.Resolve(router.Overrides{Profile: profileID, Provider: providerID, Model: modelID})
+		if err == nil {
+			result, err = runToolCallSmoke(ctx, runtime.Router, router.Overrides{Profile: profileID, Provider: providerID, Model: modelID}, request, func(event chatToolEvent) {
+				emit("tool", event)
+			})
+		}
+		if err == nil && result.Content != "" {
+			emit("delta", map[string]string{"text": result.Content})
+		}
+	} else {
+		result, route, err = runtime.Router.Chat(ctx, router.Overrides{Profile: profileID, Provider: providerID, Model: modelID}, request, sink)
+	}
 	if err != nil {
 		emit("error", map[string]string{"message": "LLM 请求失败: " + err.Error()})
 		return
 	}
-	sess = s.chats.AppendExchange(sess.ID, modelID, userText, strings.TrimSpace(reply.String()))
+	sess = s.chats.AppendExchangeSelection(sess.ID, profileID, providerID, modelID, userText, strings.TrimSpace(result.Content))
 	contextLimit := chatContextLimit(s.opts.Config.External.LLM.Models, modelID)
 	contextUsed := EstimateChatContextTokens(s.opts.RepoRoot, sess.Messages)
 	emit("done", map[string]any{
 		"session_id":    sess.ID,
 		"messages":      len(sess.Messages),
-		"finish_reason": finishReason,
-		"truncated":     finishReason == "length",
+		"provider":      route.Provider.Descriptor().ID,
+		"model":         route.Model,
+		"finish_reason": result.FinishReason,
+		"prompt_tokens": result.Usage.PromptTokens,
+		"output_tokens": result.Usage.CompletionTokens,
+		"truncated":     result.FinishReason == "length",
 		"max_tokens":    maxTokens,
 		"context_used":  contextUsed,
 		"context_limit": contextLimit,
@@ -406,6 +461,34 @@ func parseChatMaxTokens(raw string) int {
 		return maxChatMaxTokens
 	}
 	return n
+}
+
+func (s *Server) resolveChatSelection(profileID, providerID, modelID string) (string, string, string, error) {
+	if profileID == "" {
+		profileID = "general"
+	}
+	runtime, err := ai.NewRuntime(s.opts.RepoRoot, s.opts.Config)
+	if err != nil {
+		return "", "", "", err
+	}
+	route, err := runtime.Router.Resolve(router.Overrides{Profile: profileID, Provider: providerID, Model: modelID})
+	if err != nil {
+		return "", "", "", err
+	}
+	descriptor := route.Provider.Descriptor()
+	if route.Model != "" && len(descriptor.Models) > 0 {
+		found := false
+		for _, candidate := range descriptor.Models {
+			if candidate == route.Model {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return "", "", "", fmt.Errorf("model %q is not configured for provider %q", route.Model, descriptor.ID)
+		}
+	}
+	return profileID, descriptor.ID, route.Model, nil
 }
 
 func chatStorePath(opts Options) string {

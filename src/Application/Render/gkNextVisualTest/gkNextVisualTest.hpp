@@ -68,7 +68,6 @@ private:
     double loadTimeoutSeconds_ = 20.0;
     std::string baselineDir_ = "assets/visual_test_baselines";
     int diffThreshold_ = 5;
-    bool useFastCapture_ = true;
     bool useSceneList_ = true;
     bool updateBaseline_ = false;
     std::vector<std::string> includeExtensions_;
@@ -83,6 +82,8 @@ private:
     size_t currentSceneIndex_ = 0;
     int frameCounter_ = 0;
     bool observedLoadingState_ = false;
+    bool captureRequested_ = false;
+    double captureRenderTimeSeconds_ = 0.0;
     std::chrono::steady_clock::time_point sceneLoadStartTime_;
     std::chrono::steady_clock::time_point sceneStartTime_;
 

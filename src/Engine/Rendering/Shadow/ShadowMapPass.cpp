@@ -9,32 +9,11 @@
 #include "Engine/Vulkan/GraphicsPipelineBuilder.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 
-#include <filesystem>
-
 namespace Vulkan::Shadow
 {
     namespace
     {
         constexpr VkFormat kShadowFormat = VK_FORMAT_D32_SFLOAT;
-
-        std::string ShaderFilename(const std::string& shaderFile)
-        {
-            return std::filesystem::path(shaderFile).filename().string();
-        }
-
-        bool MarkChangedShaderFile(
-            const std::string& shaderFile,
-            const std::set<std::string>& changedShaderFiles,
-            std::set<std::string>& handledShaderFiles)
-        {
-            const std::string filename = ShaderFilename(shaderFile);
-            if (changedShaderFiles.find(filename) == changedShaderFiles.end())
-            {
-                return false;
-            }
-            handledShaderFiles.insert(filename);
-            return true;
-        }
     }
 
     ShadowMapPass::ShadowMapPass(const Vulkan::Device& device) : device_(device)
@@ -100,7 +79,7 @@ namespace Vulkan::Shadow
             Check(vkCreateRenderPass(device_.Handle(), &rpInfo, nullptr, &renderPass_), "create shadow render pass");
         }
 
-        // Pipeline layout：复用 bindless 全局描述符集 + GPUScene push constant
+        // Pipeline layout: reuse the global bindless descriptor set and GPUScene push constants.
         {
             std::vector<DescriptorSetManager*> managers = {
                 &Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager(),
@@ -112,7 +91,7 @@ namespace Vulkan::Shadow
             pipelineLayout_.reset(new PipelineLayout(device_, managers, 1, &pushConstantRange, 1));
         }
 
-        // 图形管线
+        // Graphics pipeline.
         {
             const VkExtent2D extent{Assets::Scene::kSunShadowResolution, Assets::Scene::kSunShadowResolution};
 
@@ -128,7 +107,7 @@ namespace Vulkan::Shadow
                 .Build(pipelineLayout_->Handle(), renderPass_, "create shadow graphics pipeline");
         }
 
-        // 4 个 framebuffer
+        // Four framebuffers, one per cascade.
         for (uint32_t i = 0; i < Assets::Scene::kSunShadowCascadeCount; ++i)
         {
             VkImageView attachment = scene.SunShadowImageView(i).Handle();
@@ -143,45 +122,6 @@ namespace Vulkan::Shadow
             Check(vkCreateFramebuffer(device_.Handle(), &fbInfo, nullptr, &frameBuffers_[i]),
                 "create shadow framebuffer");
         }
-    }
-
-    void ShadowMapPass::RecreatePipeline()
-    {
-        if (pipeline_)
-        {
-            vkDestroyPipeline(device_.Handle(), pipeline_, nullptr);
-            pipeline_ = VK_NULL_HANDLE;
-        }
-
-        const VkExtent2D extent{Assets::Scene::kSunShadowResolution, Assets::Scene::kSunShadowResolution};
-        const ShaderModule fragShader(device_, "assets/shaders/Rast.ShadowMap.frag.slang.spv");
-        const ShaderModule vertShader(device_, "assets/shaders/Rast.ShadowMapSoftMeshShader.vert.slang.spv");
-
-        pipeline_ = GraphicsPipelineBuilder(device_)
-            .SetShaders(vertShader, fragShader)
-            .SetFixedViewport({0, 0}, extent)
-            .SetDepth(true, true, VK_COMPARE_OP_LESS)
-            .SetDepthBias(1.25f, 1.75f)
-            .SetColorAttachmentCount(0)
-            .Build(pipelineLayout_->Handle(), renderPass_, "recreate shadow graphics pipeline");
-    }
-
-    void ShadowMapPass::ReloadShaders(
-        const std::set<std::string>& changedShaderFiles,
-        std::set<std::string>& handledShaderFiles)
-    {
-        constexpr const char* vertexShader = "assets/shaders/Rast.ShadowMapSoftMeshShader.vert.slang.spv";
-        constexpr const char* fragmentShader = "assets/shaders/Rast.ShadowMap.frag.slang.spv";
-        const bool reloadVertex = changedShaderFiles.find(ShaderFilename(vertexShader)) != changedShaderFiles.end();
-        const bool reloadFragment = changedShaderFiles.find(ShaderFilename(fragmentShader)) != changedShaderFiles.end();
-        if (!reloadVertex && !reloadFragment)
-        {
-            return;
-        }
-
-        RecreatePipeline();
-        MarkChangedShaderFile(vertexShader, changedShaderFiles, handledShaderFiles);
-        MarkChangedShaderFile(fragmentShader, changedShaderFiles, handledShaderFiles);
     }
 
     void ShadowMapPass::DestroyResources()
@@ -235,8 +175,8 @@ namespace Vulkan::Shadow
         pipelineLayout_->BindDescriptorSets(commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
 
         Assets::GPUScene gpuScene = gpuSceneBase;
-        gpuScene.custom_data_0 = cascade;
-        gpuScene.custom_data_2 = cascade * scene.GetMaxSceneTriangles();
+        gpuScene.CustomData0 = cascade;
+        gpuScene.CustomData2 = cascade * scene.GetMaxSceneTriangles();
         vkCmdPushConstants(commandBuffer, pipelineLayout_->Handle(),
                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                            0, sizeof(Assets::GPUScene), &gpuScene);

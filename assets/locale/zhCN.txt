@@ -12,7 +12,6 @@ Build Bar, switch build / camera / base mode. Handle file save.;建造区，切�
 Camera;相机
 Click: Click Object to Focus.;点击物件对焦
 DebugDraw;可视化调试
-Denoiser;降噪器
 Dig a block;挖掉一个块
 Dir;阳光方向
 DropFile: if glb file, load it.;拖入文件：加载支持的模型文件
@@ -34,6 +33,7 @@ Help;帮助
 Layout Bar, toggle Left/Right/Bottom Panel.;布局区，切换左/右/底部面板
 Light;灯光
 Lighting;光照
+Environment;环境
 Lit;默认
 Lum;亮度
 Mode Shortcuts;模式快捷键

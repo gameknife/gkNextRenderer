@@ -1,13 +1,13 @@
 // FCPUProbeBaker: ambient cube voxelization, chamfer distance field and GPU
 // upload for the software GI probe cascades.
 // Split from CPUAccelerationStructure.cpp; same namespace, separate TU.
-#include "Engine/Assets/Acceleration/CPUAccelerationStructure.h"
+#include "Engine/Assets/Acceleration/CPUAccelerationStructure.hpp"
 #include "Engine/Assets/Acceleration/CPUAccelerationStructure.Internal.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
@@ -134,37 +134,44 @@ uint PackNibbles(glm::u32vec4 low, glm::u32vec4 high)
 #define FLOAT3 vec3
 #define FLOAT4 vec4
 
-float DetectDistance(FLOAT3 origin, FLOAT3 rayDir, float cubeUnit)
+float DetectDistance(const FCPUTLASSnapshot& snapshot, FLOAT3 origin, FLOAT3 rayDir, float cubeUnit)
 {
     vec3 outNormal;
     float outRayDist;
     uint tempMaterialId;
     uint tempInstanceId;
-    if (TraceRay(origin, rayDir, cubeUnit * 64.0f, outNormal, tempMaterialId, outRayDist, tempInstanceId))
+    if (TraceRay(snapshot, origin, rayDir, cubeUnit * 64.0f, outNormal, tempMaterialId, outRayDist, tempInstanceId))
     {
         return outRayDist;
     }
     return 255;
 }
 
-bool InsideGeometry(FLOAT3& origin, FLOAT3 rayDir, VoxelData& outCube, float& distance, float cubeUnit)
+bool InsideGeometry(const FCPUTLASSnapshot& snapshot, FLOAT3& origin, FLOAT3 rayDir, VoxelData& outCube,
+                    float& distance, float cubeUnit)
 {
-    // 求交测试
+    // Intersection test.
     vec3 outNormal;
     float outRayDist;
     uint tempMaterialId;
     uint tempInstanceId;
 
-    if (TraceRay(origin, rayDir, cubeUnit * 64.0f, outNormal, tempMaterialId, outRayDist, tempInstanceId))
+    if (TraceRay(snapshot, origin, rayDir, cubeUnit * 64.0f, outNormal, tempMaterialId, outRayDist, tempInstanceId))
     {
         distance = outRayDist;
         if (distance <= cubeUnit)
         {
-            FMaterial hitMaterial = FetchMaterial(tempMaterialId);
             outCube.matId = tempMaterialId;
 
-            // 命中反面，识别为固体，并将lightprobe推出体外
-            if (dot(outNormal, rayDir) > 0.0 || ((hitMaterial.gpuMaterial_.MaterialModel == Material::Enum::DiffuseLight)))// && OutRayDist < 0.02f))
+            Material::Enum materialModel = Material::Enum::Lambertian;
+            if (snapshot.materialTable && !snapshot.materialTable->entries.empty())
+            {
+                const size_t materialIndex = tempMaterialId % snapshot.materialTable->entries.size();
+                materialModel = snapshot.materialTable->entries[materialIndex].materialModel;
+            }
+
+            // A back-face hit indicates solid geometry; push the light probe outside it.
+            if (dot(outNormal, rayDir) > 0.0 || materialModel == Material::Enum::DiffuseLight)
             {
                 distance = 0;
                 return true;
@@ -174,7 +181,7 @@ bool InsideGeometry(FLOAT3& origin, FLOAT3 rayDir, VoxelData& outCube, float& di
     return false;
 }
 
-void VoxelizeCube(VoxelData& cube, FLOAT3 origin, float cubeUnit)
+void VoxelizeCube(const FCPUTLASSnapshot& snapshot, VoxelData& cube, FLOAT3 origin, float cubeUnit)
 {
     // just write matid and solid status
     cube.matId = 0;
@@ -186,29 +193,29 @@ void VoxelizeCube(VoxelData& cube, FLOAT3 origin, float cubeUnit)
     float distPZ = 255.0f;
     float distNZ = 255.0f;
 
-    // 现在是向轴向上发射了6根光线，记录下距离，并用于后续采样判断
-    InsideGeometry(origin, FLOAT3(0, 1, 0), cube, distPY, cubeUnit);
-    InsideGeometry(origin, FLOAT3(0, -1, 0), cube, distNY, cubeUnit);
-    InsideGeometry(origin, FLOAT3(1, 0, 0), cube, distPX, cubeUnit);
-    InsideGeometry(origin, FLOAT3(-1, 0, 0), cube, distNX, cubeUnit);
-    InsideGeometry(origin, FLOAT3(0, 0, 1), cube, distPZ, cubeUnit);
-    InsideGeometry(origin, FLOAT3(0, 0, -1), cube, distNZ, cubeUnit);
+    // Cast six axis-aligned rays and retain their distances for later sampling decisions.
+    InsideGeometry(snapshot, origin, FLOAT3(0, 1, 0), cube, distPY, cubeUnit);
+    InsideGeometry(snapshot, origin, FLOAT3(0, -1, 0), cube, distNY, cubeUnit);
+    InsideGeometry(snapshot, origin, FLOAT3(1, 0, 0), cube, distPX, cubeUnit);
+    InsideGeometry(snapshot, origin, FLOAT3(-1, 0, 0), cube, distNX, cubeUnit);
+    InsideGeometry(snapshot, origin, FLOAT3(0, 0, 1), cube, distPZ, cubeUnit);
+    InsideGeometry(snapshot, origin, FLOAT3(0, 0, -1), cube, distNZ, cubeUnit);
 
     // get the min dist of each direction
     float minDist = std::min({distPY, distNY, distPX, distNX, distPZ, distNZ});
     if (minDist > 254.0f)
     {
-        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(1, 1, 1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, 1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, -1, 1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, 1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(1, 1, -1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, -1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, -1, -1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, -1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(snapshot, origin, FLOAT3(1, 1, 1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(snapshot, origin, FLOAT3(-1, 1, 1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(snapshot, origin, FLOAT3(-1, -1, 1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(snapshot, origin, FLOAT3(-1, 1, 1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(snapshot, origin, FLOAT3(1, 1, -1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(snapshot, origin, FLOAT3(-1, 1, -1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(snapshot, origin, FLOAT3(-1, -1, -1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(snapshot, origin, FLOAT3(-1, 1, -1), cubeUnit)});
     }
 
-    // 现在，相当于每一个体素，都有了一个距离场，通过判断这个，可以快速跳过？
+    // Each voxel now has a distance field that can be used for fast skipping.
     distPY = glm::fclamp(distPY / cubeUnit, 0.0f, 1.0f);
     distNY = glm::fclamp(distNY / cubeUnit, 0.0f, 1.0f);
     distPX = glm::fclamp(distPX / cubeUnit, 0.0f, 1.0f);
@@ -284,7 +291,8 @@ void FCPUProbeBaker::RebuildDistanceField()
     }
 }
 
-void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
+void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType,
+                                const std::shared_ptr<const FCPUTLASSnapshot>& snapshot)
 {
     vec3 probePos = vec3(x, y, z) * UNIT_SIZE + CUBE_OFFSET;
     uint32_t addressIdx = GetVoxelAddress(x, y, z);
@@ -300,7 +308,10 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
         case ECubeProcType::ECPT_Fence:
             break;
         case ECubeProcType::ECPT_Voxelize:
-            VoxelizeCube(voxel, probePos, UNIT_SIZE);
+            if (snapshot)
+            {
+                VoxelizeCube(*snapshot, voxel, probePos, UNIT_SIZE);
+            }
             distanceToSolidSeeds[addressIdx] = GetPackedNibbleX(voxel.distanceToSolid);
             break;
     }

@@ -1,105 +1,28 @@
 {
   "arenas": [
     {
-      "id": "grassland",
-      "name": "绿野",
-      "halfExtent": [30.0, 20.0],
-      "baseGroundColor": [0.28, 0.36, 0.22],
-      "borderColor": [0.45, 0.55, 0.35],
-      "groundTiles": [
-        { "kind": "lambertian", "color": [0.31, 0.43, 0.26], "coverage": 0.18 },
-        { "kind": "lambertian", "color": [0.26, 0.33, 0.20], "coverage": 0.12 },
-        { "kind": "mixture", "color": [0.55, 0.58, 0.46], "coverage": 0.14, "fuzziness": 0.06, "ior": 1.45 },
-        { "kind": "metallic", "color": [0.58, 0.60, 0.52], "coverage": 0.10, "fuzziness": 0.22 },
-        { "kind": "metallic", "color": [0.50, 0.54, 0.44], "coverage": 0.08, "fuzziness": 0.18 }
-      ]
+      "id": "deadly_town",
+      "name": "小型城镇",
+      "scene": "assets/scad/source/brotato3d/deadly_town.scad",
+      "halfExtent": [260.0, 160.0],
+      "baseGroundColor": [0.30, 0.34, 0.22],
+      "borderColor": [0.66, 0.52, 0.28]
     },
     {
-      "id": "grassland_pcg",
-      "name": "绿野 PCG",
-      "halfExtent": [30.0, 20.0],
-      "baseGroundColor": [0.28, 0.36, 0.22],
-      "borderColor": [0.45, 0.55, 0.35],
-      "pcg": {
-        "enabled": true,
-        "targetCells": 320,
-        "lloydRelaxIterations": 2,
-        "vertexJitterAmplitude": 0.48,
-        "vertexJitterFrequency": 0.18,
-        "borderPattern": "cluster",
-        "borderSegments": 56,
-        "propPoissonRadius": 4.6,
-        "propPoissonMaxAttempts": 30,
-        "spawnSafeRadius": 4.5,
-        "edgeKeepout": 1.8,
-        "props": [
-          {
-            "id": "rock_small",
-            "footprintXZ": [0.8, 0.8],
-            "visualHeight": 0.7,
-            "colliderHeight": 0.5,
-            "baseColor": [0.45, 0.45, 0.48],
-            "weight": 3.0
-          },
-          {
-            "id": "rock_wide",
-            "footprintXZ": [1.4, 1.0],
-            "visualHeight": 0.9,
-            "colliderHeight": 0.6,
-            "baseColor": [0.38, 0.40, 0.42],
-            "weight": 1.5
-          },
-          {
-            "id": "crate",
-            "footprintXZ": [1.2, 1.2],
-            "visualHeight": 1.2,
-            "colliderHeight": 1.0,
-            "baseColor": [0.62, 0.45, 0.25],
-            "weight": 1.0
-          }
-        ],
-        "palette": [
-          [0.36, 0.55, 0.30],
-          [0.32, 0.50, 0.28],
-          [0.42, 0.58, 0.32],
-          [0.34, 0.52, 0.29],
-          [0.39, 0.56, 0.31],
-          [0.30, 0.46, 0.25],
-          [0.37, 0.53, 0.27],
-          [0.43, 0.60, 0.34],
-          [0.52, 0.55, 0.42],
-          [0.44, 0.48, 0.34]
-        ]
-      }
+      "id": "deadly_outskirts",
+      "name": "公路郊外",
+      "scene": "assets/scad/source/brotato3d/deadly_outskirts.scad",
+      "halfExtent": [320.0, 200.0],
+      "baseGroundColor": [0.35, 0.40, 0.24],
+      "borderColor": [0.58, 0.48, 0.30]
     },
     {
-      "id": "wasteland",
-      "name": "荒地",
-      "halfExtent": [34.0, 22.0],
-      "baseGroundColor": [0.39, 0.30, 0.22],
-      "borderColor": [0.55, 0.50, 0.40],
-      "groundTiles": [
-        { "kind": "lambertian", "color": [0.44, 0.34, 0.25], "coverage": 0.16 },
-        { "kind": "lambertian", "color": [0.33, 0.25, 0.18], "coverage": 0.12 },
-        { "kind": "mixture", "color": [0.55, 0.44, 0.35], "coverage": 0.11, "fuzziness": 0.09, "ior": 1.46 },
-        { "kind": "metallic", "color": [0.57, 0.48, 0.35], "coverage": 0.09, "fuzziness": 0.25 },
-        { "kind": "metallic", "color": [0.49, 0.39, 0.28], "coverage": 0.07, "fuzziness": 0.22 }
-      ]
-    },
-    {
-      "id": "tech_grid",
-      "name": "数码",
-      "halfExtent": [40.0, 28.0],
-      "baseGroundColor": [0.16, 0.20, 0.28],
-      "borderColor": [0.35, 0.55, 0.85],
-      "groundTiles": [
-        { "kind": "metallic", "color": [0.29, 0.68, 0.90], "coverage": 0.17, "fuzziness": 0.10 },
-        { "kind": "metallic", "color": [0.40, 0.54, 0.77], "coverage": 0.16, "fuzziness": 0.12 },
-        { "kind": "mixture", "color": [0.83, 0.86, 0.92], "coverage": 0.14, "fuzziness": 0.04, "ior": 1.50 },
-        { "kind": "metallic", "color": [0.33, 0.79, 0.95], "coverage": 0.12, "fuzziness": 0.09 },
-        { "kind": "mixture", "color": [0.71, 0.78, 0.90], "coverage": 0.09, "fuzziness": 0.05, "ior": 1.48 },
-        { "kind": "metallic", "color": [0.46, 0.58, 0.79], "coverage": 0.08, "fuzziness": 0.14 }
-      ]
+      "id": "deadly_desert",
+      "name": "沙漠荒野",
+      "scene": "assets/scad/source/brotato3d/deadly_desert.scad",
+      "halfExtent": [340.0, 220.0],
+      "baseGroundColor": [0.48, 0.35, 0.20],
+      "borderColor": [0.72, 0.50, 0.25]
     }
   ]
 }

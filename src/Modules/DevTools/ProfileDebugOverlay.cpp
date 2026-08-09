@@ -12,13 +12,18 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Utilities/Math.hpp"
+#include "Engine/Utilities/Format.hpp"
 #include "Engine/Vulkan/Allocator.hpp"
-#include "Engine/Vulkan/SyncAndTiming.hpp"
+#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Modules/DevTools/UI/DiagnosticWidgets.hpp"
 
 namespace
 {
+    using Utilities::FormatBytes;
+    using Runtime::DevToolsUI::DrawSectionHeader;
+    using Runtime::DevToolsUI::DrawValueRow;
     constexpr int maxCpuTimerRows = 18;
 
     std::string FormatCount(uint64_t value)
@@ -31,26 +36,6 @@ namespace
         return lhs > rhs ? lhs - rhs : 0;
     }
 
-    std::string FormatBytes(VkDeviceSize bytes)
-    {
-        static constexpr const char* units[] = {"B", "KB", "MB", "GB", "TB"};
-        double value = static_cast<double>(bytes);
-        size_t unitIndex = 0;
-        while (value >= 1024.0 && unitIndex + 1 < (sizeof(units) / sizeof(units[0])))
-        {
-            value /= 1024.0;
-            ++unitIndex;
-        }
-        return fmt::format("{:.2f} {}", value, units[unitIndex]);
-    }
-
-    void DrawSectionHeader(const char* title)
-    {
-        ImGui::Spacing();
-        ImGui::TextColored(ImVec4(0.96f, 0.82f, 0.42f, 1.0f), "%s", title);
-        ImGui::Separator();
-    }
-
     bool BeginStatTable(const char* id)
     {
         if (!ImGui::BeginTable(id, 2, ImGuiTableFlags_SizingStretchProp))
@@ -61,16 +46,6 @@ namespace
         ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 132.0f);
         ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
         return true;
-    }
-
-    void DrawValueRow(const char* label, const std::string& value,
-                      const ImVec4& valueColor = ImVec4(0.93f, 0.96f, 1.0f, 1.0f))
-    {
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0);
-        ImGui::TextColored(ImVec4(0.72f, 0.76f, 0.82f, 1.0f), "%s", label);
-        ImGui::TableSetColumnIndex(1);
-        ImGui::TextColored(valueColor, "%s", value.c_str());
     }
 
     std::string FormatVisibleOverTotal(uint32_t visibleCount, uint32_t totalCount)
@@ -112,14 +87,14 @@ namespace
         ImGui::EndTable();
     }
 
-    void DrawCpuTimers(VulkanGpuTimer* gpuTimer)
+    void DrawCpuTimers(Runtime::FrameProfiler* profiler)
     {
-        if (gpuTimer == nullptr)
+        if (profiler == nullptr)
         {
             return;
         }
 
-        const std::vector<VulkanGpuTimer::TimerStat> timers = gpuTimer->FetchAllCpuTimes(3);
+        const std::vector<Runtime::ProfileTimerStat> timers = profiler->FetchCpuTimes(3);
         if (timers.empty())
         {
             ImGui::TextColored(ImVec4(0.72f, 0.76f, 0.82f, 1.0f), "No CPU timer samples yet");
@@ -175,7 +150,7 @@ namespace
     }
 }
 
-void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statistics& statistics, VulkanGpuTimer* gpuTimer,
+void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statistics& statistics, Runtime::FrameProfiler* profiler,
                                       float topOffset)
 {
     Assets::Scene& scene = engine.GetScene();
@@ -226,7 +201,7 @@ void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statisti
         if (BeginStatTable("##SceneStats"))
         {
             DrawValueRow("Nodes", FormatCount(scene.Nodes().size()));
-            DrawValueRow("Instances", FormatCount(scene.GetNodeProxys().size()));
+            DrawValueRow("Instances", FormatCount(scene.GetNodeProxies().size()));
             DrawValueRow("Models", FormatCount(scene.Models().size()));
             DrawValueRow("Materials", FormatCount(scene.Materials().size()));
             DrawValueRow("Textures", FormatCount(statistics.TextureCount));
@@ -272,7 +247,7 @@ void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statisti
         }
 
         DrawSectionHeader("CPU Timers");
-        DrawCpuTimers(gpuTimer);
+        DrawCpuTimers(profiler);
 
         ImGui::PopStyleVar();
     }

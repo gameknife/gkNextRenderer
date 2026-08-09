@@ -1,14 +1,13 @@
-#include "Engine/Assets/Acceleration/CPUAccelerationStructure.h"
+#include "Engine/Assets/Acceleration/CPUAccelerationStructure.hpp"
 #include "Engine/Assets/Acceleration/CPUAccelerationStructure.Internal.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Runtime/Components/GaussianSplatComponent.h"
 
 #include <atomic>
 #include <chrono>
@@ -123,10 +122,12 @@ void FCPUAccelerationStructure::InitBVH(Scene& scene)
 {
     const auto timer = std::chrono::high_resolution_clock::now();
 
-    bvhBLASList.clear();
-    bvhBLASContexts.clear();
+    CancelRuntimeBuilds();
 
-    bvhBLASContexts.resize(scene.Models().size());
+    auto blasSet = std::make_shared<FCPUBLASSet>();
+    blasSet->generation = ++blasGeneration_;
+    blasSet->contexts.resize(scene.Models().size());
+    blasSet->list.reserve(scene.Models().size());
     for ( size_t m = 0; m < scene.Models().size(); ++m )
     {
         const Model& model = scene.Models()[m];
@@ -143,37 +144,39 @@ void FCPUAccelerationStructure::InitBVH(Scene& scene)
             vec3 normal = normalize(cross(edge1, edge2));
             
             // Add triangle vertices to BVH
-            bvhBLASContexts[m].triangles.push_back(tinybvh::bvhvec4(v0.Position.x, v0.Position.y, v0.Position.z, 0));
-            bvhBLASContexts[m].triangles.push_back(tinybvh::bvhvec4(v1.Position.x, v1.Position.y, v1.Position.z, 0));
-            bvhBLASContexts[m].triangles.push_back(tinybvh::bvhvec4(v2.Position.x, v2.Position.y, v2.Position.z, 0));
+            blasSet->contexts[m].triangles.push_back(tinybvh::bvhvec4(v0.Position.x, v0.Position.y, v0.Position.z, 0));
+            blasSet->contexts[m].triangles.push_back(tinybvh::bvhvec4(v1.Position.x, v1.Position.y, v1.Position.z, 0));
+            blasSet->contexts[m].triangles.push_back(tinybvh::bvhvec4(v2.Position.x, v2.Position.y, v2.Position.z, 0));
 
             // Store additional triangle information
-            bvhBLASContexts[m].extinfos.push_back({normal, v0.MaterialIndex});
+            blasSet->contexts[m].extinfos.push_back({normal, v0.MaterialIndex});
         }
 
         // here we can cache the blas to disk if its big enough
-        if (bvhBLASContexts[m].triangles.size() > 16384 * 3)
+        if (blasSet->contexts[m].triangles.size() > 16384 * 3)
         {
-            XXH64_hash_t vhash = XXH64(bvhBLASContexts[m].triangles.data(), bvhBLASContexts[m].triangles.size() * sizeof(tinybvh::bvhvec4), 0);
+            XXH64_hash_t vhash = XXH64(blasSet->contexts[m].triangles.data(), blasSet->contexts[m].triangles.size() * sizeof(tinybvh::bvhvec4), 0);
             std::string cacheFileName = Utilities::CookHelper::GetCookedFileName(fmt::format("{:016x}", vhash), "cpubvh");
 
             if (!std::filesystem::exists(cacheFileName))
             {
-                bvhBLASContexts[m].bvh.Build( bvhBLASContexts[m].triangles.data(), static_cast<int>(bvhBLASContexts[m].triangles.size()) / 3 );
-                bvhBLASContexts[m].bvh.Save(cacheFileName.c_str());
+                blasSet->contexts[m].bvh.Build(blasSet->contexts[m].triangles.data(), static_cast<int>(blasSet->contexts[m].triangles.size()) / 3);
+                blasSet->contexts[m].bvh.Save(cacheFileName.c_str());
             }
             else
             {
-                bvhBLASContexts[m].bvh.Load(cacheFileName.c_str(), bvhBLASContexts[m].triangles.data(), static_cast<int>(bvhBLASContexts[m].triangles.size()) / 3 );
+                blasSet->contexts[m].bvh.Load(cacheFileName.c_str(), blasSet->contexts[m].triangles.data(), static_cast<int>(blasSet->contexts[m].triangles.size()) / 3);
             }
         }
         else
         {
-            bvhBLASContexts[m].bvh.Build( bvhBLASContexts[m].triangles.data(), static_cast<int>(bvhBLASContexts[m].triangles.size()) / 3 );
+            blasSet->contexts[m].bvh.Build(blasSet->contexts[m].triangles.data(), static_cast<int>(blasSet->contexts[m].triangles.size()) / 3);
         }
 
-        bvhBLASList.push_back( &bvhBLASContexts[m].bvh );
+        blasSet->list.push_back(&blasSet->contexts[m].bvh);
     }
+
+    blasSet_ = std::move(blasSet);
     
     const Runtime::Config::UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
     InitCascadeBakers(settings, scene.AmbientCubeCascadeCapacity());
@@ -183,25 +186,40 @@ void FCPUAccelerationStructure::InitBVH(Scene& scene)
 
 void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
 {
-    std::vector<tinybvh::BLASInstance> tmpbvhInstanceList;
-    std::vector<FCPUTLASInstanceInfo> tmpbvhTLASContexts;
-    std::unordered_map<uint32_t, FWorldBounds> previousNavBounds;
-    std::unordered_map<uint32_t, FWorldBounds> currentNavBounds;
+    std::shared_ptr<FCPUTLASBuildInput> input = CaptureBuildInput(scene);
+    std::shared_ptr<FCPUTLASBuildResult> result = BuildSnapshot(*input);
+    PublishSnapshot(result->snapshot);
+    MergeNavDirtyBounds(*result);
+    publishedRevision_.store(result->snapshot->sceneRevision, std::memory_order_release);
+    ++completedBuildCount_;
+}
 
-    previousNavBounds.reserve(bvhTLASContexts.size());
-    for (const FCPUTLASInstanceInfo& previousInfo : bvhTLASContexts)
+std::shared_ptr<FCPUTLASBuildInput> FCPUAccelerationStructure::CaptureBuildInput(Scene& scene)
+{
+    auto input = std::make_shared<FCPUTLASBuildInput>();
+    const auto captureStartTime = std::chrono::steady_clock::now();
+    input->epoch = buildEpoch_.load(std::memory_order_acquire);
+    input->sceneRevision = ++sceneRevision_;
+    input->requestTime = std::chrono::steady_clock::now();
+    input->blasSet = blasSet_;
+    input->previousSnapshot = AcquireSnapshot();
+
+    auto materialTable = std::make_shared<FCPUMaterialTable>();
+    materialTable->generation = ++materialGeneration_;
+    materialTable->entries.reserve(scene.Materials().size());
+    for (const FMaterial& material : scene.Materials())
     {
-        if (!previousInfo.navRelevant)
-        {
-            continue;
-        }
-        previousNavBounds[previousInfo.nodeId] = {previousInfo.worldBoundsMin, previousInfo.worldBoundsMax};
+        materialTable->entries.push_back({material.gpuMaterial_.MaterialModel});
     }
+    input->materialTable = std::move(materialTable);
 
-    for (auto& node : scene.Nodes())
+    const auto renderComponents = scene.Components<Runtime::RenderComponent>();
+    input->instances.reserve(renderComponents.size());
+    input->contexts.reserve(renderComponents.size());
+    for (auto* render : renderComponents)
     {
-        auto render = node->GetComponent<Runtime::RenderComponent>();
-        if (!render) continue;
+        Node* node = render->GetOwner();
+        if (!node) continue;
         const uint32_t modelId = render->GetModelId();
         if (modelId == -1) continue;
         if (!render->GetVisible()) continue;
@@ -211,74 +229,87 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
             continue;
         }
 
-        node->RecalcTransform(true);
+        //node->RecalcTransform(true);
         const glm::mat4 nodeWorldTransform = node->WorldTransform();
         const FWorldBounds worldBounds = ComputeWorldBounds(scene.Models()[modelId], nodeWorldTransform);
 
-        mat4 worldTS = transpose(nodeWorldTransform);
-
+        const mat4 worldTS = transpose(nodeWorldTransform);
         tinybvh::BLASInstance instance;
         instance.blasIdx = modelId;
-        std::memcpy( (float*)instance.transform, &(worldTS[0]), sizeof(float) * 16);
+        std::memcpy(instance.transform, &worldTS[0], sizeof(instance.transform));
+        input->instances.emplace_back(std::move(instance));
 
-        tmpbvhInstanceList.push_back(instance);
         FCPUTLASInstanceInfo info;
         info.matIdxs.fill(0);
-        const bool isSplatProxy = node->GetTag() == "__splat_proxy";
-        info.nodeId = isSplatProxy ? scene.ResolveEditableNodeId(node->GetInstanceId()) : node->GetInstanceId();
+        info.nodeId = node->GetInstanceId();
         info.rayCastVisible = render->GetRayCastVisible();
-        if (isSplatProxy)
-        {
-            if (const auto sourceNode = scene.GetNodeSharedByInstanceId(info.nodeId))
-            {
-                if (const auto* splat = sourceNode->GetComponentPtr<Runtime::GaussianSplatComponent>())
-                {
-                    info.rayCastVisible = splat->GetVisible() && splat->GetRayCastVisible();
-                }
-            }
-        }
         info.worldBoundsMin = worldBounds.min;
         info.worldBoundsMax = worldBounds.max;
-        if (const auto physics = node->GetComponent<Runtime::PhysicsComponent>())
-        {
-            info.navRelevant = physics->GetMobility() != Runtime::ENodeMobility::Dynamic;
-        }
-        else
-        {
-            info.navRelevant = true;
-        }
+        info.navRelevant = true;
 
         const auto& mats = render->GetMaterials();
         for (int i = 0; i < mats.size() && i < static_cast<int>(info.matIdxs.size()); ++i)
         {
-            uint32_t matId = mats[i];
-            info.matIdxs[i] = matId;
+            info.matIdxs[i] = mats[i];
         }
-
-        if (info.navRelevant)
-        {
-            currentNavBounds[info.nodeId] = worldBounds;
-        }
-        tmpbvhTLASContexts.push_back( info );
+        input->contexts.emplace_back(std::move(info));
     }
 
-    bool hasNavDirtyBounds = false;
-    glm::vec3 navDirtyWorldMin(0.0f);
-    glm::vec3 navDirtyWorldMax(0.0f);
+    input->captureMilliseconds =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - captureStartTime).count();
+    latestRequestedRevision_.store(input->sceneRevision, std::memory_order_release);
+    return input;
+}
+
+std::shared_ptr<FCPUTLASBuildResult> FCPUAccelerationStructure::BuildSnapshot(FCPUTLASBuildInput& input)
+{
+    auto result = std::make_shared<FCPUTLASBuildResult>();
+    result->epoch = input.epoch;
+    result->requestTime = input.requestTime;
+    result->buildStartTime = std::chrono::steady_clock::now();
+
+    auto snapshot = std::make_shared<FCPUTLASSnapshot>();
+    snapshot->sceneRevision = input.sceneRevision;
+    snapshot->blasSet = input.blasSet;
+    snapshot->materialTable = input.materialTable;
+    snapshot->instances = std::move(input.instances);
+    snapshot->contexts = std::move(input.contexts);
+
+    std::unordered_map<uint32_t, FWorldBounds> previousNavBounds;
+    std::unordered_map<uint32_t, FWorldBounds> currentNavBounds;
+    if (input.previousSnapshot)
+    {
+        previousNavBounds.reserve(input.previousSnapshot->contexts.size());
+        for (const FCPUTLASInstanceInfo& previousInfo : input.previousSnapshot->contexts)
+        {
+            if (previousInfo.navRelevant)
+            {
+                previousNavBounds[previousInfo.nodeId] = {previousInfo.worldBoundsMin, previousInfo.worldBoundsMax};
+            }
+        }
+    }
+    currentNavBounds.reserve(snapshot->contexts.size());
+    for (const FCPUTLASInstanceInfo& info : snapshot->contexts)
+    {
+        if (info.navRelevant)
+        {
+            currentNavBounds[info.nodeId] = {info.worldBoundsMin, info.worldBoundsMax};
+        }
+    }
 
     for (const auto& [nodeId, currentBounds] : currentNavBounds)
     {
         const auto previousIt = previousNavBounds.find(nodeId);
         if (previousIt == previousNavBounds.end())
         {
-            AccumulateBounds(hasNavDirtyBounds, navDirtyWorldMin, navDirtyWorldMax, currentBounds);
+            AccumulateBounds(result->hasNavDirtyBounds, result->navDirtyWorldMin, result->navDirtyWorldMax, currentBounds);
             continue;
         }
 
         if (!BoundsNearlyEqual(currentBounds, previousIt->second))
         {
-            AccumulateBounds(hasNavDirtyBounds, navDirtyWorldMin, navDirtyWorldMax, currentBounds);
-            AccumulateBounds(hasNavDirtyBounds, navDirtyWorldMin, navDirtyWorldMax, previousIt->second);
+            AccumulateBounds(result->hasNavDirtyBounds, result->navDirtyWorldMin, result->navDirtyWorldMax, currentBounds);
+            AccumulateBounds(result->hasNavDirtyBounds, result->navDirtyWorldMin, result->navDirtyWorldMax, previousIt->second);
         }
     }
 
@@ -286,51 +317,53 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
     {
         if (currentNavBounds.find(nodeId) == currentNavBounds.end())
         {
-            AccumulateBounds(hasNavDirtyBounds, navDirtyWorldMin, navDirtyWorldMax, previousBounds);
+            AccumulateBounds(result->hasNavDirtyBounds, result->navDirtyWorldMin, result->navDirtyWorldMax, previousBounds);
         }
     }
 
-    if (tmpbvhInstanceList.size() > 0)
+    if (!snapshot->instances.empty() && snapshot->blasSet && !snapshot->blasSet->list.empty())
     {
-        GetCpuBvhState().bvh.Build( tmpbvhInstanceList.data(), static_cast<int>(tmpbvhInstanceList.size()), bvhBLASList.data(), static_cast<int>(bvhBLASList.size()) );
+        // tinybvh 1.3.8 does not const-qualify this non-owning BLAS pointer array,
+        // although TLAS Build only reads the array and the BLAS objects.
+        snapshot->tlas.Build(snapshot->instances.data(), static_cast<uint32_t>(snapshot->instances.size()),
+                             const_cast<tinybvh::BVHBase**>(snapshot->blasSet->list.data()),
+                             static_cast<uint32_t>(snapshot->blasSet->list.size()));
     }
 
-    Tasks::TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+    result->snapshot = std::move(snapshot);
+    result->buildEndTime = std::chrono::steady_clock::now();
+    return result;
+}
 
-    bvhInstanceList.swap(tmpbvhInstanceList);
-    bvhTLASContexts.swap(tmpbvhTLASContexts);
-    
-    // rebind with new address
-    GetCpuBvhState().instanceList = &bvhInstanceList;
-    GetCpuBvhState().tlasContexts = &bvhTLASContexts;
-    GetCpuBvhState().blasContexts = &bvhBLASContexts;
-
-    if (hasNavDirtyBounds)
+void FCPUAccelerationStructure::MergeNavDirtyBounds(const FCPUTLASBuildResult& result)
+{
+    if (result.hasNavDirtyBounds)
     {
         if (!hasNavRelevantDirtyBounds_)
         {
-            navRelevantDirtyWorldMin_ = navDirtyWorldMin;
-            navRelevantDirtyWorldMax_ = navDirtyWorldMax;
+            navRelevantDirtyWorldMin_ = result.navDirtyWorldMin;
+            navRelevantDirtyWorldMax_ = result.navDirtyWorldMax;
             hasNavRelevantDirtyBounds_ = true;
         }
         else
         {
-            navRelevantDirtyWorldMin_ = glm::min(navRelevantDirtyWorldMin_, navDirtyWorldMin);
-            navRelevantDirtyWorldMax_ = glm::max(navRelevantDirtyWorldMax_, navDirtyWorldMax);
+            navRelevantDirtyWorldMin_ = glm::min(navRelevantDirtyWorldMin_, result.navDirtyWorldMin);
+            navRelevantDirtyWorldMax_ = glm::max(navRelevantDirtyWorldMax_, result.navDirtyWorldMax);
         }
     }
 }
 
 void FCPUAccelerationStructure::RebuildBVHOnly(Scene& scene)
 {
-    UpdateBVH(scene);
+    RequestRuntimeBuild(scene);
 }
 
 RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDir)
 {
     RayCastResult result {};
+    const SnapshotPtr snapshot = AcquireSnapshot();
 
-    if (GetCpuBvhState().bvh.blasCount > 0)
+    if (snapshot && !snapshot->instances.empty())
     {
         constexpr float maxDistance = 2000.0f;
         constexpr float skipEpsilon = 1e-3f;
@@ -341,15 +374,19 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
             const float remainingDistance = maxDistance - accumulatedT;
             tinybvh::Ray ray(tinybvh::bvhvec3(currentOrigin.x, currentOrigin.y, currentOrigin.z),
                              tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z), remainingDistance);
-            GetCpuBvhState().bvh.Intersect(ray);
+            snapshot->tlas.Intersect(ray);
             if (ray.hit.t >= remainingDistance)
             {
                 break;
             }
 
             uint32_t primIdx = ray.hit.prim;
-            tinybvh::BLASInstance& instance = (*GetCpuBvhState().instanceList)[ray.hit.inst];
-            FCPUTLASInstanceInfo& instContext = (*GetCpuBvhState().tlasContexts)[ray.hit.inst];
+            if (!snapshot->blasSet || ray.hit.inst >= snapshot->instances.size() || ray.hit.inst >= snapshot->contexts.size())
+            {
+                break;
+            }
+            const tinybvh::BLASInstance& instance = snapshot->instances[ray.hit.inst];
+            const FCPUTLASInstanceInfo& instContext = snapshot->contexts[ray.hit.inst];
             const float globalT = accumulatedT + ray.hit.t;
             vec3 hitPos = rayOrigin + rayDir * globalT;
             if (!instContext.rayCastVisible)
@@ -359,7 +396,15 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
                 continue;
             }
 
-            FCPUBLASContext& context = (*GetCpuBvhState().blasContexts)[instance.blasIdx];
+            if (instance.blasIdx >= snapshot->blasSet->contexts.size())
+            {
+                break;
+            }
+            const FCPUBLASContext& context = snapshot->blasSet->contexts[instance.blasIdx];
+            if (primIdx >= context.extinfos.size())
+            {
+                break;
+            }
             mat4* worldTS = (mat4*)instance.transform;
             vec4 normalWS = vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
             // Ensure normal faces toward the ray origin (flip if we hit a back face)
@@ -367,10 +412,10 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
                 normalWS = -normalWS;
             result.HitPoint = vec4(hitPos, 0);
             result.Normal = normalWS;
-            result.Hitted = true;
+            result.Hit = true;
             result.T = globalT;
             result.InstanceId = instContext.nodeId;
-            result.MaterialId = FetchMaterialId(context.extinfos[primIdx].matIdx, ray.hit.inst);
+            result.MaterialId = FetchMaterialId(*snapshot, context.extinfos[primIdx].matIdx, ray.hit.inst);
             break;
         }
     }
@@ -378,8 +423,192 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
     return result;
 }
 
+FCPUAccelerationStructure::SnapshotPtr FCPUAccelerationStructure::AcquireSnapshot() const
+{
+#if defined(__cpp_lib_atomic_shared_ptr) && __cpp_lib_atomic_shared_ptr >= 201711L
+    return activeSnapshot_.load(std::memory_order_acquire);
+#else
+    std::lock_guard<std::mutex> lock(snapshotMutex_);
+    return activeSnapshot_;
+#endif
+}
+
+void FCPUAccelerationStructure::PublishSnapshot(SnapshotPtr snapshot)
+{
+#if defined(__cpp_lib_atomic_shared_ptr) && __cpp_lib_atomic_shared_ptr >= 201711L
+    activeSnapshot_.store(std::move(snapshot), std::memory_order_release);
+#else
+    std::lock_guard<std::mutex> lock(snapshotMutex_);
+    activeSnapshot_ = std::move(snapshot);
+#endif
+}
+
+uint64_t FCPUAccelerationStructure::RequestRuntimeBuild(Scene& scene)
+{
+    return QueueBuildInput(CaptureBuildInput(scene));
+}
+
+uint64_t FCPUAccelerationStructure::QueueBuildInput(std::shared_ptr<FCPUTLASBuildInput> input)
+{
+    const uint64_t requestedRevision = input->sceneRevision;
+    latestRequestedRevision_.store(requestedRevision, std::memory_order_release);
+    bool shouldStartBuild = false;
+    {
+        std::lock_guard<std::mutex> lock(buildMutex_);
+        lastCaptureMilliseconds_ = input->captureMilliseconds;
+        if (buildInFlight_)
+        {
+            latestBuildInput_ = std::move(input);
+            ++coalescedRequestCount_;
+        }
+        else
+        {
+            buildInFlight_ = true;
+            shouldStartBuild = true;
+        }
+    }
+
+    if (shouldStartBuild)
+    {
+        StartBuild(std::move(input));
+    }
+    return requestedRevision;
+}
+
+void FCPUAccelerationStructure::StartBuild(std::shared_ptr<FCPUTLASBuildInput> input)
+{
+    Tasks::TaskCoordinator::GetInstance()->AddNamedTask(
+        Tasks::ENamedTaskThread::CPU_AS_BUILD,
+        [this, input = std::move(input)](Tasks::ResTask& task) mutable
+        {
+            std::shared_ptr<FCPUTLASBuildResult> result = BuildSnapshot(*input);
+            std::lock_guard<std::mutex> lock(buildMutex_);
+            completedBuildResult_ = std::move(result);
+        });
+}
+
+void FCPUAccelerationStructure::PollBVHBuild()
+{
+    std::shared_ptr<FCPUTLASBuildResult> result;
+    std::shared_ptr<FCPUTLASBuildInput> nextInput;
+    {
+        std::lock_guard<std::mutex> lock(buildMutex_);
+        if (!completedBuildResult_)
+        {
+            return;
+        }
+
+        result = std::move(completedBuildResult_);
+        nextInput = std::move(latestBuildInput_);
+        buildInFlight_ = nextInput != nullptr;
+    }
+
+    const uint64_t activeEpoch = buildEpoch_.load(std::memory_order_acquire);
+    const bool generationMatches = result->snapshot && result->snapshot->blasSet && blasSet_ &&
+                                   result->snapshot->blasSet->generation == blasSet_->generation;
+    if (result->epoch == activeEpoch && generationMatches)
+    {
+        const auto publishTime = std::chrono::steady_clock::now();
+        PublishSnapshot(result->snapshot);
+        MergeNavDirtyBounds(*result);
+        publishedRevision_.store(result->snapshot->sceneRevision, std::memory_order_release);
+        {
+            std::lock_guard<std::mutex> lock(buildMutex_);
+            ++completedBuildCount_;
+            lastBuildMilliseconds_ =
+                std::chrono::duration<double, std::milli>(result->buildEndTime - result->buildStartTime).count();
+            lastBuildToPublishMilliseconds_ =
+                std::chrono::duration<double, std::milli>(publishTime - result->requestTime).count();
+            buildToPublishSamples_.push_back(lastBuildToPublishMilliseconds_);
+            constexpr size_t maxBuildTimingSamples = 256;
+            if (buildToPublishSamples_.size() > maxBuildTimingSamples)
+            {
+                buildToPublishSamples_.erase(buildToPublishSamples_.begin());
+            }
+        }
+    }
+
+    if (nextInput)
+    {
+        StartBuild(std::move(nextInput));
+    }
+}
+
+void FCPUAccelerationStructure::CancelRuntimeBuilds()
+{
+    buildEpoch_.fetch_add(1, std::memory_order_acq_rel);
+    Tasks::TaskCoordinator::GetInstance()->WaitForNamedTask(Tasks::ENamedTaskThread::CPU_AS_BUILD);
+    std::lock_guard<std::mutex> lock(buildMutex_);
+    buildInFlight_ = false;
+    latestBuildInput_.reset();
+    completedBuildResult_.reset();
+    pendingProbeRevision_ = 0;
+}
+
+FCPUTLASBuildStats FCPUAccelerationStructure::GetBuildStats() const
+{
+    std::lock_guard<std::mutex> lock(buildMutex_);
+    FCPUTLASBuildStats stats;
+    stats.publishedRevision = publishedRevision_.load(std::memory_order_acquire);
+    stats.latestRequestedRevision = latestRequestedRevision_.load(std::memory_order_acquire);
+    stats.coalescedRequestCount = coalescedRequestCount_;
+    stats.completedBuildCount = completedBuildCount_;
+    stats.snapshotStaleness = stats.latestRequestedRevision > stats.publishedRevision
+                                  ? stats.latestRequestedRevision - stats.publishedRevision
+                                  : 0;
+    stats.lastBuildMilliseconds = lastBuildMilliseconds_;
+    stats.lastCaptureMilliseconds = lastCaptureMilliseconds_;
+    stats.lastBuildToPublishMilliseconds = lastBuildToPublishMilliseconds_;
+    if (!buildToPublishSamples_.empty())
+    {
+        std::vector<double> sortedSamples = buildToPublishSamples_;
+        std::sort(sortedSamples.begin(), sortedSamples.end());
+        const size_t p95Index = static_cast<size_t>(std::ceil(sortedSamples.size() * 0.95)) - 1;
+        stats.buildToPublishP95Milliseconds = sortedSamples[p95Index];
+    }
+    return stats;
+}
+
+void FCPUAccelerationStructure::QueueFullProbeBake()
+{
+    constexpr int groupSize = 16;
+    const int lengthX = CUBE_SIZE_XY / groupSize;
+    const int lengthZ = CUBE_SIZE_XY / groupSize;
+
+    std::vector<std::pair<int, int>> coordinates;
+    coordinates.reserve(lengthX * lengthZ);
+    for (int x = 0; x < lengthX; ++x)
+    {
+        for (int z = 0; z < lengthZ; ++z)
+        {
+            coordinates.push_back({x, z});
+        }
+    }
+
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    std::shuffle(coordinates.begin(), coordinates.end(), generator);
+
+    for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
+    {
+        for (const auto& [x, z] : coordinates)
+        {
+            needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Voxelize, EBakerType::EBT_Probe, cascadeIndex});
+        }
+        needUpdateGroups.push({ivec3(0), ECubeProcType::ECPT_Fence, EBakerType::EBT_Probe, cascadeIndex});
+    }
+}
+
 bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::DeviceMemory* voxelGpuMemory, bool incremental)
 {
+    if (incremental)
+    {
+        // Geometry revisions must continue to coalesce while an older probe batch
+        // is running. The new batch is queued only after this revision publishes.
+        pendingProbeRevision_ = RequestRuntimeBuild(scene);
+        return true;
+    }
+
     if ( !Tasks::TaskCoordinator::GetInstance()->IsAllParralledTaskComplete() )
     {
         return false;
@@ -395,53 +624,14 @@ bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::D
         incremental = false;
     }
 
-    if (!incremental)
+    for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
     {
-        for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
-        {
-            FCPUProbeBaker& baker = cascadeBakers[cascadeIndex];
-            baker.ClearAmbientCubes();
-            baker.UploadGPU(*voxelGpuMemory, scene.AmbientVoxelsByteOffset(), cascadeIndex * kCascadeVoxelCount);
-        }
+        FCPUProbeBaker& baker = cascadeBakers[cascadeIndex];
+        baker.ClearAmbientCubes();
+        baker.UploadGPU(*voxelGpuMemory, scene.AmbientVoxelsByteOffset(), cascadeIndex * kCascadeVoxelCount);
     }
-    else
-    {
-        UpdateBVH(scene);
-    }
-    
-    const int groupSize = 16;
-    const int lengthX = CUBE_SIZE_XY / groupSize;
-    const int lengthZ = CUBE_SIZE_XY / groupSize;
 
-    // far probe gen
-    // for (int x = 0; x < lengthX; x++)
-    //     for (int z = 0; z < lengthZ; z++)
-    //         needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Voxelize, EBakerType::EBT_FarProbe});
-    
-    // 2 pass near probe iterate
-    for(int pass = 0; pass < 1; ++pass)
-    {
-        // shuffle
-        std::vector<std::pair<int, int>> coordinates;
-        for (int x = 0; x < lengthX; x++)
-            for (int z = 0; z < lengthZ; z++)
-                coordinates.push_back({x, z});
-        
-        std::random_device rd;
-        std::mt19937 g(rd());
-        std::shuffle(coordinates.begin(), coordinates.end(), g);
-
-        // dispatch
-        for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
-        {
-            for (const auto& [x, z] : coordinates)
-            {
-                needUpdateGroups.push({ivec3(x, 0, z), ECubeProcType::ECPT_Voxelize, EBakerType::EBT_Probe, cascadeIndex});
-            }
-            needUpdateGroups.push({ivec3(0), ECubeProcType::ECPT_Fence, EBakerType::EBT_Probe, cascadeIndex});
-        }
-        // add fence
-    }
+    QueueFullProbeBake();
 
     return true;
 }
@@ -450,7 +640,8 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Sc
                                                   EBakerType bakerType, uint32_t cascadeIndex)
 {
     (void)bakerType;
-    if (bvhInstanceList.empty())
+    const SnapshotPtr snapshot = AcquireSnapshot();
+    if (!snapshot || snapshot->instances.empty())
     {
         return;
     }
@@ -472,20 +663,20 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Sc
         lightPos.push_back(mix(light.p1, light.p3, 0.5f));
     }
 
-    if (scene.HasSun())
+    if (scene.GetEnvSettings().HasSun)
     {
-        sunDir.push_back( scene.GetSunDir() );
+        sunDir.push_back(scene.GetEnvSettings().SunDirection());
     }
 
     uint32_t taskId = Tasks::TaskCoordinator::GetInstance()->AddParralledTask(
-                [this, actualX, actualZ, groupSize, procType, cascadeIndex](Tasks::ResTask& task)
+                [this, snapshot, actualX, actualZ, groupSize, procType, cascadeIndex](Tasks::ResTask& task)
             {
                 FCPUProbeBaker& baker = cascadeBakers[cascadeIndex];
                 for (int z = actualZ; z < actualZ + groupSize; z++)
                     for (int y = 0; y < CUBE_SIZE_Z; y++)
                         for (int x = actualX; x < actualX + groupSize; x++)
                         {
-                            baker.ProcessCube(x, y, z, procType);
+                            baker.ProcessCube(x, y, z, procType, snapshot);
                         }
             },
             [this](Tasks::ResTask& task)
@@ -499,27 +690,38 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Sc
 }
 void FCPUAccelerationStructure::ClearAllTasks()
 {
-    // 等待所有并行任务完成
+    CancelRuntimeBuilds();
+
+    // Wait for all parallel tasks to finish.
     Tasks::TaskCoordinator::GetInstance()->WaitForAllParralledTask();
     
-    // 清空待更新队列
+    // Clear the pending-update queue.
     while (!needUpdateGroups.empty())
     {
         needUpdateGroups.pop();
     }
     
-    // 清空当前批次任务列表
+    // Clear the current batch's task list.
     lastBatchTasks.clear();
     distanceFieldRebuildTasks.clear();
     
-    // 重置刷新标志
+    // Reset the refresh flag.
     needFlush = false;
     distanceFieldRebuildScheduled_ = false;
     ClearNavRelevantDirtyBounds();
+    PublishSnapshot(std::make_shared<FCPUTLASSnapshot>());
+    blasSet_.reset();
 }
 
 bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemory, Vulkan::DeviceMemory* voxelGpuMemory, Vulkan::DeviceMemory* pageIndexMemory)
 {
+    if (pendingProbeRevision_ != 0 &&
+        publishedRevision_.load(std::memory_order_acquire) >= pendingProbeRevision_)
+    {
+        QueueFullProbeBake();
+        pendingProbeRevision_ = 0;
+    }
+
     bool voxelUploadCompleted = false;
     const bool batchComplete = lastBatchTasks.empty() || Tasks::TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks);
     NextEngine* engine = NextEngine::GetInstance();
@@ -636,7 +838,9 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
 
 bool FCPUAccelerationStructure::HasPendingWork() const
 {
-    return needFlush || !lastBatchTasks.empty() || !distanceFieldRebuildTasks.empty() || distanceFieldRebuildScheduled_ || !needUpdateGroups.empty();
+    std::lock_guard<std::mutex> lock(buildMutex_);
+    return buildInFlight_ || pendingProbeRevision_ != 0 || needFlush || !lastBatchTasks.empty() ||
+           !distanceFieldRebuildTasks.empty() || distanceFieldRebuildScheduled_ || !needUpdateGroups.empty();
 }
 
 void FCPUAccelerationStructure::RequestUpdate(vec3 worldPos, float radius)

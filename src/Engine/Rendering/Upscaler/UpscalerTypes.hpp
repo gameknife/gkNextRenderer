@@ -13,6 +13,84 @@ namespace Assets
 
 namespace Rendering::Upscaler
 {
+    enum class EUpscalerType : uint32_t
+    {
+        None = 0,
+        DLSS = 1,
+        DLSSRayReconstruction = 2,
+        FidelityFXFSR = 3,
+        NativeTAAU = 4,
+        SnapdragonGSR2 = 5,
+        Count,
+    };
+
+    using FUpscalerTypeMask = uint32_t;
+
+    constexpr FUpscalerTypeMask UpscalerTypeBit(EUpscalerType type)
+    {
+        return type == EUpscalerType::None || type >= EUpscalerType::Count
+            ? 0u
+            : 1u << static_cast<uint32_t>(type);
+    }
+
+    constexpr bool SupportsUpscalerType(FUpscalerTypeMask supportedTypes, EUpscalerType type)
+    {
+        return (supportedTypes & UpscalerTypeBit(type)) != 0;
+    }
+
+    // Pre-scale for the reversible Reinhard compression the temporal chain operates in.
+    // CompressHdr(c) = c / (1 + L(c)); its inverse c / (1 - L) has unbounded gain as L approaches
+    // 1, so an additive clamp applied in compressed space turns into a multiplicative jump once
+    // decompressed. Holding the working point on the curve's knee rather than in its saturated
+    // tail keeps the firefly ceilings additive on both sides of the round trip.
+    // Tonemap.slang maps scene linear 230 * (PaperWhiteNit / 40000) to paper white on the HDR
+    // path, so dividing by that lands paper white at L = 0.5. The SDR path feeds GT_Tonemapping
+    // directly and its white point already sits near linear 1.
+    inline float ComputeHdrCompressionScale(const float paperWhiteNit, const bool hdrOutput)
+    {
+        if (!hdrOutput)
+        {
+            return 1.0f;
+        }
+        const float exposure = std::max(paperWhiteNit / 40000.0f, 1.0e-6f);
+        return std::clamp(1.0f / std::max(230.0f * exposure, 1.0e-3f), 0.05f, 4.0f);
+    }
+
+    inline void SetUpscalerTypeSupport(
+        FUpscalerTypeMask& supportedTypes, EUpscalerType type, bool supported)
+    {
+        const FUpscalerTypeMask bit = UpscalerTypeBit(type);
+        supportedTypes = supported ? supportedTypes | bit : supportedTypes & ~bit;
+    }
+
+    struct FUpscalerTypeInfo
+    {
+        EUpscalerType type = EUpscalerType::None;
+        const char* stableId = "none";
+        const char* name = "None";
+        bool requiresDepthAndMotion = false;
+        bool requiresRayReconstruction = false;
+        bool supportsTemporalPostFilter = false;
+        bool requiresInvalidMotionMask = false;
+        bool requiresStorageOutput = false;
+        bool frameGenerationRequiresReadableDepth = false;
+        bool leavesInputsShaderRead = false;
+    };
+
+    inline const FUpscalerTypeInfo& GetUpscalerTypeInfo(uint32_t rawType)
+    {
+        static constexpr FUpscalerTypeInfo kTypes[] = {
+            {EUpscalerType::None, "none", "None", false, false, false, false, false, false, false},
+            {EUpscalerType::DLSS, "dlss", "DLSS", true, false, false, true, false, false, false},
+            {EUpscalerType::DLSSRayReconstruction, "dlss-ray-reconstruction", "DLSS Ray Reconstruction", true, true, false, false, false, false, false},
+            {EUpscalerType::FidelityFXFSR, "fidelityfx-fsr", "FidelityFX FSR", true, false, true, false, true, true, true},
+            {EUpscalerType::NativeTAAU, "native-taau", "Native TAAU", true, false, true, false, true, false, false},
+            {EUpscalerType::SnapdragonGSR2, "sgsr2", "SGSR2 (2-pass CS)", true, false, true, false, true, false, false},
+        };
+        static_assert(std::size(kTypes) == static_cast<size_t>(EUpscalerType::Count));
+        return rawType < std::size(kTypes) ? kTypes[rawType] : kTypes[0];
+    }
+
     enum class EUpscaleMode : uint32_t
     {
         Quality = 0,
@@ -20,11 +98,13 @@ namespace Rendering::Upscaler
         Performance = 2,
         UltraPerformance = 3,
         Native = 4,
+        Auto = 5,
     };
 
     struct FUpscaleModeInfo
     {
         EUpscaleMode mode = EUpscaleMode::Quality;
+        const char* stableId = "quality";
         const char* name = "Quality";
         float fallbackScale = 1.5f;
     };
@@ -32,11 +112,14 @@ namespace Rendering::Upscaler
     inline const FUpscaleModeInfo& GetUpscaleModeInfo(uint32_t rawMode)
     {
         static constexpr FUpscaleModeInfo kModes[] = {
-            {EUpscaleMode::Quality, "Quality", 1.5f},
-            {EUpscaleMode::Balanced, "Balanced", 1.7f},
-            {EUpscaleMode::Performance, "Performance", 2.0f},
-            {EUpscaleMode::UltraPerformance, "Ultra Performance", 3.0f},
-            {EUpscaleMode::Native, "Native", 1.0f},
+            {EUpscaleMode::Quality, "quality", "Quality", 1.5f},
+            {EUpscaleMode::Balanced, "balanced", "Balanced", 1.7f},
+            {EUpscaleMode::Performance, "performance", "Performance", 2.0f},
+            {EUpscaleMode::UltraPerformance, "ultra-performance", "Ultra Performance", 3.0f},
+            {EUpscaleMode::Native, "native", "Native", 1.0f},
+            // Auto has no fixed scale. ResolveUpscaleMode converts it to either
+            // Native/DLAA or Quality before the provider sees it.
+            {EUpscaleMode::Auto, "auto", "Auto", 1.0f},
         };
 
         if (rawMode >= std::size(kModes))
@@ -44,6 +127,31 @@ namespace Rendering::Upscaler
             return kModes[0];
         }
         return kModes[rawMode];
+    }
+
+    struct FResolvedUpscaleMode
+    {
+        bool enabled = false;
+        uint32_t mode = static_cast<uint32_t>(EUpscaleMode::Native);
+    };
+
+    inline FResolvedUpscaleMode ResolveUpscaleMode(uint32_t rawMode, VkExtent2D outputExtent)
+    {
+        const auto& modeInfo = GetUpscaleModeInfo(rawMode);
+        if (modeInfo.mode != EUpscaleMode::Auto)
+        {
+            return {true, static_cast<uint32_t>(modeInfo.mode)};
+        }
+
+        constexpr uint64_t fullHdPixelCount = 1920ull * 1080ull;
+        const uint64_t outputPixelCount =
+            static_cast<uint64_t>(outputExtent.width) * static_cast<uint64_t>(outputExtent.height);
+        if (outputPixelCount <= fullHdPixelCount)
+        {
+            return {true, static_cast<uint32_t>(EUpscaleMode::Native)};
+        }
+
+        return {true, static_cast<uint32_t>(EUpscaleMode::Quality)};
     }
 
     inline VkExtent2D ScaleExtent(VkExtent2D extent, float scale)
@@ -82,11 +190,10 @@ namespace Rendering::Upscaler
 
     struct FFeatureCaps
     {
+        FUpscalerTypeMask supportedTypes = 0;
+        FUpscalerTypeMask frameGenerationTypes = 0;
         bool streamlineInitialized = false;
         bool streamlineDeviceReady = false;
-        bool supportDLSS = false;
-        bool supportDLSSRR = false;
-        bool supportDLSSG = false;
         bool supportReflex = false;
         bool supportPCL = false;
         bool requestedDeviceExtensionsAvailable = false;
@@ -179,18 +286,23 @@ namespace Rendering::Upscaler
         uint32_t frameIndex = 0;
         uint32_t imageIndex = 0;
         bool reset = false;
-        bool enableDLSS = false;
-        bool enableDLSSRR = false;
-        bool enableDLSSG = false;
+        EUpscalerType upscalerType = EUpscalerType::None;
+        bool enableFrameGeneration = false;
         uint32_t superResolutionMode = 0;
         uint32_t frameGenerationMultiplier = 2;
         bool hdrOutput = false;
-
+        // True when the scaling input remains pre-exposed linear scene radiance. Providers
+        // must not apply an sRGB/PQ transfer; display encoding happens afterwards.
+        bool inputColorIsLinear = false;
+        float frameTimeDeltaMilliseconds = 16.6667f;
+        float nativeTemporalHistoryWeight = 0.97f;
+        float nativeTemporalSharpness = 0.25f;
         VkExtent2D renderExtent{};
         VkExtent2D outputExtent{};
         VkOffset2D outputOffset{};
         VkFormat swapchainFormat = VK_FORMAT_UNDEFINED;
         uint32_t backBufferCount = 0;
+        VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 
         const Assets::UniformBufferObject* ubo = nullptr;
         FCameraConstants camera{};

@@ -8,19 +8,19 @@
 #include "KongLie3DNotifications.hpp"
 #include "KongLie3DStyle.hpp"
 #include "KongLie3DUI.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Data/Material.hpp"
-#include "Engine/Assets/Loaders/FProcModel.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
-#include "Engine/Runtime/Editor/FontLoader.h"
+#include "Engine/Runtime/Editor/FontLoader.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Scene/NodeUtils.h"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
-#include "Engine/Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "KongLie3DDataLoader.hpp"
-#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
@@ -352,8 +352,7 @@ void KongLie3DGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
                         "KongLie3D battle simulation speed");
     
     //std::string error;
-    //cvars.SetDefaultFromString("r.dlss", "true", &error);
-    // cvars.SetDefaultFromString("r.dlssrr", "true", &error);
+    //cvars.SetDefaultFromString("r.upscaler.type", "2", &error);
 }
 
 void KongLie3DGameInstance::OnTick(double deltaSeconds)
@@ -672,9 +671,9 @@ bool KongLie3DGameInstance::OnMouseButton(SDL_Event& event)
         Runtime::EngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
 
         bool handled = false;
-        GetEngine().RayCastGPU(rayOrigin, rayDir, [this, &handled](Assets::RayCastResult result)
+        GetEngine().RayCast(rayOrigin, rayDir, [this, &handled](Assets::RayCastResult result)
         {
-            if (!result.Hitted)
+            if (!result.Hit)
             {
                 return true;
             }
@@ -1279,9 +1278,9 @@ void KongLie3DGameInstance::UpdateHoveredPieceTooltip(double deltaSeconds)
     Runtime::EngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
 
     std::string hoveredPieceId;
-    GetEngine().RayCastGPU(rayOrigin, rayDir, [this, &hoveredPieceId](Assets::RayCastResult result)
+    GetEngine().RayCast(rayOrigin, rayDir, [this, &hoveredPieceId](Assets::RayCastResult result)
     {
-        if (!result.Hitted)
+        if (!result.Hit)
         {
             return true;
         }

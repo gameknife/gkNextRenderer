@@ -2,7 +2,7 @@
 // ReSharper disable once CppUnusedIncludeDirective
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <glm/gtc/constants.hpp>

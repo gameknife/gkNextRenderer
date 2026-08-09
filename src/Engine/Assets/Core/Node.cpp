@@ -1,10 +1,13 @@
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Assets/Core/Scene.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Reflection/PropertyMeta.h"
+#include "Engine/Runtime/Reflection/PropertyMeta.hpp"
+#include "Engine/Utilities/Exception.hpp"
 #include <entt/meta/factory.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
@@ -35,10 +38,10 @@ namespace Assets
                 .custom<PropertyMeta>(PropertyPresets::Editable("Scale", "Transform", "Local scale"))
             .func<&Node::GetName>("GetName")
             .func<&Node::GetInstanceId>("GetInstanceId")
-            .func<&Node::GetComponentByTypeName>("GetComponent");
+            .func<static_cast<Component* (Node::*)(const std::string&) const>(&Node::GetComponent)>("GetComponent");
     }
 
-    Component* Node::GetComponentByTypeName(const std::string& componentType) const
+    Component* Node::GetComponent(const std::string& componentType) const
     {
         for (const auto& component : components_)
         {
@@ -54,6 +57,89 @@ namespace Assets
         }
 
         return nullptr;
+    }
+
+    Component* Node::FindComponent(entt::id_type componentTypeId) const
+    {
+        if (componentTypeId == ComponentTypeId<Runtime::RenderComponent>())
+        {
+            return renderComponent_;
+        }
+        if (componentTypeId == ComponentTypeId<Runtime::PhysicsComponent>())
+        {
+            return physicsComponent_;
+        }
+
+        const auto component = std::ranges::find_if(components_, [componentTypeId](const auto& candidate)
+        {
+            return candidate->GetTypeId() == componentTypeId;
+        });
+        return component != components_.end() ? component->get() : nullptr;
+    }
+
+    void Node::SetComponent(entt::id_type componentTypeId, std::shared_ptr<Component> component)
+    {
+        if (component && component->GetTypeId() != componentTypeId)
+        {
+            Throw(std::logic_error("Component static and dynamic types do not match"));
+        }
+        if (component && component->GetOwner() && component->GetOwner() != this)
+        {
+            Throw(std::logic_error("Component is already attached to another node"));
+        }
+
+        const auto existing = std::ranges::find_if(components_, [componentTypeId](const auto& candidate)
+        {
+            return candidate->GetTypeId() == componentTypeId;
+        });
+        if (existing == components_.end() && !component)
+        {
+            return;
+        }
+        if (existing != components_.end() && existing->get() == component.get())
+        {
+            return;
+        }
+
+        std::shared_ptr<Component> replaced;
+        if (existing != components_.end())
+        {
+            replaced = std::move(*existing);
+            if (component)
+            {
+                *existing = component;
+            }
+            else
+            {
+                components_.erase(existing);
+            }
+        }
+        else
+        {
+            components_.push_back(component);
+        }
+
+        if (component)
+        {
+            component->SetOwner(this);
+        }
+        if (componentTypeId == ComponentTypeId<Runtime::RenderComponent>())
+        {
+            renderComponent_ = static_cast<Runtime::RenderComponent*>(component.get());
+        }
+        else if (componentTypeId == ComponentTypeId<Runtime::PhysicsComponent>())
+        {
+            physicsComponent_ = static_cast<Runtime::PhysicsComponent*>(component.get());
+        }
+
+        if (scene_)
+        {
+            scene_->OnNodeComponentChanged(*this, componentTypeId, component.get());
+        }
+        if (replaced)
+        {
+            replaced->SetOwner(nullptr);
+        }
     }
 
     std::shared_ptr<Node> Node::CreateNode(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t instanceId)
@@ -92,9 +178,9 @@ namespace Assets
     void Node::RecalcTransform(bool full)
     {
         RecalcLocalTransform();
-        if(parent_)
+        if (const auto parent = parent_.lock())
         {
-            transform_ = parent_->transform_ * localTransform_;
+            transform_ = parent->transform_ * localTransform_;
         }
         else
         {
@@ -136,12 +222,13 @@ namespace Assets
         return scale;
     }
 
-    bool Node::TickVelocity(glm::mat4& combinedTS)
+    void Node::SyncPhysics()
     {
         auto* physComp = physicsComponent_;
         if (physComp && physComp->GetMobility() == ENodeMobility::Dynamic)
         {
-            auto body = NextEngine::GetInstance()->GetPhysicsEngine()->GetBody(physComp->GetPhysicsBody());
+            NextPhysics* physics = NextEngine::GetInstance()->GetPhysicsEngine();
+            auto body = physics ? physics->GetBody(physComp->GetPhysicsBody()) : nullptr;
             if (body != nullptr)
             {
                 // Physics body position is the center of mass in world space.
@@ -157,73 +244,89 @@ namespace Assets
                 RecalcTransform(true);
             }
         }
-        
-        combinedTS = prevTransform_ * glm::inverse(transform_);
+    }
+
+    bool Node::TickVelocity()
+    {
+        combinedPrevTransform_ = prevTransform_ * glm::inverse(transform_);
         prevTransform_ = transform_;
 
-        glm::vec3 newPos = combinedTS * glm::vec4(0,0,0,1);
-        bool moving = glm::length(newPos) > 0.001;
+        constexpr float transformEpsilon = 0.001f;
+        const glm::mat4 identity(1.0f);
+        bool moving = false;
+        for (glm::length_t column = 0; column < 4 && !moving; ++column)
+        {
+            for (glm::length_t row = 0; row < 4; ++row)
+            {
+                if (glm::abs(combinedPrevTransform_[column][row] - identity[column][row]) > transformEpsilon)
+                {
+                    moving = true;
+                    break;
+                }
+            }
+        }
         if (moving)
         {
             return true;
         }
 
-        combinedTS = glm::mat4(1);
+        combinedPrevTransform_ = identity;
         return false;
     }
 
-    void Node::SetParent(std::shared_ptr<Node> parent)
+    void Node::SetParent(const std::shared_ptr<Node>& parent)
     {
-        // remove form previous parent
-        if(parent_)
+        if (!parent)
         {
-            parent_->RemoveChild( shared_from_this() );
+            ClearParent();
+            return;
+        }
+        for (const Node* ancestor = parent.get(); ancestor; ancestor = ancestor->GetParent())
+        {
+            if (ancestor == this)
+            {
+                Throw(std::logic_error("Node hierarchy cannot contain a cycle"));
+            }
+        }
+
+        if (const auto previousParent = parent_.lock())
+        {
+            previousParent->children_.erase(shared_from_this());
         }
         parent_ = parent;
-        parent_->AddChild( shared_from_this() );
+        parent->children_.insert(shared_from_this());
 
         RecalcTransform();
     }
 
     void Node::ClearParent()
     {
-        if (parent_)
+        if (const auto parent = parent_.lock())
         {
-            parent_->RemoveChild(shared_from_this());
-            parent_.reset();
-            RecalcTransform();
+            parent->children_.erase(shared_from_this());
         }
+        parent_.reset();
+        RecalcTransform();
     }
 
-    void Node::AddChild(std::shared_ptr<Node> child)
+    void Node::GetNodeProxy(NodeProxy& proxy) const
     {
-        children_.insert(child);
-    }
-
-    void Node::RemoveChild(std::shared_ptr<Node> child)
-    {
-        children_.erase(child);
-    }
-
-    NodeProxy Node::GetNodeProxy() const
-    {
-        NodeProxy proxy;
         proxy.instanceId = instanceId_;
-        proxy.worldTS = WorldTransform();
+        proxy.worldTS = transform_;
+        proxy.combinedPrevTS = combinedPrevTransform_;
         proxy.reserved1 = 0;
         proxy.reserved2 = 0;
         
-        auto renderComp = GetComponent<Runtime::RenderComponent>();
-        if (renderComp)
+        if (renderComponent_)
         {
-            proxy.modelId = renderComp->GetModelId();
-            proxy.visible = renderComp->GetRenderParticipationMask();
-            const auto& mats = renderComp->GetMaterials();
+            proxy.modelId = renderComponent_->GetModelId();
+            proxy.visible = renderComponent_->GetRenderParticipationMask();
+            const auto& mats = renderComponent_->GetMaterials();
             for ( int i = 0; i < 16; i++ )
             {
                 proxy.matId[i] = mats[i];
             }
-            proxy.skinId = renderComp->GetSkinIndex();
+            proxy.skinId = renderComponent_->GetSkinIndex();
         }
         else
         {
@@ -232,11 +335,8 @@ namespace Assets
              for ( int i = 0; i < 16; i++ ) proxy.matId[i] = 0;
              proxy.skinId = -1;
         }
-
         proxy.jointMatrixOffset = 0; // Default
-        proxy.nort = 0; // Default
-
-        return proxy;
+        proxy.excludeFromAS = 0; // Default
     }
 
     Node::Node(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t instanceId):

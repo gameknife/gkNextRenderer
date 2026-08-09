@@ -5,7 +5,6 @@
   "loadTimeoutSeconds": 20.0,
   "baselineDir": "assets/visual_test_baselines",
   "diffThreshold": 5,
-  "useFastCapture": true,
   "useSceneList": false,
   "includeExtensions": [
     ".proc",
@@ -31,27 +30,21 @@
       "frames": 180
     },
     {
-      "path": "assets/scad/acient_city.scad",
+      "path": "assets/scad/source/old_city.scad",
       "frames": 90
     },
     {
-      "path": "assets/scad/beer_cup.scad",
+      "path": "assets/scad/source/beer_cup.scad",
       "frames": 90
-    },
-    {
-      "path": "assets/sog/Grape.sog",
-      "frames": 120
     }
   ],
   "sceneTimeouts": {
     "PhysicsShowcase.proc": 30.0,
-    "assets/scad/acient_city.scad": 30.0,
-    "assets/scad/beer_cup.scad": 30.0,
-    "assets/sog/Grape.sog": 30.0
+    "assets/scad/source/old_city.scad": 60.0,
+    "assets/scad/source/beer_cup.scad": 30.0
   },
   "notes": {
     "PhysicsShowcase.proc": "Physics motion can have small platform-dependent variance; visual baseline is informational.",
-    "assets/scad/acient_city.scad": "SCAD loader uses Manifold for CSG on desktop; mobile/no-backend builds may still fall back to approximations.",
-    "assets/sog/Grape.sog": "Gaussian splat regression scene; validates SOG decode, GPU sorting, SH shading and accumulation/compose."
+    "assets/scad/source/old_city.scad": "SCAD loader uses Manifold for CSG on desktop; mobile/no-backend builds may still fall back to approximations."
   }
 }

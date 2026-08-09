@@ -12,112 +12,112 @@ namespace MagicaLego
 
 enum EIntroStep : uint8_t
 {
-	EIS_Entry,
-	EIS_Opening,
-	EIS_GuideBuild,
-	EIS_Finish,
-	EIS_InGame,
+    EIS_Entry,
+    EIS_Opening,
+    EIS_GuideBuild,
+    EIS_Finish,
+    EIS_InGame,
 };
 
 enum EUILayout : uint8_t
 {
-	EULUT_LeftBar = 0x1,
-	EULUT_RightBar = 0x2,
-	EULUT_Timeline = 0x4,
-	EULUT_TitleBar = 0x8,
-	EULUT_LayoutIndicator = 0x10,
+    EULUT_LeftBar = 0x1,
+    EULUT_RightBar = 0x2,
+    EULUT_Timeline = 0x4,
+    EULUT_TitleBar = 0x8,
+    EULUT_LayoutIndicator = 0x10,
 };
 
 class MagicaLegoUserInterface final
 {
 public:
-	MagicaLegoUserInterface(MagicaLegoGameInstance* gameInstance);
-	~MagicaLegoUserInterface();
+    MagicaLegoUserInterface(MagicaLegoGameInstance* gameInstance);
+    ~MagicaLegoUserInterface();
 
-	void OnInitUI();
-	void OnRenderUI();
-	void OnSceneLoaded();
+    void OnInitUI();
+    void OnRenderUI();
+    void OnSceneLoaded();
 
 private:
-	void DrawTitleBar();
-	void DrawMainToolBar();
-	void DrawLeftBar();
-	void DrawRightBar();
-	void DrawTimeline();
-	void DrawOpening() const;
+    void DrawTitleBar();
+    void DrawMainToolBar();
+    void DrawLeftBar();
+    void DrawRightBar();
+    void DrawTimeline();
+    void DrawOpening() const;
 
-	void DrawWaiting();
-	void DrawNotify();
+    void DrawWaiting();
+    void DrawNotify();
 
-	void DrawWatermark();
-	void DrawVersionWatermark();
+    void DrawWatermark();
+    void DrawVersionWatermark();
 
-	void DrawHUD();
+    void DrawHUD();
 
-	void DrawHelp();
-	void DrawConsoleWindow();
-	void DrawConsole();
-	void DrawScriptLoadPopup();
-	void DrawAISection();
-	void DrawColorVocabulary();
+    void DrawHelp();
+    void DrawConsoleWindow();
+    void DrawConsole();
+    void DrawScriptLoadPopup();
+    void DrawAISection();
+    void DrawColorVocabulary();
 
-	void RecordTimeline(bool autoRotate);
+    void RecordTimeline(bool autoRotate);
 
-	void ShowNotify(const std::string& text, std::function<void()> callback = nullptr);
-	
-	MagicaLegoGameInstance* GetGameInstance() const {return gameInstance_;}
-	MagicaLegoGameInstance* gameInstance_;
+    void ShowNotify(const std::string& text, std::function<void()> callback = nullptr);
+    
+    MagicaLegoGameInstance* GetGameInstance() const {return gameInstance_;}
+    MagicaLegoGameInstance* gameInstance_;
 
-	void DirectSetLayout(uint32_t layout);
-	void PushLayout(uint32_t layout);
-	void PopLayout();
-	uint32_t uiStatus_ {};
-	std::vector<uint32_t> uiStatusStack_ {};
+    void DirectSetLayout(uint32_t layout);
+    void PushLayout(uint32_t layout);
+    void PopLayout();
+    uint32_t uiStatus_ {};
+    std::vector<uint32_t> uiStatusStack_ {};
 
-	bool capture_ {};
-	bool waiting_ {};
-	std::string waitingText_ {};
+    bool capture_ {};
+    bool waiting_ {};
+    std::string waitingText_ {};
 
-	bool notify_ {};
-	std::string notifyText_ {};
-	std::function<void()> notifyCallback_ {};
+    bool notify_ {};
+    std::string notifyText_ {};
+    std::function<void()> notifyCallback_ {};
 
-	ImFont* bigFont_ {};
-	ImFont* boldFont_ {};
-	float openingTimer_ = 2.0f;
+    ImFont* bigFont_ {};
+    ImFont* boldFont_ {};
+    float openingTimer_ = 2.0f;
 
-	bool showHelp_ {};
+    bool showHelp_ {};
 
-	EIntroStep introStep_ = EIntroStep::EIS_Entry;
+    EIntroStep introStep_ = EIntroStep::EIS_Entry;
 
-	bool qualityMode_ {};
+    bool qualityMode_ {};
 
-	// Console
-	std::unique_ptr<MagicaLego::FCommandExecutor> commandExecutor_;
-	std::string consoleInput_;
-	std::vector<std::string> consoleOutput_;
-	bool scrollToBottom_ = false;
-	bool showScriptPopup_ = false;
-	std::string selectedScript_;
+    // Console
+    std::unique_ptr<MagicaLego::FCommandExecutor> commandExecutor_;
+    std::string consoleInput_;
+    std::vector<std::string> consoleOutput_;
+    bool scrollToBottom_ = false;
+    bool showScriptPopup_ = false;
+    std::string selectedScript_;
 
-	// AI Assistant
-	struct FAIChatMessage
-	{
-		std::string text;
-		bool isUser = false;
-		bool isError = false;
-		bool isCodeBlock = false;
-	};
+    // AI Assistant
+    struct FAIChatMessage
+    {
+        std::string text;
+        bool isUser = false;
+        bool isError = false;
+        bool isCodeBlock = false;
+    };
 
-	std::unique_ptr<MagicaLego::FAIService> aiService_;
-	std::string aiInput_;
-	bool aiGenerating_ = false;
-	bool aiBuildOnExisting_ = false;  // Toggle for context-aware generation
-	std::string lastGeneratedScript_;
-	float aiGenerateStartTime_ = 0.0f;  // Timer for AI generation
-	std::vector<FAIChatMessage> aiChatHistory_;
-	bool aiChatScrollToBottom_ = false;
+    std::unique_ptr<MagicaLego::FAIService> aiService_;
+    std::string aiInput_;
+    bool aiGenerating_ = false;
+    bool aiBuildOnExisting_ = false;  // Toggle for context-aware generation
+    std::string lastGeneratedScript_;
+    float aiGenerateStartTime_ = 0.0f;  // Timer for AI generation
+    std::vector<FAIChatMessage> aiChatHistory_;
+    bool aiChatScrollToBottom_ = false;
 
-	// Console Window
-	bool showConsoleWindow_ = false;
+    // Console Window
+    bool showConsoleWindow_ = false;
 };

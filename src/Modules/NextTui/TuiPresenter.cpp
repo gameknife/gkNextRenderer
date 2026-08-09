@@ -9,6 +9,7 @@
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
+#include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Modules/NextTui/NextTuiModule.hpp"
 
 #include <SDL3/SDL_events.h>
@@ -32,10 +33,13 @@ namespace Runtime::Tui
 
         struct FSlot
         {
+            // Keep memory before its resource so destruction releases the resource first.
+            std::unique_ptr<Vulkan::DeviceMemory> ImageMemory;
             std::unique_ptr<Vulkan::Image> Image;
-            std::unique_ptr<Vulkan::DeviceMemory> Memory;
-            VkSubresourceLayout Layout{};
+            std::unique_ptr<Vulkan::DeviceMemory> StagingMemory;
+            std::unique_ptr<Vulkan::Buffer> StagingBuffer;
             VkExtent2D Extent{};
+            bool ImageInitialized = false;
             uint64_t SubmitSerial = 0;
             uint64_t Serial = 0;
             ESlotState State = ESlotState::Free;
@@ -60,17 +64,6 @@ namespace Runtime::Tui
         constexpr uint32_t TuiMinColumns = 10;
         constexpr uint32_t TuiMinRows = 2;
 
-        VkSubresourceLayout GetLinearImageLayout(const Vulkan::Device& device, const Vulkan::Image& image)
-        {
-            VkSubresourceLayout layout{};
-            VkImageSubresource subresource{};
-            subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            subresource.mipLevel = 0;
-            subresource.arrayLayer = 0;
-            vkGetImageSubresourceLayout(device.Handle(), image.Handle(), &subresource, &layout);
-            return layout;
-        }
-
         SDL_WindowID ResolveWindowId(NextEngine& engine)
         {
             SDL_Window* window = engine.GetWindow().Handle();
@@ -81,7 +74,13 @@ namespace Runtime::Tui
     TuiPresenter::TuiPresenter(NextEngine& engine, const Runtime::Config::Options& options)
         : engine_(engine)
         , options_(options)
-        , blitter_({.MaxColumns = options.TuiMaxCols, .MaxRows = options.TuiMaxRows})
+        , blitter_({
+            .MaxColumns = options.TuiMaxCols,
+            .MaxRows = options.TuiMaxRows,
+            .CellMode = options.TuiCellMode == "quadrant"
+                ? ECellMode::Quadrant
+                : ECellMode::HalfBlock,
+        })
         , terminal_(!options.TuiNoInput)
         , readback_(std::make_unique<FReadbackState>())
     {
@@ -147,8 +146,14 @@ namespace Runtime::Tui
         }
 
         const Vulkan::SwapChain& swapChain = renderer.SwapChain();
-        const VkExtent2D extent = swapChain.Extent();
-        if (extent.width == 0 || extent.height == 0)
+        const VkExtent2D sourceExtent = swapChain.Extent();
+        const FRenderTargetSize outputSize = ComputeOutputSize(terminal_.GetSize());
+        if (sourceExtent.width == 0 || sourceExtent.height == 0 ||
+            outputSize.Width == 0 || outputSize.Height == 0)
+        {
+            return;
+        }
+        if (!swapChain.SupportsUsage(VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
         {
             return;
         }
@@ -156,22 +161,70 @@ namespace Runtime::Tui
         const VkImage swapImage = swapChain.Images()[imageIndex];
         Vulkan::ImageMemoryBarrier::FullInsert(commandBuffer, swapImage, 0, VK_ACCESS_TRANSFER_READ_BIT,
                                                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-        Vulkan::ImageMemoryBarrier::FullInsert(commandBuffer, freeSlot->Image->Handle(), 0, VK_ACCESS_TRANSFER_WRITE_BIT,
-                                               VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        Vulkan::ImageMemoryBarrier::FullInsert(
+            commandBuffer, freeSlot->Image->Handle(),
+            freeSlot->ImageInitialized ? VK_ACCESS_TRANSFER_READ_BIT : 0,
+            VK_ACCESS_TRANSFER_WRITE_BIT,
+            freeSlot->ImageInitialized ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-        VkImageCopy copyRegion{};
-        copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        copyRegion.extent = {extent.width, extent.height, 1};
-        vkCmdCopyImage(commandBuffer,
-                       swapImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                       freeSlot->Image->Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                       1, &copyRegion);
+        VkImageBlit blitRegion{};
+        blitRegion.srcOffsets[0] = {0, 0, 0};
+        blitRegion.srcOffsets[1] = {
+            static_cast<int32_t>(sourceExtent.width),
+            static_cast<int32_t>(sourceExtent.height),
+            1};
+        blitRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        blitRegion.dstOffsets[0] = {0, 0, 0};
+        blitRegion.dstOffsets[1] = {
+            static_cast<int32_t>(freeSlot->Extent.width),
+            static_cast<int32_t>(freeSlot->Extent.height),
+            1};
+        blitRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        const bool sameExtent = sourceExtent.width == freeSlot->Extent.width &&
+            sourceExtent.height == freeSlot->Extent.height;
+        if (sameExtent)
+        {
+            VkImageCopy copyRegion{};
+            copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            copyRegion.extent = {sourceExtent.width, sourceExtent.height, 1};
+            vkCmdCopyImage(commandBuffer,
+                           swapImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           freeSlot->Image->Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           1, &copyRegion);
+        }
+        else
+        {
+            vkCmdBlitImage(commandBuffer,
+                           swapImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           freeSlot->Image->Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           1, &blitRegion, VK_FILTER_LINEAR);
+        }
+
+        Vulkan::ImageMemoryBarrier::FullInsert(
+            commandBuffer, freeSlot->Image->Handle(), VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+        VkBufferImageCopy bufferCopyRegion{};
+        bufferCopyRegion.bufferOffset = 0;
+        bufferCopyRegion.bufferRowLength = 0;
+        bufferCopyRegion.bufferImageHeight = 0;
+        bufferCopyRegion.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        bufferCopyRegion.imageOffset = {0, 0, 0};
+        bufferCopyRegion.imageExtent = {freeSlot->Extent.width, freeSlot->Extent.height, 1};
+        vkCmdCopyImageToBuffer(
+            commandBuffer, freeSlot->Image->Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            freeSlot->StagingBuffer->Handle(), 1, &bufferCopyRegion);
+        Vulkan::BufferMemoryBarrier::Insert(
+            commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT,
+            freeSlot->StagingBuffer->Handle(), VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_HOST_READ_BIT);
 
         Vulkan::ImageMemoryBarrier::FullInsert(commandBuffer, swapImage, VK_ACCESS_TRANSFER_READ_BIT, 0,
                                                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-        freeSlot->Extent = extent;
+        freeSlot->ImageInitialized = true;
         freeSlot->SubmitSerial = renderer.RecordingSubmitSerial();
         freeSlot->Serial = readback_->NextSerial++;
         freeSlot->State = FReadbackState::ESlotState::Recorded;
@@ -232,31 +285,63 @@ namespace Runtime::Tui
         }
 
         const Vulkan::SwapChain& swapChain = renderer.SwapChain();
-        const VkExtent2D extent = swapChain.Extent();
-        if (extent.width == 0 || extent.height == 0)
+        const VkExtent2D sourceExtent = swapChain.Extent();
+        const FRenderTargetSize outputSize = ComputeOutputSize(terminal_.GetSize());
+        if (sourceExtent.width == 0 || sourceExtent.height == 0 ||
+            outputSize.Width == 0 || outputSize.Height == 0)
         {
             return false;
         }
 
+        VkFormatProperties formatProperties{};
+        vkGetPhysicalDeviceFormatProperties(
+            renderer.Device().PhysicalDevice(), swapChain.Format(), &formatProperties);
+        const bool optimalTilingSupportsTransferSrc =
+            (formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_TRANSFER_SRC_BIT) != 0;
+        const bool optimalTilingSupportsTransferDst =
+            (formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_TRANSFER_DST_BIT) != 0;
+        if (!optimalTilingSupportsTransferSrc || !optimalTilingSupportsTransferDst)
+        {
+            SPDLOG_WARN("TUI GPU readback is unavailable for swapchain format {} with optimal tiling",
+                        static_cast<int>(swapChain.Format()));
+            return false;
+        }
+        const bool canGpuDownscale =
+            swapChain.SupportsUsage(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) &&
+            (formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT) != 0 &&
+            (formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT) != 0;
+        const VkExtent2D readbackExtent = canGpuDownscale
+            ? VkExtent2D{outputSize.Width, outputSize.Height}
+            : sourceExtent;
+        if (!canGpuDownscale &&
+            (sourceExtent.width != outputSize.Width || sourceExtent.height != outputSize.Height))
+        {
+            SPDLOG_WARN("TUI SSAA GPU readback downscale is unavailable for swapchain format {}; falling back to CPU downscale",
+                        static_cast<int>(swapChain.Format()));
+        }
+
         const size_t slotCount = std::max<size_t>(swapChain.Images().size(), 2);
         readback_->Slots.reserve(slotCount);
+        const VkDeviceSize stagingSize = static_cast<VkDeviceSize>(readbackExtent.width) *
+            static_cast<VkDeviceSize>(readbackExtent.height) * 4;
         for (size_t i = 0; i < slotCount; ++i)
         {
             auto image = std::make_unique<Vulkan::Image>(
-                renderer.Device(), extent, 1, swapChain.Format(), VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT);
-            auto memory = std::make_unique<Vulkan::DeviceMemory>(
-                image->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
-            auto layout = GetLinearImageLayout(renderer.Device(), *image);
-            if (layout.rowPitch == 0)
-            {
-                return false;
-            }
+                renderer.Device(), readbackExtent, 1, swapChain.Format(),
+                VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+            auto imageMemory = std::make_unique<Vulkan::DeviceMemory>(
+                image->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+            auto stagingBuffer = std::make_unique<Vulkan::Buffer>(
+                renderer.Device(), static_cast<size_t>(stagingSize), VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+            auto stagingMemory = std::make_unique<Vulkan::DeviceMemory>(
+                stagingBuffer->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
 
             auto& slot = readback_->Slots.emplace_back();
+            slot.ImageMemory = std::move(imageMemory);
             slot.Image = std::move(image);
-            slot.Memory = std::move(memory);
-            slot.Layout = layout;
-            slot.Extent = extent;
+            slot.StagingMemory = std::move(stagingMemory);
+            slot.StagingBuffer = std::move(stagingBuffer);
+            slot.Extent = readbackExtent;
         }
         return true;
     }
@@ -301,18 +386,18 @@ namespace Runtime::Tui
 
         width = selectedSlot->Extent.width;
         height = selectedSlot->Extent.height;
-        if (width == 0 || height == 0 || selectedSlot->Layout.rowPitch == 0 || !selectedSlot->Memory)
+        if (width == 0 || height == 0 || !selectedSlot->StagingBuffer || !selectedSlot->StagingMemory)
         {
             selectedSlot->State = FReadbackState::ESlotState::Free;
             return false;
         }
 
-        uint8_t* mapped = static_cast<uint8_t*>(selectedSlot->Memory->Map(0, VK_WHOLE_SIZE));
-        uint8_t* imageData = mapped + selectedSlot->Layout.offset;
+        uint8_t* imageData = static_cast<uint8_t*>(selectedSlot->StagingMemory->Map(0, VK_WHOLE_SIZE));
+        const uint32_t rowPitch = width * 4;
         pixels.resize(width * height);
         for (uint32_t y = 0; y < height; ++y)
         {
-            const uint8_t* row = imageData + y * selectedSlot->Layout.rowPitch;
+            const uint8_t* row = imageData + y * rowPitch;
             for (uint32_t x = 0; x < width; ++x)
             {
                 uint32_t pixel = 0;
@@ -323,7 +408,7 @@ namespace Runtime::Tui
                 outPixel.b = static_cast<uint8_t>(pixel & 0xff);
             }
         }
-        selectedSlot->Memory->Unmap();
+        selectedSlot->StagingMemory->Unmap();
         selectedSlot->State = FReadbackState::ESlotState::Free;
         return true;
     }
@@ -576,6 +661,11 @@ namespace Runtime::Tui
 
     void TuiPresenter::RequestScreenshot()
     {
+#if __linux__
+        statusState_.Message = "screenshot disabled on Linux";
+        statusState_.UntilFrame = engine_.GetTotalFrames() + TuiStatusFramesScreenshotSaved;
+        return;
+#else
         if (engine_.IsCapturingScreenShot())
         {
             statusState_.Message = "screenshot already in progress";
@@ -588,6 +678,7 @@ namespace Runtime::Tui
         engine_.RequestScreenShot({.filename = resolvedPath});
         statusState_.Message = "shot -> " + resolvedPath + ".jpg";
         statusState_.UntilFrame = engine_.GetTotalFrames() + TuiStatusFramesScreenshotSaved;
+#endif
     }
 
     std::string TuiPresenter::BuildStatusLine(uint32_t columns, uint32_t rows) const
@@ -622,22 +713,42 @@ namespace Runtime::Tui
 
     TuiPresenter::FRenderTargetSize TuiPresenter::ComputeRenderTargetSize(const FTerminalSize terminalSize) const
     {
-        const uint32_t cappedColumns = options_.TuiMaxCols > 0
-            ? std::min(terminalSize.Columns, options_.TuiMaxCols)
-            : terminalSize.Columns;
-        const uint32_t cappedRows = options_.TuiMaxRows > 0
-            ? std::min(terminalSize.Rows, options_.TuiMaxRows)
-            : terminalSize.Rows;
-        if (cappedColumns < TuiMinColumns || cappedRows < TuiMinRows)
+        if (terminalSize.Columns < TuiMinColumns || terminalSize.Rows < TuiMinRows)
         {
             return {};
         }
 
-        const uint32_t imageRows = cappedRows - 1;
+        const TerminalBlitter::FSourceExtent renderExtent =
+            blitter_.GetRenderExtent(terminalSize.Columns, terminalSize.Rows);
+        if (renderExtent.Width == 0 || renderExtent.Height == 0)
+        {
+            return {};
+        }
+
         const uint32_t ssaa = std::max(1u, options_.TuiSsaa);
         return {
-            .Width = cappedColumns * ssaa,
-            .Height = imageRows * 2 * ssaa,
+            .Width = renderExtent.Width * ssaa,
+            .Height = renderExtent.Height * ssaa,
+        };
+    }
+
+    TuiPresenter::FRenderTargetSize TuiPresenter::ComputeOutputSize(const FTerminalSize terminalSize) const
+    {
+        if (terminalSize.Columns < TuiMinColumns || terminalSize.Rows < TuiMinRows)
+        {
+            return {};
+        }
+
+        const TerminalBlitter::FSourceExtent sourceExtent =
+            blitter_.GetSourceExtent(terminalSize.Columns, terminalSize.Rows);
+        if (sourceExtent.Width == 0 || sourceExtent.Height == 0)
+        {
+            return {};
+        }
+
+        return {
+            .Width = sourceExtent.Width,
+            .Height = sourceExtent.Height,
         };
     }
 

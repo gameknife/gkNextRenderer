@@ -15,8 +15,7 @@ namespace Assets
         const std::string& filename, EnvironmentSetting& camera,
         std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models,
         std::vector<FMaterial>& materials, std::vector<LightObject>& lights,
-        std::vector<AnimationTrack>& tracks, std::vector<Skeleton>& skeletons,
-        std::vector<FGaussianSplatData>& splats)>;
+        std::vector<AnimationTrack>& tracks, std::vector<Skeleton>& skeletons)>;
 
     // Procedural scene builder (a ".proc" entry in the scene list).
     using FProcSceneFn = std::function<void(
@@ -26,8 +25,7 @@ namespace Assets
         std::vector<AnimationTrack>& tracks)>;
 
     // Registry decoupling the engine core from optional scene loaders and
-    // application demo scenes. glTF stays built into the core; modules
-    // (Modules/LDrawLoader, Modules/ScadLoader, ...) and applications register
+    // application demo scenes. Format modules and applications register
     // their formats / procedural scenes explicitly at startup.
     class FLoaderRegistry final
     {

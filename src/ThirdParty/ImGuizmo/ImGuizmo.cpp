@@ -986,6 +986,7 @@ namespace IMGUIZMO_NAMESPACE
 #ifdef IMGUI_HAS_VIEWPORT
       ImGui::SetNextWindowSize(ImGui::GetMainViewport()->Size);
       ImGui::SetNextWindowPos(ImGui::GetMainViewport()->Pos);
+      ImGui::SetNextWindowViewport(ImGui::GetMainViewport()->ID);
 #else
       ImGuiIO& io = ImGui::GetIO();
       ImGui::SetNextWindowSize(io.DisplaySize);

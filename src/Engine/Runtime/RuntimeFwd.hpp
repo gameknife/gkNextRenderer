@@ -5,7 +5,6 @@ class NextEngine;
 class NextGameInstanceBase;
 class NextLocalization;
 class NextPhysics;
-class VulkanGpuTimer;
 
 namespace NextCVar
 {
@@ -21,9 +20,11 @@ namespace NextUI
 
 namespace Runtime
 {
+    class FrameProfiler;
     class IDebugUiProvider;
     class IRenderFrameConsumer;
     class IScriptRuntime;
+    class FScreenShotService;
     class IUiOverlay;
 }
 

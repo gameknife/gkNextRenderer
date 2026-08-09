@@ -1,3 +1,5 @@
+implementing PathTracing;
+
 #include "PreProcessor.slang"
 
 // Probe baker for ambient cubes.
@@ -130,7 +132,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
             }
             else
             {
-                skyEmissiveDirect += Common.SampleIBLRough(Camera.SkyIdx, rayDir, Camera.SkyRotation) * (Camera.HasSky ? Camera.SkyIntensity : 0.0f);
+                skyEmissiveDirect += Common.SampleSkyRadiance(rayDir, 1.0f);
                 skyVisibility += 1.0f;
             }
         }
@@ -253,9 +255,9 @@ public struct FGpuProbeGenerator : IProbeGenerator
         {
             uint iterate = Bindless.GetGpuscene().Camera[0].TotalFrames;
 
-            uint bakeCascadeIndex = Bindless.GetGpuscene().custom_data_1;
-            uint4 skyvis_pznzpyny = UnpackBytes(Cubes[cubeIdx].skyVisibility_pznzpyny);
-            uint4 skyvis_pxnxs0s1 = UnpackBytes(Cubes[cubeIdx].skyVisibility_pxnxs0s1);
+            uint bakeCascadeIndex = Bindless.GetGpuscene().CustomData1;
+            uint4 skyvis_pznzpyny = UnpackBytes(Cubes[cubeIdx].SkyVisibilityPZNZPYNY);
+            uint4 skyvis_pxnxs0s1 = UnpackBytes(Cubes[cubeIdx].SkyVisibilityPXNXS0S1);
             uint sampleCount = skyvis_pxnxs0s1.z;
             float currWeight = AmbientCubeAccumulationWeight(sampleCount);
             float4 faceSun;
@@ -289,8 +291,8 @@ public struct FGpuProbeGenerator : IProbeGenerator
             Cubes[cubeIdx].SkyEmissiveDirect =
                 LerpPackedColorAlt(Cubes[cubeIdx].SkyEmissiveDirect, skyEmissiveDirect, currWeight);
             AdvanceAmbientCubeSampleCount(skyvis_pxnxs0s1, sampleCount);
-            Cubes[cubeIdx].skyVisibility_pznzpyny = PackBytes(skyvis_pznzpyny);
-            Cubes[cubeIdx].skyVisibility_pxnxs0s1 = PackBytes(skyvis_pxnxs0s1);
+            Cubes[cubeIdx].SkyVisibilityPZNZPYNY = PackBytes(skyvis_pznzpyny);
+            Cubes[cubeIdx].SkyVisibilityPXNXS0S1 = PackBytes(skyvis_pxnxs0s1);
         }
     }
 
@@ -299,14 +301,14 @@ public struct FGpuProbeGenerator : IProbeGenerator
         AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
         VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
 
-        uint4 upacked = UnpackNibblesLow(Voxels[voxelIdx].distanceToSolid);
-        if (upacked.x < 15 && cubeIdx >= 0) // 只处理表面，增值算法的时候可以具体的把他做好
+        uint4 unpacked = UnpackNibblesLow(Voxels[voxelIdx].distanceToSolid);
+        if (unpacked.x < 15 && cubeIdx >= 0) // 只处理表面，增值算法的时候可以具体的把他做好
         {
             uint iterate = Bindless.GetGpuscene().Camera[0].TotalFrames;
 
-            uint bakeCascadeIndex = Bindless.GetGpuscene().custom_data_1;
-            uint4 skyvis_pznzpyny = UnpackBytes(Cubes[cubeIdx].skyVisibility_pznzpyny);
-            uint4 skyvis_pxnxs0s1 = UnpackBytes(Cubes[cubeIdx].skyVisibility_pxnxs0s1);
+            uint bakeCascadeIndex = Bindless.GetGpuscene().CustomData1;
+            uint4 skyvis_pznzpyny = UnpackBytes(Cubes[cubeIdx].SkyVisibilityPZNZPYNY);
+            uint4 skyvis_pxnxs0s1 = UnpackBytes(Cubes[cubeIdx].SkyVisibilityPXNXS0S1);
             uint sampleCount = skyvis_pxnxs0s1.z;
             float currWeight = AmbientCubeAccumulationWeight(sampleCount);
             float4 faceSun;
@@ -340,8 +342,8 @@ public struct FGpuProbeGenerator : IProbeGenerator
             Cubes[cubeIdx].SkyEmissiveDirect =
                 LerpPackedColorAlt(Cubes[cubeIdx].SkyEmissiveDirect, skyEmissiveDirect, currWeight);
             AdvanceAmbientCubeSampleCount(skyvis_pxnxs0s1, sampleCount);
-            Cubes[cubeIdx].skyVisibility_pznzpyny = PackBytes(skyvis_pznzpyny);
-            Cubes[cubeIdx].skyVisibility_pxnxs0s1 = PackBytes(skyvis_pxnxs0s1);
+            Cubes[cubeIdx].SkyVisibilityPZNZPYNY = PackBytes(skyvis_pznzpyny);
+            Cubes[cubeIdx].SkyVisibilityPXNXS0S1 = PackBytes(skyvis_pxnxs0s1);
         }
     }
 }

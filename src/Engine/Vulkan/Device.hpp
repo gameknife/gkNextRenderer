@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Vulkan/Allocator.hpp"
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -8,76 +9,78 @@
 
 namespace Vulkan
 {
-	class Surface;
-	class DeviceProcedures;
+    class Surface;
+    class DeviceProcedures;
 
-	class Device final
-	{
-	public:
+    class Device final
+    {
+    public:
 
-		VULKAN_NON_COPIABLE(Device)
+        VULKAN_NON_COPIABLE(Device)
 
-		Device(
-			VkPhysicalDevice physicalDevice, 
-			const Surface& surface, 
-			const std::vector<const char*>& requiredExtensionsconst,
-			const VkPhysicalDeviceFeatures& deviceFeatures,
-			const void* nextDeviceFeatures);
-		
-		~Device();
+        Device(
+            VkPhysicalDevice physicalDevice, 
+            const Surface& surface, 
+            const std::vector<const char*>& requiredExtensionsconst,
+            const VkPhysicalDeviceFeatures& deviceFeatures,
+            const void* nextDeviceFeatures);
+        
+        ~Device();
 
-		VkPhysicalDevice PhysicalDevice() const { return physicalDevice_; }
-		const class Surface& Surface() const { return surface_; }
+        VkPhysicalDevice PhysicalDevice() const { return physicalDevice_; }
+        const class Surface& Surface() const { return surface_; }
 
-		const class DebugUtils& DebugUtils() const { return debugUtils_; }
+        const class DebugUtils& DebugUtils() const { return debugUtils_; }
 
-		uint32_t GraphicsFamilyIndex() const { return graphicsFamilyIndex_; }
-		uint32_t ComputeFamilyIndex() const { return computeFamilyIndex_; }
-		uint32_t PresentFamilyIndex() const { return presentFamilyIndex_; }
-		int32_t TransferFamilyIndex() const { return transferFamilyIndex_; }
-		uint32_t VideoEncodeFamilyIndex() const { return videoEncodeFamilyIndex_; } // UINT32_MAX if absent
+        uint32_t GraphicsFamilyIndex() const { return graphicsFamilyIndex_; }
+        uint32_t ComputeFamilyIndex() const { return computeFamilyIndex_; }
+        uint32_t PresentFamilyIndex() const { return presentFamilyIndex_; }
+        int32_t TransferFamilyIndex() const { return transferFamilyIndex_; }
 
-		VkQueue GraphicsQueue() const { return graphicsQueue_; }
-		VkQueue ComputeQueue() const { return computeQueue_; }
-		VkQueue PresentQueue() const { return presentQueue_; }
-		VkQueue TransferQueue() const { return transferQueue_; }
-		VkQueue VideoEncodeQueue() const { return videoEncodeQueue_; } // VK_NULL_HANDLE if absent
-		VkQueue QueueForFamilyIndex(uint32_t queueFamilyIndex) const;
+        VkQueue GraphicsQueue() const { return graphicsQueue_; }
+        VkQueue ComputeQueue() const { return computeQueue_; }
+        VkQueue PresentQueue() const { return presentQueue_; }
+        VkQueue TransferQueue() const { return transferQueue_; }
+        // Also resolves queues created for augmenter-requested extra families.
+        VkQueue QueueForFamilyIndex(uint32_t queueFamilyIndex) const;
+        VkQueue QueueForFamilyIndex(uint32_t queueFamilyIndex, uint32_t queueIndex) const;
+        uint32_t CreatedQueueCount(uint32_t queueFamilyIndex) const;
 
-		VkPhysicalDeviceProperties DeviceProperties() const { return deviceProp_; }
-		MemoryStatsSnapshot CaptureMemoryStats(bool includeDetails = false) const;
+        VkPhysicalDeviceProperties DeviceProperties() const { return deviceProp_; }
+        MemoryStatsSnapshot CaptureMemoryStats(bool includeDetails = false) const;
 
-		void WaitIdle() const;
+        void WaitIdle() const;
 
-		const DeviceProcedures& GetDeviceProcedures() const { return *deviceProcedures_; }
-		const MemoryAllocator& GetMemoryAllocator() const { return *memoryAllocator_; }
+        const DeviceProcedures& GetDeviceProcedures() const { return *deviceProcedures_; }
+        const MemoryAllocator& GetMemoryAllocator() const { return *memoryAllocator_; }
 
-	private:
+    private:
 
-		void CheckRequiredExtensions(VkPhysicalDevice physicalDevice, const std::vector<const char*>& requiredExtensions) const;
+        void CheckRequiredExtensions(VkPhysicalDevice physicalDevice, const std::vector<const char*>& requiredExtensions) const;
 
-		const VkPhysicalDevice physicalDevice_;
-		const class Surface& surface_;
+        const VkPhysicalDevice physicalDevice_;
+        const class Surface& surface_;
 
-		VULKAN_HANDLE(VkDevice, device_)
+        VULKAN_HANDLE(VkDevice, device_)
 
-		class DebugUtils debugUtils_;
+        class DebugUtils debugUtils_;
 
-		uint32_t graphicsFamilyIndex_ {};
-		uint32_t computeFamilyIndex_{};
-		uint32_t presentFamilyIndex_{};
-		uint32_t transferFamilyIndex_{};
-		uint32_t videoEncodeFamilyIndex_ = UINT32_MAX;
+        uint32_t graphicsFamilyIndex_ {};
+        uint32_t computeFamilyIndex_{};
+        uint32_t presentFamilyIndex_{};
+        uint32_t transferFamilyIndex_{};
 
-		VkQueue graphicsQueue_{};
-		VkQueue computeQueue_{};
-		VkQueue presentQueue_{};
-		VkQueue transferQueue_{};
-		VkQueue videoEncodeQueue_{};
-				
-		std::unique_ptr<DeviceProcedures> deviceProcedures_;
-		std::unique_ptr<MemoryAllocator> memoryAllocator_;
-		VkPhysicalDeviceProperties deviceProp_;
-	};
+        VkQueue graphicsQueue_{};
+        VkQueue computeQueue_{};
+        VkQueue presentQueue_{};
+        VkQueue transferQueue_{};
+        // Queues for augmenter-requested extra families (e.g. video encode).
+        std::map<uint32_t, VkQueue> extraQueues_;
+        std::map<uint32_t, std::vector<VkQueue>> createdQueues_;
+                
+        std::unique_ptr<DeviceProcedures> deviceProcedures_;
+        std::unique_ptr<MemoryAllocator> memoryAllocator_;
+        VkPhysicalDeviceProperties deviceProp_;
+    };
 
 }

@@ -1,0 +1,31 @@
+{
+  "name": "atmosphere",
+  "target": "gkNextRenderer",
+  "scene": "TimeOfDayObservatory.proc",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 12000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 12000 },
+    { "type": "wait-frames", "n": 20 },
+    { "type": "assert", "query": "scene.atmosphereEnabled", "op": "eq", "value": true },
+    { "type": "assert", "query": "scene.aerialPerspectiveEnabled", "op": "eq", "value": true },
+    { "type": "assert", "query": "scene.heightFogEnabled", "op": "eq", "value": true },
+    { "type": "assert", "query": "engine.frameRate", "op": "gt", "value": 1 },
+    { "type": "assert", "query": "scene.sunElevation", "op": "gt", "value": 0.0 },
+    { "type": "screenshot", "out": "screenshots/atmosphere_observatory" },
+    { "type": "cvar", "name": "r.atmosphere.debugMode", "set": 2 },
+    { "type": "wait-frames", "n": 4 },
+    { "type": "screenshot", "out": "screenshots/atmosphere_transmittance" },
+    { "type": "cvar", "name": "r.atmosphere.debugMode", "set": 3 },
+    { "type": "wait-frames", "n": 4 },
+    { "type": "screenshot", "out": "screenshots/atmosphere_sky_lut" },
+    { "type": "cvar", "name": "r.atmosphere.debugMode", "set": 0 },
+    { "type": "quit" }
+  ]
+}

@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/workflow/commitmessage"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/gitops"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/llm"
@@ -40,11 +43,13 @@ func newGitCommitMsgCommand(ctx appContext) *cobra.Command {
 		temperature float64
 		dryRun      bool
 		modelID     string
+		providerID  string
+		profileID   string
 	)
 	cmd := &cobra.Command{
 		Use:     "commit-msg",
 		Aliases: []string{"ai-commit"},
-		Short:   "Generate a commit message from local changes using the local LLM",
+		Short:   "Generate a commit message from local changes using an AI provider",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if stageAll {
 				if err := gitops.AddAll(ctx.repoRoot); err != nil {
@@ -68,11 +73,15 @@ func newGitCommitMsgCommand(ctx appContext) *cobra.Command {
 			}
 			c, cancel := context.WithTimeout(cmd.Context(), 5*time.Minute)
 			defer cancel()
-			llmCfg, err := selectLLMModel(ctx.cfg.External.LLM, modelID)
+			runtime, err := ai.NewRuntime(ctx.repoRoot, ctx.cfg)
 			if err != nil {
 				return err
 			}
-			res, err := llm.GenerateCommitMessage(c, ctx.repoRoot, llmCfg, maxDiffChar, temperature)
+			rawResult, err := runtime.Workflows.Run(c, commitmessage.Name, commitmessage.Input{MaxDiffChars: maxDiffChar, Temperature: temperature, Profile: profileID, Provider: providerID, Model: modelID}, nil)
+			var res commitmessage.Output
+			if err == nil {
+				err = json.Unmarshal(rawResult, &res)
+			}
 			if err != nil {
 				return err
 			}
@@ -106,6 +115,8 @@ func newGitCommitMsgCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().Float64Var(&temperature, "temperature", 0.2, "sampling temperature for the model")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the prompt that would be sent without calling the LLM")
 	cmd.Flags().StringVar(&modelID, "model", "", "override the active LLM model (id from [[external.llm.models]])")
+	cmd.Flags().StringVar(&providerID, "provider", "", "override the AI provider id")
+	cmd.Flags().StringVar(&profileID, "profile", "general", "AI profile")
 	return cmd
 }
 

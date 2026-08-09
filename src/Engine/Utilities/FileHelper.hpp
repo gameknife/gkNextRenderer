@@ -9,7 +9,7 @@
 #include <assert.h>
 #include <regex>
 #include <SDL3/SDL.h>
-#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 
 namespace Utilities
 {
@@ -31,6 +31,43 @@ namespace Utilities
 #endif
         }
 
+        // Portable mode keeps every writable artifact next to the executable. It is
+        // opt-in through a `portable.txt` marker in the runtime root, because the usual
+        // install location for a release build (Program Files, a read-only mount, a
+        // network share) cannot be written to.
+        inline bool IsPortableMode()
+        {
+            static const bool portable = []
+            {
+                std::error_code errorCode;
+                return std::filesystem::exists(GetDesktopRuntimeRoot() / "portable.txt", errorCode);
+            }();
+            return portable;
+        }
+
+        inline std::filesystem::path GetDesktopWritableRoot()
+        {
+            if (IsPortableMode())
+            {
+                return GetDesktopRuntimeRoot();
+            }
+
+            static const std::filesystem::path preferencesRoot = []
+            {
+                char* preferences = SDL_GetPrefPath("gkNext", NextRenderer::GetApplicationIdentity().c_str());
+                if (preferences == nullptr)
+                {
+                    // Nothing else is writable for certain, so fall back to the install
+                    // directory; individual writes still fail gracefully.
+                    return GetDesktopRuntimeRoot();
+                }
+                std::filesystem::path resolved = std::filesystem::path(preferences).lexically_normal();
+                SDL_free(preferences);
+                return resolved;
+            }();
+            return preferencesRoot;
+        }
+
         static std::filesystem::path GetWritableRuntimeRoot()
         {
 #if ANDROID
@@ -38,7 +75,7 @@ namespace Utilities
 #elif IOS
             return std::filesystem::path(SDL_GetPrefPath("gknext", "renderer"));
 #else
-            return GetDesktopRuntimeRoot();
+            return GetDesktopWritableRoot();
 #endif
         }
 
@@ -73,10 +110,34 @@ namespace Utilities
             return GetRuntimeRoot().append(srcPath).string();
         }
 
+        // Path for data the application produces (settings, logs, screenshots, layout).
+        // Always use this instead of GetPlatformFilePath for writes: the runtime root is
+        // read-only for an installed release.
+        static std::string GetWritableFilePath( const char* srcPath )
+        {
+            std::filesystem::path fullPath = GetWritableRuntimeRoot() / srcPath;
+            std::error_code errorCode;
+            std::filesystem::create_directories(fullPath.parent_path(), errorCode);
+            return fullPath.string();
+        }
+
+        // Reads user data written by GetWritableFilePath, falling back to the runtime
+        // root so existing portable installs and in-repo development keep working.
+        static std::string ResolveWritableFileForRead( const char* srcPath )
+        {
+            const std::filesystem::path writablePath = GetWritableRuntimeRoot() / srcPath;
+            std::error_code errorCode;
+            if (std::filesystem::exists(writablePath, errorCode))
+            {
+                return writablePath.string();
+            }
+            return GetPlatformFilePath(srcPath);
+        }
+
         static std::string GetNormalizedFilePath( const char* srcPath )
         {
-            std::string normlizedPath = GetRuntimeRoot().append(srcPath).string();
-            std::filesystem::path fullPath(normlizedPath);
+            std::string normalizedPath = GetRuntimeRoot().append(srcPath).string();
+            std::filesystem::path fullPath(normalizedPath);
             std::filesystem::path directory = fullPath.parent_path();
             std::string pattern = fullPath.filename().string();
 
@@ -84,13 +145,13 @@ namespace Utilities
             {
                 for (const auto& entry : std::filesystem::directory_iterator(directory)) {
                     if (entry.is_regular_file() && entry.path().filename().string() == pattern) {
-                        normlizedPath =  std::filesystem::absolute(entry.path()).string();
+                        normalizedPath =  std::filesystem::absolute(entry.path()).string();
                         break;
                     }
                 }    
             }
             
-            return normlizedPath;
+            return normalizedPath;
         }
     }
 
@@ -187,7 +248,7 @@ namespace Utilities
     namespace FileHelper
     {
         // Returns true if a relative asset path can be resolved either from disk or from any mounted pak.
-        // Game instances use this to bail out gracefully when optional assets (fetched via scripts/fetch-paks)
+        // Game instances use this to bail out gracefully when optional assets (fetched via gnb paks fetch)
         // are missing, instead of crashing later in scene/component code.
         static bool IsAssetAvailable(const std::string& relativePath)
         {

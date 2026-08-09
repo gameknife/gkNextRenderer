@@ -104,11 +104,17 @@ namespace NextCVar
                                           std::move(onChanged));
     }
 
-    bool FCVarSystem::LoadDefaultFile(const std::string& path)
+    // Iterates a { "name": value } JSON config; values are passed on as text.
+    // User configs live in the per-user writable root, shipped defaults in the
+    // read-only runtime root.
+    static bool ForEachJsonConfigEntry(const std::string& path,
+                                       const std::function<void(const std::string&, const std::string&)>& apply,
+                                       const bool userConfig = false)
     {
-        defaultConfigPath_ = path;
-        std::string configPath = Utilities::FileHelper::GetPlatformFilePath(path.c_str());
-        std::ifstream file(configPath);
+        const std::string resolvedPath = userConfig
+            ? Utilities::FileHelper::ResolveWritableFileForRead(path.c_str())
+            : Utilities::FileHelper::GetPlatformFilePath(path.c_str());
+        std::ifstream file(resolvedPath);
         if (!file.is_open())
         {
             return false;
@@ -118,27 +124,10 @@ namespace NextCVar
         {
             json j;
             file >> j;
-
             for (auto it = j.begin(); it != j.end(); ++it)
             {
-                const std::string name = it.key();
-                auto entryIt = cvars_.find(name);
-                if (entryIt == cvars_.end())
-                {
-                    continue;
-                }
-
-                FCVarValue value;
-                std::string error;
-                std::string valueText = it.value().is_string() ? it.value().get<std::string>() : it.value().dump();
-                if (!ParseValue(valueText, entryIt->second.type, value, &error))
-                {
-                    continue;
-                }
-
-                ApplyDefaultValue(entryIt->second, value);
+                apply(it.key(), it.value().is_string() ? it.value().get<std::string>() : it.value().dump());
             }
-
             return true;
         }
         catch (const std::exception&)
@@ -147,35 +136,24 @@ namespace NextCVar
         }
     }
 
+    bool FCVarSystem::LoadDefaultFile(const std::string& path)
+    {
+        defaultConfigPath_ = path;
+        return ForEachJsonConfigEntry(path, [this](const std::string& name, const std::string& valueText)
+        {
+            std::string error;
+            (void)SetDefaultFromString(name, valueText, &error);
+        });
+    }
+
     bool FCVarSystem::LoadUserFile(const std::string& path)
     {
         userConfigPath_ = path;
-        std::string configPath = Utilities::FileHelper::GetPlatformFilePath(path.c_str());
-        std::ifstream file(configPath);
-        if (!file.is_open())
+        return ForEachJsonConfigEntry(path, [this](const std::string& name, const std::string& valueText)
         {
-            return false;
-        }
-
-        try
-        {
-            json j;
-            file >> j;
-
-            for (auto it = j.begin(); it != j.end(); ++it)
-            {
-                const std::string name = it.key();
-                std::string error;
-                std::string valueText = it.value().is_string() ? it.value().get<std::string>() : it.value().dump();
-                SetValueFromString(name, valueText, ECVarSetBy::UserFile, &error);
-            }
-
-            return true;
-        }
-        catch (const std::exception&)
-        {
-            return false;
-        }
+            std::string error;
+            (void)SetValueFromString(name, valueText, ECVarSetBy::UserFile, &error);
+        }, true);
     }
 
     bool FCVarSystem::SaveUserFile(const std::string& path) const
@@ -251,33 +229,10 @@ namespace NextCVar
                 continue;
             }
 
-            FCVarValue currentValue = GetEntryValue(entry);
-            if (entry.type == ECVarType::Float)
-            {
-                j[name] = std::get<double>(currentValue);
-                continue;
-            }
-
-            if (entry.type == ECVarType::Int)
-            {
-                j[name] = std::get<int64_t>(currentValue);
-                continue;
-            }
-
-            if (entry.type == ECVarType::Bool)
-            {
-                j[name] = std::get<bool>(currentValue);
-                continue;
-            }
-
-            if (entry.type == ECVarType::String)
-            {
-                j[name] = std::get<std::string>(currentValue);
-                continue;
-            }
+            std::visit([&](const auto& value) { j[name] = value; }, GetEntryValue(entry));
         }
 
-        std::string configPath = Utilities::FileHelper::GetPlatformFilePath(outputPath.c_str());
+        std::string configPath = Utilities::FileHelper::GetWritableFilePath(outputPath.c_str());
         Utilities::FileHelper::EnsureDirectoryExists(std::filesystem::path(configPath).parent_path());
 
         std::ofstream file(configPath);
@@ -287,7 +242,8 @@ namespace NextCVar
         }
 
         file << j.dump(2);
-        return true;
+        file.flush();
+        return file.good();
     }
 
     std::string FCVarSystem::ChannelPathForName(const std::string& name) const
@@ -746,61 +702,52 @@ namespace NextCVar
 
         entry.setBy = setBy;
 
-        if (std::holds_alternative<int32_t*>(entry.boundTarget))
-        {
-            auto* target = std::get<int32_t*>(entry.boundTarget);
-            if (entry.type != ECVarType::Int)
+        // Write through to the bound target (unbound cvars store into entry.value).
+        // The variant alternative implies the required entry type.
+        const bool applied = std::visit(
+            [&]<typename TargetPtr>(TargetPtr target) -> bool
             {
-                return false;
-            }
-            int64_t val = std::get<int64_t>(normalizedValue);
-            *target = static_cast<int32_t>(val);
-        }
-        else if (std::holds_alternative<uint32_t*>(entry.boundTarget))
+                if constexpr (std::is_same_v<TargetPtr, std::monostate>)
+                {
+                    entry.value = normalizedValue;
+                    return true;
+                }
+                else
+                {
+                    using TargetT = std::remove_pointer_t<TargetPtr>;
+                    constexpr ECVarType requiredType =
+                        std::is_same_v<TargetT, float>       ? ECVarType::Float
+                        : std::is_same_v<TargetT, bool>        ? ECVarType::Bool
+                        : std::is_same_v<TargetT, std::string> ? ECVarType::String
+                                                               : ECVarType::Int;
+                    if (entry.type != requiredType)
+                    {
+                        return false;
+                    }
+                    if constexpr (std::is_same_v<TargetT, int32_t> || std::is_same_v<TargetT, uint32_t>)
+                    {
+                        int64_t val = std::get<int64_t>(normalizedValue);
+                        if (std::is_same_v<TargetT, uint32_t> && val < 0)
+                        {
+                            val = 0;
+                        }
+                        *target = static_cast<TargetT>(val);
+                    }
+                    else if constexpr (std::is_same_v<TargetT, float>)
+                    {
+                        *target = static_cast<float>(std::get<double>(normalizedValue));
+                    }
+                    else
+                    {
+                        *target = std::get<TargetT>(normalizedValue);
+                    }
+                    return true;
+                }
+            },
+            entry.boundTarget);
+        if (!applied)
         {
-            auto* target = std::get<uint32_t*>(entry.boundTarget);
-            if (entry.type != ECVarType::Int)
-            {
-                return false;
-            }
-            int64_t val = std::get<int64_t>(normalizedValue);
-            if (val < 0)
-            {
-                val = 0;
-            }
-            *target = static_cast<uint32_t>(val);
-        }
-        else if (std::holds_alternative<float*>(entry.boundTarget))
-        {
-            auto* target = std::get<float*>(entry.boundTarget);
-            if (entry.type != ECVarType::Float)
-            {
-                return false;
-            }
-            double val = std::get<double>(normalizedValue);
-            *target = static_cast<float>(val);
-        }
-        else if (std::holds_alternative<bool*>(entry.boundTarget))
-        {
-            auto* target = std::get<bool*>(entry.boundTarget);
-            if (entry.type != ECVarType::Bool)
-            {
-                return false;
-            }
-            *target = std::get<bool>(normalizedValue);
-        }
-        else if (std::holds_alternative<std::string*>(entry.boundTarget))
-        {
-            auto* target = std::get<std::string*>(entry.boundTarget);
-            if (entry.type != ECVarType::String)
-            {
-                return false;
-            }
-            *target = std::get<std::string>(normalizedValue);
-        }
-        else
-        {
-            entry.value = normalizedValue;
+            return false;
         }
 
         if (entry.onChanged)
@@ -813,27 +760,27 @@ namespace NextCVar
 
     FCVarSystem::FCVarValue FCVarSystem::GetEntryValue(const FCVarEntry& entry) const
     {
-        if (std::holds_alternative<int32_t*>(entry.boundTarget))
-        {
-            return static_cast<int64_t>(*std::get<int32_t*>(entry.boundTarget));
-        }
-        if (std::holds_alternative<uint32_t*>(entry.boundTarget))
-        {
-            return static_cast<int64_t>(*std::get<uint32_t*>(entry.boundTarget));
-        }
-        if (std::holds_alternative<float*>(entry.boundTarget))
-        {
-            return static_cast<double>(*std::get<float*>(entry.boundTarget));
-        }
-        if (std::holds_alternative<bool*>(entry.boundTarget))
-        {
-            return *std::get<bool*>(entry.boundTarget);
-        }
-        if (std::holds_alternative<std::string*>(entry.boundTarget))
-        {
-            return *std::get<std::string*>(entry.boundTarget);
-        }
-        return entry.value;
+        return std::visit(
+            [&]<typename TargetPtr>(TargetPtr target) -> FCVarValue
+            {
+                if constexpr (std::is_same_v<TargetPtr, std::monostate>)
+                {
+                    return entry.value;
+                }
+                else if constexpr (std::is_same_v<TargetPtr, int32_t*> || std::is_same_v<TargetPtr, uint32_t*>)
+                {
+                    return static_cast<int64_t>(*target);
+                }
+                else if constexpr (std::is_same_v<TargetPtr, float*>)
+                {
+                    return static_cast<double>(*target);
+                }
+                else
+                {
+                    return *target;
+                }
+            },
+            entry.boundTarget);
     }
 
     FCVarInfo FCVarSystem::MakeInfo(const FCVarEntry& entry) const

@@ -7,22 +7,23 @@
 #include <spdlog/spdlog.h>
 #include <cassert>
 
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Assets/Loaders/FProcModel.h"
-#include "Engine/Assets/Loaders/FSceneLoader.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
+#include "Modules/GltfLoader/FSceneLoader.h"
 #include "Gameplay/Gameplay/GameplayMath.hpp"
 #include "Gameplay/Character/CharacterControllerDebugDraw.hpp"
 #include "Gameplay/Reflection/GameplayReflectionRegistry.h"
 #include "Gameplay/Utilities/SceneNodeUtils.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Platform/PlatformCommon.h"
-#include "Engine/Runtime/Scene/NodeUtils.h"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Modules/DevTools/PhysicsDebugOverlay.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
@@ -70,8 +71,8 @@ void CharacterDemoGameInstance::OnInit()
         const char* message =
             "CharacterDemo needs the optional asset pack (character mesh).\n\n"
             "Run one of the following from the repo root, then relaunch:\n"
-            "  scripts/fetch-paks.sh --optional      (Linux / macOS / Git Bash)\n"
-            "  scripts\\fetch-paks.bat --optional    (Windows)";
+            "  ./gnb.sh paks fetch optional      (Linux / macOS / Git Bash)\n"
+            "  gnb.bat paks fetch optional       (Windows)";
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "CharacterDemo - Missing Optional Assets",
                                  message, GetEngine().GetWindow().Handle());
         SPDLOG_ERROR("CharacterDemo: optional asset pack missing; aborting OnInit");
@@ -154,9 +155,9 @@ void CharacterDemoGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
     cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
-    //cvars.SetDefaultFromString("r.superResolution", "4", &error);
-    cvars.SetDefaultFromString("r.fastGather", "true", &error);
-    //cvars.SetDefaultFromString("r.dlss", "true", &error);
+    //cvars.SetDefaultFromString("r.upscaler.qualityMode", "4", &error);
+    cvars.SetDefaultFromString("r.tracing.exitAfterFirst", "true", &error);
+    //cvars.SetDefaultFromString("r.upscaler.type", "1", &error);
 }
 
 void CharacterDemoGameInstance::BeforeSceneRebuild(
@@ -376,7 +377,7 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("Space - Jump | Mouse - Look");
     ImGui::Text("V - Toggle FPS/TPS | Tab - Move Mode");
     ImGui::Text("LMB - Shoot | F1 - Physics | F2 - Graphics | Q - Next Renderer");
-    ImGui::Text("1-8 - View Modes | F8 - AI Debug Menu | F9 - IK Debug");
+    ImGui::Text("1-9 - View Modes | F8 - AI Debug Menu | F9 - IK Debug");
     ImGui::Text("ESC - Release Mouse");
 
     ImGui::SliderFloat("Walk Speed", &config_.Player.WalkSpeed, 1.0f, 10.0f);
@@ -855,7 +856,7 @@ bool CharacterDemoGameInstance::HasLineOfSightToPlayer() const
 
     const Assets::RayCastResult hit =
         GetEngine().GetScene().GetCPUAccelerationStructure().RayCastInCPU(origin, delta / distance);
-    if (!hit.Hitted)
+    if (!hit.Hit)
     {
         return true;
     }

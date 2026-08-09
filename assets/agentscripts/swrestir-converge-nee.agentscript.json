@@ -1,0 +1,21 @@
+{
+  "name": "swrestir-converge-nee",
+  "target": "gkNextRenderer",
+  "scene": "CornellBox.proc",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 120000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "cvar", "name": "r.rendererType", "set": 1 },
+    { "type": "cvar", "name": "r.restir.enable", "set": false },
+    { "type": "wait-frames", "n": 20 },
+    { "type": "screenshot", "out": "screenshots/swrestir_converged_nee", "accumulateFrames": 600, "timeoutMs": 120000 },
+    { "type": "quit" }
+  ]
+}

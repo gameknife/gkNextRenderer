@@ -58,13 +58,15 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install autoconf autoconf-archive automake libtool curl unzip tar libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev ninja-build
+          sudo apt-get install curl unzip tar ninja-build libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev
       - name: Build and package
         run: |
           echo "BUILDVER(${{ github.ref_name }})" > src/build.version
           ./gnb.sh setup
-          ./gnb.sh build
+          ./gnb.sh build gkNextRenderer gkNextEditor gkNextMotionBenchmark
           ./gnb.sh package linux --version ${{ github.ref_name }}
+      - name: Smoke test package
+        run: ./gnb.sh smoke ./gknextrenderer_linux64_${{ github.ref_name }}.zip
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -85,10 +87,36 @@ jobs:
         run: |
           echo BUILDVER(${{ github.ref_name }}) > src/build.version
           .\gnb.bat setup
-          .\gnb.bat build
+          .\gnb.bat build gkNextRenderer gkNextEditor gkNextMotionBenchmark
           .\gnb.bat package windows --version ${{ github.ref_name }}
+        shell: cmd
+      - name: Smoke test package
+        run: .\gnb.bat smoke gknextrenderer_win64_${{ github.ref_name }}.zip
         shell: cmd
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: ./gkNextRenderer-windows.zip
+          files: ./gknextrenderer_win64_${{ github.ref_name }}.zip
+
+  macos-build:
+    needs: make-release
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.23.x'
+      - name: Build and package
+        run: |
+          echo "BUILDVER(${{ github.ref_name }})" > src/build.version
+          ./gnb.sh setup
+          ./gnb.sh build gkNextRenderer gkNextEditor gkNextMotionBenchmark
+          ./gnb.sh package macos --version ${{ github.ref_name }}
+      - name: Smoke test package
+        run: ./gnb.sh smoke ./gknextrenderer_macos_${{ github.ref_name }}.zip
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: ./gknextrenderer_macos_${{ github.ref_name }}.zip

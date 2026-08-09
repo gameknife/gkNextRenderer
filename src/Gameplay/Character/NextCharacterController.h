@@ -4,30 +4,7 @@
 #include <glm/glm.hpp>
 #include <glm/detail/type_quat.hpp>
 
-#include "Engine/Runtime/RuntimeFwd.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
-
-struct FNextCharacterControllerContext;
-
-enum class ECharacterGroundState
-{
-    OnGround,
-    OnSteepGround,
-    NotSupported,
-    InAir
-};
-
-struct FCharacterControllerSettings
-{
-    float height = 1.75f;          // capsule total height (including caps)
-    float radius = 0.3f;           // capsule radius
-    float maxSlopeAngle = 50.0f;   // degrees
-    float maxStepHeight = 0.35f;   // step-up height
-    float mass = 70.0f;
-    float maxStrength = 100.0f;    // push force on dynamic bodies
-    float padding = 0.02f;         // character padding
-    glm::vec3 initialPosition{0.0f, 1.0f, 0.0f};
-};
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 
 class NextCharacterController final
 {
@@ -48,18 +25,26 @@ public:
     /// @param deltaSeconds    Frame delta time.
     void Update(const glm::vec3& inputDirection, float speed, bool jump, float deltaSeconds);
 
+    /// Changes the controller height while keeping its foot position fixed.
+    /// Growing fails if the added volume is obstructed.
+    bool TrySetHeight(float height);
+
+    /// Moves to an externally validated foot position (scripted traversal).
+    void SetPosition(const glm::vec3& position);
+
     glm::vec3 GetPosition() const;
     glm::vec3 GetLinearVelocity() const;
     ECharacterGroundState GetGroundState() const;
     bool IsOnGround() const;
-    float GetHeight() const { return settings_.height; }
+    float GetHeight() const;
     float GetRadius() const { return settings_.radius; }
 
     bool IsValid() const;
 
 private:
-    std::unique_ptr<FNextCharacterControllerContext> context_;
+    void CompletePhysics() const;
+
     NextPhysics* physics_ = nullptr;
-    glm::vec3 velocity_{0.0f};
+    std::unique_ptr<INextCharacterControllerBackend> backend_;
     FCharacterControllerSettings settings_{};
 };

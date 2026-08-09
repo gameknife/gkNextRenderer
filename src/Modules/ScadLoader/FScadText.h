@@ -16,7 +16,7 @@
 
 #include "Modules/ScadLoader/FScadGeometry.h" // TriSoup
 
-namespace Assets::scad
+namespace Assets::Scad
 {
     class ScadText
     {
@@ -34,4 +34,4 @@ namespace Assets::scad
                               double fnSegments,
                               TriSoup& out);
     };
-} // namespace Assets::scad
+} // namespace Assets::Scad

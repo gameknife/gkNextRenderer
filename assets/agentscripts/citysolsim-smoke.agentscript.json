@@ -1,0 +1,29 @@
+{
+  "name": "citysolsim-smoke",
+  "target": "CitySolSim",
+  "scene": "assets/scad/source/habor_city_v2.scad",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 15000
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "steps": [
+    { "type": "wait-until", "query": "game.city.vehicleCount", "op": "eq", "value": 36, "timeoutMs": 15000 },
+    { "type": "assert", "query": "game.city.citizenCount", "op": "eq", "value": 32 },
+    { "type": "wait-until", "query": "game.city.movingCitizens", "op": "ge", "value": 1, "timeoutMs": 10000 },
+    { "type": "wait-frames", "n": 120 },
+    { "type": "key", "code": "C", "action": "press", "comment": "Follow a moving road vehicle." },
+    { "type": "wait-frames", "n": 60 },
+    { "type": "screenshot", "out": "screenshots/agent_citysolsim_vehicle" },
+    { "type": "key", "code": "3", "action": "press", "comment": "Fast-forward from morning into the evening." },
+    { "type": "wait-until", "query": "game.city.isNight", "op": "eq", "value": true, "timeoutMs": 15000 },
+    { "type": "assert", "query": "game.city.hour", "op": "ge", "value": 18.0 },
+    { "type": "key", "code": "R", "action": "press" },
+    { "type": "wait-frames", "n": 90 },
+    { "type": "screenshot", "out": "screenshots/agent_citysolsim_night" },
+    { "type": "quit" }
+  ]
+}

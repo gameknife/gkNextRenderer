@@ -85,7 +85,7 @@ void AirportSimGameInstance::OnInit()
     // NavGrid 从场景 CPU BVH 构建，需保留 CPU 网格数据。
     GOption->KeepCPUMeshData = true;
 
-    std::string initialScene = "assets/scad/airport.scad";
+    std::string initialScene = "assets/scad/source/airport.scad";
     if (!GOption->SceneName.empty())
     {
         initialScene = GOption->SceneName;
@@ -93,12 +93,8 @@ void AirportSimGameInstance::OnInit()
     SPDLOG_INFO("AirportSim: loading scene '{}'", initialScene);
     GetEngine().RequestLoadScene({.filename = initialScene});
 
-    // 行为决策走本地 llama-server（§5.3）；不可用时全程 fallback。
-    if (auto* ai = NextAI::GetAIService(GetEngine()))
-    {
-        const bool ok = ai->SwitchProvider(NextAI::EAIProviderType::LocalLlama);
-        SPDLOG_INFO("AirportSim: SwitchProvider(LocalLlama) -> {} (provider='{}')", ok, ai->GetProviderName());
-    }
+    // 行为决策走本地 llama-server；不可用时全程 fallback。
+    if (auto* ai = NextAI::GetAIService(GetEngine())) ai->SetProfile("simulation");
 }
 
 void AirportSimGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& /*nodes*/,
@@ -311,6 +307,26 @@ bool AirportSimGameInstance::OnKey(SDL_Event& event)
     }
 }
 
+bool AirportSimGameInstance::SupportsAppDebugShortcut(SDL_Keycode key) const
+{
+    return key == SDLK_F5;
+}
+
+bool AirportSimGameInstance::IsAppDebugShortcutActive(SDL_Keycode key) const
+{
+    return key == SDLK_F5 && ui_.State().showPoiMarkers;
+}
+
+bool AirportSimGameInstance::SetAppDebugShortcutActive(SDL_Keycode key, bool active)
+{
+    if (key != SDLK_F5)
+    {
+        return false;
+    }
+    ui_.State().showPoiMarkers = active;
+    return true;
+}
+
 int AirportSimGameInstance::PickAgentAtScreen(const glm::vec2& screenPos) const
 {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -376,6 +392,6 @@ void AirportSimGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
     cvars.SetDefaultFromString("r.samples", "4", &error);
     cvars.SetDefaultFromString("r.sharc.enable", "true", &error);
-    //cvars.SetDefaultFromString("r.superResolution", "4", &error);
-    cvars.SetDefaultFromString("r.dlss", "true", &error);
+    //cvars.SetDefaultFromString("r.upscaler.qualityMode", "4", &error);
+    cvars.SetDefaultFromString("r.upscaler.type", "1", &error);
 }

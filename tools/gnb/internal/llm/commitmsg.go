@@ -29,6 +29,29 @@ type CommitMessageResult struct {
 	Truncated bool
 }
 
+type CommitChatFunc func(context.Context, []ChatMessage, float64, int) (string, error)
+
+func GenerateCommitMessageWithChat(ctx context.Context, repoRoot string, maxDiffChars int, temperature float64, chat CommitChatFunc) (CommitMessageResult, error) {
+	res := CommitMessageResult{}
+	diff, source, truncated, err := CollectDiff(repoRoot, DiffBudget{TotalChars: maxDiffChars})
+	if err != nil {
+		return res, err
+	}
+	res.Source, res.Truncated = source, truncated
+	if strings.TrimSpace(diff) == "" {
+		return res, fmt.Errorf("no changes to describe")
+	}
+	reply, err := chat(ctx, []ChatMessage{{Role: "system", Content: CommitMsgSystemPrompt}, {Role: "user", Content: buildCommitUserPrompt(diff)}}, temperature, 256)
+	if err != nil {
+		return res, err
+	}
+	res.Message = SanitizeCommitMessage(reply)
+	if res.Message == "" {
+		return res, fmt.Errorf("LLM returned an empty commit message")
+	}
+	return res, nil
+}
+
 // DiffBudget bounds how much we serialise for the model. Sized so the typical
 // commit stays small enough for fast local commit-message generation after the
 // system prompt + chat template overhead.
@@ -67,19 +90,8 @@ func GenerateCommitMessageReuseRunning(ctx context.Context, repoRoot string, cfg
 }
 
 func generateCommitMessage(ctx context.Context, repoRoot string, cfg config.LLMConfig, maxDiffChars int, temperature float64, reuseRunning bool) (CommitMessageResult, error) {
-	res := CommitMessageResult{}
-	budget := DiffBudget{TotalChars: maxDiffChars}
-	diff, source, truncated, err := CollectDiff(repoRoot, budget)
-	if err != nil {
-		return res, err
-	}
-	res.Source = source
-	res.Truncated = truncated
-	if strings.TrimSpace(diff) == "" {
-		return res, fmt.Errorf("no changes to describe")
-	}
-
 	srv := NewServer(repoRoot, cfg)
+	var err error
 	var info ServerInfo
 	if reuseRunning {
 		info, err = srv.EnsureRunningOrReuse(ctx)
@@ -87,26 +99,12 @@ func generateCommitMessage(ctx context.Context, repoRoot string, cfg config.LLMC
 		info, err = srv.EnsureRunning(ctx)
 	}
 	if err != nil {
-		return res, err
+		return CommitMessageResult{}, err
 	}
 	client := NewClient(info.BaseURL())
-	reply, err := client.Chat(ctx, ChatRequest{
-		Messages: []ChatMessage{
-			{Role: "system", Content: CommitMsgSystemPrompt},
-			{Role: "user", Content: buildCommitUserPrompt(diff)},
-		},
-		Temperature: temperature,
-		MaxTokens:   256,
+	return GenerateCommitMessageWithChat(ctx, repoRoot, maxDiffChars, temperature, func(chatCtx context.Context, messages []ChatMessage, temp float64, maxTokens int) (string, error) {
+		return client.Chat(chatCtx, ChatRequest{Messages: messages, Temperature: temp, MaxTokens: maxTokens})
 	})
-	if err != nil {
-		return res, err
-	}
-	msg := SanitizeCommitMessage(reply)
-	if msg == "" {
-		return res, fmt.Errorf("LLM returned an empty commit message")
-	}
-	res.Message = msg
-	return res, nil
 }
 
 func buildCommitUserPrompt(diff string) string {

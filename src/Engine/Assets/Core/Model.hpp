@@ -5,14 +5,71 @@
 #include <glm/ext.hpp>
 
 #include <array>
-
-struct FNextPhysicsBody;
+#include <cmath>
 
 namespace Assets
 {
+    struct AtmosphereSetting
+    {
+        AtmosphereSetting()
+        {
+            Reset();
+        }
+
+        void Reset()
+        {
+            RayleighScattering = glm::vec3(0.005802f, 0.013558f, 0.033100f);
+            RayleighDensityH = 8.0f;
+            MieScattering = glm::vec3(0.003996f);
+            MieDensityH = 1.2f;
+            MieAbsorption = glm::vec3(0.004440f);
+            MiePhaseG = 0.8f;
+            OzoneAbsorption = glm::vec3(0.000650f, 0.001881f, 0.000085f);
+            OzoneCenterAltitude = 25.0f;
+            GroundAlbedo = glm::vec3(0.3f);
+            OzoneWidth = 15.0f;
+            BottomRadius = 6360.0f;
+            TopRadius = 6460.0f;
+            WorldUnitsPerKm = 1000.0f;
+            WorldOriginAltitude = 0.0f;
+            AerialPerspectiveMaxDistance = 2000.0f;
+            SkyLuminanceScale = 1.0f;
+            FogInscatteringColor = glm::vec3(0.55f, 0.65f, 0.75f);
+            FogDensity = 0.01f;
+            FogHeightFalloff = 0.2f;
+            FogBaseHeight = 0.0f;
+            FogStartDistance = 0.0f;
+            FogMaxOpacity = 0.95f;
+        }
+
+        glm::vec3 RayleighScattering{};
+        float RayleighDensityH{};
+        glm::vec3 MieScattering{};
+        float MieDensityH{};
+        glm::vec3 MieAbsorption{};
+        float MiePhaseG{};
+        glm::vec3 OzoneAbsorption{};
+        float OzoneCenterAltitude{};
+        glm::vec3 GroundAlbedo{};
+        float OzoneWidth{};
+        float BottomRadius{};
+        float TopRadius{};
+        float WorldUnitsPerKm{};
+        float WorldOriginAltitude{};
+        float AerialPerspectiveMaxDistance{};
+        float SkyLuminanceScale{};
+        glm::vec3 FogInscatteringColor{};
+        float FogDensity{};
+        float FogHeightFalloff{};
+        float FogBaseHeight{};
+        float FogStartDistance{};
+        float FogMaxOpacity{};
+    };
+
     struct Camera final
     {
         std::string name;
+        std::string NodeName_;
         glm::mat4 ModelView;
         float FieldOfView;
         float Aperture;
@@ -40,47 +97,58 @@ namespace Assets
             GammaCorrection = true;
             HasSky = true;
             HasSun = false;
+            AtmosphereEnabled = false;
+            AerialPerspectiveEnabled = false;
+            HeightFogEnabled = false;
             SkyIdx = 0;
             SunIntensity = 500.f;
             SkyIntensity = 100.0f;
+            SunColor = glm::vec3(1.0f);
+            SkyColor = glm::vec3(1.0f);
             SkyRotation = 0;
             SunRotation = 0.5f;   
+            SunElevation = std::atan(0.75f);
         }
 
         glm::vec3 SunDirection() const 
         {
-            return glm::normalize(glm::vec3( sinf( SunRotation * glm::pi<float>() ), 0.75f, cosf(SunRotation * glm::pi<float>()) ));
+            const float azimuth = SunRotation * glm::pi<float>();
+            const float horizontalScale = std::cos(SunElevation);
+            return glm::normalize(glm::vec3(
+                std::sin(azimuth) * horizontalScale,
+                std::sin(SunElevation),
+                std::cos(azimuth) * horizontalScale));
         }
 
-        // Deprecated: 旧 CPU shadowmap 路径用。新的 GPU CSM 走 ComputeSunCascades。
+        // Deprecated: retained for the old CPU shadow-map path. GPU CSM uses ComputeSunCascades.
         glm::mat4 GetSunViewProjection() const
         {
-            // 获取阳光方向并规范化
+            // Normalize the sun direction.
             vec3 lightDir = normalize(-SunDirection());
 
-            // 计算向上向量（确保不与光线方向共线）
+            // Choose an up vector that is not collinear with the light direction.
             vec3 lightUp = abs(lightDir.y) > 0.99f ? vec3(1.0f, 0.0f, 0.0f) : vec3(0.0f, 1.0f, 0.0f);
 
-            // 计算右向量和新的上向量（确保三个向量互相垂直）
+            // Derive an orthogonal right vector and corrected up vector.
             vec3 lightRight = normalize(cross(lightUp, lightDir));
             lightUp = normalize(cross(lightDir, lightRight));
 
-            // 定义阴影图覆盖的世界空间大小
+            // Define the world-space area covered by the shadow map.
             float halfSize = 100.f;
 
-            // 构建从光源视角的观察矩阵（将光源放在远处）
+            // Build the light-view matrix with the light positioned far away.
             vec3 lightPos = vec3(0) - lightDir * 1000.f;
             mat4 lightView = glm::lookAt(lightPos, lightPos + lightDir, lightUp);
 
-            // 创建正交投影矩阵
+            // Build the orthographic projection matrix.
             mat4 lightProj = glm::ortho(-halfSize, halfSize, -halfSize, halfSize, 500.f, 2000.f);
 
-            // 返回组合的视图投影矩阵
+            // Return the combined view-projection matrix.
             return lightProj * lightView;
         }
 
-        // GPU CSM：以主相机视椎为根据切 4 段，对每段计算光源 view-proj。
-        // cameraViewProj 应为未抖动的主相机 view*proj；shadowFar 控制 cascade 覆盖深度。
+        // GPU CSM: split the main-camera frustum into four ranges and compute a light view-projection for each.
+        // cameraViewProj must be the unjittered main-camera view * projection; shadowFar controls cascade depth.
         CascadeShadowSetup ComputeSunCascades(
             const glm::mat4& cameraViewProj,
             float cameraNear,
@@ -91,12 +159,19 @@ namespace Assets
         bool GammaCorrection;
         bool HasSky;
         bool HasSun;
+        bool AtmosphereEnabled;
+        bool AerialPerspectiveEnabled;
+        bool HeightFogEnabled;
         int32_t SkyIdx;
         float SunRotation;
+        float SunElevation;
         float SkyRotation;
         
         float SkyIntensity = 100.0f;
         float SunIntensity = 500.0f;
+        glm::vec3 SunColor{1.0f};
+        glm::vec3 SkyColor{1.0f};
+        AtmosphereSetting Atmosphere;
 
         std::vector<Camera> cameras;
     };
@@ -121,21 +196,36 @@ namespace Assets
 
     struct AnimationTrack
     {
+        enum class Target
+        {
+            NodeTransform,
+            Environment
+        };
+
         bool Playing() const { return Playing_; }
         void Play() { Playing_ = true; }
         void Stop() { Playing_ = false; }
         
         void Sample(float time, glm::vec3& translation, glm::quat& rotation, glm::vec3& scaling);
+        void Sample(float time, EnvironmentSetting& environment);
         
         std::string AnimationName;
         std::string NodeName_;
+        Target Target_ = Target::NodeTransform;
         
         AnimationChannel<glm::vec3> TranslationChannel;
         AnimationChannel<glm::quat> RotationChannel;
         AnimationChannel<glm::vec3> ScaleChannel;
+        AnimationChannel<float> SunRotationChannel;
+        AnimationChannel<float> SunElevationChannel;
+        AnimationChannel<float> SkyRotationChannel;
+        AnimationChannel<float> SunIntensityChannel;
+        AnimationChannel<float> SkyIntensityChannel;
+        AnimationChannel<glm::vec3> SunColorChannel;
+        AnimationChannel<glm::vec3> SkyColorChannel;
         
-        float Time_;
-        float Duration_;
+        float Time_ = 0.0f;
+        float Duration_ = 0.0f;
         float PlaySpeed_ = 1.0f;
 
         bool Playing_{};
@@ -165,8 +255,9 @@ namespace Assets
         glm::vec3 GetLocalAABBMin() const {return local_aabb_min;}
         glm::vec3 GetLocalAABBMax() const {return local_aabb_max;}
 
-        uint32_t NumberOfVertices() const { return verticeCount; }
+        uint32_t NumberOfVertices() const { return vertexCount; }
         uint32_t NumberOfIndices() const { return indiceCount; }
+        uint32_t MaterialSlotCount() const { return materialSlotCount; }
         uint32_t SectionCount() const { return sectionCount; }
         void SetSectionCount(uint32_t count) { sectionCount = count; }
 
@@ -196,8 +287,9 @@ namespace Assets
         glm::vec3 local_aabb_min;
         glm::vec3 local_aabb_max;
 
-        uint32_t verticeCount;
+        uint32_t vertexCount;
         uint32_t indiceCount;
+        uint32_t materialSlotCount = 0;
 
         uint32_t sectionCount;
 

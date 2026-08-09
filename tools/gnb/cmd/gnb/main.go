@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/android"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/cmakerun"
@@ -22,6 +24,7 @@ import (
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/runner"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/targetgraph"
+	validatepkg "github.com/gameknife/gknextrenderer/tools/gnb/internal/validate"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/vcpkg"
 	"github.com/spf13/cobra"
 )
@@ -36,6 +39,9 @@ type appContext struct {
 
 func main() {
 	repoRootCandidates := []string{"."}
+	if explicit := explicitRepoRoot(); explicit != "" {
+		repoRootCandidates = []string{explicit}
+	}
 	if executable, err := os.Executable(); err == nil {
 		if resolvedExecutable, resolveErr := filepath.EvalSymlinks(executable); resolveErr == nil {
 			executable = resolvedExecutable
@@ -64,6 +70,8 @@ func main() {
 			return runDashboard(ctx, dashboardCmdOpts{})
 		},
 	}
+	var repoRootFlag string
+	root.PersistentFlags().StringVar(&repoRootFlag, "repo-root", "", "explicit repository root (also GNB_REPO_ROOT)")
 	// Commands listed here run without a discovered repository — everything
 	// else fails fast with a friendly hint instead of crashing inside a
 	// command implementation that assumed a repo root.
@@ -101,6 +109,7 @@ func main() {
 	root.AddCommand(newTestCommand(ctx))
 	root.AddCommand(newVisualCommand(ctx))
 	root.AddCommand(newShotCommand(ctx))
+	root.AddCommand(newScadCommand(ctx))
 	root.AddCommand(newValidateCommand(ctx))
 	root.AddCommand(newTuiCommand(ctx))
 	root.AddCommand(newEditorCommand(ctx))
@@ -108,18 +117,37 @@ func main() {
 	root.AddCommand(newIOSCommand(ctx))
 	root.AddCommand(newPaksCommand(ctx))
 	root.AddCommand(newPackageCommand(ctx))
+	root.AddCommand(newSmokeCommand(ctx))
 	root.AddCommand(newCleanCommand(ctx))
 	root.AddCommand(newInstallCommand(ctx))
 	root.AddCommand(newTodoCommand(ctx))
 	root.AddCommand(newDashboardCommand(ctx))
 	root.AddCommand(newLocCommand(ctx))
+	root.AddCommand(newTyposCommand(ctx))
 	root.AddCommand(newGitCommand(ctx))
 	root.AddCommand(newLLMCommand(ctx))
+	root.AddCommand(newAICommand(ctx))
+	root.AddCommand(newLegacyAgentCommand(ctx))
 	root.AddCommand(newInitCommand())
 
 	if err := root.Execute(); err != nil {
 		fatal(err)
 	}
+}
+
+func explicitRepoRoot() string {
+	if value := strings.TrimSpace(os.Getenv("GNB_REPO_ROOT")); value != "" {
+		return value
+	}
+	for i, arg := range os.Args[1:] {
+		if strings.HasPrefix(arg, "--repo-root=") {
+			return strings.TrimPrefix(arg, "--repo-root=")
+		}
+		if arg == "--repo-root" && i+2 < len(os.Args) {
+			return os.Args[i+2]
+		}
+	}
+	return ""
 }
 
 func newInfoCommand(ctx appContext) *cobra.Command {
@@ -280,7 +308,7 @@ func newDepsCommand(ctx appContext) *cobra.Command {
 	}
 
 	fetch := &cobra.Command{
-		Use:   "fetch [all|tsc|vulkan|streamline]",
+		Use:   "fetch [all|tsc|vulkan|streamline|fidelityfx]",
 		Short: "Fetch one or more external dependencies",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return fetcher.EnsureNamedExternal(ctx.repoRoot, ctx.cfg, args)
@@ -294,12 +322,21 @@ func newDepsCommand(ctx appContext) *cobra.Command {
 func newBuildCommand(ctx appContext) *cobra.Command {
 	opts := cmakerun.BuildOptions{}
 	skipSetup := false
+	allTargets := false
 	cmd := &cobra.Command{
 		Use:   "build [targets...]",
 		Short: "Configure and build the native project",
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.Targets = append([]string(nil), args...)
+			startTime := time.Now()
+			if len(args) == 0 && !allTargets {
+				opts.Targets = []string{"gkNextRenderer", "gkNextUnitTests"}
+				if !opts.PrintCmd {
+					console.Info("默认仅构建核心目标: gkNextRenderer, gkNextUnitTests (使用 --all 构建全部项目)")
+				}
+			} else {
+				opts.Targets = append([]string(nil), args...)
+			}
 			if !skipSetup {
 				if _, err := os.Stat(vcpkg.Toolchain(ctx.repoRoot, ctx.cfg)); err != nil {
 					console.Info("首次构建：自动执行 setup（如需跳过用 --skip-setup）")
@@ -322,20 +359,29 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 			if err := platform.EnsureLinuxDesktopPackages(); err != nil {
 				return err
 			}
+			if err := platform.EnsureMSVCEnvironment(); err != nil {
+				return err
+			}
 			cmakePath, err := vcpkg.EnsureBundledCMake(ctx.repoRoot, ctx.cfg)
 			if err != nil {
 				return err
 			}
-			if ctx.preset == "linux" || ctx.preset == "macos-arm64" {
+			if ctx.preset == "windows" || ctx.preset == "windows-ninja" || ctx.preset == "linux" || ctx.preset == "macos-arm64" {
 				ninjaPath, err := vcpkg.EnsureBundledNinja(ctx.repoRoot, ctx.cfg)
 				if err != nil {
 					return err
 				}
 				opts.MakeProgram = ninjaPath
 			}
-			return cmakerun.BuildWithCMake(ctx.repoRoot, cmakePath, ctx.preset, opts)
+			buildErr := cmakerun.BuildWithCMake(ctx.repoRoot, cmakePath, ctx.preset, opts)
+			if !opts.PrintCmd {
+				elapsed := time.Since(startTime)
+				console.Info("Build completed in %s", formatDuration(elapsed))
+			}
+			return buildErr
 		},
 	}
+	cmd.Flags().BoolVar(&allTargets, "all", false, "build all targets in the project")
 	cmd.Flags().BoolVar(&opts.Clean, "clean", false, "delete the CMake build directory before building")
 	cmd.Flags().BoolVar(&opts.Reconfigure, "reconfigure", false, "force CMake configure")
 	cmd.Flags().IntVar(&opts.Jobs, "jobs", 0, "parallel build jobs")
@@ -528,19 +574,15 @@ func newShotCommand(ctx appContext) *cobra.Command {
 			"The screenshot path is printed when finished.\n\n" +
 			"Examples:\n" +
 			"  gnb shot --scene assets/models/playground.glb\n" +
-			"  gnb shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60\n" +
+			"  gnb shot --target ScadStudio --scene assets/scad/source/beer_cup.scad --frames 60\n" +
 			"  gnb shot --target AirportSim --ui",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			runArgs := shotRunArgs(frames, includeUI, args)
-			opts := runner.Options{Target: target, Preset: ctx.preset, Args: runArgs}
-			if scene != "" {
-				opts.Scenes = append(opts.Scenes, scene)
-			}
-			if err := runner.Run(ctx.repoRoot, opts); err != nil {
+			out := filepath.Join(filepath.Dir(platform.BinDir(ctx.repoRoot, ctx.preset)), "screenshots", "agent_validation")
+			opts := validatepkg.Options{RepoRoot: ctx.repoRoot, Preset: ctx.preset, Target: target, Scene: scene, Args: args}
+			if err := validatepkg.Shot(context.Background(), opts, frames, includeUI, out); err != nil {
 				return err
 			}
-			shot := filepath.Join(filepath.Dir(platform.BinDir(ctx.repoRoot, ctx.preset)),
-				"screenshots", "agent_validation.jpg")
+			shot := out + ".jpg"
 			console.Info("screenshot: " + shot)
 			return nil
 		},
@@ -581,6 +623,7 @@ func newValidateCommand(ctx appContext) *cobra.Command {
 	var width int
 	var height int
 	var visible bool
+	var syncValidation bool
 	cmd := &cobra.Command{
 		Use:   "validate --script <path> [--target <name>] [--scene <path>]",
 		Short: "Run an agent input validation script and write a JSON report",
@@ -612,13 +655,6 @@ func newValidateCommand(ctx appContext) *cobra.Command {
 				height = hints.Viewport.Height
 			}
 
-			runArgs := validateRunArgs(scriptPath, report, width, height, visible, args)
-			opts := runner.Options{Target: target, Preset: ctx.preset, Args: runArgs}
-			if scene != "" {
-				opts.Scenes = append(opts.Scenes, scene)
-			}
-			err := runner.Run(ctx.repoRoot, opts)
-
 			reportPath := report
 			if reportPath == "" {
 				reportName := hints.Name
@@ -630,6 +666,9 @@ func newValidateCommand(ctx appContext) *cobra.Command {
 			} else if !filepath.IsAbs(reportPath) {
 				reportPath = filepath.Join(filepath.Dir(platform.BinDir(ctx.repoRoot, ctx.preset)), reportPath)
 			}
+			opts := validatepkg.Options{RepoRoot: ctx.repoRoot, Preset: ctx.preset, Target: target, Scene: scene,
+				Script: scriptPath, Report: reportPath, Width: width, Height: height, Visible: visible, SyncValidation: syncValidation, Args: args}
+			err := validatepkg.Run(context.Background(), opts)
 			console.Info("agent report: " + reportPath)
 			return err
 		},
@@ -641,24 +680,8 @@ func newValidateCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().IntVar(&width, "width", 0, "window width (overrides script viewport.width)")
 	cmd.Flags().IntVar(&height, "height", 0, "window height (overrides script viewport.height)")
 	cmd.Flags().BoolVar(&visible, "visible", false, "show the desktop window while replaying the agent script")
+	cmd.Flags().BoolVar(&syncValidation, "sync-validation", false, "enable Vulkan core and synchronization validation")
 	return cmd
-}
-
-func validateRunArgs(scriptPath string, report string, width int, height int, visible bool, trailingArgs []string) []string {
-	runArgs := []string{"--agent-script=" + scriptPath}
-	if report != "" {
-		runArgs = append(runArgs, "--agent-report="+report)
-	}
-	if visible {
-		runArgs = append(runArgs, "--agent-visible-window")
-	}
-	if width > 0 {
-		runArgs = append(runArgs, fmt.Sprintf("--width=%d", width))
-	}
-	if height > 0 {
-		runArgs = append(runArgs, fmt.Sprintf("--height=%d", height))
-	}
-	return append(runArgs, trailingArgs...)
 }
 
 func loadValidateScriptHints(scriptPath string) validateScriptHints {
@@ -686,7 +709,7 @@ func newTuiCommand(ctx appContext) *cobra.Command {
 			"current terminal using truecolor half-block characters.\n\n" +
 			"Examples:\n" +
 			"  gnb tui --scene assets/models/playground.glb\n" +
-			"  gnb tui --target ScadStudio --scene assets/scad/beer_cup.scad\n" +
+			"  gnb tui --target ScadStudio --scene assets/scad/source/beer_cup.scad\n" +
 			"  gnb tui --target gkNextRenderer --tui-fps 20",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			runArgs := []string{"--tui"}
@@ -835,6 +858,29 @@ func newPackageCommand(ctx appContext) *cobra.Command {
 	return cmd
 }
 
+func newSmokeCommand(ctx appContext) *cobra.Command {
+	opts := packager.SmokeOptions{}
+	timeoutSeconds := 90
+	cmd := &cobra.Command{
+		Use:   "smoke <package.zip>",
+		Short: "Extract a release zip into a clean directory and verify it runs out of the box",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			archive := args[0]
+			if !filepath.IsAbs(archive) {
+				archive = filepath.Join(ctx.repoRoot, archive)
+			}
+			opts.LaunchTimeout = time.Duration(timeoutSeconds) * time.Second
+			return packager.Smoke(archive, opts)
+		},
+	}
+	cmd.Flags().BoolVar(&opts.Launch, "launch", false, "also launch each target and wait for the scene-ready log (needs a Vulkan device)")
+	cmd.Flags().BoolVar(&opts.Keep, "keep", false, "keep the extracted staging directory")
+	cmd.Flags().StringVar(&opts.StagingDir, "staging", "", "extraction directory (default: a temp directory)")
+	cmd.Flags().IntVar(&timeoutSeconds, "timeout", 90, "per-target launch timeout in seconds")
+	return cmd
+}
+
 func newCleanCommand(ctx appContext) *cobra.Command {
 	return &cobra.Command{
 		Use:   "clean [target]",
@@ -907,6 +953,27 @@ func newLocCommand(ctx appContext) *cobra.Command {
 	return cmd
 }
 
+func newTyposCommand(ctx appContext) *cobra.Command {
+	return &cobra.Command{
+		Use:                "typos [flags]",
+		Short:              "Check first-party files for spelling mistakes",
+		DisableFlagParsing: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			typosPath, err := exec.LookPath("typos")
+			if err != nil {
+				return fmt.Errorf("typos is not installed; see https://github.com/crate-ci/typos#install")
+			}
+
+			check := exec.Command(typosPath, args...)
+			check.Dir = ctx.repoRoot
+			check.Stdin = os.Stdin
+			check.Stdout = os.Stdout
+			check.Stderr = os.Stderr
+			return check.Run()
+		},
+	}
+}
+
 func gitCommit(repoRoot string) (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
 	cmd.Dir = repoRoot
@@ -920,4 +987,17 @@ func gitCommit(repoRoot string) (string, error) {
 func fatal(err error) {
 	console.Error("%s", err)
 	os.Exit(1)
+}
+
+func formatDuration(d time.Duration) string {
+	d = d.Round(time.Second)
+	min := int(d / time.Minute)
+	sec := int((d % time.Minute) / time.Second)
+	if min > 0 {
+		if sec == 0 {
+			return fmt.Sprintf("%d min", min)
+		}
+		return fmt.Sprintf("%d min %d sec", min, sec)
+	}
+	return fmt.Sprintf("%d sec", sec)
 }

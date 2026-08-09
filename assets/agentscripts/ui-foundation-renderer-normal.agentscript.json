@@ -1,0 +1,19 @@
+{
+  "name": "ui-foundation-renderer-normal",
+  "target": "gkNextRenderer",
+  "scene": "assets/models/playground.glb",
+  "viewport": { "width": 1280, "height": 720 },
+  "defaults": { "waitFrames": 2, "stepTimeoutMs": 8000 },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running" },
+    { "type": "cvar", "name": "r.rendererType", "set": 1 },
+    { "type": "cvar", "name": "r.upscaler.type", "set": 0 },
+    { "type": "key", "code": "F2", "action": "press" },
+    { "type": "key", "code": "GRAVE", "action": "press" },
+    { "type": "wait-frames", "n": 8 },
+    { "type": "assert", "query": "cvar.r.rendererType", "op": "eq", "value": 1 },
+    { "type": "assert", "query": "cvar.r.upscaler.type", "op": "eq", "value": 0 },
+    { "type": "screenshot", "out": "screenshots/ui_foundation_renderer_normal" },
+    { "type": "quit" }
+  ]
+}

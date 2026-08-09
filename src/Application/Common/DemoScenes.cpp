@@ -2,20 +2,21 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/Core/Model.hpp"
-#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"
-#include "Engine/Assets/Loaders/FProcModel.h"
+#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Assets/Loaders/LoaderRegistry.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
+#include "Engine/Runtime/Scene/SceneBuilder.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/LightComponent.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <functional>
 #include <random>
 #include <cmath>
+#include <unordered_map>
 
 #include <spdlog/spdlog.h>
 
@@ -33,6 +34,43 @@ namespace
     {
         materials.push_back({mat});
         return static_cast<int>(materials.size() - 1);
+    }
+
+    void AttachSpherePhysics(const std::shared_ptr<Assets::Node>& node, const vec3& position,
+                             float radius, NextMotionType motionType)
+    {
+        // DemoScenes remain loadable by core-only applications; installing NextPhysics
+        // upgrades the same scene nodes with live bodies.
+        NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine();
+        if (!physicsEngine)
+        {
+            return;
+        }
+
+        auto component = std::make_shared<Runtime::PhysicsComponent>();
+        component->SetMobility(motionType == NextMotionType::Dynamic
+            ? Runtime::ENodeMobility::Dynamic
+            : Runtime::ENodeMobility::Static);
+        component->BindPhysicsBody(physicsEngine->CreateSphereBody(position, radius, motionType));
+        node->AddComponent(component);
+    }
+
+    void AttachBoxPhysics(const std::shared_ptr<Assets::Node>& node, const vec3& position,
+                          const quat& rotation, const vec3& extent, NextMotionType motionType)
+    {
+        // Keep the render-only fallback deterministic when no physics backend is installed.
+        NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine();
+        if (!physicsEngine)
+        {
+            return;
+        }
+
+        auto component = std::make_shared<Runtime::PhysicsComponent>();
+        component->SetMobility(motionType == NextMotionType::Dynamic
+            ? Runtime::ENodeMobility::Dynamic
+            : Runtime::ENodeMobility::Static);
+        component->BindPhysicsBody(physicsEngine->CreateBoxBody(position, rotation, extent, motionType));
+        node->AddComponent(component);
     }
 
     void AddRayTracingInOneWeekendCommonScene(std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
@@ -53,8 +91,6 @@ namespace
                 
                 if (length(center - vec3(4, 0.2f, 0)) > 0.9f)
                 {
-                    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(center, 0.2f, NextMotionType::Dynamic);
-                    
                     std::shared_ptr<Assets::Node> newNode;
 
                     if (chooseMat < 0.7f) // Diffuse
@@ -85,10 +121,7 @@ namespace
                     }
                     
                     nodes.push_back(newNode);
-                    auto phys = std::make_shared<Runtime::PhysicsComponent>();
-                    phys->SetMobility(Runtime::ENodeMobility::Dynamic);
-                    phys->BindPhysicsBody(id);
-                    newNode->AddComponent(phys);
+                    AttachSpherePhysics(newNode, center, 0.2f, NextMotionType::Dynamic);
                 }
             }
         }
@@ -141,12 +174,7 @@ namespace
             auto newNode = Assets::SceneBuilder::CreateRenderNode(Utilities::NameHelper::RandomName(6), vec3(0, 1, 0),
                                                           vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()),
                                                           modelIdx, matIdx0);
-            
-            auto body1 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(0, 1, 0), 1.0f, NextMotionType::Dynamic);
-            auto phys1 = std::make_shared<Runtime::PhysicsComponent>();
-            phys1->SetMobility(Runtime::ENodeMobility::Dynamic);
-            phys1->BindPhysicsBody(body1);
-            newNode->AddComponent(phys1);
+            AttachSpherePhysics(newNode, vec3(0, 1, 0), 1.0f, NextMotionType::Dynamic);
             nodes.push_back(newNode);
         }
         
@@ -154,12 +182,7 @@ namespace
             auto newNode = Assets::SceneBuilder::CreateRenderNode(Utilities::NameHelper::RandomName(6), vec3(-4, 1, 0),
                                                           vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()),
                                                           modelIdx, matIdx1);
-            
-            auto body2 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(-4, 1, 0), 1.0f, NextMotionType::Dynamic);
-            auto phys2 = std::make_shared<Runtime::PhysicsComponent>();
-            phys2->SetMobility(Runtime::ENodeMobility::Dynamic);
-            phys2->BindPhysicsBody(body2);
-            newNode->AddComponent(phys2);
+            AttachSpherePhysics(newNode, vec3(-4, 1, 0), 1.0f, NextMotionType::Dynamic);
             nodes.push_back(newNode);
         }
         
@@ -167,12 +190,7 @@ namespace
             auto newNode = Assets::SceneBuilder::CreateRenderNode(Utilities::NameHelper::RandomName(6), vec3(4, 1, 0),
                                                           vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()),
                                                           modelIdx, matIdx2);
-
-            auto body3 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(4, 1, 0), 1.0f, NextMotionType::Dynamic);
-            auto phys3 = std::make_shared<Runtime::PhysicsComponent>();
-            phys3->SetMobility(Runtime::ENodeMobility::Dynamic);
-            phys3->BindPhysicsBody(body3);
-            newNode->AddComponent(phys3);
+            AttachSpherePhysics(newNode, vec3(4, 1, 0), 1.0f, NextMotionType::Dynamic);
             nodes.push_back(newNode);
         }
         
@@ -197,6 +215,7 @@ namespace
         cameraInit.HasSky = false;
         cameraInit.HasSun = false;
 
+        const size_t firstCornellLight = lights.size();
         int cboxModel = Assets::FProcModel::CreateCornellBox(5.55f, models, materials, lights);
         {
             auto newNode = Assets::SceneBuilder::CreateRenderNode(
@@ -207,6 +226,13 @@ namespace
                 static_cast<uint32_t>(cboxModel),
                 std::array<uint32_t, 16>{prevMatId + 0, prevMatId + 1, prevMatId + 2, prevMatId + 3});
             nodes.push_back(newNode);
+            auto lightComponent = std::make_shared<Runtime::LightComponent>();
+            for (size_t lightIndex = firstCornellLight; lightIndex < lights.size(); ++lightIndex)
+            {
+                lightComponent->AddLight(lights[lightIndex]);
+            }
+            newNode->AddComponent(lightComponent);
+            lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstCornellLight), lights.end());
         }
 
         auto spherePos = vec3(1.30, 1.01 + 2.00 * 0.0, 0.80);
@@ -228,12 +254,7 @@ namespace
                                                           prevMatId + 5,
                                                           true,
                                                           quat(vec3(0, 0.5f, 0)));
-            
-            auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(spherePos, 1.0f, NextMotionType::Dynamic);
-            auto phys = std::make_shared<Runtime::PhysicsComponent>();
-            phys->SetMobility(Runtime::ENodeMobility::Dynamic);
-            phys->BindPhysicsBody(id);
-            newNode->AddComponent(phys);
+            AttachSpherePhysics(newNode, spherePos, 1.0f, NextMotionType::Dynamic);
             nodes.push_back(newNode);
         }
         
@@ -354,8 +375,12 @@ namespace
         auto addAreaLight = [&](const std::string& name, const vec3& origin,
                                 const vec3& right, const vec3& up, uint32_t lightMat)
         {
+            const size_t firstLight = lights.size();
             models.push_back(Assets::FProcModel::CreateAreaLight(name, origin, right, up, lightMat, lights));
             addNode(name, vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), lightMat);
+            auto lightComponent = std::make_shared<Runtime::LightComponent>(lights.back());
+            nodes.back()->AddComponent(lightComponent);
+            lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstLight), lights.end());
         };
 
         // Main ceiling light (warm white), faces -Y.
@@ -565,7 +590,7 @@ namespace
         cameraInit.GammaCorrection = true;
         cameraInit.HasSky = true;
         cameraInit.SkyIdx = 0;
-        cameraInit.SkyIntensity = 15.0f;
+        cameraInit.SkyIntensity = 50.0f;
         cameraInit.HasSun = false;
 
         const uint32_t matGround = static_cast<uint32_t>(materials.size());
@@ -625,7 +650,7 @@ namespace
         }
         for (int i = 0; i < 3; ++i)
         {
-            const float intensity = 280.0f + roughness[i] * 520.0f;
+            const float intensity = 500.0f + roughness[i] * 300.0f;
             materials.push_back({Material::DiffuseLight(vec3(intensity, intensity * 0.85f, intensity * 0.55f)),
                                  fmt::format("ms_diffuse_light_{:.1f}", roughness[i])});
         }
@@ -657,10 +682,13 @@ namespace
             }
         }
 
+        const size_t firstKeyLight = lights.size();
         models.push_back(Assets::FProcModel::CreateAreaLight(
             "KeyLight", vec3(-3.0f, 5.5f, 1.5f), vec3(6.0f, 0.0f, 0.0f),
-            vec3(0.0f, 0.0f, -3.0f), matLight, lights));
+            vec3(0.0f, 0.0f, 3.0f), matLight, lights));
         addNode("KeyLight", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matLight);
+        nodes.back()->AddComponent(std::make_shared<Runtime::LightComponent>(lights.back()));
+        lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstKeyLight), lights.end());
     }
 
     void LightingShowcase(Assets::EnvironmentSetting& cameraInit,
@@ -683,20 +711,20 @@ namespace
         cameraInit.HasSky = true;
         cameraInit.SkyIdx = 0;
         cameraInit.SkyIntensity = 10.0f;
-        cameraInit.HasSun = true;
+        cameraInit.HasSun = false;
         cameraInit.SunIntensity = 300.0f;
 
         const uint32_t matGround = static_cast<uint32_t>(materials.size());
         materials.push_back({Material::Lambertian(vec3(0.45f, 0.45f, 0.46f)), "ls_ground_gray"});
         const uint32_t matSphere = static_cast<uint32_t>(materials.size());
-        materials.push_back({Material::Lambertian(vec3(0.72f, 0.72f, 0.72f)), "ls_sphere_neutral"});
+        materials.push_back({Material::Mixture(vec3(0.72f, 0.72f, 0.72f), 0.2f), "ls_sphere_neutral"});
 
         const uint32_t matPointLight = static_cast<uint32_t>(materials.size());
         materials.push_back({Material::DiffuseLight(vec3(1000.0f, 900.0f, 800.0f)), "ls_point_light"});
         const uint32_t matAreaLight = static_cast<uint32_t>(materials.size());
-        materials.push_back({Material::DiffuseLight(vec3(700.0f, 800.0f, 900.0f)), "ls_area_light"});
+        materials.push_back({Material::DiffuseLight(vec3(700.0f, 800.0f, 1200.0f)), "ls_area_light"});
         const uint32_t matFillLight = static_cast<uint32_t>(materials.size());
-        materials.push_back({Material::DiffuseLight(vec3(150.0f, 180.0f, 200.0f)), "ls_fill_light"});
+        materials.push_back({Material::DiffuseLight(vec3(1050.0f, 1080.0f, 600.0f)), "ls_fill_light"});
 
         auto addNode = [&](const std::string& name, const vec3& pos, uint32_t modelIdx, uint32_t matIdx)
         {
@@ -734,22 +762,67 @@ namespace
         }
 
         // Light 1: Point light (small sphere emitter above sphere 1)
-        models.push_back(Assets::FProcModel::CreateSphere(vec3(0, 0, 0), 0.2f));
+        const vec3 pointLightPosition(-5.25f, 4.5f, -1.0f);
+        constexpr float pointLightRadius = 0.2f;
+        size_t firstLight = lights.size();
+        models.push_back(Assets::FProcModel::CreatePointLight(
+            "PointLight", vec3(0.0f), pointLightRadius, matPointLight, lights));
         const uint32_t pointLightModel = static_cast<uint32_t>(models.size() - 1);
-        addNode("PointLight", vec3(-5.25f, 4.5f, -1.0f), pointLightModel, matPointLight);
+        addNode("PointLight", pointLightPosition, pointLightModel, matPointLight);
+        nodes.back()->AddComponent(std::make_shared<Runtime::LightComponent>(lights.back()));
+        lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstLight), lights.end());
 
         // Light 2: Area light (rectangle above sphere 2)
+        const vec3 areaLightPosition(-1.75f, 4.5f, 0.0f);
+        firstLight = lights.size();
         models.push_back(Assets::FProcModel::CreateAreaLight(
-            "AreaLight", vec3(-2.75f, 4.5f, -0.5f), vec3(2.0f, 0.0f, 0.0f),
-            vec3(0.0f, 0.0f, -1.0f), matAreaLight, lights));
-        addNode("AreaLight", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matAreaLight);
+            "AreaLight", vec3(-1.0f, 0.0f, -0.5f), vec3(2.0f, 0.0f, 0.0f),
+            vec3(0.0f, 0.0f, 1.0f), matAreaLight, lights));
+        addNode("AreaLight", areaLightPosition, static_cast<uint32_t>(models.size() - 1), matAreaLight);
+        nodes.back()->AddComponent(std::make_shared<Runtime::LightComponent>(lights.back()));
+        lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstLight), lights.end());
 
         // Light 3: Uses global sun (directional) - no explicit light node needed
         // Light 4: Fill light (small area light near sphere 4)
+        const vec3 fillRight(1.0f, 0.0f, 0.0f);
+        const vec3 fillUp(0.0f, -0.5f, 0.5f);
+        const vec3 fillLightPosition(5.25f, 2.55f, 1.25f);
+        firstLight = lights.size();
         models.push_back(Assets::FProcModel::CreateAreaLight(
-            "FillLight", vec3(4.75f, 2.8f, 1.0f), vec3(1.0f, 0.0f, 0.0f),
-            vec3(0.0f, 0.5f, -0.5f), matFillLight, lights));
-        addNode("FillLight", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matFillLight);
+            "FillLight", -0.5f * (fillRight + fillUp), fillRight, fillUp, matFillLight, lights));
+        addNode("FillLight", fillLightPosition, static_cast<uint32_t>(models.size() - 1), matFillLight);
+        nodes.back()->AddComponent(std::make_shared<Runtime::LightComponent>(lights.back()));
+        lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstLight), lights.end());
+
+        auto addSubtleLightMotion = [&tracks](const std::string& nodeName,
+                                               const vec3& center,
+                                               const vec3& amplitude,
+                                               float phase)
+        {
+            Assets::AnimationTrack track;
+            track.AnimationName = nodeName + "_SubtleMotion";
+            track.NodeName_ = nodeName;
+            track.Duration_ = 8.0f;
+            track.Play();
+            constexpr int keyCount = 16;
+            for (int keyIndex = 0; keyIndex <= keyCount; ++keyIndex)
+            {
+                const float time = 8.0f * static_cast<float>(keyIndex) / static_cast<float>(keyCount);
+                const float angle = glm::two_pi<float>() * time / 8.0f + phase;
+                const vec3 offset(
+                    amplitude.x * std::sin(angle),
+                    amplitude.y * std::sin(angle * 2.0f),
+                    amplitude.z * std::cos(angle));
+                track.TranslationChannel.Keys.push_back({time, center + offset});
+            }
+            tracks.push_back(std::move(track));
+        };
+
+        addSubtleLightMotion("PointLight", pointLightPosition, vec3(0.28f, 0.10f, 0.16f) * 2.f, 0.0f);
+        addSubtleLightMotion("AreaLight", areaLightPosition, vec3(0.16f, 0.08f, 0.12f) * 2.f,
+                             glm::two_pi<float>() / 3.0f);
+        addSubtleLightMotion("FillLight", fillLightPosition, vec3(0.14f, 0.07f, 0.20f) * 2.f,
+                             glm::two_pi<float>() * 2.0f / 3.0f);
     }
 
     void CameraShowcase(Assets::EnvironmentSetting& cameraInit,
@@ -771,7 +844,7 @@ namespace
         cameraInit.GammaCorrection = true;
         cameraInit.HasSky = true;
         cameraInit.SkyIdx = 0;
-        cameraInit.SkyIntensity = 10.0f;
+        cameraInit.SkyIntensity = 50.0f;
         cameraInit.HasSun = true;
         cameraInit.SunIntensity = 400.0f;
 
@@ -780,7 +853,7 @@ namespace
         const uint32_t matWhite = static_cast<uint32_t>(materials.size());
         materials.push_back({Material::Lambertian(vec3(0.78f, 0.78f, 0.78f)), "cs_white"});
         const uint32_t matDark = static_cast<uint32_t>(materials.size());
-        materials.push_back({Material::Lambertian(vec3(0.25f, 0.25f, 0.25f)), "cs_dark"});
+        materials.push_back({Material::Mixture(vec3(0.15f, 0.15f, 0.15f), 0.01f), "cs_dark"});
         const uint32_t matRed = static_cast<uint32_t>(materials.size());
         materials.push_back({Material::Lambertian(vec3(0.72f, 0.15f, 0.15f)), "cs_red"});
         const uint32_t matBlue = static_cast<uint32_t>(materials.size());
@@ -854,7 +927,7 @@ namespace
         cameraInit.GammaCorrection = true;
         cameraInit.HasSky = true;
         cameraInit.SkyIdx = 0;
-        cameraInit.SkyIntensity = 12.0f;
+        cameraInit.SkyIntensity = 50.0f;
         cameraInit.HasSun = true;
         cameraInit.SunIntensity = 250.0f;
 
@@ -946,7 +1019,7 @@ namespace
         cameraInit.GammaCorrection = true;
         cameraInit.HasSky = true;
         cameraInit.SkyIdx = 0;
-        cameraInit.SkyIntensity = 12.0f;
+        cameraInit.SkyIntensity = 50.0f;
         cameraInit.HasSun = true;
         cameraInit.SunIntensity = 350.0f;
 
@@ -1012,12 +1085,735 @@ namespace
             node->SetScale(cube.extent);
             node->RecalcTransform(true);
 
-            auto phys = std::make_shared<Runtime::PhysicsComponent>();
-            phys->SetMobility(Runtime::ENodeMobility::Dynamic);
-            const NextBodyID bodyId = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(
-                cube.position, cube.extent, NextMotionType::Dynamic);
-            phys->BindPhysicsBody(bodyId);
-            node->AddComponent(phys);
+            AttachBoxPhysics(node, cube.position, quat(1, 0, 0, 0), cube.extent, NextMotionType::Dynamic);
+        }
+    }
+}
+
+namespace
+{
+    // ReSTIR stress scene: 64 colored area lights over a pillar field, no sun/sky, so every
+    // surface point sees a different subset of many lights (docs/plans/pathtracing-restir-plan.md M1).
+    void ManyLightsShowcase(Assets::EnvironmentSetting& cameraInit, std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                            std::vector<Assets::Model>& models,
+                            std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights,
+                            std::vector<Assets::AnimationTrack>& tracks)
+    {
+        Assets::Camera defaultCam;
+        defaultCam.name = "Cam";
+        defaultCam.ModelView = lookAt(vec3(0, 15.0f, 24.0f), vec3(0, 0.5f, 0), vec3(0, 1, 0));
+        defaultCam.FieldOfView = 50;
+        defaultCam.Aperture = 0;
+        defaultCam.FocalDistance = 26;
+
+        cameraInit.cameras.push_back(defaultCam);
+        cameraInit.ControlSpeed = 10.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = false;
+        cameraInit.HasSun = false;
+
+        const uint32_t matGround = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.55f, 0.55f, 0.55f)), "ml_ground"});
+        const uint32_t matPillar = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.70f, 0.68f, 0.62f)), "ml_pillar"});
+
+        // Eight emitter colors with a wide intensity spread: the light CDF weights by
+        // luminance * area, so this also exercises non-uniform light selection.
+        const vec3 lightColors[8] = {
+            vec3(2200.0f, 30.0f, 12.0f), vec3(30.0f, 2200.0f, 20.0f),
+            vec3(20.0f, 35.0f, 2400.0f), vec3(2100.0f, 2000.0f, 25.0f),
+            vec3(1000.0f, 25.0f, 2000.0f), vec3(25.0f, 2000.0f, 2000.0f),
+            vec3(1900.0f, 1850.0f, 1780.0f), vec3(2600.0f, 50.0f, 25.0f),
+        };
+        const uint32_t lightMatBase = static_cast<uint32_t>(materials.size());
+        for (int i = 0; i < 8; ++i)
+        {
+            materials.push_back({Material::DiffuseLight(lightColors[i]), "ml_light_" + std::to_string(i)});
+        }
+
+        auto addNode = [&](const std::string& name, uint32_t modelIdx, uint32_t matIdx)
+        {
+            nodes.push_back(Assets::SceneBuilder::CreateRenderNode(name, vec3(0), vec3(1),
+                                                                   static_cast<uint32_t>(nodes.size()),
+                                                                   modelIdx, matIdx));
+        };
+
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-22.0f, -0.2f, -22.0f), vec3(22.0f, 0.0f, 22.0f)));
+        addNode("Ground", static_cast<uint32_t>(models.size() - 1), matGround);
+
+        // 8x8 grid of downward-facing light quads at y = 5 (normal = cross(right, up) = -y).
+        const int gridN = 8;
+        const float spacing = 5.0f;
+        const float lightSize = 1.2f;
+        for (int row = 0; row < gridN; ++row)
+        {
+            for (int col = 0; col < gridN; ++col)
+            {
+                const float x = (col - (gridN - 1) * 0.5f) * spacing - lightSize * 0.5f;
+                const float z = (row - (gridN - 1) * 0.5f) * spacing - lightSize * 0.5f;
+                const uint32_t matIdx = lightMatBase + (row * 3 + col) % 8;
+                const size_t firstLight = lights.size();
+                models.push_back(Assets::FProcModel::CreateAreaLight(
+                    "ml_light_quad_" + std::to_string(row) + "_" + std::to_string(col),
+                    vec3(x, 3.5f, z), vec3(lightSize, 0, 0), vec3(0, 0, lightSize),
+                    matIdx, lights));
+                addNode("Light_" + std::to_string(row) + "_" + std::to_string(col),
+                        static_cast<uint32_t>(models.size() - 1), matIdx);
+                nodes.back()->AddComponent(std::make_shared<Runtime::LightComponent>(lights.back()));
+                lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstLight), lights.end());
+            }
+        }
+
+        // Occluder pillars offset half a cell from the lights with varying heights: every
+        // surface point sees a different subset of lights, which stresses light selection.
+        for (int row = 0; row < gridN - 1; ++row)
+        {
+            for (int col = 0; col < gridN - 1; ++col)
+            {
+                const float x = (col - (gridN - 2) * 0.5f) * spacing;
+                const float z = (row - (gridN - 2) * 0.5f) * spacing;
+                const float h = 1.5f + float((row * 5 + col * 3) % 4);
+                models.push_back(Assets::FProcModel::CreateBox(
+                    vec3(x - 0.3f, 0.0f, z - 0.3f), vec3(x + 0.3f, h, z + 0.3f)));
+                addNode("Pillar_" + std::to_string(row) + "_" + std::to_string(col),
+                        static_cast<uint32_t>(models.size() - 1), matPillar);
+            }
+        }
+    }
+
+    float Hash01(uint32_t value)
+    {
+        value ^= value >> 16u;
+        value *= 0x7feb352du;
+        value ^= value >> 15u;
+        value *= 0x846ca68bu;
+        value ^= value >> 16u;
+        return static_cast<float>(value & 0x00ffffffu) / static_cast<float>(0x01000000u);
+    }
+
+    float HashRange(uint32_t value, float minValue, float maxValue)
+    {
+        return glm::mix(minValue, maxValue, Hash01(value));
+    }
+
+    Assets::Model CreateFacetedAsteroid(uint32_t seed)
+    {
+        const float goldenRatio = (1.0f + std::sqrt(5.0f)) * 0.5f;
+        std::vector<vec3> positions = {
+            vec3(-1, goldenRatio, 0), vec3(1, goldenRatio, 0),
+            vec3(-1, -goldenRatio, 0), vec3(1, -goldenRatio, 0),
+            vec3(0, -1, goldenRatio), vec3(0, 1, goldenRatio),
+            vec3(0, -1, -goldenRatio), vec3(0, 1, -goldenRatio),
+            vec3(goldenRatio, 0, -1), vec3(goldenRatio, 0, 1),
+            vec3(-goldenRatio, 0, -1), vec3(-goldenRatio, 0, 1),
+        };
+        for (vec3& position : positions)
+        {
+            position = glm::normalize(position);
+        }
+
+        std::vector<std::array<uint32_t, 3>> faces = {
+            {0, 11, 5}, {0, 5, 1}, {0, 1, 7}, {0, 7, 10}, {0, 10, 11},
+            {1, 5, 9}, {5, 11, 4}, {11, 10, 2}, {10, 7, 6}, {7, 1, 8},
+            {3, 9, 4}, {3, 4, 2}, {3, 2, 6}, {3, 6, 8}, {3, 8, 9},
+            {4, 9, 5}, {2, 4, 11}, {6, 2, 10}, {8, 6, 7}, {9, 8, 1},
+        };
+
+        std::unordered_map<uint64_t, uint32_t> midpointCache;
+        auto midpoint = [&](uint32_t lhs, uint32_t rhs)
+        {
+            const uint32_t low = std::min(lhs, rhs);
+            const uint32_t high = std::max(lhs, rhs);
+            const uint64_t key = (static_cast<uint64_t>(low) << 32u) | high;
+            if (const auto found = midpointCache.find(key); found != midpointCache.end())
+            {
+                return found->second;
+            }
+            const uint32_t index = static_cast<uint32_t>(positions.size());
+            positions.push_back(glm::normalize(positions[lhs] + positions[rhs]));
+            midpointCache.emplace(key, index);
+            return index;
+        };
+
+        std::vector<std::array<uint32_t, 3>> subdividedFaces;
+        subdividedFaces.reserve(faces.size() * 4);
+        for (const auto& face : faces)
+        {
+            const uint32_t ab = midpoint(face[0], face[1]);
+            const uint32_t bc = midpoint(face[1], face[2]);
+            const uint32_t ca = midpoint(face[2], face[0]);
+            subdividedFaces.push_back({face[0], ab, ca});
+            subdividedFaces.push_back({face[1], bc, ab});
+            subdividedFaces.push_back({face[2], ca, bc});
+            subdividedFaces.push_back({ab, bc, ca});
+        }
+        faces = std::move(subdividedFaces);
+
+        for (uint32_t index = 0; index < positions.size(); ++index)
+        {
+            positions[index] *= HashRange(seed * 131u + index * 17u, 0.84f, 1.16f);
+        }
+
+        std::vector<Assets::Vertex> vertices;
+        std::vector<uint32_t> indices;
+        vertices.reserve(faces.size() * 3);
+        indices.reserve(faces.size() * 3);
+        for (const auto& face : faces)
+        {
+            const vec3& a = positions[face[0]];
+            const vec3& b = positions[face[1]];
+            const vec3& c = positions[face[2]];
+            const vec3 normal = glm::normalize(glm::cross(b - a, c - a));
+            const uint32_t base = static_cast<uint32_t>(vertices.size());
+            vertices.push_back({a, normal, vec4(1, 0, 0, 0), vec2(0, 0), 0});
+            vertices.push_back({b, normal, vec4(1, 0, 0, 0), vec2(1, 0), 0});
+            vertices.push_back({c, normal, vec4(1, 0, 0, 0), vec2(0.5f, 1), 0});
+            indices.insert(indices.end(), {base, base + 1u, base + 2u});
+        }
+        return Assets::FProcModel::CreateFromBuffers(
+            fmt::format("faceted_asteroid_{}", seed), std::move(vertices), std::move(indices), false);
+    }
+
+    void BuildAsteroidBelt(Assets::EnvironmentSetting& cameraInit,
+                           std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                           std::vector<Assets::Model>& models,
+                           std::vector<Assets::FMaterial>& materials,
+                           std::vector<Assets::LightObject>& lights,
+                           std::vector<Assets::AnimationTrack>& tracks,
+                           uint32_t asteroidCount)
+    {
+        const std::array<float, 7> cameraTimes{0.0f, 3.5f, 7.0f, 10.5f, 14.0f, 17.5f, 21.0f};
+        const std::array<vec3, 7> cameraPositions{
+            vec3(680, 250, 800),
+            vec3(540, 155, 625),
+            vec3(390, 72, 430),
+            vec3(285, 30, 270),
+            vec3(185, 9, 115),
+            vec3(45, -4, -35),
+            vec3(-175, 7, -205),
+        };
+        const std::array<vec3, 7> cameraTargets{
+            vec3(120, 0, 120),
+            vec3(170, 0, 180),
+            vec3(205, -3, 170),
+            vec3(155, 0, 75),
+            vec3(45, -2, -30),
+            vec3(-105, 2, -145),
+            vec3(-330, 8, -285),
+        };
+
+        Assets::Camera animatedCamera;
+        animatedCamera.name = "AsteroidBeltFlythrough";
+        animatedCamera.NodeName_ = "AsteroidBeltCamera";
+        animatedCamera.ModelView = lookAt(cameraPositions[0], cameraTargets[0], vec3(0, 1, 0));
+        animatedCamera.FieldOfView = 62;
+        animatedCamera.Aperture = 0;
+        animatedCamera.FocalDistance = glm::length(cameraTargets[0] - cameraPositions[0]);
+        animatedCamera.FarPlane = 2200.0f;
+        cameraInit.cameras.push_back(animatedCamera);
+
+        Assets::AnimationTrack cameraTrack;
+        cameraTrack.AnimationName = "AsteroidBeltFlythrough";
+        cameraTrack.NodeName_ = animatedCamera.NodeName_;
+        cameraTrack.Duration_ = cameraTimes.back();
+        for (size_t index = 0; index < cameraTimes.size(); ++index)
+        {
+            const mat4 cameraWorld = glm::inverse(lookAt(cameraPositions[index], cameraTargets[index], vec3(0, 1, 0)));
+            cameraTrack.TranslationChannel.Keys.push_back({cameraTimes[index], cameraPositions[index]});
+            cameraTrack.RotationChannel.Keys.push_back(
+                {cameraTimes[index], glm::normalize(glm::quat_cast(glm::mat3(cameraWorld)))});
+        }
+        tracks.push_back(std::move(cameraTrack));
+        const mat4 initialCameraWorld = glm::inverse(animatedCamera.ModelView);
+        nodes.push_back(Assets::Node::CreateNode(
+            animatedCamera.NodeName_,
+            cameraPositions[0],
+            glm::normalize(glm::quat_cast(glm::mat3(initialCameraWorld))),
+            vec3(1.0f),
+            static_cast<uint32_t>(nodes.size())));
+
+        Assets::Camera overviewCamera;
+        overviewCamera.name = "BeltOverview";
+        overviewCamera.ModelView = lookAt(vec3(520, 420, 680), vec3(0, 0, 0), vec3(0, 1, 0));
+        overviewCamera.FieldOfView = 72;
+        overviewCamera.Aperture = 0;
+        overviewCamera.FocalDistance = 950;
+        overviewCamera.FarPlane = 2000.0f;
+        cameraInit.cameras.push_back(overviewCamera);
+
+        Assets::Camera cinematicCamera;
+        cinematicCamera.name = "CinematicBelt";
+        cinematicCamera.ModelView = lookAt(vec3(0, 44, 182), vec3(112, -3, 258), vec3(0, 1, 0));
+        cinematicCamera.FieldOfView = 56;
+        cinematicCamera.Aperture = 0;
+        cinematicCamera.FocalDistance = 142;
+        cinematicCamera.FarPlane = 1400.0f;
+        cameraInit.cameras.push_back(cinematicCamera);
+        cameraInit.ControlSpeed = 35.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = true;
+        cameraInit.HasSun = true;
+        cameraInit.SkyIntensity = 18.0f;
+        cameraInit.SunIntensity = 900.0f;
+        cameraInit.SunRotation = 0.72f;
+
+        constexpr uint32_t modelCount = 24;
+        constexpr uint32_t materialCount = 12000;
+        for (uint32_t index = 0; index < modelCount; ++index)
+        {
+            models.push_back(CreateFacetedAsteroid(4100u + index));
+        }
+        for (uint32_t index = 0; index < materialCount; ++index)
+        {
+            const float hueBand = Hash01(index * 11u + 3u);
+            const vec3 color = glm::mix(
+                vec3(0.08f, 0.075f, 0.07f),
+                hueBand > 0.84f ? vec3(0.34f, 0.20f, 0.10f) : vec3(0.48f, 0.46f, 0.42f),
+                HashRange(index * 17u + 5u, 0.15f, 1.0f));
+            const float roughness = HashRange(index * 23u + 7u, 0.08f, 0.95f);
+            if ((index % 9u) == 0u)
+            {
+                materials.push_back({Material::Metallic(color, roughness), fmt::format("ab_metal_{:05}", index)});
+            }
+            else
+            {
+                materials.push_back({Material::Mixture(color, roughness), fmt::format("ab_rock_{:05}", index)});
+            }
+        }
+
+        for (uint32_t index = 0; index < asteroidCount; ++index)
+        {
+            const float ringSelector = Hash01(index * 29u + 13u);
+            const float ringBase = ringSelector < 0.45f ? 125.0f : (ringSelector < 0.82f ? 255.0f : 395.0f);
+            const float radius = ringBase + HashRange(index * 31u + 17u, -48.0f, 48.0f);
+            const float angle = HashRange(index * 37u + 19u, 0.0f, glm::two_pi<float>());
+            const float vertical = HashRange(index * 41u + 23u, -1.0f, 1.0f);
+            const vec3 position(
+                std::cos(angle) * radius,
+                vertical * vertical * vertical * 36.0f,
+                std::sin(angle) * radius);
+            const float size = HashRange(index * 43u + 29u, 0.55f, 3.6f);
+            const vec3 scale(
+                size * HashRange(index * 47u + 31u, 0.65f, 1.55f),
+                size * HashRange(index * 53u + 37u, 0.65f, 1.45f),
+                size * HashRange(index * 59u + 41u, 0.65f, 1.65f));
+            const quat rotation = quat(vec3(
+                HashRange(index * 61u + 43u, 0.0f, glm::two_pi<float>()),
+                HashRange(index * 67u + 47u, 0.0f, glm::two_pi<float>()),
+                HashRange(index * 71u + 53u, 0.0f, glm::two_pi<float>())));
+            nodes.push_back(Assets::SceneBuilder::CreateRenderNode(
+                fmt::format("Asteroid_{:05}", index), position, scale, static_cast<uint32_t>(nodes.size()),
+                index % modelCount, index % materialCount, true, rotation));
+        }
+    }
+
+    void AsteroidBelt(Assets::EnvironmentSetting& cameraInit,
+                      std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                      std::vector<Assets::Model>& models,
+                      std::vector<Assets::FMaterial>& materials,
+                      std::vector<Assets::LightObject>& lights,
+                      std::vector<Assets::AnimationTrack>& tracks)
+    {
+        BuildAsteroidBelt(cameraInit, nodes, models, materials, lights, tracks, 30000u);
+    }
+
+    void MassiveAsteroidBelt(Assets::EnvironmentSetting& cameraInit,
+                             std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                             std::vector<Assets::Model>& models,
+                             std::vector<Assets::FMaterial>& materials,
+                             std::vector<Assets::LightObject>& lights,
+                             std::vector<Assets::AnimationTrack>& tracks)
+    {
+        BuildAsteroidBelt(cameraInit, nodes, models, materials, lights, tracks, 70000u);
+    }
+
+    float KilometerHeight(float x, float z)
+    {
+        return 13.0f * std::sin(x * 0.011f) * std::cos(z * 0.009f)
+             + 7.0f * std::sin((x + z) * 0.021f)
+             + 4.0f * std::cos((x - z) * 0.031f);
+    }
+
+    void KilometerWorld(Assets::EnvironmentSetting& cameraInit, std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                        std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
+                        std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
+    {
+        auto addCamera = [&](const char* name, const vec3& eye, const vec3& target, float fov)
+        {
+            Assets::Camera camera;
+            camera.name = name;
+            camera.ModelView = lookAt(eye, target, vec3(0, 1, 0));
+            camera.FieldOfView = fov;
+            camera.Aperture = 0;
+            camera.FocalDistance = glm::length(target - eye);
+            camera.NearPlane = 0.2f;
+            camera.FarPlane = 2000.0f;
+            cameraInit.cameras.push_back(camera);
+        };
+        addCamera("Corner_Diagonal", vec3(-485, 22, -485), vec3(470, 45, 470), 55);
+        addCamera("Ground_Center", vec3(0, 8, 440), vec3(0, 18, 0), 58);
+        addCamera("Aerial_Overview", vec3(620, 620, 620), vec3(0, 0, 0), 52);
+        cameraInit.ControlSpeed = 80.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = true;
+        cameraInit.HasSun = true;
+        cameraInit.SkyIntensity = 60.0f;
+        cameraInit.SunIntensity = 850.0f;
+        cameraInit.SunRotation = 0.34f;
+        cameraInit.AtmosphereEnabled = true;
+        cameraInit.AerialPerspectiveEnabled = true;
+        cameraInit.HeightFogEnabled = true;
+
+        const std::array<vec3, 10> palette = {
+            vec3(0.24f, 0.34f, 0.18f), vec3(0.35f, 0.43f, 0.21f), vec3(0.42f, 0.36f, 0.20f),
+            vec3(0.20f, 0.24f, 0.18f), vec3(0.14f, 0.15f, 0.16f), vec3(0.56f, 0.55f, 0.50f),
+            vec3(0.45f, 0.19f, 0.12f), vec3(0.18f, 0.30f, 0.48f), vec3(0.52f, 0.42f, 0.24f),
+            vec3(0.75f, 0.68f, 0.42f),
+        };
+        const uint32_t materialBase = static_cast<uint32_t>(materials.size());
+        for (uint32_t index = 0; index < palette.size(); ++index)
+        {
+            materials.push_back({Material::Lambertian(palette[index]), fmt::format("kw_material_{}", index)});
+        }
+
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-0.5f), vec3(0.5f)));
+        const uint32_t cubeModel = static_cast<uint32_t>(models.size() - 1);
+        auto addCube = [&](const std::string& name, const vec3& position, const vec3& scale, uint32_t material)
+        {
+            nodes.push_back(Assets::SceneBuilder::CreateRenderNode(
+                name, position, scale, static_cast<uint32_t>(nodes.size()), cubeModel, materialBase + material));
+        };
+
+        constexpr int terrainCells = 40;
+        constexpr float tileSize = 25.0f;
+        for (int row = 0; row < terrainCells; ++row)
+        {
+            for (int col = 0; col < terrainCells; ++col)
+            {
+                const float x = -500.0f + (static_cast<float>(col) + 0.5f) * tileSize;
+                const float z = -500.0f + (static_cast<float>(row) + 0.5f) * tileSize;
+                const float top = KilometerHeight(x, z);
+                const float depth = top + 30.0f;
+                const bool road = (row % 8 == 3) || (col % 8 == 3);
+                const uint32_t material = road ? 4u : static_cast<uint32_t>((row * 3 + col * 5) % 4);
+                addCube(fmt::format("Terrain_{:02}_{:02}", row, col),
+                        vec3(x, top - depth * 0.5f, z), vec3(tileSize, depth, tileSize), material);
+            }
+        }
+
+        for (int row = -10; row <= 10; ++row)
+        {
+            for (int col = -10; col <= 10; ++col)
+            {
+                if ((row % 4) == 0 || (col % 4) == 0)
+                {
+                    continue;
+                }
+                const float x = static_cast<float>(col) * 19.0f;
+                const float z = static_cast<float>(row) * 19.0f;
+                const float baseY = KilometerHeight(x, z);
+                const float height = HashRange(static_cast<uint32_t>((row + 10) * 31 + col + 10), 12.0f, 72.0f);
+                addCube(fmt::format("Downtown_{:+03}_{:+03}", row, col),
+                        vec3(x, baseY + height * 0.5f, z),
+                        vec3(HashRange(static_cast<uint32_t>(row * row + col + 200), 9.0f, 15.0f), height,
+                             HashRange(static_cast<uint32_t>(col * col + row + 400), 9.0f, 15.0f)),
+                        5u + static_cast<uint32_t>((row * row + col * col) % 4));
+            }
+        }
+
+        for (int row = -5; row <= 5; ++row)
+        {
+            for (int col = -5; col <= 5; ++col)
+            {
+                const float x = static_cast<float>(col) * 100.0f;
+                const float z = static_cast<float>(row) * 100.0f;
+                const float baseY = KilometerHeight(x, z);
+                const float height = ((row + col) & 1) == 0 ? 18.0f : 10.0f;
+                addCube(fmt::format("DistanceMarker_{:+02}_{:+02}", row, col),
+                        vec3(x, baseY + height * 0.5f, z), vec3(1.5f, height, 1.5f), 9);
+            }
+        }
+        const float towerBase = KilometerHeight(340.0f, -330.0f);
+        addCube("FarLandmarkTower", vec3(340, towerBase + 90, -330), vec3(18, 180, 18), 6);
+        addCube("FarLandmarkCrown", vec3(340, towerBase + 185, -330), vec3(52, 10, 52), 9);
+    }
+
+    void TimeOfDayObservatory(Assets::EnvironmentSetting& cameraInit,
+                              std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                              std::vector<Assets::Model>& models,
+                              std::vector<Assets::FMaterial>& materials,
+                              std::vector<Assets::LightObject>& lights,
+                              std::vector<Assets::AnimationTrack>& tracks)
+    {
+        Assets::Camera camera;
+        camera.name = "ObservatoryCourtyard";
+        camera.ModelView = lookAt(vec3(28, 15, 32), vec3(0, 4, 0), vec3(0, 1, 0));
+        camera.FieldOfView = 52;
+        camera.Aperture = 0;
+        camera.FocalDistance = 42;
+        cameraInit.cameras.push_back(camera);
+        cameraInit.ControlSpeed = 8.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = true;
+        cameraInit.HasSun = true;
+        cameraInit.SkyIntensity = 35.0f;
+        cameraInit.SunIntensity = 140.0f;
+        cameraInit.SunColor = vec3(1.0f);
+        cameraInit.SkyColor = vec3(1.0f);
+        cameraInit.SunRotation = -0.5f;
+        cameraInit.SunElevation = glm::radians(6.0f);
+        cameraInit.AtmosphereEnabled = true;
+        cameraInit.AerialPerspectiveEnabled = true;
+        cameraInit.HeightFogEnabled = true;
+        cameraInit.Atmosphere.SkyLuminanceScale = 1.0f;
+        cameraInit.Atmosphere.AerialPerspectiveMaxDistance = 2000.0f;
+        cameraInit.Atmosphere.FogDensity = 0.004f;
+        cameraInit.Atmosphere.FogHeightFalloff = 0.08f;
+        cameraInit.Atmosphere.FogStartDistance = 12.0f;
+        cameraInit.Atmosphere.FogMaxOpacity = 0.75f;
+
+        const std::array<Material, 8> sceneMaterials = {
+            Material::Lambertian(vec3(0.56f, 0.52f, 0.43f)),
+            Material::Lambertian(vec3(0.82f, 0.80f, 0.72f)),
+            Material::Lambertian(vec3(0.52f, 0.13f, 0.08f)),
+            Material::Lambertian(vec3(0.08f, 0.18f, 0.34f)),
+            Material::Metallic(vec3(0.78f, 0.76f, 0.70f), 0.06f),
+            Material::Dielectric(1.5f, 0.02f),
+            Material::DiffuseLight(vec3(420.0f, 210.0f, 70.0f)),
+            Material::Lambertian(vec3(0.08f, 0.08f, 0.07f)),
+        };
+        const uint32_t materialBase = static_cast<uint32_t>(materials.size());
+        for (uint32_t index = 0; index < sceneMaterials.size(); ++index)
+        {
+            materials.push_back({sceneMaterials[index], fmt::format("tod_material_{}", index)});
+        }
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-0.5f), vec3(0.5f)));
+        const uint32_t cubeModel = static_cast<uint32_t>(models.size() - 1);
+        models.push_back(Assets::FProcModel::CreateSphere(vec3(0), 1.0f));
+        const uint32_t sphereModel = static_cast<uint32_t>(models.size() - 1);
+        auto addNode = [&](const std::string& name, const vec3& position, const vec3& scale,
+                           uint32_t model, uint32_t material, const quat& rotation = quat(1, 0, 0, 0))
+        {
+            nodes.push_back(Assets::SceneBuilder::CreateRenderNode(
+                name, position, scale, static_cast<uint32_t>(nodes.size()), model,
+                materialBase + material, true, rotation));
+        };
+
+        addNode("Courtyard", vec3(0, -0.25f, 0), vec3(48, 0.5f, 48), cubeModel, 0);
+        addNode("NorthWall", vec3(0, 3.5f, -24), vec3(48, 7, 1), cubeModel, 1);
+        addNode("EastWall", vec3(24, 3.5f, 0), vec3(1, 7, 48), cubeModel, 2);
+        addNode("WestWall", vec3(-24, 3.5f, 0), vec3(1, 7, 48), cubeModel, 3);
+        addNode("SundialBase", vec3(0, 0.35f, 0), vec3(9, 0.7f, 9), cubeModel, 1);
+        addNode("SundialGnomon", vec3(0, 5.2f, 0), vec3(0.45f, 10, 0.45f), cubeModel, 7,
+                glm::angleAxis(glm::radians(-18.0f), vec3(1, 0, 0)));
+        for (int index = 0; index < 12; ++index)
+        {
+            const float angle = glm::two_pi<float>() * static_cast<float>(index) / 12.0f;
+            addNode(fmt::format("HourMarker_{:02}", index),
+                    vec3(std::sin(angle) * 7.0f, 0.25f, std::cos(angle) * 7.0f),
+                    vec3(0.35f, 0.5f, 1.4f), cubeModel, index % 2 == 0 ? 7u : 2u,
+                    glm::angleAxis(angle, vec3(0, 1, 0)));
+        }
+        for (int side : {-1, 1})
+        {
+            for (int index = -2; index <= 2; ++index)
+            {
+                addNode(fmt::format("Colonnade_{}_{}", side, index),
+                        vec3(static_cast<float>(side) * 14.0f, 3.0f, static_cast<float>(index) * 7.0f),
+                        vec3(1.0f, 6.0f, 1.0f), cubeModel, 1);
+            }
+            addNode(fmt::format("ColonnadeBeam_{}", side), vec3(static_cast<float>(side) * 14.0f, 6.5f, 0),
+                    vec3(1.4f, 1.0f, 36.0f), cubeModel, 1);
+        }
+        addNode("MetalReference", vec3(-7, 1.8f, 8), vec3(1.8f), sphereModel, 4);
+        addNode("GlassReference", vec3(7, 1.8f, 8), vec3(1.8f), sphereModel, 5);
+
+        for (int side : {-1, 1})
+        {
+            const float x = static_cast<float>(side) * 19.0f;
+            for (int index = -2; index <= 2; ++index)
+            {
+                const float z = static_cast<float>(index) * 7.0f;
+                const size_t firstLight = lights.size();
+                models.push_back(Assets::FProcModel::CreateAreaLight(
+                    fmt::format("NightLampMesh_{}_{}", side, index),
+                    vec3(x - 0.4f, 4.8f, z - 0.4f), vec3(0.8f, 0, 0), vec3(0, 0, 0.8f),
+                    materialBase + 6u, lights));
+                addNode(fmt::format("NightLamp_{}_{}", side, index), vec3(0), vec3(1),
+                        static_cast<uint32_t>(models.size() - 1), 6);
+                nodes.back()->AddComponent(std::make_shared<Runtime::LightComponent>(lights.back()));
+                lights.erase(lights.begin() + static_cast<std::ptrdiff_t>(firstLight), lights.end());
+            }
+        }
+
+        Assets::AnimationTrack timeOfDay;
+        timeOfDay.AnimationName = "TimeOfDay";
+        timeOfDay.Target_ = Assets::AnimationTrack::Target::Environment;
+        timeOfDay.Duration_ = 120.0f;
+        timeOfDay.Play();
+        const std::array<float, 5> times = {0, 30, 60, 90, 120};
+        const std::array<float, 5> rotations = {-0.5f, 0.0f, 0.5f, 1.0f, 1.5f};
+        const std::array<float, 5> elevations = {
+            glm::radians(6.0f), glm::radians(68.0f), glm::radians(6.0f),
+            glm::radians(-18.0f), glm::radians(6.0f),
+        };
+        const std::array<float, 5> sunIntensity = {140, 950, 120, 0, 140};
+        const std::array<float, 5> skyIntensity = {35, 95, 28, 3, 35};
+        for (uint32_t index = 0; index < times.size(); ++index)
+        {
+            timeOfDay.SunRotationChannel.Keys.push_back({times[index], rotations[index]});
+            timeOfDay.SunElevationChannel.Keys.push_back({times[index], elevations[index]});
+            timeOfDay.SkyRotationChannel.Keys.push_back({times[index], rotations[index] * 0.5f});
+            timeOfDay.SunIntensityChannel.Keys.push_back({times[index], sunIntensity[index]});
+            timeOfDay.SkyIntensityChannel.Keys.push_back({times[index], skyIntensity[index]});
+        }
+        tracks.push_back(std::move(timeOfDay));
+    }
+
+    void KineticWave(Assets::EnvironmentSetting& cameraInit, std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                     std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
+                     std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
+    {
+        Assets::Camera camera;
+        camera.name = "WaveOverview";
+        camera.ModelView = lookAt(vec3(48, 38, 58), vec3(0, 2, 0), vec3(0, 1, 0));
+        camera.FieldOfView = 52;
+        camera.Aperture = 0;
+        camera.FocalDistance = 84;
+        cameraInit.cameras.push_back(camera);
+        cameraInit.ControlSpeed = 12.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = true;
+        cameraInit.HasSun = true;
+        cameraInit.SkyIntensity = 45.0f;
+        cameraInit.SunIntensity = 650.0f;
+
+        const uint32_t materialBase = static_cast<uint32_t>(materials.size());
+        const std::array<vec3, 4> colors = {
+            vec3(0.08f, 0.32f, 0.74f), vec3(0.12f, 0.66f, 0.48f),
+            vec3(0.88f, 0.48f, 0.08f), vec3(0.70f, 0.12f, 0.22f),
+        };
+        for (uint32_t index = 0; index < colors.size(); ++index)
+        {
+            materials.push_back({Material::Mixture(colors[index], 0.24f), fmt::format("kwave_{}", index)});
+        }
+        materials.push_back({Material::Lambertian(vec3(0.12f)), "kwave_ground"});
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-0.5f), vec3(0.5f)));
+        const uint32_t cubeModel = static_cast<uint32_t>(models.size() - 1);
+        nodes.push_back(Assets::SceneBuilder::CreateRenderNode(
+            "KineticGround", vec3(0, -0.5f, 0), vec3(70, 1, 70), static_cast<uint32_t>(nodes.size()),
+            cubeModel, materialBase + 4u));
+
+        constexpr int gridSize = 32;
+        constexpr float spacing = 2.0f;
+        for (int row = 0; row < gridSize; ++row)
+        {
+            for (int col = 0; col < gridSize; ++col)
+            {
+                const float x = (static_cast<float>(col) - 15.5f) * spacing;
+                const float z = (static_cast<float>(row) - 15.5f) * spacing;
+                const float phase = glm::length(vec2(x, z)) * 0.32f + std::atan2(z, x) * 2.0f;
+                const std::string name = fmt::format("Wave_{:02}_{:02}", row, col);
+                nodes.push_back(Assets::SceneBuilder::CreateRenderNode(
+                    name, vec3(x, 2.5f, z), vec3(1.3f, 4.0f, 1.3f), static_cast<uint32_t>(nodes.size()),
+                    cubeModel, materialBase + static_cast<uint32_t>((row + col) & 3)));
+
+                Assets::AnimationTrack track;
+                track.AnimationName = "KineticWave";
+                track.NodeName_ = name;
+                track.Duration_ = 8.0f;
+                track.Play();
+                for (int key = 0; key <= 8; ++key)
+                {
+                    const float time = static_cast<float>(key);
+                    const float wave = std::sin(phase + glm::two_pi<float>() * time / 8.0f);
+                    track.TranslationChannel.Keys.push_back({time, vec3(x, 2.5f + wave * 2.2f, z)});
+                    track.RotationChannel.Keys.push_back({
+                        time, glm::angleAxis(wave * 0.42f, glm::normalize(vec3(1, 0.2f, 1)))});
+                }
+                tracks.push_back(std::move(track));
+            }
+        }
+    }
+
+    void RigidBodyAvalanche(Assets::EnvironmentSetting& cameraInit,
+                            std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                            std::vector<Assets::Model>& models,
+                            std::vector<Assets::FMaterial>& materials,
+                            std::vector<Assets::LightObject>& lights,
+                            std::vector<Assets::AnimationTrack>& tracks)
+    {
+        Assets::Camera camera;
+        camera.name = "AvalancheOverview";
+        camera.ModelView = lookAt(vec3(28, 24, 42), vec3(0, 8, 0), vec3(0, 1, 0));
+        camera.FieldOfView = 55;
+        camera.Aperture = 0;
+        camera.FocalDistance = 50;
+        cameraInit.cameras.push_back(camera);
+        cameraInit.ControlSpeed = 10.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = true;
+        cameraInit.HasSun = true;
+        cameraInit.SkyIntensity = 48.0f;
+        cameraInit.SunIntensity = 720.0f;
+
+        const uint32_t materialBase = static_cast<uint32_t>(materials.size());
+        const std::array<vec3, 6> colors = {
+            vec3(0.75f, 0.12f, 0.10f), vec3(0.10f, 0.30f, 0.78f), vec3(0.12f, 0.62f, 0.24f),
+            vec3(0.88f, 0.58f, 0.08f), vec3(0.58f, 0.12f, 0.68f), vec3(0.10f, 0.68f, 0.68f),
+        };
+        for (uint32_t index = 0; index < colors.size(); ++index)
+        {
+            materials.push_back({Material::Mixture(colors[index], 0.35f), fmt::format("avalanche_{}", index)});
+        }
+        materials.push_back({Material::Lambertian(vec3(0.35f, 0.32f, 0.27f)), "avalanche_structure"});
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-0.5f), vec3(0.5f)));
+        const uint32_t cubeModel = static_cast<uint32_t>(models.size() - 1);
+        auto addPhysicalBox = [&](const std::string& name, const vec3& position, const vec3& extent,
+                                  const quat& rotation, uint32_t material, NextMotionType motionType)
+        {
+            auto node = Assets::SceneBuilder::CreateRenderNode(
+                name, position, extent, static_cast<uint32_t>(nodes.size()), cubeModel,
+                materialBase + material, true, rotation);
+            AttachBoxPhysics(node, position, rotation, extent, motionType);
+            nodes.push_back(std::move(node));
+        };
+
+        addPhysicalBox("AvalancheFloor", vec3(0, -0.75f, 0), vec3(42, 1.5f, 42),
+                       quat(1, 0, 0, 0), 6, NextMotionType::Static);
+        addPhysicalBox("AvalancheRampLeft", vec3(-8, 8, -4), vec3(18, 1, 13),
+                       glm::angleAxis(glm::radians(-24.0f), vec3(0, 0, 1)), 6, NextMotionType::Static);
+        addPhysicalBox("AvalancheRampRight", vec3(8, 8, 4), vec3(18, 1, 13),
+                       glm::angleAxis(glm::radians(24.0f), vec3(0, 0, 1)), 6, NextMotionType::Static);
+        addPhysicalBox("AvalancheDivider", vec3(0, 3, 0), vec3(1, 6, 30),
+                       quat(1, 0, 0, 0), 6, NextMotionType::Static);
+
+        constexpr int columns = 16;
+        constexpr int rows = 12;
+        constexpr int layers = 3;
+        for (int layer = 0; layer < layers; ++layer)
+        {
+            for (int row = 0; row < rows; ++row)
+            {
+                for (int col = 0; col < columns; ++col)
+                {
+                    const uint32_t seed = static_cast<uint32_t>(layer * rows * columns + row * columns + col);
+                    const vec3 extent(
+                        HashRange(seed * 17u + 1u, 0.65f, 1.15f),
+                        HashRange(seed * 19u + 3u, 0.65f, 1.15f),
+                        HashRange(seed * 23u + 5u, 0.65f, 1.15f));
+                    const vec3 position(
+                        (static_cast<float>(col) - 7.5f) * 1.2f,
+                        18.0f + static_cast<float>(layer) * 2.0f + static_cast<float>(row) * 1.15f,
+                        (static_cast<float>(row) - 5.5f) * 1.15f);
+                    const quat rotation = quat(vec3(
+                        HashRange(seed * 29u, -0.15f, 0.15f),
+                        HashRange(seed * 31u, -glm::pi<float>(), glm::pi<float>()),
+                        HashRange(seed * 37u, -0.15f, 0.15f)));
+                    addPhysicalBox(fmt::format("Avalanche_{:03}", seed), position, extent, rotation,
+                                   seed % 6u, NextMotionType::Dynamic);
+                }
+            }
         }
     }
 }
@@ -1028,12 +1824,19 @@ namespace AppCommon
     {
         auto& registry = Assets::FLoaderRegistry::Get();
         registry.RegisterProcScene("CornellBox.proc", CornellBox);
+        registry.RegisterProcScene("ManyLightsShowcase.proc", ManyLightsShowcase);
         registry.RegisterProcScene("GIBootcamp.proc", GIBootcamp);
         registry.RegisterProcScene("MaterialShowcase.proc", MaterialShowcase);
         registry.RegisterProcScene("LightingShowcase.proc", LightingShowcase);
         registry.RegisterProcScene("CameraShowcase.proc", CameraShowcase);
         registry.RegisterProcScene("AnimationShowcase.proc", AnimationShowcase);
         registry.RegisterProcScene("PhysicsShowcase.proc", PhysicsShowcase);
+        registry.RegisterProcScene("AsteroidBelt.proc", AsteroidBelt);
+        registry.RegisterProcScene("MassiveAsteroidBelt.proc", MassiveAsteroidBelt);
+        registry.RegisterProcScene("KilometerWorld.proc", KilometerWorld);
+        registry.RegisterProcScene("TimeOfDayObservatory.proc", TimeOfDayObservatory);
+        registry.RegisterProcScene("KineticWave.proc", KineticWave);
+        registry.RegisterProcScene("RigidBodyAvalanche.proc", RigidBodyAvalanche);
         registry.RegisterProcScene("RTIO.proc", RayTracingInOneWeekend);
     }
 }

@@ -1,7 +1,8 @@
 #include "Modules/NextRemote/RemoteImGuiSession.hpp"
 
-#include "Engine/Runtime/DebugUiProvider.hpp"
+#include "Engine/Runtime/Interface/DebugUiProvider.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Editor/UI/UiTheme.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/RemoteProtocol.hpp"
 #include "Engine/Utilities/Exception.hpp"
@@ -140,10 +141,7 @@ namespace Runtime::Remote
         {
             userInterface->AttachRendererBackendToCurrentContext();
         }
-        if (Runtime::IDebugUiProvider* styleProvider = engine_.GetDebugUiProvider())
-        {
-            styleProvider->ApplyUiStyle();
-        }
+        NextUI::Foundation::ApplyTheme();
     }
 
     void FRemoteImGuiSession::HandleInputEvents(const std::vector<FCloudInputEvent>& events, const VkExtent2D extent)
@@ -212,7 +210,9 @@ namespace Runtime::Remote
             context.framebufferExtent = extent;
             context.viewCamera = &camera;
             context.allowWindowCommands = false;
-            gameInstance->OnRenderUI(context);
+            context.policy.allowedDeveloperLayers = NextUI::EUiDeveloperLayer::None;
+            const NextUI::FUiFrameResult result = gameInstance->RenderUiFrame(context);
+            (void)(result.requestedDeveloperLayers & context.policy.allowedDeveloperLayers);
         }
         ImGui::Render();
         wantsCaptureKeyboard_ = io.WantCaptureKeyboard;

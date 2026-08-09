@@ -5,13 +5,13 @@
 #include "AirportSimConfig.hpp"
 #include "AirportSimFormat.hpp"
 #include "JourneySystem.h"
+#include "StructuredDecisionContract.hpp"
 
 #include <algorithm>
 #include <chrono>
 #include <iterator>
 
 #include <fmt/format.h>
-#include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
 #include "Engine/Common/CoreMinimal.hpp"
@@ -52,8 +52,7 @@ namespace AirportSim
             return Config::kDecisionCooldownMinutes;
         }
         constexpr size_t kLogLimit = 60;
-
-        // ---- 预制台词库（fallback，§5.3）----
+        // ---- 预制台词库（fallback）----
         const char* kGreetLines[] = {"嗨，今天人真多", "又见面啦", "辛苦辛苦", "吃了吗您", "今天天气不错"};
         const char* kQueueLines[] = {"怎么还不动啊", "前面快点啊…", "早知道走自助了", "要赶不上了吧", "唉，排到天黑"};
         const char* kBoardingLines[] = {"该登机了！", "走走走，登机去", "终于登机了", "别忘了登机牌"};
@@ -67,31 +66,6 @@ namespace AirportSim
         const char* Pick(std::mt19937& rng, const char* const* lines, size_t count)
         {
             return lines[rng() % count];
-        }
-
-        FDecisionResult ParseDecision(const std::string& text)
-        {
-            FDecisionResult result;
-            const size_t open = text.find('{');
-            const size_t close = text.rfind('}');
-            if (open == std::string::npos || close == std::string::npos || close <= open)
-            {
-                return result;
-            }
-            try
-            {
-                const nlohmann::json json = nlohmann::json::parse(text.substr(open, close - open + 1));
-                result.action = json.value("action", std::string("idle"));
-                result.target = json.value("target", std::string());
-                result.say = json.value("say", std::string());
-                result.mood = MoodFromString(json.value("mood", std::string("neutral")));
-                result.valid = true;
-            }
-            catch (...)
-            {
-                result.valid = false;
-            }
-            return result;
         }
 
         bool IsEligible(const FAgent& agent, double gameMinutes)
@@ -140,7 +114,7 @@ namespace AirportSim
                 neighbors = "无";
             }
 
-            // 白名单动作集（由 Layer 0 按当前状态给出，§5.3）。
+            // 白名单动作集（由 Layer 0 按当前状态给出）。
             std::string actions;
             std::string poiList;
             const bool isAirsidePassenger = agent.role == EAgentRole::Passenger;
@@ -331,7 +305,7 @@ namespace AirportSim
             completed_.clear();
         }
 
-        // 超时弃单 → fallback 兜底（§10 风险表）。
+        // 超时弃单后由 fallback 兜底。
         if (inFlight_ && gameMinutes - inFlightSince_ > kLlmTimeoutGameMinutes)
         {
             const double elapsedMs = InFlightElapsedMs();
@@ -413,12 +387,12 @@ namespace AirportSim
 
         const int agentId = chosen->id;
         const uint64_t generation = generation_;
-        ai->GenerateTextAsync(prompt,
+        ai->GenerateStructuredTextAsync(prompt, "airport_npc_decision", std::string(kStructuredDecisionSchema),
                               [this, agentId, generation, prompt](NextAI::FAIResponse response)
                               {
-                                  // Worker 线程：只解析 + 入队，绝不碰 Scene/agents（§7.4）。
+                                  // Worker 线程：只解析 + 入队，绝不碰 Scene/agents。
                                   FDecisionResult result =
-                                      ParseDecision(response.success ? response.text : std::string());
+                                      ParseStructuredDecision(response.success ? response.text : std::string());
                                   std::lock_guard<std::mutex> lock(mutex_);
                                   if (generation != generation_)
                                   {

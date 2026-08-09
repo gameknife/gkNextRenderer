@@ -200,15 +200,52 @@ func findMSBuild() (string, bool) {
 
 func findVSProjectForTarget(buildDir string, target string) (string, bool) {
 	want := target + ".vcxproj"
-	var found string
+	var matches []string
 	_ = filepath.WalkDir(buildDir, func(path string, entry os.DirEntry, err error) error {
 		if err != nil || entry.IsDir() || entry.Name() != want {
 			return nil
 		}
-		found = path
-		return filepath.SkipAll
+		matches = append(matches, path)
+		return nil
 	})
-	return found, found != ""
+	if len(matches) == 0 {
+		return "", false
+	}
+	if len(matches) == 1 {
+		return matches[0], true
+	}
+
+	// A reconfigure does not remove project files from an older source-tree
+	// layout. Prefer the project explicitly listed by the current solution so
+	// an old duplicate cannot overwrite the library with stale source groups.
+	solutionPath := filepath.Join(buildDir, "gkNextRenderer.slnx")
+	if solutionBytes, err := os.ReadFile(solutionPath); err == nil {
+		solutionText := string(solutionBytes)
+		for _, match := range matches {
+			relative, err := filepath.Rel(buildDir, match)
+			if err != nil {
+				continue
+			}
+			relative = filepath.ToSlash(relative)
+			if strings.Contains(solutionText, `Path="`+relative+`"`) {
+				return match, true
+			}
+		}
+	}
+
+	// Fall back to the deepest path. Current projects are nested under their
+	// owning Engine/Modules/Application directory, while stale projects from
+	// the former flat layout are directly under src/.
+	best := matches[0]
+	bestDepth := strings.Count(filepath.ToSlash(best), "/")
+	for _, match := range matches[1:] {
+		depth := strings.Count(filepath.ToSlash(match), "/")
+		if depth > bestDepth {
+			best = match
+			bestDepth = depth
+		}
+	}
+	return best, true
 }
 
 func buildTraversalProject(projects []string) string {

@@ -1,6 +1,45 @@
 [gnb]
 min_version = "0.1.0"
 
+[ai]
+default_profile = "general"
+
+[ai.providers.localllm]
+kind = "llama-cpp"
+display_name = "Local Llama"
+runtime = "external.llm"
+
+[ai.profiles.general]
+provider = "localllm"
+temperature = 0.7
+max_output_tokens = 2048
+
+[ai.profiles.scad-scene]
+provider = "localllm"
+temperature = 0.4
+max_output_tokens = 4096
+
+[ai.profiles.scad-studio]
+provider = "localllm"
+temperature = 0.4
+max_output_tokens = 4096
+
+[ai.profiles.scad-authoring]
+provider = "localllm"
+temperature = 0.4
+max_output_tokens = 4096
+
+[ai.profiles.magicalego-script]
+provider = "localllm"
+temperature = 0.4
+max_output_tokens = 4096
+
+[ai.profiles.simulation]
+provider = "localllm"
+temperature = 0.4
+max_output_tokens = 1024
+max_concurrency = 1
+
 [vcpkg]
 ref = "2026.04.27"
 binary_cache = ".vcpkg_bincache"
@@ -9,6 +48,11 @@ root = ".vcpkg"
 [external.streamline]
 when = "windows"
 url = "https://github.com/NVIDIA-RTX/Streamline/releases/download/v2.10.0/streamline-sdk-v2.10.0.zip"
+
+[external.fidelityfx]
+when = "windows"
+version = "1.1.4"
+url = "https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/archive/refs/tags/v1.1.4.zip"
 
 [external.tsc]
 version = "v2025.5.23"
@@ -103,17 +147,29 @@ dest = "src/ThirdParty/ffmpeg/bin/ffmpeg.exe"
 default = "gkNextRenderer"
 all = [
   "gkNextRenderer",
+  "gkNextMinimalRenderer",
   "gkNextEditor",
   "gkNextStillBenchmark",
   "gkNextMotionBenchmark",
   "gkNextVisualTest",
+  "RmlUiDemo",
+  "ScadStudio",
+  "ScadLibrary",
   "MagicaLego",
   "KongLie3D",
   "Brotato3D",
+  "NextRA",
   "FlappyCpp",
   "FlappyJs",
   "BrickPlayer",
   "CharacterDemo",
+  "TruckerDemo",
+  "StudioSim",
+  "AirportSim",
+  "CitySolSim",
+  "Voyage3D",
+  "NextTotalwar",
   "Packager",
+  "ScadCatalog",
   "gkNextUnitTests"
 ]

@@ -2,6 +2,7 @@
   "name": "gknextrenderer",
   "version": "1.0.0",
   "description": "Next generation renderer with Vulkan support",
+  "license": "MIT",
   "homepage": "https://github.com/gameknife/gkNextRenderer",
   "dependencies": [
     {

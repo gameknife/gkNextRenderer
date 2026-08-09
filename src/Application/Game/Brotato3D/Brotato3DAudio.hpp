@@ -3,7 +3,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Brotato3DAssetPaths.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Subsystems/NextAudio.h"
+#include "Engine/Runtime/Subsystems/NextAudio.hpp"
 
 #include <spdlog/spdlog.h>
 

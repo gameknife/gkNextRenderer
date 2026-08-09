@@ -1,4 +1,6 @@
 #include "MagicaLegoAIService.hpp"
+#include "MagicaLegoCommands.hpp"
+#include "MagicaLegoScriptParser.hpp"
 #include "MagicaLegoGameInstance.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include <algorithm>
@@ -43,12 +45,18 @@ namespace MagicaLego
         if (gameInstance_)
         {
             aiService_ = NextAI::GetAIService(gameInstance_->GetEngine());
+            if (aiService_) aiService_->SetProfile("magicalego-script");
         }
 
         if (aiService_)
         {
             aiService_->LoadConfig();
         }
+    }
+
+    FAIService::~FAIService()
+    {
+        if (worker_.joinable()) { worker_.request_stop(); worker_.join(); }
     }
 
     bool FAIService::LoadConfig()
@@ -82,34 +90,24 @@ namespace MagicaLego
         return aiService_ ? aiService_->GetProviderName() : "None";
     }
 
-    EAIProviderType FAIService::GetProviderType() const
+    std::string FAIService::GetProviderId() const
     {
-        return aiService_ ? aiService_->GetProviderType() : EAIProviderType::Gemini;
+        return aiService_ ? aiService_->GetProviderId() : std::string();
     }
 
-    bool FAIService::SwitchProvider(EAIProviderType type)
+    bool FAIService::SwitchProvider(const std::string& providerId)
     {
-        return aiService_ ? aiService_->SwitchProvider(type) : false;
+        return aiService_ ? aiService_->SwitchProvider(providerId) : false;
     }
 
-    bool FAIService::IsProviderConfigured(EAIProviderType type) const
+    bool FAIService::IsProviderConfigured(const std::string& providerId) const
     {
-        return aiService_ ? aiService_->IsProviderConfigured(type) : false;
+        return aiService_ ? aiService_->IsProviderConfigured(providerId) : false;
     }
 
-    std::vector<std::pair<EAIProviderType, std::string>> FAIService::GetAvailableProviders()
+    std::vector<NextAI::FAIProviderDescriptor> FAIService::GetAvailableProviders() const
     {
-        return NextAI::FAIService::GetAvailableProviders();
-    }
-
-    std::string FAIService::ProviderTypeToString(EAIProviderType type)
-    {
-        return NextAI::FAIService::ProviderTypeToString(type);
-    }
-
-    EAIProviderType FAIService::StringToProviderType(const std::string& name)
-    {
-        return NextAI::FAIService::StringToProviderType(name);
+        return aiService_ ? aiService_->GetAvailableProviders() : std::vector<NextAI::FAIProviderDescriptor>{};
     }
 
     FColorSemantic FAIService::AnalyzeColor(const std::string& colorCode, glm::vec4 rgba)
@@ -544,15 +542,56 @@ Based on the existing scene above, generate ADDITIONAL script to fulfill the use
         std::string systemPrompt = BuildSystemPrompt();
         std::string fullPrompt = systemPrompt + userPrompt;
 
-        auto response = aiService_->GenerateText(fullPrompt);
-
-        if (response.success)
+        auto validate = [this](const std::string& responseText, std::string& outScript, std::string& outError)
         {
-            std::string script = ExtractScriptFromResponse(response.text);
-            return FAIResponse::Success(script);
-        }
+            outScript = ExtractScriptFromResponse(responseText);
+            if (outScript.empty())
+            {
+                outError = "response contains no mlscript artifact";
+                return false;
+            }
+            const auto normalized = FScriptParser::ValidateAndFix(outScript);
+            if (!normalized.valid)
+            {
+                outError = normalized.warnings.empty() ? "script validation failed" : normalized.warnings.front();
+                return false;
+            }
+            outScript = normalized.fixedScript;
+            FScriptParser parser;
+            auto commands = parser.Parse(outScript, outError);
+            if (!outError.empty() || commands.empty())
+            {
+                if (outError.empty()) outError = "script contains no executable commands";
+                return false;
+            }
+            for (const auto& line : commands)
+            {
+                std::string commandError;
+                if (!FCommandParser::Parse(line, commandError))
+                {
+                    outError = line + ": " + commandError;
+                    return false;
+                }
+            }
+            return true;
+        };
 
-        return FAIResponse::Failure(response.message);
+        auto response = aiService_->GenerateText(fullPrompt);
+        if (!response.success) return FAIResponse::Failure(response.message);
+
+        std::string script;
+        std::string validationError;
+        if (validate(response.text, script, validationError)) return FAIResponse::Success(script);
+
+        const std::string repairPrompt = fullPrompt +
+            "\nThe previous output failed local mlscript parsing. Return one complete corrected ```mlscript``` "
+            "artifact and no explanation. Exact validator error: " + validationError +
+            "\nPrevious output:\n" + response.text;
+        response = aiService_->GenerateText(repairPrompt);
+        if (!response.success) return FAIResponse::Failure("repair request failed: " + response.message);
+        if (validate(response.text, script, validationError)) return FAIResponse::Success(script);
+
+        return FAIResponse::Failure("repair failed after one attempt: " + validationError);
     }
 
     std::string FAIService::ExtractScriptFromResponse(const std::string& responseText)
@@ -601,7 +640,8 @@ Based on the existing scene above, generate ADDITIONAL script to fulfill the use
     void FAIService::GenerateScriptAsync(const std::string& prompt,
                                          std::function<void(FAIResponse)> callback)
     {
-        std::thread([this, prompt, callback]()
+        if (worker_.joinable()) worker_.join();
+        worker_ = std::jthread([this, prompt, callback](std::stop_token)
         {
             auto response = CallProvider(prompt);
 
@@ -615,7 +655,7 @@ Based on the existing scene above, generate ADDITIONAL script to fulfill the use
             {
                 callback(response);
             }
-        }).detach();
+        });
     }
 
     FAIResponse FAIService::GenerateScriptWithContext(const std::string& prompt)
@@ -627,7 +667,8 @@ Based on the existing scene above, generate ADDITIONAL script to fulfill the use
     void FAIService::GenerateScriptWithContextAsync(const std::string& prompt,
                                                     std::function<void(FAIResponse)> callback)
     {
-        std::thread([this, prompt, callback]()
+        if (worker_.joinable()) worker_.join();
+        worker_ = std::jthread([this, prompt, callback](std::stop_token)
         {
             std::string contextPrompt = BuildContextPrompt(prompt);
             auto response = CallProvider(contextPrompt);
@@ -642,7 +683,7 @@ Based on the existing scene above, generate ADDITIONAL script to fulfill the use
             {
                 callback(response);
             }
-        }).detach();
+        });
     }
 
     FAIResponse FAIService::GetPendingResult()

@@ -14,9 +14,12 @@
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
-#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/DevTools/UI/DeveloperStatusBar.hpp"
+#include "Modules/LiveCoding/LiveCodingModule.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
+#include "Modules/SceneExport/FSceneSaver.h"
 
 namespace Editor
 {
@@ -29,6 +32,7 @@ namespace Editor
         };
         constexpr SDL_DialogFileFilter kSceneSaveFilters[] = {
             {"GLB Scene", "glb"},
+            {"glTF Scene", "gltf"},
             {"All Files", "*"},
         };
 
@@ -45,14 +49,14 @@ namespace Editor
 
         void SaveSceneToPath(EditorContext& ctx, EditorUiState& ui, const std::string& filename)
         {
-            if (!IsGlbScenePath(filename))
+            if (!IsWritableGltfScenePath(filename))
             {
-                SPDLOG_ERROR("Scene save target must be a .glb file: {}", filename);
+                SPDLOG_ERROR("Scene save target must be a .glb or .gltf file: {}", filename);
                 return;
             }
 
             const std::string savePath = ResolveSceneFilesystemPath(filename).string();
-            const bool success = ctx.scene.Save(savePath);
+            const bool success = SceneExport::SaveScene(ctx.scene, savePath);
             if (success)
             {
                 ui.currentScenePath = filename;
@@ -170,7 +174,7 @@ namespace Editor
                 {
                     auto* dialogContext = new FSaveSceneDialogContext{&ui, DefaultSceneSaveDirectory().string()};
                     SDL_ShowSaveFileDialog(
-                        [](void* userdata, const char* const* filelist, int /*filter*/)
+                        [](void* userdata, const char* const* filelist, int filter)
                         {
                             std::unique_ptr<FSaveSceneDialogContext> dialogContext(
                                 static_cast<FSaveSceneDialogContext*>(userdata));
@@ -181,7 +185,8 @@ namespace Editor
 
                             if (filelist && filelist[0])
                             {
-                                std::string filename = NormalizeSaveAsScenePath(filelist[0]);
+                                const std::string_view defaultExtension = filter == 1 ? ".gltf" : ".glb";
+                                std::string filename = NormalizeSaveAsScenePath(filelist[0], defaultExtension);
                                 std::scoped_lock lock(dialogContext->Ui->sceneDialogMutex);
                                 dialogContext->Ui->pendingSaveScenePath = std::move(filename);
                             }
@@ -192,7 +197,7 @@ namespace Editor
                         },
                         dialogContext,
                         ctx.engine.GetWindow().Handle(),
-                        kSceneSaveFilters, 2, dialogContext->DefaultLocation.c_str());
+                        kSceneSaveFilters, 3, dialogContext->DefaultLocation.c_str());
                 }
 
                 ImGui::Separator();
@@ -306,21 +311,16 @@ namespace Editor
                 ImGui::MenuItem("Color Export", nullptr, &ui.child_color);
                 ImGui::MenuItem("Command History", nullptr, &ui.commandHistoryPanel);
                 ImGui::MenuItem("Hot Reload", nullptr, &ui.hotReloadPanel);
-                ImGui::MenuItem("AI Assistant", nullptr, &ui.aiPanel);
+                ImGui::MenuItem("Script Console", nullptr, &ui.scriptConsolePanel);
                 ImGui::MenuItem("Log", nullptr, &ui.logPanel);
                 ImGui::MenuItem("Material Editor", nullptr, &ui.child_mat_editor);
+                ImGui::MenuItem("Sequencer", nullptr, &ui.sequencerPanel);
                 ImGui::EndMenu();
             }
 
-            bool buildMenuOpen = ImGui::BeginMenu("Build");
-            menuRight = std::max(menuRight, ImGui::GetItemRectMax().x);
-            if (buildMenuOpen)
-            {
-                ImGui::MenuItem("Cook Assets", nullptr, false, false);
-                ImGui::MenuItem("Package Project", nullptr, false, false);
-                ImGui::MenuItem("Launch Renderer", nullptr, false, false);
-                ImGui::EndMenu();
-            }
+            // The Build menu is intentionally absent: cooking and packaging are driven by
+            // `gnb`, and "Launch Renderer" is the Play button in the toolbar. A menu of
+            // permanently greyed items reads as a broken feature.
 
             bool windowsMenuOpen = ImGui::BeginMenu("Windows");
             menuRight = std::max(menuRight, ImGui::GetItemRectMax().x);
@@ -335,6 +335,7 @@ namespace Editor
                     DevTools::FUiDevPanels::Get().ToggleConsole();
                 }
                 ImGui::MenuItem("Material Editor", nullptr, &ui.child_mat_editor);
+                ImGui::MenuItem("Sequencer", nullptr, &ui.sequencerPanel);
 
                 ImGui::Separator();
                 ImGui::MenuItem("Material Browser", nullptr, &ui.materialBrowser);
@@ -346,7 +347,7 @@ namespace Editor
                 ImGui::MenuItem("Camera View 3", nullptr, &ui.cameraViews[2].open);
                 ui.cameraViewPanel = ui.cameraViews[0].open;
                 ImGui::Separator();
-                ImGui::MenuItem("AI Assistant", nullptr, &ui.aiPanel);
+                ImGui::MenuItem("Script Console", nullptr, &ui.scriptConsolePanel);
                 ImGui::MenuItem("Command History", nullptr, &ui.commandHistoryPanel);
                 ImGui::MenuItem("Hot Reload", nullptr, &ui.hotReloadPanel);
                 ImGui::MenuItem("Settings", nullptr, &ui.settingsPanel);
@@ -380,6 +381,9 @@ namespace Editor
         };
         NextUI::Theme::DrawAppTitleBar(ctx.engine, config);
 
-        NextUI::Theme::DrawStandardBottomBar(ctx.engine, "Footer", kFooterHeight);
+        Runtime::DevToolsUI::DrawDeveloperStatusBar(
+            ctx.engine, "Footer", kFooterHeight,
+            []() { Modules::LiveCoding::RequestCppReload(); },
+            Modules::LiveCoding::IsCppLiveCodingAvailable(), true);
     }
 } // namespace Editor

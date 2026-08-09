@@ -1,26 +1,23 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include <glm/detail/type_half.hpp>
 #include <meshoptimizer.h>
-#include <tiny_gltf.h>
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Assets/Savers/FSceneSaver.h"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Options.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
 
-#include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Components/EnvironmentComponent.h"
-#include "Engine/Runtime/Components/GaussianSplatComponent.h"
-#include "Engine/Runtime/Components/SceneReferenceComponent.h"
-#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Components/EnvironmentComponent.hpp"
+#include "Engine/Runtime/Components/SceneReferenceComponent.hpp"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
-#include "Engine/Vulkan/SyncAndTiming.hpp"
+#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 #include "Engine/Utilities/Exception.hpp"
 
 #include <algorithm>
@@ -100,8 +97,9 @@ namespace Assets
         static_assert(sizeof(Assets::NodeProxy) == Assets::GPU_SCENE_NODE_PROXY_SIZE);
         static_assert(sizeof(Assets::Material) == Assets::GPU_SCENE_MATERIAL_SIZE);
         static_assert(sizeof(Assets::GPUDrivenStat) == Assets::GPU_SCENE_GPU_DRIVEN_STAT_SIZE);
+        static_assert(sizeof(Assets::VisibilityId) == 8);
         static_assert(sizeof(Assets::SoftMeshShaderVisibleItem) == 16);
-        static_assert(sizeof(Assets::SoftMeshShaderResources) == 48);
+        static_assert(sizeof(Assets::SoftMeshShaderResources) == 64);
         static_assert(sizeof(Assets::SphericalHarmonics) == Assets::GPU_SCENE_SPHERICAL_HARMONICS_SIZE);
         static_assert(sizeof(Assets::AmbientCube) == Assets::GPU_SCENE_AMBIENT_CUBE_SIZE);
         static_assert(sizeof(Assets::AmbientBrickResidency) == 16);
@@ -130,10 +128,10 @@ namespace Assets
             .type("Scene"_hs)
             .func<&Assets::Scene::GetIndicesCount>("GetIndicesCount")
             .func<&Assets::Scene::FindNodeIdWithComponent>("FindNodeIdWithComponent")
-            .func<&Assets::Scene::GetNodeById>("GetNodeById");
+            .func<&Assets::Scene::GetNodeByInstanceId>("GetNodeById");
     }
 
-    void Scene::RebuildNodeIndex() const
+    void Scene::RebuildNodeIndex()
     {
         nodeByInstanceId_.clear();
         nodeByInstanceId_.reserve(nodes_.size());
@@ -144,11 +142,9 @@ namespace Assets
             RegisterNodeIndex(node);
         }
 
-        indexedNodeCount_ = nodes_.size();
-        nodeIndexDirty_ = false;
     }
 
-    void Scene::RegisterNodeIndex(const std::shared_ptr<Node>& node) const
+    void Scene::RegisterNodeIndex(const std::shared_ptr<Node>& node)
     {
         if (!node)
         {
@@ -161,44 +157,24 @@ namespace Assets
         {
             nextInstanceId_ = std::max(nextInstanceId_, instanceId + 1u);
         }
-        indexedNodeCount_ = nodes_.size();
     }
 
-    void Scene::UnregisterNodeIndex(uint32_t id) const
+    void Scene::UnregisterNodeIndex(uint32_t id)
     {
-        if (nodeIndexDirty_)
-        {
-            return;
-        }
-
         nodeByInstanceId_.erase(id);
-        indexedNodeCount_ = nodes_.size();
     }
 
     int32_t Scene::FindNodeIdWithComponent(const std::string& componentType) const
     {
-        for (const auto& node : nodes_)
+        const auto typeIt = componentTypeByName_.find(componentType);
+        if (typeIt == componentTypeByName_.end())
         {
-            if (!node)
-            {
-                continue;
-            }
-
-            for (const auto& component : node->GetComponents())
-            {
-                if (component && component->GetTypeName() == componentType)
-                {
-                    return static_cast<int32_t>(node->GetInstanceId());
-                }
-            }
+            return -1;
         }
-
-        return -1;
-    }
-
-    Node* Scene::GetNodeById(uint32_t nodeId)
-    {
-        return GetNodeByInstanceId(nodeId);
+        const auto components = GetComponentsByType(typeIt->second);
+        return components.empty() || components.front()->GetOwner() == nullptr
+                   ? -1
+                   : static_cast<int32_t>(components.front()->GetOwner()->GetInstanceId());
     }
 
     void Scene::RefreshEnvironmentComponentCache()
@@ -221,7 +197,7 @@ namespace Assets
             return;
         }
 
-        environmentComponent_ = node->GetComponentPtr<Runtime::EnvironmentComponent>();
+        environmentComponent_ = node->GetComponent<Runtime::EnvironmentComponent>();
     }
 
     Runtime::EnvironmentComponent* Scene::GetEnvironmentComponent()
@@ -245,6 +221,7 @@ namespace Assets
                                      glm::vec3(1.0f), GenerateInstanceId());
         auto environment = std::make_shared<Runtime::EnvironmentComponent>();
         node->AddComponent(environment);
+        BindNode(*node);
         nodes_.push_back(node);
         RegisterNodeIndex(node);
         environmentComponent_ = environment.get();
@@ -260,36 +237,11 @@ namespace Assets
         return DefaultEnvironmentSettings();
     }
 
-    void Scene::SetEnvSettings(const EnvironmentSetting& envSettings)
-    {
-        auto& environment = GetEnvSettings();
-        environment = envSettings;
-    }
-
-    const glm::vec3 Scene::GetSunDir() const
-    {
-        return GetEnvSettings().SunDirection();
-    }
-
-    const bool Scene::HasSun() const
-    {
-        return GetEnvSettings().HasSun;
-    }
-
-    const std::vector<Assets::Camera>& Scene::GetCameras() const
-    {
-        return GetEnvSettings().cameras;
-    }
-
-    const Assets::EnvironmentSetting& Scene::GetEnvironmentStrings() const
-    {
-        return GetEnvSettings();
-    }
-
     Scene::Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing,
                  const bool allocateAmbientResources, const bool enableCpuAcceleration) :
         allocateAmbientResources_(allocateAmbientResources),
-        enableCpuAcceleration_(enableCpuAcceleration)
+        enableCpuAcceleration_(enableCpuAcceleration),
+        commandPool_(&commandPool)
     {
         int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         const bool allocateAmbientCube =
@@ -404,7 +356,7 @@ namespace Assets
             ambientArenaBufferMemory_->Unmap();
         }
 
-        // 太阳方向光 CSM：4 个单层 D32_SFLOAT 阴影图，初始 layout = DEPTH_READ_ONLY。
+        // Directional-sun CSM: four single-layer D32_SFLOAT shadow maps, initially in DEPTH_READ_ONLY layout.
         {
             const auto& device = commandPool.Device();
             const VkExtent2D extent{kSunShadowResolution, kSunShadowResolution};
@@ -488,6 +440,16 @@ namespace Assets
 
     Scene::~Scene()
     {
+        cpuAccelerationStructure_.ClearAllTasks();
+
+        for (const auto& node : nodes_)
+        {
+            if (node)
+            {
+                node->scene_ = nullptr;
+            }
+        }
+
         offsetBuffer_.reset();
         offsetBufferMemory_.reset(); // release memory after bound buffer has been destroyed
 
@@ -501,6 +463,8 @@ namespace Assets
         primAddressBufferMemory_.reset(); // release memory after bound buffer has been destroyed
         lightBuffer_.reset();
         lightBufferMemory_.reset();
+        lightGridBuffer_.reset();
+        lightGridBufferMemory_.reset();
 
         softMeshShaderPrimBuffer_.reset();
         softMeshShaderPrimBufferMemory_.reset();
@@ -528,6 +492,10 @@ namespace Assets
         skinWeightBufferMemory_.reset();
         skinJointBuffer_.reset();
         skinJointBufferMemory_.reset();
+        skinnedVertexBuffer_.reset();
+        skinnedVertexBufferMemory_.reset();
+        jointMatrixBuffer_.reset();
+        jointMatrixBufferMemory_.reset();
 
         cpuShadowMap_.reset();
 
@@ -578,10 +546,10 @@ namespace Assets
 
     void Scene::PostLoad(const std::vector<Skeleton>& skeletons)
     {
-        for (auto& node : nodes_)
+        for (auto* render : Components<Runtime::RenderComponent>())
         {
-            auto render = node->GetComponent<Runtime::RenderComponent>();
-            if (render && render->GetSkinIndex() != -1 && render->GetSkinIndex() < skeletons.size())
+            Node* node = render->GetOwner();
+            if (node && render->GetSkinIndex() != -1 && render->GetSkinIndex() < skeletons.size())
             {
                 auto comp = std::make_shared<Runtime::SkinnedMeshComponent>(skeletons[render->GetSkinIndex()]);
                 comp->AddAnimations(tracks_);
@@ -595,10 +563,23 @@ namespace Assets
 
     void Scene::AddNode(std::shared_ptr<Node> node)
     {
+        if (!node)
+        {
+            return;
+        }
         CacheEnvironmentComponentFromNode(node.get());
+        BindNode(*node);
         nodes_.push_back(node);
         RegisterNodeIndex(node);
         EnsureNodePhysicsBody(node.get());
+    }
+
+    void Scene::AddNodes(std::span<const std::shared_ptr<Node>> nodes)
+    {
+        for (const auto& node : nodes)
+        {
+            AddNode(node);
+        }
     }
 
     void Scene::EnsureNodePhysicsBody(Node* node)
@@ -615,8 +596,14 @@ namespace Assets
             if (render && render->GetRayCastVisible() &&
                 render->GetModelId() < cachedMeshShapes_.size() && cachedMeshShapes_[render->GetModelId()])
             {
-                auto phys = node->GetComponent<Runtime::PhysicsComponent>();
+                auto* phys = node->GetComponent<Runtime::PhysicsComponent>();
                 Node::ENodeMobility mobility = phys ? phys->GetMobility() : Node::ENodeMobility::Static;
+
+                if (auto staticBody = staticPhysicsBodies_.find(node); staticBody != staticPhysicsBodies_.end())
+                {
+                    physicsEngine->RemoveBody(staticBody->second);
+                    staticPhysicsBodies_.erase(staticBody);
+                }
 
                 if (mobility == Node::ENodeMobility::Dynamic)
                 {
@@ -637,24 +624,27 @@ namespace Assets
                 NextObjectLayer layer =
                     mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
 
-                bool validShape = false;
-                if (cachedMeshShapes_[render->GetModelId()].GetPtr() &&
-                    cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0)
-                    validShape = true;
-
-                if (validShape)
+                if (cachedMeshShapes_[render->GetModelId()])
                 {
                     NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[render->GetModelId()],
                                                                   node->WorldTranslation(), node->WorldRotation(),
                                                                   node->WorldScale(), motionType, layer);
 
-                    if (!phys)
+                    if (mobility == Node::ENodeMobility::Static && !phys)
                     {
-                        phys = std::make_shared<Runtime::PhysicsComponent>();
-                        phys->SetMobility(mobility);
-                        node->AddComponent(phys);
+                        staticPhysicsBodies_[node] = id;
                     }
-                    phys->BindPhysicsBody(id);
+                    else if (!phys)
+                    {
+                        auto newPhysics = std::make_shared<Runtime::PhysicsComponent>();
+                        newPhysics->SetMobility(mobility);
+                        phys = newPhysics.get();
+                        node->AddComponent(std::move(newPhysics));
+                    }
+                    if (phys)
+                    {
+                        phys->BindPhysicsBody(id);
+                    }
 
                     physicsEngine->SetBodyActive(id, render->GetVisible());
                 }
@@ -664,58 +654,79 @@ namespace Assets
 
     std::shared_ptr<Node> Scene::RemoveNodeByInstanceId(uint32_t id)
     {
-        for (auto it = nodes_.begin(); it != nodes_.end(); ++it)
+        const std::array<uint32_t, 1> ids = {id};
+        auto removedNodes = RemoveNodesByInstanceId(ids);
+        return removedNodes.empty() ? nullptr : std::move(removedNodes.front());
+    }
+
+    std::vector<std::shared_ptr<Node>> Scene::RemoveNodesByInstanceId(std::span<const uint32_t> ids)
+    {
+        std::vector<std::shared_ptr<Node>> removedNodes;
+        if (ids.empty())
         {
-            if ((*it)->GetInstanceId() == id)
+            return removedNodes;
+        }
+
+        std::unordered_set<uint32_t> removeIds(ids.begin(), ids.end());
+        removedNodes.reserve(removeIds.size());
+        bool refreshEnvironment = false;
+        for (auto it = nodes_.begin(); it != nodes_.end();)
+        {
+            const auto& node = *it;
+            const uint32_t id = node->GetInstanceId();
+            if (!removeIds.contains(id))
             {
-                auto node = *it;
-                if (NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine())
+                ++it;
+                continue;
+            }
+
+            if (NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine())
+            {
+                if (auto staticBody = staticPhysicsBodies_.find(node.get());
+                    staticBody != staticPhysicsBodies_.end())
                 {
-                    if (auto phys = node->GetComponent<Runtime::PhysicsComponent>())
+                    physicsEngine->RemoveBody(staticBody->second);
+                    staticPhysicsBodies_.erase(staticBody);
+                }
+                if (auto phys = node->GetComponent<Runtime::PhysicsComponent>())
+                {
+                    const NextBodyID bodyId = phys->GetPhysicsBody();
+                    if (!bodyId.IsInvalid())
                     {
-                        const NextBodyID bodyId = phys->GetPhysicsBody();
-                        if (!bodyId.IsInvalid())
-                        {
-                            physicsEngine->RemoveBody(bodyId);
-                        }
+                        physicsEngine->RemoveBody(bodyId);
                     }
                 }
-                selectionState_.Remove(id);
-                if (hoveredId_ == id)
-                {
-                    hoveredId_ = SceneSelectionState::invalidNodeId;
-                }
-                lockedIds_.erase(id);
-                node->ClearParent();
-                UnregisterNodeIndex(id);
-                nodes_.erase(it);
-                if (node->GetComponentPtr<Runtime::EnvironmentComponent>() == environmentComponent_)
-                {
-                    RefreshEnvironmentComponentCache();
-                }
-                return node;
             }
+
+            selectionState_.Remove(id);
+            if (hoveredId_ == id)
+            {
+                hoveredId_ = SceneSelectionState::invalidNodeId;
+            }
+            lockedIds_.erase(id);
+            node->ClearParent();
+            refreshEnvironment |= node->GetComponent<Runtime::EnvironmentComponent>() == environmentComponent_;
+            UnbindNode(*node);
+            UnregisterNodeIndex(id);
+            removedNodes.push_back(node);
+            it = nodes_.erase(it);
         }
-        return nullptr;
+
+        if (refreshEnvironment)
+        {
+            RefreshEnvironmentComponentCache();
+        }
+        return removedNodes;
     }
 
     std::shared_ptr<Node> Scene::GetNodeSharedByInstanceId(uint32_t id) const
     {
-        if (nodeIndexDirty_ || indexedNodeCount_ != nodes_.size())
-        {
-            RebuildNodeIndex();
-        }
-
         const auto it = nodeByInstanceId_.find(id);
         return it != nodeByInstanceId_.end() ? it->second : nullptr;
     }
 
     uint32_t Scene::GenerateInstanceId() const
     {
-        if (nodeIndexDirty_ || indexedNodeCount_ != nodes_.size())
-        {
-            RebuildNodeIndex();
-        }
         return nextInstanceId_;
     }
 
@@ -759,6 +770,21 @@ namespace Assets
         removeIds.reserve(nodesToRemove.size());
         for (const auto& node : nodesToRemove)
         {
+            if (NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine())
+            {
+                if (auto staticBody = staticPhysicsBodies_.find(node.get());
+                    staticBody != staticPhysicsBodies_.end())
+                {
+                    physicsEngine->RemoveBody(staticBody->second);
+                    staticPhysicsBodies_.erase(staticBody);
+                }
+                if (auto* physics = node->GetComponent<Runtime::PhysicsComponent>())
+                {
+                    physicsEngine->RemoveBody(physics->GetPhysicsBody());
+                    physics->BindPhysicsBody({});
+                }
+            }
+            UnbindNode(*node);
             removeIds.insert(node->GetInstanceId());
         }
 
@@ -787,12 +813,6 @@ namespace Assets
                                     { return removeIds.find(node->GetInstanceId()) != removeIds.end(); }),
                      nodes_.end());
         RefreshEnvironmentComponentCache();
-        gaussianSplats_.erase(std::remove_if(gaussianSplats_.begin(), gaussianSplats_.end(),
-                                             [&removeIds](const FGaussianSplatData& splat)
-                                             {
-                                                 return removeIds.find(splat.nodeInstanceId) != removeIds.end();
-                                             }),
-                               gaussianSplats_.end());
 
         return removedEntries;
     }
@@ -804,8 +824,10 @@ namespace Assets
         {
             const size_t index = std::min(it->index, nodes_.size());
             nodes_.insert(nodes_.begin() + index, it->node);
+            BindNode(*it->node);
             RegisterNodeIndex(it->node);
             CacheEnvironmentComponentFromNode(it->node.get());
+            EnsureNodePhysicsBody(it->node.get());
         }
 
         if (parent && root)
@@ -814,7 +836,7 @@ namespace Assets
         }
     }
 
-    Assets::GPUScene Scene::BuildGPUScene(const uint32_t imageIndex) const
+    Assets::GPUScene Scene::BuildGPUScene(const uint32_t imageIndex, const uint32_t viewBankBase) const
     {
         Assets::GPUScene gpuScene{};
         // Active RenderView's camera UBO (primary == per-image uniform buffer; secondary views
@@ -831,22 +853,22 @@ namespace Assets
 
         gpuScene.SkinWeights = skinWeightBuffer_->GetDeviceAddress();
         gpuScene.SkinJoints = skinJointBuffer_->GetDeviceAddress();
-        gpuScene.SkinnedVertices = skinnedVerticesAddr_;
-        gpuScene.JointMatrices = jointMatricesAddr_;
+        gpuScene.SkinnedVertices = skinnedVertexBuffer_ ? skinnedVertexBuffer_->GetDeviceAddress() : 0;
+        gpuScene.JointMatrices = jointMatrixBuffer_ ? jointMatrixBuffer_->GetDeviceAddress() : 0;
         gpuScene.SoftMeshShaderResourcesAddress =
             softMeshShaderResourcesBuffer_ ? softMeshShaderResourcesBuffer_->GetDeviceAddress() : 0;
 
         gpuScene.SwapChainIndex = imageIndex;
         // Active RenderView RT bank base -> shaders resolve screen-space slots via Bindless::ViewRT.
         // Primary view == 0, so the absolute (legacy) layout is unchanged.
-        gpuScene.custom_data_0 = NextEngine::GetInstance()->GetRenderer().ActiveViewBankBase();
+        gpuScene.CustomData0 = viewBankBase;
 
         return gpuScene;
     }
 
-    const Assets::GPUScene& Scene::FetchGPUScene(const uint32_t imageIndex) const
+    const Assets::GPUScene& Scene::FetchGPUScene(const uint32_t imageIndex, const uint32_t viewBankBase) const
     {
-        gpuScene_ = BuildGPUScene(imageIndex);
+        gpuScene_ = BuildGPUScene(imageIndex, viewBankBase);
 
         return gpuScene_;
     }
@@ -863,20 +885,80 @@ namespace Assets
 
     void Scene::PlayAllTracks()
     {
+        SetTracksPlaying(true);
+    }
+
+    void Scene::SetTracksPlaying(const bool playing)
+    {
         for (auto& track : tracks_)
         {
-            track.Play();
+            playing ? track.Play() : track.Stop();
         }
     }
 
-    void Scene::MarkEnvDirty()
+    void Scene::EvaluateTracks(const float time)
     {
-        // cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), true);
+        bool evaluated = false;
+        for (auto& track : tracks_)
+        {
+            track.Time_ = std::max(0.0f, time);
+            if (track.Target_ == AnimationTrack::Target::Environment)
+            {
+                track.Sample(track.Time_, GetEnvSettings());
+                evaluated = true;
+                continue;
+            }
+
+            Node* node = GetNode(track.NodeName_);
+            if (!node)
+            {
+                continue;
+            }
+
+            glm::vec3 translation = node->Translation();
+            glm::quat rotation = node->Rotation();
+            glm::vec3 scaling = node->Scale();
+            track.Sample(track.Time_, translation, rotation, scaling);
+            node->SetTranslation(translation);
+            node->SetRotation(rotation);
+            node->SetScale(scaling);
+            node->RecalcTransform(true);
+            evaluated = true;
+        }
+
+        if (evaluated)
+        {
+            MarkDirty();
+        }
     }
 
-    Node* Scene::GetNode(std::string name)
+    bool Scene::HasCameraAnimation() const
     {
-        for (auto& node : nodes_)
+        const Node* node = GetNode(renderCamera_.NodeName_);
+        while (node)
+        {
+            const bool hasTrack = std::any_of(tracks_.begin(), tracks_.end(), [node](const AnimationTrack& track)
+            {
+                return track.Target_ == AnimationTrack::Target::NodeTransform &&
+                       track.NodeName_ == node->GetName();
+            });
+            if (hasTrack)
+            {
+                return true;
+            }
+            node = node->GetParent();
+        }
+        return false;
+    }
+
+    Node* Scene::GetNode(const std::string& name)
+    {
+        return const_cast<Node*>(std::as_const(*this).GetNode(name));
+    }
+
+    const Node* Scene::GetNode(const std::string& name) const
+    {
+        for (const auto& node : nodes_)
         {
             if (node->GetName() == name)
             {
@@ -931,15 +1013,6 @@ namespace Assets
             }
         }
 
-        glm::vec3 splatBoundsMin;
-        glm::vec3 splatBoundsMax;
-        if (GetGaussianSplatWorldBounds(nodeId, splatBoundsMin, splatBoundsMax))
-        {
-            center = (splatBoundsMin + splatBoundsMax) * 0.5f;
-            radius = glm::length(splatBoundsMax - splatBoundsMin) * 0.5f;
-            return true;
-        }
-
         center = glm::vec3(foundNode->WorldTransform()[3]);
 
         auto renderComp = foundNode->GetComponent<Runtime::RenderComponent>();
@@ -957,55 +1030,31 @@ namespace Assets
             }
         }
 
+        // Non-render container nodes inherit bounds from their renderable children.
+        glm::vec3 childMin(FLT_MAX);
+        glm::vec3 childMax(-FLT_MAX);
+        bool hasChildBounds = false;
+        for (const auto& child : foundNode->Children())
+        {
+            glm::vec3 childCenter;
+            float childRadius = 0.0f;
+            if (GetNodeBounds(child->GetInstanceId(), childCenter, childRadius))
+            {
+                childMin = glm::min(childMin, childCenter - glm::vec3(childRadius));
+                childMax = glm::max(childMax, childCenter + glm::vec3(childRadius));
+                hasChildBounds = true;
+            }
+        }
+        if (hasChildBounds)
+        {
+            center = (childMin + childMax) * 0.5f;
+            radius = glm::length(childMax - childMin) * 0.5f;
+            return true;
+        }
+
         // Fallback for non-render nodes (default small radius)
         radius = 1.0f;
         return true;
-    }
-
-    bool Scene::GetGaussianSplatWorldBounds(uint32_t nodeId, glm::vec3& boundsMin, glm::vec3& boundsMax) const
-    {
-        const auto splat = std::find_if(gaussianSplats_.begin(), gaussianSplats_.end(),
-            [nodeId](const FGaussianSplatData& data) { return data.nodeInstanceId == nodeId; });
-        if (splat == gaussianSplats_.end()) return false;
-
-        const auto node = GetNodeSharedByInstanceId(nodeId);
-        if (!node) return false;
-
-        const glm::vec3& localMin = splat->aabbMin;
-        const glm::vec3& localMax = splat->aabbMax;
-        const glm::mat4& world = node->WorldTransform();
-        boundsMin = glm::vec3(std::numeric_limits<float>::max());
-        boundsMax = glm::vec3(std::numeric_limits<float>::lowest());
-        for (uint32_t corner = 0; corner < 8; ++corner)
-        {
-            const glm::vec3 local(
-                (corner & 1u) ? localMax.x : localMin.x,
-                (corner & 2u) ? localMax.y : localMin.y,
-                (corner & 4u) ? localMax.z : localMin.z);
-            const glm::vec3 transformed = glm::vec3(world * glm::vec4(local, 1.0f));
-            boundsMin = glm::min(boundsMin, transformed);
-            boundsMax = glm::max(boundsMax, transformed);
-        }
-        return true;
-    }
-
-    void Scene::RayCastGaussianSplats(glm::vec3 rayOrigin, glm::vec3 rayDir, RayCastResult& result) const
-    {
-        (void)rayOrigin;
-        (void)rayDir;
-        if (!result.Hitted)
-        {
-            return;
-        }
-
-        for (const auto& splat : gaussianSplats_)
-        {
-            if (splat.proxyNodeInstanceId == result.InstanceId)
-            {
-                result.InstanceId = splat.nodeInstanceId;
-                return;
-            }
-        }
     }
 
     const Model* Scene::GetModel(uint32_t id) const
@@ -1026,7 +1075,7 @@ namespace Assets
         return nullptr;
     }
 
-    const uint32_t Scene::AddMaterial(const FMaterial& material)
+    uint32_t Scene::AddMaterial(const FMaterial& material)
     {
         materials_.push_back(material);
         materialDirty_ = true;
@@ -1066,18 +1115,8 @@ namespace Assets
         }
 
         const uint32_t replacement = id == 0 ? 1u : 0u;
-        for (const auto& node : nodes_)
+        for (auto* render : Components<Runtime::RenderComponent>())
         {
-            if (!node)
-            {
-                continue;
-            }
-            auto* render = node->GetComponentPtr<Runtime::RenderComponent>();
-            if (render == nullptr)
-            {
-                continue;
-            }
-
             auto materialRefs = render->GetMaterials();
             bool changed = false;
             for (uint32_t& materialRef : materialRefs)
@@ -1113,19 +1152,18 @@ namespace Assets
     {
         sceneDirty_ = true;
         sceneDirtyForCpuAS_ = true;
-        NextEngine::GetInstance()->SetProgressiveRendering(false, false);
+        NextEngine::GetInstance()->SetProgressiveRendering(false);
     }
 
     void Scene::MarkTransformDirty()
     {
         sceneDirty_ = true;
-        NextEngine::GetInstance()->SetProgressiveRendering(false, false);
+        NextEngine::GetInstance()->SetProgressiveRendering(false);
     }
 
     void Scene::MarkSelectionDirty()
     {
         sceneDirty_ = true;
-        NextEngine::GetInstance()->SetProgressiveRendering(false, false);
     }
 
     void Scene::OverrideModelView(glm::mat4& outMatrix)
@@ -1137,31 +1175,4 @@ namespace Assets
         }
     }
 
-    void Scene::SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress jointMatrices)
-    {
-        skinnedVerticesAddr_ = skinnedVertices;
-        jointMatricesAddr_ = jointMatrices;
-    }
-
-    bool Scene::Save(const std::string& filename) const
-    {
-        // 根据文件扩展名选择保存格式
-        if (filename.ends_with(".glb") || filename.ends_with(".GLB"))
-        {
-            return SaveAsGLB(filename);
-        }
-        else if (filename.ends_with(".gltf") || filename.ends_with(".GLTF"))
-        {
-            return SaveAsGLTF(filename);
-        }
-        else
-        {
-            SPDLOG_ERROR("Unsupported file extension. Use .glb or .gltf");
-            return false;
-        }
-    }
-
-    bool Scene::SaveAsGLB(const std::string& filename) const { return FSceneSaver::SaveGLBScene(filename, *this); }
-
-    bool Scene::SaveAsGLTF(const std::string& filename) const { return FSceneSaver::SaveGLTFScene(filename, *this); }
 } // namespace Assets
