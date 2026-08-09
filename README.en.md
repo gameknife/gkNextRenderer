@@ -131,45 +131,45 @@ On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is i
 
 ## 🛠️ Core Capabilities
 
-### 1️⃣ High-quality rendering designed for runtime use
+### 1️⃣ Rendering
 
-- **Real-time path tracing and hybrid rendering**: built around 1/2spp + temporal reuse, denoising, reprojection, and multi-pipeline switching so path tracing remains usable under real runtime constraints
-- **Modern GPU raster pipeline**: Visibility Buffer, fully bindless resources, single-draw GPU-driven submission, Soft Mesh Shader, and GPU CSM shadows support dense scenes and game-like workloads
-- **Hot-swappable renderers**: the same scene and asset set can switch across PathTracing, SoftwareTracing, SoftwareModern / NoAmbient, and related pipelines for image-quality, performance, and platform comparisons
-- **GI, denoising, and upscaling**: SHARC world radiance cache, ReSTIR DI, as well as FSR / DLSS / DLSS RR / Native TAAU / SGSR2
-- **Gaussian Splat co-rendering**: PlayCanvas SOG v2 Gaussian Splatting runs through a hardware-billboard path and can coexist with mesh scenes
+- **Real-time path tracing**: 1/2spp sampling with temporal reuse, reprojection, and denoising — aimed at frames that hold up at runtime, not offline stills
+- **Modern GPU raster pipeline**: Visibility Buffer, fully bindless resources, single-draw GPU-driven submission, Soft Mesh Shader, and GPU CSM shadows
+- **Hot-swappable renderers**: PathTracing, SoftwareTracing, and SoftwareModern / NoAmbient share one scene and asset set, so image quality, performance, and platform fit compare directly
+- **Global illumination and upscaling**: SHARC world radiance cache, ReSTIR DI, plus DLSS / DLSS-RR / FSR / SGSR2 / Native TAAU
+- **Gaussian Splat co-rendering**: PlayCanvas SOG v2 splats run through a hardware-billboard path and share the frame with mesh scenes
 
-### 2️⃣ Runtime, editor, and validation tooling
+### 2️⃣ Runtime and Editor
 
-- **ECS + reflection**: based on entt, with a reflection layer shared across runtime systems, editor property panels, undo / redo, and QuickJS bindings
-- **ImGui editor and material workflow**: `gkNextEditor` supports scene, material, and runtime-oriented editing, with data-driven settings, cvar panels, and a node-based material workflow
-- **QuickJS + TypeScript hot reload**: TypeScript is compiled at runtime via the bundled `tools/tsc/tsc[.exe]`, with no Node/npm or global `tsc` dependency; see [docs/guides/typescript-integration.md](docs/guides/typescript-integration.md)
-- **Jolt Physics and interactive runtime support**: provides a practical physics base for dragging, collision, character movement, playable prototypes, and automated scene validation
-- **Agent validation tools**: `gnb shot` captures hidden-window validation screenshots, while `gnb validate` supports input-driven scripts, assertions, and JSON reports for rendering, UI, and gameplay-state regression checks
-- **Profiler / benchmark / TUI**: built-in CPU / GPU pass profiling, `gkNextMotionBenchmark` CSV performance reports, `gkNextVisualTest` visual regression, and `gnb tui` terminal rendering previews
-- **Remote Play mode**: `gnb remote` / `--remote` can run any desktop target as a WebRTC host, stream the frame to a zero-install browser client, and route keyboard, mouse, and virtual-gamepad input back into the runtime; video uses Vulkan Video H.264 hardware encoding
-- **gnb dashboard and local LLM**: `gnb dashboard` provides local TODO, Build, Run, Test, Git, Chat, and LOC workflows; `gnb llm` integrates llama.cpp / Gemma as a local OpenAI-compatible service for tooling and runtime AI features
+- **ECS + reflection**: an entt component system and entt::meta reflection layer — one registration serves the runtime, editor property panels, undo / redo, and script bindings alike
+- **Visual editor**: scene editing, a node-based material graph, cvar tuning, and data-driven settings in a single ImGui workflow
+- **TypeScript hot reload**: a QuickJS runtime paired with the bundled TypeScript toolchain; script and shader edits apply live, with no external Node dependency
+- **Physics and character runtime**: Jolt Physics backs collision, grab-and-drag, vehicles, and character movement
 
-### 3️⃣ AI-native workflows and gameplay prototypes
+### 3️⃣ Content Pipelines
 
-- **Multiple prototypes validate real requirements**: MagicaLego, BrickPlayer, Brotato3D, KongLie3D, CharacterDemo, Flappy, AirportSim, StudioSim, NextRA, and the Voyage3D source prototype exercise building, action, physics, scripting, UI, combat, simulation, and AI interaction scenarios
-- **Structured content for AI generation**: SCAD, LDraw, Gaussian Splat, and glTF pipelines give AI systems parseable, editable, and verifiable 3D content instead of only uncontrolled static assets
-- **AI-assisted gameplay iteration**: local LLM support, QuickJS scripting, reflected components, agent validation, and the dashboard form a loop for "generate content -> run validation -> iterate"
-- **Script parity and deterministic validation**: Flappy C++ / JS parity, input scripts, hidden-window screenshots, and benchmark reports help constrain behavioral regressions after AI-assisted changes
+- **glTF 2.0**: full import of scenes, materials, animation, and skeletal meshes, plus partial export of runtime content
+- **LDraw**: `.ldr` / `.mpd` load straight into the runtime, with the official color table and LGEO realistic materials mapped onto engine PBR, and brick connectivity preserved as data building gameplay can use
+- **OpenSCAD DSL**: a built-in parser and evaluator turn procedural scripts into renderable meshes — geometry via Manifold CSG, text via FreeType
+- **ScadRig**: SCAD describes rigid-body bone hierarchies and animation clips that drive characters in the simulation prototypes
+- **Gaussian Splat**: load PlayCanvas `.sog` directly and place it in the same runtime scene as meshes, materials, and cameras
 
-### 4️⃣ glTF, LDraw, OpenSCAD, and Gaussian-splat content pipelines
+### 4️⃣ Tooling and Automated Validation
 
-- **Full glTF import / partial export**: runtime support for scenes, materials, animation, and skeletal content, with selected runtime content exportable back into a glTF-oriented workflow
-- **Direct LDraw runtime import**: `.ldr` / `.mpd` load directly into the runtime, with full color/material mapping from `LDConfig.ldr` and LGEO realistic colors into engine PBR materials, plus brick connectivity semantics converted into data the building system can understand
-- **OpenSCAD DSL and ScadStudio**: parse / evaluate `.scad` directly, with geometry through Manifold CSG and text through FreeType; `ScadStudio` builds on this for modeling, scene generation, and character-rig experiments
-- **ScadRig rigid-body characters**: SCAD files can describe rigid-body bone hierarchies and animation clips, currently used in the AirportSim / StudioSim direction for character visualization and role-based coloring experiments
-- **Gaussian Splat assets**: load PlayCanvas `.sog` directly (packed ZIP or `meta.json` + `.webp`) and co-render with mesh, material, camera, and runtime scene data
+- **One CLI**: `gnb` covers dependency provisioning, builds, runs, tests, and asset packaging with the same interface across desktop and mobile
+- **Profiling**: a per-pass CPU / GPU timing overlay, with optional Superluminal timeline integration for fine-grained sampling
+- **Automated regression**: headless screenshots, input-script assertions, visual regression, and benchmark CSV reports — all CI-ready
+- **Remote Play**: any desktop target can act as a WebRTC host, streaming to a zero-install browser client that routes keyboard, mouse, and virtual-gamepad input back; video uses Vulkan Video hardware encoding
+- **Local workbench**: a graphical dashboard for todos, builds, runs, tests, and Git, plus a bundled llama.cpp inference service shared by the toolchain and the runtime
 
-### 5️⃣ Controlled codebase size for learning and extension
+### 5️⃣ AI-Native Workflow
 
-- **First-party Engine core targeted under 50k LOC**: the core stays intentionally understandable and maintainable
-- **Clarity over over-engineering**: favors explicit data flow, clear ownership, and mature third-party libraries, without turning experimental systems into heavy frameworks too early
-- **A good engine codebase to study**: from Vulkan rendering, resource management, scripting, editor integration, reflection, and content import to testing, benchmarking, and agent validation
+- **A parseable content foundation**: the SCAD, LDraw, glTF, and splat pipelines give AI readable, editable, verifiable 3D content instead of opaque static assets
+- **A programmable runtime**: reflected components and TypeScript bindings expose engine state directly to scripts and models
+- **A machine-checkable loop**: screenshots, assertion scripts, replay parity, and benchmark reports close the "generate → run → validate → iterate" cycle
+- **Local inference**: a bundled llama.cpp / Gemma OpenAI-compatible service serves both content generation and in-game AI decisions
+
+> The first-party Engine core is deliberately held under 50k LOC, favoring explicit data flow and clear ownership over prematurely abstracting experiments into heavy frameworks.
 
 <p align="center">✦</p>
 

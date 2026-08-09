@@ -9,6 +9,7 @@
 #include "Application/Editor/Common/Preview/AssetThumbnailRenderer.hpp"
 #include "Modules/DevTools/Command/RenameNodeCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Engine/Runtime/Reflection/PropertyAccessor.hpp"
 

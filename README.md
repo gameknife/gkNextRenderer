@@ -128,45 +128,45 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 
 ## 🛠️ 核心能力
 
-### 1️⃣ 面向运行时的高质量渲染
+### 1️⃣ 渲染
 
-- **实时路径追踪与 Hybrid Rendering**：围绕 1/2spp + temporal reuse、降噪、重投影和多管线切换持续推进，让路径追踪在真实运行时条件下可用
-- **现代 GPU 光栅管线**：Visibility Buffer、全 Bindless、GPU-Driven 单 draw 提交、Soft Mesh Shader 和 GPU CSM 阴影服务于高密度场景与游戏级工况
-- **多套渲染器热切换**：同一套资产与场景可切换 PathTracing、SoftwareTracing、SoftwareModern / NoAmbient 等管线，便于画质、性能与平台适配对比
-- **GI、降噪与上采**：SHARC 世界辐射缓存、RESTIR DI，以及 FSR / DLSS / DLSS RR / Native TAAU / SGSR2
-- **高斯溅射共渲染**：支持 PlayCanvas SOG v2 Gaussian Splatting，以硬件 billboard 路径和 mesh 场景共存
+- **实时路径追踪**：1/2 spp 采样配合时域复用、重投影与降噪，目标是可稳定运行的实时画面，而非离线出图
+- **现代 GPU 光栅管线**：Visibility Buffer、全 Bindless、GPU-Driven 单 Draw 提交、Soft Mesh Shader 与 GPU CSM 阴影
+- **多渲染器热切换**：PathTracing、SoftwareTracing、SoftwareModern / NoAmbient 共享同一套场景与资产，可直接对比画质、性能与平台适配
+- **全局光照与上采**：SHARC 世界辐射缓存、ReSTIR DI，以及 DLSS / DLSS-RR / FSR / SGSR2 / Native TAAU
+- **高斯溅射共渲染**：PlayCanvas SOG v2 splat 走硬件 billboard 路径，与 mesh 场景在同一帧共存
 
-### 2️⃣ 运行时、编辑器与验证工具链
+### 2️⃣ 运行时与编辑器
 
-- **ECS + Reflection**：基于 entt 的组件系统，加上反射层，统一服务于运行时、编辑器属性面板、撤销 / 重做和 QuickJS 绑定
-- **ImGui 编辑器与材质工作流**：`gkNextEditor` 面向场景、材质和运行时内容编辑，支持数据驱动设置、cvar 面板和 node-based material workflow
-- **QuickJS + TypeScript 热重载**：运行时使用仓库内置 `tools/tsc/tsc[.exe]` 编译 TypeScript，无需 Node/npm 或全局 `tsc`；整合链路见 [docs/guides/typescript-integration.md](docs/guides/typescript-integration.md)
-- **Jolt Physics 与交互运行时**：为拖拽、碰撞、角色移动、可玩原型和自动化场景验证提供真实物理基础
-- **Agent 验证工具**：`gnb shot` 隐藏窗口截图验证，`gnb validate` 支持输入驱动、断言和 JSON report，适合渲染、UI 与玩法状态的自动化回归
-- **Profiler / Benchmark / TUI**：内置 CPU / GPU pass profiler、`gkNextMotionBenchmark` CSV 性能报告、`gkNextVisualTest` 视觉回归，以及 `gnb tui` 终端渲染预览
-- **Remote Play 模式**：`gnb remote` / `--remote` 可把任意桌面 target 作为 WebRTC host 运行，浏览器零安装接入画面，并通过键盘、鼠标和虚拟手柄回传输入；视频路径走 Vulkan Video H.264 硬件编码
-- **gnb Dashboard 与本地 LLM**：`gnb dashboard` 提供 TODO、Build、Run、Test、Git、Chat、LOC 等本地工作台；`gnb llm` 集成 llama.cpp / Gemma，本地 OpenAI 兼容服务可复用于工具链和运行时 AI
+- **ECS + 反射**：entt 组件系统与 entt::meta 反射层，一次注册即同时服务运行时、编辑器属性面板、撤销 / 重做与脚本绑定
+- **可视化编辑器**：场景编辑、节点式材质图、cvar 调优与数据驱动设置集成在同一套 ImGui 工作流
+- **TypeScript 脚本热重载**：QuickJS 运行时搭配仓库自带的 TypeScript 工具链，脚本与着色器改动即时生效，无外部 Node 依赖
+- **物理与角色运行时**：Jolt Physics 支撑碰撞、抓取拖拽、载具与角色移动
 
-### 3️⃣ AI Native 与多游戏原型
+### 3️⃣ 内容管线
 
-- **多原型验证真实需求**：MagicaLego、BrickPlayer、Brotato3D、KongLie3D、CharacterDemo、Flappy、AirportSim、StudioSim、NextRA 等应用，以及 Voyage3D 源码原型，覆盖搭建、动作、物理、脚本、UI、战斗、模拟和 AI 交互场景
-- **结构化内容面向 AI 生成**：SCAD、LDraw、Gaussian Splat 与 glTF 管线让 AI 能处理可解析、可修改、可验证的 3D 内容，而不是只生成不可控的静态素材
-- **AI 辅助玩法迭代**：本地 LLM、QuickJS 脚本、反射组件、agent validation 和 dashboard 形成闭环，为后续“生成内容 -> 运行验证 -> 迭代修改”的 AI Native 工作流铺底
-- **脚本 parity 与确定性验证**：Flappy C++ / JS parity、输入脚本、隐藏窗口截图和 benchmark report 用于约束 AI 修改后的行为回归
+- **glTF 2.0**：场景、材质、动画与骨骼蒙皮完整导入，并支持将部分运行时内容回写
+- **LDraw**：`.ldr` / `.mpd` 直接进入运行时，官方色表与 LGEO 真实材质映射为引擎 PBR，零件连接语义转换为搭建玩法可用的数据
+- **OpenSCAD DSL**：内置解析与求值器，几何走 Manifold CSG、文字走 FreeType，把程序化脚本变成可渲染网格
+- **ScadRig**：以 SCAD 描述刚体骨骼层级与动画片段，驱动模拟类原型中的角色表现
+- **Gaussian Splat**：直接加载 PlayCanvas `.sog`，与 mesh、材质、相机共处同一运行时场景
 
-### 4️⃣ glTF、LDraw、OpenSCAD 与高斯溅射的内容导入能力
+### 4️⃣ 工具链与自动化验证
 
-- **glTF 完整导入 / 部分导出**：面向运行时支持 glTF 场景、材质、动画、骨骼蒙皮等内容导入，并可将部分运行时内容回写到 glTF 工作流
-- **LDraw 直接导入 Runtime**：`.ldr` / `.mpd` 可直接进入 Runtime，从 `LDConfig.ldr`、LGEO realistic color 到引擎 PBR 材质的完整颜色与材质映射，并把零件连接语义转换成搭建系统可理解的数据
-- **OpenSCAD DSL 与 ScadStudio**：直接解析 / 求值 `.scad`，几何走 Manifold CSG、文本走 FreeType，把程序化建模脚本变成可渲染网格；`ScadStudio` 基于此做建模、场景生成与角色绑定实验
-- **ScadRig 刚体角色**：用 SCAD 描述刚体骨骼层级和动画片段，已用于 AirportSim / StudioSim 方向的角色可视化与职业配色实验
-- **Gaussian Splat 资产**：直接加载 PlayCanvas `.sog`（打包 ZIP 或 `meta.json` + `.webp`），与 mesh、材质、相机和运行时场景共渲染
+- **统一 CLI**：`gnb` 单一入口覆盖依赖准备、构建、运行、测试与资产打包，桌面与移动平台口径一致
+- **性能剖析**：逐 pass 的 CPU / GPU 计时叠加层，并可选接入 Superluminal 时间线做细粒度采样
+- **自动化回归**：无窗口截图、输入脚本驱动的断言验证、视觉回归与 benchmark CSV 报告，均可直接接入 CI
+- **Remote Play**：任意桌面 target 可作为 WebRTC host，浏览器零安装接入画面并回传键鼠与虚拟手柄输入，视频走 Vulkan Video 硬件编码
+- **本地工作台**：图形化 dashboard 汇总待办、构建、运行、测试与 Git，内置 llama.cpp 本地推理服务同时供工具链与运行时使用
 
-### 5️⃣ 代码规模可控，适合学习和扩展
+### 5️⃣ AI Native 工作流
 
-- **第一方 Engine core 目标 < 50k LOC**：核心刻意保持在便于理解和持续演进的区间
-- **优先清晰实现而非过度设计**：尽量用明确的数据流、职责边界和成熟三方库解决问题，避免把实验性功能过早抽象成沉重框架
-- **适合阅读现代引擎实现**：从 Vulkan 渲染、资源管理、脚本、编辑器、反射、内容导入到测试 / benchmark / agent validation，都能看到完整的工程组织方式
+- **可解析的内容基座**：SCAD、LDraw、glTF 与 Splat 管线让 AI 面对的是可读取、可修改、可校验的结构化 3D 内容，而非不可控的静态素材
+- **可编程的运行时**：反射组件与 TypeScript 绑定把引擎状态直接开放给脚本和模型
+- **可自动判定的闭环**：截图、断言脚本、replay parity 与 benchmark 报告构成“生成 → 运行 → 验证 → 迭代”的机器可读回路
+- **本地推理**：集成 llama.cpp / Gemma 的本地 OpenAI 兼容服务，供内容生成与游戏内 AI 决策共用
+
+> 第一方 Engine core 刻意维持在 50k LOC 以内，优先明确的数据流与职责边界，而不是过早把实验性功能抽象成重型框架。
 
 <p align="center">✦</p>
 
