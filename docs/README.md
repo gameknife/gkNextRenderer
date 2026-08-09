@@ -84,6 +84,8 @@
 
 ## Plans（待实施）
 
+- [gkNextEditor / gkNextRenderer 桌面 UI 基础层重构计划](plans/desktop-ui-foundation-refactor-plan.md)
+  （待实施；统一 Engine UI 主题、语义控件、Toolbar/Combo、应用 chrome、领域选项目录与 DevTools 边界）
 - [阶段性 Release 准备计划](plans/release-readiness-plan.md)（现行；发布流水线、崩溃兜底、UI 收口、
   合规与文档一致性的问题清单与分批任务，覆盖 gkNextRenderer / gkNextEditor / gkNextMotionBenchmark）
 - [CPU TLAS 异步与并行更新计划](plans/cpu-tlas-parallel-update-plan.md)
