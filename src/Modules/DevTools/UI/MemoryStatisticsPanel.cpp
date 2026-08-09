@@ -1,53 +1,20 @@
-#include "gkNextRenderer.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
+
+#include "Modules/DevTools/UiDevPanels.hpp"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <ThirdParty/fontawesome/IconsFontAwesome6.h>
 
 #include <algorithm>
-#include <array>
-#include <random>
 #include <tuple>
 
-#include "Engine/Assets/Loaders/FProcModel.hpp"
-#include "Engine/Assets/Core/Node.hpp"
-#include "Engine/Runtime/Components/RenderComponent.hpp"
-#include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/ScreenShotService.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
-#include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
-#include "Engine/Rendering/RendererChoices.hpp"
 #include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
-#include "Modules/DevTools/UI/DeveloperStatusBar.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/Scene/SceneBuilder.hpp"
-#include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
-#include "Modules/DevTools/GraphicsDebugPanel.hpp"
-#include "Modules/DevTools/Command/DeleteNodesCommand.hpp"
-#include "Modules/DevTools/Command/DuplicateNodesCommand.hpp"
-#include "Modules/LiveCoding/LiveCodingModule.hpp"
-#include "Engine/Utilities/Localization.hpp"
 #include "Engine/Utilities/Format.hpp"
-#include "Engine/Utilities/AboutDialog.hpp"
-#include "Engine/Utilities/ImGui.hpp"
-
-#include <SDL3/SDL_misc.h>
-#include "Engine/Runtime/Platform/PlatformCommon.hpp"
-#include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
-#include "Engine/Runtime/Config/CVarSystem.hpp"
-#include "Engine/Vulkan/Allocator.hpp"
-#include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/Device.hpp"
-#include "Modules/LDrawLoader/LDrawModule.hpp"
-#include "Modules/ScadLoader/ScadModule.hpp"
-#include "Application/Common/DemoScenes.hpp"
 
-
-extern float TitlebarSize;
-extern float ModeRailWidth;
-
-namespace RendererMemoryDetail
+namespace DevTools::MemoryDetail
 {
 using Utilities::FormatBytes;
 
@@ -258,70 +225,61 @@ void DrawMemoryBlockDetails(const Vulkan::MemoryStatsSnapshot& memoryStats)
     DrawMemoryAllocationTileGrid(memoryStats);
 }
 
-} // namespace RendererMemoryDetail
+} // namespace DevTools::MemoryDetail
 
-void NextRendererGameInstance::DrawMemoryStatisticsPanel(FRendererUiState& uiState)
+void DevTools::FUiDevPanels::ToggleMemoryStatistics()
 {
-    using namespace RendererMemoryDetail;
-    const bool profilerMode = uiState.workMode == EWorkMode::Profile;
-    if (!profilerMode && !uiState.memoryStatisticsPanelOpen)
+    showMemoryStatistics_ = !showMemoryStatistics_;
+}
+
+void DevTools::FUiDevPanels::DrawMemoryStatisticsPanel(NextEngine& engine)
+{
+    using namespace MemoryDetail;
+    if (!showMemoryStatistics_)
     {
         return;
     }
 
-    bool keepOpen = true;
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-
-    constexpr float profilerPanelWidth = 380.0f;
-    constexpr float profilerPanelMargin = 12.0f;
-    const float profilerLeftEdge = viewport->Pos.x + viewport->Size.x - profilerPanelMargin - profilerPanelWidth;
-
-    float panelWidth;
-    float panelHeight;
-    ImVec2 panelPos;
-    ImVec2 panelPivot;
-
-    if (profilerMode)
+    if (viewport == nullptr)
     {
-        const float gap = 12.0f;
-        const float rightEdge = profilerLeftEdge - gap;
-        const float leftEdge = viewport->Pos.x + ModeRailWidth + 16.0f;
-        panelWidth = std::max(520.0f, rightEdge - leftEdge);
-        const float availablePanelHeight = viewport->Size.y - TitlebarSize - 30.0f - 28.0f;
+        return;
+    }
+
+    const float availablePanelHeight = viewport->Size.y - 48.0f - 30.0f - 28.0f;
+    const bool profilerOpen = engine.GetUserSettings().ShowOverlay;
+    float panelWidth = std::clamp(viewport->Size.x - 24.0f, 640.0f, 820.0f);
+    float panelHeight = std::clamp(availablePanelHeight, 430.0f, 680.0f);
+    ImVec2 panelPos(viewport->Pos.x + viewport->Size.x - 16.0f,
+                    viewport->Pos.y + viewport->Size.y - 30.0f - 12.0f);
+    ImVec2 panelPivot(1.0f, 1.0f);
+    if (profilerOpen)
+    {
+        constexpr float profilerWidth = 380.0f;
+        constexpr float panelGap = 12.0f;
+        constexpr float viewportMargin = 12.0f;
+        const ImGuiWindow* profilerWindow = ImGui::FindWindowByName("##ProfilerPanel");
+        const float profilerLeft = profilerWindow != nullptr
+            ? profilerWindow->Pos.x
+            : viewport->Pos.x + viewport->Size.x - viewportMargin - profilerWidth;
+        const float rightEdge = profilerLeft - panelGap;
+        const float leftEdge = viewport->Pos.x + 16.0f;
+        panelWidth = std::clamp(rightEdge - leftEdge, 520.0f, 820.0f);
         panelHeight = std::clamp(availablePanelHeight, 480.0f, 800.0f);
-        panelPos = ImVec2(rightEdge, viewport->Pos.y + TitlebarSize + profilerPanelMargin);
+        panelPos = ImVec2(rightEdge, viewport->Pos.y + 48.0f + viewportMargin);
         panelPivot = ImVec2(1.0f, 0.0f);
     }
-    else
-    {
-        panelWidth = std::clamp(viewport->Size.x - 24.0f, 640.0f, 820.0f);
-        const float availablePanelHeight = viewport->Size.y - TitlebarSize - 30.0f - 28.0f;
-        panelHeight = std::clamp(availablePanelHeight, 430.0f, 680.0f);
-        panelPos = ImVec2(viewport->Pos.x + viewport->Size.x - 16.0f,
-                          viewport->Pos.y + viewport->Size.y - 30.0f - 12.0f);
-        panelPivot = ImVec2(1.0f, 1.0f);
-    }
-
     const ImVec2 panelSize(panelWidth, panelHeight);
 
-    if (!NextUI::Theme::BeginFloatingPanel("##RendererMemoryStats", ICON_FA_CHART_COLUMN, "Memory Statistics",
-                                              &keepOpen, panelPos, panelSize, panelPivot))
+    if (!NextUI::Theme::BeginFloatingPanel("##DeveloperMemoryStats", ICON_FA_CHART_COLUMN, "Memory Statistics",
+                                           &showMemoryStatistics_, panelPos, panelSize, panelPivot))
     {
-        if (!keepOpen)
-        {
-            uiState.memoryStatisticsPanelOpen = false;
-            if (profilerMode)
-            {
-                uiState.workMode = EWorkMode::Render;
-                uiState.lastWorkMode = EWorkMode::Count;
-            }
-        }
         return;
     }
 
     NextUI::Theme::BeginInsetPanel("##MemoryStatsBody", ImVec2(0, 0), false, 0, ImVec2(12.0f, 12.0f), 0.0f);
 
-    const Vulkan::MemoryStatsSnapshot memoryStats = GetEngine().GetRenderer().Device().CaptureMemoryStats(true);
+    const Vulkan::MemoryStatsSnapshot memoryStats = engine.GetRenderer().Device().CaptureMemoryStats(true);
 
     const float vramUsageFraction =
         SafeFraction(memoryStats.deviceLocalUsageBytes, memoryStats.deviceLocalBudgetBytes);
@@ -425,13 +383,4 @@ void NextRendererGameInstance::DrawMemoryStatisticsPanel(FRendererUiState& uiSta
 
     NextUI::Theme::EndFloatingPanel();
 
-    if (!keepOpen)
-    {
-        uiState.memoryStatisticsPanelOpen = false;
-        if (profilerMode)
-        {
-            uiState.workMode = EWorkMode::Render;
-            uiState.lastWorkMode = EWorkMode::Count;
-        }
-    }
 }

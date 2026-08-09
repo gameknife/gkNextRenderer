@@ -181,14 +181,9 @@ void NextRendererGameInstance::DrawTitleBar(const FGameUiFrameContext& context, 
     NextUI::Theme::DrawAppTitleBar(GetEngine(), config);
 }
 
-void NextRendererGameInstance::DrawBottomStatusBar(FRendererUiState& uiState)
+void NextRendererGameInstance::DrawBottomStatusBar()
 {
     Runtime::DevToolsUI::DrawDeveloperStatusBar(GetEngine(), "RendererStatusBar", 30.0f,
-                                         [&]()
-                                         {
-                                             uiState.memoryStatisticsPanelOpen = !uiState.memoryStatisticsPanelOpen;
-                                         },
-                                         uiState.memoryStatisticsPanelOpen,
                                          []() { Modules::LiveCoding::RequestCppReload(); },
                                          Modules::LiveCoding::IsCppLiveCodingAvailable());
 }

@@ -13,6 +13,11 @@
 class NextEngine;
 union SDL_Event;
 
+namespace NextCVar
+{
+    class FCVarSystem;
+}
+
 namespace NextUI
 {
     struct Statistics;
@@ -32,6 +37,7 @@ namespace DevTools
     {
     public:
         static FUiDevPanels& Get();
+        void RegisterCVars(NextCVar::FCVarSystem& cvars);
 
         // Console
         void SubmitConsoleCommand(const std::string& command);
@@ -45,6 +51,12 @@ namespace DevTools
 
         // Statistics overlay
         void DrawOverlay(const NextUI::Statistics& statistics, Runtime::FrameProfiler* profiler);
+
+        // Memory statistics
+        void ToggleMemoryStatistics();
+        void SetMemoryStatisticsOpen(bool open) { showMemoryStatistics_ = open; }
+        bool IsMemoryStatisticsOpen() const { return showMemoryStatistics_; }
+        void DrawMemoryStatisticsPanel(NextEngine& engine);
 
         // Grave-key console toggle; returns true when the event was consumed.
         bool HandleEvent(const SDL_Event& event);
@@ -86,6 +98,7 @@ namespace DevTools
         int consoleMatchSelection_ = -1;
         bool consoleSkipEditReset_ = false;
         bool showConsole_ = false;
+        bool showMemoryStatistics_ = false;
         bool consoleInteractiveMode_ = false;
         bool consoleScrollToBottom_ = false;
         bool requestConsoleFocus_ = false;

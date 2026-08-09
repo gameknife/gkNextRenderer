@@ -74,6 +74,16 @@ namespace
     }
 }
 
+void FUiDevPanels::RegisterCVars(NextCVar::FCVarSystem& cvars)
+{
+    NextCVar::FCVarInfo existing;
+    if (!cvars.TryGetInfo("ui.memoryStats", existing))
+    {
+        cvars.RegisterBool("ui.memoryStats", false, &showMemoryStatistics_, NextCVar::ECVarFlags::None,
+                           "Open the shared developer memory statistics panel");
+    }
+}
+
 FUiDevPanels& FUiDevPanels::Get()
 {
     static FUiDevPanels panels;

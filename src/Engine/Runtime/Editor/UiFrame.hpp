@@ -9,7 +9,8 @@ namespace NextUI
         None = 0,
         Statistics = 1u << 0u,
         Console = 1u << 1u,
-        All = (1u << 0u) | (1u << 1u),
+        Memory = 1u << 2u,
+        All = (1u << 0u) | (1u << 1u) | (1u << 2u),
     };
 
     constexpr EUiDeveloperLayer operator&(const EUiDeveloperLayer lhs, const EUiDeveloperLayer rhs)

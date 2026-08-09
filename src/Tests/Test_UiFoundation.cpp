@@ -63,6 +63,12 @@ TEST_CASE("UI frame layers are explicit and policy composable", "[Unit][UI]")
     const FUiFrameResult editorResult{EUiDeveloperLayer::Console};
     CHECK(HasUiLayer(editorResult.requestedDeveloperLayers, EUiDeveloperLayer::Console));
     CHECK_FALSE(HasUiLayer(editorResult.requestedDeveloperLayers, EUiDeveloperLayer::Statistics));
+    CHECK_FALSE(HasUiLayer(editorResult.requestedDeveloperLayers, EUiDeveloperLayer::Memory));
+
+    const FUiFrameResult fullDeveloperUi{EUiDeveloperLayer::All};
+    CHECK(HasUiLayer(fullDeveloperUi.requestedDeveloperLayers, EUiDeveloperLayer::Statistics));
+    CHECK(HasUiLayer(fullDeveloperUi.requestedDeveloperLayers, EUiDeveloperLayer::Console));
+    CHECK(HasUiLayer(fullDeveloperUi.requestedDeveloperLayers, EUiDeveloperLayer::Memory));
 
     const FUiFramePolicy remotePolicy{.allowApplicationUi = true,
                                       .allowedDeveloperLayers = EUiDeveloperLayer::None};

@@ -61,7 +61,6 @@ private:
         bool showSettings = false;
         bool showCheatSheet = true;
         bool showAbout = false;
-        bool memoryStatisticsPanelOpen = false;
     };
 
     struct FLaunchView
@@ -79,9 +78,8 @@ private:
     FRendererUiState& GetRemoteUiState(std::string_view sessionId);
     void DrawSettings(FRendererUiState& uiState);
     void DrawTitleBar(const FGameUiFrameContext& context, FRendererUiState& uiState);
-    void DrawBottomStatusBar(FRendererUiState& uiState);
+    void DrawBottomStatusBar();
     void DrawModeRail(FRendererUiState& uiState);
-    void DrawMemoryStatisticsPanel(FRendererUiState& uiState);
     void DrawViewportTopBar(const FGameUiFrameContext& context, FRendererUiState& uiState);
     void DrawViewportCheatSheet(FRendererUiState& uiState);
     void RequestScreenshot(bool openFolder, const std::string& tag);

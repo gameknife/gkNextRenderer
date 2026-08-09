@@ -36,6 +36,7 @@
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
+#include "Modules/DevTools/UiDevPanels.hpp"
 #include "Engine/Vulkan/Allocator.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/Device.hpp"
@@ -316,28 +317,28 @@ bool NextRendererGameInstance::DrawRendererUi(const FGameUiFrameContext& context
         case EWorkMode::Render:
             uiState.showSettings = false;
             uiState.showCheatSheet = false;
-            uiState.memoryStatisticsPanelOpen = false;
+            DevTools::FUiDevPanels::Get().SetMemoryStatisticsOpen(false);
             userSettings.ShowOverlay = false;
             showFlags.DebugCVarPanel = false;
             break;
         case EWorkMode::Detail:
             uiState.showSettings = true;
             uiState.showCheatSheet = false;
-            uiState.memoryStatisticsPanelOpen = false;
+            DevTools::FUiDevPanels::Get().SetMemoryStatisticsOpen(false);
             userSettings.ShowOverlay = false;
             showFlags.DebugCVarPanel = false;
             break;
         case EWorkMode::Profile:
             uiState.showSettings = false;
             uiState.showCheatSheet = false;
-            uiState.memoryStatisticsPanelOpen = true;
+            DevTools::FUiDevPanels::Get().SetMemoryStatisticsOpen(true);
             userSettings.ShowOverlay = true;
             showFlags.DebugCVarPanel = false;
             break;
         case EWorkMode::CVar:
             uiState.showSettings = false;
             uiState.showCheatSheet = false;
-            uiState.memoryStatisticsPanelOpen = false;
+            DevTools::FUiDevPanels::Get().SetMemoryStatisticsOpen(false);
             userSettings.ShowOverlay = false;
             showFlags.DebugCVarPanel = true;
             break;
@@ -357,8 +358,7 @@ bool NextRendererGameInstance::DrawRendererUi(const FGameUiFrameContext& context
     DrawSettings(uiState);
     DrawViewportTopBar(context, uiState);
     DrawViewportCheatSheet(uiState);
-    DrawBottomStatusBar(uiState);
-    DrawMemoryStatisticsPanel(uiState);
+    DrawBottomStatusBar();
     Utilities::UI::ShowAboutDialog(uiState.showAbout);
 
     if (context.surfaceKind == FGameUiFrameContext::ESurfaceKind::MainWindow && ImGui::GetCurrentContext() != nullptr)

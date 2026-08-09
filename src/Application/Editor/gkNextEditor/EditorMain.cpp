@@ -321,7 +321,7 @@ bool EditorGameInstance::OnRenderUI(const FGameUiFrameContext& context)
 NextUI::FUiFrameResult EditorGameInstance::RenderUiFrame(const FGameUiFrameContext& context)
 {
     editorUserInterface_->Render(context);
-    return {NextUI::EUiDeveloperLayer::Console};
+    return {NextUI::EUiDeveloperLayer::All};
 }
 
 void EditorGameInstance::OnInitUI() { editorUserInterface_->Init(); }

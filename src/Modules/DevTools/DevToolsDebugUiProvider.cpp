@@ -25,6 +25,7 @@ namespace DevTools
     {
         engine.SetDebugDraw(std::make_shared<FAuxDrawSystem>());
         engine.SetDebugUiProvider(&DefaultDebugUiProvider());
+        FUiDevPanels::Get().RegisterCVars(engine.GetCVarSystem());
         NextCVar::FCVarInfo existing;
         if (!engine.GetCVarSystem().TryGetInfo("ui.catalog", existing))
         {
@@ -58,6 +59,10 @@ namespace DevTools
                 if (NextUI::HasUiLayer(layers, NextUI::EUiDeveloperLayer::Console))
                 {
                     panels.RenderConsoleOverlay();
+                }
+                if (NextUI::HasUiLayer(layers, NextUI::EUiDeveloperLayer::Memory))
+                {
+                    panels.DrawMemoryStatisticsPanel(engine);
                 }
                 Runtime::DevToolsUI::DrawUiCatalog(uiCatalogOpen);
             }

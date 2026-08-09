@@ -41,8 +41,6 @@ namespace Runtime::DevToolsUI
     void DrawDeveloperStatusBar(NextEngine& engine,
                                 const char* windowId,
                                 const float height,
-                                std::function<void()> onMemoryClicked,
-                                const bool memoryActive,
                                 std::function<void()> onCppReloadClicked,
                                 const bool cppLiveCodingAvailable)
     {
@@ -58,7 +56,7 @@ namespace Runtime::DevToolsUI
         constexpr float statsWidth = 58.0f;
         constexpr float buttonHeight = 22.0f;
         constexpr float toolWidth = 24.0f;
-        const float memoryWidth = ImGui::CalcTextSize(memoryText.c_str()).x + (onMemoryClicked ? 12.0f : 0.0f);
+        const float memoryWidth = ImGui::CalcTextSize(memoryText.c_str()).x + 12.0f;
         const float rightWidth = consoleWidth + statsWidth + toolWidth * 2.0f +
             ImGui::CalcTextSize(fpsText.c_str()).x + memoryWidth + 104.0f;
 
@@ -114,22 +112,14 @@ namespace Runtime::DevToolsUI
             ImGui::TextColored(NextUI::Foundation::Color(NextUI::Foundation::EColor::TextMuted),
                                "%s", fpsText.c_str());
             DrawSeparator();
-            if (onMemoryClicked)
+            NextUI::Foundation::FScopedStyle memoryStyle;
+            memoryStyle.Add(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
+            if (ImGui::Selectable(memoryText.c_str(), panels.IsMemoryStatisticsOpen(),
+                                  ImGuiSelectableFlags_None, ImVec2(memoryWidth, buttonHeight)))
             {
-                NextUI::Foundation::FScopedStyle memoryStyle;
-                memoryStyle.Add(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
-                if (ImGui::Selectable(memoryText.c_str(), memoryActive, ImGuiSelectableFlags_None,
-                                      ImVec2(memoryWidth, buttonHeight)))
-                {
-                    onMemoryClicked();
-                }
-                NextUI::Foundation::Tooltip("Show VRAM details");
+                panels.ToggleMemoryStatistics();
             }
-            else
-            {
-                ImGui::TextColored(NextUI::Foundation::Color(NextUI::Foundation::EColor::TextMuted),
-                                   "%s", memoryText.c_str());
-            }
+            NextUI::Foundation::Tooltip("Show VRAM details");
         };
         NextUI::Foundation::DrawBottomBar(options);
     }

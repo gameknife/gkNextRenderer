@@ -382,7 +382,7 @@ namespace Editor
         NextUI::Theme::DrawAppTitleBar(ctx.engine, config);
 
         Runtime::DevToolsUI::DrawDeveloperStatusBar(
-            ctx.engine, "Footer", kFooterHeight, {}, false,
+            ctx.engine, "Footer", kFooterHeight,
             []() { Modules::LiveCoding::RequestCppReload(); },
             Modules::LiveCoding::IsCppLiveCodingAvailable());
     }
