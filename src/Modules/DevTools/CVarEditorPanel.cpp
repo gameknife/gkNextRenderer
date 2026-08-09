@@ -175,35 +175,15 @@ namespace DevTools
     void DrawCVarEditorPanel(NextEngine& engine, bool& panelVisible)
     {
         ImGui::SetNextWindowSize(ImVec2(980.0f, 700.0f), ImGuiCond_FirstUseEver);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18.0f, 16.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 8.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 7.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 5.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.0f);
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated));
-        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover));
-        ImGui::PushStyleColor(ImGuiCol_Header,
-                              NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated, 0.80f));
-        ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
-                              NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.92f));
-        ImGui::PushStyleColor(ImGuiCol_HeaderActive,
-                              NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.32f));
-        ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, NextUI::Theme::Color(NextUI::Theme::EColor::Surface, 0.56f));
-        ImGui::PushStyleColor(ImGuiCol_TableRowBg,
-                              NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.08f));
-        ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt,
-                              NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated, 0.32f));
+        NextUI::Theme::PushToolWindowStyle();
         if (!ImGui::Begin("CVar Editor", &panelVisible))
         {
             ImGui::End();
-            ImGui::PopStyleColor(8);
-            ImGui::PopStyleVar(7);
+            NextUI::Theme::PopToolWindowStyle();
             return;
         }
         // Keep the roomier title bar while using medium-sized controls in the content area.
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 5.0f));
+        NextUI::Theme::PushToolWindowContentStyle();
 
         auto& cvars = engine.GetCVarSystem();
         static char search[128]{};
@@ -290,9 +270,8 @@ namespace DevTools
             ImGui::EndTable();
             ImGui::Dummy(ImVec2(0.0f, 6.0f));
         }
-        ImGui::PopStyleVar();
+        NextUI::Theme::PopToolWindowContentStyle();
         ImGui::End();
-        ImGui::PopStyleColor(8);
-        ImGui::PopStyleVar(7);
+        NextUI::Theme::PopToolWindowStyle();
     }
 }

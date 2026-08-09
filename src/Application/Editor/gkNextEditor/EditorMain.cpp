@@ -57,6 +57,8 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Runtime::Co
     uint32_t computedHeight = static_cast<uint32_t>(monitorSize.y * 0.75f);
     config.Width = computedWidth < 1920u ? static_cast<uint32_t>(monitorSize.x) : computedWidth;
     config.Height = computedHeight < 1080u ? static_cast<uint32_t>(monitorSize.y) : computedHeight;
+    options.Width = config.Width;
+    options.Height = config.Height;
     config.HideTitleBar = true;
     options.KeepCPUMeshData = true; // 编辑器模式保留CPU网格数据用于场景保存
     options.HighPrecisionProgressiveHistory = true;

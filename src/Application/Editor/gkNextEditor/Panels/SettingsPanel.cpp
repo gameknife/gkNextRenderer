@@ -7,6 +7,7 @@
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Modules/DevTools/CVarEditorPanel.hpp"
 #include "Modules/DevTools/ProfessionalUI.hpp"
+#include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include <fstream>
 #include <imgui.h>
@@ -272,11 +273,17 @@ namespace Editor
             std::clamp(panelState.selectedCategory, 0, static_cast<int>(layout.categories.size()) - 1);
 
         ImGui::SetNextWindowSize(ImVec2(920.0f, 650.0f), ImGuiCond_FirstUseEver);
+        NextUI::Theme::PushToolWindowStyle();
         if (!ImGui::Begin("Settings / Preferences", &ui.settingsPanel))
         {
             ImGui::End();
+            NextUI::Theme::PopToolWindowStyle();
             return;
         }
+        NextUI::Theme::PushToolWindowContentStyle();
+
+        NextUI::Theme::DrawPanelHeader(
+            ICON_FA_GEAR, "Preferences", "Editor and renderer settings apply immediately");
 
         ImGui::SetNextItemWidth(320.0f);
         ImGui::InputTextWithHint("##SettingsSearch",
@@ -292,18 +299,19 @@ namespace Editor
         }
 
         const float footerHeight = ImGui::GetFrameHeightWithSpacing() + 10.0f;
-        ImGui::BeginChild("##SettingsCategories", ImVec2(190.0f, -footerHeight), true);
+        NextUI::Theme::BeginInsetPanel("##SettingsCategories", ImVec2(190.0f, -footerHeight));
         for (int i = 0; i < static_cast<int>(layout.categories.size()); ++i)
         {
-            if (ImGui::Selectable(layout.categories[i].label.c_str(), panelState.selectedCategory == i))
+            if (ImGui::Selectable(layout.categories[i].label.c_str(), panelState.selectedCategory == i,
+                                  ImGuiSelectableFlags_None, ImVec2(0.0f, 30.0f)))
             {
                 panelState.selectedCategory = i;
             }
         }
-        ImGui::EndChild();
+        NextUI::Theme::EndInsetPanel();
         ImGui::SameLine();
 
-        ImGui::BeginChild("##SettingsContent", ImVec2(0.0f, -footerHeight), true);
+        NextUI::Theme::BeginInsetPanel("##SettingsContent", ImVec2(0.0f, -footerHeight));
         const FSettingsCategory& category = layout.categories[panelState.selectedCategory];
         for (const FSettingsGroup& group : category.groups)
         {
@@ -331,7 +339,7 @@ namespace Editor
             }
             NextUI::Theme::EndSection();
         }
-        ImGui::EndChild();
+        NextUI::Theme::EndInsetPanel();
 
         if (ImGui::Button("Reset Category"))
         {
@@ -353,7 +361,9 @@ namespace Editor
         }
         ImGui::SameLine();
         ImGui::TextDisabled("Changes apply immediately");
+        NextUI::Theme::PopToolWindowContentStyle();
         ImGui::End();
+        NextUI::Theme::PopToolWindowStyle();
 
         if (panelState.showAllCVars)
         {

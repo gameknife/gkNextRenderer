@@ -6,6 +6,8 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Utilities/AboutDialog.hpp"
 #include "Engine/Utilities/ImGui.hpp"
+#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include <SDL3/SDL_misc.h>
 
@@ -200,17 +202,16 @@ void utils::ShowResourcesWindow(bool *childResources)
     // links carried over from an ImGui starter template and had nothing to do with
     // this engine.
     ImGui::SetNextWindowSize(ImVec2(420, 260), ImGuiCond_Once);
+    NextUI::Theme::PushToolWindowStyle();
     if (ImGui::Begin("Resources", childResources, ImGuiWindowFlags_NoCollapse))
     {
-        ImGui::TextWrapped("Documentation and support for gkNextRenderer.");
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
+        NextUI::Theme::PushToolWindowContentStyle();
+        NextUI::Theme::DrawPanelHeader(
+            ICON_FA_BOOK_OPEN, "Resources", "Documentation and support for gkNextRenderer");
 
         const auto Link = [](const char* label, const char* url)
         {
-            ImGui::Bullet();
-            if (ImGui::SmallButton(label))
+            if (ImGui::Button(label, ImVec2(-FLT_MIN, ImGui::GetFrameHeight())))
             {
                 SDL_OpenURL(url);
             }
@@ -230,13 +231,19 @@ void utils::ShowResourcesWindow(bool *childResources)
         ImGui::TextWrapped(
             "Keyboard and mouse bindings are listed in the renderer's shortcut panel "
             "and in docs/AGENT_GUIDE/quick-commands.md.");
+        NextUI::Theme::PopToolWindowContentStyle();
     }
     ImGui::End();
+    NextUI::Theme::PopToolWindowStyle();
 }
 void utils::ShowAboutWindow(bool *childAbout)
 {
     // Shared with gkNextRenderer so both targets report the same information.
+    NextUI::Theme::PushToolWindowStyle();
+    NextUI::Theme::PushToolWindowContentStyle();
     Utilities::UI::ShowAboutDialog(*childAbout);
+    NextUI::Theme::PopToolWindowContentStyle();
+    NextUI::Theme::PopToolWindowStyle();
 }
 
 bool utils::IsItemActiveAlt(ImVec2 pos, int id)

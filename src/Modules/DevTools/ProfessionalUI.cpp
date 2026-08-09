@@ -802,6 +802,41 @@ namespace NextUI::Theme
         return ImGui::Selectable(label, selected, ImGuiSelectableFlags_None, ImVec2(0.0f, 28.0f));
     }
 
+    void PushToolWindowStyle()
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18.0f, 16.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 8.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 7.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 5.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.0f);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, Color(EColor::SurfaceElevated));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, Color(EColor::SurfaceHover));
+        ImGui::PushStyleColor(ImGuiCol_Header, Color(EColor::SurfaceElevated, 0.80f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, Color(EColor::SurfaceHover, 0.92f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, Color(EColor::Accent, 0.32f));
+        ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, Color(EColor::Surface, 0.56f));
+        ImGui::PushStyleColor(ImGuiCol_TableRowBg, Color(EColor::Background, 0.08f));
+        ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt, Color(EColor::SurfaceElevated, 0.32f));
+    }
+
+    void PopToolWindowStyle()
+    {
+        ImGui::PopStyleColor(8);
+        ImGui::PopStyleVar(7);
+    }
+
+    void PushToolWindowContentStyle()
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 5.0f));
+    }
+
+    void PopToolWindowContentStyle()
+    {
+        ImGui::PopStyleVar();
+    }
+
     void BeginFormRow(const char* label, float ratio, float minLabelWidth, float maxLabelWidth)
     {
         ImGui::AlignTextToFramePadding();

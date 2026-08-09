@@ -101,6 +101,10 @@ namespace NextUI::Theme
     void PushViewportPopupStyle();
     void PopViewportPopupStyle();
     bool DrawViewportComboOption(const char* label, bool selected);
+    void PushToolWindowStyle();
+    void PopToolWindowStyle();
+    void PushToolWindowContentStyle();
+    void PopToolWindowContentStyle();
     bool ModeRailButton(const char* icon, const char* tooltip, bool active, float buttonSize);
     bool BeginSection(const char* icon, const char* label, bool defaultOpen = true);
     void EndSection();

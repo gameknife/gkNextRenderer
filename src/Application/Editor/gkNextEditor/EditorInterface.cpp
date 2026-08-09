@@ -207,9 +207,10 @@ void EditorInterface::RebuildDefaultDockLayout(ImGuiID id)
     ImGui::DockBuilderSetNodeSize(id, viewport->Size);
 
     ImGuiID dockMain = id;
-    ImGuiID dock1 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.155f, nullptr, &dockMain);
-    ImGuiID dock2 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.205f, nullptr, &dockMain);
+    
+    ImGuiID dock2 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.25f, nullptr, &dockMain);
     ImGuiID dock3 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Down, 0.25f, nullptr, &dockMain);
+    ImGuiID dock1 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.2f, nullptr, &dockMain);
 
     ImGui::DockBuilderDockWindow("Outliner", dock1);
     ImGui::DockBuilderDockWindow("Properties", dock2);
