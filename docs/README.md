@@ -42,6 +42,7 @@
 ## Designs（当前架构）
 
 - [Agent 输入驱动验证](designs/agent-validation-input-driver.md)
+- [Desktop UI Foundation](designs/desktop-ui-foundation.md)
 - [AmbientCube 命中驱动驻留](designs/ambientcube-hit-driven-residency-design.md)
 - [大气散射与高度雾架构](designs/atmosphere-and-height-fog-design.md)（现行；程序化天空、大气透视、高度雾、
   昼夜 Demo 与人工/Agent 验证入口均已完成。体积雾光轴与 PathTracing 介质散射按需另立任务）
@@ -84,7 +85,6 @@
 
 ## Plans（待实施）
 
-- [gkNextEditor / gkNextRenderer 桌面 UI 基础层重构计划](plans/desktop-ui-foundation-refactor-plan.md)
   （待实施；统一 Engine UI 主题、语义控件、Toolbar/Combo、应用 chrome、领域选项目录与 DevTools 边界）
 - [阶段性 Release 准备计划](plans/release-readiness-plan.md)（现行；发布流水线、崩溃兜底、UI 收口、
   合规与文档一致性的问题清单与分批任务，覆盖 gkNextRenderer / gkNextEditor / gkNextMotionBenchmark）

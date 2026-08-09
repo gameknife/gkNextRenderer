@@ -23,6 +23,7 @@ public:
     void OnPreConfigUI() override;
     bool OnRenderUI() override;
     bool OnRenderUI(const FGameUiFrameContext& context) override;
+    NextUI::FUiFrameResult RenderUiFrame(const FGameUiFrameContext& context) override;
     void OnInitUI() override;
     void OnRemoteUiSessionClosed(std::string_view sessionId) override;
 
@@ -57,7 +58,6 @@ private:
         NextUI::GizmoController gizmoController;
         EWorkMode workMode = EWorkMode::Render;
         EWorkMode lastWorkMode = EWorkMode::Render;
-        struct ImFont* bigFont {};
         bool showSettings = false;
         bool showCheatSheet = true;
         bool showAbout = false;
@@ -77,7 +77,6 @@ private:
 
     bool DrawRendererUi(const FGameUiFrameContext& context, FRendererUiState& uiState);
     FRendererUiState& GetRemoteUiState(std::string_view sessionId);
-    void EnsureUiFonts(FRendererUiState& uiState, bool allowLoad);
     void DrawSettings(FRendererUiState& uiState);
     void DrawTitleBar(const FGameUiFrameContext& context, FRendererUiState& uiState);
     void DrawBottomStatusBar(FRendererUiState& uiState);

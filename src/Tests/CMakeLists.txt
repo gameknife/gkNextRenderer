@@ -53,6 +53,8 @@ set(unitTestSources
     Test_CharacterWorkbenchAI.cpp
     Test_Rgb9e5Pack.cpp
     Test_UpscalerTypes.cpp
+    Test_RendererChoices.cpp
+    Test_UiFoundation.cpp
     Test_SogLoader.cpp
     Test_TerminalBlitter.cpp
     Test_PhysicsComponent.cpp

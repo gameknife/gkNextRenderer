@@ -318,6 +318,12 @@ bool EditorGameInstance::OnRenderUI(const FGameUiFrameContext& context)
     return true;
 }
 
+NextUI::FUiFrameResult EditorGameInstance::RenderUiFrame(const FGameUiFrameContext& context)
+{
+    editorUserInterface_->Render(context);
+    return {NextUI::EUiDeveloperLayer::Console};
+}
+
 void EditorGameInstance::OnInitUI() { editorUserInterface_->Init(); }
 
 void EditorGameInstance::OnRemoteUiSessionClosed(std::string_view sessionId)

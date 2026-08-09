@@ -2,7 +2,8 @@
 #include "Modules/DevTools/Command/PropertyCommand.hpp"
 #include "Engine/Runtime/Reflection/ReflectionMacros.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
-#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Engine/Runtime/Editor/UI/UiWidgets.hpp"
 
 #include <imgui_stdlib.h>
 #include <imgui_internal.h>
@@ -90,7 +91,7 @@ namespace Editor
                 onReset();
                 changed = true;
             }
-            if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Reset to default"); }
+            NextUI::Foundation::Tooltip("Reset to default");
             if (isDefault) ImGui::EndDisabled();
             ImGui::PopID();
         }
@@ -154,9 +155,9 @@ namespace Editor
         ImGui::SetCursorScreenPos(panelMin);
         ImGui::PushClipRect(panelMin, ImVec2(panelMaxX, buttonRowY - style.ItemSpacing.y), true);
         ImGui::PushTextWrapPos(panelMaxX);
-        ImGui::PushFont(NextUI::Theme::GetTitleFont(*NextEngine::GetInstance()));
+        if (config.titleFont != nullptr) ImGui::PushFont(config.titleFont);
         ImGui::TextWrapped("%s", assetName.c_str());
-        ImGui::PopFont();
+        if (config.titleFont != nullptr) ImGui::PopFont();
         ImGui::PopTextWrapPos();
         ImGui::PopClipRect();
 

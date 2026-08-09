@@ -348,7 +348,7 @@ namespace ScadStudio
                 streamingText_ += delta;
             });
 
-            auto parseAndValidate = [this](const NextAI::FChatResponse& candidate)
+            auto parseAndValidate = [](const NextAI::FChatResponse& candidate)
             {
                 FScadGenResult result;
                 if (!candidate.success)

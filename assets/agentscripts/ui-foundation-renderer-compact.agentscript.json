@@ -1,0 +1,16 @@
+{
+  "name": "ui-foundation-renderer-compact",
+  "target": "gkNextRenderer",
+  "scene": "assets/models/playground.glb",
+  "viewport": { "width": 800, "height": 600 },
+  "defaults": { "waitFrames": 2, "stepTimeoutMs": 8000 },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running" },
+    { "type": "cvar", "name": "r.rendererType", "set": 1 },
+    { "type": "key", "code": "F2", "action": "press" },
+    { "type": "wait-frames", "n": 8 },
+    { "type": "assert", "query": "engine.totalFrames", "op": "ge", "value": 1 },
+    { "type": "screenshot", "out": "screenshots/ui_foundation_renderer_compact" },
+    { "type": "quit" }
+  ]
+}

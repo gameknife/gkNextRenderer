@@ -1,4 +1,6 @@
 #pragma once
+
+#include "Engine/Common/CoreMinimal.hpp"
 #include <stdexcept>
 
 namespace NextStackWalk

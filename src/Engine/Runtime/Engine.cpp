@@ -1,4 +1,5 @@
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Rendering/RendererChoices.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
@@ -13,6 +14,7 @@
 #include "Engine/Runtime/ScreenShot.hpp"
 #include "Engine/Runtime/ScreenShotService.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Editor/UiFrameDispatcher.hpp"
 #include "Engine/Runtime/Interface/UiOverlay.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
@@ -95,22 +97,6 @@ namespace
     bool IsKosmicKrispDriver(VkPhysicalDevice physicalDevice)
     {
         return GetDriverId(physicalDevice) == kMesaKosmicKrispDriverId;
-    }
-
-    Vulkan::ERendererType ResolveRendererType(
-        Vulkan::ERendererType requestedType,
-        bool supportsRayTracing,
-        bool hasFullAmbientCubeBudget)
-    {
-        if (!supportsRayTracing && Vulkan::GetRendererRequirements(requestedType).requestRayTracing)
-        {
-            requestedType = Vulkan::ERT_SoftwareTracing;
-        }
-        if (!hasFullAmbientCubeBudget && Vulkan::GetRendererRequirements(requestedType).requestAmbientCube)
-        {
-            return Vulkan::ERT_SoftwareModernNoAmbient;
-        }
-        return requestedType;
     }
 
     bool HasFullAmbientCubeBudget(VkPhysicalDevice physicalDevice)
@@ -229,8 +215,8 @@ namespace NextRenderer
         }
 
         auto requestedType =
-            ResolveRendererType(static_cast<Vulkan::ERendererType>(rendererType), useRayTracingRenderer,
-                                hasFullAmbientCubeBudget);
+            Rendering::ResolveRendererChoice(static_cast<Vulkan::ERendererType>(rendererType),
+                                             {useRayTracingRenderer, hasFullAmbientCubeBudget});
         if (std::find(supportedTypes.begin(), supportedTypes.end(), requestedType) == supportedTypes.end())
         {
             requestedType = *supportedTypes.begin();
@@ -458,8 +444,9 @@ void NextEngine::Start()
         it = renderFrameConsumers_.erase(it);
     }
 
-    auto resolvedRendererType = ResolveRendererType(
-        renderer_->CurrentLogicRendererType(), renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget());
+    auto resolvedRendererType = Rendering::ResolveRendererChoice(
+        renderer_->CurrentLogicRendererType(),
+        {renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget()});
     if (resolvedRendererType != renderer_->CurrentLogicRendererType())
     {
         renderer_->SwitchLogicRenderer(resolvedRendererType);
@@ -672,8 +659,8 @@ bool NextEngine::Tick(bool forcingDelta)
         // Hot change renderer
         {
             auto requestedRendererType =
-                ResolveRendererType(static_cast<Vulkan::ERendererType>(config_.userSettings.RendererType),
-                                    renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget());
+                Rendering::ResolveRendererChoice(static_cast<Vulkan::ERendererType>(config_.userSettings.RendererType),
+                                                 {renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget()});
             if (requestedRendererType != static_cast<Vulkan::ERendererType>(config_.userSettings.RendererType))
             {
                 config_.userSettings.RendererType = static_cast<int32_t>(requestedRendererType);
@@ -1145,6 +1132,71 @@ void NextEngine::ResetProgressiveRenderingAccumulation()
     progressiveRender_.accumulatedFrames = 0;
 }
 
+bool NextEngine::RequestRendererType(const Vulkan::ERendererType type)
+{
+    if (!renderer_)
+    {
+        return false;
+    }
+
+    const Vulkan::ERendererType resolved = Rendering::ResolveRendererChoice(
+        type, {renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget()});
+    const bool changed = config_.userSettings.RendererType != static_cast<int32_t>(resolved) ||
+        renderer_->CurrentLogicRendererType() != resolved;
+    config_.userSettings.RendererType = static_cast<int32_t>(resolved);
+    if (renderer_->CurrentLogicRendererType() != resolved)
+    {
+        renderer_->SwitchLogicRenderer(resolved);
+    }
+    return changed;
+}
+
+bool NextEngine::SetUpscalerConfiguration(Rendering::Upscaler::EUpscalerType type, uint32_t mode)
+{
+    Runtime::Config::UserSettings& settings = config_.userSettings;
+    const bool changed = settings.UpscalerType != static_cast<int32_t>(type) || settings.SuperResolution != mode;
+    if (!changed)
+    {
+        return false;
+    }
+
+    settings.UpscalerType = static_cast<int32_t>(type);
+    settings.SuperResolution = mode;
+    ApplyUpscalerConfigurationFromSettings();
+    return true;
+}
+
+bool NextEngine::ApplyUpscalerConfigurationFromSettings()
+{
+    if (!renderer_)
+    {
+        return false;
+    }
+
+    Runtime::Config::UserSettings& settings = config_.userSettings;
+    auto type = static_cast<Rendering::Upscaler::EUpscalerType>(settings.UpscalerType);
+    uint32_t mode = settings.SuperResolution;
+    if (type >= Rendering::Upscaler::EUpscalerType::Count ||
+        (type != Rendering::Upscaler::EUpscalerType::None && !renderer_->SupportsUpscaler(type)))
+    {
+        type = renderer_->SupportsUpscaler(Rendering::Upscaler::EUpscalerType::NativeTAAU)
+            ? Rendering::Upscaler::EUpscalerType::NativeTAAU
+            : Rendering::Upscaler::EUpscalerType::None;
+    }
+    if (mode > static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Auto))
+    {
+        mode = static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Quality);
+    }
+    settings.UpscalerType = static_cast<int32_t>(type);
+    settings.SuperResolution = mode;
+    if (!renderer_->SupportsFrameGeneration(type))
+    {
+        settings.FrameGeneration = false;
+    }
+    renderer_->RequestRecreateSwapChain();
+    return true;
+}
+
 VkDeviceAddress NextEngine::TryGetGPUAccelerationStructureAddress() const
 {
     if (renderer_ && renderer_->SupportsRayTracing() && !renderer_->TLAS().empty())
@@ -1324,10 +1376,20 @@ void NextEngine::OnRendererAfterSubmit()
     const bool suppressAllUi = ShouldCaptureScreenShotThisFrame() && !screenShot_.pending.includeUi &&
         (screenShot_.pending.forceUiHidden ||
          !gameInstance_ || !gameInstance_->ShouldRenderUiDuringScreenshot());
-    bool uiHandled = false;
+    NextUI::FUiFrameResult uiResult{NextUI::EUiDeveloperLayer::None};
+    NextGameInstanceBase::FGameUiFrameContext uiContext;
+    uiContext.surfaceKind = NextGameInstanceBase::FGameUiFrameContext::ESurfaceKind::MainWindow;
+    uiContext.framebufferExtent = renderer_->SwapChain().OutputExtent();
+    uiContext.viewCamera = &scene_->GetRenderCamera();
+    uiContext.allowWindowCommands = true;
+    uiContext.policy.allowApplicationUi = !suppressAllUi;
+    uiContext.policy.allowedDeveloperLayers = suppressAllUi
+        ? NextUI::EUiDeveloperLayer::None
+        : NextUI::EUiDeveloperLayer::All;
+    if (uiContext.policy.allowApplicationUi)
     {
         SCOPED_CPU_TIMER("game ui");
-        uiHandled = gameInstance_->OnRenderUI();
+        uiResult = gameInstance_->RenderUiFrame(uiContext);
     }
     if (uiOverlay_ && !suppressAllUi)
     {
@@ -1358,10 +1420,13 @@ void NextEngine::OnRendererAfterSubmit()
                                                  gameInstance_->GetGraphicsDebugPanelTopOffset());
         }
     }
-    if (!uiHandled)
+    const NextUI::EUiDeveloperLayer developerLayers =
+        uiResult.requestedDeveloperLayers & uiContext.policy.allowedDeveloperLayers;
+    if (developerLayers != NextUI::EUiDeveloperLayer::None)
     {
         SCOPED_CPU_TIMER("overlay ui");
-        userInterface_->Render(stats, renderer_->Profiler(), scene_.get(), config_.showFlags.DebugProfileOverlay);
+        NextUI::FUiFrameDispatcher::DrawDeveloperLayers(
+            *this, stats, renderer_->Profiler(), developerLayers, config_.showFlags.DebugProfileOverlay);
     }
     if (debugUiProvider_)
     {

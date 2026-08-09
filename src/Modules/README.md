@@ -28,7 +28,7 @@ Android 平台模块源直接并入单一 SHARED target；`NextTui` 仅桌面 + 
 | NextTemporalUpscaler | Native TAAU + Snapdragon GSR 2 2-pass compute（全 Vulkan 平台，见 `AGENT_GUIDE/NativeTemporalUpscaler.md`） |
 | NextTui | 终端 TUI 渲染模式 |
 | RenderViews | 离屏 RenderView 控制器（缩略图 / 多视口） |
-| DevTools | 调试面板、AuxDraw、ProfessionalUI、CVar 编辑器等 |
+| DevTools | 调试面板、AuxDraw、DeveloperStatusBar、CVar 编辑器等 |
 | LiveCoding | shader 热重载 watcher / `slangc` 增量编译 |
 
 当前添加/链接模块的方法见 `docs/guides/cmake-structure.md`；历史拆分过程只在 Git 提交记录中保留。

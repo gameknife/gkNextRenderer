@@ -1,0 +1,16 @@
+{
+  "name": "ui-foundation-editor-compact",
+  "target": "gkNextEditor",
+  "scene": "assets/models/playground.glb",
+  "viewport": { "width": 900, "height": 640 },
+  "defaults": { "waitFrames": 2, "stepTimeoutMs": 10000 },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running" },
+    { "type": "cvar", "name": "r.upscaler.type", "set": 0 },
+    { "type": "key", "code": "F2", "action": "press" },
+    { "type": "wait-frames", "n": 8 },
+    { "type": "assert", "query": "cvar.r.upscaler.type", "op": "eq", "value": 0 },
+    { "type": "screenshot", "out": "screenshots/ui_foundation_editor_compact" },
+    { "type": "quit" }
+  ]
+}

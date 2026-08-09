@@ -1,7 +1,7 @@
 #include "EditorUi.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
-#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
 #include "Modules/LiveCoding/LiveCodingModule.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 

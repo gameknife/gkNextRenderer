@@ -39,6 +39,11 @@ manifest 不是值文件，也不是 CVar 注册源。新增设置通常需要�
 
 `Panels/SettingsPanel.cpp` 当前支持 checkbox、combo、integer slider/drag、float slider/drag 和只读文本 fallback。加载时会调用 `TryGetInfo()` 验证名称和类型；未知项或 widget/type 不匹配会记录 warning 并跳过。文件缺失、无效或没有可用分类时使用内置最小 manifest，保证面板仍可打开。
 
+动态领域枚举使用 `optionsProvider`：Renderer 为 `renderer`，Upscaler 类型为
+`upscaler.type`，质量档位为 `upscaler.quality`。Provider 从 Engine 的
+`RendererChoices` / `UpscalerTypes` 元数据及当前设备能力生成 `(value, label)`；manifest
+不得复制这些名称，也不得假定选项下标等于枚举值。普通静态枚举继续使用 `options`。
+
 控件修改统一走 `SetValueFromString(..., ECVarSetBy::Console)`，因此范围、StartupOnly/ReadOnly 规则和 onChanged callback 仍由 CVar 层执行。改值立即生效；`Apply & Save` 只调用 `SaveUserFiles()` 落盘。Reset Category 会对该分类中的每项调用 `ResetToDefault()`。
 
 manifest 中的数值范围用于 UI，同时注册 CVar 自身也应提供真实 min/max。安全边界必须存在于 CVar 注册/SetEntryValue，不能只靠 slider 限制，因为 console、配置文件和命令行都能绕过 UI。

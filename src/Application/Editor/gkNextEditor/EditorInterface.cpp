@@ -3,6 +3,7 @@
 #include "Engine/Utilities/Exception.hpp"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <imgui_freetype.h>
 
 #include <array>
@@ -25,9 +26,9 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Editor/ImGuiScaling.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Engine/Runtime/Editor/UI/UiWidgets.hpp"
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
-#include "Modules/DevTools/UiDevPanels.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/ImGui.hpp"
@@ -257,15 +258,15 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
 
     const float playButtonWidth =
         std::ceil(ImGui::CalcTextSize(ICON_FA_PLAY " Play").x + ImGui::GetStyle().FramePadding.x * 2.0f + 16.0f);
-    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Success, 0.92f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::Success));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, NextUI::Theme::Color(NextUI::Theme::EColor::Success, 0.75f));
-    if (ImGui::Button(ICON_FA_PLAY " Play", ImVec2(playButtonWidth, kToolbarIconHeight)))
+    if (NextUI::Foundation::Button(
+            ICON_FA_PLAY " Play",
+            {.variant = NextUI::Foundation::EButtonVariant::Primary,
+             .tone = NextUI::Foundation::EButtonTone::Success,
+             .size = ImVec2(playButtonWidth, kToolbarIconHeight),
+             .tooltip = "Run the current scene in gkNextRenderer"}))
     {
         LaunchRendererDetached();
     }
-    NextUI::Theme::DrawTooltip("Run the current scene in gkNextRenderer");
-    ImGui::PopStyleColor(3);
 
     const float rightStart = viewport->Size.x - kToolbarIconWidth - 12.0f;
     if (ImGui::GetCursorPosX() < rightStart)
@@ -335,8 +336,6 @@ void EditorInterface::Render(Editor::EditorUiState& uiState)
     if (uiState.contentBrowser || uiState.materialBrowser || uiState.textureBrowser || uiState.meshBrowser) Editor::DrawContentBrowserPanel(ctx, uiState);
     
     Editor::DrawCameraViewPanel(ctx, uiState);
-    DevTools::FUiDevPanels::Get().RenderConsoleOverlay();
-
     if (uiState.child_style) utils::ShowStyleEditorWindow(&uiState.child_style);
     if (uiState.child_demo) ImGui::ShowDemoWindow(&uiState.child_demo);
     if (uiState.child_metrics) ImGui::ShowMetricsWindow(&uiState.child_metrics);
@@ -445,22 +444,4 @@ void EditorInterface::Render(Editor::EditorUiState& uiState)
 
     firstRun_ = false;
     ImGui::GetIO().UserData = previousUserData;
-}
-
-void EditorInterface::DrawIndicator(uint32_t frameCount)
-{
-    ImGui::OpenPopup("Loading");
-    if (Utilities::UI::BeginAnchoredPopupModal(
-            "Loading",
-            NULL,
-            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar,
-            Utilities::UI::FModalPopupOptions{.RequestedSize = ImVec2(100, 40)}))
-    {
-        ImGui::Text("Loading%s   ",
-                    frameCount % 4 == 0       ? ""
-                        : frameCount % 4 == 1 ? "."
-                        : frameCount % 4 == 2 ? ".."
-                                              : "...");
-        ImGui::EndPopup();
-    }
 }

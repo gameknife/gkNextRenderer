@@ -1,7 +1,8 @@
+#include "Engine/Common/CoreMinimal.hpp"
+
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Utilities/Exception.hpp"
-#include "Engine/Common/CoreMinimal.hpp"
 
 #ifdef VK_USE_PLATFORM_WIN32_KHR
 #include <aclapi.h>

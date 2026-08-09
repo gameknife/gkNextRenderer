@@ -1,7 +1,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
 #include "Modules/DevTools/ConsoleLogBuffer.hpp"
-#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"

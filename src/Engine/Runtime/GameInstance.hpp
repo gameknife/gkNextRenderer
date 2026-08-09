@@ -5,6 +5,7 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
 #include "Engine/Runtime/Editor/MultiViewportBackend.hpp"
+#include "Engine/Runtime/Editor/UiFrame.hpp"
 #include "Engine/Utilities/Glm.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 
@@ -29,6 +30,7 @@ public:
         VkExtent2D framebufferExtent{};
         const Assets::Camera* viewCamera = nullptr;
         bool allowWindowCommands = true;
+        NextUI::FUiFramePolicy policy{};
     };
 
     struct FRemoteViewActionContext
@@ -54,6 +56,10 @@ public:
     {
         (void)context;
         return OnRenderUI();
+    }
+    virtual NextUI::FUiFrameResult RenderUiFrame(const FGameUiFrameContext& context)
+    {
+        return NextUI::FUiFrameResult::FromLegacyHandled(OnRenderUI(context));
     }
     virtual bool ShouldRenderUiDuringScreenshot() const { return false; }
     virtual void OnPreConfigUI() {}

@@ -3,21 +3,35 @@
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
 #include "Modules/DevTools/PhysicsDebugOverlay.hpp"
 #include "Modules/DevTools/ProfileDebugOverlay.hpp"
-#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
 #include "Modules/DevTools/ConsoleLogBuffer.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
 #include "Modules/DevTools/CVarEditorPanel.hpp"
 #include "Modules/DevTools/AuxDrawPass.hpp"
 #include "Modules/DevTools/AuxDrawSystem.hpp"
+#include "Modules/DevTools/UI/UiCatalog.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Rendering/ExternalPassRegistry.hpp"
 
 namespace DevTools
 {
+    namespace
+    {
+        bool uiCatalogOpen = false;
+    }
+
     void Install(NextEngine& engine)
     {
         engine.SetDebugDraw(std::make_shared<FAuxDrawSystem>());
         engine.SetDebugUiProvider(&DefaultDebugUiProvider());
+        NextCVar::FCVarInfo existing;
+        if (!engine.GetCVarSystem().TryGetInfo("ui.catalog", existing))
+        {
+            engine.GetCVarSystem().RegisterBool(
+                "ui.catalog", false, &uiCatalogOpen, NextCVar::ECVarFlags::None,
+                "Open the developer UI foundation catalog");
+        }
     }
 
     namespace
@@ -32,20 +46,20 @@ namespace DevTools
                 Runtime::Editor::AttachConsoleLogSinkToDefaultLogger();
             }
 
-            void ApplyUiStyle() override
-            {
-                NextUI::Theme::ApplyProfessionalTheme();
-            }
-
             void DrawUiPanels(NextEngine& engine, const NextUI::Statistics& statistics,
-                              Runtime::FrameProfiler* profiler, bool suppressStatsOverlay) override
+                              Runtime::FrameProfiler* profiler, NextUI::EUiDeveloperLayer layers,
+                              bool suppressStatsOverlay) override
             {
                 FUiDevPanels& panels = FUiDevPanels::Get();
-                if (!suppressStatsOverlay)
+                if (NextUI::HasUiLayer(layers, NextUI::EUiDeveloperLayer::Statistics) && !suppressStatsOverlay)
                 {
                     panels.DrawOverlay(statistics, profiler);
                 }
-                panels.RenderConsoleOverlay();
+                if (NextUI::HasUiLayer(layers, NextUI::EUiDeveloperLayer::Console))
+                {
+                    panels.RenderConsoleOverlay();
+                }
+                Runtime::DevToolsUI::DrawUiCatalog(uiCatalogOpen);
             }
 
             bool HandleUiEvent(const SDL_Event& event) override

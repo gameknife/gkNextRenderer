@@ -27,6 +27,8 @@ namespace Runtime::Input::Synthetic
                 {"SPACE", SDLK_SPACE},
                 {"TAB", SDLK_TAB},
                 {"BACKSPACE", SDLK_BACKSPACE},
+                {"GRAVE", SDLK_GRAVE},
+                {"BACKQUOTE", SDLK_GRAVE},
                 {"DELETE", SDLK_DELETE},
                 {"DEL", SDLK_DELETE},
                 {"LEFT", SDLK_LEFT},

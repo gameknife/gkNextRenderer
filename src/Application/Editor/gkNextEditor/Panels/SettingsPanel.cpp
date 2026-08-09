@@ -4,9 +4,12 @@
 
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Rendering/RendererChoices.hpp"
+#include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Modules/DevTools/CVarEditorPanel.hpp"
-#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Engine/Runtime/Editor/UI/UiWidgets.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include <fstream>
@@ -24,6 +27,7 @@ namespace Editor
             std::string widget;
             std::string tooltip;
             std::vector<std::string> options;
+            std::string optionsProvider;
             float minValue = 0.0f;
             float maxValue = 1.0f;
             float step = 0.1f;
@@ -56,7 +60,7 @@ namespace Editor
         constexpr const char* kFallbackLayout = R"json(
         {"version":1,"categories":[
           {"id":"rendering","label":"Rendering","groups":[{"label":"Quality","items":[
-            {"cvar":"r.rendererType","label":"Renderer","widget":"combo","options":["Path Tracing","Software Tracing","Software Modern","Voxel Tracing","Modern No Ambient"]},
+            {"cvar":"r.rendererType","label":"Renderer","widget":"combo","optionsProvider":"renderer"},
             {"cvar":"r.samples","label":"Samples","widget":"slider_int","min":1,"max":16}
           ]}]},
           {"id":"editor","label":"Editor","groups":[{"label":"Interaction","items":[
@@ -105,6 +109,7 @@ namespace Editor
                         }
                         item.tooltip = itemJson.value("tooltip", info.description);
                         item.options = itemJson.value("options", std::vector<std::string>{});
+                        item.optionsProvider = itemJson.value("optionsProvider", "");
                         item.hasRange = itemJson.contains("min") && itemJson.contains("max");
                         item.minValue = itemJson.value("min", 0.0f);
                         item.maxValue = itemJson.value("max", 1.0f);
@@ -173,7 +178,58 @@ namespace Editor
             }
         }
 
-        void DrawItem(NextCVar::FCVarSystem& cvars, const FSettingsItem& item)
+        struct FSettingsOption
+        {
+            int value = 0;
+            const char* label = "";
+        };
+
+        std::vector<FSettingsOption> ResolveOptions(NextEngine& engine, const FSettingsItem& item)
+        {
+            std::vector<FSettingsOption> result;
+            if (item.optionsProvider == "renderer")
+            {
+                const Rendering::FRendererChoiceCapabilities capabilities{
+                    engine.GetRenderer().SupportsRayTracing(),
+                    engine.GetRenderer().HasFullAmbientCubeBudget(),
+                };
+                for (const Rendering::FRendererChoice* choice : Rendering::AvailableRendererChoices(capabilities))
+                {
+                    result.push_back({static_cast<int>(choice->type), choice->displayName});
+                }
+                return result;
+            }
+            if (item.optionsProvider == "upscaler.type")
+            {
+                using namespace Rendering::Upscaler;
+                for (uint32_t rawType = 0; rawType < static_cast<uint32_t>(EUpscalerType::Count); ++rawType)
+                {
+                    const auto type = static_cast<EUpscalerType>(rawType);
+                    if (type == EUpscalerType::None || engine.GetRenderer().SupportsUpscaler(type))
+                    {
+                        result.push_back({static_cast<int>(rawType), GetUpscalerTypeInfo(rawType).name});
+                    }
+                }
+                return result;
+            }
+            if (item.optionsProvider == "upscaler.quality")
+            {
+                using namespace Rendering::Upscaler;
+                for (uint32_t rawMode = 0; rawMode <= static_cast<uint32_t>(EUpscaleMode::Auto); ++rawMode)
+                {
+                    result.push_back({static_cast<int>(rawMode), GetUpscaleModeInfo(rawMode).name});
+                }
+                return result;
+            }
+
+            for (int index = 0; index < static_cast<int>(item.options.size()); ++index)
+            {
+                result.push_back({index, item.options[index].c_str()});
+            }
+            return result;
+        }
+
+        void DrawItem(NextEngine& engine, NextCVar::FCVarSystem& cvars, const FSettingsItem& item)
         {
             NextCVar::FCVarInfo info;
             if (!cvars.TryGetInfo(item.cvar, info))
@@ -193,18 +249,21 @@ namespace Editor
                     SetValue(cvars, item, value ? "true" : "false");
                 }
             }
-            else if (item.widget == "combo" && info.type == NextCVar::ECVarType::Int && !item.options.empty())
+            else if (item.widget == "combo" && info.type == NextCVar::ECVarType::Int)
             {
                 int value = std::stoi(valueText);
-                const char* preview = value >= 0 && value < static_cast<int>(item.options.size())
-                    ? item.options[value].c_str() : "Unknown";
+                const std::vector<FSettingsOption> options = ResolveOptions(engine, item);
+                const auto current = std::find_if(options.begin(), options.end(),
+                                                  [value](const FSettingsOption& option)
+                                                  { return option.value == value; });
+                const char* preview = current != options.end() ? current->label : "Unavailable";
                 if (ImGui::BeginCombo("##value", preview))
                 {
-                    for (int i = 0; i < static_cast<int>(item.options.size()); ++i)
+                    for (const FSettingsOption& option : options)
                     {
-                        if (ImGui::Selectable(item.options[i].c_str(), value == i))
+                        if (ImGui::Selectable(option.label, value == option.value))
                         {
-                            SetValue(cvars, item, std::to_string(i));
+                            SetValue(cvars, item, std::to_string(option.value));
                         }
                     }
                     ImGui::EndCombo();
@@ -242,10 +301,7 @@ namespace Editor
                 ImGui::TextUnformatted(valueText.c_str());
             }
 
-            if (ImGui::IsItemHovered() && !item.tooltip.empty())
-            {
-                ImGui::SetTooltip("%s", item.tooltip.c_str());
-            }
+            NextUI::Foundation::Tooltip(item.tooltip.c_str());
             if (item.requiresRestart)
             {
                 ImGui::SameLine();
@@ -335,7 +391,7 @@ namespace Editor
                 {
                     continue;
                 }
-                DrawItem(cvars, item);
+                DrawItem(ctx.engine, cvars, item);
             }
             NextUI::Theme::EndSection();
         }

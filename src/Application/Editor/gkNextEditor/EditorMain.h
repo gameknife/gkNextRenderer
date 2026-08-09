@@ -38,6 +38,7 @@ public:
     void OnPreConfigUI() override;
     bool OnRenderUI() override;
     bool OnRenderUI(const FGameUiFrameContext& context) override;
+    NextUI::FUiFrameResult RenderUiFrame(const FGameUiFrameContext& context) override;
     void OnInitUI() override;
     void OnRemoteUiSessionClosed(std::string_view sessionId) override;
     std::unique_ptr<NextUI::IMultiViewportBackend> CreateMultiViewportBackend() override;

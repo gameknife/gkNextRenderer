@@ -3,16 +3,20 @@
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
 #include "Engine/Runtime/Editor/MultiViewportBackend.hpp"
+#include "Engine/Runtime/Editor/UiFrame.hpp"
+#include "Engine/Runtime/Editor/UiTextureResolver.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 #include <imgui.h>
-#include <imgui_internal.h>
-#include "Engine/Vulkan/DebugUtilities.hpp"
-#include "Engine/Vulkan/RenderingPipeline.hpp"
+#include <vulkan/vulkan.h>
 #include <deque>
 #include <glm/vec4.hpp>
 
+union SDL_Event;
+
 namespace NextUI
 {
+class FImGuiContextHost;
+class FImGuiVulkanRenderer;
 
 enum class EUiTextureLifetime
 {
@@ -58,8 +62,6 @@ public:
     ~UserInterface();
 
     void PreRender();
-    void Render(const Statistics& statistics, Runtime::FrameProfiler* profiler, Assets::Scene* scene,
-                bool suppressStatisticsOverlay = false);
     void PrepareDrawData();
     void RenderPreparedDrawData(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx,
                                 bool suppressAllUi = false);
@@ -81,12 +83,7 @@ public:
     ImTextureID RequestImTextureIdRawOutput(uint32_t bindlessSampleSlot);
     ImTextureID RequestImTextureByName(const std::string& name);
 
-    struct FUiTextureHandle
-    {
-        ImTextureID textureId = 0;
-        ImVec2 pixelSize{0.0f, 0.0f};
-        bool valid = false;
-    };
+    using FUiTextureHandle = NextUI::FUiTextureHandle;
     FUiTextureHandle RequestUiTexture(const std::string& path, bool srgb = true,
                                       EUiTextureLifetime lifetime = EUiTextureLifetime::Transient);
     
@@ -127,8 +124,9 @@ private:
     Runtime::Config::UserSettings& userSettings_;
     
     std::unique_ptr<IMultiViewportBackend> multiViewportBackend_;
-    std::unordered_set<std::string> uiTextureLoadRequests_;
-    std::unordered_map<std::string, ImVec2> uiTexturePixelSizeCache_;
+    std::unique_ptr<FUiTextureResolver> textureResolver_;
+    std::unique_ptr<FImGuiContextHost> contextHost_;
+    std::unique_ptr<FImGuiVulkanRenderer> vulkanRenderer_;
     ImFontAtlas* fontAtlas_ = nullptr;
     ImFont* defaultFont_ = nullptr;
     ImFont* titleBarFont_ = nullptr;

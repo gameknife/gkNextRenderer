@@ -1,5 +1,5 @@
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/Editor/UserInterface.Internal.hpp"
+#include "Engine/Runtime/Editor/UI/UiTheme.hpp"
 
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/GPU/TextureImage.hpp"
@@ -7,6 +7,8 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/Editor/FontLoader.hpp"
+#include "Engine/Runtime/Editor/ImGuiContextHost.hpp"
+#include "Engine/Runtime/Editor/ImGuiVulkanRenderer.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Interface/DebugUiProvider.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
@@ -19,7 +21,6 @@
 #include "Engine/Vulkan/CommandExecution.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
-#include "Engine/Vulkan/GraphicsPipelineBuilder.hpp"
 #include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
@@ -81,8 +82,6 @@ UiRenderBuffer& UiRenderBuffer::operator=(UiRenderBuffer&&) noexcept = default;
 namespace
 {
 
-    constexpr const char* kUiVertexShaderPath = "assets/shaders/UI.ImGui.vert.slang.spv";
-    constexpr const char* kUiFragmentShaderPath = "assets/shaders/UI.ImGui.frag.slang.spv";
     constexpr const char* kUiFontAtlasTextureName = "__imgui_font_atlas__";
     constexpr float kUiHdrReferenceWhiteNit = 203.0f;
     constexpr uint32_t kUiTextureFlagRawOutput = 1u << 0u;
@@ -147,57 +146,14 @@ namespace
     }
 
 } // namespace
-
-VkPipeline CreateUiGraphicsPipeline(const Vulkan::Device& device, VkPipelineLayout pipelineLayout,
-                                    VkRenderPass renderPass)
-{
-    const Vulkan::ShaderModule vertShader(device, kUiVertexShaderPath);
-    const Vulkan::ShaderModule fragShader(device, kUiFragmentShaderPath);
-
-    VkVertexInputBindingDescription vertexBinding{};
-    vertexBinding.binding = 0;
-    vertexBinding.stride = sizeof(UiBatchedVertex);
-    vertexBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-    std::array<VkVertexInputAttributeDescription, 6> vertexAttributes{};
-    vertexAttributes[0].location = 0;
-    vertexAttributes[0].binding = 0;
-    vertexAttributes[0].format = VK_FORMAT_R32G32_SFLOAT;
-    vertexAttributes[0].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, position));
-    vertexAttributes[1].location = 1;
-    vertexAttributes[1].binding = 0;
-    vertexAttributes[1].format = VK_FORMAT_R32G32_SFLOAT;
-    vertexAttributes[1].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, uv));
-    vertexAttributes[2].location = 2;
-    vertexAttributes[2].binding = 0;
-    vertexAttributes[2].format = VK_FORMAT_R8G8B8A8_UNORM;
-    vertexAttributes[2].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, color));
-    vertexAttributes[3].location = 3;
-    vertexAttributes[3].binding = 0;
-    vertexAttributes[3].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-    vertexAttributes[3].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, clipRect));
-    vertexAttributes[4].location = 4;
-    vertexAttributes[4].binding = 0;
-    vertexAttributes[4].format = VK_FORMAT_R32_UINT;
-    vertexAttributes[4].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, textureIndex));
-    vertexAttributes[5].location = 5;
-    vertexAttributes[5].binding = 0;
-    vertexAttributes[5].format = VK_FORMAT_R32_UINT;
-    vertexAttributes[5].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, textureFlags));
-
-    return Vulkan::GraphicsPipelineBuilder(device)
-        .SetShaders(vertShader, fragShader)
-        .SetVertexInput(vertexBinding, vertexAttributes.data(), static_cast<uint32_t>(vertexAttributes.size()))
-        .SetDynamicViewportAndScissor()
-        .SetAlphaBlend(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
-        .Build(pipelineLayout, renderPass, "create ui pipeline");
-}
-
 UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPool, const Vulkan::SwapChain& swapChain,
                              const Vulkan::DepthBuffer& depthBuffer, Runtime::Config::UserSettings& userSettings,
                              std::function<void()> funcPreConfig, std::function<void()> funcInit,
                              std::unique_ptr<IMultiViewportBackend> multiViewportBackend) :
-    userSettings_(userSettings), multiViewportBackend_(std::move(multiViewportBackend)), engine_(engine)
+    userSettings_(userSettings), multiViewportBackend_(std::move(multiViewportBackend)),
+    textureResolver_(std::make_unique<FUiTextureResolver>()),
+    contextHost_(std::make_unique<FImGuiContextHost>()),
+    vulkanRenderer_(std::make_unique<FImGuiVulkanRenderer>()), engine_(engine)
 {
     const auto& window = swapChain.Device().Surface().Instance().Window();
 
@@ -206,8 +162,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     CreateUiPipeline(swapChain);
 
     // Initialise ImGui
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
+    contextHost_->Create();
 
     auto& io = ImGui::GetIO();
     fontAtlas_ = io.Fonts;
@@ -239,10 +194,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     uiScale_ = scaleFactor;
     constexpr float fontSize = 16.0f;
 
-    if (Runtime::IDebugUiProvider* styleProvider = engine->GetDebugUiProvider())
-    {
-        styleProvider->ApplyUiStyle();
-    }
+    NextUI::Foundation::ApplyTheme();
 #if !WIN32
     ImGui::GetStyle().ScaleAllSizes(scaleFactor);
 #endif
@@ -374,7 +326,7 @@ UserInterface::~UserInterface()
     uiRenderBuffers_.clear();
 
     ImGui_ImplSDL3_Shutdown();
-    ImGui::DestroyContext();
+    contextHost_->Destroy();
 }
 
 void UserInterface::InitializeRendererBackend()
@@ -532,49 +484,8 @@ ImTextureID UserInterface::RequestImTextureByName(const std::string& name)
 UserInterface::FUiTextureHandle UserInterface::RequestUiTexture(const std::string& path, bool srgb,
                                                                 EUiTextureLifetime lifetime)
 {
-    FUiTextureHandle handle{};
-    if (path.empty() || !Utilities::FileHelper::IsAssetAvailable(path))
-    {
-        return handle;
-    }
-
-    const Assets::ETextureLifetime textureLifetime = lifetime == EUiTextureLifetime::Persistent
-        ? Assets::ETextureLifetime::ETL_Persistent
-        : Assets::ETextureLifetime::ETL_Transient;
-
-    if (uiTextureLoadRequests_.insert(path).second)
-    {
-        Assets::GlobalTexturePool::LoadTexture(path, srgb, textureLifetime);
-    }
-
-    handle.textureId = RequestImTextureByName(path);
-    handle.valid = handle.textureId != 0;
-
-    // Scene transitions release transient textures. Retry the request when the name is still
-    // known but its image has been unloaded, so persistent and transient UI callers both recover.
-    if (!handle.valid)
-    {
-        Assets::GlobalTexturePool::LoadTexture(path, srgb, textureLifetime);
-        handle.textureId = RequestImTextureByName(path);
-        handle.valid = handle.textureId != 0;
-    }
-
-    if (const auto sizeIt = uiTexturePixelSizeCache_.find(path); sizeIt != uiTexturePixelSizeCache_.end())
-    {
-        handle.pixelSize = sizeIt->second;
-        return handle;
-    }
-
-    int width = 0;
-    int height = 0;
-    int comp = 0;
-    const std::string platformPath = Utilities::FileHelper::GetPlatformFilePath(path.c_str());
-    if (stbi_info(platformPath.c_str(), &width, &height, &comp) != 0 && width > 0 && height > 0)
-    {
-        handle.pixelSize = ImVec2(static_cast<float>(width), static_cast<float>(height));
-    }
-    uiTexturePixelSizeCache_[path] = handle.pixelSize;
-    return handle;
+    return textureResolver_->Request(
+        path, srgb, lifetime, [this](const std::string& name) { return RequestImTextureByName(name); });
 }
 
 void UserInterface::CreateUiPipeline(const Vulkan::SwapChain& swapChain)
@@ -608,7 +519,7 @@ void UserInterface::CreateUiPipeline(const Vulkan::SwapChain& swapChain)
 
     Vulkan::Check(vkCreatePipelineLayout(device.Handle(), &pipelineLayoutInfo, nullptr, &uiPipelineLayout_),
                   "create ui pipeline layout");
-    uiPipeline_ = CreateUiGraphicsPipeline(device, uiPipelineLayout_, renderPass_->Handle());
+    uiPipeline_ = vulkanRenderer_->CreateGraphicsPipeline(device, uiPipelineLayout_, renderPass_->Handle());
 }
 
 void UserInterface::DestroyUiPipeline()
@@ -641,7 +552,7 @@ VkPipeline UserInterface::CreateViewportPipeline(VkRenderPass renderPass) const
     {
         return VK_NULL_HANDLE;
     }
-    return CreateUiGraphicsPipeline(engine_->GetRenderer().Device(), uiPipelineLayout_, renderPass);
+    return vulkanRenderer_->CreateGraphicsPipeline(engine_->GetRenderer().Device(), uiPipelineLayout_, renderPass);
 }
 
 void UserInterface::DestroyViewportPipeline(VkPipeline pipeline) const
@@ -1004,16 +915,7 @@ void UserInterface::PreRender()
     io.DisplayFramebufferScale.x *= Vulkan::SwapChain::UiContentScale();
     io.DisplayFramebufferScale.y *= Vulkan::SwapChain::UiContentScale();
 #endif
-    ImGui::NewFrame();
-}
-
-void UserInterface::Render(const Statistics& statistics, Runtime::FrameProfiler* profiler, Assets::Scene* scene,
-                           bool suppressStatisticsOverlay)
-{
-    if (Runtime::IDebugUiProvider* provider = GetEngine().GetDebugUiProvider())
-    {
-        provider->DrawUiPanels(GetEngine(), statistics, profiler, suppressStatisticsOverlay);
-    }
+    contextHost_->BeginFrame();
 }
 
 void UserInterface::PrepareDrawData()
@@ -1128,9 +1030,9 @@ void UserInterface::HandleEvent(const SDL_Event* event)
     ImGui_ImplSDL3_ProcessEvent(event);
 }
 
-bool UserInterface::WantsToCaptureKeyboard() const { return ImGui::GetIO().WantCaptureKeyboard; }
+bool UserInterface::WantsToCaptureKeyboard() const { return contextHost_->WantsToCaptureKeyboard(); }
 
-bool UserInterface::WantsToCaptureMouse() const { return ImGui::GetIO().WantCaptureMouse; }
+bool UserInterface::WantsToCaptureMouse() const { return contextHost_->WantsToCaptureMouse(); }
 
 
 

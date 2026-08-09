@@ -124,6 +124,8 @@ TEST_CASE("Upscaler types have one stable ordered selection", "[Unit][Upscaler]"
     CHECK(GetUpscalerTypeInfo(4).type == EUpscalerType::NativeTAAU);
     CHECK(GetUpscalerTypeInfo(5).type == EUpscalerType::SnapdragonGSR2);
     CHECK(GetUpscalerTypeInfo(99).type == EUpscalerType::None);
+    CHECK(std::string_view(GetUpscalerTypeInfo(4).stableId) == "native-taau");
+    CHECK(std::string_view(GetUpscaleModeInfo(5).stableId) == "auto");
 
     const FUpscalerTypeMask nativeTypes =
         UpscalerTypeBit(EUpscalerType::NativeTAAU) |

@@ -11,7 +11,7 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/FileHelper.hpp"
 
@@ -583,7 +583,7 @@ namespace Editor
             {
                 const bool selected = section == entry.section;
                 const float rowWidth = ImGui::GetContentRegionAvail().x;
-                if (ImGui::Selectable(entry.label, selected, ImGuiSelectableFlags_SpanAvailWidth,
+                if (ImGui::Selectable(entry.label, selected, ImGuiSelectableFlags_None,
                                       ImVec2(rowWidth, 20.0f)))
                 {
                     section = entry.section;

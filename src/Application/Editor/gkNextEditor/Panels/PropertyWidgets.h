@@ -27,11 +27,14 @@ namespace Editor
     public:
         struct AssetWidgetConfig
         {
+            ImFont* titleFont;
             std::function<ImTextureID(uint32_t)> thumbnail;
             std::function<std::string(uint32_t)> name;
             std::function<uint32_t()> selectedAsset;
             std::function<void(uint32_t)> locateAsset;
             std::function<void(uint32_t)> editAsset;
+
+            AssetWidgetConfig() : titleFont(nullptr) {}
         };
 
         /**

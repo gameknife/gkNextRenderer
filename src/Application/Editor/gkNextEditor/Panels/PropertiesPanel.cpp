@@ -10,7 +10,7 @@
 #include "Modules/DevTools/Command/RenameNodeCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
 #include "Engine/Runtime/Reflection/PropertyAccessor.hpp"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
@@ -451,6 +451,8 @@ namespace Editor
                     {
                         //ImGui::Indent();
                         PropertyWidgets::WidgetConfig widgetConfig;
+                        widgetConfig.modelAsset.titleFont = ctx.ui.GetTitleBarFont();
+                        widgetConfig.materialAsset.titleFont = ctx.ui.GetTitleBarFont();
                         if (component.get() == render)
                         {
                             if (modelId >= 0 && modelId < static_cast<int>(ctx.scene.Models().size()))

@@ -8,10 +8,11 @@
 #include "EditorActionDispatcher.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
 #include "Modules/DevTools/GizmoController.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
+#include "Engine/Rendering/RendererChoices.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/ImGui.hpp"
@@ -27,32 +28,6 @@ namespace Editor
     namespace
     {
         constexpr float kToolIconWidth = 34.0f;
-
-        std::vector<Vulkan::ERendererType> BuildSupportedRendererList(NextEngine& engine)
-        {
-            std::vector<Vulkan::ERendererType> supportedTypes;
-            const bool hasFullAmbientCubeBudget = engine.GetRenderer().HasFullAmbientCubeBudget();
-            if (hasFullAmbientCubeBudget)
-            {
-                supportedTypes = {
-                    Vulkan::ERT_SoftwareTracing,
-                    Vulkan::ERT_SoftwareModern,
-                    Vulkan::ERT_VoxelTracing,
-                    Vulkan::ERT_SoftwareModernNoAmbient,
-                };
-            }
-            else
-            {
-                supportedTypes = {Vulkan::ERT_SoftwareModernNoAmbient};
-            }
-
-            if (engine.GetRenderer().SupportsRayTracing() && hasFullAmbientCubeBudget)
-            {
-                supportedTypes.emplace_back(Vulkan::ERT_PathTracing);
-            }
-
-            return supportedTypes;
-        }
 
         bool CanAuthorSceneReferences(const std::string& currentScenePath)
         {
@@ -191,21 +166,27 @@ namespace Editor
 
         Runtime::Config::UserSettings& userSettings = ctx.engine.GetUserSettings();
         auto& renderer = ctx.engine.GetRenderer();
-        const auto supportedRenderers = BuildSupportedRendererList(ctx.engine);
+        const auto supportedRenderers = Rendering::AvailableRendererChoices({
+            renderer.SupportsRayTracing(), renderer.HasFullAmbientCubeBudget()});
         Vulkan::ERendererType currentRendererType = renderer.CurrentLogicRendererType();
-        if (std::find(supportedRenderers.begin(), supportedRenderers.end(), currentRendererType) ==
-            supportedRenderers.end())
+        const auto currentChoice = std::find_if(
+            supportedRenderers.begin(), supportedRenderers.end(),
+            [currentRendererType](const Rendering::FRendererChoice* choice)
+            {
+                return choice->type == currentRendererType;
+            });
+        if (currentChoice == supportedRenderers.end())
         {
             currentRendererType = supportedRenderers.empty() ? Vulkan::ERT_SoftwareModernNoAmbient
-                                                             : supportedRenderers.front();
+                                                             : supportedRenderers.front()->type;
         }
 
         // Match gkNextRenderer's viewport toolbar metrics and flat-control styling.
         float widestRendererName = 0.0f;
-        for (Vulkan::ERendererType rendererType : supportedRenderers)
+        for (const Rendering::FRendererChoice* choice : supportedRenderers)
         {
             widestRendererName =
-                std::max(widestRendererName, ImGui::CalcTextSize(Vulkan::GetRendererName(rendererType)).x);
+                std::max(widestRendererName, ImGui::CalcTextSize(choice->displayName).x);
         }
         constexpr float toolbarFramePaddingX = 7.0f;
         constexpr float toolbarFramePaddingY = 3.0f;
@@ -239,7 +220,7 @@ namespace Editor
         toolbarConfig.WindowId = "ViewportToolbar";
         toolbarConfig.Position = pos + ImVec2(padding, padding);
         toolbarConfig.Size = ImVec2(std::min(toolbarWidth, availableToolbarWidth), toolbarHeight);
-        toolbarConfig.Padding = ImVec2(4.0f, 4.0f);
+        toolbarConfig.Padding = ImVec2(4.0f, 8.0f);
         toolbarConfig.ItemSpacing = ImVec2(toolbarItemSpacing, 0.0f);
         toolbarConfig.Rounding = 5.0f;
         toolbarConfig.BackgroundAlpha = 0.74f;
@@ -250,18 +231,19 @@ namespace Editor
 
             ImGui::SetNextItemWidth(rendererComboWidth);
             NextUI::Theme::PushViewportPopupStyle();
-            if (ImGui::BeginCombo("##ViewportRenderer", Vulkan::GetRendererName(currentRendererType)))
+            const Rendering::FRendererChoice* selectedRendererChoice =
+                Rendering::FindRendererChoice(currentRendererType);
+            if (ImGui::BeginCombo("##ViewportRenderer",
+                                  selectedRendererChoice != nullptr ? selectedRendererChoice->displayName
+                                                                    : "Renderer"))
             {
-                for (Vulkan::ERendererType rendererType : supportedRenderers)
+                for (const Rendering::FRendererChoice* choice : supportedRenderers)
                 {
+                    const Vulkan::ERendererType rendererType = choice->type;
                     const bool isSelected = rendererType == currentRendererType;
-                    if (NextUI::Theme::DrawViewportComboOption(Vulkan::GetRendererName(rendererType), isSelected))
+                    if (NextUI::Theme::DrawViewportComboOption(choice->displayName, isSelected))
                     {
-                        userSettings.RendererType = static_cast<int32_t>(rendererType);
-                        if (renderer.CurrentLogicRendererType() != rendererType)
-                        {
-                            renderer.SwitchLogicRenderer(rendererType);
-                        }
+                        ctx.engine.RequestRendererType(rendererType);
                     }
                     if (isSelected)
                     {
@@ -306,12 +288,7 @@ namespace Editor
                         ImGui::BeginDisabled(!supported);
                         if (NextUI::Theme::DrawViewportComboOption(typeInfo.name, selected))
                         {
-                            userSettings.UpscalerType = static_cast<int32_t>(rawType);
-                            if (!renderer.SupportsFrameGeneration(typeInfo.type))
-                            {
-                                userSettings.FrameGeneration = false;
-                            }
-                            renderer.RequestRecreateSwapChain();
+                            ctx.engine.SetUpscalerConfiguration(typeInfo.type, userSettings.SuperResolution);
                         }
                         ImGui::EndDisabled();
                     }
@@ -326,8 +303,8 @@ namespace Editor
                         const bool selected = rawMode == userSettings.SuperResolution;
                         if (NextUI::Theme::DrawViewportComboOption(modeInfo.name, selected))
                         {
-                            userSettings.SuperResolution = rawMode;
-                            renderer.RequestRecreateSwapChain();
+                            ctx.engine.SetUpscalerConfiguration(
+                                static_cast<Rendering::Upscaler::EUpscalerType>(userSettings.UpscalerType), rawMode);
                         }
                     }
                     ImGui::EndCombo();
@@ -492,7 +469,7 @@ namespace Editor
         toolConfig.WindowId = "ViewportTool";
         toolConfig.Position = pos + ImVec2(std::max(padding, size.x - toolW - padding), padding);
         toolConfig.Size = ImVec2(toolW, toolH);
-        toolConfig.Padding = ImVec2(4.0f, 4.0f);
+        toolConfig.Padding = ImVec2(4.0f, 8.0f);
         toolConfig.ItemSpacing = ImVec2(toolbarItemSpacing, 0.0f);
         toolConfig.Rounding = 5.0f;
         toolConfig.BackgroundAlpha = 0.74f;

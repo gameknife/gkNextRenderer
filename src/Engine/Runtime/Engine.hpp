@@ -169,6 +169,9 @@ public:
     // Rendering helpers
     void SetProgressiveRendering(bool enable);
     void ResetProgressiveRenderingAccumulation();
+    bool RequestRendererType(Vulkan::ERendererType type);
+    bool SetUpscalerConfiguration(Rendering::Upscaler::EUpscalerType type, uint32_t mode);
+    bool ApplyUpscalerConfigurationFromSettings();
     bool IsProgressiveRendering() const { return progressiveRender_.enabled; }
     bool IsOfflineProgressivePathTracing() const
     {

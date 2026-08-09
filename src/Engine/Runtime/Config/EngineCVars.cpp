@@ -32,6 +32,22 @@ namespace
         }
     }
 
+    void ApplyRendererIfPossible(NextEngine* engine, const Runtime::Config::UserSettings& settings)
+    {
+        if (engine != nullptr && engine->GetEngineStatus() != NextRenderer::EApplicationStatus::Starting)
+        {
+            engine->RequestRendererType(static_cast<Vulkan::ERendererType>(settings.RendererType));
+        }
+    }
+
+    void ApplyUpscalerIfPossible(NextEngine* engine)
+    {
+        if (engine != nullptr && engine->GetEngineStatus() != NextRenderer::EApplicationStatus::Starting)
+        {
+            engine->ApplyUpscalerConfigurationFromSettings();
+        }
+    }
+
     void ApplyBorderlessFullscreenIfPossible(NextEngine* engine, const Runtime::Config::UserSettings& settings)
     {
         if (!engine)
@@ -51,7 +67,7 @@ namespace NextCVar
         GK_CVAR_INT("r.samples", settings, NumberOfSamples, 2, ECVarFlags::Archive, "Samples per pixel");
         GK_CVAR_UINT("r.bounces", settings, NumberOfBounces, 8, ECVarFlags::Archive, "Ray bounce count");
         GK_CVAR_BOOL("r.progressiveRender", settings, ProgressiveRender, false, ECVarFlags::Archive, "Enable progressive rendering while the camera is idle");
-        GK_CVAR_INT("r.rendererType", settings, RendererType, 0, ECVarFlags::Archive, "Renderer type (0=PathTracing,1=SoftwareTracing,2=SoftwareModern,3=VoxelTracing,4=SoftwareModernNoAmbient)");
+        GK_CVAR_INT_CB("r.rendererType", settings, RendererType, 0, ECVarFlags::Archive, "Renderer type (0=PathTracing,1=SoftwareTracing,2=SoftwareModern,3=VoxelTracing,4=SoftwareModernNoAmbient)", std::bind(ApplyRendererIfPossible, engine, std::cref(settings)));
         GK_CVAR_UINT("r.maxBounces", settings, MaxNumberOfBounces, 10, ECVarFlags::Archive, "Maximum ray bounce count");
         GK_CVAR_BOOL("r.gtao.enable", settings, GTAOEnable, true, ECVarFlags::Archive, "Enable half-resolution GTAO for SoftwareModernNoAmbient sky lighting");
         GK_CVAR_INT("r.gtao.quality", settings, GTAOQuality, 1, ECVarFlags::Archive, "GTAO sampling quality (0=low 16 taps,1=medium 36 taps,2=high 64 taps,3=ultra 120 taps)");
@@ -66,8 +82,8 @@ namespace NextCVar
         GK_CVAR_FLOAT("r.lightGrid.cullThreshold", settings, LightGridCullThreshold, 1.0e-4f, ECVarFlags::Archive, "Minimum contribution a light must reach in a cell to be stored there");
         GK_CVAR_FLOAT_RANGE("r.atmosphere.skyViewLutScale", settings, AtmosphereSkyViewLutScale, 1.0f, ECVarFlags::Archive, "Sky-view LUT resolution scale", 0.25, 2.0);
         GK_CVAR_INT_RANGE("r.atmosphere.debugMode", settings, AtmosphereDebugMode, 0, ECVarFlags::None, "Atmosphere debug mode (0=off,1=in-scatter,2=transmittance,3=sky LUT)", 0, 3);
-        GK_CVAR_UINT_CB("r.upscaler.qualityMode", settings, SuperResolution, 5, ECVarFlags::Archive, "Upscaler quality mode (0=Quality,1=Balanced,2=Performance,3=Ultra Performance,4=Native/DLAA,5=Auto)", std::bind(RequestSwapChainIfPossible, engine));
-        GK_CVAR_INT_CB("r.upscaler.type", settings, UpscalerType, 4, ECVarFlags::Archive, "Upscaler type (0=None,1=DLSS,2=DLSS Ray Reconstruction,3=FidelityFX FSR,4=Native TAAU,5=SGSR2)", std::bind(RequestSwapChainIfPossible, engine));
+        GK_CVAR_UINT_CB("r.upscaler.qualityMode", settings, SuperResolution, 5, ECVarFlags::Archive, "Upscaler quality mode (0=Quality,1=Balanced,2=Performance,3=Ultra Performance,4=Native/DLAA,5=Auto)", std::bind(ApplyUpscalerIfPossible, engine));
+        GK_CVAR_INT_CB("r.upscaler.type", settings, UpscalerType, 4, ECVarFlags::Archive, "Upscaler type (0=None,1=DLSS,2=DLSS Ray Reconstruction,3=FidelityFX FSR,4=Native TAAU,5=SGSR2)", std::bind(ApplyUpscalerIfPossible, engine));
         GK_CVAR_FLOAT_RANGE("r.taau.historyWeight", settings, NativeTAAUHistoryWeight, 0.97f, ECVarFlags::Archive, "Native TAAU stable-history blend weight", 0.5, 0.98);
         GK_CVAR_FLOAT_RANGE("r.taau.sharpness", settings, NativeTAAUSharpness, 0.25f, ECVarFlags::Archive, "Native TAAU display-resolution adaptive sharpening", 0.0, 1.0);
         GK_CVAR_BOOL("r.upscaler.postFilter", settings, TemporalUpscalerPostFilter, false, ECVarFlags::Archive, "Apply display-resolution bilateral noise and firefly suppression after supported temporal upscalers");

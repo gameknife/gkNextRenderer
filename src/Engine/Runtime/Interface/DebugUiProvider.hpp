@@ -3,6 +3,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
+#include "Engine/Runtime/Editor/UiFrame.hpp"
 
 #include <SDL3/SDL_keycode.h>
 
@@ -28,14 +29,11 @@ namespace Runtime
         virtual bool HandleViewModeShortcut(SDL_Keycode key, bool pressed, bool panelVisible,
                                             Runtime::Config::ShowFlags& showFlags) = 0;
 
-        // ImGui style applied when the core UI backend initializes; default keeps
-        // the stock ImGui style.
-        virtual void ApplyUiStyle() {}
-
         // Per-frame developer panels (statistics overlay, console). Called from
         // the core ImGui backend inside the frame.
         virtual void DrawUiPanels(NextEngine& engine, const NextUI::Statistics& statistics,
-                                  Runtime::FrameProfiler* profiler, bool suppressStatsOverlay) {}
+                                  Runtime::FrameProfiler* profiler, NextUI::EUiDeveloperLayer layers,
+                                  bool suppressStatsOverlay) {}
 
         // First-chance UI event hook (e.g. grave-key console toggle); return
         // true to consume the event before ImGui sees it.

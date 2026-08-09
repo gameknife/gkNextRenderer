@@ -66,6 +66,7 @@ namespace Rendering::Upscaler
     struct FUpscalerTypeInfo
     {
         EUpscalerType type = EUpscalerType::None;
+        const char* stableId = "none";
         const char* name = "None";
         bool requiresDepthAndMotion = false;
         bool requiresRayReconstruction = false;
@@ -79,12 +80,12 @@ namespace Rendering::Upscaler
     inline const FUpscalerTypeInfo& GetUpscalerTypeInfo(uint32_t rawType)
     {
         static constexpr FUpscalerTypeInfo kTypes[] = {
-            {EUpscalerType::None, "None", false, false, false, false, false, false, false},
-            {EUpscalerType::DLSS, "DLSS", true, false, false, true, false, false, false},
-            {EUpscalerType::DLSSRayReconstruction, "DLSS Ray Reconstruction", true, true, false, false, false, false, false},
-            {EUpscalerType::FidelityFXFSR, "FidelityFX FSR", true, false, true, false, true, true, true},
-            {EUpscalerType::NativeTAAU, "Native TAAU", true, false, true, false, true, false, false},
-            {EUpscalerType::SnapdragonGSR2, "SGSR2 (2-pass CS)", true, false, true, false, true, false, false},
+            {EUpscalerType::None, "none", "None", false, false, false, false, false, false, false},
+            {EUpscalerType::DLSS, "dlss", "DLSS", true, false, false, true, false, false, false},
+            {EUpscalerType::DLSSRayReconstruction, "dlss-ray-reconstruction", "DLSS Ray Reconstruction", true, true, false, false, false, false, false},
+            {EUpscalerType::FidelityFXFSR, "fidelityfx-fsr", "FidelityFX FSR", true, false, true, false, true, true, true},
+            {EUpscalerType::NativeTAAU, "native-taau", "Native TAAU", true, false, true, false, true, false, false},
+            {EUpscalerType::SnapdragonGSR2, "sgsr2", "SGSR2 (2-pass CS)", true, false, true, false, true, false, false},
         };
         static_assert(std::size(kTypes) == static_cast<size_t>(EUpscalerType::Count));
         return rawType < std::size(kTypes) ? kTypes[rawType] : kTypes[0];
@@ -103,6 +104,7 @@ namespace Rendering::Upscaler
     struct FUpscaleModeInfo
     {
         EUpscaleMode mode = EUpscaleMode::Quality;
+        const char* stableId = "quality";
         const char* name = "Quality";
         float fallbackScale = 1.5f;
     };
@@ -110,14 +112,14 @@ namespace Rendering::Upscaler
     inline const FUpscaleModeInfo& GetUpscaleModeInfo(uint32_t rawMode)
     {
         static constexpr FUpscaleModeInfo kModes[] = {
-            {EUpscaleMode::Quality, "Quality", 1.5f},
-            {EUpscaleMode::Balanced, "Balanced", 1.7f},
-            {EUpscaleMode::Performance, "Performance", 2.0f},
-            {EUpscaleMode::UltraPerformance, "Ultra Performance", 3.0f},
-            {EUpscaleMode::Native, "Native", 1.0f},
+            {EUpscaleMode::Quality, "quality", "Quality", 1.5f},
+            {EUpscaleMode::Balanced, "balanced", "Balanced", 1.7f},
+            {EUpscaleMode::Performance, "performance", "Performance", 2.0f},
+            {EUpscaleMode::UltraPerformance, "ultra-performance", "Ultra Performance", 3.0f},
+            {EUpscaleMode::Native, "native", "Native", 1.0f},
             // Auto has no fixed scale. ResolveUpscaleMode converts it to either
             // Native/DLAA or Quality before the provider sees it.
-            {EUpscaleMode::Auto, "Auto", 1.0f},
+            {EUpscaleMode::Auto, "auto", "Auto", 1.0f},
         };
 
         if (rawMode >= std::size(kModes))

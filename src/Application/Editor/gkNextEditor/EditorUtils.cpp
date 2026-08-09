@@ -6,83 +6,26 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Utilities/AboutDialog.hpp"
 #include "Engine/Utilities/ImGui.hpp"
-#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include <SDL3/SDL_misc.h>
 
-ImVec2 utils::GetLocalCursor()
+namespace
 {
-    ImGuiIO &     io         = ImGui::GetIO();
-    ImGuiContext &g          = *ImGui::GetCurrentContext();
-    ImGuiWindow * w          = g.CurrentWindow;
-    ImVec2        cursor     = ImVec2(io.MousePos.x - w->Pos.x, io.MousePos.y - w->Pos.y);
-    ImRect        itemrect   = ImRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
-    float         itemwidth  = itemrect.Max.x - itemrect.Min.x;
-    float         itemheight = itemrect.Max.y - itemrect.Min.y;
-    cursor.x                -= itemwidth / 2;
-    cursor.y                -= itemheight / 2;
-    return cursor;
-}
-
-void utils::TextCentered(std::string text, int type = 0)
+void HelpMarker(const char* description)
 {
-    auto windowWidth = ImGui::GetWindowSize().x;
-    auto textWidth   = ImGui::CalcTextSize(text.c_str()).x;
-
-    ImGui::SetCursorPosX((windowWidth - textWidth) * 0.5f);
-    switch (type)
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
     {
-    case 0:
-        ImGui::TextUnformatted(text.c_str());
-        break;
-    
-    case 1:
-        ImGui::TextDisabled("%s", text.c_str());
-        break;
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(description);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
     }
 }
-
-float utils::RandomFloat(float a, float b)
-{
-    float random = ((float) rand()) / (float) RAND_MAX;
-    float diff = b - a;
-    float r = random * diff;
-    return a + r;
-}
-
-ImVec4 utils::RainbowCol()
-{
-    static ImVec4 col = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
-    static int c = 0;
-    if (c>=10)
-    {
-        col.x = RandomFloat(0.0f, 0.7f);
-        col.y = RandomFloat(0.0f, 0.7f);
-        col.z = RandomFloat(0.0f, 0.7f);
-        c = 0;
-    }
-    c++;
-    return col;
-}
-
-void utils::DrawGrid()
-{
-    if (!NextEngine::GetInstance()->GetShowFlags().ShowGrid)
-    {
-        return;
-    }
-    for (float i = ImGui::GetWindowPos().y; i < ImGui::GetWindowSize().x * 4.0f;)
-    {
-        ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f, i),ImVec2(ImGui::GetMainViewport()->Size.x, i),IM_COL32(88, 88, 88, 50));
-        i += 25.0f;
-    }
-    for (float i = ImGui::GetWindowPos().x; i < ImGui::GetWindowSize().y * 4.0f;)
-    {
-        ImGui::GetWindowDrawList()->AddLine(ImVec2(i, 0.0f),ImVec2(i, ImGui::GetMainViewport()->Size.y),IM_COL32(88, 88, 88, 50));
-        i += 25.0f;
-    }
-}
+} // namespace
 
 void utils::ShowStyleEditorWindow(bool *childSty)
 {
@@ -244,54 +187,4 @@ void utils::ShowAboutWindow(bool *childAbout)
     Utilities::UI::ShowAboutDialog(*childAbout);
     NextUI::Theme::PopToolWindowContentStyle();
     NextUI::Theme::PopToolWindowStyle();
-}
-
-bool utils::IsItemActiveAlt(ImVec2 pos, int id)
-{
-    bool active = false;
-    ImGui::SetCursorPos(pos);
-    ImGui::PushID(id);
-    ImGui::InvisibleButton(" ", ImGui::GetItemRectSize());
-    ImGui::PopID();
-    active = ImGui::IsItemActive();
-    return active;
-}
-
-bool utils::GrabButton(ImVec2 pos, int randomInt)
-{
-    bool active = false;
-    ImGui::SetCursorPos(pos);
-    ImGui::PushID(randomInt);
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.00f, 0.00f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0);
-    ImGui::BeginChild(randomInt + 9, ImVec2(20, 20));
-    ImGui::Button("  ");
-    active = ImGui::IsItemActive();
-    ImGui::EndChild();
-    ImGui::PopStyleVar(2);
-    ImGui::PopID();
-    return active;
-}
-
-void utils::HelpMarker(const char *desc)
-{
-    ImGui::PushStyleColor(ImGuiCol_Text,ImVec4(0.92f, 0.92f, 0.92f, 1.00f));
-    ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::BeginTooltip();
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
-        ImGui::TextUnformatted(desc);
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
-    }
-    ImGui::PopStyleColor(1);
-}
-
-float utils::CenterHorizontal()
-{
-    auto windowWidth = ImGui::GetWindowSize().x;
-    auto itemWidth   = ImGui::GetItemRectSize().x;
-    float posX = ((windowWidth - itemWidth) * 0.5f);
-    return posX;
 }

@@ -7,6 +7,7 @@
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Vulkan/VulkanInterposer.hpp"
+#include "Engine/Vulkan/WindowSurface.hpp"
 
 namespace Vulkan
 {

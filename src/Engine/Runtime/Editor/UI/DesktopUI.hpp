@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/Editor/UI/UiTheme.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
 
 #include <functional>
@@ -8,28 +9,9 @@
 
 namespace NextUI::Theme
 {
-    enum class EColor
-    {
-        Text,
-        TextMuted,
-        TextDim,
-        Background,
-        Surface,
-        SurfaceElevated,
-        SurfaceHover,
-        Border,
-        BorderStrong,
-        Accent,
-        AccentHover,
-        Brand,
-        Success,
-        Warning,
-        Danger,
-        Blue,
-    };
-
-    ImVec4 Color(EColor color, float alpha = 1.0f);
-    ImU32 ColorU32(EColor color, float alpha = 1.0f);
+    using EColor = Foundation::EColor;
+    using Foundation::Color;
+    using Foundation::ColorU32;
     ImFont* GetDefaultFont(NextEngine& engine);
     ImFont* GetTitleFont(NextEngine& engine);
 
@@ -76,6 +58,9 @@ namespace NextUI::Theme
         ImVec2 Padding = ImVec2(10.0f, 5.0f);
         ImVec2 ItemSpacing = ImVec2(6.0f, 0.0f);
         float Rounding = 8.0f;
+        // Overlay surfaces are flat by default. Set this explicitly for panels
+        // that need an outlined treatment.
+        float BorderSize = 0.0f;
         float BorderAlpha = 0.74f;
         float BackgroundAlpha = 0.82f;
         EColor BackgroundColor = EColor::Background;
@@ -86,10 +71,6 @@ namespace NextUI::Theme
     void DrawBrandMark(ImDrawList* drawList, ImVec2 min, float size);
     void DrawAppTitleBar(NextEngine& engine, const FAppTitleBarConfig& config);
     void DrawBottomBar(const FBottomBarConfig& config);
-    void DrawStandardBottomBar(NextEngine& engine, const char* windowId = "AppBottomBar", float height = 30.0f,
-                               std::function<void()> onMemoryClicked = {}, bool memoryActive = false,
-                               std::function<void()> onCppReloadClicked = {}, bool cppLiveCodingAvailable = false,
-                               std::function<void()> onCaptureClicked = {});
     void DrawTooltip(const char* text);
     // A non-positive size component is fitted to the active font and theme padding.
     bool IconButton(const char* label, const char* tooltip, bool active = false, ImVec2 size = ImVec2(0.0f, 0.0f));
@@ -126,9 +107,6 @@ namespace NextUI::Theme
     bool BeginPanelSection(const char* label, bool defaultOpen = true);
     void EndPanelSection();
 
-    // Renders "Label" small caption above the next control. Use right before a Combo / Slider / etc.
-    void LabelOver(const char* label);
-
     // Inline sparkline. width<=0 fills available width.
     // When scaleMin/scaleMax are left at FLT_MAX the range auto-fits the dataset.
     // Set baselineAtZero=true (in auto-fit mode) to pin scaleMin=0 so timing-style
@@ -139,10 +117,6 @@ namespace NextUI::Theme
                    bool baselineAtZero = false);
 
     void DrawPanelHeader(const char* icon, const char* title, const char* subtitle = nullptr);
-    void DrawLabelValue(const char* label, const char* value, ImVec4 valueColor = Color(EColor::Text));
-    void DrawStatusDot(const char* label, bool active);
-    void DrawBadge(const char* label, ImVec4 background, ImVec4 foreground);
-    void DrawMetricCard(const char* label, const char* value, ImVec4 valueColor, float width);
     void DrawThinSeparator(float alpha = 1.0f);
     void DrawVerticalSeparator(float height = 18.0f, float spacing = 12.0f, float alpha = 0.9f);
     void DrawProgressBar(float fraction, ImVec4 color, ImVec2 size);

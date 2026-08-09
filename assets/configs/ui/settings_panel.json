@@ -12,7 +12,7 @@
               "cvar": "r.rendererType",
               "label": "Renderer",
               "widget": "combo",
-              "options": ["Path Tracing", "Software Tracing", "Software Modern", "Voxel Tracing", "Modern No Ambient"]
+              "optionsProvider": "renderer"
             },
             {"cvar": "r.samples", "label": "Samples", "widget": "slider_int", "min": 1, "max": 16},
             {"cvar": "r.temporalFrames", "label": "Motion History", "widget": "slider_int", "min": 1, "max": 64},
@@ -32,13 +32,13 @@
               "cvar": "r.upscaler.qualityMode",
               "label": "Quality Mode",
               "widget": "combo",
-              "options": ["Quality", "Balanced", "Performance", "Ultra Performance", "Native / DLAA", "Auto"]
+              "optionsProvider": "upscaler.quality"
             },
             {
               "cvar": "r.upscaler.type",
               "label": "Upscaler",
               "widget": "combo",
-              "options": ["None", "DLSS", "DLSS Ray Reconstruction", "FidelityFX FSR", "Native TAAU", "SGSR2 (2-pass CS)"]
+              "optionsProvider": "upscaler.type"
             },
             {"cvar": "r.taau.historyWeight", "label": "TAAU History Weight", "widget": "slider_float", "min": 0.5, "max": 0.98, "step": 0.01, "format": "%.2f", "advanced": true},
             {"cvar": "r.taau.sharpness", "label": "TAAU Sharpness", "widget": "slider_float", "min": 0.0, "max": 1.0, "step": 0.01, "format": "%.2f", "advanced": true},
