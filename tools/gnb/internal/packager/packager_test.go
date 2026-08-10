@@ -44,6 +44,32 @@ func TestNormalizeTraceRejectsEmptyCoverage(t *testing.T) {
 	}
 }
 
+func TestReusePreciseAssetsRequiresCompleteBundle(t *testing.T) {
+	repoRoot := t.TempDir()
+	bundle := filepath.Join(repoRoot, "release-paks", "default")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"runtime.pak", "runtime-assets.txt", "runtime.manifest.json"} {
+		if err := os.WriteFile(filepath.Join(bundle, name), []byte(name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, err := reusePreciseAssets(repoRoot, Options{RuntimePak: filepath.Join("release-paks", "default")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 3 || entries[0].name != "assets/paks/runtime.pak" {
+		t.Fatalf("unexpected reusable precise assets: %#v", entries)
+	}
+	if err := os.Remove(filepath.Join(bundle, "runtime.pak")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reusePreciseAssets(repoRoot, Options{RuntimePak: filepath.Join("release-paks", "default")}); err == nil {
+		t.Fatal("reusePreciseAssets accepted an incomplete bundle")
+	}
+}
+
 func TestIncludeAllShaderBinaries(t *testing.T) {
 	buildRoot := t.TempDir()
 	shaderRoot := filepath.Join(buildRoot, "assets", "shaders", "nested")

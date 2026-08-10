@@ -54,6 +54,7 @@ type Options struct {
 	Version     string
 	TraceAssets bool
 	AssetTrace  string
+	RuntimePak  string
 	TraceFrames int
 	IncludeGNB  bool
 }
@@ -61,6 +62,19 @@ type Options struct {
 func Package(repoRoot string, buildPreset string, variant string, packagePreset Preset, opts Options) error {
 	if err := validatePreset(packagePreset); err != nil {
 		return err
+	}
+	preciseAssetSources := 0
+	if opts.TraceAssets {
+		preciseAssetSources++
+	}
+	if opts.AssetTrace != "" {
+		preciseAssetSources++
+	}
+	if opts.RuntimePak != "" {
+		preciseAssetSources++
+	}
+	if preciseAssetSources > 1 {
+		return fmt.Errorf("--trace-assets, --asset-trace, and --runtime-pak are mutually exclusive")
 	}
 	buildRoot := filepath.Join(repoRoot, "out", "build", buildPreset)
 	version := opts.Version
@@ -73,7 +87,13 @@ func Package(repoRoot string, buildPreset string, variant string, packagePreset 
 			}
 		}
 		var preciseAssets []entry
-		if opts.TraceAssets || opts.AssetTrace != "" {
+		if opts.RuntimePak != "" {
+			var err error
+			preciseAssets, err = reusePreciseAssets(repoRoot, opts)
+			if err != nil {
+				return err
+			}
+		} else if opts.TraceAssets || opts.AssetTrace != "" {
 			tracePath, err := preparePreciseAssets(repoRoot, buildPreset, buildRoot, packagePreset, opts)
 			if err != nil {
 				return err
@@ -214,9 +234,6 @@ func collectDesktopEntries(repoRoot, buildRoot, variant, version string, preset 
 }
 
 func preparePreciseAssets(repoRoot, buildPreset, buildRoot string, packagePreset Preset, opts Options) (string, error) {
-	if opts.TraceAssets && opts.AssetTrace != "" {
-		return "", fmt.Errorf("--trace-assets and --asset-trace are mutually exclusive")
-	}
 	pakDir := filepath.Join(buildRoot, "assets", "paks")
 	pakPath := filepath.Join(pakDir, "runtime.pak")
 	manifestPath := filepath.Join(pakDir, "runtime.manifest.json")
@@ -280,6 +297,36 @@ func preparePreciseAssets(repoRoot, buildPreset, buildRoot string, packagePreset
 		return "", fmt.Errorf("build precise runtime pak: %w", err)
 	}
 	return tracePath, nil
+}
+
+// reusePreciseAssets takes a complete precise-asset bundle produced by a
+// trusted build job. The runtime pak embeds platform-neutral game assets, so a
+// Lavapipe trace on Linux can supply the exact same bundle to every desktop
+// release job without asking GPU-less Windows or macOS runners to launch Vulkan.
+func reusePreciseAssets(repoRoot string, opts Options) ([]entry, error) {
+	root := opts.RuntimePak
+	if !filepath.IsAbs(root) {
+		root = filepath.Join(repoRoot, root)
+	}
+	files := []struct {
+		source, name string
+	}{
+		{source: filepath.Join(root, "runtime.pak"), name: "assets/paks/runtime.pak"},
+		{source: filepath.Join(root, "runtime-assets.txt"), name: "assets/paks/runtime-assets.txt"},
+		{source: filepath.Join(root, "runtime.manifest.json"), name: "assets/paks/runtime.manifest.json"},
+	}
+	entries := make([]entry, 0, len(files))
+	for _, file := range files {
+		info, err := os.Stat(file.source)
+		if err != nil {
+			return nil, fmt.Errorf("read reusable precise asset %s: %w", file.source, err)
+		}
+		if info.IsDir() {
+			return nil, fmt.Errorf("reusable precise asset is a directory: %s", file.source)
+		}
+		entries = append(entries, entry{source: file.source, name: file.name})
+	}
+	return entries, nil
 }
 
 func normalizeTrace(path string) error {

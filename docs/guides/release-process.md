@@ -1,8 +1,7 @@
 # 发布流程（Release Process）
 
-本文描述 gkNextEngine 的完整发布流程。同一个 `v*` Release 同时发布标准 `default` preset
-（**gkNextRenderer / gkNextEditor / gkNextMotionBenchmark**）和 Windows `magicalego` preset，
-平台优先级 Windows > Linux > macOS。
+本文描述 gkNextEngine 的完整发布流程。同一个 `v*` Release 发布标准 `default` preset
+（**gkNextRenderer / gkNextEditor / gkNextMotionBenchmark**），平台优先级 Windows > Linux > macOS。
 
 按本文逐步执行即可完成一次发布，不需要额外的口头约定。
 
@@ -58,11 +57,15 @@ git tag v0.1.2.0 && git push origin v0.1.2.0
 CI 会依次执行：
 
 1. `make-release` — 创建 GitHub Release
-2. `android-build` / `linux-build` / `windows-build` / `macos-build` — 各平台：
+2. `linux-build` — 写入版本、构建桌面目标，并在 `Xvfb + Lavapipe` 软件 Vulkan 环境中对
+   `default` 运行 `--trace-assets`。它发布 Linux 的 `default` 包，并上传平台无关的完整精确资产包
+   （`runtime.pak`、资产列表、manifest）供后续 job 使用。
+3. `windows-build` / `macos-build` — 在 Linux 资产追踪完成后构建各自的可执行文件，下载对应
+   preset 的精确资产包并通过 `--runtime-pak` 组装归档；不在无 GPU runner 上运行 Vulkan 追踪：
    - 写入 `src/build.version`
    - `gnb setup`
-   - `gnb build gkNextRenderer gkNextEditor gkNextMotionBenchmark`
-   - Linux/macOS 打包 `default`；Windows 同时打包 `default` 与精确 trace 的 `magicalego`
+   - `gnb build` 所有该归档需要的 target
+   - Windows 与 macOS 均打包 `default`
    - `gnb smoke <7z>`（结构冒烟；runner 无 GPU，不带 `--launch`）
    - 上传产物到 Release
 
@@ -70,16 +73,15 @@ CI 会依次执行：
 `macos-latest`。它们也使用相同的 `gnb info --bincache-key` 和 `.vcpkg` / `.vcpkg_bincache`
 缓存路径，因此 Release 可以直接复用日常 Desktop CI 已生成的 vcpkg 二进制缓存。Windows 的
 `default` 与 `magicalego` 位于同一个 job，共享同一台 runner、依赖目录和 CMake build tree。
+Android 当前不属于发布支持平台，也不会产生 Release 产物。
 
 ### 产物命名
 
 | 平台 | 文件名 |
 |---|---|
 | Windows | `gknextrenderer_win64_<tag>.7z` |
-| Windows / MagicaLego | `MagicaLego_win64_<tag>.7z` |
 | Linux | `gknextrenderer_linux64_<tag>.7z` |
 | macOS | `gknextrenderer_macos_<tag>.7z` |
-| Android | `gknextrenderer_android_<tag>.zip` |
 
 ### 包内结构
 
@@ -104,6 +106,8 @@ THIRD-PARTY-NOTICES.md
 实际命中的 Pak 条目，排序去重后生成单一 `assets/paks/runtime.pak`。发布 7z 同时携带
 `runtime-assets.txt` 和 `runtime.manifest.json`，便于审计文件名与压缩后大小。已有的多轮覆盖清单
 可用 `--asset-trace <path>` 直接复用；这适合把代表性场景和交互脚本的结果合并后交给无 GPU 的 CI。
+完整的 `runtime.pak`、资产列表与 manifest 也可通过 `--runtime-pak <目录>` 原样复用；Release CI
+用 Linux 的 Lavapipe 生成它们，因此 Windows/macOS 只需组装，不依赖各自 runner 的 Vulkan 设备。
 Packager 会从原始资产目录或已有 Pak 中提取每个命中项，不会把整个可选 Pak 嵌套进新 Pak。
 场景列表、内容浏览器、`IsAssetAvailable` 和 Pak 条目枚举只属于发现/存在性探测，不计入覆盖；
 只有具体磁盘文件路径被解析或 `LoadFile` / `LoadMountedFile` 成功读取时才记录。

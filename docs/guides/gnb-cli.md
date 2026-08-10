@@ -55,6 +55,8 @@ last_updated: 2026-07-17
 ./gnb.sh package windows --package-preset magicalego --trace-assets --version m0.1.0
 # 复用多轮运行合并出的覆盖清单（也适合无 GPU / 跨平台打包环境）
 ./gnb.sh package windows --asset-trace out/build/windows/asset-traces/release-assets.txt --version v0.1.2.0
+# 复用 Linux 追踪作业已生成的完整精确资产包（无需在本机运行 Vulkan 或构建 Packager）
+./gnb.sh package windows --runtime-pak release-paks/default --version v0.1.2.0
 # 可选：显式携带 gnb agent sidecar（默认不打包）
 ./gnb.sh package windows --include-gnb --version v0.1.2.0
 ./gnb.sh git status
@@ -64,6 +66,11 @@ last_updated: 2026-07-17
 package preset 配置在 `gnb.toml` 的 `[package.presets.<name>]`，可独立声明 `targets`、
 `archive_name`、`always_include_assets` 和 `extra_files`。精确包会合并当前 preset 的
 `always_include_assets`；新增产品只需增加 preset，无需修改 packager 分支。
+
+`--runtime-pak <目录>` 接收包含 `runtime.pak`、`runtime-assets.txt` 与
+`runtime.manifest.json` 的完整精确资产包；它不能与 `--trace-assets` 或 `--asset-trace`
+同时使用。Release CI 在 Linux/Lavapipe 上生成这两个 preset 的资产包，再由 Windows 与 macOS
+直接装配到各自的归档中。
 
 裸 `gnb` 启动 Dashboard。Windows/macOS 使用 Wails 原生窗口；Linux build 回退浏览器，`dashboard --no-open` 为 server-only。
 
