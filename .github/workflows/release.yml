@@ -20,36 +20,17 @@ jobs:
           draft: false
           prerelease: false
 
-  android-build:
-    needs: make-release
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '21'
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
-        with:
-          go-version: '1.23.x'
-      - name: Build Android
-        run: |
-          echo "BUILDVER(${{ github.ref_name }})" > src/build.version
-          ./gnb.sh setup --skip-paks
-          ./gnb.sh android release
-          zip -r gknextrenderer_android_${{ github.ref_name }}.zip ./android/app/build/outputs/apk/release/app-release.apk ./deploy_android.bat
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: ./gknextrenderer_android_${{ github.ref_name }}.zip
-
   linux-build:
     needs: make-release
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      actions: write
+    env:
+      # GitHub runners have no hardware Vulkan device.  Lavapipe plus Xvfb
+      # drives the hidden trace runs and produces platform-neutral runtime paks.
+      VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+      LIBGL_ALWAYS_SOFTWARE: '1'
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
@@ -70,15 +51,28 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install curl unzip p7zip-full tar ninja-build libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev
-      - name: Build and package
+          sudo apt-get install curl unzip p7zip-full tar ninja-build libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev mesa-vulkan-drivers xvfb
+      - name: Build release targets
         run: |
           echo "BUILDVER(${{ github.ref_name }})" > src/build.version
           ./gnb.sh setup
-          ./gnb.sh build gkNextRenderer gkNextEditor gkNextMotionBenchmark
-          ./gnb.sh package linux --package-preset default --version ${{ github.ref_name }}
+          ./gnb.sh build gkNextRenderer gkNextEditor gkNextMotionBenchmark Packager
+      - name: Trace runtime assets with Lavapipe and package Linux
+        run: |
+          xvfb-run --auto-servernum ./gnb.sh package linux --package-preset default --trace-assets --version ${{ github.ref_name }}
+          mkdir -p release-paks/default
+          cp out/build/linux/assets/paks/runtime.pak release-paks/default/runtime.pak
+          cp out/build/linux/asset-traces/default-assets.txt release-paks/default/runtime-assets.txt
+          cp out/build/linux/assets/paks/runtime.manifest.json release-paks/default/runtime.manifest.json
       - name: Smoke test package
         run: ./gnb.sh smoke ./gknextrenderer_linux64_${{ github.ref_name }}.7z
+      - name: Share precise runtime paks
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-runtime-paks
+          path: release-paks
+          if-no-files-found: error
+          retention-days: 1
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -93,10 +87,11 @@ jobs:
           key: ${{ steps.gnb.outputs.key }}
 
   windows-build:
-    needs: make-release
+    needs: linux-build
     runs-on: windows-latest
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
@@ -115,25 +110,32 @@ jobs:
             .vcpkg_bincache
           key: ${{ steps.gnb.outputs.key }}
       - uses: microsoft/setup-msbuild@v3
-      - name: Build and package default and MagicaLego
+      - name: Build release targets
+        shell: pwsh
         run: |
-          echo BUILDVER(${{ github.ref_name }}) > src/build.version
+          "BUILDVER(${{ github.ref_name }})" | Set-Content src/build.version -NoNewline
           .\gnb.bat setup
-          .\gnb.bat build gkNextRenderer gkNextEditor gkNextMotionBenchmark MagicaLego Packager
-          .\gnb.bat package windows --package-preset default --version ${{ github.ref_name }}
-          .\gnb.bat package windows --package-preset magicalego --trace-assets --version ${{ github.ref_name }}
-        shell: cmd
-      - name: Smoke test packages
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\gnb.bat build gkNextRenderer gkNextEditor gkNextMotionBenchmark
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Download precise runtime paks
+        uses: actions/download-artifact@v4
+        with:
+          name: release-runtime-paks
+          path: release-paks
+      - name: Package
+        shell: pwsh
+        run: |
+          .\gnb.bat package windows --package-preset default --runtime-pak release-paks/default --version ${{ github.ref_name }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Smoke test package
         run: |
           .\gnb.bat smoke gknextrenderer_win64_${{ github.ref_name }}.7z
-          .\gnb.bat smoke MagicaLego_win64_${{ github.ref_name }}.7z
         shell: cmd
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: |
-            ./gknextrenderer_win64_${{ github.ref_name }}.7z
-            ./MagicaLego_win64_${{ github.ref_name }}.7z
+          files: ./gknextrenderer_win64_${{ github.ref_name }}.7z
 
       - uses: actions/cache/save@v6
         if: steps.cache-vcpkg-restore.outputs.cache-hit != 'true'
@@ -144,10 +146,11 @@ jobs:
           key: ${{ steps.gnb.outputs.key }}
 
   macos-build:
-    needs: make-release
+    needs: linux-build
     runs-on: macos-latest
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
@@ -167,12 +170,18 @@ jobs:
           key: ${{ steps.gnb.outputs.key }}
       - name: Install 7-Zip
         run: brew install sevenzip
-      - name: Build and package
+      - name: Build release targets
         run: |
           echo "BUILDVER(${{ github.ref_name }})" > src/build.version
           ./gnb.sh setup
           ./gnb.sh build gkNextRenderer gkNextEditor gkNextMotionBenchmark
-          ./gnb.sh package macos --package-preset default --version ${{ github.ref_name }}
+      - name: Download precise runtime paks
+        uses: actions/download-artifact@v4
+        with:
+          name: release-runtime-paks
+          path: release-paks
+      - name: Package
+        run: ./gnb.sh package macos --package-preset default --runtime-pak release-paks/default --version ${{ github.ref_name }}
       - name: Smoke test package
         run: ./gnb.sh smoke ./gknextrenderer_macos_${{ github.ref_name }}.7z
       - uses: softprops/action-gh-release@v2

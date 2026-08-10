@@ -850,6 +850,7 @@ func newPackageCommand(ctx appContext) *cobra.Command {
 	packagePresetName := ""
 	traceAssets := false
 	assetTrace := ""
+	runtimePak := ""
 	traceFrames := 120
 	includeGNB := false
 	cmd := &cobra.Command{
@@ -863,7 +864,7 @@ func newPackageCommand(ctx appContext) *cobra.Command {
 			}
 			return packager.Package(ctx.repoRoot, ctx.preset, args[0], preset, packager.Options{
 				Version: versionFlag, TraceAssets: traceAssets, AssetTrace: assetTrace, TraceFrames: traceFrames,
-				IncludeGNB: includeGNB,
+				RuntimePak: runtimePak, IncludeGNB: includeGNB,
 			})
 		},
 	}
@@ -871,6 +872,7 @@ func newPackageCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().StringVar(&packagePresetName, "package-preset", "", "package preset from gnb.toml (defaults to package.default_preset)")
 	cmd.Flags().BoolVar(&traceAssets, "trace-assets", false, "run the package preset targets and package only observed runtime assets")
 	cmd.Flags().StringVar(&assetTrace, "asset-trace", "", "reuse a newline-delimited runtime asset trace instead of launching targets")
+	cmd.Flags().StringVar(&runtimePak, "runtime-pak", "", "reuse a directory containing runtime.pak, runtime-assets.txt, and runtime.manifest.json")
 	cmd.Flags().IntVar(&traceFrames, "trace-frames", 120, "stable frames to sample per target with --trace-assets")
 	cmd.Flags().BoolVar(&includeGNB, "include-gnb", false, "include the gnb executable and agent manifest in the desktop package")
 	return cmd

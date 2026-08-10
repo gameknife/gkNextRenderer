@@ -139,6 +139,40 @@ namespace
         }
     }
 #endif
+
+#if defined(__APPLE__) && !IOS
+    void ConfigurePackagedMoltenVKDriver()
+    {
+        // Desktop macOS has no system Vulkan ICD. Release packages put the
+        // loader and MoltenVK next to the executable, with this manifest under
+        // bin/vulkan/icd.d/. Preserve explicit user overrides for development
+        // and diagnostics.
+        if ((std::getenv("VK_DRIVER_FILES") != nullptr && std::getenv("VK_DRIVER_FILES")[0] != '\0') ||
+            (std::getenv("VK_ICD_FILENAMES") != nullptr && std::getenv("VK_ICD_FILENAMES")[0] != '\0'))
+        {
+            return;
+        }
+
+        const std::filesystem::path manifest = NextRenderer::GetExecutableDirectory() / "vulkan" / "icd.d" / "MoltenVK_icd.json";
+        std::error_code errorCode;
+        if (!std::filesystem::is_regular_file(manifest, errorCode))
+        {
+            return;
+        }
+
+        const std::string manifestPath = std::filesystem::absolute(manifest, errorCode).string();
+        if (errorCode || setenv("VK_DRIVER_FILES", manifestPath.c_str(), 1) != 0 ||
+            setenv("VK_ICD_FILENAMES", manifestPath.c_str(), 1) != 0)
+        {
+            Throw(std::runtime_error("failed to configure the packaged MoltenVK ICD"));
+        }
+        SPDLOG_INFO("Using packaged MoltenVK ICD: {}", manifestPath);
+    }
+#else
+    void ConfigurePackagedMoltenVKDriver()
+    {
+    }
+#endif
 }
 
 // ============================================================================
@@ -490,6 +524,7 @@ void Window::InitSDL(bool systemDpiScaling, const std::string& vulkanDriver)
         Throw(std::runtime_error("failed to init SDL."));
     }
     ConfigureVulkanDriver(vulkanDriver);
+    ConfigurePackagedMoltenVKDriver();
 
     // Software / translation ICDs cannot go through the Streamline interposer (see
     // VulkanLoaderBypass.hpp), so both the engine and SDL talk to the loader directly.

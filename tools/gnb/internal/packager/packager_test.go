@@ -44,6 +44,32 @@ func TestNormalizeTraceRejectsEmptyCoverage(t *testing.T) {
 	}
 }
 
+func TestReusePreciseAssetsRequiresCompleteBundle(t *testing.T) {
+	repoRoot := t.TempDir()
+	bundle := filepath.Join(repoRoot, "release-paks", "default")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"runtime.pak", "runtime-assets.txt", "runtime.manifest.json"} {
+		if err := os.WriteFile(filepath.Join(bundle, name), []byte(name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, err := reusePreciseAssets(repoRoot, Options{RuntimePak: filepath.Join("release-paks", "default")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 3 || entries[0].name != "assets/paks/runtime.pak" {
+		t.Fatalf("unexpected reusable precise assets: %#v", entries)
+	}
+	if err := os.Remove(filepath.Join(bundle, "runtime.pak")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reusePreciseAssets(repoRoot, Options{RuntimePak: filepath.Join("release-paks", "default")}); err == nil {
+		t.Fatal("reusePreciseAssets accepted an incomplete bundle")
+	}
+}
+
 func TestIncludeAllShaderBinaries(t *testing.T) {
 	buildRoot := t.TempDir()
 	shaderRoot := filepath.Join(buildRoot, "assets", "shaders", "nested")
@@ -140,6 +166,42 @@ func TestPackageArchivePathUsesPresetTemplate(t *testing.T) {
 	want := filepath.Join(repoRoot, "MagicaLego_win64_m1.2.3.7z")
 	if got != want {
 		t.Fatalf("packageArchivePath = %q, want %q", got, want)
+	}
+}
+
+func TestCollectMacOSVulkanRuntimePackagesLoaderMoltenVKAndManifest(t *testing.T) {
+	repoRoot := t.TempDir()
+	sdkLib := filepath.Join(repoRoot, "external", "VulkanSDK", "1.4.0", "macOS", "lib")
+	if err := os.MkdirAll(sdkLib, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repoRoot, "external", "VulkanSDK", ".current_version"), []byte("1.4.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"libvulkan.1.dylib", "libMoltenVK.dylib"} {
+		if err := os.WriteFile(filepath.Join(sdkLib, name), []byte(name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	buildRoot := filepath.Join(repoRoot, "out", "build", "macos-arm64")
+	entries, err := collectMacOSVulkanRuntime(repoRoot, buildRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 3 {
+		t.Fatalf("runtime entries = %#v, want three entries", entries)
+	}
+	if entries[0].name != "bin/libvulkan.1.dylib" || entries[1].name != "bin/libMoltenVK.dylib" ||
+		entries[2].name != "bin/vulkan/icd.d/MoltenVK_icd.json" {
+		t.Fatalf("unexpected runtime entries: %#v", entries)
+	}
+	manifest, err := os.ReadFile(entries[2].source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(manifest), "../../libMoltenVK.dylib") {
+		t.Fatalf("packaged manifest does not point at the bundled MoltenVK: %s", manifest)
 	}
 }
 

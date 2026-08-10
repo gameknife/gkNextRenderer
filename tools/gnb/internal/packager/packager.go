@@ -54,6 +54,7 @@ type Options struct {
 	Version     string
 	TraceAssets bool
 	AssetTrace  string
+	RuntimePak  string
 	TraceFrames int
 	IncludeGNB  bool
 }
@@ -61,6 +62,19 @@ type Options struct {
 func Package(repoRoot string, buildPreset string, variant string, packagePreset Preset, opts Options) error {
 	if err := validatePreset(packagePreset); err != nil {
 		return err
+	}
+	preciseAssetSources := 0
+	if opts.TraceAssets {
+		preciseAssetSources++
+	}
+	if opts.AssetTrace != "" {
+		preciseAssetSources++
+	}
+	if opts.RuntimePak != "" {
+		preciseAssetSources++
+	}
+	if preciseAssetSources > 1 {
+		return fmt.Errorf("--trace-assets, --asset-trace, and --runtime-pak are mutually exclusive")
 	}
 	buildRoot := filepath.Join(repoRoot, "out", "build", buildPreset)
 	version := opts.Version
@@ -73,7 +87,13 @@ func Package(repoRoot string, buildPreset string, variant string, packagePreset 
 			}
 		}
 		var preciseAssets []entry
-		if opts.TraceAssets || opts.AssetTrace != "" {
+		if opts.RuntimePak != "" {
+			var err error
+			preciseAssets, err = reusePreciseAssets(repoRoot, opts)
+			if err != nil {
+				return err
+			}
+		} else if opts.TraceAssets || opts.AssetTrace != "" {
 			tracePath, err := preparePreciseAssets(repoRoot, buildPreset, buildRoot, packagePreset, opts)
 			if err != nil {
 				return err
@@ -184,6 +204,14 @@ func collectDesktopEntries(repoRoot, buildRoot, variant, version string, preset 
 		found[name] = true
 	}
 
+	if variant == "macos" {
+		vulkanRuntime, err := collectMacOSVulkanRuntime(repoRoot, buildRoot)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, vulkanRuntime...)
+	}
+
 	extraFiles, err := collectPaths(buildRoot, preset.ExtraFiles)
 	if err != nil {
 		return nil, err
@@ -213,10 +241,79 @@ func collectDesktopEntries(repoRoot, buildRoot, variant, version string, preset 
 	return append(entries, docs...), nil
 }
 
-func preparePreciseAssets(repoRoot, buildPreset, buildRoot string, packagePreset Preset, opts Options) (string, error) {
-	if opts.TraceAssets && opts.AssetTrace != "" {
-		return "", fmt.Errorf("--trace-assets and --asset-trace are mutually exclusive")
+// collectMacOSVulkanRuntime packages the Vulkan loader, MoltenVK ICD and its
+// manifest. macOS does not provide a system Vulkan runtime; a release must not
+// rely on the absolute Vulkan SDK rpath recorded on the build machine.
+func collectMacOSVulkanRuntime(repoRoot, buildRoot string) ([]entry, error) {
+	sdkRoot, err := macOSVulkanSDKRoot(repoRoot)
+	if err != nil {
+		return nil, err
 	}
+
+	libDir := filepath.Join(sdkRoot, "macOS", "lib")
+	files := []struct {
+		source string
+		name   string
+	}{
+		{source: filepath.Join(libDir, "libvulkan.1.dylib"), name: "bin/libvulkan.1.dylib"},
+		{source: filepath.Join(libDir, "libMoltenVK.dylib"), name: "bin/libMoltenVK.dylib"},
+	}
+
+	entries := make([]entry, 0, len(files)+1)
+	for _, file := range files {
+		info, statErr := os.Stat(file.source)
+		if statErr != nil {
+			return nil, fmt.Errorf("macOS Vulkan runtime file %s: %w", file.source, statErr)
+		}
+		if info.IsDir() {
+			return nil, fmt.Errorf("macOS Vulkan runtime file is a directory: %s", file.source)
+		}
+		entries = append(entries, entry{source: file.source, name: file.name})
+	}
+
+	// The packaged layout is bin/vulkan/icd.d/MoltenVK_icd.json. The loader
+	// resolves this path relative to the manifest, so ../../ reaches bin/.
+	manifestPath := filepath.Join(buildRoot, "package-runtime", "vulkan", "icd.d", "MoltenVK_icd.json")
+	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+		return nil, err
+	}
+	manifest := "{\n" +
+		"    \"file_format_version\": \"1.0.0\",\n" +
+		"    \"ICD\": {\n" +
+		"        \"library_path\": \"../../libMoltenVK.dylib\",\n" +
+		"        \"api_version\": \"1.4.0\",\n" +
+		"        \"is_portability_driver\": true\n" +
+		"    }\n" +
+		"}\n"
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o644); err != nil {
+		return nil, err
+	}
+	entries = append(entries, entry{source: manifestPath, name: "bin/vulkan/icd.d/MoltenVK_icd.json"})
+	return entries, nil
+}
+
+func macOSVulkanSDKRoot(repoRoot string) (string, error) {
+	root := filepath.Join(repoRoot, "external", "VulkanSDK")
+	versionPath := filepath.Join(root, ".current_version")
+	versionData, err := os.ReadFile(versionPath)
+	if err != nil {
+		return "", fmt.Errorf("read macOS Vulkan SDK version %s: %w", versionPath, err)
+	}
+	version := strings.TrimSpace(string(versionData))
+	if version == "" || filepath.Base(version) != version {
+		return "", fmt.Errorf("invalid macOS Vulkan SDK version in %s", versionPath)
+	}
+	sdkRoot := filepath.Join(root, version)
+	if info, statErr := os.Stat(filepath.Join(sdkRoot, "macOS")); statErr != nil || !info.IsDir() {
+		if statErr != nil {
+			return "", fmt.Errorf("macOS Vulkan SDK %s: %w", sdkRoot, statErr)
+		}
+		return "", fmt.Errorf("macOS Vulkan SDK is missing macOS/: %s", sdkRoot)
+	}
+	return sdkRoot, nil
+}
+
+func preparePreciseAssets(repoRoot, buildPreset, buildRoot string, packagePreset Preset, opts Options) (string, error) {
 	pakDir := filepath.Join(buildRoot, "assets", "paks")
 	pakPath := filepath.Join(pakDir, "runtime.pak")
 	manifestPath := filepath.Join(pakDir, "runtime.manifest.json")
@@ -280,6 +377,36 @@ func preparePreciseAssets(repoRoot, buildPreset, buildRoot string, packagePreset
 		return "", fmt.Errorf("build precise runtime pak: %w", err)
 	}
 	return tracePath, nil
+}
+
+// reusePreciseAssets takes a complete precise-asset bundle produced by a
+// trusted build job. The runtime pak embeds platform-neutral game assets, so a
+// Lavapipe trace on Linux can supply the exact same bundle to every desktop
+// release job without asking GPU-less Windows or macOS runners to launch Vulkan.
+func reusePreciseAssets(repoRoot string, opts Options) ([]entry, error) {
+	root := opts.RuntimePak
+	if !filepath.IsAbs(root) {
+		root = filepath.Join(repoRoot, root)
+	}
+	files := []struct {
+		source, name string
+	}{
+		{source: filepath.Join(root, "runtime.pak"), name: "assets/paks/runtime.pak"},
+		{source: filepath.Join(root, "runtime-assets.txt"), name: "assets/paks/runtime-assets.txt"},
+		{source: filepath.Join(root, "runtime.manifest.json"), name: "assets/paks/runtime.manifest.json"},
+	}
+	entries := make([]entry, 0, len(files))
+	for _, file := range files {
+		info, err := os.Stat(file.source)
+		if err != nil {
+			return nil, fmt.Errorf("read reusable precise asset %s: %w", file.source, err)
+		}
+		if info.IsDir() {
+			return nil, fmt.Errorf("reusable precise asset is a directory: %s", file.source)
+		}
+		entries = append(entries, entry{source: file.source, name: file.name})
+	}
+	return entries, nil
 }
 
 func normalizeTrace(path string) error {

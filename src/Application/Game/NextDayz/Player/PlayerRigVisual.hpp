@@ -27,7 +27,7 @@ namespace Assets
 {
     class Scene;
     class Node;
-    struct Model;
+    class Model;
     struct FMaterial;
 }
 
