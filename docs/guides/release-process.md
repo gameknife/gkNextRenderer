@@ -1,7 +1,8 @@
 # 发布流程（Release Process）
 
-本文描述 gkNextRenderer 桌面版的完整发布流程。发布物为三个 target：
-**gkNextRenderer / gkNextEditor / gkNextMotionBenchmark**，平台优先级 Windows > Linux > macOS。
+本文描述 gkNextEngine 的完整发布流程。同一个 `v*` Release 同时发布标准 `default` preset
+（**gkNextRenderer / gkNextEditor / gkNextMotionBenchmark**）和 Windows `magicalego` preset，
+平台优先级 Windows > Linux > macOS。
 
 按本文逐步执行即可完成一次发布，不需要额外的口头约定。
 
@@ -14,6 +15,7 @@
 - [ ] `gnb test` 全绿（本机跑全量；CI 只跑 `~[GPU]` 子集）
 - [ ] `gnb visual` 无视觉回归
 - [ ] 三个 target 在本机能正常启动、切换全部渲染器、截图、正常退出
+- [ ] MagicaLego 能加载 `legobricks.glb`、显示缩略图、播放放置音效并读写示例存档
 - [ ] 100 / 125 / 150 / 200% DPI 下两个 GUI target 无文字裁切
 - [ ] 无硬件光追的设备上（或 `--forcenort`）回退链路正常
 - [ ] `README.md` / `README.en.md` / `AGENTS.md` / `docs/README.md` 与代码一致
@@ -26,19 +28,21 @@
 CI 出问题时排查成本高，建议先在本机跑一遍完整链路：
 
 ```bash
-gnb build gkNextRenderer gkNextEditor gkNextMotionBenchmark
+gnb build gkNextRenderer gkNextEditor gkNextMotionBenchmark MagicaLego Packager
 ```
 
 ```bash
-gnb package windows --version v0.1.2.0
+gnb package windows --package-preset default --trace-assets --version v0.1.2.0
+gnb package windows --package-preset magicalego --trace-assets --version v0.1.2.0
 ```
 
 ```bash
-gnb smoke gknextrenderer_win64_v0.1.2.0.zip --launch
+gnb smoke gknextrenderer_win64_v0.1.2.0.7z --launch
+gnb smoke MagicaLego_win64_v0.1.2.0.7z --launch
 ```
 
-`gnb smoke` 会把 zip 解压到一个干净目录并验证：包内没有 `.pdb` / `.ilk` 等构建产物、
-必需资产齐全、三个可执行文件都能启动（`--help`）。加 `--launch` 时还会真实运行每个 target
+`gnb smoke` 会把 7z 解压到一个干净目录并验证：包内没有 `.pdb` / `.ilk` 等构建产物、
+必需资产齐全、package manifest 中声明的可执行文件都能启动（`--help`）。加 `--launch` 时还会真实运行每个 target
 并等待引擎日志里的 `committed scene`（需要可用的 Vulkan 设备）。
 
 ---
@@ -58,32 +62,64 @@ CI 会依次执行：
    - 写入 `src/build.version`
    - `gnb setup`
    - `gnb build gkNextRenderer gkNextEditor gkNextMotionBenchmark`
-   - `gnb package <platform> --version <tag>`
-   - `gnb smoke <zip>`（结构冒烟；runner 无 GPU，不带 `--launch`）
+   - Linux/macOS 打包 `default`；Windows 同时打包 `default` 与精确 trace 的 `magicalego`
+   - `gnb smoke <7z>`（结构冒烟；runner 无 GPU，不带 `--launch`）
    - 上传产物到 Release
+
+三个桌面 Release job 与 `desktop.yml` 使用相同 runner：`ubuntu-24.04`、`windows-latest`、
+`macos-latest`。它们也使用相同的 `gnb info --bincache-key` 和 `.vcpkg` / `.vcpkg_bincache`
+缓存路径，因此 Release 可以直接复用日常 Desktop CI 已生成的 vcpkg 二进制缓存。Windows 的
+`default` 与 `magicalego` 位于同一个 job，共享同一台 runner、依赖目录和 CMake build tree。
 
 ### 产物命名
 
 | 平台 | 文件名 |
 |---|---|
-| Windows | `gknextrenderer_win64_<tag>.zip` |
-| Linux | `gknextrenderer_linux64_<tag>.zip` |
-| macOS | `gknextrenderer_macos_<tag>.zip` |
+| Windows | `gknextrenderer_win64_<tag>.7z` |
+| Windows / MagicaLego | `MagicaLego_win64_<tag>.7z` |
+| Linux | `gknextrenderer_linux64_<tag>.7z` |
+| macOS | `gknextrenderer_macos_<tag>.7z` |
 | Android | `gknextrenderer_android_<tag>.zip` |
 
 ### 包内结构
 
 ```
-bin/          三个 exe + 运行时 DLL/共享库 + 厂商 license 文本
-assets/       anims brand configs fonts locale models paks remote scripts shaders sounds textures
+bin/          当前 package preset 的 exe + 运行时 DLL/共享库 + 厂商 license 文本
+assets/paks/  runtime.pak + 可审计的运行时资产清单（精确模式）
+package.manifest.json  preset、平台、版本和目标清单
 README.txt    启动方式 / 系统要求 / 已知问题 / 反馈入口
 LICENSE
 THIRD-PARTY-NOTICES.md
 ```
 
-打包清单由 `tools/gnb/internal/packager/packager.go` 的 `releaseTargets` 与
-`releaseAssetDirs` 决定。**新增运行期读取的资产目录时必须同步 `releaseAssetDirs`**，
-否则用户解压后会缺资产。
+默认发布包不携带 `gnb` 命令行工具。仅在需要随包提供 AI agent sidecar 时显式传入
+`--include-gnb`；打包器届时会加入 `bin/gnb[.exe]` 和 `bin/gnb-agent-manifest.json`。
+
+打包目标由 `gnb.toml` 的 `[package.presets.<name>]` 配置；`default` 是标准三程序发布，
+`magicalego` 是单程序发布。通过 `--package-preset <name>` 选择，省略时使用
+`[package].default_preset`。所有 preset 共用同一套 trace、runtime.pak、sidecar、文档和 7z 流程。
+
+推荐的精确模式 `--trace-assets` 会依次以隐藏 Agent Validation 模式运行
+`gkNextRenderer`、`gkNextEditor`、`gkNextMotionBenchmark`，合并 `FileHelper` 成功解析的磁盘文件与
+实际命中的 Pak 条目，排序去重后生成单一 `assets/paks/runtime.pak`。发布 7z 同时携带
+`runtime-assets.txt` 和 `runtime.manifest.json`，便于审计文件名与压缩后大小。已有的多轮覆盖清单
+可用 `--asset-trace <path>` 直接复用；这适合把代表性场景和交互脚本的结果合并后交给无 GPU 的 CI。
+Packager 会从原始资产目录或已有 Pak 中提取每个命中项，不会把整个可选 Pak 嵌套进新 Pak。
+场景列表、内容浏览器、`IsAssetAvailable` 和 Pak 条目枚举只属于发现/存在性探测，不计入覆盖；
+只有具体磁盘文件路径被解析或 `LoadFile` / `LoadMountedFile` 成功读取时才记录。
+编译后的 `assets/shaders/**/*.spv` 是例外：渲染器可在运行时切换，采样期间未启用的渲染器仍是
+发布功能，因此精确打包会无条件合并全部 SPIR-V 文件。场景扫描还会用当前安装目录和已挂载 Pak
+再次校验逻辑资产路径，避免旧的按需解包缓存让未随当前版本发布的场景重新出现在选择器中。
+其他必须进入精确包、但不保证在采样流程中加载的资产，分别配置在各 preset 的
+`always_include_assets`。当前 `default` 固定包含 `conf_room.glb`、`pbr.glb` 和 `playground.glb`；
+`magicalego` 不继承这三个场景，而是独立补齐交互阶段才读取的音效和示例 `.mls` 存档。
+
+精确包只保证覆盖采样时实际走到的功能。发布前应以代表性的场景与交互流程扩充清单，并始终执行
+`gnb smoke <7z> --launch`。不传上述两个参数时仍保留目录白名单模式，作为 CI 与问题排查的保守回退。
+
+桌面发布归档使用 7z/LZMA2 最高压缩级别、128 MiB 字典和 solid 模式。gnb 依次查找
+`GNB_7Z`、PATH 中的 `7zz` / `7z` / `7za`，Windows 还会查找标准的 `Program Files/7-Zip`。
+`gnb smoke` 仍可读取旧 `.zip`，但新的桌面与 MagicaLego 发布物统一输出 `.7z`。
 
 ---
 

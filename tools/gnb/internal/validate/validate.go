@@ -24,6 +24,7 @@ type Options struct {
 	Width, Height                                   int
 	Visible, SyncValidation                         bool
 	Args                                            []string
+	Env                                             []string
 }
 type Script struct {
 	Name, Target, Scene string
@@ -65,6 +66,18 @@ func Shot(ctx context.Context, o Options, frames int, ui bool, out string) error
 	s := Script{Name: "agent_validation"}
 	s.Defaults.StepTimeoutMs = 30000
 	s.Steps = []map[string]any{{"type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 30000}, {"type": "wait-frames", "n": frames}, {"type": "screenshot", "out": out, "ui": ui}, {"type": "quit"}}
+	return run(ctx, o, s)
+}
+
+// Trace runs a target to a stable frame without creating a screenshot. Callers
+// pass --asset-trace through Options.Args so the engine records runtime coverage.
+func Trace(ctx context.Context, o Options, frames int) error {
+	if frames <= 0 {
+		frames = 120
+	}
+	s := Script{Name: "asset_trace"}
+	s.Defaults.StepTimeoutMs = 30000
+	s.Steps = []map[string]any{{"type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 30000}, {"type": "wait-frames", "n": frames}, {"type": "quit"}}
 	return run(ctx, o, s)
 }
 
@@ -118,6 +131,7 @@ func run(ctx context.Context, o Options, s Script) (retErr error) {
 	console.CommandLine(exe + " " + strings.Join(args, " "))
 	cmd := exec.CommandContext(ctx, exe, args...)
 	cmd.Dir = filepath.Dir(exe)
+	cmd.Env = append(os.Environ(), o.Env...)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err = cmd.Start(); err != nil {
 		return err

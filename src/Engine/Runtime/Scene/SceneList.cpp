@@ -236,7 +236,9 @@ void SceneList::ScanScenes()
         {
             std::filesystem::path filename = entry.path().filename();
             if (!IsSupportedScenePath(entry.path())) continue;
-            AllScenes.push_back((modelPath / filename).string());
+            const std::string scenePath = (modelPath / filename).string();
+            if (!Utilities::FileHelper::IsAssetAvailable(scenePath)) continue;
+            AllScenes.push_back(scenePath);
         }
     }
 
@@ -249,7 +251,9 @@ void SceneList::ScanScenes()
         {
             if (!IsSupportedScenePath(entry.path())) continue;
             std::filesystem::path filename = entry.path().filename();
-            AllScenes.push_back((omrPath / filename).string());
+            const std::string scenePath = (omrPath / filename).string();
+            if (!Utilities::FileHelper::IsAssetAvailable(scenePath)) continue;
+            AllScenes.push_back(scenePath);
         }
     }
 
@@ -264,7 +268,9 @@ void SceneList::ScanScenes()
             if (!entry.is_regular_file()) continue;
             if (!IsSupportedScenePath(entry.path())) continue;
             std::filesystem::path filename = entry.path().filename();
-            AllScenes.push_back((scadPath / filename).string());
+            const std::string scenePath = (scadPath / filename).string();
+            if (!Utilities::FileHelper::IsAssetAvailable(scenePath)) continue;
+            AllScenes.push_back(scenePath);
         }
     }
 
@@ -277,8 +283,10 @@ void SceneList::ScanScenes()
         for (const auto& entry : std::filesystem::recursive_directory_iterator(sogDir))
         {
             if (!entry.is_regular_file() || !IsSupportedScenePath(entry.path())) continue;
-            AllScenes.push_back((std::filesystem::path(sogPath) /
-                                 std::filesystem::relative(entry.path(), sogDir)).generic_string());
+            const std::string scenePath = (std::filesystem::path(sogPath) /
+                std::filesystem::relative(entry.path(), sogDir)).generic_string();
+            if (!Utilities::FileHelper::IsAssetAvailable(scenePath)) continue;
+            AllScenes.push_back(scenePath);
         }
     }
 

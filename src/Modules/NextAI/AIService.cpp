@@ -37,25 +37,58 @@ namespace NextAI
 
     bool FAIService::LoadConfig()
     {
-        if (client_ && client_->IsAvailable()) return true;
+        if (IsBridgeAvailable()) return true;
+        if (const char* disabled = std::getenv("GKNEXT_DISABLE_GNB_SIDECAR"); disabled && std::string_view(disabled) == "1")
+        {
+            SetUnavailable("gnb sidecar disabled");
+            return false;
+        }
         const auto repoRoot = FindRepoRoot();
-        if (repoRoot.empty()) { statusMessage_ = "gnb repository root not found"; return false; }
+        if (repoRoot.empty())
+        {
+            SetUnavailable("gnb sidecar unavailable");
+            return false;
+        }
         client_ = std::make_unique<FGnbAIClient>();
         std::string error;
         if (!client_->StartDefault(repoRoot, error))
         {
-            client_.reset(); configured_ = false; status_ = EAIStatus::NotConfigured; statusMessage_ = error; return false;
+            client_.reset();
+            SetUnavailable(error.empty() ? "gnb sidecar unavailable" : std::move(error));
+            return false;
         }
         if (!RefreshCatalog() || !RecreateSession())
         {
-            client_->Stop(); client_.reset(); configured_ = false; status_ = EAIStatus::NotConfigured; return false;
+            if (client_) client_->Stop();
+            client_.reset();
+            SetUnavailable(statusMessage_.empty() ? "gnb sidecar unavailable" : statusMessage_);
+            return false;
         }
         configured_ = true; status_ = EAIStatus::Ready; statusMessage_ = currentProviderId_ + " ready via gnb";
         return true;
     }
 
+    bool FAIService::IsBridgeAvailable() const
+    {
+        return client_ && client_->IsAvailable();
+    }
+
+    void FAIService::SetUnavailable(std::string message)
+    {
+        configured_ = false;
+        status_ = EAIStatus::NotConfigured;
+        providers_.clear();
+        sessionId_.clear();
+        statusMessage_ = std::move(message);
+    }
+
     bool FAIService::RefreshCatalog()
     {
+        if (!IsBridgeAvailable())
+        {
+            SetUnavailable("gnb sidecar unavailable");
+            return false;
+        }
         try
         {
             providers_.clear();
@@ -87,6 +120,11 @@ namespace NextAI
 
     bool FAIService::RecreateSession()
     {
+        if (!IsBridgeAvailable())
+        {
+            SetUnavailable("gnb sidecar unavailable");
+            return false;
+        }
         try
         {
             const auto session = client_->CreateSession(currentProfileId_, currentProviderId_, currentModelId_).get();
@@ -100,7 +138,7 @@ namespace NextAI
 
     bool FAIService::SwitchProvider(const std::string& providerId)
     {
-        if (status_ == EAIStatus::Generating || !IsProviderConfigured(providerId)) return false;
+        if (!configured_ || !IsBridgeAvailable() || status_ == EAIStatus::Generating || !IsProviderConfigured(providerId)) return false;
         currentProviderId_ = providerId; currentModelId_.clear();
         const auto selected = std::find_if(providers_.begin(), providers_.end(), [&providerId](const auto& item) { return item.id == providerId; });
         if (selected != providers_.end()) currentModelId_ = selected->defaultModel;
@@ -118,13 +156,18 @@ namespace NextAI
     }
     bool FAIService::SetCurrentModel(std::string model)
     {
-        if (model.empty() || status_ == EAIStatus::Generating) return false;
+        if (!configured_ || !IsBridgeAvailable() || model.empty() || status_ == EAIStatus::Generating) return false;
         currentModelId_ = std::move(model); return RecreateSession();
     }
     bool FAIService::SetProfile(std::string profileId)
     {
         if (profileId.empty() || status_ == EAIStatus::Generating) return false;
         currentProfileId_ = std::move(profileId);
+        if (!configured_ || !IsBridgeAvailable())
+        {
+            SetUnavailable("gnb sidecar unavailable");
+            return false;
+        }
         if (!RefreshCatalog()) return false;
         return RecreateSession();
     }
@@ -186,6 +229,11 @@ namespace NextAI
 
     FChatResponse FAIService::Chat(const FChatRequest& request)
     {
+        if (!configured_ || !IsBridgeAvailable())
+        {
+            SetUnavailable("gnb sidecar unavailable");
+            return FChatResponse::Failure(statusMessage_);
+        }
         status_ = EAIStatus::Generating; statusMessage_ = "Generating...";
         auto response = ChatViaGnb(request);
         status_ = response.success ? EAIStatus::Ready : EAIStatus::Error;
@@ -194,6 +242,11 @@ namespace NextAI
     }
     FChatResponse FAIService::ChatStream(const FChatRequest& request, FChatStreamCallback onDelta)
     {
+        if (!configured_ || !IsBridgeAvailable())
+        {
+            SetUnavailable("gnb sidecar unavailable");
+            return FChatResponse::Failure(statusMessage_);
+        }
         status_ = EAIStatus::Generating; statusMessage_ = "Generating...";
         auto response = ChatViaGnb(request, std::move(onDelta));
         status_ = response.success ? EAIStatus::Ready : EAIStatus::Error;

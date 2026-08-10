@@ -268,7 +268,9 @@ void MagicaLegoUserInterface::DrawTitleBar()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 
     ImGui::SetNextWindowPos(ImVec2(windowSize.x - titlebarControlSize, -animOffset), ImGuiCond_Always, ImVec2(0, 0));
@@ -418,8 +420,8 @@ void MagicaLegoUserInterface::DrawTitleBar()
     ImGui::PopStyleVar();
     ImGui::End();
 
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar(4);
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(5);
     GetGameInstance()->GetEngine().ConfigureCustomTitleBarDrag(
         isOpen, titlebarSize, titlebarLeftReservedWidth, titlebarRightReservedWidth);
 }

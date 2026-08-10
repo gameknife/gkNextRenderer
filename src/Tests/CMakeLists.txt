@@ -6,6 +6,7 @@ set(unitTestSources
     Test_BindlessSlotRegistry.cpp
     Test_GpuTimerLogic.cpp
     Test_GltfSkinning.cpp
+    Test_FileHelperTrace.cpp
     Test_SequencerSerialization.cpp
     Test_LightObject.cpp
     Test_CameraFocus.cpp

@@ -8,8 +8,32 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/config"
 	"github.com/spf13/cobra"
 )
+
+func TestResolvePackagePresetUsesConfiguredDefault(t *testing.T) {
+	cfg := config.Config{Package: config.PackageConfig{
+		DefaultPreset: "default",
+		Presets: map[string]config.PackagePresetConfig{
+			"default": {
+				Targets:             []string{"gkNextRenderer"},
+				ArchiveName:         "renderer_{platform}_{version}.7z",
+				AlwaysIncludeAssets: []string{"assets/models/playground.glb"},
+			},
+		},
+	}}
+	preset, err := resolvePackagePreset(cfg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preset.Name != "default" || len(preset.Targets) != 1 || preset.Targets[0] != "gkNextRenderer" {
+		t.Fatalf("resolved preset = %+v", preset)
+	}
+	if len(preset.AlwaysIncludeAssets) != 1 || preset.AlwaysIncludeAssets[0] != "assets/models/playground.glb" {
+		t.Fatalf("resolved always-include assets = %v", preset.AlwaysIncludeAssets)
+	}
+}
 
 func TestResolveIOSSkipCodeSignDefault(t *testing.T) {
 	cmd := &cobra.Command{Use: "ios"}

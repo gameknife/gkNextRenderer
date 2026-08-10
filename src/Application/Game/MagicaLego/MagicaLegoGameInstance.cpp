@@ -155,6 +155,7 @@ void MagicaLegoGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     cvars.SetDefaultFromString("r.samples", "16", &error);
     cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
     cvars.SetDefaultFromString("r.rendererType", "0", &error);
+    cvars.SetDefaultFromString("r.upscaler.type", "1", &error);
 }
 
 bool MagicaLegoGameInstance::ResolvePlacementLocationFromRay(const Assets::RayCastResult& rayResult, glm::i16vec3& outBlockLocation, std::string* reason)

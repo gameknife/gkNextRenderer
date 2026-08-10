@@ -19,6 +19,7 @@ int main(int argc, const char* argv[]) noexcept
         std::string rootPath;
         std::string regex;
         std::string manifestPath;
+        std::string listPath;
         bool disableCompression = false;
 
         cxxopts::Options options("options", "");
@@ -28,6 +29,7 @@ int main(int argc, const char* argv[]) noexcept
             ("regex", "if not empty, only pak files match the regex will be packed.", cxxopts::value<std::string>(regex)->default_value(""))
             ("root", "root path used to compute relative entries, defaults to project root", cxxopts::value<std::string>(rootPath)->default_value(""))
             ("manifest", "optional manifest json path to record packed entries", cxxopts::value<std::string>(manifestPath)->default_value(""))
+            ("list", "newline-delimited exact asset list; overrides --src/--regex", cxxopts::value<std::string>(listPath)->default_value(""))
             ("no-compress", "store files without compression", cxxopts::value<bool>(disableCompression)->default_value("false")->implicit_value("true"))
 
             ("h,help", "Print usage");
@@ -40,7 +42,17 @@ int main(int argc, const char* argv[]) noexcept
         }
 
         Utilities::Package::FPackageFileSystem packageSystem(Utilities::Package::EPM_OsFile);
-        packageSystem.PakAll(pakPath, srcPath, rootPath, regex, !disableCompression, manifestPath);
+        if (!listPath.empty())
+        {
+            if (!packageSystem.PakFromList(pakPath, rootPath, listPath, !disableCompression, manifestPath))
+            {
+                return EXIT_FAILURE;
+            }
+        }
+        else
+        {
+            packageSystem.PakAll(pakPath, srcPath, rootPath, regex, !disableCompression, manifestPath);
+        }
 
         return EXIT_SUCCESS;
     }
