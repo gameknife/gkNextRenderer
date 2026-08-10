@@ -95,13 +95,14 @@ type indexVM struct {
 	Preset     string
 	OS         string
 	RecentSize int
-	ActiveTab  string // "todo" | "docs" | "build" | "remote" | "test" | "git" | "chat" | "loc" | "graph" | "settings"
+	ActiveTab  string // "todo" | "docs" | "build" | "remote" | "test" | "git" | "chat" | "loc" | "paks" | "graph" | "settings"
 	BuildVM    buildRunVM
 	RemoteVM   remoteVM
 	TestVM     testVM
 	GitVM      gitVM
 	ChatVM     chatVM
 	LocVM      locVM
+	PaksVM     paksVM
 	DocsVM     docsVM
 	GraphVM    graphVM
 }
@@ -630,6 +631,12 @@ func collectJournals(repoRoot string, doc *spec.Document, limit int) []journalSu
 // ----- handlers -------------------------------------------------------
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("tab") == "paks" {
+		vm := s.buildHeader("paks")
+		vm.PaksVM = s.buildPaksVM(r.URL.Query().Get("file"))
+		s.render(w, "layout.html", vm)
+		return
+	}
 	vm, err := s.buildIndex()
 	if err != nil {
 		httpError(w, err)
@@ -715,6 +722,10 @@ func (s *Server) handleTab(w http.ResponseWriter, r *http.Request) {
 		vm := s.buildHeader("loc")
 		vm.LocVM = s.buildLocVM(r.URL.Query().Get("thirdparty") != "", r.URL.Query().Get("depth"))
 		s.render(w, "tab_loc", vm)
+	case "paks":
+		vm := s.buildHeader("paks")
+		vm.PaksVM = s.buildPaksVM(r.URL.Query().Get("file"))
+		s.render(w, "tab_paks", vm)
 	case "graph":
 		vm := s.buildHeader("graph")
 		vm.GraphVM = s.buildGraphVM()

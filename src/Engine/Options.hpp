@@ -72,6 +72,7 @@ public:
 
     // Benchmark options used by gkNextMotionBenchmark.
     std::string BenchmarkConfig{};
+    std::string AssetTrace{};
 
     
     // Scene options.

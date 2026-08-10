@@ -69,6 +69,8 @@ namespace NextAI
         const std::vector<FAIProviderDescriptor>& GetAvailableProviders() const { return providers_; }
 
     private:
+        bool IsBridgeAvailable() const;
+        void SetUnavailable(std::string message);
         bool RefreshCatalog();
         bool RecreateSession();
         FChatResponse ChatViaGnb(const FChatRequest& request, FChatStreamCallback onDelta = {});

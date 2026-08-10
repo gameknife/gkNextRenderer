@@ -2,6 +2,7 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
 #if GK_MODULE_GLTFLOADER
 #include "Modules/GltfLoader/GltfModule.hpp"
 #endif
@@ -135,6 +136,10 @@ static SDL_AppResult InitializeApplication(int argc, char *argv[])
 #endif
     // Global GOption, can access from everywhere
     GOption = GOptionPtr.get();
+    if (!GOption->AssetTrace.empty())
+    {
+        Utilities::FileHelper::SetAssetTracePath(GOption->AssetTrace);
+    }
 
     if(GOption->RenderDoc)
     {

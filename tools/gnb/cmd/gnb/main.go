@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"time"
 
@@ -846,24 +847,63 @@ func newPaksCommand(ctx appContext) *cobra.Command {
 
 func newPackageCommand(ctx appContext) *cobra.Command {
 	versionFlag := ""
+	packagePresetName := ""
+	traceAssets := false
+	assetTrace := ""
+	traceFrames := 120
+	includeGNB := false
 	cmd := &cobra.Command{
-		Use:   "package <windows|linux|macos|magicalego>",
-		Short: "Create a release zip",
+		Use:   "package <windows|linux|macos>",
+		Short: "Create a high-compression 7z release archive",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return packager.Package(ctx.repoRoot, ctx.preset, args[0], versionFlag)
+			preset, err := resolvePackagePreset(ctx.cfg, packagePresetName)
+			if err != nil {
+				return err
+			}
+			return packager.Package(ctx.repoRoot, ctx.preset, args[0], preset, packager.Options{
+				Version: versionFlag, TraceAssets: traceAssets, AssetTrace: assetTrace, TraceFrames: traceFrames,
+				IncludeGNB: includeGNB,
+			})
 		},
 	}
 	cmd.Flags().StringVar(&versionFlag, "version", "", "package version")
+	cmd.Flags().StringVar(&packagePresetName, "package-preset", "", "package preset from gnb.toml (defaults to package.default_preset)")
+	cmd.Flags().BoolVar(&traceAssets, "trace-assets", false, "run the package preset targets and package only observed runtime assets")
+	cmd.Flags().StringVar(&assetTrace, "asset-trace", "", "reuse a newline-delimited runtime asset trace instead of launching targets")
+	cmd.Flags().IntVar(&traceFrames, "trace-frames", 120, "stable frames to sample per target with --trace-assets")
+	cmd.Flags().BoolVar(&includeGNB, "include-gnb", false, "include the gnb executable and agent manifest in the desktop package")
 	return cmd
+}
+
+func resolvePackagePreset(cfg config.Config, name string) (packager.Preset, error) {
+	if name == "" {
+		name = cfg.Package.DefaultPreset
+	}
+	configured, ok := cfg.Package.Presets[name]
+	if !ok {
+		available := make([]string, 0, len(cfg.Package.Presets))
+		for candidate := range cfg.Package.Presets {
+			available = append(available, candidate)
+		}
+		sort.Strings(available)
+		return packager.Preset{}, fmt.Errorf("unknown package preset %q (available: %s)", name, strings.Join(available, ", "))
+	}
+	return packager.Preset{
+		Name:                name,
+		Targets:             configured.Targets,
+		ArchiveName:         configured.ArchiveName,
+		AlwaysIncludeAssets: configured.AlwaysIncludeAssets,
+		ExtraFiles:          configured.ExtraFiles,
+	}, nil
 }
 
 func newSmokeCommand(ctx appContext) *cobra.Command {
 	opts := packager.SmokeOptions{}
 	timeoutSeconds := 90
 	cmd := &cobra.Command{
-		Use:   "smoke <package.zip>",
-		Short: "Extract a release zip into a clean directory and verify it runs out of the box",
+		Use:   "smoke <package.7z>",
+		Short: "Extract a release archive into a clean directory and verify it runs out of the box",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			archive := args[0]

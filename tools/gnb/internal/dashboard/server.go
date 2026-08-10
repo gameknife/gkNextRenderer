@@ -361,6 +361,13 @@ func templateFuncs() template.FuncMap {
 			}
 			return b.String()
 		},
+		"byteSize": formatByteSize,
+		"sizeShare": func(size, total uint64) string {
+			if total == 0 {
+				return "0.0"
+			}
+			return fmt.Sprintf("%.1f", float64(size)*100/float64(total))
+		},
 		"emptyHint": func(k spec.SectionKind) string {
 			switch k {
 			case spec.SectionNext:
@@ -373,6 +380,25 @@ func templateFuncs() template.FuncMap {
 			return "(暂无)"
 		},
 	}
+}
+
+func formatByteSize(size uint64) string {
+	const unit = 1024
+	if size < unit {
+		return fmt.Sprintf("%d B", size)
+	}
+	value := float64(size)
+	units := []string{"KiB", "MiB", "GiB", "TiB"}
+	for _, suffix := range units {
+		value /= unit
+		if value < unit || suffix == units[len(units)-1] {
+			if value >= 100 {
+				return fmt.Sprintf("%.0f %s", value, suffix)
+			}
+			return fmt.Sprintf("%.1f %s", value, suffix)
+		}
+	}
+	return fmt.Sprintf("%d B", size)
 }
 
 func dirtyPrimaryCode(code string) byte {

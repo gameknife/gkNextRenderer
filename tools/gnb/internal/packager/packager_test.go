@@ -1,0 +1,166 @@
+package packager
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestNormalizeTraceDeduplicatesSortsAndRejectsBuildFiles(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "assets.txt")
+	input := strings.Join([]string{
+		"assets/textures/z.png",
+		"assets/models/a.glb\r",
+		"assets/textures/z.png",
+		"assets/models.stamp",
+		"assets/paks/optional.pak",
+		"../outside.txt",
+		"",
+	}, "\n")
+	if err := os.WriteFile(path, []byte(input), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := normalizeTrace(path); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "assets/models/a.glb\nassets/textures/z.png\n"
+	if string(raw) != want {
+		t.Fatalf("normalized trace = %q, want %q", string(raw), want)
+	}
+}
+
+func TestNormalizeTraceRejectsEmptyCoverage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "assets.txt")
+	if err := os.WriteFile(path, []byte("assets/paks/optional.pak\nassets/models.stamp\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := normalizeTrace(path); err == nil {
+		t.Fatal("normalizeTrace accepted a trace without runtime assets")
+	}
+}
+
+func TestIncludeAllShaderBinaries(t *testing.T) {
+	buildRoot := t.TempDir()
+	shaderRoot := filepath.Join(buildRoot, "assets", "shaders", "nested")
+	if err := os.MkdirAll(shaderRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"active.comp.slang.spv", "inactive.frag.slang.spv", "source.slang"} {
+		if err := os.WriteFile(filepath.Join(shaderRoot, name), []byte(name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tracePath := filepath.Join(buildRoot, "trace.txt")
+	if err := os.WriteFile(tracePath, []byte("assets/models/playground.glb\nassets/shaders/nested/active.comp.slang.spv\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := includeAllShaderBinaries(buildRoot, tracePath); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(tracePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"assets/models/playground.glb",
+		"assets/shaders/nested/active.comp.slang.spv",
+		"assets/shaders/nested/inactive.frag.slang.spv",
+		"",
+	}, "\n")
+	if string(raw) != want {
+		t.Fatalf("shader-complete trace = %q, want %q", string(raw), want)
+	}
+}
+
+func TestIncludeConfiguredAssets(t *testing.T) {
+	tracePath := filepath.Join(t.TempDir(), "trace.txt")
+	if err := os.WriteFile(tracePath, []byte("assets/textures/base.png\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configured := []string{
+		"assets/models/playground.glb",
+		"assets/models/conf_room.glb",
+		"assets/models/playground.glb",
+	}
+	if err := includeConfiguredAssets(tracePath, configured); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(tracePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"assets/models/conf_room.glb",
+		"assets/models/playground.glb",
+		"assets/textures/base.png",
+		"",
+	}, "\n")
+	if string(raw) != want {
+		t.Fatalf("configured trace = %q, want %q", string(raw), want)
+	}
+}
+
+func TestIncludeConfiguredAssetsRejectsInvalidPath(t *testing.T) {
+	tracePath := filepath.Join(t.TempDir(), "trace.txt")
+	if err := os.WriteFile(tracePath, []byte("assets/textures/base.png\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := includeConfiguredAssets(tracePath, []string{"../private.glb"}); err == nil {
+		t.Fatal("includeConfiguredAssets accepted a path outside assets")
+	}
+}
+
+func TestGnbSidecarRequiresExplicitOptIn(t *testing.T) {
+	gnbName := "gnb" + platformExeExt()
+	for _, name := range []string{gnbName, "gnb-agent-manifest.json"} {
+		if isRuntimeSidecar(name, false) {
+			t.Fatalf("%s included without explicit opt-in", name)
+		}
+		if !isRuntimeSidecar(name, true) {
+			t.Fatalf("%s excluded with explicit opt-in", name)
+		}
+	}
+	if !isRuntimeSidecar("runtime.dll", false) {
+		t.Fatal("ordinary runtime sidecar was excluded")
+	}
+}
+
+func TestPackageArchivePathUsesPresetTemplate(t *testing.T) {
+	preset := Preset{Name: "magicalego", Targets: []string{"MagicaLego"}, ArchiveName: "MagicaLego_{platform}_{version}.7z"}
+	repoRoot := t.TempDir()
+	got, err := packageArchivePath(repoRoot, "windows", "m1.2.3", preset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(repoRoot, "MagicaLego_win64_m1.2.3.7z")
+	if got != want {
+		t.Fatalf("packageArchivePath = %q, want %q", got, want)
+	}
+}
+
+func TestValidatePresetRejectsEmptyTargets(t *testing.T) {
+	err := validatePreset(Preset{Name: "empty", ArchiveName: "empty_{version}.7z"})
+	if err == nil {
+		t.Fatal("validatePreset accepted a preset without targets")
+	}
+}
+
+func TestSmokeTargetsReadsPackageManifest(t *testing.T) {
+	staging := t.TempDir()
+	raw := []byte(`{"preset":"magicalego","platform":"windows","version":"m1","targets":["MagicaLego"]}`)
+	if err := os.WriteFile(filepath.Join(staging, "package.manifest.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	targets, err := smokeTargets(staging)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(targets) != 1 || targets[0] != "MagicaLego" {
+		t.Fatalf("smoke targets = %v, want [MagicaLego]", targets)
+	}
+}

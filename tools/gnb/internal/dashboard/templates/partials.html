@@ -3100,6 +3100,209 @@
 </div>
 {{end}}
 
+{{define "tab_paks"}}
+<div class="tab-paks">
+  <style>
+    .tab-paks {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+      background: var(--bg);
+    }
+    .pak-sidebar {
+      min-height: 0;
+      padding: 16px 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: #151617;
+    }
+    .pak-sidebar-head { display: flex; align-items: center; gap: 8px; padding: 0 3px 12px; }
+    .pak-sidebar-head h2 { margin: 0; font-size: 13px; font-weight: 650; }
+    .pak-sidebar-head .tag-mini { margin-left: auto; }
+    .pak-file-list { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+    .pak-file-item {
+      width: 100%;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 8px;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      background: transparent;
+      color: var(--fg-mute);
+      text-align: left;
+      cursor: pointer;
+    }
+    .pak-file-item:hover { background: var(--bg-card); color: var(--fg); }
+    .pak-file-item.selected { border-color: rgba(79,140,255,.7); background: rgba(79,140,255,.14); color: var(--fg); }
+    .pak-file-icon { color: #d1a827; }
+    .pak-file-label { min-width: 0; display: flex; align-items: baseline; gap: 6px; }
+    .pak-file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+    .pak-file-location { color: var(--fg-dim); font: 8px var(--font-mono); text-transform: uppercase; }
+    .pak-file-size { color: var(--fg-dim); font: 9.5px var(--font-mono); white-space: nowrap; }
+    .pak-file-path { display: block; padding: 10px 3px 0; color: var(--fg-dim); font: 9px/1.5 var(--font-mono); overflow-wrap: anywhere; }
+    .pak-empty { margin: 4px 2px; padding: 12px; border: 1px dashed var(--border); border-radius: 6px; color: var(--fg-dim); font-size: 11px; line-height: 1.6; }
+    .pak-main { min-width: 0; min-height: 0; overflow-y: auto; padding: 16px; }
+    .pak-error { padding: 12px 14px; border: 1px solid rgba(239,68,68,.32); border-radius: 6px; background: rgba(239,68,68,.08); color: var(--red); font-size: 12px; }
+    .pak-heading { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+    .pak-heading h2 { margin: 0; color: var(--fg); font: 600 16px/1.3 var(--font-sans); }
+    .pak-heading p { margin: 5px 0 0; color: var(--fg-dim); font: 10px var(--font-mono); }
+    .pak-summary { display: grid; grid-template-columns: repeat(5, minmax(115px, 1fr)); gap: 10px; margin-bottom: 14px; }
+    .pak-stat { padding: 12px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); }
+    .pak-stat .k { color: var(--fg-mute); font-size: 9.5px; text-transform: uppercase; letter-spacing: .45px; }
+    .pak-stat .v { margin-top: 5px; color: var(--fg); font: 600 17px var(--font-mono); }
+    .pak-stat .sub { margin-top: 3px; color: var(--fg-dim); font-size: 9.5px; }
+    .pak-analysis { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
+    .pak-card { min-width: 0; padding: 0; overflow: hidden; }
+    .pak-card-head { min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    .pak-card-head h3 { margin: 0; font-size: 12px; font-weight: 600; }
+    .pak-search { margin-left: auto; width: min(260px, 42%); padding: 6px 9px; border: 1px solid var(--border); border-radius: 5px; outline: 0; background: var(--bg-input); color: var(--fg); font-size: 10.5px; }
+    .pak-search:focus { border-color: var(--accent); }
+    .pak-table-wrap { overflow: auto; max-height: calc(100vh - 245px); }
+    .pak-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .pak-table th { position: sticky; top: 0; z-index: 1; padding: 7px 10px; border-bottom: 1px solid var(--border); background: #191a1c; color: var(--fg-mute); font-size: 9.5px; font-weight: 500; text-align: right; }
+    .pak-table th:first-child { width: 48%; text-align: left; }
+    .pak-table td { padding: 6px 10px; border-bottom: 1px solid rgba(53,57,62,.65); color: var(--fg-mute); font: 10.5px var(--font-mono); text-align: right; }
+    .pak-table td:first-child { text-align: left; }
+    .pak-tree-name { min-width: 0; display: flex; align-items: center; gap: 6px; padding-left: calc(var(--depth) * 16px); }
+    .pak-tree-name svg { width: 13px; height: 13px; flex: 0 0 13px; color: var(--fg-dim); }
+    .pak-tree-name.dir { color: var(--fg); font-weight: 600; }
+    .pak-tree-name.dir svg { color: #d1a827; }
+    .pak-tree-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pak-size-cell { position: relative; }
+    .pak-size-bar { position: absolute; inset: 4px auto 4px 0; max-width: 100%; border-radius: 2px; background: rgba(79,140,255,.10); pointer-events: none; }
+    .pak-size-value { position: relative; }
+    .pak-type-list { max-height: calc(100vh - 245px); overflow-y: auto; }
+    .pak-type-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px 12px; padding: 9px 12px; border-bottom: 1px solid rgba(53,57,62,.65); }
+    .pak-type-ext { color: var(--fg); font: 600 11px var(--font-mono); }
+    .pak-type-count, .pak-type-meta { color: var(--fg-dim); font: 9.5px var(--font-mono); }
+    .pak-type-size { color: var(--fg-mute); font: 10.5px var(--font-mono); text-align: right; }
+    .pak-type-track { grid-column: 1 / -1; height: 3px; overflow: hidden; border-radius: 2px; background: var(--bg-input); }
+    .pak-type-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #6366f1); }
+    @media (max-width: 1050px) {
+      .pak-summary { grid-template-columns: repeat(3, 1fr); }
+      .pak-analysis { grid-template-columns: minmax(0, 1fr); }
+      .pak-type-list { max-height: 260px; }
+    }
+  </style>
+
+  {{with .PaksVM}}
+  <aside class="pak-sidebar">
+    <div class="pak-sidebar-head">
+      <h2>Pak 文件</h2>
+      <span class="tag-mini">{{len .Files}}</span>
+    </div>
+    {{if .Files}}
+    <div class="pak-file-list">
+      {{range .Files}}
+      <button class="pak-file-item {{if .Selected}}selected{{end}}" type="button" title="{{.RelPath}}"
+              hx-get="/tab/paks?file={{urlquery .RelPath}}" hx-target="#tab-content" hx-swap="innerHTML">
+        <svg class="pak-file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16v13H4z"/><path d="M7 4h10l3 3H4z"/></svg>
+        <span class="pak-file-label"><span class="pak-file-name">{{.Name}}</span><span class="pak-file-location">{{.Location}}</span></span>
+        <span class="pak-file-size">{{byteSize .Size}}</span>
+      </button>
+      {{end}}
+    </div>
+    {{if .SelectedPath}}<span class="pak-file-path">{{.SelectedPath}}</span>{{end}}
+    {{else}}
+    <div class="pak-empty">未找到 Pak。<br>扫描范围：<code>assets/paks</code> 与当前 preset 的构建输出。</div>
+    {{end}}
+  </aside>
+
+  <section class="pak-main">
+    {{if .Error}}
+      <div class="pak-error">{{.Error}}</div>
+    {{else if .Archive}}
+      <div class="pak-heading">
+        <div>
+          <h2>{{.SelectedPath}}</h2>
+          <p>GNP index {{byteSize .Archive.IndexSize}} · payload {{byteSize .Archive.StoredSize}}</p>
+        </div>
+      </div>
+      <div class="pak-summary">
+        <div class="pak-stat"><div class="k">文件数</div><div class="v">{{intCommas (len .Archive.Entries)}}</div><div class="sub">{{.CompressedFiles}} 个有效压缩</div></div>
+        <div class="pak-stat"><div class="k">Pak 尺寸</div><div class="v">{{byteSize .Archive.FileSize}}</div><div class="sub">含索引与数据</div></div>
+        <div class="pak-stat"><div class="k">存储尺寸</div><div class="v">{{byteSize .Archive.StoredSize}}</div><div class="sub">压缩后 payload</div></div>
+        <div class="pak-stat"><div class="k">原始尺寸</div><div class="v">{{byteSize .UncompressedSize}}</div><div class="sub">解压后的文件总量</div></div>
+        <div class="pak-stat"><div class="k">节省空间</div><div class="v">{{printf "%.1f%%" .CompressionSavings}}</div><div class="sub">相对原始尺寸</div></div>
+      </div>
+
+      <div class="pak-analysis">
+        <section class="card pak-card">
+          <div class="pak-card-head">
+            <h3>文件组织结构</h3>
+            <input class="pak-search" type="search" placeholder="按路径筛选…" data-pak-filter>
+          </div>
+          <div class="pak-table-wrap">
+            <table class="pak-table">
+              <thead><tr><th>路径</th><th>文件</th><th>存储</th><th>原始</th><th>占比</th></tr></thead>
+              <tbody data-pak-rows>
+                {{$total := .Archive.StoredSize}}
+                {{range .Rows}}
+                <tr data-pak-row data-path="{{.Path}}">
+                  <td title="{{.Path}}">
+                    <div class="pak-tree-name {{if .Directory}}dir{{end}}" style="--depth:{{.Depth}}">
+                      {{if .Directory}}
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h7l2 2h9v11H3z"/></svg>
+                      {{else}}
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5"/></svg>
+                      {{end}}
+                      <span class="pak-tree-label">{{.Name}}</span>
+                    </div>
+                  </td>
+                  <td>{{if .Directory}}{{intCommas .FileCount}}{{else}}—{{end}}</td>
+                  <td class="pak-size-cell"><span class="pak-size-bar" style="width:{{sizeShare .StoredSize $total}}%"></span><span class="pak-size-value">{{byteSize .StoredSize}}</span></td>
+                  <td>{{byteSize .UncompressedSize}}</td>
+                  <td>{{sizeShare .StoredSize $total}}%</td>
+                </tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card pak-card">
+          <div class="pak-card-head"><h3>文件类型</h3><span class="tag-mini" style="margin-left:auto">{{len .Types}}</span></div>
+          <div class="pak-type-list">
+            {{$total := .Archive.StoredSize}}
+            {{range .Types}}
+            <div class="pak-type-row">
+              <div><span class="pak-type-ext">{{.Extension}}</span> <span class="pak-type-count">× {{intCommas .FileCount}}</span></div>
+              <div class="pak-type-size">{{byteSize .StoredSize}}</div>
+              <div class="pak-type-meta">原始 {{byteSize .UncompressedSize}}</div>
+              <div class="pak-type-meta" style="text-align:right">{{sizeShare .StoredSize $total}}%</div>
+              <div class="pak-type-track"><div class="pak-type-fill" style="width:{{sizeShare .StoredSize $total}}%"></div></div>
+            </div>
+            {{end}}
+          </div>
+        </section>
+      </div>
+    {{else}}
+      <div class="pak-empty">选择左侧 Pak 查看文件组织与尺寸分析。</div>
+    {{end}}
+  </section>
+  {{end}}
+</div>
+<script>
+(function () {
+  const input = document.querySelector('.tab-paks [data-pak-filter]');
+  if (!input) return;
+  input.addEventListener('input', function () {
+    const query = this.value.trim().toLowerCase();
+    document.querySelectorAll('.tab-paks [data-pak-row]').forEach(row => {
+      row.hidden = query !== '' && !row.dataset.path.toLowerCase().includes(query);
+    });
+  });
+})();
+</script>
+{{end}}
+
 {{define "tab_graph"}}
 <div class="target-graph-tab" data-target-graph data-preset="{{.GraphVM.Preset}}">
   <style>

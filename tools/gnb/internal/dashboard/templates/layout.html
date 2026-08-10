@@ -2343,6 +2343,11 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="4" y2="10"/><line x1="10" y1="20" x2="10" y2="4"/><line x1="16" y1="20" x2="16" y2="14"/><line x1="22" y1="20" x2="22" y2="8"/></svg>
       <span>LOC</span>
     </button>
+    <button class="tab-item {{if eq .ActiveTab "paks"}}active{{end}}" type="button" data-tab="paks"
+            hx-get="/tab/paks" hx-target="#tab-content" hx-swap="innerHTML">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16v13H4z"/><path d="M7 4h10l3 3H4z"/><path d="M9 11h6M9 15h6"/></svg>
+      <span>Paks</span>
+    </button>
     <button class="tab-item {{if eq .ActiveTab "graph"}}active{{end}}" type="button" data-tab="graph"
             hx-get="/tab/graph" hx-target="#tab-content" hx-swap="innerHTML">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><path d="M9 6h6"/><path d="M7.5 8.5 11 15"/><path d="M16.5 8.5 13 15"/></svg>
@@ -2370,6 +2375,8 @@
       {{template "tab_chat" .}}
     {{else if eq .ActiveTab "loc"}}
       {{template "tab_loc" .}}
+    {{else if eq .ActiveTab "paks"}}
+      {{template "tab_paks" .}}
     {{else if eq .ActiveTab "graph"}}
       {{template "tab_graph" .}}
     {{else if eq .ActiveTab "settings"}}

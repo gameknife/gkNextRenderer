@@ -3,9 +3,91 @@
 #include <optional>
 #include <system_error>
 #include <cstring>
+#include <mutex>
+#include <set>
 
 namespace Utilities
 {
+    namespace FileHelper
+    {
+        namespace
+        {
+            std::mutex assetTraceMutex;
+            std::filesystem::path assetTracePath;
+            std::set<std::string> tracedAssets;
+
+            bool IsTraceableAsset(const std::string& relativePath)
+            {
+                if (relativePath.rfind("assets/", 0) != 0)
+                {
+                    return false;
+                }
+                // Runtime assets live below a named asset directory. Build-system
+                // stamps and cmake_install.cmake sit directly under assets/ and must
+                // never leak into a coverage-derived package.
+                if (relativePath.find('/', std::string("assets/").size()) == std::string::npos)
+                {
+                    return false;
+                }
+                const std::filesystem::path assetPath(relativePath);
+                return assetPath.extension() != ".pak" && assetPath.extension() != ".stamp";
+            }
+        }
+
+        void SetAssetTracePath(const std::filesystem::path& tracePath)
+        {
+            std::scoped_lock lock(assetTraceMutex);
+            assetTracePath = tracePath;
+            tracedAssets.clear();
+            if (!assetTracePath.empty() && assetTracePath.has_parent_path())
+            {
+                std::error_code errorCode;
+                std::filesystem::create_directories(assetTracePath.parent_path(), errorCode);
+            }
+        }
+
+        void RecordAssetReference(const std::filesystem::path& path, bool knownToExist)
+        {
+            std::scoped_lock lock(assetTraceMutex);
+            if (assetTracePath.empty())
+            {
+                return;
+            }
+
+            std::filesystem::path absolutePath = path;
+            if (!absolutePath.is_absolute())
+            {
+                absolutePath = GetRuntimeRoot() / absolutePath;
+            }
+            absolutePath = absolutePath.lexically_normal();
+
+            std::error_code errorCode;
+            const bool isFile = std::filesystem::is_regular_file(absolutePath, errorCode);
+            if (!knownToExist && !isFile)
+            {
+                return;
+            }
+
+            std::filesystem::path relativePath = std::filesystem::relative(absolutePath, GetRuntimeRoot(), errorCode);
+            if (errorCode)
+            {
+                return;
+            }
+            const std::string normalized = NormalizePathString(relativePath);
+            if (!IsTraceableAsset(normalized) || normalized.rfind("..", 0) == 0 || !tracedAssets.insert(normalized).second)
+            {
+                return;
+            }
+
+            std::ofstream writer(assetTracePath, std::ios::binary | std::ios::app);
+            if (writer.is_open())
+            {
+                writer << normalized << '\n';
+                writer.flush();
+            }
+        }
+    }
+
     namespace Package
     {
         namespace
@@ -116,17 +198,28 @@ namespace Utilities
 
             if (runMode_ != EPM_OsFile && hasMountedEntry)
             {
-                return LoadMountedEntryData(filemaps, mountedPaks, normalizedEntry, outData);
+                const bool loaded = LoadMountedEntryData(filemaps, mountedPaks, normalizedEntry, outData);
+                if (loaded)
+                {
+                    FileHelper::RecordAssetReference(normalizedEntry, true);
+                }
+                return loaded;
             }
 
             if (LoadOsFileData(normalizedEntry, outData))
             {
+                FileHelper::RecordAssetReference(normalizedEntry, true);
                 return true;
             }
 
             if (hasMountedEntry)
             {
-                return LoadMountedEntryData(filemaps, mountedPaks, normalizedEntry, outData);
+                const bool loaded = LoadMountedEntryData(filemaps, mountedPaks, normalizedEntry, outData);
+                if (loaded)
+                {
+                    FileHelper::RecordAssetReference(normalizedEntry, true);
+                }
+                return loaded;
             }
 
             SPDLOG_ERROR("LoadFile: Failed to open file: {}", normalizedEntry);
@@ -135,12 +228,19 @@ namespace Utilities
 
         bool FPackageFileSystem::LoadMountedFile(const std::string& entry, std::vector<uint8_t>& outData) const
         {
-            return LoadMountedEntryData(filemaps, mountedPaks, FileHelper::NormalizePathString(entry), outData);
+            const std::string normalizedEntry = FileHelper::NormalizePathString(entry);
+            const bool loaded = LoadMountedEntryData(filemaps, mountedPaks, normalizedEntry, outData);
+            if (loaded)
+            {
+                FileHelper::RecordAssetReference(normalizedEntry, true);
+            }
+            return loaded;
         }
 
         bool FPackageFileSystem::HasMountedEntry(const std::string& entry) const
         {
-            return filemaps.find(FileHelper::NormalizePathString(entry)) != filemaps.end();
+            const std::string normalizedEntry = FileHelper::NormalizePathString(entry);
+            return filemaps.find(normalizedEntry) != filemaps.end();
         }
 
         std::vector<std::string> FPackageFileSystem::ListMountedEntries(const std::string& prefix) const
@@ -351,6 +451,152 @@ namespace Utilities
             }
         }
 
+        bool FPackageFileSystem::PakFromList(const std::string& pakFile, const std::string& rootPath, const std::string& listPath, bool enableCompression, const std::string& manifestPath)
+        {
+            const std::filesystem::path absoluteRoot = std::filesystem::absolute(FileHelper::GetPlatformFilePath(rootPath.c_str()));
+            std::ifstream listReader(listPath);
+            if (!listReader.is_open())
+            {
+                SPDLOG_ERROR("PakFromList: Failed to open asset list: {}", listPath);
+                return false;
+            }
+
+            std::set<std::string> requestedEntries;
+            std::string line;
+            while (std::getline(listReader, line))
+            {
+                if (!line.empty() && line.back() == '\r')
+                {
+                    line.pop_back();
+                }
+                const std::string normalized = FileHelper::NormalizePathString(line);
+                if (!normalized.empty() && normalized.rfind("assets/", 0) == 0 && normalized.rfind("..", 0) != 0 && std::filesystem::path(normalized).extension() != ".pak")
+                {
+                    requestedEntries.insert(normalized);
+                }
+            }
+            if (requestedEntries.empty())
+            {
+                SPDLOG_ERROR("PakFromList: Asset list contains no usable entries: {}", listPath);
+                return false;
+            }
+
+            // Mount source paks so a trace produced while reading optional assets can
+            // be flattened into the new standalone pak instead of nesting whole paks.
+            const std::filesystem::path sourcePakDirectory = absoluteRoot / "assets" / "paks";
+            const std::filesystem::path absoluteOutputPak = std::filesystem::absolute(pakFile).lexically_normal();
+            std::error_code iterationError;
+            if (std::filesystem::exists(sourcePakDirectory, iterationError))
+            {
+                for (const auto& item : std::filesystem::directory_iterator(sourcePakDirectory, iterationError))
+                {
+                    if (item.is_regular_file() && item.path().extension() == ".pak" &&
+                        std::filesystem::absolute(item.path()).lexically_normal() != absoluteOutputPak)
+                    {
+                        MountPak(item.path().string());
+                    }
+                }
+            }
+
+            std::map<std::string, std::vector<uint8_t>> payloads;
+            bool complete = true;
+            for (const std::string& name : requestedEntries)
+            {
+                std::vector<uint8_t> data;
+                const std::filesystem::path source = absoluteRoot / name;
+                std::ifstream reader(source, std::ios::binary);
+                if (reader.is_open())
+                {
+                    reader.seekg(0, std::ios::end);
+                    const size_t size = static_cast<size_t>(reader.tellg());
+                    reader.seekg(0, std::ios::beg);
+                    data.resize(size);
+                    reader.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(size));
+                }
+                else if (!LoadMountedEntryData(filemaps, mountedPaks, name, data))
+                {
+                    SPDLOG_ERROR("PakFromList: Traced asset is unavailable: {}", name);
+                    complete = false;
+                    continue;
+                }
+                payloads.emplace(name, std::move(data));
+            }
+            if (!complete)
+            {
+                return false;
+            }
+
+            filemaps.clear();
+            mountedPaks.clear();
+            for (const auto& [name, data] : payloads)
+            {
+                filemaps[name] = {name, 0, 0, static_cast<uint32_t>(data.size()), static_cast<uint32_t>(data.size())};
+            }
+
+            std::ofstream writer(pakFile, std::ios::binary);
+            if (!writer.is_open())
+            {
+                SPDLOG_ERROR("PakFromList: Failed to open output pak: {}", pakFile);
+                return false;
+            }
+            writer.write("GNP", 3);
+            const uint32_t entryCount = static_cast<uint32_t>(filemaps.size());
+            writer.write(reinterpret_cast<const char*>(&entryCount), sizeof(uint32_t));
+            for (const auto& [key, value] : filemaps)
+            {
+                writer.write(value.name.c_str(), static_cast<std::streamsize>(value.name.size()));
+                writer.write("\0", 1);
+            }
+
+            const auto indexPosition = writer.tellp();
+            uint32_t offset = static_cast<uint32_t>(indexPosition) + entryCount * 4 * 3;
+            writer.seekp(offset);
+            for (auto& [name, value] : filemaps)
+            {
+                const std::vector<uint8_t>& data = payloads.at(name);
+                if (enableCompression && !data.empty())
+                {
+                    const int maximumSize = lzav_compress_bound_hi(static_cast<int>(data.size()));
+                    std::vector<uint8_t> compressed(static_cast<size_t>(maximumSize));
+                    const int compressedSize = lzav_compress_hi(data.data(), compressed.data(), static_cast<int>(data.size()), maximumSize);
+                    writer.write(reinterpret_cast<const char*>(compressed.data()), compressedSize);
+                    value.size = static_cast<uint32_t>(compressedSize);
+                }
+                else
+                {
+                    writer.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
+                    value.size = static_cast<uint32_t>(data.size());
+                }
+            }
+            writer.seekp(indexPosition);
+            for (auto& [key, value] : filemaps)
+            {
+                value.offset = offset;
+                writer.write(reinterpret_cast<const char*>(&value.offset), sizeof(uint32_t));
+                writer.write(reinterpret_cast<const char*>(&value.size), sizeof(uint32_t));
+                writer.write(reinterpret_cast<const char*>(&value.uncompressSize), sizeof(uint32_t));
+                offset += value.size;
+            }
+            writer.close();
+
+            if (!manifestPath.empty())
+            {
+                std::ofstream manifestWriter(manifestPath, std::ios::binary);
+                manifestWriter << "{\n  \"entries\": [\n";
+                bool first = true;
+                for (const auto& [key, value] : filemaps)
+                {
+                    if (!first) manifestWriter << ",\n";
+                    first = false;
+                    manifestWriter << "    {\"name\": \"" << value.name << "\", \"size\": " << value.size
+                                   << ", \"uncompressedSize\": " << value.uncompressSize << "}";
+                }
+                manifestWriter << "\n  ]\n}\n";
+            }
+            SPDLOG_INFO("PakFromList: wrote {} entries to {}", entryCount, pakFile);
+            return true;
+        }
+
         void FPackageFileSystem::Reset()
         {
             filemaps.clear();
@@ -405,6 +651,73 @@ namespace Utilities
             reader.close();
 
             SPDLOG_INFO("Pak: mount {} with {} entries", pakFile.c_str(), entryCount);
+        }
+    }
+
+    namespace FileHelper
+    {
+        std::string ResolvePlatformFilePath(const char* srcPath)
+        {
+            const std::filesystem::path relativePath = std::filesystem::path(srcPath).lexically_normal();
+            const std::filesystem::path diskPath = (GetRuntimeRoot() / relativePath).lexically_normal();
+            std::error_code errorCode;
+            if (std::filesystem::is_regular_file(diskPath, errorCode))
+            {
+                RecordAssetReference(diskPath, true);
+                return diskPath.string();
+            }
+            if (std::filesystem::is_directory(diskPath, errorCode))
+            {
+                // Directory discovery is not asset consumption. The caller may only
+                // be building a scene/content-browser list, so do not trace children.
+                return diskPath.string();
+            }
+
+            auto* packageSystem = Package::FPackageFileSystem::TryGetInstance();
+            if (packageSystem == nullptr || relativePath.is_absolute())
+            {
+                return diskPath.string();
+            }
+
+            const std::string normalized = NormalizePathString(relativePath);
+            std::vector<std::string> entries;
+            if (packageSystem->HasMountedEntry(normalized))
+            {
+                entries.push_back(normalized);
+            }
+            else
+            {
+                std::string prefix = normalized;
+                if (!prefix.empty() && prefix.back() != '/')
+                {
+                    prefix.push_back('/');
+                }
+                entries = packageSystem->ListMountedEntries(prefix);
+            }
+            if (entries.empty())
+            {
+                return diskPath.string();
+            }
+
+            const std::filesystem::path cacheRoot = GetWritableRuntimeRoot() / "asset-cache";
+            for (const std::string& entry : entries)
+            {
+                if (!IsTraceableAsset(entry) || entry.rfind("..", 0) == 0)
+                {
+                    SPDLOG_WARN("Pak: refusing to materialize unsafe entry '{}'", entry);
+                    continue;
+                }
+                std::vector<uint8_t> data;
+                if (!packageSystem->LoadMountedFile(entry, data))
+                {
+                    continue;
+                }
+                const std::filesystem::path destination = (cacheRoot / entry).lexically_normal();
+                std::filesystem::create_directories(destination.parent_path(), errorCode);
+                std::ofstream writer(destination, std::ios::binary | std::ios::trunc);
+                writer.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
+            }
+            return (cacheRoot / relativePath).lexically_normal().string();
         }
     }
 }

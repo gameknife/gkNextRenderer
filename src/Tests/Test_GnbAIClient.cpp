@@ -1,5 +1,6 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Modules/NextAI/GnbClient/GnbAIClient.hpp"
+#include "Modules/NextAI/AIService.hpp"
 
 #include <catch2/catch_all.hpp>
 #include <fstream>
@@ -13,6 +14,31 @@ namespace
     {
         return std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
     }
+}
+
+TEST_CASE("AI service remains unavailable when the gnb sidecar is absent", "[Unit][AI][Bridge]")
+{
+#if defined(_WIN32)
+    _putenv_s("GKNEXT_DISABLE_GNB_SIDECAR", "1");
+#else
+    setenv("GKNEXT_DISABLE_GNB_SIDECAR", "1", 1);
+#endif
+    {
+        FAIService service;
+        REQUIRE_FALSE(service.IsConfigured());
+        REQUIRE(service.GetStatus() == EAIStatus::NotConfigured);
+        REQUIRE_FALSE(service.SetProfile("magicalego-script"));
+        REQUIRE_FALSE(service.SetCurrentModel("unused"));
+        FChatRequest request;
+        request.messages.push_back(FChatMessage::User("hello"));
+        REQUIRE_FALSE(service.Chat(request).success);
+        REQUIRE(service.GetStatus() == EAIStatus::NotConfigured);
+    }
+#if defined(_WIN32)
+    _putenv_s("GKNEXT_DISABLE_GNB_SIDECAR", "");
+#else
+    unsetenv("GKNEXT_DISABLE_GNB_SIDECAR");
+#endif
 }
 
 TEST_CASE("Gnb AI bridge v2 shared fixtures contain valid JSON-RPC frames", "[Unit][AI][Bridge]")

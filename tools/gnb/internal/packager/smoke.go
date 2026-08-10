@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -30,11 +31,16 @@ type SmokeOptions struct {
 }
 
 // requiredEntries are archive members that must exist for the package to be
-// usable straight out of the zip.
+// usable straight out of the release archive.
 var requiredEntries = []string{
 	"README.txt",
 	"LICENSE",
 	"THIRD-PARTY-NOTICES.md",
+}
+
+var legacyReleaseTargets = []string{"gkNextRenderer", "gkNextEditor", "gkNextMotionBenchmark"}
+
+var legacyRequiredAssets = []string{
 	"assets/configs/cvar_default.json",
 	"assets/shaders",
 	"assets/textures",
@@ -88,7 +94,11 @@ func Smoke(archive string, opts SmokeOptions) error {
 	failures = append(failures, checkForbidden(names)...)
 	failures = append(failures, checkRequired(staging)...)
 
-	for _, target := range releaseTargets {
+	targets, manifestErr := smokeTargets(staging)
+	if manifestErr != nil {
+		failures = append(failures, manifestErr.Error())
+	}
+	for _, target := range targets {
 		exe := filepath.Join(staging, "bin", target+platformExeExt())
 		if _, statErr := os.Stat(exe); statErr != nil {
 			failures = append(failures, fmt.Sprintf("missing executable bin/%s%s", target, platformExeExt()))
@@ -120,7 +130,37 @@ func Smoke(archive string, opts SmokeOptions) error {
 	return nil
 }
 
+func smokeTargets(staging string) ([]string, error) {
+	path := filepath.Join(staging, "package.manifest.json")
+	raw, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return legacyReleaseTargets, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read package.manifest.json: %w", err)
+	}
+	var manifest packageManifest
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		return nil, fmt.Errorf("parse package.manifest.json: %w", err)
+	}
+	if len(manifest.Targets) == 0 {
+		return nil, fmt.Errorf("package.manifest.json contains no targets")
+	}
+	return manifest.Targets, nil
+}
+
 func extractArchive(archive string, staging string) ([]string, error) {
+	switch strings.ToLower(filepath.Ext(archive)) {
+	case ".7z":
+		return extract7zArchive(archive, staging)
+	case ".zip":
+		return extractZipArchive(archive, staging)
+	default:
+		return nil, fmt.Errorf("unsupported package archive %q; expected .7z or legacy .zip", archive)
+	}
+}
+
+func extractZipArchive(archive string, staging string) ([]string, error) {
 	reader, err := zip.OpenReader(archive)
 	if err != nil {
 		return nil, err
@@ -180,6 +220,19 @@ func checkForbidden(names []string) []string {
 func checkRequired(staging string) []string {
 	var failures []string
 	for _, rel := range requiredEntries {
+		if _, err := os.Stat(filepath.Join(staging, filepath.FromSlash(rel))); err != nil {
+			failures = append(failures, "package is missing "+rel)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(staging, "assets", "paks", "runtime.pak")); err == nil {
+		for _, rel := range []string{"assets/paks/runtime-assets.txt", "assets/paks/runtime.manifest.json"} {
+			if _, statErr := os.Stat(filepath.Join(staging, filepath.FromSlash(rel))); statErr != nil {
+				failures = append(failures, "package is missing "+rel)
+			}
+		}
+		return failures
+	}
+	for _, rel := range legacyRequiredAssets {
 		if _, err := os.Stat(filepath.Join(staging, filepath.FromSlash(rel))); err != nil {
 			failures = append(failures, "package is missing "+rel)
 		}

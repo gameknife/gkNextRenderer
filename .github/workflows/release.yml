@@ -1,4 +1,4 @@
-name: Release NextRenderer
+name: Release gkNextEngine
 
 on:
   push:
@@ -47,7 +47,7 @@ jobs:
 
   linux-build:
     needs: make-release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -55,22 +55,42 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: '1.23.x'
+      - name: Cache key
+        id: gnb
+        shell: pwsh
+        run: |
+          "key=$(./gnb.sh info --bincache-key)" >> $env:GITHUB_OUTPUT
+      - uses: actions/cache/restore@v6
+        id: cache-vcpkg-restore
+        with:
+          path: |
+            .vcpkg
+            .vcpkg_bincache
+          key: ${{ steps.gnb.outputs.key }}
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install curl unzip tar ninja-build libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev
+          sudo apt-get install curl unzip p7zip-full tar ninja-build libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev
       - name: Build and package
         run: |
           echo "BUILDVER(${{ github.ref_name }})" > src/build.version
           ./gnb.sh setup
           ./gnb.sh build gkNextRenderer gkNextEditor gkNextMotionBenchmark
-          ./gnb.sh package linux --version ${{ github.ref_name }}
+          ./gnb.sh package linux --package-preset default --version ${{ github.ref_name }}
       - name: Smoke test package
-        run: ./gnb.sh smoke ./gknextrenderer_linux64_${{ github.ref_name }}.zip
+        run: ./gnb.sh smoke ./gknextrenderer_linux64_${{ github.ref_name }}.7z
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: ./gknextrenderer_linux64_${{ github.ref_name }}.zip
+          files: ./gknextrenderer_linux64_${{ github.ref_name }}.7z
+
+      - uses: actions/cache/save@v6
+        if: steps.cache-vcpkg-restore.outputs.cache-hit != 'true'
+        with:
+          path: |
+            .vcpkg
+            .vcpkg_bincache
+          key: ${{ steps.gnb.outputs.key }}
 
   windows-build:
     needs: make-release
@@ -82,25 +102,50 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: '1.23.x'
+      - name: Cache key
+        id: gnb
+        shell: pwsh
+        run: |
+          "key=$(./gnb.bat info --bincache-key)" >> $env:GITHUB_OUTPUT
+      - uses: actions/cache/restore@v6
+        id: cache-vcpkg-restore
+        with:
+          path: |
+            .vcpkg
+            .vcpkg_bincache
+          key: ${{ steps.gnb.outputs.key }}
       - uses: microsoft/setup-msbuild@v3
-      - name: Build and package
+      - name: Build and package default and MagicaLego
         run: |
           echo BUILDVER(${{ github.ref_name }}) > src/build.version
           .\gnb.bat setup
-          .\gnb.bat build gkNextRenderer gkNextEditor gkNextMotionBenchmark
-          .\gnb.bat package windows --version ${{ github.ref_name }}
+          .\gnb.bat build gkNextRenderer gkNextEditor gkNextMotionBenchmark MagicaLego Packager
+          .\gnb.bat package windows --package-preset default --version ${{ github.ref_name }}
+          .\gnb.bat package windows --package-preset magicalego --trace-assets --version ${{ github.ref_name }}
         shell: cmd
-      - name: Smoke test package
-        run: .\gnb.bat smoke gknextrenderer_win64_${{ github.ref_name }}.zip
+      - name: Smoke test packages
+        run: |
+          .\gnb.bat smoke gknextrenderer_win64_${{ github.ref_name }}.7z
+          .\gnb.bat smoke MagicaLego_win64_${{ github.ref_name }}.7z
         shell: cmd
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: ./gknextrenderer_win64_${{ github.ref_name }}.zip
+          files: |
+            ./gknextrenderer_win64_${{ github.ref_name }}.7z
+            ./MagicaLego_win64_${{ github.ref_name }}.7z
+
+      - uses: actions/cache/save@v6
+        if: steps.cache-vcpkg-restore.outputs.cache-hit != 'true'
+        with:
+          path: |
+            .vcpkg
+            .vcpkg_bincache
+          key: ${{ steps.gnb.outputs.key }}
 
   macos-build:
     needs: make-release
-    runs-on: macos-14
+    runs-on: macos-latest
     permissions:
       contents: write
     steps:
@@ -108,15 +153,36 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: '1.23.x'
+      - name: Cache key
+        id: gnb
+        shell: pwsh
+        run: |
+          "key=$(./gnb.sh info --bincache-key)" >> $env:GITHUB_OUTPUT
+      - uses: actions/cache/restore@v6
+        id: cache-vcpkg-restore
+        with:
+          path: |
+            .vcpkg
+            .vcpkg_bincache
+          key: ${{ steps.gnb.outputs.key }}
+      - name: Install 7-Zip
+        run: brew install sevenzip
       - name: Build and package
         run: |
           echo "BUILDVER(${{ github.ref_name }})" > src/build.version
           ./gnb.sh setup
           ./gnb.sh build gkNextRenderer gkNextEditor gkNextMotionBenchmark
-          ./gnb.sh package macos --version ${{ github.ref_name }}
+          ./gnb.sh package macos --package-preset default --version ${{ github.ref_name }}
       - name: Smoke test package
-        run: ./gnb.sh smoke ./gknextrenderer_macos_${{ github.ref_name }}.zip
+        run: ./gnb.sh smoke ./gknextrenderer_macos_${{ github.ref_name }}.7z
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: ./gknextrenderer_macos_${{ github.ref_name }}.zip
+          files: ./gknextrenderer_macos_${{ github.ref_name }}.7z
+      - uses: actions/cache/save@v6
+        if: steps.cache-vcpkg-restore.outputs.cache-hit != 'true'
+        with:
+          path: |
+            .vcpkg
+            .vcpkg_bincache
+          key: ${{ steps.gnb.outputs.key }}

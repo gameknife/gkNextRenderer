@@ -16,6 +16,7 @@ type Config struct {
 	Vcpkg    VcpkgConfig     `toml:"vcpkg"`
 	External ExternalConfig  `toml:"external"`
 	Paks     PaksConfig      `toml:"paks"`
+	Package  PackageConfig   `toml:"package"`
 	Targets  TargetsConfig   `toml:"targets"`
 	AI       aiconfig.Config `toml:"ai"`
 }
@@ -130,6 +131,18 @@ type PakAsset struct {
 	Dest string `toml:"dest"`
 }
 
+type PackageConfig struct {
+	DefaultPreset string                         `toml:"default_preset"`
+	Presets       map[string]PackagePresetConfig `toml:"presets"`
+}
+
+type PackagePresetConfig struct {
+	Targets             []string `toml:"targets"`
+	ArchiveName         string   `toml:"archive_name"`
+	AlwaysIncludeAssets []string `toml:"always_include_assets"`
+	ExtraFiles          []string `toml:"extra_files"`
+}
+
 type TargetsConfig struct {
 	Default string   `toml:"default"`
 	All     []string `toml:"all"`
@@ -189,6 +202,9 @@ func Load(repoRoot string) (Config, error) {
 	}
 	if cfg.External.VulkanSDK.Root == "" {
 		cfg.External.VulkanSDK.Root = "external/VulkanSDK"
+	}
+	if cfg.Package.DefaultPreset == "" {
+		cfg.Package.DefaultPreset = "default"
 	}
 	applyLLMDefaults(&cfg.External.LLM)
 	aiconfig.ApplyDefaults(&cfg.AI)

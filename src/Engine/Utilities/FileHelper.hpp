@@ -15,6 +15,13 @@ namespace Utilities
 {
     namespace FileHelper
     {
+        // Runtime asset tracing is opt-in. The trace contains normalized project-root
+        // relative paths, one per line, and is consumed by `gnb package --asset-trace`.
+        // Writes and files outside assets/ are deliberately ignored.
+        void SetAssetTracePath(const std::filesystem::path& tracePath);
+        void RecordAssetReference(const std::filesystem::path& path, bool knownToExist = false);
+        std::string ResolvePlatformFilePath(const char* srcPath);
+
         static std::filesystem::path GetDesktopRuntimeRoot()
         {
             return (NextRenderer::GetExecutableDirectory() / "..").lexically_normal();
@@ -107,7 +114,7 @@ namespace Utilities
         
         static std::string GetPlatformFilePath( const char* srcPath )
         {
-            return GetRuntimeRoot().append(srcPath).string();
+            return ResolvePlatformFilePath(srcPath);
         }
 
         // Path for data the application produces (settings, logs, screenshots, layout).
@@ -146,6 +153,7 @@ namespace Utilities
                 for (const auto& entry : std::filesystem::directory_iterator(directory)) {
                     if (entry.is_regular_file() && entry.path().filename().string() == pattern) {
                         normalizedPath =  std::filesystem::absolute(entry.path()).string();
+                        RecordAssetReference(entry.path(), true);
                         break;
                     }
                 }    
@@ -225,6 +233,7 @@ namespace Utilities
             
             // Paking
             void PakAll(const std::string& pakFile, const std::string& srcDir, const std::string& rootPath, const std::string& regex = "", bool enableCompression = true, const std::string& manifestPath = "");
+            bool PakFromList(const std::string& pakFile, const std::string& rootPath, const std::string& listPath, bool enableCompression = true, const std::string& manifestPath = "");
 
             static FPackageFileSystem& GetInstance()
             {
@@ -253,7 +262,9 @@ namespace Utilities
         static bool IsAssetAvailable(const std::string& relativePath)
         {
             std::error_code ec;
-            if (std::filesystem::exists(GetPlatformFilePath(relativePath.c_str()), ec))
+            // Availability checks are probes, not reads. Avoid GetPlatformFilePath()
+            // here because resolving a concrete disk file is intentionally traced.
+            if (std::filesystem::exists(GetRuntimeRoot() / relativePath, ec))
             {
                 return true;
             }

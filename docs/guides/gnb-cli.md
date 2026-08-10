@@ -48,10 +48,22 @@ last_updated: 2026-07-17
 ./gnb.sh loc
 ./gnb.sh graph
 ./gnb.sh paks list
-./gnb.sh package <windows|linux|macos|magicalego>
+./gnb.sh package <windows|linux|macos>
+# 使用 gnb.toml 的 default package preset，隐藏运行其目标并生成单一 runtime.pak
+./gnb.sh package windows --trace-assets --version v0.1.2.0
+# 使用独立的 MagicaLego preset，但复用完全相同的 trace / runtime.pak / 7z 流程
+./gnb.sh package windows --package-preset magicalego --trace-assets --version m0.1.0
+# 复用多轮运行合并出的覆盖清单（也适合无 GPU / 跨平台打包环境）
+./gnb.sh package windows --asset-trace out/build/windows/asset-traces/release-assets.txt --version v0.1.2.0
+# 可选：显式携带 gnb agent sidecar（默认不打包）
+./gnb.sh package windows --include-gnb --version v0.1.2.0
 ./gnb.sh git status
 ./gnb.sh typos
 ```
+
+package preset 配置在 `gnb.toml` 的 `[package.presets.<name>]`，可独立声明 `targets`、
+`archive_name`、`always_include_assets` 和 `extra_files`。精确包会合并当前 preset 的
+`always_include_assets`；新增产品只需增加 preset，无需修改 packager 分支。
 
 裸 `gnb` 启动 Dashboard。Windows/macOS 使用 Wails 原生窗口；Linux build 回退浏览器，`dashboard --no-open` 为 server-only。
 

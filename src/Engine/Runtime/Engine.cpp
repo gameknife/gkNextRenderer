@@ -285,8 +285,13 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
 
     services_.packageFileSystem.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
     {
-        const std::string optionalPakPath = Utilities::FileHelper::GetPlatformFilePath("assets/paks/optional.pak");
+        const std::string runtimePakPath = Utilities::FileHelper::GetPlatformFilePath("assets/paks/runtime.pak");
         std::error_code ec;
+        if (std::filesystem::exists(runtimePakPath, ec))
+        {
+            services_.packageFileSystem->MountPak(runtimePakPath);
+        }
+        const std::string optionalPakPath = Utilities::FileHelper::GetPlatformFilePath("assets/paks/optional.pak");
         if (std::filesystem::exists(optionalPakPath, ec))
         {
             services_.packageFileSystem->MountPak(optionalPakPath);

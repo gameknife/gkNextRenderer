@@ -118,6 +118,36 @@ idle_seconds = 600
 repo = "gameknife/gkNextEngine"
 release_tag = "paks-latest"
 
+[package]
+default_preset = "default"
+
+[package.presets.default]
+targets = ["gkNextRenderer", "gkNextEditor", "gkNextMotionBenchmark"]
+archive_name = "gknextrenderer_{platform}_{version}.7z"
+always_include_assets = [
+  "assets/models/conf_room.glb",
+  "assets/models/pbr.glb",
+  "assets/models/playground.glb",
+]
+
+[package.presets.magicalego]
+targets = ["MagicaLego"]
+archive_name = "MagicaLego_{platform}_{version}.7z"
+always_include_assets = [
+  "assets/sfx/bgm.mp3",
+  "assets/sfx/bgm2.mp3",
+  "assets/sfx/put.mp3",
+  "assets/sfx/put1.wav",
+  "assets/sfx/put2.wav",
+  "assets/sfx/put3.wav",
+  "assets/legos/diorama.mls",
+  "assets/legos/diorama1.mls",
+  "assets/legos/diorama2.mls",
+  "assets/legos/diorama3.mls",
+  "assets/legos/gastation.mls",
+]
+extra_files = ["bin/ffmpeg.exe"]
+
 [[paks.assets]]
 id = "ldraw"
 name = "ldraw.pak"
