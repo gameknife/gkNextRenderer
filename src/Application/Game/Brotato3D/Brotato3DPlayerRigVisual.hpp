@@ -15,7 +15,7 @@ namespace Assets
     class Node;
     class Scene;
     struct FMaterial;
-    struct Model;
+    class Model;
 }
 
 namespace Brotato3D
