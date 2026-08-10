@@ -169,6 +169,42 @@ func TestPackageArchivePathUsesPresetTemplate(t *testing.T) {
 	}
 }
 
+func TestCollectMacOSVulkanRuntimePackagesLoaderMoltenVKAndManifest(t *testing.T) {
+	repoRoot := t.TempDir()
+	sdkLib := filepath.Join(repoRoot, "external", "VulkanSDK", "1.4.0", "macOS", "lib")
+	if err := os.MkdirAll(sdkLib, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repoRoot, "external", "VulkanSDK", ".current_version"), []byte("1.4.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"libvulkan.1.dylib", "libMoltenVK.dylib"} {
+		if err := os.WriteFile(filepath.Join(sdkLib, name), []byte(name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	buildRoot := filepath.Join(repoRoot, "out", "build", "macos-arm64")
+	entries, err := collectMacOSVulkanRuntime(repoRoot, buildRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 3 {
+		t.Fatalf("runtime entries = %#v, want three entries", entries)
+	}
+	if entries[0].name != "bin/libvulkan.1.dylib" || entries[1].name != "bin/libMoltenVK.dylib" ||
+		entries[2].name != "bin/vulkan/icd.d/MoltenVK_icd.json" {
+		t.Fatalf("unexpected runtime entries: %#v", entries)
+	}
+	manifest, err := os.ReadFile(entries[2].source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(manifest), "../../libMoltenVK.dylib") {
+		t.Fatalf("packaged manifest does not point at the bundled MoltenVK: %s", manifest)
+	}
+}
+
 func TestValidatePresetRejectsEmptyTargets(t *testing.T) {
 	err := validatePreset(Preset{Name: "empty", ArchiveName: "empty_{version}.7z"})
 	if err == nil {

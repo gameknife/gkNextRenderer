@@ -204,6 +204,14 @@ func collectDesktopEntries(repoRoot, buildRoot, variant, version string, preset 
 		found[name] = true
 	}
 
+	if variant == "macos" {
+		vulkanRuntime, err := collectMacOSVulkanRuntime(repoRoot, buildRoot)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, vulkanRuntime...)
+	}
+
 	extraFiles, err := collectPaths(buildRoot, preset.ExtraFiles)
 	if err != nil {
 		return nil, err
@@ -231,6 +239,78 @@ func collectDesktopEntries(repoRoot, buildRoot, variant, version string, preset 
 		return nil, err
 	}
 	return append(entries, docs...), nil
+}
+
+// collectMacOSVulkanRuntime packages the Vulkan loader, MoltenVK ICD and its
+// manifest. macOS does not provide a system Vulkan runtime; a release must not
+// rely on the absolute Vulkan SDK rpath recorded on the build machine.
+func collectMacOSVulkanRuntime(repoRoot, buildRoot string) ([]entry, error) {
+	sdkRoot, err := macOSVulkanSDKRoot(repoRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	libDir := filepath.Join(sdkRoot, "macOS", "lib")
+	files := []struct {
+		source string
+		name   string
+	}{
+		{source: filepath.Join(libDir, "libvulkan.1.dylib"), name: "bin/libvulkan.1.dylib"},
+		{source: filepath.Join(libDir, "libMoltenVK.dylib"), name: "bin/libMoltenVK.dylib"},
+	}
+
+	entries := make([]entry, 0, len(files)+1)
+	for _, file := range files {
+		info, statErr := os.Stat(file.source)
+		if statErr != nil {
+			return nil, fmt.Errorf("macOS Vulkan runtime file %s: %w", file.source, statErr)
+		}
+		if info.IsDir() {
+			return nil, fmt.Errorf("macOS Vulkan runtime file is a directory: %s", file.source)
+		}
+		entries = append(entries, entry{source: file.source, name: file.name})
+	}
+
+	// The packaged layout is bin/vulkan/icd.d/MoltenVK_icd.json. The loader
+	// resolves this path relative to the manifest, so ../../ reaches bin/.
+	manifestPath := filepath.Join(buildRoot, "package-runtime", "vulkan", "icd.d", "MoltenVK_icd.json")
+	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+		return nil, err
+	}
+	manifest := "{\n" +
+		"    \"file_format_version\": \"1.0.0\",\n" +
+		"    \"ICD\": {\n" +
+		"        \"library_path\": \"../../libMoltenVK.dylib\",\n" +
+		"        \"api_version\": \"1.4.0\",\n" +
+		"        \"is_portability_driver\": true\n" +
+		"    }\n" +
+		"}\n"
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o644); err != nil {
+		return nil, err
+	}
+	entries = append(entries, entry{source: manifestPath, name: "bin/vulkan/icd.d/MoltenVK_icd.json"})
+	return entries, nil
+}
+
+func macOSVulkanSDKRoot(repoRoot string) (string, error) {
+	root := filepath.Join(repoRoot, "external", "VulkanSDK")
+	versionPath := filepath.Join(root, ".current_version")
+	versionData, err := os.ReadFile(versionPath)
+	if err != nil {
+		return "", fmt.Errorf("read macOS Vulkan SDK version %s: %w", versionPath, err)
+	}
+	version := strings.TrimSpace(string(versionData))
+	if version == "" || filepath.Base(version) != version {
+		return "", fmt.Errorf("invalid macOS Vulkan SDK version in %s", versionPath)
+	}
+	sdkRoot := filepath.Join(root, version)
+	if info, statErr := os.Stat(filepath.Join(sdkRoot, "macOS")); statErr != nil || !info.IsDir() {
+		if statErr != nil {
+			return "", fmt.Errorf("macOS Vulkan SDK %s: %w", sdkRoot, statErr)
+		}
+		return "", fmt.Errorf("macOS Vulkan SDK is missing macOS/: %s", sdkRoot)
+	}
+	return sdkRoot, nil
 }
 
 func preparePreciseAssets(repoRoot, buildPreset, buildRoot string, packagePreset Preset, opts Options) (string, error) {

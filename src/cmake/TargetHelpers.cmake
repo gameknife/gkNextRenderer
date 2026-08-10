@@ -205,6 +205,12 @@ function(gk_configure_application target)
         target_link_libraries(${target} PRIVATE gkNextEngine)
     endif()
 
+    # Release archives place the macOS Vulkan loader next to each executable.
+    # Keep this relocatable rpath in addition to CMake's SDK build rpath.
+    if(APPLE AND NOT IOS)
+        set_property(TARGET ${target} APPEND PROPERTY BUILD_RPATH "@executable_path")
+    endif()
+
     if(NOT ARG_NO_UNITY)
         gk_enable_unity_build(${target} 8)
     endif()
