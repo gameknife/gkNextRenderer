@@ -22,7 +22,6 @@ if [ -d "$INPUT_PATH" ]; then
                 -name external -o \
                 -name ThirdParty -o \
                 -name vcpkg-overlays -o \
-                -name custom-triplets -o \
                 -path '*/tools/tests/build_system/fixtures' \
             \) -prune \) -o \
             \( -type f \( -name CMakeLists.txt -o -name '*.cmake' \) -print \)

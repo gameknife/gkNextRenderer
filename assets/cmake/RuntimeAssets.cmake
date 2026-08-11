@@ -1,6 +1,11 @@
 set(output_base_dir ${CMAKE_CURRENT_BINARY_DIR})
 if(ANDROID)
-    set(output_base_dir ${CMAKE_CURRENT_SOURCE_DIR}/../android/app/src/main/assets/assets/)
+    if(NOT GK_ANDROID_ASSET_OUTPUT_DIR)
+        message(FATAL_ERROR
+            "GK_ANDROID_ASSET_OUTPUT_DIR is required for Android builds. "
+            "Configure Android through tools/android so assets stay in the build tree.")
+    endif()
+    get_filename_component(output_base_dir "${GK_ANDROID_ASSET_OUTPUT_DIR}" ABSOLUTE)
 elseif(IOS)
     set(output_base_dir ${CMAKE_CURRENT_BINARY_DIR}/assets/)
 endif()

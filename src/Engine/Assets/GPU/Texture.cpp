@@ -542,7 +542,14 @@ namespace Assets
                         // ldr texture, try cache fist
                         // hash the texname
                         std::string cacheFileName = Utilities::CookHelper::GetCookedFileName(fmt::format("{:016x}", hasher(texname)), "texktx");
-                        if (!std::filesystem::exists(cacheFileName))
+#if ANDROID
+                        // libktx's writer trips Android FORTIFY in appendLibId. The cache is optional,
+                        // so keep the in-memory compression path and avoid reading/writing KTX files.
+                        constexpr bool useKtxDiskCache = false;
+#else
+                        constexpr bool useKtxDiskCache = true;
+#endif
+                        if (!useKtxDiskCache || !std::filesystem::exists(cacheFileName))
                         {
                             // load from stbi and compress to ktx and cache
                             stbdata = stbi_load_from_memory(copiedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha);
@@ -572,7 +579,14 @@ namespace Assets
                             result = ktxTexture2_CompressBasisEx(kTexture, &params);
                             if (KTX_SUCCESS != result) Throw(std::runtime_error("failed to compress ktx2 image "));
                             // save to cache
-                            ktxTexture_WriteToNamedFile(ktxTexture(kTexture), cacheFileName.c_str());
+                            if (useKtxDiskCache)
+                            {
+                                result = ktxTexture_WriteToNamedFile(ktxTexture(kTexture), cacheFileName.c_str());
+                                if (result != KTX_SUCCESS)
+                                {
+                                    SPDLOG_WARN("Failed to cache KTX2 texture '{}': {}", texname, static_cast<int>(result));
+                                }
+                            }
                         }
                         else
                         {

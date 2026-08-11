@@ -85,6 +85,6 @@ namespace NextAI
         EAIStatus status_ = EAIStatus::NotConfigured;
         std::string statusMessage_;
         std::mutex asyncThreadsMutex_;
-        std::vector<std::jthread> asyncThreads_;
+        std::vector<std::thread> asyncThreads_;
     };
 }

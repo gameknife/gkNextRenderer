@@ -21,7 +21,8 @@
 ./gnb.sh build
 
 # Android
-./gnb.sh android
+./gnb.sh android debug    # 构建、安装、启动
+./gnb.sh android release  # 只构建 APK
 ```
 
 **⚠️ 按范围选目标，默认无需全量构建：**

@@ -291,6 +291,7 @@ function(gk_configure_android_runtime target)
         imgui::imgui
         draco::draco
         WebP::webp
+        WebP::libwebpmux
         RmlUi::RmlUi
         Jolt::Jolt
         ${Vulkan_LIBRARIES}

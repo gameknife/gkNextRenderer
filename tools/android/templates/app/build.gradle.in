@@ -1,0 +1,104 @@
+plugins {
+    id 'com.android.application'
+}
+
+def releaseSigningPropertiesPath = '@GK_ANDROID_SIGNING_PROPERTIES@'
+def releaseSigningPropertiesFile = releaseSigningPropertiesPath ? file(releaseSigningPropertiesPath) : null
+def releaseSigningProperties = new Properties()
+def releaseSigningEnabled = releaseSigningPropertiesFile != null && releaseSigningPropertiesFile.isFile()
+if (releaseSigningEnabled) {
+    releaseSigningPropertiesFile.withInputStream { releaseSigningProperties.load(it) }
+}
+
+android {
+    namespace 'com.gknext.renderer'
+    compileSdk 35
+    ndkVersion '@GK_ANDROID_NDK_VERSION@'
+    ndkPath '@GK_ANDROID_NDK_ROOT@'
+
+    defaultConfig {
+        applicationId 'com.gknext.renderer'
+        minSdk 21
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+
+        ndk {
+            abiFilters '@GK_ANDROID_ABI@'
+        }
+
+        externalNativeBuild {
+            cmake {
+                targets 'gkNextRenderer'
+                arguments '-DANDROID_STL=c++_shared',
+                        '-DANDROID_PLATFORM=android-33',
+                        '-DANDROID_NATIVE_API_LEVEL=33',
+                        '-DVCPKG_CMAKE_SYSTEM_VERSION=33',
+                        '-DVCPKG_TARGET_TRIPLET=arm64-android',
+                        '-DCMAKE_TOOLCHAIN_FILE=@GK_VCPKG_TOOLCHAIN@',
+                        '-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=@GK_NDK_TOOLCHAIN@',
+                        '-DGK_ANDROID_ASSET_OUTPUT_DIR=@GK_ANDROID_ASSET_OUTPUT_DIR@',
+                        '-DVulkan_SLANGC=@GK_SLANGC@'
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('@GK_REPO_ROOT@/CMakeLists.txt')
+            buildStagingDirectory file('@GK_NATIVE_DIR@')
+        }
+    }
+
+    sourceSets {
+        main {
+            assets.srcDirs = [file('@GK_ASSET_ROOT@')]
+        }
+    }
+
+    signingConfigs {
+        if (releaseSigningEnabled) {
+            release {
+                storeFile file(releaseSigningProperties['storeFile'])
+                storePassword releaseSigningProperties['storePassword']
+                keyAlias releaseSigningProperties['keyAlias']
+                keyPassword releaseSigningProperties['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            buildConfigField 'boolean', 'DEBUG', 'true'
+        }
+        release {
+            minifyEnabled false
+            buildConfigField 'boolean', 'DEBUG', 'false'
+            if (releaseSigningEnabled) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    buildFeatures {
+        prefab true
+        buildConfig true
+    }
+}
+
+dependencies {
+    implementation files('@GK_SDL_AAR@')
+}
+
+afterEvaluate {
+    ['Debug', 'Release'].each { variantName ->
+        tasks.named("merge${variantName}Assets").configure {
+            dependsOn tasks.named("externalNativeBuild${variantName}")
+        }
+    }
+}

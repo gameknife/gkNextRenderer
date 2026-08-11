@@ -14,6 +14,7 @@ last_updated: 2026-07-17
 ## 文件职责
 
 - 根 `CMakeLists.txt`：preset 入口、平台选项、依赖发现、shader/assets 等全局步骤。
+- `tools/android/CMakeLists.txt`：Android host driver；校验 SDK/NDK/JDK，生成临时 Gradle 工程，并编排 APK、安装、启动和 logcat target。
 - `src/CMakeLists.txt`：公共 helper、Engine/Modules/Gameplay/Application/Tests 子目录和标准 runtime module 集合。
 - `src/cmake/SourceFiles.cmake`：Engine、Gameplay 和可选 module 的共享源码集合；Android 单体布局也使用它。
 - `src/cmake/TargetHelpers.cmake`：编译选项、include、unity/链接策略，以及 `gk_configure_module`、`gk_configure_application`、`gk_target_runtime_modules`。
@@ -55,3 +56,6 @@ gk_configure_application(MyTarget MODULES ${GK_STANDARD_RUNTIME_MODULES} MyOptio
 ```
 
 纯文档、gnb Go 代码或 tools 修改不需要 C++ 构建。全量 `./gnb.sh build --reconfigure` 只用于大型 ABI/广泛 header 重构、影响范围确实不清楚或用户明确要求的情况。
+
+Android 不使用根目录下的长期 Gradle 工程。`gnb android debug|release` 配置
+`out/build/android-<variant>/` 下的 driver，native/asset/Gradle/APK 产物都留在该目录。

@@ -771,7 +771,7 @@ func newEditorCommand(ctx appContext) *cobra.Command {
 func newAndroidCommand(ctx appContext) *cobra.Command {
 	return &cobra.Command{
 		Use:   "android [debug|release]",
-		Short: "Run Android Gradle build/install",
+		Short: "Build Android through the CMake driver",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mode := "debug"

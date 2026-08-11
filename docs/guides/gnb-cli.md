@@ -92,10 +92,23 @@ package preset 配置在 `gnb.toml` 的 `[package.presets.<name>]`，可独立�
 ## 移动平台与安装
 
 ```bash
-./gnb.sh android
+./gnb.sh android debug    # CMake 驱动构建、安装并启动
+./gnb.sh android release  # CMake 驱动，仅生成 APK
 ./gnb.sh ios
 ./gnb.sh install
 ./gnb.sh init
 ```
+
+Android 的 Gradle 工程由 `tools/android/templates/` 生成到
+`out/build/android-<variant>/gradle/`，固定 APK 位于
+`out/build/android-<variant>/apk/gkNextRenderer-<variant>.apk`。Gradle 是内部打包后端，
+日常命令和 CI 不应直接调用 `gradlew`。
+driver 要求 JDK 17–23，以及 libc++ 提供 C++20 `<ranges>` 的当前 NDK；
+不兼容的 NDK 会在 configure 阶段明确失败。
+
+release 正式签名从仓库外的 `~/.gknext/android-signing.properties` 自动加载，也可通过
+`GK_ANDROID_SIGNING_PROPERTIES` 环境变量或同名 CMake cache 参数指定。属性文件必须包含
+`storeFile`、`storePassword`、`keyAlias` 和 `keyPassword`；未配置时 release 仍生成 unsigned
+APK 供 CI 构建验证，但不能直接安装或发布。发布密钥必须长期备份，后续升级包必须使用同一密钥。
 
 `init` 可在仓库外克隆新 checkout；其他大多数命令要求能发现 `gnb.toml`。也可通过 `--repo-root` 或 `GNB_REPO_ROOT` 明确仓库根。

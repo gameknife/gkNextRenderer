@@ -35,7 +35,7 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 - Core build (default): `./gnb.sh build` (Windows: `gnb.bat build` —— 默认仅构建核心目标 `gkNextRenderer` 与 `gkNextUnitTests`)
 - Full build (all targets): `./gnb.sh build --all` (Windows: `gnb.bat build --all` —— 构建全量 15+ 子项目)
 - Specific target: `./gnb.sh build gkNextEditor`
-- Android: `./gnb.sh android`
+- Android: `./gnb.sh android debug`（构建、安装、启动）或 `./gnb.sh android release`（仅生成 APK）
 - Clean rebuild: `./gnb.sh build --clean`
 - Force vcpkg update: `./gnb.sh setup --refresh`
 
@@ -68,7 +68,7 @@ because concurrent Windows builds can lock `.obj`, executables, or vcpkg state f
 - Editor shortcut: `./gnb.sh editor`
 - Visual test shortcut: `./gnb.sh visual`
 - TUI terminal mode: `./gnb.sh tui --scene assets/models/playground.glb`
-- Android: `./gnb.sh android`
+- Android: `./gnb.sh android debug` / `./gnb.sh android release`
 - Optional assets: `./gnb.sh paks fetch` / `./gnb.sh paks list`
 - Source-line stats: `./gnb.sh loc` (CLI) — also browsable in `./gnb.sh dashboard`
 - Dashboard: `./gnb.sh dashboard` (Wails window on Windows/macOS, browser fallback on Linux; todo/build/run/test/git/chat/LOC tabs)

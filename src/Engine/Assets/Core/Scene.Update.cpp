@@ -22,6 +22,7 @@
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
 #include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Utilities/Exception.hpp"
 
 #include <algorithm>

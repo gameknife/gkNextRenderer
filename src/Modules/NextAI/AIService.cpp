@@ -30,7 +30,6 @@ namespace NextAI
     FAIService::~FAIService()
     {
         std::lock_guard lock(asyncThreadsMutex_);
-        for (auto& thread : asyncThreads_) thread.request_stop();
         for (auto& thread : asyncThreads_) if (thread.joinable()) thread.join();
         if (client_) client_->Stop();
     }
@@ -262,7 +261,7 @@ namespace NextAI
     void FAIService::GenerateTextAsync(const std::string& prompt, std::function<void(FAIResponse)> callback)
     {
         std::lock_guard lock(asyncThreadsMutex_);
-        asyncThreads_.emplace_back([this, prompt, callback = std::move(callback)](std::stop_token) { auto response = GenerateText(prompt); if (callback) callback(std::move(response)); });
+        asyncThreads_.emplace_back([this, prompt, callback = std::move(callback)]() { auto response = GenerateText(prompt); if (callback) callback(std::move(response)); });
     }
 
     FAIResponse FAIService::GenerateStructuredText(const std::string& prompt, std::string_view schemaName,
@@ -291,7 +290,7 @@ namespace NextAI
         std::lock_guard lock(asyncThreadsMutex_);
         asyncThreads_.emplace_back(
             [this, prompt, schemaName = std::move(schemaName), jsonSchema = std::move(jsonSchema),
-             callback = std::move(callback)](std::stop_token)
+             callback = std::move(callback)]()
             {
                 auto response = GenerateStructuredText(prompt, schemaName, jsonSchema);
                 if (callback) callback(std::move(response));

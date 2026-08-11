@@ -343,9 +343,6 @@ build
 assets/shaders/Platform.glsl
 assets/package
 assets/textures/thumb
-android/.gradle/
-android/app/src/main/assets/
-android/local.properties
 slang/
 
 tools/node/
@@ -426,9 +423,6 @@ assets/models/KayKit_Platformer_Pack/
 assets/sog/
 assets/sfx/*.mp3
 assets/sfx/*.wav
-
-# SDL3 Android archive — pulled by android/app/build.gradle's downloadSdlAar task.
-android/app/libs/SDL3-*.aar
 
 # Phase 3 占位资产 — 受版权保护，不得入库
 assets/_placeholder/*

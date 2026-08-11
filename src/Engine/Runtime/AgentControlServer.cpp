@@ -45,12 +45,12 @@ namespace Runtime::Agent
         Socket listener = invalidSocket;
         Socket client = invalidSocket;
         std::string token;
-        std::jthread thread;
+        std::thread thread;
         std::atomic<bool> running = false;
         std::mutex mutex;
         std::vector<std::shared_ptr<FRequest>> requests;
 
-        void Run(std::stop_token stopToken)
+        void Run()
         {
             sockaddr_in address{};
 #if WIN32
@@ -62,7 +62,7 @@ namespace Runtime::Agent
             if (client == invalidSocket) { running = false; return; }
             std::string line;
             char value = 0;
-            while (!stopToken.stop_requested() && running)
+            while (running)
             {
                 const int count = recv(client, &value, 1, 0);
                 if (count <= 0) break;
@@ -113,17 +113,16 @@ namespace Runtime::Agent
             bind(impl_->listener, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 || listen(impl_->listener, 1) != 0)
         { error = "bind/listen failed"; Stop(); return false; }
         impl_->token = std::move(token); impl_->running = true;
-        impl_->thread = std::jthread([this](std::stop_token token) { impl_->Run(token); });
+        impl_->thread = std::thread([this]() { impl_->Run(); });
         return true;
     }
     void FAgentControlServer::Stop()
     {
         if (!impl_) return;
         impl_->running = false;
-        if (impl_->thread.joinable()) impl_->thread.request_stop();
         // Closing a socket from another POSIX thread does not reliably wake a
         // blocking recv(). Shutdown first so the agent-control thread can
-        // observe its stop request and join during engine teardown.
+        // observe running=false and join during engine teardown.
         ShutdownSocket(impl_->client);
         CloseSocket(impl_->client);
         impl_->client = invalidSocket;

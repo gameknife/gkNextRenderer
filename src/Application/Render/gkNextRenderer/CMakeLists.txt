@@ -18,6 +18,7 @@ if(ANDROID)
         ${src_files_engine}
         ${src_files_vulkan}
         ${src_files_rendering}
+        ${src_files_nextgameplay}
         ${src_files_thirdparty}
         ${src_files_modules_all}
         ${GK_APPLICATION_COMMON_SOURCES}
