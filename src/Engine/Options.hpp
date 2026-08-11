@@ -39,6 +39,9 @@ public:
     std::string AgentControl;
     std::string AgentControlToken;
     bool HiddenWindow{};
+    // Force VK_EXT_headless_surface instead of creating an SDL window. Intended
+    // for validating the headless render path on hosts with a desktop session.
+    bool HeadlessSurface{};
     bool Tui{};
     uint32_t TuiFps{30};
     uint32_t TuiMaxCols{};

@@ -65,7 +65,13 @@ func Shot(ctx context.Context, o Options, frames int, ui bool, out string) error
 	}
 	s := Script{Name: "agent_validation"}
 	s.Defaults.StepTimeoutMs = 30000
-	s.Steps = []map[string]any{{"type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 30000}, {"type": "wait-frames", "n": frames}, {"type": "screenshot", "out": out, "ui": ui}, {"type": "quit"}}
+	s.Steps = []map[string]any{{"type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 30000}}
+	// Startup creates an empty scene before a requested scene is loaded asynchronously. Waiting
+	// for one node avoids a valid-but-black capture on fast software/headless frame loops.
+	if o.Scene != "" {
+		s.Steps = append(s.Steps, map[string]any{"type": "wait-until", "query": "scene.nodeCount", "op": "gt", "value": 0, "timeoutMs": 30000})
+	}
+	s.Steps = append(s.Steps, map[string]any{"type": "wait-frames", "n": frames}, map[string]any{"type": "screenshot", "out": out, "ui": ui}, map[string]any{"type": "quit"})
 	return run(ctx, o, s)
 }
 
@@ -192,7 +198,9 @@ func run(ctx context.Context, o Options, s Script) (retErr error) {
 }
 
 func (c *client) call(method string, params any) (any, error) {
-	_ = c.conn.SetDeadline(time.Now().Add(30 * time.Second))
+	// Software Vulkan ICDs (notably Lavapipe) may need much longer than a hardware
+	// driver for first-pipeline compilation and a single validation frame.
+	_ = c.conn.SetDeadline(time.Now().Add(2 * time.Minute))
 	c.next++
 	req := map[string]any{"id": strconv.Itoa(c.next), "token": c.token, "method": method, "params": params}
 	b, _ := json.Marshal(req)

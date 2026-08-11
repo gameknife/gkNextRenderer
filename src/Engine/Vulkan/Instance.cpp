@@ -53,6 +53,13 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
             });
     };
 
+    if (window.IsHeadless() && !hasInstanceExtension(VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME))
+    {
+        Throw(std::runtime_error(
+            "VK_EXT_headless_surface is unavailable from the selected Vulkan ICD. "
+            "Use a Mesa driver with headless-surface support (for example Lavapipe)."));
+    }
+
     // Check the validation layers and add them to the list of required extensions.
     CheckVulkanValidationLayerSupport(validationLayers);
 

@@ -13,6 +13,7 @@
 #include "Engine/Runtime/Subsystems/NextLocalization.hpp"
 #include "Engine/Runtime/ScreenShot.hpp"
 #include "Engine/Runtime/ScreenShotService.hpp"
+#include <cstdlib>
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Editor/UiFrameDispatcher.hpp"
 #include "Engine/Runtime/Interface/UiOverlay.hpp"
@@ -301,13 +302,34 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     // TUI dimensions are terminal/logical pixels. Keep the hidden render window at
     // a fixed scale so high-DPI monitors do not enlarge the terminal UI.
     const bool useSystemDpiScaling = options.SystemDpiScaling || options.Tui;
-    Vulkan::Window::InitSDL(useSystemDpiScaling, options.VulkanDriver);
+#if defined(__linux__)
+    const bool hasX11Display = std::getenv("DISPLAY") != nullptr;
+    const bool hasWaylandDisplay = std::getenv("WAYLAND_DISPLAY") != nullptr;
+    const bool useHeadlessSurface = options.HeadlessSurface ||
+        (options.AgentValidation && !options.AgentVisibleWindow && !hasX11Display && !hasWaylandDisplay);
+#else
+    const bool useHeadlessSurface = options.HeadlessSurface;
+#endif
+    if (useHeadlessSurface)
+    {
+        SPDLOG_INFO("No X11/Wayland display detected; agent validation will use VK_EXT_headless_surface");
+        // Lavapipe can advertise ray-query extensions, but its RT resource path is neither
+        // representative of a hardware renderer nor reliable for unattended validation.
+        // Use the software renderer deterministically on a display-less validation host.
+        if (!options.ForceNoRT)
+        {
+            options.ForceNoRT = true;
+            SPDLOG_INFO("Headless agent validation disables hardware ray tracing");
+        }
+    }
+    Vulkan::Window::InitSDL(useSystemDpiScaling, options.VulkanDriver, useHeadlessSurface);
     
     Vulkan::WindowConfig windowConfig{"gkNextEngine " + NextRenderer::GetBuildVersion(),
                                       options.Width,options.Height,
                                       false, options.Fullscreen,!options.Fullscreen,
                                       options.SaveFile,userdata,options.ForceSDR};
     windowConfig.SystemDpiScaling = useSystemDpiScaling;
+    windowConfig.HeadlessSurface = useHeadlessSurface;
     
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
     
@@ -341,6 +363,23 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     // create windows
     window_.reset(new Vulkan::Window(windowConfig));
     SetBorderlessFullscreen(config_.userSettings.BorderlessFullscreen);
+
+    // Start accepting gnb's connection before renderer startup. Software Vulkan ICDs can spend
+    // considerable time compiling the first pipeline; the control request is queued until Tick.
+    if (!options_->AgentControl.empty())
+    {
+        agentControl_ = std::make_unique<Runtime::Agent::FAgentControlServer>();
+        std::string error;
+        if (!agentControl_->Start(options_->AgentControl, options_->AgentControlToken, error))
+        {
+            SPDLOG_ERROR("[AgentControl] failed to start: {}", error);
+            RequestExit(3);
+        }
+        else
+        {
+            SPDLOG_INFO("[AgentControl] listening on {}", options_->AgentControl);
+        }
+    }
     
     // localization
     services_.localization = std::make_unique<NextLocalization>();
@@ -495,19 +534,9 @@ void NextEngine::Start()
     // gameinstance init
     gameInstance_->OnInit();
     
-    if (!options_->AgentControl.empty())
+    if (agentControl_ && agentControl_->IsRunning())
     {
-        agentControl_ = std::make_unique<Runtime::Agent::FAgentControlServer>();
-        std::string error;
-        if (!agentControl_->Start(options_->AgentControl, options_->AgentControlToken, error))
-        {
-            SPDLOG_ERROR("[AgentControl] failed to start: {}", error); RequestExit(3);
-        }
-        else
-        {
-            gameInstance_->RegisterAgentQueries(agentQueries_);
-            SPDLOG_INFO("[AgentControl] listening on {}", options_->AgentControl);
-        }
+        gameInstance_->RegisterAgentQueries(agentQueries_);
     }
 
     SPDLOG_INFO("---- Next Engine Started in {}", stopwatch.elapsed_ms());
@@ -522,7 +551,10 @@ bool NextEngine::HandleEvent(SDL_Event& event)
 
     const bool globalCaptureShortcut = HandleGlobalCaptureShortcut(event);
 
-    userInterface_->HandleEvent(&event);
+    if (userInterface_)
+    {
+        userInterface_->HandleEvent(&event);
+    }
     const bool rmlUiConsumed = uiOverlay_ && uiOverlay_->HandleEvent(event);
 
     if (scriptRuntime_)
@@ -1275,6 +1307,11 @@ void NextEngine::OnRendererDeviceSet()
 
 void NextEngine::OnRendererCreateSwapChain()
 {
+    if (window_ && window_->IsHeadless())
+    {
+        SPDLOG_INFO("Headless agent validation disables the SDL/ImGui UI backend; screenshots contain rendered scene only");
+        return;
+    }
     if (userInterface_.get() == nullptr)
     {
         userInterface_.reset(new NextUI::UserInterface(
@@ -1459,7 +1496,7 @@ nlohmann::json NextEngine::HandleAgentControlCommand(const std::string& method, 
 {
     using Runtime::Input::Synthetic::FPoint;
     SDL_Window* window = GetWindow().Handle();
-    const SDL_WindowID windowId = SDL_GetWindowID(window);
+    const SDL_WindowID windowId = window != nullptr ? SDL_GetWindowID(window) : 0;
     const FPoint current{static_cast<float>(GetMousePos().x), static_cast<float>(GetMousePos().y)};
     auto point = [](const nlohmann::json& value) -> FPoint
     {

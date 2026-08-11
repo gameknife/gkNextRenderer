@@ -148,6 +148,14 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
     {
         optionalUsage &= ~VK_IMAGE_USAGE_STORAGE_BIT;
     }
+    // Headless swapchains are implementation-owned virtual images. Some ICDs advertise
+    // STORAGE usage for them but corrupt compute stores (notably MoltenVK's
+    // VK_EXT_headless_surface path). Use the established intermediate-target + blit
+    // path instead; it is also portable to display-less Linux drivers.
+    if (window.IsHeadless())
+    {
+        optionalUsage &= ~VK_IMAGE_USAGE_STORAGE_BIT;
+    }
     createInfo.imageUsage = requiredUsage | optionalUsage;
     createInfo.preTransform = details.Capabilities.currentTransform;
     createInfo.compositeAlpha = ChooseCompositeAlpha(details.Capabilities.supportedCompositeAlpha);

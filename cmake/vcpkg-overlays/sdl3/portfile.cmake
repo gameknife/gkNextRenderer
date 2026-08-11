@@ -63,6 +63,7 @@ vcpkg_cmake_configure(
         -DCMAKE_DISABLE_FIND_PACKAGE_LibUSB=1
     MAYBE_UNUSED_VARIABLES
         SDL_FORCE_STATIC_VCRT
+        SDL_UNIX_CONSOLE_BUILD
 )
 
 vcpkg_cmake_install()
