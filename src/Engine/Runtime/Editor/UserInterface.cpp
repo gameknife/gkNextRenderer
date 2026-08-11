@@ -176,6 +176,12 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     // A VK_EXT_headless_surface has no SDL_Window. Dear ImGui's Vulkan renderer
     // can still render into it, but the SDL platform backend cannot be initialized.
     sdlPlatformBackendInitialized_ = !window.IsHeadless();
+    if (!sdlPlatformBackendInitialized_)
+    {
+        // Docking remains useful in the main viewport, but detached ImGui windows
+        // require SDL platform callbacks and their own Vulkan surfaces.
+        io.ConfigFlags &= ~ImGuiConfigFlags_ViewportsEnable;
+    }
     if (sdlPlatformBackendInitialized_ && !ImGui_ImplSDL3_InitForVulkan(window.Handle()))
     {
         Throw(std::runtime_error("failed to initialise ImGui SDL adapter"));

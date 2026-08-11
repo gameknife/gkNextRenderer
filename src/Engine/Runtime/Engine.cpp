@@ -1337,10 +1337,16 @@ void NextEngine::OnRendererCreateSwapChain()
     }
     if (userInterface_.get() == nullptr)
     {
+        // ImGui platform viewports create additional SDL windows and Vulkan surfaces.
+        // A VK_EXT_headless_surface has neither, so retain the main-swapchain UI
+        // but do not initialize an application's multi-viewport backend.
+        auto multiViewportBackend = window_->IsHeadless()
+            ? std::unique_ptr<NextUI::IMultiViewportBackend>{}
+            : gameInstance_->CreateMultiViewportBackend();
         userInterface_.reset(new NextUI::UserInterface(
             this, renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(), config_.userSettings,
             [this]() -> void { gameInstance_->OnPreConfigUI(); }, [this]() -> void { gameInstance_->OnInitUI(); },
-            gameInstance_->CreateMultiViewportBackend()));
+            std::move(multiViewportBackend)));
     }
     if (uiOverlay_.get() == nullptr && uiOverlayFactory_)
     {
