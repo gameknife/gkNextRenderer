@@ -29,7 +29,6 @@ jobs:
     env:
       # GitHub runners have no hardware Vulkan device.  Lavapipe plus Xvfb
       # drives the hidden trace runs and produces platform-neutral runtime paks.
-      VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
       LIBGL_ALWAYS_SOFTWARE: '1'
     steps:
       - uses: actions/checkout@v7
@@ -59,7 +58,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install --only-upgrade --yes mesa-vulkan-drivers libgbm1 libgl1-mesa-dri
           sudo apt-get install --no-install-recommends --yes vulkan-tools
-          vulkaninfo | grep --fixed-strings --quiet VK_EXT_headless_surface
+          lavapipe_icd="$(find /usr/share/vulkan/icd.d -maxdepth 1 -type f -name 'lvp_icd*.json' -print -quit)"
+          test -n "$lavapipe_icd"
+          echo "Using Lavapipe ICD: $lavapipe_icd"
+          echo "VK_ICD_FILENAMES=$lavapipe_icd" >> "$GITHUB_ENV"
+          echo "VK_DRIVER_FILES=$lavapipe_icd" >> "$GITHUB_ENV"
+          VK_ICD_FILENAMES="$lavapipe_icd" VK_DRIVER_FILES="$lavapipe_icd" \
+            vulkaninfo | grep --fixed-strings --quiet VK_EXT_headless_surface
       - name: Build release targets
         run: |
           echo "BUILDVER(${{ github.ref_name }})" > src/build.version
