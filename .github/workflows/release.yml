@@ -52,6 +52,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install curl unzip p7zip-full tar ninja-build libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev mesa-vulkan-drivers xvfb
+      - name: Upgrade Lavapipe for headless validation
+        run: |
+          sudo apt-get install --no-install-recommends --yes software-properties-common
+          sudo add-apt-repository --yes ppa:kisak/kisak-mesa
+          sudo apt-get update
+          sudo apt-get install --only-upgrade --yes mesa-vulkan-drivers libgbm1 libgl1-mesa-dri
+          sudo apt-get install --no-install-recommends --yes vulkan-tools
+          vulkaninfo | grep --fixed-strings --quiet VK_EXT_headless_surface
       - name: Build release targets
         run: |
           echo "BUILDVER(${{ github.ref_name }})" > src/build.version
