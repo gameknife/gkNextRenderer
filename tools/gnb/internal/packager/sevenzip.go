@@ -14,6 +14,12 @@ import (
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 )
 
+// archiveOptions controls transformations applied only to copied archive
+// contents. Source build outputs are never modified.
+type archiveOptions struct {
+	StripELFDebug bool
+}
+
 func resolve7Zip() (string, error) {
 	if configured := strings.TrimSpace(os.Getenv("GNB_7Z")); configured != "" {
 		if info, err := os.Stat(configured); err == nil && !info.IsDir() {
@@ -84,6 +90,10 @@ func copyArchiveEntry(staging string, item entry) (int64, error) {
 }
 
 func write7zArchive(dst string, entries []entry) error {
+	return write7zArchiveWithOptions(dst, entries, archiveOptions{})
+}
+
+func write7zArchiveWithOptions(dst string, entries []entry, opts archiveOptions) error {
 	sevenZip, err := resolve7Zip()
 	if err != nil {
 		return err
@@ -118,6 +128,16 @@ func write7zArchive(dst string, entries []entry) error {
 		}
 		total += size
 	}
+	if opts.StripELFDebug {
+		saved, stripErr := stripELFDebugInfo(staging)
+		if stripErr != nil {
+			return stripErr
+		}
+		if saved > 0 {
+			console.Info("stripped %.1f MB of ELF debug information from release binaries", float64(saved)/(1024*1024))
+			total -= saved
+		}
+	}
 	if err := os.Remove(dst); err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -133,6 +153,69 @@ func write7zArchive(dst string, entries []entry) error {
 	console.Success("package written: %s (%d files, %.1f MB -> %.1f MB)", dst, len(entries),
 		float64(total)/(1024*1024), float64(archiveInfo.Size())/(1024*1024))
 	return nil
+}
+
+// stripELFDebugInfo removes embedded DWARF sections from ELF files under
+// bin/. Linux release archives must not inherit the large debug
+// payload from RelWithDebInfo build outputs.
+func stripELFDebugInfo(staging string) (int64, error) {
+	strip, err := exec.LookPath("strip")
+	if err != nil {
+		return 0, fmt.Errorf("Linux packaging requires strip to remove ELF debug information: %w", err)
+	}
+
+	var saved int64
+	err = filepath.WalkDir(filepath.Join(staging, "bin"), func(path string, item os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if item.IsDir() {
+			return nil
+		}
+		isELF, elfErr := isELFFile(path)
+		if elfErr != nil {
+			return elfErr
+		}
+		if !isELF {
+			return nil
+		}
+
+		before, statErr := os.Stat(path)
+		if statErr != nil {
+			return statErr
+		}
+		output, runErr := exec.Command(strip, "--strip-debug", path).CombinedOutput()
+		if runErr != nil {
+			return fmt.Errorf("strip debug information from %s: %w (output: %s)", path, runErr, strings.TrimSpace(string(output)))
+		}
+		after, statErr := os.Stat(path)
+		if statErr != nil {
+			return statErr
+		}
+		saved += before.Size() - after.Size()
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return saved, nil
+}
+
+func isELFFile(path string) (bool, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer file.Close()
+
+	var magic [4]byte
+	if _, err := io.ReadFull(file, magic[:]); err != nil {
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			return false, nil
+		}
+		return false, err
+	}
+	return magic == [4]byte{0x7f, 'E', 'L', 'F'}, nil
 }
 
 func cleanup7zStaging(staging string) {

@@ -112,7 +112,9 @@ func Package(repoRoot string, buildPreset string, variant string, packagePreset 
 		if err != nil {
 			return err
 		}
-		return write7zArchive(archivePath, entries)
+		return write7zArchiveWithOptions(archivePath, entries, archiveOptions{
+			StripELFDebug: variant == "linux",
+		})
 	default:
 		return fmt.Errorf("unknown package platform %q", variant)
 	}

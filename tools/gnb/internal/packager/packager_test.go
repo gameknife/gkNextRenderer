@@ -1,8 +1,11 @@
 package packager
 
 import (
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -154,6 +157,95 @@ func TestGnbSidecarRequiresExplicitOptIn(t *testing.T) {
 	if !isRuntimeSidecar("runtime.dll", false) {
 		t.Fatal("ordinary runtime sidecar was excluded")
 	}
+}
+
+func TestIsELFFileRecognizesOnlyELFMagic(t *testing.T) {
+	root := t.TempDir()
+	elfPath := filepath.Join(root, "program")
+	if err := os.WriteFile(elfPath, []byte{0x7f, 'E', 'L', 'F', 2, 1, 1}, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	isELF, err := isELFFile(elfPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isELF {
+		t.Fatal("isELFFile did not recognize ELF magic")
+	}
+
+	textPath := filepath.Join(root, "manifest.json")
+	if err := os.WriteFile(textPath, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	isELF, err = isELFFile(textPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isELF {
+		t.Fatal("isELFFile recognized a non-ELF file")
+	}
+}
+
+func TestStripELFDebugInfoStripsOnlyStagedLinuxBinary(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("ELF debug stripping is only used for Linux packages")
+	}
+	if _, err := exec.LookPath("strip"); err != nil {
+		t.Skip("strip is not installed")
+	}
+
+	staging := t.TempDir()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stagedPath := filepath.Join(staging, "bin", "package-test")
+	if err := os.MkdirAll(filepath.Dir(stagedPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyFile(executable, stagedPath); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(stagedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	saved, err := stripELFDebugInfo(staging)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(stagedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved <= 0 || after.Size() >= before.Size() {
+		t.Fatalf("strip saved %d bytes: %d -> %d", saved, before.Size(), after.Size())
+	}
+	original, err := os.Stat(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if original.Size() != before.Size() {
+		t.Fatalf("source executable was modified: %d -> %d", before.Size(), original.Size())
+	}
+}
+
+func copyFile(source string, destination string) error {
+	in, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o755)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 func TestPackageArchivePathUsesPresetTemplate(t *testing.T) {
