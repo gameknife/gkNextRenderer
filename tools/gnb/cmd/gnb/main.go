@@ -571,8 +571,9 @@ func newShotCommand(ctx appContext) *cobra.Command {
 	var target string
 	var frames int
 	var includeUI bool
+	var headless bool
 	cmd := &cobra.Command{
-		Use:   "shot [--scene <path>] [--target <name>] [--frames N] [--ui]",
+		Use:   "shot [--scene <path>] [--target <name>] [--frames N] [--ui] [--headless]",
 		Short: "Capture one validation screenshot, then auto-exit (no focus-stealing window)",
 		Long: "Render a scene to a stable frame, capture a single screenshot to a fixed path, then exit.\n\n" +
 			"The window is hidden so it never pops to the foreground or steals focus during an agent\n" +
@@ -584,6 +585,9 @@ func newShotCommand(ctx appContext) *cobra.Command {
 			"  gnb shot --target AirportSim --ui",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out := filepath.Join(filepath.Dir(platform.BinDir(ctx.repoRoot, ctx.preset)), "screenshots", "agent_validation")
+			if headless {
+				args = append(args, "--headless-surface")
+			}
 			opts := validatepkg.Options{RepoRoot: ctx.repoRoot, Preset: ctx.preset, Target: target, Scene: scene, Args: args}
 			if err := validatepkg.Shot(context.Background(), opts, frames, includeUI, out); err != nil {
 				return err
@@ -597,6 +601,7 @@ func newShotCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().StringVar(&target, "target", "gkNextRenderer", "target executable to run")
 	cmd.Flags().IntVar(&frames, "frames", 0, "frames to render before capture (0 = engine default)")
 	cmd.Flags().BoolVar(&includeUI, "ui", false, "include ImGui UI in the screenshot")
+	cmd.Flags().BoolVar(&headless, "headless", false, "force VK_EXT_headless_surface (including on macOS)")
 	return cmd
 }
 

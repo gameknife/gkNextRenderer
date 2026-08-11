@@ -90,13 +90,15 @@ Device::Device(
     //const auto computeFamily = FindQueue(queueFamilies, "compute", VK_QUEUE_COMPUTE_BIT, VK_QUEUE_GRAPHICS_BIT);
     
     // Find the presentation queue (usually the same as graphics queue).
-    const auto presentFamily = std::find_if(queueFamilies.begin(), queueFamilies.end(), [&](const VkQueueFamilyProperties& queueFamily)
-    {
-        VkBool32 presentSupport = false;
-        const uint32_t i = static_cast<uint32_t>(&queueFamily - queueFamilies.data());
-        vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface.Handle(), &presentSupport);
-        return queueFamily.queueCount > 0 && presentSupport;
-    });
+    const auto presentFamily = surface.Instance().Window().IsHeadless()
+        ? graphicsFamily
+        : std::find_if(queueFamilies.begin(), queueFamilies.end(), [&](const VkQueueFamilyProperties& queueFamily)
+          {
+              VkBool32 presentSupport = false;
+              const uint32_t i = static_cast<uint32_t>(&queueFamily - queueFamilies.data());
+              vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface.Handle(), &presentSupport);
+              return queueFamily.queueCount > 0 && presentSupport;
+          });
 
     if (presentFamily == queueFamilies.end())
     {

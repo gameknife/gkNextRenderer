@@ -338,11 +338,25 @@ func preparePreciseAssets(repoRoot, buildPreset, buildRoot string, packagePreset
 		}
 		for _, target := range packagePreset.Targets {
 			console.Header("asset trace: " + target)
+			traceArgs := []string{
+				"--headless-surface",
+				"--asset-trace=" + tracePath,
+			}
+			if target == "gkNextMotionBenchmark" {
+				// Lavapipe can fault in SoftwareTracing while the motion benchmark
+				// renders its first procedural scene. Asset coverage is independent
+				// of that renderer, so use the stable raster path for this short
+				// headless tracing run only.
+				traceArgs = append(traceArgs, "--cvar=r.rendererType 4")
+			}
 			err := validatepkg.Trace(context.Background(), validatepkg.Options{
 				RepoRoot: repoRoot,
 				Preset:   buildPreset,
 				Target:   target,
-				Args:     []string{"--asset-trace=" + tracePath},
+				// Trace always uses agent validation for its deterministic control channel.
+				// Force the Vulkan headless surface as well so packaging works on a
+				// Linux worker with no graphical session (or stale DISPLAY variables).
+				Args: traceArgs,
 			}, opts.TraceFrames)
 			if err != nil {
 				return "", fmt.Errorf("asset trace %s: %w", target, err)

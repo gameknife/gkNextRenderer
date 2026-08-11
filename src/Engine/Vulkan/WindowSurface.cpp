@@ -17,6 +17,8 @@ namespace Vulkan
 
 namespace
 {
+    bool sdlVulkanLibraryLoaded = false;
+
 #if WIN32
     std::filesystem::path FindIcdManifest(const std::string& vulkanDriver)
     {
@@ -133,10 +135,53 @@ namespace
 #else
     void ConfigureVulkanDriver(const std::string& vulkanDriver)
     {
-        if (vulkanDriver != "native")
+        if (vulkanDriver == "native")
         {
-            Throw(std::runtime_error("--vulkan-driver lvp and dozen are only supported on Windows"));
+            return;
         }
+        if (vulkanDriver == "dozen")
+        {
+            Throw(std::runtime_error("--vulkan-driver dozen is only supported on Windows"));
+        }
+
+#if defined(__linux__)
+        const char* manifestOverride = std::getenv("GK_NEXT_LVP_ICD");
+        std::filesystem::path manifest = manifestOverride != nullptr && manifestOverride[0] != '\0'
+            ? std::filesystem::path(manifestOverride)
+            : std::filesystem::path{};
+        if (manifest.empty())
+        {
+            constexpr std::array<const char*, 3> candidates = {
+                "/usr/share/vulkan/icd.d/lvp_icd.x86_64.json",
+                "/usr/share/vulkan/icd.d/lvp_icd.aarch64.json",
+                "/usr/share/vulkan/icd.d/lvp_icd.i686.json",
+            };
+            for (const char* candidate : candidates)
+            {
+                std::error_code errorCode;
+                if (std::filesystem::is_regular_file(candidate, errorCode))
+                {
+                    manifest = candidate;
+                    break;
+                }
+            }
+        }
+        if (manifest.empty())
+        {
+            Throw(std::runtime_error(
+                "Lavapipe ICD manifest was not found; install mesa-vulkan-drivers or set GK_NEXT_LVP_ICD"));
+        }
+
+        const std::string manifestPath = std::filesystem::absolute(manifest).string();
+        if (setenv("VK_DRIVER_FILES", manifestPath.c_str(), 1) != 0 ||
+            setenv("VK_ICD_FILENAMES", manifestPath.c_str(), 1) != 0)
+        {
+            Throw(std::runtime_error("failed to configure the Lavapipe Vulkan ICD"));
+        }
+        SPDLOG_INFO("Vulkan driver mode: Lavapipe; using ICD manifest {}", manifestPath);
+#else
+        Throw(std::runtime_error("--vulkan-driver lvp is only supported on Windows and Linux"));
+#endif
     }
 #endif
 
@@ -248,6 +293,12 @@ SDL_HitTestResult SDLCALL Window::TitleBarHitTestCallback(SDL_Window* win, const
 Window::Window(const WindowConfig& config) :
     config_(config)
 {
+    if (config_.HeadlessSurface)
+    {
+        SPDLOG_INFO("Using VK_EXT_headless_surface; SDL window creation is disabled");
+        return;
+    }
+
     SDL_WindowFlags flags = SDL_WINDOW_VULKAN;
     if (config.Resizable)
     {
@@ -366,6 +417,10 @@ Window::~Window()
 
 float Window::ContentScale() const
 {
+    if (config_.HeadlessSurface)
+    {
+        return 1.0f;
+    }
 #if WIN32
     if (config_.SystemDpiScaling)
     {
@@ -379,6 +434,10 @@ float Window::ContentScale() const
 
 VkExtent2D Window::FramebufferSize() const
 {
+    if (config_.HeadlessSurface)
+    {
+        return VkExtent2D{config_.Width, config_.Height};
+    }
     int width, height;
     SDL_GetWindowSizeInPixels(window_, &width, &height);
     return VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
@@ -386,6 +445,10 @@ VkExtent2D Window::FramebufferSize() const
 
 VkExtent2D Window::WindowSize() const
 {
+    if (config_.HeadlessSurface)
+    {
+        return VkExtent2D{config_.Width, config_.Height};
+    }
     int width, height;
     SDL_GetWindowSize(window_, &width, &height);
     return VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
@@ -393,6 +456,10 @@ VkExtent2D Window::WindowSize() const
 
 std::vector<const char*> Window::GetRequiredInstanceExtensions() const
 {
+    if (config_.HeadlessSurface)
+    {
+        return {VK_KHR_SURFACE_EXTENSION_NAME, VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME};
+    }
     uint32_t extensionCount = 0;
     auto extensionNames = SDL_Vulkan_GetInstanceExtensions(&extensionCount);
     return std::vector<const char*>(extensionNames, extensionNames + extensionCount);
@@ -405,6 +472,13 @@ double Window::GetTime() const
 
 void Window::Close()
 {
+    if (config_.HeadlessSurface)
+    {
+        SDL_Event e{};
+        e.type = SDL_EVENT_QUIT;
+        SDL_PushEvent(&e);
+        return;
+    }
     SDL_Event e{};
     e.type = SDL_EventType::SDL_EVENT_WINDOW_CLOSE_REQUESTED;
     e.window.windowID = SDL_GetWindowID(window_);
@@ -413,22 +487,40 @@ void Window::Close()
 
 bool Window::IsMinimized() const
 {
+    if (config_.HeadlessSurface)
+    {
+        return false;
+    }
     return SDL_GetWindowFlags(window_) & SDL_WINDOW_MINIMIZED;
 }
 
 bool Window::IsMaximumed() const
 {
+    if (config_.HeadlessSurface)
+    {
+        return false;
+    }
     //return glfwGetWindowAttrib(window_, GLFW_MAXIMIZED);
     return SDL_GetWindowFlags(window_) & SDL_WINDOW_MAXIMIZED;
 }
 
 void Window::Show() const
 {
+    if (config_.HeadlessSurface)
+    {
+        return;
+    }
     SDL_ShowWindow(window_);
 }
 
 bool Window::SetSize(uint32_t width, uint32_t height) const
 {
+    if (config_.HeadlessSurface)
+    {
+        SPDLOG_WARN("Ignoring resize request for VK_EXT_headless_surface (fixed extent {}x{})",
+                    config_.Width, config_.Height);
+        return false;
+    }
     if (width == 0 || height == 0)
     {
         return false;
@@ -449,26 +541,46 @@ bool Window::SetSize(uint32_t width, uint32_t height) const
 
 void Window::Minimize()
 {
+    if (config_.HeadlessSurface)
+    {
+        return;
+    }
     SDL_MinimizeWindow(window_);
 }
 
 void Window::Maximum()
 {
+    if (config_.HeadlessSurface)
+    {
+        return;
+    }
     SDL_MaximizeWindow(window_);
 }
 
 void Window::Restore()
 {
+    if (config_.HeadlessSurface)
+    {
+        return;
+    }
     SDL_RestoreWindow(window_);
 }
 
 bool Window::IsBorderlessFullscreen() const
 {
+    if (config_.HeadlessSurface)
+    {
+        return false;
+    }
     return (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) != 0;
 }
 
 bool Window::SetBorderlessFullscreen(bool enable)
 {
+    if (config_.HeadlessSurface)
+    {
+        return !enable;
+    }
     if (IsBorderlessFullscreen() == enable)
     {
         return true;
@@ -495,6 +607,10 @@ bool Window::ToggleBorderlessFullscreen()
 
 void Window::ConfigureCustomTitleBarDrag(bool enabled, int titleBarHeight, int leftReservedWidth, int rightReservedWidth)
 {
+    if (config_.HeadlessSurface)
+    {
+        return;
+    }
     if (!config_.HideTitleBar)
     {
         customTitleBarDrag_.enabled = false;
@@ -507,7 +623,7 @@ void Window::ConfigureCustomTitleBarDrag(bool enabled, int titleBarHeight, int l
     customTitleBarDrag_.rightReservedWidth = std::max(0, rightReservedWidth);
 }
 
-void Window::InitSDL(bool systemDpiScaling, const std::string& vulkanDriver)
+void Window::InitSDL(bool systemDpiScaling, const std::string& vulkanDriver, const bool headlessSurface)
 {
 #if WIN32
     const char* dpiAwareness = systemDpiScaling ? "unaware" : "permonitorv2";
@@ -519,12 +635,20 @@ void Window::InitSDL(bool systemDpiScaling, const std::string& vulkanDriver)
     (void)systemDpiScaling;
 #endif
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
+    const SDL_InitFlags initFlags = (headlessSurface ? SDL_INIT_EVENTS : SDL_INIT_VIDEO) | SDL_INIT_GAMEPAD;
+    if (!SDL_Init(initFlags))
     {
         Throw(std::runtime_error("failed to init SDL."));
     }
     ConfigureVulkanDriver(vulkanDriver);
     ConfigurePackagedMoltenVKDriver();
+
+    // SDL owns Vulkan loading through its video backend. A headless surface has no
+    // SDL video backend at all; the engine's linked Vulkan loader is used directly.
+    if (headlessSurface)
+    {
+        return;
+    }
 
     // Software / translation ICDs cannot go through the Streamline interposer (see
     // VulkanLoaderBypass.hpp), so both the engine and SDL talk to the loader directly.
@@ -535,6 +659,7 @@ void Window::InitSDL(bool systemDpiScaling, const std::string& vulkanDriver)
         {
             Throw(std::runtime_error("failed to init SDL Vulkan."));
         }
+        sdlVulkanLibraryLoaded = true;
         return;
     }
 
@@ -547,16 +672,22 @@ void Window::InitSDL(bool systemDpiScaling, const std::string& vulkanDriver)
                         SDL_GetError());
             if (SDL_Vulkan_LoadLibrary(nullptr))
             {
+                sdlVulkanLibraryLoaded = true;
                 return;
             }
         }
         Throw(std::runtime_error("failed to init SDL Vulkan."));
     }
+    sdlVulkanLibraryLoaded = true;
 }
 
 void Window::TerminateSDL()
 {
-    SDL_Vulkan_UnloadLibrary();
+    if (sdlVulkanLibraryLoaded)
+    {
+        SDL_Vulkan_UnloadLibrary();
+        sdlVulkanLibraryLoaded = false;
+    }
     SDL_Quit();
 }
 
@@ -567,6 +698,21 @@ void Window::TerminateSDL()
 Surface::Surface(const class Instance& instance) :
     instance_(instance)
 {
+    if (instance.Window().IsHeadless())
+    {
+        const auto createHeadlessSurface = reinterpret_cast<PFN_vkCreateHeadlessSurfaceEXT>(
+            vkGetInstanceProcAddr(instance.Handle(), "vkCreateHeadlessSurfaceEXT"));
+        if (createHeadlessSurface == nullptr)
+        {
+            Throw(std::runtime_error(
+                "VK_EXT_headless_surface was enabled but vkCreateHeadlessSurfaceEXT is unavailable. "
+                "Install a Vulkan ICD that supports VK_EXT_headless_surface (Mesa Lavapipe does)."));
+        }
+        VkHeadlessSurfaceCreateInfoEXT createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_HEADLESS_SURFACE_CREATE_INFO_EXT;
+        Check(createHeadlessSurface(instance.Handle(), &createInfo, nullptr, &surface_), "create headless surface");
+        return;
+    }
 #if WIN32
     VkWin32SurfaceCreateInfoKHR createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;

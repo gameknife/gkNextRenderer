@@ -49,14 +49,24 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Runtime::Co
 
     NextRenderer::HideConsole();
 
-    glm::ivec2 monitorSize = GetEngine().GetMonitorSize();
-
     // windows config
     config.Title = "gkNextEditor";
-    uint32_t computedWidth = static_cast<uint32_t>(monitorSize.x * 0.75f);
-    uint32_t computedHeight = static_cast<uint32_t>(monitorSize.y * 0.75f);
-    config.Width = computedWidth < 1920u ? static_cast<uint32_t>(monitorSize.x) : computedWidth;
-    config.Height = computedHeight < 1080u ? static_cast<uint32_t>(monitorSize.y) : computedHeight;
+    if (config.HeadlessSurface)
+    {
+        // A headless host has no desktop work area. SDL's fallback display can
+        // report a virtual 16K monitor, which would make the editor allocate
+        // unreasonably large render targets. Keep the requested CLI size.
+        config.Width = options.Width;
+        config.Height = options.Height;
+    }
+    else
+    {
+        glm::ivec2 monitorSize = GetEngine().GetMonitorSize();
+        uint32_t computedWidth = static_cast<uint32_t>(monitorSize.x * 0.75f);
+        uint32_t computedHeight = static_cast<uint32_t>(monitorSize.y * 0.75f);
+        config.Width = computedWidth < 1920u ? static_cast<uint32_t>(monitorSize.x) : computedWidth;
+        config.Height = computedHeight < 1080u ? static_cast<uint32_t>(monitorSize.y) : computedHeight;
+    }
     options.Width = config.Width;
     options.Height = config.Height;
     config.HideTitleBar = true;

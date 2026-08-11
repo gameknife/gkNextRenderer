@@ -32,6 +32,9 @@ struct WindowConfig final
     bool HiddenWindow {};
     // Compatibility mode: let Windows bitmap-scale the whole application as a DPI-unaware process.
     bool SystemDpiScaling {};
+    // Use VK_EXT_headless_surface instead of creating an SDL window. This is intended for
+    // unattended Vulkan captures on Linux hosts with no X11 or Wayland display server.
+    bool HeadlessSurface {};
 };
 
 // ============================================================================
@@ -51,6 +54,7 @@ public:
     const WindowConfig& Config() const { return config_; }
 
     Next_Window* Handle() const { return window_; }
+    bool IsHeadless() const { return config_.HeadlessSurface; }
 
     float ContentScale() const;
     VkExtent2D FramebufferSize() const;
@@ -77,7 +81,7 @@ public:
     void ConfigureCustomTitleBarDrag(bool enabled, int titleBarHeight, int leftReservedWidth, int rightReservedWidth);
 
     // Static methods
-    static void InitSDL(bool systemDpiScaling, const std::string& vulkanDriver);
+    static void InitSDL(bool systemDpiScaling, const std::string& vulkanDriver, bool headlessSurface = false);
     static void TerminateSDL();
 
 private:

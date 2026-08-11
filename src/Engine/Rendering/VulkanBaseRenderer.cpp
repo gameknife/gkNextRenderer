@@ -1082,7 +1082,8 @@ namespace Vulkan
                     frame_.swapChain->OutputExtent(),
                     VK_FORMAT_R16G16B16A16_SFLOAT,
                     VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+                        VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                     false,
                     debugName.c_str()));
                 ctx_.globalTexturePool->BindStorageTexture(
@@ -1319,12 +1320,13 @@ namespace Vulkan
             const bool supportsRequestedPostProcess = HasAny(contract.post, EPostProcess::Upscale) &&
                 (!typeInfo.requiresRayReconstruction ||
                  HasAny(contract.post, EPostProcess::RayReconstruction));
-            const bool hasRequiredSwapchainUsage = !typeInfo.requiresStorageOutput ||
-                frame_.swapChain->SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT);
+            // Temporal upscalers always resolve into the engine-owned late tone-mapping
+            // image, not the swapchain image. This keeps them available when a surface
+            // needs the intermediate-target + blit presentation fallback.
             temporalSuperResolutionActive_ =
                 resolvedMode.enabled && requestedUpscalerType != Rendering::Upscaler::EUpscalerType::None &&
                 upscaler_ && SupportsUpscaler(requestedUpscalerType) && hasRequiredOutputs &&
-                supportsRequestedPostProcess && hasRequiredSwapchainUsage;
+                supportsRequestedPostProcess;
 
             if (temporalSuperResolutionActive_)
             {
