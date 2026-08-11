@@ -103,6 +103,9 @@ Options::Options(const int argc, const char* argv[])
     {
         auto result = options.parse(argc, argv);
 
+        WidthSpecified = result.count("width") != 0;
+        HeightSpecified = result.count("height") != 0;
+
         if (result.count("help-all"))
         {
             std::cout << options.help(AllGroups) << std::endl;

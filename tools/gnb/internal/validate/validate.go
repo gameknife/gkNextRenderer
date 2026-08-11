@@ -71,7 +71,12 @@ func Shot(ctx context.Context, o Options, frames int, ui bool, out string) error
 	if o.Scene != "" {
 		s.Steps = append(s.Steps, map[string]any{"type": "wait-until", "query": "scene.nodeCount", "op": "gt", "value": 0, "timeoutMs": 30000})
 	}
-	s.Steps = append(s.Steps, map[string]any{"type": "wait-frames", "n": frames}, map[string]any{"type": "screenshot", "out": out, "ui": ui}, map[string]any{"type": "quit"})
+	s.Steps = append(s.Steps,
+		map[string]any{"type": "wait-frames", "n": frames},
+		// Make capture and normal process shutdown a single engine-side operation.
+		// A separate quit control request can race with the server teardown that
+		// follows a synchronous screenshot on a headless host.
+		map[string]any{"type": "screenshot", "out": out, "ui": ui, "quitAfterCapture": true})
 	return run(ctx, o, s)
 }
 
@@ -142,11 +147,14 @@ func run(ctx context.Context, o Options, s Script) (retErr error) {
 	if err = cmd.Start(); err != nil {
 		return err
 	}
+	processWaited := false
 	defer func() {
-		if cmd.Process != nil {
+		if !processWaited && cmd.Process != nil {
 			_ = cmd.Process.Kill()
 		}
-		_ = cmd.Wait()
+		if !processWaited {
+			_ = cmd.Wait()
+		}
 	}()
 	var conn net.Conn
 	deadline := time.Now().Add(30 * time.Second)
@@ -191,10 +199,48 @@ func run(ctx context.Context, o Options, s Script) (retErr error) {
 			return err
 		}
 	}
-	if rep.Passed {
-		return nil
+	if !rep.Passed {
+		return fmt.Errorf("agent validation failed")
 	}
-	return fmt.Errorf("agent validation failed")
+
+	// The quit command is acknowledged before the next engine tick observes the
+	// close request. Waiting here lets the application finish that tick and exit
+	// with its requested code instead of being unconditionally SIGKILLed by the
+	// cleanup defer above.
+	err = waitForProcessExit(ctx, cmd, 30*time.Second)
+	processWaited = true
+	if err != nil {
+		return fmt.Errorf("agent process exit: %w", err)
+	}
+	for _, screenshot := range rep.Screenshots {
+		if err = poll(5*time.Second, func() (bool, error) {
+			_, statErr := os.Stat(screenshot)
+			return statErr == nil, nil
+		}); err != nil {
+			return fmt.Errorf("agent screenshot %s: %w", screenshot, err)
+		}
+	}
+	return nil
+}
+
+func waitForProcessExit(ctx context.Context, cmd *exec.Cmd, timeout time.Duration) error {
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		_ = cmd.Process.Kill()
+		<-done
+		return ctx.Err()
+	case <-timer.C:
+		_ = cmd.Process.Kill()
+		<-done
+		return fmt.Errorf("timed out after %s waiting for the agent process to exit", timeout)
+	}
 }
 
 func (c *client) call(method string, params any) (any, error) {
@@ -263,6 +309,7 @@ func execute(c *client, st map[string]any, s Script, o Options) (map[string]any,
 			"out":              p,
 			"ui":               boolv(st, "ui", false),
 			"accumulateFrames": uint32(numv(st, "accumulateFrames", 0)),
+			"quitAfterCapture": boolv(st, "quitAfterCapture", false),
 		})
 		if er != nil {
 			return e, er
@@ -270,14 +317,24 @@ func execute(c *client, st map[string]any, s Script, o Options) (map[string]any,
 		m, _ := r.(map[string]any)
 		path, _ := m["path"].(string)
 		e["out"] = path
+		if boolv(st, "quitAfterCapture", false) {
+			// The engine will exit when the synchronous capture is complete.
+			// Verify the output after its process has reaped in run().
+			return e, nil
+		}
 		er = poll(timeout, func() (bool, error) { _, x := os.Stat(path); return x == nil, nil })
 		return e, er
 	case "log":
 		e["message"] = str(st, "message", str(st, "text", ""))
 		return e, nil
 	case "quit":
-		_, er := c.call(typ, map[string]any{"exitCode": 0})
-		return e, er
+		_, _ = c.call(typ, map[string]any{"exitCode": 0})
+		// The engine may begin teardown immediately after accepting quit, which
+		// can close the control socket before its acknowledgement is read. The
+		// child process exit code checked by run() is authoritative; a failed
+		// control reply simply leads to the normal exit timeout if quit was not
+		// actually delivered.
+		return e, nil
 	case "cvar":
 		p := map[string]any{"name": str(st, "name", "")}
 		if v, ok := st["set"]; ok {

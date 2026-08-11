@@ -313,6 +313,17 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     if (useHeadlessSurface)
     {
         SPDLOG_INFO("No X11/Wayland display detected; agent validation will use VK_EXT_headless_surface");
+        // There is no desktop to match in this path. A compact default keeps
+        // unattended Lavapipe validation fast while explicit CLI dimensions
+        // remain authoritative.
+        if (!options.WidthSpecified)
+        {
+            options.Width = 480;
+        }
+        if (!options.HeightSpecified)
+        {
+            options.Height = 320;
+        }
         // Lavapipe can advertise ray-query extensions, but its RT resource path is neither
         // representative of a hardware renderer nor reliable for unattended validation.
         // Use the software renderer deterministically on a display-less validation host.
@@ -579,6 +590,7 @@ bool NextEngine::HandleEvent(SDL_Event& event)
 
     switch (event.type)
     {
+    case SDL_EVENT_QUIT:
     case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
         {
             return true;
@@ -862,7 +874,7 @@ bool NextEngine::Tick(bool forcingDelta)
     {
         Profiler()->EndCpuFrame();
     }
-    return false;
+    return closeRequested_;
 }
 
 void NextEngine::End()
@@ -942,6 +954,7 @@ glm::dvec2 NextEngine::GetMousePos()
 
 void NextEngine::RequestClose()
 {
+    closeRequested_ = true;
     if (window_)
     {
         window_->Close();
@@ -1100,6 +1113,7 @@ void NextEngine::AdvanceScreenShotCapture()
 
     screenShot_.exportPending = true;
     ++screenShot_.asyncExportsInFlight;
+    const bool exitAfterCapture = screenShot_.pending.exitAfterCapture;
     SaveScreenShot(screenShot_.pending);
     if (screenShot_.pending.accumulateFrames > 0)
     {
@@ -1110,6 +1124,11 @@ void NextEngine::AdvanceScreenShotCapture()
     }
     screenShot_.hasPending = false;
     screenShot_.pending = {};
+    if (exitAfterCapture)
+    {
+        SPDLOG_INFO("Screenshot capture completed; requesting agent exit");
+        RequestExit(0);
+    }
 }
 
 void NextEngine::SaveScreenShot(const FScreenShotSpec& spec)
@@ -1569,15 +1588,24 @@ nlohmann::json NextEngine::HandleAgentControlCommand(const std::string& method, 
                                          errorCode.message());
             }
         }
+        const bool exitAfterCapture = params.value("quitAfterCapture", false);
+        SPDLOG_INFO("[AgentControl] screenshot requested; exitAfterCapture={}", exitAfterCapture);
         RequestScreenShot({
             .filename = path,
             .accumulateFrames = params.value("accumulateFrames", 0u),
             .sync = true,
             .includeUi = params.value("ui", false),
+            .exitAfterCapture = exitAfterCapture,
         });
         return {{"path", path + ".jpg"}};
     }
-    if (method == "quit") { RequestExit(params.value("exitCode", 0)); return {{"ok", true}}; }
+    if (method == "quit")
+    {
+        const int exitCode = params.value("exitCode", 0);
+        SPDLOG_INFO("[AgentControl] exit requested with code {}", exitCode);
+        RequestExit(exitCode);
+        return {{"ok", true}};
+    }
     throw std::runtime_error("unknown agent control method: " + method);
 }
 

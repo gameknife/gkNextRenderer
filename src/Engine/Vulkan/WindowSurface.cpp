@@ -474,9 +474,9 @@ void Window::Close()
 {
     if (config_.HeadlessSurface)
     {
-        SDL_Event e{};
-        e.type = SDL_EVENT_QUIT;
-        SDL_PushEvent(&e);
+        // Headless shutdown is driven by NextEngine's close-request flag. SDL
+        // was initialized without its video subsystem here, and pushing a quit
+        // event can block while no SDL event pump owns that queue.
         return;
     }
     SDL_Event e{};

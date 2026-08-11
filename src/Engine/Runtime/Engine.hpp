@@ -75,6 +75,7 @@ public:
         Runtime::ScreenShot::EFileFormat fileFormat = Runtime::ScreenShot::EFileFormat::Automatic;
         bool allowOverlappingExports = false;
         bool forceUiHidden = false;
+        bool exitAfterCapture = false;
     };
 
     using FHotReloadStatus = Runtime::FShaderHotReloadStatus;
@@ -394,6 +395,7 @@ private:
     std::unique_ptr<Runtime::Agent::FAgentControlServer> agentControl_;
     Runtime::Agent::FAgentQueryRegistry agentQueries_;
     int requestedExitCode_ = 0;
+    bool closeRequested_ = false;
     FTaskQueues taskQueues_{};
     NextRenderer::EApplicationStatus status_{};
 

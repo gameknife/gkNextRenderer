@@ -24,10 +24,18 @@ namespace Runtime::Agent
         using Socket = SOCKET;
         constexpr Socket invalidSocket = INVALID_SOCKET;
         void CloseSocket(Socket socket) { if (socket != invalidSocket) closesocket(socket); }
+        void ShutdownSocket(Socket socket)
+        {
+            if (socket != invalidSocket) shutdown(socket, SD_BOTH);
+        }
 #else
         using Socket = int;
         constexpr Socket invalidSocket = -1;
         void CloseSocket(Socket socket) { if (socket != invalidSocket) close(socket); }
+        void ShutdownSocket(Socket socket)
+        {
+            if (socket != invalidSocket) shutdown(socket, SHUT_RDWR);
+        }
 #endif
     }
 
@@ -113,7 +121,15 @@ namespace Runtime::Agent
         if (!impl_) return;
         impl_->running = false;
         if (impl_->thread.joinable()) impl_->thread.request_stop();
-        CloseSocket(impl_->client); impl_->client = invalidSocket; CloseSocket(impl_->listener); impl_->listener = invalidSocket;
+        // Closing a socket from another POSIX thread does not reliably wake a
+        // blocking recv(). Shutdown first so the agent-control thread can
+        // observe its stop request and join during engine teardown.
+        ShutdownSocket(impl_->client);
+        CloseSocket(impl_->client);
+        impl_->client = invalidSocket;
+        ShutdownSocket(impl_->listener);
+        CloseSocket(impl_->listener);
+        impl_->listener = invalidSocket;
         if (impl_->thread.joinable()) impl_->thread.join();
 #if WIN32
         WSACleanup();

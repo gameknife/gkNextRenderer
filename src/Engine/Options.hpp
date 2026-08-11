@@ -89,6 +89,10 @@ public:
     // Window options
     uint32_t Width{};
     uint32_t Height{};
+    // Preserve explicit CLI dimensions when headless validation substitutes its
+    // smaller default framebuffer size.
+    bool WidthSpecified{};
+    bool HeightSpecified{};
     uint32_t PresentMode{};
     bool Fullscreen{};
     bool SystemDpiScaling{};

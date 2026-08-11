@@ -180,8 +180,11 @@ BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Runti
 {
     config.Title = "gkNextMotionBenchmark";
     options.PresentMode = 0;
-    options.Width = 1280;
-    options.Height = 720;
+    if (!config.HeadlessSurface)
+    {
+        options.Width = 1280;
+        options.Height = 720;
+    }
     LoadConfig(options, config);
 }
 
