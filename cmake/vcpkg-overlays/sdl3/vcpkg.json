@@ -18,7 +18,7 @@
   "default-features": [
     {
       "name": "ibus",
-      "platform": "linux"
+      "platform": "linux & !arm64"
     },
     {
       "name": "wayland",

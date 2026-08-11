@@ -351,6 +351,7 @@ slang/
 tools/node/
 tools/typescript/
 tools/tsc/
+tools/slang/
 tools/gnb-bin/
 /gnb
 /gnb.exe

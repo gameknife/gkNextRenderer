@@ -352,6 +352,11 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 					}
 				}
 			}
+			if !skipSetup {
+				if err := vcpkg.EnsureBootstrapped(ctx.repoRoot, ctx.cfg); err != nil {
+					return err
+				}
+			}
 			if !opts.PrintCmd {
 				if err := fetcher.EnsureHostBuildTools(ctx.repoRoot, ctx.cfg); err != nil {
 					return err
@@ -367,7 +372,7 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if ctx.preset == "windows" || ctx.preset == "windows-ninja" || ctx.preset == "linux" || ctx.preset == "macos-arm64" {
+			if ctx.preset == "windows" || ctx.preset == "windows-ninja" || ctx.preset == "linux" || ctx.preset == "linux-arm64" || ctx.preset == "macos-arm64" {
 				ninjaPath, err := vcpkg.EnsureBundledNinja(ctx.repoRoot, ctx.cfg)
 				if err != nil {
 					return err

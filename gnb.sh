@@ -13,6 +13,7 @@ if command -v python3 >/dev/null 2>&1; then
 fi
 case "$OS/$ARCH" in
   Linux/x86_64) PLATFORM="linux-amd64" ;;
+  Linux/aarch64|Linux/arm64) PLATFORM="linux-arm64" ;;
   Darwin/arm64) PLATFORM="macos-arm64" ;;
   Darwin/x86_64) PLATFORM="macos-amd64" ;;
   *) echo "unsupported platform: $OS/$ARCH" >&2; exit 1 ;;
@@ -103,6 +104,10 @@ sync_remote_gnb() {
 }
 
 if command -v go >/dev/null 2>&1; then
+  if [ -z "${GOPATH:-}" ]; then
+    GOPATH="$ROOT/tools/gnb-bin/go-path"
+    export GOPATH
+  fi
   if [ -z "${GOCACHE:-}" ]; then
     GOCACHE="$ROOT/tools/gnb-bin/go-build-cache"
     export GOCACHE

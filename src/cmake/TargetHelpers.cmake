@@ -137,7 +137,8 @@ function(gk_apply_target_defaults target)
                 -Wno-ignored-attributes
             )
         endif()
-        if(UNIX AND NOT APPLE AND NOT ANDROID)
+        if(UNIX AND NOT APPLE AND NOT ANDROID AND
+           CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
             # Distributable builds must run on any CPU meeting the documented baseline.
             # -march=native bakes in the build machine's instruction set and makes the
             # binary SIGILL on older CPUs, so it stays opt-in for local development.
@@ -146,6 +147,8 @@ function(gk_apply_target_defaults target)
             else()
                 target_compile_options(${target} PRIVATE -march=${GK_ARCH_BASELINE})
             endif()
+        elseif(UNIX AND NOT APPLE AND NOT ANDROID AND GK_NATIVE_ARCH)
+            target_compile_options(${target} PRIVATE -march=native)
         endif()
     endif()
 endfunction()

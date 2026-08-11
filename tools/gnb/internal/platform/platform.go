@@ -26,7 +26,11 @@ func Detect() (Host, error) {
 		return host, nil
 	}
 	if runtime.GOOS == "linux" {
-		host.Preset = "linux"
+		if runtime.GOARCH == "arm64" {
+			host.Preset = "linux-arm64"
+		} else {
+			host.Preset = "linux"
+		}
 		return host, nil
 	}
 	if runtime.GOOS == "darwin" {
@@ -146,6 +150,9 @@ func ensureLinuxAptPackages() error {
 		"libxcursor-dev",
 		"libxrandr-dev",
 		"libxtst-dev",
+		"libwayland-dev",
+		"libegl1-mesa-dev",
+		"libibus-1.0-dev",
 		"wayland-protocols",
 		"libxkbcommon-dev",
 		"xorg-dev",

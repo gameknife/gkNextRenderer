@@ -134,6 +134,13 @@ func Ensure(repoRoot string, cfg config.Config, refresh bool) error {
 		}
 	}
 
+	return EnsureBootstrapped(repoRoot, cfg)
+}
+
+// EnsureBootstrapped verifies that the vcpkg executable can run on the current
+// host. The vcpkg checkout may be shared between ARM64 Linux and macOS (for
+// example, through a synced workspace), while its executable is host-specific.
+func EnsureBootstrapped(repoRoot string, cfg config.Config) error {
 	needsBootstrap, err := NeedsBootstrap(repoRoot, cfg)
 	if err != nil {
 		return err
