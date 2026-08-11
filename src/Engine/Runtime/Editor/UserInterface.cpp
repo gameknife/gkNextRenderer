@@ -173,10 +173,19 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
 
     funcPreConfig();
 
-    // Initialise ImGui GLFW adapter
-    if (!ImGui_ImplSDL3_InitForVulkan(window.Handle()))
+    // A VK_EXT_headless_surface has no SDL_Window. Dear ImGui's Vulkan renderer
+    // can still render into it, but the SDL platform backend cannot be initialized.
+    sdlPlatformBackendInitialized_ = !window.IsHeadless();
+    if (sdlPlatformBackendInitialized_ && !ImGui_ImplSDL3_InitForVulkan(window.Handle()))
     {
-        Throw(std::runtime_error("failed to initialise ImGui GLFW adapter"));
+        Throw(std::runtime_error("failed to initialise ImGui SDL adapter"));
+    }
+    if (!sdlPlatformBackendInitialized_)
+    {
+        const auto extent = swapChain.Extent();
+        io.DisplaySize = ImVec2(static_cast<float>(extent.width), static_cast<float>(extent.height));
+        io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+        io.DeltaTime = 1.0f / 60.0f;
     }
 
     InitializeRendererBackend();
@@ -325,7 +334,10 @@ UserInterface::~UserInterface()
     uiFrameBuffers_.clear();
     uiRenderBuffers_.clear();
 
-    ImGui_ImplSDL3_Shutdown();
+    if (sdlPlatformBackendInitialized_)
+    {
+        ImGui_ImplSDL3_Shutdown();
+    }
     contextHost_->Destroy();
 }
 
@@ -849,8 +861,19 @@ void UserInterface::DrawLine(float fromx, float fromy, float tox, float toy, flo
 void UserInterface::PreRender()
 {
     BeginRendererBackendFrame();
-    ImGui_ImplSDL3_SetFramebufferScaleBias(Vulkan::SwapChain::UiContentScale());
-    ImGui_ImplSDL3_NewFrame();
+    if (sdlPlatformBackendInitialized_)
+    {
+        ImGui_ImplSDL3_SetFramebufferScaleBias(Vulkan::SwapChain::UiContentScale());
+        ImGui_ImplSDL3_NewFrame();
+    }
+    else
+    {
+        auto& io = ImGui::GetIO();
+        const auto extent = GetEngine().GetRenderer().SwapChain().Extent();
+        io.DisplaySize = ImVec2(static_cast<float>(extent.width), static_cast<float>(extent.height));
+        io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+        io.DeltaTime = 1.0f / 60.0f;
+    }
 #if WIN32
     auto& io = ImGui::GetIO();
     if (uiScale_ > 1.0f)
@@ -1027,7 +1050,10 @@ void UserInterface::HandleEvent(const SDL_Event* event)
         }
     }
 #endif
-    ImGui_ImplSDL3_ProcessEvent(event);
+    if (sdlPlatformBackendInitialized_)
+    {
+        ImGui_ImplSDL3_ProcessEvent(event);
+    }
 }
 
 bool UserInterface::WantsToCaptureKeyboard() const { return contextHost_->WantsToCaptureKeyboard(); }

@@ -136,6 +136,7 @@ private:
     bool hasPreparedDrawData_ = false;
     double loadingStartedAt_ = -1.0;
     bool loadingIndicatorOpen_ = false;
+    bool sdlPlatformBackendInitialized_ = false;
     NextEngine* engine_;
 };
 

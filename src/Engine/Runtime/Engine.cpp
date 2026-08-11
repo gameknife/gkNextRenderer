@@ -1326,10 +1326,14 @@ void NextEngine::OnRendererDeviceSet()
 
 void NextEngine::OnRendererCreateSwapChain()
 {
+    if (window_ && window_->IsHeadless() && !options_->AgentValidation)
+    {
+        SPDLOG_INFO("Headless surface disables the SDL/ImGui UI backend outside agent validation");
+        return;
+    }
     if (window_ && window_->IsHeadless())
     {
-        SPDLOG_INFO("Headless agent validation disables the SDL/ImGui UI backend; screenshots contain rendered scene only");
-        return;
+        SPDLOG_INFO("Headless agent validation enables ImGui rendering without an SDL platform backend");
     }
     if (userInterface_.get() == nullptr)
     {
