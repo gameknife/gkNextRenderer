@@ -49,10 +49,15 @@ else()
 endif()
 
 if(IOS)
+    # Single source of truth: the target property and the gnb manifest below must
+    # agree, otherwise `gnb ios run` reports an identifier the bundle never had.
+    set(GK_IOS_BUNDLE_ID "com.tzy.gknext" CACHE STRING
+        "Bundle identifier for the iOS app; must match an installed provisioning profile")
+
     set_target_properties(gkNextRenderer PROPERTIES
         MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist
         MACOSX_BUNDLE_BUNDLE_NAME gkNextRenderer
-        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.tzy.gknext"
+        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "${GK_IOS_BUNDLE_ID}"
         XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
     )
 
@@ -62,6 +67,9 @@ if(IOS)
             XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "${IOS_DEVELOPMENT_TEAM}"
         )
     else()
+        # CI builds have no signing certificate or provisioning profile. Without
+        # this Xcode still demands a development identity and fails the build.
+        # The resulting bundle compiles and links but cannot be launched.
         set_target_properties(gkNextRenderer PROPERTIES
             XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
             XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
@@ -94,6 +102,6 @@ if(IOS)
 
     file(GENERATE
         OUTPUT "${PROJECT_BINARY_DIR}/ios-app-$<CONFIG>.json"
-        CONTENT "{\n  \"bundle_path\": \"$<TARGET_BUNDLE_DIR:gkNextRenderer>\",\n  \"bundle_id\": \"com.tzy.gknext\"\n}\n"
+        CONTENT "{\n  \"bundle_path\": \"$<TARGET_BUNDLE_DIR:gkNextRenderer>\",\n  \"bundle_id\": \"${GK_IOS_BUNDLE_ID}\"\n}\n"
     )
 endif()

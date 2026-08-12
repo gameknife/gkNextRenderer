@@ -795,6 +795,7 @@ func newIOSCommand(ctx appContext) *cobra.Command {
 
 	buildOpts := cmakerun.BuildOptions{}
 	teamID := ""
+	verbose := false
 	build := &cobra.Command{
 		Use:   "build",
 		Short: "Build gkNextRenderer for an arm64 iOS device",
@@ -815,15 +816,78 @@ func newIOSCommand(ctx appContext) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return ios.Build(ctx.repoRoot, cmakePath, teamID, buildOpts)
+			staged, err := ios.Build(ctx.repoRoot, cmakePath, teamID, !verbose, buildOpts)
+			if err != nil {
+				return err
+			}
+			if staged.WrapperPath == "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "[ios] built an unsigned bundle; pass --team-id <TEAM_ID> to produce a launchable app\n")
+				return nil
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "[ios] Designed-for-iPad app staged: %s\n", staged.WrapperPath)
+			fmt.Fprintf(cmd.OutOrStdout(), "[ios] launch it with `gnb ios run`\n")
+			if staged.Restaged {
+				fmt.Fprintf(cmd.OutOrStdout(), "[ios] first launch needs you to approve the developer certificate in the Gatekeeper dialog\n")
+			}
+			return nil
 		},
 	}
 	build.Flags().BoolVar(&buildOpts.Clean, "clean", false, "delete the selected iOS build directory first")
 	build.Flags().BoolVar(&buildOpts.Reconfigure, "reconfigure", false, "force CMake configure")
 	build.Flags().IntVar(&buildOpts.Jobs, "jobs", 0, "parallel build jobs")
 	build.Flags().StringVar(&teamID, "team-id", "", "Apple Developer Team ID for automatic device signing")
+	build.Flags().BoolVar(&verbose, "verbose", false, "show normal Xcode build progress output")
 
 	root.AddCommand(build)
+	run := &cobra.Command{
+		Use:   "run",
+		Short: "Launch the signed iOS app on this Apple Silicon Mac",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			artifact, err := ios.Run(ctx.repoRoot)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "[ios] launched %s (%s)\n", artifact.BundleID, artifact.WrapperPath)
+			if artifact.Restaged {
+				fmt.Fprintf(cmd.OutOrStdout(), "[ios] this build is new to Gatekeeper: approve the developer certificate in the dialog, otherwise the app stays suspended\n")
+			}
+			return nil
+		},
+	}
+
+	root.AddCommand(run)
+	teams := &cobra.Command{
+		Use:   "teams",
+		Short: "List locally provisioned Apple Developer teams",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("locate home directory: %w", err)
+			}
+			teams, warnings := ios.Teams(homeDir)
+			for _, warning := range warnings {
+				fmt.Fprintf(cmd.ErrOrStderr(), "[warning] %v\n", warning)
+			}
+			if len(teams) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No local iOS provisioning profiles found. Sign an iOS app once in Xcode, then run this command again.")
+				return nil
+			}
+
+			fmt.Fprintln(cmd.OutOrStdout(), "Apple Developer teams available from local provisioning profiles:")
+			for _, team := range teams {
+				name := team.Name
+				if name == "" {
+					name = "(unnamed team)"
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "  %s\t%s\n", name, team.ID)
+			}
+			return nil
+		},
+	}
+
+	root.AddCommand(teams)
 	return root
 }
 

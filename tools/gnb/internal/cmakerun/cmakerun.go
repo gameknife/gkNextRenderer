@@ -22,6 +22,7 @@ type BuildOptions struct {
 	LTO           bool
 	MakeProgram   string
 	PrintCmd      bool
+	BuildToolArgs []string
 }
 
 func Build(repoRoot string, preset string, opts BuildOptions) error {
@@ -83,6 +84,10 @@ func makeBuildArgs(preset string, opts BuildOptions) []string {
 		args = append(args, "--parallel", fmt.Sprintf("%d", opts.Jobs))
 	} else {
 		args = append(args, "--parallel")
+	}
+	if len(opts.BuildToolArgs) > 0 {
+		args = append(args, "--")
+		args = append(args, opts.BuildToolArgs...)
 	}
 	return args
 }

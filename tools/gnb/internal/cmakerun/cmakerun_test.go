@@ -31,6 +31,14 @@ func TestMakeBuildArgs(t *testing.T) {
 			t.Fatalf("makeBuildArgs() = %#v, want %#v", got, want)
 		}
 	})
+
+	t.Run("forwards generator arguments", func(t *testing.T) {
+		got := makeBuildArgs("ios-device", BuildOptions{BuildToolArgs: []string{"-quiet"}})
+		want := []string{"--build", "--preset", "ios-device", "--parallel", "--", "-quiet"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("makeBuildArgs() = %#v, want %#v", got, want)
+		}
+	})
 }
 
 func TestBuildOptionsAcceptConfigureArgs(t *testing.T) {

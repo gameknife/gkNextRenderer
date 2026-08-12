@@ -95,6 +95,7 @@ package preset 配置在 `gnb.toml` 的 `[package.presets.<name>]`，可独立�
 ./gnb.sh android debug    # CMake 驱动构建、安装并启动
 ./gnb.sh android release  # CMake 驱动，仅生成 APK
 ./gnb.sh ios build
+./gnb.sh ios run
 ./gnb.sh install
 ./gnb.sh init
 ```
@@ -112,7 +113,20 @@ release 正式签名从仓库外的 `~/.gknext/android-signing.properties` 自�
 APK 供 CI 构建验证，但不能直接安装或发布。发布密钥必须长期备份，后续升级包必须使用同一密钥。
 
 iOS 由根 CMake 工程生成 arm64 device `.app`；需要签名时通过 `--team-id` 提供仓库外 Team ID，
-未提供时生成 CI 可验证的 unsigned bundle。项目不支持 iOS Simulator，也不提供 `ios run`；真机
-安装、启动和完整 Vulkan/MoltenVK 渲染验证由 Xcode 或外部部署工具完成。
+未提供时禁用签名并生成 CI 可验证的 unsigned bundle（该 bundle 无法启动，`gnb ios build` 此时也不会
+生成下面的 wrapper）。可用的 Team ID 通过 `gnb ios teams` 从本机 provisioning profile 列出。项目
+不支持 iOS Simulator。
+
+已签名的 device bundle 可在 Apple Silicon Mac 上通过 `gnb ios run` 直接启动（Mac Designed for iPad），
+无需 Xcode 参与。macOS 只能通过 Launch Services 启动 Designed-for-iPad 的 wrapper 布局，直接运行
+iPhoneOS 可执行文件会被内核以 code signing 错误杀掉（SIGKILL，退出码 9）。因此 `gnb ios build` /
+`gnb ios run` 会把签名后的 bundle 镜像成 `bin/DesignedForIpad/<App>.app/Wrapper/<App>.app`（用
+`ditto` 保留签名所封的扩展属性），再用 `open` 交给 Launch Services。
+
+wrapper 仅在 bundle 的 CDHash 变化时重建：app 每获得一个新的磁盘身份，Gatekeeper 就会重新要求批准
+开发者证书（app 用 Apple Development 证书签名，未经公证）。因此每编译出一个新版本，首次启动需要在
+弹窗中批准一次，否则 app 会一直挂起；之后重复 `gnb ios run` 不再询问。
+
+真机安装、调试和断点仍由 Xcode 工程完成，该工程照常生成。
 
 `init` 可在仓库外克隆新 checkout；其他大多数命令要求能发现 `gnb.toml`。也可通过 `--repo-root` 或 `GNB_REPO_ROOT` 明确仓库根。
