@@ -64,7 +64,7 @@ namespace Runtime::Agent
             char value = 0;
             while (running)
             {
-                const int count = recv(client, &value, 1, 0);
+                const auto count = recv(client, &value, 1, 0);
                 if (count <= 0) break;
                 if (value != '\n') { if (value != '\r' && line.size() < 4 * 1024 * 1024) line.push_back(value); continue; }
                 try

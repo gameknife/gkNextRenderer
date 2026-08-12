@@ -108,9 +108,9 @@
             }
         },
         {
-            "name": "ios",
+            "name": "ios-device",
             "inherits": "base",
-            "displayName": "iOS",
+            "displayName": "iOS Device (arm64)",
             "generator": "Xcode",
             "condition": {
                 "type": "equals",
@@ -119,9 +119,11 @@
             },
             "cacheVariables": {
                 "CMAKE_SYSTEM_NAME": "iOS",
-                "VCPKG_TARGET_TRIPLET": "arm64-ios",
-                "IOS_SKIP_CODE_SIGN": "ON",
-                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+                "CMAKE_OSX_SYSROOT": "iphoneos",
+                "CMAKE_OSX_ARCHITECTURES": "arm64",
+                "CMAKE_OSX_DEPLOYMENT_TARGET": "15.0",
+                "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/vcpkg-triplets",
+                "VCPKG_TARGET_TRIPLET": "arm64-ios"
             }
         }
     ],
@@ -152,8 +154,8 @@
             "configuration": "RelWithDebInfo"
         },
         {
-            "name": "ios",
-            "configurePreset": "ios",
+            "name": "ios-device",
+            "configurePreset": "ios-device",
             "configuration": "RelWithDebInfo"
         }
     ]

@@ -784,42 +784,47 @@ func newAndroidCommand(ctx appContext) *cobra.Command {
 }
 
 func newIOSCommand(ctx appContext) *cobra.Command {
-	skipCodeSign := true
-	codeSign := false
-	cmd := &cobra.Command{
+	root := &cobra.Command{
 		Use:   "ios",
-		Short: "Build iOS target with CMake preset",
+		Short: "Build the CMake-generated iOS device app",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+	}
+
+	buildOpts := cmakerun.BuildOptions{}
+	teamID := ""
+	build := &cobra.Command{
+		Use:   "build",
+		Short: "Build gkNextRenderer for an arm64 iOS device",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if _, err := os.Stat(vcpkg.Toolchain(ctx.repoRoot, ctx.cfg)); err != nil {
+				if err := vcpkg.Ensure(ctx.repoRoot, ctx.cfg, false); err != nil {
+					return err
+				}
+			}
+			if err := vcpkg.EnsureBootstrapped(ctx.repoRoot, ctx.cfg); err != nil {
+				return err
+			}
 			if err := fetcher.EnsureExternal(ctx.repoRoot, ctx.cfg); err != nil {
 				return err
 			}
-			if err := fetcher.EnsureIOSExternal(ctx.repoRoot, ctx.cfg); err != nil {
-				return err
-			}
-			skip, err := resolveIOSSkipCodeSign(cmd, skipCodeSign, codeSign)
+			cmakePath, err := vcpkg.EnsureBundledCMake(ctx.repoRoot, ctx.cfg)
 			if err != nil {
 				return err
 			}
-			cmakePath, err := vcpkg.ResolveCMake(ctx.repoRoot, ctx.cfg)
-			if err != nil {
-				return err
-			}
-			return ios.Build(ctx.repoRoot, cmakePath, skip)
+			return ios.Build(ctx.repoRoot, cmakePath, teamID, buildOpts)
 		},
 	}
-	cmd.Flags().BoolVar(&skipCodeSign, "skip-codesign", true, "disable code signing")
-	cmd.Flags().BoolVar(&codeSign, "codesign", false, "enable code signing")
-	return cmd
-}
+	build.Flags().BoolVar(&buildOpts.Clean, "clean", false, "delete the selected iOS build directory first")
+	build.Flags().BoolVar(&buildOpts.Reconfigure, "reconfigure", false, "force CMake configure")
+	build.Flags().IntVar(&buildOpts.Jobs, "jobs", 0, "parallel build jobs")
+	build.Flags().StringVar(&teamID, "team-id", "", "Apple Developer Team ID for automatic device signing")
 
-func resolveIOSSkipCodeSign(cmd *cobra.Command, skipCodeSign bool, codeSign bool) (bool, error) {
-	if cmd.Flags().Changed("skip-codesign") && cmd.Flags().Changed("codesign") {
-		return false, fmt.Errorf("cannot use --skip-codesign and --codesign together")
-	}
-	if cmd.Flags().Changed("codesign") {
-		return !codeSign, nil
-	}
-	return skipCodeSign, nil
+	root.AddCommand(build)
+	return root
 }
 
 func newPaksCommand(ctx appContext) *cobra.Command {

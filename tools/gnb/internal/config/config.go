@@ -35,7 +35,6 @@ type ExternalConfig struct {
 	Streamline ExternalURLConfig `toml:"streamline"`
 	FidelityFX FidelityFXConfig  `toml:"fidelityfx"`
 	TSC        TSCConfig         `toml:"tsc"`
-	MoltenVK   ExternalURLConfig `toml:"moltenvk"`
 	VulkanSDK  VulkanSDKConfig   `toml:"vulkansdk"`
 	LLM        LLMConfig         `toml:"llm"`
 }

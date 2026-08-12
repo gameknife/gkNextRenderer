@@ -52,7 +52,7 @@ because concurrent Windows builds can lock `.obj`, executables, or vcpkg state f
 - **大型 engine 重构、改动 ABI/广泛 header、不确定影响面，或用户明确要求**：才执行全量 `./gnb.sh build --all --reconfigure`，确认所有 program 都能编译。
 - 增量构建无需 `--reconfigure`；仅在改了 CMake/preset/新增文件未被 glob 收录时才加 `--reconfigure`。
 
-**CMake presets:** `windows` (默认使用 Ninja 极速生成器，带 MSVC/SDK 环境自动发现), `windows-vcproj`, `windows-no-unity`, `linux`, `macos-arm64`, `ios`.
+**CMake presets:** `windows` (默认使用 Ninja 极速生成器，带 MSVC/SDK 环境自动发现), `windows-vcproj`, `windows-no-unity`, `linux`, `macos-arm64`, `ios-device`.
 
 **Optional Features:**
 - AVIF is manual: `cmake --preset windows -DENABLE_AVIF=ON -DVCPKG_MANIFEST_FEATURES=avif` then `./gnb.sh build`

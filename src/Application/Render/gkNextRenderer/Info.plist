@@ -9,7 +9,7 @@
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
-    <string>com.tzy.gknext</string>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
@@ -24,9 +24,11 @@
     <true/>
     <key>UIRequiredDeviceCapabilities</key>
     <array>
-        <string>armv7</string>
+        <string>arm64</string>
         <string>metal</string>
     </array>
+    <key>UIApplicationSupportsIndirectInputEvents</key>
+    <true/>
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
@@ -40,28 +42,5 @@
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
-    <key>UIRequiresFullScreen</key>
-    <false/>
-    <key>UIStatusBarHidden</key>
-    <false/>
-    <key>UIViewControllerBasedStatusBarAppearance</key>
-    <true/>
-    <key>UIInterfaceOrientation</key>
-    <string>UIInterfaceOrientationPortrait</string>
-    <key>CFBundleIconName</key>
-    <string>AppIcon</string>
-    <key>UILaunchScreen</key>
-    <dict>
-        <key>UIImageName</key>
-        <string>LaunchScreen</string>
-        <key>UIColorName</key>
-        <string>LaunchScreenBackground</string>
-    </dict>
-    <key>NSCameraUsageDescription</key>
-    <string>Camera access is required for AR features</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Microphone access is required for audio recording</string>
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>Photo library access is required for importing textures</string>
 </dict>
 </plist>

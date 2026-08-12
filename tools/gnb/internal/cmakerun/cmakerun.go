@@ -13,14 +13,15 @@ import (
 )
 
 type BuildOptions struct {
-	Targets     []string
-	Clean       bool
-	Reconfigure bool
-	Jobs        int
-	NoUnity     bool
-	LTO         bool
-	MakeProgram string
-	PrintCmd    bool
+	Targets       []string
+	ConfigureArgs []string
+	Clean         bool
+	Reconfigure   bool
+	Jobs          int
+	NoUnity       bool
+	LTO           bool
+	MakeProgram   string
+	PrintCmd      bool
 }
 
 func Build(repoRoot string, preset string, opts BuildOptions) error {
@@ -38,6 +39,7 @@ func BuildWithCMake(repoRoot string, cmakePath string, preset string, opts Build
 	}
 
 	configureArgs := []string{"--preset", preset}
+	configureArgs = append(configureArgs, opts.ConfigureArgs...)
 	if opts.NoUnity {
 		configureArgs = append(configureArgs, "-DENABLE_UNITY_BUILD=OFF")
 	}
@@ -48,7 +50,7 @@ func BuildWithCMake(repoRoot string, cmakePath string, preset string, opts Build
 		configureArgs = append(configureArgs, "-DCMAKE_MAKE_PROGRAM="+opts.MakeProgram)
 	}
 
-	needsConfigure := opts.Clean || opts.Reconfigure || opts.NoUnity || opts.LTO
+	needsConfigure := opts.Clean || opts.Reconfigure || opts.NoUnity || opts.LTO || len(opts.ConfigureArgs) > 0
 	if _, err := os.Stat(cache); os.IsNotExist(err) {
 		needsConfigure = true
 	}

@@ -46,7 +46,10 @@
       "features": ["freetype"]
     },
     "stb",
-    "curl",
+    {
+      "name": "curl",
+      "platform": "!(ios)"
+    },
     "nlohmann-json",
     "tinygltf",
     "draco",

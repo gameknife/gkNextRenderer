@@ -6,13 +6,6 @@ include(cmake/SourceFiles.cmake)
 include(cmake/TargetHelpers.cmake)
 include(cmake/RuntimeFeatures.cmake)
 
-if(IOS)
-    set_source_files_properties(
-        ${GK_SOURCE_ROOT}/Engine/Runtime/Subsystems/NextAudio.cpp
-        PROPERTIES LANGUAGE OBJCXX
-    )
-endif()
-
 if(UNIX AND NOT APPLE AND NOT ANDROID)
     set(extra_libs -lstdc++fs ${Backtrace_LIBRARIES})
 endif()

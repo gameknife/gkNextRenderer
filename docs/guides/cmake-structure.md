@@ -15,6 +15,7 @@ last_updated: 2026-07-17
 
 - 根 `CMakeLists.txt`：preset 入口、平台选项、依赖发现、shader/assets 等全局步骤。
 - `tools/android/CMakeLists.txt`：Android host driver；校验 SDK/NDK/JDK，生成临时 Gradle 工程，并编排 APK、安装、启动和 logcat target。
+- `CMakePresets.json` 的 `ios-device`：选择 `iphoneos`、arm64 和 iOS vcpkg triplet；`gkNextRenderer` target 自己拥有 bundle、plist、资源和可选签名定义。
 - `src/CMakeLists.txt`：公共 helper、Engine/Modules/Gameplay/Application/Tests 子目录和标准 runtime module 集合。
 - `src/cmake/SourceFiles.cmake`：Engine、Gameplay 和可选 module 的共享源码集合；Android 单体布局也使用它。
 - `src/cmake/TargetHelpers.cmake`：编译选项、include、unity/链接策略，以及 `gk_configure_module`、`gk_configure_application`、`gk_target_runtime_modules`。
@@ -59,3 +60,7 @@ gk_configure_application(MyTarget MODULES ${GK_STANDARD_RUNTIME_MODULES} MyOptio
 
 Android 不使用根目录下的长期 Gradle 工程。`gnb android debug|release` 配置
 `out/build/android-<variant>/` 下的 driver，native/asset/Gradle/APK 产物都留在该目录。
+
+iOS 同样只有根 CMake build graph。macOS Vulkan SDK 同时提供 headers、host `slangc` 与
+`MoltenVK.xcframework`；CMake 固定选择 `ios-arm64` device slice。项目不提供 iOS Simulator
+构建或运行路径，`gnb ios build` 只是 device preset 的薄封装。

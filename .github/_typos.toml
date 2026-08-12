@@ -9,7 +9,6 @@ extend-exclude = [
     "external/",
     "out/",
     "android/",
-    "ios/",
     ".vcpkg/",
     "assets/models/",
     "assets/paks/",

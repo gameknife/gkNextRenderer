@@ -61,10 +61,6 @@ linux = "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.2
 macos_amd64 = "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-darwin-amd64"
 macos_arm64 = "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-darwin-arm64"
 
-[external.moltenvk]
-when = "ios"
-url = "https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.0/MoltenVK-ios.tar"
-
 [external.vulkansdk]
 version = "1.4.341.1"
 root = "external/VulkanSDK"

@@ -80,7 +80,7 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
     }
 #endif
     
-#if __APPLE__
+#if IOS
     AppendUniqueExtension(extensions, "VK_EXT_swapchain_colorspace");
 #endif
 
@@ -111,11 +111,39 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
     createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
     createInfo.ppEnabledLayerNames = validationLayers.data();
 
+#if IOS
+    if (!hasInstanceExtension(VK_EXT_LAYER_SETTINGS_EXTENSION_NAME))
+    {
+        Throw(std::runtime_error("MoltenVK requires VK_EXT_layer_settings for bindless resources"));
+    }
+    AppendUniqueExtension(extensions, VK_EXT_LAYER_SETTINGS_EXTENSION_NAME);
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+    createInfo.ppEnabledExtensionNames = extensions.data();
+
+    // Full iOS device rendering requires Metal argument buffers for the engine's bindless
+    // descriptor arrays. Pass the setting while creating the statically linked MoltenVK instance.
+    const VkBool32 useMetalArgumentBuffers = VK_TRUE;
+    const VkLayerSettingEXT moltenVkSetting{
+        "MoltenVK",
+        "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS",
+        VK_LAYER_SETTING_TYPE_BOOL32_EXT,
+        1,
+        &useMetalArgumentBuffers,
+    };
+    VkLayerSettingsCreateInfoEXT moltenVkSettings{};
+    moltenVkSettings.sType = VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT;
+    moltenVkSettings.settingCount = 1;
+    moltenVkSettings.pSettings = &moltenVkSetting;
+    moltenVkSettings.pNext = createInfo.pNext;
+    createInfo.pNext = &moltenVkSettings;
+#endif
+
     VkValidationFeatureEnableEXT validationFeature = VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
     VkValidationFeaturesEXT validationFeatures{};
     if (enableSynchronizationValidation)
     {
         validationFeatures.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+        validationFeatures.pNext = createInfo.pNext;
         validationFeatures.enabledValidationFeatureCount = 1;
         validationFeatures.pEnabledValidationFeatures = &validationFeature;
         createInfo.pNext = &validationFeatures;

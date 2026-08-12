@@ -78,6 +78,12 @@ func EnsureNamedExternal(repoRoot string, cfg config.Config, names []string) err
 }
 
 func EnsureVulkanSDK(repoRoot string, cfg config.Config) error {
+	if explicit := os.Getenv("VULKAN_SDK"); explicit != "" {
+		if normalizeVulkanSDKRoot(explicit) == "" {
+			return fmt.Errorf("VULKAN_SDK is set to an unusable path: %s", explicit)
+		}
+		return nil
+	}
 	if sdkRoot := DiscoverVulkanSDK(repoRoot, cfg); sdkRoot != "" {
 		return nil
 	}
@@ -167,21 +173,18 @@ func DiscoverVulkanSDK(repoRoot string, cfg config.Config) string {
 		}
 	}
 
-	return ""
-}
-
-func EnsureIOSExternal(repoRoot string, cfg config.Config) error {
-	dstDir := filepath.Join(repoRoot, "external", "moltenvk-1.4.0")
-	sentinels := []string{
-		"MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a",
-		"MoltenVK/MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a",
-	}
-	for _, sentinel := range sentinels {
-		if _, err := os.Stat(filepath.Join(dstDir, filepath.FromSlash(sentinel))); err == nil {
-			return nil
+	if home, err := os.UserHomeDir(); err == nil {
+		homeMatches, _ := filepath.Glob(filepath.Join(home, "VulkanSDK", "*"))
+		slices.Sort(homeMatches)
+		slices.Reverse(homeMatches)
+		for _, match := range homeMatches {
+			if sdkRoot := normalizeVulkanSDKRoot(match); sdkRoot != "" {
+				return sdkRoot
+			}
 		}
 	}
-	return ensureArchive(repoRoot, cfg.External.MoltenVK.URL, dstDir, "MoltenVK/MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a")
+
+	return ""
 }
 
 func ensureTSC(repoRoot string, cfg config.Config) error {

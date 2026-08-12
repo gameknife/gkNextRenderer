@@ -94,7 +94,7 @@ package preset 配置在 `gnb.toml` 的 `[package.presets.<name>]`，可独立�
 ```bash
 ./gnb.sh android debug    # CMake 驱动构建、安装并启动
 ./gnb.sh android release  # CMake 驱动，仅生成 APK
-./gnb.sh ios
+./gnb.sh ios build
 ./gnb.sh install
 ./gnb.sh init
 ```
@@ -110,5 +110,9 @@ release 正式签名从仓库外的 `~/.gknext/android-signing.properties` 自�
 `GK_ANDROID_SIGNING_PROPERTIES` 环境变量或同名 CMake cache 参数指定。属性文件必须包含
 `storeFile`、`storePassword`、`keyAlias` 和 `keyPassword`；未配置时 release 仍生成 unsigned
 APK 供 CI 构建验证，但不能直接安装或发布。发布密钥必须长期备份，后续升级包必须使用同一密钥。
+
+iOS 由根 CMake 工程生成 arm64 device `.app`；需要签名时通过 `--team-id` 提供仓库外 Team ID，
+未提供时生成 CI 可验证的 unsigned bundle。项目不支持 iOS Simulator，也不提供 `ios run`；真机
+安装、启动和完整 Vulkan/MoltenVK 渲染验证由 Xcode 或外部部署工具完成。
 
 `init` 可在仓库外克隆新 checkout；其他大多数命令要求能发现 `gnb.toml`。也可通过 `--repo-root` 或 `GNB_REPO_ROOT` 明确仓库根。

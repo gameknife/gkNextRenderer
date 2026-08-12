@@ -6,6 +6,17 @@ foreach(gkModule IN LISTS GK_MODULE_NAMES)
     endif()
 endforeach()
 
+if(IOS AND TARGET NextAudio)
+    # miniaudio's iOS backend includes Objective-C framework headers. Keep it
+    # out of the C++ unity source so Xcode invokes the Objective-C++ compiler.
+    set_source_files_properties(
+        ${GK_SOURCE_ROOT}/Modules/NextAudio/MiniaudioBackend.cpp
+        PROPERTIES
+            LANGUAGE OBJCXX
+            SKIP_UNITY_BUILD_INCLUSION ON
+    )
+endif()
+
 if(TARGET LiveCoding AND GK_ENABLE_CPP_LIVE_CODING)
     target_include_directories(LiveCoding SYSTEM PRIVATE
         "${GK_LIVEPP_RESOLVED_ROOT}/API/x64"

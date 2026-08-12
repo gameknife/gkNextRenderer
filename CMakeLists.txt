@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.26)
 
 project(gkNextRenderer LANGUAGES CXX C)
 
+if(IOS)
+    enable_language(OBJCXX)
+endif()
+
 include(cmake/SetupPlatform.cmake)
 include(cmake/ProjectOptions.cmake)
 

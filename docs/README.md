@@ -87,6 +87,7 @@
 
   （待实施；统一 Engine UI 主题、语义控件、Toolbar/Combo、应用 chrome、领域选项目录与 DevTools 边界）
 - [Android 纯 CMake 驱动构建重构方案](plans/android-cmake-build-refactor-plan.md)（实施中；源码迁移已完成，待兼容 NDK 环境完成 APK/AVD 验收）
+- [iOS 纯 CMake 驱动构建重构方案](plans/ios-pure-cmake-build-refactor-plan.md)（device-only 实施；复用 macOS Vulkan SDK 解析，保留 `gnb ios build` 薄入口）
 - [阶段性 Release 准备计划](plans/release-readiness-plan.md)（现行；发布流水线、崩溃兜底、UI 收口、
   合规与文档一致性的问题清单与分批任务，覆盖 gkNextRenderer / gkNextEditor / gkNextMotionBenchmark）
 - [CPU TLAS 异步与并行更新计划](plans/cpu-tlas-parallel-update-plan.md)

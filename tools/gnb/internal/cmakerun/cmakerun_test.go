@@ -33,6 +33,13 @@ func TestMakeBuildArgs(t *testing.T) {
 	})
 }
 
+func TestBuildOptionsAcceptConfigureArgs(t *testing.T) {
+	opts := BuildOptions{ConfigureArgs: []string{"-DIOS_DEVELOPMENT_TEAM=ABCDE12345"}}
+	if !reflect.DeepEqual(opts.ConfigureArgs, []string{"-DIOS_DEVELOPMENT_TEAM=ABCDE12345"}) {
+		t.Fatalf("ConfigureArgs = %#v", opts.ConfigureArgs)
+	}
+}
+
 func TestRequiresMakeProgramRefresh(t *testing.T) {
 	t.Run("missing want does not force refresh", func(t *testing.T) {
 		if requiresMakeProgramRefresh("missing-cache", "") {
