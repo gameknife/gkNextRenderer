@@ -260,10 +260,16 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     // are captured too. This covers entry points that do not go through DesktopMain.
     Utilities::Logging::InstallFileSink();
 
-#if defined(__APPLE__) && !IOS
+#if defined(__APPLE__)
+    // Workaround, not a policy: any vertical-blank-synchronized present mode still drops the
+    // composited scene on some frames under MoltenVK, leaving the window black or flickering.
+    // MoltenVK advertises only FIFO and IMMEDIATE, so MAILBOX and FIFO_RELAXED silently degrade
+    // to FIFO and are unusable too - Immediate is the only mode that presents reliably.
+    // Deepening the swapchain to three images fixed the present pacing (77fps median / 16.3 stdev
+    // -> 111 / 4.5 on a 120Hz panel) but not the dropped frames, so the underlying defect is
+    // still open. Output colorspace is unaffected: EDR stays enabled.
     options.PresentMode = static_cast<uint32_t>(VK_PRESENT_MODE_IMMEDIATE_KHR);
-    options.ForceSDR = true;
-    SPDLOG_INFO("macOS display policy: forcing Immediate present mode and SDR output");
+    SPDLOG_INFO("Apple display workaround: forcing Immediate present mode");
 #endif
 
 #if ANDROID

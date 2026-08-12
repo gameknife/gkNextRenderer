@@ -100,7 +100,7 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
     const auto surfaceFormat = ChooseSwapSurfaceFormat(details.Formats, forceSDR);
     const auto actualPresentMode = ChooseSwapPresentMode(details.PresentModes, presentMode);
     auto extent = ChooseSwapExtent(window, details.Capabilities);
-    const auto imageCount = ChooseImageCount(details.Capabilities);
+    const auto imageCount = ChooseImageCount(details.Capabilities, actualPresentMode);
 
 #if ANDROID
     float aspect = extent.width / static_cast<float>(extent.height);
@@ -181,7 +181,9 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
     Check(Interposer().CreateSwapchainKHR(device.Handle(), &createInfo, nullptr, &swapChain_),
         "create swap chain!");
 
-    minImageCount_ = std::max(2u, details.Capabilities.minImageCount);
+    // Report what was actually requested: secondary ImGui viewport swapchains are created
+    // with this count and need the same triple-buffering policy as the main swapchain.
+    minImageCount_ = imageCount;
     presentMode_ = actualPresentMode;
     format_ = surfaceFormat.format;
     colorSpace_ = surfaceFormat.colorSpace;
@@ -268,10 +270,10 @@ VkSurfaceFormatKHR SwapChain::ChooseSwapSurfaceFormat(const std::vector<VkSurfac
     // hdr first
     if(!forceSDR)
     {
-#if _APPLE_
+#if defined(__APPLE__)
+        // MoltenVK exposes EDR through extended-sRGB linear; prefer it over HDR10 on Apple.
         for (const auto& format : formats)
         {
-
             if (IsExtendedSrgbLinearSurfaceFormat(format))
             {
                 outputMode_ = ESwapChainOutputMode::ExtendedSrgbLinear;
@@ -392,13 +394,24 @@ VkExtent2D SwapChain::ChooseSwapExtent(const Window& window, const VkSurfaceCapa
     return actualExtent;
 }
 
-uint32_t SwapChain::ChooseImageCount(const VkSurfaceCapabilitiesKHR& capabilities)
+uint32_t SwapChain::ChooseImageCount(const VkSurfaceCapabilitiesKHR& capabilities,
+                                     const VkPresentModeKHR presentMode)
 {
-    // The implementation specifies the minimum amount of images to function properly
-    // and we'll try to have one more than that to properly implement triple buffering.
-    // (tanguyf: or not, we can just rely on VK_PRESENT_MODE_MAILBOX_KHR with two buffers)
-    uint32_t imageCount = std::max(2u, capabilities.minImageCount);// +1; 
-    
+    // The implementation specifies the minimum amount of images to function properly.
+    // Two images only suffice when presentation never has to wait: either the engine
+    // discards a queued request (MAILBOX) or it does not synchronize at all (IMMEDIATE).
+    // Any vertical-blank-synchronized mode needs a third image, otherwise the renderer
+    // stalls on the previous frame's presentation every frame.
+    //
+    // This is what broke Apple: MoltenVK advertises only FIFO and IMMEDIATE, so the
+    // MAILBOX assumption never held there. A two-image FIFO swapchain becomes a
+    // CAMetalLayer with maximumDrawableCount == 2 and displaySyncEnabled, whose drawable
+    // pool starves - present pacing on a 120Hz panel measured 77fps median with a 16.3
+    // stdev (beating between 60 and 120), against 114/7.3 with three images.
+    const bool presentationCanWait = presentMode != VK_PRESENT_MODE_MAILBOX_KHR &&
+        presentMode != VK_PRESENT_MODE_IMMEDIATE_KHR;
+    uint32_t imageCount = std::max(2u, capabilities.minImageCount) + (presentationCanWait ? 1u : 0u);
+
     if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount)
     {
         imageCount = capabilities.maxImageCount;

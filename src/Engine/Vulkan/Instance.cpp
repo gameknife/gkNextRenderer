@@ -73,16 +73,14 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
     {
         AppendUniqueExtension(extensions, VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME);
     }
-#if WIN32
+    // Required before a swapchain may be created with any colorspace other than
+    // SRGB_NONLINEAR. SwapChain::ChooseSwapSurfaceFormat picks HDR10/EDR formats purely
+    // from what the surface reports, so this must be enabled wherever it is available -
+    // otherwise the swapchain is created with a colorspace the instance never opted into.
     if (hasInstanceExtension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME))
     {
         AppendUniqueExtension(extensions, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
     }
-#endif
-    
-#if IOS
-    AppendUniqueExtension(extensions, "VK_EXT_swapchain_colorspace");
-#endif
 
     VkInstanceCreateFlags createFlags = 0;
 #if defined(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)
