@@ -4,7 +4,10 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Vulkan/Device.hpp"
+#include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
+#include "Engine/Vulkan/WindowSurface.hpp"
 
 #include <imgui.h>
 
@@ -98,12 +101,26 @@ namespace Runtime::EngineHelper
             dir = {};
             return;
         }
-        auto vkoffset = engine->GetRenderer().SwapChain().OutputOffset();
-        auto vkextent = engine->GetRenderer().SwapChain().OutputExtent();
+        const auto& swapChain = engine->GetRenderer().SwapChain();
+        const auto vkoffset = swapChain.OutputOffset();
+        const auto vkextent = swapChain.OutputExtent();
         glm::vec2 offset = {vkoffset.x, vkoffset.y};
         glm::vec2 extent = {vkextent.width, vkextent.height};
-        glm::vec2 pixel = locationSS - glm::vec2(offset.x, offset.y);
-        glm::vec2 uv = pixel / extent * glm::vec2(2.0, 2.0) - glm::vec2(1.0, 1.0);
+        glm::vec2 pixel = locationSS - offset;
+        glm::vec2 uv = pixel / extent * glm::vec2(2.0f) - glm::vec2(1.0f);
+#if ANDROID
+        // SDL reports touch/mouse positions in the landscape window coordinate
+        // space, while the Android swapchain is deliberately portrait. Match
+        // the +90-degree pre-rotation in BuildViewCameraUbo so unprojection
+        // receives the pixel's actual swapchain NDC position.
+        const VkExtent2D inputExtent = engine->GetRenderer().Device().Surface().Instance().Window().WindowSize();
+        if (inputExtent.width > 0 && inputExtent.height > 0)
+        {
+            const glm::vec2 normalizedInput = locationSS /
+                glm::vec2(static_cast<float>(inputExtent.width), static_cast<float>(inputExtent.height));
+            uv = glm::vec2(1.0f - normalizedInput.y * 2.0f, normalizedInput.x * 2.0f - 1.0f);
+        }
+#endif
         const auto& prevUBO = engine->GetLastUniformBufferObject();
         glm::vec4 origin = prevUBO.ModelViewInverse * glm::vec4(0, 0, 0, 1);
         glm::vec4 target = prevUBO.ProjectionInverse * (glm::vec4(uv.x, uv.y, 1, 1));

@@ -197,11 +197,10 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     InitializeRendererBackend();
 
     // Window scaling and style.
-#if ANDROID
-    const float scaleFactor = 0.75f / Vulkan::SwapChain::UiContentScale();
-#elif WIN32
+#if ANDROID || WIN32
     // Keep ImGui in the scaleFactor=1 logical coordinate space used by all existing UI code.
-    // PreRender maps that coordinate space onto the DPI-sized framebuffer.
+    // PreRender maps that coordinate space onto the DPI-sized framebuffer and
+    // normalizes input to the same space.
     const float scaleFactor = std::max(1.0f, window.ContentScale());
 #else
     const float scaleFactor = 1.0f;
@@ -210,7 +209,10 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     constexpr float fontSize = 16.0f;
 
     NextUI::Foundation::ApplyTheme();
-#if !WIN32
+// The high-DPI path below reduces DisplaySize and scales the framebuffer
+// transform, which scales every ImGui primitive (including text) uniformly.
+// Do not additionally scale style metrics on those platforms.
+#if !WIN32 && !ANDROID
     ImGui::GetStyle().ScaleAllSizes(scaleFactor);
 #endif
 
@@ -641,8 +643,12 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
     pushConsts.rotation[3] = 1.0f;
 #if ANDROID
     pushConsts.rotation[0] = 0.0f;
-    pushConsts.rotation[1] = 1.0f;
-    pushConsts.rotation[2] = -1.0f;
+    // Android's camera projection rotates the portrait swapchain +90 degrees
+    // into the landscape SDL coordinate space. Keep UI in that same space: the
+    // opposite rotation would leave every widget upside down relative to scene
+    // content.
+    pushConsts.rotation[1] = -1.0f;
+    pushConsts.rotation[2] = 1.0f;
     pushConsts.rotation[3] = 0.0f;
 #endif
     pushConsts.hdrOutputMode = hdrOutputMode;
@@ -880,7 +886,7 @@ void UserInterface::PreRender()
         io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
         io.DeltaTime = 1.0f / 60.0f;
     }
-#if WIN32
+#if WIN32 || ANDROID
     auto& io = ImGui::GetIO();
     if (uiScale_ > 1.0f)
     {
@@ -889,9 +895,11 @@ void UserInterface::PreRender()
         io.DisplayFramebufferScale.x *= uiScale_;
         io.DisplayFramebufferScale.y *= uiScale_;
 
-        // SDL reports Windows display bounds in physical screen coordinates, while
-        // the editor keeps Dear ImGui in logical coordinates. Normalize monitor
-        // work areas as well so popup and tooltip clamping uses the same space.
+        // SDL reports desktop monitor bounds in physical screen coordinates,
+        // while the editor keeps Dear ImGui in logical coordinates. Normalize
+        // monitor work areas as well so popup and tooltip clamping uses the
+        // same space.
+#if WIN32
         auto& monitors = ImGui::GetPlatformIO().Monitors;
         for (int monitorIndex = 0; monitorIndex < monitors.Size; ++monitorIndex)
         {
@@ -905,10 +913,12 @@ void UserInterface::PreRender()
             monitor.WorkSize.x /= uiScale_;
             monitor.WorkSize.y /= uiScale_;
         }
+#endif
 
-        // SDL input events and global mouse state are also in physical pixels on
-        // Windows. Feed ImGui the logical position after the platform backend has
-        // updated its event queue.
+        // SDL input events and global mouse state are also in physical pixels.
+        // Feed ImGui the logical position after the platform backend has updated
+        // its event queue.
+#if WIN32
         SDL_Window* mouseWindow = SDL_GetMouseFocus();
         if (mouseWindow != nullptr && !SDL_GetWindowRelativeMouseMode(mouseWindow))
         {
@@ -937,12 +947,8 @@ void UserInterface::PreRender()
             }
             io.AddMousePosEvent(logicalPosition.x, logicalPosition.y);
         }
-    }
 #endif
-#if ANDROID
-    auto& io = ImGui::GetIO();
-    io.DisplayFramebufferScale.x *= Vulkan::SwapChain::UiContentScale();
-    io.DisplayFramebufferScale.y *= Vulkan::SwapChain::UiContentScale();
+    }
 #endif
     contextHost_->BeginFrame();
 }
@@ -1052,6 +1058,20 @@ void UserInterface::HandleEvent(const SDL_Event* event)
                                        ? ImGuiMouseSource_TouchScreen
                                        : ImGuiMouseSource_Mouse);
             io.AddMousePosEvent(logicalPosition.x, logicalPosition.y);
+            return;
+        }
+    }
+#elif ANDROID
+    if (uiScale_ > 1.0f && event->type == SDL_EVENT_MOUSE_MOTION)
+    {
+        SDL_Window* window = SDL_GetWindowFromID(event->motion.windowID);
+        if (window != nullptr && !SDL_GetWindowRelativeMouseMode(window))
+        {
+            auto& io = ImGui::GetIO();
+            io.AddMouseSourceEvent(event->motion.which == SDL_TOUCH_MOUSEID
+                                       ? ImGuiMouseSource_TouchScreen
+                                       : ImGuiMouseSource_Mouse);
+            io.AddMousePosEvent(event->motion.x / uiScale_, event->motion.y / uiScale_);
             return;
         }
     }

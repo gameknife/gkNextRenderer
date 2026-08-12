@@ -123,6 +123,7 @@ static void UpdateUiScaledMetrics()
 {
     float scale = 1.0f;
 
+#if !ANDROID
     if (Vulkan::SwapChain::UiContentScale() < 1.0f)
     {
         scale *= 0.75f / Vulkan::SwapChain::UiContentScale();
@@ -137,6 +138,7 @@ static void UpdateUiScaledMetrics()
             scale *= fontSize / referenceFontSize;
         }
     }
+#endif
 
     TitlebarSize = constTitlebarSize * scale;
     TitlebarRightInfoWidth = constTitlebarRightInfoWidth * scale;
