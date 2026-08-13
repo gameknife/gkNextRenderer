@@ -316,10 +316,19 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         neighborhoodSquared / 8.0 - neighborhoodMean * neighborhoodMean, 0.0));
     const float neighborLuminanceSigma = sqrt(max(
         neighborLuminanceSquared / 8.0 - neighborLuminanceMean * neighborLuminanceMean, 0.0));
+
+    // The second-order extrema deliberately discard one isolated sample and are therefore useful
+    // for detecting a firefly below. They are not a valid reconstruction/history envelope: at a
+    // thin emissive edge the centre can be the only bright sample while all eight neighbours are
+    // dark. Clamping that centre to secondMaximum first turns real detail into a dark sample, and
+    // the temporal blend then persists it. Keep the centre in the reconstruction envelope instead.
+    const float3 centerYCoCg = RgbToYCoCg(LoadCurrent(centerPixel).rgb);
+    const float3 reconstructionMinimum = min(neighborhoodMinimum, centerYCoCg);
+    const float3 reconstructionMaximum = max(neighborhoodMaximum, centerYCoCg);
     const float3 currentYCoCg = clamp(
         RgbToYCoCg(reconstructedCurrent.rgb),
-        secondMinimum - spatialSigma * 0.2,
-        secondMaximum + spatialSigma * 0.2);
+        reconstructionMinimum - spatialSigma * 0.2,
+        reconstructionMaximum + spatialSigma * 0.2);
     float3 currentRgb = max(YCoCgToRgb(currentYCoCg), 0.0);
 
     float4 history = SampleHistoryCatmullRom(previousUv);
@@ -361,20 +370,27 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             currentRgb *= fireflyCeiling / max(currentLuminance, 1.0e-5);
         }
     }
-    // A locked history is allowed slightly outside this frame's noisy min/max range. Clamping
-    // strictly to a single noisy frame defeats temporal convergence and was the main source of
-    // the weak reuse in the first implementation.
+    // A locked history is allowed slightly outside this frame's noisy min/max range. The history
+    // envelope must include the current reconstructed sample as well as the full neighbour range:
+    // the second-order extrema above are intentionally biased toward the dark majority around a
+    // sub-pixel highlight, so using them here would repeatedly clamp valid bright history down.
     const float3 clipExtent = max(
         spatialSigma * clipGamma,
         float3(temporalSigma * 1.5 + abs(neighborhoodMean.x) * 0.005,
                spatialSigma.y * 1.5 + 0.002,
                spatialSigma.z * 1.5 + 0.002));
-    const float3 clipMinimum = max(
+    const float3 historyMinimum = min(neighborhoodMinimum, currentYCoCg);
+    const float3 historyMaximum = max(neighborhoodMaximum, currentYCoCg);
+    float3 clipMinimum = max(
         neighborhoodMean - clipExtent,
-        secondMinimum - spatialSigma * 0.5);
-    const float3 clipMaximum = min(
+        historyMinimum - spatialSigma * 0.5);
+    float3 clipMaximum = min(
         neighborhoodMean + clipExtent,
-        secondMaximum + spatialSigma * 0.5);
+        historyMaximum + spatialSigma * 0.5);
+    // The variance term may still be narrower than a legitimate centre sample on a high-contrast
+    // contour. Do not make the temporal clamp manufacture a value that this frame rejected.
+    clipMinimum = min(clipMinimum, currentYCoCg);
+    clipMaximum = max(clipMaximum, currentYCoCg);
     const float3 historyYCoCg = RgbToYCoCg(history.rgb);
     const float3 clippedHistoryYCoCg = clamp(historyYCoCg, clipMinimum, clipMaximum);
     const float3 clippedHistory = max(YCoCgToRgb(clippedHistoryYCoCg), 0.0);
