@@ -47,7 +47,6 @@ namespace Vulkan
         Runtime::Config::UserSettings userSettings{};
         bool progressiveRendering = false;
         bool offlineProgressivePathTracing = false;
-        bool effectiveSharc = false;
         uint32_t progressiveAccumulatedFrames = 0;
         uint32_t progressiveTargetFrames = 1;
     };
@@ -68,6 +67,7 @@ namespace Vulkan
         ERT_SoftwareModern,
         ERT_VoxelTracing,
         ERT_SoftwareModernNoAmbient,
+        ERT_PathTracingLite,
     };
 
     enum class ESceneResource : uint32_t

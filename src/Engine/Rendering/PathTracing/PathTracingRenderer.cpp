@@ -56,14 +56,11 @@ namespace Vulkan::PathTracing
 
     void PathTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
     {
-        rayTracingPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(
-            SwapChain(), "assets/shaders/Core.PathTracing.comp.slang.spv", GetScene(), baseRender_.ActiveTLASHandle()));
         samplePostChain_.CreateSwapChain(SwapChain(), GetScene());
     }
 
     void PathTracingRenderer::DeleteSwapChain()
     {
-        rayTracingPipeline_.reset();
         sharcUpdatePipeline_.reset();
         sharcResolvePipeline_.reset();
         sharcQueryPipeline_.reset();
@@ -88,11 +85,6 @@ namespace Vulkan::PathTracing
             sharcQueryPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(
                 SwapChain(), "assets/shaders/Core.SharcQuery.comp.slang.spv", GetScene(), baseRender_.ActiveTLASHandle()));
         }
-    }
-
-    bool PathTracingRenderer::IsEffectiveSharcEnabled() const
-    {
-        return baseRender_.FrameSettings().effectiveSharc;
     }
 
     void PathTracingRenderer::EnsureSharcResources()
@@ -251,7 +243,7 @@ namespace Vulkan::PathTracing
         return baseRender_.FrameSettings().userSettings.RestirEnable;
     }
 
-    void PathTracingRenderer::UpdateExtrasTable(bool sharcActive)
+    void PathTracingRenderer::UpdateExtrasTable()
     {
         if (!extras_.buffer)
         {
@@ -267,7 +259,7 @@ namespace Vulkan::PathTracing
         // in-flight frames read this memory, so a steady-state per-frame memcpy would be a
         // torn-read hazard against the GPU.
         Assets::FTracingExtras extras{};
-        if (sharcActive && sharc_.hashEntries.buffer)
+        if (sharc_.hashEntries.buffer)
         {
             extras.HashEntries = sharc_.hashEntries.buffer->GetDeviceAddress();
             extras.LockBuffer = sharc_.lockBuffer.buffer->GetDeviceAddress();
@@ -292,7 +284,6 @@ namespace Vulkan::PathTracing
     void PathTracingRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
         const FFrameRenderSettings& frameSettings = baseRender_.FrameSettings();
-        const bool sharcEnabled = IsEffectiveSharcEnabled();
         const bool isPrimaryView = baseRender_.ActiveViewBankBase() == 0;
         const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
 
@@ -323,65 +314,48 @@ namespace Vulkan::PathTracing
 
             Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase());
             baseRender_.ConfigureCheckerboardShading(gpuScene, !restirEnabled);
-            if (sharcEnabled || restirEnabled)
+            EnsureSharcPipelines();
+            EnsureSharcResources();
+            UpdateSharcParameters();
+            ClearSharcResources(commandBuffer);
+            UpdateExtrasTable();
+            gpuScene.ReservedAddress0 = extras_.buffer->GetDeviceAddress();
+            // ReSTIR frame stamp (bit0 parity, bit1 temporal valid) rides the recorded
+            // push constant; the host-visible parameter buffer races with in-flight frames.
+            if (restirEnabled && isPrimaryView)
             {
-                if (sharcEnabled)
-                {
-                    EnsureSharcPipelines();
-                    EnsureSharcResources();
-                    UpdateSharcParameters();
-                    ClearSharcResources(commandBuffer);
-                }
-                UpdateExtrasTable(sharcEnabled);
-                gpuScene.ReservedAddress0 = extras_.buffer->GetDeviceAddress();
-                // ReSTIR frame stamp (bit0 parity, bit1 temporal valid) rides the recorded
-                // push constant; the host-visible parameter buffer races with in-flight frames.
-                if (restirEnabled && isPrimaryView)
-                {
-                    gpuScene.CustomData1 = restir.FrameStamp();
-                }
+                gpuScene.CustomData1 = restir.FrameStamp();
             }
 
-            if (sharcEnabled)
             {
-                {
-                    SCOPED_GPU_TIMER("sharc update pass");
-                    sharcUpdatePipeline_->BindPipeline(commandBuffer, gpuScene);
-                    vkCmdDispatch(commandBuffer,
-                                  Utilities::Math::GetSafeDispatchCount(
-                                      baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
-                                  Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
-                }
-
-                InsertSharcBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
-                                   VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
-
-                {
-                    SCOPED_GPU_TIMER("sharc resolve pass");
-                    sharcResolvePipeline_->BindPipeline(commandBuffer, gpuScene);
-                    vkCmdDispatch(commandBuffer,
-                                  Utilities::Math::GetSafeDispatchCount(sharc_.entryCount, kSharcResolveThreadCount),
-                                  1,
-                                  1);
-                }
-
-                InsertSharcBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
-                                   VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
-
-                {
-                    SCOPED_GPU_TIMER("sharc query pass");
-                    sharcQueryPipeline_->BindPipeline(commandBuffer, gpuScene);
-                    vkCmdDispatch(commandBuffer,
-                                  Utilities::Math::GetSafeDispatchCount(
-                                      baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
-                                  Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
-                }
+                SCOPED_GPU_TIMER("sharc update pass");
+                sharcUpdatePipeline_->BindPipeline(commandBuffer, gpuScene);
+                vkCmdDispatch(commandBuffer,
+                              Utilities::Math::GetSafeDispatchCount(
+                                  baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
+                              Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
             }
-            else
+
+            InsertSharcBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
+                               VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+
             {
-                SCOPED_GPU_TIMER("rt pass");
-                rayTracingPipeline_->BindPipeline(commandBuffer, gpuScene);
-                vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(
+                SCOPED_GPU_TIMER("sharc resolve pass");
+                sharcResolvePipeline_->BindPipeline(commandBuffer, gpuScene);
+                vkCmdDispatch(commandBuffer,
+                              Utilities::Math::GetSafeDispatchCount(sharc_.entryCount, kSharcResolveThreadCount),
+                              1,
+                              1);
+            }
+
+            InsertSharcBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
+                               VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+
+            {
+                SCOPED_GPU_TIMER("sharc query pass");
+                sharcQueryPipeline_->BindPipeline(commandBuffer, gpuScene);
+                vkCmdDispatch(commandBuffer,
+                              Utilities::Math::GetSafeDispatchCount(
                                   baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
                               Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
             }

@@ -48,8 +48,7 @@ namespace Vulkan
             return false;
         }
 
-        return CurrentLogicRendererType() == ERendererType::ERT_PathTracing &&
-            NextEngine::GetInstance()->IsEffectiveSharcEnabled();
+        return CurrentLogicRendererType() == ERendererType::ERT_PathTracing;
     }
 
     void VulkanBaseRenderer::ClearAmbientCubeCache(VkCommandBuffer commandBuffer, uint32_t imageIndex)

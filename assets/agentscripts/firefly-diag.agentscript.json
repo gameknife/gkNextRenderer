@@ -44,8 +44,8 @@
     },
     {
       "type": "cvar",
-      "name": "r.sharc.enable",
-      "set": false
+      "name": "r.rendererType",
+      "set": 5
     },
     {
       "type": "wait-frames",
@@ -57,8 +57,8 @@
     },
     {
       "type": "cvar",
-      "name": "r.sharc.enable",
-      "set": true
+      "name": "r.rendererType",
+      "set": 0
     },
     {
       "type": "quit"

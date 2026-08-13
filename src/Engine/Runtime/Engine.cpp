@@ -208,6 +208,7 @@ namespace NextRenderer
         if (useRayTracingRenderer)
         {
             supportedTypes.emplace_back(Vulkan::ERT_PathTracing);
+            supportedTypes.emplace_back(Vulkan::ERT_PathTracingLite);
         }
 
         for (auto type : supportedTypes)

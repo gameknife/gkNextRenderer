@@ -28,6 +28,7 @@ Engine 核心可以定义稳定接缝，但不得依赖 `src/Modules/`。Streaml
 | Renderer | Scene resources | Prepass | Post/history 要点 |
 |---|---|---|---|
 | PathTracing | Voxel、Ambient、TLAS、SHARC | Cull、Clear、Visibility | Temporal、DLSS、Frame Generation；Diffuse/Specular/Albedo/ObjectId history |
+| PathTracingLite | Voxel、Ambient、TLAS | Cull、Clear、Visibility | 无 SHARC / ReSTIR 的硬件光追路径；Temporal、DLSS、Frame Generation；四类 history |
 | SoftwareTracing | Voxel、Ambient | Cull、Clear、Visibility、CSM | Temporal + spatial upscale；四类 history |
 | SoftwareModern | Voxel、Ambient | Cull、Clear、Visibility、CSM | Temporal + spatial upscale；四类 history |
 | VoxelTracing | Voxel、Ambient | 无 | 只承诺 Color 与 spatial upscale；无 history |

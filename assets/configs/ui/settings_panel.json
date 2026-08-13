@@ -72,10 +72,9 @@
           ]
         },
         {
-          "label": "SHARC",
+          "label": "SHARC (PathTracing)",
           "advanced": true,
           "items": [
-            {"cvar": "r.sharc.enable", "label": "Enable SHARC", "widget": "checkbox"},
             {"cvar": "r.sharc.updateSampleRatio", "label": "Update Ratio", "widget": "slider_float", "min": 0.01, "max": 1.0, "step": 0.01, "format": "%.2f"},
             {"cvar": "r.sharc.sceneScale", "label": "Scene Scale", "widget": "drag_float", "min": 1.0, "max": 1000.0, "step": 1.0, "format": "%.1f"}
           ]

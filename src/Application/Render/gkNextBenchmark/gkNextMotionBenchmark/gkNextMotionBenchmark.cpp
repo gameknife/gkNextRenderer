@@ -58,6 +58,7 @@ namespace
         }
         
         for (const Vulkan::ERendererType type : {Vulkan::ERT_PathTracing,
+                                                 Vulkan::ERT_PathTracingLite,
                                                  Vulkan::ERT_SoftwareTracing,
                                                  Vulkan::ERT_SoftwareModern,
                                                  Vulkan::ERT_VoxelTracing,

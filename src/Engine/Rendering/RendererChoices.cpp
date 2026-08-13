@@ -6,12 +6,13 @@ namespace Rendering
 {
     namespace
     {
-        constexpr std::array<FRendererChoice, 5> rendererChoices{{
+        constexpr std::array<FRendererChoice, 6> rendererChoices{{
             {"software-tracing", "SoftwareTracing", Vulkan::ERT_SoftwareTracing, false, true},
             {"software-modern", "SoftwareModern", Vulkan::ERT_SoftwareModern, false, true},
             {"software-modern-no-ambient", "SoftwareModernNoAmbient", Vulkan::ERT_SoftwareModernNoAmbient, false, false},
             {"voxel-tracing", "VoxelTracing", Vulkan::ERT_VoxelTracing, false, true},
             {"path-tracing", "PathTracing", Vulkan::ERT_PathTracing, true, true},
+            {"path-tracing-lite", "PathTracingLite", Vulkan::ERT_PathTracingLite, true, true},
         }};
     }
 

@@ -177,11 +177,7 @@ public:
     bool IsOfflineProgressivePathTracing() const
     {
         return progressiveRender_.enabled && renderer_ != nullptr &&
-            renderer_->CurrentLogicRendererType() == Vulkan::ERT_PathTracing;
-    }
-    bool IsEffectiveSharcEnabled() const
-    {
-        return config_.userSettings.SharcEnable && !IsOfflineProgressivePathTracing();
+            renderer_->CurrentLogicRendererType() == Vulkan::ERT_PathTracingLite;
     }
     uint32_t GetProgressiveRenderAccumulatedFrames() const { return progressiveRender_.accumulatedFrames; }
     uint32_t GetProgressiveRenderTargetFrames() const { return FProgressiveRenderState::TargetFrames; }

@@ -36,6 +36,7 @@
 #include "Engine/Rendering/SoftwareModern/SoftwareModernNoAmbientRenderer.hpp"
 #include "Engine/Rendering/SoftwareTracing/SoftwareTracingRenderer.hpp"
 #include "Engine/Rendering/PathTracing/PathTracingRenderer.hpp"
+#include "Engine/Rendering/PathTracing/PathTracingLiteRenderer.hpp"
 #include "Engine/Rendering/ExternalPassRegistry.hpp"
 #include "Engine/Rendering/Preview/RenderViewServices.hpp"
 #include "Engine/Rendering/RenderView.hpp"
@@ -220,6 +221,16 @@ namespace Vulkan
                                        EPostProcess::DebugGBuffer,
                                    EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 1, 1,
                                &CreateLogicRenderer<PathTracing::PathTracingRenderer>},
+            RendererDescriptor{ERT_PathTracingLite, "PathTracingLite", {
+                                   ESceneResource::Voxel | ESceneResource::Ambient | ESceneResource::TLAS | ESceneResource::LightGrid,
+                                   EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility,
+                                   ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion | ERenderOutput::ObjectId |
+                                       ERenderOutput::Normal | ERenderOutput::Albedo | ERenderOutput::Diffuse | ERenderOutput::Specular,
+                                   EPostProcess::Temporal | EPostProcess::Upscale |
+                                       EPostProcess::RayReconstruction | EPostProcess::FrameGeneration |
+                                       EPostProcess::DebugGBuffer,
+                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 1, 1,
+                               &CreateLogicRenderer<PathTracing::PathTracingLiteRenderer>},
             RendererDescriptor{ERT_SoftwareTracing, "SoftwareTracing", {
                                    ESceneResource::Voxel | ESceneResource::Ambient | ESceneResource::LightGrid,
                                    EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility | EViewPrepass::CSM,
@@ -1341,7 +1352,6 @@ namespace Vulkan
         frameSettings_.userSettings = engine->GetUserSettings();
         frameSettings_.progressiveRendering = engine->IsProgressiveRendering();
         frameSettings_.offlineProgressivePathTracing = engine->IsOfflineProgressivePathTracing();
-        frameSettings_.effectiveSharc = engine->IsEffectiveSharcEnabled();
         frameSettings_.progressiveAccumulatedFrames = engine->GetProgressiveRenderAccumulatedFrames();
         frameSettings_.progressiveTargetFrames = engine->GetProgressiveRenderTargetFrames();
         const auto& settings = frameSettings_.userSettings;
@@ -1823,7 +1833,6 @@ namespace Vulkan
         frameSettings_.userSettings = engine->GetUserSettings();
         frameSettings_.progressiveRendering = engine->IsProgressiveRendering();
         frameSettings_.offlineProgressivePathTracing = engine->IsOfflineProgressivePathTracing();
-        frameSettings_.effectiveSharc = engine->IsEffectiveSharcEnabled();
         frameSettings_.progressiveAccumulatedFrames = engine->GetProgressiveRenderAccumulatedFrames();
         frameSettings_.progressiveTargetFrames = engine->GetProgressiveRenderTargetFrames();
         const auto& settings = frameSettings_.userSettings;

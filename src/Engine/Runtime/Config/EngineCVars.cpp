@@ -67,7 +67,7 @@ namespace NextCVar
         GK_CVAR_INT("r.samples", settings, NumberOfSamples, 2, ECVarFlags::Archive, "Samples per pixel");
         GK_CVAR_UINT("r.bounces", settings, NumberOfBounces, 8, ECVarFlags::Archive, "Ray bounce count");
         GK_CVAR_BOOL("r.progressiveRender", settings, ProgressiveRender, false, ECVarFlags::Archive, "Enable progressive rendering while the camera is idle");
-        GK_CVAR_INT_CB("r.rendererType", settings, RendererType, 0, ECVarFlags::Archive, "Renderer type (0=PathTracing,1=SoftwareTracing,2=SoftwareModern,3=VoxelTracing,4=SoftwareModernNoAmbient)", std::bind(ApplyRendererIfPossible, engine, std::cref(settings)));
+        GK_CVAR_INT_CB("r.rendererType", settings, RendererType, 0, ECVarFlags::Archive, "Renderer type (0=PathTracing,1=SoftwareTracing,2=SoftwareModern,3=VoxelTracing,4=SoftwareModernNoAmbient,5=PathTracingLite)", std::bind(ApplyRendererIfPossible, engine, std::cref(settings)));
         GK_CVAR_UINT("r.maxBounces", settings, MaxNumberOfBounces, 10, ECVarFlags::Archive, "Maximum ray bounce count");
         GK_CVAR_BOOL("r.gtao.enable", settings, GTAOEnable, true, ECVarFlags::Archive, "Enable half-resolution GTAO for SoftwareModernNoAmbient sky lighting");
         GK_CVAR_INT("r.gtao.quality", settings, GTAOQuality, 1, ECVarFlags::Archive, "GTAO sampling quality (0=low 16 taps,1=medium 36 taps,2=high 64 taps,3=ultra 120 taps)");
@@ -125,7 +125,6 @@ namespace NextCVar
         GK_CVAR_FLOAT_RANGE("r.ambientCube.hitMarkTileRatio", settings, AmbientCubeHitMarkTileRatio, 0.25f, ECVarFlags::Archive, "Sparse query hit marking ratio", 0.01, 1.0);
         GK_CVAR_INT_RANGE("r.ambientCube.residencyDebug", settings, AmbientCubeResidencyDebug, 0, ECVarFlags::None, "Ambient residency debug (0=off,1=hit age,2=resident state)", 0, 2);
         GK_CVAR_BOOL("sys.hdrTextureStreaming", settings, StreamHDRTextures, true, ECVarFlags::Archive, "Keep inactive HDR environment textures at their lowest mip and promote the active sky on demand");
-        GK_CVAR_BOOL("r.sharc.enable", settings, SharcEnable, true, ECVarFlags::Archive, "Enable experimental SHARC path tracing radiance cache");
         GK_CVAR_UINT("r.sharc.entriesPow2", settings, SharcEntriesPow2, 21, ECVarFlags::Archive, "SHARC cache entry count as log2");
         GK_CVAR_FLOAT("r.sharc.updateSampleRatio", settings, SharcUpdateSampleRatio, 0.25f, ECVarFlags::Archive, "Fraction of pixels used by SHARC update pass");
         GK_CVAR_INT("r.sharc.debugMode", settings, SharcDebugMode, 0, ECVarFlags::Archive, "SHARC debug mode (0=off,1=cache hit,2=cache miss,3=occupancy,4=radiance mosaic,5=stale/sample/frame heatmap)");

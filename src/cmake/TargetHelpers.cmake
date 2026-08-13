@@ -136,6 +136,11 @@ function(gk_apply_target_defaults target)
                 -Wno-stringop-overflow
                 -Wno-ignored-attributes
             )
+            if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16)
+                # GCC 16 reports a false positive in nlohmann/json's shared
+                # output adapter destruction when optimization is enabled.
+                target_compile_options(${target} PRIVATE -Wno-array-bounds)
+            endif()
         endif()
         if(UNIX AND NOT APPLE AND NOT ANDROID AND
            CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")

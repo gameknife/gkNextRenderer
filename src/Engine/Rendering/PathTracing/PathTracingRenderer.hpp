@@ -55,8 +55,6 @@ namespace Vulkan::PathTracing
 
     private:
 
-        // individual textures
-        std::unique_ptr<PipelineCommon::ZeroBindWithTLASPipeline> rayTracingPipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindWithTLASPipeline> sharcUpdatePipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindWithTLASPipeline> sharcQueryPipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindWithTLASPipeline> restirSpatialPipeline_;
@@ -75,8 +73,7 @@ namespace Vulkan::PathTracing
         void UpdateSharcParameters();
         void ClearSharcResources(VkCommandBuffer commandBuffer);
         void InsertSharcBarrier(VkCommandBuffer commandBuffer, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask) const;
-        void UpdateExtrasTable(bool sharcActive);
-        bool IsEffectiveSharcEnabled() const;
+        void UpdateExtrasTable();
         bool IsRestirEnabled() const;
     };
 

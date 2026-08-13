@@ -20,8 +20,7 @@ RGB9E5 是单个 32-bit radiance 值的编码选择，不是块压缩。它保�
 ## Renderer 使用关系
 
 - SoftwareTracing、SoftwareModern 和 VoxelTracing 请求 Voxel + Ambient。
-- PathTracing 的 contract 声明 Voxel、Ambient、TLAS、SHARC；当 SHARC 实际启用时，`ShouldSkipAmbientCubeUpdates()` 会跳过 PT 的 AmbientCube 更新。
-- `r.sharc.enable` 的用户默认值当前为 true，但 offline progressive path tracing 会令 `IsEffectiveSharcEnabled()` 返回 false。判断运行时行为要看 effective 值，不只看归档 CVar。
+- PathTracing 的 contract 声明 Voxel、Ambient、TLAS、SHARC，并固定使用 SHARC；`ShouldSkipAmbientCubeUpdates()` 会跳过其 AmbientCube 更新。PathTracingLite 声明 Voxel、Ambient、TLAS，保留 AmbientCube 更新，且不创建 SHARC 或 ReSTIR 资源。
 - SoftwareModernNoAmbient 不请求任何 scene GI resource；它使用直接/IBL/CSM 与屏幕空间 GTAO，不会因为 VoxelData 存在就自动获得体素天光遮蔽。
 
 ## Ambient arena
