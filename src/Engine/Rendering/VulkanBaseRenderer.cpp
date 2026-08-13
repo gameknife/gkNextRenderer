@@ -2961,15 +2961,10 @@ namespace Vulkan
 
     void VulkanBaseRenderer::PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
-        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
-
         if (ActiveRendererRequirements().requestAmbientCube && !ShouldSkipAmbientCubeUpdates())
         {
-            if (settings.BakeSpeedLevel != 2)
-            {
-                const bool useHardware = caps_.supportRayTracing && !GOption->ForceSoftGen;
-                BakeAmbientCubeCascade(commandBuffer, imageIndex, useHardware);
-            }
+            const bool useHardware = caps_.supportRayTracing && !GOption->ForceSoftGen;
+            BakeAmbientCubeCascade(commandBuffer, imageIndex, useHardware);
         }
 
         DispatchVisualDebugger(commandBuffer, imageIndex);

@@ -33,6 +33,57 @@
 
 namespace Assets
 {
+    namespace
+    {
+        void AccumulateAnimatedNodeBounds(const Scene& scene, const Node& node, bool& hasBounds,
+                                          glm::vec3& worldMin, glm::vec3& worldMax)
+        {
+            if (const auto* render = node.GetComponent<Runtime::RenderComponent>();
+                render && render->GetVisible() && render->IsDrawable() &&
+                (render->GetRenderParticipationMask() & Runtime::RenderParticipation::giBake) != 0u)
+            {
+                if (const Model* model = scene.GetModel(render->GetModelId()))
+                {
+                    const glm::vec3 localMin = model->GetLocalAABBMin();
+                    const glm::vec3 localMax = model->GetLocalAABBMax();
+                    const glm::mat4& world = node.WorldTransform();
+                    const glm::vec3 corners[] = {
+                        glm::vec3(world * glm::vec4(localMin.x, localMin.y, localMin.z, 1.0f)),
+                        glm::vec3(world * glm::vec4(localMax.x, localMin.y, localMin.z, 1.0f)),
+                        glm::vec3(world * glm::vec4(localMin.x, localMax.y, localMin.z, 1.0f)),
+                        glm::vec3(world * glm::vec4(localMax.x, localMax.y, localMin.z, 1.0f)),
+                        glm::vec3(world * glm::vec4(localMin.x, localMin.y, localMax.z, 1.0f)),
+                        glm::vec3(world * glm::vec4(localMax.x, localMin.y, localMax.z, 1.0f)),
+                        glm::vec3(world * glm::vec4(localMin.x, localMax.y, localMax.z, 1.0f)),
+                        glm::vec3(world * glm::vec4(localMax.x, localMax.y, localMax.z, 1.0f)),
+                    };
+                    for (const glm::vec3& corner : corners)
+                    {
+                        if (!hasBounds)
+                        {
+                            worldMin = corner;
+                            worldMax = corner;
+                            hasBounds = true;
+                        }
+                        else
+                        {
+                            worldMin = glm::min(worldMin, corner);
+                            worldMax = glm::max(worldMax, corner);
+                        }
+                    }
+                }
+            }
+
+            for (const auto& child : node.Children())
+            {
+                if (child)
+                {
+                    AccumulateAnimatedNodeBounds(scene, *child, hasBounds, worldMin, worldMax);
+                }
+            }
+        }
+    }
+
     void Scene::BindNode(Node& node)
     {
         node.scene_ = this;
@@ -397,6 +448,16 @@ namespace Assets
 
                         if (skinnedMesh->IsPlaying())
                         {
+                            bool hasDirtyBounds = false;
+                            glm::vec3 dirtyWorldMin(0.0f);
+                            glm::vec3 dirtyWorldMax(0.0f);
+                            AccumulateAnimatedNodeBounds(*this, *node, hasDirtyBounds,
+                                                        dirtyWorldMin, dirtyWorldMax);
+                            if (hasDirtyBounds)
+                            {
+                                cpuAccelerationStructure_.AccumulateProbeDirtyBounds(
+                                    dirtyWorldMin, dirtyWorldMax);
+                            }
                             MarkDirty();
                             if (auto* renderComponent = node->GetComponent<Runtime::RenderComponent>())
                             {
@@ -444,6 +505,12 @@ namespace Assets
                     Node* node = GetNode(track.NodeName_);
                     if (node)
                     {
+                        bool hasDirtyBounds = false;
+                        glm::vec3 dirtyWorldMin(0.0f);
+                        glm::vec3 dirtyWorldMax(0.0f);
+                        AccumulateAnimatedNodeBounds(*this, *node, hasDirtyBounds,
+                                                    dirtyWorldMin, dirtyWorldMax);
+
                         glm::vec3 translation = node->Translation();
                         glm::quat rotation = node->Rotation();
                         glm::vec3 scaling = node->Scale();
@@ -454,6 +521,14 @@ namespace Assets
                         node->SetRotation(rotation);
                         node->SetScale(scaling);
                         node->RecalcTransform(true);
+
+                        AccumulateAnimatedNodeBounds(*this, *node, hasDirtyBounds,
+                                                    dirtyWorldMin, dirtyWorldMax);
+                        if (hasDirtyBounds)
+                        {
+                            cpuAccelerationStructure_.AccumulateProbeDirtyBounds(
+                                dirtyWorldMin, dirtyWorldMax);
+                        }
 
                         MarkDirty();
 

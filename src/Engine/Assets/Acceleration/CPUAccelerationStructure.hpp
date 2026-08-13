@@ -199,14 +199,26 @@ struct FCPUBrickTable
     std::vector<uint32_t> recentlyHitBricksPerCascade;
     std::vector<uint32_t> candidateFirstSeenFrames;
     std::vector<uint32_t> slotsToClear;
+    std::vector<uint8_t> dirtyBricks;
+    std::vector<uint32_t> dirtyBricksPerCascade;
     uint32_t activeBricksLastBuild = 0;
+    uint64_t dirtyRevision = 0;
 
     bool UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint32_t cascadeCapacity,
                     uint32_t poolBricksPerCascade, int dilationRadius,
                     const std::vector<Assets::AmbientBrickResidency>* residency,
                     uint32_t currentFrame, bool hitDriven, bool bounceHitAffectsResidency,
                     uint32_t graceFrames, uint32_t evictFrames);
+    void MarkAllActiveDirty();
+    void MarkDirtyBounds(const std::vector<FCPUProbeBaker>& bakers,
+                         const glm::vec3& worldMin, const glm::vec3& worldMax,
+                         uint32_t poolBricksPerCascade);
+    void AcknowledgeDirty(uint64_t revision);
     void UploadGPU(Vulkan::DeviceMemory& deviceMemory, size_t tableByteOffset, size_t activeListByteOffset);
+
+private:
+    void RebuildActiveBrickList(uint32_t cascadeCapacity, uint32_t poolBricksPerCascade);
+    bool MarkDirty(uint32_t globalBrickIndex);
 };
 
 class FCPUAccelerationStructure
@@ -231,7 +243,12 @@ public:
     bool Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory, Vulkan::DeviceMemory* PageIndexMemory);
     bool HasPendingWork() const;
 
+    uint64_t AmbientBakeDirtyRevision() const { return cpuBrickTable.dirtyRevision; }
+    uint32_t AmbientBakeDirtyBrickCount(uint32_t cascadeIndex) const;
+    void AcknowledgeAmbientBake(uint64_t revision);
+
     void RequestUpdate(glm::vec3 worldPos, float radius);
+    void AccumulateProbeDirtyBounds(const glm::vec3& worldMin, const glm::vec3& worldMax);
     bool ConsumeNavRelevantDirtyBounds(glm::vec3& outWorldMin, glm::vec3& outWorldMax);
     void ClearNavRelevantDirtyBounds();
 
@@ -254,6 +271,7 @@ private:
     void CancelRuntimeBuilds();
     void MergeNavDirtyBounds(const FCPUTLASBuildResult& result);
     void QueueFullProbeBake();
+    void QueueProbeBakeBounds(const glm::vec3& worldMin, const glm::vec3& worldMax);
 
 #if defined(__cpp_lib_atomic_shared_ptr) && __cpp_lib_atomic_shared_ptr >= 201711L
     std::atomic<SnapshotPtr> activeSnapshot_;
@@ -281,6 +299,11 @@ private:
     double lastBuildToPublishMilliseconds_ = 0.0;
     std::vector<double> buildToPublishSamples_;
     uint64_t pendingProbeRevision_ = 0;
+    bool fullProbeBakePending_ = true;
+    bool ambientBakeIdle_ = false;
+    bool hasProbeDirtyBounds_ = false;
+    glm::vec3 probeDirtyWorldMin_{0.0f};
+    glm::vec3 probeDirtyWorldMax_{0.0f};
         
     std::vector<uint32_t> lastBatchTasks;
     std::vector<uint32_t> distanceFieldRebuildTasks;

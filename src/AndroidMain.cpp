@@ -47,8 +47,8 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
 #if ANDROID
-    const char* argv1[] = { "gkNextRenderer", "--gpu=0", "--forcesoftgen", "--fullscreen", "--load-scene=GIBootcamp.proc" };
-    GOptionPtr.reset(new Runtime::Config::Options(5, argv1));
+    const char* argv1[] = { "gkNextRenderer", "--gpu=0", "--fullscreen", "--load-scene=GIBootcamp.proc" };
+    GOptionPtr.reset(new Runtime::Config::Options(4, argv1));
 #else
     // Handle command line options.
     GOptionPtr.reset(new Runtime::Config::Options(argc, const_cast<const char**>(argv)));

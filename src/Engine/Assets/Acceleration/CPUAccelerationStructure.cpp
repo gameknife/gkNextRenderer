@@ -339,6 +339,18 @@ void FCPUAccelerationStructure::MergeNavDirtyBounds(const FCPUTLASBuildResult& r
 {
     if (result.hasNavDirtyBounds)
     {
+        if (!hasProbeDirtyBounds_)
+        {
+            probeDirtyWorldMin_ = result.navDirtyWorldMin;
+            probeDirtyWorldMax_ = result.navDirtyWorldMax;
+            hasProbeDirtyBounds_ = true;
+        }
+        else
+        {
+            probeDirtyWorldMin_ = glm::min(probeDirtyWorldMin_, result.navDirtyWorldMin);
+            probeDirtyWorldMax_ = glm::max(probeDirtyWorldMax_, result.navDirtyWorldMax);
+        }
+
         if (!hasNavRelevantDirtyBounds_)
         {
             navRelevantDirtyWorldMin_ = result.navDirtyWorldMin;
@@ -599,6 +611,34 @@ void FCPUAccelerationStructure::QueueFullProbeBake()
     }
 }
 
+void FCPUAccelerationStructure::QueueProbeBakeBounds(const glm::vec3& worldMin, const glm::vec3& worldMax)
+{
+    constexpr int groupSize = 16;
+    for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
+    {
+        const FCPUProbeBaker& baker = cascadeBakers[cascadeIndex];
+        const glm::ivec3 minCell = glm::clamp(
+            glm::ivec3(glm::floor((worldMin - baker.CUBE_OFFSET) / baker.UNIT_SIZE)),
+            glm::ivec3(0), glm::ivec3(CUBE_SIZE_XY - 1, CUBE_SIZE_Z - 1, CUBE_SIZE_XY - 1));
+        const glm::ivec3 maxCell = glm::clamp(
+            glm::ivec3(glm::ceil((worldMax - baker.CUBE_OFFSET) / baker.UNIT_SIZE)),
+            glm::ivec3(0), glm::ivec3(CUBE_SIZE_XY - 1, CUBE_SIZE_Z - 1, CUBE_SIZE_XY - 1));
+        const int minGroupX = std::max(0, minCell.x / groupSize - 1);
+        const int minGroupZ = std::max(0, minCell.z / groupSize - 1);
+        const int maxGroupX = std::min(CUBE_SIZE_XY / groupSize - 1, maxCell.x / groupSize + 1);
+        const int maxGroupZ = std::min(CUBE_SIZE_XY / groupSize - 1, maxCell.z / groupSize + 1);
+        for (int groupX = minGroupX; groupX <= maxGroupX; ++groupX)
+        {
+            for (int groupZ = minGroupZ; groupZ <= maxGroupZ; ++groupZ)
+            {
+                needUpdateGroups.push({ivec3(groupX, 0, groupZ), ECubeProcType::ECPT_Voxelize,
+                                       EBakerType::EBT_Probe, cascadeIndex});
+            }
+        }
+        needUpdateGroups.push({ivec3(0), ECubeProcType::ECPT_Fence, EBakerType::EBT_Probe, cascadeIndex});
+    }
+}
+
 bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::DeviceMemory* voxelGpuMemory, bool incremental)
 {
     if (incremental)
@@ -606,6 +646,7 @@ bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::D
         // Geometry revisions must continue to coalesce while an older probe batch
         // is running. The new batch is queued only after this revision publishes.
         pendingProbeRevision_ = RequestRuntimeBuild(scene);
+        ambientBakeIdle_ = false;
         return true;
     }
 
@@ -632,6 +673,8 @@ bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::D
     }
 
     QueueFullProbeBake();
+    fullProbeBakePending_ = true;
+    ambientBakeIdle_ = false;
 
     return true;
 }
@@ -692,7 +735,13 @@ void FCPUAccelerationStructure::ClearAllTasks()
 {
     CancelRuntimeBuilds();
 
-    // Wait for all parallel tasks to finish.
+    // Discard queued voxelization work before waiting. A full ambient-cube bake
+    // contains many independent groups; dispatching its entire queue here makes
+    // LoadScene wait for obsolete work from the outgoing scene.
+    Tasks::TaskCoordinator::GetInstance()->CancelAllParralledTasks();
+
+    // Wait for running groups and their main-thread completion callbacks before
+    // clearing the state those callbacks capture.
     Tasks::TaskCoordinator::GetInstance()->WaitForAllParralledTask();
     
     // Clear the pending-update queue.
@@ -708,6 +757,10 @@ void FCPUAccelerationStructure::ClearAllTasks()
     // Reset the refresh flag.
     needFlush = false;
     distanceFieldRebuildScheduled_ = false;
+    fullProbeBakePending_ = true;
+    ambientBakeIdle_ = false;
+    hasProbeDirtyBounds_ = false;
+    cpuBrickTable = {};
     ClearNavRelevantDirtyBounds();
     PublishSnapshot(std::make_shared<FCPUTLASSnapshot>());
     blasSet_.reset();
@@ -718,7 +771,15 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
     if (pendingProbeRevision_ != 0 &&
         publishedRevision_.load(std::memory_order_acquire) >= pendingProbeRevision_)
     {
-        QueueFullProbeBake();
+        if (hasProbeDirtyBounds_)
+        {
+            QueueProbeBakeBounds(probeDirtyWorldMin_, probeDirtyWorldMax_);
+        }
+        else
+        {
+            QueueFullProbeBake();
+            fullProbeBakePending_ = true;
+        }
         pendingProbeRevision_ = 0;
     }
 
@@ -791,6 +852,25 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             {
                 cpuPageIndex.UpdateData(cascadeBakers);
                 rebuildBrickResidency();
+                if (fullProbeBakePending_)
+                {
+                    cpuBrickTable.MarkAllActiveDirty();
+                }
+                else if (hasProbeDirtyBounds_)
+                {
+                    cpuBrickTable.MarkDirtyBounds(cascadeBakers, probeDirtyWorldMin_, probeDirtyWorldMax_,
+                                                  scene.AmbientPoolBricksPerCascade());
+                }
+
+                // Keep the previous radiance while locally dirty bricks are refined. Clearing
+                // resident slots here makes animated geometry visibly pulse black every time a
+                // new CPU voxel revision is published. Slot ownership changes are still cleared
+                // by slotsToClear in rebuildBrickResidency().
+                cpuBrickTable.UploadGPU(*voxelGpuMemory, scene.AmbientBrickTableByteOffset(),
+                                        scene.AmbientActiveBrickListByteOffset());
+                scene.SetAmbientActiveBrickCounts(cpuBrickTable.activeBricksPerCascade);
+                fullProbeBakePending_ = false;
+                hasProbeDirtyBounds_ = false;
             }
             cpuPageIndex.UploadGPU(*pageIndexMemory, scene.AmbientPagesByteOffset());
             needFlush = false;
@@ -799,7 +879,7 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             voxelUploadCompleted = true;
         }
     }
-    else if (!cpuBrickTable.brickTable.empty() &&
+    else if (!ambientBakeIdle_ && !cpuBrickTable.brickTable.empty() &&
              engine->GetRenderer().ActiveRendererRequirements().requestAmbientCube)
     {
         rebuildBrickResidency();
@@ -843,6 +923,22 @@ bool FCPUAccelerationStructure::HasPendingWork() const
            !distanceFieldRebuildTasks.empty() || distanceFieldRebuildScheduled_ || !needUpdateGroups.empty();
 }
 
+uint32_t FCPUAccelerationStructure::AmbientBakeDirtyBrickCount(uint32_t cascadeIndex) const
+{
+    return cascadeIndex < cpuBrickTable.dirtyBricksPerCascade.size()
+        ? cpuBrickTable.dirtyBricksPerCascade[cascadeIndex]
+        : 0u;
+}
+
+void FCPUAccelerationStructure::AcknowledgeAmbientBake(uint64_t revision)
+{
+    cpuBrickTable.AcknowledgeDirty(revision);
+    if (revision == cpuBrickTable.dirtyRevision)
+    {
+        ambientBakeIdle_ = true;
+    }
+}
+
 void FCPUAccelerationStructure::RequestUpdate(vec3 worldPos, float radius)
 {
     for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
@@ -862,6 +958,23 @@ void FCPUAccelerationStructure::RequestUpdate(vec3 worldPos, float radius)
             }
         }
     }
+}
+
+void FCPUAccelerationStructure::AccumulateProbeDirtyBounds(const glm::vec3& worldMin,
+                                                            const glm::vec3& worldMax)
+{
+    if (!hasProbeDirtyBounds_)
+    {
+        probeDirtyWorldMin_ = worldMin;
+        probeDirtyWorldMax_ = worldMax;
+        hasProbeDirtyBounds_ = true;
+    }
+    else
+    {
+        probeDirtyWorldMin_ = glm::min(probeDirtyWorldMin_, worldMin);
+        probeDirtyWorldMax_ = glm::max(probeDirtyWorldMax_, worldMax);
+    }
+    ambientBakeIdle_ = false;
 }
 
 bool FCPUAccelerationStructure::ConsumeNavRelevantDirtyBounds(glm::vec3& outWorldMin, glm::vec3& outWorldMax)

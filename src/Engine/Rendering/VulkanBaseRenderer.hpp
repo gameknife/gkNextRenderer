@@ -443,6 +443,13 @@ namespace Vulkan
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> softBake;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> clearCache;
             bool requestClearCache = true;
+            uint64_t dirtyRevision = 0;
+            std::array<uint32_t, Assets::CUBE_CASCADE_MAX> nextGroup{};
+            std::array<uint32_t, Assets::CUBE_CASCADE_MAX> completedPasses{};
+            uint32_t nextCascade = 0;
+            uint32_t groupsPerFrame = 1;
+            uint32_t lastDispatchedGroups = 0;
+            float millisecondsPerGroup = 0.0f;
         };
 
         struct SkinnedMeshResources

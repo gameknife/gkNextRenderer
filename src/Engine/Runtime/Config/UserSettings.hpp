@@ -93,6 +93,8 @@ struct UserSettings final
     float AmbientCubeHitMarkTileRatio = 0.25f;
     int AmbientCubeResidencyDebug = 0;
     bool StreamHDRTextures = true;
+    // Required by NextEngine::IsEffectiveSharcEnabled; Android still overrides this to false.
+    bool SharcEnable = true;
     uint32_t SharcEntriesPow2 = 21;
     float SharcUpdateSampleRatio = 0.25f;
     int SharcDebugMode = 0;

@@ -138,16 +138,15 @@ uint32_t TaskCoordinator::AddNamedTask(
 
 void TaskCoordinator::WaitForAllParralledTask()
 {
-    while( parralledTaskQueue_.size() > 0 )
+    // A parallel task is not fully retired when its worker becomes idle: its
+    // main-thread completion callback can still be queued in completeTaskQueue_.
+    // Keep ticking until both the work and those callbacks have drained. This is
+    // required before a Scene releases state captured by ambient-cube bake tasks.
+    while (parralledTaskQueue_.size() > 0 || !IsAllParralledTaskComplete() ||
+           completeTaskQueue_.size() > 0)
     {
         Tick();
-        std::this_thread::sleep_for(std::chrono::milliseconds(0));
-    }
-    
-    // wait for all idle
-    while( !IsAllParralledTaskComplete() )
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(0));
+        std::this_thread::yield();
     }
 }
 
