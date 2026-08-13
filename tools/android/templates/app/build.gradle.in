@@ -71,9 +71,26 @@ android {
         debug {
             buildConfigField 'boolean', 'DEBUG', 'true'
         }
+        relWithDebInfo {
+            initWith debug
+            matchingFallbacks = ['debug']
+            // Keep Android's debug signing/installability while asking the
+            // native CMake project for its standard optimized-with-symbols
+            // configuration.
+            externalNativeBuild {
+                cmake {
+                    arguments '-DCMAKE_BUILD_TYPE=RelWithDebInfo'
+                }
+            }
+        }
         release {
             minifyEnabled false
             buildConfigField 'boolean', 'DEBUG', 'false'
+            externalNativeBuild {
+                cmake {
+                    arguments '-DCMAKE_BUILD_TYPE=Release'
+                }
+            }
             if (releaseSigningEnabled) {
                 signingConfig signingConfigs.release
             }

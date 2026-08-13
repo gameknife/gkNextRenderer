@@ -19,12 +19,6 @@ namespace Common
         NodeProxy proxy = NodeProxies[vBuffer.x - 1];
         ModelData model = Models[proxy.modelId];
 
-        GPUVertex* currentVertices = Vertices;
-        if (proxy.skinId != 0xFFFFFFFF)
-        {
-            currentVertices = Bindless.GetGpuscene().SkinnedVertices;
-        }
-
         result = {};
         float3 positions[3], normals[3], tangents[3], localNormals[3];
         float4 localTangents[3];
@@ -34,7 +28,17 @@ namespace Common
         uint primitive_index = vBuffer.y; // triangle index in model, so has to add by modelinfo
 
         for (int i = 0; i != 3; ++i) {
-            const Vertex v = UnpackVertex(currentVertices[model.vertexOffset + PrimAddress[model.indexOffset + primitive_index * 3 + i]]);
+            const uint vertexAddress = model.vertexOffset + PrimAddress[model.indexOffset + primitive_index * 3 + i];
+            GPUVertex packedVertex;
+            if (proxy.skinId != 0xFFFFFFFF)
+            {
+                packedVertex = Bindless.GetGpuscene().SkinnedVertices[vertexAddress];
+            }
+            else
+            {
+                packedVertex = Vertices[vertexAddress];
+            }
+            const Vertex v = UnpackVertex(packedVertex);
             positions[i] = mul(proxy.worldTS, float4(v.Position, 1)).xyz;
             normals[i] = mul(proxy.worldTS, float4(v.Normal, 0)).xyz;
             tangents[i] = mul(proxy.worldTS, float4(v.Tangent.xyz, 0)).xyz;

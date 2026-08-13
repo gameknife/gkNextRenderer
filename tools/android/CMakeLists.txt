@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.26)
 
 project(gkNextAndroidDriver LANGUAGES NONE)
 
-set(GK_ANDROID_VARIANT "debug" CACHE STRING "Android build variant (debug or release)")
-set_property(CACHE GK_ANDROID_VARIANT PROPERTY STRINGS debug release)
+set(GK_ANDROID_VARIANT "release" CACHE STRING "Android build variant (relwithdebinfo, debug, or release)")
+set_property(CACHE GK_ANDROID_VARIANT PROPERTY STRINGS relwithdebinfo debug release)
 set(GK_ANDROID_ABI "arm64-v8a" CACHE STRING "Android ABI")
 set(GK_ANDROID_SDK_ROOT "" CACHE PATH "Android SDK root")
 set(GK_ANDROID_NDK_ROOT "" CACHE PATH "Android NDK root")
@@ -11,8 +11,8 @@ set(GK_ANDROID_JAVA_HOME "" CACHE PATH "JDK root")
 set(GK_ANDROID_SERIAL "" CACHE STRING "adb device serial")
 set(GK_ANDROID_SIGNING_PROPERTIES "" CACHE FILEPATH "External Gradle properties file for release signing")
 
-if(NOT GK_ANDROID_VARIANT MATCHES "^(debug|release)$")
-    message(FATAL_ERROR "GK_ANDROID_VARIANT must be 'debug' or 'release'")
+if(NOT GK_ANDROID_VARIANT MATCHES "^(relwithdebinfo|debug|release)$")
+    message(FATAL_ERROR "GK_ANDROID_VARIANT must be 'relwithdebinfo', 'debug', or 'release'")
 endif()
 if(NOT GK_ANDROID_ABI STREQUAL "arm64-v8a")
     message(FATAL_ERROR "Only arm64-v8a is supported during the Android build migration")
@@ -276,6 +276,9 @@ endif()
 if(GK_ANDROID_VARIANT STREQUAL "debug")
     set(gradleTask assembleDebug)
     set(gradleApk "${GK_GRADLE_DIR}/app/build/outputs/apk/debug/app-debug.apk")
+elseif(GK_ANDROID_VARIANT STREQUAL "relwithdebinfo")
+    set(gradleTask assembleRelWithDebInfo)
+    set(gradleApk "${GK_GRADLE_DIR}/app/build/outputs/apk/relWithDebInfo/app-relWithDebInfo.apk")
 else()
     set(gradleTask assembleRelease)
     if(GK_ANDROID_RELEASE_SIGNED)
@@ -321,7 +324,7 @@ add_custom_target(android-apk
     VERBATIM
 )
 
-if(GK_ANDROID_VARIANT STREQUAL "debug" OR GK_ANDROID_RELEASE_SIGNED)
+if(GK_ANDROID_VARIANT STREQUAL "debug" OR GK_ANDROID_VARIANT STREQUAL "relwithdebinfo" OR GK_ANDROID_RELEASE_SIGNED)
     add_custom_target(android-install
         COMMAND "${CMAKE_COMMAND}"
             "-DADB=${GK_ADB}"
@@ -335,7 +338,7 @@ if(GK_ANDROID_VARIANT STREQUAL "debug" OR GK_ANDROID_RELEASE_SIGNED)
     )
 endif()
 
-if(GK_ANDROID_VARIANT STREQUAL "debug")
+if(GK_ANDROID_VARIANT STREQUAL "debug" OR GK_ANDROID_VARIANT STREQUAL "relwithdebinfo")
     add_custom_target(android-run
         COMMAND "${CMAKE_COMMAND}"
             "-DADB=${GK_ADB}"

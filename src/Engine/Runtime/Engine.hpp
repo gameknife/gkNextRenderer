@@ -179,6 +179,15 @@ public:
         return progressiveRender_.enabled && renderer_ != nullptr &&
             renderer_->CurrentLogicRendererType() == Vulkan::ERT_PathTracingLite;
     }
+    bool IsEffectiveSharcEnabled() const
+    {
+#if ANDROID
+        // Qualcomm's Android Vulkan compiler crashes while creating Core.SharcUpdate.
+        return false;
+#else
+        return config_.userSettings.SharcEnable && !IsOfflineProgressivePathTracing();
+#endif
+    }
     uint32_t GetProgressiveRenderAccumulatedFrames() const { return progressiveRender_.accumulatedFrames; }
     uint32_t GetProgressiveRenderTargetFrames() const { return FProgressiveRenderState::TargetFrames; }
     Assets::UniformBufferObject& GetLastUniformBufferObject() { return renderer_->PrimaryViewState().previousUniformBuffer; }

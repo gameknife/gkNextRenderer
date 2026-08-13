@@ -1138,6 +1138,14 @@ namespace Vulkan
 
         bindless_.images.resize(Assets::Bindless::RT_COUNT);
 
+        const size_t swapChainImageCount = frame_.swapChain->Images().size();
+        if (swapChainImageCount > static_cast<size_t>(Assets::Bindless::kMaxSwapChainImages))
+        {
+            Throw(std::runtime_error(fmt::format(
+                "Swapchain image count {} exceeds the bindless capacity {}",
+                swapChainImageCount, Assets::Bindless::kMaxSwapChainImages)));
+        }
+
         // Primary view RT bank (bank 0 == legacy absolute layout).
         CreateRenderTargetBank(0);
         renderViews_->ResetSwapChainResources();
@@ -1146,7 +1154,7 @@ namespace Vulkan
         {
             renderViewServices_->OnSwapChainResourcesInvalidated(/*releaseOffscreenSampledOutputs*/ false);
         }
-        for (uint32_t i = 0; i != frame_.swapChain->Images().size(); i++)
+        for (uint32_t i = 0; i != swapChainImageCount; i++)
         {
             if (frame_.swapChain->SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT))
             {
@@ -1163,13 +1171,8 @@ namespace Vulkan
 
         lateToneMapping_.inputInitialized.clear();
         {
-            const size_t imageCount = frame_.swapChain->Images().size();
-            if (Assets::Bindless::RT_TONEMAP_INPUT0 + imageCount > Assets::Bindless::RT_REMOTE_ENCODE0_Y)
-            {
-                Throw(std::runtime_error("Late tone-mapping bindless slot range exhausted"));
-            }
-            lateToneMapping_.inputInitialized.assign(imageCount, false);
-            for (size_t i = 0; i < imageCount; ++i)
+            lateToneMapping_.inputInitialized.assign(swapChainImageCount, false);
+            for (size_t i = 0; i < swapChainImageCount; ++i)
             {
                 const std::string debugName = fmt::format("Late tone-mapping input {}", i);
                 bindless_.images[Assets::Bindless::RT_TONEMAP_INPUT0 + i].reset(new RenderImage(
@@ -1217,16 +1220,11 @@ namespace Vulkan
                 static_cast<uint32_t>(activeUpscalerType_)).supportsTemporalPostFilter;
         if (temporalPostFilterActive)
         {
-            const size_t imageCount = frame_.swapChain->Images().size();
-            if (Assets::Bindless::RT_TEMPORAL_POST_PONG0 + imageCount > Assets::Bindless::RT_REMOTE_ENCODE0_Y)
-            {
-                Throw(std::runtime_error("Temporal post-filter bindless slot range exhausted"));
-            }
-            temporalPostFilter_.pingImages.reserve(imageCount);
-            temporalPostFilter_.pongImages.reserve(imageCount);
-            temporalPostFilter_.pingInitialized.assign(imageCount, false);
-            temporalPostFilter_.pongInitialized.assign(imageCount, false);
-            for (size_t i = 0; i < imageCount; ++i)
+            temporalPostFilter_.pingImages.reserve(swapChainImageCount);
+            temporalPostFilter_.pongImages.reserve(swapChainImageCount);
+            temporalPostFilter_.pingInitialized.assign(swapChainImageCount, false);
+            temporalPostFilter_.pongInitialized.assign(swapChainImageCount, false);
+            for (size_t i = 0; i < swapChainImageCount; ++i)
             {
                 const std::string pingDebugName = fmt::format("Temporal post-filter ping {}", i);
                 temporalPostFilter_.pingImages.emplace_back(std::make_unique<RenderImage>(

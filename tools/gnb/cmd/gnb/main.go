@@ -769,18 +769,71 @@ func newEditorCommand(ctx appContext) *cobra.Command {
 }
 
 func newAndroidCommand(ctx appContext) *cobra.Command {
-	return &cobra.Command{
-		Use:   "android [debug|release]",
-		Short: "Build Android through the CMake driver",
-		Args:  cobra.MaximumNArgs(1),
+	root := &cobra.Command{
+		Use:   "android",
+		Short: "Build and launch the Android app",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			mode := "debug"
-			if len(args) == 1 {
-				mode = args[0]
-			}
-			return android.Run(ctx.repoRoot, ctx.cfg, mode)
+			return cmd.Help()
 		},
 	}
+
+	build := &cobra.Command{
+		Use:   "build [relwithdebinfo|debug|release]",
+		Short: "Build an Android APK (default: release)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			variant := ""
+			if len(args) == 1 {
+				variant = args[0]
+			}
+			artifact, err := android.Build(ctx.repoRoot, ctx.cfg, variant)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "[android] built %s\n", artifact.APKPath)
+			fmt.Fprintln(cmd.OutOrStdout(), "[android] install and launch it with `gnb android run`")
+			return nil
+		},
+	}
+	root.AddCommand(build)
+
+	serial := ""
+	avd := ""
+	run := &cobra.Command{
+		Use:   "run [relwithdebinfo|debug|release]",
+		Short: "Install and launch a built Android APK on adb or a local AVD",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			variant := ""
+			if len(args) == 1 {
+				variant = args[0]
+			}
+			result, err := android.Run(ctx.repoRoot, variant, serial, avd)
+			if err != nil {
+				return err
+			}
+			if result.EmulatorStarted {
+				fmt.Fprintf(cmd.OutOrStdout(), "[android] started AVD %s\n", result.AVD)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "[android] installed and launched on %s\n", result.Serial)
+			return nil
+		},
+	}
+	run.Flags().StringVar(&serial, "serial", "", "use this online adb device serial")
+	run.Flags().StringVar(&avd, "avd", "", "start this local AVD when no adb device is online")
+	root.AddCommand(run)
+
+	devices := &cobra.Command{
+		Use:   "devices",
+		Short: "List adb-connected Android devices",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return android.ListDevices(ctx.repoRoot, cmd.OutOrStdout())
+		},
+	}
+	root.AddCommand(devices)
+	return root
 }
 
 func newIOSCommand(ctx appContext) *cobra.Command {

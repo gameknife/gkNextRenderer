@@ -300,6 +300,10 @@ Window::Window(const WindowConfig& config) :
     }
 
     SDL_WindowFlags flags = SDL_WINDOW_VULKAN;
+    if (config.Fullscreen)
+    {
+        flags |= SDL_WINDOW_FULLSCREEN;
+    }
     if (config.Resizable)
     {
         flags |= SDL_WINDOW_RESIZABLE;
@@ -729,7 +733,14 @@ Surface::Surface(const class Instance& instance) :
               instance.Handle(), &createInfo, nullptr, &surface_),
           "create Win32 window surface");
 #else
-    SDL_Vulkan_CreateSurface(instance.Window().Handle(), instance.Handle(), nullptr, &surface_);
+    if (!SDL_Vulkan_CreateSurface(instance.Window().Handle(), instance.Handle(), nullptr, &surface_))
+    {
+        Throw(std::runtime_error(fmt::format("create Vulkan window surface: {}", SDL_GetError())));
+    }
+    if (surface_ == nullptr)
+    {
+        Throw(std::runtime_error("SDL created a null Vulkan window surface"));
+    }
 #endif
 }
 

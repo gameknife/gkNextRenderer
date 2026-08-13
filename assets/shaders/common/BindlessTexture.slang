@@ -132,15 +132,18 @@ namespace Bindless
 
     // --- Global / shared slots: absolute, must NOT be remapped through ViewRT() ---
     public static const int RT_TEMP_USAGE0 = 50;
+    // The global region below RT_SWAPCHAIN0 reserves 12 entries per swapchain-image
+    // resource. Some mobile HDR surfaces require more than the usual three images;
+    // these ranges must therefore not assume triple buffering.
+    public static const int kMaxSwapChainImages = 12;
+
     // Per-swapchain-image ping/pong images used by the optional temporal post filter.
-    // Slots 50..55 mirror RT_SWAPCHAIN0..2 and stay below the remote encode range.
     public static const int RT_TEMPORAL_POST_PING0 = RT_TEMP_USAGE0;
-    public static const int RT_TEMPORAL_POST_PONG0 = RT_TEMPORAL_POST_PING0 + 3;
+    public static const int RT_TEMPORAL_POST_PONG0 = RT_TEMPORAL_POST_PING0 + kMaxSwapChainImages;
     // Full-resolution linear scene color targets consumed by the final output pass.
-    // Slots 56..58 remain below the remote encode range.
-    public static const int RT_TONEMAP_INPUT0 = RT_TEMPORAL_POST_PONG0 + 3;
+    public static const int RT_TONEMAP_INPUT0 = RT_TEMPORAL_POST_PONG0 + kMaxSwapChainImages;
     // Compatibility aliases for older shader and host code.
-    public static const int RT_REMOTE_ENCODE0_Y = 60;
+    public static const int RT_REMOTE_ENCODE0_Y = RT_TONEMAP_INPUT0 + kMaxSwapChainImages;
     public static const int RT_REMOTE_ENCODE0_UV = 61;
     public static const int RT_REMOTE_ENCODE1_Y = 62;
     public static const int RT_REMOTE_ENCODE1_UV = 63;
@@ -185,6 +188,10 @@ namespace Bindless
     // The high region is a derived chain, so these can only fire if someone hand-edits a base
     // back into a magic number or grows a range past its successor.
     static_assert(RT_COUNT <= kViewRtBankStride, "an RT bank must fit inside its stride");
+    static_assert(RT_REMOTE_ENCODE0_Y + 8 <= RT_SWAPCHAIN0,
+                  "per-swapchain image resources would overlap the remote encode slots");
+    static_assert(RT_SWAPCHAIN0 + kMaxSwapChainImages <= RT_COUNT,
+                  "per-swapchain image resources would exceed the RT range");
     static_assert(kMaxViewRtBanks * kViewRtBankStride <= RES_HIGH_BASE,
                   "RT banks (binding 1) would run into the explicitly-bound region");
     static_assert(RES_SCENE_TEXTURE_CAPACITY <= RES_HIGH_BASE,

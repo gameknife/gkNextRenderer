@@ -197,7 +197,12 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     InitializeRendererBackend();
 
     // Window scaling and style.
-#if ANDROID || WIN32
+#if ANDROID
+    // Android reports the physical display density. Keep the existing DPI mapping,
+    // but target 70% of its previous on-screen size for the touch UI.
+    constexpr float androidUiScale = 0.70f;
+    const float scaleFactor = std::max(1.0f, window.ContentScale()) * androidUiScale;
+#elif WIN32
     // Keep ImGui in the scaleFactor=1 logical coordinate space used by all existing UI code.
     // PreRender maps that coordinate space onto the DPI-sized framebuffer and
     // normalizes input to the same space.
@@ -888,7 +893,11 @@ void UserInterface::PreRender()
     }
 #if WIN32 || ANDROID
     auto& io = ImGui::GetIO();
+#if ANDROID
+    if (uiScale_ != 1.0f)
+#else
     if (uiScale_ > 1.0f)
+#endif
     {
         io.DisplaySize.x /= uiScale_;
         io.DisplaySize.y /= uiScale_;
@@ -1062,7 +1071,7 @@ void UserInterface::HandleEvent(const SDL_Event* event)
         }
     }
 #elif ANDROID
-    if (uiScale_ > 1.0f && event->type == SDL_EVENT_MOUSE_MOTION)
+    if (uiScale_ != 1.0f && event->type == SDL_EVENT_MOUSE_MOTION)
     {
         SDL_Window* window = SDL_GetWindowFromID(event->motion.windowID);
         if (window != nullptr && !SDL_GetWindowRelativeMouseMode(window))

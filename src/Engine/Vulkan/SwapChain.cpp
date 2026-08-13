@@ -82,6 +82,7 @@ namespace
         return format.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 ||
                format.format == VK_FORMAT_A2R10G10B10_UNORM_PACK32;
     }
+    
 }
 
 SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentMode, bool forceSDR) :
@@ -118,7 +119,6 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
         extent.height = 1280;
         extent.width = floorf(1280 / aspect);
     }
-    SDL_SetWindowFullscreen(window.Handle(), true);
 #endif
     
     VkSwapchainCreateInfoKHR createInfo = {};

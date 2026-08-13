@@ -80,6 +80,19 @@ TEST_CASE("Bindless slot registry partitions the address space", "[Unit][Bindles
     CHECK(Assets::GlobalTexturePool::kMaxBindlessSlots == static_cast<uint32_t>(Slots::RES_SLOT_COUNT));
 }
 
+TEST_CASE("Per-swapchain bindless resources reserve enough non-overlapping slots", "[Unit][Bindless]")
+{
+    const uint32_t count = static_cast<uint32_t>(Slots::kMaxSwapChainImages);
+    CHECK(count >= 5u);
+    CHECK(static_cast<uint32_t>(Slots::RT_TEMPORAL_POST_PING0) + count <=
+          static_cast<uint32_t>(Slots::RT_TEMPORAL_POST_PONG0));
+    CHECK(static_cast<uint32_t>(Slots::RT_TEMPORAL_POST_PONG0) + count <=
+          static_cast<uint32_t>(Slots::RT_TONEMAP_INPUT0));
+    CHECK(static_cast<uint32_t>(Slots::RT_TONEMAP_INPUT0) + count <=
+          static_cast<uint32_t>(Slots::RT_REMOTE_ENCODE0_Y));
+    CHECK(static_cast<uint32_t>(Slots::RT_SWAPCHAIN0) + count <= static_cast<uint32_t>(Slots::RT_COUNT));
+}
+
 TEST_CASE_METHOD(EngineTestFixture, "Bindless descriptor arrays cover every registered slot",
                  "[GPU][Unit][Bindless]")
 {

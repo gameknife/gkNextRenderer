@@ -92,8 +92,10 @@ package preset 配置在 `gnb.toml` 的 `[package.presets.<name>]`，可独立�
 ## 移动平台与安装
 
 ```bash
-./gnb.sh android debug    # CMake 驱动构建、安装并启动
-./gnb.sh android release  # CMake 驱动，仅生成 APK
+./gnb.sh android build    # CMake 驱动构建 release APK
+./gnb.sh android run      # 安装并启动已构建的 APK
+./gnb.sh android devices  # 列出 adb 已连接设备及其状态
+./gnb.sh android build relwithdebinfo  # 可选：构建带原生调试符号的 APK
 ./gnb.sh ios build
 ./gnb.sh ios run
 ./gnb.sh install
@@ -102,8 +104,14 @@ package preset 配置在 `gnb.toml` 的 `[package.presets.<name>]`，可独立�
 
 Android 的 Gradle 工程由 `tools/android/templates/` 生成到
 `out/build/android-<variant>/gradle/`，固定 APK 位于
-`out/build/android-<variant>/apk/gkNextRenderer-<variant>.apk`。Gradle 是内部打包后端，
+`out/build/android-<variant>/apk/gkNextRenderer-<variant>.apk`。默认 variant 是
+`release`。如需保留 CMake 的 `RelWithDebInfo` 及 Android debug 签名以便安装和原生调试，使用
+`gnb android build relwithdebinfo`。
+`gnb android run` 优先安装到当前第一个在线 adb 设备；没有在线设备时，会启动本机第一个 AVD（可用
+`--avd <name>` 指定）并等待其完成启动，再安装运行。Gradle 是内部打包后端，
 日常命令和 CI 不应直接调用 `gradlew`。
+`gnb android devices` 等同于以详细格式执行 `adb devices -l`，因此也会显示 offline 和
+unauthorized 设备，便于诊断连接问题。
 driver 要求 JDK 17–23，以及 libc++ 提供 C++20 `<ranges>` 的当前 NDK；
 不兼容的 NDK 会在 configure 阶段明确失败。
 

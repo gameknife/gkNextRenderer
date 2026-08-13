@@ -308,14 +308,22 @@ namespace Common
         UniformBufferObject Camera = scene.Camera[0];
         NodeProxy proxy = scene.Nodes[vBuffer.x - 1];
         ModelData model = scene.Offsets[proxy.modelId];
-        GPUVertex* vertices = proxy.skinId != 0xFFFFFFFF ? scene.SkinnedVertices : scene.Vertices;
-
         float3 corners[3];
         [unroll]
         for (uint i = 0u; i < 3u; ++i)
         {
             const uint vertexIndex = scene.Indices[model.indexOffset + vBuffer.y * 3u + i];
-            const float3 local = float3(vertices[model.vertexOffset + vertexIndex].Position_Tx.xyz);
+            const uint vertexAddress = model.vertexOffset + vertexIndex;
+            GPUVertex packedVertex;
+            if (proxy.skinId != 0xFFFFFFFF)
+            {
+                packedVertex = scene.SkinnedVertices[vertexAddress];
+            }
+            else
+            {
+                packedVertex = scene.Vertices[vertexAddress];
+            }
+            const float3 local = float3(packedVertex.Position_Tx.xyz);
             corners[i] = mul(proxy.worldTS, float4(local, 1.0f)).xyz;
         }
 
