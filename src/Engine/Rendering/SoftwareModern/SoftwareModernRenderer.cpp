@@ -37,14 +37,20 @@ namespace Vulkan::SoftwareModern
             {Assets::Bindless::RT_DIFFUSE_HITDIST, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
             {Assets::Bindless::RT_SPECULAR_HITDIST, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
             {Assets::Bindless::RT_SPECULAR_ALBEDO, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+            {Assets::Bindless::RT_BSDF_DATA, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
         }, "software modern shading");
 
         {
             SCOPED_GPU_TIMER("shadingpass");
-            deferredShadingPipeline_->BindPipeline(commandBuffer,
-                GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase()));
-            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(extent.width, 8),
+            Assets::GPUScene gpuScene =
+                GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase());
+            baseRender_.ConfigureCheckerboardShading(gpuScene);
+            deferredShadingPipeline_->BindPipeline(commandBuffer, gpuScene);
+            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(
+                              baseRender_.CheckerboardDispatchWidth(extent.width, gpuScene), 8),
                           Utilities::Math::GetSafeDispatchCount(extent.height, 8), 1);
+            baseRender_.ResolveCheckerboardShading(
+                commandBuffer, gpuScene, PipelineCommon::ECheckerboardResolveSet::Tracing);
         }
 
         const auto& frameSettings = baseRender_.FrameSettings();

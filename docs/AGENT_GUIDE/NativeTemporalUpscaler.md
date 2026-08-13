@@ -38,6 +38,10 @@ another type or None. The provider restores the engine depth attachment layout a
   and retains its BSD-3-Clause notice under `assets/shaders/third_party/sgsr2/`.
 - `r.upscaler.type 4`: select Native TAAU.
 - `r.upscaler.qualityMode`: shared Quality/Balanced/Performance/Ultra Performance/Native/Auto mode.
+- `r.checkerboardRendering` (default `true`): dispatches half as many shading invocations and
+  alternates the shaded pixel parity every frame. A cheap spatial resolve fills the missing parity
+  before the selected temporal upscaler consumes color/depth/motion. It is disabled automatically
+  for reference/progressive rendering, non-primary views, and PathTracing/SoftwareTracing ReSTIR.
 - `r.taau.historyWeight` (default `0.97`, range `0.5..0.98`): stable-history contribution.
 - `r.taau.sharpness` (default `0.25`, range `0..1`): display-resolution adaptive sharpening.
 - `r.upscaler.postFilter` and its `postFilterPasses`, `postFilterStrength`, `postFilterLumaSigma`,
@@ -62,6 +66,8 @@ gnb validate --script assets/agentscripts/native-taau-smoke.agentscript.json --s
 gnb validate --script assets/agentscripts/native-taau-motion.agentscript.json
 gnb validate --script assets/agentscripts/sgsr2-smoke.agentscript.json
 gnb validate --script assets/agentscripts/sgsr2-motion.agentscript.json
+gnb validate --script assets/agentscripts/checkerboard-rendering-smoke.agentscript.json
+gnb validate --script assets/agentscripts/checkerboard-renderers-smoke.agentscript.json
 ```
 
 The first implementation derives reactivity from color change because the renderer contract has

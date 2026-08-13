@@ -1,6 +1,7 @@
 import Shader.Bindless;
 import Shader.PathTracing;
 #include "common/ShaderClock.slang"
+#include "common/CheckerboardRendering.slang"
 
 void OutputColor(int2 ipos, float3 total)
 {
@@ -13,7 +14,8 @@ void OutputColor(int2 ipos, float3 total)
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     const uint2 outputSize = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SCENE_COLOR);
-    if (any(DTid.xy >= outputSize))
+    const uint2 shadingPixel = ResolveShadingPixel(DTid.xy);
+    if (any(shadingPixel >= outputSize))
     {
         return;
     }
@@ -25,7 +27,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FHiVoxelDDARayTracer voxelTracer;
     FVoxelRayCaster rayCasterVoxel;
 
-    int2 ipos = int2(DTid.xy);
+    int2 ipos = int2(shadingPixel);
     int2 size = int2(outputSize);
     uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
 

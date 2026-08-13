@@ -48,11 +48,17 @@ namespace Vulkan::SoftwareModernNoAmbient
                 {Assets::Bindless::RT_MOTIONVECTOR, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
                 {Assets::Bindless::RT_NORMAL, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
             }, "software modern no ambient shading");
-            shadingPipeline_->BindPipeline(commandBuffer,
-                GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase()));
+            Assets::GPUScene gpuScene =
+                GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase());
+            baseRender_.ConfigureCheckerboardShading(gpuScene);
+            shadingPipeline_->BindPipeline(commandBuffer, gpuScene);
             vkCmdDispatch(commandBuffer,
-                          Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                          Utilities::Math::GetSafeDispatchCount(
+                              baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
                           Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
+            baseRender_.ResolveCheckerboardShading(
+                commandBuffer, gpuScene,
+                PipelineCommon::ECheckerboardResolveSet::SoftwareModernNoAmbient);
         }
 
         {

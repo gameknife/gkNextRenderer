@@ -1,19 +1,19 @@
 import Shader.Bindless;
 import Shader.PathTracing;
 #include "common/ShaderClock.slang"
+#include "common/CheckerboardRendering.slang"
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    START_SHADERCLOCK()
-
     const uint2 size = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
-    if (DTid.x >= size.x || DTid.y >= size.y)
+    const uint2 pixel = ResolveShadingPixel(DTid.xy);
+    if (any(pixel >= size))
     {
-        END_SHADERCLOCK(DTid.xy)
         return;
     }
+    START_SHADERCLOCK()
 
     FVisibilityBufferRayCaster rayCaster;
     FAmbientCubeRayTracerIndirect tracer;
@@ -27,11 +27,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.FuzzyTracing = true;
     renderer.ForceExitAfterFirst = true;
     renderer.SecondaryDirectMode = 0;
-    renderer.Init(DTid.xy);
+    renderer.Init(pixel);
 
     if( !renderer.PrimaryHit(rayCaster) )
     {
-        END_SHADERCLOCK(DTid.xy)
+        END_SHADERCLOCK(pixel)
         return;
     }
 
@@ -39,11 +39,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
     if (TryAmbientResidencyDebug(renderer.GetPrimaryVertex().Position, residencyDebugColor))
     {
         renderer.WriteDebugColor(residencyDebugColor);
-        END_SHADERCLOCK(DTid.xy)
+        END_SHADERCLOCK(pixel)
         return;
     }
 
     FNullRadianceCache cache;
     renderer.Render(tracer, dIlluminator, cache, 1);
-    END_SHADERCLOCK(DTid.xy)
+    END_SHADERCLOCK(pixel)
 }

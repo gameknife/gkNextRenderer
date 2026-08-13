@@ -37,6 +37,7 @@ struct UserSettings final
     uint32_t FrameGenerationFrameLimitFps = 0;
     uint32_t UpscalerJitterFrames = 16;
     bool UpscalerJitterInvertY = false;
+    bool CheckerboardRendering = true;
     int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low
 
     // Camera

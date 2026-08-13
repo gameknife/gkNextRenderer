@@ -13,6 +13,7 @@
 #include "Engine/Rendering/ExternalPassRegistry.hpp"
 #include "Engine/Rendering/RenderView.hpp"
 #include "Engine/Rendering/PipelineCommon/ResourceStateTracker.hpp"
+#include "Engine/Rendering/PipelineCommon/CheckerboardRendering.hpp"
 #include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include <vector>
@@ -296,6 +297,13 @@ namespace Vulkan
         }
         bool SupportReflex() const { return caps_.supportReflex; }
         bool IsTemporalSuperResolutionActive() const { return temporalSuperResolutionActive_; }
+        bool IsCheckerboardRenderingActive() const;
+        uint32_t CheckerboardDispatchWidth(uint32_t width, const Assets::GPUScene& gpuScene) const;
+        void ConfigureCheckerboardShading(Assets::GPUScene& gpuScene, bool allowed = true) const;
+        void ResolveCheckerboardShading(
+            VkCommandBuffer commandBuffer,
+            const Assets::GPUScene& gpuScene,
+            PipelineCommon::ECheckerboardResolveSet resolveSet);
         bool IsFrameGenerationSwapchainRequested() const
         {
             return frameGenerationSwapchainRequested_;
@@ -498,6 +506,7 @@ namespace Vulkan
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> temporalPostFilterPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> toneMappingPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> visualDebuggerPipeline;
+            std::unique_ptr<PipelineCommon::ZeroBindPipeline> checkerboardResolvePipeline;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> gpuCullCompactPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> softMeshShaderFinalizePipeline;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> softMeshShaderExpandPipeline;
@@ -590,7 +599,6 @@ namespace Vulkan
         FSceneRenderState sceneState_;
         FFrameRenderSettings frameSettings_;
         VkPresentModeKHR presentMode_;
-        bool checkerboxRendering_{};
         bool forceSDR_{};
         bool visualDebug_{};
         bool requestRecreateSwapChain_ = false;

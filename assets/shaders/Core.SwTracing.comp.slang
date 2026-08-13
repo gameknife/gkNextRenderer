@@ -1,13 +1,15 @@
 import Shader.Bindless;
 import Shader.PathTracing;
 #include "common/ShaderClock.slang"
+#include "common/CheckerboardRendering.slang"
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     const uint2 size = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
-    if (any(DTid.xy >= size))
+    const uint2 pixel = ResolveShadingPixel(DTid.xy);
+    if (any(pixel >= size))
     {
         return;
     }
@@ -26,7 +28,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.ForceExitAfterFirst = false;
     renderer.EnableSoftTracingAdaptiveOffset = true;
     renderer.SecondaryDirectMode = 0;
-    renderer.Init(DTid.xy);
+    renderer.Init(pixel);
 
     const bool restirActive = RestirIsAvailable() && Bindless.GetGpuscene().CustomData0 == 0;
     dIlluminator.RestirPrimary = restirActive;
@@ -35,9 +37,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
     {
         if (restirActive)
         {
-            RestirStoreEmpty(int2(DTid.xy));
+            RestirStoreEmpty(int2(pixel));
         }
-        END_SHADERCLOCK(DTid.xy)
+        END_SHADERCLOCK(pixel)
         return;
     }
 
@@ -48,7 +50,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         Material primaryMat = Bindless.GetGpuscene().GetMaterial(renderer.GetPrimaryVertex().MaterialIndex);
         if (primaryMat.MaterialModel == MaterialDiffuseLight)
         {
-            RestirStoreEmpty(int2(DTid.xy));
+            RestirStoreEmpty(int2(pixel));
         }
     }
 
@@ -56,11 +58,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
     if (TryAmbientResidencyDebug(renderer.GetPrimaryVertex().Position, residencyDebugColor))
     {
         renderer.WriteDebugColor(residencyDebugColor);
-        END_SHADERCLOCK(DTid.xy)
+        END_SHADERCLOCK(pixel)
         return;
     }
 
     FNullRadianceCache cache;
     renderer.Render(tracer, dIlluminator, cache, 1);
-    END_SHADERCLOCK(DTid.xy)
+    END_SHADERCLOCK(pixel)
 }

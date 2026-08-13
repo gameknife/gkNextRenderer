@@ -43,6 +43,7 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
 
     Assets::GPUScene gpuScene =
         GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase());
+    baseRender_.ConfigureCheckerboardShading(gpuScene, !restirEnabled);
     if (restirEnabled && restir.HasResources())
     {
         gpuScene.ReservedAddress0 = restir.ResourceTableAddress();
@@ -71,7 +72,8 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
         // cs shading pass
         deferredShadingPipeline_->BindPipeline(commandBuffer, gpuScene);
         vkCmdDispatch(commandBuffer,
-            Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+            Utilities::Math::GetSafeDispatchCount(
+                baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
             Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
     }
 
@@ -104,9 +106,13 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
         SCOPED_GPU_TIMER("software restir spatial shade");
         restirSpatialPipeline_->BindPipeline(commandBuffer, gpuScene);
         vkCmdDispatch(commandBuffer,
-                      Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                      Utilities::Math::GetSafeDispatchCount(
+                          baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
                       Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
     }
+
+    baseRender_.ResolveCheckerboardShading(
+        commandBuffer, gpuScene, PipelineCommon::ECheckerboardResolveSet::Tracing);
 
     samplePostChain_.Run(baseRender_, commandBuffer, imageIndex, {
         .progressiveRender = isPrimaryView && frameSettings.progressiveRendering,

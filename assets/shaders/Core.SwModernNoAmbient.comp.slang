@@ -2,6 +2,7 @@ import Shader.Bindless;
 import Shader.PathTracing;
 import Shader.VisibilityBuffer;
 #include "common/PreProcessor.slang"
+#include "common/CheckerboardRendering.slang"
 
 float3 FresnelSchlick(float cosTheta, float3 f0)
 {
@@ -110,8 +111,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     let Camera = Bindless.GetGpuscene().Camera[0];
     uint2 size = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
-    int2 pixel = int2(DTid.xy);
-    if (DTid.x >= size.x || DTid.y >= size.y)
+    const uint2 shadingPixel = ResolveShadingPixel(DTid.xy);
+    int2 pixel = int2(shadingPixel);
+    if (any(shadingPixel >= size))
     {
         return;
     }

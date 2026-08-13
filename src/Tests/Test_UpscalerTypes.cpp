@@ -1,6 +1,7 @@
 #include <catch2/catch_all.hpp>
 
 #include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
+#include "Engine/Rendering/PipelineCommon/CheckerboardRendering.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 
 TEST_CASE("Upscaler mode mapping is centralized", "[Unit][Upscaler]")
@@ -133,4 +134,26 @@ TEST_CASE("Upscaler types have one stable ordered selection", "[Unit][Upscaler]"
     CHECK(SupportsUpscalerType(nativeTypes, EUpscalerType::NativeTAAU));
     CHECK(SupportsUpscalerType(nativeTypes, EUpscalerType::SnapdragonGSR2));
     CHECK_FALSE(SupportsUpscalerType(nativeTypes, EUpscalerType::FidelityFXFSR));
+}
+
+TEST_CASE("Checkerboard shading covers opposite pixel parities on consecutive frames",
+          "[Unit][Upscaler][Checkerboard]")
+{
+    using namespace Vulkan::PipelineCommon;
+
+    CHECK(GetCheckerboardDispatchWidth(1920, true) == 960);
+    CHECK(GetCheckerboardDispatchWidth(1919, true) == 960);
+    CHECK(GetCheckerboardDispatchWidth(1919, false) == 1919);
+
+    for (uint32_t y = 0; y < 5; ++y)
+    {
+        for (uint32_t compactX = 0; compactX < 7; ++compactX)
+        {
+            const uint32_t evenFrameX = GetCheckerboardPixelX(compactX, y, 0);
+            const uint32_t oddFrameX = GetCheckerboardPixelX(compactX, y, 1);
+            CHECK((evenFrameX ^ oddFrameX) == 1u);
+            CHECK(GetCheckerboardMissingPixelX(compactX, y, 0) == oddFrameX);
+            CHECK(GetCheckerboardMissingPixelX(compactX, y, 1) == evenFrameX);
+        }
+    }
 }

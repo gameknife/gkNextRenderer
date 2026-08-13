@@ -580,6 +580,90 @@ namespace Vulkan
         return upscaler_ ? upscaler_->JitterPhaseCount() : 0;
     }
 
+    bool VulkanBaseRenderer::IsCheckerboardRenderingActive() const
+    {
+        return frameSettings_.userSettings.CheckerboardRendering &&
+            temporalSuperResolutionActive_ && ActiveViewBankBase() == 0u &&
+            !frameSettings_.progressiveRendering &&
+            !frameSettings_.offlineProgressivePathTracing &&
+            (!GOption || !GOption->ReferenceMode);
+    }
+
+    uint32_t VulkanBaseRenderer::CheckerboardDispatchWidth(
+        const uint32_t width, const Assets::GPUScene& gpuScene) const
+    {
+        return PipelineCommon::GetCheckerboardDispatchWidth(
+            width, (gpuScene.CustomData2 & PipelineCommon::checkerboardShadingFlag) != 0u);
+    }
+
+    void VulkanBaseRenderer::ConfigureCheckerboardShading(
+        Assets::GPUScene& gpuScene, const bool allowed) const
+    {
+        gpuScene.CustomData2 &= ~PipelineCommon::checkerboardShadingFlag;
+        if (allowed && IsCheckerboardRenderingActive())
+        {
+            gpuScene.CustomData2 |= PipelineCommon::checkerboardShadingFlag;
+        }
+    }
+
+    void VulkanBaseRenderer::ResolveCheckerboardShading(
+        VkCommandBuffer commandBuffer,
+        const Assets::GPUScene& gpuScene,
+        const PipelineCommon::ECheckerboardResolveSet resolveSet)
+    {
+        if ((gpuScene.CustomData2 & PipelineCommon::checkerboardShadingFlag) == 0u ||
+            !overlay_.checkerboardResolvePipeline)
+        {
+            return;
+        }
+
+        constexpr auto compute = PipelineCommon::ERenderStage::Compute;
+        constexpr auto readWrite = PipelineCommon::EResourceAccess::ShaderRead |
+            PipelineCommon::EResourceAccess::ShaderWrite;
+        switch (resolveSet)
+        {
+        case PipelineCommon::ECheckerboardResolveSet::Tracing:
+            TransitionActiveViewImages(commandBuffer, {
+                {Assets::Bindless::RT_SINGLE_DIFFUSE, compute, readWrite},
+                {Assets::Bindless::RT_SINGLE_SPECULAR, compute, readWrite},
+                {Assets::Bindless::RT_ALBEDO, compute, readWrite},
+                {Assets::Bindless::RT_NORMAL, compute, readWrite},
+                {Assets::Bindless::RT_OBJECTID_0, compute, readWrite},
+                {Assets::Bindless::RT_PREV_DEPTHBUFFER, compute, readWrite},
+                {Assets::Bindless::RT_MOTIONVECTOR, compute, readWrite},
+                {Assets::Bindless::RT_DIFFUSE_HITDIST, compute, readWrite},
+                {Assets::Bindless::RT_SPECULAR_HITDIST, compute, readWrite},
+                {Assets::Bindless::RT_SPECULAR_ALBEDO, compute, readWrite},
+                {Assets::Bindless::RT_BSDF_DATA, compute, readWrite},
+            }, "checkerboard tracing resolve");
+            break;
+        case PipelineCommon::ECheckerboardResolveSet::SoftwareModernNoAmbient:
+            TransitionActiveViewImages(commandBuffer, {
+                {Assets::Bindless::RT_SINGLE_DIFFUSE, compute, readWrite},
+                {Assets::Bindless::RT_AMBIENT, compute, readWrite},
+                {Assets::Bindless::RT_NORMAL, compute, readWrite},
+                {Assets::Bindless::RT_OBJECTID_0, compute, readWrite},
+                {Assets::Bindless::RT_PREV_DEPTHBUFFER, compute, readWrite},
+                {Assets::Bindless::RT_MOTIONVECTOR, compute, readWrite},
+            }, "checkerboard software modern no ambient resolve");
+            break;
+        case PipelineCommon::ECheckerboardResolveSet::SceneColor:
+            TransitionActiveViewImages(commandBuffer, {
+                {Assets::Bindless::RT_SCENE_COLOR, compute, readWrite},
+            }, "checkerboard scene color resolve");
+            break;
+        }
+
+        SCOPED_GPU_TIMER("checkerboard resolve");
+        Assets::GPUScene resolveScene = gpuScene;
+        resolveScene.CustomData1 = static_cast<uint32_t>(resolveSet);
+        overlay_.checkerboardResolvePipeline->BindPipeline(commandBuffer, resolveScene);
+        const VkExtent2D extent = ActiveViewRenderExtent();
+        vkCmdDispatch(commandBuffer,
+                      Utilities::Math::GetSafeDispatchCount((extent.width + 1u) / 2u, 8),
+                      Utilities::Math::GetSafeDispatchCount(extent.height, 8), 1);
+    }
+
     Assets::UniformBufferObject VulkanBaseRenderer::GetUniformBufferObject(
         const VkOffset2D offset, const VkExtent2D extent) const
     {
@@ -1188,6 +1272,8 @@ namespace Vulkan
         overlay_.toneMappingPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(
             SwapChain(), "assets/shaders/Process.TonemapAfterUpscaler.comp.slang.spv", 52));
         overlay_.bufferClearPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*frame_.swapChain, "assets/shaders/Util.BufferClear.comp.slang.spv", 4));
+        overlay_.checkerboardResolvePipeline.reset(new PipelineCommon::ZeroBindPipeline(
+            *frame_.swapChain, "assets/shaders/Process.CheckerboardResolve.comp.slang.spv", GetScene()));
         // Shared swap-chain resources must cover every registered renderer because
         // switching logic renderers does not recreate the swap chain.
         if (RegisteredRendererRequirements().requestAmbientCube)
@@ -1430,6 +1516,7 @@ namespace Vulkan
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframePipeline.reset();
         overlay_.bufferClearPipeline.reset();
+        overlay_.checkerboardResolvePipeline.reset();
         ambient_.softBake.reset();
         ambient_.clearCache.reset();
         if (rt_)
@@ -1512,6 +1599,7 @@ namespace Vulkan
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframePipeline.reset();
         overlay_.bufferClearPipeline.reset();
+        overlay_.checkerboardResolvePipeline.reset();
         frame_.inFlightFenceSubmitSerials.clear();
         ambient_.softBake.reset();
         ambient_.clearCache.reset();

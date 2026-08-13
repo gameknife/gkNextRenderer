@@ -322,6 +322,7 @@ namespace Vulkan::PathTracing
             }
 
             Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase());
+            baseRender_.ConfigureCheckerboardShading(gpuScene, !restirEnabled);
             if (sharcEnabled || restirEnabled)
             {
                 if (sharcEnabled)
@@ -347,7 +348,8 @@ namespace Vulkan::PathTracing
                     SCOPED_GPU_TIMER("sharc update pass");
                     sharcUpdatePipeline_->BindPipeline(commandBuffer, gpuScene);
                     vkCmdDispatch(commandBuffer,
-                                  Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                                  Utilities::Math::GetSafeDispatchCount(
+                                      baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
                                   Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
                 }
 
@@ -370,7 +372,8 @@ namespace Vulkan::PathTracing
                     SCOPED_GPU_TIMER("sharc query pass");
                     sharcQueryPipeline_->BindPipeline(commandBuffer, gpuScene);
                     vkCmdDispatch(commandBuffer,
-                                  Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                                  Utilities::Math::GetSafeDispatchCount(
+                                      baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
                                   Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
                 }
             }
@@ -378,7 +381,8 @@ namespace Vulkan::PathTracing
             {
                 SCOPED_GPU_TIMER("rt pass");
                 rayTracingPipeline_->BindPipeline(commandBuffer, gpuScene);
-                vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(
+                                  baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
                               Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
             }
 
@@ -412,9 +416,13 @@ namespace Vulkan::PathTracing
                 SCOPED_GPU_TIMER("restir spatial shade");
                 restirSpatialPipeline_->BindPipeline(commandBuffer, gpuScene);
                 vkCmdDispatch(commandBuffer,
-                              Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                              Utilities::Math::GetSafeDispatchCount(
+                                  baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
                               Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
             }
+
+            baseRender_.ResolveCheckerboardShading(
+                commandBuffer, gpuScene, PipelineCommon::ECheckerboardResolveSet::Tracing);
         }
         
         samplePostChain_.Run(baseRender_, commandBuffer, imageIndex, {
