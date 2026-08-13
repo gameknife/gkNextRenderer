@@ -33,6 +33,60 @@ namespace Common
                              uv.y * (light.p3.xyz - light.p0.xyz);
     }
 
+    // Forward renderers use one delta sample for point records and rectangular quadrature for
+    // area records. Keep the type inspection in this module because LightObject's raw layout is
+    // intentionally not exposed to shader entry points.
+    public uint GetLightQuadratureSampleCount(uint lightIndex)
+    {
+        LightObject light = Bindless.GetGpuscene().Lights[lightIndex];
+        return light.lightType == LightTypeArea ? 4u : 1u;
+    }
+
+    // Most-representative-point approximation for glossy reflection from a rectangle. Intersect
+    // the perfect reflection ray with the emitter plane, then clamp that point to the p0/p1/p3
+    // parallelogram. Evaluating GGX towards this point makes the highlight cover the continuous
+    // projected emitter instead of exposing a small set of discrete quadrature directions.
+    public float2 GetAreaLightSpecularUV(uint lightIndex, float3 position,
+                                         float3 reflectionDirection)
+    {
+        LightObject light = Bindless.GetGpuscene().Lights[lightIndex];
+        if (light.lightType != LightTypeArea)
+        {
+            return float2(0.5f);
+        }
+
+        const float3 edgeU = light.p1.xyz - light.p0.xyz;
+        const float3 edgeV = light.p3.xyz - light.p0.xyz;
+        const float3 lightNormal = normalize(light.normal_area.xyz);
+        const float planeDenominator = dot(reflectionDirection, lightNormal);
+        if (abs(planeDenominator) <= EPS)
+        {
+            return float2(0.5f);
+        }
+
+        const float planeDistance =
+            dot(light.p0.xyz - position, lightNormal) / planeDenominator;
+        if (planeDistance <= 0.0f)
+        {
+            return float2(0.5f);
+        }
+
+        const float3 onPlane = position + reflectionDirection * planeDistance - light.p0.xyz;
+        const float uu = dot(edgeU, edgeU);
+        const float uv = dot(edgeU, edgeV);
+        const float vv = dot(edgeV, edgeV);
+        const float determinant = uu * vv - uv * uv;
+        if (determinant <= EPS * EPS)
+        {
+            return float2(0.5f);
+        }
+
+        const float du = dot(onPlane, edgeU);
+        const float dv = dot(onPlane, edgeV);
+        return saturate(float2((du * vv - dv * uv) / determinant,
+                               (dv * uu - du * uv) / determinant));
+    }
+
     // BSDF-independent evaluation of one finite light, for forward renderers that shade every
     // light deterministically instead of importance-sampling one of them. Returns the incident
     // direction and L_e * dOmega arriving at the shading point, so the caller applies its own

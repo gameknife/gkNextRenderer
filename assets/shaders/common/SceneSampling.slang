@@ -402,7 +402,17 @@ namespace Common
         const int2 size = int2(Visibility.Dimensions(gpuScene.CustomData0));
         const float dither = ScreenSpaceHash(screenPixel, temporalDither ? Camera.TotalFrames : 0u);
 
-        const uint stepCount = 12u;
+        // Short projected segments do not benefit from twelve visibility lookups. Scale the march
+        // budget in screen space so distant/small lights use 4 steps, medium segments 8, and only
+        // long rays pay the original 12-step cost.
+        const float4 clippedEnd = lerp(clipStart, clipEnd, endFraction);
+        const float2 startPixel = (clipStart.xy / clipStart.w) * (0.5f * float2(size));
+        const float2 endPixel = (clippedEnd.xy / clippedEnd.w) * (0.5f * float2(size));
+        const float projectedLength = length(endPixel - startPixel);
+        const uint maximumSteps = clamp(Camera.LightObjectShadowSteps, 4u, 12u);
+        const uint stepCount = projectedLength <= 24.0f
+            ? min(4u, maximumSteps)
+            : (projectedLength <= 96.0f ? min(8u, maximumSteps) : maximumSteps);
         for (uint i = 0u; i < stepCount; ++i)
         {
             // Quadratic spacing concentrates the budget near the receiver, where contact shadows

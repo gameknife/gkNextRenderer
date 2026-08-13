@@ -63,6 +63,31 @@ float LightContribution(float3 incidentWeight, float NoL)
     return dot(incidentWeight * NoL, float3(0.2126f, 0.7152f, 0.0722f));
 }
 
+// A 2x2 Gauss-Legendre rule integrates a rectangular emitter over its actual p0/p1/p3
+// footprint. Unlike a centre sample, these four directions produce near-field diffuse falloff and
+// a spatial penumbra while remaining deterministic for the temporal pass.
+float2 AreaLightQuadratureUV(uint sampleIndex)
+{
+    const float low = 0.2113248654f;
+    const float high = 0.7886751346f;
+    return float2((sampleIndex & 1u) != 0u ? high : low,
+                  (sampleIndex & 2u) != 0u ? high : low);
+}
+
+// Each pixel starts at a decorrelated corner and rotates through all four quadrature samples.
+// Native TAAU integrates the resulting binary visibility into a stable penumbra. Without temporal
+// jitter use the centre so a non-temporal renderer gets a stable, conservative approximation.
+float2 AreaLightShadowUV(uint2 pixel, uint frame, bool temporalDither)
+{
+    if (!temporalDither)
+    {
+        return float2(0.5f);
+    }
+    const float seed = dot(float2(pixel), float2(0.06711056f, 0.00583715f));
+    const uint spatialOffset = uint(frac(52.9829189f * frac(seed)) * 4.0f);
+    return AreaLightQuadratureUV((spatialOffset + frame) & 3u);
+}
+
 float3 MaterialF0(Material material, float3 albedo, float metalness)
 {
     float3 dielectricF0 = material.MaterialModel == MaterialDielectric
@@ -200,77 +225,158 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
             float3 direct = float3(0);
 
-            // Finite lights (GPUScene LightObjects, point or quad emitters). This renderer has
-            // neither a ray tracer nor a reservoir, so every light is evaluated deterministically
-            // from its centre and shaded with the same Lambert + GGX pair the sun uses below.
-            // Visibility is the optional coarse screen-space contact shadow.
+            // Finite lights (GPUScene LightObjects, point or quad emitters). Point lights retain a
+            // single delta sample. Quad lights use deterministic 2x2 Gaussian quadrature across
+            // p0/p1/p3, so their declared extent and orientation affect diffuse, GGX highlights,
+            // falloff and the optional coarse screen-space penumbra.
             GPUScene lightScene = Bindless.GetGpuscene();
             if (Camera.LightCount > 0 && lightScene.SoftMeshShader.Lights != 0)
             {
                 const float shadowDistance = max(Camera.LightObjectShadowDistance, 0.0f);
                 const bool traceShadow =
-                    Camera.LightObjectScreenSpaceShadow && shadowDistance > 0.0f;
+                    Camera.LightObjectScreenSpaceShadow && shadowDistance > 0.0f &&
+                    Camera.LightObjectMaxShadowedLights > 0u;
 
                 // Resolve the lights that matter here once. Inside the light grid this is a
                 // bounded set; outside every cascade the cell reports a global fallback and both
                 // loops below degrade to the full scene, which stays correct but unaccelerated.
                 const Common.FLightCell lightCell = Common.GetLightCell(hitVertex.Position);
 
-                // The trace dominates the cost of this loop, so bound it: find the strongest
-                // contributor at this pixel first, then trace only lights within a fraction of it.
-                // A light far below the strongest is washed out here, so its shadow edge would not
-                // be visible anyway. The ranking is per pixel, not per cell, because a 2m cell is
-                // coarse enough that cell-centre ordering picks the wrong light near cell borders.
-                float shadowThreshold = 0.0f;
+                // Shadow marching dominates this pass. Select exactly the two strongest lights at
+                // this pixel instead of using a relative threshold that can admit every similarly
+                // bright light in a cell. Lighting still sums the full cell; only visibility is
+                // budgeted. The ranking stays per pixel because cell-centre ordering is too coarse
+                // near cell borders.
+                uint shadowLight0 = 0xFFFFFFFFu;
+                uint shadowLight1 = 0xFFFFFFFFu;
+                float shadowWeight0 = 0.0f;
+                float shadowWeight1 = 0.0f;
                 if (traceShadow)
                 {
-                    float strongest = 0.0f;
                     for (uint probeSlot = 0; probeSlot < lightCell.Count; ++probeSlot)
                     {
-                        float3 probeL;
-                        float3 probeIncident;
-                        float3 probePosition;
-                        if (Common.EvaluateLightIncident(lightCell.GetLightIndex(probeSlot),
-                                                         float2(0.5f, 0.5f), hitVertex.Position,
-                                                         probeL, probeIncident, probePosition))
+                        const uint probeLightIndex = lightCell.GetLightIndex(probeSlot);
+                        const uint probeSampleCount =
+                            Common.GetLightQuadratureSampleCount(probeLightIndex);
+                        float3 probeIrradiance = float3(0.0f);
+                        for (uint probeSample = 0u; probeSample < probeSampleCount; ++probeSample)
                         {
-                            strongest = max(strongest,
-                                            LightContribution(probeIncident, max(dot(N, probeL), 0.0f)));
+                            const float2 probeUV = probeSampleCount == 1u
+                                ? float2(0.5f)
+                                : AreaLightQuadratureUV(probeSample);
+                            float3 probeL;
+                            float3 probeIncident;
+                            float3 probePosition;
+                            if (Common.EvaluateLightIncident(probeLightIndex, probeUV,
+                                                             hitVertex.Position, probeL,
+                                                             probeIncident, probePosition))
+                            {
+                                probeIrradiance += probeIncident * max(dot(N, probeL), 0.0f) /
+                                                   float(probeSampleCount);
+                            }
+                        }
+                        const float probeWeight = LightContribution(probeIrradiance, 1.0f);
+                        if (probeWeight > shadowWeight0)
+                        {
+                            shadowWeight1 = shadowWeight0;
+                            shadowLight1 = shadowLight0;
+                            shadowWeight0 = probeWeight;
+                            shadowLight0 = probeLightIndex;
+                        }
+                        else if (probeWeight > shadowWeight1)
+                        {
+                            shadowWeight1 = probeWeight;
+                            shadowLight1 = probeLightIndex;
                         }
                     }
-                    shadowThreshold = strongest * 0.2f;
                 }
 
                 for (uint lightSlot = 0; lightSlot < lightCell.Count; ++lightSlot)
                 {
                     const uint lightIndex = lightCell.GetLightIndex(lightSlot);
-                    float3 L;
-                    float3 incident;
-                    float3 lightPosition;
-                    if (!Common.EvaluateLightIncident(lightIndex, float2(0.5f, 0.5f),
-                                                      hitVertex.Position, L, incident, lightPosition))
+                    const uint lightSampleCount =
+                        Common.GetLightQuadratureSampleCount(lightIndex);
+                    float lightVisibility = 1.0f;
+                    if (traceShadow &&
+                        (lightIndex == shadowLight0 ||
+                         (Camera.LightObjectMaxShadowedLights > 1u && lightIndex == shadowLight1)))
                     {
-                        continue;
+                        const float2 shadowUV = lightSampleCount == 1u
+                            ? float2(0.5f)
+                            : AreaLightShadowUV(uint2(pixel), Camera.TotalFrames,
+                                                Camera.PrimaryRayJitter);
+                        float3 shadowL;
+                        float3 shadowIncident;
+                        float3 shadowPosition;
+                        if (Common.EvaluateLightIncident(lightIndex, shadowUV,
+                                                         hitVertex.Position, shadowL,
+                                                         shadowIncident, shadowPosition))
+                        {
+                            lightVisibility = Common.ScreenSpaceShadowVisibility(
+                                hitVertex.Position, N, shadowPosition, shadowDistance,
+                                uint2(pixel), Camera.PrimaryRayJitter);
+                        }
                     }
 
-                    const float NoL = max(dot(N, L), 0.0f);
-                    const float contribution = LightContribution(incident, NoL);
-                    if (contribution < 1e-4f)
+                    for (uint lightSample = 0u; lightSample < lightSampleCount; ++lightSample)
                     {
-                        continue;
+                        const float2 lightUV = lightSampleCount == 1u
+                            ? float2(0.5f)
+                            : AreaLightQuadratureUV(lightSample);
+                        float3 L;
+                        float3 incident;
+                        float3 lightPosition;
+                        if (!Common.EvaluateLightIncident(lightIndex, lightUV, hitVertex.Position,
+                                                          L, incident, lightPosition))
+                        {
+                            continue;
+                        }
+
+                        const float NoL = max(dot(N, L), 0.0f);
+                        const float contribution = LightContribution(incident, NoL);
+                        if (contribution < 1e-4f)
+                        {
+                            continue;
+                        }
+
+                        const float3 radiance =
+                            incident * (NoL * lightVisibility / float(lightSampleCount));
+
+                        direct += kD * albedo * radiance * M_1_PI;
+                        if (lightSampleCount == 1u)
+                        {
+                            specularColor.rgb +=
+                                SpecularBRDF(N, V, L, NoV, NoL, roughness, f0) * radiance;
+                        }
                     }
 
-                    float3 radiance = incident * NoL;
-                    if (traceShadow && contribution >= shadowThreshold)
+                    if (lightSampleCount > 1u)
                     {
-                        radiance *= Common.ScreenSpaceShadowVisibility(
-                            hitVertex.Position, N, lightPosition, shadowDistance, uint2(pixel),
-                            Camera.PrimaryRayJitter);
+                        // Glossy area-light response uses a continuous representative point on
+                        // the declared rectangle. Diffuse and visibility above remain integrated
+                        // over its area; separating the two prevents four discrete GGX highlights.
+                        const float2 specularUV =
+                            Common.GetAreaLightSpecularUV(lightIndex, hitVertex.Position, R);
+                        float3 specularL;
+                        float3 specularIncident;
+                        float3 specularPosition;
+                        if (Common.EvaluateLightIncident(lightIndex, specularUV,
+                                                         hitVertex.Position, specularL,
+                                                         specularIncident, specularPosition))
+                        {
+                            const float specularNoL = max(dot(N, specularL), 0.0f);
+                            const float specularContribution =
+                                LightContribution(specularIncident, specularNoL);
+                            if (specularContribution >= 1e-4f)
+                            {
+                                const float3 specularRadiance =
+                                    specularIncident * (specularNoL * lightVisibility);
+                                specularColor.rgb += SpecularBRDF(
+                                    N, V, specularL, NoV, specularNoL, roughness, f0) *
+                                    specularRadiance;
+                            }
+                        }
                     }
-
-                    direct += kD * albedo * radiance * M_1_PI;
-                    specularColor.rgb +=
-                        SpecularBRDF(N, V, L, NoV, NoL, roughness, f0) * radiance;
                 }
             }
 

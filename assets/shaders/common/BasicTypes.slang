@@ -213,6 +213,8 @@ public struct ALIGN_16 UniformBufferObject
     public uint GTAOQuality;
     public bool LightObjectScreenSpaceShadow;
     public float LightObjectShadowDistance; // world units the screen-space light shadow marches
+    public uint LightObjectMaxShadowedLights;
+    public uint LightObjectShadowSteps;
 
     public uint LightGridCascadeCount;   // 0 disables the grid: every query falls back to the global CDF
     public float LightGridCullThreshold; // minimum per-cell contribution a light must reach to be stored

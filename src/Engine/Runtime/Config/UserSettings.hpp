@@ -61,6 +61,8 @@ struct UserSettings final
     int GTAODebugMode = 0;
     bool LightObjectScreenSpaceShadow = false;
     float LightObjectShadowDistance = 6.0f;
+    uint32_t LightObjectMaxShadowedLights = 2;
+    uint32_t LightObjectShadowSteps = 12;
 
     // Cascaded world-space light grid. 0 cascades disables it: every light query falls back to the
     // global CDF, which restores the pre-grid behaviour exactly.

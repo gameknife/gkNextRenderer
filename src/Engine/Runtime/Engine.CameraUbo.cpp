@@ -250,6 +250,10 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.GTAOQuality = static_cast<uint32_t>(std::clamp(config_.userSettings.GTAOQuality, 0, 3));
     ubo.LightObjectScreenSpaceShadow = config_.userSettings.LightObjectScreenSpaceShadow;
     ubo.LightObjectShadowDistance = std::max(config_.userSettings.LightObjectShadowDistance, 0.0f);
+    ubo.LightObjectMaxShadowedLights =
+        std::min(config_.userSettings.LightObjectMaxShadowedLights, 2u);
+    ubo.LightObjectShadowSteps =
+        std::clamp(config_.userSettings.LightObjectShadowSteps, 4u, 12u);
 
     // The light grid anchors to the camera, but the anchor is uploaded rather than re-derived in
     // each shader: the build pass and every query must agree on cell boundaries to the bit, and a

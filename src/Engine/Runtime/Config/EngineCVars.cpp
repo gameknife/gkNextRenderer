@@ -77,6 +77,8 @@ namespace NextCVar
         GK_CVAR_INT("r.gtao.debugMode", settings, GTAODebugMode, 0, ECVarFlags::Archive, "GTAO debug mode (0=off,1=occlusion,2=unoccluded sky lighting)");
         GK_CVAR_BOOL("r.lightObject.screenSpaceShadow", settings, LightObjectScreenSpaceShadow, false, ECVarFlags::Archive, "Enable coarse screen-space shadows for LightObjects in SoftwareModernNoAmbient");
         GK_CVAR_FLOAT_RANGE("r.lightObject.screenSpaceShadowDistance", settings, LightObjectShadowDistance, 6.0f, ECVarFlags::Archive, "World-space distance the screen-space LightObject shadow marches; shorter is cheaper and leaks more", 0.0, 64.0);
+        GK_CVAR_UINT_RANGE("r.lightObject.maxShadowedLights", settings, LightObjectMaxShadowedLights, 2, ECVarFlags::Archive, "Maximum strongest LightObjects that cast screen-space shadows per pixel", 0, 2);
+        GK_CVAR_UINT_RANGE("r.lightObject.screenSpaceShadowSteps", settings, LightObjectShadowSteps, 12, ECVarFlags::Archive, "Maximum adaptive screen-space LightObject shadow steps (4-12)", 4, 12);
         GK_CVAR_INT_RANGE("r.lightGrid.cascades", settings, LightGridCascadeCount, 3, ECVarFlags::Archive, "Cascaded world-space light grid cascade count (0 = disabled, fall back to the global light CDF)", 0, 3);
         GK_CVAR_FLOAT_RANGE("r.lightGrid.cellSize", settings, LightGridBaseCellSize, 2.0f, ECVarFlags::Archive, "Cascade 0 cell size in world units; each further cascade is 4x coarser", 0.25, 32.0);
         GK_CVAR_FLOAT("r.lightGrid.cullThreshold", settings, LightGridCullThreshold, 1.0e-4f, ECVarFlags::Archive, "Minimum contribution a light must reach in a cell to be stored there");

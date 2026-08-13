@@ -105,6 +105,8 @@ namespace Vulkan
             ubo.GTAOQuality = 0;
             ubo.LightObjectScreenSpaceShadow = false;
             ubo.LightObjectShadowDistance = 0.0f;
+            ubo.LightObjectMaxShadowedLights = 0;
+            ubo.LightObjectShadowSteps = 4;
             // Thumbnails render off the primary camera's grid anchor, so disable the grid for them
             // and let every light query take the global-CDF fallback.
             ubo.LightGridCascadeCount = 0;
