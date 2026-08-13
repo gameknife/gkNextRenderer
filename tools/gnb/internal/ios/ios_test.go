@@ -161,9 +161,9 @@ func TestStageWrapperCreatesLaunchableLayout(t *testing.T) {
 	}
 }
 
-// Every run restages, so the second call must clear the previous wrapper
-// instead of tripping over the existing symlink.
-func TestStageWrapperReplacesPreviousWrapper(t *testing.T) {
+// A changed build replaces the old inner bundle, but preserves the outer
+// wrapper that Launch Services identifies.
+func TestStageWrapperReplacesInnerBundleAndPreservesOuterWrapper(t *testing.T) {
 	dir := t.TempDir()
 	bundlePath := filepath.Join(dir, "gkNextRenderer.app")
 	if err := os.Mkdir(bundlePath, 0o755); err != nil {
@@ -174,8 +174,12 @@ func TestStageWrapperReplacesPreviousWrapper(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first stageWrapper() error = %v", err)
 	}
-	stalePath := filepath.Join(first.WrapperPath, "Wrapper", "stale.txt")
+	stalePath := filepath.Join(first.WrapperPath, "Wrapper", "gkNextRenderer.app", "stale.txt")
 	if err := os.WriteFile(stalePath, []byte("stale"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	outerSentinel := filepath.Join(first.WrapperPath, "outer-sentinel")
+	if err := os.WriteFile(outerSentinel, []byte("preserve"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -187,12 +191,14 @@ func TestStageWrapperReplacesPreviousWrapper(t *testing.T) {
 		t.Fatalf("wrapper path changed between runs: %q then %q", first.WrapperPath, second.WrapperPath)
 	}
 	if _, err := os.Stat(stalePath); !os.IsNotExist(err) {
-		t.Fatalf("stale wrapper content survived restaging: %v", err)
+		t.Fatalf("stale inner-bundle content survived restaging: %v", err)
+	}
+	if _, err := os.Stat(outerSentinel); err != nil {
+		t.Fatalf("outer wrapper was replaced instead of preserved: %v", err)
 	}
 }
 
-// Restaging an unchanged build would give the app a new on-disk identity and
-// make Gatekeeper prompt for developer approval all over again.
+// Restaging an unchanged build would needlessly replace the inner bundle.
 func TestStageWrapperReusesWrapperWhenBuildUnchanged(t *testing.T) {
 	dir := t.TempDir()
 	bundlePath := filepath.Join(dir, "gkNextRenderer.app")

@@ -827,7 +827,7 @@ func newIOSCommand(ctx appContext) *cobra.Command {
 			fmt.Fprintf(cmd.OutOrStdout(), "[ios] Designed-for-iPad app staged: %s\n", staged.WrapperPath)
 			fmt.Fprintf(cmd.OutOrStdout(), "[ios] launch it with `gnb ios run`\n")
 			if staged.Restaged {
-				fmt.Fprintf(cmd.OutOrStdout(), "[ios] first launch needs you to approve the developer certificate in the Gatekeeper dialog\n")
+				fmt.Fprintf(cmd.OutOrStdout(), "[ios] current bundle replaced inside the persistent Designed-for-iPad wrapper\n")
 			}
 			return nil
 		},
@@ -850,7 +850,7 @@ func newIOSCommand(ctx appContext) *cobra.Command {
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "[ios] launched %s (%s)\n", artifact.BundleID, artifact.WrapperPath)
 			if artifact.Restaged {
-				fmt.Fprintf(cmd.OutOrStdout(), "[ios] this build is new to Gatekeeper: approve the developer certificate in the dialog, otherwise the app stays suspended\n")
+				fmt.Fprintf(cmd.OutOrStdout(), "[ios] launched the current bundle from the persistent Designed-for-iPad wrapper\n")
 			}
 			return nil
 		},

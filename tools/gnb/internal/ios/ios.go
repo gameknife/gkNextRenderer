@@ -32,8 +32,7 @@ const (
 // WrapperPath means nothing was staged because the build is unsigned.
 type StagedApp struct {
 	WrapperPath string
-	// Restaged reports that the wrapper was rebuilt, which means Gatekeeper
-	// asks the user to approve the developer certificate on the next launch.
+	// Restaged reports that the wrapper's inner iOS bundle was replaced.
 	Restaged bool
 }
 
@@ -113,10 +112,10 @@ type bundleHasher func(bundlePath string) (string, error)
 // iPhoneOS executable; only this layout gets the correct platform passed
 // through posix_spawn, so a bare bundle is killed on sight (SIGKILL, code 9).
 //
-// An unchanged wrapper is reused rather than rebuilt: restaging gives the app a
-// new on-disk identity, and Gatekeeper then re-prompts for approval of the
-// developer certificate because the approval it already has is recorded against
-// the previous one.
+// An unchanged wrapper is reused. When the bundle changes, its inner copy is
+// replaced while the outer wrapper and WrappedBundle link are retained. This
+// keeps the Launch Services target stable without allowing an old inner app to
+// shadow the freshly built bundle.
 func stageWrapper(bundlePath string, copyBundle bundleCopier, hashBundle bundleHasher) (StagedApp, error) {
 	bundleName := filepath.Base(bundlePath)
 	wrapperPath := filepath.Join(filepath.Dir(bundlePath), wrapperDirName, bundleName)
@@ -126,19 +125,36 @@ func stageWrapper(bundlePath string, copyBundle bundleCopier, hashBundle bundleH
 		return StagedApp{WrapperPath: wrapperPath}, nil
 	}
 
-	if err := os.RemoveAll(wrapperPath); err != nil {
-		return StagedApp{}, fmt.Errorf("clear previous Designed-for-iPad wrapper %s: %w", wrapperPath, err)
-	}
 	if err := os.MkdirAll(filepath.Dir(innerPath), 0o755); err != nil {
 		return StagedApp{}, fmt.Errorf("create Designed-for-iPad wrapper %s: %w", wrapperPath, err)
+	}
+	// Keep wrapperPath itself in place. Launch Services identifies this outer
+	// app, whereas replacing only innerPath ensures it cannot retain an older
+	// signed iOS bundle after a successful rebuild.
+	if err := os.RemoveAll(innerPath); err != nil {
+		return StagedApp{}, fmt.Errorf("clear previous iOS bundle in wrapper %s: %w", innerPath, err)
 	}
 	if err := copyBundle(bundlePath, innerPath); err != nil {
 		return StagedApp{}, fmt.Errorf("copy %s into Designed-for-iPad wrapper: %w", bundlePath, err)
 	}
-	if err := os.Symlink(filepath.Join("Wrapper", bundleName), linkPath); err != nil {
-		return StagedApp{}, fmt.Errorf("link WrappedBundle in %s: %w", wrapperPath, err)
+	if err := ensureWrappedBundleLink(linkPath, bundleName); err != nil {
+		return StagedApp{}, err
 	}
 	return StagedApp{WrapperPath: wrapperPath, Restaged: true}, nil
+}
+
+func ensureWrappedBundleLink(linkPath, bundleName string) error {
+	want := filepath.Join("Wrapper", bundleName)
+	if link, err := os.Readlink(linkPath); err == nil && link == want {
+		return nil
+	}
+	if err := os.RemoveAll(linkPath); err != nil {
+		return fmt.Errorf("clear WrappedBundle link %s: %w", linkPath, err)
+	}
+	if err := os.Symlink(want, linkPath); err != nil {
+		return fmt.Errorf("link WrappedBundle in %s: %w", filepath.Dir(linkPath), err)
+	}
+	return nil
 }
 
 // wrapperIsCurrent reports whether a complete staged copy already carries the
@@ -150,6 +166,9 @@ func wrapperIsCurrent(bundlePath, innerPath, linkPath string, hashBundle bundleH
 	// Lstat: a staging run interrupted before the symlink was created leaves an
 	// incomplete wrapper that must not be reused.
 	if _, err := os.Lstat(linkPath); err != nil {
+		return false
+	}
+	if link, err := os.Readlink(linkPath); err != nil || link != filepath.Join("Wrapper", filepath.Base(bundlePath)) {
 		return false
 	}
 	built, err := hashBundle(bundlePath)
