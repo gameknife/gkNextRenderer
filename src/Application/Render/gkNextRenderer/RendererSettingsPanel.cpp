@@ -531,7 +531,8 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
             NextUI::Theme::DrawTooltip("Progressive rendering always uses 1 spp per frame");
         }
         DrawSettingCheckboxRow(LOCTEXT("Exit After First"), &userSetting.ExitAfterFirst);
-        DrawIntSetting(LOCTEXT("Ambient Speed"), &userSetting.BakeSpeedLevel, 0, 2);
+        DrawFloatSetting(LOCTEXT("Ambient Bake Target"), &userSetting.AmbientCubeBakeTargetMs,
+                         0.1f, 16.0f, "%.2f ms", 0.1f);
         NextUI::Theme::EndPanelSection();
     }
 

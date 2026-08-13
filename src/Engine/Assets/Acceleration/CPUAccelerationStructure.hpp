@@ -272,6 +272,7 @@ private:
     void MergeNavDirtyBounds(const FCPUTLASBuildResult& result);
     void QueueFullProbeBake();
     void QueueProbeBakeBounds(const glm::vec3& worldMin, const glm::vec3& worldMax);
+    bool HasProbeVoxelizationWork() const;
 
 #if defined(__cpp_lib_atomic_shared_ptr) && __cpp_lib_atomic_shared_ptr >= 201711L
     std::atomic<SnapshotPtr> activeSnapshot_;
@@ -304,6 +305,12 @@ private:
     bool hasProbeDirtyBounds_ = false;
     glm::vec3 probeDirtyWorldMin_{0.0f};
     glm::vec3 probeDirtyWorldMax_{0.0f};
+    // Bounds consumed by the probe batch currently being voxelized. Keep them
+    // separate from probeDirtyWorld* so dynamic changes arriving during this
+    // batch are preserved for the next coalesced revision.
+    bool hasInFlightProbeDirtyBounds_ = false;
+    glm::vec3 inFlightProbeDirtyWorldMin_{0.0f};
+    glm::vec3 inFlightProbeDirtyWorldMax_{0.0f};
         
     std::vector<uint32_t> lastBatchTasks;
     std::vector<uint32_t> distanceFieldRebuildTasks;

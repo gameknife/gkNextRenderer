@@ -644,7 +644,8 @@ bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::D
     if (incremental)
     {
         // Geometry revisions must continue to coalesce while an older probe batch
-        // is running. The new batch is queued only after this revision publishes.
+        // is running. The new batch is queued only after this revision publishes
+        // and the previous CPU voxelization batch has drained.
         pendingProbeRevision_ = RequestRuntimeBuild(scene);
         ambientBakeIdle_ = false;
         return true;
@@ -760,6 +761,9 @@ void FCPUAccelerationStructure::ClearAllTasks()
     fullProbeBakePending_ = true;
     ambientBakeIdle_ = false;
     hasProbeDirtyBounds_ = false;
+    hasInFlightProbeDirtyBounds_ = false;
+    inFlightProbeDirtyWorldMin_ = glm::vec3(0.0f);
+    inFlightProbeDirtyWorldMax_ = glm::vec3(0.0f);
     cpuBrickTable = {};
     ClearNavRelevantDirtyBounds();
     PublishSnapshot(std::make_shared<FCPUTLASSnapshot>());
@@ -769,16 +773,22 @@ void FCPUAccelerationStructure::ClearAllTasks()
 bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemory, Vulkan::DeviceMemory* voxelGpuMemory, Vulkan::DeviceMemory* pageIndexMemory)
 {
     if (pendingProbeRevision_ != 0 &&
-        publishedRevision_.load(std::memory_order_acquire) >= pendingProbeRevision_)
+        publishedRevision_.load(std::memory_order_acquire) >= pendingProbeRevision_ &&
+        !HasProbeVoxelizationWork())
     {
         if (hasProbeDirtyBounds_)
         {
             QueueProbeBakeBounds(probeDirtyWorldMin_, probeDirtyWorldMax_);
+            hasInFlightProbeDirtyBounds_ = true;
+            inFlightProbeDirtyWorldMin_ = probeDirtyWorldMin_;
+            inFlightProbeDirtyWorldMax_ = probeDirtyWorldMax_;
+            hasProbeDirtyBounds_ = false;
         }
         else
         {
             QueueFullProbeBake();
             fullProbeBakePending_ = true;
+            hasInFlightProbeDirtyBounds_ = false;
         }
         pendingProbeRevision_ = 0;
     }
@@ -856,9 +866,9 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
                 {
                     cpuBrickTable.MarkAllActiveDirty();
                 }
-                else if (hasProbeDirtyBounds_)
+                else if (hasInFlightProbeDirtyBounds_)
                 {
-                    cpuBrickTable.MarkDirtyBounds(cascadeBakers, probeDirtyWorldMin_, probeDirtyWorldMax_,
+                    cpuBrickTable.MarkDirtyBounds(cascadeBakers, inFlightProbeDirtyWorldMin_, inFlightProbeDirtyWorldMax_,
                                                   scene.AmbientPoolBricksPerCascade());
                 }
 
@@ -870,7 +880,7 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
                                         scene.AmbientActiveBrickListByteOffset());
                 scene.SetAmbientActiveBrickCounts(cpuBrickTable.activeBricksPerCascade);
                 fullProbeBakePending_ = false;
-                hasProbeDirtyBounds_ = false;
+                hasInFlightProbeDirtyBounds_ = false;
             }
             cpuPageIndex.UploadGPU(*pageIndexMemory, scene.AmbientPagesByteOffset());
             needFlush = false;
@@ -920,7 +930,14 @@ bool FCPUAccelerationStructure::HasPendingWork() const
 {
     std::lock_guard<std::mutex> lock(buildMutex_);
     return buildInFlight_ || pendingProbeRevision_ != 0 || needFlush || !lastBatchTasks.empty() ||
-           !distanceFieldRebuildTasks.empty() || distanceFieldRebuildScheduled_ || !needUpdateGroups.empty();
+           !distanceFieldRebuildTasks.empty() || distanceFieldRebuildScheduled_ || !needUpdateGroups.empty() ||
+           hasProbeDirtyBounds_ || hasInFlightProbeDirtyBounds_;
+}
+
+bool FCPUAccelerationStructure::HasProbeVoxelizationWork() const
+{
+    return needFlush || !lastBatchTasks.empty() || !distanceFieldRebuildTasks.empty() ||
+           distanceFieldRebuildScheduled_ || !needUpdateGroups.empty();
 }
 
 uint32_t FCPUAccelerationStructure::AmbientBakeDirtyBrickCount(uint32_t cascadeIndex) const

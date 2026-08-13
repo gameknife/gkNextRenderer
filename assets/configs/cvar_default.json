@@ -20,7 +20,7 @@
   "show.grid": true,
   "show.wireframe": false,
   "r.tracing.exitAfterFirst": false,
-  "r.bakeSpeedLevel": 1,
+  "r.ambientCube.bakeTargetMs": 4.0,
   "r.heatmapScale": 1.0,
   "r.paperWhiteNit": 600.0
 }

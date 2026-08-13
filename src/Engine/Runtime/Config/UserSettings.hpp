@@ -38,7 +38,8 @@ struct UserSettings final
     uint32_t UpscalerJitterFrames = 16;
     bool UpscalerJitterInvertY = false;
     bool CheckerboardRendering = true;
-    int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low
+    // Target GPU time budget, in milliseconds, for one AmbientCube bake dispatch per frame.
+    float AmbientCubeBakeTargetMs = 4.0f;
 
     // Camera
     int CameraIdx;

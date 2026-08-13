@@ -147,14 +147,8 @@ namespace Vulkan
                 : measuredMillisecondsPerGroup;
         }
 
-        float targetMilliseconds = 1.0f;
-        switch (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel)
-        {
-        case 0: targetMilliseconds = 2.0f; break;
-        case 1: targetMilliseconds = 1.0f; break;
-        case 2: targetMilliseconds = 0.35f; break;
-        default: break;
-        }
+        const float targetMilliseconds =
+            NextEngine::GetInstance()->GetUserSettings().AmbientCubeBakeTargetMs;
         if (ambient_.millisecondsPerGroup > 0.0f)
         {
             const uint32_t measuredBudget = std::max(
