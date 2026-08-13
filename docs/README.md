@@ -30,6 +30,7 @@
 - [AMD FidelityFX FSR 3.1 / Frame Generation](guides/fidelityfx-fsr.md)
 - [gnb 架构与代码导览](guides/gnb-architecture.md)
 - [gnb CLI](guides/gnb-cli.md)
+- [macOS / MoltenVK FIFO 黑屏与闪烁排障](guides/macos-moltenvk-fifo-present-troubleshooting.md)
 - [发布流程（打 tag → CI → 验收 → release notes → 回滚）](guides/release-process.md)
 - [SCAD 场景生成指引](guides/scad-scene-authoring-guide.md)
 - [Windows Dozen Vulkan 后端排障](guides/dozen-vulkan-backend-troubleshooting.md)

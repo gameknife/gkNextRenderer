@@ -137,25 +137,13 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
             "surface usage 0x{:x} lacks required COLOR_ATTACHMENT/TRANSFER_DST flags 0x{:x}",
             details.Capabilities.supportedUsageFlags, requiredUsage));
     }
-    VkImageUsageFlags optionalUsage =
-        details.Capabilities.supportedUsageFlags &
-        (VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT);
-    // Dozen advertises STORAGE on its surfaces but hands out DXGI back buffers, which cannot
-    // be typed UAVs for BGRA8 in D3D12. Creating such a swapchain leaves its D3D12 device in
-    // a state where every later allocation fails with VK_ERROR_OUT_OF_DEVICE_MEMORY, so drop
-    // the flag here: the renderer already falls back to an intermediate target plus a blit.
-    if (GOption != nullptr && GOption->VulkanDriver == "dozen")
-    {
-        optionalUsage &= ~VK_IMAGE_USAGE_STORAGE_BIT;
-    }
-    // Headless swapchains are implementation-owned virtual images. Some ICDs advertise
-    // STORAGE usage for them but corrupt compute stores (notably MoltenVK's
-    // VK_EXT_headless_surface path). Use the established intermediate-target + blit
-    // path instead; it is also portable to display-less Linux drivers.
-    if (window.IsHeadless())
-    {
-        optionalUsage &= ~VK_IMAGE_USAGE_STORAGE_BIT;
-    }
+    // Surface-provided images are not used as storage images. Although several drivers
+    // advertise STORAGE, using a presentable image as a UAV is not portable (for example,
+    // Dozen's BGRA back buffers and MoltenVK headless images). The renderer consequently
+    // always writes its intermediate target and resolves it with the transfer-destination
+    // path, which is supported by every swapchain we create.
+    const VkImageUsageFlags optionalUsage =
+        details.Capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     createInfo.imageUsage = requiredUsage | optionalUsage;
     createInfo.preTransform = details.Capabilities.currentTransform;
     createInfo.compositeAlpha = ChooseCompositeAlpha(details.Capabilities.supportedCompositeAlpha);
@@ -199,7 +187,7 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
                 static_cast<uint32_t>(createInfo.compositeAlpha));
     if (!SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT))
     {
-        SPDLOG_WARN("Swapchain STORAGE usage is unavailable; using intermediate render target + blit fallback");
+        SPDLOG_INFO("Swapchain STORAGE usage is disabled; using intermediate render target + blit path");
     }
     if (!SupportsUsage(VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
     {
