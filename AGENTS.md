@@ -120,6 +120,7 @@ gnb shot --target AirportSim --ui  # 截图包含 ImGui，适合验证 HUD / 面
 **何时用哪条路径：**
 - **改了某个场景/材质/光照/着色，只想看一眼对不对** → `gnb shot --scene <X>`（最轻、最快）。
 - **做渲染回归、需要和 baseline 对比 / 一次性扫多个场景** → 跑全量 `gkNextVisualTest`（生成 report + baseline diff + manifest，较重）。
+- **SCAD 资产与 ScadLibrary 实时协作模式（极速原则）**：当用户正在运行 `ScadLibrary` / 场景编辑器查看修改时，AGENT **直接修改 `.scad` 文件并更新 `catalog.json` 即可**，不要额外执行 `gnb shot` 截图或全套单元测试，依靠实时热重载秒级反馈，保持极速迭代节奏。仅在离线/无界面自检时才调 `gnb shot`。
 
 ### DLSS / Streamline 验证限制
 
