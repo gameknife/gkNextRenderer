@@ -54,6 +54,7 @@ void ScadLibraryGameInstance::OnTick(double deltaSeconds)
 {
     cameraController_.UpdateCamera(1.0, deltaSeconds);
     ui_->RigPreview().Tick(deltaSeconds);
+    ui_->TickKitFileWatch(deltaSeconds);
     // Agent validation (capture + auto-exit) is handled centrally by NextEngine.
 }
 

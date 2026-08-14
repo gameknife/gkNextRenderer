@@ -7,11 +7,13 @@
 #include "TerrainProcessDocument.hpp"
 
 #include <nlohmann/json.hpp>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <limits>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 class NextEngine;
@@ -100,6 +102,10 @@ namespace ScadLibrary
         // Engine hooks forwarded by ScadLibraryGameInstance for the rig preview.
         FRigPreview& RigPreview() { return rigPreview_; }
 
+        // Kit file change watch: main-thread entry driven from GameInstance::OnTick.
+        // The filesystem probe itself runs on a TaskCoordinator worker thread.
+        void TickKitFileWatch(double deltaSeconds);
+
     private:
         void DrawTitleBar();
         void DrawBottomBar();
@@ -168,6 +174,16 @@ namespace ScadLibrary
         bool WriteWorkspaceFile(const std::string& fileName, const std::string& source, std::string& outAbsPath);
         bool WriteAndLoad(const std::string& fileName, const std::string& source);
 
+        // ---- Kit file change watch (polled on a worker thread) ----
+        // Runs on the main thread when the gather task completes.
+        void FinishKitFileChanges(std::vector<std::string> changedPaths, bool treeChanged);
+        // Per-frame check in Render(): performs the deferred preview reload/rescan.
+        void PollKitFileChanges();
+        // Re-snapshot last_write_time of every kit (called after any RescanKits).
+        void RefreshKitWatchBaseline();
+        // Pure source generation shared by PreviewModule and the auto-refresh path.
+        std::string BuildModulePreviewSource(int kitIndex, const std::string& moduleName) const;
+
         NextEngine& engine_;
         std::string imguiIniPath_;
         std::string startupAssemblyPath_;
@@ -175,6 +191,17 @@ namespace ScadLibrary
         std::vector<FKitInfo> kits_;
         std::vector<FBenchItem> bench_;
         std::vector<FSceneAssemblyInfo> assemblies_;
+
+        // Kit file change watch state. The gather task runs on a TaskCoordinator
+        // worker thread; only the stamps snapshot and the pending flag cross the
+        // thread boundary (both owned by the main thread, copied in/out of the
+        // task context).
+        std::vector<std::pair<std::string, std::filesystem::file_time_type>> kitWatchStamps_;
+        double kitWatchElapsed_ = 0.0;
+        bool kitWatchTaskInFlight_ = false;
+        bool kitWatchPending_ = false;
+        bool kitWatchChangedPreviewKit_ = false;
+        std::chrono::steady_clock::time_point kitWatchReloadAt_{};
 
         // Character designer state.
         FCharacterDesigner designer_;

@@ -16,6 +16,7 @@
 #include "Engine/Runtime/Editor/ImGuiScaling.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/Math.hpp"
@@ -35,6 +36,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -51,8 +53,10 @@
 #include <limits>
 #include <optional>
 #include <regex>
+#include <set>
 #include <spdlog/spdlog.h>
 #include <sstream>
+#include <utility>
 
 namespace ScadLibrary
 {
@@ -63,6 +67,12 @@ namespace ScadLibrary
         constexpr float kCollapsedRailWidth = 46.0f;
         constexpr int kBenchGridColumns = 6;
         constexpr float kBenchGridStep = 14.0f;
+
+        // Kit file change watch: how often the gather task runs, and how long a
+        // detected change is debounced before the preview reload actually fires
+        // (merges consecutive writes from an external agent).
+        constexpr double kKitWatchPollIntervalSeconds = 0.5;
+        constexpr std::chrono::milliseconds kKitWatchReloadDebounce{300};
 
         std::optional<EScadSceneKind> SceneKindFromRelativePath(const std::filesystem::path& relativePath)
         {
@@ -477,6 +487,99 @@ namespace ScadLibrary
             }
             return blocks;
         }
+
+        // ------------------------------------------------------------------ kit file watch
+
+        // A browsable parts library file: kit_*.scad (excluding the combinator
+        // rule libraries kit_layout.scad / kit_terrain.scad), mirroring the
+        // filter in KitCatalog::ScanKits.
+        bool IsBrowsableKitFile(const std::filesystem::path& path)
+        {
+            const std::string filename = path.filename().string();
+            return path.extension() == ".scad" && filename.rfind("kit_", 0) == 0 &&
+                filename != "kit_layout.scad" && filename != "kit_terrain.scad";
+        }
+
+        struct FKitWatchGatherResult
+        {
+            std::vector<std::string> changedPaths; // kit files edited or vanished
+            bool treeChanged = false;              // kit_*.scad added or removed in the lib dir
+        };
+
+        // Runs on a TaskCoordinator worker thread: only touches the copied-in
+        // paths/timestamps, never UI or scene state. Detects content edits by
+        // comparing last_write_time against the previous snapshot, and kit
+        // add/remove by enumerating the lib directory (entry membership, not
+        // directory mtime, so it is reliable across platforms).
+        FKitWatchGatherResult GatherKitFileChanges(
+            const std::vector<std::string>& watchPaths,
+            const std::vector<std::pair<std::string, std::filesystem::file_time_type>>& prevStamps,
+            const std::string& libDir)
+        {
+            FKitWatchGatherResult result;
+            std::error_code ec;
+
+            std::set<std::string> seenFiles;
+            for (const std::string& path : watchPaths)
+            {
+                const std::filesystem::path filePath(path);
+                const std::filesystem::file_time_type stamp = std::filesystem::last_write_time(filePath, ec);
+                if (ec)
+                {
+                    ec.clear();
+                    // File vanished or unreadable: treat as a change so the tree is rescanned.
+                    result.changedPaths.push_back(path);
+                    continue;
+                }
+                seenFiles.insert(filePath.filename().string());
+
+                bool unchanged = false;
+                for (const auto& [prevPath, prevStamp] : prevStamps)
+                {
+                    if (prevPath == path)
+                    {
+                        unchanged = prevStamp == stamp;
+                        break;
+                    }
+                }
+                if (!unchanged)
+                {
+                    result.changedPaths.push_back(path);
+                }
+            }
+
+            std::set<std::string> onDiskFiles;
+            if (std::filesystem::is_directory(std::filesystem::path(libDir), ec))
+            {
+                for (const std::filesystem::directory_entry& entry :
+                     std::filesystem::directory_iterator(libDir, ec))
+                {
+                    if (ec)
+                    {
+                        ec.clear();
+                        continue;
+                    }
+                    if (!entry.is_regular_file(ec))
+                    {
+                        ec.clear();
+                        continue;
+                    }
+                    if (IsBrowsableKitFile(entry.path()))
+                    {
+                        onDiskFiles.insert(entry.path().filename().string());
+                    }
+                }
+            }
+            if (onDiskFiles != seenFiles)
+            {
+                result.treeChanged = true;
+            }
+
+            std::sort(result.changedPaths.begin(), result.changedPaths.end());
+            result.changedPaths.erase(
+                std::unique(result.changedPaths.begin(), result.changedPaths.end()), result.changedPaths.end());
+            return result;
+        }
     } // namespace
 
     ScadLibraryInterface::ScadLibraryInterface(NextEngine& engine, std::string startupAssemblyPath) :
@@ -491,7 +594,13 @@ namespace ScadLibrary
         RescanAssemblies();
     }
 
-    ScadLibraryInterface::~ScadLibraryInterface() = default;
+    ScadLibraryInterface::~ScadLibraryInterface()
+    {
+        // Drain any in-flight kit watch task before members are torn down: its
+        // completion callback runs on the main thread and touches `this`.
+        // TaskCoordinator outlives the game instance (destroyed in NextEngine::End).
+        Tasks::TaskCoordinator::GetInstance()->WaitForAllTasks();
+    }
 
     void ScadLibraryInterface::Config()
     {
@@ -576,6 +685,11 @@ namespace ScadLibrary
 
     void ScadLibraryInterface::Render()
     {
+        // Auto-refresh when an external agent edits a kit_*.scad file. The
+        // filesystem probe runs on a worker thread; this only performs the
+        // deferred preview reload / tree rescan when it is safe to do so.
+        PollKitFileChanges();
+
         // First frame: open a real kit-based scene when available.
         if (!welcomeLoaded_)
         {
@@ -3233,6 +3347,135 @@ namespace ScadLibrary
         }
         designer_.SetKit(kitCharIndex_ >= 0 ? &kits_[kitCharIndex_] : nullptr);
         designerEverLoaded_ = false;
+
+        // The watch compares against this snapshot; keep it in sync so manual
+        // rescans (F5 / AI save) do not re-trigger the auto-reload path.
+        RefreshKitWatchBaseline();
+    }
+
+    void ScadLibraryInterface::RefreshKitWatchBaseline()
+    {
+        kitWatchStamps_.clear();
+        kitWatchStamps_.reserve(kits_.size());
+        std::error_code ec;
+        for (const FKitInfo& kit : kits_)
+        {
+            const std::filesystem::file_time_type stamp =
+                std::filesystem::last_write_time(std::filesystem::path(kit.filePath), ec);
+            if (!ec)
+            {
+                kitWatchStamps_.emplace_back(kit.filePath, stamp);
+            }
+            ec.clear();
+        }
+    }
+
+    void ScadLibraryInterface::TickKitFileWatch(double deltaSeconds)
+    {
+        kitWatchElapsed_ += deltaSeconds;
+        if (kitWatchElapsed_ < kKitWatchPollIntervalSeconds)
+        {
+            return;
+        }
+        kitWatchElapsed_ = 0.0;
+        if (kitWatchTaskInFlight_)
+        {
+            return;
+        }
+
+        struct FKitWatchTaskContext
+        {
+            FKitWatchGatherResult result;
+        };
+        auto context = std::make_shared<FKitWatchTaskContext>();
+
+        std::vector<std::string> watchPaths;
+        watchPaths.reserve(kits_.size());
+        for (const FKitInfo& kit : kits_)
+        {
+            watchPaths.push_back(kit.filePath);
+        }
+        const std::vector<std::pair<std::string, std::filesystem::file_time_type>> prevStamps = kitWatchStamps_;
+        const std::string libDir = AuthoringPath("assets/scad/lib").string();
+
+        kitWatchTaskInFlight_ = true;
+        Tasks::TaskCoordinator::GetInstance()->AddTask(
+            [context, watchPaths = std::move(watchPaths), prevStamps = std::move(prevStamps), libDir](Tasks::ResTask& task)
+            {
+                (void)task;
+                context->result = GatherKitFileChanges(watchPaths, prevStamps, libDir);
+            },
+            [this, context](Tasks::ResTask& task)
+            {
+                (void)task;
+                FinishKitFileChanges(std::move(context->result.changedPaths), context->result.treeChanged);
+            },
+            0);
+    }
+
+    void ScadLibraryInterface::FinishKitFileChanges(std::vector<std::string> changedPaths, bool treeChanged)
+    {
+        kitWatchTaskInFlight_ = false;
+        if (changedPaths.empty() && !treeChanged)
+        {
+            return;
+        }
+
+        // Resolve the "preview kit changed" flag on the main thread while the
+        // current kit indices are still valid (the tree has not been rescanned yet).
+        kitWatchChangedPreviewKit_ = false;
+        if (selectedKit_ >= 0 && selectedKit_ < static_cast<int>(kits_.size()) && !selectedModule_.empty())
+        {
+            const std::string& previewPath = kits_[selectedKit_].filePath;
+            kitWatchChangedPreviewKit_ =
+                std::find(changedPaths.begin(), changedPaths.end(), previewPath) != changedPaths.end();
+        }
+
+        kitWatchPending_ = true;
+        kitWatchReloadAt_ = std::chrono::steady_clock::now() + kKitWatchReloadDebounce;
+    }
+
+    void ScadLibraryInterface::PollKitFileChanges()
+    {
+        if (!kitWatchPending_)
+        {
+            return;
+        }
+        // Same deferred-reload guard as bench/designer: never rebuild the scene
+        // while the user is dragging a widget.
+        if (ImGui::IsAnyItemActive())
+        {
+            return;
+        }
+        if (std::chrono::steady_clock::now() < kitWatchReloadAt_)
+        {
+            return;
+        }
+        kitWatchPending_ = false;
+
+        const bool previewChanged = kitWatchChangedPreviewKit_;
+        kitWatchChangedPreviewKit_ = false;
+        const std::string refreshedModule = previewChanged ? selectedModule_ : std::string();
+
+        // Reload the preview first while the old kit indices are still valid,
+        // keeping the camera (and the AI editing context) intact.
+        if (previewChanged && selectedKit_ >= 0 && selectedKit_ < static_cast<int>(kits_.size()) &&
+            !selectedModule_.empty())
+        {
+            preserveCameraOnNextSceneLoad_ = true;
+            WriteAndLoad("preview.scad", BuildModulePreviewSource(selectedKit_, selectedModule_));
+        }
+
+        // RescanKits resets statusLine_, so report the auto-refresh afterwards.
+        RescanKits();
+
+        SPDLOG_INFO("[ScadLibrary] kit file(s) changed externally, auto-refreshed (preview reload: {})",
+                    previewChanged);
+
+        statusLine_ = previewChanged
+            ? fmt::format("kit 文件已变化，已自动刷新预览 {}", refreshedModule)
+            : "kit 文件已变化，资源库已自动刷新";
+        statusError_ = false;
     }
 
     void ScadLibraryInterface::RescanAssemblies()
@@ -3312,6 +3555,15 @@ namespace ScadLibrary
         aiController_->Reset();
         rigPreview_.SetActive(false);
 
+        if (WriteAndLoad("preview.scad", BuildModulePreviewSource(kitIndex, moduleName)))
+        {
+            statusLine_ = fmt::format("预览 {}", moduleName);
+            statusError_ = false;
+        }
+    }
+
+    std::string ScadLibraryInterface::BuildModulePreviewSource(int kitIndex, const std::string& moduleName) const
+    {
         std::string source;
         source += "// ScadLibrary module preview\n";
         source += fmt::format("$fn = {};\n", fnSegments_);
@@ -3319,11 +3571,7 @@ namespace ScadLibrary
         std::replace(usePath.begin(), usePath.end(), '\\', '/');
         source += fmt::format("use <{}>\n\n", usePath);
         source += fmt::format("{}();\n", moduleName);
-        if (WriteAndLoad("preview.scad", source))
-        {
-            statusLine_ = fmt::format("预览 {}", moduleName);
-            statusError_ = false;
-        }
+        return source;
     }
 
     void ScadLibraryInterface::AddToBench(int kitIndex, const std::string& moduleName)

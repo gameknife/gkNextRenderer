@@ -330,22 +330,91 @@ module ap_furn_cafe_counter()
     color([0.90, 0.60, 0.40]) translate([1.45, 0.12, 1.10]) cylinder(h = 0.26, r1 = 0.06, r2 = 0.045, $fn = 10);
 }
 
+// 咖啡小圆桌 + 双人休闲椅（桌上含咖啡杯与餐巾筒，两椅面朝圆桌）
 module ap_furn_cafe_table(c = ap_BROWNC())
 {
+    // ---- 1. 现代金属底座与实木圆桌面 (Pedestal Round Table) ----
+    // 铸铁加重圆盘底座（两阶渐变）
     color(ap_DARKMETC())
     {
-        cylinder(h = 0.04, r = 0.22, $fn = 14);
-        cylinder(h = 0.72, r = 0.035, $fn = 10);
+        cylinder(h = 0.025, r = 0.24, $fn = 20);
+        cylinder(h = 0.070, r1 = 0.22, r2 = 0.042, $fn = 16);
+        // 金属中心立柱
+        translate([0, 0, 0.06]) cylinder(h = 0.64, r = 0.032, $fn = 12);
+        // 桌面下十字支撑法兰盘
+        translate([0, 0, 0.69]) cylinder(h = 0.02, r = 0.18, $fn = 12);
     }
-    color(ap_OAKC()) translate([0, 0, 0.72]) cylinder(h = 0.04, r = 0.38, $fn = 20);
-    for (a = [40, 220])
-        rotate([0, 0, a]) translate([0, -0.62, 0])
+
+    // 橡木圆桌面（双层带下切倒角阴影边）
+    color(ap_OAKC()) translate([0, 0, 0.71]) cylinder(h = 0.035, r = 0.40, $fn = 24);
+    color([0.55, 0.38, 0.23]) translate([0, 0, 0.70]) cylinder(h = 0.012, r = 0.408, $fn = 24);
+
+    // ---- 2. 桌面生动陈列：咖啡杯碟、拉花咖啡与餐巾纸筒 ----
+    // 咖啡杯 1（含托盘、白瓷杯身、咖啡与拉花）
+    translate([-0.12, 0.08, 0.745])
+    {
+        color(ap_WHITEC())
         {
+            cylinder(h = 0.010, r = 0.068, $fn = 14); // 托盘
+            translate([0, 0, 0.008]) cylinder(h = 0.055, r1 = 0.036, r2 = 0.046, $fn = 14); // 杯身
+            translate([0.046, 0, 0.034]) rotate([0, 90, 0]) cylinder(h = 0.018, r = 0.018, $fn = 8); // 杯把
+        }
+        color([0.42, 0.25, 0.14]) translate([0, 0, 0.055]) cylinder(h = 0.006, r = 0.042, $fn = 12); // 咖啡液
+        color([0.94, 0.90, 0.84]) translate([0, 0, 0.060]) cylinder(h = 0.002, r = 0.022, $fn = 8); // 拉花奶沫
+    }
+
+    // 咖啡杯 2（外带纸杯）
+    translate([0.14, -0.06, 0.745])
+    {
+        color([0.88, 0.84, 0.76]) cylinder(h = 0.095, r1 = 0.034, r2 = 0.046, $fn = 14); // 纸杯身
+        color(ap_BROWNC()) translate([0, 0, 0.030]) cylinder(h = 0.040, r1 = 0.039, r2 = 0.043, $fn = 14); // 隔热纸套
+        color(ap_WHITEC()) translate([0, 0, 0.095]) cylinder(h = 0.012, r = 0.048, $fn = 14); // 杯盖
+    }
+
+    // 餐巾纸筒与立式台号牌
+    translate([0.02, 0.16, 0.745])
+    {
+        color(ap_METALC()) cylinder(h = 0.065, r = 0.028, $fn = 12); // 不锈钢筒
+        color(ap_PAPERC()) translate([0, 0, 0.065]) cylinder(h = 0.035, r = 0.025, $fn = 10); // 餐巾纸露头
+    }
+
+    // ---- 3. 双人北欧风休闲咖啡椅（朝向圆桌 + 优雅弧形靠背） ----
+    for (a = [40, 220])
+        rotate([0, 0, a]) translate([0, -0.68, 0])
+        {
+            // 黑色金属椅腿与支架（位于座垫下方 0~0.42，不穿透座垫）
+            color(ap_DARKMETC())
+            {
+                // 四条外八斜腿（底宽略大，向上收拢至座框）
+                for (sx = [-1, 1], sy = [-1, 1])
+                    translate([0.15 * sx, 0.14 * sy, 0])
+                        cylinder(h = 0.42, r1 = 0.014, r2 = 0.018, $fn = 12);
+
+                // 座面底框
+                translate([0, 0, 0.41]) cube([0.34, 0.32, 0.02], center = true);
+
+                // 靠背两根后部加固支撑立杆（自座面升起并微后倾 8 度支撑靠背）
+                for (sx = [-0.12, 0.12])
+                    translate([sx, -0.15, 0.42])
+                        rotate([8, 0, 0])
+                            cylinder(h = 0.22, r = 0.011, $fn = 10);
+            }
+
+            // 软包坐垫（z=0.44，厚 0.04）
             color(c)
             {
-                for (sx = [-1, 1], sy = [-1, 1]) translate([0.14 * sx, 0.13 * sy, 0.21]) cube([0.04, 0.04, 0.42], center = true);
-                translate([0, 0, 0.43]) cube([0.36, 0.34, 0.04], center = true);
-                translate([0, 0.16, 0.66]) cube([0.36, 0.04, 0.42], center = true);
+                translate([0, 0.01, 0.44]) cube([0.38, 0.36, 0.04], center = true);
+
+                // 一体化平滑微弧靠背（微后倾 8 度，向外微张，舒适贴背）
+                translate([0, -0.15, 0.42])
+                    rotate([8, 0, 0])
+                        translate([0, 0, 0.11])
+                            hull()
+                            {
+                                translate([-0.17, 0.020, 0]) cylinder(h = 0.20, r = 0.012, $fn = 12);
+                                translate([0, 0, 0]) cylinder(h = 0.20, r = 0.012, $fn = 12);
+                                translate([0.17, 0.020, 0]) cylinder(h = 0.20, r = 0.012, $fn = 12);
+                            }
             }
         }
 }
@@ -452,12 +521,131 @@ module ap_prop_fountain()
 
 module ap_furn_atm()
 {
-    color([0.55, 0.58, 0.64]) translate([0, 0, 0.80]) cube([0.75, 0.45, 1.60], center = true);
-    color(ap_SIGNBLUE()) translate([0, -0.01, 1.50]) cube([0.77, 0.45, 0.20], center = true);
-    color(ap_BLACKC()) translate([0, -0.235, 1.12]) rotate([12, 0, 0]) cube([0.50, 0.05, 0.36], center = true);
-    color(ap_SCREENC()) translate([0, -0.250, 1.12]) rotate([12, 0, 0]) cube([0.42, 0.02, 0.28], center = true);
-    color(ap_METALC()) translate([0, -0.235, 0.82]) cube([0.40, 0.04, 0.06], center = true);
-    color(ap_BLACKC()) translate([0, -0.235, 0.66]) cube([0.30, 0.04, 0.05], center = true);
+    // ---- 1. 底座与下柜体 (Base & Lower Safe Cabinet) ----
+    // 黑色/深金属加重防震踢脚底座
+    color(ap_DARKMETC()) translate([0, 0.01, 0.03]) cube([0.76, 0.54, 0.06], center = true);
+
+    // 主机身下部安全柜 (深冷灰主体)
+    color([0.52, 0.55, 0.60]) translate([0, 0.02, 0.40]) cube([0.72, 0.50, 0.68], center = true);
+
+    // 下柜维护门与分缝饰板 (前面板微凸)
+    color([0.58, 0.61, 0.66]) translate([0, -0.235, 0.40]) cube([0.66, 0.02, 0.62], center = true);
+    // 维护门安全锁孔与金属标牌
+    color(ap_METALC()) translate([0.24, -0.25, 0.60]) cylinder(h = 0.015, r = 0.022, $fn = 12);
+    color(ap_BLACKC()) translate([0.24, -0.252, 0.60]) cube([0.006, 0.015, 0.008], center = true);
+    // 底部进气散热百叶窗槽
+    for (i = [0 : 3])
+        color(ap_BLACKC()) translate([0, -0.247, 0.16 + i * 0.035]) cube([0.42, 0.008, 0.014], center = true);
+
+    // ---- 2. 两侧防窥导翼与侧板 (Side Privacy Wings) ----
+    // 左右防窥挡板 (两侧凸出包裹，阻挡侧面视线)
+    color(ap_AIRBLUE()) for (sx = [-1, 1])
+    {
+        // 侧护翼主体
+        translate([0.365 * sx, 0.02, 1.20]) cube([0.04, 0.52, 0.94], center = true);
+        // 侧护翼前沿上部导角饰条
+        translate([0.365 * sx, -0.23, 1.20]) cube([0.042, 0.02, 0.90], center = true);
+    }
+    // 机身上部后壳
+    color([0.48, 0.51, 0.56]) translate([0, 0.10, 1.22]) cube([0.69, 0.34, 0.92], center = true);
+
+    // ---- 3. 顶部发光招牌灯箱 (Top Marquee Header) ----
+    // 顶冠外框
+    color(ap_SIGNBLUE()) translate([0, -0.02, 1.62]) cube([0.74, 0.48, 0.18], center = true);
+    // 发光招牌内嵌面板
+    color([0.90, 0.94, 0.98]) translate([0, -0.262, 1.62]) cube([0.64, 0.01, 0.14], center = true);
+    // 立体 ATM 标识字样
+    color(ap_SIGNBLUE()) translate([-0.18, -0.275, 1.56]) rotate([90, 0, 0]) linear_extrude(0.015) text("ATM", size = 0.11);
+    // 顶部安全防窥凸面镜 (半球形金属反射镜)
+    color(ap_METALC()) translate([0, -0.25, 1.505]) rotate([90, 0, 0]) sphere(r = 0.032, $fn = 12);
+    // 针孔监控摄像头
+    color(ap_BLACKC()) translate([-0.22, -0.25, 1.505]) cylinder(h = 0.015, r = 0.012, $fn = 10);
+    // 运行状态绿色 LED 指示灯
+    color([0.25, 0.85, 0.45]) translate([0.22, -0.255, 1.505]) cube([0.025, 0.008, 0.012], center = true);
+
+    // ---- 4. 上部主控交互屏区 (Main Display Console, 倾角 14 度) ----
+    // 屏幕内凹安装底仓
+    translate([0, -0.16, 1.23]) rotate([14, 0, 0])
+    {
+        // 黑色防眩光大边框面板
+        color(ap_BLACKC()) cube([0.65, 0.04, 0.44], center = true);
+        // 主彩色液晶显示屏 (深海蓝 UI 界面)
+        color([0.15, 0.35, 0.62]) translate([0, -0.022, 0.01]) cube([0.42, 0.01, 0.30], center = true);
+        // 屏幕顶部银行标题蓝条与底部软按键提示
+        color(ap_WHITEC()) translate([0, -0.028, 0.125]) cube([0.40, 0.005, 0.035], center = true);
+        color([0.30, 0.65, 0.95]) translate([0, -0.028, 0.01]) cube([0.22, 0.005, 0.12], center = true);
+        for (sy = [-0.10, -0.04, 0.02, 0.08])
+        {
+            color([0.22, 0.50, 0.80]) translate([-0.14, -0.028, sy]) cube([0.09, 0.005, 0.022], center = true);
+            color([0.22, 0.50, 0.80]) translate([0.14, -0.028, sy]) cube([0.09, 0.005, 0.022], center = true);
+        }
+
+        // 屏幕两侧 4+4 物理功能按键
+        color(ap_METALC()) for (i = [0 : 3])
+        {
+            translate([-0.24, -0.025, -0.10 + i * 0.068]) cube([0.022, 0.015, 0.028], center = true);
+            translate([0.24, -0.025, -0.10 + i * 0.068]) cube([0.022, 0.015, 0.028], center = true);
+        }
+
+        // 语音提示立体声扬声器小孔条
+        color([0.35, 0.38, 0.42]) for (sx = [-1, 1])
+            translate([0.18 * sx, -0.023, 0.18]) cube([0.08, 0.006, 0.012], center = true);
+    }
+
+    // ---- 5. 中段操作台面 (Keypad & Insertion Console Desk) ----
+    // 倾斜约 10 度的金属台面底座
+    translate([0, -0.18, 0.95]) rotate([10, 0, 0])
+    {
+        // 操作台基座
+        color([0.35, 0.38, 0.44]) cube([0.65, 0.18, 0.04], center = true);
+
+        // 加密金属数字小键盘 (EPP Keypad)
+        // 键盘金属底板
+        color(ap_METALC()) translate([-0.08, -0.01, 0.024]) cube([0.17, 0.13, 0.01], center = true);
+        // 金属防窥遮挡罩 (两侧与上方金属护壁)
+        color(ap_DARKMETC())
+        {
+            translate([-0.17, -0.01, 0.05]) cube([0.012, 0.13, 0.05], center = true);
+            translate([0.01, -0.01, 0.05]) cube([0.012, 0.13, 0.05], center = true);
+            translate([-0.08, 0.058, 0.05]) cube([0.17, 0.012, 0.05], center = true);
+        }
+        // 3x4 数字键帽
+        for (rx = [0 : 2], ry = [0 : 3])
+            color(ap_METALC()) translate([-0.14 + rx * 0.038, 0.035 - ry * 0.030, 0.032])
+                cube([0.024, 0.020, 0.01], center = true);
+
+        // 键盘右侧功能键 (取消-红、更正-黄、确认-绿)
+        color([0.82, 0.22, 0.18]) translate([-0.022, 0.035, 0.032]) cube([0.028, 0.020, 0.01], center = true); // Cancel
+        color([0.90, 0.75, 0.18]) translate([-0.022, 0.005, 0.032]) cube([0.028, 0.020, 0.01], center = true); // Clear
+        color([0.20, 0.75, 0.35]) translate([-0.022, -0.025, 0.032]) cube([0.028, 0.020, 0.01], center = true); // Enter
+
+        // 非接触式 NFC 闪付感应区 (右侧感应圆盘)
+        color(ap_AIRBLUE()) translate([0.16, -0.01, 0.023]) cylinder(h = 0.006, r = 0.048, $fn = 16);
+        color(ap_WHITEC()) translate([0.16, -0.01, 0.027]) cylinder(h = 0.004, r = 0.028, $fn = 12);
+    }
+
+    // ---- 6. 插卡口与凭条打印出口 (Card Reader & Receipt Printer) ----
+    // 发光插卡嘴 (带翠绿色导光指示嘴)
+    color([0.15, 0.75, 0.35]) translate([0.16, -0.255, 1.05]) cube([0.11, 0.02, 0.03], center = true);
+    color(ap_BLACKC()) translate([0.16, -0.266, 1.05]) cube([0.075, 0.006, 0.01], center = true); // 插卡缝
+
+    // 凭条打印出口 (Receipt Slot)
+    color(ap_DARKMETC()) translate([-0.16, -0.252, 1.05]) cube([0.12, 0.02, 0.025], center = true);
+    color(ap_BLACKC()) translate([-0.16, -0.263, 1.05]) cube([0.085, 0.005, 0.008], center = true);
+    // 吐出的一小截白色热敏打印凭条
+    color(ap_PAPERC()) translate([-0.16, -0.272, 1.045]) rotate([15, 0, 0]) cube([0.07, 0.018, 0.004], center = true);
+
+    // ---- 7. 出钞口与存取款仓门 (Cash Dispenser Slot) ----
+    // 宽幅电动出钞口金属框
+    color(ap_DARKMETC()) translate([0, -0.245, 0.81]) cube([0.34, 0.03, 0.10], center = true);
+    // 不锈钢活动电动闸门
+    color(ap_METALC()) translate([0, -0.255, 0.81]) cube([0.28, 0.012, 0.06], center = true);
+    // 出钞口导引提示蓝光条
+    color([0.25, 0.65, 0.95]) translate([0, -0.258, 0.852]) cube([0.26, 0.006, 0.008], center = true);
+
+    // ---- 8. 扫码窗 (2D Barcode / QR Scanner) ----
+    color(ap_BLACKC()) translate([0, -0.248, 0.70]) cube([0.12, 0.015, 0.05], center = true);
+    color([0.65, 0.15, 0.15]) translate([0, -0.254, 0.70]) cube([0.08, 0.006, 0.028], center = true);
 }
 
 module ap_furn_vending(c = [0.80, 0.30, 0.28])
@@ -882,17 +1070,112 @@ module ap_furn_kitchen_strip(len = 5)
     color([0.55, 0.58, 0.62]) translate([0, 0.10, 1.60]) cube([0.35, 0.45, 0.55], center = true); // 烟道
 }
 
-// 书店展台：矮桌 + 平摊书堆 + 立书
+// 书店中岛展台：双层实木阶梯台 + 下层储书架 + 精装书堆/立书/书立 + 亚克力推荐牌
 module ap_furn_book_table()
 {
-    color(ap_OAKC()) translate([0, 0, 0.70]) cube([1.50, 0.95, 0.06], center = true);
-    color([0.60, 0.42, 0.25]) for (sx = [-1, 1]) translate([0.65 * sx, 0, 0.34]) cube([0.08, 0.85, 0.68], center = true);
+    // ---- 1. 展台主体与下层置物架构 (Base Table & Shelving) ----
+    // 底部加固踢脚底座
+    color([0.38, 0.26, 0.16]) translate([0, 0, 0.025]) cube([1.42, 0.86, 0.05], center = true);
+
+    // 四角及侧面实木支腿
+    color([0.52, 0.36, 0.22])
+    {
+        for (sx = [-1, 1], sy = [-1, 1])
+            translate([0.65 * sx, 0.38 * sy, 0.36]) cube([0.06, 0.06, 0.67], center = true);
+        for (sx = [-1, 1])
+            translate([0.65 * sx, 0, 0.36]) cube([0.04, 0.72, 0.67], center = true);
+        // 下层置物层横撑
+        translate([0, 0, 0.18]) cube([1.34, 0.80, 0.03], center = true);
+    }
+
+    // 主台面（橡木主板 + 深色封边）
+    color(ap_OAKC()) translate([0, 0, 0.70]) cube([1.50, 0.95, 0.05], center = true);
+    color([0.55, 0.38, 0.23]) translate([0, 0, 0.672]) cube([1.51, 0.96, 0.015], center = true);
+
+    // 中岛二层阶梯小展台 (Raised Center Riser)
+    color([0.72, 0.52, 0.31]) translate([0, 0.12, 0.79]) cube([1.20, 0.38, 0.13], center = true);
+    color([0.55, 0.38, 0.23]) translate([0, 0.12, 0.858]) cube([1.22, 0.40, 0.015], center = true);
+
+    // ---- 2. 下层置物架上的库存书堆 (Lower Shelf Storage Stacks) ----
+    for (i = [0 : 3])
+    {
+        // 书芯白页
+        color(ap_PAPERC()) translate([-0.45 + i * 0.30, -0.15, 0.245]) cube([0.22, 0.28, 0.09], center = true);
+        // 外层封面
+        color(ap_book5((i + 1) % 5)) translate([-0.45 + i * 0.30, -0.15, 0.292]) cube([0.23, 0.29, 0.01], center = true);
+    }
     for (i = [0 : 2])
-        color(ap_book5(i)) translate([-0.45 + i * 0.45, 0.18, 0.765 + (i == 1 ? 0.02 : 0)])
-            rotate([0, 0, i * 14 - 10]) cube([0.30, 0.40, 0.07 + i * 0.02], center = true);
-    for (i = [0 : 2])
-        color(ap_book5(i + 2)) translate([-0.40 + i * 0.42, -0.24, 0.755]) rotate([0, 0, -i * 8]) cube([0.28, 0.38, 0.05], center = true);
-    color(ap_book5(4)) translate([0.55, 0.10, 0.90]) rotate([78, 0, -15]) cube([0.26, 0.36, 0.03], center = true);
+    {
+        color(ap_PAPERC()) translate([-0.30 + i * 0.32, 0.18, 0.24]) cube([0.24, 0.26, 0.08], center = true);
+        color(ap_book5((i + 3) % 5)) translate([-0.30 + i * 0.32, 0.18, 0.282]) cube([0.25, 0.27, 0.01], center = true);
+    }
+
+    // ---- 3. 主台面前排：平摊与错落堆叠的热销书堆 (Front Row Book Stacks) ----
+    // 左侧书堆 (3本微旋转堆叠)
+    for (k = [0 : 2])
+    {
+        color(ap_PAPERC()) translate([-0.50, -0.26, 0.745 + k * 0.038]) rotate([0, 0, -8 + k * 7]) cube([0.22, 0.30, 0.032], center = true);
+        color(ap_book5(k)) translate([-0.50, -0.26, 0.762 + k * 0.038]) rotate([0, 0, -8 + k * 7]) cube([0.23, 0.31, 0.006], center = true);
+    }
+
+    // 中左平摊书
+    color(ap_PAPERC()) translate([-0.18, -0.25, 0.74]) rotate([0, 0, 4]) cube([0.24, 0.32, 0.03], center = true);
+    color(ap_book5(3)) translate([-0.18, -0.25, 0.757]) rotate([0, 0, 4]) cube([0.25, 0.33, 0.006], center = true);
+
+    // 中右平摊厚精装书堆 (2本)
+    for (k = [0 : 1])
+    {
+        color(ap_PAPERC()) translate([0.16, -0.25, 0.75 + k * 0.045]) rotate([0, 0, -4 + k * 5]) cube([0.24, 0.32, 0.04], center = true);
+        color(ap_book5(4 - k)) translate([0.16, -0.25, 0.772 + k * 0.045]) rotate([0, 0, -4 + k * 5]) cube([0.25, 0.33, 0.007], center = true);
+    }
+
+    // 右侧大开本画册平摊
+    color(ap_PAPERC()) translate([0.48, -0.24, 0.742]) rotate([0, 0, 12]) cube([0.28, 0.34, 0.035], center = true);
+    color(ap_SIGNBLUE()) translate([0.48, -0.24, 0.761]) rotate([0, 0, 12]) cube([0.29, 0.35, 0.006], center = true);
+
+    // ---- 4. 二层阶梯展台：展示架斜立书 (Easel Face-Out Bestsellers) ----
+    // 两组金属/亚克力斜撑展示架
+    for (sx = [-0.38, 0.38])
+    {
+        // 金属展架支脚
+        color(ap_DARKMETC())
+        {
+            translate([sx, 0.06, 0.875]) cube([0.16, 0.04, 0.015], center = true);
+            translate([sx, 0.12, 0.94]) rotate([-65, 0, 0]) cube([0.14, 0.01, 0.16], center = true);
+        }
+        // 斜立封面书本（带纸芯分色）
+        color(ap_PAPERC()) translate([sx, 0.09, 0.96]) rotate([-20, 0, 0]) cube([0.22, 0.025, 0.30], center = true);
+        color(sx < 0 ? [0.82, 0.24, 0.20] : [0.20, 0.45, 0.75])
+            translate([sx, 0.076, 0.96]) rotate([-20, 0, 0]) cube([0.23, 0.006, 0.31], center = true);
+    }
+
+    // 二层中央平摊畅销书
+    color(ap_PAPERC()) translate([0, 0.11, 0.885]) cube([0.22, 0.28, 0.035], center = true);
+    color(ap_book5(1)) translate([0, 0.11, 0.904]) cube([0.23, 0.29, 0.006], center = true);
+
+    // ---- 5. 侧边立书区：并排立书与金属书立 (Leaning Book Row & Bookend) ----
+    translate([-0.42, 0.11, 0.73])
+    {
+        // 黑色 L 型金属书立
+        color(ap_DARKMETC())
+        {
+            translate([-0.16, 0, 0.01]) cube([0.08, 0.18, 0.008], center = true);
+            translate([-0.16, 0, 0.08]) cube([0.008, 0.16, 0.15], center = true);
+        }
+        // 6 本立放书（带倾斜与书脊分色）
+        for (i = [0 : 5])
+        {
+            translate([-0.12 + i * 0.032, 0, 0.10]) rotate([0, 6, 0])
+            {
+                color(ap_PAPERC()) cube([0.025, 0.22, 0.19], center = true);
+                color(ap_book5(i % 5)) translate([-0.013, 0, 0]) cube([0.004, 0.224, 0.195], center = true); // 书脊
+            }
+        }
+    }
+
+    // ---- 6. 亚克力 POP 促销推荐立牌 (Acrylic Promo Card) ----
+    color([0.20, 0.45, 0.78]) translate([0, -0.05, 0.76]) rotate([15, 0, 0]) cube([0.16, 0.01, 0.07], center = true);
+    color(ap_WHITEC()) translate([0, -0.056, 0.76]) rotate([15, 0, 0]) cube([0.14, 0.004, 0.05], center = true);
 }
 
 // 杂志架（斜板三层）
