@@ -1,6 +1,7 @@
 #include "TestCommon.hpp"
 
 #include "Engine/Assets/Acceleration/CPUAccelerationStructure.hpp"
+#include "Engine/Assets/Acceleration/CPUAccelerationStructure.Internal.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 
 #include <atomic>
@@ -207,11 +208,9 @@ TEST_CASE("Ambient brick table keeps newly dirty bricks at the front until ackno
 {
     FCPUProbeBaker baker;
     baker.Init(0, 1.0f, glm::vec3(0.0f));
-    const auto voxelIndex = [](int x, int y, int z)
-    {
-        return static_cast<size_t>(y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY +
-                                   z * Assets::CUBE_SIZE_XY + x);
-    };
+    // Voxel storage is brick-swizzled; go through the shared mapping so this stays a test about
+    // brick dirtiness rather than a second copy of the address arithmetic.
+    const auto voxelIndex = [](int x, int y, int z) { return static_cast<size_t>(GetVoxelAddress(x, y, z)); };
 
     baker.voxels[voxelIndex(4, 4, 4)].matId = 1u;
     FCPUBrickTable table;

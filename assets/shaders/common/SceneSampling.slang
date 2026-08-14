@@ -31,13 +31,6 @@ namespace Common
         return objectId;
     }
 
-    public uint GetPageIndex(float3 pagePos)
-    {
-        // Calculate the page index based on the page position
-        uint pageIndex = uint(pagePos.x) + uint(pagePos.z) * PAGE_COUNT;
-        return clamp(pageIndex, 0, 4095);
-    }
-
     float3 CalculateRayAABBEntry(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax)
     {
         float3 t1 = (boxMin - rayOrigin) / rayDir;
@@ -233,6 +226,11 @@ namespace Common
         outNormal = float3(0, 0, 1);
         outMaterialIdx = 0;
 
+        // Loop invariants: the visibility-buffer extent and the camera origin do not depend on the
+        // step, and this march runs for every secondary ray in software tracing.
+        const int2 size = int2(Visibility.Dimensions(gpuScene.CustomData0));
+        const float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
+
         for (int i = 0; i < maxSteps; i++)
         {
             float3 currentPos = rayStart + rayDir * (i * stepSize);
@@ -242,14 +240,11 @@ namespace Common
             if (any(currentUV < float2(0.0)) || any(currentUV > float2(1.0)))
                 continue;
 
-            int2 size = int2(Visibility.Dimensions(gpuScene.CustomData0));
-
             int2 sampleCoord = clamp(int2(currentUV * float2(size)), int2(0), size - 1);
             uint2 vBufferSample = Visibility.Load(sampleCoord, gpuScene.CustomData0);
             if (!Visibility.IsValid(vBufferSample))
                 continue;
 
-            float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
             const float2 sampleNdc =
                 ((float2(sampleCoord) + 0.5f) / float2(size)) * 2.0f - 1.0f;
             float4 target = mul(Camera.ProjectionInverse, float4(sampleNdc, 1, 1));

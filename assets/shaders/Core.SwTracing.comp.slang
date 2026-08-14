@@ -21,7 +21,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     FPathTracingRenderer renderer;
     renderer.ExitProbability = 0.5f;
-    renderer.ExitAfterFirst = Bindless.GetGpuscene().Camera->ExitAfterFirst;
+    renderer.ExitAfterFirst = true;//Bindless.GetGpuscene().Camera->ExitAfterFirst;
     renderer.HitNormalOffset = max(Bindless.GetGpuscene().Camera->AmbientCubeUnit, 0.0001f) * 0.5;
     renderer.SampleDownscale = 2;
     renderer.FuzzyTracing = false;

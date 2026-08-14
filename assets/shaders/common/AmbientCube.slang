@@ -39,9 +39,15 @@ public float3 GetAmbientCubeOffsetBias()
     return GetAmbientCubeOffset() - baseOffset;
 }
 
+// Cascade N's cell size is baseUnit * ratio^N. cascadeIndex is always below CUBE_CASCADE_MAX (4),
+// so two selects replace pow() -- which the drivers lower to exp2/log2 and which used to run
+// several times per DDA step through the helpers below.
 public float GetAmbientCubeUnitAtCascade(uint cascadeIndex)
 {
-    return GetAmbientCubeUnit() * pow(GetAmbientCubeCascadeRatio(), float(cascadeIndex));
+    float ratio = GetAmbientCubeCascadeRatio();
+    float ratioSquared = ratio * ratio;
+    return GetAmbientCubeUnit() * ((cascadeIndex & 1u) != 0u ? ratio : 1.0f)
+                                * ((cascadeIndex & 2u) != 0u ? ratioSquared : 1.0f);
 }
 
 public float3 GetAmbientCubeOffsetAtCascade(uint cascadeIndex)
@@ -50,26 +56,50 @@ public float3 GetAmbientCubeOffsetAtCascade(uint cascadeIndex)
     return float3(-CUBE_SIZE_XY / 2.0f, -1.375f, -CUBE_SIZE_XY / 2.0f) * unit + GetAmbientCubeOffsetBias();
 }
 
-public uint GetAmbientCubeCascadeAtPosition(float3 worldPos)
+// Cascade + grid parameters for a world position in one pass. Callers that need both used to run
+// the search and then re-derive the unit and offset from scratch, re-reading the UBO each time.
+public bool GetAmbientCubeGridAtPosition(float3 worldPos, out uint cascadeIndex, out float unit, out float3 offset)
 {
     uint cascadeCount = GetAmbientCubeCascadeCount();
-    for (uint cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
+    float ratio = GetAmbientCubeCascadeRatio();
+    float3 offsetBias = GetAmbientCubeOffsetBias();
+    const float3 cascadeCorner = float3(-CUBE_SIZE_XY / 2.0f, -1.375f, -CUBE_SIZE_XY / 2.0f);
+
+    unit = GetAmbientCubeUnit();
+    for (cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
     {
-        float unit = GetAmbientCubeUnitAtCascade(cascadeIndex);
-        float3 offset = GetAmbientCubeOffsetAtCascade(cascadeIndex);
+        offset = cascadeCorner * unit + offsetBias;
         float3 voxelPos = (worldPos - offset) / unit;
         if (voxelPos.x >= 0 && voxelPos.y >= 0 && voxelPos.z >= 0 && voxelPos.x <= CUBE_SIZE_XY - 1 &&
             voxelPos.y <= CUBE_SIZE_Z - 1 && voxelPos.z <= CUBE_SIZE_XY - 1)
         {
-            return cascadeIndex;
+            return true;
         }
+        unit *= ratio;
     }
-    return cascadeCount - 1;
+
+    cascadeIndex = cascadeCount - 1;
+    unit = GetAmbientCubeUnitAtCascade(cascadeIndex);
+    offset = cascadeCorner * unit + offsetBias;
+    return false;
+}
+
+public uint GetAmbientCubeCascadeAtPosition(float3 worldPos)
+{
+    uint cascadeIndex;
+    float unit;
+    float3 offset;
+    GetAmbientCubeGridAtPosition(worldPos, cascadeIndex, unit, offset);
+    return cascadeIndex;
 }
 
 public float GetAmbientCubeUnitAtPosition(float3 worldPos)
 {
-    return GetAmbientCubeUnitAtCascade(GetAmbientCubeCascadeAtPosition(worldPos));
+    uint cascadeIndex;
+    float unit;
+    float3 offset;
+    GetAmbientCubeGridAtPosition(worldPos, cascadeIndex, unit, offset);
+    return unit;
 }
 
 public uint GetCascadeBaseOffset(uint cascadeIndex)
@@ -310,33 +340,45 @@ public AmbientCube ZeroAmbientCube()
     return c;
 }
 
+// Brick coordinates are only ever formed from in-range probe positions, so the divide and modulo
+// are done in unsigned: signed / 8 and % 8 make the compiler emit the sign-correction dance
+// instead of a shift and a mask, and this runs eight times per probe interpolation.
+static const uint kAmbientBrickEdgeShift = 3; // GPU_SCENE_AMBIENT_BRICK_EDGE == 8
+static const uint kAmbientBrickEdgeMask = uint(GPU_SCENE_AMBIENT_BRICK_EDGE) - 1u;
+
+uint AmbientBrickLinear(int3 probePos)
+{
+    uint bx = uint(probePos.x) >> kAmbientBrickEdgeShift;
+    uint by = uint(probePos.y) >> kAmbientBrickEdgeShift;
+    uint bz = uint(probePos.z) >> kAmbientBrickEdgeShift;
+    return by * uint(GPU_SCENE_AMBIENT_BRICKS_X * GPU_SCENE_AMBIENT_BRICKS_Z)
+         + bz * uint(GPU_SCENE_AMBIENT_BRICKS_X) + bx;
+}
+
 uint AmbientBrickSlot(uint cascadeIndex, int3 probePos)
 {
     uint* table = Bindless.GetGpuscene().AmbientBrickTable;
-    int bx = probePos.x / GPU_SCENE_AMBIENT_BRICK_EDGE;
-    int by = probePos.y / GPU_SCENE_AMBIENT_BRICK_EDGE;
-    int bz = probePos.z / GPU_SCENE_AMBIENT_BRICK_EDGE;
-    uint brickLinear = uint(by) * uint(GPU_SCENE_AMBIENT_BRICKS_X * GPU_SCENE_AMBIENT_BRICKS_Z)
-                     + uint(bz) * uint(GPU_SCENE_AMBIENT_BRICKS_X) + uint(bx);
-    return table[cascadeIndex * uint(GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) + brickLinear];
+    return table[cascadeIndex * uint(GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) + AmbientBrickLinear(probePos)];
 }
 
 uint AmbientBrickLocalOffset(int3 probePos)
 {
-    int lx = probePos.x % GPU_SCENE_AMBIENT_BRICK_EDGE;
-    int ly = probePos.y % GPU_SCENE_AMBIENT_BRICK_EDGE;
-    int lz = probePos.z % GPU_SCENE_AMBIENT_BRICK_EDGE;
-    return uint(ly) * uint(GPU_SCENE_AMBIENT_BRICK_EDGE * GPU_SCENE_AMBIENT_BRICK_EDGE)
-         + uint(lz) * uint(GPU_SCENE_AMBIENT_BRICK_EDGE) + uint(lx);
+    uint lx = uint(probePos.x) & kAmbientBrickEdgeMask;
+    uint ly = uint(probePos.y) & kAmbientBrickEdgeMask;
+    uint lz = uint(probePos.z) & kAmbientBrickEdgeMask;
+    return ly * uint(GPU_SCENE_AMBIENT_BRICK_EDGE * GPU_SCENE_AMBIENT_BRICK_EDGE)
+         + lz * uint(GPU_SCENE_AMBIENT_BRICK_EDGE) + lx;
 }
 
-uint AmbientBrickLinear(int3 probePos)
+// Element index of a probe inside one cascade's dense VoxelData array. The array is brick-swizzled
+// rather than laid out as y * W * W + z * W + x: the DDA reads it one cell at a time, and linearly
+// a single Y step landed ~2 MB away, so nearly every step missed cache. Tiled into 8^3 blocks an
+// entire neighbourhood is one 4 KB run. Must match GetVoxelAddress() in
+// Engine/Assets/Acceleration/CPUAccelerationStructure.Internal.hpp, which writes the array.
+public uint VoxelStorageIndex(int3 probePos)
 {
-    uint bx = uint(probePos.x / GPU_SCENE_AMBIENT_BRICK_EDGE);
-    uint by = uint(probePos.y / GPU_SCENE_AMBIENT_BRICK_EDGE);
-    uint bz = uint(probePos.z / GPU_SCENE_AMBIENT_BRICK_EDGE);
-    return by * uint(GPU_SCENE_AMBIENT_BRICKS_X * GPU_SCENE_AMBIENT_BRICKS_Z)
-         + bz * uint(GPU_SCENE_AMBIENT_BRICKS_X) + bx;
+    return AmbientBrickLinear(probePos) * uint(GPU_SCENE_AMBIENT_BRICK_VOLUME)
+         + AmbientBrickLocalOffset(probePos);
 }
 
 uint AmbientResidencyHash(uint value)
@@ -373,17 +415,18 @@ public void MarkAmbientBrickHit(uint cascadeIndex, int3 probePos, bool bounceHit
         return;
     }
 
+    // Only the last-hit frames drive eviction (FCPUBrickTable::UpdateData); the hit counters are
+    // written nowhere else and read by nothing, so they are left alone rather than costing a
+    // second atomic on an address the whole wave already contends for.
     AmbientBrickResidency* residency = Bindless.GetGpuscene().AmbientResidency;
     uint residencyIndex = cascadeIndex * uint(GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) + brickLinear;
     if (bounceHit)
     {
         InterlockedMax(residency[residencyIndex].lastBounceHitFrame, camera.TotalFrames);
-        InterlockedAdd(residency[residencyIndex].bounceHitCount, 1);
     }
     else
     {
         InterlockedMax(residency[residencyIndex].lastConsumerHitFrame, camera.TotalFrames);
-        InterlockedAdd(residency[residencyIndex].consumerHitCount, 1);
     }
 }
 
@@ -492,8 +535,7 @@ public bool DecodeAmbientActiveBrickProbe(uint cascadeIndex,
     uint z = bz * uint(GPU_SCENE_AMBIENT_BRICK_EDGE) + lz;
     probePos = int3(int(x), int(y), int(z));
 
-    uint localVoxelIdx = y * CUBE_SIZE_XY * CUBE_SIZE_XY + z * CUBE_SIZE_XY + x;
-    voxelIdx = GetCascadeBaseOffset(cascadeIndex) + localVoxelIdx;
+    voxelIdx = GetCascadeBaseOffset(cascadeIndex) + VoxelStorageIndex(probePos);
     uint slot = AmbientBrickSlot(cascadeIndex, probePos);
     cubeIdx = int((cascadeIndex * poolBricks + slot) * uint(GPU_SCENE_AMBIENT_BRICK_VOLUME) +
                   localProbeOffset);
@@ -555,14 +597,112 @@ AmbientCube FetchCubeStable(int3 probePos, in AmbientCube* Cubes, in AmbientCube
 
 VoxelData FetchVoxel(int3 probePos, in VoxelData* Cubes)
 {
-    int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY + probePos.z * CUBE_SIZE_XY + probePos.x;
-    return Cubes[idx];
+    return Cubes[VoxelStorageIndex(probePos)];
 }
 
 VoxelData FetchVoxel(int3 probePos, in VoxelData* Cubes, uint baseOffset)
 {
-    int idx = int(baseOffset) + probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY + probePos.z * CUBE_SIZE_XY + probePos.x;
-    return Cubes[idx];
+    return Cubes[baseOffset + VoxelStorageIndex(probePos)];
+}
+
+// One trilinear probe gather, shared by the plain and the "stable" (pong pool) entry points.
+// The corner loop is ordered cheapest-first: the trilinear weight needs no memory at all, the
+// 8-byte VoxelData decides visibility, and only a corner that survives both pays for the 40-byte
+// AmbientCube fetch behind the sparse brick indirection.
+float4 gatherAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, float3 normal, bool useStablePool,
+                                                   uint stableCascadeIndex)
+{
+    VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+    uint cascadeCount = GetAmbientCubeCascadeCount();
+    float ratio = GetAmbientCubeCascadeRatio();
+    float3 offsetBias = GetAmbientCubeOffsetBias();
+    const float3 cascadeCorner = float3(-CUBE_SIZE_XY / 2.0f, -1.375f, -CUBE_SIZE_XY / 2.0f);
+    float cubeUnit = GetAmbientCubeUnit();
+
+    for (uint cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex, cubeUnit *= ratio)
+    {
+        float3 cubeOffset = cascadeCorner * cubeUnit + offsetBias;
+        float3 nearpos = (inPos - cubeOffset) / cubeUnit;
+
+        if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 || nearpos.x > CUBE_SIZE_XY - 2 || nearpos.y > CUBE_SIZE_Z - 2 ||
+            nearpos.z > CUBE_SIZE_XY - 2)
+        {
+            continue;
+        }
+
+        uint baseOffset = GetCascadeBaseOffset(cascadeIndex);
+        int3 baseIdx = int3(floor(nearpos));
+        float3 frac = frac(nearpos);
+
+        // The eight corners span a single cell and the residency dilation is 3 bricks wide, so one
+        // mark covers them all. Marking per corner meant eight hashes and eight atomics contending
+        // for what is almost always the same brick.
+        MarkAmbientBrickHit(cascadeIndex, baseIdx, false);
+
+        float totalWeight = 0.0;
+        float4 result = float4(0.0, 0.0, 0.0, 0.0);
+
+        for (int i = 0; i < 8; i++)
+        {
+            int3 offset = int3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+
+            float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
+            float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
+            float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
+            float weight = wx * wy * wz;
+            if (weight <= 0.0f)
+            {
+                continue;
+            }
+
+            int3 probePos = baseIdx + offset;
+            uint packedDistance = FetchVoxel(probePos, Voxels, baseOffset).distanceToSolid;
+
+            // Nibble y is the "inside geometry" marker; a probe buried in a solid contributes nothing.
+            if (((packedDistance >> 4) & 0xFu) == 0u)
+            {
+                continue;
+            }
+
+            // Leak test: is the probe visible from the sample point, given the probe's per-face
+            // clearance? Only the face the offset direction points at can be the blocker on each
+            // axis, so take |dir| once and select that nibble -- the six sqrt(max(+-dir, 0)) pairs
+            // this replaces evaluated three terms that were always zero.
+            float3 probeToLocal = frac - float3(offset);
+            float lengthSquared = dot(probeToLocal, probeToLocal);
+            float invLength = rsqrt(max(lengthSquared, 1e-12f));
+            float distanceToProbe = lengthSquared * invLength;
+            float3 axisWeight = sqrt(abs(probeToLocal) * invLength);
+            float3 faceDistance = float3(
+                float((packedDistance >> (probeToLocal.x >= 0.0f ? 16u : 20u)) & 0xFu),
+                float((packedDistance >> (probeToLocal.y >= 0.0f ? 24u : 28u)) & 0xFu),
+                float((packedDistance >> (probeToLocal.z >= 0.0f ? 8u : 12u)) & 0xFu)) * (1.0f / 15.0f);
+
+            if (distanceToProbe > dot(axisWeight, faceDistance) + 0.05f)
+            {
+                continue;
+            }
+
+            AmbientCube cube;
+            bool hasCube = (useStablePool && cascadeIndex == stableCascadeIndex)
+                ? TryFetchCubePongPool(probePos, cascadeIndex, cube)
+                : TryFetchCubePool(probePos, cascadeIndex, cube);
+            if (!hasCube)
+            {
+                continue;
+            }
+
+            result += T.Sample(cube, normal) * weight;
+            totalWeight += weight;
+        }
+
+        if (totalWeight > 0.0)
+        {
+            return result / totalWeight;
+        }
+    }
+
+    return float4(0.0, 0.0, 0.0, 1.0);
 }
 
 public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, float3 normal)
@@ -572,201 +712,26 @@ public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, flo
     {
         return residencyDebugColor;
     }
-
-    VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
-    uint cascadeCount = GetAmbientCubeCascadeCount();
-
-    for (uint cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
-    {
-        float cubeUnit = GetAmbientCubeUnitAtCascade(cascadeIndex);
-        float3 cubeOffset = GetAmbientCubeOffsetAtCascade(cascadeIndex);
-        float3 nearpos = (inPos - cubeOffset) / cubeUnit;
-
-        if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 || nearpos.x > CUBE_SIZE_XY - 2 || nearpos.y > CUBE_SIZE_Z - 2 ||
-            nearpos.z > CUBE_SIZE_XY - 2)
-        {
-            continue;
-        }
-
-        uint baseOffset = GetCascadeBaseOffset(cascadeIndex);
-        int3 baseIdx = int3(floor(nearpos));
-        float3 frac = frac(nearpos);
-
-        float totalWeight = 0.0;
-        float4 result = float4(0.0, 0.0, 0.0, 0.0);
-
-        for (int i = 0; i < 8; i++)
-        {
-            int3 offset = int3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
-
-            int3 probePos = baseIdx + offset;
-            MarkAmbientBrickHit(cascadeIndex, probePos, false);
-            AmbientCube cube;
-            if (!TryFetchCubePool(probePos, cascadeIndex, cube))
-            {
-                continue;
-            }
-            VoxelData voxel = FetchVoxel(probePos, Voxels, baseOffset);
-
-            uint4 unpacked0 = UnpackNibblesLow(voxel.distanceToSolid);
-            uint4 unpacked1 = UnpackNibblesHigh(voxel.distanceToSolid);
-
-            float4 distance00z01 = unpacked0 / 15.0f;
-            float4 distancex01y01 = unpacked1 / 15.0f;
-
-            if (distance00z01.y < 0.01f)
-                continue;
-
-            float3 localPos = frac;
-            float3 probeRealPos = offset;
-            float3 probeToLocal = localPos - probeRealPos;
-
-            float distanceToProbe = length(probeToLocal);
-            float3 dir = normalize(probeToLocal);
-
-            float distPZ = distance00z01.z;
-            float distNZ = distance00z01.w;
-            float distPX = distancex01y01.x;
-            float distNX = distancex01y01.y;
-            float distPY = distancex01y01.z;
-            float distNY = distancex01y01.w;
-
-            float wx_pos = sqrt(max(dir.x, 0.0));
-            float wx_neg = sqrt(max(-dir.x, 0.0));
-            float wy_pos = sqrt(max(dir.y, 0.0));
-            float wy_neg = sqrt(max(-dir.y, 0.0));
-            float wz_pos = sqrt(max(dir.z, 0.0));
-            float wz_neg = sqrt(max(-dir.z, 0.0));
-
-            float hitLength = wx_pos * distPX + wx_neg * distNX + wy_pos * distPY + wy_neg * distNY +
-                              wz_pos * distPZ + wz_neg * distNZ;
-
-            if (distanceToProbe > hitLength + 0.05f)
-                continue;
-
-            float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
-            float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
-            float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
-            float weight = wx * wy * wz;
-
-            float4 sampleColor = T.Sample(cube, normal);
-            result += sampleColor * weight;
-            totalWeight += weight;
-        }
-
-        if (totalWeight > 0.0)
-        {
-            return result / totalWeight;
-        }
-    }
-
-    return float4(0.0, 0.0, 0.0, 1.0);
+    return gatherAmbientCubes<T>(inPos, normal, false, 0u);
 }
 
 public float4 interpolateAmbientCubesStable<T : IAmbientCubeSampler>(float3 inPos, float3 normal, uint stableCascadeIndex)
 {
-    VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
-    uint cascadeCount = GetAmbientCubeCascadeCount();
-
-    for (uint cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
-    {
-        float cubeUnit = GetAmbientCubeUnitAtCascade(cascadeIndex);
-        float3 cubeOffset = GetAmbientCubeOffsetAtCascade(cascadeIndex);
-        float3 nearpos = (inPos - cubeOffset) / cubeUnit;
-
-        if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 || nearpos.x > CUBE_SIZE_XY - 2 || nearpos.y > CUBE_SIZE_Z - 2 ||
-            nearpos.z > CUBE_SIZE_XY - 2)
-        {
-            continue;
-        }
-
-        uint baseOffset = GetCascadeBaseOffset(cascadeIndex);
-        int3 baseIdx = int3(floor(nearpos));
-        float3 frac = frac(nearpos);
-
-        float totalWeight = 0.0;
-        float4 result = float4(0.0, 0.0, 0.0, 0.0);
-
-        for (int i = 0; i < 8; i++)
-        {
-            int3 offset = int3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
-
-            int3 probePos = baseIdx + offset;
-            MarkAmbientBrickHit(cascadeIndex, probePos, false);
-            AmbientCube cube;
-            bool hasCube = (cascadeIndex == stableCascadeIndex)
-                ? TryFetchCubePongPool(probePos, cascadeIndex, cube)
-                : TryFetchCubePool(probePos, cascadeIndex, cube);
-            if (!hasCube)
-            {
-                continue;
-            }
-            VoxelData voxel = FetchVoxel(probePos, Voxels, baseOffset);
-
-            uint4 unpacked0 = UnpackNibblesLow(voxel.distanceToSolid);
-            uint4 unpacked1 = UnpackNibblesHigh(voxel.distanceToSolid);
-
-            float4 distance00z01 = unpacked0 / 15.0f;
-            float4 distancex01y01 = unpacked1 / 15.0f;
-
-            if (distance00z01.y < 0.01f)
-                continue;
-
-            float3 localPos = frac;
-            float3 probeRealPos = offset;
-            float3 probeToLocal = localPos - probeRealPos;
-
-            float distanceToProbe = length(probeToLocal);
-            float3 dir = normalize(probeToLocal);
-
-            float distPZ = distance00z01.z;
-            float distNZ = distance00z01.w;
-            float distPX = distancex01y01.x;
-            float distNX = distancex01y01.y;
-            float distPY = distancex01y01.z;
-            float distNY = distancex01y01.w;
-
-            float wx_pos = sqrt(max(dir.x, 0.0));
-            float wx_neg = sqrt(max(-dir.x, 0.0));
-            float wy_pos = sqrt(max(dir.y, 0.0));
-            float wy_neg = sqrt(max(-dir.y, 0.0));
-            float wz_pos = sqrt(max(dir.z, 0.0));
-            float wz_neg = sqrt(max(-dir.z, 0.0));
-
-            float hitLength = wx_pos * distPX + wx_neg * distNX + wy_pos * distPY + wy_neg * distNY +
-                              wz_pos * distPZ + wz_neg * distNZ;
-
-            if (distanceToProbe > hitLength + 0.05f)
-                continue;
-
-            float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
-            float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
-            float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
-            float weight = wx * wy * wz;
-
-            float4 sampleColor = T.Sample(cube, normal);
-            result += sampleColor * weight;
-            totalWeight += weight;
-        }
-
-        if (totalWeight > 0.0)
-        {
-            return result / totalWeight;
-        }
-    }
-
-    return float4(0.0, 0.0, 0.0, 1.0);
+    return gatherAmbientCubes<T>(inPos, normal, true, stableCascadeIndex);
 }
 
-public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipStep,
+// Solid test for the voxel containing `pos` (cascade-local grid coordinates). `clearanceVoxels`
+// comes back as the L-infinity distance transform in cells, always >= 1: every cell whose index
+// differs from this one by less than that on all three axes is guaranteed empty, which is what
+// lets the DDA jump ahead. See FCPUProbeBaker::RebuildDistanceField for how the field is built.
+public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float clearanceVoxels,
                       in VoxelData* Cubes, uint baseOffset, float cubeUnit)
 {
-    skipStep = 1;
+    clearanceVoxels = 1;
     // Early out if position is outside the probe grid
     if (pos.x <= 0 || pos.y <= 0 || pos.z <= 0 ||
         pos.x > CUBE_SIZE_XY - 2 || pos.y > CUBE_SIZE_Z - 2 || pos.z > CUBE_SIZE_XY - 2)
     {
-        skipStep = 1;
         return false;
     }
 
@@ -776,7 +741,6 @@ public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uin
     matId = cube.matId;
 
     uint4 unpack0 = UnpackNibblesLow(cube.distanceToSolid);
-    uint4 unpack1 = UnpackNibblesHigh(cube.distanceToSolid);
     if (cube.matId > 0)
     {
         if (unpack0.y == 0)
@@ -785,7 +749,10 @@ public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uin
             return true;
         }
 
-        float3 dir = normalize(-rayDir);
+        // The per-face nibbles only matter once the voxel is known to be occupied, and rayDir is
+        // already unit length, so the axis weights are its components straight off.
+        uint4 unpack1 = UnpackNibblesHigh(cube.distanceToSolid);
+        float3 dir = -rayDir;
 
         float distPZ = unpack0.z / 15.0f;
         float distNZ = unpack0.w / 15.0f;
@@ -804,9 +771,7 @@ public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uin
                           wy_pos * distPY + wy_neg * distNY +
                           wz_pos * distPZ + wz_neg * distNZ;
 
-        float hitLengthRef = wx_pos + wx_neg +
-                          wy_pos + wy_neg +
-                          wz_pos + wz_neg;
+        float hitLengthRef = abs(dir.x) + abs(dir.y) + abs(dir.z);
 
         if (hitLength < hitLengthRef)
         {
@@ -815,24 +780,20 @@ public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uin
         }
     }
 
-    if (unpack0.x > 1)
-    {
-        skipStep = max(1, unpack0.x);
-    }
-
+    clearanceVoxels = max(1.0f, float(unpack0.x));
     return false;
 }
 
-public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipStep,
+public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float clearanceVoxels,
                       in VoxelData* Cubes)
 {
-    return inSolid(pos, rayDir, offsetDist, matId, skipStep, Cubes, 0, GetAmbientCubeUnit());
+    return inSolid(pos, rayDir, offsetDist, matId, clearanceVoxels, Cubes, 0, GetAmbientCubeUnit());
 }
 
-public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipStep,
+public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float clearanceVoxels,
                       in VoxelData* Cubes, uint baseOffset)
 {
-    return inSolid(pos, rayDir, offsetDist, matId, skipStep, Cubes, baseOffset, GetAmbientCubeUnit());
+    return inSolid(pos, rayDir, offsetDist, matId, clearanceVoxels, Cubes, baseOffset, GetAmbientCubeUnit());
 }
 
 public interface IProbeGenerator

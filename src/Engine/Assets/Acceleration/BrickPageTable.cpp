@@ -31,7 +31,6 @@ bool FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint3
     const int BX = Assets::GPU_SCENE_AMBIENT_BRICKS_X;
     const int BY = Assets::GPU_SCENE_AMBIENT_BRICKS_Y;
     const int BZ = Assets::GPU_SCENE_AMBIENT_BRICKS_Z;
-    const int EDGE = Assets::GPU_SCENE_AMBIENT_BRICK_EDGE;
     const uint32_t BPC = static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
     const uint32_t kInvalid = Assets::GPU_SCENE_AMBIENT_BRICK_INVALID;
 
@@ -72,14 +71,9 @@ bool FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint3
             {
                 continue;
             }
-            const uint32_t y = v / (Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY);
-            const uint32_t z = (v - y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY) / Assets::CUBE_SIZE_XY;
-            const uint32_t x = v - y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY - z * Assets::CUBE_SIZE_XY;
-            const int sbx = static_cast<int>(x) / EDGE;
-            const int sby = static_cast<int>(y) / EDGE;
-            const int sbz = static_cast<int>(z) / EDGE;
-            occupied[static_cast<uint32_t>(sby) * (BX * BZ) + static_cast<uint32_t>(sbz) * BX +
-                     static_cast<uint32_t>(sbx)] = 1;
+            // Voxel storage is brick-swizzled, so the brick a voxel belongs to is just its element
+            // index divided by the brick volume -- no coordinate round trip needed.
+            occupied[v / kVoxelBrickVolume] = 1;
         }
 
         for (uint32_t b = 0; b < BPC; ++b)
@@ -382,9 +376,10 @@ void FCPUPageIndex::UpdateData(const std::vector<FCPUProbeBaker>& bakers)
             }
 
             // convert to local position
-            uint y = gIdx / (CUBE_SIZE_XY * CUBE_SIZE_XY);
-            uint z = (gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY) / CUBE_SIZE_XY;
-            uint x = gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY - z * CUBE_SIZE_XY;
+            uint x;
+            uint y;
+            uint z;
+            DecodeVoxelAddress(gIdx, x, y, z);
 
             vec3 worldPos = vec3(x, y, z) * baker.UNIT_SIZE + baker.CUBE_OFFSET;
 
