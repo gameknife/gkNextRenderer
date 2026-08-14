@@ -294,6 +294,8 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         }
     }
     ubo.AmbientCubeUnit = ambientCubeUnit;
+    ubo.IndirectIntensity = std::max(config_.userSettings.IndirectIntensity, 0.0f);
+    ubo.MultiBounceIntensity = std::max(config_.userSettings.MultiBounceIntensity, 0.0f);
     ubo.AmbientCubeOffset = Assets::CalculateAmbientCubeOffset(ambientCubeUnit, ambientCubeOffsetBias);
     ubo.AmbientCubeCascadeParams =
         glm::vec4(float(ambientCubeCascadeCount), ambientCubeCascadeRatio,

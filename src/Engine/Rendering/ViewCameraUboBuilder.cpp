@@ -120,6 +120,13 @@ namespace Vulkan
         Assets::UniformBufferObject ubo = request.baseUbo != nullptr
             ? *request.baseUbo
             : Assets::UniformBufferObject{};
+        if (request.baseUbo == nullptr)
+        {
+            // Value-initialization zeroes the UBO, and a zero indirect multiplier would silently
+            // black out every bounce in this view. Views without a base inherit the physical default.
+            ubo.IndirectIntensity = 1.0f;
+            ubo.MultiBounceIntensity = 1.0f;
+        }
 
         FillCameraMatrices(ubo, request.camera, request.extent);
         if (request.fillSunCascades)

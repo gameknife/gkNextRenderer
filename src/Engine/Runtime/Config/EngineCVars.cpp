@@ -129,6 +129,8 @@ namespace NextCVar
         GK_CVAR_UINT_RANGE("r.ambientCube.graceFrames", settings, AmbientCubeGraceFrames, 30, ECVarFlags::Archive, "Initial candidate residency grace period", 1, 600);
         GK_CVAR_FLOAT_RANGE("r.ambientCube.hitMarkTileRatio", settings, AmbientCubeHitMarkTileRatio, 0.25f, ECVarFlags::Archive, "Sparse query hit marking ratio", 0.01, 1.0);
         GK_CVAR_INT_RANGE("r.ambientCube.residencyDebug", settings, AmbientCubeResidencyDebug, 0, ECVarFlags::None, "Ambient residency debug (0=off,1=hit age,2=resident state)", 0, 2);
+        GK_CVAR_FLOAT_RANGE("r.gi.indirectIntensity", settings, IndirectIntensity, 1.0f, ECVarFlags::Archive, "Multiplier on the indirect term only (SHARC cache hit + ambient cube path terminal); direct sun/sky are untouched, so raising it strengthens bounce light without raising contrast", 0.0, 8.0);
+        GK_CVAR_FLOAT_RANGE("r.gi.multiBounceIntensity", settings, MultiBounceIntensity, 1.0f, ECVarFlags::Archive, "Weight per bounce order past the first in the SHARC cache (order n scales by this^(n-1)); 0 leaves only once-bounced direct light, 1 is physical. PathTracing only", 0.0, 4.0);
         GK_CVAR_BOOL("sys.hdrTextureStreaming", settings, StreamHDRTextures, true, ECVarFlags::Archive, "Keep inactive HDR environment textures at their lowest mip and promote the active sky on demand");
         GK_CVAR_UINT("r.sharc.entriesPow2", settings, SharcEntriesPow2, 21, ECVarFlags::Archive, "SHARC cache entry count as log2");
         GK_CVAR_FLOAT("r.sharc.updateSampleRatio", settings, SharcUpdateSampleRatio, 0.25f, ECVarFlags::Archive, "Fraction of pixels used by SHARC update pass");

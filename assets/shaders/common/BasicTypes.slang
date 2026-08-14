@@ -193,8 +193,15 @@ public struct ALIGN_16 UniformBufferObject
     public float SceneEpsilonScale;
 
     public float AmbientCubeUnit;
-    public float AmbientCubeOffsetPadding0;
-    public float AmbientCubeOffsetPadding1;
+    // Artistic multiplier on the indirect (post-first-bounce) term only: the SHARC cache hit and
+    // the ambient-cube path terminal. Direct lighting and sky are untouched, so raising it lifts
+    // bounce light without the contrast blowout that comes from raising SunIntensity. 1 = physical.
+    public float IndirectIntensity;
+    // Per-order weight on bounces beyond the first. A SHARC entry's radiance is
+    // direct + T1*direct(next) + T1*T2*direct(next2) + ...; only the leading term skips every
+    // segment throughput, so weighting throughput scales bounce order n by this^(n-1) and
+    // leaves once-bounced direct light alone. 1 = physical.
+    public float MultiBounceIntensity;
     public float AmbientCubeOffsetPadding2;
 
     public float3 AmbientCubeOffset;

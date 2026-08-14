@@ -93,6 +93,12 @@ struct UserSettings final
     uint32_t AmbientCubeGraceFrames = 30;
     float AmbientCubeHitMarkTileRatio = 0.25f;
     int AmbientCubeResidencyDebug = 0;
+    // Multiplier on the indirect term only (SHARC cache hit + ambient-cube path terminal).
+    // 1 = physically accumulated GI; raise it to lift bounce light without touching direct/sky.
+    float IndirectIntensity = 1.0f;
+    // Per-order weight on bounces past the first, so once-bounced sunlight and multi-bounce
+    // fill can be dialed independently. SHARC (PathTracing) only. 1 = physical.
+    float MultiBounceIntensity = 1.0f;
     bool StreamHDRTextures = true;
     // Required by NextEngine::IsEffectiveSharcEnabled; Android still overrides this to false.
     bool SharcEnable = true;

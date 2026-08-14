@@ -42,6 +42,8 @@
 
 ## Designs（当前架构）
 
+- [.NET 脚本运行时架构](designs/dotnet-scripting-design.md)（提案，未实现；C# 替换 QuickJS，
+  CoreCLR/NativeAOT 双后端共用同一份托管代码；[开发计划](plans/dotnet-scripting-plan.md)）
 - [Agent 输入驱动验证](designs/agent-validation-input-driver.md)
 - [Desktop UI Foundation](designs/desktop-ui-foundation.md)
 - [AmbientCube 命中驱动驻留](designs/ambientcube-hit-driven-residency-design.md)
@@ -87,6 +89,9 @@
 ## Plans（待实施）
 
   （待实施；统一 Engine UI 主题、语义控件、Toolbar/Combo、应用 chrome、领域选项目录与 DevTools 边界）
+- [.NET 脚本运行时开发计划](plans/dotnet-scripting-plan.md)（待实施；P0 双后端钉子 →
+  QuickJS 退场 → EngineApi codegen → NextDotNet 宿主 → FlappyCSharp 双后端 parity。
+  P0 是全程唯一回退窗口）
 - [Android 纯 CMake 驱动构建重构方案](plans/android-cmake-build-refactor-plan.md)（实施中；源码迁移已完成，待兼容 NDK 环境完成 APK/AVD 验收）
 - [iOS 纯 CMake 驱动构建重构方案](plans/ios-pure-cmake-build-refactor-plan.md)（device-only 实施；复用 macOS Vulkan SDK 解析，保留 `gnb ios build` 薄入口）
 - [阶段性 Release 准备计划](plans/release-readiness-plan.md)（现行；发布流水线、崩溃兜底、UI 收口、

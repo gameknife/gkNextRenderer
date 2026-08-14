@@ -531,6 +531,16 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
             NextUI::Theme::DrawTooltip("Progressive rendering always uses 1 spp per frame");
         }
         DrawSettingCheckboxRow(LOCTEXT("Exit After First"), &userSetting.ExitAfterFirst);
+        DrawFloatSetting(LOCTEXT("Indirect Intensity"), &userSetting.IndirectIntensity,
+                         0.0f, 8.0f, "%.2fx", 0.05f);
+        NextUI::Theme::DrawTooltip(
+            "Scales bounce light only (SHARC cache hit + ambient cube terminal). "
+            "Direct sun and sky are untouched, so this lifts GI without raising contrast. 1 = physical.");
+        DrawFloatSetting(LOCTEXT("Multi Bounce Intensity"), &userSetting.MultiBounceIntensity,
+                         0.0f, 4.0f, "%.2fx", 0.05f);
+        NextUI::Theme::DrawTooltip(
+            "Weights bounce orders past the first: order n scales by this^(n-1). "
+            "0 keeps only once-bounced direct light, 1 = physical. PathTracing (SHARC) only.");
         DrawFloatSetting(LOCTEXT("Ambient Bake Target"), &userSetting.AmbientCubeBakeTargetMs,
                          0.1f, 16.0f, "%.2f ms", 0.1f);
         NextUI::Theme::EndPanelSection();

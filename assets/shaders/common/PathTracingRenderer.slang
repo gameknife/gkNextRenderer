@@ -70,7 +70,11 @@ public struct FPathTracingRenderer{
     {
         if (UseAmbientCubeTerminal)
         {
-            return interpolateAmbientCubes<FullAmbientCubeSampler>(vertex.Position, vertex.Normal);
+            float4 terminal = interpolateAmbientCubes<FullAmbientCubeSampler>(vertex.Position, vertex.Normal);
+            // The terminal is the path's remaining indirect energy, so it takes the same artistic
+            // multiplier as a SHARC cache hit (see FSharcQueryCache.TryQueryRadiance).
+            terminal.rgb *= Bindless.GetGpuscene().Camera[0].IndirectIntensity;
+            return terminal;
         }
         return float4(0, 0, 0, 1);
     }
