@@ -9,7 +9,7 @@ struct PushConsts
     uint _ViewHdr_CustomData1;
     uint _ViewHdr_CustomData2;
 
-    uint SwapChainIdx;
+    uint OutputIndex;
     uint offset_x;
     uint offset_y;
     uint output_w;
@@ -100,14 +100,14 @@ float SampleBilinear(RWTexture2D<float> image, float2 uv)
         float2 uv = float2(0, 0);                                      \
         if (DrawQuadFiltered(quadx, quady, divider, ipos, isize, uv)) {                                                          \
             float4 col = SampleBilinear(IMAGE, uv); \
-            Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = col * multiplier;} \
+            Bindless.GetStorageTexture<float4>(pushConsts.OutputIndex)[ipos] = col * multiplier;} \
 }
 
 #define DRAWNORMAL(IMAGE, quadx, quady, divider, ipos, isize) {                                                         \
         float2 uv = float2(0, 0);                                 \
         if (DrawQuadFiltered(quadx, quady, divider, ipos, isize, uv)) {                                                     \
             float4 col = SampleBilinear(IMAGE, uv); \
-            Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = col.rbga * 0.5 + 0.5;} \
+            Bindless.GetStorageTexture<float4>(pushConsts.OutputIndex)[ipos] = col.rbga * 0.5 + 0.5;} \
 }
 
 #define DRAWINT(IMAGE, quadx, quady, divider, ipos, isize) {                                                         \
@@ -117,7 +117,7 @@ float SampleBilinear(RWTexture2D<float> image, float2 uv)
             IMAGE.GetDimensions(ssize.x, ssize.y); \
     uint icol = IMAGE[uv * ssize / isize]; \
     float3 color = UintToStableColor(icol); \
-    Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = float4(color, 1.0);} \
+    Bindless.GetStorageTexture<float4>(pushConsts.OutputIndex)[ipos] = float4(color, 1.0);} \
 }
 
 #define DRAWVISIBILITYINSTANCE(quadx, quady, divider, ipos, isize) {                                                  \
@@ -126,7 +126,7 @@ float SampleBilinear(RWTexture2D<float> image, float2 uv)
             int2 ssize = int2(Visibility.Dimensions(pushConsts._ViewHdr_CustomData0));        \
             uint icol = Visibility.Load(uv * ssize / isize, pushConsts._ViewHdr_CustomData0).x;       \
             float3 color = UintToStableColor(icol);           \
-            Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = float4(color, 1.0);}                                                     \
+            Bindless.GetStorageTexture<float4>(pushConsts.OutputIndex)[ipos] = float4(color, 1.0);}                                                     \
     }
 
 #define DRAWVISIBILITYTRIANGLE(quadx, quady, divider, ipos, isize) {                                                  \
@@ -135,7 +135,7 @@ float SampleBilinear(RWTexture2D<float> image, float2 uv)
             int2 ssize = int2(Visibility.Dimensions(pushConsts._ViewHdr_CustomData0));         \
             uint icol = Visibility.Load(uv * ssize / isize, pushConsts._ViewHdr_CustomData0).y;  \
             float3 color = UintToStableColor(icol);           \
-            Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = float4(color, 1.0);}                                                     \
+            Bindless.GetStorageTexture<float4>(pushConsts.OutputIndex)[ipos] = float4(color, 1.0);}                                                     \
     }
 
 #define DRAWDEPTH(IMAGE, quadx, quady, divider, ipos, isize, depth) {                                                               \
@@ -143,7 +143,7 @@ float SampleBilinear(RWTexture2D<float> image, float2 uv)
         if (DrawQuadFiltered(quadx, quady, divider, ipos, isize, uv)) {                                                           \
             float icol = SampleBilinear(IMAGE, uv);                 \
             float3 color = float3(pow(saturate(icol / depth), 100));           \
-            Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = float4(color, 1.0);}                                                     \
+            Bindless.GetStorageTexture<float4>(pushConsts.OutputIndex)[ipos] = float4(color, 1.0);}                                                     \
 }
 
 bool DrawQuadFiltered(float quadx, float quady, float divider, int2 ipos, int2 isize, out float2 uv)
@@ -179,12 +179,12 @@ bool DrawQuad(float quadx, float quady, float divider, int2 ipos, int2 isize, ou
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     int2 ipos = int2(DTid.xy);
-    int2 isize = Bindless.GetStorageTextureDimensions<float4>(pushConsts.SwapChainIdx);
+    int2 isize = Bindless.GetStorageTextureDimensions<float4>(pushConsts.OutputIndex);
     // if (any(ipos >= isize))
     // {
     //     return;
     // }
-    Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = float4(0, 0, 0, 1); // Clear the output image
+    Bindless.GetStorageTexture<float4>(pushConsts.OutputIndex)[ipos] = float4(0, 0, 0, 1); // Clear the output image
 
     //ipos = int2(ipos.x, ipos.y);
     isize = int2(pushConsts.output_w, pushConsts.output_h);

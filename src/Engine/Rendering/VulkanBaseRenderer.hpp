@@ -572,15 +572,18 @@ namespace Vulkan
 
         struct TemporalPostFilterResources
         {
-            std::vector<std::unique_ptr<RenderImage>> pingImages;
-            std::vector<std::unique_ptr<RenderImage>> pongImages;
-            std::vector<bool> pingInitialized;
-            std::vector<bool> pongInitialized;
+            std::unique_ptr<RenderImage> pingImage;
+            std::unique_ptr<RenderImage> pongImage;
+            bool pingInitialized = false;
+            bool pongInitialized = false;
         };
 
         struct LateToneMappingResources
         {
-            std::vector<bool> inputInitialized;
+            std::unique_ptr<RenderImage> inputImage;
+            std::unique_ptr<RenderImage> outputImage;
+            bool inputInitialized = false;
+            bool outputInitialized = false;
         };
 
         DeviceCaps caps_;

@@ -634,27 +634,32 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         {
             return;
         }
-        if (!SwapChain().SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT))
+        SCOPED_GPU_TIMER("visual debugger");
+        constexpr uint32_t outputIndex = Assets::Bindless::RT_TONEMAP_OUTPUT;
+        RenderImage* intermediateOutput = lateToneMapping_.outputImage.get();
+        if (intermediateOutput == nullptr)
         {
-            static bool warnedMissingStorage = false;
-            if (!warnedMissingStorage)
-            {
-                SPDLOG_WARN("Visual debugger requires swapchain STORAGE usage; skipping overlay");
-                warnedMissingStorage = true;
-            }
+            SPDLOG_ERROR("Visual debugger has no intermediate output");
             return;
         }
 
-        SCOPED_GPU_TIMER("visual debugger");
-        TransitionSwapchainImage(
-            commandBuffer, imageIndex,
-            {.stages = PipelineCommon::ERenderStage::Compute,
-             .access = PipelineCommon::EResourceAccess::ShaderWrite,
-             .layout = VK_IMAGE_LAYOUT_GENERAL},
-            "visual debugger");
+        constexpr VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        const bool initialized = lateToneMapping_.outputInitialized;
+        ImageMemoryBarrier::Insert(
+            commandBuffer,
+            initialized ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT
+                        : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            intermediateOutput->GetImage().Handle(),
+            range,
+            initialized ? VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT : 0u,
+            VK_ACCESS_SHADER_WRITE_BIT,
+            initialized ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_GENERAL);
+        lateToneMapping_.outputInitialized = true;
 
         std::array<uint32_t, 5> pushConst = {
-            imageIndex,
+            outputIndex,
             uint32_t(SwapChain().OutputOffset().x), uint32_t(SwapChain().OutputOffset().y),
             uint32_t(SwapChain().OutputExtent().width), uint32_t(SwapChain().OutputExtent().height)
         };
@@ -663,6 +668,48 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
             commandBuffer,
             Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, 8),
             Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().height, 8), 1);
+
+        ImageMemoryBarrier::Insert(
+            commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            intermediateOutput->GetImage().Handle(),
+            range,
+            VK_ACCESS_SHADER_WRITE_BIT,
+            VK_ACCESS_TRANSFER_READ_BIT,
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_LAYOUT_GENERAL);
+        TransitionSwapchainImage(
+            commandBuffer, imageIndex,
+            {.stages = PipelineCommon::ERenderStage::Transfer,
+             .access = PipelineCommon::EResourceAccess::TransferWrite,
+             .layout = VK_IMAGE_LAYOUT_GENERAL},
+            "visual debugger blit");
+        VkImageBlit blitRegion{};
+        blitRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        blitRegion.srcOffsets[0] = {0, 0, 0};
+        blitRegion.srcOffsets[1] = {
+            static_cast<int32_t>(SwapChain().OutputExtent().width),
+            static_cast<int32_t>(SwapChain().OutputExtent().height),
+            1};
+        blitRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        blitRegion.dstOffsets[0] = {
+            SwapChain().OutputOffset().x,
+            SwapChain().OutputOffset().y,
+            0};
+        blitRegion.dstOffsets[1] = {
+            SwapChain().OutputOffset().x + static_cast<int32_t>(SwapChain().OutputExtent().width),
+            SwapChain().OutputOffset().y + static_cast<int32_t>(SwapChain().OutputExtent().height),
+            1};
+        vkCmdBlitImage(
+            commandBuffer,
+            intermediateOutput->GetImage().Handle(),
+            VK_IMAGE_LAYOUT_GENERAL,
+            SwapChain().Images()[imageIndex],
+            VK_IMAGE_LAYOUT_GENERAL,
+            1,
+            &blitRegion,
+            VK_FILTER_NEAREST);
 
         TransitionSwapchainImage(
             commandBuffer, imageIndex,

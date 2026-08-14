@@ -1138,14 +1138,6 @@ namespace Vulkan
 
         bindless_.images.resize(Assets::Bindless::RT_COUNT);
 
-        const size_t swapChainImageCount = frame_.swapChain->Images().size();
-        if (swapChainImageCount > static_cast<size_t>(Assets::Bindless::kMaxSwapChainImages))
-        {
-            Throw(std::runtime_error(fmt::format(
-                "Swapchain image count {} exceeds the bindless capacity {}",
-                swapChainImageCount, Assets::Bindless::kMaxSwapChainImages)));
-        }
-
         // Primary view RT bank (bank 0 == legacy absolute layout).
         CreateRenderTargetBank(0);
         renderViews_->ResetSwapChainResources();
@@ -1154,40 +1146,26 @@ namespace Vulkan
         {
             renderViewServices_->OnSwapChainResourcesInvalidated(/*releaseOffscreenSampledOutputs*/ false);
         }
-        for (uint32_t i = 0; i != swapChainImageCount; i++)
+        lateToneMapping_.inputImage.reset();
+        lateToneMapping_.outputImage.reset();
+        lateToneMapping_.inputInitialized = false;
+        lateToneMapping_.outputInitialized = false;
         {
-            if (frame_.swapChain->SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT))
-            {
-                ctx_.globalTexturePool->BindStorageTexture(
-                    Assets::Bindless::RT_SWAPCHAIN0 + i, *frame_.swapChain->ImageViews()[i]);
-            }
-            else
-            {
-                ctx_.globalTexturePool->BindStorageTexture(
-                    Assets::Bindless::RT_SWAPCHAIN0 + i,
-                    GetViewStorageImage(Assets::Bindless::RT_SCENE_COLOR)->GetImageView());
-            }
-        }
+            lateToneMapping_.inputImage = std::make_unique<RenderImage>(
+                Device(), frame_.swapChain->OutputExtent(), VK_FORMAT_R16G16B16A16_SFLOAT,
+                VK_IMAGE_TILING_OPTIMAL,
+                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                false, "Late tone-mapping input");
+            ctx_.globalTexturePool->BindStorageTexture(
+                Assets::Bindless::RT_TONEMAP_INPUT, lateToneMapping_.inputImage->GetImageView());
 
-        lateToneMapping_.inputInitialized.clear();
-        {
-            lateToneMapping_.inputInitialized.assign(swapChainImageCount, false);
-            for (size_t i = 0; i < swapChainImageCount; ++i)
-            {
-                const std::string debugName = fmt::format("Late tone-mapping input {}", i);
-                bindless_.images[Assets::Bindless::RT_TONEMAP_INPUT0 + i].reset(new RenderImage(
-                    Device(),
-                    frame_.swapChain->OutputExtent(),
-                    VK_FORMAT_R16G16B16A16_SFLOAT,
-                    VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
-                        VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-                    false,
-                    debugName.c_str()));
-                ctx_.globalTexturePool->BindStorageTexture(
-                    Assets::Bindless::RT_TONEMAP_INPUT0 + static_cast<uint32_t>(i),
-                    bindless_.images[Assets::Bindless::RT_TONEMAP_INPUT0 + i]->GetImageView());
-            }
+            lateToneMapping_.outputImage = std::make_unique<RenderImage>(
+                Device(), frame_.swapChain->OutputExtent(), VK_FORMAT_R16G16B16A16_SFLOAT,
+                VK_IMAGE_TILING_OPTIMAL,
+                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                false, "Late tone-mapping output");
+            ctx_.globalTexturePool->BindStorageTexture(
+                Assets::Bindless::RT_TONEMAP_OUTPUT, lateToneMapping_.outputImage->GetImageView());
         }
 
         frameGeneration_.hudlessImages.clear();
@@ -1211,47 +1189,26 @@ namespace Vulkan
             }
         }
 
-        temporalPostFilter_.pingImages.clear();
-        temporalPostFilter_.pongImages.clear();
-        temporalPostFilter_.pingInitialized.clear();
-        temporalPostFilter_.pongInitialized.clear();
+        temporalPostFilter_.pingImage.reset();
+        temporalPostFilter_.pongImage.reset();
+        temporalPostFilter_.pingInitialized = false;
+        temporalPostFilter_.pongInitialized = false;
         const bool temporalPostFilterActive = temporalSuperResolutionActive_ &&
             Rendering::Upscaler::GetUpscalerTypeInfo(
                 static_cast<uint32_t>(activeUpscalerType_)).supportsTemporalPostFilter;
         if (temporalPostFilterActive)
         {
-            temporalPostFilter_.pingImages.reserve(swapChainImageCount);
-            temporalPostFilter_.pongImages.reserve(swapChainImageCount);
-            temporalPostFilter_.pingInitialized.assign(swapChainImageCount, false);
-            temporalPostFilter_.pongInitialized.assign(swapChainImageCount, false);
-            for (size_t i = 0; i < swapChainImageCount; ++i)
-            {
-                const std::string pingDebugName = fmt::format("Temporal post-filter ping {}", i);
-                temporalPostFilter_.pingImages.emplace_back(std::make_unique<RenderImage>(
-                    Device(),
-                    frame_.swapChain->OutputExtent(),
-                    VK_FORMAT_R16G16B16A16_SFLOAT,
-                    VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_STORAGE_BIT,
-                    false,
-                    pingDebugName.c_str()));
-                ctx_.globalTexturePool->BindStorageTexture(
-                    Assets::Bindless::RT_TEMPORAL_POST_PING0 + static_cast<uint32_t>(i),
-                    temporalPostFilter_.pingImages.back()->GetImageView());
+            temporalPostFilter_.pingImage = std::make_unique<RenderImage>(
+                Device(), frame_.swapChain->OutputExtent(), VK_FORMAT_R16G16B16A16_SFLOAT,
+                VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "Temporal post-filter ping");
+            ctx_.globalTexturePool->BindStorageTexture(
+                Assets::Bindless::RT_TEMPORAL_POST_PING, temporalPostFilter_.pingImage->GetImageView());
 
-                const std::string pongDebugName = fmt::format("Temporal post-filter pong {}", i);
-                temporalPostFilter_.pongImages.emplace_back(std::make_unique<RenderImage>(
-                    Device(),
-                    frame_.swapChain->OutputExtent(),
-                    VK_FORMAT_R16G16B16A16_SFLOAT,
-                    VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_STORAGE_BIT,
-                    false,
-                    pongDebugName.c_str()));
-                ctx_.globalTexturePool->BindStorageTexture(
-                    Assets::Bindless::RT_TEMPORAL_POST_PONG0 + static_cast<uint32_t>(i),
-                    temporalPostFilter_.pongImages.back()->GetImageView());
-            }
+            temporalPostFilter_.pongImage = std::make_unique<RenderImage>(
+                Device(), frame_.swapChain->OutputExtent(), VK_FORMAT_R16G16B16A16_SFLOAT,
+                VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "Temporal post-filter pong");
+            ctx_.globalTexturePool->BindStorageTexture(
+                Assets::Bindless::RT_TEMPORAL_POST_PONG, temporalPostFilter_.pongImage->GetImageView());
         }
     }
 
@@ -1616,11 +1573,14 @@ namespace Vulkan
         screenshot_.initialized = false;
         screenshot_.captureSubmitSerial = 0;
         frameGeneration_.hudlessImages.clear();
-        temporalPostFilter_.pingImages.clear();
-        temporalPostFilter_.pongImages.clear();
-        temporalPostFilter_.pingInitialized.clear();
-        temporalPostFilter_.pongInitialized.clear();
-        lateToneMapping_.inputInitialized.clear();
+        temporalPostFilter_.pingImage.reset();
+        temporalPostFilter_.pongImage.reset();
+        temporalPostFilter_.pingInitialized = false;
+        temporalPostFilter_.pongInitialized = false;
+        lateToneMapping_.inputImage.reset();
+        lateToneMapping_.outputImage.reset();
+        lateToneMapping_.inputInitialized = false;
+        lateToneMapping_.outputInitialized = false;
         frame_.commandBuffers.reset();
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframePipeline.reset();
@@ -2268,14 +2228,13 @@ namespace Vulkan
     {
         const auto& settings = NextEngine::GetInstance()->GetUserSettings();
         if (!settings.TemporalUpscalerPostFilter || overlay_.temporalPostFilterPipeline == nullptr ||
-            imageIndex >= temporalPostFilter_.pingImages.size() ||
-            imageIndex >= temporalPostFilter_.pingInitialized.size())
+            temporalPostFilter_.pingImage == nullptr)
         {
             return false;
         }
 
-        RenderImage& output = *temporalPostFilter_.pingImages[imageIndex];
-        const bool initialized = temporalPostFilter_.pingInitialized[imageIndex];
+        RenderImage& output = *temporalPostFilter_.pingImage;
+        const bool initialized = temporalPostFilter_.pingInitialized;
         constexpr VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
         ImageMemoryBarrier::Insert(
             commandBuffer,
@@ -2287,7 +2246,7 @@ namespace Vulkan
             VK_ACCESS_SHADER_WRITE_BIT,
             initialized ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_GENERAL);
-        temporalPostFilter_.pingInitialized[imageIndex] = true;
+        temporalPostFilter_.pingInitialized = true;
         inputs.scalingOutputColor = MakeRenderImageResource(
             &output, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_USAGE_STORAGE_BIT);
         return true;
@@ -2299,10 +2258,8 @@ namespace Vulkan
         const Rendering::Upscaler::FFrameInputs& inputs)
     {
         SCOPED_GPU_TIMER("Temporal a-trous filter");
-        if (imageIndex >= temporalPostFilter_.pingImages.size() ||
-            imageIndex >= temporalPostFilter_.pongImages.size() ||
-            imageIndex >= temporalPostFilter_.pingInitialized.size() ||
-            imageIndex >= temporalPostFilter_.pongInitialized.size() ||
+        if (temporalPostFilter_.pingImage == nullptr ||
+            temporalPostFilter_.pongImage == nullptr ||
             overlay_.temporalPostFilterPipeline == nullptr)
         {
             return;
@@ -2345,8 +2302,8 @@ namespace Vulkan
         const bool useAlbedoGuide = HasAny(
             GetRendererContract(logicRenderers_.current).outputs, ERenderOutput::Albedo);
 
-        RenderImage* sourceImage = temporalPostFilter_.pingImages[imageIndex].get();
-        uint32_t sourceIndex = Assets::Bindless::RT_TEMPORAL_POST_PING0 + imageIndex;
+        RenderImage* sourceImage = temporalPostFilter_.pingImage.get();
+        uint32_t sourceIndex = Assets::Bindless::RT_TEMPORAL_POST_PING;
         const uint32_t passCount = std::clamp(settings.TemporalUpscalerPostFilterPasses, 1u, 4u);
         const float totalStrength = std::clamp(settings.TemporalUpscalerPostFilterStrength, 0.0f, 1.0f);
         const float passStrength =
@@ -2366,16 +2323,14 @@ namespace Vulkan
 
             const bool finalPass = pass + 1u == passCount;
             RenderImage* destinationImage = nullptr;
-            uint32_t destinationIndex = Assets::Bindless::RT_SWAPCHAIN0 + imageIndex;
-            int32_t destinationOffsetX = inputs.outputOffset.x;
-            int32_t destinationOffsetY = inputs.outputOffset.y;
+            uint32_t destinationIndex = 0;
+            int32_t destinationOffsetX = 0;
+            int32_t destinationOffsetY = 0;
             if (finalPass)
             {
-                destinationImage = bindless_.images[Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex].get();
-                destinationIndex = Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex;
-                destinationOffsetX = 0;
-                destinationOffsetY = 0;
-                const bool initialized = lateToneMapping_.inputInitialized[imageIndex];
+                destinationImage = lateToneMapping_.inputImage.get();
+                destinationIndex = Assets::Bindless::RT_TONEMAP_INPUT;
+                const bool initialized = lateToneMapping_.inputInitialized;
                 ImageMemoryBarrier::Insert(
                     commandBuffer,
                     initialized ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -2386,20 +2341,20 @@ namespace Vulkan
                     VK_ACCESS_SHADER_WRITE_BIT,
                     initialized ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED,
                     VK_IMAGE_LAYOUT_GENERAL);
-                lateToneMapping_.inputInitialized[imageIndex] = true;
+                lateToneMapping_.inputInitialized = true;
             }
             else
             {
-                const bool sourceIsPing = sourceIndex == Assets::Bindless::RT_TEMPORAL_POST_PING0 + imageIndex;
+                const bool sourceIsPing = sourceIndex == Assets::Bindless::RT_TEMPORAL_POST_PING;
                 destinationImage = sourceIsPing
-                    ? temporalPostFilter_.pongImages[imageIndex].get()
-                    : temporalPostFilter_.pingImages[imageIndex].get();
+                    ? temporalPostFilter_.pongImage.get()
+                    : temporalPostFilter_.pingImage.get();
                 destinationIndex = (sourceIsPing
-                    ? Assets::Bindless::RT_TEMPORAL_POST_PONG0
-                    : Assets::Bindless::RT_TEMPORAL_POST_PING0) + imageIndex;
+                    ? Assets::Bindless::RT_TEMPORAL_POST_PONG
+                    : Assets::Bindless::RT_TEMPORAL_POST_PING);
                 const bool destinationInitialized = sourceIsPing
-                    ? temporalPostFilter_.pongInitialized[imageIndex]
-                    : temporalPostFilter_.pingInitialized[imageIndex];
+                    ? temporalPostFilter_.pongInitialized
+                    : temporalPostFilter_.pingInitialized;
                 ImageMemoryBarrier::Insert(
                     commandBuffer,
                     destinationInitialized ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -2412,14 +2367,12 @@ namespace Vulkan
                     VK_IMAGE_LAYOUT_GENERAL);
                 if (sourceIsPing)
                 {
-                    temporalPostFilter_.pongInitialized[imageIndex] = true;
+                    temporalPostFilter_.pongInitialized = true;
                 }
                 else
                 {
-                    temporalPostFilter_.pingInitialized[imageIndex] = true;
+                    temporalPostFilter_.pingInitialized = true;
                 }
-                destinationOffsetX = 0;
-                destinationOffsetY = 0;
             }
 
             const FPushConstants pushConstants{
@@ -2465,25 +2418,20 @@ namespace Vulkan
         const Assets::UniformBufferObject& outputUbo)
     {
         if (overlay_.toneMappingPipeline == nullptr ||
-            imageIndex >= lateToneMapping_.inputInitialized.size())
+            lateToneMapping_.inputImage == nullptr || lateToneMapping_.outputImage == nullptr)
         {
             return;
         }
 
         SCOPED_GPU_TIMER("tone mapping after upscaler");
         constexpr VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-        const bool writesSwapchain = SwapChain().SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT);
         uint32_t inputIndex = Assets::Bindless::RT_SCENE_COLOR;
         VkExtent2D inputExtent = sourceExtent;
         if (sourceIsUpscaled)
         {
-            inputIndex = Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex;
+            inputIndex = Assets::Bindless::RT_TONEMAP_INPUT;
             inputExtent = outputExtent;
-            RenderImage* inputImage = bindless_.images[inputIndex].get();
-            if (inputImage == nullptr)
-            {
-                return;
-            }
+            RenderImage* inputImage = lateToneMapping_.inputImage.get();
             ImageMemoryBarrier::Insert(
                 commandBuffer,
                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -2496,39 +2444,26 @@ namespace Vulkan
                 VK_IMAGE_LAYOUT_GENERAL);
         }
 
-        const uint32_t outputIndex = writesSwapchain
-            ? Assets::Bindless::RT_SWAPCHAIN0 + imageIndex
-            : Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex;
-        RenderImage* offscreenOutput = writesSwapchain
-            ? nullptr
-            : bindless_.images[Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex].get();
-        if (!writesSwapchain && offscreenOutput == nullptr)
-        {
-            return;
-        }
-        if (offscreenOutput != nullptr)
-        {
-            const bool initialized = lateToneMapping_.inputInitialized[imageIndex];
-            ImageMemoryBarrier::Insert(
-                commandBuffer,
-                initialized ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT
-                             : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                offscreenOutput->GetImage().Handle(),
-                range,
-                initialized ? VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT : 0u,
-                VK_ACCESS_SHADER_WRITE_BIT,
-                initialized ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_GENERAL);
-            lateToneMapping_.inputInitialized[imageIndex] = true;
-        }
+        constexpr uint32_t outputIndex = Assets::Bindless::RT_TONEMAP_OUTPUT;
+        RenderImage* offscreenOutput = lateToneMapping_.outputImage.get();
+        const bool initialized = lateToneMapping_.outputInitialized;
+        ImageMemoryBarrier::Insert(
+            commandBuffer,
+            initialized ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT
+                        : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            offscreenOutput->GetImage().Handle(),
+            range,
+            initialized ? VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT : 0u,
+            VK_ACCESS_SHADER_WRITE_BIT,
+            initialized ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_GENERAL);
+        lateToneMapping_.outputInitialized = true;
 
         TransitionSwapchainImage(
             commandBuffer, imageIndex,
-            {.stages = writesSwapchain ? PipelineCommon::ERenderStage::Compute
-                                       : PipelineCommon::ERenderStage::Transfer,
-             .access = writesSwapchain ? PipelineCommon::EResourceAccess::ShaderWrite
-                                       : PipelineCommon::EResourceAccess::TransferWrite,
+            {.stages = PipelineCommon::ERenderStage::Transfer,
+             .access = PipelineCommon::EResourceAccess::TransferWrite,
              .layout = VK_IMAGE_LAYOUT_GENERAL},
             "tone mapping after upscaler");
 
@@ -2642,19 +2577,11 @@ namespace Vulkan
         if (upscaler_ && temporalUpscalerActive)
         {
             SCOPED_GPU_TIMER("temporal upscaler resolve");
-            TransitionSwapchainImage(
-                commandBuffer, imageIndex,
-                {.stages = PipelineCommon::ERenderStage::Compute,
-                 .access = PipelineCommon::EResourceAccess::ShaderWrite,
-                 .layout = VK_IMAGE_LAYOUT_GENERAL},
-                "temporal upscaler resolve");
-
             auto inputs = BuildUpscalerFrameInputs(commandBuffer, imageIndex, VK_IMAGE_LAYOUT_GENERAL);
             const auto& typeInfo = Rendering::Upscaler::GetUpscalerTypeInfo(
                 static_cast<uint32_t>(activeUpscalerType_));
             inputs.inputColorIsLinear = true;
-            RenderImage* toneMappingInput =
-                bindless_.images[Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex].get();
+            RenderImage* toneMappingInput = lateToneMapping_.inputImage.get();
             if (toneMappingInput == nullptr)
             {
                 return;
@@ -2667,7 +2594,7 @@ namespace Vulkan
                 PrepareTemporalPostFilterOutput(commandBuffer, imageIndex, inputs);
             if (!temporalPostFilterActive)
             {
-                const bool initialized = lateToneMapping_.inputInitialized[imageIndex];
+                const bool initialized = lateToneMapping_.inputInitialized;
                 constexpr VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
                 ImageMemoryBarrier::Insert(
                     commandBuffer,
@@ -2679,7 +2606,7 @@ namespace Vulkan
                     VK_ACCESS_SHADER_WRITE_BIT,
                     initialized ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED,
                     VK_IMAGE_LAYOUT_GENERAL);
-                lateToneMapping_.inputInitialized[imageIndex] = true;
+                lateToneMapping_.inputInitialized = true;
             }
             if (typeInfo.requiresStorageOutput)
             {
@@ -2757,7 +2684,7 @@ namespace Vulkan
             {
                 // The intermediate may contain a partially recorded failed dispatch. Discard it
                 // before the next attempt instead of treating it as a readable previous result.
-                temporalPostFilter_.pingInitialized[imageIndex] = false;
+                temporalPostFilter_.pingInitialized = false;
             }
         }
         ApplyToneMappingAfterUpscaler(

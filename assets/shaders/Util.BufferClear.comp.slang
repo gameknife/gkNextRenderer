@@ -23,7 +23,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     {
         return;
     }
-    //Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + SwapChainIdx)[ipos] = float4(0, 0, 0, 0);
     Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SINGLE_DIFFUSE))[ipos] = float4(0, 0, 0, 0);
     Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SINGLE_SPECULAR))[ipos] = float4(0, 0, 0, 0);
     Bindless.GetStorageTexture<float>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_PREV_DEPTHBUFFER))[ipos] = 100000.0f;

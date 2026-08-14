@@ -185,6 +185,9 @@ namespace Runtime::Remote
         }
         gpuConvertPipeline_.reset();
         graphicsCompletionSemaphore_.reset();
+        swapChainCapture_.reset();
+        swapChainCaptureExtent_ = {};
+        swapChainCaptureLayout_ = VK_IMAGE_LAYOUT_UNDEFINED;
         for (auto& slot : slots_)
         {
             DestroySlotResources(*slot);
@@ -198,6 +201,9 @@ namespace Runtime::Remote
     void FVideoPipeline::ReleaseSwapChainResources()
     {
         gpuConvertPipeline_.reset();
+        swapChainCapture_.reset();
+        swapChainCaptureExtent_ = {};
+        swapChainCaptureLayout_ = VK_IMAGE_LAYOUT_UNDEFINED;
     }
 
     uint64_t FVideoPipeline::AddSink(FPacketSink sink)
@@ -372,15 +378,106 @@ namespace Runtime::Remote
             return;
         }
 
-        const VkImage swapImage = swapChain.Images()[imageIndex];
+        if (sinkCount_.load(std::memory_order_relaxed) == 0)
+        {
+            return;
+        }
+        if (!swapChain.SupportsUsage(VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
+        {
+            if (!warnedMissingTransferSrc_)
+            {
+                SPDLOG_WARN("RemotePlay: swapchain lacks TRANSFER_SRC usage; post-UI video capture is unavailable");
+                warnedMissingTransferSrc_ = true;
+            }
+            return;
+        }
+
         const VkExtent2D srcExtent = swapChain.Extent();
         if (srcExtent.width == 0 || srcExtent.height == 0)
         {
             return;
         }
+        if (!EnsureSwapChainCapture(renderer))
+        {
+            return;
+        }
 
-        RecordFrameFromSource(commandBuffer, imageIndex, renderer, Assets::Bindless::RT_SWAPCHAIN0 + imageIndex,
-                              srcExtent, swapImage);
+        renderer.TransitionSwapchainImage(
+            commandBuffer, imageIndex,
+            {.stages = Vulkan::PipelineCommon::ERenderStage::Transfer,
+             .access = Vulkan::PipelineCommon::EResourceAccess::TransferRead,
+             .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL},
+            "remote video capture source");
+        swapChainCapture_->InsertBarrier(
+            commandBuffer,
+            swapChainCaptureLayout_ == VK_IMAGE_LAYOUT_GENERAL ? VK_ACCESS_SHADER_READ_BIT : 0u,
+            VK_ACCESS_TRANSFER_WRITE_BIT,
+            swapChainCaptureLayout_,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        swapChainCaptureLayout_ = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+        VkImageBlit blit{};
+        blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        blit.srcOffsets[1] = {static_cast<int32_t>(srcExtent.width), static_cast<int32_t>(srcExtent.height), 1};
+        blit.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        blit.dstOffsets[1] = {static_cast<int32_t>(srcExtent.width), static_cast<int32_t>(srcExtent.height), 1};
+        vkCmdBlitImage(commandBuffer,
+                       swapChain.Images()[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                       swapChainCapture_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                       1, &blit, VK_FILTER_NEAREST);
+
+        swapChainCapture_->InsertBarrier(
+            commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+        swapChainCaptureLayout_ = VK_IMAGE_LAYOUT_GENERAL;
+        renderer.TransitionSwapchainImage(
+            commandBuffer, imageIndex,
+            {.stages = Vulkan::PipelineCommon::ERenderStage::Present,
+             .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
+            "remote video capture restore");
+
+        RecordFrameFromSource(commandBuffer, imageIndex, renderer,
+                              Assets::Bindless::RES_REMOTE_CAPTURE, srcExtent, VK_NULL_HANDLE);
+    }
+
+    bool FVideoPipeline::EnsureSwapChainCapture(Vulkan::VulkanBaseRenderer& renderer)
+    {
+        const Vulkan::SwapChain& swapChain = renderer.SwapChain();
+        const VkExtent2D extent = swapChain.Extent();
+        if (swapChainCapture_ && swapChainCaptureExtent_.width == extent.width &&
+            swapChainCaptureExtent_.height == extent.height)
+        {
+            return true;
+        }
+
+        swapChainCapture_.reset();
+        swapChainCaptureExtent_ = {};
+        swapChainCaptureLayout_ = VK_IMAGE_LAYOUT_UNDEFINED;
+        try
+        {
+            // Keep capture linear and storage-capable; vkCmdBlitImage performs the format
+            // conversion from the presentable surface before the NV12 compute conversion.
+            swapChainCapture_ = std::make_unique<Vulkan::RenderImage>(
+                renderer.Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT,
+                VK_IMAGE_TILING_OPTIMAL,
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+                false, "Remote post-UI capture");
+            Assets::GlobalTexturePool* texturePool = Assets::GlobalTexturePool::GetInstance();
+            if (texturePool == nullptr)
+            {
+                throw std::runtime_error("RemotePlay: global texture pool is unavailable");
+            }
+            texturePool->BindStorageTexture(
+                Assets::Bindless::RES_REMOTE_CAPTURE, swapChainCapture_->GetImageView());
+            swapChainCaptureExtent_ = extent;
+            return true;
+        }
+        catch (const std::exception& error)
+        {
+            SPDLOG_ERROR("RemotePlay: failed to create post-UI capture image: {}", error.what());
+            swapChainCapture_.reset();
+            return false;
+        }
     }
 
     void FVideoPipeline::RecordFrameFromStorage(VkCommandBuffer commandBuffer, uint32_t imageIndex,

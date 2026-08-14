@@ -43,12 +43,13 @@
 //   k*256+0..127    2048  1        VulkanBaseRenderer              RT bank k (RT_* below)
 //   16384..16391       8  0        OffscreenRenderViewController   secondary view outputs (3 used)
 //   16392..16399       8  0+1      NextRemote RemoteServer         session composites (3 used)
-//   16400..16447      48  1        NextRemote VideoPipeline        NV12 encode planes (3 x 16)
-//   16448..16455       8  3+4      volume resources                3D froxel grids / LUTs
-//   16456              1  0        AssetThumbnailRenderer          material preview
-//   16457..16968     512  0        AssetThumbnailRenderer          mesh thumbnails
-//   16969..17480     512  0        AssetThumbnailRenderer          material thumbnails
-//   -> RES_SLOT_COUNT = 17481 descriptors in each 2D array (3D arrays have 8 descriptors)
+//   16400              1  1        NextRemote VideoPipeline        post-UI capture intermediate
+//   16401..16448      48  1        NextRemote VideoPipeline        NV12 encode planes (3 x 16)
+//   16449..16456       8  3+4      volume resources                3D froxel grids / LUTs
+//   16457              1  0        AssetThumbnailRenderer          material preview
+//   16458..16969     512  0        AssetThumbnailRenderer          mesh thumbnails
+//   16970..17481     512  0        AssetThumbnailRenderer          material thumbnails
+//   -> RES_SLOT_COUNT = 17482 descriptors in each 2D array (3D arrays have 8 descriptors)
 
 namespace Bindless
 {
@@ -71,8 +72,11 @@ namespace Bindless
     public static const int RES_REMOTE_COMPOSITE_BASE = RES_VIEW_SAMPLE_BASE + RES_VIEW_SAMPLE_COUNT;
     public static const int RES_REMOTE_COMPOSITE_COUNT = 8; // one per client view, 3 max today
 
+    // NextRemote captures the post-UI swapchain into this storage image before compute encoding.
+    public static const int RES_REMOTE_CAPTURE = RES_REMOTE_COMPOSITE_BASE + RES_REMOTE_COMPOSITE_COUNT;
+
     // NextRemote NV12 encode planes (VideoPipeline): 16 slots per client view.
-    public static const int RES_REMOTE_ENCODE_BASE = RES_REMOTE_COMPOSITE_BASE + RES_REMOTE_COMPOSITE_COUNT;
+    public static const int RES_REMOTE_ENCODE_BASE = RES_REMOTE_CAPTURE + 1;
     public static const int RES_REMOTE_ENCODE_STRIDE = 16;
     public static const int RES_REMOTE_ENCODE_COUNT = RES_REMOTE_ENCODE_STRIDE * 3;
 
@@ -131,32 +135,15 @@ namespace Bindless
     public static const int RT_GTAO = 30;
 
     // --- Global / shared slots: absolute, must NOT be remapped through ViewRT() ---
-    public static const int RT_TEMP_USAGE0 = 50;
-    // The global region below RT_SWAPCHAIN0 reserves 12 entries per swapchain-image
-    // resource. Some mobile HDR surfaces require more than the usual three images;
-    // these ranges must therefore not assume triple buffering.
-    public static const int kMaxSwapChainImages = 12;
+    // Final output is recorded with one frame in flight, so these storage images are reused only
+    // after the previous submission fence has completed. Swapchain images themselves deliberately
+    // never enter this bindless array: they are only transfer destinations and present sources.
+    public static const int RT_TEMPORAL_POST_PING = 50;
+    public static const int RT_TEMPORAL_POST_PONG = RT_TEMPORAL_POST_PING + 1;
+    public static const int RT_TONEMAP_INPUT = RT_TEMPORAL_POST_PONG + 1;
+    public static const int RT_TONEMAP_OUTPUT = RT_TONEMAP_INPUT + 1;
 
-    // Per-swapchain-image ping/pong images used by the optional temporal post filter.
-    public static const int RT_TEMPORAL_POST_PING0 = RT_TEMP_USAGE0;
-    public static const int RT_TEMPORAL_POST_PONG0 = RT_TEMPORAL_POST_PING0 + kMaxSwapChainImages;
-    // Full-resolution linear scene color targets consumed by the final output pass.
-    public static const int RT_TONEMAP_INPUT0 = RT_TEMPORAL_POST_PONG0 + kMaxSwapChainImages;
-    // Compatibility aliases for older shader and host code.
-    public static const int RT_REMOTE_ENCODE0_Y = RT_TONEMAP_INPUT0 + kMaxSwapChainImages;
-    public static const int RT_REMOTE_ENCODE0_UV = 61;
-    public static const int RT_REMOTE_ENCODE1_Y = 62;
-    public static const int RT_REMOTE_ENCODE1_UV = 63;
-    public static const int RT_REMOTE_ENCODE2_Y = 64;
-    public static const int RT_REMOTE_ENCODE2_UV = 65;
-    public static const int RT_REMOTE_ENCODE3_Y = 66;
-    public static const int RT_REMOTE_ENCODE3_UV = 67;
-    
-    public static const int RT_SWAPCHAIN0 = 100;
-    public static const int RT_SWAPCHAIN1 = 101;
-    public static const int RT_SWAPCHAIN2 = 102;
-
-    public static const int RT_COUNT = 128;
+    public static const int RT_COUNT = RT_TONEMAP_OUTPUT + 1;
 
     // --- Multi-viewport (RenderView) RT bank layout ---
     // Each RenderView owns a contiguous "bank" of screen-space RT slots so it can keep an
@@ -164,8 +151,8 @@ namespace Bindless
     // Bank 0 == the legacy global layout above (primary view), so existing absolute slots are
     // unchanged and the primary view is bit-for-bit identical. The active view's bank base travels
     // in GPUScene.CustomData0; resolve a logical screen-space RT slot through ViewRT(base, RT_X).
-    // Stride is sized to clear the screen-space range (0..~30) plus headroom while staying below the
-    // global/shared slots (RT_TEMP_USAGE0=50, RT_REMOTE_*=60.., RT_SWAPCHAIN*=100..).
+    // Stride is sized to clear the screen-space range (0..~30) plus headroom while staying below
+    // the global/shared final-output slots (RT_TEMPORAL_POST_PING=50).
     public static const int kViewRtBankStride = 256;
     // Total banks including bank 0. Owned here rather than by FBankAllocator so the address-space
     // assertions below can see it; FBankAllocator::kMaxConcurrentBanks forwards to this.
@@ -188,10 +175,7 @@ namespace Bindless
     // The high region is a derived chain, so these can only fire if someone hand-edits a base
     // back into a magic number or grows a range past its successor.
     static_assert(RT_COUNT <= kViewRtBankStride, "an RT bank must fit inside its stride");
-    static_assert(RT_REMOTE_ENCODE0_Y + 8 <= RT_SWAPCHAIN0,
-                  "per-swapchain image resources would overlap the remote encode slots");
-    static_assert(RT_SWAPCHAIN0 + kMaxSwapChainImages <= RT_COUNT,
-                  "per-swapchain image resources would exceed the RT range");
+    static_assert(RT_TONEMAP_OUTPUT < RT_COUNT, "final output slots must fit inside the RT range");
     static_assert(kMaxViewRtBanks * kViewRtBankStride <= RES_HIGH_BASE,
                   "RT banks (binding 1) would run into the explicitly-bound region");
     static_assert(RES_SCENE_TEXTURE_CAPACITY <= RES_HIGH_BASE,
