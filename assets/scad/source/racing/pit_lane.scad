@@ -2,6 +2,7 @@
 // 1 unit = 1 m。gnb shot --scene assets/scad/source/racing/pit_lane.scad
 use <../../lib/kit_pitlane.scad>
 use <../../lib/kit_layout.scad>
+use <../../lib/gk_camera.scad>
 
 $fn = 12;
 
@@ -128,3 +129,17 @@ lay_scatter(n = 8, x0 = -56, x1 = 56, y0 = -34, y1 = -14, seed = 63)
     lay_pick($seed) { rp_nature_bush(s = 1.1, seed = $seed); rp_nature_bush(s = 0.9, seed = $seed + 1); }
 lay_scatter(n = 6, x0 = -50, x1 = 50, y0 = 36, y1 = 44, seed = 64)
     lay_pick($seed) { rp_nature_tree(s = 1.1, seed = $seed); rp_nature_bush(s = 1.2, seed = $seed); }
+
+// ================= 相机机位（虚拟点，零几何；第一个为默认入场机位） =================
+// 定点机位：UI 相机列表直接可选
+gk_camera_lookat(eye = [42, -46, 30], target = [0, 8, 0], name = "overview", fov = 50);
+gk_camera_lookat(eye = [16, 6.5, 1.7], target = [4, -6, 1.2], name = "pitbox", fov = 55, focal = 11);
+gk_camera_lookat(eye = [38, 17, 1.3], target = [-20, 21, 1.0], name = "start-straight", fov = 48);
+gk_camera_lookat(eye = [0, 38.5, 9], target = [0, 5, 0], name = "grandstand", fov = 55);
+gk_camera_lookat(eye = [44, 6, 12.5], target = [0, -2, 0], name = "control-tower", fov = 55);
+
+// 路径相机：车载视角沿维修通道由西向东（12s 往返由引擎 ping-pong 回放）
+gk_camera_lookat_key(eye = [-46, 5, 1.2], target = [-36, 5, 1.1], path = "pit-lane-drive", t = 0, fov = 52);
+gk_camera_lookat_key(eye = [-18, 5, 1.2], target = [-8, 5, 1.1], path = "pit-lane-drive", t = 4, fov = 52);
+gk_camera_lookat_key(eye = [12, 5, 1.2], target = [22, 5, 1.1], path = "pit-lane-drive", t = 8, fov = 52);
+gk_camera_lookat_key(eye = [40, 7, 1.4], target = [50, 12, 1.2], path = "pit-lane-drive", t = 12, fov = 52);

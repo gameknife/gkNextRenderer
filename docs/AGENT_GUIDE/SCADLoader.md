@@ -65,6 +65,26 @@ ScadLibrary 场景对象 Gizmo 在引擎 Y-up 与 SCAD Z-up 之间用 `ScadToWor
   无物理体）、地形数据经 `SceneTerrain` payload 挂成引擎 `TerrainComponent`。
   详见 `AGENT_GUIDE/ScadTerrain.md`。
 
+## 相机机位（虚拟点）
+
+场景可内嵌零几何相机标记（`use <../lib/gk_camera.scad>`，marker 是空 module，**不产生三角面、
+不进 kit/catalog**）。Loader（`FScadLoader.cpp` `BuildScadCameras`）识别标记节点并转换为与
+glTF 相机完全相同的运行时结构：定点机位进 `EnvironmentSetting.cameras`（UI 相机列表可选），
+路径机位额外生成根级动画节点 + `AnimationTrack`（选中该机位且 track 播放时由
+`Scene::HasCameraAnimation` 驱动画面跟随）。
+
+- `gk_camera(name=..., fov=55, aperture=0, focal=0)` — 定点机位。文件中第一个 `gk_camera`
+  即场景默认入场视角（`cameras[0]`）。
+- `gk_camera_key(path=..., t=秒, fov=...)` — 路径关键帧。同一 `path` 名 ≥2 个 key 生成一条
+  相机动画（按 t 升序，key 世界变换烘焙进 track，引擎侧 ping-pong 回放）。
+- 推荐用 lookat 便捷模块免除手写旋转：`gk_camera_lookat(eye, target, name, fov, focal)` /
+  `gk_camera_lookat_key(eye, target, path, t, fov)`（focal 缺省取 eye→target 距离）。
+- **朝向约定**：手动摆放时相机局部 front = +Y、up = +Z（SCAD 空间），即
+  `translate(eye) rotate([pitch,0,yaw])`（pitch 正=抬头；yaw 0=朝 +Y，-90=朝 +X）。
+  该约定经 Z-up→Y-up 转换后与引擎相机 front=-Z/up=+Y 一致。
+- marker 节点保留在场景层级中（重命名为 `cam_<name>` / `camkey_<path>_<i>` /
+  `campath_<path>`），Outliner 可见、便于排查。
+
 变量采用调用链可见的动态作用域，定义使用局部 definition stack；它与 OpenSCAD 的所有边角语义不保证完全一致。遇到不支持语法应补最小 parser/evaluator test，而不是在资产中依赖偶然降级。
 
 ## 后端与降级

@@ -15,11 +15,14 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <map>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 #include <fmt/format.h>
@@ -443,6 +446,232 @@ namespace Assets
         }
     } // namespace
 
+    namespace
+    {
+        // ------------------------------------------------------------------
+        // Camera markers: gk_camera() / gk_camera_key() are zero-geometry
+        // virtual points (see assets/scad/lib/gk_camera.scad). Marker local
+        // space: front = +Y, up = +Z (SCAD Z-up); after the Z-up -> Y-up bake
+        // this matches the engine camera convention (front = -Z, up = +Y), so
+        // fixed and path cameras both reuse the glTF camera runtime path
+        // (EnvironmentSetting.cameras + Scene::HasCameraAnimation override).
+        // ------------------------------------------------------------------
+
+        const Scad::Value* FindScadParam(const Scad::SceneNode& node, const char* name)
+        {
+            for (const auto& [key, value] : node.parameters)
+            {
+                if (key == name)
+                {
+                    return &value;
+                }
+            }
+            return nullptr;
+        }
+
+        std::string ScadParamString(const Scad::SceneNode& node, const char* name, const std::string& fallback)
+        {
+            const Scad::Value* value = FindScadParam(node, name);
+            return (value && value->type == Scad::Value::Type::Str && !value->str.empty()) ? value->str : fallback;
+        }
+
+        float ScadParamNumber(const Scad::SceneNode& node, const char* name, float fallback)
+        {
+            const Scad::Value* value = FindScadParam(node, name);
+            return (value && value->IsNumber()) ? static_cast<float>(value->num) : fallback;
+        }
+
+        void DecomposeWorldTR(const glm::dmat4& world, glm::vec3& outTranslation, glm::quat& outRotation)
+        {
+            glm::dvec3 scaleD(1.0);
+            glm::dvec3 translationD(0.0);
+            glm::dvec3 skew(0.0);
+            glm::dvec4 perspective(0.0);
+            glm::dquat rotationD(1.0, 0.0, 0.0, 0.0);
+            if (glm::decompose(world, scaleD, rotationD, translationD, skew, perspective))
+            {
+                outTranslation = glm::vec3(translationD);
+                outRotation = glm::normalize(glm::quat(rotationD));
+            }
+            else
+            {
+                outTranslation = glm::vec3(0.0f);
+                outRotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+            }
+        }
+
+        glm::mat4 CameraModelViewFromWorld(const glm::dmat4& world)
+        {
+            glm::vec3 eye(0.0f);
+            glm::quat rotation(1.0f, 0.0f, 0.0f, 0.0f);
+            DecomposeWorldTR(world, eye, rotation);
+            return glm::lookAtRH(eye, eye + rotation * glm::vec3(0.0f, 0.0f, -1.0f),
+                                 rotation * glm::vec3(0.0f, 1.0f, 0.0f));
+        }
+
+        void CollectScadCameraMarkersRecursive(
+            const Scad::SceneNode& sceneNode,
+            std::vector<const Scad::SceneNode*>& outFixed,
+            std::vector<const Scad::SceneNode*>& outKeys)
+        {
+            if (sceneNode.name == "gk_camera")
+            {
+                outFixed.push_back(&sceneNode);
+            }
+            else if (sceneNode.name == "gk_camera_key")
+            {
+                outKeys.push_back(&sceneNode);
+            }
+            for (const Scad::SceneNode& child : sceneNode.children)
+            {
+                CollectScadCameraMarkersRecursive(child, outFixed, outKeys);
+            }
+        }
+
+        void BuildScadCameras(
+            const std::vector<Scad::SceneNode>& roots,
+            ScadBuildCache& cache,
+            std::vector<std::shared_ptr<Node>>& nodes,
+            EnvironmentSetting& cameraInit,
+            std::vector<AnimationTrack>& tracks)
+        {
+            std::vector<const Scad::SceneNode*> fixedMarkers;
+            std::vector<const Scad::SceneNode*> keyMarkers;
+            for (const Scad::SceneNode& root : roots)
+            {
+                CollectScadCameraMarkersRecursive(root, fixedMarkers, keyMarkers);
+            }
+            if (fixedMarkers.empty() && keyMarkers.empty())
+            {
+                return;
+            }
+
+            std::unordered_set<std::string> usedNodeNames;
+            for (const auto& node : nodes)
+            {
+                usedNodeNames.insert(node->GetName());
+            }
+            const auto uniqueName = [&usedNodeNames](const std::string& base)
+            {
+                std::string name = base;
+                for (int suffix = 1; usedNodeNames.count(name) != 0; ++suffix)
+                {
+                    name = fmt::format("{}_{}", base, suffix);
+                }
+                usedNodeNames.insert(name);
+                return name;
+            };
+            const auto findEntry = [&cache](const Scad::SceneNode& marker)
+                -> const std::pair<std::shared_ptr<Node>, glm::dmat4>*
+            {
+                const auto found = cache.nodeByInstanceId.find(marker.instanceId);
+                return found == cache.nodeByInstanceId.end() ? nullptr : &found->second;
+            };
+            const auto fillCameraParams = [](Camera& camera, const Scad::SceneNode& marker)
+            {
+                camera.FieldOfView = ScadParamNumber(marker, "fov", 55.0f);
+                camera.Aperture = ScadParamNumber(marker, "aperture", 0.0f);
+                camera.FocalDistance = ScadParamNumber(marker, "focal", 10.0f);
+                if (camera.FocalDistance <= 0.0f)
+                {
+                    camera.FocalDistance = 10.0f;
+                }
+            };
+
+            // ---- Fixed cameras: one cameras[] entry per gk_camera marker ----
+            for (const Scad::SceneNode* marker : fixedMarkers)
+            {
+                const auto* entry = findEntry(*marker);
+                if (!entry)
+                {
+                    continue;
+                }
+                const std::string cameraName = ScadParamString(*marker, "name", "cam");
+                const std::string nodeName = uniqueName(fmt::format("cam_{}", cameraName));
+                entry->first->SetName(nodeName);
+
+                Camera camera{};
+                camera.name = cameraName;
+                camera.NodeName_ = nodeName;
+                camera.ModelView = CameraModelViewFromWorld(entry->second);
+                fillCameraParams(camera, *marker);
+                cameraInit.cameras.push_back(std::move(camera));
+            }
+
+            // ---- Path cameras: group gk_camera_key markers by path, sort by t ----
+            std::map<std::string, std::vector<const Scad::SceneNode*>> keysByPath;
+            for (const Scad::SceneNode* marker : keyMarkers)
+            {
+                keysByPath[ScadParamString(*marker, "path", "fly")].push_back(marker);
+            }
+            for (auto& [pathName, keys] : keysByPath)
+            {
+                std::sort(keys.begin(), keys.end(),
+                          [](const Scad::SceneNode* a, const Scad::SceneNode* b)
+                          { return ScadParamNumber(*a, "t", 0.0f) < ScadParamNumber(*b, "t", 0.0f); });
+                if (keys.size() < 2)
+                {
+                    SPDLOG_WARN("SCAD: camera path '{}' has < 2 keys; skipping animation", pathName);
+                    continue;
+                }
+
+                const std::string nodeName = uniqueName(fmt::format("campath_{}", pathName));
+                AnimationTrack track;
+                track.AnimationName = pathName;
+                track.NodeName_ = nodeName;
+
+                glm::vec3 firstTranslation(0.0f);
+                glm::quat firstRotation(1.0f, 0.0f, 0.0f, 0.0f);
+                glm::dmat4 firstWorld(1.0);
+                for (size_t keyIndex = 0; keyIndex < keys.size(); ++keyIndex)
+                {
+                    const Scad::SceneNode& marker = *keys[keyIndex];
+                    const auto* entry = findEntry(marker);
+                    if (!entry)
+                    {
+                        continue;
+                    }
+                    // The path node sits at scene root, so keys are baked to world TRS.
+                    glm::vec3 translation(0.0f);
+                    glm::quat rotation(1.0f, 0.0f, 0.0f, 0.0f);
+                    DecomposeWorldTR(entry->second, translation, rotation);
+                    const float time = std::max(0.0f, ScadParamNumber(marker, "t", 0.0f));
+                    track.TranslationChannel.Keys.push_back({time, translation});
+                    track.RotationChannel.Keys.push_back({time, rotation});
+                    track.Duration_ = std::max(track.Duration_, time);
+                    if (track.TranslationChannel.Keys.size() == 1)
+                    {
+                        firstTranslation = translation;
+                        firstRotation = rotation;
+                        firstWorld = entry->second;
+                    }
+                    // Rename the key marker node for outliner readability.
+                    entry->first->SetName(uniqueName(fmt::format("camkey_{}_{}", pathName, keyIndex)));
+                }
+                if (track.Duration_ <= 0.0f)
+                {
+                    SPDLOG_WARN("SCAD: camera path '{}' has zero duration; skipping animation", pathName);
+                    continue;
+                }
+
+                auto pathNode = Node::CreateNode(nodeName, firstTranslation, firstRotation, glm::vec3(1.0f),
+                                                 static_cast<uint32_t>(nodes.size()));
+                nodes.push_back(pathNode);
+                tracks.push_back(std::move(track));
+
+                Camera camera{};
+                camera.name = pathName;
+                camera.NodeName_ = nodeName;
+                camera.ModelView = CameraModelViewFromWorld(firstWorld);
+                fillCameraParams(camera, *keys.front());
+                cameraInit.cameras.push_back(std::move(camera));
+            }
+
+            SPDLOG_INFO("SCAD: {} fixed camera(s), {} camera path(s) collected", fixedMarkers.size(),
+                        keysByPath.size());
+        }
+    } // namespace
+
     bool FScadLoader::LoadScadScene(
         const std::string& filename,
         EnvironmentSetting& cameraInit,
@@ -450,7 +679,7 @@ namespace Assets
         std::vector<Model>& models,
         std::vector<FMaterial>& materials,
         std::vector<LightObject>& /*lights*/,
-        std::vector<AnimationTrack>& /*tracks*/,
+        std::vector<AnimationTrack>& tracks,
         std::vector<Skeleton>& /*skeletons*/,
         const ScadLoadOptions& options)
     {
@@ -486,6 +715,9 @@ namespace Assets
 
         // ---- Terrain payloads -> TerrainComponent (height/water/biome queries) ----
         AttachTerrainComponents(result.terrains, scale, buildCache);
+
+        // ---- Camera markers -> cameras[] + path animation tracks ----
+        BuildScadCameras(result.roots, buildCache, nodes, cameraInit, tracks);
 
         // ---- Camera + environment ----
         cameraInit.HasSky = true;

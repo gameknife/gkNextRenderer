@@ -141,6 +141,10 @@ gnb shot --scene assets/scad/xxx.scad              # 3. 截图肉眼验收（读
   结构不要交给随机。
 - 叙事细节让场景"活"：弃车长龙、洗劫翻倒的货架、检疫封锁沙袋、幸存者篝火+铺盖卷。
   每场景 1~2 个叙事焦点即可。
+- **相机机位**：场景收尾时 `use <../lib/gk_camera.scad>` 摆机位虚拟点——`gk_camera_lookat`
+  定点（3~5 个：全景入场位放第一个=默认视角，加 1~2 个叙事特写位）+ `gk_camera_lookat_key`
+  路径相机（≥2 个 key 即成动画）。加载后 UI 相机列表直接可选，路径机位自动播放跟随。
+  约定详见 `SCADLoader.md`「相机机位」节；参考 `source/racing/pit_lane.scad` 末尾。
 
 ## 4. 地形开放地图（1km 级）
 

@@ -4,6 +4,8 @@
 和 AI adapter 的依据：
 
 - `lib/kit_*.scad`：只放可复用模块库，不放完整场景。
+- `lib/gk_camera.scad`：相机机位虚拟点标记库（`gk_camera` / `gk_camera_key` 零几何 marker），
+  场景 `use` 后即可内嵌定点/路径机位；不进 catalog。约定见 `docs/AGENT_GUIDE/SCADLoader.md`。
 - `evaluated/**/*.scad`：确定的 Kit 实例列表；支持对象选择、Gizmo 和定向对象 AI。
 - `source/**/*.scad`：保留循环、条件、变量和局部 module 的 SCAD 程序；只使用源码编辑和源码 AI。
 - `proc/**/*.scad`：带 `gk_terrain(TERR)` 与 `ter_*` 规则的过程场景；使用过程节点编辑和过程 AI。

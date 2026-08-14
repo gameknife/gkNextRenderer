@@ -819,6 +819,73 @@ TEST_CASE("Scad loader: parse errors fail the load", "[Unit][Scad]")
                                                    tracks, skeletons));
 }
 
+TEST_CASE("Scad loader: gk_camera markers become fixed and path cameras", "[Unit][Scad]")
+{
+    ScopedDir dir;
+    // Marker modules are zero-geometry virtual points (assets/scad/lib/gk_camera.scad);
+    // inline copies keep the test independent of the asset tree.
+    const std::filesystem::path mainPath = dir.Write("cams.scad",
+                                                     "module gk_camera(name=\"cam\", fov=55, aperture=0, focal=0) {}\n"
+                                                     "module gk_camera_key(path=\"fly\", t=0, fov=55, aperture=0, focal=0) {}\n"
+                                                     "cube([10,10,1], center=true);\n"
+                                                     "translate([0,-10,2]) gk_camera(name=\"entry\", fov=40);\n"
+                                                     "translate([0,0,2]) gk_camera_key(path=\"fly\", t=0, fov=50);\n"
+                                                     "translate([10,0,2]) gk_camera_key(path=\"fly\", t=4);\n");
+
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
+
+    // One fixed + one path camera; the auto-focus fallback must not be appended.
+    REQUIRE(environment.cameras.size() == 2);
+
+    // Fixed camera: SCAD (0,-10,2) -> engine (x, z, -y) = (0, 2, 10).
+    const Assets::Camera& fixed = environment.cameras[0];
+    CHECK(fixed.name == "entry");
+    CHECK(fixed.FieldOfView == Catch::Approx(40.0f));
+    CHECK(fixed.NodeName_ == "cam_entry");
+    const glm::vec3 fixedEye = glm::vec3(glm::inverse(fixed.ModelView)[3]);
+    CHECK(fixedEye.x == Catch::Approx(0.0f).margin(1e-4f));
+    CHECK(fixedEye.y == Catch::Approx(2.0f).margin(1e-4f));
+    CHECK(fixedEye.z == Catch::Approx(10.0f).margin(1e-4f));
+    // Identity marker rotation: front = SCAD +Y -> engine -Z.
+    const glm::vec3 fixedFwd = -glm::normalize(glm::vec3(fixed.ModelView[2]));
+    CHECK(fixedFwd.z == Catch::Approx(-1.0f).margin(1e-4f));
+
+    // Path camera: one NodeTransform track with world-baked keys.
+    const Assets::Camera& path = environment.cameras[1];
+    CHECK(path.name == "fly");
+    CHECK(path.NodeName_ == "campath_fly");
+    REQUIRE(tracks.size() == 1);
+    const Assets::AnimationTrack& track = tracks[0];
+    CHECK(track.Target_ == Assets::AnimationTrack::Target::NodeTransform);
+    CHECK(track.AnimationName == "fly");
+    CHECK(track.NodeName_ == "campath_fly");
+    CHECK(track.Duration_ == Catch::Approx(4.0f));
+    REQUIRE(track.TranslationChannel.Keys.size() == 2);
+    REQUIRE(track.RotationChannel.Keys.size() == 2);
+    CHECK(track.TranslationChannel.Keys[0].Time == Catch::Approx(0.0f));
+    CHECK(track.TranslationChannel.Keys[1].Time == Catch::Approx(4.0f));
+    // Keys are baked to engine world space: scad (10,0,2) -> engine (10, 2, 0).
+    CHECK(track.TranslationChannel.Keys[1].Value.x == Catch::Approx(10.0f).margin(1e-4f));
+    CHECK(track.TranslationChannel.Keys[1].Value.y == Catch::Approx(2.0f).margin(1e-4f));
+    CHECK(track.TranslationChannel.Keys[1].Value.z == Catch::Approx(0.0f).margin(1e-4f));
+
+    // The animated path node exists so Scene::EvaluateTracks can resolve it.
+    const auto pathNode = std::ranges::find_if(nodes, [](const std::shared_ptr<Assets::Node>& node)
+    { return node->GetName() == "campath_fly"; });
+    REQUIRE(pathNode != nodes.end());
+    CHECK((*pathNode)->Translation().x == Catch::Approx(0.0f).margin(1e-4f));
+    CHECK((*pathNode)->Translation().y == Catch::Approx(2.0f).margin(1e-4f));
+}
+
 TEST_CASE("Scad loader: Z-up converts to engine Y-up", "[Unit][Scad]")
 {
     ScopedDir dir;
