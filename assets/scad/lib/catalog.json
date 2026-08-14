@@ -15359,6 +15359,1329 @@
       ]
     },
     {
+      "name": "kit_pitlane",
+      "file": "kit_pitlane.scad",
+      "prefix": "rp_",
+      "scaleClass": "mid",
+      "modules": [
+        {
+          "name": "rp_bldg_control_tower",
+          "category": "bldg",
+          "params": "seed = 0, h = 13",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "h",
+              "default": "13"
+            }
+          ],
+          "line": 258,
+          "footprint": [
+            6.4,
+            6.0
+          ],
+          "height": 19.4,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 348,
+          "colors": 26,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_bldg_garage",
+          "category": "bldg",
+          "params": "seed = 0, car = -1, closed = false",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "car",
+              "default": "-1"
+            },
+            {
+              "name": "closed",
+              "default": "false"
+            }
+          ],
+          "line": 180,
+          "footprint": [
+            8.16,
+            11.18
+          ],
+          "height": 11.2,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.51
+          ],
+          "triangles": 2204,
+          "colors": 85,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_bldg_grandstand",
+          "category": "bldg",
+          "params": "L = 24, rows = 7, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "24"
+            },
+            {
+              "name": "rows",
+              "default": "7"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 281,
+          "footprint": [
+            24.6,
+            9.99
+          ],
+          "height": 9.18,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.4
+          ],
+          "triangles": 2556,
+          "colors": 213,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_bldg_hospitality",
+          "category": "bldg",
+          "params": "seed = 0, L = 12, D = 7",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "L",
+              "default": "12"
+            },
+            {
+              "name": "D",
+              "default": "7"
+            }
+          ],
+          "line": 316,
+          "footprint": [
+            12.3,
+            8.55
+          ],
+          "height": 6.78,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.63
+          ],
+          "triangles": 360,
+          "colors": 30,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_ground_grass",
+          "category": "ground",
+          "params": "L = 8, D = 7, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "8"
+            },
+            {
+              "name": "D",
+              "default": "7"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 154,
+          "footprint": [
+            8.0,
+            7.0
+          ],
+          "height": 0.13,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 48,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_ground_gravel",
+          "category": "ground",
+          "params": "L = 8, D = 6, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "8"
+            },
+            {
+              "name": "D",
+              "default": "6"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 164,
+          "footprint": [
+            8.0,
+            6.0
+          ],
+          "height": 0.13,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 60,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_ground_paddock",
+          "category": "ground",
+          "params": "L = 12, D = 10, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "12"
+            },
+            {
+              "name": "D",
+              "default": "10"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 140,
+          "footprint": [
+            12.0,
+            10.0
+          ],
+          "height": 0.15,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 84,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_ground_pitlane",
+          "category": "ground",
+          "params": "L = 24, W = 12, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "24"
+            },
+            {
+              "name": "W",
+              "default": "12"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 115,
+          "footprint": [
+            24.0,
+            12.0
+          ],
+          "height": 0.15,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 228,
+          "colors": 19,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_ground_track",
+          "category": "ground",
+          "params": "L = 24, W = 12, seed = 0, start = false",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "24"
+            },
+            {
+              "name": "W",
+              "default": "12"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "start",
+              "default": "false"
+            }
+          ],
+          "line": 85,
+          "footprint": [
+            24.0,
+            12.0
+          ],
+          "height": 0.15,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 384,
+          "colors": 32,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_boxc",
+          "category": "misc",
+          "params": "s",
+          "paramList": [
+            {
+              "name": "s"
+            }
+          ],
+          "line": 54,
+          "footprint": [
+            1.0,
+            1.0
+          ],
+          "height": 0.5,
+          "zMin": -0.5,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_slab",
+          "category": "misc",
+          "params": "L = 4, D = 4, t = 0.2",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "4"
+            },
+            {
+              "name": "D",
+              "default": "4"
+            },
+            {
+              "name": "t",
+              "default": "0.2"
+            }
+          ],
+          "line": 55,
+          "footprint": [
+            4.0,
+            4.0
+          ],
+          "height": 0.2,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_nature_bush",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 802,
+          "footprint": [
+            1.3,
+            1.2
+          ],
+          "height": 0.82,
+          "zMin": -0.15,
+          "center": [
+            0.05,
+            0.0
+          ],
+          "triangles": 360,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_nature_hedge",
+          "category": "nature",
+          "params": "L = 4, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "4"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 809,
+          "footprint": [
+            4.0,
+            0.7
+          ],
+          "height": 1.07,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_nature_tree",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 793,
+          "footprint": [
+            3.03,
+            3.0
+          ],
+          "height": 5.13,
+          "zMin": 0.0,
+          "center": [
+            -0.01,
+            0.0
+          ],
+          "triangles": 408,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_part_pyramid",
+          "category": "part",
+          "params": "L = 3, D = 3, h = 0.8, c = [0.5, 0.5, 0.5]",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "3"
+            },
+            {
+              "name": "D",
+              "default": "3"
+            },
+            {
+              "name": "h",
+              "default": "0.8"
+            },
+            {
+              "name": "c",
+              "default": "[0.5, 0.5, 0.5]"
+            }
+          ],
+          "line": 58,
+          "footprint": [
+            3.0,
+            3.0
+          ],
+          "height": 0.8,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 6,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_part_tire",
+          "category": "part",
+          "params": "r = 0.34, w = 0.26",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "0.34"
+            },
+            {
+              "name": "w",
+              "default": "0.26"
+            }
+          ],
+          "line": 66,
+          "footprint": [
+            0.68,
+            0.26
+          ],
+          "height": 0.34,
+          "zMin": -0.34,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_banner",
+          "category": "prop",
+          "params": "len = 6, seed = 0",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "6"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 486,
+          "footprint": [
+            6.0,
+            0.05
+          ],
+          "height": 1.05,
+          "zMin": 0.15,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 60,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_bottle",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 552,
+          "footprint": [
+            0.6,
+            0.4
+          ],
+          "height": 2.1,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 204,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_canopy",
+          "category": "prop",
+          "params": "seed = 0, S = 3.2",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "S",
+              "default": "3.2"
+            }
+          ],
+          "line": 603,
+          "footprint": [
+            3.6,
+            3.6
+          ],
+          "height": 3.1,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 90,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_cone",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 428,
+          "footprint": [
+            0.34,
+            0.34
+          ],
+          "height": 0.75,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 108,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_fence_catch",
+          "category": "prop",
+          "params": "len = 6, h = 3.0, seed = 0",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "6"
+            },
+            {
+              "name": "h",
+              "default": "3.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 477,
+          "footprint": [
+            6.55,
+            0.1
+          ],
+          "height": 3.0,
+          "zMin": 0.0,
+          "center": [
+            0.27,
+            0.0
+          ],
+          "triangles": 60,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_flag",
+          "category": "prop",
+          "params": "seed = 0, h = 6",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "h",
+              "default": "6"
+            }
+          ],
+          "line": 407,
+          "footprint": [
+            1.18,
+            0.1
+          ],
+          "height": 6.0,
+          "zMin": 0.0,
+          "center": [
+            0.54,
+            0.0
+          ],
+          "triangles": 72,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_floodlight",
+          "category": "prop",
+          "params": "h = 14, seed = 0",
+          "paramList": [
+            {
+              "name": "h",
+              "default": "14"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 392,
+          "footprint": [
+            2.5,
+            1.1
+          ],
+          "height": 14.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 168,
+          "colors": 11,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_fuel_rig",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 576,
+          "footprint": [
+            1.8,
+            1.6
+          ],
+          "height": 2.45,
+          "zMin": 0.0,
+          "center": [
+            0.1,
+            0.0
+          ],
+          "triangles": 132,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_gantry",
+          "category": "prop",
+          "params": "L = 14, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "14"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 363,
+          "footprint": [
+            1.0,
+            15.0
+          ],
+          "height": 6.15,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 348,
+          "colors": 29,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_generator",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 589,
+          "footprint": [
+            1.9,
+            1.1
+          ],
+          "height": 1.7,
+          "zMin": 0.08,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 132,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_guardrail",
+          "category": "prop",
+          "params": "len = 6, seed = 0",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "6"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 468,
+          "footprint": [
+            6.46,
+            0.15
+          ],
+          "height": 0.71,
+          "zMin": 0.0,
+          "center": [
+            0.23,
+            -0.02
+          ],
+          "triangles": 72,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_lift",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 563,
+          "footprint": [
+            3.5,
+            1.89
+          ],
+          "height": 2.7,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 108,
+          "colors": 9,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_locker",
+          "category": "prop",
+          "params": "seed = 0, n = 3",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "n",
+              "default": "3"
+            }
+          ],
+          "line": 540,
+          "footprint": [
+            1.9,
+            0.54
+          ],
+          "height": 2.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.02
+          ],
+          "triangles": 108,
+          "colors": 9,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_monitor",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 634,
+          "footprint": [
+            1.5,
+            0.5
+          ],
+          "height": 2.28,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 108,
+          "colors": 9,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_pitwall",
+          "category": "prop",
+          "params": "len = 8, seed = 0",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "8"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 345,
+          "footprint": [
+            8.24,
+            1.37
+          ],
+          "height": 2.95,
+          "zMin": 0.0,
+          "center": [
+            0.12,
+            -0.4
+          ],
+          "triangles": 120,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_podium",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 615,
+          "footprint": [
+            6.13,
+            2.36
+          ],
+          "height": 5.0,
+          "zMin": 0.0,
+          "center": [
+            0.27,
+            0.47
+          ],
+          "triangles": 324,
+          "colors": 18,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_pylon",
+          "category": "prop",
+          "params": "seed = 0, h = 7",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "h",
+              "default": "7"
+            }
+          ],
+          "line": 415,
+          "footprint": [
+            1.3,
+            1.0
+          ],
+          "height": 7.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 204,
+          "colors": 17,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_tire_rack",
+          "category": "prop",
+          "params": "seed = 0, L = 2.4",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "L",
+              "default": "2.4"
+            }
+          ],
+          "line": 526,
+          "footprint": [
+            2.4,
+            0.5
+          ],
+          "height": 2.08,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 624,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_tire_stack",
+          "category": "prop",
+          "params": "seed = 0, n = 3",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "n",
+              "default": "3"
+            }
+          ],
+          "line": 439,
+          "footprint": [
+            0.68,
+            0.68
+          ],
+          "height": 0.81,
+          "zMin": 0.01,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 288,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_tire_wall",
+          "category": "prop",
+          "params": "len = 4, seed = 0",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "4"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 448,
+          "footprint": [
+            3.89,
+            0.32
+          ],
+          "height": 1.36,
+          "zMin": -0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 1920,
+          "colors": 12,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_toolcart",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 494,
+          "footprint": [
+            0.95,
+            0.6
+          ],
+          "height": 1.12,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 564,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_prop_workbench",
+          "category": "prop",
+          "params": "seed = 0, L = 2.4",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "L",
+              "default": "2.4"
+            }
+          ],
+          "line": 509,
+          "footprint": [
+            2.4,
+            0.7
+          ],
+          "height": 2.2,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 156,
+          "colors": 13,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_veh_cart",
+          "category": "veh",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 778,
+          "footprint": [
+            1.6,
+            1.04
+          ],
+          "height": 1.21,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 444,
+          "colors": 13,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_veh_gt3",
+          "category": "veh",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 652,
+          "footprint": [
+            5.0,
+            2.2
+          ],
+          "height": 1.53,
+          "zMin": 0.0,
+          "center": [
+            0.07,
+            0.0
+          ],
+          "triangles": 864,
+          "colors": 41,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_veh_hauler",
+          "category": "veh",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 750,
+          "footprint": [
+            13.15,
+            2.64
+          ],
+          "height": 3.5,
+          "zMin": 0.0,
+          "center": [
+            0.17,
+            0.0
+          ],
+          "triangles": 888,
+          "colors": 26,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_veh_safety_car",
+          "category": "veh",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 707,
+          "footprint": [
+            4.48,
+            2.0
+          ],
+          "height": 1.6,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 540,
+          "colors": 21,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_veh_van",
+          "category": "veh",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 731,
+          "footprint": [
+            5.64,
+            2.22
+          ],
+          "height": 2.3,
+          "zMin": 0.0,
+          "center": [
+            -0.04,
+            0.0
+          ],
+          "triangles": 576,
+          "colors": 17,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "rp_veh_wheel",
+          "category": "veh",
+          "params": "r = 0.34, w = 0.30",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "0.34"
+            },
+            {
+              "name": "w",
+              "default": "0.30"
+            }
+          ],
+          "line": 76,
+          "footprint": [
+            0.68,
+            0.34
+          ],
+          "height": 0.34,
+          "zMin": -0.34,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        }
+      ]
+    },
+    {
       "name": "kit_tw",
       "file": "kit_tw.scad",
       "prefix": "tw_",
