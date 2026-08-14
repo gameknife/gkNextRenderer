@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The shared contract assembly. Lives in the default AssemblyLoadContext so that types crossing
+    the collectible-ALC boundary (IGameModule, GkStr, ...) have a single identity regardless of
+    how many times GkNext.Game is reloaded.
+  -->
+
+  <PropertyGroup>
+    <RootNamespace>GkNext</RootNamespace>
+    <AssemblyName>GkNext.Engine</AssemblyName>
+  </PropertyGroup>
+
+</Project>

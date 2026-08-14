@@ -7,8 +7,6 @@
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Engine/Runtime/Components/SceneReferenceComponent.hpp"
 #include "Engine/Runtime/Components/TerrainComponent.hpp"
-#include "Engine/Runtime/Engine.hpp"
-#include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 
 namespace Reflection
@@ -37,10 +35,12 @@ namespace Reflection
         Runtime::SceneReferenceComponent::RegisterReflection();
         Runtime::TerrainComponent::RegisterReflection();
         Assets::Node::RegisterReflection();
-        
-        NextEngine::RegisterReflection();
-        Assets::Scene::RegisterReflection();
-        
+
+        // NextEngine and Assets::Scene are deliberately absent. Reflection owns component and node
+        // *properties*; engine-level and scene-level *functions* are owned by the script binding
+        // table (src/Modules/NextDotNet/EngineApi.def.h). They used to be registered here as well,
+        // which is how the two sources drifted apart — see the design's section 4.4.
+
         sReflectionInitialized = true;
     }
 

@@ -3,8 +3,6 @@
 #include "Automation/EditorScriptExecutor.hpp"
 #include "EditorContext.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Modules/NextQuickJS/NextQuickJSModule.hpp"
-#include "Modules/NextQuickJS/QuickJSEngine.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include <cstring>
@@ -27,16 +25,6 @@ namespace Editor
                 return;
             }
             executor = std::make_unique<FEditorScriptExecutor>(engine);
-            if (auto* qjs = Modules::NextQuickJS::Get(engine))
-            {
-                qjs->SetEditorBindingsCallback([](void* context)
-                {
-                    if (executor)
-                    {
-                        executor->RegisterEditorBindings(context);
-                    }
-                });
-            }
         }
 
         void DrainExecutionState()
@@ -134,15 +122,7 @@ namespace Editor
         {
             const std::string input = scriptInputBuffer;
             logHistory.push_back({"> [script]\n" + input, false});
-            if (input.find("Editor.") != std::string::npos || input.starts_with("const ") ||
-                input.starts_with("let ") || input.starts_with("var ") || input.starts_with("for"))
-            {
-                executor->EvalJavaScript(input);
-            }
-            else
-            {
-                executor->ExecuteScriptText(input, &context, true);
-            }
+            executor->ExecuteScriptText(input, &context, true);
             DrainExecutionState();
         }
         ImGui::SameLine();

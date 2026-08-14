@@ -126,6 +126,8 @@ func main() {
 	root.AddCommand(newLocCommand(ctx))
 	root.AddCommand(newTyposCommand(ctx))
 	root.AddCommand(newGitCommand(ctx))
+	root.AddCommand(newDotNetCommand(ctx))
+	root.AddCommand(newCSharpGenCommand(ctx))
 	root.AddCommand(newLLMCommand(ctx))
 	root.AddCommand(newAICommand(ctx))
 	root.AddCommand(newLegacyAgentCommand(ctx))
@@ -309,7 +311,7 @@ func newDepsCommand(ctx appContext) *cobra.Command {
 	}
 
 	fetch := &cobra.Command{
-		Use:   "fetch [all|tsc|vulkan|streamline|fidelityfx]",
+		Use:   "fetch [all|vulkan|streamline|fidelityfx]",
 		Short: "Fetch one or more external dependencies",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return fetcher.EnsureNamedExternal(ctx.repoRoot, ctx.cfg, args)
@@ -354,11 +356,6 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 			}
 			if !skipSetup {
 				if err := vcpkg.EnsureBootstrapped(ctx.repoRoot, ctx.cfg); err != nil {
-					return err
-				}
-			}
-			if !opts.PrintCmd {
-				if err := fetcher.EnsureHostBuildTools(ctx.repoRoot, ctx.cfg); err != nil {
 					return err
 				}
 			}

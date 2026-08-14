@@ -28,7 +28,6 @@ set(ASSET_DIRS
     sfx
     sounds
     textures
-    typescript
 )
 
 set(all_asset_files "")
@@ -56,25 +55,6 @@ foreach(dir IN LISTS ASSET_DIRS)
         COMMENT "Copying ${dir}..."
     )
 endforeach()
-
-set(tsc_tool_dir "${CMAKE_CURRENT_SOURCE_DIR}/../tools/tsc")
-if(EXISTS "${tsc_tool_dir}")
-    file(GLOB_RECURSE tsc_tool_files CONFIGURE_DEPENDS "${tsc_tool_dir}/*")
-    set(tsc_tool_stamp "${CMAKE_CURRENT_BINARY_DIR}/tsc-tool.stamp")
-    list(APPEND all_asset_files ${tsc_tool_files})
-    list(APPEND all_asset_stamps ${tsc_tool_stamp})
-    add_custom_command(
-        OUTPUT ${tsc_tool_stamp}
-        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
-            "${tsc_tool_dir}"
-            "${output_base_dir}/../tools/tsc"
-        COMMAND ${CMAKE_COMMAND} -E touch ${tsc_tool_stamp}
-        DEPENDS ${tsc_tool_files}
-        COMMENT "Copying bundled TypeScript compiler..."
-    )
-else()
-    message(STATUS "Bundled TypeScript compiler not found at ${tsc_tool_dir}; QuickJS TS hot reload will be disabled in copied runtime layouts.")
-endif()
 
 if(NOT ANDROID AND NOT IOS AND Vulkan_SLANGC)
     get_filename_component(slangc_tool_dir "${Vulkan_SLANGC}" DIRECTORY)

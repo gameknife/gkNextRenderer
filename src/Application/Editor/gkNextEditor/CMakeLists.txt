@@ -15,7 +15,6 @@ gk_configure_application(gkNextEditor MODULES
     LDrawLoader
     ScadLoader
     SplatLoader
-    NextQuickJS
     RenderViews
     SceneExport
 )

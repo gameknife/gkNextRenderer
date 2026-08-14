@@ -235,6 +235,12 @@ func EnsureMSVCEnvironment() error {
 		return nil
 	}
 
+	// The NativeAOT compiler shells out to a bare `vswhere` to find link.exe, and fails with the
+	// shell's "not recognized" text substituted for the linker path when it is not on PATH.
+	if !CommandExists("vswhere.exe") {
+		os.Setenv("PATH", filepath.Dir(vswhere)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	}
+
 	cmd := exec.Command(vswhere, "-latest", "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath")
 	output, err := cmd.Output()
 	if err != nil {

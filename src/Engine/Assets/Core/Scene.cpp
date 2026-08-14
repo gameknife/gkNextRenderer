@@ -22,7 +22,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <entt/meta/factory.hpp>
 
 namespace Assets
 {
@@ -118,17 +117,6 @@ namespace Assets
         static_assert(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE * Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME ==
                       Assets::GPU_SCENE_AMBIENT_PER_CASCADE_COUNT);
         static_assert(sizeof(Assets::GPUScene) == 128);
-    }
-
-    void Scene::RegisterReflection()
-    {
-        using namespace entt::literals;
-
-        entt::meta_factory<Assets::Scene>()
-            .type("Scene"_hs)
-            .func<&Assets::Scene::GetIndicesCount>("GetIndicesCount")
-            .func<&Assets::Scene::FindNodeIdWithComponent>("FindNodeIdWithComponent")
-            .func<&Assets::Scene::GetNodeByInstanceId>("GetNodeById");
     }
 
     void Scene::RebuildNodeIndex()

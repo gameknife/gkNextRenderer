@@ -35,7 +35,6 @@ namespace Assets
     class Scene final
     {
     public:
-        static void RegisterReflection();
         static constexpr uint32_t kSunShadowCascadeCount = 4;
         static constexpr uint32_t kSunShadowResolution = 1024;
         static constexpr uint32_t kRenderProxyCapacity = MAX_RENDER_PROXIES;

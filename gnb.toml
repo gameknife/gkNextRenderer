@@ -54,12 +54,12 @@ when = "windows"
 version = "1.1.4"
 url = "https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/archive/refs/tags/v1.1.4.zip"
 
-[external.tsc]
-version = "v2025.5.23"
-windows = "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-windows-amd64.exe"
-linux = "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-linux-amd64"
-macos_amd64 = "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-darwin-amd64"
-macos_arm64 = "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-darwin-arm64"
+[external.dotnet]
+# .NET SDK for the managed scripting layer (src/Modules/NextDotNet + assets/csharp).
+# `version` is the floor: an already-installed SDK at or above it is used as-is, and only when none
+# is found does `gnb dotnet setup` download this exact version into external/dotnet/.
+version = "10.0.300"
+url_template = "https://builds.dotnet.microsoft.com/dotnet/Sdk/{version}/dotnet-sdk-{version}-{rid}.{ext}"
 
 [external.vulkansdk]
 version = "1.4.341.1"
@@ -186,7 +186,8 @@ all = [
   "Brotato3D",
   "NextRA",
   "FlappyCpp",
-  "FlappyJs",
+  "FlappyCSharp",
+  "DotNetSandbox",
   "BrickPlayer",
   "CharacterDemo",
   "TruckerDemo",

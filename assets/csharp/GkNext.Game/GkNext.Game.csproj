@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The reloadable half of the managed side. Under CoreCLR this assembly is loaded into a
+    collectible AssemblyLoadContext; under NativeAOT it is linked into GkNext.Bootstrap. The source
+    is identical either way and must never contain a backend #if.
+  -->
+
+  <PropertyGroup>
+    <RootNamespace>GkNext.Game</RootNamespace>
+    <AssemblyName>GkNext.Game</AssemblyName>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+
+    <!-- Phase 0 only: lets the probe build two behaviourally different copies of this assembly so
+         a hot reload can be proven to have swapped real code, not just re-run the same code. -->
+    <GkGameVariant Condition="'$(GkGameVariant)' == ''">A</GkGameVariant>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The generator that turns [GameInstance] into GkNext.Generated.GameEntry. -->
+    <ProjectReference Include="..\GkNext.SourceGen\GkNext.SourceGen.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\GkNext.Engine\GkNext.Engine.csproj">
+      <!-- GkNext.Engine always resolves from the default ALC; copying it next to the reloadable
+           assembly would risk a second copy being loaded and breaking type identity. -->
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <Target Name="GkGenerateBuildInfo" BeforeTargets="BeforeCompile">
+    <PropertyGroup>
+      <GkBuildInfoFile>$(IntermediateOutputPath)BuildInfo.g.cs</GkBuildInfoFile>
+    </PropertyGroup>
+    <WriteLinesToFile
+      File="$(GkBuildInfoFile)"
+      Lines="namespace GkNext.Game%3B;internal static class BuildInfo;{;    public const string Variant = &quot;$(GkGameVariant)&quot;%3B;}"
+      Overwrite="true"
+      WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(GkBuildInfoFile)" />
+      <FileWrites Include="$(GkBuildInfoFile)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

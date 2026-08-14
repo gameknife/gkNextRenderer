@@ -1,6 +1,9 @@
 # Reflection System
 
-当前反射层用 `entt::meta` 同时服务编辑器 PropertyWidgets、QuickJS component/node proxy 和属性命令历史。实现位于 `src/Engine/Runtime/Reflection/`；不要按已删除的“自注册 builder”设计工作，那套方案没有落地。
+当前反射层用 `entt::meta` 同时服务编辑器 PropertyWidgets 和属性命令历史。实现位于 `src/Engine/Runtime/Reflection/`；不要按已删除的“自注册 builder”设计工作，那套方案没有落地。
+
+反射层第三个消费者——脚本绑定——当前是空的：QuickJS 已删除，C# 的强类型 component wrapper 要到
+`docs/plans/dotnet-scripting-plan.md` 的 P5 才生成。这不意味着可以随手改属性名，见下文“脚本绑定”。
 
 ## 当前结构
 
@@ -13,7 +16,6 @@ PropertyTypes.hpp         封闭的 widget type enum
 PropertyAccessor.*        meta data 枚举、类型推断、get/set
 
 Editor/PropertyWidgets.*  ImGui widget + PropertyCommand
-NextQuickJS/Reflection/   JS 转换与 TypeScript 定义
 ```
 
 `REFLECT_COMPONENT(ClassName)` 只生成 `GetTypeName/GetTypeId/GetMetaType` 和 `static RegisterReflection()` 声明。它不是 fluent registration macro，也不会触发静态初始化。
@@ -61,23 +63,23 @@ void MyComponent::RegisterReflection()
 }
 ```
 
-优先注册 setter/getter，而不是直接暴露 private field。read-only 属性使用 `.data<nullptr, &Getter>()`；可调用 JS method 使用 `.func<&Method>("Method")`。property name 是编辑器命令、QuickJS 和 TS 定义共同使用的稳定 API，改名需要同步脚本和兼容处理。
+优先注册 setter/getter，而不是直接暴露 private field。read-only 属性使用 `.data<nullptr, &Getter>()`；可调用脚本 method 使用 `.func<&Method>("Method")`。property name 是编辑器命令与脚本绑定共同使用的稳定 API，改名需要同步兼容处理。
 
 ## PropertyMeta
 
-`PropertyPresets` 提供 Editable、ReadOnly、Range、Hidden、Transient。默认 metadata 带 `JSExposed`；如果属性只供编辑器使用，要显式去掉该 flag，而不是假定未生成 TS 就不可访问。
+`PropertyPresets` 提供 Editable、ReadOnly、Range、Hidden、Transient。默认 metadata 带 `JSExposed`；如果属性只供编辑器使用，要显式去掉该 flag，而不是假定当前没有脚本层就不会被暴露。
 
-- `ReadOnly`：PropertyWidgets 和 JS object 不提供 setter。
+- `ReadOnly`：PropertyWidgets 和脚本对象不提供 setter。
 - `Hidden`：编辑器隐藏；不要把它当序列化策略。
-- `JSExposed`：QuickJS proxy/TS 输出包含该属性。
+- `JSExposed`：脚本绑定包含该属性。设计上会改名为 `ScriptExposed`（`dotnet-scripting-design.md` 4.3），当前仍是旧名。
 - `Transient`：意图为不持久化；当前 SceneExport 并不会自动序列化所有反射属性。
 - `HasRange`：numeric widget 使用 min/max。
 
-缺少 custom metadata 时，`PropertyAccessor` 使用 property name 和 `General` category；这会默认 JS exposed，敏感/内部状态不要依赖默认值。
+缺少 custom metadata 时，`PropertyAccessor` 使用 property name 和 `General` category；这会默认 script exposed，敏感/内部状态不要依赖默认值。
 
 ## 类型与容器限制
 
-`PropertyAccessor::DeducePropertyType()` 当前识别 Bool、Int32、UInt32、Float、Double、String、Vec2/3/4、Quat、Mat4、Enum 和 Array。编辑器有常用 scalar/vector/quat/enum/array widget；Mat4 虽能识别和供 JS 转换，但当前没有专用 PropertyWidgets case。`AssetRef` enum 值只是预留，当前没有推断路径。
+`PropertyAccessor::DeducePropertyType()` 当前识别 Bool、Int32、UInt32、Float、Double、String、Vec2/3/4、Quat、Mat4、Enum 和 Array。编辑器有常用 scalar/vector/quat/enum/array widget；Mat4 虽能识别，但当前没有专用 PropertyWidgets case。`AssetRef` enum 值只是预留，当前没有推断路径。
 
 已知 container registry 只有：
 
@@ -94,18 +96,22 @@ Enum 要先以 `entt::meta_factory<Enum>()` 注册所有 value，再把 enum pro
 
 因此 editor property side effect 应放在 setter/command 可重复执行的路径，保证 execute/undo/redo 一致。不要在 ImGui 绘制分支中额外修改 Scene，否则 redo 无法重放。
 
-## QuickJS
+## 脚本绑定
 
-`NextQuickJS` 枚举 `PropertyAccessor::GetProperties()`，过滤 `JSExposed`，把非 read-only property 定义成 JS getter/setter，并从 meta funcs 生成 method。`assets/typescript/Engine.d.ts` 是对外契约；反射属性变更后要同步/重新生成并做脚本回归。
+当前没有脚本运行时消费反射：QuickJS 及其 `Engine.d.ts` 生成器已删除，替代它的 C# 侧
+`Components.g.cs` 由 `gnb csharpgen` 从反射清单生成，属于 P5
+（`docs/plans/dotnet-scripting-plan.md`）。
 
-QuickJS 支持的值转换面与 PropertyWidgets 不完全相同。新增 `PropertyType` 时至少审计：
+这段真空期不改变对反射注册的要求。P5 的生成器要消费的正是 `PropertyAccessor::GetProperties()`
+过滤 `JSExposed` 后的集合，因此新增 `PropertyType` 时仍要审计：
 
 - `PropertyAccessor::DeducePropertyType`；
 - `PropertyWidgets`；
-- `QuickJSTypeConverter` 的 JS 与 TS 双向转换；
 - container/enum handling；
 - undo/redo 的 `meta_any` copy 语义。
 
+脚本侧的类型转换面（P5 之前不存在）会在生成 wrapper 时补上第五项审计。
+
 ## 验证
 
-Engine 内建反射改动构建 `gkNextRenderer gkNextUnitTests`；模块类型还构建一个安装该模块的 consumer。运行对应 unit tag，并在 Editor 中验证显示、范围、undo/redo；JS exposed 属性再运行 QuickJS binding/Flappy parity 测试。只验证 `entt::resolve<T>()` 非空不足以证明 UI、命令和 JS 三条链都可用。
+Engine 内建反射改动构建 `gkNextRenderer gkNextUnitTests`；模块类型还构建一个安装该模块的 consumer。运行对应 unit tag，并在 Editor 中验证显示、范围、undo/redo。只验证 `entt::resolve<T>()` 非空不足以证明 UI 与命令两条链都可用；P5 之后还要加上 C# wrapper 一条。

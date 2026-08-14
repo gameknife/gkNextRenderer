@@ -86,11 +86,37 @@ if(TARGET SplatLoader)
     target_link_libraries(SplatLoader PRIVATE WebP::webp ZLIB::ZLIB)
 endif()
 
-if(TARGET NextQuickJS)
-    target_compile_definitions(NextQuickJS PRIVATE
-        GK_NEXT_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+if(TARGET NextDotNet)
+    # Headers only: hostfxr is located and loaded at runtime, so nothing from the .NET installation
+    # is linked in and a build machine needs no SDK beyond the two headers.
+    target_include_directories(NextDotNet PRIVATE "${GK_DOTNET_RESOLVED_HOSTPACK}")
+    target_compile_definitions(NextDotNet PRIVATE
+        GK_DOTNET_USE_AOT=${GK_DOTNET_USE_AOT}
+        GK_DOTNET_ROOT="${GK_DOTNET_RESOLVED_ROOT}"
     )
-    target_link_libraries(NextQuickJS PRIVATE quickjs SDL3::SDL3 imgui::imgui)
+    target_link_libraries(NextDotNet PRIVATE SDL3::SDL3 imgui::imgui)
+
+    # --- managed assemblies ------------------------------------------------------------------
+    # Only the bootstrap is published here, and only for CoreCLR: it is application-independent.
+    # Each application brings its own game assembly through gk_dotnet_managed_game(), because under
+    # NativeAOT the game is linked into a native library and two applications cannot share one.
+    if(NOT GK_DOTNET_USE_AOT)
+        set(gkBootstrapStamp "${CMAKE_CURRENT_BINARY_DIR}/managed-bootstrap.stamp")
+        add_custom_command(
+            OUTPUT ${gkBootstrapStamp}
+            COMMAND "${GK_DOTNET_EXE}" publish
+                "${GK_DOTNET_MANAGED_ROOT}/GkNext.Bootstrap/GkNext.Bootstrap.csproj"
+                -c Release -o "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/csharp" --nologo
+            COMMAND ${CMAKE_COMMAND} -E touch ${gkBootstrapStamp}
+            DEPENDS ${GK_DOTNET_MANAGED_SOURCES}
+            COMMENT "Publishing the managed bootstrap (CoreCLR)..."
+            VERBATIM
+        )
+        add_custom_target(gkNextManagedBootstrap DEPENDS ${gkBootstrapStamp})
+        add_dependencies(NextDotNet gkNextManagedBootstrap)
+        gk_dotnet_chain_publish(gkNextManagedBootstrap)
+        set_target_properties(gkNextManagedBootstrap PROPERTIES FOLDER "Modules")
+    endif()
 endif()
 
 if(TARGET NextPhysics)

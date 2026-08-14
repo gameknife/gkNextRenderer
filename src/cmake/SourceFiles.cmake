@@ -70,8 +70,8 @@ set(GK_MODULE_NAMES GltfLoader LDrawLoader ScadLoader SplatLoader NextAI NextAud
 if(GK_WITH_TUI AND NOT (ANDROID OR IOS))
     list(APPEND GK_MODULE_NAMES NextTui)
 endif()
-if(NOT ANDROID)
-    list(APPEND GK_MODULE_NAMES NextQuickJS)
+if(GK_DOTNET_ENABLED)
+    list(APPEND GK_MODULE_NAMES NextDotNet)
 endif()
 foreach(gk_module IN LISTS GK_MODULE_NAMES)
     file(GLOB_RECURSE src_files_module_${gk_module} CONFIGURE_DEPENDS
@@ -80,6 +80,13 @@ foreach(gk_module IN LISTS GK_MODULE_NAMES)
         "Modules/${gk_module}/*.h"
     )
 endforeach()
+
+# Two NextDotNet subdirectories are deliberately not part of the module library: Probe/ is a
+# standalone acceptance harness with its own main() and CMake project, and Stub/ is linked only
+# into targets that use the module without hosting managed code.
+if(src_files_module_NextDotNet)
+    list(FILTER src_files_module_NextDotNet EXCLUDE REGEX "/(Probe|Stub)/")
+endif()
 set(src_files_modules_all "")
 foreach(gk_module IN LISTS GK_MODULE_NAMES)
     list(APPEND src_files_modules_all ${src_files_module_${gk_module}})

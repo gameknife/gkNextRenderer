@@ -111,6 +111,10 @@ set(unitTestSources
     ${GK_SOURCE_ROOT}/Application/Game/NextDayz/Zombies/ZombieVisualPool.cpp
 )
 
+if(GK_DOTNET_ENABLED)
+    list(APPEND unitTestSources Test_DotNetEngineApi.cpp)
+endif()
+
 find_package(Catch2 3 REQUIRED)
 add_executable(gkNextUnitTests ${unitTestSources})
 
@@ -148,4 +152,12 @@ set(unitTestRuntimeModules
 if(TARGET NextTui)
     list(APPEND unitTestRuntimeModules NextTui)
 endif()
+if(TARGET NextDotNet)
+    list(APPEND unitTestRuntimeModules NextDotNet)
+endif()
 gk_target_runtime_modules(gkNextUnitTests MODULES ${unitTestRuntimeModules})
+
+if(TARGET NextDotNet)
+    # The tests exercise the native binding table, not the managed runtime, so they host no C#.
+    gk_dotnet_stub_game(gkNextUnitTests)
+endif()

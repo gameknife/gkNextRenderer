@@ -38,12 +38,13 @@
 - [SCAD Terrain 使用速查](AGENT_GUIDE/ScadTerrain.md)
 - [Soft Mesh Shader GPU-Driven 提交路径](guides/soft-mesh-shader-gpu-driven-submit.md)
 - [TUI 终端模式](guides/tui-mode.md)
-- [TypeScript 整合](guides/typescript-integration.md)
 
 ## Designs（当前架构）
 
-- [.NET 脚本运行时架构](designs/dotnet-scripting-design.md)（提案，未实现；C# 替换 QuickJS，
-  CoreCLR/NativeAOT 双后端共用同一份托管代码；[开发计划](plans/dotnet-scripting-plan.md)）
+- [.NET 脚本运行时架构](designs/dotnet-scripting-design.md)（现行；P0–P4 已落地，C# 脚本运行时
+  已接入引擎并通过 Flappy 双后端 parity；[开发计划](plans/dotnet-scripting-plan.md)）
+- [脚本绑定面基线（QuickJS 誊本）](designs/script-binding-surface-baseline.md)（现行；
+  QuickJS 退场前誊下的完整绑定面，P2 的 `EngineApi.def.h` 范围基线，P2 完成后由 def 取代）
 - [Agent 输入驱动验证](designs/agent-validation-input-driver.md)
 - [Desktop UI Foundation](designs/desktop-ui-foundation.md)
 - [AmbientCube 命中驱动驻留](designs/ambientcube-hit-driven-residency-design.md)
@@ -71,7 +72,7 @@
 ## Projects
 
 - Brotato3D：[介绍](projects/brotato-3d/introduction.md) · [配置与玩法开发指南](projects/brotato-3d/developer-guide.md)
-- Flappy C++ / TypeScript parity：[介绍与验证方式](projects/flappy-bird-parity/introduction.md)
+- Flappy 脚本 parity：[介绍与验证方式](projects/flappy-bird-parity/introduction.md)（C++ / C# 双实现，双后端）
 - AirportSim：[架构与确定性边界](projects/airport-sim/architecture.md)
 - NextRA：[架构不变量](projects/nextra/architecture.md) · [现状与后续方向](projects/nextra/roadmap.md)
 - ScadStudio：[会话、生成与预览架构](projects/scad-studio/architecture.md)
@@ -89,9 +90,8 @@
 ## Plans（待实施）
 
   （待实施；统一 Engine UI 主题、语义控件、Toolbar/Combo、应用 chrome、领域选项目录与 DevTools 边界）
-- [.NET 脚本运行时开发计划](plans/dotnet-scripting-plan.md)（待实施；P0 双后端钉子 →
-  QuickJS 退场 → EngineApi codegen → NextDotNet 宿主 → FlappyCSharp 双后端 parity。
-  P0 是全程唯一回退窗口）
+- [.NET 脚本运行时开发计划](plans/dotnet-scripting-plan.md)（实施中；P0–P4 已完成，FlappyCSharp
+  在两种后端下 parity 通过，下一步 P5 反射组件 wrapper 与文档收尾）
 - [Android 纯 CMake 驱动构建重构方案](plans/android-cmake-build-refactor-plan.md)（实施中；源码迁移已完成，待兼容 NDK 环境完成 APK/AVD 验收）
 - [iOS 纯 CMake 驱动构建重构方案](plans/ios-pure-cmake-build-refactor-plan.md)（device-only 实施；复用 macOS Vulkan SDK 解析，保留 `gnb ios build` 薄入口）
 - [阶段性 Release 准备计划](plans/release-readiness-plan.md)（现行；发布流水线、崩溃兜底、UI 收口、
@@ -124,4 +124,4 @@
 
 ## 更稳定的专题入口
 
-反射、QuickJS、热重载、各 loader 和具体游戏代码结构优先阅读 `AGENT_GUIDE/`；它们由 `AGENTS.md` 的 Key References 维护，不在这里复制一份容易漂移的版本。
+反射、热重载、各 loader 和具体游戏代码结构优先阅读 `AGENT_GUIDE/`；它们由 `AGENTS.md` 的 Key References 维护，不在这里复制一份容易漂移的版本。

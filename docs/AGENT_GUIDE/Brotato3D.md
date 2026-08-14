@@ -8,7 +8,7 @@
 
 ## 1. 一句话架构
 
-Brotato3D 是一个 **C++ 原生子应用**（不是 QuickJS 脚本游戏），核心是一个"上帝类" `Brotato3DGameInstance`，它继承引擎的 `NextGameInstanceBase`，把所有运行时状态作为成员持有；**实现按功能域拆分到多个 `*System.cpp` 翻译单元**里，但它们都是同一个类的成员函数。
+Brotato3D 是一个 **C++ 原生子应用**（不是脚本游戏），核心是一个"上帝类" `Brotato3DGameInstance`，它继承引擎的 `NextGameInstanceBase`，把所有运行时状态作为成员持有；**实现按功能域拆分到多个 `*System.cpp` 翻译单元**里，但它们都是同一个类的成员函数。
 
 ```
 Brotato3DGameInstance  (类声明集中在 Brotato3DGameInstance.hpp)

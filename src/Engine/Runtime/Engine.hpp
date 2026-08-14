@@ -81,7 +81,6 @@ public:
     using FHotReloadStatus = Runtime::FShaderHotReloadStatus;
 
     // Construction and global access
-    static void RegisterReflection();
     static NextEngine* GetInstance() { return instance_; }
 
     NextEngine(Runtime::Config::Options& options, void* userdata = nullptr);

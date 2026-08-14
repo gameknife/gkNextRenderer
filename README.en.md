@@ -70,7 +70,7 @@ gkNextEngine is a cross-platform 3D game engine and rendering playground built w
 - **Real-Time Path Tracing & Hybrid Rendering**: Practical 1/2spp path tracing, denoising, and seamless multi-pipeline switching built for real runtime constraints.
 - **High-Performance GPU Architecture**: Fully bindless resources, Visibility Buffer, and single-draw GPU-driven submission to minimize CPU overhead.
 - **Radiance Caching & Sparse VRAM**: Leaning on SHARC cache reuse and on-demand residency to maximize rendering efficiency within fixed GPU budgets.
-- **Full Engine Stack & Gameplay Prototypes**: Integrated ECS, reflection, ImGui editor, QuickJS/TS hot reload, and Jolt Physics to support interactive prototyping.
+- **Full Engine Stack & Gameplay Prototypes**: Integrated ECS, reflection, ImGui editor, Slang shader hot reload, and Jolt Physics to support interactive prototyping.
 - **Multi-Format Structured Asset Pipelines**: Direct runtime import for glTF 2.0, LDraw (LEGO), OpenSCAD DSL, and PlayCanvas Gaussian Splatting.
 
 <p align="center">✦</p>
@@ -146,7 +146,7 @@ On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is i
 
 - **ECS + reflection**: an entt component system and entt::meta reflection layer — one registration serves the runtime, editor property panels, undo / redo, and script bindings alike
 - **Visual editor**: scene editing, a node-based material graph, cvar tuning, and data-driven settings in a single ImGui workflow
-- **TypeScript hot reload**: a QuickJS runtime paired with the bundled TypeScript toolchain; script and shader edits apply live, with no external Node dependency
+- **Shader hot reload**: incremental Slang compilation plus pipeline rebuild, so shader edits apply live (the scripting layer is migrating from QuickJS/TS to C#; see `docs/designs/dotnet-scripting-design.md`)
 - **Physics and character runtime**: Jolt Physics backs collision, grab-and-drag, vehicles, and character movement
 
 ### 3️⃣ Content Pipelines
@@ -168,7 +168,7 @@ On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is i
 ### 5️⃣ AI-Native Workflow
 
 - **A parseable content foundation**: the SCAD, LDraw, glTF, and splat pipelines give AI readable, editable, verifiable 3D content instead of opaque static assets
-- **A programmable runtime**: reflected components and TypeScript bindings expose engine state directly to scripts and models
+- **A programmable runtime**: reflected components expose engine state to the editor and to script bindings
 - **A machine-checkable loop**: screenshots, assertion scripts, replay parity, and benchmark reports close the "generate → run → validate → iterate" cycle
 - **Local inference**: a bundled llama.cpp / Gemma OpenAI-compatible service serves both content generation and in-game AI decisions
 
@@ -223,7 +223,7 @@ The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond 
 ./gnb.bat run gkNextRenderer
 ```
 
-Beyond host tools such as Visual Studio, remaining project dependencies are handled by `gnb`; the default workflow pulls project-versioned Vulkan SDK, Slang, and TypeScript toolchains directly into the workspace. On Windows, `gnb` uses **Ninja** as the generator (automatically discovering MSVC/SDK environments), with NVIDIA Streamline (DLSS) enabled by default.
+Beyond host tools such as Visual Studio, remaining project dependencies are handled by `gnb`; the default workflow pulls project-versioned Vulkan SDK and Slang directly into the workspace. On Windows, `gnb` uses **Ninja** as the generator (automatically discovering MSVC/SDK environments), with NVIDIA Streamline (DLSS) enabled by default.
 
 </details>
 
@@ -276,7 +276,7 @@ Notes:
 ./gnb.sh run gkNextRenderer
 ```
 
-`gnb setup` automatically downloads the project-specified Vulkan SDK, Slang, and TypeScript toolchains, removing the need to manually prepare these dependencies. If `VULKAN_SDK` is explicitly set, that environment SDK takes precedence.
+`gnb setup` automatically downloads the project-specified Vulkan SDK and Slang, removing the need to manually prepare these dependencies. If `VULKAN_SDK` is explicitly set, that environment SDK takes precedence.
 
 </details>
 
@@ -333,10 +333,10 @@ Notes:
       </div>
     </td>
     <td width="33%" align="center" valign="top" style="padding: 0;">
-      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="100%" style="display: block; width: 100%;" alt="FlappyJs" />
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="100%" style="display: block; width: 100%;" alt="FlappyCpp" />
       <div style="padding: 10px 8px 12px 8px;">
-        <strong>🐤 FlappyCpp / FlappyJs</strong><br>
-        <sub>Dual C++ & QuickJS/TS implementations validating engine replay parity</sub>
+        <strong>🐤 FlappyCpp</strong><br>
+        <sub>C++ baseline for deterministic replay parity (scripted counterpart is being migrated)</sub>
       </div>
     </td>
     <td width="33%" align="center" valign="top" style="padding: 0;">
@@ -390,7 +390,7 @@ Notes:
 - **`KongLie3D`**: Auto-chess / synergy / round-based combat simulation prototype.
 - **`NextRA`**: Deterministic RTS simulation prototype validating lockstep synchronization and replay.
 - **`CharacterDemo`**: Character actor mounting, NavGrid A* navigation, AI behavior tree, and combat interaction.
-- **`FlappyCpp` / `FlappyJs`**: Dual C++ and QuickJS/TS Flappy Bird implementations for verifying engine replay parity.
+- **`FlappyCpp`**: the C++ Flappy Bird implementation that serves as the baseline for deterministic replay parity (scripted counterpart is being migrated).
 - **`TruckerDemo` / `CitySolSim` / `NextDayz` / `NextTotalWar`**: Vehicle driving, city traffic, survival tactics, and army simulation prototypes.
 
 #### Benchmarks & Developer Utilities

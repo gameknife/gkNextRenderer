@@ -11,9 +11,6 @@ if(UNIX AND NOT APPLE AND NOT ANDROID)
 endif()
 
 add_subdirectory(ThirdParty/ozz)
-if(NOT ANDROID)
-    add_subdirectory(ThirdParty/quickjs-ng)
-endif()
 
 if(NOT ANDROID)
     add_subdirectory(Engine)
@@ -45,8 +42,5 @@ if(NOT ANDROID AND NOT IOS)
     add_subdirectory(Tests)
 endif()
 
-if(TARGET quickjs)
-    set_target_properties(quickjs PROPERTIES FOLDER "ThirdParty")
-endif()
 set_target_properties(ozz PROPERTIES FOLDER "ThirdParty")
 set_target_properties(Assets PROPERTIES FOLDER "Engine")

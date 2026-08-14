@@ -1,0 +1,46 @@
+<Project>
+
+  <!--
+    Shared settings for every gkNext managed assembly.
+
+    The hard rule from docs/designs/dotnet-scripting-design.md section 3.4: the same C# source
+    must build and behave identically under CoreCLR and NativeAOT. Everything here is chosen so
+    that a violation fails at build time rather than at publish time on a release branch.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <!-- AOT hygiene: trim/AOT analyzers run under the CoreCLR build too, so the daily
+         CoreCLR loop already rejects reflection that would only fail under ILC. -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
+
+    <!-- Keep the two backends configured identically (design section 9: GC settings must not
+         drift between runtimeconfig.json and the AOT MSBuild properties). -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredCompilation>true</TieredCompilation>
+
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <EnableDefaultItems>true</EnableDefaultItems>
+    <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <!-- GkAot=true selects the NativeAOT shape: GkNext.Game is statically referenced instead of
+       being loaded into a collectible AssemblyLoadContext. This is the only backend switch that
+       reaches managed code, and only GkNext.Bootstrap is allowed to observe it. -->
+  <PropertyGroup Condition="'$(GkAot)' == 'true'">
+    <DefineConstants>$(DefineConstants);GK_AOT</DefineConstants>
+  </PropertyGroup>
+
+</Project>

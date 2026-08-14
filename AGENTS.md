@@ -14,7 +14,7 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 **Key Technologies:**
 - C++20/C11, Vulkan API, Slang shader language (ray query, not ray pipeline)
 - ECS architecture (entt library) + entt::meta reflection
-- QuickJS TypeScript scripting with hot reload (bundled `tools/tsc`)
+- C# scripting (.NET) with two interchangeable backends: CoreCLR for hot reload, NativeAOT for release; same managed code under both
 - Multi-platform: Windows x86_64 / Linux x86_64 / macOS arm64 / Android arm64 / iOS arm64
 
 **Subprojects (under `src/Application/`):**
@@ -22,7 +22,7 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
   gkNextStillBenchmark and gkNextMotionBenchmark (both under the `Render/gkNextBenchmark/` directory)
 - Editor: gkNextEditor (ImGui editor + node-based material editor), ScadStudio, ScadLibrary
 - Game: MagicaLego, Brotato3D, KongLie3D, NextRA, NextDayz, NextTotalwar, BrickPlayer, CharacterDemo,
-  FlappyCpp/FlappyJs (`Game/Flappy/`), TruckerDemo, StudioSim, AirportSim, CitySolSim, Voyage3D
+  FlappyCpp/FlappyCSharp (`Game/Flappy/`), DotNetSandbox, TruckerDemo, StudioSim, AirportSim, CitySolSim, Voyage3D
 - Util: Packager (asset paking), ScadCatalog
 
 **Release targets:** the desktop release ships exactly three of these —
@@ -71,6 +71,8 @@ because concurrent Windows builds can lock `.obj`, executables, or vcpkg state f
 - Android: `./gnb.sh android debug` / `./gnb.sh android release`
 - Optional assets: `./gnb.sh paks fetch` / `./gnb.sh paks list`
 - Source-line stats: `./gnb.sh loc` (CLI) — also browsable in `./gnb.sh dashboard`
+- Managed bindings: `./gnb.sh csharpgen` (regenerate) / `./gnb.sh csharpgen --check` (CI guard)
+- .NET verification: `./gnb.sh dotnet probe` (two-backend ABI) / `./gnb.sh dotnet ci` (full)
 - Dashboard: `./gnb.sh dashboard` (Wails window on Windows/macOS, browser fallback on Linux; todo/build/run/test/git/chat/LOC tabs)
 
 Desktop binaries can be launched from any working directory; no `cd out/build/<preset>/bin` is required.
@@ -201,7 +203,7 @@ src/
 │   └── Utilities/           # Misc helpers
 ├── Modules/                 # 18 optional engine modules (static libs, linked per app; see src/Modules/README.md)
 │   ├── GltfLoader/, LDrawLoader/, ScadLoader/, SplatLoader/, SceneExport/  # Content pipelines
-│   ├── NextQuickJS/, NextPhysics/, NextAudio/, NextAI/, NextRmlUi/         # Runtime capabilities
+│   ├── NextDotNet/, NextPhysics/, NextAudio/, NextAI/, NextRmlUi/          # Runtime capabilities
 │   ├── NextRemote/, NextStreamline/, NextFidelityFX/, NextTemporalUpscaler/,
 │   │   NextTui/, RenderViews/                                              # Presentation / streaming
 │   └── DevTools/, LiveCoding/                                              # Development tooling
@@ -215,8 +217,8 @@ assets/
 ├── shaders/                 # Slang shaders (.slang)
 ├── configs/                 # Runtime config (cvar_default.json, visual_test.json, per-game configs, ...)
 ├── models/                  # glTF scenes
-├── scripts/                 # Hand-maintained runtime JS/MLS scripts
-└── typescript/              # TypeScript sources + generated Engine.d.ts; runtime JS is emitted under build assets
+├── scripts/                 # Hand-maintained MagicaLego .mlscript files
+└── csharp/                  # Managed scripting sources (GkNext.Engine / .Bootstrap / .Game)
 
 tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 ```
@@ -225,20 +227,36 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 
 **Reflection System (entt::meta):**
 - Provides auto-generated editor UI via PropertyPanel
-- Exposes component properties to QuickJS JavaScript bindings
 - Supports undo/redo for property modifications
 - See `docs/AGENT_GUIDE/ReflectionSystem.md` for detailed documentation
 - Register components using `REFLECT_COMPONENT` macro in component's .cpp file
-- TypeScript definitions in `assets/typescript/Engine.d.ts` mirror reflected properties
+- The script-binding consumer is currently absent; C# component wrappers are generated in phase 5
 
-**QuickJS Scripting:**
-- TypeScript hot reload support via bundled `tools/tsc/tsc[.exe]` (`tsc.exe` on Windows, `tsc` on macOS/Linux); no Node/npm/global `tsc` dependency is required at runtime
-- ES module loading supports relative imports under the runtime `assets/scripts` path; sources live in `assets/typescript`, while the source-tree `assets/scripts` directory contains separately maintained scripts
-- Components reflected via `entt::meta` are auto-exposed to JavaScript
-- Global namespace: `Global.GetEngine()`, `Global.GetScene()`, `Global.spdlog()`
-- Scripted games should extend `assets/typescript/NextGameInstanceBase.ts` and call `RunGameInstance(new YourGameInstance())`
-- Scene API: `Scene.FindNodeIdWithComponent()`, `Scene.GetNodeById()`, `SceneBuild.*` for rebuild-time procedural scene construction, `Scene.AddRenderNode()` for runtime nodes
-- See `docs/AGENT_GUIDE/QuickJSBindings.md`; `FlappyCpp` / `FlappyJs` replay parity is the binding regression demo
+**C# Scripting (`Modules/NextDotNet` + `assets/csharp/`):**
+- Managed sources live in `assets/csharp/`: `GkNext.Engine` (contract + generated bindings),
+  `GkNext.Bootstrap` (never-unloaded entry, owns the `[UnmanagedCallersOnly]` export),
+  `GkNext.Game` (reloadable game code)
+- **Adding a binding is one line in `src/Modules/NextDotNet/EngineApi.def.h` plus one implementation
+  function in `EngineApi.cpp`**, then `gnb csharpgen`. Never hand-edit `Engine.g.cs`.
+- Cross-boundary type rules (violating them breaks NativeAOT, often silently): no `bool` (use
+  `GkBool`), no strings inside structs, no optional struct fields, colors as `GkColor32`
+- Backend: CMake option `GK_DOTNET_BACKEND=CoreCLR|AOT`, default CoreCLR. Managed code is identical
+  under both; the only allowed difference is hot reload, which CoreCLR has and AOT does not.
+- `gnb dotnet ci` is the enforcement point: generated-file check, two-backend probe, and an engine
+  build under both backends. Run it when touching the ABI, the hosts, or the managed layer.
+- `gnb dotnet setup|status|build|probe` drive the toolchain; `DotNetSandbox` is the reference host
+- Write a game by deriving from `NextGameInstance` and marking it `[GameInstance]`; a source
+  generator emits the entry point, and a missing/duplicate/invalid one is a compile error
+- An application gets its C# through `gk_dotnet_managed_game(<target> PROJECT <csproj> DIR <dir>)`;
+  a target that links the module without hosting C# calls `gk_dotnet_stub_game(<target>)` instead
+- `FlappyCpp` vs `FlappyCSharp` replay parity is the binding regression — see
+  `docs/projects/flappy-bird-parity/introduction.md`
+- Per-frame allocation is the realistic way this layer degrades frame time: set
+  `GK_DOTNET_ALLOC_GUARD=1` while developing gameplay
+- Two gotchas that produce a silently static scene: the live `Scene.*` node accessors only work
+  after the scene is committed (inside `BeforeSceneRebuild` put the transform in the spec), and a
+  game that moves nodes must call `Scene.MarkTransformDirty()` once per tick
+- Component property access from C# is not implemented yet (phase 5 of the plan)
 
 **Component System:**
 - ECS via entt library
@@ -281,7 +299,6 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 - **`docs/AGENT_GUIDE/`** - Layered documentation:
   - `core-patterns.md` / `contextual-rules.md` / `coding-standards.md` / `quick-commands.md` - General rules
   - `ReflectionSystem.md` - entt::meta reflection (editor UI + JS bindings)
-  - `QuickJSBindings.md` - JS/TS engine bindings and replay parity demo
   - `HotReload.md` - Shader/script hot reload mechanics
   - `LDrawLoader.md` - LDraw model loading (used by MagicaLego/BrickPlayer)
   - `SCADLoader.md` - OpenSCAD (.scad) DSL loading (parser/evaluator/CSG via Manifold/text via FreeType)

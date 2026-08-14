@@ -1,6 +1,9 @@
 # Hot Reload Cookbook (C++ / Slang)
 
-> **状态：** 当前保留 TypeScript 与 Slang shader hot reload，并可在 Windows 开发构建中选择启用 Live++ C++ 函数级 live coding。旧 C++ game plugin / DLL hot reload 仍已移除，桌面程序保持 monolithic executable + static `gkNextEngine` 架构。
+> **状态：** 当前保留 Slang shader hot reload，并可在 Windows 开发构建中选择启用 Live++ C++ 函数级 live coding。旧 C++ game plugin / DLL hot reload 仍已移除，桌面程序保持 monolithic executable + static `gkNextEngine` 架构。
+>
+> 脚本热重载暂时不存在：QuickJS/TypeScript 已随脚本层迁移删除，C# 的 collectible ALC 热重载要到
+> `docs/plans/dotnet-scripting-plan.md` 的 P3 才接入引擎（机制本身已在 P0 实证，见该文 2.1 节）。
 >
 > Shader reload 走增量 Slang 编译 + renderer pipeline 重建；C++ live coding 直接 patch 已链接进 executable 的静态库 object。不要按旧计划里的 `ShaderRegistry` 或 game plugin ABI 假设写代码。
 
@@ -10,12 +13,11 @@
 
 | 链路 | 入口 | 触发 | 当前行为 |
 |---|---|---|---|
-| TypeScript -> QuickJS | `Modules/NextQuickJS/QuickJSEngine::TickHotReload()` | 安装模块且启用配置后 0.5 s 轮询 | 失败保留旧脚本 |
 | Slang -> SPIR-V -> Vulkan pipeline | `Modules::LiveCoding::ShaderHotReloader` | 安装 `LiveCoding` 模块后 0.5 s 默认轮询或 Editor 手动触发 | 编译变更 `.slang`，`common` 变更触发全量重编，成功后 `VulkanBaseRenderer::ReloadShaders()` |
 | C++ -> Live++ patch | `Modules::LiveCoding::CppLiveCoding` | Windows 开发构建显式启用后，按 `Ctrl+Alt+F11` 或 Broker 的 `Tools -> Hot-Reload changes` | Broker 后台编译，主线程在下一帧开始前同步应用 patch |
 | Editor/CVar | `Hot Reload` 面板 + CVar console | 手动 | 可开关 shader reload，调整轮询间隔，手动触发 shader rebuild |
 
-移动端（Android/iOS）不启用 shader 或 C++ live coding 路径。未链接并安装 `NextQuickJS` 的 program 也不启用 TypeScript 热重载。
+移动端（Android/iOS）不启用 shader 或 C++ live coding 路径。
 
 ---
 

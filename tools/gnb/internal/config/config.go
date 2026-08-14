@@ -34,9 +34,17 @@ type VcpkgConfig struct {
 type ExternalConfig struct {
 	Streamline ExternalURLConfig `toml:"streamline"`
 	FidelityFX FidelityFXConfig  `toml:"fidelityfx"`
-	TSC        TSCConfig         `toml:"tsc"`
 	VulkanSDK  VulkanSDKConfig   `toml:"vulkansdk"`
 	LLM        LLMConfig         `toml:"llm"`
+	DotNet     DotNetConfig      `toml:"dotnet"`
+}
+
+// DotNetConfig pins the .NET SDK used by the managed scripting layer. Version is the floor an
+// already-installed SDK must meet to be accepted; URLTemplate is only used when one has to be
+// downloaded into external/dotnet.
+type DotNetConfig struct {
+	Version     string `toml:"version"`
+	URLTemplate string `toml:"url_template"`
 }
 
 type FidelityFXConfig struct {
@@ -103,14 +111,6 @@ type ServerConfig struct {
 type ExternalURLConfig struct {
 	When string `toml:"when"`
 	URL  string `toml:"url"`
-}
-
-type TSCConfig struct {
-	Version    string `toml:"version"`
-	Windows    string `toml:"windows"`
-	Linux      string `toml:"linux"`
-	MacOSAMD64 string `toml:"macos_amd64"`
-	MacOSArm64 string `toml:"macos_arm64"`
 }
 
 type VulkanSDKConfig struct {
@@ -204,6 +204,12 @@ func Load(repoRoot string) (Config, error) {
 	}
 	if cfg.Package.DefaultPreset == "" {
 		cfg.Package.DefaultPreset = "default"
+	}
+	if cfg.External.DotNet.Version == "" {
+		cfg.External.DotNet.Version = "10.0.300"
+	}
+	if cfg.External.DotNet.URLTemplate == "" {
+		cfg.External.DotNet.URLTemplate = "https://builds.dotnet.microsoft.com/dotnet/Sdk/{version}/dotnet-sdk-{version}-{rid}.{ext}"
 	}
 	applyLLMDefaults(&cfg.External.LLM)
 	aiconfig.ApplyDefaults(&cfg.AI)

@@ -68,7 +68,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 - **实时路径追踪与 Hybrid 渲染**：面向真实运行时的 1/2spp 路径追踪、降噪与多管线无缝切换。
 - **高性能 GPU 架构**：全 Bindless、Visibility Buffer 与 GPU-Driven 单 Draw 提交，最小化 CPU 开销。
 - **辐射缓存与稀疏显存**：借助 SHARC 缓存复用与按需驻留，在固定 GPU 预算下最大化渲染效率。
-- **全栈引擎与玩法原型**：整合 ECS、反射、ImGui 编辑器、QuickJS/TS 热重载与 Jolt 物理，支撑丰富玩法验证。
+- **全栈引擎与玩法原型**：整合 ECS、反射、ImGui 编辑器、Slang 着色器热重载与 Jolt 物理，支撑丰富玩法验证。
 - **AI Native 基础设施**：配合自动化 Agent 验证与结构化内容管线，让 AI 可直接生成、理解并修改 3D 资产与脚本。
 - **多格式结构化资产导入**：原生支持 glTF 2.0、LDraw（乐高）、OpenSCAD DSL 与 PlayCanvas 高斯溅射（Gaussian Splatting）。
 
@@ -144,7 +144,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 
 - **ECS + 反射**：entt 组件系统与 entt::meta 反射层，一次注册即同时服务运行时、编辑器属性面板、撤销 / 重做与脚本绑定
 - **可视化编辑器**：场景编辑、节点式材质图、cvar 调优与数据驱动设置集成在同一套 ImGui 工作流
-- **TypeScript 脚本热重载**：QuickJS 运行时搭配仓库自带的 TypeScript 工具链，脚本与着色器改动即时生效，无外部 Node 依赖
+- **着色器热重载**：Slang 增量编译 + pipeline 重建，着色器改动即时生效（脚本层正从 QuickJS/TS 迁移到 C#，见 `docs/designs/dotnet-scripting-design.md`）
 - **物理与角色运行时**：Jolt Physics 支撑碰撞、抓取拖拽、载具与角色移动
 
 ### 3️⃣ 内容管线
@@ -166,7 +166,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 ### 5️⃣ AI Native 工作流
 
 - **可解析的内容基座**：SCAD、LDraw、glTF 与 Splat 管线让 AI 面对的是可读取、可修改、可校验的结构化 3D 内容，而非不可控的静态素材
-- **可编程的运行时**：反射组件与 TypeScript 绑定把引擎状态直接开放给脚本和模型
+- **可编程的运行时**：反射组件把引擎状态开放给编辑器与脚本绑定
 - **可自动判定的闭环**：截图、断言脚本、replay parity 与 benchmark 报告构成“生成 → 运行 → 验证 → 迭代”的机器可读回路
 - **本地推理**：集成 llama.cpp / Gemma 的本地 OpenAI 兼容服务，供内容生成与游戏内 AI 决策共用
 
@@ -220,7 +220,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 ./gnb.bat run gkNextRenderer
 ```
 
-除 Visual Studio 这类宿主工具外，其余项目依赖通常都由 `gnb` 自动准备；默认会拉取项目约定版本的 Vulkan SDK、Slang 与 TypeScript 工具链到仓库内。`gnb` 在 Windows 上默认使用 **Ninja** 极速构建生成器（自动管理 MSVC 与 SDK 环境路径），Windows 默认启用 NVIDIA Streamline（DLSS）。
+除 Visual Studio 这类宿主工具外，其余项目依赖通常都由 `gnb` 自动准备；默认会拉取项目约定版本的 Vulkan SDK 与 Slang 到仓库内。`gnb` 在 Windows 上默认使用 **Ninja** 极速构建生成器（自动管理 MSVC 与 SDK 环境路径），Windows 默认启用 NVIDIA Streamline（DLSS）。
 
 </details>
 
@@ -273,7 +273,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 ./gnb.sh run gkNextRenderer
 ```
 
-`gnb setup` 会自动下载项目使用的 Vulkan SDK、Slang 与 TypeScript 工具链，无需再单独准备这些项目级依赖。若显式设置 `VULKAN_SDK`，则优先使用该环境变量指向的 SDK。
+`gnb setup` 会自动下载项目使用的 Vulkan SDK 与 Slang，无需再单独准备这些项目级依赖。若显式设置 `VULKAN_SDK`，则优先使用该环境变量指向的 SDK。
 
 </details>
 
@@ -330,10 +330,10 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
       </div>
     </td>
     <td width="33%" align="center" valign="top" style="padding: 0;">
-      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="100%" style="display: block; width: 100%;" alt="FlappyJs" />
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="100%" style="display: block; width: 100%;" alt="FlappyCpp" />
       <div style="padding: 10px 8px 12px 8px;">
-        <strong>🐤 FlappyCpp / FlappyJs</strong><br>
-        <sub>C++ 与 QuickJS/TS 双实现，验证引擎确定性 replay parity</sub>
+        <strong>🐤 FlappyCpp</strong><br>
+        <sub>确定性 replay parity 的 C++ 基线（脚本侧对照实现迁移中）</sub>
       </div>
     </td>
     <td width="33%" align="center" valign="top" style="padding: 0;">
@@ -387,7 +387,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 - **`KongLie3D`**：自走棋 / 羁绊 / 战斗回合模拟原型。
 - **`NextRA`**：确定性 RTS 模拟原型，验证 Lockstep 帧同步与 Replay 回放。
 - **`CharacterDemo`**：角色 Actor 挂载、NavGrid A* 导航、AI 行为树与战斗交互实验。
-- **`FlappyCpp` / `FlappyJs`**：Flappy Bird C++ / QuickJS TS 双实现，验证引擎重播与脚本行为一致性（Parity）。
+- **`FlappyCpp`**：Flappy Bird C++ 实现，作为引擎确定性重播 parity 的基线（脚本侧对照实现迁移中）。
 - **`TruckerDemo` / `CitySolSim` / `NextDayz` / `NextTotalWar`**：车辆驾驶、城市交通、生存战术与军团模拟原型。
 
 #### 基准测试与自动化工具 (Benchmark & Tools)

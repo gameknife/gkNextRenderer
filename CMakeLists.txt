@@ -77,6 +77,7 @@ if (ANDROID OR IOS)
 endif()
 
 include(cmake/SetupExternalLibs.cmake)
+include(cmake/SetupDotNet.cmake)
 include(cmake/SetupDependencies.cmake)
 
 add_subdirectory(assets)

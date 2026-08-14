@@ -5,8 +5,6 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"crypto/sha256"
-	"debug/macho"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,17 +33,13 @@ func EnsureExternal(repoRoot string, cfg config.Config) error {
 
 func EnsureNamedExternal(repoRoot string, cfg config.Config, names []string) error {
 	if len(names) == 0 {
-		names = []string{"tsc", "vulkan", "streamline", "fidelityfx"}
+		names = []string{"vulkan", "streamline", "fidelityfx"}
 	}
 
 	for _, name := range names {
 		switch strings.ToLower(name) {
 		case "all":
 			return EnsureExternal(repoRoot, cfg)
-		case "tsc":
-			if err := ensureTSC(repoRoot, cfg); err != nil {
-				return err
-			}
 		case "vulkan", "vulkansdk", "vulkan-sdk":
 			if err := EnsureVulkanSDK(repoRoot, cfg); err != nil {
 				return err
@@ -136,13 +130,6 @@ func EnsureVulkanSDK(repoRoot string, cfg config.Config) error {
 	return writeCurrentVulkanSDKVersion(installBase, spec.Version)
 }
 
-func EnsureHostBuildTools(repoRoot string, cfg config.Config) error {
-	if runtime.GOOS == "darwin" && runtime.GOARCH == "amd64" {
-		return ensureTSC(repoRoot, cfg)
-	}
-	return nil
-}
-
 func DiscoverVulkanSDK(repoRoot string, cfg config.Config) string {
 	if sdkRoot := normalizeVulkanSDKRoot(os.Getenv("VULKAN_SDK")); sdkRoot != "" {
 		return sdkRoot
@@ -185,71 +172,6 @@ func DiscoverVulkanSDK(repoRoot string, cfg config.Config) string {
 	}
 
 	return ""
-}
-
-func ensureTSC(repoRoot string, cfg config.Config) error {
-	filename := "tsc"
-	url := cfg.External.TSC.Linux
-	if runtime.GOOS == "windows" {
-		filename = "tsc.exe"
-		url = cfg.External.TSC.Windows
-	} else if runtime.GOOS == "darwin" {
-		if runtime.GOARCH == "amd64" {
-			url = cfg.External.TSC.MacOSAMD64
-		} else {
-			url = cfg.External.TSC.MacOSArm64
-		}
-	}
-	dir := filepath.Join(repoRoot, "tools", "tsc")
-	dst := filepath.Join(dir, filename)
-	versionFile := filepath.Join(dir, ".tsc_version")
-	if data, err := os.ReadFile(versionFile); err == nil && strings.TrimSpace(string(data)) == cfg.External.TSC.Version {
-		if _, err := os.Stat(dst); err == nil && tscMatchesHostArch(dst) {
-			return nil
-		}
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	if err := Download(url, dst); err != nil {
-		return err
-	}
-	if runtime.GOOS != "windows" {
-		if err := os.Chmod(dst, 0o755); err != nil {
-			return err
-		}
-	}
-	return os.WriteFile(versionFile, []byte(cfg.External.TSC.Version+"\n"), 0o644)
-}
-
-func tscMatchesHostArch(path string) bool {
-	if runtime.GOOS != "darwin" {
-		return true
-	}
-
-	wantCPU := macho.CpuArm64
-	if runtime.GOARCH == "amd64" {
-		wantCPU = macho.CpuAmd64
-	}
-
-	if fatFile, err := macho.OpenFat(path); err == nil {
-		defer fatFile.Close()
-		for _, arch := range fatFile.Arches {
-			if arch.Cpu == wantCPU {
-				return true
-			}
-		}
-		return false
-	} else if !errors.Is(err, macho.ErrNotFat) {
-		return false
-	}
-
-	file, err := macho.Open(path)
-	if err != nil {
-		return false
-	}
-	defer file.Close()
-	return file.Cpu == wantCPU
 }
 
 func ensureArchive(repoRoot string, url string, dstDir string, sentinel string) error {

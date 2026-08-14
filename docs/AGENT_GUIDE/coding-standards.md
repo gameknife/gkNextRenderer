@@ -190,7 +190,7 @@
 - [ ] 渲染改动需附截图对比（性能改动需附 FPS 数据）
 - [ ] 跨平台改动需在至少 2 个平台验证
 - [ ] 着色器改动需运行 `gkNextRenderer` 目视检查
-- [ ] TypeScript 脚本改动先做不落盘类型检查：Windows 用 `tools\tsc\tsc.exe --noEmit -p assets\typescript\tsconfig.json`，macOS/Linux 用 `tools/tsc/tsc --noEmit -p assets/typescript/tsconfig.json`；运行时热重载同样使用 bundled tsc，不依赖 Node/npm
+- [ ] 托管脚本（`assets/csharp/`）改动跑 `gnb dotnet build` 做编译检查；改到跨界 ABI 或后端相关代码再跑 `gnb dotnet probe` 做双后端验收
 
 ---
 

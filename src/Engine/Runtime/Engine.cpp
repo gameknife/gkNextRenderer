@@ -48,7 +48,6 @@
 
 #include <math.h>
 
-#include <entt/meta/factory.hpp>
 
 #define BUILDVER(X) std::string buildver(#X);
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
@@ -67,15 +66,6 @@
 #endif
 
 Runtime::Config::Options* GOption = nullptr;
-
-void NextEngine::RegisterReflection()
-{
-    using namespace entt::literals;
-
-    entt::meta_factory<NextEngine>()
-        .type("NextEngine"_hs)
-        .func<&NextEngine::GetTotalFrames>("GetTotalFrames");
-}
 
 namespace
 {
