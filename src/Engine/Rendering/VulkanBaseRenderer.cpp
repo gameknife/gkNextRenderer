@@ -1424,6 +1424,7 @@ namespace Vulkan
 
             if (temporalSuperResolutionActive_)
             {
+                upscalerFallbackReported_ = false;
                 activeUpscalerType_ = requestedUpscalerType;
                 upscaler_->SetActiveType(activeUpscalerType_);
                 const auto optimal = upscaler_->GetOptimalRenderSettings(
@@ -1440,10 +1441,27 @@ namespace Vulkan
                             frame_.swapChain->Extent().width,
                             frame_.swapChain->Extent().height);
             }
-            else if (requestedUpscalerType != Rendering::Upscaler::EUpscalerType::None)
+            else if (requestedUpscalerType != Rendering::Upscaler::EUpscalerType::None &&
+                     (!upscalerFallbackReported_ ||
+                      upscalerFallbackReportedType_ != requestedUpscalerType ||
+                      upscalerFallbackReportedRenderer_ != logicRenderers_.current))
             {
-                SPDLOG_WARN("{} is unavailable for {}; using native rendering",
-                            typeInfo.name, GetRendererName(logicRenderers_.current));
+                upscalerFallbackReported_ = true;
+                upscalerFallbackReportedType_ = requestedUpscalerType;
+                upscalerFallbackReportedRenderer_ = logicRenderers_.current;
+                // A contract without the required outputs is a design fact about the renderer, not a
+                // fault; anything else means the upscaler was expected to run and did not.
+                if (!hasRequiredOutputs || !supportsRequestedPostProcess)
+                {
+                    SPDLOG_INFO("{} does not apply to {}: the renderer's contract lacks the required "
+                                "outputs or post-process stage; using native rendering",
+                                typeInfo.name, GetRendererName(logicRenderers_.current));
+                }
+                else
+                {
+                    SPDLOG_WARN("{} is unavailable for {}; using native rendering",
+                                typeInfo.name, GetRendererName(logicRenderers_.current));
+                }
             }
         }
 
@@ -2808,6 +2826,14 @@ namespace Vulkan
                 DispatchScheduledRenderViews(commandBuffer, imageIndex);
             }
 
+            if (!overlay_.skipReportedRendererValid ||
+                overlay_.skipReportedRendererType != logicRenderers_.current)
+            {
+                overlay_.skipReportedPassNames.clear();
+                overlay_.skipReportedRendererType = logicRenderers_.current;
+                overlay_.skipReportedRendererValid = true;
+            }
+
             // Module content passes run before debug overlay passes.
             for (const auto& externalPass : overlay_.externalPasses)
             {
@@ -2818,9 +2844,15 @@ namespace Vulkan
                     passContract.scope != EExternalPassScope::PrimaryView ||
                     !AreExternalPassInputsAvailable(passContract, availableOutputs))
                 {
-                    SPDLOG_WARN("Skipping external pass {}: incompatible insertion/scope or missing outputs "
-                                "(required=0x{:x}, available=0x{:x})",
-                                passContract.name, passContract.requiredOutputs, availableOutputs);
+                    if (std::find(overlay_.skipReportedPassNames.begin(), overlay_.skipReportedPassNames.end(),
+                                  passContract.name) == overlay_.skipReportedPassNames.end())
+                    {
+                        overlay_.skipReportedPassNames.push_back(passContract.name);
+                        SPDLOG_INFO("Skipping external pass {} under {}: incompatible insertion/scope or missing "
+                                    "outputs (required=0x{:x}, available=0x{:x})",
+                                    passContract.name, GetRendererName(logicRenderers_.current),
+                                    passContract.requiredOutputs, availableOutputs);
+                    }
                     continue;
                 }
                 SCOPED_GPU_TIMER("external pass");

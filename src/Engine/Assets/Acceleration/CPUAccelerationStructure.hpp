@@ -221,6 +221,18 @@ private:
     bool MarkDirty(uint32_t globalBrickIndex);
 };
 
+// The ambient/voxel grid the cascade bakers were actually built with. User settings can change at
+// any time, but the CPU voxel array and the GPU cube pool only adopt a new grid when the bakers are
+// re-initialized, so consumers that must agree with the baked data (the shading UBO above all) read
+// this instead of the pending settings.
+struct FAmbientGridConfig
+{
+    float baseUnit = Assets::CUBE_UNIT;
+    glm::vec3 offsetBias{0.0f};
+    uint32_t cascadeCount = 1;
+    float cascadeRatio = 2.0f;
+};
+
 class FCPUAccelerationStructure
 {
 public:
@@ -247,6 +259,14 @@ public:
     uint32_t AmbientBakeDirtyBrickCount(uint32_t cascadeIndex) const;
     void AcknowledgeAmbientBake(uint64_t revision);
 
+    // The grid the current voxel/cube data was produced with. False until the bakers exist, which is
+    // the case for scenes created without CPU acceleration.
+    bool TryGetAmbientGridConfig(FAmbientGridConfig& outConfig) const;
+    // True when the user settings ask for a grid the bakers have not adopted yet, i.e. a full
+    // re-voxelization and re-bake is required before shading may follow the new scale.
+    bool AmbientGridConfigDiffersFromSettings(const Runtime::Config::UserSettings& settings,
+                                              uint32_t maxCascadeCapacity) const;
+
     void RequestUpdate(glm::vec3 worldPos, float radius);
     void AccumulateProbeDirtyBounds(const glm::vec3& worldMin, const glm::vec3& worldMax);
     bool ConsumeNavRelevantDirtyBounds(glm::vec3& outWorldMin, glm::vec3& outWorldMax);
@@ -259,6 +279,8 @@ private:
     friend struct FCPUAccelerationStructureTestAccess;
 
     bool InitCascadeBakers(const Runtime::Config::UserSettings& settings, uint32_t maxCascadeCapacity);
+    static FAmbientGridConfig ResolveAmbientGridConfig(const Runtime::Config::UserSettings& settings,
+                                                       uint32_t maxCascadeCapacity);
     uint32_t GetActiveCascadeCount() const { return static_cast<uint32_t>(cascadeBakers.size()); }
 
     void UpdateBVH(Assets::Scene& scene);
@@ -325,6 +347,8 @@ private:
     glm::vec3 navRelevantDirtyWorldMax_{0.0f};
 
     std::vector<FCPUProbeBaker> cascadeBakers;
+    FAmbientGridConfig committedAmbientGrid_;
+    bool hasCommittedAmbientGrid_ = false;
     FCPUPageIndex cpuPageIndex;
     FCPUBrickTable cpuBrickTable;
 };

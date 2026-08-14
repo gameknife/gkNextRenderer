@@ -536,6 +536,43 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
         NextUI::Theme::EndPanelSection();
     }
 
+    if (NextUI::Theme::BeginPanelSection(LOCTEXT("Ambient Cube Grid"), true))
+    {
+        const Assets::Scene& scene = GetEngine().GetScene();
+        // Cascade 0 voxel size. The probe count per cascade is fixed, so a smaller unit resolves
+        // finer detail across a proportionally smaller volume: worth lowering for interiors, not for
+        // open terrain. Editing any of these re-voxelizes the scene and re-bakes every cascade;
+        // shading keeps using the previous grid until the bake has adopted the new one.
+        DrawFloatSetting(LOCTEXT("Cube Unit"), &userSetting.AmbientCubeUnit,
+                         0.02f, 2.0f, "%.3f m", 0.005f);
+        DrawIntSetting(LOCTEXT("Cascades"), &userSetting.AmbientCubeCascadeCount,
+                       1, Assets::CUBE_CASCADE_MAX);
+        DrawFloatSetting(LOCTEXT("Cascade Ratio"), &userSetting.AmbientCubeCascadeRatio,
+                         1.0f, 8.0f, "%.2f", 0.05f);
+
+        const float baseUnit = Assets::SanitizeAmbientCubeUnit(userSetting.AmbientCubeUnit);
+        const float ratio = Assets::SanitizeAmbientCubeCascadeRatio(userSetting.AmbientCubeCascadeRatio);
+        const uint32_t cascadeCount = std::min(
+            Assets::SanitizeAmbientCubeCascadeCount(userSetting.AmbientCubeCascadeCount),
+            std::max(1u, scene.AmbientCubeCascadeCapacity()));
+        const float outerUnit = Assets::CalculateAmbientCubeCascadeUnit(baseUnit, ratio, cascadeCount - 1);
+        DrawSettingRow(LOCTEXT("Coverage"),
+                       [&]()
+                       {
+                           ImGui::TextDisabled("%.1f x %.1f x %.1f m",
+                                               outerUnit * Assets::CUBE_SIZE_XY,
+                                               outerUnit * Assets::CUBE_SIZE_Z,
+                                               outerUnit * Assets::CUBE_SIZE_XY);
+                           return false;
+                       });
+        if (cascadeCount < Assets::SanitizeAmbientCubeCascadeCount(userSetting.AmbientCubeCascadeCount))
+        {
+            ImGui::TextDisabled("Scene allocated %u cascades; reload to use more.",
+                                scene.AmbientCubeCascadeCapacity());
+        }
+        NextUI::Theme::EndPanelSection();
+    }
+
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Upscaling"), true))
     {
         int upscaleMethod = userSetting.UpscalerType;

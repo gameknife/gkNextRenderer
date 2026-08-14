@@ -75,16 +75,54 @@ namespace
 
 using namespace Assets;
 
+FAmbientGridConfig FCPUAccelerationStructure::ResolveAmbientGridConfig(
+    const Runtime::Config::UserSettings& settings, uint32_t maxCascadeCapacity)
+{
+    FAmbientGridConfig config;
+    config.baseUnit = SanitizeAmbientCubeUnit(settings.AmbientCubeUnit);
+    config.offsetBias =
+        vec3(settings.AmbientCubeOffsetX, settings.AmbientCubeOffsetY, settings.AmbientCubeOffsetZ);
+    // Clamp to the GPU arena's allocated capacity so the per-cascade upload never writes out of bounds.
+    config.cascadeCount =
+        std::min(SanitizeAmbientCubeCascadeCount(settings.AmbientCubeCascadeCount), std::max(1u, maxCascadeCapacity));
+    config.cascadeRatio = SanitizeAmbientCubeCascadeRatio(settings.AmbientCubeCascadeRatio);
+    return config;
+}
+
+bool FCPUAccelerationStructure::TryGetAmbientGridConfig(FAmbientGridConfig& outConfig) const
+{
+    if (!hasCommittedAmbientGrid_)
+    {
+        return false;
+    }
+    outConfig = committedAmbientGrid_;
+    return true;
+}
+
+bool FCPUAccelerationStructure::AmbientGridConfigDiffersFromSettings(
+    const Runtime::Config::UserSettings& settings, uint32_t maxCascadeCapacity) const
+{
+    if (!hasCommittedAmbientGrid_)
+    {
+        return false;
+    }
+
+    const FAmbientGridConfig requested = ResolveAmbientGridConfig(settings, maxCascadeCapacity);
+    return requested.cascadeCount != committedAmbientGrid_.cascadeCount ||
+        glm::abs(requested.baseUnit - committedAmbientGrid_.baseUnit) > 1e-6f ||
+        glm::abs(requested.cascadeRatio - committedAmbientGrid_.cascadeRatio) > 1e-6f ||
+        glm::length(requested.offsetBias - committedAmbientGrid_.offsetBias) > 1e-6f;
+}
+
 bool FCPUAccelerationStructure::InitCascadeBakers(const Runtime::Config::UserSettings& settings, uint32_t maxCascadeCapacity)
 {
-    const float baseUnit = SanitizeAmbientCubeUnit(settings.AmbientCubeUnit);
-    const vec3 cubeOffsetBias = vec3(settings.AmbientCubeOffsetX, settings.AmbientCubeOffsetY, settings.AmbientCubeOffsetZ);
-    // Clamp to the GPU arena's allocated capacity so the per-cascade upload never writes out of bounds.
-    const uint32_t cascadeCount =
-        std::min(SanitizeAmbientCubeCascadeCount(settings.AmbientCubeCascadeCount), std::max(1u, maxCascadeCapacity));
-    const float cascadeRatio = SanitizeAmbientCubeCascadeRatio(settings.AmbientCubeCascadeRatio);
+    const FAmbientGridConfig requested = ResolveAmbientGridConfig(settings, maxCascadeCapacity);
+    const float baseUnit = requested.baseUnit;
+    const vec3 cubeOffsetBias = requested.offsetBias;
+    const uint32_t cascadeCount = requested.cascadeCount;
+    const float cascadeRatio = requested.cascadeRatio;
 
-    bool needRebuild = cascadeBakers.size() != cascadeCount;
+    bool needRebuild = cascadeBakers.size() != cascadeCount || !hasCommittedAmbientGrid_;
     if (!needRebuild)
     {
         for (uint32_t i = 0; i < cascadeCount; ++i)
@@ -113,6 +151,10 @@ bool FCPUAccelerationStructure::InitCascadeBakers(const Runtime::Config::UserSet
         const vec3 offset = CalculateAmbientCubeOffset(unit, cubeOffsetBias);
         cascadeBakers[i].Init(i, unit, offset);
     }
+
+    // Publish only after the bakers exist: shading reads this to stay in step with the data.
+    committedAmbientGrid_ = requested;
+    hasCommittedAmbientGrid_ = true;
 
     cpuPageIndex.Init();
     return true;

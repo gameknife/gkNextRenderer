@@ -113,12 +113,15 @@ namespace NextCVar
         GK_CVAR_FLOAT("sys.ldrawLduToWorldScale", settings, LDrawLduToWorldScale, 0.02f, ECVarFlags::Archive, "World-space units represented by one LDraw LDU when loading .ldr/.mpd scenes");
         GK_CVAR_FLOAT("sys.scadToWorldScale", settings, ScadToWorldScale, 1.0f, ECVarFlags::Archive, "Uniform world scale applied when loading .scad scenes (1 unit -> N meters)");
         GK_CVAR_FLOAT("sys.sceneEpsilonScale", settings, SceneEpsilonScale, 1.0f, ECVarFlags::Archive, "Scene epsilon scale");
-        GK_CVAR_FLOAT("sys.ambientCubeUnit", settings, AmbientCubeUnit, 0.25f, ECVarFlags::Archive, "Ambient cube probe unit size in world units");
+        // The grid geometry below is live: changing it re-initializes the CPU cascade bakers and
+        // triggers a full re-voxelization plus ambient re-bake. Shading only follows the new grid
+        // once the bakers have adopted it, so no frame is shaded against mismatched voxel data.
+        GK_CVAR_FLOAT_RANGE("sys.ambientCubeUnit", settings, AmbientCubeUnit, 0.25f, ECVarFlags::Archive, "Cascade 0 ambient cube / voxel size in world units; smaller resolves finer detail over a proportionally smaller volume", 0.02, 2.0);
         GK_CVAR_FLOAT("sys.ambientCubeOffsetX", settings, AmbientCubeOffsetX, 0.0f, ECVarFlags::Archive, "Ambient cube offset X in world units");
         GK_CVAR_FLOAT("sys.ambientCubeOffsetY", settings, AmbientCubeOffsetY, 0.0f, ECVarFlags::Archive, "Ambient cube offset Y in world units");
         GK_CVAR_FLOAT("sys.ambientCubeOffsetZ", settings, AmbientCubeOffsetZ, 0.0f, ECVarFlags::Archive, "Ambient cube offset Z in world units");
-        GK_CVAR_INT("sys.ambientCubeCascadeCount", settings, AmbientCubeCascadeCount, 3, ECVarFlags::Archive, "Ambient cube cascade count");
-        GK_CVAR_FLOAT("sys.ambientCubeCascadeRatio", settings, AmbientCubeCascadeRatio, 2.0f, ECVarFlags::Archive, "Ambient cube cascade ratio between levels");
+        GK_CVAR_INT_RANGE("sys.ambientCubeCascadeCount", settings, AmbientCubeCascadeCount, 3, ECVarFlags::Archive, "Ambient cube cascade count; raising it above the count the scene was allocated for only takes effect after a scene reload", 1, Assets::CUBE_CASCADE_MAX);
+        GK_CVAR_FLOAT_RANGE("sys.ambientCubeCascadeRatio", settings, AmbientCubeCascadeRatio, 2.0f, ECVarFlags::Archive, "Ambient cube unit multiplier between consecutive cascades", 1.0, 8.0);
         GK_CVAR_FLOAT("sys.ambientCubePoolBrickRatio", settings, AmbientCubePoolBrickRatio, 0.5f, ECVarFlags::Archive, "Ambient cube sparse pool capacity as a ratio of full bricks per cascade");
         GK_CVAR_BOOL("r.ambientCube.hitDrivenResidency", settings, AmbientCubeHitDrivenResidency, false, ECVarFlags::Archive, "Enable hit-driven ambient cube brick residency");
         GK_CVAR_BOOL("r.ambientCube.bounceHitAffectsResidency", settings, AmbientCubeBounceHitAffectsResidency, false, ECVarFlags::Archive, "Allow ambient cube bake bounce hits to keep bricks resident");

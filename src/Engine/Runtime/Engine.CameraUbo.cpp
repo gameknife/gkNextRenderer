@@ -267,19 +267,32 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
 
     ubo.ProgressiveRender = progressiveRender_.enabled;
     ubo.SceneEpsilonScale = config_.userSettings.SceneEpsilonScale;
-    const float ambientCubeUnit = Assets::SanitizeAmbientCubeUnit(config_.userSettings.AmbientCubeUnit);
-    const glm::vec3 ambientCubeOffsetBias =
+    float ambientCubeUnit = Assets::SanitizeAmbientCubeUnit(config_.userSettings.AmbientCubeUnit);
+    glm::vec3 ambientCubeOffsetBias =
         glm::vec3(config_.userSettings.AmbientCubeOffsetX, config_.userSettings.AmbientCubeOffsetY,
                   config_.userSettings.AmbientCubeOffsetZ);
     uint32_t ambientCubeCascadeCount =
         Assets::SanitizeAmbientCubeCascadeCount(config_.userSettings.AmbientCubeCascadeCount);
+    float ambientCubeCascadeRatio =
+        Assets::SanitizeAmbientCubeCascadeRatio(config_.userSettings.AmbientCubeCascadeRatio);
     if (scene_)
     {
         // Never advertise more cascades than the arena was sized for (Phase 2 right-sizing).
         ambientCubeCascadeCount = std::min(ambientCubeCascadeCount, scene_->AmbientCubeCascadeCapacity());
+
+        // The scale is adjustable at runtime, but the voxel array and cube pool only move to a new
+        // grid when the CPU bakers are re-initialized. Shading the pending settings instead would
+        // sample the old data through the new grid for as long as the rebake takes, so follow the
+        // committed grid and let it flip once the bakers have adopted it.
+        Assets::CPU::FAmbientGridConfig committedGrid;
+        if (scene_->GetCPUAccelerationStructure().TryGetAmbientGridConfig(committedGrid))
+        {
+            ambientCubeUnit = committedGrid.baseUnit;
+            ambientCubeOffsetBias = committedGrid.offsetBias;
+            ambientCubeCascadeCount = std::min(committedGrid.cascadeCount, scene_->AmbientCubeCascadeCapacity());
+            ambientCubeCascadeRatio = committedGrid.cascadeRatio;
+        }
     }
-    const float ambientCubeCascadeRatio =
-        Assets::SanitizeAmbientCubeCascadeRatio(config_.userSettings.AmbientCubeCascadeRatio);
     ubo.AmbientCubeUnit = ambientCubeUnit;
     ubo.AmbientCubeOffset = Assets::CalculateAmbientCubeOffset(ambientCubeUnit, ambientCubeOffsetBias);
     ubo.AmbientCubeCascadeParams =

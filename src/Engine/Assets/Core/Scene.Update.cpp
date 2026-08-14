@@ -628,6 +628,26 @@ namespace Assets
             }
         }
 
+        if (enableCpuAcceleration_ && ambientArenaBufferMemory_)
+        {
+            // The ambient grid scale is a live setting, so react on the frame it changes rather than
+            // on the 30-frame voxel cadence below: shading follows the committed grid, which only
+            // moves once the bakers are re-initialized by this full rebake.
+            auto& renderer = NextEngine::GetInstance()->GetRenderer();
+            if (renderer.ActiveRendererRequirements().NeedsVoxelGeometry() &&
+                !renderer.ShouldSkipAmbientCubeUpdates() &&
+                cpuAccelerationStructure_.AmbientGridConfigDiffersFromSettings(
+                    NextEngine::GetInstance()->GetUserSettings(), AmbientCubeCascadeCapacity()))
+            {
+                if (cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), false))
+                {
+                    // Cube radiance was baked against the previous grid; keeping it would smear the
+                    // old scale over the new probe positions until every brick reconverges.
+                    renderer.RequestClearAmbientCubeCache();
+                }
+            }
+        }
+
         if (enableCpuAcceleration_ && NextEngine::GetInstance()->GetTotalFrames() % 30 == 0)
         {
             auto& renderer = NextEngine::GetInstance()->GetRenderer();

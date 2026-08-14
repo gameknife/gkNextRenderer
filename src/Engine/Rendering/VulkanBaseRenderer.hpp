@@ -283,6 +283,9 @@ namespace Vulkan
         FRendererRequirements ActiveRendererRequirements() const;
         FRendererRequirements RegisteredRendererRequirements() const;
         bool ShouldSkipAmbientCubeUpdates() const;
+        // Drop the baked cube radiance. The scene calls this whenever the probe grid moves under it,
+        // because radiance baked for the previous grid would otherwise persist at the new positions.
+        void RequestClearAmbientCubeCache() { ambient_.requestClearCache = true; }
 
         // Capabilities / flags
         bool VisualDebug() const {return visualDebug_;}
@@ -509,6 +512,12 @@ namespace Vulkan
             std::unique_ptr<PipelineCommon::VisibilityPipeline> visibilityPipeline;
             std::unique_ptr<Shadow::ShadowMapPass> sunShadowPass;
             std::vector<std::unique_ptr<IExternalRenderPass>> externalPasses;
+            // Whether a module pass fits the active renderer's contract cannot change between
+            // frames, so the skip diagnostic is reported per renderer transition instead of once
+            // per pass per frame.
+            std::vector<std::string> skipReportedPassNames;
+            ERendererType skipReportedRendererType = ERT_PathTracing;
+            bool skipReportedRendererValid = false;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> bufferClearPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> temporalPostFilterPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> toneMappingPipeline;
@@ -613,6 +622,13 @@ namespace Vulkan
         Rendering::Upscaler::EUpscalerType activeUpscalerType_ =
             Rendering::Upscaler::EUpscalerType::None;
         bool temporalSuperResolutionActive_ = false;
+        // A renderer whose contract lacks depth/motion can never drive a temporal upscaler, so the
+        // fallback notice depends only on this pair. Reporting it per swapchain rebuild would repeat
+        // it on every window resize.
+        Rendering::Upscaler::EUpscalerType upscalerFallbackReportedType_ =
+            Rendering::Upscaler::EUpscalerType::None;
+        ERendererType upscalerFallbackReportedRenderer_ = ERT_PathTracing;
+        bool upscalerFallbackReported_ = false;
         bool frameGenerationSwapchainRequested_ = false;
         uint32_t effectiveSuperResolutionMode_ =
             static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Native);
@@ -656,7 +672,6 @@ namespace Vulkan
         void CreateStorageImage(uint32_t bindlessIdx, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
         void CreateStorageImage(uint32_t bindlessIdx, VkExtent2D extent, VkFormat format, VkImageTiling tiling,
                                 VkImageUsageFlags usage, const char* debugName);
-        void RequestClearAmbientCubeCache() { ambient_.requestClearCache = true; }
         void RecreateSwapChain();
         void UpdateUniformBuffer(uint32_t imageIndex);
 
