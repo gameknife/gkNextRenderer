@@ -9,6 +9,7 @@
 #include "Engine/Assets/Core/LightObject.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
 #include "Engine/Vulkan/Device.hpp"
 
@@ -360,17 +361,36 @@ namespace Assets
             }
             staticPhysicsBodies_.clear();
 
-            cachedMeshShapes_.clear();
-            for (auto& model : models_)
+            // Build and cook every mesh shape up front, in parallel. Each model owns an
+            // independent shape, and neither call reaches the physics world, so the only ordering
+            // this needs is the barrier below before bodies start referencing the shapes. Leaving
+            // the cook to CreateMeshBody instead put the whole triangle-tree build on the main
+            // thread, serialized behind body creation.
+            cachedMeshShapes_.assign(models_.size(), NextMeshShapeHandle{});
+            std::vector<uint32_t> shapeCookTasks;
+            shapeCookTasks.reserve(models_.size());
+            for (size_t modelIndex = 0; modelIndex < models_.size(); ++modelIndex)
             {
-                if (model.NumberOfIndices() < 65535 * 3 && model.NumberOfIndices() > 0)
+                const Model& model = models_[modelIndex];
+                if (model.NumberOfIndices() >= 65535 * 3 || model.NumberOfIndices() == 0)
                 {
-                    cachedMeshShapes_.push_back(physicsEngine->CreateMeshShape(model));
+                    continue;
                 }
-                else
-                {
-                    cachedMeshShapes_.push_back(nullptr);
-                }
+
+                shapeCookTasks.push_back(Tasks::TaskCoordinator::GetInstance()->AddParralledTask(
+                    [this, physicsEngine, modelIndex](Tasks::ResTask&)
+                    {
+                        NextMeshShapeHandle shape = physicsEngine->CreateMeshShape(models_[modelIndex]);
+                        if (shape && physicsEngine->CookMeshShape(shape))
+                        {
+                            cachedMeshShapes_[modelIndex] = std::move(shape);
+                        }
+                    },
+                    nullptr));
+            }
+            if (!shapeCookTasks.empty())
+            {
+                Tasks::TaskCoordinator::GetInstance()->WaitForAllParralledTask();
             }
             lastRebuildProfile_.physicsShapeCookingMs =
                 std::chrono::duration<float, std::milli>(Clock::now() - shapeCookingStart).count();
@@ -449,7 +469,28 @@ namespace Assets
         std::vector<uint32_t> reorders;
         std::vector<uint32_t> primitiveIndices;
 
+        // Size everything from the model tables first: a multi-million vertex scene otherwise
+        // spends most of this loop copying these arrays into successively larger allocations.
+        // The index-derived counts are upper bounds -- models past ten sections get truncated
+        // below -- which is what reserve wants anyway.
+        {
+            size_t totalVertices = 0;
+            size_t totalIndices = 0;
+            for (const auto& model : models_)
+            {
+                totalVertices += model.CPUVertices().size();
+                totalIndices += model.CPUIndices().size();
+            }
+            vertices.reserve(totalVertices);
+            indices.reserve(totalIndices);
+            allWeights.reserve(totalVertices);
+            allJoints.reserve(totalVertices);
+            reorders.reserve(totalVertices + totalIndices / 3);
+            primitiveIndices.reserve(totalIndices);
+        }
+
         offsets_.clear();
+        offsets_.reserve(models_.size() * kModelSectionStride);
         for (auto& model : models_)
         {
             // Remember the index, vertex offsets.

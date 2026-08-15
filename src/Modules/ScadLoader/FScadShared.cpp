@@ -5,13 +5,13 @@
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <sstream>
 #include <unordered_set>
 
 #include <fmt/format.h>
@@ -28,14 +28,29 @@ namespace Assets::Scad
 
         bool ScadReadFile(const fs::path& path, std::string& out)
         {
-            std::ifstream file(path, std::ios::binary);
-            if (!file.is_open())
+            std::vector<uint8_t> data;
+            bool loaded = false;
+            if (auto* package = Utilities::Package::FPackageFileSystem::TryGetInstance())
+            {
+                loaded = package->LoadFile(path.generic_string(), data);
+            }
+            else
+            {
+                const fs::path loosePath = path.is_absolute()
+                    ? path
+                    : Utilities::FileHelper::GetRuntimeFilePath(path);
+                std::ifstream file(loosePath, std::ios::binary);
+                if (file.is_open())
+                {
+                    data.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+                    loaded = true;
+                }
+            }
+            if (!loaded)
             {
                 return false;
             }
-            std::ostringstream ss;
-            ss << file.rdbuf();
-            out = ss.str();
+            out.assign(reinterpret_cast<const char*>(data.data()), data.size());
             return true;
         }
 
@@ -179,17 +194,25 @@ namespace Assets::Scad
     bool LoadScadProgram(const std::string& filename, ScadProgram& outProgram, std::string& outError)
     {
         fs::path mainPath = filename;
-        if (!mainPath.is_absolute())
+        if (mainPath.is_absolute())
         {
-            mainPath = fs::path(Utilities::FileHelper::GetPlatformFilePath(filename.c_str()));
+            std::error_code ec;
+            const std::array<fs::path, 2> roots = {
+                Utilities::FileHelper::GetRuntimeRoot(),
+                Utilities::FileHelper::GetWritableRuntimeRoot() / "asset-cache",
+            };
+            for (const fs::path& root : roots)
+            {
+                const fs::path relative = fs::relative(mainPath, root, ec);
+                if (!ec && !relative.empty() && relative.generic_string().rfind("..", 0) != 0)
+                {
+                    mainPath = relative.lexically_normal();
+                    break;
+                }
+                ec.clear();
+            }
         }
-
-        std::error_code ec;
-        if (!fs::exists(mainPath, ec))
-        {
-            outError = fmt::format("file not found: {}", mainPath.string());
-            return false;
-        }
+        mainPath = mainPath.lexically_normal();
 
         std::unordered_set<std::string> parsedDefinitions;
         std::unordered_set<std::string> executedTopLevel;
@@ -199,7 +222,7 @@ namespace Assets::Scad
             bool executable = false;
         };
         std::vector<WorkItem> queue;
-        queue.push_back({fs::weakly_canonical(mainPath, ec), true});
+        queue.push_back({mainPath, true});
 
         size_t head = 0;
         while (head < queue.size())
@@ -269,9 +292,14 @@ namespace Assets::Scad
             }
 
             const fs::path baseDir = item.path.parent_path();
+            std::error_code ec;
             for (const ScadDirective& d : directives)
             {
-                fs::path target = fs::weakly_canonical(baseDir / d.path, ec);
+                fs::path target = (baseDir / d.path).lexically_normal();
+                if (target.is_absolute())
+                {
+                    target = fs::weakly_canonical(target, ec);
+                }
                 queue.push_back({target, d.isInclude});
             }
         }

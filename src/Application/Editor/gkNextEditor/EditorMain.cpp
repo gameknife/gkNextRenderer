@@ -177,8 +177,7 @@ void EditorGameInstance::OnInit()
                                     Utilities::Package::FPackageFileSystem::GetInstance().HasMountedEntry(filename);
                                 std::error_code existsError;
                                 const bool hasFilesystemEntry = std::filesystem::exists(filename, existsError) ||
-                                    std::filesystem::exists(Utilities::FileHelper::GetPlatformFilePath(filename.c_str()),
-                                                            existsError);
+                                    std::filesystem::exists(Utilities::FileHelper::GetRuntimeFilePath(filename), existsError);
                                 if (!hasMountedEntry && !hasFilesystemEntry)
                                 {
                                     SPDLOG_ERROR("Failed to load HDRI: {}", filename);

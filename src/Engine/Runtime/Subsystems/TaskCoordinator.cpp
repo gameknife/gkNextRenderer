@@ -80,9 +80,8 @@ TaskCoordinator::~TaskCoordinator()
 
 uint32_t TaskCoordinator::AddTask( ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc, uint8_t priority)
 {
-    static uint32_t taskId = 0;
     ResTask task;
-    task.task_id = taskId++;
+    task.task_id = AllocateTaskId();
     task.priority = priority;
     task.task_func = std::move(taskFunc);
     task.complete_func = std::move(completeFunc);
@@ -92,9 +91,8 @@ uint32_t TaskCoordinator::AddTask( ResTask::TaskFunc taskFunc, ResTask::TaskFunc
 
 uint32_t TaskCoordinator::AddMainThreadTask(ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc, uint8_t priority)
 {
-    static uint32_t taskId = 0;
     ResTask task;
-    task.task_id = taskId++;
+    task.task_id = AllocateTaskId();
     task.priority = priority;
     task.task_func = std::move(taskFunc);
     task.complete_func = std::move(completeFunc);
@@ -104,9 +102,8 @@ uint32_t TaskCoordinator::AddMainThreadTask(ResTask::TaskFunc taskFunc, ResTask:
 
 uint32_t TaskCoordinator::AddParralledTask(ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc)
 {
-    static uint32_t taskId = 0;
     ResTask task;
-    task.task_id = taskId++;
+    task.task_id = AllocateTaskId();
     task.priority = 3;
     task.task_func = std::move(taskFunc);
     task.complete_func = std::move(completeFunc);
@@ -119,9 +116,8 @@ uint32_t TaskCoordinator::AddParralledTask(ResTask::TaskFunc taskFunc, ResTask::
 uint32_t TaskCoordinator::AddNamedTask(
     ENamedTaskThread namedThread, ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc)
 {
-    static std::atomic<uint32_t> taskId = 0;
     ResTask task;
-    task.task_id = taskId.fetch_add(1, std::memory_order_relaxed);
+    task.task_id = AllocateTaskId();
     task.task_func = std::move(taskFunc);
     task.complete_func = std::move(completeFunc);
 

@@ -367,6 +367,14 @@ public:
     }
 
 private:
+    // Every queue retires into completedTaskIds_, so they must share one id space. Per-function
+    // counters handed out colliding ids and IsAllTaskComplete(tasks) then reported another
+    // queue's finished work as this caller's -- which let the ambient bake treat still-running
+    // voxelization groups as complete. Ids start at 1 so a default-constructed ResTask (task_id 0)
+    // can never be mistaken for a real one.
+    uint32_t AllocateTaskId() { return nextTaskId_.fetch_add(1, std::memory_order_relaxed); }
+
+    std::atomic<uint32_t> nextTaskId_{1};
     std::vector< std::unique_ptr<TaskThread> > threads_;
     // low-level thread, use for parallel task
     std::vector< std::unique_ptr<TaskThread> > lowThreads_;

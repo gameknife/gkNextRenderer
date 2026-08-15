@@ -158,6 +158,10 @@ void FCPUAccelerationStructure::InitBVH(Scene& scene)
     for ( size_t m = 0; m < scene.Models().size(); ++m )
     {
         const Model& model = scene.Models()[m];
+        // A million-triangle model reallocates this array ~40 times without the hint, and the
+        // copies dominate the whole BLAS pass.
+        blasSet->contexts[m].triangles.reserve(model.CPUIndices().size());
+        blasSet->contexts[m].extinfos.reserve(model.CPUIndices().size() / 3);
         for (size_t i = 0; i < model.CPUIndices().size(); i += 3)
         {
             // Get the three vertices of the triangle
@@ -639,6 +643,13 @@ bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::D
         needUpdateGroups.pop();
     lastBatchTasks.clear();
 
+    // Drop the previous bake's flush state as well. Carrying a completed distance-field pass into
+    // the new bake makes Tick() take the "rebuild already done" branch on the first drained tick
+    // and upload the fresh voxels with the placeholder distance field, never rebuilding it.
+    needFlush = false;
+    distanceFieldRebuildScheduled_ = false;
+    distanceFieldRebuildTasks.clear();
+
     const Runtime::Config::UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
     InitCascadeBakers(settings, scene.AmbientCubeCascadeCapacity());
 
@@ -748,7 +759,6 @@ void FCPUAccelerationStructure::ClearAllTasks()
 bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemory, Vulkan::DeviceMemory* voxelGpuMemory, Vulkan::DeviceMemory* pageIndexMemory)
 {
     bool voxelUploadCompleted = false;
-    const bool batchComplete = lastBatchTasks.empty() || Tasks::TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks);
     NextEngine* engine = NextEngine::GetInstance();
     const Runtime::Config::UserSettings& settings = engine->GetUserSettings();
     const uint32_t currentFrame = engine->GetTotalFrames();
@@ -786,7 +796,45 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
                                 scene.AmbientActiveBrickListByteOffset());
     };
 
-    if (needFlush && batchComplete)
+    // Drive the voxelization queue before the flush below. Retiring the finished batch and popping
+    // the trailing fence here makes the drained state visible to the flush in this same tick;
+    // Scene::Tick only calls us every 30 frames, so each extra round trip costs half a second.
+    if (!lastBatchTasks.empty() && Tasks::TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks))
+    {
+        lastBatchTasks.clear();
+    }
+
+    if (lastBatchTasks.empty())
+    {
+        while (!needUpdateGroups.empty())
+        {
+            auto& group = needUpdateGroups.front();
+            ECubeProcType type = std::get<1>(group);
+            uint32_t cascadeIndex = std::get<3>(group);
+            if (type == ECubeProcType::ECPT_Fence)
+            {
+                if (!Tasks::TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks))
+                {
+                    break;
+                }
+                needUpdateGroups.pop();
+                continue;
+            }
+            AsyncProcessGroup(std::get<0>(group).x, std::get<0>(group).z, scene, std::get<1>(group), std::get<2>(group), cascadeIndex);
+            needUpdateGroups.pop();
+        }
+    }
+
+    // The distance field is a whole-cascade sweep over voxels that queued groups are still going to
+    // write, so it may only start once the queue is empty and every dispatched group has retired.
+    // Gating on the current batch alone scheduled it while the remaining cascades were still
+    // queued: their sweep ran on empty voxels, VoxelizeCube then overwrote the result with its
+    // placeholder seed, and the upload that clears needFlush shipped that placeholder to the GPU
+    // for good -- which is what left the far cascades with a uniform 15-cell clearance and let the
+    // DDA skip straight through their geometry.
+    const bool voxelizationDrained = needUpdateGroups.empty() && lastBatchTasks.empty();
+
+    if (needFlush && voxelizationDrained)
     {
         if (!distanceFieldRebuildScheduled_)
         {
@@ -836,34 +884,6 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
              engine->GetRenderer().ActiveRendererRequirements().requestAmbientCube)
     {
         rebuildBrickResidency();
-    }
-
-    if (!lastBatchTasks.empty())
-    {
-        if (Tasks::TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks))
-        {
-            lastBatchTasks.clear();
-        }
-    }
-    else
-    {
-        while (!needUpdateGroups.empty())
-        {
-            auto& group = needUpdateGroups.front();
-            ECubeProcType type = std::get<1>(group);
-            uint32_t cascadeIndex = std::get<3>(group);
-            if (type == ECubeProcType::ECPT_Fence)
-            {
-                if (!Tasks::TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks))
-                {
-                    break; 
-                }
-                needUpdateGroups.pop();
-                continue;
-            }
-            AsyncProcessGroup(std::get<0>(group).x, std::get<0>(group).z, scene, std::get<1>(group), std::get<2>(group), cascadeIndex);
-            needUpdateGroups.pop();
-        }
     }
 
     return voxelUploadCompleted;

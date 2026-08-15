@@ -5,6 +5,7 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <vector>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 #include <nlohmann/json.hpp>
@@ -111,19 +112,38 @@ namespace NextCVar
                                        const std::function<void(const std::string&, const std::string&)>& apply,
                                        const bool userConfig = false)
     {
-        const std::string resolvedPath = userConfig
-            ? Utilities::FileHelper::ResolveWritableFileForRead(path.c_str())
-            : Utilities::FileHelper::GetPlatformFilePath(path.c_str());
-        std::ifstream file(resolvedPath);
-        if (!file.is_open())
+        std::vector<uint8_t> data;
+        if (userConfig)
         {
-            return false;
+            const std::string resolvedPath = Utilities::FileHelper::ResolveWritableFileForRead(path.c_str());
+            std::ifstream file(resolvedPath);
+            if (!file.is_open())
+            {
+                return false;
+            }
+            data.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+        }
+        else if (auto* package = Utilities::Package::FPackageFileSystem::TryGetInstance())
+        {
+            if (!package->LoadFile(path, data))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            const std::filesystem::path loosePath = Utilities::FileHelper::GetRuntimeFilePath(path);
+            std::ifstream file(loosePath);
+            if (!file.is_open())
+            {
+                return false;
+            }
+            data.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
         }
 
         try
         {
-            json j;
-            file >> j;
+            json j = json::parse(data.begin(), data.end());
             for (auto it = j.begin(); it != j.end(); ++it)
             {
                 apply(it.key(), it.value().is_string() ? it.value().get<std::string>() : it.value().dump());

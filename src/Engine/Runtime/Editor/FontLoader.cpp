@@ -46,7 +46,7 @@ namespace NextUI::FontLoader
         }
 
         ImGuiIO& io = ImGui::GetIO();
-        const std::string platformPath = Utilities::FileHelper::GetPlatformFilePath(request.filePath.c_str());
+        const std::filesystem::path loosePath = Utilities::FileHelper::GetRuntimeFilePath(request.filePath);
         const ImWchar* ranges = request.glyphRanges ? request.glyphRanges :
             ResolveGlyphRanges(*io.Fonts, request.includeChineseFull, request.extraGlyphsUtf8);
         ImFontConfig fontConfig;
@@ -62,9 +62,9 @@ namespace NextUI::FontLoader
         }
 
         ImFont* font = nullptr;
-        if (std::filesystem::exists(platformPath))
+        if (std::filesystem::is_regular_file(loosePath))
         {
-            font = io.Fonts->AddFontFromFileTTF(platformPath.c_str(), request.pixelSize, fontConfigPtr, ranges);
+            font = io.Fonts->AddFontFromFileTTF(loosePath.string().c_str(), request.pixelSize, fontConfigPtr, ranges);
         }
         else
         {
@@ -85,7 +85,7 @@ namespace NextUI::FontLoader
         {
             if (request.warnOnFailure)
             {
-                SPDLOG_ERROR("[FontLoader] failed to load font '{}'", platformPath);
+                SPDLOG_ERROR("[FontLoader] failed to load font '{}'", request.filePath);
             }
             return nullptr;
         }

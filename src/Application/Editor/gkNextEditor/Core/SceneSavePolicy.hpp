@@ -32,7 +32,7 @@ namespace Editor
             return directPath;
         }
 
-        const std::filesystem::path runtimePath = Utilities::FileHelper::GetPlatformFilePath(path.c_str());
+        const std::filesystem::path runtimePath = Utilities::FileHelper::GetRuntimeFilePath(path);
         if (std::filesystem::exists(runtimePath, ec))
         {
             return runtimePath;

@@ -7,6 +7,9 @@
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/StbImage.hpp"
 
+#include <limits>
+#include <vector>
+
 namespace NextUI
 {
     FUiTextureHandle FUiTextureResolver::Request(
@@ -46,8 +49,11 @@ namespace NextUI
         int width = 0;
         int height = 0;
         int componentCount = 0;
-        const std::string platformPath = Utilities::FileHelper::GetPlatformFilePath(path.c_str());
-        if (stbi_info(platformPath.c_str(), &width, &height, &componentCount) != 0 && width > 0 && height > 0)
+        std::vector<uint8_t> imageData;
+        const bool loaded = Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(path, imageData);
+        if (loaded && imageData.size() <= static_cast<size_t>(std::numeric_limits<int>::max()) &&
+            stbi_info_from_memory(imageData.data(), static_cast<int>(imageData.size()),
+                                  &width, &height, &componentCount) != 0 && width > 0 && height > 0)
         {
             handle.pixelSize = ImVec2(static_cast<float>(width), static_cast<float>(height));
         }

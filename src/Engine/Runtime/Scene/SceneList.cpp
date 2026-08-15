@@ -226,7 +226,7 @@ void SceneList::ScanScenes()
 
     // add relative path
     std::string modelPath = "assets/models/";
-    std::filesystem::path path = Utilities::FileHelper::GetPlatformFilePath(modelPath.c_str());
+    std::filesystem::path path = Utilities::FileHelper::GetRuntimeFilePath(modelPath);
 
     // if with models, scan
     if (std::filesystem::exists(path))
@@ -244,7 +244,7 @@ void SceneList::ScanScenes()
 
     // Scan assets/omr/ for .ldr files
     std::string omrPath = "assets/omr/";
-    std::filesystem::path omrDir = Utilities::FileHelper::GetPlatformFilePath(omrPath.c_str());
+    std::filesystem::path omrDir = Utilities::FileHelper::GetRuntimeFilePath(omrPath);
     if (std::filesystem::exists(omrDir))
     {
         for (const auto& entry : std::filesystem::directory_iterator(omrDir))
@@ -260,7 +260,7 @@ void SceneList::ScanScenes()
     // Scan assets/scad/ for top-level .scad files (sub-modules under nested
     // directories are pulled in via `use`/`include`, not listed as scenes).
     std::string scadPath = "assets/scad/";
-    std::filesystem::path scadDir = Utilities::FileHelper::GetPlatformFilePath(scadPath.c_str());
+    std::filesystem::path scadDir = Utilities::FileHelper::GetRuntimeFilePath(scadPath);
     if (std::filesystem::exists(scadDir))
     {
         for (const auto& entry : std::filesystem::directory_iterator(scadDir))
@@ -277,7 +277,7 @@ void SceneList::ScanScenes()
     // SOG supports both packaged *.sog files and unpacked directories whose
     // entry point is meta.json. Nested unpacked datasets are listed as scenes.
     const std::string sogPath = "assets/sog/";
-    const std::filesystem::path sogDir = Utilities::FileHelper::GetPlatformFilePath(sogPath.c_str());
+    const std::filesystem::path sogDir = Utilities::FileHelper::GetRuntimeFilePath(sogPath);
     if (std::filesystem::exists(sogDir))
     {
         for (const auto& entry : std::filesystem::recursive_directory_iterator(sogDir))

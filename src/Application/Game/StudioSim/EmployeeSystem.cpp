@@ -45,14 +45,12 @@ namespace StudioSim
             return;
         }
 
-        const std::string path = Utilities::FileHelper::GetPlatformFilePath("assets/configs/studio_sim.json");
-        std::ifstream file(path);
-        if (file.is_open())
+        std::vector<uint8_t> data;
+        if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/configs/studio_sim.json", data))
         {
             try
             {
-                nlohmann::json json;
-                file >> json;
+                nlohmann::json json = nlohmann::json::parse(data.begin(), data.end());
                 for (const auto& entry : json.at("employees"))
                 {
                     FEmployeeCardDef card;

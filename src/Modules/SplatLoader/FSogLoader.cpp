@@ -14,6 +14,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <array>
 #include <fstream>
 #include <limits>
 #include <unordered_map>
@@ -39,13 +40,25 @@ namespace Assets
                    (static_cast<uint32_t>(bytes[offset + 3]) << 24);
         }
 
-        ByteArray ReadFile(const std::filesystem::path& path)
+        ByteArray ReadAssetFile(const std::filesystem::path& path)
         {
-            std::ifstream stream(path, std::ios::binary | std::ios::ate);
+            ByteArray result;
+            if (auto* package = Utilities::Package::FPackageFileSystem::TryGetInstance())
+            {
+                if (package->LoadFile(path.generic_string(), result))
+                {
+                    return result;
+                }
+            }
+
+            const std::filesystem::path loosePath = path.is_absolute()
+                ? path
+                : Utilities::FileHelper::GetRuntimeFilePath(path);
+            std::ifstream stream(loosePath, std::ios::binary | std::ios::ate);
             if (!stream) throw std::runtime_error(fmt::format("cannot open {}", path.string()));
             const auto length = stream.tellg();
             if (length < 0) throw std::runtime_error(fmt::format("cannot size {}", path.string()));
-            ByteArray result(static_cast<size_t>(length));
+            result.resize(static_cast<size_t>(length));
             stream.seekg(0);
             stream.read(reinterpret_cast<char*>(result.data()), static_cast<std::streamsize>(result.size()));
             if (!stream) throw std::runtime_error(fmt::format("cannot read {}", path.string()));
@@ -71,7 +84,7 @@ namespace Assets
 
         std::unordered_map<std::string, ByteArray> ReadStoredZip(const std::filesystem::path& path)
         {
-            const ByteArray zip = ReadFile(path);
+            const ByteArray zip = ReadAssetFile(path);
             std::unordered_map<std::string, ByteArray> entries;
             if (zip.size() < 22) throw std::runtime_error("truncated ZIP archive");
             size_t eocd = zip.size() - 22;
@@ -153,7 +166,7 @@ namespace Assets
                     if (found == entries_.end()) throw std::runtime_error(fmt::format("missing SOG member {}", name));
                     return found->second;
                 }
-                return ReadFile(root_ / name);
+                return ReadAssetFile(root_ / name);
             }
 
         private:
@@ -182,7 +195,26 @@ namespace Assets
     {
         try
         {
-            const std::filesystem::path path(Utilities::FileHelper::GetPlatformFilePath(filename.c_str()));
+            std::filesystem::path path(filename);
+            if (path.is_absolute())
+            {
+                std::error_code ec;
+                const std::array<std::filesystem::path, 2> roots = {
+                    Utilities::FileHelper::GetRuntimeRoot(),
+                    Utilities::FileHelper::GetWritableRuntimeRoot() / "asset-cache",
+                };
+                for (const std::filesystem::path& root : roots)
+                {
+                    const std::filesystem::path relative = std::filesystem::relative(path, root, ec);
+                    if (!ec && !relative.empty() && relative.generic_string().rfind("..", 0) != 0)
+                    {
+                        path = relative.lexically_normal();
+                        break;
+                    }
+                    ec.clear();
+                }
+            }
+            path = path.lexically_normal();
             const SogFileSet files(path);
             const ByteArray metaBytes = files.Read("meta.json");
             const nlohmann::json meta = nlohmann::json::parse(metaBytes.begin(), metaBytes.end());

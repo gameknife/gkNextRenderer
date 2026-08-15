@@ -72,6 +72,16 @@ float AmbientCubeAccumulationWeight(uint sampleCount)
     return 1.0f / float(min(sampleCount, 254u) + 1u);
 }
 
+// Ambient cubes are converged over many scheduler passes. On Android, tracing
+// sixteen rays per face makes the initial bake prohibitively long on mobile
+// GPUs, so prefer the four-ray stratified approximation. Desktop retains the
+// full sample set for maximum bake quality.
+#ifdef PLATFORM_ANDROID
+static const uint AMBIENT_BAKE_FACE_TRACING = FACE_TRACING_SUPER;
+#else
+static const uint AMBIENT_BAKE_FACE_TRACING = FACE_TRACING_FAST;
+#endif
+
 void AdvanceAmbientCubeSampleCount(inout uint4 skyvis_pxnxs0s1, uint sampleCount)
 {
     skyvis_pxnxs0s1.z = min(sampleCount + 1u, 255u);
@@ -100,9 +110,9 @@ public struct FGpuProbeGenerator : IProbeGenerator
         scramble ^= AmbientBakeHash(iterate * 131u + Camera.TotalFrames * 8191u);
 
         // 这个采样还是有点过重，可以考虑用probe间的光能传递来完成，而非直接tracing
-        for (uint i = 0; i < FACE_TRACING; i++)
+        for (uint i = 0; i < AMBIENT_BAKE_FACE_TRACING; i++)
         {
-            float2 sampleUv = AmbientBakeSample2D(i, FACE_TRACING, scramble);
+            float2 sampleUv = AmbientBakeSample2D(i, AMBIENT_BAKE_FACE_TRACING, scramble);
             float3 hemiVec = AmbientBakeUniformHemisphere(sampleUv);
             float3 rayDir = AlignWithNormal(hemiVec, basis);
 
@@ -137,9 +147,9 @@ public struct FGpuProbeGenerator : IProbeGenerator
             }
         }
 
-        skyEmissiveDirect = skyEmissiveDirect / float(FACE_TRACING);
-        bounceColor = bounceColor / float(FACE_TRACING);
-        skyVisibility = skyVisibility / float(FACE_TRACING);
+        skyEmissiveDirect = skyEmissiveDirect / float(AMBIENT_BAKE_FACE_TRACING);
+        bounceColor = bounceColor / float(AMBIENT_BAKE_FACE_TRACING);
+        skyVisibility = skyVisibility / float(AMBIENT_BAKE_FACE_TRACING);
 
         // // 太阳光
         if (Camera.HasSun)

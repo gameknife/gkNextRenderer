@@ -38,6 +38,18 @@ namespace Utilities
 #endif
         }
 
+        // Returns the loose-file location without consulting mounted paks or
+        // materializing package entries. Use this for discovery/probes and for
+        // callers that already have an in-memory fallback.
+        static std::filesystem::path GetRuntimeFilePath(const std::filesystem::path& srcPath)
+        {
+            if (srcPath.is_absolute())
+            {
+                return srcPath.lexically_normal();
+            }
+            return (GetRuntimeRoot() / srcPath).lexically_normal();
+        }
+
         // Portable mode keeps every writable artifact next to the executable. It is
         // opt-in through a `portable.txt` marker in the runtime root, because the usual
         // install location for a release build (Program Files, a read-only mount, a
@@ -215,6 +227,7 @@ namespace Utilities
         public:
             // Construct
             FPackageFileSystem(EPackageRunMode RunMode);
+            ~FPackageFileSystem();
 
             void SetRunMode(EPackageRunMode RunMode) { runMode_ = RunMode; }
             

@@ -98,7 +98,10 @@ namespace Utilities
                 std::string absEntry = entry;
                 if (!path.is_absolute())
                 {
-                    absEntry = FileHelper::GetPlatformFilePath(entry.c_str());
+                    // Loose-file fallback must not materialize a mounted pak
+                    // entry. If the loose file is absent, LoadFile() will use
+                    // the in-memory pak path below.
+                    absEntry = FileHelper::GetRuntimeFilePath(path).string();
                 }
 
                 std::ifstream reader(absEntry, std::ios::binary);
@@ -190,6 +193,14 @@ namespace Utilities
             instance_ = this;
         }
 
+        FPackageFileSystem::~FPackageFileSystem()
+        {
+            if (instance_ == this)
+            {
+                instance_ = nullptr;
+            }
+        }
+
         bool FPackageFileSystem::LoadFile(const std::string& entry, std::vector<uint8_t>& outData)
         {
             outData.clear();
@@ -266,7 +277,7 @@ namespace Utilities
             filemaps.clear();
 
             auto resolvePath = [](const std::string& path) {
-                return std::filesystem::absolute(FileHelper::GetPlatformFilePath(path.c_str()));
+                return std::filesystem::absolute(FileHelper::GetRuntimeFilePath(path));
             };
 
             std::filesystem::path absSrcPath = resolvePath(srcDir);
@@ -453,7 +464,7 @@ namespace Utilities
 
         bool FPackageFileSystem::PakFromList(const std::string& pakFile, const std::string& rootPath, const std::string& listPath, bool enableCompression, const std::string& manifestPath)
         {
-            const std::filesystem::path absoluteRoot = std::filesystem::absolute(FileHelper::GetPlatformFilePath(rootPath.c_str()));
+            const std::filesystem::path absoluteRoot = std::filesystem::absolute(FileHelper::GetRuntimeFilePath(rootPath));
             std::ifstream listReader(listPath);
             if (!listReader.is_open())
             {
@@ -659,7 +670,7 @@ namespace Utilities
         std::string ResolvePlatformFilePath(const char* srcPath)
         {
             const std::filesystem::path relativePath = std::filesystem::path(srcPath).lexically_normal();
-            const std::filesystem::path diskPath = (GetRuntimeRoot() / relativePath).lexically_normal();
+            const std::filesystem::path diskPath = GetRuntimeFilePath(relativePath);
             std::error_code errorCode;
             if (std::filesystem::is_regular_file(diskPath, errorCode))
             {
@@ -680,42 +691,40 @@ namespace Utilities
             }
 
             const std::string normalized = NormalizePathString(relativePath);
-            std::vector<std::string> entries;
-            if (packageSystem->HasMountedEntry(normalized))
-            {
-                entries.push_back(normalized);
-            }
-            else
-            {
-                std::string prefix = normalized;
-                if (!prefix.empty() && prefix.back() != '/')
-                {
-                    prefix.push_back('/');
-                }
-                entries = packageSystem->ListMountedEntries(prefix);
-            }
-            if (entries.empty())
+            // A directory lookup is discovery, not a request for every child.
+            // Materializing a prefix here would unpack an entire asset tree just
+            // because a scene list or content browser asked for its root path.
+            if (!packageSystem->HasMountedEntry(normalized))
             {
                 return diskPath.string();
             }
 
             const std::filesystem::path cacheRoot = GetWritableRuntimeRoot() / "asset-cache";
-            for (const std::string& entry : entries)
+            const std::string& entry = normalized;
+            if (!IsTraceableAsset(entry) || entry.rfind("..", 0) == 0)
             {
-                if (!IsTraceableAsset(entry) || entry.rfind("..", 0) == 0)
-                {
-                    SPDLOG_WARN("Pak: refusing to materialize unsafe entry '{}'", entry);
-                    continue;
-                }
-                std::vector<uint8_t> data;
-                if (!packageSystem->LoadMountedFile(entry, data))
-                {
-                    continue;
-                }
-                const std::filesystem::path destination = (cacheRoot / entry).lexically_normal();
-                std::filesystem::create_directories(destination.parent_path(), errorCode);
-                std::ofstream writer(destination, std::ios::binary | std::ios::trunc);
-                writer.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
+                SPDLOG_WARN("Pak: refusing to materialize unsafe entry '{}'", entry);
+                return diskPath.string();
+            }
+
+            std::vector<uint8_t> data;
+            if (!packageSystem->LoadMountedFile(entry, data))
+            {
+                return diskPath.string();
+            }
+            const std::filesystem::path destination = (cacheRoot / entry).lexically_normal();
+            std::filesystem::create_directories(destination.parent_path(), errorCode);
+            std::ofstream writer(destination, std::ios::binary | std::ios::trunc);
+            if (!writer.is_open())
+            {
+                SPDLOG_WARN("Pak: failed to materialize '{}' at '{}'", entry, destination.string());
+                return diskPath.string();
+            }
+            writer.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
+            if (!writer)
+            {
+                SPDLOG_WARN("Pak: failed to write materialized entry '{}'", entry);
+                return diskPath.string();
             }
             return (cacheRoot / relativePath).lexically_normal().string();
         }

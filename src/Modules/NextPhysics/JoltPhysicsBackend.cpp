@@ -874,14 +874,13 @@ NextBodyID FJoltPhysicsBackend::CreateMeshBody(const NextMeshShapeHandle& meshSh
 
     // Cooking can drop every triangle (e.g. centimeter-scale meshes fall below Jolt's
     // degenerate-triangle threshold). Feeding such settings to CreateAndAddBody trips a
-    // fatal assert, so validate here and skip the physics body instead.
-    if (const Shape::ShapeResult cooked = meshShapeSettings->Create(); cooked.HasError())
+    // fatal assert, so validate here and skip the physics body instead. Jolt caches the cooked
+    // shape on the settings, so this is free when the caller already cooked off the load path.
+    if (!CookMeshShape(meshShape))
     {
-        SPDLOG_WARN("[Physics] mesh shape cooking failed ({}); skipping collision body",
-                    cooked.GetError().c_str());
         return {};
     }
-    
+
     const float epsilon = 0.001f;
     bool isUniformScale = (glm::abs(scale.x - 1.0f) < epsilon && 
                           glm::abs(scale.y - 1.0f) < epsilon && 
@@ -955,6 +954,25 @@ NextMeshShapeHandle FJoltPhysicsBackend::CreateMeshShape(Assets::Model& model)
         return nullptr;
     }
     return std::make_shared<FJoltMeshShape>(new MeshShapeSettings(inVertices, inTriangles, materials));
+}
+
+bool FJoltPhysicsBackend::CookMeshShape(const NextMeshShapeHandle& meshShape)
+{
+    const auto joltMeshShape = std::dynamic_pointer_cast<const FJoltMeshShape>(meshShape);
+    if (!joltMeshShape || !joltMeshShape->settings_)
+    {
+        return false;
+    }
+
+    // Create() builds the triangle tree on first call and returns the cached result afterwards.
+    // It touches nothing but the settings object, so cooking distinct shapes in parallel is safe.
+    if (const Shape::ShapeResult cooked = joltMeshShape->settings_->Create(); cooked.HasError())
+    {
+        SPDLOG_WARN("[Physics] mesh shape cooking failed ({}); skipping collision body",
+                    cooked.GetError().c_str());
+        return false;
+    }
+    return true;
 }
 
 void FJoltPhysicsBackend::AddForceToBody(NextBodyID bodyID, const glm::vec3& force)

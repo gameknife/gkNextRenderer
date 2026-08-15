@@ -29,6 +29,7 @@ namespace Modules::Physics
                                   NextObjectLayer layer) override;
         NextBodyID CreatePlaneBody(glm::vec3 position, glm::vec3 normal, NextMotionType motionType) override;
         NextMeshShapeHandle CreateMeshShape(Assets::Model& model) override;
+        bool CookMeshShape(const NextMeshShapeHandle& meshShape) override;
 
         void AddForceToBody(NextBodyID bodyID, const glm::vec3& force) override;
         void MoveKinematicBody(NextBodyID bodyID, const glm::vec3& position,

@@ -3,10 +3,9 @@
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
-#include <fstream>
-#include <filesystem>
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
+#include <vector>
 
 namespace
 {
@@ -18,23 +17,15 @@ namespace
 
     nlohmann::json ReadDocument(const std::string& path)
     {
-        std::filesystem::path resolvedPath(path);
-        if (!std::filesystem::exists(resolvedPath))
-        {
-            resolvedPath = Utilities::FileHelper::GetPlatformFilePath(path.c_str());
-        }
-
-        std::ifstream input(resolvedPath);
-        if (!input)
+        std::vector<uint8_t> data;
+        if (!Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(path, data))
         {
             FailJson(path, "file not found");
         }
 
         try
         {
-            nlohmann::json document;
-            input >> document;
-            return document;
+            return nlohmann::json::parse(data.begin(), data.end());
         }
         catch (const std::exception& exception)
         {

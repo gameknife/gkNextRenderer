@@ -79,12 +79,7 @@ namespace Assets
     uint32_t GlobalTexturePool::LoadTexture(const std::string& filename, bool srgb, ETextureLifetime lifetime)
     {
         auto& pakSystem = Utilities::Package::FPackageFileSystem::GetInstance();
-        const bool hasMountedEntry = pakSystem.HasMountedEntry(filename);
-        const std::string absPath = Utilities::FileHelper::GetPlatformFilePath(filename.c_str());
-        std::error_code existsError;
-        const bool hasOsFile = std::filesystem::exists(absPath, existsError);
-
-        if (!hasMountedEntry && !hasOsFile)
+        if (!Utilities::FileHelper::IsAssetAvailable(filename))
         {
             SPDLOG_WARN("Texture '{}' is unavailable; using a placeholder texture.", filename);
             return GetInstance()->RequestNewTextureMemAsync(
@@ -92,7 +87,12 @@ namespace Assets
         }
 
         std::vector<uint8_t> data;
-        pakSystem.LoadFile(filename, data);
+        if (!pakSystem.LoadFile(filename, data) || data.empty())
+        {
+            SPDLOG_WARN("Texture '{}' failed to load; using a placeholder texture.", filename);
+            return GetInstance()->RequestNewTextureMemAsync(
+                filename, "image/png", false, nullptr, 0, srgb, ETextureLifetime::ETL_Transient);
+        }
         std::filesystem::path path(filename);
         std::string mime = std::string("image/") + path.extension().string().substr(1);
         return GetInstance()->RequestNewTextureMemAsync(
@@ -109,12 +109,7 @@ namespace Assets
     uint32_t GlobalTexturePool::LoadHDRTexture(const std::string& filename)
     {
         auto& pakSystem = Utilities::Package::FPackageFileSystem::GetInstance();
-        const bool hasMountedEntry = pakSystem.HasMountedEntry(filename);
-        const std::string absPath = Utilities::FileHelper::GetPlatformFilePath(filename.c_str());
-        std::error_code existsError;
-        const bool hasOsFile = std::filesystem::exists(absPath, existsError);
-
-        if (!hasMountedEntry && !hasOsFile)
+        if (!Utilities::FileHelper::IsAssetAvailable(filename))
         {
             SPDLOG_WARN("HDR texture '{}' is unavailable; using a placeholder environment.", filename);
             return GetInstance()->RequestNewTextureMemAsync(

@@ -918,7 +918,7 @@ namespace Editor
         ImGui::Begin("Content Browser", nullptr);
         {
             static const std::filesystem::path rootPath =
-                std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets"));
+                Utilities::FileHelper::GetRuntimeFilePath("assets");
             static DirectoryCache directoryCache;
             static DirectoryVisibilityCache visibilityCache;
             auto& browserState = ui.contentBrowserState;
