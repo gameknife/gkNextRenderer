@@ -29,6 +29,7 @@
 #include "Modules/LiveCoding/LiveCodingModule.hpp"
 #include "Engine/Utilities/Localization.hpp"
 #include "Engine/Utilities/Format.hpp"
+#include "Engine/Utilities/Math.hpp"
 #include "Engine/Utilities/AboutDialog.hpp"
 #include "Engine/Utilities/ImGui.hpp"
 
@@ -194,15 +195,21 @@ bool NextRendererGameInstance::DrawGiBakeIndicator()
     const auto DrawActivity = [](const char* label, const std::string& value, float fraction,
                                  bool indeterminate, const char* tooltip)
     {
-        constexpr ImVec2 size(264.0f, 22.0f);
+        constexpr float height = 20.0f;
         constexpr float rounding = 7.0f;
-        constexpr float progressWidth = 62.0f;
-        constexpr float progressHeight = 5.0f;
+        constexpr float progressWidth = 76.0f;
+        constexpr float progressHeight = 4.0f;
+        constexpr float textScale = 0.78f;
 
         const ImVec2 position = ImGui::GetCursorScreenPos();
+        ImFont* font = ImGui::GetFont();
+        const float textSize = ImGui::GetFontSize() * textScale;
+        const ImVec2 labelSize = font->CalcTextSizeA(textSize, FLT_MAX, 0.0f, label);
+        const ImVec2 valueSize = font->CalcTextSizeA(textSize, FLT_MAX, 0.0f, value.c_str());
+        const ImVec2 size(22.0f + labelSize.x + 10.0f + progressWidth + 8.0f + valueSize.x + 10.0f, height);
         const ImVec2 maximum = position + size;
-        const ImVec2 progressMin(maximum.x - progressWidth - 9.0f,
-                                 position.y + (size.y - progressHeight) * 0.5f);
+        const ImVec2 progressMin(position.x + 22.0f + labelSize.x + 10.0f,
+                                 position.y + (height - progressHeight) * 0.5f);
         const ImVec2 progressMax(progressMin.x + progressWidth, progressMin.y + progressHeight);
         ImDrawList* drawList = ImGui::GetWindowDrawList();
 
@@ -211,14 +218,11 @@ bool NextRendererGameInstance::DrawGiBakeIndicator()
                                 rounding);
         drawList->AddRect(position, maximum,
                           NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::Accent, 0.32f), rounding);
-        drawList->AddCircleFilled(ImVec2(position.x + 12.0f, position.y + size.y * 0.5f), 3.5f,
+        drawList->AddCircleFilled(ImVec2(position.x + 11.0f, position.y + height * 0.5f), 3.0f,
                                   NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::Accent));
-        drawList->AddText(ImVec2(position.x + 22.0f, position.y + 3.0f),
-                          NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::Text), label);
-
-        const ImVec2 valueSize = ImGui::CalcTextSize(value.c_str());
-        drawList->AddText(ImVec2(progressMin.x - valueSize.x - 9.0f, position.y + 3.0f),
-                          NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::TextMuted), value.c_str());
+        const float textY = position.y + (height - textSize) * 0.5f;
+        drawList->AddText(font, textSize, ImVec2(position.x + 22.0f, textY),
+                          NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::TextMuted), label);
         drawList->AddRectFilled(progressMin, progressMax,
                                 NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::Background, 0.85f),
                                 progressHeight * 0.5f);
@@ -244,6 +248,9 @@ bool NextRendererGameInstance::DrawGiBakeIndicator()
                                     progressHeight * 0.5f);
         }
 
+        drawList->AddText(font, textSize, ImVec2(progressMax.x + 8.0f, textY),
+                          NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::TextDim), value.c_str());
+
         ImGui::Dummy(size);
         if (ImGui::IsItemHovered())
         {
@@ -253,14 +260,18 @@ bool NextRendererGameInstance::DrawGiBakeIndicator()
 
     const Assets::CPU::FProbeBakeProgress probeProgress =
         GetEngine().GetScene().GetCPUAccelerationStructure().GetProbeBakeProgress();
+    const auto FormatProgressCount = [](uint32_t count)
+    {
+        return Utilities::metricFormatter(static_cast<double>(count), "");
+    };
     if (probeProgress.stage == Assets::CPU::EProbeBakeStage::VoxelData)
     {
         const float fraction = probeProgress.totalVoxelGroups > 0u
             ? static_cast<float>(probeProgress.completedVoxelGroups) /
                   static_cast<float>(probeProgress.totalVoxelGroups)
             : 0.0f;
-        DrawActivity("Voxel data", fmt::format("{} / {}", probeProgress.completedVoxelGroups,
-                                                probeProgress.totalVoxelGroups),
+        DrawActivity("Voxel data", fmt::format("{} / {}", FormatProgressCount(probeProgress.completedVoxelGroups),
+                                                FormatProgressCount(probeProgress.totalVoxelGroups)),
                      fraction, false, "CPU voxel data generation");
         return true;
     }
@@ -281,7 +292,9 @@ bool NextRendererGameInstance::DrawGiBakeIndicator()
         ? static_cast<float>(ambientProgress.completedDispatchGroups) /
               static_cast<float>(ambientProgress.totalDispatchGroups)
         : 0.0f;
-    DrawActivity("Ambient bake", fmt::format("{:.0f}%", fraction * 100.0f), fraction, false,
-                 "GPU ambient cube lighting bake");
+    DrawActivity("Ambient bake", fmt::format("{} / {}", FormatProgressCount(ambientProgress.completedDispatchGroups),
+                                              FormatProgressCount(ambientProgress.totalDispatchGroups)),
+                 fraction, false,
+                 "GPU ambient cube lighting bake: dispatched groups / total groups");
     return true;
 }
