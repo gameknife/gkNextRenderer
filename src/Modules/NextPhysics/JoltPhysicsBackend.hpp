@@ -73,6 +73,13 @@ namespace Modules::Physics
             glm::vec3 velocity;
         };
 
+        struct FKinematicTarget
+        {
+            NextBodyID id;
+            glm::vec3 position;
+            glm::quat rotation;
+        };
+
         struct FPendingUpdate
         {
             std::vector<FPendingBodyState> bodies;
@@ -93,6 +100,8 @@ namespace Modules::Physics
         uint32_t previousActiveRigidBodyCount_{};
         std::vector<NextBodyID> dynamicBodyIds_;
         std::vector<NextBodyID> pendingDynamicBodyIds_;
+        std::unordered_map<NextBodyID, FKinematicTarget> pendingKinematicTargets_;
+        std::unordered_set<NextBodyID> rejectedKinematicTargets_;
         FPendingUpdate pendingUpdate_;
         bool updatePending_ = false;
         bool updatePublished_ = false;

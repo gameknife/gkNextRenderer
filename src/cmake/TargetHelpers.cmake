@@ -15,7 +15,7 @@ function(gk_enable_unity_build target batchSize)
 endfunction()
 
 function(gk_enable_fast_dev_link target)
-    if(MSVC AND GK_FAST_DEV_LINK)
+    if(MSVC AND GK_FAST_DEV_LINK AND NOT GK_ENABLE_ASAN)
         target_link_options(${target} PRIVATE
             /INCREMENTAL
             /OPT:NOREF
@@ -24,6 +24,17 @@ function(gk_enable_fast_dev_link target)
         )
         target_compile_options(${target} PRIVATE
             /Zf
+        )
+    endif()
+endfunction()
+
+function(gk_copy_asan_runtime target)
+    if(MSVC AND GK_ENABLE_ASAN)
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${GK_ASAN_RUNTIME_DLL}"
+                "$<TARGET_FILE_DIR:${target}>"
+            COMMENT "Copying MSVC AddressSanitizer runtime for ${target}"
         )
     endif()
 endfunction()
@@ -56,6 +67,11 @@ function(gk_apply_target_defaults target)
     endif()
 
     set_target_properties(${target} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
+
+    get_target_property(targetType ${target} TYPE)
+    if(targetType STREQUAL "EXECUTABLE")
+        gk_copy_asan_runtime(${target})
+    endif()
 
     target_include_directories(${target} PRIVATE
         ${GK_SOURCE_ROOT}

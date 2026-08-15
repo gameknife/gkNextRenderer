@@ -375,6 +375,34 @@ TEST_CASE_METHOD(EngineTestFixture, "Kinematic platform driven every frame in as
     physics->RemoveBody(floor);
 }
 
+TEST_CASE_METHOD(EngineTestFixture, "Kinematic target remains bounded across catch-up steps",
+                 "[GPU][Integration][Physics][FixedStep][Kinematic]")
+{
+    auto* physics = engine_->GetPhysicsEngine();
+    REQUIRE(physics != nullptr);
+    physics->OnSceneStarted();
+
+    const NextBodyID platform =
+        physics->CreateBoxBody({0.0f, 1.0f, 0.0f}, {2.0f, 0.2f, 2.0f}, NextMotionType::Kinematic);
+
+    for (int frame = 1; frame <= 60; ++frame)
+    {
+        const glm::vec3 targetPosition{static_cast<float>(frame) * 0.1f, 1.0f, 0.0f};
+        physics->MoveKinematicBody(platform, targetPosition, glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+                                   1.0f / 60.0f);
+        physics->Tick(4.0 / 60.0);
+
+        const FNextPhysicsBody* body = physics->GetBody(platform);
+        REQUIRE(body != nullptr);
+        CHECK(std::isfinite(body->position.x));
+        CHECK(std::isfinite(body->position.y));
+        CHECK(std::isfinite(body->position.z));
+        CHECK(glm::distance(body->position, targetPosition) < 1.0e-3f);
+    }
+
+    physics->RemoveBody(platform);
+}
+
 TEST_CASE_METHOD(EngineTestFixture, "NaN kinematic target does not corrupt the physics thread",
                  "[GPU][Integration][Physics][Async][Kinematic]")
 {

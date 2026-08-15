@@ -473,7 +473,7 @@ namespace Assets
                                     if (NextPhysics* physics = NextEngine::GetInstance()->GetPhysicsEngine())
                                     {
                                         physics->MoveKinematicBody(
-                                            bodyID, n->WorldTranslation(), n->WorldRotation(), 0.01f);
+                                            bodyID, n->WorldTranslation(), n->WorldRotation(), 1.0f / 60.0f);
                                     }
                                 }
                             }

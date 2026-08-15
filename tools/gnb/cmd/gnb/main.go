@@ -59,6 +59,9 @@ func main() {
 		}
 	}
 	preset, _ := cmakerun.DefaultPreset()
+	if explicit := explicitPreset(); explicit != "" {
+		preset = explicit
+	}
 	ctx := appContext{repoRoot: repoRoot, cfg: cfg, preset: preset}
 
 	root := &cobra.Command{
@@ -73,6 +76,8 @@ func main() {
 	}
 	var repoRootFlag string
 	root.PersistentFlags().StringVar(&repoRootFlag, "repo-root", "", "explicit repository root (also GNB_REPO_ROOT)")
+	var presetFlag string
+	root.PersistentFlags().StringVar(&presetFlag, "preset", "", "CMake preset to use instead of the host default")
 	// Commands listed here run without a discovered repository — everything
 	// else fails fast with a friendly hint instead of crashing inside a
 	// command implementation that assumed a repo root.
@@ -148,6 +153,18 @@ func explicitRepoRoot() string {
 		}
 		if arg == "--repo-root" && i+2 < len(os.Args) {
 			return os.Args[i+2]
+		}
+	}
+	return ""
+}
+
+func explicitPreset() string {
+	for i, arg := range os.Args[1:] {
+		if strings.HasPrefix(arg, "--preset=") {
+			return strings.TrimSpace(strings.TrimPrefix(arg, "--preset="))
+		}
+		if arg == "--preset" && i+2 < len(os.Args) {
+			return strings.TrimSpace(os.Args[i+2])
 		}
 	}
 	return ""
@@ -369,7 +386,7 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if ctx.preset == "windows" || ctx.preset == "windows-ninja" || ctx.preset == "linux" || ctx.preset == "linux-arm64" || ctx.preset == "macos-arm64" {
+			if usesNinjaPreset(ctx.preset) {
 				ninjaPath, err := vcpkg.EnsureBundledNinja(ctx.repoRoot, ctx.cfg)
 				if err != nil {
 					return err
@@ -393,6 +410,16 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.PrintCmd, "print-cmd", false, "print cmake commands without executing")
 	cmd.Flags().BoolVar(&skipSetup, "skip-setup", false, "do not auto-bootstrap vcpkg/external dependencies")
 	return cmd
+}
+
+func usesNinjaPreset(preset string) bool {
+	switch preset {
+	case "windows", "windows-no-unity", "windows-asan", "windows-ninja",
+		"linux", "linux-asan", "linux-arm64", "macos-arm64", "macos-arm64-asan":
+		return true
+	default:
+		return false
+	}
 }
 
 func newGraphCommand(ctx appContext) *cobra.Command {

@@ -62,6 +62,29 @@
             }
         },
         {
+            "name": "windows-asan",
+            "inherits": "windows-no-unity",
+            "displayName": "Windows (AddressSanitizer)",
+            "cacheVariables": {
+                "GK_ENABLE_ASAN": "ON",
+                "GK_FAST_DEV_LINK": "OFF",
+                "GK_ENABLE_CPP_LIVE_CODING": "OFF",
+                "ENABLE_STREAMLINE": "OFF"
+            }
+        },
+        {
+            "name": "windows-vcproj-asan",
+            "inherits": "windows-vcproj",
+            "displayName": "Windows (Visual Studio + AddressSanitizer)",
+            "cacheVariables": {
+                "ENABLE_UNITY_BUILD": "OFF",
+                "GK_ENABLE_ASAN": "ON",
+                "GK_FAST_DEV_LINK": "OFF",
+                "GK_ENABLE_CPP_LIVE_CODING": "OFF",
+                "ENABLE_STREAMLINE": "OFF"
+            }
+        },
+        {
             "name": "linux",
             "inherits": "base",
             "displayName": "Linux",
@@ -74,6 +97,15 @@
             "cacheVariables": {
                 "VCPKG_TARGET_TRIPLET": "x64-linux",
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "linux-asan",
+            "inherits": "linux",
+            "displayName": "Linux (AddressSanitizer)",
+            "cacheVariables": {
+                "ENABLE_UNITY_BUILD": "OFF",
+                "GK_ENABLE_ASAN": "ON"
             }
         },
         {
@@ -108,6 +140,15 @@
             }
         },
         {
+            "name": "macos-arm64-asan",
+            "inherits": "macos-arm64",
+            "displayName": "macOS ARM64 (AddressSanitizer)",
+            "cacheVariables": {
+                "ENABLE_UNITY_BUILD": "OFF",
+                "GK_ENABLE_ASAN": "ON"
+            }
+        },
+        {
             "name": "ios-device",
             "inherits": "base",
             "displayName": "iOS Device (arm64)",
@@ -139,8 +180,23 @@
             "configuration": "RelWithDebInfo"
         },
         {
+            "name": "windows-asan",
+            "configurePreset": "windows-asan",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "windows-vcproj-asan",
+            "configurePreset": "windows-vcproj-asan",
+            "configuration": "RelWithDebInfo"
+        },
+        {
             "name": "linux",
             "configurePreset": "linux",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "linux-asan",
+            "configurePreset": "linux-asan",
             "configuration": "RelWithDebInfo"
         },
         {
@@ -151,6 +207,11 @@
         {
             "name": "macos-arm64",
             "configurePreset": "macos-arm64",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "macos-arm64-asan",
+            "configurePreset": "macos-arm64-asan",
             "configuration": "RelWithDebInfo"
         },
         {
