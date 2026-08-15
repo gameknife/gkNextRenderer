@@ -82,12 +82,18 @@ GK_API(Scene, AddRenderNode,           uint32_t, (GkStr name, const FRenderNodeS
 GK_API(Scene, RemoveNodeById,          void,     (uint32_t nodeId))
 GK_API(Scene, MarkTransformDirty,      void,     ())
 GK_API(Scene, RecalcNodeTransform,     void,     (uint32_t nodeId, GkBool full))   //= full:0
-// Direct node transform. Distinct from the component property access reserved below: a node's
-// transform is the node's own state, not a reflected component field, and gameplay moves nodes
-// every frame.
+// Direct node transform. The node's transform is also reachable through the reflected property
+// access below (Node::Translation and friends), and both routes reach the same setter; these exist
+// because gameplay moves nodes every frame and should not pay a property lookup to do it.
 GK_API(Scene, SetNodeTranslation,      void,     (uint32_t nodeId, const FVec3* translation))
 GK_API(Scene, SetNodeScale,            void,     (uint32_t nodeId, const FVec3* scale))
 GK_API(Scene, SetNodeVisible,          void,     (uint32_t nodeId, GkBool visible))
+// The node carrying the scene's EnvironmentComponent, created if the scene has none — the same
+// on-demand behaviour C++ gameplay gets from Scene::GetEnvSettings(). A procedural scene built
+// from SceneBuild has no environment node, so without this there would be no way for managed code
+// to reach sun and sky at all. The settings themselves are reflected properties and are reached
+// through the generated wrapper: `new NodeRef(Scene.GetEnvironmentNodeId()).Environment`.
+GK_API(Scene, GetEnvironmentNodeId,    uint32_t, ())
 
 // --- Scene construction ---------------------------------------------------------------------
 // Only valid inside the BeforeSceneRebuild hook window; calls outside it are rejected and logged.
@@ -113,8 +119,53 @@ GK_API(Paths,  GetProjectRoot, int32_t, (char* buffer, int32_t capacity))
 GK_API(Paths,  GetOutputDir,   int32_t, (char* buffer, int32_t capacity))
 GK_API(Assets, ReadFile,       int32_t, (GkStr path, uint8_t* buffer, int32_t capacity))
 
-// --- Reserved: component property access ------------------------------------------------------
-// Node/component property get/set belongs here, but its shape is decided by the generator that
-// consumes it (Components.g.cs, phase 5 of docs/plans/dotnet-scripting-plan.md). Adding guessed
-// entries now would mean designing an ABI without its only consumer. Scene_FindNodeIdWithComponent
-// above is enough for phase 3 and 4.
+// --- Component and node property access --------------------------------------------------------
+// Reflected properties, addressed by (nodeId, typeId, propId).
+//
+// This is the only part of the binding surface not written by hand: the property *names* live in
+// entt::meta, not here, so these entries are the typed transport and the generated wrappers in
+// Components.g.cs are what a game author actually calls
+// (`node.Render.Visible = false`). Adding a property to a component therefore needs no change to
+// this file — register it with REFLECT_COMPONENT, refresh the manifest, regenerate.
+//
+// typeId is the meta type id, which is the hash of the name the type was registered under
+// ("RenderComponent"_hs). The node's own properties use "Node"_hs, so one addressing scheme covers
+// both and the generated Node wrapper is not a special case.
+//
+// propId comes from the committed reflection manifest and is a compile-time constant in the
+// generated C#: a per-frame property write must not do string comparisons. A stale manifest would
+// therefore address a property that no longer exists, which is why a unit test compares the
+// committed manifest against live reflection.
+//
+// One accessor pair per property type rather than a single variant-shaped entry: a variant would
+// need a tagged union crossing the boundary, and the generator already knows each property's exact
+// type, so the type information would be discarded at the boundary only to be re-checked at
+// runtime. Getters report failure as a zero value and a logged warning, matching the rest of the
+// surface (Scene_FindNodeIdWithComponent returns GK_INVALID_NODE_ID rather than an error code).
+GK_API(Component, Has,       GkBool,   (uint32_t nodeId, uint32_t typeId))
+GK_API(Component, GetBool,   GkBool,   (uint32_t nodeId, uint32_t typeId, uint32_t propId))
+GK_API(Component, SetBool,   void,     (uint32_t nodeId, uint32_t typeId, uint32_t propId, GkBool value))
+GK_API(Component, GetInt32,  int32_t,  (uint32_t nodeId, uint32_t typeId, uint32_t propId))
+GK_API(Component, SetInt32,  void,     (uint32_t nodeId, uint32_t typeId, uint32_t propId, int32_t value))
+GK_API(Component, GetUInt32, uint32_t, (uint32_t nodeId, uint32_t typeId, uint32_t propId))
+GK_API(Component, SetUInt32, void,     (uint32_t nodeId, uint32_t typeId, uint32_t propId, uint32_t value))
+GK_API(Component, GetFloat,  float,    (uint32_t nodeId, uint32_t typeId, uint32_t propId))
+GK_API(Component, SetFloat,  void,     (uint32_t nodeId, uint32_t typeId, uint32_t propId, float value))
+GK_API(Component, GetDouble, double,   (uint32_t nodeId, uint32_t typeId, uint32_t propId))
+GK_API(Component, SetDouble, void,     (uint32_t nodeId, uint32_t typeId, uint32_t propId, double value))
+GK_API(Component, GetVec2,   void,     (uint32_t nodeId, uint32_t typeId, uint32_t propId, FVec2* outValue))
+GK_API(Component, SetVec2,   void,     (uint32_t nodeId, uint32_t typeId, uint32_t propId, const FVec2* value))
+GK_API(Component, GetVec3,   void,     (uint32_t nodeId, uint32_t typeId, uint32_t propId, FVec3* outValue))
+GK_API(Component, SetVec3,   void,     (uint32_t nodeId, uint32_t typeId, uint32_t propId, const FVec3* value))
+GK_API(Component, GetVec4,   void,     (uint32_t nodeId, uint32_t typeId, uint32_t propId, FVec4* outValue))
+GK_API(Component, SetVec4,   void,     (uint32_t nodeId, uint32_t typeId, uint32_t propId, const FVec4* value))
+// Quaternions cross as FVec4 in (x, y, z, w) order. glm::quat stores w first, so the conversion is
+// not a memcpy — doing it in one place here keeps every caller from getting the order wrong.
+GK_API(Component, GetQuat,   void,     (uint32_t nodeId, uint32_t typeId, uint32_t propId, FVec4* outValue))
+GK_API(Component, SetQuat,   void,     (uint32_t nodeId, uint32_t typeId, uint32_t propId, const FVec4* value))
+GK_API(Component, GetString, int32_t,  (uint32_t nodeId, uint32_t typeId, uint32_t propId, char* buffer, int32_t capacity))
+GK_API(Component, SetString, void,     (uint32_t nodeId, uint32_t typeId, uint32_t propId, GkStr value))
+// Mat4, Array and AssetRef properties are reflected but not bound. Mat4 and AssetRef have no
+// managed counterpart yet, and an array needs element-level accessors rather than a value copy;
+// the generator skips them and says so in a comment on the wrapper, so the omission is visible in
+// the generated file rather than silently absent.

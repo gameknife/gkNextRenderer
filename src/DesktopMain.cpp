@@ -2,6 +2,7 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
+#include "Engine/Runtime/Reflection/ReflectionDump.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #if GK_MODULE_GLTFLOADER
 #include "Modules/GltfLoader/GltfModule.hpp"
@@ -139,6 +140,15 @@ static SDL_AppResult InitializeApplication(int argc, char *argv[])
     if (!GOption->AssetTrace.empty())
     {
         Utilities::FileHelper::SetAssetTracePath(GOption->AssetTrace);
+    }
+
+    // Before anything creates a device: the manifest comes from entt::meta alone, and requiring a
+    // working GPU to regenerate source would make code generation fail on build machines.
+    if (!GOption->DumpReflection.empty())
+    {
+        const bool dumped = Reflection::DumpManifest(GOption->DumpReflection);
+        spdlog::default_logger()->flush();
+        std::exit(dumped ? 0 : 1);
     }
 
     if(GOption->RenderDoc)

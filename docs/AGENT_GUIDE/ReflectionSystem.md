@@ -2,8 +2,9 @@
 
 当前反射层用 `entt::meta` 同时服务编辑器 PropertyWidgets 和属性命令历史。实现位于 `src/Engine/Runtime/Reflection/`；不要按已删除的“自注册 builder”设计工作，那套方案没有落地。
 
-反射层第三个消费者——脚本绑定——当前是空的：QuickJS 已删除，C# 的强类型 component wrapper 要到
-`docs/plans/dotnet-scripting-plan.md` 的 P5 才生成。这不意味着可以随手改属性名，见下文“脚本绑定”。
+反射层有三个消费者：编辑器 PropertyWidgets、属性命令历史，以及 C# 脚本绑定。第三个是从反射清单
+自动生成的强类型 component wrapper，见下文“脚本绑定”与
+[.NET Bindings](DotNetBindings.md)。
 
 ## 当前结构
 
@@ -67,11 +68,11 @@ void MyComponent::RegisterReflection()
 
 ## PropertyMeta
 
-`PropertyPresets` 提供 Editable、ReadOnly、Range、Hidden、Transient。默认 metadata 带 `JSExposed`；如果属性只供编辑器使用，要显式去掉该 flag，而不是假定当前没有脚本层就不会被暴露。
+`PropertyPresets` 提供 Editable、ReadOnly、Range、Hidden、Transient。默认 metadata 带 `ScriptExposed`；如果属性只供编辑器使用，要显式去掉该 flag——默认值会让它出现在生成的 C# wrapper 里。
 
 - `ReadOnly`：PropertyWidgets 和脚本对象不提供 setter。
 - `Hidden`：编辑器隐藏；不要把它当序列化策略。
-- `JSExposed`：脚本绑定包含该属性。设计上会改名为 `ScriptExposed`（`dotnet-scripting-design.md` 4.3），当前仍是旧名。
+- `ScriptExposed`：脚本绑定包含该属性，即 `Components.g.cs` 会为它生成 C# 属性。旧名 `JSExposed` 保留为 deprecated 别名一个版本周期。
 - `Transient`：意图为不持久化；当前 SceneExport 并不会自动序列化所有反射属性。
 - `HasRange`：numeric widget 使用 min/max。
 
@@ -98,19 +99,23 @@ Enum 要先以 `entt::meta_factory<Enum>()` 注册所有 value，再把 enum pro
 
 ## 脚本绑定
 
-当前没有脚本运行时消费反射：QuickJS 及其 `Engine.d.ts` 生成器已删除，替代它的 C# 侧
-`Components.g.cs` 由 `gnb csharpgen` 从反射清单生成，属于 P5
-（`docs/plans/dotnet-scripting-plan.md`）。
+C# 侧的 `assets/csharp/GkNext.Engine/Components.g.cs` 由 `gnb csharpgen` 从提交的反射清单
+`src/Modules/NextDotNet/ReflectionManifest.json` 生成，清单本身由 `gkNextRenderer --dump-reflection`
+导出。生成器消费的正是 `PropertyAccessor::GetProperties()` 过滤 `ScriptExposed` 后的集合。
 
-这段真空期不改变对反射注册的要求。P5 的生成器要消费的正是 `PropertyAccessor::GetProperties()`
-过滤 `JSExposed` 后的集合，因此新增 `PropertyType` 时仍要审计：
+**改了反射注册就要 `gnb csharpgen --refresh` 并提交清单与生成文件。**
+`Test_ReflectionManifest.cpp` 会拿提交的清单和实时反射逐项比对，忘了刷新是测试失败而不是静默漂移。
+
+property name 与 propId（name 的 entt hash）是生成 C# 的编译期常量，改名等于改脚本侧 API。
+
+新增 `PropertyType` 时要审计五处：
 
 - `PropertyAccessor::DeducePropertyType`；
 - `PropertyWidgets`；
 - container/enum handling；
-- undo/redo 的 `meta_any` copy 语义。
-
-脚本侧的类型转换面（P5 之前不存在）会在生成 wrapper 时补上第五项审计。
+- undo/redo 的 `meta_any` copy 语义；
+- 脚本侧类型映射：`tools/gnb/internal/csharpgen/components.go` 的 `accessors`（绑定它）或
+  `skipReasons`（明确声明还不绑定，理由会写进生成文件）。生成器对未知类型直接报错，不会静默跳过。
 
 ## 验证
 

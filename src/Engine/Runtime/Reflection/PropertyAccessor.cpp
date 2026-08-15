@@ -199,6 +199,60 @@ namespace Reflection
         return false;
     }
 
+    entt::meta_any PropertyAccessor::GetPropertyValueById(entt::meta_type type, void* instance, uint32_t propId)
+    {
+        if (!instance || !type)
+        {
+            return {};
+        }
+
+        entt::meta_any instanceAny = type.from_void(instance);
+        if (!instanceAny)
+        {
+            spdlog::warn("PropertyAccessor::GetPropertyValueById: failed to wrap instance");
+            return {};
+        }
+
+        auto data = type.data(propId);
+        if (!data)
+        {
+            spdlog::warn("PropertyAccessor::GetPropertyValueById: property id {} not found on {}",
+                         propId, type.info().name());
+            return {};
+        }
+        return data.get(instanceAny);
+    }
+
+    bool PropertyAccessor::SetPropertyValueById(entt::meta_type type, void* instance, uint32_t propId, const entt::meta_any& value)
+    {
+        if (!instance || !type || !value)
+        {
+            return false;
+        }
+
+        entt::meta_any instanceAny = type.from_void(instance);
+        if (!instanceAny)
+        {
+            spdlog::warn("PropertyAccessor::SetPropertyValueById: failed to wrap instance");
+            return false;
+        }
+
+        auto data = type.data(propId);
+        if (!data)
+        {
+            spdlog::warn("PropertyAccessor::SetPropertyValueById: property id {} not found on {}",
+                         propId, type.info().name());
+            return false;
+        }
+        if (data.is_const())
+        {
+            spdlog::warn("PropertyAccessor::SetPropertyValueById: property id {} on {} is read-only",
+                         propId, type.info().name());
+            return false;
+        }
+        return data.set(instanceAny, value);
+    }
+
     PropertyType PropertyAccessor::DeducePropertyType(entt::meta_type type)
     {
         auto typeId = type.id();

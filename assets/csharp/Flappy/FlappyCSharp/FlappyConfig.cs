@@ -52,6 +52,15 @@ public struct CameraConfig
     public float FieldOfView;
 }
 
+public struct EnvironmentConfig
+{
+    public int SkyIndex;
+    public float SkyIntensity;
+    public float SunIntensity;
+    public float SunRotation;
+    public float SunElevation;
+}
+
 public struct ParallaxConfig
 {
     public float MountainZ;
@@ -72,6 +81,7 @@ public struct GameplayConfig
 {
     public CameraConfig Camera;
     public WorldConfig World;
+    public EnvironmentConfig Environment;
     public ParallaxConfig Parallax;
     public BirdConfig Bird;
     public PipeConfig Pipe;
@@ -125,6 +135,11 @@ public static class FlappyConfigLoader
                 Radius = 0.4f, Gravity = -22.0f, FlapVelocity = 7.5f,
                 MinVelocity = -10.0f, MaxVelocity = 10.0f,
             },
+            Environment = new EnvironmentConfig
+            {
+                SkyIndex = 0, SkyIntensity = 150.0f,
+                SunIntensity = 600.0f, SunRotation = 0.0f, SunElevation = 0.65f,
+            },
             Parallax = new ParallaxConfig
             {
                 MountainZ = -18.0f, MountainSpeed = 0.35f, MountainSpacing = 12.0f, MountainCount = 7,
@@ -167,6 +182,15 @@ public static class FlappyConfigLoader
             config.World.MaxY = ReadFloat(world, "maxY", config.World.MaxY);
             config.World.GameplayZ = ReadFloat(world, "gameplayZ", config.World.GameplayZ);
             config.World.BackdropZ = ReadFloat(world, "backdropZ", config.World.BackdropZ);
+        }
+
+        if (root.TryGetProperty("environment", out JsonElement environment))
+        {
+            config.Environment.SkyIndex = ReadInt(environment, "skyIndex", config.Environment.SkyIndex);
+            config.Environment.SkyIntensity = ReadFloat(environment, "skyIntensity", config.Environment.SkyIntensity);
+            config.Environment.SunIntensity = ReadFloat(environment, "sunIntensity", config.Environment.SunIntensity);
+            config.Environment.SunRotation = ReadFloat(environment, "sunRotation", config.Environment.SunRotation);
+            config.Environment.SunElevation = ReadFloat(environment, "sunElevation", config.Environment.SunElevation);
         }
 
         if (root.TryGetProperty("parallax", out JsonElement parallax))

@@ -450,6 +450,15 @@ void NextEngine::RequestShaderHotReload()
 
 NextEngine::~NextEngine()
 {
+    // Before anything is torn down. GetInstance() is how the script bindings and several
+    // subsystems reach the engine, and leaving it pointing at freed memory turns every one of
+    // them into a use-after-free the moment something runs after shutdown. Guarded because tests
+    // construct and destroy engines in sequence.
+    if (instance_ == this)
+    {
+        instance_ = nullptr;
+    }
+
     uiOverlay_.reset();
     userInterface_.reset();
     scene_.reset();

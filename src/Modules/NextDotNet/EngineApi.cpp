@@ -5,6 +5,7 @@
 #include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Reflection/PropertyAccessor.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
 #include "Engine/Runtime/Subsystems/NextAudio.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
@@ -255,10 +256,13 @@ namespace Modules::NextDotNet
 
         void UI_GetScreenSize(FVec2* outSize)
         {
-            if (auto* engine = NextEngine::GetInstance())
+            // The ImGui viewport, not the swapchain extent. Managed code uses this to lay out what
+            // it draws with UI_DrawText and UI_DrawRect, and those are in ImGui's coordinate space
+            // — on a DPI-scaled display the two differ by the scale factor, which put every
+            // centred HUD element off-centre by exactly that ratio.
+            if (const ImGuiViewport* viewport = ImGui::GetMainViewport())
             {
-                const VkExtent2D extent = engine->GetWindow().WindowSize();
-                StoreVec2(outSize, static_cast<float>(extent.width), static_cast<float>(extent.height));
+                StoreVec2(outSize, viewport->Size.x, viewport->Size.y);
                 return;
             }
             StoreVec2(outSize, 0.0f, 0.0f);
@@ -444,6 +448,24 @@ namespace Modules::NextDotNet
             }
         }
 
+        uint32_t Scene_GetEnvironmentNodeId()
+        {
+            auto* engine = NextEngine::GetInstance();
+            if (engine == nullptr)
+            {
+                return GK_INVALID_NODE_ID;
+            }
+
+            Assets::Scene& scene = engine->GetScene();
+            // Creates the node when the scene has none, which is the case for every procedurally
+            // built scene. The return value is the settings, not the node, so the id is looked up
+            // afterwards rather than reached through the scene's private component cache.
+            scene.GetEnvSettings();
+
+            const int32_t found = scene.FindNodeIdWithComponent("EnvironmentComponent");
+            return found < 0 ? GK_INVALID_NODE_ID : static_cast<uint32_t>(found);
+        }
+
         // --- scene construction ---------------------------------------------------------------------
 
         uint32_t SceneBuild_AddBoxModel(const FVec3* min, const FVec3* max)
@@ -519,6 +541,271 @@ namespace Modules::NextDotNet
             const uint32_t nodeId = node->GetInstanceId();
             GSceneBuildContext.nodes->push_back(node);
             return nodeId;
+        }
+
+        // --- component and node property access ------------------------------------------------------
+
+        /// A reflected property lives either on a component attached to a node, or on the node
+        /// itself. Both are (meta type, instance) pairs, so resolving them to one shape keeps the
+        /// twenty accessors below free of that distinction.
+        struct FPropertyTarget
+        {
+            entt::meta_type Type;
+            void* Instance = nullptr;
+
+            explicit operator bool() const { return Instance != nullptr && static_cast<bool>(Type); }
+        };
+
+        FPropertyTarget ResolvePropertyTarget(uint32_t nodeId, uint32_t typeId, const char* what)
+        {
+            Assets::Node* node = FindNodeOrWarn(nodeId, what);
+            if (node == nullptr)
+            {
+                return {};
+            }
+
+            const entt::meta_type nodeType = entt::resolve<Assets::Node>();
+            if (nodeType && nodeType.id() == typeId)
+            {
+                return FPropertyTarget{nodeType, node};
+            }
+
+            // A node carries a handful of components, so a linear scan beats maintaining a second
+            // index keyed by meta id.
+            for (const auto& component : node->GetComponents())
+            {
+                if (!component)
+                {
+                    continue;
+                }
+                const entt::meta_type type = component->GetMetaType();
+                if (type && type.id() == typeId)
+                {
+                    return FPropertyTarget{type, component.get()};
+                }
+            }
+
+            static std::unordered_set<uint64_t> reported;
+            const uint64_t key = (static_cast<uint64_t>(nodeId) << 32) | typeId;
+            if (reported.insert(key).second)
+            {
+                SPDLOG_WARN("[dotnet] {}: node {} has no component with type id {}", what, nodeId, typeId);
+            }
+            return {};
+        }
+
+        /// Reads a reflected property as T. Failure is a warning plus a zero value: a getter has no
+        /// error channel across this ABI, and the alternative — returning uninitialised memory —
+        /// would be worse than a visibly wrong value.
+        template <typename T>
+        T GetProperty(uint32_t nodeId, uint32_t typeId, uint32_t propId, const char* what)
+        {
+            const FPropertyTarget target = ResolvePropertyTarget(nodeId, typeId, what);
+            if (!target)
+            {
+                return T{};
+            }
+
+            entt::meta_any value = Reflection::PropertyAccessor::GetPropertyValueById(
+                target.Type, target.Instance, propId);
+            if (!value)
+            {
+                return T{};
+            }
+            if (const T* typed = value.try_cast<T>())
+            {
+                return *typed;
+            }
+            // A mismatch here means the generated wrapper picked an accessor that does not match the
+            // property's real type, i.e. the committed manifest is stale.
+            SPDLOG_WARN("[dotnet] {}: property {} on node {} is not the expected type", what, propId, nodeId);
+            return T{};
+        }
+
+        template <typename T>
+        void SetProperty(uint32_t nodeId, uint32_t typeId, uint32_t propId, const T& value, const char* what)
+        {
+            const FPropertyTarget target = ResolvePropertyTarget(nodeId, typeId, what);
+            if (!target)
+            {
+                return;
+            }
+            if (!Reflection::PropertyAccessor::SetPropertyValueById(target.Type, target.Instance, propId,
+                                                                    entt::meta_any{value}))
+            {
+                SPDLOG_WARN("[dotnet] {}: could not write property {} on node {}", what, propId, nodeId);
+            }
+        }
+
+        GkBool Component_Has(uint32_t nodeId, uint32_t typeId)
+        {
+            // Deliberately silent: asking whether a component is present is a question, not a
+            // mistake, so this must not go through the warning path the accessors use.
+            Assets::Node* node = nullptr;
+            if (auto* engine = NextEngine::GetInstance())
+            {
+                node = engine->GetScene().GetNodeByInstanceId(nodeId);
+            }
+            if (node == nullptr)
+            {
+                return 0;
+            }
+
+            const entt::meta_type nodeType = entt::resolve<Assets::Node>();
+            if (nodeType && nodeType.id() == typeId)
+            {
+                return 1;
+            }
+            for (const auto& component : node->GetComponents())
+            {
+                const entt::meta_type type = component ? component->GetMetaType() : entt::meta_type{};
+                if (type && type.id() == typeId)
+                {
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
+        GkBool Component_GetBool(uint32_t nodeId, uint32_t typeId, uint32_t propId)
+        {
+            return GetProperty<bool>(nodeId, typeId, propId, "Component.GetBool") ? 1 : 0;
+        }
+
+        void Component_SetBool(uint32_t nodeId, uint32_t typeId, uint32_t propId, GkBool value)
+        {
+            SetProperty<bool>(nodeId, typeId, propId, value != 0, "Component.SetBool");
+        }
+
+        int32_t Component_GetInt32(uint32_t nodeId, uint32_t typeId, uint32_t propId)
+        {
+            return GetProperty<int32_t>(nodeId, typeId, propId, "Component.GetInt32");
+        }
+
+        void Component_SetInt32(uint32_t nodeId, uint32_t typeId, uint32_t propId, int32_t value)
+        {
+            SetProperty<int32_t>(nodeId, typeId, propId, value, "Component.SetInt32");
+        }
+
+        uint32_t Component_GetUInt32(uint32_t nodeId, uint32_t typeId, uint32_t propId)
+        {
+            return GetProperty<uint32_t>(nodeId, typeId, propId, "Component.GetUInt32");
+        }
+
+        void Component_SetUInt32(uint32_t nodeId, uint32_t typeId, uint32_t propId, uint32_t value)
+        {
+            SetProperty<uint32_t>(nodeId, typeId, propId, value, "Component.SetUInt32");
+        }
+
+        float Component_GetFloat(uint32_t nodeId, uint32_t typeId, uint32_t propId)
+        {
+            return GetProperty<float>(nodeId, typeId, propId, "Component.GetFloat");
+        }
+
+        void Component_SetFloat(uint32_t nodeId, uint32_t typeId, uint32_t propId, float value)
+        {
+            SetProperty<float>(nodeId, typeId, propId, value, "Component.SetFloat");
+        }
+
+        double Component_GetDouble(uint32_t nodeId, uint32_t typeId, uint32_t propId)
+        {
+            return GetProperty<double>(nodeId, typeId, propId, "Component.GetDouble");
+        }
+
+        void Component_SetDouble(uint32_t nodeId, uint32_t typeId, uint32_t propId, double value)
+        {
+            SetProperty<double>(nodeId, typeId, propId, value, "Component.SetDouble");
+        }
+
+        void Component_GetVec2(uint32_t nodeId, uint32_t typeId, uint32_t propId, FVec2* outValue)
+        {
+            const glm::vec2 value = GetProperty<glm::vec2>(nodeId, typeId, propId, "Component.GetVec2");
+            StoreVec2(outValue, value.x, value.y);
+        }
+
+        void Component_SetVec2(uint32_t nodeId, uint32_t typeId, uint32_t propId, const FVec2* value)
+        {
+            if (value == nullptr)
+            {
+                return;
+            }
+            SetProperty<glm::vec2>(nodeId, typeId, propId, glm::vec2(value->X, value->Y), "Component.SetVec2");
+        }
+
+        void Component_GetVec3(uint32_t nodeId, uint32_t typeId, uint32_t propId, FVec3* outValue)
+        {
+            const glm::vec3 value = GetProperty<glm::vec3>(nodeId, typeId, propId, "Component.GetVec3");
+            if (outValue != nullptr)
+            {
+                outValue->X = value.x;
+                outValue->Y = value.y;
+                outValue->Z = value.z;
+            }
+        }
+
+        void Component_SetVec3(uint32_t nodeId, uint32_t typeId, uint32_t propId, const FVec3* value)
+        {
+            if (value == nullptr)
+            {
+                return;
+            }
+            SetProperty<glm::vec3>(nodeId, typeId, propId, ToGlm(value), "Component.SetVec3");
+        }
+
+        void Component_GetVec4(uint32_t nodeId, uint32_t typeId, uint32_t propId, FVec4* outValue)
+        {
+            const glm::vec4 value = GetProperty<glm::vec4>(nodeId, typeId, propId, "Component.GetVec4");
+            if (outValue != nullptr)
+            {
+                outValue->X = value.x;
+                outValue->Y = value.y;
+                outValue->Z = value.z;
+                outValue->W = value.w;
+            }
+        }
+
+        void Component_SetVec4(uint32_t nodeId, uint32_t typeId, uint32_t propId, const FVec4* value)
+        {
+            if (value == nullptr)
+            {
+                return;
+            }
+            SetProperty<glm::vec4>(nodeId, typeId, propId, glm::vec4(value->X, value->Y, value->Z, value->W),
+                                   "Component.SetVec4");
+        }
+
+        void Component_GetQuat(uint32_t nodeId, uint32_t typeId, uint32_t propId, FVec4* outValue)
+        {
+            const glm::quat value = GetProperty<glm::quat>(nodeId, typeId, propId, "Component.GetQuat");
+            if (outValue != nullptr)
+            {
+                // glm::quat is (w, x, y, z) in memory; the managed side uses (x, y, z, w).
+                outValue->X = value.x;
+                outValue->Y = value.y;
+                outValue->Z = value.z;
+                outValue->W = value.w;
+            }
+        }
+
+        void Component_SetQuat(uint32_t nodeId, uint32_t typeId, uint32_t propId, const FVec4* value)
+        {
+            if (value == nullptr)
+            {
+                return;
+            }
+            SetProperty<glm::quat>(nodeId, typeId, propId, glm::quat(value->W, value->X, value->Y, value->Z),
+                                   "Component.SetQuat");
+        }
+
+        int32_t Component_GetString(uint32_t nodeId, uint32_t typeId, uint32_t propId, char* buffer, int32_t capacity)
+        {
+            return WriteString(GetProperty<std::string>(nodeId, typeId, propId, "Component.GetString"),
+                               buffer, capacity);
+        }
+
+        void Component_SetString(uint32_t nodeId, uint32_t typeId, uint32_t propId, GkStr value)
+        {
+            SetProperty<std::string>(nodeId, typeId, propId, ToString(value), "Component.SetString");
         }
 
         // --- paths and asset I/O -------------------------------------------------------------------

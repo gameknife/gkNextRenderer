@@ -76,6 +76,8 @@ public:
     // Benchmark options used by gkNextMotionBenchmark.
     std::string BenchmarkConfig{};
     std::string AssetTrace{};
+    // When set, write the reflection manifest to this path and exit without touching Vulkan.
+    std::string DumpReflection{};
 
     
     // Scene options.

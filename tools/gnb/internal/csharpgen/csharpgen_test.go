@@ -1,6 +1,7 @@
 package csharpgen
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -104,5 +105,92 @@ func TestGenerateRejectsDefaultsThatAreNotTrailing(t *testing.T) {
 	}
 	if _, err := Generate(entries); err == nil {
 		t.Fatal("expected a non-trailing default to be rejected")
+	}
+}
+
+func testManifest() Manifest {
+	return Manifest{
+		Version: 1,
+		Types: []ReflectedType{
+			{
+				Name: "Node", TypeID: 879231789, Kind: "node",
+				Properties: []ReflectedProperty{
+					{Name: "Name", PropID: 1, Type: "String", ReadOnly: true, ScriptExposed: true,
+						Tooltip: "Node name", Category: "Transform"},
+					{Name: "Translation", PropID: 2, Type: "Vec3", ScriptExposed: true},
+				},
+			},
+			{
+				Name: "RenderComponent", TypeID: 3393791048, Kind: "component",
+				Properties: []ReflectedProperty{
+					{Name: "Visible", PropID: 3, Type: "Bool", ScriptExposed: true},
+					{Name: "Materials", PropID: 4, Type: "Array", ScriptExposed: true},
+					{Name: "Secret", PropID: 5, Type: "Float"},
+				},
+			},
+		},
+	}
+}
+
+func TestGenerateComponentsProducesWrappers(t *testing.T) {
+	generated, err := GenerateComponents(testManifest())
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	wants := []string{
+		// ids are compile-time constants; that is the whole point of the manifest
+		"public const uint TypeId = 3393791048u;",
+		"public readonly struct RenderComponent(uint nodeId) : IComponentRef<RenderComponent>",
+		// a settable property gets both accessors, pointed at the matching binding pair
+		"get => Component.GetBool(Id, TypeId, 3u);",
+		"set => Component.SetBool(Id, TypeId, 3u, value);",
+		// a read-only property gets no setter
+		"public string Name => Component.GetString(Id, TypeId, 1u);",
+		// vectors are passed by reference
+		"set => Component.SetVec3(Id, TypeId, 2u, in value);",
+		// the node's own properties live on NodeRef, and components hang off it
+		"public readonly struct NodeRef(uint nodeId)",
+		"public RenderComponent Render => new(Id);",
+		// what the plan's acceptance line needs
+		"public T GetComponent<T>() where T : struct, IComponentRef<T> => T.FromNode(Id);",
+		// gaps are stated in the generated file rather than silently dropped
+		"//   Materials (Array) — arrays need element-level accessors, not a value copy",
+		"//   Secret — not script-exposed",
+	}
+	for _, want := range wants {
+		if !strings.Contains(generated, want) {
+			t.Errorf("generated output is missing %q\n---\n%s", want, generated)
+		}
+	}
+}
+
+func TestGenerateComponentsRejectsAnUnhandledPropertyType(t *testing.T) {
+	manifest := testManifest()
+	manifest.Types[1].Properties[0].Type = "SomethingNew"
+	// A new PropertyType must be handled deliberately — either bound or listed as a known gap.
+	// Falling through and emitting nothing would hide a whole property from script authors.
+	if _, err := GenerateComponents(manifest); err == nil {
+		t.Fatal("expected an unhandled property type to be rejected")
+	}
+}
+
+func TestGenerateComponentsRejectsAShorthandCollision(t *testing.T) {
+	manifest := testManifest()
+	manifest.Types[0].Properties = append(manifest.Types[0].Properties,
+		ReflectedProperty{Name: "Render", PropID: 9, Type: "Bool", ScriptExposed: true})
+	// "RenderComponent" shortens to "Render", which would now be declared twice on NodeRef.
+	if _, err := GenerateComponents(manifest); err == nil {
+		t.Fatal("expected a shorthand collision to be rejected")
+	}
+}
+
+func TestParseManifestRejectsAnUnknownKind(t *testing.T) {
+	path := t.TempDir() + "/manifest.json"
+	if err := os.WriteFile(path, []byte(`{"version":1,"types":[{"name":"X","kind":"widget","properties":[]}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseManifest(path); err == nil {
+		t.Fatal("expected an unknown kind to be rejected")
 	}
 }

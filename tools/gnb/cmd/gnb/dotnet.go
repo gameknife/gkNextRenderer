@@ -171,14 +171,18 @@ func newDotNetCICommand(ctx appContext) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ci",
 		Short: "Verify the managed layer under both backends",
-		Long: "Checks that Engine.g.cs matches EngineApi.def.h, runs the standalone two-backend " +
-			"probe, then builds the engine itself under CoreCLR and NativeAOT. The build is left " +
-			"configured for CoreCLR, which is the default developers work against.",
+		Long: "Checks that the generated managed files match their sources, runs the standalone " +
+			"two-backend probe, then builds the engine itself under CoreCLR and NativeAOT. The " +
+			"build is left configured for CoreCLR, which is the default developers work against.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if _, err := csharpgen.Run(ctx.repoRoot, true); err != nil {
 				return err
 			}
-			console.Success("Engine.g.cs matches %s", csharpgen.DefPath)
+			// Whether the reflection *snapshot* still matches live reflection is checked by the
+			// unit tests, which have the engine loaded; here we only check that the generated C#
+			// matches the two committed sources.
+			console.Success("%s matches %s", csharpgen.OutputPath, csharpgen.DefPath)
+			console.Success("%s matches %s", csharpgen.ComponentsOutputPath, csharpgen.ManifestPath)
 
 			if err := newDotNetProbe(ctx, dotnetsdk.ProbeOptions{Configuration: "Release"}); err != nil {
 				return err

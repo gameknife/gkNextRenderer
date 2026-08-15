@@ -196,8 +196,37 @@ public sealed class FlappyCSharpGameInstance : NextGameInstance
 
     protected override void OnSceneLoaded()
     {
+        ApplyEnvironment();
         sceneReady = true;
         ResetRuntime();
+    }
+
+    /// <summary>
+    /// Mirrors FlappyCppGameInstance::OnSceneLoaded, which writes the same fields through
+    /// Scene::GetEnvSettings().
+    /// </summary>
+    /// <remarks>
+    /// Runs after the scene is committed rather than during the build: these are reflected
+    /// component properties, addressed by node id, and node ids only resolve once the scene exists.
+    /// A procedurally built scene has no environment node, so asking for its id creates one — the
+    /// same on-demand behaviour the C++ side gets.
+    /// </remarks>
+    private void ApplyEnvironment()
+    {
+        EnvironmentComponent environment = new NodeRef(Scene.GetEnvironmentNodeId()).Environment;
+        if (!environment.Exists)
+        {
+            Log.Warn("[FlappyCSharp] no environment node; the scene will use default lighting");
+            return;
+        }
+
+        environment.HasSky = true;
+        environment.SkyIdx = config.Environment.SkyIndex;
+        environment.SkyIntensity = config.Environment.SkyIntensity;
+        environment.HasSun = true;
+        environment.SunIntensity = config.Environment.SunIntensity;
+        environment.SunRotation = config.Environment.SunRotation;
+        environment.SunElevation = config.Environment.SunElevation;
     }
 
     protected override void OnTick(double deltaSeconds)

@@ -1,10 +1,10 @@
 ---
 title: ".NET 脚本运行时开发计划"
 category: plan
-status: 实施中（P0–P4 已完成，下一步 P5）
+status: 已完成（P0–P5 全部落地）
 owner: engine/scripting
 created: 2026-08-14
-last_updated: 2026-08-14
+last_updated: 2026-08-15
 design: ../designs/dotnet-scripting-design.md
 ---
 
@@ -293,6 +293,49 @@ Ready/GameOver 面板。视差在 `FixedStep` 内推进（与 C++ 同位置）�
 
 **验收**：`node.GetComponent<RenderComponent>().Visible = false` 可用；改动反射属性后
 Editor PropertyPanel、undo/redo 与 C# wrapper 三条链同时验证通过。
+
+### 7.1 P5 结果（2026-08-15，已完成）
+
+验收线成立：`node.GetComponent<RenderComponent>().Visible = false` 可用，简写形式
+`node.Render.Visible` 与 node 自身属性 `node.Translation` 同样可用。整条链路在 CoreCLR 与
+NativeAOT 下都跑通，Flappy parity 重跑两个后端各 0 violations，322 个测试 / 59897 断言全通过。
+
+**清单是提交的快照，不是构建产物。** 原计划隐含"构建时导出 JSON 再消费"。真做下去会发现
+`gnb csharpgen --check` 就必须先有一个能跑的 `gkNextRenderer`——而这个检查的职责恰恰是在构建
+之前守住生成文件。所以 `--dump-reflection` 拆成显式的 `gnb csharpgen --refresh`，清单提交进仓库
+（`src/Modules/NextDotNet/ReflectionManifest.json`），生成只读快照。代价是快照会过期，用
+`Test_ReflectionManifest.cpp` 兜住：提交的清单和实时反射逐项比对，不一致就测试失败。
+
+**注册表自己产出类型列表。** `RegisterAllReflection()` 现在把注册过的类型记进
+`GetReflectedTypes()`，dump 遍历这个列表而不是另写一份。第二份手工列表正是设计 4.4 要消灭的
+那类东西。`Register<T>()` 顺带断言 `meta.id() == hashed_string(name)`——生成的 C# 用这个 hash
+寻址 component，注册名对不上会让每次属性查找都静默失败。
+
+**ABI 形状：一种属性类型一对访问器**，按 `(nodeId, typeId, propId)` 寻址，共 21 个新绑定
+（含 `Component_Has`）。变体式的单一入口需要跨界的 tagged union，而生成器在生成时就知道每个属性
+的确切类型——把类型信息在边界丢掉再在运行时重新检查是纯粹的倒退。node 自身用 `"Node"_hs` 作
+typeId，于是一套寻址覆盖 component 和 node 两者，生成的 `NodeRef` 不是特例。
+
+**两个在实测中才暴露的问题，都不在计划里：**
+
+1. **`UI.GetScreenSize()` 返回的是 swapchain extent，不是 ImGui 坐标系。** 托管侧用它给
+   `UI.DrawText` / `UI.DrawRect` 排版，而后者画在 ImGui 空间里；在 DPI 缩放的显示器上两者差一个
+   缩放因子，于是所有居中的 HUD 元素整体偏移了正好这个比例（1.25 倍屏幕上偏移 25%）。改为返回
+   `ImGui::GetMainViewport()->Size`。这个 bug 从 P3 就存在，replay 不画 UI，所以一路躲过了 trace
+   验收，只有并排截图才看得出来。
+2. **`NextEngine::GetInstance()` 在引擎析构后是悬垂指针。** `instance_` 只在构造时赋值，从不清空。
+   所有绑定都经由它取引擎，所以引擎销毁后任何一次脚本调用都是 use-after-free。新增的
+   "无场景时属性绑定必须安全"用例在完整测试序列里稳定 SIGSEGV，单独跑却通过——因为要先有别的
+   用例建过并销毁引擎。析构函数里清空即可。
+
+**光照缺口已补。** P4 遗留的唯一视觉差异（sun/sky）现在走生成的 `EnvironmentComponent` wrapper。
+需要一个新绑定 `Scene_GetEnvironmentNodeId()`：程序化场景没有 environment 节点，而 C++ 侧的
+`Scene::GetEnvSettings()` 会按需创建一个——这是**函数**语义，属于 `EngineApi.def.h`；设置项本身
+是反射属性，走生成的 wrapper。两侧截图现在逐像素对应。
+
+**明确不绑定的属性类型**：`Array`（需要元素级访问器）、`Enum`（需要生成 C# enum 类型，清单目前
+只带 type id）、`Mat4` / `AssetRef`（托管侧无对应类型）。生成器对**未知**类型直接报错而不是静默
+跳过；已知但未绑定的会写进生成文件的注释里，所以缺口出现在使用者会去找它的地方。
 
 ## 8. 风险与回退
 

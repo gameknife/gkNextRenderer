@@ -2,8 +2,9 @@
 
 > **状态：** 当前保留 Slang shader hot reload，并可在 Windows 开发构建中选择启用 Live++ C++ 函数级 live coding。旧 C++ game plugin / DLL hot reload 仍已移除，桌面程序保持 monolithic executable + static `gkNextEngine` 架构。
 >
-> 脚本热重载暂时不存在：QuickJS/TypeScript 已随脚本层迁移删除，C# 的 collectible ALC 热重载要到
-> `docs/plans/dotnet-scripting-plan.md` 的 P3 才接入引擎（机制本身已在 P0 实证，见该文 2.1 节）。
+> 脚本热重载走 C#：`Modules/NextDotNet` 在 CoreCLR 后端下用 collectible ALC 卸载重载游戏程序集
+> （NativeAOT 后端没有热重载，这是两个后端唯一允许的差异）。QuickJS/TypeScript 已删除。
+> 见 [.NET Bindings](DotNetBindings.md) 与 [架构](../designs/dotnet-scripting-design.md)。
 >
 > Shader reload 走增量 Slang 编译 + renderer pipeline 重建；C++ live coding 直接 patch 已链接进 executable 的静态库 object。不要按旧计划里的 `ShaderRegistry` 或 game plugin ABI 假设写代码。
 

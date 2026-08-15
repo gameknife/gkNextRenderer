@@ -18,7 +18,7 @@ namespace Modules::NextDotNet
 {
     /// Bumped whenever the layout of FEngineApi or FManagedApi changes. Bootstrap rejects a
     /// mismatch instead of reading a table with a different shape.
-    inline constexpr uint32_t GK_DOTNET_ABI_VERSION = 2;
+    inline constexpr uint32_t GK_DOTNET_ABI_VERSION = 3;
 
     // --- primitive cross-boundary types --------------------------------------------------------
 

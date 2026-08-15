@@ -56,6 +56,7 @@ namespace GkNext.Interop
         public delegate* unmanaged<uint, Vector3*, void> Scene_SetNodeTranslation;
         public delegate* unmanaged<uint, Vector3*, void> Scene_SetNodeScale;
         public delegate* unmanaged<uint, int, void> Scene_SetNodeVisible;
+        public delegate* unmanaged<uint> Scene_GetEnvironmentNodeId;
         public delegate* unmanaged<Vector3*, Vector3*, uint> SceneBuild_AddBoxModel;
         public delegate* unmanaged<Vector3*, float, uint> SceneBuild_AddSphereModel;
         public delegate* unmanaged<Vector3*, uint> SceneBuild_AddLambertianMaterial;
@@ -64,12 +65,33 @@ namespace GkNext.Interop
         public delegate* unmanaged<byte*, int, int> Paths_GetProjectRoot;
         public delegate* unmanaged<byte*, int, int> Paths_GetOutputDir;
         public delegate* unmanaged<GkStr, byte*, int, int> Assets_ReadFile;
+        public delegate* unmanaged<uint, uint, int> Component_Has;
+        public delegate* unmanaged<uint, uint, uint, int> Component_GetBool;
+        public delegate* unmanaged<uint, uint, uint, int, void> Component_SetBool;
+        public delegate* unmanaged<uint, uint, uint, int> Component_GetInt32;
+        public delegate* unmanaged<uint, uint, uint, int, void> Component_SetInt32;
+        public delegate* unmanaged<uint, uint, uint, uint> Component_GetUInt32;
+        public delegate* unmanaged<uint, uint, uint, uint, void> Component_SetUInt32;
+        public delegate* unmanaged<uint, uint, uint, float> Component_GetFloat;
+        public delegate* unmanaged<uint, uint, uint, float, void> Component_SetFloat;
+        public delegate* unmanaged<uint, uint, uint, double> Component_GetDouble;
+        public delegate* unmanaged<uint, uint, uint, double, void> Component_SetDouble;
+        public delegate* unmanaged<uint, uint, uint, Vector2*, void> Component_GetVec2;
+        public delegate* unmanaged<uint, uint, uint, Vector2*, void> Component_SetVec2;
+        public delegate* unmanaged<uint, uint, uint, Vector3*, void> Component_GetVec3;
+        public delegate* unmanaged<uint, uint, uint, Vector3*, void> Component_SetVec3;
+        public delegate* unmanaged<uint, uint, uint, Vector4*, void> Component_GetVec4;
+        public delegate* unmanaged<uint, uint, uint, Vector4*, void> Component_SetVec4;
+        public delegate* unmanaged<uint, uint, uint, Vector4*, void> Component_GetQuat;
+        public delegate* unmanaged<uint, uint, uint, Vector4*, void> Component_SetQuat;
+        public delegate* unmanaged<uint, uint, uint, byte*, int, int> Component_GetString;
+        public delegate* unmanaged<uint, uint, uint, GkStr, void> Component_SetString;
     }
 
     /// <summary>Number of bindings in the table, checked against the native side.</summary>
     public static class EngineApiInfo
     {
-        public const int EntryCount = 46;
+        public const int EntryCount = 68;
     }
 }
 
@@ -416,6 +438,11 @@ namespace GkNext
         {
             Api.Table->Scene_SetNodeVisible(nodeId, visible ? 1 : 0);
         }
+
+        public static uint GetEnvironmentNodeId()
+        {
+            return Api.Table->Scene_GetEnvironmentNodeId();
+        }
     }
 
     public static unsafe class SceneBuild
@@ -527,6 +554,152 @@ namespace GkNext
                     }
                     return written <= 0 ? System.Array.Empty<byte>() : buffer.AsSpan(0, written).ToArray();
                 }
+            }
+            finally
+            {
+                Utf8Arena.Release(mark);
+            }
+        }
+    }
+
+    public static unsafe class Component
+    {
+        public static bool Has(uint nodeId, uint typeId)
+        {
+            return Api.Table->Component_Has(nodeId, typeId) != 0;
+        }
+
+        public static bool GetBool(uint nodeId, uint typeId, uint propId)
+        {
+            return Api.Table->Component_GetBool(nodeId, typeId, propId) != 0;
+        }
+
+        public static void SetBool(uint nodeId, uint typeId, uint propId, bool value)
+        {
+            Api.Table->Component_SetBool(nodeId, typeId, propId, value ? 1 : 0);
+        }
+
+        public static int GetInt32(uint nodeId, uint typeId, uint propId)
+        {
+            return Api.Table->Component_GetInt32(nodeId, typeId, propId);
+        }
+
+        public static void SetInt32(uint nodeId, uint typeId, uint propId, int value)
+        {
+            Api.Table->Component_SetInt32(nodeId, typeId, propId, value);
+        }
+
+        public static uint GetUInt32(uint nodeId, uint typeId, uint propId)
+        {
+            return Api.Table->Component_GetUInt32(nodeId, typeId, propId);
+        }
+
+        public static void SetUInt32(uint nodeId, uint typeId, uint propId, uint value)
+        {
+            Api.Table->Component_SetUInt32(nodeId, typeId, propId, value);
+        }
+
+        public static float GetFloat(uint nodeId, uint typeId, uint propId)
+        {
+            return Api.Table->Component_GetFloat(nodeId, typeId, propId);
+        }
+
+        public static void SetFloat(uint nodeId, uint typeId, uint propId, float value)
+        {
+            Api.Table->Component_SetFloat(nodeId, typeId, propId, value);
+        }
+
+        public static double GetDouble(uint nodeId, uint typeId, uint propId)
+        {
+            return Api.Table->Component_GetDouble(nodeId, typeId, propId);
+        }
+
+        public static void SetDouble(uint nodeId, uint typeId, uint propId, double value)
+        {
+            Api.Table->Component_SetDouble(nodeId, typeId, propId, value);
+        }
+
+        public static Vector2 GetVec2(uint nodeId, uint typeId, uint propId)
+        {
+            Vector2 result = default;
+            Api.Table->Component_GetVec2(nodeId, typeId, propId, &result);
+            return result;
+        }
+
+        public static void SetVec2(uint nodeId, uint typeId, uint propId, in Vector2 value)
+        {
+            fixed (Vector2* p_value = &value)
+            {
+                Api.Table->Component_SetVec2(nodeId, typeId, propId, p_value);
+            }
+        }
+
+        public static Vector3 GetVec3(uint nodeId, uint typeId, uint propId)
+        {
+            Vector3 result = default;
+            Api.Table->Component_GetVec3(nodeId, typeId, propId, &result);
+            return result;
+        }
+
+        public static void SetVec3(uint nodeId, uint typeId, uint propId, in Vector3 value)
+        {
+            fixed (Vector3* p_value = &value)
+            {
+                Api.Table->Component_SetVec3(nodeId, typeId, propId, p_value);
+            }
+        }
+
+        public static Vector4 GetVec4(uint nodeId, uint typeId, uint propId)
+        {
+            Vector4 result = default;
+            Api.Table->Component_GetVec4(nodeId, typeId, propId, &result);
+            return result;
+        }
+
+        public static void SetVec4(uint nodeId, uint typeId, uint propId, in Vector4 value)
+        {
+            fixed (Vector4* p_value = &value)
+            {
+                Api.Table->Component_SetVec4(nodeId, typeId, propId, p_value);
+            }
+        }
+
+        public static Vector4 GetQuat(uint nodeId, uint typeId, uint propId)
+        {
+            Vector4 result = default;
+            Api.Table->Component_GetQuat(nodeId, typeId, propId, &result);
+            return result;
+        }
+
+        public static void SetQuat(uint nodeId, uint typeId, uint propId, in Vector4 value)
+        {
+            fixed (Vector4* p_value = &value)
+            {
+                Api.Table->Component_SetQuat(nodeId, typeId, propId, p_value);
+            }
+        }
+
+        public static string GetString(uint nodeId, uint typeId, uint propId)
+        {
+            int required = Api.Table->Component_GetString(nodeId, typeId, propId, null, 0);
+            if (required <= 0)
+            {
+                return string.Empty;
+            }
+            byte[] buffer = new byte[required];
+            fixed (byte* bufferPtr = buffer)
+            {
+                int written = Api.Table->Component_GetString(nodeId, typeId, propId, bufferPtr, required);
+                return written <= 0 ? string.Empty : System.Text.Encoding.UTF8.GetString(bufferPtr, written);
+            }
+        }
+
+        public static void SetString(uint nodeId, uint typeId, uint propId, string value)
+        {
+            var mark = Utf8Arena.Mark();
+            try
+            {
+                Api.Table->Component_SetString(nodeId, typeId, propId, Utf8Arena.Encode(value));
             }
             finally
             {

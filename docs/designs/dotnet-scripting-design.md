@@ -1,10 +1,10 @@
 ---
 title: ".NET 脚本运行时架构"
 category: design
-status: P0–P4 已落地，P5 未实施
+status: 现行；P0–P5 全部落地
 owner: engine/scripting
 created: 2026-08-14
-last_updated: 2026-08-14
+last_updated: 2026-08-15
 plan: ../plans/dotnet-scripting-plan.md
 ---
 
@@ -246,8 +246,18 @@ node.GetComponent<RenderComponent>().Visible = false;
 生成流程用 build-time codegen（引擎 `--dump-reflection` 导出 JSON → `gnb csharpgen`），不用
 Source Generator：后者复杂度高、难调试，在这里没有额外收益。
 
-`PropertyFlags::JSExposed`（[PropertyMeta.hpp:13](../../src/Engine/Runtime/Reflection/PropertyMeta.hpp)）
+`PropertyFlags::JSExposed`（[PropertyMeta.hpp](../../src/Engine/Runtime/Reflection/PropertyMeta.hpp)）
 改名为 `ScriptExposed`，保留旧名作为 deprecated 别名一个版本周期。
+
+**P5 落地结果。** 实现见 [.NET Bindings](../AGENT_GUIDE/DotNetBindings.md)。两处与上述设计不同：
+
+- 清单**提交进仓库**（`src/Modules/NextDotNet/ReflectionManifest.json`），生成器读快照而不是每次
+  跑引擎。原设计隐含"构建时导出"，但那会让 `gnb csharpgen --check` 依赖一个已构建的二进制，而
+  这个检查的职责恰恰是守住构建之前的状态。代价是快照会过期，所以补了
+  `Test_ReflectionManifest.cpp` 做闸门：提交的清单与实时反射不一致就测试失败。
+- 节点自身的反射属性直接长在 `NodeRef` 上（`node.Translation`），不是 `node.GetComponent<Node>()`
+  ——node handle 本身就是那个 node，多一层间接没有意义。component 则同时有简写（`node.Render`）
+  和泛型形式（`node.GetComponent<RenderComponent>()`）。
 
 ### 4.4 跨界类型规约与四项定稿取舍
 

@@ -41,10 +41,11 @@
 
 ## Designs（当前架构）
 
-- [.NET 脚本运行时架构](designs/dotnet-scripting-design.md)（现行；P0–P4 已落地，C# 脚本运行时
-  已接入引擎并通过 Flappy 双后端 parity；[开发计划](plans/dotnet-scripting-plan.md)）
-- [脚本绑定面基线（QuickJS 誊本）](designs/script-binding-surface-baseline.md)（现行；
-  QuickJS 退场前誊下的完整绑定面，P2 的 `EngineApi.def.h` 范围基线，P2 完成后由 def 取代）
+- [.NET 脚本运行时架构](designs/dotnet-scripting-design.md)（现行；C# 脚本运行时已完整落地——
+  双后端、绑定表 codegen、反射组件 wrapper，Flappy 在两种后端下 parity 通过。日常用法见
+  [.NET Bindings](AGENT_GUIDE/DotNetBindings.md)）
+- [脚本绑定面基线（QuickJS 誊本）](designs/script-binding-surface-baseline.md)（历史证据；
+  QuickJS 退场前誊下的完整绑定面，已由 `EngineApi.def.h` 与反射清单取代，保留用于追溯取舍来源）
 - [Agent 输入驱动验证](designs/agent-validation-input-driver.md)
 - [Desktop UI Foundation](designs/desktop-ui-foundation.md)
 - [AmbientCube 命中驱动驻留](designs/ambientcube-hit-driven-residency-design.md)
@@ -90,8 +91,6 @@
 ## Plans（待实施）
 
   （待实施；统一 Engine UI 主题、语义控件、Toolbar/Combo、应用 chrome、领域选项目录与 DevTools 边界）
-- [.NET 脚本运行时开发计划](plans/dotnet-scripting-plan.md)（实施中；P0–P4 已完成，FlappyCSharp
-  在两种后端下 parity 通过，下一步 P5 反射组件 wrapper 与文档收尾）
 - [Android 纯 CMake 驱动构建重构方案](plans/android-cmake-build-refactor-plan.md)（实施中；源码迁移已完成，待兼容 NDK 环境完成 APK/AVD 验收）
 - [iOS 纯 CMake 驱动构建重构方案](plans/ios-pure-cmake-build-refactor-plan.md)（device-only 实施；复用 macOS Vulkan SDK 解析，保留 `gnb ios build` 薄入口）
 - [阶段性 Release 准备计划](plans/release-readiness-plan.md)（现行；发布流水线、崩溃兜底、UI 收口、
@@ -109,6 +108,9 @@
 这些 plan 的 `status` 已是“已完成 / 已实施”。按本页的生命周期规则它们应退出现行文档面；
 在把其中仍成立的契约提炼进对应 design 之前先在此列出，避免成为无人索引的游离文档。
 
+- [.NET 脚本运行时开发计划](plans/dotnet-scripting-plan.md)（P0–P5 已完成 →
+  [design](designs/dotnet-scripting-design.md) · [guide](AGENT_GUIDE/DotNetBindings.md)；
+  每个阶段的结果段记录了实测才暴露的失败与原因，是这条链路最完整的排障线索）
 - [大气散射与高度雾开发计划](plans/atmosphere-and-height-fog-plan.md)（已完成 → [design](designs/atmosphere-and-height-fog-design.md)）
 - [Bindless 3D 纹理支持计划](plans/bindless-3d-texture-support-plan.md)（已完成）
 - [BSDF-aware Direct Lighting 计划](plans/bsdf-aware-direct-lighting-plan.md)（已实施 → [design](designs/pathtracing-restir-design.md)）

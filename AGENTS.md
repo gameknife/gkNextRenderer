@@ -230,7 +230,9 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 - Supports undo/redo for property modifications
 - See `docs/AGENT_GUIDE/ReflectionSystem.md` for detailed documentation
 - Register components using `REFLECT_COMPONENT` macro in component's .cpp file
-- The script-binding consumer is currently absent; C# component wrappers are generated in phase 5
+- `PropertyFlags::ScriptExposed` governs whether a property reaches C#; it is on by default
+- Changing a reflection registration means `gnb csharpgen --refresh` (re-dumps the committed
+  manifest and regenerates the C# wrappers). A stale manifest fails `Test_ReflectionManifest.cpp`.
 
 **C# Scripting (`Modules/NextDotNet` + `assets/csharp/`):**
 - Managed sources live in `assets/csharp/`: `GkNext.Engine` (contract + generated bindings),
@@ -238,6 +240,9 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
   `GkNext.Game` (reloadable game code)
 - **Adding a binding is one line in `src/Modules/NextDotNet/EngineApi.def.h` plus one implementation
   function in `EngineApi.cpp`**, then `gnb csharpgen`. Never hand-edit `Engine.g.cs`.
+  See `docs/AGENT_GUIDE/DotNetBindings.md`.
+- Reflection owns component/node *properties*; the def file owns engine/scene *functions*. Exposing
+  a property needs no def entry at all — register it and run `gnb csharpgen --refresh`.
 - Cross-boundary type rules (violating them breaks NativeAOT, often silently): no `bool` (use
   `GkBool`), no strings inside structs, no optional struct fields, colors as `GkColor32`
 - Backend: CMake option `GK_DOTNET_BACKEND=CoreCLR|AOT`, default CoreCLR. Managed code is identical
@@ -256,7 +261,9 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 - Two gotchas that produce a silently static scene: the live `Scene.*` node accessors only work
   after the scene is committed (inside `BeforeSceneRebuild` put the transform in the spec), and a
   game that moves nodes must call `Scene.MarkTransformDirty()` once per tick
-- Component property access from C# is not implemented yet (phase 5 of the plan)
+- Component and node properties are reached through the generated wrappers in `Components.g.cs`:
+  `node.Render.Visible = false`, `node.GetComponent<RenderComponent>()`, `node.Translation`. Array,
+  enum, Mat4 and AssetRef properties are not bound yet; the generated file lists each gap.
 
 **Component System:**
 - ECS via entt library
@@ -298,7 +305,8 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 - **`docs/README.md`** - 现行文档索引与生命周期规则；架构设计、项目说明和仍有效计划从这里进入
 - **`docs/AGENT_GUIDE/`** - Layered documentation:
   - `core-patterns.md` / `contextual-rules.md` / `coding-standards.md` / `quick-commands.md` - General rules
-  - `ReflectionSystem.md` - entt::meta reflection (editor UI + JS bindings)
+  - `ReflectionSystem.md` - entt::meta reflection (editor UI + generated C# wrappers)
+  - `DotNetBindings.md` - C# binding surface: adding a function vs exposing a property
   - `HotReload.md` - Shader/script hot reload mechanics
   - `LDrawLoader.md` - LDraw model loading (used by MagicaLego/BrickPlayer)
   - `SCADLoader.md` - OpenSCAD (.scad) DSL loading (parser/evaluator/CSG via Manifold/text via FreeType)

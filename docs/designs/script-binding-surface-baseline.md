@@ -125,7 +125,7 @@ plan: ../plans/dotnet-scripting-plan.md
 ## 4. 反射暴露的类型
 
 由 `QuickJSReflectionBridge::GenerateTypeScriptDef<T>()` 生成，属性集合来自 `entt::meta` 且带
-`PropertyFlags::JSExposed`（设计 4.3 要求改名为 `ScriptExposed`）：
+`PropertyFlags::JSExposed`（已在 P5 改名为 `ScriptExposed`，旧名保留为 deprecated 别名）：
 
 - `Assets::Node`
 - `Assets::Scene`
@@ -134,7 +134,7 @@ plan: ../plans/dotnet-scripting-plan.md
 - `Runtime::SkinnedMeshComponent`
 - `Runtime::ENodeMobility`（枚举）
 
-这一层是 P5 `Components.g.cs` 的输入，不属于 `EngineApi.def.h` 的范围。
+这一层现在是 `Components.g.cs` 的输入（经由 `--dump-reflection` 导出的清单），不属于 `EngineApi.def.h` 的范围。
 
 ## 5. 跨界数据结构
 

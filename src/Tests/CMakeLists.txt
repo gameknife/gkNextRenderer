@@ -113,6 +113,7 @@ set(unitTestSources
 
 if(GK_DOTNET_ENABLED)
     list(APPEND unitTestSources Test_DotNetEngineApi.cpp)
+    list(APPEND unitTestSources Test_ReflectionManifest.cpp)
 endif()
 
 find_package(Catch2 3 REQUIRED)
@@ -120,6 +121,9 @@ add_executable(gkNextUnitTests ${unitTestSources})
 
 gk_apply_target_defaults(gkNextUnitTests)
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
+# The reflection manifest test reads a committed source file, and the tests are launched from
+# whatever directory the caller happens to be in.
+target_compile_definitions(gkNextUnitTests PRIVATE GK_NEXT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_dependencies(gkNextUnitTests Assets)
 find_package(nlohmann_json CONFIG REQUIRED)
 
