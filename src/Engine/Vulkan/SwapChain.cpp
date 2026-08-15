@@ -166,8 +166,11 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
         createInfo.pQueueFamilyIndices = nullptr; // Optional
     }
 
+    const auto createStart = std::chrono::steady_clock::now();
     Check(Interposer().CreateSwapchainKHR(device.Handle(), &createInfo, nullptr, &swapChain_),
         "create swap chain!");
+    const float createMs = std::chrono::duration<float, std::milli>(
+        std::chrono::steady_clock::now() - createStart).count();
 
     // Report what was actually requested: secondary ImGui viewport swapchains are created
     // with this count and need the same triple-buffering policy as the main swapchain.
@@ -180,11 +183,12 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
     renderExtent_ = extent_;
     renderOffset_ = {0,0};
 
-    SPDLOG_INFO("Swap Chain format: {} ({}) colorSpace: {} ({}) outputMode: {} usage: 0x{:x} compositeAlpha: 0x{:x}",
+    SPDLOG_INFO("Swap Chain format: {} ({}) colorSpace: {} ({}) outputMode: {} usage: 0x{:x} compositeAlpha: 0x{:x}"
+                " (vkCreateSwapchainKHR {:.2f}ms)",
                 FormatName(format_), static_cast<int>(format_),
                 ColorSpaceName(colorSpace_), static_cast<int>(colorSpace_),
                 static_cast<int>(outputMode_), imageUsage_,
-                static_cast<uint32_t>(createInfo.compositeAlpha));
+                static_cast<uint32_t>(createInfo.compositeAlpha), createMs);
     if (!SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT))
     {
         SPDLOG_INFO("Swapchain STORAGE usage is disabled; using intermediate render target + blit path");

@@ -19,6 +19,7 @@
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
+#include "Engine/Utilities/LogFormatting.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 #include "Engine/Utilities/Localization.hpp"
@@ -290,6 +291,17 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
                 rebuild.physicsShapeCookingMs + rebuild.physicsBodyCreationMs,
                 rebuild.physicsShapeCookingMs, rebuild.physicsBodyCreationMs,
                 rebuild.cpuPreparationMs, outsideRebuildMs);
+
+            // Process-level startup cost, reported once: everything from PlatformInit to the
+            // first scene being renderable. Later scene loads are covered by the line above.
+            static bool startupReported = false;
+            if (!startupReported)
+            {
+                startupReported = true;
+                GK_LOG_STAGE("---- Startup complete in {:.2f}ms (first scene [{}] ready)",
+                             NextRenderer::GetMillisecondsSinceProcessStart(),
+                             std::filesystem::path(request.filename).filename().string());
+            }
         });
 }
 

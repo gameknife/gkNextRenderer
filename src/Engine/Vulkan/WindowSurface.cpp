@@ -639,11 +639,17 @@ void Window::InitSDL(bool systemDpiScaling, const std::string& vulkanDriver, con
     (void)systemDpiScaling;
 #endif
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
-    const SDL_InitFlags initFlags = (headlessSurface ? SDL_INIT_EVENTS : SDL_INIT_VIDEO) | SDL_INIT_GAMEPAD;
+    // SDL_INIT_GAMEPAD is deliberately absent: it enumerates HID devices and costs ~190ms on
+    // Windows. NextEngine::Start defers it to a ticked task once the first scene is up.
+    const SDL_InitFlags initFlags = headlessSurface ? SDL_INIT_EVENTS : SDL_INIT_VIDEO;
+    const auto sdlInitStart = std::chrono::steady_clock::now();
     if (!SDL_Init(initFlags))
     {
         Throw(std::runtime_error("failed to init SDL."));
     }
+    SPDLOG_INFO("SDL_Init took {:.2f}ms",
+                std::chrono::duration<float, std::milli>(
+                    std::chrono::steady_clock::now() - sdlInitStart).count());
     ConfigureVulkanDriver(vulkanDriver);
     ConfigurePackagedMoltenVKDriver();
 

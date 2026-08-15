@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <filesystem>
 #include <string>
 #include <system_error>
@@ -7,6 +8,28 @@
 
 namespace NextRenderer
 {
+    // Origin for the startup timing reported once the first scene is ready. The static
+    // initializes on first call, and PlatformInit makes that call before any engine or
+    // module initialization runs - entry points that skip PlatformInit still get a usable
+    // (if slightly late) origin rather than a wrong one.
+    inline std::chrono::steady_clock::time_point ProcessStartTime()
+    {
+        static const std::chrono::steady_clock::time_point startTime =
+            std::chrono::steady_clock::now();
+        return startTime;
+    }
+
+    inline void MarkProcessStart()
+    {
+        (void)ProcessStartTime();
+    }
+
+    inline double GetMillisecondsSinceProcessStart()
+    {
+        return std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - ProcessStartTime()).count();
+    }
+
     // Short, filesystem-safe name of the running application. It names the per-user
     // data directory (see Utilities::FileHelper::GetWritableRuntimeRoot) and the log
     // file, so each shipped target keeps its own settings and layout.

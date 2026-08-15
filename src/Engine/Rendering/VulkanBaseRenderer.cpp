@@ -1302,6 +1302,8 @@ namespace Vulkan
 
     void VulkanBaseRenderer::CreateSwapChain()
     {
+        const auto createSwapChainStart = std::chrono::steady_clock::now();
+
         // SwapChain
         auto* engine = NextEngine::GetInstance();
         frameSettings_.userSettings = engine->GetUserSettings();
@@ -1473,6 +1475,10 @@ namespace Vulkan
         {
             delegates_.createSwapChain();
         }
+
+        SPDLOG_INFO("CreateSwapChain took {:.2f}ms",
+                    std::chrono::duration<float, std::milli>(
+                        std::chrono::steady_clock::now() - createSwapChainStart).count());
     }
 
     void VulkanBaseRenderer::RefreshSceneSwapChainResources()

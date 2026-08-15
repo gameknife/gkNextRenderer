@@ -4,6 +4,7 @@ namespace NextRenderer
 {
     inline void PlatformInit()
     {
+        MarkProcessStart();
         NormalizeWorkingDirectoryToExecutableDirectory();
     }
 

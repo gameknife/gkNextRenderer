@@ -7,6 +7,7 @@ namespace NextRenderer
 {
     inline void PlatformInit()
     {
+        MarkProcessStart();
         NormalizeWorkingDirectoryToExecutableDirectory();
 
         // Windows console color support

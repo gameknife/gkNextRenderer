@@ -270,7 +270,7 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     spdlog::set_default_logger(android_logger);
 #endif
 
-    SPDLOG_INFO("---- Next Engine Initializing...");
+    GK_LOG_STAGE("---- Next Engine Initializing...");
     spdlog::stopwatch stopwatch;
 
     instance_ = this;
@@ -397,7 +397,7 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     services_.localization = std::make_unique<NextLocalization>();
     services_.localization->LoadFromTxt(fmt::format("assets/locale/{}.txt", options_->locale), options_->locale);
 
-    SPDLOG_INFO("---- Next Engine Initialized in {}", stopwatch.elapsed_ms());
+    GK_LOG_STAGE("---- Next Engine Initialized in {}", stopwatch.elapsed_ms());
 }
 
 void NextEngine::TickHotReload()
@@ -472,7 +472,7 @@ void NextEngine::Start()
 {
     PERFORMANCEAPI_INSTRUMENT_FUNCTION();
 
-    SPDLOG_INFO("---- Next Engine Starting...");
+    GK_LOG_STAGE("---- Next Engine Starting...");
     spdlog::stopwatch stopwatch;
 
     // Initialize Renderer
@@ -560,7 +560,27 @@ void NextEngine::Start()
         gameInstance_->RegisterAgentQueries(agentQueries_);
     }
 
-    SPDLOG_INFO("---- Next Engine Started in {}", stopwatch.elapsed_ms());
+    // SDL_INIT_GAMEPAD enumerates HID devices and costs ~190ms on Windows. Rendering and
+    // keyboard/mouse input do not need it, so it runs a couple of frames after the first
+    // scene is up instead of inside startup. TickGamepadInput sees no devices until then;
+    // SDL reports the already-connected ones once the subsystem comes up.
+    AddTickedTask(
+        [this, framesUntilInit = 2](double) mutable -> bool
+        {
+            if (status_ != NextRenderer::EApplicationStatus::Running || framesUntilInit-- > 0)
+            {
+                return false;
+            }
+            if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
+            {
+                SPDLOG_WARN("Gamepad subsystem unavailable: {}", SDL_GetError());
+                return true;
+            }
+            SPDLOG_INFO("Gamepad subsystem ready");
+            return true;
+        });
+
+    GK_LOG_STAGE("---- Next Engine Started in {}", stopwatch.elapsed_ms());
 }
 
 bool NextEngine::HandleEvent(SDL_Event& event)
