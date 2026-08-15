@@ -233,6 +233,23 @@ struct FAmbientGridConfig
     float cascadeRatio = 2.0f;
 };
 
+// UI-facing state for the CPU half of the ambient GI bake pipeline. Voxel work
+// is counted in 16x16 XZ groups; distance-field reconstruction runs once all
+// groups across the cascade set have completed.
+enum class EProbeBakeStage : uint8_t
+{
+    Idle,
+    VoxelData,
+    DistanceField,
+};
+
+struct FProbeBakeProgress
+{
+    EProbeBakeStage stage = EProbeBakeStage::Idle;
+    uint32_t completedVoxelGroups = 0;
+    uint32_t totalVoxelGroups = 0;
+};
+
 class FCPUAccelerationStructure
 {
 public:
@@ -254,6 +271,8 @@ public:
     
     bool Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory, Vulkan::DeviceMemory* PageIndexMemory);
     bool HasPendingWork() const;
+
+    FProbeBakeProgress GetProbeBakeProgress() const;
 
     uint64_t AmbientBakeDirtyRevision() const { return cpuBrickTable.dirtyRevision; }
     uint32_t AmbientBakeDirtyBrickCount(uint32_t cascadeIndex) const;
@@ -315,6 +334,8 @@ private:
     std::vector<double> buildToPublishSamples_;
     bool fullProbeBakePending_ = true;
     bool ambientBakeIdle_ = false;
+    uint32_t totalVoxelGroups_ = 0;
+    std::atomic<uint32_t> completedVoxelGroups_{0};
         
     std::vector<uint32_t> lastBatchTasks;
     std::vector<uint32_t> distanceFieldRebuildTasks;

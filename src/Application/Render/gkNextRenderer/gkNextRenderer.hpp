@@ -79,6 +79,7 @@ private:
     void DrawSettings(FRendererUiState& uiState);
     void DrawTitleBar(const FGameUiFrameContext& context, FRendererUiState& uiState);
     void DrawBottomStatusBar();
+    bool DrawGiBakeIndicator();
     void DrawModeRail(FRendererUiState& uiState);
     void DrawViewportTopBar(const FGameUiFrameContext& context, FRendererUiState& uiState);
     void DrawViewportCheatSheet(FRendererUiState& uiState);

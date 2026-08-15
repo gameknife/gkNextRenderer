@@ -98,7 +98,7 @@ namespace Vulkan
         }
 
         constexpr uint32_t cubesPerGroup = 64u;
-        constexpr uint32_t convergencePasses = 32u;
+        constexpr uint32_t convergencePasses = AmbientCubePipelines::convergencePasses;
         const uint32_t cascadeCount = std::min(
             Assets::SanitizeAmbientCubeCascadeCount(NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount),
             GetScene().AmbientCubeCascadeCapacity());
@@ -253,6 +253,47 @@ namespace Vulkan
             ambient_.nextGroup[cascadeIndex] = 0u;
             ++ambient_.completedPasses[cascadeIndex];
         }
+    }
+
+    FAmbientBakeProgress VulkanBaseRenderer::GetAmbientBakeProgress()
+    {
+        FAmbientBakeProgress progress;
+        if (!ActiveRendererRequirements().requestAmbientCube || ShouldSkipAmbientCubeUpdates())
+        {
+            return progress;
+        }
+
+        const uint32_t cascadeCount = std::min(
+            Assets::SanitizeAmbientCubeCascadeCount(NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount),
+            GetScene().AmbientCubeCascadeCapacity());
+        auto& cpuAcceleration = GetScene().GetCPUAccelerationStructure();
+        const uint64_t dirtyRevision = cpuAcceleration.AmbientBakeDirtyRevision();
+        if (dirtyRevision == 0u || cascadeCount == 0u)
+        {
+            return progress;
+        }
+
+        constexpr uint32_t cubesPerGroup = 64u;
+        for (uint32_t cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
+        {
+            const uint32_t dirtyBrickCount = cpuAcceleration.AmbientBakeDirtyBrickCount(cascadeIndex);
+            const uint32_t probeCount =
+                dirtyBrickCount * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME);
+            const uint32_t groupsPerPass = (probeCount + cubesPerGroup - 1u) / cubesPerGroup;
+            progress.totalDispatchGroups += groupsPerPass * AmbientCubePipelines::convergencePasses;
+
+            if (ambient_.dirtyRevision == dirtyRevision)
+            {
+                const uint32_t completedPasses = std::min(
+                    ambient_.completedPasses[cascadeIndex], AmbientCubePipelines::convergencePasses);
+                const uint32_t currentGroup = std::min(ambient_.nextGroup[cascadeIndex], groupsPerPass);
+                progress.completedDispatchGroups += completedPasses * groupsPerPass + currentGroup;
+            }
+        }
+
+        progress.completedDispatchGroups = std::min(progress.completedDispatchGroups, progress.totalDispatchGroups);
+        progress.active = progress.totalDispatchGroups > 0u;
+        return progress;
     }
 
 }

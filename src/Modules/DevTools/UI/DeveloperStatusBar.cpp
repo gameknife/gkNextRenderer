@@ -43,7 +43,8 @@ namespace Runtime::DevToolsUI
                                 const float height,
                                 std::function<void()> onCppReloadClicked,
                                 const bool cppLiveCodingAvailable,
-                                const bool detachedStatisticsViewport)
+                                const bool detachedStatisticsViewport,
+                                std::function<bool()> drawActivityIndicator)
     {
         const NextEngine::FHotReloadStatus hotReload = engine.GetHotReloadStatus();
         const auto memory = engine.GetRenderer().Device().CaptureMemoryStats();
@@ -64,8 +65,12 @@ namespace Runtime::DevToolsUI
         options.windowId = windowId;
         options.height = height;
         options.rightWidth = rightWidth;
-        options.drawLeftContent = []()
+        options.drawLeftContent = [&drawActivityIndicator]()
         {
+            if (drawActivityIndicator && drawActivityIndicator())
+            {
+                return;
+            }
             const ImVec2 position = ImGui::GetCursorScreenPos();
             ImGui::GetWindowDrawList()->AddCircleFilled(
                 ImVec2(position.x + 4.0f, position.y + ImGui::GetTextLineHeight() * 0.5f), 3.5f,

@@ -50,6 +50,13 @@ namespace Vulkan
         uint32_t progressiveAccumulatedFrames = 0;
         uint32_t progressiveTargetFrames = 1;
     };
+
+    struct FAmbientBakeProgress
+    {
+        bool active = false;
+        uint32_t completedDispatchGroups = 0;
+        uint32_t totalDispatchGroups = 0;
+    };
     class FActiveRenderViewScope;
     class FrameSubmission;
     class RayTracingSceneBackend;
@@ -283,6 +290,7 @@ namespace Vulkan
         FRendererRequirements ActiveRendererRequirements() const;
         FRendererRequirements RegisteredRendererRequirements() const;
         bool ShouldSkipAmbientCubeUpdates() const;
+        FAmbientBakeProgress GetAmbientBakeProgress();
         // Drop the baked cube radiance. The scene calls this whenever the probe grid moves under it,
         // because radiance baked for the previous grid would otherwise persist at the new positions.
         void RequestClearAmbientCubeCache() { ambient_.requestClearCache = true; }
@@ -443,6 +451,7 @@ namespace Vulkan
 
         struct AmbientCubePipelines
         {
+            static constexpr uint32_t convergencePasses = 32u;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> softBake;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> clearCache;
             bool requestClearCache = true;

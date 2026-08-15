@@ -11,5 +11,6 @@ namespace Runtime::DevToolsUI
                                 float height = 30.0f,
                                 std::function<void()> onCppReloadClicked = {},
                                 bool cppLiveCodingAvailable = false,
-                                bool detachedStatisticsViewport = false);
+                                bool detachedStatisticsViewport = false,
+                                std::function<bool()> drawActivityIndicator = {});
 }

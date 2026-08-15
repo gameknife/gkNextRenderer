@@ -611,6 +611,9 @@ void FCPUAccelerationStructure::QueueFullProbeBake()
         }
     }
 
+    totalVoxelGroups_ = static_cast<uint32_t>(coordinates.size()) * GetActiveCascadeCount();
+    completedVoxelGroups_.store(0, std::memory_order_release);
+
     std::random_device rd;
     std::mt19937 generator(rd());
     std::shuffle(coordinates.begin(), coordinates.end(), generator);
@@ -700,6 +703,7 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Sc
             {
                 // flush here
                 //bakerType == EBakerType::EBT_Probe ? probeBaker.UploadGPU(*GPUMemory) : farProbeBaker.UploadGPU(*FarGPUMemory);
+                completedVoxelGroups_.fetch_add(1, std::memory_order_release);
                 needFlush = true;
             });
 
@@ -733,6 +737,8 @@ void FCPUAccelerationStructure::ClearAllTasks()
     distanceFieldRebuildScheduled_ = false;
     fullProbeBakePending_ = true;
     ambientBakeIdle_ = false;
+    totalVoxelGroups_ = 0;
+    completedVoxelGroups_.store(0, std::memory_order_release);
     cpuBrickTable = {};
     ClearNavRelevantDirtyBounds();
     PublishSnapshot(std::make_shared<FCPUTLASSnapshot>());
@@ -868,6 +874,24 @@ bool FCPUAccelerationStructure::HasPendingWork() const
     std::lock_guard<std::mutex> lock(buildMutex_);
     return buildInFlight_ || needFlush || !lastBatchTasks.empty() ||
            !distanceFieldRebuildTasks.empty() || distanceFieldRebuildScheduled_ || !needUpdateGroups.empty();
+}
+
+FProbeBakeProgress FCPUAccelerationStructure::GetProbeBakeProgress() const
+{
+    FProbeBakeProgress progress;
+    progress.completedVoxelGroups = completedVoxelGroups_.load(std::memory_order_acquire);
+    progress.totalVoxelGroups = totalVoxelGroups_;
+
+    if (!needUpdateGroups.empty() || !lastBatchTasks.empty())
+    {
+        progress.stage = EProbeBakeStage::VoxelData;
+    }
+    else if (needFlush || distanceFieldRebuildScheduled_ || !distanceFieldRebuildTasks.empty())
+    {
+        progress.stage = EProbeBakeStage::DistanceField;
+    }
+
+    return progress;
 }
 
 bool FCPUAccelerationStructure::HasProbeVoxelizationWork() const

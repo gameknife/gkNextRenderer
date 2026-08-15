@@ -185,5 +185,103 @@ void NextRendererGameInstance::DrawBottomStatusBar()
 {
     Runtime::DevToolsUI::DrawDeveloperStatusBar(GetEngine(), "RendererStatusBar", 30.0f,
                                          []() { Modules::LiveCoding::RequestCppReload(); },
-                                         Modules::LiveCoding::IsCppLiveCodingAvailable());
+                                         Modules::LiveCoding::IsCppLiveCodingAvailable(), false,
+                                         [this]() { return DrawGiBakeIndicator(); });
+}
+
+bool NextRendererGameInstance::DrawGiBakeIndicator()
+{
+    const auto DrawActivity = [](const char* label, const std::string& value, float fraction,
+                                 bool indeterminate, const char* tooltip)
+    {
+        constexpr ImVec2 size(264.0f, 22.0f);
+        constexpr float rounding = 7.0f;
+        constexpr float progressWidth = 62.0f;
+        constexpr float progressHeight = 5.0f;
+
+        const ImVec2 position = ImGui::GetCursorScreenPos();
+        const ImVec2 maximum = position + size;
+        const ImVec2 progressMin(maximum.x - progressWidth - 9.0f,
+                                 position.y + (size.y - progressHeight) * 0.5f);
+        const ImVec2 progressMax(progressMin.x + progressWidth, progressMin.y + progressHeight);
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+        drawList->AddRectFilled(position, maximum,
+                                NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::SurfaceElevated, 0.90f),
+                                rounding);
+        drawList->AddRect(position, maximum,
+                          NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::Accent, 0.32f), rounding);
+        drawList->AddCircleFilled(ImVec2(position.x + 12.0f, position.y + size.y * 0.5f), 3.5f,
+                                  NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::Accent));
+        drawList->AddText(ImVec2(position.x + 22.0f, position.y + 3.0f),
+                          NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::Text), label);
+
+        const ImVec2 valueSize = ImGui::CalcTextSize(value.c_str());
+        drawList->AddText(ImVec2(progressMin.x - valueSize.x - 9.0f, position.y + 3.0f),
+                          NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::TextMuted), value.c_str());
+        drawList->AddRectFilled(progressMin, progressMax,
+                                NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::Background, 0.85f),
+                                progressHeight * 0.5f);
+
+        if (indeterminate)
+        {
+            constexpr float segmentWidth = 22.0f;
+            const float phase = std::fmod(static_cast<float>(ImGui::GetTime()) * 0.9f, 1.0f);
+            const float segmentStart = progressMin.x - segmentWidth +
+                phase * (progressWidth + segmentWidth * 2.0f);
+            drawList->PushClipRect(progressMin, progressMax, true);
+            drawList->AddRectFilled(ImVec2(segmentStart, progressMin.y),
+                                    ImVec2(segmentStart + segmentWidth, progressMax.y),
+                                    NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::AccentHover),
+                                    progressHeight * 0.5f);
+            drawList->PopClipRect();
+        }
+        else
+        {
+            const float fillWidth = std::max(progressHeight, progressWidth * std::clamp(fraction, 0.0f, 1.0f));
+            drawList->AddRectFilled(progressMin, ImVec2(progressMin.x + fillWidth, progressMax.y),
+                                    NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::AccentHover),
+                                    progressHeight * 0.5f);
+        }
+
+        ImGui::Dummy(size);
+        if (ImGui::IsItemHovered())
+        {
+            NextUI::Theme::DrawTooltip(tooltip);
+        }
+    };
+
+    const Assets::CPU::FProbeBakeProgress probeProgress =
+        GetEngine().GetScene().GetCPUAccelerationStructure().GetProbeBakeProgress();
+    if (probeProgress.stage == Assets::CPU::EProbeBakeStage::VoxelData)
+    {
+        const float fraction = probeProgress.totalVoxelGroups > 0u
+            ? static_cast<float>(probeProgress.completedVoxelGroups) /
+                  static_cast<float>(probeProgress.totalVoxelGroups)
+            : 0.0f;
+        DrawActivity("Voxel data", fmt::format("{} / {}", probeProgress.completedVoxelGroups,
+                                                probeProgress.totalVoxelGroups),
+                     fraction, false, "CPU voxel data generation");
+        return true;
+    }
+
+    if (probeProgress.stage == Assets::CPU::EProbeBakeStage::DistanceField)
+    {
+        DrawActivity("Distance field", "Building", 0.0f, true, "Rebuilding the voxel distance field");
+        return true;
+    }
+
+    const Vulkan::FAmbientBakeProgress ambientProgress = GetEngine().GetRenderer().GetAmbientBakeProgress();
+    if (!ambientProgress.active)
+    {
+        return false;
+    }
+
+    const float fraction = ambientProgress.totalDispatchGroups > 0u
+        ? static_cast<float>(ambientProgress.completedDispatchGroups) /
+              static_cast<float>(ambientProgress.totalDispatchGroups)
+        : 0.0f;
+    DrawActivity("Ambient bake", fmt::format("{:.0f}%", fraction * 100.0f), fraction, false,
+                 "GPU ambient cube lighting bake");
+    return true;
 }
