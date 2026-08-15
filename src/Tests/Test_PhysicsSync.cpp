@@ -333,6 +333,80 @@ TEST_CASE_METHOD(EngineTestFixture, "Character stance resize keeps feet anchored
     physics->RemoveBody(floor);
 }
 
+TEST_CASE_METHOD(EngineTestFixture, "Kinematic platform driven every frame in async mode",
+                 "[GPU][Integration][Physics][Async][Kinematic]")
+{
+    auto* physics = engine_->GetPhysicsEngine();
+    REQUIRE(physics != nullptr);
+    physics->OnSceneStarted();
+
+    const NextBodyID floor =
+        physics->CreateBoxBody({0.0f, -0.5f, 0.0f}, {50.0f, 1.0f, 50.0f}, NextMotionType::Static);
+    const NextBodyID platform =
+        physics->CreateBoxBody({0.0f, 1.0f, 0.0f}, {4.0f, 0.2f, 4.0f}, NextMotionType::Kinematic);
+
+    std::vector<NextBodyID> spheres;
+    for (int i = 0; i < 8; ++i)
+    {
+        spheres.push_back(physics->CreateSphereBody(
+            {-3.5f + static_cast<float>(i), 2.5f, 0.0f}, 0.25f, NextMotionType::Dynamic));
+    }
+
+    float time = 0.0f;
+    for (int frame = 0; frame < 1200; ++frame)
+    {
+        time += 1.0f / 60.0f;
+        physics->KickTick(1.0 / 60.0);
+        physics->MoveKinematicBody(platform,
+                                   {0.0f, 1.0f + 0.5f * std::sin(time * 2.0f), 0.0f},
+                                   glm::quat(1, 0, 0, 0), 0.01f);
+        physics->TryCompleteTick();
+    }
+
+    const FNextPhysicsBody* platformBody = physics->GetBody(platform);
+    REQUIRE(platformBody != nullptr);
+    CHECK(std::isfinite(platformBody->position.y));
+
+    for (const NextBodyID sphere : spheres)
+    {
+        physics->RemoveBody(sphere);
+    }
+    physics->RemoveBody(platform);
+    physics->RemoveBody(floor);
+}
+
+TEST_CASE_METHOD(EngineTestFixture, "NaN kinematic target does not corrupt the physics thread",
+                 "[GPU][Integration][Physics][Async][Kinematic]")
+{
+    auto* physics = engine_->GetPhysicsEngine();
+    REQUIRE(physics != nullptr);
+    physics->OnSceneStarted();
+
+    const NextBodyID floor =
+        physics->CreateBoxBody({0.0f, -0.5f, 0.0f}, {50.0f, 1.0f, 50.0f}, NextMotionType::Static);
+    const NextBodyID platform =
+        physics->CreateBoxBody({0.0f, 1.0f, 0.0f}, {4.0f, 0.2f, 4.0f}, NextMotionType::Kinematic);
+    const NextBodyID sphere =
+        physics->CreateSphereBody({0.0f, 2.5f, 0.0f}, 0.25f, NextMotionType::Dynamic);
+
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    for (int frame = 0; frame < 120; ++frame)
+    {
+        physics->KickTick(1.0 / 60.0);
+        physics->MoveKinematicBody(platform, {nan, 1.0f, 0.0f},
+                                   glm::quat(nan, nan, nan, nan), 0.01f);
+        physics->CompleteTick();
+    }
+
+    const FNextPhysicsBody* sphereBody = physics->GetBody(sphere);
+    REQUIRE(sphereBody != nullptr);
+    CHECK(std::isfinite(sphereBody->position.y));
+
+    physics->RemoveBody(sphere);
+    physics->RemoveBody(platform);
+    physics->RemoveBody(floor);
+}
+
 TEST_CASE_METHOD(EngineTestFixture, "Wheeled vehicle suspension and drivetrain telemetry", "[GPU][Integration][Physics][Vehicle]")
 {
     auto* physics = engine_->GetPhysicsEngine();

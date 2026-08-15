@@ -248,7 +248,7 @@ public:
     
     Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
     
-    bool AsyncProcessFull(Assets::Scene& scene, Vulkan::DeviceMemory* VoxelGPUMemory, bool Incremental = false);
+    bool AsyncProcessFull(Assets::Scene& scene, Vulkan::DeviceMemory* VoxelGPUMemory);
     void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene, ECubeProcType procType, EBakerType bakerType,
                            uint32_t cascadeIndex);
     
@@ -262,13 +262,6 @@ public:
     // The grid the current voxel/cube data was produced with. False until the bakers exist, which is
     // the case for scenes created without CPU acceleration.
     bool TryGetAmbientGridConfig(FAmbientGridConfig& outConfig) const;
-    // True when the user settings ask for a grid the bakers have not adopted yet, i.e. a full
-    // re-voxelization and re-bake is required before shading may follow the new scale.
-    bool AmbientGridConfigDiffersFromSettings(const Runtime::Config::UserSettings& settings,
-                                              uint32_t maxCascadeCapacity) const;
-
-    void RequestUpdate(glm::vec3 worldPos, float radius);
-    void AccumulateProbeDirtyBounds(const glm::vec3& worldMin, const glm::vec3& worldMax);
     bool ConsumeNavRelevantDirtyBounds(glm::vec3& outWorldMin, glm::vec3& outWorldMax);
     void ClearNavRelevantDirtyBounds();
 
@@ -293,7 +286,6 @@ private:
     void CancelRuntimeBuilds();
     void MergeNavDirtyBounds(const FCPUTLASBuildResult& result);
     void QueueFullProbeBake();
-    void QueueProbeBakeBounds(const glm::vec3& worldMin, const glm::vec3& worldMax);
     bool HasProbeVoxelizationWork() const;
 
 #if defined(__cpp_lib_atomic_shared_ptr) && __cpp_lib_atomic_shared_ptr >= 201711L
@@ -321,18 +313,8 @@ private:
     double lastCaptureMilliseconds_ = 0.0;
     double lastBuildToPublishMilliseconds_ = 0.0;
     std::vector<double> buildToPublishSamples_;
-    uint64_t pendingProbeRevision_ = 0;
     bool fullProbeBakePending_ = true;
     bool ambientBakeIdle_ = false;
-    bool hasProbeDirtyBounds_ = false;
-    glm::vec3 probeDirtyWorldMin_{0.0f};
-    glm::vec3 probeDirtyWorldMax_{0.0f};
-    // Bounds consumed by the probe batch currently being voxelized. Keep them
-    // separate from probeDirtyWorld* so dynamic changes arriving during this
-    // batch are preserved for the next coalesced revision.
-    bool hasInFlightProbeDirtyBounds_ = false;
-    glm::vec3 inFlightProbeDirtyWorldMin_{0.0f};
-    glm::vec3 inFlightProbeDirtyWorldMax_{0.0f};
         
     std::vector<uint32_t> lastBatchTasks;
     std::vector<uint32_t> distanceFieldRebuildTasks;

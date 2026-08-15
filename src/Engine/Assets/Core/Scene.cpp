@@ -1139,7 +1139,7 @@ namespace Assets
     void Scene::MarkDirty()
     {
         sceneDirty_ = true;
-        sceneDirtyForCpuAS_ = true;
+        cpuBvhDirty_ = true;
         NextEngine::GetInstance()->SetProgressiveRendering(false);
     }
 

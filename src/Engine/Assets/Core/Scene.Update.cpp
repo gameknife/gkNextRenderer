@@ -33,57 +33,6 @@
 
 namespace Assets
 {
-    namespace
-    {
-        void AccumulateAnimatedNodeBounds(const Scene& scene, const Node& node, bool& hasBounds,
-                                          glm::vec3& worldMin, glm::vec3& worldMax)
-        {
-            if (const auto* render = node.GetComponent<Runtime::RenderComponent>();
-                render && render->GetVisible() && render->IsDrawable() &&
-                (render->GetRenderParticipationMask() & Runtime::RenderParticipation::giBake) != 0u)
-            {
-                if (const Model* model = scene.GetModel(render->GetModelId()))
-                {
-                    const glm::vec3 localMin = model->GetLocalAABBMin();
-                    const glm::vec3 localMax = model->GetLocalAABBMax();
-                    const glm::mat4& world = node.WorldTransform();
-                    const glm::vec3 corners[] = {
-                        glm::vec3(world * glm::vec4(localMin.x, localMin.y, localMin.z, 1.0f)),
-                        glm::vec3(world * glm::vec4(localMax.x, localMin.y, localMin.z, 1.0f)),
-                        glm::vec3(world * glm::vec4(localMin.x, localMax.y, localMin.z, 1.0f)),
-                        glm::vec3(world * glm::vec4(localMax.x, localMax.y, localMin.z, 1.0f)),
-                        glm::vec3(world * glm::vec4(localMin.x, localMin.y, localMax.z, 1.0f)),
-                        glm::vec3(world * glm::vec4(localMax.x, localMin.y, localMax.z, 1.0f)),
-                        glm::vec3(world * glm::vec4(localMin.x, localMax.y, localMax.z, 1.0f)),
-                        glm::vec3(world * glm::vec4(localMax.x, localMax.y, localMax.z, 1.0f)),
-                    };
-                    for (const glm::vec3& corner : corners)
-                    {
-                        if (!hasBounds)
-                        {
-                            worldMin = corner;
-                            worldMax = corner;
-                            hasBounds = true;
-                        }
-                        else
-                        {
-                            worldMin = glm::min(worldMin, corner);
-                            worldMax = glm::max(worldMax, corner);
-                        }
-                    }
-                }
-            }
-
-            for (const auto& child : node.Children())
-            {
-                if (child)
-                {
-                    AccumulateAnimatedNodeBounds(scene, *child, hasBounds, worldMin, worldMax);
-                }
-            }
-        }
-    }
-
     void Scene::BindNode(Node& node)
     {
         node.scene_ = this;
@@ -448,16 +397,6 @@ namespace Assets
 
                         if (skinnedMesh->IsPlaying())
                         {
-                            bool hasDirtyBounds = false;
-                            glm::vec3 dirtyWorldMin(0.0f);
-                            glm::vec3 dirtyWorldMax(0.0f);
-                            AccumulateAnimatedNodeBounds(*this, *node, hasDirtyBounds,
-                                                        dirtyWorldMin, dirtyWorldMax);
-                            if (hasDirtyBounds)
-                            {
-                                cpuAccelerationStructure_.AccumulateProbeDirtyBounds(
-                                    dirtyWorldMin, dirtyWorldMax);
-                            }
                             MarkDirty();
                             if (auto* renderComponent = node->GetComponent<Runtime::RenderComponent>())
                             {
@@ -505,12 +444,6 @@ namespace Assets
                     Node* node = GetNode(track.NodeName_);
                     if (node)
                     {
-                        bool hasDirtyBounds = false;
-                        glm::vec3 dirtyWorldMin(0.0f);
-                        glm::vec3 dirtyWorldMax(0.0f);
-                        AccumulateAnimatedNodeBounds(*this, *node, hasDirtyBounds,
-                                                    dirtyWorldMin, dirtyWorldMax);
-
                         glm::vec3 translation = node->Translation();
                         glm::quat rotation = node->Rotation();
                         glm::vec3 scaling = node->Scale();
@@ -521,15 +454,6 @@ namespace Assets
                         node->SetRotation(rotation);
                         node->SetScale(scaling);
                         node->RecalcTransform(true);
-
-                        AccumulateAnimatedNodeBounds(*this, *node, hasDirtyBounds,
-                                                    dirtyWorldMin, dirtyWorldMax);
-                        if (hasDirtyBounds)
-                        {
-                            cpuAccelerationStructure_.AccumulateProbeDirtyBounds(
-                                dirtyWorldMin, dirtyWorldMax);
-                        }
-
                         MarkDirty();
 
                         // to physicSys
@@ -538,7 +462,10 @@ namespace Assets
                             if (!n)
                                 return;
                             auto* phys = n->GetComponent<Runtime::PhysicsComponent>();
-                            if (phys)
+                            // Only kinematic bodies are valid MoveKinematic targets. Skipping other
+                            // mobilities here also avoids a blocking CompleteTick per animated node,
+                            // which would serialize the async physics tick.
+                            if (phys && phys->GetMobility() == Runtime::ENodeMobility::Kinematic)
                             {
                                 NextBodyID bodyID = phys->GetPhysicsBody();
                                 if (!bodyID.IsInvalid())
@@ -628,26 +555,6 @@ namespace Assets
             }
         }
 
-        if (enableCpuAcceleration_ && ambientArenaBufferMemory_)
-        {
-            // The ambient grid scale is a live setting, so react on the frame it changes rather than
-            // on the 30-frame voxel cadence below: shading follows the committed grid, which only
-            // moves once the bakers are re-initialized by this full rebake.
-            auto& renderer = NextEngine::GetInstance()->GetRenderer();
-            if (renderer.ActiveRendererRequirements().NeedsVoxelGeometry() &&
-                !renderer.ShouldSkipAmbientCubeUpdates() &&
-                cpuAccelerationStructure_.AmbientGridConfigDiffersFromSettings(
-                    NextEngine::GetInstance()->GetUserSettings(), AmbientCubeCascadeCapacity()))
-            {
-                if (cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), false))
-                {
-                    // Cube radiance was baked against the previous grid; keeping it would smear the
-                    // old scale over the new probe positions until every brick reconverges.
-                    renderer.RequestClearAmbientCubeCache();
-                }
-            }
-        }
-
         if (enableCpuAcceleration_ && NextEngine::GetInstance()->GetTotalFrames() % 30 == 0)
         {
             auto& renderer = NextEngine::GetInstance()->GetRenderer();
@@ -657,21 +564,14 @@ namespace Assets
 
             if (shouldUpdateVoxel && ambientArenaBufferMemory_)
             {
-                const bool voxelUploadCompleted = cpuAccelerationStructure_.Tick(
+                cpuAccelerationStructure_.Tick(
                     *this, ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get());
-
-                if (sceneDirtyForCpuAS_)
-                {
-                    if (cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), true))
-                    {
-                        sceneDirtyForCpuAS_ = false;
-                    }
-                }
             }
-            else if (sceneDirtyForCpuAS_)
+
+            if (cpuBvhDirty_)
             {
                 cpuAccelerationStructure_.RebuildBVHOnly(*this);
-                sceneDirtyForCpuAS_ = false;
+                cpuBvhDirty_ = false;
             }
         }
     }

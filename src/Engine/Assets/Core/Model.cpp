@@ -143,7 +143,12 @@ namespace Assets
             auto& keyNext = Keys[i + 1];
             if (time >= key.Time && time < keyNext.Time)
             {
-                float t = (time - key.Time) / (keyNext.Time - key.Time);
+                const float interval = keyNext.Time - key.Time;
+                if (interval <= 1.0e-8f)
+                {
+                    return keyNext.Value;
+                }
+                float t = (time - key.Time) / interval;
                 return glm::mix(key.Value, keyNext.Value, t);
             }
 
@@ -174,7 +179,12 @@ namespace Assets
             auto& keyNext = Keys[i + 1];
             if (time >= key.Time && time < keyNext.Time)
             {
-                float t = (time - key.Time) / (keyNext.Time - key.Time);
+                const float interval = keyNext.Time - key.Time;
+                if (interval <= 1.0e-8f)
+                {
+                    return keyNext.Value;
+                }
+                float t = (time - key.Time) / interval;
                 return glm::slerp(key.Value, keyNext.Value, t);
             }
 

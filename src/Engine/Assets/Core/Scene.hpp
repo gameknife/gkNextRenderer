@@ -400,7 +400,12 @@ namespace Assets
         std::unordered_map<uint32_t, std::shared_ptr<Node>> nodeByInstanceId_;
         uint32_t nextInstanceId_ = 0;
 
-        bool sceneDirtyForCpuAS_ = false;
+        // Scene edits still rebuild the CPU tinybvh, but they no longer restart the
+        // voxel / distance-field / ambient-cube bake pipeline.
+        bool cpuBvhDirty_ = false;
+        // Set only by Reload(), i.e. a full level transition. Appending content or
+        // ordinary scene edits must not schedule another full probe bake.
+        bool levelVoxelBakePending_ = false;
         bool sceneDirty_ = true;
         bool materialDirty_ = true;
         SceneRebuildProfile lastRebuildProfile_{};

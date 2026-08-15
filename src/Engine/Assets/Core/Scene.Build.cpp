@@ -133,7 +133,8 @@ namespace Assets
         sceneAABBMin_ = glm::vec3(0.0f);
         sceneAABBMax_ = glm::vec3(0.0f);
         sceneDirty_ = true;
-        sceneDirtyForCpuAS_ = true;
+        cpuBvhDirty_ = true;
+        levelVoxelBakePending_ = true;
         materialDirty_ = true;
     }
 
@@ -654,11 +655,17 @@ namespace Assets
         
         MarkDirty();
 
-        if (enableCpuAcceleration_ && ambientArenaBufferMemory_ &&
-            (!NextEngine::GetInstance() ||
-             NextEngine::GetInstance()->GetRenderer().ActiveRendererRequirements().requestAmbientCube))
+        if (levelVoxelBakePending_)
         {
-            cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), false);
+            // Consume the transition here even when the active renderer does not need ambient
+            // data. A later Append()/GPU refresh must never turn that old transition into a bake.
+            levelVoxelBakePending_ = false;
+            if (enableCpuAcceleration_ && ambientArenaBufferMemory_ &&
+                (!NextEngine::GetInstance() ||
+                 NextEngine::GetInstance()->GetRenderer().ActiveRendererRequirements().requestAmbientCube))
+            {
+                cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get());
+            }
         }
 
         const auto rebuildEnd = Clock::now();

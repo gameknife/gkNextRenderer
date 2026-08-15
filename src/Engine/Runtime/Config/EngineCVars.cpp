@@ -113,9 +113,8 @@ namespace NextCVar
         GK_CVAR_FLOAT("sys.ldrawLduToWorldScale", settings, LDrawLduToWorldScale, 0.02f, ECVarFlags::Archive, "World-space units represented by one LDraw LDU when loading .ldr/.mpd scenes");
         GK_CVAR_FLOAT("sys.scadToWorldScale", settings, ScadToWorldScale, 1.0f, ECVarFlags::Archive, "Uniform world scale applied when loading .scad scenes (1 unit -> N meters)");
         GK_CVAR_FLOAT("sys.sceneEpsilonScale", settings, SceneEpsilonScale, 1.0f, ECVarFlags::Archive, "Scene epsilon scale");
-        // The grid geometry below is live: changing it re-initializes the CPU cascade bakers and
-        // triggers a full re-voxelization plus ambient re-bake. Shading only follows the new grid
-        // once the bakers have adopted it, so no frame is shaded against mismatched voxel data.
+        // The grid geometry below is applied by the next level load. Runtime changes do not restart
+        // voxelization, distance-field generation, or ambient-cube baking for the current scene.
         GK_CVAR_FLOAT_RANGE("sys.ambientCubeUnit", settings, AmbientCubeUnit, 0.25f, ECVarFlags::Archive, "Cascade 0 ambient cube / voxel size in world units; smaller resolves finer detail over a proportionally smaller volume", 0.02, 2.0);
         GK_CVAR_FLOAT("sys.ambientCubeOffsetX", settings, AmbientCubeOffsetX, 0.0f, ECVarFlags::Archive, "Ambient cube offset X in world units");
         GK_CVAR_FLOAT("sys.ambientCubeOffsetY", settings, AmbientCubeOffsetY, 0.0f, ECVarFlags::Archive, "Ambient cube offset Y in world units");
