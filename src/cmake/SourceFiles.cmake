@@ -67,6 +67,9 @@ file(GLOB_RECURSE src_files_nextgameplay CONFIGURE_DEPENDS
 
 # --- Optional Engine Modules (src/Modules/<Name>, one static library each) ---
 set(GK_MODULE_NAMES GltfLoader LDrawLoader ScadLoader SplatLoader NextAI NextAudio NextPhysics NextRemote NextRmlUi DevTools LiveCoding RenderViews NextStreamline NextFidelityFX NextTemporalUpscaler SceneExport)
+if(GK_ENABLE_VITURE)
+    list(APPEND GK_MODULE_NAMES NextViture)
+endif()
 if(GK_WITH_TUI AND NOT (ANDROID OR IOS))
     list(APPEND GK_MODULE_NAMES NextTui)
 endif()

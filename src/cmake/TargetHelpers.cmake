@@ -93,6 +93,7 @@ function(gk_apply_target_defaults target)
         GK_WITH_TUI=$<BOOL:${GK_WITH_TUI}>
         GK_WITH_RMLUI=1
         GK_WITH_REMOTE=$<BOOL:${GK_REMOTE_ENABLED}>
+        GK_WITH_VITURE=$<BOOL:${GK_ENABLE_VITURE}>
     )
 
     if(WIN32)
@@ -203,6 +204,31 @@ function(gk_target_runtime_modules target)
             message(FATAL_ERROR "Runtime module target '${module}' is unavailable for '${target}'")
         endif()
         set_property(TARGET ${target} APPEND PROPERTY GK_RUNTIME_MODULES "${module}")
+
+        if(module STREQUAL "NextViture")
+            if(NOT TARGET gkNextVitureRuntime)
+                set(gkVitureRuntimeGlasses "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/libglasses.dylib")
+                set(gkVitureRuntimeVio "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/libcarina_vio.dylib")
+                add_custom_command(
+                    OUTPUT "${gkVitureRuntimeGlasses}" "${gkVitureRuntimeVio}"
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${GK_VITURE_SDK_LIBRARY}" "${gkVitureRuntimeGlasses}"
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${GK_VITURE_VIO_LIBRARY}" "${gkVitureRuntimeVio}"
+                    # The SDK's libglasses.dylib currently carries an invalid
+                    # embedded signature. macOS rejects it only once --ar causes
+                    # dyld to load it, so repair the copied development runtime.
+                    COMMAND "${GK_VITURE_CODESIGN_EXECUTABLE}" --force --sign - "${gkVitureRuntimeGlasses}"
+                    DEPENDS "${GK_VITURE_ARCHIVE}" "${GK_VITURE_SDK_LIBRARY}" "${GK_VITURE_VIO_LIBRARY}"
+                    COMMENT "Preparing VITURE XR runtime"
+                    VERBATIM
+                )
+                add_custom_target(gkNextVitureRuntime DEPENDS
+                    "${gkVitureRuntimeGlasses}" "${gkVitureRuntimeVio}")
+                set_target_properties(gkNextVitureRuntime PROPERTIES FOLDER "Modules")
+            endif()
+            add_dependencies(${target} gkNextVitureRuntime)
+        endif()
     endforeach()
 endfunction()
 

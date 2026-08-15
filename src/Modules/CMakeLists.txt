@@ -151,6 +151,11 @@ if(TARGET NextFidelityFX)
     endif()
 endif()
 
+if(TARGET NextViture)
+    target_include_directories(NextViture PRIVATE "${GK_VITURE_SDK_INCLUDE_DIR}")
+    target_link_libraries(NextViture PRIVATE "${GK_VITURE_SDK_LIBRARY}" "-framework IOKit")
+endif()
+
 if(TARGET NextRemote)
     if(TARGET RenderViews)
         target_link_libraries(NextRemote PRIVATE RenderViews)

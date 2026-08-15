@@ -7,6 +7,9 @@
 #include "Gameplay/Camera/ModelViewController.hpp"
 #include "Core/EditorSettings.hpp"
 #include "Core/EditorUiState.hpp"
+#if GK_WITH_VITURE
+#include "Modules/NextViture/VitureModule.hpp"
+#endif
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -31,7 +34,7 @@ public:
     // overrides
     void OnInit() override;
     void OnTick(double deltaSeconds) override;
-    void OnDestroy() override {};
+    void OnDestroy() override;
 
     void OnSceneLoaded() override;
 
@@ -87,6 +90,9 @@ private:
     void SetActiveInputViewport(EViewportInputTarget target);
     bool IsMouseInRect(const glm::vec2& mousePos, const glm::vec2& rectPos, const glm::vec2& rectSize) const;
     void UpdateControllerContext(Runtime::Camera::ModelViewController& controller);
+#if GK_WITH_VITURE
+    bool UpdateArTracking(double deltaSeconds);
+#endif
     void RayCastFromViewport(EViewportInputTarget target, const glm::vec2& mousePos,
                              std::function<bool(Assets::RayCastResult)> callback);
 
@@ -94,6 +100,10 @@ private:
 
     std::unique_ptr<EditorInterface> editorUserInterface_;
     Runtime::Camera::ModelViewController modelViewController_;
+#if GK_WITH_VITURE
+    std::unique_ptr<Modules::Viture::IHeadPoseTracker> headPoseTracker_;
+    Modules::Viture::FHeadTrackingCamera arCamera_;
+#endif
     std::array<Runtime::Camera::ModelViewController, Editor::kMaxCameraViewports> cameraViewControllers_;
     EViewportInputTarget activeInputViewport_ = EViewportInputTarget::Scene;
     std::optional<EViewportInputTarget> capturedInputViewport_{};

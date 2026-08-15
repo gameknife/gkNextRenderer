@@ -204,8 +204,9 @@ void TextureImage::UpdateDataMainThread(
             &region);
     });
 
-    // Transition the image back to shader-read-only layout after the copy.
-    image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_GENERAL);
+    // This API updates sampled textures. Keep its declared image layout in sync
+    // with the bindless sampled descriptor after every upload.
+    image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     // Release temporary resources.
     stagingBuffer.reset();

@@ -26,6 +26,7 @@ const (
 	// wrapperDirName keeps the Designed-for-iPad wrappers beside the raw bundle
 	// without colliding with the CMake output layout.
 	wrapperDirName = "DesignedForIpad"
+	lsregisterPath = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 )
 
 // StagedApp locates the Designed-for-iPad app prepared for launch. An empty
@@ -266,6 +267,17 @@ func verifyCodeSignature(bundlePath string) error {
 // the iOS platform identity the kernel checks when it spawns the executable.
 // Launching the bare bundle instead gets the process killed (SIGKILL, code 9).
 func launchWrapper(wrapperPath string) error {
+	// Refresh the Launch Services record first. The wrapper directory is reused
+	// across builds, so Launch Services keeps serving the bundle identifier it
+	// first saw at this path. When a rebuild changes the identifier, that stale
+	// record makes the kernel spawn the app under the previous identity, and
+	// AMFI rejects it: "Launch Constraint Violation", surfaced as a launchd
+	// spawn failure (POSIX 162) with a valid signature and profile.
+	//
+	// Best effort: when the record is already correct this changes nothing, and
+	// a registration failure should not block a launch that would succeed.
+	_ = exec.Command(lsregisterPath, "-f", wrapperPath).Run()
+
 	output, err := exec.Command("open", wrapperPath).CombinedOutput()
 	if err == nil {
 		return nil

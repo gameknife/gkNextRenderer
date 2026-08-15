@@ -9,6 +9,10 @@ endif()
 include(cmake/SetupPlatform.cmake)
 include(cmake/ProjectOptions.cmake)
 
+# The optional VITURE SDK is activated only when its official archive is
+# deliberately placed under external/viture/.
+include(cmake/SetupViture.cmake)
+
 option(ENABLE_AVIF "Enable AVIF support" OFF)
 set(WITH_AVIF ${ENABLE_AVIF})
 

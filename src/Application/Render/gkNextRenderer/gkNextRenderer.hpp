@@ -4,6 +4,9 @@
 #include "Engine/Runtime/ScreenShotService.hpp"
 #include "Modules/DevTools/GizmoController.hpp"
 #include "Gameplay/Camera/ModelViewController.hpp"
+#if GK_WITH_VITURE
+#include "Modules/NextViture/VitureModule.hpp"
+#endif
 
 class NextRendererGameInstance : public NextGameInstanceBase
 {
@@ -14,7 +17,7 @@ public:
     // overrides
     void OnInit() override;
     void OnTick(double deltaSeconds) override;
-    void OnDestroy() override {};
+    void OnDestroy() override;
 
     void BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights,
                        std::vector<Assets::AnimationTrack>& tracks) override;
@@ -86,7 +89,14 @@ private:
     void RequestScreenshot(bool openFolder, const std::string& tag);
     void DrawVideoCaptureMenuItems();
     void RequestThreeSecondVideo(Runtime::FScreenShotService::EVideoOutputScale outputScale);
+#if GK_WITH_VITURE
+    bool UpdateArTracking(double deltaSeconds);
+#endif
     Runtime::Camera::ModelViewController modelViewController_;
+#if GK_WITH_VITURE
+    std::unique_ptr<Modules::Viture::IHeadPoseTracker> headPoseTracker_;
+    Modules::Viture::FHeadTrackingCamera arCamera_;
+#endif
 
     FRendererUiState mainUiState_;
     std::unordered_map<std::string, FRendererUiState> remoteUiStates_;

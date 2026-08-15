@@ -42,6 +42,9 @@
 #include "Engine/Vulkan/Device.hpp"
 #include "Modules/LDrawLoader/LDrawModule.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
+#if GK_WITH_VITURE
+#include "Modules/NextViture/VitureModule.hpp"
+#endif
 #include "Application/Common/DemoScenes.hpp"
 
 
@@ -189,20 +192,60 @@ void NextRendererGameInstance::OnInit()
     }
 
     GetEngine().RequestLoadScene({.filename = initializedScene});
+
+#if GK_WITH_VITURE
+    if (GOption != nullptr && GOption->ArMode)
+    {
+        headPoseTracker_ = Modules::Viture::CreateHeadPoseTracker(GOption->ArDof == 6);
+        if (!headPoseTracker_->Start())
+        {
+            SPDLOG_ERROR("AR mode could not start {}: {}", headPoseTracker_->Name(), headPoseTracker_->Status());
+            headPoseTracker_.reset();
+        }
+    }
+#endif
 }
 
 void NextRendererGameInstance::OnTick(double deltaSeconds)
 {
+    bool arMoving = false;
+#if GK_WITH_VITURE
+    arMoving = UpdateArTracking(deltaSeconds);
+#endif
     if (playbackPaused_ && !stepRequested_)
     {
-        GetEngine().SetProgressiveRendering(GetEngine().GetUserSettings().ProgressiveRender);
+        GetEngine().SetProgressiveRendering(GetEngine().GetUserSettings().ProgressiveRender && !arMoving);
         return;
     }
 
-    const bool moving = modelViewController_.UpdateCamera(10.0f, deltaSeconds);
+    const bool moving = modelViewController_.UpdateCamera(10.0f, deltaSeconds) || arMoving;
     GetEngine().SetProgressiveRendering(GetEngine().GetUserSettings().ProgressiveRender && !moving);
     stepRequested_ = false;
 }
+
+void NextRendererGameInstance::OnDestroy()
+{
+#if GK_WITH_VITURE
+    if (headPoseTracker_)
+    {
+        headPoseTracker_->Stop();
+    }
+#endif
+}
+
+#if GK_WITH_VITURE
+bool NextRendererGameInstance::UpdateArTracking(const double deltaSeconds)
+{
+    if (!headPoseTracker_)
+    {
+        return false;
+    }
+
+    const std::optional<Modules::Viture::FHeadPose> pose = headPoseTracker_->PollPose();
+    const float smoothingHz = GOption != nullptr ? GOption->ArSmoothingHz : 30.0f;
+    return pose.has_value() && arCamera_.Update(*pose, deltaSeconds, smoothingHz);
+}
+#endif
 
 std::vector<Assets::FMaterial> MatPreparedForAdd;
 
@@ -539,6 +582,13 @@ bool NextRendererGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCam
 {
     outRenderCamera.ModelView = modelViewController_.ModelView();
     outRenderCamera.FieldOfView = modelViewController_.FieldOfView();
+#if GK_WITH_VITURE
+    if (headPoseTracker_ && GOption != nullptr)
+    {
+        outRenderCamera.ModelView = arCamera_.BuildModelView(
+            outRenderCamera.ModelView, GOption->ArWorldUnitsPerMeter);
+    }
+#endif
     return true;
 }
 
@@ -554,6 +604,14 @@ bool NextRendererGameInstance::OnKey(SDL_Event& event)
 
     if (event.key.type == SDL_EVENT_KEY_DOWN)
     {
+#if GK_WITH_VITURE
+        if (event.key.key == SDLK_R && headPoseTracker_ && arCamera_.Recenter())
+        {
+            SPDLOG_INFO("VITURE AR: tracking origin recentered");
+            return true;
+        }
+#endif
+
         switch (event.key.key)
         {
         case SDLK_ESCAPE:

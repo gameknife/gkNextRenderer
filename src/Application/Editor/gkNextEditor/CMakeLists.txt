@@ -10,7 +10,7 @@ add_executable(gkNextEditor
     ${GK_APPLICATION_COMMON_SOURCES}
     ${GK_DESKTOP_MAIN_SOURCE}
 )
-gk_configure_application(gkNextEditor MODULES
+set(gkNextEditorModules
     ${GK_STANDARD_RUNTIME_MODULES}
     LDrawLoader
     ScadLoader
@@ -18,6 +18,10 @@ gk_configure_application(gkNextEditor MODULES
     RenderViews
     SceneExport
 )
+if(GK_ENABLE_VITURE)
+    list(APPEND gkNextEditorModules NextViture)
+endif()
+gk_configure_application(gkNextEditor MODULES ${gkNextEditorModules})
 target_link_libraries(gkNextEditor PRIVATE NextGameplay)
 
 set_source_files_properties(

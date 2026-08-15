@@ -35,6 +35,12 @@ Options::Options(const int argc, const char* argv[])
         ("width", "Framebuffer width in pixels.", cxxopts::value<uint32_t>(Width)->default_value("1920"))
         ("height", "Framebuffer height in pixels.", cxxopts::value<uint32_t>(Height)->default_value("1080"))
         ("fullscreen", "Start borderless fullscreen instead of windowed.", cxxopts::value<bool>(Fullscreen)->default_value("false"))
+#if GK_WITH_VITURE
+        ("ar", "Enable VITURE AR head tracking.", cxxopts::value<bool>(ArMode)->default_value("false")->implicit_value("true"))
+        ("ar-world-units-per-meter", "World-unit scale applied to tracked physical translation.", cxxopts::value<float>(ArWorldUnitsPerMeter)->default_value("1.0"))
+        ("ar-smoothing-hz", "AR pose low-pass smoothing frequency in Hz (0 disables smoothing).", cxxopts::value<float>(ArSmoothingHz)->default_value("30.0"))
+        ("ar-dof", "VITURE Carina tracking mode: 3 or 6 (default: 6).", cxxopts::value<uint32_t>(ArDof)->default_value("6"))
+#endif
         ("present-mode", "Presentation mode (0 = Immediate, 1 = MailBox, 2 = FIFO, 3 = FIFO relaxed).", cxxopts::value<uint32_t>(PresentMode)->default_value("2"))
         ("forcesdr", "Force SDR output even when the display supports HDR.", cxxopts::value<bool>(ForceSDR)->default_value("false"))
         ("system-dpi-scaling", "Use legacy Windows bitmap DPI scaling instead of engine-native DPI scaling.",
@@ -223,6 +229,13 @@ Options::Options(const int argc, const char* argv[])
         {
             Throw(std::out_of_range("Invalid present mode."));
         }
+
+#if GK_WITH_VITURE
+        if (ArDof != 3 && ArDof != 6)
+        {
+            Throw(std::out_of_range("Invalid --ar-dof. Expected 3 or 6."));
+        }
+#endif
     }
     catch (const cxxopts::exceptions::exception& e)
     {

@@ -36,6 +36,12 @@ public:
     bool FastExit{true};
     bool AgentValidation{};
     bool AgentVisibleWindow{};
+#if GK_WITH_VITURE
+    bool ArMode{};
+    float ArWorldUnitsPerMeter{1.0f};
+    float ArSmoothingHz{30.0f};
+    uint32_t ArDof{6};
+#endif
     std::string AgentControl;
     std::string AgentControlToken;
     bool HiddenWindow{};

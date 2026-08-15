@@ -730,12 +730,17 @@ bool NextEngine::Tick(bool forcingDelta)
         {
             const auto prevTime = frameState_.time;
             double currentTime = GetWindow().GetTime();
-            if (!forcingDelta && window_ && window_->IsMinimized())
+            double minimumTickInterval = 0.0;
+            if (window_ && window_->IsMinimized())
+            {
+                minimumTickInterval = minimizedTickIntervalSeconds;
+            }
+            if (!forcingDelta && minimumTickInterval > 0.0)
             {
                 const double elapsed = currentTime - prevTime;
-                if (elapsed < minimizedTickIntervalSeconds)
+                if (elapsed < minimumTickInterval)
                 {
-                    const double remainingSeconds = minimizedTickIntervalSeconds - std::max(0.0, elapsed);
+                    const double remainingSeconds = minimumTickInterval - std::max(0.0, elapsed);
                     const auto delayMilliseconds = static_cast<Uint32>(std::max(
                         1.0, std::ceil(remainingSeconds * 1000.0)));
                     SDL_Delay(delayMilliseconds);

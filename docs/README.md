@@ -38,6 +38,7 @@
 - [SCAD Terrain 使用速查](AGENT_GUIDE/ScadTerrain.md)
 - [Soft Mesh Shader GPU-Driven 提交路径](guides/soft-mesh-shader-gpu-driven-submit.md)
 - [TUI 终端模式](guides/tui-mode.md)
+- [VITURE Carina AR（可选模块）](guides/viture-ar.md)
 
 ## Designs（当前架构）
 

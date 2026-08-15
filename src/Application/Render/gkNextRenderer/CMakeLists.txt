@@ -10,6 +10,9 @@ set(gkNextRendererModules
     ScadLoader
     SplatLoader
 )
+if(GK_ENABLE_VITURE)
+    list(APPEND gkNextRendererModules NextViture)
+endif()
 
 if(ANDROID)
     add_library(gkNextRenderer SHARED
@@ -51,7 +54,14 @@ endif()
 if(IOS)
     # Single source of truth: the target property and the gnb manifest below must
     # agree, otherwise `gnb ios run` reports an identifier the bundle never had.
-    set(GK_IOS_BUNDLE_ID "com.tzy.gknext" CACHE STRING
+    #
+    # Do not go back to com.tzy.gknext. That identifier was previously shipped
+    # from another checkout signed by a different Apple team, and macOS records
+    # the identity a bundle identifier is expected to carry. Re-signing it with
+    # this team trips an AMFI launch constraint, and the app is refused at spawn
+    # ("Launch Constraint Violation", launchd job spawn failed, POSIX 162) even
+    # though the signature and provisioning profile are perfectly valid.
+    set(GK_IOS_BUNDLE_ID "gknext.renderer" CACHE STRING
         "Bundle identifier for the iOS app; must match an installed provisioning profile")
 
     set_target_properties(gkNextRenderer PROPERTIES

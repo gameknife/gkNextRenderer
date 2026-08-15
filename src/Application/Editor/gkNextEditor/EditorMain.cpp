@@ -24,6 +24,9 @@
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Modules/LDrawLoader/LDrawModule.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
+#if GK_WITH_VITURE
+#include "Modules/NextViture/VitureModule.hpp"
+#endif
 #include "Application/Common/DemoScenes.hpp"
 #include "Application/Editor/Common/MultiViewportBackend.hpp"
 
@@ -234,12 +237,27 @@ void EditorGameInstance::OnInit()
         GetEngine().RequestLoadScene({.filename = startupScene});
         GetEditorInterface().GetEditorUiState().currentScenePath = startupScene;
     }
+
+#if GK_WITH_VITURE
+    if (GOption != nullptr && GOption->ArMode)
+    {
+        headPoseTracker_ = Modules::Viture::CreateHeadPoseTracker(GOption->ArDof == 6);
+        if (!headPoseTracker_->Start())
+        {
+            SPDLOG_ERROR("AR mode could not start {}: {}", headPoseTracker_->Name(), headPoseTracker_->Status());
+            headPoseTracker_.reset();
+        }
+    }
+#endif
 }
 
 void EditorGameInstance::OnTick(double deltaSeconds)
 {
     const bool progressiveEnabled = GetEngine().GetUserSettings().ProgressiveRender;
     bool moving = modelViewController_.UpdateCamera(1.0f, deltaSeconds);
+#if GK_WITH_VITURE
+    moving |= UpdateArTracking(deltaSeconds);
+#endif
     for (auto& cameraViewController : cameraViewControllers_)
     {
         moving |= cameraViewController.UpdateCamera(1.0f, deltaSeconds);
@@ -270,6 +288,30 @@ void EditorGameInstance::OnTick(double deltaSeconds)
 
     GetEngine().SetProgressiveRendering(progressiveEnabled);
 }
+
+void EditorGameInstance::OnDestroy()
+{
+#if GK_WITH_VITURE
+    if (headPoseTracker_)
+    {
+        headPoseTracker_->Stop();
+    }
+#endif
+}
+
+#if GK_WITH_VITURE
+bool EditorGameInstance::UpdateArTracking(const double deltaSeconds)
+{
+    if (!headPoseTracker_)
+    {
+        return false;
+    }
+
+    const std::optional<Modules::Viture::FHeadPose> pose = headPoseTracker_->PollPose();
+    const float smoothingHz = GOption != nullptr ? GOption->ArSmoothingHz : 30.0f;
+    return pose.has_value() && arCamera_.Update(*pose, deltaSeconds, smoothingHz);
+}
+#endif
 
 void EditorGameInstance::OnSceneLoaded()
 {
@@ -341,6 +383,14 @@ void EditorGameInstance::OnRemoteUiSessionClosed(std::string_view sessionId)
 
 bool EditorGameInstance::OnKey(SDL_Event& event)
 {
+#if GK_WITH_VITURE
+    if (event.key.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_R && headPoseTracker_ && arCamera_.Recenter())
+    {
+        SPDLOG_INFO("VITURE AR: tracking origin recentered");
+        return true;
+    }
+#endif
+
     // WASDQE camera movement (only active when right mouse is pressed)
     ControllerForViewport(ActiveViewportFromUi()).OnKey(event);
 
@@ -719,6 +769,12 @@ Assets::Camera EditorGameInstance::BuildSceneViewportCamera() const
     Assets::Camera camera = GetEngine().GetScene().GetRenderCamera();
     camera.ModelView = modelViewController_.ModelView();
     camera.FieldOfView = modelViewController_.FieldOfView();
+#if GK_WITH_VITURE
+    if (headPoseTracker_ && GOption != nullptr)
+    {
+        camera.ModelView = arCamera_.BuildModelView(camera.ModelView, GOption->ArWorldUnitsPerMeter);
+    }
+#endif
     return camera;
 }
 
