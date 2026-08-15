@@ -41,6 +41,8 @@
 
 ## Designs（当前架构）
 
+- [用 C# 开发应用](AGENT_GUIDE/CSharpGameDevelopment.md)（现行；面向 Unity 背景的上手指南，
+  以 FlappyCSharp 为样例）
 - [.NET 脚本运行时架构](designs/dotnet-scripting-design.md)（现行；C# 脚本运行时已完整落地——
   双后端、绑定表 codegen、反射组件 wrapper，Flappy 在两种后端下 parity 通过。日常用法见
   [.NET Bindings](AGENT_GUIDE/DotNetBindings.md)）

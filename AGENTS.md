@@ -251,7 +251,10 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
   build under both backends. Run it when touching the ABI, the hosts, or the managed layer.
 - `gnb dotnet setup|status|build|probe` drive the toolchain; `DotNetSandbox` is the reference host
 - Write a game by deriving from `NextGameInstance` and marking it `[GameInstance]`; a source
-  generator emits the entry point, and a missing/duplicate/invalid one is a compile error
+  generator emits the entry point, and a missing/duplicate/invalid one is a compile error.
+  `docs/AGENT_GUIDE/CSharpGameDevelopment.md` is the getting-started guide; `FlappyCSharp` is its
+  worked example. Every app still needs a ~90-line C++ shell that installs the module and forwards
+  the lifecycle hooks — a hook the shell does not forward silently never reaches C#.
 - An application gets its C# through `gk_dotnet_managed_game(<target> PROJECT <csproj> DIR <dir>)`;
   a target that links the module without hosting C# calls `gk_dotnet_stub_game(<target>)` instead
 - `FlappyCpp` vs `FlappyCSharp` replay parity is the binding regression — see
@@ -307,6 +310,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
   - `core-patterns.md` / `contextual-rules.md` / `coding-standards.md` / `quick-commands.md` - General rules
   - `ReflectionSystem.md` - entt::meta reflection (editor UI + generated C# wrappers)
   - `DotNetBindings.md` - C# binding surface: adding a function vs exposing a property
+  - `CSharpGameDevelopment.md` - Writing an application in C# (start here for a new C# game)
   - `HotReload.md` - Shader/script hot reload mechanics
   - `LDrawLoader.md` - LDraw model loading (used by MagicaLego/BrickPlayer)
   - `SCADLoader.md` - OpenSCAD (.scad) DSL loading (parser/evaluator/CSG via Manifold/text via FreeType)

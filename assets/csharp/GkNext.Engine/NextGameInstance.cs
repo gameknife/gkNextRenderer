@@ -55,7 +55,35 @@ public abstract class NextGameInstance : IGameModule
     // --- IGameModule plumbing ---------------------------------------------------------------
     // Sealed: a game overrides the named hooks above, not the ABI-shaped ones.
 
-    void IGameModule.Initialize() => OnInit();
+    // Init and destroy each arrive twice: the host raises Initialize()/Shutdown() around loading
+    // and unloading the assembly, and the native game instance separately forwards its own
+    // OnInit/OnDestroy through CallLifecycleHook. Collapsing them here is deliberate — the
+    // alternative is every game writing its own idempotence, and a game that forgets loads its
+    // config twice and only notices when something is not idempotent.
+    private bool initialized;
+    private bool destroyed;
+
+    private void RaiseInit()
+    {
+        if (initialized)
+        {
+            return;
+        }
+        initialized = true;
+        OnInit();
+    }
+
+    private void RaiseDestroy()
+    {
+        if (destroyed || !initialized)
+        {
+            return;
+        }
+        destroyed = true;
+        OnDestroy();
+    }
+
+    void IGameModule.Initialize() => RaiseInit();
 
     void IGameModule.Tick(double deltaSeconds)
     {
@@ -69,10 +97,10 @@ public abstract class NextGameInstance : IGameModule
         switch (hook)
         {
             case ScriptHook.OnInit:
-                OnInit();
+                RaiseInit();
                 return false;
             case ScriptHook.OnDestroy:
-                OnDestroy();
+                RaiseDestroy();
                 return false;
             case ScriptHook.BeforeSceneRebuild:
                 BeforeSceneRebuild();
@@ -91,7 +119,7 @@ public abstract class NextGameInstance : IGameModule
 
     bool IGameModule.OverrideCamera(ref CameraOverride camera) => OnOverrideCamera(ref camera);
 
-    void IGameModule.Shutdown() => OnDestroy();
+    void IGameModule.Shutdown() => RaiseDestroy();
 }
 
 /// <summary>

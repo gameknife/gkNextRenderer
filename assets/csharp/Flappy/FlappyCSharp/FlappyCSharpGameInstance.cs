@@ -14,8 +14,8 @@ namespace Flappy;
 /// wrong order — shows up as a different score or death frame, which the trace comparison catches.
 /// Making the C# "nicer" than the C++ would throw that away.
 ///
-/// Parallax layers are the one deliberate omission: they move backdrop nodes and never touch the
-/// simulation, so they cannot affect parity.
+/// It is also the worked example behind docs/AGENT_GUIDE/CSharpGameDevelopment.md, so it covers
+/// every hook a game actually uses rather than only the ones parity needs.
 /// </remarks>
 [GameInstance]
 public sealed class FlappyCSharpGameInstance : NextGameInstance

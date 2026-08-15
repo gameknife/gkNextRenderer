@@ -100,6 +100,7 @@ gnb dotnet ci           # 上面这条 + 双后端探针 + CoreCLR/AOT 两次引
 
 ## 相关文档
 
+- [用 C# 开发应用](CSharpGameDevelopment.md) —— 反过来的视角：怎么**用**这些绑定写游戏
 - [反射系统](ReflectionSystem.md) —— entt::meta 注册方式与编辑器侧消费者
 - [.NET 脚本运行时架构](../designs/dotnet-scripting-design.md) —— 为什么是这个形状（双后端、
   单一 ABI 入口、类型规则的由来）
