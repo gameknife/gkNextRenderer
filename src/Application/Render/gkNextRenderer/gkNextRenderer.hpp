@@ -30,6 +30,11 @@ public:
     void OnInitUI() override;
     void OnRemoteUiSessionClosed(std::string_view sessionId) override;
 
+#if GK_WITH_VITURE
+    bool HasVitureDebugPanel() const { return headPoseTracker_ != nullptr; }
+    bool& GetVitureDebugPanelVisible() { return vitureDebugPanelVisible_; }
+#endif
+
     bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const override;
     float GetGraphicsDebugPanelTopOffset() const override;
     bool OnKey(SDL_Event& event) override;
@@ -91,11 +96,14 @@ private:
     void RequestThreeSecondVideo(Runtime::FScreenShotService::EVideoOutputScale outputScale);
 #if GK_WITH_VITURE
     bool UpdateArTracking(double deltaSeconds);
+    void DrawVitureDebugPanel();
 #endif
     Runtime::Camera::ModelViewController modelViewController_;
 #if GK_WITH_VITURE
     std::unique_ptr<Modules::Viture::IHeadPoseTracker> headPoseTracker_;
     Modules::Viture::FHeadTrackingCamera arCamera_;
+    std::optional<Modules::Viture::FHeadPose> latestArPose_;
+    bool vitureDebugPanelVisible_ = true;
 #endif
 
     FRendererUiState mainUiState_;

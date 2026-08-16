@@ -1,6 +1,7 @@
 #include "Engine/Options.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include <cxxopts.hpp>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
 
@@ -38,7 +39,8 @@ Options::Options(const int argc, const char* argv[])
 #if GK_WITH_VITURE
         ("ar", "Enable VITURE AR head tracking.", cxxopts::value<bool>(ArMode)->default_value("false")->implicit_value("true"))
         ("ar-world-units-per-meter", "World-unit scale applied to tracked physical translation.", cxxopts::value<float>(ArWorldUnitsPerMeter)->default_value("1.0"))
-        ("ar-smoothing-hz", "AR pose low-pass smoothing frequency in Hz (0 disables smoothing).", cxxopts::value<float>(ArSmoothingHz)->default_value("30.0"))
+        ("ar-prediction-ms", "VITURE pose prediction horizon in milliseconds (default: 20.0).", cxxopts::value<float>(ArPredictionMs)->default_value("20.0"))
+        ("ar-smoothing-hz", "AR pose low-pass smoothing frequency in Hz (0 disables smoothing; default: 0).", cxxopts::value<float>(ArSmoothingHz)->default_value("0.0"))
         ("ar-dof", "VITURE Carina tracking mode: 3 or 6 (default: 6).", cxxopts::value<uint32_t>(ArDof)->default_value("6"))
 #endif
         ("present-mode", "Presentation mode (0 = Immediate, 1 = MailBox, 2 = FIFO, 3 = FIFO relaxed).", cxxopts::value<uint32_t>(PresentMode)->default_value("2"))
@@ -231,6 +233,14 @@ Options::Options(const int argc, const char* argv[])
         }
 
 #if GK_WITH_VITURE
+        if (!std::isfinite(ArPredictionMs) || ArPredictionMs < 0.0f || ArPredictionMs > 100.0f)
+        {
+            Throw(std::out_of_range("Invalid --ar-prediction-ms. Expected a value from 0 to 100."));
+        }
+        if (!std::isfinite(ArSmoothingHz) || ArSmoothingHz < 0.0f || ArSmoothingHz > 240.0f)
+        {
+            Throw(std::out_of_range("Invalid --ar-smoothing-hz. Expected a value from 0 to 240."));
+        }
         if (ArDof != 3 && ArDof != 6)
         {
             Throw(std::out_of_range("Invalid --ar-dof. Expected 3 or 6."));

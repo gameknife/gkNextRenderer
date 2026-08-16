@@ -25,6 +25,7 @@
 #include "Modules/LDrawLoader/LDrawModule.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
 #if GK_WITH_VITURE
+#include "Modules/DevTools/VitureDebugPanel.hpp"
 #include "Modules/NextViture/VitureModule.hpp"
 #endif
 #include "Application/Common/DemoScenes.hpp"
@@ -240,11 +241,11 @@ void EditorGameInstance::OnInit()
 #if GK_WITH_VITURE
     if (GOption != nullptr && GOption->ArMode)
     {
-        headPoseTracker_ = Modules::Viture::CreateHeadPoseTracker(GOption->ArDof == 6);
+        headPoseTracker_ = Modules::Viture::CreateHeadPoseTracker(
+            GOption->ArDof == 6, static_cast<double>(GOption->ArPredictionMs) * 0.001);
         if (!headPoseTracker_->Start())
         {
             SPDLOG_ERROR("AR mode could not start {}: {}", headPoseTracker_->Name(), headPoseTracker_->Status());
-            headPoseTracker_.reset();
         }
     }
 #endif
@@ -307,8 +308,47 @@ bool EditorGameInstance::UpdateArTracking(const double deltaSeconds)
     }
 
     const std::optional<Modules::Viture::FHeadPose> pose = headPoseTracker_->PollPose();
-    const float smoothingHz = GOption != nullptr ? GOption->ArSmoothingHz : 30.0f;
+    latestArPose_ = pose;
+    const float smoothingHz = GOption != nullptr ? GOption->ArSmoothingHz : 0.0f;
     return pose.has_value() && arCamera_.Update(*pose, deltaSeconds, smoothingHz);
+}
+
+void EditorGameInstance::DrawVitureDebugPanel()
+{
+    if (!headPoseTracker_)
+    {
+        return;
+    }
+
+    const float worldUnitsPerMeter = GOption != nullptr ? GOption->ArWorldUnitsPerMeter : 1.0f;
+    const float predictionMs = GOption != nullptr ? GOption->ArPredictionMs : 20.0f;
+    const float smoothingHz = GOption != nullptr ? GOption->ArSmoothingHz : 0.0f;
+    DevTools::FVitureDebugPanelData data{};
+    data.tracker = headPoseTracker_.get();
+    data.pose = latestArPose_.has_value() ? &latestArPose_.value() : nullptr;
+    const std::optional<glm::quat> relativeOrientation = arCamera_.RelativeOrientation();
+    const std::optional<glm::vec3> cameraEulerDegrees = latestArPose_.has_value() && relativeOrientation.has_value()
+        ? std::optional<glm::vec3>(glm::degrees(glm::eulerAngles(*relativeOrientation)))
+        : std::nullopt;
+    data.cameraEulerDegrees = cameraEulerDegrees.has_value() ? &cameraEulerDegrees.value() : nullptr;
+    data.sixDof = GOption == nullptr || GOption->ArDof == 6;
+    data.worldUnitsPerMeter = worldUnitsPerMeter;
+    data.predictionMs = predictionMs;
+    data.pollHz = 25.0f;
+    data.smoothingHz = smoothingHz;
+    data.recenter = [this]() { return arCamera_.Recenter(); };
+    data.restart = [this]()
+    {
+        latestArPose_.reset();
+        arCamera_ = {};
+        const bool started = headPoseTracker_ != nullptr && headPoseTracker_->Start();
+        if (!started && headPoseTracker_ != nullptr)
+        {
+            SPDLOG_ERROR("AR mode could not restart {}: {}", headPoseTracker_->Name(), headPoseTracker_->Status());
+        }
+        return started;
+    };
+    DevTools::DrawVitureDebugPanel(vitureDebugPanelVisible_, data, 48.0f);
 }
 #endif
 
@@ -358,18 +398,33 @@ void EditorGameInstance::OnPreConfigUI() { editorUserInterface_->Config(); }
 bool EditorGameInstance::OnRenderUI()
 {
     editorUserInterface_->Render();
+#if GK_WITH_VITURE
+    DrawVitureDebugPanel();
+#endif
     return true;
 }
 
 bool EditorGameInstance::OnRenderUI(const FGameUiFrameContext& context)
 {
     editorUserInterface_->Render(context);
+#if GK_WITH_VITURE
+    if (context.surfaceKind == FGameUiFrameContext::ESurfaceKind::MainWindow)
+    {
+        DrawVitureDebugPanel();
+    }
+#endif
     return true;
 }
 
 NextUI::FUiFrameResult EditorGameInstance::RenderUiFrame(const FGameUiFrameContext& context)
 {
     editorUserInterface_->Render(context);
+#if GK_WITH_VITURE
+    if (context.surfaceKind == FGameUiFrameContext::ESurfaceKind::MainWindow)
+    {
+        DrawVitureDebugPanel();
+    }
+#endif
     return {NextUI::EUiDeveloperLayer::All};
 }
 

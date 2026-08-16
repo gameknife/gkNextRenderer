@@ -93,6 +93,12 @@ void NextRendererGameInstance::DrawTitleBar(const FGameUiFrameContext& context, 
             auto& showFlags = GetEngine().GetShowFlags();
             Utilities::UI::DrawShowFlagsCommon(showFlags);
             ImGui::MenuItem("Profiler Overlay", nullptr, &GetEngine().GetUserSettings().ShowOverlay);
+#if GK_WITH_VITURE
+            if (HasVitureDebugPanel())
+            {
+                ImGui::MenuItem("VITURE AR Debug", nullptr, &GetVitureDebugPanelVisible());
+            }
+#endif
             ImGui::EndMenu();
         }
         else

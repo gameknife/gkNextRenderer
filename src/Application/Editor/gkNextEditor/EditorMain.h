@@ -46,6 +46,12 @@ public:
     void OnRemoteUiSessionClosed(std::string_view sessionId) override;
     std::unique_ptr<NextUI::IMultiViewportBackend> CreateMultiViewportBackend() override;
 
+#if GK_WITH_VITURE
+    bool HasVitureDebugPanel() const { return headPoseTracker_ != nullptr; }
+    bool& GetVitureDebugPanelVisible() { return vitureDebugPanelVisible_; }
+    void DrawVitureDebugPanel();
+#endif
+
     void ConfigureCVars(NextCVar::FCVarSystem& cvars) override;
 
     bool OnKey(SDL_Event& event) override;
@@ -103,6 +109,8 @@ private:
 #if GK_WITH_VITURE
     std::unique_ptr<Modules::Viture::IHeadPoseTracker> headPoseTracker_;
     Modules::Viture::FHeadTrackingCamera arCamera_;
+    std::optional<Modules::Viture::FHeadPose> latestArPose_;
+    bool vitureDebugPanelVisible_ = true;
 #endif
     std::array<Runtime::Camera::ModelViewController, Editor::kMaxCameraViewports> cameraViewControllers_;
     EViewportInputTarget activeInputViewport_ = EViewportInputTarget::Scene;

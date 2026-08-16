@@ -39,7 +39,8 @@ public:
 #if GK_WITH_VITURE
     bool ArMode{};
     float ArWorldUnitsPerMeter{1.0f};
-    float ArSmoothingHz{30.0f};
+    float ArPredictionMs{20.0f};
+    float ArSmoothingHz{0.0f};
     uint32_t ArDof{6};
 #endif
     std::string AgentControl;

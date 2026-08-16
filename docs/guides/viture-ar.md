@@ -44,7 +44,10 @@ external/viture/VITURE_XR_Glasses_SDK_for_MacOS_arm64.zip
 `--ar` 默认使用 6DOF；`--ar-dof 3` 使用仅朝向追踪。首个有效姿态会成为软件
 原点，按 `R` 可重新居中。物理平移以米为单位，使用
 `--ar-world-units-per-meter <scale>` 适配场景单位；
-`--ar-smoothing-hz <hz>` 控制平滑（`0` 关闭）。
+姿态默认由固定 25Hz 线程轮询，SDK 的 `predict_time` 默认设置为 `20.0ms`
+（SDK 接口单位为秒），可使用 `--ar-prediction-ms <ms>` 调节。渲染线程保留一个
+25Hz 采样周期（约 40ms）后，在相邻 SDK 姿态之间进行位置线性插值和旋转 SLERP；
+`--ar-smoothing-hz` 默认关闭，避免额外低通延迟。
 
-模块只保留设备发现、SDK 生命周期和姿态读取。双目相机预览、GPU 纹理上传、
-ImGui 调试面板与专用测试代码不属于正式集成，未被编译或分发。
+模块包含设备发现、SDK 生命周期、固定频率姿态轮询和 VITURE AR 调试面板；双目
+相机预览与 GPU 纹理上传仍不属于正式集成。
