@@ -2,13 +2,14 @@ implementing PathTracing;
 
 #include "PreProcessor.slang"
 import Shader.VisibilityBuffer;
+import Shader.SurfaceBuffer;
 
 // IPrimaryRayCaster implementations: hardware ray-query, visibility-buffer replay and
 // voxel DDA. Interfaces live in Interfaces.slang; ray tracers in RayTracers.slang.
 
 public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
 {
-    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset)
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset, inout FPrimarySurfaceSample outSurface)
     {
         let Camera = Bindless.GetGpuscene().Camera[0];
         float2 uvOffset = float2(0);
@@ -51,7 +52,7 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
 
 public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
 {
-    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset)
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset, inout FPrimarySurfaceSample outSurface)
     {
         let Camera = Bindless.GetGpuscene().Camera[0];
         GPUVertex* vertices = Bindless.GetGpuscene().Vertices;
@@ -88,9 +89,61 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
     }
 
 }
+// Primary Surface caster: replays the primary hit from the dense G-buffer Core.SurfaceBuild wrote,
+// instead of re-decoding the visibility buffer. Position comes from depth, so this caster has no
+// TexCoord to give; it hands over the material parameters that TexCoord would have been used for
+// (base color, roughness, metalness) through outSurface, which is exactly what BuildBSDFContext and
+// the first bounce need.
+//
+// Aperture / depth-of-field cannot be replayed this way, which is why the hardware path tracer
+// keeps its own caster.
+public struct FSurfacePrimaryRayCaster : IPrimaryRayCaster
+{
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset, inout FPrimarySurfaceSample outSurface)
+    {
+        let Camera = Bindless.GetGpuscene().Camera[0];
+        const uint viewBase = Bindless.GetGpuscene().CustomData0;
+
+        // Same pixel-center sample the raster coverage and Core.SurfaceBuild used.
+        const float2 uv = ((float2(ipos) + 0.5f) / float2(isize)) * 2.0f - 1.0f;
+        const float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
+        const float4 target = mul(Camera.ProjectionInverse, float4(uv.x, uv.y, 1, 1));
+        const float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
+
+        outRayDir = normalize(dir.xyz);
+        outPixelOffset = float2(0, 0);
+
+        const Surface.FPrimarySurface surface = Surface.Load(viewBase, ipos);
+        if (!Surface.IsValid(surface.Depth) || surface.MaterialId == Surface.kInvalidMaterialId)
+        {
+            return false;
+        }
+
+        outVertex = {};
+        outVertex.Position = Surface.ReconstructPosition(
+            Camera.ProjectionInverse, Camera.ModelViewInverse, ipos, uint2(isize), surface.Depth);
+        outVertex.Normal = normalize(surface.Normal);
+        outVertex.MaterialIndex = surface.MaterialId;
+
+        outNode = {};
+        // The only NodeProxy field anything downstream reads on this path: the ReSTIR primary gate.
+        // Motion and object id are Build's outputs now, so nothing re-derives them from the node.
+        outNode.instanceId = surface.ObjectId & OBJECT_ID_INSTANCE_MASK;
+
+        outRayLength = length(outVertex.Position - origin.xyz);
+
+        outSurface.Valid = true;
+        outSurface.Albedo = surface.Albedo;
+        outSurface.Roughness = surface.Roughness;
+        outSurface.Metalness = surface.Metalness;
+        outSurface.MotionPixels = surface.Motion;
+        return true;
+    }
+}
+
 public struct FVoxelRayCaster : IPrimaryRayCaster
 {
-    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset)
+    public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset, inout FPrimarySurfaceSample outSurface)
     {
         let Camera = Bindless.GetGpuscene().Camera[0];
 

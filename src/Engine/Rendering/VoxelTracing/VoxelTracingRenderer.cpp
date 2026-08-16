@@ -40,15 +40,12 @@ namespace Vulkan::VoxelTracing
             }, "voxel tracing shading");
             Assets::GPUScene gpuScene =
                 GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase());
-            baseRender_.ConfigureCheckerboardShading(gpuScene);
             deferredShadingPipeline_->BindPipeline(commandBuffer, gpuScene);
             vkCmdDispatch(
                 commandBuffer,
                 Utilities::Math::GetSafeDispatchCount(
-                    baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
+                    activeExtent.width, 8),
                 Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
-            baseRender_.ResolveCheckerboardShading(
-                commandBuffer, gpuScene, PipelineCommon::ECheckerboardResolveSet::SceneColor);
         }
     }
 }

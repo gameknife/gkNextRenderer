@@ -46,17 +46,14 @@ namespace Vulkan::PathTracing
         }, "path tracing lite shading");
 
         Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase());
-        baseRender_.ConfigureCheckerboardShading(gpuScene, true);
 
         SCOPED_GPU_TIMER("rt lite pass");
         rayTracingPipeline_->BindPipeline(commandBuffer, gpuScene);
         vkCmdDispatch(commandBuffer,
                       Utilities::Math::GetSafeDispatchCount(
-                          baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
+                          activeExtent.width, 8),
                       Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
 
-        baseRender_.ResolveCheckerboardShading(
-            commandBuffer, gpuScene, PipelineCommon::ECheckerboardResolveSet::Tracing);
 
         samplePostChain_.Run(baseRender_, commandBuffer, imageIndex, {
             .progressiveRender = isPrimaryView && frameSettings.progressiveRendering,

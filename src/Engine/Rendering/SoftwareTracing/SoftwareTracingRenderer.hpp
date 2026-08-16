@@ -2,6 +2,7 @@
 
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Rendering/PipelineCommon/SamplePostChain.hpp"
+#include "Engine/Rendering/PipelineCommon/SurfaceBuildPass.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <memory>
@@ -27,7 +28,8 @@ namespace Vulkan::SoftwareTracing
     private:
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> deferredShadingPipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> restirSpatialPipeline_;
-        PipelineCommon::SamplePostChain samplePostChain_;
+        PipelineCommon::SurfaceBuildPass surfaceBuild_;
+    PipelineCommon::SamplePostChain samplePostChain_;
 
     };
 

@@ -6,11 +6,17 @@ namespace Vulkan::PipelineCommon
 {
     constexpr uint32_t checkerboardShadingFlag = 1u << 0u;
 
+    // Which lighting channels the resolve reconstructs for the parity this frame did not shade.
+    //
+    // Checkerboard rendering requires the Primary Surface path (VulkanBaseRenderer::
+    // IsCheckerboardRenderingActive), because Core.SurfaceBuild is what makes every surface-class RT
+    // dense at full rate. Reconstruction therefore only ever touches lighting; the sets that used to
+    // neighbour-copy depth / normal / motion / object id are gone, along with checkerboard support
+    // for the renderers that never got a Build pass.
     enum class ECheckerboardResolveSet : uint32_t
     {
         Tracing = 1,
         SoftwareModernNoAmbient = 2,
-        SceneColor = 3,
     };
 
     constexpr uint32_t GetCheckerboardDispatchWidth(const uint32_t width, const bool enabled)

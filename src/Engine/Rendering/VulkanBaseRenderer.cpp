@@ -593,7 +593,12 @@ namespace Vulkan
 
     bool VulkanBaseRenderer::IsCheckerboardRenderingActive() const
     {
-        return frameSettings_.userSettings.CheckerboardRendering &&
+        // Checkerboard is a shading *rate*, and a rate is only safe once something else guarantees
+        // dense surface data. That something is Core.SurfaceBuild, so checkerboard requires the
+        // Primary Surface path: renderers without a Build pass (PathTracing, PathTracingLite,
+        // VoxelTracing) simply shade at full rate.
+        return IsSurfacePathActive() &&
+            frameSettings_.userSettings.CheckerboardRendering &&
             temporalSuperResolutionActive_ && ActiveViewBankBase() == 0u &&
             !frameSettings_.progressiveRendering &&
             !frameSettings_.offlineProgressivePathTracing &&
@@ -617,6 +622,74 @@ namespace Vulkan
         }
     }
 
+    bool VulkanBaseRenderer::IsSurfacePathActive() const
+    {
+        return frameSettings_.userSettings.SurfaceBuild;
+    }
+
+    bool VulkanBaseRenderer::IsSurfaceSchedulerActive() const
+    {
+        // The scheduler shades from the Primary Surface, so it cannot outlive its producer. It is
+        // also limited to the primary view: its tile lists are sized for one extent, and secondary
+        // RenderViews with different extents would reallocate the buffer every frame.
+        return IsSurfacePathActive() && frameSettings_.userSettings.SurfaceScheduler &&
+            ActiveViewBankBase() == 0u;
+    }
+
+    bool VulkanBaseRenderer::IsSparseCheckerboardLightingActive() const
+    {
+        if (!frameSettings_.userSettings.CheckerboardSparseLighting ||
+            !IsCheckerboardRenderingActive())
+        {
+            return false;
+        }
+        // Only Native TAAU can consume a sparse image; every external upscaler contract requires a
+        // dense scene color, depth and motion triple.
+        if (activeUpscalerType_ != Rendering::Upscaler::EUpscalerType::NativeTAAU)
+        {
+            return false;
+        }
+        // A module pass that paints the scene color after the primary view writes every pixel and
+        // would turn the unshaded parity into plausible-looking garbage the upscaler cannot detect.
+        return !HasScenePassAfterPrimaryView();
+    }
+
+    bool VulkanBaseRenderer::HasScenePassAfterPrimaryView() const
+    {
+        const uint32_t availableOutputs =
+            static_cast<uint32_t>(GetRendererContract(logicRenderers_.current).outputs);
+        for (const auto& externalPass : overlay_.externalPasses)
+        {
+            const FExternalPassContract contract = externalPass->Contract();
+            if (externalPass->PaintsWholeSceneThisFrame() &&
+                contract.insertionPoint == EExternalPassInsertionPoint::AfterPrimaryView &&
+                contract.scope == EExternalPassScope::PrimaryView &&
+                AreExternalPassInputsAvailable(contract, availableOutputs))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void VulkanBaseRenderer::ConfigureSurfacePath(
+        Assets::GPUScene& gpuScene, const bool allowed) const
+    {
+        gpuScene.CustomData2 &= ~(PipelineCommon::surfacePathFlag | PipelineCommon::surfaceSchedulerFlag);
+        if (allowed && IsSurfacePathActive())
+        {
+            gpuScene.CustomData2 |= PipelineCommon::surfacePathFlag;
+            if (IsSurfaceSchedulerActive())
+            {
+                gpuScene.CustomData2 |= PipelineCommon::surfaceSchedulerFlag;
+            }
+            if (frameSettings_.userSettings.GTAOApplyInCore)
+            {
+                gpuScene.CustomData2 |= PipelineCommon::surfaceGtaoInCoreFlag;
+            }
+        }
+    }
+
     void VulkanBaseRenderer::ResolveCheckerboardShading(
         VkCommandBuffer commandBuffer,
         const Assets::GPUScene& gpuScene,
@@ -624,6 +697,12 @@ namespace Vulkan
     {
         if ((gpuScene.CustomData2 & PipelineCommon::checkerboardShadingFlag) == 0u ||
             !overlay_.checkerboardResolvePipeline)
+        {
+            return;
+        }
+        // Sparse mode is exactly "do not run this pass": Native TAAU consumes the shaded parity and
+        // fills the rest from history, which is strictly better than a horizontal neighbour copy.
+        if (IsSparseCheckerboardLightingActive())
         {
             return;
         }
@@ -637,31 +716,19 @@ namespace Vulkan
             TransitionActiveViewImages(commandBuffer, {
                 {Assets::Bindless::RT_SINGLE_DIFFUSE, compute, readWrite},
                 {Assets::Bindless::RT_SINGLE_SPECULAR, compute, readWrite},
-                {Assets::Bindless::RT_ALBEDO, compute, readWrite},
-                {Assets::Bindless::RT_NORMAL, compute, readWrite},
-                {Assets::Bindless::RT_OBJECTID_0, compute, readWrite},
-                {Assets::Bindless::RT_PREV_DEPTHBUFFER, compute, readWrite},
-                {Assets::Bindless::RT_MOTIONVECTOR, compute, readWrite},
                 {Assets::Bindless::RT_DIFFUSE_HITDIST, compute, readWrite},
                 {Assets::Bindless::RT_SPECULAR_HITDIST, compute, readWrite},
-                {Assets::Bindless::RT_SPECULAR_ALBEDO, compute, readWrite},
-                {Assets::Bindless::RT_BSDF_DATA, compute, readWrite},
-            }, "checkerboard tracing resolve");
+                // RT_ALBEDO is the compose demodulation guide, and Core overrides it to white at
+                // sky and emissive pixels, so it is a lighting channel here rather than a surface
+                // one. Every other surface RT stays out of the resolve.
+                {Assets::Bindless::RT_ALBEDO, compute, readWrite},
+            }, "checkerboard tracing lighting resolve");
             break;
         case PipelineCommon::ECheckerboardResolveSet::SoftwareModernNoAmbient:
             TransitionActiveViewImages(commandBuffer, {
                 {Assets::Bindless::RT_SINGLE_DIFFUSE, compute, readWrite},
                 {Assets::Bindless::RT_AMBIENT, compute, readWrite},
-                {Assets::Bindless::RT_NORMAL, compute, readWrite},
-                {Assets::Bindless::RT_OBJECTID_0, compute, readWrite},
-                {Assets::Bindless::RT_PREV_DEPTHBUFFER, compute, readWrite},
-                {Assets::Bindless::RT_MOTIONVECTOR, compute, readWrite},
-            }, "checkerboard software modern no ambient resolve");
-            break;
-        case PipelineCommon::ECheckerboardResolveSet::SceneColor:
-            TransitionActiveViewImages(commandBuffer, {
-                {Assets::Bindless::RT_SCENE_COLOR, compute, readWrite},
-            }, "checkerboard scene color resolve");
+            }, "checkerboard software modern no ambient lighting resolve");
             break;
         }
 

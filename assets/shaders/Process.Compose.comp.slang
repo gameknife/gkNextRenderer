@@ -2,6 +2,7 @@ import Shader.Bindless;
 import Shader.Types;
 import Shader.GpuScene;
 import Shader.Tonemap;
+import Shader.ShadingScheduler;
 
 // Direct sample compose. Realtime rendering reads the current diffuse/specular sample;
 // explicit offline progressive rendering reads the running-average linear scene color instead.
@@ -73,6 +74,14 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     const UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
     const uint2 outputSize = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SCENE_COLOR);
     if (any(dispatchThreadId.xy >= outputSize))
+    {
+        return;
+    }
+
+    // Sparse checkerboard lighting: the parity Core Shading did not write is left untouched all the
+    // way to Native TAAU, which reconstructs it from history instead of from a neighbour copy.
+    if (Scheduler.ShouldSkipPixel(dispatchThreadId.xy, camera.CheckerboardSparseLighting, true,
+                                  camera.TotalFrames))
     {
         return;
     }

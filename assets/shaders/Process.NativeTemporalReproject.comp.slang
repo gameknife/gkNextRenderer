@@ -27,6 +27,10 @@ struct PushConstants
     // Pre-exposure applied before the Reinhard compression this pass works in, so the working
     // point sits on the curve's knee instead of its saturated tail. Undone in the sharpen pass.
     float compressionScale;
+    // Sparse checkerboard input: 0 = dense, otherwise the shaded parity's frame phase plus one.
+    // Only the colour is sparse - depth and motion come from the full-rate Primary Surface, so
+    // disocclusion, dilation and the surface slope estimate are unaffected.
+    uint sparsePhasePlusOne;
 };
 
 [[vk::push_constant]]
@@ -35,6 +39,20 @@ ConstantBuffer<PushConstants> constants;
 int2 ClampRenderPixel(int2 pixel)
 {
     return clamp(pixel, int2(0), int2(constants.renderSize) - 1);
+}
+
+// Was this render pixel shaded this frame? Checkerboard leaves one parity unwritten, and with
+// sparse input nothing reconstructed it, so every colour tap has to test it. The mapping is the
+// same one the shading scheduler allocates with.
+bool IsShadedPixel(int2 pixel)
+{
+    if (constants.sparsePhasePlusOne == 0u)
+    {
+        return true;
+    }
+    const uint framePhase = constants.sparsePhasePlusOne - 1u;
+    const int2 clamped = ClampRenderPixel(pixel);
+    return (uint(clamped.x) & 1u) == ((uint(clamped.y) + framePhase) & 1u);
 }
 
 int2 ClampOutputPixel(int2 pixel)
@@ -106,11 +124,19 @@ float4 SampleCurrentCatmullRom(float2 position)
         [unroll]
         for (int x = -1; x <= 2; ++x)
         {
+            const int2 tap = base + int2(x, y);
+            if (!IsShadedPixel(tap))
+            {
+                continue;
+            }
             const float weight = weightY * CatmullWeight(position.x - float(base.x + x));
-            result += LoadCurrent(base + int2(x, y)) * weight;
+            result += LoadCurrent(tap) * weight;
             weightSum += weight;
         }
     }
+    // A 4x4 footprint always contains eight shaded taps under checkerboard, so the renormalised sum
+    // is a genuine reconstruction rather than a fallback. Negative Catmull-Rom lobes can still sum
+    // near zero, which the epsilon below guards exactly as in the dense case.
     return result / max(weightSum, 1e-5);
 }
 
@@ -284,14 +310,18 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     float secondMaximumLuminance = -1e20;
     float neighborLuminanceMean = 0.0;
     float neighborLuminanceSquared = 0.0;
+    // Under checkerboard exactly the four diagonal neighbours share the shaded parity, so the
+    // statistics stay well defined - they are just built from four samples instead of eight.
+    float neighborCount = 0.0;
     [unroll]
     for (int y = -1; y <= 1; ++y)
     {
         [unroll]
         for (int x = -1; x <= 1; ++x)
         {
-            if (x != 0 || y != 0)
+            if ((x != 0 || y != 0) && IsShadedPixel(centerPixel + int2(x, y)))
             {
+                ++neighborCount;
                 const float3 sampleRgb = LoadCurrent(centerPixel + int2(x, y)).rgb;
                 const float3 sampleColor = RgbToYCoCg(sampleRgb);
                 secondMaximum = max(secondMaximum, min(neighborhoodMaximum, sampleColor));
@@ -310,19 +340,25 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             }
         }
     }
-    neighborhoodMean /= 8.0;
-    neighborLuminanceMean /= 8.0;
+    const float neighborNormalize = 1.0 / max(neighborCount, 1.0);
+    neighborhoodMean *= neighborNormalize;
+    neighborLuminanceMean *= neighborNormalize;
     const float3 spatialSigma = sqrt(max(
-        neighborhoodSquared / 8.0 - neighborhoodMean * neighborhoodMean, 0.0));
+        neighborhoodSquared * neighborNormalize - neighborhoodMean * neighborhoodMean, 0.0));
     const float neighborLuminanceSigma = sqrt(max(
-        neighborLuminanceSquared / 8.0 - neighborLuminanceMean * neighborLuminanceMean, 0.0));
+        neighborLuminanceSquared * neighborNormalize -
+            neighborLuminanceMean * neighborLuminanceMean, 0.0));
 
     // The second-order extrema deliberately discard one isolated sample and are therefore useful
     // for detecting a firefly below. They are not a valid reconstruction/history envelope: at a
     // thin emissive edge the centre can be the only bright sample while all eight neighbours are
     // dark. Clamping that centre to secondMaximum first turns real detail into a dark sample, and
     // the temporal blend then persists it. Keep the centre in the reconstruction envelope instead.
-    const float3 centerYCoCg = RgbToYCoCg(LoadCurrent(centerPixel).rgb);
+    // With sparse input the centre itself may be one of the unshaded pixels; the reconstruction
+    // already represents that location, so use it rather than reading stale colour.
+    const float3 centerYCoCg = IsShadedPixel(centerPixel)
+        ? RgbToYCoCg(LoadCurrent(centerPixel).rgb)
+        : RgbToYCoCg(reconstructedCurrent.rgb);
     const float3 reconstructionMinimum = min(neighborhoodMinimum, centerYCoCg);
     const float3 reconstructionMaximum = max(neighborhoodMaximum, centerYCoCg);
     const float3 currentYCoCg = clamp(

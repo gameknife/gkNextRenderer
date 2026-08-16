@@ -1,5 +1,7 @@
 implementing PathTracing;
 
+import Shader.SurfaceBuffer;
+
 #include "PreProcessor.slang"
 
 // Shared ReSTIR DI pass 2. Hardware and software entry shaders provide an IRayTracer;
@@ -74,7 +76,7 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
     position -= normalize(position - eye) * camera.SceneEpsilonScale * 0.01f;
 
     const uint2 packedBsdf = bsdfDataBuffer[pixel];
-    if (packedBsdf.x == 0xFFFFFFFFu)
+    if (packedBsdf.x == Surface.kInvalidMaterialId)
     {
         RestirGetFinalBuffer(params)[reservoirIndex] = RestirPackReservoir(FRestirState());
         return;
@@ -92,7 +94,7 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
     context.Wo = normalize(eye - position);
     context.BaseColor = albedoBuffer[pixel].rgb;
     context.PerceptualRoughness = saturate(normalData.a);
-    context.Metalness = saturate(asfloat(packedBsdf.y));
+    context.Metalness = saturate(Surface.UnpackMetalness(packedBsdf.y));
     context.EtaOutside = 1.0f;
     context.EtaInside = max(material.RefractionIndex2, 1.0001f);
     context.MaterialModel = material.MaterialModel;

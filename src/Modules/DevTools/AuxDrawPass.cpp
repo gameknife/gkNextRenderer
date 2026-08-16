@@ -25,6 +25,8 @@ namespace Vulkan::AuxDraw
             .name = "AuxDraw",
             .requiredOutputs = static_cast<uint32_t>(ERenderOutput::Color | ERenderOutput::Depth),
             .producedOutputs = static_cast<uint32_t>(ERenderOutput::Color),
+            // Debug lines only touch the pixels they rasterize, so a sparse scene color is fine.
+            .supportsSparseShadingRate = true,
         };
     }
 

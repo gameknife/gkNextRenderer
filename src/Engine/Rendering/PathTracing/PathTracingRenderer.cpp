@@ -313,7 +313,6 @@ namespace Vulkan::PathTracing
             }
 
             Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase());
-            baseRender_.ConfigureCheckerboardShading(gpuScene, !restirEnabled);
             EnsureSharcPipelines();
             EnsureSharcResources();
             UpdateSharcParameters();
@@ -332,7 +331,7 @@ namespace Vulkan::PathTracing
                 sharcUpdatePipeline_->BindPipeline(commandBuffer, gpuScene);
                 vkCmdDispatch(commandBuffer,
                               Utilities::Math::GetSafeDispatchCount(
-                                  baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
+                                  activeExtent.width, 8),
                               Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
             }
 
@@ -356,7 +355,7 @@ namespace Vulkan::PathTracing
                 sharcQueryPipeline_->BindPipeline(commandBuffer, gpuScene);
                 vkCmdDispatch(commandBuffer,
                               Utilities::Math::GetSafeDispatchCount(
-                                  baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
+                                  activeExtent.width, 8),
                               Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
             }
 
@@ -391,12 +390,10 @@ namespace Vulkan::PathTracing
                 restirSpatialPipeline_->BindPipeline(commandBuffer, gpuScene);
                 vkCmdDispatch(commandBuffer,
                               Utilities::Math::GetSafeDispatchCount(
-                                  baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
+                                  activeExtent.width, 8),
                               Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
             }
 
-            baseRender_.ResolveCheckerboardShading(
-                commandBuffer, gpuScene, PipelineCommon::ECheckerboardResolveSet::Tracing);
         }
         
         samplePostChain_.Run(baseRender_, commandBuffer, imageIndex, {

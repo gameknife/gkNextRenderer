@@ -28,6 +28,10 @@ namespace Vulkan::GaussianSplat
         void CreateResources() override;
         void DestroyResources();
         void Execute(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
+        // The splat composite blends over the whole frame, so it only tolerates a sparse scene
+        // color on the frames it draws nothing - which is the common case in a scene without
+        // splats, and exactly when the sparse checkerboard path would otherwise be disabled.
+        bool PaintsWholeSceneThisFrame() const override;
 
     private:
         void UpdateModelStates(uint32_t imageIndex);

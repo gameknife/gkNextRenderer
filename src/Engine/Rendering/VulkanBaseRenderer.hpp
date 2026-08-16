@@ -14,6 +14,7 @@
 #include "Engine/Rendering/RenderView.hpp"
 #include "Engine/Rendering/PipelineCommon/ResourceStateTracker.hpp"
 #include "Engine/Rendering/PipelineCommon/CheckerboardRendering.hpp"
+#include "Engine/Rendering/PipelineCommon/SurfaceBufferLayout.hpp"
 #include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include <vector>
@@ -326,6 +327,16 @@ namespace Vulkan
             VkCommandBuffer commandBuffer,
             const Assets::GPUScene& gpuScene,
             PipelineCommon::ECheckerboardResolveSet resolveSet);
+        // Primary Surface path: the visibility buffer is resolved once by Core.SurfaceBuild and every
+        // consumer reads the resulting dense G-buffer. Renderers that have not been migrated ignore
+        // this and keep decoding visibility inline.
+        bool IsSurfacePathActive() const;
+        bool IsSurfaceSchedulerActive() const;
+        // Checkerboard lighting handed to Native TAAU without a reconstruction pass. Everything
+        // between Core Shading and the upscaler then has to run at the shading rate, which is why
+        // this is a whole-frame decision rather than a per-pass one.
+        bool IsSparseCheckerboardLightingActive() const;
+        void ConfigureSurfacePath(Assets::GPUScene& gpuScene, bool allowed = true) const;
         bool IsFrameGenerationSwapchainRequested() const
         {
             return frameGenerationSwapchainRequested_;
@@ -366,6 +377,7 @@ namespace Vulkan
         // Shared render resources used by logic renderers
         void CaptureScreenShot();
         void RequestScreenShotCapture() { screenshot_.captureRequested = true; }
+        bool HasScenePassAfterPrimaryView() const;
         void TransitionSwapchainImage(VkCommandBuffer commandBuffer, uint32_t imageIndex,
                                       const PipelineCommon::FImageUse& use, std::string_view passName);
         void ImportSwapchainImageState(uint32_t imageIndex, const PipelineCommon::FImageState& state);

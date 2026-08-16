@@ -1,6 +1,7 @@
 import Shader.Bindless;
 import Shader.Types;
 import Shader.GpuScene;
+import Shader.ShadingScheduler;
 
 float3 ReconstructWorldPosition(
     UniformBufferObject camera, int2 pixel, uint2 size, float depth)
@@ -54,6 +55,15 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     }
 
     const int2 pixel = int2(dispatchThreadId.xy);
+
+    // Sparse checkerboard lighting: the parity Core Shading did not write is left untouched all the
+    // way to Native TAAU, which reconstructs it from history instead of from a neighbour copy.
+    if (Scheduler.ShouldSkipPixel(uint2(pixel), camera.CheckerboardSparseLighting, true,
+                                  camera.TotalFrames))
+    {
+        return;
+    }
+
     const float depth = Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[pixel];
     const bool surface = depth >= 0.0f && depth <= 1.0f;
     if (!surface)

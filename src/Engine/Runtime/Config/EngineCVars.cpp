@@ -75,6 +75,7 @@ namespace NextCVar
         GK_CVAR_FLOAT("r.gtao.strength", settings, GTAOStrength, 5.0f, ECVarFlags::Archive, "Master sky-occlusion strength: scales GTAO sky darkening (1=natural, lower=lighter)");
         GK_CVAR_FLOAT("r.gtao.thickness", settings, GTAOThickness, 0.5f, ECVarFlags::Archive, "GTAO depth-discontinuity thickness heuristic in world units");
         GK_CVAR_INT("r.gtao.debugMode", settings, GTAODebugMode, 0, ECVarFlags::Archive, "GTAO debug mode (0=off,1=occlusion,2=unoccluded sky lighting)");
+        GK_CVAR_BOOL("r.gtao.applyInCore", settings, GTAOApplyInCore, false, ECVarFlags::Archive, "Apply GTAO inside Core Shading instead of at compose time (requires r.surface.build)");
         GK_CVAR_BOOL("r.lightObject.screenSpaceShadow", settings, LightObjectScreenSpaceShadow, false, ECVarFlags::Archive, "Enable coarse screen-space shadows for LightObjects in SoftwareModernNoAmbient");
         GK_CVAR_FLOAT_RANGE("r.lightObject.screenSpaceShadowDistance", settings, LightObjectShadowDistance, 6.0f, ECVarFlags::Archive, "World-space distance the screen-space LightObject shadow marches; shorter is cheaper and leaks more", 0.0, 64.0);
         GK_CVAR_UINT_RANGE("r.lightObject.maxShadowedLights", settings, LightObjectMaxShadowedLights, 2, ECVarFlags::Archive, "Maximum strongest LightObjects that cast screen-space shadows per pixel", 0, 2);
@@ -100,6 +101,9 @@ namespace NextCVar
         GK_CVAR_UINT("r.upscaler.jitterFrames", settings, UpscalerJitterFrames, 16, ECVarFlags::Archive, "Fallback temporal upscaler projection jitter sequence length (clamped to 1-256)");
         GK_CVAR_BOOL("r.upscaler.jitterInvertY", settings, UpscalerJitterInvertY, false, ECVarFlags::Archive, "Invert temporal upscaler projection jitter Y for diagnostics");
         GK_CVAR_BOOL("r.checkerboardRendering", settings, CheckerboardRendering, true, ECVarFlags::Archive, "Shade one checkerboard pixel parity per frame and reconstruct the missing parity before temporal upscaling");
+        GK_CVAR_BOOL("r.surface.build", settings, SurfaceBuild, false, ECVarFlags::Archive, "Resolve the visibility buffer once into a dense Primary Surface, then shade from it instead of decoding per consumer");
+        GK_CVAR_BOOL("r.surface.scheduler", settings, SurfaceScheduler, false, ECVarFlags::Archive, "Classify the Primary Surface into 8x8 tile buckets and shade each bucket with its own indirect dispatch (requires r.surface.build)");
+        GK_CVAR_BOOL("r.taau.sparseCheckerboard", settings, CheckerboardSparseLighting, false, ECVarFlags::Archive, "Feed Native TAAU the sparse checkerboard lighting directly instead of reconstructing the missing parity (requires r.surface.build + r.checkerboardRendering + Native TAAU)");
         GK_CVAR_BOOL("r.tracing.exitAfterFirst", settings, ExitAfterFirst, false, ECVarFlags::Archive, "Terminate tracing after the first non-dielectric surface hit");
         GK_CVAR_FLOAT_RANGE("r.ambientCube.bakeTargetMs", settings, AmbientCubeBakeTargetMs, 4.0f,
                             ECVarFlags::Archive,

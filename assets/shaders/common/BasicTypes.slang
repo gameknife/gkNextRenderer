@@ -230,6 +230,14 @@ public struct ALIGN_16 UniformBufferObject
     // Stable extension point for procedural atmosphere. Zero preserves the legacy IBL path.
     public uint64_t AtmosphereParams;
     public uint64_t AtmosphereReserved0;
+
+    // Checkerboard lighting is handed to the temporal upscaler sparse: the missing parity is left
+    // unwritten instead of being reconstructed by a neighbour copy, and Native TAAU fills it from
+    // history. Every pass between Core Shading and the upscaler must then respect the shading rate,
+    // so this flag lives in the camera UBO rather than in one pass's CustomData word.
+    // Appended at the end deliberately: inserting into the middle of this struct shifts every
+    // following field, and C++ and Slang do not have to agree on how a bool is packed.
+    public bool CheckerboardSparseLighting;
 };
 
 public struct ALIGN_16 NodeProxy
@@ -712,6 +720,14 @@ public struct ALIGN_8 GPUScene
 
     /* Others */
     uint64_t2 Reserved_AmbientBase_Address;
+
+    // Raw pass-local resource address. TracingExtras below is the ReSTIR interpretation of the same
+    // word; the shading scheduler interprets it as its tile-list buffer. Only one pass owns it at a
+    // time, which is why it stays a bare address rather than a typed pointer.
+    public property uint64_t ReservedAddress0
+    {
+        get { return Reserved_AmbientBase_Address.x; }
+    }
 
     public property FTracingExtras* TracingExtras
     {

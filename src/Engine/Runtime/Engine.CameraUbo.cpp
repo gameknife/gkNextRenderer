@@ -80,6 +80,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.SuperResolution = GOption->ReferenceMode ? 2 : renderer_->EffectiveSuperResolutionMode();
     ubo.UpscalerInvalidMotionMask = renderer_->RequiresInvalidMotionMask();
     ubo.RayReconstruction = renderer_->IsRayReconstructionActive();
+    ubo.CheckerboardSparseLighting = renderer_->IsSparseCheckerboardLightingActive();
 
     glm::mat4x4 projectionUnJit = ubo.Projection;
     const bool noAmbientRenderer = renderer_->CurrentLogicRendererType() == Vulkan::ERT_SoftwareModernNoAmbient;

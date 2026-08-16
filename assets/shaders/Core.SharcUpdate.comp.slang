@@ -1,13 +1,12 @@
 import Shader.Bindless;
 import Shader.PathTracing;
-#include "common/CheckerboardRendering.slang"
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     const uint2 size = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
-    const uint2 pixel = ResolveShadingPixel(DTid.xy);
+    const uint2 pixel = DTid.xy;
     if (any(pixel >= size))
     {
         return;

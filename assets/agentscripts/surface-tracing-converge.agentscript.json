@@ -1,0 +1,223 @@
+{
+  "name": "surface-tracing-converge",
+  "target": "gkNextRenderer",
+  "scene": "assets/models/playground.glb",
+  "defaults": {
+    "waitFrames": 0,
+    "stepTimeoutMs": 60000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running",
+      "timeoutMs": 30000
+    },
+    {
+      "type": "cvar",
+      "name": "sys.tickPhysics",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "sys.tickAnimation",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.type",
+      "set": 0
+    },
+    {
+      "type": "cvar",
+      "name": "r.checkerboardRendering",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "r.restir.enable",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "r.samples",
+      "set": 64
+    },
+    {
+      "type": "log",
+      "message": "=== swmodern legacy A ==="
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 2
+    },
+    {
+      "type": "cvar",
+      "name": "r.surface.build",
+      "set": false
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3c_swmodern_legacyA",
+      "accumulateFrames": 192,
+      "timeoutMs": 60000
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "log",
+      "message": "=== swmodern surface ==="
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 2
+    },
+    {
+      "type": "cvar",
+      "name": "r.surface.build",
+      "set": true
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3c_swmodern_surface",
+      "accumulateFrames": 192,
+      "timeoutMs": 60000
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "log",
+      "message": "=== swmodern legacy B ==="
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 2
+    },
+    {
+      "type": "cvar",
+      "name": "r.surface.build",
+      "set": false
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3c_swmodern_legacyB",
+      "accumulateFrames": 192,
+      "timeoutMs": 60000
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "log",
+      "message": "=== swtracing legacy A ==="
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 1
+    },
+    {
+      "type": "cvar",
+      "name": "r.surface.build",
+      "set": false
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3c_swtracing_legacyA",
+      "accumulateFrames": 192,
+      "timeoutMs": 60000
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "log",
+      "message": "=== swtracing surface ==="
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 1
+    },
+    {
+      "type": "cvar",
+      "name": "r.surface.build",
+      "set": true
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3c_swtracing_surface",
+      "accumulateFrames": 192,
+      "timeoutMs": 60000
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "log",
+      "message": "=== swtracing legacy B ==="
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 1
+    },
+    {
+      "type": "cvar",
+      "name": "r.surface.build",
+      "set": false
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3c_swtracing_legacyB",
+      "accumulateFrames": 192,
+      "timeoutMs": 60000
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

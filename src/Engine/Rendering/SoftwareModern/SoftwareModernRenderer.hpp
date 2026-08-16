@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/Rendering/PipelineCommon/SurfaceBuildPass.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Rendering/PipelineCommon/SamplePostChain.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
@@ -23,6 +24,7 @@ namespace Vulkan::SoftwareModern
 
     private:
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> deferredShadingPipeline_;
+        PipelineCommon::SurfaceBuildPass surfaceBuild_;
         PipelineCommon::SamplePostChain samplePostChain_;
 
     };

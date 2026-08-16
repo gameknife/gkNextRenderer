@@ -1,7 +1,7 @@
 ---
 title: "Visibility Surface / G-buffer / Shading Scheduler 开发计划"
 category: plan
-status: 待实施
+status: M0–M4 与 M5a/M5b/M5c 已完成；仅剩触发条件式扩展
 owner: engine/rendering
 created: 2026-08-16
 last_updated: 2026-08-16
@@ -10,162 +10,374 @@ related_design: ../designs/visibility-surface-gbuffer-shading-scheduler.md
 
 # Visibility Surface / G-buffer / Shading Scheduler 开发计划
 
-设计决策与契约见[设计定稿](../designs/visibility-surface-gbuffer-shading-scheduler.md)；
-本文只记录执行顺序、每个里程碑的范围、验收与回退。里程碑按依赖排序，每个里程碑独立可
-提交、cvar 门控、可回退；**不允许跨里程碑合并提交**。
+设计与契约见[当前架构](../designs/visibility-surface-gbuffer-shading-scheduler.md)。本文保留每个
+里程碑的**实测数据与决策门结论**——这些数字是后续判断「要不要打开 surface 路径 / 调度器」的唯一
+依据，不能只留在 Git 历史里。
 
-## 全局约束（所有里程碑适用）
+测试环境：Windows x86_64 / RTX 5070 Ti / `windows` preset。全部数据由
+`gnb validate --script assets/agentscripts/surface-*.agentscript.json` 采集，`engine.gpuTime.<name>`
+经 `assert` 步骤落进 agent report，用 `tools/surface_perf_table.py` 与
+`tools/surface_scheduler_table.py` 出表。
 
-- 构建：Engine 层改动用 `./gnb.sh build`（默认 gkNextRenderer + gkNextUnitTests）；不做全量。
-- 视觉验证：`gnb shot --scene assets/models/playground.glb`（及至少一个含 emissive 与
-  skinned mesh 的场景）；baseline 回归跑 `gkNextVisualTest`。
-- 性能记录：新增 pass 一律挂 `SCOPED_GPU_TIMER`；每个里程碑的 journal 必须附 1080p 与 4K
-  的 GPU timer 对照表（surface 路径开/关、checkerboard 开/关）。
-- 开关：新增 cvar `r.surface.build`（默认 off，直至 M2 验收通过后再讨论默认值）；
-  scheduler 相关用 `r.surface.scheduler`（M4）。cvar 注册与默认值遵循
-  [Editor Settings 与 CVar 架构](../designs/editor-settings-and-cvars.md)。
-- 资源状态：Build pass 的所有 image 状态经 `FResourceStateTracker` 的 `FImageUse` 声明，
-  不手写 barrier；renderer contract（`RendererDescriptors`）先于调度改动更新。
-- 失败语义：`get_material_data` 拒绝样本按背景处理，与现状一致；不得引入静默 fallback。
+## 完成状态
 
-## M0 — 契约与脚手架（无行为变化）
+| 里程碑 | 范围 | 状态 |
+| --- | --- | --- |
+| M0 | 契约与脚手架（codec、C++ layout 头、cvar） | 完成 |
+| M1 | SoftwareModernNoAmbient 拆分 Build + Core | 完成 |
+| M2 | 屏幕空间消费者改读 surface | 完成 |
+| M3 | SoftwareModern / SoftwareTracing 迁移 | 完成 |
+| M4 | Shading Scheduler：tile 分类 + indirect dispatch | 完成，默认 off（相对解析式净收益为负） |
+| M4b | scheduler 的 lane 压实 | 完成，半率相对全率 0.98× → **0.83×** |
+| M5a | legacy checkerboard 退场（checkerboard 现在依赖 surface 路径） | 完成 |
+| M5b | Native TAAU sparse 输入 | 完成，默认 off，**净收益为正** |
+| M5c | GTAO 合成下沉 | 完成，默认 off，**只有在半率着色下才划算** |
+| M5 其余 | 触发条件式扩展 | 未立项 |
 
-范围：
+cvar：`r.surface.build`（默认 0）、`r.surface.scheduler`（默认 0）、
+`r.taau.sparseCheckerboard`（默认 0）、`r.gtao.applyInCore`（默认 0）——后三者都隐含依赖第一个。
+`r.surface.build` 关闭时每个 renderer 走迁移前的 inline 解码路径，且**没有 checkerboard**。
 
-1. 新增 `assets/shaders/Shader/SurfaceBuffer.slang`：`FPrimarySurface`、
-   `Surface.Load/Store/IsValid/ReconstructPosition`、背景 depth sentinel 常量、
-   feature flags 位定义、material ID 无效值。所有常量以现状值收口（sentinel=1000 等），
-   不改变任何现有输出。
-2. 新增 C++ layout 头（`src/Engine/Rendering/PipelineCommon/`，对标
-   `VisibilityBufferLayout.hpp`）：surface 字段 ↔ RT 槽位/格式对应表。
-3. 注册 `r.surface.build` cvar（默认 off）。
-4. `RT_BSDF_DATA` 语义扩展先只写文档与 flags 位定义，不改 shader。
+## M1 — NoAmbient Build + Core 拆分
 
-验收：编译通过；`gnb shot` 与改动前逐像素一致（无 shader 行为变化）；unit tests 通过。
+### 一致性
 
-回退：纯新增文件，直接 revert。
+冻结场景（`sys.tickPhysics=0`、`sys.tickAnimation=0`）、关 upscaler、full rate、关 GTAO 与
+SS shadow，playground.glb 1280×720：
 
-## M1 — SoftwareModernNoAmbient 拆分 Build + Core
+| 对照 | mean | max |
+| --- | --- | --- |
+| legacy vs legacy（确定性基线） | 0.0000 | 0 |
+| legacy vs surface | **0.0000** | **0** |
 
-范围：
+在最终代码上两次独立复跑均为逐位一致。基线本身也是逐位一致的，说明测量确定，
+`0 = 0` 不是「两边都没跑」的假象——脚本用 `assert` 记录了
+`cvar.r.surface.build`（false/true/false）与 `engine.gpuTime.surface build`（0 / 0.082 / 0）。
 
-1. 新增 `Core.SurfaceBuild.comp.slang`：从 `Core.SwModernNoAmbient` 中拆出 visibility 解析、
-   `get_material_data`、`FetchGBuffer`、motion（含 `RT_MOTIONMOMENT` 副作用）、objectId、
-   depth、背景写出；额外写 `RT_BSDF_DATA = {resolved material ID, f16 metalness | flags}`，
-   `RT_NORMAL.w` 统一写 roughness（修正现状 w=1 分歧）。Build **永远 full-rate**。
-2. `Core.SwModernNoAmbient` 改为读 `Surface.Load`：不再 include VisibilityBuffer、不再调
-   `get_material_data`/`FetchGBuffer`；position 由 depth 重建；metalness/roughness/albedo/
-   material ID 来自 surface（MRA 采样从 Core 删除）。
-3. `SoftwareModernNoAmbientRenderer::Render` 增加 Build dispatch（在 shading 前），image
-   transition 相应拆分；`r.surface.build=off` 时走旧单体 shader（保留旧 SPIR-V 路径）。
-4. checkerboard resolve：NoAmbient set 收缩为 `RT_SINGLE_DIFFUSE` + `RT_AMBIENT`
-   （仅 surface 路径下；旧路径保持旧 resolve set）。
-5. GTAO dispatch 前移到 Build 之后、Core 之前（仅 surface 路径下）。合成方式不变，仍由
-   `Process.GTAOCompose` 应用。
+需要注意这是**无 jitter**（`r.upscaler.type=0`）下的结果：此时 `ViewProjection` 与
+`ProjectionInverse` 都不含 jitter，depth 往返是精确的。开启 temporal upscaler 后，surface 路径的
+位置来自 depth 重建、法线/反照率经过 f16 往返，理论上会有轻微残差；M1 中间版本上曾测到
+mean 0.107 / max 23（集中在轮廓与细结构，10 倍放大的差分图仍近乎全黑）。这属于 deferred
+G-buffer 的固有量化代价，不是逻辑差异。
 
-验收：
+### GPU timer 对照（1080p / 4K，playground.glb，单位 ms）
 
-- full-rate 下 surface 路径与旧路径 `gnb shot` 视觉一致，`gkNextVisualTest` diff 在阈值内；
-- checkerboard 下 depth/normal/motion/objectId 为真 dense（抽查边缘像素无邻居复制值）；
-- GTAO 开/关、四档 quality、outline flags、HDR/SDR 全对照；
-- journal 附 GPU timer 对照表（见全局约束），并明确回答决策门：NoAmbient 在无 GTAO/无
-  SS shadow 场景下 surface 路径是否净变慢；若是，记录 cvar 联动策略建议。
+"consumers" = GTAO + screen-space shadow 打开；"bare" = 两者关闭（决策门场景）。
 
-回退：`r.surface.build=off` 即回旧路径；代码层面 revert 单提交。
+| 配置 | shadingpass | gtao | compose | cb resolve | surface build | 合计 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1080p consumers full legacy | 0.355 | 0.225 | 0.176 | 0.000 | 0.000 | **0.756** |
+| 1080p consumers full surface | 0.205 | 0.225 | 0.178 | 0.000 | 0.180 | **0.788** |
+| 1080p consumers cb legacy | 0.566 | 0.225 | 0.178 | 0.260 | 0.000 | **1.229** |
+| 1080p consumers cb surface | 0.219 | 0.227 | 0.180 | 0.090 | 0.180 | **0.897** |
+| 1080p bare full legacy | 0.353 | — | 0.078 | 0.000 | 0.000 | **0.430** |
+| 1080p bare full surface | 0.215 | — | 0.076 | 0.000 | 0.180 | **0.471** |
+| 1080p bare cb legacy | 0.555 | — | 0.092 | 0.262 | 0.000 | **0.909** |
+| 1080p bare cb surface | 0.230 | — | 0.078 | 0.092 | 0.180 | **0.579** |
+| 4K consumers full legacy | 0.885 | 0.553 | 0.436 | 0.000 | 0.000 | **1.874** |
+| 4K consumers full surface | 0.500 | 0.553 | 0.435 | 0.000 | 0.428 | **1.916** |
+| 4K consumers cb legacy | 1.360 | 0.552 | 0.434 | 0.608 | 0.000 | **2.954** |
+| 4K consumers cb surface | 0.636 | 0.551 | 0.439 | 0.238 | 0.429 | **2.292** |
+| 4K bare full legacy | 0.885 | — | 0.176 | 0.000 | 0.000 | **1.061** |
+| 4K bare full surface | 0.508 | — | 0.174 | 0.000 | 0.428 | **1.110** |
+| 4K bare cb legacy | 1.303 | — | 0.203 | 0.807 | 0.000 | **2.313** |
+| 4K bare cb surface | 0.565 | — | 0.188 | 0.221 | 0.429 | **1.403** |
+
+### 决策门结论
+
+> **问题**：NoAmbient 在无 GTAO / 无 SS shadow 的场景下，surface 路径是否净变慢？
+
+**Full rate：是，但幅度很小。** bare 配置下 +0.041 ms（1080p，+9.5%）、+0.049 ms（4K，+4.6%）。
+Build 的固定成本略高于 Core 变轻的收益。
+
+**Checkerboard：不，surface 路径大幅更快。** bare 配置下 −36%（1080p）与 −39%（4K），
+consumers 配置下 −27%（1080p）与 −22%（4K）。原因有二：resolve 从 6 张 RT 收缩到 2 张；
+更关键的是 legacy 的 checkerboard shading 反而**比全率还贵**（1080p 0.566 vs 0.355），
+因为半率 dispatch 让 6 张 RT 的写入变成跨步访问，带宽没省而 lane 利用率下降。surface 路径的
+Core 只写 2 张，这个反常消失了。
+
+**联动建议**：`r.checkerboardRendering` 默认是 on，所以在默认配置下 surface 路径就是净收益，
+不需要设计文档设想的「仅在 GTAO/SS shadow 启用时激活」的 cvar 联动。真正需要谨慎的是
+「全率 + 无消费者」这一组合，代价约 0.04 ms。
+
+### checkerboard 下 surface RT 的密度
+
+密度是**结构性保证**而非经验结论：surface 路径下只有 `Core.SurfaceBuild` 写这些 RT，它按
+`pixel = DTid.xy` 全屏 dispatch、不经过任何 parity 映射，而 `SoftwareModernNoAmbient`
+resolve 集合只复制 `RT_SINGLE_DIFFUSE` 与 `RT_AMBIENT`（M5a 之后它是唯一的 NoAmbient 集合）。
+
+可观测的旁证（`r.gtao.debugMode=1`，GTAO 只吃 depth+normal，因此它的输出隔离出了 surface 数据质量）：
+
+| 对照 | mean | >8 占比 |
+| --- | --- | --- |
+| legacy：full vs checkerboard | 0.366 | 0.270% |
+| surface：full vs checkerboard | 0.231 | 0.164% |
+| full rate：legacy vs surface（基线） | 0.254 | 0.181% |
+
+surface 路径下「全率 vs 半率」的偏差已经落到与基线同量级，即 **GTAO 的输入基本与采样率无关**；
+legacy 则明显更大。
 
 ## M2 — 屏幕空间消费者改读 surface
 
-范围：
+`Common.LoadOccluderPlane` 分流 march step；`TraceInScreenSpace` 增加 surface 分支。
 
-1. `Common.ScreenSpaceShadowVisibility` march step 改读 dense depth+normal（surface 路径
-   门控分支）；`LoadVisibilitySurfacePlane` 保留为非 surface renderer 的现有路径。
-2. NoAmbient Core 的 SS shadow 调用切到 surface 分支。
-3. `TraceInScreenSpace` 增加 surface 分支（本里程碑仅实现，不切换调用方——SwTracing 在 M3
-   切换）。
+screen-space shadow march 增量成本（NoAmbient，full rate，关 GTAO）：
 
-验收：
+| 场景 | legacy（on − off） | surface（on − off） | 降幅 |
+| --- | --- | --- | --- |
+| LightingShowcase.proc 1080p | 1.641 − 0.461 = **1.180** | 0.954 − 0.299 = **0.655** | −44% |
+| conf_room.glb 1080p（相机埋在几何里，march 命中率高） | 6.121 − 2.376 = **3.745** | 3.730 − 1.719 = **2.011** | −46% |
 
-- SS shadow 画质对照（contact shadow 场景 + 快速运动）；march 步进语义不变（fail-open、
-  border fade、plane bias 行为保留）；
-- GPU timer：受影阴光源较多的场景下 Core 时间应可测下降；journal 记录数值；
-- 旧路径（surface off / 其他 renderer）行为不变。
-
-回退：分支门控，off 即旧行为。
+**验证缺口（诚实记录）**：仓库里现有的场景在 NoAmbient 下都没能产生**肉眼可见**的屏幕空间接触
+阴影——`r.lightObject.screenSpaceShadow` 开/关的截图在两条路径下都逐位相同（march 确实在跑，
+timer 证明了这一点，只是可见范围内找不到遮挡体）。因此 M2 的画质对照只证明了
+「legacy 与 surface 完全一致」，没有证明「阴影本身正确」。需要画质对照时得先构造一个带
+LightObject 且有明确接触阴影的场景。
 
 ## M3 — SoftwareModern / SoftwareTracing 迁移
 
-前置核验（先做再动手，结论写进 journal）：
+### 前置核验结论
 
-- `BuildBSDFContext` 与 bounce 链路是否依赖 primary `TexCoord`；
-- `PrimaryHit` 中非 dielectric 的 position nudge 如何在 depth 重建路径下复现；
-- ReSTIR primary gate（instanceId/motion）从 surface 读取的一致性。
+1. **`BuildBSDFContext` 是否依赖 primary TexCoord**：依赖，但只用于采样出 base color、
+   roughness、metalness 三个值——而这三个值正是 surface 已经存下的。新增
+   `BuildBSDFContextFromSurface` 直接接收它们，surface 不需要增补 TexCoord 字段。
+   `RestirSpatialShade` 早就这么做了，是现成先例。
+2. **`PrimaryHit` 中非 dielectric 的 position nudge**：`position -= rayDir * SceneEpsilonScale * 0.01`
+   只依赖 rayDir 与重建位置，depth 重建路径下逐字复现即可。
+3. **ReSTIR primary gate**：`instanceId` 从 `RT_OBJECTID_0` 解码（`OBJECT_ID_INSTANCE_MASK`），
+   `motion` 直接读 `RT_MOTIONVECTOR`，两者都是 Build 的全率输出。
+4. **额外发现**：`ScatterAndTrace` 在 bounce 0 用的是未经材质模型覆盖的原始 metalness，
+   而 surface 存的是 effective 值。对 Metallic/Dielectric 材质这会改变 bounce 0 的 lobe 选择概率；
+   已作为有意的统一记录在设计文档里。
 
-范围：
+### 一致性
 
-1. 新增 `FSurfacePrimaryRayCaster : IPrimaryRayCaster`（`PrimaryRayCasters.slang`）：从
-   surface 重建 primary vertex 状态，替换 SwModern/SwTracing 入口 shader 里的
-   `FVisibilityBufferRayCaster`（surface 路径门控）。
-2. `FPathTracingRenderer` 的 surface 类输出（albedo/normal/objectId/motion/depth/BSDF/
-   specular albedo）职责移交 Build：surface 路径下 `WriteOutputs` 收缩为仅 lighting 类
-   （diffuse/specular/hitdist）。
-3. 两个 renderer 的 `Render()` 增加 Build dispatch 与 transition；tracing checkerboard
-   resolve set 收缩为 diffuse/specular/两张 hitdist（`RT_SPECULAR_ALBEDO` 归 Build 全率）。
-4. SwTracing 的 `TraceInScreenSpace` 调用切到 M2 的 surface 分支。
+两个 renderer 都是随机采样器，单帧截图之间本身就有巨大的 Monte Carlo 噪声，因此对照必须带
+「legacy vs legacy」噪声地板。playground.glb 1280×720，`r.samples=64`，冻结场景，16×16 块均值
+用于抵消逐像素噪声：
 
-验收：
+| 对照 | 逐像素 mean | 块均值 mean | 块均值 p99 |
+| --- | --- | --- | --- |
+| SwModern legacy vs legacy（噪声地板） | 14.449 | 0.869 | 3.633 |
+| SwModern legacy vs surface | 14.441 | 0.886 | 3.820 |
+| SwTracing legacy vs legacy（噪声地板） | 12.263 | 0.771 | 3.348 |
+| SwTracing legacy vs surface | 12.268 | 0.771 | 3.285 |
+| SwTracing + ReSTIR legacy vs legacy | — | 0.765 | — |
+| SwTracing + ReSTIR legacy vs surface | — | 0.768 | — |
 
-- 两个 renderer full-rate 视觉一致 + visual test baseline；
-- DLSS/FSR 路径冒烟（upscaler 输入契约未破坏：dense scene color/depth/motion）；
-  DLSS 验证遵循 AGENTS.md 的 Streamline 限制（需 Windows 非 hidden 路径时先告知用户）；
-- checkerboard 下 resolve 流量收缩生效（timer + 带宽估算记录）；
-- ReSTIR 开/关对照无回归。
+legacy/surface 的差异全程贴着噪声地板（偏差 ≤2%），**没有系统性偏移**。ReSTIR 开启时同样成立。
 
-回退：cvar off 回旧 caster 与旧 resolve set。
+### GPU timer 对照（1080p，playground.glb，单位 ms）
 
-## M4 — Shading Scheduler：tile 分类 + indirect dispatch
+| 配置 | shadingpass | cb resolve | surface build | fps |
+| --- | --- | --- | --- | --- |
+| SwModern full legacy | 0.690 | 0.000 | 0.000 | 652 |
+| SwModern full surface | 0.563 | 0.000 | 0.180 | 625 |
+| SwModern cb legacy | 0.837 | 0.391 | 0.000 | 484 |
+| SwModern cb surface | 0.453 | 0.145 | 0.182 | 492 |
+| SwTracing full legacy | 7.100 | 0.000 | 0.000 | 122 |
+| SwTracing full surface | 6.573 | 0.000 | 0.178 | 130 |
+| SwTracing cb legacy | 3.735 | 0.389 | 0.000 | 182 |
+| SwTracing cb surface | 3.214 | 0.139 | 0.178 | 196 |
 
-范围：
+checkerboard resolve 从 0.39 ms 降到 0.14 ms（−64%），与「11 张 RT → 5 张（4 张 lighting +
+解调用的 albedo）」的带宽收缩一致。重 Core 的 SwTracing 在 full rate 下也已经是净收益
+（6.573+0.178 = 6.751 vs 7.100）。
 
-1. 新增 classification pass（Build 后）：8×8 tile 粒度，生成 per-bucket tile list +
-   per-pixel 位掩码。首批 bucket：`Background`、`Emissive`、`Standard`。
-2. 新增 Background / Emissive 轻量 kernel（从现有 Core 的 early-out 写出路径平移）；
-   `Standard` kernel 不再含 miss/emissive 分支。
-3. `vkCmdDispatchIndirect` 按 bucket 派发；checkerboard 作为 per-bucket rate 作用于
-   allocation（`Standard` 可 checkerboard，`Background`/`Emissive` full-rate，成本可忽略）。
-4. `ResolveShadingPixel` 从 Core 语义中退役，parity 知识全部收进 scheduler 头。
-5. `r.surface.scheduler` 门控；off 时保留 M1–M3 的解析式 allocation 全屏路径做 A/B。
+### Upscaler 契约冒烟
 
-验收：
+surface 路径 + checkerboard 下，FSR(3) / Native TAAU(4) / SGSR2(5) × SwTracing / SwModern /
+NoAmbient 共 9 组，全部产出正常的 1600×900 放大画面，无黑屏、无结构性错误。
 
-- A/B：scheduler on/off 视觉一致；GPU timer 对照（分类 + indirect 开销 vs Standard kernel
-  去分支收益），1080p/4K、天空占比大/小两类场景都测；
-- 若净收益为负，journal 明确记录并保持默认 off——本里程碑的机制价值（为未来材质桶铺路）
-  与性能结论分开陈述。
+**DLSS 未验证**：`gnb validate` 强制禁用 Streamline（见 AGENTS.md），因此本轮无法覆盖 DLSS 与
+DLSS-RR。需要时必须在 Windows NVIDIA 环境用非 hidden、非 agent-validation 的正常窗口路径复测，
+运行会弹窗。
 
-回退：cvar off；classification pass 不运行。
+## M4 — Shading Scheduler
 
-## M5 —（触发条件式，不排期）
+实现：`Task.ShadingClassify.comp.slang`（8×8 tile，per-bucket 64bit 掩码，每 tile 每桶至多一次
+atomic）+ `Core.SwModernNoAmbient{Standard,Background,Emissive}.comp.slang` 三个 bucket kernel +
+`PipelineCommon::ShadingSchedulerPass` 的 `vkCmdDispatchIndirect`。
 
-以下项只有触发条件满足才立项，不属于本计划的承诺范围：
+### A/B（单位 ms；`r.surface.build=1` 恒定，只切 `r.surface.scheduler`）
 
-- **材质特征桶**：出现第二种真实 shading 方式（独立 kernel 的特殊 BRDF）时，由 material ID
-  查 feature mask 归桶；bucket 数以 GPU profiler 为准。
-- **Native TAAU sparse 输入**：在 missing-pixel mask 前提下评估 checkerboard lighting 不做
-  resolve、由 TAAU 直接利用历史；外部 upscaler 继续 dense contract。
-- **GTAO 合成下沉**：Core 直接消费 AO、删除独立上采样；需先解决非 temporal / 截图路径
-  fallback。
-- **Build 与 classification 合并 dispatch**：仅当 M4 实测分类读回成本显著时评估。
+| 配置 | build | classify | shadingpass | gtao | cb resolve | compose | 合计 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1080p full analytic | 0.176 | 0.000 | 0.186 | 0.225 | 0.000 | 0.176 | **0.764** |
+| 1080p full scheduler | 0.179 | 0.038 | **0.152** | 0.226 | 0.000 | 0.176 | **0.770** |
+| 1080p cb analytic | 0.178 | 0.000 | 0.213 | 0.223 | 0.090 | 0.178 | **0.883** |
+| 1080p cb scheduler | 0.179 | 0.040 | 0.225 | 0.228 | 0.088 | 0.180 | **0.940** |
+| 4K full analytic | 0.425 | 0.000 | 0.455 | 0.530 | 0.000 | 0.430 | **1.840** |
+| 4K full scheduler | 0.428 | 0.089 | **0.383** | 0.552 | 0.000 | 0.602 | **2.054** |
+| 4K cb analytic | 0.429 | 0.000 | 0.537 | 0.555 | 0.393 | 0.606 | **2.520** |
+| 4K cb scheduler | 0.430 | 0.093 | 0.596 | 0.735 | 0.389 | 0.436 | **2.680** |
+| old_city 1080p full analytic | 0.097 | 0.000 | 0.158 | 0.037 | 0.000 | 0.082 | **0.373** |
+| old_city 1080p full scheduler | 0.095 | 0.038 | **0.123** | 0.036 | 0.000 | 0.082 | **0.373** |
+| old_city 1080p cb analytic | 0.095 | 0.000 | 0.174 | 0.035 | 0.072 | 0.086 | **0.461** |
+| old_city 1080p cb scheduler | 0.096 | 0.038 | 0.154 | 0.036 | **0.018** | 0.084 | **0.426** |
 
-## 里程碑依赖与产出总览
+4K 的 gtao/compose 列在两行之间本应相同却有 ±0.2 ms 抖动，那是测量噪声；可靠信号是 shadingpass
+与 classify 两列，它们跨两次独立采样都可复现。
 
-```text
-M0 契约脚手架
- └→ M1 NoAmbient Build+Core 拆分（决策门：轻 Core 带宽实测）
-     └→ M2 SS shadow / SS tracing 消费者
-         └→ M3 SwModern + SwTracing（FSurfacePrimaryRayCaster）
-             └→ M4 Scheduler（tile 分类 + Background/Emissive/Standard buckets）
-                 └→ M5 触发条件式扩展
-```
+### 结论
 
-每个里程碑完成后按 Spec Workflow 写 journal；性能对照表与决策门结论是 journal 的必填项，
-不写数字不算完成。
+**机制按设计生效**：Standard kernel 去掉 miss/emissive 分支后稳定快 16%~22%
+（1080p 0.186→0.152，4K 0.455→0.383，old_city 0.158→0.123）。scheduler 打开时 lighting resolve
+还能跳过全率着色的 background/emissive 像素（old_city cb：0.072→0.018）。
+
+**性能净收益为负或持平**，因此 `r.surface.scheduler` 默认 off：
+
+1. 分类本身要 0.04 ms（1080p）/ 0.09 ms（4K），吃掉了大部分 kernel 收益；
+2. checkerboard 下 tile 粒度无法压到半率——`Standard` bucket 仍按 8×8 tile 起 64 线程，约一半
+   lane 立即返回；解析式路径则把 dispatch 宽度压掉一半、lane 全部有效。这是 tile 粒度分类的
+   固有代价，不是实现瑕疵。
+
+画质：scheduler on/off 的差异（1080p full mean 0.285）与「同一条路径两次采样」的噪声地板
+（0.284，源自 GTAO 每帧轮转的采样相位）完全相同，即**视觉一致**。
+
+## 「surface off 是 no-op」回归
+
+`assets/agentscripts/surface-legacy-parity.agentscript.json` 在改动前的 `dev` HEAD 与改动后各跑
+一次（`r.surface.build=0`，冻结场景，关 upscaler / checkerboard / ReSTIR，`r.samples=64`）：
+
+| Renderer | 逐像素 mean | max | 块均值 mean | 判定 |
+| --- | --- | --- | --- | --- |
+| SoftwareModernNoAmbient | **0.00000** | **0** | 0.00000 | 逐位一致 |
+| SoftwareModern | 14.459 | 151 | 0.885 | 与自身噪声地板（14.449 / 0.869）一致 |
+| SoftwareTracing | 12.258 | 158 | 0.766 | 与自身噪声地板（12.263 / 0.771）一致 |
+| PathTracing | 10.774 | 119 | 0.672 | 未迁移；仅 `RT_BSDF_DATA` 编码变化，落在噪声内 |
+
+NoAmbient 的逐位一致同时证明了「legacy 入口改成调用共享 kernel」这一步没有引入任何差异。
+
+## M4b — scheduler 的 lane 压实
+
+**问题**：scheduler 打开时开 checkerboard 几乎没有收益（`shading + classify` 0.192 → 0.187 ms，
+0.98×），而解析式路径是 0.182 → 0.117（0.64×）。原因是 `Standard` bucket 按 8×8 tile 起 64 条 lane，
+半率下掩码里只有 32 位置上，另一半 lane 进来就 return——dispatch 的形状是 tile 的，工作密度只有一半。
+
+**做法**：checkerboard 时一个 workgroup 覆盖两个 tile，lane `i` 取 `slot = group*2 + (i>>5)` 号 tile
+掩码里的第 `i&31` 个置位；group 数由新增的 `Task.ShadingClassifyFinalize`（1 个 workgroup、每 bucket
+一个线程）在分类完成后改成 `ceil(n/2)`。
+
+1080p，playground.glb，NoAmbient（单位 ms）：
+
+| 配置 | shading | classify | 合计 | vs 全率 |
+| --- | --- | --- | --- | --- |
+| scheduler off，full | 0.182 | — | 0.182 | — |
+| scheduler off，cb | 0.117 | — | **0.117** | 0.64× |
+| scheduler on，full | 0.152 | 0.040 | 0.192 | — |
+| scheduler on，cb（压实前） | 0.135 | 0.040 | 0.187 | 0.98× |
+| scheduler on，cb（压实后） | **0.117** | 0.042 | **0.159** | **0.83×** |
+
+`Standard` kernel 的半率耗时已经和解析式完全一致（0.117）。
+
+**两个被否掉的替代方案**（数字留着，免得有人再试一遍）：
+
+| 方案 | shading | classify | 合计 |
+| --- | --- | --- | --- |
+| 每 tile 第二次 atomic 单独维护 group 数 | 0.117 | 0.071 | 0.188 |
+| 仍按 tile 数 dispatch、后一半 group 立刻退出 | 0.135 | 0.040 | 0.175 |
+| finalize pass（采用） | 0.117 | 0.042 | **0.159** |
+
+**正确性**：关掉 GTAO（唯一的时序抖动源）、冻结场景后，压实路径与解析式路径的差异 mean 0.0768，
+低于同配置两次采样之间的 TAAU 收敛基线 0.0928——没有丢像素。
+
+**仍然默认 off**：相对解析式（0.117）依旧是负收益。分类的 0.04 ms 对 NoAmbient 这种 0.12 ms 的
+kernel 太贵。scheduler 要真正划算，得接到 Standard kernel 重得多的 renderer 上。
+
+## 一个排查陷阱
+
+`engine.checkerboardActive` 报的是**引擎级资格**，不是每个 renderer 的实际决定。SoftwareTracing 在
+`SoftwareTracingRenderer.cpp` 里用 `ConfigureCheckerboardShading(gpuScene, !restirEnabled)` 自己否掉了
+checkerboard，所以 **ReSTIR 打开时 SwTracing 全率着色，而这个 query 仍然报 True**（实测 cb/full = 1.00）。
+排查半率没生效时，先看 `engine.gpuTime.shadingpass` 的全率/半率比值，不要只信这个 query。
+
+`r.surface.scheduler` 也只接在 SoftwareModernNoAmbient 上；SwModern / SwTracing 对它是空开关
+（`engine.gpuTime.shading classify` 恒为 0 即可确认）。
+
+## M5a — legacy checkerboard 退场
+
+Checkerboard 曾经要复制整套 surface 类 RT 才能工作，那是在没有 Build pass 的时代唯一的做法，也是
+它在轮廓处伪造 depth/motion/objectId 的根源。Build 存在之后这套做法没有保留价值，已整体删除：
+
+- `IsCheckerboardRenderingActive()` 增加 `IsSurfacePathActive()` 前提——**checkerboard 现在是
+  Primary Surface 路径独有的能力**；
+- `ECheckerboardResolveSet` 只剩两个 lighting-only 集合（`Tracing`、`SoftwareModernNoAmbient`），
+  `CopyTracingOutputs`（11 张 RT）、`CopySoftwareModernNoAmbientOutputs`（6 张）与
+  `RESOLVE_SCENE_COLOR` 全部删除；
+- `common/CheckerboardRendering.slang` 删除，parity 知识全部收进 `Shader/ShadingScheduler.slang`
+  （`ResolveAnalyticPixel` / `IsActiveParity` / `MissingPixel` / `ReconstructionSource`），
+  兑现 M4 计划里 "`ResolveShadingPixel` 从 Core 语义中退役" 那一条；
+- **PathTracing、PathTracingLite、VoxelTracing 因此不再支持 checkerboard**，在 upscaler 下一律
+  全率着色。它们没有 Build pass，也无法有（HW primary 含 aperture/DOF，raster VB 无法重放）。
+
+## M5b — Native TAAU sparse 输入
+
+`r.taau.sparseCheckerboard`（默认 off）。开启后 checkerboard 的缺失 parity **不再被邻居复制**：
+resolve pass 整个不跑，Core 到 upscaler 之间的每个 pass 都按着色率跳过未着色像素
+（`Process.GTAOCompose`、`Process.Compose`、`Process.AtmosphereComposite`），
+`Process.NativeTemporalReproject` 在 Catmull-Rom 重建与邻域统计里剔除未着色 tap 并重新归一化，
+由历史补齐。深度与 motion 仍然是 Build 的全率输出，所以 disocclusion、dilation、slope 估计都不受影响。
+
+生效前提（任一不满足自动退回 resolve 路径）：surface 路径 + checkerboard + Native TAAU + 主视图，
+且当帧没有会整屏合成的 external pass。后者是运行时判断：`IExternalRenderPass::PaintsWholeSceneThisFrame()`
+默认由契约里的 `supportsSparseShadingRate` 决定，AuxDraw 声明自己只画自己光栅化的像素，
+GaussianSplat 则按"这帧是否真的要画 splat"回答。
+
+1080p / 4K，playground.glb，NoAmbient，Native TAAU（单位 ms）：
+
+| 配置 | build | shading | gtao | cb resolve | compose | 合计 | fps |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1080p full rate | 0.181 | 0.182 | 0.236 | 0.000 | 0.313 | **0.912** | 476 |
+| 1080p cb + resolve | 0.181 | 0.121 | 0.236 | 0.090 | 0.315 | **0.942** | 462 |
+| 1080p cb + sparse | 0.181 | 0.119 | 0.233 | — | 0.311 | **0.844** | 476 |
+| 4K cb + resolve | 0.431 | 0.539 | 0.555 | 0.272 | 0.459 | **2.255** | 221 |
+| 4K cb + sparse | 0.431 | 0.541 | 0.551 | — | 0.635 | **2.157** | 231 |
+
+结论：**resolve pass 消失是净收益**，1080p −10.4%、4K −4.3%。静态画面上 sparse 与 resolve 的差异
+（1080p mean 0.378）略高于同配置噪声地板（0.305）——两者都是近似，差别不代表谁更准；sparse 真正的
+优势在运动下（历史补齐尊重 motion，邻居复制不尊重），本轮的静止场景测不出这一点，记为验证缺口。
+
+## M5c — GTAO 合成下沉
+
+`r.gtao.applyInCore`（默认 off）。开启后 Core Shading 自己做 GTAO 的 3×3 双边上采样并把遮蔽乘进
+ambient 项，`Process.GTAOCompose` 不再上采样。上采样代码收进 `common/GTAOUpsample.slang`，
+两条路径共用，保证"用户 strength 只应用一次"这条规则不会在搬家过程中被破坏。
+
+1080p，playground.glb（单位 ms）：
+
+| 配置 | shading | compose | 合计 |
+| --- | --- | --- | --- |
+| full rate，compose 端应用（默认） | 0.182 | 0.313 | **0.912** |
+| full rate，Core 端应用 | 0.385 | 0.186 | **0.987** |
+| cb + sparse，compose 端应用 | 0.119 | 0.311 | **0.844** |
+| cb + sparse，Core 端应用 | 0.227 | 0.188 | **0.831** |
+
+结论：**下沉的收益完全取决于着色率**。同样的九抽样双边滤波，放进本来就寄存器吃紧的 shading kernel
+比放在小小的 compose kernel 里贵得多（full rate +0.203 vs −0.127，净 +8%）；但 shading 一旦降到半率，
+它只为一半像素付费而 compose 是全率的，于是反过来赢 1.5%。因此默认关闭，并建议**与 checkerboard
+同开**。当前实测最佳组合是 `cb + sparse + gtao.applyInCore` = 0.831 ms，相对 M5 之前的
+`cb + resolve` 基线 0.942 ms 快 12%。
+
+架构收益与性能分开陈述：下沉之后 GTAO 不再是一个只能作用于 compose 的后置项，Core 可以在着色时
+消费遮蔽——这是未来让 AO 参与直接光/镜面决策的前提，即使今天的帧时间不划算。
+
+## M5 剩余（触发条件式，未立项）
+
+- **材质特征桶**：出现第二种真实 shading 方式（需要独立 kernel 的特殊 BRDF）时，由 material ID
+  查 feature mask 归桶。
+- **调度器扩展到 SwModern / SwTracing**：两者目前只用解析式 allocation；它们的 Background/Emissive
+  像素相对于重得多的 Standard kernel 占比很小，按 M4 的结论收益不明显。
+- **sparse 输入扩展到 SwModern / SwTracing**：机制是通用的（`Process.Compose` 已经会跳过未着色
+  像素），但尚未在这两个 renderer 上实测。
+- **Build 与 classification 合并 dispatch**：M4 实测分类只占 0.04–0.09 ms，暂无必要。
+
+## 已知遗留
+
+- `Process.AtmosphereComposite` 仍用 `ProjectionInverseUnJit` 重建世界坐标，而 surface depth 是
+  jittered 的。这是迁移前就存在的分歧，本轮没有触碰。
+- 仓库里没有提交 visual test baseline（`assets/visual_test_baselines/` 为空），所以
+  `gkNextVisualTest` 只能作为 7 个场景的渲染冒烟（本轮 7/7 通过），无法做 baseline diff。
+  逐像素回归由本文列出的 agent script 承担。
+- `gkNextUnitTests` 有 5 个用例 / 9 条断言失败（Test_PhysicsSync、Test_TerrainWalkable）。已在
+  未改动的 `dev` HEAD 上复现同样的失败，与本次改动无关。

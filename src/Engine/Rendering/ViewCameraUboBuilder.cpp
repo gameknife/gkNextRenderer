@@ -38,6 +38,7 @@ namespace Vulkan
             ubo.PrevViewProjection = ubo.ViewProjection;
             ubo.PrevViewProjectionUnJit = ubo.ViewProjectionUnJit;
             ubo.Jitter = glm::vec4(0.0f);
+            ubo.CheckerboardSparseLighting = false;
             ubo.ViewportRect =
                 glm::vec4(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height));
         }

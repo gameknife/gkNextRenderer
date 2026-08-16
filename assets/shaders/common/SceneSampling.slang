@@ -2,6 +2,7 @@ implementing PathTracing;
 
 #include "PreProcessor.slang"
 import Shader.VisibilityBuffer;
+import Shader.SurfaceBuffer;
 
 // Scene-space sampling helpers shared across the renderer: object-id encoding, page
 // index, motion vectors, spherical-harmonic / IBL evaluation, G-buffer fetch and the
@@ -29,6 +30,36 @@ namespace Common
             objectId |= OBJECT_ID_FLAG_DANGER;
         }
         return objectId;
+    }
+
+    // Shading-strategy flags for the Primary Surface (Shader/SurfaceBuffer.slang). Material
+    // *identity* stays in the resolved material id; these say how the pixel has to be shaded, which
+    // is what a scheduler buckets on. Kept next to the other G-buffer encoders so every writer of
+    // RT_BSDF_DATA derives them the same way.
+    public uint MakeSurfaceFlags(in Material material)
+    {
+        uint flags = 0u;
+        if (material.MaterialModel == MaterialDiffuseLight)
+        {
+            flags |= Surface.kFlagEmissive;
+        }
+        if (material.MaterialModel == MaterialMetallic)
+        {
+            flags |= Surface.kFlagMetallic;
+        }
+        if (material.MaterialModel == MaterialDielectric)
+        {
+            flags |= Surface.kFlagDielectric;
+        }
+        if (material.MRATextureId >= 0)
+        {
+            flags |= Surface.kFlagHasMra;
+        }
+        if (material.NormalTextureId >= 0)
+        {
+            flags |= Surface.kFlagHasNormalMap;
+        }
+        return flags;
     }
 
     float3 CalculateRayAABBEntry(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax)
@@ -209,9 +240,67 @@ namespace Common
         return min(float4(10, 10, 10, 1), Bindless.GetSampleTexture(skyIdx).SampleLevel(t, roughness * 8.0f));
     };
 
+    // Surface-path screen-space trace. Same march, same acceptance test, but each step reads the
+    // resolved surface instead of running a full get_material_data (three vertex fetches, a
+    // barycentric solve and attribute interpolation) per step.
+    bool TraceInScreenSpaceSurface(float3 position, float3 rayDir, float maxDistance,
+                                   float depthTolerance, out float3 outPosition,
+                                   out float3 outNormal, out uint outMaterialIdx)
+    {
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+        const uint viewBase = Bindless.GetGpuscene().CustomData0;
+
+        const int maxSteps = 5;
+        const float stepSize = maxDistance / float(maxSteps);
+        const float3 rayStart = position + rayDir * 0.1;
+
+        outPosition = float3(0, 0, 0);
+        outNormal = float3(0, 0, 1);
+        outMaterialIdx = 0;
+
+        const int2 size = int2(Surface.Dimensions(viewBase));
+
+        for (int i = 0; i < maxSteps; i++)
+        {
+            const float3 currentPos = rayStart + rayDir * (i * stepSize);
+            float4 currentPosProj = mul(Camera.ViewProjection, float4(currentPos, 1.0));
+            currentPosProj.xyz /= currentPosProj.w;
+            const float2 currentUV = currentPosProj.xy * 0.5 + 0.5;
+            if (any(currentUV < float2(0.0)) || any(currentUV > float2(1.0)))
+                continue;
+
+            const int2 sampleCoord = clamp(int2(currentUV * float2(size)), int2(0), size - 1);
+            const Surface.FSurfaceGeometry sample = Surface.LoadGeometry(viewBase, sampleCoord);
+            if (!Surface.IsValid(sample.Depth))
+                continue;
+
+            const float3 samplePosition = Surface.ReconstructPosition(
+                Camera.ProjectionInverse, Camera.ModelViewInverse, sampleCoord, uint2(size),
+                sample.Depth);
+            const float viewSpaceCurrentDepth = mul(Camera.ModelView, float4(currentPos, 1.0)).z;
+            const float viewSpaceSampleDepth = mul(Camera.ModelView, float4(samplePosition, 1.0)).z;
+
+            if (viewSpaceCurrentDepth < viewSpaceSampleDepth &&
+                viewSpaceCurrentDepth > viewSpaceSampleDepth - depthTolerance)
+            {
+                outPosition = samplePosition;
+                outNormal = normalize(sample.Normal);
+                outMaterialIdx = Surface.LoadMaterialId(viewBase, sampleCoord);
+                return true;
+            }
+        }
+        return false;
+    }
+
     public bool TraceInScreenSpace(float3 position, float3 rayDir, float maxDistance, float depthTolerance,
                                    out float3 outPosition, out float3 outNormal, out uint outMaterialIdx)
     {
+        if (Surface.IsPathActive(Bindless.GetGpuscene().CustomData2))
+        {
+            return TraceInScreenSpaceSurface(position, rayDir, maxDistance, depthTolerance,
+                                             outPosition, outNormal, outMaterialIdx);
+        }
+
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
         GPUVertex* Vertices = Bindless.GetGpuscene().Vertices;
         NodeProxy* NodeProxies = Bindless.GetGpuscene().Nodes;
@@ -345,6 +434,53 @@ namespace Common
         return true;
     }
 
+    // Surface-path replacement for LoadVisibilitySurfacePlane. The Primary Surface already holds a
+    // dense depth and normal, so a march step costs two texture reads instead of re-fetching three
+    // vertices, re-skinning them, transforming them and intersecting the triangle plane.
+    //
+    // The plane it reports is the *shading* plane, not the exact geometric triangle plane: normal
+    // maps and smooth vertex normals perturb it. For an occlusion approximation that is the right
+    // trade (see the accuracy caveats on ScreenSpaceShadowVisibility); a caller that genuinely
+    // needs the exact triangle plane must keep using LoadVisibilitySurfacePlane.
+    bool LoadSurfaceShadingPlane(int2 pixel, int2 size, out float3 worldPosition,
+                                 out float3 worldNormal)
+    {
+        worldPosition = float3(0, 0, 0);
+        worldNormal = float3(0, 0, 1);
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+        const Surface.FSurfaceGeometry geometry =
+            Surface.LoadGeometry(Bindless.GetGpuscene().CustomData0, pixel);
+        if (!Surface.IsValid(geometry.Depth))
+        {
+            return false;
+        }
+        const float normalLengthSquared = dot(geometry.Normal, geometry.Normal);
+        if (normalLengthSquared < 1e-8f)
+        {
+            return false;
+        }
+
+        worldPosition = Surface.ReconstructPosition(
+            Camera.ProjectionInverse, Camera.ModelViewInverse, pixel, uint2(size), geometry.Depth);
+        // Orient toward the camera for the same reason the visibility plane does: callers reason
+        // about what lies in front of or behind the face the camera can see.
+        const float3 eye = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1)).xyz;
+        const float3 normal = geometry.Normal * rsqrt(normalLengthSquared);
+        worldNormal = dot(normal, worldPosition - eye) > 0.0f ? -normal : normal;
+        return true;
+    }
+
+    // Dispatch between the two: the Primary Surface when the pass declared it, the per-step
+    // visibility decode otherwise. Renderers that have not migrated keep their exact old behaviour.
+    bool LoadOccluderPlane(int2 pixel, int2 size, out float3 worldPosition, out float3 worldNormal)
+    {
+        if (Surface.IsPathActive(Bindless.GetGpuscene().CustomData2))
+        {
+            return LoadSurfaceShadingPlane(pixel, size, worldPosition, worldNormal);
+        }
+        return LoadVisibilitySurfacePlane(pixel, size, worldPosition, worldNormal);
+    }
+
     // Coarse contact shadow between a shading point and a finite light, marched against the
     // visibility buffer. The visibility buffer only holds what the camera can see, so every
     // uncertain path here fails *open*: a missed occluder is a light leak that reads as soft
@@ -438,7 +574,7 @@ namespace Common
             float3 occluderPosition;
             float3 occluderNormal;
             const int2 sampleCoord = clamp(int2(uv * float2(size)), int2(0), size - 1);
-            if (!LoadVisibilitySurfacePlane(sampleCoord, size, occluderPosition, occluderNormal))
+            if (!LoadOccluderPlane(sampleCoord, size, occluderPosition, occluderNormal))
             {
                 continue;
             }

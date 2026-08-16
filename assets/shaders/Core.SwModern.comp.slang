@@ -1,21 +1,28 @@
 import Shader.Bindless;
 import Shader.PathTracing;
+import Shader.SurfaceBuffer;
+import Shader.ShadingScheduler;
 #include "common/ShaderClock.slang"
-#include "common/CheckerboardRendering.slang"
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     const uint2 size = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
-    const uint2 pixel = ResolveShadingPixel(DTid.xy);
+    const uint2 pixel = Scheduler.ResolveAnalyticPixel(
+        DTid.xy, Scheduler.IsCheckerboardActive(Bindless.GetGpuscene().CustomData2),
+        Bindless.GetGpuscene().Camera[0].TotalFrames);
     if (any(pixel >= size))
     {
         return;
     }
     START_SHADERCLOCK()
 
-    FVisibilityBufferRayCaster rayCaster;
+    // On the Primary Surface path the primary hit is replayed from the dense G-buffer
+    // Core.SurfaceBuild produced; otherwise the visibility buffer is decoded inline.
+    const bool surfacePath = Surface.IsPathActive(Bindless.GetGpuscene().CustomData2);
+    FVisibilityBufferRayCaster visibilityRayCaster;
+    FSurfacePrimaryRayCaster surfaceRayCaster;
     FAmbientCubeRayTracerIndirect tracer;
     FShadowMapDirectIlluminator dIlluminator;
 
@@ -29,7 +36,17 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.SecondaryDirectMode = 0;
     renderer.Init(pixel);
 
-    if( !renderer.PrimaryHit(rayCaster) )
+    bool primaryHit;
+    if (surfacePath)
+    {
+        primaryHit = renderer.PrimaryHit(surfaceRayCaster);
+    }
+    else
+    {
+        primaryHit = renderer.PrimaryHit(visibilityRayCaster);
+    }
+
+    if( !primaryHit )
     {
         END_SHADERCLOCK(pixel)
         return;

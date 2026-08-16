@@ -261,6 +261,7 @@ namespace Vulkan
         Assets::UniformBufferObject ubo = renderer_.LastUniformBufferObject();
         ubo.ViewportRect = glm::vec4(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height));
         ubo.Jitter = glm::vec4(0.0f);
+        ubo.CheckerboardSparseLighting = false;
         ubo.TemporalFrames = 1;
         ubo.PrimaryRayJitter = false;
         ubo.ProgressiveRender = false;

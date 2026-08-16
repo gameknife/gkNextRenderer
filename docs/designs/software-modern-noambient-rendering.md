@@ -25,9 +25,16 @@ last_updated: 2026-07-17
 
 ## 当前 pass 顺序
 
+`r.surface.build=0`（默认，legacy 路径）：
+
 1. `Core.SwModernNoAmbient.comp.slang` 从 visibility buffer 重建表面并写 full-resolution G-buffer/output。
 2. 若 `r.gtao.enable`，`Core.GTAO.comp.slang` 在 half-resolution `R16_SFLOAT` 的 `RT_GTAO` 上计算 horizon visibility。
 3. `Process.GTAOCompose.comp.slang` 以 3×3 depth/normal joint bilateral 上采样 AO，合成天光，画 selection/hover/lock/danger outline，并编码 HDR 或做 SDR tonemap 到 `RT_SCENE_COLOR`。
+
+`r.surface.build=1`（[Primary Surface 路径](visibility-surface-gbuffer-shading-scheduler.md)）：
+Core 拆成 `Core.SurfaceBuild`（全率解析 G-buffer）+ `Core.SwModernNoAmbientSurface`（只做光照），
+GTAO 因此前移到 Build 之后、着色之前——它读的 depth/normal 不再是着色阶段的输出。compose 与
+GTAO 的合成语义完全不变。两条路径的光照 kernel 是 `common/NoAmbientShading.slang` 里的同一份代码。
 
 着色阶段有意把光照拆开：
 

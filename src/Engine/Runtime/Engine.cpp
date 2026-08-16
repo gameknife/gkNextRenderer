@@ -1664,6 +1664,22 @@ std::optional<Runtime::Agent::FAgentQueryValue> NextEngine::QueryAgentControl(co
         switch (GetEngineStatus()) { case NextRenderer::EApplicationStatus::Starting: return std::string("Starting"); case NextRenderer::EApplicationStatus::Running: return std::string("Running"); case NextRenderer::EApplicationStatus::Loading: return std::string("Loading"); default: return std::string("AsyncPreparing"); }
     }
     if (query == "engine.rendererType") return static_cast<int64_t>(renderer_->CurrentLogicRendererType());
+    // Rate diagnostics: agent scripts assert on these when measuring the checkerboard paths, so a
+    // silently inactive path shows up as a failed assertion instead of as flat timings.
+    if (query == "engine.checkerboardActive") return renderer_->IsCheckerboardRenderingActive();
+    if (query == "engine.sparseCheckerboardActive") return renderer_->IsSparseCheckerboardLightingActive();
+    // engine.gpuTime.<SCOPED_GPU_TIMER name>, in milliseconds. Agent scripts need this to record a
+    // per-pass GPU comparison table; the value is the profiler's most recently resolved frame, so
+    // read it after the configuration under test has been running for several frames.
+    if (query.rfind("engine.gpuTime.", 0) == 0)
+    {
+        const Runtime::FrameProfiler* profiler = renderer_ != nullptr ? renderer_->Profiler() : nullptr;
+        if (profiler == nullptr)
+        {
+            return std::nullopt;
+        }
+        return static_cast<double>(profiler->GetGpuTime(query.substr(15).c_str()));
+    }
     if (query == "scene.nodeCount") return static_cast<int64_t>(GetScene().Nodes().size());
     if (query == "scene.renderProxyCount")
         return static_cast<int64_t>(GetScene().GetIndirectDrawBatchCount());

@@ -1,0 +1,135 @@
+{
+  "name": "surface-noambient-strict",
+  "target": "gkNextRenderer",
+  "scene": "assets/models/playground.glb",
+  "defaults": {
+    "waitFrames": 0,
+    "stepTimeoutMs": 15000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running",
+      "timeoutMs": 15000
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 4
+    },
+    {
+      "type": "cvar",
+      "name": "sys.tickPhysics",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "sys.tickAnimation",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.type",
+      "set": 0
+    },
+    {
+      "type": "cvar",
+      "name": "r.checkerboardRendering",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "r.gtao.enable",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "r.lightObject.screenSpaceShadow",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "r.surface.build",
+      "set": false
+    },
+    {
+      "type": "wait-frames",
+      "n": 32
+    },
+    {
+      "type": "assert",
+      "query": "cvar.r.surface.build",
+      "op": "ge",
+      "value": ""
+    },
+    {
+      "type": "assert",
+      "query": "engine.gpuTime.surface build",
+      "op": "ge",
+      "value": 0
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_strict_legacy"
+    },
+    {
+      "type": "cvar",
+      "name": "r.surface.build",
+      "set": true
+    },
+    {
+      "type": "wait-frames",
+      "n": 32
+    },
+    {
+      "type": "assert",
+      "query": "cvar.r.surface.build",
+      "op": "ge",
+      "value": ""
+    },
+    {
+      "type": "assert",
+      "query": "engine.gpuTime.surface build",
+      "op": "ge",
+      "value": 0
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_strict_surface"
+    },
+    {
+      "type": "cvar",
+      "name": "r.surface.build",
+      "set": false
+    },
+    {
+      "type": "wait-frames",
+      "n": 32
+    },
+    {
+      "type": "assert",
+      "query": "cvar.r.surface.build",
+      "op": "ge",
+      "value": ""
+    },
+    {
+      "type": "assert",
+      "query": "engine.gpuTime.surface build",
+      "op": "ge",
+      "value": 0
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_strict_legacy2"
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

@@ -522,6 +522,12 @@ namespace Vulkan::GaussianSplat
         sortCacheValid_ = true;
     }
 
+    bool GaussianSplatPass::PaintsWholeSceneThisFrame() const
+    {
+        const auto settings = Modules::Splat::GetSettings(*NextEngine::GetInstance());
+        return pipeline_ != nullptr && settings != nullptr && settings->visible;
+    }
+
     void GaussianSplatPass::Execute(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         const auto settings = Modules::Splat::GetSettings(*NextEngine::GetInstance());
