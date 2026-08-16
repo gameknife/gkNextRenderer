@@ -15,6 +15,13 @@ namespace Vulkan::SoftwareModern
         deferredShadingPipeline_ = std::make_unique<PipelineCommon::ZeroBindPipeline>(
             SwapChain(), "assets/shaders/Core.SwModern.comp.slang.spv", GetScene());
         surfaceBuild_.CreateSwapChain(SwapChain(), GetScene());
+        scheduler_.CreateSwapChain(SwapChain(), GetScene());
+        standardBucketPipeline_ = std::make_unique<PipelineCommon::ZeroBindPipeline>(
+            SwapChain(), "assets/shaders/Core.SwModernStandard.comp.slang.spv", GetScene());
+        backgroundBucketPipeline_ = std::make_unique<PipelineCommon::ZeroBindPipeline>(
+            SwapChain(), "assets/shaders/Core.TracingBackground.comp.slang.spv", GetScene());
+        emissiveBucketPipeline_ = std::make_unique<PipelineCommon::ZeroBindPipeline>(
+            SwapChain(), "assets/shaders/Core.TracingEmissive.comp.slang.spv", GetScene());
         samplePostChain_.CreateSwapChain(SwapChain(), GetScene());
     }
 
@@ -22,6 +29,10 @@ namespace Vulkan::SoftwareModern
     {
         deferredShadingPipeline_.reset();
         surfaceBuild_.DeleteSwapChain();
+        scheduler_.DeleteSwapChain();
+        standardBucketPipeline_.reset();
+        backgroundBucketPipeline_.reset();
+        emissiveBucketPipeline_.reset();
         samplePostChain_.DeleteSwapChain();
     }
 
@@ -34,11 +45,18 @@ namespace Vulkan::SoftwareModern
         baseRender_.ConfigureSurfacePath(gpuScene);
         baseRender_.ConfigureCheckerboardShading(gpuScene);
 
+        const bool scheduled =
+            surfacePath && baseRender_.IsSurfaceSchedulerActive() && scheduler_.IsValid();
+
         if (surfacePath)
         {
             // Resolve the visibility buffer once, at full rate. The tracing set consumes
             // RT_SPECULAR_ALBEDO, so this build writes it too.
             surfaceBuild_.Run(baseRender_, commandBuffer, gpuScene, true);
+        }
+        if (scheduled)
+        {
+            scheduler_.Classify(baseRender_, commandBuffer, gpuScene);
         }
 
         if (surfacePath)
@@ -78,13 +96,23 @@ namespace Vulkan::SoftwareModern
 
         {
             SCOPED_GPU_TIMER("shadingpass");
-            deferredShadingPipeline_->BindPipeline(commandBuffer, gpuScene);
-            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(
-                              baseRender_.CheckerboardDispatchWidth(extent.width, gpuScene), 8),
-                          Utilities::Math::GetSafeDispatchCount(extent.height, 8), 1);
-            baseRender_.ResolveCheckerboardShading(
-                commandBuffer, gpuScene, PipelineCommon::ECheckerboardResolveSet::Tracing);
+            if (scheduled)
+            {
+                using EBucket = PipelineCommon::ShadingSchedulerPass::EBucket;
+                scheduler_.DispatchBucket(commandBuffer, *standardBucketPipeline_, gpuScene, EBucket::Standard);
+                scheduler_.DispatchBucket(commandBuffer, *backgroundBucketPipeline_, gpuScene, EBucket::Background);
+                scheduler_.DispatchBucket(commandBuffer, *emissiveBucketPipeline_, gpuScene, EBucket::Emissive);
+            }
+            else
+            {
+                deferredShadingPipeline_->BindPipeline(commandBuffer, gpuScene);
+                vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(
+                                  baseRender_.CheckerboardDispatchWidth(extent.width, gpuScene), 8),
+                              Utilities::Math::GetSafeDispatchCount(extent.height, 8), 1);
+            }
         }
+        baseRender_.ResolveCheckerboardShading(
+            commandBuffer, gpuScene, PipelineCommon::ECheckerboardResolveSet::Tracing);
 
         const auto& frameSettings = baseRender_.FrameSettings();
         samplePostChain_.Run(baseRender_, commandBuffer, imageIndex, {

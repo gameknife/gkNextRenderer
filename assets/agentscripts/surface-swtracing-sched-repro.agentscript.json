@@ -1,0 +1,87 @@
+{
+  "name": "surface-swtracing-sched-repro",
+  "target": "gkNextRenderer",
+  "scene": "assets/models/playground.glb",
+  "defaults": {
+    "waitFrames": 0,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running",
+      "timeoutMs": 30000
+    },
+    {
+      "type": "cvar",
+      "name": "sys.tickPhysics",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "sys.tickAnimation",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.type",
+      "set": 4
+    },
+    {
+      "type": "cvar",
+      "name": "r.samples",
+      "set": 2
+    },
+    {
+      "type": "cvar",
+      "name": "r.restir.enable",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "r.surface.build",
+      "set": true
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 1
+    },
+    {
+      "type": "wait-frames",
+      "n": 60
+    },
+    {
+      "type": "log",
+      "message": "=== swtracing analytic ok ==="
+    },
+    {
+      "type": "cvar",
+      "name": "r.surface.scheduler",
+      "set": true
+    },
+    {
+      "type": "wait-frames",
+      "n": 60
+    },
+    {
+      "type": "log",
+      "message": "=== swtracing scheduler ok ==="
+    },
+    {
+      "type": "assert",
+      "query": "engine.totalFrames",
+      "op": "ge",
+      "value": 1
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

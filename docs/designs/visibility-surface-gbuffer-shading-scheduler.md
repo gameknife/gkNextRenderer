@@ -183,6 +183,22 @@ dispatch 的形状是 tile 的而工作密度只有一半——解析式路径�
 比省下的还多；**仍按 tile 数 dispatch、让后一半 group 立刻退出** 省掉了 atomic，但 lane 压实也一起
 没了（shading 退回 0.135 ms）。
 
+三个已迁移 renderer 都接了 scheduler。`Standard` 每个 renderer 一个 kernel，其 Core Shading 体与
+对应的解析式入口共用一份代码（`common/NoAmbientShading.slang` / `SwModernShading.slang` /
+`SwTracingShading.slang`）；`Background` 与 `Emissive` 则按 renderer 家族共享——NoAmbient 一套、
+两个 tracing renderer 共用一套，因为「天空是什么颜色」不取决于旁边的表面由谁着色。
+
+tracing 家族的两个 terminal kernel 是手写的，而不是调用 `FPathTracingRenderer.PrimaryHit`：那条路
+要付一整个 `Surface.Load`（八张平面）加十一个 RWTexture 句柄才产生四次 store，在主 kernel 里这些
+延迟被邻居的重活盖住，独立 dispatch 之后完全暴露。**`PrimaryHit` 的两个 terminal 分支仍然是契约
+权威**，改一边必须改另一边，两处都写了这条注释。
+
+**ReSTIR 与 scheduler 在 SoftwareTracing 上互斥**：`GPUScene.ReservedAddress0` 是唯一的 pass-local
+资源槽（ReSTIR resource table vs scheduler tile buffer），`CustomData1` 同样冲突，而 GPUScene 正好
+是 128 字节——push constant 的常见下限，加不了第三个槽。这个排他性必须对**所有**调用方可见：
+`RestirIsAvailable()` 只判断指针非空，scheduler 打开时它会把 tile 数据当 ReSTIR 表解引用并写进随机
+显存（实测 `ERROR_DEVICE_LOST`），所以那个函数本身现在先检查 `Surface.IsSchedulerActive`。
+
 checkerboard 下 `Background`/`Emissive` 保持全率（kernel 近乎免费，且它们的结果是精确的），
 `Standard` 只认领当帧 parity。因此 lighting resolve 在 scheduler 打开时必须跳过 background/emissive
 像素——否则会用邻居近似值覆盖已经正确的值。
@@ -194,11 +210,15 @@ Standard kernel 去掉 miss/emissive 分支后确实变快（1080p 0.186→0.152
 `shading + classify` 从全率 0.192 ms 降到半率 0.159 ms（0.83×，压实前是 0.98×），`Standard` kernel
 的半率耗时 0.117 ms 已与解析式路径完全一致。
 
-但**相对解析式仍然是负收益**，因此 `r.surface.scheduler` 默认关闭：分类的 0.04 ms（1080p）/
-0.09 ms（4K）对 NoAmbient 这种 0.12 ms 的 Standard kernel 来说太贵——分类占到 kernel 本身的三分之一。
-这不是实现瑕疵，而是「kernel 太便宜、摊不掉分类成本」。要让 scheduler 真正划算，它得接到 Standard
-kernel 重得多的 renderer 上（SwTracing 的 shading 是 NoAmbient 的约 35 倍）。机制价值（为未来材质
-特征桶铺路、把 parity 知识收进 allocation 层）与性能结论分开陈述；具体数字见开发计划。
+但**相对解析式仍然是负收益**，因此 `r.surface.scheduler` 默认关闭。三个 renderer 上的 `sched/analytic`
+是 0.97×（SwTracing 全率）到 1.10×，只有最重的那个 kernel 打平。原因始终是同一个：分类的
+0.04 ms（1080p）/ 0.09 ms（4K）是固定成本，对 SwTracing 的 2.9 ms kernel 只占 1.4% 而 coherence 刚好
+抵掉，对 NoAmbient 的 0.12 ms kernel 就占了三分之一。这不是实现瑕疵，而是「kernel 还不够重，摊不掉
+分类成本」。
+
+真正会让成本模型翻转的不是继续优化调度器，而是让 bucket 承载它本来的目的——**不同的 shading 方式**
+（材质特征桶）。到那时分类是必需品而不是可选优化。机制价值（把 parity 知识收进 allocation 层、
+为材质特征桶铺路）与性能结论分开陈述；具体数字见开发计划。
 
 ### Resolve 收缩与 upscaler 契约
 

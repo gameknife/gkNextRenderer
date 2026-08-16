@@ -29,6 +29,7 @@ related_design: ../designs/visibility-surface-gbuffer-shading-scheduler.md
 | M3 | SoftwareModern / SoftwareTracing 迁移 | 完成 |
 | M4 | Shading Scheduler：tile 分类 + indirect dispatch | 完成，默认 off（相对解析式净收益为负） |
 | M4b | scheduler 的 lane 压实 | 完成，半率相对全率 0.98× → **0.83×** |
+| M4c | scheduler 扩展到 SwModern / SwTracing | 完成，默认 off；代价从 1.13–1.40× 降到 0.97–1.10× |
 | M5a | legacy checkerboard 退场（checkerboard 现在依赖 surface 路径） | 完成 |
 | M5b | Native TAAU sparse 输入 | 完成，默认 off，**净收益为正** |
 | M5c | GTAO 合成下沉 | 完成，默认 off，**只有在半率着色下才划算** |
@@ -285,6 +286,50 @@ NoAmbient 的逐位一致同时证明了「legacy 入口改成调用共享 kerne
 **仍然默认 off**：相对解析式（0.117）依旧是负收益。分类的 0.04 ms 对 NoAmbient 这种 0.12 ms 的
 kernel 太贵。scheduler 要真正划算，得接到 Standard kernel 重得多的 renderer 上。
 
+## M4c — scheduler 扩展到 SwModern / SwTracing
+
+三个 bucket 都接上了：`Core.SwModernStandard` / `Core.SwTracingStandard`（各自的 Core Shading 体
+经 `common/SwModernShading.slang` / `common/SwTracingShading.slang` 与解析式入口共用，两条路径不会
+漂移），加上两个 renderer 共享的 `Core.TracingBackground` / `Core.TracingEmissive`。
+
+### 一个会 device lost 的坑
+
+`GPUScene.ReservedAddress0` 是唯一的 pass-local 资源槽，ReSTIR（resource table）和 scheduler
+（tile buffer）都要用它；`CustomData1` 同样冲突（frame stamp vs tile 容量）。GPUScene 已经正好是
+**128 字节**——push constant 的常见下限（移动端），加不了第三个槽。
+
+真正危险的是 `RestirIsAvailable()` 只判断指针非空：scheduler 打开时它看到 tile buffer 的地址，
+于是把 tile 数据当 ReSTIR 表解引用，读出垃圾指针后写进随机显存 —— **实测直接 `ERROR_DEVICE_LOST`**。
+
+修法是在源头让排他性对所有调用方可见，而不是只在一处短路：`RestirIsAvailable()` 现在先检查
+`Surface.IsSchedulerActive(CustomData2)`。C++ 侧 `SoftwareTracingRenderer` 也拒绝在 ReSTIR 打开时
+启用 scheduler。
+
+### 两次优化
+
+| | swmodern full | swmodern cb | swtracing full | swtracing cb |
+| --- | --- | --- | --- | --- |
+| 初版 | 1.32× | 1.16× | 1.09× | 1.40× |
+| `NthSetBit` 改 5 步二分（原本 32 次线性扫描） | 1.32× | 1.13× | 1.13× | **1.03×** |
+| terminal bucket 精简（不再复用 `PrimaryHit`） | **1.06×** | **1.10×** | **0.97×** | **1.06×** |
+
+（`sched/analytic` 的 `shading + classify + build` 合计比，1080p playground，两次独立运行取一致值。）
+
+terminal bucket 原本直接调 `PrimaryHit`——为了不让 sky/emissive 的写出集有第二份会漂移的拷贝。
+但那条路要付一整个 `Surface.Load`（八张平面）加 11 个 RWTexture 句柄，只为产生四次 store；在
+主 kernel 里这些延迟被邻居的重活盖住了，独立 dispatch 之后就全部暴露。现在改成手写，并在两边
+都注明 `PrimaryHit` 仍是契约权威。
+
+### 结论
+
+**唯一打平的是 SwTracing 全率（0.97–1.03×）**——它的 Standard kernel 有 2.9 ms，分类那 0.040 ms
+只占 1.4%，coherence 的收益刚好抵掉。其余三种组合是 1.06–1.10×，仍然略负。
+
+所以 `r.surface.scheduler` 继续默认 off。整轮下来把代价从 1.13–1.40× 压到 0.97–1.10×，机制在三个
+renderer 上都正确、稳定；但**分类那 0.04 ms 的固定成本，需要比 SwTracing 更重的 kernel 才能真正
+赚回来**。下一个真正有意义的推动是让 bucket 承载它本来的目的——不同的 shading 方式（材质特征桶），
+那时分类是**必需**的而不是可选优化，成本模型才会翻转。
+
 ## 一个排查陷阱
 
 `engine.checkerboardActive` 报的是**引擎级资格**，不是每个 renderer 的实际决定。SoftwareTracing 在
@@ -366,8 +411,6 @@ ambient 项，`Process.GTAOCompose` 不再上采样。上采样代码收进 `com
 
 - **材质特征桶**：出现第二种真实 shading 方式（需要独立 kernel 的特殊 BRDF）时，由 material ID
   查 feature mask 归桶。
-- **调度器扩展到 SwModern / SwTracing**：两者目前只用解析式 allocation；它们的 Background/Emissive
-  像素相对于重得多的 Standard kernel 占比很小，按 M4 的结论收益不明显。
 - **sparse 输入扩展到 SwModern / SwTracing**：机制是通用的（`Process.Compose` 已经会跳过未着色
   像素），但尚未在这两个 renderer 上实测。
 - **Build 与 classification 合并 dispatch**：M4 实测分类只占 0.04–0.09 ms，暂无必要。

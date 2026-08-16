@@ -1,6 +1,5 @@
 #include "Engine/Rendering/SoftwareTracing/SoftwareTracingRenderer.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
-#include "Engine/Rendering/PipelineCommon/RestirDI.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Utilities/Math.hpp"
 
@@ -20,14 +19,24 @@ void SoftwareTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
 {
     deferredShadingPipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Core.SwTracing.comp.slang.spv", GetScene()));
     surfaceBuild_.CreateSwapChain(SwapChain(), GetScene());
+    scheduler_.CreateSwapChain(SwapChain(), GetScene());
+    standardBucketPipeline_.reset(new PipelineCommon::ZeroBindPipeline(
+        SwapChain(), "assets/shaders/Core.SwTracingStandard.comp.slang.spv", GetScene()));
+    backgroundBucketPipeline_.reset(new PipelineCommon::ZeroBindPipeline(
+        SwapChain(), "assets/shaders/Core.TracingBackground.comp.slang.spv", GetScene()));
+    emissiveBucketPipeline_.reset(new PipelineCommon::ZeroBindPipeline(
+        SwapChain(), "assets/shaders/Core.TracingEmissive.comp.slang.spv", GetScene()));
     samplePostChain_.CreateSwapChain(SwapChain(), GetScene());
 }
 
 void SoftwareTracingRenderer::DeleteSwapChain()
 {
     deferredShadingPipeline_.reset();
-    restirSpatialPipeline_.reset();
     surfaceBuild_.DeleteSwapChain();
+    scheduler_.DeleteSwapChain();
+    standardBucketPipeline_.reset();
+    backgroundBucketPipeline_.reset();
+    emissiveBucketPipeline_.reset();
     samplePostChain_.DeleteSwapChain();
 }
 
@@ -36,32 +45,25 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
     const bool isPrimaryView = baseRender_.ActiveViewBankBase() == 0;
     const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
     const auto& frameSettings = baseRender_.FrameSettings();
-    const bool restirEnabled = frameSettings.userSettings.RestirEnable;
-    auto& restir = baseRender_.RestirDIResources();
-    if (restirEnabled && isPrimaryView)
-    {
-        restir.Prepare(commandBuffer, activeExtent, !frameSettings.progressiveRendering);
-    }
 
     const bool surfacePath = baseRender_.IsSurfacePathActive();
     Assets::GPUScene gpuScene =
         GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase());
     baseRender_.ConfigureSurfacePath(gpuScene);
-    baseRender_.ConfigureCheckerboardShading(gpuScene, !restirEnabled);
-    if (restirEnabled && restir.HasResources())
-    {
-        gpuScene.ReservedAddress0 = restir.ResourceTableAddress();
-        if (isPrimaryView)
-        {
-            gpuScene.CustomData1 = restir.FrameStamp();
-        }
-    }
+    baseRender_.ConfigureCheckerboardShading(gpuScene);
+
+    const bool scheduled =
+        surfacePath && baseRender_.IsSurfaceSchedulerActive() && scheduler_.IsValid();
 
     if (surfacePath)
     {
         // Resolve the visibility buffer once, at full rate, before anything shades from it.
         // The tracing set consumes RT_SPECULAR_ALBEDO, so this build writes it too.
         surfaceBuild_.Run(baseRender_, commandBuffer, gpuScene, true);
+    }
+    if (scheduled)
+    {
+        scheduler_.Classify(baseRender_, commandBuffer, gpuScene);
     }
 
     {
@@ -102,45 +104,21 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
             }, "software tracing shading");
         }
         // cs shading pass
-        deferredShadingPipeline_->BindPipeline(commandBuffer, gpuScene);
-        vkCmdDispatch(commandBuffer,
-            Utilities::Math::GetSafeDispatchCount(
-                baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
-            Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
-    }
-
-    if (restirEnabled && isPrimaryView && restir.HasResources())
-    {
-        if (!restirSpatialPipeline_)
+        if (scheduled)
         {
-            restirSpatialPipeline_.reset(new PipelineCommon::ZeroBindPipeline(
-                SwapChain(), "assets/shaders/Core.SwRestirSpatialShade.comp.slang.spv", GetScene()));
+            using EBucket = PipelineCommon::ShadingSchedulerPass::EBucket;
+            scheduler_.DispatchBucket(commandBuffer, *standardBucketPipeline_, gpuScene, EBucket::Standard);
+            scheduler_.DispatchBucket(commandBuffer, *backgroundBucketPipeline_, gpuScene, EBucket::Background);
+            scheduler_.DispatchBucket(commandBuffer, *emissiveBucketPipeline_, gpuScene, EBucket::Emissive);
         }
-
-        restir.InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
-                             VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
-        baseRender_.TransitionActiveViewImages(commandBuffer, {
-            {Assets::Bindless::RT_SINGLE_DIFFUSE, PipelineCommon::ERenderStage::Compute,
-             PipelineCommon::EResourceAccess::ShaderRead |
-                 PipelineCommon::EResourceAccess::ShaderWrite},
-            {Assets::Bindless::RT_OBJECTID_0, PipelineCommon::ERenderStage::Compute,
-             PipelineCommon::EResourceAccess::ShaderRead},
-            {Assets::Bindless::RT_NORMAL, PipelineCommon::ERenderStage::Compute,
-             PipelineCommon::EResourceAccess::ShaderRead},
-            {Assets::Bindless::RT_ALBEDO, PipelineCommon::ERenderStage::Compute,
-             PipelineCommon::EResourceAccess::ShaderRead},
-            {Assets::Bindless::RT_BSDF_DATA, PipelineCommon::ERenderStage::Compute,
-             PipelineCommon::EResourceAccess::ShaderRead},
-            {Assets::Bindless::RT_PREV_DEPTHBUFFER, PipelineCommon::ERenderStage::Compute,
-             PipelineCommon::EResourceAccess::ShaderRead},
-        }, "software restir spatial shade");
-
-        SCOPED_GPU_TIMER("software restir spatial shade");
-        restirSpatialPipeline_->BindPipeline(commandBuffer, gpuScene);
-        vkCmdDispatch(commandBuffer,
-                      Utilities::Math::GetSafeDispatchCount(
-                          baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
-                      Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
+        else
+        {
+            deferredShadingPipeline_->BindPipeline(commandBuffer, gpuScene);
+            vkCmdDispatch(commandBuffer,
+                Utilities::Math::GetSafeDispatchCount(
+                    baseRender_.CheckerboardDispatchWidth(activeExtent.width, gpuScene), 8),
+                Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
+        }
     }
 
     baseRender_.ResolveCheckerboardShading(

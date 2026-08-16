@@ -146,7 +146,7 @@ namespace NextCVar
         GK_CVAR_UINT("r.sharc.accumulatedFrameMax", settings, SharcAccumulatedFrameMax, 64, ECVarFlags::Archive, "Official SHARC maximum temporal accumulation frames");
         GK_CVAR_UINT("r.sharc.responsiveFrameMax", settings, SharcResponsiveFrameMax, 8, ECVarFlags::Archive, "Official SHARC responsive temporal accumulation frames");
         GK_CVAR_UINT("r.sharc.staleFrameMax", settings, SharcStaleFrameMax, 180, ECVarFlags::Archive, "Official SHARC stale frame eviction threshold");
-        GK_CVAR_BOOL("r.restir.enable", settings, RestirEnable, false, ECVarFlags::Archive, "Enable ReSTIR DI resampling for PathTracing/SoftwareTracing primary-surface light direct lighting");
+        GK_CVAR_BOOL("r.restir.enable", settings, RestirEnable, false, ECVarFlags::Archive, "Enable ReSTIR DI resampling for PathTracing primary-surface light direct lighting");
         GK_CVAR_UINT_RANGE("r.restir.candidates", settings, RestirCandidates, 8, ECVarFlags::Archive, "ReSTIR initial candidate count per pixel", 1, 64);
         GK_CVAR_BOOL("r.restir.temporal", settings, RestirTemporal, true, ECVarFlags::Archive, "Enable ReSTIR temporal reservoir reuse");
         GK_CVAR_UINT_RANGE("r.restir.mClamp", settings, RestirMClamp, 160, ECVarFlags::Archive, "ReSTIR temporal reservoir M clamp", 1, 4096);

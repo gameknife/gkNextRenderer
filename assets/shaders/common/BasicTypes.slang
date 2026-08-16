@@ -721,9 +721,13 @@ public struct ALIGN_8 GPUScene
     /* Others */
     uint64_t2 Reserved_AmbientBase_Address;
 
-    // Raw pass-local resource address. TracingExtras below is the ReSTIR interpretation of the same
-    // word; the shading scheduler interprets it as its tile-list buffer. Only one pass owns it at a
-    // time, which is why it stays a bare address rather than a typed pointer.
+    // Raw pass-local resource address, and the only one of its kind: GPUScene sits exactly at the
+    // 128-byte push-constant floor, so there is no second slot to hand out. TracingExtras below is
+    // the ReSTIR interpretation of this word; the shading scheduler interprets it as its tile-list
+    // buffer. Exactly one subsystem may claim it per pass - the interpretations are raw pointer
+    // casts, so a second claimant does not fail loudly, it reads the other one's data as its own
+    // and takes the device down. Today ReSTIR belongs to the hardware path tracer and the scheduler
+    // to the surface renderers, and those sets do not overlap.
     public property uint64_t ReservedAddress0
     {
         get { return Reserved_AmbientBase_Address.x; }

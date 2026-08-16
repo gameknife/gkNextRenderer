@@ -120,7 +120,6 @@
 - [大气散射与高度雾开发计划](plans/atmosphere-and-height-fog-plan.md)（已完成 → [design](designs/atmosphere-and-height-fog-design.md)）
 - [Bindless 3D 纹理支持计划](plans/bindless-3d-texture-support-plan.md)（已完成）
 - [BSDF-aware Direct Lighting 计划](plans/bsdf-aware-direct-lighting-plan.md)（已实施 → [design](designs/pathtracing-restir-design.md)）
-- [SoftwareTracing Direct Lighting 与 ReSTIR DI 同步计划](plans/softwaretracing-direct-lighting-restir-plan.md)（已实施）
 - [SCAD Terrain 开发计划](plans/scad-terrain-plan.md)（M0–M4 已完成 → [design](designs/scad-terrain-design.md)）
 - [NextDayz 复杂 3C 与 ScadRig 分层动画开发计划](projects/nextdayz/nextdayz-3c-scadrig-development-plan.md)（已完成）
 - [NextDayz PVE 生存循环产品化开发计划](projects/nextdayz/nextdayz-productization-development-plan.md)（已完成）

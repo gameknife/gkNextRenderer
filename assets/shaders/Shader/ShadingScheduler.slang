@@ -160,31 +160,35 @@ namespace Scheduler
     }
 
     // Index of the n-th set bit of a 64-bit tile mask, or kTilePixels when there is no such bit.
-    // This is what turns "half the lanes test a bit and return" into "every lane owns a pixel".
+    // This is what turns "half the lanes test a bit and return" into "every lane owns a pixel", so
+    // it runs once per shaded pixel per frame and sits in the prologue of some very heavy kernels.
+    // Five popcount-guided halvings rather than a 32-iteration scan: a scan would make every lane in
+    // a wave pay for the highest bit index any of them needed.
     public uint NthSetBit(uint2 mask, uint n)
     {
+        if (n >= TilePixelCount(mask))
+        {
+            return kTilePixels;
+        }
+
         const uint lowCount = countbits(mask.x);
-        uint word = mask.x;
-        uint remaining = n;
-        uint base = 0u;
-        if (n >= lowCount)
-        {
-            word = mask.y;
-            remaining = n - lowCount;
-            base = 32u;
-        }
-        for (uint bit = 0u; bit < 32u; ++bit)
-        {
-            if ((word & (1u << bit)) != 0u)
-            {
-                if (remaining == 0u)
-                {
-                    return base + bit;
-                }
-                --remaining;
-            }
-        }
-        return kTilePixels;
+        const bool inHighWord = n >= lowCount;
+        uint word = inHighWord ? mask.y : mask.x;
+        uint remaining = inHighWord ? n - lowCount : n;
+        uint position = inHighWord ? 32u : 0u;
+
+        // The bit is known to exist in `word`, so each step can commit to a half unconditionally.
+        uint half = countbits(word & 0xFFFFu);
+        if (remaining >= half) { remaining -= half; position += 16u; word >>= 16u; }
+        half = countbits(word & 0xFFu);
+        if (remaining >= half) { remaining -= half; position += 8u; word >>= 8u; }
+        half = countbits(word & 0xFu);
+        if (remaining >= half) { remaining -= half; position += 4u; word >>= 4u; }
+        half = countbits(word & 0x3u);
+        if (remaining >= half) { remaining -= half; position += 2u; word >>= 2u; }
+        half = word & 1u;
+        if (remaining >= half) { position += 1u; }
+        return position;
     }
 
     // Compacted addressing: one workgroup covers two tiles, each served by half its lanes, so a
