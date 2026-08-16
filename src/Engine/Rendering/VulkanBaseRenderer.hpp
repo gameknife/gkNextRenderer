@@ -22,6 +22,7 @@
 #include <functional>
 #include <map>
 #include <array>
+#include <optional>
 #include <set>
 #include <unordered_map>
 
@@ -212,6 +213,16 @@ namespace Vulkan
         void DrawFrame();
         void ReloadShaders();
         void RequestRecreateSwapChain() { requestRecreateSwapChain_ = true; }
+
+        // Scene-viewport override. An editor host presents the scene into a sub-rect of the
+        // swapchain image (the dockspace central node), so the whole screen-space chain -- render
+        // extent, RT bank images, dispatch counts -- must be sized to that rect, not to the window.
+        // Without it the shaders read their screen size from full-window RT images and every pass
+        // shades the pixels the panels cover. The rect is in framebuffer pixels and persists across
+        // swapchain recreation; a size change rebuilds the swapchain resources like a window resize.
+        void SetSceneViewportRect(VkRect2D rect);
+        void ClearSceneViewportRect();
+        bool HasSceneViewportRect() const { return sceneViewport_.requested.has_value(); }
         VkPresentModeKHR RequestedPresentMode() const { return presentMode_; }
         void SetRequestedPresentMode(VkPresentModeKHR presentMode)
         {
@@ -645,6 +656,21 @@ namespace Vulkan
         uint32_t effectiveSuperResolutionMode_ =
             static_cast<uint32_t>(Rendering::Upscaler::EUpscaleMode::Native);
 
+        struct SceneViewportOverride
+        {
+            // Set by the host; absent means "render the whole swapchain image".
+            std::optional<VkRect2D> requested;
+            // Resolved rect seen last frame, used to detect that a drag has settled.
+            VkRect2D lastResolved{};
+            // Rect the current swapchain resources were built for.
+            VkExtent2D built{};
+            uint32_t unsettledFrames = 0;
+        };
+        // A dock splitter drag reports a new size every frame; rebuilding the swapchain on each of
+        // them would stall the drag, so wait for the size to hold still (or for the cap below).
+        static constexpr uint32_t kSceneViewportResizeDeferFrames = 12;
+        SceneViewportOverride sceneViewport_;
+
         // Device / swapchain internals
         void SelectPhysicalDevice(uint32_t gpuIdx);
         void SetPhysicalDevice(VkPhysicalDevice physicalDevice);
@@ -685,6 +711,10 @@ namespace Vulkan
         void CreateStorageImage(uint32_t bindlessIdx, VkExtent2D extent, VkFormat format, VkImageTiling tiling,
                                 VkImageUsageFlags usage, const char* debugName);
         void RecreateSwapChain();
+        // Clamps the requested scene viewport against the current swapchain image.
+        VkRect2D ResolveSceneViewportRect() const;
+        // Publishes the resolved rect for this frame and schedules a rebuild when its size changed.
+        void UpdateSceneViewportRect();
         void UpdateUniformBuffer(uint32_t imageIndex);
 
         // Frame stages

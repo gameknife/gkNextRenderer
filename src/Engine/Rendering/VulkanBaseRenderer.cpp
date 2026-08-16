@@ -1159,8 +1159,12 @@ namespace Vulkan
             ctx_.globalTexturePool->BindStorageTexture(
                 Assets::Bindless::RT_TONEMAP_INPUT, lateToneMapping_.inputImage->GetImageView());
 
+            // Unlike the input (which the upscaler and post filter write at view-local pixels),
+            // the tone-mapping output is addressed in swapchain pixels: every composed view writes
+            // it at its own output offset and blits that same rect out. It therefore has to cover
+            // the whole image, not just the rect the primary view happens to present into.
             lateToneMapping_.outputImage = std::make_unique<RenderImage>(
-                Device(), frame_.swapChain->OutputExtent(), VK_FORMAT_R16G16B16A16_SFLOAT,
+                Device(), frame_.swapChain->Extent(), VK_FORMAT_R16G16B16A16_SFLOAT,
                 VK_IMAGE_TILING_OPTIMAL,
                 VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                 false, "Late tone-mapping output");
@@ -1178,9 +1182,11 @@ namespace Vulkan
             for (size_t i = 0; i < frame_.swapChain->Images().size(); ++i)
             {
                 const std::string debugName = fmt::format("Frame Generation HUD-less {}", i);
+                // HUD-less color is a copy of the presented swapchain image, so it is sized in
+                // swapchain pixels rather than by the rect the scene presents into.
                 frameGeneration_.hudlessImages.emplace_back(std::make_unique<RenderImage>(
                     Device(),
-                    frame_.swapChain->OutputExtent(),
+                    frame_.swapChain->Extent(),
                     frame_.swapChain->Format(),
                     VK_IMAGE_TILING_OPTIMAL,
                     VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -1353,7 +1359,13 @@ namespace Vulkan
         frame_.currentImageIndex = 0;
         frame_.currentFence = nullptr;
         frame_.currentFenceSerial = 0;
-        VkExtent2D renderExtent = frame_.swapChain->Extent();
+        // Everything below sizes the screen-space chain against the presented scene rect, which is
+        // the whole image unless a host (the editor) reserves part of the window for its panels.
+        const VkRect2D sceneViewport = ResolveSceneViewportRect();
+        sceneViewport_.built = sceneViewport.extent;
+        sceneViewport_.lastResolved = sceneViewport;
+        sceneViewport_.unsettledFrames = 0;
+        VkExtent2D renderExtent = sceneViewport.extent;
         activeUpscalerType_ = Rendering::Upscaler::EUpscalerType::None;
         temporalSuperResolutionActive_ = false;
         effectiveSuperResolutionMode_ =
@@ -1362,7 +1374,7 @@ namespace Vulkan
         {
             const auto resolvedMode = Rendering::Upscaler::ResolveUpscaleMode(
                 settings.SuperResolution,
-                frame_.swapChain->Extent());
+                sceneViewport.extent);
             effectiveSuperResolutionMode_ = resolvedMode.mode;
 
             const FRendererContract& contract = GetRendererContract(logicRenderers_.current);
@@ -1388,7 +1400,7 @@ namespace Vulkan
                 upscaler_->SetActiveType(activeUpscalerType_);
                 const auto optimal = upscaler_->GetOptimalRenderSettings(
                     effectiveSuperResolutionMode_,
-                    frame_.swapChain->Extent(),
+                    sceneViewport.extent,
                     true,
                     frame_.swapChain->IsHDR(),
                     activeUpscalerType_);
@@ -1397,8 +1409,8 @@ namespace Vulkan
                             typeInfo.name,
                             GetRendererName(logicRenderers_.current),
                             renderExtent.width, renderExtent.height,
-                            frame_.swapChain->Extent().width,
-                            frame_.swapChain->Extent().height);
+                            sceneViewport.extent.width,
+                            sceneViewport.extent.height);
             }
             else if (requestedUpscalerType != Rendering::Upscaler::EUpscalerType::None &&
                      (!upscalerFallbackReported_ ||
@@ -1430,7 +1442,8 @@ namespace Vulkan
         }
 
         frame_.swapChain->UpdateRenderViewport(0, 0, renderExtent.width, renderExtent.height);
-        frame_.swapChain->UpdateOutputViewport( 0, 0, frame_.swapChain->Extent().width, frame_.swapChain->Extent().height);
+        frame_.swapChain->UpdateOutputViewport(sceneViewport.offset.x, sceneViewport.offset.y,
+                                               sceneViewport.extent.width, sceneViewport.extent.height);
 
         // Primary RenderView mirrors the swapchain's render rect (full-window, bank 0).
         {
@@ -1640,6 +1653,83 @@ namespace Vulkan
         NextEngine::GetInstance()->ResetProgressiveRenderingAccumulation();
     }
 
+    void VulkanBaseRenderer::SetSceneViewportRect(const VkRect2D rect)
+    {
+        sceneViewport_.requested = rect;
+    }
+
+    void VulkanBaseRenderer::ClearSceneViewportRect()
+    {
+        if (!sceneViewport_.requested.has_value())
+        {
+            return;
+        }
+        sceneViewport_.requested.reset();
+        if (frame_.swapChain &&
+            (sceneViewport_.built.width != frame_.swapChain->Extent().width ||
+             sceneViewport_.built.height != frame_.swapChain->Extent().height))
+        {
+            RequestRecreateSwapChain();
+        }
+    }
+
+    VkRect2D VulkanBaseRenderer::ResolveSceneViewportRect() const
+    {
+        const VkExtent2D full = frame_.swapChain->Extent();
+        if (!sceneViewport_.requested.has_value() || full.width == 0 || full.height == 0)
+        {
+            return VkRect2D{{0, 0}, full};
+        }
+
+        VkRect2D rect = *sceneViewport_.requested;
+        rect.offset.x = std::clamp(rect.offset.x, 0, static_cast<int32_t>(full.width) - 1);
+        rect.offset.y = std::clamp(rect.offset.y, 0, static_cast<int32_t>(full.height) - 1);
+        rect.extent.width = std::clamp(
+            rect.extent.width, 1u, full.width - static_cast<uint32_t>(rect.offset.x));
+        rect.extent.height = std::clamp(
+            rect.extent.height, 1u, full.height - static_cast<uint32_t>(rect.offset.y));
+        return rect;
+    }
+
+    void VulkanBaseRenderer::UpdateSceneViewportRect()
+    {
+        if (!sceneViewport_.requested.has_value() || !frame_.swapChain)
+        {
+            return;
+        }
+
+        const VkRect2D resolved = ResolveSceneViewportRect();
+        const bool sizeMatchesResources =
+            resolved.extent.width == sceneViewport_.built.width &&
+            resolved.extent.height == sceneViewport_.built.height;
+
+        // The render targets, the late tone-mapping images and the upscaler are all sized for
+        // sceneViewport_.built. Until a rebuild lands, present no more than that so a viewport that
+        // just grew cannot make a pass store past its allocation; a viewport that shrank simply
+        // resolves down, exactly as it did before this override existed.
+        frame_.swapChain->UpdateOutputViewport(
+            resolved.offset.x,
+            resolved.offset.y,
+            std::min(resolved.extent.width, sceneViewport_.built.width),
+            std::min(resolved.extent.height, sceneViewport_.built.height));
+
+        if (sizeMatchesResources)
+        {
+            sceneViewport_.lastResolved = resolved;
+            sceneViewport_.unsettledFrames = 0;
+            return;
+        }
+
+        const bool settled =
+            resolved.extent.width == sceneViewport_.lastResolved.extent.width &&
+            resolved.extent.height == sceneViewport_.lastResolved.extent.height;
+        sceneViewport_.lastResolved = resolved;
+        if (settled || ++sceneViewport_.unsettledFrames >= kSceneViewportResizeDeferFrames)
+        {
+            RequestRecreateSwapChain();
+        }
+    }
+
     void VulkanBaseRenderer::ReloadShaders()
     {
         // Keep shader refresh on the same complete resource lifecycle used by resize/recovery.
@@ -1803,13 +1893,15 @@ namespace Vulkan
             return;
         }
 
+        UpdateSceneViewportRect();
+
         if (requestRecreateSwapChain_)
         {
             RecreateSwapChain();
             requestRecreateSwapChain_ = false;
             return;
         }
-        
+
         const auto noTimeout = std::numeric_limits<uint64_t>::max();
         auto* engine = NextEngine::GetInstance();
         frameSettings_.userSettings = engine->GetUserSettings();
@@ -2972,8 +3064,8 @@ namespace Vulkan
         copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
         copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
         copyRegion.extent = {
-            frame_.swapChain->OutputExtent().width,
-            frame_.swapChain->OutputExtent().height,
+            frame_.swapChain->Extent().width,
+            frame_.swapChain->Extent().height,
             1};
         vkCmdCopyImage(
             commandBuffer,

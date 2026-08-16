@@ -34,7 +34,6 @@
 #include "Engine/Utilities/ImGui.hpp"
 #include "Engine/Utilities/Localization.hpp"
 #include "Engine/Utilities/Math.hpp"
-#include "Engine/Vulkan/SwapChain.hpp"
 
 #include <SDL3/SDL_dialog.h>
 #include <SDL3/SDL_process.h>
@@ -392,11 +391,17 @@ void EditorInterface::Render(Editor::EditorUiState& uiState)
             const int32_t outputY = Utilities::Math::floorToInt(framebufferViewport.Position.y);
             const uint32_t outputWidth = Utilities::Math::ceilToInt(framebufferViewport.Size.x);
             const uint32_t outputHeight = Utilities::Math::ceilToInt(framebufferViewport.Size.y);
-            const Vulkan::SwapChain& swapChain = editor_->GetEngine().GetRenderer().SwapChain();
+            // Hand the rect to the renderer rather than poking the swapchain's output viewport
+            // directly: the renderer also sizes the render extent and the RT bank to it, so the
+            // scene costs what the panel shows instead of what the whole window would.
+            const VkRect2D sceneViewport{{outputX, outputY}, {outputWidth, outputHeight}};
             const bool outputViewportChanged =
-                swapChain.OutputOffset().x != outputX || swapChain.OutputOffset().y != outputY ||
-                swapChain.OutputExtent().width != outputWidth || swapChain.OutputExtent().height != outputHeight;
-            swapChain.UpdateOutputViewport(outputX, outputY, outputWidth, outputHeight);
+                sceneViewportRect_.offset.x != sceneViewport.offset.x ||
+                sceneViewportRect_.offset.y != sceneViewport.offset.y ||
+                sceneViewportRect_.extent.width != sceneViewport.extent.width ||
+                sceneViewportRect_.extent.height != sceneViewport.extent.height;
+            sceneViewportRect_ = sceneViewport;
+            editor_->GetEngine().GetRenderer().SetSceneViewportRect(sceneViewport);
             if (outputViewportChanged)
             {
                 editor_->GetEngine().ResetProgressiveRenderingAccumulation();
