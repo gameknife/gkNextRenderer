@@ -114,7 +114,25 @@ uint SelectSunCascade(float viewDist, float4 splits)
     return 3;
 }
 
-float SampleSplatSunShadowCSM(UniformBufferObject camera, float3 worldPos, float3 normal, float viewDist)
+// CSM disk kernel 的随机旋转角。key 取 splat 中心（同一 quad 各顶点一致，避免旋转不同
+// 导致的插值错乱），时域序列与 SceneSampling.ScreenSpaceHash 相同：golden-ratio 每帧
+// 去相关，让时域 upscaler 把旋转 kernel 平均成均匀圆盘。
+float SplatSunShadowJitterRotation(float3 jitterKey, uint frame)
+{
+    uint seed = (asuint(jitterKey.x) * 0x9E3779B9u) ^ (asuint(jitterKey.y) * 0x85EBCA6Bu) ^
+                (asuint(jitterKey.z) * 0xC2B2AE35u);
+    seed ^= seed >> 16u;
+    seed *= 0x7FEB352Du;
+    seed ^= seed >> 15u;
+    seed *= 0x846CA68Bu;
+    seed ^= seed >> 16u;
+    return frac(float(seed & 0x00FFFFFFu) / 16777216.0 + float(frame) * 0.6180339887);
+}
+
+// 8-tap Vogel disk + slope-scaled bias；时域超分激活（PrimaryRayJitter）时逐帧随机
+// 旋转交给 upscaler 时域降噪，否则固定旋转退化为确定性 disk PCF。
+float SampleSplatSunShadowCSM(UniformBufferObject camera, float3 worldPos, float3 normal,
+                              float viewDist, float3 jitterKey)
 {
     const uint cascade = SelectSunCascade(viewDist, camera.CascadeSplits);
     const float4 lightPos = mul(camera.SunCascadeViewProjection[cascade], float4(worldPos, 1.0));
@@ -132,19 +150,21 @@ float SampleSplatSunShadowCSM(UniformBufferObject camera, float3 worldPos, float
     shadowMap.GetDimensions(texSize.x, texSize.y);
     const float2 texelSize = 1.0 / float2(texSize);
 
+    const float rotation = camera.PrimaryRayJitter
+        ? SplatSunShadowJitterRotation(jitterKey, camera.TotalFrames)
+        : 0.0;
+
     float shadow = 0.0;
     [unroll]
-    for (int dy = -1; dy <= 1; ++dy)
+    for (uint tap = 0u; tap < 8u; ++tap)
     {
-        [unroll]
-        for (int dx = -1; dx <= 1; ++dx)
-        {
-            const float2 offset = float2(dx, dy) * texelSize;
-            const float closestDepth = shadowMap.SampleLevel(uv + offset, 0).r;
-            shadow += (projCoords.z - bias) > closestDepth ? 0.0 : 1.0;
-        }
+        const float radius = sqrt((float(tap) + 0.5) * 0.125);
+        const float theta = float(tap) * 2.39996323 + rotation * 6.283185307179586;
+        const float2 offset = (2.0 * radius) * texelSize * float2(cos(theta), sin(theta));
+        const float closestDepth = shadowMap.SampleLevel(uv + offset, 0).r;
+        shadow += (projCoords.z - bias) > closestDepth ? 0.0 : 1.0;
     }
-    return shadow * (1.0 / 9.0);
+    return shadow * 0.125;
 }
 
 uint GetSplatAmbientCubeCascadeCount()
@@ -327,7 +347,8 @@ float3 ApplySceneLighting(GaussianSplat splat, SplatModelState model, UniformBuf
     float shadowMask = 1.0;
     if (camera.HasSun)
     {
-        shadowMask = SampleSplatSunShadowCSM(camera, worldPosition + worldUp * 0.015, worldUp, viewDist);
+        shadowMask = SampleSplatSunShadowCSM(camera, worldPosition + worldUp * 0.015, worldUp,
+                                            viewDist, splat.positionOpacity.xyz);
     }
 
     const float upwardSkyVisibility = SampleSplatUpSkyVisibility(worldPosition);

@@ -347,8 +347,26 @@ namespace Common
         return 3;
     }
 
-    // 3x3 PCF + slope-scaled bias，对 4 个 CSM cascade 都通用。
+    // CSM disk kernel 的随机旋转角：world position 白噪声 hash + 每帧 golden-ratio 去相关
+    // （与 SceneSampling.ScreenSpaceHash 相同的时域序列）。逐点独立、逐帧变化，是时域
+    // upscaler 把旋转 kernel 平均回均匀圆盘所需要的那种"快"噪声。
+    float SunShadowJitterRotation(float3 worldPos, uint frame)
+    {
+        uint seed = (asuint(worldPos.x) * 0x9E3779B9u) ^ (asuint(worldPos.y) * 0x85EBCA6Bu) ^
+                    (asuint(worldPos.z) * 0xC2B2AE35u);
+        seed ^= seed >> 16u;
+        seed *= 0x7FEB352Du;
+        seed ^= seed >> 15u;
+        seed *= 0x846CA68Bu;
+        seed ^= seed >> 16u;
+        return frac(float(seed & 0x00FFFFFFu) / 16777216.0f + float(frame) * 0.6180339887f);
+    }
+
+    // 8-tap Vogel disk + slope-scaled bias，对 4 个 CSM cascade 都通用。
     // 返回 [0,1]，1 = 完全无遮蔽，0 = 完全阴影。
+    // 时域超分激活（PrimaryRayJitter）时 disk kernel 逐帧随机旋转：单帧是有颗粒感的
+    // 随机采样，upscaler 的时域累积把多帧旋转 kernel 平均成均匀圆盘，得到比固定 3x3 PCF
+    // 更软、无带状伪影的半影；无时域累积时旋转角固定为 0，退化为确定性 disk PCF。
     public float SampleSunShadowCSM(float3 worldPos, float3 normal, float viewDist)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
@@ -372,19 +390,24 @@ namespace Common
         shadowMap.GetDimensions(texSize.x, texSize.y);
         float2 texelSize = 1.0f / float2(texSize);
 
+        const float rotation = Camera.PrimaryRayJitter
+            ? Common.SunShadowJitterRotation(worldPos, Camera.TotalFrames)
+            : 0.0f;
+
         float shadow = 0.0f;
         [unroll]
-        for (int dy = -1; dy <= 1; ++dy)
+        for (uint tap = 0u; tap < 8u; ++tap)
         {
-            [unroll]
-            for (int dx = -1; dx <= 1; ++dx)
-            {
-                float2 offset = float2(dx, dy) * texelSize;
-                float closestDepth = shadowMap.SampleLevel(uv + offset, 0).r;
-                shadow += (projCoords.z - bias) > closestDepth ? 0.0f : 1.0f;
-            }
+            // Vogel disk：golden-angle 螺旋均匀覆盖圆盘，旋转副本在时域平均下收敛到
+            // 整个均匀圆盘。半径 2 texel，比 3x3 方形核（角点 ~1.4 texel）略宽以获得
+            // 更软的半影。
+            const float radius = sqrt((float(tap) + 0.5f) * 0.125f);
+            const float theta = float(tap) * 2.39996323f + rotation * M_TWO_PI;
+            float2 offset = (2.0f * radius) * texelSize * float2(cos(theta), sin(theta));
+            float closestDepth = shadowMap.SampleLevel(uv + offset, 0).r;
+            shadow += (projCoords.z - bias) > closestDepth ? 0.0f : 1.0f;
         }
-        return shadow * (1.0f / 9.0f);
+        return shadow * 0.125f;
     }
 }
 
