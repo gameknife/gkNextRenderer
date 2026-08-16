@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 #include <vulkan/vulkan.h>
 
@@ -74,13 +75,23 @@ namespace Vulkan::PipelineCommon
         bool IsValid() const { return classifyPipeline_ != nullptr; }
 
     private:
+        // Declaration order makes Buffer die before its bound DeviceMemory.
+        struct FTileBuffer
+        {
+            std::unique_ptr<Vulkan::DeviceMemory> memory;
+            std::unique_ptr<Vulkan::Buffer> buffer;
+        };
+
         void EnsureResources(VulkanBaseRenderer& baseRender, VkExtent2D extent);
 
         std::unique_ptr<ZeroBindPipeline> classifyPipeline_;
         std::unique_ptr<ZeroBindPipeline> finalizePipeline_;
         std::unique_ptr<Vulkan::DeviceMemory> memory_;
         std::unique_ptr<Vulkan::Buffer> buffer_;
-        VkExtent2D extent_{};
+        // Buffers a grow kept alive until DeleteSwapChain, because commands recorded earlier in the
+        // frame may still reference them.
+        std::vector<FTileBuffer> retired_;
+        // Tile capacity of buffer_, i.e. the largest extent this pass has been asked for.
         uint32_t maxTiles_ = 0;
     };
 }

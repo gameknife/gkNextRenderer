@@ -238,7 +238,8 @@ namespace Vulkan
                                        ERenderOutput::Normal | ERenderOutput::Albedo | ERenderOutput::Diffuse | ERenderOutput::Specular,
                                    EPostProcess::Temporal | EPostProcess::Upscale |
                                        EPostProcess::DebugGBuffer,
-                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 1, 0,
+                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId,
+                                   false, true}, 1, 0,
                                &CreateLogicRenderer<SoftwareTracing::SoftwareTracingRenderer>},
             RendererDescriptor{ERT_SoftwareModern, "SoftwareModern", {
                                    ESceneResource::Voxel | ESceneResource::Ambient,
@@ -247,7 +248,8 @@ namespace Vulkan
                                        ERenderOutput::Normal | ERenderOutput::Albedo | ERenderOutput::Diffuse | ERenderOutput::Specular,
                                    EPostProcess::Temporal | EPostProcess::Upscale |
                                        EPostProcess::DebugGBuffer,
-                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 0, 0,
+                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId,
+                                   false, true}, 0, 0,
                                &CreateLogicRenderer<SoftwareModern::SoftwareModernRenderer>},
             RendererDescriptor{ERT_VoxelTracing, "VoxelTracing", {
                                    ESceneResource::Voxel | ESceneResource::Ambient,
@@ -262,7 +264,7 @@ namespace Vulkan
                                    ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion |
                                        ERenderOutput::ObjectId | ERenderOutput::Normal,
                                    EPostProcess::Upscale | EPostProcess::DebugGBuffer,
-                                   EHistoryChannel::None, true}, 0, 1,
+                                   EHistoryChannel::None, true, true}, 0, 1,
                                &CreateLogicRenderer<SoftwareModernNoAmbient::SoftwareModernNoAmbientRenderer>},
         };
 
@@ -624,22 +626,12 @@ namespace Vulkan
 
     bool VulkanBaseRenderer::IsSurfacePathActive() const
     {
-        return frameSettings_.userSettings.SurfaceBuild;
-    }
-
-    bool VulkanBaseRenderer::IsSurfaceSchedulerActive() const
-    {
-        // The scheduler shades from the Primary Surface, so it cannot outlive its producer. It is
-        // also limited to the primary view: its tile lists are sized for one extent, and secondary
-        // RenderViews with different extents would reallocate the buffer every frame.
-        return IsSurfacePathActive() && frameSettings_.userSettings.SurfaceScheduler &&
-            ActiveViewBankBase() == 0u;
+        return GetRendererContract(logicRenderers_.current).usesPrimarySurface;
     }
 
     bool VulkanBaseRenderer::IsSparseCheckerboardLightingActive() const
     {
-        if (!frameSettings_.userSettings.CheckerboardSparseLighting ||
-            !IsCheckerboardRenderingActive())
+        if (!IsCheckerboardRenderingActive())
         {
             return false;
         }
@@ -670,24 +662,6 @@ namespace Vulkan
             }
         }
         return false;
-    }
-
-    void VulkanBaseRenderer::ConfigureSurfacePath(
-        Assets::GPUScene& gpuScene, const bool allowed) const
-    {
-        gpuScene.CustomData2 &= ~(PipelineCommon::surfacePathFlag | PipelineCommon::surfaceSchedulerFlag);
-        if (allowed && IsSurfacePathActive())
-        {
-            gpuScene.CustomData2 |= PipelineCommon::surfacePathFlag;
-            if (IsSurfaceSchedulerActive())
-            {
-                gpuScene.CustomData2 |= PipelineCommon::surfaceSchedulerFlag;
-            }
-            if (frameSettings_.userSettings.GTAOApplyInCore)
-            {
-                gpuScene.CustomData2 |= PipelineCommon::surfaceGtaoInCoreFlag;
-            }
-        }
     }
 
     void VulkanBaseRenderer::ResolveCheckerboardShading(

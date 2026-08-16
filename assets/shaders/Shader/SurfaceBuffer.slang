@@ -31,38 +31,14 @@ namespace Surface
     public static const uint kFlagHasMra = 1u << 3u;
     public static const uint kFlagHasNormalMap = 1u << 4u;
 
-    // GPUScene.CustomData2 bit selecting the surface path. Bit 0 is the checkerboard flag
-    // (common/CheckerboardRendering.slang); both are pass-local and travel in the same word.
-    public static const uint kPathFlag = 1u << 1u;
-
-    // GPUScene.CustomData2 bit: shading allocation comes from the tile classification
-    // (Shader/ShadingScheduler.slang) rather than the analytic full-screen mapping. Implies kPathFlag.
-    public static const uint kSchedulerFlag = 1u << 2u;
-
-    // GPUScene.CustomData2 bit: the shading kernel upsamples GTAO and folds it into the ambient
-    // term itself, instead of leaving that to the compose pass. Implies kPathFlag, because it only
-    // works when GTAO runs before shading.
-    public static const uint kGtaoInCoreFlag = 1u << 3u;
+    // GPUScene.CustomData2 carries a single pass-local bit, the checkerboard flag (bit 0). Bits 1-3
+    // are retired: they selected the surface path, the tile scheduler and GTAO-in-Core back when a
+    // renderer could run without them; all three are now unconditional on every surface renderer.
 
     // GPUScene.CustomData1 bits for Core.SurfaceBuild: which optional planes this build writes.
     // Specular albedo is material data that only the tracing renderers consume, so a light
     // consumer (SoftwareModernNoAmbient) does not pay for it.
     public static const uint kBuildWriteSpecularAlbedo = 1u << 0u;
-
-    public bool IsPathActive(uint customData2)
-    {
-        return (customData2 & kPathFlag) != 0u;
-    }
-
-    public bool IsSchedulerActive(uint customData2)
-    {
-        return (customData2 & kSchedulerFlag) != 0u;
-    }
-
-    public bool IsGtaoAppliedInCore(uint customData2)
-    {
-        return (customData2 & kGtaoInCoreFlag) != 0u;
-    }
 
     // --- Payloads -----------------------------------------------------------------------------
 

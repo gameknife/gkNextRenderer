@@ -45,22 +45,31 @@ namespace Vulkan::PipelineCommon
         finalizePipeline_.reset();
         buffer_.reset();
         memory_.reset();
-        extent_ = {};
+        retired_.clear();
         maxTiles_ = 0;
     }
 
     void ShadingSchedulerPass::EnsureResources(
         VulkanBaseRenderer& baseRender, const VkExtent2D extent)
     {
-        if (buffer_ && extent_.width == extent.width && extent_.height == extent.height)
+        // maxTiles_ is a capacity, not the current tile count: one renderer serves the primary view
+        // and every secondary RenderView (thumbnails, offscreen cameras, reference views), and those
+        // extents alternate within a single frame. Sizing to the largest extent seen makes the
+        // buffer stop churning after the first frame; a smaller view simply leaves the tail unused.
+        const uint32_t neededTiles = TileCount(extent);
+        if (buffer_ && neededTiles <= maxTiles_)
         {
             return;
         }
 
-        buffer_.reset();
-        memory_.reset();
-        extent_ = extent;
-        maxTiles_ = TileCount(extent);
+        // The superseded buffer may still be referenced by commands recorded earlier this frame, so
+        // it cannot be destroyed here. Growth is bounded by the number of distinct larger extents,
+        // and DeleteSwapChain (device idle) frees the whole set.
+        if (buffer_)
+        {
+            retired_.push_back({std::move(memory_), std::move(buffer_)});
+        }
+        maxTiles_ = neededTiles;
 
         const size_t bytes =
             sizeof(uint32_t) * (kHeaderUints + size_t(kBucketCount) * maxTiles_ * kEntryUints);
@@ -98,6 +107,24 @@ namespace Vulkan::PipelineCommon
         }
 
         SCOPED_GPU_TIMER("shading classify");
+
+        // One buffer serves every view in the frame, so the reset below is a write-after-read
+        // against the previous view's bucket dispatches - both their tile-list reads and their
+        // indirect argument fetch have to complete first.
+        VkBufferMemoryBarrier previousViewToTransfer{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+        previousViewToTransfer.srcAccessMask =
+            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+        previousViewToTransfer.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        previousViewToTransfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        previousViewToTransfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        previousViewToTransfer.buffer = buffer_->Handle();
+        previousViewToTransfer.offset = 0;
+        previousViewToTransfer.size = VK_WHOLE_SIZE;
+        vkCmdPipelineBarrier(commandBuffer,
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+                                 VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 1,
+                             &previousViewToTransfer, 0, nullptr);
 
         // Reset the three VkDispatchIndirectCommands. y and z stay 1; x is the tile counter the
         // classification atomically increments, so it doubles as the append cursor.

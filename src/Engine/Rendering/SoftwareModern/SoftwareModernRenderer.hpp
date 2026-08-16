@@ -24,7 +24,6 @@ namespace Vulkan::SoftwareModern
         void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
     private:
-        std::unique_ptr<PipelineCommon::ZeroBindPipeline> deferredShadingPipeline_;
         PipelineCommon::SurfaceBuildPass surfaceBuild_;
         PipelineCommon::ShadingSchedulerPass scheduler_;
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> standardBucketPipeline_;

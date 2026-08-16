@@ -48,17 +48,10 @@ namespace Vulkan::PipelineCommon
     inline constexpr uint32_t kSurfaceFlagHasMra = 1u << 3u;
     inline constexpr uint32_t kSurfaceFlagHasNormalMap = 1u << 4u;
 
-    // GPUScene.CustomData2 bit selecting the surface path. Bit 0 is checkerboardShadingFlag
-    // (CheckerboardRendering.hpp); both are pass-local and share the same word.
-    inline constexpr uint32_t surfacePathFlag = 1u << 1u;
-
-    // GPUScene.CustomData2 bit: shading allocation comes from the tile classification rather than
-    // the analytic full-screen mapping; must equal Surface.kSchedulerFlag. Implies surfacePathFlag.
-    inline constexpr uint32_t surfaceSchedulerFlag = 1u << 2u;
-
-    // GPUScene.CustomData2 bit: Core Shading upsamples GTAO and folds it into the ambient term
-    // itself; must equal Surface.kGtaoInCoreFlag. Implies surfacePathFlag.
-    inline constexpr uint32_t surfaceGtaoInCoreFlag = 1u << 3u;
+    // GPUScene.CustomData2 now carries a single pass-local bit, checkerboardShadingFlag
+    // (CheckerboardRendering.hpp). Bits 1-3 are retired: they selected the surface path, the tile
+    // scheduler and GTAO-in-Core back when a renderer could run without them; all three are now
+    // unconditional on every surface renderer.
 
     // GPUScene.CustomData1 bits for Core.SurfaceBuild; must equal Surface.kBuildWrite*.
     inline constexpr uint32_t kSurfaceBuildWriteSpecularAlbedo = 1u << 0u;

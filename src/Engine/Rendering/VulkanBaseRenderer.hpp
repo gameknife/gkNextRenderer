@@ -153,6 +153,10 @@ namespace Vulkan
         EPostProcess post = EPostProcess::None;
         EHistoryChannel history = EHistoryChannel::None;
         bool supportsSceneOverrideWithoutPrepare = false;
+        // Shades from the Primary Surface: Core.SurfaceBuild resolves the visibility buffer once
+        // into a dense G-buffer and the tile scheduler allocates the shading dispatches from it.
+        // Renderers without it decode visibility inline and shade at full rate.
+        bool usesPrimarySurface = false;
     };
 
     struct FRendererRequirements
@@ -327,16 +331,13 @@ namespace Vulkan
             VkCommandBuffer commandBuffer,
             const Assets::GPUScene& gpuScene,
             PipelineCommon::ECheckerboardResolveSet resolveSet);
-        // Primary Surface path: the visibility buffer is resolved once by Core.SurfaceBuild and every
-        // consumer reads the resulting dense G-buffer. Renderers that have not been migrated ignore
-        // this and keep decoding visibility inline.
+        // Does the renderer currently selected shade from the Primary Surface? A property of the
+        // renderer (FRendererContract::usesPrimarySurface), not a runtime switch.
         bool IsSurfacePathActive() const;
-        bool IsSurfaceSchedulerActive() const;
-        // Checkerboard lighting handed to Native TAAU without a reconstruction pass. Everything
-        // between Core Shading and the upscaler then has to run at the shading rate, which is why
-        // this is a whole-frame decision rather than a per-pass one.
+        // Checkerboard lighting handed to Native TAAU without a reconstruction pass -- the default
+        // whenever its preconditions hold. Everything between Core Shading and the upscaler then has
+        // to run at the shading rate, which is why this is a whole-frame decision, not a per-pass one.
         bool IsSparseCheckerboardLightingActive() const;
-        void ConfigureSurfacePath(Assets::GPUScene& gpuScene, bool allowed = true) const;
         bool IsFrameGenerationSwapchainRequested() const
         {
             return frameGenerationSwapchainRequested_;

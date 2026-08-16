@@ -1,12 +1,12 @@
 #ifndef GK_NEXT_NO_AMBIENT_SHADING_SLANG
 #define GK_NEXT_NO_AMBIENT_SHADING_SLANG
 
-// SoftwareModernNoAmbient shading kernel, shared by the legacy inline entry
-// (Core.SwModernNoAmbient) and the Primary Surface entry (Core.SwModernNoAmbientSurface).
+// SoftwareModernNoAmbient shading kernels, shared by the three scheduler bucket entries
+// (Core.SwModernNoAmbient{Standard,Background,Emissive}).
 //
 // The split is the whole point of the surface refactor: this file knows how to light a resolved
 // surface and nothing about where that surface came from. Anything that decodes the visibility
-// buffer belongs in the entry shader or in Core.SurfaceBuild, never here.
+// buffer belongs in Core.SurfaceBuild, never here.
 //
 // Requires: Shader.Bindless, Shader.PathTracing and common/PreProcessor.slang.
 

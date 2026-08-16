@@ -27,14 +27,12 @@ namespace Vulkan::SoftwareTracing
         void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
     private:
-        std::unique_ptr<PipelineCommon::ZeroBindPipeline> deferredShadingPipeline_;
-            PipelineCommon::SurfaceBuildPass surfaceBuild_;
-    PipelineCommon::ShadingSchedulerPass scheduler_;
-    std::unique_ptr<PipelineCommon::ZeroBindPipeline> standardBucketPipeline_;
-    std::unique_ptr<PipelineCommon::ZeroBindPipeline> backgroundBucketPipeline_;
-    std::unique_ptr<PipelineCommon::ZeroBindPipeline> emissiveBucketPipeline_;
-    PipelineCommon::SamplePostChain samplePostChain_;
-
+        PipelineCommon::SurfaceBuildPass surfaceBuild_;
+        PipelineCommon::ShadingSchedulerPass scheduler_;
+        std::unique_ptr<PipelineCommon::ZeroBindPipeline> standardBucketPipeline_;
+        std::unique_ptr<PipelineCommon::ZeroBindPipeline> backgroundBucketPipeline_;
+        std::unique_ptr<PipelineCommon::ZeroBindPipeline> emissiveBucketPipeline_;
+        PipelineCommon::SamplePostChain samplePostChain_;
     };
 
 }

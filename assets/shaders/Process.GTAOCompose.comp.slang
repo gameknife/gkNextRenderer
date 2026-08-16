@@ -2,7 +2,6 @@ import Shader.Bindless;
 import Shader.Types;
 import Shader.GpuScene;
 import Shader.Tonemap;
-import Shader.SurfaceBuffer;
 import Shader.ShadingScheduler;
 
 #include "common/GTAOUpsample.slang"
@@ -87,16 +86,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
     const float3 worldNormal = Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL)[pixel].xyz;
     const bool surface = GTAOIsSurfaceDepth(depth) && dot(worldNormal, worldNormal) >= 0.25f;
 
-    // On the Primary Surface path GTAO runs before Core Shading, so the shading kernel already
-    // upsampled the occlusion and folded it into RT_AMBIENT. Doing it again here would square it.
-    // The rollback path still runs GTAO after shading and therefore applies it at compose time.
-    const bool occlusionAlreadyApplied =
-        Surface.IsGtaoAppliedInCore(Bindless.GetGpuscene().CustomData2);
-    const float skyOcclusion = occlusionAlreadyApplied
-        ? 1.0f
-        : GTAOSkyOcclusion(camera, pixel, fullSize, depth, worldNormal);
-
-    float3 total = directSpecularOrEmissive.rgb + ambient.rgb * skyOcclusion;
+    // GTAO runs before Core Shading, so the shading kernel already upsampled the occlusion and
+    // folded it into RT_AMBIENT. Applying it again here would square it.
+    float3 total = directSpecularOrEmissive.rgb + ambient.rgb;
     if (camera.GTAODebugMode == 1u)
     {
         // Debug view of the raw visibility, so it upsamples regardless of who applied it.
@@ -108,7 +100,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
     else if (camera.GTAODebugMode == 2u)
     {
-        // The sky diffuse channel. On the surface path it already carries the occlusion.
+        // The sky diffuse channel; it already carries the occlusion Core Shading applied.
         total = ambient.rgb;
     }
     const float exposure = max(camera.PaperWhiteNit / 40000.0f, 1.0e-6f);

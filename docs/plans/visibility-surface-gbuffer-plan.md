@@ -11,8 +11,16 @@ related_design: ../designs/visibility-surface-gbuffer-shading-scheduler.md
 # Visibility Surface / G-buffer / Shading Scheduler 开发计划
 
 设计与契约见[当前架构](../designs/visibility-surface-gbuffer-shading-scheduler.md)。本文保留每个
-里程碑的**实测数据与决策门结论**——这些数字是后续判断「要不要打开 surface 路径 / 调度器」的唯一
-依据，不能只留在 Git 历史里。
+里程碑的**实测数据与决策门结论**——这些数字是后续判断调度器成本模型的唯一依据，不能只留在 Git
+历史里。
+
+> **2026-08-16 后续变更**：`r.surface.build`、`r.surface.scheduler`、`r.gtao.applyInCore`、
+> `r.taau.sparseCheckerboard` 四个 cvar 全部删除，它们描述的行为成为唯一路径——三个 software
+> renderer 一律走 surface 路径 + tile 调度器，GTAO 由 Core Shading 上采样并应用，checkerboard
+> lighting 在前提满足时以 sparse 形式交给 Native TAAU（前提不满足仍走 lighting-only resolve，
+> 这条路径因此保留）。迁移前的 inline 入口、解析式全屏 allocation、compose 端 AO 应用，以及只
+> 用于这些开关 A/B 的 agentscript 一并移除。因此本文中「默认 off」「legacy vs surface」
+> 「analytic vs scheduler」的对照只作为**历史实测记录**阅读，不再是可执行的配置。
 
 测试环境：Windows x86_64 / RTX 5070 Ti / `windows` preset。全部数据由
 `gnb validate --script assets/agentscripts/surface-*.agentscript.json` 采集，`engine.gpuTime.<name>`
@@ -35,9 +43,9 @@ related_design: ../designs/visibility-surface-gbuffer-shading-scheduler.md
 | M5c | GTAO 合成下沉 | 完成，默认 off，**只有在半率着色下才划算** |
 | M5 其余 | 触发条件式扩展 | 未立项 |
 
-cvar：`r.surface.build`（默认 0）、`r.surface.scheduler`（默认 0）、
+当时的 cvar：`r.surface.build`（默认 0）、`r.surface.scheduler`（默认 0）、
 `r.taau.sparseCheckerboard`（默认 0）、`r.gtao.applyInCore`（默认 0）——后三者都隐含依赖第一个。
-`r.surface.build` 关闭时每个 renderer 走迁移前的 inline 解码路径，且**没有 checkerboard**。
+前两个现已删除（见文首注记），后两个仍在且仍默认关闭。
 
 ## M1 — NoAmbient Build + Core 拆分
 

@@ -58,11 +58,6 @@
       "message": "=== restir legacy A ==="
     },
     {
-      "type": "cvar",
-      "name": "r.surface.build",
-      "set": false
-    },
-    {
       "type": "wait-frames",
       "n": 40
     },
@@ -81,11 +76,6 @@
       "message": "=== restir surface ==="
     },
     {
-      "type": "cvar",
-      "name": "r.surface.build",
-      "set": true
-    },
-    {
       "type": "wait-frames",
       "n": 40
     },
@@ -102,11 +92,6 @@
     {
       "type": "log",
       "message": "=== restir legacy B ==="
-    },
-    {
-      "type": "cvar",
-      "name": "r.surface.build",
-      "set": false
     },
     {
       "type": "wait-frames",
@@ -135,11 +120,6 @@
     {
       "type": "cvar",
       "name": "r.checkerboardRendering",
-      "set": true
-    },
-    {
-      "type": "cvar",
-      "name": "r.surface.build",
       "set": true
     },
     {

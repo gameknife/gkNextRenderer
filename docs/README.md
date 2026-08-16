@@ -61,8 +61,8 @@
 - [Gaussian Splat / SOG v2 格式与集成](designs/gaussian-splatting-sog-design.md)
 - [gnb AI Bridge Protocol v2](designs/gnb-ai-bridge-protocol-v2.md)
 - [Massive Rendering Mode 与双 uint Visibility Buffer](designs/massive-visibility-buffer-design.md)（提案，未实现；[开发计划](plans/massive-rendering-mode-plan.md)）
-- [Visibility Surface、G-buffer 与 Shading Scheduler](designs/visibility-surface-gbuffer-shading-scheduler.md)（现行；Surface Build、shading bucket 调度与 checkerboard allocation 已落地，`r.surface.build` / `r.surface.scheduler` / `r.taau.sparseCheckerboard` / `r.gtao.applyInCore` 默认关闭，
-  且 checkerboard 现在只在 surface 路径下存在。实测数据与决策门结论见[开发计划](plans/visibility-surface-gbuffer-plan.md)）
+- [Visibility Surface、G-buffer 与 Shading Scheduler](designs/visibility-surface-gbuffer-shading-scheduler.md)（现行；三个 software renderer 一律走 Surface Build + tile 调度器 + Core 内 GTAO + Native TAAU sparse checkerboard，
+  `r.surface.build` / `r.surface.scheduler` / `r.gtao.applyInCore` / `r.taau.sparseCheckerboard` 四个 cvar 与各自的另一条路径已删除，且 checkerboard 只在 surface 路径下存在。实测数据与决策门结论见[开发计划](plans/visibility-surface-gbuffer-plan.md)）
 - [Tracing Direct Lighting 与 ReSTIR DI 架构](designs/pathtracing-restir-design.md)
 - [RenderView 多视图架构](designs/multi-viewport-renderview-design.md)
 - [渲染运行时架构与契约](designs/rendering-runtime-architecture.md)

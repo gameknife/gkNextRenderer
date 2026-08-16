@@ -3,10 +3,10 @@
 
 // Half-resolution GTAO -> full-resolution sky occlusion.
 //
-// Shared by Core Shading (Primary Surface path, where the shading kernel consumes AO directly) and
-// by Process.GTAOCompose (legacy path and the AO debug view). Keeping one copy is what guarantees
-// the "user strength is applied exactly once" rule survives the move: SampleSkyOcclusion is the
-// only function allowed to raise visibility to the strength power.
+// Shared by Core Shading (which consumes AO directly and applies it to the ambient term) and by
+// Process.GTAOCompose (AO debug view only). Keeping one copy is what guarantees the "user strength
+// is applied exactly once" rule: GTAOSkyOcclusion is the only function allowed to raise visibility
+// to the strength power.
 //
 // Requires: Shader.Bindless and a gpuScene push constant carrying UniformBufferObject.
 

@@ -38,18 +38,6 @@ struct UserSettings final
     uint32_t UpscalerJitterFrames = 16;
     bool UpscalerJitterInvertY = false;
     bool CheckerboardRendering = true;
-    // Primary Surface path (docs/designs/visibility-surface-gbuffer-shading-scheduler.md):
-    // resolve the visibility buffer once into a dense G-buffer, then shade from it.
-    bool SurfaceBuild = false;
-    // Tile classification + indirect per-bucket dispatch on top of the surface path.
-    bool SurfaceScheduler = false;
-    // Hand checkerboard lighting to Native TAAU sparse instead of reconstructing the missing
-    // parity first. Requires the surface path, checkerboard and the Native TAAU upscaler.
-    bool CheckerboardSparseLighting = false;
-    // Let Core Shading upsample GTAO and apply it to the ambient term instead of the compose pass.
-    // Requires the surface path (GTAO must run before shading). Measured slower today; kept for the
-    // architecture, not for the frame time.
-    bool GTAOApplyInCore = false;
     // Target GPU time budget, in milliseconds, for one AmbientCube bake dispatch per frame.
     float AmbientCubeBakeTargetMs = 4.0f;
 

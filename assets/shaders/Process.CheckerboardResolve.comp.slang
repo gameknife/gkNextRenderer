@@ -57,18 +57,14 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     const int2 sourcePixel = int2(Scheduler.ReconstructionSource(target, size, totalFrames));
     const uint resolveSet = scene.CustomData1;
 
-    // With the scheduler on, the Background and Emissive buckets shaded every pixel at full rate,
-    // so those pixels already hold their exact lighting. Reconstructing them from a neighbour would
-    // replace a correct value with an approximate one.
-    if (Surface.IsSchedulerActive(scene.CustomData2))
+    // The Background and Emissive buckets shaded every pixel at full rate, so those pixels already
+    // hold their exact lighting. Reconstructing them from a neighbour would replace a correct value
+    // with an approximate one.
+    const uint2 bsdf = Surface.LoadBsdf(scene.CustomData0, targetPixel);
+    if (bsdf.x == Surface.kInvalidMaterialId ||
+        Surface.HasFlag(Surface.UnpackFlags(bsdf.y), Surface.kFlagEmissive))
     {
-        const uint2 bsdf = Surface.LoadBsdf(scene.CustomData0, targetPixel);
-        const bool shadedFullRate = bsdf.x == Surface.kInvalidMaterialId ||
-            Surface.HasFlag(Surface.UnpackFlags(bsdf.y), Surface.kFlagEmissive);
-        if (shadedFullRate)
-        {
-            return;
-        }
+        return;
     }
 
     if (resolveSet == RESOLVE_TRACING)

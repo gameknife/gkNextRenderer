@@ -49,16 +49,6 @@
       "set": 2
     },
     {
-      "type": "cvar",
-      "name": "r.surface.build",
-      "set": true
-    },
-    {
-      "type": "cvar",
-      "name": "r.taau.sparseCheckerboard",
-      "set": false
-    },
-    {
       "type": "log",
       "message": "=== restir_off | full | analytic ==="
     },
@@ -70,11 +60,6 @@
     {
       "type": "cvar",
       "name": "r.checkerboardRendering",
-      "set": false
-    },
-    {
-      "type": "cvar",
-      "name": "r.surface.scheduler",
       "set": false
     },
     {
@@ -140,11 +125,6 @@
       "set": false
     },
     {
-      "type": "cvar",
-      "name": "r.surface.scheduler",
-      "set": true
-    },
-    {
       "type": "wait-frames",
       "n": 180
     },
@@ -207,11 +187,6 @@
       "set": true
     },
     {
-      "type": "cvar",
-      "name": "r.surface.scheduler",
-      "set": false
-    },
-    {
       "type": "wait-frames",
       "n": 180
     },
@@ -271,11 +246,6 @@
     {
       "type": "cvar",
       "name": "r.checkerboardRendering",
-      "set": true
-    },
-    {
-      "type": "cvar",
-      "name": "r.surface.scheduler",
       "set": true
     },
     {
@@ -341,11 +311,6 @@
       "set": false
     },
     {
-      "type": "cvar",
-      "name": "r.surface.scheduler",
-      "set": false
-    },
-    {
       "type": "wait-frames",
       "n": 180
     },
@@ -406,11 +371,6 @@
       "type": "cvar",
       "name": "r.checkerboardRendering",
       "set": false
-    },
-    {
-      "type": "cvar",
-      "name": "r.surface.scheduler",
-      "set": true
     },
     {
       "type": "wait-frames",
@@ -475,11 +435,6 @@
       "set": true
     },
     {
-      "type": "cvar",
-      "name": "r.surface.scheduler",
-      "set": false
-    },
-    {
       "type": "wait-frames",
       "n": 180
     },
@@ -539,11 +494,6 @@
     {
       "type": "cvar",
       "name": "r.checkerboardRendering",
-      "set": true
-    },
-    {
-      "type": "cvar",
-      "name": "r.surface.scheduler",
       "set": true
     },
     {

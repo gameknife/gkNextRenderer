@@ -1,8 +1,7 @@
 #ifndef GK_NEXT_SW_TRACING_SHADING_SLANG
 #define GK_NEXT_SW_TRACING_SHADING_SLANG
 
-// SoftwareTracing Core Shading body, shared by the analytic full-screen entry and the scheduler's
-// Standard bucket. Keeping one copy is what stops the two allocations from drifting apart.
+// SoftwareTracing Core Shading body, used by the scheduler's Standard bucket.
 //
 // Requires: Shader.PathTracing, Shader.SurfaceBuffer and common/ShaderClock.slang.
 
@@ -10,10 +9,8 @@ void ShadeSwTracingPixel(int2 pixel)
 {
     START_SHADERCLOCK()
 
-    // On the Primary Surface path the primary hit is replayed from the dense G-buffer
-    // Core.SurfaceBuild produced; otherwise the visibility buffer is decoded inline.
-    const bool surfacePath = Surface.IsPathActive(Bindless.GetGpuscene().CustomData2);
-    FVisibilityBufferRayCaster visibilityRayCaster;
+    // The primary hit is replayed from the dense G-buffer Core.SurfaceBuild produced; nothing on
+    // this renderer decodes the visibility buffer per pixel any more.
     FSurfacePrimaryRayCaster surfaceRayCaster;
     FSoftwareRayTracer tracer;
     FSoftwareTracingDirectIlluminator dIlluminator;
@@ -29,17 +26,7 @@ void ShadeSwTracingPixel(int2 pixel)
     renderer.SecondaryDirectMode = 0;
     renderer.Init(uint2(pixel));
 
-    bool primaryHit;
-    if (surfacePath)
-    {
-        primaryHit = renderer.PrimaryHit(surfaceRayCaster);
-    }
-    else
-    {
-        primaryHit = renderer.PrimaryHit(visibilityRayCaster);
-    }
-
-    if( !primaryHit )
+    if (!renderer.PrimaryHit(surfaceRayCaster))
     {
         END_SHADERCLOCK(pixel)
         return;

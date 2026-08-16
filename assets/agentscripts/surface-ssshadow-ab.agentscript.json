@@ -35,7 +35,6 @@
 
     { "type": "log", "message": "=== ss shadow off (reference) ===" },
     { "type": "cvar", "name": "r.lightObject.screenSpaceShadow", "set": false },
-    { "type": "cvar", "name": "r.surface.build", "set": false },
     { "type": "wait-frames", "n": 60 },
     { "type": "assert", "query": "engine.gpuTime.shadingpass", "op": "ge", "value": 0 },
     { "type": "assert", "query": "engine.gpuTime.surface build", "op": "ge", "value": 0 },
@@ -51,7 +50,6 @@
     { "type": "screenshot", "out": "screenshots/surface_sss_legacy" },
 
     { "type": "log", "message": "=== ss shadow on, surface ===" },
-    { "type": "cvar", "name": "r.surface.build", "set": true },
     { "type": "wait-frames", "n": 60 },
     { "type": "assert", "query": "engine.gpuTime.shadingpass", "op": "ge", "value": 0 },
     { "type": "assert", "query": "engine.gpuTime.surface build", "op": "ge", "value": 0 },

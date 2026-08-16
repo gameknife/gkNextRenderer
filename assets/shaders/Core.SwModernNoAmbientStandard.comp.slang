@@ -37,13 +37,10 @@ void main(uint3 Gid : SV_GroupID, uint3 GTid : SV_GroupThreadID)
     shadingInput.Metalness = s.Metalness;
     shadingInput.Albedo = s.Albedo;
     shadingInput.MaterialId = s.MaterialId;
-    // Sinking the GTAO upsample into this kernel removes a dependency but measured slower than
-    // leaving it in the small compose kernel: the nine-tap bilateral costs far more inside an
-    // already register-heavy shading kernel. Opt in with r.gtao.applyInCore.
-    shadingInput.SkyOcclusion =
-        Surface.IsGtaoAppliedInCore(Bindless.GetGpuscene().CustomData2)
-            ? GTAOSkyOcclusion(Camera, pixel, size, s.Depth, s.Normal)
-            : 1.0f;
+    // GTAO is upsampled and applied here, not at compose time. The nine-tap bilateral is more
+    // expensive inside an already register-heavy shading kernel, but this kernel only runs on the
+    // pixels the shading rate actually claims, while compose runs on every pixel.
+    shadingInput.SkyOcclusion = GTAOSkyOcclusion(Camera, pixel, size, s.Depth, s.Normal);
 
     const FNoAmbientShadingOutput lighting = ShadeNoAmbientStandard(shadingInput, pixel);
     Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, lighting.Diffuse);

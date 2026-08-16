@@ -203,21 +203,7 @@ namespace Scheduler
         return outSlot < tileCount;
     }
 
-    // --- Analytic allocation (scheduler off) ---------------------------------------------------
-
-    // The zero-memory allocation the surface path uses when tile classification is disabled: a
-    // single Standard bucket over the whole screen, with checkerboard expressed as a compacted
-    // dispatch width. Same mapping as common/CheckerboardRendering.slang, which the renderers that
-    // have not moved to the Primary Surface still use directly.
-    public uint2 ResolveAnalyticPixel(uint2 dispatchPixel, bool checkerboardActive, uint totalFrames)
-    {
-        if (!checkerboardActive)
-        {
-            return dispatchPixel;
-        }
-        const uint framePhase = totalFrames & 1u;
-        return uint2(dispatchPixel.x * 2u + ((dispatchPixel.y + framePhase) & 1u), dispatchPixel.y);
-    }
+    // --- Rate queries ---------------------------------------------------------------------------
 
     // Is this pixel the parity the checkerboard rate shades this frame?
     public bool IsActiveParity(uint2 pixel, bool checkerboardActive, uint totalFrames)
@@ -241,8 +227,8 @@ namespace Scheduler
 
     // --- Reconstruction addressing ---------------------------------------------------------------
 
-    // The pixel this frame did NOT shade, addressed from a half-width reconstruction dispatch.
-    // Inverse of ResolveAnalyticPixel.
+    // The pixel this frame did NOT shade, addressed from a half-width reconstruction dispatch:
+    // the parity complement of IsActiveParity.
     public uint2 MissingPixel(uint2 dispatchPixel, uint totalFrames)
     {
         const uint framePhase = totalFrames & 1u;

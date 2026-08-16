@@ -40,26 +40,6 @@
     },
     {
       "type": "cvar",
-      "name": "r.surface.build",
-      "set": true
-    },
-    {
-      "type": "cvar",
-      "name": "r.surface.scheduler",
-      "set": false
-    },
-    {
-      "type": "cvar",
-      "name": "r.taau.sparseCheckerboard",
-      "set": true
-    },
-    {
-      "type": "cvar",
-      "name": "r.gtao.applyInCore",
-      "set": false
-    },
-    {
-      "type": "cvar",
       "name": "r.restir.enable",
       "set": false
     },
