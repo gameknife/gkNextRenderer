@@ -217,17 +217,22 @@ DebugUtils::DebugUtils(VkInstance instance)
     , vkCmdBeginDebugUtilsLabelEXT_(reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkCmdBeginDebugUtilsLabelEXT")))
     , vkCmdEndDebugUtilsLabelEXT_(reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT")))
 {
-#if !ANDROID
-    if (vkSetDebugUtilsObjectNameEXT_ == nullptr || vkCmdBeginDebugUtilsLabelEXT_ == nullptr || vkCmdEndDebugUtilsLabelEXT_ == nullptr)
+    const bool available = vkSetDebugUtilsObjectNameEXT_ != nullptr &&
+        vkCmdBeginDebugUtilsLabelEXT_ != nullptr &&
+        vkCmdEndDebugUtilsLabelEXT_ != nullptr;
+    if (!available)
     {
-        Throw(std::runtime_error("failed to load VK_EXT_debug_utils entry points"));
+        SPDLOG_DEBUG("Vulkan debug utils entry points are unavailable; object names and markers are disabled");
     }
-#endif
 }
 
 void DebugUtils::BeginMarker(VkCommandBuffer commandBuffer, const char* name) const
 {
-#if !ANDROID
+    if (vkCmdBeginDebugUtilsLabelEXT_ == nullptr || commandBuffer == VK_NULL_HANDLE || name == nullptr)
+    {
+        return;
+    }
+
     VkDebugUtilsLabelEXT label
     {
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
@@ -236,19 +241,16 @@ void DebugUtils::BeginMarker(VkCommandBuffer commandBuffer, const char* name) co
         .color = {0.0f, 0.0f, 0.0f, 0.0f}
     };
     vkCmdBeginDebugUtilsLabelEXT_(commandBuffer, &label);
-#else
-    (void)commandBuffer;
-    (void)name;
-#endif
 }
 
 void DebugUtils::EndMarker(VkCommandBuffer commandBuffer) const
 {
-#if !ANDROID
+    if (vkCmdEndDebugUtilsLabelEXT_ == nullptr || commandBuffer == VK_NULL_HANDLE)
+    {
+        return;
+    }
+
     vkCmdEndDebugUtilsLabelEXT_(commandBuffer);
-#else
-    (void)commandBuffer;
-#endif
 }
 
 // ============================================================================

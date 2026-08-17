@@ -65,9 +65,13 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
 
     Interposer().AppendRequiredInstanceExtensions(extensions);
     
-#if !ANDROID
-    AppendUniqueExtension(extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-#endif
+    // Debug utils are optional on Android. Enable them whenever the loader or
+    // an injected layer exposes the extension so RenderDoc can retain object
+    // names and command markers without making them a startup requirement.
+    if (hasInstanceExtension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+    {
+        AppendUniqueExtension(extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    }
     
     if (hasInstanceExtension(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME))
     {
