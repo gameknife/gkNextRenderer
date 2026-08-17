@@ -7,6 +7,7 @@
 #include "Engine/Runtime/Editor/UI/UiTheme.hpp"
 #include "Engine/Runtime/Editor/UI/UiWidgets.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/RenderDoc.hpp"
 #include "Engine/Utilities/Format.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
@@ -57,9 +58,15 @@ namespace Runtime::DevToolsUI
         constexpr float consoleWidth = 74.0f;
         constexpr float buttonHeight = 22.0f;
         constexpr float toolWidth = 24.0f;
+#if WITH_RENDERDOC
+        const bool renderDocSupported = Runtime::RenderDoc::IsSupported();
+#else
+        constexpr bool renderDocSupported = false;
+#endif
         const float fpsWidth = ImGui::CalcTextSize(fpsText.c_str()).x + 12.0f;
         const float memoryWidth = ImGui::CalcTextSize(memoryText.c_str()).x + 12.0f;
-        const float rightWidth = consoleWidth + toolWidth * 2.0f + fpsWidth + memoryWidth + 98.0f;
+        const float rightWidth = consoleWidth + toolWidth * (2.0f + (renderDocSupported ? 1.0f : 0.0f)) +
+            fpsWidth + memoryWidth + 98.0f + (renderDocSupported ? 20.0f : 0.0f);
 
         NextUI::Foundation::FBottomBarOptions options;
         options.windowId = windowId;
@@ -106,6 +113,19 @@ namespace Runtime::DevToolsUI
                     onCppReloadClicked();
                 }
             }
+
+#if WITH_RENDERDOC
+            if (renderDocSupported)
+            {
+                DrawSeparator();
+                if (StatusButton(ICON_FA_CAMERA "##BottomBarRenderDocCapture",
+                                 "Capture frame and open RenderDoc", false,
+                                 ImVec2(toolWidth, buttonHeight)))
+                {
+                    Runtime::RenderDoc::RequestCapture();
+                }
+            }
+#endif
 
             DrawSeparator();
             if (StatusButton(fpsText.c_str(), "Toggle Stats Overlay", engine.GetUserSettings().ShowOverlay,

@@ -2,6 +2,7 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
+#include "Engine/Runtime/RenderDoc.hpp"
 #include "Engine/Runtime/Reflection/ReflectionDump.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #if GK_MODULE_GLTFLOADER
@@ -38,10 +39,6 @@
 #include "Modules/NextTui/NextTuiModule.hpp"
 #endif
 
-#if WITH_RENDERDOC
-#include <renderdoc_app.h>
-#endif
-
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -59,106 +56,7 @@ std::unique_ptr<Runtime::Config::Options> GOptionPtr;
 namespace
 {
 #if WITH_RENDERDOC
-    HMODULE GRenderDocModule = nullptr;
-    RENDERDOC_API_1_6_0* GRenderDocApi = nullptr;
-    uint32_t GRenderDocCaptureCountBeforeLaunch = 0;
-    bool GRenderDocCaptureRequested = false;
-    bool GRenderDocCaptureOpened = false;
-
-    bool InitializeRenderDoc()
-    {
-        GRenderDocModule = GetModuleHandleW(L"renderdoc.dll");
-        if (GRenderDocModule == nullptr)
-        {
-            GRenderDocModule = LoadLibraryA(GK_RENDERDOC_DLL_PATH);
-        }
-        if (GRenderDocModule == nullptr)
-        {
-            SPDLOG_WARN("RenderDoc requested but renderdoc.dll could not be loaded from {}",
-                        GK_RENDERDOC_DLL_PATH);
-            return false;
-        }
-
-        const auto getApi = reinterpret_cast<pRENDERDOC_GetAPI>(
-            GetProcAddress(GRenderDocModule, "RENDERDOC_GetAPI"));
-        if (getApi == nullptr ||
-            getApi(eRENDERDOC_API_Version_1_6_0, reinterpret_cast<void**>(&GRenderDocApi)) == 0 ||
-            GRenderDocApi == nullptr)
-        {
-            SPDLOG_WARN("RenderDoc requested but its application API is unavailable");
-            return false;
-        }
-
-        int major = 0;
-        int minor = 0;
-        int patch = 0;
-        GRenderDocApi->GetAPIVersion(&major, &minor, &patch);
-        GRenderDocCaptureCountBeforeLaunch = GRenderDocApi->GetNumCaptures();
-        SPDLOG_INFO("RenderDoc {}.{}.{} attached; capture will start when the first scene is ready",
-                    major, minor, patch);
-        return true;
-    }
-
-    void RequestRenderDocCaptureIfReady()
-    {
-        if (GRenderDocCaptureRequested || GRenderDocApi == nullptr || GApplication == nullptr ||
-            GApplication->GetEngineStatus() != NextRenderer::EApplicationStatus::Running ||
-            GApplication->GetScene().Nodes().empty())
-        {
-            return;
-        }
-
-        GRenderDocApi->TriggerCapture();
-        GRenderDocCaptureRequested = true;
-        SPDLOG_INFO("RenderDoc capture requested for the next presented scene frame");
-    }
-
-    void OpenLatestRenderDocCapture()
-    {
-        if (!GRenderDocCaptureRequested || GRenderDocCaptureOpened || GRenderDocApi == nullptr)
-        {
-            return;
-        }
-
-        const uint32_t captureCount = GRenderDocApi->GetNumCaptures();
-        if (captureCount <= GRenderDocCaptureCountBeforeLaunch)
-        {
-            return;
-        }
-
-        const uint32_t captureIndex = captureCount - 1;
-        uint32_t pathLength = 0;
-        uint64_t timestamp = 0;
-        if (GRenderDocApi->GetCapture(captureIndex, nullptr, &pathLength, &timestamp) == 0 ||
-            pathLength == 0)
-        {
-            SPDLOG_WARN("RenderDoc captured a frame but did not return its capture path");
-            GRenderDocCaptureOpened = true;
-            return;
-        }
-
-        std::string capturePath(pathLength, '\0');
-        if (GRenderDocApi->GetCapture(captureIndex, capturePath.data(), &pathLength, &timestamp) == 0)
-        {
-            SPDLOG_WARN("RenderDoc captured a frame but its capture path could not be read");
-            GRenderDocCaptureOpened = true;
-            return;
-        }
-        capturePath.resize(std::char_traits<char>::length(capturePath.c_str()));
-
-        const uint32_t replayUiPid = GRenderDocApi->LaunchReplayUI(0, capturePath.c_str());
-        if (replayUiPid == 0)
-        {
-            SPDLOG_WARN("RenderDoc capture saved to {} but the replay UI could not be opened",
-                        capturePath);
-        }
-        else
-        {
-            SPDLOG_INFO("RenderDoc capture saved to {}; replay UI started with PID {}",
-                        capturePath, replayUiPid);
-        }
-        GRenderDocCaptureOpened = true;
-    }
+    bool GRenderDocAutoCaptureRequested = false;
 #endif
 
     // Last-resort handler for exceptions that escape a thread or a noexcept context.
@@ -218,8 +116,14 @@ SDL_AppResult SDL_AppIterate(void *appstate)
         return SDL_APP_SUCCESS;
     }
 #if WITH_RENDERDOC
-    RequestRenderDocCaptureIfReady();
-    OpenLatestRenderDocCapture();
+    if (GOption != nullptr && GOption->RenderDoc && !GRenderDocAutoCaptureRequested &&
+        GApplication != nullptr &&
+        GApplication->GetEngineStatus() == NextRenderer::EApplicationStatus::Running &&
+        !GApplication->GetScene().Nodes().empty())
+    {
+        GRenderDocAutoCaptureRequested = Runtime::RenderDoc::RequestCapture();
+    }
+    Runtime::RenderDoc::Poll();
 #endif
     return SDL_APP_CONTINUE;
 }
@@ -258,11 +162,12 @@ static SDL_AppResult InitializeApplication(int argc, char *argv[])
         std::exit(dumped ? 0 : 1);
     }
 
+#if WITH_RENDERDOC
+    Runtime::RenderDoc::Initialize();
+#endif
+
     if(GOption->RenderDoc)
     {
-#if WITH_RENDERDOC
-        InitializeRenderDoc();
-#endif
             
 #if __linux__
         setenv("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1", 1);
