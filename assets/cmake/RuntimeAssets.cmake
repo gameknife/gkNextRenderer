@@ -30,6 +30,17 @@ set(ASSET_DIRS
     textures
 )
 
+# Android packages the generated asset tree directly through Gradle. Keep that
+# tree exact across CMake regenerations so removed source assets cannot survive
+# in a later APK. The stamps are removed together with their destinations so the
+# copy commands below repopulate every directory after the cleanup.
+if(ANDROID)
+    foreach(dir IN LISTS ASSET_DIRS)
+        file(REMOVE_RECURSE "${output_base_dir}/${dir}")
+        file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/${dir}.stamp")
+    endforeach()
+endif()
+
 set(all_asset_files "")
 set(all_asset_stamps "")
 

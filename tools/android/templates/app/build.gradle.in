@@ -3,6 +3,7 @@ plugins {
 }
 
 def releaseSigningPropertiesPath = '@GK_ANDROID_SIGNING_PROPERTIES@'
+def gkNextSourceAssetRoot = file('@GK_REPO_ROOT@/assets')
 def releaseSigningPropertiesFile = releaseSigningPropertiesPath ? file(releaseSigningPropertiesPath) : null
 def releaseSigningProperties = new Properties()
 def releaseSigningEnabled = releaseSigningPropertiesFile != null && releaseSigningPropertiesFile.isFile()
@@ -113,9 +114,22 @@ dependencies {
 }
 
 afterEvaluate {
-    ['Debug', 'Release'].each { variantName ->
+    // CMake generates Android assets as part of the external native build. Gradle's
+    // merge task otherwise snapshots the generated directory before that dependency
+    // creates new or changed files and may incorrectly reuse stale merged assets.
+    ['Debug', 'RelWithDebInfo', 'Release'].each { variantName ->
+        def nativeBuildTask = tasks.named("externalNativeBuild${variantName}")
+        nativeBuildTask.configure {
+            // Track the source tree explicitly so adding or editing an asset also
+            // invalidates the external native build task. This includes untracked
+            // files in the current working tree; Git commits are not build inputs.
+            inputs.dir(gkNextSourceAssetRoot)
+        }
         tasks.named("merge${variantName}Assets").configure {
-            dependsOn tasks.named("externalNativeBuild${variantName}")
+            dependsOn nativeBuildTask
+            // The input directory is populated by nativeBuildTask. Force a fresh
+            // snapshot after it completes so newly generated assets reach the APK.
+            outputs.upToDateWhen { false }
         }
     }
 }
