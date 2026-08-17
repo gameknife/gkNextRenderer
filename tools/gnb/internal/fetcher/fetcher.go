@@ -300,8 +300,8 @@ func untar(src string, dst string, gz bool) error {
 		if err != nil {
 			return err
 		}
-		target := filepath.Join(dst, header.Name)
-		if !strings.HasPrefix(filepath.Clean(target), filepath.Clean(dst)+string(os.PathSeparator)) {
+		target, err := archiveEntryPath(dst, header.Name)
+		if err != nil {
 			return fmt.Errorf("tar entry escapes destination: %s", header.Name)
 		}
 		switch header.Typeflag {
@@ -338,6 +338,22 @@ func untar(src string, dst string, gz bool) error {
 			}
 		}
 	}
+}
+
+// archiveEntryPath resolves a tar entry beneath dst while allowing the archive's conventional
+// top-level "." directory entry. Comparing only with a dst+separator prefix rejects that legal
+// entry because filepath.Clean(filepath.Join(dst, "./")) is exactly dst.
+func archiveEntryPath(dst string, name string) (string, error) {
+	cleanDst := filepath.Clean(dst)
+	if filepath.IsAbs(name) {
+		return "", fmt.Errorf("absolute archive entry")
+	}
+	target := filepath.Clean(filepath.Join(cleanDst, name))
+	relative, err := filepath.Rel(cleanDst, target)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) {
+		return "", fmt.Errorf("archive entry outside destination")
+	}
+	return target, nil
 }
 
 func resolveVulkanDownloadSpec(requestedVersion string) (vulkanDownloadSpec, error) {

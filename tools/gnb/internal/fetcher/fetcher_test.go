@@ -33,6 +33,11 @@ func TestUntarPreservesSymlink(t *testing.T) {
 	}
 
 	writeHeader(&tar.Header{
+		Name:     "./",
+		Typeflag: tar.TypeDir,
+		Mode:     0o755,
+	}, "")
+	writeHeader(&tar.Header{
 		Name:     "pkg",
 		Typeflag: tar.TypeDir,
 		Mode:     0o755,
@@ -78,5 +83,22 @@ func TestUntarPreservesSymlink(t *testing.T) {
 	}
 	if target != "libfoo.1.2.3.dylib" {
 		t.Fatalf("symlink target = %q, want %q", target, "libfoo.1.2.3.dylib")
+	}
+}
+
+func TestArchiveEntryPathAllowsRootAndRejectsTraversal(t *testing.T) {
+	dst := filepath.Join("relative", "out")
+	root, err := archiveEntryPath(dst, "./")
+	if err != nil {
+		t.Fatalf("archiveEntryPath root: %v", err)
+	}
+	if root != filepath.Clean(dst) {
+		t.Fatalf("archiveEntryPath root = %q, want %q", root, filepath.Clean(dst))
+	}
+
+	for _, name := range []string{"../outside", "/tmp/outside"} {
+		if _, err := archiveEntryPath(dst, name); err == nil {
+			t.Fatalf("archiveEntryPath accepted escaping entry %q", name)
+		}
 	}
 }
