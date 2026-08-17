@@ -300,13 +300,18 @@ function(gk_link_engine_feature_dependencies target)
     endif()
 
     if(WITH_RENDERDOC)
-        target_compile_definitions(${target} PUBLIC
-            WITH_RENDERDOC=1
-            GK_RENDERDOC_DLL_PATH="${GK_RENDERDOC_DLL_PATH}"
-        )
+        target_compile_definitions(${target} PUBLIC WITH_RENDERDOC=1)
+        if(GK_RENDERDOC_ANDROID)
+            target_compile_definitions(${target} PUBLIC GK_RENDERDOC_ANDROID=1)
+        else()
+            target_compile_definitions(${target} PUBLIC
+                GK_RENDERDOC_ANDROID=0
+                GK_RENDERDOC_DLL_PATH="${GK_RENDERDOC_DLL_PATH}"
+            )
+        endif()
         target_include_directories(${target} SYSTEM PUBLIC ${GK_RENDERDOC_API_DIR})
     else()
-        target_compile_definitions(${target} PUBLIC WITH_RENDERDOC=0)
+        target_compile_definitions(${target} PUBLIC WITH_RENDERDOC=0 GK_RENDERDOC_ANDROID=0)
     endif()
 
     target_link_libraries(${target} PRIVATE ozz KTX::ktx)

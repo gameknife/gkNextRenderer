@@ -848,6 +848,40 @@ func newAndroidCommand(ctx appContext) *cobra.Command {
 	run.Flags().StringVar(&avd, "avd", "", "start this local AVD when no adb device is online")
 	root.AddCommand(run)
 
+	captureSerial := ""
+	capture := &cobra.Command{
+		Use:   "capture",
+		Short: "Capture the existing shared release APK through RenderDoc and open the first capture",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result, err := android.Capture(ctx.repoRoot, ctx.cfg, captureSerial)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "[android] RenderDoc captured and opened on %s: %s\n", result.Serial, result.CapturePath)
+			return nil
+		},
+	}
+	capture.Flags().StringVar(&captureSerial, "serial", "", "use this online adb device serial")
+	root.AddCommand(capture)
+
+	renderDocSerial := ""
+	renderDoc := &cobra.Command{
+		Use:   "renderdoc",
+		Short: "Open RenderDoc connected to an adb Android device",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result, err := android.OpenRenderDoc(ctx.repoRoot, renderDocSerial)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "[android] RenderDoc opened for %s; select this device in Replay Context\n", result.Serial)
+			return nil
+		},
+	}
+	renderDoc.Flags().StringVar(&renderDocSerial, "serial", "", "use this online adb device serial")
+	root.AddCommand(renderDoc)
+
 	connect := &cobra.Command{
 		Use:   "connect <host>:<port>",
 		Short: "Connect adb to a remote Android device",

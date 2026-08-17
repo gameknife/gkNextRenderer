@@ -38,15 +38,16 @@ public class GkNextActivity extends SDLActivity {
 
     private void enableImmersiveFullscreen() {
         Window window = getWindow();
+        View decorView = window.getDecorView();
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            WindowInsetsController controller = window.getInsetsController();
+            WindowInsetsController controller = decorView.getWindowInsetsController();
             if (controller != null) {
                 controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
                 controller.setSystemBarsBehavior(
                     WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
             }
         } else {
-            window.getDecorView().setSystemUiVisibility(
+            decorView.setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
                 View.SYSTEM_UI_FLAG_FULLSCREEN |
                 View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
@@ -115,9 +116,26 @@ public class GkNextActivity extends SDLActivity {
         }
     }
 
+    /**
+     * Forward launch-time diagnostic switches to SDL's native argv. The
+     * RenderDoc layer is installed and selected by the desktop replay host;
+     * this flag only opts the native application into its application API and
+     * automatic first-frame capture.
+     */
+    @Override
+    protected String[] getArguments() {
+        if (getIntent() != null && getIntent().getBooleanExtra("gknext.renderdoc", false)) {
+            return new String[] { "--renderdoc" };
+        }
+        return new String[0];
+    }
+
     @Override
     protected String[] getLibraries() {
-        return new String[] { "SDL3", BuildConfig.DEBUG ? "gkNextRendererd" : "gkNextRenderer" };
+        String nativeLibrary = "debug".equalsIgnoreCase(BuildConfig.BUILD_TYPE)
+            ? "gkNextRendererd"
+            : "gkNextRenderer";
+        return new String[] { "SDL3", nativeLibrary };
     }
 
     @Override

@@ -33,6 +33,7 @@ type RunResult struct {
 	Serial          string
 	EmulatorStarted bool
 	AVD             string
+	CapturePath     string
 }
 
 // ListDevices writes the detailed adb device list to output. It includes
@@ -70,8 +71,39 @@ func Connect(repoRoot, address string) error {
 	return nil
 }
 
-// Build configures the Android driver and produces an APK. Release is the
-// default; provide signing properties before using its APK on a device.
+// OpenRenderDoc installs the matching Android replay helper and opens the
+// desktop RenderDoc UI connected to an online adb device.
+func OpenRenderDoc(repoRoot, requestedSerial string) (RunResult, error) {
+	sdkADBPath, err := discoverADBPath(repoRoot)
+	if err != nil {
+		return RunResult{}, err
+	}
+	sdkRoot := filepath.Dir(filepath.Dir(sdkADBPath))
+	renderDocRoot, err := discoverRenderDocRoot()
+	if err != nil {
+		return RunResult{}, err
+	}
+	adbPath := sdkADBPath
+	devices, err := onlineDevices(adbPath)
+	if err != nil {
+		return RunResult{}, err
+	}
+	serial, err := selectDevice(devices, requestedSerial)
+	if err != nil {
+		return RunResult{}, err
+	}
+	resetRenderDocAndroidSettings(adbPath, serial)
+	if err := installRenderDocLayer(adbPath, serial, renderDocRoot); err != nil {
+		return RunResult{}, err
+	}
+	if err := startRenderDocReplayUI(renderDocRoot, serial, sdkRoot); err != nil {
+		return RunResult{}, err
+	}
+	return RunResult{Serial: serial}, nil
+}
+
+// Build configures the Android driver and produces the shared APK. Release is
+// the default; provide signing properties before using its APK on a device.
 func Build(repoRoot string, cfg config.Config, variant string) (Artifact, error) {
 	variant, err := normalizeVariant(variant)
 	if err != nil {
@@ -146,11 +178,59 @@ func Run(repoRoot, variant, requestedSerial, requestedAVD string) (RunResult, er
 		result.EmulatorStarted = true
 		result.AVD = avd
 	}
+	// RenderDoc's Android injection uses global GPU layer settings.  Always
+	// clear them before a normal launch so a previous capture cannot affect the
+	// shared APK when it is started without --renderdoc.
+	resetRenderDocAndroidSettings(adbPath, serial)
 	if err := installAndLaunch(adbPath, serial, artifact.APKPath); err != nil {
 		return RunResult{}, err
 	}
 	result.Serial = serial
 	return result, nil
+}
+
+// Capture installs the existing shared release APK, then asks qrenderdoc to
+// perform its official Android injection and target-control capture flow.
+func Capture(repoRoot string, _ config.Config, requestedSerial string) (RunResult, error) {
+	const variant = "release"
+	artifact, err := ReadArtifact(repoRoot, variant)
+	if err != nil {
+		return RunResult{}, err
+	}
+	renderDocRoot, err := discoverRenderDocRoot()
+	if err != nil {
+		return RunResult{}, err
+	}
+	sdkADBPath := androidTool(artifact.SDKRoot, "platform-tools", "adb")
+	if _, err := os.Stat(sdkADBPath); err != nil {
+		return RunResult{}, fmt.Errorf("adb not found: %s", sdkADBPath)
+	}
+	adbPath := sdkADBPath
+	devices, err := onlineDevices(adbPath)
+	if err != nil {
+		return RunResult{}, err
+	}
+	serial, err := selectDevice(devices, requestedSerial)
+	if err != nil {
+		return RunResult{}, err
+	}
+	defer resetRenderDocAndroidSettings(adbPath, serial)
+
+	if err := uninstallAndInstall(adbPath, serial, artifact.APKPath); err != nil {
+		return RunResult{}, fmt.Errorf("launch RenderDoc capture on %s: %w", serial, err)
+	}
+	remoteCapture, err := runRenderDocCaptureScript(repoRoot, renderDocRoot, serial, artifact.SDKRoot)
+	if err != nil {
+		return RunResult{}, err
+	}
+	localCapture, err := pullRenderDocCapture(repoRoot, adbPath, serial, remoteCapture)
+	if err != nil {
+		return RunResult{}, err
+	}
+	if err := openRenderDocCapture(renderDocRoot, artifact.SDKRoot, localCapture); err != nil {
+		return RunResult{}, err
+	}
+	return RunResult{Serial: serial, CapturePath: localCapture}, nil
 }
 
 // ReadArtifact locates the archived APK and Android SDK for a completed build.
@@ -159,7 +239,8 @@ func ReadArtifact(repoRoot, variant string) (Artifact, error) {
 	if err != nil {
 		return Artifact{}, err
 	}
-	apkPath := filepath.Join(buildDirectory(repoRoot, variant), "apk", "gkNextRenderer-"+variant+".apk")
+	buildDir := buildDirectory(repoRoot, variant)
+	apkPath := filepath.Join(buildDir, "apk", "gkNextRenderer-"+variant+".apk")
 	info, err := os.Stat(apkPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -170,7 +251,7 @@ func ReadArtifact(repoRoot, variant string) (Artifact, error) {
 	if info.IsDir() {
 		return Artifact{}, fmt.Errorf("Android APK path is a directory: %s", apkPath)
 	}
-	sdkRoot, err := discoverSDKRoot(repoRoot, variant)
+	sdkRoot, err := discoverSDKRootFromBuildDir(repoRoot, buildDir)
 	if err != nil {
 		return Artifact{}, err
 	}
@@ -193,7 +274,11 @@ func buildDirectory(repoRoot, variant string) string {
 }
 
 func discoverSDKRoot(repoRoot, variant string) (string, error) {
-	cachePath := filepath.Join(buildDirectory(repoRoot, variant), "CMakeCache.txt")
+	return discoverSDKRootFromBuildDir(repoRoot, buildDirectory(repoRoot, variant))
+}
+
+func discoverSDKRootFromBuildDir(repoRoot, buildDir string) (string, error) {
+	cachePath := filepath.Join(buildDir, "CMakeCache.txt")
 	if cache, err := os.ReadFile(cachePath); err == nil {
 		if root := cmakeCacheValue(string(cache), "GK_ANDROID_SDK_ROOT"); root != "" {
 			return root, nil
@@ -261,6 +346,134 @@ func discoverADBPath(repoRoot string) (string, error) {
 		return "", fmt.Errorf("adb not found: %s", adbPath)
 	}
 	return adbPath, nil
+}
+
+func discoverRenderDocRoot() (string, error) {
+	if runtime.GOOS != "windows" {
+		return "", fmt.Errorf("Android RenderDoc capture currently requires the Windows RenderDoc installation")
+	}
+	candidates := []string{}
+	if programFiles := os.Getenv("ProgramFiles"); programFiles != "" {
+		candidates = append(candidates, filepath.Join(programFiles, "RenderDoc"))
+	}
+	if programFilesX86 := os.Getenv("ProgramFiles(x86)"); programFilesX86 != "" {
+		candidates = append(candidates, filepath.Join(programFilesX86, "RenderDoc"))
+	}
+	for _, candidate := range candidates {
+		if _, err := os.Stat(filepath.Join(candidate, "qrenderdoc.exe")); err == nil {
+			if _, err := os.Stat(filepath.Join(candidate, "plugins", "android", "org.renderdoc.renderdoccmd.arm64.apk")); err == nil {
+				return candidate, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("RenderDoc Android support not found; install RenderDoc under Program Files")
+}
+
+func installRenderDocLayer(adbPath, serial, renderDocRoot string) error {
+	apkPath := filepath.Join(renderDocRoot, "plugins", "android", "org.renderdoc.renderdoccmd.arm64.apk")
+	if err := runCommand("", nil, adbPath, "-s", serial, "install", "-r", "-g", "--force-queryable", apkPath); err != nil {
+		return fmt.Errorf("install RenderDoc Android layer: %w", err)
+	}
+	return nil
+}
+
+func runRenderDocCaptureScript(repoRoot, renderDocRoot, serial, sdkRoot string) (string, error) {
+	scriptPath := filepath.Join(repoRoot, "tools", "gnb", "internal", "android", "renderdoc_capture.py")
+	if _, err := os.Stat(scriptPath); err != nil {
+		return "", fmt.Errorf("RenderDoc capture script not found: %s", scriptPath)
+	}
+	resultPath := filepath.Join(repoRoot, "out", "build", "android-release", "renderdoc-capture.result")
+	_ = os.Remove(resultPath)
+	qrenderdocPath := filepath.Join(renderDocRoot, "qrenderdoc.exe")
+	console.Command(qrenderdocPath, "--python", scriptPath)
+	cmd := exec.Command(qrenderdocPath, "--python", scriptPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = append(renderDocEnvironment(sdkRoot),
+		"GK_RENDERDOC_SERIAL="+serial,
+		"GK_RENDERDOC_RESULT_FILE="+resultPath,
+	)
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("start RenderDoc Android capture script: %w", err)
+	}
+	defer func() {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		_ = cmd.Wait()
+	}()
+
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
+		data, err := os.ReadFile(resultPath)
+		if err == nil {
+			remoteCapture := strings.TrimSpace(string(data))
+			if strings.HasPrefix(remoteCapture, "ERROR:") {
+				return "", fmt.Errorf("RenderDoc Android capture failed: %s", remoteCapture)
+			}
+			if strings.HasSuffix(remoteCapture, ".rdc") {
+				return remoteCapture, nil
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return "", fmt.Errorf("timed out waiting for the RenderDoc Android capture script")
+}
+
+func pullRenderDocCapture(repoRoot, adbPath, serial, remoteCapture string) (string, error) {
+	fileName := remoteCapture
+	if separator := strings.LastIndexAny(fileName, "/\\"); separator >= 0 {
+		fileName = fileName[separator+1:]
+	}
+	if fileName == "" || !strings.HasSuffix(fileName, ".rdc") {
+		return "", fmt.Errorf("invalid RenderDoc capture path returned by adb: %q", remoteCapture)
+	}
+	localDir := filepath.Join(repoRoot, "out", "build", "android-release", "captures")
+	if err := os.MkdirAll(localDir, 0o755); err != nil {
+		return "", fmt.Errorf("create RenderDoc capture directory %s: %w", localDir, err)
+	}
+	localCapture := filepath.Join(localDir, fileName)
+	if err := runCommand("", nil, adbPath, "-s", serial, "pull", remoteCapture, localCapture); err != nil {
+		return "", fmt.Errorf("pull RenderDoc capture %s: %w", remoteCapture, err)
+	}
+	return localCapture, nil
+}
+
+func startRenderDocReplayUI(renderDocRoot, serial, sdkRoot string) error {
+	qrenderdocPath := filepath.Join(renderDocRoot, "qrenderdoc.exe")
+	console.Command(qrenderdocPath, "--replayhost", "adb://"+serial)
+	cmd := exec.Command(qrenderdocPath, "--replayhost", "adb://"+serial)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = renderDocEnvironment(sdkRoot)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start qrenderdoc for adb://%s: %w", serial, err)
+	}
+	_ = cmd.Process.Release()
+	return nil
+}
+
+func renderDocEnvironment(sdkRoot string) []string {
+	platformTools := filepath.Join(sdkRoot, "platform-tools")
+	return append(os.Environ(),
+		"ANDROID_HOME="+sdkRoot,
+		"ANDROID_SDK_ROOT="+sdkRoot,
+		"PATH="+platformTools+string(os.PathListSeparator)+os.Getenv("PATH"),
+	)
+}
+
+func openRenderDocCapture(renderDocRoot, sdkRoot, capturePath string) error {
+	qrenderdocPath := filepath.Join(renderDocRoot, "qrenderdoc.exe")
+	console.Command(qrenderdocPath, capturePath)
+	cmd := exec.Command(qrenderdocPath, capturePath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = renderDocEnvironment(sdkRoot)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("open RenderDoc capture %s: %w", capturePath, err)
+	}
+	_ = cmd.Process.Release()
+	return nil
 }
 
 func onlineDevices(adbPath string) ([]string, error) {
@@ -372,10 +585,51 @@ func installAndLaunch(adbPath, serial, apkPath string) error {
 	if err := runCommand("", nil, adbPath, "-s", serial, "install", "-r", apkPath); err != nil {
 		return fmt.Errorf("install Android APK on %s: %w", serial, err)
 	}
-	if err := runCommand("", nil, adbPath, "-s", serial, "shell", "am", "start", "-n", activityName); err != nil {
+	return launchInstalled(adbPath, serial, false)
+}
+
+func launchInstalled(adbPath, serial string, renderDoc bool) error {
+	arguments := []string{"-s", serial, "shell", "am", "start", "-S", "-n", activityName}
+	if renderDoc {
+		arguments = append(arguments, "--ez", "gknext.renderdoc", "true")
+	}
+	if err := runCommand("", nil, adbPath, arguments...); err != nil {
 		return fmt.Errorf("launch Android app on %s: %w", serial, err)
 	}
 	return nil
+}
+
+func uninstallAndInstall(adbPath, serial, apkPath string) error {
+	// A previously installed APK may have been signed by another local
+	// keystore. Remove only this project package so the new shared APK can be
+	// installed without changing any other device state.
+	_ = runCommand("", nil, adbPath, "-s", serial, "shell", "am", "force-stop", packageName)
+	_ = runCommand("", nil, adbPath, "-s", serial, "uninstall", packageName)
+	if err := runCommand("", nil, adbPath, "-s", serial, "install", "-r", apkPath); err != nil {
+		return fmt.Errorf("install Android APK on %s: %w", serial, err)
+	}
+	return nil
+}
+
+func resetRenderDocAndroidSettings(adbPath, serial string) {
+	// Keep this in sync with RenderDoc's Android::ResetCaptureSettings(). The
+	// settings are global on the device, so leaving them behind causes every
+	// later launch of this package to load the RenderDoc layer.
+	settings := [][]string{
+		{"shell", "setprop", "debug.vulkan.layers", ":"},
+		{"shell", "settings", "delete", "global", "enable_gpu_debug_layers"},
+		{"shell", "settings", "delete", "global", "gpu_debug_app"},
+		{"shell", "settings", "delete", "global", "gpu_debug_layer_app"},
+		{"shell", "settings", "delete", "global", "gpu_debug_layers"},
+		{"shell", "settings", "delete", "global", "gpu_debug_layers_gles"},
+		{"shell", "am", "force-stop", packageName},
+		{"shell", "am", "force-stop", "org.renderdoc.renderdoccmd.arm64"},
+		{"shell", "am", "force-stop", "org.renderdoc.renderdoccmd.arm32"},
+	}
+	for _, command := range settings {
+		arguments := append([]string{"-s", serial}, command...)
+		_ = runCommand("", nil, adbPath, arguments...)
+	}
 }
 
 func runCommand(dir string, env []string, path string, args ...string) error {

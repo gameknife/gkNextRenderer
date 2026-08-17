@@ -1,6 +1,7 @@
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/RenderDoc.hpp"
 #include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
 #include "Modules/GltfLoader/GltfModule.hpp"
 #include "Modules/LiveCoding/LiveCodingModule.hpp"
@@ -18,9 +19,17 @@
 #include <SDL3/SDL_main.h>
 
 #include <cstdlib>
+#include <vector>
 
 std::unique_ptr<NextEngine> GApplication;
 std::unique_ptr<Runtime::Config::Options> GOptionPtr;
+
+#if WITH_RENDERDOC
+namespace
+{
+    bool GRenderDocAutoCaptureRequested = false;
+}
+#endif
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
@@ -28,6 +37,16 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     {
         return SDL_APP_SUCCESS;
     }
+#if WITH_RENDERDOC
+    const bool renderDocRequested = GOption != nullptr && GOption->RenderDoc;
+    if (renderDocRequested && !GRenderDocAutoCaptureRequested && Runtime::RenderDoc::IsSupported() &&
+        GApplication->GetEngineStatus() == NextRenderer::EApplicationStatus::Running &&
+        !GApplication->GetScene().Nodes().empty())
+    {
+        GRenderDocAutoCaptureRequested = Runtime::RenderDoc::RequestCapture();
+    }
+    Runtime::RenderDoc::Poll();
+#endif
     return SDL_APP_CONTINUE;
 }
 
@@ -43,8 +62,21 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
 #if ANDROID
-    const char* argv1[] = { "gkNextRenderer", "--gpu=0", "--fullscreen", "--load-scene=GIBootcamp.proc" };
-    GOptionPtr.reset(new Runtime::Config::Options(4, argv1));
+    std::vector<const char*> androidArguments = {
+        "gkNextRenderer",
+        "--gpu=0",
+        "--fullscreen",
+        "--load-scene=GIBootcamp.proc"
+    };
+    for (int argumentIndex = 1; argumentIndex < argc; ++argumentIndex)
+    {
+        if (argv != nullptr && argv[argumentIndex] != nullptr)
+        {
+            androidArguments.push_back(argv[argumentIndex]);
+        }
+    }
+    GOptionPtr.reset(new Runtime::Config::Options(
+        static_cast<int>(androidArguments.size()), androidArguments.data()));
 #else
     // Handle command line options.
     GOptionPtr.reset(new Runtime::Config::Options(argc, const_cast<const char**>(argv)));
@@ -90,6 +122,19 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         GApplication->AddRenderFrameConsumer(Modules::NextRemote::CreateRemoteServer(*GOption));
     }
     GApplication->Start();
+#if WITH_RENDERDOC
+#if ANDROID
+    // The gnb launch path controls whether the Android Vulkan layer is
+    // installed; --renderdoc controls whether we resolve its API and capture.
+    // Keep normal launches completely free of RenderDoc state.
+    if (GOption->RenderDoc)
+    {
+        Runtime::RenderDoc::Initialize();
+    }
+#else
+    Runtime::RenderDoc::Initialize();
+#endif
+#endif
     
     return SDL_APP_CONTINUE;
 }

@@ -26,6 +26,8 @@ set(GK_ANDROID_ASSET_OUTPUT_DIR "${GK_ASSET_ROOT}/assets")
 set(GK_CACHE_DIR "${CMAKE_BINARY_DIR}/cache")
 set(GK_APK_DIR "${CMAKE_BINARY_DIR}/apk")
 
+set(GK_ANDROID_HARDWARE_ACCELERATED "false")
+
 if(NOT GK_ANDROID_SDK_ROOT)
     if(DEFINED ENV{ANDROID_SDK_ROOT} AND NOT "$ENV{ANDROID_SDK_ROOT}" STREQUAL "")
         set(GK_ANDROID_SDK_ROOT "$ENV{ANDROID_SDK_ROOT}")
@@ -258,6 +260,11 @@ endforeach()
 configure_file(
     "${CMAKE_CURRENT_LIST_DIR}/templates/app/build.gradle.in"
     "${GK_GRADLE_DIR}/app/build.gradle"
+    @ONLY
+)
+configure_file(
+    "${CMAKE_CURRENT_LIST_DIR}/templates/app/src/main/AndroidManifest.xml"
+    "${GK_GRADLE_DIR}/app/src/main/AndroidManifest.xml"
     @ONLY
 )
 

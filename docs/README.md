@@ -101,6 +101,8 @@
 - [阶段性 Release 准备计划](plans/release-readiness-plan.md)（现行；发布流水线、崩溃兜底、UI 收口、
   合规与文档一致性的问题清单与分批任务，覆盖 gkNextRenderer / gkNextEditor / gkNextMotionBenchmark）
 - [CPU TLAS 异步与并行更新计划](plans/cpu-tlas-parallel-update-plan.md)
+- [Tracy Profiler 接入与 CPU/GPU 计时设施重构计划](plans/tracy-profiler-integration-plan.md)（待实施；
+  宏层扇出 Tracy sink、GPU 后端组合器、非阻塞 query 读回、Android adb forward 实时连接）
 - [Visibility Surface / G-buffer / Shading Scheduler 开发计划](plans/visibility-surface-gbuffer-plan.md)（待实施；M0–M4 里程碑，含决策门与回退）
 - [PathTracing Slang Shader 库重构计划](plans/shader-library-refactor-plan.md)（计划中）
 - [PathTracing 材质模型统一（Stage 3 设计增量）](plans/shader-material-model-unification-plan.md)（待审阅）
