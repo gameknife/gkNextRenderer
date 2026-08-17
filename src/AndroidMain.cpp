@@ -13,10 +13,6 @@
 #include <filesystem>
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
 
-#if WIN32
-#include "ThirdParty/renderdoc/renderdoc_app.h"
-#endif
-
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -62,17 +58,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 #endif   
     if(GOption->RenderDoc)
     {
-#if WIN32
-        RENDERDOC_API_1_1_2* rdoc_api = NULL;
-        const auto mod = LoadLibrary(L"renderdoc.dll");
-        if (mod)
-        {
-            pRENDERDOC_GetAPI RENDERDOC_GetAPI =
-                (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
-            RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void**)&rdoc_api);
-        }
-#endif
-            
 #if __linux__
         setenv("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1", 1);
 #endif

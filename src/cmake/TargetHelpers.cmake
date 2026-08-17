@@ -299,6 +299,16 @@ function(gk_link_engine_feature_dependencies target)
         target_compile_definitions(${target} PUBLIC WITH_SUPERLUMINAL=0)
     endif()
 
+    if(WITH_RENDERDOC)
+        target_compile_definitions(${target} PUBLIC
+            WITH_RENDERDOC=1
+            GK_RENDERDOC_DLL_PATH="${GK_RENDERDOC_DLL_PATH}"
+        )
+        target_include_directories(${target} SYSTEM PUBLIC ${GK_RENDERDOC_API_DIR})
+    else()
+        target_compile_definitions(${target} PUBLIC WITH_RENDERDOC=0)
+    endif()
+
     target_link_libraries(${target} PRIVATE ozz KTX::ktx)
 
     if(WITH_AVIF)

@@ -88,7 +88,7 @@ Options::Options(const int argc, const char* argv[])
         ("validation", "Enable Vulkan validation layers.", cxxopts::value<bool>(Validation)->default_value("false"))
         ("sync-validation", "Enable Vulkan synchronization validation. Implies --validation.", cxxopts::value<bool>(SyncValidation)->default_value("false")->implicit_value("true"))
         ("vulkan-driver", "Vulkan driver selection: native, lvp (Windows/Linux), or dozen (Windows).", cxxopts::value<std::string>(VulkanDriver)->default_value("native"))
-        ("renderdoc", "Attach RenderDoc if available.", cxxopts::value<bool>(RenderDoc)->default_value("false"))
+        ("renderdoc", "Capture the first ready scene frame and open it in RenderDoc if available.", cxxopts::value<bool>(RenderDoc)->default_value("false"))
         ("hidden-window", "Create the window hidden: no popup and no focus steal.", cxxopts::value<bool>(HiddenWindow)->default_value("false")->implicit_value("true"))
         ("headless-surface", "Use VK_EXT_headless_surface and skip SDL window creation. Intended for headless-path testing.", cxxopts::value<bool>(HeadlessSurface)->default_value("false")->implicit_value("true"))
         ("benchmark-config", "Load a gkNextMotionBenchmark orchestration JSON.", cxxopts::value<std::string>(BenchmarkConfig)->default_value(""));

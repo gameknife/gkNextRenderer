@@ -128,6 +128,10 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API（默认探测 `C:/Program Files/Superluminal/Performance/API`），构建会自动启用 `WITH_SUPERLUMINAL`，把引擎的 CPU 与 GPU 命名事件投递到 Superluminal 时间线（GPU 事件经独立回放线程标注），便于做细粒度采样剖析与跨帧分析。未安装时自动跳过，不影响构建。
 
+### RenderDoc 集成
+
+Windows 上若存在 `C:/Program Files/RenderDoc/renderdoc_app.h`，构建会自动启用 `WITH_RENDERDOC`，并从同一安装目录动态加载 RenderDoc 应用 API。启动任意桌面目标时附加 `--renderdoc`，引擎会在首个场景就绪后自动捕获下一帧并打开 RenderDoc UI；未安装时自动跳过，不影响构建。
+
 <p align="center">✦</p>
 
 ## 🛠️ 核心能力

@@ -130,6 +130,10 @@ The engine ships a CPU / GPU per-pass timing system: every render pass is annota
 
 On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is installed (probed by default at `C:/Program Files/Superluminal/Performance/API`), the build automatically enables `WITH_SUPERLUMINAL` and forwards the engine's named CPU and GPU events to the Superluminal timeline (GPU events emitted from a dedicated replay thread), enabling fine-grained sampling profiles and cross-frame analysis. When it is not installed, the integration is skipped and the build is unaffected.
 
+### 🧪 RenderDoc Integration
+
+On Windows, if `C:/Program Files/RenderDoc/renderdoc_app.h` exists, the build automatically enables `WITH_RENDERDOC` and dynamically loads the RenderDoc application API from the same installation. Append `--renderdoc` to any desktop target to capture the first frame after the scene is ready and open it in the RenderDoc UI; when RenderDoc is not installed, the integration is skipped and the build is unaffected.
+
 <p align="center">✦</p>
 
 ## 🛠️ Core Capabilities
