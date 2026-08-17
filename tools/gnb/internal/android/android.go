@@ -38,21 +38,9 @@ type RunResult struct {
 // ListDevices writes the detailed adb device list to output. It includes
 // online, offline, and unauthorized devices so connection problems are visible.
 func ListDevices(repoRoot string, output io.Writer) error {
-	sdkRoot, err := discoverSDKRoot(repoRoot, defaultVariant)
+	adbPath, err := discoverADBPath(repoRoot)
 	if err != nil {
-		for _, variant := range []string{"relwithdebinfo", "debug"} {
-			sdkRoot, err = discoverSDKRoot(repoRoot, variant)
-			if err == nil {
-				break
-			}
-		}
-		if err != nil {
-			return err
-		}
-	}
-	adbPath := androidTool(sdkRoot, "platform-tools", "adb")
-	if _, err := os.Stat(adbPath); err != nil {
-		return fmt.Errorf("adb not found: %s", adbPath)
+		return err
 	}
 	console.Command(adbPath, "devices", "-l")
 	cmd := exec.Command(adbPath, "devices", "-l")
@@ -60,6 +48,24 @@ func ListDevices(repoRoot string, output io.Writer) error {
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("adb devices -l: %w", err)
+	}
+	return nil
+}
+
+// Connect attaches adb to a remote Android device at address. The address is
+// passed as a single argument to `adb connect`, so both host:port and adb's
+// supported host names are accepted.
+func Connect(repoRoot, address string) error {
+	address = strings.TrimSpace(address)
+	if address == "" {
+		return fmt.Errorf("remote Android device address must not be empty (expected host:port)")
+	}
+	adbPath, err := discoverADBPath(repoRoot)
+	if err != nil {
+		return err
+	}
+	if err := runCommand("", nil, adbPath, "connect", address); err != nil {
+		return fmt.Errorf("adb connect %q: %w", address, err)
 	}
 	return nil
 }
@@ -235,6 +241,26 @@ func androidTool(sdkRoot string, path ...string) string {
 		path[len(path)-1] += ".exe"
 	}
 	return filepath.Join(append([]string{sdkRoot}, path...)...)
+}
+
+func discoverADBPath(repoRoot string) (string, error) {
+	sdkRoot, err := discoverSDKRoot(repoRoot, defaultVariant)
+	if err != nil {
+		for _, variant := range []string{"relwithdebinfo", "debug"} {
+			sdkRoot, err = discoverSDKRoot(repoRoot, variant)
+			if err == nil {
+				break
+			}
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+	adbPath := androidTool(sdkRoot, "platform-tools", "adb")
+	if _, err := os.Stat(adbPath); err != nil {
+		return "", fmt.Errorf("adb not found: %s", adbPath)
+	}
+	return adbPath, nil
 }
 
 func onlineDevices(adbPath string) ([]string, error) {

@@ -197,6 +197,22 @@ namespace Vulkan::PipelineCommon
                              0, 0, nullptr, 1, &shaderToIndirect, 0, nullptr);
     }
 
+    namespace
+    {
+        // The two pipeline classes share PipelineBase but not BindPipeline, so the bucket dispatch
+        // is written once here and instantiated for each.
+        template <typename TPipeline>
+        void RecordBucketDispatch(VkCommandBuffer commandBuffer, TPipeline& pipeline,
+                                  const Assets::GPUScene& bucketScene, Vulkan::Buffer& buffer,
+                                  const ShadingSchedulerPass::EBucket bucket)
+        {
+            pipeline.BindPipeline(commandBuffer, bucketScene);
+            const VkDeviceSize offset =
+                static_cast<VkDeviceSize>(static_cast<uint32_t>(bucket)) * 3u * sizeof(uint32_t);
+            vkCmdDispatchIndirect(commandBuffer, buffer.Handle(), offset);
+        }
+    }
+
     void ShadingSchedulerPass::DispatchBucket(
         VkCommandBuffer commandBuffer,
         ZeroBindPipeline& pipeline,
@@ -209,9 +225,21 @@ namespace Vulkan::PipelineCommon
         }
         Assets::GPUScene bucketScene = gpuScene;
         ApplyToScene(bucketScene);
-        pipeline.BindPipeline(commandBuffer, bucketScene);
-        const VkDeviceSize offset =
-            static_cast<VkDeviceSize>(static_cast<uint32_t>(bucket)) * 3u * sizeof(uint32_t);
-        vkCmdDispatchIndirect(commandBuffer, buffer_->Handle(), offset);
+        RecordBucketDispatch(commandBuffer, pipeline, bucketScene, *buffer_, bucket);
+    }
+
+    void ShadingSchedulerPass::DispatchBucket(
+        VkCommandBuffer commandBuffer,
+        ZeroBindWithTLASPipeline& pipeline,
+        const Assets::GPUScene& gpuScene,
+        const EBucket bucket) const
+    {
+        if (!buffer_)
+        {
+            return;
+        }
+        Assets::GPUScene bucketScene = gpuScene;
+        ApplyToScene(bucketScene);
+        RecordBucketDispatch(commandBuffer, pipeline, bucketScene, *buffer_, bucket);
     }
 }

@@ -95,6 +95,7 @@ package preset 配置在 `gnb.toml` 的 `[package.presets.<name>]`，可独立�
 ./gnb.sh android build    # CMake 驱动构建 release APK
 ./gnb.sh android run      # 安装并启动已构建的 APK
 ./gnb.sh android devices  # 列出 adb 已连接设备及其状态
+./gnb.sh android connect 192.168.1.100:5555  # 通过 adb 连接远程调试设备
 ./gnb.sh android build relwithdebinfo  # 可选：构建带原生调试符号的 APK
 ./gnb.sh ios build
 ./gnb.sh ios run
@@ -112,6 +113,8 @@ Android 的 Gradle 工程由 `tools/android/templates/` 生成到
 日常命令和 CI 不应直接调用 `gradlew`。
 `gnb android devices` 等同于以详细格式执行 `adb devices -l`，因此也会显示 offline 和
 unauthorized 设备，便于诊断连接问题。
+`gnb android connect <host>:<port>` 将目标转发给 SDK 中的 `adb connect`，连接成功后可直接
+使用 `gnb android run --serial <host>:<port>` 安装并启动 APK。
 driver 要求 JDK 17–23，以及 libc++ 提供 C++20 `<ranges>` 的当前 NDK；
 不兼容的 NDK 会在 configure 阶段明确失败。
 

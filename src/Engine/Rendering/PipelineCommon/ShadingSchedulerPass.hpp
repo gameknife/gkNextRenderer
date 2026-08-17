@@ -23,6 +23,7 @@ namespace Vulkan
 namespace Vulkan::PipelineCommon
 {
     class ZeroBindPipeline;
+    class ZeroBindWithTLASPipeline;
 
     // Shading Scheduler: tile classification + per-bucket indirect dispatch.
     //
@@ -61,8 +62,14 @@ namespace Vulkan::PipelineCommon
                       const Assets::GPUScene& gpuScene);
 
         // Dispatches one bucket indirectly. gpuScene must be the same one Classify received.
+        // The TLAS overload exists for PathTracingLite, whose Standard kernel hardware-traces its
+        // secondary rays; the two pipeline classes are siblings with no common BindPipeline.
         void DispatchBucket(VkCommandBuffer commandBuffer,
                             ZeroBindPipeline& pipeline,
+                            const Assets::GPUScene& gpuScene,
+                            EBucket bucket) const;
+        void DispatchBucket(VkCommandBuffer commandBuffer,
+                            ZeroBindWithTLASPipeline& pipeline,
                             const Assets::GPUScene& gpuScene,
                             EBucket bucket) const;
 

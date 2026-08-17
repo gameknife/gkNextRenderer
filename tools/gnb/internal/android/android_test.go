@@ -26,6 +26,12 @@ func TestNormalizeVariantAcceptsKnownVariantsCaseInsensitively(t *testing.T) {
 	}
 }
 
+func TestConnectRejectsEmptyAddressBeforeDiscoveringSDK(t *testing.T) {
+	if err := Connect(t.TempDir(), "   "); err == nil {
+		t.Fatal("Connect succeeded with an empty address, want error")
+	}
+}
+
 func TestParseOnlineDevicesIgnoresOfflineDevices(t *testing.T) {
 	output := "List of devices attached\r\nphone-1\tdevice product:foo\r\nemulator-5554\toffline\r\nphone-2\tunauthorized\r\n"
 	got := parseOnlineDevices(output)

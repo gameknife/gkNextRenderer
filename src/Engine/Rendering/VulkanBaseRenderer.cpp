@@ -229,7 +229,8 @@ namespace Vulkan
                                    EPostProcess::Temporal | EPostProcess::Upscale |
                                        EPostProcess::RayReconstruction | EPostProcess::FrameGeneration |
                                        EPostProcess::DebugGBuffer,
-                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 1, 1,
+                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId,
+                                   false, true}, 1, 1,
                                &CreateLogicRenderer<PathTracing::PathTracingLiteRenderer>},
             RendererDescriptor{ERT_SoftwareTracing, "SoftwareTracing", {
                                    ESceneResource::Voxel | ESceneResource::Ambient | ESceneResource::LightGrid,

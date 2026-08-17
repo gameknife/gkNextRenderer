@@ -848,6 +848,16 @@ func newAndroidCommand(ctx appContext) *cobra.Command {
 	run.Flags().StringVar(&avd, "avd", "", "start this local AVD when no adb device is online")
 	root.AddCommand(run)
 
+	connect := &cobra.Command{
+		Use:   "connect <host>:<port>",
+		Short: "Connect adb to a remote Android device",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return android.Connect(ctx.repoRoot, args[0])
+		},
+	}
+	root.AddCommand(connect)
+
 	devices := &cobra.Command{
 		Use:   "devices",
 		Short: "List adb-connected Android devices",

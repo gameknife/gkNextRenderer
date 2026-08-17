@@ -13,9 +13,10 @@ related_plan: ../plans/visibility-surface-gbuffer-plan.md
 本文描述**当前实现**的职责链、数据契约与调度抽象。执行记录、实测数据与决策门结论见
 [开发计划](../plans/visibility-surface-gbuffer-plan.md)。
 
-**这条链路上已经没有开关**。SoftwareTracing、SoftwareModern、SoftwareModernNoAmbient 一律先跑
-Surface Build，再由 tile 分类分配 per-bucket indirect dispatch；GTAO 由 Core Shading 上采样并折进
-ambient；checkerboard lighting 在条件允许时直接以 sparse 形式交给 Native TAAU。四个 cvar
+**这条链路上已经没有开关**。SoftwareTracing、SoftwareModern、SoftwareModernNoAmbient、
+PathTracingLite 一律先跑 Surface Build，再由 tile 分类分配 per-bucket indirect dispatch；GTAO 由
+Core Shading 上采样并折进 ambient；checkerboard lighting 在条件允许时直接以 sparse 形式交给
+Native TAAU。四个 cvar
 （`r.surface.build`、`r.surface.scheduler`、`r.gtao.applyInCore`、`r.taau.sparseCheckerboard`）
 与它们各自的另一条路径都已删除：
 
@@ -27,8 +28,8 @@ ambient；checkerboard lighting 在条件允许时直接以 sparse 形式交给 
 | `r.taau.sparseCheckerboard` | 恒定行为，前提仍然运行时判定（见「Resolve 收缩与 upscaler 契约」） |
 
 **checkerboard 是 Primary Surface 路径独有的能力**：`IsCheckerboardRenderingActive()` 先问
-`usesPrimarySurface`。因此 PathTracing、PathTracingLite、VoxelTracing（没有、也无法有 Build pass）
-在 upscaler 下一律全率着色。
+`usesPrimarySurface`。因此 PathTracing 与 VoxelTracing（没有 Build pass）在 upscaler 下一律全率着色，
+而 PathTracingLite 随迁移一并获得了 checkerboard 与 Native TAAU sparse。
 
 ## 职责链
 
@@ -58,9 +59,8 @@ Surface Build（Core.SurfaceBuild.comp.slang，永远 full-rate）
 5. Checkerboard 下沉为 per-bucket 采样率；Surface Build 永远 full-rate，resolve 收缩为 lighting-only。
 6. GTAO 前移到 Build 之后、Core 之前，遮蔽也由 Core Shading 上采样并折进 ambient；compose 只做
    相加。它只作用于 sky diffuse。
-7. Renderer 迁移：SoftwareModernNoAmbient、SoftwareModern、SoftwareTracing 已迁移；
-   PathTracing / PathTracingLite（HW primary 含 aperture/DOF，raster VB 无法重放）与
-   VoxelTracing（数据来源不同）不迁移。
+7. Renderer 迁移：SoftwareModernNoAmbient、SoftwareModern、SoftwareTracing、PathTracingLite 已迁移；
+   PathTracing（ReSTIR/SHARC 占着调度器的资源槽）与 VoxelTracing（数据来源不同）不迁移。
 
 ## 它解决的问题
 
@@ -189,10 +189,11 @@ dispatch 的形状是 tile 的而工作密度只有一半——**开了 checkerb
 比省下的还多；**仍按 tile 数 dispatch、让后一半 group 立刻退出** 省掉了 atomic，但 lane 压实也一起
 没了（shading 退回 0.135 ms）。
 
-三个 surface renderer 都只有 scheduler 这一条路径。`Standard` 每个 renderer 一个 kernel，其 Core
-Shading 体在 `common/NoAmbientShading.slang` / `SwModernShading.slang` / `SwTracingShading.slang`；
-`Background` 与 `Emissive` 则按 renderer 家族共享——NoAmbient 一套、两个 tracing renderer 共用一套，
-因为「天空是什么颜色」不取决于旁边的表面由谁着色。
+四个 surface renderer 都只有 scheduler 这一条路径。`Standard` 每个 renderer 一个 kernel，其 Core
+Shading 体在 `common/NoAmbientShading.slang` / `SwModernShading.slang` / `SwTracingShading.slang` /
+`PathTracingLiteShading.slang`；`Background` 与 `Emissive` 则按 renderer 家族共享——NoAmbient 一套，
+SwTracing / SwModern / PathTracingLite 共用一套，因为「天空是什么颜色」不取决于旁边的表面由谁着色，
+也不取决于二次光线是软件还是硬件 tracing。
 
 tracing 家族的两个 terminal kernel 是手写的，而不是调用 `FPathTracingRenderer.PrimaryHit`：那条路
 要付一整个 `Surface.Load`（八张平面）加十一个 RWTexture 句柄才产生四次 store，在主 kernel 里这些
@@ -270,8 +271,13 @@ AuxDraw 声明自己只画光栅化到的像素，GaussianSplat 按「这帧是�
 | SoftwareModernNoAmbient | surface only | 单体 shader 拆成 `Core.SurfaceBuild` + 三个 bucket kernel；lighting 逻辑在 `common/NoAmbientShading.slang` |
 | SoftwareModern | surface only | `FSurfacePrimaryRayCaster : IPrimaryRayCaster` 替换 `FVisibilityBufferRayCaster` |
 | SoftwareTracing | surface only | 同上 |
-| PathTracing / Lite | 不迁移 | HW primary 含 aperture/DOF，raster VB 无法重放 |
+| PathTracingLite | surface only | primary 本来就是 VB 重放，换 caster 即可；Standard bucket 用 `ZeroBindWithTLASPipeline`（二次光线仍是硬件 tracing），Background/Emissive 复用 tracing 家族的共享 kernel |
+| PathTracing | 不迁移 | ReSTIR + SHARC 的 extras 表就住在 `ReservedAddress0`/`CustomData1`，正是调度器要用的两个槽 |
 | VoxelTracing | 不迁移 | 数据来源不同 |
+
+历史文档把 PathTracing 系「不迁移」的理由写成「HW primary 含 aperture/DOF，raster VB 无法重放」，
+这与代码不符：`FHardwarePrimaryRayCaster`（唯一带 aperture/DOF 的 caster）全仓没有任何 shader 在用，
+PathTracing 与 Lite 的 primary 都是 `FVisibilityBufferRayCaster`。真正的门槛是上面那条槽位冲突。
 
 `usesPrimarySurface` 就写在 `VulkanBaseRenderer.cpp` 的 renderer 描述表里，和 prepass/输出/history
 契约放在一起。
