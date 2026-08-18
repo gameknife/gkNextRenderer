@@ -24,6 +24,7 @@
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Profiling/TracyIntegration.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 
@@ -743,6 +744,8 @@ bool NextEngine::Tick(bool forcingDelta)
             if (renderer_->CurrentLogicRendererType() != requestedRendererType)
             {
                 renderer_->SwitchLogicRenderer(requestedRendererType);
+                GkProfiling::Message(fmt::format("Renderer switched to {}",
+                                                 Vulkan::GetRendererName(requestedRendererType)));
             }
         }
 
@@ -909,6 +912,7 @@ bool NextEngine::Tick(bool forcingDelta)
     {
         Profiler()->EndCpuFrame();
     }
+    GkProfiling::FrameMark();
     return closeRequested_;
 }
 
@@ -1479,6 +1483,16 @@ void NextEngine::OnRendererAfterSubmit()
     stats.TextureCount = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
     stats.ComputePassCount = 0;
     stats.LoadingStatus = status_ == NextRenderer::EApplicationStatus::Loading;
+
+    const auto& gpuDrivenStat = scene_->GetGpuDrivenStat();
+    const uint32_t visibleTriangleCount = gpuDrivenStat.TriangleCount > gpuDrivenStat.CulledTriangleCount
+        ? gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount
+        : 0u;
+    const auto memoryStats = renderer_->Device().CaptureMemoryStats();
+    GkProfiling::Plot("FPS", frameState_.frameRate);
+    GkProfiling::Plot("Draw calls", static_cast<int64_t>(gpuDrivenStat.VisibleCount));
+    GkProfiling::Plot("Triangles", static_cast<int64_t>(visibleTriangleCount));
+    GkProfiling::Plot("VRAM used", static_cast<int64_t>(memoryStats.deviceLocalUsageBytes));
 
     // Renderer::visualDebug_ = config_.userSettings.ShowVisualDebug;
     {

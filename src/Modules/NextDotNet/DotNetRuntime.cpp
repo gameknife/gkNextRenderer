@@ -1,4 +1,5 @@
 #include "Modules/NextDotNet/DotNetRuntime.hpp"
+#include "Engine/Runtime/Profiling/TracyIntegration.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
@@ -398,11 +399,13 @@ namespace Modules::NextDotNet
         switch (static_cast<EGameStatus>(status))
         {
         case EGameStatus::Ok:
+            GkProfiling::Message(fmt::format("script hot reload: {}", path));
             SPDLOG_INFO("[dotnet] hot reloaded {}", path);
             break;
         case EGameStatus::UnloadPending:
             // The new code is live, but the previous load context is still referenced. Repeated
             // occurrences mean a leak that would eventually exhaust memory.
+            GkProfiling::Message(fmt::format("script hot reload pending unload: {}", path));
             SPDLOG_WARN("[dotnet] hot reloaded {}, but the previous load context was not collected", path);
             break;
         default:

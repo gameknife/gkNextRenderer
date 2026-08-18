@@ -22,6 +22,7 @@
 #include "Engine/Utilities/LogFormatting.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Profiling/TracyIntegration.hpp"
 #include "Engine/Utilities/Localization.hpp"
 
 #include <SDL3/SDL.h>
@@ -291,6 +292,8 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
                 rebuild.physicsShapeCookingMs + rebuild.physicsBodyCreationMs,
                 rebuild.physicsShapeCookingMs, rebuild.physicsBodyCreationMs,
                 rebuild.cpuPreparationMs, outsideRebuildMs);
+            GkProfiling::Message(fmt::format("committed scene [{}]",
+                                             std::filesystem::path(request.filename).filename().string()));
 
             // Process-level startup cost, reported once: everything from PlatformInit to the
             // first scene being renderable. Later scene loads are covered by the line above.

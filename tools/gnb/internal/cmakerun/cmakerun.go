@@ -71,11 +71,23 @@ func BuildWithCMake(repoRoot string, cmakePath string, preset string, opts Build
 		return err
 	}
 
-	return run(repoRoot, opts.PrintCmd, cmakePath, makeBuildArgs(preset, opts)...)
+	// CMakePresets.json intentionally contains configure presets only. Build
+	// the directory produced by that configure preset instead of relying on a
+	// separate build preset with the same name.
+	return run(repoRoot, opts.PrintCmd, cmakePath, makeBuildArgs(buildDir, opts)...)
 }
 
-func makeBuildArgs(preset string, opts BuildOptions) []string {
-	args := []string{"--build", "--preset", preset}
+// ConfigureWithCMake runs a configure preset without building any target.
+// This is useful for IDE generators such as Visual Studio, where the
+// generated solution is the requested artifact.
+func ConfigureWithCMake(repoRoot string, cmakePath string, preset string, configureArgs ...string) error {
+	args := []string{"--preset", preset}
+	args = append(args, configureArgs...)
+	return run(repoRoot, false, cmakePath, args...)
+}
+
+func makeBuildArgs(buildDir string, opts BuildOptions) []string {
+	args := []string{"--build", buildDir}
 	if len(opts.Targets) > 0 {
 		args = append(args, "--target")
 		args = append(args, opts.Targets...)
@@ -100,7 +112,8 @@ func Clean(repoRoot string, preset string, target string) error {
 	if target == "" || target == "out" {
 		return os.RemoveAll(filepath.Join(repoRoot, "out"))
 	}
-	return run(repoRoot, false, "cmake", "--build", "--preset", preset, "--target", "clean")
+	buildDir := filepath.Join(repoRoot, "out", "build", preset)
+	return run(repoRoot, false, "cmake", "--build", buildDir, "--target", "clean")
 }
 
 func DefaultPreset() (string, error) {

@@ -2,6 +2,7 @@
 #include "Engine/Rendering/FrameSubmission.hpp"
 #include "Engine/Rendering/RenderSubsystems.hpp"
 #include "Engine/Vulkan/GpuQueryTimer.hpp"
+#include "Engine/Vulkan/TracyGpuProfilerBackend.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
 #include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
@@ -42,6 +43,8 @@
 #include "Engine/Rendering/RenderView.hpp"
 #include "Engine/Rendering/VoxelTracing/VoxelTracingRenderer.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Profiling/CompositeGpuProfilerBackend.hpp"
+#include "Engine/Runtime/Profiling/TracyIntegration.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Rendering/PipelineCommon/VisibilityBufferLayout.hpp"
@@ -409,6 +412,15 @@ namespace Vulkan
             // VK_KHR_swapchain
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         };
+
+#if GK_TRACY_ENABLED
+        if (GOption != nullptr && GOption->HardwareQuery &&
+            HasDeviceExtension(physicalDevice, VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME))
+        {
+            requiredExtensions.push_back(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
+            tracyCalibratedTimestampsAvailable_ = true;
+        }
+#endif
 
         VkPhysicalDeviceFeatures deviceFeatures = {};
 
@@ -928,8 +940,24 @@ namespace Vulkan
                                        &scalarBlockLayoutFeatures));
         ctx_.commandPool.reset(new class CommandPool(*ctx_.device, ctx_.device->GraphicsFamilyIndex(), 0, true));
         ctx_.commandPool2.reset(new class CommandPool(*ctx_.device, ctx_.device->TransferFamilyIndex(), 1, true));
-        ctx_.frameProfiler = std::make_unique<Runtime::FrameProfiler>(
+
+        auto compositeGpuProfiler = std::make_unique<Runtime::FCompositeGpuProfilerBackend>();
+        compositeGpuProfiler->AddBackend(
             std::make_unique<Vulkan::GpuQueryTimer>(*ctx_.device, 200, ctx_.device->DeviceProperties()));
+#if GK_TRACY_ENABLED
+        compositeGpuProfiler->AddBackend(std::make_unique<Vulkan::TracyGpuProfilerBackend>(
+            ctx_.instance->Handle(), *ctx_.device, *ctx_.commandPool, tracyCalibratedTimestampsAvailable_));
+#endif
+        ctx_.frameProfiler = std::make_unique<Runtime::FrameProfiler>(std::move(compositeGpuProfiler));
+
+#if defined(NDEBUG)
+        constexpr const char* buildConfig = "release";
+#else
+        constexpr const char* buildConfig = "debug";
+#endif
+        GkProfiling::AppInfo(fmt::format(
+            "target=gkNextRenderer;renderer={};gpu={};config={}",
+            GetRendererName(logicRenderers_.current), ctx_.device->DeviceProperties().deviceName, buildConfig));
     }
 
     void VulkanBaseRenderer::OnDeviceSet()
@@ -2330,6 +2358,7 @@ namespace Vulkan
             SPDLOG_INFO("Renderer history invalidated: {} -> {}, generation {}",
                         GetRendererName(previousType), GetRendererName(type),
                         PrimaryView().State().historyGeneration);
+            GkProfiling::Message(fmt::format("Renderer switched to {}", GetRendererName(type)));
         }
     }
 

@@ -124,11 +124,13 @@ Performance is one of the project's core constraints. The engine leans on radian
 
 ### 🔍 Built-in Profiler
 
-The engine ships a CPU / GPU per-pass timing system: every render pass is annotated with a named scope, `VulkanGpuTimer` collects per-pass GPU-side timings, and an ImGui overlay (`ProfileDebugOverlay`) shows per-pass frame time and statistics live at runtime. You can locate rendering hotspots and compare the cost of different pipelines and settings without any external tooling.
+The engine ships a CPU / GPU per-pass timing system: every render pass is annotated with a named scope, `GpuQueryTimer` collects per-pass GPU-side timings, and an ImGui overlay (`ProfileDebugOverlay`) shows per-pass frame time and statistics live at runtime. You can locate rendering hotspots and compare the cost of different pipelines and settings without any external tooling.
+
+Development builds also enable the Tracy client by default (on-demand, so disconnected processes do not keep accumulating events). Run `gnb tracy fetch` to obtain the official GUI matching the vcpkg client, then `gnb tracy` to launch it; on Android use `gnb tracy --android` and connect to `127.0.0.1` through adb forwarding. See the [Tracy Profiling Guide](docs/guides/tracy-profiling.md). Release builds pass `--tracy=off` and do not ship the Tracy client.
 
 ### ⏱️ Superluminal Integration
 
-On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is installed (probed by default at `C:/Program Files/Superluminal/Performance/API`), the build automatically enables `WITH_SUPERLUMINAL` and forwards the engine's named CPU and GPU events to the Superluminal timeline (GPU events emitted from a dedicated replay thread), enabling fine-grained sampling profiles and cross-frame analysis. When it is not installed, the integration is skipped and the build is unaffected.
+On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is installed (probed by default at `C:/Program Files/Superluminal/Performance/API`), the build automatically enables `WITH_SUPERLUMINAL` and forwards the engine's named CPU events and debug markers to the Superluminal timeline, enabling fine-grained sampling profiles and cross-frame analysis. GPU timing data is collected separately by the engine query timer and the Tracy sink; there is currently no dedicated GPU replay thread. When it is not installed, the integration is skipped and the build is unaffected.
 
 ### 🧪 RenderDoc Integration
 

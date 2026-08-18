@@ -122,11 +122,13 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 ### Profiler
 
-引擎内置一套 CPU / GPU 逐 pass 计时系统：每个渲染 pass 由命名 scope 标注，`VulkanGpuTimer` 采集各 pass 的 GPU 端耗时，运行时以 ImGui 叠加层（`ProfileDebugOverlay`）实时显示逐 pass 帧时间与统计。无需外部工具即可定位渲染热点、对比不同管线与设置的开销。
+引擎内置一套 CPU / GPU 逐 pass 计时系统：每个渲染 pass 由命名 scope 标注，`GpuQueryTimer` 采集各 pass 的 GPU 端耗时，运行时以 ImGui 叠加层（`ProfileDebugOverlay`）实时显示逐 pass 帧时间与统计。无需外部工具即可定位渲染热点、对比不同管线与设置的开销。
+
+开发构建默认还启用 Tracy client（on-demand，不连接时不持续积累事件）。运行 `gnb tracy fetch` 获取与 vcpkg client 同版本的官方 GUI，再运行 `gnb tracy` 启动；Android 使用 `gnb tracy --android`，通过 adb forward 后连接 `127.0.0.1`。完整步骤见 [Tracy Profiling Guide](docs/guides/tracy-profiling.md)。发布构建使用 `--tracy=off`，不携带 Tracy client。
 
 ### Superluminal 集成
 
-Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API（默认探测 `C:/Program Files/Superluminal/Performance/API`），构建会自动启用 `WITH_SUPERLUMINAL`，把引擎的 CPU 与 GPU 命名事件投递到 Superluminal 时间线（GPU 事件经独立回放线程标注），便于做细粒度采样剖析与跨帧分析。未安装时自动跳过，不影响构建。
+Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API（默认探测 `C:/Program Files/Superluminal/Performance/API`），构建会自动启用 `WITH_SUPERLUMINAL`，把引擎的命名 CPU 事件和调试 marker 投递到 Superluminal，便于做细粒度采样剖析与跨帧分析。GPU 时间数据由引擎自己的 query timer 和 Tracy sink 分别采集；当前没有独立的 GPU 回放线程。未安装时自动跳过，不影响构建。
 
 ### RenderDoc 集成
 

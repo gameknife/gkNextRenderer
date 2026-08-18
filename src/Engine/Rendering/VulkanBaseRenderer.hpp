@@ -652,6 +652,7 @@ namespace Vulkan
         FFrameRenderSettings frameSettings_;
         VkPresentModeKHR presentMode_;
         bool forceSDR_{};
+        bool tracyCalibratedTimestampsAvailable_ = false;
         bool visualDebug_{};
         bool requestRecreateSwapChain_ = false;
         bool resetUpscalerHistory_ = true;

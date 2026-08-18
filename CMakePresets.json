@@ -167,57 +167,5 @@
                 "VCPKG_TARGET_TRIPLET": "arm64-ios"
             }
         }
-    ],
-    "buildPresets": [
-        {
-            "name": "windows",
-            "configurePreset": "windows",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "windows-no-unity",
-            "configurePreset": "windows-no-unity",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "windows-asan",
-            "configurePreset": "windows-asan",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "windows-vcproj-asan",
-            "configurePreset": "windows-vcproj-asan",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "linux",
-            "configurePreset": "linux",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "linux-asan",
-            "configurePreset": "linux-asan",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "linux-arm64",
-            "configurePreset": "linux-arm64",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "macos-arm64",
-            "configurePreset": "macos-arm64",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "macos-arm64-asan",
-            "configurePreset": "macos-arm64-asan",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "ios-device",
-            "configurePreset": "ios-device",
-            "configuration": "RelWithDebInfo"
-        }
     ]
 }

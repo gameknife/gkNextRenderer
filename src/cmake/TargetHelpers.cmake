@@ -299,6 +299,22 @@ function(gk_link_engine_feature_dependencies target)
         target_compile_definitions(${target} PUBLIC WITH_SUPERLUMINAL=0)
     endif()
 
+    if(GK_ENABLE_TRACY AND TARGET Tracy::TracyClient)
+        # TracyIntegration.hpp is visible through Engine headers and can be
+        # parsed by modules as well as the engine target. Keep Tracy's header
+        # mode consistent for every consumer, not only the library that owns
+        # the client link.
+        target_compile_definitions(${target} PUBLIC
+            GK_TRACY_ENABLED=1
+            TRACY_ENABLE
+            TRACY_ON_DEMAND
+            TRACY_NO_CRASH_HANDLER
+        )
+        target_link_libraries(${target} PRIVATE Tracy::TracyClient)
+    else()
+        target_compile_definitions(${target} PUBLIC GK_TRACY_ENABLED=0)
+    endif()
+
     if(WITH_RENDERDOC)
         target_compile_definitions(${target} PUBLIC WITH_RENDERDOC=1)
         if(GK_RENDERDOC_ANDROID)

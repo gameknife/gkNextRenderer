@@ -189,6 +189,37 @@ func Run(repoRoot, variant, requestedSerial, requestedAVD string) (RunResult, er
 	return result, nil
 }
 
+// ForwardPort maps the Android Tracy endpoint to a host TCP port. Tracy uses
+// its default 8086 endpoint inside the APK; callers may choose a different
+// host port when multiple devices are profiled concurrently.
+func ForwardPort(repoRoot, variant, requestedSerial string, port int) (RunResult, error) {
+	if port <= 0 || port > 65535 {
+		return RunResult{}, fmt.Errorf("invalid Tracy port %d", port)
+	}
+	artifact, err := ReadArtifact(repoRoot, variant)
+	if err != nil {
+		return RunResult{}, err
+	}
+	adbPath := androidTool(artifact.SDKRoot, "platform-tools", "adb")
+	if _, err := os.Stat(adbPath); err != nil {
+		return RunResult{}, fmt.Errorf("adb not found: %s", adbPath)
+	}
+	devices, err := onlineDevices(adbPath)
+	if err != nil {
+		return RunResult{}, err
+	}
+	serial, err := selectDevice(devices, requestedSerial)
+	if err != nil {
+		return RunResult{}, err
+	}
+	hostEndpoint := fmt.Sprintf("tcp:%d", port)
+	deviceEndpoint := "tcp:8086"
+	if err := runCommand("", nil, adbPath, "-s", serial, "forward", hostEndpoint, deviceEndpoint); err != nil {
+		return RunResult{}, fmt.Errorf("adb forward %s -> %s on %s: %w", hostEndpoint, deviceEndpoint, serial, err)
+	}
+	return RunResult{Serial: serial}, nil
+}
+
 // Capture installs the existing shared release APK, then asks qrenderdoc to
 // perform its official Android injection and target-control capture flow.
 func Capture(repoRoot string, _ config.Config, requestedSerial string) (RunResult, error) {

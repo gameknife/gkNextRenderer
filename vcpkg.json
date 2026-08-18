@@ -6,6 +6,12 @@
   "homepage": "https://github.com/gameknife/gkNextRenderer",
   "dependencies": [
     {
+      "name": "tracy",
+      "default-features": false,
+      "features": ["on-demand"],
+      "platform": "!(ios)"
+    },
+    {
       "name": "cpptrace",
       "platform": "!(android | ios)"
     },

@@ -65,6 +65,11 @@ url_template = "https://builds.dotnet.microsoft.com/dotnet/Sdk/{version}/dotnet-
 version = "1.4.341.1"
 root = "external/VulkanSDK"
 
+[external.tracy]
+# Client and GUI must stay on the same protocol version.
+version = "0.13.1"
+root = "external/tracy"
+
 [external.llm]
 # 当前默认使用的模型 id，必须匹配下面 [[external.llm.models]] 中的某一个 id
 active = "gemma-4-E4B-it-Q4_K_M"

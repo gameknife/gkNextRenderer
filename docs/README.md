@@ -32,6 +32,7 @@
 - [gnb CLI](guides/gnb-cli.md)
 - [macOS / MoltenVK FIFO 黑屏与闪烁排障](guides/macos-moltenvk-fifo-present-troubleshooting.md)
 - [发布流程（打 tag → CI → 验收 → release notes → 回滚）](guides/release-process.md)
+- [Tracy Profiler 使用与 Android adb 连接](guides/tracy-profiling.md)
 - [SCAD 场景生成指引](guides/scad-scene-authoring-guide.md)
 - [Windows Dozen Vulkan 后端排障](guides/dozen-vulkan-backend-troubleshooting.md)
 - [SCAD 资产目录与 ScadLibrary 场景组装约定](../assets/scad/README.md)
@@ -101,8 +102,9 @@
 - [阶段性 Release 准备计划](plans/release-readiness-plan.md)（现行；发布流水线、崩溃兜底、UI 收口、
   合规与文档一致性的问题清单与分批任务，覆盖 gkNextRenderer / gkNextEditor / gkNextMotionBenchmark）
 - [CPU TLAS 异步与并行更新计划](plans/cpu-tlas-parallel-update-plan.md)
-- [Tracy Profiler 接入与 CPU/GPU 计时设施重构计划](plans/tracy-profiler-integration-plan.md)（待实施；
-  宏层扇出 Tracy sink、GPU 后端组合器、非阻塞 query 读回、Android adb forward 实时连接）
+- [GI Bake 磁盘缓存开发计划](plans/gi-bake-disk-cache-plan.md)（待实施；voxelize/DF/ambient cube 的 tile 级
+  本地缓存、`gnb gicache` 管理工具与离线 background 生成；架构边界见
+  [GI 缓存与体素资源架构](designs/gi-cache-architecture.md)）
 - [Visibility Surface / G-buffer / Shading Scheduler 开发计划](plans/visibility-surface-gbuffer-plan.md)（待实施；M0–M4 里程碑，含决策门与回退）
 - [PathTracing Slang Shader 库重构计划](plans/shader-library-refactor-plan.md)（计划中）
 - [PathTracing 材质模型统一（Stage 3 设计增量）](plans/shader-material-model-unification-plan.md)（待审阅）
@@ -119,6 +121,8 @@
 - [.NET 脚本运行时开发计划](plans/dotnet-scripting-plan.md)（P0–P5 已完成 →
   [design](designs/dotnet-scripting-design.md) · [guide](AGENT_GUIDE/DotNetBindings.md)；
   每个阶段的结果段记录了实测才暴露的失败与原因，是这条链路最完整的排障线索）
+- [Tracy Profiler 接入与 CPU/GPU 计时设施重构计划](plans/tracy-profiler-integration-plan.md)（M0–M5 已完成 →
+  [Tracy 使用指南](guides/tracy-profiling.md)）
 - [大气散射与高度雾开发计划](plans/atmosphere-and-height-fog-plan.md)（已完成 → [design](designs/atmosphere-and-height-fog-design.md)）
 - [Bindless 3D 纹理支持计划](plans/bindless-3d-texture-support-plan.md)（已完成）
 - [BSDF-aware Direct Lighting 计划](plans/bsdf-aware-direct-lighting-plan.md)（已实施 → [design](designs/pathtracing-restir-design.md)）

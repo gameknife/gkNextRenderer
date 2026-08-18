@@ -1,6 +1,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 
 #include "Modules/LiveCoding/ShaderHotReloader.hpp"
+#include "Engine/Runtime/Profiling/TracyIntegration.hpp"
 
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
@@ -416,6 +417,7 @@ namespace Modules::LiveCoding
         {
             renderer_->ReloadShaders();
         }
+        GkProfiling::Message(fmt::format("shader hot reload: {} file(s)", result.requests.size()));
         SPDLOG_INFO("[HotReload] Shader rebuilt: {} file(s) in {}", result.requests.size(), stopwatch.elapsed_ms());
     }
 

@@ -115,6 +115,25 @@ Android 的 Gradle 工程由 `tools/android/templates/` 生成到
 unauthorized 设备，便于诊断连接问题。
 `gnb android connect <host>:<port>` 将目标转发给 SDK 中的 `adb connect`，连接成功后可直接
 使用 `gnb android run --serial <host>:<port>` 安装并启动 APK。
+
+### Tracy
+
+`gnb tracy fetch` 下载与 vcpkg client 匹配的官方 Tracy GUI，`gnb tracy` 启动它；开发构建可用
+`gnb build --tracy=on` 或默认配置启用 client，发布构建使用 `gnb build --tracy=off`。Android 先运行
+`gnb android build relwithdebinfo`，再执行 `gnb tracy --android --serial <serial>`，然后在 GUI 中连接
+`127.0.0.1:8086`（`--port` 可改本机端口）。完整排障说明见 [Tracy Profiling](tracy-profiling.md)。
+
+### Rider
+
+`gnb rider` 每次启动前都会删除仓库根目录的 `.idea`，然后启动 Rider 并直接打开
+`CMakeLists.txt`，以规避当前 Rider 的 CMake 构建问题。命令会优先使用 `PATH` 中的
+`rider64` / `rider`，也会探测常见的 JetBrains Toolbox 和系统安装目录。
+
+### Visual Studio
+
+Windows 上运行 `gnb visualstudio` 会使用 `windows-vcproj` preset 重新生成
+`out/build/windows-vcproj/gkNextRenderer.slnx`（或 `.sln`），然后用 Visual Studio 打开它。
+可加 `--skip-setup` 跳过依赖检查。
 driver 要求 JDK 17–23，以及 libc++ 提供 C++20 `<ranges>` 的当前 NDK；
 不兼容的 NDK 会在 configure 阶段明确失败。
 

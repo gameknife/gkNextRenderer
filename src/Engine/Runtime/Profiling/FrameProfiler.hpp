@@ -1,28 +1,16 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/Profiling/ProfileScopeTree.hpp"
 
 #include <limits>
+#include <thread>
 
 struct VkCommandBuffer_T;
 using VkCommandBuffer = VkCommandBuffer_T*;
 
-#define GK_CONCAT_IMPL(a, b) a##b
-#define GK_CONCAT(a, b) GK_CONCAT_IMPL(a, b)
-#define SCOPED_GPU_TIMER_CMD(commandBufferValue, name) Runtime::ScopedGpuProfileScope GK_CONCAT(scopedGpuTimer_, __LINE__)(commandBufferValue, Runtime::FrameProfiler::GetActiveProfiler(), name)
-#define SCOPED_GPU_TIMER(name) SCOPED_GPU_TIMER_CMD(commandBuffer, name)
-#define SCOPED_CPU_TIMER(name) PERFORMANCEAPI_INSTRUMENT_DATA(name, ""); Runtime::ScopedCpuProfileScope GK_CONCAT(scopedCpuTimer_, __LINE__)(Runtime::FrameProfiler::GetActiveProfiler(), name)
-
 namespace Runtime
 {
-    struct ProfileTimerStat
-    {
-        std::string name;
-        std::string stableKey;
-        float milliseconds = 0.0f;
-        int depth = 0;
-    };
-
     class IGpuProfilerBackend
     {
     public:
@@ -32,6 +20,15 @@ namespace Runtime
         virtual void EndFrame(VkCommandBuffer commandBuffer) = 0;
         virtual uint32_t BeginScope(VkCommandBuffer commandBuffer, const char* name) = 0;
         virtual void EndScope(VkCommandBuffer commandBuffer, uint32_t scopeId) = 0;
+        virtual void BeginMarker(VkCommandBuffer commandBuffer, const char* name)
+        {
+            (void)commandBuffer;
+            (void)name;
+        }
+        virtual void EndMarker(VkCommandBuffer commandBuffer)
+        {
+            (void)commandBuffer;
+        }
         virtual float GetTime(const char* name) const = 0;
         virtual std::vector<ProfileTimerStat> FetchTimes(int maxStack) const = 0;
     };
@@ -45,16 +42,6 @@ namespace Runtime
         using TimerStat = ProfileTimerStat;
 
         static constexpr uint32_t invalidTimerId = std::numeric_limits<uint32_t>::max();
-
-        struct CpuTimerRecord
-        {
-            std::string name;
-            std::string stableKey;
-            int depth = 0;
-            CpuClock::time_point startTime{};
-            float elapsedMilliseconds = 0.0f;
-            std::unordered_map<std::string, uint32_t> childNameCounts;
-        };
 
         static FrameProfiler* GetActiveProfiler()
         {
@@ -76,6 +63,8 @@ namespace Runtime
         void EndGpuFrame(VkCommandBuffer commandBuffer);
         uint32_t BeginGpuScope(VkCommandBuffer commandBuffer, const char* name);
         void EndGpuScope(VkCommandBuffer commandBuffer, uint32_t scopeId);
+        void BeginGpuMarker(VkCommandBuffer commandBuffer, const char* name);
+        void EndGpuMarker(VkCommandBuffer commandBuffer);
 
         void BeginCpuFrame();
         void EndCpuFrame();
@@ -90,13 +79,41 @@ namespace Runtime
         void CalculateCpuStats();
 
         std::vector<TimerStat> lastCpuStats_;
-        std::vector<CpuTimerRecord> cpuTimerRecords_;
-        std::vector<uint32_t> cpuActiveStack_;
-        std::unordered_map<std::string, uint32_t> cpuRootNameCounts_;
+        ProfileScopeTree cpuScopeTree_;
+        std::vector<CpuClock::time_point> cpuStartTimes_;
         std::unique_ptr<IGpuProfilerBackend> gpuProfilerBackend_;
         bool cpuFrameStarted_ = false;
+        std::thread::id cpuOwnerThreadId_;
+        std::atomic_bool cpuThreadWarningLogged_ = false;
 
         inline static FrameProfiler* activeProfiler_ = nullptr;
+    };
+
+    class ScopedGpuMarker
+    {
+    public:
+        GK_NON_COPIABLE(ScopedGpuMarker)
+
+        ScopedGpuMarker(VkCommandBuffer commandBuffer, FrameProfiler* profiler, const char* name)
+            : commandBuffer_(commandBuffer), profiler_(profiler)
+        {
+            if (profiler_ != nullptr)
+            {
+                profiler_->BeginGpuMarker(commandBuffer_, name);
+            }
+        }
+
+        ~ScopedGpuMarker()
+        {
+            if (profiler_ != nullptr)
+            {
+                profiler_->EndGpuMarker(commandBuffer_);
+            }
+        }
+
+    private:
+        VkCommandBuffer commandBuffer_;
+        FrameProfiler* profiler_;
     };
 
     class ScopedGpuProfileScope
@@ -155,3 +172,5 @@ namespace Runtime
         uint32_t timerId_ = FrameProfiler::invalidTimerId;
     };
 }
+
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"

@@ -208,7 +208,8 @@ func (s *Server) buildJobSpec(target string, reconfigure bool) JobSpec {
 	if target == "" || target == "all" {
 		label = "all"
 	}
-	args := []string{"--build", "--preset", s.opts.Preset}
+	buildDir := filepath.Join(s.opts.RepoRoot, "out", "build", s.opts.Preset)
+	args := []string{"--build", buildDir}
 	if target != "" && target != "all" {
 		args = append(args, "--target", target)
 	}

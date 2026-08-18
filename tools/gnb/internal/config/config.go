@@ -37,6 +37,13 @@ type ExternalConfig struct {
 	VulkanSDK  VulkanSDKConfig   `toml:"vulkansdk"`
 	LLM        LLMConfig         `toml:"llm"`
 	DotNet     DotNetConfig      `toml:"dotnet"`
+	Tracy      TracyConfig       `toml:"tracy"`
+}
+
+type TracyConfig struct {
+	Version string `toml:"version"`
+	Root    string `toml:"root"`
+	URL     string `toml:"url"`
 }
 
 // DotNetConfig pins the .NET SDK used by the managed scripting layer. Version is the floor an

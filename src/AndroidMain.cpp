@@ -123,17 +123,13 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     }
     GApplication->Start();
 #if WITH_RENDERDOC
-#if ANDROID
-    // The gnb launch path controls whether the Android Vulkan layer is
-    // installed; --renderdoc controls whether we resolve its API and capture.
-    // Keep normal launches completely free of RenderDoc state.
+    // The launch path controls whether the RenderDoc layer is available;
+    // --renderdoc controls whether we resolve its API and capture. Keep
+    // normal launches completely free of RenderDoc state.
     if (GOption->RenderDoc)
     {
         Runtime::RenderDoc::Initialize();
     }
-#else
-    Runtime::RenderDoc::Initialize();
-#endif
 #endif
     
     return SDL_APP_CONTINUE;

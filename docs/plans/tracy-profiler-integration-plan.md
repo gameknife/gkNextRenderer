@@ -1,7 +1,7 @@
 ---
 title: "Tracy Profiler 接入与 CPU/GPU 计时设施重构计划"
 category: plan
-status: 待实施
+status: 已完成
 owner: engine
 created: 2026-08-17
 last_updated: 2026-08-17

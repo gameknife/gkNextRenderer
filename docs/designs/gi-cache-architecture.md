@@ -81,3 +81,10 @@ SHARC 使用 vendored NVIDIA header，经 `assets/shaders/common/Sharc.slang` �
 - NoAmbient 的 voxel sky-visibility soft trace。
 
 这些旧设计可以作为历史研究，但不是当前 roadmap。若重新立项，应先用现有 arena/brick/effective renderer contract 建立基线，不能从旧结构尺寸或旧阶段继续施工。
+
+## 磁盘缓存（计划中）
+
+voxelize / distance field / ambient cube 目前每次加载都完整重算，虽然在同一场景与同一网格配置下结果稳定。
+把这条链路做成 tile 级本地磁盘缓存的执行方案见 [GI Bake 磁盘缓存开发计划](../plans/gi-bake-disk-cache-plan.md)。
+其中两条约束会影响本文档描述的结构，改动这些区域前先读：distance field 是整 cascade 的 chamfer 扫描
+（不能按区块局部重算），cube pool slot 是每次分类压缩出来的运行时产物（缓存必须按 logical brick 索引）。

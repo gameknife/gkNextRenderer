@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <chrono>
 #include <cstdint>
+#include <atomic>
 
 // fmt library (still needed for formatting)
 #include <fmt/printf.h>

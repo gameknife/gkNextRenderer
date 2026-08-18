@@ -163,7 +163,12 @@ static SDL_AppResult InitializeApplication(int argc, char *argv[])
     }
 
 #if WITH_RENDERDOC
-    Runtime::RenderDoc::Initialize();
+    // RenderDoc must be opt-in. Its application API is loaded before Vulkan
+    // creation only when the user explicitly requests a capture workflow.
+    if (GOption->RenderDoc)
+    {
+        Runtime::RenderDoc::Initialize();
+    }
 #endif
 
     if(GOption->RenderDoc)

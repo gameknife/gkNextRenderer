@@ -10,12 +10,13 @@ import (
 
 func TestMakeBuildArgs(t *testing.T) {
 	t.Run("multiple targets", func(t *testing.T) {
-		got := makeBuildArgs("windows", BuildOptions{
+		buildDir := filepath.Join("out", "build", "windows")
+		got := makeBuildArgs(buildDir, BuildOptions{
 			Targets: []string{"gkNextRenderer", "gkNextUnitTests"},
 			Jobs:    8,
 		})
 		want := []string{
-			"--build", "--preset", "windows",
+			"--build", buildDir,
 			"--target", "gkNextRenderer", "gkNextUnitTests",
 			"--parallel", "8",
 		}
@@ -25,16 +26,18 @@ func TestMakeBuildArgs(t *testing.T) {
 	})
 
 	t.Run("default target", func(t *testing.T) {
-		got := makeBuildArgs("linux", BuildOptions{})
-		want := []string{"--build", "--preset", "linux", "--parallel"}
+		buildDir := filepath.Join("out", "build", "linux")
+		got := makeBuildArgs(buildDir, BuildOptions{})
+		want := []string{"--build", buildDir, "--parallel"}
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("makeBuildArgs() = %#v, want %#v", got, want)
 		}
 	})
 
 	t.Run("forwards generator arguments", func(t *testing.T) {
-		got := makeBuildArgs("ios-device", BuildOptions{BuildToolArgs: []string{"-quiet"}})
-		want := []string{"--build", "--preset", "ios-device", "--parallel", "--", "-quiet"}
+		buildDir := filepath.Join("out", "build", "ios-device")
+		got := makeBuildArgs(buildDir, BuildOptions{BuildToolArgs: []string{"-quiet"}})
+		want := []string{"--build", buildDir, "--parallel", "--", "-quiet"}
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("makeBuildArgs() = %#v, want %#v", got, want)
 		}

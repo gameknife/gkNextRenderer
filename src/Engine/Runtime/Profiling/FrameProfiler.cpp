@@ -1,84 +1,20 @@
 #include "Engine/Runtime/Profiling/FrameProfiler.hpp"
-
-namespace
-{
-    template <typename TRecord>
-    void ResetTimerRecords(std::vector<TRecord>& records,
-                           std::vector<uint32_t>& activeStack,
-                           std::unordered_map<std::string, uint32_t>& rootNameCounts)
-    {
-        records.clear();
-        activeStack.clear();
-        rootNameCounts.clear();
-    }
-
-    void PopActiveTimer(std::vector<uint32_t>& activeStack, uint32_t timerId)
-    {
-        if (!activeStack.empty() && activeStack.back() == timerId)
-        {
-            activeStack.pop_back();
-        }
-    }
-
-    template <typename TRecord>
-    std::string BuildStableKey(const std::string& name,
-                               const std::vector<uint32_t>& activeStack,
-                               std::vector<TRecord>& records,
-                               std::unordered_map<std::string, uint32_t>& rootNameCounts)
-    {
-        if (activeStack.empty())
-        {
-            const uint32_t occurrence = rootNameCounts[name]++;
-            return "/" + name + "#" + std::to_string(occurrence);
-        }
-
-        auto& parent = records[activeStack.back()];
-        const uint32_t occurrence = parent.childNameCounts[name]++;
-        return parent.stableKey + "/" + name + "#" + std::to_string(occurrence);
-    }
-
-    template <typename TRecord>
-    std::vector<Runtime::ProfileTimerStat> CollectTimerStats(const std::vector<TRecord>& records)
-    {
-        std::vector<Runtime::ProfileTimerStat> stats;
-        stats.reserve(records.size());
-        for (const auto& record : records)
-        {
-            if (record.elapsedMilliseconds <= 0.0f)
-            {
-                continue;
-            }
-            stats.push_back({record.name, record.stableKey, record.elapsedMilliseconds, record.depth});
-        }
-        return stats;
-    }
-
-    std::vector<Runtime::ProfileTimerStat> FilterTimerStats(const std::vector<Runtime::ProfileTimerStat>& stats,
-                                                            int maxStack)
-    {
-        std::vector<Runtime::ProfileTimerStat> result;
-        for (const auto& stat : stats)
-        {
-            if (maxStack > stat.depth)
-            {
-                result.push_back(stat);
-            }
-        }
-        return result;
-    }
-}
+#include "Engine/Runtime/Profiling/TracyIntegration.hpp"
 
 namespace Runtime
 {
     FrameProfiler::FrameProfiler()
+        : cpuOwnerThreadId_(std::this_thread::get_id())
     {
         SetActiveProfiler(this);
+        GkProfiling::SetThreadName("Main");
     }
 
     FrameProfiler::FrameProfiler(std::unique_ptr<IGpuProfilerBackend> gpuProfilerBackend)
-        : gpuProfilerBackend_(std::move(gpuProfilerBackend))
+        : gpuProfilerBackend_(std::move(gpuProfilerBackend)), cpuOwnerThreadId_(std::this_thread::get_id())
     {
         SetActiveProfiler(this);
+        GkProfiling::SetThreadName("Main");
     }
 
     FrameProfiler::~FrameProfiler()
@@ -123,46 +59,81 @@ namespace Runtime
         }
     }
 
+    void FrameProfiler::BeginGpuMarker(VkCommandBuffer commandBuffer, const char* name)
+    {
+        if (gpuProfilerBackend_)
+        {
+            gpuProfilerBackend_->BeginMarker(commandBuffer, name);
+        }
+    }
+
+    void FrameProfiler::EndGpuMarker(VkCommandBuffer commandBuffer)
+    {
+        if (gpuProfilerBackend_)
+        {
+            gpuProfilerBackend_->EndMarker(commandBuffer);
+        }
+    }
+
     void FrameProfiler::BeginCpuFrame()
     {
+        if (std::this_thread::get_id() != cpuOwnerThreadId_)
+        {
+            return;
+        }
         cpuFrameStarted_ = true;
-        ResetTimerRecords(cpuTimerRecords_, cpuActiveStack_, cpuRootNameCounts_);
+        cpuScopeTree_.Reset();
+        cpuStartTimes_.clear();
     }
 
     void FrameProfiler::EndCpuFrame()
     {
+        if (std::this_thread::get_id() != cpuOwnerThreadId_)
+        {
+            return;
+        }
         CalculateCpuStats();
         cpuFrameStarted_ = false;
     }
 
     uint32_t FrameProfiler::BeginCpuScope(const char* name)
     {
+        if (std::this_thread::get_id() != cpuOwnerThreadId_)
+        {
+            bool expected = false;
+            if (cpuThreadWarningLogged_.compare_exchange_strong(expected, true))
+            {
+                SPDLOG_WARN("FrameProfiler CPU aggregation is main-thread only; this scope is Tracy-only");
+            }
+            return invalidTimerId;
+        }
+
         if (!cpuFrameStarted_)
         {
             BeginCpuFrame();
         }
 
-        const uint32_t timerId = static_cast<uint32_t>(cpuTimerRecords_.size());
-        CpuTimerRecord record{};
-        record.name = name ? name : "";
-        record.depth = static_cast<int>(cpuActiveStack_.size());
-        record.stableKey = BuildStableKey(record.name, cpuActiveStack_, cpuTimerRecords_, cpuRootNameCounts_);
-        record.startTime = CpuClock::now();
-        cpuTimerRecords_.push_back(std::move(record));
-        cpuActiveStack_.push_back(timerId);
+        const uint32_t timerId = cpuScopeTree_.BeginScope(name ? name : "");
+        cpuStartTimes_.push_back(CpuClock::now());
         return timerId;
     }
 
     void FrameProfiler::EndCpuScope(uint32_t scopeId)
     {
-        if (scopeId == invalidTimerId || scopeId >= cpuTimerRecords_.size())
+        if (std::this_thread::get_id() != cpuOwnerThreadId_ || scopeId == invalidTimerId)
         {
             return;
         }
 
-        auto& record = cpuTimerRecords_[scopeId];
-        record.elapsedMilliseconds = std::chrono::duration<float, std::milli>(CpuClock::now() - record.startTime).count();
-        PopActiveTimer(cpuActiveStack_, scopeId);
+        if (scopeId >= cpuStartTimes_.size() || cpuScopeTree_.GetRecord(scopeId) == nullptr)
+        {
+            return;
+        }
+
+        cpuScopeTree_.SetElapsedMilliseconds(
+            scopeId,
+            std::chrono::duration<float, std::milli>(CpuClock::now() - cpuStartTimes_[scopeId]).count());
+        cpuScopeTree_.EndScope(scopeId);
     }
 
     float FrameProfiler::GetGpuTime(const char* name) const
@@ -177,11 +148,12 @@ namespace Runtime
 
     std::vector<FrameProfiler::TimerStat> FrameProfiler::FetchCpuTimes(int maxStack) const
     {
-        return FilterTimerStats(lastCpuStats_, maxStack);
+        return ProfileScopeTree::FilterStats(lastCpuStats_, maxStack);
     }
 
     void FrameProfiler::CalculateCpuStats()
     {
-        lastCpuStats_ = CollectTimerStats(cpuTimerRecords_);
+        lastCpuStats_ = cpuScopeTree_.CollectStats();
+        cpuStartTimes_.clear();
     }
 }

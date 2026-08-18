@@ -5,57 +5,8 @@
 
 namespace
 {
-    template <typename TRecord>
-    void ResetTimerRecords(std::vector<TRecord>& records,
-                           std::vector<uint32_t>& activeStack,
-                           std::unordered_map<std::string, uint32_t>& rootNameCounts)
-    {
-        records.clear();
-        activeStack.clear();
-        rootNameCounts.clear();
-    }
-
-    void PopActiveTimer(std::vector<uint32_t>& activeStack, uint32_t timerId)
-    {
-        if (!activeStack.empty() && activeStack.back() == timerId)
-        {
-            activeStack.pop_back();
-        }
-    }
-
-    template <typename TRecord>
-    std::string BuildStableKey(const std::string& name,
-                               const std::vector<uint32_t>& activeStack,
-                               std::vector<TRecord>& records,
-                               std::unordered_map<std::string, uint32_t>& rootNameCounts)
-    {
-        if (activeStack.empty())
-        {
-            const uint32_t occurrence = rootNameCounts[name]++;
-            return "/" + name + "#" + std::to_string(occurrence);
-        }
-
-        auto& parent = records[activeStack.back()];
-        const uint32_t occurrence = parent.childNameCounts[name]++;
-        return parent.stableKey + "/" + name + "#" + std::to_string(occurrence);
-    }
-
-    std::vector<Runtime::ProfileTimerStat> FilterTimerStats(const std::vector<Runtime::ProfileTimerStat>& stats,
-                                                            int maxStack)
-    {
-        std::vector<Runtime::ProfileTimerStat> result;
-        for (const auto& stat : stats)
-        {
-            if (maxStack > stat.depth)
-            {
-                result.push_back(stat);
-            }
-        }
-        return result;
-    }
-
     bool TryCalculateElapsedMilliseconds(uint64_t startTimestamp, uint64_t endTimestamp,
-                                         float timestampPeriod, uint32_t timestampValidBits,
+                                         const float timestampPeriod, const uint32_t timestampValidBits,
                                          float& outMilliseconds)
     {
         outMilliseconds = 0.0f;
@@ -65,7 +16,9 @@ namespace
         }
 
         const uint32_t validBits = std::min(timestampValidBits, 64u);
-        const uint64_t mask = validBits == 64 ? std::numeric_limits<uint64_t>::max() : ((uint64_t{1} << validBits) - 1);
+        const uint64_t mask = validBits == 64
+            ? std::numeric_limits<uint64_t>::max()
+            : ((uint64_t{1} << validBits) - 1);
         startTimestamp &= mask;
         endTimestamp &= mask;
 
@@ -96,12 +49,10 @@ namespace
 
 namespace Vulkan
 {
-    GpuQueryTimer::GpuQueryTimer(const Device& device, uint32_t totalCount, const VkPhysicalDeviceProperties& properties)
-        : device_(device)
+    GpuQueryTimer::GpuQueryTimer(const Device& device, const uint32_t totalCount,
+                                 const VkPhysicalDeviceProperties& properties)
+        : device_(device), timestampPeriod_(properties.limits.timestampPeriod)
     {
-        timestamps_.resize(totalCount);
-        timestampPeriod_ = properties.limits.timestampPeriod;
-
         const auto queueFamilies = Vulkan::GetEnumerateVector(device_.PhysicalDevice(), vkGetPhysicalDeviceQueueFamilyProperties);
         if (device_.GraphicsFamilyIndex() >= queueFamilies.size())
         {
@@ -109,22 +60,37 @@ namespace Vulkan
         }
 
         timestampValidBits_ = std::min(queueFamilies[device_.GraphicsFamilyIndex()].timestampValidBits, 64u);
-        if (timestampPeriod_ == 0.0f || timestampValidBits_ == 0)
+        if (timestampPeriod_ == 0.0f || timestampValidBits_ == 0 || totalCount < 2)
         {
             return;
         }
 
-        VkQueryPoolCreateInfo queryPoolInfo{};
-        queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-        queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
-        queryPoolInfo.queryCount = static_cast<uint32_t>(timestamps_.size());
-
-        const VkResult result = vkCreateQueryPool(device_.Handle(), &queryPoolInfo, nullptr, &queryPool_);
-        if (result != VK_SUCCESS)
+        queryBanks_.resize(queryBankCount);
+        for (QueryBank& bank : queryBanks_)
         {
-            SPDLOG_WARN("Failed to create timestamp query pool: {}", static_cast<int>(result));
-            queryPool_ = VK_NULL_HANDLE;
-            return;
+            bank.timestamps.resize(totalCount * 2);
+            bank.availability.resize(totalCount);
+
+            VkQueryPoolCreateInfo queryPoolInfo{};
+            queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+            queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+            queryPoolInfo.queryCount = totalCount;
+
+            const VkResult result = vkCreateQueryPool(device_.Handle(), &queryPoolInfo, nullptr, &bank.queryPool);
+            if (result != VK_SUCCESS)
+            {
+                SPDLOG_WARN("Failed to create timestamp query bank: {}", static_cast<int>(result));
+                for (QueryBank& createdBank : queryBanks_)
+                {
+                    if (createdBank.queryPool != VK_NULL_HANDLE)
+                    {
+                        vkDestroyQueryPool(device_.Handle(), createdBank.queryPool, nullptr);
+                        createdBank.queryPool = VK_NULL_HANDLE;
+                    }
+                }
+                queryBanks_.clear();
+                return;
+            }
         }
 
         valid_ = true;
@@ -132,132 +98,145 @@ namespace Vulkan
 
     GpuQueryTimer::~GpuQueryTimer()
     {
-        if (queryPool_ != VK_NULL_HANDLE)
+        for (QueryBank& bank : queryBanks_)
         {
-            vkDestroyQueryPool(device_.Handle(), queryPool_, nullptr);
-        }
-    }
-
-    void GpuQueryTimer::BeginFrame(VkCommandBuffer commandBuffer)
-    {
-        if (!GOption->HardwareQuery || !valid_)
-        {
-            return;
-        }
-
-        vkCmdResetQueryPool(commandBuffer, queryPool_, 0, static_cast<uint32_t>(timestamps_.size()));
-        queryIndex_ = 0;
-        frameActive_ = true;
-
-        CalculateStats();
-        ResetTimerRecords(records_, activeStack_, rootNameCounts_);
-    }
-
-    void GpuQueryTimer::EndFrame(VkCommandBuffer commandBuffer)
-    {
-        (void)commandBuffer;
-        if (!GOption->HardwareQuery || !valid_ || !frameActive_)
-        {
-            return;
-        }
-
-        frameActive_ = false;
-        if (queryIndex_ == 0)
-        {
-            return;
-        }
-
-        const VkResult result = vkGetQueryPoolResults(
-            device_.Handle(),
-            queryPool_,
-            0,
-            queryIndex_,
-            static_cast<size_t>(queryIndex_) * sizeof(uint64_t),
-            timestamps_.data(),
-            sizeof(uint64_t),
-            VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
-        if (result != VK_SUCCESS)
-        {
-            static bool queryWarningLogged = false;
-            if (!queryWarningLogged)
+            if (bank.queryPool != VK_NULL_HANDLE)
             {
-                queryWarningLogged = true;
-                SPDLOG_WARN("GPU timer query result unavailable: {}", static_cast<int>(result));
+                vkDestroyQueryPool(device_.Handle(), bank.queryPool, nullptr);
             }
+        }
+    }
+
+    bool GpuQueryTimer::HardwareQueryEnabled() const
+    {
+        return GOption != nullptr && GOption->HardwareQuery;
+    }
+
+    void GpuQueryTimer::BeginFrame(const VkCommandBuffer commandBuffer)
+    {
+        if (!HardwareQueryEnabled() || !valid_)
+        {
             return;
         }
 
-        for (auto& record : records_)
+        for (QueryBank& bank : queryBanks_)
         {
-            if (record.startQuery == invalidTimerId || record.endQuery == invalidTimerId)
+            if (bank.hasSubmittedWork && PollBank(bank) && bank.frameSerial > lastResolvedFrameSerial_)
+            {
+                ResolveBankStats(bank);
+                lastResolvedFrameSerial_ = bank.frameSerial;
+            }
+        }
+
+        const int32_t bankCount = static_cast<int32_t>(queryBanks_.size());
+        for (int32_t attempt = 1; attempt <= bankCount; ++attempt)
+        {
+            const int32_t candidateIndex = (currentBankIndex_ + attempt + bankCount) % bankCount;
+            QueryBank& candidate = queryBanks_[candidateIndex];
+            if (candidate.hasSubmittedWork && !CanReuseBank(candidate))
             {
                 continue;
             }
 
-            float elapsedMilliseconds = 0.0f;
-            if (TryCalculateElapsedMilliseconds(timestamps_[record.startQuery],
-                                                timestamps_[record.endQuery],
-                                                timestampPeriod_,
-                                                timestampValidBits_,
-                                                elapsedMilliseconds))
-            {
-                record.elapsedMilliseconds = elapsedMilliseconds;
-            }
+            vkCmdResetQueryPool(commandBuffer, candidate.queryPool, 0,
+                                static_cast<uint32_t>(candidate.timestamps.size() / 2));
+            candidate.queryIndex = 0;
+            candidate.frameSerial = ++nextFrameSerial_;
+            candidate.frameActive = true;
+            candidate.hasSubmittedWork = false;
+            candidate.scopeTree.Reset();
+            candidate.records.clear();
+            currentBankIndex_ = candidateIndex;
+            return;
+        }
+
+        // GPU is more than queryBankCount frames behind.  Do not reset a pool
+        // that may still be referenced by an in-flight command buffer.
+        currentBankIndex_ = -1;
+        static bool warningLogged = false;
+        if (!warningLogged)
+        {
+            warningLogged = true;
+            SPDLOG_WARN("GPU timer query banks are all in flight; skipping timestamp scopes for this frame");
         }
     }
 
-    uint32_t GpuQueryTimer::BeginScope(VkCommandBuffer commandBuffer, const char* name)
+    void GpuQueryTimer::EndFrame(const VkCommandBuffer commandBuffer)
     {
-        if (!GOption->HardwareQuery || !valid_)
+        (void)commandBuffer;
+        if (!HardwareQueryEnabled() || !valid_ || currentBankIndex_ < 0)
         {
-            return invalidTimerId;
+            return;
         }
-        if (queryIndex_ + activeStack_.size() + 1 >= timestamps_.size())
+
+        QueryBank& bank = queryBanks_[currentBankIndex_];
+        bank.frameActive = false;
+        bank.hasSubmittedWork = bank.queryIndex > 0;
+        if (bank.hasSubmittedWork && PollBank(bank) && bank.frameSerial > lastResolvedFrameSerial_)
+        {
+            ResolveBankStats(bank);
+            lastResolvedFrameSerial_ = bank.frameSerial;
+        }
+    }
+
+    uint32_t GpuQueryTimer::BeginScope(const VkCommandBuffer commandBuffer, const char* name)
+    {
+        if (!HardwareQueryEnabled() || !valid_ || currentBankIndex_ < 0)
         {
             return invalidTimerId;
         }
 
-        const char* timerName = name ? name : "";
-        const uint32_t scopeId = static_cast<uint32_t>(records_.size());
+        QueryBank& bank = queryBanks_[currentBankIndex_];
+        if (!bank.frameActive || bank.queryIndex + 2 > bank.timestamps.size() / 2)
+        {
+            return invalidTimerId;
+        }
+
+        const uint32_t scopeId = bank.scopeTree.BeginScope(name == nullptr ? "" : name);
         GpuQueryRecord record{};
-        record.name = timerName;
-        record.depth = static_cast<int>(activeStack_.size());
-        record.stableKey = BuildStableKey(record.name, activeStack_, records_, rootNameCounts_);
-        record.startQuery = queryIndex_;
-        records_.push_back(std::move(record));
-
-        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPool_, queryIndex_);
-        device_.DebugUtils().BeginMarker(commandBuffer, timerName);
-        queryIndex_++;
-        activeStack_.push_back(scopeId);
+        record.startQuery = bank.queryIndex++;
+        bank.records.push_back(record);
+        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, bank.queryPool, record.startQuery);
         return scopeId;
     }
 
-    void GpuQueryTimer::EndScope(VkCommandBuffer commandBuffer, uint32_t scopeId)
+    void GpuQueryTimer::EndScope(const VkCommandBuffer commandBuffer, const uint32_t scopeId)
     {
-        if (scopeId == invalidTimerId || scopeId >= records_.size())
+        if (!HardwareQueryEnabled() || !valid_ || currentBankIndex_ < 0)
         {
-            return;
-        }
-        if (queryIndex_ >= timestamps_.size())
-        {
-            device_.DebugUtils().EndMarker(commandBuffer);
-            PopActiveTimer(activeStack_, scopeId);
             return;
         }
 
-        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPool_, queryIndex_);
+        QueryBank& bank = queryBanks_[currentBankIndex_];
+        if (!bank.frameActive || scopeId == invalidTimerId || scopeId >= bank.records.size())
+        {
+            return;
+        }
+
+        if (bank.queryIndex < bank.timestamps.size() / 2)
+        {
+            bank.records[scopeId].endQuery = bank.queryIndex++;
+            vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                bank.queryPool, bank.records[scopeId].endQuery);
+        }
+        bank.scopeTree.EndScope(scopeId);
+    }
+
+    void GpuQueryTimer::BeginMarker(const VkCommandBuffer commandBuffer, const char* name)
+    {
+        device_.DebugUtils().BeginMarker(commandBuffer, name == nullptr ? "" : name);
+    }
+
+    void GpuQueryTimer::EndMarker(const VkCommandBuffer commandBuffer)
+    {
         device_.DebugUtils().EndMarker(commandBuffer);
-        records_[scopeId].endQuery = queryIndex_;
-        queryIndex_++;
-        PopActiveTimer(activeStack_, scopeId);
     }
 
     float GpuQueryTimer::GetTime(const char* name) const
     {
         for (const auto& stat : lastStats_)
         {
-            if (stat.name == name)
+            if (stat.name == (name == nullptr ? "" : name))
             {
                 return stat.milliseconds;
             }
@@ -265,22 +244,72 @@ namespace Vulkan
         return 0.0f;
     }
 
-    std::vector<Runtime::ProfileTimerStat> GpuQueryTimer::FetchTimes(int maxStack) const
+    std::vector<Runtime::ProfileTimerStat> GpuQueryTimer::FetchTimes(const int maxStack) const
     {
-        return FilterTimerStats(lastStats_, maxStack);
+        return Runtime::ProfileScopeTree::FilterStats(lastStats_, maxStack);
     }
 
-    void GpuQueryTimer::CalculateStats()
+    bool GpuQueryTimer::PollBank(QueryBank& bank)
     {
-        lastStats_.clear();
-        lastStats_.reserve(records_.size());
-        for (const auto& record : records_)
+        if (!bank.hasSubmittedWork || bank.queryIndex == 0)
         {
-            if (record.elapsedMilliseconds <= 0.0f)
+            return true;
+        }
+
+        const VkResult result = vkGetQueryPoolResults(
+            device_.Handle(), bank.queryPool, 0, bank.queryIndex,
+            static_cast<size_t>(bank.queryIndex) * sizeof(uint64_t) * 2,
+            bank.timestamps.data(), sizeof(uint64_t) * 2,
+            VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
+
+        if (result != VK_SUCCESS && result != VK_NOT_READY)
+        {
+            static bool queryWarningLogged = false;
+            if (!queryWarningLogged)
+            {
+                queryWarningLogged = true;
+                SPDLOG_WARN("GPU timer query result unavailable: {}", static_cast<int>(result));
+            }
+            return false;
+        }
+
+        bool allReady = result == VK_SUCCESS;
+        for (uint32_t queryIndex = 0; queryIndex < bank.queryIndex; ++queryIndex)
+        {
+            bank.availability[queryIndex] = bank.timestamps[queryIndex * 2 + 1];
+            bank.timestamps[queryIndex] = bank.timestamps[queryIndex * 2];
+            if (bank.availability[queryIndex] == 0)
+            {
+                allReady = false;
+            }
+        }
+
+        for (uint32_t recordIndex = 0; recordIndex < bank.records.size(); ++recordIndex)
+        {
+            const GpuQueryRecord& record = bank.records[recordIndex];
+            if (record.startQuery == invalidTimerId || record.endQuery == invalidTimerId ||
+                bank.availability[record.startQuery] == 0 || bank.availability[record.endQuery] == 0)
             {
                 continue;
             }
-            lastStats_.push_back({record.name, record.stableKey, record.elapsedMilliseconds, record.depth});
+
+            float elapsedMilliseconds = 0.0f;
+            if (TryCalculateElapsedMilliseconds(bank.timestamps[record.startQuery], bank.timestamps[record.endQuery],
+                                                timestampPeriod_, timestampValidBits_, elapsedMilliseconds))
+            {
+                bank.scopeTree.SetElapsedMilliseconds(recordIndex, elapsedMilliseconds);
+            }
         }
+        return allReady;
+    }
+
+    bool GpuQueryTimer::CanReuseBank(QueryBank& bank)
+    {
+        return !bank.hasSubmittedWork || PollBank(bank);
+    }
+
+    void GpuQueryTimer::ResolveBankStats(QueryBank& bank)
+    {
+        lastStats_ = bank.scopeTree.CollectStats();
     }
 }

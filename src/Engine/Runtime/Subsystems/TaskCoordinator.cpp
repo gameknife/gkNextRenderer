@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <SDL3/SDL_thread.h>
+#include "Engine/Runtime/Profiling/TracyIntegration.hpp"
 
 namespace Tasks
 {
@@ -23,6 +24,10 @@ TaskThread::TaskThread(std::string threadName, bool highPriority)
             PerformanceAPI::SetCurrentThreadName(threadName_.c_str());
         }
 #endif
+        if (!threadName_.empty())
+        {
+            GkProfiling::SetThreadName(threadName_.c_str());
+        }
         while (true)
         {
             if(terminate_->is_set())

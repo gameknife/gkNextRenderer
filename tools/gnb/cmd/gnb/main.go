@@ -135,6 +135,9 @@ func main() {
 	root.AddCommand(newCSharpGenCommand(ctx))
 	root.AddCommand(newLLMCommand(ctx))
 	root.AddCommand(newAICommand(ctx))
+	root.AddCommand(newTracyCommand(ctx))
+	root.AddCommand(newRiderCommand(ctx))
+	root.AddCommand(newVisualStudioCommand(ctx))
 	root.AddCommand(newLegacyAgentCommand(ctx))
 	root.AddCommand(newInitCommand())
 
@@ -343,11 +346,19 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 	opts := cmakerun.BuildOptions{}
 	skipSetup := false
 	allTargets := false
+	tracyMode := ""
 	cmd := &cobra.Command{
 		Use:   "build [targets...]",
 		Short: "Configure and build the native project",
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if tracyMode != "" {
+				mode := strings.ToLower(strings.TrimSpace(tracyMode))
+				if mode != "on" && mode != "off" {
+					return fmt.Errorf("--tracy expects on or off, got %q", tracyMode)
+				}
+				opts.ConfigureArgs = append(opts.ConfigureArgs, "-DGK_ENABLE_TRACY="+strings.ToUpper(mode))
+			}
 			startTime := time.Now()
 			if len(args) == 0 && !allTargets {
 				opts.Targets = []string{"gkNextRenderer", "gkNextUnitTests"}
@@ -402,6 +413,7 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&allTargets, "all", false, "build all targets in the project")
+	cmd.Flags().StringVar(&tracyMode, "tracy", "", "override Tracy client for this configure (on or off)")
 	cmd.Flags().BoolVar(&opts.Clean, "clean", false, "delete the CMake build directory before building")
 	cmd.Flags().BoolVar(&opts.Reconfigure, "reconfigure", false, "force CMake configure")
 	cmd.Flags().IntVar(&opts.Jobs, "jobs", 0, "parallel build jobs")
