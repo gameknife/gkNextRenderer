@@ -15,8 +15,8 @@
 #include "Engine/Rendering/PipelineCommon/ResourceStateTracker.hpp"
 #include "Engine/Rendering/PipelineCommon/CheckerboardRendering.hpp"
 #include "Engine/Rendering/PipelineCommon/SurfaceBufferLayout.hpp"
-#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
 #include <vector>
 #include <memory>
 #include <cassert>
@@ -246,7 +246,6 @@ namespace Vulkan
         const class Window& Window() const { return *ctx_.window; }
         const class DepthBuffer& DepthBuffer() const { return *frame_.depthBuffer; }
         const std::vector<Assets::UniformBuffer>& UniformBuffers() const { return frame_.uniformBuffers; }
-        Runtime::FrameProfiler* Profiler() const { return ctx_.frameProfiler.get(); }
         bool HasSwapChain() const { return frame_.swapChain.operator bool(); }
         int FrameCount() const {return frame_.frameCount;}
         uint64_t SceneGeneration() const { return sceneState_.generation; }
@@ -484,8 +483,7 @@ namespace Vulkan
             std::array<uint32_t, Assets::CUBE_CASCADE_MAX> completedPasses{};
             uint32_t nextCascade = 0;
             uint32_t groupsPerFrame = 1;
-            uint32_t lastDispatchedGroups = 0;
-            float millisecondsPerGroup = 0.0f;
+            double smoothedFrameTimeSeconds = 0.0;
         };
 
         struct SkinnedMeshResources
@@ -502,7 +500,7 @@ namespace Vulkan
             std::unique_ptr<class Device> device;
             std::unique_ptr<class CommandPool> commandPool;
             std::unique_ptr<class CommandPool> commandPool2;
-            std::unique_ptr<Runtime::FrameProfiler> frameProfiler;
+            std::unique_ptr<class TracyGpuProfilerBackend> tracyGpuProfiler;
             std::unique_ptr<Assets::GlobalTexturePool> globalTexturePool;
         };
 
@@ -797,8 +795,6 @@ namespace Vulkan
         class CommandPool& CommandPool() { return baseRender_.CommandPool(); }
         const class DepthBuffer& DepthBuffer() const { return baseRender_.DepthBuffer(); }
         const std::vector<Assets::UniformBuffer>& UniformBuffers() const { return baseRender_.UniformBuffers(); }
-        Runtime::FrameProfiler* Profiler() const { return baseRender_.Profiler(); }
-        
         const Assets::Scene& GetScene() {return baseRender_.GetScene();}
 
         int FrameCount() const {return baseRender_.FrameCount();}

@@ -101,9 +101,6 @@ namespace NextCVar
         GK_CVAR_BOOL("r.upscaler.jitterInvertY", settings, UpscalerJitterInvertY, false, ECVarFlags::Archive, "Invert temporal upscaler projection jitter Y for diagnostics");
         GK_CVAR_BOOL("r.checkerboardRendering", settings, CheckerboardRendering, true, ECVarFlags::Archive, "Shade one checkerboard pixel parity per frame and reconstruct the missing parity before temporal upscaling");
         GK_CVAR_BOOL("r.tracing.exitAfterFirst", settings, ExitAfterFirst, false, ECVarFlags::Archive, "Terminate tracing after the first non-dielectric surface hit");
-        GK_CVAR_FLOAT_RANGE("r.ambientCube.bakeTargetMs", settings, AmbientCubeBakeTargetMs, 4.0f,
-                            ECVarFlags::Archive,
-                            "Target GPU time budget in milliseconds for AmbientCube baking per frame", 0.1, 16.0);
         GK_CVAR_FLOAT("r.heatmapScale", settings, HeatmapScale, 1.0f, ECVarFlags::Archive, "Profiler heatmap scale");
         GK_CVAR_FLOAT("r.paperWhiteNit", settings, PaperWhiteNit, 600.0f, ECVarFlags::Archive, "Paper white nit");
         GK_CVAR_BOOL("ui.showOverlay", settings, ShowOverlay, true, ECVarFlags::Archive, "Show overlay");
@@ -122,6 +119,7 @@ namespace NextCVar
         GK_CVAR_INT_RANGE("sys.ambientCubeCascadeCount", settings, AmbientCubeCascadeCount, 3, ECVarFlags::Archive, "Ambient cube cascade count; raising it above the count the scene was allocated for only takes effect after a scene reload", 1, Assets::CUBE_CASCADE_MAX);
         GK_CVAR_FLOAT_RANGE("sys.ambientCubeCascadeRatio", settings, AmbientCubeCascadeRatio, 2.0f, ECVarFlags::Archive, "Ambient cube unit multiplier between consecutive cascades", 1.0, 8.0);
         GK_CVAR_FLOAT("sys.ambientCubePoolBrickRatio", settings, AmbientCubePoolBrickRatio, 0.5f, ECVarFlags::Archive, "Ambient cube sparse pool capacity as a ratio of full bricks per cascade");
+        GK_CVAR_UINT_RANGE("r.ambientCube.bakeTargetFps", settings, AmbientCubeBakeTargetFps, 60, ECVarFlags::Archive, "Target total frame rate while ambient cube baking is active", 1, 240);
         GK_CVAR_BOOL("r.ambientCube.hitDrivenResidency", settings, AmbientCubeHitDrivenResidency, false, ECVarFlags::Archive, "Enable hit-driven ambient cube brick residency");
         GK_CVAR_BOOL("r.ambientCube.bounceHitAffectsResidency", settings, AmbientCubeBounceHitAffectsResidency, false, ECVarFlags::Archive, "Allow ambient cube bake bounce hits to keep bricks resident");
         GK_CVAR_UINT_RANGE("r.ambientCube.evictFrames", settings, AmbientCubeEvictFrames, 180, ECVarFlags::Archive, "Frames without a residency-driving hit before eviction", 30, 3600);
@@ -156,7 +154,7 @@ namespace NextCVar
         GK_CVAR_BOOL("debug.physics.overlay", showFlags, DebugPhysicsOverlay, false, ECVarFlags::None, "Show physics debug overlay");
         GK_CVAR_BOOL("debug.graphics.panel", showFlags, DebugGraphicsPanel, false, ECVarFlags::None, "Show graphics debug panel");
         GK_CVAR_BOOL("debug.cvar.panel", showFlags, DebugCVarPanel, false, ECVarFlags::None, "Show the developer CVar editor");
-        GK_CVAR_BOOL("debug.profile.overlay", showFlags, DebugProfileOverlay, false, ECVarFlags::None, "Show CPU profile debug overlay");
+        GK_CVAR_BOOL("debug.profile.overlay", showFlags, DebugProfileOverlay, false, ECVarFlags::None, "Show runtime statistics overlay");
         GK_CVAR_BOOL("show.debugPhysicsBodies", showFlags, DebugDraw_PhysicsBodies, false, ECVarFlags::None, "Debug draw physics bodies");
         GK_CVAR_BOOL("show.visualDebug", showFlags, ShowVisualDebug, false, ECVarFlags::None, "Show visual debug");
         GK_CVAR_BOOL("show.edge", showFlags, ShowEdge, false, ECVarFlags::None, "Show selected edge highlight");

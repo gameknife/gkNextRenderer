@@ -20,7 +20,7 @@
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
-#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
 #include "Engine/Utilities/Localization.hpp"
 
 #include <SDL3/SDL.h>

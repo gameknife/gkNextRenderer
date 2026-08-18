@@ -681,11 +681,13 @@ namespace Assets
 
         if (textureWorkerUploadEnabled_)
         {
-            Tasks::TaskCoordinator::GetInstance()->AddTask(std::move(textureLoadTask), std::move(textureCompleteTask), 0);
+            Tasks::TaskCoordinator::GetInstance()->AddTask(
+                std::move(textureLoadTask), std::move(textureCompleteTask), 0, "Texture load");
         }
         else
         {
-            Tasks::TaskCoordinator::GetInstance()->AddMainThreadTask(std::move(textureLoadTask), std::move(textureCompleteTask), 0);
+            Tasks::TaskCoordinator::GetInstance()->AddMainThreadTask(
+                std::move(textureLoadTask), std::move(textureCompleteTask), 0, "Texture load");
         }
 
         return newTextureIdx;
@@ -837,12 +839,14 @@ namespace Assets
         if (textureWorkerUploadEnabled_)
         {
             Tasks::TaskCoordinator::GetInstance()->AddTask(
-                std::move(textureResidencyTask), std::move(textureResidencyCompleteTask), 0);
+                std::move(textureResidencyTask), std::move(textureResidencyCompleteTask), 0,
+                "HDR texture residency");
         }
         else
         {
             Tasks::TaskCoordinator::GetInstance()->AddMainThreadTask(
-                std::move(textureResidencyTask), std::move(textureResidencyCompleteTask), 0);
+                std::move(textureResidencyTask), std::move(textureResidencyCompleteTask), 0,
+                "HDR texture residency");
         }
     }
 

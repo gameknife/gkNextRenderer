@@ -4,7 +4,6 @@ set(unitTestSources
     Test_Bindless3DTexture.cpp
     Test_Atmosphere.cpp
     Test_BindlessSlotRegistry.cpp
-    Test_GpuTimerLogic.cpp
     Test_GltfSkinning.cpp
     Test_FileHelperTrace.cpp
     Test_SequencerSerialization.cpp
@@ -60,6 +59,7 @@ set(unitTestSources
     Test_TerminalBlitter.cpp
     Test_PhysicsComponent.cpp
     Test_CPUAccelerationSnapshot.cpp
+    Test_AmbientBakeScheduler.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadOutline.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadPromptContext.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadSessionStore.cpp

@@ -20,7 +20,6 @@ namespace NextUI
 
 namespace Runtime
 {
-    class FrameProfiler;
     class IDebugUiProvider;
     class IRenderFrameConsumer;
     class IScriptRuntime;

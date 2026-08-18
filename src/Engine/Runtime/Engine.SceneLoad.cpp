@@ -21,7 +21,7 @@
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "Engine/Utilities/LogFormatting.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
-#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
 #include "Engine/Runtime/Profiling/TracyIntegration.hpp"
 #include "Engine/Utilities/Localization.hpp"
 
@@ -220,7 +220,8 @@ void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<vo
 
             status_ = NextRenderer::EApplicationStatus::Running;
         },
-        1);
+        1,
+        "Scene load");
 }
 
 void NextEngine::LoadScene(const FSceneLoadRequest& request)

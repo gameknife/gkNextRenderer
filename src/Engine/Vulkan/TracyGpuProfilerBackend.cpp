@@ -49,6 +49,10 @@ namespace Vulkan
             SPDLOG_WARN("Tracy GPU profiling disabled: failed to create Vulkan context");
             contextCommandBuffers_.reset();
         }
+        else
+        {
+            active_ = this;
+        }
 #else
         (void)instance;
         (void)calibratedTimestampsAvailable;
@@ -57,6 +61,10 @@ namespace Vulkan
 
     TracyGpuProfilerBackend::~TracyGpuProfilerBackend()
     {
+        if (active_ == this)
+        {
+            active_ = nullptr;
+        }
 #if GK_TRACY_ENABLED
         if (context_ != nullptr)
         {
@@ -83,17 +91,13 @@ namespace Vulkan
 #endif
     }
 
-    void TracyGpuProfilerBackend::EndFrame(const VkCommandBuffer commandBuffer)
-    {
-        (void)commandBuffer;
-    }
-
-    uint32_t TracyGpuProfilerBackend::BeginScope(const VkCommandBuffer commandBuffer, const char* name)
+    GkProfiling::GpuZoneId TracyGpuProfilerBackend::BeginScope(
+        const VkCommandBuffer commandBuffer, const char* name)
     {
 #if GK_TRACY_ENABLED
         if (context_ == nullptr)
         {
-            return Runtime::FrameProfiler::invalidTimerId;
+            return GkProfiling::invalidGpuZoneId;
         }
 
         scopes_.emplace_back();
@@ -113,11 +117,12 @@ namespace Vulkan
 #else
         (void)commandBuffer;
         (void)name;
-        return Runtime::FrameProfiler::invalidTimerId;
+        return GkProfiling::invalidGpuZoneId;
 #endif
     }
 
-    void TracyGpuProfilerBackend::EndScope(const VkCommandBuffer commandBuffer, const uint32_t scopeId)
+    void TracyGpuProfilerBackend::EndScope(
+        const VkCommandBuffer commandBuffer, const GkProfiling::GpuZoneId scopeId)
     {
         (void)commandBuffer;
 #if GK_TRACY_ENABLED
@@ -130,15 +135,33 @@ namespace Vulkan
 #endif
     }
 
-    float TracyGpuProfilerBackend::GetTime(const char* name) const
+    TracyGpuProfilerBackend* TracyGpuProfilerBackend::GetActive()
     {
-        (void)name;
-        return 0.0f;
+        return active_;
+    }
+}
+
+namespace GkProfiling
+{
+    void BeginGpuFrame(const VkCommandBuffer commandBuffer)
+    {
+        if (Vulkan::TracyGpuProfilerBackend* profiler = Vulkan::TracyGpuProfilerBackend::GetActive())
+        {
+            profiler->BeginFrame(commandBuffer);
+        }
     }
 
-    std::vector<Runtime::ProfileTimerStat> TracyGpuProfilerBackend::FetchTimes(const int maxStack) const
+    GpuZoneId BeginGpuZone(const VkCommandBuffer commandBuffer, const char* name)
     {
-        (void)maxStack;
-        return {};
+        Vulkan::TracyGpuProfilerBackend* profiler = Vulkan::TracyGpuProfilerBackend::GetActive();
+        return profiler != nullptr ? profiler->BeginScope(commandBuffer, name) : invalidGpuZoneId;
+    }
+
+    void EndGpuZone(const VkCommandBuffer commandBuffer, const GpuZoneId zoneId)
+    {
+        if (Vulkan::TracyGpuProfilerBackend* profiler = Vulkan::TracyGpuProfilerBackend::GetActive())
+        {
+            profiler->EndScope(commandBuffer, zoneId);
+        }
     }
 }

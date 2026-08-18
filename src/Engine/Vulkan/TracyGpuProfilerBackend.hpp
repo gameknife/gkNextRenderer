@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 #include "Engine/Runtime/Profiling/TracyIntegration.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
 #include "Engine/Vulkan/Device.hpp"
@@ -14,21 +13,20 @@
 
 namespace Vulkan
 {
-    class TracyGpuProfilerBackend final : public Runtime::IGpuProfilerBackend
+    class TracyGpuProfilerBackend final
     {
     public:
         GK_NON_COPIABLE(TracyGpuProfilerBackend)
 
         TracyGpuProfilerBackend(VkInstance instance, const Device& device, CommandPool& commandPool,
                                 bool calibratedTimestampsAvailable);
-        ~TracyGpuProfilerBackend() override;
+        ~TracyGpuProfilerBackend();
 
-        void BeginFrame(VkCommandBuffer commandBuffer) override;
-        void EndFrame(VkCommandBuffer commandBuffer) override;
-        uint32_t BeginScope(VkCommandBuffer commandBuffer, const char* name) override;
-        void EndScope(VkCommandBuffer commandBuffer, uint32_t scopeId) override;
-        float GetTime(const char* name) const override;
-        std::vector<Runtime::ProfileTimerStat> FetchTimes(int maxStack) const override;
+        void BeginFrame(VkCommandBuffer commandBuffer);
+        GkProfiling::GpuZoneId BeginScope(VkCommandBuffer commandBuffer, const char* name);
+        void EndScope(VkCommandBuffer commandBuffer, GkProfiling::GpuZoneId scopeId);
+
+        static TracyGpuProfilerBackend* GetActive();
 
     private:
         struct ScopeSlot
@@ -45,5 +43,7 @@ namespace Vulkan
 #if GK_TRACY_ENABLED
         TracyVkCtx context_ = nullptr;
 #endif
+
+        inline static TracyGpuProfilerBackend* active_ = nullptr;
     };
 }

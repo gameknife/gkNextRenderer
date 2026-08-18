@@ -15,7 +15,6 @@ namespace NextUI
     public:
         static void DrawDeveloperLayers(NextEngine& engine,
                                         const Statistics& statistics,
-                                        Runtime::FrameProfiler* profiler,
                                         EUiDeveloperLayer layers,
                                         bool suppressStatisticsOverlay);
     };

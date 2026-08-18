@@ -77,7 +77,7 @@ gkNextEngine is a cross-platform 3D game engine and rendering playground built w
 
 ## ⚡ Performance & Rendering Efficiency
 
-Performance is one of the project's core constraints. The engine leans on radiance-cache reuse, sparse VRAM layouts, GPU-driven mass submission, on-demand residency, and multi-tier upscaling to produce more frame for a fixed GPU budget while keeping memory in check. Below is a set of **runtime performance references** for typical scenes, backed by a built-in per-pass profiler and a Superluminal integration for deeper analysis.
+Performance is one of the project's core constraints. The engine leans on radiance-cache reuse, sparse VRAM layouts, GPU-driven mass submission, on-demand residency, and multi-tier upscaling to produce more frame for a fixed GPU budget while keeping memory in check. Below is a set of **runtime performance references** for typical scenes, backed by Tracy and Superluminal integrations for deeper analysis.
 
 ### Performance Reference Data
 
@@ -96,18 +96,18 @@ Performance is one of the project's core constraints. The engine leans on radian
 > | Sampling | 3 s warmup + 3 s measurement per scene |
 > | Disabled | DLSS / FSR / GTAO / animation tick (pinned by the config cvars) |
 
-| Scene | Pipeline | Frame time (ms) | GPU time (ms) | FPS | VRAM | Draw AfterCull / View | Triangles AfterCull / View |
-|------|----------|-----------------|---------------|-----|------|---------------------------|--------------------------|
-| MaterialShowcase | PathTracing | 2.342 | 1.846 | 427 | 978 MiB | 15 / 15 | 13,862 / 13,862 |
-| MaterialShowcase | SoftwareModernNoAmbient | 0.619 | 0.249 | 1,614 | 925 MiB | 15 / 15 | 13,542 / 13,542 |
-| LightingShowcase | PathTracing | 2.836 | 2.408 | 353 | 978 MiB | 9 / 9 | 4,953 / 4,953 |
-| LightingShowcase | SoftwareModernNoAmbient | 0.707 | 0.275 | 1,414 | 925 MiB | 5 / 5 | 2,881 / 2,881 |
-| GIBootcamp | PathTracing | 4.950 | 4.455 | 202 | 925 MiB | 30 / 36 | 4,741 / 4,952 |
-| GIBootcamp | SoftwareModernNoAmbient | 0.994 | 0.547 | 1,006 | 925 MiB | 33 / 40 | 5,175 / 5,388 |
-| KilometerWorld | PathTracing | 1.651 | 1.255 | 606 | 925 MiB | 401 / 1,780 | 4,789 / 21,362 |
-| KilometerWorld | SoftwareModernNoAmbient | 0.991 | 0.496 | 1,009 | 925 MiB | 405 / 1,798 | 4,851 / 21,580 |
-| MassiveAsteroidBelt | PathTracing | 2.089 | 1.598 | 479 | 1,192 MiB | 34,265 / 67,786 | 2,733,342 / 5,422,850 |
-| MassiveAsteroidBelt | SoftwareModernNoAmbient | 0.987 | 0.595 | 1,013 | 1,139 MiB | 32,977 / 65,197 | 2,620,345 / 5,215,602 |
+| Scene | Pipeline | Frame time (ms) | FPS | VRAM | Draw AfterCull / View | Triangles AfterCull / View |
+|------|----------|-----------------|-----|------|---------------------------|--------------------------|
+| MaterialShowcase | PathTracing | 2.342 | 427 | 978 MiB | 15 / 15 | 13,862 / 13,862 |
+| MaterialShowcase | SoftwareModernNoAmbient | 0.619 | 1,614 | 925 MiB | 15 / 15 | 13,542 / 13,542 |
+| LightingShowcase | PathTracing | 2.836 | 353 | 978 MiB | 9 / 9 | 4,953 / 4,953 |
+| LightingShowcase | SoftwareModernNoAmbient | 0.707 | 1,414 | 925 MiB | 5 / 5 | 2,881 / 2,881 |
+| GIBootcamp | PathTracing | 4.950 | 202 | 925 MiB | 30 / 36 | 4,741 / 4,952 |
+| GIBootcamp | SoftwareModernNoAmbient | 0.994 | 1,006 | 925 MiB | 33 / 40 | 5,175 / 5,388 |
+| KilometerWorld | PathTracing | 1.651 | 606 | 925 MiB | 401 / 1,780 | 4,789 / 21,362 |
+| KilometerWorld | SoftwareModernNoAmbient | 0.991 | 1,009 | 925 MiB | 405 / 1,798 | 4,851 / 21,580 |
+| MassiveAsteroidBelt | PathTracing | 2.089 | 479 | 1,192 MiB | 34,265 / 67,786 | 2,733,342 / 5,422,850 |
+| MassiveAsteroidBelt | SoftwareModernNoAmbient | 0.987 | 1,013 | 1,139 MiB | 32,977 / 65,197 | 2,620,345 / 5,215,602 |
 
 > To reproduce (no optional asset packs needed - every scene is a built-in proc demo):
 >
@@ -122,15 +122,15 @@ Performance is one of the project's core constraints. The engine leans on radian
 
 </details>
 
-### 🔍 Built-in Profiler
+### 🔍 Profiling
 
-The engine ships a CPU / GPU per-pass timing system: every render pass is annotated with a named scope, `GpuQueryTimer` collects per-pass GPU-side timings, and an ImGui overlay (`ProfileDebugOverlay`) shows per-pass frame time and statistics live at runtime. You can locate rendering hotspots and compare the cost of different pipelines and settings without any external tooling.
+The engine has no separate runtime CPU / GPU timing aggregator. Named scopes bind directly to Tracy (CPU/GPU) and Superluminal (CPU), so the engine does not retain a duplicate CPU timing tree, GPU query banks, or ImGui timing history.
 
 Development builds also enable the Tracy client by default (on-demand, so disconnected processes do not keep accumulating events). Run `gnb tracy fetch` to obtain the official GUI matching the vcpkg client, then `gnb tracy` to launch it; on Android use `gnb tracy --android` and connect to `127.0.0.1` through adb forwarding. See the [Tracy Profiling Guide](docs/guides/tracy-profiling.md). Release builds pass `--tracy=off` and do not ship the Tracy client.
 
 ### ⏱️ Superluminal Integration
 
-On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is installed (probed by default at `C:/Program Files/Superluminal/Performance/API`), the build automatically enables `WITH_SUPERLUMINAL` and forwards the engine's named CPU events and debug markers to the Superluminal timeline, enabling fine-grained sampling profiles and cross-frame analysis. GPU timing data is collected separately by the engine query timer and the Tracy sink; there is currently no dedicated GPU replay thread. When it is not installed, the integration is skipped and the build is unaffected.
+On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is installed (probed by default at `C:/Program Files/Superluminal/Performance/API`), the build automatically enables `WITH_SUPERLUMINAL` and forwards the engine's named CPU events and debug markers to the Superluminal timeline, enabling fine-grained sampling profiles and cross-frame analysis. When it is not installed, the integration is skipped and the build is unaffected.
 
 ### 🧪 RenderDoc Integration
 
@@ -166,7 +166,7 @@ On Windows, if `C:/Program Files/RenderDoc/renderdoc_app.h` exists, the build au
 ### 4️⃣ Tooling and Automated Validation
 
 - **One CLI**: `gnb` covers dependency provisioning, builds, runs, tests, and asset packaging with the same interface across desktop and mobile
-- **Profiling**: a per-pass CPU / GPU timing overlay, with optional Superluminal timeline integration for fine-grained sampling
+- **Profiling**: Tracy CPU/GPU zones with optional Superluminal CPU timeline integration
 - **Automated regression**: headless screenshots, input-script assertions, visual regression, and benchmark CSV reports — all CI-ready
 - **Remote Play**: any desktop target can act as a WebRTC host, streaming to a zero-install browser client that routes keyboard, mouse, and virtual-gamepad input back; video uses Vulkan Video hardware encoding
 - **Local workbench**: a graphical dashboard for todos, builds, runs, tests, and Git, plus a bundled llama.cpp inference service shared by the toolchain and the runtime

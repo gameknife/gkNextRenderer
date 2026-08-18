@@ -515,7 +515,9 @@ void FCPUAccelerationStructure::StartBuild(std::shared_ptr<FCPUTLASBuildInput> i
             std::shared_ptr<FCPUTLASBuildResult> result = BuildSnapshot(*input);
             std::lock_guard<std::mutex> lock(buildMutex_);
             completedBuildResult_ = std::move(result);
-        });
+        },
+        {},
+        "CPU TLAS build");
 }
 
 void FCPUAccelerationStructure::PollBVHBuild()
@@ -716,7 +718,8 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Sc
                 //bakerType == EBakerType::EBT_Probe ? probeBaker.UploadGPU(*GPUMemory) : farProbeBaker.UploadGPU(*FarGPUMemory);
                 completedVoxelGroups_.fetch_add(1, std::memory_order_release);
                 needFlush = true;
-            });
+            },
+            "Ambient probe bake");
 
     lastBatchTasks.push_back(taskId);
 }
@@ -847,7 +850,8 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
                     {
                         cascadeBakers[cascadeIndex].RebuildDistanceField();
                     },
-                    nullptr);
+                    nullptr,
+                    "Distance field rebuild");
                 distanceFieldRebuildTasks.push_back(taskId);
             }
             distanceFieldRebuildScheduled_ = true;

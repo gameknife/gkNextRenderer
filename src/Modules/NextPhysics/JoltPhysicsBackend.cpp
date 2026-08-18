@@ -676,7 +676,9 @@ void FJoltPhysicsBackend::KickTick(double deltaSeconds)
                         glm::vec3(velocity.GetX(), velocity.GetY(), velocity.GetZ())});
                 }
             }
-        });
+        },
+        {},
+        "Physics update");
 }
 
 bool FJoltPhysicsBackend::TryCompleteTick()

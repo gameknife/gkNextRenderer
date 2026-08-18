@@ -386,7 +386,8 @@ namespace Modules::LiveCoding
                 (void)task;
                 FinishGatherCompileRequests(std::move(context->result));
             },
-            0);
+            0,
+            "Shader hot reload gather");
     }
 
     void ShaderHotReloader::FinishGatherCompileRequests(FGatherCompileResult result)

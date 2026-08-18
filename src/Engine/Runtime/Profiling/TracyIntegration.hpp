@@ -2,7 +2,11 @@
 
 #include "Engine/Common/CoreMinimal.hpp"
 
+#include <limits>
 #include <string_view>
+
+struct VkCommandBuffer_T;
+using VkCommandBuffer = VkCommandBuffer_T*;
 
 #ifndef GK_TRACY_ENABLED
 #define GK_TRACY_ENABLED 0
@@ -20,6 +24,9 @@
 
 namespace GkProfiling
 {
+    using GpuZoneId = uint32_t;
+    inline constexpr GpuZoneId invalidGpuZoneId = std::numeric_limits<GpuZoneId>::max();
+
     inline size_t ZoneNameLength(const char* name)
     {
         return name == nullptr ? 0u : std::strlen(name);
@@ -62,7 +69,30 @@ namespace GkProfiling
     void FrameMark();
     void AppInfo(std::string_view text);
     void Message(std::string_view text);
+    void BeginGpuFrame(VkCommandBuffer commandBuffer);
+    GpuZoneId BeginGpuZone(VkCommandBuffer commandBuffer, const char* name);
+    void EndGpuZone(VkCommandBuffer commandBuffer, GpuZoneId zoneId);
     void Plot(const char* name, double value);
     void Plot(const char* name, float value);
     void Plot(const char* name, int64_t value);
+
+    class ScopedGpuZone final
+    {
+    public:
+        GK_NON_COPIABLE(ScopedGpuZone)
+
+        ScopedGpuZone(VkCommandBuffer commandBuffer, const char* name)
+            : commandBuffer_(commandBuffer), zoneId_(BeginGpuZone(commandBuffer, name))
+        {
+        }
+
+        ~ScopedGpuZone()
+        {
+            EndGpuZone(commandBuffer_, zoneId_);
+        }
+
+    private:
+        VkCommandBuffer commandBuffer_;
+        GpuZoneId zoneId_ = invalidGpuZoneId;
+    };
 }

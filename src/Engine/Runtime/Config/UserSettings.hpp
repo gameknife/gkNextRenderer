@@ -38,9 +38,6 @@ struct UserSettings final
     uint32_t UpscalerJitterFrames = 16;
     bool UpscalerJitterInvertY = false;
     bool CheckerboardRendering = true;
-    // Target GPU time budget, in milliseconds, for one AmbientCube bake dispatch per frame.
-    float AmbientCubeBakeTargetMs = 4.0f;
-
     // Camera
     int CameraIdx;
 
@@ -87,6 +84,7 @@ struct UserSettings final
     int AmbientCubeCascadeCount = 3;
     float AmbientCubeCascadeRatio = 2.0f;
     float AmbientCubePoolBrickRatio = 0.5f;
+    uint32_t AmbientCubeBakeTargetFps = 60;
     bool AmbientCubeHitDrivenResidency = false;
     bool AmbientCubeBounceHitAffectsResidency = false;
     uint32_t AmbientCubeEvictFrames = 180;

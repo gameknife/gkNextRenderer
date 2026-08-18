@@ -9,6 +9,7 @@
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
+#include "Engine/Rendering/AmbientBakeScheduler.hpp"
 #include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
@@ -23,7 +24,7 @@
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
-#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
 
 namespace Vulkan
 {
@@ -122,7 +123,6 @@ namespace Vulkan
         if (dirtyBrickTotal == 0u)
         {
             ambient_.dirtyRevision = 0u;
-            ambient_.lastDispatchedGroups = 0u;
             return;
         }
 
@@ -136,29 +136,20 @@ namespace Vulkan
                         dirtyRevision, dirtyBrickTotal, useHardware ? "hardware" : "software");
         }
 
+        const double frameSeconds = NextEngine::GetInstance()->GetDeltaSeconds();
+        if (std::isfinite(frameSeconds) && frameSeconds > 0.0)
+        {
+            constexpr double smoothing = 0.2;
+            ambient_.smoothedFrameTimeSeconds = ambient_.smoothedFrameTimeSeconds > 0.0
+                ? ambient_.smoothedFrameTimeSeconds * (1.0 - smoothing) + frameSeconds * smoothing
+                : frameSeconds;
+            ambient_.groupsPerFrame = AmbientBake::PlanNextDispatchGroups(
+                ambient_.groupsPerFrame,
+                ambient_.smoothedFrameTimeSeconds,
+                NextEngine::GetInstance()->GetUserSettings().AmbientCubeBakeTargetFps);
+        }
+
         const char* timerName = useHardware ? "hw-lightbake" : "sw-lightbake";
-        const float previousMilliseconds = ctx_.frameProfiler->GetGpuTime(timerName);
-        if (previousMilliseconds > 0.0f && ambient_.lastDispatchedGroups > 0u)
-        {
-            const float measuredMillisecondsPerGroup =
-                previousMilliseconds / static_cast<float>(ambient_.lastDispatchedGroups);
-            ambient_.millisecondsPerGroup = ambient_.millisecondsPerGroup > 0.0f
-                ? glm::mix(ambient_.millisecondsPerGroup, measuredMillisecondsPerGroup, 0.2f)
-                : measuredMillisecondsPerGroup;
-        }
-
-        const float targetMilliseconds =
-            NextEngine::GetInstance()->GetUserSettings().AmbientCubeBakeTargetMs;
-        if (ambient_.millisecondsPerGroup > 0.0f)
-        {
-            const uint32_t measuredBudget = std::max(
-                1u, static_cast<uint32_t>(targetMilliseconds / ambient_.millisecondsPerGroup));
-            // Limit the controller slew rate so one noisy timestamp cannot cause a large frame spike.
-            const uint32_t lower = std::max(1u, ambient_.groupsPerFrame / 2u);
-            const uint32_t upper = std::max(2u, ambient_.groupsPerFrame * 2u);
-            ambient_.groupsPerFrame = std::clamp(measuredBudget, lower, upper);
-        }
-
         uint32_t cascadeIndex = cascadeCount;
         for (uint32_t attempt = 0; attempt < cascadeCount; ++attempt)
         {
@@ -178,7 +169,6 @@ namespace Vulkan
             SPDLOG_INFO("Ambient bake revision {} converged after {} passes; scheduler idle",
                         dirtyRevision, convergencePasses);
             ambient_.dirtyRevision = 0u;
-            ambient_.lastDispatchedGroups = 0u;
             return;
         }
 
@@ -246,7 +236,6 @@ namespace Vulkan
                            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
         vkCmdDispatch(commandBuffer, dispatchGroupCount, 1, 1);
 
-        ambient_.lastDispatchedGroups = dispatchGroupCount;
         ambient_.nextGroup[cascadeIndex] = offset + dispatchGroupCount;
         if (ambient_.nextGroup[cascadeIndex] >= totalGroups)
         {

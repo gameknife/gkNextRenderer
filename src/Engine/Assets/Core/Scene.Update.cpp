@@ -21,7 +21,7 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
-#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Utilities/Exception.hpp"
 
@@ -904,7 +904,8 @@ namespace Assets
                             }
                             nodeProxyTasksRemaining_.fetch_sub(1, std::memory_order_acq_rel);
                         },
-                        {});
+                        {},
+                        "Scene node proxy update");
                 }
             }
             return true;

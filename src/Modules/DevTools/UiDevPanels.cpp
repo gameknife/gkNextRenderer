@@ -557,7 +557,7 @@ void FUiDevPanels::RenderConsoleOverlay()
     DrawConsoleWindow();
 }
 
-void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, Runtime::FrameProfiler* profiler)
+void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics)
 {
     if (!Engine().GetUserSettings().ShowOverlay)
     {
@@ -581,7 +581,7 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, Runtime::Fr
     const float panelHeight = std::max(420.0f, viewport->Size.y - distance - 86.0f);
 
     if (!NextUI::Theme::BeginFloatingPanel(
-            "##ProfilerPanel", ICON_FA_CHART_LINE, "Profiler", &Engine().GetUserSettings().ShowOverlay,
+            "##ProfilerPanel", ICON_FA_CHART_LINE, "Statistics", &Engine().GetUserSettings().ShowOverlay,
             pos, ImVec2(panelWidth, panelHeight), ImVec2(0.0f, 0.0f), statisticsDetachedViewport_))
     {
         return;
@@ -784,207 +784,6 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, Runtime::Fr
             }
         }
         ImGui::EndTable();
-    }
-    EndCard();
-
-    struct TimingRow
-    {
-        std::string name;
-        int depth = 0;
-        float average = 0.0f;
-        float minimum = 0.0f;
-        float maximum = 0.0f;
-        uint32_t displayOrder = 0;
-        bool active = true;
-    };
-
-    constexpr double timingHistoryWindowSeconds = 2.0;
-    constexpr double timingStaleSeconds = 3.0;
-    const double now = ImGui::GetTime();
-
-    auto BuildTimingRows = [&](const std::vector<Runtime::ProfileTimerStat>& times,
-                               std::unordered_map<std::string, TimingHistory>& historyMap)
-    {
-        uint32_t currentDisplayOrder = 0;
-        for (const auto& time : times)
-        {
-            const std::string& historyKey = time.stableKey;
-            auto historyIter = historyMap.try_emplace(historyKey).first;
-            auto& history = historyIter->second;
-
-            // Keep stale timers in their previous slot so transient timers do not
-            // cause the rest of the table to jump every frame. Existing rows only
-            // move when the current traversal order would otherwise place them
-            // above a timer we have already emitted this frame.
-            if (history.displayOrder < currentDisplayOrder)
-            {
-                history.displayOrder = currentDisplayOrder;
-            }
-            currentDisplayOrder = history.displayOrder + 1;
-            history.displayName = time.name;
-            history.depth = time.depth;
-            history.lastSeenTime = now;
-            history.samples.push_back({now, time.milliseconds});
-
-            while (!history.samples.empty() &&
-                   now - history.samples.front().sampleTime > timingHistoryWindowSeconds)
-            {
-                history.samples.pop_front();
-            }
-
-            float sum = 0.0f;
-            float minimum = 1000000.0f;
-            float maximum = 0.0f;
-            for (const auto& sample : history.samples)
-            {
-                sum += sample.milliseconds;
-                minimum = std::min(minimum, sample.milliseconds);
-                maximum = std::max(maximum, sample.milliseconds);
-            }
-
-            history.average = history.samples.empty() ? time.milliseconds : sum / static_cast<float>(history.samples.size());
-            history.minimum = minimum;
-            history.maximum = maximum;
-        }
-
-        for (auto iter = historyMap.begin(); iter != historyMap.end();)
-        {
-            auto& history = iter->second;
-            while (!history.samples.empty() &&
-                   now - history.samples.front().sampleTime > timingHistoryWindowSeconds)
-            {
-                history.samples.pop_front();
-            }
-
-            if (now - iter->second.lastSeenTime > timingStaleSeconds)
-            {
-                iter = historyMap.erase(iter);
-            }
-            else
-            {
-                ++iter;
-            }
-        }
-
-        std::vector<TimingRow> timingRows;
-        timingRows.reserve(historyMap.size());
-        for (const auto& [key, history] : historyMap)
-        {
-            timingRows.push_back({history.displayName,
-                                  history.depth,
-                                  history.average,
-                                  history.minimum,
-                                  history.maximum,
-                                  history.displayOrder,
-                                  now - history.lastSeenTime <= 0.1});
-        }
-        std::sort(timingRows.begin(), timingRows.end(), [](const TimingRow& lhs, const TimingRow& rhs)
-        {
-            if (lhs.displayOrder != rhs.displayOrder)
-            {
-                return lhs.displayOrder < rhs.displayOrder;
-            }
-            if (lhs.active != rhs.active)
-            {
-                return lhs.active;
-            }
-            return lhs.name < rhs.name;
-        });
-        return timingRows;
-    };
-
-    auto DrawTimingSection = [&](const char* label, const char* tableId, const std::vector<TimingRow>& timingRows)
-    {
-        float totalTime = 0.0f;
-        for (const auto& row : timingRows)
-        {
-            if (row.depth == 0)
-            {
-                totalTime += row.average;
-            }
-        }
-
-        //ImGui::TextColored(colHeader, "%s (avg %.2fms / %.1fs)", label, totalTime, timingHistoryWindowSeconds);
-
-        auto TimingBarColor = [&](float milliseconds)
-        {
-            if (milliseconds < 1.0f)
-            {
-                return colGood;
-            }
-            if (milliseconds < 4.0f)
-            {
-                return colWarn;
-            }
-            return colBad;
-        };
-
-        if (ImGui::BeginTable(tableId, 5,
-                              ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
-                                  ImGuiTableFlags_SizingFixedFit))
-        {
-            ImGui::TableSetupColumn("Pass", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-            ImGui::TableSetupColumn("Avg", ImGuiTableColumnFlags_WidthFixed, 30.0f);
-            ImGui::TableSetupColumn("Min", ImGuiTableColumnFlags_WidthFixed, 30.0f);
-            ImGui::TableSetupColumn("Max", ImGuiTableColumnFlags_WidthFixed, 30.0f);
-            ImGui::TableSetupColumn("Graph", ImGuiTableColumnFlags_WidthFixed, 74.0f);
-            ImGui::TableHeadersRow();
-
-            for (const auto& row : timingRows)
-            {
-                const float ratio = totalTime > 0.001f ? row.average / totalTime : 0.0f;
-                const ImVec4 rowColor = row.depth == 0 ? colVal : colLabel;
-
-                ImGui::TableNextRow();
-                ImGui::PushStyleVar(ImGuiStyleVar_Alpha, row.active ? 1.0f : 0.45f);
-                ImGui::TableNextColumn();
-                ImGui::Indent(static_cast<float>(row.depth) * 12.0f);
-                ImGui::TextColored(rowColor, "%s", row.name.c_str());
-                ImGui::Unindent(static_cast<float>(row.depth) * 12.0f);
-
-                ImGui::TableNextColumn();
-                ImGui::TextColored(rowColor, "%.2f", row.average);
-                ImGui::TableNextColumn();
-                ImGui::TextColored(colLabel, "%.2f", row.minimum);
-                ImGui::TableNextColumn();
-                ImGui::TextColored(colLabel, "%.2f", row.maximum);
-                ImGui::TableNextColumn();
-                NextUI::Theme::DrawProgressBar(std::min(ratio, 1.0f),
-                                                  TimingBarColor(row.average),
-                                                  ImVec2(70.0f, ImGui::GetTextLineHeight()));
-                ImGui::PopStyleVar();
-            }
-            ImGui::EndTable();
-        }
-    };
-
-    const float timingCardHeight = std::max(220.0f, ImGui::GetContentRegionAvail().y - 42.0f);
-    BeginCard("##ProfilerTimingCard", timingCardHeight, ImGuiWindowFlags_HorizontalScrollbar);
-    if (profiler)
-    {
-        const auto gpuTimingRows = BuildTimingRows(profiler->FetchGpuTimes(4), gpuTimeHistory_);
-        const auto cpuTimingRows = BuildTimingRows(profiler->FetchCpuTimes(5), cpuTimeHistory_);
-
-        // Build both timing data sets up front so tab switching is free of
-        // the 2s history window hitch on first switch.
-        if (ImGui::BeginTabBar("##ProfilerTimingTabs", ImGuiTabBarFlags_FittingPolicyScroll))
-        {
-            if (ImGui::BeginTabItem("GPU"))
-            {
-                DrawTimingSection("GPU Time", "##GpuTimeTable", gpuTimingRows);
-                ImGui::EndTabItem();
-            }
-            if (!cpuTimingRows.empty() && ImGui::BeginTabItem("CPU"))
-            {
-                DrawTimingSection("CPU Time", "##CpuTimeTable", cpuTimingRows);
-                ImGui::EndTabItem();
-            }
-            ImGui::EndTabBar();
-        }
-    }
-    else
-    {
-        ImGui::TextColored(colLabel, "Timing data is unavailable.");
     }
     EndCard();
 

@@ -3410,7 +3410,8 @@ namespace ScadLibrary
                 (void)task;
                 FinishKitFileChanges(std::move(context->result.changedPaths), context->result.treeChanged);
             },
-            0);
+            0,
+            "ScadLibrary kit watch");
     }
 
     void ScadLibraryInterface::FinishKitFileChanges(std::vector<std::string> changedPaths, bool treeChanged)

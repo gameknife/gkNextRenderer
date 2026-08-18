@@ -139,7 +139,7 @@ void NextRendererGameInstance::DrawModeRail(FRendererUiState& uiState)
         const ModeEntry topEntries[] = {
             {EWorkMode::Render,  ICON_FA_EYE,        "Render - Hide All Panels"},
             {EWorkMode::Detail,  ICON_FA_SLIDERS,    "Detail - Renderer Settings"},
-            {EWorkMode::Profile, ICON_FA_CHART_LINE, "Profile - Memory & Stats"},
+            {EWorkMode::Profile, ICON_FA_CHART_LINE, "Statistics - Memory & Rendering"},
         };
 
         for (const auto& entry : topEntries)

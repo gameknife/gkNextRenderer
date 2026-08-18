@@ -418,6 +418,7 @@ namespace Runtime::ScreenShot
                     onCompleted();
                 }
             },
-            1);
+            1,
+            "Screenshot encode");
     }
 }

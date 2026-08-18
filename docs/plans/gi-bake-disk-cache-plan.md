@@ -74,7 +74,7 @@ last_updated: 2026-08-17
 | --- | --- | --- | --- |
 | voxelize | `ProbeBaker.cpp:167` `VoxelizeCube` / `:266` `ProcessCube` | `AsyncProcessGroup`（`CPUAccelerationStructure.cpp:670`）每组 16×16×48 | TaskCoordinator 并行任务，每 voxel 独立 |
 | distance field | `ProbeBaker.cpp:237` `RebuildDistanceField` | flush 分支里每 cascade 一个任务（`CPUAccelerationStructure.cpp:843-853`） | 每 cascade 一个任务，内部串行两轮双向扫描 |
-| ambient bake | `VulkanBaseRenderer.GiBake.cpp:91` `BakeAmbientCubeCascade` | 每帧一条 cascade、按 `r.ambientCube.bakeTargetMs` 控制 group 数 | GPU compute，`convergencePasses` 轮 |
+| ambient bake | `VulkanBaseRenderer.GiBake.cpp:91` `BakeAmbientCubeCascade` | 每帧一条 cascade、按 `r.ambientCube.bakeTargetFps` 和整体帧耗时自适应控制 group 数 | GPU compute，`convergencePasses` 轮 |
 
 驱动时点：
 
@@ -288,7 +288,7 @@ tile 文件 header（固定 64 B，`GiCacheFormat.hpp` 里用 `static_assert` �
   这是本里程碑最容易做错的一点：区块级 *voxelize* 可以局部，区块级 *DF* 不可以。
   折中方案：job 至少以 cascade 为单位收敛 DF，tile 粒度用于分批推进和进度恢复，而不是缩小 DF 范围。
 - 新 target `src/Application/Util/GiCacheBaker`：解析 `--scene/--cascade/--tiles/--mode`，
-  headless + 隐藏窗口，把 `r.ambientCube.bakeTargetMs` 提到上限、关闭 hit-driven residency，
+  headless + 隐藏窗口，把 `r.ambientCube.bakeTargetFps` 调低以优先完成 bake、关闭 hit-driven residency，
   轮询直到 `HasPendingWork()` 为假且 cube 收敛，落盘后退出（非零退出码表示未完成）。
 - `gnb gicache bake --scene X [--cascade N] [--tiles x0,z0-x1,z1] [--mode both] [--background]`：
   编排进程、把 job 切成批次、写进度 json 到 `out/build/<preset>/gicache/jobs/<id>.json`；

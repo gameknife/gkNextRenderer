@@ -295,11 +295,11 @@ albedo / roughness / metalness / motion。这是必要的，因为从 depth 重�
 - `assets/agentscripts/checkerboard-renderers-smoke.agentscript.json`：三个 surface renderer 的
   full / checkerboard 冒烟。
 - `assets/agentscripts/surface-ssshadow-ab.agentscript.json`：screen-space shadow march 成本对照。
-- `assets/agentscripts/surface-cb-rate-audit.agentscript.json`：checkerboard 采样率的 GPU timer 审计。
+- Tracy：checkerboard 采样率与 pass 成本的 GPU 时间线审计。
 - `assets/agentscripts/surface-tracing-restir-upscaler.agentscript.json`：ReSTIR 对照 +
   FSR/TAAU/SGSR2 输入契约冒烟（切到非 Native TAAU 的 upscaler 时 sparse 自动退回 resolve，
   `engine.sparseCheckerboardActive` 可以断言这一点）。
-- `engine.gpuTime.<SCOPED_GPU_TIMER 名>` 是 agent query，脚本用 `assert` 步骤把数值落进 report。
+- GPU pass timing is inspected in Tracy; agent validation only asserts runtime state and frame-rate health.
 
 「legacy vs surface」「analytic vs scheduler」两类 A/B 脚本随两条路径一起删除；它们的结论已经落在
 本文与开发计划里。

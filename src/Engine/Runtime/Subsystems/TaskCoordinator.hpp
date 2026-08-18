@@ -2,6 +2,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <queue>
+#include <string>
 #include <thread>
 #include <atomic>
 #include "Engine/Common/CoreMinimal.hpp"
@@ -171,7 +172,7 @@ public:
     void enqueue(T t)
     {
         std::lock_guard<std::mutex> lock(m);
-        q.push(t);
+        q.push(std::move(t));
         c.notify_one();
     }
     
@@ -202,7 +203,7 @@ public:
             }
         }
 
-        result = q.front();
+        result = std::move(q.front());
         q.pop();
         return true;
     }
@@ -219,6 +220,7 @@ struct ResTask
     
     uint32_t task_id = 0;
     uint8_t priority = 0;
+    std::string taskName;
     TaskFunc task_func;
     TaskFunc complete_func;
     uint8_t task_context_1k[1024] = {};
@@ -294,9 +296,9 @@ public:
     ~TaskCoordinator();
    
 
-    void MarkTaskComplete(const ResTask& task)
+    void MarkTaskComplete(ResTask task)
     {
-        completeTaskQueue_.enqueue(task);
+        completeTaskQueue_.enqueue(std::move(task));
     }
 
     void MarkTaskEnd(const ResTask& task)
@@ -306,11 +308,15 @@ public:
     
     // Queues worker-thread CPU tasks. Use this for long-running work that must not touch scene/UI state directly.
     // complete_func runs back on the coordinator path after task_func finishes.
-    uint32_t AddTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func, uint8_t priority = 0);
-    uint32_t AddMainThreadTask(ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func, uint8_t priority = 0);
-    uint32_t AddParralledTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func );
+    uint32_t AddTask(ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc, uint8_t priority = 0,
+                     std::string taskName = {});
+    uint32_t AddMainThreadTask(ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc, uint8_t priority = 0,
+                               std::string taskName = {});
+    uint32_t AddParralledTask(ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc,
+                              std::string taskName = {});
     uint32_t AddNamedTask(
-        ENamedTaskThread namedThread, ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc = {});
+        ENamedTaskThread namedThread, ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc = {},
+        std::string taskName = {});
 
     void WaitForTask(uint32_t task_id)
     {

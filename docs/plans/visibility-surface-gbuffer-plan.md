@@ -22,10 +22,10 @@ related_design: ../designs/visibility-surface-gbuffer-shading-scheduler.md
 > 用于这些开关 A/B 的 agentscript 一并移除。因此本文中「默认 off」「legacy vs surface」
 > 「analytic vs scheduler」的对照只作为**历史实测记录**阅读，不再是可执行的配置。
 
-测试环境：Windows x86_64 / RTX 5070 Ti / `windows` preset。全部数据由
-`gnb validate --script assets/agentscripts/surface-*.agentscript.json` 采集，`engine.gpuTime.<name>`
-经 `assert` 步骤落进 agent report，用 `tools/surface_perf_table.py` 与
-`tools/surface_scheduler_table.py` 出表。
+测试环境：Windows x86_64 / RTX 5070 Ti / `windows` preset。以下数据由旧版
+`gnb validate --script assets/agentscripts/surface-*.agentscript.json` 采集，旧版
+`engine.gpuTime.<name>` 经 `assert` 步骤落进 agent report，再用
+`tools/surface_perf_table.py` 与 `tools/surface_scheduler_table.py` 出表；当前版本的 GPU 时间线改由 Tracy 查看。
 
 ## 完成状态
 
@@ -60,8 +60,8 @@ SS shadow，playground.glb 1280×720：
 | legacy vs surface | **0.0000** | **0** |
 
 在最终代码上两次独立复跑均为逐位一致。基线本身也是逐位一致的，说明测量确定，
-`0 = 0` 不是「两边都没跑」的假象——脚本用 `assert` 记录了
-`cvar.r.surface.build`（false/true/false）与 `engine.gpuTime.surface build`（0 / 0.082 / 0）。
+`0 = 0` 不是「两边都没跑」的假象——旧脚本用 `assert` 记录了
+`cvar.r.surface.build`（false/true/false）与当时的 `engine.gpuTime.surface build`（0 / 0.082 / 0）。
 
 需要注意这是**无 jitter**（`r.upscaler.type=0`）下的结果：此时 `ViewProjection` 与
 `ProjectionInverse` 都不含 jitter，depth 往返是精确的。开启 temporal upscaler 后，surface 路径的
@@ -343,10 +343,10 @@ renderer 上都正确、稳定；但**分类那 0.04 ms 的固定成本，需要
 `engine.checkerboardActive` 报的是**引擎级资格**，不是每个 renderer 的实际决定。SoftwareTracing 在
 `SoftwareTracingRenderer.cpp` 里用 `ConfigureCheckerboardShading(gpuScene, !restirEnabled)` 自己否掉了
 checkerboard，所以 **ReSTIR 打开时 SwTracing 全率着色，而这个 query 仍然报 True**（实测 cb/full = 1.00）。
-排查半率没生效时，先看 `engine.gpuTime.shadingpass` 的全率/半率比值，不要只信这个 query。
+排查半率没生效时，当前应在 Tracy 中比较 `shadingpass` 的全率/半率 GPU 时间，不要只信这个 query。
 
-`r.surface.scheduler` 也只接在 SoftwareModernNoAmbient 上；SwModern / SwTracing 对它是空开关
-（`engine.gpuTime.shading classify` 恒为 0 即可确认）。
+`r.surface.scheduler` 也只接在 SoftwareModernNoAmbient 上；SwModern / SwTracing 对它是空开关，
+历史上通过 `engine.gpuTime.shading classify` 恒为 0 确认。
 
 ## M5a — legacy checkerboard 退场
 

@@ -1,7 +1,6 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Rendering/FrameSubmission.hpp"
 #include "Engine/Rendering/RenderSubsystems.hpp"
-#include "Engine/Vulkan/GpuQueryTimer.hpp"
 #include "Engine/Vulkan/TracyGpuProfilerBackend.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
@@ -43,7 +42,7 @@
 #include "Engine/Rendering/RenderView.hpp"
 #include "Engine/Rendering/VoxelTracing/VoxelTracingRenderer.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Profiling/CompositeGpuProfilerBackend.hpp"
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
 #include "Engine/Runtime/Profiling/TracyIntegration.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
@@ -362,7 +361,7 @@ namespace Vulkan
         restirDI_.reset();
         renderViews_.reset();
         upscaler_.reset();
-        ctx_.frameProfiler.reset();
+        ctx_.tracyGpuProfiler.reset();
         ctx_.globalTexturePool.reset();
         ctx_.commandPool.reset();
         ctx_.commandPool2.reset();
@@ -545,7 +544,7 @@ namespace Vulkan
         {
             upscaler_->Shutdown();
         }
-        ctx_.frameProfiler.reset();
+        ctx_.tracyGpuProfiler.reset();
         ctx_.globalTexturePool.reset();
     }
 
@@ -941,14 +940,10 @@ namespace Vulkan
         ctx_.commandPool.reset(new class CommandPool(*ctx_.device, ctx_.device->GraphicsFamilyIndex(), 0, true));
         ctx_.commandPool2.reset(new class CommandPool(*ctx_.device, ctx_.device->TransferFamilyIndex(), 1, true));
 
-        auto compositeGpuProfiler = std::make_unique<Runtime::FCompositeGpuProfilerBackend>();
-        compositeGpuProfiler->AddBackend(
-            std::make_unique<Vulkan::GpuQueryTimer>(*ctx_.device, 200, ctx_.device->DeviceProperties()));
 #if GK_TRACY_ENABLED
-        compositeGpuProfiler->AddBackend(std::make_unique<Vulkan::TracyGpuProfilerBackend>(
-            ctx_.instance->Handle(), *ctx_.device, *ctx_.commandPool, tracyCalibratedTimestampsAvailable_));
+        ctx_.tracyGpuProfiler = std::make_unique<Vulkan::TracyGpuProfilerBackend>(
+            ctx_.instance->Handle(), *ctx_.device, *ctx_.commandPool, tracyCalibratedTimestampsAvailable_);
 #endif
-        ctx_.frameProfiler = std::make_unique<Runtime::FrameProfiler>(std::move(compositeGpuProfiler));
 
 #if defined(NDEBUG)
         constexpr const char* buildConfig = "release";
@@ -2011,11 +2006,6 @@ namespace Vulkan
                                  frame_.streamlineFrameToken);
         }
 
-        {
-            SCOPED_CPU_TIMER("hwquery");
-            ctx_.frameProfiler->EndGpuFrame((*frame_.commandBuffers)[frame_.currentFrame]);
-        }
-
         VkSemaphore imageAvailableSemaphore = VK_NULL_HANDLE;
         VkSemaphore renderFinishedSemaphore = VK_NULL_HANDLE;
         if (!FrameSubmission::WaitAndAcquire(
@@ -2056,7 +2046,9 @@ namespace Vulkan
         }
 
         const auto commandBuffer = frame_.commandBuffers->Begin(frame_.currentFrame);
-        ctx_.frameProfiler->BeginGpuFrame(commandBuffer);
+#if GK_TRACY_ENABLED
+        GkProfiling::BeginGpuFrame(commandBuffer);
+#endif
 
         {
             SCOPED_GPU_TIMER("[gpu]");

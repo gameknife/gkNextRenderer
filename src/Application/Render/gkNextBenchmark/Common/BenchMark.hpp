@@ -43,10 +43,8 @@ public:
     double periodInitialTime_{};
     uint32_t periodTotalFrames_{};
     uint32_t benchmarkTotalFrames_{};
-    uint32_t gpuSampleCount_{};
     uint32_t gpuDrivenSampleCount_{};
     double frameTimeTotalMilliseconds_{};
-    double gpuTimeTotalMilliseconds_{};
     double drawCallsActualTotal_{};
     double drawCallsTotal_{};
     double trisActualTotal_{};

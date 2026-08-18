@@ -541,8 +541,6 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
         NextUI::Theme::DrawTooltip(
             "Weights bounce orders past the first: order n scales by this^(n-1). "
             "0 keeps only once-bounced direct light, 1 = physical. PathTracing (SHARC) only.");
-        DrawFloatSetting(LOCTEXT("Ambient Bake Target"), &userSetting.AmbientCubeBakeTargetMs,
-                         0.1f, 16.0f, "%.2f ms", 0.1f);
         NextUI::Theme::EndPanelSection();
     }
 
@@ -559,6 +557,14 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
                        1, Assets::CUBE_CASCADE_MAX);
         DrawFloatSetting(LOCTEXT("Cascade Ratio"), &userSetting.AmbientCubeCascadeRatio,
                          1.0f, 8.0f, "%.2f", 0.05f);
+        int bakeTargetFps = static_cast<int>(std::clamp(userSetting.AmbientCubeBakeTargetFps, 1u, 240u));
+        if (DrawIntSetting(LOCTEXT("Bake Target FPS"), &bakeTargetFps, 1, 240))
+        {
+            userSetting.AmbientCubeBakeTargetFps = static_cast<uint32_t>(bakeTargetFps);
+        }
+        NextUI::Theme::DrawTooltip(
+            "Ambient cube bake scales its next dispatch from total frame time to preserve this target FPS. "
+            "GPU timestamp queries are not required.");
 
         const float baseUnit = Assets::SanitizeAmbientCubeUnit(userSetting.AmbientCubeUnit);
         const float ratio = Assets::SanitizeAmbientCubeCascadeRatio(userSetting.AmbientCubeCascadeRatio);

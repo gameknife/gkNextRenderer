@@ -9,6 +9,10 @@ last_updated: 2026-08-17
 
 # Tracy Profiler 接入与 CPU/GPU 计时设施重构计划
 
+> 历史说明（2026-08-18）：本文记录的是 Tracy 初次接入时的过渡架构。随后已完成进一步清理，
+> `FrameProfiler`、`GpuQueryTimer`、组合器、内部计时树和 ImGui timing tables 均已移除；现行实现
+> 只保留 Tracy CPU/GPU 与 Superluminal CPU 绑定，使用方式以 [Tracy 使用指南](../guides/tracy-profiling.md) 为准。
+
 ## 结论
 
 1. **Tracy 以「第二个 sink」的身份接入，不取代现有 `FrameProfiler`。**

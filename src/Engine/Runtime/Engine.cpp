@@ -23,7 +23,7 @@
 #include "Engine/Runtime/Interface/DebugUiProvider.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/Instance.hpp"
-#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
 #include "Engine/Runtime/Profiling/TracyIntegration.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
@@ -715,11 +715,6 @@ bool NextEngine::Tick(bool forcingDelta)
 {
     PERFORMANCEAPI_INSTRUMENT_FUNCTION();
 
-    if (Profiler())
-    {
-        Profiler()->BeginCpuFrame();
-    }
-
     {
         SCOPED_CPU_TIMER("engine");
 
@@ -908,10 +903,6 @@ bool NextEngine::Tick(bool forcingDelta)
         }
     }
 
-    if (Profiler())
-    {
-        Profiler()->EndCpuFrame();
-    }
     GkProfiling::FrameMark();
     return closeRequested_;
 }
@@ -1489,7 +1480,7 @@ void NextEngine::OnRendererAfterSubmit()
         ? gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount
         : 0u;
     const auto memoryStats = renderer_->Device().CaptureMemoryStats();
-    GkProfiling::Plot("FPS", frameState_.frameRate);
+    GkProfiling::Plot("FPS", static_cast<int64_t>(std::lround(frameState_.frameRate)));
     GkProfiling::Plot("Draw calls", static_cast<int64_t>(gpuDrivenStat.VisibleCount));
     GkProfiling::Plot("Triangles", static_cast<int64_t>(visibleTriangleCount));
     GkProfiling::Plot("VRAM used", static_cast<int64_t>(memoryStats.deviceLocalUsageBytes));
@@ -1546,7 +1537,7 @@ void NextEngine::OnRendererAfterSubmit()
         if (debugUiProvider_ && config_.showFlags.DebugProfileOverlay)
         {
             SCOPED_CPU_TIMER("profile debug ui");
-            debugUiProvider_->DrawProfileOverlay(*this, stats, renderer_->Profiler(),
+            debugUiProvider_->DrawProfileOverlay(*this, stats,
                                                  gameInstance_->GetGraphicsDebugPanelTopOffset());
         }
     }
@@ -1556,7 +1547,7 @@ void NextEngine::OnRendererAfterSubmit()
     {
         SCOPED_CPU_TIMER("overlay ui");
         NextUI::FUiFrameDispatcher::DrawDeveloperLayers(
-            *this, stats, renderer_->Profiler(), developerLayers, config_.showFlags.DebugProfileOverlay);
+            *this, stats, developerLayers, config_.showFlags.DebugProfileOverlay);
     }
     if (debugUiProvider_)
     {
@@ -1682,18 +1673,6 @@ std::optional<Runtime::Agent::FAgentQueryValue> NextEngine::QueryAgentControl(co
     // silently inactive path shows up as a failed assertion instead of as flat timings.
     if (query == "engine.checkerboardActive") return renderer_->IsCheckerboardRenderingActive();
     if (query == "engine.sparseCheckerboardActive") return renderer_->IsSparseCheckerboardLightingActive();
-    // engine.gpuTime.<SCOPED_GPU_TIMER name>, in milliseconds. Agent scripts need this to record a
-    // per-pass GPU comparison table; the value is the profiler's most recently resolved frame, so
-    // read it after the configuration under test has been running for several frames.
-    if (query.rfind("engine.gpuTime.", 0) == 0)
-    {
-        const Runtime::FrameProfiler* profiler = renderer_ != nullptr ? renderer_->Profiler() : nullptr;
-        if (profiler == nullptr)
-        {
-            return std::nullopt;
-        }
-        return static_cast<double>(profiler->GetGpuTime(query.substr(15).c_str()));
-    }
     if (query == "scene.nodeCount") return static_cast<int64_t>(GetScene().Nodes().size());
     if (query == "scene.renderProxyCount")
         return static_cast<int64_t>(GetScene().GetIndirectDrawBatchCount());
