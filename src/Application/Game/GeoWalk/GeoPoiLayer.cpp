@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace GeoWalk
 {
@@ -35,6 +36,18 @@ namespace GeoWalk
         ImU32 ToImColor(const glm::vec3& rgb, float alpha)
         {
             return ImGui::GetColorU32(ImVec4(rgb.r, rgb.g, rgb.b, alpha));
+        }
+
+        // Street labels fade out with distance; from the air they must not, or
+        // the far half of the tile loses its map.
+        float LabelAlpha(float distance, bool aerial)
+        {
+            if (aerial || distance <= Config::kLabelFadeStart)
+            {
+                return 1.0f;
+            }
+            const float span = Config::kLabelMaxDistance - Config::kLabelFadeStart;
+            return std::clamp(1.0f - (distance - Config::kLabelFadeStart) / span, 0.0f, 1.0f);
         }
     }
 
@@ -108,16 +121,21 @@ namespace GeoWalk
     void FGeoPoiLayer::Update(const std::vector<FGeoPoi>& pois, const glm::vec3& viewPosition)
     {
         visible_.clear();
+        markers_.clear();
+        markerScreen_.clear();
         if (!showLabels_)
         {
             return;
         }
+
+        const bool aerial = style_ == ELabelStyle::Aerial;
 
         struct FCandidate
         {
             int index;
             float distance;
             float rank;
+            bool highlighted;
         };
         std::vector<FCandidate> candidates;
         candidates.reserve(pois.size());
@@ -125,53 +143,112 @@ namespace GeoWalk
         for (size_t i = 0; i < pois.size(); ++i)
         {
             const FGeoPoi& poi = pois[i];
-            if (!poi.grounded || !IsCategoryEnabled(poi.category))
+            if (!poi.grounded)
+            {
+                continue;
+            }
+            const bool highlighted = static_cast<int>(i) == highlight_;
+            if (!highlighted && !IsCategoryEnabled(poi.category))
             {
                 continue;
             }
             const glm::vec3 anchor = LabelAnchor(poi);
             const float distance = glm::distance(viewPosition, anchor);
-            const float maxDistance = poi.rank >= Config::kLabelMinorRank
-                                          ? Config::kLabelMaxDistance
-                                          : Config::kLabelMinorMaxDistance;
-            if (distance > maxDistance)
+            // From above the whole tile is the subject, so the street rules that
+            // hide a minor place until you are next to it would empty the map.
+            const float maxDistance = aerial
+                                          ? Config::kAerialMarkerMaxDistance
+                                          : (poi.rank >= Config::kLabelMinorRank
+                                                 ? Config::kLabelMaxDistance
+                                                 : Config::kLabelMinorMaxDistance);
+            if (!highlighted && distance > maxDistance)
             {
                 continue;
             }
-            candidates.push_back({static_cast<int>(i), distance, poi.rank});
+            candidates.push_back({static_cast<int>(i), distance, poi.rank, highlighted});
         }
 
-        // Prominence decides who survives the budget, not proximity: standing in
-        // a side street, the tower two blocks away is the label that tells you
-        // where you are. Distance only breaks ties.
+        // Prominence decides who survives the label budget, not proximity:
+        // standing in a side street, the tower two blocks away is the label that
+        // tells you where you are. Distance only breaks ties, and the place the
+        // browser is pointed at always keeps its name.
         std::sort(candidates.begin(), candidates.end(),
                   [](const FCandidate& a, const FCandidate& b)
                   {
+                      if (a.highlighted != b.highlighted)
+                      {
+                          return a.highlighted;
+                      }
                       if (a.rank != b.rank)
                       {
                           return a.rank > b.rank;
                       }
                       return a.distance < b.distance;
                   });
-        if (static_cast<int>(candidates.size()) > Config::kMaxVisibleLabels)
+
+        const int budget = aerial ? Config::kAerialMaxLabels : Config::kMaxVisibleLabels;
+        const size_t labelled = std::min(candidates.size(),
+                                         static_cast<size_t>(std::max(0, budget)));
+
+        // Kept in prominence order: the drawing pass places plates in this
+        // order and drops the ones that would land on a plate already placed,
+        // so a crowded skyline keeps its landmarks rather than whichever label
+        // happened to be drawn last.
+        visible_.reserve(labelled);
+        for (size_t i = 0; i < labelled; ++i)
         {
-            candidates.resize(Config::kMaxVisibleLabels);
+            visible_.push_back(candidates[i].index);
         }
 
-        // Draw far to near so nearer labels overlap the ones behind them.
-        std::sort(candidates.begin(), candidates.end(),
-                  [](const FCandidate& a, const FCandidate& b) { return a.distance > b.distance; });
-        visible_.reserve(candidates.size());
-        for (const FCandidate& candidate : candidates)
+        const auto farToNear = [](const FCandidate& a, const FCandidate& b)
+        { return a.distance > b.distance; };
+
+        // A marker is cheap and clickable; in the map view every place gets one
+        // even when there is no room for its name. On the street the marker set
+        // is just the labels, so a label can be clicked too.
+        if (aerial)
         {
-            visible_.push_back(candidate.index);
+            std::sort(candidates.begin(), candidates.end(), farToNear);
+            markers_.reserve(candidates.size());
+            for (const FCandidate& candidate : candidates)
+            {
+                markers_.push_back(candidate.index);
+            }
+        }
+        else
+        {
+            markers_ = visible_;
         }
     }
 
-    void FGeoPoiLayer::Draw(const NextGameInstanceBase& gameInstance,
-                            const std::vector<FGeoPoi>& pois, const glm::vec3& viewPosition) const
+    int FGeoPoiLayer::PickAt(const glm::vec2& screenPosition) const
     {
-        if (!showLabels_ || visible_.empty())
+        int best = -1;
+        float bestDistance = Config::kMarkerPickRadius;
+        for (size_t i = 0; i < markerScreen_.size() && i < markers_.size(); ++i)
+        {
+            const glm::vec2& screen = markerScreen_[i];
+            if (!std::isfinite(screen.x) || !std::isfinite(screen.y))
+            {
+                continue;
+            }
+            const float distance = glm::distance(screen, screenPosition);
+            if (distance <= bestDistance)
+            {
+                bestDistance = distance;
+                best = markers_[i];
+            }
+        }
+        return best;
+    }
+
+    void FGeoPoiLayer::Draw(const NextGameInstanceBase& gameInstance,
+                            const std::vector<FGeoPoi>& pois, const glm::vec3& viewPosition)
+    {
+        markerScreen_.assign(markers_.size(),
+                             glm::vec2(std::numeric_limits<float>::quiet_NaN()));
+        placedCount_ = 0;
+        if (!showLabels_ || markers_.empty())
         {
             return;
         }
@@ -180,6 +257,66 @@ namespace GeoWalk
         {
             return;
         }
+
+        const bool aerial = style_ == ELabelStyle::Aerial;
+
+        // Pass one: the markers themselves, and the screen positions a click is
+        // resolved against.
+        for (size_t slot = 0; slot < markers_.size(); ++slot)
+        {
+            const int index = markers_[slot];
+            const FGeoPoi& poi = pois[static_cast<size_t>(index)];
+            const glm::vec3 anchor = LabelAnchor(poi);
+            ImVec2 screen;
+            if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, anchor, screen))
+            {
+                continue;
+            }
+            markerScreen_[slot] = glm::vec2(screen.x, screen.y);
+
+            const float alpha = LabelAlpha(glm::distance(viewPosition, anchor), aerial);
+            if (alpha <= 0.02f)
+            {
+                continue;
+            }
+            const glm::vec3 color = CategoryColor(poi.category);
+            // Rank already encodes height x footprint x category weight, so the
+            // marker size is the city's own sense of what matters.
+            const float radius = aerial
+                                     ? std::clamp(Config::kMarkerMinRadius + poi.rank * 0.32f,
+                                                  Config::kMarkerMinRadius, Config::kMarkerMaxRadius)
+                                     : 3.0f;
+            drawList->AddCircleFilled(screen, radius, ToImColor(color, alpha));
+            if (index == highlight_)
+            {
+                drawList->AddCircle(screen, radius + 6.0f, ToImColor(glm::vec3(1.0f), alpha), 0, 2.0f);
+            }
+        }
+
+        // Pass two: the names, drawn over every marker so a plate never ends up
+        // behind a dot that happens to be nearer. Plates are placed in
+        // prominence order, and one that would cover a plate already placed is
+        // lifted a row at a time until it finds space: in a CBD a third of the
+        // tile's places project into the same hundred pixels, and overlapping
+        // plates hide both the names and the city.
+        struct FPlate
+        {
+            float minX, minY, maxX, maxY;
+        };
+        std::vector<FPlate> placed;
+        placed.reserve(visible_.size());
+        const auto overlaps = [&placed](const FPlate& plate)
+        {
+            for (const FPlate& other : placed)
+            {
+                if (plate.minX < other.maxX && other.minX < plate.maxX &&
+                    plate.minY < other.maxY && other.minY < plate.maxY)
+                {
+                    return true;
+                }
+            }
+            return false;
+        };
 
         for (const int index : visible_)
         {
@@ -190,33 +327,58 @@ namespace GeoWalk
             {
                 continue;
             }
-
-            const float distance = glm::distance(viewPosition, anchor);
-            float alpha = 1.0f;
-            if (distance > Config::kLabelFadeStart)
-            {
-                const float span = Config::kLabelMaxDistance - Config::kLabelFadeStart;
-                alpha = std::clamp(1.0f - (distance - Config::kLabelFadeStart) / span, 0.0f, 1.0f);
-            }
+            const float alpha = LabelAlpha(glm::distance(viewPosition, anchor), aerial);
             if (alpha <= 0.02f)
             {
                 continue;
             }
 
-            const glm::vec3 color = CategoryColor(poi.category);
+            // The place the browser is pointed at is never decluttered away.
+            const bool highlighted = index == highlight_;
+            const glm::vec3 color = highlighted
+                                        ? glm::mix(CategoryColor(poi.category), glm::vec3(1.0f), 0.45f)
+                                        : CategoryColor(poi.category);
             const ImVec2 textSize = ImGui::CalcTextSize(poi.name.c_str());
-            const ImVec2 textPos(screen.x - textSize.x * 0.5f, screen.y - textSize.y - 10.0f);
+            ImVec2 textPos(screen.x - textSize.x * 0.5f,
+                           screen.y - textSize.y - (aerial ? 9.0f : 10.0f));
 
-            // A pin down to the anchor, so a roof label reads as belonging to
-            // the building under it rather than floating over the skyline.
-            drawList->AddLine(ImVec2(screen.x, screen.y),
-                              ImVec2(screen.x, textPos.y + textSize.y),
-                              ToImColor(color, alpha * 0.55f), 1.0f);
-            drawList->AddCircleFilled(ImVec2(screen.x, screen.y), 3.0f, ToImColor(color, alpha));
-            drawList->AddRectFilled(ImVec2(textPos.x - 5.0f, textPos.y - 2.0f),
-                                    ImVec2(textPos.x + textSize.x + 5.0f, textPos.y + textSize.y + 2.0f),
-                                    ImGui::GetColorU32(ImVec4(0.05f, 0.06f, 0.08f, alpha * 0.68f)), 3.0f);
+            const float rowHeight = textSize.y + 4.0f + Config::kLabelStackGap;
+            FPlate plate{textPos.x - 5.0f, textPos.y - 2.0f, textPos.x + textSize.x + 5.0f,
+                         textPos.y + textSize.y + 2.0f};
+            int row = 0;
+            while (!highlighted && row < Config::kLabelStackRows && overlaps(plate))
+            {
+                plate.minY -= rowHeight;
+                plate.maxY -= rowHeight;
+                ++row;
+            }
+            if (!highlighted && overlaps(plate))
+            {
+                continue;
+            }
+            placed.push_back(plate);
+            const float stacked = -rowHeight * static_cast<float>(row);
+            textPos.y += stacked;
+
+            if (!aerial)
+            {
+                // A pin down to the anchor, so a roof label reads as belonging
+                // to the building under it rather than floating over the
+                // skyline. From above there is no "under", so no pin.
+                drawList->AddLine(ImVec2(screen.x, screen.y), ImVec2(screen.x, plate.maxY),
+                                  ToImColor(color, alpha * 0.55f), 1.0f);
+            }
+            drawList->AddRectFilled(ImVec2(plate.minX, plate.minY), ImVec2(plate.maxX, plate.maxY),
+                                    ImGui::GetColorU32(ImVec4(0.05f, 0.06f, 0.08f,
+                                                              alpha * (highlighted ? 0.88f : 0.68f))),
+                                    3.0f);
+            if (highlighted)
+            {
+                drawList->AddRect(ImVec2(plate.minX, plate.minY), ImVec2(plate.maxX, plate.maxY),
+                                  ToImColor(color, alpha), 3.0f, 0, 1.5f);
+            }
             drawList->AddText(textPos, ToImColor(color, alpha), poi.name.c_str());
         }
+        placedCount_ = static_cast<int>(placed.size());
     }
 }

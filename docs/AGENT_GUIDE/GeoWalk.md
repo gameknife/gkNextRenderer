@@ -1,7 +1,8 @@
-# GeoWalk — 真实地点漫游器
+# GeoWalk — 真实地点浏览器
 
-加载 `gnb geo` 生成的真实城市 tile，把 OpenStreetMap 标注的地点显示成世界空间标签，并在**可达
-的街面**上放一个 ScadRig 角色（AI 自动漫游 / 玩家 WASD 操控，按键切换）。
+加载 `gnb geo` 生成的真实城市 tile，用**三种视图**看同一块地：Walk 把一个 ScadRig 角色放在
+**可达的街面**上（AI 自动漫游 / 玩家 WASD），Aerial 从空中把整块 tile 变成一张标着
+OpenStreetMap 地点的地图，Focus 绕着其中一个地点转。走路是其中一种视图，不是这个程序的全部。
 
 管线与地形契约见 [geo-city-generation-design](../designs/geo-city-generation-design.md)，
 角色资产格式见 [ScadRig](ScadRig.md)，复用的仿真层见 [SimKit](SimKit.md)。
@@ -9,27 +10,91 @@
 ```bash
 ./gnb.sh build GeoWalk
 ./gnb.sh run GeoWalk                                                   # 默认加载第一个 tile
-./gnb.sh shot --target GeoWalk --ui --scene assets/scad/proc/generated/paris_cite.scad
-./gnb.sh validate --script assets/agentscripts/geowalk-smoke.agentscript.json
+./gnb.sh shot --target GeoWalk --ui --scene assets/scad/proc/generated/hk_victoria.scad
+./gnb.sh validate --script assets/agentscripts/geowalk-smoke.agentscript.json   # 走路
+./gnb.sh validate --script assets/agentscripts/geowalk-browse.agentscript.json  # 浏览（鸟瞰 + 绕物）
 ./out/build/<preset>/bin/gkNextUnitTests "[POI]"                       # poi.json 数据契约，无需 GPU
 ```
 
-## 操作
+**注意**：POI 标签和 marker 走 ImGui draw list，`gnb shot` / 脚本 `screenshot` 默认不含 UI；
+验证浏览功能的截图必须带 `--ui`（脚本里写 `"ui": true`），否则截出来的图上一个点都没有。
+
+## 三种视图
 
 | 键 | 作用 |
 |---|---|
-| `F` | 在 **Roam（AI 自动漫游）** 与 **Player（WASD）** 之间切换 |
-| `W/A/S/D` | 玩家模式移动角色；自由相机模式移动相机 |
-| `Q/E` | 自由相机降/升 |
-| `Shift` | 跑步 / 相机加速 |
-| `C` | 跟随相机 ↔ 自由相机 |
-| `V` | 吸附到整块 tile 的俯瞰视角 |
-| `L` | 开关地点标签 |
+| `1` | **Walk** — 第三人称跟随角色（原来的漫游器） |
+| `2` / `V` | **Aerial** — 整块 tile 的鸟瞰地图，每个地点画成 marker |
+| `3` / `G` | **Focus** — 绕当前地点的环绕相机；没选过地点时开在最显著的那个 |
+| `N` / `B` | Focus：下一个 / 上一个地点（按显著度排序） |
+| `T` | 开关 **Tour**：每停留 N 秒自动跳到下一个地点（默认 11 s，HUD 可调） |
+| `O` | 开关自动环绕 |
+| `F` | Walk：**Roam（AI 自动漫游）** ↔ **Player（WASD）** |
+| `W/A/S/D` | Walk 玩家模式移动角色；自由相机移动相机；Aerial 平移地图 |
+| `Q/E` | 自由相机降/升；Aerial 拉近/拉远 |
+| `Shift` | 跑步 / 相机加速 / Aerial 快速平移 |
+| `C` | Walk：跟随相机 ↔ 自由相机 |
+| `L` | 开关地点标签与 marker |
 | `Tab` | 开关 HUD |
-| 右键拖动 | 转视角；滚轮调跟随距离 |
+| 右键拖动 | 转视角（三种视图各转自己的那套角度） |
+| 滚轮 | Walk 调吊臂长度；Aerial 调高度；Focus 调取景距离 |
+| 左键 | Aerial：点 marker 直接 focus 该地点 |
 
-HUD 里可切 tile、按分类过滤标签、搜索地点列表；双击列表项或按 "Walk here" 让角色走过去
-（切回 Roam 模式并寻路），"Look at" 只转相机。
+HUD 顶部是三个视图的 tab，下面跟着当前视图的面板；再往下是标签分类过滤和地点列表。列表项单击
+在 Walk 里是 "看过去"、在浏览视图里是 focus，双击或 "Walk here" 让角色走过去（**会切回 Walk
+视图**，因为走过去是走路的事）。
+
+## 相机：一个导演，三套取景
+
+`FGeoCameraDirector`（`GeoCameraDirector.h`）拥有全部相机状态和它们之间的过渡；应用只喂给它
+角色位置、地形和一条**射线探针**（场景在应用手里，导演不直接碰引擎）。
+
+- 每个模式**精确**算自己的 pose，不做稳态平滑——鼠标转视角一帧都不能延迟。
+- 切模式 / 换 focus 目标时才启动一次 **blend**（0.9 s / 1.4 s），从切换瞬间屏幕上的 pose 飞到
+  新 pose。从人行道直接切到 620 m 高空会让人完全失去方位，这个飞行是必要的。
+- **验证脚本里等 blend 要用 `wait-ms` 而不是 `wait-frames`**：隐藏窗口跑到 250+ fps，150 帧只有
+  0.6 秒，截出来全是过渡中间态。
+
+### Focus：怎么给一个地点取景
+
+1. **取景距离**从地点自己的体量算：`height × 1.45 + √area × 1.25`，钳在 34…900 m。相机看的是
+   **体量中腰**（`height × 0.55`），不是地基（塔会掉到画面下三分之一）也不是屋顶（会对着天）。
+2. **邻域天际线抬升**：一条清晰的视线不等于一个能看的画面。55 m 的香港站周围全是 300 m 的塔，
+   从它自己的高度看过去，视线恰好从楼缝里穿过去、画面里全是墙。所以还要沿 8 个方位在
+   `0.7 × 取景距离` 处各打一条**朝下**的射线量屋顶高度，取最高的那个 + 26 m 作为相机最低高度。
+   这个测量**每个目标只做一次**（绕圈时屋顶不会动，每帧测会变成高度和可见性的反馈震荡）。
+3. 抬升超过 55°（`kFocusMaxLiftSine`）时改为**拉远**而不是继续抬：再抬下去地点就从"一栋楼"
+   变成"一张平面图"了。香港站因此从 227 m 拉到 480 m，看到的是它和 IFC、交易广场一起的全景。
+4. 剩下的单点遮挡由**射线抬 pitch**处理（最多 5 档，每档 0.13 rad），**不缩短吊臂**——缩短会
+   破坏取景。射线从相机**朝目标**打，用地点自己的 `halfExtent` 区分"打到了要看的东西"和
+   "打到了挡在前面的东西"；反过来从中心往外打没用，因为建筑的环绕中心就在建筑里面。
+5. pitch 收敛故意很慢（`kFocusPitchSharpness = 1.6`）：每次有塔扫过视线就弹一下，比被挡住更难看。
+
+### Focus 里角色是暂停的
+
+`FGeoWalker::SetPaused` 只让 rig 站住（idle clip 继续播），仿真状态、路线、导航窗口全部原样保留，
+恢复时接着走。原因是 NavGrid 滑动窗口重建要 ~1 秒，落在环绕镜头中间是这个程序最明显的一次卡顿。
+Aerial 不暂停——鸟瞰图里有个人在走反而给了尺度感。
+
+## 标签与 marker
+
+一套数据两种呈现（`FGeoPoiLayer::ELabelStyle`）：
+
+- **Street**（Walk / Focus）：沿用原来的规则——rank ≥ 6 的 700 m 内可见，其余只在 130 m 内出现，
+  最多 28 个候选，带一根指向锚点的引线。
+- **Aerial**：整块 tile 是一张地图，**每个 anchored 地点都画一个点**（大小按 rank，颜色按分类），
+  但只有最显著的 44 个给名字——牌子铺满会把它们描述的城市盖掉。距离不再淡出，否则 tile 的另一半
+  会没有地图。
+
+**去重叠**：牌子按显著度顺序放置，撞到已放的牌子就**整行往上抬**，最多抬 5 行，5 行都占满才丢弃。
+从人行道上看，几乎所有屋顶都投影到同一条天际线带上，不抬行的话三十个标签只活得下来一个。当前
+focus 的地点**永远不被剔除**，也不参与分类过滤。
+
+因此有两个不同的 agent query：`geo.labelsVisible` 是"这一帧有多少地点值得给名字"（预算内的候选数），
+`geo.labelsDrawn` 是"其中多少真的画上了屏幕"。相机对着一面墙时后者合法地接近 0，别拿它写死断言。
+
+Aerial 里还会画角色自己的 marker（"walker"），点击 marker 的命中测试用的是**上一帧**缓存的投影
+位置——那正是用户看着点下去的位置。ImGui 抓住鼠标时不参与拾取。
 
 ## 数据来源：`poi.json` sidecar
 
@@ -97,14 +162,15 @@ lodging / park / place / other`）在三处必须一致：`tools/gnb/internal/ge
 回退到地形高度场）。NavGrid 的采样跟着路面/码头/桥面走，地形高度场不会——所以角色走在路面上
 而不是陷进路基里。
 
-## 相机
+## Walk 相机
 
-第三人称吊臂在 CBD 里默认是穿墙的。`ResolveFollowDistance` 从角色沿吊臂方向对 CPU BVH 打一条
-射线，命中就把吊臂缩到命中点前 0.35m；**射线起点要推出 0.9m**（`kCameraCollisionStart`），
-否则第一帧就打在角色自己的 rig 上，吊臂每帧塌到最小值。遇障瞬间收、离开缓慢放。
+第三人称吊臂在 CBD 里默认是穿墙的。Walk 模式从角色沿吊臂方向对 CPU BVH 打一条射线，命中就把
+吊臂缩到命中点前 0.35m；**射线起点要推出 0.9m**（`kCameraCollisionStart`），否则第一帧就打在
+角色自己的 rig 上，吊臂每帧塌到最小值。遇障瞬间收、离开缓慢放。
 
-出生时只取最显著地点的**朝向**、俯仰用固定的 `kSpawnPitch`。直接 look-at 塔楼屋顶会把吊臂
-甩进地面。想看塔楼全景用 `V`。
+出生时只取最显著地点的**朝向**（`SetHeading`）、俯仰用固定的 `kSpawnPitch`。直接 look-at 塔楼
+屋顶会把吊臂甩进地面；想看塔楼全景按 `3`/`G` 进 Focus。从浏览视图回到 Walk 一律落回跟随相机，
+恢复一个停在两条街外的自由相机看起来像 bug。
 
 ## 已知限制
 
@@ -112,6 +178,10 @@ lodging / park / place / other`）在三处必须一致：`tools/gnb/internal/ge
   未打包的入库资产；真进了 pak 需要改成读一份清单。读 `poi.json` 本身已经走
   `ScadReadAsset`（package + loose 回退），所以只有"发现"这一步有这个限制。
 - **滑动窗口重建是同步的**，372×372 格约 1 秒，跨窗口时会卡一帧。要平滑需要异步重建 NavGrid。
-- **标签没有遮挡剔除**，楼后面的地点标签照样画在楼上。做正确需要每标签一次射线或深度查询。
+- **标签没有遮挡剔除**，楼后面的地点标签照样画在楼上（Aerial 的 marker 同理）。做正确需要每标签
+  一次射线或深度查询。
+- **Focus 的遮挡判断只有一条射线**，加上邻域天际线抬升已经够用，但一根正好卡在视线上的细柱子
+  仍可能挡住画面而不被检测到。
+- **Tour 的顺序就是 sidecar 的 rank 顺序**，不考虑地理上的邻近；连着两站可能在 tile 的两端。
 - **玩家模式没有跳跃动画**，rig 的 clip 只有 idle/walk/sit/work；空格会驱动物理跳但姿态还是走路。
 - iOS 不可用（`GK_WITH_EARCUT` 关闭，凹多边形建筑出不来），同 geo 管线本身的限制。

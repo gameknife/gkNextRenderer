@@ -41,6 +41,13 @@ namespace GeoWalk
 
         void Tick(float deltaSeconds, Assets::Scene& scene);
 
+        // Holds the character still without unspawning it: the route, the nav
+        // window and the rig all survive, so resuming continues the walk that
+        // was in flight. A nav window rebuild costs about a second, and one
+        // landing in the middle of an orbit is the most visible hitch this
+        // application has.
+        void SetPaused(bool paused) { paused_ = paused; }
+
         void SetMode(EWalkMode mode);
         EWalkMode Mode() const { return mode_; }
         void ToggleMode() { SetMode(mode_ == EWalkMode::Roam ? EWalkMode::Player : EWalkMode::Roam); }
@@ -96,6 +103,7 @@ namespace GeoWalk
         const Runtime::TerrainComponent* terrain_ = nullptr;
 
         EWalkMode mode_ = EWalkMode::Roam;
+        bool paused_ = false;
         glm::vec3 playerIntent_{0.0f};
         bool playerSprint_ = false;
         bool playerJump_ = false;

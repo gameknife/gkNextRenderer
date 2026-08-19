@@ -521,6 +521,22 @@ namespace GeoWalk
         {
             return;
         }
+        if (paused_)
+        {
+            // The simulation state is left exactly as it was — speed included,
+            // because the pool integrates movement from it — and only the rig
+            // is told to stand still, so the character is not frozen mid-stride
+            // while a camera orbits past it.
+            lastSpeed_ = 0.0f;
+            if (character_->visual)
+            {
+                character_->visual->SetMoveSpeed(0.0f);
+                character_->visual->SetAnimHint(NextGameplay::Sim::EAnimHint::Idle);
+                character_->visual->Tick(deltaSeconds);
+                scene.MarkTransformDirty();
+            }
+            return;
+        }
         const glm::vec3 previous = character_->position;
 
         if (mode_ == EWalkMode::Roam)

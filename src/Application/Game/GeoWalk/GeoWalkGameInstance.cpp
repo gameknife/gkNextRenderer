@@ -26,11 +26,6 @@
 
 using namespace GeoWalk;
 
-namespace
-{
-    constexpr float kPitchLimit = 1.45f; // just under 90 degrees
-}
-
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config,
                                                          Runtime::Config::Options& options,
                                                          NextEngine* engine)
@@ -104,7 +99,9 @@ void GeoWalkGameInstance::RequestTile(int index)
     sceneReady_ = false;
     walkerSpawned_ = false;
     terrain_ = nullptr;
-    focusInitialized_ = false;
+    focusPoi_ = -1;
+    tourActive_ = false;
+    poiLayer_.SetHighlight(-1);
     ui_.ClearSelection();
     SPDLOG_INFO("GeoWalk: loading tile '{}' ({})", tiles_[static_cast<size_t>(index)].name,
                 tiles_[static_cast<size_t>(index)].scenePath);
@@ -176,33 +173,35 @@ void GeoWalkGameInstance::SpawnWalker()
     {
         return;
     }
-    smoothedFocus_ = walker_.Position();
-    focusInitialized_ = true;
-    resolvedFollowDistance_ = followDistance_;
-    freeCameraPosition_ = walker_.Position() + glm::vec3(0.0f, 45.0f, 45.0f);
+
+    // Prime the camera with the spawn position before deriving anything from
+    // it: the follow rig smooths towards the character, and without this first
+    // tick that smoothing starts at the tile origin.
+    camera_.Tick(1.0f, MakeCameraWorld());
 
     // Open facing the most prominent place in range, so the first frame says
     // which city this is instead of pointing at whichever compass direction yaw
     // 0 happens to be. Only the heading is taken from it: pitching up at a
     // 400 m tower would swing the boom down into the pavement.
-    pitch_ = Config::kSpawnPitch;
     if (const FGeoTile* tile = ActiveTile())
     {
+        const glm::vec3 from = walker_.Position();
         for (const FGeoPoi& poi : tile->pois) // rank-descending
         {
             if (!poi.grounded)
             {
                 continue;
             }
-            const glm::vec2 delta = poi.position - glm::vec2(smoothedFocus_.x, smoothedFocus_.z);
+            const glm::vec2 delta = poi.position - glm::vec2(from.x, from.z);
             if (glm::length(delta) > Config::kLabelMaxDistance || glm::length(delta) < 1.0f)
             {
                 continue;
             }
-            yaw_ = std::atan2(delta.x, -delta.y);
+            camera_.SetHeading(std::atan2(delta.x, -delta.y), Config::kSpawnPitch);
             break;
         }
     }
+    camera_.Tick(1.0f, MakeCameraWorld());
 }
 
 void GeoWalkGameInstance::OnSceneUnloaded()
@@ -232,58 +231,27 @@ FGeoTile* GeoWalkGameInstance::ActiveTile()
     return const_cast<FGeoTile*>(const_cast<const GeoWalkGameInstance*>(this)->ActiveTile());
 }
 
-glm::vec3 GeoWalkGameInstance::ViewForward() const
+FCameraWorld GeoWalkGameInstance::MakeCameraWorld() const
 {
-    return glm::normalize(glm::vec3(std::cos(pitch_) * std::sin(yaw_), std::sin(pitch_),
-                                    -std::cos(pitch_) * std::cos(yaw_)));
-}
-
-glm::vec3 GeoWalkGameInstance::ViewRight() const
-{
-    return glm::normalize(glm::cross(ViewForward(), glm::vec3(0.0f, 1.0f, 0.0f)));
-}
-
-glm::vec3 GeoWalkGameInstance::CameraPosition() const
-{
-    if (cameraMode_ == ECameraMode::Free)
+    FCameraWorld world;
+    world.walkerValid = walkerSpawned_;
+    world.walkerPosition = walkerSpawned_ ? walker_.Position() : glm::vec3(0.0f);
+    world.terrain = terrain_;
+    if (sceneReady_)
     {
-        return freeCameraPosition_;
+        world.probe = [this](const glm::vec3& origin, const glm::vec3& direction) -> float
+        {
+            const Assets::RayCastResult hit =
+                GetEngine().GetScene().GetCPUAccelerationStructure().RayCastInCPU(origin, direction);
+            return (hit.Hit == 0 || hit.T <= 0.0f) ? -1.0f : hit.T;
+        };
     }
-    const glm::vec3 focus = smoothedFocus_ + glm::vec3(0.0f, Config::kFollowHeight, 0.0f);
-    return focus - ViewForward() * resolvedFollowDistance_;
-}
-
-float GeoWalkGameInstance::ResolveFollowDistance(const glm::vec3& focus, float desired) const
-{
-    // Cast from the character out along the boom: anything hit is between the
-    // camera and the character. The origin is pushed clear of the character's
-    // own rig first — it is ordinary scene geometry, and a ray started at chest
-    // height hits its own back immediately, collapsing the boom every frame.
-    const glm::vec3 direction = -ViewForward();
-    const glm::vec3 origin = focus + direction * Config::kCameraCollisionStart;
-    const Assets::RayCastResult hit =
-        GetEngine().GetScene().GetCPUAccelerationStructure().RayCastInCPU(origin, direction);
-    if (hit.Hit == 0 || hit.T <= 0.0f)
-    {
-        return desired;
-    }
-    const float blocked = Config::kCameraCollisionStart + hit.T;
-    if (blocked >= desired)
-    {
-        return desired;
-    }
-    return std::max(Config::kFollowMinDistance, blocked - Config::kCameraCollisionPadding);
-}
-
-glm::mat4 GeoWalkGameInstance::ViewMatrix() const
-{
-    const glm::vec3 eye = CameraPosition();
-    return glm::lookAt(eye, eye + ViewForward(), glm::vec3(0.0f, 1.0f, 0.0f));
+    return world;
 }
 
 bool GeoWalkGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
 {
-    outRenderCamera.ModelView = ViewMatrix();
+    outRenderCamera.ModelView = camera_.ViewMatrix();
     outRenderCamera.FieldOfView = Config::kFov;
     outRenderCamera.NearPlane = Config::kNearPlane;
     outRenderCamera.FarPlane = Config::kFarPlane;
@@ -296,11 +264,18 @@ void GeoWalkGameInstance::UpdatePlayerIntent()
     {
         return;
     }
+    // Only the walk camera drives the character: WASD belongs to the map while
+    // the map is up, and to the orbit while a place is being looked at.
+    if (camera_.Mode() != EViewMode::Walk)
+    {
+        walker_.SetPlayerIntent(glm::vec3(0.0f), false, false);
+        return;
+    }
     // Movement is camera-relative and flattened onto the ground plane, so
     // looking up does not slow the character down.
-    glm::vec3 forward = ViewForward();
+    glm::vec3 forward = camera_.Forward();
     forward.y = 0.0f;
-    glm::vec3 right = ViewRight();
+    glm::vec3 right = camera_.Right();
     right.y = 0.0f;
     if (glm::length(forward) > 0.001f)
     {
@@ -321,44 +296,136 @@ void GeoWalkGameInstance::UpdatePlayerIntent()
     walker_.SetPlayerIntent(intent, keySprint_, false);
 }
 
-void GeoWalkGameInstance::UpdateCamera(float deltaSeconds)
+std::vector<int> GeoWalkGameInstance::BuildBrowseOrder() const
 {
-    if (cameraMode_ == ECameraMode::Free)
+    std::vector<int> order;
+    const FGeoTile* tile = ActiveTile();
+    if (tile == nullptr)
     {
-        const float speed = Config::kFreeFlySpeed * (keySprint_ ? 4.0f : 1.0f);
-        glm::vec3 move(0.0f);
-        move += ViewForward() * ((keyForward_ ? 1.0f : 0.0f) - (keyBack_ ? 1.0f : 0.0f));
-        move += ViewRight() * ((keyRight_ ? 1.0f : 0.0f) - (keyLeft_ ? 1.0f : 0.0f));
-        move += glm::vec3(0.0f, 1.0f, 0.0f) * ((keyUp_ ? 1.0f : 0.0f) - (keyDown_ ? 1.0f : 0.0f));
-        if (glm::length(move) > 0.001f)
+        return order;
+    }
+    order.reserve(tile->pois.size());
+    for (size_t i = 0; i < tile->pois.size(); ++i)
+    {
+        const FGeoPoi& poi = tile->pois[i];
+        // The sidecar is already rank-descending, so honouring its order is all
+        // it takes for a tour to open on the landmark and work down.
+        if (poi.grounded && poiLayer_.IsCategoryEnabled(poi.category))
         {
-            freeCameraPosition_ += glm::normalize(move) * speed * deltaSeconds;
+            order.push_back(static_cast<int>(i));
         }
-        return;
     }
+    return order;
+}
 
-    if (!walkerSpawned_)
+FFocusSubject GeoWalkGameInstance::MakeFocusSubject(const FGeoPoi& poi) const
+{
+    FFocusSubject subject;
+    const float footprint = std::sqrt(std::max(poi.areaM2, 0.0f));
+    // Look at the middle of the mass: aiming at the base leaves a tower in the
+    // bottom third of the frame, aiming at the roof points at empty sky.
+    const float lift = std::max(poi.height * Config::kFocusCenterHeightFactor,
+                                Config::kFocusCenterMinLift);
+    subject.center = glm::vec3(poi.position.x, poi.groundY + lift, poi.position.y);
+    subject.radius = std::clamp(std::max(Config::kFocusMinRadius,
+                                         poi.height * Config::kFocusRadiusFromHeight +
+                                             footprint * Config::kFocusRadiusFromFootprint),
+                                Config::kFocusMinRadius, Config::kFocusMaxRadius);
+    subject.halfExtent = std::max(6.0f, footprint * 0.5f);
+    subject.valid = true;
+    return subject;
+}
+
+void GeoWalkGameInstance::SetViewMode(EViewMode mode)
+{
+    if (mode == camera_.Mode())
     {
         return;
     }
-    const glm::vec3 target = walker_.Position();
-    if (!focusInitialized_)
+    if (mode == EViewMode::Focus && focusPoi_ < 0)
     {
-        smoothedFocus_ = target;
-        focusInitialized_ = true;
+        // Entering the orbit without a subject: open on whatever the tile is
+        // known for, which is the first entry of the browse order.
+        const std::vector<int> order = BuildBrowseOrder();
+        if (order.empty())
+        {
+            SPDLOG_WARN("GeoWalk: no anchored place to focus on this tile");
+            return;
+        }
+        FocusPoi(order.front());
         return;
     }
-    const float blend = 1.0f - std::exp(-Config::kCameraSharpness * deltaSeconds);
-    smoothedFocus_ += (target - smoothedFocus_) * blend;
 
-    const glm::vec3 focus = smoothedFocus_ + glm::vec3(0.0f, Config::kFollowHeight, 0.0f);
-    const float allowed = ResolveFollowDistance(focus, followDistance_);
-    // Snap in immediately when a wall appears (otherwise the camera spends the
-    // blend inside it) and ease back out when it clears.
-    resolvedFollowDistance_ = allowed < resolvedFollowDistance_
-                                  ? allowed
-                                  : resolvedFollowDistance_ +
-                                        (allowed - resolvedFollowDistance_) * blend;
+    camera_.SetMode(mode, MakeCameraWorld());
+    // From above the tile is a map and every place gets a marker; on the street
+    // and in an orbit the street rules apply, with the focused place pinned.
+    poiLayer_.SetStyle(mode == EViewMode::Aerial ? ELabelStyle::Aerial : ELabelStyle::Street);
+    poiLayer_.SetHighlight(mode == EViewMode::Walk ? -1 : focusPoi_);
+    // A nav window rebuild costs about a second, and one landing in the middle
+    // of an orbit is the most visible hitch the application has. Browsing an
+    // orbit is a camera move, not a walk, so the character holds still for it.
+    walker_.SetPaused(mode == EViewMode::Focus);
+    if (mode != EViewMode::Focus)
+    {
+        tourActive_ = false;
+    }
+}
+
+void GeoWalkGameInstance::FocusPoi(int poiIndex)
+{
+    const FGeoTile* tile = ActiveTile();
+    if (tile == nullptr || poiIndex < 0 || poiIndex >= static_cast<int>(tile->pois.size()))
+    {
+        return;
+    }
+    const FGeoPoi& poi = tile->pois[static_cast<size_t>(poiIndex)];
+    if (!poi.grounded)
+    {
+        SPDLOG_WARN("GeoWalk: '{}' is outside the heightfield and cannot be framed", poi.name);
+        return;
+    }
+
+    focusPoi_ = poiIndex;
+    ui_.SetSelectedPoi(poiIndex);
+    poiLayer_.SetHighlight(poiIndex);
+    camera_.SetFocusSubject(MakeFocusSubject(poi));
+    if (camera_.Mode() != EViewMode::Focus)
+    {
+        camera_.SetMode(EViewMode::Focus, MakeCameraWorld());
+        poiLayer_.SetStyle(ELabelStyle::Street);
+        walker_.SetPaused(true);
+    }
+    tourTimer_ = tourDwell_;
+}
+
+void GeoWalkGameInstance::FocusStep(int delta)
+{
+    const std::vector<int> order = BuildBrowseOrder();
+    if (order.empty())
+    {
+        return;
+    }
+    const auto it = std::find(order.begin(), order.end(), focusPoi_);
+    // Stepping from nothing starts at the top of the order rather than at
+    // whatever index happens to be adjacent to -1.
+    const int current = it == order.end() ? -1 : static_cast<int>(it - order.begin());
+    const int count = static_cast<int>(order.size());
+    const int next = current < 0 ? (delta >= 0 ? 0 : count - 1)
+                                 : ((current + delta) % count + count) % count;
+    FocusPoi(order[static_cast<size_t>(next)]);
+}
+
+void GeoWalkGameInstance::UpdateTour(float deltaSeconds)
+{
+    if (!tourActive_ || camera_.Mode() != EViewMode::Focus)
+    {
+        return;
+    }
+    tourTimer_ -= deltaSeconds;
+    if (tourTimer_ <= 0.0f)
+    {
+        FocusStep(1);
+    }
 }
 
 void GeoWalkGameInstance::OnTick(double deltaSeconds)
@@ -377,29 +444,25 @@ void GeoWalkGameInstance::OnTick(double deltaSeconds)
     {
         walker_.Tick(dt, GetEngine().GetScene());
     }
-    UpdateCamera(dt);
+
+    FCameraMoveInput move;
+    move.forward = (keyForward_ ? 1.0f : 0.0f) - (keyBack_ ? 1.0f : 0.0f);
+    move.right = (keyRight_ ? 1.0f : 0.0f) - (keyLeft_ ? 1.0f : 0.0f);
+    move.up = (keyUp_ ? 1.0f : 0.0f) - (keyDown_ ? 1.0f : 0.0f);
+    move.sprint = keySprint_;
+    // In walk mode the same keys drive the character; the free camera is the
+    // only walk sub-mode that flies.
+    const bool cameraOwnsMovement = camera_.Mode() != EViewMode::Walk ||
+                                    camera_.WalkCamera() == EWalkCamera::Free;
+    camera_.SetMoveInput(cameraOwnsMovement ? move : FCameraMoveInput{});
+    camera_.Tick(dt, MakeCameraWorld());
+
+    UpdateTour(dt);
 
     if (const FGeoTile* tile = ActiveTile())
     {
         poiLayer_.Update(tile->pois, CameraPosition());
     }
-}
-
-void GeoWalkGameInstance::LookAtPoi(const FGeoPoi& poi)
-{
-    // Aim a third of the way up a building rather than at its roof: from a
-    // pavement across the street, framing the roof of a 400 m tower points the
-    // camera at empty sky.
-    const glm::vec3 aim(poi.position.x, poi.groundY + poi.height * 0.33f, poi.position.y);
-    const glm::vec3 from = cameraMode_ == ECameraMode::Free ? freeCameraPosition_ : smoothedFocus_;
-    const glm::vec3 delta = aim - from;
-    const float horizontal = glm::length(glm::vec2(delta.x, delta.z));
-    if (horizontal < 0.01f && std::abs(delta.y) < 0.01f)
-    {
-        return;
-    }
-    yaw_ = std::atan2(delta.x, -delta.z);
-    pitch_ = std::clamp(std::atan2(delta.y, horizontal), -kPitchLimit, kPitchLimit);
 }
 
 void GeoWalkGameInstance::ApplyUIRequest(const FGeoWalkUIRequest& request)
@@ -423,21 +486,83 @@ void GeoWalkGameInstance::ApplyUIRequest(const FGeoWalkUIRequest& request)
     {
         walker_.ToggleMode();
     }
+    if (request.setViewMode)
+    {
+        SetViewMode(request.viewMode);
+    }
+    if (request.toggleTour)
+    {
+        tourActive_ = !tourActive_;
+        tourTimer_ = tourDwell_;
+        if (tourActive_)
+        {
+            // Starting a tour from the map is the common case, and it has to
+            // put something on screen rather than only arming a timer.
+            if (camera_.Mode() != EViewMode::Focus)
+            {
+                SetViewMode(EViewMode::Focus);
+            }
+            camera_.AutoOrbit() = true;
+        }
+    }
+    if (request.focusNext)
+    {
+        FocusStep(1);
+    }
+    if (request.focusPrev)
+    {
+        FocusStep(-1);
+    }
 
     const FGeoTile* tile = ActiveTile();
     if (tile == nullptr)
     {
         return;
     }
+    if (request.focusPoiIndex >= 0 && request.focusPoiIndex < static_cast<int>(tile->pois.size()))
+    {
+        FocusPoi(request.focusPoiIndex);
+    }
     if (request.lookAtPoiIndex >= 0 && request.lookAtPoiIndex < static_cast<int>(tile->pois.size()))
     {
-        LookAtPoi(tile->pois[static_cast<size_t>(request.lookAtPoiIndex)]);
+        // Aim a third of the way up a building rather than at its roof: from a
+        // pavement across the street, framing the roof of a 400 m tower points
+        // the camera at empty sky.
+        const FGeoPoi& poi = tile->pois[static_cast<size_t>(request.lookAtPoiIndex)];
+        camera_.LookAt(glm::vec3(poi.position.x, poi.groundY + poi.height * 0.33f, poi.position.y));
     }
     if (request.walkToPoiIndex >= 0 && request.walkToPoiIndex < static_cast<int>(tile->pois.size()))
     {
         const FGeoPoi& poi = tile->pois[static_cast<size_t>(request.walkToPoiIndex)];
+        // Walking there is a walk-mode action; asking for it from the map or an
+        // orbit means the browser goes back to the street to do it.
+        SetViewMode(EViewMode::Walk);
         walker_.WalkTo(glm::vec3(poi.position.x, poi.groundY, poi.position.y));
     }
+}
+
+void GeoWalkGameInstance::DrawWalkerMarker() const
+{
+    if (!walkerSpawned_ || camera_.Mode() != EViewMode::Aerial)
+    {
+        return;
+    }
+    ImDrawList* drawList = ImGui::GetBackgroundDrawList();
+    if (drawList == nullptr)
+    {
+        return;
+    }
+    const glm::vec3 head = walker_.Position() + glm::vec3(0.0f, Config::kCharacterHeight, 0.0f);
+    ImVec2 screen;
+    if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(*this, head, screen))
+    {
+        return;
+    }
+    const ImU32 color = ImGui::GetColorU32(ImVec4(Config::kCharacterTint.r, Config::kCharacterTint.g,
+                                                  Config::kCharacterTint.b, 1.0f));
+    drawList->AddCircleFilled(screen, 5.0f, color);
+    drawList->AddCircle(screen, 9.0f, ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.85f)), 0, 1.5f);
+    drawList->AddText(ImVec2(screen.x + 12.0f, screen.y - 7.0f), color, "walker");
 }
 
 bool GeoWalkGameInstance::OnRenderUI()
@@ -451,14 +576,26 @@ bool GeoWalkGameInstance::OnRenderUI()
     {
         poiLayer_.Draw(*this, tile->pois, CameraPosition());
     }
+    DrawWalkerMarker();
 
     const glm::vec3 cameraPosition = CameraPosition();
+    const std::vector<int> order = BuildBrowseOrder();
+    const auto focusIt = std::find(order.begin(), order.end(), focusPoi_);
+
     FGeoWalkUIContext context;
     context.tiles = &tiles_;
     context.activeTile = activeTile_;
     context.walker = &walker_;
     context.cameraPosition = &cameraPosition;
-    context.followCamera = cameraMode_ == ECameraMode::Follow;
+    context.camera = &camera_;
+    context.tourDwellSeconds = &tourDwell_;
+    context.viewMode = camera_.Mode();
+    context.followCamera = camera_.WalkCamera() == EWalkCamera::Follow;
+    context.focusPoi = focusPoi_;
+    context.focusOrdinal = focusIt == order.end() ? 0 : static_cast<int>(focusIt - order.begin()) + 1;
+    context.focusTotal = static_cast<int>(order.size());
+    context.tourActive = tourActive_;
+    context.tourProgress = tourDwell_ > 0.0f ? std::clamp(tourTimer_ / tourDwell_, 0.0f, 1.0f) : 0.0f;
     context.frameMs = frameMs_;
     ApplyUIRequest(ui_.Draw(context, poiLayer_));
     return true;
@@ -478,11 +615,54 @@ bool GeoWalkGameInstance::OnKey(SDL_Event& event)
     case SDLK_LSHIFT:
     case SDLK_RSHIFT: keySprint_ = down; return true;
     case SDLK_SPACE:
-        if (down && walker_.Mode() == EWalkMode::Player)
+        if (down && walker_.Mode() == EWalkMode::Player && camera_.Mode() == EViewMode::Walk)
         {
             walker_.SetPlayerIntent(glm::vec3(0.0f), keySprint_, true);
         }
         return true;
+
+    // ---- View modes ---------------------------------------------------
+    case SDLK_1:
+        if (down) { SetViewMode(EViewMode::Walk); }
+        return true;
+    case SDLK_2:
+    case SDLK_V:
+        // V used to snap to a whole-tile overview; that view is now a mode of
+        // its own, so the key keeps its meaning and gains a map.
+        if (down) { SetViewMode(EViewMode::Aerial); }
+        return true;
+    case SDLK_3:
+    case SDLK_G:
+        if (down) { SetViewMode(EViewMode::Focus); }
+        return true;
+
+    // ---- Browsing -----------------------------------------------------
+    case SDLK_N:
+        if (down) { FocusStep(1); }
+        return true;
+    case SDLK_B:
+        if (down) { FocusStep(-1); }
+        return true;
+    case SDLK_T:
+        if (down)
+        {
+            tourActive_ = !tourActive_;
+            tourTimer_ = tourDwell_;
+            if (tourActive_)
+            {
+                if (camera_.Mode() != EViewMode::Focus)
+                {
+                    SetViewMode(EViewMode::Focus);
+                }
+                camera_.AutoOrbit() = true;
+            }
+        }
+        return true;
+    case SDLK_O:
+        if (down) { camera_.AutoOrbit() = !camera_.AutoOrbit(); }
+        return true;
+
+    // ---- Walk mode ----------------------------------------------------
     case SDLK_F:
         if (down)
         {
@@ -490,35 +670,18 @@ bool GeoWalkGameInstance::OnKey(SDL_Event& event)
             // Taking control only makes sense from behind the character.
             if (walker_.Mode() == EWalkMode::Player)
             {
-                cameraMode_ = ECameraMode::Follow;
+                SetViewMode(EViewMode::Walk);
+                camera_.SetWalkCamera(EWalkCamera::Follow);
             }
         }
         return true;
     case SDLK_C:
-        if (down)
+        if (down && camera_.Mode() == EViewMode::Walk)
         {
-            cameraMode_ = cameraMode_ == ECameraMode::Follow ? ECameraMode::Free
-                                                             : ECameraMode::Follow;
-            if (cameraMode_ == ECameraMode::Free)
-            {
-                freeCameraPosition_ = CameraPosition();
-            }
+            camera_.ToggleWalkCamera();
         }
         return true;
-    case SDLK_V:
-        if (down)
-        {
-            // Snap to a view of the whole tile. Getting here by flying is
-            // hopeless inside a CBD: the free camera starts between two towers
-            // and every direction is a facade.
-            cameraMode_ = ECameraMode::Free;
-            const glm::vec3 anchor = walkerSpawned_ ? walker_.Position() : glm::vec3(0.0f);
-            freeCameraPosition_ = glm::vec3(anchor.x, anchor.y + Config::kOverviewHeight,
-                                            anchor.z + Config::kOverviewSetback);
-            yaw_ = 0.0f;
-            pitch_ = Config::kOverviewPitch;
-        }
-        return true;
+
     case SDLK_L:
         if (down)
         {
@@ -553,31 +716,42 @@ bool GeoWalkGameInstance::OnCursorPosition(double xpos, double ypos)
     const double dx = xpos - mousePos_.x;
     const double dy = ypos - mousePos_.y;
     mousePos_ = {xpos, ypos};
-    yaw_ += static_cast<float>(dx) * Config::kMouseSensitivity;
-    pitch_ = std::clamp(pitch_ - static_cast<float>(dy) * Config::kMouseSensitivity,
-                        -kPitchLimit, kPitchLimit);
+    camera_.AddLook(static_cast<float>(dx) * Config::kMouseSensitivity,
+                    static_cast<float>(dy) * Config::kMouseSensitivity);
     return true;
 }
 
 bool GeoWalkGameInstance::OnMouseButton(SDL_Event& event)
 {
-    if (event.button.button != SDL_BUTTON_RIGHT)
+    if (event.button.button == SDL_BUTTON_RIGHT)
+    {
+        mouseLookActive_ = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
+        resetMouse_ = true;
+        camera_.SetLookActive(mouseLookActive_);
+        return true;
+    }
+    if (event.button.button != SDL_BUTTON_LEFT || event.type != SDL_EVENT_MOUSE_BUTTON_DOWN)
     {
         return false;
     }
-    mouseLookActive_ = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
-    resetMouse_ = true;
+    // Picking a marker is the map's whole point, but the HUD is drawn over the
+    // same pixels and gets first refusal on them.
+    if (ImGui::GetCurrentContext() != nullptr && ImGui::GetIO().WantCaptureMouse)
+    {
+        return false;
+    }
+    const int picked = poiLayer_.PickAt(glm::vec2(mousePos_));
+    if (picked < 0)
+    {
+        return false;
+    }
+    FocusPoi(picked);
     return true;
 }
 
 bool GeoWalkGameInstance::OnScroll(double /*xoffset*/, double yoffset)
 {
-    if (cameraMode_ != ECameraMode::Follow)
-    {
-        return false;
-    }
-    followDistance_ = std::clamp(followDistance_ - static_cast<float>(yoffset) * 1.5f,
-                                 Config::kFollowMinDistance, Config::kFollowMaxDistance);
+    camera_.AddZoom(static_cast<float>(yoffset));
     return true;
 }
 
@@ -597,10 +771,52 @@ void GeoWalkGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegist
     {
         return static_cast<int64_t>(poiLayer_.GroundedCount());
     });
+    // Two different questions: how many places the layer decided are worth a
+    // name here, and how many of those actually reached the screen after
+    // decluttering. A camera facing a wall legitimately draws almost none.
     registry.Add("geo.labelsVisible", [this]()
     {
         return static_cast<int64_t>(poiLayer_.VisibleCount());
     });
+    registry.Add("geo.labelsDrawn", [this]()
+    {
+        return static_cast<int64_t>(poiLayer_.PlacedCount());
+    });
+    registry.Add("geo.markersVisible", [this]()
+    {
+        return static_cast<int64_t>(poiLayer_.MarkerCount());
+    });
+    registry.Add("geo.viewMode", [this]()
+    {
+        switch (camera_.Mode())
+        {
+        case EViewMode::Aerial: return std::string("aerial");
+        case EViewMode::Focus: return std::string("focus");
+        case EViewMode::Walk:
+        default: return std::string("walk");
+        }
+    });
+    registry.Add("geo.focusName", [this]()
+    {
+        const FGeoTile* tile = ActiveTile();
+        if (tile == nullptr || focusPoi_ < 0 || focusPoi_ >= static_cast<int>(tile->pois.size()))
+        {
+            return std::string("none");
+        }
+        return tile->pois[static_cast<size_t>(focusPoi_)].name;
+    });
+    registry.Add("geo.focusIndex", [this]() { return static_cast<int64_t>(focusPoi_); });
+    registry.Add("geo.browseCount", [this]()
+    {
+        return static_cast<int64_t>(BuildBrowseOrder().size());
+    });
+    registry.Add("geo.tourActive", [this]() { return tourActive_; });
+    registry.Add("geo.cameraHeight", [this]()
+    {
+        return static_cast<double>(camera_.EyePosition().y);
+    });
+    registry.Add("geo.cameraX", [this]() { return static_cast<double>(camera_.EyePosition().x); });
+    registry.Add("geo.cameraZ", [this]() { return static_cast<double>(camera_.EyePosition().z); });
     registry.Add("geo.walkerSpawned", [this]() { return walkerSpawned_; });
     registry.Add("geo.walkerMode", [this]()
     {
