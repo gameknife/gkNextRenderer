@@ -46,7 +46,8 @@ namespace NextUI::Foundation
         return pressed;
     }
 
-    bool IconButton(const char* icon, const char* tooltip, const bool active, ImVec2 size)
+    bool IconButton(const char* icon, const char* tooltip, const bool active, ImVec2 size,
+                    const bool activeUnderline)
     {
         if (size.x <= 0.0f) size.x = ImGui::GetFrameHeight();
         if (size.y <= 0.0f) size.y = ImGui::GetFrameHeight();
@@ -62,12 +63,16 @@ namespace NextUI::Foundation
         bool pressed = false;
         {
             FScopedStyle style;
+            const bool showActiveFill = active && !activeUnderline;
             style.Add(ImGuiStyleVar_FrameRounding, 4.0f)
+                .Add(ImGuiStyleVar_FrameBorderSize, 0.0f)
                 .Add(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.5f, 0.5f))
                 .Add(ImGuiCol_Text, ImVec4(textColor.x, textColor.y, textColor.z, 0.0f))
-                .Add(ImGuiCol_Button, active ? Color(EColor::Accent, 0.72f) : ImVec4(0, 0, 0, 0))
+                .Add(ImGuiCol_Border, ImVec4(0, 0, 0, 0))
+                .Add(ImGuiCol_Button, showActiveFill ? Color(EColor::Accent, 0.72f) : ImVec4(0, 0, 0, 0))
                 .Add(ImGuiCol_ButtonHovered, Color(EColor::SurfaceHover))
-                .Add(ImGuiCol_ButtonActive, Color(EColor::Accent, 0.86f));
+                .Add(ImGuiCol_ButtonActive, activeUnderline ? Color(EColor::SurfaceHover)
+                                                             : Color(EColor::Accent, 0.86f));
 
             pressed = ImGui::Button(label, size);
             const ImVec2 itemMin = ImGui::GetItemRectMin();
@@ -98,6 +103,13 @@ namespace NextUI::Foundation
                 const ImVec2 drawPosition = itemCenter - textSize * 0.5f;
                 drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), drawPosition,
                                   renderedTextColor, label, visibleEnd);
+            }
+            if (active && activeUnderline)
+            {
+                drawList->AddRectFilled(
+                    ImVec2(itemMin.x + 3.0f, itemMax.y - 2.0f),
+                    ImVec2(itemMax.x - 3.0f, itemMax.y),
+                    ColorU32(EColor::Accent, 0.95f), 1.0f);
             }
             drawList->PopClipRect();
         }

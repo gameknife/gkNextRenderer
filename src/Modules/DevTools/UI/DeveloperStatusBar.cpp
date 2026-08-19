@@ -1,6 +1,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 
 #include "DeveloperStatusBar.hpp"
+#include "TracyProfiler.hpp"
 
 #include "Engine/Runtime/Editor/UI/AppChrome.hpp"
 #include "Engine/Runtime/Editor/UI/UiScopes.hpp"
@@ -37,6 +38,12 @@ namespace Runtime::DevToolsUI
             options.active = active;
             return NextUI::Foundation::Button(label, options);
         }
+
+        bool StatusIconButton(const char* icon, const char* tooltip, const bool active, const ImVec2 size,
+                              const bool activeUnderline = false)
+        {
+            return NextUI::Foundation::IconButton(icon, tooltip, active, size, activeUnderline);
+        }
     }
 
     void DrawDeveloperStatusBar(NextEngine& engine,
@@ -65,7 +72,7 @@ namespace Runtime::DevToolsUI
 #endif
         const float fpsWidth = ImGui::CalcTextSize(fpsText.c_str()).x + 12.0f;
         const float memoryWidth = ImGui::CalcTextSize(memoryText.c_str()).x + 12.0f;
-        const float rightWidth = consoleWidth + toolWidth * (2.0f + (renderDocSupported ? 1.0f : 0.0f)) +
+        const float rightWidth = consoleWidth + toolWidth * (3.0f + (renderDocSupported ? 1.0f : 0.0f)) +
             fpsWidth + memoryWidth + 98.0f + (renderDocSupported ? 20.0f : 0.0f);
 
         NextUI::Foundation::FBottomBarOptions options;
@@ -97,35 +104,46 @@ namespace Runtime::DevToolsUI
                 panels.ToggleConsole();
             }
             DrawSeparator();
-            if (StatusButton(ICON_FA_WAND_MAGIC_SPARKLES "##BottomBarRebuildShaders",
-                             shaderLive ? "Rebuild shaders now (hot reload ready)" : "Rebuild shaders now",
-                             shaderLive, ImVec2(toolWidth, buttonHeight)))
+            if (StatusIconButton(ICON_FA_WAND_MAGIC_SPARKLES "##BottomBarRebuildShaders",
+                                 shaderLive ? "Rebuild shaders now (hot reload ready)" : "Rebuild shaders now",
+                                 shaderLive, ImVec2(toolWidth, buttonHeight), true))
             {
                 engine.RequestShaderHotReload();
             }
             ImGui::SameLine(0.0f, 4.0f);
             {
                 NextUI::Foundation::FScopedDisabled disabled(!cppLiveCodingAvailable || !onCppReloadClicked);
-                if (StatusButton(ICON_FA_HAMMER "##BottomBarCompileCpp",
-                                 cppLiveCodingAvailable ? "Compile C++ changes" : "Live++ is unavailable",
-                                 cppLiveCodingAvailable, ImVec2(toolWidth, buttonHeight)) && onCppReloadClicked)
+                if (StatusIconButton(ICON_FA_HAMMER "##BottomBarCompileCpp",
+                                     cppLiveCodingAvailable ? "Compile C++ changes" : "Live++ is unavailable",
+                                     cppLiveCodingAvailable, ImVec2(toolWidth, buttonHeight)) && onCppReloadClicked)
                 {
                     onCppReloadClicked();
                 }
             }
-
-#if WITH_RENDERDOC
-            if (renderDocSupported)
+            ImGui::SameLine(0.0f, 4.0f);
             {
-                DrawSeparator();
-                if (StatusButton(ICON_FA_CAMERA "##BottomBarRenderDocCapture",
-                                 "Capture frame and open RenderDoc", false,
-                                 ImVec2(toolWidth, buttonHeight)))
+                const bool tracyAvailable = IsTracyProfilerAvailable();
+                NextUI::Foundation::FScopedDisabled disabled(!tracyAvailable);
+                if (StatusIconButton(ICON_FA_CHART_LINE "##BottomBarTracy",
+                                     tracyAvailable ? "Start Tracy and connect to 127.0.0.1:8086"
+                                                    : "Tracy is unavailable; run `gnb tracy fetch`",
+                                     false, ImVec2(toolWidth, buttonHeight)) && tracyAvailable)
+                {
+                    LaunchTracyProfiler();
+                }
+            }
+
+            ImGui::SameLine(0.0f, 4.0f);
+            {
+                NextUI::Foundation::FScopedDisabled disabled(!renderDocSupported);
+                if (StatusIconButton(ICON_FA_CAMERA "##BottomBarRenderDocCapture",
+                                     renderDocSupported ? "Capture frame and open RenderDoc"
+                                                         : "RenderDoc is unavailable; launch with --renderdoc",
+                                     false, ImVec2(toolWidth, buttonHeight)) && renderDocSupported)
                 {
                     Runtime::RenderDoc::RequestCapture();
                 }
             }
-#endif
 
             DrawSeparator();
             if (StatusButton(fpsText.c_str(), "Toggle Stats Overlay", engine.GetUserSettings().ShowOverlay,

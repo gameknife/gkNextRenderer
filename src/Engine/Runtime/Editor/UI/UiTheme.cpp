@@ -104,6 +104,7 @@ namespace NextUI::Foundation
 
         style.WindowPadding = ImVec2(8.0f, 7.0f);
         style.FramePadding = ImVec2(7.0f, 4.0f);
+        style.DisabledAlpha = 0.42f;
         style.CellPadding = ImVec2(7.0f, 4.0f);
         style.ItemSpacing = ImVec2(6.0f, 5.0f);
         style.ItemInnerSpacing = ImVec2(5.0f, 4.0f);

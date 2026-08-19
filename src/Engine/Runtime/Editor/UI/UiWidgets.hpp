@@ -36,6 +36,6 @@ namespace NextUI::Foundation
     void Tooltip(const char* text);
     bool Button(const char* label, const FButtonOptions& options = {});
     bool IconButton(const char* icon, const char* tooltip, bool active = false,
-                    ImVec2 size = ImVec2());
+                    ImVec2 size = ImVec2(), bool activeUnderline = false);
     bool ComboOption(const char* label, bool selected);
 }
