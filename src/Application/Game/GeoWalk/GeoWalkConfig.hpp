@@ -29,10 +29,8 @@ namespace GeoWalk::Config
     // floorHeightTolerance is an absolute band, so it must span the window's
     // own relief; this is added on top of the measured min/max spread.
     inline constexpr float kNavFloorToleranceSlack = 12.0f;
-    // Down-rays start here, above every roof in the generated tiles (the
-    // tallest committed building is One World Trade Center at 417 m). A ceiling
-    // below a roof starts the ray *inside* the building.
-    inline constexpr float kNavSampleCeiling = 520.0f;
+    // 0 = automatic sceneMax.y + 5. Adapts to any tile regardless of elevation.
+    inline constexpr float kNavSampleCeiling = 0.0f;
 
     // ---- Roaming ---------------------------------------------------------
     inline constexpr float kRoamMinDistance = 25.0f;

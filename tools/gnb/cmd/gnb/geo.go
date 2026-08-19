@@ -195,7 +195,7 @@ func geoEmit(ctx appContext, tile geo.Tile, opt geo.Options) error {
 		return err
 	}
 	paths := geo.NewPaths(ctx.repoRoot, tile.Name)
-	for _, src := range []string{scadPath, paths.HmapPath()} {
+	for _, src := range []string{scadPath, paths.HmapPath(), paths.POIPath(), paths.AttributionPath()} {
 		rel, relErr := filepath.Rel(filepath.Join(ctx.repoRoot, "assets"), src)
 		if relErr != nil || filepath.IsAbs(rel) || isDotDot(rel) {
 			continue

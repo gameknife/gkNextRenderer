@@ -8,6 +8,7 @@
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Options.hpp"
+#include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Components/TerrainComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Interface/AgentQueries.hpp"
@@ -83,6 +84,14 @@ void GeoWalkGameInstance::OnInit()
         }
     }
     RequestTile(index);
+}
+
+void GeoWalkGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
+{
+    std::string error;
+    // GeoWalk is a ray-traced city walk; keep the engine's lighter default
+    // available through user settings and explicit command-line overrides.
+    cvars.SetDefaultFromString("r.rendererType", "0", &error);
 }
 
 void GeoWalkGameInstance::RequestTile(int index)
@@ -504,7 +513,7 @@ bool GeoWalkGameInstance::OnKey(SDL_Event& event)
             // and every direction is a facade.
             cameraMode_ = ECameraMode::Free;
             const glm::vec3 anchor = walkerSpawned_ ? walker_.Position() : glm::vec3(0.0f);
-            freeCameraPosition_ = glm::vec3(anchor.x, Config::kOverviewHeight,
+            freeCameraPosition_ = glm::vec3(anchor.x, anchor.y + Config::kOverviewHeight,
                                             anchor.z + Config::kOverviewSetback);
             yaw_ = 0.0f;
             pitch_ = Config::kOverviewPitch;

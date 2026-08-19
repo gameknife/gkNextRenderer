@@ -31,6 +31,7 @@ public:
     void OnInit() override;
     void OnTick(double deltaSeconds) override;
     void OnDestroy() override;
+    void ConfigureCVars(NextCVar::FCVarSystem& cvars) override;
 
     void BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
                             std::vector<Assets::Model>& models,
