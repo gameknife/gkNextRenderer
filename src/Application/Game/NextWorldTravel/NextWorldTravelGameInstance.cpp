@@ -12,6 +12,7 @@
 #include "Engine/Runtime/Components/TerrainComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Interface/AgentQueries.hpp"
+#include "Engine/Runtime/ScreenShotService.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
 
@@ -490,6 +491,10 @@ void NextWorldTravelGameInstance::ApplyUIRequest(const FNextWorldTravelUIRequest
     {
         SetViewMode(request.viewMode);
     }
+    if (request.resetViewport)
+    {
+        camera_.ResetView(camera_.Mode(), MakeCameraWorld());
+    }
     if (request.toggleTour)
     {
         tourActive_ = !tourActive_;
@@ -512,6 +517,10 @@ void NextWorldTravelGameInstance::ApplyUIRequest(const FNextWorldTravelUIRequest
     if (request.focusPrev)
     {
         FocusStep(-1);
+    }
+    if (request.takeScreenshot)
+    {
+        GetEngine().GetScreenShotService().Request();
     }
 
     const FGeoTile* tile = ActiveTile();

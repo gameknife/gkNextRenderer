@@ -3,7 +3,10 @@
 #include "NextWorldTravelConfig.hpp"
 #include "NextWorldTraveler.h"
 
+#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+
 #include <imgui.h>
+#include <ThirdParty/fontawesome/IconsFontAwesome6.h>
 
 #include <algorithm>
 #include <cstring>
@@ -30,47 +33,216 @@ namespace NextWorldTravel
             return mode == EWalkMode::Roam ? "Roam (AI)" : "Player (WASD)";
         }
 
-        // A tab that reads as selected rather than as a button that happens to
-        // be pressed; the view mode is the application's primary state.
-        bool ViewTab(const char* label, bool active, const ImVec2& size)
-        {
-            const bool pushed = active;
-            if (pushed)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.22f, 0.46f, 0.72f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.52f, 0.80f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.20f, 0.42f, 0.68f, 1.0f));
-            }
-            const bool clicked = ImGui::Button(label, size);
-            if (pushed)
-            {
-                ImGui::PopStyleColor(3);
-            }
-            return clicked && !active;
-        }
     }
 
-    void FNextWorldTravelUI::DrawViewModeBar(const FNextWorldTravelUIContext& context, FNextWorldTravelUIRequest& request)
+    void FNextWorldTravelUI::DrawViewportToolbar(const FNextWorldTravelUIContext& context,
+                                                  FGeoPoiLayer& poiLayer,
+                                                  FNextWorldTravelUIRequest& request)
     {
-        const float width = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2.0f) / 3.0f;
-        const ImVec2 size(width, 0.0f);
-        if (ViewTab("Walk (1)", context.viewMode == EViewMode::Walk, size))
+        if (context.tiles == nullptr)
         {
-            request.setViewMode = true;
-            request.viewMode = EViewMode::Walk;
+            return;
         }
-        ImGui::SameLine();
-        if (ViewTab("Aerial (2)", context.viewMode == EViewMode::Aerial, size))
+
+        const std::vector<FGeoTile>& tiles = *context.tiles;
+        const FGeoTile* tile = context.activeTile >= 0 && context.activeTile < static_cast<int>(tiles.size())
+            ? &tiles[static_cast<size_t>(context.activeTile)]
+            : nullptr;
+        const char* tileLabel = tile != nullptr ? tile->name.c_str() : "No tile";
+        ImGuiViewport* viewport = ImGui::GetMainViewport();
+        constexpr float margin = 12.0f;
+        const float toolbarHeight = std::ceil(ImGui::GetFontSize() + 22.0f);
+        const float tileWidth = std::clamp(ImGui::CalcTextSize(tileLabel).x + 54.0f, 150.0f, 250.0f);
+
+        NextUI::Theme::FOverlayPanelConfig navigationConfig{};
+        navigationConfig.WindowId = "##NextWorldTravelNavigation";
+        navigationConfig.Position = viewport->Pos + ImVec2(margin, margin);
+        navigationConfig.Size = ImVec2(tileWidth + 160.0f, toolbarHeight);
+        navigationConfig.Padding = ImVec2(5.0f, 7.0f);
+        navigationConfig.ItemSpacing = ImVec2(4.0f, 0.0f);
+        navigationConfig.Rounding = 5.0f;
+        navigationConfig.BackgroundAlpha = 0.80f;
+        if (NextUI::Theme::BeginOverlayPanel(navigationConfig))
         {
-            request.setViewMode = true;
-            request.viewMode = EViewMode::Aerial;
+            NextUI::Theme::PushViewportToolbarStyle();
+            ImGui::SetNextItemWidth(tileWidth);
+            NextUI::Theme::PushViewportPopupStyle();
+            if (ImGui::BeginCombo("##TravelTile", tileLabel))
+            {
+                for (size_t i = 0; i < tiles.size(); ++i)
+                {
+                    const bool selected = static_cast<int>(i) == context.activeTile;
+                    if (NextUI::Theme::DrawViewportComboOption(tiles[i].name.c_str(), selected) && !selected)
+                    {
+                        request.loadTileIndex = static_cast<int>(i);
+                    }
+                    if (selected)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            NextUI::Theme::PopViewportPopupStyle();
+            NextUI::Theme::DrawTooltip("Choose a generated world tile");
+            NextUI::Theme::DrawVerticalSeparator(ImGui::GetFrameHeight(), 7.0f);
+
+            const auto selectView = [&](const char* label, const char* tooltip, EViewMode mode)
+            {
+                if (NextUI::Theme::DrawFlatViewportButton(
+                        label, tooltip, context.viewMode == mode, ImVec2(28.0f, 22.0f)) &&
+                    context.viewMode != mode)
+                {
+                    request.setViewMode = true;
+                    request.viewMode = mode;
+                }
+                ImGui::SameLine();
+            };
+            selectView(ICON_FA_PERSON_WALKING "##Walk", "Walk view (1)", EViewMode::Walk);
+            selectView(ICON_FA_MAP "##Aerial", "Aerial map view (2 or V)", EViewMode::Aerial);
+            selectView(ICON_FA_LOCATION_CROSSHAIRS "##Focus", "Focus the current place (3 or G)", EViewMode::Focus);
+            ImGui::Dummy(ImVec2(0.0f, 0.0f));
+            NextUI::Theme::PopViewportToolbarStyle();
         }
-        ImGui::SameLine();
-        if (ViewTab("Focus (3)", context.viewMode == EViewMode::Focus, size))
+        NextUI::Theme::EndOverlayPanel();
+
+        constexpr float actionWidth = 250.0f;
+        NextUI::Theme::FOverlayPanelConfig actionConfig{};
+        actionConfig.WindowId = "##NextWorldTravelViewportTools";
+        actionConfig.Position = ImVec2(viewport->Pos.x + viewport->Size.x - margin - actionWidth,
+                                       viewport->Pos.y + margin);
+        actionConfig.Size = ImVec2(actionWidth, toolbarHeight);
+        actionConfig.Padding = ImVec2(5.0f, 7.0f);
+        actionConfig.ItemSpacing = ImVec2(4.0f, 0.0f);
+        actionConfig.Rounding = 5.0f;
+        actionConfig.BackgroundAlpha = 0.80f;
+        if (NextUI::Theme::BeginOverlayPanel(actionConfig))
         {
-            request.setViewMode = true;
-            request.viewMode = EViewMode::Focus;
+            NextUI::Theme::PushViewportToolbarStyle();
+            if (NextUI::Theme::DrawFlatViewportButton(
+                    ICON_FA_TAGS "##Labels", "Show or hide place labels (L)", poiLayer.ShowLabels(),
+                    ImVec2(28.0f, 22.0f)))
+            {
+                poiLayer.ShowLabels() = !poiLayer.ShowLabels();
+            }
+            ImGui::SameLine();
+
+            const bool canToggleFollow = context.camera != nullptr && context.viewMode == EViewMode::Walk;
+            ImGui::BeginDisabled(!canToggleFollow);
+            if (NextUI::Theme::DrawFlatViewportButton(
+                    ICON_FA_COMPASS "##Follow", "Switch between follow and free camera (C)",
+                    context.followCamera, ImVec2(28.0f, 22.0f)))
+            {
+                context.camera->ToggleWalkCamera();
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+
+            if (NextUI::Theme::DrawFlatViewportButton(
+                    ICON_FA_ARROWS_ROTATE "##Tour", "Start or stop the landmark tour (T)", context.tourActive,
+                    ImVec2(28.0f, 22.0f)))
+            {
+                request.toggleTour = true;
+            }
+            ImGui::SameLine();
+
+            if (NextUI::Theme::DrawFlatViewportButton(
+                    ICON_FA_ARROWS_ROTATE "##Reset", "Reset the current viewport", false, ImVec2(28.0f, 22.0f)))
+            {
+                request.resetViewport = true;
+            }
+            ImGui::SameLine();
+            if (NextUI::Theme::DrawFlatViewportButton(
+                    ICON_FA_CAMERA "##Capture", "Capture a screenshot (F9)", false, ImVec2(28.0f, 22.0f)))
+            {
+                request.takeScreenshot = true;
+            }
+            ImGui::SameLine();
+            if (NextUI::Theme::DrawFlatViewportButton(
+                    ICON_FA_SLIDERS "##Explorer", "Show or hide the world explorer", showExplorer_,
+                    ImVec2(28.0f, 22.0f)))
+            {
+                showExplorer_ = !showExplorer_;
+            }
+            ImGui::SameLine();
+            if (NextUI::Theme::DrawFlatViewportButton(
+                    ICON_FA_KEYBOARD "##Shortcuts", "Show viewport shortcuts", showShortcutSheet_,
+                    ImVec2(28.0f, 22.0f)))
+            {
+                showShortcutSheet_ = !showShortcutSheet_;
+            }
+            NextUI::Theme::PopViewportToolbarStyle();
         }
+        NextUI::Theme::EndOverlayPanel();
+    }
+
+    void FNextWorldTravelUI::DrawShortcutSheet()
+    {
+        if (!showShortcutSheet_)
+        {
+            return;
+        }
+
+        ImGuiViewport* viewport = ImGui::GetMainViewport();
+        constexpr float margin = 12.0f;
+        constexpr float panelWidth = 370.0f;
+        const float toolbarHeight = std::ceil(ImGui::GetFontSize() + 22.0f);
+        NextUI::Theme::FOverlayPanelConfig config{};
+        config.WindowId = "##NextWorldTravelShortcuts";
+        config.Position = ImVec2(viewport->Pos.x + viewport->Size.x - margin - panelWidth,
+                                 viewport->Pos.y + margin + toolbarHeight + 8.0f);
+        config.Size = ImVec2(panelWidth, 290.0f);
+        config.Padding = ImVec2(14.0f, 10.0f);
+        config.ItemSpacing = ImVec2(6.0f, 5.0f);
+        config.Rounding = 6.0f;
+        config.BackgroundAlpha = 0.92f;
+        if (NextUI::Theme::BeginOverlayPanel(config))
+        {
+            ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::Text),
+                               "%s  Viewport shortcuts", ICON_FA_KEYBOARD);
+            ImGui::SameLine(ImGui::GetContentRegionMax().x - 24.0f);
+            NextUI::Theme::PushViewportToolbarStyle();
+            if (NextUI::Theme::DrawFlatViewportButton(
+                    ICON_FA_XMARK "##CloseShortcuts", "Close shortcuts", false, ImVec2(24.0f, 22.0f)))
+            {
+                showShortcutSheet_ = false;
+            }
+            NextUI::Theme::PopViewportToolbarStyle();
+            NextUI::Theme::DrawThinSeparator();
+
+            struct FShortcut
+            {
+                const char* key;
+                const char* action;
+            };
+            constexpr FShortcut shortcuts[] = {
+                {"1 / 2 / 3", "Walk, aerial map, focus"},
+                {"V / G", "Aerial map / focus top place"},
+                {"C", "Follow or free camera in Walk"},
+                {"T / N / B", "Tour, next place, previous place"},
+                {"L / O", "Labels / auto-orbit"},
+                {"RMB + drag", "Look or orbit"},
+                {"Wheel", "Zoom"},
+                {"F9", "Screenshot"},
+                {"Tab", "Hide all travel UI"},
+            };
+            if (ImGui::BeginTable("##TravelShortcuts", 2,
+                                  ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoSavedSettings))
+            {
+                ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_WidthFixed, 108.0f);
+                ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);
+                for (const FShortcut& shortcut : shortcuts)
+                {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::Text), "%s", shortcut.key);
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted), "%s", shortcut.action);
+                }
+                ImGui::EndTable();
+            }
+        }
+        NextUI::Theme::EndOverlayPanel();
     }
 
     void FNextWorldTravelUI::DrawWalkPanel(const FNextWorldTravelUIContext& context, FNextWorldTravelUIRequest& request)
@@ -207,12 +379,25 @@ namespace NextWorldTravel
             return request;
         }
 
-        const std::vector<FGeoTile>& tiles = *context.tiles;
-        ImGui::SetNextWindowPos(ImVec2(16.0f, 16.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(400.0f, 700.0f), ImGuiCond_FirstUseEver);
-        if (!ImGui::Begin("NextWorldTravel — tile browser", &visible_))
+        DrawViewportToolbar(context, poiLayer, request);
+        DrawShortcutSheet();
+        if (!showExplorer_)
         {
-            ImGui::End();
+            return request;
+        }
+
+        const std::vector<FGeoTile>& tiles = *context.tiles;
+        ImGuiViewport* viewport = ImGui::GetMainViewport();
+        NextUI::Theme::FDetailPanelConfig panelConfig{};
+        panelConfig.WindowId = "##NextWorldTravelExplorer";
+        panelConfig.ContentWindowId = "##NextWorldTravelExplorerContent";
+        panelConfig.Icon = ICON_FA_MAP_LOCATION_DOT;
+        panelConfig.Title = "World explorer";
+        panelConfig.Open = &showExplorer_;
+        panelConfig.Position = viewport->Pos + ImVec2(16.0f, std::ceil(ImGui::GetFontSize() + 42.0f));
+        panelConfig.Size = ImVec2(390.0f, 690.0f);
+        if (!NextUI::Theme::BeginDetailPanel(panelConfig))
+        {
             return request;
         }
 
@@ -221,22 +406,10 @@ namespace NextWorldTravel
                                 context.activeTile < static_cast<int>(tiles.size()))
                                    ? &tiles[static_cast<size_t>(context.activeTile)]
                                    : nullptr;
-        const char* preview = tile != nullptr ? tile->name.c_str() : "(no tile)";
-        if (ImGui::BeginCombo("Tile", preview))
-        {
-            for (size_t i = 0; i < tiles.size(); ++i)
-            {
-                const bool selected = static_cast<int>(i) == context.activeTile;
-                if (ImGui::Selectable(tiles[i].name.c_str(), selected) && !selected)
-                {
-                    request.loadTileIndex = static_cast<int>(i);
-                }
-            }
-            ImGui::EndCombo();
-        }
         if (tile != nullptr)
         {
-            ImGui::TextDisabled("%.5f, %.5f — %.0f m tile, %zu places",
+            ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted),
+                                "%.5f, %.5f  ·  %.0f m  ·  %zu places",
                                 tile->center.x, tile->center.y, tile->sizeM, tile->pois.size());
             if (!tile->loadError.empty())
             {
@@ -244,11 +417,7 @@ namespace NextWorldTravel
             }
         }
 
-        ImGui::Separator();
-
-        // ---- View mode ----------------------------------------------------
-        DrawViewModeBar(context, request);
-        ImGui::Spacing();
+        NextUI::Theme::DrawThinSeparator();
         switch (context.viewMode)
         {
         case EViewMode::Aerial: DrawAerialPanel(context, poiLayer, request); break;
@@ -256,12 +425,12 @@ namespace NextWorldTravel
         case EViewMode::Walk:
         default: DrawWalkPanel(context, request); break;
         }
-        ImGui::TextDisabled("%.1f ms/frame", context.frameMs);
-
-        ImGui::Separator();
+        ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted),
+                           "%.1f ms/frame", context.frameMs);
+        NextUI::Theme::DrawThinSeparator();
 
         // ---- Labels -------------------------------------------------------
-        if (ImGui::CollapsingHeader("Labels", ImGuiTreeNodeFlags_DefaultOpen))
+        if (NextUI::Theme::BeginPanelSection("Labels", true))
         {
             ImGui::Checkbox("Show labels (L)", &poiLayer.ShowLabels());
             ImGui::SameLine();
@@ -277,19 +446,21 @@ namespace NextWorldTravel
                 ImGui::Checkbox(PoiCategory::kAll[static_cast<size_t>(i)], &poiLayer.CategoryEnabled(i));
                 ImGui::PopStyleColor();
             }
+            NextUI::Theme::EndPanelSection();
         }
 
         // ---- Places -------------------------------------------------------
-        if (tile != nullptr && ImGui::CollapsingHeader("Places", ImGuiTreeNodeFlags_DefaultOpen))
+        if (tile != nullptr && NextUI::Theme::BeginPanelSection("Places", true))
         {
             const glm::vec3 from = context.walker != nullptr && context.walker->IsSpawned()
                                        ? context.walker->Position()
                                        : (context.cameraPosition != nullptr ? *context.cameraPosition
                                                                             : glm::vec3(0.0f));
             DrawPlaceList(*tile, poiLayer, context, from, request);
+            NextUI::Theme::EndPanelSection();
         }
 
-        ImGui::End();
+        NextUI::Theme::EndDetailPanel();
         return request;
     }
 

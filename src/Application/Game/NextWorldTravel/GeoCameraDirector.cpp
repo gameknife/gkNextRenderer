@@ -85,6 +85,38 @@ namespace NextWorldTravel
         mode_ = mode;
     }
 
+    void FGeoCameraDirector::ResetView(const EViewMode mode, const FCameraWorld& world)
+    {
+        if (mode != mode_)
+        {
+            SetMode(mode, world);
+        }
+        else
+        {
+            BeginBlend(Config::kModeBlendSeconds);
+        }
+
+        yaw_ = 0.0f;
+        pitch_ = Config::kSpawnPitch;
+        walkCamera_ = EWalkCamera::Follow;
+        followDistance_ = Config::kFollowDistance;
+        resolvedFollow_ = Config::kFollowDistance;
+
+        aerialDistance_ = Config::kAerialDistance;
+        aerialPitch_ = Config::kAerialPitch;
+        aerialPivot_ = world.walkerValid ? glm::vec2(world.walkerPosition.x, world.walkerPosition.z)
+                                         : glm::vec2(0.0f);
+
+        focusPitch_ = Config::kFocusPitch;
+        resolvedFocusPitch_ = Config::kFocusPitch;
+        focusZoom_ = 1.0f;
+        orbitYaw_ = 0.0f;
+        orbitSpeed_ = Config::kFocusOrbitSpeed;
+        autoOrbit_ = true;
+        orbitResume_ = 0.0f;
+        skylineDirty_ = subject_.valid;
+    }
+
     void FGeoCameraDirector::SetWalkCamera(EWalkCamera camera)
     {
         if (camera == walkCamera_)

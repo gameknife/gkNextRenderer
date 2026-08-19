@@ -35,14 +35,17 @@ OpenStreetMap 地点的地图，Focus 绕着其中一个地点转。走路是其
 | `Shift` | 跑步 / 相机加速 / Aerial 快速平移 |
 | `C` | Walk：跟随相机 ↔ 自由相机 |
 | `L` | 开关地点标签与 marker |
+| `F9` | 截图（顶部工具栏也提供同一操作） |
 | `Tab` | 开关 HUD |
 | 右键拖动 | 转视角（三种视图各转自己的那套角度） |
 | 滚轮 | Walk 调吊臂长度；Aerial 调高度；Focus 调取景距离 |
 | 左键 | Aerial：点 marker 直接 focus 该地点 |
 
-HUD 顶部是三个视图的 tab，下面跟着当前视图的面板；再往下是标签分类过滤和地点列表。列表项单击
-在 Walk 里是 "看过去"、在浏览视图里是 focus，双击或 "Walk here" 让角色走过去（**会切回 Walk
-视图**，因为走过去是走路的事）。
+HUD 顶部是和 `gkNextRenderer` 同风格的 viewport 工具栏：左侧选 tile，并一键切换 Walk / Aerial /
+Focus；右侧从左到右是标签、Walk 跟随/自由镜头、Tour、重置当前取景、截图、Explorer 面板和快捷键
+说明。Explorer 把当前视图状态、标签分类过滤和地点列表收在可关闭的浮层里。列表项单击在 Walk 里是
+"看过去"、在浏览视图里是 focus，双击或 "Walk here" 让角色走过去（**会切回 Walk 视图**，因为走过去
+是走路的事）。
 
 ## 相机：一个导演，三套取景
 

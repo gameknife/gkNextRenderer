@@ -271,13 +271,19 @@ void DevTools::FUiDevPanels::DrawMemoryStatisticsPanel(NextEngine& engine)
     }
     const ImVec2 panelSize(panelWidth, panelHeight);
 
-    if (!NextUI::Theme::BeginFloatingPanel("##DeveloperMemoryStats", ICON_FA_CHART_COLUMN, "Memory Statistics",
-                                           &showMemoryStatistics_, panelPos, panelSize, panelPivot))
+    NextUI::Theme::FDetailPanelConfig panelConfig{};
+    panelConfig.WindowId = "##DeveloperMemoryStats";
+    panelConfig.ContentWindowId = "##MemoryStatsContent";
+    panelConfig.Icon = ICON_FA_CHART_COLUMN;
+    panelConfig.Title = "Memory Statistics";
+    panelConfig.Open = &showMemoryStatistics_;
+    panelConfig.Position = panelPos;
+    panelConfig.Size = panelSize;
+    panelConfig.Pivot = panelPivot;
+    if (!NextUI::Theme::BeginDetailPanel(panelConfig))
     {
         return;
     }
-
-    NextUI::Theme::BeginInsetPanel("##MemoryStatsBody", ImVec2(0, 0), false, 0, ImVec2(12.0f, 12.0f), 0.0f);
 
     const Vulkan::MemoryStatsSnapshot memoryStats = engine.GetRenderer().Device().CaptureMemoryStats(true);
 
@@ -379,8 +385,6 @@ void DevTools::FUiDevPanels::DrawMemoryStatisticsPanel(NextEngine& engine)
     }
     NextUI::Theme::EndInsetPanel();
 
-    NextUI::Theme::EndInsetPanel();
-
-    NextUI::Theme::EndFloatingPanel();
+    NextUI::Theme::EndDetailPanel();
 
 }

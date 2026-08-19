@@ -27,6 +27,8 @@ namespace NextWorldTravel
         bool toggleTour = false;
         bool toggleMode = false; // roam <-> player, within Walk
         bool respawn = false;
+        bool resetViewport = false;
+        bool takeScreenshot = false;
     };
 
     struct FNextWorldTravelUIContext
@@ -62,7 +64,9 @@ namespace NextWorldTravel
         void ClearSelection() { selectedPoi_ = -1; }
 
     private:
-        void DrawViewModeBar(const FNextWorldTravelUIContext& context, FNextWorldTravelUIRequest& request);
+        void DrawViewportToolbar(const FNextWorldTravelUIContext& context, FGeoPoiLayer& poiLayer,
+                                 FNextWorldTravelUIRequest& request);
+        void DrawShortcutSheet();
         void DrawWalkPanel(const FNextWorldTravelUIContext& context, FNextWorldTravelUIRequest& request);
         void DrawAerialPanel(const FNextWorldTravelUIContext& context, const FGeoPoiLayer& poiLayer,
                              FNextWorldTravelUIRequest& request);
@@ -73,6 +77,8 @@ namespace NextWorldTravel
                            FNextWorldTravelUIRequest& request);
 
         bool visible_ = true;
+        bool showExplorer_ = true;
+        bool showShortcutSheet_ = false;
         int selectedPoi_ = -1;
         char filter_[64] = {};
         bool sortByDistance_ = false;

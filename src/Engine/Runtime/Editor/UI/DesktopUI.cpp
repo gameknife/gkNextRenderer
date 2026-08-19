@@ -640,6 +640,28 @@ namespace NextUI::Theme
         ImGui::PopStyleVar(3);
     }
 
+    bool BeginDetailPanel(const FDetailPanelConfig& config)
+    {
+        if (!BeginFloatingPanel(config.WindowId, config.Icon, config.Title, config.Open,
+                                config.Position, config.Size, config.Pivot, config.DetachedViewport))
+        {
+            return false;
+        }
+
+        // BeginChild must always be paired with EndChild, even if it returns
+        // false. The wrapper therefore reports the floating shell's visibility
+        // and owns the inset pair in EndDetailPanel().
+        BeginInsetPanel(config.ContentWindowId, ImVec2(0.0f, 0.0f), config.ContentBorder,
+                        config.ContentFlags, config.ContentPadding, config.ContentBackgroundAlpha);
+        return true;
+    }
+
+    void EndDetailPanel()
+    {
+        EndInsetPanel();
+        EndFloatingPanel();
+    }
+
     bool BeginPanelSection(const char* label, bool defaultOpen)
     {
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));

@@ -187,15 +187,18 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
     const ImVec2 panelSize(panelWidth,
                            viewport->Size.y - TitlebarSize - 50.0f - panelMargin);
 
-    if (!NextUI::Theme::BeginFloatingPanel("##RendererSettingsPanel", ICON_FA_SLIDERS,
-                                              "Renderer Settings", &uiState.showSettings,
-                                              panelPos, panelSize))
+    NextUI::Theme::FDetailPanelConfig panelConfig{};
+    panelConfig.WindowId = "##RendererSettingsPanel";
+    panelConfig.ContentWindowId = "##RendererSettingsContent";
+    panelConfig.Icon = ICON_FA_SLIDERS;
+    panelConfig.Title = "Renderer Settings";
+    panelConfig.Open = &uiState.showSettings;
+    panelConfig.Position = panelPos;
+    panelConfig.Size = panelSize;
+    if (!NextUI::Theme::BeginDetailPanel(panelConfig))
     {
         return;
     }
-
-    // Scrollable body
-    NextUI::Theme::BeginInsetPanel("##SettingsBody", ImVec2(0, 0), true, 0, ImVec2(10.0f, 10.0f), 0.30f);
 
     auto DrawFloatSetting = [&](const char* label, float* value, float minValue, float maxValue,
                                 const char* format, float dragSpeed)
@@ -768,6 +771,5 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
         NextUI::Theme::EndPanelSection();
     }
 
-    NextUI::Theme::EndInsetPanel();
-    NextUI::Theme::EndFloatingPanel();
+    NextUI::Theme::EndDetailPanel();
 }

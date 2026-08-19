@@ -78,6 +78,9 @@ namespace NextWorldTravel
 
         // ---- Modes --------------------------------------------------------
         void SetMode(EViewMode mode, const FCameraWorld& world);
+        // Restores the active view's predictable starting framing without
+        // discarding the current world, tile, or focus subject.
+        void ResetView(EViewMode mode, const FCameraWorld& world);
         EViewMode Mode() const { return mode_; }
         void SetWalkCamera(EWalkCamera camera);
         void ToggleWalkCamera() { SetWalkCamera(walkCamera_ == EWalkCamera::Follow ? EWalkCamera::Free

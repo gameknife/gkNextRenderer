@@ -580,14 +580,19 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics)
                               viewport->Pos.y + distance + 44.0f);
     const float panelHeight = std::max(420.0f, viewport->Size.y - distance - 86.0f);
 
-    if (!NextUI::Theme::BeginFloatingPanel(
-            "##ProfilerPanel", ICON_FA_CHART_LINE, "Statistics", &Engine().GetUserSettings().ShowOverlay,
-            pos, ImVec2(panelWidth, panelHeight), ImVec2(0.0f, 0.0f), statisticsDetachedViewport_))
+    NextUI::Theme::FDetailPanelConfig panelConfig{};
+    panelConfig.WindowId = "##ProfilerPanel";
+    panelConfig.ContentWindowId = "##ProfilerContent";
+    panelConfig.Icon = ICON_FA_CHART_LINE;
+    panelConfig.Title = "Statistics";
+    panelConfig.Open = &Engine().GetUserSettings().ShowOverlay;
+    panelConfig.Position = pos;
+    panelConfig.Size = ImVec2(panelWidth, panelHeight);
+    panelConfig.DetachedViewport = statisticsDetachedViewport_;
+    if (!NextUI::Theme::BeginDetailPanel(panelConfig))
     {
         return;
     }
-
-    ImGui::BeginChild("##ProfilerBody", ImVec2(0, 0), false, ImGuiWindowFlags_NoBackground);
 
     constexpr float cardHorizontalInset = 4.0f;
     auto BeginCard = [&](const char* id, float height, ImGuiWindowFlags extraFlags = 0)
@@ -787,8 +792,7 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics)
     }
     EndCard();
 
-    ImGui::EndChild();
-    NextUI::Theme::EndFloatingPanel();
+    NextUI::Theme::EndDetailPanel();
 }
 
 bool FUiDevPanels::HandleEvent(const SDL_Event& event)

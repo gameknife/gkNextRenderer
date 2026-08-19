@@ -67,6 +67,27 @@ namespace NextUI::Theme
         ImGuiWindowFlags ExtraFlags = 0;
     };
 
+    // The standard detail surface used by renderer settings, diagnostics, and
+    // application explorers. It owns both the floating chrome and the inset,
+    // scrollable content surface so detail windows cannot drift in padding or
+    // border treatment from one application to another.
+    struct FDetailPanelConfig
+    {
+        const char* WindowId = "DetailPanel";
+        const char* ContentWindowId = "##DetailPanelContent";
+        const char* Icon = nullptr;
+        const char* Title = nullptr;
+        bool* Open = nullptr;
+        ImVec2 Position = ImVec2(0.0f, 0.0f);
+        ImVec2 Size = ImVec2(0.0f, 0.0f);
+        ImVec2 Pivot = ImVec2(0.0f, 0.0f);
+        bool DetachedViewport = false;
+        ImVec2 ContentPadding = ImVec2(10.0f, 10.0f);
+        bool ContentBorder = true;
+        float ContentBackgroundAlpha = 0.30f;
+        ImGuiWindowFlags ContentFlags = 0;
+    };
+
     void ApplyProfessionalTheme();
     void DrawBrandMark(ImDrawList* drawList, ImVec2 min, float size);
     void DrawAppTitleBar(NextEngine& engine, const FAppTitleBarConfig& config);
@@ -103,6 +124,9 @@ namespace NextUI::Theme
                              ImVec2 position, ImVec2 size, ImVec2 pivot = ImVec2(0.0f, 0.0f),
                              bool detachedViewport = false);
     void EndFloatingPanel();
+
+    bool BeginDetailPanel(const FDetailPanelConfig& config);
+    void EndDetailPanel();
 
     // Collapsible section inside a floating panel: chevron + title row, no border background.
     bool BeginPanelSection(const char* label, bool defaultOpen = true);
