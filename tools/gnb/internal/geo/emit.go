@@ -73,6 +73,7 @@ type EmitReport struct {
 	Blocks       int
 	Roads        int
 	Surfaces     int
+	Junctions    int
 	Piers        int
 	Trees        int
 	Triangles    int
@@ -82,9 +83,9 @@ type EmitReport struct {
 
 func (r EmitReport) String() string {
 	return fmt.Sprintf("%d buildings in %d blocks (dropped %d off-tile, %d too small), "+
-		"%d road operators, %d street surfaces, %d piers, %d trees, ~%d triangles",
+		"%d road operators, %d street runs + %d junctions, %d piers, %d trees, ~%d triangles",
 		r.Buildings, r.Blocks, r.DroppedEdge, r.DroppedSmall,
-		r.Roads, r.Surfaces, r.Piers, r.Trees, r.Triangles)
+		r.Roads, r.Surfaces, r.Junctions, r.Piers, r.Trees, r.Triangles)
 }
 
 // Muted palette: under the path tracer's daylight an albedo of 0.5 already
@@ -171,7 +172,9 @@ func Emit(tile Tile, ir *IR, grid *HeightGrid, hmapRef string, opt EmitOptions) 
 	roads := selectRoads(ir, half, opt)
 	report.Roads = len(roads)
 	surfaces := selectSurfaces(ir, half, opt)
-	report.Surfaces = len(surfaces)
+	runs, junctions := BuildRoadNetwork(surfaces, half, opt)
+	report.Surfaces = len(runs)
+	report.Junctions = len(junctions)
 	piers := selectPiers(ir, half, opt)
 	report.Piers = len(piers)
 	waterLevel := 0.0
@@ -184,7 +187,7 @@ func Emit(tile Tile, ir *IR, grid *HeightGrid, hmapRef string, opt EmitOptions) 
 	// ---- file ---------------------------------------------------------------
 	var s strings.Builder
 	writeHeader(&s, tile, ir, grid, report)
-	s.WriteString("use <../../lib/gk_camera.scad>\n\n$fn = 8;\n\n")
+	s.WriteString("use <../../lib/gk_camera.scad>\nuse <../../lib/kit_road.scad>\n\n$fn = 8;\n\n")
 	writeTerrain(&s, tile, hmapRef, roads, ir.Terrain)
 
 	s.WriteString("// Ground height under a footprint: the terrain mesh is the single source of\n")
@@ -205,7 +208,7 @@ func Emit(tile Tile, ir *IR, grid *HeightGrid, hmapRef string, opt EmitOptions) 
 		s.WriteString("}\n\n")
 	}
 
-	surfaceModules := writeStreetSurfaces(&s, surfaces, opt, &report)
+	surfaceModules := writeStreetSurfaces(&s, runs, junctions, opt, &report)
 	pierModule := writePiers(&s, piers, opt, waterLevel, &report)
 	treeModule := writeTrees(&s, trees, &report)
 
@@ -334,50 +337,30 @@ func writeBuilding(s *strings.Builder, b Building, ring Ring, inners []Ring, ski
 // Street surface colours: asphalt for the carriageway, a lighter kerb tone for
 // the service network so the hierarchy reads from above.
 var (
-	asphaltColor = [3]float64{0.16, 0.16, 0.17}
-	serviceColor = [3]float64{0.22, 0.22, 0.21}
+	asphaltColor = [3]float64{0.09, 0.09, 0.10}
+	serviceColor = [3]float64{0.14, 0.14, 0.14}
 	pierColor    = [3]float64{0.30, 0.29, 0.27}
 )
 
-// writeStreetSurfaces emits the drivable network as terrain-following slabs and
-// returns the module names to instantiate.
+// writeStreetSurfaces emits the drivable network as continuous carriageway
+// ribbons plus filled intersections, and returns the module names to call.
 //
-// One flat slab per segment rather than a single mitred ribbon: a planar ribbon
-// cannot follow a hillside, and sampling the terrain per ribbon vertex would
-// put tens of thousands of gk_terrain_height() calls in the file. Junction
-// discs sit 2 cm proud of the slabs so no two faces are ever coincident —
-// coincident coplanar faces alias badly under the path tracer.
-//
-// The whole chunk is one module driven by a data list rather than one call per
-// street: every user-module invocation becomes a scene Node, and a per-street
-// module turns 600 streets into 600 nodes for no benefit.
-func writeStreetSurfaces(s *strings.Builder, roads []Road, opt EmitOptions, report *EmitReport) []string {
-	if len(roads) == 0 {
+// Topology is decided here (roadnet.go: junction nodes, run splitting, trimming,
+// mitring); geometry rules live in kit_road.scad. That split is the point — a
+// change to how every road meets the ground, or a new kind of road marking, is
+// one edit in the kit for every tile at once.
+func writeStreetSurfaces(s *strings.Builder, runs []RoadRun, junctions []Junction,
+	opt EmitOptions, report *EmitReport) []string {
+	if len(runs) == 0 {
 		return nil
 	}
-	s.WriteString("// Street surface, rs = [[width, [[x,y], ...]], ...]. Slab per segment plus a\n")
-	s.WriteString("// junction disc at each interior vertex; both snap to the terrain at\n")
-	s.WriteString("// evaluation time. The disc sits 2 cm proud so overlapping pieces never\n")
-	s.WriteString("// share a plane (coincident faces alias badly under path tracing).\n")
-	s.WriteString("module streets(c, rs) {\n")
-	s.WriteString("    color(c) for (k = [0 : len(rs) - 1])\n")
-	s.WriteString("        let (w = rs[k][0], pts = rs[k][1]) {\n")
-	s.WriteString("            for (i = [0 : len(pts) - 2])\n")
-	s.WriteString("                let (a = pts[i], b = pts[i + 1], d = b - a,\n")
-	s.WriteString("                     mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2)\n")
-	s.WriteString("                    translate([mx, my, gk_terrain_height(TERR, mx, my) + 0.06])\n")
-	s.WriteString("                        rotate([0, 0, atan2(d[1], d[0])])\n")
-	s.WriteString("                            cube([norm(d), w, 0.12], center = true);\n")
-	s.WriteString("            if (len(pts) > 2)\n")
-	s.WriteString("                for (i = [1 : len(pts) - 2])\n")
-	s.WriteString("                    translate([pts[i][0], pts[i][1],\n")
-	s.WriteString("                               gk_terrain_height(TERR, pts[i][0], pts[i][1]) + 0.07])\n")
-	s.WriteString("                        cylinder(h = 0.14, r = w / 2, center = true);\n")
-	s.WriteString("        }\n}\n\n")
+	s.WriteString("// Street network. Each run is one continuous ribbon (a single polyhedron,\n")
+	s.WriteString("// no per-segment seams); each junction is a filled patch the approaches were\n")
+	s.WriteString("// trimmed back from. Geometry rules: assets/scad/lib/kit_road.scad.\n\n")
 
 	// Split by surface colour first so each module has a single material.
-	groups := [][]Road{nil, nil}
-	for _, r := range roads {
+	groups := [][]RoadRun{nil, nil}
+	for _, r := range runs {
 		if r.Class == "service" || r.Class == "living_street" {
 			groups[1] = append(groups[1], r)
 		} else {
@@ -393,26 +376,64 @@ func writeStreetSurfaces(s *strings.Builder, roads []Road, opt EmitOptions, repo
 			if end > len(group) {
 				end = len(group)
 			}
+			chunk := group[start:end]
 			name := fmt.Sprintf("streets_%d", len(names))
 			names = append(names, name)
 			c := colors[gi]
-			fmt.Fprintf(s, "module %s() { streets([%s, %s, %s], [\n",
+			// Service roads are back alleys: no centre line.
+			markings := "true"
+			if gi == 1 {
+				markings = "false"
+			}
+			fmt.Fprintf(s, "module %s() { rd_network(TERR, [%s, %s, %s], [\n",
 				name, fnum(c[0]), fnum(c[1]), fnum(c[2]))
-			for i, r := range group[start:end] {
+			for i, r := range chunk {
 				if i > 0 {
 					s.WriteString(",\n")
 				}
-				fmt.Fprintf(s, "    [%s, ", fnum(r.Width))
-				writePoints(s, r.Pts)
+				s.WriteString("    [")
+				writePoints(s, r.Left)
+				s.WriteString(", ")
+				writePoints(s, r.Right)
 				s.WriteString("]")
-				// Slab (12 tris) per segment plus an octagonal disc (28) per joint.
-				segments := len(r.Pts) - 1
-				report.Triangles += segments*12 + max(0, segments-1)*28
+				report.Triangles += ribbonTriangles(len(r.Left), r.Width)
 			}
-			s.WriteString("]); }\n\n")
+			// Every intersection goes in the first module: they are one shared
+			// surface, and repeating them per colour group would double them.
+			s.WriteString("],\n    [")
+			if gi == 0 && start == 0 {
+				for i, j := range junctions {
+					if i > 0 {
+						s.WriteString(", ")
+					}
+					writePoints(s, j.Ring)
+					report.Triangles += 4 * len(j.Ring)
+				}
+			}
+			s.WriteString("],\n    [")
+			for i, r := range chunk {
+				if i > 0 {
+					s.WriteString(", ")
+				}
+				s.WriteString(fnum(r.Width))
+			}
+			fmt.Fprintf(s, "], %s); }\n\n", markings)
 		}
 	}
 	return names
+}
+
+// ribbonTriangles mirrors what kit_road builds: a closed prism over n stations
+// (top, bottom, two sides, two caps), plus a dash every 10 m on wide roads.
+func ribbonTriangles(stations int, width float64) int {
+	if stations < 2 {
+		return 0
+	}
+	tris := (4*(stations-1) + 2) * 2
+	if width >= 9 {
+		tris += stations * 12
+	}
+	return tris
 }
 
 // writePiers emits harbour piers: a solid deck standing in the water. Closed
@@ -562,6 +583,10 @@ func scatterTrees(ir *IR, half float64, seed int, opt EmitOptions) []treeSpot {
 }
 
 // selectSurfaces picks the drivable network for street geometry.
+//
+// Selection only — no clipping and no simplification. Both of those destroy the
+// index alignment between Pts and Nodes, and BuildRoadNetwork needs the node ids
+// intact to find the junctions. It applies them itself, per run, afterwards.
 func selectSurfaces(ir *IR, half float64, opt EmitOptions) []Road {
 	allowed := map[string]bool{}
 	for _, c := range opt.SurfaceClasses {
@@ -572,16 +597,11 @@ func selectSurfaces(ir *IR, half float64, opt EmitOptions) []Road {
 		if !allowed[r.Class] {
 			continue
 		}
-		pts := clipToSquare(r.Pts, half)
-		if len(pts) < 2 {
+		// Cheap reject: a way with no vertex anywhere near the tile.
+		minX, minY, maxX, maxY := BoundsOf(r.Pts)
+		if maxX < -half || minX > half || maxY < -half || minY > half {
 			continue
 		}
-		// 3 m keeps junction geometry while removing survey noise.
-		pts = Simplify(Ring(pts), 3, 32)
-		if len(pts) < 2 {
-			continue
-		}
-		r.Pts = pts
 		out = append(out, r)
 	}
 	// Widest first, so the budget keeps the roads that carry the picture.

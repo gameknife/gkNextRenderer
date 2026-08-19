@@ -50,6 +50,12 @@ namespace NextGameplay
         std::vector<glm::vec3> FindPath(const glm::vec3& from, const glm::vec3& to, float referenceHeight) const;
 
         bool IsWalkable(const glm::vec3& worldPos) const;
+        // Ground height under worldPos, as sampled when the grid was built.
+        // Returns false outside the grid or on a cell no down-ray ever hit, so
+        // the caller can fall back rather than silently teleport to y = 0.
+        // Unlike the terrain height field this follows what an agent actually
+        // stands on — a road deck, a pier, a bridge — not just the heightmap.
+        bool SampleGroundHeight(const glm::vec3& worldPos, float& outHeight) const;
         bool IsBuilt() const { return !cells_.empty(); }
         int GetWidth() const { return width_; }
         int GetHeight() const { return height_; }

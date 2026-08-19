@@ -2,6 +2,8 @@ package geo
 
 import (
 	"math"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -757,4 +759,218 @@ func TestAssembleRingsStitchesOpenMultipolygonMembers(t *testing.T) {
 	if len(areas) != 1 || len(areas[0].Inners) != 1 {
 		t.Fatalf("areasFrom lost the multipolygon structure: %+v", areas)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// POI layer
+// ---------------------------------------------------------------------------
+
+func poiNode(id int64, lat, lon float64, tags map[string]string) osmElement {
+	return osmElement{Type: "node", ID: id, Tags: tags, Lat: lat, Lon: lon}
+}
+
+func poiFixtureElements() []osmElement {
+	const d = 0.0004 // ~44m
+	return append(fixtureElements(),
+		// A named church footprint: small, but a landmark rather than an office.
+		squareWay(5, 22.2857, 114.1583, 0.0002, map[string]string{
+			"building": "church", "name": "St. Fixture"}),
+		// A named park, and a named flowerbed that is too small to label.
+		squareWay(6, 22.2850, 114.1588, d, map[string]string{
+			"leisure": "park", "name": "Fixture Gardens"}),
+		squareWay(7, 22.2853, 114.1590, 0.00002, map[string]string{
+			"leisure": "garden", "name": "Nameless Planter"}),
+		// Standalone nodes.
+		poiNode(100, 22.2853, 114.1578, map[string]string{
+			"name": "Fixture Station", "railway": "station"}),
+		poiNode(101, 22.2856, 114.1581, map[string]string{
+			"name": "Old Fixture Wall", "historic": "city_wall"}),
+		// Same name and location as the church way: OSM often carries both, and
+		// only the footprint (which has a height) should survive.
+		poiNode(102, 22.2857, 114.1583, map[string]string{
+			"name": "St. Fixture", "amenity": "place_of_worship"}),
+		// Unnamed, and a named node with no POI-worthy tag: both ignored.
+		poiNode(103, 22.2854, 114.1579, map[string]string{"railway": "station"}),
+		poiNode(104, 22.2854, 114.1579, map[string]string{
+			"name": "A Bench", "amenity": "bench"}),
+		// Named, but outside the 400 m tile.
+		poiNode(105, 22.2920, 114.1660, map[string]string{
+			"name": "Far Away Museum", "tourism": "museum"}),
+	)
+}
+
+func findPOI(pois []POI, name string) (POI, bool) {
+	for _, p := range pois {
+		if p.Name == name {
+			return p, true
+		}
+	}
+	return POI{}, false
+}
+
+func TestCollectPOIsPicksNamedPlacesFromEverySource(t *testing.T) {
+	tile := fixtureTile()
+	ir := Normalize(tile, poiFixtureElements(), Profiles["hongkong"], nil)
+
+	for _, want := range []struct {
+		name     string
+		source   string
+		category string
+	}{
+		{"Tower One", "building", CatCommerce},
+		{"St. Fixture", "building", CatWorship},
+		{"Fixture Gardens", "area", CatPark},
+		{"Fixture Station", "node", CatTransport},
+		{"Old Fixture Wall", "node", CatLandmark},
+	} {
+		got, ok := findPOI(ir.POIs, want.name)
+		if !ok {
+			t.Errorf("missing POI %q; have %v", want.name, poiNames(ir.POIs))
+			continue
+		}
+		if got.Source != want.source || got.Category != want.category {
+			t.Errorf("%q: source=%q category=%q, want %q/%q",
+				want.name, got.Source, got.Category, want.source, want.category)
+		}
+	}
+
+	for _, unwanted := range []string{"Nameless Planter", "A Bench", "Far Away Museum"} {
+		if _, ok := findPOI(ir.POIs, unwanted); ok {
+			t.Errorf("%q should not be a POI", unwanted)
+		}
+	}
+
+	// The unnamed station node contributes nothing.
+	if n := countPOISource(ir.POIs, "node"); n != 2 {
+		t.Errorf("got %d node POIs, want 2 (%v)", n, poiNames(ir.POIs))
+	}
+}
+
+func TestCollectPOIsPrefersTheFootprintOverACoincidentNode(t *testing.T) {
+	tile := fixtureTile()
+	ir := Normalize(tile, poiFixtureElements(), Profiles["hongkong"], nil)
+
+	var matches []POI
+	for _, p := range ir.POIs {
+		if p.Name == "St. Fixture" {
+			matches = append(matches, p)
+		}
+	}
+	if len(matches) != 1 {
+		t.Fatalf("got %d POIs named St. Fixture, want 1", len(matches))
+	}
+	// The surviving anchor is the one that can float a label over the roof.
+	if matches[0].Source != "building" || matches[0].Height <= 0 {
+		t.Fatalf("kept the node instead of the footprint: %+v", matches[0])
+	}
+}
+
+func TestPOIsAreRankedAndDeterministic(t *testing.T) {
+	tile := fixtureTile()
+	first := Normalize(tile, poiFixtureElements(), Profiles["hongkong"], nil).POIs
+	second := Normalize(tile, poiFixtureElements(), Profiles["hongkong"], nil).POIs
+
+	if len(first) != len(second) {
+		t.Fatalf("POI count is not stable: %d vs %d", len(first), len(second))
+	}
+	for i := range first {
+		if first[i].ID != second[i].ID || first[i].Rank != second[i].Rank {
+			t.Fatalf("POI %d differs between runs: %+v vs %+v", i, first[i], second[i])
+		}
+		if i > 0 && first[i-1].Rank < first[i].Rank {
+			t.Fatalf("POIs are not rank-sorted at %d", i)
+		}
+	}
+	// A 120 m office tower outranks a subway station node; a station outranks a
+	// small garden. This is the ordering the runtime's label budget relies on.
+	tower, _ := findPOI(first, "Tower One")
+	station, _ := findPOI(first, "Fixture Station")
+	park, _ := findPOI(first, "Fixture Gardens")
+	if !(tower.Rank > station.Rank && station.Rank > 0) {
+		t.Errorf("tower %.2f should outrank station %.2f", tower.Rank, station.Rank)
+	}
+	if park.Rank <= 0 {
+		t.Errorf("park rank %.2f", park.Rank)
+	}
+}
+
+func TestClassifyPOIFallsBackWithoutDropping(t *testing.T) {
+	if got := ClassifyPOI("building", "warehouse"); got != CatOther {
+		t.Errorf("unmapped building kind = %q, want %q", got, CatOther)
+	}
+	if got := ClassifyPOI("historic", "anything_at_all"); got != CatLandmark {
+		t.Errorf("historic=* = %q, want %q", got, CatLandmark)
+	}
+	if got := ClassifyPOI("amenity", "place_of_worship"); got != CatWorship {
+		t.Errorf("place_of_worship = %q", got)
+	}
+}
+
+func TestOverpassQueryAsksForNamedPOINodes(t *testing.T) {
+	q := BuildOverpassQuery(BBox{South: 1, West: 2, North: 3, East: 4})
+	for _, want := range []string{`node["name"]["railway"`, `node["name"]["historic"]`,
+		`node["name"]["amenity"`, `node["name"]["tourism"`} {
+		if !strings.Contains(q, want) {
+			t.Errorf("query is missing %q:\n%s", want, q)
+		}
+	}
+	// Every node selector must be name-filtered: an unnamed POI cannot be
+	// labelled, and node["amenity"] unfiltered returns every bench in a downtown.
+	for _, s := range poiNodeSelectors {
+		if !strings.HasPrefix(s, `node["name"]`) {
+			t.Errorf("POI selector %q is not filtered on name", s)
+		}
+	}
+}
+
+func TestOverpassCacheIsKeyedOnTheQuery(t *testing.T) {
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "overpass.json")
+	if err := os.WriteFile(dst, []byte(`{"elements":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bbox := BBox{South: 1, West: 2, North: 3, East: 4}
+	// A cache with no fingerprint predates the current query and must not be
+	// trusted: silently serving it would drop the POI layer with no error.
+	if cachedQueryMatches(dst, BuildOverpassQuery(bbox)) {
+		t.Error("a fingerprint-less cache must be treated as stale")
+	}
+	if err := os.WriteFile(queryFingerprintPath(dst),
+		[]byte(BuildOverpassQuery(bbox)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !cachedQueryMatches(dst, BuildOverpassQuery(bbox)) {
+		t.Error("a cache fetched with the current query must be reused")
+	}
+	if cachedQueryMatches(dst, BuildOverpassQuery(BBox{South: 9, West: 9, North: 9, East: 9})) {
+		t.Error("a different bbox must invalidate the cache")
+	}
+}
+
+func TestPOIPathIsACommittedProducedWork(t *testing.T) {
+	p := NewPaths("/repo", "hk_victoria")
+	if strings.Contains(p.POIPath(), "external") {
+		t.Errorf("%s must not live in the gitignored cache", p.POIPath())
+	}
+	if !strings.HasSuffix(filepath.ToSlash(p.POIPath()), "assets/scad/geo/hk_victoria/poi.json") {
+		t.Errorf("poi path = %q", p.POIPath())
+	}
+}
+
+func poiNames(pois []POI) []string {
+	out := make([]string, 0, len(pois))
+	for _, p := range pois {
+		out = append(out, p.Name)
+	}
+	return out
+}
+
+func countPOISource(pois []POI, source string) int {
+	n := 0
+	for _, p := range pois {
+		if p.Source == source {
+			n++
+		}
+	}
+	return n
 }

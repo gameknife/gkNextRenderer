@@ -385,6 +385,13 @@ namespace Assets
                         {
                             cachedMeshShapes_[modelIndex] = std::move(shape);
                         }
+                        else
+                        {
+                            // Name the model: a bare cooking failure is unactionable
+                            // in a generated scene with a hundred models.
+                            SPDLOG_WARN("[Physics] no collision for model '{}' ({} indices)",
+                                        models_[modelIndex].Name(), models_[modelIndex].NumberOfIndices());
+                        }
                     },
                     nullptr,
                     "Physics shape cooking"));

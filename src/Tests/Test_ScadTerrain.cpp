@@ -16,6 +16,7 @@
 #include <chrono>
 #include <cstring>
 #include <filesystem>
+#include <functional>
 #include <fstream>
 #include <fmt/format.h>
 #include <map>
@@ -777,6 +778,51 @@ TEST_CASE("ScadTerrain scene: faceted + water flags and terrain payload", "[Unit
     }
     CHECK(sawFaceted);
     CHECK(sawWater);
+}
+
+TEST_CASE("Scad gk_flatten: collapses a rule library's module calls into one node",
+          "[Unit][Scad][Flatten]")
+{
+    // A rule library expands a data table into many small module calls. Without
+    // gk_flatten every call is a scene Node — and therefore its own Model and
+    // collider, which is what made a generated city cost seconds of shape
+    // cooking. Inside gk_flatten the geometry lands on the enclosing node.
+    const char* kLib =
+        "module piece(i) { translate([i * 2, 0, 0]) cube(1); }\n"
+        "module loose() { for (i = [0 : 5]) piece(i); }\n"
+        "module packed() { gk_flatten() for (i = [0 : 5]) piece(i); }\n";
+
+    std::function<void(const SceneNode&, int&, size_t&)> walk =
+        [&](const SceneNode& node, int& nodes, size_t& verts)
+    {
+        ++nodes;
+        for (const SceneMeshBucket& bucket : node.meshes)
+        {
+            verts += bucket.tris.size();
+        }
+        for (const SceneNode& child : node.children)
+        {
+            walk(child, nodes, verts);
+        }
+    };
+
+    int looseNodes = 0;
+    size_t looseVerts = 0;
+    const SceneEvalResult loose = EvalSceneProgram(std::string(kLib) + "loose();\n");
+    REQUIRE(loose.roots.size() == 1);
+    walk(loose.roots[0], looseNodes, looseVerts);
+    CHECK(looseNodes == 7); // loose() + one per piece()
+
+    int packedNodes = 0;
+    size_t packedVerts = 0;
+    const SceneEvalResult packed = EvalSceneProgram(std::string(kLib) + "packed();\n");
+    REQUIRE(packed.roots.size() == 1);
+    walk(packed.roots[0], packedNodes, packedVerts);
+    CHECK(packedNodes == 1);
+
+    // Same geometry either way — only the scene structure collapses.
+    CHECK(packedVerts > 0);
+    CHECK(packedVerts == looseVerts);
 }
 
 TEST_CASE("ScadTerrain scene: non-terrain geometry keeps default flags", "[Unit][Scad][ScadTerrain]")

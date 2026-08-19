@@ -25,6 +25,7 @@ set(unitTestSources
     Test_ScadLibraryTerrainProcess.cpp
     Test_TerrainWalkable.cpp
     Test_GeoCityWalkable.cpp
+    Test_GeoPoiSidecar.cpp
     Test_SimKit.cpp
     Test_ScadRig.cpp
     Test_RigAnimator.cpp

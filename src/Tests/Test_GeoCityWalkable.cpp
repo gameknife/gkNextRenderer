@@ -131,12 +131,17 @@ TEST_CASE_METHOD(EngineTestFixture, "Geo city walkability: streets connect, towe
     REQUIRE_FALSE(path.empty());
 
     // The route goes around the tower, never through it. The footprint bounding
-    // box is (engine) x -205.3..-158.1, z 73.9..123.1; allow a small margin so
-    // a waypoint hugging the facade does not trip the check.
+    // box is (engine) x -205.3..-158.1, z 73.9..123.1. The test box is inset
+    // from it: a route that walks the pavement hugs the facade, and the nav grid
+    // legitimately puts a waypoint within a metre or two of the wall. "Through
+    // the building" means the interior, which the inset covers — the tower being
+    // solid at all is asserted by the two reachability checks around this loop.
+    constexpr float kFacadeMargin = 5.0f;
     for (const glm::vec3& p : path)
     {
-        const bool insideFootprint = p.x > -203.0f && p.x < -160.0f &&
-                                     p.z > 76.0f && p.z < 121.0f;
+        const bool insideFootprint = p.x > -205.3f + kFacadeMargin && p.x < -158.1f - kFacadeMargin &&
+                                     p.z > 73.9f + kFacadeMargin && p.z < 123.1f - kFacadeMargin;
+        CAPTURE(p.x, p.y, p.z);
         CHECK_FALSE(insideFootprint);
     }
 
@@ -163,10 +168,19 @@ TEST_CASE_METHOD(EngineTestFixture, "Geo city walkability: streets connect, towe
 
     const auto* streetBallInfo = physics->GetBody(streetBall);
     REQUIRE(streetBallInfo != nullptr);
-    // The street surface is a 12 cm slab laid on the terrain, so the rest height
-    // is a little above the raw terrain sample.
-    CHECK(streetBallInfo->position.y > streetAHeight);
-    CHECK(streetBallInfo->position.y < streetAHeight + 1.5f);
+    // The carriageway is a real pitched surface now, so a sphere dropped on it
+    // rolls downhill instead of resting where it landed. The invariant is that
+    // it came to rest *on* something under wherever it ended up — not that it
+    // stayed put, and not that it sank through the world. kit_road anchors the
+    // surface on the uphill edge (see the 贴地契约 block), so a road sits above
+    // the centre-line terrain sample by up to half the width times the
+    // cross-gradient; hence the generous upper bound.
+    const float restGround = terrain->SampleHeight(streetBallInfo->position.x,
+                                                   streetBallInfo->position.z);
+    CAPTURE(streetBallInfo->position.x, streetBallInfo->position.y,
+            streetBallInfo->position.z, restGround);
+    CHECK(streetBallInfo->position.y > restGround - 0.5f);
+    CHECK(streetBallInfo->position.y < restGround + 4.0f);
 
     const auto* roofBallInfo = physics->GetBody(roofBall);
     REQUIRE(roofBallInfo != nullptr);

@@ -30,6 +30,12 @@
 
 每个 user module 调用实例形成逻辑 Node；直属几何按量化 RGBA 分桶并尽量合并进多-section Model。材质槽超过引擎上限时拆成同名 render 子节点。alpha `< 0.99` 的 bucket 使用透明 Dielectric 路径。
 
+**`gk_flatten() { ... }`**：声明"以下全是几何、不是场景结构"，抑制子树内的 Node 创建，
+几何并入最近的外层 Node。规则库（`kit_road` 把一张路网表展开成几千个子段调用）必须用它——
+否则每个 module 调用各成一个 Node，也就各成一个 Model 和碰撞体。实测 1km 香港 tile
+不加是 7683 个 Node、物理 shape cooking 1.2 秒；加上后 90 个 Node、34 毫秒。
+分块粒度仍由调用方控制，每块要留在 65535 三角的 Model 上限之下。
+
 `SceneEvalResult::SceneNode` 同时保留 module 调用的源行、求值后的具名参数、调用点颜色和
 局部变换。ScadLibrary 使用这些作者元数据沿 module 调用树提取最终 Kit 实例；它不改变
 运行时 Node/Model 的装配语义。

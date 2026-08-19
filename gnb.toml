@@ -199,6 +199,7 @@ all = [
   "StudioSim",
   "AirportSim",
   "CitySolSim",
+  "GeoWalk",
   "Voyage3D",
   "NextTotalwar",
   "Packager",

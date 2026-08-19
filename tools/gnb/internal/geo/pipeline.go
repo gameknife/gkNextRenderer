@@ -123,6 +123,13 @@ func Build(tile Tile, opt Options, logf Logf) (*BuildResult, error) {
 	if stats.TallestName != "" {
 		logf("tallest: %s at %.0fm", stats.TallestName, stats.TallestHeight)
 	}
+	logf("pois: %d (%d from standalone nodes) — %s",
+		stats.POIs, stats.POINodes, FormatPOICounts(ir.POIs))
+	if stats.POIs == 0 {
+		opt.warn("no named places in this tile — the POI layer will be empty. " +
+			"Either OSM has no names here, or the cached Overpass response predates " +
+			"the POI selectors (delete external/geocache/<tile>/osm and re-fetch).")
+	}
 
 	sampler, _, err := NewSampler(tile.BBox(demPadM), paths.DemDir(), logf)
 	if err != nil {
@@ -169,6 +176,17 @@ func Build(tile Tile, opt Options, logf Logf) (*BuildResult, error) {
 		return nil, err
 	}
 	logf("wrote %s (%d KB)", relTo(opt.RepoRoot, paths.HmapPath()), len(blob)/1024)
+
+	poiFile := POIFile{
+		Format: POIFormat, Tile: tile.Name,
+		Center: [2]float64{tile.Lat, tile.Lon}, SizeM: tile.SizeM,
+		Attribution: ir.Attribution, POIs: ir.POIs,
+	}
+	if err := writeJSON(paths.POIPath(), poiFile); err != nil {
+		return nil, err
+	}
+	logf("wrote %s (%d places)", relTo(opt.RepoRoot, paths.POIPath()), len(ir.POIs))
+
 	if err := writeAttribution(paths, tile, ir); err != nil {
 		return nil, err
 	}
@@ -241,7 +259,7 @@ func writeAttribution(paths Paths, tile Tile, ir *IR) error {
 	for _, a := range ir.Attribution {
 		fmt.Fprintf(&s, "- %s\n", a)
 	}
-	s.WriteString("\nThe committed files here (`terrain.hmap`) and the generated scene are\n")
+	s.WriteString("\nThe committed files here (`terrain.hmap`, `poi.json`) and the generated scene are\n")
 	s.WriteString("produced works. The raw downloads and the normalised intermediate\n")
 	s.WriteString("representation are ODbL-derived databases and stay in `external/geocache/`,\n")
 	s.WriteString("which is not part of the repository.\n")

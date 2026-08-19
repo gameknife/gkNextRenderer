@@ -36,6 +36,7 @@ func (p Paths) AssetDir() string {
 	return filepath.Join(p.RepoRoot, "assets", "scad", "geo", p.Tile)
 }
 func (p Paths) HmapPath() string { return filepath.Join(p.AssetDir(), "terrain.hmap") }
+func (p Paths) POIPath() string  { return filepath.Join(p.AssetDir(), "poi.json") }
 func (p Paths) AttributionPath() string {
 	return filepath.Join(p.AssetDir(), "ATTRIBUTION.md")
 }

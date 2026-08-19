@@ -41,7 +41,10 @@ func Normalize(tile Tile, elements []osmElement, profile HeightProfile,
 				ir.Buildings = append(ir.Buildings, b)
 			}
 		case tags["highway"] != "" && e.Type == "way":
-			pts := DedupeRing(project(e.Geometry), 0.2)
+			// Points and node ids must be deduplicated together: the ids are the
+			// junction topology, and they are only meaningful while they stay
+			// index-aligned with the geometry.
+			pts, nodes := dedupeWay(project(e.Geometry), e.Nodes, 0.2)
 			if len(pts) < 2 {
 				continue
 			}
@@ -50,6 +53,7 @@ func Normalize(tile Tile, elements []osmElement, profile HeightProfile,
 				Lanes: atoiDefault(tags["lanes"], 0),
 				Width: roadWidth(tags),
 				Pts:   pts,
+				Nodes: nodes,
 			})
 		case tags["natural"] == "coastline" && e.Type == "way":
 			pts := DedupeRing(project(e.Geometry), 0.2)
@@ -73,7 +77,11 @@ func Normalize(tile Tile, elements []osmElement, profile HeightProfile,
 			if tags["landuse"] == "" {
 				tag = "leisure=" + tags["leisure"]
 			}
-			ir.Landuse = append(ir.Landuse, areasFrom(e, project, tag)...)
+			areas := areasFrom(e, project, tag)
+			for i := range areas {
+				areas[i].Name = tags["name"]
+			}
+			ir.Landuse = append(ir.Landuse, areas...)
 		}
 	}
 
@@ -85,6 +93,10 @@ func Normalize(tile Tile, elements []osmElement, profile HeightProfile,
 	sort.SliceStable(ir.Waters, func(i, j int) bool { return ir.Waters[i].ID < ir.Waters[j].ID })
 	sort.SliceStable(ir.Coastline, func(i, j int) bool { return ir.Coastline[i].ID < ir.Coastline[j].ID })
 	sort.SliceStable(ir.Landuse, func(i, j int) bool { return ir.Landuse[i].ID < ir.Landuse[j].ID })
+
+	// POIs are derived last: the footprint and area layers are their primary
+	// sources, and both have to be sorted first for the output to be stable.
+	ir.POIs = CollectPOIs(ir, elements, p.Forward, tile.SizeM/2)
 	return ir
 }
 
@@ -481,4 +493,30 @@ func roadWidth(tags map[string]string) float64 {
 		return 4.5
 	}
 	return 3
+}
+
+// dedupeWay drops consecutive coincident vertices from an open way, keeping the
+// node id array aligned. A road is never closed the way a ring is, so unlike
+// DedupeRing the first and last points are both kept.
+func dedupeWay(pts [][2]float64, nodes []int64, eps float64) ([][2]float64, []int64) {
+	if len(pts) == 0 {
+		return nil, nil
+	}
+	aligned := len(nodes) == len(pts)
+	outPts := [][2]float64{pts[0]}
+	var outNodes []int64
+	if aligned {
+		outNodes = []int64{nodes[0]}
+	}
+	for i := 1; i < len(pts); i++ {
+		last := outPts[len(outPts)-1]
+		if math.Hypot(pts[i][0]-last[0], pts[i][1]-last[1]) <= eps {
+			continue
+		}
+		outPts = append(outPts, pts[i])
+		if aligned {
+			outNodes = append(outNodes, nodes[i])
+		}
+	}
+	return outPts, outNodes
 }

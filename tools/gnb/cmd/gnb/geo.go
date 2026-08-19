@@ -16,13 +16,14 @@ import (
 // geoFlags is shared by every subcommand so `fetch`/`build`/`scad`/`make` all
 // describe the same tile.
 type geoFlags struct {
-	name    string
-	at      string
-	size    float64
-	cells   int
-	profile string
-	seed    int
-	debug   bool
+	name     string
+	at       string
+	size     float64
+	cells    int
+	profile  string
+	seed     int
+	debug    bool
+	endpoint string
 }
 
 func (f *geoFlags) bind(cmd *cobra.Command) {
@@ -33,6 +34,8 @@ func (f *geoFlags) bind(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.profile, "profile", "default", "building height profile (default, china, hongkong)")
 	cmd.Flags().IntVar(&f.seed, "seed", 7, "terrain jitter seed")
 	cmd.Flags().BoolVar(&f.debug, "debug-images", false, "write per-stage DEM greyscale PNGs into the cache")
+	cmd.Flags().StringVar(&f.endpoint, "overpass-endpoint", geo.OverpassEndpoint,
+		"Overpass API mirror (switch when the default one keeps refusing the tile)")
 }
 
 func (f *geoFlags) tile() (geo.Tile, error) {
@@ -87,6 +90,9 @@ func geoOptions(ctx appContext, f geoFlags) geo.Options {
 	opt := geo.DefaultOptions(ctx.repoRoot)
 	opt.DebugImages = f.debug
 	opt.Warnf = geoWarn
+	if f.endpoint != "" {
+		opt.OverpassEndpoint = f.endpoint
+	}
 	return opt
 }
 

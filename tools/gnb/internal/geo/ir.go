@@ -27,6 +27,33 @@ type IR struct {
 	Coastline []Line     `json:"coastline"` // natural=coastline, sea on the right
 	Landuse   []Area     `json:"landuse"`   // parks, forest, industrial, ...
 	Piers     []Line     `json:"piers"`     // man_made=pier
+	POIs      []POI      `json:"pois"`      // named places, see poi.go
+}
+
+// POI is one named place. Unlike everything else in the IR it carries no
+// geometry: it is a label anchor, consumed by the .poi.json sidecar rather than
+// by the .scad emitter. Sources are standalone OSM nodes, named building
+// footprints, and named leisure/landuse areas — see ClassifyPOI.
+type POI struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	// Tag is the raw OSM key=value the POI was recognised by, e.g.
+	// "building=church" or "railway=station".
+	Tag string `json:"tag"`
+	// Category is the normalised bucket the runtime colours and filters by.
+	Category string `json:"category"`
+	// Source is "node" | "building" | "area".
+	Source string `json:"source"`
+	// Pos is the label anchor in SCAD metres (+x east, +y north); for footprints
+	// and areas it is the ring centroid.
+	Pos [2]float64 `json:"pos"`
+	// Height is the building height in metres, 0 for nodes and areas. The
+	// runtime lifts a building label to its roof.
+	Height float64 `json:"height,omitempty"`
+	AreaM2 float64 `json:"areaM2,omitempty"`
+	// Rank is the prominence score (see ScorePOI). Higher shows first when the
+	// runtime caps how many labels it draws.
+	Rank float64 `json:"rank"`
 }
 
 // TerrainMeta is the derived tile datum. Absolute ground elevation ranges from
@@ -67,12 +94,17 @@ type Road struct {
 	Lanes int          `json:"lanes,omitempty"`
 	Width float64      `json:"width"` // metres, inferred when untagged
 	Pts   [][2]float64 `json:"pts"`
+	// Nodes is index-aligned with Pts: the OSM node id of each vertex. This is
+	// the network topology — shared ids are exact junctions — and it must be
+	// consumed before any clipping or simplification breaks the alignment.
+	Nodes []int64 `json:"nodes,omitempty"`
 }
 
 // Area is a tagged polygon (water, landuse, leisure).
 type Area struct {
 	ID     int64  `json:"id"`
 	Tag    string `json:"tag"` // e.g. "natural=water", "leisure=park"
+	Name   string `json:"name,omitempty"`
 	Outer  Ring   `json:"outer"`
 	Inners []Ring `json:"inners,omitempty"`
 }
@@ -95,6 +127,8 @@ type Stats struct {
 	Roads          int
 	WaterAreas     int
 	CoastlineWays  int
+	POIs           int
+	POINodes       int
 	TallestName    string
 	TallestHeight  float64
 }
@@ -102,7 +136,13 @@ type Stats struct {
 // Summarize walks the IR once for reporting.
 func (ir *IR) Summarize() Stats {
 	s := Stats{Buildings: len(ir.Buildings), Roads: len(ir.Roads),
-		WaterAreas: len(ir.Waters), CoastlineWays: len(ir.Coastline)}
+		WaterAreas: len(ir.Waters), CoastlineWays: len(ir.Coastline),
+		POIs: len(ir.POIs)}
+	for _, p := range ir.POIs {
+		if p.Source == "node" {
+			s.POINodes++
+		}
+	}
 	for _, b := range ir.Buildings {
 		switch b.HeightSource {
 		case "tag":

@@ -330,16 +330,30 @@ namespace Assets::Scad::EvalDetail
     {
         auto num = [&](size_t i, double d = 0.0) { return i < a.size() ? a[i].AsNumber(d) : d; };
 
-        if (name == "max")
+        if (name == "max" || name == "min")
         {
-            double m = -std::numeric_limits<double>::infinity();
-            for (const Value& v : a) m = std::max(m, v.AsNumber(m));
-            return Value::MakeNumber(m);
-        }
-        if (name == "min")
-        {
-            double m = std::numeric_limits<double>::infinity();
-            for (const Value& v : a) m = std::min(m, v.AsNumber(m));
+            const bool wantMax = name == "max";
+            // OpenSCAD accepts both max(a, b, ...) and max([a, b, ...]); the
+            // single-vector form is the one a list comprehension produces, and
+            // silently folding the vector to its AsNumber() (0) used to yield
+            // -inf, which then poisoned every vertex derived from it.
+            const std::vector<Value>& args =
+                (a.size() == 1 && a[0].type == Value::Type::Vec) ? a[0].vec : a;
+            double m = wantMax ? -std::numeric_limits<double>::infinity()
+                               : std::numeric_limits<double>::infinity();
+            for (const Value& v : args)
+            {
+                if (!v.IsNumber())
+                {
+                    continue;
+                }
+                m = wantMax ? std::max(m, v.num) : std::min(m, v.num);
+            }
+            if (std::isinf(m))
+            {
+                Warn(name, name + "() got no numeric argument");
+                return Value();
+            }
             return Value::MakeNumber(m);
         }
         if (name == "abs") return Value::MakeNumber(std::abs(num(0)));

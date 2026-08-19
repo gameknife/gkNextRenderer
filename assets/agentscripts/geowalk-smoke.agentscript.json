@@ -1,0 +1,49 @@
+{
+  "name": "geowalk-smoke",
+  "target": "GeoWalk",
+  "scene": "assets/scad/proc/generated/hk_victoria.scad",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 20000
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "steps": [
+    { "type": "wait-until", "query": "game.geo.walkerSpawned", "op": "eq", "value": true, "timeoutMs": 30000,
+      "comment": "Terrain resolves, the nav window builds, and a reachable street is found." },
+    { "type": "assert", "query": "game.geo.tile", "op": "eq", "value": "hk_victoria" },
+    { "type": "assert", "query": "game.geo.poiCount", "op": "ge", "value": 200 },
+    { "type": "assert", "query": "game.geo.poiAnchored", "op": "ge", "value": 200,
+      "comment": "Every place must land on the heightfield; an un-anchored label would sit at y=0." },
+    { "type": "wait-until", "query": "game.geo.labelsVisible", "op": "ge", "value": 5, "timeoutMs": 10000 },
+
+    { "type": "wait-until", "query": "game.geo.walkerSpeed", "op": "ge", "value": 0.5, "timeoutMs": 20000,
+      "comment": "Roam mode picked a destination and the character is walking to it." },
+    { "type": "wait-frames", "n": 180 },
+    { "type": "screenshot", "out": "screenshots/agent_geowalk_roam" },
+
+    { "type": "key", "code": "F", "action": "press", "comment": "Hand control to the player." },
+    { "type": "wait-frames", "n": 5 },
+    { "type": "assert", "query": "game.geo.walkerMode", "op": "eq", "value": "player" },
+    { "type": "wait-frames", "n": 30, "comment": "Idle under player control: no roam destination pulls it." },
+    { "type": "assert", "query": "game.geo.walkerSpeed", "op": "le", "value": 0.4 },
+
+    { "type": "key", "code": "W", "action": "down" },
+    { "type": "wait-until", "query": "game.geo.walkerSpeed", "op": "ge", "value": 0.5, "timeoutMs": 8000,
+      "comment": "WASD drives the physics character controller." },
+    { "type": "wait-frames", "n": 90 },
+    { "type": "key", "code": "W", "action": "up" },
+    { "type": "screenshot", "out": "screenshots/agent_geowalk_player" },
+
+    { "type": "key", "code": "F", "action": "press" },
+    { "type": "wait-frames", "n": 5 },
+    { "type": "assert", "query": "game.geo.walkerMode", "op": "eq", "value": "roam" },
+
+    { "type": "key", "code": "V", "action": "press", "comment": "Snap to the whole-tile overview." },
+    { "type": "wait-frames", "n": 90 },
+    { "type": "screenshot", "out": "screenshots/agent_geowalk_overview" },
+    { "type": "quit" }
+  ]
+}

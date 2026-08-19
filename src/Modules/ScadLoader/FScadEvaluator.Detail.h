@@ -578,6 +578,18 @@ namespace Assets::Scad
                 {
                     return EvalScope(inst.children, xform, color, hasColor);
                 }
+                if (name == "gk_flatten")
+                {
+                    // Declares "everything below me is one piece of geometry, not
+                    // scene structure". A rule library that expands a data table
+                    // into thousands of small module calls (kit_road turning a
+                    // street network into per-segment slabs) would otherwise emit
+                    // one scene Node per call: measured at 7683 nodes for a 1km
+                    // city tile, which cost 1.2 s of physics shape cooking alone
+                    // because every node becomes its own Model and collider.
+                    SuppressSceneNodeGuard suppressGuard(*this);
+                    return EvalScope(inst.children, xform, color, hasColor);
+                }
                 if (name == "minkowski")
                 {
                     Warn("minkowski", "minkowski() approximated as union (no backend)");

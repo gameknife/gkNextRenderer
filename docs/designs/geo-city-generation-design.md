@@ -27,6 +27,10 @@ gnb shot --scene assets/scad/proc/generated/<tile>.scad
 | 高程 | AWS `elevation-tiles-prod/skadi/<N/S><lat>/<tile>.hgt.gz`（SRTM 1 弧秒，大端 int16） | HTTP 200，6.6MB/1°瓦片，中环 bbox **0 void**，维港 2~9m、半山 119m，剖面正确 |
 | 矢量 | Overpass API `out body geom;` | HTTP 200，1km² 578KB / 535 栋建筑 |
 
+**Overpass 缓存必须按查询指纹失效**。`FetchOverpass` 把发出的 QL 原文写在
+`osm/overpass.json.query` 旁边，命中缓存前先比对。加 POI 节点选择器那次踩过：改了查询、缓存
+仍然命中，产出静默少了一整层数据——不报错，只是没有。没有指纹文件的旧缓存一律视为过期。
+
 **被否决的 DEM 源**：`elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`。解码约定
 `h = (R·256 + G + B/256) − 32768`，但实测该瓦片约 **1% 像素 red 通道跑飞**（正常 R=127~129，
 坏点 R=96~121 → 解出 −1600 ~ −8600m），且散布而非成条，无法用简单规则区分真实海底。
@@ -64,6 +68,7 @@ external/geocache/<tile>/       # gitignored
   tile.json      归一化 IR（米制）
 assets/scad/geo/<tile>/         # 入库
   terrain.hmap   二进制高度场
+  poi.json       命名地点 sidecar（§5.8）
   ATTRIBUTION.md
 assets/scad/proc/generated/<tile>.scad
 ```
@@ -260,12 +265,50 @@ color(c) translate([0, 0, z0]) linear_extrude(height = h + skirt)
 2. **街面几何**（`SurfaceClasses`，含 residential / service，上限 600 条）：5.7m 的地形格画不出
    街道网格，所以整个可行车网络另发一层薄板。
 
-街面用**每段一块平板 + 每个内折点一个圆盘**，而不是整条 mitre 出来的 ribbon：
+**拓扑在生成器里（[`roadnet.go`](../../tools/gnb/internal/geo/roadnet.go)），几何在
+[`kit_road.scad`](../../assets/scad/lib/kit_road.scad)。** 生成器只发左右缘点列和路口轮廓：
 
-- 单一平面 ribbon 跟不了坡；逐顶点取 `gk_terrain_height` 会往文件里塞几万次调用。
-- 圆盘比平板**高 2cm**，保证重叠处没有共面 —— PT 下共面重叠会 alias 出脏面。
-- 整块街网是**一个 module 吃一个数据列表**，不是一条街一个 module：每次 user module 调用都会
-  变成一个场景 Node，600 条街 600 个 Node 毫无意义（实测节点数 1542 → 90）。
+```scad
+module streets_0() { rd_network(TERR, [0.09, 0.09, 0.1],
+    [ [ /*左缘*/ [[x,y],...], /*右缘*/ [[x,y],...] ], ... ],   // runs
+    [ [[x,y],...], ... ],                                      // junctions
+    [13.6, ...], true); }
+```
+
+这样"统一改所有路面"是改一个文件。贴地契约见 kit 头部；下面是拓扑与两条最贵的教训。
+
+#### 拓扑：用 OSM 节点 id，不要用坐标近邻
+
+Overpass `out body geom` 给每条 way 一个与 geometry **索引对齐**的 `nodes` 数组，共享
+节点 id 就是精确的路口（参考 tile：7200 个节点，3100 个被多条路共享，611 个三岔以上）。
+**必须在裁剪与简化之前用掉它** —— 两者都会破坏索引对齐，所以 `selectSurfaces` 只做筛选。
+
+判据：一个节点同时被 ≥2 条 way 引用**且**进口方向 ≥3 个才算路口（way 内部顶点算 2 个方向，
+端点算 1 个）。这样排除了"两条路首尾相接换个名字"（2 个方向）和单条路的普通折点（1 次引用）。
+
+流程：标记路口 → 在路口处把 way 切成 run → 每个 run 从两端各回缩 `0.55×最宽进口`
+→ 裁剪 + 简化 → **加密到 5m 站距** → mitre 出左右缘；各进口回缩后的断面取凸包 = 路口面片。
+转角 > 60° 的地方 mitre 会自交，所以也在那里切开并按路口补片处理。
+
+#### 教训一：横坡，不是净空
+
+首版是逐段水平 cube、z 取段中点地形高，实测 **87% 的路段有一端脱离地面**，最糟的一段偏 16.7m。
+改成按两端定高 + 倾斜后仍然碎裂，而且把抬升从 0.1m 加到 0.4m 毫无改善——真正的原因是**横坡**：
+香港的街道切在山坡上，16m 宽的 carriageway 左右缘能差 1.6m。修法是取左右缘、锚在上坡侧、
+左右共用该高度（路面横向水平）、用 4m 裙边把下坡侧填进地里。
+
+**诊断手法值得记住**：把路面临时染成亮红，再把抬升调到 3m。红色分辨"几何在不在、拓扑对不对"，
+大抬升分辨"是净空不够还是几何算错"。这两步在这次排查里各省了大量时间。
+
+#### 教训二：规则库会炸节点数
+
+**每个 user module 调用都会变成一个场景 Node（= 一个 Model + 一个碰撞体）。** kit 把一张表
+展开成几千个子模块调用，实测 7683 个节点、物理 shape cooking 1.2 秒、启动 3.4 秒。
+为此新增了 `gk_flatten()` 语言构造（见 [SCADLoader](../AGENT_GUIDE/SCADLoader.md)），
+`rd_network` 整个包在里面：90 个节点、34 毫秒、启动 1.6 秒。分块仍由生成器控制。
+
+顺带查出并修掉一个求值器 bug：`max([列表])` / `min([列表])`（OpenSCAD 标准的单向量形式）
+返回 ∓inf，使路口面片所有顶点 z = -inf，Jolt 整块拒收。现在支持向量形式，全空时 warning + undef。
 
 ### 5.7 码头与绿地
 
@@ -274,6 +317,28 @@ color(c) translate([0, 0, z0]) linear_extrude(height = h + skirt)
 - `leisure=park|garden` / `landuse=grass|forest`：Go 侧多边形内拒绝采样出确定性点位，SCAD 侧
   `gk_terrain_height` 贴地。树是**生成器自带几何**，不用 `kit_city_hd` 的 `hc_nature_tree`
   —— 那套树叶色是 0.76 绿，城市尺度下 PT 直接过曝成霓虹点。
+
+### 5.8 命名地点：`poi.json` sidecar
+
+建筑名字一直在 IR 里（香港 515 栋、纽约 225、巴黎 111），但只作为 `.scad` 注释输出，引擎读不到。
+`gnb geo build` 另出一份入库 sidecar `assets/scad/geo/<tile>/poi.json`（`"format": "gkgeopoi1"`）。
+
+**为什么是 sidecar 而不是 `.scad` 标记模块**：每个 user module 调用都会变成一个场景 Node
+（§5.6 教训二），把 300 个标签烘进场景就是 300 个没有任何渲染器会画的 Node。标签是运行时数据。
+
+三个来源，按作为锚点的优劣：`building`（有高度，标签能挂屋顶）> `area`（公园/广场，锚质心，
+面积 < 1500 m² 丢弃）> `node`（地铁口、雕像、观景点）。**node 选择器全部带 `["name"]` 过滤**，
+且 amenity/tourism 按值白名单——不加过滤的 `node["amenity"]` 会把市中心每一条长椅、每一个垃圾桶
+都拉下来。同名且 60m 内的 node 被 footprint 去重掉。
+
+坐标是 SCAD 米制，**不带 Y**：地面高度由运行时对高度场采样，理由同 §5.4（三角化网格是唯一真源，
+预烘焙必然漂移）。`rank`（高度 + 面积 × 分类权重）降序排列，供运行时的标签预算取前 N 个。
+
+实测：香港 345、纽约 290、巴黎 252、里约 114、**成都 30**。成都稀疏与它 0% 的建筑高度覆盖率
+同源，是数据可用性问题。
+
+消费者见 [GeoWalk](../AGENT_GUIDE/GeoWalk.md)；数据契约由 `Test_GeoPoiSidecar.cpp`
+（`[POI]`，无需 GPU）守住。
 
 ## 6. 预算与限制
 
@@ -288,8 +353,10 @@ color(c) translate([0, 0, z0]) linear_extrude(height = h + skirt)
 - **TERR 只有一个全局水位**。一个 tile 里同时有不同高程的河与湖时只取最大的那个，其余跳过。
 - **30m DEM 上采样到 5.7m** = 多数是插值：宏观坡度对，微地形平滑。
 - **iOS 不可用**：`GK_WITH_EARCUT` 在 iOS 关闭，凹多边形建筑出不来。
-- **Overpass 限流**：首次请求常返回 HTTP 200 + HTML 错误页。当前会报错退出（不写缓存），
-  重跑即可；尚无自动退避重试。
+- **Overpass 限流**：首次请求常返回 HTTP 200 + HTML 限流页。已识别该情况并按 15s 起指数退避
+  重试 5 次（`errOverpassBusy`），失败时**不写缓存**。默认镜像仍会对某些 bbox 持续 EOF——
+  实测成都那一块重试 5 次全失败，换 `--overpass-endpoint https://overpass.kumi.systems/api/interpreter`
+  一次成功。
 - 生成场景含 `gk_*`，不兼容 OpenSCAD 本体；地形不得参与场景级 CSG。
 - 建筑是单个挤出棱柱，没有 `building:part`：IFC 二期、中银大厦这类有削切造型的塔楼是光棱柱。
 
@@ -313,8 +380,10 @@ color(c) translate([0, 0, z0]) linear_extrude(height = h + skirt)
 ```bash
 gkNextUnitTests "[ScadTerrain]"                     # hmap 解码/双线性/确定性/域外 clamp
 gkNextUnitTests "[Geo]"                             # 可行走闭环（需 GPU，加载参考 tile）
+gkNextUnitTests "[POI]"                             # poi.json 数据契约（无需 GPU，扫全部 tile）
 cd tools/gnb && go test ./internal/geo/             # fixture 驱动，不打网络
 gnb shot --scene assets/scad/proc/generated/hk_victoria.scad
+gnb validate --script assets/agentscripts/geowalk-smoke.agentscript.json   # 端到端漫游闭环
 ```
 
 `gnb geo build` 输出的三组数字就是数据质量的看门指标：建筑高度的 tagged / levels / inferred

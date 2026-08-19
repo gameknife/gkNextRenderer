@@ -259,6 +259,22 @@ bool FNavGrid::IsWalkable(const glm::vec3& worldPos) const
     return cells_[CellIndex(g.x, g.y)].walkable;
 }
 
+bool FNavGrid::SampleGroundHeight(const glm::vec3& worldPos, float& outHeight) const
+{
+    const glm::ivec2 g = WorldToGrid(worldPos);
+    if (!InBounds(g.x, g.y))
+    {
+        return false;
+    }
+    const FNavCell& cell = cells_[CellIndex(g.x, g.y)];
+    if (!cell.baseWalkable)
+    {
+        return false;
+    }
+    outHeight = cell.groundHeight;
+    return true;
+}
+
 bool FNavGrid::IsCellWalkable(int gx, int gz) const
 {
     return InBounds(gx, gz) && cells_[CellIndex(gx, gz)].walkable;

@@ -22,7 +22,8 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
   gkNextStillBenchmark and gkNextMotionBenchmark (both under the `Render/gkNextBenchmark/` directory)
 - Editor: gkNextEditor (ImGui editor + node-based material editor), ScadStudio, ScadLibrary
 - Game: MagicaLego, Brotato3D, KongLie3D, NextRA, NextDayz, NextTotalwar, BrickPlayer, CharacterDemo,
-  FlappyCpp/FlappyCSharp (`Game/Flappy/`), DotNetSandbox, TruckerDemo, StudioSim, AirportSim, CitySolSim, Voyage3D
+  FlappyCpp/FlappyCSharp (`Game/Flappy/`), DotNetSandbox, TruckerDemo, StudioSim, AirportSim, CitySolSim,
+  GeoWalk, Voyage3D
 - Util: Packager (asset paking), ScadCatalog
 
 **Release targets:** the desktop release ships exactly three of these —
@@ -319,6 +320,8 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
   - `ScadAssetPlaybook.md` - SCAD 资产生成实战手册：kit → 场景 → 地形开放地图的流程、契约与验证闭环（新题材组件库/地图生成任务必读）
   - `../designs/geo-city-generation-design.md` - `gnb geo`：从 SRTM 高程 + OpenStreetMap 生成真实
     地点的 1km 城市 tile（可渲染 + 可行走）。换地点只改 `--at`，无需改代码
+  - `GeoWalk.md` - 生成 tile 的漫游器：`poi.json` 地点标签 sidecar、滑动 NavGrid 窗口、
+    街面出生点选择，ScadRig 角色 AI 漫游 / WASD 双模式
   - `ScadRig.md` - ScadRig rigid-body character rigs (bone_ modules + anim_* clips, FRigAnimator runtime)
   - `MagicaLego.md` - MagicaLego subproject notes
   - `Brotato3D.md` - Brotato3D code structure (god-class + per-system split, runtime data model, object pools)

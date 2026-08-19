@@ -51,6 +51,27 @@ domain objects after `OnSceneLoaded`, then pass a span of base pointers to `Tick
 integrated in real seconds; applications decide whether time scaling should affect the
 delta passed to the pool.
 
+### Terrain And Large Worlds
+
+Both of the following are opt-in; leaving them unset keeps the flat-floor,
+whole-scene behaviour AirportSim and StudioSim rely on.
+
+- `config.groundSampler` replaces the constant `groundY` clamp. Set it for any world that
+  is not a single flat floor: it is used for character integration, for `MoveTo`'s goal
+  height, and for the path search. Without it a character on terrain walks at a fixed
+  altitude through the hillside.
+- `config.navWorldMin` / `navWorldMax` bound the nav grid, and `RebuildNavGrid()` slides
+  that window at runtime. The whole-scene default is right for a building interior and
+  ruinous on a square kilometre — at the default cell size that is millions of raycast
+  columns. `SetNavFloorTolerance()` exists separately because the tolerance a window needs
+  depends on the relief it covers, and `Configure()` would take the pool apart.
+- `FNavGrid::SampleGroundHeight()` is the natural ground sampler on such worlds: it follows
+  what an agent actually stands on (road deck, pier, bridge), which a terrain heightfield
+  does not.
+
+`GeoWalk` is the worked example — see [GeoWalk](GeoWalk.md) for the spawn-selection and
+floor-tolerance rules that come with walking on a real city tile.
+
 ## Visuals And Animation
 
 `ISimVisual` has geometry and ScadRig implementations. The pool automatically falls
@@ -85,7 +106,7 @@ have converged on compatible behavior and a user task defines acceptance criteri
 Build shared consumers after changing Sim Kit:
 
 ```bash
-./gnb.sh build AirportSim StudioSim CitySolSim gkNextUnitTests
+./gnb.sh build AirportSim StudioSim CitySolSim GeoWalk gkNextUnitTests
 ./out/build/<preset>/bin/gkNextUnitTests "[Unit][SimKit]"
 ```
 
