@@ -68,9 +68,9 @@ namespace NextUI::Theme
     };
 
     // The standard detail surface used by renderer settings, diagnostics, and
-    // application explorers. It owns both the floating chrome and the inset,
-    // scrollable content surface so detail windows cannot drift in padding or
-    // border treatment from one application to another.
+    // application explorers. Its weak translucent black shell intentionally
+    // matches viewport toolbars; it owns the inset scrollable content surface
+    // so detail windows cannot drift in padding or border treatment.
     struct FDetailPanelConfig
     {
         const char* WindowId = "DetailPanel";

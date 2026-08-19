@@ -24,6 +24,9 @@ namespace NextUI::Theme
         constexpr const char* kBrandIconAssetPath150 = "assets/brand/gknext_logo_icon_150.png";
         constexpr const char* kBrandIconAssetPath175 = "assets/brand/gknext_logo_icon_175.png";
         constexpr const char* kBrandIconAssetPath200 = "assets/brand/gknext_logo_icon_200.png";
+        constexpr float kDetailPanelBackgroundAlpha = 0.82f;
+        constexpr float kDetailPanelHeaderAlpha = 0.56f;
+        constexpr float kDetailPanelBorderAlpha = 0.52f;
 
         const char* GetBrandIconAssetPath(float uiScale)
         {
@@ -549,13 +552,15 @@ namespace NextUI::Theme
             ImGui::SetNextWindowPos(position, ImGuiCond_Always, pivot);
             ImGui::SetNextWindowSize(size, ImGuiCond_Always);
         }
-        ImGui::SetNextWindowBgAlpha(0.99f);
+        // Detail panels share the viewport toolbar's dark, lightly translucent
+        // surface instead of reading as an opaque application window.
+        ImGui::SetNextWindowBgAlpha(kDetailPanelBackgroundAlpha);
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
-        ImGui::PushStyleColor(ImGuiCol_Border, Color(EColor::Border, 0.85f));
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, Color(EColor::Surface, 0.99f));
+        ImGui::PushStyleColor(ImGuiCol_Border, Color(EColor::Border, kDetailPanelBorderAlpha));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, Color(EColor::Background, kDetailPanelBackgroundAlpha));
 
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoNavInputs;
@@ -580,11 +585,11 @@ namespace NextUI::Theme
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         drawList->AddRectFilled(
             winPos, ImVec2(winPos.x + winSize.x, winPos.y + headerHeight),
-            ColorU32(EColor::SurfaceElevated, 0.88f), 8.0f, ImDrawFlags_RoundCornersTop);
+            ColorU32(EColor::Surface, kDetailPanelHeaderAlpha), 8.0f, ImDrawFlags_RoundCornersTop);
         drawList->AddLine(
             ImVec2(winPos.x, winPos.y + headerHeight),
             ImVec2(winPos.x + winSize.x, winPos.y + headerHeight),
-            ColorU32(EColor::Border, 0.85f));
+            ColorU32(EColor::Border, kDetailPanelBorderAlpha));
 
         // Title text
         const float textY = winPos.y + (headerHeight - ImGui::GetTextLineHeight()) * 0.5f;

@@ -18,15 +18,18 @@ namespace NextUI::Foundation
         ImVec4 result;
         switch (color)
         {
-        case EColor::Text: result = ImVec4(0.88f, 0.90f, 0.93f, 1.0f); break;
-        case EColor::TextMuted: result = ImVec4(0.63f, 0.67f, 0.73f, 1.0f); break;
-        case EColor::TextDim: result = ImVec4(0.43f, 0.47f, 0.53f, 1.0f); break;
-        case EColor::Background: result = ImVec4(0.055f, 0.058f, 0.064f, 1.0f); break;
-        case EColor::Surface: result = ImVec4(0.105f, 0.112f, 0.122f, 1.0f); break;
-        case EColor::SurfaceElevated: result = ImVec4(0.145f, 0.153f, 0.166f, 1.0f); break;
-        case EColor::SurfaceHover: result = ImVec4(0.185f, 0.198f, 0.218f, 1.0f); break;
-        case EColor::Border: result = ImVec4(0.22f, 0.235f, 0.255f, 1.0f); break;
-        case EColor::BorderStrong: result = ImVec4(0.30f, 0.325f, 0.36f, 1.0f); break;
+        // Keep the structural palette achromatic. Blue is reserved for the
+        // explicit Accent/AccentHover states below, so surfaces remain calm
+        // over arbitrary viewport content and do not compete with the scene.
+        case EColor::Text: result = ImVec4(0.90f, 0.90f, 0.90f, 1.0f); break;
+        case EColor::TextMuted: result = ImVec4(0.67f, 0.67f, 0.67f, 1.0f); break;
+        case EColor::TextDim: result = ImVec4(0.47f, 0.47f, 0.47f, 1.0f); break;
+        case EColor::Background: result = ImVec4(0.045f, 0.045f, 0.045f, 1.0f); break;
+        case EColor::Surface: result = ImVec4(0.095f, 0.095f, 0.095f, 1.0f); break;
+        case EColor::SurfaceElevated: result = ImVec4(0.135f, 0.135f, 0.135f, 1.0f); break;
+        case EColor::SurfaceHover: result = ImVec4(0.190f, 0.190f, 0.190f, 1.0f); break;
+        case EColor::Border: result = ImVec4(0.245f, 0.245f, 0.245f, 1.0f); break;
+        case EColor::BorderStrong: result = ImVec4(0.340f, 0.340f, 0.340f, 1.0f); break;
         case EColor::Accent: result = ImVec4(0.18f, 0.43f, 0.78f, 1.0f); break;
         case EColor::AccentHover: result = ImVec4(0.26f, 0.53f, 0.90f, 1.0f); break;
         case EColor::Brand: result = ImVec4(0.95f, 0.58f, 0.14f, 1.0f); break;
