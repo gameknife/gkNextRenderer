@@ -26,27 +26,28 @@ namespace Assets::Scad
     {
         namespace fs = std::filesystem;
 
+        bool ScadReadBytes(const fs::path& path, std::vector<uint8_t>& data)
+        {
+            if (auto* package = Utilities::Package::FPackageFileSystem::TryGetInstance())
+            {
+                return package->LoadFile(path.generic_string(), data);
+            }
+            const fs::path loosePath = path.is_absolute()
+                ? path
+                : Utilities::FileHelper::GetRuntimeFilePath(path);
+            std::ifstream file(loosePath, std::ios::binary);
+            if (!file.is_open())
+            {
+                return false;
+            }
+            data.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+            return true;
+        }
+
         bool ScadReadFile(const fs::path& path, std::string& out)
         {
             std::vector<uint8_t> data;
-            bool loaded = false;
-            if (auto* package = Utilities::Package::FPackageFileSystem::TryGetInstance())
-            {
-                loaded = package->LoadFile(path.generic_string(), data);
-            }
-            else
-            {
-                const fs::path loosePath = path.is_absolute()
-                    ? path
-                    : Utilities::FileHelper::GetRuntimeFilePath(path);
-                std::ifstream file(loosePath, std::ios::binary);
-                if (file.is_open())
-                {
-                    data.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
-                    loaded = true;
-                }
-            }
-            if (!loaded)
+            if (!ScadReadBytes(path, data))
             {
                 return false;
             }
@@ -190,6 +191,12 @@ namespace Assets::Scad
             }
         };
     } // namespace
+
+    bool ScadReadAsset(const std::string& path, std::vector<uint8_t>& out)
+    {
+        out.clear();
+        return ScadReadBytes(fs::path(path).lexically_normal(), out);
+    }
 
     bool LoadScadProgram(const std::string& filename, ScadProgram& outProgram, std::string& outError)
     {

@@ -72,6 +72,9 @@
 - [ScadLibrary AI 融合创作架构](designs/scadlibrary-ai-authoring-integration.md)
 - [SCAD Scene Compose](designs/scad-scene-compose-design.md)
 - [SCAD Terrain 地形架构](designs/scad-terrain-design.md)（M0–M4 已落地）
+- [真实地理数据 → OpenSCAD 城市关卡](designs/geo-city-generation-design.md)（现行；`gnb geo`
+  从 SRTM 高程 + OpenStreetMap 生成可渲染、可行走的城市 tile。沿海与内陆均已验证
+  （香港/纽约/里约/巴黎/成都），换地点只需换 `--at`）
 - [SoftwareModernNoAmbient 渲染与 GTAO](designs/software-modern-noambient-rendering.md)
 - [直接样本后处理与 Upscaler 输入链](designs/direct-sample-post-chain.md)
 - [WebRTC Remote Play](designs/webrtc-remoteplay-design.md)
@@ -127,6 +130,8 @@
 - [Bindless 3D 纹理支持计划](plans/bindless-3d-texture-support-plan.md)（已完成）
 - [BSDF-aware Direct Lighting 计划](plans/bsdf-aware-direct-lighting-plan.md)（已实施 → [design](designs/pathtracing-restir-design.md)）
 - [SCAD Terrain 开发计划](plans/scad-terrain-plan.md)（M0–M4 已完成 → [design](designs/scad-terrain-design.md)）
+- [地理城市生成剩余计划](plans/geo-city-generation-plan.md)（P0–P5 已完成并并入 design；
+  余下 P6 高精度 DTM、Overpass 健壮性、`building:part`/街具，以及两项待用户决策：入库范围与地图尺寸）
 - [NextDayz 复杂 3C 与 ScadRig 分层动画开发计划](projects/nextdayz/nextdayz-3c-scadrig-development-plan.md)（已完成）
 - [NextDayz PVE 生存循环产品化开发计划](projects/nextdayz/nextdayz-productization-development-plan.md)（已完成）
 - [NextTotalwar 基础战斗循环产品化开发计划](projects/nexttotalwar/nexttotalwar-productization-development-plan.md)（已完成）

@@ -37,13 +37,36 @@ TERR = ["gkterr1", [sizeX, sizeY], [cellsX, cellsY], seed,
           ["lake",     [x,y], radius, depth],
           ["river",    [[x,y],...], width, depth],     // 上游→下游
           ["road",     [[x,y],...], width],            // 填方>0.9 的深沟留空给桥
-          ["pad",      [x,y], [w,d], rotDeg] ]];       // 建筑基座压平
+          ["pad",      [x,y], [w,d], rotDeg],          // 建筑基座压平
+          ["hmap",     path|[cols,rows][,grid], mode, zScale, zBias] ]];  // 采样高度场
 ```
 
-- features **按序作用**：山→河（下切+水面）→路（压平）→pad（最后压平）。
+- features **按序作用**：hmap→山→河（下切+水面）→路（压平）→pad（最后压平）。
 - 全部 seed 确定性；同 TERR 逐字节同网格。cells 上限 256（评估器 clamp + warn）。
-- 调色板：`temperate` / `arid` / `alpine`；biomeId 枚举见 `FScadTerrain.h` `ETerrainBiome`
-  （grass=0, grass_dark, dry_grass, sand, rock, rock_high, snow, bed, road, pad）。
+- 调色板：`temperate` / `arid` / `alpine` / `urban`；biomeId 枚举见 `FScadTerrain.h`
+  `ETerrainBiome`（grass=0, grass_dark, dry_grass, sand, rock, rock_high, snow, bed, road, pad）。
+  `urban` 把低平地染成混凝土、把高处染成绿坡并**彻底关掉雪线**（城市丘陵只有一两百米，
+  用 temperate 会在山顶盖雪），给真实地理数据生成的城市关卡使用。
+
+### hmap：把任意采样高度场喂进地形
+
+真实 DEM、手绘遮罩等"数据型"高度场用 `hmap` 算子注入，它是 features 的一员，因此后面的
+`road`/`pad` 压平和全套 `ter_*` 组合子行为不变：
+
+```scad
+["hmap", "assets/scad/geo/hk_victoria/terrain.hmap", "set", 1, 0]   // side-car 文件（推荐）
+["hmap", [cols, rows], [h00, h01, ...], "add", 1, 0]                // 内联字面量
+```
+
+- `mode`：`"set"` 替换当前高度（丢弃 base fbm），`"add"` 叠加。域外 clamp 到边界值，无接缝。
+- 路径是 **runtime-root 相对路径**（含 `assets/` 前缀），走 `FScadShared::ScadReadAsset`
+  → `FPackageFileSystem` + loose 回退，打包进 pak 后行为一致。
+- `.hmap` 是小端二进制：`"GKHM"` + u32 version/cols/rows + f32 originX/originY/cellX/cellY/scale/bias
+  + `int16[cols*rows]`（行主序，x 最快，row 递增 = +y）；`h = raw * scale + bias`。176² 约 62KB。
+- **别用内联形式放大网格**：`Scad::Value` 按值持有 `std::vector<Value>`，几万元素的 TERR
+  字面量会让每次 `gk_terrain_height(TERR, x, y)` 传参深拷贝数 MB。文件形式让 TERR 保持 ~2KB。
+- 网格按路径进程级缓存；`SpecCacheKey` 纳入 path + 内容 hash，改了 `.hmap` 会正确失效。
+- 生成器见 [真实地理数据 → 城市关卡](../designs/geo-city-generation-design.md)（`gnb geo`）。
 
 ## 贴地组合子（`assets/scad/lib/kit_terrain.scad`，catalog 不收录）
 
@@ -123,7 +146,18 @@ navGrid.MaskUnwalkable([&](const glm::vec3& cellPos) {
 });  // RebuildDirtyRegion 后需要重新应用
 ```
 
-- 集成测试范例：`src/Tests/Test_TerrainWalkable.cpp`（河挡路/桥连通/落球物理）。
+- 集成测试范例：`src/Tests/Test_TerrainWalkable.cpp`（河挡路/桥连通/落球物理）、
+  `src/Tests/Test_GeoCityWalkable.cpp`（真实地理城市：街道连通/楼体挡路/维港不可走）。
+
+**城市尺度的 NavGrid 四条契约**（`Test_GeoCityWalkable.cpp` 踩出来的，照抄）：
+
+- `sampleCeiling` 是**绝对世界 Y**（默认 50），必须高于区域内最高屋顶，否则向下的射线从楼内部开始。
+- **平屋顶是"可走"格**（法线朝上、净空够）。密集城区里绝大多数格子是屋顶，所以判断"楼挡住了"
+  必须用**可达性**（`IsCellReachable` / `BuildReachabilityMask`），不能用 `IsCellWalkable`。
+- `floorHeightTolerance` 是绕**查询参考高度**的绝对带宽、不沿路径传播（它是用来分楼层的）。
+  放在有坡的地形上必须覆盖整个区域的起伏，否则上坡一米就算另一层楼，什么都不可达。
+- NavGrid 区域要**宽到装得下一条街级路线**。紧贴两个端点画的框会被中间街区封死，
+  寻路正确地找不到路——这不是 bug。
 
 ## 桥的布置契约（血泪经验）
 

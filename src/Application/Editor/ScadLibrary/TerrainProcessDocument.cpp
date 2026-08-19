@@ -598,6 +598,28 @@ namespace ScadLibrary
                     source << FormatPoint(feature.at) << ", " << FormatPoint(feature.size) << ", "
                            << FormatNumber(feature.rot);
                     break;
+                case EType::Hmap:
+                    // Sampled heightfields are data, not editable geometry: the
+                    // process editor round-trips them verbatim. The side-car
+                    // form is the one generators emit; the inline literal is
+                    // re-serialized from the decoded grid so nothing is lost.
+                    if (!feature.path.empty())
+                    {
+                        source << "\"" << EscapeString(feature.path) << "\"";
+                    }
+                    else if (feature.grid)
+                    {
+                        source << "[" << feature.grid->cols << ", " << feature.grid->rows << "], [";
+                        for (size_t i = 0; i < feature.grid->values.size(); ++i)
+                        {
+                            if (i > 0) source << ", ";
+                            source << FormatNumber(feature.grid->values[i]);
+                        }
+                        source << "]";
+                    }
+                    source << ", \"" << (feature.hmapAdd ? "add" : "set") << "\", "
+                           << FormatNumber(feature.zScale) << ", " << FormatNumber(feature.zBias);
+                    break;
                 }
                 source << "]";
             }
@@ -1112,6 +1134,8 @@ namespace ScadLibrary
             return "road";
         case EType::Pad:
             return "pad";
+        case EType::Hmap:
+            return "hmap";
         }
         return "unknown";
     }

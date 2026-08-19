@@ -1,0 +1,756 @@
+package geo
+
+import (
+	"fmt"
+	"math"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+// EmitOptions tunes stage E.
+type EmitOptions struct {
+	// BlockSizeM groups buildings into module calls. Keeping each generated
+	// Model well under 65535*3 indices matters: above that the engine skips the
+	// physics mesh entirely (AGENT_GUIDE/ScadTerrain.md).
+	BlockSizeM float64
+	// SimplifyToleranceM / MaxFootprintVerts bound the footprint complexity.
+	SimplifyToleranceM float64
+	MaxFootprintVerts  int
+	// MinFootprintM2 drops sheds and mapping noise.
+	MinFootprintM2 float64
+	// SkirtM sinks every building below the terrain so a sloped site does not
+	// show daylight under the walls.
+	SkirtM float64
+	// RoadClasses selects which highways become terrain road operators. These
+	// cut and fill the heightfield, which is what an arterial actually does to
+	// a hillside; the count is bounded because every operator costs a polyline
+	// query per terrain cell.
+	RoadClasses []string
+	MaxRoads    int
+	// SurfaceClasses selects which highways get street-surface geometry. This
+	// is the whole drivable network, not just the arterials: at 5.7 m per
+	// terrain cell the biome painting alone cannot show a street grid.
+	SurfaceClasses []string
+	MaxSurfaces    int
+	// RoadsPerModule bounds how many streets share one Model.
+	RoadsPerModule int
+	// TreeDensityM2 is one tree per this many square metres of green space.
+	TreeDensityM2 float64
+	MaxTrees      int
+	// PierWidthM is used when a pier way carries no width.
+	PierWidthM float64
+}
+
+// DefaultEmitOptions matches the budget in design §6.
+func DefaultEmitOptions() EmitOptions {
+	return EmitOptions{
+		BlockSizeM:         100,
+		SimplifyToleranceM: 0.5,
+		MaxFootprintVerts:  24,
+		MinFootprintM2:     12,
+		SkirtM:             1.5,
+		RoadClasses:        []string{"motorway", "trunk", "primary", "secondary", "tertiary"},
+		MaxRoads:           80,
+		SurfaceClasses: []string{
+			"motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
+			"secondary", "secondary_link", "tertiary", "tertiary_link",
+			"residential", "unclassified", "living_street", "service",
+		},
+		MaxSurfaces:    600,
+		RoadsPerModule: 80,
+		TreeDensityM2:  95,
+		MaxTrees:       420,
+		PierWidthM:     11,
+	}
+}
+
+// EmitReport summarises the generated scene.
+type EmitReport struct {
+	Buildings    int
+	DroppedEdge  int // footprint crosses the tile boundary
+	DroppedSmall int // below MinFootprintM2
+	Blocks       int
+	Roads        int
+	Surfaces     int
+	Piers        int
+	Trees        int
+	Triangles    int
+	TallestName  string
+	TallestH     float64
+}
+
+func (r EmitReport) String() string {
+	return fmt.Sprintf("%d buildings in %d blocks (dropped %d off-tile, %d too small), "+
+		"%d road operators, %d street surfaces, %d piers, %d trees, ~%d triangles",
+		r.Buildings, r.Blocks, r.DroppedEdge, r.DroppedSmall,
+		r.Roads, r.Surfaces, r.Piers, r.Trees, r.Triangles)
+}
+
+// Muted palette: under the path tracer's daylight an albedo of 0.5 already
+// reads as white, so facades live in the 0.10..0.30 band (ScadAssetPlaybook).
+var buildingPalette = [][3]float64{
+	{0.33, 0.32, 0.30}, // pale concrete
+	{0.26, 0.26, 0.27}, // grey concrete
+	{0.30, 0.28, 0.25}, // warm render
+	{0.20, 0.23, 0.26}, // glass curtain wall
+	{0.28, 0.25, 0.22}, // tile cladding
+	{0.24, 0.26, 0.24}, // green-grey
+	{0.17, 0.18, 0.20}, // dark glass
+	{0.34, 0.31, 0.28}, // light stone
+}
+
+// Emit renders the whole scene file.
+func Emit(tile Tile, ir *IR, grid *HeightGrid, hmapRef string, opt EmitOptions) (string, EmitReport) {
+	var report EmitReport
+	half := tile.SizeM / 2
+
+	// ---- buildings: filter, simplify, bucket by block -----------------------
+	type placed struct {
+		b      Building
+		ring   Ring
+		inners []Ring
+		block  [2]int
+	}
+	var kept []placed
+	for _, b := range ir.Buildings {
+		// The whole footprint has to be on the tile: a building that only has
+		// its centroid inside ends up cantilevered over the edge of the world.
+		minX, minY, maxX, maxY := BoundsOf(b.Outer)
+		if minX < -half || minY < -half || maxX > half || maxY > half {
+			report.DroppedEdge++
+			continue
+		}
+		if b.AreaM2 < opt.MinFootprintM2 {
+			report.DroppedSmall++
+			continue
+		}
+		ring := EnsureCCW(Simplify(b.Outer, opt.SimplifyToleranceM, opt.MaxFootprintVerts))
+		if len(ring) < 3 {
+			report.DroppedSmall++
+			continue
+		}
+		c := Centroid(ring)
+		var inners []Ring
+		for _, hole := range b.Inners {
+			h := Simplify(hole, opt.SimplifyToleranceM, opt.MaxFootprintVerts)
+			if len(h) >= 3 && RingArea(h) > 4 {
+				// A hole must wind opposite to the outer ring for earcut.
+				if SignedArea(h) > 0 {
+					h = reverseRing(h)
+				}
+				inners = append(inners, h)
+			}
+		}
+		bx := int(math.Floor((c[0] + half) / opt.BlockSizeM))
+		by := int(math.Floor((c[1] + half) / opt.BlockSizeM))
+		kept = append(kept, placed{b: b, ring: ring, inners: inners, block: [2]int{bx, by}})
+		if b.Height > report.TallestH {
+			report.TallestH = b.Height
+			report.TallestName = b.Name
+		}
+	}
+	report.Buildings = len(kept)
+
+	blocks := map[[2]int][]placed{}
+	for _, p := range kept {
+		blocks[p.block] = append(blocks[p.block], p)
+	}
+	blockKeys := make([][2]int, 0, len(blocks))
+	for k := range blocks {
+		blockKeys = append(blockKeys, k)
+	}
+	sort.Slice(blockKeys, func(i, j int) bool {
+		if blockKeys[i][1] != blockKeys[j][1] {
+			return blockKeys[i][1] < blockKeys[j][1]
+		}
+		return blockKeys[i][0] < blockKeys[j][0]
+	})
+	report.Blocks = len(blockKeys)
+
+	roads := selectRoads(ir, half, opt)
+	report.Roads = len(roads)
+	surfaces := selectSurfaces(ir, half, opt)
+	report.Surfaces = len(surfaces)
+	piers := selectPiers(ir, half, opt)
+	report.Piers = len(piers)
+	waterLevel := 0.0
+	if ir.Terrain != nil {
+		waterLevel = ir.Terrain.WaterLevel
+	}
+	trees := scatterTrees(ir, half, tile.Seed, opt)
+	report.Trees = len(trees)
+
+	// ---- file ---------------------------------------------------------------
+	var s strings.Builder
+	writeHeader(&s, tile, ir, grid, report)
+	s.WriteString("use <../../lib/gk_camera.scad>\n\n$fn = 8;\n\n")
+	writeTerrain(&s, tile, hmapRef, roads, ir.Terrain)
+
+	s.WriteString("// Ground height under a footprint: the terrain mesh is the single source of\n")
+	s.WriteString("// truth for elevation, so the base is sampled at evaluation time rather than\n")
+	s.WriteString("// baked by the generator (a baked value would drift from the rendered mesh).\n")
+	s.WriteString("function gz(x0, y0, x1, y1) = min(\n")
+	s.WriteString("    gk_terrain_height(TERR, x0, y0), gk_terrain_height(TERR, x1, y0),\n")
+	s.WriteString("    gk_terrain_height(TERR, x0, y1), gk_terrain_height(TERR, x1, y1),\n")
+	s.WriteString("    gk_terrain_height(TERR, (x0 + x1) / 2, (y0 + y1) / 2));\n\n")
+
+	for _, key := range blockKeys {
+		group := blocks[key]
+		sort.SliceStable(group, func(i, j int) bool { return group[i].b.ID < group[j].b.ID })
+		fmt.Fprintf(&s, "module blk_r%dc%d() {\n", key[1], key[0])
+		for _, p := range group {
+			report.Triangles += writeBuilding(&s, p.b, p.ring, p.inners, opt.SkirtM)
+		}
+		s.WriteString("}\n\n")
+	}
+
+	surfaceModules := writeStreetSurfaces(&s, surfaces, opt, &report)
+	pierModule := writePiers(&s, piers, opt, waterLevel, &report)
+	treeModule := writeTrees(&s, trees, &report)
+
+	s.WriteString("// ================= assembly =================\n")
+	s.WriteString("gk_terrain(TERR);\n")
+	for _, name := range surfaceModules {
+		fmt.Fprintf(&s, "%s();\n", name)
+	}
+	if pierModule != "" {
+		fmt.Fprintf(&s, "%s();\n", pierModule)
+	}
+	for _, key := range blockKeys {
+		fmt.Fprintf(&s, "blk_r%dc%d();\n", key[1], key[0])
+	}
+	if treeModule != "" {
+		fmt.Fprintf(&s, "%s();\n", treeModule)
+	}
+	s.WriteString("\n")
+	writeCameras(&s, tile, ir, grid)
+
+	report.Triangles += 2 * tile.Cells * tile.Cells
+	return s.String(), report
+}
+
+func writeHeader(s *strings.Builder, tile Tile, ir *IR, grid *HeightGrid, report EmitReport) {
+	lo, hi := grid.Bounds()
+	stats := ir.Summarize()
+	fmt.Fprintf(s, "// %s.scad — generated by `gnb geo`, do not edit by hand.\n//\n", tile.Name)
+	fmt.Fprintf(s, "// Real-world tile: %.5f, %.5f — %.0f x %.0f m, %d x %d terrain cells (%.1f m/cell).\n",
+		tile.Lat, tile.Lon, tile.SizeM, tile.SizeM, tile.Cells, tile.Cells,
+		tile.SizeM/float64(tile.Cells))
+	water := "no water body"
+	if ir.Terrain != nil && ir.Terrain.HasWater {
+		kind := "inland water"
+		if ir.Terrain.IsSea {
+			kind = "sea level"
+		}
+		water = fmt.Sprintf("%s %.1f m", kind, ir.Terrain.WaterLevel)
+	}
+	base := 0.0
+	if ir.Terrain != nil {
+		base = ir.Terrain.BaseElevation
+	}
+	fmt.Fprintf(s, "// Elevation %.1f .. %.1f m, datum %.1f m, %s.\n", lo, hi, base, water)
+	s.WriteString("// SCAD +x east, +y north, 1 unit = 1 m.\n//\n")
+	s.WriteString("// Data sources — attribution is required, keep this block:\n")
+	for _, a := range ir.Attribution {
+		fmt.Fprintf(s, "//   %s\n", a)
+	}
+	fmt.Fprintf(s, "//\n// %d buildings; heights: %d tagged, %d from levels, %d inferred.\n",
+		stats.Buildings, stats.HeightFromTag, stats.HeightFromLvls, stats.HeightInferred)
+	fmt.Fprintf(s, "// Regenerate: gnb geo make --name %s --at %.5f,%.5f --size %.0f --cells %d --profile %s --seed %d\n\n",
+		tile.Name, tile.Lat, tile.Lon, tile.SizeM, tile.Cells, tile.Profile, tile.Seed)
+}
+
+func writeTerrain(s *strings.Builder, tile Tile, hmapRef string, roads []Road, meta *TerrainMeta) {
+	base := 0.0
+	water := "undef"
+	if meta != nil {
+		base = meta.BaseElevation
+		if meta.HasWater {
+			water = fnum(meta.WaterLevel)
+		}
+	}
+	fmt.Fprintf(s, "TERR = [\"gkterr1\", [%s, %s], [%d, %d], %d,\n",
+		fnum(tile.SizeM), fnum(tile.SizeM), tile.Cells, tile.Cells, tile.Seed)
+	// The base height is the tile datum, not zero: the palette's biome bands are
+	// measured from it, so an inland city at 500 m would otherwise be painted as
+	// if it were a 500 m mountain rising out of the sea.
+	// "urban": concrete on the flat low ground, green on the hills, no snow cap.
+	fmt.Fprintf(s, "    [%s, 0, 0], %s, \"urban\",\n", fnum(base), water)
+	fmt.Fprintf(s, "    [[\"hmap\", \"%s\", \"set\", 1, 0]", hmapRef)
+	for _, r := range roads {
+		s.WriteString(",\n     [\"road\", ")
+		writePoints(s, r.Pts)
+		fmt.Fprintf(s, ", %s]", fnum(r.Width))
+	}
+	s.WriteString("]];\n\n")
+}
+
+// writeBuilding emits one extruded footprint and returns its triangle estimate.
+func writeBuilding(s *strings.Builder, b Building, ring Ring, inners []Ring, skirt float64) int {
+	minX, minY, maxX, maxY := BoundsOf(ring)
+	c := buildingPalette[int(uint64(b.ID)%uint64(len(buildingPalette)))]
+	height := math.Max(3, b.Height) + skirt
+
+	if b.Name != "" {
+		fmt.Fprintf(s, "    // %s (%.0fm, %s)\n", sanitizeComment(b.Name), b.Height, b.HeightSource)
+	}
+	fmt.Fprintf(s, "    color([%s, %s, %s]) translate([0, 0, gz(%s, %s, %s, %s) - %s])\n",
+		fnum(c[0]), fnum(c[1]), fnum(c[2]),
+		fnum(minX), fnum(minY), fnum(maxX), fnum(maxY), fnum(skirt))
+	fmt.Fprintf(s, "        linear_extrude(height = %s) polygon(points = ", fnum(height))
+
+	all := append(Ring{}, ring...)
+	paths := [][]int{indexRange(0, len(ring))}
+	for _, hole := range inners {
+		paths = append(paths, indexRange(len(all), len(hole)))
+		all = append(all, hole...)
+	}
+	writePoints(s, all)
+	if len(paths) > 1 {
+		s.WriteString(", paths = [")
+		for i, p := range paths {
+			if i > 0 {
+				s.WriteString(", ")
+			}
+			s.WriteString("[")
+			for j, idx := range p {
+				if j > 0 {
+					s.WriteString(", ")
+				}
+				s.WriteString(strconv.Itoa(idx))
+			}
+			s.WriteString("]")
+		}
+		s.WriteString("]")
+	}
+	s.WriteString(");\n")
+
+	// Prism: 2*(v-2) per cap plus 2 per side quad.
+	v := len(all)
+	return 4*v - 4
+}
+
+// Street surface colours: asphalt for the carriageway, a lighter kerb tone for
+// the service network so the hierarchy reads from above.
+var (
+	asphaltColor = [3]float64{0.16, 0.16, 0.17}
+	serviceColor = [3]float64{0.22, 0.22, 0.21}
+	pierColor    = [3]float64{0.30, 0.29, 0.27}
+)
+
+// writeStreetSurfaces emits the drivable network as terrain-following slabs and
+// returns the module names to instantiate.
+//
+// One flat slab per segment rather than a single mitred ribbon: a planar ribbon
+// cannot follow a hillside, and sampling the terrain per ribbon vertex would
+// put tens of thousands of gk_terrain_height() calls in the file. Junction
+// discs sit 2 cm proud of the slabs so no two faces are ever coincident —
+// coincident coplanar faces alias badly under the path tracer.
+//
+// The whole chunk is one module driven by a data list rather than one call per
+// street: every user-module invocation becomes a scene Node, and a per-street
+// module turns 600 streets into 600 nodes for no benefit.
+func writeStreetSurfaces(s *strings.Builder, roads []Road, opt EmitOptions, report *EmitReport) []string {
+	if len(roads) == 0 {
+		return nil
+	}
+	s.WriteString("// Street surface, rs = [[width, [[x,y], ...]], ...]. Slab per segment plus a\n")
+	s.WriteString("// junction disc at each interior vertex; both snap to the terrain at\n")
+	s.WriteString("// evaluation time. The disc sits 2 cm proud so overlapping pieces never\n")
+	s.WriteString("// share a plane (coincident faces alias badly under path tracing).\n")
+	s.WriteString("module streets(c, rs) {\n")
+	s.WriteString("    color(c) for (k = [0 : len(rs) - 1])\n")
+	s.WriteString("        let (w = rs[k][0], pts = rs[k][1]) {\n")
+	s.WriteString("            for (i = [0 : len(pts) - 2])\n")
+	s.WriteString("                let (a = pts[i], b = pts[i + 1], d = b - a,\n")
+	s.WriteString("                     mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2)\n")
+	s.WriteString("                    translate([mx, my, gk_terrain_height(TERR, mx, my) + 0.06])\n")
+	s.WriteString("                        rotate([0, 0, atan2(d[1], d[0])])\n")
+	s.WriteString("                            cube([norm(d), w, 0.12], center = true);\n")
+	s.WriteString("            if (len(pts) > 2)\n")
+	s.WriteString("                for (i = [1 : len(pts) - 2])\n")
+	s.WriteString("                    translate([pts[i][0], pts[i][1],\n")
+	s.WriteString("                               gk_terrain_height(TERR, pts[i][0], pts[i][1]) + 0.07])\n")
+	s.WriteString("                        cylinder(h = 0.14, r = w / 2, center = true);\n")
+	s.WriteString("        }\n}\n\n")
+
+	// Split by surface colour first so each module has a single material.
+	groups := [][]Road{nil, nil}
+	for _, r := range roads {
+		if r.Class == "service" || r.Class == "living_street" {
+			groups[1] = append(groups[1], r)
+		} else {
+			groups[0] = append(groups[0], r)
+		}
+	}
+	colors := [][3]float64{asphaltColor, serviceColor}
+
+	var names []string
+	for gi, group := range groups {
+		for start := 0; start < len(group); start += opt.RoadsPerModule {
+			end := start + opt.RoadsPerModule
+			if end > len(group) {
+				end = len(group)
+			}
+			name := fmt.Sprintf("streets_%d", len(names))
+			names = append(names, name)
+			c := colors[gi]
+			fmt.Fprintf(s, "module %s() { streets([%s, %s, %s], [\n",
+				name, fnum(c[0]), fnum(c[1]), fnum(c[2]))
+			for i, r := range group[start:end] {
+				if i > 0 {
+					s.WriteString(",\n")
+				}
+				fmt.Fprintf(s, "    [%s, ", fnum(r.Width))
+				writePoints(s, r.Pts)
+				s.WriteString("]")
+				// Slab (12 tris) per segment plus an octagonal disc (28) per joint.
+				segments := len(r.Pts) - 1
+				report.Triangles += segments*12 + max(0, segments-1)*28
+			}
+			s.WriteString("]); }\n\n")
+		}
+	}
+	return names
+}
+
+// writePiers emits harbour piers: a solid deck standing in the water. Closed
+// ways are deck outlines and get extruded; open ways get a slab strip.
+func writePiers(s *strings.Builder, piers []Line, opt EmitOptions, waterLevel float64,
+	report *EmitReport) string {
+	if len(piers) == 0 {
+		return ""
+	}
+	s.WriteString("// Piers: solid decks from the water line up. They stand in dredged water,\n")
+	s.WriteString("// so they sit on the tile's water plane rather than snapping to the bed.\n")
+	s.WriteString("module piers() {\n")
+	fmt.Fprintf(s, "    WL = %s;\n", fnum(waterLevel))
+	fmt.Fprintf(s, "    color([%s, %s, %s]) {\n", fnum(pierColor[0]), fnum(pierColor[1]), fnum(pierColor[2]))
+	for _, p := range piers {
+		if p.Closed {
+			s.WriteString("        translate([0, 0, WL - 1]) linear_extrude(height = 4.2) polygon(points = ")
+			writePoints(s, p.Pts)
+			s.WriteString(");\n")
+			report.Triangles += 4*len(p.Pts) - 4
+			continue
+		}
+		for i := 0; i+1 < len(p.Pts); i++ {
+			a, b := p.Pts[i], p.Pts[i+1]
+			dx, dy := b[0]-a[0], b[1]-a[1]
+			length := math.Hypot(dx, dy)
+			if length < 1 {
+				continue
+			}
+			fmt.Fprintf(s, "        translate([%s, %s, WL + 1.1]) rotate([0, 0, %s]) cube([%s, %s, 4.2], center = true);\n",
+				fnum((a[0]+b[0])/2), fnum((a[1]+b[1])/2),
+				fnum(math.Atan2(dy, dx)*180/math.Pi), fnum(length), fnum(opt.PierWidthM))
+			report.Triangles += 12
+		}
+	}
+	s.WriteString("    }\n}\n\n")
+	return "piers"
+}
+
+// writeTrees emits the green-space planting. Positions are baked (Go owns the
+// polygon test) but the height is not: every tree snaps to the terrain at
+// evaluation time.
+//
+// The foliage is local geometry rather than kit_city_hd's hc_nature_tree: that
+// kit's leaf colour is 0.76 green, which blows out to a neon dot under
+// path-traced daylight at city scale.
+func writeTrees(s *strings.Builder, trees []treeSpot, report *EmitReport) string {
+	if len(trees) == 0 {
+		return ""
+	}
+	s.WriteString("// Green-space planting (leisure=park/garden, landuse=grass/forest).\n")
+	s.WriteString("// spots = [[x, y, scale, variant], ...]; one module, one Node.\n")
+	s.WriteString("TREEC = [[0.13, 0.20, 0.09], [0.16, 0.23, 0.11],\n")
+	s.WriteString("         [0.11, 0.17, 0.08], [0.18, 0.25, 0.12]];\n")
+	s.WriteString("module veg(spots) {\n")
+	s.WriteString("    for (k = [0 : len(spots) - 1])\n")
+	s.WriteString("        let (p = spots[k], x = p[0], y = p[1], s = p[2], i = p[3],\n")
+	s.WriteString("             z = gk_terrain_height(TERR, x, y)) {\n")
+	s.WriteString("            color([0.19, 0.14, 0.10])\n")
+	s.WriteString("                translate([x, y, z]) cylinder(h = 1.7 * s, r = 0.22 * s, $fn = 5);\n")
+	s.WriteString("            color(TREEC[i % 4])\n")
+	s.WriteString("                translate([x, y, z + 2.4 * s]) sphere(r = 1.6 * s, $fn = 6);\n")
+	s.WriteString("            color(TREEC[(i + 1) % 4])\n")
+	s.WriteString("                translate([x + 0.7 * s, y + 0.4 * s, z + 3.2 * s]) sphere(r = 1.0 * s, $fn = 5);\n")
+	s.WriteString("        }\n}\n\n")
+	s.WriteString("module veg_all() { veg([\n")
+	for i, t := range trees {
+		if i > 0 {
+			s.WriteString(",\n")
+		}
+		fmt.Fprintf(s, "    [%s, %s, %s, %d]", fnum(t.x), fnum(t.y), fnum(t.scale), t.variant)
+		report.Triangles += 90
+	}
+	s.WriteString("]); }\n\n")
+	return "veg_all"
+}
+
+// treeSpot is one baked planting position.
+type treeSpot struct {
+	x, y    float64
+	scale   float64
+	variant int
+}
+
+// greenTags are the areas worth planting.
+var greenTags = map[string]bool{
+	"leisure=park": true, "leisure=garden": true, "leisure=pitch": false,
+	"landuse=grass": true, "landuse=forest": true, "landuse=village_green": true,
+	"landuse=recreation_ground": true, "landuse=cemetery": true,
+}
+
+// scatterTrees rejection-samples inside the green polygons. Deterministic: the
+// PRNG is seeded from the tile seed and the OSM id, and areas are walked in the
+// IR's (id-sorted) order.
+func scatterTrees(ir *IR, half float64, seed int, opt EmitOptions) []treeSpot {
+	var out []treeSpot
+	for _, area := range ir.Landuse {
+		if !greenTags[area.Tag] {
+			continue
+		}
+		minX, minY, maxX, maxY := BoundsOf(area.Outer)
+		if minX < -half || minY < -half || maxX > half || maxY > half {
+			continue
+		}
+		area2 := RingArea(area.Outer)
+		want := int(area2 / opt.TreeDensityM2)
+		if want < 1 {
+			continue
+		}
+		rng := uint64(seed)*0x9E3779B97F4A7C15 ^ uint64(area.ID)
+		next := func() float64 {
+			rng ^= rng << 13
+			rng ^= rng >> 7
+			rng ^= rng << 17
+			return float64(rng%1000000) / 1000000.0
+		}
+		// Bounded attempts: a long thin park should not spin here forever.
+		for attempts, placed := 0, 0; attempts < want*24 && placed < want; attempts++ {
+			x := minX + next()*(maxX-minX)
+			y := minY + next()*(maxY-minY)
+			if !PointInRing(area.Outer, x, y) {
+				continue
+			}
+			inHole := false
+			for _, hole := range area.Inners {
+				if PointInRing(hole, x, y) {
+					inHole = true
+					break
+				}
+			}
+			if inHole {
+				continue
+			}
+			// Forest reads as older, larger canopy than a city garden.
+			scale := 1.3 + next()*1.0
+			if area.Tag == "landuse=forest" {
+				scale += 0.6
+			}
+			out = append(out, treeSpot{x: x, y: y, scale: scale, variant: int(next() * 4)})
+			placed++
+			if len(out) >= opt.MaxTrees {
+				return out
+			}
+		}
+	}
+	return out
+}
+
+// selectSurfaces picks the drivable network for street geometry.
+func selectSurfaces(ir *IR, half float64, opt EmitOptions) []Road {
+	allowed := map[string]bool{}
+	for _, c := range opt.SurfaceClasses {
+		allowed[c] = true
+	}
+	var out []Road
+	for _, r := range ir.Roads {
+		if !allowed[r.Class] {
+			continue
+		}
+		pts := clipToSquare(r.Pts, half)
+		if len(pts) < 2 {
+			continue
+		}
+		// 3 m keeps junction geometry while removing survey noise.
+		pts = Simplify(Ring(pts), 3, 32)
+		if len(pts) < 2 {
+			continue
+		}
+		r.Pts = pts
+		out = append(out, r)
+	}
+	// Widest first, so the budget keeps the roads that carry the picture.
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Width != out[j].Width {
+			return out[i].Width > out[j].Width
+		}
+		return out[i].ID < out[j].ID
+	})
+	if len(out) > opt.MaxSurfaces {
+		out = out[:opt.MaxSurfaces]
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// selectPiers keeps the piers that fit on the tile.
+func selectPiers(ir *IR, half float64, opt EmitOptions) []Line {
+	var out []Line
+	for _, p := range ir.Piers {
+		minX, minY, maxX, maxY := BoundsOf(p.Pts)
+		if minX < -half || minY < -half || maxX > half || maxY > half {
+			continue
+		}
+		if p.Closed && len(p.Pts) < 3 {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// selectRoads picks the arterial network and turns it into terrain operators.
+func selectRoads(ir *IR, half float64, opt EmitOptions) []Road {
+	classRank := map[string]int{}
+	for i, c := range opt.RoadClasses {
+		classRank[c] = len(opt.RoadClasses) - i
+	}
+	var out []Road
+	for _, r := range ir.Roads {
+		rank, ok := classRank[r.Class]
+		if !ok {
+			continue
+		}
+		pts := clipToSquare(r.Pts, half)
+		if len(pts) < 2 {
+			continue
+		}
+		pts = Simplify(Ring(pts), 4, 24)
+		if len(pts) < 2 {
+			continue
+		}
+		r.Pts = pts
+		r.Lanes = rank
+		out = append(out, r)
+	}
+	// Keep the most important roads when the budget bites: every operator costs
+	// one polyline distance query per terrain cell.
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Lanes != out[j].Lanes {
+			return out[i].Lanes > out[j].Lanes
+		}
+		return out[i].ID < out[j].ID
+	})
+	if len(out) > opt.MaxRoads {
+		out = out[:opt.MaxRoads]
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// clipToSquare keeps the longest run of a polyline that stays inside the tile.
+func clipToSquare(pts [][2]float64, half float64) [][2]float64 {
+	var best, run [][2]float64
+	for _, p := range pts {
+		if math.Abs(p[0]) <= half && math.Abs(p[1]) <= half {
+			run = append(run, p)
+			continue
+		}
+		if len(run) > len(best) {
+			best = run
+		}
+		run = nil
+	}
+	if len(run) > len(best) {
+		best = run
+	}
+	return best
+}
+
+func writeCameras(s *strings.Builder, tile Tile, ir *IR, grid *HeightGrid) {
+	_, hi := grid.Bounds()
+	half := tile.SizeM / 2
+	tallest := [2]float64{0, 0}
+	best := 0.0
+	for _, b := range ir.Buildings {
+		if b.Height > best {
+			best = b.Height
+			tallest = Centroid(b.Outer)
+		}
+	}
+	// Everything here is relative to the tile datum. Building heights are
+	// heights, terrain samples are elevations: mixing them frames a 500 m
+	// inland city from a point half a kilometre underground.
+	ground := 0.0
+	if ir.Terrain != nil {
+		ground = ir.Terrain.BaseElevation
+	}
+	relief := hi - ground
+	eyeZ := ground + math.Max(relief, best) + tile.SizeM*0.45
+
+	fmt.Fprintf(s, "// Camera markers (no geometry). The first one is the default view.\n")
+	fmt.Fprintf(s, "gk_camera_lookat([%s, %s, %s], [0, 0, %s], \"overview\", 48);\n",
+		fnum(-half*1.25), fnum(-half*1.45), fnum(eyeZ), fnum(ground+best*0.35))
+	fmt.Fprintf(s, "gk_camera_lookat([%s, %s, %s], [%s, %s, %s], \"skyline\", 42);\n",
+		fnum(tallest[0]-half*0.9), fnum(tallest[1]-half*1.1), fnum(ground+math.Max(best*0.55, 40)),
+		fnum(tallest[0]), fnum(tallest[1]), fnum(ground+best*0.7))
+	fmt.Fprintf(s, "gk_camera_lookat([%s, %s, %s], [%s, %s, %s], \"street\", 60);\n",
+		fnum(tallest[0]+70), fnum(tallest[1]+70), fnum(ground+14.0),
+		fnum(tallest[0]), fnum(tallest[1]), fnum(ground+6.0))
+}
+
+// ---------------------------------------------------------------------------
+// formatting helpers
+// ---------------------------------------------------------------------------
+
+func writePoints(s *strings.Builder, pts [][2]float64) {
+	s.WriteString("[")
+	for i, p := range pts {
+		if i > 0 {
+			s.WriteString(", ")
+		}
+		fmt.Fprintf(s, "[%s, %s]", fnum(p[0]), fnum(p[1]))
+	}
+	s.WriteString("]")
+}
+
+// fnum prints a compact, locale-free, deterministic number.
+func fnum(v float64) string {
+	if math.Abs(v) < 5e-3 {
+		return "0"
+	}
+	s := strconv.FormatFloat(v, 'f', 2, 64)
+	s = strings.TrimRight(s, "0")
+	return strings.TrimSuffix(s, ".")
+}
+
+func indexRange(start, n int) []int {
+	out := make([]int, n)
+	for i := range out {
+		out[i] = start + i
+	}
+	return out
+}
+
+func reverseRing(r Ring) Ring {
+	out := append(Ring{}, r...)
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out
+}
+
+// sanitizeComment keeps a building name on one line and out of the parser.
+func sanitizeComment(name string) string {
+	name = strings.ReplaceAll(name, "\n", " ")
+	name = strings.ReplaceAll(name, "*/", "")
+	if len(name) > 90 {
+		name = name[:90]
+	}
+	return strings.TrimSpace(name)
+}

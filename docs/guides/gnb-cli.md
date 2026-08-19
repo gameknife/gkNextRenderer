@@ -89,6 +89,19 @@ package preset 配置在 `gnb.toml` 的 `[package.presets.<name>]`，可独立�
 
 `gnb ai` 是 provider/Bridge 正式入口；旧 `agent run` 已删除。`llm` 管理本地 llama-server。SCAD 的生成物与源数据规则见 [Scene Compose](../designs/scad-scene-compose-design.md)。
 
+## 真实地理数据生成城市关卡
+
+```bash
+./gnb.sh geo make --name hk_victoria --at 22.2855,114.1580 --size 1000 --profile hongkong
+./gnb.sh shot --scene assets/scad/proc/generated/hk_victoria.scad
+```
+
+`fetch`（SRTM 高程 + Overpass 矢量，缓存到 gitignore 的 `external/geocache/`）、`build`
+（归一化 IR + `terrain.hmap`）、`scad`（发射场景）三步也可单独跑；`make` 串联。加
+`--debug-images` 会导出 DEM 各阶段灰度图。详见
+[地理城市生成](../designs/geo-city-generation-design.md)。**原始下载与中间 IR 是 ODbL
+衍生数据库，不入库；只提交带署名的 `.scad` 与 `.hmap`。**
+
 ## 移动平台与安装
 
 ```bash

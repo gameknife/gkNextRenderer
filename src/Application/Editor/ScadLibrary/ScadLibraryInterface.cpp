@@ -2712,6 +2712,23 @@ namespace ScadLibrary
                         changed |= editPoint("尺寸", feature.size);
                         changed |= editNumber("旋转", feature.rot, 1.0f, "%.1f°");
                         break;
+                    case EType::Hmap:
+                        // Sampled heightfield (generated from real elevation
+                        // data). Not structurally editable here; the source page
+                        // owns it. Only the cheap scalars are exposed.
+                        ImGui::TextDisabled("采样高度场%s",
+                                            feature.path.empty() ? "（内联）" : "");
+                        if (!feature.path.empty())
+                        {
+                            ImGui::TextWrapped("%s", feature.path.c_str());
+                        }
+                        if (feature.grid)
+                        {
+                            ImGui::TextDisabled("%d x %d 采样", feature.grid->cols, feature.grid->rows);
+                        }
+                        changed |= editNumber("高度缩放", feature.zScale);
+                        changed |= editNumber("高度偏移", feature.zBias);
+                        break;
                     }
                     ImGui::TreePop();
                 }
@@ -5209,6 +5226,8 @@ namespace ScadLibrary
                 return IM_COL32(255, 218, 84, alpha);
             case EType::Pad:
                 return IM_COL32(255, 108, 196, alpha);
+            case EType::Hmap:
+                return IM_COL32(150, 160, 170, alpha);
             }
             return IM_COL32(255, 255, 255, alpha);
         };

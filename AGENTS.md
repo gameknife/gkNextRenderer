@@ -217,6 +217,7 @@ assets/
 ├── shaders/                 # Slang shaders (.slang)
 ├── configs/                 # Runtime config (cvar_default.json, visual_test.json, per-game configs, ...)
 ├── models/                  # glTF scenes
+├── scad/geo/<tile>/         # Generated real-world city tiles (terrain.hmap + attribution)
 ├── scripts/                 # Hand-maintained MagicaLego .mlscript files
 └── csharp/                  # Managed scripting sources (GkNext.Engine / .Bootstrap / .Game)
 
@@ -316,6 +317,8 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
   - `SCADLoader.md` - OpenSCAD (.scad) DSL loading (parser/evaluator/CSG via Manifold/text via FreeType)
   - `ScadTerrain.md` - gk_terrain low-poly walkable terrain (TERR spec, ter_* combinators, TerrainComponent)
   - `ScadAssetPlaybook.md` - SCAD 资产生成实战手册：kit → 场景 → 地形开放地图的流程、契约与验证闭环（新题材组件库/地图生成任务必读）
+  - `../designs/geo-city-generation-design.md` - `gnb geo`：从 SRTM 高程 + OpenStreetMap 生成真实
+    地点的 1km 城市 tile（可渲染 + 可行走）。换地点只改 `--at`，无需改代码
   - `ScadRig.md` - ScadRig rigid-body character rigs (bone_ modules + anim_* clips, FRigAnimator runtime)
   - `MagicaLego.md` - MagicaLego subproject notes
   - `Brotato3D.md` - Brotato3D code structure (god-class + per-system split, runtime data model, object pools)

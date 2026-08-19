@@ -46,6 +46,11 @@ void ScadLibraryGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     std::string error;
     cvars.SetDefaultFromString("r.samples", "4", &error);
     cvars.SetDefaultFromString("r.temporalFrames", "16", &error);
+#if defined(__APPLE__)
+    // MoltenVK has no hardware ray tracing path; use the cheaper lighting-only renderer for
+    // ScadLibrary's iterative previews and validation runs on macOS.
+    cvars.SetDefaultFromString("r.rendererType", "4", &error);
+#endif
 }
 
 void ScadLibraryGameInstance::OnInit() {}

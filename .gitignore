@@ -295,6 +295,11 @@ paket-files/
 # JetBrains Rider
 .idea/
 *.sln.iml
+# The Flappy C# solution includes one shared Rider run configuration so its Run button
+# rebuilds the managed assembly and launches the native engine host.
+!assets/csharp/Flappy/.idea/
+!assets/csharp/Flappy/.idea/runConfigurations/
+!assets/csharp/Flappy/.idea/runConfigurations/FlappyCSharp.xml
 
 # CodeRush
 .cr/

@@ -61,6 +61,8 @@ ScadLibrary 场景对象 Gizmo 在引擎 Y-up 与 SCAD Z-up 之间用 `ScadToWor
 - **内置函数**：`max min abs floor ceil round sqrt pow exp ln log sign sin cos tan asin acos atan atan2 len norm concat str`（三角函数为角度制）
 - **引擎扩展（`gk_` 前缀，非 OpenSCAD 标准）**：`gk_terrain(TERR)` 低模高度场地形 module +
   `gk_terrain_height(TERR,x,y)` / `gk_terrain_info(TERR,x,y)` 纯函数（`FScadTerrain.{h,cpp}`）。
+  TERR 的 `["hmap", ...]` 算子可引用 `.hmap` 二进制 side-car（真实 DEM 等采样高度场），
+  路径为 runtime-root 相对、经 `ScadReadAsset` 读取，pak 与 loose 行为一致。
   地形桶带 faceted 标志（loader 跳过法线平滑）、水面桶拆分为 `__water` 子节点（rayCast 不可见、
   无物理体）、地形数据经 `SceneTerrain` payload 挂成引擎 `TerrainComponent`。
   详见 `AGENT_GUIDE/ScadTerrain.md`。
