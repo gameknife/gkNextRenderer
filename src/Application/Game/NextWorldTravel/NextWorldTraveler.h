@@ -13,7 +13,7 @@ namespace Assets { class Model; class Scene; struct FMaterial; }
 namespace Runtime { class TerrainComponent; }
 class NextEngine;
 
-namespace GeoWalk
+namespace NextWorldTravel
 {
     enum class EWalkMode
     {
@@ -28,7 +28,7 @@ namespace GeoWalk
     // controller and copies its position onto the same rig. Both stand on the
     // ground the nav grid sampled, so what the AI can walk and what the player
     // can walk are the same surface — which is the point of the application.
-    class FGeoWalker
+    class FNextWorldTraveler
     {
     public:
         void InjectAssets(std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials);

@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace GeoWalk
+namespace NextWorldTravel
 {
     // One named place from assets/scad/geo/<tile>/poi.json.
     //
@@ -18,7 +18,7 @@ namespace GeoWalk
     {
         std::string name;
         std::string tag;      // raw OSM key=value, shown in the details panel
-        std::string category; // one of GeoWalk::PoiCategory
+        std::string category; // one of NextWorldTravel::PoiCategory
         std::string source;   // "building" | "area" | "node"
         glm::vec2 position{0.0f};
         float height = 0.0f; // building height in metres, 0 for areas and nodes

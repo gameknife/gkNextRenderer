@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace GeoWalk
+namespace NextWorldTravel
 {
     namespace
     {

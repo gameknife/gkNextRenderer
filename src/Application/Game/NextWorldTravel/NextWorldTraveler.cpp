@@ -1,6 +1,6 @@
-#include "GeoWalker.h"
+#include "NextWorldTraveler.h"
 
-#include "GeoWalkConfig.hpp"
+#include "NextWorldTravelConfig.hpp"
 
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace GeoWalk
+namespace NextWorldTravel
 {
     namespace
     {
@@ -33,7 +33,7 @@ namespace GeoWalk
         constexpr float kSpawnSearchStep = 12.0f;
     }
 
-    void FGeoWalker::ConfigurePool()
+    void FNextWorldTraveler::ConfigurePool()
     {
         NextGameplay::Sim::FCharacterPoolConfig config;
         config.poolCapacity = 1;
@@ -45,7 +45,7 @@ namespace GeoWalk
         config.rigPath = Config::kRigPath;
         config.rigVisual.baseWalkSpeed = Config::kWalkSpeed;
         config.rigVisual.sizeJitterRange = 0.0f;
-        config.nodeNamePrefix = "geo_walker";
+        config.nodeNamePrefix = "next_world_traveler";
         config.slotTints = {Config::kCharacterTint};
         config.navMaxStepHeight = Config::kNavMaxStepHeight;
         config.navClearanceHeight = Config::kNavClearanceHeight;
@@ -64,14 +64,14 @@ namespace GeoWalk
         pool_.Configure(config);
     }
 
-    void FGeoWalker::InjectAssets(std::vector<Assets::Model>& models,
+    void FNextWorldTraveler::InjectAssets(std::vector<Assets::Model>& models,
                                   std::vector<Assets::FMaterial>& materials)
     {
         ConfigurePool();
         pool_.InjectAssets(models, materials);
     }
 
-    float FGeoWalker::GroundHeight(float x, float z, float fallbackY) const
+    float FNextWorldTraveler::GroundHeight(float x, float z, float fallbackY) const
     {
         float navGround = 0.0f;
         if (pool_.NavReady() &&
@@ -86,7 +86,7 @@ namespace GeoWalk
         return fallbackY;
     }
 
-    float FGeoWalker::FloorToleranceFor(const glm::vec2& center, float halfSize) const
+    float FNextWorldTraveler::FloorToleranceFor(const glm::vec2& center, float halfSize) const
     {
         if (terrain_ == nullptr || !terrain_->HasData())
         {
@@ -112,7 +112,7 @@ namespace GeoWalk
         return (highest - lowest) + Config::kNavFloorToleranceSlack;
     }
 
-    void FGeoWalker::RebuildNavWindow(Assets::Scene& scene, const glm::vec2& center)
+    void FNextWorldTraveler::RebuildNavWindow(Assets::Scene& scene, const glm::vec2& center)
     {
         const float half = Config::kNavWindowHalfSize;
         navMin_ = glm::vec3(center.x - half, 0.0f, center.y - half);
@@ -122,7 +122,7 @@ namespace GeoWalk
         ++navRebuilds_;
     }
 
-    bool FGeoWalker::IsStreetLevel(float x, float z, float navGroundY) const
+    bool FNextWorldTraveler::IsStreetLevel(float x, float z, float navGroundY) const
     {
         if (terrain_ == nullptr || !terrain_->HasData())
         {
@@ -135,7 +135,7 @@ namespace GeoWalk
         return std::abs(navGroundY - terrain_->SampleHeight(x, z)) <= kStreetLevelBand;
     }
 
-    bool FGeoWalker::FindStreetSpawn(const glm::vec2& searchCenter, glm::vec3& outPosition) const
+    bool FNextWorldTraveler::FindStreetSpawn(const glm::vec2& searchCenter, glm::vec3& outPosition) const
     {
         if (!pool_.NavReady())
         {
@@ -214,18 +214,18 @@ namespace GeoWalk
 
         if (bestReachable < kMinReachableCells)
         {
-            SPDLOG_WARN("GeoWalk: best spawn candidate reaches only {} nav cells (want {})",
+            SPDLOG_WARN("NextWorldTravel: best spawn candidate reaches only {} nav cells (want {})",
                         bestReachable, kMinReachableCells);
             return false;
         }
         outPosition = best;
-        SPDLOG_INFO("GeoWalk: spawn at ({:.1f}, {:.1f}, {:.1f}), {} reachable nav cells "
+        SPDLOG_INFO("NextWorldTravel: spawn at ({:.1f}, {:.1f}, {:.1f}), {} reachable nav cells "
                     "out of {} candidates",
                     outPosition.x, outPosition.y, outPosition.z, bestReachable, budget);
         return true;
     }
 
-    bool FGeoWalker::OnSceneLoaded(Assets::Scene& scene, NextEngine& engine,
+    bool FNextWorldTraveler::OnSceneLoaded(Assets::Scene& scene, NextEngine& engine,
                                    const Runtime::TerrainComponent* terrain)
     {
         engine_ = &engine;
@@ -246,7 +246,7 @@ namespace GeoWalk
         if (!pool_.NavReady())
         {
             status_ = "nav grid failed to build";
-            SPDLOG_ERROR("GeoWalk: nav grid did not build — is KeepCPUMeshData enabled?");
+            SPDLOG_ERROR("NextWorldTravel: nav grid did not build — is KeepCPUMeshData enabled?");
             return false;
         }
 
@@ -254,7 +254,7 @@ namespace GeoWalk
         if (!FindStreetSpawn(glm::vec2(0.0f), spawn))
         {
             status_ = "no reachable street found in this tile";
-            SPDLOG_ERROR("GeoWalk: no reachable street-level ground within {} m of the tile centre",
+            SPDLOG_ERROR("NextWorldTravel: no reachable street-level ground within {} m of the tile centre",
                          Config::kNavWindowHalfSize);
             return false;
         }
@@ -271,7 +271,7 @@ namespace GeoWalk
         return true;
     }
 
-    void FGeoWalker::OnSceneUnloaded()
+    void FNextWorldTraveler::OnSceneUnloaded()
     {
         if (playerController_.IsValid())
         {
@@ -286,16 +286,16 @@ namespace GeoWalk
         status_ = "not spawned";
     }
 
-    glm::vec3 FGeoWalker::Position() const
+    glm::vec3 FNextWorldTraveler::Position() const
     {
         return character_ != nullptr ? character_->position : lastPosition_;
     }
 
-    float FGeoWalker::Yaw() const { return character_ != nullptr ? character_->yaw : 0.0f; }
+    float FNextWorldTraveler::Yaw() const { return character_ != nullptr ? character_->yaw : 0.0f; }
 
-    bool FGeoWalker::IsMoving() const { return lastSpeed_ > 0.05f; }
+    bool FNextWorldTraveler::IsMoving() const { return lastSpeed_ > 0.05f; }
 
-    void FGeoWalker::SetMode(EWalkMode mode)
+    void FNextWorldTraveler::SetMode(EWalkMode mode)
     {
         if (mode == mode_ || character_ == nullptr)
         {
@@ -337,14 +337,14 @@ namespace GeoWalk
         }
     }
 
-    void FGeoWalker::SetPlayerIntent(const glm::vec3& moveDirection, bool sprint, bool jump)
+    void FNextWorldTraveler::SetPlayerIntent(const glm::vec3& moveDirection, bool sprint, bool jump)
     {
         playerIntent_ = moveDirection;
         playerSprint_ = sprint;
         playerJump_ = playerJump_ || jump;
     }
 
-    bool FGeoWalker::WalkTo(const glm::vec3& worldTarget)
+    bool FNextWorldTraveler::WalkTo(const glm::vec3& worldTarget)
     {
         if (character_ == nullptr)
         {
@@ -362,7 +362,7 @@ namespace GeoWalk
         return found;
     }
 
-    bool FGeoWalker::PickRoamTarget(glm::vec3& outTarget)
+    bool FNextWorldTraveler::PickRoamTarget(glm::vec3& outTarget)
     {
         if (!pool_.NavReady() || character_ == nullptr)
         {
@@ -409,7 +409,7 @@ namespace GeoWalk
         return false;
     }
 
-    void FGeoWalker::TickRoam(float deltaSeconds, Assets::Scene& scene)
+    void FNextWorldTraveler::TickRoam(float deltaSeconds, Assets::Scene& scene)
     {
         (void)scene;
         if (character_ == nullptr)
@@ -454,7 +454,7 @@ namespace GeoWalk
         status_ = "roaming";
     }
 
-    void FGeoWalker::TickPlayer(float deltaSeconds, Assets::Scene& scene)
+    void FNextWorldTraveler::TickPlayer(float deltaSeconds, Assets::Scene& scene)
     {
         (void)scene;
         if (character_ == nullptr || !playerController_.IsValid())
@@ -478,7 +478,7 @@ namespace GeoWalk
         character_->speed = speed;
     }
 
-    void FGeoWalker::MaybeSlideNavWindow(Assets::Scene& scene)
+    void FNextWorldTraveler::MaybeSlideNavWindow(Assets::Scene& scene)
     {
         if (character_ == nullptr)
         {
@@ -502,7 +502,7 @@ namespace GeoWalk
         roamPause_ = 0.2f;
     }
 
-    void FGeoWalker::ApplyVisual(float deltaSeconds, Assets::Scene& scene)
+    void FNextWorldTraveler::ApplyVisual(float deltaSeconds, Assets::Scene& scene)
     {
         if (character_ == nullptr || !character_->visual)
         {
@@ -515,7 +515,7 @@ namespace GeoWalk
         scene.MarkTransformDirty();
     }
 
-    void FGeoWalker::Tick(float deltaSeconds, Assets::Scene& scene)
+    void FNextWorldTraveler::Tick(float deltaSeconds, Assets::Scene& scene)
     {
         if (character_ == nullptr || deltaSeconds <= 0.0f)
         {

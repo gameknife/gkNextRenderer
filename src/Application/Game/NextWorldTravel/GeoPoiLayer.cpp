@@ -1,6 +1,6 @@
 #include "GeoPoiLayer.h"
 
-#include "GeoWalkConfig.hpp"
+#include "NextWorldTravelConfig.hpp"
 
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/Components/TerrainComponent.hpp"
@@ -12,7 +12,7 @@
 #include <cmath>
 #include <limits>
 
-namespace GeoWalk
+namespace NextWorldTravel
 {
     namespace
     {
@@ -113,7 +113,7 @@ namespace GeoWalk
 
         if (groundedCount_ < static_cast<int>(pois.size()))
         {
-            SPDLOG_WARN("GeoWalk: {} of {} places fall outside the terrain extents and will not be labelled",
+            SPDLOG_WARN("NextWorldTravel: {} of {} places fall outside the terrain extents and will not be labelled",
                         static_cast<int>(pois.size()) - groundedCount_, pois.size());
         }
     }

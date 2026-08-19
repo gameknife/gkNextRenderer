@@ -11,7 +11,7 @@
 namespace Runtime { class TerrainComponent; }
 class NextGameInstanceBase;
 
-namespace GeoWalk
+namespace NextWorldTravel
 {
     // Categories the generator emits, in its canonical order. Kept in step with
     // POICategories in tools/gnb/internal/geo/poi.go; an unrecognised category

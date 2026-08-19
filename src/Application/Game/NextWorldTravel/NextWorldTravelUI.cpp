@@ -1,14 +1,14 @@
-#include "GeoWalkUI.h"
+#include "NextWorldTravelUI.h"
 
-#include "GeoWalkConfig.hpp"
-#include "GeoWalker.h"
+#include "NextWorldTravelConfig.hpp"
+#include "NextWorldTraveler.h"
 
 #include <imgui.h>
 
 #include <algorithm>
 #include <cstring>
 
-namespace GeoWalk
+namespace NextWorldTravel
 {
     namespace
     {
@@ -50,7 +50,7 @@ namespace GeoWalk
         }
     }
 
-    void FGeoWalkUI::DrawViewModeBar(const FGeoWalkUIContext& context, FGeoWalkUIRequest& request)
+    void FNextWorldTravelUI::DrawViewModeBar(const FNextWorldTravelUIContext& context, FNextWorldTravelUIRequest& request)
     {
         const float width = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2.0f) / 3.0f;
         const ImVec2 size(width, 0.0f);
@@ -73,13 +73,13 @@ namespace GeoWalk
         }
     }
 
-    void FGeoWalkUI::DrawWalkPanel(const FGeoWalkUIContext& context, FGeoWalkUIRequest& request)
+    void FNextWorldTravelUI::DrawWalkPanel(const FNextWorldTravelUIContext& context, FNextWorldTravelUIRequest& request)
     {
         if (context.walker == nullptr)
         {
             return;
         }
-        const FGeoWalker& walker = *context.walker;
+        const FNextWorldTraveler& walker = *context.walker;
         ImGui::Text("Control: %s", ModeName(walker.Mode()));
         ImGui::SameLine();
         if (ImGui::SmallButton("Switch (F)"))
@@ -109,8 +109,8 @@ namespace GeoWalk
         }
     }
 
-    void FGeoWalkUI::DrawAerialPanel(const FGeoWalkUIContext& context, const FGeoPoiLayer& poiLayer,
-                                     FGeoWalkUIRequest& request)
+    void FNextWorldTravelUI::DrawAerialPanel(const FNextWorldTravelUIContext& context, const FGeoPoiLayer& poiLayer,
+                                     FNextWorldTravelUIRequest& request)
     {
         ImGui::TextDisabled("right-drag orbit · WASD pan · wheel/QE zoom");
         ImGui::TextDisabled("click a marker to focus it");
@@ -133,8 +133,8 @@ namespace GeoWalk
         }
     }
 
-    void FGeoWalkUI::DrawFocusPanel(const FGeoWalkUIContext& context, const FGeoTile* tile,
-                                    FGeoWalkUIRequest& request)
+    void FNextWorldTravelUI::DrawFocusPanel(const FNextWorldTravelUIContext& context, const FGeoTile* tile,
+                                    FNextWorldTravelUIRequest& request)
     {
         const FGeoPoi* poi = (tile != nullptr && context.focusPoi >= 0 &&
                               context.focusPoi < static_cast<int>(tile->pois.size()))
@@ -199,9 +199,9 @@ namespace GeoWalk
         }
     }
 
-    FGeoWalkUIRequest FGeoWalkUI::Draw(const FGeoWalkUIContext& context, FGeoPoiLayer& poiLayer)
+    FNextWorldTravelUIRequest FNextWorldTravelUI::Draw(const FNextWorldTravelUIContext& context, FGeoPoiLayer& poiLayer)
     {
-        FGeoWalkUIRequest request;
+        FNextWorldTravelUIRequest request;
         if (!visible_ || context.tiles == nullptr)
         {
             return request;
@@ -210,7 +210,7 @@ namespace GeoWalk
         const std::vector<FGeoTile>& tiles = *context.tiles;
         ImGui::SetNextWindowPos(ImVec2(16.0f, 16.0f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(400.0f, 700.0f), ImGuiCond_FirstUseEver);
-        if (!ImGui::Begin("GeoWalk — tile browser", &visible_))
+        if (!ImGui::Begin("NextWorldTravel — tile browser", &visible_))
         {
             ImGui::End();
             return request;
@@ -293,9 +293,9 @@ namespace GeoWalk
         return request;
     }
 
-    void FGeoWalkUI::DrawPlaceList(const FGeoTile& tile, const FGeoPoiLayer& poiLayer,
-                                   const FGeoWalkUIContext& context, const glm::vec3& from,
-                                   FGeoWalkUIRequest& request)
+    void FNextWorldTravelUI::DrawPlaceList(const FGeoTile& tile, const FGeoPoiLayer& poiLayer,
+                                   const FNextWorldTravelUIContext& context, const glm::vec3& from,
+                                   FNextWorldTravelUIRequest& request)
     {
         ImGui::SetNextItemWidth(-70.0f);
         ImGui::InputTextWithHint("##filter", "filter by name", filter_, sizeof(filter_));

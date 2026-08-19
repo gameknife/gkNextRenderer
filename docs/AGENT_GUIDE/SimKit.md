@@ -69,7 +69,7 @@ whole-scene behaviour AirportSim and StudioSim rely on.
   what an agent actually stands on (road deck, pier, bridge), which a terrain heightfield
   does not.
 
-`GeoWalk` is the worked example — see [GeoWalk](GeoWalk.md) for the spawn-selection and
+`NextWorldTravel` is the worked example — see [NextWorldTravel](NextWorldTravel.md) for the spawn-selection and
 floor-tolerance rules that come with walking on a real city tile.
 
 ## Visuals And Animation
@@ -106,7 +106,7 @@ have converged on compatible behavior and a user task defines acceptance criteri
 Build shared consumers after changing Sim Kit:
 
 ```bash
-./gnb.sh build AirportSim StudioSim CitySolSim GeoWalk gkNextUnitTests
+./gnb.sh build AirportSim StudioSim CitySolSim NextWorldTravel gkNextUnitTests
 ./out/build/<preset>/bin/gkNextUnitTests "[Unit][SimKit]"
 ```
 

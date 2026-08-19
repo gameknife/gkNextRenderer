@@ -9,12 +9,12 @@
 #include <string>
 #include <vector>
 
-namespace GeoWalk
+namespace NextWorldTravel
 {
-    class FGeoWalker;
+    class FNextWorldTraveler;
 
     // What the HUD is allowed to ask the application to do this frame.
-    struct FGeoWalkUIRequest
+    struct FNextWorldTravelUIRequest
     {
         int loadTileIndex = -1;
         int walkToPoiIndex = -1;
@@ -29,11 +29,11 @@ namespace GeoWalk
         bool respawn = false;
     };
 
-    struct FGeoWalkUIContext
+    struct FNextWorldTravelUIContext
     {
         const std::vector<FGeoTile>* tiles = nullptr;
         int activeTile = -1;
-        const FGeoWalker* walker = nullptr;
+        const FNextWorldTraveler* walker = nullptr;
         const glm::vec3* cameraPosition = nullptr;
         // The camera and the tour dwell are edited in place: a slider that has
         // to round-trip through a request struct cannot be dragged.
@@ -49,11 +49,11 @@ namespace GeoWalk
         float frameMs = 0.0f;
     };
 
-    class FGeoWalkUI
+    class FNextWorldTravelUI
     {
     public:
         // Returns the actions the user asked for; the caller performs them.
-        FGeoWalkUIRequest Draw(const FGeoWalkUIContext& context, FGeoPoiLayer& poiLayer);
+        FNextWorldTravelUIRequest Draw(const FNextWorldTravelUIContext& context, FGeoPoiLayer& poiLayer);
 
         bool& Visible() { return visible_; }
         bool Visible() const { return visible_; }
@@ -62,15 +62,15 @@ namespace GeoWalk
         void ClearSelection() { selectedPoi_ = -1; }
 
     private:
-        void DrawViewModeBar(const FGeoWalkUIContext& context, FGeoWalkUIRequest& request);
-        void DrawWalkPanel(const FGeoWalkUIContext& context, FGeoWalkUIRequest& request);
-        void DrawAerialPanel(const FGeoWalkUIContext& context, const FGeoPoiLayer& poiLayer,
-                             FGeoWalkUIRequest& request);
-        void DrawFocusPanel(const FGeoWalkUIContext& context, const FGeoTile* tile,
-                            FGeoWalkUIRequest& request);
+        void DrawViewModeBar(const FNextWorldTravelUIContext& context, FNextWorldTravelUIRequest& request);
+        void DrawWalkPanel(const FNextWorldTravelUIContext& context, FNextWorldTravelUIRequest& request);
+        void DrawAerialPanel(const FNextWorldTravelUIContext& context, const FGeoPoiLayer& poiLayer,
+                             FNextWorldTravelUIRequest& request);
+        void DrawFocusPanel(const FNextWorldTravelUIContext& context, const FGeoTile* tile,
+                            FNextWorldTravelUIRequest& request);
         void DrawPlaceList(const FGeoTile& tile, const FGeoPoiLayer& poiLayer,
-                           const FGeoWalkUIContext& context, const glm::vec3& from,
-                           FGeoWalkUIRequest& request);
+                           const FNextWorldTravelUIContext& context, const glm::vec3& from,
+                           FNextWorldTravelUIRequest& request);
 
         bool visible_ = true;
         int selectedPoi_ = -1;

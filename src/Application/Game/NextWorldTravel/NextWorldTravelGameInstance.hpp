@@ -3,9 +3,9 @@
 #include "GeoCameraDirector.h"
 #include "GeoPoiLayer.h"
 #include "GeoTileCatalog.h"
-#include "GeoWalkConfig.hpp"
-#include "GeoWalkUI.h"
-#include "GeoWalker.h"
+#include "NextWorldTravelConfig.hpp"
+#include "NextWorldTravelUI.h"
+#include "NextWorldTraveler.h"
 
 #include "Engine/Runtime/GameInstance.hpp"
 
@@ -24,14 +24,14 @@ namespace Runtime { class TerrainComponent; }
 // named in it, and Focus orbits one of those places — by hand, or as a tour
 // that steps through them in order of prominence.
 //
-// See docs/AGENT_GUIDE/GeoWalk.md and
+// See docs/AGENT_GUIDE/NextWorldTravel.md and
 // docs/designs/geo-city-generation-design.md.
-class GeoWalkGameInstance : public NextGameInstanceBase
+class NextWorldTravelGameInstance : public NextGameInstanceBase
 {
 public:
-    GeoWalkGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
+    NextWorldTravelGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
                         NextEngine* engine);
-    ~GeoWalkGameInstance() override = default;
+    ~NextWorldTravelGameInstance() override = default;
 
     void OnInit() override;
     void OnTick(double deltaSeconds) override;
@@ -61,10 +61,10 @@ private:
     void TryResolveTerrain();
     void SpawnWalker();
     void UpdatePlayerIntent();
-    void ApplyUIRequest(const GeoWalk::FGeoWalkUIRequest& request);
+    void ApplyUIRequest(const NextWorldTravel::FNextWorldTravelUIRequest& request);
 
     // ---- Browsing --------------------------------------------------------
-    void SetViewMode(GeoWalk::EViewMode mode);
+    void SetViewMode(NextWorldTravel::EViewMode mode);
     // Points the orbit at a place, entering Focus mode if it is not already on.
     void FocusPoi(int poiIndex);
     // Steps through the browse order; +1 is the next place, -1 the previous.
@@ -74,17 +74,17 @@ private:
     // written in, minus whatever the category checkboxes are hiding.
     std::vector<int> BuildBrowseOrder() const;
     void UpdateTour(float deltaSeconds);
-    GeoWalk::FFocusSubject MakeFocusSubject(const GeoWalk::FGeoPoi& poi) const;
-    GeoWalk::FCameraWorld MakeCameraWorld() const;
+    NextWorldTravel::FFocusSubject MakeFocusSubject(const NextWorldTravel::FGeoPoi& poi) const;
+    NextWorldTravel::FCameraWorld MakeCameraWorld() const;
     // Draws the character's position into the aerial view, so the map says
     // where walking would resume from.
     void DrawWalkerMarker() const;
 
-    const GeoWalk::FGeoTile* ActiveTile() const;
-    GeoWalk::FGeoTile* ActiveTile();
+    const NextWorldTravel::FGeoTile* ActiveTile() const;
+    NextWorldTravel::FGeoTile* ActiveTile();
     glm::vec3 CameraPosition() const { return camera_.EyePosition(); }
 
-    std::vector<GeoWalk::FGeoTile> tiles_;
+    std::vector<NextWorldTravel::FGeoTile> tiles_;
     int activeTile_ = -1;
     int pendingTile_ = -1;
 
@@ -92,16 +92,16 @@ private:
     bool sceneReady_ = false;
     bool walkerSpawned_ = false;
 
-    GeoWalk::FGeoWalker walker_;
-    GeoWalk::FGeoPoiLayer poiLayer_;
-    GeoWalk::FGeoWalkUI ui_;
-    GeoWalk::FGeoCameraDirector camera_;
+    NextWorldTravel::FNextWorldTraveler walker_;
+    NextWorldTravel::FGeoPoiLayer poiLayer_;
+    NextWorldTravel::FNextWorldTravelUI ui_;
+    NextWorldTravel::FGeoCameraDirector camera_;
 
     // Browsing state
     int focusPoi_ = -1;
     bool tourActive_ = false;
     float tourTimer_ = 0.0f;
-    float tourDwell_ = GeoWalk::Config::kTourDwellSeconds;
+    float tourDwell_ = NextWorldTravel::Config::kTourDwellSeconds;
 
     // Input
     bool keyForward_ = false;

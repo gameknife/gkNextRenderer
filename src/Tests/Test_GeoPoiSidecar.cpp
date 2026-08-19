@@ -15,7 +15,7 @@
 // Contract test for assets/scad/geo/<tile>/poi.json, the label sidecar `gnb geo
 // build` writes next to terrain.hmap (see docs/designs/geo-city-generation-design.md).
 //
-// The consumer (GeoWalk) anchors every place against the loaded heightfield, so
+// The consumer (NextWorldTravel) anchors every place against the loaded heightfield, so
 // a POI outside the tile square silently disappears rather than erroring — which
 // makes the *file* the right place to assert. No GPU and no scene load: this
 // runs anywhere the repository is checked out.
@@ -24,7 +24,7 @@ namespace
     namespace fs = std::filesystem;
 
     // Kept in step with POICategories in tools/gnb/internal/geo/poi.go and with
-    // PoiCategory::kAll in the GeoWalk runtime. A category outside this set
+    // PoiCategory::kAll in the NextWorldTravel runtime. A category outside this set
     // would be drawn in the "other" colour with no warning.
     const std::set<std::string> kCategories = {
         "landmark", "transport", "culture", "education", "health", "worship",

@@ -337,7 +337,7 @@ Overpass `out body geom` 给每条 way 一个与 geometry **索引对齐**的 `n
 实测：香港 345、纽约 290、巴黎 252、里约 114、**成都 30**。成都稀疏与它 0% 的建筑高度覆盖率
 同源，是数据可用性问题。
 
-消费者见 [GeoWalk](../AGENT_GUIDE/GeoWalk.md)；数据契约由 `Test_GeoPoiSidecar.cpp`
+消费者见 [NextWorldTravel](../AGENT_GUIDE/NextWorldTravel.md)；数据契约由 `Test_GeoPoiSidecar.cpp`
 （`[POI]`，无需 GPU）守住。
 
 ## 6. 预算与限制
@@ -383,7 +383,7 @@ gkNextUnitTests "[Geo]"                             # 可行走闭环（需 GPU�
 gkNextUnitTests "[POI]"                             # poi.json 数据契约（无需 GPU，扫全部 tile）
 cd tools/gnb && go test ./internal/geo/             # fixture 驱动，不打网络
 gnb shot --scene assets/scad/proc/generated/hk_victoria.scad
-gnb validate --script assets/agentscripts/geowalk-smoke.agentscript.json   # 端到端漫游闭环
+gnb validate --script assets/agentscripts/next-world-travel-smoke.agentscript.json   # 端到端漫游闭环
 ```
 
 `gnb geo build` 输出的三组数字就是数据质量的看门指标：建筑高度的 tagged / levels / inferred

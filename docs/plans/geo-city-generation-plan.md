@@ -8,7 +8,7 @@
 `gnb geo make --name X --at lat,lon --size 1000` 一条命令、10~25 秒产出可渲染可行走的 1km 城市
 tile，沿海与内陆均已验证（香港 / 纽约 / 里约 / 巴黎 / 成都），重跑逐字节一致。P0~P5 与 R3 已完成，
 耐久知识已全部并入 design。每个 tile 另出 `poi.json` 命名地点 sidecar，消费者是
-[GeoWalk](../AGENT_GUIDE/GeoWalk.md)（漫游器：地点标签 + ScadRig 角色在可行走区域上行走）。
+[NextWorldTravel](../AGENT_GUIDE/NextWorldTravel.md)（漫游器：地点标签 + ScadRig 角色在可行走区域上行走）。
 
 ## 冷启动指引
 
@@ -40,7 +40,7 @@ cd tools/gnb && go test ./internal/geo/       # fixture 驱动，不打网络
 1. **入库范围**。现有 5 个 tile（`assets/scad/geo/*/` 与 `assets/scad/proc/generated/*.scad`）
    都还是未跟踪文件。要留哪些？是否进 pak？原始下载与 IR 在 gitignore 的 `external/geocache/`
    下，按已定政策不入库。
-   **注意**：GeoWalk 靠扫 `assets/scad/geo/*/` 这个 loose 目录发现 tile，pak 里没有目录列表。
+   **注意**：NextWorldTravel 靠扫 `assets/scad/geo/*/` 这个 loose 目录发现 tile，pak 里没有目录列表。
    如果决定进 pak，需要额外产出一份 tile 清单。
 2. **地图尺寸**。1km 对关卡偏小，但 2km 会撞上 `cells ≤ 176` 的物理网格上限（见 design §6）。
    选项：(a) 接受 11.4m/格的粗地形；(b) 改引擎让地形跨多个 Model / 支持多 tile 拼接。

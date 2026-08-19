@@ -4,7 +4,7 @@
 
 #include <array>
 
-namespace GeoWalk::Config
+namespace NextWorldTravel::Config
 {
     // ---- Character -------------------------------------------------------
     inline constexpr const char* kRigPath = "assets/scad/characters/citizen.scad";

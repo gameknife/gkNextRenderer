@@ -37,7 +37,7 @@
 - [Windows Dozen Vulkan 后端排障](guides/dozen-vulkan-backend-troubleshooting.md)
 - [SCAD 资产目录与 ScadLibrary 场景组装约定](../assets/scad/README.md)
 - [SCAD Terrain 使用速查](AGENT_GUIDE/ScadTerrain.md)
-- [GeoWalk 真实地点浏览器](AGENT_GUIDE/GeoWalk.md)（加载 `gnb geo` 城市 tile：Walk 让 ScadRig
+- [NextWorldTravel 真实地点浏览器](AGENT_GUIDE/NextWorldTravel.md)（加载 `gnb geo` 城市 tile：Walk 让 ScadRig
   角色在可行走街面上 AI 漫游或 WASD 操控，Aerial 把 OSM 地点铺成鸟瞰地图，Focus 逐个绕物取景）
 - [Soft Mesh Shader GPU-Driven 提交路径](guides/soft-mesh-shader-gpu-driven-submit.md)
 - [TUI 终端模式](guides/tui-mode.md)

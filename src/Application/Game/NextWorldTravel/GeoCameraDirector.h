@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GeoWalkConfig.hpp"
+#include "NextWorldTravelConfig.hpp"
 
 #include <glm/glm.hpp>
 
@@ -8,7 +8,7 @@
 
 namespace Runtime { class TerrainComponent; }
 
-namespace GeoWalk
+namespace NextWorldTravel
 {
     // The three ways this application looks at a generated tile. Walking is one
     // of them, not the whole application: Aerial is the map you pick a place

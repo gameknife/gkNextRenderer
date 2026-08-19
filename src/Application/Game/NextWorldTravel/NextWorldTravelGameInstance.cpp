@@ -1,6 +1,6 @@
-#include "GeoWalkGameInstance.hpp"
+#include "NextWorldTravelGameInstance.hpp"
 
-#include "GeoWalkConfig.hpp"
+#include "NextWorldTravelConfig.hpp"
 
 #include "Engine/Assets/Acceleration/CPUAccelerationStructure.hpp"
 #include "Engine/Assets/Core/Node.hpp"
@@ -24,24 +24,24 @@
 #include <algorithm>
 #include <cmath>
 
-using namespace GeoWalk;
+using namespace NextWorldTravel;
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config,
                                                          Runtime::Config::Options& options,
                                                          NextEngine* engine)
 {
     Modules::Scad::Register();
-    return std::make_unique<GeoWalkGameInstance>(config, options, engine);
+    return std::make_unique<NextWorldTravelGameInstance>(config, options, engine);
 }
 
-GeoWalkGameInstance::GeoWalkGameInstance(Vulkan::WindowConfig& config,
+NextWorldTravelGameInstance::NextWorldTravelGameInstance(Vulkan::WindowConfig& config,
                                          Runtime::Config::Options& options, NextEngine* engine)
     : NextGameInstanceBase(config, options, engine)
 {
-    ConfigureWindow(config, options, "GeoWalk", 1920, 1080, false);
+    ConfigureWindow(config, options, "NextWorldTravel", 1920, 1080, false);
 }
 
-void GeoWalkGameInstance::OnInit()
+void NextWorldTravelGameInstance::OnInit()
 {
     // The nav grid raycasts the CPU BVH, so the scene mesh has to keep its CPU
     // copy. Without this the grid builds empty and nothing can be spawned.
@@ -50,7 +50,7 @@ void GeoWalkGameInstance::OnInit()
     tiles_ = DiscoverGeoTiles();
     if (tiles_.empty())
     {
-        SPDLOG_ERROR("GeoWalk: no generated tiles found. Generate one with "
+        SPDLOG_ERROR("NextWorldTravel: no generated tiles found. Generate one with "
                      "`gnb geo make --name <tile> --at <lat>,<lon>`");
         return;
     }
@@ -58,7 +58,7 @@ void GeoWalkGameInstance::OnInit()
     {
         if (!LoadTilePois(tile))
         {
-            SPDLOG_WARN("GeoWalk: {}", tile.loadError);
+            SPDLOG_WARN("NextWorldTravel: {}", tile.loadError);
         }
     }
 
@@ -74,22 +74,22 @@ void GeoWalkGameInstance::OnInit()
         }
         else
         {
-            SPDLOG_WARN("GeoWalk: '{}' is not a generated geo tile — loading '{}' instead",
+            SPDLOG_WARN("NextWorldTravel: '{}' is not a generated geo tile — loading '{}' instead",
                         GOption->SceneName, tiles_[0].name);
         }
     }
     RequestTile(index);
 }
 
-void GeoWalkGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
+void NextWorldTravelGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
-    // GeoWalk is a ray-traced city walk; keep the engine's lighter default
+    // NextWorldTravel is a ray-traced city walk; keep the engine's lighter default
     // available through user settings and explicit command-line overrides.
     cvars.SetDefaultFromString("r.rendererType", "0", &error);
 }
 
-void GeoWalkGameInstance::RequestTile(int index)
+void NextWorldTravelGameInstance::RequestTile(int index)
 {
     if (index < 0 || index >= static_cast<int>(tiles_.size()))
     {
@@ -103,12 +103,12 @@ void GeoWalkGameInstance::RequestTile(int index)
     tourActive_ = false;
     poiLayer_.SetHighlight(-1);
     ui_.ClearSelection();
-    SPDLOG_INFO("GeoWalk: loading tile '{}' ({})", tiles_[static_cast<size_t>(index)].name,
+    SPDLOG_INFO("NextWorldTravel: loading tile '{}' ({})", tiles_[static_cast<size_t>(index)].name,
                 tiles_[static_cast<size_t>(index)].scenePath);
     GetEngine().RequestLoadScene({.filename = tiles_[static_cast<size_t>(index)].scenePath});
 }
 
-void GeoWalkGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& /*nodes*/,
+void NextWorldTravelGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& /*nodes*/,
                                              std::vector<Assets::Model>& models,
                                              std::vector<Assets::FMaterial>& materials,
                                              std::vector<Assets::LightObject>& /*lights*/,
@@ -117,7 +117,7 @@ void GeoWalkGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets:
     walker_.InjectAssets(models, materials);
 }
 
-void GeoWalkGameInstance::OnSceneLoaded()
+void NextWorldTravelGameInstance::OnSceneLoaded()
 {
     if (pendingTile_ >= 0)
     {
@@ -132,7 +132,7 @@ void GeoWalkGameInstance::OnSceneLoaded()
     // Resolution and spawning are deferred to the first ticks.
 }
 
-void GeoWalkGameInstance::TryResolveTerrain()
+void NextWorldTravelGameInstance::TryResolveTerrain()
 {
     if (terrain_ != nullptr)
     {
@@ -156,13 +156,13 @@ void GeoWalkGameInstance::TryResolveTerrain()
     if (FGeoTile* tile = ActiveTile())
     {
         poiLayer_.OnTerrainReady(tile->pois, *terrain_);
-        SPDLOG_INFO("GeoWalk: terrain {}x{} cells, {} of {} places anchored",
+        SPDLOG_INFO("NextWorldTravel: terrain {}x{} cells, {} of {} places anchored",
                     terrain_->GetCellsX(), terrain_->GetCellsY(), poiLayer_.GroundedCount(),
                     tile->pois.size());
     }
 }
 
-void GeoWalkGameInstance::SpawnWalker()
+void NextWorldTravelGameInstance::SpawnWalker()
 {
     if (walkerSpawned_ || terrain_ == nullptr)
     {
@@ -204,7 +204,7 @@ void GeoWalkGameInstance::SpawnWalker()
     camera_.Tick(1.0f, MakeCameraWorld());
 }
 
-void GeoWalkGameInstance::OnSceneUnloaded()
+void NextWorldTravelGameInstance::OnSceneUnloaded()
 {
     walker_.OnSceneUnloaded();
     sceneReady_ = false;
@@ -212,12 +212,12 @@ void GeoWalkGameInstance::OnSceneUnloaded()
     terrain_ = nullptr;
 }
 
-void GeoWalkGameInstance::OnDestroy()
+void NextWorldTravelGameInstance::OnDestroy()
 {
     walker_.OnSceneUnloaded();
 }
 
-const FGeoTile* GeoWalkGameInstance::ActiveTile() const
+const FGeoTile* NextWorldTravelGameInstance::ActiveTile() const
 {
     if (activeTile_ < 0 || activeTile_ >= static_cast<int>(tiles_.size()))
     {
@@ -226,12 +226,12 @@ const FGeoTile* GeoWalkGameInstance::ActiveTile() const
     return &tiles_[static_cast<size_t>(activeTile_)];
 }
 
-FGeoTile* GeoWalkGameInstance::ActiveTile()
+FGeoTile* NextWorldTravelGameInstance::ActiveTile()
 {
-    return const_cast<FGeoTile*>(const_cast<const GeoWalkGameInstance*>(this)->ActiveTile());
+    return const_cast<FGeoTile*>(const_cast<const NextWorldTravelGameInstance*>(this)->ActiveTile());
 }
 
-FCameraWorld GeoWalkGameInstance::MakeCameraWorld() const
+FCameraWorld NextWorldTravelGameInstance::MakeCameraWorld() const
 {
     FCameraWorld world;
     world.walkerValid = walkerSpawned_;
@@ -249,7 +249,7 @@ FCameraWorld GeoWalkGameInstance::MakeCameraWorld() const
     return world;
 }
 
-bool GeoWalkGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
+bool NextWorldTravelGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
 {
     outRenderCamera.ModelView = camera_.ViewMatrix();
     outRenderCamera.FieldOfView = Config::kFov;
@@ -258,7 +258,7 @@ bool GeoWalkGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) 
     return true;
 }
 
-void GeoWalkGameInstance::UpdatePlayerIntent()
+void NextWorldTravelGameInstance::UpdatePlayerIntent()
 {
     if (walker_.Mode() != EWalkMode::Player)
     {
@@ -296,7 +296,7 @@ void GeoWalkGameInstance::UpdatePlayerIntent()
     walker_.SetPlayerIntent(intent, keySprint_, false);
 }
 
-std::vector<int> GeoWalkGameInstance::BuildBrowseOrder() const
+std::vector<int> NextWorldTravelGameInstance::BuildBrowseOrder() const
 {
     std::vector<int> order;
     const FGeoTile* tile = ActiveTile();
@@ -318,7 +318,7 @@ std::vector<int> GeoWalkGameInstance::BuildBrowseOrder() const
     return order;
 }
 
-FFocusSubject GeoWalkGameInstance::MakeFocusSubject(const FGeoPoi& poi) const
+FFocusSubject NextWorldTravelGameInstance::MakeFocusSubject(const FGeoPoi& poi) const
 {
     FFocusSubject subject;
     const float footprint = std::sqrt(std::max(poi.areaM2, 0.0f));
@@ -336,7 +336,7 @@ FFocusSubject GeoWalkGameInstance::MakeFocusSubject(const FGeoPoi& poi) const
     return subject;
 }
 
-void GeoWalkGameInstance::SetViewMode(EViewMode mode)
+void NextWorldTravelGameInstance::SetViewMode(EViewMode mode)
 {
     if (mode == camera_.Mode())
     {
@@ -349,7 +349,7 @@ void GeoWalkGameInstance::SetViewMode(EViewMode mode)
         const std::vector<int> order = BuildBrowseOrder();
         if (order.empty())
         {
-            SPDLOG_WARN("GeoWalk: no anchored place to focus on this tile");
+            SPDLOG_WARN("NextWorldTravel: no anchored place to focus on this tile");
             return;
         }
         FocusPoi(order.front());
@@ -371,7 +371,7 @@ void GeoWalkGameInstance::SetViewMode(EViewMode mode)
     }
 }
 
-void GeoWalkGameInstance::FocusPoi(int poiIndex)
+void NextWorldTravelGameInstance::FocusPoi(int poiIndex)
 {
     const FGeoTile* tile = ActiveTile();
     if (tile == nullptr || poiIndex < 0 || poiIndex >= static_cast<int>(tile->pois.size()))
@@ -381,7 +381,7 @@ void GeoWalkGameInstance::FocusPoi(int poiIndex)
     const FGeoPoi& poi = tile->pois[static_cast<size_t>(poiIndex)];
     if (!poi.grounded)
     {
-        SPDLOG_WARN("GeoWalk: '{}' is outside the heightfield and cannot be framed", poi.name);
+        SPDLOG_WARN("NextWorldTravel: '{}' is outside the heightfield and cannot be framed", poi.name);
         return;
     }
 
@@ -398,7 +398,7 @@ void GeoWalkGameInstance::FocusPoi(int poiIndex)
     tourTimer_ = tourDwell_;
 }
 
-void GeoWalkGameInstance::FocusStep(int delta)
+void NextWorldTravelGameInstance::FocusStep(int delta)
 {
     const std::vector<int> order = BuildBrowseOrder();
     if (order.empty())
@@ -415,7 +415,7 @@ void GeoWalkGameInstance::FocusStep(int delta)
     FocusPoi(order[static_cast<size_t>(next)]);
 }
 
-void GeoWalkGameInstance::UpdateTour(float deltaSeconds)
+void NextWorldTravelGameInstance::UpdateTour(float deltaSeconds)
 {
     if (!tourActive_ || camera_.Mode() != EViewMode::Focus)
     {
@@ -428,7 +428,7 @@ void GeoWalkGameInstance::UpdateTour(float deltaSeconds)
     }
 }
 
-void GeoWalkGameInstance::OnTick(double deltaSeconds)
+void NextWorldTravelGameInstance::OnTick(double deltaSeconds)
 {
     frameMs_ = static_cast<float>(deltaSeconds * 1000.0);
     if (!sceneReady_)
@@ -465,7 +465,7 @@ void GeoWalkGameInstance::OnTick(double deltaSeconds)
     }
 }
 
-void GeoWalkGameInstance::ApplyUIRequest(const FGeoWalkUIRequest& request)
+void NextWorldTravelGameInstance::ApplyUIRequest(const FNextWorldTravelUIRequest& request)
 {
     // Both of these throw the scene away, so nothing else in the request can
     // still be meaningful this frame.
@@ -541,7 +541,7 @@ void GeoWalkGameInstance::ApplyUIRequest(const FGeoWalkUIRequest& request)
     }
 }
 
-void GeoWalkGameInstance::DrawWalkerMarker() const
+void NextWorldTravelGameInstance::DrawWalkerMarker() const
 {
     if (!walkerSpawned_ || camera_.Mode() != EViewMode::Aerial)
     {
@@ -565,7 +565,7 @@ void GeoWalkGameInstance::DrawWalkerMarker() const
     drawList->AddText(ImVec2(screen.x + 12.0f, screen.y - 7.0f), color, "walker");
 }
 
-bool GeoWalkGameInstance::OnRenderUI()
+bool NextWorldTravelGameInstance::OnRenderUI()
 {
     if (!sceneReady_)
     {
@@ -582,7 +582,7 @@ bool GeoWalkGameInstance::OnRenderUI()
     const std::vector<int> order = BuildBrowseOrder();
     const auto focusIt = std::find(order.begin(), order.end(), focusPoi_);
 
-    FGeoWalkUIContext context;
+    FNextWorldTravelUIContext context;
     context.tiles = &tiles_;
     context.activeTile = activeTile_;
     context.walker = &walker_;
@@ -601,7 +601,7 @@ bool GeoWalkGameInstance::OnRenderUI()
     return true;
 }
 
-bool GeoWalkGameInstance::OnKey(SDL_Event& event)
+bool NextWorldTravelGameInstance::OnKey(SDL_Event& event)
 {
     const bool down = event.type == SDL_EVENT_KEY_DOWN;
     switch (event.key.key)
@@ -700,7 +700,7 @@ bool GeoWalkGameInstance::OnKey(SDL_Event& event)
     return false;
 }
 
-bool GeoWalkGameInstance::OnCursorPosition(double xpos, double ypos)
+bool NextWorldTravelGameInstance::OnCursorPosition(double xpos, double ypos)
 {
     if (!mouseLookActive_)
     {
@@ -721,7 +721,7 @@ bool GeoWalkGameInstance::OnCursorPosition(double xpos, double ypos)
     return true;
 }
 
-bool GeoWalkGameInstance::OnMouseButton(SDL_Event& event)
+bool NextWorldTravelGameInstance::OnMouseButton(SDL_Event& event)
 {
     if (event.button.button == SDL_BUTTON_RIGHT)
     {
@@ -749,13 +749,13 @@ bool GeoWalkGameInstance::OnMouseButton(SDL_Event& event)
     return true;
 }
 
-bool GeoWalkGameInstance::OnScroll(double /*xoffset*/, double yoffset)
+bool NextWorldTravelGameInstance::OnScroll(double /*xoffset*/, double yoffset)
 {
     camera_.AddZoom(static_cast<float>(yoffset));
     return true;
 }
 
-void GeoWalkGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegistry& registry)
+void NextWorldTravelGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegistry& registry)
 {
     registry.Add("geo.tile", [this]()
     {

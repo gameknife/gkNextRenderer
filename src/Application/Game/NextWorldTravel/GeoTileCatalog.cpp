@@ -11,7 +11,7 @@
 
 namespace fs = std::filesystem;
 
-namespace GeoWalk
+namespace NextWorldTravel
 {
     namespace
     {
@@ -40,7 +40,7 @@ namespace GeoWalk
         std::error_code ec;
         if (!fs::is_directory(root, ec))
         {
-            SPDLOG_WARN("GeoWalk: no geo tiles at '{}' — run `gnb geo make` first", root.string());
+            SPDLOG_WARN("NextWorldTravel: no geo tiles at '{}' — run `gnb geo make` first", root.string());
             return tiles;
         }
 
@@ -56,14 +56,14 @@ namespace GeoWalk
             {
                 // A tile generated before the POI stage existed. Nothing to
                 // label, so nothing for this application to show.
-                SPDLOG_WARN("GeoWalk: tile '{}' has no poi.json — regenerate it with `gnb geo build`",
+                SPDLOG_WARN("NextWorldTravel: tile '{}' has no poi.json — regenerate it with `gnb geo build`",
                             tileName);
                 continue;
             }
             const fs::path scene = Utilities::FileHelper::GetRuntimeFilePath(ScenePathFor(tileName));
             if (!fs::exists(scene, ec))
             {
-                SPDLOG_WARN("GeoWalk: tile '{}' has no scene at '{}'", tileName, scene.string());
+                SPDLOG_WARN("NextWorldTravel: tile '{}' has no scene at '{}'", tileName, scene.string());
                 continue;
             }
             FGeoTile tile;
@@ -149,7 +149,7 @@ namespace GeoWalk
         }
 
         tile.poisLoaded = true;
-        SPDLOG_INFO("GeoWalk: tile '{}' — {} places from {}", tile.name, tile.pois.size(), tile.poiPath);
+        SPDLOG_INFO("NextWorldTravel: tile '{}' — {} places from {}", tile.name, tile.pois.size(), tile.poiPath);
         return true;
     }
 

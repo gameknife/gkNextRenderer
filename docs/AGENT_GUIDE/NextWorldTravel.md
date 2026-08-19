@@ -1,4 +1,4 @@
-# GeoWalk — 真实地点浏览器
+# NextWorldTravel — 真实地点浏览器
 
 加载 `gnb geo` 生成的真实城市 tile，用**三种视图**看同一块地：Walk 把一个 ScadRig 角色放在
 **可达的街面**上（AI 自动漫游 / 玩家 WASD），Aerial 从空中把整块 tile 变成一张标着
@@ -8,11 +8,11 @@ OpenStreetMap 地点的地图，Focus 绕着其中一个地点转。走路是其
 角色资产格式见 [ScadRig](ScadRig.md)，复用的仿真层见 [SimKit](SimKit.md)。
 
 ```bash
-./gnb.sh build GeoWalk
-./gnb.sh run GeoWalk                                                   # 默认加载第一个 tile
-./gnb.sh shot --target GeoWalk --ui --scene assets/scad/proc/generated/hk_victoria.scad
-./gnb.sh validate --script assets/agentscripts/geowalk-smoke.agentscript.json   # 走路
-./gnb.sh validate --script assets/agentscripts/geowalk-browse.agentscript.json  # 浏览（鸟瞰 + 绕物）
+./gnb.sh build NextWorldTravel
+./gnb.sh run NextWorldTravel                                                   # 默认加载第一个 tile
+./gnb.sh shot --target NextWorldTravel --ui --scene assets/scad/proc/generated/hk_victoria.scad
+./gnb.sh validate --script assets/agentscripts/next-world-travel-smoke.agentscript.json   # 走路
+./gnb.sh validate --script assets/agentscripts/next-world-travel-browse.agentscript.json  # 浏览（鸟瞰 + 绕物）
 ./out/build/<preset>/bin/gkNextUnitTests "[POI]"                       # poi.json 数据契约，无需 GPU
 ```
 
@@ -72,7 +72,7 @@ HUD 顶部是三个视图的 tab，下面跟着当前视图的面板；再往下
 
 ### Focus 里角色是暂停的
 
-`FGeoWalker::SetPaused` 只让 rig 站住（idle clip 继续播），仿真状态、路线、导航窗口全部原样保留，
+`FNextWorldTraveler::SetPaused` 只让 rig 站住（idle clip 继续播），仿真状态、路线、导航窗口全部原样保留，
 恢复时接着走。原因是 NavGrid 滑动窗口重建要 ~1 秒，落在环绕镜头中间是这个程序最明显的一次卡顿。
 Aerial 不暂停——鸟瞰图里有个人在走反而给了尺度感。
 
@@ -158,7 +158,7 @@ lodging / park / place / other`）在三处必须一致：`tools/gnb/internal/ge
 - **Player**：`NextCharacterController` 物理胶囊，每帧把它的脚点写回 `FSimCharacter::position`，
   再手动驱动 visual（pool 的 `Tick` 在这个模式下不跑，位置由物理拥有）。
 
-两者站在**同一套导航面高度**上（`FGeoWalker::GroundHeight`：窗口内取 NavGrid 采样值，窗口外
+两者站在**同一套导航面高度**上（`FNextWorldTraveler::GroundHeight`：窗口内取 NavGrid 采样值，窗口外
 回退到地形高度场）。NavGrid 的采样跟着路面/码头/桥面走，地形高度场不会——所以角色走在路面上
 而不是陷进路基里。
 
