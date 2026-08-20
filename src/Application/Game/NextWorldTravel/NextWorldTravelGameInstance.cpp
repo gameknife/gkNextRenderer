@@ -10,6 +10,7 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Components/TerrainComponent.hpp"
+#include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Interface/AgentQueries.hpp"
 #include "Engine/Runtime/ScreenShotService.hpp"
@@ -99,6 +100,7 @@ void NextWorldTravelGameInstance::RequestTile(int index)
     pendingTile_ = index;
     sceneReady_ = false;
     walkerSpawned_ = false;
+    walkerSpawnAttempted_ = false;
     terrain_ = nullptr;
     focusPoi_ = -1;
     tourActive_ = false;
@@ -127,6 +129,7 @@ void NextWorldTravelGameInstance::OnSceneLoaded()
     }
     sceneReady_ = true;
     walkerSpawned_ = false;
+    walkerSpawnAttempted_ = false;
     terrain_ = nullptr;
     // The terrain component arrives with the scene, but the CPU acceleration
     // structure the nav grid needs is not necessarily ready on this callback.
@@ -165,10 +168,22 @@ void NextWorldTravelGameInstance::TryResolveTerrain()
 
 void NextWorldTravelGameInstance::SpawnWalker()
 {
-    if (walkerSpawned_ || terrain_ == nullptr)
+    if (walkerSpawned_ || walkerSpawnAttempted_ || terrain_ == nullptr)
     {
         return;
     }
+
+    // SceneLoaded can arrive before the asynchronous CPU BVH publishes its
+    // first snapshot. Do not consume the one-shot spawn attempt until raycasts
+    // are meaningful; once a real attempt has failed, keep the failure latched
+    // instead of rebuilding the nav grid on every tick.
+    const auto snapshot = GetEngine().GetScene().GetCPUAccelerationStructure().AcquireSnapshot();
+    if (!snapshot || snapshot->instances.empty())
+    {
+        return;
+    }
+
+    walkerSpawnAttempted_ = true;
     walkerSpawned_ = walker_.OnSceneLoaded(GetEngine().GetScene(), GetEngine(), terrain_);
     if (!walkerSpawned_)
     {
@@ -210,6 +225,7 @@ void NextWorldTravelGameInstance::OnSceneUnloaded()
     walker_.OnSceneUnloaded();
     sceneReady_ = false;
     walkerSpawned_ = false;
+    walkerSpawnAttempted_ = false;
     terrain_ = nullptr;
 }
 
@@ -583,7 +599,13 @@ bool NextWorldTravelGameInstance::OnRenderUI()
     const FGeoTile* tile = ActiveTile();
     if (tile != nullptr)
     {
-        poiLayer_.Draw(*this, tile->pois, CameraPosition());
+        // Dear ImGui owns the logical UI coordinate space used by the POI
+        // projection. Its backend already normalizes SDL's physical mouse
+        // coordinates on high-DPI Windows, so do not use NextEngine's raw
+        // input-state position here.
+        const ImVec2 mousePosition = ImGui::GetIO().MousePos;
+        poiLayer_.Draw(*this, tile->pois, CameraPosition(),
+                       glm::vec2(mousePosition.x, mousePosition.y));
     }
     DrawWalkerMarker();
 
@@ -749,7 +771,20 @@ bool NextWorldTravelGameInstance::OnMouseButton(SDL_Event& event)
     {
         return false;
     }
-    const int picked = poiLayer_.PickAt(glm::vec2(mousePos_));
+    // Label projection and ImGui both use logical coordinates. On a DPI-scaled
+    // desktop SDL reports mouse button positions in physical pixels, while
+    // synthetic validation input is already expressed in logical pixels. Try
+    // the normalized event position first, then retain the logical fallback so
+    // both input sources hit the same cached label plate.
+    const glm::vec2 eventPosition(event.button.x, event.button.y);
+    const float uiScale = GetEngine().GetUserInterface() != nullptr
+                              ? std::max(1.0f, GetEngine().GetUserInterface()->UiScale())
+                              : 1.0f;
+    int picked = poiLayer_.PickAt(eventPosition / uiScale);
+    if (picked < 0 && uiScale > 1.0f)
+    {
+        picked = poiLayer_.PickAt(eventPosition);
+    }
     if (picked < 0)
     {
         return false;

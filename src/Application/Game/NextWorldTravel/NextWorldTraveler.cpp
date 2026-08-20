@@ -112,6 +112,44 @@ namespace NextWorldTravel
         return (highest - lowest) + Config::kNavFloorToleranceSlack;
     }
 
+    bool FNextWorldTraveler::FindNearestDrySearchCenter(const glm::vec2& searchCenter,
+                                                        glm::vec2& outCenter) const
+    {
+        if (terrain_ == nullptr || !terrain_->HasData())
+        {
+            return false;
+        }
+
+        const float halfX = terrain_->GetSizeX() * 0.5f;
+        const float halfZ = terrain_->GetSizeY() * 0.5f;
+        if (halfX <= 0.0f || halfZ <= 0.0f)
+        {
+            return false;
+        }
+
+        float bestDistance = std::numeric_limits<float>::max();
+        bool found = false;
+        for (float z = -halfZ + kSpawnSearchStep; z < halfZ; z += kSpawnSearchStep)
+        {
+            for (float x = -halfX + kSpawnSearchStep; x < halfX; x += kSpawnSearchStep)
+            {
+                if (terrain_->IsWater(x, z))
+                {
+                    continue;
+                }
+
+                const float distance = glm::distance(glm::vec2(x, z), searchCenter);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    outCenter = {x, z};
+                    found = true;
+                }
+            }
+        }
+        return found;
+    }
+
     void FNextWorldTraveler::RebuildNavWindow(Assets::Scene& scene, const glm::vec2& center)
     {
         const float half = Config::kNavWindowHalfSize;
@@ -238,9 +276,26 @@ namespace NextWorldTravel
         mode_ = EWalkMode::Roam;
 
         const float half = Config::kNavWindowHalfSize;
-        navMin_ = glm::vec3(-half, 0.0f, -half);
-        navMax_ = glm::vec3(half, 0.0f, half);
-        pool_.SetNavFloorTolerance(FloorToleranceFor(glm::vec2(0.0f), half));
+        glm::vec2 searchCenter(0.0f);
+        if (terrain_ != nullptr && terrain_->HasData() && terrain_->IsWater(0.0f, 0.0f))
+        {
+            glm::vec2 dryCenter(0.0f);
+            if (FindNearestDrySearchCenter(searchCenter, dryCenter))
+            {
+                searchCenter = dryCenter;
+                SPDLOG_INFO("NextWorldTravel: tile origin is water; moving initial nav window to ({:.1f}, {:.1f})",
+                            searchCenter.x, searchCenter.y);
+            }
+            else
+            {
+                SPDLOG_WARN("NextWorldTravel: tile has no dry terrain sample for the initial nav window");
+            }
+        }
+
+        navMin_ = glm::vec3(searchCenter.x - half, 0.0f, searchCenter.y - half);
+        navMax_ = glm::vec3(searchCenter.x + half, 0.0f, searchCenter.y + half);
+        pool_.SetNavWorldBounds(navMin_, navMax_);
+        pool_.SetNavFloorTolerance(FloorToleranceFor(searchCenter, half));
         pool_.OnSceneLoaded(scene); // builds the first nav window
         navRebuilds_ = 1;
         if (!pool_.NavReady())
@@ -251,7 +306,7 @@ namespace NextWorldTravel
         }
 
         glm::vec3 spawn{0.0f};
-        if (!FindStreetSpawn(glm::vec2(0.0f), spawn))
+        if (!FindStreetSpawn(searchCenter, spawn))
         {
             status_ = "no reachable street found in this tile";
             SPDLOG_ERROR("NextWorldTravel: no reachable street-level ground within {} m of the tile centre",

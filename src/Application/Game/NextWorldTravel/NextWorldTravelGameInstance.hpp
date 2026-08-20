@@ -91,6 +91,7 @@ private:
     Runtime::TerrainComponent* terrain_ = nullptr;
     bool sceneReady_ = false;
     bool walkerSpawned_ = false;
+    bool walkerSpawnAttempted_ = false;
 
     NextWorldTravel::FNextWorldTraveler walker_;
     NextWorldTravel::FGeoPoiLayer poiLayer_;

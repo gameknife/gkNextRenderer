@@ -169,6 +169,13 @@ namespace NextWorldTravel::Config
     inline constexpr float kMarkerMinRadius = 2.6f;
     inline constexpr float kMarkerMaxRadius = 6.5f;
     inline constexpr float kMarkerPickRadius = 16.0f;
+    inline constexpr float kMarkerHoverRadius = 4.0f;
+    inline constexpr float kMarkerHoverThickness = 2.0f;
+    inline constexpr float kLabelPaddingX = 10.0f;
+    inline constexpr float kLabelPaddingY = 6.0f;
+    inline constexpr float kLabelRounding = 7.0f;
+    inline constexpr float kLabelHoverAlpha = 0.92f;
+    inline constexpr float kLabelHoverThickness = 2.0f;
     // Plates never overlap; one that would land on another is lifted by whole
     // rows until it finds a free one, and only dropped when every row is taken.
     // From a pavement most roofs project into the same band of sky, so without

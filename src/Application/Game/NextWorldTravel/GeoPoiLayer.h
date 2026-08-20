@@ -57,12 +57,12 @@ namespace NextWorldTravel
         void Update(const std::vector<FGeoPoi>& pois, const glm::vec3& viewPosition);
 
         // Draws the markers and labels into ImGui's background list, and caches
-        // where each marker landed on screen so it can be clicked.
+        // their screen bounds so either one can be clicked.
         void Draw(const NextGameInstanceBase& gameInstance, const std::vector<FGeoPoi>& pois,
-                  const glm::vec3& viewPosition);
+                  const glm::vec3& viewPosition, const glm::vec2& pointerPosition);
 
-        // Index of the marker under a screen position, or -1. Uses the previous
-        // frame's projection, which is what the user actually clicked on.
+        // Index of the label or marker under a screen position, or -1. Uses the
+        // previous frame's projection, which is what the user actually clicked on.
         int PickAt(const glm::vec2& screenPosition) const;
 
         // World-space anchor a label hangs at (roof for buildings, a fixed lift
@@ -86,16 +86,28 @@ namespace NextWorldTravel
         const std::vector<int>& Visible() const { return visible_; }
 
     private:
+        struct FLabelHit
+        {
+            int index = -1;
+            // left, top, right, bottom in screen coordinates.
+            glm::vec4 bounds{0.0f};
+        };
+
         // Every place worth a dot this frame, far to near.
         std::vector<int> markers_;
         // The subset that also gets its name drawn, far to near.
         std::vector<int> visible_;
         // Parallel to markers_; off-screen entries are flagged with a NaN x.
         std::vector<glm::vec2> markerScreen_;
+        // The actual label plates drawn this frame, cached for the next input
+        // event just like markerScreen_. A label hit must include its padding,
+        // otherwise the visible plate feels larger than its clickable area.
+        std::vector<FLabelHit> labelHits_;
         std::array<bool, PoiCategory::kCount> categoryEnabled_{};
         ELabelStyle style_ = ELabelStyle::Street;
         bool showLabels_ = true;
         int highlight_ = -1;
+        int hovered_ = -1;
         int placedCount_ = 0;
         int groundedCount_ = 0;
     };

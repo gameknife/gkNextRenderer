@@ -84,6 +84,10 @@ namespace NextWorldTravel
         void RebuildNavWindow(Assets::Scene& scene, const glm::vec2& center);
         // Relief-aware floor tolerance for a window (see design §6b).
         float FloorToleranceFor(const glm::vec2& center, float halfSize) const;
+        // Finds a nearby dry point for the first nav window. Geo tiles can be
+        // centred on a river or harbour, so the tile origin is not guaranteed
+        // to be a valid place to start walking.
+        bool FindNearestDrySearchCenter(const glm::vec2& searchCenter, glm::vec2& outCenter) const;
         bool FindStreetSpawn(const glm::vec2& searchCenter, glm::vec3& outPosition) const;
         // True when the nav cell at (x, z) sits on the terrain rather than on a
         // roof. The generated tiles make almost every flat roof "walkable", so

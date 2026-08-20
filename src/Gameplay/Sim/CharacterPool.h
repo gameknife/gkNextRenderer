@@ -62,6 +62,14 @@ namespace NextGameplay::Sim
         void Configure(const FCharacterPoolConfig& config);
         void InjectAssets(std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials);
         void OnSceneLoaded(Assets::Scene& scene);
+        // Sets the initial nav region without rebuilding it. This is useful for
+        // worlds whose logical origin is not a walkable surface; call before
+        // OnSceneLoaded() when the first window must be placed elsewhere.
+        void SetNavWorldBounds(const glm::vec3& worldMin, const glm::vec3& worldMax)
+        {
+            config_.navWorldMin = worldMin;
+            config_.navWorldMax = worldMax;
+        }
         // Re-samples the nav grid over a new window. Slide it to follow a
         // character across a world too large to grid in one go; the config's
         // navWorldMin/Max are updated so later rebuilds keep the new region.
