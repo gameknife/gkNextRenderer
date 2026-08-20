@@ -59,7 +59,8 @@ ScadLibrary 场景对象 Gizmo 在引擎 Y-up 与 SCAD Z-up 之间用 `ScadToWor
 
 - **图元 3D**：`cube`、`sphere`、`cylinder`(含 r1/r2 圆锥)、`polyhedron`
 - **图元 2D**（在 extrude 内）：`circle`、`square`、`polygon`(含 `paths` 洞)、`text`(FreeType, CJK)
-- **变换**：`translate`、`rotate`(欧拉/角轴)、`scale`、`mirror`、`multmatrix`、`color`(rgba/命名色)
+- **变换**：`translate`、`rotate`(欧拉/角轴)、`scale`、`mirror`、`multmatrix`、`color`(rgba/命名色)、
+  `gk_material`(颜色 + roughness/metalness)
 - **CSG**：`union`、`difference`、`intersection`、`hull`（Manifold）；`minkowski`(近似为 union)
 - **拉伸**：`linear_extrude`(凹/带洞/嵌套变换)、`rotate_extrude`(angle，360 闭合/部分端盖)
 - **控制流**：`for`(笛卡尔多绑定)、`if/else`、`let`、`intersection_for`(按 for)
@@ -76,6 +77,11 @@ ScadLibrary 场景对象 Gizmo 在引擎 Y-up 与 SCAD Z-up 之间用 `ScadToWor
   地形桶带 faceted 标志（loader 跳过法线平滑）、水面桶拆分为 `__water` 子节点（rayCast 不可见、
   无物理体）、地形数据经 `SceneTerrain` payload 挂成引擎 `TerrainComponent`。
   详见 `AGENT_GUIDE/ScadTerrain.md`。
+
+`gk_material(c, roughness = 1, metalness = 0, alpha = 1) children();` 是材质表达扩展。
+`roughness` 和 `metalness` 都会被限制到 `0..1`，并随几何桶传入 GPU 材质；未包在
+`gk_material` 中的旧 `color()` 仍然生成 roughness=1、metalness=0 的 Lambertian，
+因此既有资产不改变外观。材质参数也参与颜色桶合并键，避免相同颜色的玻璃和墙面被错误合并。
 
 ## 相机机位（虚拟点）
 

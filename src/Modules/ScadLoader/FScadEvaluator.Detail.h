@@ -34,6 +34,7 @@ namespace Assets::Scad
         struct ColoredSoup
         {
             glm::dvec4 color = glm::dvec4(0.78, 0.78, 0.78, 1.0);
+            ScadMaterialProperties material;
             bool hasColor = false;
             bool faceted = false; // terrain: keep flat shading in the loader
             bool terrainWater = false; // terrain water surface (dedicated node)
@@ -52,6 +53,20 @@ namespace Assets::Scad
                 return static_cast<uint32_t>(clamped * 255.0f + 0.5f);
             };
             return (q(c.r) << 24) | (q(c.g) << 16) | (q(c.b) << 8) | q(c.a);
+        }
+
+        inline uint64_t QuantizeMaterial(const glm::vec4& c, const ScadMaterialProperties& material)
+        {
+            auto q = [](float v) -> uint64_t
+            {
+                const float clamped = std::min(1.0f, std::max(0.0f, v));
+                return static_cast<uint64_t>(clamped * 65535.0f + 0.5f);
+            };
+            const float effectiveRoughness =
+                c.a < 0.99f && !material.explicitParameters ? 0.0f : material.roughness;
+            return (static_cast<uint64_t>(QuantizeColor(c)) << 32u) |
+                   (q(effectiveRoughness) << 16u) |
+                   q(material.metalness);
         }
 
         inline void AppendMove(GeomList& dst, GeomList&& src)
@@ -202,6 +217,7 @@ namespace Assets::Scad
             };
             std::vector<GroupFrame> moduleCallStack_;
             std::vector<std::string> materialNameStack_;
+            std::vector<ScadMaterialProperties> materialPropertiesStack_;
             std::string topLevelFallbackLabel_;
             uint64_t topLevelFallbackInstanceId_ = 0;
             uint64_t nextGroupInstanceId_ = 1;
@@ -217,7 +233,7 @@ namespace Assets::Scad
                 std::vector<std::pair<std::string, Value>> parameters;
                 glm::dvec4 callColor = glm::dvec4(0.78, 0.78, 0.78, 1.0);
                 bool hasCallColor = false;
-                std::map<uint32_t, SceneMeshBucket> meshes;
+                std::map<uint64_t, SceneMeshBucket> meshes;
                 std::vector<std::unique_ptr<SceneNodeBuild>> children;
             };
             std::vector<std::unique_ptr<SceneNodeBuild>> sceneRoots_;
@@ -294,9 +310,10 @@ namespace Assets::Scad
                     const std::string groupName = cs.groupName.empty() ? std::string("part") : cs.groupName;
                     const uint64_t groupInstanceId =
                         cs.groupInstanceId == 0 ? nextGroupInstanceId_++ : cs.groupInstanceId;
-                    const BucketKey key{groupName, groupInstanceId, QuantizeColor(c)};
+                    const BucketKey key{groupName, groupInstanceId, QuantizeMaterial(c, cs.material)};
                     ColorBucket& bucket = flatResult_->buckets[key];
                     bucket.color = c;
+                    bucket.material = cs.material;
                     bucket.groupName = groupName;
                     bucket.faceted = bucket.faceted || cs.faceted;
                     bucket.tris.insert(bucket.tris.end(), cs.soup.begin(), cs.soup.end());
@@ -378,8 +395,9 @@ namespace Assets::Scad
                 for (const ColoredSoup& cs : geom)
                 {
                     const glm::vec4 c = cs.hasColor ? glm::vec4(cs.color) : glm::vec4(0.78f, 0.78f, 0.78f, 1.0f);
-                    SceneMeshBucket& bucket = owner->meshes[QuantizeColor(c)];
+                    SceneMeshBucket& bucket = owner->meshes[QuantizeMaterial(c, cs.material)];
                     bucket.color = c;
+                    bucket.material = cs.material;
                     if (bucket.materialName.empty() && !cs.materialName.empty())
                     {
                         bucket.materialName = cs.materialName;
@@ -574,6 +592,26 @@ namespace Assets::Scad
                     }
                     return EvalScope(inst.children, xform, color, hasColor);
                 }
+                if (name == "gk_material")
+                {
+                    glm::dvec4 c = color;
+                    if (ResolveMaterialColor(inst, c))
+                    {
+                        ScadMaterialProperties material;
+                        material.explicitParameters = true;
+                        material.roughness = static_cast<float>(std::clamp(
+                            Arg(inst, "roughness", 1).AsNumber(1.0), 0.0, 1.0));
+                        material.metalness = static_cast<float>(std::clamp(
+                            Arg(inst, "metalness", 2).AsNumber(0.0), 0.0, 1.0));
+                        materialNameStack_.push_back(ResolveColorName(inst));
+                        materialPropertiesStack_.push_back(material);
+                        GeomList result = EvalScope(inst.children, xform, c, true);
+                        materialPropertiesStack_.pop_back();
+                        materialNameStack_.pop_back();
+                        return result;
+                    }
+                    return EvalScope(inst.children, xform, color, hasColor);
+                }
                 if (name == "union" || name == "group" || name == "render")
                 {
                     return EvalScope(inst.children, xform, color, hasColor);
@@ -703,6 +741,7 @@ namespace Assets::Scad
                 std::vector<TriSoup> negatives;
                 glm::dvec4 posColor = color;
                 bool posHas = hasColor;
+                ScadMaterialProperties posMaterial;
                 std::string posMaterialName;
                 std::string posGroupName = CurrentGroupLabel();
                 uint64_t posGroupInstanceId = CurrentGroupInstanceId();
@@ -728,6 +767,7 @@ namespace Assets::Scad
                             {
                                 posColor = cs.color;
                                 posHas = cs.hasColor;
+                                posMaterial = cs.material;
                                 posMaterialName = cs.materialName;
                                 posGroupName = cs.groupName.empty() ? posGroupName : cs.groupName;
                                 posGroupInstanceId = cs.groupInstanceId == 0 ? posGroupInstanceId : cs.groupInstanceId;
@@ -761,6 +801,7 @@ namespace Assets::Scad
                 ColoredSoup result;
                 result.color = posColor;
                 result.hasColor = posHas;
+                result.material = posMaterial;
                 result.materialName = posMaterialName;
                 result.groupName = posGroupName;
                 result.groupInstanceId = posGroupInstanceId;
@@ -778,6 +819,7 @@ namespace Assets::Scad
                 std::vector<TriSoup> operands;
                 glm::dvec4 firstColor = color;
                 bool firstHas = hasColor;
+                ScadMaterialProperties firstMaterial;
                 std::string firstMaterialName;
                 std::string firstGroupName = CurrentGroupLabel();
                 uint64_t firstGroupInstanceId = CurrentGroupInstanceId();
@@ -801,6 +843,7 @@ namespace Assets::Scad
                         {
                             firstColor = cs.color;
                             firstHas = cs.hasColor;
+                            firstMaterial = cs.material;
                             firstMaterialName = cs.materialName;
                             firstGroupName = cs.groupName.empty() ? firstGroupName : cs.groupName;
                             firstGroupInstanceId = cs.groupInstanceId == 0 ? firstGroupInstanceId : cs.groupInstanceId;
@@ -824,6 +867,7 @@ namespace Assets::Scad
                 ColoredSoup result;
                 result.color = firstColor;
                 result.hasColor = firstHas;
+                result.material = firstMaterial;
                 result.materialName = firstMaterialName;
                 result.groupName = firstGroupName;
                 result.groupInstanceId = firstGroupInstanceId;
@@ -839,6 +883,7 @@ namespace Assets::Scad
                 std::vector<TriSoup> parts;
                 glm::dvec4 firstColor = color;
                 bool firstHas = hasColor;
+                ScadMaterialProperties firstMaterial;
                 std::string firstMaterialName;
                 std::string firstGroupName = CurrentGroupLabel();
                 uint64_t firstGroupInstanceId = CurrentGroupInstanceId();
@@ -849,6 +894,7 @@ namespace Assets::Scad
                     {
                         firstColor = cs.color;
                         firstHas = cs.hasColor;
+                        firstMaterial = cs.material;
                         firstMaterialName = cs.materialName;
                         firstGroupName = cs.groupName.empty() ? firstGroupName : cs.groupName;
                         firstGroupInstanceId = cs.groupInstanceId == 0 ? firstGroupInstanceId : cs.groupInstanceId;
@@ -867,6 +913,7 @@ namespace Assets::Scad
                 ColoredSoup result;
                 result.color = firstColor;
                 result.hasColor = firstHas;
+                result.material = firstMaterial;
                 result.materialName = firstMaterialName;
                 result.groupName = firstGroupName;
                 result.groupInstanceId = firstGroupInstanceId;
@@ -1105,6 +1152,10 @@ namespace Assets::Scad
             glm::dmat4 BuildMultmatrix(const Stmt& inst);
 
             bool ResolveColor(const Stmt& inst, glm::dvec4& out);
+
+            // gk_material() keeps roughness/metalness positional arguments
+            // separate from color's legacy positional alpha argument.
+            bool ResolveMaterialColor(const Stmt& inst, glm::dvec4& out);
 
             const ExprPtr& ColorArgExpr(const Stmt& inst) const;
 

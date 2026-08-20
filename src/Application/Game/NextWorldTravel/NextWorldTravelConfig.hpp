@@ -6,6 +6,10 @@
 
 namespace NextWorldTravel::Config
 {
+    // Loose output directory watched by the optional live geo-tile reload path.
+    inline constexpr const char* kGeoSceneDirectory = "assets/geo";
+    inline constexpr float kGeoSceneWatchIntervalSeconds = 0.5f;
+
     // ---- Character -------------------------------------------------------
     inline constexpr const char* kRigPath = "assets/scad/characters/citizen.scad";
     inline constexpr float kWalkSpeed = 1.7f;

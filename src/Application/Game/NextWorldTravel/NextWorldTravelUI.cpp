@@ -3,6 +3,9 @@
 #include "NextWorldTravelConfig.hpp"
 #include "NextWorldTraveler.h"
 
+#include "Engine/Rendering/RendererChoices.hpp"
+#include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
+#include "Engine/Runtime/Engine.hpp"
 #include "Modules/NextUI/UI/DesktopUI.hpp"
 
 #include <imgui.h>
@@ -371,6 +374,87 @@ namespace NextWorldTravel
         }
     }
 
+    void FNextWorldTravelUI::DrawRenderingPanel(const FNextWorldTravelUIContext& context)
+    {
+        if (context.engine == nullptr || !NextUI::Theme::BeginPanelSection("Rendering", true))
+        {
+            return;
+        }
+
+        NextEngine& engine = *context.engine;
+        Runtime::Config::UserSettings& settings = engine.GetUserSettings();
+        Vulkan::VulkanBaseRenderer& renderer = engine.GetRenderer();
+
+        const std::vector<const Rendering::FRendererChoice*> availableRenderers =
+            Rendering::AvailableRendererChoices(
+                {.supportsRayTracing = renderer.SupportsRayTracing(),
+                 .hasFullAmbientCubeBudget = renderer.HasFullAmbientCubeBudget()});
+        const Vulkan::ERendererType currentRenderer = renderer.CurrentLogicRendererType();
+        const Rendering::FRendererChoice* currentRendererChoice =
+            Rendering::FindRendererChoice(currentRenderer);
+        const char* rendererLabel = currentRendererChoice != nullptr
+            ? currentRendererChoice->displayName
+            : "Unknown";
+
+        ImGui::TextDisabled("Renderer");
+        ImGui::SetNextItemWidth(-1.0f);
+        NextUI::Theme::PushViewportPopupStyle();
+        if (ImGui::BeginCombo("##NextWorldTravelRenderer", rendererLabel))
+        {
+            for (const Rendering::FRendererChoice* choice : availableRenderers)
+            {
+                const bool selected = choice->type == currentRenderer;
+                if (NextUI::Theme::DrawViewportComboOption(choice->displayName, selected))
+                {
+                    engine.RequestRendererType(choice->type);
+                }
+                if (selected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+        NextUI::Theme::PopViewportPopupStyle();
+
+        const uint32_t currentUpscaler = settings.UpscalerType >= 0
+            ? static_cast<uint32_t>(settings.UpscalerType)
+            : 0u;
+        const auto& currentUpscalerInfo = Rendering::Upscaler::GetUpscalerTypeInfo(currentUpscaler);
+
+        ImGui::TextDisabled("Upscaler");
+        ImGui::SetNextItemWidth(-1.0f);
+        NextUI::Theme::PushViewportPopupStyle();
+        if (ImGui::BeginCombo("##NextWorldTravelUpscaler", currentUpscalerInfo.name))
+        {
+            for (uint32_t rawType = 0;
+                 rawType < static_cast<uint32_t>(Rendering::Upscaler::EUpscalerType::Count);
+                 ++rawType)
+            {
+                const auto& typeInfo = Rendering::Upscaler::GetUpscalerTypeInfo(rawType);
+                const bool supported = typeInfo.type == Rendering::Upscaler::EUpscalerType::None ||
+                    renderer.SupportsUpscaler(typeInfo.type);
+                const bool selected = rawType == currentUpscaler;
+                ImGui::BeginDisabled(!supported);
+                if (NextUI::Theme::DrawViewportComboOption(typeInfo.name, selected))
+                {
+                    engine.SetUpscalerConfiguration(typeInfo.type, settings.SuperResolution);
+                }
+                ImGui::EndDisabled();
+                if (selected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+        NextUI::Theme::PopViewportPopupStyle();
+        ImGui::TextDisabled("Mode: %s",
+                            Rendering::Upscaler::GetUpscaleModeInfo(settings.SuperResolution).name);
+
+        NextUI::Theme::EndPanelSection();
+    }
+
     FNextWorldTravelUIRequest FNextWorldTravelUI::Draw(const FNextWorldTravelUIContext& context, FGeoPoiLayer& poiLayer)
     {
         FNextWorldTravelUIRequest request;
@@ -417,6 +501,8 @@ namespace NextWorldTravel
             }
         }
 
+        NextUI::Theme::DrawThinSeparator();
+        DrawRenderingPanel(context);
         NextUI::Theme::DrawThinSeparator();
         switch (context.viewMode)
         {

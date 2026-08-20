@@ -31,9 +31,19 @@ namespace Assets::Scad
 {
     struct FTerrainData; // FScadTerrain.h
 
+    // Surface parameters carried by the SCAD evaluator into an engine material.
+    // The defaults intentionally preserve the historical color() behavior.
+    struct ScadMaterialProperties
+    {
+        float roughness = 1.0f;
+        float metalness = 0.0f;
+        bool explicitParameters = false;
+    };
+
     struct ColorBucket
     {
         glm::vec4 color = glm::vec4(0.78f, 0.78f, 0.78f, 1.0f);
+        ScadMaterialProperties material;
         std::string groupName;
         std::vector<glm::dvec3> tris; // triangle soup (3N), SCAD world space (Z-up)
         bool faceted = false; // skip vertex-normal smoothing (terrain)
@@ -43,7 +53,7 @@ namespace Assets::Scad
     {
         std::string groupName;
         uint64_t groupInstanceId = 0;
-        uint32_t colorKey = 0;
+        uint64_t materialKey = 0;
 
         bool operator<(const BucketKey& other) const
         {
@@ -55,7 +65,7 @@ namespace Assets::Scad
             {
                 return groupInstanceId < other.groupInstanceId;
             }
-            return colorKey < other.colorKey;
+            return materialKey < other.materialKey;
         }
     };
 
@@ -69,6 +79,7 @@ namespace Assets::Scad
     struct SceneMeshBucket
     {
         glm::vec4 color = glm::vec4(0.78f, 0.78f, 0.78f, 1.0f);
+        ScadMaterialProperties material;
         std::string materialName;
         std::vector<glm::dvec3> tris; // triangle soup (3N), local to the owning scene node
         bool faceted = false; // skip vertex-normal smoothing (terrain)

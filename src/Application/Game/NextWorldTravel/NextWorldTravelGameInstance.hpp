@@ -12,6 +12,7 @@
 #include <glm/glm.hpp>
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Runtime { class TerrainComponent; }
@@ -57,7 +58,10 @@ public:
     void RegisterAgentQueries(Runtime::Agent::FAgentQueryRegistry& registry) override;
 
 private:
-    void RequestTile(int index);
+    void RequestTile(int index, bool switchToAerial = false);
+    void InitializeGeoSceneWatch();
+    void PollGeoSceneDirectory(float deltaSeconds);
+    bool ReloadChangedGeoTile(const std::string& tileName);
     void TryResolveTerrain();
     void SpawnWalker();
     void UpdatePlayerIntent();
@@ -87,6 +91,21 @@ private:
     std::vector<NextWorldTravel::FGeoTile> tiles_;
     int activeTile_ = -1;
     int pendingTile_ = -1;
+
+    // `gnb geo` writes a tile as several files. The watcher only reacts after
+    // the same directory snapshot has been observed twice and the catalog can
+    // load the complete tile, so a half-written scene is never requested.
+    struct FGeoSceneWatchCandidate
+    {
+        std::string stamp;
+        int stablePolls = 0;
+    };
+    bool geoSceneWatchEnabled_ = true;
+    bool geoSceneWatchInitialized_ = false;
+    float geoSceneWatchElapsed_ = 0.0f;
+    std::unordered_map<std::string, std::string> geoSceneWatchSnapshot_;
+    std::unordered_map<std::string, FGeoSceneWatchCandidate> geoSceneWatchCandidates_;
+    bool switchToAerialOnSceneLoad_ = false;
 
     Runtime::TerrainComponent* terrain_ = nullptr;
     bool sceneReady_ = false;

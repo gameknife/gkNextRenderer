@@ -369,7 +369,46 @@ TEST_CASE("Scad translucent color() becomes a dielectric material", "[Unit][Scad
 
     REQUIRE(materials.size() == 1);
     CHECK(materials[0].gpuMaterial_.MaterialModel == Assets::Material::Enum::Dielectric);
+    CHECK(materials[0].gpuMaterial_.Fuzziness == Catch::Approx(0.0f).margin(1e-3f));
     CHECK(materials[0].gpuMaterial_.Diffuse.a == Catch::Approx(0.3f).margin(1e-3f));
+}
+
+TEST_CASE("Scad gk_material carries roughness and metalness", "[Unit][Scad]")
+{
+    ScopedDir dir;
+    const std::filesystem::path mainPath = dir.Write(
+        "material.scad",
+        "gk_material([0.18,0.22,0.28], roughness=0.06, metalness=0.85) cube([2,2,2]);\n"
+        "color([0.18,0.22,0.28]) translate([3,0,0]) cube([2,2,2]);\n");
+
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
+
+    REQUIRE(materials.size() == 2);
+    const Assets::Material* reflective = nullptr;
+    const Assets::Material* legacy = nullptr;
+    for (const Assets::FMaterial& material : materials)
+    {
+        if (material.gpuMaterial_.MaterialModel == Assets::Material::Enum::Mixture)
+            reflective = &material.gpuMaterial_;
+        if (material.gpuMaterial_.MaterialModel == Assets::Material::Enum::Lambertian)
+            legacy = &material.gpuMaterial_;
+    }
+
+    REQUIRE(reflective);
+    REQUIRE(legacy);
+    CHECK(reflective->Fuzziness == Catch::Approx(0.06f).margin(1e-3f));
+    CHECK(reflective->Metalness == Catch::Approx(0.85f).margin(1e-3f));
+    CHECK(legacy->Fuzziness == Catch::Approx(1.0f).margin(1e-3f));
+    CHECK(legacy->Metalness == Catch::Approx(0.0f).margin(1e-3f));
 }
 
 TEST_CASE("Scad loader: recreates module hierarchy with module names", "[Unit][Scad]")

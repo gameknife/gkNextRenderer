@@ -88,6 +88,17 @@ function gc_METALC()  = [0.30, 0.31, 0.33];   // 屋面设备
 function gc_TANKC()   = [0.28, 0.27, 0.25];   // 水箱
 function gc_MASTC()   = [0.23, 0.23, 0.24];   // 天线
 
+// Surface helper. `color()` remains the default for all existing SCAD assets;
+// only the glass shell/band opts into a glossy, metal-like response so the
+// curtain wall can reflect the sky and neighbouring buildings.
+module gc_SURFACE(c, glass = 0)
+{
+    if (glass > 0)
+        gk_material(c, roughness = 0.06, metalness = 0.85) children();
+    else
+        color(c) children();
+}
+
 // ============================ 立面方案 ============================
 //
 // [0]bandH 腰线高  [1]relief 浮雕深度  [2]mullW 窗挺宽  [3]mullPitch 窗挺间距
@@ -236,7 +247,7 @@ module gc_facade(pts, paths, ring, z, h, f, floorH, bandC)
             {
                 step = max(1, ceil(n / 48));
                 cnt = floor((n - 1) / step);
-                color(bandC)
+                gc_SURFACE(bandC, f[6] > 0 ? 0 : 1)
                     for (k = [0 : cnt])
                         gc_slab_at(pts, paths, z0 + k * step * floorH, f[0]);
             }
@@ -391,10 +402,10 @@ module gc_bld(pts, z, h, fac, roof, obb = [], skirt = 0, paths = [])
     // 壳体内缩 relief：装饰再填回到轮廓，最大外廓恒等于 OSM 轮廓（约束 4）。
     spts = f[1] > 0.001 ? gc_offset_pts(pts, paths, -f[1]) : pts;
     if (len(paths) == 0)
-        color(shellC) translate([0, 0, z - skirt]) linear_extrude(height = h + skirt)
+        gc_SURFACE(shellC, f[6]) translate([0, 0, z - skirt]) linear_extrude(height = h + skirt)
             polygon(points = spts);
     else
-        color(shellC) translate([0, 0, z - skirt]) linear_extrude(height = h + skirt)
+        gc_SURFACE(shellC, f[6]) translate([0, 0, z - skirt]) linear_extrude(height = h + skirt)
             polygon(points = spts, paths = paths);
 
     gc_facade(pts, paths, ring, z, h, f, floorH, bandC);

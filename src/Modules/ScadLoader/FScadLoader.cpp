@@ -33,17 +33,27 @@ namespace Assets
 {
     namespace
     {
-        Material ScadMaterialFromColor(const glm::vec4& color)
+        Material ScadMaterialFromColor(const glm::vec4& color, const Scad::ScadMaterialProperties& properties)
         {
             const glm::vec3 rgb(color.r, color.g, color.b);
             const float alpha = color.a;
+            const float roughness = std::clamp(
+                alpha < 0.99f && !properties.explicitParameters ? 0.0f : properties.roughness, 0.0f, 1.0f);
+            const float metalness = std::clamp(properties.metalness, 0.0f, 1.0f);
             if (alpha < 0.99f)
             {
-                Material material = Material::Dielectric(1.45f, 0.0f);
+                Material material = Material::Dielectric(1.45f, roughness);
                 material.Diffuse = glm::vec4(rgb, alpha);
                 return material;
             }
-            return Material::Lambertian(rgb);
+            if (roughness >= 0.999f && metalness <= 0.001f)
+            {
+                return Material::Lambertian(rgb);
+            }
+
+            Material material = Material::Mixture(rgb, roughness);
+            material.Metalness = metalness;
+            return material;
         }
 
         uint32_t QuantizeMaterialColor(const glm::vec4& color)
@@ -140,7 +150,7 @@ namespace Assets
 
         struct ScadBuildCache
         {
-            std::unordered_map<uint32_t, uint32_t> materialByColor;
+            std::unordered_map<uint64_t, uint32_t> materialByProperties;
             std::unordered_map<ScadMeshFingerprint, std::vector<uint32_t>, ScadMeshFingerprintHash> modelByMesh;
             // Scene-eval instanceId -> engine node + accumulated engine-space
             // world transform (for the TerrainComponent hookup).
@@ -149,20 +159,26 @@ namespace Assets
 
         uint32_t GetOrCreateScadMaterial(
             const glm::vec4& color,
+            const Scad::ScadMaterialProperties& properties,
             const std::string& sourceName,
             std::vector<FMaterial>& materials,
             ScadBuildCache& cache)
         {
-            const uint32_t colorKey = QuantizeMaterialColor(color);
-            auto found = cache.materialByColor.find(colorKey);
-            if (found != cache.materialByColor.end())
+            const float effectiveRoughness =
+                color.a < 0.99f && !properties.explicitParameters ? 0.0f : properties.roughness;
+            const uint64_t colorKey =
+                (static_cast<uint64_t>(QuantizeMaterialColor(color)) << 32u) |
+                (static_cast<uint64_t>(std::clamp(effectiveRoughness, 0.0f, 1.0f) * 65535.0f + 0.5f) << 16u) |
+                static_cast<uint64_t>(std::clamp(properties.metalness, 0.0f, 1.0f) * 65535.0f + 0.5f);
+            auto found = cache.materialByProperties.find(colorKey);
+            if (found != cache.materialByProperties.end())
             {
                 return found->second;
             }
 
             const uint32_t materialIdx = static_cast<uint32_t>(materials.size());
-            materials.push_back({ScadMaterialFromColor(color), ScadMaterialName(color, sourceName)});
-            cache.materialByColor[colorKey] = materialIdx;
+            materials.push_back({ScadMaterialFromColor(color, properties), ScadMaterialName(color, sourceName)});
+            cache.materialByProperties[colorKey] = materialIdx;
             return materialIdx;
         }
 
@@ -218,7 +234,8 @@ namespace Assets
                     indices.push_back(vertexOffset + i);
                 }
 
-                nodeMaterials[sectionIndex] = GetOrCreateScadMaterial(bucket.color, bucket.materialName, materials, cache);
+                nodeMaterials[sectionIndex] = GetOrCreateScadMaterial(
+                    bucket.color, bucket.material, bucket.materialName, materials, cache);
                 ++sectionIndex;
             }
 

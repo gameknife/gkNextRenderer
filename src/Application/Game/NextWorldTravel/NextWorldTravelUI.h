@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+class NextEngine;
+
 namespace NextWorldTravel
 {
     class FNextWorldTraveler;
@@ -37,6 +39,7 @@ namespace NextWorldTravel
         int activeTile = -1;
         const FNextWorldTraveler* walker = nullptr;
         const glm::vec3* cameraPosition = nullptr;
+        NextEngine* engine = nullptr;
         // The camera and the tour dwell are edited in place: a slider that has
         // to round-trip through a request struct cannot be dragged.
         FGeoCameraDirector* camera = nullptr;
@@ -67,6 +70,7 @@ namespace NextWorldTravel
         void DrawViewportToolbar(const FNextWorldTravelUIContext& context, FGeoPoiLayer& poiLayer,
                                  FNextWorldTravelUIRequest& request);
         void DrawShortcutSheet();
+        void DrawRenderingPanel(const FNextWorldTravelUIContext& context);
         void DrawWalkPanel(const FNextWorldTravelUIContext& context, FNextWorldTravelUIRequest& request);
         void DrawAerialPanel(const FNextWorldTravelUIContext& context, const FGeoPoiLayer& poiLayer,
                              FNextWorldTravelUIRequest& request);

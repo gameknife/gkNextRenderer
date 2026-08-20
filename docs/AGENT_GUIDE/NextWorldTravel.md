@@ -45,6 +45,17 @@ tile 发现同时看散文件和挂载的 pak，两者取并集，所以本地�
 ./out/build/<preset>/bin/gkNextUnitTests "[POI]"                       # poi.json 数据契约，无需 GPU
 ```
 
+开发时可用 `geo.watchGeneratedScenes` 控制 geo 目录热加载（默认开启）：
+
+```text
+set geo.watchGeneratedScenes false
+set geo.watchGeneratedScenes true
+```
+
+开启后，NextWorldTravel 每 0.5 秒检查 `assets/geo/<tile>/` 的 `.scad`、`terrain.hmap` 和
+`poi.json`。同一组文件稳定两个轮询周期、且 tile 完整可读后，程序会自动加载该 tile 并切到
+Aerial 鸟瞰模式；半写入目录不会触发加载。
+
 **注意**：POI 标签和 marker 走 ImGui draw list，`gnb shot` / 脚本 `screenshot` 默认不含 UI；
 验证浏览功能的截图必须带 `--ui`（脚本里写 `"ui": true`），否则截出来的图上一个点都没有。
 

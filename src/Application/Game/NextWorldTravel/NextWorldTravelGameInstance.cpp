@@ -15,6 +15,7 @@
 #include "Engine/Runtime/Interface/AgentQueries.hpp"
 #include "Engine/Runtime/Interface/ScreenShotService.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
 
 #include <imgui.h>
@@ -25,8 +26,144 @@
 
 #include <algorithm>
 #include <cmath>
+#include <system_error>
 
 using namespace NextWorldTravel;
+
+namespace
+{
+    std::filesystem::path GeoSceneDirectory()
+    {
+        // `gnb geo make` writes the authoring tree while a desktop executable
+        // resolves loose assets from out/build/<preset>/assets. Prefer the
+        // source tree when it is discoverable so live generation is visible.
+        std::filesystem::path cursor = std::filesystem::current_path();
+        std::error_code ec;
+        for (int depth = 0; depth < 8 && !cursor.empty(); ++depth)
+        {
+            ec.clear();
+            const bool isProjectRoot = std::filesystem::is_regular_file(cursor / "AGENTS.md", ec) &&
+                                       std::filesystem::is_directory(cursor / Config::kGeoSceneDirectory, ec);
+            if (isProjectRoot)
+            {
+                return std::filesystem::absolute(cursor / Config::kGeoSceneDirectory, ec).lexically_normal();
+            }
+            const std::filesystem::path parent = cursor.parent_path();
+            if (parent == cursor)
+            {
+                break;
+            }
+            cursor = parent;
+        }
+        return Utilities::FileHelper::GetRuntimeFilePath(Config::kGeoSceneDirectory);
+    }
+
+    std::string GeoSceneDirectorySnapshotStamp(const std::filesystem::path& directory,
+                                               const std::string& tileName)
+    {
+        std::string stamp;
+        const std::string fileNames[] = {tileName + ".scad", "terrain.hmap", "poi.json"};
+        for (const std::string& fileName : fileNames)
+        {
+            const std::filesystem::path path = directory / tileName / fileName;
+            std::error_code ec;
+            const bool exists = std::filesystem::is_regular_file(path, ec);
+            if (!exists || ec)
+            {
+                stamp += "missing;";
+                continue;
+            }
+
+            const auto writeTime = std::filesystem::last_write_time(path, ec);
+            if (ec)
+            {
+                stamp += "unreadable;";
+                continue;
+            }
+            const uintmax_t size = std::filesystem::file_size(path, ec);
+            stamp += fmt::format("{}:{};", writeTime.time_since_epoch().count(),
+                                 ec ? 0u : size);
+        }
+        return stamp;
+    }
+
+    std::unordered_map<std::string, std::string> SnapshotGeoSceneDirectory()
+    {
+        std::unordered_map<std::string, std::string> snapshot;
+        const std::filesystem::path root = GeoSceneDirectory();
+        std::error_code ec;
+        if (!std::filesystem::is_directory(root, ec))
+        {
+            return snapshot;
+        }
+
+        for (const std::filesystem::directory_entry& entry :
+             std::filesystem::directory_iterator(root, ec))
+        {
+            if (ec)
+            {
+                ec.clear();
+                continue;
+            }
+            std::error_code entryError;
+            if (!entry.is_directory(entryError) || entryError)
+            {
+                continue;
+            }
+            const std::string tileName = entry.path().filename().string();
+            snapshot.emplace(tileName, GeoSceneDirectorySnapshotStamp(root, tileName));
+        }
+        return snapshot;
+    }
+
+    bool SyncGeoTileToRuntime(const std::string& tileName)
+    {
+        const std::filesystem::path sourceRoot = GeoSceneDirectory();
+        const std::filesystem::path runtimeRoot = Utilities::FileHelper::GetRuntimeFilePath(
+            Config::kGeoSceneDirectory);
+        if (sourceRoot.lexically_normal() == runtimeRoot.lexically_normal())
+        {
+            return true;
+        }
+
+        const std::filesystem::path sourceDirectory = sourceRoot / tileName;
+        const std::filesystem::path runtimeDirectory = runtimeRoot / tileName;
+        std::error_code ec;
+        if (!std::filesystem::is_directory(sourceDirectory, ec) || ec)
+        {
+            return false;
+        }
+        std::filesystem::create_directories(runtimeDirectory, ec);
+        if (ec)
+        {
+            SPDLOG_WARN("NextWorldTravel: cannot mirror geo tile '{}' to runtime assets: {}",
+                        tileName, ec.message());
+            return false;
+        }
+
+        for (const std::string& fileName : {std::string(tileName + ".scad"),
+                                             std::string("terrain.hmap"),
+                                             std::string("poi.json"),
+                                             std::string("ATTRIBUTION.md")})
+        {
+            const std::filesystem::path sourcePath = sourceDirectory / fileName;
+            if (!std::filesystem::is_regular_file(sourcePath, ec))
+            {
+                ec.clear();
+                continue;
+            }
+            std::filesystem::copy_file(sourcePath, runtimeDirectory / fileName,
+                                       std::filesystem::copy_options::overwrite_existing, ec);
+            if (ec)
+            {
+                SPDLOG_WARN("NextWorldTravel: cannot mirror '{}' to runtime assets: {}",
+                            sourcePath.string(), ec.message());
+                return false;
+            }
+        }
+        return true;
+    }
+}
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config,
                                                          Runtime::Config::Options& options,
@@ -50,6 +187,10 @@ void NextWorldTravelGameInstance::OnInit()
     GOption->KeepCPUMeshData = true;
 
     tiles_ = DiscoverGeoTiles();
+    if (geoSceneWatchEnabled_)
+    {
+        InitializeGeoSceneWatch();
+    }
     if (tiles_.empty())
     {
         SPDLOG_ERROR("NextWorldTravel: no generated tiles found. Generate one with "
@@ -89,15 +230,19 @@ void NextWorldTravelGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     // NextWorldTravel is a ray-traced city walk; keep the engine's lighter default
     // available through user settings and explicit command-line overrides.
     cvars.SetDefaultFromString("r.rendererType", "0", &error);
+    cvars.RegisterBool("geo.watchGeneratedScenes", true, &geoSceneWatchEnabled_,
+                       NextCVar::ECVarFlags::Archive,
+                       "Watch assets/geo for completed tiles and load them automatically");
 }
 
-void NextWorldTravelGameInstance::RequestTile(int index)
+void NextWorldTravelGameInstance::RequestTile(int index, bool switchToAerial)
 {
     if (index < 0 || index >= static_cast<int>(tiles_.size()))
     {
         return;
     }
     pendingTile_ = index;
+    switchToAerialOnSceneLoad_ = switchToAerial;
     sceneReady_ = false;
     walkerSpawned_ = false;
     walkerSpawnAttempted_ = false;
@@ -109,6 +254,151 @@ void NextWorldTravelGameInstance::RequestTile(int index)
     SPDLOG_INFO("NextWorldTravel: loading tile '{}' ({})", tiles_[static_cast<size_t>(index)].name,
                 tiles_[static_cast<size_t>(index)].scenePath);
     GetEngine().RequestLoadScene({.filename = tiles_[static_cast<size_t>(index)].scenePath});
+}
+
+void NextWorldTravelGameInstance::InitializeGeoSceneWatch()
+{
+    geoSceneWatchSnapshot_ = SnapshotGeoSceneDirectory();
+    geoSceneWatchCandidates_.clear();
+    geoSceneWatchElapsed_ = 0.0f;
+    geoSceneWatchInitialized_ = true;
+    SPDLOG_INFO("NextWorldTravel: geo scene watch {} at '{}'",
+                geoSceneWatchEnabled_ ? "enabled" : "disabled", GeoSceneDirectory().string());
+}
+
+void NextWorldTravelGameInstance::PollGeoSceneDirectory(float deltaSeconds)
+{
+    if (!geoSceneWatchEnabled_)
+    {
+        geoSceneWatchInitialized_ = false;
+        geoSceneWatchSnapshot_.clear();
+        geoSceneWatchCandidates_.clear();
+        geoSceneWatchElapsed_ = 0.0f;
+        return;
+    }
+    if (!geoSceneWatchInitialized_)
+    {
+        InitializeGeoSceneWatch();
+        return;
+    }
+
+    geoSceneWatchElapsed_ += std::max(deltaSeconds, 0.0f);
+    if (geoSceneWatchElapsed_ < Config::kGeoSceneWatchIntervalSeconds)
+    {
+        return;
+    }
+    geoSceneWatchElapsed_ = 0.0f;
+
+    const std::unordered_map<std::string, std::string> currentSnapshot =
+        SnapshotGeoSceneDirectory();
+    for (const auto& [tileName, stamp] : currentSnapshot)
+    {
+        const auto previous = geoSceneWatchSnapshot_.find(tileName);
+        if (previous == geoSceneWatchSnapshot_.end() || previous->second != stamp)
+        {
+            geoSceneWatchCandidates_[tileName] = {stamp, 1};
+            SPDLOG_INFO("NextWorldTravel: geo directory changed for '{}', waiting for a stable tile",
+                        tileName);
+            continue;
+        }
+
+        const auto candidate = geoSceneWatchCandidates_.find(tileName);
+        if (candidate != geoSceneWatchCandidates_.end())
+        {
+            if (candidate->second.stamp == stamp)
+            {
+                ++candidate->second.stablePolls;
+            }
+            else
+            {
+                candidate->second = {stamp, 1};
+            }
+        }
+    }
+    for (auto it = geoSceneWatchCandidates_.begin(); it != geoSceneWatchCandidates_.end();)
+    {
+        if (currentSnapshot.find(it->first) == currentSnapshot.end())
+        {
+            it = geoSceneWatchCandidates_.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+    geoSceneWatchSnapshot_ = currentSnapshot;
+
+    std::vector<std::string> readyTiles;
+    for (const auto& [tileName, candidate] : geoSceneWatchCandidates_)
+    {
+        if (candidate.stablePolls >= 2)
+        {
+            readyTiles.push_back(tileName);
+        }
+    }
+    std::sort(readyTiles.begin(), readyTiles.end());
+    for (const std::string& tileName : readyTiles)
+    {
+        if (ReloadChangedGeoTile(tileName))
+        {
+            geoSceneWatchCandidates_.erase(tileName);
+            break;
+        }
+    }
+}
+
+bool NextWorldTravelGameInstance::ReloadChangedGeoTile(const std::string& tileName)
+{
+    if (!SyncGeoTileToRuntime(tileName))
+    {
+        return false;
+    }
+    std::vector<FGeoTile> refreshedTiles = DiscoverGeoTiles();
+    for (FGeoTile& tile : refreshedTiles)
+    {
+        if (!LoadTilePois(tile))
+        {
+            SPDLOG_WARN("NextWorldTravel: {}", tile.loadError);
+        }
+    }
+
+    const auto changedTile = std::find_if(refreshedTiles.begin(), refreshedTiles.end(),
+                                          [&tileName](const FGeoTile& tile)
+    {
+        return tile.name == tileName;
+    });
+    if (changedTile == refreshedTiles.end())
+    {
+        // Keep the candidate alive: the generator may have exposed one file
+        // before the rest of the tile became readable.
+        return false;
+    }
+    const int changedTileIndex = static_cast<int>(changedTile - refreshedTiles.begin());
+
+    const std::string activeName = ActiveTile() != nullptr ? ActiveTile()->name : std::string{};
+    const std::string pendingName = pendingTile_ >= 0 && pendingTile_ < static_cast<int>(tiles_.size())
+                                        ? tiles_[static_cast<size_t>(pendingTile_)].name
+                                        : std::string{};
+    tiles_ = std::move(refreshedTiles);
+
+    activeTile_ = -1;
+    pendingTile_ = -1;
+    for (size_t i = 0; i < tiles_.size(); ++i)
+    {
+        if (!activeName.empty() && tiles_[i].name == activeName)
+        {
+            activeTile_ = static_cast<int>(i);
+        }
+        if (!pendingName.empty() && tiles_[i].name == pendingName)
+        {
+            pendingTile_ = static_cast<int>(i);
+        }
+    }
+
+    SPDLOG_INFO("NextWorldTravel: detected completed geo tile '{}', loading it in aerial view",
+                tileName);
+    RequestTile(changedTileIndex, true);
+    return true;
 }
 
 void NextWorldTravelGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& /*nodes*/,
@@ -448,12 +738,26 @@ void NextWorldTravelGameInstance::UpdateTour(float deltaSeconds)
 void NextWorldTravelGameInstance::OnTick(double deltaSeconds)
 {
     frameMs_ = static_cast<float>(deltaSeconds * 1000.0);
+    PollGeoSceneDirectory(static_cast<float>(deltaSeconds));
     if (!sceneReady_)
     {
         return;
     }
     TryResolveTerrain();
     SpawnWalker();
+
+    if (switchToAerialOnSceneLoad_)
+    {
+        switchToAerialOnSceneLoad_ = false;
+        if (camera_.Mode() == EViewMode::Aerial)
+        {
+            camera_.ResetView(EViewMode::Aerial, MakeCameraWorld());
+        }
+        else
+        {
+            SetViewMode(EViewMode::Aerial);
+        }
+    }
 
     const float dt = static_cast<float>(deltaSeconds);
     UpdatePlayerIntent();
@@ -618,6 +922,7 @@ bool NextWorldTravelGameInstance::OnRenderUI()
     context.activeTile = activeTile_;
     context.walker = &walker_;
     context.cameraPosition = &cameraPosition;
+    context.engine = &GetEngine();
     context.camera = &camera_;
     context.tourDwellSeconds = &tourDwell_;
     context.viewMode = camera_.Mode();
@@ -801,6 +1106,7 @@ bool NextWorldTravelGameInstance::OnScroll(double /*xoffset*/, double yoffset)
 
 void NextWorldTravelGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegistry& registry)
 {
+    registry.Add("geo.watchGeneratedScenes", [this]() { return geoSceneWatchEnabled_; });
     registry.Add("geo.tile", [this]()
     {
         const FGeoTile* tile = ActiveTile();
