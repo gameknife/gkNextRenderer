@@ -1,7 +1,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/RemoteProtocol.hpp"
 #include "Modules/RenderViews/OffscreenRenderViewController.hpp"
@@ -576,7 +576,7 @@ namespace Runtime::Remote
     {
         if (NextEngine* engine = NextEngine::GetInstance())
         {
-            if (NextUI::UserInterface* userInterface = engine->GetUserInterface())
+            if (NextUI::IUserInterface* userInterface = engine->GetUserInterface())
             {
                 userInterface->DestroyViewportPipeline(clientView.compositeUiPipeline);
             }
@@ -643,7 +643,7 @@ namespace Runtime::Remote
 
         if (NextEngine* engine = NextEngine::GetInstance())
         {
-            if (NextUI::UserInterface* userInterface = engine->GetUserInterface())
+            if (NextUI::IUserInterface* userInterface = engine->GetUserInterface())
             {
                 clientView.compositeUiPipeline =
                     userInterface->CreateViewportPipeline(clientView.compositeRenderPass->Handle());
@@ -729,7 +729,7 @@ namespace Runtime::Remote
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
         if (NextEngine* engine = NextEngine::GetInstance())
         {
-            if (NextUI::UserInterface* userInterface = engine->GetUserInterface())
+            if (NextUI::IUserInterface* userInterface = engine->GetUserInterface())
             {
                 const uint32_t bufferIndex = imageIndex % static_cast<uint32_t>(clientView.uiRenderBuffers.size());
                 userInterface->RenderViewportDrawData(drawData,

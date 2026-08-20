@@ -1,5 +1,7 @@
 #pragma once
 
+// Private implementation details for the core CPU scene acceleration system.
+
 // Internal declarations shared between the CPUAccelerationStructure partial
 // TUs (CpuBvh / ProbeBaker / BrickPageTable / main). Not engine public API.
 

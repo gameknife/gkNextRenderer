@@ -6,8 +6,8 @@
 #include "Brotato3DAssetPaths.hpp"
 #include "Brotato3DGameInstance.hpp"
 #include "Modules/DevTools/ImGuiPainter.h"
-#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Modules/NextUI/ImGuiScaling.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Subsystems/NextLocalization.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 
@@ -44,13 +44,13 @@ namespace
 
     ImTextureID LoadUiTexture(Brotato3DGameInstance& gameInstance, const std::string& path, bool srgb = true)
     {
-        NextUI::UserInterface* ui = gameInstance.GetEngine().GetUserInterface();
+        NextUI::IUserInterface* ui = gameInstance.GetEngine().GetUserInterface();
         if (!ui)
         {
             return EmptyTexture();
         }
 
-        const NextUI::UserInterface::FUiTextureHandle handle = ui->RequestUiTexture(path, srgb);
+        const NextUI::IUserInterface::FUiTextureHandle handle = ui->RequestUiTexture(path, srgb);
         return handle.valid ? handle.textureId : EmptyTexture();
     }
 
@@ -75,7 +75,7 @@ namespace
 
     ImVec2 GetTexturePixelSize(Brotato3DGameInstance& gameInstance, const std::string& path)
     {
-        NextUI::UserInterface* ui = gameInstance.GetEngine().GetUserInterface();
+        NextUI::IUserInterface* ui = gameInstance.GetEngine().GetUserInterface();
         return ui ? ui->RequestUiTexture(path).pixelSize : ImVec2(0.0f, 0.0f);
     }
 

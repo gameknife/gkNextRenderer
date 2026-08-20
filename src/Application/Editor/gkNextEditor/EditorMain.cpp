@@ -17,7 +17,7 @@
 #include "Core/SceneSavePolicy.hpp"
 #include "Modules/DevTools/Command/DeleteNodesCommand.hpp"
 #include "Modules/DevTools/Command/DuplicateNodesCommand.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Modules/SceneContent/SceneList.hpp"
 
 #include <spdlog/spdlog.h>
 

@@ -2,6 +2,8 @@
 // BLAS/TLAS creation, per-frame updates and teardown.
 // Split from VulkanBaseRenderer.cpp; same class, separate TU.
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+
+// Hardware acceleration-structure lifecycle owned by gkNextEngine.
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"

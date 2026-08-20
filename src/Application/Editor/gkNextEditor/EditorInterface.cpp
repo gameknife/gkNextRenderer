@@ -24,10 +24,10 @@
 #include "EditorUtils.h"
 #include "Engine/Options.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
-#include "Engine/Runtime/Editor/UI/UiWidgets.hpp"
+#include "Modules/NextUI/ImGuiScaling.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/UiWidgets.hpp"
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/FileHelper.hpp"
@@ -300,7 +300,7 @@ void EditorInterface::Render(const NextGameInstanceBase::FGameUiFrameContext& co
 
 void EditorInterface::Render(Editor::EditorUiState& uiState)
 {
-    NextUI::UserInterface* ui = editor_->GetEngine().GetUserInterface();
+    NextUI::IUserInterface* ui = editor_->GetEngine().GetUserInterface();
     if (ui == nullptr)
     {
         return;

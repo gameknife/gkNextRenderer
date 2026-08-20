@@ -3,7 +3,7 @@
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"

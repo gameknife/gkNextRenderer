@@ -1,5 +1,7 @@
 #pragma once
 
+// Shared only by concrete renderer implementations in this module.
+
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 

@@ -1,4 +1,5 @@
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Rendering/BuiltinRendererProviders.hpp"
 #include "Engine/Rendering/RendererChoices.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/Node.hpp"
@@ -11,15 +12,12 @@
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Config/EngineCVars.hpp"
 #include "Engine/Runtime/Subsystems/NextLocalization.hpp"
-#include "Engine/Runtime/ScreenShot.hpp"
-#include "Engine/Runtime/ScreenShotService.hpp"
+#include "Engine/Runtime/Interface/ScreenShotService.hpp"
 #include <cstdlib>
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Editor/UiFrameDispatcher.hpp"
 #include "Engine/Runtime/Interface/UiOverlay.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/Input/SyntheticInput.hpp"
 #include "Engine/Runtime/Interface/DebugUiProvider.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/Instance.hpp"
@@ -36,7 +34,6 @@
 #include <initializer_list>
 #include <optional>
 #include <system_error>
-#include <nlohmann/json.hpp>
 
 #include "Engine/Runtime/Subsystems/NextAudio.hpp"
 #include "Engine/Options.hpp"
@@ -163,6 +160,7 @@ namespace NextRenderer
     Vulkan::VulkanBaseRenderer* CreateRenderer(uint32_t rendererType, Vulkan::Window* window,
                                                const VkPresentModeKHR presentMode, const bool enableValidationLayers)
     {
+        Vulkan::RegisterBuiltinRendererProviders();
         std::vector<const char*> validationLayers;
         if (enableValidationLayers)
         {
@@ -227,8 +225,6 @@ namespace
 
 Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options& options)
 {
-    Runtime::Scene::SceneList::ScanScenes();
-
     Runtime::Config::UserSettings userSettings{};
     userSettings.BorderlessFullscreen = options.Fullscreen;
 
@@ -280,8 +276,6 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     Reflection::RegisterAllReflection();
 
     status_ = NextRenderer::EApplicationStatus::Starting;
-    screenShotService_ = std::make_unique<Runtime::FScreenShotService>(*this);
-
     services_.packageFileSystem.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
     {
         const std::string runtimePakPath = Utilities::FileHelper::GetPlatformFilePath("assets/paks/runtime.pak");
@@ -377,23 +371,6 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     window_.reset(new Vulkan::Window(windowConfig));
     SetBorderlessFullscreen(config_.userSettings.BorderlessFullscreen);
 
-    // Start accepting gnb's connection before renderer startup. Software Vulkan ICDs can spend
-    // considerable time compiling the first pipeline; the control request is queued until Tick.
-    if (!options_->AgentControl.empty())
-    {
-        agentControl_ = std::make_unique<Runtime::Agent::FAgentControlServer>();
-        std::string error;
-        if (!agentControl_->Start(options_->AgentControl, options_->AgentControlToken, error))
-        {
-            SPDLOG_ERROR("[AgentControl] failed to start: {}", error);
-            RequestExit(3);
-        }
-        else
-        {
-            SPDLOG_INFO("[AgentControl] listening on {}", options_->AgentControl);
-        }
-    }
-    
     // localization
     services_.localization = std::make_unique<NextLocalization>();
     services_.localization->LoadFromTxt(fmt::format("assets/locale/{}.txt", options_->locale), options_->locale);
@@ -464,6 +441,9 @@ NextEngine::~NextEngine()
     userInterface_.reset();
     scene_.reset();
     renderer_.reset();
+    // Scene and renderer teardown may still drain or query task state. Destroying
+    // the coordinator in End() made Scene::~Scene recreate it during shutdown.
+    Tasks::TaskCoordinator::DestroyInstance();
     window_.reset();
 
     Vulkan::Window::TerminateSDL();
@@ -875,6 +855,10 @@ bool NextEngine::Tick(bool forcingDelta)
             renderer_->DrawFrame();
         }
         frameState_.totalFrames = renderer_->FrameCount();
+        if (options_->ExitAfterFrames > 0 && frameState_.totalFrames >= options_->ExitAfterFrames)
+        {
+            RequestExit(0);
+        }
 
         if (progressiveRender_.enabled)
         {
@@ -891,7 +875,7 @@ bool NextEngine::Tick(bool forcingDelta)
 
         if (agentControl_)
         {
-            agentControl_->Pump([this](const std::string& method, const nlohmann::json& params) { return HandleAgentControlCommand(method, params); });
+            agentControl_->Pump();
         }
 
         if (!renderFrameConsumers_.empty())
@@ -934,7 +918,6 @@ void NextEngine::End()
     {
         Tasks::TaskCoordinator::GetInstance()->CancelAllParralledTasks();
         Tasks::TaskCoordinator::GetInstance()->WaitForAllTasks();
-        Tasks::TaskCoordinator::DestroyInstance();
     }
 
     if (services_.audio)
@@ -1164,7 +1147,21 @@ void NextEngine::AdvanceScreenShotCapture()
 void NextEngine::SaveScreenShot(const FScreenShotSpec& spec)
 {
     const bool allowOverlappingExports = spec.allowOverlappingExports;
-    Runtime::ScreenShot::SaveSwapChainToFile(
+    if (!screenShotService_)
+    {
+        SPDLOG_ERROR("Screenshot export requested without the NextCapture module");
+        screenShot_.exportPending = false;
+        if (screenShot_.asyncExportsInFlight > 0)
+        {
+            --screenShot_.asyncExportsInFlight;
+        }
+        if (spec.exitAfterCapture)
+        {
+            RequestExit(1);
+        }
+        return;
+    }
+    screenShotService_->SaveSwapChainToFile(
         renderer_.get(), spec.filename, spec.x, spec.y, spec.width, spec.height,
         spec.fileFormat,
         spec.sync,
@@ -1373,10 +1370,18 @@ void NextEngine::OnRendererCreateSwapChain()
         auto multiViewportBackend = window_->IsHeadless()
             ? std::unique_ptr<NextUI::IMultiViewportBackend>{}
             : gameInstance_->CreateMultiViewportBackend();
-        userInterface_.reset(new NextUI::UserInterface(
-            this, renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(), config_.userSettings,
-            [this]() -> void { gameInstance_->OnPreConfigUI(); }, [this]() -> void { gameInstance_->OnInitUI(); },
-            std::move(multiViewportBackend)));
+        if (userInterfaceFactory_)
+        {
+            userInterface_ = userInterfaceFactory_(
+                *this,
+                [this]() { gameInstance_->OnPreConfigUI(); },
+                [this]() { gameInstance_->OnInitUI(); },
+                std::move(multiViewportBackend));
+        }
+    }
+    if (!userInterface_)
+    {
+        return;
     }
     if (uiOverlay_.get() == nullptr && uiOverlayFactory_)
     {
@@ -1559,138 +1564,6 @@ void NextEngine::OnRendererAfterSubmit()
         SCOPED_CPU_TIMER("imgui prepare draw data");
         userInterface_->PrepareDrawData();
     }
-}
-
-nlohmann::json NextEngine::HandleAgentControlCommand(const std::string& method, const nlohmann::json& params)
-{
-    using Runtime::Input::Synthetic::FPoint;
-    SDL_Window* window = GetWindow().Handle();
-    const SDL_WindowID windowId = window != nullptr ? SDL_GetWindowID(window) : 0;
-    const FPoint current{static_cast<float>(GetMousePos().x), static_cast<float>(GetMousePos().y)};
-    auto point = [](const nlohmann::json& value) -> FPoint
-    {
-        if (!value.is_array() || value.size() < 2) throw std::runtime_error("point must be [x,y]");
-        return {value[0].get<float>(), value[1].get<float>()};
-    };
-    if (method == "handshake") return {{"protocolVersion", 1}, {"capabilities", {"input", "query", "cvar", "exec", "screenshot", "quit"}}};
-    if (method == "query")
-    {
-        const auto value = QueryAgentControl(params.value("query", ""));
-        if (!value) throw std::runtime_error("query not found");
-        return std::visit([](const auto& item) { return nlohmann::json(item); }, *value);
-    }
-    if (method == "key")
-    {
-        const std::string code = params.value("code", ""); const auto key = Runtime::Input::Synthetic::ResolveKeyCode(code);
-        if (key == SDLK_UNKNOWN) throw std::runtime_error("unknown key");
-        const auto scan = Runtime::Input::Synthetic::ResolveScanCode(key, code);
-        const auto modifiers = Runtime::Input::Synthetic::ResolveModifiers(params.value("mods", std::vector<std::string>{}));
-        const std::string action = params.value("action", "press");
-        if (action == "down") Runtime::Input::Synthetic::PushKey(windowId, key, scan, modifiers, true);
-        else if (action == "up") Runtime::Input::Synthetic::PushKey(windowId, key, scan, modifiers, false);
-        else Runtime::Input::Synthetic::PushKeyPress(windowId, key, scan, modifiers);
-        return {{"ok", true}};
-    }
-    if (method == "text") { Runtime::Input::Synthetic::PushText(windowId, params.value("value", "")); return {{"ok", true}}; }
-    if (method == "mouse-move")
-    {
-        const auto to = point(params.at("to"));
-        if (params.value("relative", false)) InjectRelativeMouse(to.x, to.y); else Runtime::Input::Synthetic::PushMouseMove(window, current, to);
-        return {{"ok", true}};
-    }
-    if (method == "mouse-button" || method == "click")
-    {
-        const auto at = params.contains("at") ? point(params["at"]) : current;
-        if (params.contains("at")) Runtime::Input::Synthetic::PushMouseMove(window, current, at);
-        const auto button = Runtime::Input::Synthetic::ResolveMouseButton(params.value("button", "left"));
-        const auto clicks = static_cast<Uint8>(std::max(1, params.value("count", 1)));
-        const std::string action = method == "click" ? "press" : params.value("action", "press");
-        if (action != "up") Runtime::Input::Synthetic::PushMouseButton(windowId, at, button, true, clicks);
-        if (action != "down") Runtime::Input::Synthetic::PushMouseButton(windowId, at, button, false, clicks);
-        return {{"ok", true}};
-    }
-    if (method == "drag")
-    {
-        const auto from = point(params.at("from")); const auto to = point(params.at("to"));
-        const auto button = Runtime::Input::Synthetic::ResolveMouseButton(params.value("button", "left"));
-        Runtime::Input::Synthetic::PushMouseMove(window, current, from); Runtime::Input::Synthetic::PushMouseButton(windowId, from, button, true);
-        Runtime::Input::Synthetic::PushMouseMove(window, from, to); Runtime::Input::Synthetic::PushMouseButton(windowId, to, button, false); return {{"ok", true}};
-    }
-    if (method == "scroll") { Runtime::Input::Synthetic::PushMouseWheel(windowId, current, params.value("x", 0.0f), params.value("y", 0.0f)); return {{"ok", true}}; }
-    if (method == "cvar")
-    {
-        const std::string name = params.value("name", "");
-        if (params.contains("set")) { std::string error; const std::string value = params["set"].is_string() ? params["set"].get<std::string>() : params["set"].dump(); if (!GetCVarSystem().SetValueFromString(name, value, NextCVar::ECVarSetBy::Console, &error)) throw std::runtime_error(error); return {{"value", value}}; }
-        bool found = false; const auto value = GetCVarSystem().GetValueString(name, &found); if (!found) throw std::runtime_error("cvar not found"); return {{"value", value}};
-    }
-    if (method == "exec") { const auto result = GetCVarSystem().ExecuteCommand(params.value("line", "")); if (!result.success) throw std::runtime_error(result.message); return {{"message", result.message}, {"output", result.output}}; }
-    if (method == "screenshot")
-    {
-        const std::string path = Utilities::FileHelper::GetPlatformFilePath(params.value("out", "screenshots/agent_validation").c_str());
-        Utilities::FileHelper::EnsureDirectoryExists(std::filesystem::path(path).parent_path().string());
-        for (const char* extension : {".jpg", ".avif"})
-        {
-            std::error_code errorCode;
-            std::filesystem::remove(path + extension, errorCode);
-            if (errorCode)
-            {
-                throw std::runtime_error("failed to remove existing screenshot " + path + extension + ": " +
-                                         errorCode.message());
-            }
-        }
-        const bool exitAfterCapture = params.value("quitAfterCapture", false);
-        SPDLOG_INFO("[AgentControl] screenshot requested; exitAfterCapture={}", exitAfterCapture);
-        RequestScreenShot({
-            .filename = path,
-            .accumulateFrames = params.value("accumulateFrames", 0u),
-            .sync = true,
-            .includeUi = params.value("ui", false),
-            .exitAfterCapture = exitAfterCapture,
-        });
-        return {{"path", path + ".jpg"}};
-    }
-    if (method == "quit")
-    {
-        const int exitCode = params.value("exitCode", 0);
-        SPDLOG_INFO("[AgentControl] exit requested with code {}", exitCode);
-        RequestExit(exitCode);
-        return {{"ok", true}};
-    }
-    throw std::runtime_error("unknown agent control method: " + method);
-}
-
-std::optional<Runtime::Agent::FAgentQueryValue> NextEngine::QueryAgentControl(const std::string& query) const
-{
-    if (query == "engine.totalFrames") return static_cast<int64_t>(GetTotalFrames());
-    if (query == "engine.frameRate") return static_cast<double>(GetFrameRate());
-    if (query == "engine.time") return GetTime();
-    if (query == "engine.status")
-    {
-        switch (GetEngineStatus()) { case NextRenderer::EApplicationStatus::Starting: return std::string("Starting"); case NextRenderer::EApplicationStatus::Running: return std::string("Running"); case NextRenderer::EApplicationStatus::Loading: return std::string("Loading"); default: return std::string("AsyncPreparing"); }
-    }
-    if (query == "engine.rendererType") return static_cast<int64_t>(renderer_->CurrentLogicRendererType());
-    // Rate diagnostics: agent scripts assert on these when measuring the checkerboard paths, so a
-    // silently inactive path shows up as a failed assertion instead of as flat timings.
-    if (query == "engine.checkerboardActive") return renderer_->IsCheckerboardRenderingActive();
-    if (query == "engine.sparseCheckerboardActive") return renderer_->IsSparseCheckerboardLightingActive();
-    if (query == "scene.nodeCount") return static_cast<int64_t>(GetScene().Nodes().size());
-    if (query == "scene.renderProxyCount")
-        return static_cast<int64_t>(GetScene().GetIndirectDrawBatchCount());
-    if (query == "scene.maxVisibleProxyIndex")
-        return static_cast<int64_t>(GetScene().GetGpuDrivenStat().MaxVisibleProxyIndex);
-    if (query == "scene.sunElevation")
-        return static_cast<double>(GetScene().GetEnvSettings().SunElevation);
-    if (query == "scene.atmosphereEnabled")
-        return GetScene().GetEnvSettings().AtmosphereEnabled;
-    if (query == "scene.aerialPerspectiveEnabled")
-        return GetScene().GetEnvSettings().AerialPerspectiveEnabled;
-    if (query == "scene.heightFogEnabled")
-        return GetScene().GetEnvSettings().HeightFogEnabled;
-    if (query == "scene.selectedId") return static_cast<int64_t>(GetScene().GetSelectedId());
-    if (query == "scene.selectedCount") return static_cast<int64_t>(GetScene().GetSelectedIds().size());
-    if (query.rfind("cvar.", 0) == 0) { bool found = false; auto value = GetCVarSystem().GetValueString(query.substr(5), &found); if (found) return value; return std::nullopt; }
-    if (query.rfind("game.", 0) == 0) return agentQueries_.Query(query.substr(5));
-    return std::nullopt;
 }
 
 void NextEngine::OnRendererBeforeNextFrame()

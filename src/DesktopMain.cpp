@@ -2,14 +2,26 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
-#include "Engine/Runtime/RenderDoc.hpp"
-#include "Engine/Runtime/Reflection/ReflectionDump.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #if GK_MODULE_GLTFLOADER
 #include "Modules/GltfLoader/GltfModule.hpp"
 #endif
 #if GK_MODULE_DEVTOOLS
 #include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
+#include "Modules/DevTools/ReflectionDump.hpp"
+#include "Modules/DevTools/RenderDoc.hpp"
+#endif
+#if GK_MODULE_NEXTUI
+#include "Modules/NextUI/NextUIModule.hpp"
+#endif
+#if GK_MODULE_NEXTCAPTURE
+#include "Modules/NextCapture/NextCaptureModule.hpp"
+#endif
+#if GK_MODULE_NEXTVALIDATION
+#include "Modules/NextValidation/NextValidationModule.hpp"
+#endif
+#if GK_MODULE_SCENECONTENT
+#include "Modules/SceneContent/SceneContentModule.hpp"
 #endif
 #if GK_MODULE_LIVECODING
 #include "Modules/LiveCoding/LiveCodingModule.hpp"
@@ -55,7 +67,7 @@ std::unique_ptr<Runtime::Config::Options> GOptionPtr;
 
 namespace
 {
-#if WITH_RENDERDOC
+#if WITH_RENDERDOC && GK_MODULE_DEVTOOLS
     bool GRenderDocAutoCaptureRequested = false;
 #endif
 
@@ -115,7 +127,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     {
         return SDL_APP_SUCCESS;
     }
-#if WITH_RENDERDOC
+#if WITH_RENDERDOC && GK_MODULE_DEVTOOLS
     if (GOption != nullptr && GOption->RenderDoc && !GRenderDocAutoCaptureRequested &&
         GApplication != nullptr &&
         GApplication->GetEngineStatus() == NextRenderer::EApplicationStatus::Running &&
@@ -155,14 +167,16 @@ static SDL_AppResult InitializeApplication(int argc, char *argv[])
 
     // Before anything creates a device: the manifest comes from entt::meta alone, and requiring a
     // working GPU to regenerate source would make code generation fail on build machines.
+#if GK_MODULE_DEVTOOLS
     if (!GOption->DumpReflection.empty())
     {
         const bool dumped = Reflection::DumpManifest(GOption->DumpReflection);
         spdlog::default_logger()->flush();
         std::exit(dumped ? 0 : 1);
     }
+#endif
 
-#if WITH_RENDERDOC
+#if WITH_RENDERDOC && GK_MODULE_DEVTOOLS
     // RenderDoc must be opt-in. Its application API is loaded before Vulkan
     // creation only when the user explicitly requests a capture workflow.
     if (GOption->RenderDoc)
@@ -209,6 +223,18 @@ static SDL_AppResult InitializeApplication(int argc, char *argv[])
     Modules::NextTemporalUpscaler::Install(*GOption);
 #endif
     GApplication.reset( new NextEngine(*GOption) );
+#if GK_MODULE_SCENECONTENT
+    Modules::SceneContent::Install(*GApplication);
+#endif
+#if GK_MODULE_NEXTVALIDATION
+    Modules::NextValidation::Install(*GApplication);
+#endif
+#if GK_MODULE_NEXTUI
+    Modules::NextUI::Install(*GApplication);
+#endif
+#if GK_MODULE_NEXTCAPTURE
+    Modules::NextCapture::Install(*GApplication);
+#endif
 #if GK_MODULE_DEVTOOLS
     DevTools::Install(*GApplication);
 #endif

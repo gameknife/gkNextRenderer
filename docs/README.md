@@ -101,6 +101,8 @@
 
 ## Plans（待实施）
 
+- [Engine 核心精炼 Round 5](plans/engine-core-refactor-round5.md)（已完成并修订边界；`src/Engine` 40,862 → 35,702，
+  Minimal 仅依赖完整核心，UI/捕获/validation/scene catalog/upscaler 保持可选）
   （待实施；统一 Engine UI 主题、语义控件、Toolbar/Combo、应用 chrome、领域选项目录与 DevTools 边界）
 - [Android 纯 CMake 驱动构建重构方案](plans/android-cmake-build-refactor-plan.md)（实施中；源码迁移已完成，待兼容 NDK 环境完成 APK/AVD 验收）
 - [iOS 纯 CMake 驱动构建重构方案](plans/ios-pure-cmake-build-refactor-plan.md)（device-only 实施；复用 macOS Vulkan SDK 解析，保留 `gnb ios build` 薄入口）

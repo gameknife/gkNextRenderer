@@ -34,7 +34,7 @@ namespace Rendering::Upscaler
 
 namespace Rendering::Atmosphere
 {
-    class AtmosphereSubsystem;
+    class IAtmosphereSubsystem;
 }
 
 namespace Vulkan::PipelineCommon
@@ -66,6 +66,7 @@ namespace Vulkan
     class GpuDrivenPasses;
     class LightGridBuilder;
     class LogicRendererBase;
+    class VulkanBaseRenderer;
     class RenderViewResourceFactory;
     class RenderViewServices;
 
@@ -193,6 +194,9 @@ namespace Vulkan
     const FRendererContract& GetRendererContract(ERendererType type);
     const char* GetRendererName(ERendererType type);
     const std::array<ERendererType, 4>& GetReferenceRendererTypes();
+
+    using LogicRendererFactory = std::unique_ptr<LogicRendererBase> (*)(VulkanBaseRenderer&);
+    void RegisterLogicRendererFactory(ERendererType type, LogicRendererFactory factory);
 
     struct FReferenceViewLayout
     {
@@ -644,7 +648,7 @@ namespace Vulkan
         Delegates delegates_;
         std::unique_ptr<Rendering::Upscaler::IUpscaler> upscaler_;
         std::unique_ptr<PipelineCommon::RestirDI> restirDI_;
-        std::unique_ptr<Rendering::Atmosphere::AtmosphereSubsystem> atmosphere_;
+        std::unique_ptr<Rendering::Atmosphere::IAtmosphereSubsystem> atmosphere_;
 
         FSceneRenderState sceneState_;
         FFrameRenderSettings frameSettings_;

@@ -10,7 +10,7 @@
 #include <tuple>
 
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "Engine/Utilities/Format.hpp"
 #include "Engine/Vulkan/Device.hpp"
 

@@ -12,7 +12,7 @@
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Reflection/PropertyAccessor.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Modules/SceneContent/SceneList.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <glm/gtc/quaternion.hpp>

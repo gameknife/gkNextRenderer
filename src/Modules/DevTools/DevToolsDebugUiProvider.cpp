@@ -3,7 +3,7 @@
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
 #include "Modules/DevTools/PhysicsDebugOverlay.hpp"
 #include "Modules/DevTools/ProfileDebugOverlay.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "Modules/DevTools/ConsoleLogBuffer.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
 #include "Modules/DevTools/CVarEditorPanel.hpp"

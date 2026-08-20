@@ -1,7 +1,7 @@
 #pragma once
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/ScreenShotService.hpp"
+#include "Engine/Runtime/Interface/ScreenShotService.hpp"
 #include "Modules/DevTools/GizmoController.hpp"
 #include "Gameplay/Camera/ModelViewController.hpp"
 #if GK_WITH_VITURE
@@ -93,7 +93,7 @@ private:
     void DrawViewportCheatSheet(FRendererUiState& uiState);
     void RequestScreenshot(bool openFolder, const std::string& tag);
     void DrawVideoCaptureMenuItems();
-    void RequestThreeSecondVideo(Runtime::FScreenShotService::EVideoOutputScale outputScale);
+    void RequestThreeSecondVideo(Runtime::IScreenShotService::EVideoOutputScale outputScale);
 #if GK_WITH_VITURE
     bool UpdateArTracking(double deltaSeconds);
     void DrawVitureDebugPanel();
@@ -117,8 +117,8 @@ private:
 
     bool isTakingScreenshot_ = false;
     bool isRecordingVideo_ = false;
-    Runtime::FScreenShotService::EVideoOutputScale videoOutputScale_ =
-        Runtime::FScreenShotService::EVideoOutputScale::Half;
+    Runtime::IScreenShotService::EVideoOutputScale videoOutputScale_ =
+        Runtime::IScreenShotService::EVideoOutputScale::Half;
     bool playbackPaused_ = false;
     bool stepRequested_ = false;
 };

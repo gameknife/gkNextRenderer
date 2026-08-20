@@ -2,10 +2,10 @@
 
 #include "UiCatalog.hpp"
 
-#include "Engine/Runtime/Editor/UI/UiContainers.hpp"
-#include "Engine/Runtime/Editor/UI/UiScopes.hpp"
-#include "Engine/Runtime/Editor/UI/UiTheme.hpp"
-#include "Engine/Runtime/Editor/UI/UiWidgets.hpp"
+#include "Modules/NextUI/UI/UiContainers.hpp"
+#include "Modules/NextUI/UI/UiScopes.hpp"
+#include "Modules/NextUI/UI/UiTheme.hpp"
+#include "Modules/NextUI/UI/UiWidgets.hpp"
 
 namespace Runtime::DevToolsUI
 {

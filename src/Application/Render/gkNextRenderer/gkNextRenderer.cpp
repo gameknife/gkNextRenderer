@@ -9,18 +9,19 @@
 #include <tuple>
 
 #include "Engine/Assets/Loaders/FProcModel.hpp"
+#include "Modules/SceneContent/SceneList.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/ScreenShotService.hpp"
+#include "Engine/Runtime/Interface/ScreenShotService.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
+#include "Modules/NextUI/ImGuiScaling.hpp"
 #include "Engine/Rendering/RendererChoices.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "Modules/DevTools/UI/DeveloperStatusBar.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
@@ -512,7 +513,7 @@ void NextRendererGameInstance::RequestScreenshot(bool openFolder, const std::str
     }
 
     isTakingScreenshot_ = true;
-    Runtime::FScreenShotService::FRequest request;
+    Runtime::IScreenShotService::FRequest request;
     request.tag = tag;
     request.onCompleted = [this, openFolder](const std::string&) {
         if (openFolder)
@@ -531,7 +532,7 @@ void NextRendererGameInstance::RequestScreenshot(bool openFolder, const std::str
 }
 
 void NextRendererGameInstance::RequestThreeSecondVideo(
-    const Runtime::FScreenShotService::EVideoOutputScale outputScale)
+    const Runtime::IScreenShotService::EVideoOutputScale outputScale)
 {
     if (isTakingScreenshot_ || isRecordingVideo_ || GetEngine().GetScreenShotService().IsBusy())
     {
@@ -539,12 +540,12 @@ void NextRendererGameInstance::RequestThreeSecondVideo(
     }
 
     isRecordingVideo_ = true;
-    Runtime::FScreenShotService::FThreeSecondVideoRequest request;
+    Runtime::IScreenShotService::FThreeSecondVideoRequest request;
     // Without ffmpeg only the libwebp path can produce output; asking for Both would
     // just log an encoding error for the GIF half.
-    request.format = Runtime::FScreenShotService::IsGifEncodingAvailable()
-        ? Runtime::FScreenShotService::EAnimationFormat::Both
-        : Runtime::FScreenShotService::EAnimationFormat::AnimatedWebp;
+    request.format = GetEngine().GetScreenShotService().IsGifEncodingAvailable()
+        ? Runtime::IScreenShotService::EAnimationFormat::Both
+        : Runtime::IScreenShotService::EAnimationFormat::AnimatedWebp;
     request.outputScale = outputScale;
     request.onCaptureFinished = [this]()
     {
@@ -572,15 +573,15 @@ void NextRendererGameInstance::RequestThreeSecondVideo(
 
 void NextRendererGameInstance::DrawVideoCaptureMenuItems()
 {
-    const auto outputScaleLabel = [](const Runtime::FScreenShotService::EVideoOutputScale outputScale)
+    const auto outputScaleLabel = [](const Runtime::IScreenShotService::EVideoOutputScale outputScale)
     {
         switch (outputScale)
         {
-        case Runtime::FScreenShotService::EVideoOutputScale::Half:
+        case Runtime::IScreenShotService::EVideoOutputScale::Half:
             return "50% Swapchain";
-        case Runtime::FScreenShotService::EVideoOutputScale::Quarter:
+        case Runtime::IScreenShotService::EVideoOutputScale::Quarter:
             return "25% Swapchain";
-        case Runtime::FScreenShotService::EVideoOutputScale::Full:
+        case Runtime::IScreenShotService::EVideoOutputScale::Full:
         default:
             return "100% Swapchain";
         }
@@ -592,13 +593,13 @@ void NextRendererGameInstance::DrawVideoCaptureMenuItems()
     {
         struct FVideoOutputScaleOption
         {
-            Runtime::FScreenShotService::EVideoOutputScale scale;
+            Runtime::IScreenShotService::EVideoOutputScale scale;
             const char* label;
         };
         static constexpr std::array<FVideoOutputScaleOption, 3> options{{
-            {Runtime::FScreenShotService::EVideoOutputScale::Full, "100% Swapchain"},
-            {Runtime::FScreenShotService::EVideoOutputScale::Half, "50% Swapchain"},
-            {Runtime::FScreenShotService::EVideoOutputScale::Quarter, "25% Swapchain"},
+            {Runtime::IScreenShotService::EVideoOutputScale::Full, "100% Swapchain"},
+            {Runtime::IScreenShotService::EVideoOutputScale::Half, "50% Swapchain"},
+            {Runtime::IScreenShotService::EVideoOutputScale::Quarter, "25% Swapchain"},
         }};
 
         for (const FVideoOutputScaleOption& option : options)
@@ -613,7 +614,7 @@ void NextRendererGameInstance::DrawVideoCaptureMenuItems()
 
     // GIF encoding needs ffmpeg next to the executable, which release packages do not
     // ship. Say so in the menu instead of failing silently into the log.
-    const bool gifAvailable = Runtime::FScreenShotService::IsGifEncodingAvailable();
+    const bool gifAvailable = GetEngine().GetScreenShotService().IsGifEncodingAvailable();
     if (ImGui::MenuItem(gifAvailable ? "Record 3s GIF + Animated WebP" : "Record 3s Animated WebP"))
     {
         RequestThreeSecondVideo(videoOutputScale_);

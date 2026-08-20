@@ -7,6 +7,7 @@
 
 namespace NextUI
 {
+    class IUserInterface;
     class UserInterface;
 
     class UiRenderBuffer final
@@ -32,7 +33,7 @@ namespace NextUI
     public:
         virtual ~IMultiViewportBackend() = default;
 
-        virtual void Initialize(UserInterface& userInterface) = 0;
+        virtual void Initialize(IUserInterface& userInterface) = 0;
         virtual void Shutdown() = 0;
         virtual void OnUiPipelineDestroyed() = 0;
         virtual void RenderPlatformWindows() = 0;

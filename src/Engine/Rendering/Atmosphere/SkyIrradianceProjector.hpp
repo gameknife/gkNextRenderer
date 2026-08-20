@@ -1,5 +1,7 @@
 #pragma once
 
+// CPU sky projection used by the optional atmosphere implementation.
+
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 
 namespace Rendering::Atmosphere

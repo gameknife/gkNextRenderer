@@ -8,7 +8,7 @@
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/TerrainComponent.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Interface/AgentQueries.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
@@ -527,7 +527,7 @@ namespace NextTotalwar
 
     float FGameInstance::UiScale() const
     {
-        const NextUI::UserInterface* ui = GetEngine().GetUserInterface();
+        const NextUI::IUserInterface* ui = GetEngine().GetUserInterface();
         return ui ? std::max(ui->UiScale(), 0.001f) : 1.0f;
     }
 

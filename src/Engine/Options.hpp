@@ -45,6 +45,7 @@ public:
 #endif
     std::string AgentControl;
     std::string AgentControlToken;
+    uint32_t ExitAfterFrames{};
     bool HiddenWindow{};
     // Force VK_EXT_headless_surface instead of creating an SDL window. Intended
     // for validating the headless render path on hosts with a desktop session.

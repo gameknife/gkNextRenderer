@@ -2,6 +2,8 @@
 
 #include "Engine/Rendering/RendererChoices.hpp"
 
+// Runtime renderer-selection policy follows the installed renderer implementations.
+
 namespace Rendering
 {
     namespace

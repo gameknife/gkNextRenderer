@@ -2,6 +2,8 @@
 // visibility, sun shadow, wireframe overlay and visual debugger passes.
 // Split from VulkanBaseRenderer.cpp; same class, separate TU.
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+
+// GPU-driven pass implementation belongs to the concrete renderer feature pack.
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"

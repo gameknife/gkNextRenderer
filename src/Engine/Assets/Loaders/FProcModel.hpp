@@ -1,4 +1,6 @@
 #pragma once
+
+// Core primitive-mesh construction API used by minimal scenes and applications.
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 

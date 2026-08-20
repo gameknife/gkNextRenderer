@@ -22,6 +22,10 @@ endif()
 # that do not exist on the active platform are omitted here, not special-cased
 # in every application.
 set(GK_STANDARD_RUNTIME_MODULES
+    SceneContent
+    NextValidation
+    NextUI
+    NextCapture
     DevTools
     LiveCoding
     NextAudio

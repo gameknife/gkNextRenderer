@@ -1,5 +1,7 @@
 #pragma once
 
+// Core renderer implementation owned by gkNextEngine.
+
 #include "Engine/Rendering/PipelineCommon/ShadingSchedulerPass.hpp"
 #include "Engine/Rendering/PipelineCommon/SurfaceBuildPass.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"

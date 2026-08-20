@@ -273,7 +273,7 @@ namespace Assets
 
         if (enableCpuAcceleration_)
         {
-            cpuAccelerationStructure_.InitBVH(*this);
+            cpuAccelerationStructure_->InitBVH(*this);
         }
 
         // force static flag
@@ -713,7 +713,7 @@ namespace Assets
                 (!NextEngine::GetInstance() ||
                  NextEngine::GetInstance()->GetRenderer().ActiveRendererRequirements().requestAmbientCube))
             {
-                cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get());
+                cpuAccelerationStructure_->AsyncProcessFull(*this, ambientArenaBufferMemory_.get());
             }
         }
 

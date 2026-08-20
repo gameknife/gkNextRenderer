@@ -7,7 +7,7 @@
 #include "Application/Editor/Common/Preview/AssetThumbnailRenderer.hpp"
 #include "Engine/Runtime/Command/ICommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Utilities/ImGui.hpp"
 
 #include <glm/vec3.hpp>

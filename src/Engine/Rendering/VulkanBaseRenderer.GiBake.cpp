@@ -2,6 +2,8 @@
 // distance field cascade rebuild.
 // Split from VulkanBaseRenderer.cpp; same class, separate TU.
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+
+// Ambient GI bake orchestration follows the scene-acceleration implementation.
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"

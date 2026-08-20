@@ -17,7 +17,7 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Modules/SceneContent/SceneList.hpp"
 #include "Modules/NextAI/AIService.hpp"
 #include "Modules/NextAI/NextAIModule.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"

@@ -1,7 +1,7 @@
 #include "EditorUi.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Modules/RenderViews/OffscreenRenderViewController.hpp"
 #include "EditorMain.h"
 

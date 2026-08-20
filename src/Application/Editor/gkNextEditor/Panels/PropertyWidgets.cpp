@@ -2,8 +2,8 @@
 #include "Modules/DevTools/Command/PropertyCommand.hpp"
 #include "Engine/Runtime/Reflection/ReflectionMacros.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
-#include "Engine/Runtime/Editor/UI/UiWidgets.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/UiWidgets.hpp"
 
 #include <imgui_stdlib.h>
 #include <imgui_internal.h>

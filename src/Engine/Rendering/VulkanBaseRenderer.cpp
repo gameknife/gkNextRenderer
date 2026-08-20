@@ -22,7 +22,6 @@
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/Core/Node.hpp"
-#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
@@ -32,24 +31,18 @@
 #include "Engine/Common/CoreMinimal.hpp"
 
 #include "Engine/Options.hpp"
-#include "Engine/Rendering/SoftwareModern/SoftwareModernRenderer.hpp"
-#include "Engine/Rendering/SoftwareModern/SoftwareModernNoAmbientRenderer.hpp"
-#include "Engine/Rendering/SoftwareTracing/SoftwareTracingRenderer.hpp"
-#include "Engine/Rendering/PathTracing/PathTracingRenderer.hpp"
-#include "Engine/Rendering/PathTracing/PathTracingLiteRenderer.hpp"
 #include "Engine/Rendering/ExternalPassRegistry.hpp"
 #include "Engine/Rendering/Preview/RenderViewServices.hpp"
 #include "Engine/Rendering/RenderView.hpp"
-#include "Engine/Rendering/VoxelTracing/VoxelTracingRenderer.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
 #include "Engine/Runtime/Profiling/TracyIntegration.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Rendering/PipelineCommon/VisibilityBufferLayout.hpp"
 #include "Engine/Rendering/PipelineCommon/RestirDI.hpp"
 #include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
-#include "Engine/Rendering/Atmosphere/AtmosphereSubsystem.hpp"
+#include "Engine/Rendering/Interface/AtmosphereSubsystem.hpp"
 #include "Engine/Rendering/Upscaler/IUpscaler.hpp"
 #include "Engine/Rendering/Upscaler/UpscalerRegistry.hpp"
 
@@ -193,8 +186,6 @@ namespace Vulkan
 {
     namespace
     {
-        using RendererFactory = std::unique_ptr<LogicRendererBase> (*)(VulkanBaseRenderer&);
-
         struct RendererDescriptor
         {
             ERendererType type;
@@ -202,14 +193,9 @@ namespace Vulkan
             FRendererContract contract;
             uint32_t referenceColumn;
             uint32_t referenceRow;
-            RendererFactory factory;
         };
 
-        template <typename T>
-        std::unique_ptr<LogicRendererBase> CreateLogicRenderer(VulkanBaseRenderer& baseRenderer)
-        {
-            return std::make_unique<T>(baseRenderer);
-        }
+        std::array<LogicRendererFactory, ERT_PathTracingLite + 1> RendererFactories{};
 
         const std::array RendererDescriptors{
             RendererDescriptor{ERT_PathTracing, "PathTracing", {
@@ -221,8 +207,7 @@ namespace Vulkan
                                    EPostProcess::Temporal | EPostProcess::Upscale |
                                        EPostProcess::RayReconstruction | EPostProcess::FrameGeneration |
                                        EPostProcess::DebugGBuffer,
-                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 1, 1,
-                               &CreateLogicRenderer<PathTracing::PathTracingRenderer>},
+                                    EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 1, 1},
             RendererDescriptor{ERT_PathTracingLite, "PathTracingLite", {
                                    ESceneResource::Voxel | ESceneResource::Ambient | ESceneResource::TLAS | ESceneResource::LightGrid,
                                    EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility,
@@ -232,8 +217,7 @@ namespace Vulkan
                                        EPostProcess::RayReconstruction | EPostProcess::FrameGeneration |
                                        EPostProcess::DebugGBuffer,
                                    EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId,
-                                   false, true}, 1, 1,
-                               &CreateLogicRenderer<PathTracing::PathTracingLiteRenderer>},
+                                    false, true}, 1, 1},
             RendererDescriptor{ERT_SoftwareTracing, "SoftwareTracing", {
                                    ESceneResource::Voxel | ESceneResource::Ambient | ESceneResource::LightGrid,
                                    EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility | EViewPrepass::CSM,
@@ -242,8 +226,7 @@ namespace Vulkan
                                    EPostProcess::Temporal | EPostProcess::Upscale |
                                        EPostProcess::DebugGBuffer,
                                    EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId,
-                                   false, true}, 1, 0,
-                               &CreateLogicRenderer<SoftwareTracing::SoftwareTracingRenderer>},
+                                    false, true}, 1, 0},
             RendererDescriptor{ERT_SoftwareModern, "SoftwareModern", {
                                    ESceneResource::Voxel | ESceneResource::Ambient,
                                    EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility | EViewPrepass::CSM,
@@ -252,23 +235,20 @@ namespace Vulkan
                                    EPostProcess::Temporal | EPostProcess::Upscale |
                                        EPostProcess::DebugGBuffer,
                                    EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId,
-                                   false, true}, 0, 0,
-                               &CreateLogicRenderer<SoftwareModern::SoftwareModernRenderer>},
+                                    false, true}, 0, 0},
             RendererDescriptor{ERT_VoxelTracing, "VoxelTracing", {
                                    ESceneResource::Voxel | ESceneResource::Ambient,
                                    EViewPrepass::None,
                                    ERenderOutput::Color,
                                    EPostProcess::Upscale,
-                                   EHistoryChannel::None, false}, 0, 1,
-                               &CreateLogicRenderer<VoxelTracing::VoxelTracingRenderer>},
+                                    EHistoryChannel::None, false}, 0, 1},
             RendererDescriptor{ERT_SoftwareModernNoAmbient, "SoftwareModernNoAmbient", {
                                    ESceneResource::LightGrid,
                                    EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility | EViewPrepass::CSM,
                                    ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion |
                                        ERenderOutput::ObjectId | ERenderOutput::Normal,
                                    EPostProcess::Upscale | EPostProcess::DebugGBuffer,
-                                   EHistoryChannel::None, true, true}, 0, 1,
-                               &CreateLogicRenderer<SoftwareModernNoAmbient::SoftwareModernNoAmbientRenderer>},
+                                    EHistoryChannel::None, true, true}, 0, 1},
         };
 
         const RendererDescriptor& GetRendererDescriptor(ERendererType type)
@@ -290,6 +270,16 @@ namespace Vulkan
             .requestRayTracing = HasAny(contract.sceneResources, ESceneResource::TLAS),
             .requestVoxelGeometry = HasAny(contract.sceneResources, ESceneResource::Voxel),
         };
+    }
+
+    void RegisterLogicRendererFactory(const ERendererType type, LogicRendererFactory factory)
+    {
+        const size_t index = static_cast<size_t>(type);
+        if (index >= RendererFactories.size())
+        {
+            Throw(std::invalid_argument("logic renderer type is out of range"));
+        }
+        RendererFactories[index] = factory;
     }
 
     const FRendererContract& GetRendererContract(const ERendererType type)
@@ -343,7 +333,7 @@ namespace Vulkan
         ambientCubeBaker_ = std::make_unique<AmbientCubeBaker>(*this);
         gpuDrivenPasses_ = std::make_unique<GpuDrivenPasses>(*this);
         lightGridBuilder_ = std::make_unique<LightGridBuilder>(*this);
-        atmosphere_ = std::make_unique<Rendering::Atmosphere::AtmosphereSubsystem>(*this);
+        atmosphere_ = Rendering::Atmosphere::CreateRegisteredAtmosphereSubsystem(*this);
     }
 
     VulkanBaseRenderer::~VulkanBaseRenderer()
@@ -511,7 +501,10 @@ namespace Vulkan
         ctx_.globalTexturePool.reset(new Assets::GlobalTexturePool(*ctx_.device, *ctx_.commandPool2, *ctx_.commandPool));
 
         OnDeviceSet();
-        atmosphere_->CreateDeviceResources();
+        if (atmosphere_)
+        {
+            atmosphere_->CreateDeviceResources();
+        }
         CreateSwapChain();
         // Keep hidden windows hidden (agent validation captures, unit-test engine fixture):
         // showing here would override SDL_WINDOW_HIDDEN and pop a window that steals focus.
@@ -1285,7 +1278,10 @@ namespace Vulkan
 
     void VulkanBaseRenderer::CreateSceneSwapChainResources()
     {
-        atmosphere_->CreateSwapChainPipelines();
+        if (atmosphere_)
+        {
+            atmosphere_->CreateSwapChainPipelines();
+        }
         overlay_.wireframePipeline.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframeFrameBuffers.reserve(frame_.swapChain->ImageViews().size());
@@ -1614,7 +1610,10 @@ namespace Vulkan
         swapchainStateTracker_.Reset();
         auxiliaryImageStateTracker_.Reset();
         shadowCameraFamilyCache_ = {};
-        atmosphere_->DestroySwapChainPipelines();
+        if (atmosphere_)
+        {
+            atmosphere_->DestroySwapChainPipelines();
+        }
 
         if (upscaler_)
         {
@@ -1713,7 +1712,10 @@ namespace Vulkan
         ctx_.device->WaitIdle();
         DeleteSwapChain();
         CreateSwapChain();
-        atmosphere_->SyncRuntimeResources(true);
+        if (atmosphere_)
+        {
+            atmosphere_->SyncRuntimeResources(true);
+        }
         resetUpscalerHistory_ = true;
         NextEngine::GetInstance()->ResetProgressiveRenderingAccumulation();
     }
@@ -1814,7 +1816,10 @@ namespace Vulkan
     // Camera-independent, runs once per scene per frame (shared across all views).
     void VulkanBaseRenderer::BeginSceneFrame(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        atmosphere_->BeginSceneFrame(commandBuffer, imageIndex);
+        if (atmosphere_)
+        {
+            atmosphere_->BeginSceneFrame(commandBuffer, imageIndex);
+        }
         rayTracingSceneBackend_->PrepareSceneFrame(commandBuffer, imageIndex);
         ambientCubeBaker_->PrepareSceneFrame(commandBuffer, imageIndex);
         lightGridBuilder_->PrepareSceneFrame(commandBuffer, imageIndex);
@@ -1846,9 +1851,15 @@ namespace Vulkan
         }
 
         PreRenderPerView(commandBuffer, imageIndex, clearSwapchain, contract);
-        atmosphere_->PrepareView(commandBuffer, imageIndex, view.IsPrimary(), contract);
+        if (atmosphere_)
+        {
+            atmosphere_->PrepareView(commandBuffer, imageIndex, view.IsPrimary(), contract);
+        }
         logicRenderer.Render(commandBuffer, imageIndex);
-        atmosphere_->ApplyToView(commandBuffer, imageIndex, view.IsPrimary(), contract);
+        if (atmosphere_)
+        {
+            atmosphere_->ApplyToView(commandBuffer, imageIndex, view.IsPrimary(), contract);
+        }
         if (view.CopyObjectIdHistory() && HasAny(contract.history, EHistoryChannel::ObjectId))
         {
             CopyObjectIdHistory(commandBuffer);
@@ -1975,7 +1986,10 @@ namespace Vulkan
         frameSettings_.progressiveAccumulatedFrames = engine->GetProgressiveRenderAccumulatedFrames();
         frameSettings_.progressiveTargetFrames = engine->GetProgressiveRenderTargetFrames();
         const auto& settings = frameSettings_.userSettings;
-        atmosphere_->SyncRuntimeResources();
+        if (atmosphere_)
+        {
+            atmosphere_->SyncRuntimeResources();
+        }
         const bool frameGenerationEnabled = !frameSettings_.progressiveRendering && settings.FrameGeneration &&
             SupportsFrameGeneration(activeUpscalerType_) && temporalSuperResolutionActive_ &&
             engine->GetEngineStatus() != NextRenderer::EApplicationStatus::Loading;
@@ -2275,7 +2289,16 @@ namespace Vulkan
             return renderer->second.get();
         }
 
-        auto logicRenderer = GetRendererDescriptor(type).factory(*this);
+        const size_t factoryIndex = static_cast<size_t>(type);
+        const LogicRendererFactory factory = factoryIndex < RendererFactories.size()
+            ? RendererFactories[factoryIndex]
+            : nullptr;
+        if (factory == nullptr)
+        {
+            Throw(std::runtime_error(fmt::format(
+                "logic renderer implementation '{}' is not installed", GetRendererName(type))));
+        }
+        auto logicRenderer = factory(*this);
         LogicRendererBase* result = logicRenderer.get();
         logicRenderers_.renderers[type] = std::move(logicRenderer);
         if (ctx_.device)

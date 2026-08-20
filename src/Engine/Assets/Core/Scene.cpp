@@ -227,6 +227,7 @@ namespace Assets
 
     Scene::Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing,
                  const bool allocateAmbientResources, const bool enableCpuAcceleration) :
+        cpuAccelerationStructure_(std::make_unique<Assets::CPU::FCPUAccelerationStructure>()),
         allocateAmbientResources_(allocateAmbientResources),
         enableCpuAcceleration_(enableCpuAcceleration),
         commandPool_(&commandPool)
@@ -428,7 +429,7 @@ namespace Assets
 
     Scene::~Scene()
     {
-        cpuAccelerationStructure_.ClearAllTasks();
+        cpuAccelerationStructure_->ClearAllTasks();
 
         for (const auto& node : nodes_)
         {
@@ -547,7 +548,7 @@ namespace Assets
         }
     }
 
-    void Scene::CleanUp() { cpuAccelerationStructure_.ClearAllTasks(); }
+    void Scene::CleanUp() { cpuAccelerationStructure_->ClearAllTasks(); }
 
     void Scene::AddNode(std::shared_ptr<Node> node)
     {

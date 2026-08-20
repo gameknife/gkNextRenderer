@@ -1,8 +1,8 @@
 #include "Engine/Common/CoreMinimal.hpp"
 
-#include "Engine/Runtime/Editor/UI/AppChrome.hpp"
-#include "Engine/Runtime/Editor/UI/UiContext.hpp"
-#include "Engine/Runtime/Editor/UI/UiContainers.hpp"
+#include "Modules/NextUI/UI/AppChrome.hpp"
+#include "Modules/NextUI/UI/UiContext.hpp"
+#include "Modules/NextUI/UI/UiContainers.hpp"
 #include "Engine/Runtime/Editor/UiFrame.hpp"
 
 #include <catch2/catch_test_macros.hpp>

@@ -1,5 +1,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Rendering/ViewCameraUboBuilder.hpp"
+
+// Camera UBO assembly is part of the concrete renderer implementation pack.
 #include "Engine/Assets/Core/Scene.hpp"
 
 namespace Vulkan

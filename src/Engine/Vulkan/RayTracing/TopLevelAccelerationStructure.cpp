@@ -1,4 +1,6 @@
 #include "Engine/Vulkan/RayTracing/TopLevelAccelerationStructure.hpp"
+
+// Core hardware RT implementation owned by gkNextEngine.
 #include "Engine/Vulkan/RayTracing/BottomLevelAccelerationStructure.hpp"
 #include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
 #include "Engine/Utilities/Exception.hpp"

@@ -1,6 +1,6 @@
 #include "Application/Editor/Common/MultiViewportBackend.hpp"
 
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Vulkan/Device.hpp"
@@ -428,7 +428,7 @@ MultiViewportBackend::MultiViewportBackend(NextEngine& engine) : engine_(engine)
 
 MultiViewportBackend::~MultiViewportBackend() = default;
 
-void MultiViewportBackend::Initialize(UserInterface& userInterface)
+void MultiViewportBackend::Initialize(IUserInterface& userInterface)
 {
     userInterface_ = &userInterface;
     auto& io = ImGui::GetIO();

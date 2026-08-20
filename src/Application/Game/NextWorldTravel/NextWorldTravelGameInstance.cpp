@@ -10,10 +10,10 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Components/TerrainComponent.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Interface/AgentQueries.hpp"
-#include "Engine/Runtime/ScreenShotService.hpp"
+#include "Engine/Runtime/Interface/ScreenShotService.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
 

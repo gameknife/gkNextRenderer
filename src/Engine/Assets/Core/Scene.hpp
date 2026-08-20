@@ -274,7 +274,7 @@ namespace Assets
         const Vulkan::ImageView& SunShadowImageView(uint32_t cascade) const { return *sunShadowViews_[cascade]; }
         const Vulkan::Sampler& SunShadowSampler() const { return *sunShadowSampler_; }
 
-        Assets::CPU::FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
+        Assets::CPU::FCPUAccelerationStructure& GetCPUAccelerationStructure() { return *cpuAccelerationStructure_; }
         glm::vec3 GetSceneAABBMin() const { return sceneAABBMin_; }
         glm::vec3 GetSceneAABBMax() const { return sceneAABBMax_; }
 
@@ -430,7 +430,7 @@ namespace Assets
 
         Camera renderCamera_;
 
-        Assets::CPU::FCPUAccelerationStructure cpuAccelerationStructure_;
+        std::unique_ptr<Assets::CPU::FCPUAccelerationStructure> cpuAccelerationStructure_;
         bool allocateAmbientResources_ = true;
         bool enableCpuAcceleration_ = true;
 

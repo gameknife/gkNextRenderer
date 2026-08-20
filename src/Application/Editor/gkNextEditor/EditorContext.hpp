@@ -9,7 +9,7 @@ class EditorGameInstance;
 
 namespace NextUI
 {
-    class UserInterface;
+    class IUserInterface;
     class GizmoController;
 }
 
@@ -22,7 +22,7 @@ struct EditorContext final
 {
     NextEngine& engine;
     Assets::Scene& scene;
-    NextUI::UserInterface& ui;
+    NextUI::IUserInterface& ui;
     EditorActionDispatcher& actions;
     Editor::EditorSettings& settings;
     NextUI::GizmoController* gizmoController = nullptr;

@@ -9,8 +9,8 @@
 #include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Modules/DevTools/CVarEditorPanel.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
-#include "Engine/Runtime/Editor/UI/UiWidgets.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/UiWidgets.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include <imgui.h>

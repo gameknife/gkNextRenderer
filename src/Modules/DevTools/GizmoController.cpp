@@ -6,7 +6,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Modules/DevTools/Command/DuplicateNodesCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Editor/UI/UiWidgets.hpp"
+#include "Modules/NextUI/UI/UiWidgets.hpp"
 #include "Modules/DevTools/Command/TransformNodesCommand.hpp"
 #include "ThirdParty/ImGuizmo/ImGuizmo.h"
 

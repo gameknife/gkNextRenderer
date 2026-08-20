@@ -147,6 +147,9 @@ target_link_libraries(gkNextUnitTests PRIVATE
     fmt::fmt
 )
 set(unitTestRuntimeModules
+    SceneContent
+    NextValidation
+    NextUI
     DevTools
     NextPhysics
     GltfLoader

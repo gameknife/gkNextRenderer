@@ -26,7 +26,7 @@ namespace NextUI
 namespace DevTools
 {
     // Developer console + statistics overlay, extracted from the engine core
-    // ImGui backend (NextUI::UserInterface). Driven per-frame through the
+    // ImGui backend (NextUI::IUserInterface). Driven per-frame through the
     // IDebugUiProvider hooks in DevToolsDebugUiProvider.
     class FUiDevPanels final
     {

@@ -3,7 +3,7 @@
 #include "NextWorldTravelConfig.hpp"
 #include "NextWorldTraveler.h"
 
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 
 #include <imgui.h>
 #include <ThirdParty/fontawesome/IconsFontAwesome6.h>

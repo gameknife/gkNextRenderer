@@ -1,5 +1,7 @@
 #pragma once
 
+// Core renderer implementation owned by gkNextEngine.
+
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 
 #include <memory>

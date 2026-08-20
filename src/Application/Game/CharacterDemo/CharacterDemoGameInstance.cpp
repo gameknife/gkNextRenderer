@@ -24,7 +24,7 @@
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "Engine/Runtime/Scene/NodeUtils.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Modules/SceneContent/SceneList.hpp"
 #include "Modules/DevTools/PhysicsDebugOverlay.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"

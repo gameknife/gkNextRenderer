@@ -13,15 +13,15 @@
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Modules/NextUI/ImGuiScaling.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "Modules/ScadLoader/FScadEvaluator.h"
 #include "Modules/ScadLoader/FScadLexer.h"
 #include "Modules/ScadLoader/FScadParser.h"
@@ -5074,7 +5074,7 @@ namespace ScadLibrary
 
         // Engine mouse events use framebuffer pixels, while the overlay handles
         // are stored in ImGui's logical coordinate space.
-        const NextUI::UserInterface* ui = engine_.GetUserInterface();
+        const NextUI::IUserInterface* ui = engine_.GetUserInterface();
         const float uiScale = ui != nullptr ? ui->UiScale() : 1.0f;
         const glm::vec2 mouse(static_cast<float>(x) / uiScale, static_cast<float>(y) / uiScale);
         for (const FTerrainFeatureHandle& handle : terrainFeatureHandles_)
@@ -5768,7 +5768,7 @@ namespace ScadLibrary
         }
 
         const glm::vec2 mouse(ImGui::GetIO().MousePos.x, ImGui::GetIO().MousePos.y);
-        const NextUI::UserInterface* ui = engine_.GetUserInterface();
+        const NextUI::IUserInterface* ui = engine_.GetUserInterface();
         const float uiScale = ui != nullptr ? ui->UiScale() : 1.0f;
         const glm::vec2 framebufferMouse = mouse * uiScale;
         int hoveredHandle = -1;

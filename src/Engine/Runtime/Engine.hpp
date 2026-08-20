@@ -9,19 +9,19 @@
 #include "Engine/Rendering/RenderView.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Command/CommandHistory.hpp"
+#include "Engine/Runtime/Interface/AgentControl.hpp"
 #include "Engine/Runtime/Interface/AgentQueries.hpp"
-#include "Engine/Runtime/AgentControlServer.hpp"
 #include "Engine/Runtime/Interface/DebugDraw.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Engine/Runtime/Interface/ScreenShotService.hpp"
+#include "Engine/Runtime/Interface/SceneContent.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Interface/ScriptRuntime.hpp"
 #include "Engine/Runtime/Interface/ShaderHotReload.hpp"
 #include "Engine/Runtime/Config/ShowFlags.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
-#include "Engine/Runtime/ScreenShot.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
-#include <nlohmann/json_fwd.hpp>
 
 namespace NextRenderer
 {
@@ -108,10 +108,24 @@ public:
     const Runtime::Config::Options& GetOptions() const { return *options_; }
 
     // Runtime services
-    NextUI::UserInterface* GetUserInterface() { return userInterface_.get(); }
+    NextUI::IUserInterface* GetUserInterface() { return userInterface_.get(); }
     Runtime::IUiOverlay* GetUiOverlay() { return uiOverlay_.get(); }
-    Runtime::FScreenShotService& GetScreenShotService() { return *screenShotService_; }
-    const Runtime::FScreenShotService& GetScreenShotService() const { return *screenShotService_; }
+    Runtime::IScreenShotService& GetScreenShotService()
+    {
+        if (!screenShotService_)
+        {
+            throw std::logic_error("screen capture service is not installed");
+        }
+        return *screenShotService_;
+    }
+    const Runtime::IScreenShotService& GetScreenShotService() const
+    {
+        if (!screenShotService_)
+        {
+            throw std::logic_error("screen capture service is not installed");
+        }
+        return *screenShotService_;
+    }
     NextAudio* GetAudio() { return services_.audio.get(); }
     const NextAudio* GetAudio() const { return services_.audio.get(); }
     NextLocalization* GetLocalization() { return services_.localization.get(); }
@@ -227,6 +241,32 @@ public:
         uiOverlayFactory_ = std::move(factory);
     }
 
+    using UserInterfaceFactory = std::function<std::unique_ptr<NextUI::IUserInterface>(
+        NextEngine&,
+        std::function<void()>,
+        std::function<void()>,
+        std::unique_ptr<NextUI::IMultiViewportBackend>)>;
+    void SetUserInterfaceFactory(UserInterfaceFactory factory)
+    {
+        userInterfaceFactory_ = std::move(factory);
+    }
+
+    void SetScreenShotService(std::unique_ptr<Runtime::IScreenShotService> service)
+    {
+        screenShotService_ = std::move(service);
+    }
+
+    void SetAgentControlService(std::unique_ptr<Runtime::Agent::IAgentControlService> service)
+    {
+        agentControl_ = std::move(service);
+    }
+    const Runtime::Agent::FAgentQueryRegistry& GetAgentQueries() const { return agentQueries_; }
+
+    void SetSceneContentService(std::unique_ptr<Runtime::Scene::ISceneContentService> service)
+    {
+        sceneContent_ = std::move(service);
+    }
+
     void SetAudioFactory(std::function<std::unique_ptr<NextAudio>()> factory)
     {
         audioFactory_ = std::move(factory);
@@ -298,8 +338,6 @@ private:
     void OnScroll(double xoffset, double yoffset);
     void OnDropFile(const char* path);
     void TickGamepadInput();
-    nlohmann::json HandleAgentControlCommand(const std::string& method, const nlohmann::json& params);
-    std::optional<Runtime::Agent::FAgentQueryValue> QueryAgentControl(const std::string& query) const;
     bool HandleGlobalCaptureShortcut(const SDL_Event& event);
     bool HandleDebugShortcut(SDL_Keycode key);
 
@@ -394,8 +432,9 @@ private:
     FInputState inputState_{};
     FProgressiveRenderState progressiveRender_{};
     FScreenShotState screenShot_{};
-    std::unique_ptr<Runtime::FScreenShotService> screenShotService_;
-    std::unique_ptr<Runtime::Agent::FAgentControlServer> agentControl_;
+    std::unique_ptr<Runtime::IScreenShotService> screenShotService_;
+    std::unique_ptr<Runtime::Scene::ISceneContentService> sceneContent_;
+    std::unique_ptr<Runtime::Agent::IAgentControlService> agentControl_;
     Runtime::Agent::FAgentQueryRegistry agentQueries_;
     int requestedExitCode_ = 0;
     bool closeRequested_ = false;
@@ -403,7 +442,8 @@ private:
     NextRenderer::EApplicationStatus status_{};
 
     // Runtime services and UI
-    std::unique_ptr<NextUI::UserInterface> userInterface_;
+    std::unique_ptr<NextUI::IUserInterface> userInterface_;
+    UserInterfaceFactory userInterfaceFactory_;
     std::unique_ptr<Runtime::IUiOverlay> uiOverlay_;
     std::function<std::unique_ptr<Runtime::IUiOverlay>(NextEngine&)> uiOverlayFactory_;
     std::vector<std::unique_ptr<Runtime::IRenderFrameConsumer>> renderFrameConsumers_{};

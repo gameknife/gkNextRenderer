@@ -1,7 +1,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "ScadAIPanel.hpp"
 
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 
 #include <imgui.h>
 

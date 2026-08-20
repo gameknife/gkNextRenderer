@@ -1,5 +1,7 @@
 #pragma once
 
+// Dispatch controller for the optional ambient-bake implementation.
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>

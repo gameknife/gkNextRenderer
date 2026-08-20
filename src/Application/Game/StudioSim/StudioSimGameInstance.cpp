@@ -16,7 +16,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Modules/SceneContent/SceneList.hpp"
 #include "Modules/NextAI/AIService.hpp"
 
 #include "Modules/ScadLoader/ScadModule.hpp"

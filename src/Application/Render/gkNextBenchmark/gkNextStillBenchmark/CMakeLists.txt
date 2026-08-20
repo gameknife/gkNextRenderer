@@ -12,6 +12,9 @@ add_executable(gkNextStillBenchmark
 )
 # Intentionally mirrors the minimal renderer module footprint. DemoScenes need no asset loaders.
 gk_configure_application(gkNextStillBenchmark MINIMAL_LINK MODULES
+    SceneContent
+    NextValidation
+    NextCapture
     NextPhysics
     NextTemporalUpscaler
 )

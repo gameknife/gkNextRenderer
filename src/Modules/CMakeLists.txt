@@ -6,6 +6,39 @@ foreach(gkModule IN LISTS GK_MODULE_NAMES)
     endif()
 endforeach()
 
+if(TARGET NextUI)
+    target_link_libraries(NextUI PRIVATE SDL3::SDL3 imgui::imgui)
+endif()
+
+if(TARGET NextCapture)
+    target_link_libraries(NextCapture PRIVATE WebP::webp WebP::libwebpmux)
+    if(WITH_AVIF)
+        target_compile_definitions(NextCapture PRIVATE WITH_AVIF=1 AVIF_CODEC_AOM=SYSTEM)
+        target_include_directories(NextCapture PRIVATE
+            $<TARGET_PROPERTY:avif,INTERFACE_INCLUDE_DIRECTORIES>
+        )
+        target_link_libraries(NextCapture PRIVATE avif)
+    else()
+        target_compile_definitions(NextCapture PRIVATE WITH_AVIF=0)
+    endif()
+endif()
+
+if(TARGET DevTools AND TARGET NextUI)
+    target_link_libraries(DevTools PRIVATE NextUI)
+endif()
+
+if(TARGET NextRemote AND TARGET NextUI)
+    target_link_libraries(NextRemote PRIVATE NextUI)
+endif()
+
+if(TARGET NextUI AND TARGET SceneContent)
+    target_link_libraries(NextUI PRIVATE SceneContent)
+endif()
+
+if(TARGET DevTools AND TARGET SceneContent)
+    target_link_libraries(DevTools PRIVATE SceneContent)
+endif()
+
 if(IOS AND TARGET NextAudio)
     # miniaudio's iOS backend includes Objective-C framework headers. Keep it
     # out of the C++ unity source so Xcode invokes the Objective-C++ compiler.

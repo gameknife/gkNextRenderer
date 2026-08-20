@@ -4,7 +4,7 @@
 
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 
 #include <imgui.h>
 

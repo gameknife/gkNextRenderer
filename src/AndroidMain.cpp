@@ -1,7 +1,7 @@
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/RenderDoc.hpp"
+#include "Modules/DevTools/RenderDoc.hpp"
 #include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
 #include "Modules/GltfLoader/GltfModule.hpp"
 #include "Modules/LiveCoding/LiveCodingModule.hpp"
@@ -9,6 +9,10 @@
 #include "Modules/NextPhysics/NextPhysicsModule.hpp"
 #include "Modules/NextRemote/NextRemoteModule.hpp"
 #include "Modules/NextTemporalUpscaler/NextTemporalUpscalerModule.hpp"
+#include "Modules/NextUI/NextUIModule.hpp"
+#include "Modules/NextCapture/NextCaptureModule.hpp"
+#include "Modules/NextValidation/NextValidationModule.hpp"
+#include "Modules/SceneContent/SceneContentModule.hpp"
 
 #include <fmt/format.h>
 #include <filesystem>
@@ -112,6 +116,10 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     Runtime::IDebugUiProvider& debugUiProvider = DevTools::DefaultDebugUiProvider();
     Modules::NextTemporalUpscaler::Install(*GOption);
     GApplication.reset( new NextEngine(*GOption) );
+    Modules::SceneContent::Install(*GApplication);
+    Modules::NextValidation::Install(*GApplication);
+    Modules::NextUI::Install(*GApplication);
+    Modules::NextCapture::Install(*GApplication);
     GApplication->SetDebugUiProvider(&debugUiProvider);
     Modules::Audio::Install(*GApplication);
     Modules::Physics::Install(*GApplication);

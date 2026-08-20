@@ -8,8 +8,8 @@
 #include "MagicaLegoStyle.hpp"
 #include "MagicaLegoUIHelpers.hpp"
 
-#include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/Editor/FontLoader.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
+#include "Modules/NextUI/FontLoader.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/FileHelper.hpp"
@@ -1046,7 +1046,7 @@ void MagicaLegoUserInterface::DrawRightBar()
             for (auto& block : basicBlocks)
             {
                 std::string filename = fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", block.type, block.name);
-                const NextUI::UserInterface::FUiTextureHandle texture =
+                const NextUI::IUserInterface::FUiTextureHandle texture =
                     GetGameInstance()->GetEngine().GetUserInterface()->RequestUiTexture(filename);
                 ImTextureID id = texture.valid ? texture.textureId : static_cast<ImTextureID>(0);
                 if (MaterialButton(block, id, windowWidth, GetGameInstance()->GetCurrentBrushIdx() == block.brushId_))

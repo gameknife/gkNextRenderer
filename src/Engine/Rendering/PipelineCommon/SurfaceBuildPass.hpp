@@ -1,5 +1,7 @@
 #pragma once
 
+// Shared only by concrete renderer implementations in this module.
+
 #include <memory>
 
 #include <vulkan/vulkan.h>

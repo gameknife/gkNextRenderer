@@ -376,7 +376,7 @@ namespace Assets
     {
         if (enableCpuAcceleration_)
         {
-            cpuAccelerationStructure_.PollBVHBuild();
+            cpuAccelerationStructure_->PollBVHBuild();
         }
 
         if (NextEngine::GetInstance()->GetUserSettings().TickAnimation)
@@ -564,13 +564,13 @@ namespace Assets
 
             if (shouldUpdateVoxel && ambientArenaBufferMemory_)
             {
-                cpuAccelerationStructure_.Tick(
+                cpuAccelerationStructure_->Tick(
                     *this, ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get());
             }
 
             if (cpuBvhDirty_)
             {
-                cpuAccelerationStructure_.RebuildBVHOnly(*this);
+                cpuAccelerationStructure_->RebuildBVHOnly(*this);
                 cpuBvhDirty_ = false;
             }
         }
