@@ -1,4 +1,4 @@
-#include "Engine/Rendering/Interface/AtmosphereSubsystem.hpp"
+#include "Engine/Rendering/Interface/IAtmosphereSubsystem.hpp"
 
 namespace Rendering::Atmosphere
 {

@@ -1,6 +1,6 @@
 #include "Engine/Rendering/BuiltinRendererProviders.hpp"
 
-#include "Engine/Rendering/Interface/AtmosphereSubsystem.hpp"
+#include "Engine/Rendering/Interface/IAtmosphereSubsystem.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Rendering/Atmosphere/AtmosphereSubsystem.hpp"
 #include "Engine/Rendering/PathTracing/PathTracingLiteRenderer.hpp"

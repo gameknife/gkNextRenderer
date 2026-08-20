@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
-#include "Engine/Rendering/Interface/AtmosphereSubsystem.hpp"
+#include "Engine/Rendering/Interface/IAtmosphereSubsystem.hpp"
 #include "Engine/Rendering/PipelineCommon/ResourceStateTracker.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
