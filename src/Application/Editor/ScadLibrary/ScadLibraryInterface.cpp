@@ -491,13 +491,14 @@ namespace ScadLibrary
         // ------------------------------------------------------------------ kit file watch
 
         // A browsable parts library file: kit_*.scad (excluding the combinator
-        // rule libraries kit_layout.scad / kit_terrain.scad), mirroring the
-        // filter in KitCatalog::ScanKits.
+        // rule libraries kit_layout.scad / kit_terrain.scad / kit_geo_city.scad),
+        // mirroring the filter in KitCatalog::ScanKits.
         bool IsBrowsableKitFile(const std::filesystem::path& path)
         {
             const std::string filename = path.filename().string();
             return path.extension() == ".scad" && filename.rfind("kit_", 0) == 0 &&
-                filename != "kit_layout.scad" && filename != "kit_terrain.scad";
+                filename != "kit_layout.scad" && filename != "kit_terrain.scad" &&
+                filename != "kit_geo_city.scad";
         }
 
         struct FKitWatchGatherResult

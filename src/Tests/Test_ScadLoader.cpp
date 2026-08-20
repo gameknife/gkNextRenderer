@@ -690,6 +690,37 @@ TEST_CASE("Scad list comprehension drives a for-loop", "[Unit][Scad]")
     CHECK(TotalTriangles(dependent) == 60); // i=1 has 2 j values, i=2 has 3
 }
 
+TEST_CASE("Scad let() binds inside a function body", "[Unit][Scad]")
+{
+    // The rule libraries (kit_geo_city, kit_road) name shared subexpressions in
+    // function bodies. Without expression-level let, a footprint offset has to
+    // recompute every normal three times and reads as one unbroken line.
+    const EvalResult single =
+        EvalProgram("function f(v) = let (l = v * 2) l + l;\n"
+                    "for (i = [0 : f(1) - 1]) translate([i,0,0]) cube([1,1,1]);\n");
+    CHECK(single.warningCount == 0);
+    CHECK(TotalTriangles(single) == 48); // f(1) = 4 -> i = 0..3
+
+    // The body is the whole expression, not just the first term, and later
+    // bindings see earlier ones.
+    const EvalResult chained =
+        EvalProgram("function g(a) = let (b = a + 1, c = b * 2) c + b;\n"
+                    "for (i = [1 : g(1)]) translate([i,0,0]) cube([1,1,1]);\n");
+    CHECK(TotalTriangles(chained) == 72); // g(1): b=2, c=4 -> 6 cubes
+
+    // The binding must not leak out of the let.
+    const EvalResult scoped =
+        EvalProgram("q = 3;\n"
+                    "function h() = let (q = 99) 1;\n"
+                    "for (i = [1 : h() + q]) translate([i,0,0]) cube([1,1,1]);\n");
+    CHECK(TotalTriangles(scoped) == 48); // 1 + 3 = 4 cubes, not 100
+
+    // The comprehension form still splices rather than yielding one value.
+    const EvalResult comprehension =
+        EvalProgram("for (x = [for (i = [1:3]) let (d = i * 2) d]) translate([x,0,0]) cube([1,1,1]);\n");
+    CHECK(TotalTriangles(comprehension) == 36);
+}
+
 TEST_CASE("Scad echo / assert / str are accepted", "[Unit][Scad]")
 {
     const EvalResult result = EvalProgram("echo(str(\"size=\", 5));\n"

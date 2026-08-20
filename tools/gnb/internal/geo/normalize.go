@@ -298,6 +298,53 @@ var Profiles = map[string]HeightProfile{
 		Fallback:   12,
 		RoofHeight: 1.2,
 	},
+	// European old towns: a uniform 5..7 storey perimeter block. Heights cluster
+	// far more tightly than in "default", which has to cover North American
+	// downtowns too, and the fallback for an untagged building is a block in the
+	// street wall rather than a generic 12 m box.
+	"europe": {
+		Name: "europe",
+		FloorHeight: map[string]float64{
+			"":            3.3,
+			"apartments":  3.2,
+			"residential": 3.2,
+			"house":       3.0,
+			"commercial":  3.8,
+			"office":      3.6,
+			"retail":      4.2,
+			"industrial":  5.0,
+			"hotel":       3.3,
+		},
+		Default: map[string]float64{
+			"yes":            17, // the perimeter block: 5 storeys plus a roof
+			"house":          9,
+			"garage":         3,
+			"shed":           3,
+			"roof":           4,
+			"kiosk":          3.5,
+			"retail":         11,
+			"commercial":     19,
+			"office":         24,
+			"apartments":     20,
+			"residential":    18,
+			"hotel":          21,
+			"industrial":     12,
+			"warehouse":      11,
+			"school":         15,
+			"hospital":       24,
+			"church":         24,
+			"cathedral":      42,
+			"train_station":  18,
+			"transportation": 12,
+			"civic":          19,
+			"public":         19,
+			"construction":   18,
+			"parking":        12,
+			"service":        4,
+		},
+		Fallback:   17,
+		RoofHeight: 2.4,
+	},
 	// Mainland Chinese cities: mid-rise slab housing dominates, and OSM height
 	// coverage is thin, so these fallbacks carry most of the skyline rather than
 	// just filling gaps. They are plausible defaults for the building class, not

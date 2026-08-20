@@ -25,6 +25,7 @@ type geoFlags struct {
 	seed     int
 	debug    bool
 	endpoint string
+	noDetail bool
 }
 
 func (f *geoFlags) bind(cmd *cobra.Command) {
@@ -32,11 +33,15 @@ func (f *geoFlags) bind(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.at, "at", "", "tile centre as lat,lon (e.g. 22.2855,114.1580)")
 	cmd.Flags().Float64Var(&f.size, "size", 1000, "tile side length in metres")
 	cmd.Flags().IntVar(&f.cells, "cells", geo.DefaultCells, "terrain grid cells per axis (max 176)")
-	cmd.Flags().StringVar(&f.profile, "profile", "default", "building height profile (default, china, hongkong)")
+	cmd.Flags().StringVar(&f.profile, "profile", "default",
+		"regional profile — height fallbacks plus facade/roof rules "+
+			"(default, europe, china, hongkong)")
 	cmd.Flags().IntVar(&f.seed, "seed", 7, "terrain jitter seed")
 	cmd.Flags().BoolVar(&f.debug, "debug-images", false, "write per-stage DEM greyscale PNGs into the cache")
 	cmd.Flags().StringVar(&f.endpoint, "overpass-endpoint", geo.OverpassEndpoint,
 		"Overpass API mirror (switch when the default one keeps refusing the tile)")
+	cmd.Flags().BoolVar(&f.noDetail, "no-detail", false,
+		"emit bare OSM extrusions: no facades, roofs, sidewalks or street furniture")
 }
 
 func (f *geoFlags) tile() (geo.Tile, error) {
@@ -98,6 +103,7 @@ func geoOptions(ctx appContext, f geoFlags) geo.Options {
 	if f.endpoint != "" {
 		opt.OverpassEndpoint = f.endpoint
 	}
+	opt.Emit.Detail = !f.noDetail
 	return opt
 }
 

@@ -135,12 +135,13 @@ namespace ScadLibrary
             {
                 continue;
             }
-            // kit_layout / kit_terrain / kit_road are rule libraries: placement
-            // combinators and data-driven generators that need a terrain or a
-            // network table to produce anything. They are not browsable parts,
-            // and evaluating them with default arguments yields nothing.
+            // kit_layout / kit_terrain / kit_road / kit_geo_city are rule
+            // libraries: placement combinators and data-driven generators that
+            // need a terrain, a network table or a footprint to produce
+            // anything. They are not browsable parts, and evaluating them with
+            // default arguments yields nothing.
             if (path.filename() == "kit_layout.scad" || path.filename() == "kit_terrain.scad" ||
-                path.filename() == "kit_road.scad")
+                path.filename() == "kit_road.scad" || path.filename() == "kit_geo_city.scad")
             {
                 continue;
             }

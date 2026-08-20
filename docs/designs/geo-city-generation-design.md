@@ -4,7 +4,7 @@
 **零 LLM**：`geo` 包只依赖 Go 标准库，换地点只改命令行参数。
 
 ```bash
-gnb geo make --name <tile> --at <lat>,<lon> --size 1000 [--profile default|china|hongkong]
+gnb geo make --name <tile> --at <lat>,<lon> --size 1000 [--profile default|europe|china|hongkong]
 gnb shot --scene assets/geo/<tile>/<tile>.scad
 ```
 
@@ -257,6 +257,73 @@ color(c) translate([0, 0, z0]) linear_extrude(height = h + skirt)
 - **整个 footprint bbox 必须在 tile 内**才发射。只判断质心会让边缘建筑悬挑到地形之外，
   画面上是一块浮在虚空里的板。
 
+### 5.4b 细节层：立面、屋顶、街具
+
+5.4 那个光棱柱是"轮廓对、高度对，别的什么都没有"。它读起来像地图软件，不像城市。
+细节层补的就是那一步，沿用 5.6 已经定下的分工：
+
+- **生成器分类与量测**（[`detail.go`](../../tools/gnb/internal/geo/detail.go)）：按高度 /
+  `building=*` / 地域 profile 选立面方案与屋顶形式，用旋转卡壳算最小面积包围盒（坡屋顶的
+  脊向）与矩形度，再算一个**保证落在轮廓内**的屋面锚点。
+- **kit 出几何**（[`kit_geo_city.scad`](../../assets/scad/lib/kit_geo_city.scad) `gc_` 前缀，
+  街具在 [`kit_road.scad`](../../assets/scad/lib/kit_road.scad)）。
+
+`.scad` 里每栋楼仍然只有一行：轮廓 + 一个样式向量。**场景文件没有因此变大**
+（hk_victoria 仍是 372KB），三角形全部在求值期长出来。
+
+```scad
+gc_bld([[x,y],...], gz(...), 31.24,
+       [facade, wallTone, glassTone, floorH, seed],
+       [roofKind, roofTone, rise, ridgeFrac, clutter, anchorX, anchorY, anchorR],
+       [cx, cy, w, d, angDeg], skirt);
+```
+
+**窗户不是一个个盒子。** 逐窗建模在 40 层塔上是几千个 cube。改成"每层一圈水平腰线 +
+沿周长的竖向窗挺"，露出来的深色壳体本身就是玻璃：一栋 40 层塔约 1.5k 三角而不是 40k，
+远近都读得出窗格。壳体取玻璃调、腰线窗挺取墙面调 —— 反过来就是"黑楼白框"。
+玻璃 albedo 不能低于 0.17：首版 0.11 配上自阴影，整座塔在 PT 下是一根黑柱子。
+
+屋顶按 profile 分：平顶 + 女儿墙 + 屋面杂物（水箱 / 空调 / 楼梯间 / 桅杆，港式最密），
+或矮房的坡顶（双坡 / 四坡 / 攒尖共用一套 polyhedron 拓扑，只差脊长）。
+
+街面在 `kit_road` 里，全部由生成器已经发出的左右缘点列推导，**生成器不需要多发一个坐标**：
+人行道 + 路缘石、路灯 / 行道树 / 长椅 / 垃圾桶 / 消火栓（左右交替，按站位索引确定性摆放）、
+run 端头的斑马线、大路口的信号灯。背街小巷（service / living_street）不铺不摆。
+
+`gnb geo scad --no-detail` 回到 5.4 的光棱柱，用于 A/B 与排查。
+
+#### 两条不能破的规则（都是踩出来的）
+
+**一、装饰只许内缩，不许越出 OSM 轮廓。**
+轮廓是导航与碰撞的契约。NavGrid 判定一格的地面是**从上往下打射线取第一个命中**，
+人行道上方哪怕只挑出 0.2m 的檐口，那一格的"地面"就变成檐口高度，相邻格跨不过去。
+首版把腰线 / 勒脚 / 雨篷都往外贴，`Test_GeoCityWalkable` 的两点之间直接找不到路
+（可达格 22264 → 16764）。做法是**壳体整体内缩 relief、装饰再填回到原轮廓**，
+最大外廓因此恒等于轮廓本身 —— 顺带让幕墙的玻璃真的退在窗挺后面，比外贴还好看。
+同理，屋面杂物用生成器算的**轮廓内锚点**而不是包围盒：L 形楼的包围盒盖住凹口，
+水箱会散到街道上空，那几格的"地面"变成 40m 高。
+
+**二、横坡大的 run 不铺人行道。**
+路面锚在上坡侧（见 `kit_road` 贴地契约第 3 条），人行道再往外伸两米就悬在自然地面之上，
+那条斜面在香港的山街上轻易超过 NavGrid 的 `maxSlopeAngle`(50°)，
+于是整条街被自己的人行道围成一道走不过去的峡谷。**收窄没用 —— 越窄越陡**；
+只能在横坡超过 `rd_WALK_MAX_OFF()` 的地方放弃人行道，现实里那种地方也是挡土墙加台阶。
+
+#### 地域 profile
+
+`--profile` 现在同时选**高度回退**（§5.3）和**立面/屋顶规则**（`DetailProfiles`）：
+
+| profile | 幕墙起点 | 砌体开窗上限 | 坡屋顶上限 | 屋面杂物 | 典型 |
+|---|---|---|---|---|---|
+| `default` | 55m | 32m | 14m | 无加成 | 北美 / 通用 |
+| `europe` | 60m | 34m | **26m** | 无加成 | 巴黎、布达佩斯 |
+| `china` | 60m | — | 10m | +1（太阳能热水器） | 上海、成都 |
+| `hongkong` | 45m | — | 5.5m | +2（水箱 + 天线） | 香港 |
+
+`europe` 是为了**让坡屋顶阈值高过奥斯曼式街区**（~20m）才加的：用 `default` 的 14m，
+巴黎整片街区都是灰平顶，而那座城市从空中看是一片锌板和石板坡顶 —— 这是欧洲 tile
+最扎眼的一处不对。
+
 ### 5.5 街区分组（必须）
 
 2000 栋 × ~40 tri ≈ 80k 三角。若全部作为顶层裸几何按颜色合并成单个 Model，索引会逼近
@@ -349,7 +416,16 @@ Overpass `out body geom` 给每条 way 一个与 geometry **索引对齐**的 `n
 
 ## 6. 预算与限制
 
-实测（5 个 tile）：**85k ~ 200k 三角、90 ~ 116 节点、0 warning、加载 280~360ms**。
+实测（9 个 tile，细节层开启）：**290k ~ 2.0M 三角、92 ~ 205 节点、0 warning**。
+求值期长几何是主要开销：hk_victoria 解析 3.7s / 提交 0.5s，最密的 hk_mongkok
+（1272 栋）7.0s / 1.4s；`--no-detail` 分别是 2.0s / 0.15s。物理 cooking 只从
+60ms 涨到 110~180ms —— 因为块是按三角预算切的（下一条）。
+
+**每个生成的 module 都按三角预算切分**（`EmitOptions.ModuleTriBudget`，44k）。
+这是发射器里最要命的一个数：Model 到 65535 三角，物理 cook 会**静默跳过**，
+那一块照常渲染但人直接穿过去。光棱柱时代 100m 街区从来碰不到上限，加了立面就会，
+所以街区和路网都改成按估算三角切块而不是按条数。估算函数 `styleTriangles` /
+`runTriangles` 是 kit 的镜像，改了 kit 的方案表要同步改它们。
 
 已知限制，按影响排序：
 
@@ -365,7 +441,11 @@ Overpass `out body geom` 给每条 way 一个与 geometry **索引对齐**的 `n
   实测成都那一块重试 5 次全失败，换 `--overpass-endpoint https://overpass.kumi.systems/api/interpreter`
   一次成功。
 - 生成场景含 `gk_*`，不兼容 OpenSCAD 本体；地形不得参与场景级 CSG。
-- 建筑是单个挤出棱柱，没有 `building:part`：IFC 二期、中银大厦这类有削切造型的塔楼是光棱柱。
+- 建筑体量仍是单个挤出棱柱，没有 `building:part`：IFC 二期、中银大厦这类有削切造型的
+  塔楼只是加了窗格的棱柱，轮廓不会收分。
+- **求值期长几何**，最密的 tile 解析要 7s（§6 表）。要再快只能把 kit 的展开搬到生成器里，
+  代价是场景文件从几百 KB 涨到几十 MB，且"改一个文件改全世界"的性质就没了。
+- 细节层的规则表在 kit 和 `detail.go` 里各有一份（几何 / 三角估算），改一处要同步另一处。
 
 ## 6b. 可行走闭环（NavGrid 契约，血泪经验）
 
@@ -385,6 +465,7 @@ Overpass `out body geom` 给每条 way 一个与 geometry **索引对齐**的 `n
 ## 7. 验证
 
 ```bash
+gnb shot --scene assets/scad/source/geo_city_probe.scad   # 细节层探针：六种立面 x 两种屋顶 + 一条街
 gkNextUnitTests "[ScadTerrain]"                     # hmap 解码/双线性/确定性/域外 clamp
 gkNextUnitTests "[Geo]"                             # 可行走闭环（需 GPU，加载参考 tile）
 gkNextUnitTests "[POI]"                             # poi.json 数据契约（无需 GPU，扫全部 tile）

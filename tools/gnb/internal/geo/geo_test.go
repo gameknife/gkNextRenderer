@@ -610,8 +610,9 @@ func TestEmitIsDeterministicAndWellFormed(t *testing.T) {
 		`["road", `,
 		"function gz(",
 		"gk_terrain(TERR);",
-		"linear_extrude(",
-		"polygon(points = ",
+		"use <../../scad/lib/kit_geo_city.scad>",
+		"gc_bld(",
+		"gk_flatten()",
 		"OpenStreetMap contributors",
 		"gk_camera_lookat(",
 		"// Tower One (120m, tag)",
@@ -619,6 +620,11 @@ func TestEmitIsDeterministicAndWellFormed(t *testing.T) {
 		if !strings.Contains(src, want) {
 			t.Errorf("generated scene is missing %q", want)
 		}
+	}
+	// The decoration lives in the kit, not in the tile: a building is still one
+	// call with a footprint, and no geometry primitive leaks into the scene file.
+	if strings.Contains(src, "linear_extrude(") {
+		t.Error("detailed buildings must go through gc_bld, not raw extrusions")
 	}
 	// Every building must sit on a terrain-sampled base, never a baked height.
 	if strings.Count(src, "gz(") < 3 {
@@ -646,8 +652,138 @@ func TestEmitHandlesFootprintHoles(t *testing.T) {
 	if report.Buildings != 1 {
 		t.Fatalf("courtyard building was dropped: %+v", report)
 	}
-	if !strings.Contains(src, "paths = [[0, 1, 2, 3], [4, 5, 6, 7]]") {
+	if !strings.Contains(src, "[[0, 1, 2, 3], [4, 5, 6, 7]]") {
 		t.Fatalf("hole was not emitted as a polygon path:\n%s", src)
+	}
+
+	// The same courtyard must survive with the decoration layer off, where the
+	// emitter writes the polygon itself.
+	plain := DefaultEmitOptions()
+	plain.Detail = false
+	bare, _ := Emit(tile, ir, grid, "x.hmap", plain)
+	if !strings.Contains(bare, "paths = [[0, 1, 2, 3], [4, 5, 6, 7]]") {
+		t.Fatalf("hole was lost on the --no-detail path:\n%s", bare)
+	}
+	if !strings.Contains(bare, "linear_extrude(") || strings.Contains(bare, "gc_bld(") {
+		t.Error("--no-detail must emit the bare prism")
+	}
+	if strings.Contains(bare, "kit_geo_city") {
+		t.Error("--no-detail must not pull in the decoration kit")
+	}
+}
+
+func TestMinAreaRectFindsTheRidgeAxis(t *testing.T) {
+	// A 20 x 8 rectangle rotated 30 degrees. The ridge has to come out along
+	// the long side or every pitched roof in the tile is turned 90 degrees.
+	const ang = 30.0
+	rot := func(x, y float64) [2]float64 {
+		c := math.Cos(ang * math.Pi / 180)
+		s := math.Sin(ang * math.Pi / 180)
+		return [2]float64{x*c - y*s + 15, x*s + y*c - 40}
+	}
+	ring := Ring{rot(-10, -4), rot(10, -4), rot(10, 4), rot(-10, 4)}
+	obb, rect := MinAreaRect(ring)
+
+	if math.Abs(obb[2]-20) > 0.05 || math.Abs(obb[3]-8) > 0.05 {
+		t.Fatalf("obb size %.3f x %.3f, want 20 x 8", obb[2], obb[3])
+	}
+	if math.Abs(obb[0]-15) > 0.05 || math.Abs(obb[1]+40) > 0.05 {
+		t.Fatalf("obb centre (%.3f, %.3f), want (15, -40)", obb[0], obb[1])
+	}
+	if d := math.Abs(obb[4] - ang); d > 0.05 && math.Abs(d-180) > 0.05 {
+		t.Fatalf("obb angle %.3f, want %v", obb[4], ang)
+	}
+	if math.Abs(rect-1) > 1e-6 {
+		t.Fatalf("a rectangle must be perfectly rectangular, got %.4f", rect)
+	}
+
+	// An L-shape must score well below the pitched-roof threshold: a straight
+	// ridge over it would hang in mid-air over the notch.
+	l := Ring{{0, 0}, {20, 0}, {20, 6}, {8, 6}, {8, 20}, {0, 20}}
+	if _, r := MinAreaRect(l); r > 0.6 {
+		t.Fatalf("L-shape rectangularity %.3f is too high to reject", r)
+	}
+}
+
+func TestClassifyBuildingIsRegionalAndDeterministic(t *testing.T) {
+	house := Building{ID: 41, Kind: "house", Height: 7, HeightSource: "tag", AreaM2: 96}
+	ring := Ring{{0, 0}, {12, 0}, {12, 8}, {0, 8}}
+
+	eu := classifyBuilding(house, ring, nil, DetailProfiles["default"], Profiles["default"], 7)
+	if eu.RoofKind != 2 {
+		t.Errorf("a small European house should get a pitched roof, got kind %d", eu.RoofKind)
+	}
+	if eu.RoofRise <= 0.5 {
+		t.Errorf("pitched roof has no rise: %.2f", eu.RoofRise)
+	}
+	// 12 x 8 is elongated, so unless the hip roll wins it should be gabled;
+	// either way the ridge fraction has to stay in the range the kit accepts.
+	if eu.RidgeFrac <= 0 || eu.RidgeFrac > 1 {
+		t.Errorf("ridge fraction %.2f out of range", eu.RidgeFrac)
+	}
+
+	hk := classifyBuilding(house, ring, nil, DetailProfiles["hongkong"], Profiles["hongkong"], 7)
+	if hk.RoofKind != 1 {
+		t.Errorf("a Hong Kong village house is flat-roofed, got kind %d", hk.RoofKind)
+	}
+	if hk.Clutter < 1 {
+		t.Error("the Hong Kong clutter boost should put something on the roof")
+	}
+
+	// Tall enough to be a curtain-wall tower under either profile.
+	tower := Building{ID: 42, Kind: "office", Height: 120, HeightSource: "tag", AreaM2: 2400}
+	big := Ring{{0, 0}, {50, 0}, {50, 48}, {0, 48}}
+	tw := classifyBuilding(tower, big, nil, DetailProfiles["default"], Profiles["default"], 7)
+	if tw.Facade != 1 {
+		t.Errorf("a 120 m office should be a curtain wall, got facade %d", tw.Facade)
+	}
+	if tw.Clutter < 3 {
+		t.Errorf("a 120 m tower should carry a mast, clutter %d", tw.Clutter)
+	}
+
+	// Same inputs, same output — the tile has to regenerate byte for byte.
+	again := classifyBuilding(tower, big, nil, DetailProfiles["default"], Profiles["default"], 7)
+	if again != tw {
+		t.Error("classifyBuilding is not deterministic")
+	}
+	// ...and the seed has to actually reach it.
+	if other := classifyBuilding(tower, big, nil, DetailProfiles["default"], Profiles["default"], 8); other == tw {
+		t.Error("the tile seed does not reach the building style")
+	}
+}
+
+// The physics cook silently skips any Model at or above 65535 triangles, so an
+// over-budget module renders fine and has no collider. This is the guard.
+func TestEmittedModulesStayUnderThePhysicsBudget(t *testing.T) {
+	tile := fixtureTile()
+	ir := &IR{Tile: tile.Name, Attribution: []string{osmLicense}}
+	// 120 towers in one 100 m block: far more than a bare-prism block ever was,
+	// and enough that a single module would be well over the limit.
+	for i := 0; i < 120; i++ {
+		x := float64(i%12)*7 - 40
+		y := float64(i/12)*7 - 40
+		ir.Buildings = append(ir.Buildings, Building{
+			ID: int64(1000 + i), Kind: "office", Height: 80, HeightSource: "tag",
+			Outer:  Ring{{x, y}, {x + 6, y}, {x + 6, y + 6}, {x, y + 6}},
+			AreaM2: 36,
+		})
+	}
+	grid := NewHeightGrid(11, 11, -200, -200, 40, 40)
+	src, report := Emit(tile, ir, grid, "x.hmap", DefaultEmitOptions())
+
+	if report.Buildings != 120 {
+		t.Fatalf("emitted %d buildings, want 120", report.Buildings)
+	}
+	if report.Blocks < 2 {
+		t.Fatalf("120 detailed towers fit in %d module(s); the budget split is not working", report.Blocks)
+	}
+	// Every declared module must be one the assembly calls, and vice versa.
+	if strings.Count(src, "module blk_r") != report.Blocks {
+		t.Fatalf("%d block modules declared, report says %d",
+			strings.Count(src, "module blk_r"), report.Blocks)
+	}
+	if strings.Count(src, "gk_flatten()") != report.Blocks {
+		t.Error("every block module must wrap its buildings in gk_flatten()")
 	}
 }
 

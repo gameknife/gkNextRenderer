@@ -68,6 +68,37 @@ function rd_DASH() = 4.0;        // 虚线段长
 function rd_GAP() = 6.0;         // 虚线间隔
 function rd_LINE_W() = 0.24;
 
+// ---- 街面装饰（人行道 / 路灯 / 斑马线 / 信号灯）----
+//
+// 只有车行道的城市是一张地图；人行道那 0.16m 的台阶和一排路灯，
+// 才是"街"和"路网数据"的区别。全部由生成器已经发出的左右缘点列推导，
+// 生成器**不需要**再多发一个坐标。
+
+function rd_WALK_W() = 2.4;      // 人行道宽（含路缘）
+function rd_WALK_H() = 0.16;     // 人行道高出车行道
+function rd_KERB_W() = 0.34;     // 路缘石宽
+// 人行道与自然地面的最大高差。超过就整条 run 不铺人行道 —— 见 rd_sidewalk。
+function rd_WALK_MAX_OFF() = 0.9;
+function rd_WALKC() = [0.30, 0.29, 0.28];
+function rd_KERBC() = [0.39, 0.38, 0.35];
+function rd_ZEBRAC() = [0.60, 0.59, 0.54];
+function rd_POLEC() = [0.20, 0.21, 0.22];
+function rd_LAMPC() = [0.44, 0.42, 0.37];
+function rd_TRUNKC() = [0.19, 0.14, 0.10];
+function rd_LEAFC() = [0.13, 0.20, 0.09];
+function rd_LEAFD() = [0.11, 0.17, 0.08];
+function rd_PROP_STEP() = 6;     // 每 N 个站位放一件（站距 5m => 30m）
+function rd_ZEBRA_MIN_W() = 9.0; // 窄于此宽度不画斑马线
+function rd_JUNC_LIGHT_M() = 16; // 路口外接方短于此不配信号灯
+
+// 街具序列：灯为主，间杂行道树与小件。定死一张表而不是纯随机，
+// 是为了让"每隔一根灯有一棵树"这种节奏稳定出现。
+function rd_PROP_SEQ(i) = [0, 1, 0, 3, 0, 1, 0, 4, 0, 1, 0, 5][i % 12];
+
+function rd_rnd01(s) = (((abs(s) * 1103515245 + 12345) % 2097152) / 2097152);
+function rd_unit(v) = let (l = norm(v)) l < 1e-9 ? [0, 0] : [v[0] / l, v[1] / l];
+function rd_lerp2(a, b, u) = [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
+
 // ============================ 基元 ============================
 
 // 站位高度：左右缘取 max（上挖下填），左右共用 => 路面横向水平。
@@ -81,16 +112,27 @@ function rd_station_h(t, l, r, lift) =
 // 顶点索引：顶面 L = 0..n-1，顶面 R = n..2n-1，底面 L = 2n..3n-1，底面 R = 3n..4n-1。
 module rd_ribbon(t, L, R, lift = 0, deep = 0)
 {
+    if (len(L) >= 2)
+        rd_ribbon_h(L, R, [for (i = [0 : len(L) - 1]) rd_station_h(t, L[i], R[i], lift)], deep);
+}
+
+// 站位高度由外部给定的带。人行道要的正是这个：它必须和相邻车行道**共用同一串
+// 高度**，自己去采样地形的话，横坡上外缘那一侧会算出另一个值，路缘就错台了。
+module rd_ribbon_h(L, R, hs, deep = 0) rd_ribbon_h2(L, R, hs, hs, deep);
+
+// 左右缘各自一串高度的带（横向不再水平）。人行道外缘要落回自然地面，
+// 靠的就是它：内缘锚在车行道上，外缘锚在地形上。
+module rd_ribbon_h2(L, R, hl, hr, deep = 0)
+{
     n = len(L);
     if (n >= 2)
     {
         d = deep > 0 ? deep : rd_DEEP();
-        hs = [for (i = [0 : n - 1]) rd_station_h(t, L[i], R[i], lift)];
         pts = concat(
-            [for (i = [0 : n - 1]) [L[i][0], L[i][1], hs[i]]],
-            [for (i = [0 : n - 1]) [R[i][0], R[i][1], hs[i]]],
-            [for (i = [0 : n - 1]) [L[i][0], L[i][1], hs[i] - d]],
-            [for (i = [0 : n - 1]) [R[i][0], R[i][1], hs[i] - d]]);
+            [for (i = [0 : n - 1]) [L[i][0], L[i][1], hl[i]]],
+            [for (i = [0 : n - 1]) [R[i][0], R[i][1], hr[i]]],
+            [for (i = [0 : n - 1]) [L[i][0], L[i][1], hl[i] - d]],
+            [for (i = [0 : n - 1]) [R[i][0], R[i][1], hr[i] - d]]);
         faces = concat(
             // 顶面：外部在 +z，故从上往下看要顺时针 => L(i) L(i+1) R(i+1) R(i)
             [for (i = [0 : n - 2]) [i, i + 1, n + i + 1, n + i]],
@@ -163,32 +205,254 @@ module rd_centerline(t, L, R, w)
                                           rd_DEEP() + rd_JOINT_LIFT() + 0.02);
 }
 
+// ============================ 街面装饰 ============================
+
+// 人行道 + 路缘石。两条独立的带并排放（不是一块板压另一块板）：
+// 共面重叠在 PT 下会 alias 出脏面，错开成两条各自封闭的实体就没有这个问题。
+// 路缘那一侧的高度来自车行道的 rd_station_h，所以台阶始终是 rd_WALK_H() 那么高。
+//
+// **外缘必须落回自然地面**（下面的 hlo / hro）。首版整条人行道都用车行道的高度，
+// 在香港这种坡地上立刻出事：路面已经锚在上坡侧（kit 头部契约第 3 条），再往外
+// 2.7m 就伸到了没被路面算子压平的自然地形上，下坡侧于是变成一道悬空的坎——
+// 最深处接近 rd_DEEP()。视觉上是一条飘在半空的板，功能上更糟：NavGrid 判定
+// 一格能不能走要看和邻格的高差，这道坎把街道和周边地面整个切开，
+// Test_GeoCityWalkable 的两点之间**找不到路**。
+//
+// 取 min(路面高, 地形高 + 台阶) 就是"上挖下填"的另一半：上坡侧仍然平着切进山体，
+// 下坡侧顺着地面斜下去。
+//
+// **横坡太大的 run 干脆不铺**（rd_WALK_MAX_OFF）。这条不是美学取舍，是实测：
+// 路面锚在上坡侧（契约第 3 条），人行道再往外伸两米就悬在自然地面之上，
+// 那条斜面在香港的山街上轻易超过 NavGrid 的 maxSlopeAngle（50°），
+// 于是整条街被自己的人行道围成一道走不过去的峡谷 —— 可达格从 22264 掉到 16995，
+// `Test_GeoCityWalkable` 的两点之间找不到路。收窄没用（越窄越陡），
+// 只能在横坡大的地方放弃人行道 —— 现实里那种地方也是挡土墙加台阶，不是人行道。
+// 这条 run 的两侧地面是否和路面足够贴合，值不值得铺人行道。
+function rd_walk_fits(t, L, R, w) =
+    max([for (i = [0 : len(L) - 1])
+             let (dr = rd_unit([R[i][0] - L[i][0], R[i][1] - L[i][1]]),
+                  hw = rd_station_h(t, L[i], R[i], rd_WALK_H()))
+                 max(abs(gk_terrain_height(t, L[i][0] - dr[0] * w, L[i][1] - dr[1] * w)
+                         + rd_WALK_H() - hw),
+                     abs(gk_terrain_height(t, R[i][0] + dr[0] * w, R[i][1] + dr[1] * w)
+                         + rd_WALK_H() - hw))])
+    <= rd_WALK_MAX_OFF();
+
+module rd_sidewalk(t, L, R, w)
+{
+    n = len(L);
+    if (n >= 2 && w > rd_KERB_W() + 0.2 && rd_walk_fits(t, L, R, w))
+    {
+        hw = [for (i = [0 : n - 1]) rd_station_h(t, L[i], R[i], rd_WALK_H())];
+        hk = [for (i = [0 : n - 1]) hw[i] + 0.02];
+        dr = [for (i = [0 : n - 1]) rd_unit([R[i][0] - L[i][0], R[i][1] - L[i][1]])];
+        // 左缘往外是 -dr，右缘往外是 +dr
+        LK = [for (i = [0 : n - 1]) [L[i][0] - dr[i][0] * rd_KERB_W(), L[i][1] - dr[i][1] * rd_KERB_W()]];
+        RK = [for (i = [0 : n - 1]) [R[i][0] + dr[i][0] * rd_KERB_W(), R[i][1] + dr[i][1] * rd_KERB_W()]];
+        LO = [for (i = [0 : n - 1]) [L[i][0] - dr[i][0] * w, L[i][1] - dr[i][1] * w]];
+        RO = [for (i = [0 : n - 1]) [R[i][0] + dr[i][0] * w, R[i][1] + dr[i][1] * w]];
+        hlo = [for (i = [0 : n - 1])
+                   min(hw[i], gk_terrain_height(t, LO[i][0], LO[i][1]) + rd_WALK_H())];
+        hro = [for (i = [0 : n - 1])
+                   min(hw[i], gk_terrain_height(t, RO[i][0], RO[i][1]) + rd_WALK_H())];
+        color(rd_KERBC()) { rd_ribbon_h(LK, L, hk); rd_ribbon_h(R, RK, hk); }
+        color(rd_WALKC())
+        {
+            rd_ribbon_h2(LO, LK, hlo, hw);
+            rd_ribbon_h2(RK, RO, hw, hro);
+        }
+    }
+}
+
+// 斑马线：在 run 的端头（= 路口跟前）横铺几条。生成器已经把每条 run 从路口
+// 往回缩过，所以端头正好是人该过街的位置。
+module rd_crosswalk(t, L, R, w, atStart)
+{
+    n = len(L);
+    if (w >= rd_ZEBRA_MIN_W() && n >= 3)
+    {
+        i0 = atStart ? 0 : n - 2;
+        i1 = i0 + 1;
+        color(rd_ZEBRAC())
+            for (k = [0 : 4])
+                let (u0 = (k + 0.15) / 5, u1 = (k + 0.72) / 5,
+                     La = rd_lerp2(L[i0], L[i1], u0), Lb = rd_lerp2(L[i0], L[i1], u1),
+                     Ra = rd_lerp2(R[i0], R[i1], u0), Rb = rd_lerp2(R[i0], R[i1], u1),
+                     // 两端各留出路缘边距，条纹不要压到路肩上
+                     Aa = rd_lerp2(La, Ra, 0.07), Ab = rd_lerp2(Lb, Rb, 0.07),
+                     Ba = rd_lerp2(La, Ra, 0.93), Bb = rd_lerp2(Lb, Rb, 0.93),
+                     h0 = rd_station_h(t, L[i0], R[i0], rd_JOINT_LIFT() + 0.02),
+                     h1 = rd_station_h(t, L[i1], R[i1], rd_JOINT_LIFT() + 0.02))
+                    rd_ribbon_h([Aa, Ab], [Ba, Bb],
+                                [h0 + (h1 - h0) * u0, h0 + (h1 - h0) * u1],
+                                rd_DEEP() + 0.05);
+    }
+}
+
+// ---- 街具本体。局部 +x 一律朝向路面，摆放模块负责转到位。----
+
+module rd_lamp(h = 8.2)
+{
+    color(rd_POLEC())
+    {
+        cylinder(h = h, r = 0.11, $fn = 6);
+        translate([0, 0, h - 0.55]) rotate([0, 62, 0]) cylinder(h = 1.7, r = 0.085, $fn = 5);
+    }
+    color(rd_LAMPC()) translate([1.42, 0, h - 0.02]) cube([0.78, 0.30, 0.15], center = true);
+}
+
+module rd_street_tree(s = 1.0)
+{
+    color(rd_TRUNKC()) cylinder(h = 2.4 * s, r = 0.17 * s, $fn = 5);
+    color(rd_LEAFC()) translate([0, 0, 3.3 * s]) sphere(r = 1.55 * s, $fn = 6);
+    color(rd_LEAFD()) translate([0.5 * s, 0.35 * s, 4.1 * s]) sphere(r = 0.95 * s, $fn = 5);
+}
+
+module rd_bench()
+{
+    color(rd_POLEC()) for (y = [-0.7, 0.7]) translate([0, y, 0.22]) cube([0.5, 0.12, 0.44], center = true);
+    color([0.28, 0.22, 0.16])
+    {
+        translate([0, 0, 0.46]) cube([0.55, 1.8, 0.09], center = true);
+        translate([-0.24, 0, 0.72]) cube([0.09, 1.8, 0.45], center = true);
+    }
+}
+
+module rd_bin()
+{
+    color([0.20, 0.25, 0.22]) cylinder(h = 0.95, r = 0.28, $fn = 6);
+    color(rd_POLEC()) translate([0, 0, 0.95]) cylinder(h = 0.07, r = 0.31, $fn = 6);
+}
+
+module rd_hydrant()
+{
+    color([0.34, 0.14, 0.12])
+    {
+        cylinder(h = 0.66, r = 0.13, $fn = 6);
+        translate([0, 0, 0.66]) sphere(r = 0.14, $fn = 5);
+        translate([0, 0, 0.44]) cube([0.44, 0.13, 0.13], center = true);
+    }
+}
+
+module rd_traffic_light()
+{
+    color(rd_POLEC())
+    {
+        cylinder(h = 3.4, r = 0.09, $fn = 6);
+        translate([0, 0, 3.4]) rotate([0, 70, 0]) cylinder(h = 1.3, r = 0.075, $fn = 5);
+    }
+    color([0.16, 0.17, 0.18]) translate([1.15, 0, 3.42]) cube([0.28, 0.34, 0.92], center = true);
+    color([0.42, 0.15, 0.12]) translate([1.30, 0, 3.72]) sphere(r = 0.10, $fn = 5);
+    color([0.44, 0.38, 0.14]) translate([1.30, 0, 3.44]) sphere(r = 0.10, $fn = 5);
+    color([0.16, 0.40, 0.20]) translate([1.30, 0, 3.16]) sphere(r = 0.10, $fn = 5);
+}
+
+module rd_street_prop(v, s)
+{
+    if (v == 0) rd_lamp(7.6 + rd_rnd01(s) * 1.5);
+    if (v == 1) rd_street_tree(0.85 + rd_rnd01(s + 31) * 0.45);
+    if (v == 3) rd_bench();
+    if (v == 4) rd_bin();
+    if (v == 5) rd_hydrant();
+}
+
+// 沿人行道摆街具，左右交替。位置来自站位索引而不是随机采样：
+// 同一条 run 重跑两次必须一模一样，站距 5m 的站位表就是天然的确定性网格。
+module rd_props(t, L, R, w, seed)
+{
+    n = len(L);
+    step = rd_PROP_STEP();
+    if (n >= step + 2)
+        for (i = [step : step : n - 2])
+            let (k = floor(i / step),
+                 dr = rd_unit([R[i][0] - L[i][0], R[i][1] - L[i][1]]),
+                 sgn = (k % 2) == 0 ? -1 : 1,
+                 base = (k % 2) == 0 ? L[i] : R[i],
+                 px = base[0] + dr[0] * sgn * w * 0.58,
+                 py = base[1] + dr[1] * sgn * w * 0.58,
+                 // 人行道外缘是斜下去的（见 rd_sidewalk），所以街具也得跟着落，
+                 // 否则下坡侧的灯杆会悬空半米。
+                 z = min(rd_station_h(t, L[i], R[i], rd_WALK_H()),
+                         gk_terrain_height(t, px, py) + rd_WALK_H()))
+                translate([px, py, z])
+                    rotate([0, 0, atan2(-sgn * dr[1], -sgn * dr[0])])
+                        rd_street_prop(rd_PROP_SEQ(k + seed), seed * 13 + i);
+}
+
+// 路口信号灯。小路口不配：三岔小巷插四根杆子比没有还假。
+module rd_junction_props(t, ring, seed)
+{
+    n = len(ring);
+    if (n >= 3)
+    {
+        xs = [for (p = ring) p[0]];
+        ys = [for (p = ring) p[1]];
+        ext = max(max(xs) - min(xs), max(ys) - min(ys));
+        if (ext >= rd_JUNC_LIGHT_M())
+        {
+            cx = (max(xs) + min(xs)) / 2;
+            cy = (max(ys) + min(ys)) / 2;
+            z = max([for (p = ring) gk_terrain_height(t, p[0], p[1])]) + rd_LIFT();
+            stride = max(1, floor(n / 4));
+            for (i = [0 : stride : n - 1])
+                let (p = ring[i], u = rd_unit([p[0] - cx, p[1] - cy]))
+                    translate([p[0] + u[0] * 1.1, p[1] + u[1] * 1.1, z])
+                        rotate([0, 0, atan2(-u[1], -u[0])]) rd_traffic_light();
+        }
+    }
+}
+
 // ============================ 入口 ============================
 
 // 整张网络。
 //   net       = [[L, R], ...]   已 mitre 的左右缘
 //   junctions = [ring, ...]     路口凸包
-//   widths    = [w, ...]        与 net 等长，仅用于决定画不画中线
+//   widths    = [w, ...]        与 net 等长，决定画不画中线 / 斑马线
+//   sidewalks / props           街面装饰开关（背街小巷不开）
 //
 // gk_flatten() 是必须的：本库把一张表展开成上千个模块调用，而**每个 user module
 // 调用都会变成一个场景 Node**（=一个 Model + 一个碰撞体）。实测 1km 香港 tile 不加
 // 它是 7683 个节点，光物理 shape cooking 就 1.2 秒；加上之后 90 个节点、34 毫秒。
-// 几何合并到调用方那一层，分块仍由生成器控制（每块远低于 65535 三角的 Model 上限）。
-module rd_network(t, c, net, junctions = [], widths = [], markings = true)
+// 几何合并到调用方那一层，分块仍由生成器控制（每块远低于 65535 三角的 Model 上限，
+// 超了引擎会**静默跳过整块的碰撞体** —— 加了街面装饰后每条 run 贵了三倍，
+// 所以生成器改成按三角预算切块，不再按固定条数）。
+module rd_network(t, c, net, junctions = [], widths = [], markings = true,
+                  sidewalks = false, props = false, seed = 0)
 {
     gk_flatten()
     {
-        color(c)
+        if (len(net) > 0)
         {
-            for (k = [0 : len(net) - 1])
-                rd_ribbon(t, net[k][0], net[k][1]);
-            if (len(junctions) > 0)
-                for (k = [0 : len(junctions) - 1])
-                    rd_patch(t, junctions[k]);
+            color(c)
+                for (k = [0 : len(net) - 1])
+                    rd_ribbon(t, net[k][0], net[k][1]);
+
+            if (sidewalks)
+                for (k = [0 : len(net) - 1])
+                    rd_sidewalk(t, net[k][0], net[k][1], rd_WALK_W());
+
+            if (markings && len(widths) > 0)
+                for (k = [0 : len(net) - 1])
+                {
+                    rd_centerline(t, net[k][0], net[k][1], widths[k]);
+                    rd_crosswalk(t, net[k][0], net[k][1], widths[k], true);
+                    rd_crosswalk(t, net[k][0], net[k][1], widths[k], false);
+                }
+
+            if (props)
+                for (k = [0 : len(net) - 1])
+                    rd_props(t, net[k][0], net[k][1], rd_WALK_W(), seed + k);
         }
 
-        if (markings && len(widths) > 0)
-            for (k = [0 : len(net) - 1])
-                rd_centerline(t, net[k][0], net[k][1], widths[k]);
+        if (len(junctions) > 0)
+        {
+            color(c)
+                for (k = [0 : len(junctions) - 1])
+                    rd_patch(t, junctions[k]);
+
+            if (props)
+                for (k = [0 : len(junctions) - 1])
+                    rd_junction_props(t, junctions[k], seed + k);
+        }
     }
 }

@@ -35,6 +35,20 @@ type EmitOptions struct {
 	MaxSurfaces    int
 	// RoadsPerModule bounds how many streets share one Model.
 	RoadsPerModule int
+	// Detail turns on the kit_geo_city / kit_road decoration layer: facades,
+	// roofs, sidewalks and street furniture. Off emits the bare OSM extrusion,
+	// which is what the pipeline shipped before and stays useful for A/B and as
+	// an escape hatch when a tile misbehaves.
+	Detail bool
+	// ModuleTriBudget caps the estimated triangles in one generated module.
+	//
+	// This is the single most load-bearing number in the emitter: a Model at or
+	// above 65535 triangles is skipped by the physics cook (Scene.Build.cpp), so
+	// an over-budget block still renders and you walk straight through it. With
+	// bare prisms a 100 m block was never close; with facades and street
+	// furniture it is, so blocks and street chunks are cut by estimated
+	// triangles rather than by count. The margin covers the estimate's error.
+	ModuleTriBudget int
 	// TreeDensityM2 is one tree per this many square metres of green space.
 	TreeDensityM2 float64
 	MaxTrees      int
@@ -57,11 +71,13 @@ func DefaultEmitOptions() EmitOptions {
 			"secondary", "secondary_link", "tertiary", "tertiary_link",
 			"residential", "unclassified", "living_street", "service",
 		},
-		MaxSurfaces:    600,
-		RoadsPerModule: 80,
-		TreeDensityM2:  95,
-		MaxTrees:       420,
-		PierWidthM:     11,
+		MaxSurfaces:     600,
+		RoadsPerModule:  80,
+		TreeDensityM2:   95,
+		MaxTrees:        420,
+		PierWidthM:      11,
+		Detail:          true,
+		ModuleTriBudget: 44000,
 	}
 }
 
@@ -101,18 +117,21 @@ var buildingPalette = [][3]float64{
 	{0.34, 0.31, 0.28}, // light stone
 }
 
+// placed is one building that survived filtering, with its simplified rings
+// and the spatial block it belongs to.
+type placed struct {
+	b      Building
+	ring   Ring
+	inners []Ring
+	block  [2]int
+}
+
 // Emit renders the whole scene file.
 func Emit(tile Tile, ir *IR, grid *HeightGrid, hmapRef string, opt EmitOptions) (string, EmitReport) {
 	var report EmitReport
 	half := tile.SizeM / 2
 
 	// ---- buildings: filter, simplify, bucket by block -----------------------
-	type placed struct {
-		b      Building
-		ring   Ring
-		inners []Ring
-		block  [2]int
-	}
 	var kept []placed
 	for _, b := range ir.Buildings {
 		// The whole footprint has to be on the tile: a building that only has
@@ -167,7 +186,6 @@ func Emit(tile Tile, ir *IR, grid *HeightGrid, hmapRef string, opt EmitOptions) 
 		}
 		return blockKeys[i][0] < blockKeys[j][0]
 	})
-	report.Blocks = len(blockKeys)
 
 	roads := selectRoads(ir, half, opt)
 	report.Roads = len(roads)
@@ -189,7 +207,11 @@ func Emit(tile Tile, ir *IR, grid *HeightGrid, hmapRef string, opt EmitOptions) 
 	writeHeader(&s, tile, ir, grid, report)
 	// The scene lives at assets/geo/<tile>/, so the shared kit libraries under
 	// assets/scad/lib are two levels up and back down.
-	s.WriteString("use <../../scad/lib/gk_camera.scad>\nuse <../../scad/lib/kit_road.scad>\n\n$fn = 8;\n\n")
+	s.WriteString("use <../../scad/lib/gk_camera.scad>\nuse <../../scad/lib/kit_road.scad>\n")
+	if opt.Detail {
+		s.WriteString("use <../../scad/lib/kit_geo_city.scad>\n")
+	}
+	s.WriteString("\n$fn = 8;\n\n")
 	writeTerrain(&s, tile, hmapRef, roads, ir.Terrain)
 
 	s.WriteString("// Ground height under a footprint: the terrain mesh is the single source of\n")
@@ -200,15 +222,8 @@ func Emit(tile Tile, ir *IR, grid *HeightGrid, hmapRef string, opt EmitOptions) 
 	s.WriteString("    gk_terrain_height(TERR, x0, y1), gk_terrain_height(TERR, x1, y1),\n")
 	s.WriteString("    gk_terrain_height(TERR, (x0 + x1) / 2, (y0 + y1) / 2));\n\n")
 
-	for _, key := range blockKeys {
-		group := blocks[key]
-		sort.SliceStable(group, func(i, j int) bool { return group[i].b.ID < group[j].b.ID })
-		fmt.Fprintf(&s, "module blk_r%dc%d() {\n", key[1], key[0])
-		for _, p := range group {
-			report.Triangles += writeBuilding(&s, p.b, p.ring, p.inners, opt.SkirtM)
-		}
-		s.WriteString("}\n\n")
-	}
+	blockModules := writeBlocks(&s, blocks, blockKeys, tile, opt, &report)
+	report.Blocks = len(blockModules)
 
 	surfaceModules := writeStreetSurfaces(&s, runs, junctions, opt, &report)
 	pierModule := writePiers(&s, piers, opt, waterLevel, &report)
@@ -222,8 +237,8 @@ func Emit(tile Tile, ir *IR, grid *HeightGrid, hmapRef string, opt EmitOptions) 
 	if pierModule != "" {
 		fmt.Fprintf(&s, "%s();\n", pierModule)
 	}
-	for _, key := range blockKeys {
-		fmt.Fprintf(&s, "blk_r%dc%d();\n", key[1], key[0])
+	for _, name := range blockModules {
+		fmt.Fprintf(&s, "%s();\n", name)
 	}
 	if treeModule != "" {
 		fmt.Fprintf(&s, "%s();\n", treeModule)
@@ -291,43 +306,170 @@ func writeTerrain(s *strings.Builder, tile Tile, hmapRef string, roads []Road, m
 	s.WriteString("]];\n\n")
 }
 
-// writeBuilding emits one extruded footprint and returns its triangle estimate.
-func writeBuilding(s *strings.Builder, b Building, ring Ring, inners []Ring, skirt float64) int {
+// writeBlocks emits the building modules and returns their names in call order.
+//
+// Buildings are grouped spatially first (BlockSizeM, for BLAS and culling), then
+// each block is cut into as many modules as the triangle budget needs. The cut
+// is what keeps physics alive: see EmitOptions.ModuleTriBudget.
+func writeBlocks(s *strings.Builder, blocks map[[2]int][]placed, blockKeys [][2]int,
+	tile Tile, opt EmitOptions, report *EmitReport) []string {
+	dp := DetailProfileFor(tile.Profile)
+	hp, ok := Profiles[tile.Profile]
+	if !ok {
+		hp = Profiles["default"]
+	}
+	if opt.Detail {
+		s.WriteString("// Buildings. The footprint and the height come from OSM; the facade scheme,\n")
+		s.WriteString("// the roof and the oriented bounding box the ridge runs along are decided in\n")
+		s.WriteString("// the generator (detail.go) and turned into geometry by kit_geo_city.scad.\n")
+		s.WriteString("// gc_bld(pts, z, h, [facade, wallTone, glassTone, floorH, seed],\n")
+		s.WriteString("//        [roofKind, roofTone, rise, ridgeFrac, clutter, anchorX, anchorY, anchorR],\n")
+		s.WriteString("//        obb, skirt, paths)\n\n")
+	}
+
+	var names []string
+	for _, key := range blockKeys {
+		group := blocks[key]
+		sort.SliceStable(group, func(i, j int) bool { return group[i].b.ID < group[j].b.ID })
+
+		part, acc, open := 0, 0, false
+		for _, p := range group {
+			var tri int
+			var st buildingStyle
+			if opt.Detail {
+				st = classifyBuilding(p.b, p.ring, p.inners, dp, hp, tile.Seed)
+				verts := len(p.ring)
+				for _, h := range p.inners {
+					verts += len(h)
+				}
+				tri = styleTriangles(st, verts, ringPerimeter(p.ring), math.Max(3, p.b.Height))
+			} else {
+				verts := len(p.ring)
+				for _, h := range p.inners {
+					verts += len(h)
+				}
+				tri = 4*verts - 4
+			}
+
+			if open && acc+tri > opt.ModuleTriBudget {
+				s.WriteString("    }\n}\n\n")
+				open = false
+			}
+			if !open {
+				name := fmt.Sprintf("blk_r%dc%d", key[1], key[0])
+				if part > 0 {
+					name = fmt.Sprintf("%s_%d", name, part)
+				}
+				part++
+				names = append(names, name)
+				// gk_flatten: every user module call would otherwise become its
+				// own Node, Model and collider — one per building.
+				fmt.Fprintf(s, "module %s()\n{\n    gk_flatten()\n    {\n", name)
+				open, acc = true, 0
+			}
+
+			if opt.Detail {
+				writeBuildingDetail(s, p.b, p.ring, p.inners, st, opt.SkirtM)
+			} else {
+				writeBuilding(s, p.b, p.ring, p.inners, opt.SkirtM)
+			}
+			acc += tri
+			report.Triangles += tri
+		}
+		if open {
+			s.WriteString("    }\n}\n\n")
+		}
+	}
+	return names
+}
+
+// writeBuildingDetail emits one gc_bld() call: the footprint plus the style
+// vector the kit needs. The geometry itself never appears in the tile file —
+// that is the point of the split, and it is why the scene file did not grow
+// when buildings gained facades.
+func writeBuildingDetail(s *strings.Builder, b Building, ring Ring, inners []Ring,
+	st buildingStyle, skirt float64) {
 	minX, minY, maxX, maxY := BoundsOf(ring)
-	c := buildingPalette[int(uint64(b.ID)%uint64(len(buildingPalette)))]
-	height := math.Max(3, b.Height) + skirt
+	height := math.Max(3, b.Height)
 
 	if b.Name != "" {
-		fmt.Fprintf(s, "    // %s (%.0fm, %s)\n", sanitizeComment(b.Name), b.Height, b.HeightSource)
+		fmt.Fprintf(s, "        // %s (%.0fm, %s)\n", sanitizeComment(b.Name), b.Height, b.HeightSource)
 	}
-	fmt.Fprintf(s, "    color([%s, %s, %s]) translate([0, 0, gz(%s, %s, %s, %s) - %s])\n",
-		fnum(c[0]), fnum(c[1]), fnum(c[2]),
-		fnum(minX), fnum(minY), fnum(maxX), fnum(maxY), fnum(skirt))
-	fmt.Fprintf(s, "        linear_extrude(height = %s) polygon(points = ", fnum(height))
+	all, paths := flattenRings(ring, inners)
 
+	s.WriteString("        gc_bld(")
+	writePoints(s, all)
+	fmt.Fprintf(s, ", gz(%s, %s, %s, %s), %s,\n",
+		fnum(minX), fnum(minY), fnum(maxX), fnum(maxY), fnum(height))
+	fmt.Fprintf(s, "            [%d, %d, %d, %s, %d], [%d, %d, %s, %s, %d, %s, %s, %s], ",
+		st.Facade, st.WallTone, st.GlassTone, fnum(st.FloorH), st.Seed,
+		st.RoofKind, st.RoofTone, fnum(st.RoofRise), fnum(st.RidgeFrac), st.Clutter,
+		fnum(st.Anchor[0]), fnum(st.Anchor[1]), fnum(st.Anchor[2]))
+	if st.HasOBB {
+		fmt.Fprintf(s, "[%s, %s, %s, %s, %s]",
+			fnum(st.OBB[0]), fnum(st.OBB[1]), fnum(st.OBB[2]), fnum(st.OBB[3]), fnum(st.OBB[4]))
+	} else {
+		s.WriteString("[]")
+	}
+	fmt.Fprintf(s, ", %s", fnum(skirt))
+	if len(paths) > 1 {
+		s.WriteString(", ")
+		writePaths(s, paths)
+	}
+	s.WriteString(");\n")
+}
+
+// flattenRings packs an outer ring plus its holes into the one point list and
+// index paths a polygon() needs.
+func flattenRings(ring Ring, inners []Ring) (Ring, [][]int) {
 	all := append(Ring{}, ring...)
 	paths := [][]int{indexRange(0, len(ring))}
 	for _, hole := range inners {
 		paths = append(paths, indexRange(len(all), len(hole)))
 		all = append(all, hole...)
 	}
-	writePoints(s, all)
-	if len(paths) > 1 {
-		s.WriteString(", paths = [")
-		for i, p := range paths {
-			if i > 0 {
+	return all, paths
+}
+
+func writePaths(s *strings.Builder, paths [][]int) {
+	s.WriteString("[")
+	for i, p := range paths {
+		if i > 0 {
+			s.WriteString(", ")
+		}
+		s.WriteString("[")
+		for j, idx := range p {
+			if j > 0 {
 				s.WriteString(", ")
 			}
-			s.WriteString("[")
-			for j, idx := range p {
-				if j > 0 {
-					s.WriteString(", ")
-				}
-				s.WriteString(strconv.Itoa(idx))
-			}
-			s.WriteString("]")
+			s.WriteString(strconv.Itoa(idx))
 		}
 		s.WriteString("]")
+	}
+	s.WriteString("]")
+}
+
+// writeBuilding emits one extruded footprint and returns its triangle estimate.
+// This is the --no-detail path: a bare prism, exactly what the pipeline emitted
+// before the decoration layer existed.
+func writeBuilding(s *strings.Builder, b Building, ring Ring, inners []Ring, skirt float64) int {
+	minX, minY, maxX, maxY := BoundsOf(ring)
+	c := buildingPalette[int(uint64(b.ID)%uint64(len(buildingPalette)))]
+	height := math.Max(3, b.Height) + skirt
+
+	if b.Name != "" {
+		fmt.Fprintf(s, "        // %s (%.0fm, %s)\n", sanitizeComment(b.Name), b.Height, b.HeightSource)
+	}
+	fmt.Fprintf(s, "        color([%s, %s, %s]) translate([0, 0, gz(%s, %s, %s, %s) - %s])\n",
+		fnum(c[0]), fnum(c[1]), fnum(c[2]),
+		fnum(minX), fnum(minY), fnum(maxX), fnum(maxY), fnum(skirt))
+	fmt.Fprintf(s, "            linear_extrude(height = %s) polygon(points = ", fnum(height))
+
+	all, paths := flattenRings(ring, inners)
+	writePoints(s, all)
+	if len(paths) > 1 {
+		s.WriteString(", paths = ")
+		writePaths(s, paths)
 	}
 	s.WriteString(");\n")
 
@@ -360,7 +502,10 @@ func writeStreetSurfaces(s *strings.Builder, runs []RoadRun, junctions []Junctio
 	s.WriteString("// no per-segment seams); each junction is a filled patch the approaches were\n")
 	s.WriteString("// trimmed back from. Geometry rules: assets/scad/lib/kit_road.scad.\n\n")
 
-	// Split by surface colour first so each module has a single material.
+	// Split by surface colour first so each module has a single material. The
+	// service group is the back-alley network: no centre line, no crosswalks, no
+	// sidewalk and no street furniture — a lane behind a block does not have a
+	// kerb, and decorating them all is what would blow the budget.
 	groups := [][]RoadRun{nil, nil}
 	for _, r := range runs {
 		if r.Class == "service" || r.Class == "living_street" {
@@ -373,20 +518,11 @@ func writeStreetSurfaces(s *strings.Builder, runs []RoadRun, junctions []Junctio
 
 	var names []string
 	for gi, group := range groups {
-		for start := 0; start < len(group); start += opt.RoadsPerModule {
-			end := start + opt.RoadsPerModule
-			if end > len(group) {
-				end = len(group)
-			}
-			chunk := group[start:end]
+		decorated := opt.Detail && gi == 0
+		for _, chunk := range chunkRuns(group, opt, decorated) {
 			name := fmt.Sprintf("streets_%d", len(names))
 			names = append(names, name)
 			c := colors[gi]
-			// Service roads are back alleys: no centre line.
-			markings := "true"
-			if gi == 1 {
-				markings = "false"
-			}
 			fmt.Fprintf(s, "module %s() { rd_network(TERR, [%s, %s, %s], [\n",
 				name, fnum(c[0]), fnum(c[1]), fnum(c[2]))
 			for i, r := range chunk {
@@ -398,42 +534,113 @@ func writeStreetSurfaces(s *strings.Builder, runs []RoadRun, junctions []Junctio
 				s.WriteString(", ")
 				writePoints(s, r.Right)
 				s.WriteString("]")
-				report.Triangles += ribbonTriangles(len(r.Left), r.Width)
+				report.Triangles += runTriangles(r, decorated)
 			}
-			// Every intersection goes in the first module: they are one shared
-			// surface, and repeating them per colour group would double them.
-			s.WriteString("],\n    [")
-			if gi == 0 && start == 0 {
-				for i, j := range junctions {
-					if i > 0 {
-						s.WriteString(", ")
-					}
-					writePoints(s, j.Ring)
-					report.Triangles += 4 * len(j.Ring)
-				}
-			}
-			s.WriteString("],\n    [")
+			s.WriteString("],\n    [],\n    [")
 			for i, r := range chunk {
 				if i > 0 {
 					s.WriteString(", ")
 				}
 				s.WriteString(fnum(r.Width))
 			}
-			fmt.Fprintf(s, "], %s); }\n\n", markings)
+			// markings, sidewalks, props, seed
+			fmt.Fprintf(s, "], %t, %t, %t, %d); }\n\n",
+				gi == 0, decorated, decorated, len(names))
 		}
+	}
+
+	// Intersections get their own modules. They used to ride along in the first
+	// street module; with sidewalks and props in the mix that one Model would
+	// cross the physics limit and the whole first chunk of the city would lose
+	// its collider.
+	for _, chunk := range chunkJunctions(junctions, opt) {
+		name := fmt.Sprintf("junctions_%d", len(names))
+		names = append(names, name)
+		fmt.Fprintf(s, "module %s() { rd_network(TERR, [%s, %s, %s], [],\n    [",
+			name, fnum(asphaltColor[0]), fnum(asphaltColor[1]), fnum(asphaltColor[2]))
+		for i, j := range chunk {
+			if i > 0 {
+				s.WriteString(", ")
+			}
+			writePoints(s, j.Ring)
+			report.Triangles += junctionTriangles(j, opt.Detail)
+		}
+		fmt.Fprintf(s, "],\n    [], false, false, %t, %d); }\n\n", opt.Detail, len(names))
 	}
 	return names
 }
 
-// ribbonTriangles mirrors what kit_road builds: a closed prism over n stations
-// (top, bottom, two sides, two caps), plus a dash every 10 m on wide roads.
-func ribbonTriangles(stations int, width float64) int {
+// chunkRuns cuts a colour group into modules that stay under the triangle
+// budget, never exceeding RoadsPerModule either.
+func chunkRuns(group []RoadRun, opt EmitOptions, decorated bool) [][]RoadRun {
+	var out [][]RoadRun
+	var cur []RoadRun
+	acc := 0
+	for _, r := range group {
+		tri := runTriangles(r, decorated)
+		if len(cur) > 0 && (acc+tri > opt.ModuleTriBudget || len(cur) >= opt.RoadsPerModule) {
+			out = append(out, cur)
+			cur, acc = nil, 0
+		}
+		cur = append(cur, r)
+		acc += tri
+	}
+	if len(cur) > 0 {
+		out = append(out, cur)
+	}
+	return out
+}
+
+func chunkJunctions(junctions []Junction, opt EmitOptions) [][]Junction {
+	var out [][]Junction
+	var cur []Junction
+	acc := 0
+	for _, j := range junctions {
+		tri := junctionTriangles(j, opt.Detail)
+		if len(cur) > 0 && acc+tri > opt.ModuleTriBudget {
+			out = append(out, cur)
+			cur, acc = nil, 0
+		}
+		cur = append(cur, j)
+		acc += tri
+	}
+	if len(cur) > 0 {
+		out = append(out, cur)
+	}
+	return out
+}
+
+// runTriangles mirrors what kit_road builds for one run: a closed prism over n
+// stations (top, bottom, two sides, two caps), a dash every 10 m on wide roads,
+// and — when the run is decorated — four more ribbons for the kerb and the
+// footway, one prop every rd_PROP_STEP stations, and a zebra at each end.
+func runTriangles(r RoadRun, decorated bool) int {
+	stations := len(r.Left)
 	if stations < 2 {
 		return 0
 	}
-	tris := (4*(stations-1) + 2) * 2
-	if width >= 9 {
+	ribbon := (4*(stations-1) + 2) * 2
+	tris := ribbon
+	if r.Width >= 9 {
 		tris += stations * 12
+	}
+	if decorated {
+		tris += 4 * ribbon // 2 kerb strips + 2 footway strips
+		tris += (stations/6 + 1) * 60
+		if r.Width >= 9 {
+			tris += 2 * 5 * 12 // two crosswalks, five stripes each
+		}
+	}
+	return tris
+}
+
+func junctionTriangles(j Junction, detail bool) int {
+	tris := 4 * len(j.Ring)
+	if detail {
+		minX, minY, maxX, maxY := BoundsOf(j.Ring)
+		if math.Max(maxX-minX, maxY-minY) >= 16 {
+			tris += 4 * 110 // up to four traffic lights
+		}
 	}
 	return tris
 }

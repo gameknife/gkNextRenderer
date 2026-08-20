@@ -68,8 +68,21 @@ namespace Assets::Scad::EvalDetail
         case ExprKind::Cond:
             return EvalExpr(e->list[0]).IsTruthy() ? EvalExpr(e->list[1]) : EvalExpr(e->list[2]);
         case ExprKind::Call: return EvalCall(e);
-        case ExprKind::CompFor:
         case ExprKind::CompLet:
+        {
+            // `let(...) expr` in expression position -- the function-body form.
+            // Inside a vector literal the same node is met by AppendElement
+            // instead, which splices elements rather than yielding one value.
+            ctx_.Push();
+            for (const CallArg& a : e->args)
+            {
+                if (!a.name.empty()) ctx_.Set(a.name, EvalExpr(a.value));
+            }
+            const Value bound = e->list.empty() ? Value() : EvalExpr(e->list[0]);
+            ctx_.Pop();
+            return bound;
+        }
+        case ExprKind::CompFor:
         case ExprKind::CompIf:
         case ExprKind::CompEach:
             return Value(); // only meaningful inside a VectorLit (see AppendElement)

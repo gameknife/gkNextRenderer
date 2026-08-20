@@ -63,6 +63,10 @@ ScadLibrary 场景对象 Gizmo 在引擎 Y-up 与 SCAD Z-up 之间用 `ScadToWor
 - **CSG**：`union`、`difference`、`intersection`、`hull`（Manifold）；`minkowski`(近似为 union)
 - **拉伸**：`linear_extrude`(凹/带洞/嵌套变换)、`rotate_extrude`(angle，360 闭合/部分端盖)
 - **控制流**：`for`(笛卡尔多绑定)、`if/else`、`let`、`intersection_for`(按 for)
+- **表达式位置的 `let`**：`function f(v) = let (l = norm(v)) [v[0]/l, v[1]/l];`。规则库的
+  函数体靠它给共享子式命名（`kit_geo_city` 的轮廓外扩、`kit_road` 的单位向量）；
+  没有它只能把每个共享项内联展开，既难读又重复求值。绑定不外泄，且 `let` 覆盖的是
+  **整个**后续表达式（`let (a = 1) a + 2` 得 3）。列表推导里的 `let` 语义不变（拼接元素）。
 - **语言**：`module`/`function` 定义（含局部 helper 与后向引用）与默认参/关键字参、`children()`/`children(i)`/`$children`、list comprehension(`for`/`if`/`let`/`each`)、`echo`/`assert`/`str`、`$fn`/`$fa`/`$fs`
 - **内置函数**：`max min abs floor ceil round sqrt pow exp ln log sign sin cos tan asin acos atan atan2 len norm concat str`（三角函数为角度制）
 - **引擎扩展（`gk_` 前缀，非 OpenSCAD 标准）**：`gk_terrain(TERR)` 低模高度场地形 module +

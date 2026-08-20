@@ -17,6 +17,14 @@ tile 是**生成物，不入库**：`assets/geo/` 被 gitignore，一个干净 c
 ./gnb.sh geo make --name hk_victoria --at 22.2855,114.1580 --size 1000 --profile hongkong
 ```
 
+`--profile` 同时决定建筑高度回退和**立面/屋顶的地域风格**（`default` / `europe` /
+`china` / `hongkong`）：欧洲旧城要用 `europe`，否则奥斯曼式街区会全是灰平顶。
+生成的楼有窗格、勒脚、女儿墙和屋面杂物，街道有人行道、路灯、行道树、斑马线和信号灯 ——
+Walk 视图看到的细节都来自那一层，详见
+[geo-city-generation-design §5.4b](../designs/geo-city-generation-design.md)。
+排查细节层本身不要重跑管线，用探针场景：
+`gnb shot --scene assets/scad/source/geo_city_probe.scad`。
+
 自己生成的 tile 以散文件落在 `assets/geo/<tile>/`（`<tile>.scad` + `terrain.hmap` +
 `poi.json` + `ATTRIBUTION.md`），要分发给别人再打包：
 
