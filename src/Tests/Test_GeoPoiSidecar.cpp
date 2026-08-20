@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-// Contract test for assets/scad/geo/<tile>/poi.json, the label sidecar `gnb geo
+// Contract test for assets/geo/<tile>/poi.json, the label sidecar `gnb geo
 // build` writes next to terrain.hmap (see docs/designs/geo-city-generation-design.md).
 //
 // The consumer (NextWorldTravel) anchors every place against the loaded heightfield, so
@@ -35,7 +35,7 @@ namespace
     std::vector<fs::path> FindPoiFiles()
     {
         std::vector<fs::path> files;
-        const fs::path root = Utilities::FileHelper::GetRuntimeFilePath("assets/scad/geo");
+        const fs::path root = Utilities::FileHelper::GetRuntimeFilePath("assets/geo");
         std::error_code ec;
         if (!fs::is_directory(root, ec))
         {
@@ -64,9 +64,14 @@ namespace
 TEST_CASE("Geo POI sidecars describe places inside their tile", "[Unit][Geo][POI]")
 {
     const std::vector<fs::path> files = FindPoiFiles();
-    // The generated tiles are committed assets; losing them entirely means the
-    // geo pipeline's output is gone, not that the test has nothing to say.
-    REQUIRE_FALSE(files.empty());
+    if (files.empty())
+    {
+        // assets/geo is gitignored: tiles arrive either from `gnb geo make` or
+        // from geo.pak, and a clean checkout has neither. This test validates
+        // loose sidecars, so with none present there is nothing to check —
+        // failing here would only report a missing optional asset.
+        SKIP("no loose geo tiles under assets/geo — run `gnb geo make` or `gnb paks fetch geo`");
+    }
 
     for (const fs::path& path : files)
     {

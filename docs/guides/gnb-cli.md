@@ -93,14 +93,20 @@ package preset 配置在 `gnb.toml` 的 `[package.presets.<name>]`，可独立�
 
 ```bash
 ./gnb.sh geo make --name hk_victoria --at 22.2855,114.1580 --size 1000 --profile hongkong
-./gnb.sh shot --scene assets/scad/proc/generated/hk_victoria.scad
+./gnb.sh shot --scene assets/geo/hk_victoria/hk_victoria.scad
+./gnb.sh geo pak                 # assets/geo/** -> assets/paks/geo.pak
+./gnb.sh paks fetch geo          # 反向：取别人发布的 tile
 ```
 
 `fetch`（SRTM 高程 + Overpass 矢量，缓存到 gitignore 的 `external/geocache/`）、`build`
-（归一化 IR + `terrain.hmap`）、`scad`（发射场景）三步也可单独跑；`make` 串联。加
+（归一化 IR + `terrain.hmap` + `poi.json`）、`scad`（发射场景）三步也可单独跑；`make` 串联。加
 `--debug-images` 会导出 DEM 各阶段灰度图。详见
-[地理城市生成](../designs/geo-city-generation-design.md)。**原始下载与中间 IR 是 ODbL
-衍生数据库，不入库；只提交带署名的 `.scad` 与 `.hmap`。**
+[地理城市生成](../designs/geo-city-generation-design.md)。
+
+**原始下载与中间 IR 是 ODbL 衍生数据库，不入库。产物也不入库**：一个 tile 的四件产物
+（`<tile>.scad` / `terrain.hmap` / `poi.json` / `ATTRIBUTION.md`）落在 gitignore 的
+`assets/geo/<tile>/`，由 `gnb geo pak` 打成 `assets/paks/geo.pak` 分发，引擎启动时自动挂载。
+署名随 `.scad` 头注释与 `ATTRIBUTION.md` 一起进 pak。
 
 ## 移动平台与安装
 

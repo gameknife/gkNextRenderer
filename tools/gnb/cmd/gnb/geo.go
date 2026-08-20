@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -70,19 +71,23 @@ func newGeoCommand(ctx appContext) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "geo",
 		Short: "Generate a .scad city level from public elevation + OpenStreetMap data",
-		Long: "Five staged, individually re-runnable steps (see\n" +
+		Long: "Staged, individually re-runnable steps (see\n" +
 			"docs/designs/geo-city-generation-design.md):\n" +
 			"  fetch  SRTM .hgt + Overpass JSON -> external/geocache/<tile>/\n" +
-			"  build  -> normalised IR + assets/scad/geo/<tile>/terrain.hmap\n" +
-			"  scad   -> assets/scad/proc/generated/<tile>.scad\n" +
-			"  make   all of the above\n\n" +
+			"  build  -> normalised IR + assets/geo/<tile>/terrain.hmap + poi.json\n" +
+			"  scad   -> assets/geo/<tile>/<tile>.scad\n" +
+			"  make   all of the above\n" +
+			"  pak    every tile under assets/geo -> assets/paks/geo.pak\n\n" +
 			"Raw downloads and the IR are ODbL-derived databases and stay out of the\n" +
-			"repository; the generated .scad and .hmap carry the required attribution.",
+			"repository; the generated .scad and .hmap carry the required attribution.\n" +
+			"assets/geo is gitignored as well: tiles are bulky and reproducible, so they\n" +
+			"ship as assets/paks/geo.pak via `gnb paks fetch` rather than in git.",
 	}
 	cmd.AddCommand(newGeoFetchCommand(ctx))
 	cmd.AddCommand(newGeoBuildCommand(ctx))
 	cmd.AddCommand(newGeoScadCommand(ctx))
 	cmd.AddCommand(newGeoMakeCommand(ctx))
+	cmd.AddCommand(newGeoPakCommand(ctx))
 	return cmd
 }
 
@@ -185,6 +190,75 @@ func newGeoMakeCommand(ctx appContext) *cobra.Command {
 	}
 	f.bind(cmd)
 	return cmd
+}
+
+// newGeoPakCommand packs every generated tile into the single pak the runtime
+// mounts. assets/geo is gitignored, so this is how a tile reaches anyone who did
+// not generate it themselves.
+func newGeoPakCommand(ctx appContext) *cobra.Command {
+	var out string
+	var noCompress bool
+	cmd := &cobra.Command{
+		Use:   "pak",
+		Short: "Pack assets/geo into assets/paks/geo.pak",
+		Long: "Packs every tile directory under assets/geo into one pak, keeping the\n" +
+			"entry names runtime-root-relative so a mounted pak resolves exactly the\n" +
+			"paths a loose checkout would (assets/geo/<tile>/<tile>.scad and friends).\n\n" +
+			"Publish it with `gnb paks publish geo`; consumers get it via `gnb paks fetch`.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return geoPak(ctx, out, noCompress)
+		},
+	}
+	cmd.Flags().StringVar(&out, "out", geo.PakRef, "output pak path, relative to the repository root")
+	cmd.Flags().BoolVar(&noCompress, "no-compress", false, "store entries uncompressed")
+	return cmd
+}
+
+func geoPak(ctx appContext, out string, noCompress bool) error {
+	tiles, err := geo.ListTiles(ctx.repoRoot)
+	if err != nil {
+		return err
+	}
+	if len(tiles) == 0 {
+		return fmt.Errorf("no tiles under %s — run `gnb geo make` first", geo.GeoAssetRoot)
+	}
+	binDir := platform.BinDir(ctx.repoRoot, ctx.preset)
+	packer := platform.ExecutablePath(binDir, "Packager")
+	if _, statErr := os.Stat(packer); statErr != nil {
+		return fmt.Errorf("%s is missing; run `gnb build Packager` first", packer)
+	}
+	outPath := out
+	if !filepath.IsAbs(outPath) {
+		outPath = filepath.Join(ctx.repoRoot, filepath.FromSlash(out))
+	}
+	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+		return err
+	}
+	// Both paths have to be absolute: the Packager resolves a relative one
+	// against its own runtime root (out/build/<preset>), which holds only the
+	// mirrored copy of whichever tile was generated last. Rooting it at the
+	// repository is what makes entry names come out as assets/geo/<tile>/... —
+	// the same strings the runtime asks for when the tiles are loose on disk.
+	args := []string{
+		"--out=" + outPath,
+		"--src=" + filepath.Join(ctx.repoRoot, filepath.FromSlash(geo.GeoAssetRoot)),
+		"--root=" + ctx.repoRoot,
+	}
+	if noCompress {
+		args = append(args, "--no-compress")
+	}
+	packCmd := exec.Command(packer, args...)
+	packCmd.Dir = binDir
+	packCmd.Stdout, packCmd.Stderr = os.Stdout, os.Stderr
+	if err := packCmd.Run(); err != nil {
+		return fmt.Errorf("pack %s: %w", geo.GeoAssetRoot, err)
+	}
+	console.Label("tiles", strings.Join(tiles, ", "))
+	if info, statErr := os.Stat(outPath); statErr == nil {
+		console.Label("pak", fmt.Sprintf("%s (%d KB)", filepath.ToSlash(out), info.Size()/1024))
+	}
+	console.Info("publish: gnb paks publish geo")
+	return nil
 }
 
 // geoEmit renders the scene and mirrors both the scene and its .hmap side-car

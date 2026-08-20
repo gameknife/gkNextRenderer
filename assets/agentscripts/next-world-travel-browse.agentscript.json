@@ -1,0 +1,70 @@
+{
+  "name": "next-world-travel-browse",
+  "target": "NextWorldTravel",
+  "scene": "assets/geo/hk_victoria/hk_victoria.scad",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 20000
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "steps": [
+    { "type": "wait-until", "query": "game.geo.walkerSpawned", "op": "eq", "value": true, "timeoutMs": 30000,
+      "comment": "The browser opens on the street: terrain resolves, the nav window builds, a reachable street is found." },
+    { "type": "assert", "query": "game.geo.viewMode", "op": "eq", "value": "walk" },
+    { "type": "assert", "query": "game.geo.browseCount", "op": "ge", "value": 200,
+      "comment": "Every anchored place is a stop the browser can step to." },
+
+    { "type": "key", "code": "V", "action": "press", "comment": "Up to the bird's eye." },
+    { "type": "wait-ms", "ms": 2000, "comment": "The transition is a 0.9 s flight in wall-clock time, not a frame count: hidden-window validation runs at 250+ fps." },
+    { "type": "assert", "query": "game.geo.viewMode", "op": "eq", "value": "aerial" },
+    { "type": "assert", "query": "game.geo.cameraHeight", "op": "ge", "value": 300,
+      "comment": "The aerial camera is actually above the skyline, not just re-aimed." },
+    { "type": "assert", "query": "game.geo.markersVisible", "op": "ge", "value": 200,
+      "comment": "From above the tile is a map: every anchored place gets a marker, not just the label budget." },
+    { "type": "assert", "query": "game.geo.labelsVisible", "op": "le", "value": 44,
+      "comment": "Names stay inside the budget so the plates do not cover the city they describe." },
+    { "type": "assert", "query": "game.geo.labelsDrawn", "op": "ge", "value": 10,
+      "comment": "And enough of them survive decluttering to make the map readable." },
+    { "type": "screenshot", "ui": true, "out": "screenshots/agent_next_world_travel_aerial" },
+
+    { "type": "click", "at": [1700, 120],
+      "comment": "Sky, well above the tile: the marker pick finds nothing and the map is left alone. Clicking an actual marker is position-dependent (the map pans with the roaming walker), so only the negative case is scripted." },
+    { "type": "wait-frames", "n": 10 },
+    { "type": "assert", "query": "game.geo.viewMode", "op": "eq", "value": "aerial" },
+    { "type": "assert", "query": "game.geo.focusIndex", "op": "eq", "value": -1 },
+
+    { "type": "key", "code": "G", "action": "press", "comment": "Focus the most prominent place." },
+    { "type": "wait-ms", "ms": 2500 },
+    { "type": "assert", "query": "game.geo.viewMode", "op": "eq", "value": "focus" },
+    { "type": "assert", "query": "game.geo.focusIndex", "op": "ge", "value": 0 },
+    { "type": "assert", "query": "game.geo.focusName", "op": "ne", "value": "none" },
+    { "type": "assert", "query": "game.geo.walkerSpeed", "op": "le", "value": 0.01,
+      "comment": "The character holds still while an orbit is running: a nav rebuild mid-shot is the worst hitch this app has." },
+    { "type": "screenshot", "ui": true, "out": "screenshots/agent_next_world_travel_focus" },
+
+    { "type": "wait-ms", "ms": 6000, "comment": "Auto-orbit carries the camera about 55 degrees around the subject." },
+    { "type": "screenshot", "ui": true, "out": "screenshots/agent_next_world_travel_orbit" },
+
+    { "type": "key", "code": "N", "action": "press", "comment": "Step to the next place in the browse order." },
+    { "type": "wait-ms", "ms": 2500 },
+    { "type": "assert", "query": "game.geo.focusIndex", "op": "ge", "value": 0 },
+    { "type": "screenshot", "ui": true, "out": "screenshots/agent_next_world_travel_focus_next" },
+
+    { "type": "key", "code": "T", "action": "press", "comment": "Hand the stepping over to the tour." },
+    { "type": "wait-frames", "n": 10 },
+    { "type": "assert", "query": "game.geo.tourActive", "op": "eq", "value": true },
+
+    { "type": "key", "code": "1", "action": "press", "comment": "Back down to the street." },
+    { "type": "wait-ms", "ms": 2000 },
+    { "type": "assert", "query": "game.geo.viewMode", "op": "eq", "value": "walk" },
+    { "type": "assert", "query": "game.geo.tourActive", "op": "eq", "value": false,
+      "comment": "Leaving the orbit ends the tour rather than leaving a timer running behind the walk." },
+    { "type": "wait-until", "query": "game.geo.walkerSpeed", "op": "ge", "value": 0.5, "timeoutMs": 20000,
+      "comment": "Roaming resumes where it was paused." },
+    { "type": "screenshot", "ui": true, "out": "screenshots/agent_next_world_travel_back_to_walk" },
+    { "type": "quit" }
+  ]
+}

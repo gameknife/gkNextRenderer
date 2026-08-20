@@ -7,7 +7,7 @@
 
 namespace NextWorldTravel
 {
-    // One named place from assets/scad/geo/<tile>/poi.json.
+    // One named place from assets/geo/<tile>/poi.json.
     //
     // The sidecar stores SCAD metres (+x east, +y north), the frame the .scad
     // and the .hmap agree on. `position` here is already converted to the
@@ -35,8 +35,8 @@ namespace NextWorldTravel
     struct FGeoTile
     {
         std::string name;      // directory name, e.g. "hk_victoria"
-        std::string scenePath; // assets/scad/proc/generated/<name>.scad
-        std::string poiPath;   // assets/scad/geo/<name>/poi.json
+        std::string scenePath; // assets/geo/<name>/<name>.scad
+        std::string poiPath;   // assets/geo/<name>/poi.json
         glm::dvec2 center{0.0}; // lat, lon
         double sizeM = 0.0;
         std::vector<std::string> attribution;

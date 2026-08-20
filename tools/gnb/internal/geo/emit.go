@@ -187,7 +187,9 @@ func Emit(tile Tile, ir *IR, grid *HeightGrid, hmapRef string, opt EmitOptions) 
 	// ---- file ---------------------------------------------------------------
 	var s strings.Builder
 	writeHeader(&s, tile, ir, grid, report)
-	s.WriteString("use <../../lib/gk_camera.scad>\nuse <../../lib/kit_road.scad>\n\n$fn = 8;\n\n")
+	// The scene lives at assets/geo/<tile>/, so the shared kit libraries under
+	// assets/scad/lib are two levels up and back down.
+	s.WriteString("use <../../scad/lib/gk_camera.scad>\nuse <../../scad/lib/kit_road.scad>\n\n$fn = 8;\n\n")
 	writeTerrain(&s, tile, hmapRef, roads, ir.Terrain)
 
 	s.WriteString("// Ground height under a footprint: the terrain mesh is the single source of\n")

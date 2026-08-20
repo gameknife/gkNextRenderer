@@ -587,8 +587,8 @@ func TestEmitIsDeterministicAndWellFormed(t *testing.T) {
 	}
 	opt := DefaultEmitOptions()
 
-	src, report := Emit(tile, ir, grid, "assets/scad/geo/fixture/terrain.hmap", opt)
-	again, _ := Emit(tile, ir, grid, "assets/scad/geo/fixture/terrain.hmap", opt)
+	src, report := Emit(tile, ir, grid, "assets/geo/fixture/terrain.hmap", opt)
+	again, _ := Emit(tile, ir, grid, "assets/geo/fixture/terrain.hmap", opt)
 	if src != again {
 		t.Fatal("Emit is not deterministic")
 	}
@@ -605,7 +605,7 @@ func TestEmitIsDeterministicAndWellFormed(t *testing.T) {
 
 	for _, want := range []string{
 		`["gkterr1"`,
-		`["hmap", "assets/scad/geo/fixture/terrain.hmap", "set", 1, 0]`,
+		`["hmap", "assets/geo/fixture/terrain.hmap", "set", 1, 0]`,
 		`"urban"`,
 		`["road", `,
 		"function gz(",
@@ -681,18 +681,25 @@ func TestPathsLayoutKeepsDerivedDatabasesOutOfTheRepo(t *testing.T) {
 	p := NewPaths("/repo", "hk_victoria")
 	// Raw downloads and the IR are ODbL-derived: external/ is gitignored.
 	for _, path := range []string{p.OsmPath(), p.IRPath(), p.MetaPath(), p.DemDir()} {
-		if !strings.Contains(path, "/external/geocache") {
+		if !strings.Contains(filepath.ToSlash(path), "/external/geocache") {
 			t.Errorf("%s must live under external/geocache", path)
 		}
 	}
-	// Produced works are committed.
-	for _, path := range []string{p.HmapPath(), p.ScadPath(), p.AttributionPath()} {
+	// Produced works are runtime assets: gitignored like the cache, but under
+	// assets/geo so one pak boundary covers a whole tile.
+	for _, path := range []string{p.HmapPath(), p.ScadPath(), p.POIPath(), p.AttributionPath()} {
 		if strings.Contains(path, "external") {
 			t.Errorf("%s must not live in the cache", path)
 		}
+		if !strings.Contains(filepath.ToSlash(path), "/"+GeoAssetRoot+"/hk_victoria/") {
+			t.Errorf("%s must live in the tile's own directory under %s", path, GeoAssetRoot)
+		}
 	}
-	if p.HmapAssetRef() != "assets/scad/geo/hk_victoria/terrain.hmap" {
+	if p.HmapAssetRef() != "assets/geo/hk_victoria/terrain.hmap" {
 		t.Errorf("hmap asset ref = %q", p.HmapAssetRef())
+	}
+	if p.ScadAssetRef() != "assets/geo/hk_victoria/hk_victoria.scad" {
+		t.Errorf("scad asset ref = %q", p.ScadAssetRef())
 	}
 }
 
@@ -947,13 +954,54 @@ func TestOverpassCacheIsKeyedOnTheQuery(t *testing.T) {
 	}
 }
 
-func TestPOIPathIsACommittedProducedWork(t *testing.T) {
+func TestPOIPathIsAPackagedProducedWork(t *testing.T) {
 	p := NewPaths("/repo", "hk_victoria")
 	if strings.Contains(p.POIPath(), "external") {
-		t.Errorf("%s must not live in the gitignored cache", p.POIPath())
+		t.Errorf("%s must not live in the ODbL-derived cache", p.POIPath())
 	}
-	if !strings.HasSuffix(filepath.ToSlash(p.POIPath()), "assets/scad/geo/hk_victoria/poi.json") {
+	if !strings.HasSuffix(filepath.ToSlash(p.POIPath()), "assets/geo/hk_victoria/poi.json") {
 		t.Errorf("poi path = %q", p.POIPath())
+	}
+}
+
+func TestListTilesSkipsIncompleteDirectories(t *testing.T) {
+	root := t.TempDir()
+	write := func(tile string, names ...string) {
+		dir := filepath.Join(root, filepath.FromSlash(GeoAssetRoot), tile)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range names {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	write("zurich", "zurich.scad", "terrain.hmap", "poi.json")
+	write("apple_park", "apple_park.scad", "terrain.hmap", "poi.json")
+	// A `gnb geo build` that never reached the emit stage: packing it would put a
+	// tile in the pak that the runtime then refuses for having no scene.
+	write("half_built", "terrain.hmap")
+
+	tiles, err := ListTiles(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"apple_park", "zurich"}
+	if strings.Join(tiles, ",") != strings.Join(want, ",") {
+		t.Errorf("tiles = %v, want %v", tiles, want)
+	}
+}
+
+func TestListTilesOnAFreshCheckoutIsEmpty(t *testing.T) {
+	// assets/geo is gitignored, so a clone that has not fetched geo.pak or run
+	// the generator has no directory at all. That is a normal state, not an error.
+	tiles, err := ListTiles(t.TempDir())
+	if err != nil {
+		t.Fatalf("missing assets/geo must not be an error: %v", err)
+	}
+	if len(tiles) != 0 {
+		t.Errorf("tiles = %v, want none", tiles)
 	}
 }
 

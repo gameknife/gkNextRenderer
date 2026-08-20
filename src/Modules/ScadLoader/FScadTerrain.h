@@ -25,7 +25,7 @@
 //
 // The hmap operator stamps a sampled heightfield (real-world elevation, a
 // sculpted mask, ...) into the field. Two source forms:
-//   ["hmap", "assets/scad/geo/<tile>/terrain.hmap", "set", 1, 0]
+//   ["hmap", "assets/geo/<tile>/terrain.hmap", "set", 1, 0]
 //   ["hmap", [cols, rows], [h00, h01, ...], "set", 1, 0]
 // mode is "set" (replace) or "add". The side-car file is a little-endian blob:
 //   "GKHM", u32 version=1, u32 cols, u32 rows, f32 originX, originY,

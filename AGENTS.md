@@ -218,7 +218,8 @@ assets/
 ├── shaders/                 # Slang shaders (.slang)
 ├── configs/                 # Runtime config (cvar_default.json, visual_test.json, per-game configs, ...)
 ├── models/                  # glTF scenes
-├── scad/geo/<tile>/         # Generated real-world city tiles (terrain.hmap + attribution)
+├── geo/<tile>/              # Generated real-world city tiles (.scad + .hmap + poi.json);
+│                           # gitignored, shipped as assets/paks/geo.pak (`gnb geo pak`)
 ├── scripts/                 # Hand-maintained MagicaLego .mlscript files
 └── csharp/                  # Managed scripting sources (GkNext.Engine / .Bootstrap / .Game)
 

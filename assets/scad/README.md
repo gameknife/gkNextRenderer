@@ -11,6 +11,10 @@
 - `proc/**/*.scad`：带 `gk_terrain(TERR)` 与 `ter_*` 规则的过程场景；使用过程节点编辑和过程 AI。
 - `characters/*.scad`：角色 Rig 与角色资产，不出现在场景组装浏览器中。
 - `specs/*.json`：声明式场景规格。
+- **`gnb geo` 生成的真实城市 tile 不在这个目录下**，在 `assets/geo/<tile>/`：一个 tile 的
+  `.scad`、`terrain.hmap`、`poi.json`、`ATTRIBUTION.md` 同放一处，整体 gitignore 并由
+  `gnb geo pak` 打进 `assets/paks/geo.pak`。它们仍是 `proc` 类场景（顶层 `gk_terrain(TERR)`），
+  只是分发单位不同。
 - `source/generated/` 与 `proc/generated/`：由 `gnb scad compose` 生成的分类派生产物；重新
   生成时会覆盖手工改动。
 

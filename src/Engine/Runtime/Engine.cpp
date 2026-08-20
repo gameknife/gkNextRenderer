@@ -278,16 +278,20 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     status_ = NextRenderer::EApplicationStatus::Starting;
     services_.packageFileSystem.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
     {
-        const std::string runtimePakPath = Utilities::FileHelper::GetPlatformFilePath("assets/paks/runtime.pak");
-        std::error_code ec;
-        if (std::filesystem::exists(runtimePakPath, ec))
+        // Paks every target may need. Game-specific ones (lego, brotato3d, ...)
+        // stay with their game; these three carry assets any scene can reference,
+        // so a missing mount would show up as an unexplained load failure rather
+        // than as a game that was not started.
+        for (const char* pak : {"assets/paks/runtime.pak",
+                                "assets/paks/optional.pak",
+                                "assets/paks/geo.pak"})
         {
-            services_.packageFileSystem->MountPak(runtimePakPath);
-        }
-        const std::string optionalPakPath = Utilities::FileHelper::GetPlatformFilePath("assets/paks/optional.pak");
-        if (std::filesystem::exists(optionalPakPath, ec))
-        {
-            services_.packageFileSystem->MountPak(optionalPakPath);
+            const std::string pakPath = Utilities::FileHelper::GetPlatformFilePath(pak);
+            std::error_code ec;
+            if (std::filesystem::exists(pakPath, ec))
+            {
+                services_.packageFileSystem->MountPak(pakPath);
+            }
         }
     }
 

@@ -25,7 +25,7 @@ cd tools/gnb && go test ./internal/geo/       # fixture 驱动，不打网络
 ./out/build/<preset>/bin/gkNextUnitTests "[ScadTerrain]"
 ./out/build/<preset>/bin/gkNextUnitTests "[Geo]"        # 需 GPU，加载 hk_victoria tile
 ./gnb.sh geo make --name hk_victoria --at 22.2855,114.1580 --size 1000 --profile hongkong
-./gnb.sh shot --scene assets/scad/proc/generated/hk_victoria.scad
+./gnb.sh shot --scene assets/geo/hk_victoria/hk_victoria.scad
 ```
 
 `[Geo]` 测试硬编码了 hk_victoria tile 的坐标（恒生总行 footprint、干諾道中、维港），
@@ -33,15 +33,14 @@ cd tools/gnb && go test ./internal/geo/       # fixture 驱动，不打网络
 
 ## 待办
 
-### R1. 需要用户先决策的两件事
+### R1. 需要用户先决策的事
 
-这两件不定，后面的优先级排不出来：
-
-1. **入库范围**。现有 5 个 tile（`assets/scad/geo/*/` 与 `assets/scad/proc/generated/*.scad`）
-   都还是未跟踪文件。要留哪些？是否进 pak？原始下载与 IR 在 gitignore 的 `external/geocache/`
-   下，按已定政策不入库。
-   **注意**：NextWorldTravel 靠扫 `assets/scad/geo/*/` 这个 loose 目录发现 tile，pak 里没有目录列表。
-   如果决定进 pak，需要额外产出一份 tile 清单。
+1. ~~**入库范围**~~ —— **已决（2026-08-20）：tile 不入库，走 pak**。四件产物合并到
+   `assets/geo/<tile>/`（`<tile>.scad` + `terrain.hmap` + `poi.json` + `ATTRIBUTION.md`），
+   目录 gitignore，由 `gnb geo pak` 打成 `assets/paks/geo.pak` 分发；`assets/geo/landmarks.json`
+   是输入不是产出，仍然入库。引擎随 `runtime.pak`/`optional.pak` 一起自动挂载 geo.pak，
+   pak entry 名与散文件路径逐字相同。tile 发现取"散文件 ∪ pak 目录枚举"的并集
+   （`FPackageFileSystem::ListMountedEntries`），因此不需要额外的 tile 清单文件。
 2. **地图尺寸**。1km 对关卡偏小，但 2km 会撞上 `cells ≤ 176` 的物理网格上限（见 design §6）。
    选项：(a) 接受 11.4m/格的粗地形；(b) 改引擎让地形跨多个 Model / 支持多 tile 拼接。
    (b) 是引擎改动，生成器绕不过去。
@@ -72,7 +71,7 @@ cd tools/gnb && go test ./internal/geo/       # fixture 驱动，不打网络
 - **路面修饰**（在 kit_road 里做）：路缘石、斑马线、停止线、井盖、路口转角圆弧。
 - `kit_city_hd` 街具（路灯 / 红绿灯 / 公交站）—— 沿路网折线撒，同样归 kit_road。
 - `building:part` 支持：IFC 二期、中银大厦现在是光棱柱。要处理 part 与父 building 的覆盖关系。
-- 填 `assets/scad/geo/landmarks.json`：机制已就位、文件还没建。香港/纽约补十几栋地标是廉价收益。
+- 填 `assets/geo/landmarks.json`：机制已就位、文件还没建。香港/纽约补十几栋地标是廉价收益。
 
 已知的路面遗留：
 - **桥梁/高架仍贴地形**（`layer` / `bridge` tag 没用上），中環灣仔繞道会沿地面爬坡而不是架空。

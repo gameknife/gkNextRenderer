@@ -5,7 +5,7 @@
 
 ```bash
 gnb geo make --name <tile> --at <lat>,<lon> --size 1000 [--profile default|china|hongkong]
-gnb shot --scene assets/scad/proc/generated/<tile>.scad
+gnb shot --scene assets/geo/<tile>/<tile>.scad
 ```
 
 已验证 5 个 tile（沿海 3 / 内陆 2，含西经与南半球），见 §5.2c。单个 tile 端到端 10~25 秒，
@@ -49,9 +49,9 @@ skadi 原始 int16 没有这个问题，且一个 1°瓦片覆盖整个城市群
 ```
 A. fetch      bbox → SRTM .hgt.gz + Overpass JSON        → external/geocache/<tile>/
 B. normalize  投影到本地 ENU 米制 + 拼环 → IR(tile.json)  → external/geocache/<tile>/
-C. terrain    重采样 → DSM→DTM → 水位规划 → terrain.hmap  → assets/scad/geo/<tile>/
+C. terrain    重采样 → DSM→DTM → 水位规划 → terrain.hmap  → assets/geo/<tile>/
 D. layout     高度推断 / 简化 / 街区分组                   → 内存
-E. emit       TERR + hmap 引用 + 分组建筑 module → .scad  → assets/scad/proc/generated/
+E. emit       TERR + hmap 引用 + 分组建筑 module → .scad  → assets/geo/<tile>/
 ```
 
 **IR 是解耦点**：C/D/E 只读 `tile.json`，可离线迭代任意次不碰网络，也允许手工注入自制数据。
@@ -66,12 +66,19 @@ external/geocache/<tile>/       # gitignored
   dem/N22E114.hgt.gz
   osm/overpass.json
   tile.json      归一化 IR（米制）
-assets/scad/geo/<tile>/         # 入库
+assets/geo/<tile>/              # gitignored，经 assets/paks/geo.pak 分发
+  <tile>.scad    可加载场景
   terrain.hmap   二进制高度场
   poi.json       命名地点 sidecar（§5.8）
   ATTRIBUTION.md
-assets/scad/proc/generated/<tile>.scad
+assets/geo/landmarks.json       # 入库：人工高度覆盖表，是输入不是产出
 ```
+
+一个 tile 的四件产物同放一个目录，为的是让"分发边界"正好等于"目录边界"：
+`gnb geo pak` 把 `assets/geo/**` 整体打进 `assets/paks/geo.pak`，引擎启动时和
+`runtime.pak`/`optional.pak` 一起自动挂载，pak 内的 entry 名与散文件路径逐字相同，
+因此运行时代码不需要区分两种来源。产物体积大（每 tile 数百 KB，一半是二进制）且可由
+`external/geocache/` 完全复现，入库没有收益。
 
 ### 投影
 
@@ -90,7 +97,7 @@ y = (lat − lat0) · 110574.0
 // 成都望江楼的实际产物：基准面 483.46m，锦江水位同高。
 TERR = ["gkterr1", [1000, 1000], [176, 176], 7,
         [483.46, 0, 0], 483.46, "urban",
-        [ ["hmap", "assets/scad/geo/chengdu_wangjianglou/terrain.hmap", "set", 1, 0],
+        [ ["hmap", "assets/geo/chengdu_wangjianglou/terrain.hmap", "set", 1, 0],
           ["road", [[...]], 9] ]];
 ```
 
@@ -221,7 +228,7 @@ relation 的边界是**拆成若干条开放 way** 的，只有首尾相接才�
 
 按优先级取，**每栋记录 provenance**，`gnb geo build` 输出覆盖率报告：
 
-1. `assets/scad/geo/landmarks.json` 人工覆盖表（按 OSM id；**机制已就位，文件尚未创建**）
+1. `assets/geo/landmarks.json` 人工覆盖表（按 OSM id；**机制已就位，文件尚未创建**）
 2. OSM `height`（解析 `"415.8"` / `"96 m"`）
 3. `building:levels` × profile 层高 + 屋顶
 4. profile 的 `building=*` 类型默认值
@@ -321,7 +328,7 @@ Overpass `out body geom` 给每条 way 一个与 geometry **索引对齐**的 `n
 ### 5.8 命名地点：`poi.json` sidecar
 
 建筑名字一直在 IR 里（香港 515 栋、纽约 225、巴黎 111），但只作为 `.scad` 注释输出，引擎读不到。
-`gnb geo build` 另出一份入库 sidecar `assets/scad/geo/<tile>/poi.json`（`"format": "gkgeopoi1"`）。
+`gnb geo build` 另出一份 sidecar `assets/geo/<tile>/poi.json`（`"format": "gkgeopoi1"`）。
 
 **为什么是 sidecar 而不是 `.scad` 标记模块**：每个 user module 调用都会变成一个场景 Node
 （§5.6 教训二），把 300 个标签烘进场景就是 300 个没有任何渲染器会画的 Node。标签是运行时数据。
@@ -382,7 +389,7 @@ gkNextUnitTests "[ScadTerrain]"                     # hmap 解码/双线性/确�
 gkNextUnitTests "[Geo]"                             # 可行走闭环（需 GPU，加载参考 tile）
 gkNextUnitTests "[POI]"                             # poi.json 数据契约（无需 GPU，扫全部 tile）
 cd tools/gnb && go test ./internal/geo/             # fixture 驱动，不打网络
-gnb shot --scene assets/scad/proc/generated/hk_victoria.scad
+gnb shot --scene assets/geo/hk_victoria/hk_victoria.scad
 gnb validate --script assets/agentscripts/next-world-travel-smoke.agentscript.json   # 端到端漫游闭环
 ```
 

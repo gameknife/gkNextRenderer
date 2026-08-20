@@ -54,7 +54,7 @@ TERR = ["gkterr1", [sizeX, sizeY], [cellsX, cellsY], seed,
 `road`/`pad` 压平和全套 `ter_*` 组合子行为不变：
 
 ```scad
-["hmap", "assets/scad/geo/hk_victoria/terrain.hmap", "set", 1, 0]   // side-car 文件（推荐）
+["hmap", "assets/geo/hk_victoria/terrain.hmap", "set", 1, 0]   // side-car 文件（推荐）
 ["hmap", [cols, rows], [h00, h01, ...], "add", 1, 0]                // 内联字面量
 ```
 

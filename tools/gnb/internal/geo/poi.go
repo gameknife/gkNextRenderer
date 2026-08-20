@@ -26,7 +26,8 @@ import (
 // POIFormat is the sidecar's version tag; the runtime rejects anything else.
 const POIFormat = "gkgeopoi1"
 
-// POIFile is the committed sidecar at assets/scad/geo/<tile>/poi.json.
+// POIFile is the sidecar at assets/geo/<tile>/poi.json, packed into geo.pak
+// alongside the tile it labels.
 //
 // Positions are SCAD metres (+x east, +y north) — the same frame as the .scad
 // and the .hmap. The engine's mapping is (x, z) = (x, -y) with world Y taken

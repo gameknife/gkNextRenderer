@@ -470,7 +470,7 @@ TEST_CASE("ScadTerrain hmap: a missing file warns and skips the feature",
 {
     const Value v = VecV({StrV("gkterr1"), PtV(100, 100), PtV(20, 20), NumV(3),
                           VecV({NumV(1.0), NumV(0), NumV(0.5)}), Value(), StrV("temperate"),
-                          VecV({VecV({StrV("hmap"), StrV("assets/scad/geo/__does_not_exist.hmap")})})});
+                          VecV({VecV({StrV("hmap"), StrV("assets/geo/__does_not_exist.hmap")})})});
     FTerrainSpec spec;
     std::string err;
     std::vector<std::string> warnings;

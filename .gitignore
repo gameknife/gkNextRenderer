@@ -424,6 +424,14 @@ assets/paks/ldraw.pak
 
 assets/models/KayKit_Platformer_Pack/
 
+# Generated real-world city tiles (gnb geo). Bulky, part binary, and fully
+# reproducible from external/geocache, so they ship as assets/paks/geo.pak via
+# gnb paks fetch instead of living in git. landmarks.json is the hand-maintained
+# input to the generator, so it stays.
+assets/geo/*
+!assets/geo/landmarks.json
+assets/paks/geo.pak
+
 # Optional binary assets — fetched via gnb paks fetch.
 assets/sog/
 assets/sfx/*.mp3

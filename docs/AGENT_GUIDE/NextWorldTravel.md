@@ -7,10 +7,31 @@ OpenStreetMap 地点的地图，Focus 绕着其中一个地点转。走路是其
 管线与地形契约见 [geo-city-generation-design](../designs/geo-city-generation-design.md)，
 角色资产格式见 [ScadRig](ScadRig.md)，复用的仿真层见 [SimKit](SimKit.md)。
 
+## tile 从哪来（先做这一步）
+
+tile 是**生成物，不入库**：`assets/geo/` 被 gitignore，一个干净 clone 里一个 tile 都没有，
+程序会打 `no geo tiles under 'assets/geo'` 然后什么都不显示。两条获取路径：
+
+```bash
+./gnb.sh paks fetch geo          # 已发布的 tile：解到 assets/paks/geo.pak，引擎自动挂载
+./gnb.sh geo make --name hk_victoria --at 22.2855,114.1580 --size 1000 --profile hongkong
+```
+
+自己生成的 tile 以散文件落在 `assets/geo/<tile>/`（`<tile>.scad` + `terrain.hmap` +
+`poi.json` + `ATTRIBUTION.md`），要分发给别人再打包：
+
+```bash
+./gnb.sh geo pak                 # assets/geo/** -> assets/paks/geo.pak
+./gnb.sh paks publish geo        # 需要 GITHUB_TOKEN
+```
+
+tile 发现同时看散文件和挂载的 pak，两者取并集，所以本地新生成的 tile 会和 pak 里的一起出现
+在列表里。
+
 ```bash
 ./gnb.sh build NextWorldTravel
 ./gnb.sh run NextWorldTravel                                                   # 默认加载第一个 tile
-./gnb.sh shot --target NextWorldTravel --ui --scene assets/scad/proc/generated/hk_victoria.scad
+./gnb.sh shot --target NextWorldTravel --ui --scene assets/geo/hk_victoria/hk_victoria.scad
 ./gnb.sh validate --script assets/agentscripts/next-world-travel-smoke.agentscript.json   # 走路
 ./gnb.sh validate --script assets/agentscripts/next-world-travel-browse.agentscript.json  # 浏览（鸟瞰 + 绕物）
 ./out/build/<preset>/bin/gkNextUnitTests "[POI]"                       # poi.json 数据契约，无需 GPU
@@ -105,7 +126,7 @@ Aerial 里还会画角色自己的 marker（"walker"），点击 marker 的命�
 的 ODbL 衍生数据库）。`gnb geo build` 额外产出一个入库的 sidecar：
 
 ```
-assets/scad/geo/<tile>/poi.json     # 与 terrain.hmap 同级，同属"产出作品"，带署名
+assets/geo/<tile>/poi.json          # 与 terrain.hmap、<tile>.scad 同级，同属"产出作品"，带署名
 ```
 
 ```json
@@ -177,9 +198,6 @@ lodging / park / place / other`）在三处必须一致：`tools/gnb/internal/ge
 
 ## 已知限制
 
-- **tile 发现走的是 loose 目录扫描**（`assets/scad/geo/*/`），pak 内没有目录列表。tile 目前是
-  未打包的入库资产；真进了 pak 需要改成读一份清单。读 `poi.json` 本身已经走
-  `ScadReadAsset`（package + loose 回退），所以只有"发现"这一步有这个限制。
 - **滑动窗口重建是同步的**，372×372 格约 1 秒，跨窗口时会卡一帧。要平滑需要异步重建 NavGrid。
 - **标签没有遮挡剔除**，楼后面的地点标签照样画在楼上（Aerial 的 marker 同理）。做正确需要每标签
   一次射线或深度查询。

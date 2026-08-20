@@ -6,6 +6,7 @@
 #include "Engine/Runtime/Components/TerrainComponent.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Gameplay/AI/NavGrid.h"
+#include "Modules/ScadLoader/FScadShared.h"
 #include "Modules/ScadLoader/ScadModule.hpp"
 
 // Walkability closure over a city generated from real geographic data
@@ -17,7 +18,7 @@
 // to behave as solid obstacles for both the nav grid and the physics engine,
 // and the harbour has to stay off limits.
 //
-// Coordinates come from the committed tile and are stable because the whole
+// Coordinates come from the generated tile and are stable because the whole
 // pipeline is deterministic (regenerating produces a byte-identical .scad).
 // Engine space is (x, z) = (scad x, -scad y); world Y is scad z.
 namespace
@@ -42,7 +43,17 @@ TEST_CASE_METHOD(EngineTestFixture, "Geo city walkability: streets connect, towe
     Modules::Scad::Register();
     GOption->KeepCPUMeshData = true; // NavGrid raycasts the CPU BVH
 
-    engine_->RequestLoadScene({.filename = "assets/scad/proc/generated/hk_victoria.scad"});
+    // assets/geo is gitignored — the tile comes from `gnb geo make` or from
+    // geo.pak, and a clean checkout has neither. ScadReadAsset covers both.
+    const std::string scene = "assets/geo/hk_victoria/hk_victoria.scad";
+    std::vector<uint8_t> sceneBytes;
+    if (!Assets::Scad::ScadReadAsset(scene, sceneBytes) || sceneBytes.empty())
+    {
+        SKIP("assets/geo/hk_victoria is absent — run `gnb geo make --name hk_victoria "
+             "--at 22.2855,114.1580 --size 1000 --profile hongkong` or `gnb paks fetch geo`");
+    }
+
+    engine_->RequestLoadScene({.filename = scene});
 
     Runtime::TerrainComponent* terrain = nullptr;
     for (int i = 0; i < 2400 && !terrain; ++i)

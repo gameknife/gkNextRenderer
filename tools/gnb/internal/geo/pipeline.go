@@ -225,7 +225,7 @@ func Scad(tile Tile, opt Options, logf Logf) (string, EmitReport, error) {
 
 // LoadLandmarks reads the optional per-OSM-id height override table.
 func LoadLandmarks(repoRoot string) (map[int64]float64, error) {
-	path := filepath.Join(repoRoot, "assets", "scad", "geo", "landmarks.json")
+	path := filepath.Join(repoRoot, filepath.FromSlash(LandmarksRef))
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return map[int64]float64{}, nil

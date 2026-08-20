@@ -29,6 +29,9 @@ func List(repoRoot string, cfg config.Config) error {
 
 func Fetch(repoRoot string, cfg config.Config, groups []string, force bool) error {
 	selected := selectedGroups(cfg, groups)
+	// Only a bulk fetch tolerates a missing optional pak. `gnb paks fetch geo`
+	// names the asset, so a failure there is the answer the caller asked for.
+	tolerateOptional := len(groups) == 0 || contains(groups, "all")
 	baseURL := os.Getenv("PAKS_BASE_URL")
 	if baseURL == "" {
 		repo := cfg.Paks.Repo
@@ -51,6 +54,11 @@ func Fetch(repoRoot string, cfg config.Config, groups []string, force bool) erro
 			continue
 		}
 		if err := fetcher.Download(baseURL+"/"+asset.Name, dst); err != nil {
+			if asset.Optional && tolerateOptional {
+				console.Warn("optional pak %s is unavailable (%v); fetch it later with `gnb paks fetch %s`",
+					asset.Name, err, asset.ID)
+				continue
+			}
 			return err
 		}
 	}

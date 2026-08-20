@@ -15,6 +15,10 @@ set(ASSET_DIRS
     brand
     configs
     fonts
+    # Generated city tiles (`gnb geo`). Gitignored and normally shipped inside
+    # assets/paks/geo.pak, so the directory is often absent — the EXISTS guard
+    # below skips it, and the pak covers the runtime either way.
+    geo
     legos
     locale
     models

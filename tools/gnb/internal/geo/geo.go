@@ -6,7 +6,7 @@
 //
 //	fetch      bbox -> raw SRTM .hgt.gz + Overpass JSON   (external/geocache)
 //	normalize  -> local ENU metres, IR (tile.json)        (external/geocache)
-//	terrain    -> resample + DSM strip + sea bed -> .hmap (assets/scad/geo)
+//	terrain    -> resample + DSM strip + sea bed -> .hmap (assets/geo)
 //	layout     -> height inference, simplify, block split (in memory)
 //	emit       -> TERR + hmap ref + block modules -> .scad
 //

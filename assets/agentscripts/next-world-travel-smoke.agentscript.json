@@ -1,7 +1,7 @@
 {
   "name": "next-world-travel-smoke",
   "target": "NextWorldTravel",
-  "scene": "assets/scad/proc/generated/hk_victoria.scad",
+  "scene": "assets/geo/hk_victoria/hk_victoria.scad",
   "defaults": {
     "waitFrames": 2,
     "stepTimeoutMs": 20000

@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <set>
 #include <system_error>
 
 namespace fs = std::filesystem;
@@ -19,51 +20,104 @@ namespace NextWorldTravel
         // unknown one is deliberate: a silently mis-parsed POI file puts labels
         // in the wrong place, which reads as an engine bug.
         constexpr const char* kPoiFormat = "gkgeopoi1";
-        constexpr const char* kGeoAssetDir = "assets/scad/geo";
-        constexpr const char* kSceneDir = "assets/scad/proc/generated";
+        // Mirrors geo.GeoAssetRoot in tools/gnb/internal/geo/cache.go. Every
+        // artefact of a tile lives in one directory under here so a single pak
+        // (assets/paks/geo.pak) can carry the whole set.
+        constexpr const char* kGeoAssetDir = "assets/geo";
 
         std::string ScenePathFor(const std::string& tileName)
         {
-            return std::string(kSceneDir) + "/" + tileName + ".scad";
+            return std::string(kGeoAssetDir) + "/" + tileName + "/" + tileName + ".scad";
         }
 
         std::string PoiPathFor(const std::string& tileName)
         {
             return std::string(kGeoAssetDir) + "/" + tileName + "/poi.json";
         }
+
+        // Tile names from loose files on disk. Present while iterating on the
+        // generator, before (or instead of) packing.
+        void CollectLooseTileNames(std::set<std::string>& names)
+        {
+            const fs::path root = Utilities::FileHelper::GetRuntimeFilePath(kGeoAssetDir);
+            std::error_code ec;
+            if (!fs::is_directory(root, ec))
+            {
+                return;
+            }
+            for (const fs::directory_entry& entry : fs::directory_iterator(root, ec))
+            {
+                if (entry.is_directory())
+                {
+                    names.insert(entry.path().filename().string());
+                }
+            }
+        }
+
+        // Tile names from geo.pak. assets/geo is gitignored, so for anyone who
+        // did not run the generator themselves this is the only source — and a
+        // mounted pak is invisible to directory_iterator.
+        void CollectPackedTileNames(std::set<std::string>& names)
+        {
+            const Utilities::Package::FPackageFileSystem* pak =
+                Utilities::Package::FPackageFileSystem::TryGetInstance();
+            if (pak == nullptr)
+            {
+                return;
+            }
+            const std::string prefix = std::string(kGeoAssetDir) + "/";
+            for (const std::string& entry : pak->ListMountedEntries(prefix))
+            {
+                const size_t begin = prefix.size();
+                const size_t slash = entry.find('/', begin);
+                if (slash != std::string::npos && slash > begin)
+                {
+                    names.insert(entry.substr(begin, slash - begin));
+                }
+            }
+        }
+
+        // A tile is usable only with both halves: the scene to load and the
+        // labels to draw on it. ScadReadAsset resolves pak first, then loose
+        // files, so this one check covers both origins.
+        bool TileIsComplete(const std::string& tileName, std::string& outMissing)
+        {
+            std::vector<uint8_t> probe;
+            for (const std::string& path : {ScenePathFor(tileName), PoiPathFor(tileName)})
+            {
+                if (!Assets::Scad::ScadReadAsset(path, probe) || probe.empty())
+                {
+                    outMissing = path;
+                    return false;
+                }
+            }
+            return true;
+        }
     }
 
     std::vector<FGeoTile> DiscoverGeoTiles()
     {
-        std::vector<FGeoTile> tiles;
-        const fs::path root = Utilities::FileHelper::GetRuntimeFilePath(kGeoAssetDir);
-        std::error_code ec;
-        if (!fs::is_directory(root, ec))
+        std::set<std::string> names;
+        CollectLooseTileNames(names);
+        CollectPackedTileNames(names);
+        if (names.empty())
         {
-            SPDLOG_WARN("NextWorldTravel: no geo tiles at '{}' — run `gnb geo make` first", root.string());
-            return tiles;
+            SPDLOG_WARN("NextWorldTravel: no geo tiles under '{}' — run `gnb geo make`, "
+                        "or `gnb paks fetch geo` for the published ones",
+                        kGeoAssetDir);
+            return {};
         }
 
-        for (const fs::directory_entry& entry : fs::directory_iterator(root, ec))
+        std::vector<FGeoTile> tiles;
+        tiles.reserve(names.size());
+        for (const std::string& tileName : names)
         {
-            if (!entry.is_directory())
+            std::string missing;
+            if (!TileIsComplete(tileName, missing))
             {
-                continue;
-            }
-            const std::string tileName = entry.path().filename().string();
-            const fs::path poi = entry.path() / "poi.json";
-            if (!fs::exists(poi, ec))
-            {
-                // A tile generated before the POI stage existed. Nothing to
-                // label, so nothing for this application to show.
-                SPDLOG_WARN("NextWorldTravel: tile '{}' has no poi.json — regenerate it with `gnb geo build`",
-                            tileName);
-                continue;
-            }
-            const fs::path scene = Utilities::FileHelper::GetRuntimeFilePath(ScenePathFor(tileName));
-            if (!fs::exists(scene, ec))
-            {
-                SPDLOG_WARN("NextWorldTravel: tile '{}' has no scene at '{}'", tileName, scene.string());
+                SPDLOG_WARN("NextWorldTravel: tile '{}' is incomplete — '{}' is missing; "
+                            "regenerate it with `gnb geo make --name {}`",
+                            tileName, missing, tileName);
                 continue;
             }
             FGeoTile tile;
@@ -73,8 +127,7 @@ namespace NextWorldTravel
             tiles.push_back(std::move(tile));
         }
 
-        std::sort(tiles.begin(), tiles.end(),
-                  [](const FGeoTile& a, const FGeoTile& b) { return a.name < b.name; });
+        // std::set already orders the names; the tiles inherit that order.
         return tiles;
     }
 

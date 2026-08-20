@@ -135,6 +135,10 @@ type PakAsset struct {
 	ID   string `toml:"id"`
 	Name string `toml:"name"`
 	Dest string `toml:"dest"`
+	// Optional marks a pak that the release may legitimately not carry yet, so a
+	// bulk `gnb setup` warns past it instead of failing. Asking for it by name
+	// (`gnb paks fetch geo`) still reports the download error.
+	Optional bool `toml:"optional"`
 }
 
 type PackageConfig struct {
