@@ -352,20 +352,21 @@ namespace NextWorldTravel
             const float radius = aerial
                                      ? std::clamp(Config::kMarkerMinRadius + poi.rank * 0.32f,
                                                   Config::kMarkerMinRadius, Config::kMarkerMaxRadius)
-                                     : 3.0f;
+                                     : Config::kStreetMarkerRadius;
             const glm::vec3 markerColor = hovered ? glm::mix(color, glm::vec3(1.0f), 0.35f) : color;
+            const float markerAlpha = alpha * Config::kMarkerAlpha;
             const ImVec2 screen(marker.x, marker.y);
             drawList->AddCircleFilled(screen, radius + (hovered ? 1.5f : 0.0f),
-                                      ToImColor(markerColor, alpha));
+                                      ToImColor(markerColor, markerAlpha));
             if (hovered)
             {
                 drawList->AddCircle(screen, radius + Config::kMarkerHoverRadius,
-                                    ToImColor(glm::vec3(1.0f), std::min(1.0f, alpha + 0.18f)), 0,
+                                    ToImColor(glm::vec3(1.0f), std::min(1.0f, markerAlpha + 0.18f)), 0,
                                     Config::kMarkerHoverThickness);
             }
             if (index == highlight_)
             {
-                drawList->AddCircle(screen, radius + 6.0f, ToImColor(glm::vec3(1.0f), alpha), 0, 2.0f);
+                drawList->AddCircle(screen, radius + 6.0f, ToImColor(glm::vec3(1.0f), markerAlpha), 0, 2.0f);
             }
         }
 
@@ -462,15 +463,11 @@ namespace NextWorldTravel
                                              ? glm::mix(color, glm::vec3(1.0f), 0.35f)
                                              : color;
 
-            if (!aerial)
-            {
-                // A pin down to the anchor, so a roof label reads as belonging
-                // to the building under it rather than floating over the
-                // skyline. From above there is no "under", so no pin.
-                drawList->AddLine(ImVec2(screen.x, screen.y), ImVec2(screen.x, plate.maxY),
-                                  ToImColor(labelColor, alpha * (hovered ? 0.85f : 0.55f)),
-                                  hovered ? 1.5f : 1.0f);
-            }
+            // A thin vertical connector makes a label's relationship with its
+            // dot unambiguous, including when aerial labels are stacked upward.
+            drawList->AddLine(ImVec2(screen.x, screen.y), ImVec2(screen.x, plate.maxY),
+                              ToImColor(labelColor, alpha * (hovered ? 0.85f : 0.55f)),
+                              Config::kLabelConnectorThickness);
             drawList->AddRectFilled(ImVec2(plate.minX, plate.minY), ImVec2(plate.maxX, plate.maxY),
                                     ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 0.0f,
                                                               alpha * (hovered ? Config::kLabelHoverAlpha

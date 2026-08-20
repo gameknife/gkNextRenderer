@@ -43,7 +43,7 @@ namespace NextWorldTravel::Config
 
     // ---- Camera ----------------------------------------------------------
     inline constexpr float kFov = 55.0f;
-    inline constexpr float kNearPlane = 0.1f;
+    inline constexpr float kNearPlane = 1.0f;
     inline constexpr float kFarPlane = 3000.0f;
     inline constexpr float kFollowDistance = 9.0f;
     inline constexpr float kFollowMinDistance = 2.0f;
@@ -166,8 +166,10 @@ namespace NextWorldTravel::Config
     // prominent get a name, otherwise the plates cover the city they describe.
     inline constexpr int kAerialMaxLabels = 44;
     inline constexpr float kAerialMarkerMaxDistance = 4200.0f;
-    inline constexpr float kMarkerMinRadius = 2.6f;
-    inline constexpr float kMarkerMaxRadius = 6.5f;
+    inline constexpr float kMarkerMinRadius = 2.0f;
+    inline constexpr float kMarkerMaxRadius = 5.0f;
+    inline constexpr float kMarkerAlpha = 0.7f;
+    inline constexpr float kStreetMarkerRadius = 2.25f;
     inline constexpr float kMarkerPickRadius = 16.0f;
     inline constexpr float kMarkerHoverRadius = 4.0f;
     inline constexpr float kMarkerHoverThickness = 2.0f;
@@ -176,6 +178,7 @@ namespace NextWorldTravel::Config
     inline constexpr float kLabelRounding = 7.0f;
     inline constexpr float kLabelHoverAlpha = 0.92f;
     inline constexpr float kLabelHoverThickness = 2.0f;
+    inline constexpr float kLabelConnectorThickness = 1.0f;
     // Plates never overlap; one that would land on another is lifted by whole
     // rows until it finds a free one, and only dropped when every row is taken.
     // From a pavement most roofs project into the same band of sky, so without
