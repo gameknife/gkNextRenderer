@@ -522,7 +522,7 @@ namespace RendererViewportDetail
         {"Delete / Backspace", "Delete selection"},
         {"TRANSFORM GIZMO", nullptr},
         {"W / E / R", "Move / Rotate / Scale"},
-        {"Q", "Toggle Local / World"},
+        {"Q", "Selection mode (hide gizmo)"},
     }};
 }
 

@@ -114,6 +114,7 @@ namespace Runtime::Camera
         bool leftDragPans_{};
 
         double mouseSensitive_{};
+        double orbitMouseSensitive_{};
         float navigationScale_{};
 
         float fieldOfView_{};

@@ -31,7 +31,12 @@ namespace Runtime::Camera
         mouseLeftPressed_ = false;
         mouseRightPressed_ = false;
 
-        mouseSensitive_ = 0.0002;
+        // Mouse rotation is measured in radians per physical pixel.  Keep the
+        // accumulated mouse delta independent from the render frame rate; the
+        // pending delta is consumed once by UpdateCamera(). Free look is three
+        // times faster, while orbiting retains its original sensitivity.
+        mouseSensitive_ = 0.0006;
+        orbitMouseSensitive_ = 0.0002;
 
         fieldOfView_ = renderCamera.FieldOfView;
 
@@ -146,6 +151,8 @@ namespace Runtime::Camera
         const auto pixelDeltaY = static_cast<float>(ypos - mousePosY_);
         const auto deltaX = pixelDeltaX * mouseSensitive_;
         const auto deltaY = pixelDeltaY * mouseSensitive_;
+        const auto orbitDeltaX = pixelDeltaX * orbitMouseSensitive_;
+        const auto orbitDeltaY = pixelDeltaY * orbitMouseSensitive_;
 
         // Mouse Right Button Handling
         if (mouseRightPressed_)
@@ -156,7 +163,7 @@ namespace Runtime::Camera
             if (altPressed_ && orbitTarget_.has_value())
             {
                 // Orbit Mode
-                Orbit(deltaX, deltaY);
+                Orbit(orbitDeltaX, orbitDeltaY);
             }
             else
             {
@@ -421,9 +428,12 @@ namespace Runtime::Camera
         modelRotX_ = glm::mix(modelRotX_, rawModelRotX_, 0.5);
         modelRotY_ = glm::mix(modelRotY_, rawModelRotY_, 0.5);
 
-        const double rotationDiv = 1 / timeDelta;
-        Rotate(static_cast<float>(cameraRotX_ / rotationDiv + cameraRotXAbs_),
-               static_cast<float>(cameraRotY_ / rotationDiv + cameraRotYAbs_));
+        // Gamepad rotation is a per-frame input and therefore needs the frame
+        // delta.  Mouse rotation is accumulated from actual pixel movement in
+        // OnCursorPosition(), so applying it directly keeps the same angular
+        // result at different render frame rates.
+        Rotate(static_cast<float>(cameraRotX_ * timeDelta + cameraRotXAbs_),
+               static_cast<float>(cameraRotY_ * timeDelta + cameraRotYAbs_));
 
         const bool hasMovement = keyboardInput_.IsActive() || gamepadInput_.IsActive();
         const bool updated = hasMovement || (cameraRotY_ + cameraRotYAbs_) != 0.0 ||
