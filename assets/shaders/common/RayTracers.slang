@@ -15,6 +15,20 @@ implementing PathTracing;
 // CUBE_SIZE_XY^2 * CUBE_SIZE_Z cascade crosses 2 * 192 + 48 = 432 cell boundaries, so a walk that
 // reaches this ceiling has already left anything the grid can represent.
 static const uint kVoxelDDAMaxSteps = 768;
+static const float kAmbientCubeSkyVisibilityThresholdMin = 0.20f;
+static const float kAmbientCubeSkyVisibilityThresholdMax = 0.45f;
+
+float AmbientCubeSkyVisibilityThreshold(float3 rayOrigin, float3 rayDirection)
+{
+    const UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
+    uint4 jitterSeed = InitRandomSeed(
+        asuint(rayOrigin.x) ^ asuint(rayDirection.x),
+        asuint(rayOrigin.y) ^ asuint(rayDirection.y),
+        camera.TotalFrames ^ asuint(rayOrigin.z) ^ asuint(rayDirection.z));
+    const float jitter = RandomFloat(jitterSeed);
+    return lerp(kAmbientCubeSkyVisibilityThresholdMin,
+                kAmbientCubeSkyVisibilityThresholdMax, jitter);
+}
 
 public struct FHiVoxelDDARayTracer : IRayTracer
 {
@@ -140,9 +154,75 @@ public struct FHiVoxelDDARayTracer : IRayTracer
         const float normalOffset = max(cubeUnit, minimumNormalOffset);
         return position + normalize(normal) * normalOffset + lightDirection * cubeUnit;
     }
-    public bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
+    bool IsTargetAreaLightHit(Vertex hitVertex, float3 rayOrigin, float3 rayDirection,
+                              float rayLength, uint targetLightIndex)
     {
-        return TraceSegment(rayOrigin, rayTarget, epsilon);
+        GPUScene gpuScene = Bindless.GetGpuscene();
+        UniformBufferObject camera = gpuScene.Camera[0];
+        if (targetLightIndex >= camera.LightCount)
+        {
+            return false;
+        }
+
+        LightObject light = gpuScene.Lights[targetLightIndex];
+        if (light.lightType != LightTypeArea ||
+            hitVertex.MaterialIndex != light.lightMatIdx)
+        {
+            return false;
+        }
+
+        // The voxel hit is the entry face of the emitter's occupied voxel, not the exact
+        // triangle plane. Accept that entry only when it is close to the requested endpoint
+        // and projects onto the target rectangle; another object remains a real occluder.
+        const float cubeUnit = max(GetAmbientCubeUnitAtPosition(rayOrigin), 0.0001f);
+        const float endpointTolerance = max(cubeUnit * 2.5f, EPS2);
+        const float hitDistance = dot(hitVertex.Position - rayOrigin, rayDirection);
+        if (rayLength - hitDistance > endpointTolerance)
+        {
+            return false;
+        }
+
+        const float3 edgeU = light.p1.xyz - light.p0.xyz;
+        const float3 edgeV = light.p3.xyz - light.p0.xyz;
+        const float3 relative = hitVertex.Position - light.p0.xyz;
+        const float denominator = dot(edgeU, edgeU) * dot(edgeV, edgeV) -
+                                  dot(edgeU, edgeV) * dot(edgeU, edgeV);
+        if (denominator <= EPS * EPS)
+        {
+            return false;
+        }
+
+        const float du = dot(relative, edgeU);
+        const float dv = dot(relative, edgeV);
+        const float u = (du * dot(edgeV, edgeV) - dv * dot(edgeU, edgeV)) / denominator;
+        const float v = (dv * dot(edgeU, edgeU) - du * dot(edgeU, edgeV)) / denominator;
+        const float planeDistance = abs(dot(relative, normalize(light.normal_area.xyz)));
+        return planeDistance <= endpointTolerance &&
+               u >= -0.5f && u <= 1.5f && v >= -0.5f && v <= 1.5f;
+    }
+
+    public bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon,
+                                      uint targetLightIndex)
+    {
+        const float3 segment = rayTarget - rayOrigin;
+        const float rayLength = length(segment);
+        if (rayLength <= epsilon)
+        {
+            return false;
+        }
+
+        const float3 rayDirection = segment / rayLength;
+        Vertex hitVertex;
+        NodeProxy hitNode;
+        float4 hitColor;
+        float hitDistance;
+        if (!TraceRay(rayOrigin, rayDirection, rayLength - epsilon,
+                      hitVertex, hitNode, hitColor, hitDistance))
+        {
+            return false;
+        }
+        return !IsTargetAreaLightHit(hitVertex, rayOrigin, rayDirection,
+                                     rayLength, targetLightIndex);
     }
     // Walks one cascade's voxel grid. The traversable span is the cascade volume intersected with
     // `boxMin`/`boxMax` (pass a huge box for an unbounded walk) and with `maxDistance`; callers
@@ -334,7 +414,8 @@ public struct FAmbientCubeRayTracer : IRayTracer
     {
         return position;
     }
-    public bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
+    public bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon,
+                                      uint targetLightIndex)
     {
         return false;
     }
@@ -349,7 +430,7 @@ public struct FAmbientCubeRayTracer : IRayTracer
 }
 
 // Indirect-only 版本：从 ambient cube probe 只读取间接反弹通道，跳过 `_D` 中的太阳直射部分。
-// 配合 FShadowMapDirectIlluminator 使用，避免太阳光被 probe baked direct 和 shadow map 双重计算。
+// 配合独立的直接光照器使用，避免太阳光被 probe baked direct 和 shadow map 双重计算。
 public struct FAmbientCubeRayTracerIndirect : IRayTracer
 {
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
@@ -366,7 +447,8 @@ public struct FAmbientCubeRayTracerIndirect : IRayTracer
     {
         return position;
     }
-    public bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
+    public bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon,
+                                      uint targetLightIndex)
     {
         return false;
     }
@@ -376,7 +458,7 @@ public struct FAmbientCubeRayTracerIndirect : IRayTracer
         float4 probeData = interpolateAmbientCubes<FullAmbientCubeSampler>(rayOrigin, rayDir);
         inoutRayColor.rgb = probeData.rgb;
         outHitDist = 100.0f;
-        return probeData.a < 0.5;
+        return probeData.a < AmbientCubeSkyVisibilityThreshold(rayOrigin, rayDir);
     }
 }
 public bool IsPointOnAreaLight(float3 position, LightObject light, float planeTolerance)
@@ -460,8 +542,11 @@ public struct FHardwareRayTracer : IRayTracer
         return position + normalize(normal) * max(EPS2, minimumNormalOffset);
     }
 
-    public bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
+    public bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon,
+                                      uint targetLightIndex)
     {
+        // Hardware ray queries already use an endpoint margin; the target light index is kept
+        // in the interface so software voxel tracing can filter the emitter's own voxel hit.
         const float3 segment = rayTarget - rayOrigin;
         const float segmentLength = length(segment);
         // Visibility is evaluated on the open segment between the shading point and the sampled
@@ -558,9 +643,10 @@ public struct FSoftwareRayTracer : IRayTracer
         return DDARayTracer.GetAreaLightShadowOrigin(
             position, normal, lightPosition, minimumNormalOffset);
     }
-    public bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
+    public bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon,
+                                      uint targetLightIndex)
     {
-        return DDARayTracer.TraceAreaLightSegment(rayOrigin, rayTarget, epsilon);
+        return DDARayTracer.TraceAreaLightSegment(rayOrigin, rayTarget, epsilon, targetLightIndex);
     }
     public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor, out float outHitDist)
     {

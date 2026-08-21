@@ -110,7 +110,7 @@ namespace NextCVar
         GK_CVAR_UINT("r.frameGeneration.frameLimitFps", settings, FrameGenerationFrameLimitFps, 0, ECVarFlags::Archive, "Base frame-rate limit while frame generation is enabled (0=unlimited)");
         GK_CVAR_UINT("r.upscaler.jitterFrames", settings, UpscalerJitterFrames, 16, ECVarFlags::Archive, "Fallback temporal upscaler projection jitter sequence length (clamped to 1-256)");
         GK_CVAR_BOOL("r.upscaler.jitterInvertY", settings, UpscalerJitterInvertY, false, ECVarFlags::Archive, "Invert temporal upscaler projection jitter Y for diagnostics");
-        GK_CVAR_BOOL("r.checkerboardRendering", settings, CheckerboardRendering, true, ECVarFlags::Archive, "Shade one checkerboard pixel parity per frame and reconstruct the missing parity before temporal upscaling");
+        GK_CVAR_BOOL("r.checkerboardRendering", settings, CheckerboardRendering, false, ECVarFlags::Archive, "Shade one checkerboard pixel parity per frame and reconstruct the missing parity before temporal upscaling");
         GK_CVAR_BOOL("r.tracing.exitAfterFirst", settings, ExitAfterFirst, false, ECVarFlags::Archive, "Terminate tracing after the first non-dielectric surface hit");
         GK_CVAR_FLOAT("r.heatmapScale", settings, HeatmapScale, 1.0f, ECVarFlags::Archive, "Profiler heatmap scale");
         GK_CVAR_FLOAT("r.paperWhiteNit", settings, PaperWhiteNit, 600.0f, ECVarFlags::Archive, "Paper white nit");

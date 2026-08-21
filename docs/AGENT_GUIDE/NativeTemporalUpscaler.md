@@ -38,7 +38,7 @@ another type or None. The provider restores the engine depth attachment layout a
   and retains its BSD-3-Clause notice under `assets/shaders/third_party/sgsr2/`.
 - `r.upscaler.type 4`: select Native TAAU.
 - `r.upscaler.qualityMode`: shared Quality/Balanced/Performance/Ultra Performance/Native/Auto mode.
-- `r.checkerboardRendering` (default `true`): dispatches half as many shading invocations and
+- `r.checkerboardRendering` (default `false`): when enabled, dispatches half as many shading invocations and
   alternates the shaded pixel parity every frame. A cheap spatial resolve fills the missing parity
   before the selected temporal upscaler consumes color/depth/motion. It is disabled automatically
   for reference/progressive rendering, non-primary views, and PathTracing/SoftwareTracing ReSTIR.

@@ -228,7 +228,7 @@ namespace Vulkan
                                    EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId,
                                     false, true}, 1, 0},
             RendererDescriptor{ERT_SoftwareModern, "SoftwareModern", {
-                                   ESceneResource::Voxel | ESceneResource::Ambient,
+                                   ESceneResource::Voxel | ESceneResource::Ambient | ESceneResource::LightGrid,
                                    EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility | EViewPrepass::CSM,
                                    ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion | ERenderOutput::ObjectId |
                                        ERenderOutput::Normal | ERenderOutput::Albedo | ERenderOutput::Diffuse | ERenderOutput::Specular,

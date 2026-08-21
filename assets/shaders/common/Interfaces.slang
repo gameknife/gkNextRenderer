@@ -57,7 +57,8 @@ public interface IRayTracer
     bool TraceSegment(float3 rayOrigin, float3 rayTarget, float epsilon);
     float3 GetAreaLightShadowOrigin(float3 position, float3 normal, float3 lightPosition,
                                     float minimumNormalOffset);
-    bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon);
+    bool TraceAreaLightSegment(float3 rayOrigin, float3 rayTarget, float epsilon,
+                               uint targetLightIndex);
 }
 
 // direct illum

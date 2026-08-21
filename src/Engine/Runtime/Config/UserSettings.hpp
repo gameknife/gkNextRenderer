@@ -37,7 +37,7 @@ struct UserSettings final
     uint32_t FrameGenerationFrameLimitFps = 0;
     uint32_t UpscalerJitterFrames = 16;
     bool UpscalerJitterInvertY = false;
-    bool CheckerboardRendering = true;
+    bool CheckerboardRendering = false;
     // Camera
     int CameraIdx;
 

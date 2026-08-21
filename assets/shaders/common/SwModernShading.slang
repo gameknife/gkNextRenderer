@@ -13,7 +13,8 @@ void ShadeSwModernPixel(int2 pixel)
     // this renderer decodes the visibility buffer per pixel any more.
     FSurfacePrimaryRayCaster surfaceRayCaster;
     FAmbientCubeRayTracerIndirect tracer;
-    FShadowMapDirectIlluminator dIlluminator;
+    FSoftwareTracingDirectIlluminator dIlluminator;
+    dIlluminator.EnableAnalyticDeltaLightReflection = true;
 
     FPathTracingRenderer renderer;
     renderer.ExitProbability = 0.5f;

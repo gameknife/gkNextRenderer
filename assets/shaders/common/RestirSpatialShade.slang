@@ -121,7 +121,8 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
                 context.Position, context.Normal, centerLightPosition, reconstructionOffset);
             const float3 visibilityTarget = Common.GetLightVisibilityTarget(
                 center.LightIndex, shadowOrigin, centerLightPosition);
-            if (tracer.TraceAreaLightSegment(shadowOrigin, visibilityTarget, EPS))
+            if (tracer.TraceAreaLightSegment(shadowOrigin, visibilityTarget, EPS,
+                                             center.LightIndex))
             {
                 center.WeightW = 0.0f;
             }
@@ -212,7 +213,8 @@ public void RestirSpatialShade(uint3 dispatchThreadId, IRayTracer tracer)
             const float3 visibilityTarget = Common.GetLightVisibilityTarget(
                 combined.LightIndex, shadowOrigin, lightPosition);
             if (!alreadyVerified &&
-                tracer.TraceAreaLightSegment(shadowOrigin, visibilityTarget, EPS))
+                tracer.TraceAreaLightSegment(shadowOrigin, visibilityTarget, EPS,
+                                             combined.LightIndex))
             {
                 combined.WeightW = 0.0f;
             }

@@ -6,7 +6,7 @@ implementing PathTracing;
 //   - Common sun-disk + finite/delta-light NEE sampling helpers (SelectLight,
 //     EvaluateLightDirectSample / EvaluateLightDiffuseSample, AccumulateSunBSDF, ...)
 //   - Common CSM sun-shadow sampling (SelectSunCascade / SampleSunShadowCSM)
-//   - FShadowMapDirectIlluminator : SoftwareModern sun-only Lambert + CSM
+//   - FShadowMapDirectIlluminator : legacy sun-only Lambert + CSM fallback
 //   - ISunShadowPolicy + FTracingDirectIlluminator<TTracer, TSun>, aliased as
 //     FHardwareDirectIlluminator (ray-query) and FSoftwareTracingDirectIlluminator
 //     (CSM sun + voxel-DDA visibility)
@@ -476,6 +476,11 @@ public struct FCsmSunShadow : ISunShadowPolicy
 public struct FTracingDirectIlluminator<TTracer : IRayTracer, TSun : ISunShadowPolicy>
     : IDirectIlluminator
 {
+    // SoftwareModern keeps AmbientCube as its indirect tracer. Its near-delta glossy ray cannot
+    // therefore land on a registered area emitter, so that renderer opts into the analytic
+    // emitter fallback below. Other renderers keep this disabled to preserve their existing
+    // glossy/MIS policy.
+    public bool EnableAnalyticDeltaLightReflection;
     // Set on the primary view when ReSTIR is active (see DirectIlluminatePrimary).
     public bool RestirPrimary;
     // Primary-hit state for the ReSTIR temporal gates, set by the entry shader after
@@ -489,6 +494,7 @@ public struct FTracingDirectIlluminator<TTracer : IRayTracer, TSun : ISunShadowP
     // a null parameter table (GPU page fault / device lost on some GPUs).
     public __init()
     {
+        EnableAnalyticDeltaLightReflection = false;
         RestirPrimary = false;
         PrimaryInstanceId = 0;
         PrimaryMotionPixels = float2(0, 0);
@@ -547,7 +553,7 @@ public struct FTracingDirectIlluminator<TTracer : IRayTracer, TSun : ISunShadowP
             tracer.GetAreaLightShadowOrigin(context.Position, context.Normal, lightPosition, EPS2);
         const float3 visibilityTarget =
             Common.GetLightVisibilityTarget(lightIndex, shadowOrigin, lightPosition);
-        if (!tracer.TraceAreaLightSegment(shadowOrigin, visibilityTarget, EPS))
+        if (!tracer.TraceAreaLightSegment(shadowOrigin, visibilityTarget, EPS, lightIndex))
         {
             if (includeDiffuse)
             {
@@ -557,11 +563,71 @@ public struct FTracingDirectIlluminator<TTracer : IRayTracer, TSun : ISunShadowP
         }
     }
 
+    void AnalyticDeltaLightIlluminate(FBSDFContext context,
+                                      inout FDirectLighting directLighting)
+    {
+        if (!EnableAnalyticDeltaLightReflection ||
+            context.PerceptualRoughness > BSDF_DELTA_ROUGHNESS)
+        {
+            return;
+        }
+
+        GPUScene gpuScene = Bindless.GetGpuscene();
+        UniformBufferObject camera = gpuScene.Camera[0];
+        if (camera.LightCount == 0 || gpuScene.SoftMeshShader.Lights == 0)
+        {
+            return;
+        }
+
+        const float3 reflectionDirection = normalize(reflect(-context.Wo, context.Normal));
+        const float3 fresnel = BSDFFresnelSchlick(
+            max(dot(context.Normal, context.Wo), 0.0f), BSDFMaterialF0(context));
+        Common.FLightCell lightCell = Common.GetGlobalLightCell();
+        for (uint lightSlot = 0u; lightSlot < lightCell.Count; ++lightSlot)
+        {
+            const uint lightIndex = lightCell.GetLightIndex(lightSlot);
+            LightObject light = gpuScene.Lights[lightIndex];
+            if (light.lightType != LightTypeArea)
+            {
+                continue;
+            }
+
+            const float2 uv = Common.GetAreaLightSpecularUV(
+                lightIndex, context.Position, reflectionDirection);
+            float3 lightDirection;
+            float3 incidentWeight;
+            float3 lightPosition;
+            if (!Common.EvaluateLightIncident(lightIndex, uv, context.Position,
+                                              lightDirection, incidentWeight, lightPosition))
+            {
+                continue;
+            }
+
+            // GetAreaLightSpecularUV clamps a miss to the nearest edge. Reject that edge point
+            // unless it is still effectively on the ideal reflection ray.
+            if (dot(reflectionDirection, lightDirection) < 0.999f)
+            {
+                continue;
+            }
+
+            const float3 shadowOrigin = tracer.GetAreaLightShadowOrigin(
+                context.Position, context.Normal, lightPosition, EPS2);
+            if (tracer.TraceAreaLightSegment(shadowOrigin, lightPosition, EPS, lightIndex))
+            {
+                continue;
+            }
+
+            const Material lightMaterial = gpuScene.GetMaterial(light.lightMatIdx);
+            directLighting.SpecularRadiance += fresnel * lightMaterial.Diffuse.rgb;
+        }
+    }
+
     public void DirectIlluminate(inout uint4 randomSeed, FBSDFContext context,
                                  inout FDirectLighting directLighting)
     {
         SunIlluminate(randomSeed, context, directLighting);
         LightIlluminate(randomSeed, context, true, directLighting);
+        AnalyticDeltaLightIlluminate(context, directLighting);
     }
 
     public void DirectIlluminatePrimary(inout uint4 randomSeed, int2 pixel, FBSDFContext context,
@@ -590,6 +656,7 @@ public struct FTracingDirectIlluminator<TTracer : IRayTracer, TSun : ISunShadowP
         {
             LightIlluminate(randomSeed, context, true, directLighting);
         }
+        AnalyticDeltaLightIlluminate(context, directLighting);
     }
 }
 
