@@ -134,7 +134,21 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         const auto cascades = scene_->GetEnvSettings().ComputeSunCascades(
             ubo.ViewProjectionUnJit, renderCam.NearPlane, renderCam.FarPlane, 400.f);
         const uint32_t frameIndex = static_cast<uint32_t>(std::max(renderer_->FrameCount(), 0));
+        bool cameraChanged = viewState.previousUniformBuffer.TotalFrames == 0;
+        for (uint32_t column = 0; column < 4 && !cameraChanged; ++column)
+        {
+            for (uint32_t row = 0; row < 4; ++row)
+            {
+                if (viewState.previousUniformBuffer.ViewProjectionUnJit[column][row] !=
+                    ubo.ViewProjectionUnJit[column][row])
+                {
+                    cameraChanged = true;
+                    break;
+                }
+            }
+        }
         const bool forceRefresh = !viewState.cachedSunCascadesValid ||
+                                  cameraChanged ||
                                   (bool)viewState.previousUniformBuffer.HasSun != hasSun ||
                                   viewState.previousUniformBuffer.SunDirection != sunDirection;
 

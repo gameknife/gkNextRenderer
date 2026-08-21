@@ -438,13 +438,19 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         auto& scene = GetScene();
         const uint32_t indirectDrawBatchCount = scene.GetIndirectDrawBatchCount();
         const uint32_t groupCount = (indirectDrawBatchCount + 63) / 64;
-        const FViewRenderState& viewState = ActiveRenderView().State();
+        // Reference views deliberately share the primary camera and shadow-map set. Their own
+        // RenderView state is only temporal image history; using it for CSM scheduling leaves the
+        // update mask at its initial zero value after the first reference frame.
+        const bool sharedPrimaryShadow = GOption != nullptr && GOption->ReferenceMode;
+        const FViewRenderState& viewState = sharedPrimaryShadow
+            ? PrimaryView().State()
+            : ActiveRenderView().State();
         uint32_t activeCascadeMask = viewState.sunShadowCascadeUpdateMask;
-        const bool sameCameraFamily = shadowCameraFamilyCache_.valid &&
+        const bool sameCameraFamily = sharedPrimaryShadow || (shadowCameraFamilyCache_.valid &&
             shadowCameraFamilyCache_.scene == &scene &&
             shadowCameraFamilyCache_.sceneGeneration == SceneGeneration() &&
             std::memcmp(&shadowCameraFamilyCache_.cascades, &viewState.cachedSunCascades,
-                        sizeof(Assets::CascadeShadowSetup)) == 0;
+                        sizeof(Assets::CascadeShadowSetup)) == 0);
         if (!sameCameraFamily)
         {
             // A shared shadow image set currently contains another camera family's cascades.
