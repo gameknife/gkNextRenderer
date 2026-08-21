@@ -757,7 +757,23 @@ bool NextRendererGameInstance::OnMouseButton(SDL_Event& event)
         auto mousePos = GetEngine().GetMousePos();
         glm::vec3 org;
         glm::vec3 dir;
-        Runtime::EngineHelper::GetScreenToWorldRay(mousePos, org, dir);
+        if (GetEngine().GetOptions().ReferenceMode)
+        {
+            // Reference views occupy a 2x2 grid. Keep picking anchored to the first
+            // view so the shared scene camera is unprojected with that view's aspect.
+            const auto& renderExtent = GetEngine().GetRenderer().SwapChain().RenderExtent();
+            const glm::vec2 referenceExtent{
+                static_cast<float>(std::max(1u, renderExtent.width / 2u)),
+                static_cast<float>(std::max(1u, renderExtent.height / 2u))};
+            Assets::Camera pickCamera = GetEngine().GetScene().GetRenderCamera();
+            OverrideRenderCamera(pickCamera);
+            Runtime::EngineHelper::GetScreenToWorldRayWithCamera(
+                pickCamera, mousePos, glm::vec2(0.0f), referenceExtent, org, dir);
+        }
+        else
+        {
+            Runtime::EngineHelper::GetScreenToWorldRay(mousePos, org, dir);
+        }
         GetEngine().RayCast( org, dir, [this](Assets::RayCastResult result)
         {
             if (result.Hit)
