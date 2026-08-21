@@ -89,7 +89,7 @@ namespace NextUI::Theme
                 return;
             }
 
-            const UserInterface::FUiTextureHandle texture =
+            const IUserInterface::FUiTextureHandle texture =
                 userInterface->RequestUiTexture(GetBrandIconAssetPath(userInterface->UiScale()), false,
                                                  EUiTextureLifetime::Persistent);
             if (!texture.valid || texture.pixelSize.x <= 0.0f || texture.pixelSize.y <= 0.0f)

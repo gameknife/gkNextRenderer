@@ -3,6 +3,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
+#include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
 namespace Vulkan
