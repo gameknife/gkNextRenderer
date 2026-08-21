@@ -131,6 +131,11 @@ void NextRendererGameInstance::DrawTitleBar(const FGameUiFrameContext& context, 
             UpdateMenuRight();
             Runtime::GraphicsDebugPanel::DrawRendererSelector(GetEngine(), GetEngine().GetUserSettings(),
                                                               "##RendererMenuSelector", 180.0f);
+            bool referenceMode = GetEngine().GetOptions().ReferenceMode;
+            if (ImGui::MenuItem("Reference Comparison", nullptr, &referenceMode))
+            {
+                GetEngine().SetReferenceMode(referenceMode);
+            }
             ImGui::EndMenu();
         }
         else

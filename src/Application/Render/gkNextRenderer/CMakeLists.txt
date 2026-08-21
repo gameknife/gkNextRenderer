@@ -9,6 +9,7 @@ set(gkNextRendererModules
     LDrawLoader
     ScadLoader
     SplatLoader
+    RenderViews
 )
 if(GK_ENABLE_VITURE)
     list(APPEND gkNextRendererModules NextViture)

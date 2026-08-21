@@ -1229,6 +1229,31 @@ void NextEngine::ResetProgressiveRenderingAccumulation()
     progressiveRender_.accumulatedFrames = 0;
 }
 
+bool NextEngine::SetReferenceMode(const bool enabled)
+{
+    if (options_ == nullptr || options_->ReferenceMode == enabled)
+    {
+        return false;
+    }
+
+    options_->ReferenceMode = enabled;
+    ApplyReferenceModeFromOptions();
+    return true;
+}
+
+void NextEngine::ApplyReferenceModeFromOptions()
+{
+    if (renderer_ == nullptr)
+    {
+        return;
+    }
+
+    renderer_->RenderViews().InvalidateAllTemporalHistory(Vulkan::EHistoryInvalidationReason::RendererChanged);
+    renderer_->RequestRecreateSwapChain();
+    ResetProgressiveRenderingAccumulation();
+    GkProfiling::Message(fmt::format("Reference comparison {}", options_->ReferenceMode ? "enabled" : "disabled"));
+}
+
 bool NextEngine::RequestRendererType(const Vulkan::ERendererType type)
 {
     if (!renderer_)

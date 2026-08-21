@@ -183,6 +183,8 @@ public:
     void SetProgressiveRendering(bool enable);
     void ResetProgressiveRenderingAccumulation();
     bool RequestRendererType(Vulkan::ERendererType type);
+    bool SetReferenceMode(bool enabled);
+    void ApplyReferenceModeFromOptions();
     bool SetUpscalerConfiguration(Rendering::Upscaler::EUpscalerType type, uint32_t mode);
     bool ApplyUpscalerConfigurationFromSettings();
     bool IsProgressiveRendering() const { return progressiveRender_.enabled; }

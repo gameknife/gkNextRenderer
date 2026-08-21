@@ -3,6 +3,7 @@
 #include "Engine/Runtime/Config/ShowFlags.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Options.hpp"
 #include <functional>
 
 namespace
@@ -48,6 +49,14 @@ namespace
         }
     }
 
+    void ApplyReferenceModeIfPossible(NextEngine* engine)
+    {
+        if (engine != nullptr && engine->GetEngineStatus() != NextRenderer::EApplicationStatus::Starting)
+        {
+            engine->ApplyReferenceModeFromOptions();
+        }
+    }
+
     void ApplyBorderlessFullscreenIfPossible(NextEngine* engine, const Runtime::Config::UserSettings& settings)
     {
         if (!engine)
@@ -63,11 +72,13 @@ namespace NextCVar
 {
     void RegisterEngineCVars(FCVarSystem& cvars, Runtime::Config::UserSettings& settings, Runtime::Config::ShowFlags& showFlags, NextEngine* engine)
     {
+        Runtime::Config::Options& options = engine->GetOptions();
         GK_CVAR_UINT("r.temporalFrames", settings, TemporalFrames, 16, ECVarFlags::Archive, "Moving-object history rejection frames");
         GK_CVAR_INT("r.samples", settings, NumberOfSamples, 2, ECVarFlags::Archive, "Samples per pixel");
         GK_CVAR_UINT("r.bounces", settings, NumberOfBounces, 8, ECVarFlags::Archive, "Ray bounce count");
         GK_CVAR_BOOL("r.progressiveRender", settings, ProgressiveRender, false, ECVarFlags::Archive, "Enable progressive rendering while the camera is idle");
         GK_CVAR_INT_CB("r.rendererType", settings, RendererType, 0, ECVarFlags::Archive, "Renderer type (0=PathTracing,1=SoftwareTracing,2=SoftwareModern,3=VoxelTracing,4=SoftwareModernNoAmbient,5=PathTracingLite)", std::bind(ApplyRendererIfPossible, engine, std::cref(settings)));
+        GK_CVAR_BOOL_CB("r.reference", options, ReferenceMode, options.ReferenceMode, ECVarFlags::None, "Render the four-way reference renderer comparison", std::bind(ApplyReferenceModeIfPossible, engine));
         GK_CVAR_UINT("r.maxBounces", settings, MaxNumberOfBounces, 10, ECVarFlags::Archive, "Maximum ray bounce count");
         GK_CVAR_BOOL("r.gtao.enable", settings, GTAOEnable, true, ECVarFlags::Archive, "Enable half-resolution GTAO for SoftwareModernNoAmbient sky lighting");
         GK_CVAR_INT("r.gtao.quality", settings, GTAOQuality, 1, ECVarFlags::Archive, "GTAO sampling quality (0=low 16 taps,1=medium 36 taps,2=high 64 taps,3=ultra 120 taps)");

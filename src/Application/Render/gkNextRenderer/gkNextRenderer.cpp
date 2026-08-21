@@ -43,6 +43,7 @@
 #include "Engine/Vulkan/Device.hpp"
 #include "Modules/LDrawLoader/LDrawModule.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
+#include "Modules/RenderViews/OffscreenRenderViewController.hpp"
 #if GK_WITH_VITURE
 #include "Modules/DevTools/VitureDebugPanel.hpp"
 #include "Modules/NextViture/VitureModule.hpp"
@@ -167,6 +168,11 @@ NextRendererGameInstance::NextRendererGameInstance(Vulkan::WindowConfig& config,
 
 void NextRendererGameInstance::OnInit()
 {
+    // Reference comparison is an auxiliary multi-view render path. Keep the
+    // provider installed even when the application starts in normal mode so
+    // r.reference can switch it on without restarting the process.
+    RenderViews::OffscreenViews(GetEngine().GetRenderer());
+
     // Keep the viewport clean on startup. The Stats button remains available in
     // the bottom status bar for sessions that need the diagnostic overlay.
     GetEngine().GetUserSettings().ShowOverlay = false;
