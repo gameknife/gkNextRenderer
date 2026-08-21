@@ -43,6 +43,9 @@ public struct FPathTracingRenderer{
     public bool FuzzyTracing = false;
     public bool ForceExitAfterFirst = false;
     public bool EnableSoftTracingAdaptiveOffset = false;
+    // Tangential jitter radius for fuzzy ambient-cube samples, in local cube-cell units.
+    // Kept disabled by default so non-ambient renderers retain their existing sampling sequence.
+    public float AmbientCubePositionJitter = 0.0f;
     public bool UseAmbientCubeTerminal = true;
     public bool WriteOutputs = true;
     // Secondary (post-first-bounce) direct lighting strategy, decoupled from any cache:
@@ -393,10 +396,59 @@ public struct FPathTracingRenderer{
         float surfaceOffset = EnableSoftTracingAdaptiveOffset
             ? max(HitNormalOffset, GetAmbientCubeUnitAtPosition(inVertex.Position) * 0.5f)
             : HitNormalOffset;
-        const float3 traceOrigin = inVertex.Position + inVertex.Normal * surfaceOffset * startPosOffset;
+        const float3 originalTraceOrigin =
+            inVertex.Position + inVertex.Normal * surfaceOffset * startPosOffset;
+        float3 traceOrigin = originalTraceOrigin;
+        float jitterRadius = 0.0f;
+        if (FuzzyTracing && AmbientCubePositionJitter > 0.0f)
+        {
+            // Keep the jitter on the shading plane. A full 3D offset can move the query through
+            // the surface and turn the ambient-cube leak test into a source of dark/firefly hits.
+            float3 tangent;
+            float3 bitangent;
+            orthonormalBasis(normalize(inVertex.Normal), tangent, bitangent);
+            jitterRadius = AmbientCubePositionJitter * GetAmbientCubeUnitAtPosition(inVertex.Position);
+            const float2 jitter = RandomInUnitDisk(randomSeed) * jitterRadius;
+            traceOrigin += tangent * jitter.x + bitangent * jitter.y;
+        }
         float hitDist = 0.0f;
-        if (!tracer.TraceRay(traceOrigin, traceDir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode,
-                             tempColor, hitDist))
+        bool traceHit = false;
+        if (FuzzyTracing && jitterRadius > 0.0f)
+        {
+            // The unjittered query is the conservative leak guard. Only use the jittered color
+            // when the original position also sees an ambient-cube hit; otherwise a tangent
+            // offset that crossed a thin occluder could pull light from its far side.
+            Vertex originalVertex = inVertex;
+            NodeProxy originalNode = {};
+            float4 originalColor = float4(0, 0, 0, 1);
+            float originalHitDist = 0.0f;
+            const bool originalHit = tracer.TraceRay(
+                originalTraceOrigin, traceDir, PT_MAX_TRACE_DISTANCE, originalVertex, originalNode,
+                originalColor, originalHitDist);
+            if (originalHit)
+            {
+                Vertex jitterVertex = originalVertex;
+                NodeProxy jitterNode = originalNode;
+                float4 jitterColor = float4(0, 0, 0, 1);
+                float jitterHitDist = 0.0f;
+                const bool jitterHit = tracer.TraceRay(
+                    traceOrigin, traceDir, PT_MAX_TRACE_DISTANCE, jitterVertex, jitterNode,
+                    jitterColor, jitterHitDist);
+
+                inVertex = originalVertex;
+                hitNode = originalNode;
+                tempColor = jitterHit ? (originalColor + jitterColor) * 0.5f : originalColor;
+                hitDist = originalHitDist;
+                traceHit = true;
+            }
+        }
+        else
+        {
+            traceHit = tracer.TraceRay(traceOrigin, traceDir, PT_MAX_TRACE_DISTANCE, inVertex,
+                                       hitNode, tempColor, hitDist);
+        }
+
+        if (!traceHit)
         {
             // Miss: escaped into the sky.
             const float4 skyColor = Common.SampleSkyRadiance(traceDir, 0.0f);

@@ -22,6 +22,7 @@ void ShadeSwModernPixel(int2 pixel)
     renderer.SampleDownscale = 2;
     renderer.FuzzyTracing = true;
     renderer.ForceExitAfterFirst = true;
+    renderer.AmbientCubePositionJitter = 2.0f;
     renderer.SecondaryDirectMode = 0;
     renderer.Init(uint2(pixel));
 
