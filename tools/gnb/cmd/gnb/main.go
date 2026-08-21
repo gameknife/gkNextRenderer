@@ -973,22 +973,38 @@ func newIOSCommand(ctx appContext) *cobra.Command {
 	build.Flags().BoolVar(&verbose, "verbose", false, "show normal Xcode build progress output")
 
 	root.AddCommand(build)
-	run := &cobra.Command{
-		Use:   "run",
-		Short: "Launch the signed iOS app on this Apple Silicon Mac",
+	devices := &cobra.Command{
+		Use:   "device",
+		Short: "List available iOS run devices",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			artifact, err := ios.Run(ctx.repoRoot)
+			return ios.ListDevices(cmd.OutOrStdout())
+		},
+	}
+	root.AddCommand(devices)
+
+	requestedDevice := ""
+	run := &cobra.Command{
+		Use:   "run",
+		Short: "Install and launch the signed iOS app on a selected device",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			artifact, device, err := ios.Run(ctx.repoRoot, requestedDevice, cmd.InOrStdin(), cmd.OutOrStdout())
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "[ios] launched %s (%s)\n", artifact.BundleID, artifact.WrapperPath)
-			if artifact.Restaged {
+			if device.IsMac() {
+				fmt.Fprintf(cmd.OutOrStdout(), "[ios] launched %s on %s (%s)\n", artifact.BundleID, device.Name, artifact.WrapperPath)
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "[ios] installed and launched %s on %s (%s)\n", artifact.BundleID, device.Name, device.Identifier)
+			}
+			if device.IsMac() && artifact.Restaged {
 				fmt.Fprintf(cmd.OutOrStdout(), "[ios] launched the current bundle from the persistent Designed-for-iPad wrapper\n")
 			}
 			return nil
 		},
 	}
+	run.Flags().StringVar(&requestedDevice, "device", "", "device ID, UDID, or name; prompts when multiple devices are available")
 
 	root.AddCommand(run)
 	teams := &cobra.Command{

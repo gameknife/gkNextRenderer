@@ -1,6 +1,7 @@
 package ios
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
@@ -11,7 +12,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/cmakerun"
 )
@@ -26,8 +29,31 @@ const (
 	// wrapperDirName keeps the Designed-for-iPad wrappers beside the raw bundle
 	// without colliding with the CMake output layout.
 	wrapperDirName = "DesignedForIpad"
+	macDeviceID    = "mac"
 	lsregisterPath = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 )
+
+type DeviceKind string
+
+const (
+	DeviceKindMac    DeviceKind = "mac"
+	DeviceKindRemote DeviceKind = "remote"
+)
+
+// Device identifies a local Mac or a paired physical iOS device that can
+// receive the built application.
+type Device struct {
+	Identifier string
+	Kind       DeviceKind
+	Name       string
+	Model      string
+	OSVersion  string
+	UDID       string
+}
+
+func (d Device) IsMac() bool {
+	return d.Kind == DeviceKindMac
+}
 
 // StagedApp locates the Designed-for-iPad app prepared for launch. An empty
 // WrapperPath means nothing was staged because the build is unsigned.
@@ -47,6 +73,7 @@ func Build(repoRoot, cmakePath, teamID string, quiet bool, opts cmakerun.BuildOp
 	if quiet {
 		opts.BuildToolArgs = append(opts.BuildToolArgs, "-quiet")
 	}
+	opts = withAutomaticProvisioningUpdates(teamID, opts)
 	// Always write the sole signing input so a previously signed cache cannot
 	// leak into a later unsigned build.
 	opts.ConfigureArgs = append(opts.ConfigureArgs, "-DIOS_DEVELOPMENT_TEAM="+teamID)
@@ -65,6 +92,15 @@ func Build(repoRoot, cmakePath, teamID string, quiet bool, opts cmakerun.BuildOp
 	return stageWrapper(artifact.BundlePath, dittoBundle, codesignCDHash)
 }
 
+func withAutomaticProvisioningUpdates(teamID string, opts cmakerun.BuildOptions) cmakerun.BuildOptions {
+	if teamID != "" {
+		// Let command-line Xcode perform the same automatic signing refresh as
+		// the Xcode UI, including updating expired provisioning profiles.
+		opts.BuildToolArgs = append(opts.BuildToolArgs, "-allowProvisioningUpdates")
+	}
+	return opts
+}
+
 // Artifact identifies the iOS application produced by the device build.
 type Artifact struct {
 	BundlePath string `json:"bundle_path"`
@@ -74,13 +110,271 @@ type Artifact struct {
 	StagedApp `json:"-"`
 }
 
-// Run launches the signed device application on an Apple Silicon Mac as an app
-// designed for iPad.
-func Run(repoRoot string) (Artifact, error) {
+// Run launches the signed application on the requested device. When no device
+// is requested, a single available device is selected automatically and an
+// interactive choice is shown when multiple devices are available.
+func Run(repoRoot, requestedDevice string, input io.Reader, output io.Writer) (Artifact, Device, error) {
 	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
-		return Artifact{}, fmt.Errorf("iOS app launch on this Mac requires macOS arm64; current host is %s/%s", runtime.GOOS, runtime.GOARCH)
+		return Artifact{}, Device{}, fmt.Errorf("iOS app launch requires macOS arm64; current host is %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
-	return runOnMac(repoRoot, verifyCodeSignature, dittoBundle, codesignCDHash, launchWrapper)
+	devices, err := Devices()
+	if err != nil {
+		return Artifact{}, Device{}, err
+	}
+	selected, err := selectDevice(devices, requestedDevice, input, output)
+	if err != nil {
+		return Artifact{}, Device{}, err
+	}
+	if selected.IsMac() {
+		artifact, err := runOnMac(repoRoot, verifyCodeSignature, dittoBundle, codesignCDHash, launchWrapper)
+		return artifact, selected, err
+	}
+
+	artifact, err := runOnPhysicalDevice(repoRoot, selected.Identifier)
+	if err != nil {
+		return Artifact{}, Device{}, err
+	}
+	return artifact, selected, nil
+}
+
+// ListDevices writes the available iOS run targets. CoreDevice's JSON output
+// is used instead of parsing its human-readable table, whose columns are not
+// a stable scripting interface.
+func ListDevices(output io.Writer) error {
+	devices, err := Devices()
+	if err != nil {
+		return err
+	}
+	if output == nil {
+		output = io.Discard
+	}
+	if len(devices) == 0 {
+		fmt.Fprintln(output, "No available iOS run devices found.")
+		return nil
+	}
+
+	fmt.Fprintln(output, "Available iOS run devices:")
+	writer := tabwriter.NewWriter(output, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(writer, "#\tID\tName\tModel\tOS")
+	for index, device := range devices {
+		model := device.Model
+		if device.IsMac() {
+			model = "Apple Silicon Mac"
+		}
+		osVersion := device.OSVersion
+		if osVersion == "" {
+			osVersion = "host"
+		}
+		fmt.Fprintf(writer, "%d\t%s\t%s\t%s\t%s\n", index+1, device.Identifier, device.Name, model, osVersion)
+	}
+	return writer.Flush()
+}
+
+// Devices returns the Mac Designed-for-iPad target plus paired, reachable
+// physical iOS devices known by CoreDevice.
+func Devices() ([]Device, error) {
+	if runtime.GOOS != "darwin" {
+		return nil, fmt.Errorf("iOS devices require macOS; current host is %s", runtime.GOOS)
+	}
+
+	devices := []Device{{
+		Identifier: macDeviceID,
+		Kind:       DeviceKindMac,
+		Name:       "Mac (Designed for iPad)",
+	}}
+	physicalDevices, err := coreDevices()
+	if err != nil {
+		return nil, err
+	}
+	devices = append(devices, physicalDevices...)
+	return devices, nil
+}
+
+type coreDeviceListResponse struct {
+	Info struct {
+		Outcome string `json:"outcome"`
+	} `json:"info"`
+	Result struct {
+		Devices []coreDevice `json:"devices"`
+	} `json:"result"`
+}
+
+type coreDevice struct {
+	Identifier           string `json:"identifier"`
+	ConnectionProperties struct {
+		PairingState  string `json:"pairingState"`
+		TransportType string `json:"transportType"`
+	} `json:"connectionProperties"`
+	DeviceProperties struct {
+		Name            string `json:"name"`
+		OSVersionNumber string `json:"osVersionNumber"`
+	} `json:"deviceProperties"`
+	HardwareProperties struct {
+		Platform      string `json:"platform"`
+		Reality       string `json:"reality"`
+		MarketingName string `json:"marketingName"`
+		UDID          string `json:"udid"`
+	} `json:"hardwareProperties"`
+}
+
+func coreDevices() ([]Device, error) {
+	if _, err := exec.LookPath("xcrun"); err != nil {
+		return nil, fmt.Errorf("xcrun not found; install Xcode command-line tools: %w", err)
+	}
+
+	file, err := os.CreateTemp("", "gknext-devices-*.json")
+	if err != nil {
+		return nil, fmt.Errorf("create devicectl JSON output file: %w", err)
+	}
+	jsonPath := file.Name()
+	defer os.Remove(jsonPath)
+	if err := file.Close(); err != nil {
+		return nil, fmt.Errorf("close devicectl JSON output file: %w", err)
+	}
+
+	cmd := exec.Command("xcrun", "devicectl", "list", "devices", "--json-output", jsonPath)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		detail := strings.TrimSpace(stderr.String())
+		if detail != "" {
+			return nil, fmt.Errorf("list iOS devices with devicectl: %w\n%s", err, detail)
+		}
+		return nil, fmt.Errorf("list iOS devices with devicectl: %w", err)
+	}
+
+	data, err := os.ReadFile(jsonPath)
+	if err != nil {
+		return nil, fmt.Errorf("read devicectl device list: %w", err)
+	}
+	return parseCoreDevices(data)
+}
+
+func parseCoreDevices(data []byte) ([]Device, error) {
+	response := coreDeviceListResponse{}
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, fmt.Errorf("parse devicectl device list: %w", err)
+	}
+	if response.Info.Outcome != "" && response.Info.Outcome != "success" {
+		return nil, fmt.Errorf("devicectl device list outcome: %s", response.Info.Outcome)
+	}
+
+	devices := make([]Device, 0, len(response.Result.Devices))
+	for _, device := range response.Result.Devices {
+		if !isAvailableCoreDevice(device) {
+			continue
+		}
+		name := device.DeviceProperties.Name
+		if name == "" {
+			name = device.HardwareProperties.MarketingName
+		}
+		devices = append(devices, Device{
+			Identifier: device.Identifier,
+			Kind:       DeviceKindRemote,
+			Name:       name,
+			Model:      device.HardwareProperties.MarketingName,
+			OSVersion:  device.DeviceProperties.OSVersionNumber,
+			UDID:       device.HardwareProperties.UDID,
+		})
+	}
+	sort.Slice(devices, func(i, j int) bool {
+		if devices[i].Name == devices[j].Name {
+			return devices[i].Identifier < devices[j].Identifier
+		}
+		return devices[i].Name < devices[j].Name
+	})
+	return devices, nil
+}
+
+func isAvailableCoreDevice(device coreDevice) bool {
+	return device.Identifier != "" &&
+		strings.EqualFold(device.HardwareProperties.Platform, "iOS") &&
+		strings.EqualFold(device.HardwareProperties.Reality, "physical") &&
+		strings.EqualFold(device.ConnectionProperties.PairingState, "paired") &&
+		device.ConnectionProperties.TransportType != ""
+}
+
+func selectDevice(devices []Device, requested string, input io.Reader, output io.Writer) (Device, error) {
+	requested = strings.TrimSpace(requested)
+	if requested != "" {
+		if index, err := strconv.Atoi(requested); err == nil {
+			if index < 1 || index > len(devices) {
+				return Device{}, fmt.Errorf("iOS device number %q is invalid; choose 1-%d", requested, len(devices))
+			}
+			return devices[index-1], nil
+		}
+		matches := make([]Device, 0, 1)
+		for _, device := range devices {
+			if requested == device.Identifier || requested == device.Name || requested == device.UDID {
+				matches = append(matches, device)
+			}
+		}
+		if len(matches) == 1 {
+			return matches[0], nil
+		}
+		if len(matches) > 1 {
+			return Device{}, fmt.Errorf("iOS device selector %q matches multiple devices; use the device ID", requested)
+		}
+		return Device{}, fmt.Errorf("iOS device %q is not available; run `gnb ios device` to list devices", requested)
+	}
+	if len(devices) == 0 {
+		return Device{}, fmt.Errorf("no available iOS run device found; run `gnb ios device` to inspect devices")
+	}
+	if len(devices) == 1 {
+		return devices[0], nil
+	}
+	if input == nil {
+		return Device{}, fmt.Errorf("multiple iOS devices are available; pass `gnb ios run --device <ID>`")
+	}
+	if output == nil {
+		output = io.Discard
+	}
+
+	fmt.Fprintln(output, "Multiple iOS run devices are available:")
+	for index, device := range devices {
+		fmt.Fprintf(output, "  %d) %s (%s)\n", index+1, device.Name, device.Identifier)
+	}
+	fmt.Fprint(output, "Select device [1]: ")
+	line, err := bufio.NewReader(input).ReadString('\n')
+	if err != nil && err != io.EOF {
+		return Device{}, fmt.Errorf("read iOS device selection: %w", err)
+	}
+	choice := strings.TrimSpace(line)
+	if choice == "" {
+		return devices[0], nil
+	}
+	index, err := strconv.Atoi(choice)
+	if err != nil || index < 1 || index > len(devices) {
+		return Device{}, fmt.Errorf("invalid iOS device selection %q; choose 1-%d", choice, len(devices))
+	}
+	return devices[index-1], nil
+}
+
+func runOnPhysicalDevice(repoRoot, deviceIdentifier string) (Artifact, error) {
+	artifact, err := ReadArtifact(repoRoot)
+	if err != nil {
+		return Artifact{}, err
+	}
+	if err := verifyCodeSignature(artifact.BundlePath); err != nil {
+		return Artifact{}, fmt.Errorf("iOS app signature is not valid: %w\nrebuild with `gnb ios build --team-id <TEAM_ID>` before running", err)
+	}
+	if err := runDevicectl("device", "install", "app", "--device", deviceIdentifier, artifact.BundlePath); err != nil {
+		return Artifact{}, fmt.Errorf("install iOS app on %s: %w", deviceIdentifier, err)
+	}
+	if err := runDevicectl("device", "process", "launch", "--device", deviceIdentifier, "--terminate-existing", artifact.BundleID); err != nil {
+		return Artifact{}, fmt.Errorf("launch iOS app on %s: %w", deviceIdentifier, err)
+	}
+	return artifact, nil
+}
+
+func runDevicectl(args ...string) error {
+	cmd := exec.Command("xcrun", append([]string{"devicectl"}, args...)...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func runOnMac(repoRoot string, verify func(string) error, copyBundle bundleCopier, hashBundle bundleHasher, launch func(string) error) (Artifact, error) {

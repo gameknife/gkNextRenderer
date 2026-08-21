@@ -5,8 +5,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/cmakerun"
 )
 
 func TestDeviceBuildConstants(t *testing.T) {
@@ -15,6 +18,107 @@ func TestDeviceBuildConstants(t *testing.T) {
 	}
 	if target != "gkNextRenderer" {
 		t.Fatalf("target = %q, want gkNextRenderer", target)
+	}
+}
+
+func TestSignedBuildEnablesAutomaticProvisioningUpdates(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		teamID string
+		want   []string
+	}{
+		{name: "signed", teamID: "ABCDE12345", want: []string{"-allowProvisioningUpdates"}},
+		{name: "unsigned", want: nil},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got := withAutomaticProvisioningUpdates(test.teamID, cmakerun.BuildOptions{})
+			if !reflect.DeepEqual(got.BuildToolArgs, test.want) {
+				t.Fatalf("BuildToolArgs = %#v, want %#v", got.BuildToolArgs, test.want)
+			}
+		})
+	}
+}
+
+func TestParseCoreDevicesFiltersUnavailableAndSorts(t *testing.T) {
+	data := []byte(`{
+        "info": {"outcome": "success"},
+        "result": {"devices": [
+            {
+                "identifier": "offline",
+                "connectionProperties": {"pairingState": "paired"},
+                "deviceProperties": {"name": "Offline iPad", "osVersionNumber": "18.0"},
+                "hardwareProperties": {"platform": "iOS", "reality": "physical", "marketingName": "iPad", "udid": "offline-udid"}
+            },
+            {
+                "identifier": "z-device",
+                "connectionProperties": {"pairingState": "paired", "transportType": "localNetwork"},
+                "deviceProperties": {"name": "Zeta iPad", "osVersionNumber": "26.5"},
+                "hardwareProperties": {"platform": "iOS", "reality": "physical", "marketingName": "iPad Pro", "udid": "z-udid"}
+            },
+            {
+                "identifier": "a-device",
+                "connectionProperties": {"pairingState": "paired", "transportType": "wired"},
+                "deviceProperties": {"name": "Alpha iPad", "osVersionNumber": "18.3"},
+                "hardwareProperties": {"platform": "iOS", "reality": "physical", "marketingName": "iPad mini", "udid": "a-udid"}
+            }
+        ]}
+    }`)
+
+	devices, err := parseCoreDevices(data)
+	if err != nil {
+		t.Fatalf("parseCoreDevices() error = %v", err)
+	}
+	want := []Device{
+		{Identifier: "a-device", Kind: DeviceKindRemote, Name: "Alpha iPad", Model: "iPad mini", OSVersion: "18.3", UDID: "a-udid"},
+		{Identifier: "z-device", Kind: DeviceKindRemote, Name: "Zeta iPad", Model: "iPad Pro", OSVersion: "26.5", UDID: "z-udid"},
+	}
+	if !reflect.DeepEqual(devices, want) {
+		t.Fatalf("parseCoreDevices() = %#v, want %#v", devices, want)
+	}
+}
+
+func TestSelectDevicePromptsWhenMultipleAreAvailable(t *testing.T) {
+	devices := []Device{
+		{Identifier: macDeviceID, Kind: DeviceKindMac, Name: "Mac (Designed for iPad)"},
+		{Identifier: "ipad-device", Kind: DeviceKindRemote, Name: "Test iPad", UDID: "test-udid"},
+	}
+	var output strings.Builder
+	selected, err := selectDevice(devices, "", strings.NewReader("2\n"), &output)
+	if err != nil {
+		t.Fatalf("selectDevice() error = %v", err)
+	}
+	if selected.Identifier != "ipad-device" {
+		t.Fatalf("selected device = %#v, want ipad-device", selected)
+	}
+	if !strings.Contains(output.String(), "Multiple iOS run devices") {
+		t.Fatalf("selection prompt missing from output: %s", output.String())
+	}
+}
+
+func TestSelectDeviceMatchesIdentifierNameOrUDID(t *testing.T) {
+	device := Device{Identifier: "ipad-device", Kind: DeviceKindRemote, Name: "Test iPad", UDID: "test-udid"}
+	for _, selector := range []string{"ipad-device", "Test iPad", "test-udid"} {
+		selected, err := selectDevice([]Device{device}, selector, nil, nil)
+		if err != nil {
+			t.Fatalf("selectDevice(%q) error = %v", selector, err)
+		}
+		if selected.Identifier != device.Identifier {
+			t.Fatalf("selectDevice(%q) = %#v, want %#v", selector, selected, device)
+		}
+	}
+}
+
+func TestSelectDeviceMatchesListNumber(t *testing.T) {
+	devices := []Device{
+		{Identifier: macDeviceID, Kind: DeviceKindMac, Name: "Mac (Designed for iPad)"},
+		{Identifier: "ipad-device", Kind: DeviceKindRemote, Name: "Test iPad"},
+	}
+	selected, err := selectDevice(devices, "2", nil, nil)
+	if err != nil {
+		t.Fatalf("selectDevice(2) error = %v", err)
+	}
+	if selected.Identifier != "ipad-device" {
+		t.Fatalf("selectDevice(2) = %#v, want ipad-device", selected)
 	}
 }
 

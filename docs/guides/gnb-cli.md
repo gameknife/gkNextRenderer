@@ -176,6 +176,18 @@ wrapper 仅在 bundle 的 CDHash 变化时重建：app 每获得一个新的磁�
 开发者证书（app 用 Apple Development 证书签名，未经公证）。因此每编译出一个新版本，首次启动需要在
 弹窗中批准一次，否则 app 会一直挂起；之后重复 `gnb ios run` 不再询问。
 
-真机安装、调试和断点仍由 Xcode 工程完成，该工程照常生成。
+可运行设备通过 CoreDevice 的 `devicectl` 发现和部署：
+
+```bash
+./gnb.sh ios device
+./gnb.sh ios run
+./gnb.sh ios run --device <设备 ID、UDID 或名称>
+```
+
+`ios device` 列出本机 Mac Designed for iPad 和已配对、可连接的物理 iOS/iPadOS 设备。
+`ios run` 只有一个可选设备时自动使用它，设备多于一个时显示交互式选择；脚本或 CI 应传
+`--device <编号>`（也支持设备 ID、UDID 或名称）。列表编号可直接用于 `ios run --device`，物理设备使用 `devicectl device install app` 和 `devicectl device process launch`，
+因此需要设备已配对并开启 Developer Mode；Mac 目标仍使用上面的 Designed-for-iPad wrapper。
+真机调试和断点仍可由 Xcode 接管。
 
 `init` 可在仓库外克隆新 checkout；其他大多数命令要求能发现 `gnb.toml`。也可通过 `--repo-root` 或 `GNB_REPO_ROOT` 明确仓库根。
