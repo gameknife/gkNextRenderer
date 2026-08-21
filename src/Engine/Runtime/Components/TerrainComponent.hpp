@@ -63,6 +63,15 @@ namespace Runtime
         bool IsWalkable(float worldX, float worldZ, float maxSlopeDeg = 45.0f) const;
         uint8_t BiomeId(float worldX, float worldZ) const;
 
+        // True when the point is inside this terrain's domain rather than being
+        // clamped to its border. Every query above clamps silently, which is
+        // the right answer for one terrain and the wrong one for a scene that
+        // holds several — a generated geo area is a grid of them — so this is
+        // what lets a caller pick the terrain the point actually belongs to.
+        bool ContainsWorld(float worldX, float worldZ) const;
+        // World-space XZ extent of the domain; false without data.
+        bool WorldBoundsXZ(glm::vec2& outMin, glm::vec2& outMax) const;
+
         // Read-only reflection info.
         int GetCellsX() const { return data_ ? data_->cellsX : 0; }
         int GetCellsY() const { return data_ ? data_->cellsY : 0; }

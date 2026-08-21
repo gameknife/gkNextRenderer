@@ -3,6 +3,7 @@
 #include "Engine/Runtime/Reflection/PropertyMeta.hpp"
 
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 
 namespace Runtime
@@ -235,6 +236,44 @@ namespace Runtime
         }
         const int cell = CellIndexAt(local);
         return cell >= 0 ? data_->biome[cell] : 0;
+    }
+
+    bool TerrainComponent::ContainsWorld(float worldX, float worldZ) const
+    {
+        glm::dvec2 local;
+        if (!WorldToLocal(worldX, worldZ, local))
+        {
+            return false;
+        }
+        // Half a cell of slack on each side: neighbouring terrains in a grid
+        // share their border exactly, and a query landing on the seam has to
+        // resolve to one of them rather than to neither.
+        const double slackX = data_->cellsX > 0 ? 0.5 * data_->sizeX / data_->cellsX : 0.0;
+        const double slackY = data_->cellsY > 0 ? 0.5 * data_->sizeY / data_->cellsY : 0.0;
+        return std::abs(local.x) <= data_->sizeX * 0.5 + slackX &&
+               std::abs(local.y) <= data_->sizeY * 0.5 + slackY;
+    }
+
+    bool TerrainComponent::WorldBoundsXZ(glm::vec2& outMin, glm::vec2& outMax) const
+    {
+        if (!HasData())
+        {
+            return false;
+        }
+        const double hx = data_->sizeX * 0.5;
+        const double hy = data_->sizeY * 0.5;
+        glm::vec2 lo(FLT_MAX);
+        glm::vec2 hi(-FLT_MAX);
+        for (int k = 0; k < 4; ++k)
+        {
+            const glm::dvec4 corner((k & 1) ? hx : -hx, (k & 2) ? hy : -hy, 0.0, 1.0);
+            const glm::dvec4 world = data_->localToWorld * corner;
+            lo = glm::min(lo, glm::vec2(world.x, world.z));
+            hi = glm::max(hi, glm::vec2(world.x, world.z));
+        }
+        outMin = lo;
+        outMax = hi;
+        return true;
     }
 
     void TerrainComponent::RegisterReflection()

@@ -171,17 +171,45 @@ func planWater(ir *IR, g *HeightGrid, elevation []float64) WaterPlan {
 // footprints, masking them out and interpolating from the surrounding ground
 // recovers a usable bare-earth model for free.
 func BuildTerrain(tile Tile, ir *IR, sampler ElevationSource, debugDir string) (*HeightGrid, TerrainReport, error) {
-	n := tile.Cells + 1 // vertex grid: cells+1 samples per axis
-	cell := tile.SizeM / float64(tile.Cells)
-	origin := -tile.SizeM / 2
+	return BuildTerrainField(TerrainArea{
+		SizeM: tile.SizeM, Cells: tile.Cells, Unproject: tile.Unproject,
+	}, ir, sampler, debugDir)
+}
+
+// TerrainArea is the ground BuildTerrainField works over. For a standalone tile
+// that is the tile; for an area it is the whole grid of parts at once.
+//
+// The distinction matters because every step below this line is a
+// *neighbourhood* operation: the morphological ground filter reaches 12 cells
+// (68 m), the footprint inpaint pulls from whatever is around the hole, the
+// blur averages a 5x5, and the water plan and datum are single numbers derived
+// from the whole sample set. Run per part, each of those clamps at the part
+// border and the two sides of a seam disagree — measured on two adjacent
+// Manhattan parts, mean 0.24 m and max 0.98 m, which is a visible crack and a
+// nav-grid cut. Run once over the area and sliced afterwards, the shared edge
+// samples are literally the same numbers.
+type TerrainArea struct {
+	SizeM float64 // side length of the whole area
+	Cells int     // terrain cells per axis over the whole area
+	// Unproject maps area-local metres back to WGS84 for the DEM sampler.
+	Unproject func(x, y float64) (lat, lon float64)
+}
+
+// BuildTerrainField resamples the DEM over the area, strips it from a DSM to a
+// DTM, plans the water and returns the vertex grid plus a data-quality report.
+// The IR it reads (footprints, water polygons, coastline) must be in the same
+// area-local frame as the grid.
+func BuildTerrainField(area TerrainArea, ir *IR, sampler ElevationSource, debugDir string) (*HeightGrid, TerrainReport, error) {
+	n := area.Cells + 1 // vertex grid: cells+1 samples per axis
+	cell := area.SizeM / float64(area.Cells)
+	origin := -area.SizeM / 2
 	grid := NewHeightGrid(n, n, origin, origin, cell, cell)
 	report := TerrainReport{Samples: n * n}
 
-	proj := NewProj(tile.Lat, tile.Lon)
 	raw := make([]float64, n*n)
 	for row := 0; row < n; row++ {
 		for col := 0; col < n; col++ {
-			lat, lon := proj.Inverse(grid.PosX(col), grid.PosY(row))
+			lat, lon := area.Unproject(grid.PosX(col), grid.PosY(row))
 			v, ok := sampler.At(lat, lon)
 			if !ok {
 				v = 0
@@ -474,19 +502,46 @@ func dilate(v []float64, w, h, radius int) []float64 {
 	return morph(v, w, h, radius, math.Max)
 }
 
+// morph runs a min/max over a square window. It is separable and done in two
+// passes: a min (or max) over a clipped rectangle is the same number whichever
+// axis is reduced first, so this is bit-for-bit what the naive double loop
+// produced — but (2r+1)+(2r+1) taps instead of (2r+1)^2. At radius 12 that is
+// 50 taps rather than 625, which is the difference between seconds and minutes
+// once the grid is 881^2 (a 5x5 area) instead of 177^2.
 func morph(v []float64, w, h, radius int, pick func(a, b float64) float64) []float64 {
+	tmp := make([]float64, len(v))
+	for row := 0; row < h; row++ {
+		base := row * w
+		for col := 0; col < w; col++ {
+			lo := col - radius
+			if lo < 0 {
+				lo = 0
+			}
+			hi := col + radius
+			if hi > w-1 {
+				hi = w - 1
+			}
+			best := v[base+lo]
+			for c := lo + 1; c <= hi; c++ {
+				best = pick(best, v[base+c])
+			}
+			tmp[base+col] = best
+		}
+	}
 	out := make([]float64, len(v))
 	for row := 0; row < h; row++ {
+		lo := row - radius
+		if lo < 0 {
+			lo = 0
+		}
+		hi := row + radius
+		if hi > h-1 {
+			hi = h - 1
+		}
 		for col := 0; col < w; col++ {
-			best := v[row*w+col]
-			for dr := -radius; dr <= radius; dr++ {
-				for dc := -radius; dc <= radius; dc++ {
-					r, c := row+dr, col+dc
-					if r < 0 || r >= h || c < 0 || c >= w {
-						continue
-					}
-					best = pick(best, v[r*w+c])
-				}
+			best := tmp[lo*w+col]
+			for r := lo + 1; r <= hi; r++ {
+				best = pick(best, tmp[r*w+col])
 			}
 			out[row*w+col] = best
 		}

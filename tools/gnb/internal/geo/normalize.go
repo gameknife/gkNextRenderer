@@ -12,11 +12,13 @@ import (
 // rings assembled, heights inferred.
 func Normalize(tile Tile, elements []osmElement, profile HeightProfile,
 	landmarks map[int64]float64) *IR {
-	p := NewProj(tile.Lat, tile.Lon)
+	// Tile.Project, not Proj.Forward: a mosaic part borrows the area's tangent
+	// plane and subtracts its own offset, so its coordinates stay part-local
+	// while the metric frame stays shared with its neighbours.
 	project := func(g []osmPoint) [][2]float64 {
 		out := make([][2]float64, 0, len(g))
 		for _, q := range g {
-			x, y := p.Forward(q.Lat, q.Lon)
+			x, y := tile.Project(q.Lat, q.Lon)
 			out = append(out, [2]float64{x, y})
 		}
 		return out
@@ -96,7 +98,7 @@ func Normalize(tile Tile, elements []osmElement, profile HeightProfile,
 
 	// POIs are derived last: the footprint and area layers are their primary
 	// sources, and both have to be sorted first for the output to be stable.
-	ir.POIs = CollectPOIs(ir, elements, p.Forward, tile.SizeM/2)
+	ir.POIs = CollectPOIs(ir, elements, tile.Project, tile.SizeM/2)
 	return ir
 }
 

@@ -61,6 +61,12 @@ type POI struct {
 // far above the ground" has to be anchored here rather than at z = 0.
 type TerrainMeta struct {
 	BaseElevation float64 `json:"baseElevation"`
+	// PaletteSpan is the relief the biome colour ramp is measured over, in
+	// metres above the datum. It is a property of the whole area rather than of
+	// one part: left to derive it per terrain, each part of a hillside would
+	// take its own highest point as the top of the ramp and the two sides of a
+	// seam would come out different colours.
+	PaletteSpan float64 `json:"paletteSpan,omitempty"`
 	HasWater      bool    `json:"hasWater"`
 	IsSea         bool    `json:"isSea"`
 	WaterLevel    float64 `json:"waterLevel"`

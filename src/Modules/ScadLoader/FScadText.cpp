@@ -151,6 +151,13 @@ namespace Assets::Scad
         EnsureInit();
         if (!g_ready) return false;
 
+        // One process-wide FT_Face, and FreeType mutates it on every glyph load.
+        // The evaluator may run independent top-level calls on several threads,
+        // so the outline pass is serialised. Text is a rounding error next to
+        // the geometry those threads exist to build.
+        static std::mutex faceMutex;
+        std::lock_guard<std::mutex> faceLock(faceMutex);
+
         FT_Face face = Face();
         const double unitsPerEm = face->units_per_EM ? static_cast<double>(face->units_per_EM) : 1000.0;
         const double scale = size / unitsPerEm;

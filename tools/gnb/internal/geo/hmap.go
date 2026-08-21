@@ -83,6 +83,24 @@ func (g *HeightGrid) Bounds() (lo, hi float64) {
 	return lo, hi
 }
 
+// SubGrid cuts a (cells+1)^2 vertex block out of a larger vertex grid and
+// re-centres it on its own origin.
+//
+// This is how an area's parts get their heightfields: the whole area is
+// filtered as one field and then sliced, so two neighbouring parts do not just
+// agree along their shared edge — they hold literally the same samples, and
+// the seam cannot open no matter what the filtering did.
+func (g *HeightGrid) SubGrid(col0, row0, cells int, originX, originY float64) *HeightGrid {
+	n := cells + 1
+	out := NewHeightGrid(n, n, originX, originY, g.CellX, g.CellY)
+	for row := 0; row < n; row++ {
+		for col := 0; col < n; col++ {
+			out.Values[row*n+col] = g.At(col0+col, row0+row)
+		}
+	}
+	return out
+}
+
 // PosX / PosY give the SCAD coordinate of a sample.
 func (g *HeightGrid) PosX(col int) float64 { return g.OriginX + float64(col)*g.CellX }
 func (g *HeightGrid) PosY(row int) float64 { return g.OriginY + float64(row)*g.CellY }

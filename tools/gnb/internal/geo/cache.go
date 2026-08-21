@@ -59,7 +59,11 @@ func ListTiles(repoRoot string) ([]string, error) {
 			continue
 		}
 		p := NewPaths(repoRoot, entry.Name())
-		if fileExists(p.ScadPath()) && fileExists(p.HmapPath()) && fileExists(p.POIPath()) {
+		if !fileExists(p.ScadPath()) || !fileExists(p.POIPath()) {
+			continue
+		}
+		// One heightfield at the top for a 1x1 area, one per part above that.
+		if fileExists(p.HmapPath()) || fileExists(p.MosaicPath()) {
 			tiles = append(tiles, entry.Name())
 		}
 	}
@@ -69,6 +73,47 @@ func ListTiles(repoRoot string) ([]string, error) {
 
 func (p Paths) CacheDir() string {
 	return filepath.Join(p.RepoRoot, "external", "geocache", p.Tile)
+}
+
+// ---- per-part layout ------------------------------------------------------
+//
+// An area is a grid of 1 km parts (mosaic.go). Each part owns a cache
+// directory and, when there is more than one, an asset directory; a 1x1 area
+// keeps the flat layout the pipeline has always written, so every tile that
+// already exists on disk or in geo.pak stays valid.
+
+// PartCacheDir holds one part's raw download and its IR.
+func (p Paths) PartCacheDir(id string) string {
+	return filepath.Join(p.CacheDir(), "parts", id)
+}
+func (p Paths) PartOsmPath(id string) string {
+	return filepath.Join(p.PartCacheDir(id), "osm", "overpass.json")
+}
+func (p Paths) PartIRPath(id string) string {
+	return filepath.Join(p.PartCacheDir(id), "part.json")
+}
+
+// PartHmapPath is where a part's heightfield goes. `single` is the 1x1 case,
+// which keeps writing assets/geo/<tile>/terrain.hmap.
+func (p Paths) PartHmapPath(id string, single bool) string {
+	if single {
+		return p.HmapPath()
+	}
+	return filepath.Join(p.AssetDir(), "parts", id, "terrain.hmap")
+}
+
+// PartHmapAssetRef is the runtime-root-relative form the TERR literal carries.
+func (p Paths) PartHmapAssetRef(id string, single bool) string {
+	if single {
+		return p.HmapAssetRef()
+	}
+	return GeoAssetRoot + "/" + p.Tile + "/parts/" + id + "/terrain.hmap"
+}
+
+// MosaicPath is the manifest: what parts exist, where they sit, at what level
+// of detail. `gnb geo grow` reads it to know what it can keep.
+func (p Paths) MosaicPath() string {
+	return filepath.Join(p.AssetDir(), "mosaic.json")
 }
 func (p Paths) DemDir() string   { return filepath.Join(p.RepoRoot, "external", "geocache", "_dem") }
 func (p Paths) OsmPath() string  { return filepath.Join(p.CacheDir(), "osm", "overpass.json") }

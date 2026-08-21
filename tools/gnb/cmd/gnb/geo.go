@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/geo"
@@ -15,45 +16,118 @@ import (
 )
 
 // geoFlags is shared by every subcommand so `fetch`/`build`/`scad`/`make` all
-// describe the same tile.
+// describe the same area.
 type geoFlags struct {
-	name     string
-	at       string
-	size     float64
-	cells    int
-	profile  string
-	seed     int
-	debug    bool
-	endpoint string
-	noDetail bool
+	name        string
+	at          string
+	size        float64
+	cells       int
+	profile     string
+	seed        int
+	debug       bool
+	endpoint    string
+	intervalSec float64
+	noDetail    bool
+	fullRings   int
+	mediumRings int
 }
 
 func (f *geoFlags) bind(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&f.name, "name", "", "tile identifier (cache dir + output file name)")
-	cmd.Flags().StringVar(&f.at, "at", "", "tile centre as lat,lon (e.g. 22.2855,114.1580)")
-	cmd.Flags().Float64Var(&f.size, "size", 1000, "tile side length in metres")
-	cmd.Flags().IntVar(&f.cells, "cells", geo.DefaultCells, "terrain grid cells per axis (max 176)")
+	cmd.Flags().StringVar(&f.name, "name", "", "area identifier (cache dir + output file name)")
+	cmd.Flags().StringVar(&f.at, "at", "", "area centre as lat,lon (e.g. 22.2855,114.1580)")
+	cmd.Flags().Float64Var(&f.size, "size", geo.PartSizeM,
+		"side length in metres: an odd multiple of 1000 (1000, 3000, 5000, 7000). "+
+			"Above 1000 the area is a grid of 1 km parts, each with its own terrain")
+	cmd.Flags().IntVar(&f.cells, "cells", geo.DefaultCells, "terrain grid cells per axis, per part (max 176)")
 	cmd.Flags().StringVar(&f.profile, "profile", "default",
 		"regional profile — height fallbacks plus facade/roof rules "+
 			"(default, europe, china, hongkong)")
 	cmd.Flags().IntVar(&f.seed, "seed", 7, "terrain jitter seed")
 	cmd.Flags().BoolVar(&f.debug, "debug-images", false, "write per-stage DEM greyscale PNGs into the cache")
 	cmd.Flags().StringVar(&f.endpoint, "overpass-endpoint", geo.OverpassEndpoint,
-		"Overpass API mirror (switch when the default one keeps refusing the tile)")
+		"Overpass API mirror (switch when the default one keeps refusing the area)")
+	cmd.Flags().Float64Var(&f.intervalSec, "overpass-interval",
+		geo.OverpassMinInterval.Seconds(),
+		"seconds between Overpass requests. The public instances rate-limit per IP, "+
+			"and going faster than this earns a temporary block that costs more than "+
+			"it saves; 0 disables the pacing for a local instance")
 	cmd.Flags().BoolVar(&f.noDetail, "no-detail", false,
 		"emit bare OSM extrusions: no facades, roofs, sidewalks or street furniture")
+	cmd.Flags().IntVar(&f.fullRings, "full-rings", 1,
+		"how many rings of parts get full detail, minimum 1 (ring 0 is the centre "+
+			"part). Use --no-detail to strip decoration from the whole area")
+	cmd.Flags().IntVar(&f.mediumRings, "medium-rings", 2,
+		"how many rings keep building facades but lose street decoration; "+
+			"beyond this a part is bare prisms")
 }
 
-func (f *geoFlags) tile() (geo.Tile, error) {
+func (f *geoFlags) mosaic() (geo.Mosaic, error) {
 	lat, lon, err := parseLatLon(f.at)
 	if err != nil {
-		return geo.Tile{}, err
+		return geo.Mosaic{}, err
 	}
-	t := geo.Tile{
+	m := geo.Mosaic{
 		Name: f.name, Lat: lat, Lon: lon, SizeM: f.size,
 		Cells: f.cells, Profile: f.profile, Seed: f.seed,
+		FullRings: f.fullRings, MediumRings: f.mediumRings,
 	}
-	return t, t.Normalize()
+	return m, m.Normalize()
+}
+
+// grown resolves an existing area and applies whatever the caller overrode.
+// This is what makes the workflow "start at 1 km, resize later": the centre,
+// profile and seed come from what is already on disk, so growing cannot
+// silently re-centre the area.
+func (f *geoFlags) grown(ctx appContext, cmd *cobra.Command) (geo.Mosaic, error) {
+	if strings.TrimSpace(f.name) == "" {
+		return geo.Mosaic{}, fmt.Errorf("grow needs a --name")
+	}
+	m, ok, err := geo.LoadMosaic(ctx.repoRoot, f.name)
+	if err != nil {
+		return geo.Mosaic{}, err
+	}
+	if !ok {
+		meta, found, err := geo.LoadFetchMeta(ctx.repoRoot, f.name)
+		if err != nil {
+			return geo.Mosaic{}, err
+		}
+		if !found {
+			return geo.Mosaic{}, fmt.Errorf("no area named %q yet — run `gnb geo make --name %s "+
+				"--at <lat>,<lon>` first", f.name, f.name)
+		}
+		// A tile generated before areas existed: the centre is all the metadata
+		// carries, so the rest falls back to the flag defaults.
+		console.Info("no manifest for %q — taking the centre from its fetch metadata", f.name)
+		m = geo.Mosaic{
+			Name: f.name, Lat: meta.Lat, Lon: meta.Lon, SizeM: meta.SizeM,
+			Cells: f.cells, Profile: f.profile, Seed: f.seed,
+		}
+	}
+	if cmd.Flags().Changed("size") {
+		m.SizeM = f.size
+	}
+	if cmd.Flags().Changed("at") {
+		lat, lon, err := parseLatLon(f.at)
+		if err != nil {
+			return geo.Mosaic{}, err
+		}
+		m.Lat, m.Lon = lat, lon
+	}
+	for _, o := range []struct {
+		flag string
+		set  func()
+	}{
+		{"cells", func() { m.Cells = f.cells }},
+		{"profile", func() { m.Profile = f.profile }},
+		{"seed", func() { m.Seed = f.seed }},
+		{"full-rings", func() { m.FullRings = f.fullRings }},
+		{"medium-rings", func() { m.MediumRings = f.mediumRings }},
+	} {
+		if cmd.Flags().Changed(o.flag) {
+			o.set()
+		}
+	}
+	return m, m.Normalize()
 }
 
 func parseLatLon(s string) (float64, float64, error) {
@@ -82,7 +156,12 @@ func newGeoCommand(ctx appContext) *cobra.Command {
 			"  build  -> normalised IR + assets/geo/<tile>/terrain.hmap + poi.json\n" +
 			"  scad   -> assets/geo/<tile>/<tile>.scad\n" +
 			"  make   all of the above\n" +
+			"  grow   resize an area that already exists (only the new parts are fetched)\n" +
 			"  pak    every tile under assets/geo -> assets/paks/geo.pak\n\n" +
+			"An area of more than 1000 m is a grid of 1 km parts, each with its own\n" +
+			"176-cell terrain, all placed in one scene. The heightfield, the water plane\n" +
+			"and the datum are derived once for the whole area and sliced, so the parts\n" +
+			"meet without a step.\n\n" +
 			"Raw downloads and the IR are ODbL-derived databases and stay out of the\n" +
 			"repository; the generated .scad and .hmap carry the required attribution.\n" +
 			"assets/geo is gitignored as well: tiles are bulky and reproducible, so they\n" +
@@ -92,6 +171,7 @@ func newGeoCommand(ctx appContext) *cobra.Command {
 	cmd.AddCommand(newGeoBuildCommand(ctx))
 	cmd.AddCommand(newGeoScadCommand(ctx))
 	cmd.AddCommand(newGeoMakeCommand(ctx))
+	cmd.AddCommand(newGeoGrowCommand(ctx))
 	cmd.AddCommand(newGeoPakCommand(ctx))
 	return cmd
 }
@@ -103,7 +183,16 @@ func geoOptions(ctx appContext, f geoFlags) geo.Options {
 	if f.endpoint != "" {
 		opt.OverpassEndpoint = f.endpoint
 	}
+	if f.intervalSec > 0 {
+		opt.OverpassInterval = time.Duration(f.intervalSec * float64(time.Second))
+	} else {
+		opt.OverpassInterval = -1 // explicit "no pacing"
+	}
+	// --no-detail is the escape hatch back to the bare extrusion, so it clears
+	// both decoration layers; the level-of-detail rings control them separately.
 	opt.Emit.Detail = !f.noDetail
+	opt.Emit.StreetDetail = !f.noDetail
+	opt.Emit.Trees = !f.noDetail
 	return opt
 }
 
@@ -117,13 +206,13 @@ func newGeoFetchCommand(ctx appContext) *cobra.Command {
 	var f geoFlags
 	cmd := &cobra.Command{
 		Use:   "fetch",
-		Short: "Download the raw DEM and OSM data for a tile (cached)",
+		Short: "Download the raw DEM and OSM data for every part (cached)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			tile, err := f.tile()
+			m, err := f.mosaic()
 			if err != nil {
 				return err
 			}
-			meta, err := geo.Fetch(tile, geoOptions(ctx, f), geoLog)
+			meta, err := geo.Fetch(m, geoOptions(ctx, f), geoLog)
 			if err != nil {
 				return err
 			}
@@ -141,13 +230,13 @@ func newGeoBuildCommand(ctx appContext) *cobra.Command {
 	var f geoFlags
 	cmd := &cobra.Command{
 		Use:   "build",
-		Short: "Normalise the cached data into the IR and write terrain.hmap",
+		Short: "Normalise the cached data into the IR and write every part's terrain.hmap",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			tile, err := f.tile()
+			m, err := f.mosaic()
 			if err != nil {
 				return err
 			}
-			_, err = geo.Build(tile, geoOptions(ctx, f), geoLog)
+			_, err = geo.Build(m, geoOptions(ctx, f), geoLog)
 			return err
 		},
 	}
@@ -159,13 +248,13 @@ func newGeoScadCommand(ctx appContext) *cobra.Command {
 	var f geoFlags
 	cmd := &cobra.Command{
 		Use:   "scad",
-		Short: "Emit the .scad scene from the cached IR + .hmap",
+		Short: "Emit the .scad scene from the cached IRs + .hmaps",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			tile, err := f.tile()
+			m, err := f.mosaic()
 			if err != nil {
 				return err
 			}
-			return geoEmit(ctx, tile, geoOptions(ctx, f))
+			return geoEmit(ctx, m, geoOptions(ctx, f))
 		},
 	}
 	f.bind(cmd)
@@ -178,24 +267,60 @@ func newGeoMakeCommand(ctx appContext) *cobra.Command {
 		Use:   "make",
 		Short: "fetch + build + scad in one go",
 		Example: "  gnb geo make --name hk_victoria --at 22.2855,114.1580 --size 1000 " +
+			"--profile hongkong\n" +
+			"  gnb geo make --name hk_victoria --at 22.2855,114.1580 --size 3000 " +
 			"--profile hongkong",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			tile, err := f.tile()
+			m, err := f.mosaic()
 			if err != nil {
 				return err
 			}
-			opt := geoOptions(ctx, f)
-			if _, err := geo.Fetch(tile, opt, geoLog); err != nil {
-				return err
-			}
-			if _, err := geo.Build(tile, opt, geoLog); err != nil {
-				return err
-			}
-			return geoEmit(ctx, tile, opt)
+			return geoRun(ctx, m, geoOptions(ctx, f))
 		},
 	}
 	f.bind(cmd)
 	return cmd
+}
+
+// newGeoGrowCommand resizes an area that already exists.
+//
+// This is the workflow the pipeline is meant to be used with: make one 1 km
+// part to see whether the place is worth the disk, then grow it. Growing is
+// incremental where it can be — the DEM is already cached and the parts that
+// already have an Overpass response keep it — but the heightfield, the water
+// plane, the datum and the scene are all derived from the whole area, so those
+// are always recomputed. Shrinking keeps every cache and just re-emits.
+func newGeoGrowCommand(ctx appContext) *cobra.Command {
+	var f geoFlags
+	cmd := &cobra.Command{
+		Use:   "grow",
+		Short: "Resize an existing area, fetching only the parts it does not have",
+		Example: "  gnb geo grow --name nyc_times_square --size 3000\n" +
+			"  gnb geo grow --name nyc_times_square --size 5000\n" +
+			"  gnb geo grow --name nyc_times_square --size 1000   # back down; nothing is deleted",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			m, err := f.grown(ctx, cmd)
+			if err != nil {
+				return err
+			}
+			console.Label("area", fmt.Sprintf("%.0f x %.0f m (%dx%d parts) at %.5f,%.5f",
+				m.SizeM, m.SizeM, m.Grid(), m.Grid(), m.Lat, m.Lon))
+			return geoRun(ctx, m, geoOptions(ctx, f))
+		},
+	}
+	f.bind(cmd)
+	return cmd
+}
+
+// geoRun is fetch + build + scad, which is what both `make` and `grow` do.
+func geoRun(ctx appContext, m geo.Mosaic, opt geo.Options) error {
+	if _, err := geo.Fetch(m, opt, geoLog); err != nil {
+		return err
+	}
+	if _, err := geo.Build(m, opt, geoLog); err != nil {
+		return err
+	}
+	return geoEmit(ctx, m, opt)
 }
 
 // newGeoPakCommand packs every generated tile into the single pak the runtime
@@ -267,15 +392,14 @@ func geoPak(ctx appContext, out string, noCompress bool) error {
 	return nil
 }
 
-// geoEmit renders the scene and mirrors both the scene and its .hmap side-car
-// into the build assets, so `gnb shot` sees them without a rebuild.
-func geoEmit(ctx appContext, tile geo.Tile, opt geo.Options) error {
-	scadPath, _, err := geo.Scad(tile, opt, geoLog)
+// geoEmit renders the scene and mirrors every produced file into the build
+// assets, so `gnb shot` sees them without a rebuild.
+func geoEmit(ctx appContext, m geo.Mosaic, opt geo.Options) error {
+	scadPath, _, err := geo.Scad(m, opt, geoLog)
 	if err != nil {
 		return err
 	}
-	paths := geo.NewPaths(ctx.repoRoot, tile.Name)
-	for _, src := range []string{scadPath, paths.HmapPath(), paths.POIPath(), paths.AttributionPath()} {
+	for _, src := range m.OutputFiles(ctx.repoRoot) {
 		rel, relErr := filepath.Rel(filepath.Join(ctx.repoRoot, "assets"), src)
 		if relErr != nil || filepath.IsAbs(rel) || isDotDot(rel) {
 			continue

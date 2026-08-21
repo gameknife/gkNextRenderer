@@ -1,5 +1,7 @@
 #pragma once
 
+#include "GeoTerrainSet.h"
+
 #include "Gameplay/Character/NextCharacterController.h"
 #include "Gameplay/Sim/CharacterPool.h"
 
@@ -10,7 +12,6 @@
 #include <vector>
 
 namespace Assets { class Model; class Scene; struct FMaterial; }
-namespace Runtime { class TerrainComponent; }
 class NextEngine;
 
 namespace NextWorldTravel
@@ -36,7 +37,7 @@ namespace NextWorldTravel
         // Builds the nav window, finds a street to stand on, and spawns the rig.
         // Returns false when the tile has no reachable street-level ground.
         bool OnSceneLoaded(Assets::Scene& scene, NextEngine& engine,
-                           const Runtime::TerrainComponent* terrain);
+                           const FGeoTerrainSet* terrain);
         void OnSceneUnloaded();
 
         void Tick(float deltaSeconds, Assets::Scene& scene);
@@ -104,7 +105,7 @@ namespace NextWorldTravel
         NextCharacterController playerController_;
         NextEngine* engine_ = nullptr;
         Assets::Scene* scene_ = nullptr;
-        const Runtime::TerrainComponent* terrain_ = nullptr;
+        const FGeoTerrainSet* terrain_ = nullptr;
 
         EWalkMode mode_ = EWalkMode::Roam;
         bool paused_ = false;

@@ -81,7 +81,7 @@ namespace NextWorldTravel
     }
 
     void FGeoPoiLayer::OnTerrainReady(std::vector<FGeoPoi>& pois,
-                                      const Runtime::TerrainComponent& terrain)
+                                      const FGeoTerrainSet& terrain)
     {
         groundedCount_ = 0;
         if (!terrain.HasData())
@@ -93,15 +93,21 @@ namespace NextWorldTravel
             return;
         }
 
-        // The heightfield is centred on the tile origin and the sidecar is
-        // clipped to the same square, so anything outside the extents is a
-        // generator/runtime disagreement rather than an edge case worth
-        // guessing at.
-        const float halfX = terrain.GetSizeX() * 0.5f;
-        const float halfY = terrain.GetSizeY() * 0.5f;
+        // Against the whole area, not one part: the sidecar of a multi-part
+        // area carries places from every part, and measuring them against the
+        // centre part's square would silently drop everything but the middle
+        // ninth. Anything outside the union really is a generator/runtime
+        // disagreement rather than an edge case worth guessing at.
+        const glm::vec2 lo = terrain.WorldMin();
+        const glm::vec2 hi = terrain.WorldMax();
+        // Labels are sized for a 1 km tile; a bigger area needs them to survive
+        // proportionally further from the camera or the map view empties out.
+        aerialMarkerRange_ = Config::kAerialMarkerMaxDistance *
+            std::max(1.0f, std::max(terrain.TotalSizeX(), terrain.TotalSizeY()) / Config::kReferenceAreaM);
         for (FGeoPoi& poi : pois)
         {
-            if (std::abs(poi.position.x) > halfX || std::abs(poi.position.y) > halfY)
+            if (poi.position.x < lo.x || poi.position.x > hi.x ||
+                poi.position.y < lo.y || poi.position.y > hi.y)
             {
                 poi.grounded = false;
                 continue;
@@ -157,7 +163,7 @@ namespace NextWorldTravel
             // From above the whole tile is the subject, so the street rules that
             // hide a minor place until you are next to it would empty the map.
             const float maxDistance = aerial
-                                          ? Config::kAerialMarkerMaxDistance
+                                          ? aerialMarkerRange_
                                           : (poi.rank >= Config::kLabelMinorRank
                                                  ? Config::kLabelMaxDistance
                                                  : Config::kLabelMinorMaxDistance);

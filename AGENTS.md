@@ -320,9 +320,10 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
   - `ScadTerrain.md` - gk_terrain low-poly walkable terrain (TERR spec, ter_* combinators, TerrainComponent)
   - `ScadAssetPlaybook.md` - SCAD 资产生成实战手册：kit → 场景 → 地形开放地图的流程、契约与验证闭环（新题材组件库/地图生成任务必读）
   - `../designs/geo-city-generation-design.md` - `gnb geo`：从 SRTM 高程 + OpenStreetMap 生成真实
-    地点的 1km 城市 tile（可渲染 + 可行走）。换地点只改 `--at`，无需改代码。§5.4b 是细节层
+    地点的城市关卡（可渲染 + 可行走）。换地点只改 `--at`，无需改代码。§5.4b 是细节层
     （立面窗格 / 地域屋顶 / 人行道街具，`kit_geo_city.scad` + `kit_road.scad`），
-    含"装饰不得越出 OSM 轮廓"这条可行走性硬规则
+    含"装饰不得越出 OSM 轮廓"这条可行走性硬规则；§7 是**大地块**：`--size 3000/5000` 由
+    1km part 拼成，`gnb geo grow` 增量扩缩，地形整块算完再切片（否则接缝错台 1m）
   - `NextWorldTravel.md` - 生成 tile 的浏览器：Walk / Aerial / Focus 三视图，`poi.json` 地点标签
     sidecar、鸟瞰 POI 地图与绕物取景、滑动 NavGrid 窗口、街面出生点选择
   - `ScadRig.md` - ScadRig rigid-body character rigs (bone_ modules + anim_* clips, FRigAnimator runtime)

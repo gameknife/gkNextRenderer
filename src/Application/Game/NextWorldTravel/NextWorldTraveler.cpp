@@ -264,7 +264,7 @@ namespace NextWorldTravel
     }
 
     bool FNextWorldTraveler::OnSceneLoaded(Assets::Scene& scene, NextEngine& engine,
-                                   const Runtime::TerrainComponent* terrain)
+                                   const FGeoTerrainSet* terrain)
     {
         engine_ = &engine;
         scene_ = &scene;

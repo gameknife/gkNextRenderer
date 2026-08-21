@@ -14,11 +14,13 @@
 #include "Modules/ScadLoader/FScadText.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cmath>
 #include <functional>
 #include <limits>
 #include <memory>
+#include <thread>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_transform.hpp>
@@ -164,8 +166,16 @@ namespace Assets::Scad
                 DefinitionFrameGuard definitionFrame(*this);
                 RegisterLocalDefinitions(topLevel);
 
-                for (const StmtPtr& s : topLevel)
+                // A generated area is a run of independent top-level calls —
+                // one per 1 km part — and evaluating a dense part costs
+                // seconds, so a 5x5 is minutes of one core. When the tail of
+                // the file is nothing but instances they can be evaluated
+                // concurrently; see ParallelTopLevelStart for what "can" means.
+                const size_t parallelFrom = ParallelTopLevelStart(topLevel);
+
+                for (size_t i = 0; i < topLevel.size() && i < parallelFrom; ++i)
                 {
+                    const StmtPtr& s = topLevel[i];
                     if (!s)
                         continue;
                     if (s->kind == StmtKind::Assign)
@@ -174,14 +184,12 @@ namespace Assets::Scad
                     }
                     else if (s->kind == StmtKind::Instance)
                     {
-                        topLevelFallbackLabel_ = s->name;
-                        topLevelFallbackInstanceId_ = nextGroupInstanceId_++;
-                        currentTopLevelFallbackRoot_ = nullptr;
-                        EmitSceneGeometry(EvalInstance(*s, glm::dmat4(1.0), glm::dvec4(0.78, 0.78, 0.78, 1.0), false));
-                        currentTopLevelFallbackRoot_ = nullptr;
-                        topLevelFallbackLabel_.clear();
-                        topLevelFallbackInstanceId_ = 0;
+                        RunTopLevelInstance(*s);
                     }
+                }
+                if (parallelFrom < topLevel.size())
+                {
+                    RunTopLevelInstancesParallel(topLevel, parallelFrom);
                 }
 
                 // Snapshot the final top-level bindings (the global frame) so
@@ -198,7 +206,160 @@ namespace Assets::Scad
                 ctx_.Pop();
             }
 
+            // Evaluates one top-level instance into its own result, with a
+            // copy of the caller's globals. Used only by the parallel path;
+            // everything it touches is either its own state or immutable.
+            void RunIsolatedTopLevel(const Stmt& instance,
+                                     const std::unordered_map<std::string, Value>& globals,
+                                     const Scope& topLevel,
+                                     uint64_t idBase)
+            {
+                InitGlobals();
+                for (const auto& entry : globals)
+                {
+                    ctx_.Set(entry.first, entry.second);
+                }
+                // Disjoint id ranges. Node ids have to stay unique across the
+                // whole scene (the loader keys terrain payloads on them), and
+                // value identities key a per-evaluator memo whose entries would
+                // otherwise be shadowed by an identity minted in the parent.
+                nextGroupInstanceId_ = idBase;
+                nextValueIdentity_ = idBase;
+
+                DefinitionFrameGuard definitionFrame(*this);
+                RegisterLocalDefinitions(topLevel);
+                RunTopLevelInstance(instance);
+                FinalizeScene();
+                ctx_.Pop();
+            }
+
         private:
+            void RunTopLevelInstance(const Stmt& instance)
+            {
+                topLevelFallbackLabel_ = instance.name;
+                topLevelFallbackInstanceId_ = nextGroupInstanceId_++;
+                currentTopLevelFallbackRoot_ = nullptr;
+                EmitSceneGeometry(EvalInstance(instance, glm::dmat4(1.0), glm::dvec4(0.78, 0.78, 0.78, 1.0), false));
+                currentTopLevelFallbackRoot_ = nullptr;
+                topLevelFallbackLabel_.clear();
+                topLevelFallbackInstanceId_ = 0;
+            }
+
+            // Index of the first top-level instance of a tail made up entirely
+            // of instances, or topLevel.size() for "do not parallelise".
+            //
+            // The whole tail, not any run of instances: an instance evaluated
+            // out of band produces its scene roots in its own result, and
+            // interleaving those with roots the sequential path appended would
+            // mean tracking an ordering key through both. A generated scene
+            // puts every assignment first and every call last, which is the
+            // case worth having.
+            size_t ParallelTopLevelStart(const Scope& topLevel) const
+            {
+                const size_t none = topLevel.size();
+                if (!options_.parallelTopLevel || !IsSceneMode())
+                {
+                    return none;
+                }
+                if (std::thread::hardware_concurrency() < 2)
+                {
+                    return none;
+                }
+                size_t first = none;
+                size_t count = 0;
+                for (size_t i = 0; i < topLevel.size(); ++i)
+                {
+                    const StmtPtr& s = topLevel[i];
+                    if (!s)
+                    {
+                        continue;
+                    }
+                    if (s->kind != StmtKind::Instance)
+                    {
+                        // A statement of any other kind after an instance ends
+                        // the tail, and with it the opportunity.
+                        if (first != none)
+                        {
+                            return none;
+                        }
+                        continue;
+                    }
+                    if (first == none)
+                    {
+                        first = i;
+                    }
+                    ++count;
+                }
+                // Below this the thread handshake costs more than it saves, and
+                // every ordinary scene stays on the path it has always taken.
+                return count >= kMinParallelTopLevel ? first : none;
+            }
+
+            void RunTopLevelInstancesParallel(const Scope& topLevel, size_t from)
+            {
+                const size_t count = topLevel.size() - from;
+                std::vector<SceneEvalResult> partials(count);
+                // The globals frame is the shared input: the TERR literals, the
+                // palettes, $fn. Copied per worker rather than shared, because a
+                // worker's context is free to shadow them.
+                const std::unordered_map<std::string, Value> globals = ctx_.TopFrame();
+
+                std::atomic<size_t> cursor{0};
+                const unsigned hardware = std::max(1u, std::thread::hardware_concurrency());
+                const unsigned workers =
+                    static_cast<unsigned>(std::min<size_t>(hardware, count));
+                const auto run = [&]()
+                {
+                    for (;;)
+                    {
+                        const size_t k = cursor.fetch_add(1);
+                        if (k >= count)
+                        {
+                            break;
+                        }
+                        const StmtPtr& s = topLevel[from + k];
+                        if (!s)
+                        {
+                            continue;
+                        }
+                        Evaluator sub(modules_, functions_, options_, partials[k]);
+                        sub.RunIsolatedTopLevel(*s, globals, topLevel, kParallelIdStride * (k + 1));
+                    }
+                };
+                std::vector<std::thread> pool;
+                pool.reserve(workers > 0 ? workers - 1 : 0);
+                for (unsigned t = 1; t < workers; ++t)
+                {
+                    pool.emplace_back(run);
+                }
+                run();
+                for (std::thread& worker : pool)
+                {
+                    worker.join();
+                }
+
+                // Merged in statement order, so the scene is identical whatever
+                // order the workers finished in.
+                for (SceneEvalResult& partial : partials)
+                {
+                    for (SceneNode& root : partial.roots)
+                    {
+                        parallelRoots_.push_back(std::move(root));
+                    }
+                    for (SceneTerrain& terrain : partial.terrains)
+                    {
+                        sceneResult_->terrains.push_back(std::move(terrain));
+                    }
+                    sceneResult_->warningCount += partial.warningCount;
+                    sceneResult_->triangleCount += partial.triangleCount;
+                }
+            }
+
+            // One worker's id range. Wide enough that no single top-level call
+            // can run into the next worker's numbers.
+            static constexpr uint64_t kParallelIdStride = 1ull << 40;
+            static constexpr size_t kMinParallelTopLevel = 4;
+
             const std::unordered_map<std::string, StmtPtr>& modules_;
             const std::unordered_map<std::string, StmtPtr>& functions_;
             const ScadLoadOptions& options_;
@@ -221,6 +382,8 @@ namespace Assets::Scad
             std::string topLevelFallbackLabel_;
             uint64_t topLevelFallbackInstanceId_ = 0;
             uint64_t nextGroupInstanceId_ = 1;
+            // Finished subtrees handed back by the parallel top-level workers.
+            std::vector<SceneNode> parallelRoots_;
             uint64_t nextValueIdentity_ = 1;
             int suppressSceneNodes_ = 0;
 
@@ -440,11 +603,18 @@ namespace Assets::Scad
                 }
 
                 sceneResult_->roots.clear();
-                sceneResult_->roots.reserve(sceneRoots_.size());
+                sceneResult_->roots.reserve(sceneRoots_.size() + parallelRoots_.size());
                 for (const auto& root : sceneRoots_)
                 {
                     sceneResult_->roots.push_back(FinalizeSceneNode(*root));
                 }
+                // Workers finalise their own subtrees; they are appended in
+                // statement order (see RunTopLevelInstancesParallel).
+                for (SceneNode& root : parallelRoots_)
+                {
+                    sceneResult_->roots.push_back(std::move(root));
+                }
+                parallelRoots_.clear();
             }
 
             std::string CurrentGroupLabel() const

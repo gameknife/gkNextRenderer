@@ -32,6 +32,13 @@ type RoadRun struct {
 	// along the direction of travel.
 	Left  [][2]float64
 	Right [][2]float64
+	// CapHead / CapTail say whether each end is a real end of street, and so
+	// gets the crosswalk that marks one. A run cut by an area seam is not: the
+	// street continues in the next part, and capping it would paint zebra
+	// stripes across the middle of the road from both sides. Set by
+	// markSeamCaps; BuildRoadNetwork leaves both true.
+	CapHead bool
+	CapTail bool
 }
 
 // Junction is a filled intersection: the convex hull of the carriageway ends
@@ -178,7 +185,8 @@ func BuildRoadNetwork(roads []Road, half float64, opt EmitOptions) ([]RoadRun, [
 			// making the ribbon follow the *simplified* vertices.
 			stations := densifyPolyline(simplified, stationStepM)
 			left, right := offsetPolyline(stations, r.Width/2)
-			run := RoadRun{Width: r.Width, Class: r.Class, ID: r.ID, Left: left, Right: right}
+			run := RoadRun{Width: r.Width, Class: r.Class, ID: r.ID, Left: left, Right: right,
+				CapHead: true, CapTail: true}
 			runs = append(runs, run)
 
 			// Record the cross-sections facing each junction. Only if the run's

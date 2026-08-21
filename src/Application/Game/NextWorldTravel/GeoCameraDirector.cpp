@@ -59,6 +59,19 @@ namespace NextWorldTravel
         blendRemaining_ = duration;
     }
 
+    void FGeoCameraDirector::SetAreaSize(float metres)
+    {
+        const float scale = metres > 1.0f ? metres / Config::kReferenceAreaM : 1.0f;
+        if (std::abs(scale - areaScale_) < 0.01f)
+        {
+            return;
+        }
+        areaScale_ = scale;
+        // Re-frame rather than keeping a distance that was chosen for a
+        // different sized world.
+        aerialDistance_ = Config::kAerialDistance * areaScale_;
+    }
+
     void FGeoCameraDirector::SetMode(EViewMode mode, const FCameraWorld& world)
     {
         if (mode == mode_)
@@ -72,8 +85,8 @@ namespace NextWorldTravel
             // origin: losing your place is the whole failure mode of a map view.
             const glm::vec3 anchor = world.walkerValid ? world.walkerPosition : pose_.target;
             aerialPivot_ = glm::clamp(glm::vec2(anchor.x, anchor.z),
-                                      glm::vec2(-Config::kAerialPivotRange),
-                                      glm::vec2(Config::kAerialPivotRange));
+                                      glm::vec2(-Config::kAerialPivotRange * areaScale_),
+                                      glm::vec2(Config::kAerialPivotRange * areaScale_));
         }
         if (mode == EViewMode::Walk)
         {
@@ -102,7 +115,7 @@ namespace NextWorldTravel
         followDistance_ = Config::kFollowDistance;
         resolvedFollow_ = Config::kFollowDistance;
 
-        aerialDistance_ = Config::kAerialDistance;
+        aerialDistance_ = Config::kAerialDistance * areaScale_;
         aerialPitch_ = Config::kAerialPitch;
         aerialPivot_ = world.walkerValid ? glm::vec2(world.walkerPosition.x, world.walkerPosition.z)
                                          : glm::vec2(0.0f);
@@ -190,7 +203,7 @@ namespace NextWorldTravel
             // Multiplicative: one notch has to mean the same thing at 2 km up
             // and at 100 m up.
             aerialDistance_ = std::clamp(aerialDistance_ * std::exp(-wheel * Config::kAerialZoomRate),
-                                         Config::kAerialMinDistance, Config::kAerialMaxDistance);
+                                         Config::kAerialMinDistance, Config::kAerialMaxDistance * areaScale_);
             break;
         case EViewMode::Focus:
             focusZoom_ = std::clamp(focusZoom_ * std::exp(-wheel * Config::kFocusZoomRate),
@@ -292,14 +305,14 @@ namespace NextWorldTravel
         {
             const glm::vec3 step = glm::normalize(pan) * panSpeed * deltaSeconds;
             aerialPivot_ = glm::clamp(aerialPivot_ + glm::vec2(step.x, step.z),
-                                      glm::vec2(-Config::kAerialPivotRange),
-                                      glm::vec2(Config::kAerialPivotRange));
+                                      glm::vec2(-Config::kAerialPivotRange * areaScale_),
+                                      glm::vec2(Config::kAerialPivotRange * areaScale_));
         }
         if (std::abs(move_.up) > 0.001f)
         {
             aerialDistance_ = std::clamp(
                 aerialDistance_ * std::exp(move_.up * Config::kAerialKeyZoomRate * deltaSeconds),
-                Config::kAerialMinDistance, Config::kAerialMaxDistance);
+                Config::kAerialMinDistance, Config::kAerialMaxDistance * areaScale_);
         }
 
         const glm::vec3 pivot(aerialPivot_.x, GroundAt(world, aerialPivot_.x, aerialPivot_.y, 0.0f),

@@ -35,11 +35,35 @@ type EmitOptions struct {
 	MaxSurfaces    int
 	// RoadsPerModule bounds how many streets share one Model.
 	RoadsPerModule int
-	// Detail turns on the kit_geo_city / kit_road decoration layer: facades,
-	// roofs, sidewalks and street furniture. Off emits the bare OSM extrusion,
-	// which is what the pipeline shipped before and stays useful for A/B and as
-	// an escape hatch when a tile misbehaves.
+	// Detail turns on the kit_geo_city decoration layer: facades and roofs. Off
+	// emits the bare OSM extrusion, which is what the pipeline shipped before
+	// and stays useful for A/B and as an escape hatch when a tile misbehaves.
 	Detail bool
+	// StreetDetail turns on kit_road's sidewalks, kerbs, lamps, trees, benches,
+	// crosswalks and traffic lights. It is a separate switch from Detail
+	// because it is by far the most expensive thing the pipeline emits:
+	// measured on a dense Manhattan part, the decorated street network is
+	// 4.31 s of a 6.3 s evaluation for 217k of 968k triangles, and turning
+	// only this off brings the network down to 1.05 s. That ratio is what
+	// makes a multi-part area loadable at all.
+	StreetDetail bool
+	// Trees plants the green spaces. Off for the outer parts: at a kilometre
+	// away a sphere on a stick contributes nothing.
+	Trees bool
+	// MinBuildingH drops anything shorter, on top of MinFootprintM2. The outer
+	// parts want the skyline, not the sheds.
+	MinBuildingH float64
+	// SeamMarginM widens the *selection* box for the street network past the
+	// part edge, so junction topology is decided from the same set of ways on
+	// both sides of a seam. Geometry is still clipped at the edge.
+	SeamMarginM float64
+	// RoadOpMarginM widens the clip for the TERR road operators. Those flatten
+	// the heightfield over roughly 2.4 widths, and the height they flatten to
+	// is a smoothed profile along the polyline — so a road cut off exactly at
+	// the seam flattens to a slightly different level on each side. A margin
+	// well past both the influence radius and the smoothing window makes the
+	// two sides agree.
+	RoadOpMarginM float64
 	// ModuleTriBudget caps the estimated triangles in one generated module.
 	//
 	// This is the single most load-bearing number in the emitter: a Model at or
@@ -77,8 +101,59 @@ func DefaultEmitOptions() EmitOptions {
 		MaxTrees:        420,
 		PierWidthM:      11,
 		Detail:          true,
+		StreetDetail:    true,
+		Trees:           true,
+		SeamMarginM:     150,
+		RoadOpMarginM:   120,
 		ModuleTriBudget: 44000,
 	}
+}
+
+// WithLOD returns the options for one level of detail. Full is the tile as the
+// single-tile pipeline emits it; the two reduced levels exist because
+// evaluation cost is linear in parts and a 5x5 at full detail is a
+// three-minute load (measured 6.3 s per dense part).
+func (o EmitOptions) WithLOD(l LOD) EmitOptions {
+	switch l {
+	case LODFull:
+		return o
+	case LODMedium:
+		// Facades survive — they are what a building looks like from two
+		// streets away — but the pavement furniture does not.
+		o.StreetDetail = false
+		o.MinFootprintM2 = math.Max(o.MinFootprintM2, 25)
+		return o
+	default:
+		o.Detail = false
+		o.StreetDetail = false
+		o.Trees = false
+		o.MinFootprintM2 = math.Max(o.MinFootprintM2, 120)
+		o.MinBuildingH = math.Max(o.MinBuildingH, 6)
+		// The back-alley network is invisible at this range and it is most of
+		// the run count, so the far parts keep only the roads that draw the
+		// city's shape.
+		o.SurfaceClasses = []string{
+			"motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
+			"secondary", "secondary_link", "tertiary",
+		}
+		o.MaxSurfaces = 220
+		return o
+	}
+}
+
+// scope names the symbols one part emits.
+//
+// The loader flattens every referenced file into a single global module table
+// (FScadShared.cpp), and a repeated module name silently overwrites the earlier
+// one rather than erroring. So every symbol an area emits carries its part id.
+// A standalone tile uses the empty scope and keeps the flat names.
+type scope struct{ suffix string }
+
+func (sc scope) sym(base string) string {
+	if sc.suffix == "" {
+		return base
+	}
+	return base + "_" + sc.suffix
 }
 
 // EmitReport summarises the generated scene.
@@ -126,22 +201,87 @@ type placed struct {
 	block  [2]int
 }
 
-// Emit renders the whole scene file.
+// Edges records which sides of a part are the outer rim of the area.
+//
+// A building may overhang an *internal* seam: the neighbour's terrain carries
+// the same border samples, so the overhang lands on real ground and dropping
+// it would leave a lane of missing buildings along every seam. An overhang past
+// the rim is a slab cantilevered into nothing, and that one still goes.
+type Edges struct{ West, East, South, North bool }
+
+// AllEdges is a standalone tile: every side is the rim.
+var AllEdges = Edges{West: true, East: true, South: true, North: true}
+
+// partInput is everything one part needs to emit itself.
+type partInput struct {
+	tile    Tile
+	ir      *IR
+	grid    *HeightGrid
+	hmapRef string
+	opt     EmitOptions
+	sc      scope
+	edges   Edges
+}
+
+// Emit renders a standalone single-part scene file.
 func Emit(tile Tile, ir *IR, grid *HeightGrid, hmapRef string, opt EmitOptions) (string, EmitReport) {
 	var report EmitReport
+	var s strings.Builder
+	writeHeader(&s, tile, ir, grid)
+	writePreamble(&s, opt.Detail)
+	calls := emitPart(&s, partInput{
+		tile: tile, ir: ir, grid: grid, hmapRef: hmapRef, opt: opt, edges: AllEdges,
+	}, &report)
+	s.WriteString("// ================= assembly =================\n")
+	for _, c := range calls {
+		s.WriteString(c + "\n")
+	}
+	s.WriteString("\n")
+	writeCameras(&s, tile, ir, grid)
+	report.Triangles += 2 * tile.Cells * tile.Cells
+	return s.String(), report
+}
+
+// writePreamble writes the shared kit references and the global $fn. An area
+// emits it once for the whole file, not once per part.
+func writePreamble(s *strings.Builder, detail bool) {
+	// The scene lives at assets/geo/<tile>/, so the shared kit libraries under
+	// assets/scad/lib are two levels up and back down.
+	s.WriteString("use <../../scad/lib/gk_camera.scad>\nuse <../../scad/lib/kit_road.scad>\n")
+	if detail {
+		s.WriteString("use <../../scad/lib/kit_geo_city.scad>\n")
+	}
+	s.WriteString("\n$fn = 8;\n\n")
+}
+
+// emitPart writes one part's definitions and returns the calls that instantiate
+// them, in draw order. Everything it writes is in part-local coordinates; an
+// area places the part with a translate.
+func emitPart(s *strings.Builder, in partInput, report *EmitReport) []string {
+	tile, ir, opt, sc := in.tile, in.ir, in.opt, in.sc
 	half := tile.SizeM / 2
 
 	// ---- buildings: filter, simplify, bucket by block -----------------------
 	var kept []placed
 	for _, b := range ir.Buildings {
-		// The whole footprint has to be on the tile: a building that only has
-		// its centroid inside ends up cantilevered over the edge of the world.
+		// Past the rim of the area a footprint has no ground under it, so it
+		// goes — the same rule a standalone tile has always applied to all four
+		// of its sides.
 		minX, minY, maxX, maxY := BoundsOf(b.Outer)
-		if minX < -half || minY < -half || maxX > half || maxY > half {
+		if (in.edges.West && minX < -half) || (in.edges.East && maxX > half) ||
+			(in.edges.South && minY < -half) || (in.edges.North && maxY > half) {
 			report.DroppedEdge++
 			continue
 		}
-		if b.AreaM2 < opt.MinFootprintM2 {
+		// Across an internal seam the neighbour's ground is continuous, so the
+		// footprint may overhang; ownership is by centroid, which emits it
+		// exactly once rather than twice or not at all. Dropping seam
+		// buildings instead would leave a lane of holes along every seam.
+		mid := Centroid(b.Outer)
+		if math.Abs(mid[0]) > half || math.Abs(mid[1]) > half {
+			continue
+		}
+		if b.AreaM2 < opt.MinFootprintM2 || b.Height < opt.MinBuildingH {
 			report.DroppedSmall++
 			continue
 		}
@@ -170,7 +310,7 @@ func Emit(tile Tile, ir *IR, grid *HeightGrid, hmapRef string, opt EmitOptions) 
 			report.TallestName = b.Name
 		}
 	}
-	report.Buildings = len(kept)
+	report.Buildings += len(kept)
 
 	blocks := map[[2]int][]placed{}
 	for _, p := range kept {
@@ -187,70 +327,94 @@ func Emit(tile Tile, ir *IR, grid *HeightGrid, hmapRef string, opt EmitOptions) 
 		return blockKeys[i][0] < blockKeys[j][0]
 	})
 
-	roads := selectRoads(ir, half, opt)
-	report.Roads = len(roads)
-	surfaces := selectSurfaces(ir, half, opt)
+	roads := selectRoads(ir, half+opt.RoadOpMarginM, opt)
+	report.Roads += len(roads)
+	// Selection reaches past the part so a seam junction is decided from the
+	// same set of ways on both sides; the ribbons still stop at the edge.
+	surfaces := selectSurfaces(ir, half+opt.SeamMarginM, opt)
 	runs, junctions := BuildRoadNetwork(surfaces, half, opt)
-	report.Surfaces = len(runs)
-	report.Junctions = len(junctions)
+	markSeamCaps(runs, half, in.edges)
+	report.Surfaces += len(runs)
+	report.Junctions += len(junctions)
 	piers := selectPiers(ir, half, opt)
-	report.Piers = len(piers)
+	report.Piers += len(piers)
 	waterLevel := 0.0
 	if ir.Terrain != nil {
 		waterLevel = ir.Terrain.WaterLevel
 	}
-	trees := scatterTrees(ir, half, tile.Seed, opt)
-	report.Trees = len(trees)
-
-	// ---- file ---------------------------------------------------------------
-	var s strings.Builder
-	writeHeader(&s, tile, ir, grid, report)
-	// The scene lives at assets/geo/<tile>/, so the shared kit libraries under
-	// assets/scad/lib are two levels up and back down.
-	s.WriteString("use <../../scad/lib/gk_camera.scad>\nuse <../../scad/lib/kit_road.scad>\n")
-	if opt.Detail {
-		s.WriteString("use <../../scad/lib/kit_geo_city.scad>\n")
+	var trees []treeSpot
+	if opt.Trees {
+		trees = scatterTrees(ir, half, tile.Seed, opt)
 	}
-	s.WriteString("\n$fn = 8;\n\n")
-	writeTerrain(&s, tile, hmapRef, roads, ir.Terrain)
+	report.Trees += len(trees)
+
+	// ---- definitions --------------------------------------------------------
+	writeTerrain(s, tile, in.hmapRef, roads, ir.Terrain, sc)
 
 	s.WriteString("// Ground height under a footprint: the terrain mesh is the single source of\n")
 	s.WriteString("// truth for elevation, so the base is sampled at evaluation time rather than\n")
 	s.WriteString("// baked by the generator (a baked value would drift from the rendered mesh).\n")
-	s.WriteString("function gz(x0, y0, x1, y1) = min(\n")
-	s.WriteString("    gk_terrain_height(TERR, x0, y0), gk_terrain_height(TERR, x1, y0),\n")
-	s.WriteString("    gk_terrain_height(TERR, x0, y1), gk_terrain_height(TERR, x1, y1),\n")
-	s.WriteString("    gk_terrain_height(TERR, (x0 + x1) / 2, (y0 + y1) / 2));\n\n")
+	fmt.Fprintf(s, "function %s(x0, y0, x1, y1) = min(\n", sc.sym("gz"))
+	fmt.Fprintf(s, "    gk_terrain_height(%[1]s, x0, y0), gk_terrain_height(%[1]s, x1, y0),\n", sc.sym("TERR"))
+	fmt.Fprintf(s, "    gk_terrain_height(%[1]s, x0, y1), gk_terrain_height(%[1]s, x1, y1),\n", sc.sym("TERR"))
+	fmt.Fprintf(s, "    gk_terrain_height(%s, (x0 + x1) / 2, (y0 + y1) / 2));\n\n", sc.sym("TERR"))
 
-	blockModules := writeBlocks(&s, blocks, blockKeys, tile, opt, &report)
-	report.Blocks = len(blockModules)
+	blockModules := writeBlocks(s, blocks, blockKeys, tile, opt, sc, report)
+	report.Blocks += len(blockModules)
 
-	surfaceModules := writeStreetSurfaces(&s, runs, junctions, opt, &report)
-	pierModule := writePiers(&s, piers, opt, waterLevel, &report)
-	treeModule := writeTrees(&s, trees, &report)
+	surfaceModules := writeStreetSurfaces(s, runs, junctions, opt, sc, report)
+	pierModule := writePiers(s, piers, opt, waterLevel, sc, report)
+	treeModule := writeTrees(s, trees, sc, report)
 
-	s.WriteString("// ================= assembly =================\n")
-	s.WriteString("gk_terrain(TERR);\n")
+	calls := []string{fmt.Sprintf("gk_terrain(%s);", sc.sym("TERR"))}
 	for _, name := range surfaceModules {
-		fmt.Fprintf(&s, "%s();\n", name)
+		calls = append(calls, name+"();")
 	}
 	if pierModule != "" {
-		fmt.Fprintf(&s, "%s();\n", pierModule)
+		calls = append(calls, pierModule+"();")
 	}
 	for _, name := range blockModules {
-		fmt.Fprintf(&s, "%s();\n", name)
+		calls = append(calls, name+"();")
 	}
 	if treeModule != "" {
-		fmt.Fprintf(&s, "%s();\n", treeModule)
+		calls = append(calls, treeModule+"();")
 	}
-	s.WriteString("\n")
-	writeCameras(&s, tile, ir, grid)
-
-	report.Triangles += 2 * tile.Cells * tile.Cells
-	return s.String(), report
+	return calls
 }
 
-func writeHeader(s *strings.Builder, tile Tile, ir *IR, grid *HeightGrid, report EmitReport) {
+// markSeamCaps clears the end-of-run decoration where a run was cut by an
+// internal seam rather than by the end of a street. Without it every seam grows
+// a row of zebra crossings across the middle of a street, twice — once from
+// each side.
+func markSeamCaps(runs []RoadRun, half float64, edges Edges) {
+	const eps = 0.75
+	atSeam := func(p [2]float64) bool {
+		if !edges.West && p[0] < -half+eps {
+			return true
+		}
+		if !edges.East && p[0] > half-eps {
+			return true
+		}
+		if !edges.South && p[1] < -half+eps {
+			return true
+		}
+		return !edges.North && p[1] > half-eps
+	}
+	centre := func(a, b [2]float64) [2]float64 {
+		return [2]float64{(a[0] + b[0]) / 2, (a[1] + b[1]) / 2}
+	}
+	for i := range runs {
+		r := &runs[i]
+		if len(r.Left) < 2 || len(r.Right) < 2 {
+			continue
+		}
+		r.CapHead = !atSeam(centre(r.Left[0], r.Right[0]))
+		last := len(r.Left) - 1
+		r.CapTail = !atSeam(centre(r.Left[last], r.Right[last]))
+	}
+}
+
+func writeHeader(s *strings.Builder, tile Tile, ir *IR, grid *HeightGrid) {
 	lo, hi := grid.Bounds()
 	stats := ir.Summarize()
 	fmt.Fprintf(s, "// %s.scad — generated by `gnb geo`, do not edit by hand.\n//\n", tile.Name)
@@ -281,22 +445,29 @@ func writeHeader(s *strings.Builder, tile Tile, ir *IR, grid *HeightGrid, report
 		tile.Name, tile.Lat, tile.Lon, tile.SizeM, tile.Cells, tile.Profile, tile.Seed)
 }
 
-func writeTerrain(s *strings.Builder, tile Tile, hmapRef string, roads []Road, meta *TerrainMeta) {
+func writeTerrain(s *strings.Builder, tile Tile, hmapRef string, roads []Road,
+	meta *TerrainMeta, sc scope) {
 	base := 0.0
+	paletteSpan := 0.0
 	water := "undef"
 	if meta != nil {
 		base = meta.BaseElevation
+		paletteSpan = meta.PaletteSpan
 		if meta.HasWater {
 			water = fnum(meta.WaterLevel)
 		}
 	}
-	fmt.Fprintf(s, "TERR = [\"gkterr1\", [%s, %s], [%d, %d], %d,\n",
-		fnum(tile.SizeM), fnum(tile.SizeM), tile.Cells, tile.Cells, tile.Seed)
+	fmt.Fprintf(s, "%s = [\"gkterr1\", [%s, %s], [%d, %d], %d,\n",
+		sc.sym("TERR"), fnum(tile.SizeM), fnum(tile.SizeM), tile.Cells, tile.Cells, tile.Seed)
 	// The base height is the tile datum, not zero: the palette's biome bands are
 	// measured from it, so an inland city at 500 m would otherwise be painted as
 	// if it were a 500 m mountain rising out of the sea.
 	// "urban": concrete on the flat low ground, green on the hills, no snow cap.
-	fmt.Fprintf(s, "    [%s, 0, 0], %s, \"urban\",\n", fnum(base), water)
+	// The fourth element is the colour ramp's relief. Emitted for every
+	// scene, not only multi-part ones: it makes the biome bands a property
+	// of the data rather than of the jittered mesh's highest vertex, and
+	// across an area it is what keeps one ramp for all the parts.
+	fmt.Fprintf(s, "    [%s, 0, 0, %s], %s, \"urban\",\n", fnum(base), fnum(paletteSpan), water)
 	fmt.Fprintf(s, "    [[\"hmap\", \"%s\", \"set\", 1, 0]", hmapRef)
 	for _, r := range roads {
 		s.WriteString(",\n     [\"road\", ")
@@ -312,7 +483,7 @@ func writeTerrain(s *strings.Builder, tile Tile, hmapRef string, roads []Road, m
 // each block is cut into as many modules as the triangle budget needs. The cut
 // is what keeps physics alive: see EmitOptions.ModuleTriBudget.
 func writeBlocks(s *strings.Builder, blocks map[[2]int][]placed, blockKeys [][2]int,
-	tile Tile, opt EmitOptions, report *EmitReport) []string {
+	tile Tile, opt EmitOptions, sc scope, report *EmitReport) []string {
 	dp := DetailProfileFor(tile.Profile)
 	hp, ok := Profiles[tile.Profile]
 	if !ok {
@@ -356,7 +527,7 @@ func writeBlocks(s *strings.Builder, blocks map[[2]int][]placed, blockKeys [][2]
 				open = false
 			}
 			if !open {
-				name := fmt.Sprintf("blk_r%dc%d", key[1], key[0])
+				name := sc.sym(fmt.Sprintf("blk_r%dc%d", key[1], key[0]))
 				if part > 0 {
 					name = fmt.Sprintf("%s_%d", name, part)
 				}
@@ -369,9 +540,9 @@ func writeBlocks(s *strings.Builder, blocks map[[2]int][]placed, blockKeys [][2]
 			}
 
 			if opt.Detail {
-				writeBuildingDetail(s, p.b, p.ring, p.inners, st, opt.SkirtM)
+				writeBuildingDetail(s, p.b, p.ring, p.inners, st, opt.SkirtM, sc)
 			} else {
-				writeBuilding(s, p.b, p.ring, p.inners, opt.SkirtM)
+				writeBuilding(s, p.b, p.ring, p.inners, opt.SkirtM, sc)
 			}
 			acc += tri
 			report.Triangles += tri
@@ -388,7 +559,7 @@ func writeBlocks(s *strings.Builder, blocks map[[2]int][]placed, blockKeys [][2]
 // that is the point of the split, and it is why the scene file did not grow
 // when buildings gained facades.
 func writeBuildingDetail(s *strings.Builder, b Building, ring Ring, inners []Ring,
-	st buildingStyle, skirt float64) {
+	st buildingStyle, skirt float64, sc scope) {
 	minX, minY, maxX, maxY := BoundsOf(ring)
 	height := math.Max(3, b.Height)
 
@@ -399,8 +570,8 @@ func writeBuildingDetail(s *strings.Builder, b Building, ring Ring, inners []Rin
 
 	s.WriteString("        gc_bld(")
 	writePoints(s, all)
-	fmt.Fprintf(s, ", gz(%s, %s, %s, %s), %s,\n",
-		fnum(minX), fnum(minY), fnum(maxX), fnum(maxY), fnum(height))
+	fmt.Fprintf(s, ", %s(%s, %s, %s, %s), %s,\n",
+		sc.sym("gz"), fnum(minX), fnum(minY), fnum(maxX), fnum(maxY), fnum(height))
 	fmt.Fprintf(s, "            [%d, %d, %d, %s, %d], [%d, %d, %s, %s, %d, %s, %s, %s], ",
 		st.Facade, st.WallTone, st.GlassTone, fnum(st.FloorH), st.Seed,
 		st.RoofKind, st.RoofTone, fnum(st.RoofRise), fnum(st.RidgeFrac), st.Clutter,
@@ -452,7 +623,7 @@ func writePaths(s *strings.Builder, paths [][]int) {
 // writeBuilding emits one extruded footprint and returns its triangle estimate.
 // This is the --no-detail path: a bare prism, exactly what the pipeline emitted
 // before the decoration layer existed.
-func writeBuilding(s *strings.Builder, b Building, ring Ring, inners []Ring, skirt float64) int {
+func writeBuilding(s *strings.Builder, b Building, ring Ring, inners []Ring, skirt float64, sc scope) int {
 	minX, minY, maxX, maxY := BoundsOf(ring)
 	c := buildingPalette[int(uint64(b.ID)%uint64(len(buildingPalette)))]
 	height := math.Max(3, b.Height) + skirt
@@ -460,8 +631,8 @@ func writeBuilding(s *strings.Builder, b Building, ring Ring, inners []Ring, ski
 	if b.Name != "" {
 		fmt.Fprintf(s, "        // %s (%.0fm, %s)\n", sanitizeComment(b.Name), b.Height, b.HeightSource)
 	}
-	fmt.Fprintf(s, "        color([%s, %s, %s]) translate([0, 0, gz(%s, %s, %s, %s) - %s])\n",
-		fnum(c[0]), fnum(c[1]), fnum(c[2]),
+	fmt.Fprintf(s, "        color([%s, %s, %s]) translate([0, 0, %s(%s, %s, %s, %s) - %s])\n",
+		fnum(c[0]), fnum(c[1]), fnum(c[2]), sc.sym("gz"),
 		fnum(minX), fnum(minY), fnum(maxX), fnum(maxY), fnum(skirt))
 	fmt.Fprintf(s, "            linear_extrude(height = %s) polygon(points = ", fnum(height))
 
@@ -494,7 +665,7 @@ var (
 // change to how every road meets the ground, or a new kind of road marking, is
 // one edit in the kit for every tile at once.
 func writeStreetSurfaces(s *strings.Builder, runs []RoadRun, junctions []Junction,
-	opt EmitOptions, report *EmitReport) []string {
+	opt EmitOptions, sc scope, report *EmitReport) []string {
 	if len(runs) == 0 {
 		return nil
 	}
@@ -518,13 +689,13 @@ func writeStreetSurfaces(s *strings.Builder, runs []RoadRun, junctions []Junctio
 
 	var names []string
 	for gi, group := range groups {
-		decorated := opt.Detail && gi == 0
+		decorated := opt.StreetDetail && gi == 0
 		for _, chunk := range chunkRuns(group, opt, decorated) {
-			name := fmt.Sprintf("streets_%d", len(names))
+			name := sc.sym(fmt.Sprintf("streets_%d", len(names)))
 			names = append(names, name)
 			c := colors[gi]
-			fmt.Fprintf(s, "module %s() { rd_network(TERR, [%s, %s, %s], [\n",
-				name, fnum(c[0]), fnum(c[1]), fnum(c[2]))
+			fmt.Fprintf(s, "module %s() { rd_network(%s, [%s, %s, %s], [\n",
+				name, sc.sym("TERR"), fnum(c[0]), fnum(c[1]), fnum(c[2]))
 			for i, r := range chunk {
 				if i > 0 {
 					s.WriteString(",\n")
@@ -543,9 +714,11 @@ func writeStreetSurfaces(s *strings.Builder, runs []RoadRun, junctions []Junctio
 				}
 				s.WriteString(fnum(r.Width))
 			}
-			// markings, sidewalks, props, seed
-			fmt.Fprintf(s, "], %t, %t, %t, %d); }\n\n",
+			// markings, sidewalks, props, seed, per-run end caps
+			fmt.Fprintf(s, "], %t, %t, %t, %d",
 				gi == 0, decorated, decorated, len(names))
+			writeCaps(s, chunk)
+			s.WriteString("); }\n\n")
 		}
 	}
 
@@ -554,20 +727,52 @@ func writeStreetSurfaces(s *strings.Builder, runs []RoadRun, junctions []Junctio
 	// cross the physics limit and the whole first chunk of the city would lose
 	// its collider.
 	for _, chunk := range chunkJunctions(junctions, opt) {
-		name := fmt.Sprintf("junctions_%d", len(names))
+		name := sc.sym(fmt.Sprintf("junctions_%d", len(names)))
 		names = append(names, name)
-		fmt.Fprintf(s, "module %s() { rd_network(TERR, [%s, %s, %s], [],\n    [",
-			name, fnum(asphaltColor[0]), fnum(asphaltColor[1]), fnum(asphaltColor[2]))
+		fmt.Fprintf(s, "module %s() { rd_network(%s, [%s, %s, %s], [],\n    [",
+			name, sc.sym("TERR"), fnum(asphaltColor[0]), fnum(asphaltColor[1]), fnum(asphaltColor[2]))
 		for i, j := range chunk {
 			if i > 0 {
 				s.WriteString(", ")
 			}
 			writePoints(s, j.Ring)
-			report.Triangles += junctionTriangles(j, opt.Detail)
+			report.Triangles += junctionTriangles(j, opt.StreetDetail)
 		}
-		fmt.Fprintf(s, "],\n    [], false, false, %t, %d); }\n\n", opt.Detail, len(names))
+		fmt.Fprintf(s, "],\n    [], false, false, %t, %d); }\n\n", opt.StreetDetail, len(names))
 	}
 	return names
+}
+
+// writeCaps emits the per-run end-cap mask, and only when a run actually needs
+// one: a seam-cut run must not get the crosswalk that marks the end of a
+// street. An empty argument means "cap both ends", which is every run of a
+// standalone tile.
+func writeCaps(s *strings.Builder, chunk []RoadRun) {
+	needed := false
+	for _, r := range chunk {
+		if !r.CapHead || !r.CapTail {
+			needed = true
+			break
+		}
+	}
+	if !needed {
+		return
+	}
+	s.WriteString(", [")
+	for i, r := range chunk {
+		if i > 0 {
+			s.WriteString(", ")
+		}
+		fmt.Fprintf(s, "[%d, %d]", boolBit(r.CapHead), boolBit(r.CapTail))
+	}
+	s.WriteString("]")
+}
+
+func boolBit(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
 }
 
 // chunkRuns cuts a colour group into modules that stay under the triangle
@@ -648,13 +853,13 @@ func junctionTriangles(j Junction, detail bool) int {
 // writePiers emits harbour piers: a solid deck standing in the water. Closed
 // ways are deck outlines and get extruded; open ways get a slab strip.
 func writePiers(s *strings.Builder, piers []Line, opt EmitOptions, waterLevel float64,
-	report *EmitReport) string {
+	sc scope, report *EmitReport) string {
 	if len(piers) == 0 {
 		return ""
 	}
 	s.WriteString("// Piers: solid decks from the water line up. They stand in dredged water,\n")
 	s.WriteString("// so they sit on the tile's water plane rather than snapping to the bed.\n")
-	s.WriteString("module piers() {\n")
+	fmt.Fprintf(s, "module %s() {\n", sc.sym("piers"))
 	fmt.Fprintf(s, "    WL = %s;\n", fnum(waterLevel))
 	fmt.Fprintf(s, "    color([%s, %s, %s]) {\n", fnum(pierColor[0]), fnum(pierColor[1]), fnum(pierColor[2]))
 	for _, p := range piers {
@@ -679,7 +884,7 @@ func writePiers(s *strings.Builder, piers []Line, opt EmitOptions, waterLevel fl
 		}
 	}
 	s.WriteString("    }\n}\n\n")
-	return "piers"
+	return sc.sym("piers")
 }
 
 // writeTrees emits the green-space planting. Positions are baked (Go owns the
@@ -689,26 +894,26 @@ func writePiers(s *strings.Builder, piers []Line, opt EmitOptions, waterLevel fl
 // The foliage is local geometry rather than kit_city_hd's hc_nature_tree: that
 // kit's leaf colour is 0.76 green, which blows out to a neon dot under
 // path-traced daylight at city scale.
-func writeTrees(s *strings.Builder, trees []treeSpot, report *EmitReport) string {
+func writeTrees(s *strings.Builder, trees []treeSpot, sc scope, report *EmitReport) string {
 	if len(trees) == 0 {
 		return ""
 	}
 	s.WriteString("// Green-space planting (leisure=park/garden, landuse=grass/forest).\n")
 	s.WriteString("// spots = [[x, y, scale, variant], ...]; one module, one Node.\n")
-	s.WriteString("TREEC = [[0.13, 0.20, 0.09], [0.16, 0.23, 0.11],\n")
+	fmt.Fprintf(s, "%s = [[0.13, 0.20, 0.09], [0.16, 0.23, 0.11],\n", sc.sym("TREEC"))
 	s.WriteString("         [0.11, 0.17, 0.08], [0.18, 0.25, 0.12]];\n")
-	s.WriteString("module veg(spots) {\n")
+	fmt.Fprintf(s, "module %s(spots) {\n", sc.sym("veg"))
 	s.WriteString("    for (k = [0 : len(spots) - 1])\n")
 	s.WriteString("        let (p = spots[k], x = p[0], y = p[1], s = p[2], i = p[3],\n")
-	s.WriteString("             z = gk_terrain_height(TERR, x, y)) {\n")
+	fmt.Fprintf(s, "             z = gk_terrain_height(%s, x, y)) {\n", sc.sym("TERR"))
 	s.WriteString("            color([0.19, 0.14, 0.10])\n")
 	s.WriteString("                translate([x, y, z]) cylinder(h = 1.7 * s, r = 0.22 * s, $fn = 5);\n")
-	s.WriteString("            color(TREEC[i % 4])\n")
+	fmt.Fprintf(s, "            color(%s[i %% 4])\n", sc.sym("TREEC"))
 	s.WriteString("                translate([x, y, z + 2.4 * s]) sphere(r = 1.6 * s, $fn = 6);\n")
-	s.WriteString("            color(TREEC[(i + 1) % 4])\n")
+	fmt.Fprintf(s, "            color(%s[(i + 1) %% 4])\n", sc.sym("TREEC"))
 	s.WriteString("                translate([x + 0.7 * s, y + 0.4 * s, z + 3.2 * s]) sphere(r = 1.0 * s, $fn = 5);\n")
 	s.WriteString("        }\n}\n\n")
-	s.WriteString("module veg_all() { veg([\n")
+	fmt.Fprintf(s, "module %s() { %s([\n", sc.sym("veg_all"), sc.sym("veg"))
 	for i, t := range trees {
 		if i > 0 {
 			s.WriteString(",\n")
@@ -717,7 +922,7 @@ func writeTrees(s *strings.Builder, trees []treeSpot, report *EmitReport) string
 		report.Triangles += 90
 	}
 	s.WriteString("]); }\n\n")
-	return "veg_all"
+	return sc.sym("veg_all")
 }
 
 // treeSpot is one baked planting position.
@@ -882,23 +1087,94 @@ func selectRoads(ir *IR, half float64, opt EmitOptions) []Road {
 	return out
 }
 
-// clipToSquare keeps the longest run of a polyline that stays inside the tile.
+// clipToSquare keeps the longest run of a polyline that stays inside the
+// square, cut *at* the boundary rather than at the last vertex before it.
+//
+// The interpolation is what makes an area's carriageways meet. Street stations
+// are 5 m apart, so dropping the outside vertices leaves each side of a seam
+// stopping up to 5 m short and a gap of up to 10 m in the middle of the road.
+// Clipped at the boundary, both sides end on the same line, with the same
+// direction (the crossing OSM segment is shared), and the ribbons meet.
 func clipToSquare(pts [][2]float64, half float64) [][2]float64 {
+	inside := func(p [2]float64) bool {
+		return math.Abs(p[0]) <= half && math.Abs(p[1]) <= half
+	}
 	var best, run [][2]float64
-	for _, p := range pts {
-		if math.Abs(p[0]) <= half && math.Abs(p[1]) <= half {
-			run = append(run, p)
-			continue
-		}
-		if len(run) > len(best) {
+	flush := func() {
+		if len(run) >= 2 && polylineLength(run) > polylineLength(best) {
 			best = run
 		}
 		run = nil
 	}
-	if len(run) > len(best) {
-		best = run
+	for i, p := range pts {
+		if inside(p) {
+			if len(run) == 0 && i > 0 {
+				if t0, _, ok := clipParam(pts[i-1], p, half); ok {
+					run = append(run, lerpPoint(pts[i-1], p, t0))
+				}
+			}
+			run = append(run, p)
+			continue
+		}
+		if len(run) > 0 {
+			if _, t1, ok := clipParam(pts[i-1], p, half); ok {
+				run = append(run, lerpPoint(pts[i-1], p, t1))
+			}
+			flush()
+			continue
+		}
+		// Neither end inside: a single long segment can still cross the square
+		// corner to corner, which matters once a part is only 1 km wide.
+		if i > 0 && !inside(pts[i-1]) {
+			if t0, t1, ok := clipParam(pts[i-1], p, half); ok && t1-t0 > 1e-9 {
+				run = append(run, lerpPoint(pts[i-1], p, t0), lerpPoint(pts[i-1], p, t1))
+				flush()
+			}
+		}
 	}
+	flush()
 	return best
+}
+
+// clipParam is Liang-Barsky against the axis-aligned square: the parameter
+// range of a -> b that lies inside it.
+func clipParam(a, b [2]float64, half float64) (t0, t1 float64, ok bool) {
+	t0, t1 = 0, 1
+	dx, dy := b[0]-a[0], b[1]-a[1]
+	edges := [4][2]float64{
+		{-dx, a[0] + half}, {dx, half - a[0]},
+		{-dy, a[1] + half}, {dy, half - a[1]},
+	}
+	for _, e := range edges {
+		pEdge, qEdge := e[0], e[1]
+		if math.Abs(pEdge) < 1e-12 {
+			if qEdge < 0 {
+				return 0, 0, false // parallel and outside
+			}
+			continue
+		}
+		r := qEdge / pEdge
+		if pEdge < 0 {
+			if r > t1 {
+				return 0, 0, false
+			}
+			if r > t0 {
+				t0 = r
+			}
+		} else {
+			if r < t0 {
+				return 0, 0, false
+			}
+			if r < t1 {
+				t1 = r
+			}
+		}
+	}
+	return t0, t1, true
+}
+
+func lerpPoint(a, b [2]float64, t float64) [2]float64 {
+	return [2]float64{a[0] + (b[0]-a[0])*t, a[1] + (b[1]-a[1])*t}
 }
 
 func writeCameras(s *strings.Builder, tile Tile, ir *IR, grid *HeightGrid) {

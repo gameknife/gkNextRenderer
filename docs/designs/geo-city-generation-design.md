@@ -5,8 +5,15 @@
 
 ```bash
 gnb geo make --name <tile> --at <lat>,<lon> --size 1000 [--profile default|europe|china|hongkong]
+gnb geo grow --name <tile> --size 3000        # 同一地点扩成 3km x 3km（只抓缺的 part）
 gnb shot --scene assets/geo/<tile>/<tile>.scad
 ```
+
+抓取按 Overpass 的限流节奏走（默认 30 秒一次，见 §7.7），所以 3x3 约四分钟、5x5 约十二分钟；
+中途断了重跑同一条命令从断点续上。
+
+`--size` 超过 1000 时，产物是**一张由 1km part 拼成的大地块**（§8）：每个 part 有自己的
+176 格地形，高程滤波 / 水面 / 基准面在整块区域上算一次再切片，所以接缝处不会错台。
 
 已验证 5 个 tile（沿海 3 / 内陆 2，含西经与南半球），见 §5.2c。单个 tile 端到端 10~25 秒，
 重跑逐字节一致。
@@ -430,16 +437,14 @@ Overpass `out body geom` 给每条 way 一个与 geometry **索引对齐**的 `n
 已知限制，按影响排序：
 
 - **CBD 绝对高程偏高且无法验证**（§5.1）。源数据是 DSM，密集城区不含裸地回波。唯一真解是 P6。
-- **单 tile 1km**。`cells ≤ 176`（超过 180² 单 Model 三角数越过 65535，引擎跳过物理网格），
-  所以 2km tile 只能 11.4m/格。做更大的地图需要先决定：接受更粗的地形，还是改引擎支持地形
-  跨多个 Model —— 这是引擎改动，生成器绕不过去。tile 边缘的建筑会被丢弃（香港 483 栋）。
+- **单个 part 仍是 1km**。`cells ≤ 176`（超过 180² 单 Model 三角数越过 65535，引擎跳过物理
+  网格），所以一块地形最多 1km / 5.7m 每格。更大的范围由**多个 part 拼接**解决（§8），不是
+  把一块地形拉大。区域最外圈的建筑仍然会被丢弃，内部接缝上的不会。
 - **TERR 只有一个全局水位**。一个 tile 里同时有不同高程的河与湖时只取最大的那个，其余跳过。
 - **30m DEM 上采样到 5.7m** = 多数是插值：宏观坡度对，微地形平滑。
 - **iOS 不可用**：`GK_WITH_EARCUT` 在 iOS 关闭，凹多边形建筑出不来。
-- **Overpass 限流**：首次请求常返回 HTTP 200 + HTML 限流页。已识别该情况并按 15s 起指数退避
-  重试 5 次（`errOverpassBusy`），失败时**不写缓存**。默认镜像仍会对某些 bbox 持续 EOF——
-  实测成都那一块重试 5 次全失败，换 `--overpass-endpoint https://overpass.kumi.systems/api/interpreter`
-  一次成功。
+- **Overpass 限流**：见 §7.7。限流页 / 5xx / 断流都算可重试，每次重试换一个镜像，失败时
+  **不写缓存**；重跑同一条命令从断点续上。
 - 生成场景含 `gk_*`，不兼容 OpenSCAD 本体；地形不得参与场景级 CSG。
 - 建筑体量仍是单个挤出棱柱，没有 `building:part`：IFC 二期、中银大厦这类有削切造型的
   塔楼只是加了窗格的棱柱，轮廓不会收分。
@@ -462,7 +467,162 @@ Overpass `out body geom` 给每条 way 一个与 geometry **索引对齐**的 `n
 - **NavGrid 区域要宽到装得下一条街级路线**。在中环这种密度下，紧贴两个端点画的框会被中间的
   街区整个封死，寻路正确地找不到路——这不是 bug。
 
-## 7. 验证
+## 7. 大地块：由 1km part 拼成的区域
+
+`--size 3000` / `5000` 生成的不是一块更大的地形，而是 **N x N 个 1km part**，每个 part 一个
+TERR + 一个 `.hmap`，全部放进同一个场景、各自 `translate` 到位。part 数是奇数（有唯一的中心
+part），上限 7x7。
+
+```bash
+gnb geo make --name nyc_times_square --at 40.758,-73.9855 --size 1000   # 先看看这地方值不值
+gnb geo grow --name nyc_times_square --size 3000     # 扩：只抓缺的 8 个 part
+gnb geo grow --name nyc_times_square --size 5000     # 再扩：只抓缺的 16 个
+gnb geo grow --name nyc_times_square --size 1000     # 缩回：只重发场景，缓存一个不删
+```
+
+目录仍然是"一个地点一个目录"，所以对消费端（`gnb geo pak`、NextWorldTravel 的 tile 列表）
+完全透明：
+
+```
+assets/geo/<name>/
+  <name>.scad          区域场景（N 个 TERR + N 个 part module）
+  poi.json             合并后的地点，pos 在区域坐标系，sizeM = 区域边长
+  mosaic.json          清单：每个 part 的 id / 偏移 / ring / LOD / hmap 路径
+  parts/p0_0/terrain.hmap   ...（1x1 时仍写在顶层 terrain.hmap，老 tile 不受影响）
+```
+
+### 7.1 为什么整块算地形，再切片
+
+**这是这一节唯一不能妥协的决定。** DSM→DTM 那一串全是**邻域算子**：形态学开运算窗口到 12 格
+（68m）、footprint inpaint、两遍 radius-2 box blur；水位和基准面更是整块地区**一个数**。
+按 part 各算一遍，每个算子都在 part 边界 clamp，两侧就对不上。
+
+实测两块相邻的曼哈顿 part（各自独立跑完整管线）：
+
+```
+seam mismatch over 177 samples: mean 0.24 m, max 0.98 m
+```
+
+在平地上这是一条肉眼可见的裂缝，1m 的台阶还会把 NavGrid 从中切断。所以 `BuildTerrainField`
+接受的是**整个区域**（5x5 就是 881² 个采样），一次滤波、一次水位规划、一次基准面，然后
+`HeightGrid.SubGrid` 按 176 格切片 —— 相邻 part 共享的那一列采样是**同一批数值**，接缝按
+构造为零。
+
+代价是形态学滤波的规模：naive 的 (2r+1)² 邻域在 881² 上是十几亿次比较，所以 `morph` 改成
+可分离的两趟（min/max 对矩形窗口可分离，结果逐位相同），半径 12 从 625 次采样降到 50 次。
+
+### 7.2 投影必须是区域的
+
+相邻 part 的中心不能各自按自己的切平面推。metres-per-degree 随纬度变，实测 40°N 处一步 1km
+会差 **3.9m**。`Tile.Frame` 让 part 借用区域的切平面并带一个自己的偏移；几何仍是 part 本地
+坐标（part module 用 `translate` 放置），共享的只有投影。
+
+### 7.3 接缝上的三条规则
+
+- **建筑按质心归属，允许外挑。** 内部接缝两侧的地形是连续的，`gk_terrain_height` 在域外
+  clamp 到边界值 —— 而边界值两侧相同，所以外挑的楼照样落在真地面上。反过来沿用"bbox 越界
+  就丢"，每条接缝上都会留一条空楼带。区域**最外圈**仍然照旧丢弃。
+- **裁剪要插值，不能丢点。** 街面站距 5m，直接丢掉界外顶点会让两侧各自停在离接缝最多 5m 的
+  地方，路中间留一个 10m 的洞。`clipToSquare` 改成 Liang–Barsky 在边界上切，两侧落在同一条
+  线上、方向也相同（跨接缝的那段 OSM 线是共用的），路面就接上了。
+- **接缝切断的 run 不发端头斑马线。** 否则每条接缝的马路中间会出现两道（两侧各一道）人行
+  横道。`RoadRun.CapHead/CapTail` 由 `markSeamCaps` 按端点是否落在内部接缝上决定，传给
+  `rd_network` 的 `caps` 参数。
+- TERR 的 `road` 算子按 **part + 120m** 裁剪（算子影响半径约 2.4 倍路宽，平滑窗口再往外一
+  截），这样接缝两侧压平到的高度一致。街面的**选择**框也放宽 150m，让接缝上的路口拓扑两侧
+  看到同一批 way。
+
+### 7.4 分级（LOD）
+
+求值耗时是线性的，所以必须分级。实测单个密集 part（Times Square，1401 栋）：
+
+| 层 | 解析 | 三角 |
+|---|---|---|
+| 完整 | **6.3s** | 968k |
+| └ 街道（sidewalks + props + markings） | **4.31s** | 217k |
+| └ 街道（三个开关关掉） | 1.05s | 89k |
+| └ 建筑块 | 1.74s | 706k |
+| └ 树 | 0.21s | — |
+| └ 地形（含 80 条 road 算子） | 0.14s | 63k |
+
+街面装饰占了三分之二，所以 `EmitOptions.StreetDetail` 从 `Detail` 里拆了出来。按环（到中心
+part 的 Chebyshev 距离）分三档，`--full-rings` / `--medium-rings` 可调：
+
+| ring | 层级 | 内容 |
+|---|---|---|
+| `< full-rings`（默认 1） | full | 和单 tile 完全一样 |
+| `< medium-rings`（默认 2） | medium | 保留立面/屋顶，街道去装饰，footprint ≥ 25m² |
+| 其余 | far | 光棱柱、无树、footprint ≥ 120m² 且高 ≥ 6m、只留干道 |
+
+### 7.5 并行求值
+
+区域场景的顶层就是一串互不相干的 `translate(...) part_pX_Y();`，所以求值器把**整条由
+Instance 组成的尾巴**分到工作线程上（`ScadEvaluator::RunScene` → `ParallelTopLevelStart`）。
+每个 worker 一份自己的 `Evaluator`、一份全局变量的拷贝、一段互不重叠的 instance id 与
+value identity 区间（`kParallelIdStride`），结果按语句顺序合并 —— 所以输出与顺序执行逐个
+节点一致。
+
+实测 3x3 曼哈顿（6.70M 三角、1213 节点）：
+
+| | 解析 | 提交 | 节点 / 三角 |
+|---|---|---|---|
+| 顺序 | **45.8s** | 6.5s | 1213 / 6701212 |
+| 并行 | **13.1s** | 6.7s | 1213 / 6701212 |
+
+节点数与三角数逐字相同，这本身就是确定性的检查。`ScadLoadOptions.parallelTopLevel = false`
+是 A/B 开关。共享状态只有两处需要动：FreeType 的进程级 `FT_Face` 加了一把锁（`text()` 在
+城市场景里可以忽略不计），`.hmap` 的进程级缓存本来就是带锁的。
+
+### 7.6 引擎/应用侧必须跟着改的三处
+
+1. **相机远平面**。`gk_camera` 标记走的是 `Camera` 结构体默认的 **2000m**，3km 区域对角
+   4.2km，overview 相机站在区域外 —— 整个场景被裁掉，画面全黑。`FScadLoader` 现在用
+   `SceneWorldBounds` + `ExtendCameraFarPlane` 按场景包围盒把作者相机的远平面往外推（只推
+   不拉）。NextWorldTravel 自己的 `kFarPlane` 也按区域边长缩放。
+2. **多地形派发**。`TerrainComponent` 的每个查询都在自己的域内 clamp，取第一个地形会让人走
+   出中心 part 之后一直贴着"边界高度"走。新增 `ContainsWorld` / `WorldBoundsXZ`，应用侧
+   `FGeoTerrainSet` 按位置派发；`Primary()` 是覆盖原点的那个 part，出生点搜索留在它里面。
+3. **POI 范围**。sidecar 现在覆盖整个区域，anchor 的范围检查要对整块区域的包围盒做，否则
+   3x3 只有中间九分之一的地点会 grounded；鸟瞰 marker 的可见距离也按区域边长缩放。
+
+### 7.7 数据获取：一个 part 一次请求
+
+Overpass 按 part 抓（每次 1km + 120m pad），不是整块区域一次：5x5 一次要几十 MB，而镜像明确
+要求不要这么用；按 part 抓还让 `grow` 是增量的。DEM 不受影响（SRTM 按 1° 瓦片缓存，扩大范围
+通常一个字节都不用再下）。
+
+part 的缓存目录按**相对中心的偏移**命名（`p0_0`、`pm1_1`），不按网格下标 —— 否则每次扩大，
+中心 part 都会换名字，把已经抓好的响应作废掉。
+
+**限流是按 IP 的节奏，不是按 bbox 大小。** 这一点值得单独记：被限之后，连
+`[out:json];out count;` 这种空查询都会被掐断 —— 看起来像"请求太大了"，其实和 bbox 完全无关。
+把 `--size 3000` 拆成 9 个 1km 请求解决的是响应体积，解决不了节奏。
+
+**`OverpassMinInterval = 30s` 是实测出来的节奏**：参考实例按 30 秒一次可以一直抓下去（一整批
+area 就是这么生成的），比这快就会换来一次临时封禁，代价远大于省下的时间。所以进程级有一个
+节流器（`waitForOverpassPace`），**跨 part、跨重试、跨镜像**统一生效，没有哪条路径能绕过它。
+3x3 约四分钟，5x5 约十二分钟，中途失败重跑同一条命令从断点续上（报错会带"已缓存 N/M 个
+part"）。本地实例用 `--overpass-interval 0` 关掉。
+
+重试时（且仅在重试时）会先问一次 `/api/status`，用服务器自己给的数字代替猜出来的退避：
+
+| 状态回的 | 做什么 |
+|---|---|
+| `Rate limit: 0` | 不等，直接发 |
+| `N slots available now.`（N ≥ 1） | 不等，直接发 |
+| `Slot available after: ..., in N seconds.` | 睡最近的那个 + 1s（上限 3 分钟，超了换镜像） |
+| 没有 `/api/status` / 解析不了 | 不等，退回退避重试 |
+
+稳态不查 status，因为那会给每个 part 多加一次请求；稳态靠的是上面那个 30s 节奏。
+
+镜像仍然是这条管线最不稳的一环：**所有 5xx 与读到一半断流都算可重试**，每次重试**换一个
+镜像**（`OverpassMirrors`），退避封顶 90s。
+
+**镜像必须是全球实例。** `overpass.osm.ch` 只有瑞士数据，而且不会说 —— 它对曼哈顿的查询回
+200 + 一个语法完美的空结果，实测一次写坏了 7 个 part 的缓存，管线照常拿它建了一块空地形。
+`emptyResult` 是这件事的安全带：空结果不直接落盘，先换下一个镜像，所有镜像都说空才认。
+
+## 8. 验证
 
 ```bash
 gnb shot --scene assets/scad/source/geo_city_probe.scad   # 细节层探针：六种立面 x 两种屋顶 + 一条街
@@ -472,7 +632,12 @@ gkNextUnitTests "[POI]"                             # poi.json 数据契约（�
 cd tools/gnb && go test ./internal/geo/             # fixture 驱动，不打网络
 gnb shot --scene assets/geo/hk_victoria/hk_victoria.scad
 gnb validate --script assets/agentscripts/next-world-travel-smoke.agentscript.json   # 端到端漫游闭环
+gnb validate --script assets/agentscripts/next-world-travel-browse.agentscript.json   --scene assets/geo/<大地块>/<大地块>.scad          # 大地块的鸟瞰/绕物闭环
 ```
+
+大地块多看两处：接缝和取景。接缝就临时把相机放到 part 边界（`x = ±500` 的整数倍）低角度看
+一眼街面接不接得上；取景看鸟瞰是不是整块都在画面里 —— 如果远的一半是黑的，那是远平面，
+不是雾。
 
 `gnb geo build` 输出的三组数字就是数据质量的看门指标：建筑高度的 tagged / levels / inferred
 覆盖率、地形的 building-masked / ground-filtered 数量、以及近岸坡度。

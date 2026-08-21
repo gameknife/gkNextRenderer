@@ -15,7 +15,17 @@ tile 是**生成物，不入库**：`assets/geo/` 被 gitignore，一个干净 c
 ```bash
 ./gnb.sh paks fetch geo          # 已发布的 tile：解到 assets/paks/geo.pak，引擎自动挂载
 ./gnb.sh geo make --name hk_victoria --at 22.2855,114.1580 --size 1000 --profile hongkong
+./gnb.sh geo grow --name hk_victoria --size 3000    # 同一地点扩成 3km x 3km
 ```
+
+**大地块**：`--size` 超过 1000 就是一片由 1km part 拼成的区域（3000 / 5000 / 7000）。抓取按
+Overpass 的限流节奏走（默认 30 秒一次），3x3 约四分钟、5x5 约十二分钟，断了重跑续上。一个
+part 一块地形，全部在同一个场景里。对这个程序来说是透明的 —— 目录结构没变，tile 列表里还是
+一个条目，HUD 顶上的尺寸会显示成 `3000 m`。三件事会自动跟着区域大小走：相机远平面、鸟瞰
+高度与平移范围、鸟瞰 marker 的可见距离。地面查询走 `FGeoTerrainSet` 按位置派发到对应的
+part（`TerrainComponent` 的查询各自在自己域内 clamp，取第一个会让人走出中心 part 后贴着
+边界高度走）；出生点仍然只在**中心 part** 里找。生成侧见
+[geo-city-generation-design §7](../designs/geo-city-generation-design.md)。
 
 `--profile` 同时决定建筑高度回退和**立面/屋顶的地域风格**（`default` / `europe` /
 `china` / `hongkong`）：欧洲旧城要用 `europe`，否则奥斯曼式街区会全是灰平顶。
@@ -218,6 +228,9 @@ lodging / park / place / other`）在三处必须一致：`tools/gnb/internal/ge
 ## 已知限制
 
 - **滑动窗口重建是同步的**，372×372 格约 1 秒，跨窗口时会卡一帧。要平滑需要异步重建 NavGrid。
+- **大地块的加载时间是线性的**：3km x 3km 的曼哈顿（6.7M 三角、1213 节点）解析 13s + 提交
+  7s。分级（外圈去装饰/光棱柱）和顶层并行求值把它从 46s 压到 13s，但再大仍然是等待，不是
+  流式加载。
 - **标签没有遮挡剔除**，楼后面的地点标签照样画在楼上（Aerial 的 marker 同理）。做正确需要每标签
   一次射线或深度查询。
 - **Focus 的遮挡判断只有一条射线**，加上邻域天际线抬升已经够用，但一根正好卡在视线上的细柱子

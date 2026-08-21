@@ -3,8 +3,11 @@ package geo
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -16,10 +19,26 @@ type Logf func(format string, args ...any)
 type Options struct {
 	RepoRoot         string
 	OverpassEndpoint string
+	// OverpassInterval is the minimum spacing between two Overpass requests.
+	// Zero means OverpassMinInterval; negative disables the pacing (a local
+	// instance does not need it).
+	OverpassInterval time.Duration
 	Emit             EmitOptions
 	DebugImages      bool
 	// Warnf receives data-quality warnings; falls back to the progress log.
 	Warnf Logf
+}
+
+// overpassInterval resolves the request spacing: unset means the measured
+// default, negative means the caller knows better (a local instance).
+func (o Options) overpassInterval() time.Duration {
+	if o.OverpassInterval == 0 {
+		return OverpassMinInterval
+	}
+	if o.OverpassInterval < 0 {
+		return 0
+	}
+	return o.OverpassInterval
 }
 
 func (o Options) warn(format string, args ...any) {
@@ -33,6 +52,7 @@ func DefaultOptions(repoRoot string) Options {
 	return Options{
 		RepoRoot:         repoRoot,
 		OverpassEndpoint: OverpassEndpoint,
+		OverpassInterval: OverpassMinInterval,
 		Emit:             DefaultEmitOptions(),
 	}
 }
@@ -41,39 +61,62 @@ func DefaultOptions(repoRoot string) Options {
 // straddle the tile edge are still covered.
 const demPadM = 120
 
-// Fetch downloads the raw DEM and OSM data for the tile (cached).
-func Fetch(tile Tile, opt Options, logf Logf) (*Meta, error) {
-	if err := tile.Normalize(); err != nil {
+// Fetch downloads the raw DEM and OSM data for every part of the area (cached).
+//
+// One Overpass request per 1 km part rather than one for the whole box: a
+// 5x5 request would be tens of megabytes from a mirror that asks callers not to
+// do that, and per-part requests are what make `gnb geo grow` incremental —
+// growing 3x3 to 5x5 fetches the sixteen new parts and reuses the nine it
+// already has. The DEM needs no such care: SRTM is cached as whole 1-degree
+// tiles, so a bigger area almost always costs zero extra downloads.
+func Fetch(m Mosaic, opt Options, logf Logf) (*Meta, error) {
+	if err := m.Normalize(); err != nil {
 		return nil, err
 	}
-	paths := NewPaths(opt.RepoRoot, tile.Name)
-	bbox := tile.BBox(demPadM)
+	paths := NewPaths(opt.RepoRoot, m.Name)
+	area := m.BBox(demPadM)
 
-	_, demSources, err := NewSampler(bbox, paths.DemDir(), logf)
+	_, demSources, err := NewSampler(area, paths.DemDir(), logf)
 	if err != nil {
 		return nil, fmt.Errorf("elevation: %w", err)
 	}
 
-	fetched, err := FetchOverpass(opt.OverpassEndpoint, bbox, paths.OsmPath(), logf)
-	if err != nil {
-		return nil, fmt.Errorf("overpass: %w", err)
-	}
-	if !fetched {
-		logf("overpass: cached (%s)", relTo(opt.RepoRoot, paths.OsmPath()))
-	}
-	sum, size, err := sha256File(paths.OsmPath())
-	if err != nil {
-		return nil, err
+	parts := m.Parts()
+	sources := demSources
+	for i, part := range parts {
+		tile := m.TileFor(part)
+		dst := paths.PartOsmPath(part.ID)
+		adoptLegacyPartCache(paths, m, part)
+		if len(parts) > 1 {
+			logf("part %s (%d/%d) at %.5f,%.5f", part.ID, i+1, len(parts), part.Lat, part.Lon)
+		}
+		fetched, err := FetchOverpass(opt.OverpassEndpoint, tile.BBox(demPadM), dst,
+			opt.overpassInterval(), logf)
+		if err != nil {
+			// Say what survives, because it is almost everything: each part is
+			// cached the moment it lands, so re-running the same command picks
+			// up where this stopped rather than starting over.
+			return nil, fmt.Errorf("overpass %s (%d of %d parts already cached — "+
+				"re-run the same command to continue): %w", part.ID, i, len(parts), err)
+		}
+		if !fetched {
+			logf("overpass: cached (%s)", relTo(opt.RepoRoot, dst))
+		}
+		sum, size, err := sha256File(dst)
+		if err != nil {
+			return nil, err
+		}
+		sources = append(sources, Source{
+			Kind: "osm", URL: opt.OverpassEndpoint, Path: dst,
+			Bytes: size, SHA256: sum, License: osmLicense,
+		})
 	}
 
 	meta := &Meta{
-		Tile: tile.Name, Lat: tile.Lat, Lon: tile.Lon, SizeM: tile.SizeM,
-		BBox:      [4]float64{bbox.South, bbox.West, bbox.North, bbox.East},
+		Tile: m.Name, Lat: m.Lat, Lon: m.Lon, SizeM: m.SizeM,
+		BBox:      [4]float64{area.South, area.West, area.North, area.East},
 		FetchedAt: time.Now().UTC(),
-		Sources: append(demSources, Source{
-			Kind: "osm", URL: opt.OverpassEndpoint, Path: paths.OsmPath(),
-			Bytes: size, SHA256: sum, License: osmLicense,
-		}),
+		Sources:   sources,
 	}
 	for i := range meta.Sources {
 		meta.Sources[i].Path = relTo(opt.RepoRoot, meta.Sources[i].Path)
@@ -84,54 +127,103 @@ func Fetch(tile Tile, opt Options, logf Logf) (*Meta, error) {
 	return meta, nil
 }
 
-// BuildResult is what stage B+C produce.
-type BuildResult struct {
-	IR      *IR
-	Grid    *HeightGrid
-	Terrain TerrainReport
-	Stats   Stats
+// adoptLegacyPartCache moves a pre-area cache into the centre part's slot.
+//
+// Before areas existed, a tile's Overpass response lived at
+// external/geocache/<tile>/osm/. The centre part of an area centred on that
+// same point wants exactly that response, and re-downloading it just to move it
+// is a pointless request to a mirror that rate-limits. The query fingerprint is
+// moved with it, so a genuinely different box is still detected and re-fetched.
+func adoptLegacyPartCache(paths Paths, m Mosaic, part Part) {
+	if part != m.CentrePart() {
+		return
+	}
+	dst := paths.PartOsmPath(part.ID)
+	if fileExists(dst) {
+		return
+	}
+	legacy := filepath.Join(paths.CacheDir(), "osm", "overpass.json")
+	if !fileExists(legacy) {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return
+	}
+	if err := os.Rename(legacy, dst); err != nil {
+		return
+	}
+	_ = os.Rename(queryFingerprintPath(legacy), queryFingerprintPath(dst))
+	_ = os.Remove(filepath.Dir(legacy))
 }
 
-// Build normalises the cached OSM data into the IR and turns the DEM into the
-// tile's .hmap. Requires a prior Fetch.
-func Build(tile Tile, opt Options, logf Logf) (*BuildResult, error) {
-	if err := tile.Normalize(); err != nil {
-		return nil, err
-	}
-	paths := NewPaths(opt.RepoRoot, tile.Name)
-	if !fileExists(paths.OsmPath()) {
-		return nil, fmt.Errorf("no cached OSM data for %q — run `gnb geo fetch` first", tile.Name)
-	}
-	profile, ok := Profiles[tile.Profile]
-	if !ok {
-		return nil, fmt.Errorf("unknown height profile %q (have: %s)", tile.Profile, profileNames())
-	}
+// BuildResult is what stage B+C produce for the whole area.
+type BuildResult struct {
+	Parts   []*IR
+	Grids   []*HeightGrid
+	Terrain TerrainReport
+	Stats   Stats
+	POIs    int
+}
 
-	elements, err := ParseOverpass(paths.OsmPath())
-	if err != nil {
+// Build normalises every part's cached OSM data into its IR, derives one
+// heightfield for the whole area and slices it into the parts.
+//
+// The single field is the load-bearing decision (see TerrainArea): every step
+// of the DSM-to-DTM chain is a neighbourhood operation and the water plane and
+// datum are single numbers, so doing this per part leaves a step at every seam.
+func Build(m Mosaic, opt Options, logf Logf) (*BuildResult, error) {
+	if err := m.Normalize(); err != nil {
 		return nil, err
+	}
+	paths := NewPaths(opt.RepoRoot, m.Name)
+	profile, ok := Profiles[m.Profile]
+	if !ok {
+		return nil, fmt.Errorf("unknown height profile %q (have: %s)", m.Profile, profileNames())
 	}
 	landmarks, err := LoadLandmarks(opt.RepoRoot)
 	if err != nil {
 		return nil, err
 	}
-	ir := Normalize(tile, elements, profile, landmarks)
-	stats := ir.Summarize()
-	logf("normalized: %d buildings (%d tagged / %d levels / %d inferred), %d roads, %d water areas, %d coastline ways",
-		stats.Buildings, stats.HeightFromTag, stats.HeightFromLvls, stats.HeightInferred,
-		stats.Roads, stats.WaterAreas, stats.CoastlineWays)
-	if stats.TallestName != "" {
-		logf("tallest: %s at %.0fm", stats.TallestName, stats.TallestHeight)
+
+	parts := m.Parts()
+	single := len(parts) == 1
+	irs := make([]*IR, len(parts))
+	var total Stats
+	for i, part := range parts {
+		osm := paths.PartOsmPath(part.ID)
+		if !fileExists(osm) {
+			return nil, fmt.Errorf("no cached OSM data for part %s of %q — run `gnb geo fetch` first",
+				part.ID, m.Name)
+		}
+		elements, err := ParseOverpass(osm)
+		if err != nil {
+			return nil, fmt.Errorf("part %s: %w", part.ID, err)
+		}
+		ir := Normalize(m.TileFor(part), elements, profile, landmarks)
+		irs[i] = ir
+		st := ir.Summarize()
+		total.Buildings += st.Buildings
+		total.HeightFromTag += st.HeightFromTag
+		total.HeightFromLvls += st.HeightFromLvls
+		total.HeightInferred += st.HeightInferred
+		total.Roads += st.Roads
+		total.WaterAreas += st.WaterAreas
+		total.CoastlineWays += st.CoastlineWays
+		total.POIs += st.POIs
+		total.POINodes += st.POINodes
+		if st.TallestHeight > total.TallestHeight {
+			total.TallestHeight, total.TallestName = st.TallestHeight, st.TallestName
+		}
 	}
-	logf("pois: %d (%d from standalone nodes) — %s",
-		stats.POIs, stats.POINodes, FormatPOICounts(ir.POIs))
-	if stats.POIs == 0 {
-		opt.warn("no named places in this tile — the POI layer will be empty. " +
-			"Either OSM has no names here, or the cached Overpass response predates " +
-			"the POI selectors (delete external/geocache/<tile>/osm and re-fetch).")
+	logf("normalized: %d buildings (%d tagged / %d levels / %d inferred), %d roads, %d water areas, %d coastline ways%s",
+		total.Buildings, total.HeightFromTag, total.HeightFromLvls, total.HeightInferred,
+		total.Roads, total.WaterAreas, total.CoastlineWays, partSuffix(len(parts)))
+	if total.TallestName != "" {
+		logf("tallest: %s at %.0fm", total.TallestName, total.TallestHeight)
 	}
 
-	sampler, _, err := NewSampler(tile.BBox(demPadM), paths.DemDir(), logf)
+	// ---- one heightfield for the whole area, then slice ---------------------
+	sampler, _, err := NewSampler(m.BBox(demPadM), paths.DemDir(), logf)
 	if err != nil {
 		return nil, err
 	}
@@ -139,19 +231,14 @@ func Build(tile Tile, opt Options, logf Logf) (*BuildResult, error) {
 	if opt.DebugImages {
 		debugDir = filepath.Join(paths.CacheDir(), "debug")
 	}
-	grid, terrainReport, err := BuildTerrain(tile, ir, sampler, debugDir)
+	areaIR := unionIR(m, parts, irs)
+	areaProj := NewProj(m.Lat, m.Lon)
+	field, terrainReport, err := BuildTerrainField(TerrainArea{
+		SizeM:     m.SizeM,
+		Cells:     m.Cells * m.Grid(),
+		Unproject: areaProj.Inverse,
+	}, areaIR, sampler, debugDir)
 	if err != nil {
-		return nil, err
-	}
-	// The terrain stage derives the tile datum; the emitter reads it back from
-	// the IR, so the IR is written after the terrain rather than before.
-	ir.Terrain = &TerrainMeta{
-		BaseElevation: terrainReport.BaseElevation,
-		HasWater:      terrainReport.Water.HasWater,
-		IsSea:         terrainReport.Water.IsSea,
-		WaterLevel:    terrainReport.Water.Level,
-	}
-	if err := writeJSON(paths.IRPath(), ir); err != nil {
 		return nil, err
 	}
 	logf("terrain: %s", terrainReport)
@@ -161,58 +248,268 @@ func Build(tile Tile, opt Options, logf Logf) (*BuildResult, error) {
 			"in the built-up area read high; see design §5.1.",
 			terrainReport.CoastalGradient*100)
 	}
-	if debugDir != "" {
-		logf("debug images: %s", relTo(opt.RepoRoot, debugDir))
-	}
 
-	blob, err := EncodeHmap(grid)
-	if err != nil {
-		return nil, err
+	meta := &TerrainMeta{
+		BaseElevation: terrainReport.BaseElevation,
+		PaletteSpan:   math.Max(0, terrainReport.MaxLand-terrainReport.BaseElevation),
+		HasWater:      terrainReport.Water.HasWater,
+		IsSea:         terrainReport.Water.IsSea,
+		WaterLevel:    terrainReport.Water.Level,
 	}
-	if err := os.MkdirAll(paths.AssetDir(), 0o755); err != nil {
-		return nil, err
+	grids := make([]*HeightGrid, len(parts))
+	hmapBytes := 0
+	for i, part := range parts {
+		grid := field.SubGrid(part.Col*m.Cells, part.Row*m.Cells, m.Cells,
+			-PartSizeM/2, -PartSizeM/2)
+		grids[i] = grid
+		blob, err := EncodeHmap(grid)
+		if err != nil {
+			return nil, err
+		}
+		dst := paths.PartHmapPath(part.ID, single)
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(dst, blob, 0o644); err != nil {
+			return nil, err
+		}
+		hmapBytes += len(blob)
+		// The terrain stage derives the datum, so the IR is written after it.
+		irs[i].Terrain = meta
+		if err := writeJSON(paths.PartIRPath(part.ID), irs[i]); err != nil {
+			return nil, err
+		}
 	}
-	if err := os.WriteFile(paths.HmapPath(), blob, 0o644); err != nil {
-		return nil, err
-	}
-	logf("wrote %s (%d KB)", relTo(opt.RepoRoot, paths.HmapPath()), len(blob)/1024)
+	logf("wrote %d heightfield(s), %d KB total", len(parts), hmapBytes/1024)
 
+	pois := mergePOIs(parts, irs)
 	poiFile := POIFile{
-		Format: POIFormat, Tile: tile.Name,
-		Center: [2]float64{tile.Lat, tile.Lon}, SizeM: tile.SizeM,
-		Attribution: ir.Attribution, POIs: ir.POIs,
+		Format: POIFormat, Tile: m.Name,
+		Center: [2]float64{m.Lat, m.Lon}, SizeM: m.SizeM,
+		Attribution: irs[0].Attribution, POIs: pois,
 	}
 	if err := writeJSON(paths.POIPath(), poiFile); err != nil {
 		return nil, err
 	}
-	logf("wrote %s (%d places)", relTo(opt.RepoRoot, paths.POIPath()), len(ir.POIs))
+	logf("wrote %s (%d places) — %s", relTo(opt.RepoRoot, paths.POIPath()), len(pois),
+		FormatPOICounts(pois))
+	if len(pois) == 0 {
+		opt.warn("no named places in this area — the POI layer will be empty. " +
+			"Either OSM has no names here, or the cached Overpass response predates " +
+			"the POI selectors (delete external/geocache/<tile>/parts and re-fetch).")
+	}
 
-	if err := writeAttribution(paths, tile, ir); err != nil {
+	if err := writeMosaicManifest(paths, m, single, irs[0].Attribution); err != nil {
 		return nil, err
 	}
-	return &BuildResult{IR: ir, Grid: grid, Terrain: terrainReport, Stats: stats}, nil
+	prunePartAssets(paths, m, logf)
+	if err := writeAttribution(paths, m, irs[0]); err != nil {
+		return nil, err
+	}
+	if debugDir != "" {
+		logf("debug images: %s", relTo(opt.RepoRoot, debugDir))
+	}
+	return &BuildResult{Parts: irs, Grids: grids, Terrain: terrainReport,
+		Stats: total, POIs: len(pois)}, nil
 }
 
-// Scad renders the .scad scene from the cached IR + .hmap. Requires a prior Build.
-func Scad(tile Tile, opt Options, logf Logf) (string, EmitReport, error) {
-	if err := tile.Normalize(); err != nil {
+// unionIR gathers every part's footprints, water and coastline into one
+// area-local IR for the terrain stage. Parts overlap by the query pad, so the
+// same way arrives several times; it is deduplicated by OSM id rather than
+// by ownership, because a footprint straddling the rim still has to be masked
+// out of the DSM even though no part will emit it.
+func unionIR(m Mosaic, parts []Part, irs []*IR) *IR {
+	out := &IR{Tile: m.Name, Center: [2]float64{m.Lat, m.Lon}, SizeM: m.SizeM}
+	if len(irs) == 1 {
+		return irs[0]
+	}
+	seenB := map[int64]bool{}
+	seenW := map[int64]bool{}
+	seenC := map[int64]bool{}
+	for i, part := range parts {
+		dx, dy := part.OffsetX, part.OffsetY
+		for _, b := range irs[i].Buildings {
+			if seenB[b.ID] {
+				continue
+			}
+			seenB[b.ID] = true
+			b.Outer = shiftRing(b.Outer, dx, dy)
+			b.Inners = shiftRings(b.Inners, dx, dy)
+			out.Buildings = append(out.Buildings, b)
+		}
+		for _, w := range irs[i].Waters {
+			if seenW[w.ID] {
+				continue
+			}
+			seenW[w.ID] = true
+			w.Outer = shiftRing(w.Outer, dx, dy)
+			w.Inners = shiftRings(w.Inners, dx, dy)
+			out.Waters = append(out.Waters, w)
+		}
+		for _, c := range irs[i].Coastline {
+			if seenC[c.ID] {
+				continue
+			}
+			seenC[c.ID] = true
+			c.Pts = shiftRing(c.Pts, dx, dy)
+			out.Coastline = append(out.Coastline, c)
+		}
+	}
+	return out
+}
+
+func shiftRing(r Ring, dx, dy float64) Ring {
+	out := make(Ring, len(r))
+	for i, p := range r {
+		out[i] = [2]float64{p[0] + dx, p[1] + dy}
+	}
+	return out
+}
+
+func shiftRings(rs []Ring, dx, dy float64) []Ring {
+	if len(rs) == 0 {
+		return nil
+	}
+	out := make([]Ring, len(rs))
+	for i, r := range rs {
+		out[i] = shiftRing(r, dx, dy)
+	}
+	return out
+}
+
+// mergePOIs lifts every part's places into area coordinates. Each part already
+// clipped its own set to its own square, so the union has no gaps and no
+// duplicates; the id set is checked anyway because a place sitting exactly on a
+// seam passes both clips.
+func mergePOIs(parts []Part, irs []*IR) []POI {
+	var out []POI
+	seen := map[string]bool{}
+	for i, part := range parts {
+		for _, p := range irs[i].POIs {
+			key := fmt.Sprintf("%s/%d", p.Source, p.ID)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			p.Pos = [2]float64{p.Pos[0] + part.OffsetX, p.Pos[1] + part.OffsetY}
+			out = append(out, p)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Rank != out[j].Rank {
+			return out[i].Rank > out[j].Rank
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+// prunePartAssets removes the heightfields of parts the area no longer has.
+//
+// Shrinking is meant to be free — nothing in the cache is touched, so growing
+// back costs no downloads — but the *outputs* of the parts that went away must
+// not survive: assets/geo/<name> is packed wholesale by `gnb geo pak`, and a
+// stale part would ship as a heightfield no scene references. Only directories
+// under parts/ whose name is a part id are considered, and only those outside
+// the current grid.
+func prunePartAssets(paths Paths, m Mosaic, logf Logf) {
+	if m.Grid() > 1 {
+		// The flat heightfield of a former 1x1 area is an orphan once the parts
+		// own theirs; it is the same trap in the other direction.
+		if err := os.Remove(paths.HmapPath()); err == nil {
+			logf("dropped the single-part heightfield the area outgrew")
+		}
+	}
+	root := filepath.Join(paths.AssetDir(), "parts")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return
+	}
+	keep := map[string]bool{}
+	// A 1x1 area writes its heightfield at the top of the directory, so it keeps
+	// nothing under parts/ — not even its own centre, whose file from a larger
+	// pass would otherwise survive as an orphan the scene never reads.
+	if m.Grid() > 1 {
+		for _, part := range m.Parts() {
+			keep[part.ID] = true
+		}
+	}
+	removed := 0
+	for _, entry := range entries {
+		if !entry.IsDir() || keep[entry.Name()] || !partIDPattern.MatchString(entry.Name()) {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(root, entry.Name())); err == nil {
+			removed++
+		}
+	}
+	if removed > 0 {
+		logf("dropped %d part(s) the area no longer covers (their cache is kept)", removed)
+	}
+	// An area that shrank back to one part writes its heightfield at the top
+	// again, so the empty parts/ directory should not linger either.
+	if rest, err := os.ReadDir(root); err == nil && len(rest) == 0 {
+		_ = os.Remove(root)
+	}
+}
+
+// partIDPattern is the shape PartAt produces: p<signed>_<signed>, where a
+// negative offset is spelled with a leading m.
+var partIDPattern = regexp.MustCompile(`^p(m?\d+)_(m?\d+)$`)
+
+func writeMosaicManifest(paths Paths, m Mosaic, single bool, attribution []string) error {
+	f := MosaicFile{
+		Format: MosaicFormat, Name: m.Name,
+		Center: [2]float64{m.Lat, m.Lon}, SizeM: m.SizeM, PartSizeM: PartSizeM,
+		Grid: m.Grid(), Cells: m.Cells, Profile: m.Profile, Seed: m.Seed,
+		FullRings: m.FullRings, MediumRings: m.MediumRings,
+		Attribution: attribution,
+	}
+	for _, part := range m.Parts() {
+		f.Parts = append(f.Parts, MosaicPart{
+			ID: part.ID, Col: part.Col, Row: part.Row, Ring: part.Ring,
+			LOD:    m.LODForRing(part.Ring).String(),
+			Offset: [2]float64{part.OffsetX, part.OffsetY},
+			Center: [2]float64{part.Lat, part.Lon},
+			Hmap:   paths.PartHmapAssetRef(part.ID, single),
+		})
+	}
+	return writeJSON(paths.MosaicPath(), f)
+}
+
+// Scad renders the scene from the cached part IRs and heightfields.
+func Scad(m Mosaic, opt Options, logf Logf) (string, EmitReport, error) {
+	if err := m.Normalize(); err != nil {
 		return "", EmitReport{}, err
 	}
-	paths := NewPaths(opt.RepoRoot, tile.Name)
-	var ir IR
-	if err := readJSON(paths.IRPath(), &ir); err != nil {
-		return "", EmitReport{}, fmt.Errorf("no IR for %q — run `gnb geo build` first (%w)", tile.Name, err)
-	}
-	blob, err := os.ReadFile(paths.HmapPath())
-	if err != nil {
-		return "", EmitReport{}, fmt.Errorf("no .hmap for %q — run `gnb geo build` first (%w)", tile.Name, err)
-	}
-	grid, err := DecodeHmap(blob)
-	if err != nil {
-		return "", EmitReport{}, err
+	paths := NewPaths(opt.RepoRoot, m.Name)
+	parts := m.Parts()
+	single := len(parts) == 1
+
+	scenes := make([]PartScene, 0, len(parts))
+	for _, part := range parts {
+		var ir IR
+		if err := readJSON(paths.PartIRPath(part.ID), &ir); err != nil {
+			return "", EmitReport{}, fmt.Errorf("no IR for part %s of %q — run `gnb geo build` first (%w)",
+				part.ID, m.Name, err)
+		}
+		blob, err := os.ReadFile(paths.PartHmapPath(part.ID, single))
+		if err != nil {
+			return "", EmitReport{}, fmt.Errorf("no .hmap for part %s of %q — run `gnb geo build` first (%w)",
+				part.ID, m.Name, err)
+		}
+		grid, err := DecodeHmap(blob)
+		if err != nil {
+			return "", EmitReport{}, err
+		}
+		scenes = append(scenes, PartScene{
+			Part: part, Tile: m.TileFor(part), IR: &ir, Grid: grid,
+			HmapRef: paths.PartHmapAssetRef(part.ID, single),
+			LOD:     m.LODForRing(part.Ring), Edges: m.EdgesFor(part),
+		})
 	}
 
-	source, report := Emit(tile, &ir, grid, paths.HmapAssetRef(), opt.Emit)
+	source, report := EmitMosaic(m, scenes, opt.Emit)
 	if err := os.MkdirAll(filepath.Dir(paths.ScadPath()), 0o755); err != nil {
 		return "", report, err
 	}
@@ -221,6 +518,13 @@ func Scad(tile Tile, opt Options, logf Logf) (string, EmitReport, error) {
 	}
 	logf("emitted: %s", report)
 	return paths.ScadPath(), report, nil
+}
+
+func partSuffix(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return fmt.Sprintf(" across %d parts", n)
 }
 
 // LoadLandmarks reads the optional per-OSM-id height override table.
@@ -250,11 +554,11 @@ func LoadLandmarks(repoRoot string) (map[int64]float64, error) {
 	return out, nil
 }
 
-func writeAttribution(paths Paths, tile Tile, ir *IR) error {
+func writeAttribution(paths Paths, m Mosaic, ir *IR) error {
 	var s strings.Builder
-	fmt.Fprintf(&s, "# %s — data attribution\n\n", tile.Name)
-	fmt.Fprintf(&s, "Generated by `gnb geo` from public data for the tile centred on\n")
-	fmt.Fprintf(&s, "%.5f, %.5f (%.0f x %.0f m).\n\n", tile.Lat, tile.Lon, tile.SizeM, tile.SizeM)
+	fmt.Fprintf(&s, "# %s — data attribution\n\n", m.Name)
+	fmt.Fprintf(&s, "Generated by `gnb geo` from public data for the area centred on\n")
+	fmt.Fprintf(&s, "%.5f, %.5f (%.0f x %.0f m).\n\n", m.Lat, m.Lon, m.SizeM, m.SizeM)
 	s.WriteString("Sources:\n\n")
 	for _, a := range ir.Attribution {
 		fmt.Fprintf(&s, "- %s\n", a)

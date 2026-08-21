@@ -1,12 +1,12 @@
 #pragma once
 
+#include "GeoTerrainSet.h"
 #include "NextWorldTravelConfig.hpp"
 
 #include <glm/glm.hpp>
 
 #include <functional>
 
-namespace Runtime { class TerrainComponent; }
 
 namespace NextWorldTravel
 {
@@ -48,7 +48,7 @@ namespace NextWorldTravel
     {
         glm::vec3 walkerPosition{0.0f};
         bool walkerValid = false;
-        const Runtime::TerrainComponent* terrain = nullptr;
+        const FGeoTerrainSet* terrain = nullptr;
         // Distance from `origin` along `direction` to the first scene hit, or a
         // negative value when the ray is clear.
         std::function<float(const glm::vec3& origin, const glm::vec3& direction)> probe;
@@ -78,6 +78,11 @@ namespace NextWorldTravel
 
         // ---- Modes --------------------------------------------------------
         void SetMode(EViewMode mode, const FCameraWorld& world);
+
+        // How big the loaded area is, in metres per side. The map view's
+        // framing distance, its zoom ceiling and how far the pivot may pan are
+        // all "the whole thing in frame" numbers, so they scale with it.
+        void SetAreaSize(float metres);
         // Restores the active view's predictable starting framing without
         // discarding the current world, tile, or focus subject.
         void ResetView(EViewMode mode, const FCameraWorld& world);
@@ -143,6 +148,8 @@ namespace NextWorldTravel
         glm::vec2 aerialPivot_{0.0f};
         float aerialDistance_ = Config::kAerialDistance;
         float aerialPitch_ = Config::kAerialPitch;
+        // 1.0 for a single 1 km part; 3.0 for a 3 km area, and so on.
+        float areaScale_ = 1.0f;
 
         // Focus
         FFocusSubject subject_;

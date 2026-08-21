@@ -30,7 +30,7 @@ TERR 编码（compose 自动生成，手写参考 `assets/scad/proc/terrain_demo
 
 ```scad
 TERR = ["gkterr1", [sizeX, sizeY], [cellsX, cellsY], seed,
-        [baseHeight, relief, roughness], waterLevel /*或 undef*/, "temperate",
+        [baseHeight, relief, roughness, paletteSpan?], waterLevel /*或 undef*/, "temperate",
         [ ["mountain", [x,y], radius, height, rugged],
           ["ridge",    [[x,y],...], width, height],
           ["plateau",  [x,y], radius, height],
@@ -43,6 +43,12 @@ TERR = ["gkterr1", [sizeX, sizeY], [cellsX, cellsY], seed,
 
 - features **按序作用**：hmap→山→河（下切+水面）→路（压平）→pad（最后压平）。
 - 全部 seed 确定性；同 TERR 逐字节同网格。cells 上限 256（评估器 clamp + warn）。
+- `paletteSpan`（可选第 4 项）：调色板色带覆盖的起伏（米，从 baseHeight 起算）。省略时用本块
+  地形自己的最高点 —— 单块地形正确，**一片由多块地形拼成的区域就不行**：每块各按自己的最高
+  点定色带，接缝两侧会变色。`gnb geo` 的大地块统一发整块区域的值。
+- `urban` 另有一条 `minGreenRiseM = 40`：起伏不到 40m 就完全不上绿色。色带本来是"本块起伏的
+  百分比"，这对城市问错了问题 —— 曼哈顿建成区总共只有 27m 起伏，55% 就是 15m，半个中城会被
+  涂成山坡。
 - 调色板：`temperate` / `arid` / `alpine` / `urban`；biomeId 枚举见 `FScadTerrain.h`
   `ETerrainBiome`（grass=0, grass_dark, dry_grass, sand, rock, rock_high, snow, bed, road, pad）。
   `urban` 把低平地染成混凝土、把高处染成绿坡并**彻底关掉雪线**（城市丘陵只有一两百米，
@@ -67,6 +73,9 @@ TERR = ["gkterr1", [sizeX, sizeY], [cellsX, cellsY], seed,
   字面量会让每次 `gk_terrain_height(TERR, x, y)` 传参深拷贝数 MB。文件形式让 TERR 保持 ~2KB。
 - 网格按路径进程级缓存；`SpecCacheKey` 纳入 path + 内容 hash，改了 `.hmap` 会正确失效。
 - 生成器见 [真实地理数据 → 城市关卡](../designs/geo-city-generation-design.md)（`gnb geo`）。
+  超过 1km 的范围由**多块地形拼接**实现（同一场景里 N 个 TERR，各自 `translate` 到位），
+  不是把一块地形拉大 —— cells 上限决定了一块地形最细只能覆盖 1km。多地形场景的位置派发用
+  `TerrainComponent::ContainsWorld`；每个查询都在自己域内 clamp，取第一个地形是错的。
 
 ## 贴地组合子（`assets/scad/lib/kit_terrain.scad`，catalog 不收录）
 

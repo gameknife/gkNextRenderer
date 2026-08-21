@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GeoTerrainSet.h"
 #include "GeoTileCatalog.h"
 
 #include <glm/glm.hpp>
@@ -8,7 +9,6 @@
 #include <string>
 #include <vector>
 
-namespace Runtime { class TerrainComponent; }
 class NextGameInstanceBase;
 
 namespace NextWorldTravel
@@ -48,10 +48,14 @@ namespace NextWorldTravel
         void SetHighlight(int poiIndex) { highlight_ = poiIndex; }
         int Highlight() const { return highlight_; }
 
+        // How far a marker stays on the map view, scaled to the loaded area by
+        // OnTerrainReady.
+        float AerialMarkerRange() const { return aerialMarkerRange_; }
+
         // Resolves every label's ground height against the loaded terrain. POIs
         // whose anchor falls outside the heightfield keep grounded == false and
         // are skipped: a label at y = 0 on a 480 m plateau is worse than none.
-        void OnTerrainReady(std::vector<FGeoPoi>& pois, const Runtime::TerrainComponent& terrain);
+        void OnTerrainReady(std::vector<FGeoPoi>& pois, const FGeoTerrainSet& terrain);
 
         // Recomputes the visible set for this frame's viewpoint.
         void Update(const std::vector<FGeoPoi>& pois, const glm::vec3& viewPosition);
@@ -107,6 +111,7 @@ namespace NextWorldTravel
         ELabelStyle style_ = ELabelStyle::Street;
         bool showLabels_ = true;
         int highlight_ = -1;
+        float aerialMarkerRange_ = Config::kAerialMarkerMaxDistance;
         int hovered_ = -1;
         int placedCount_ = 0;
         int groundedCount_ = 0;

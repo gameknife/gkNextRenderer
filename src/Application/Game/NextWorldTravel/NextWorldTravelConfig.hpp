@@ -48,7 +48,13 @@ namespace NextWorldTravel::Config
     // ---- Camera ----------------------------------------------------------
     inline constexpr float kFov = 55.0f;
     inline constexpr float kNearPlane = 1.0f;
+    // Enough for a 1 km tile. An area is a grid of them, so the runtime scales
+    // this (and the map-view distances below) by how big the loaded area
+    // actually is — a 5 km area has a 7 km diagonal, and a far plane short of
+    // it does not fade the far side out, it deletes it.
     inline constexpr float kFarPlane = 3000.0f;
+    // The area size every constant tuned for one tile is expressed against.
+    inline constexpr float kReferenceAreaM = 1000.0f;
     inline constexpr float kFollowDistance = 9.0f;
     inline constexpr float kFollowMinDistance = 2.0f;
     inline constexpr float kFollowMaxDistance = 90.0f;

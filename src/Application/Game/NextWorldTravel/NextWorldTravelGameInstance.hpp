@@ -15,7 +15,6 @@
 #include <unordered_map>
 #include <vector>
 
-namespace Runtime { class TerrainComponent; }
 
 // A browser for the city tiles `gnb geo` generates from real geographic data.
 //
@@ -107,7 +106,7 @@ private:
     std::unordered_map<std::string, FGeoSceneWatchCandidate> geoSceneWatchCandidates_;
     bool switchToAerialOnSceneLoad_ = false;
 
-    Runtime::TerrainComponent* terrain_ = nullptr;
+    NextWorldTravel::FGeoTerrainSet terrain_;
     bool sceneReady_ = false;
     bool walkerSpawned_ = false;
     bool walkerSpawnAttempted_ = false;

@@ -30,6 +30,56 @@ type Tile struct {
 	Cells   int     // terrain grid resolution per axis (<= 176, see design §6)
 	Profile string  // building height profile name
 	Seed    int     // terrain seed (jitter only; the field itself is data)
+
+	// Frame is the metric frame the tile's geometry is expressed in. The zero
+	// value means "my own centre", which is what a standalone tile uses.
+	Frame Frame
+}
+
+// Frame lets several tiles share one tangent plane.
+//
+// Metres-per-degree varies with latitude, so a neighbour centre derived from
+// the neighbour's own plane does not land exactly one part away: measured at
+// 40 degrees N, one 1 km step comes out 3.9 m long. A mosaic therefore owns the
+// projection and every part borrows it, carrying its own centre as an offset
+// inside that plane. Geometry stays part-local (the part module is placed with
+// a translate), so only the projection is shared, not the coordinates.
+type Frame struct {
+	Shared    bool    // false: OriginLat/Lon and the offsets are ignored
+	OriginLat float64 // tangent-plane origin (the mosaic centre)
+	OriginLon float64
+	OffsetX   float64 // this tile's centre inside the frame, metres east
+	OffsetY   float64 // ... metres north
+}
+
+// Proj is the tangent plane the tile's coordinates are measured in.
+func (t Tile) Proj() Proj {
+	if t.Frame.Shared {
+		return NewProj(t.Frame.OriginLat, t.Frame.OriginLon)
+	}
+	return NewProj(t.Lat, t.Lon)
+}
+
+// Offset is where the tile centre sits inside its frame; local coordinates are
+// frame coordinates minus this.
+func (t Tile) Offset() (x, y float64) {
+	if t.Frame.Shared {
+		return t.Frame.OffsetX, t.Frame.OffsetY
+	}
+	return 0, 0
+}
+
+// Project maps WGS84 degrees straight to this tile's local metres.
+func (t Tile) Project(lat, lon float64) (x, y float64) {
+	px, py := t.Proj().Forward(lat, lon)
+	ox, oy := t.Offset()
+	return px - ox, py - oy
+}
+
+// Unproject is the inverse of Project.
+func (t Tile) Unproject(x, y float64) (lat, lon float64) {
+	ox, oy := t.Offset()
+	return t.Proj().Inverse(x+ox, y+oy)
 }
 
 // DefaultCells keeps a 1km tile at ~5.7m per cell while staying under the

@@ -64,12 +64,20 @@ func Shot(ctx context.Context, o Options, frames int, ui bool, out string) error
 		frames = 90
 	}
 	s := Script{Name: "agent_validation"}
-	s.Defaults.StepTimeoutMs = 30000
-	s.Steps = []map[string]any{{"type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 30000}}
+	// Generous, because the step that actually waits for the scene is
+	// wait-frames: a scene is parsed on the main thread, so the frame counter
+	// simply stops until it is done, and a multi-part geo area takes tens of
+	// seconds of CPU evaluation. Every step returns the moment its condition
+	// holds, so the budget costs a small scene nothing.
+	s.Defaults.StepTimeoutMs = 300000
+	// No explicit budget on "Running" either: the engine reaches it once the
+	// first scene is committed, which for a large area is exactly the wait this
+	// whole step list exists to sit through.
+	s.Steps = []map[string]any{{"type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running"}}
 	// Startup creates an empty scene before a requested scene is loaded asynchronously. Waiting
 	// for one node avoids a valid-but-black capture on fast software/headless frame loops.
 	if o.Scene != "" {
-		s.Steps = append(s.Steps, map[string]any{"type": "wait-until", "query": "scene.nodeCount", "op": "gt", "value": 0, "timeoutMs": 30000})
+		s.Steps = append(s.Steps, map[string]any{"type": "wait-until", "query": "scene.nodeCount", "op": "gt", "value": 0})
 	}
 	s.Steps = append(s.Steps,
 		map[string]any{"type": "wait-frames", "n": frames},

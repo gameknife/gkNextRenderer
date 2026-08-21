@@ -409,6 +409,11 @@ module rd_junction_props(t, ring, seed)
 //   junctions = [ring, ...]     路口凸包
 //   widths    = [w, ...]        与 net 等长，决定画不画中线 / 斑马线
 //   sidewalks / props           街面装饰开关（背街小巷不开）
+//   caps      = [[头, 尾], ...] 与 net 等长的端头掩码；空 = 两端都封。
+//               一条 run 的端头默认画人行横道，因为那是街的尽头。但**被地块接缝
+//               切断的 run 不是街的尽头** —— 路在下一块里继续，两侧各画一道就成了
+//               马路正中间的两条斑马线。生成器按端点是否落在内部接缝上决定
+//               （geo emit.go 的 markSeamCaps）。
 //
 // gk_flatten() 是必须的：本库把一张表展开成上千个模块调用，而**每个 user module
 // 调用都会变成一个场景 Node**（=一个 Model + 一个碰撞体）。实测 1km 香港 tile 不加
@@ -417,7 +422,7 @@ module rd_junction_props(t, ring, seed)
 // 超了引擎会**静默跳过整块的碰撞体** —— 加了街面装饰后每条 run 贵了三倍，
 // 所以生成器改成按三角预算切块，不再按固定条数）。
 module rd_network(t, c, net, junctions = [], widths = [], markings = true,
-                  sidewalks = false, props = false, seed = 0)
+                  sidewalks = false, props = false, seed = 0, caps = [])
 {
     gk_flatten()
     {
@@ -435,8 +440,10 @@ module rd_network(t, c, net, junctions = [], widths = [], markings = true,
                 for (k = [0 : len(net) - 1])
                 {
                     rd_centerline(t, net[k][0], net[k][1], widths[k]);
-                    rd_crosswalk(t, net[k][0], net[k][1], widths[k], true);
-                    rd_crosswalk(t, net[k][0], net[k][1], widths[k], false);
+                    if (len(caps) == 0 || caps[k][0] > 0)
+                        rd_crosswalk(t, net[k][0], net[k][1], widths[k], true);
+                    if (len(caps) == 0 || caps[k][1] > 0)
+                        rd_crosswalk(t, net[k][0], net[k][1], widths[k], false);
                 }
 
             if (props)

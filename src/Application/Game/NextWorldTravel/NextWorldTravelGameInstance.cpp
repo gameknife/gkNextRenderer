@@ -246,7 +246,7 @@ void NextWorldTravelGameInstance::RequestTile(int index, bool switchToAerial)
     sceneReady_ = false;
     walkerSpawned_ = false;
     walkerSpawnAttempted_ = false;
-    terrain_ = nullptr;
+    terrain_.Clear();
     focusPoi_ = -1;
     tourActive_ = false;
     poiLayer_.SetHighlight(-1);
@@ -420,7 +420,7 @@ void NextWorldTravelGameInstance::OnSceneLoaded()
     sceneReady_ = true;
     walkerSpawned_ = false;
     walkerSpawnAttempted_ = false;
-    terrain_ = nullptr;
+    terrain_.Clear();
     // The terrain component arrives with the scene, but the CPU acceleration
     // structure the nav grid needs is not necessarily ready on this callback.
     // Resolution and spawning are deferred to the first ticks.
@@ -428,37 +428,32 @@ void NextWorldTravelGameInstance::OnSceneLoaded()
 
 void NextWorldTravelGameInstance::TryResolveTerrain()
 {
-    if (terrain_ != nullptr)
+    if (terrain_.HasData())
     {
         return;
     }
-    for (const std::shared_ptr<Assets::Node>& node : GetEngine().GetScene().Nodes())
-    {
-        if (auto* component = node->GetComponent<Runtime::TerrainComponent>())
-        {
-            if (component->HasData())
-            {
-                terrain_ = component;
-                break;
-            }
-        }
-    }
-    if (terrain_ == nullptr)
+    // Every terrain in the scene, not the first one: an area of more than one
+    // part is a grid of them, and each answers only for its own square.
+    terrain_.Collect(GetEngine().GetScene());
+    if (!terrain_.HasData())
     {
         return;
     }
+    camera_.SetAreaSize(std::max(terrain_.TotalSizeX(), terrain_.TotalSizeY()));
     if (FGeoTile* tile = ActiveTile())
     {
-        poiLayer_.OnTerrainReady(tile->pois, *terrain_);
-        SPDLOG_INFO("NextWorldTravel: terrain {}x{} cells, {} of {} places anchored",
-                    terrain_->GetCellsX(), terrain_->GetCellsY(), poiLayer_.GroundedCount(),
-                    tile->pois.size());
+        poiLayer_.OnTerrainReady(tile->pois, terrain_);
+        SPDLOG_INFO("NextWorldTravel: {} terrain part(s), {}x{} cells each over {:.0f}x{:.0f} m, "
+                    "{} of {} places anchored",
+                    terrain_.Count(), terrain_.GetCellsX(), terrain_.GetCellsY(),
+                    terrain_.TotalSizeX(), terrain_.TotalSizeY(),
+                    poiLayer_.GroundedCount(), tile->pois.size());
     }
 }
 
 void NextWorldTravelGameInstance::SpawnWalker()
 {
-    if (walkerSpawned_ || walkerSpawnAttempted_ || terrain_ == nullptr)
+    if (walkerSpawned_ || walkerSpawnAttempted_ || !terrain_.HasData())
     {
         return;
     }
@@ -474,7 +469,7 @@ void NextWorldTravelGameInstance::SpawnWalker()
     }
 
     walkerSpawnAttempted_ = true;
-    walkerSpawned_ = walker_.OnSceneLoaded(GetEngine().GetScene(), GetEngine(), terrain_);
+    walkerSpawned_ = walker_.OnSceneLoaded(GetEngine().GetScene(), GetEngine(), &terrain_);
     if (!walkerSpawned_)
     {
         return;
@@ -516,7 +511,7 @@ void NextWorldTravelGameInstance::OnSceneUnloaded()
     sceneReady_ = false;
     walkerSpawned_ = false;
     walkerSpawnAttempted_ = false;
-    terrain_ = nullptr;
+    terrain_.Clear();
 }
 
 void NextWorldTravelGameInstance::OnDestroy()
@@ -543,7 +538,7 @@ FCameraWorld NextWorldTravelGameInstance::MakeCameraWorld() const
     FCameraWorld world;
     world.walkerValid = walkerSpawned_;
     world.walkerPosition = walkerSpawned_ ? walker_.Position() : glm::vec3(0.0f);
-    world.terrain = terrain_;
+    world.terrain = &terrain_;
     if (sceneReady_)
     {
         world.probe = [this](const glm::vec3& origin, const glm::vec3& direction) -> float
@@ -561,7 +556,11 @@ bool NextWorldTravelGameInstance::OverrideRenderCamera(Assets::Camera& outRender
     outRenderCamera.ModelView = camera_.ViewMatrix();
     outRenderCamera.FieldOfView = Config::kFov;
     outRenderCamera.NearPlane = Config::kNearPlane;
-    outRenderCamera.FarPlane = Config::kFarPlane;
+    // The far plane has to contain the area, not the tile it was tuned for.
+    // The diagonal plus the overview height is what a map view of the whole
+    // thing needs; short of it the far side is not dimmer, it is gone.
+    const float span = std::max(terrain_.TotalSizeX(), terrain_.TotalSizeY());
+    outRenderCamera.FarPlane = std::max(Config::kFarPlane, span * 1.8f + Config::kOverviewHeight);
     return true;
 }
 

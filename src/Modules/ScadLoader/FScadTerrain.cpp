@@ -199,6 +199,14 @@ namespace Assets::Scad
             double rockSlopeDeg = 38.0;   // steeper than this => rock
             double dryFrac = 0.45;        // dry grass above base + frac * span
             double minReliefForSnow = 6.0;
+            // Floor under the green line, in metres above the datum. The bands
+            // are fractions of the tile's own relief, which asks the wrong
+            // question of a city: Manhattan's built-up ground spans 27 m, so
+            // 55% of it is 15 m, and half of midtown came out painted as
+            // hillside. Greenery needs a real hill under it, not the upper
+            // half of whatever this tile happens to contain. 0 disables it,
+            // which is what a natural palette wants.
+            double minGreenRiseM = 0.0;
         };
 
         const FPaletteDef* FindPalette(const std::string& name)
@@ -274,7 +282,9 @@ namespace Assets::Scad
                 // dryFrac 0.55: only the genuine hillside goes green. A lower
                 // line turns the flat downtown into a meadow, because span is
                 // set by the single highest corner of the tile.
-                4.0, 36.0, 0.55, 3000.0};
+                // minGreenRiseM 40: and nothing goes green at all below 40 m of
+                // rise, which is what keeps a city with no hills in it grey.
+                4.0, 36.0, 0.55, 3000.0, 40.0};
 
             if (name == "temperate") return &temperate;
             if (name == "arid") return &arid;
@@ -1090,6 +1100,10 @@ namespace Assets::Scad
             if (!base.vec.empty()) outSpec.baseHeight = base.vec[0].AsNumber(0.0);
             if (base.vec.size() > 1) outSpec.relief = std::max(0.0, base.vec[1].AsNumber(1.0));
             if (base.vec.size() > 2) outSpec.roughness = Clamp01(base.vec[2].AsNumber(0.5));
+            // Optional 4th element: the colour ramp's relief. Absent means
+            // "derive it from this terrain", which is what every hand-written
+            // TERR does and what a single tile wants.
+            if (base.vec.size() > 3) outSpec.paletteSpan = std::max(0.0, base.vec[3].AsNumber(0.0));
         }
         else if (base.IsNumber())
         {
@@ -1286,6 +1300,7 @@ namespace Assets::Scad
         AppendKeyNumber(key, spec.baseHeight);
         AppendKeyNumber(key, spec.relief);
         AppendKeyNumber(key, spec.roughness);
+        AppendKeyNumber(key, spec.paletteSpan);
         AppendKeyNumber(key, spec.hasWaterLevel ? 1.0 : 0.0);
         AppendKeyNumber(key, spec.waterLevel);
         key += spec.palette;
@@ -1409,8 +1424,20 @@ namespace Assets::Scad
         data->cellWater.resize(static_cast<size_t>(cx) * cy, 0.0);
         data->cellBiome.resize(static_cast<size_t>(cx) * cy, static_cast<uint8_t>(ETerrainBiome::Grass));
 
-        const double span = std::max(0.0, maxH - spec.baseHeight);
-        const bool snowEligible = span >= pal.minReliefForSnow;
+        // The ramp is measured over the whole area when the spec says so, not
+        // over this terrain's own extremes. A grid of terrains would otherwise
+        // give each part its own colour ramp, and two parts of one hillside
+        // would meet at the seam in different colours.
+        const double localSpan = std::max(0.0, maxH - spec.baseHeight);
+        double span = spec.paletteSpan > 0.0 ? spec.paletteSpan : localSpan;
+        // Keep the green line above minGreenRiseM by widening the ramp rather
+        // than by special-casing one band: the wooded-slope band has to move
+        // with it or it appears below the greenery it belongs above.
+        if (pal.minGreenRiseM > 0.0 && pal.dryFrac > 1e-3)
+        {
+            span = std::max(span, pal.minGreenRiseM / pal.dryFrac);
+        }
+        const bool snowEligible = localSpan >= pal.minReliefForSnow;
         const double snowLine = spec.baseHeight + pal.snowFrac * span;
         const double rockHighZ = spec.baseHeight + 0.5 * span;
         const double dryLine = span >= 3.0 ? spec.baseHeight + pal.dryFrac * span : 1e30;

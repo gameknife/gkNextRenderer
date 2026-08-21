@@ -11,7 +11,7 @@
 //
 // TERR is a nested list literal, versioned with a "gkterr1" tag:
 //   ["gkterr1", [sizeX,sizeY], [cellsX,cellsY], seed,
-//    [baseHeight, relief, roughness], waterLevel|undef, "palette",
+//    [baseHeight, relief, roughness, paletteSpan?], waterLevel|undef, "palette",
 //    [ feature, ... ]]
 // Features (applied in order, each an ordered operator on the heightfield):
 //   ["mountain", [x,y], radius, height, rugged]
@@ -123,6 +123,11 @@ namespace Assets::Scad
         glm::ivec2 cells{50, 50};
         uint64_t seed = 0;
         double baseHeight = 0.0;
+        // Relief the colour ramp is measured over, in metres above baseHeight.
+        // 0 means "use this terrain's own maximum", which is right for a single
+        // terrain and wrong for a grid of them: every part would derive its own
+        // ramp from its own highest point and the seams would change colour.
+        double paletteSpan = 0.0;
         double relief = 1.0;    // fbm amplitude (0 = perfectly flat base)
         double roughness = 0.5; // 0..1, mapped to fbm frequency/octaves
         bool hasWaterLevel = false;
