@@ -185,8 +185,15 @@ namespace Vulkan::Compatibility
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
             pipelineLayout_->BindDescriptorSets(commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
 
+            const Assets::UniformBufferObject& camera = baseRender_.LastUniformBufferObject();
             FPushConstants pushConstants{};
-            pushConstants.ViewProjection = baseRender_.LastUniformBufferObject().ViewProjection;
+            pushConstants.ViewProjection = camera.ViewProjection;
+            pushConstants.SunDirection = camera.SunDirection;
+            // Colours forwarded as-is; w says whether the scene has that light. The shader takes
+            // only the hue -- SunIntensity / SkyIntensity are scaled against the sky IBL it cannot
+            // sample, so passing their magnitudes would just blow the preview out.
+            pushConstants.SunColor = glm::vec4(glm::vec3(camera.SunColor), camera.HasSun ? 1.0f : 0.0f);
+            pushConstants.SkyColor = glm::vec4(glm::vec3(camera.SkyColor), camera.HasSky ? 1.0f : 0.0f);
 
             const std::vector<Assets::NodeProxy>& proxies = scene.GetNodeProxies();
             // Indexed by the *encoded* model-section id that NodeProxy::modelId already carries,

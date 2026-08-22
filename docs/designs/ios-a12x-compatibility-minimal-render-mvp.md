@@ -1,7 +1,7 @@
 ---
 title: "iOS A12X Compatibility Minimal Render MVP"
 category: design
-status: M0–M2 已实施（几何 + base color），M3 起待实施
+status: M0–M3 已实施（几何 + base color + 法线/Lambert），贴图与 CSM 待实施
 owner: engine
 created: 2026-08-22
 last_updated: 2026-08-22
@@ -64,13 +64,39 @@ cull / finalize / expand 三个 compute pass 都是 `ZeroBindPipeline`，其 lay
 - 用 storage buffer 而不是 uniform buffer：std430 的 array stride 与 CPU 结构体一致，
   std140 会把 `NodeProxy::matId[16]` 从 4 字节/元素撑到 16。已核对 SPIR-V 的 `ArrayStride`：
   NodeProxy 224、ModelData 64、Material 64、uint 4，与 `GPU_SCENE_*_SIZE` 逐个吻合。
-- push constant 只有 `float4x4 ViewProjection` + `uint ProxyIndex`（68 B），
-  相机矩阵直接推进去，省掉一个 camera descriptor 和它的 layout 风险。
+- push constant 是 `float4x4 ViewProjection` + 太阳/天空 `float4` × 3 + `uint ProxyIndex`
+  （116 B，补齐到引擎既有的 128 B push constant 上限）。相机矩阵和光照参数直接推进去，
+  省掉一个 camera descriptor 和它的 layout 风险。
 - 每个 render proxy 一次 `vkCmdPushConstants` + `vkCmdDraw(model.indexCount)`；
   vertex shader 用 `SV_VertexID` 做 vertex pulling，没有 vertex input binding。
 - 单个 raster pass 直接画进 swapchain image：`LOAD_OP_CLEAR` 顺带完成背景清屏，
   initial/final layout 都是 `COLOR_ATTACHMENT_OPTIMAL`，之后由 base renderer 转 `PRESENT_SRC`。
-- fragment 输出 `Material.Diffuse.rgb`，即 base-color factor。
+- fragment 输出 `Material.Diffuse.rgb`（base-color factor）乘以一个法线光照项，见下。
+
+### 光照：预览量级，不是 radiance
+
+顶点法线从 vertex buffer 的 word 2..3 解出，用 `worldTS` 的左上 3x3 变到世界空间（不做
+inverse-transpose：场景节点通常是刚体+均匀缩放，非均匀缩放只会让明暗过渡略微偏斜）。
+fragment 做一个太阳 Lambert 项 + 一个半球天空补光。
+
+**关键：不能直接用 `SunIntensity` / `SkyIntensity`。** 这两个量是相对**天空 IBL 贴图**标定的——
+典型场景 `SkyIntensity = 100`、`SunColor = 500`，因为 `SampleIBL()` 返回的是很小的数值。
+兼容 profile 采样不到那张贴图，照搬量级会直接全屏过曝（实测确认过，Reinhard 和引擎的
+Uncharted2 曲线都压不住）。
+
+所以这里**只取光的色调**，用固定预览权重，并按"场景实际有哪些光"归一化：
+
+```
+lighting = (sunTint·NoL·0.75·hasSun + skyTint·hemisphere·0.55·hasSky)
+         / (0.75·hasSun + 0.55·hasSky)
+```
+
+`hasSun` / `hasSky` 由 host 塞进 `SunColor.w` / `SkyColor.w`，shader 不需要分支。两者都没有时
+退回平铺 base color（即加光照之前的行为），不会出现黑屏。
+
+这样任何场景下满照面都落在 1 附近，曝光稳定、不需要 tonemap。代价是**不跟随场景光强**——
+这是预览取向的取舍，不是要对齐完整渲染器。`playground.glb` 恰好是 `HasSun = 0` 的纯天空场景，
+是这条归一化路径的实测用例。
 
 **顶点缓冲按裸 uint 读，不按 `GPUVertex` 读。** `GPUVertex` 是 3 个 `half4`；只要 shader 里出现
 16-bit 类型，SPIR-V 就会声明 `UniformAndStorageBuffer16BitAccess`（引擎从未启用），而
@@ -117,7 +143,8 @@ gnb validate --script assets/agentscripts/compatibility-renderer-smoke.agentscri
 
 ### 尚未实施
 
-M3 起：法线 / Lambert、显式 albedo texture、CSM。另外这一版**不做骨骼蒙皮**（skinning compute
+显式 albedo texture（要动 sampled 数组，得先拿到 A12X 的 update-after-bind 上限）、CSM、
+高光。另外这一版**不做骨骼蒙皮**（skinning compute
 属于被跳过的 scene-frame prepass，shader 读 bind pose）、**不做视锥剔除**（逐 proxy 全量提交）、
 **不做 alpha 测试 / 混合**。这些都是有意的 MVP 边界，不是遗漏。
 

@@ -30,6 +30,11 @@ import Shader.Types;
 struct CompatibilityPushConstants
 {
     float4x4 ViewProjection;
+    // .xyz points toward the sun, matching UniformBufferObject::SunDirection. Radiance already has
+    // intensity folded in and is zeroed when the scene has no sun/sky, so neither shader branches.
+    float4 SunDirection;
+    float4 SunColor;
+    float4 SkyColor;
     uint ProxyIndex;
 };
 [[vk::push_constant]] CompatibilityPushConstants pushConstants;
@@ -92,6 +97,7 @@ uint FetchNodeMaterialId(in NodeProxy node, uint slot)
 struct VertexOutput
 {
     float4 position : SV_Position;
+    float3 worldNormal : WORLD_NORMAL;
     nointerpolation uint materialId : MATERIAL_ID;
 };
 
@@ -109,9 +115,14 @@ VertexOutput main(uint vertexIndex: SV_VertexID)
     // a buffer nothing has written this frame.
     const uint vertexWord = (model.vertexOffset + localVertex) * kVertexWordCount;
 
+    // Word 0..1: Position_Tx, word 2..3: Normal_Ty (see the GPUVertex field order above).
     const float2 positionXY = UnpackHalf2(VertexWords[vertexWord + 0]);
     const float2 positionZ_TexU = UnpackHalf2(VertexWords[vertexWord + 1]);
     const float3 localPosition = float3(positionXY, positionZ_TexU.x);
+
+    const float2 normalXY = UnpackHalf2(VertexWords[vertexWord + 2]);
+    const float2 normalZ_TexV = UnpackHalf2(VertexWords[vertexWord + 3]);
+    const float3 localNormal = float3(normalXY, normalZ_TexV.x);
 
     // Tangent.w packs the per-vertex material slot in its low byte (see UnpackVertex): the half sits
     // in the upper 16 bits of the last word, and the slot is that half's low byte.
@@ -119,6 +130,10 @@ VertexOutput main(uint vertexIndex: SV_VertexID)
 
     output.position =
         mul(mul(pushConstants.ViewProjection, proxy.worldTS), float4(localPosition, 1.0));
+    // The upper 3x3 rather than its inverse-transpose: correct for the rigid, uniformly scaled
+    // transforms scene nodes normally carry, and this pass is not worth a per-node normal matrix.
+    // Non-uniformly scaled nodes get a slightly skewed normal, which only shifts the shading ramp.
+    output.worldNormal = mul((float3x3)proxy.worldTS, localNormal);
     output.materialId = FetchNodeMaterialId(proxy, materialSlot);
     return output;
 }

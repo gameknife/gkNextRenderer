@@ -30,9 +30,15 @@ namespace Vulkan::Compatibility
     {
     public:
         // Matches CompatibilityPushConstants in Rast.CompatibilityAlbedo.{vert,frag}.slang.
+        // 116 bytes, padded to the 128-byte push-constant floor the engine already targets.
         struct FPushConstants
         {
             glm::mat4 ViewProjection;
+            glm::vec4 SunDirection;
+            // rgb from UniformBufferObject; w carries HasSun / HasSky so the shader needs no branch.
+            // Intensities are deliberately not folded in -- see the fragment shader.
+            glm::vec4 SunColor;
+            glm::vec4 SkyColor;
             uint32_t ProxyIndex;
         };
 
