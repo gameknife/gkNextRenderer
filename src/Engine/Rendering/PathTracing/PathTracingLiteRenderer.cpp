@@ -36,9 +36,6 @@ namespace Vulkan::PathTracing
 
     void PathTracingLiteRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        const FFrameRenderSettings& frameSettings = baseRender_.FrameSettings();
-        const bool isPrimaryView = baseRender_.ActiveViewBankBase() == 0;
-
         Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase());
         baseRender_.ConfigureCheckerboardShading(gpuScene);
 
@@ -75,10 +72,8 @@ namespace Vulkan::PathTracing
         baseRender_.ResolveCheckerboardShading(
             commandBuffer, gpuScene, PipelineCommon::ECheckerboardResolveSet::Tracing);
 
-        samplePostChain_.Run(baseRender_, commandBuffer, imageIndex, {
-            .progressiveRender = isPrimaryView && frameSettings.progressiveRendering,
-            .progressiveSampleCount = frameSettings.progressiveAccumulatedFrames,
-            .progressiveTargetSampleCount = frameSettings.progressiveTargetFrames,
-        });
+        samplePostChain_.Run(
+            baseRender_, commandBuffer, imageIndex,
+            PipelineCommon::MakeSamplePostSettings(baseRender_));
     }
 }

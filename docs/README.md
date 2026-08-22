@@ -50,6 +50,9 @@
 - [.NET 脚本运行时架构](designs/dotnet-scripting-design.md)（现行；C# 脚本运行时已完整落地——
   双后端、绑定表 codegen、反射组件 wrapper，Flappy 在两种后端下 parity 通过。日常用法见
   [.NET Bindings](AGENT_GUIDE/DotNetBindings.md)）
+- [用 C# 绑定实现 Brotato3D 的能力缺口与可行性](designs/csharp-binding-brotato3d-feasibility.md)（提案，
+  未实施；盘点 `EngineApi.def.h` 现有 68 项绑定面对 Brotato3D 的覆盖度，列出物理 body、节点 parent/材质、
+  运行时材质创建、手柄摇杆轴、UI 与 ScadRig 的缺口，给出跨界调用成本估算与分档落地顺序）
 - [脚本绑定面基线（QuickJS 誊本）](designs/script-binding-surface-baseline.md)（历史证据；
   QuickJS 退场前誊下的完整绑定面，已由 `EngineApi.def.h` 与反射清单取代，保留用于追溯取舍来源）
 - [Agent 输入驱动验证](designs/agent-validation-input-driver.md)

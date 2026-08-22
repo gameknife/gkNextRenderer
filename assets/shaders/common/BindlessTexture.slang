@@ -104,7 +104,7 @@ namespace Bindless
     // --- Screen-space RT slots (0..30): per-RenderView, resolved through ViewRT() ---
 
     // G-buffer / primary signals
-    // Single linear scene-color history used only by offline progressive rendering.
+    // Single linear scene-color history used by progressive rendering and reference comparison.
     public static const int RT_PROGRESSIVE_SCENE_COLOR = 0;
     public static const int RT_SINGLE_DIFFUSE = 1;
     public static const int RT_VISIBILITY_INSTANCE = 2;

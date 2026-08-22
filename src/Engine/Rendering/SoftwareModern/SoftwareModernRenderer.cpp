@@ -69,11 +69,8 @@ namespace Vulkan::SoftwareModern
         baseRender_.ResolveCheckerboardShading(
             commandBuffer, gpuScene, PipelineCommon::ECheckerboardResolveSet::Tracing);
 
-        const auto& frameSettings = baseRender_.FrameSettings();
-        samplePostChain_.Run(baseRender_, commandBuffer, imageIndex, {
-            .progressiveRender = baseRender_.ActiveViewBankBase() == 0 && frameSettings.progressiveRendering,
-            .progressiveSampleCount = frameSettings.progressiveAccumulatedFrames,
-            .progressiveTargetSampleCount = frameSettings.progressiveTargetFrames,
-        });
+        samplePostChain_.Run(
+            baseRender_, commandBuffer, imageIndex,
+            PipelineCommon::MakeSamplePostSettings(baseRender_));
     }
 }

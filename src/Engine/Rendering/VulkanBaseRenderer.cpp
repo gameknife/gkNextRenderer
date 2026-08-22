@@ -767,6 +767,18 @@ namespace Vulkan
             (!GOption || !GOption->ReferenceMode);
     }
 
+    bool VulkanBaseRenderer::IsReferenceViewAccumulationActive() const
+    {
+        return GOption != nullptr && GOption->ReferenceMode && !ActiveRenderView().IsPrimary();
+    }
+
+    uint32_t VulkanBaseRenderer::ProgressiveSampleCountForActiveView() const
+    {
+        return IsReferenceViewAccumulationActive()
+            ? ActiveRenderView().State().progressiveFrame
+            : frameSettings_.progressiveAccumulatedFrames;
+    }
+
     uint32_t VulkanBaseRenderer::CheckerboardDispatchWidth(
         const uint32_t width, const Assets::GPUScene& gpuScene) const
     {
@@ -1280,6 +1292,10 @@ namespace Vulkan
             bindless_.images.resize(bankBase + Assets::Bindless::RT_COUNT);
         }
 
+        // Progressive history belongs to the view bank. Rebuilding or reusing a bank must not
+        // carry a previous view's running average into the new view.
+        bindless_.images[bankBase + Assets::Bindless::RT_PROGRESSIVE_SCENE_COLOR].reset();
+
         CREATE_STORAGE_IMAGE(RT_SINGLE_DIFFUSE, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
         CREATE_STORAGE_IMAGE(RT_VISIBILITY_INSTANCE, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
         CREATE_STORAGE_IMAGE(RT_VISIBILITY_TRIANGLE, VK_FORMAT_R16_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
@@ -1313,8 +1329,7 @@ namespace Vulkan
 
     void VulkanBaseRenderer::EnsureProgressiveRenderTarget()
     {
-        assert(ActiveViewBankBase() == 0);
-        const uint32_t bindlessIdx = Assets::Bindless::RT_PROGRESSIVE_SCENE_COLOR;
+        const uint32_t bindlessIdx = ActiveViewBankBase() + Assets::Bindless::RT_PROGRESSIVE_SCENE_COLOR;
         if (bindless_.images.size() <= bindlessIdx)
         {
             bindless_.images.resize(bindlessIdx + 1);
@@ -1366,6 +1381,7 @@ namespace Vulkan
         // Primary view RT bank (bank 0 == legacy absolute layout).
         CreateRenderTargetBank(0);
         renderViews_->ResetSwapChainResources();
+        renderViews_->InvalidateAllTemporalHistory(EHistoryInvalidationReason::SwapchainRecreated);
         // Non-primary view resources were destroyed with the swapchain; recreate on demand.
         if (renderViewServices_)
         {
@@ -2050,6 +2066,12 @@ namespace Vulkan
             atmosphere_->PrepareView(commandBuffer, imageIndex, view.IsPrimary(), contract);
         }
         logicRenderer.Render(commandBuffer, imageIndex);
+        if (IsReferenceViewAccumulationActive())
+        {
+            view.State().progressiveFrame = std::min(
+                view.State().progressiveFrame + 1,
+                frameSettings_.progressiveTargetFrames);
+        }
         if (atmosphere_)
         {
             atmosphere_->ApplyToView(commandBuffer, imageIndex, view.IsPrimary(), contract);

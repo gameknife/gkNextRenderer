@@ -39,9 +39,6 @@ void SoftwareTracingRenderer::DeleteSwapChain()
 
 void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
-    const bool isPrimaryView = baseRender_.ActiveViewBankBase() == 0;
-    const auto& frameSettings = baseRender_.FrameSettings();
-
     Assets::GPUScene gpuScene =
         GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase());
     baseRender_.ConfigureCheckerboardShading(gpuScene);
@@ -78,10 +75,8 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
     baseRender_.ResolveCheckerboardShading(
         commandBuffer, gpuScene, PipelineCommon::ECheckerboardResolveSet::Tracing);
 
-    samplePostChain_.Run(baseRender_, commandBuffer, imageIndex, {
-        .progressiveRender = isPrimaryView && frameSettings.progressiveRendering,
-        .progressiveSampleCount = frameSettings.progressiveAccumulatedFrames,
-        .progressiveTargetSampleCount = frameSettings.progressiveTargetFrames,
-    });
+    samplePostChain_.Run(
+        baseRender_, commandBuffer, imageIndex,
+        PipelineCommon::MakeSamplePostSettings(baseRender_));
 }
 }

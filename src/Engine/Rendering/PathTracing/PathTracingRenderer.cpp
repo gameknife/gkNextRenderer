@@ -396,10 +396,8 @@ namespace Vulkan::PathTracing
 
         }
         
-        samplePostChain_.Run(baseRender_, commandBuffer, imageIndex, {
-            .progressiveRender = isPrimaryView && frameSettings.progressiveRendering,
-            .progressiveSampleCount = frameSettings.progressiveAccumulatedFrames,
-            .progressiveTargetSampleCount = frameSettings.progressiveTargetFrames,
-        });
+        samplePostChain_.Run(
+            baseRender_, commandBuffer, imageIndex,
+            PipelineCommon::MakeSamplePostSettings(baseRender_));
     }
 }

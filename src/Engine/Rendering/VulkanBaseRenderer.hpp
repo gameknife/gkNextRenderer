@@ -309,6 +309,11 @@ namespace Vulkan
         uint32_t ActiveViewBankBase() const { return activeViewContext_.bankBase; }
         void SetActiveViewBankBase(uint32_t bankBase) { activeViewContext_.bankBase = bankBase; }
 
+        // Reference comparison views expose a per-view sample count for renderer-specific
+        // non-reprojected progressive accumulations. Deterministic renderers may ignore it.
+        bool IsReferenceViewAccumulationActive() const;
+        uint32_t ProgressiveSampleCountForActiveView() const;
+
         // Camera UBO device address of the view currently being recorded -> GPUScene.Camera.
         // 0 == primary view (uses the per-image uniform buffer).
         VkDeviceAddress ActiveViewCameraAddress(uint32_t imageIndex) const;
