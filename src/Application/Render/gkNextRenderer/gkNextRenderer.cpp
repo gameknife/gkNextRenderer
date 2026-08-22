@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <random>
 #include <tuple>
 
@@ -794,6 +795,89 @@ bool NextRendererGameInstance::OnMouseButton(SDL_Event& event)
     }
 
     return true;
+}
+
+bool NextRendererGameInstance::OnTouch(SDL_Event& event)
+{
+#if IOS || ANDROID
+    const SDL_TouchFingerEvent& touch = event.tfinger;
+
+    if (event.type == SDL_EVENT_FINGER_DOWN)
+    {
+        uint64_t& activeFinger = touch.x < 0.5f ? mobilePanFinger_ : mobileRotateFinger_;
+        if (activeFinger == 0)
+        {
+            activeFinger = touch.fingerID;
+            if (touch.x < 0.5f)
+            {
+                mobilePanCenter_ = {touch.x, touch.y};
+                modelViewController_.SetTouchMovement(0.0f, 0.0f);
+            }
+        }
+        return true;
+    }
+
+    if (event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED)
+    {
+        if (mobilePanFinger_ == touch.fingerID)
+        {
+            mobilePanFinger_ = 0;
+            modelViewController_.SetTouchMovement(0.0f, 0.0f);
+        }
+        if (mobileRotateFinger_ == touch.fingerID)
+        {
+            mobileRotateFinger_ = 0;
+        }
+        return true;
+    }
+
+    const bool pan = mobilePanFinger_ == touch.fingerID;
+    const bool rotate = mobileRotateFinger_ == touch.fingerID;
+    if (event.type != SDL_EVENT_FINGER_MOTION || (!pan && !rotate))
+    {
+        return true;
+    }
+
+    if (mainUiState_.gizmoController.IsInteracting())
+    {
+        if (pan)
+        {
+            modelViewController_.SetTouchMovement(0.0f, 0.0f);
+        }
+        return true;
+    }
+
+    const VkExtent2D windowSize = GetEngine().GetWindow().WindowSize();
+    const double windowWidth = static_cast<double>(std::max(1u, windowSize.width));
+    const double windowHeight = static_cast<double>(std::max(1u, windowSize.height));
+    if (pan)
+    {
+        const double deltaX = (static_cast<double>(touch.x) - mobilePanCenter_.x) * windowWidth;
+        const double deltaY = (static_cast<double>(touch.y) - mobilePanCenter_.y) * windowHeight;
+        const double distance = std::sqrt(deltaX * deltaX + deltaY * deltaY);
+        const double joystickRadius = std::min(windowWidth, windowHeight) * 0.2;
+        const float magnitude = static_cast<float>(std::min(distance / joystickRadius, 1.0));
+        if (distance > 0.0001)
+        {
+            modelViewController_.SetTouchMovement(
+                static_cast<float>(deltaX / distance) * magnitude,
+                -static_cast<float>(deltaY / distance) * magnitude);
+        }
+        else
+        {
+            modelViewController_.SetTouchMovement(0.0f, 0.0f);
+        }
+        return true;
+    }
+
+    const double pixelDeltaX = static_cast<double>(touch.dx) * windowWidth;
+    const double pixelDeltaY = static_cast<double>(touch.dy) * windowHeight;
+    modelViewController_.OnTouchMove(false, pixelDeltaX, pixelDeltaY);
+    return true;
+#else
+    (void)event;
+    return false;
+#endif
 }
 
 bool NextRendererGameInstance::OnScroll(double xoffset, double yoffset)

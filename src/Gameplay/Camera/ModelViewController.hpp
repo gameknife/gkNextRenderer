@@ -36,6 +36,10 @@ namespace Runtime::Camera
         bool OnCursorPosition(double xpos, double ypos);
         bool OnMouseButton(SDL_Event& event);
         bool OnTouch(bool down, double xpos, double ypos);
+        // Apply a mobile drag in window pixels. Pan and free-look are kept
+        // separate so two fingers can operate both halves of the screen at once.
+        void OnTouchMove(bool pan, double deltaX, double deltaY);
+        void SetTouchMovement(float right, float forward);
         void OnScroll(double xoffset, double yoffset);
 
         void SetKeyHeld(SDL_Keycode key, bool held);
@@ -91,6 +95,7 @@ namespace Runtime::Camera
         // Movement input (replaces 12 bools)
         MovementInput keyboardInput_;
         MovementInput gamepadInput_;
+        MovementInput touchInput_;
 
         // with smooth movement
         double cameraRotX_{};

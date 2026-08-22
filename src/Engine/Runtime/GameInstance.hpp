@@ -93,6 +93,7 @@ public:
     virtual bool OnKey(SDL_Event& event) { return false; }
     virtual bool OnCursorPosition(double xpos, double ypos) { return false; }
     virtual bool OnMouseButton(SDL_Event& event) { return false; }
+    virtual bool OnTouch(SDL_Event& event) { return false; }
     virtual bool OnScroll(double xoffset, double yoffset) { return false; }
     virtual bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY, int16_t rightStickX, int16_t rightStickY,
                                 int16_t leftTrigger, int16_t rightTrigger)

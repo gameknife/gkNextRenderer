@@ -595,6 +595,21 @@ bool NextEngine::HandleEvent(SDL_Event& event)
     }
     const bool rmlUiConsumed = uiOverlay_ && uiOverlay_->HandleEvent(event);
 
+#if IOS || ANDROID
+    // SDL also synthesizes mouse events for touches. Mobile camera gestures
+    // consume the finger events directly, so don't deliver the synthetic
+    // mouse stream a second time to gameplay/editor input.
+    if ((event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP) &&
+        event.button.which == SDL_TOUCH_MOUSEID)
+    {
+        return false;
+    }
+    if (event.type == SDL_EVENT_MOUSE_MOTION && event.motion.which == SDL_TOUCH_MOUSEID)
+    {
+        return false;
+    }
+#endif
+
     if (scriptRuntime_)
     {
         switch (event.type)
@@ -696,6 +711,15 @@ bool NextEngine::HandleEvent(SDL_Event& event)
         if (!rmlUiConsumed)
         {
             OnScroll(event.wheel.x, event.wheel.y);
+        }
+        break;
+    case SDL_EVENT_FINGER_DOWN:
+    case SDL_EVENT_FINGER_MOTION:
+    case SDL_EVENT_FINGER_UP:
+    case SDL_EVENT_FINGER_CANCELED:
+        if (!rmlUiConsumed || event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED)
+        {
+            OnTouch(event);
         }
         break;
     case SDL_EVENT_DROP_FILE:

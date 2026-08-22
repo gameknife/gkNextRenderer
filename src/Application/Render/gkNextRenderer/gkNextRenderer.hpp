@@ -40,6 +40,7 @@ public:
     bool OnKey(SDL_Event& event) override;
     bool OnCursorPosition(double xpos, double ypos) override;
     bool OnMouseButton(SDL_Event& event) override;
+    bool OnTouch(SDL_Event& event) override;
     bool OnScroll(double xoffset, double yoffset) override;
     bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY,
                     int16_t rightStickX, int16_t rightStickY,
@@ -99,6 +100,11 @@ private:
     void DrawVitureDebugPanel();
 #endif
     Runtime::Camera::ModelViewController modelViewController_;
+#if IOS || ANDROID
+    uint64_t mobilePanFinger_ = 0;
+    uint64_t mobileRotateFinger_ = 0;
+    glm::dvec2 mobilePanCenter_{};
+#endif
 #if GK_WITH_VITURE
     std::unique_ptr<Modules::Viture::IHeadPoseTracker> headPoseTracker_;
     Modules::Viture::FHeadTrackingCamera arCamera_;

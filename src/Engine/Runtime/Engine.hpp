@@ -161,8 +161,7 @@ public:
 
     // Input forwarding
     void InjectRelativeMouse(float dx, float dy);
-    void OnTouch(bool down, double xpos, double ypos);
-    void OnTouchMove(double xpos, double ypos);
+    void OnTouch(SDL_Event& event);
 
     // Screen capture
     void RequestScreenShot(FScreenShotSpec spec);

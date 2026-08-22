@@ -239,12 +239,23 @@ bool NextEngine::HandleDebugShortcut(SDL_Keycode key)
     return true;
 }
 
-void NextEngine::OnTouch(bool down, double xpos, double ypos)
+void NextEngine::OnTouch(SDL_Event& event)
 {
-    // OnMouseButton(GLFW_MOUSE_BUTTON_RIGHT, down ? GLFW_PRESS : GLFW_RELEASE, 0);
-}
+    const bool touchEnded = event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED;
+    if (!renderer_->HasSwapChain() ||
+        (!touchEnded && uiOverlay_ && uiOverlay_->WantsToCaptureMouse()))
+    {
+        return;
+    }
 
-void NextEngine::OnTouchMove(double xpos, double ypos) { OnCursorPosition(xpos, ypos); }
+    if (!touchEnded && userInterface_ && userInterface_->WantsToCaptureMouse() &&
+        !gameInstance_->WantsMouseInputWhenUiCaptures())
+    {
+        return;
+    }
+
+    (void)gameInstance_->OnTouch(event);
+}
 
 void NextEngine::InjectRelativeMouse(float dx, float dy)
 {
