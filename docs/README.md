@@ -62,6 +62,8 @@
 - [Editor Sequencer 与动画轨道编辑](designs/editor-sequencer.md)
 - [GI 缓存与体素资源架构](designs/gi-cache-architecture.md)
 - [Gaussian Splat / SOG v2 格式与集成](designs/gaussian-splatting-sog-design.md)
+- [iOS A12X Compatibility Minimal Render MVP](designs/ios-a12x-compatibility-minimal-render-mvp.md)（当前简化 MVP，待实施）
+- [iOS A12X Non-Bindless 兼容路径：适配复盘与重构设计](designs/ios-a12x-non-bindless-compatibility.md)（根因复盘；目标已由简化 MVP 取代）
 - [gnb AI Bridge Protocol v2](designs/gnb-ai-bridge-protocol-v2.md)
 - [Massive Rendering Mode 与双 uint Visibility Buffer](designs/massive-visibility-buffer-design.md)（提案，未实现；[开发计划](plans/massive-rendering-mode-plan.md)）
 - [Visibility Surface、G-buffer 与 Shading Scheduler](designs/visibility-surface-gbuffer-shading-scheduler.md)（现行；三个 software renderer 与 PathTracingLite 一律走 Surface Build + tile 调度器 + Core 内 GTAO + Native TAAU sparse checkerboard，
