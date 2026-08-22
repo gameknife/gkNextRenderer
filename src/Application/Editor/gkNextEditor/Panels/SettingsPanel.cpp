@@ -185,10 +185,8 @@ namespace Editor
             std::vector<FSettingsOption> result;
             if (item.optionsProvider == "renderer")
             {
-                const Rendering::FRendererChoiceCapabilities capabilities{
-                    engine.GetRenderer().SupportsRayTracing(),
-                    engine.GetRenderer().HasFullAmbientCubeBudget(),
-                };
+                const Rendering::FRendererChoiceCapabilities capabilities =
+                    engine.GetRenderer().RendererChoiceCapabilities();
                 for (const Rendering::FRendererChoice* choice : Rendering::AvailableRendererChoices(capabilities))
                 {
                     result.push_back({static_cast<int>(choice->type), choice->displayName});

@@ -1,7 +1,7 @@
 ---
 title: "iOS A12X Non-Bindless 兼容路径：适配复盘与重构设计"
 category: design
-status: 重构前提案，未实现
+status: 根因复盘；目标已由 ios-a12x-compatibility-minimal-render-mvp.md 取代（其 M0 已实施）
 owner: engine
 created: 2026-08-22
 last_updated: 2026-08-22
@@ -33,6 +33,13 @@ last_updated: 2026-08-22
 - Vulkan per-stage descriptor limits：sampled/storage/sampler = `96/96/16`；
 - Vulkan descriptor-set limits：sampled/storage/sampler = `480/480/80`；
 - 当前可用 profile：`constrained`，不是 full bindless。
+
+> **更正（2026-08-22）**：上面两行是**基础**上限，不是本引擎的判据。bindless set 的每个 binding 都带
+> `VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT`，规范把这类 binding 排除在 `maxPerStageDescriptor*`
+> 之外，改为按 `VkPhysicalDeviceDescriptorIndexingProperties` 的 update-after-bind 上限校验。按基础
+> 上限判断会误降级每一台 Apple GPU——M3 Max 同样只报 `maxPerStageDescriptorSamplers = 16`，却能创建
+> 完整的 17,506 descriptor layout（其 update-after-bind 上限是 1000000/500000/1000000）。
+> A12X 的真实约束需要重新按 update-after-bind 上限测一次。
 
 这里最容易误判的是：Metal 侧有 96 个 texture slot，并不表示一个使用大量不同 typed `StorageTextureArray` 的 Slang shader 就能安全运行。MoltenVK 还要把 Vulkan/Slang 的资源类型、访问权限和数组布局翻译成 Metal 函数参数表。
 

@@ -22,6 +22,9 @@ namespace Rendering
     {
         bool supportsRayTracing = false;
         bool hasFullAmbientCubeBudget = false;
+        // Whether the device can back the full bindless descriptor arrays. When it cannot, none of
+        // the catalog entries can create their resources and ERT_Compatibility is the only answer.
+        bool hasFullBindlessBudget = true;
     };
 
     enum class ERendererFallbackReason : uint8_t
@@ -30,6 +33,7 @@ namespace Rendering
         UnknownRenderer,
         RayTracingUnavailable,
         AmbientCubeBudgetUnavailable,
+        BindlessBudgetUnavailable,
     };
 
     struct FResolvedRendererChoice

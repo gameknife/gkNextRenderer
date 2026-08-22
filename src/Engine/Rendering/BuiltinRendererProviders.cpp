@@ -3,6 +3,7 @@
 #include "Engine/Rendering/Interface/IAtmosphereSubsystem.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Rendering/Atmosphere/AtmosphereSubsystem.hpp"
+#include "Engine/Rendering/Compatibility/CompatibilityRenderer.hpp"
 #include "Engine/Rendering/PathTracing/PathTracingLiteRenderer.hpp"
 #include "Engine/Rendering/PathTracing/PathTracingRenderer.hpp"
 #include "Engine/Rendering/SoftwareModern/SoftwareModernNoAmbientRenderer.hpp"
@@ -43,6 +44,8 @@ namespace Vulkan
         RegisterLogicRendererFactory(
             ERT_SoftwareModernNoAmbient,
             &CreateLogicRenderer<SoftwareModernNoAmbient::SoftwareModernNoAmbientRenderer>);
+        RegisterLogicRendererFactory(
+            ERT_Compatibility, &CreateLogicRenderer<Compatibility::CompatibilityRenderer>);
         Rendering::Atmosphere::RegisterAtmosphereSubsystemFactory(&CreateAtmosphere);
     }
 }

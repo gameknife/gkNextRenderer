@@ -308,39 +308,51 @@ void NextRendererGameInstance::DrawViewportTopBar(
         }
 
         const int rendererOptionCount = Runtime::GraphicsDebugPanel::GetRendererOptionCount(GetEngine());
-        int currentRendererIndex =
-            Runtime::GraphicsDebugPanel::ResolveRendererOptionIndex(GetEngine(), userSetting, rendererOptionCount);
-        if (currentRendererIndex < 0)
+        if (rendererOptionCount <= 0)
         {
-            currentRendererIndex = 0;
-            GetEngine().RequestRendererType(
-                Runtime::GraphicsDebugPanel::GetRendererOption(GetEngine(), currentRendererIndex).type);
+            // A GPU that cannot back the full bindless arrays runs the compatibility renderer and
+            // has nothing to switch to. Show what is running rather than an empty combo.
+            ImGui::TextDisabled("%s",
+                                Runtime::GraphicsDebugPanel::GetCurrentRendererLabel(GetEngine(), userSetting));
+            NextUI::Theme::DrawTooltip("Renderer (no alternative on this GPU)");
+            ImGui::SameLine();
         }
-        ImGui::SetNextItemWidth(rendererWidth);
-        PushViewportPopupStyle();
-        if (ImGui::BeginCombo(
-                "##ViewportRenderer",
-                Runtime::GraphicsDebugPanel::GetRendererOption(GetEngine(), currentRendererIndex).displayName))
+        else
         {
-            for (int rendererIndex = 0; rendererIndex < rendererOptionCount; ++rendererIndex)
+            int currentRendererIndex =
+                Runtime::GraphicsDebugPanel::ResolveRendererOptionIndex(GetEngine(), userSetting, rendererOptionCount);
+            if (currentRendererIndex < 0)
             {
-                const bool selected = rendererIndex == currentRendererIndex;
-                if (DrawViewportComboOption(
-                        Runtime::GraphicsDebugPanel::GetRendererOption(GetEngine(), rendererIndex).displayName, selected))
-                {
-                    GetEngine().RequestRendererType(
-                        Runtime::GraphicsDebugPanel::GetRendererOption(GetEngine(), rendererIndex).type);
-                }
-                if (selected)
-                {
-                    ImGui::SetItemDefaultFocus();
-                }
+                currentRendererIndex = 0;
+                GetEngine().RequestRendererType(
+                    Runtime::GraphicsDebugPanel::GetRendererOption(GetEngine(), currentRendererIndex).type);
             }
-            ImGui::EndCombo();
+            ImGui::SetNextItemWidth(rendererWidth);
+            PushViewportPopupStyle();
+            if (ImGui::BeginCombo(
+                    "##ViewportRenderer",
+                    Runtime::GraphicsDebugPanel::GetRendererOption(GetEngine(), currentRendererIndex).displayName))
+            {
+                for (int rendererIndex = 0; rendererIndex < rendererOptionCount; ++rendererIndex)
+                {
+                    const bool selected = rendererIndex == currentRendererIndex;
+                    if (DrawViewportComboOption(
+                            Runtime::GraphicsDebugPanel::GetRendererOption(GetEngine(), rendererIndex).displayName, selected))
+                    {
+                        GetEngine().RequestRendererType(
+                            Runtime::GraphicsDebugPanel::GetRendererOption(GetEngine(), rendererIndex).type);
+                    }
+                    if (selected)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            PopViewportPopupStyle();
+            NextUI::Theme::DrawTooltip("Renderer");
+            ImGui::SameLine();
         }
-        PopViewportPopupStyle();
-        NextUI::Theme::DrawTooltip("Renderer");
-        ImGui::SameLine();
 
         const char* renderModeLabel = userSetting.ProgressiveRender ? "Progressive" : "Realtime";
         if (DrawFlatViewportButton(

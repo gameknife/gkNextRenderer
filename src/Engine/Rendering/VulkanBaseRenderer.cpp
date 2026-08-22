@@ -32,6 +32,7 @@
 
 #include "Engine/Options.hpp"
 #include "Engine/Rendering/ExternalPassRegistry.hpp"
+#include "Engine/Rendering/RendererChoices.hpp"
 #include "Engine/Rendering/Preview/RenderViewServices.hpp"
 #include "Engine/Rendering/RenderView.hpp"
 #include "Engine/Runtime/Engine.hpp"
@@ -53,6 +54,58 @@
 namespace
 {
     constexpr const char* kPortabilitySubsetExtensionName = "VK_KHR_portability_subset";
+
+    // The bindless arrays are declared at their full count, so the device has to be able to hold
+    // every descriptor the profile asks for -- not some round number. The totals come from the
+    // profile itself (see Assets::FBindlessProfile), which is also what sizes the layout.
+    //
+    // The limits queried are the *update-after-bind* ones, not VkPhysicalDeviceLimits. Every
+    // binding in this layout carries VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT and the set is
+    // created with UPDATE_AFTER_BIND_POOL (DescriptorSystem.cpp), and the spec excludes such
+    // bindings from the base maxPerStageDescriptor* limits. Reading the base limits instead
+    // demotes every Apple GPU: an M3 Max reports maxPerStageDescriptorSamplers = 16 while happily
+    // creating the full 17k-descriptor layout.
+    bool CanBackBindlessProfile(const VkPhysicalDeviceDescriptorIndexingProperties& limits,
+                                const VkPhysicalDeviceDescriptorIndexingFeatures& features,
+                                const Assets::FBindlessProfile& profile)
+    {
+        const bool hasFeatures = features.runtimeDescriptorArray &&
+            features.shaderSampledImageArrayNonUniformIndexing &&
+            features.descriptorBindingPartiallyBound &&
+            features.descriptorBindingSampledImageUpdateAfterBind &&
+            (profile.StorageImages() == 0 ||
+             (features.shaderStorageImageArrayNonUniformIndexing &&
+              features.descriptorBindingStorageImageUpdateAfterBind));
+
+        const uint32_t combinedImageSamplers = profile.CombinedImageSamplers();
+        const uint32_t storageImages = profile.StorageImages();
+        return hasFeatures &&
+            limits.maxPerStageDescriptorUpdateAfterBindSampledImages >= combinedImageSamplers &&
+            limits.maxPerStageDescriptorUpdateAfterBindSamplers >= combinedImageSamplers &&
+            limits.maxPerStageDescriptorUpdateAfterBindStorageImages >= storageImages &&
+            limits.maxDescriptorSetUpdateAfterBindSampledImages >= combinedImageSamplers &&
+            limits.maxDescriptorSetUpdateAfterBindSamplers >= combinedImageSamplers &&
+            limits.maxDescriptorSetUpdateAfterBindStorageImages >= storageImages &&
+            limits.maxPerStageUpdateAfterBindResources >= combinedImageSamplers + storageImages;
+    }
+
+    bool SupportsBCTextures(VkPhysicalDevice physicalDevice)
+    {
+        // Asked per format and usage rather than inferred from the platform: BC7 is what KTX2/Basis
+        // assets transcode to, and the only thing that matters is whether it can be sampled.
+        constexpr VkFormatFeatureFlags required =
+            VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+        for (const VkFormat format : {VK_FORMAT_BC7_UNORM_BLOCK, VK_FORMAT_BC7_SRGB_BLOCK})
+        {
+            VkFormatProperties properties = {};
+            vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &properties);
+            if ((properties.optimalTilingFeatures & required) != required)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
 
     void PrintVulkanSdkInformation()
     {
@@ -195,7 +248,7 @@ namespace Vulkan
             uint32_t referenceRow;
         };
 
-        std::array<LogicRendererFactory, ERT_PathTracingLite + 1> RendererFactories{};
+        std::array<LogicRendererFactory, ERT_Compatibility + 1> RendererFactories{};
 
         const std::array RendererDescriptors{
             RendererDescriptor{ERT_PathTracing, "PathTracing", {
@@ -249,6 +302,15 @@ namespace Vulkan
                                        ERenderOutput::ObjectId | ERenderOutput::Normal,
                                    EPostProcess::Upscale | EPostProcess::DebugGBuffer,
                                     EHistoryChannel::None, true, true}, 0, 1},
+            // Everything None: no scene resources, no prepasses, no outputs. The empty `outputs`
+            // set is what tells the base renderer there is no screen-space chain to build or
+            // resolve from, so a constrained device never creates resources it cannot back.
+            RendererDescriptor{ERT_Compatibility, "Compatibility", {
+                                   ESceneResource::None,
+                                   EViewPrepass::None,
+                                   ERenderOutput::None,
+                                   EPostProcess::None,
+                                   EHistoryChannel::None, false, false}, 0, 0},
         };
 
         const RendererDescriptor& GetRendererDescriptor(ERendererType type)
@@ -259,6 +321,73 @@ namespace Vulkan
             assert(descriptor != RendererDescriptors.end());
             return descriptor != RendererDescriptors.end() ? *descriptor : RendererDescriptors.front();
         }
+    }
+
+    // Why the last ProbeBindlessProfile call chose the compatibility profile. Only SetPhysicalDevice
+    // prints it, so the verdict appears once even though the probe runs twice.
+    static std::string LastBindlessProfileDecision;
+
+    Assets::FBindlessProfile ProbeBindlessProfile(VkPhysicalDevice physicalDevice)
+    {
+        VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures = {};
+        indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+        VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {};
+        bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+        bufferDeviceAddressFeatures.pNext = &indexingFeatures;
+        VkPhysicalDeviceFeatures2 features = {};
+        features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        features.pNext = &bufferDeviceAddressFeatures;
+        vkGetPhysicalDeviceFeatures2(physicalDevice, &features);
+
+        VkPhysicalDeviceDescriptorIndexingProperties indexingProperties = {};
+        indexingProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES;
+        VkPhysicalDeviceProperties2 properties = {};
+        properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        properties.pNext = &indexingProperties;
+        vkGetPhysicalDeviceProperties2(physicalDevice, &properties);
+
+        const bool forceCompatibility = GOption != nullptr && GOption->ForceCompatibilityRenderer;
+        // Every renderer except ERT_Compatibility reads the scene through addresses in the GPUScene
+        // push constant, so a device without bufferDeviceAddress is just as constrained as one that
+        // cannot size the descriptor arrays -- same verdict, different reason.
+        const bool hasBufferDeviceAddress = bufferDeviceAddressFeatures.bufferDeviceAddress != VK_FALSE;
+        const Assets::FBindlessProfile full = Assets::FBindlessProfile::Full();
+        if (!forceCompatibility && hasBufferDeviceAddress &&
+            CanBackBindlessProfile(indexingProperties, indexingFeatures, full))
+        {
+            return full;
+        }
+
+        const Assets::FBindlessProfile compatibility = Assets::FBindlessProfile::Compatibility();
+        // Recorded rather than logged: this is a pure query, and renderer creation calls it once to
+        // pick the renderer set before SetPhysicalDevice calls it again to fill caps_. Logging here
+        // would print the verdict twice.
+        LastBindlessProfileDecision = fmt::format(
+            "GPU '{}' {} the full renderer contract (bufferDeviceAddress {}; update-after-bind "
+            "per-stage sampled/sampler/storage {}/{}/{}, per-set {}/{}/{}, resources {}; the "
+            "bindless layout needs {} combined image samplers and {} storage images); "
+            "using the compatibility profile",
+            properties.properties.deviceName,
+            forceCompatibility ? "was asked to ignore" : "cannot meet",
+            hasBufferDeviceAddress ? "supported" : "MISSING",
+            indexingProperties.maxPerStageDescriptorUpdateAfterBindSampledImages,
+            indexingProperties.maxPerStageDescriptorUpdateAfterBindSamplers,
+            indexingProperties.maxPerStageDescriptorUpdateAfterBindStorageImages,
+            indexingProperties.maxDescriptorSetUpdateAfterBindSampledImages,
+            indexingProperties.maxDescriptorSetUpdateAfterBindSamplers,
+            indexingProperties.maxDescriptorSetUpdateAfterBindStorageImages,
+            indexingProperties.maxPerStageUpdateAfterBindResources,
+            full.CombinedImageSamplers(), full.StorageImages());
+
+        if (!CanBackBindlessProfile(indexingProperties, indexingFeatures, compatibility))
+        {
+            Throw(std::runtime_error(fmt::format(
+                "GPU '{}' cannot back even the compatibility descriptor layout "
+                "({} combined image samplers, {} storage images)",
+                properties.properties.deviceName, compatibility.CombinedImageSamplers(),
+                compatibility.StorageImages())));
+        }
+        return compatibility;
     }
 
     FRendererRequirements GetRendererRequirements(ERendererType type)
@@ -456,21 +585,27 @@ namespace Vulkan
                         static_cast<uint64_t>(fullAmbientCubeAllocationSize / (1024 * 1024)));
         }
 
-        caps_.supportRayTracing = !GOption->ForceNoRT && ctx_.instance->SupportsRayQuery(physicalDevice);
+        // Resolved before any renderer decision below, and before any device resource is created:
+        // the profile decides which renderers may run at all, so correcting it afterwards would
+        // mean tearing down resources that were already sized for the wrong contract.
+        caps_.bindlessProfile = ProbeBindlessProfile(physicalDevice);
+        caps_.supportsBCTextures = SupportsBCTextures(physicalDevice);
+        if (!HasFullBindlessBudget())
+        {
+            SPDLOG_WARN("{}", LastBindlessProfileDecision);
+        }
+
+        caps_.supportRayTracing = !GOption->ForceNoRT && HasFullBindlessBudget() &&
+            ctx_.instance->SupportsRayQuery(physicalDevice);
         if (caps_.supportRayTracing)
         {
             rt_ = std::make_unique<RayTracingResources>();
         }
 
-        ERendererType resolvedRendererType = logicRenderers_.current;
-        if (!caps_.supportRayTracing && GetRendererRequirements(resolvedRendererType).requestRayTracing)
-        {
-            resolvedRendererType = ERT_SoftwareTracing;
-        }
-        if (!caps_.fullAmbientCubeBudget && GetRendererRequirements(resolvedRendererType).requestAmbientCube)
-        {
-            resolvedRendererType = ERT_SoftwareModernNoAmbient;
-        }
+        // One policy, shared with NextEngine::Start and the editor's renderer picker, rather than
+        // a second hand-rolled fallback chain here.
+        const ERendererType resolvedRendererType =
+            Rendering::ResolveRendererChoice(logicRenderers_.current, RendererChoiceCapabilities());
         if (resolvedRendererType != logicRenderers_.current)
         {
             SwitchLogicRenderer(resolvedRendererType);
@@ -498,7 +633,18 @@ namespace Vulkan
 
         SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
 
-        ctx_.globalTexturePool.reset(new Assets::GlobalTexturePool(*ctx_.device, *ctx_.commandPool2, *ctx_.commandPool));
+        ctx_.globalTexturePool.reset(new Assets::GlobalTexturePool(
+            *ctx_.device, *ctx_.commandPool2, *ctx_.commandPool, caps_.bindlessProfile,
+            caps_.supportsBCTextures));
+
+        // The compatibility profile renders no scene, so the subsystems that only exist to feed one
+        // are dropped here instead of being guarded at each of their use sites. Both are held in
+        // optional pointers that every caller already null-checks.
+        if (!HasFullBindlessBudget())
+        {
+            atmosphere_.reset();
+            upscaler_.reset();
+        }
 
         OnDeviceSet();
         if (atmosphere_)
@@ -578,6 +724,15 @@ namespace Vulkan
         }
         RequestClearAmbientCubeCache();
         resetUpscalerHistory_ = true;
+    }
+
+    Rendering::FRendererChoiceCapabilities VulkanBaseRenderer::RendererChoiceCapabilities() const
+    {
+        return {
+            .supportsRayTracing = caps_.supportRayTracing,
+            .hasFullAmbientCubeBudget = caps_.fullAmbientCubeBudget,
+            .hasFullBindlessBudget = HasFullBindlessBudget(),
+        };
     }
 
     void VulkanBaseRenderer::OnHdrShUpdated()
@@ -832,6 +987,7 @@ namespace Vulkan
 
         VkPhysicalDeviceProperties deviceProperties = {};
         vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
+
         auto enableDeviceExtensionIfAvailable = [&](const char* extensionName)
         {
             if (HasDeviceExtension(physicalDevice, extensionName) &&
@@ -846,7 +1002,9 @@ namespace Vulkan
         enableDeviceExtensionIfAvailable(VK_KHR_16BIT_STORAGE_EXTENSION_NAME);
         enableDeviceExtensionIfAvailable(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
         enableDeviceExtensionIfAvailable(kPortabilitySubsetExtensionName);
-        if (deviceProperties.apiVersion < VK_API_VERSION_1_2 &&
+        // Only the full renderer needs addresses; the compatibility profile binds its buffers
+        // through descriptors precisely because devices like the A12X cannot provide them.
+        if (HasFullBindlessBudget() && deviceProperties.apiVersion < VK_API_VERSION_1_2 &&
             !HasDeviceExtension(physicalDevice, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
         {
             Throw(std::runtime_error("VK_KHR_buffer_device_address is required"));
@@ -890,6 +1048,7 @@ namespace Vulkan
         indexingFeatures.pNext = nextDeviceFeatures;
         indexingFeatures.runtimeDescriptorArray = supportedIndexingFeatures.runtimeDescriptorArray;
         indexingFeatures.shaderSampledImageArrayNonUniformIndexing = supportedIndexingFeatures.shaderSampledImageArrayNonUniformIndexing;
+        indexingFeatures.shaderStorageImageArrayNonUniformIndexing = supportedIndexingFeatures.shaderStorageImageArrayNonUniformIndexing;
         indexingFeatures.descriptorBindingPartiallyBound = supportedIndexingFeatures.descriptorBindingPartiallyBound;
         indexingFeatures.descriptorBindingSampledImageUpdateAfterBind = supportedIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind;
         indexingFeatures.descriptorBindingStorageImageUpdateAfterBind = supportedIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind;
@@ -899,7 +1058,12 @@ namespace Vulkan
         VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {};
         bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
         bufferDeviceAddressFeatures.pNext = &indexingFeatures;
-        bufferDeviceAddressFeatures.bufferDeviceAddress = supportedBufferDeviceAddressFeatures.bufferDeviceAddress;
+        // Left off under the compatibility profile even where the device offers it, so that forcing
+        // the profile on a capable GPU reproduces the constrained device exactly -- buffers lose the
+        // address usage, GetDeviceAddress reports null, and any code that quietly depended on an
+        // address fails here rather than only on the hardware nobody can debug on.
+        bufferDeviceAddressFeatures.bufferDeviceAddress =
+            HasFullBindlessBudget() ? supportedBufferDeviceAddressFeatures.bufferDeviceAddress : VK_FALSE;
 
         VkPhysicalDeviceHostQueryResetFeaturesEXT hostQueryResetFeatures = {};
         hostQueryResetFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES_EXT;
@@ -1168,7 +1332,7 @@ namespace Vulkan
                            "RT_PROGRESSIVE_SCENE_COLOR");
     }
 
-    void VulkanBaseRenderer::CreateRenderImages()
+    void VulkanBaseRenderer::CreateScreenShotBuffer()
     {
         const VkDeviceSize bufferSize = static_cast<VkDeviceSize>(frame_.swapChain->Extent().width) *
                                         frame_.swapChain->Extent().height *
@@ -1193,7 +1357,10 @@ namespace Vulkan
         screenshot_.captureReady = false;
         screenshot_.initialized = false;
         screenshot_.captureSubmitSerial = 0;
+    }
 
+    void VulkanBaseRenderer::CreateRenderImages()
+    {
         bindless_.images.resize(Assets::Bindless::RT_COUNT);
 
         // Primary view RT bank (bank 0 == legacy absolute layout).
@@ -1420,6 +1587,7 @@ namespace Vulkan
         frame_.currentImageIndex = 0;
         frame_.currentFence = nullptr;
         frame_.currentFenceSerial = 0;
+
         // Everything below sizes the screen-space chain against the presented scene rect, which is
         // the whole image unless a host (the editor) reserves part of the window for its panels.
         const VkRect2D sceneViewport = ResolveSceneViewportRect();
@@ -1539,10 +1707,23 @@ namespace Vulkan
         frame_.queuedSignalSemaphores.clear();
         frame_.queuedSignalValues.clear();
 
-        // Shared render images.
-        CreateRenderImages();
-        renderViews_->CreateSwapChain(SwapChain());
-        CreateSceneSwapChainResources();
+        // Screenshots copy from the presented swapchain image, so they work under any renderer and
+        // the staging buffer is created before the scene-only resources below.
+        CreateScreenShotBuffer();
+
+        // Shared render images. A renderer without outputs presents into the swapchain image
+        // directly, so the whole screen-space chain -- RT banks, visibility, the shared compute
+        // pipelines -- is neither created nor needed. On a compatibility device it could not be
+        // created at all: every one of those pipelines binds the full bindless set.
+        //
+        // The one place the policy is consulted; from here on the frame path reads the flag.
+        frame_.sceneChainCreated = RendererDeclaresOutputs();
+        if (frame_.sceneChainCreated)
+        {
+            CreateRenderImages();
+            renderViews_->CreateSwapChain(SwapChain());
+            CreateSceneSwapChainResources();
+        }
 
         // Delegate
         if (delegates_.createSwapChain)
@@ -1557,7 +1738,9 @@ namespace Vulkan
 
     void VulkanBaseRenderer::RefreshSceneSwapChainResources()
     {
-        if (!frame_.swapChain)
+        // A renderer without outputs never built the screen-space chain, so a scene swap has
+        // nothing to rebuild here.
+        if (!frame_.swapChain || !frame_.sceneChainCreated)
         {
             return;
         }
@@ -1605,6 +1788,9 @@ namespace Vulkan
         {
             return;
         }
+
+        // No compatibility branch: every step below is a reset/clear of something that a renderer
+        // without outputs simply never created, and the two subsystem calls are null-guarded.
         renderViews_->ClearSchedule();
         visibilityStateTracker_.Reset();
         swapchainStateTracker_.Reset();
@@ -1694,6 +1880,7 @@ namespace Vulkan
         frame_.queuedSignalValues.clear();
         frame_.depthBuffer.reset();
         frame_.swapChain.reset();
+        frame_.sceneChainCreated = false;
 
         frame_.currentFence = nullptr;
     }
@@ -1816,6 +2003,13 @@ namespace Vulkan
     // Camera-independent, runs once per scene per frame (shared across all views).
     void VulkanBaseRenderer::BeginSceneFrame(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
+        // Each of these dispatches through a shared pipeline that CreateSceneSwapChainResources
+        // built; a renderer without outputs never got them.
+        if (!frame_.sceneChainCreated)
+        {
+            return;
+        }
+
         if (atmosphere_)
         {
             atmosphere_->BeginSceneFrame(commandBuffer, imageIndex);
@@ -2356,6 +2550,8 @@ namespace Vulkan
 
     void VulkanBaseRenderer::SwitchLogicRenderer(ERendererType type)
     {
+        // No compatibility guard: a constrained device registers only ERT_Compatibility, so every
+        // other type falls into the unregistered branch below.
         const ERendererType previousType = logicRenderers_.current;
         LogicRendererBase* logicRenderer = EnsureLogicRenderer(type);
         if (logicRenderer == nullptr)
@@ -2884,6 +3080,23 @@ namespace Vulkan
 
     void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
+        // A renderer with no declared outputs owns the swapchain image: there is no RT bank to
+        // resolve from, and none of the view/overlay machinery below has resources. It writes the
+        // image itself, then hands it to the UI pass in PRESENT_SRC like every other path.
+        if (!frame_.sceneChainCreated)
+        {
+            if (LogicRendererBase* renderer = EnsureLogicRenderer(logicRenderers_.current))
+            {
+                renderer->Render(commandBuffer, imageIndex);
+            }
+            TransitionSwapchainImage(
+                commandBuffer, imageIndex,
+                {.stages = PipelineCommon::ERenderStage::Present,
+                 .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
+                "compatibility present");
+            return;
+        }
+
         const auto preparePrimaryView = [this](const char* debugName) -> RenderView&
         {
             RenderView& primary = PrimaryView();

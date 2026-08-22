@@ -166,8 +166,8 @@ namespace Editor
 
         Runtime::Config::UserSettings& userSettings = ctx.engine.GetUserSettings();
         auto& renderer = ctx.engine.GetRenderer();
-        const auto supportedRenderers = Rendering::AvailableRendererChoices({
-            renderer.SupportsRayTracing(), renderer.HasFullAmbientCubeBudget()});
+        const auto supportedRenderers =
+            Rendering::AvailableRendererChoices(renderer.RendererChoiceCapabilities());
         Vulkan::ERendererType currentRendererType = renderer.CurrentLogicRendererType();
         const auto currentChoice = std::find_if(
             supportedRenderers.begin(), supportedRenderers.end(),

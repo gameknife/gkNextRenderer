@@ -47,6 +47,12 @@ namespace Vulkan
         uint32_t CreatedQueueCount(uint32_t queueFamilyIndex) const;
 
         VkPhysicalDeviceProperties DeviceProperties() const { return deviceProp_; }
+        // Whether vkCreateDevice actually enabled bufferDeviceAddress. Almost the whole engine
+        // reaches scene data through addresses in the GPUScene push constant, so a device without
+        // it can only run the compatibility renderer, which binds its buffers explicitly.
+        // Buffer masks the usage bit and returns a null address when this is false, so a buffer
+        // built for the normal path stays creatable -- it just cannot be addressed.
+        bool SupportsBufferDeviceAddress() const { return bufferDeviceAddressEnabled_; }
         MemoryStatsSnapshot CaptureMemoryStats(bool includeDetails = false) const;
 
         void WaitIdle() const;
@@ -81,6 +87,7 @@ namespace Vulkan
         std::unique_ptr<DeviceProcedures> deviceProcedures_;
         std::unique_ptr<MemoryAllocator> memoryAllocator_;
         VkPhysicalDeviceProperties deviceProp_;
+        bool bufferDeviceAddressEnabled_ = false;
     };
 
 }

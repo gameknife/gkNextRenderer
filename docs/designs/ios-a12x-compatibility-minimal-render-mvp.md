@@ -1,7 +1,7 @@
 ---
 title: "iOS A12X Compatibility Minimal Render MVP"
 category: design
-status: 待实施
+status: M0–M2 已实施（几何 + base color），M3 起待实施
 owner: engine
 created: 2026-08-22
 last_updated: 2026-08-22
@@ -9,6 +9,117 @@ related_design: ios-a12x-non-bindless-compatibility.md
 ---
 
 # iOS A12X Compatibility Minimal Render MVP
+
+## 0. 实施现状（2026-08-22）
+
+M0 的骨架已落地，形态与本文 §8 的描述一致，但把"兼容"表达成了两个数据决策点而不是一组条件分支：
+
+- **`Assets::FBindlessProfile`**（`Engine/Assets/GPU/Texture.hpp`）描述 descriptor 数组容量。
+  `Full()` 来自 `BindlessTexture.slang` 的槽位注册表；`Compatibility()` 是 8 个 sampled、
+  0 storage/shadow/volume。**同一个 struct** 同时驱动 descriptor layout、`RegisterTexture` 的容量
+  上限、以及设备探测的阈值——三者错开正是之前越界写 descriptor 的成因。
+- **`ERT_Compatibility`**（`Engine/Rendering/Compatibility/`）是一个 contract 全 `None` 的
+  logic renderer。`outputs == None` 就是"没有 screen-space 链"的判据：`CreateSwapChain`、
+  `RefreshSceneSwapChainResources`、`BeginSceneFrame`、`Render` 各自据此跳过 RT bank、visibility、
+  共享 compute pipeline。约束设备上只注册这一个 renderer，其它类型自然走"未注册"分支。
+- 触发降级的条件有两个，任一成立即降级：撑不住 bindless descriptor 数组，**或**没有
+  `bufferDeviceAddress`（见下）。
+
+能力探测读的是 **update-after-bind** 上限（`VkPhysicalDeviceDescriptorIndexingProperties`），
+不是 `VkPhysicalDeviceLimits`：本引擎的 bindless set 全部带
+`VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT`，规范把这类 binding 排除在基础 per-stage 上限之外。
+§2 记录的 A12X "per-stage 96/96/16、descriptor-set 480/480/80" 是**基础上限**，不是真正的判据——
+按基础上限判会把每一台 Apple GPU 都降级（M3 Max 报 `maxPerStageDescriptorSamplers = 16`，却能正常
+创建 17k descriptor 的完整 layout）。重新按 A12X 的 update-after-bind 上限核对本文结论时要注意这点。
+
+与本文原计划的差异：兼容模式**照常提交真实场景**（`conf_room.glb` / `playground.glb` 都能 commit），
+只是不绘制它——场景的 CPU/GPU 数据、节点树、UI、输入全部可用，`Scene` 也会依据已注册 renderer 的
+requirements 自动把 ambient arena 收缩到 1 个 cascade。因此 §6.3 验收顺序的第 1–4 步已具备。
+
+### A12X 的第二条硬约束：没有 bufferDeviceAddress
+
+真机验证推翻了本文原先的一个隐含假设。**A12X 不支持 `VK_KHR_buffer_device_address`**，而
+`GPUScene` push constant 里每一个字段都是 buffer device address。因此兼容路径不仅不能用 bindless
+descriptor 数组，**也完全不能用 GPUScene**。
+
+引擎侧按"能力缺失即降级"处理，收口在三个点，而不是给 ~50 个 `GetDeviceAddress()` 调用点各加判断：
+
+- `Device::SupportsBufferDeviceAddress()` 读的是 `vkCreateDevice` 实际启用的 feature（走 pNext 链）；
+- `Buffer` 构造时把 `VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT` 抹掉，`GetDeviceAddress()` 返回 0；
+- VMA allocator 不再无条件带 `VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT`（否则每次分配都会
+  带上非法的 `VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT`）。
+
+`ProbeBindlessProfile` 把"没有 BDA"和"撑不住 descriptor 数组"视作同一个结论：都只能跑
+`ERT_Compatibility`。并且**兼容 profile 下即使设备支持 BDA 也不启用它**——这样在桌面 GPU 上加
+`--force-compatibility-renderer` 就能精确复现真机，而不是只复现一半。
+
+### 绘制路径（M1 + M2 合并实施）
+
+`CompatibilityRenderer` 现在真的画场景，但**没有走 §5.2 的 Soft Mesh GPU-driven 链路**：
+cull / finalize / expand 三个 compute pass 都是 `ZeroBindPipeline`，其 layout 里带着
+`GlobalTexturePool` 的 descriptor set，兼容 profile 建不出来。改用最短的等价路径：
+
+- **自带一个 5 个 storage buffer 的 descriptor set**（Nodes / VertexWords / Indices / Offsets /
+  Materials），不碰 bindless set。shader 只 `import Shader.Types`，**不 import `Shader.Bindless`**。
+- 用 storage buffer 而不是 uniform buffer：std430 的 array stride 与 CPU 结构体一致，
+  std140 会把 `NodeProxy::matId[16]` 从 4 字节/元素撑到 16。已核对 SPIR-V 的 `ArrayStride`：
+  NodeProxy 224、ModelData 64、Material 64、uint 4，与 `GPU_SCENE_*_SIZE` 逐个吻合。
+- push constant 只有 `float4x4 ViewProjection` + `uint ProxyIndex`（68 B），
+  相机矩阵直接推进去，省掉一个 camera descriptor 和它的 layout 风险。
+- 每个 render proxy 一次 `vkCmdPushConstants` + `vkCmdDraw(model.indexCount)`；
+  vertex shader 用 `SV_VertexID` 做 vertex pulling，没有 vertex input binding。
+- 单个 raster pass 直接画进 swapchain image：`LOAD_OP_CLEAR` 顺带完成背景清屏，
+  initial/final layout 都是 `COLOR_ATTACHMENT_OPTIMAL`，之后由 base renderer 转 `PRESENT_SRC`。
+- fragment 输出 `Material.Diffuse.rgb`，即 base-color factor。
+
+**顶点缓冲按裸 uint 读，不按 `GPUVertex` 读。** `GPUVertex` 是 3 个 `half4`；只要 shader 里出现
+16-bit 类型，SPIR-V 就会声明 `UniformAndStorageBuffer16BitAccess`（引擎从未启用），而
+`f16tof32` 也会 lower 成经由 `half` 的 bitcast、引入 `Float16` capability。改成读 6 个 uint、
+用纯整数运算解 IEEE binary16 之后，这个 module 只剩 `Shader` 和 `DrawParameters` 两个 capability。
+
+`Offsets` 用 **encoded model-section id**（`NodeProxy::modelId` 本身）索引，不要在这里
+`DecodeModelIndex`——那个函数是给 BLAS 用的。shader 侧同理。
+
+自检手段（改 shader 后建议都跑一遍）：
+
+```bash
+spirv-dis <out>/assets/shaders/Rast.CompatibilityAlbedo.vert.slang.spv | grep -E "OpCapability|DescriptorSet"
+```
+
+应当只看到 `Shader` / `DrawParameters` 两个 capability，以及 set 0 的 4 个 binding；
+出现 `PhysicalStorageBufferAddresses`、`Float16` 或 `UniformAndStorageBuffer16BitAccess` 即为回归。
+
+已验证：`playground.glb` / `conf_room.glb` 几何、变换、深度、逐材质颜色均正确；相机可自由移动；
+ImGui 正常叠加；开 `--validation` 相对普通路径**零新增** validation error。
+
+### 兼容 profile 不绑定场景纹理
+
+兼容 renderer 只读材质常量，不采样任何纹理。但场景加载器照样会为每张贴图注册 slot——
+`conf_room.glb` 有 11 张，而兼容 profile 的 sampled 数组只有 8 个。因此
+`FBindlessProfile::bindsSceneTextures = false`：纹理照常加载上传（材质 id 保持有意义），
+**超出数组的部分不绑定**，只 warn 一次。
+
+顺带修掉一个既有漏洞：`RequestNewTextureMemAsync`（场景纹理真正走的那条路）自己分配 index，
+**完全绕过了 `RegisterTexture` 的容量检查**。在完整 profile 下因为数组够大一直没暴露；
+在 8 槽的兼容 profile 下就是直接越界写 descriptor——这正是真机之外的第二个崩溃源。
+现在容量检查在两条路径上都有，并且 `BindSampleTexture` / `BindStorageTexture` / `BindShadowMap`
+都加了最后一道越界防线。
+
+### 验证入口
+
+`--force-compatibility-renderer` 在有能力的桌面 GPU 上强制走这条路径。仓库里的回归脚本
+`assets/agentscripts/compatibility-renderer-smoke.agentscript.json` 已把该 flag 写进脚本的
+`args` 字段，直接跑即可：
+
+```bash
+gnb validate --script assets/agentscripts/compatibility-renderer-smoke.agentscript.json
+```
+
+### 尚未实施
+
+M3 起：法线 / Lambert、显式 albedo texture、CSM。另外这一版**不做骨骼蒙皮**（skinning compute
+属于被跳过的 scene-frame prepass，shader 读 bind pose）、**不做视锥剔除**（逐 proxy 全量提交）、
+**不做 alpha 测试 / 混合**。这些都是有意的 MVP 边界，不是遗漏。
 
 ## 1. 目标
 

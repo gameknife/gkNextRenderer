@@ -38,6 +38,23 @@ namespace
 
         return family;
     }
+
+    // The enabled-features chain is handed to us as an opaque pNext list, so read the answer from
+    // the same structure vkCreateDevice will act on rather than re-querying the physical device --
+    // the caller may have masked the feature off even when the device advertises it.
+    bool IsBufferDeviceAddressEnabled(const void* nextDeviceFeatures)
+    {
+        for (const auto* entry = static_cast<const VkBaseInStructure*>(nextDeviceFeatures);
+             entry != nullptr; entry = entry->pNext)
+        {
+            if (entry->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES)
+            {
+                return reinterpret_cast<const VkPhysicalDeviceBufferDeviceAddressFeatures*>(entry)
+                    ->bufferDeviceAddress != VK_FALSE;
+            }
+        }
+        return false;
+    }
 }
 
 Device::Device(
@@ -48,9 +65,16 @@ Device::Device(
     const void* nextDeviceFeatures) :
     physicalDevice_(physicalDevice),
     surface_(surface),
-    debugUtils_(surface.Instance().Handle())
+    debugUtils_(surface.Instance().Handle()),
+    bufferDeviceAddressEnabled_(IsBufferDeviceAddressEnabled(nextDeviceFeatures))
 {
     CheckRequiredExtensions(physicalDevice, requiredExtensions);
+    if (!bufferDeviceAddressEnabled_)
+    {
+        SPDLOG_WARN("bufferDeviceAddress is not available on this device; buffers drop the "
+                    "SHADER_DEVICE_ADDRESS usage and report a null address. Only the compatibility "
+                    "renderer, which binds its buffers through descriptors, can run here.");
+    }
 
     const auto queueFamilies = GetEnumerateVector(physicalDevice, vkGetPhysicalDeviceQueueFamilyProperties);
 

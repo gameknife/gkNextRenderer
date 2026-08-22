@@ -149,6 +149,8 @@ namespace Assets
         VkDeviceSize SoftMeshShaderDrawArgByteOffset(uint32_t slot) const;
         uint32_t SoftMeshShaderDrawSlotForShadowCascade(uint32_t cascade) const;
         const Vulkan::Buffer& PrimAddressBuffer() const { return *primAddressBuffer_; }
+        // Per-section ModelData, indexed by the encoded model-section id in NodeProxy::modelId.
+        const Vulkan::Buffer& OffsetBuffer() const { return *offsetBuffer_; }
         const Vulkan::Buffer& LightGridBuffer() const { return *lightGridBuffer_; }
         bool HasLightGridBuffer() const { return lightGridBuffer_ != nullptr; }
 
@@ -209,6 +211,7 @@ namespace Assets
         void MarkSelectionDirty();
 
         std::vector<NodeProxy>& GetNodeProxies() { return nodeProxiesBackup; }
+        const std::vector<NodeProxy>& GetNodeProxies() const { return nodeProxiesBackup; }
 
         void OverrideModelView(glm::mat4& OutMatrix);
 

@@ -177,13 +177,25 @@ namespace NextRenderer
             SPDLOG_WARN("KosmicKrisp detected; disabling Vulkan timestamp queries to avoid device-loss on macOS");
             GOption->HardwareQuery = false;
         }
-        const bool hasFullAmbientCubeBudget = HasFullAmbientCubeBudget(physicalDevices[selectedGpuIdx]);
+        // Probed here, before the renderer exists: which renderers are worth registering at all is
+        // a device verdict, and registering one whose resources cannot be created only defers the
+        // failure to swapchain creation.
+        const bool hasFullBindlessBudget =
+            Vulkan::ProbeBindlessProfile(physicalDevices[selectedGpuIdx]) ==
+            Assets::FBindlessProfile::Full();
+        const bool hasFullAmbientCubeBudget =
+            hasFullBindlessBudget && HasFullAmbientCubeBudget(physicalDevices[selectedGpuIdx]);
         const bool useRayTracingRenderer =
             hasFullAmbientCubeBudget && !GOption->ForceNoRT &&
             instance->SupportsRayQuery(physicalDevices[selectedGpuIdx]);
 
         std::vector<Vulkan::ERendererType> supportedTypes;
-        if (hasFullAmbientCubeBudget)
+        if (!hasFullBindlessBudget)
+        {
+            // The only renderer that does not build the full bindless resource set.
+            supportedTypes = {Vulkan::ERT_Compatibility};
+        }
+        else if (hasFullAmbientCubeBudget)
         {
             supportedTypes = {Vulkan::ERT_SoftwareTracing, Vulkan::ERT_SoftwareModern,
                               Vulkan::ERT_VoxelTracing, Vulkan::ERT_SoftwareModernNoAmbient};
@@ -207,7 +219,8 @@ namespace NextRenderer
 
         auto requestedType =
             Rendering::ResolveRendererChoice(static_cast<Vulkan::ERendererType>(rendererType),
-                                             {useRayTracingRenderer, hasFullAmbientCubeBudget});
+                                             {useRayTracingRenderer, hasFullAmbientCubeBudget,
+                                              hasFullBindlessBudget});
         if (std::find(supportedTypes.begin(), supportedTypes.end(), requestedType) == supportedTypes.end())
         {
             requestedType = *supportedTypes.begin();
@@ -491,8 +504,7 @@ void NextEngine::Start()
     }
 
     auto resolvedRendererType = Rendering::ResolveRendererChoice(
-        renderer_->CurrentLogicRendererType(),
-        {renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget()});
+        renderer_->CurrentLogicRendererType(), renderer_->RendererChoiceCapabilities());
     if (resolvedRendererType != renderer_->CurrentLogicRendererType())
     {
         renderer_->SwitchLogicRenderer(resolvedRendererType);
@@ -715,7 +727,7 @@ bool NextEngine::Tick(bool forcingDelta)
         {
             auto requestedRendererType =
                 Rendering::ResolveRendererChoice(static_cast<Vulkan::ERendererType>(config_.userSettings.RendererType),
-                                                 {renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget()});
+                                                 renderer_->RendererChoiceCapabilities());
             if (requestedRendererType != static_cast<Vulkan::ERendererType>(config_.userSettings.RendererType))
             {
                 config_.userSettings.RendererType = static_cast<int32_t>(requestedRendererType);
@@ -1261,8 +1273,8 @@ bool NextEngine::RequestRendererType(const Vulkan::ERendererType type)
         return false;
     }
 
-    const Vulkan::ERendererType resolved = Rendering::ResolveRendererChoice(
-        type, {renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget()});
+    const Vulkan::ERendererType resolved =
+        Rendering::ResolveRendererChoice(type, renderer_->RendererChoiceCapabilities());
     const bool changed = config_.userSettings.RendererType != static_cast<int32_t>(resolved) ||
         renderer_->CurrentLogicRendererType() != resolved;
     config_.userSettings.RendererType = static_cast<int32_t>(resolved);
@@ -1358,20 +1370,29 @@ void NextEngine::OnRendererDeviceSet()
         });
     }
 
-    // global textures
-    // texture id 0: dynamic hdri sky
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/river_road_2.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/canary_wharf_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_01_puresky_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_07_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/std_env.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/rainforest_trail_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_03_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_09_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/sunset_fairway_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/umhlanga_sunrise_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/shanghai_bund_1k.hdr");
+    // Environment maps exist to be sampled; a profile that binds no scene textures would upload
+    // eleven of them for nothing. The scene itself is still built and committed below either way,
+    // so nothing downstream has to special-case a missing renderer scene.
+    if (renderer_->BindlessProfile().bindsSceneTextures)
+    {
+        // global textures
+        // texture id 0: dynamic hdri sky
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/river_road_2.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/canary_wharf_1k.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_01_puresky_1k.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_07_1k.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/std_env.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/rainforest_trail_1k.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_03_1k.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_09_1k.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/sunset_fairway_1k.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/umhlanga_sunrise_1k.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/shanghai_bund_1k.hdr");
+    }
 
+    // Single path on purpose: the renderer must always own a live scene, or every consumer that
+    // reaches GetScene() needs its own guard. Scene sizes its own ambient arena from the registered
+    // renderers' requirements, so a compatibility device gets the right-sized allocation for free.
     scene_.reset(new Assets::Scene(renderer_->CommandPool(), renderer_->SupportsRayTracing()));
     CommitSceneToRenderer({.rebuildMeshBuffer = false,
                            .resetFrameCounter = false,

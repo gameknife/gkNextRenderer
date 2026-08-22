@@ -29,6 +29,10 @@ public:
     bool ForceSDR{};
     bool ReferenceMode{};
     bool ForceNoRT{};
+    // Pretend the GPU cannot back the full bindless arrays. The compatibility renderer otherwise
+    // only runs on constrained devices (MoltenVK on A12X-class GPUs), where it cannot be exercised
+    // as part of a desktop change.
+    bool ForceCompatibilityRenderer{};
     bool ForceSoftGen{};
     bool HardwareQuery{};
     bool Validation{};

@@ -28,9 +28,13 @@ type Options struct {
 }
 type Script struct {
 	Name, Target, Scene string
-	Defaults            struct{ WaitFrames, StepTimeoutMs int }
-	Viewport            struct{ Width, Height int }
-	Steps               []map[string]any
+	// Extra engine arguments the script cannot do without, so a scenario that only exists under a
+	// flag (e.g. --force-compatibility-renderer) stays runnable as plain `gnb validate --script X`.
+	// Command-line args are appended after these.
+	Args     []string
+	Defaults struct{ WaitFrames, StepTimeoutMs int }
+	Viewport struct{ Width, Height int }
+	Steps    []map[string]any
 }
 type Report struct {
 	Name        string           `json:"name"`
@@ -146,6 +150,7 @@ func run(ctx context.Context, o Options, s Script) (retErr error) {
 	if o.Scene != "" {
 		args = append(args, "--load-scene="+o.Scene)
 	}
+	args = append(args, s.Args...)
 	args = append(args, o.Args...)
 	console.CommandLine(exe + " " + strings.Join(args, " "))
 	cmd := exec.CommandContext(ctx, exe, args...)

@@ -8,6 +8,7 @@
 #include "Engine/Vulkan/RayTracing/BottomLevelAccelerationStructure.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
+#include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
 #include "Engine/Rendering/ExternalPassRegistry.hpp"
@@ -35,6 +36,11 @@ namespace Rendering::Upscaler
 namespace Rendering::Atmosphere
 {
     class IAtmosphereSubsystem;
+}
+
+namespace Rendering
+{
+    struct FRendererChoiceCapabilities;
 }
 
 namespace Vulkan::PipelineCommon
@@ -78,6 +84,10 @@ namespace Vulkan
         ERT_VoxelTracing,
         ERT_SoftwareModernNoAmbient,
         ERT_PathTracingLite,
+        // Presents UI over a cleared swapchain and declares no outputs. This is the only renderer
+        // a device without the full bindless descriptor budget can run; it is a device verdict,
+        // not a user-selectable quality level, so it stays out of the renderer choice catalog.
+        ERT_Compatibility,
     };
 
     enum class ESceneResource : uint32_t
@@ -189,6 +199,11 @@ namespace Vulkan
         VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL;
         bool discardPreviousContents = false;
     };
+
+    // Which descriptor-array sizes a physical device can back. Queried before the logical device
+    // exists so renderer registration is decided up front, rather than by demoting a renderer whose
+    // resources were already created.
+    Assets::FBindlessProfile ProbeBindlessProfile(VkPhysicalDevice physicalDevice);
 
     FRendererRequirements GetRendererRequirements(ERendererType type);
     const FRendererContract& GetRendererContract(ERendererType type);
@@ -317,6 +332,11 @@ namespace Vulkan
         // Capabilities / flags
         bool VisualDebug() const {return visualDebug_;}
         bool SupportsRayTracing() const { return caps_.supportRayTracing; }
+        const Assets::FBindlessProfile& BindlessProfile() const { return caps_.bindlessProfile; }
+        // Single source of truth for "which renderers may this device run"; pass this to
+        // Rendering::ResolveRendererChoice / AvailableRendererChoices rather than assembling the
+        // struct at each call site, so a new capability field cannot be forgotten in one of them.
+        Rendering::FRendererChoiceCapabilities RendererChoiceCapabilities() const;
         bool SupportsUpscaler(Rendering::Upscaler::EUpscalerType type) const
         {
             return Rendering::Upscaler::SupportsUpscalerType(caps_.supportedUpscalerTypes, type);
@@ -443,6 +463,10 @@ namespace Vulkan
         struct DeviceCaps
         {
             bool supportRayTracing       = false;
+            // Descriptor-array sizes this device can actually back. Anything other than
+            // FBindlessProfile::Full() means only ERT_Compatibility can run here.
+            Assets::FBindlessProfile bindlessProfile = Assets::FBindlessProfile::Full();
+            bool supportsBCTextures      = true;
             Rendering::Upscaler::FUpscalerTypeMask supportedUpscalerTypes = 0;
             Rendering::Upscaler::FUpscalerTypeMask frameGenerationTypes = 0;
             bool supportReflex           = false;
@@ -530,6 +554,11 @@ namespace Vulkan
             int frameCount = 0;
             Assets::UniformBufferObject lastUBO;
             Rendering::Upscaler::FFrameToken streamlineFrameToken;
+            // Whether CreateSwapChain built the screen-space chain (RT banks, visibility buffer,
+            // shared compute pipelines). State, not policy: the frame path asks "do these resources
+            // exist", never "which renderer is this", so it stays correct no matter why they are
+            // absent and cannot disagree with what was actually created.
+            bool sceneChainCreated = false;
         };
 
         struct BindlessStorageImages
@@ -700,6 +729,20 @@ namespace Vulkan
         ERendererType GetLogicRendererType(const LogicRendererBase& renderer) const;
         void EnsureLogicRendererSwapChain(ERendererType type, LogicRendererBase& logicRenderer);
         void CreateRenderImages();
+        void CreateScreenShotBuffer();
+
+        bool HasFullBindlessBudget() const
+        {
+            return caps_.bindlessProfile == Assets::FBindlessProfile::Full();
+        }
+        // Policy, asked exactly once per swapchain: does the current renderer declare any output?
+        // One without any owns the swapchain image directly and needs none of the screen-space
+        // chain -- which is what keeps the compatibility profile from creating resources its device
+        // cannot back. Everything after CreateSwapChain reads frame_.sceneChainCreated instead.
+        bool RendererDeclaresOutputs() const
+        {
+            return GetRendererContract(logicRenderers_.current).outputs != ERenderOutput::None;
+        }
         void CreateSceneSwapChainResources();
         // Creates the full screen-space RT set at [bankBase + RT_X]. bankBase 0 == primary view.
         void CreateRenderTargetBank(uint32_t bankBase);

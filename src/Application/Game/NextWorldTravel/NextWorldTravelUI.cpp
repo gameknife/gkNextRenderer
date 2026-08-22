@@ -386,9 +386,7 @@ namespace NextWorldTravel
         Vulkan::VulkanBaseRenderer& renderer = engine.GetRenderer();
 
         const std::vector<const Rendering::FRendererChoice*> availableRenderers =
-            Rendering::AvailableRendererChoices(
-                {.supportsRayTracing = renderer.SupportsRayTracing(),
-                 .hasFullAmbientCubeBudget = renderer.HasFullAmbientCubeBudget()});
+            Rendering::AvailableRendererChoices(renderer.RendererChoiceCapabilities());
         const Vulkan::ERendererType currentRenderer = renderer.CurrentLogicRendererType();
         const Rendering::FRendererChoice* currentRendererChoice =
             Rendering::FindRendererChoice(currentRenderer);

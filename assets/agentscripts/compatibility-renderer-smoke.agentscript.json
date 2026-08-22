@@ -1,0 +1,37 @@
+{
+  "name": "compatibility-renderer-smoke",
+  "target": "gkNextRenderer",
+  "scene": "assets/models/playground.glb",
+  "args": ["--force-compatibility-renderer"],
+  "defaults": {
+    "stepTimeoutMs": 90000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    { "type": "log", "message": "ERT_Compatibility only runs on devices that cannot back the full bindless arrays (MoltenVK on A12X-class GPUs), so this script forces the profile on a capable GPU. Without it the compatibility path has no desktop regression at all." },
+
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running" },
+    { "type": "assert", "query": "engine.rendererType", "op": "eq", "value": 6, "comment": "ERT_Compatibility; a capable GPU must not silently keep a normal renderer." },
+
+    { "type": "wait-until", "query": "scene.nodeCount", "op": "gt", "value": 0, "comment": "The compatibility profile still commits a real scene; only the render path is reduced." },
+    { "type": "wait-frames", "n": 60 },
+    { "type": "assert", "query": "engine.totalFrames", "op": "gt", "value": 30, "comment": "Frames keep advancing: no stall in acquire/submit/present." },
+
+    { "type": "screenshot", "out": "screenshots/compatibility_renderer_smoke.jpg", "comment": "Base-colour geometry over the background clear." },
+
+    { "type": "mouse-button", "button": "right", "action": "down", "at": { "norm": [0.5, 0.5] } },
+    { "type": "key", "code": "W", "action": "down" },
+    { "type": "mouse-move", "relative": true, "to": [120, -20], "comment": "playground is an open scene, so the camera still frames geometry after the move -- the second screenshot is meant to be eyeballed." },
+    { "type": "wait-ms", "ms": 900 },
+    { "type": "key", "code": "W", "action": "up" },
+    { "type": "mouse-button", "button": "right", "action": "up", "at": { "norm": [0.5, 0.5] } },
+    { "type": "wait-frames", "n": 20 },
+    { "type": "assert", "query": "engine.status", "op": "eq", "value": "Running", "comment": "Camera drives the pass without tripping a missing resource." },
+
+    { "type": "screenshot", "out": "screenshots/compatibility_renderer_smoke_moved.jpg", "ui": true, "comment": "UI must still composite over the scene." },
+    { "type": "quit" }
+  ]
+}
