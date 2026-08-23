@@ -238,6 +238,13 @@ struct ResTask
     
 };
 
+struct FTaskThreadStatus
+{
+    std::string name;
+    uint32_t queued = 0;
+    bool running = false;
+};
+
 class TaskCoordinator;
 
 class TaskThread
@@ -257,6 +264,21 @@ public:
     {
         std::lock_guard<std::mutex> lock(completedTaskMutex_);
         return completedTaskCount_ >= submittedTaskCount_.load(std::memory_order_acquire);
+    }
+
+    bool IsBusy() const
+    {
+        return busy_.load();
+    }
+
+    const std::string& GetThreadName() const
+    {
+        return threadName_;
+    }
+
+    uint32_t GetQueuedTaskCount() const
+    {
+        return static_cast<uint32_t>(taskQueue_.size());
     }
 
     void EnqueueTask(ResTask task)
@@ -348,6 +370,8 @@ public:
     }
 
     uint32_t GetMainTaskCount();
+
+    std::vector<FTaskThreadStatus> GetTaskThreadStatuses() const;
 
     uint32_t GetCompleteTaskQueueCount()
     {

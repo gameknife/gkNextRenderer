@@ -192,6 +192,32 @@ uint32_t TaskCoordinator::GetMainTaskCount()
     return count;
 }
 
+std::vector<FTaskThreadStatus> TaskCoordinator::GetTaskThreadStatuses() const
+{
+    std::vector<FTaskThreadStatus> statuses;
+
+    const auto AppendThreadStatuses = [&statuses](const std::vector<std::unique_ptr<TaskThread>>& threads)
+    {
+        for (const auto& thread : threads)
+        {
+            statuses.push_back({
+                .name = thread->GetThreadName(),
+                .queued = thread->GetQueuedTaskCount(),
+                .running = thread->IsBusy(),
+            });
+        }
+    };
+
+    AppendThreadStatuses(threads_);
+    AppendThreadStatuses(lowThreads_);
+    for (const auto& threadPool : namedThreadPools_)
+    {
+        AppendThreadStatuses(threadPool);
+    }
+
+    return statuses;
+}
+
 bool TaskCoordinator::IsAllTaskComplete(std::vector<uint32_t>& tasks)
 {
     for (uint32_t taskId : tasks)
