@@ -454,7 +454,7 @@ void StudioSimGameInstance::OnInit()
     // NavGrid is built from the scene CPU BVH, so keep CPU mesh data alive.
     GOption->KeepCPUMeshData = true;
 
-    std::string initialScene = "assets/scad/source/office.scad";
+    std::string initialScene = "assets/scad/source/office/office.scad";
     if (!GOption->SceneName.empty())
     {
         initialScene = GOption->SceneName;

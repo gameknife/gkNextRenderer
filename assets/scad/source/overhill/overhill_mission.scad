@@ -1,5 +1,5 @@
-use <../lib/kit_overhill.scad>
-include <generated/overhill_vignette.scad>
+use <../../lib/kit_overhill.scad>
+include <../generated/overhill_vignette.scad>
 
 module player_truck_body() { oh_veh_truck_body(seed = 1); }
 module player_wheel() { oh_veh_wheel(0.5, 0.42); }

@@ -1,7 +1,7 @@
 {
   "name": "trucker_smoke",
   "target": "TruckerDemo",
-  "scene": "assets/scad/source/overhill_mission.scad",
+  "scene": "assets/scad/source/overhill/overhill_mission.scad",
   "steps": [
     { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 8000 },
     { "type": "wait-frames", "n": 120 },

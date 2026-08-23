@@ -127,6 +127,7 @@ namespace ScadLibrary
         void DrawTerrainProcessContent();
         void DrawDesignerContent();
         void DrawWorkbenchContent();
+        bool DrawBenchItemParameters(FBenchItem& benchItem);
         void DrawAnimationTimelinePanel(const ImVec2& pos, const ImVec2& size);
         void DrawViewportAxis(const ImVec2& viewportPos, const ImVec2& viewportSize);
         void DrawViewportToolbar(const ImVec2& viewportPos);
@@ -145,7 +146,7 @@ namespace ScadLibrary
         void RescanAssemblies();
         void PreviewModule(int kitIndex, const std::string& moduleName);
         void AddToBench(int kitIndex, const std::string& moduleName);
-        void ReloadBench();
+        void ReloadBench(bool preserveCamera = true);
         void ExportBench();
         bool OpenAssembly(const std::string& path);
         void ConvertSourceToEvaluated();

@@ -11,7 +11,7 @@ last_updated: 2026-07-18
 
 > 状态：**📝 待实现**。本文定义 CitySolSim 下一轮迭代的**目标与目标架构**，配套的分阶段落地顺序见 [`management-loop-plan.md`](management-loop-plan.md)。
 >
-> 相关代码：`src/Application/Game/CitySolSim/`（当前 ~1.5k 行）；场景资产 `assets/scad/source/habor_city_v2.scad`；市民角色走 `Gameplay/Sim/CharacterPool`（NextGameplay 共享层）。
+> 相关代码：`src/Application/Game/CitySolSim/`（当前 ~1.5k 行）；场景资产 `assets/scad/source/habor_city/habor_city_v2.scad`；市民角色走 `Gameplay/Sim/CharacterPool`（NextGameplay 共享层）。
 
 ---
 
@@ -63,7 +63,7 @@ last_updated: 2026-07-18
 | D1 | 经济数值制 | **全整数**（资金 / 价格 / 收支均 `int64`），决策逻辑不用 float 累积 | agent-validation 模式下确定性可断言；学 NextRA 的纪律红利 |
 | D2 | Zone 数据 | config constexpr 数组降级为**种子**，运行时由 `CityZoneSystem` 持 `std::vector<FZone>` | 建造 = 追加 zone；不重构这里一切免谈（本轮最大重构） |
 | D3 | 建造的资产通路 | **模型 / 材质在 `BeforeSceneRebuild` 一次性预注入建筑库**；运行时建造只 spawn node 引用既有 model/material id | 运行时注入 model/material 会触发 GPU 场景重建且有共享 model 崩溃前科（AirportSim 教训）；spawn node 是 MagicaLego 验证过的路径 |
-| D4 | 空地来源 | 修改 `habor_city_v2.scad` 腾出 8~10 块带地基板视觉的空地，锚点登记进 config | 比"拆除重建"简单一个量级；地基板给玩家明确的"这里能建"提示 |
+| D4 | 空地来源 | 修改 `habor_city/habor_city_v2.scad` 腾出 8~10 块带地基板视觉的空地，锚点登记进 config | 比"拆除重建"简单一个量级；地基板给玩家明确的"这里能建"提示 |
 | D5 | 新建筑视觉 | 首版用 FProcModel 盒体组合（体块 + 窗光 emissive 分层），不做 scad 模块实例化 | 施工两阶段（脚手架 → 成品）用盒体好做；scad 实例化留 P1 |
 | D6 | 人口上限 | CharacterPool `poolCapacity` 32 → **96** | 96 个 ScadRig 是性能未知数，M1 首日实测帧率，不达标就降 64 |
 | D7 | 玩家驱动通路 | UI 点击为主；同时注册**调试 CVar `city.agent.order`**（字符串指令，游戏每帧消费后清空） | agentscript 的 `cvar` / `exec` 步骤只能到 CVar 层，这是 agent 驱动建造的最短通路 |
@@ -241,6 +241,6 @@ struct FZone
 - `TrafficSystem.{h,cpp}` — 车辆数随人口缩放（P1）
 - `CitySolSimUI.{h,cpp}` — §8 全部
 - `CitySolSimGameInstance.{hpp,cpp}` — 系统接线 / CVar / agent queries
-- `assets/scad/source/habor_city_v2.scad` — 空地改造（§6.1）
+- `assets/scad/source/habor_city/habor_city_v2.scad` — 空地改造（§6.1）
 
 **LOC 预算**：现有 ~1.5k，本轮增量控制在 **+2.0k 以内**（游戏侧 demo，超预算先砍 M4）。

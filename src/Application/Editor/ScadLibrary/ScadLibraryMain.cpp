@@ -126,11 +126,12 @@ void ScadLibraryGameInstance::OnSceneLoaded()
             return;
         }
 
-        // Re-frame whatever was just previewed/composed and orbit around it.
+        // Re-frame whatever was just previewed/composed immediately. Loading a
+        // scene should show the final view without an extra camera zoom.
         cameraController_.Reset(scene.GetRenderCamera());
         cameraController_.SetOrbitTarget(center);
         cameraController_.SetAltPressed(true);
-        cameraController_.Focus(center, radius);
+        cameraController_.FocusImmediate(center, radius);
         return;
     }
     if (ui_->ConsumePreserveCameraOnNextSceneLoad())

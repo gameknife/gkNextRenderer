@@ -40,7 +40,7 @@
 //   * 伪随机 oc_rnd(i,m) 整数散列，确定性（引擎与 OpenSCAD 渲染一致）；
 //   * text() 只用于匾额（CJK 走 DroidSansFallback），字宽按全角 size 手动居中（不用 len() 数多字节）。
 
-use <../lib/kit_old_city.scad>
+use <../../lib/kit_old_city.scad>
 
 $fn = 10;
 

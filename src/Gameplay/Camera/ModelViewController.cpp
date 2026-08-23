@@ -245,6 +245,21 @@ namespace Runtime::Camera
         focusAnimation_.Start(glm::vec3(position_), currentRot, targetPos, currentRot);
     }
 
+    void ModelViewController::FocusImmediate(const glm::vec3& focusPoint, float radius)
+    {
+        // Calculate the same fit distance as Focus(), but apply it directly so
+        // scene initialization does not animate the camera into place.
+        float fovRad = glm::radians(fieldOfView_);
+        float halfFovTan = glm::tan(fovRad * 0.5f);
+        float safeRadius = std::max(radius, 0.001f);
+        float dist = safeRadius / std::max(halfFovTan, 0.001f) * 1.1f;
+
+        glm::vec3 fwd = GetForward();
+        position_ = glm::vec4(focusPoint - fwd * dist, 1.0f);
+        focusAnimation_.Cancel();
+        UpdateVectors();
+    }
+
     void ModelViewController::Orbit(float deltaX, float deltaY)
     {
         if (!orbitTarget_.has_value())

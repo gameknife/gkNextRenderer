@@ -33,6 +33,12 @@ ScadLibrary 的“场景”资源库不会再把所有 `.scad` 文件平铺显�
 - 新增特殊游戏或 Showcase 场景时，优先在 `assets/scad/source/<类别>/` 或
   `assets/scad/proc/<类别>/` 下放置文件。只要类别目录名称相同，Source/Proc 就会自动合并，
   不需要额外维护注册表。
+- 具体项目场景也按项目目录归档：机场放在 `source/airport/`，办公室放在 `source/office/`，
+  Overhill 任务放在 `source/overhill/`，海港城市放在 `source/habor_city/`；对应的 kit 展示场景
+  使用根目录的 `airport_showcase.scad`、`office_showcase.scad`、`overhill_showcase.scad` 和
+  `habor_city_showcase.scad`，便于在 ScadLibrary 中直接浏览零件库。
+- Racing 的 `pit_lane.scad` 与 `kit_pitlane` 展示统一位于 `source/racing/`；Old City 的
+  `old_city.scad` 与 `kit_old_city` 展示统一位于 `source/oldcity/`。
 
 ## ScadLibrary 场景组装
 

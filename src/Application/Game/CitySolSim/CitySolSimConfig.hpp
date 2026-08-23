@@ -6,7 +6,7 @@
 
 namespace CitySolSim::Config
 {
-    inline constexpr const char* kScenePath = "assets/scad/source/habor_city_v2.scad";
+    inline constexpr const char* kScenePath = "assets/scad/source/habor_city/habor_city_v2.scad";
     inline constexpr const char* kCitizenRigPath = "assets/scad/characters/agent_basic.scad";
 
     constexpr int kVehicleCount = 36;

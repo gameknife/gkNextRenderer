@@ -23,7 +23,7 @@
 // 西餐饮区（BURGER 快餐 + COFFEE 咖啡岛）/ 东零售街（SHOP/BOOKS/GIFTS 三连铺）
 // → 北侧 6 登机口 + 双候机排椅集群；东北卫生间、东侧员工办公室。
 
-use <../lib/kit_airport.scad>
+use <../../lib/kit_airport.scad>
 
 $fn = 16;
 TEALC    = [0.16, 0.62, 0.55];    // 礼品店

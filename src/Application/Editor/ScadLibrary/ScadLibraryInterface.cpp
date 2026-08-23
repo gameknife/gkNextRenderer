@@ -56,6 +56,8 @@
 #include <set>
 #include <spdlog/spdlog.h>
 #include <sstream>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 
 namespace ScadLibrary
@@ -67,6 +69,496 @@ namespace ScadLibrary
         constexpr float kCollapsedRailWidth = 46.0f;
         constexpr int kBenchGridColumns = 6;
         constexpr float kBenchGridStep = 14.0f;
+
+        struct FScadRawArgument
+        {
+            std::string name;
+            std::string source;
+            bool named = false;
+        };
+
+        struct FScadParameterEditor
+        {
+            std::string name;
+            std::string defaultSource;
+            std::string source;
+            Assets::Scad::ExprPtr expression;
+            bool explicitValue = false;
+        };
+
+        std::string TrimScadText(std::string_view text)
+        {
+            size_t begin = 0;
+            while (begin < text.size() && std::isspace(static_cast<unsigned char>(text[begin])))
+            {
+                ++begin;
+            }
+            size_t end = text.size();
+            while (end > begin && std::isspace(static_cast<unsigned char>(text[end - 1])))
+            {
+                --end;
+            }
+            return std::string(text.substr(begin, end - begin));
+        }
+
+        std::vector<std::string> SplitTopLevelScadArguments(const std::string& source)
+        {
+            std::vector<std::string> parts;
+            if (TrimScadText(source).empty())
+            {
+                return parts;
+            }
+
+            size_t begin = 0;
+            int parentheses = 0;
+            int brackets = 0;
+            int braces = 0;
+            bool quoted = false;
+            bool escaped = false;
+            for (size_t index = 0; index < source.size(); ++index)
+            {
+                const char character = source[index];
+                if (quoted)
+                {
+                    if (escaped)
+                    {
+                        escaped = false;
+                    }
+                    else if (character == '\\')
+                    {
+                        escaped = true;
+                    }
+                    else if (character == '"')
+                    {
+                        quoted = false;
+                    }
+                    continue;
+                }
+                if (character == '"')
+                {
+                    quoted = true;
+                    continue;
+                }
+                switch (character)
+                {
+                case '(':
+                    ++parentheses;
+                    break;
+                case ')':
+                    parentheses = std::max(0, parentheses - 1);
+                    break;
+                case '[':
+                    ++brackets;
+                    break;
+                case ']':
+                    brackets = std::max(0, brackets - 1);
+                    break;
+                case '{':
+                    ++braces;
+                    break;
+                case '}':
+                    braces = std::max(0, braces - 1);
+                    break;
+                case ',':
+                    if (parentheses == 0 && brackets == 0 && braces == 0)
+                    {
+                        parts.push_back(TrimScadText(std::string_view(source).substr(begin, index - begin)));
+                        begin = index + 1;
+                    }
+                    break;
+                default:
+                    break;
+                }
+            }
+            parts.push_back(TrimScadText(std::string_view(source).substr(begin)));
+            parts.erase(std::remove_if(parts.begin(), parts.end(), [](const std::string& part) { return part.empty(); }),
+                        parts.end());
+            return parts;
+        }
+
+        std::optional<size_t> FindTopLevelScadAssignment(const std::string& source)
+        {
+            int parentheses = 0;
+            int brackets = 0;
+            int braces = 0;
+            bool quoted = false;
+            bool escaped = false;
+            for (size_t index = 0; index < source.size(); ++index)
+            {
+                const char character = source[index];
+                if (quoted)
+                {
+                    if (escaped)
+                    {
+                        escaped = false;
+                    }
+                    else if (character == '\\')
+                    {
+                        escaped = true;
+                    }
+                    else if (character == '"')
+                    {
+                        quoted = false;
+                    }
+                    continue;
+                }
+                if (character == '"')
+                {
+                    quoted = true;
+                    continue;
+                }
+                switch (character)
+                {
+                case '(':
+                    ++parentheses;
+                    break;
+                case ')':
+                    parentheses = std::max(0, parentheses - 1);
+                    break;
+                case '[':
+                    ++brackets;
+                    break;
+                case ']':
+                    brackets = std::max(0, brackets - 1);
+                    break;
+                case '{':
+                    ++braces;
+                    break;
+                case '}':
+                    braces = std::max(0, braces - 1);
+                    break;
+                case '=':
+                    if (parentheses == 0 && brackets == 0 && braces == 0 &&
+                        (index == 0 || source[index - 1] != '=') &&
+                        (index + 1 >= source.size() || source[index + 1] != '='))
+                    {
+                        return index;
+                    }
+                    break;
+                default:
+                    break;
+                }
+            }
+            return std::nullopt;
+        }
+
+        bool IsScadIdentifier(const std::string& text)
+        {
+            if (text.empty())
+            {
+                return false;
+            }
+            const auto isFirst = [](unsigned char character)
+            { return std::isalpha(character) || character == '_' || character == '$'; };
+            const auto isRest = [](unsigned char character)
+            { return std::isalnum(character) || character == '_' || character == '$'; };
+            if (!isFirst(static_cast<unsigned char>(text.front())))
+            {
+                return false;
+            }
+            return std::all_of(text.begin() + 1, text.end(),
+                               [&](char character) { return isRest(static_cast<unsigned char>(character)); });
+        }
+
+        bool ParseScadExpression(const std::string& source, Assets::Scad::ExprPtr& outExpression)
+        {
+            if (TrimScadText(source).empty())
+            {
+                outExpression.reset();
+                return false;
+            }
+            const std::string wrapper = fmt::format(
+                "module __scadlibrary_expression_probe__() {{ __scadlibrary_expression__({}); }}", source);
+            std::vector<Assets::Scad::Token> tokens;
+            std::string error;
+            Assets::Scad::Scope scope;
+            if (!Assets::Scad::ScadLexer::Tokenize(wrapper, tokens, error) ||
+                !Assets::Scad::ScadParser::Parse(tokens, scope, error) || scope.size() != 1 ||
+                scope.front() == nullptr || scope.front()->body.size() != 1 ||
+                scope.front()->body.front() == nullptr || scope.front()->body.front()->args.size() != 1)
+            {
+                outExpression.reset();
+                return false;
+            }
+            outExpression = scope.front()->body.front()->args.front().value;
+            return outExpression != nullptr;
+        }
+
+        bool ParseScadModuleParameters(const FKitModuleInfo& moduleInfo,
+                                       std::vector<FScadParameterEditor>& outParameters)
+        {
+            outParameters.clear();
+            for (const std::string& part : SplitTopLevelScadArguments(moduleInfo.params))
+            {
+                const std::optional<size_t> assignment = FindTopLevelScadAssignment(part);
+                const std::string name = TrimScadText(
+                    assignment ? std::string_view(part).substr(0, *assignment) : std::string_view(part));
+                if (!IsScadIdentifier(name))
+                {
+                    outParameters.clear();
+                    return false;
+                }
+                FScadParameterEditor parameter;
+                parameter.name = name;
+                if (assignment)
+                {
+                    parameter.defaultSource = TrimScadText(std::string_view(part).substr(*assignment + 1));
+                }
+                outParameters.push_back(std::move(parameter));
+            }
+            return true;
+        }
+
+        std::vector<FScadRawArgument> ParseScadCallArguments(const std::string& source)
+        {
+            std::vector<FScadRawArgument> arguments;
+            for (const std::string& part : SplitTopLevelScadArguments(source))
+            {
+                const std::optional<size_t> assignment = FindTopLevelScadAssignment(part);
+                if (assignment)
+                {
+                    const std::string name = TrimScadText(std::string_view(part).substr(0, *assignment));
+                    if (IsScadIdentifier(name))
+                    {
+                        arguments.push_back({name, TrimScadText(std::string_view(part).substr(*assignment + 1)), true});
+                        continue;
+                    }
+                }
+                arguments.push_back({{}, part, false});
+            }
+            return arguments;
+        }
+
+        std::vector<FScadParameterEditor> MakeScadParameterEditors(const FKitModuleInfo& moduleInfo,
+                                                                     const std::string& currentArguments,
+                                                                     std::vector<FScadRawArgument>& outUnknown)
+        {
+            std::vector<FScadParameterEditor> parameters;
+            if (!ParseScadModuleParameters(moduleInfo, parameters))
+            {
+                return parameters;
+            }
+            const std::vector<FScadRawArgument> arguments = ParseScadCallArguments(currentArguments);
+            std::vector<bool> used(arguments.size(), false);
+            size_t positionalIndex = 0;
+            for (FScadParameterEditor& parameter : parameters)
+            {
+                for (size_t index = 0; index < arguments.size(); ++index)
+                {
+                    if (!used[index] && arguments[index].named && arguments[index].name == parameter.name)
+                    {
+                        parameter.source = arguments[index].source;
+                        parameter.explicitValue = true;
+                        used[index] = true;
+                        break;
+                    }
+                }
+                if (!parameter.explicitValue)
+                {
+                    while (positionalIndex < arguments.size() &&
+                           (used[positionalIndex] || arguments[positionalIndex].named))
+                    {
+                        ++positionalIndex;
+                    }
+                    if (positionalIndex < arguments.size())
+                    {
+                        parameter.source = arguments[positionalIndex].source;
+                        parameter.explicitValue = true;
+                        used[positionalIndex] = true;
+                        ++positionalIndex;
+                    }
+                    else
+                    {
+                        parameter.source = parameter.defaultSource;
+                    }
+                }
+                ParseScadExpression(parameter.source, parameter.expression);
+            }
+            for (size_t index = 0; index < arguments.size(); ++index)
+            {
+                if (!used[index])
+                {
+                    outUnknown.push_back(arguments[index]);
+                }
+            }
+            return parameters;
+        }
+
+        std::string ScadParameterValueSource(const FScadParameterEditor& parameter)
+        {
+            if (parameter.expression == nullptr)
+            {
+                return parameter.source;
+            }
+            return parameter.source;
+        }
+
+        std::string ComposeScadArguments(const std::vector<FScadParameterEditor>& parameters,
+                                         const std::vector<FScadRawArgument>& unknown)
+        {
+            std::string result;
+            const auto append = [&](const std::string& value)
+            {
+                if (value.empty())
+                {
+                    return;
+                }
+                if (!result.empty())
+                {
+                    result += ", ";
+                }
+                result += value;
+            };
+            for (const FScadParameterEditor& parameter : parameters)
+            {
+                if (!parameter.source.empty())
+                {
+                    append(fmt::format("{} = {}", parameter.name, ScadParameterValueSource(parameter)));
+                }
+            }
+            for (const FScadRawArgument& argument : unknown)
+            {
+                append(argument.named ? fmt::format("{} = {}", argument.name, argument.source)
+                                       : argument.source);
+            }
+            return result;
+        }
+
+        bool IsColorScadParameter(const std::string& name)
+        {
+            std::string lower;
+            lower.reserve(name.size());
+            for (const char character : name)
+            {
+                lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(character))));
+            }
+            return lower == "c" || lower == "color" || lower == "colour" || lower == "skin" ||
+                lower.ends_with("color") || lower.ends_with("colour");
+        }
+
+        std::string ScadParameterDescription(const std::string& name)
+        {
+            std::string lower;
+            lower.reserve(name.size());
+            for (const char character : name)
+            {
+                lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(character))));
+            }
+            if (lower == "seed" || lower.ends_with("seed"))
+            {
+                return "随机种子：相同 seed 会产生相同的确定性变体";
+            }
+            if (IsColorScadParameter(name))
+            {
+                return "颜色参数：通常为 RGB 或 RGBA 向量";
+            }
+            if (lower == "plinth" || lower == "dual" || lower == "laptop" || lower == "tablet" ||
+                lower == "sticky" || lower == "closed" || lower == "porch" || lower == "randomrotation")
+            {
+                return "布尔开关参数";
+            }
+            if (lower == "l" || lower == "w" || lower == "d" || lower == "h" || lower == "t" ||
+                lower == "len" || lower == "width" || lower == "height" || lower == "depth" ||
+                lower == "radius" || lower == "r")
+            {
+                return "几何尺寸参数，单位遵循当前 Kit 的 scaleClass";
+            }
+            return "SCAD 模块参数";
+        }
+
+        bool ReadScadNumericLiteral(const Assets::Scad::ExprPtr& expression, double& outValue)
+        {
+            if (expression == nullptr)
+            {
+                return false;
+            }
+            if (expression->kind == Assets::Scad::ExprKind::Number)
+            {
+                outValue = expression->num;
+                return true;
+            }
+            if (expression->kind == Assets::Scad::ExprKind::Unary && expression->list.size() == 1 &&
+                expression->list.front() != nullptr &&
+                expression->list.front()->kind == Assets::Scad::ExprKind::Number &&
+                (expression->str == "+" || expression->str == "-"))
+            {
+                outValue = expression->str == "-" ? -expression->list.front()->num : expression->list.front()->num;
+                return true;
+            }
+            return false;
+        }
+
+        std::string QuoteScadString(const std::string& value)
+        {
+            std::string result;
+            result.reserve(value.size() + 2);
+            result.push_back('"');
+            for (const char character : value)
+            {
+                if (character == '\\' || character == '"')
+                {
+                    result.push_back('\\');
+                }
+                result.push_back(character);
+            }
+            result.push_back('"');
+            return result;
+        }
+
+        std::string ReadScadModuleComment(const FKitInfo& kit, const FKitModuleInfo& module)
+        {
+            if (kit.filePath.empty() || module.line <= 1)
+            {
+                return {};
+            }
+
+            static std::unordered_map<std::string, std::string> commentCache;
+            const std::string cacheKey = fmt::format("{}#{}", kit.filePath, module.line);
+            const auto cached = commentCache.find(cacheKey);
+            if (cached != commentCache.end())
+            {
+                return cached->second;
+            }
+
+            std::ifstream input(kit.filePath, std::ios::binary);
+            if (!input)
+            {
+                return {};
+            }
+            std::vector<std::string> lines;
+            std::string line;
+            while (std::getline(input, line))
+            {
+                lines.push_back(std::move(line));
+            }
+            std::string comment;
+            const size_t moduleLine = static_cast<size_t>(module.line - 1);
+            if (moduleLine <= lines.size())
+            {
+                for (size_t index = moduleLine; index > 0;)
+                {
+                    --index;
+                    const std::string trimmed = TrimScadText(lines[index]);
+                    if (trimmed.empty())
+                    {
+                        break;
+                    }
+                    if (!trimmed.starts_with("//"))
+                    {
+                        break;
+                    }
+                    const std::string text = TrimScadText(std::string_view(trimmed).substr(2));
+                    if (text.empty() || std::all_of(text.begin(), text.end(), [](unsigned char character)
+                                                     { return character == '-' || character == '=' || character == ' '; }))
+                    {
+                        continue;
+                    }
+                    comment = comment.empty() ? text : text + "\n" + comment;
+                }
+            }
+            commentCache.emplace(cacheKey, comment);
+            return comment;
+        }
 
         // Kit file change watch: how often the gather task runs, and how long a
         // detected change is debounced before the preview reload actually fires
@@ -884,7 +1376,7 @@ namespace ScadLibrary
             }
             else if (!bench_.empty())
             {
-                ReloadBench();
+                ReloadBench(false);
             }
             else if (selectedKit_ >= 0 && !selectedModule_.empty())
             {
@@ -3808,6 +4300,252 @@ namespace ScadLibrary
         }
     }
 
+    bool ScadLibraryInterface::DrawBenchItemParameters(FBenchItem& benchItem)
+    {
+        const FKitModuleInfo* moduleInfo = nullptr;
+        if (benchItem.kitIndex >= 0 && benchItem.kitIndex < static_cast<int>(kits_.size()))
+        {
+            const FKitInfo& kit = kits_[benchItem.kitIndex];
+            const auto found = std::find_if(kit.modules.begin(), kit.modules.end(),
+                                            [&](const FKitModuleInfo& module) { return module.name == benchItem.moduleName; });
+            if (found != kit.modules.end())
+            {
+                moduleInfo = &*found;
+            }
+        }
+
+        std::vector<FScadParameterEditor> parameters;
+        if (moduleInfo == nullptr || !ParseScadModuleParameters(*moduleInfo, parameters))
+        {
+            const bool changed = ImGui::InputTextWithHint("原始参数##scad_raw_args",
+                                                          "SCAD 参数，例如 seed = 3",
+                                                          benchItem.args, sizeof(benchItem.args));
+            ImGui::SetItemTooltip("模块签名无法结构化解析，保留原始 SCAD 参数编辑\n%s",
+                                  moduleInfo == nullptr ? "未找到模块签名" : moduleInfo->params.c_str());
+            return changed;
+        }
+
+        std::vector<FScadRawArgument> unknown;
+        parameters = MakeScadParameterEditors(*moduleInfo, benchItem.args, unknown);
+        const std::string moduleComment =
+            ReadScadModuleComment(kits_[benchItem.kitIndex], *moduleInfo);
+        if (parameters.empty())
+        {
+            if (!unknown.empty())
+            {
+                std::string rawUnknown;
+                for (const FScadRawArgument& argument : unknown)
+                {
+                    if (!rawUnknown.empty())
+                    {
+                        rawUnknown += ", ";
+                    }
+                    rawUnknown += argument.named ? fmt::format("{} = {}", argument.name, argument.source)
+                                                  : argument.source;
+                }
+                if (ImGui::InputTextWithHint("原始参数##scad_raw_args", "SCAD 参数", &rawUnknown))
+                {
+                    if (rawUnknown.size() < sizeof(benchItem.args))
+                    {
+                        std::snprintf(benchItem.args, sizeof(benchItem.args), "%s", rawUnknown.c_str());
+                        return true;
+                    }
+                    statusLine_ = "参数文本过长，最多支持 511 个字符";
+                    statusError_ = true;
+                }
+            }
+            else
+            {
+                ImGui::TextDisabled("该模块没有可编辑参数");
+            }
+            return false;
+        }
+
+        bool changed = false;
+        for (size_t index = 0; index < parameters.size(); ++index)
+        {
+            FScadParameterEditor& parameter = parameters[index];
+            const std::string label = fmt::format("{}##scad_parameter_{}", parameter.name, index);
+            const Assets::Scad::ExprPtr& expression = parameter.expression;
+            const auto setTooltip = [&](const char* type)
+            {
+                const std::string defaultValue = parameter.defaultSource.empty() ? "无默认值（必填）"
+                                                                                   : parameter.defaultSource;
+                const std::string tooltip = fmt::format("{}\n类型: {}\n默认值: {}",
+                                                         ScadParameterDescription(parameter.name), type,
+                                                         defaultValue);
+                if (moduleComment.empty())
+                {
+                    ImGui::SetItemTooltip("%s", tooltip.c_str());
+                }
+                else
+                {
+                    ImGui::SetItemTooltip("%s\n\n模块注释:\n%s", tooltip.c_str(), moduleComment.c_str());
+                }
+            };
+
+            double number = 0.0;
+            if (ReadScadNumericLiteral(expression, number))
+            {
+                if (ImGui::DragScalar(label.c_str(), ImGuiDataType_Double, &number, 0.01f, nullptr, nullptr,
+                                      "%.4g"))
+                {
+                    parameter.source = fmt::format("{:.9g}", number);
+                    changed = true;
+                }
+                setTooltip("数值");
+                continue;
+            }
+
+            if (expression != nullptr && expression->kind == Assets::Scad::ExprKind::Bool)
+            {
+                bool value = expression->boolean;
+                if (ImGui::Checkbox(label.c_str(), &value))
+                {
+                    parameter.source = value ? "true" : "false";
+                    changed = true;
+                }
+                setTooltip("布尔");
+                continue;
+            }
+
+            if (expression != nullptr && expression->kind == Assets::Scad::ExprKind::Str)
+            {
+                std::string value = expression->str;
+                if (ImGui::InputText(label.c_str(), &value))
+                {
+                    parameter.source = QuoteScadString(value);
+                    changed = true;
+                }
+                setTooltip("字符串");
+                continue;
+            }
+
+            bool numericVector = expression != nullptr && expression->kind == Assets::Scad::ExprKind::VectorLit &&
+                expression->list.size() >= 1 && expression->list.size() <= 4;
+            std::vector<double> vectorValues;
+            if (numericVector)
+            {
+                vectorValues.reserve(expression->list.size());
+                for (const Assets::Scad::ExprPtr& element : expression->list)
+                {
+                    double value = 0.0;
+                    if (!ReadScadNumericLiteral(element, value))
+                    {
+                        numericVector = false;
+                        break;
+                    }
+                    vectorValues.push_back(value);
+                }
+            }
+            if (numericVector)
+            {
+                bool vectorChanged = false;
+                if (IsColorScadParameter(parameter.name) &&
+                    (vectorValues.size() == 3 || vectorValues.size() == 4))
+                {
+                    float color[4] = {static_cast<float>(vectorValues[0]), static_cast<float>(vectorValues[1]),
+                                      static_cast<float>(vectorValues[2]),
+                                      vectorValues.size() == 4 ? static_cast<float>(vectorValues[3]) : 1.0f};
+                    vectorChanged = vectorValues.size() == 3
+                        ? ImGui::ColorEdit3(label.c_str(), color)
+                        : ImGui::ColorEdit4(label.c_str(), color);
+                    if (vectorChanged)
+                    {
+                        parameter.source = vectorValues.size() == 3
+                            ? fmt::format("[{:.5f}, {:.5f}, {:.5f}]", color[0], color[1], color[2])
+                            : fmt::format("[{:.5f}, {:.5f}, {:.5f}, {:.5f}]", color[0], color[1], color[2],
+                                          color[3]);
+                    }
+                    setTooltip(vectorValues.size() == 3 ? "RGB 颜色" : "RGBA 颜色");
+                }
+                else if (vectorValues.size() == 1)
+                {
+                    vectorChanged = ImGui::DragScalar(label.c_str(), ImGuiDataType_Double, vectorValues.data(),
+                                                      0.01f, nullptr, nullptr, "%.4g");
+                    if (vectorChanged)
+                    {
+                        parameter.source = fmt::format("[{:.9g}]", vectorValues[0]);
+                    }
+                    setTooltip("数值向量");
+                }
+                else
+                {
+                    vectorChanged = ImGui::DragScalarN(label.c_str(), ImGuiDataType_Double, vectorValues.data(),
+                                                       static_cast<int>(vectorValues.size()), 0.01f, nullptr, nullptr,
+                                                       "%.4g");
+                    if (vectorChanged)
+                    {
+                        parameter.source = "[";
+                        for (size_t component = 0; component < vectorValues.size(); ++component)
+                        {
+                            if (component > 0)
+                            {
+                                parameter.source += ", ";
+                            }
+                            parameter.source += fmt::format("{:.9g}", vectorValues[component]);
+                        }
+                        parameter.source += "]";
+                    }
+                    setTooltip(fmt::format("{}D 数值向量", vectorValues.size()).c_str());
+                }
+                changed |= vectorChanged;
+                continue;
+            }
+
+            std::string expressionText = parameter.source;
+            if (ImGui::InputTextWithHint(label.c_str(), "SCAD 表达式", &expressionText))
+            {
+                parameter.source = std::move(expressionText);
+                changed = true;
+            }
+            setTooltip("表达式");
+        }
+
+        if (!unknown.empty())
+        {
+            ImGui::TextDisabled("未在模块签名中识别的参数");
+            std::string unknownText;
+            for (const FScadRawArgument& argument : unknown)
+            {
+                if (!unknownText.empty())
+                {
+                    unknownText += ", ";
+                }
+                unknownText += argument.named ? fmt::format("{} = {}", argument.name, argument.source)
+                                              : argument.source;
+            }
+            if (ImGui::InputTextWithHint("高级参数##scad_unknown_args", "保留的 SCAD 参数", &unknownText))
+            {
+                if (unknownText.size() < sizeof(benchItem.args))
+                {
+                    const std::string composed = ComposeScadArguments(parameters, ParseScadCallArguments(unknownText));
+                    if (composed.size() < sizeof(benchItem.args))
+                    {
+                        std::snprintf(benchItem.args, sizeof(benchItem.args), "%s", composed.c_str());
+                        return true;
+                    }
+                }
+                statusLine_ = "参数文本过长，最多支持 511 个字符";
+                statusError_ = true;
+            }
+        }
+
+        if (!changed)
+        {
+            return false;
+        }
+        const std::string composed = ComposeScadArguments(parameters, unknown);
+        if (composed.size() >= sizeof(benchItem.args))
+        {
+            statusLine_ = "参数文本过长，最多支持 511 个字符";
+            statusError_ = true;
+            return false;
+        }
+        std::snprintf(benchItem.args, sizeof(benchItem.args), "%s", composed.c_str());
+        return true;
+    }
+
     void ScadLibraryInterface::DrawBenchContent()
     {
         ImGui::Spacing();
@@ -3998,7 +4736,7 @@ namespace ScadLibrary
                             {
                                 benchDirty_ = true;
                             }
-                            if (ImGui::InputTextWithHint("参数", "如 seed = 3", benchItem.args, sizeof(benchItem.args)))
+                            if (DrawBenchItemParameters(benchItem))
                             {
                                 benchDirty_ = true;
                             }
@@ -4941,7 +5679,10 @@ namespace ScadLibrary
     void ScadLibraryInterface::PreviewAssemblySource()
     {
         rigPreview_.SetActive(false);
-        preserveCameraOnNextSceneLoad_ = assemblyProcedural_;
+        // Previewing edited assembly data is an in-place reload. Keep the
+        // current view for Source, Evaluated, and Proc alike; only opening a
+        // different assembly should perform the initial framing.
+        preserveCameraOnNextSceneLoad_ = true;
         if (WriteAndLoad("assembly_preview.scad", BuildAssemblyPreviewSource()))
         {
             statusLine_ = assemblyProcedural_
@@ -5051,7 +5792,9 @@ namespace ScadLibrary
         std::snprintf(assemblyPathBuf_, sizeof(assemblyPathBuf_), "%s", relativePath.c_str());
         if (reloadScene)
         {
-            preserveCameraOnNextSceneLoad_ = assemblyProcedural_;
+            // Saving and reloading the current assembly must not move the
+            // user's camera, including when an Evaluated scene is re-evaluated.
+            preserveCameraOnNextSceneLoad_ = true;
             engine_.RequestLoadScene({.filename = openedAssemblyPath_});
         }
         RescanAssemblies();
@@ -5086,7 +5829,7 @@ namespace ScadLibrary
         preserveCameraOnNextSceneLoad_ = false;
     }
 
-    void ScadLibraryInterface::ReloadBench()
+    void ScadLibraryInterface::ReloadBench(bool preserveCamera)
     {
         benchDirty_ = false;
         rigPreview_.SetActive(false);
@@ -5096,11 +5839,17 @@ namespace ScadLibrary
             statusError_ = false;
             return;
         }
+        // Parameter/transform edits in an Evaluated scene rebuild this preview
+        // scene. Preserve the camera while replacing the scene contents. A
+        // workspace switch passes false because it is a new preview context.
+        preserveCameraOnNextSceneLoad_ = preserveCamera;
         if (WriteAndLoad("bench.scad", BuildBenchSource()))
         {
             statusLine_ = fmt::format("场景组装 {} 个对象已重载", bench_.size());
             statusError_ = false;
+            return;
         }
+        preserveCameraOnNextSceneLoad_ = false;
     }
 
     void ScadLibraryInterface::ExportBench()

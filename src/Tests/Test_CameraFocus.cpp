@@ -22,6 +22,22 @@ TEST_CASE("Camera focus moves closer for small targets", "[Unit][Camera]")
     CHECK(finalDistance == Catch::Approx(0.060434f).margin(0.01f));
 }
 
+TEST_CASE("Immediate camera focus skips the transition", "[Unit][Camera]")
+{
+    Assets::Camera camera{};
+    camera.FieldOfView = 40.0f;
+    camera.ModelView =
+        glm::lookAtRH(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
+    Runtime::Camera::ModelViewController controller;
+    controller.Reset(camera);
+    controller.FocusImmediate(glm::vec3(0.0f), 0.02f);
+
+    const float finalDistance = glm::distance(controller.GetPosition(), glm::vec3(0.0f));
+    CHECK(finalDistance == Catch::Approx(0.060434f).margin(0.01f));
+    CHECK_FALSE(controller.UpdateCamera(1.0, 1.0 / 60.0));
+}
+
 TEST_CASE("Orbit camera movement reports updated state", "[Unit][Camera]")
 {
     Assets::Camera camera{};

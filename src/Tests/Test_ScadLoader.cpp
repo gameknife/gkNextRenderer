@@ -981,10 +981,10 @@ TEST_CASE("Scad loader: Z-up converts to engine Y-up", "[Unit][Scad]")
 TEST_CASE("Scad loader: loads the bundled old_city sample when present", "[Unit][Scad]")
 {
     const std::filesystem::path samplePath =
-        std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets/scad/source/old_city.scad"));
+        std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets/scad/source/oldcity/old_city.scad"));
     if (!std::filesystem::exists(samplePath))
     {
-        WARN("assets/scad/source/old_city.scad not present in runtime root; skipping sample load");
+    WARN("assets/scad/source/oldcity/old_city.scad not present in runtime root; skipping sample load");
         return;
     }
 
@@ -996,7 +996,7 @@ TEST_CASE("Scad loader: loads the bundled old_city sample when present", "[Unit]
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene("assets/scad/source/old_city.scad", environment, nodes, models, materials,
+    REQUIRE(Assets::FScadLoader::LoadScadScene("assets/scad/source/oldcity/old_city.scad", environment, nodes, models, materials,
                                                lights, tracks, skeletons));
 
     CHECK(nodes.size() > 1);

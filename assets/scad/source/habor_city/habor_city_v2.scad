@@ -13,8 +13,8 @@
 // 街区库在 lib/kit_city_blocks.scad（v2_ 前缀，内部 use kit_city_hd）。kit 常量
 // 已函数化（如 hc_GZT()），本文件只保留布局矩阵与总装语句，无需重申环境常量。
 
-use <../lib/kit_city_hd.scad>
-use <../lib/kit_city_blocks.scad>
+use <../../lib/kit_city_hd.scad>
+use <../../lib/kit_city_blocks.scad>
 
 
 

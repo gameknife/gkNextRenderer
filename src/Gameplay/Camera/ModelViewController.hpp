@@ -63,6 +63,7 @@ namespace Runtime::Camera
         void SetOrbitTarget(std::optional<glm::vec3> target) { orbitTarget_ = target; }
         void SetAltPressed(bool pressed) { altPressed_ = pressed; }
         void Focus(const glm::vec3& focusPoint, float radius = 0.5f);
+        void FocusImmediate(const glm::vec3& focusPoint, float radius = 0.5f);
 
         glm::vec3 GetRight() const;
         glm::vec3 GetUp() const;

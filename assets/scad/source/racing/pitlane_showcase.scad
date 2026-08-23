@@ -1,8 +1,8 @@
 // pitlane_showcase.scad —— kit_pitlane 零件总览（按类别排行，验收/选型用）
 // 行序（自北向南）：建筑 / 载具 / 赛道设施 / 车库内饰件 / 地面 / 植被。
-// gnb shot --scene assets/scad/source/pitlane_showcase.scad
+// gnb shot --scene assets/scad/source/racing/pitlane_showcase.scad
 
-use <../lib/kit_pitlane.scad>
+use <../../lib/kit_pitlane.scad>
 
 $fn = 12;
 

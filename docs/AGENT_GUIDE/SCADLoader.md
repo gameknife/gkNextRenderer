@@ -115,7 +115,7 @@ glTF 相机完全相同的运行时结构：定点机位进 `EnvironmentSetting.
 
 ## 资产与 compose
 
-现行手写验证场景使用 `assets/scad/source/beer_cup.scad`、`source/old_city.scad` 等。Kit 位于
+现行手写验证场景使用 `assets/scad/source/beer_cup.scad`、`source/oldcity/old_city.scad` 等。Kit 位于
 `assets/scad/lib/`，严格 JSON spec 位于 `assets/scad/specs/`，派生场景按结构位于
 `assets/scad/source/generated/` 或 `assets/scad/proc/generated/`。生成管线见
 `docs/designs/scad-scene-compose-design.md`。
@@ -125,7 +125,7 @@ glTF 相机完全相同的运行时结构：定点机位进 `EnvironmentSetting.
 ```bash
 ./gnb.sh build gkNextRenderer gkNextUnitTests
 ./out/build/<preset>/bin/gkNextUnitTests "[Scad]"
-./gnb.sh shot --scene assets/scad/source/old_city.scad
+./gnb.sh shot --scene assets/scad/source/oldcity/old_city.scad
 ./gnb.sh shot --target ScadStudio --scene assets/scad/source/beer_cup.scad --frames 60
 ```
 
