@@ -6,6 +6,7 @@
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
 
@@ -149,7 +150,51 @@ void ScadLibraryGameInstance::OnInitUI() { ui_->Init(); }
 bool ScadLibraryGameInstance::OnRenderUI()
 {
     ui_->Render();
+    if (ui_->ConsumeFrameAllRequest())
+    {
+        FrameAllSceneObjects();
+    }
+    if (ui_->ConsumeFocusSelectedRequest())
+    {
+        FocusSelectedSceneObject();
+    }
     return true;
+}
+
+void ScadLibraryGameInstance::FocusSelectedSceneObject()
+{
+    glm::vec3 center;
+    float radius = 0.0f;
+    if (!ui_->GetSelectedSceneObjectBounds(center, radius))
+    {
+        return;
+    }
+
+    cameraController_.SetNavigationScale(radius);
+    cameraController_.SetOrbitTarget(center);
+    cameraController_.SetAltPressed(true);
+    cameraController_.Focus(center, radius);
+}
+
+void ScadLibraryGameInstance::FrameAllSceneObjects()
+{
+    Assets::Scene& scene = GetEngine().GetScene();
+    const glm::vec3 minBounds = scene.GetSceneAABBMin();
+    const glm::vec3 maxBounds = scene.GetSceneAABBMax();
+    if (!glm::all(glm::lessThan(minBounds, maxBounds)))
+    {
+        cameraController_.Reset(scene.GetRenderCamera());
+        cameraController_.SetOrbitTarget(std::nullopt);
+        return;
+    }
+
+    const glm::vec3 center = (minBounds + maxBounds) * 0.5f;
+    const float radius = std::max(glm::length(maxBounds - minBounds) * 0.5f, 0.5f);
+    cameraController_.Reset(scene.GetRenderCamera());
+    cameraController_.SetNavigationScale(radius);
+    cameraController_.SetOrbitTarget(center);
+    cameraController_.SetAltPressed(true);
+    cameraController_.Focus(center, radius);
 }
 
 bool ScadLibraryGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
@@ -185,13 +230,43 @@ bool ScadLibraryGameInstance::OnKey(SDL_Event& event)
             ui_->SetWorkspaceMode(ScadLibrary::EWorkspaceMode::CharacterWorkbench);
             return true;
         }
+        if (event.key.key == SDLK_4)
+        {
+            ui_->SetWorkspaceMode(ScadLibrary::EWorkspaceMode::KitBrowser);
+            return true;
+        }
     }
+
+    if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && !ImGui::GetIO().WantTextInput)
+    {
+        if (event.key.key == SDLK_F && ui_->WorkspaceMode() == ScadLibrary::EWorkspaceMode::SceneAssembly)
+        {
+            FocusSelectedSceneObject();
+            return true;
+        }
+        if (event.key.key == SDLK_ESCAPE)
+        {
+            GetEngine().GetScene().ClearSelection();
+            GetEngine().GetShowFlags().ShowEdge = false;
+            return true;
+        }
+    }
+
     cameraController_.OnKey(event);
     return true;
 }
 
 bool ScadLibraryGameInstance::OnCursorPosition(double xpos, double ypos)
 {
+    glm::vec3 center;
+    float radius = 0.0f;
+    const bool hasSelectedSceneObject = ui_->WorkspaceMode() == ScadLibrary::EWorkspaceMode::SceneAssembly &&
+        ui_->GetSelectedSceneObjectBounds(center, radius);
+    if (hasSelectedSceneObject || GetEngine().GetScene().GetSelectedNodeBounds(center, radius))
+    {
+        cameraController_.SetOrbitTarget(center);
+    }
+
     if (cameraController_.IsRightMousePressed() || !ui_->IsTerrainFeatureDragging())
     {
         cameraController_.OnCursorPosition(xpos, ypos);
@@ -207,19 +282,32 @@ bool ScadLibraryGameInstance::OnMouseButton(SDL_Event& event)
         return true;
     }
 
-    // Don't start a pan drag when the cursor is over a panel/widget.
+    const glm::vec2 mousePos = GetEngine().GetMousePos();
+    const NextUI::IUserInterface* userInterface = GetEngine().GetUserInterface();
+    const float uiScale = userInterface != nullptr ? userInterface->UiScale() : 1.0f;
+    // SDL mouse coordinates are framebuffer pixels on DPI-aware Windows, while
+    // IsViewportPoint stores the viewport and toolbar in ImGui logical pixels.
+    // Keep mousePos unchanged for GetScreenToWorldRay, which consumes framebuffer pixels.
+    const glm::vec2 uiMousePos = mousePos / std::max(uiScale, 1.0f);
+
+    // Don't start a pan drag or a scene pick when the cursor is over a panel/widget.
     if (ImGui::GetIO().WantCaptureMouse && event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
     {
         return true;
     }
-    const glm::vec2 mousePos = GetEngine().GetMousePos();
+    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT &&
+        !ui_->IsViewportPoint(uiMousePos.x, uiMousePos.y))
+    {
+        return true;
+    }
     if (event.button.button == SDL_BUTTON_LEFT && ui_->TerrainFeatureConsumesMouse(mousePos.x, mousePos.y))
     {
         return true;
     }
     cameraController_.OnMouseButton(event);
     if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT &&
-        ui_->WorkspaceMode() == ScadLibrary::EWorkspaceMode::SceneAssembly && !ui_->IsTerrainProcessAssembly())
+        ui_->WorkspaceMode() == ScadLibrary::EWorkspaceMode::SceneAssembly && !ui_->IsTerrainProcessAssembly() &&
+        ui_->IsViewportPoint(uiMousePos.x, uiMousePos.y))
     {
         glm::vec3 origin;
         glm::vec3 direction;

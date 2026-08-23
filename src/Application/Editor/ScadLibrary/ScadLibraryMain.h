@@ -42,6 +42,9 @@ public:
     bool WantsMouseInputWhenUiCaptures() const override { return true; }
 
 private:
+    void FocusSelectedSceneObject();
+    void FrameAllSceneObjects();
+
     std::unique_ptr<ScadLibrary::ScadLibraryInterface> ui_;
     Runtime::Camera::ModelViewController cameraController_;
 };

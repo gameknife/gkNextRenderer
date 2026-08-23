@@ -37,6 +37,7 @@ namespace ScadLibrary
         SceneAssembly,
         CharacterDesigner,
         CharacterWorkbench,
+        KitBrowser,
     };
 
     enum class EScadSceneKind
@@ -91,6 +92,10 @@ namespace ScadLibrary
         EWorkspaceMode WorkspaceMode() const { return workspaceMode_; }
         void SaveCurrentAssembly() { SaveAssembly(false); }
         bool SelectSceneObjectFromViewport(uint32_t hitInstanceId);
+        bool GetSelectedSceneObjectBounds(glm::vec3& center, float& radius);
+        bool ConsumeFocusSelectedRequest();
+        bool ConsumeFrameAllRequest();
+        bool IsViewportPoint(double x, double y) const;
         bool TerrainFeatureConsumesMouse(double x, double y) const;
         bool IsTerrainFeatureDragging() const { return terrainFeatureDragging_ || terrainRuleDragging_; }
         bool IsTerrainProcessAssembly() const
@@ -109,6 +114,8 @@ namespace ScadLibrary
     private:
         void DrawTitleBar();
         void DrawBottomBar();
+        void DrawWorkspaceToolbar();
+        void DrawKitBrowserPanel(const ImVec2& pos, const ImVec2& size);
         void DrawBrowserPanel(const ImVec2& pos, const ImVec2& size);
         void DrawBoneHierarchyPanel(const ImVec2& pos, const ImVec2& size);
         void DrawModePanel(const ImVec2& pos, const ImVec2& size);
@@ -233,7 +240,11 @@ namespace ScadLibrary
         char filterBuf_[128] = {};
         char assemblyFilterBuf_[128] = {};
         char objectFilterBuf_[128] = {};
+        char kitBrowserFilterBuf_[128] = {};
+        char kitBrowserModuleFilterBuf_[128] = {};
         int selectedKit_ = -1;
+        int kitBrowserSelectedKit_ = -1;
+        int kitBrowserSelectedModule_ = -1;
         std::string selectedModule_;
         int selectedAssembly_ = -1;
         int selectedBenchItem_ = -1;
@@ -283,6 +294,13 @@ namespace ScadLibrary
         int sceneGizmoOperation_ = 0;
         bool sceneGizmoWasUsing_ = false;
         bool sceneGizmoAwaitingPickRelease_ = false;
+        bool focusSelectedRequested_ = false;
+        bool frameAllRequested_ = false;
+        glm::vec2 viewportPosition_ = {0.0f, 0.0f};
+        glm::vec2 viewportSize_ = {0.0f, 0.0f};
+        glm::vec2 sceneToolbarPosition_ = {0.0f, 0.0f};
+        glm::vec2 sceneToolbarSize_ = {0.0f, 0.0f};
+        bool sceneToolbarVisible_ = false;
         struct FTerrainFeatureHandle
         {
             int featureIndex = -1;

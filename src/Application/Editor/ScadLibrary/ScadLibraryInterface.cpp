@@ -63,7 +63,7 @@ namespace ScadLibrary
     namespace
     {
         constexpr float kTitleBarHeight = 48.0f;
-        constexpr float kBottomBarHeight = 28.0f;
+        constexpr float kBottomBarHeight = 48.0f;
         constexpr float kCollapsedRailWidth = 46.0f;
         constexpr int kBenchGridColumns = 6;
         constexpr float kBenchGridStep = 14.0f;
@@ -117,6 +117,28 @@ namespace ScadLibrary
                 glm::scale(glm::dmat4(1.0), glm::dvec3(item.scale, item.scaleY, item.scaleZ));
             const glm::dmat4 basis = Assets::Scad::ScadToWorldBasis(1.0);
             return glm::mat4(basis * scadMatrix * glm::inverse(basis));
+        }
+
+        void AccumulateNodeBounds(const Assets::Scene& scene, const Assets::Node& node, glm::vec3& minBounds,
+                                  glm::vec3& maxBounds, bool& found)
+        {
+            glm::vec3 center;
+            float radius = 0.0f;
+            if (scene.GetNodeBounds(node.GetInstanceId(), center, radius))
+            {
+                const glm::vec3 extent(radius);
+                minBounds = glm::min(minBounds, center - extent);
+                maxBounds = glm::max(maxBounds, center + extent);
+                found = true;
+            }
+
+            for (const std::shared_ptr<Assets::Node>& child : node.Children())
+            {
+                if (child != nullptr)
+                {
+                    AccumulateNodeBounds(scene, *child, minBounds, maxBounds, found);
+                }
+            }
         }
 
         std::filesystem::path WorkspaceDir() { return std::filesystem::current_path() / "scad_library"; }
@@ -679,9 +701,27 @@ namespace ScadLibrary
         {
             designerDirty_ = true;
         }
-        else
+        else if (mode == EWorkspaceMode::CharacterWorkbench)
         {
             workbenchReloadRequested_ = true;
+        }
+        else
+        {
+            rigPreview_.SetActive(false);
+            if (kitBrowserSelectedKit_ < 0 && !kits_.empty())
+            {
+                kitBrowserSelectedKit_ = 0;
+            }
+            if (kitBrowserSelectedKit_ >= 0 && kitBrowserSelectedKit_ < static_cast<int>(kits_.size()) &&
+                !kits_[kitBrowserSelectedKit_].modules.empty())
+            {
+                kitBrowserSelectedModule_ = 0;
+                PreviewModule(kitBrowserSelectedKit_, kits_[kitBrowserSelectedKit_].modules[0].name);
+            }
+            else
+            {
+                kitBrowserSelectedModule_ = -1;
+            }
         }
     }
 
@@ -726,6 +766,33 @@ namespace ScadLibrary
 
         const float panelY = viewport->Pos.y + kTitleBarHeight;
         const float panelHeight = std::max(1.0f, viewport->Size.y - kTitleBarHeight - kBottomBarHeight);
+        const bool kitBrowserMode = workspaceMode_ == EWorkspaceMode::KitBrowser;
+        if (kitBrowserMode)
+        {
+            constexpr float kitBrowserHeaderHeight = 56.0f;
+            constexpr float kitBrowserGap = 10.0f;
+            const float kitBrowserLeftWidth = std::clamp(viewport->Size.x * 0.22f, 280.0f, 360.0f);
+            const float kitBrowserRightWidth = std::clamp(viewport->Size.x * 0.31f, 390.0f, 500.0f);
+            const ImVec2 kitBrowserViewportPos(
+                viewport->Pos.x + kitBrowserLeftWidth + kitBrowserGap, panelY + kitBrowserHeaderHeight);
+            const ImVec2 kitBrowserViewportSize(
+                std::max(1.0f, viewport->Size.x - kitBrowserLeftWidth - kitBrowserRightWidth - kitBrowserGap * 2.0f),
+                std::max(1.0f, panelHeight - kitBrowserHeaderHeight));
+            DrawKitBrowserPanel(ImVec2(viewport->Pos.x, panelY), ImVec2(viewport->Size.x, panelHeight));
+            viewportPosition_ = {kitBrowserViewportPos.x, kitBrowserViewportPos.y};
+            viewportSize_ = {kitBrowserViewportSize.x, kitBrowserViewportSize.y};
+            sceneToolbarVisible_ = false;
+            DrawViewportAxis(kitBrowserViewportPos, kitBrowserViewportSize);
+            const NextUI::Scaling::FViewportRect framebufferViewport =
+                NextUI::Scaling::ImGuiToMainFramebufferViewport(kitBrowserViewportPos, kitBrowserViewportSize);
+            engine_.GetRenderer().SwapChain().UpdateOutputViewport(
+                Utilities::Math::floorToInt(framebufferViewport.Position.x),
+                Utilities::Math::floorToInt(framebufferViewport.Position.y),
+                Utilities::Math::ceilToInt(framebufferViewport.Size.x),
+                Utilities::Math::ceilToInt(framebufferViewport.Size.y));
+            return;
+        }
+
         const bool composeMode = workspaceMode_ == EWorkspaceMode::SceneAssembly;
         const bool workbenchMode = workspaceMode_ == EWorkspaceMode::CharacterWorkbench;
         const float leftFullWidth = workbenchMode ? std::clamp(viewport->Size.x * 0.16f, 230.0f, 290.0f)
@@ -751,6 +818,10 @@ namespace ScadLibrary
         const bool showTimeline = workspaceMode_ == EWorkspaceMode::CharacterWorkbench && workbenchEditorTab_ == 0 &&
             workbenchEverLoaded_ && rigPreview_.HasRig();
         const float timelineHeight = showTimeline ? std::clamp(viewport->Size.y * 0.38f, 320.0f, 390.0f) : 0.0f;
+        viewportPosition_ = {viewport->Pos.x + leftWidth, panelY};
+        viewportSize_ = {std::max(1.0f, viewport->Size.x - leftWidth - rightWidth),
+                         std::max(1.0f, panelHeight - timelineHeight)};
+        sceneToolbarVisible_ = false;
         if (showTimeline)
         {
             DrawAnimationTimelinePanel(
@@ -819,6 +890,30 @@ namespace ScadLibrary
             Utilities::Math::ceilToInt(framebufferViewport.Size.y));
     }
 
+    bool ScadLibraryInterface::ConsumeFocusSelectedRequest()
+    {
+        const bool requested = focusSelectedRequested_;
+        focusSelectedRequested_ = false;
+        return requested;
+    }
+
+    bool ScadLibraryInterface::ConsumeFrameAllRequest()
+    {
+        const bool requested = frameAllRequested_;
+        frameAllRequested_ = false;
+        return requested;
+    }
+
+    bool ScadLibraryInterface::IsViewportPoint(const double x, const double y) const
+    {
+        const bool insideViewport = x >= viewportPosition_.x && y >= viewportPosition_.y &&
+            x < viewportPosition_.x + viewportSize_.x && y < viewportPosition_.y + viewportSize_.y;
+        const bool insideSceneToolbar = sceneToolbarVisible_ && x >= sceneToolbarPosition_.x &&
+            y >= sceneToolbarPosition_.y && x < sceneToolbarPosition_.x + sceneToolbarSize_.x &&
+            y < sceneToolbarPosition_.y + sceneToolbarSize_.y;
+        return insideViewport && !insideSceneToolbar;
+    }
+
     void ScadLibraryInterface::DrawTitleBar()
     {
         NextUI::Theme::FAppTitleBarConfig config{};
@@ -866,7 +961,7 @@ namespace ScadLibrary
                     }
                 }
                 bool inspectorOpen = !benchCollapsed_;
-                if (ImGui::MenuItem("Inspector", nullptr, inspectorOpen))
+                if (workspaceMode_ != EWorkspaceMode::KitBrowser && ImGui::MenuItem("Inspector", nullptr, inspectorOpen))
                 {
                     benchCollapsed_ = !benchCollapsed_;
                 }
@@ -911,7 +1006,7 @@ namespace ScadLibrary
                     ExportCharacter();
                 }
             }
-            else
+            else if (workspaceMode_ == EWorkspaceMode::CharacterWorkbench)
             {
                 if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE_RIGHT " 刷新", "重新载入动作与装备", false,
                                                  ImVec2(72.0f, 32.0f)))
@@ -919,12 +1014,23 @@ namespace ScadLibrary
                     workbenchReloadRequested_ = true;
                 }
             }
-            ImGui::SameLine();
-            if (NextUI::Theme::ToolbarButton(ICON_FA_WAND_MAGIC_SPARKLES " AI", "打开 AI 创作面板",
-                                             inspectorPrimaryTab_ == 1, ImVec2(58.0f, 32.0f)))
+            else
             {
-                benchCollapsed_ = false;
-                aiOpenRequested_ = true;
+                if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE_RIGHT " 刷新", "重新扫描 Kit 目录", false,
+                                                 ImVec2(72.0f, 32.0f)))
+                {
+                    RescanKits();
+                }
+            }
+            if (workspaceMode_ != EWorkspaceMode::KitBrowser)
+            {
+                ImGui::SameLine();
+                if (NextUI::Theme::ToolbarButton(ICON_FA_WAND_MAGIC_SPARKLES " AI", "打开 AI 创作面板",
+                                                 inspectorPrimaryTab_ == 1, ImVec2(58.0f, 32.0f)))
+                {
+                    benchCollapsed_ = false;
+                    aiOpenRequested_ = true;
+                }
             }
             ImGui::SameLine(0.0f, 14.0f);
             ImGui::SetCursorPosY(std::floor((kTitleBarHeight - ImGui::GetTextLineHeight()) * 0.5f));
@@ -940,66 +1046,28 @@ namespace ScadLibrary
         config.OnToggleMaximize = [&]() { engine_.ToggleMaximize(); };
         config.OnClose = [&]() { engine_.RequestClose(); };
         NextUI::Theme::DrawAppTitleBar(engine_, config);
+    }
 
-        ImGuiViewport* viewport = ImGui::GetMainViewport();
-        const float availableTabWidth = std::max(360.0f, viewport->Size.x - 260.0f - 560.0f);
-        const ImVec2 tabsSize(std::min(492.0f, availableTabWidth), 46.0f);
-        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + 260.0f, viewport->Pos.y + 3.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(tabsSize, ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.0f);
-        const ImGuiWindowFlags tabsFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking |
-            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings;
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 0.0f));
-        if (ImGui::Begin("##ScadLibraryWorkspaceTabs", nullptr, tabsFlags))
+    void ScadLibraryInterface::DrawWorkspaceToolbar()
+    {
+        constexpr float buttonWidth = 144.0f;
+        const float buttonHeight = std::max(32.0f, kBottomBarHeight - 8.0f);
+        const auto modeButton = [&](const char* label, const char* shortcut, EWorkspaceMode mode)
         {
-            const float buttonWidth = std::floor((tabsSize.x - 4.0f) / 3.0f);
-            const auto modeButton = [&](const char* label, const char* shortcut, EWorkspaceMode mode)
+            if (NextUI::Theme::ToolbarButton(label, shortcut, workspaceMode_ == mode,
+                                              ImVec2(buttonWidth, buttonHeight)))
             {
-                const bool active = workspaceMode_ == mode;
-                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
-                if (active)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.30f));
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                          NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.42f));
-                    ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::Text));
-                }
-                else
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                          NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.70f));
-                    ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted));
-                }
-                if (ImGui::Button(label, ImVec2(buttonWidth, 44.0f)))
-                {
-                    SetWorkspaceMode(mode);
-                }
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::SetTooltip("%s", shortcut);
-                }
-                if (active)
-                {
-                    const ImVec2 min = ImGui::GetItemRectMin();
-                    const ImVec2 max = ImGui::GetItemRectMax();
-                    ImGui::GetWindowDrawList()->AddRectFilled(
-                        ImVec2(min.x + 10.0f, max.y - 3.0f), ImVec2(max.x - 10.0f, max.y),
-                        ImGui::GetColorU32(NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover)), 2.0f);
-                }
-                ImGui::PopStyleColor(3);
-                ImGui::PopStyleVar();
-            };
-            modeButton(ICON_FA_PERSON "  动作与装备", "Ctrl+3", EWorkspaceMode::CharacterWorkbench);
-            ImGui::SameLine();
-            modeButton(ICON_FA_CUBES_STACKED "  角色合成", "Ctrl+2", EWorkspaceMode::CharacterDesigner);
-            ImGui::SameLine();
-            modeButton(ICON_FA_CITY "  场景组装", "Ctrl+1", EWorkspaceMode::SceneAssembly);
-        }
-        ImGui::End();
-        ImGui::PopStyleVar(2);
+                SetWorkspaceMode(mode);
+            }
+        };
+
+        modeButton(ICON_FA_PERSON "  动作与装备", "Ctrl+3", EWorkspaceMode::CharacterWorkbench);
+        ImGui::SameLine(0.0f, 4.0f);
+        modeButton(ICON_FA_CUBES_STACKED "  角色合成", "Ctrl+2", EWorkspaceMode::CharacterDesigner);
+        ImGui::SameLine(0.0f, 4.0f);
+        modeButton(ICON_FA_CITY "  场景组装", "Ctrl+1", EWorkspaceMode::SceneAssembly);
+        ImGui::SameLine(0.0f, 4.0f);
+        modeButton(ICON_FA_BOOK_OPEN "  Kit 浏览", "Ctrl+4", EWorkspaceMode::KitBrowser);
     }
 
     void ScadLibraryInterface::DrawBottomBar()
@@ -1007,6 +1075,7 @@ namespace ScadLibrary
         NextUI::Theme::FBottomBarConfig config{};
         config.WindowId = "ScadLibraryBottomBar";
         config.Height = kBottomBarHeight;
+        config.CenterWidth = 588.0f;
         config.RightWidth = 170.0f;
         config.DrawLeftContent = [&]()
         {
@@ -1026,14 +1095,267 @@ namespace ScadLibrary
                 {
                     ImGui::TextDisabled("选择部件与颜色，生成可复用角色");
                 }
-                else
+                else if (workspaceMode_ == EWorkspaceMode::CharacterWorkbench)
                 {
                     ImGui::TextDisabled("编辑动作关键帧与骨架装备");
                 }
+                else
+                {
+                    ImGui::TextDisabled("浏览 Kit、模块分类与几何度量");
+                }
             }
         };
+        config.DrawCenterContent = [&]() { DrawWorkspaceToolbar(); };
         config.DrawRightContent = [&]() { ImGui::TextDisabled("FPS %.0f", engine_.GetFrameRate()); };
         NextUI::Theme::DrawBottomBar(config);
+    }
+
+    void ScadLibraryInterface::DrawKitBrowserPanel(const ImVec2& pos, const ImVec2& size)
+    {
+        constexpr float headerHeight = 56.0f;
+        constexpr float gap = 10.0f;
+        const float leftWidth = std::clamp(size.x * 0.22f, 280.0f, 360.0f);
+        const float rightWidth = std::clamp(size.x * 0.31f, 390.0f, 500.0f);
+        const float contentHeight = std::max(1.0f, size.y - headerHeight);
+        const ImVec2 viewportPos(pos.x + leftWidth + gap, pos.y + headerHeight);
+        const ImVec2 viewportSize(std::max(1.0f, size.x - leftWidth - rightWidth - gap * 2.0f), contentHeight);
+        const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking |
+            ImGuiWindowFlags_NoSavedSettings;
+
+        // Keep the central area uncovered so the renderer can show the selected module.
+        ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(size.x, headerHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.98f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f, 10.0f));
+        if (ImGui::Begin("##ScadLibraryKitBrowserHeader", nullptr, flags))
+        {
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(ICON_FA_BOOK_OPEN "  Kit 浏览器");
+            ImGui::SameLine();
+            ImGui::TextDisabled("%zu 个 Kit · 选择模块查看 3D 预览与详细信息", kits_.size());
+            ImGui::SameLine(ImGui::GetWindowWidth() - 54.0f);
+            if (NextUI::Theme::IconButton(ICON_FA_ARROWS_ROTATE "##kit_browser_rescan", "重新扫描 Kit 目录", false,
+                                          ImVec2(30.0f, 30.0f)))
+            {
+                RescanKits();
+            }
+        }
+        ImGui::End();
+        ImGui::PopStyleVar(3);
+
+        // Kit catalog.
+        ImGui::SetNextWindowPos(ImVec2(pos.x, pos.y + headerHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(leftWidth, contentHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.98f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 12.0f));
+        if (ImGui::Begin("##ScadLibraryKitCatalog", nullptr, flags))
+        {
+            ImGui::TextUnformatted(ICON_FA_LIST "  Kit 目录");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::InputTextWithHint("##kit_browser_filter", ICON_FA_MAGNIFYING_GLASS " 搜索 Kit、模块或尺度…",
+                                     kitBrowserFilterBuf_, sizeof(kitBrowserFilterBuf_));
+            ImGui::TextDisabled("%zu 个 Kit", kits_.size());
+            ImGui::Separator();
+            ImGui::BeginChild("##kit_browser_catalog_items", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
+            bool anyKitVisible = false;
+            for (int kitIndex = 0; kitIndex < static_cast<int>(kits_.size()); ++kitIndex)
+            {
+                const FKitInfo& kit = kits_[kitIndex];
+                bool matches = kitBrowserFilterBuf_[0] == '\0' ||
+                    kit.name.find(kitBrowserFilterBuf_) != std::string::npos ||
+                    kit.scaleClass.find(kitBrowserFilterBuf_) != std::string::npos;
+                if (!matches)
+                {
+                    matches = std::any_of(kit.modules.begin(), kit.modules.end(), [&](const FKitModuleInfo& module)
+                                          {
+                                              return module.name.find(kitBrowserFilterBuf_) != std::string::npos ||
+                                                  module.category.find(kitBrowserFilterBuf_) != std::string::npos;
+                                          });
+                }
+                if (!matches)
+                {
+                    continue;
+                }
+                anyKitVisible = true;
+                const std::string label = fmt::format("{}  ·  {} 模块  ·  {}##kit_browser_{}", kit.name,
+                                                      kit.modules.size(),
+                                                      kit.scaleClass.empty() ? "未标注" : kit.scaleClass, kitIndex);
+                if (ImGui::Selectable(label.c_str(), kitBrowserSelectedKit_ == kitIndex, 0,
+                                      ImVec2(0.0f, 36.0f)))
+                {
+                    kitBrowserSelectedKit_ = kitIndex;
+                    kitBrowserSelectedModule_ = kit.modules.empty() ? -1 : 0;
+                    if (!kit.modules.empty())
+                    {
+                        PreviewModule(kitIndex, kit.modules[0].name);
+                    }
+                }
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("%s", kit.filePath.c_str());
+                }
+            }
+            if (!anyKitVisible)
+            {
+                ImGui::TextDisabled(kits_.empty() ? "assets/scad/lib 下没有 Kit" : "没有匹配的 Kit");
+            }
+            ImGui::EndChild();
+        }
+        ImGui::End();
+        ImGui::PopStyleVar(3);
+
+        // Selected Kit details and module list.
+        ImGui::SetNextWindowPos(ImVec2(pos.x + size.x - rightWidth, pos.y + headerHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(rightWidth, contentHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.98f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 12.0f));
+        if (ImGui::Begin("##ScadLibraryKitDetails", nullptr, flags))
+        {
+            if (kits_.empty())
+            {
+                ImGui::TextDisabled("未找到 kit_*.scad。可以点击顶部刷新，或检查 assets/scad/lib。");
+                ImGui::End();
+                ImGui::PopStyleVar(3);
+                return;
+            }
+
+            kitBrowserSelectedKit_ = std::clamp(kitBrowserSelectedKit_, 0, static_cast<int>(kits_.size()) - 1);
+            const FKitInfo& selectedKit = kits_[kitBrowserSelectedKit_];
+            std::set<std::string> categories;
+            size_t metricCount = 0;
+            int triangleCount = 0;
+            float maxFootprintX = 0.0f;
+            float maxFootprintY = 0.0f;
+            float maxHeight = 0.0f;
+            for (const FKitModuleInfo& module : selectedKit.modules)
+            {
+                categories.insert(module.category);
+                if (module.hasMetrics)
+                {
+                    ++metricCount;
+                    triangleCount += module.triangles;
+                    maxFootprintX = std::max(maxFootprintX, module.footprintX);
+                    maxFootprintY = std::max(maxFootprintY, module.footprintY);
+                    maxHeight = std::max(maxHeight, module.height);
+                }
+            }
+
+            ImGui::Text(ICON_FA_CUBES_STACKED "  %s", selectedKit.name.c_str());
+            ImGui::TextDisabled("尺度分类：%s", selectedKit.scaleClass.empty() ? "未标注" : selectedKit.scaleClass.c_str());
+            ImGui::TextWrapped("文件：%s", selectedKit.filePath.c_str());
+            ImGui::Separator();
+            ImGui::Text("模块 %zu  ·  分类 %zu  ·  度量 %zu / %zu", selectedKit.modules.size(), categories.size(),
+                        metricCount, selectedKit.modules.size());
+            ImGui::Text("三角形 %d", triangleCount);
+            if (metricCount > 0)
+            {
+                ImGui::SameLine();
+                ImGui::TextDisabled("最大尺寸 %.1f × %.1f × %.1f", maxFootprintX, maxFootprintY, maxHeight);
+            }
+            ImGui::Separator();
+
+            ImGui::TextUnformatted("模块清单");
+            ImGui::SameLine();
+            ImGui::TextDisabled("（点击模块预览）");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::InputTextWithHint("##kit_browser_module_filter", ICON_FA_MAGNIFYING_GLASS " 搜索模块、分类或参数…",
+                                     kitBrowserModuleFilterBuf_, sizeof(kitBrowserModuleFilterBuf_));
+
+            if (kitBrowserSelectedModule_ >= 0 &&
+                kitBrowserSelectedModule_ < static_cast<int>(selectedKit.modules.size()))
+            {
+                const FKitModuleInfo& selectedModule = selectedKit.modules[kitBrowserSelectedModule_];
+                const std::string selectedModuleLabel = selectedModule.params.empty()
+                    ? selectedModule.name
+                    : fmt::format("{}({})", selectedModule.name, selectedModule.params);
+                ImGui::TextDisabled("当前模块：%s", selectedModuleLabel.c_str());
+            }
+
+            ImGui::BeginChild("##kit_browser_module_list", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
+            bool anyModuleVisible = false;
+            for (int moduleIndex = 0; moduleIndex < static_cast<int>(selectedKit.modules.size()); ++moduleIndex)
+            {
+                const FKitModuleInfo& module = selectedKit.modules[moduleIndex];
+                const bool matches = kitBrowserModuleFilterBuf_[0] == '\0' ||
+                    module.name.find(kitBrowserModuleFilterBuf_) != std::string::npos ||
+                    module.category.find(kitBrowserModuleFilterBuf_) != std::string::npos ||
+                    module.params.find(kitBrowserModuleFilterBuf_) != std::string::npos;
+                if (!matches)
+                {
+                    continue;
+                }
+                anyModuleVisible = true;
+                ImGui::PushID(moduleIndex);
+                const float rowWidth = ImGui::GetContentRegionAvail().x;
+                const float nameWidth = std::max(170.0f, rowWidth * 0.46f);
+                if (ImGui::Selectable(fmt::format("{}##kit_module_detail", module.name).c_str(),
+                                      kitBrowserSelectedModule_ == moduleIndex, 0, ImVec2(nameWidth, 32.0f)))
+                {
+                    kitBrowserSelectedModule_ = moduleIndex;
+                    PreviewModule(kitBrowserSelectedKit_, module.name);
+                }
+                ImGui::SameLine();
+                if (module.hasMetrics)
+                {
+                    ImGui::TextDisabled("%s  ·  L%d  ·  %.1f × %.1f × %.1f  ·  %d tris",
+                                       CategoryLabel(module.category), module.line, module.footprintX,
+                                       module.footprintY, module.height, module.triangles);
+                }
+                else
+                {
+                    ImGui::TextDisabled("%s  ·  L%d  ·  无几何度量", CategoryLabel(module.category), module.line);
+                }
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("%s%s%s", module.name.c_str(), module.params.empty() ? "" : "\n参数：",
+                                      module.params.empty() ? "" : module.params.c_str());
+                }
+                ImGui::PopID();
+            }
+            if (!anyModuleVisible)
+            {
+                ImGui::TextDisabled("没有匹配的模块");
+            }
+            ImGui::EndChild();
+        }
+        ImGui::End();
+        ImGui::PopStyleVar(3);
+
+        // A small overlay keeps the viewport self-describing and exposes frame-all.
+        ImGui::SetNextWindowPos(ImVec2(viewportPos.x + 12.0f, viewportPos.y + 12.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.90f);
+        const ImGuiWindowFlags toolbarFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoSavedSettings;
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5.0f, 5.0f));
+        if (ImGui::Begin("##ScadLibraryKitPreviewToolbar", nullptr, toolbarFlags))
+        {
+            if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE_LEFT, "回到全览视图", false))
+            {
+                frameAllRequested_ = true;
+            }
+            ImGui::SameLine();
+            if (kitBrowserSelectedKit_ >= 0 && kitBrowserSelectedKit_ < static_cast<int>(kits_.size()) &&
+                kitBrowserSelectedModule_ >= 0 &&
+                kitBrowserSelectedModule_ < static_cast<int>(kits_[kitBrowserSelectedKit_].modules.size()))
+            {
+                ImGui::Text("%s", kits_[kitBrowserSelectedKit_].modules[kitBrowserSelectedModule_].name.c_str());
+            }
+            else
+            {
+                ImGui::TextDisabled("选择模块以预览");
+            }
+        }
+        ImGui::End();
+        ImGui::PopStyleVar(2);
     }
 
     void ScadLibraryInterface::DrawBrowserPanel(const ImVec2& pos, const ImVec2& size)
@@ -3147,6 +3469,8 @@ namespace ScadLibrary
                     {
                         bench_.clear();
                         selectedBenchItem_ = -1;
+                        engine_.GetScene().ClearSelection();
+                        engine_.GetShowFlags().ShowEdge = false;
                         benchDirty_ = true;
                     }
                     ImGui::Separator();
@@ -3200,6 +3524,7 @@ namespace ScadLibrary
                                     ResolveSceneObjectNode(benchItem, SceneObjectWorldMatrix(benchItem)))
                             {
                                 engine_.GetScene().SetSelectedId(selectedNode->GetInstanceId());
+                                engine_.GetShowFlags().ShowEdge = true;
                             }
                         }
                         ImGui::SameLine(ImGui::GetContentRegionAvail().x - 52.0f);
@@ -3333,6 +3658,15 @@ namespace ScadLibrary
         const std::string libDir = AuthoringPath("assets/scad/lib").string();
         bool fromCatalog = false;
         kits_ = LoadKits(libDir, fromCatalog);
+        kitBrowserSelectedModule_ = -1;
+        if (kits_.empty())
+        {
+            kitBrowserSelectedKit_ = -1;
+        }
+        else if (kitBrowserSelectedKit_ < 0 || kitBrowserSelectedKit_ >= static_cast<int>(kits_.size()))
+        {
+            kitBrowserSelectedKit_ = 0;
+        }
         size_t moduleCount = 0;
         for (const FKitInfo& kit : kits_)
         {
@@ -4977,6 +5311,28 @@ namespace ScadLibrary
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5.0f, 5.0f));
         if (ImGui::Begin("##SceneObjectGizmoToolbar", nullptr, flags))
         {
+            sceneToolbarVisible_ = true;
+            sceneToolbarPosition_ = {ImGui::GetWindowPos().x, ImGui::GetWindowPos().y};
+            sceneToolbarSize_ = {ImGui::GetWindowSize().x, ImGui::GetWindowSize().y};
+            if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE_LEFT, "回到全览视图", false))
+            {
+                frameAllRequested_ = true;
+            }
+            ImGui::SameLine();
+
+            glm::vec3 selectedCenter;
+            float selectedRadius = 0.0f;
+            const bool hasSelection = GetSelectedSceneObjectBounds(selectedCenter, selectedRadius);
+            ImGui::BeginDisabled(!hasSelection);
+            if (NextUI::Theme::ToolbarButton(ICON_FA_CROSSHAIRS, "聚焦选中 Kit（F）", false))
+            {
+                focusSelectedRequested_ = true;
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            NextUI::Theme::DrawVerticalSeparator(20.0f, 8.0f, 0.65f);
+            ImGui::SameLine();
+
             if (NextUI::Theme::ToolbarButton(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT, "移动对象", sceneGizmoOperation_ == 0))
             {
                 sceneGizmoOperation_ = 0;
@@ -6072,6 +6428,49 @@ namespace ScadLibrary
         SaveAssembly(true, false);
     }
 
+    bool ScadLibraryInterface::GetSelectedSceneObjectBounds(glm::vec3& center, float& radius)
+    {
+        if (workspaceMode_ != EWorkspaceMode::SceneAssembly || selectedBenchItem_ < 0 ||
+            selectedBenchItem_ >= static_cast<int>(bench_.size()))
+        {
+            return false;
+        }
+
+        FBenchItem& item = bench_[selectedBenchItem_];
+        Assets::Node* selectedNode = ResolveSceneObjectNode(item, SceneObjectWorldMatrix(item));
+        if (selectedNode == nullptr)
+        {
+            return engine_.GetScene().GetSelectedNodeBounds(center, radius);
+        }
+
+        glm::vec3 minBounds(FLT_MAX);
+        glm::vec3 maxBounds(-FLT_MAX);
+        bool found = false;
+        AccumulateNodeBounds(engine_.GetScene(), *selectedNode, minBounds, maxBounds, found);
+        if (!found)
+        {
+            return engine_.GetScene().GetSelectedNodeBounds(center, radius);
+        }
+
+        center = (minBounds + maxBounds) * 0.5f;
+        radius = std::max(glm::length(maxBounds - minBounds) * 0.5f, 0.001f);
+
+        if (item.kitIndex >= 0 && item.kitIndex < static_cast<int>(kits_.size()))
+        {
+            const auto moduleIt = std::find_if(
+                kits_[item.kitIndex].modules.begin(), kits_[item.kitIndex].modules.end(),
+                [&item](const FKitModuleInfo& module) { return module.name == item.moduleName; });
+            if (moduleIt != kits_[item.kitIndex].modules.end() && moduleIt->hasMetrics)
+            {
+                const glm::vec3 scaledExtents(
+                    moduleIt->footprintX * std::abs(item.scale), moduleIt->footprintY * std::abs(item.scaleY),
+                    moduleIt->height * std::abs(item.scaleZ));
+                radius = std::max(glm::length(scaledExtents) * 0.5f, 0.001f);
+            }
+        }
+        return true;
+    }
+
     bool ScadLibraryInterface::SelectSceneObjectFromViewport(uint32_t hitInstanceId)
     {
         if (workspaceMode_ != EWorkspaceMode::SceneAssembly || bench_.empty())
@@ -6085,6 +6484,7 @@ namespace ScadLibrary
         {
             selectedBenchItem_ = -1;
             scene.ClearSelection();
+            engine_.GetShowFlags().ShowEdge = false;
             return false;
         }
 
@@ -6113,6 +6513,7 @@ namespace ScadLibrary
                 scrollToSelectedBenchItem_ = true;
                 sceneGizmoAwaitingPickRelease_ = true;
                 scene.SetSelectedId(hitInstanceId);
+                engine_.GetShowFlags().ShowEdge = true;
                 statusLine_ = fmt::format("已从视口选择 {} #{}", found->moduleName, selectedBenchItem_);
                 statusError_ = false;
                 return true;
@@ -6157,6 +6558,7 @@ namespace ScadLibrary
                 scrollToSelectedBenchItem_ = true;
                 sceneGizmoAwaitingPickRelease_ = true;
                 scene.SetSelectedId(hitInstanceId);
+                engine_.GetShowFlags().ShowEdge = true;
                 statusLine_ = fmt::format("已从视口选择 {} #{}", selected.moduleName, selectedBenchItem_);
                 statusError_ = false;
                 return true;
@@ -6165,6 +6567,7 @@ namespace ScadLibrary
 
         selectedBenchItem_ = -1;
         scene.ClearSelection();
+        engine_.GetShowFlags().ShowEdge = false;
         statusLine_ = "点选内容不属于可编辑 Kit 实例";
         statusError_ = false;
         return false;
