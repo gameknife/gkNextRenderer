@@ -4,14 +4,19 @@
 #include "TracyProfiler.hpp"
 
 #include "Modules/NextUI/UI/AppChrome.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "Modules/NextUI/UI/UiScopes.hpp"
 #include "Modules/NextUI/UI/UiTheme.hpp"
 #include "Modules/NextUI/UI/UiWidgets.hpp"
+#include "Engine/Assets/Acceleration/CPUAccelerationStructure.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Modules/DevTools/RenderDoc.hpp"
 #include "Engine/Utilities/Format.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
+
+#include <algorithm>
+#include <cmath>
 
 namespace Runtime::DevToolsUI
 {
@@ -44,6 +49,137 @@ namespace Runtime::DevToolsUI
         {
             return NextUI::Foundation::IconButton(icon, tooltip, active, size, activeUnderline);
         }
+
+        enum class EBakeStatus
+        {
+            Disabled,
+            Progress,
+            Complete,
+        };
+
+        void DrawBakeActivity(NextEngine& engine)
+        {
+            const auto DrawActivity = [](const char* label, const char* value, const float fraction,
+                                         const bool indeterminate, const EBakeStatus status, const char* tooltip)
+            {
+                constexpr float height = 20.0f;
+                constexpr float rounding = 7.0f;
+                constexpr float progressWidth = 76.0f;
+                constexpr float progressHeight = 4.0f;
+                constexpr float textScale = 0.78f;
+
+                const ImVec2 position = ImGui::GetCursorScreenPos();
+                ImFont* font = ImGui::GetFont();
+                const float textSize = ImGui::GetFontSize() * textScale;
+                const ImVec2 labelSize = font->CalcTextSizeA(textSize, FLT_MAX, 0.0f, label);
+                const ImVec2 valueSize = font->CalcTextSizeA(textSize, FLT_MAX, 0.0f, value);
+                const ImVec2 size(22.0f + labelSize.x + 10.0f + progressWidth + 8.0f + valueSize.x + 10.0f,
+                                  height);
+                const ImVec2 maximum = position + size;
+                const ImVec2 progressMin(position.x + 22.0f + labelSize.x + 10.0f,
+                                         position.y + (height - progressHeight) * 0.5f);
+                const ImVec2 progressMax(progressMin.x + progressWidth, progressMin.y + progressHeight);
+                ImDrawList* drawList = ImGui::GetWindowDrawList();
+                const NextUI::Foundation::EColor statusColor = status == EBakeStatus::Disabled
+                    ? NextUI::Foundation::EColor::TextDim
+                    : status == EBakeStatus::Complete
+                        ? NextUI::Foundation::EColor::Success
+                        : NextUI::Foundation::EColor::AccentHover;
+
+                drawList->AddRectFilled(position, maximum,
+                                        NextUI::Foundation::ColorU32(
+                                            NextUI::Foundation::EColor::SurfaceElevated, 0.90f),
+                                        rounding);
+                drawList->AddRect(position, maximum,
+                                  NextUI::Foundation::ColorU32(
+                                      statusColor, status == EBakeStatus::Disabled ? 0.20f : 0.32f),
+                                  rounding);
+                drawList->AddCircleFilled(ImVec2(position.x + 11.0f, position.y + height * 0.5f), 3.0f,
+                                          NextUI::Foundation::ColorU32(statusColor));
+                const float textY = position.y + (height - textSize) * 0.5f;
+                drawList->AddText(font, textSize, ImVec2(position.x + 22.0f, textY),
+                                  NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::TextMuted), label);
+                drawList->AddRectFilled(progressMin, progressMax,
+                                        NextUI::Foundation::ColorU32(
+                                            NextUI::Foundation::EColor::Background, 0.85f),
+                                        progressHeight * 0.5f);
+
+                if (status != EBakeStatus::Disabled && indeterminate)
+                {
+                    constexpr float segmentWidth = 22.0f;
+                    const float phase = std::fmod(static_cast<float>(ImGui::GetTime()) * 0.9f, 1.0f);
+                    const float segmentStart = progressMin.x - segmentWidth +
+                        phase * (progressWidth + segmentWidth * 2.0f);
+                    drawList->PushClipRect(progressMin, progressMax, true);
+                    drawList->AddRectFilled(ImVec2(segmentStart, progressMin.y),
+                                            ImVec2(segmentStart + segmentWidth, progressMax.y),
+                                            NextUI::Foundation::ColorU32(statusColor),
+                                            progressHeight * 0.5f);
+                    drawList->PopClipRect();
+                }
+                else if (status != EBakeStatus::Disabled)
+                {
+                    const float fillWidth = std::max(
+                        progressHeight, progressWidth * std::clamp(fraction, 0.0f, 1.0f));
+                    drawList->AddRectFilled(progressMin, ImVec2(progressMin.x + fillWidth, progressMax.y),
+                                            NextUI::Foundation::ColorU32(statusColor),
+                                            progressHeight * 0.5f);
+                }
+
+                drawList->AddText(font, textSize, ImVec2(progressMax.x + 8.0f, textY),
+                                  NextUI::Foundation::ColorU32(statusColor), value);
+
+                ImGui::Dummy(size);
+                if (ImGui::IsItemHovered())
+                {
+                    NextUI::Theme::DrawTooltip(tooltip);
+                }
+            };
+
+            auto& renderer = engine.GetRenderer();
+            const auto rendererRequirements = renderer.ActiveRendererRequirements();
+            if (!rendererRequirements.requestAmbientCube || renderer.ShouldSkipAmbientCubeUpdates())
+            {
+                DrawActivity("Bake", "Disabled", 0.0f, false, EBakeStatus::Disabled,
+                             "Ambient cube bake is disabled for the active renderer");
+                return;
+            }
+
+            const Assets::CPU::FProbeBakeProgress probeProgress =
+                engine.GetScene().GetCPUAccelerationStructure().GetProbeBakeProgress();
+            if (probeProgress.stage == Assets::CPU::EProbeBakeStage::VoxelData)
+            {
+                const float fraction = probeProgress.totalVoxelGroups > 0u
+                    ? static_cast<float>(probeProgress.completedVoxelGroups) /
+                          static_cast<float>(probeProgress.totalVoxelGroups)
+                    : 0.0f;
+                DrawActivity("Bake", "Progress", fraction, false, EBakeStatus::Progress,
+                             "Bake progress: CPU voxel data generation");
+                return;
+            }
+
+            if (probeProgress.stage == Assets::CPU::EProbeBakeStage::DistanceField)
+            {
+                DrawActivity("Bake", "Progress", 0.0f, true, EBakeStatus::Progress,
+                             "Bake progress: rebuilding the voxel distance field");
+                return;
+            }
+
+            const Vulkan::FAmbientBakeProgress ambientProgress = renderer.GetAmbientBakeProgress();
+            if (ambientProgress.active)
+            {
+                const float fraction = ambientProgress.totalDispatchGroups > 0u
+                    ? static_cast<float>(ambientProgress.completedDispatchGroups) /
+                          static_cast<float>(ambientProgress.totalDispatchGroups)
+                    : 0.0f;
+                DrawActivity("Bake", "Progress", fraction, false, EBakeStatus::Progress,
+                             "Bake progress: GPU ambient cube lighting");
+                return;
+            }
+
+            DrawActivity("Bake", "Complete", 1.0f, false, EBakeStatus::Complete,
+                         "Ambient cube bake complete");
+        }
     }
 
     void DrawDeveloperStatusBar(NextEngine& engine,
@@ -51,8 +187,7 @@ namespace Runtime::DevToolsUI
                                 const float height,
                                 std::function<void()> onCppReloadClicked,
                                 const bool cppLiveCodingAvailable,
-                                const bool detachedStatisticsViewport,
-                                std::function<bool()> drawActivityIndicator)
+                                const bool detachedStatisticsViewport)
     {
         const NextEngine::FHotReloadStatus hotReload = engine.GetHotReloadStatus();
         const auto memory = engine.GetRenderer().Device().CaptureMemoryStats();
@@ -79,20 +214,9 @@ namespace Runtime::DevToolsUI
         options.windowId = windowId;
         options.height = height;
         options.rightWidth = rightWidth;
-        options.drawLeftContent = [&drawActivityIndicator]()
+        options.drawLeftContent = [&engine]()
         {
-            if (drawActivityIndicator && drawActivityIndicator())
-            {
-                return;
-            }
-            const ImVec2 position = ImGui::GetCursorScreenPos();
-            ImGui::GetWindowDrawList()->AddCircleFilled(
-                ImVec2(position.x + 4.0f, position.y + ImGui::GetTextLineHeight() * 0.5f), 3.5f,
-                NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::Success));
-            ImGui::Dummy(ImVec2(11.0f, ImGui::GetTextLineHeight()));
-            ImGui::SameLine(0.0f, 3.0f);
-            ImGui::TextColored(
-                NextUI::Foundation::Color(NextUI::Foundation::EColor::TextMuted), "Ready");
+            DrawBakeActivity(engine);
         };
         options.drawRightContent = [&]()
         {
