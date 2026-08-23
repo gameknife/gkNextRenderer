@@ -18,6 +18,22 @@
 - `source/generated/` 与 `proc/generated/`：由 `gnb scad compose` 生成的分类派生产物；重新
   生成时会覆盖手工改动。
 
+### 场景组装浏览器的分类
+
+ScadLibrary 的“场景”资源库不会再把所有 `.scad` 文件平铺显示，而是根据目录和文件名建立
+场景类别：
+
+- `source/<类别>/` 与 `proc/<类别>/` 会合并到同一个类别下。例如
+  `source/coldwar/` 和 `proc/coldwar/` 都显示在 `coldwar`，每个条目仍分别标注
+  `Source` 或 `Proc`。
+- `source/brotato3d/`、`proc/nexttotalwar/` 等游戏/展示目录会显示为对应的游戏分组；
+  `deadly_showcase.scad` 归入 `Brotato3D`，`tw_showcase.scad` 归入 `NextTotalwar`。
+- `source/generated/` 与 `proc/generated/` 分别归入生成场景分组；根目录下没有类别目录的
+  文件保留在普通 `Source`、`Proc` 或 `Evaluated` 分组。
+- 新增特殊游戏或 Showcase 场景时，优先在 `assets/scad/source/<类别>/` 或
+  `assets/scad/proc/<类别>/` 下放置文件。只要类别目录名称相同，Source/Proc 就会自动合并，
+  不需要额外维护注册表。
+
 ## ScadLibrary 场景组装
 
 场景列表只扫描 `evaluated / source / proc`，并显示类别标签：

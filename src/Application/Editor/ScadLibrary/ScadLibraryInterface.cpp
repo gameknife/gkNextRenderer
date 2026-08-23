@@ -110,6 +110,200 @@ namespace ScadLibrary
             return "Scene";
         }
 
+        const char* SceneKindIcon(EScadSceneKind kind)
+        {
+            switch (kind)
+            {
+            case EScadSceneKind::Evaluated:
+                return ICON_FA_CUBE;
+            case EScadSceneKind::Source:
+                return ICON_FA_FILE_CODE;
+            case EScadSceneKind::Procedural:
+                return ICON_FA_TROWEL_BRICKS;
+            }
+            return ICON_FA_FILE;
+        }
+
+        ImVec4 SceneKindIconColor(EScadSceneKind kind)
+        {
+            switch (kind)
+            {
+            case EScadSceneKind::Evaluated:
+                return ImVec4(1.0f, 0.68f, 0.25f, 1.0f);
+            case EScadSceneKind::Source:
+                return ImVec4(0.36f, 0.70f, 1.0f, 1.0f);
+            case EScadSceneKind::Procedural:
+                return ImVec4(0.40f, 0.86f, 0.56f, 1.0f);
+            }
+            return ImVec4(0.70f, 0.72f, 0.76f, 1.0f);
+        }
+
+        std::string LowercaseAscii(std::string value)
+        {
+            std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character)
+            {
+                return static_cast<char>(std::tolower(character));
+            });
+            return value;
+        }
+
+        bool HasSuffix(const std::string& value, const std::string& suffix)
+        {
+            return value.size() >= suffix.size() &&
+                value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+        }
+
+        std::string NormalizeSceneCategoryName(std::string value)
+        {
+            value = LowercaseAscii(std::move(value));
+            if (value == "deadly")
+            {
+                return "brotato3d";
+            }
+            if (value == "tw")
+            {
+                return "nexttotalwar";
+            }
+            return value;
+        }
+
+        std::string SceneCategoryKeyFromRelativePath(const std::filesystem::path& relativePath)
+        {
+            const std::filesystem::path parent = relativePath.parent_path();
+            const std::string root = relativePath.empty()
+                ? std::string()
+                : LowercaseAscii(relativePath.begin()->string());
+            const std::string stem = LowercaseAscii(relativePath.stem().string());
+
+            std::string folder;
+            auto parentIt = parent.begin();
+            if (parentIt != parent.end())
+            {
+                const auto categoryIt = std::next(parentIt);
+                if (categoryIt != parent.end())
+                {
+                    folder = LowercaseAscii(categoryIt->string());
+                }
+            }
+
+            if (folder == "generated")
+            {
+                return "generated/" + root;
+            }
+
+            std::string category = folder;
+            if (category.empty() && HasSuffix(stem, "_showcase"))
+            {
+                category = stem.substr(0, stem.size() - std::string("_showcase").size());
+            }
+            if (category.empty())
+            {
+                return root.empty() ? "other" : root;
+            }
+
+            // The temporary `others` bucket still contains a few named
+            // showcase scenes. Promote those names to their real game group.
+            if (category == "others" && stem.starts_with("coldwar_"))
+            {
+                category = "coldwar";
+            }
+            category = NormalizeSceneCategoryName(std::move(category));
+            if (category == "others")
+            {
+                return "other/others";
+            }
+            if (root == "evaluated")
+            {
+                return "evaluated/" + category;
+            }
+            return "showcase/" + category;
+        }
+
+        std::string SceneCategoryDisplayName(std::string category)
+        {
+            category = NormalizeSceneCategoryName(std::move(category));
+            if (category == "brotato3d")
+            {
+                return "brotato3d";
+            }
+            if (category == "coldwar")
+            {
+                return "coldwar";
+            }
+            if (category == "nexttotalwar")
+            {
+                return "nexttotalwar";
+            }
+            std::replace(category.begin(), category.end(), '_', ' ');
+            if (!category.empty())
+            {
+                category[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(category[0])));
+            }
+            return category;
+        }
+
+        std::string SceneCategoryLabelFromKey(const std::string& key)
+        {
+            if (key == "evaluated")
+            {
+                return "对象场景 / Evaluated";
+            }
+            if (key == "source")
+            {
+                return "普通源码场景 / Source";
+            }
+            if (key == "proc")
+            {
+                return "普通过程场景 / Proc";
+            }
+            if (key.starts_with("showcase/"))
+            {
+                return SceneCategoryDisplayName(key.substr(std::string("showcase/").size()));
+            }
+            if (key.starts_with("generated/"))
+            {
+                return "生成场景 / " + SceneCategoryDisplayName(key.substr(std::string("generated/").size()));
+            }
+            if (key.starts_with("evaluated/"))
+            {
+                return "对象场景 / " + SceneCategoryDisplayName(key.substr(std::string("evaluated/").size()));
+            }
+            if (key.starts_with("other/"))
+            {
+                return "其它场景 / " + SceneCategoryDisplayName(key.substr(std::string("other/").size()));
+            }
+            return "其它场景 / " + SceneCategoryDisplayName(key);
+        }
+
+        int SceneCategorySortRank(const std::string& key)
+        {
+            if (key.starts_with("showcase/"))
+            {
+                return 0;
+            }
+            if (key == "evaluated")
+            {
+                return 10;
+            }
+            if (key.starts_with("evaluated/"))
+            {
+                return 11;
+            }
+            if (key.starts_with("generated/"))
+            {
+                return 20;
+            }
+            if (key == "source")
+            {
+                return 30;
+            }
+            if (key == "proc")
+            {
+                return 31;
+            }
+            return 40;
+        }
+
         glm::mat4 SceneObjectWorldMatrix(const FBenchItem& item)
         {
             const glm::dmat4 scadMatrix = glm::translate(glm::dmat4(1.0), glm::dvec3(item.x, item.y, item.z)) *
@@ -772,7 +966,7 @@ namespace ScadLibrary
             constexpr float kitBrowserHeaderHeight = 56.0f;
             constexpr float kitBrowserGap = 10.0f;
             const float kitBrowserLeftWidth = std::clamp(viewport->Size.x * 0.22f, 280.0f, 360.0f);
-            const float kitBrowserRightWidth = std::clamp(viewport->Size.x * 0.31f, 390.0f, 500.0f);
+            const float kitBrowserRightWidth = std::clamp(viewport->Size.x * 0.31f, 430.0f, 520.0f);
             const ImVec2 kitBrowserViewportPos(
                 viewport->Pos.x + kitBrowserLeftWidth + kitBrowserGap, panelY + kitBrowserHeaderHeight);
             const ImVec2 kitBrowserViewportSize(
@@ -922,7 +1116,7 @@ namespace ScadLibrary
         config.RightWindowId = "ScadLibraryWindowControls";
         config.AppName = "SCAD Library";
         config.Height = kTitleBarHeight;
-        config.RightContentWidth = 468.0f;
+        config.RightContentWidth = 0.0f;
         config.DrawMenuBar = [&]() -> float
         {
             float menuRight = ImGui::GetCursorScreenPos().x;
@@ -971,76 +1165,6 @@ namespace ScadLibrary
 
             return menuRight;
         };
-        config.DrawRightContent = [&]()
-        {
-            ImGui::SetCursorPos(ImVec2(8.0f, 10.0f));
-            if (workspaceMode_ == EWorkspaceMode::SceneAssembly)
-            {
-                ImGui::BeginDisabled(openedAssemblyPath_.empty());
-                if (NextUI::Theme::ToolbarButton(ICON_FA_FLOPPY_DISK " 保存", "保存当前场景", false,
-                                                 ImVec2(72.0f, 32.0f)))
-                {
-                    SaveAssembly(false);
-                }
-                ImGui::EndDisabled();
-                ImGui::SameLine();
-                ImGui::BeginDisabled(assemblySource_.empty() && bench_.empty());
-                if (NextUI::Theme::ToolbarButton(ICON_FA_PLAY " 预览", "预览当前未保存内容", false,
-                                                 ImVec2(72.0f, 32.0f)))
-                {
-                    PreviewAssemblySource();
-                }
-                ImGui::EndDisabled();
-            }
-            else if (workspaceMode_ == EWorkspaceMode::CharacterDesigner)
-            {
-                if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE_RIGHT " 刷新", "刷新角色预览", false,
-                                                 ImVec2(72.0f, 32.0f)))
-                {
-                    ReloadDesigner();
-                }
-                ImGui::SameLine();
-                if (NextUI::Theme::ToolbarButton(ICON_FA_FILE_EXPORT " 导出", "导出当前角色", true,
-                                                 ImVec2(72.0f, 32.0f)))
-                {
-                    ExportCharacter();
-                }
-            }
-            else if (workspaceMode_ == EWorkspaceMode::CharacterWorkbench)
-            {
-                if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE_RIGHT " 刷新", "重新载入动作与装备", false,
-                                                 ImVec2(72.0f, 32.0f)))
-                {
-                    workbenchReloadRequested_ = true;
-                }
-            }
-            else
-            {
-                if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE_RIGHT " 刷新", "重新扫描 Kit 目录", false,
-                                                 ImVec2(72.0f, 32.0f)))
-                {
-                    RescanKits();
-                }
-            }
-            if (workspaceMode_ != EWorkspaceMode::KitBrowser)
-            {
-                ImGui::SameLine();
-                if (NextUI::Theme::ToolbarButton(ICON_FA_WAND_MAGIC_SPARKLES " AI", "打开 AI 创作面板",
-                                                 inspectorPrimaryTab_ == 1, ImVec2(58.0f, 32.0f)))
-                {
-                    benchCollapsed_ = false;
-                    aiOpenRequested_ = true;
-                }
-            }
-            ImGui::SameLine(0.0f, 14.0f);
-            ImGui::SetCursorPosY(std::floor((kTitleBarHeight - ImGui::GetTextLineHeight()) * 0.5f));
-            size_t moduleCount = 0;
-            for (const FKitInfo& kit : kits_)
-            {
-                moduleCount += kit.modules.size();
-            }
-            ImGui::TextDisabled("%zu Kits  ·  %zu 模块", kits_.size(), moduleCount);
-        };
         config.IsMaximized = engine_.IsMaximized();
         config.OnMinimize = [&]() { engine_.RequestMinimize(); };
         config.OnToggleMaximize = [&]() { engine_.ToggleMaximize(); };
@@ -1070,13 +1194,83 @@ namespace ScadLibrary
         modeButton(ICON_FA_BOOK_OPEN "  Kit 浏览", "Ctrl+4", EWorkspaceMode::KitBrowser);
     }
 
+    void ScadLibraryInterface::DrawActionToolbar()
+    {
+        constexpr float buttonWidth = 72.0f;
+        constexpr float buttonHeight = 40.0f;
+        constexpr float itemGap = 4.0f;
+        const auto actionButton = [&](const char* label, const char* tooltip, bool active = false)
+        {
+            return NextUI::Theme::ToolbarButton(label, tooltip, active, ImVec2(buttonWidth, buttonHeight));
+        };
+
+        if (workspaceMode_ == EWorkspaceMode::SceneAssembly)
+        {
+            ImGui::BeginDisabled(openedAssemblyPath_.empty());
+            if (actionButton(ICON_FA_FLOPPY_DISK " 保存", "保存当前场景"))
+            {
+                SaveAssembly(false);
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine(0.0f, itemGap);
+            ImGui::BeginDisabled(assemblySource_.empty() && bench_.empty());
+            if (actionButton(ICON_FA_PLAY " 预览", "预览当前未保存内容"))
+            {
+                PreviewAssemblySource();
+            }
+            ImGui::EndDisabled();
+        }
+        else if (workspaceMode_ == EWorkspaceMode::CharacterDesigner)
+        {
+            if (actionButton(ICON_FA_ROTATE_RIGHT " 刷新", "刷新角色预览"))
+            {
+                ReloadDesigner();
+            }
+            ImGui::SameLine(0.0f, itemGap);
+            if (actionButton(ICON_FA_FILE_EXPORT " 导出", "导出当前角色", true))
+            {
+                ExportCharacter();
+            }
+        }
+        else if (workspaceMode_ == EWorkspaceMode::CharacterWorkbench)
+        {
+            if (actionButton(ICON_FA_ROTATE_RIGHT " 刷新", "重新载入动作与装备"))
+            {
+                workbenchReloadRequested_ = true;
+            }
+        }
+        else
+        {
+            if (actionButton(ICON_FA_ROTATE_RIGHT " 刷新", "重新扫描 Kit 目录"))
+            {
+                RescanKits();
+            }
+        }
+
+        if (workspaceMode_ != EWorkspaceMode::KitBrowser)
+        {
+            ImGui::SameLine(0.0f, itemGap);
+            if (NextUI::Theme::ToolbarButton(ICON_FA_WAND_MAGIC_SPARKLES " AI", "打开 AI 创作面板",
+                                             inspectorPrimaryTab_ == 1, ImVec2(58.0f, buttonHeight)))
+            {
+                benchCollapsed_ = false;
+                aiOpenRequested_ = true;
+            }
+        }
+        ImGui::SameLine(0.0f, 10.0f);
+        ImGui::TextDisabled("FPS %.0f", engine_.GetFrameRate());
+    }
+
     void ScadLibraryInterface::DrawBottomBar()
     {
         NextUI::Theme::FBottomBarConfig config{};
         config.WindowId = "ScadLibraryBottomBar";
         config.Height = kBottomBarHeight;
         config.CenterWidth = 588.0f;
-        config.RightWidth = 170.0f;
+        config.RightWidth = workspaceMode_ == EWorkspaceMode::SceneAssembly ||
+                workspaceMode_ == EWorkspaceMode::CharacterDesigner
+            ? 300.0f
+            : (workspaceMode_ == EWorkspaceMode::CharacterWorkbench ? 220.0f : 160.0f);
         config.DrawLeftContent = [&]()
         {
             if (!statusLine_.empty())
@@ -1106,7 +1300,7 @@ namespace ScadLibrary
             }
         };
         config.DrawCenterContent = [&]() { DrawWorkspaceToolbar(); };
-        config.DrawRightContent = [&]() { ImGui::TextDisabled("FPS %.0f", engine_.GetFrameRate()); };
+        config.DrawRightContent = [&]() { DrawActionToolbar(); };
         NextUI::Theme::DrawBottomBar(config);
     }
 
@@ -1115,7 +1309,7 @@ namespace ScadLibrary
         constexpr float headerHeight = 56.0f;
         constexpr float gap = 10.0f;
         const float leftWidth = std::clamp(size.x * 0.22f, 280.0f, 360.0f);
-        const float rightWidth = std::clamp(size.x * 0.31f, 390.0f, 500.0f);
+        const float rightWidth = std::clamp(size.x * 0.31f, 430.0f, 520.0f);
         const float contentHeight = std::max(1.0f, size.y - headerHeight);
         const ImVec2 viewportPos(pos.x + leftWidth + gap, pos.y + headerHeight);
         const ImVec2 viewportSize(std::max(1.0f, size.x - leftWidth - rightWidth - gap * 2.0f), contentHeight);
@@ -1161,8 +1355,7 @@ namespace ScadLibrary
                                      kitBrowserFilterBuf_, sizeof(kitBrowserFilterBuf_));
             ImGui::TextDisabled("%zu 个 Kit", kits_.size());
             ImGui::Separator();
-            ImGui::BeginChild("##kit_browser_catalog_items", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
-            bool anyKitVisible = false;
+            std::vector<int> visibleKitIndices;
             for (int kitIndex = 0; kitIndex < static_cast<int>(kits_.size()); ++kitIndex)
             {
                 const FKitInfo& kit = kits_[kitIndex];
@@ -1181,30 +1374,87 @@ namespace ScadLibrary
                 {
                     continue;
                 }
-                anyKitVisible = true;
-                const std::string label = fmt::format("{}  ·  {} 模块  ·  {}##kit_browser_{}", kit.name,
-                                                      kit.modules.size(),
-                                                      kit.scaleClass.empty() ? "未标注" : kit.scaleClass, kitIndex);
-                if (ImGui::Selectable(label.c_str(), kitBrowserSelectedKit_ == kitIndex, 0,
-                                      ImVec2(0.0f, 36.0f)))
-                {
-                    kitBrowserSelectedKit_ = kitIndex;
-                    kitBrowserSelectedModule_ = kit.modules.empty() ? -1 : 0;
-                    if (!kit.modules.empty())
-                    {
-                        PreviewModule(kitIndex, kit.modules[0].name);
-                    }
-                }
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::SetTooltip("%s", kit.filePath.c_str());
-                }
+                visibleKitIndices.push_back(kitIndex);
             }
-            if (!anyKitVisible)
+
+            if (visibleKitIndices.empty())
             {
                 ImGui::TextDisabled(kits_.empty() ? "assets/scad/lib 下没有 Kit" : "没有匹配的 Kit");
             }
-            ImGui::EndChild();
+            else if (ImGui::BeginTable("##kit_browser_catalog_table", 3,
+                                       ImGuiTableFlags_Sortable | ImGuiTableFlags_RowBg |
+                                           ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersOuter |
+                                           ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable |
+                                           ImGuiTableFlags_ScrollY,
+                                       ImVec2(0.0f, 0.0f)))
+            {
+                ImGui::TableSetupColumn("Kit", ImGuiTableColumnFlags_DefaultSort);
+                ImGui::TableSetupColumn("模块数");
+                ImGui::TableSetupColumn("尺度");
+                ImGui::TableHeadersRow();
+
+                const ImGuiTableSortSpecs* sortSpecs = ImGui::TableGetSortSpecs();
+                if (sortSpecs != nullptr && sortSpecs->SpecsCount > 0)
+                {
+                    const ImGuiTableColumnSortSpecs& spec = sortSpecs->Specs[0];
+                    std::stable_sort(visibleKitIndices.begin(), visibleKitIndices.end(), [&](int lhs, int rhs)
+                    {
+                        const FKitInfo& leftKit = kits_[lhs];
+                        const FKitInfo& rightKit = kits_[rhs];
+                        int result = 0;
+                        if (spec.ColumnIndex == 0)
+                        {
+                            result = leftKit.name.compare(rightKit.name);
+                        }
+                        else if (spec.ColumnIndex == 1)
+                        {
+                            result = leftKit.modules.size() < rightKit.modules.size()
+                                ? -1
+                                : (leftKit.modules.size() > rightKit.modules.size() ? 1 : 0);
+                        }
+                        else
+                        {
+                            const std::string leftScale = leftKit.scaleClass.empty() ? "未标注" : leftKit.scaleClass;
+                            const std::string rightScale = rightKit.scaleClass.empty() ? "未标注" : rightKit.scaleClass;
+                            result = leftScale.compare(rightScale);
+                        }
+                        if (result == 0)
+                        {
+                            result = leftKit.name.compare(rightKit.name);
+                        }
+                        return spec.SortDirection == ImGuiSortDirection_Descending ? result > 0 : result < 0;
+                    });
+                }
+
+                for (const int kitIndex : visibleKitIndices)
+                {
+                    const FKitInfo& kit = kits_[kitIndex];
+                    ImGui::TableNextRow(ImGuiTableRowFlags_None, 36.0f);
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::PushID(kitIndex);
+                    if (ImGui::Selectable(kit.name.c_str(), kitBrowserSelectedKit_ == kitIndex,
+                                          ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap,
+                                          ImVec2(0.0f, 0.0f)))
+                    {
+                        kitBrowserSelectedKit_ = kitIndex;
+                        kitBrowserSelectedModule_ = kit.modules.empty() ? -1 : 0;
+                        if (!kit.modules.empty())
+                        {
+                            PreviewModule(kitIndex, kit.modules[0].name);
+                        }
+                    }
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("%s", kit.filePath.c_str());
+                    }
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%zu", kit.modules.size());
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::TextDisabled("%s", kit.scaleClass.empty() ? "未标注" : kit.scaleClass.c_str());
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
+            }
         }
         ImGui::End();
         ImGui::PopStyleVar(3);
@@ -1278,8 +1528,7 @@ namespace ScadLibrary
                 ImGui::TextDisabled("当前模块：%s", selectedModuleLabel.c_str());
             }
 
-            ImGui::BeginChild("##kit_browser_module_list", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
-            bool anyModuleVisible = false;
+            std::vector<int> visibleModuleIndices;
             for (int moduleIndex = 0; moduleIndex < static_cast<int>(selectedKit.modules.size()); ++moduleIndex)
             {
                 const FKitModuleInfo& module = selectedKit.modules[moduleIndex];
@@ -1291,39 +1540,114 @@ namespace ScadLibrary
                 {
                     continue;
                 }
-                anyModuleVisible = true;
-                ImGui::PushID(moduleIndex);
-                const float rowWidth = ImGui::GetContentRegionAvail().x;
-                const float nameWidth = std::max(170.0f, rowWidth * 0.46f);
-                if (ImGui::Selectable(fmt::format("{}##kit_module_detail", module.name).c_str(),
-                                      kitBrowserSelectedModule_ == moduleIndex, 0, ImVec2(nameWidth, 32.0f)))
-                {
-                    kitBrowserSelectedModule_ = moduleIndex;
-                    PreviewModule(kitBrowserSelectedKit_, module.name);
-                }
-                ImGui::SameLine();
-                if (module.hasMetrics)
-                {
-                    ImGui::TextDisabled("%s  ·  L%d  ·  %.1f × %.1f × %.1f  ·  %d tris",
-                                       CategoryLabel(module.category), module.line, module.footprintX,
-                                       module.footprintY, module.height, module.triangles);
-                }
-                else
-                {
-                    ImGui::TextDisabled("%s  ·  L%d  ·  无几何度量", CategoryLabel(module.category), module.line);
-                }
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::SetTooltip("%s%s%s", module.name.c_str(), module.params.empty() ? "" : "\n参数：",
-                                      module.params.empty() ? "" : module.params.c_str());
-                }
-                ImGui::PopID();
+                visibleModuleIndices.push_back(moduleIndex);
             }
-            if (!anyModuleVisible)
+
+            if (visibleModuleIndices.empty())
             {
                 ImGui::TextDisabled("没有匹配的模块");
             }
-            ImGui::EndChild();
+            else if (ImGui::BeginTable("##kit_browser_module_table_v3", 5,
+                                       ImGuiTableFlags_Sortable | ImGuiTableFlags_RowBg |
+                                           ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersOuter |
+                                           ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Resizable |
+                                           ImGuiTableFlags_ScrollY,
+                                       ImVec2(0.0f, 0.0f)))
+            {
+                ImGui::TableSetupColumn("模块", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthFixed, 108.0f);
+                ImGui::TableSetupColumn("分类", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+                ImGui::TableSetupColumn("行", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+                ImGui::TableSetupColumn("尺寸", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+                ImGui::TableSetupColumn("tris", ImGuiTableColumnFlags_WidthFixed, 38.0f);
+                ImGui::TableHeadersRow();
+
+                const ImGuiTableSortSpecs* sortSpecs = ImGui::TableGetSortSpecs();
+                if (sortSpecs != nullptr && sortSpecs->SpecsCount > 0)
+                {
+                    const ImGuiTableColumnSortSpecs& spec = sortSpecs->Specs[0];
+                    std::stable_sort(visibleModuleIndices.begin(), visibleModuleIndices.end(),
+                                     [&](int lhs, int rhs)
+                    {
+                        const FKitModuleInfo& leftModule = selectedKit.modules[lhs];
+                        const FKitModuleInfo& rightModule = selectedKit.modules[rhs];
+                        int result = 0;
+                        if (spec.ColumnIndex == 0)
+                        {
+                            result = leftModule.name.compare(rightModule.name);
+                        }
+                        else if (spec.ColumnIndex == 1)
+                        {
+                            result = leftModule.category.compare(rightModule.category);
+                        }
+                        else if (spec.ColumnIndex == 2)
+                        {
+                            result = leftModule.line < rightModule.line ? -1 : (leftModule.line > rightModule.line ? 1 : 0);
+                        }
+                        else if (spec.ColumnIndex == 3)
+                        {
+                            if (leftModule.hasMetrics != rightModule.hasMetrics)
+                            {
+                                result = leftModule.hasMetrics ? 1 : -1;
+                            }
+                            else
+                            {
+                                const float leftSize = leftModule.footprintX * leftModule.footprintY * leftModule.height;
+                                const float rightSize = rightModule.footprintX * rightModule.footprintY * rightModule.height;
+                                result = leftSize < rightSize ? -1 : (leftSize > rightSize ? 1 : 0);
+                            }
+                        }
+                        else
+                        {
+                            result = leftModule.triangles < rightModule.triangles
+                                ? -1
+                                : (leftModule.triangles > rightModule.triangles ? 1 : 0);
+                        }
+                        if (result == 0)
+                        {
+                            result = leftModule.name.compare(rightModule.name);
+                        }
+                        return spec.SortDirection == ImGuiSortDirection_Descending ? result > 0 : result < 0;
+                    });
+                }
+
+                for (const int moduleIndex : visibleModuleIndices)
+                {
+                    const FKitModuleInfo& module = selectedKit.modules[moduleIndex];
+                    ImGui::TableNextRow(ImGuiTableRowFlags_None, 32.0f);
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::PushID(moduleIndex);
+                    if (ImGui::Selectable(module.name.c_str(), kitBrowserSelectedModule_ == moduleIndex,
+                                          ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap,
+                                          ImVec2(0.0f, 0.0f)))
+                    {
+                        kitBrowserSelectedModule_ = moduleIndex;
+                        PreviewModule(kitBrowserSelectedKit_, module.name);
+                    }
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("%s%s%s", module.name.c_str(), module.params.empty() ? "" : "\n参数：",
+                                          module.params.empty() ? "" : module.params.c_str());
+                    }
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::TextDisabled("%s", CategoryLabel(module.category));
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::TextDisabled("L%d", module.line);
+                    ImGui::TableSetColumnIndex(3);
+                    if (module.hasMetrics)
+                    {
+                        ImGui::TextDisabled("%.1f × %.1f × %.1f", module.footprintX, module.footprintY,
+                                           module.height);
+                    }
+                    else
+                    {
+                        ImGui::TextDisabled("—");
+                    }
+                    ImGui::TableSetColumnIndex(4);
+                    ImGui::TextDisabled("%d", module.triangles);
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
+            }
         }
         ImGui::End();
         ImGui::PopStyleVar(3);
@@ -1425,6 +1749,14 @@ namespace ScadLibrary
                                     procCount);
                 ImGui::Spacing();
                 ImGui::BeginChild("##assembly_files", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
+
+                struct FAssemblyGroupView
+                {
+                    std::string key;
+                    std::string label;
+                    std::vector<int> indices;
+                };
+                std::vector<FAssemblyGroupView> groups;
                 for (int index = 0; index < static_cast<int>(assemblies_.size()); ++index)
                 {
                     const FSceneAssemblyInfo& assembly = assemblies_[index];
@@ -1435,24 +1767,123 @@ namespace ScadLibrary
                     {
                         continue;
                     }
-                    const char* icon = assembly.generated ? ICON_FA_WAND_MAGIC_SPARKLES : ICON_FA_FILE_CODE;
-                    if (ImGui::Selectable(fmt::format("{}  [{}] {}##assembly_{}", icon,
-                                                      SceneKindLabel(assembly.kind), assembly.relativePath, index)
-                                              .c_str(),
-                                          index == selectedAssembly_, 0, ImVec2(0.0f, 29.0f)))
+                    auto groupIt = std::find_if(groups.begin(), groups.end(), [&](const FAssemblyGroupView& group)
                     {
-                        selectedAssembly_ = index;
-                        OpenAssembly(assembly.relativePath);
-                    }
-                    if (ImGui::IsItemHovered())
+                        return group.key == assembly.categoryKey;
+                    });
+                    if (groupIt == groups.end())
                     {
-                        ImGui::SetTooltip("依赖: %s%s", dependencies.c_str(),
-                                          assembly.generated ? "\n由规格或工具生成，手改可能被覆盖" : "");
+                        groups.push_back({assembly.categoryKey, assembly.categoryLabel, {}});
+                        groupIt = std::prev(groups.end());
                     }
+                    groupIt->indices.push_back(index);
                 }
-                if (assemblies_.empty())
+
+                std::sort(groups.begin(), groups.end(), [](const FAssemblyGroupView& left,
+                                                           const FAssemblyGroupView& right)
                 {
-                    ImGui::TextDisabled("未找到引用 kit_*.scad 的场景");
+                    const int leftRank = SceneCategorySortRank(left.key);
+                    const int rightRank = SceneCategorySortRank(right.key);
+                    return leftRank != rightRank ? leftRank < rightRank : left.key < right.key;
+                });
+
+                for (FAssemblyGroupView& group : groups)
+                {
+                    std::stable_sort(group.indices.begin(), group.indices.end(), [&](int leftIndex, int rightIndex)
+                    {
+                        const FSceneAssemblyInfo& left = assemblies_[leftIndex];
+                        const FSceneAssemblyInfo& right = assemblies_[rightIndex];
+                        if (left.kind != right.kind)
+                        {
+                            return static_cast<int>(left.kind) < static_cast<int>(right.kind);
+                        }
+                        return left.relativePath < right.relativePath;
+                    });
+
+                    size_t sourceInGroup = 0;
+                    size_t procInGroup = 0;
+                    size_t evaluatedInGroup = 0;
+                    for (const int index : group.indices)
+                    {
+                        switch (assemblies_[index].kind)
+                        {
+                        case EScadSceneKind::Evaluated:
+                            ++evaluatedInGroup;
+                            break;
+                        case EScadSceneKind::Source:
+                            ++sourceInGroup;
+                            break;
+                        case EScadSceneKind::Procedural:
+                            ++procInGroup;
+                            break;
+                        }
+                    }
+
+                    const std::string groupTitle = fmt::format("{}  {} 个场景##assembly_group_{}",
+                                                                group.label, group.indices.size(), group.key);
+                    const bool showcaseGroup = group.key.starts_with("showcase/");
+                    if (!ImGui::CollapsingHeader(groupTitle.c_str(),
+                                                 showcaseGroup ? ImGuiTreeNodeFlags_DefaultOpen : 0))
+                    {
+                        continue;
+                    }
+                    std::string kindSummary;
+                    auto appendKindCount = [&](const char* label, size_t count)
+                    {
+                        if (count == 0)
+                        {
+                            return;
+                        }
+                        if (!kindSummary.empty())
+                        {
+                            kindSummary += "  ·  ";
+                        }
+                        kindSummary += fmt::format("{} {}", label, count);
+                    };
+                    appendKindCount("Evaluated", evaluatedInGroup);
+                    appendKindCount("Source", sourceInGroup);
+                    appendKindCount("Proc", procInGroup);
+                    ImGui::TextDisabled("%s", kindSummary.c_str());
+                    ImGui::Indent(8.0f);
+                    for (const int index : group.indices)
+                    {
+                        const FSceneAssemblyInfo& assembly = assemblies_[index];
+                        const std::string dependencies = fmt::format("{}", fmt::join(assembly.kitDependencies, ", "));
+                        constexpr float rowHeight = 29.0f;
+                        const ImVec2 rowPosition = ImGui::GetCursorScreenPos();
+                        const float rowWidth = ImGui::GetContentRegionAvail().x;
+                        const bool rowSelected = index == selectedAssembly_;
+                        const bool rowClicked = ImGui::Selectable(fmt::format("##assembly_row_{}", index).c_str(),
+                                                                  rowSelected, 0,
+                                                                  ImVec2(rowWidth, rowHeight));
+                        const bool rowHovered = ImGui::IsItemHovered();
+
+                        ImGui::SetCursorScreenPos(ImVec2(rowPosition.x + 8.0f,
+                                                         rowPosition.y +
+                                                             std::floor((rowHeight - ImGui::GetTextLineHeight()) * 0.5f)));
+                        ImGui::TextColored(SceneKindIconColor(assembly.kind), "%s", SceneKindIcon(assembly.kind));
+                        ImGui::SameLine(0.0f, 7.0f);
+                        const std::string pureName = std::filesystem::path(assembly.relativePath).stem().string();
+                        ImGui::TextUnformatted(pureName.c_str());
+                        ImGui::SetCursorScreenPos(ImVec2(rowPosition.x,
+                                                         rowPosition.y + rowHeight + ImGui::GetStyle().ItemSpacing.y));
+
+                        if (rowClicked)
+                        {
+                            selectedAssembly_ = index;
+                            OpenAssembly(assembly.relativePath);
+                        }
+                        if (rowHovered)
+                        {
+                            ImGui::SetTooltip("类别: %s\n依赖: %s%s", group.label.c_str(), dependencies.c_str(),
+                                              assembly.generated ? "\n由规格或工具生成，手改可能被覆盖" : "");
+                        }
+                    }
+                    ImGui::Unindent(8.0f);
+                }
+                if (groups.empty())
+                {
+                    ImGui::TextDisabled(assemblies_.empty() ? "未找到引用 kit_*.scad 的场景" : "没有匹配的场景");
                 }
                 ImGui::EndChild();
                 ImGui::EndTabItem();
@@ -3873,6 +4304,8 @@ namespace ScadLibrary
             info.kind = *kind;
             const auto secondPart = std::next(relative.begin());
             info.generated = secondPart != relative.end() && secondPart->string() == "generated";
+            info.categoryKey = SceneCategoryKeyFromRelativePath(relative);
+            info.categoryLabel = SceneCategoryLabelFromKey(info.categoryKey);
             assemblies_.push_back(std::move(info));
         }
         std::sort(assemblies_.begin(), assemblies_.end(),

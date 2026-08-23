@@ -76,6 +76,8 @@ namespace ScadLibrary
         std::vector<std::string> kitDependencies;
         EScadSceneKind kind = EScadSceneKind::Source;
         bool generated = false;
+        std::string categoryKey;
+        std::string categoryLabel;
     };
 
     // Scene assembly + character authoring around the central viewport.
@@ -115,6 +117,7 @@ namespace ScadLibrary
         void DrawTitleBar();
         void DrawBottomBar();
         void DrawWorkspaceToolbar();
+        void DrawActionToolbar();
         void DrawKitBrowserPanel(const ImVec2& pos, const ImVec2& size);
         void DrawBrowserPanel(const ImVec2& pos, const ImVec2& size);
         void DrawBoneHierarchyPanel(const ImVec2& pos, const ImVec2& size);
