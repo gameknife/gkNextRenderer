@@ -291,16 +291,17 @@ namespace
         cameraInit.HasSky = true;
         cameraInit.HasSun = true;
         cameraInit.SunIntensity = 1000.0f;
+        cameraInit.SunRotation = 0.4f;
         cameraInit.SkyIntensity = 50.0f;
 
         const uint32_t matGround   = static_cast<uint32_t>(materials.size());
         materials.push_back({Material::Lambertian(vec3(0.40f, 0.42f, 0.44f)), "gb_ground"});
         const uint32_t matWhite    = static_cast<uint32_t>(materials.size());
-        materials.push_back({Material::Lambertian(vec3(0.78f, 0.78f, 0.78f)), "gb_white"});
+        materials.push_back({Material::Lambertian(vec3(0.73f, 0.73f, 0.73f)), "gb_white"});
         const uint32_t matRed      = static_cast<uint32_t>(materials.size());
-        materials.push_back({Material::Lambertian(vec3(0.72f, 0.12f, 0.12f)), "gb_red"});
+        materials.push_back({Material::Lambertian(vec3(0.65f, 0.05f, 0.05f)), "gb_red"});
         const uint32_t matGreen    = static_cast<uint32_t>(materials.size());
-        materials.push_back({Material::Lambertian(vec3(0.14f, 0.55f, 0.18f)), "gb_green"});
+        materials.push_back({Material::Lambertian(vec3(0.12f, 0.45f, 0.15f)), "gb_green"});
         const uint32_t matBlue     = static_cast<uint32_t>(materials.size());
         materials.push_back({Material::Lambertian(vec3(0.14f, 0.28f, 0.68f)), "gb_blue"});
         const uint32_t matYellow   = static_cast<uint32_t>(materials.size());
@@ -309,15 +310,11 @@ namespace
         materials.push_back({Material::Metallic(vec3(0.90f, 0.90f, 0.92f), 0.02f), "gb_metal"});
         const uint32_t matGlossy   = static_cast<uint32_t>(materials.size());
         materials.push_back({Material::Mixture(vec3(0.92f, 0.52f, 0.22f), 0.18f), "gb_glossy"});
+        const uint32_t matGlass    = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Dielectric(1.5f, 0.0f), "gb_glass"});
 
         const uint32_t matLightWarm  = static_cast<uint32_t>(materials.size());
         materials.push_back({Material::DiffuseLight(vec3(800.0f, 750.0f, 680.0f)), "gb_light_warm"});
-        const uint32_t matLightRed   = static_cast<uint32_t>(materials.size());
-        materials.push_back({Material::DiffuseLight(vec3(1500.0f, 150.0f, 60.0f)), "gb_light_red"});
-        const uint32_t matLightBlue  = static_cast<uint32_t>(materials.size());
-        materials.push_back({Material::DiffuseLight(vec3(60.0f, 250.0f, 1500.0f)), "gb_light_blue"});
-        const uint32_t matLightGreen = static_cast<uint32_t>(materials.size());
-        materials.push_back({Material::DiffuseLight(vec3(80.0f, 1100.0f, 200.0f)), "gb_light_green"});
 
         auto addNodeRot = [&](const std::string& name, const vec3& pos, const quat& rot,
                               uint32_t modelIdx, uint32_t matIdx)
@@ -344,33 +341,28 @@ namespace
         const float rxMin = -6.0f, rxMax = 6.0f;
         const float rzMin = -6.0f, rzMax = 0.0f;
         const float ryTop = 6.0f;
-        const float t = 0.2f;
+        const float wallThickness = 0.25f;
+        const float wallHalfThickness = wallThickness * 0.5f;
 
         models.push_back(Assets::FProcModel::CreateBox(
-            vec3(rxMin - t, 0.0f, rzMin - t),
-            vec3(rxMax + t, ryTop, rzMin)));
-        addNode("Wall_Back", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matRed);
+            vec3(rxMin - wallThickness, 0.0f, rzMin - wallThickness),
+            vec3(rxMax + wallThickness, ryTop, rzMin)));
+        addNode("Wall_Back", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matWhite);
 
         models.push_back(Assets::FProcModel::CreateBox(
-            vec3(rxMin - t, 0.0f, rzMin),
-            vec3(rxMin,     ryTop, rzMax + t)));
+            vec3(rxMin - wallThickness, 0.0f, rzMin),
+            vec3(rxMin,     ryTop, rzMax + wallThickness)));
         addNode("Wall_Left", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matGreen);
 
         models.push_back(Assets::FProcModel::CreateBox(
             vec3(rxMax,     0.0f, rzMin),
-            vec3(rxMax + t, ryTop, rzMax + t)));
-        addNode("Wall_Right", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matBlue);
+            vec3(rxMax + wallThickness, ryTop, rzMax + wallThickness)));
+        addNode("Wall_Right", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matRed);
 
         models.push_back(Assets::FProcModel::CreateBox(
-            vec3(rxMin - t, ryTop,     rzMin - t),
-            vec3(rxMax + t, ryTop + t, rzMax + t)));
+            vec3(rxMin - wallThickness, ryTop,     rzMin - wallThickness),
+            vec3(rxMax + wallThickness, ryTop + wallThickness, rzMax + wallThickness)));
         addNode("Ceiling", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matWhite);
-
-        // Front-top overhang frames the opening so interior lights don't leak straight out.
-        models.push_back(Assets::FProcModel::CreateBox(
-            vec3(rxMin, 4.6f, rzMax),
-            vec3(rxMax, ryTop, rzMax + t)));
-        addNode("Wall_FrontTop", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matYellow);
 
         auto addAreaLight = [&](const std::string& name, const vec3& origin,
                                 const vec3& right, const vec3& up, uint32_t lightMat)
@@ -390,27 +382,6 @@ namespace
                      vec3(0.0f, 0.0f, 3.0f),
                      matLightWarm);
 
-        // Red accent on left wall, faces +X into the room.
-        addAreaLight("Light_AccentRed",
-                     vec3(rxMin + 0.02f, 0.8f, -5.0f),
-                     vec3(0.0f, 1.2f, 0.0f),
-                     vec3(0.0f, 0.0f, 1.2f),
-                     matLightRed);
-
-        // Blue accent on back wall, faces +Z into the room.
-        addAreaLight("Light_AccentBlue",
-                     vec3(2.5f, 3.8f, rzMin + 0.02f),
-                     vec3(2.0f, 0.0f, 0.0f),
-                     vec3(0.0f, 1.2f, 0.0f),
-                     matLightBlue);
-
-        // Green outdoor lantern, faces +Y (up). Sits on a small pedestal.
-        addAreaLight("Light_OutdoorGreen",
-                     vec3(8.0f, 0.45f, 5.0f),
-                     vec3(2.0f, 0.0f, 0.0f),
-                     vec3(0.0f, 0.0f, -2.0f),
-                     matLightGreen);
-
         // Shared meshes for props.
         models.push_back(Assets::FProcModel::CreateSphere(vec3(0, 0, 0), 0.8f));
         const uint32_t mdlSphere = static_cast<uint32_t>(models.size() - 1);
@@ -426,6 +397,7 @@ namespace
         // Indoor props (GI bounce tests: metal reflects coloured walls, glossy picks up warm ceiling).
         addNode("In_Sphere_Metal",  vec3(-3.0f, 0.8f, -2.0f), mdlSphere,    matMetal);
         addNode("In_Sphere_Glossy", vec3( 2.5f, 0.8f, -4.5f), mdlSphere,    matGlossy);
+        addNode("In_Sphere_Glass",  vec3( 0.0f, 0.8f, -2.8f), mdlSphere,    matGlass);
         addNode("In_Cube_White",    vec3(-4.0f, 0.0f, -5.0f), mdlCube,      matWhite);
         addNode("In_Cube_Yellow",   vec3( 3.5f, 0.0f, -1.5f), mdlCubeSmall, matYellow);
 
@@ -442,44 +414,44 @@ namespace
 
         // Back wall (x = exMax), green
         models.push_back(Assets::FProcModel::CreateBox(
-            vec3(exMax,     0.0f, ezMin - t),
-            vec3(exMax + t, eyTop, ezMax + t)));
+            vec3(exMax,     0.0f, ezMin - wallThickness),
+            vec3(exMax + wallThickness, eyTop, ezMax + wallThickness)));
         addNode("EastRoom_Back", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matGreen);
 
         // Side wall (z = ezMin), blue
         models.push_back(Assets::FProcModel::CreateBox(
-            vec3(exMin - t, 0.0f, ezMin - t),
+            vec3(exMin - wallThickness, 0.0f, ezMin - wallThickness),
             vec3(exMax,     eyTop, ezMin)));
         addNode("EastRoom_Side", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matBlue);
 
         // Short partial front pier (x ~ exMin) to suggest a missing wall
         models.push_back(Assets::FProcModel::CreateBox(
-            vec3(exMin - t, 0.0f, ezMin),
+            vec3(exMin - wallThickness, 0.0f, ezMin),
             vec3(exMin,     eyTop, ezMin + 1.5f)));
         addNode("EastRoom_FrontPier", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matYellow);
 
         // Roof
         models.push_back(Assets::FProcModel::CreateBox(
-            vec3(exMin - t, eyTop,     ezMin - t),
-            vec3(exMax + t, eyTop + t, ezMax + t)));
+            vec3(exMin - wallThickness, eyTop,     ezMin - wallThickness),
+            vec3(exMax + wallThickness, eyTop + wallThickness, ezMax + wallThickness)));
         addNode("EastRoom_Roof", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matWhite);
 
         // --- West ruin wall (standalone wall with a window opening) ---
         // Freestanding piece at x ~ -14, facing east. Two vertical segments + horizontal lintel.
         const float wxCenter = -14.0f;
         models.push_back(Assets::FProcModel::CreateBox(
-            vec3(wxCenter - t, 0.0f, -5.0f),
-            vec3(wxCenter + t, 4.5f, -2.5f)));
+            vec3(wxCenter - wallHalfThickness, 0.0f, -5.0f),
+            vec3(wxCenter + wallHalfThickness, 4.5f, -2.5f)));
         addNode("WestRuin_LeftPier", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matRed);
 
         models.push_back(Assets::FProcModel::CreateBox(
-            vec3(wxCenter - t, 0.0f, 1.0f),
-            vec3(wxCenter + t, 4.5f, 3.5f)));
+            vec3(wxCenter - wallHalfThickness, 0.0f, 1.0f),
+            vec3(wxCenter + wallHalfThickness, 4.5f, 3.5f)));
         addNode("WestRuin_RightPier", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matRed);
 
         models.push_back(Assets::FProcModel::CreateBox(
-            vec3(wxCenter - t, 3.2f, -2.5f),
-            vec3(wxCenter + t, 4.5f, 1.0f)));
+            vec3(wxCenter - wallHalfThickness, 3.2f, -2.5f),
+            vec3(wxCenter + wallHalfThickness, 4.5f, 1.0f)));
         addNode("WestRuin_Lintel", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matYellow);
 
         // --- South courtyard with four corner pillars (open-air, no roof) ---
@@ -507,15 +479,15 @@ namespace
         struct SolidWall { vec3 p0; vec3 p1; uint32_t matId; const char* name; };
         const SolidWall solidWalls[] = {
             // Long red wall along north edge (z = -14), full height.
-            {vec3(-10.0f, 0.0f, -14.2f), vec3( 10.0f, 5.0f, -14.0f), matRed,    "SolidWall_North_Red"},
+            {vec3(-10.0f, 0.0f, -14.1f - wallHalfThickness), vec3( 10.0f, 5.0f, -14.1f + wallHalfThickness), matRed,    "SolidWall_North_Red"},
             // Long green wall along east edge (x = 26), full height.
-            {vec3( 26.0f, 0.0f, -12.0f), vec3( 26.2f, 5.0f,  12.0f), matGreen,  "SolidWall_East_Green"},
+            {vec3( 26.1f - wallHalfThickness, 0.0f, -12.0f), vec3( 26.1f + wallHalfThickness, 5.0f,  12.0f), matGreen,  "SolidWall_East_Green"},
             // Long blue wall along west edge (x = -26), full height.
-            {vec3(-26.2f, 0.0f, -12.0f), vec3(-26.0f, 5.0f,  12.0f), matBlue,   "SolidWall_West_Blue"},
+            {vec3(-26.1f - wallHalfThickness, 0.0f, -12.0f), vec3(-26.1f + wallHalfThickness, 5.0f,  12.0f), matBlue,   "SolidWall_West_Blue"},
             // Wide yellow backdrop to the south (z = 24).
-            {vec3(-12.0f, 0.0f, 23.8f),  vec3( 12.0f, 4.5f, 24.0f),  matYellow, "SolidWall_South_Yellow"},
+            {vec3(-12.0f, 0.0f, 23.9f - wallHalfThickness),  vec3( 12.0f, 4.5f, 23.9f + wallHalfThickness),  matYellow, "SolidWall_South_Yellow"},
             // Tall white divider between main room and east room (x = 10, partial).
-            {vec3(  9.9f, 0.0f,  4.0f),  vec3( 10.1f, 5.0f, 11.0f),  matWhite,  "SolidWall_Divider_White"},
+            {vec3( 10.0f - wallHalfThickness, 0.0f,  4.0f),  vec3( 10.0f + wallHalfThickness, 5.0f, 11.0f),  matWhite,  "SolidWall_Divider_White"},
         };
         for (const auto& w : solidWalls)
         {
