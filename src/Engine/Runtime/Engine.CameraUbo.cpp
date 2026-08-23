@@ -249,6 +249,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         ubo.SkyIntensity = 1.0f;
     }
     ubo.HasSky = scene_->GetEnvSettings().HasSky;
+    ubo.BackgroundMode = static_cast<uint32_t>(scene_->GetEnvSettings().BackgroundMode);
     ubo.AtmosphereParams = renderer_->AtmosphereParamsAddress();
     ubo.AtmosphereReserved0 = 0;
     if (auto* texturePool = Assets::GlobalTexturePool::GetInstance())

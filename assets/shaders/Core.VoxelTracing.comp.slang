@@ -62,8 +62,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
     else
     {
-        outColor= float4(10,10,10,0);
-        noSkyBackground = !Camera.HasSky;
+        outColor = Camera.BackgroundMode == BACKGROUND_MODE_STUDIO
+            ? Common.SampleVisibleBackground(rayDir)
+            : float4(10, 10, 10, 0);
+        noSkyBackground = !Camera.HasSky && Camera.BackgroundMode != BACKGROUND_MODE_STUDIO;
     }
 
     const float exposure = max(Camera.PaperWhiteNit / 40000.0, 1.0e-6);

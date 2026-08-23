@@ -65,6 +65,36 @@ namespace Common
         //     1.0f);
     }
 
+    public float4 SampleVisibleBackground(float3 direction)
+    {
+        const UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
+        if (camera.ForceBlackBackground)
+        {
+            return float4(0.0f, 0.0f, 0.0f, 1.0f);
+        }
+
+        if (camera.BackgroundMode == BACKGROUND_MODE_STUDIO)
+        {
+            direction = normalize(direction);
+
+            // Keep the gradient in the same pre-tonemap scene-color space as the existing no-sky
+            // clear. The lower hemisphere is only slightly brighter than the horizon, while the
+            // zenith falls off enough to make the camera orientation legible without becoming a
+            // visible band or a second light source.
+            const float baseSceneValue = camera.HDR
+                ? 0.0316466f * max(camera.PaperWhiteNit, 1.0f) / 20.0f
+                : 0.62f;
+            const float horizonBlend = smoothstep(-0.18f, 0.12f, direction.y);
+            const float zenithBlend = smoothstep(0.0f, 0.8f, max(direction.y, 0.0f));
+            const float brightness = 1.04f - 0.04f * horizonBlend - 0.10f * zenithBlend;
+            const float exposure = max(camera.PaperWhiteNit / 40000.0f, 1.0e-6f);
+            const float3 sceneColor = float3(baseSceneValue * brightness);
+            return float4(sceneColor / exposure, 1.0f);
+        }
+
+        return SampleSkyRadiance(direction, 0.0f);
+    }
+
     public float4 SampleSkyIrradiance(float3 normal)
     {
         const UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];

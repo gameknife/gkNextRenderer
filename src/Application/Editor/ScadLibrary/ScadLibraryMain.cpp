@@ -109,6 +109,7 @@ void ScadLibraryGameInstance::OnSceneLoaded()
     ui_->RigPreview().OnSceneLoaded(GetEngine().GetScene());
 
     Assets::Scene& scene = GetEngine().GetScene();
+    scene.GetEnvSettings().BackgroundMode = Assets::EBackgroundMode::Studio;
     const glm::vec3 minBounds = scene.GetSceneAABBMin();
     const glm::vec3 maxBounds = scene.GetSceneAABBMax();
     if (glm::all(glm::lessThan(minBounds, maxBounds)))

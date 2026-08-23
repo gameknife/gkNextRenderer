@@ -283,6 +283,11 @@ namespace Assets
         {
             environment.HasSky = ReadBoolExtra(extras, "HasSky", environment.HasSky);
         }
+        if (extras.Has("BackgroundMode") && extras.Get("BackgroundMode").IsNumber())
+        {
+            const int mode = std::clamp(extras.Get("BackgroundMode").GetNumberAsInt(), 0, 1);
+            environment.BackgroundMode = static_cast<Assets::EBackgroundMode>(mode);
+        }
         if (extras.Has("GammaCorrection"))
         {
             environment.GammaCorrection = ReadBoolExtra(extras, "GammaCorrection", environment.GammaCorrection);

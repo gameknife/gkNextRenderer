@@ -86,6 +86,12 @@ namespace Assets
         glm::vec4 splits{};   // view-space positive distance at the far edge of each cascade
     };
 
+    enum class EBackgroundMode : uint32_t
+    {
+        Environment = 0,
+        Studio = 1,
+    };
+
     struct EnvironmentSetting
     {
         EnvironmentSetting()
@@ -103,6 +109,7 @@ namespace Assets
             AerialPerspectiveEnabled = false;
             HeightFogEnabled = false;
             SkyIdx = 0;
+            BackgroundMode = EBackgroundMode::Environment;
             SunIntensity = 500.f;
             SkyIntensity = 100.0f;
             SunColor = glm::vec3(1.0f);
@@ -165,6 +172,7 @@ namespace Assets
         bool AerialPerspectiveEnabled;
         bool HeightFogEnabled;
         int32_t SkyIdx;
+        EBackgroundMode BackgroundMode;
         float SunRotation;
         float SunElevation;
         float SkyRotation;

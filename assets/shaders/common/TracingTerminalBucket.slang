@@ -30,10 +30,14 @@ void ShadeTracingBackgroundPixel(uint3 groupId, uint3 groupThreadId)
     const float3 rayDir =
         normalize(mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0)).xyz);
 
-    float4 skyColor = Common.SampleSkyRadiance(rayDir, 0.0f);
-    skyColor.rgb += Common.EvaluateAnalyticSunDisk(rayDir);
+    float4 skyColor = Common.SampleVisibleBackground(rayDir);
+    if (Camera.BackgroundMode != BACKGROUND_MODE_STUDIO)
+    {
+        skyColor.rgb += Common.EvaluateAnalyticSunDisk(rayDir);
+    }
 
     Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
+    Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR).Store(pixel, float4(0, 0, 0, 0));
     Bindless.GetViewStorageTexture<float>(Bindless.RT_DIFFUSE_HITDIST).Store(pixel, 1000);
     Bindless.GetViewStorageTexture<float>(Bindless.RT_SPECULAR_HITDIST).Store(pixel, 1000);
     // RT_ALBEDO is the compose demodulation guide, so the background has to read white even though

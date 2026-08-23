@@ -74,6 +74,7 @@ namespace Vulkan
             ubo.SkyIntensity = env.SkyIntensity;
             ubo.SkyIdx = static_cast<uint32_t>(std::max(env.SkyIdx, 0));
             ubo.HasSky = env.HasSky;
+            ubo.BackgroundMode = static_cast<uint32_t>(env.BackgroundMode);
             ubo.LightCount = scene.GetLightCount();
         }
 

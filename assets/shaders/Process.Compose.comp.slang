@@ -96,6 +96,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     float3 total = max(LoadComposedRadiance(pixel, progressiveRender), 0.0) * exposure;
 
     const bool noSkyBackground =
+        camera.BackgroundMode != BACKGROUND_MODE_STUDIO &&
         !camera.HasSky && !HasObjectFlag(objectId0[pixel], OBJECT_ID_FLAG_VALID);
     if (noSkyBackground)
     {

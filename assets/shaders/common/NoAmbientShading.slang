@@ -105,10 +105,7 @@ float3 MaterialF0(Material material, float3 albedo, float metalness)
 
 float4 VisibleBackground(float3 direction)
 {
-    const UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
-    return camera.ForceBlackBackground
-        ? float4(0.0f, 0.0f, 0.0f, 1.0f)
-        : Common.SampleSkyRadiance(direction, 0.0f);
+    return Common.SampleVisibleBackground(direction);
 }
 
 // A surface resolved far enough to be lit. Both entry paths fill this in; the kernel below cannot

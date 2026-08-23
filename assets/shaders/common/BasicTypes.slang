@@ -18,6 +18,9 @@ public static const int HDR_OUTPUT_MODE_SDR = 0;
 public static const int HDR_OUTPUT_MODE_HDR10_ST2084 = 1;
 public static const int HDR_OUTPUT_MODE_EXTENDED_SRGB_LINEAR = 2;
 
+public static const uint BACKGROUND_MODE_ENVIRONMENT = 0u;
+public static const uint BACKGROUND_MODE_STUDIO = 1u;
+
 public static const uint RENDER_PARTICIPATION_MAIN_VISIBILITY = 1u << 0;
 public static const uint RENDER_PARTICIPATION_SHADOW_CASTER = 1u << 1;
 public static const uint RENDER_PARTICIPATION_GPU_AS = 1u << 2;
@@ -238,6 +241,10 @@ public struct ALIGN_16 UniformBufferObject
     // Appended at the end deliberately: inserting into the middle of this struct shifts every
     // following field, and C++ and Slang do not have to agree on how a bool is packed.
     public bool CheckerboardSparseLighting;
+
+    // The visible camera background is independent from sky lighting: Studio keeps SkyIdx for
+    // irradiance/specular/path-tracing misses while replacing only the primary-ray presentation.
+    public uint BackgroundMode;
 };
 
 public struct ALIGN_16 NodeProxy

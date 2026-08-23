@@ -377,6 +377,21 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
 
         ImGui::SeparatorText(LOCTEXT("Lighting"));
         environmentChanged |= DrawSettingCheckboxRow(LOCTEXT("HasSky"), &environment.HasSky);
+        static constexpr const char* backgroundModes[] = {"Sky Environment", "Studio Gray"};
+        int backgroundMode = static_cast<int>(environment.BackgroundMode);
+        backgroundMode = std::clamp(backgroundMode, 0, static_cast<int>(IM_ARRAYSIZE(backgroundModes) - 1));
+        environmentChanged |= DrawSettingRow(
+            "Visible Background",
+            [&]()
+            {
+                if (!ImGui::Combo("##VisibleBackground", &backgroundMode,
+                                  backgroundModes, IM_ARRAYSIZE(backgroundModes)))
+                {
+                    return false;
+                }
+                environment.BackgroundMode = static_cast<Assets::EBackgroundMode>(backgroundMode);
+                return true;
+            });
         if (environment.HasSky)
         {
             environmentChanged |= DrawIntSetting(LOCTEXT("SkyIdx"), &environment.SkyIdx, 0, 10);

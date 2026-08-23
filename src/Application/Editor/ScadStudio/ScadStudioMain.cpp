@@ -64,6 +64,7 @@ void ScadStudioGameInstance::OnSceneLoaded()
     // by default. Module preview loads a temporary scene, so the same path focuses
     // the selected module without needing module-level render nodes.
     Assets::Scene& scene = GetEngine().GetScene();
+    scene.GetEnvSettings().BackgroundMode = Assets::EBackgroundMode::Studio;
     cameraController_.Reset(scene.GetRenderCamera());
 
     const glm::vec3 minBounds = scene.GetSceneAABBMin();

@@ -128,7 +128,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         total = lerp(total, float3(80, 220, 120) * exposure, saturate(hoveredEdge * 0.75));
     }
 
-    const bool noSkyBackground = !camera.HasSky && !surface;
+    const bool noSkyBackground =
+        camera.BackgroundMode != BACKGROUND_MODE_STUDIO && !camera.HasSky && !surface;
     if (noSkyBackground)
     {
         total = NoSkyClearSceneColor(camera.HDR, camera.PaperWhiteNit);

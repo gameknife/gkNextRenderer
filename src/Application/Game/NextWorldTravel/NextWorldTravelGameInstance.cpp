@@ -412,6 +412,7 @@ void NextWorldTravelGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr
 
 void NextWorldTravelGameInstance::OnSceneLoaded()
 {
+    GetEngine().GetScene().GetEnvSettings().BackgroundMode = Assets::EBackgroundMode::Studio;
     if (pendingTile_ >= 0)
     {
         activeTile_ = pendingTile_;

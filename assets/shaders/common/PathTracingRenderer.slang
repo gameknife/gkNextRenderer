@@ -721,14 +721,18 @@ public struct FPathTracingRenderer{
 
         if (!hit)
         {
-            float4 skyColor = Common.SampleSkyRadiance(primaryRayDir_, 0.0f);
-            skyColor.rgb += Common.EvaluateAnalyticSunDisk(primaryRayDir_);
+            float4 skyColor = Common.SampleVisibleBackground(primaryRayDir_);
+            if (Camera.BackgroundMode != BACKGROUND_MODE_STUDIO)
+            {
+                skyColor.rgb += Common.EvaluateAnalyticSunDisk(primaryRayDir_);
+            }
             float2 skyMotionPixels =
                 Common.CalculateSkyMotionVector(Camera, primaryRayDir_) * size_;
 
             if (WriteOutputs)
             {
                 OutSingleDiffuse.Store(pixel_, skyColor);
+                OutSingleSpecular.Store(pixel_, float4(0, 0, 0, 0));
                 OutDiffuseHitDist.Store(pixel_, 1000);
                 OutSpecularHitDist.Store(pixel_, 1000);
                 // RT_ALBEDO doubles as the compose demodulation guide (scene color is
