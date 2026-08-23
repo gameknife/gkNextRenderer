@@ -72,7 +72,7 @@ float LoadDepth(int2 pixel)
     return currentDepth.Load(int3(ClampRenderPixel(pixel), 0));
 }
 
-// Invert the [0,1] perspective depth buffer (GLM_FORCE_DEPTH_ZERO_TO_ONE, finite far plane).
+// Invert the [1,0] reverse-Z perspective depth buffer (finite far plane).
 // Disocclusion has to be judged in linear view depth: a fixed NDC epsilon is sub-millimetre near
 // the camera and tens of metres in the distance, so it cannot express one usable tolerance.
 float LinearizeDepth(float ndcDepth)
@@ -80,7 +80,7 @@ float LinearizeDepth(float ndcDepth)
     const float nearPlane = constants.nearPlane;
     const float farPlane = constants.farPlane;
     return nearPlane * farPlane /
-        max(farPlane - ndcDepth * (farPlane - nearPlane), 1.0e-6);
+        max(nearPlane + ndcDepth * (farPlane - nearPlane), 1.0e-6);
 }
 
 float LoadLinearDepth(int2 pixel)
@@ -261,7 +261,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         {
             const int2 candidatePixel = ClampRenderPixel(centerPixel + int2(x, y));
             const float candidateDepth = LoadDepth(candidatePixel);
-            if (candidateDepth < nearestDepth)
+            if (candidateDepth > nearestDepth)
             {
                 nearestDepth = candidateDepth;
                 motionPixel = candidatePixel;

@@ -100,6 +100,7 @@ public:
     Vulkan::Window& GetWindow() const { return *window_; }
     NextGameInstanceBase* GetGameInstance() { return gameInstance_.get(); }
     const NextGameInstanceBase* GetGameInstance() const { return gameInstance_.get(); }
+    Assets::Camera GetActiveRenderCamera() const;
 
     // Configuration state
     Runtime::Config::UserSettings& GetUserSettings() { return config_.userSettings; }

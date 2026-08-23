@@ -69,7 +69,7 @@ namespace Vulkan::Compatibility
         pipeline_ = GraphicsPipelineBuilder(device)
             .SetShaders(vertShader, fragShader)
             .SetDynamicViewportAndScissor()
-            .SetDepth(true, true, VK_COMPARE_OP_LESS)
+            .SetDepth(true, true, VK_COMPARE_OP_GREATER)
             .Build(pipelineLayout_->Handle(), renderPass_->Handle(), "create compatibility graphics pipeline");
 
         frameBuffers_.clear();
@@ -156,7 +156,7 @@ namespace Vulkan::Compatibility
         const class SwapChain& swapChain = SwapChain();
         const std::array<VkClearValue, 2> clearValues{
             VkClearValue{.color = kBackgroundColor},
-            VkClearValue{.depthStencil = {1.0f, 0}},
+            VkClearValue{.depthStencil = {0.0f, 0}},
         };
 
         VkRenderPassBeginInfo renderPassInfo = {};

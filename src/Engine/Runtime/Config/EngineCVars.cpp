@@ -75,6 +75,8 @@ namespace NextCVar
         Runtime::Config::Options& options = engine->GetOptions();
         GK_CVAR_UINT("r.temporalFrames", settings, TemporalFrames, 16, ECVarFlags::Archive, "Moving-object history rejection frames");
         GK_CVAR_INT("r.samples", settings, NumberOfSamples, 2, ECVarFlags::Archive, "Samples per pixel");
+        GK_CVAR_FLOAT_RANGE("r.camera.farPlane", settings, CameraFarPlane, Assets::defaultCameraFarPlane, ECVarFlags::Archive,
+                            "Global camera far clip plane in meters", 1.0, 100000000.0);
         GK_CVAR_UINT("r.bounces", settings, NumberOfBounces, 8, ECVarFlags::Archive, "Ray bounce count");
         GK_CVAR_BOOL("r.progressiveRender", settings, ProgressiveRender, false, ECVarFlags::Archive, "Enable progressive rendering while the camera is idle");
         GK_CVAR_INT_CB("r.rendererType", settings, RendererType, 0, ECVarFlags::Archive, "Renderer type (0=PathTracing,1=SoftwareTracing,2=SoftwareModern,3=VoxelTracing,4=SoftwareModernNoAmbient,5=PathTracingLite)", std::bind(ApplyRendererIfPossible, engine, std::cref(settings)));

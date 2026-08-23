@@ -88,6 +88,27 @@ namespace Assets
 
     namespace
     {
+        constexpr float defaultAutoCameraNearPlane = 0.5f;
+        constexpr float smallSceneMinAutoCameraNearPlane = 0.02f;
+        constexpr float smallSceneAutoCameraNearScale = 0.025f;
+        constexpr float smallSceneDiagonal = 20.0f;
+
+        float AutoCameraNearPlane(const glm::vec3& extent)
+        {
+            const float sceneDiagonal = glm::length(extent);
+            if (sceneDiagonal >= smallSceneDiagonal)
+            {
+                return defaultAutoCameraNearPlane;
+            }
+
+            // Reverse-Z puts the useful floating-point precision at the far
+            // end, so normal-sized scenes can move the near plane out to 0.5m.
+            // Tiny previews retain a proportional near plane to avoid clipping
+            // the model as soon as the camera is framed.
+            return std::clamp(sceneDiagonal * smallSceneAutoCameraNearScale,
+                              smallSceneMinAutoCameraNearPlane, defaultAutoCameraNearPlane);
+        }
+
         // The 8 world-space corners of a node's local AABB.
         void AppendWorldCorners(const glm::mat4& worldTransform, const glm::vec3& aabbMin,
                                 const glm::vec3& aabbMax, glm::vec3& boundsMin, glm::vec3& boundsMax)
@@ -161,9 +182,8 @@ namespace Assets
         }
         // Only ever extends. An authored camera that already reaches past the
         // scene keeps what it asked for; one that does not would otherwise
-        // clip the scene away entirely, which is what the 2 km struct default
-        // did to a 3 km generated area — the overview camera sits a kilometre
-        // outside a 4.2 km diagonal and rendered nothing at all.
+        // clip the scene away entirely. The runtime global far-plane policy
+        // still applies to the active camera after loading.
         camera.FarPlane = glm::max(camera.FarPlane, farthest * 1.05f + 1.0f);
     }
 
@@ -196,8 +216,8 @@ namespace Assets
         newCamera.Aperture = 0.0f;
         newCamera.FocalDistance = cameraDistance;
         newCamera.name = "AutoCamera";
-        newCamera.NearPlane = sphereRadius < 25.0f ? 0.01f : glm::max(0.05f, sphereRadius * 0.001f);
-        newCamera.FarPlane = glm::max(cameraDistance + sphereRadius * 1.5f, newCamera.NearPlane * 10.0f);
+        newCamera.NearPlane = AutoCameraNearPlane(extent);
+        newCamera.FarPlane = glm::max(defaultCameraFarPlane, cameraDistance + sphereRadius * 1.5f);
         cameraInit.ControlSpeed = glm::max(cameraInit.ControlSpeed, sphereRadius * 0.04f);
 
         return newCamera;

@@ -15,6 +15,33 @@
 #include <algorithm>
 #include <limits>
 
+namespace
+{
+    constexpr float kScadLibraryDefaultNearPlane = 0.5f;
+    constexpr float kScadLibrarySmallSceneMinNearPlane = 0.02f;
+    constexpr float kScadLibrarySmallSceneNearScale = 0.025f;
+    constexpr float kScadLibrarySmallSceneDiagonal = 20.0f;
+
+    float ScadLibraryNearPlaneForScene(const glm::vec3& boundsMin, const glm::vec3& boundsMax)
+    {
+        const float sceneDiagonal = glm::length(boundsMax - boundsMin);
+        if (sceneDiagonal <= 0.0f)
+        {
+            return kScadLibraryDefaultNearPlane;
+        }
+        if (sceneDiagonal >= kScadLibrarySmallSceneDiagonal)
+        {
+            return kScadLibraryDefaultNearPlane;
+        }
+
+        // Reverse-Z makes the far plane cheap, so spend the depth precision at
+        // the near end. Keep ordinary scenes at 0.5m; only tiny kit previews
+        // are allowed to lower it so their parts are not clipped immediately.
+        return std::clamp(sceneDiagonal * kScadLibrarySmallSceneNearScale,
+                          kScadLibrarySmallSceneMinNearPlane, kScadLibraryDefaultNearPlane);
+    }
+}
+
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config,
                                                          Runtime::Config::Options& options, NextEngine* engine)
 {
@@ -88,6 +115,9 @@ void ScadLibraryGameInstance::OnSceneLoaded()
     {
         const glm::vec3 center = (minBounds + maxBounds) * 0.5f;
         const float radius = std::max(glm::length(maxBounds - minBounds) * 0.5f, 0.5f);
+        Assets::Camera& sceneCamera = scene.GetRenderCamera();
+        sceneCamera.NearPlane = ScadLibraryNearPlaneForScene(minBounds, maxBounds);
+        sceneCamera.FarPlane = GetEngine().GetUserSettings().CameraFarPlane;
         cameraController_.SetNavigationScale(radius);
         if (ui_->ConsumePreserveCameraOnNextSceneLoad())
         {
@@ -105,6 +135,9 @@ void ScadLibraryGameInstance::OnSceneLoaded()
     {
         return;
     }
+    Assets::Camera& sceneCamera = scene.GetRenderCamera();
+    sceneCamera.NearPlane = kScadLibraryDefaultNearPlane;
+    sceneCamera.FarPlane = GetEngine().GetUserSettings().CameraFarPlane;
     cameraController_.Reset(scene.GetRenderCamera());
 }
 

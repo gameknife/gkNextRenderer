@@ -859,7 +859,7 @@ public struct FPathTracingRenderer{
         OutNormal.Store(pixel_, float4(0, 1, 0, 1));
         OutObjectID.Store(pixel_, 0);
         OutMotionVector.Store(pixel_, float4(0, 0, 0, 0));
-        OutPrevDepth.Store(pixel_, 1.0f);
+        OutPrevDepth.Store(pixel_, 0.0f);
         OutDiffuseHitDist.Store(pixel_, 1000.0f);
         OutSpecularHitDist.Store(pixel_, 1000.0f);
         OutSpecularAlbedo.Store(pixel_, float4(0, 0, 0, 0));

@@ -396,7 +396,8 @@ namespace FidelityFXWrapper
                 ffx::CreateContextDescUpscale create{};
                 create.maxRenderSize = {renderExtent.width, renderExtent.height};
                 create.maxUpscaleSize = {outputExtent.width, outputExtent.height};
-                create.flags = FFX_UPSCALE_ENABLE_NON_LINEAR_COLORSPACE;
+                create.flags = FFX_UPSCALE_ENABLE_NON_LINEAR_COLORSPACE |
+                    FFX_UPSCALE_ENABLE_DEPTH_INVERTED;
                 if (hdrOutput)
                 {
                     create.flags |= FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE;
@@ -441,7 +442,8 @@ namespace FidelityFXWrapper
 
                 DestroyFrameGenerationContext();
                 ffx::CreateContextDescFrameGeneration create{};
-                create.flags = FFX_FRAMEGENERATION_ENABLE_ASYNC_WORKLOAD_SUPPORT;
+                create.flags = FFX_FRAMEGENERATION_ENABLE_ASYNC_WORKLOAD_SUPPORT |
+                    FFX_FRAMEGENERATION_ENABLE_DEPTH_INVERTED;
                 if (inputs.hdrOutput)
                 {
                     create.flags |= FFX_FRAMEGENERATION_ENABLE_HIGH_DYNAMIC_RANGE;

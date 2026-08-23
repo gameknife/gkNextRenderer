@@ -43,12 +43,13 @@ function ap_book5(i)  = i == 0 ? [0.62, 0.30, 0.26] : i == 1 ? [0.28, 0.45, 0.60
                    : i == 3 ? [0.36, 0.55, 0.38] : [0.50, 0.38, 0.58];
 
 // ================= 地面 =================
-module ap_ground_base() color(ap_CONCC()) translate([0, 7, 0]) cube([84, 80, 0.26], center = true);
+// 结构基底只负责托住各区域地面；顶面降到 0.08，避免与上层薄板（z≈0.13~0.15）重叠。
+module ap_ground_base() color(ap_CONCC()) translate([0, 7, -0.02]) cube([84, 80, 0.20], center = true);
 
 // 航站楼蓝色方块地毯（30x20 块 2x2，棋盘 + 少量深色点缀）
 module ap_ground_carpet()
 {
-    color(ap_CARPETD()) translate([0, 8, 0.135]) cube([60, 40, 0.01], center = true);
+    color(ap_CARPETD()) translate([0, 8, 0.125]) cube([60, 40, 0.01], center = true);
     for (ix = [0 : 29], iy = [0 : 19])
         translate([-29 + ix * 2, -11 + iy * 2, 0.143])
             color(((ix * 7 + iy * 11) % 13 == 0) ? ap_CARPETD() : ((ix + iy) % 2 == 0) ? ap_CARPETA() : ap_CARPETB())

@@ -36,7 +36,7 @@ namespace Vulkan::PipelineCommon
         Assets::Bindless::RT_SPECULAR_ALBEDO, VK_FORMAT_R16G16B16A16_SFLOAT, "specular albedo"};
 
     // Depth written where the primary ray hit nothing; must equal Surface.kBackgroundDepth.
-    inline constexpr float kSurfaceBackgroundDepth = 1000.0f;
+    inline constexpr float kSurfaceBackgroundDepth = -1.0f;
 
     // RT_BSDF_DATA.x for background / degenerate samples; must equal Surface.kInvalidMaterialId.
     inline constexpr uint32_t kSurfaceInvalidMaterialId = 0xFFFFFFFFu;

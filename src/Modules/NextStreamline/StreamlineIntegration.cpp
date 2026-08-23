@@ -1647,7 +1647,7 @@ namespace
             constants.cameraFar = inputs.camera.farPlane;
             constants.cameraFOV = inputs.camera.verticalFovRadians;
             constants.cameraAspectRatio = inputs.camera.aspectRatio;
-            constants.depthInverted = sl::Boolean::eFalse;
+            constants.depthInverted = sl::Boolean::eTrue;
             constants.cameraMotionIncluded = sl::Boolean::eTrue;
             constants.motionVectors3D = sl::Boolean::eFalse;
             constants.reset = inputs.reset ? sl::Boolean::eTrue : sl::Boolean::eFalse;

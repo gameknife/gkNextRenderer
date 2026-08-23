@@ -66,6 +66,8 @@ namespace Assets
         float FogMaxOpacity{};
     };
 
+    inline constexpr float defaultCameraFarPlane = 10000.0f;
+
     struct Camera final
     {
         std::string name;
@@ -75,7 +77,7 @@ namespace Assets
         float Aperture;
         float FocalDistance;
         float NearPlane = 0.2f;
-        float FarPlane = 2000.0f;
+        float FarPlane = defaultCameraFarPlane;
     };
 
     struct CascadeShadowSetup

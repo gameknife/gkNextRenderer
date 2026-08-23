@@ -2,6 +2,7 @@
 
 #include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
 #include "Engine/Rendering/PipelineCommon/CheckerboardRendering.hpp"
+#include "Engine/Utilities/Math.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 
 TEST_CASE("Upscaler mode mapping is centralized", "[Unit][Upscaler]")
@@ -100,6 +101,20 @@ TEST_CASE("Upscaler reprojection transforms are inverse pairs", "[Unit][Upscaler
         CheckIdentity(transforms.prevClipToClip * transforms.clipToPrevClip, 0.002f);
         CheckIdentity(transforms.clipToPrevClip * transforms.prevClipToClip, 0.002f);
     }
+}
+
+TEST_CASE("Reverse-Z projection maps near to one and far to zero", "[Unit][Rendering]")
+{
+    const glm::mat4 projection = Utilities::Math::ReverseZPerspective(
+        glm::radians(60.0f), 16.0f / 9.0f, 0.1f, 1000.0f);
+    const auto depthAt = [&projection](float viewDistance)
+    {
+        const glm::vec4 clip = projection * glm::vec4(0.0f, 0.0f, -viewDistance, 1.0f);
+        return clip.z / clip.w;
+    };
+
+    CHECK(depthAt(0.1f) == Catch::Approx(1.0f).margin(0.00001f));
+    CHECK(depthAt(1000.0f) == Catch::Approx(0.0f).margin(0.00001f));
 }
 
 TEST_CASE("Upscaler motion vectors use pixel-space normalization", "[Unit][Upscaler]")

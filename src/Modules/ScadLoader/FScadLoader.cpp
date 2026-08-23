@@ -750,11 +750,9 @@ namespace Assets
         }
         else
         {
-            // gk_camera markers are built from the marker alone, so they carry
-            // the Camera struct's 2 km far plane. That is fine for a scene the
-            // size of a room and fatal for a generated geo area: a 3 km area has
-            // a 4.2 km diagonal and its overview camera stands outside it, so
-            // everything fell behind the far plane and the scene rendered empty.
+            // gk_camera markers are built from the marker alone. Extend their
+            // far plane against the loaded bounds so large generated areas are
+            // not clipped before the runtime global far-plane policy is applied.
             glm::vec3 boundsMin(0.0f);
             glm::vec3 boundsMax(0.0f);
             if (SceneWorldBounds(nodes, models, boundsMin, boundsMax))

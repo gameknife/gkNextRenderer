@@ -39,11 +39,11 @@ float LoadDepth(int2 pixel)
     return inputDepth.Load(int3(ClampRenderPixel(pixel), 0));
 }
 
-float MinDepth2x2(int2 topLeft)
+float MaxDepth2x2(int2 topLeft)
 {
-    const float top = min(LoadDepth(topLeft), LoadDepth(topLeft + int2(1, 0)));
-    const float bottom = min(LoadDepth(topLeft + int2(0, 1)), LoadDepth(topLeft + int2(1, 1)));
-    return min(top, bottom);
+    const float top = max(LoadDepth(topLeft), LoadDepth(topLeft + int2(1, 0)));
+    const float bottom = max(LoadDepth(topLeft + int2(0, 1)), LoadDepth(topLeft + int2(1, 1)));
+    return max(top, bottom);
 }
 
 [shader("compute")]
@@ -59,19 +59,19 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     const int2 inputPosition = int2(pixel);
 
     // SGSR2 groups the 3x3 depth neighborhood into four overlapping quadrants.
-    // Standard Vulkan depth is used by this engine (near=0, far=1), so nearest is min.
-    const float topLeftDepth = MinDepth2x2(inputPosition - int2(1, 1));
-    const float topRightDepth = MinDepth2x2(inputPosition + int2(0, -1));
-    const float bottomLeftDepth = MinDepth2x2(inputPosition + int2(-1, 0));
-    const float bottomRightDepth = MinDepth2x2(inputPosition);
-    const float nearestDepth = min(
-        min(topLeftDepth, topRightDepth), min(bottomLeftDepth, bottomRightDepth));
+    // Reverse-Z depth is near=1 and far=0, so the nearest sample is the maximum.
+    const float topLeftDepth = MaxDepth2x2(inputPosition - int2(1, 1));
+    const float topRightDepth = MaxDepth2x2(inputPosition + int2(0, -1));
+    const float bottomLeftDepth = MaxDepth2x2(inputPosition + int2(-1, 0));
+    const float bottomRightDepth = MaxDepth2x2(inputPosition);
+    const float nearestDepth = max(
+        max(topLeftDepth, topRightDepth), max(bottomLeftDepth, bottomRightDepth));
 
     float depthClip = 0.0f;
-    if (nearestDepth < 1.0f - 1.0e-5f)
+    if (nearestDepth > 1.0e-5f)
     {
         const float separation = 1.37e-5f * params.cameraFovAngleHor *
-            length(float2(params.renderSize)) * (1.0f - nearestDepth);
+            length(float2(params.renderSize)) * nearestDepth;
         const float epsilon = 1.19e-7f;
         float depthWeight = 0.0f;
         depthWeight += saturate(separation / (abs(nearestDepth - topLeftDepth) + epsilon));

@@ -56,6 +56,21 @@ namespace
     }
 } // namespace
 
+Assets::Camera NextEngine::GetActiveRenderCamera() const
+{
+    Assets::Camera renderCamera = scene_->GetRenderCamera();
+    if (gameInstance_)
+    {
+        gameInstance_->OverrideRenderCamera(renderCamera);
+    }
+
+    // This is an explicit global policy: changing r.camera.farPlane affects
+    // every main-view camera, including game/editor camera overrides.
+    renderCamera.FarPlane = std::max(
+        config_.userSettings.CameraFarPlane, renderCamera.NearPlane + 1.0e-3f);
+    return renderCamera;
+}
+
 Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
 {
     // Per-view temporal history now lives in the primary RenderView (bank 0). Multi-viewport will
@@ -63,8 +78,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     Vulkan::FViewRenderState& viewState = renderer_->PrimaryViewState();
 
     // a copy, simple struct
-    Assets::Camera renderCam = scene_->GetRenderCamera();
-    gameInstance_->OverrideRenderCamera(renderCam);
+    Assets::Camera renderCam = GetActiveRenderCamera();
     scene_->OverrideModelView(renderCam.ModelView);
     Assets::UniformBufferObject ubo = Vulkan::BuildViewCameraUbo({
         .scene = *scene_,

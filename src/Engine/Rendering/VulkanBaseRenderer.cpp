@@ -3446,7 +3446,7 @@ namespace Vulkan
         inputs.swapchain = swapChain.Handle();
         inputs.ubo = &frame_.lastUBO;
 
-        auto& camera = GetScene().GetRenderCamera();
+        const Assets::Camera camera = NextEngine::GetInstance()->GetActiveRenderCamera();
         inputs.camera.nearPlane = camera.NearPlane;
         inputs.camera.farPlane = camera.FarPlane;
         inputs.camera.verticalFovRadians = glm::radians(camera.FieldOfView);

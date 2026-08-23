@@ -5,6 +5,7 @@
 
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Utilities/Math.hpp"
 
 namespace CharacterDemoAIDebugUI
 {
@@ -235,7 +236,8 @@ namespace CharacterDemoAIDebugUI
 
         const float aspect = viewportSize.x / viewportSize.y;
         const float fov = cam.FieldOfView > 1.0f ? cam.FieldOfView : 60.0f;
-        const glm::mat4 projection = glm::perspective(glm::radians(fov), aspect, 0.05f, 2000.0f);
+        const glm::mat4 projection =
+            Utilities::Math::ReverseZPerspective(glm::radians(fov), aspect, 0.05f, 2000.0f);
         const glm::mat4 viewProjection = projection * cam.ModelView;
 
         auto project = [&](const glm::vec3& worldPos, ImVec2& screenPos) -> bool

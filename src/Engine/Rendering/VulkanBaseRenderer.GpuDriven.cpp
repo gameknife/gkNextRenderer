@@ -302,7 +302,7 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         std::array<VkClearValue, 3> clearValues = {};
         clearValues[0].color.uint32[0] = 0u;
         clearValues[1].color.uint32[0] = 0u;
-        clearValues[2].depthStencil = {1.0f, 0};
+        clearValues[2].depthStencil = {0.0f, 0};
 
         VkRenderPassBeginInfo renderPassInfo = {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;

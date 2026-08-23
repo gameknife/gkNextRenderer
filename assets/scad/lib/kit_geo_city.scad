@@ -129,6 +129,9 @@ function gc_FAC(i) = [
 
 function gc_PARAPET_H() = 0.95;
 function gc_PARAPET_T() = 0.34;
+// 屋顶与楼体顶盖不要落在同一个 z 平面。楼体和屋顶是分开的 mesh，
+// 即使只是 1~2cm 的共面，也会在远景/斜视角下触发 z-fighting。
+function gc_ROOF_CLEARANCE() = 0.05;
 // 坡屋顶出檐。这是全库**唯一**允许越出轮廓的东西：没有挑檐的坡顶不像屋顶。
 // 压到 0.25 是因为它同样吃 NavGrid 的可走格（约束 4），而坡顶只出现在矮房上，
 // 檐口离地近、遮住的正是紧贴墙根那一圈。
@@ -367,15 +370,23 @@ module gc_roof(pts, paths, ring, z, h, roof, obb, wall, seed)
         {
             // 屋面板。壳体顶盖是玻璃色，鸟瞰视角下整片城市会变成一张深色板；
             // 盖一层薄的屋面色板，Aerial 视图才有屋顶该有的样子。
-            color(gc_ROOF(roof[1])) gc_slab_at(pts, paths, z + h - 0.10, 0.16);
+            deckZ = z + h + gc_ROOF_CLEARANCE();
+            color(gc_ROOF(roof[1])) gc_slab_at(pts, paths, deckZ, 0.16);
+            // 女儿墙底面再抬一段，避免与楼体顶面及屋面板的边界面共面；
+            // 它仍然嵌入屋面板内部，不会在外观上留下缝隙。
             // out = -thick/2 让女儿墙外表面正好压在轮廓上（约束 4）。
-            color(wall) gc_edge_wall(ring, z + h, gc_PARAPET_H(), gc_PARAPET_T(),
+            parapetZ = deckZ + gc_ROOF_CLEARANCE();
+            color(wall) gc_edge_wall(ring, parapetZ, gc_PARAPET_H(), gc_PARAPET_T(),
                                      -gc_PARAPET_T() / 2);
             if (len(roof) >= 8)
-                gc_roof_clutter([roof[5], roof[6], roof[7]], z + h, roof[4], seed);
+                // 杂物底面略嵌入屋面板，避开屋面板顶面共面但不产生悬空。
+                gc_roof_clutter([roof[5], roof[6], roof[7]],
+                                 deckZ + 0.16 - gc_ROOF_CLEARANCE(), roof[4], seed);
         }
         if (roof[0] == 2)
-            color(gc_ROOF(roof[1])) gc_roof_pitched(obb, z + h, roof[2], roof[3], gc_EAVE());
+            color(gc_ROOF(roof[1]))
+                gc_roof_pitched(obb, z + h + gc_ROOF_CLEARANCE(),
+                                roof[2], roof[3], gc_EAVE());
     }
 }
 

@@ -3,6 +3,7 @@
 
 // Camera UBO assembly is part of the concrete renderer implementation pack.
 #include "Engine/Assets/Core/Scene.hpp"
+#include "Engine/Utilities/Math.hpp"
 
 namespace Vulkan
 {
@@ -17,14 +18,14 @@ namespace Vulkan
                 static_cast<float>(std::max(1u, extent.height));
             ubo.ModelView = camera.ModelView;
             ubo.ModelViewInverse = glm::inverse(camera.ModelView);
-            ubo.Projection =
-                glm::perspective(glm::radians(camera.FieldOfView), aspect, camera.NearPlane, camera.FarPlane);
+            ubo.Projection = Utilities::Math::ReverseZPerspective(
+                glm::radians(camera.FieldOfView), aspect, camera.NearPlane, camera.FarPlane);
             ubo.Projection[1][1] *= -1.0f;
             ubo.ProjectionUnJit = ubo.Projection;
 #if ANDROID
             glm::mat4 preRotate = glm::mat4(1.0f);
             preRotate = glm::rotate(preRotate, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-            ubo.Projection = glm::perspective(
+            ubo.Projection = Utilities::Math::ReverseZPerspective(
                 glm::radians(camera.FieldOfView),
                 static_cast<float>(std::max(1u, extent.height)) / static_cast<float>(std::max(1u, extent.width)),
                 0.1f,

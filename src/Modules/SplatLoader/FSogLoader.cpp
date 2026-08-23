@@ -14,6 +14,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
 #include <array>
 #include <fstream>
 #include <limits>
@@ -344,8 +345,11 @@ namespace Assets
             defaultCamera.FieldOfView = 45.0f;
             defaultCamera.Aperture = 0.0f;
             defaultCamera.FocalDistance = cameraDistance;
-            defaultCamera.NearPlane = std::max(0.01f, radius * 0.01f);
-            defaultCamera.FarPlane = radius * 20.0f;
+            const float sceneDiagonal = radius * 2.0f;
+            defaultCamera.NearPlane = sceneDiagonal >= 20.0f
+                ? 0.5f
+                : std::clamp(sceneDiagonal * 0.025f, 0.02f, 0.5f);
+            defaultCamera.FarPlane = std::max(defaultCameraFarPlane, radius * 20.0f);
             camera.cameras.push_back(defaultCamera);
             camera.ControlSpeed = radius;
             camera.HasSky = false;

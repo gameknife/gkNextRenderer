@@ -40,6 +40,7 @@ struct UserSettings final
     bool CheckerboardRendering = false;
     // Camera
     int CameraIdx;
+    float CameraFarPlane = Assets::defaultCameraFarPlane;
 
     // Profiler
     float HeatmapScale;

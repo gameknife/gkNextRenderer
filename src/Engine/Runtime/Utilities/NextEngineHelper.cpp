@@ -4,6 +4,7 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Interface/UserInterface.hpp"
+#include "Engine/Utilities/Math.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
@@ -69,8 +70,8 @@ namespace Runtime::EngineHelper
 
         const float aspect = viewport->Size.x / viewport->Size.y;
         const float fov = camera.FieldOfView > 1.0f ? camera.FieldOfView : 60.0f;
-        const glm::mat4 projection =
-            glm::perspective(glm::radians(fov), aspect, std::max(0.05f, camera.NearPlane), camera.FarPlane);
+        const glm::mat4 projection = Utilities::Math::ReverseZPerspective(
+            glm::radians(fov), aspect, std::max(0.05f, camera.NearPlane), camera.FarPlane);
         const glm::mat4 viewProjection = projection * camera.ModelView;
         const glm::vec4 clip = viewProjection * glm::vec4(worldPos, 1.0f);
         if (clip.w <= 0.0f)
@@ -141,7 +142,7 @@ namespace Runtime::EngineHelper
 
         const glm::vec2 pixel = locationSS - viewportPos;
         const glm::vec2 uv = pixel / viewportSize * glm::vec2(2.0f, 2.0f) - glm::vec2(1.0f, 1.0f);
-        glm::mat4 projection = glm::perspective(
+        glm::mat4 projection = Utilities::Math::ReverseZPerspective(
             glm::radians(camera.FieldOfView),
             viewportSize.x / viewportSize.y,
             std::max(0.05f, camera.NearPlane),

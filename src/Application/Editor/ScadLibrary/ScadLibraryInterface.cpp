@@ -491,14 +491,15 @@ namespace ScadLibrary
         // ------------------------------------------------------------------ kit file watch
 
         // A browsable parts library file: kit_*.scad (excluding the combinator
-        // rule libraries kit_layout.scad / kit_terrain.scad / kit_geo_city.scad),
+        // rule libraries kit_layout.scad / kit_terrain.scad / kit_road.scad /
+        // kit_geo_city.scad),
         // mirroring the filter in KitCatalog::ScanKits.
         bool IsBrowsableKitFile(const std::filesystem::path& path)
         {
             const std::string filename = path.filename().string();
             return path.extension() == ".scad" && filename.rfind("kit_", 0) == 0 &&
                 filename != "kit_layout.scad" && filename != "kit_terrain.scad" &&
-                filename != "kit_geo_city.scad";
+                filename != "kit_road.scad" && filename != "kit_geo_city.scad";
         }
 
         struct FKitWatchGatherResult
@@ -3396,7 +3397,10 @@ namespace ScadLibrary
             return;
         }
         kitWatchElapsed_ = 0.0;
-        if (kitWatchTaskInFlight_)
+        // Do not submit another gather while a detected change is waiting for
+        // the debounced rescan. Its snapshot would use the old baseline and
+        // report the same change again after RescanKits updates the stamps.
+        if (kitWatchTaskInFlight_ || kitWatchPending_)
         {
             return;
         }

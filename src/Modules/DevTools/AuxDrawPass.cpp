@@ -196,7 +196,7 @@ namespace Vulkan::AuxDraw
         pipeline_ = GraphicsPipelineBuilder(device)
             .SetShaders(vertexShader, fragmentShader)
             .SetFixedViewport({0, 0}, extent)
-            .SetDepth(true, false, VK_COMPARE_OP_LESS_OR_EQUAL)
+            .SetDepth(true, false, VK_COMPARE_OP_GREATER_OR_EQUAL)
             .SetAlphaBlend(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
             .Build(pipelineLayout_->Handle(), renderPass_, "create AuxDraw graphics pipeline");
     }

@@ -1,6 +1,7 @@
 {
   "r.temporalFrames": 16,
   "r.samples": 2,
+  "r.camera.farPlane": 10000.0,
   "r.bounces": 8,
   "r.rendererType": 0,
   "r.maxBounces": 10,

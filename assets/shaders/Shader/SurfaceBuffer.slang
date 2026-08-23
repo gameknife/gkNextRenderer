@@ -16,7 +16,7 @@ namespace Surface
 
     // Depth written where the primary ray hit nothing. Deliberately outside [0,1] so any consumer
     // that only asks "is this a surface?" gets the right answer without a second buffer.
-    public static const float kBackgroundDepth = 1000.0f;
+    public static const float kBackgroundDepth = -1.0f;
 
     // RT_BSDF_DATA.x for background / degenerate samples. A resolved material id is a real index
     // into GPUScene materials, so it can never collide with this.

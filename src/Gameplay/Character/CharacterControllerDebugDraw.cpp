@@ -1,6 +1,7 @@
 #include "Gameplay/Character/CharacterControllerDebugDraw.hpp"
 
 #include "Engine/Assets/Core/Model.hpp"
+#include "Engine/Utilities/Math.hpp"
 #include "Gameplay/Character/NextCharacterController.h"
 
 #include <cmath>
@@ -43,7 +44,8 @@ namespace
 
         const float aspect = viewportSize.x / viewportSize.y;
         const float fieldOfView = camera.FieldOfView > 1.0f ? camera.FieldOfView : 60.0f;
-        const glm::mat4 projection = glm::perspective(glm::radians(fieldOfView), aspect, 0.05f, 2000.0f);
+        const glm::mat4 projection =
+            Utilities::Math::ReverseZPerspective(glm::radians(fieldOfView), aspect, 0.05f, 2000.0f);
         return FOverlayProjector{viewportSize, viewportPosition, projection * camera.ModelView};
     }
 
