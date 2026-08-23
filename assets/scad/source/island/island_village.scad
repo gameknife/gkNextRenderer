@@ -11,12 +11,16 @@ use <../../lib/gk_camera.scad>
 $fn = 12;
 
 // ================= 岛体层叠（blob 有机形交错出海湾与海角） =================
-translate([0, -2, 0])    is_ground_blob(L = 150, D = 132, t = 0.10, c = is_SEADEEP(), seed = 1, fn = 12);   // 深海 → 顶 0.10
+translate([0, -2, 0])    is_ground_water_blob(L = 150, D = 132, t = 0.10, c = is_SEADEEP(), seed = 1, fn = 12,
+                                               roughness = is_WATER_ROUGH_DEEP());                         // 深海 → 顶 0.10
 translate([0, 2, 0.04])
 {
-    is_ground_blob(L = 100, D = 78, t = 0.12, c = is_SEASHAL(), seed = 2, fn = 11);                          // 浅滩 → 顶 0.16
-    translate([-25, -21, 0]) is_ground_blob(L = 50, D = 42, t = 0.12, c = is_SEASHAL(), seed = 3, fn = 9);
-    translate([27, -19, 0]) is_ground_blob(L = 42, D = 38, t = 0.12, c = is_SEASHAL(), seed = 4, fn = 9);
+    is_ground_water_blob(L = 100, D = 78, t = 0.12, c = is_SEASHAL(), seed = 2, fn = 11,
+                         roughness = is_WATER_ROUGH_SHALLOW());                                           // 浅滩 → 顶 0.16
+    translate([-25, -21, 0]) is_ground_water_blob(L = 50, D = 42, t = 0.12, c = is_SEASHAL(), seed = 3, fn = 9,
+                                                   roughness = is_WATER_ROUGH_SHALLOW());
+    translate([27, -19, 0]) is_ground_water_blob(L = 42, D = 38, t = 0.12, c = is_SEASHAL(), seed = 4, fn = 9,
+                                                  roughness = is_WATER_ROUGH_SHALLOW());
 }
 translate([0, 2, 0.08])
 {
@@ -101,7 +105,8 @@ translate([-33.5, 17, 0.265]) rotate([0, 0, atan2(-18, -3)]) is_ground_stream(L 
 translate([-33.5, -1, 0.265]) rotate([0, 0, atan2(-18, 3)]) is_ground_stream(L = 19.5, W = 3.2, seed = 32);
 translate([-29, -17, 0.265]) rotate([0, 0, atan2(-14, 6)]) is_ground_stream(L = 17, W = 3.0, seed = 33);
 // 溪口入海（浅滩小湾 + 礁石）
-translate([-25, -27, 0.05]) is_ground_blob(L = 12, D = 10, t = 0.10, c = is_SEASHAL(), seed = 34, fn = 8);
+translate([-25, -27, 0.05]) is_ground_water_blob(L = 12, D = 10, t = 0.10, c = is_SEASHAL(), seed = 34, fn = 8,
+                                                  roughness = is_WATER_ROUGH_SHALLOW());
 translate([-24, -24, 0.20]) is_nature_rock(s = 1.0, seed = 3);
 translate([-27.5, -27, 0.16]) is_nature_rock(s = 0.8, seed = 5);
 // 木桥跨溪（垂直溪流方向；桥锚点=引桥端路面高）

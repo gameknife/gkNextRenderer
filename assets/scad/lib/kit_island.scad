@@ -25,6 +25,8 @@ function is_PLAZD()  = [0.42, 0.41, 0.37];   // 地砖缝
 function is_PLAZL()  = [0.60, 0.58, 0.52];   // 浅色镶边石
 function is_SEADEEP()= [0.07, 0.29, 0.41];   // 深海
 function is_SEASHAL()= [0.15, 0.43, 0.48];   // 浅海
+function is_WATER_ROUGH_DEEP() = 0.01;       // 深水：近镜面水面高光
+function is_WATER_ROUGH_SHALLOW() = 0.01;    // 浅水：统一水面响应
 function is_SEAFOAM()= [0.62, 0.78, 0.77];   // 浪花线（细小面积可用亮色）
 function is_WOODC()  = [0.50, 0.37, 0.23];   // 原木（篱笆/桥/码头甲板）
 function is_WOODD()  = [0.36, 0.26, 0.16];   // 深木（桩/梁）
@@ -62,6 +64,13 @@ function is_leaf_c(i) = [is_LEAFC(), is_LEAFD(), [0.46, 0.55, 0.24]][is_rnd(i, 3
 // ---- 基础工具 ----
 module is_boxc(s) cube(s, center = true);
 module is_slab(L = 4, D = 4, t = 0.2) translate([0, 0, t / 2]) is_boxc([L, D, t]);   // 底面 z=0 平板
+
+// 水面材质：水面下没有需要透射的几何，因此保持不透明；只用低 roughness
+// 提供水色上的清晰环境/太阳高光。水是非金属，不应沿用 color() 的 roughness=1 漫反射。
+module is_water_surface(c, roughness = is_WATER_ROUGH_SHALLOW())
+{
+    gk_material(c, roughness = roughness, metalness = 0, alpha = 1) children();
+}
 
 // ================= 通用构件 =================
 
@@ -122,6 +131,14 @@ module is_part_window(w = 0.9, h = 1.0)
 module is_ground_blob(L = 40, D = 30, t = 0.12, c = [0.36, 0.47, 0.21], seed = 0, fn = 10)
 {
     color(c) rotate([0, 0, is_rnd(seed, 180)]) scale([L * 0.5, D * 0.5, 1]) cylinder(h = t, r = 1, $fn = fn);
+}
+
+// 有机形水面：与普通 blob 分开，避免草地/沙滩被误赋水面 PBR。
+module is_ground_water_blob(L = 40, D = 30, t = 0.12, c = is_SEASHAL(), seed = 0, fn = 10,
+                            roughness = is_WATER_ROUGH_SHALLOW())
+{
+    is_water_surface(c, roughness = roughness)
+        rotate([0, 0, is_rnd(seed, 180)]) scale([L * 0.5, D * 0.5, 1]) cylinder(h = t, r = 1, $fn = fn);
 }
 
 // 沙滩地（矩形区用）：沙底 + 沙纹 + 湿沙斑 + 零星小石
@@ -216,8 +233,8 @@ module is_ground_field(L = 10, D = 8, seed = 0, crop = 1)
 // 溪流（沿 x）：浅水面 + 两侧深色水缘 + 中央白浪虚线。叠在草地上时底面抬高 1~2 cm。
 module is_ground_stream(L = 16, W = 3.2, seed = 0)
 {
-    color(is_SEASHAL()) is_slab(L, W, 0.06);
-    color([0.10, 0.35, 0.44]) for (sy = [-1, 1])
+    is_water_surface(is_SEASHAL(), roughness = is_WATER_ROUGH_SHALLOW()) is_slab(L, W, 0.06);
+    is_water_surface([0.10, 0.35, 0.44], roughness = is_WATER_ROUGH_DEEP()) for (sy = [-1, 1])
         translate([0, sy * (W / 2 - 0.18), 0.06]) is_slab(L, 0.3, 0.012);
     nw = max(2, floor(L / 2.2));
     color(is_SEAFOAM()) for (i = [0 : nw - 1])

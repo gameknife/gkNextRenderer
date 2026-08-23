@@ -81,5 +81,7 @@ translate([22, -42, 0]) is_ground_field(L = 10, D = 8, seed = 5, crop = 2);
 translate([36, -42, 0]) is_ground_stream(L = 16, W = 3.2, seed = 6);
 translate([-38, -58, 0]) is_ground_blob(L = 24, D = 16, t = 0.12, c = is_GRASSC(), seed = 1);
 translate([-24, -58, 0]) is_ground_blob(L = 20, D = 14, t = 0.12, c = is_SANDC(), seed = 2);
-translate([-10, -58, 0]) is_ground_blob(L = 20, D = 14, t = 0.12, c = is_SEASHAL(), seed = 3);
-translate([4, -58, 0]) is_ground_blob(L = 20, D = 14, t = 0.12, c = is_SEADEEP(), seed = 4);
+translate([-10, -58, 0]) is_ground_water_blob(L = 20, D = 14, t = 0.12, c = is_SEASHAL(), seed = 3,
+                                               roughness = is_WATER_ROUGH_SHALLOW());
+translate([4, -58, 0]) is_ground_water_blob(L = 20, D = 14, t = 0.12, c = is_SEADEEP(), seed = 4,
+                                             roughness = is_WATER_ROUGH_DEEP());
