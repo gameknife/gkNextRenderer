@@ -39,6 +39,9 @@ void Audio_PlaySfx(GkStr path, float volume) { /* ... */ }
   探测所需大小。生成器把这一对折叠成 C# 的 `string` 返回值。
 - 结构体按指针跨界，定长、无可选字段、**不含字符串**——结构体里的字符串需要调用方看不见的 arena
   生命周期管理，所以名字一律作为独立的 `GkStr` 参数传。
+- 函数确实需要领域 enum 时，在 `Interop.h` 定义显式底层类型为 `int32_t` 的 ABI enum，并在 C# 侧
+  镜像为 `enum : int`；native 实现必须逐值校验 / 转换，不要把引擎内部 enum 直接穿过边界。
+  这不等于支持反射属性的通用 Enum codegen，后者仍需要清单携带 enumerator。
 - 颜色用 `GkColor32`（IM_COL32 布局），C# 侧是 `Color`，在调用点打包。
 - 非 const 指针必须是名为 `out*` 的出参；生成器会把单个出参变成 C# 的返回值。
 - 行尾 `//= name:value` 声明生成的 C# 默认实参，只能是编译期常量，且必须是尾部参数。
@@ -46,7 +49,8 @@ void Audio_PlaySfx(GkStr path, float volume) { /* ... */ }
 ### 失败语义
 
 跨这条 ABI 没有异常。约定是**记一次日志，返回无害值**：node id 返回 `GK_INVALID_NODE_ID`，
-数值返回 0，指针参数为空就直接 return。静默无操作是脚本"看起来对但屏幕上什么都不动"的主要来源，
+physics handle 返回 `PhysicsBodyIds.Invalid`，带 `Valid` 字段的状态返回无效值，普通数值返回 0，
+指针参数为空就直接 return。静默无操作是脚本“看起来对但屏幕上什么都不动”的主要来源，
 所以未知 node id 会 warn 一次（`FindNodeOrWarn`）。
 
 ## 加一个属性

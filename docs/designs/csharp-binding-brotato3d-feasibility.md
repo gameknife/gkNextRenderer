@@ -1,10 +1,10 @@
 ---
 title: "用 C# 绑定实现 Brotato3D 的能力缺口与可行性"
 category: design
-status: 提案，未实施；作为 EngineApi 绑定面演进的驱动案例
+status: 实施中；首个 C# 可玩纵切已落地，原 C++ application 保留
 owner: engine/scripting
 created: 2026-08-22
-last_updated: 2026-08-22
+last_updated: 2026-08-24
 design: dotnet-scripting-design.md
 related: ../AGENT_GUIDE/DotNetBindings.md, ../AGENT_GUIDE/Brotato3D.md
 ---
@@ -23,13 +23,16 @@ related: ../AGENT_GUIDE/DotNetBindings.md, ../AGENT_GUIDE/Brotato3D.md
 
 ---
 
-## 1. 当前绑定面的实际形状
+## 1. 分析启动时绑定面的实际形状
+
+本节保留 2026-08-22 做可行性判断时的 68 项基线，便于核对“为 Brotato3D 实际增加了什么”；
+实施后的当前数字与取舍见 §8。
 
 绑定能力有且只有两个来源，这条分界是设计 4.4 的决议（反射拥有*属性*，绑定表拥有*函数*）：
 
 | 来源 | 文件 | 当前规模 |
 |---|---|---|
-| 函数 | `src/Modules/NextDotNet/EngineApi.def.h` | **68** 个 `GK_API` 条目 |
+| 函数 | `src/Modules/NextDotNet/EngineApi.def.h` | **68** 个 `GK_API` 条目（分析基线） |
 | 属性 | `entt::meta` → `ReflectionManifest.json` → `Components.g.cs` | Node + 7 个 component |
 
 68 个条目的分布：
@@ -178,8 +181,8 @@ Brotato3D 用到的 ImGui 面（统计自 `Brotato3DUI.cpp`）：
 |---|---|---|
 | `FRenderNodeSpec` 缺 **Rotation** | 结构体布局变更 → `GK_DOTNET_ABI_VERSION` bump | Brotato3D 在 `BeforeSceneRebuild` 里一口气建 2000+ 节点，其中不少需要初始旋转；该窗口内 live `Scene_Set*` 不可用，旋转只能来自 spec |
 | **手柄摇杆轴** | 二选一 | C++ 有 `OnGamepadInput(leftStickX, leftStickY, rightStickX, rightStickY, ...)`，`IGameModule` 完全没有对应钩子。**推荐加 poll 式绑定 `Input_GetGamepadAxis(axis)`**（只加表项，不动 ABI 形状），而不是给 `FManagedApi` 加第 8 个钩子 |
-| **运行时挂 component** | 新绑定 + enum 处理 | `Scene_AddPhysicsComponent(nodeId, mobility)`：Brotato3D 的 kinematic 推挤体 hack 要求代理节点挂一个标 `Dynamic` 的 `PhysicsComponent` 以跳过 mesh 自动晋升（见 `Brotato3D.md` §5.4） |
-| **Enum 属性绑定** | codegen 变更 | `ENodeMobility` 决定 mesh 是否被自动晋升，是上一条的前提。要么补 enum codegen（清单需要带 enumerator 名字），要么用专门的绑定函数绕过 |
+| **显式挂接 physics body** | 新绑定 + 固定宽度 enum | Brotato3D 的 kinematic 推挤体要求代理节点挂一个标 `Dynamic` 的 `PhysicsComponent` 以跳过 mesh 自动晋升（见 `Brotato3D.md` §5.4）。实施时采用 `Scene{Build}_BindPhysicsBody(nodeId, bodyId, mobility)`，一次完成 component 建立、旧 body 替换和所有权转移 |
+| **Enum 属性绑定** | 本阶段不需要 | `ENodeMobility` 的通用反射 enum codegen 仍需要清单携带 enumerator；M2 没有为一个属性扩大整套清单，而是在 ABI 定义稳定的 `GkNodeMobility : int32_t`，由专用绑定显式转换 |
 
 ### 4.4 结构性缺口
 
@@ -194,9 +197,9 @@ clip 采样）整个搬过 ABI 不合理。两条路：
 - **留在 C++**：作为混合方案的一部分（§6）。
 
 **热重载与对象池状态。** Brotato3D 的全部运行时状态（1360 碎块槽、768 子弹槽、敌人池、波次状态机）
-会落在 C# 侧。CoreCLR 热重载换的是 assembly，托管状态随之丢失。要么在 `OnDestroy` / `OnInit` 做状态
-序列化往返，要么接受"重载后重开一局"。C++ 版本没有这个问题——**热重载是迁移的主要收益，
-而重状态游戏恰恰是它最难兑现的地方**。
+会落在 C# 侧。CoreCLR 热重载换的是 assembly，托管状态随之丢失；如果强行保留热重载，就要在
+`OnDestroy` / `OnInit` 做状态序列化往返，或接受“重载后重开一局”。本次实施将热重载视为可选开发能力，
+不是玩法架构要求：`Brotato3DCSharp` 直接关闭它，修改后正常构建并重启，不为热重载引入状态恢复协议。
 
 ---
 
@@ -300,7 +303,7 @@ Brotato3D 的风险点：
 | 档 | 内容 | 验收 |
 |---|---|---|
 | **M1 场景与变换** | §4.1 的 node / 材质 / parent / outline / live 材质 + 合并与批量 transform + spec 加 Rotation | C# demo：1000 个方块的"碎块雨"，60fps，`gnb shot` 出图 |
-| **M2 物理** | body 生命周期 + kinematic + world paused + `Scene_AddPhysicsComponent` + enum codegen | C# demo：1000 体物理碎块池，可推挤，帧时间与 C++ 版对齐 |
+| **M2 物理** | body 生命周期 + kinematic + world paused + 显式 body/node 绑定 + 稳定 ABI enum | C# demo：1000 体物理碎块池，可推挤，帧时间与 C++ 版对齐 |
 | **M3 输入与音频** | `Input_GetGamepadAxis` / `Input_GetMousePosition`、`Audio_PlaySfxEx`(minIntervalMs) / `Audio_SetMusicVolume` | 手柄双摇杆驱动的 C# demo |
 | **M4 UI（路线 B）** | drawlist 图元 + 纹理 + 字体 + 鼠标位置；控件在 C# 侧实现 | C# 复刻 Brotato3D 的 HUD 与升级抽卡面板 |
 | **M5 Rig 门面** | `Rig_Load/Instantiate/GetBoneNodeId/PlayClip/SetTintMaterial` | C# 驱动 ScadRig 走路 |
@@ -315,7 +318,44 @@ M1–M3 是任何 C# 游戏都会撞到的墙（`CSharpGameDevelopment.md` §10 
 - 每次 ABI bump 都要跑 `gnb dotnet ci`（双后端探针 + 两次引擎构建），并重跑 Flappy parity 回归。
 - UI 绑定面一旦定死很难改。路线 A 与路线 B 是**单向门**，先想清楚再落第一根桩。
 - Rig 门面若同时进绑定表和反射，会重演 QuickJS 时代的漂移。只能有一份事实。
-- 热重载不保 C# 侧对象池状态；Brotato3D 这种重状态游戏需要显式设计重载语义。
+- 热重载不保 C# 侧对象池状态；当前目标有意关闭热重载。未来若重新开启，必须先定义显式重载语义，
+  不能让这项可选能力反向复杂化玩法和对象池设计。
+
+---
+
+## 8. 实施进展（2026-08-24）
+
+当前实现已经按本文的路线 B 落地为独立目标 `Brotato3DCSharp`，并继续完成了 M2 物理纵切；原有
+`src/Application/Game/Brotato3D/` 未被替换或删改。目标可独立启动，当前包含：
+
+- C# 持有完整玩法状态：角色移动 / 冲刺、自动武器、敌人生成与追击、投射物与数学碰撞、
+  掉落 / 经验 / 升级、波次、商店、胜负状态和跟随相机；配置直接读取现有 Brotato3D JSON，
+  使用 `JsonDocument` 手写解析以保持 NativeAOT 安全。
+- 场景在 `BeforeSceneRebuild` 一次性建立托管对象池，每帧把活动实体写入一个
+  `ReadOnlySpan<NodeTransform>`，通过一次 `Scene.SetNodeTransforms` 跨界提交；没有逐实体的
+  三次位置 / 旋转 / 缩放调用。
+- UI 控件和命中测试完全位于 `ManagedImGui.cs`。C# 将矩形、圆、折线、凸多边形、文本和图片
+  累积为三个可复用缓冲区，每帧只调用一次 `UI.SubmitDrawList`；native 只把命令翻译为
+  `ImDrawList`，没有新增 Button、Checkbox、Slider、popup、style 等 ImGui API 绑定。
+- M2 使用通用的 primitive-body 门面，而不是 Brotato3D 专用 API：球 / 盒 body 创建、删除、激活、
+  transform / kinematic move、速度、施力、状态读取和 world pause；`Scene.BindPhysicsBody` 与
+  `SceneBuild.BindPhysicsBody` 将显式 body 交给节点的 `PhysicsComponent`，替换可能存在的隐式 mesh body。
+- C# 在场景构建期一次性建立 **1360** 个动态死亡碎块体（800 tiny + 480 chunk + 80 boss）、
+  **257** 个 kinematic 推挤体（玩家 + 256 敌人槽）和 4 面静态边界墙。死亡时复用固定池，普通敌人
+  发射 8 块、boss 发射 24 块；动态 body 的节点同步由引擎现有 `PhysicsComponent` 路径完成，
+  C# 不需要每帧逐碎块读取 body transform 再写回 node。
+- `FRenderNodeSpec` 加 Rotation 时 ABI 从 3 升到 4；物理阶段加入固定布局的
+  `FPhysicsBodyState`、`GkPhysicsMotionType`、`GkNodeMobility`，ABI 再升到 **5**。绑定表从分析时的
+  68 项增至 **98** 项（第一阶段 84 + 物理阶段 14），仍只铺开实际使用的通用能力。
+- 该 target 显式设置 `enableHotReload = false`、`compileManagedSources = false`。修改 C# 后由正常
+  构建发布并重启应用，不为保留对象池状态引入序列化、恢复协议或半重建世界。
+- 角色选择补了 C# 自持有的键盘 / 手柄焦点环；交互烟测可稳定用方向键选中 Marksman，在首波完成
+  击杀并触发动态碎块路径。该烟测同时验证场景提交、物理池、drawlist UI、移动和自动武器。
+
+当前仍不声称“全量 parity”：玩家暂用程序化球体、敌人暂用方块，伤害判定仍是确定性的 C# 数学碰撞，
+物理负责推挤代理、边界和死亡表现；敌人代理形状也暂为统一盒体。ScadRig 骨骼表现、完整本地化 / 存档、
+全套菜单的手柄焦点和更细的表现对齐仍留给后续阶段。至此 M1 + M2 + M3 + M4 的 API 形状已经由真实
+玩法验证，下一项高价值结构工作是 M5 Rig 门面，而不是继续为了“迁移完成”扩张无调用者的绑定面。
 
 ---
 

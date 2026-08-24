@@ -18,7 +18,7 @@ namespace Modules::NextDotNet
 {
     /// Bumped whenever the layout of FEngineApi or FManagedApi changes. Bootstrap rejects a
     /// mismatch instead of reading a table with a different shape.
-    inline constexpr uint32_t GK_DOTNET_ABI_VERSION = 3;
+    inline constexpr uint32_t GK_DOTNET_ABI_VERSION = 5;
 
     // --- primitive cross-boundary types --------------------------------------------------------
 
@@ -46,6 +46,22 @@ namespace Modules::NextDotNet
     /// call site, which is how script authors saw colors under QuickJS.
     using GkColor32 = uint32_t;
 
+    /// Stable, fixed-width physics enums. They deliberately do not expose Jolt values or reuse
+    /// the engine's C++ enum layout implicitly; both managed backends see these exact int32 values.
+    enum class GkPhysicsMotionType : int32_t
+    {
+        Static = 0,
+        Kinematic = 1,
+        Dynamic = 2,
+    };
+
+    enum class GkNodeMobility : int32_t
+    {
+        Static = 0,
+        Dynamic = 1,
+        Kinematic = 2,
+    };
+
     // --- cross-boundary structs ----------------------------------------------------------------
     // All fixed-layout, all blittable, no optional fields. Defaults live in the generated C#
     // wrapper, never in the wire format.
@@ -70,8 +86,82 @@ namespace Modules::NextDotNet
         uint32_t ModelId;
         uint32_t MaterialId;
         FVec3 Translation;
+        FVec4 Rotation;
         FVec3 Scale;
         GkBool Visible;
+    };
+
+    /// One complete local transform update. Keeping the node id beside the values lets managed
+    /// gameplay submit heterogeneous object pools in one call without parallel-array lifetime or
+    /// length hazards.
+    struct FNodeTransform
+    {
+        uint32_t NodeId;
+        FVec3 Translation;
+        FVec4 Rotation;
+        FVec3 Scale;
+    };
+
+    /// Published state for an opaque physics body handle. Valid is part of the value so a missing
+    /// body has a deterministic zero-like result without a second status channel or tuple ABI.
+    struct FPhysicsBodyState
+    {
+        FVec3 Position;
+        FVec4 Rotation;
+        FVec3 LinearVelocity;
+        GkPhysicsMotionType MotionType;
+        GkBool Active;
+        GkBool Valid;
+    };
+
+    /// Texture handle returned to managed UI. The handle is opaque; managed code may only pass it
+    /// back in an FUiDrawCommand. uint64_t keeps the layout stable on every supported 64-bit host.
+    struct FUiTexture
+    {
+        uint64_t Handle;
+        FVec2 PixelSize;
+        GkBool Valid;
+    };
+
+    enum class EUiDrawCommandType : int32_t
+    {
+        Line = 0,
+        Rect = 1,
+        RectFilled = 2,
+        Circle = 3,
+        CircleFilled = 4,
+        Polyline = 5,
+        ConvexPolyFilled = 6,
+        Text = 7,
+        Image = 8,
+    };
+
+    enum class EUiDrawLayer : int32_t
+    {
+        Background = 0,
+        Foreground = 1,
+    };
+
+    /// A compact draw-list command assembled by managed code. P0/P1 and the scalar fields are
+    /// interpreted by Type; variable point data and UTF-8 text live in the sibling buffers passed
+    /// to UI_SubmitDrawList. No pointers cross inside this struct.
+    struct FUiDrawCommand
+    {
+        int32_t Type;
+        int32_t Layer;
+        GkColor32 Color;
+        int32_t Flags;
+        uint64_t TextureHandle;
+        FVec2 P0;
+        FVec2 P1;
+        FVec2 Uv0;
+        FVec2 Uv1;
+        float Radius;
+        float Rounding;
+        float Thickness;
+        float Scale;
+        int32_t DataOffset;
+        int32_t DataCount;
     };
 
     struct FCameraOverride

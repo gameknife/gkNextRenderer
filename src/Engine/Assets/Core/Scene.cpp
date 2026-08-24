@@ -571,6 +571,44 @@ namespace Assets
         }
     }
 
+    bool Scene::BindPhysicsBody(Node& node, NextBodyID bodyId, Runtime::ENodeMobility mobility)
+    {
+        NextEngine* engine = NextEngine::GetInstance();
+        NextPhysics* physicsEngine = engine ? engine->GetPhysicsEngine() : nullptr;
+        if (!physicsEngine || bodyId.IsInvalid() || !physicsEngine->GetBody(bodyId))
+        {
+            return false;
+        }
+
+        // A live render node may already own the implicit static mesh body created by AddNode.
+        // Manual primitive ownership supersedes it; leaving both would produce duplicate contacts.
+        if (auto staticBody = staticPhysicsBodies_.find(&node); staticBody != staticPhysicsBodies_.end())
+        {
+            physicsEngine->RemoveBody(staticBody->second);
+            staticPhysicsBodies_.erase(staticBody);
+        }
+
+        Runtime::PhysicsComponent* component = node.GetComponent<Runtime::PhysicsComponent>();
+        if (component)
+        {
+            const NextBodyID previousBody = component->GetPhysicsBody();
+            if (!previousBody.IsInvalid() && previousBody != bodyId)
+            {
+                physicsEngine->RemoveBody(previousBody);
+            }
+        }
+        else
+        {
+            auto newComponent = std::make_shared<Runtime::PhysicsComponent>();
+            component = newComponent.get();
+            node.AddComponent(std::move(newComponent));
+        }
+
+        component->SetMobility(mobility);
+        component->BindPhysicsBody(bodyId);
+        return true;
+    }
+
     void Scene::EnsureNodePhysicsBody(Node* node)
     {
         if (!node)

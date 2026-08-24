@@ -92,6 +92,7 @@ public struct RenderNodeSpec(uint modelId, uint materialId)
     public uint ModelId = modelId;
     public uint MaterialId = materialId;
     public Vector3 Translation = Vector3.Zero;
+    public Vector4 Rotation = new(0.0f, 0.0f, 0.0f, 1.0f);
     public Vector3 Scale = Vector3.One;
     public int Visible = 1;
 
@@ -109,11 +110,128 @@ public struct RenderNodeSpec(uint modelId, uint materialId)
         return this;
     }
 
+    public RenderNodeSpec WithRotation(Vector4 rotation)
+    {
+        Rotation = rotation;
+        return this;
+    }
+
     public RenderNodeSpec WithVisible(bool visible)
     {
         Visible = visible ? 1 : 0;
         return this;
     }
+}
+
+/// <summary>A complete local transform update used by <c>Scene.SetNodeTransforms</c>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NodeTransform(uint nodeId, Vector3 translation, Vector4 rotation, Vector3 scale)
+{
+    public uint NodeId = nodeId;
+    public Vector3 Translation = translation;
+    public Vector4 Rotation = rotation;
+    public Vector3 Scale = scale;
+
+    public NodeTransform(uint nodeId, Vector3 translation)
+        : this(nodeId, translation, new Vector4(0.0f, 0.0f, 0.0f, 1.0f), Vector3.One)
+    {
+    }
+}
+
+/// <summary>Motion policy used when creating a primitive physics body.</summary>
+public enum PhysicsMotionType : int
+{
+    Static = 0,
+    Kinematic = 1,
+    Dynamic = 2,
+}
+
+/// <summary>
+/// How a node participates in scene/physics synchronisation. A manually bound primitive body
+/// normally uses <see cref="Dynamic"/> so scene mesh cooking does not replace it.
+/// </summary>
+public enum NodeMobility : int
+{
+    Static = 0,
+    Dynamic = 1,
+    Kinematic = 2,
+}
+
+/// <summary>Latest published state of an opaque native physics body.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct PhysicsBodyState
+{
+    public Vector3 Position;
+    public Vector4 Rotation;
+    public Vector3 LinearVelocity;
+    public PhysicsMotionType MotionType;
+    public int Active;
+    public int Valid;
+
+    public readonly bool IsActive => Active != 0;
+    public readonly bool IsValid => Valid != 0;
+}
+
+/// <summary>Well-known opaque body handle values.</summary>
+public static class PhysicsBodyIds
+{
+    public const uint Invalid = 0xFFFFFFFFu;
+
+    public static bool IsValid(uint bodyId) => bodyId != Invalid;
+}
+
+/// <summary>An opaque native UI texture plus its source pixel size.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct UiTexture
+{
+    public ulong Handle;
+    public Vector2 PixelSize;
+    public int Valid;
+
+    public readonly bool IsValid => Valid != 0 && Handle != 0;
+}
+
+public enum UiDrawCommandType : int
+{
+    Line = 0,
+    Rect = 1,
+    RectFilled = 2,
+    Circle = 3,
+    CircleFilled = 4,
+    Polyline = 5,
+    ConvexPolyFilled = 6,
+    Text = 7,
+    Image = 8,
+}
+
+public enum UiDrawLayer : int
+{
+    Background = 0,
+    Foreground = 1,
+}
+
+/// <summary>
+/// One command in the managed draw list. Variable point data and UTF-8 text are offsets into the
+/// sibling buffers submitted with the command span.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct UiDrawCommand
+{
+    public UiDrawCommandType Type;
+    public UiDrawLayer Layer;
+    public uint Color;
+    public int Flags;
+    public ulong TextureHandle;
+    public Vector2 P0;
+    public Vector2 P1;
+    public Vector2 Uv0;
+    public Vector2 Uv1;
+    public float Radius;
+    public float Rounding;
+    public float Thickness;
+    public float Scale;
+    public int DataOffset;
+    public int DataCount;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -146,6 +264,8 @@ public static class KeyCodes
     public const int Escape = 0x1B;
     public const int Space = 0x20;
     public const int Return = 0x0D;
+    public const int Right = 0x4000004F;
+    public const int Left = 0x40000050;
 }
 
 public enum InputEventType : int

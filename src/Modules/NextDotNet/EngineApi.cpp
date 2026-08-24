@@ -4,10 +4,14 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Reflection/PropertyAccessor.hpp"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
 #include "Engine/Runtime/Subsystems/NextAudio.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <imgui.h>
@@ -15,6 +19,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <cmath>
 #include <unordered_set>
 #include <cstring>
 #include <filesystem>
@@ -43,6 +48,17 @@ namespace Modules::NextDotNet
         glm::vec3 ToGlm(const FVec3* value)
         {
             return value != nullptr ? glm::vec3(value->X, value->Y, value->Z) : glm::vec3(0.0f);
+        }
+
+        glm::quat ToGlmQuat(const FVec4* value)
+        {
+            if (value == nullptr)
+            {
+                return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+            }
+            const glm::quat rotation(value->W, value->X, value->Y, value->Z);
+            const float lengthSquared = glm::dot(rotation, rotation);
+            return lengthSquared > 0.000001f ? glm::normalize(rotation) : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
         }
 
         void StoreVec2(FVec2* out, float x, float y)
@@ -98,6 +114,84 @@ namespace Modules::NextDotNet
             if (normalized == "start") return SDL_GAMEPAD_BUTTON_START;
             if (normalized == "back") return SDL_GAMEPAD_BUTTON_BACK;
             return static_cast<uint8_t>(SDL_GAMEPAD_BUTTON_INVALID);
+        }
+
+        void StoreVec3(FVec3& out, const glm::vec3& value)
+        {
+            out = {value.x, value.y, value.z};
+        }
+
+        void StoreQuat(FVec4& out, const glm::quat& value)
+        {
+            out = {value.x, value.y, value.z, value.w};
+        }
+
+        bool IsFinite(const glm::vec3& value)
+        {
+            return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+        }
+
+        bool TryConvertMotionType(GkPhysicsMotionType value, NextMotionType& out)
+        {
+            switch (value)
+            {
+            case GkPhysicsMotionType::Static: out = NextMotionType::Static; return true;
+            case GkPhysicsMotionType::Kinematic: out = NextMotionType::Kinematic; return true;
+            case GkPhysicsMotionType::Dynamic: out = NextMotionType::Dynamic; return true;
+            default: return false;
+            }
+        }
+
+        GkPhysicsMotionType ConvertMotionType(NextMotionType value)
+        {
+            switch (value)
+            {
+            case NextMotionType::Kinematic: return GkPhysicsMotionType::Kinematic;
+            case NextMotionType::Dynamic: return GkPhysicsMotionType::Dynamic;
+            case NextMotionType::Static:
+            default: return GkPhysicsMotionType::Static;
+            }
+        }
+
+        bool TryConvertNodeMobility(GkNodeMobility value, Runtime::ENodeMobility& out)
+        {
+            switch (value)
+            {
+            case GkNodeMobility::Static: out = Runtime::ENodeMobility::Static; return true;
+            case GkNodeMobility::Dynamic: out = Runtime::ENodeMobility::Dynamic; return true;
+            case GkNodeMobility::Kinematic: out = Runtime::ENodeMobility::Kinematic; return true;
+            default: return false;
+            }
+        }
+
+        NextPhysics* GetPhysicsEngine()
+        {
+            NextEngine* engine = NextEngine::GetInstance();
+            return engine ? engine->GetPhysicsEngine() : nullptr;
+        }
+
+        NextBodyID ToBodyId(uint32_t value)
+        {
+            return NextBodyID(value);
+        }
+
+        bool HasPhysicsBody(NextPhysics* physics, uint32_t bodyId)
+        {
+            const NextBodyID id = ToBodyId(bodyId);
+            return physics != nullptr && !id.IsInvalid() && physics->GetBody(id) != nullptr;
+        }
+
+        ImGuiMouseButton ResolveImGuiMouseButton(int32_t button)
+        {
+            switch (button)
+            {
+            case SDL_BUTTON_LEFT: return ImGuiMouseButton_Left;
+            case SDL_BUTTON_RIGHT: return ImGuiMouseButton_Right;
+            case SDL_BUTTON_MIDDLE: return ImGuiMouseButton_Middle;
+            case SDL_BUTTON_X1: return 3;
+            case SDL_BUTTON_X2: return 4;
+            default: return -1;
+            }
         }
 
         bool RequireSceneBuild(const char* what)
@@ -190,11 +284,27 @@ namespace Modules::NextDotNet
 
         GkBool Input_IsMouseButtonDown(int32_t button)
         {
+            if (ImGui::GetCurrentContext() != nullptr)
+            {
+                const ImGuiMouseButton imguiButton = ResolveImGuiMouseButton(button);
+                if (imguiButton >= 0 && ImGui::IsMouseDown(imguiButton))
+                {
+                    return 1;
+                }
+            }
             return GInputState.mouseButtonsDown.contains(static_cast<uint8_t>(button)) ? 1 : 0;
         }
 
         GkBool Input_IsMouseButtonPressed(int32_t button)
         {
+            if (ImGui::GetCurrentContext() != nullptr)
+            {
+                const ImGuiMouseButton imguiButton = ResolveImGuiMouseButton(button);
+                if (imguiButton >= 0 && ImGui::IsMouseClicked(imguiButton))
+                {
+                    return 1;
+                }
+            }
             return GInputState.mouseButtonsPressed.contains(static_cast<uint8_t>(button)) ? 1 : 0;
         }
 
@@ -207,6 +317,35 @@ namespace Modules::NextDotNet
                        : 0;
         }
 
+        void Input_GetMousePosition(FVec2* outPosition)
+        {
+            if (ImGui::GetCurrentContext() != nullptr)
+            {
+                const ImVec2 position = ImGui::GetIO().MousePos;
+                StoreVec2(outPosition, position.x, position.y);
+                return;
+            }
+            if (auto* engine = NextEngine::GetInstance())
+            {
+                const glm::dvec2 position = engine->GetMousePos();
+                StoreVec2(outPosition, static_cast<float>(position.x), static_cast<float>(position.y));
+                return;
+            }
+            StoreVec2(outPosition, 0.0f, 0.0f);
+        }
+
+        float Input_GetGamepadAxis(int32_t axis)
+        {
+            if (axis < 0 || axis >= static_cast<int32_t>(GInputState.gamepadAxes.size()))
+            {
+                return 0.0f;
+            }
+            constexpr float inverseAxisMax = 1.0f / 32767.0f;
+            return std::clamp(static_cast<float>(GInputState.gamepadAxes[static_cast<size_t>(axis)]) * inverseAxisMax,
+                              -1.0f,
+                              1.0f);
+        }
+
         // --- audio -------------------------------------------------------------------------------
 
         void Audio_PlaySfx(GkStr path, float volume)
@@ -214,6 +353,14 @@ namespace Modules::NextDotNet
             if (auto* engine = NextEngine::GetInstance(); engine != nullptr && engine->GetAudio() != nullptr)
             {
                 engine->GetAudio()->PlaySfx(ToString(path), volume);
+            }
+        }
+
+        void Audio_PlaySfxEx(GkStr path, float volume, uint32_t minIntervalMs)
+        {
+            if (auto* engine = NextEngine::GetInstance(); engine != nullptr && engine->GetAudio() != nullptr)
+            {
+                engine->GetAudio()->PlaySfx(ToString(path), volume, minIntervalMs);
             }
         }
 
@@ -231,6 +378,152 @@ namespace Modules::NextDotNet
             {
                 engine->GetAudio()->StopMusic();
             }
+        }
+
+        void Audio_SetMusicVolume(float volume)
+        {
+            if (auto* engine = NextEngine::GetInstance(); engine != nullptr && engine->GetAudio() != nullptr)
+            {
+                engine->GetAudio()->SetMusicVolume(std::clamp(volume, 0.0f, 1.0f));
+            }
+        }
+
+        // --- physics -----------------------------------------------------------------------------
+
+        GkBool Physics_IsAvailable()
+        {
+            return GetPhysicsEngine() != nullptr ? 1 : 0;
+        }
+
+        void Physics_SetWorldPaused(GkBool paused)
+        {
+            if (NextPhysics* physics = GetPhysicsEngine())
+            {
+                physics->SetPaused(paused != 0);
+            }
+        }
+
+        GkBool Physics_IsWorldPaused()
+        {
+            if (const NextPhysics* physics = GetPhysicsEngine())
+            {
+                return physics->IsPaused() ? 1 : 0;
+            }
+            return 0;
+        }
+
+        uint32_t Physics_CreateSphereBody(const FVec3* position, float radius, GkPhysicsMotionType motionType)
+        {
+            NextPhysics* physics = GetPhysicsEngine();
+            NextMotionType nativeMotion{};
+            const glm::vec3 nativePosition = ToGlm(position);
+            if (!physics || position == nullptr || !IsFinite(nativePosition) || !std::isfinite(radius) ||
+                radius <= 0.0f || !TryConvertMotionType(motionType, nativeMotion))
+            {
+                return NextBodyID::invalidValue;
+            }
+            return physics->CreateSphereBody(nativePosition, radius, nativeMotion).Value();
+        }
+
+        uint32_t Physics_CreateBoxBody(const FVec3* position, const FVec4* rotation, const FVec3* extent,
+                                       GkPhysicsMotionType motionType)
+        {
+            NextPhysics* physics = GetPhysicsEngine();
+            NextMotionType nativeMotion{};
+            const glm::vec3 nativePosition = ToGlm(position);
+            const glm::vec3 nativeExtent = glm::abs(ToGlm(extent));
+            if (!physics || position == nullptr || rotation == nullptr || extent == nullptr ||
+                !IsFinite(nativePosition) || !IsFinite(nativeExtent) ||
+                glm::any(glm::lessThanEqual(nativeExtent, glm::vec3(0.0f))) ||
+                !TryConvertMotionType(motionType, nativeMotion))
+            {
+                return NextBodyID::invalidValue;
+            }
+            return physics->CreateBoxBody(nativePosition, ToGlmQuat(rotation), nativeExtent, nativeMotion).Value();
+        }
+
+        void Physics_RemoveBody(uint32_t bodyId)
+        {
+            if (NextPhysics* physics = GetPhysicsEngine(); HasPhysicsBody(physics, bodyId))
+            {
+                physics->RemoveBody(ToBodyId(bodyId));
+            }
+        }
+
+        void Physics_SetBodyActive(uint32_t bodyId, GkBool active)
+        {
+            if (NextPhysics* physics = GetPhysicsEngine(); HasPhysicsBody(physics, bodyId))
+            {
+                physics->SetBodyActive(ToBodyId(bodyId), active != 0);
+            }
+        }
+
+        void Physics_SetBodyTransform(uint32_t bodyId, const FVec3* position, const FVec4* rotation,
+                                      GkBool resetVelocity)
+        {
+            const glm::vec3 nativePosition = ToGlm(position);
+            if (NextPhysics* physics = GetPhysicsEngine(); position != nullptr && rotation != nullptr &&
+                IsFinite(nativePosition) && HasPhysicsBody(physics, bodyId))
+            {
+                physics->SetBodyTransform(ToBodyId(bodyId), nativePosition, ToGlmQuat(rotation), resetVelocity != 0);
+            }
+        }
+
+        void Physics_MoveKinematicBody(uint32_t bodyId, const FVec3* position, const FVec4* rotation,
+                                       float deltaSeconds)
+        {
+            const glm::vec3 nativePosition = ToGlm(position);
+            if (NextPhysics* physics = GetPhysicsEngine(); position != nullptr && rotation != nullptr &&
+                IsFinite(nativePosition) && std::isfinite(deltaSeconds) && deltaSeconds > 0.0f &&
+                HasPhysicsBody(physics, bodyId))
+            {
+                physics->MoveKinematicBody(ToBodyId(bodyId), nativePosition, ToGlmQuat(rotation), deltaSeconds);
+            }
+        }
+
+        void Physics_SetBodyVelocity(uint32_t bodyId, const FVec3* linearVelocity, const FVec3* angularVelocity)
+        {
+            const glm::vec3 linear = ToGlm(linearVelocity);
+            const glm::vec3 angular = ToGlm(angularVelocity);
+            if (NextPhysics* physics = GetPhysicsEngine(); linearVelocity != nullptr && angularVelocity != nullptr &&
+                IsFinite(linear) && IsFinite(angular) && HasPhysicsBody(physics, bodyId))
+            {
+                physics->SetBodyVelocity(ToBodyId(bodyId), linear, angular);
+            }
+        }
+
+        void Physics_AddForceToBody(uint32_t bodyId, const FVec3* force)
+        {
+            const glm::vec3 nativeForce = ToGlm(force);
+            if (NextPhysics* physics = GetPhysicsEngine(); force != nullptr && IsFinite(nativeForce) &&
+                HasPhysicsBody(physics, bodyId))
+            {
+                physics->AddForceToBody(ToBodyId(bodyId), nativeForce);
+            }
+        }
+
+        void Physics_GetBodyState(uint32_t bodyId, FPhysicsBodyState* outState)
+        {
+            if (outState == nullptr)
+            {
+                return;
+            }
+            *outState = {};
+            outState->Rotation.W = 1.0f;
+
+            NextPhysics* physics = GetPhysicsEngine();
+            FNextPhysicsBody* body = physics ? physics->GetBody(ToBodyId(bodyId)) : nullptr;
+            if (!body)
+            {
+                return;
+            }
+
+            StoreVec3(outState->Position, body->position);
+            StoreQuat(outState->Rotation, body->rotation);
+            StoreVec3(outState->LinearVelocity, body->velocity);
+            outState->MotionType = ConvertMotionType(body->motionType);
+            outState->Active = physics->GetBodyDebugState(ToBodyId(bodyId)).isActive ? 1 : 0;
+            outState->Valid = 1;
         }
 
         // --- immediate-mode UI --------------------------------------------------------------------
@@ -305,6 +598,140 @@ namespace Modules::NextDotNet
             }
         }
 
+        void UI_RequestTexture(GkStr path, GkBool srgb, GkBool persistent, FUiTexture* outTexture)
+        {
+            if (outTexture == nullptr)
+            {
+                return;
+            }
+            *outTexture = FUiTexture{};
+            auto* engine = NextEngine::GetInstance();
+            NextUI::IUserInterface* ui = engine != nullptr ? engine->GetUserInterface() : nullptr;
+            if (ui == nullptr)
+            {
+                return;
+            }
+            const NextUI::FUiTextureHandle texture = ui->RequestUiTexture(
+                ToString(path),
+                srgb != 0,
+                persistent != 0 ? NextUI::EUiTextureLifetime::Persistent : NextUI::EUiTextureLifetime::Transient);
+            outTexture->Handle = static_cast<uint64_t>(texture.textureId);
+            outTexture->PixelSize = FVec2{texture.pixelSize.x, texture.pixelSize.y};
+            outTexture->Valid = texture.valid ? 1 : 0;
+        }
+
+        bool IsValidUiRange(int32_t offset, int32_t count, int32_t total)
+        {
+            return offset >= 0 && count >= 0 && offset <= total && count <= total - offset;
+        }
+
+        void UI_SubmitDrawList(const FUiDrawCommand* commands,
+                               int32_t commandCount,
+                               const FVec2* points,
+                               int32_t pointCount,
+                               const uint8_t* utf8,
+                               int32_t utf8Length)
+        {
+            constexpr int32_t maxCommands = 32768;
+            constexpr int32_t maxPoints = 131072;
+            constexpr int32_t maxTextBytes = 4 * 1024 * 1024;
+            if (ImGui::GetCurrentContext() == nullptr ||
+                commands == nullptr || commandCount <= 0 || commandCount > maxCommands ||
+                pointCount < 0 || pointCount > maxPoints || utf8Length < 0 || utf8Length > maxTextBytes ||
+                (pointCount > 0 && points == nullptr) || (utf8Length > 0 && utf8 == nullptr))
+            {
+                return;
+            }
+
+            static_assert(sizeof(FVec2) == sizeof(ImVec2));
+            static_assert(alignof(FVec2) == alignof(ImVec2));
+            const auto* drawPoints = reinterpret_cast<const ImVec2*>(points);
+
+            for (int32_t index = 0; index < commandCount; ++index)
+            {
+                const FUiDrawCommand& command = commands[index];
+                ImDrawList* drawList = command.Layer == static_cast<int32_t>(EUiDrawLayer::Background)
+                                           ? ImGui::GetBackgroundDrawList()
+                                           : ImGui::GetForegroundDrawList();
+                if (drawList == nullptr)
+                {
+                    continue;
+                }
+
+                const ImVec2 p0(command.P0.X, command.P0.Y);
+                const ImVec2 p1(command.P1.X, command.P1.Y);
+                const float thickness = std::max(0.1f, command.Thickness);
+                switch (static_cast<EUiDrawCommandType>(command.Type))
+                {
+                case EUiDrawCommandType::Line:
+                    drawList->AddLine(p0, p1, command.Color, thickness);
+                    break;
+                case EUiDrawCommandType::Rect:
+                    drawList->AddRect(p0, p1, command.Color, std::max(0.0f, command.Rounding), 0, thickness);
+                    break;
+                case EUiDrawCommandType::RectFilled:
+                    drawList->AddRectFilled(p0, p1, command.Color, std::max(0.0f, command.Rounding));
+                    break;
+                case EUiDrawCommandType::Circle:
+                    drawList->AddCircle(p0,
+                                        std::max(0.0f, command.Radius),
+                                        command.Color,
+                                        std::clamp(command.Flags, 0, 128),
+                                        thickness);
+                    break;
+                case EUiDrawCommandType::CircleFilled:
+                    drawList->AddCircleFilled(p0,
+                                              std::max(0.0f, command.Radius),
+                                              command.Color,
+                                              std::clamp(command.Flags, 0, 128));
+                    break;
+                case EUiDrawCommandType::Polyline:
+                    if (IsValidUiRange(command.DataOffset, command.DataCount, pointCount) && command.DataCount >= 2)
+                    {
+                        drawList->AddPolyline(drawPoints + command.DataOffset,
+                                              command.DataCount,
+                                              command.Color,
+                                              (command.Flags & 1) != 0 ? ImDrawFlags_Closed : ImDrawFlags_None,
+                                              thickness);
+                    }
+                    break;
+                case EUiDrawCommandType::ConvexPolyFilled:
+                    if (IsValidUiRange(command.DataOffset, command.DataCount, pointCount) && command.DataCount >= 3)
+                    {
+                        drawList->AddConvexPolyFilled(drawPoints + command.DataOffset,
+                                                      command.DataCount,
+                                                      command.Color);
+                    }
+                    break;
+                case EUiDrawCommandType::Text:
+                    if (IsValidUiRange(command.DataOffset, command.DataCount, utf8Length) && command.DataCount > 0)
+                    {
+                        const char* begin = reinterpret_cast<const char*>(utf8 + command.DataOffset);
+                        drawList->AddText(nullptr,
+                                          ImGui::GetFontSize() * std::max(0.01f, command.Scale),
+                                          p0,
+                                          command.Color,
+                                          begin,
+                                          begin + command.DataCount);
+                    }
+                    break;
+                case EUiDrawCommandType::Image:
+                    if (command.TextureHandle != 0)
+                    {
+                        drawList->AddImage(static_cast<ImTextureID>(command.TextureHandle),
+                                           p0,
+                                           p1,
+                                           ImVec2(command.Uv0.X, command.Uv0.Y),
+                                           ImVec2(command.Uv1.X, command.Uv1.Y),
+                                           command.Color);
+                    }
+                    break;
+                default:
+                    break;
+                }
+            }
+        }
+
         // --- live scene ---------------------------------------------------------------------------
 
         uint32_t Scene_GetIndicesCount()
@@ -346,7 +773,8 @@ namespace Modules::NextDotNet
                                                               scene.GenerateInstanceId(),
                                                               spec->ModelId,
                                                               spec->MaterialId,
-                                                              spec->Visible != 0);
+                                                              spec->Visible != 0,
+                                                              ToGlmQuat(&spec->Rotation));
             if (!node)
             {
                 return GK_INVALID_NODE_ID;
@@ -418,7 +846,18 @@ namespace Modules::NextDotNet
             if (Assets::Node* node = FindNodeOrWarn(nodeId, "Scene.SetNodeTranslation"))
             {
                 node->SetTranslation(ToGlm(translation));
-                node->RecalcTransform(true);
+            }
+        }
+
+        void Scene_SetNodeRotation(uint32_t nodeId, const FVec4* rotation)
+        {
+            if (rotation == nullptr)
+            {
+                return;
+            }
+            if (Assets::Node* node = FindNodeOrWarn(nodeId, "Scene.SetNodeRotation"))
+            {
+                node->SetRotation(ToGlmQuat(rotation));
             }
         }
 
@@ -431,7 +870,37 @@ namespace Modules::NextDotNet
             if (Assets::Node* node = FindNodeOrWarn(nodeId, "Scene.SetNodeScale"))
             {
                 node->SetScale(ToGlm(scale));
-                node->RecalcTransform(true);
+            }
+        }
+
+        void ApplyNodeTransform(const FNodeTransform& transform, const char* what)
+        {
+            if (Assets::Node* node = FindNodeOrWarn(transform.NodeId, what))
+            {
+                node->SetTransform(ToGlm(&transform.Translation),
+                                   ToGlmQuat(&transform.Rotation),
+                                   ToGlm(&transform.Scale));
+            }
+        }
+
+        void Scene_SetNodeTransform(const FNodeTransform* transform)
+        {
+            if (transform != nullptr)
+            {
+                ApplyNodeTransform(*transform, "Scene.SetNodeTransform");
+            }
+        }
+
+        void Scene_SetNodeTransforms(const FNodeTransform* transforms, int32_t transformCount)
+        {
+            constexpr int32_t maxTransformsPerCall = 1 << 20;
+            if (transforms == nullptr || transformCount <= 0 || transformCount > maxTransformsPerCall)
+            {
+                return;
+            }
+            for (int32_t index = 0; index < transformCount; ++index)
+            {
+                ApplyNodeTransform(transforms[index], "Scene.SetNodeTransforms");
             }
         }
 
@@ -446,6 +915,103 @@ namespace Modules::NextDotNet
                     render->SetVisible(visible != 0);
                 }
             }
+        }
+
+        void Scene_SetNodeVisibleRecursive(uint32_t nodeId, GkBool visible)
+        {
+            if (auto* engine = NextEngine::GetInstance())
+            {
+                Assets::NodeUtils::SetVisibleRecursive(engine->GetScene().GetNodeSharedByInstanceId(nodeId), visible != 0);
+            }
+        }
+
+        GkBool Scene_SetNodeParent(uint32_t childId, uint32_t parentId)
+        {
+            auto* engine = NextEngine::GetInstance();
+            if (engine == nullptr)
+            {
+                return 0;
+            }
+            auto child = engine->GetScene().GetNodeSharedByInstanceId(childId);
+            if (!child)
+            {
+                (void)FindNodeOrWarn(childId, "Scene.SetNodeParent");
+                return 0;
+            }
+            try
+            {
+                if (parentId == GK_INVALID_NODE_ID)
+                {
+                    child->ClearParent();
+                    return 1;
+                }
+                auto parent = engine->GetScene().GetNodeSharedByInstanceId(parentId);
+                if (!parent)
+                {
+                    (void)FindNodeOrWarn(parentId, "Scene.SetNodeParent");
+                    return 0;
+                }
+                child->SetParent(parent);
+                return 1;
+            }
+            catch (const std::exception& exception)
+            {
+                SPDLOG_WARN("[dotnet] Scene.SetNodeParent({}, {}) failed: {}", childId, parentId, exception.what());
+                return 0;
+            }
+        }
+
+        void Scene_SetNodePrimaryMaterial(uint32_t nodeId, uint32_t materialId)
+        {
+            if (auto* engine = NextEngine::GetInstance())
+            {
+                Assets::NodeUtils::SetPrimaryMaterial(engine->GetScene().GetNodeSharedByInstanceId(nodeId), materialId);
+            }
+        }
+
+        void Scene_SetNodeMaterialRecursive(uint32_t nodeId, uint32_t materialId)
+        {
+            if (auto* engine = NextEngine::GetInstance())
+            {
+                Assets::NodeUtils::SetMaterialRecursive(engine->GetScene().GetNodeSharedByInstanceId(nodeId), materialId);
+            }
+        }
+
+        void Scene_SetNodeOutlineFlags(uint32_t nodeId, uint32_t outlineFlags)
+        {
+            if (auto* engine = NextEngine::GetInstance())
+            {
+                Assets::NodeUtils::SetOutlineFlags(engine->GetScene().GetNodeSharedByInstanceId(nodeId), outlineFlags);
+            }
+        }
+
+        uint32_t Scene_AddLambertianMaterial(const FVec3* color)
+        {
+            auto* engine = NextEngine::GetInstance();
+            return engine != nullptr
+                       ? Assets::SceneBuilder::AddLambertianMaterialToScene(engine->GetScene(), ToGlm(color))
+                       : 0;
+        }
+
+        uint32_t Scene_AddDiffuseLightMaterial(const FVec3* color, float intensity)
+        {
+            auto* engine = NextEngine::GetInstance();
+            return engine != nullptr
+                       ? Assets::SceneBuilder::AddDiffuseLightMaterialToScene(engine->GetScene(), ToGlm(color), intensity)
+                       : 0;
+        }
+
+        GkBool Scene_BindPhysicsBody(uint32_t nodeId, uint32_t bodyId, GkNodeMobility mobility)
+        {
+            NextEngine* engine = NextEngine::GetInstance();
+            Runtime::ENodeMobility nativeMobility{};
+            if (!engine || !HasPhysicsBody(engine->GetPhysicsEngine(), bodyId) ||
+                !TryConvertNodeMobility(mobility, nativeMobility))
+            {
+                return 0;
+            }
+            Assets::Node* node = FindNodeOrWarn(nodeId, "Scene.BindPhysicsBody");
+            return node && engine->GetScene().BindPhysicsBody(*node, ToBodyId(bodyId), nativeMobility) ? 1 : 0;
         }
 
         uint32_t Scene_GetEnvironmentNodeId()
@@ -533,7 +1099,8 @@ namespace Modules::NextDotNet
                                                               instanceId,
                                                               spec->ModelId,
                                                               spec->MaterialId,
-                                                              spec->Visible != 0);
+                                                              spec->Visible != 0,
+                                                              ToGlmQuat(&spec->Rotation));
             if (!node)
             {
                 return GK_INVALID_NODE_ID;
@@ -541,6 +1108,32 @@ namespace Modules::NextDotNet
             const uint32_t nodeId = node->GetInstanceId();
             GSceneBuildContext.nodes->push_back(node);
             return nodeId;
+        }
+
+        GkBool SceneBuild_BindPhysicsBody(uint32_t nodeId, uint32_t bodyId, GkNodeMobility mobility)
+        {
+            if (!RequireSceneBuild("SceneBuild.BindPhysicsBody"))
+            {
+                return 0;
+            }
+            NextEngine* engine = NextEngine::GetInstance();
+            Runtime::ENodeMobility nativeMobility{};
+            if (!engine || !HasPhysicsBody(engine->GetPhysicsEngine(), bodyId) ||
+                !TryConvertNodeMobility(mobility, nativeMobility))
+            {
+                return 0;
+            }
+
+            const auto found = std::ranges::find_if(*GSceneBuildContext.nodes, [nodeId](const auto& node)
+            {
+                return node && node->GetInstanceId() == nodeId;
+            });
+            if (found == GSceneBuildContext.nodes->end())
+            {
+                SPDLOG_WARN("[dotnet] SceneBuild.BindPhysicsBody could not find node id {}", nodeId);
+                return 0;
+            }
+            return engine->GetScene().BindPhysicsBody(**found, ToBodyId(bodyId), nativeMobility) ? 1 : 0;
         }
 
         // --- component and node property access ------------------------------------------------------

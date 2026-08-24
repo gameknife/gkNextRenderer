@@ -204,6 +204,35 @@ env.SkyIntensity = 150.0f;
 移动节点只更新场景图，**不会**告诉渲染器重新上传 instance transform。忘了这行，画面上一切静止，
 而且没有任何报错——这是这套 API 最容易浪费时间的一个坑。每帧调一次即可，不用每个节点调。
 
+### 显式物理体
+
+`Physics` 提供跨 CoreCLR / NativeAOT 一致的 primitive-body 门面。body 是不透明 `uint` handle；
+建场景时先创建 body，再把它绑定到 render node：
+
+```csharp
+Vector3 position = new(0.0f, 2.0f, 0.0f);
+Vector3 extent = new(0.25f, 0.25f, 0.25f);
+Vector4 rotation = new(0.0f, 0.0f, 0.0f, 1.0f);
+
+uint bodyId = Physics.CreateBoxBody(in position, in rotation, in extent,
+                                    PhysicsMotionType.Dynamic);
+if (PhysicsBodyIds.IsValid(bodyId) &&
+    !SceneBuild.BindPhysicsBody(nodeId, bodyId, NodeMobility.Dynamic))
+{
+    Physics.RemoveBody(bodyId); // 绑定失败时仍由调用者清理
+}
+```
+
+`BeforeSceneRebuild` 内用 `SceneBuild.BindPhysicsBody`，场景提交后用 `Scene.BindPhysicsBody`。
+绑定成功后 body 由节点 / 场景拥有，节点删除或场景重建时会一起清理。`PhysicsMotionType` 决定 body
+是 static / kinematic / dynamic；`NodeMobility` 决定场景侧同步和 mesh 自动烘焙策略。手工创建的
+primitive body 通常传 `NodeMobility.Dynamic`，即使 body 本身是 kinematic，也可防止提交场景时被
+render mesh 的隐式 body 替换。
+
+运行时可用 `SetBodyActive`、`SetBodyTransform`、`MoveKinematicBody`、`SetBodyVelocity`、
+`AddForceToBody` 和 `GetBodyState`；非 Playing 状态可用 `Physics.SetWorldPaused(true)` 冻结整个世界。
+当前没有 raycast / shape cast、接触查询或碰撞回调，玩法命中仍需自行实现或后续扩绑定。
+
 ## 5. 输入
 
 两种方式，`FlappyCSharp` 用事件式：
@@ -299,6 +328,10 @@ dotnet publish assets/csharp/Flappy/FlappyCSharp/FlappyCSharp.csproj -c Release 
 `OnInit` 重建，要么就得忍受重置。场景不会重建（`BeforeSceneRebuild` 不会重新触发），所以改建场景的
 代码需要重启。
 
+热重载不是应用必须满足的架构要求。大量持有节点 / body handle 和对象池状态的游戏，可以像
+`Brotato3DCSharp` 一样在安装 `NextDotNet` 时设 `.enableHotReload = false`，使用“构建后重启”的简单
+开发循环；不要仅为了保住热重载而给玩法层加入状态序列化和半重建世界协议。
+
 > 注意：引擎启动时的"C# 源码变了就自动重编"只对 sandbox 工程 `GkNext.Game` 生效，它硬编码了那个
 > csproj。改 `FlappyCSharp` 的 `.cs` 会让它误以为需要重编并去编 `GkNext.Game`，你的改动不会生效。
 > 用上面的 `dotnet publish` 或 `gnb build <目标>`。
@@ -338,10 +371,11 @@ GK_DOTNET_ALLOC_BUDGET=8192    # 可调
 
 - **自定义 component**：不能从 C# 定义组件类型挂到节点上
 - **按名字找节点**：只有 `NodeRef.WithComponent<T>()` 和你自己记的 id
-- **加/删组件**：`SceneBuild` 只能建 render node；物理、光源等组件只能在已有它们的节点上调属性
-- **物理与射线检测**：`PhysicsComponent` 的属性可读写，但没有射线检测、施力、碰撞回调等 API
-- **节点父子关系**：不能从 C# 设置 parent
-- **数组 / 枚举 / Mat4 / AssetRef 属性**：反射里有，但还没绑定（生成的
+- **通用加/删组件**：仍没有任意 component 的增删 API；显式 body 可通过
+  `Scene{Build}.BindPhysicsBody` 安装 / 复用 `PhysicsComponent`
+- **物理查询与事件**：已有 primitive body 生命周期、kinematic、速度 / 施力、状态和 world pause，
+  但没有 raycast / shape cast、接触查询或碰撞回调
+- **数组 / 反射 Enum / Mat4 / AssetRef 属性**：反射里有，但还没通用绑定（生成的
   `Components.g.cs` 会在每个组件末尾列出跳过了哪些、为什么）
 - **协程**：没有；用状态机或计时器字段
 - **动画播放控制**：没有绑定
@@ -353,8 +387,11 @@ GK_DOTNET_ALLOC_BUDGET=8192    # 可调
 | 想干的事 | 看哪 |
 |---|---|
 | 完整的应用骨架 | `assets/csharp/Flappy/FlappyCSharp/FlappyCSharpGameInstance.cs` |
+| 完整 C# 玩法纵切 | `assets/csharp/Brotato3D/Brotato3DCSharp/` |
 | 程序化建场景 | 同上，`BeforeSceneRebuild` |
 | HUD | 同上，`OnRenderUI` |
+| C# drawlist 控件 | `assets/csharp/GkNext.Engine/UI/ManagedImGui.cs` |
+| 固定物理池 / kinematic 推挤 | `assets/csharp/Brotato3D/Brotato3DCSharp/BrotatoPhysicsSystem.cs` |
 | 定步长模拟 | 同上，`OnTick` + `FixedStep` |
 | AOT 安全的 JSON 配置 | `assets/csharp/Flappy/FlappyCSharp/FlappyConfig.cs` |
 | 确定性随机 | `assets/csharp/Flappy/FlappyCSharp/FlappyRng.cs` |

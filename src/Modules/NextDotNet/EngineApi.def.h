@@ -48,11 +48,34 @@ GK_API(Input, IsKeyPressed,          GkBool, (GkStr name))
 GK_API(Input, IsMouseButtonDown,     GkBool, (int32_t button))
 GK_API(Input, IsMouseButtonPressed,  GkBool, (int32_t button))
 GK_API(Input, IsGamepadButtonDown,   GkBool, (GkStr name))
+GK_API(Input, GetMousePosition,      void,   (FVec2* outPosition))
+// SDL_GamepadAxis values: left X/Y, right X/Y, left/right trigger are 0..5. The returned value is
+// normalised to [-1, 1]; games own their dead-zone policy.
+GK_API(Input, GetGamepadAxis,        float,  (int32_t axis))
 
 // --- Audio ---------------------------------------------------------------------------------
 GK_API(Audio, PlaySfx,   void, (GkStr path, float volume))   //= volume:1.0f
+GK_API(Audio, PlaySfxEx, void, (GkStr path, float volume, uint32_t minIntervalMs))
 GK_API(Audio, PlayMusic, void, (GkStr path, float volume))   //= volume:1.0f
 GK_API(Audio, StopMusic, void, ())
+GK_API(Audio, SetMusicVolume, void, (float volume))
+
+// --- Physics -------------------------------------------------------------------------------
+// Bodies are opaque uint32 handles owned by the native physics world. Primitive creation stays
+// backend-neutral; no Jolt types cross the ABI. GetBodyState returns the last state published by
+// the async physics step, while mutation calls safely ignore stale/invalid handles.
+GK_API(Physics, IsAvailable,        GkBool,  ())
+GK_API(Physics, SetWorldPaused,     void,    (GkBool paused))
+GK_API(Physics, IsWorldPaused,      GkBool,  ())
+GK_API(Physics, CreateSphereBody,   uint32_t,(const FVec3* position, float radius, GkPhysicsMotionType motionType))
+GK_API(Physics, CreateBoxBody,      uint32_t,(const FVec3* position, const FVec4* rotation, const FVec3* extent, GkPhysicsMotionType motionType))
+GK_API(Physics, RemoveBody,         void,    (uint32_t bodyId))
+GK_API(Physics, SetBodyActive,      void,    (uint32_t bodyId, GkBool active))
+GK_API(Physics, SetBodyTransform,   void,    (uint32_t bodyId, const FVec3* position, const FVec4* rotation, GkBool resetVelocity)) //= resetVelocity:false
+GK_API(Physics, MoveKinematicBody,  void,    (uint32_t bodyId, const FVec3* position, const FVec4* rotation, float deltaSeconds))
+GK_API(Physics, SetBodyVelocity,    void,    (uint32_t bodyId, const FVec3* linearVelocity, const FVec3* angularVelocity))
+GK_API(Physics, AddForceToBody,     void,    (uint32_t bodyId, const FVec3* force))
+GK_API(Physics, GetBodyState,       void,    (uint32_t bodyId, FPhysicsBodyState* outState))
 
 // --- Immediate-mode UI ---------------------------------------------------------------------
 GK_API(UI, Begin,              GkBool, (GkStr name, int32_t flags))                                            //= flags:0
@@ -66,6 +89,11 @@ GK_API(UI, CalcTextSize,       void,   (GkStr text, float scale, FVec2* outSize)
 GK_API(UI, DrawText,           void,   (GkStr text, float x, float y, GkColor32 color, float scale))           //= scale:1.0f
 GK_API(UI, DrawRectFilled,     void,   (float x, float y, float width, float height, GkColor32 color, float rounding))                  //= rounding:0.0f
 GK_API(UI, DrawRect,           void,   (float x, float y, float width, float height, GkColor32 color, float rounding, float thickness)) //= rounding:0.0f, thickness:1.0f
+// Managed code owns immediate-mode widgets and composes a complete draw list. Native receives the
+// three borrowed spans once per frame and only translates primitive commands to ImDrawList; no
+// ImGui window/control/style API is mirrored across the ABI.
+GK_API(UI, RequestTexture,     void,   (GkStr path, GkBool srgb, GkBool persistent, FUiTexture* outTexture)) //= srgb:true, persistent:true
+GK_API(UI, SubmitDrawList,     void,   (const FUiDrawCommand* commands, int32_t commandCount, const FVec2* points, int32_t pointCount, const uint8_t* utf8, int32_t utf8Length))
 
 // --- Live scene ----------------------------------------------------------------------------
 // These address nodes by instance id and are only valid once a scene is committed. Inside the
@@ -86,8 +114,19 @@ GK_API(Scene, RecalcNodeTransform,     void,     (uint32_t nodeId, GkBool full))
 // access below (Node::Translation and friends), and both routes reach the same setter; these exist
 // because gameplay moves nodes every frame and should not pay a property lookup to do it.
 GK_API(Scene, SetNodeTranslation,      void,     (uint32_t nodeId, const FVec3* translation))
+GK_API(Scene, SetNodeRotation,         void,     (uint32_t nodeId, const FVec4* rotation))
 GK_API(Scene, SetNodeScale,            void,     (uint32_t nodeId, const FVec3* scale))
+GK_API(Scene, SetNodeTransform,        void,     (const FNodeTransform* transform))
+GK_API(Scene, SetNodeTransforms,       void,     (const FNodeTransform* transforms, int32_t transformCount))
 GK_API(Scene, SetNodeVisible,          void,     (uint32_t nodeId, GkBool visible))
+GK_API(Scene, SetNodeVisibleRecursive, void,     (uint32_t nodeId, GkBool visible))
+GK_API(Scene, SetNodeParent,           GkBool,   (uint32_t childId, uint32_t parentId))
+GK_API(Scene, SetNodePrimaryMaterial,  void,     (uint32_t nodeId, uint32_t materialId))
+GK_API(Scene, SetNodeMaterialRecursive,void,     (uint32_t nodeId, uint32_t materialId))
+GK_API(Scene, SetNodeOutlineFlags,     void,     (uint32_t nodeId, uint32_t outlineFlags))
+GK_API(Scene, AddLambertianMaterial,   uint32_t, (const FVec3* color))
+GK_API(Scene, AddDiffuseLightMaterial, uint32_t, (const FVec3* color, float intensity)) //= intensity:1.0f
+GK_API(Scene, BindPhysicsBody,          GkBool,   (uint32_t nodeId, uint32_t bodyId, GkNodeMobility mobility))
 // The node carrying the scene's EnvironmentComponent, created if the scene has none — the same
 // on-demand behaviour C++ gameplay gets from Scene::GetEnvSettings(). A procedural scene built
 // from SceneBuild has no environment node, so without this there would be no way for managed code
@@ -104,6 +143,7 @@ GK_API(SceneBuild, AddSphereModel,           uint32_t, (const FVec3* center, flo
 GK_API(SceneBuild, AddLambertianMaterial,    uint32_t, (const FVec3* color))
 GK_API(SceneBuild, AddDiffuseLightMaterial,  uint32_t, (const FVec3* color, float intensity))   //= intensity:1.0f
 GK_API(SceneBuild, AddRenderNode,            uint32_t, (GkStr name, const FRenderNodeSpec* spec))
+GK_API(SceneBuild, BindPhysicsBody,          GkBool,   (uint32_t nodeId, uint32_t bodyId, GkNodeMobility mobility))
 
 // --- Render camera override -----------------------------------------------------------------
 // Not a binding. The engine pulls the camera from the game each frame through

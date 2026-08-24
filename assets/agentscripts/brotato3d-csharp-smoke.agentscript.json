@@ -1,0 +1,39 @@
+{
+  "name": "brotato3d-csharp-smoke",
+  "target": "Brotato3DCSharp",
+  "defaults": {
+    "waitFrames": 3,
+    "stepTimeoutMs": 20000
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "wait-until", "query": "scene.nodeCount", "op": "ge", "value": 1000, "timeoutMs": 20000,
+      "comment": "The SCAD arena and the managed entity pools have committed." },
+    { "type": "wait-frames", "n": 20 },
+    { "type": "key", "code": "RETURN", "action": "press",
+      "comment": "Open the C#-owned character selector through its minimal keyboard navigation." },
+    { "type": "wait-frames", "n": 5 },
+    { "type": "key", "code": "RIGHT", "action": "press" },
+    { "type": "key", "code": "RIGHT", "action": "press",
+      "comment": "Move the managed selector focus to Marksman." },
+    { "type": "wait-frames", "n": 5 },
+    { "type": "screenshot", "ui": true, "out": "screenshots/brotato3d_csharp_character_select" },
+    { "type": "key", "code": "RETURN", "action": "press",
+      "comment": "Select Marksman so the long-range weapon reaches the first wave during the physics smoke window." },
+    { "type": "wait-frames", "n": 90 },
+    { "type": "key", "code": "W", "action": "down" },
+    { "type": "wait-ms", "ms": 650 },
+    { "type": "key", "code": "W", "action": "up" },
+    { "type": "wait-frames", "n": 45 },
+    { "type": "wait-ms", "ms": 14000,
+      "comment": "Let the first wave reach weapon range so enemy deaths exercise the pooled dynamic debris bodies." },
+    { "type": "assert", "query": "engine.status", "op": "eq", "value": "Running" },
+    { "type": "assert", "query": "engine.totalFrames", "op": "ge", "value": 120 },
+    { "type": "screenshot", "ui": true, "out": "screenshots/brotato3d_csharp_gameplay" },
+    { "type": "quit" }
+  ]
+}

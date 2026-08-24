@@ -42,6 +42,16 @@ namespace Modules::NextDotNet
 
         bool TryGetOverrideCamera(Assets::Camera& outCamera) const;
 
+        /// Poll-style gamepad axes are forwarded by the thin application host. They deliberately
+        /// do not add another managed lifecycle hook: gameplay reads the latest values through
+        /// Input.GetGamepadAxis just like keyboard state.
+        void SetGamepadInput(int16_t leftStickX,
+                             int16_t leftStickY,
+                             int16_t rightStickX,
+                             int16_t rightStickY,
+                             int16_t leftTrigger,
+                             int16_t rightTrigger);
+
         bool IsReady() const { return managed_ != nullptr; }
         const char* BackendName() const;
 

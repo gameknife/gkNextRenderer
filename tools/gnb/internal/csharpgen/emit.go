@@ -9,21 +9,28 @@ import (
 // that is not in this table is rejected at parse time — that is deliberate, because the failure
 // mode of a wrong mapping is silent memory corruption under one backend only.
 var rawTypes = map[string]string{
-	"void":            "void",
-	"float":           "float",
-	"double":          "double",
-	"int32_t":         "int",
-	"uint32_t":        "uint",
-	"uint8_t":         "byte",
-	"char":            "byte",
-	"GkStr":           "GkStr",
-	"GkBool":          "int",
-	"GkColor32":       "uint",
-	"FVec2":           "Vector2",
-	"FVec3":           "Vector3",
-	"FVec4":           "Vector4",
-	"FRenderNodeSpec": "RenderNodeSpec",
-	"FCameraOverride": "CameraOverride",
+	"void":                "void",
+	"float":               "float",
+	"double":              "double",
+	"int32_t":             "int",
+	"uint32_t":            "uint",
+	"uint64_t":            "ulong",
+	"uint8_t":             "byte",
+	"char":                "byte",
+	"GkStr":               "GkStr",
+	"GkBool":              "int",
+	"GkColor32":           "uint",
+	"GkPhysicsMotionType": "PhysicsMotionType",
+	"GkNodeMobility":      "NodeMobility",
+	"FVec2":               "Vector2",
+	"FVec3":               "Vector3",
+	"FVec4":               "Vector4",
+	"FRenderNodeSpec":     "RenderNodeSpec",
+	"FNodeTransform":      "NodeTransform",
+	"FPhysicsBodyState":   "PhysicsBodyState",
+	"FUiTexture":          "UiTexture",
+	"FUiDrawCommand":      "UiDrawCommand",
+	"FCameraOverride":     "CameraOverride",
 }
 
 func rawType(param Param) string {
@@ -47,6 +54,7 @@ type friendlyParam struct {
 	PinFrom     string // when set, the managed value to pin with `fixed`
 	PinType     string
 	PinName     string
+	PinSpan     bool // pin a ReadOnlySpan<T> directly rather than the address of one value
 }
 
 // plan is the fully classified form of an entry, ready to emit.
@@ -67,6 +75,31 @@ func buildPlan(entry Entry) (plan, error) {
 
 	for index := 0; index < len(entry.Params); index++ {
 		param := entry.Params[index]
+
+		// A const pointer followed by its element count is a borrowed array. Collapse the pair into
+		// ReadOnlySpan<T>; it is the only friendly, allocation-free shape that works identically
+		// under CoreCLR and NativeAOT. The raw table still carries pointer + count.
+		if param.IsPtr && param.IsConst && index+1 < len(entry.Params) {
+			next := entry.Params[index+1]
+			lowerCountName := strings.ToLower(next.Name)
+			if !next.IsPtr && next.Base == "int32_t" &&
+				(strings.HasSuffix(lowerCountName, "count") || strings.HasSuffix(lowerCountName, "length")) {
+				managed, ok := rawTypes[param.Base]
+				if !ok {
+					return plan{}, fmt.Errorf("unsupported span element type %q in %s.%s", param.Base, entry.Namespace, entry.Name)
+				}
+				result.Params = append(result.Params, friendlyParam{
+					Declaration: "System.ReadOnlySpan<" + managed + "> " + param.Name,
+					Argument:    "p_" + param.Name + ", " + param.Name + ".Length",
+					PinFrom:     param.Name,
+					PinType:     managed,
+					PinName:     "p_" + param.Name,
+					PinSpan:     true,
+				})
+				index++
+				continue
+			}
+		}
 
 		// Buffer-and-capacity pairs collapse into a managed return value.
 		if param.IsPtr && (param.Base == "char" || param.Base == "uint8_t") {
@@ -307,8 +340,12 @@ func emitMethod(entry Entry) (string, error) {
 		if param.PinFrom == "" {
 			continue
 		}
-		fmt.Fprintf(&out, "%sfixed (%s* %s = &%s)\n%s{\n",
-			indent, param.PinType, param.PinName, param.PinFrom, indent)
+		pinSource := "&" + param.PinFrom
+		if param.PinSpan {
+			pinSource = param.PinFrom
+		}
+		fmt.Fprintf(&out, "%sfixed (%s* %s = %s)\n%s{\n",
+			indent, param.PinType, param.PinName, pinSource, indent)
 		indent += "    "
 		closePins++
 	}

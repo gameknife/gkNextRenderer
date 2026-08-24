@@ -59,6 +59,11 @@ GK_API(UI, Begin, GkBool, (GkStr name, int32_t flags))   //= flags:0
 GK_API(UI, GetScreenSize, void, (FVec2* outSize))
 GK_API(UI, DrawText, void, (GkStr text, float x, float y, GkColor32 color, float scale))   //= scale:1.0f
 GK_API(SceneBuild, AddSphereModel, uint32_t, (const FVec3* center, float radius))
+GK_API(Scene, SetNodeTransforms, void, (const FNodeTransform* transforms, int32_t transformCount))
+GK_API(UI, SubmitDrawList, void, (const FUiDrawCommand* commands, int32_t commandCount, const FVec2* points, int32_t pointCount, const uint8_t* utf8, int32_t utf8Length))
+GK_API(Physics, CreateBoxBody, uint32_t, (const FVec3* position, const FVec4* rotation, const FVec3* extent, GkPhysicsMotionType motionType))
+GK_API(Physics, GetBodyState, void, (uint32_t bodyId, FPhysicsBodyState* outState))
+GK_API(SceneBuild, BindPhysicsBody, GkBool, (uint32_t nodeId, uint32_t bodyId, GkNodeMobility mobility))
 GK_API(Paths, GetProjectRoot, int32_t, (char* buffer, int32_t capacity))
 `)
 	if err != nil {
@@ -86,10 +91,20 @@ GK_API(Paths, GetProjectRoot, int32_t, (char* buffer, int32_t capacity))
 		// const pointers become `in` parameters that are pinned at the call site
 		"public static uint AddSphereModel(in Vector3 center, float radius)",
 		"fixed (Vector3* p_center = &center)",
+		// const pointer + count pairs become allocation-free spans and retain the two raw arguments
+		"public static void SetNodeTransforms(System.ReadOnlySpan<NodeTransform> transforms)",
+		"fixed (NodeTransform* p_transforms = transforms)",
+		"Scene_SetNodeTransforms(p_transforms, transforms.Length)",
+		"public static void SubmitDrawList(System.ReadOnlySpan<UiDrawCommand> commands, System.ReadOnlySpan<Vector2> points, System.ReadOnlySpan<byte> utf8)",
+		"UI_SubmitDrawList(p_commands, commands.Length, p_points, points.Length, p_utf8, utf8.Length)",
+		// fixed-width domain enums and out structs stay friendly without weakening the ABI
+		"public static uint CreateBoxBody(in Vector3 position, in Vector4 rotation, in Vector3 extent, PhysicsMotionType motionType)",
+		"public static PhysicsBodyState GetBodyState(uint bodyId)",
+		"public static bool BindPhysicsBody(uint nodeId, uint bodyId, NodeMobility mobility)",
 		// a buffer/capacity pair becomes a string return with a probe call
 		"public static string GetProjectRoot()",
 		"int required = Api.Table->Paths_GetProjectRoot(null, 0);",
-		"EntryCount = 6",
+		"EntryCount = 11",
 	}
 	for _, want := range wants {
 		if !strings.Contains(generated, want) {

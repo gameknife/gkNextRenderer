@@ -108,3 +108,52 @@ TEST_CASE("input bindings are safe without an engine", "[Unit][DotNet]")
     GInputState.Reset();
     CHECK(api.Input_IsKeyDown(space) == 0);
 }
+
+TEST_CASE("managed pressed input survives only its engine frame", "[Unit][DotNet]")
+{
+    GInputState.Reset();
+    GInputState.BeginPressedFrame(41);
+    GInputState.keysPressed.insert(SDLK_RETURN);
+    GInputState.mouseButtonsPressed.insert(SDL_BUTTON_LEFT);
+
+    // Tick and UI in one engine frame both see the same edges.
+    GInputState.DiscardPressedBefore(41);
+    CHECK(GInputState.keysPressed.contains(SDLK_RETURN));
+    CHECK(GInputState.mouseButtonsPressed.contains(SDL_BUTTON_LEFT));
+
+    // When UI was suppressed and did not call ClearPressed, the next frame expires them.
+    GInputState.DiscardPressedBefore(42);
+    CHECK(GInputState.keysPressed.empty());
+    CHECK(GInputState.mouseButtonsPressed.empty());
+    CHECK(GInputState.pressedFrame == FInputState::invalidPressedFrame);
+
+    // A new event arriving before Tick clears stale edges but preserves the current one.
+    GInputState.BeginPressedFrame(43);
+    GInputState.keysPressed.insert(SDLK_SPACE);
+    GInputState.BeginPressedFrame(44);
+    GInputState.keysPressed.insert(SDLK_ESCAPE);
+    CHECK_FALSE(GInputState.keysPressed.contains(SDLK_SPACE));
+    CHECK(GInputState.keysPressed.contains(SDLK_ESCAPE));
+}
+
+TEST_CASE("physics bindings are safe without an engine", "[Unit][DotNet]")
+{
+    const FEngineApi api = BuildEngineApi();
+    constexpr uint32_t invalidBodyId = 0xffffffffu;
+    const FVec3 position{0.0f, 1.0f, 0.0f};
+
+    CHECK(api.Physics_IsAvailable() == 0);
+    CHECK(api.Physics_IsWorldPaused() == 0);
+    CHECK(api.Physics_CreateSphereBody(&position, 0.5f, GkPhysicsMotionType::Dynamic) ==
+          invalidBodyId);
+
+    FPhysicsBodyState state{};
+    api.Physics_GetBodyState(invalidBodyId, &state);
+    CHECK(state.Valid == 0);
+    CHECK(state.Rotation.W == 1.0f);
+
+    // All mutations are explicitly no-ops for stale handles; none may reach the backend with an
+    // invalid Jolt id or require an installed engine.
+    api.Physics_SetBodyActive(invalidBodyId, 1);
+    api.Physics_RemoveBody(invalidBodyId);
+}

@@ -234,6 +234,10 @@ namespace Assets
         void ClearSkinUpdateRequests();
         const std::vector<uint32_t>& SkinUpdateRequests() const { return skinUpdateRequests_; }
         void EnsureNodePhysicsBody(Node* node);
+        /// Gives a node ownership of an explicitly created primitive body. Any implicit mesh body
+        /// previously created for the node is removed first. This is also valid for a detached
+        /// build-time node, before AddNode binds it to the scene.
+        bool BindPhysicsBody(Node& node, NextBodyID bodyId, Runtime::ENodeMobility mobility);
         std::shared_ptr<Node> RemoveNodeByInstanceId(uint32_t id);
         std::vector<std::shared_ptr<Node>> RemoveNodesByInstanceId(std::span<const uint32_t> ids);
         std::shared_ptr<Node> GetNodeSharedByInstanceId(uint32_t id) const;

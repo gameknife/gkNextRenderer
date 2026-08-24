@@ -7,6 +7,7 @@
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
 
+#include <limits>
 #include <unordered_set>
 
 // Native side of the binding surface. The table itself is expanded from EngineApi.def.h; what this
@@ -16,22 +17,45 @@
 
 namespace Modules::NextDotNet
 {
-    /// Per-frame input state. Kept here rather than queried from SDL so "pressed this frame" has
-    /// the same clear-at-end-of-tick semantics scripts relied on under QuickJS.
+    /// Per-frame input state. Kept here rather than queried from SDL so gameplay Tick and its
+    /// later UI hook can observe the same edge. The frame stamp also expires edges when UI is
+    /// deliberately suppressed (for example, a screenshot without UI).
     struct FInputState
     {
+        static constexpr uint32_t invalidPressedFrame = std::numeric_limits<uint32_t>::max();
+
         std::unordered_set<SDL_Keycode> keysDown;
         std::unordered_set<SDL_Keycode> keysPressed;
         std::unordered_set<uint8_t> mouseButtonsDown;
         std::unordered_set<uint8_t> mouseButtonsPressed;
         std::unordered_set<uint8_t> gamepadButtonsDown;
         std::unordered_set<uint8_t> gamepadButtonsPressed;
+        std::array<int16_t, 6> gamepadAxes{};
+        uint32_t pressedFrame = invalidPressedFrame;
 
         void ClearPressed()
         {
             keysPressed.clear();
             mouseButtonsPressed.clear();
             gamepadButtonsPressed.clear();
+            pressedFrame = invalidPressedFrame;
+        }
+
+        void BeginPressedFrame(uint32_t frame)
+        {
+            if (pressedFrame != frame)
+            {
+                ClearPressed();
+                pressedFrame = frame;
+            }
+        }
+
+        void DiscardPressedBefore(uint32_t frame)
+        {
+            if (pressedFrame != invalidPressedFrame && pressedFrame != frame)
+            {
+                ClearPressed();
+            }
         }
 
         void Reset()
@@ -39,6 +63,7 @@ namespace Modules::NextDotNet
             keysDown.clear();
             mouseButtonsDown.clear();
             gamepadButtonsDown.clear();
+            gamepadAxes.fill(0);
             ClearPressed();
         }
     };

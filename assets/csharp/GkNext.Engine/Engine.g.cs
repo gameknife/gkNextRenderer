@@ -33,9 +33,25 @@ namespace GkNext.Interop
         public delegate* unmanaged<int, int> Input_IsMouseButtonDown;
         public delegate* unmanaged<int, int> Input_IsMouseButtonPressed;
         public delegate* unmanaged<GkStr, int> Input_IsGamepadButtonDown;
+        public delegate* unmanaged<Vector2*, void> Input_GetMousePosition;
+        public delegate* unmanaged<int, float> Input_GetGamepadAxis;
         public delegate* unmanaged<GkStr, float, void> Audio_PlaySfx;
+        public delegate* unmanaged<GkStr, float, uint, void> Audio_PlaySfxEx;
         public delegate* unmanaged<GkStr, float, void> Audio_PlayMusic;
         public delegate* unmanaged<void> Audio_StopMusic;
+        public delegate* unmanaged<float, void> Audio_SetMusicVolume;
+        public delegate* unmanaged<int> Physics_IsAvailable;
+        public delegate* unmanaged<int, void> Physics_SetWorldPaused;
+        public delegate* unmanaged<int> Physics_IsWorldPaused;
+        public delegate* unmanaged<Vector3*, float, PhysicsMotionType, uint> Physics_CreateSphereBody;
+        public delegate* unmanaged<Vector3*, Vector4*, Vector3*, PhysicsMotionType, uint> Physics_CreateBoxBody;
+        public delegate* unmanaged<uint, void> Physics_RemoveBody;
+        public delegate* unmanaged<uint, int, void> Physics_SetBodyActive;
+        public delegate* unmanaged<uint, Vector3*, Vector4*, int, void> Physics_SetBodyTransform;
+        public delegate* unmanaged<uint, Vector3*, Vector4*, float, void> Physics_MoveKinematicBody;
+        public delegate* unmanaged<uint, Vector3*, Vector3*, void> Physics_SetBodyVelocity;
+        public delegate* unmanaged<uint, Vector3*, void> Physics_AddForceToBody;
+        public delegate* unmanaged<uint, PhysicsBodyState*, void> Physics_GetBodyState;
         public delegate* unmanaged<GkStr, int, int> UI_Begin;
         public delegate* unmanaged<void> UI_End;
         public delegate* unmanaged<GkStr, void> UI_Text;
@@ -47,6 +63,8 @@ namespace GkNext.Interop
         public delegate* unmanaged<GkStr, float, float, uint, float, void> UI_DrawText;
         public delegate* unmanaged<float, float, float, float, uint, float, void> UI_DrawRectFilled;
         public delegate* unmanaged<float, float, float, float, uint, float, float, void> UI_DrawRect;
+        public delegate* unmanaged<GkStr, int, int, UiTexture*, void> UI_RequestTexture;
+        public delegate* unmanaged<UiDrawCommand*, int, Vector2*, int, byte*, int, void> UI_SubmitDrawList;
         public delegate* unmanaged<uint> Scene_GetIndicesCount;
         public delegate* unmanaged<GkStr, uint> Scene_FindNodeIdWithComponent;
         public delegate* unmanaged<GkStr, RenderNodeSpec*, uint> Scene_AddRenderNode;
@@ -54,14 +72,26 @@ namespace GkNext.Interop
         public delegate* unmanaged<void> Scene_MarkTransformDirty;
         public delegate* unmanaged<uint, int, void> Scene_RecalcNodeTransform;
         public delegate* unmanaged<uint, Vector3*, void> Scene_SetNodeTranslation;
+        public delegate* unmanaged<uint, Vector4*, void> Scene_SetNodeRotation;
         public delegate* unmanaged<uint, Vector3*, void> Scene_SetNodeScale;
+        public delegate* unmanaged<NodeTransform*, void> Scene_SetNodeTransform;
+        public delegate* unmanaged<NodeTransform*, int, void> Scene_SetNodeTransforms;
         public delegate* unmanaged<uint, int, void> Scene_SetNodeVisible;
+        public delegate* unmanaged<uint, int, void> Scene_SetNodeVisibleRecursive;
+        public delegate* unmanaged<uint, uint, int> Scene_SetNodeParent;
+        public delegate* unmanaged<uint, uint, void> Scene_SetNodePrimaryMaterial;
+        public delegate* unmanaged<uint, uint, void> Scene_SetNodeMaterialRecursive;
+        public delegate* unmanaged<uint, uint, void> Scene_SetNodeOutlineFlags;
+        public delegate* unmanaged<Vector3*, uint> Scene_AddLambertianMaterial;
+        public delegate* unmanaged<Vector3*, float, uint> Scene_AddDiffuseLightMaterial;
+        public delegate* unmanaged<uint, uint, NodeMobility, int> Scene_BindPhysicsBody;
         public delegate* unmanaged<uint> Scene_GetEnvironmentNodeId;
         public delegate* unmanaged<Vector3*, Vector3*, uint> SceneBuild_AddBoxModel;
         public delegate* unmanaged<Vector3*, float, uint> SceneBuild_AddSphereModel;
         public delegate* unmanaged<Vector3*, uint> SceneBuild_AddLambertianMaterial;
         public delegate* unmanaged<Vector3*, float, uint> SceneBuild_AddDiffuseLightMaterial;
         public delegate* unmanaged<GkStr, RenderNodeSpec*, uint> SceneBuild_AddRenderNode;
+        public delegate* unmanaged<uint, uint, NodeMobility, int> SceneBuild_BindPhysicsBody;
         public delegate* unmanaged<byte*, int, int> Paths_GetProjectRoot;
         public delegate* unmanaged<byte*, int, int> Paths_GetOutputDir;
         public delegate* unmanaged<GkStr, byte*, int, int> Assets_ReadFile;
@@ -91,7 +121,7 @@ namespace GkNext.Interop
     /// <summary>Number of bindings in the table, checked against the native side.</summary>
     public static class EngineApiInfo
     {
-        public const int EntryCount = 68;
+        public const int EntryCount = 98;
     }
 }
 
@@ -235,6 +265,18 @@ namespace GkNext
                 Utf8Arena.Release(mark);
             }
         }
+
+        public static Vector2 GetMousePosition()
+        {
+            Vector2 result = default;
+            Api.Table->Input_GetMousePosition(&result);
+            return result;
+        }
+
+        public static float GetGamepadAxis(int axis)
+        {
+            return Api.Table->Input_GetGamepadAxis(axis);
+        }
     }
 
     public static unsafe class Audio
@@ -245,6 +287,19 @@ namespace GkNext
             try
             {
                 Api.Table->Audio_PlaySfx(Utf8Arena.Encode(path), volume);
+            }
+            finally
+            {
+                Utf8Arena.Release(mark);
+            }
+        }
+
+        public static void PlaySfxEx(string path, float volume, uint minIntervalMs)
+        {
+            var mark = Utf8Arena.Mark();
+            try
+            {
+                Api.Table->Audio_PlaySfxEx(Utf8Arena.Encode(path), volume, minIntervalMs);
             }
             finally
             {
@@ -268,6 +323,109 @@ namespace GkNext
         public static void StopMusic()
         {
             Api.Table->Audio_StopMusic();
+        }
+
+        public static void SetMusicVolume(float volume)
+        {
+            Api.Table->Audio_SetMusicVolume(volume);
+        }
+    }
+
+    public static unsafe class Physics
+    {
+        public static bool IsAvailable()
+        {
+            return Api.Table->Physics_IsAvailable() != 0;
+        }
+
+        public static void SetWorldPaused(bool paused)
+        {
+            Api.Table->Physics_SetWorldPaused(paused ? 1 : 0);
+        }
+
+        public static bool IsWorldPaused()
+        {
+            return Api.Table->Physics_IsWorldPaused() != 0;
+        }
+
+        public static uint CreateSphereBody(in Vector3 position, float radius, PhysicsMotionType motionType)
+        {
+            fixed (Vector3* p_position = &position)
+            {
+                return Api.Table->Physics_CreateSphereBody(p_position, radius, motionType);
+            }
+        }
+
+        public static uint CreateBoxBody(in Vector3 position, in Vector4 rotation, in Vector3 extent, PhysicsMotionType motionType)
+        {
+            fixed (Vector3* p_position = &position)
+            {
+                fixed (Vector4* p_rotation = &rotation)
+                {
+                    fixed (Vector3* p_extent = &extent)
+                    {
+                        return Api.Table->Physics_CreateBoxBody(p_position, p_rotation, p_extent, motionType);
+                    }
+                }
+            }
+        }
+
+        public static void RemoveBody(uint bodyId)
+        {
+            Api.Table->Physics_RemoveBody(bodyId);
+        }
+
+        public static void SetBodyActive(uint bodyId, bool active)
+        {
+            Api.Table->Physics_SetBodyActive(bodyId, active ? 1 : 0);
+        }
+
+        public static void SetBodyTransform(uint bodyId, in Vector3 position, in Vector4 rotation, bool resetVelocity = false)
+        {
+            fixed (Vector3* p_position = &position)
+            {
+                fixed (Vector4* p_rotation = &rotation)
+                {
+                    Api.Table->Physics_SetBodyTransform(bodyId, p_position, p_rotation, resetVelocity ? 1 : 0);
+                }
+            }
+        }
+
+        public static void MoveKinematicBody(uint bodyId, in Vector3 position, in Vector4 rotation, float deltaSeconds)
+        {
+            fixed (Vector3* p_position = &position)
+            {
+                fixed (Vector4* p_rotation = &rotation)
+                {
+                    Api.Table->Physics_MoveKinematicBody(bodyId, p_position, p_rotation, deltaSeconds);
+                }
+            }
+        }
+
+        public static void SetBodyVelocity(uint bodyId, in Vector3 linearVelocity, in Vector3 angularVelocity)
+        {
+            fixed (Vector3* p_linearVelocity = &linearVelocity)
+            {
+                fixed (Vector3* p_angularVelocity = &angularVelocity)
+                {
+                    Api.Table->Physics_SetBodyVelocity(bodyId, p_linearVelocity, p_angularVelocity);
+                }
+            }
+        }
+
+        public static void AddForceToBody(uint bodyId, in Vector3 force)
+        {
+            fixed (Vector3* p_force = &force)
+            {
+                Api.Table->Physics_AddForceToBody(bodyId, p_force);
+            }
+        }
+
+        public static PhysicsBodyState GetBodyState(uint bodyId)
+        {
+            PhysicsBodyState result = default;
+            Api.Table->Physics_GetBodyState(bodyId, &result);
+            return result;
         }
     }
 
@@ -365,6 +523,35 @@ namespace GkNext
         {
             Api.Table->UI_DrawRect(x, y, width, height, color.ToPacked(), rounding, thickness);
         }
+
+        public static UiTexture RequestTexture(string path, bool srgb = true, bool persistent = true)
+        {
+            var mark = Utf8Arena.Mark();
+            try
+            {
+                UiTexture result = default;
+                Api.Table->UI_RequestTexture(Utf8Arena.Encode(path), srgb ? 1 : 0, persistent ? 1 : 0, &result);
+                return result;
+            }
+            finally
+            {
+                Utf8Arena.Release(mark);
+            }
+        }
+
+        public static void SubmitDrawList(System.ReadOnlySpan<UiDrawCommand> commands, System.ReadOnlySpan<Vector2> points, System.ReadOnlySpan<byte> utf8)
+        {
+            fixed (UiDrawCommand* p_commands = commands)
+            {
+                fixed (Vector2* p_points = points)
+                {
+                    fixed (byte* p_utf8 = utf8)
+                    {
+                        Api.Table->UI_SubmitDrawList(p_commands, commands.Length, p_points, points.Length, p_utf8, utf8.Length);
+                    }
+                }
+            }
+        }
     }
 
     public static unsafe class Scene
@@ -426,6 +613,14 @@ namespace GkNext
             }
         }
 
+        public static void SetNodeRotation(uint nodeId, in Vector4 rotation)
+        {
+            fixed (Vector4* p_rotation = &rotation)
+            {
+                Api.Table->Scene_SetNodeRotation(nodeId, p_rotation);
+            }
+        }
+
         public static void SetNodeScale(uint nodeId, in Vector3 scale)
         {
             fixed (Vector3* p_scale = &scale)
@@ -434,9 +629,71 @@ namespace GkNext
             }
         }
 
+        public static void SetNodeTransform(in NodeTransform transform)
+        {
+            fixed (NodeTransform* p_transform = &transform)
+            {
+                Api.Table->Scene_SetNodeTransform(p_transform);
+            }
+        }
+
+        public static void SetNodeTransforms(System.ReadOnlySpan<NodeTransform> transforms)
+        {
+            fixed (NodeTransform* p_transforms = transforms)
+            {
+                Api.Table->Scene_SetNodeTransforms(p_transforms, transforms.Length);
+            }
+        }
+
         public static void SetNodeVisible(uint nodeId, bool visible)
         {
             Api.Table->Scene_SetNodeVisible(nodeId, visible ? 1 : 0);
+        }
+
+        public static void SetNodeVisibleRecursive(uint nodeId, bool visible)
+        {
+            Api.Table->Scene_SetNodeVisibleRecursive(nodeId, visible ? 1 : 0);
+        }
+
+        public static bool SetNodeParent(uint childId, uint parentId)
+        {
+            return Api.Table->Scene_SetNodeParent(childId, parentId) != 0;
+        }
+
+        public static void SetNodePrimaryMaterial(uint nodeId, uint materialId)
+        {
+            Api.Table->Scene_SetNodePrimaryMaterial(nodeId, materialId);
+        }
+
+        public static void SetNodeMaterialRecursive(uint nodeId, uint materialId)
+        {
+            Api.Table->Scene_SetNodeMaterialRecursive(nodeId, materialId);
+        }
+
+        public static void SetNodeOutlineFlags(uint nodeId, uint outlineFlags)
+        {
+            Api.Table->Scene_SetNodeOutlineFlags(nodeId, outlineFlags);
+        }
+
+        public static uint AddLambertianMaterial(in Vector3 color)
+        {
+            fixed (Vector3* p_color = &color)
+            {
+                return Api.Table->Scene_AddLambertianMaterial(p_color);
+            }
+        }
+
+        public static uint AddDiffuseLightMaterial(in Vector3 color, float intensity = 1.0f)
+        {
+            fixed (Vector3* p_color = &color)
+            {
+                return Api.Table->Scene_AddDiffuseLightMaterial(p_color, intensity);
+            }
+        }
+
+        public static bool BindPhysicsBody(uint nodeId, uint bodyId, NodeMobility mobility)
+        {
+            return Api.Table->Scene_BindPhysicsBody(nodeId, bodyId, mobility) != 0;
         }
 
         public static uint GetEnvironmentNodeId()
@@ -496,6 +753,11 @@ namespace GkNext
             {
                 Utf8Arena.Release(mark);
             }
+        }
+
+        public static bool BindPhysicsBody(uint nodeId, uint bodyId, NodeMobility mobility)
+        {
+            return Api.Table->SceneBuild_BindPhysicsBody(nodeId, bodyId, mobility) != 0;
         }
     }
 

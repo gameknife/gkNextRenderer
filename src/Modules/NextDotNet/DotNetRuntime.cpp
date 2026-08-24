@@ -98,10 +98,13 @@ namespace Modules::NextDotNet
             return;
         }
 
+        const char* hotReloadStatus = !config_.enableHotReload ? "off"
+                                      : host_->SupportsHotReload() ? "on"
+                                                                  : "unavailable";
         SPDLOG_INFO("[dotnet] {} host ready ({} bindings, hot reload {})",
                     host_->BackendName(),
                     GK_ENGINE_API_COUNT,
-                    host_->SupportsHotReload() ? "on" : "unavailable");
+                    hotReloadStatus);
 
         gameAssemblyPath_ = ResolveGameAssemblyPath();
         if (config_.gameAssembly.empty())
@@ -132,14 +135,14 @@ namespace Modules::NextDotNet
 
     void DotNetRuntime::Tick(double deltaSeconds)
     {
+        // OnRenderUI normally clears edges after both managed consumers have seen them. If that
+        // hook was suppressed for a UI-free screenshot, expire the previous frame here without
+        // erasing any input event that already arrived for the current frame.
+        GInputState.DiscardPressedBefore(engine_.GetTotalFrames());
         if (managed_ != nullptr)
         {
             managed_->Tick(deltaSeconds);
         }
-
-        // Cleared after the script has seen the frame, so "pressed this frame" means the same thing
-        // it did under QuickJS.
-        GInputState.ClearPressed();
 
         TickHotReload(deltaSeconds);
     }
@@ -148,12 +151,14 @@ namespace Modules::NextDotNet
     {
         FInputEvent forwarded{};
         bool forward = false;
+        const uint32_t eventFrame = engine_.GetTotalFrames();
 
         switch (event.type)
         {
         case SDL_EVENT_KEY_DOWN:
             if (!event.key.repeat)
             {
+                GInputState.BeginPressedFrame(eventFrame);
                 GInputState.keysPressed.insert(event.key.key);
             }
             GInputState.keysDown.insert(event.key.key);
@@ -171,6 +176,7 @@ namespace Modules::NextDotNet
             break;
 
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            GInputState.BeginPressedFrame(eventFrame);
             GInputState.mouseButtonsPressed.insert(event.button.button);
             GInputState.mouseButtonsDown.insert(event.button.button);
             forwarded.Type = static_cast<int32_t>(EInputEventType::MouseButtonDown);
@@ -186,6 +192,7 @@ namespace Modules::NextDotNet
             break;
 
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+            GInputState.BeginPressedFrame(eventFrame);
             GInputState.gamepadButtonsPressed.insert(event.gbutton.button);
             GInputState.gamepadButtonsDown.insert(event.gbutton.button);
             forwarded.Type = static_cast<int32_t>(EInputEventType::GamepadButtonDown);
@@ -216,7 +223,15 @@ namespace Modules::NextDotNet
         {
             return false;
         }
-        return managed_->Lifecycle(static_cast<int32_t>(hook), deltaSeconds) != 0;
+        const bool handled = managed_->Lifecycle(static_cast<int32_t>(hook), deltaSeconds) != 0;
+        if (hook == EScriptHook::OnRenderUI)
+        {
+            // UI is the last managed consumer in a rendered frame. Keeping edges alive through
+            // this hook lets C#-owned widgets observe the same click that gameplay saw in Tick;
+            // clearing in Tick made every managed DrawList button miss its press.
+            GInputState.ClearPressed();
+        }
+        return handled;
     }
 
     bool DotNetRuntime::CallBeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
@@ -266,6 +281,23 @@ namespace Modules::NextDotNet
         outCamera.ModelView = glm::lookAt(position, target, up);
         outCamera.FieldOfView = camera.FieldOfView;
         return true;
+    }
+
+    void DotNetRuntime::SetGamepadInput(int16_t leftStickX,
+                                        int16_t leftStickY,
+                                        int16_t rightStickX,
+                                        int16_t rightStickY,
+                                        int16_t leftTrigger,
+                                        int16_t rightTrigger)
+    {
+        GInputState.gamepadAxes = {
+            leftStickX,
+            leftStickY,
+            rightStickX,
+            rightStickY,
+            leftTrigger,
+            rightTrigger,
+        };
     }
 
     const char* DotNetRuntime::BackendName() const
