@@ -3,6 +3,18 @@ find_package(SDL3 CONFIG REQUIRED)
 
 include(${CMAKE_CURRENT_LIST_DIR}/SetupVulkan.cmake)
 
+# A Tracy upgrade changes the ABI exposed by TracyClient.hpp, but the client
+# is installed by vcpkg outside the source tree. Track the overlay inputs so
+# Ninja re-runs CMake when the package is upgraded instead of linking old
+# engine objects against the new TracyClient.lib.
+set(GK_TRACY_OVERLAY_DIR "${CMAKE_SOURCE_DIR}/cmake/vcpkg-overlays/tracy")
+file(GLOB GK_TRACY_OVERLAY_INPUTS
+    "${GK_TRACY_OVERLAY_DIR}/vcpkg.json"
+    "${GK_TRACY_OVERLAY_DIR}/portfile.cmake"
+    "${GK_TRACY_OVERLAY_DIR}/*.patch"
+)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GK_TRACY_OVERLAY_INPUTS})
+
 if(NOT IOS AND NOT ANDROID)
     find_package(cpptrace CONFIG REQUIRED)
 endif()
@@ -26,7 +38,18 @@ if(GK_ENABLE_TRACY AND NOT IOS)
         message(STATUS "Tracy package not found; disabling GK_ENABLE_TRACY")
         set(GK_ENABLE_TRACY OFF CACHE BOOL "Enable Tracy CPU/GPU profiling client" FORCE)
     else()
-        message(STATUS "Tracy profiling client enabled")
+        if(DEFINED TRACY_VERSION_STRING AND NOT TRACY_VERSION_STRING STREQUAL "")
+            string(MAKE_C_IDENTIFIER "${TRACY_VERSION_STRING}" GK_TRACY_VERSION_IDENTIFIER)
+            # The definition is intentionally unused. Its value is part of
+            # every Tracy consumer's compile command, so a package-version
+            # change invalidates objects compiled against the old ABI.
+            set_property(TARGET Tracy::TracyClient APPEND PROPERTY
+                INTERFACE_COMPILE_DEFINITIONS
+                "GK_TRACY_PACKAGE_VERSION_${GK_TRACY_VERSION_IDENTIFIER}")
+            message(STATUS "Tracy profiling client enabled (${TRACY_VERSION_STRING})")
+        else()
+            message(STATUS "Tracy profiling client enabled")
+        endif()
     endif()
 endif()
 
