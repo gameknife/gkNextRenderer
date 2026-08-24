@@ -10,10 +10,11 @@ add_executable(gkNextMotionBenchmark
     ${GK_APPLICATION_COMMON_SOURCES}
     ${GK_DESKTOP_MAIN_SOURCE}
 )
-# Intentionally mirrors the minimal renderer module footprint. DemoScenes need no asset loaders.
+# DemoScenes need no asset loaders, but the benchmark overlay requires the ImGui backend.
 gk_configure_application(gkNextMotionBenchmark MINIMAL_LINK MODULES
     SceneContent
     NextValidation
+    NextUI
     NextCapture
     NextPhysics
     NextTemporalUpscaler

@@ -86,6 +86,11 @@ namespace
 void DrawBenchmarkStatsOverlay(NextEngine& engine)
 {
     const Assets::Scene& scene = engine.GetScene();
+    const Vulkan::VulkanBaseRenderer& renderer = engine.GetRenderer();
+    const std::string rendererName = Vulkan::GetRendererName(renderer.CurrentLogicRendererType());
+    const Rendering::Upscaler::EUpscalerType activeUpscalerType = renderer.ActiveUpscalerType();
+    const auto& upscalerInfo = Rendering::Upscaler::GetUpscalerTypeInfo(
+        static_cast<uint32_t>(activeUpscalerType));
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(
         ImVec2(viewport->GetCenter().x, viewport->Pos.y + 12.0f),
@@ -103,13 +108,36 @@ void DrawBenchmarkStatsOverlay(NextEngine& engine)
 
     if (ImGui::Begin("##BenchmarkStats", nullptr, flags))
     {
-        ImGui::Text(
-            "FPS %.0f  |  Nodes %zu  |  Models %zu  |  Materials %zu  |  Triangles %u",
+        const auto DrawCenteredText = [](const std::string& text)
+        {
+            const float textWidth = ImGui::CalcTextSize(text.c_str()).x;
+            const float availableWidth = ImGui::GetContentRegionAvail().x;
+            if (availableWidth > textWidth)
+            {
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (availableWidth - textWidth) * 0.5f);
+            }
+            ImGui::TextUnformatted(text.c_str());
+        };
+
+        std::string renderInfo;
+        if (activeUpscalerType == Rendering::Upscaler::EUpscalerType::None)
+        {
+            renderInfo = fmt::format("{} | None", rendererName);
+        }
+        else
+        {
+            const auto& upscaleModeInfo = Rendering::Upscaler::GetUpscaleModeInfo(
+                renderer.EffectiveSuperResolutionMode());
+            renderInfo = fmt::format("{} | {} ({})", rendererName, upscalerInfo.name, upscaleModeInfo.name);
+        }
+        DrawCenteredText(renderInfo);
+        DrawCenteredText(fmt::format(
+            "FPS {:.0f}  |  Nodes {}  |  Models {}  |  Materials {}  |  Triangles {}",
             engine.GetFrameRate(),
             scene.Nodes().size(),
             scene.Models().size(),
             scene.Materials().size(),
-            scene.GetTriangleCount());
+            scene.GetTriangleCount()));
     }
     ImGui::End();
 }

@@ -467,6 +467,24 @@ void BenchmarkGameInstance::ApplyCurrentRunSettings()
             SPDLOG_WARN("[Benchmark] Failed to set CVar {}={}: {}", name, value, error);
         }
     }
+
+    const bool softwareTracingNativeTAAU =
+        GetEngine().GetRenderer().CurrentLogicRendererType() == Vulkan::ERT_SoftwareTracing &&
+        GetEngine().GetUserSettings().UpscalerType ==
+            static_cast<int32_t>(Rendering::Upscaler::EUpscalerType::NativeTAAU);
+    if (softwareTracingNativeTAAU && !GetEngine().GetUserSettings().TemporalUpscalerPostFilter)
+    {
+        std::string error;
+        if (cvars.SetValueFromString("r.upscaler.postFilter", "1", NextCVar::ECVarSetBy::Console, &error))
+        {
+            GetEngine().GetRenderer().RequestRecreateSwapChain();
+            SPDLOG_INFO("[Benchmark] Enabled Native TAAU post-filter for SoftwareTracing");
+        }
+        else
+        {
+            SPDLOG_WARN("[Benchmark] Failed to enable Native TAAU post-filter: {}", error);
+        }
+    }
 }
 
 void BenchmarkGameInstance::LoadCurrentRun()

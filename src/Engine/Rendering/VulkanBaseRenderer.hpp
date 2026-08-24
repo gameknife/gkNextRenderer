@@ -352,6 +352,12 @@ namespace Vulkan
         }
         bool SupportReflex() const { return caps_.supportReflex; }
         bool IsTemporalSuperResolutionActive() const { return temporalSuperResolutionActive_; }
+        Rendering::Upscaler::EUpscalerType ActiveUpscalerType() const
+        {
+            return temporalSuperResolutionActive_
+                ? activeUpscalerType_
+                : Rendering::Upscaler::EUpscalerType::None;
+        }
         bool IsCheckerboardRenderingActive() const;
         uint32_t CheckerboardDispatchWidth(uint32_t width, const Assets::GPUScene& gpuScene) const;
         void ConfigureCheckerboardShading(Assets::GPUScene& gpuScene, bool allowed = true) const;
