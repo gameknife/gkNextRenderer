@@ -14,14 +14,14 @@ import (
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/fetcher"
 )
 
-const defaultVersion = "0.13.1"
+const defaultVersion = "0.14.1"
 
 type portManifest struct {
 	Version string `json:"version"`
 }
 
 // Ensure downloads the official Tracy GUI without enabling vcpkg's gui-tools
-// feature. The client version is checked against the local vcpkg port before
+// feature. The client version is checked against the repository vcpkg overlay before
 // the GUI is launched so a protocol mismatch is reported early.
 func Ensure(repoRoot string, cfg config.Config) (string, error) {
 	version := strings.TrimSpace(cfg.External.Tracy.Version)
@@ -42,12 +42,13 @@ func Ensure(repoRoot string, cfg config.Config) (string, error) {
 		}
 		return profiler, nil
 	}
-	if runtime.GOOS != "windows" {
-		return "", fmt.Errorf("Tracy 0.13.1 official prebuilt GUI is currently Windows-only; build the GUI from the matching v%s source on %s", version, runtime.GOOS)
-	}
 	url := strings.TrimSpace(cfg.External.Tracy.URL)
 	if url == "" {
-		url = fmt.Sprintf("https://github.com/wolfpld/tracy/releases/download/v%s/windows-%s.zip", version, version)
+		asset, err := releaseAsset(runtime.GOOS, version)
+		if err != nil {
+			return "", err
+		}
+		url = fmt.Sprintf("https://github.com/wolfpld/tracy/releases/download/v%s/%s-%s.zip", version, asset, version)
 	}
 	archive := filepath.Join(repoRoot, "external", ".download-tracy-"+version+".zip")
 	if err := fetcher.Download(url, archive); err != nil {
@@ -70,6 +71,19 @@ func Ensure(repoRoot string, cfg config.Config) (string, error) {
 	return profiler, nil
 }
 
+func releaseAsset(goos string, version string) (string, error) {
+	switch goos {
+	case "windows":
+		return "windows", nil
+	case "darwin":
+		return "macos", nil
+	case "linux":
+		return "linux", nil
+	default:
+		return "", fmt.Errorf("Tracy %s has no official prebuilt GUI for %s; build the matching source package manually", version, goos)
+	}
+}
+
 func Launch(repoRoot string, cfg config.Config) error {
 	profiler, err := Ensure(repoRoot, cfg)
 	if err != nil {
@@ -87,17 +101,17 @@ func Launch(repoRoot string, cfg config.Config) error {
 }
 
 func verifyClientVersion(repoRoot, expected string) error {
-	path := filepath.Join(repoRoot, ".vcpkg", "ports", "tracy", "vcpkg.json")
+	path := filepath.Join(repoRoot, "cmake", "vcpkg-overlays", "tracy", "vcpkg.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("read Tracy vcpkg port %s: %w", path, err)
+		return fmt.Errorf("read Tracy vcpkg overlay %s: %w", path, err)
 	}
 	var manifest portManifest
 	if err := json.Unmarshal(data, &manifest); err != nil {
-		return fmt.Errorf("parse Tracy vcpkg port %s: %w", path, err)
+		return fmt.Errorf("parse Tracy vcpkg overlay %s: %w", path, err)
 	}
 	if strings.TrimSpace(manifest.Version) != expected {
-		return fmt.Errorf("Tracy client version %s does not match GUI version %s; update gnb.toml and the vcpkg port together", manifest.Version, expected)
+		return fmt.Errorf("Tracy client version %s does not match GUI version %s; update gnb.toml and the vcpkg overlay together", manifest.Version, expected)
 	}
 	return nil
 }

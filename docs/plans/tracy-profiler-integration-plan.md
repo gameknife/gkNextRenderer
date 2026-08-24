@@ -27,7 +27,7 @@ last_updated: 2026-08-17
    （`src/Engine/Vulkan/GpuQueryTimer.cpp:170-178`）。** 它在 `DrawFrame` 开头、fence 等待之前阻塞主线程等 GPU
    查询完成。接入 Tracy 后时间线上会明确看到这段 stall，并且会污染所有 CPU zone 的归因。这是本次"整理重构"的
    第一优先项，且它本身就是一个可独立验证的性能修复。
-4. **依赖用 vcpkg 端口 `tracy 0.13.1`（仓库 registry 已有），构建开关用 CMake option `GK_ENABLE_TRACY`，
+4. **依赖用 vcpkg 端口 `tracy 0.14.1`（仓库 overlay 固定版本），构建开关用 CMake option `GK_ENABLE_TRACY`，
    默认 dev 开、release 关。** Server（Tracy GUI）不走 vcpkg 的 `gui-tools` feature（会拖进第二份 imgui、
    capstone、glfw、freetype 等），改用 `gnb tracy fetch` 下载官方同版本预编译包到 `external/tracy/`，
    与 `external/llm`、`external/VulkanSDK` 的既有模式一致。**client 与 server 版本必须严格一致**，
@@ -226,7 +226,7 @@ last_updated: 2026-08-17
 
 ### vcpkg
 
-`vcpkg.json` 新增（仓库 registry 已含 `tracy 0.13.1`，见 `.vcpkg/ports/tracy/vcpkg.json`）：
+`vcpkg.json` 新增（仓库 overlay 固定 `tracy 0.14.1`，见 `cmake/vcpkg-overlays/tracy/vcpkg.json`）：
 
 ```json
 {
@@ -278,7 +278,7 @@ last_updated: 2026-08-17
 
 1. `gnb tracy fetch` → 下载 `tracy-<version>-<platform>` 官方预编译包到 `external/tracy/`（沿用
    `tools/gnb/internal/fetcher` 的下载+校验+解压模式）。版本号写在 `gnb.toml`，与 vcpkg 端口版本
-   （0.13.1）**同一个来源**，不允许两处各写各的。
+   （0.14.1）**同一个来源**，不允许两处各写各的。
 2. `gnb tracy` → 启动 Tracy GUI；再正常 `gnb run <target>`，GUI 的 discovery 列表里会出现进程，点击连接。
 3. 断开后进程继续跑（on-demand 语义），可反复连接。
 

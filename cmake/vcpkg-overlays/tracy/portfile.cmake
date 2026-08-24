@@ -4,7 +4,7 @@
 vcpkg_from_git(
     OUT_SOURCE_PATH SOURCE_PATH
     URL https://github.com/wolfpld/tracy
-    REF 05cceee0df3b8d7c6fa87e9638af311dbabc63cb # tag v0.13.1
+    REF 30997d5ca6bb632cc10807a1da8a6d3de0aeeb3c # tag v0.14.1
     PATCHES
         build-tools.patch
         fix-vendor-versions.patch
@@ -48,6 +48,7 @@ endif()
 vcpkg_cmake_configure(
     SOURCE_PATH ${SOURCE_PATH}
     OPTIONS
+        -DTRACY_ENABLE=ON
         -DDOWNLOAD_CAPSTONE=OFF
         -DLEGACY=ON
         -DCMAKE_FIND_PACKAGE_TARGETS_GLOBAL=ON

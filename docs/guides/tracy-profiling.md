@@ -13,7 +13,9 @@ gnb tracy                                # launch the GUI
 gnb run gkNextRenderer                   # start a profiled target
 ```
 
-The client and GUI must use the same version. The version is configured in `gnb.toml` under `[external.tracy]` and checked against `.vcpkg/ports/tracy/vcpkg.json`. Tracy is on-demand, so disconnecting the GUI does not stop the application and reconnecting later is supported.
+`gnb tracy fetch` selects the official Tracy 0.14.1 archive for the host OS: Windows, macOS, or Linux. On macOS the archive contains `tracy-profiler.app`; `gnb tracy` launches the bundled profiler executable automatically.
+
+The client and GUI must use the same version. The version is configured in `gnb.toml` under `[external.tracy]` and checked against the repository overlay at `cmake/vcpkg-overlays/tracy/vcpkg.json`. Tracy is on-demand, so disconnecting the GUI does not stop the application and reconnecting later is supported.
 
 ## Android
 
@@ -29,7 +31,7 @@ gnb tracy --android --serial <device-serial>
 ## Troubleshooting
 
 - GUI says the process is missing: confirm `GK_ENABLE_TRACY=ON` in the configure output and rebuild; release builds intentionally omit the client.
-- Desktop GUI refuses the connection: run `gnb tracy fetch` again and check that the GUI version matches the vcpkg port version.
+- Desktop GUI refuses the connection: run `gnb tracy fetch` again and check that the GUI version matches the repository overlay version.
 - Android GUI cannot connect: check `adb devices`, use the correct `--serial`, and verify the `adb forward tcp:8086 tcp:8086` line. Connect to `127.0.0.1`, not the device's LAN address.
 - Port 8086 is occupied: stop the conflicting forward/process before starting Tracy. The client protocol currently uses the default endpoint; changing the forward alone does not reconfigure an already-built APK.
 - GPU zones are absent: this can be a device timestamp limitation. The engine logs a warning and keeps CPU zones alive; calibrated timestamps are optional and fall back to the regular Tracy Vulkan context.

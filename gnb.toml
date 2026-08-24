@@ -67,7 +67,7 @@ root = "external/VulkanSDK"
 
 [external.tracy]
 # Client and GUI must stay on the same protocol version.
-version = "0.13.1"
+version = "0.14.1"
 root = "external/tracy"
 
 [external.llm]
