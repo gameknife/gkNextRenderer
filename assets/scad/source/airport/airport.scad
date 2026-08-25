@@ -7,7 +7,7 @@
 //     entrance_<id>  航站楼出入口（旅客生成/离场点）×3
 //     checkin_<id>   人工值机柜台 ×6         kiosk_<id>   自助值机机 ×4
 //     security_<id>  安检通道（南进北出）×4   gate_<id>    登机口 ×6
-//     wait_<id>      候机排椅 ×12            cafe_<id>    咖啡岛柜台 ×1
+//     wait_<id>      候机排椅 ×20            cafe_<id>    咖啡岛柜台 ×1
 //     food_<id>      快餐店柜台 ×1           shop_<id>    便利店收银 ×1
 //     book_<id>      书店收银 ×1             gift_<id>    礼品店收银 ×1
 //     toilet_<id>    卫生间门（01=男 02=女）  staff_<id>   员工办公桌 ×2
@@ -26,8 +26,8 @@
 use <../../lib/kit_airport.scad>
 
 $fn = 16;
-TEALC    = [0.16, 0.62, 0.55];    // 礼品店
-SHOPWALL = [0.82, 0.81, 0.78];    // 零售街隔墙
+TEALC    = [0.18, 0.58, 0.48];    // 礼品店（热带碧海翡翠色）
+SHOPWALL = [0.84, 0.78, 0.70];    // 零售街隔墙（暖沙色实木板）
 
 // ================= 功能点位（锚点；translate 必须在 rotate 外层） =================
 module entrance_01() ap_furn_entrance();
@@ -65,6 +65,14 @@ module wait_09() ap_furn_bench_row();
 module wait_10() ap_furn_bench_row();
 module wait_11() ap_furn_bench_row();
 module wait_12() ap_furn_bench_row();
+module wait_13() ap_furn_bench_row();
+module wait_14() ap_furn_bench_row();
+module wait_15() ap_furn_bench_row();
+module wait_16() ap_furn_bench_row();
+module wait_17() ap_furn_bench_row();
+module wait_18() ap_furn_bench_row();
+module wait_19() ap_furn_bench_row();
+module wait_20() ap_furn_bench_row();
 module cafe_01() ap_furn_cafe_counter();
 module food_01() ap_furn_food_counter();
 module shop_01() ap_furn_checkout();
@@ -122,8 +130,8 @@ translate([-21.8, 1.2, FZ]) checkin_03();
 translate([-19.2, 1.2, FZ]) checkin_04();
 translate([-16.6, 1.2, FZ]) checkin_05();
 translate([-14.0, 1.2, FZ]) checkin_06();
-translate([-30, 4, FZ]) ap_wall_solid_seg(19.2, [0.88, 0.87, 0.84]);
-translate([-10.8, 4, FZ]) ap_wall_solid_seg(1.0, [0.88, 0.87, 0.84]);
+translate([-30, 4, FZ]) ap_wall_solid_seg(19.2, [0.78, 0.62, 0.46]);
+translate([-10.8, 4, FZ]) ap_wall_solid_seg(1.0, [0.78, 0.62, 0.46]);
 translate([-27.5, -0.6, FZ]) ap_prop_queue_line(13);
 translate([-27.5, -1.8, FZ]) ap_prop_queue_line(13);
 translate([-21, 3.3, FZ]) ap_prop_fids();
@@ -156,21 +164,33 @@ translate([4, 27.6, FZ]) gate_04();
 translate([12, 27.6, FZ]) gate_05();
 translate([20, 27.6, FZ]) gate_06();
 
-// ---- 候机区（东西双集群 12 组排椅）+ 绿植 + 航显 ----
-translate([-22.0, 16.5, FZ]) rotate([0, 0, 180]) wait_01();
-translate([-18.6, 16.5, FZ]) rotate([0, 0, 180]) wait_02();
-translate([-15.2, 16.5, FZ]) rotate([0, 0, 180]) wait_03();
-translate([-22.0, 19.5, FZ]) rotate([0, 0, 180]) wait_04();
-translate([-18.6, 19.5, FZ]) rotate([0, 0, 180]) wait_05();
-translate([-15.2, 19.5, FZ]) rotate([0, 0, 180]) wait_06();
-translate([9.0, 16.5, FZ]) rotate([0, 0, 180]) wait_07();
-translate([12.4, 16.5, FZ]) rotate([0, 0, 180]) wait_08();
-translate([15.8, 16.5, FZ]) rotate([0, 0, 180]) wait_09();
-translate([9.0, 19.5, FZ]) rotate([0, 0, 180]) wait_10();
-translate([12.4, 19.5, FZ]) rotate([0, 0, 180]) wait_11();
-translate([15.8, 19.5, FZ]) rotate([0, 0, 180]) wait_12();
-translate([-18.6, 18.0, FZ]) ap_prop_planter(2.4);
-translate([12.4, 18.0, FZ]) ap_prop_planter(2.4);
+// ---- 候机区（东西双集群 5x2 共 20 组排椅）+ 绿植 + 航显 ----
+// 西侧集群 5x2 (x∈[-24.8, -12.8], y∈[16.5, 19.5])
+translate([-24.8, 16.5, FZ]) rotate([0, 0, 180]) wait_01();
+translate([-21.8, 16.5, FZ]) rotate([0, 0, 180]) wait_02();
+translate([-18.8, 16.5, FZ]) rotate([0, 0, 180]) wait_03();
+translate([-15.8, 16.5, FZ]) rotate([0, 0, 180]) wait_04();
+translate([-12.8, 16.5, FZ]) rotate([0, 0, 180]) wait_05();
+translate([-24.8, 19.5, FZ]) rotate([0, 0, 180]) wait_06();
+translate([-21.8, 19.5, FZ]) rotate([0, 0, 180]) wait_07();
+translate([-18.8, 19.5, FZ]) rotate([0, 0, 180]) wait_08();
+translate([-15.8, 19.5, FZ]) rotate([0, 0, 180]) wait_09();
+translate([-12.8, 19.5, FZ]) rotate([0, 0, 180]) wait_10();
+
+// 东侧集群 5x2 (x∈[6.0, 18.0], y∈[16.5, 19.5])
+translate([6.0, 16.5, FZ]) rotate([0, 0, 180]) wait_11();
+translate([9.0, 16.5, FZ]) rotate([0, 0, 180]) wait_12();
+translate([12.0, 16.5, FZ]) rotate([0, 0, 180]) wait_13();
+translate([15.0, 16.5, FZ]) rotate([0, 0, 180]) wait_14();
+translate([18.0, 16.5, FZ]) rotate([0, 0, 180]) wait_15();
+translate([6.0, 19.5, FZ]) rotate([0, 0, 180]) wait_16();
+translate([9.0, 19.5, FZ]) rotate([0, 0, 180]) wait_17();
+translate([12.0, 19.5, FZ]) rotate([0, 0, 180]) wait_18();
+translate([15.0, 19.5, FZ]) rotate([0, 0, 180]) wait_19();
+translate([18.0, 19.5, FZ]) rotate([0, 0, 180]) wait_20();
+
+translate([-18.8, 18.0, FZ]) ap_prop_planter(3.0);
+translate([12.0, 18.0, FZ]) ap_prop_planter(3.0);
 translate([1.0, 21.5, FZ]) ap_prop_fids();
 translate([-6, 10.2, FZ]) ap_prop_fids();
 translate([-29.55, 18.6, FZ]) rotate([0, 0, 90]) vending_03();
@@ -178,18 +198,21 @@ translate([-29.5, 17.2, FZ]) rotate([0, 0, 90]) ap_prop_fountain();
 translate([29.55, 11.4, FZ]) rotate([0, 0, -90]) vending_01();
 translate([29.55, 12.6, FZ]) rotate([0, 0, -90]) vending_02();
 
-// ---- 西餐饮区：BURGER 快餐（后厨 + 柜台 + 门头 + 6 桌）----
+// ---- 西餐饮区：BURGER 快餐（后厨 + 柜台 + 门头 + 8 桌紧凑就餐区）----
 translate([-27.6, 7, FZ]) rotate([0, 0, 90]) ap_wall_solid_seg(6.4, [0.55, 0.35, 0.22]);
 translate([-29.3, 10.0, FZ]) rotate([0, 0, 90]) ap_furn_kitchen_strip(5);
 translate([-26.8, 10.2, FZ]) rotate([0, 0, 90]) food_01();
 translate([-25.9, 10.2, FZ]) rotate([0, 0, 90]) ap_prop_shop_portal(6.4, "BURGER", ap_REDFOOD());
-translate([-23.0, 8.5, FZ]) ap_furn_cafe_table(ap_REDFOOD());
-translate([-19.6, 8.5, FZ]) rotate([0, 0, 55]) ap_furn_cafe_table(ap_REDFOOD());
-translate([-16.2, 8.5, FZ]) rotate([0, 0, -30]) ap_furn_cafe_table(ap_REDFOOD());
-translate([-23.0, 11.8, FZ]) rotate([0, 0, 90]) ap_furn_cafe_table(ap_REDFOOD());
-translate([-19.6, 11.8, FZ]) rotate([0, 0, -70]) ap_furn_cafe_table(ap_REDFOOD());
-translate([-16.2, 11.8, FZ]) rotate([0, 0, 20]) ap_furn_cafe_table(ap_REDFOOD());
-translate([-13.2, 10.0, FZ]) rotate([0, 0, 90]) ap_prop_planter(3.0);
+// 紧凑 8 张餐桌 (2排x4列, x∈[-23.4, -15.0], y∈[8.6, 11.6])
+translate([-23.4, 8.6, FZ]) rotate([0, 0, 15]) ap_furn_cafe_table(ap_REDFOOD());
+translate([-20.6, 8.6, FZ]) rotate([0, 0, -35]) ap_furn_cafe_table(ap_REDFOOD());
+translate([-17.8, 8.6, FZ]) rotate([0, 0, 40]) ap_furn_cafe_table(ap_REDFOOD());
+translate([-15.0, 8.6, FZ]) rotate([0, 0, -20]) ap_furn_cafe_table(ap_REDFOOD());
+translate([-23.4, 11.6, FZ]) rotate([0, 0, 75]) ap_furn_cafe_table(ap_REDFOOD());
+translate([-20.6, 11.6, FZ]) rotate([0, 0, -50]) ap_furn_cafe_table(ap_REDFOOD());
+translate([-17.8, 11.6, FZ]) rotate([0, 0, 25]) ap_furn_cafe_table(ap_REDFOOD());
+translate([-15.0, 11.6, FZ]) rotate([0, 0, -65]) ap_furn_cafe_table(ap_REDFOOD());
+translate([-13.2, 10.1, FZ]) rotate([0, 0, 90]) ap_prop_planter(3.4);
 
 // ---- 中央咖啡岛：柜台 + 吊牌 + 3 桌 ----
 translate([-7, 12.5, FZ]) cafe_01();

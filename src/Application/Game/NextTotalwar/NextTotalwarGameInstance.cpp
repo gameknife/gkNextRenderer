@@ -1513,6 +1513,9 @@ namespace NextTotalwar
         case SDLK_F5:
             if (down) showDebug_ = !showDebug_;
             return true;
+        case SDLK_F6:
+            if (down) showNavGridDebug_ = !showNavGridDebug_;
+            return true;
         case SDLK_SPACE:
             if (down)
             {
@@ -1712,7 +1715,7 @@ namespace NextTotalwar
         if (ImGui::Button("Withdraw [V]")) IssueSelectedSimpleOrder(EBattleOrderType::Withdraw);
         ImGui::EndDisabled();
         ImGui::TextUnformatted("LMB select | RMB move/facing | X attack | C charge");
-        ImGui::TextUnformatted("P/Space pause | 1/2/3 speed | F5 diagnostics");
+        ImGui::TextUnformatted("P/Space pause | 1/2/3 speed | F5 diagnostics | F6 NavGrid");
         if (showDebug_ && SelectedCount() > 0)
         {
             ImGui::Separator();
@@ -1855,6 +1858,13 @@ namespace NextTotalwar
             ImGui::Text("Separation: %.2f m x %.2f",
                         combatTuning_.separationRadius,
                         combatTuning_.separationStrength);
+            ImGui::SeparatorText("Navigation");
+            ImGui::Checkbox("NavGrid overlay [F6]", &showNavGridDebug_);
+            if (navGrid_.IsBuilt())
+            {
+                ImGui::Text("Grid: %dx%d   Cell: %.2f m",
+                            navGrid_.GetWidth(), navGrid_.GetHeight(), navGrid_.GetCellSize());
+            }
             ImGui::End();
         }
 
@@ -1940,6 +1950,7 @@ namespace NextTotalwar
 
     void FGameInstance::DrawWorldOverlay() const
     {
+        DrawNavGridDebugOverlay();
         if (session_.Phase() == EBattlePhase::Finished) return;
         ImDrawList* draw = ImGui::GetForegroundDrawList();
         if (!draw) return;
@@ -2143,6 +2154,97 @@ namespace NextTotalwar
         }
     }
 
+    void FGameInstance::DrawNavGridDebugOverlay() const
+    {
+        if (!showNavGridDebug_ || !navGrid_.IsBuilt()) return;
+
+        ImDrawList* draw = ImGui::GetForegroundDrawList();
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        if (!draw || !viewport || viewport->WorkSize.x <= 1.0f || viewport->WorkSize.y <= 1.0f)
+        {
+            return;
+        }
+
+        const float cellSize = navGrid_.GetCellSize();
+        if (cellSize <= 0.001f) return;
+
+        const ImVec2 viewportMin = viewport->WorkPos;
+        const ImVec2 viewportMax = viewport->WorkPos + viewport->WorkSize;
+        const float halfExtent = cellSize * 0.46f;
+        const std::array<glm::vec2, 4> cornerOffsets = {{
+            {-halfExtent, -halfExtent},
+            {halfExtent, -halfExtent},
+            {halfExtent, halfExtent},
+            {-halfExtent, halfExtent},
+        }};
+        const ImU32 walkableFill = IM_COL32(50, 220, 100, 70);
+        const ImU32 walkableOutline = IM_COL32(70, 235, 120, 135);
+        const ImU32 blockedFill = IM_COL32(235, 65, 55, 78);
+        const ImU32 blockedOutline = IM_COL32(255, 85, 70, 145);
+        constexpr float liftY = 0.08f;
+        constexpr float screenCullPadding = 24.0f;
+        size_t walkableCount = 0;
+        size_t blockedCount = 0;
+
+        for (int gz = 0; gz < navGrid_.GetHeight(); ++gz)
+        {
+            for (int gx = 0; gx < navGrid_.GetWidth(); ++gx)
+            {
+                const bool walkable = navGrid_.IsCellWalkable(gx, gz);
+                walkable ? ++walkableCount : ++blockedCount;
+
+                const glm::vec3 cellWorld = navGrid_.GetCellWorldPosition(gx, gz);
+                ImVec2 projectedCenter{};
+                if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(
+                        *this, {cellWorld.x, cellWorld.y + liftY, cellWorld.z}, projectedCenter))
+                {
+                    continue;
+                }
+                if (projectedCenter.x < viewportMin.x - screenCullPadding ||
+                    projectedCenter.x > viewportMax.x + screenCullPadding ||
+                    projectedCenter.y < viewportMin.y - screenCullPadding ||
+                    projectedCenter.y > viewportMax.y + screenCullPadding)
+                {
+                    continue;
+                }
+
+                std::array<ImVec2, 4> projectedCorners{};
+                bool visible = true;
+                for (size_t cornerIndex = 0; cornerIndex < cornerOffsets.size(); ++cornerIndex)
+                {
+                    const glm::vec2 offset = cornerOffsets[cornerIndex];
+                    const glm::vec3 cornerWorld(
+                        cellWorld.x + offset.x, cellWorld.y + liftY, cellWorld.z + offset.y);
+                    if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(
+                            *this, cornerWorld, projectedCorners[cornerIndex]))
+                    {
+                        visible = false;
+                        break;
+                    }
+                }
+                if (!visible) continue;
+
+                draw->AddConvexPolyFilled(
+                    projectedCorners.data(), static_cast<int>(projectedCorners.size()),
+                    walkable ? walkableFill : blockedFill);
+                draw->AddPolyline(
+                    projectedCorners.data(), static_cast<int>(projectedCorners.size()),
+                    walkable ? walkableOutline : blockedOutline, ImDrawFlags_Closed, 1.0f);
+            }
+        }
+
+        const ImVec2 legendMin(viewportMin.x + 12.0f, viewportMax.y - 112.0f);
+        const ImVec2 legendMax(viewportMin.x + 300.0f, viewportMax.y - 58.0f);
+        draw->AddRectFilled(legendMin, legendMax, IM_COL32(8, 16, 26, 220), 6.0f);
+        draw->AddText(legendMin + ImVec2(10.0f, 7.0f), IM_COL32(245, 250, 255, 245), "NavGrid [F6]");
+        draw->AddRectFilled(legendMin + ImVec2(10.0f, 29.0f), legendMin + ImVec2(22.0f, 41.0f), walkableFill);
+        draw->AddText(legendMin + ImVec2(28.0f, 27.0f), IM_COL32(220, 245, 225, 235),
+                      fmt::format("Walkable {}", walkableCount).c_str());
+        draw->AddRectFilled(legendMin + ImVec2(142.0f, 29.0f), legendMin + ImVec2(154.0f, 41.0f), blockedFill);
+        draw->AddText(legendMin + ImVec2(160.0f, 27.0f), IM_COL32(255, 220, 215, 235),
+                      fmt::format("Blocked {}", blockedCount).c_str());
+    }
+
     bool FGameInstance::OverrideRenderCamera(Assets::Camera& camera) const
     {
         return camera_.OverrideRenderCamera(camera);
@@ -2255,6 +2357,7 @@ namespace NextTotalwar
             return static_cast<int64_t>(GetEngine().GetScene().GetIndirectDrawBatchCount());
         });
         registry.Add("navReady", [this]() { return navGrid_.IsBuilt(); });
+        registry.Add("navGridVisible", [this]() { return showNavGridDebug_; });
         registry.Add("debugVisible", [this]() { return showDebug_; });
         registry.Add("lastOrderDistance", [this]() { return static_cast<double>(lastOrderDistance_); });
         registry.Add("cameraFollowing", [this]() { return camera_.IsFollowing(); });

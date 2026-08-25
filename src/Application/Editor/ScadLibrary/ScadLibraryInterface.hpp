@@ -147,8 +147,9 @@ namespace ScadLibrary
         void PreviewModule(int kitIndex, const std::string& moduleName);
         void AddToBench(int kitIndex, const std::string& moduleName);
         void ReloadBench(bool preserveCamera = true);
+        void ReloadCurrentAssemblyPreview();
         void ExportBench();
-        bool OpenAssembly(const std::string& path);
+        bool OpenAssembly(const std::string& path, bool preserveCamera = false);
         void ConvertSourceToEvaluated();
         void PreviewAssemblySource();
         void SaveAssembly(bool saveAs, bool reloadScene = true);
@@ -192,6 +193,9 @@ namespace ScadLibrary
         void PollKitFileChanges();
         // Re-snapshot last_write_time of every kit (called after any RescanKits).
         void RefreshKitWatchBaseline();
+        // Re-snapshot the currently opened scene so the editor's own writes do
+        // not look like external changes on the next poll.
+        void RefreshAssemblyWatchBaseline();
         // Pure source generation shared by PreviewModule and the auto-refresh path.
         std::string BuildModulePreviewSource(int kitIndex, const std::string& moduleName) const;
 
@@ -212,7 +216,14 @@ namespace ScadLibrary
         bool kitWatchTaskInFlight_ = false;
         bool kitWatchPending_ = false;
         bool kitWatchChangedPreviewKit_ = false;
+        bool kitWatchChangedAssembly_ = false;
+        bool kitWatchFilesChanged_ = false;
         std::chrono::steady_clock::time_point kitWatchReloadAt_{};
+
+        std::string assemblyWatchPath_;
+        std::filesystem::file_time_type assemblyWatchStamp_{};
+        bool assemblyWatchStampValid_ = false;
+        bool assemblyWatchChanged_ = false;
 
         // Character designer state.
         FCharacterDesigner designer_;
@@ -276,6 +287,7 @@ namespace ScadLibrary
         bool assemblyProcedural_ = false;
         bool terrainProcessDirty_ = false;
         bool preserveCameraOnNextSceneLoad_ = false;
+        bool modulePreviewActive_ = false;
         int assemblyEditorTab_ = 0;
         int inspectorPrimaryTab_ = 0;
         bool aiOpenRequested_ = false;

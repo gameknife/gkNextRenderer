@@ -3019,6 +3019,7 @@ namespace ScadLibrary
                 {
                     assemblySource_ = candidate.source;
                     openedAssemblyPath_.clear();
+                    RefreshAssemblyWatchBaseline();
                     openedAssemblyKits_ = FindKitDependencies(assemblySource_);
                     assemblySourceDirty_ = true;
                     assemblyStructured_ = false;
@@ -4892,6 +4893,21 @@ namespace ScadLibrary
         }
     }
 
+    void ScadLibraryInterface::RefreshAssemblyWatchBaseline()
+    {
+        assemblyWatchPath_ = openedAssemblyPath_;
+        assemblyWatchChanged_ = false;
+        assemblyWatchStampValid_ = false;
+        if (assemblyWatchPath_.empty())
+        {
+            return;
+        }
+
+        std::error_code ec;
+        assemblyWatchStamp_ = std::filesystem::last_write_time(assemblyWatchPath_, ec);
+        assemblyWatchStampValid_ = !ec;
+    }
+
     void ScadLibraryInterface::TickKitFileWatch(double deltaSeconds)
     {
         kitWatchElapsed_ += deltaSeconds;
@@ -4900,6 +4916,37 @@ namespace ScadLibrary
             return;
         }
         kitWatchElapsed_ = 0.0;
+
+        // The currently opened assembly is authored outside ScadLibrary quite
+        // often (for example by ScadStudio or an editor). Check its timestamp
+        // on the main thread alongside the kit worker poll. The file metadata
+        // query is tiny, while the actual scene parse/rebuild remains deferred
+        // to Render() where it is safe to touch UI and engine state.
+        if (!assemblyWatchPath_.empty())
+        {
+            std::error_code ec;
+            const std::filesystem::file_time_type stamp =
+                std::filesystem::last_write_time(assemblyWatchPath_, ec);
+            if (ec)
+            {
+                if (assemblyWatchStampValid_)
+                {
+                    assemblyWatchStampValid_ = false;
+                    assemblyWatchChanged_ = true;
+                    kitWatchPending_ = true;
+                    kitWatchReloadAt_ = std::chrono::steady_clock::now() + kKitWatchReloadDebounce;
+                }
+            }
+            else if (!assemblyWatchStampValid_ || stamp != assemblyWatchStamp_)
+            {
+                assemblyWatchStamp_ = stamp;
+                assemblyWatchStampValid_ = true;
+                assemblyWatchChanged_ = true;
+                kitWatchPending_ = true;
+                kitWatchReloadAt_ = std::chrono::steady_clock::now() + kKitWatchReloadDebounce;
+            }
+        }
+
         // Do not submit another gather while a detected change is waiting for
         // the debounced rescan. Its snapshot would use the old baseline and
         // report the same change again after RescanKits updates the stamps.
@@ -4957,13 +5004,47 @@ namespace ScadLibrary
                 std::find(changedPaths.begin(), changedPaths.end(), previewPath) != changedPaths.end();
         }
 
+        // In Scene Assembly the visible preview is usually bench.scad (or a
+        // generated terrain/source preview), not preview.scad. Track whether
+        // any kit used by that current assembly changed so the visible scene
+        // can be rebuilt as well.
+        kitWatchChangedAssembly_ = false;
+        if (workspaceMode_ == EWorkspaceMode::SceneAssembly && !modulePreviewActive_)
+        {
+            const auto usesKitPath = [&](const std::string& changedPath)
+            {
+                const std::string changedKitName = std::filesystem::path(changedPath).stem().string();
+                if (std::find(openedAssemblyKits_.begin(), openedAssemblyKits_.end(), changedKitName) !=
+                    openedAssemblyKits_.end())
+                {
+                    return true;
+                }
+                for (const FBenchItem& benchItem : bench_)
+                {
+                    if (benchItem.kitIndex >= 0 && benchItem.kitIndex < static_cast<int>(kits_.size()) &&
+                        kits_[benchItem.kitIndex].filePath == changedPath)
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            kitWatchChangedAssembly_ =
+                std::any_of(changedPaths.begin(), changedPaths.end(), usesKitPath);
+        }
+
+        kitWatchFilesChanged_ = true;
         kitWatchPending_ = true;
         kitWatchReloadAt_ = std::chrono::steady_clock::now() + kKitWatchReloadDebounce;
     }
 
     void ScadLibraryInterface::PollKitFileChanges()
     {
-        if (!kitWatchPending_)
+        const bool assemblyPreviewVisible = workspaceMode_ == EWorkspaceMode::SceneAssembly && !modulePreviewActive_;
+        const bool modulePreviewVisible = modulePreviewActive_;
+        if (!kitWatchPending_ &&
+            !(assemblyPreviewVisible && (assemblyWatchChanged_ || kitWatchChangedAssembly_)) &&
+            !(modulePreviewVisible && kitWatchChangedPreviewKit_))
         {
             return;
         }
@@ -4979,13 +5060,34 @@ namespace ScadLibrary
         }
         kitWatchPending_ = false;
 
+        const bool kitFilesChanged = kitWatchFilesChanged_;
         const bool previewChanged = kitWatchChangedPreviewKit_;
+        const bool assemblyKitChanged = kitWatchChangedAssembly_;
+        const bool assemblyFileChanged = assemblyWatchChanged_;
+        kitWatchFilesChanged_ = false;
         kitWatchChangedPreviewKit_ = false;
-        const std::string refreshedModule = previewChanged ? selectedModule_ : std::string();
+        kitWatchChangedAssembly_ = false;
+
+        bool refreshedAssembly = false;
+        if (assemblyPreviewVisible && assemblyFileChanged && !openedAssemblyPath_.empty())
+        {
+            // Re-read the source into the editor model first. This covers
+            // direct edits to the currently opened scene, while the preserve
+            // flag keeps the camera controller untouched when the engine
+            // receives the replacement scene.
+            refreshedAssembly = OpenAssembly(openedAssemblyPath_, true);
+            assemblyWatchChanged_ = false;
+        }
+        else if (assemblyPreviewVisible && assemblyKitChanged)
+        {
+            ReloadCurrentAssemblyPreview();
+            refreshedAssembly = true;
+        }
 
         // Reload the preview first while the old kit indices are still valid,
         // keeping the camera (and the AI editing context) intact.
-        if (previewChanged && selectedKit_ >= 0 && selectedKit_ < static_cast<int>(kits_.size()) &&
+        if (!refreshedAssembly && modulePreviewVisible && previewChanged &&
+            selectedKit_ >= 0 && selectedKit_ < static_cast<int>(kits_.size()) &&
             !selectedModule_.empty())
         {
             preserveCameraOnNextSceneLoad_ = true;
@@ -4993,14 +5095,27 @@ namespace ScadLibrary
         }
 
         // RescanKits resets statusLine_, so report the auto-refresh afterwards.
-        RescanKits();
+        if (kitFilesChanged)
+        {
+            RescanKits();
+        }
 
-        SPDLOG_INFO("[ScadLibrary] kit file(s) changed externally, auto-refreshed (preview reload: {})",
-                    previewChanged);
+        SPDLOG_INFO("[ScadLibrary] source file(s) changed externally, auto-refreshed (assembly reload: {}, "
+                    "module reload: {})",
+                    refreshedAssembly, !refreshedAssembly && modulePreviewVisible && previewChanged);
 
-        statusLine_ = previewChanged
-            ? fmt::format("kit 文件已变化，已自动刷新预览 {}", refreshedModule)
-            : "kit 文件已变化，资源库已自动刷新";
+        if (refreshedAssembly)
+        {
+            statusLine_ = assemblyFileChanged ? "当前场景文件已变化，已自动刷新预览" : "场景依赖 Kit 已变化，已自动刷新预览";
+        }
+        else if (previewChanged && modulePreviewVisible)
+        {
+            statusLine_ = fmt::format("kit 文件已变化，已自动刷新预览 {}", selectedModule_);
+        }
+        else if (kitFilesChanged)
+        {
+            statusLine_ = "kit 文件已变化，资源库已自动刷新";
+        }
         statusError_ = false;
     }
 
@@ -5082,6 +5197,7 @@ namespace ScadLibrary
         aiKitContextActive_ = true;
         aiController_->Reset();
         rigPreview_.SetActive(false);
+        modulePreviewActive_ = true;
 
         if (WriteAndLoad("preview.scad", BuildModulePreviewSource(kitIndex, moduleName)))
         {
@@ -5522,7 +5638,7 @@ namespace ScadLibrary
         return true;
     }
 
-    bool ScadLibraryInterface::OpenAssembly(const std::string& path)
+    bool ScadLibraryInterface::OpenAssembly(const std::string& path, bool preserveCamera)
     {
         const std::filesystem::path scadRoot = AuthoringPath("assets/scad");
         std::filesystem::path sourcePath(path);
@@ -5565,6 +5681,7 @@ namespace ScadLibrary
         }
 
         rigPreview_.SetActive(false);
+        modulePreviewActive_ = false;
         openedAssemblyPath_ = sourcePath.string();
         openedSceneKind_ = *sceneKind;
         aiKitContextActive_ = false;
@@ -5613,7 +5730,8 @@ namespace ScadLibrary
                 break;
             }
         }
-        preserveCameraOnNextSceneLoad_ = false;
+        RefreshAssemblyWatchBaseline();
+        preserveCameraOnNextSceneLoad_ = preserveCamera;
         engine_.RequestLoadScene({.filename = openedAssemblyPath_});
         const char* editMode = openedSceneKind_ == EScadSceneKind::Evaluated
             ? " · Evaluated 对象编辑"
@@ -5679,6 +5797,7 @@ namespace ScadLibrary
     void ScadLibraryInterface::PreviewAssemblySource()
     {
         rigPreview_.SetActive(false);
+        modulePreviewActive_ = false;
         // Previewing edited assembly data is an in-place reload. Keep the
         // current view for Source, Evaluated, and Proc alike; only opening a
         // different assembly should perform the initial framing.
@@ -5787,6 +5906,8 @@ namespace ScadLibrary
         {
             assemblyProcedural_ = ImportTerrainProcessAssembly(openedAssemblyPath_, source);
         }
+        modulePreviewActive_ = false;
+        RefreshAssemblyWatchBaseline();
         const std::filesystem::path repoRoot = scadRoot.parent_path().parent_path();
         const std::string relativePath = targetPath.lexically_relative(repoRoot).generic_string();
         std::snprintf(assemblyPathBuf_, sizeof(assemblyPathBuf_), "%s", relativePath.c_str());
@@ -5817,6 +5938,7 @@ namespace ScadLibrary
             return;
         }
         rigPreview_.SetActive(false);
+        modulePreviewActive_ = false;
         preserveCameraOnNextSceneLoad_ = true;
         if (WriteAndLoad("terrain_process.scad", BuildAssemblyPreviewSource()))
         {
@@ -5829,10 +5951,27 @@ namespace ScadLibrary
         preserveCameraOnNextSceneLoad_ = false;
     }
 
+    void ScadLibraryInterface::ReloadCurrentAssemblyPreview()
+    {
+        if (assemblyProcedural_)
+        {
+            ReloadTerrainProcess();
+        }
+        else if (assemblyStructured_ || assemblyEvaluated_)
+        {
+            ReloadBench();
+        }
+        else
+        {
+            PreviewAssemblySource();
+        }
+    }
+
     void ScadLibraryInterface::ReloadBench(bool preserveCamera)
     {
         benchDirty_ = false;
         rigPreview_.SetActive(false);
+        modulePreviewActive_ = false;
         if (bench_.empty())
         {
             statusLine_ = "场景对象为空";
