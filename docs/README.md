@@ -50,6 +50,12 @@
 - [.NET 脚本运行时架构](designs/dotnet-scripting-design.md)（现行；C# 脚本运行时已完整落地——
   双后端、绑定表 codegen、反射组件 wrapper，Flappy 在两种后端下 parity 通过。日常用法见
   [.NET Bindings](AGENT_GUIDE/DotNetBindings.md)）
+- [托管游戏 Launcher / 进程内启动 C# 游戏](designs/managed-game-launcher-design.md)（现行；
+  `gkNextLauncher` 在同进程内加载/卸载任意 C# 游戏，`gkNextEditor` 用同一套 session 实现
+  play-in-editor（F5 Play / F8 eject 后可在 Outliner 与 Properties 里编辑运行中游戏的节点），
+  per-game exe 与它们共用 `ManagedGameHostInstance`，差异全部收进 `assets/configs/games/*.game.json`。
+  含 manifest 契约、会话状态机、世界重置契约与 PIE 的边界。CoreCLR 专属——NativeAOT 一个 exe 只能链
+  一个游戏，对应 Unity 的 Editor/Player 分工）
 - [用 C# 绑定实现 Brotato3D 的能力缺口与可行性](designs/csharp-binding-brotato3d-feasibility.md)（提案，
   未实施；盘点 `EngineApi.def.h` 现有 68 项绑定面对 Brotato3D 的覆盖度，列出物理 body、节点 parent/材质、
   运行时材质创建、手柄摇杆轴、UI 与 ScadRig 的缺口，给出跨界调用成本估算与分档落地顺序）

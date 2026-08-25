@@ -5,6 +5,7 @@
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Modules/DevTools/GizmoController.hpp"
 #include "Gameplay/Camera/ModelViewController.hpp"
+#include "Core/EditorPlaySession.hpp"
 #include "Core/EditorSettings.hpp"
 #include "Core/EditorUiState.hpp"
 #if GK_WITH_VITURE
@@ -37,6 +38,14 @@ public:
     void OnDestroy() override;
 
     void OnSceneLoaded() override;
+    void BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                            std::vector<Assets::Model>& models,
+                            std::vector<Assets::FMaterial>& materials,
+                            std::vector<Assets::LightObject>& lights,
+                            std::vector<Assets::AnimationTrack>& tracks) override;
+    bool OnGameRequestedClose() override;
+    bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY, int16_t rightStickX, int16_t rightStickY,
+                        int16_t leftTrigger, int16_t rightTrigger) override;
 
     void OnPreConfigUI() override;
     bool OnRenderUI() override;
@@ -53,6 +62,7 @@ public:
 #endif
 
     void ConfigureCVars(NextCVar::FCVarSystem& cvars) override;
+    void RegisterAgentQueries(Runtime::Agent::FAgentQueryRegistry& reg) override;
 
     bool OnKey(SDL_Event& event) override;
     bool OnCursorPosition(double xpos, double ypos) override;
@@ -61,6 +71,11 @@ public:
     bool WantsMouseInputWhenUiCaptures() const override { return true; }
 
     bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const override;
+
+    Editor::FPlaySession& GetPlaySession() { return playSession_; }
+    const Editor::FPlaySession& GetPlaySession() const { return playSession_; }
+    /// Starts the given game, remembering the scene currently open so Stop can come back to it.
+    void StartPlaySession(const std::string& gameId);
 
     EditorActionDispatcher& Actions() { return actions_; }
     const EditorActionDispatcher& Actions() const { return actions_; }
@@ -104,6 +119,13 @@ private:
 
     EditorActionDispatcher actions_{};
 
+    Editor::FPlaySession playSession_;
+    /// Control channel for scripted validation and the console: set ed.play to a game id to start
+    /// it, empty to stop. Consumed on tick, never inside the cvar callback.
+    std::string playCVarValue_;
+    std::string pendingPlayRequest_;
+    bool hasPendingPlayRequest_ = false;
+    bool playEjectCVar_ = false;
     std::unique_ptr<EditorInterface> editorUserInterface_;
     Runtime::Camera::ModelViewController modelViewController_;
 #if GK_WITH_VITURE
@@ -122,6 +144,12 @@ private:
 
 inline bool EditorGameInstance::OverrideRenderCamera(Assets::Camera& OutRenderCamera) const
 {
+    // While a game is playing it drives the camera, the same as in its own executable. Ejecting
+    // returns the viewport to the editor's camera without stopping the game.
+    if (playSession_.TryGetOverrideCamera(OutRenderCamera))
+    {
+        return true;
+    }
     OutRenderCamera = BuildSceneViewportCamera();
     return true;
 }

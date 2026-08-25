@@ -75,6 +75,12 @@ public:
     // Camera override hook.
     virtual bool OverrideRenderCamera(Assets::Camera& outRenderCamera) const { return false; }
 
+    /// A hosted game asked to quit (managed Engine.RequestClose, and anything else that speaks for
+    /// the game rather than for the window). Return true to say the host handled it and the process
+    /// must stay alive — a launcher returns to its menu here. The default closes the process, which
+    /// is what a single-game executable wants.
+    virtual bool OnGameRequestedClose() { return false; }
+
     // Scene lifecycle hooks.
     virtual void BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
                                     std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,

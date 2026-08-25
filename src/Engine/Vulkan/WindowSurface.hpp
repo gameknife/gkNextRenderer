@@ -71,6 +71,11 @@ public:
     void Show() const;
     bool SetSize(uint32_t width, uint32_t height) const;
 
+    // The title is the one window property a host changes after creation: a launcher that swaps
+    // games in one process has to say which game is running. Config().Title stays as created.
+    const std::string& GetTitle() const { return title_; }
+    void SetTitle(const std::string& title);
+
     void Minimize();
     void Maximum();
     void Restore();
@@ -98,6 +103,7 @@ private:
     };
 
     const WindowConfig config_;
+    std::string title_;
     Next_Window* window_{};
 
     FCustomTitleBarDragState customTitleBarDrag_;

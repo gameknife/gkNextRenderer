@@ -126,6 +126,10 @@ if(TARGET NextDotNet)
     target_compile_definitions(NextDotNet PRIVATE
         GK_DOTNET_USE_AOT=${GK_DOTNET_USE_AOT}
         GK_DOTNET_ROOT="${GK_DOTNET_RESOLVED_ROOT}"
+        # Where the C# sources are, so a host can republish a game without a C++ build. This is the
+        # source tree, not the runtime root: only the published assemblies are copied next to the
+        # executable, and resolving "assets/csharp" against the runtime root finds nothing.
+        GK_DOTNET_MANAGED_SOURCE_ROOT="${GK_DOTNET_MANAGED_ROOT}"
     )
     target_link_libraries(NextDotNet PRIVATE SDL3::SDL3 imgui::imgui)
 

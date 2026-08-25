@@ -350,7 +350,13 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
                                       options.SaveFile,userdata,options.ForceSDR};
     windowConfig.SystemDpiScaling = useSystemDpiScaling;
     windowConfig.HeadlessSurface = useHeadlessSurface;
-    
+    // Resolved before the game instance is created, not after: a game instance sizes its window in
+    // its constructor, and whether anyone will see that window is part of the decision. The editor
+    // sizes itself from the monitor when visible and from the requested size when hidden, which
+    // only works if this is already set.
+    windowConfig.HiddenWindow =
+        (options.AgentValidation && !options.AgentVisibleWindow) || options.HiddenWindow || options.Tui;
+
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
     
     // reconfigure
@@ -381,8 +387,6 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     
     // window config tweaks
     windowConfig.Fullscreen = config_.userSettings.BorderlessFullscreen;
-    windowConfig.HiddenWindow =
-        (options.AgentValidation && !options.AgentVisibleWindow) || options.HiddenWindow || options.Tui;
     
     // create windows
     window_.reset(new Vulkan::Window(windowConfig));

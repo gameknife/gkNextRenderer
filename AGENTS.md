@@ -20,10 +20,16 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 **Subprojects (under `src/Application/`):**
 - Render: gkNextRenderer (main), gkNextMinimalRenderer, gkNextVisualTest, RmlUiDemo, plus
   gkNextStillBenchmark and gkNextMotionBenchmark (both under the `Render/gkNextBenchmark/` directory)
-- Editor: gkNextEditor (ImGui editor + node-based material editor), ScadStudio, ScadLibrary
+- Editor: gkNextEditor (ImGui editor + node-based material editor + play-in-editor for C# games),
+  ScadStudio, ScadLibrary
 - Game: MagicaLego, Brotato3D, KongLie3D, NextRA, NextDayz, NextTotalwar, BrickPlayer, CharacterDemo,
-  FlappyCpp/FlappyCSharp (`Game/Flappy/`), DotNetSandbox, TruckerDemo, StudioSim, AirportSim, CitySolSim,
-  NextWorldTravel, Voyage3D
+  FlappyCpp/FlappyCSharp (`Game/Flappy/`), Brotato3DCSharp, DotNetSandbox, gkNextLauncher, TruckerDemo,
+  StudioSim, AirportSim, CitySolSim, NextWorldTravel, Voyage3D
+  - `gkNextLauncher` 在同一个进程内加载/卸载任意 C# 游戏（Unity 的 Play 模型）；三个 C# 目标
+    与它共用 `ManagedGameHostInstance`，差异全部在 `assets/configs/games/*.game.json`。
+    `gkNextEditor` 用同一个 `ManagedGameSession` 实现 play-in-editor。CoreCLR 专属——
+    launcher 在 AOT 配置下不构建，编辑器的 PIE 在 AOT 下报告不可用。见
+    [托管游戏 Launcher](docs/designs/managed-game-launcher-design.md)
 - Util: Packager (asset paking), ScadCatalog
 
 **Release targets:** the desktop release ships exactly three of these —
@@ -256,8 +262,17 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 - Write a game by deriving from `NextGameInstance` and marking it `[GameInstance]`; a source
   generator emits the entry point, and a missing/duplicate/invalid one is a compile error.
   `docs/AGENT_GUIDE/CSharpGameDevelopment.md` is the getting-started guide; `FlappyCSharp` is its
-  worked example. Every app still needs a ~90-line C++ shell that installs the module and forwards
-  the lifecycle hooks — a hook the shell does not forward silently never reaches C#.
+  worked example.
+- **A C# game is a manifest plus a CMake target.** `assets/configs/games/<id>.game.json` declares the
+  window, assembly, required modules, initial scene and hot-reload policy;
+  `Modules::NextDotNet::ManagedGameHostInstance` is the single shell that forwards every lifecycle
+  hook, so the per-game `CreateGameInstance` is ~15 lines. Never hand-write hook forwarding again —
+  that is how `FlappyCSharp` silently lost gamepad input.
+- Run a C# game from its own executable, from `gnb run gkNextLauncher` (loads any of them in one
+  process, can republish their C# from the menu), or from `gkNextEditor` itself: F5 plays, F8 ejects
+  back to the editor so the running game's scene can be inspected and edited through the Outliner
+  and Properties panels. Editor Stop reloads the scene that was open before Play and keeps no edits
+  made during it. See `docs/designs/managed-game-launcher-design.md`.
 - An application gets its C# through `gk_dotnet_managed_game(<target> PROJECT <csproj> DIR <dir>)`;
   a target that links the module without hosting C# calls `gk_dotnet_stub_game(<target>)` instead
 - `FlappyCpp` vs `FlappyCSharp` replay parity is the binding regression — see

@@ -7,6 +7,7 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
+#include "Engine/Runtime/Interface/AgentQueries.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Modules/RenderViews/OffscreenRenderViewController.hpp"
 #include "Modules/SceneExport/FSceneSaver.h"
@@ -45,7 +46,8 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 }
 
 EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine) :
-    NextGameInstanceBase(config, options, engine)
+    NextGameInstanceBase(config, options, engine),
+    playSession_(*engine)
 {
     editorUserInterface_ = std::make_unique<EditorInterface>(this);
 
@@ -53,11 +55,15 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Runtime::Co
 
     // windows config
     config.Title = "gkNextEditor";
-    if (config.HeadlessSurface)
+    if (config.HeadlessSurface || config.HiddenWindow)
     {
         // A headless host has no desktop work area. SDL's fallback display can
         // report a virtual 16K monitor, which would make the editor allocate
         // unreasonably large render targets. Keep the requested CLI size.
+        //
+        // A hidden window gets the same treatment: nobody is looking at it, and sizing it from the
+        // monitor makes agent validation depend on the machine's display. Honouring the requested
+        // size is what lets a script address the UI in normalized coordinates at all.
         config.Width = options.Width;
         config.Height = options.Height;
     }
@@ -102,6 +108,42 @@ void EditorGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
                       NextCVar::ECVarFlags::Archive,
                       "Frames to wait after gizmo interaction before resuming progressive rendering", nullptr, 0, 120);
     cvars.RegisterUserFileChannel("ed.", "assets/configs/cvar_user.editor.json");
+
+    // Play-in-editor control channel. Not archived: which game was running is a session fact, not
+    // a preference. Both callbacks only record the request — starting a game reloads the world,
+    // which must not happen inside a cvar write.
+    cvars.RegisterString("ed.play", "", &playCVarValue_, NextCVar::ECVarFlags::None,
+                         "Managed game to run in the editor: a game id from assets/configs/games, "
+                         "or empty to stop",
+                         [this]()
+                         {
+                             pendingPlayRequest_ = playCVarValue_;
+                             hasPendingPlayRequest_ = true;
+                         });
+    cvars.RegisterBool("ed.playEject", false, &playEjectCVar_, NextCVar::ECVarFlags::None,
+                       "While playing: take input and the camera back from the game",
+                       [this]() { playSession_.SetEjected(playEjectCVar_); });
+}
+
+void EditorGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegistry& reg)
+{
+    reg.Add("pieState", [this]() -> Runtime::Agent::FAgentQueryValue
+            {
+                switch (playSession_.State())
+                {
+                case Editor::EPlayState::Playing: return std::string("Playing");
+                case Editor::EPlayState::Ejected: return std::string("Ejected");
+                default: return std::string("Stopped");
+                }
+            });
+    reg.Add("pieActive", [this]() -> Runtime::Agent::FAgentQueryValue { return playSession_.ActiveGameId(); });
+    reg.Add("pieAvailable", [this]() -> Runtime::Agent::FAgentQueryValue { return playSession_.IsAvailable(); });
+    reg.Add("pieGameCount", [this]() -> Runtime::Agent::FAgentQueryValue
+            { return static_cast<int64_t>(playSession_.Games().size()); });
+    reg.Add("scenePath", [this]() -> Runtime::Agent::FAgentQueryValue
+            { return GetEditorInterface().GetEditorUiState().currentScenePath; });
+    reg.Add("selectedId", [this]() -> Runtime::Agent::FAgentQueryValue
+            { return static_cast<int64_t>(GetEngine().GetScene().GetSelectedId()); });
 }
 
 void EditorGameInstance::OnInit()
@@ -238,6 +280,8 @@ void EditorGameInstance::OnInit()
         GetEditorInterface().GetEditorUiState().currentScenePath = startupScene;
     }
 
+    playSession_.Initialize();
+
 #if GK_WITH_VITURE
     if (GOption != nullptr && GOption->ArMode)
     {
@@ -253,6 +297,36 @@ void EditorGameInstance::OnInit()
 
 void EditorGameInstance::OnTick(double deltaSeconds)
 {
+    playSession_.OnTick(deltaSeconds);
+
+    if (hasPendingPlayRequest_)
+    {
+        const std::string requested = pendingPlayRequest_;
+        hasPendingPlayRequest_ = false;
+        if (requested.empty())
+        {
+            playSession_.Stop();
+        }
+        else
+        {
+            GetEditorInterface().GetEditorUiState().lastPlayedGameId = requested;
+            StartPlaySession(requested);
+        }
+    }
+
+    if (playSession_.IsRunning())
+    {
+        // A running game animates the world every frame, so accumulating a progressive image would
+        // only average together frames that no longer agree. The editor camera is also frozen while
+        // the game owns input; ejecting hands it back.
+        GetEngine().SetProgressiveRendering(false);
+        if (!playSession_.GameOwnsInput())
+        {
+            modelViewController_.UpdateCamera(1.0f, deltaSeconds);
+        }
+        return;
+    }
+
     const bool progressiveEnabled = GetEngine().GetUserSettings().ProgressiveRender;
     bool moving = modelViewController_.UpdateCamera(1.0f, deltaSeconds);
 #if GK_WITH_VITURE
@@ -291,6 +365,7 @@ void EditorGameInstance::OnTick(double deltaSeconds)
 
 void EditorGameInstance::OnDestroy()
 {
+    playSession_.OnEditorDestroy();
 #if GK_WITH_VITURE
     if (headPoseTracker_)
     {
@@ -354,11 +429,41 @@ void EditorGameInstance::DrawVitureDebugPanel()
 
 void EditorGameInstance::OnSceneLoaded()
 {
+    playSession_.OnSceneLoaded();
     modelViewController_.Reset(GetEngine().GetScene().GetRenderCamera());
     for (auto& cameraViewController : cameraViewControllers_)
     {
         cameraViewController.Reset(GetEngine().GetScene().GetRenderCamera());
     }
+}
+
+void EditorGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                                            std::vector<Assets::Model>& models,
+                                            std::vector<Assets::FMaterial>& materials,
+                                            std::vector<Assets::LightObject>& lights,
+                                            std::vector<Assets::AnimationTrack>& tracks)
+{
+    // A managed game builds its world here. Without this the editor would load the game's scene
+    // file and none of the content the game generates procedurally.
+    playSession_.OnBeforeSceneRebuild(nodes, models, materials, lights, tracks);
+}
+
+bool EditorGameInstance::OnGameRequestedClose()
+{
+    // A game quitting means "end the Play session", never "close the editor".
+    return playSession_.OnGameRequestedClose();
+}
+
+bool EditorGameInstance::OnGamepadInput(int16_t leftStickX, int16_t leftStickY, int16_t rightStickX,
+                                        int16_t rightStickY, int16_t leftTrigger, int16_t rightTrigger)
+{
+    playSession_.SetGamepadInput(leftStickX, leftStickY, rightStickX, rightStickY, leftTrigger, rightTrigger);
+    return false;
+}
+
+void EditorGameInstance::StartPlaySession(const std::string& gameId)
+{
+    playSession_.Play(gameId, GetEditorInterface().GetEditorUiState().currentScenePath);
 }
 
 void EditorGameInstance::SelectSceneCamera(const size_t cameraIndex)
@@ -401,6 +506,9 @@ bool EditorGameInstance::OnRenderUI()
 #if GK_WITH_VITURE
     DrawVitureDebugPanel();
 #endif
+    // After the editor, so a game HUD sits on top of the viewport rather than under the panels.
+    // Suppressed while ejected — see FPlaySession::OnRenderGameUI.
+    playSession_.OnRenderGameUI();
     return true;
 }
 
@@ -425,6 +533,12 @@ NextUI::FUiFrameResult EditorGameInstance::RenderUiFrame(const FGameUiFrameConte
         DrawVitureDebugPanel();
     }
 #endif
+    if (context.surfaceKind == FGameUiFrameContext::ESurfaceKind::MainWindow)
+    {
+        // Only on the main window: a remote view renders the same scene but must not receive a
+        // second copy of the game's immediate-mode UI.
+        playSession_.OnRenderGameUI();
+    }
     return {NextUI::EUiDeveloperLayer::All};
 }
 
@@ -437,6 +551,36 @@ void EditorGameInstance::OnRemoteUiSessionClosed(std::string_view sessionId)
 
 bool EditorGameInstance::OnKey(SDL_Event& event)
 {
+    if (event.key.type == SDL_EVENT_KEY_DOWN)
+    {
+        switch (event.key.key)
+        {
+        case SDLK_F5:
+            if (playSession_.IsRunning())
+            {
+                playSession_.Stop();
+            }
+            else if (!GetEditorInterface().GetEditorUiState().lastPlayedGameId.empty())
+            {
+                StartPlaySession(GetEditorInterface().GetEditorUiState().lastPlayedGameId);
+            }
+            return true;
+        case SDLK_F8:
+            playSession_.ToggleEject();
+            return true;
+        default:
+            break;
+        }
+    }
+
+    // While the game owns input the editor keeps its hands off: the engine has already delivered
+    // this event to the managed side, and reacting here too would move the editor camera and fire
+    // editor shortcuts underneath the running game.
+    if (playSession_.GameOwnsInput())
+    {
+        return true;
+    }
+
 #if GK_WITH_VITURE
     if (event.key.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_R && headPoseTracker_ && arCamera_.Recenter())
     {
@@ -525,6 +669,11 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
 
 bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
 {
+    if (playSession_.GameOwnsInput())
+    {
+        return true;
+    }
+
     const auto hoverTarget = ResolveViewportUnderMouse();
     const bool rightMousePressed = (GetEngine().GetMouseButtons() & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
     const std::optional<EViewportInputTarget> target =
@@ -576,6 +725,11 @@ bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
 
 bool EditorGameInstance::OnMouseButton(SDL_Event& event)
 {
+    if (playSession_.GameOwnsInput())
+    {
+        return true;
+    }
+
     const auto targetUnderMouse = ResolveViewportUnderMouse();
     if (event.button.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
     {
@@ -660,6 +814,11 @@ bool EditorGameInstance::OnMouseButton(SDL_Event& event)
 
 bool EditorGameInstance::OnScroll(double xoffset, double yoffset)
 {
+    if (playSession_.GameOwnsInput())
+    {
+        return true;
+    }
+
     const auto target = ResolveViewportUnderMouse();
     if (!target.has_value())
     {

@@ -28,11 +28,7 @@ namespace Modules::NextDotNet
         /// binaries that must sit beside the host, not content that can live inside a .pak.
         std::filesystem::path ResolveManagedRoot()
         {
-            if (const char* fromEnv = std::getenv("GK_DOTNET_MANAGED_DIR"); fromEnv != nullptr && *fromEnv != '\0')
-            {
-                return std::filesystem::path(fromEnv);
-            }
-            return NextRenderer::GetExecutableDirectory() / "csharp";
+            return DotNetRuntime::ManagedRoot();
         }
 
         std::filesystem::path ResolveDotNetRoot()
@@ -48,6 +44,82 @@ namespace Modules::NextDotNet
 #endif
         }
 
+        /// The C# sources, for the two operations that compile rather than load: the start-up
+        /// rebuild and a host-initiated republish.
+        ///
+        /// Not resolved through the asset path: assets/csharp is not copied next to the executable
+        /// — only its published output is — so resolving it against the runtime root silently finds
+        /// nothing, which is how the start-up rebuild used to no-op in a normal build tree. The
+        /// baked source path is the only thing that knows where the tree is; an installed build has
+        /// no sources and correctly gets an empty path.
+        std::filesystem::path ResolveManagedSourceRoot()
+        {
+            if (const char* fromEnv = std::getenv("GK_DOTNET_MANAGED_SOURCES");
+                fromEnv != nullptr && *fromEnv != '\0')
+            {
+                return std::filesystem::path(fromEnv);
+            }
+#if defined(GK_DOTNET_MANAGED_SOURCE_ROOT)
+            std::error_code ec;
+            const std::filesystem::path baked(GK_DOTNET_MANAGED_SOURCE_ROOT);
+            if (std::filesystem::exists(baked, ec))
+            {
+                return baked;
+            }
+#endif
+            return {};
+        }
+    }
+
+    std::filesystem::path DotNetRuntime::ManagedRoot()
+    {
+        if (const char* fromEnv = std::getenv("GK_DOTNET_MANAGED_DIR"); fromEnv != nullptr && *fromEnv != '\0')
+        {
+            return std::filesystem::path(fromEnv);
+        }
+        return NextRenderer::GetExecutableDirectory() / "csharp";
+    }
+
+    bool DotNetRuntime::PublishProject(const std::string& projectRelativeToManagedSources,
+                                       const std::string& outputSubdirectory,
+                                       std::string& outError)
+    {
+#if GK_DOTNET_USE_AOT
+        (void)projectRelativeToManagedSources;
+        (void)outputSubdirectory;
+        outError = "the managed game is linked into this binary; rebuild the executable instead";
+        return false;
+#else
+        const std::filesystem::path sourceRoot = ResolveManagedSourceRoot();
+        if (sourceRoot.empty())
+        {
+            outError = "no C# sources are reachable from this build";
+            return false;
+        }
+
+        const std::filesystem::path project = sourceRoot / projectRelativeToManagedSources;
+        std::error_code ec;
+        if (!std::filesystem::exists(project, ec))
+        {
+            outError = "project not found: " + project.string();
+            return false;
+        }
+
+        // Same command CMake's gk_dotnet_managed_game runs. Deliberately the same output layout
+        // too: a rebuild from inside the launcher must land where the next load will look, or it
+        // would appear to succeed and change nothing.
+        const std::string command = "dotnet publish \"" + project.string() + "\" -c Release -o \"" +
+                                    (ManagedRoot() / outputSubdirectory).string() + "\" --nologo";
+        SPDLOG_INFO("[dotnet] republishing {}", project.string());
+
+        const int exitCode = NextRenderer::OSProcess(command.c_str());
+        if (exitCode != 0)
+        {
+            outError = "dotnet publish failed (exit " + std::to_string(exitCode) + ")";
+            return false;
+        }
+        return true;
+#endif
     }
 
     DotNetRuntime::DotNetRuntime(NextEngine& engine, FConfig config)
@@ -61,7 +133,7 @@ namespace Modules::NextDotNet
         if (managed_ != nullptr)
         {
             CallLifecycleHook(EScriptHook::OnDestroy);
-            managed_->UnloadGame();
+            UnloadGame();
         }
         GSceneBuildContext.Clear();
         GInputState.Reset();
@@ -98,38 +170,118 @@ namespace Modules::NextDotNet
             return;
         }
 
-        const char* hotReloadStatus = !config_.enableHotReload ? "off"
-                                      : host_->SupportsHotReload() ? "on"
-                                                                  : "unavailable";
+        // Whether hot reload actually runs is decided per game at load time; what the host reports
+        // here is whether the backend can do it at all.
+        const char* hotReloadStatus = host_->SupportsHotReload() ? "available" : "unavailable";
         SPDLOG_INFO("[dotnet] {} host ready ({} bindings, hot reload {})",
                     host_->BackendName(),
                     GK_ENGINE_API_COUNT,
                     hotReloadStatus);
 
-        gameAssemblyPath_ = ResolveGameAssemblyPath();
         if (config_.gameAssembly.empty())
         {
+            // A valid state: the host is up and a game can be loaded later. This is what
+            // gkNextLauncher starts in, and what a per-game host uses when its ManagedGameSession
+            // owns the load.
             SPDLOG_INFO("[dotnet] no game assembly configured; runtime is idle");
             return;
         }
 
-        const std::string path = gameAssemblyPath_.string();
+        LoadGameAssembly(config_.gameAssembly, config_.enableHotReload);
+    }
+
+    bool DotNetRuntime::SupportsRuntimeGameSwitching() const
+    {
+        return host_ != nullptr && host_->LoadsGameFromDisk();
+    }
+
+    bool DotNetRuntime::LoadGameAssembly(const std::string& relativeAssembly, bool enableHotReload)
+    {
+        if (managed_ == nullptr)
+        {
+            SPDLOG_ERROR("[dotnet] cannot load {}: the managed host is not running", relativeAssembly);
+            return false;
+        }
+
+        if (!host_->LoadsGameFromDisk())
+        {
+            // NativeAOT: the game is linked in and GameHost.Load ignores the path. Loading it a
+            // second time would re-run Initialize on the same module, so the linked-in game is
+            // treated as loaded once and never replaced.
+            if (gameLoaded_)
+            {
+                SPDLOG_WARN("[dotnet] ignoring load of {}: this backend has one linked-in game",
+                            relativeAssembly);
+                return false;
+            }
+            const int32_t status = managed_->LoadGame(MakeStr(relativeAssembly));
+            if (status != static_cast<int32_t>(EGameStatus::Ok))
+            {
+                SPDLOG_ERROR("[dotnet] failed to load the linked-in game (status {})", status);
+                return false;
+            }
+            gameLoaded_ = true;
+            SPDLOG_INFO("[dotnet] game module is linked into the executable");
+            return true;
+        }
+
+        if (gameLoaded_ && !UnloadGame())
+        {
+            return false;
+        }
+
+        const std::filesystem::path resolved = ResolveGameAssemblyPath(relativeAssembly);
+        const std::string path = resolved.string();
+
+        std::error_code ec;
+        if (!std::filesystem::exists(resolved, ec))
+        {
+            SPDLOG_ERROR("[dotnet] game assembly not found: {}", path);
+            return false;
+        }
+
         const int32_t status = managed_->LoadGame(MakeStr(path));
         if (status != static_cast<int32_t>(EGameStatus::Ok))
         {
             SPDLOG_ERROR("[dotnet] failed to load {} (status {})", path, status);
-            return;
+            return false;
         }
 
-        if (host_->LoadsGameFromDisk())
+        gameAssemblyPath_ = resolved;
+        gameAssemblyTimestamp_ = std::filesystem::last_write_time(resolved, ec);
+        hotReloadEnabled_ = enableHotReload;
+        hotReloadElapsed_ = 0.0;
+        gameLoaded_ = true;
+        SPDLOG_INFO("[dotnet] loaded {}", path);
+        return true;
+    }
+
+    bool DotNetRuntime::UnloadGame()
+    {
+        if (managed_ == nullptr || !gameLoaded_)
         {
-            std::error_code ec;
-            gameAssemblyTimestamp_ = std::filesystem::last_write_time(gameAssemblyPath_, ec);
-            SPDLOG_INFO("[dotnet] loaded {}", path);
+            return true;
         }
-        else
+
+        const int32_t status = managed_->UnloadGame();
+        gameLoaded_ = false;
+        gameAssemblyPath_.clear();
+
+        switch (static_cast<EGameStatus>(status))
         {
-            SPDLOG_INFO("[dotnet] game module is linked into the executable");
+        case EGameStatus::Ok:
+            unloadPendingStreak_ = 0;
+            return true;
+        case EGameStatus::UnloadPending:
+            // The game is gone as far as the engine is concerned, but its load context is still
+            // referenced. Tolerated once; the streak is what a host watches.
+            ++unloadPendingStreak_;
+            SPDLOG_WARN("[dotnet] unloaded the game, but its load context was not collected ({} in a row)",
+                        unloadPendingStreak_);
+            return true;
+        default:
+            SPDLOG_ERROR("[dotnet] unload failed (status {})", status);
+            return false;
         }
     }
 
@@ -147,8 +299,28 @@ namespace Modules::NextDotNet
         TickHotReload(deltaSeconds);
     }
 
+    void DotNetRuntime::SetInputEnabled(bool enabled)
+    {
+        if (inputEnabled_ == enabled)
+        {
+            return;
+        }
+        inputEnabled_ = enabled;
+        if (!enabled)
+        {
+            // Whatever was held when input was cut never gets its key-up, so release it here.
+            // Otherwise a game ejected out of mid-stride keeps walking for as long as it runs.
+            GInputState.Reset();
+        }
+    }
+
     void DotNetRuntime::HandleEvent(const SDL_Event& event)
     {
+        if (!inputEnabled_)
+        {
+            return;
+        }
+
         FInputEvent forwarded{};
         bool forward = false;
         const uint32_t eventFrame = engine_.GetTotalFrames();
@@ -305,13 +477,13 @@ namespace Modules::NextDotNet
         return host_ != nullptr ? host_->BackendName() : "none";
     }
 
-    std::filesystem::path DotNetRuntime::ResolveGameAssemblyPath() const
+    std::filesystem::path DotNetRuntime::ResolveGameAssemblyPath(const std::string& relativeAssembly) const
     {
-        if (config_.gameAssembly.empty())
+        if (relativeAssembly.empty())
         {
             return {};
         }
-        const std::filesystem::path configured(config_.gameAssembly);
+        const std::filesystem::path configured(relativeAssembly);
         if (configured.is_absolute())
         {
             return configured;
@@ -329,10 +501,9 @@ namespace Modules::NextDotNet
         // Deliberately shallow: the authoritative build happens in CMake, which publishes into the
         // binary directory. This only exists so editing C# and pressing run picks the change up
         // without a C++ rebuild, and it stays quiet when the SDK is not reachable.
-        const std::filesystem::path sourceRoot =
-            std::filesystem::path(Utilities::FileHelper::GetNormalizedFilePath("assets/csharp"));
+        const std::filesystem::path sourceRoot = ResolveManagedSourceRoot();
         std::error_code ec;
-        if (!std::filesystem::exists(sourceRoot, ec))
+        if (sourceRoot.empty())
         {
             return true;
         }
@@ -402,11 +573,11 @@ namespace Modules::NextDotNet
 
     void DotNetRuntime::TickHotReload(double deltaSeconds)
     {
-        if (managed_ == nullptr || !config_.enableHotReload || host_ == nullptr || !host_->SupportsHotReload())
+        if (managed_ == nullptr || !hotReloadEnabled_ || host_ == nullptr || !host_->SupportsHotReload())
         {
             return;
         }
-        if (gameAssemblyPath_.empty())
+        if (!gameLoaded_ || gameAssemblyPath_.empty())
         {
             return;
         }

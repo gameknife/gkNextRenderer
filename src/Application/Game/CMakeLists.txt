@@ -19,3 +19,8 @@ add_subdirectory(NextTotalwar)
 if(GK_DOTNET_ENABLED)
     add_subdirectory(DotNetSandbox)
 endif()
+# CoreCLR only: NativeAOT links one game into the binary, so a launcher there would have nothing
+# to choose between. Declared last so the managed publish targets it depends on already exist.
+if(GK_DOTNET_ENABLED AND NOT GK_DOTNET_USE_AOT)
+    add_subdirectory(gkNextLauncher)
+endif()

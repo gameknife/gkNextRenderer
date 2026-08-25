@@ -50,15 +50,37 @@ JSON 配置文件（`FlappyCSharp` 用 `assets/configs/flappy/gameplay.json`）�
 
 ## 2. 一个 C# 应用由四个文件组成
 
-**C# 游戏不是纯 C#**：每个应用仍需要一个约 90 行的 C++ 壳，负责创建窗口、装载 NextDotNet 模块、
-把引擎的生命周期钩子转发给托管侧。这个壳里**不写游戏逻辑**。
+**C# 游戏不是纯 C#**，但 C++ 的部分已经收敛到不能再少：所有 C# 游戏共用同一个原生壳
+`Modules::NextDotNet::ManagedGameHostInstance`，它负责建窗口、装 NextDotNet、把**每一个**生命周期钩子
+转发给托管侧。你要写的 C++ 只有一个约 15 行的 `CreateGameInstance`，其中不含任何游戏逻辑。
 
 | 文件 | 作用 | 抄谁 |
 |---|---|---|
+| `assets/configs/games/<id>.game.json` | **游戏清单**：窗口、程序集、模块、初始场景、热重载 | `flappy.game.json` |
 | `src/Application/Game/<Name>/CMakeLists.txt` | 声明目标，绑定 csproj | `Flappy/FlappyCSharp/CMakeLists.txt` |
-| `src/Application/Game/<Name>/<Name>GameInstance.{hpp,cpp}` | C++ 壳：转发钩子 | 同上目录 |
+| `src/Application/Game/<Name>/<Name>Main.cpp` | 15 行：注册 loader + 指向 manifest | `FlappyCSharpMain.cpp` |
 | `assets/csharp/<Name>/<Name>.csproj` | 托管工程 | `Flappy/FlappyCSharp/FlappyCSharp.csproj` |
 | `assets/csharp/<Name>/*.cs` | **你的游戏** | `FlappyCSharpGameInstance.cs` |
+
+manifest 是这个游戏唯一的声明来源——它自己的 exe 和 `gkNextLauncher` 读同一份：
+
+```json
+{
+  "id": "mygame",
+  "displayName": "My Game",
+  "assembly": "mygame/MyGame.dll",
+  "project": "MyGame/MyGame.csproj",
+  "window": { "title": "My Game", "width": 1280, "height": 720, "forceSDR": true },
+  "requiredModules": ["NextAudio"],
+  "initialScene": "Empty.proc",
+  "showFlags": { "debugGraphicsPanel": false, "overlay": false },
+  "hotReload": true
+}
+```
+
+`initialScene` 留空表示你自己在 `OnInit` 里调 `Engine.RequestLoadScene`。`requiredModules` 是
+**校验**：原生模块是链接期决定的，宿主没有的模块会让这个游戏在菜单里直接标灰并说明原因，而不是加载
+到一半才发现没有 loader。
 
 CMake 侧只有两处是你要填的：
 
@@ -67,20 +89,32 @@ gk_configure_application(MyGame MODULES ${GK_STANDARD_RUNTIME_MODULES} NextDotNe
 
 gk_dotnet_managed_game(MyGame
     PROJECT "${GK_DOTNET_MANAGED_ROOT}/MyGame/MyGame.csproj"
-    DIR mygame)          # 托管产物落到 bin/csharp/mygame/
+    DIR mygame)          # 托管产物落到 bin/csharp/mygame/，与 manifest 的 assembly 前缀一致
 ```
 
-C++ 壳里只有两行和你有关：
+C++ 全文：
 
 ```cpp
-ConfigureWindow(config, options, "MyGame", 1280, 720, true);
-Modules::NextDotNet::Install(*engine, {.gameAssembly = "mygame/MyGame.dll"});
+#include "Modules/NextDotNet/ManagedGameHostInstance.hpp"
+
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config,
+                                                        Runtime::Config::Options& options,
+                                                        NextEngine* engine)
+{
+    return std::make_unique<Modules::NextDotNet::ManagedGameHostInstance>(
+        config, options, engine,
+        Modules::NextDotNet::FManagedGameHostOptions{
+            .manifestPath = "assets/configs/games/mygame.game.json",
+            .linkedModules = {"NextAudio", "NextPhysics", "GltfLoader"},
+        });
+}
 ```
 
-其余全是把 `OnInit` / `OnTick` / `OnRenderUI` / `BeforeSceneRebuild` / `OnSceneLoaded` /
-`OverrideRenderCamera` 转发给 `Modules::NextDotNet::Get(GetEngine())` 的样板，照抄
-`FlappyCSharpGameInstance.cpp` 即可。**壳里不转发的钩子，C# 侧就收不到**——这是新应用最容易踩的坑，
-比如忘了转发 `OnRenderUI`，你的 HUD 就一行都不画，而且没有任何报错。
+需要额外的 native loader（比如 SCAD 资产）就在这里 `Modules::Scad::Register();`，并把模块名加进
+`linkedModules`。
+
+> 早期每个应用各自抄一份约 90 行的钩子转发壳。那样漏转发一个钩子就是静默失效——`FlappyCSharp` 曾经
+> 因此收不到手柄输入。现在转发只有一份实现，这类问题不会再出现；**不要**再手写钩子转发。
 
 csproj 里只有一处不能改：对 `GkNext.Engine` 的引用必须带 `<Private>false</Private>` 和
 `<ExcludeAssets>runtime</ExcludeAssets>`。它必须由宿主的加载上下文解析；跟着游戏程序集复制一份会
@@ -311,8 +345,25 @@ NativeAOT 下会失效。`FlappyConfig.cs` 是可以直接抄的模板，包含�
 
 ```bash
 gnb build FlappyCSharp        # 构建（C++ 壳 + 托管发布一起做）
-gnb run FlappyCSharp          # 运行
+gnb run FlappyCSharp          # 运行它自己的 exe
+gnb run gkNextLauncher        # 或：一个进程里选任意 C# 游戏
 ```
+
+**Launcher 是更快的循环。** `gkNextLauncher` 读 `assets/configs/games/*.game.json`，菜单里列出所有
+C# 游戏（Up/Down 选，Enter 开，游戏里 Esc 回菜单）。每个条目旁边的 **Rebuild** 会就地重新发布那个游戏的
+C#——**改 C# → 点一下 → 玩**，不需要 C++ 构建，也不需要重启进程。切换游戏时引擎会把世界（场景、物理、
+cvar、ShowFlags、音频、窗口标题）恢复到中性状态，所以上一个游戏不会污染下一个。
+
+**编辑器里也能跑（play-in-editor）。** `gnb editor` 的工具栏有游戏下拉 + Play（**F5**）。游戏跑起来后按
+**F8** eject：游戏继续跑，但相机和输入回到编辑器，于是可以在 Outliner 里选中它的节点、在 Properties 里
+读写 Transform 和组件——对着活着的游戏世界调参。再按 F8 回到游戏，Stop 回到 Play 之前打开的场景。
+
+PIE 是刻意窄的：**Stop 不保留 Play 期间的编辑**，它只是把 Play 前那个场景按路径重新加载一遍，选择集和
+undo 历史都从头开始。Play 也总是走游戏自己的完整流程和场景，没有"用当前编辑器场景开始游戏"这回事。
+Stop 之后可以点 **Rebuild C#**，下一次 Play 就用新代码。
+
+Launcher 只在 CoreCLR 后端下构建。NativeAOT 把游戏静态链进 exe，一个 exe 只能有一个游戏——所以发布仍然
+是 per-game exe，就像 Unity 的 Editor 与 Player。
 
 **热重载**（仅 CoreCLR 后端，即默认后端）：引擎每 0.5 秒检查游戏程序集的时间戳，变了就卸载重载，
 不用重启应用。触发方式是在应用运行着的时候重新发布托管工程：
@@ -329,12 +380,14 @@ dotnet publish assets/csharp/Flappy/FlappyCSharp/FlappyCSharp.csproj -c Release 
 代码需要重启。
 
 热重载不是应用必须满足的架构要求。大量持有节点 / body handle 和对象池状态的游戏，可以像
-`Brotato3DCSharp` 一样在安装 `NextDotNet` 时设 `.enableHotReload = false`，使用“构建后重启”的简单
-开发循环；不要仅为了保住热重载而给玩法层加入状态序列化和半重建世界协议。
+`Brotato3DCSharp` 一样在 manifest 里写 `"hotReload": false`，使用"构建后重启"的简单开发循环；
+不要仅为了保住热重载而给玩法层加入状态序列化和半重建世界协议。在 launcher 下这条路径同样顺畅：
+Esc 回菜单、Rebuild、再进游戏，全程不重启进程。
 
-> 注意：引擎启动时的"C# 源码变了就自动重编"只对 sandbox 工程 `GkNext.Game` 生效，它硬编码了那个
-> csproj。改 `FlappyCSharp` 的 `.cs` 会让它误以为需要重编并去编 `GkNext.Game`，你的改动不会生效。
-> 用上面的 `dotnet publish` 或 `gnb build <目标>`。
+> 注意：引擎启动时的"C# 源码变了就自动重编"（manifest 的 `compileManagedSources`）只对 sandbox 工程
+> `GkNext.Game` 生效，它硬编码了那个 csproj。改 `FlappyCSharp` 的 `.cs` 会让它误以为需要重编并去编
+> `GkNext.Game`，你的改动不会生效。用上面的 `dotnet publish`、`gnb build <目标>`，或 launcher 里那个
+> 游戏自己的 Rebuild 按钮。
 
 **截图验证**（不弹窗、自动退出，适合快速看一眼）：
 
@@ -396,7 +449,9 @@ GK_DOTNET_ALLOC_BUDGET=8192    # 可调
 | AOT 安全的 JSON 配置 | `assets/csharp/Flappy/FlappyCSharp/FlappyConfig.cs` |
 | 确定性随机 | `assets/csharp/Flappy/FlappyCSharp/FlappyRng.cs` |
 | 纯逻辑对象 | `FlappyBird.cs` / `FlappyPipes.cs` / `FlappyParallax.cs` |
-| C++ 壳 | `src/Application/Game/Flappy/FlappyCSharp/FlappyCSharpGameInstance.cpp` |
+| C++ 壳（15 行的全部） | `src/Application/Game/Flappy/FlappyCSharp/FlappyCSharpMain.cpp` |
+| 游戏清单 | `assets/configs/games/flappy.game.json` |
+| 钩子转发的唯一实现 | `src/Modules/NextDotNet/ManagedGameHostInstance.cpp` |
 | 最小 ABI 探针 | `assets/csharp/GkNext.Game/ProbeGame.cs` |
 | 可调用的全部 API | `assets/csharp/GkNext.Engine/Engine.g.cs`（生成，别手改） |
 | 可读写的全部组件属性 | `assets/csharp/GkNext.Engine/Components.g.cs`（生成，别手改） |
@@ -406,3 +461,5 @@ GK_DOTNET_ALLOC_BUDGET=8192    # 可调
 - [.NET Bindings](DotNetBindings.md) —— 给引擎加新的 C# 能力
 - [.NET 脚本运行时架构](../designs/dotnet-scripting-design.md) —— 双后端、ABI 形状与取舍理由
 - [Flappy Bird Parity](../projects/flappy-bird-parity/introduction.md) —— C++/C# 对照验收怎么跑
+- [托管游戏 Launcher](../designs/managed-game-launcher-design.md) —— manifest 契约、进程内切换游戏、
+  play-in-editor、世界重置边界

@@ -1,0 +1,86 @@
+{
+  "name": "launcher-swap-stress",
+  "target": "gkNextLauncher",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 60000
+  },
+  "comment": "Eight swaps back to back. What this catches that launcher-game-switch does not is accumulation: a load context that is never collected, or native state that grows a little on every cycle. game.unloadPending is asserted after every unload because a streak is exactly how a managed leak shows up — one uncollected context is the GC not having run, a growing count is a leak. The keyboard path (Down/Enter/Esc) is exercised at the end so the menu's own input is covered, not just the cvar control channel.",
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running" },
+    { "type": "wait-frames", "n": 10 },
+
+    { "type": "cvar", "name": "game.select", "set": "flappy" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Playing" },
+    { "type": "wait-ms", "ms": 250 },
+    { "type": "cvar", "name": "game.select", "set": "" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Idle" },
+    { "type": "assert", "query": "game.unloadPending", "op": "eq", "value": 0 },
+
+    { "type": "cvar", "name": "game.select", "set": "sandbox" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Playing" },
+    { "type": "wait-ms", "ms": 250 },
+    { "type": "cvar", "name": "game.select", "set": "" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Idle" },
+    { "type": "assert", "query": "game.unloadPending", "op": "eq", "value": 0 },
+
+    { "type": "cvar", "name": "game.select", "set": "flappy" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Playing" },
+    { "type": "wait-ms", "ms": 250 },
+    { "type": "cvar", "name": "game.select", "set": "" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Idle" },
+    { "type": "assert", "query": "game.unloadPending", "op": "eq", "value": 0 },
+
+    { "type": "cvar", "name": "game.select", "set": "sandbox" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Playing" },
+    { "type": "wait-ms", "ms": 250 },
+    { "type": "cvar", "name": "game.select", "set": "" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Idle" },
+    { "type": "assert", "query": "game.unloadPending", "op": "eq", "value": 0 },
+
+    { "type": "cvar", "name": "game.select", "set": "flappy" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Playing" },
+    { "type": "wait-ms", "ms": 250 },
+    { "type": "cvar", "name": "game.select", "set": "" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Idle" },
+    { "type": "assert", "query": "game.unloadPending", "op": "eq", "value": 0 },
+
+    { "type": "cvar", "name": "game.select", "set": "sandbox" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Playing" },
+    { "type": "wait-ms", "ms": 250 },
+    { "type": "cvar", "name": "game.select", "set": "" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Idle" },
+    { "type": "assert", "query": "game.unloadPending", "op": "eq", "value": 0 },
+
+    { "type": "cvar", "name": "game.select", "set": "flappy" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Playing" },
+    { "type": "wait-ms", "ms": 250 },
+    { "type": "cvar", "name": "game.select", "set": "" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Idle" },
+    { "type": "assert", "query": "game.unloadPending", "op": "eq", "value": 0 },
+
+    { "type": "log", "message": "keyboard path: highlight Flappy in the menu and start it" },
+    { "type": "assert", "query": "game.highlighted", "op": "eq", "value": "brotato3d" },
+    { "type": "key", "code": "DOWN", "action": "press" },
+    { "type": "wait-frames", "n": 3 },
+    { "type": "assert", "query": "game.highlighted", "op": "eq", "value": "flappy" },
+    { "type": "key", "code": "RETURN", "action": "press" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Playing" },
+    { "type": "assert", "query": "game.active", "op": "eq", "value": "flappy" },
+    { "type": "wait-frames", "n": 20 },
+
+    { "type": "log", "message": "keyboard path: Esc returns to the menu" },
+    { "type": "key", "code": "ESCAPE", "action": "press" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Idle" },
+    { "type": "assert", "query": "game.active", "op": "eq", "value": "" },
+    { "type": "assert", "query": "game.unloadPending", "op": "eq", "value": 0 },
+    { "type": "screenshot", "ui": true, "out": "screenshots/launcher_after_stress" },
+
+    { "type": "assert", "query": "engine.status", "op": "eq", "value": "Running" },
+    { "type": "quit" }
+  ]
+}

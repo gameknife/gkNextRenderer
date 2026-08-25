@@ -291,7 +291,8 @@ SDL_HitTestResult SDLCALL Window::TitleBarHitTestCallback(SDL_Window* win, const
 }
 
 Window::Window(const WindowConfig& config) :
-    config_(config)
+    config_(config),
+    title_(config.Title)
 {
     if (config_.HeadlessSurface)
     {
@@ -515,6 +516,19 @@ void Window::Show() const
         return;
     }
     SDL_ShowWindow(window_);
+}
+
+void Window::SetTitle(const std::string& title)
+{
+    if (title == title_)
+    {
+        return;
+    }
+    title_ = title;
+    if (window_ != nullptr)
+    {
+        SDL_SetWindowTitle(window_, title_.c_str());
+    }
 }
 
 bool Window::SetSize(uint32_t width, uint32_t height) const

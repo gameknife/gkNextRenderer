@@ -20,6 +20,7 @@
 #include "EditorContext.hpp"
 #include "EditorMain.h"
 #include "Core/EditorLayoutConstants.hpp"
+#include "Core/EditorPlaySession.hpp"
 #include "Core/RecentScenes.hpp"
 #include "EditorUtils.h"
 #include "Engine/Options.hpp"
@@ -255,14 +256,140 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 0.0f));
     ImGui::SetCursorPosY((kToolbarSize - kToolbarIconHeight) * 0.5f);
 
+    Editor::FPlaySession& play = ctx.editor->GetPlaySession();
+    const bool playing = play.IsRunning();
+
+    // Play / Stop for the in-editor session. Separate from "Launch", below, which starts a
+    // standalone renderer on the current scene file — a different thing that happens to share a
+    // verb: this one runs a C# game inside this process, against this scene view.
+    const char* playLabel = playing ? ICON_FA_STOP " Stop" : ICON_FA_PLAY " Play";
     const float playButtonWidth =
         std::ceil(ImGui::CalcTextSize(ICON_FA_PLAY " Play").x + ImGui::GetStyle().FramePadding.x * 2.0f + 16.0f);
+
+    std::string playTooltip;
+    if (!play.IsAvailable())
+    {
+        playTooltip = "Play-in-editor is unavailable: " + play.UnavailableReason();
+    }
+    else if (playing)
+    {
+        playTooltip = "Stop '" + play.ActiveGameId() + "' and reload the scene that was open (F5)";
+    }
+    else if (uiState.lastPlayedGameId.empty())
+    {
+        playTooltip = "Pick a game from the list to the right, then Play";
+    }
+    else
+    {
+        playTooltip = "Play '" + uiState.lastPlayedGameId + "' in this editor (F5)";
+    }
+
+    ImGui::BeginDisabled(!play.IsAvailable() || (!playing && uiState.lastPlayedGameId.empty()));
     if (NextUI::Foundation::Button(
-            ICON_FA_PLAY " Play",
+            playLabel,
             {.variant = NextUI::Foundation::EButtonVariant::Primary,
-             .tone = NextUI::Foundation::EButtonTone::Success,
+             .tone = playing ? NextUI::Foundation::EButtonTone::Warning
+                             : NextUI::Foundation::EButtonTone::Success,
              .size = ImVec2(playButtonWidth, kToolbarIconHeight),
-             .tooltip = "Run the current scene in gkNextRenderer"}))
+             .tooltip = playTooltip.c_str()}))
+    {
+        if (playing)
+        {
+            play.Stop();
+        }
+        else
+        {
+            ctx.editor->StartPlaySession(uiState.lastPlayedGameId);
+        }
+    }
+    ImGui::EndDisabled();
+
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!play.IsAvailable() || playing);
+    ImGui::SetNextItemWidth(200.0f);
+    const char* preview = uiState.lastPlayedGameId.empty() ? "Select a game..." : uiState.lastPlayedGameId.c_str();
+    if (ImGui::BeginCombo("##pieGame", preview))
+    {
+        for (const Editor::FPlayGameEntry& entry : play.Games())
+        {
+            ImGui::BeginDisabled(!entry.available);
+            if (ImGui::Selectable(entry.displayName.c_str(), entry.id == uiState.lastPlayedGameId))
+            {
+                uiState.lastPlayedGameId = entry.id;
+            }
+            ImGui::EndDisabled();
+            if (!entry.available)
+            {
+                ImGui::SameLine();
+                ImGui::TextDisabled("(%s)", entry.unavailableReason.c_str());
+            }
+        }
+        if (play.Games().empty())
+        {
+            ImGui::TextDisabled("no games under assets/configs/games");
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::EndDisabled();
+
+    // Rebuilding is a stopped-only action on purpose: it publishes over the assembly the next Play
+    // will load, and swapping it under a running game is the hot-reload path, not this one.
+    const Editor::FPlayGameEntry* selected = nullptr;
+    for (const Editor::FPlayGameEntry& entry : play.Games())
+    {
+        if (entry.id == uiState.lastPlayedGameId)
+        {
+            selected = &entry;
+            break;
+        }
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(playing || selected == nullptr || !selected->canRebuild);
+    if (NextUI::Foundation::Button(
+            ICON_FA_HAMMER " Rebuild C#",
+            {.size = ImVec2(0.0f, kToolbarIconHeight),
+             .tooltip = "Recompile this game's C# now; the next Play uses it"}))
+    {
+        std::string error;
+        if (play.Rebuild(uiState.lastPlayedGameId, error))
+        {
+            SPDLOG_INFO("[pie] rebuilt {}", uiState.lastPlayedGameId);
+        }
+        else
+        {
+            SPDLOG_ERROR("[pie] rebuild failed: {}", error);
+        }
+    }
+    ImGui::EndDisabled();
+
+    if (playing)
+    {
+        ImGui::SameLine();
+        const bool ejected = play.State() == Editor::EPlayState::Ejected;
+        if (NextUI::Foundation::Button(
+                ejected ? ICON_FA_GAMEPAD " Resume" : ICON_FA_ARROW_POINTER " Eject",
+                {.tone = ejected ? NextUI::Foundation::EButtonTone::Success
+                                 : NextUI::Foundation::EButtonTone::Default,
+                 .size = ImVec2(0.0f, kToolbarIconHeight),
+                 .tooltip = ejected
+                     ? "Give input and the camera back to the game (F8)"
+                     : "Take input and the camera back from the game so you can inspect and edit "
+                       "its scene while it keeps running (F8)"}))
+        {
+            play.ToggleEject();
+        }
+        if (ejected)
+        {
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.25f, 1.0f), ICON_FA_CIRCLE_INFO " ejected");
+        }
+    }
+
+    ImGui::SameLine();
+    if (NextUI::Foundation::Button(
+            ICON_FA_UP_RIGHT_FROM_SQUARE " Launch",
+            {.size = ImVec2(0.0f, kToolbarIconHeight),
+             .tooltip = "Run the current scene in a separate gkNextRenderer process"}))
     {
         LaunchRendererDetached();
     }

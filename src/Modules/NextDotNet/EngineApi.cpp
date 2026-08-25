@@ -4,6 +4,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Interface/UserInterface.hpp"
@@ -246,10 +247,25 @@ namespace Modules::NextDotNet
 
         void Engine_RequestClose()
         {
-            if (auto* engine = NextEngine::GetInstance())
+            auto* engine = NextEngine::GetInstance();
+            if (engine == nullptr)
             {
-                engine->RequestClose();
+                return;
             }
+
+            // "Quit" means different things depending on who is hosting. In a per-game executable
+            // it ends the process, as it always has; under a launcher or an editor Play session it
+            // ends the game and hands control back. The managed API is identical either way — a
+            // game must not have to know which host it is running under.
+            //
+            // Deliberately routed through the game instance rather than NextEngine::RequestClose:
+            // the window's close button and Alt+F4 must keep closing the process.
+            if (NextGameInstanceBase* host = engine->GetGameInstance();
+                host != nullptr && host->OnGameRequestedClose())
+            {
+                return;
+            }
+            engine->RequestClose();
         }
 
         GkBool Engine_IsReplayMode() { return GOption != nullptr && GOption->FlappyReplay ? 1 : 0; }
