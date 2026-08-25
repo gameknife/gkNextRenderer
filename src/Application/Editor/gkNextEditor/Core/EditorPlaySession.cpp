@@ -247,13 +247,21 @@ namespace Editor
         impl_->sessionWasRunning = sessionRunning;
     }
 
-    bool FPlaySession::OnRenderGameUI()
+    bool FPlaySession::OnRenderGameUI(float viewportX, float viewportY, float viewportWidth,
+                                      float viewportHeight)
     {
         if (impl_->state != EPlayState::Playing)
         {
             return false;
         }
-        return impl_->session.OnRenderUI();
+
+        impl_->session.SetUiCanvas(viewportX, viewportY, viewportWidth, viewportHeight);
+        const bool consumed = impl_->session.OnRenderUI();
+        // Cleared straight away rather than left set for the frame: everything else that reaches
+        // these bindings — a script console, a future tool — is not the game and should see the
+        // ordinary full-window coordinates.
+        impl_->session.ClearUiCanvas();
+        return consumed;
     }
 
     void FPlaySession::OnBeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
@@ -334,7 +342,7 @@ namespace Editor
         return false;
     }
     void FPlaySession::OnTick(double) {}
-    bool FPlaySession::OnRenderGameUI() { return false; }
+    bool FPlaySession::OnRenderGameUI(float, float, float, float) { return false; }
     void FPlaySession::OnBeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>&,
                                             std::vector<Assets::Model>&,
                                             std::vector<Assets::FMaterial>&,

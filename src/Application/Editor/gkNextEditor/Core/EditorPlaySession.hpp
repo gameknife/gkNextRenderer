@@ -81,9 +81,16 @@ namespace Editor
         // --- hooks forwarded by EditorGameInstance ---------------------------------------------
 
         void OnTick(double deltaSeconds);
-        /// Draws the running game's own UI. Skipped while ejected, so the editor's panels are not
-        /// covered by a HUD the user is trying to look past.
-        bool OnRenderGameUI();
+        /// Draws the running game's own UI inside the given rectangle (the editor's viewport panel,
+        /// in ImGui screen coordinates). The game sees that rectangle as its screen: it lays out
+        /// against the size, draws offset into it, and is clipped to it — which is what stops a
+        /// HUD written for a full window from landing in the corner of the editor and painting
+        /// over the panels. A zero-sized rect means "the whole window", for when the viewport
+        /// panel is closed.
+        ///
+        /// Skipped while ejected, so the editor's panels are not covered by a HUD the user is
+        /// trying to look past.
+        bool OnRenderGameUI(float viewportX, float viewportY, float viewportWidth, float viewportHeight);
         void OnBeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
                                   std::vector<Assets::Model>& models,
                                   std::vector<Assets::FMaterial>& materials,

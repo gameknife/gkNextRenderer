@@ -213,6 +213,27 @@ Eject 是让 PIE 有用而不只是"能看"的那一半：游戏照常跑，但 
 就能在 Properties 里读写它的 Transform 和组件。切断输入时会顺手清空托管侧的按键状态，否则一个在半步中
 被 eject 的游戏会永远保持"正在往前走"——它再也收不到那个 key-up。
 
+### 7.1 游戏 UI 画在哪：UI canvas
+
+一个游戏的 HUD 是按 `UI.GetScreenSize()` 布局、用绝对坐标画到 ImGui foreground drawlist 的。游戏自己
+拥有窗口时这没问题；在编辑器里就不对了——HUD 会按整个编辑器窗口布局，并从窗口左上角开始画，盖在面板上。
+
+`FUiCanvas`（`EngineApi.hpp`）是这件事的解法：一个矩形，宿主设了它之后，
+
+- `UI.GetScreenSize()` 返回矩形的尺寸——游戏看到的"屏幕"就是那个面板；
+- `UI_DrawText` / `UI_DrawRect*` / `UI_SubmitDrawList` 的坐标平移进矩形；
+- `Input.GetMousePosition()` 相对矩形返回，游戏自己的 UI 命中测试才对得上它画的位置；
+- 绘制被裁剪到矩形，于是游戏的全屏遮罩不会糊住编辑器面板。
+
+**不做缩放。** 游戏适应面板尺寸，和它适应一个被拖小的窗口是同一件事——这样文字不会因为缩放而糊，也
+不必替游戏猜一个"设计分辨率"。
+
+canvas 未设置（尺寸为 0）时每个绑定的行为与从前逐字节相同，所以 per-game exe 和 launcher 不受影响；
+编辑器只在画游戏 UI 的那一刻设置它，画完立即清除，免得同一帧里别的 ImGui 使用者也被平移。
+
+已知边界：`UI_Begin` 开出来的是真正的 ImGui 窗口，位置由 ImGui 和 dock 管理，canvas 管不到它。目前
+所有 C# 游戏的 HUD 都走 drawlist 路径（`ManagedImGui` 与 Flappy/Brotato 都是），所以还没有必要处理。
+
 **这个 PIE 是刻意窄的。** Stop **不保留** Play 之前的编辑状态：它按路径重新加载 Play 前打开的那个场景，
 选择集、undo 历史、相机都从头开始，Play 期间对场景做的任何修改都会丢失。要跨 Play 会话保留编辑，需要
 一套世界快照，那是比"把游戏跑起来"大一个量级的问题，而把游戏跑起来才是这里的目标。Play 也总是走游戏

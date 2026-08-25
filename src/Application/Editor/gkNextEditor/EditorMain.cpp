@@ -508,8 +508,17 @@ bool EditorGameInstance::OnRenderUI()
 #endif
     // After the editor, so a game HUD sits on top of the viewport rather than under the panels.
     // Suppressed while ejected — see FPlaySession::OnRenderGameUI.
-    playSession_.OnRenderGameUI();
+    RenderPlaySessionUI();
     return true;
+}
+
+void EditorGameInstance::RenderPlaySessionUI()
+{
+    // The game's screen is the viewport panel, not the editor window. Without this a HUD written
+    // against a full window lands in the top-left corner of the editor and paints over the panels.
+    const Editor::EditorUiState& ui = GetEditorInterface().GetEditorUiState();
+    playSession_.OnRenderGameUI(ui.viewportContentPos.x, ui.viewportContentPos.y,
+                                ui.viewportContentSize.x, ui.viewportContentSize.y);
 }
 
 bool EditorGameInstance::OnRenderUI(const FGameUiFrameContext& context)
@@ -537,7 +546,7 @@ NextUI::FUiFrameResult EditorGameInstance::RenderUiFrame(const FGameUiFrameConte
     {
         // Only on the main window: a remote view renders the same scene but must not receive a
         // second copy of the game's immediate-mode UI.
-        playSession_.OnRenderGameUI();
+        RenderPlaySessionUI();
     }
     return {NextUI::EUiDeveloperLayer::All};
 }

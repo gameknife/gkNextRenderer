@@ -116,6 +116,8 @@ private:
 #endif
     void RayCastFromViewport(EViewportInputTarget target, const glm::vec2& mousePos,
                              std::function<bool(Assets::RayCastResult)> callback);
+    /// Draws the running game's UI into the viewport panel's rect.
+    void RenderPlaySessionUI();
 
     EditorActionDispatcher actions_{};
 

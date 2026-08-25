@@ -36,6 +36,7 @@ namespace Modules::NextDotNet
 {
     FSceneBuildContext GSceneBuildContext;
     FInputState GInputState;
+    FUiCanvas GUiCanvas;
 
     namespace
     {
@@ -70,6 +71,58 @@ namespace Modules::NextDotNet
                 out->Y = y;
             }
         }
+
+        // --- UI canvas ----------------------------------------------------------------------
+        // Managed UI is written in absolute coordinates against UI.GetScreenSize(). These three
+        // helpers are the whole of what it takes to put that output somewhere other than the
+        // window's top-left corner; see FUiCanvas.
+
+        /// Where the game's (0,0) is, in ImGui screen coordinates.
+        ///
+        /// Zero without a canvas, deliberately: that is the coordinate space every one of these
+        /// bindings already used, so a game running in its own window or under the launcher sees
+        /// no change at all from any of this.
+        ImVec2 UiCanvasOrigin()
+        {
+            return GUiCanvas.IsActive() ? ImVec2(GUiCanvas.offset.X, GUiCanvas.offset.Y) : ImVec2(0.0f, 0.0f);
+        }
+
+        ImVec2 UiCanvasToScreen(float x, float y)
+        {
+            const ImVec2 origin = UiCanvasOrigin();
+            return ImVec2(origin.x + x, origin.y + y);
+        }
+
+        /// Keeps a game's full-screen overlays inside its canvas instead of over the editor's
+        /// panels. A no-op when the canvas is the whole viewport, which is already the clip rect.
+        struct FUiCanvasClip
+        {
+            explicit FUiCanvasClip(ImDrawList* drawList) : drawList_(drawList)
+            {
+                if (drawList_ == nullptr || !GUiCanvas.IsActive())
+                {
+                    drawList_ = nullptr;
+                    return;
+                }
+                const ImVec2 min(GUiCanvas.offset.X, GUiCanvas.offset.Y);
+                const ImVec2 max(min.x + GUiCanvas.size.X, min.y + GUiCanvas.size.Y);
+                drawList_->PushClipRect(min, max, true);
+            }
+
+            ~FUiCanvasClip()
+            {
+                if (drawList_ != nullptr)
+                {
+                    drawList_->PopClipRect();
+                }
+            }
+
+            FUiCanvasClip(const FUiCanvasClip&) = delete;
+            FUiCanvasClip& operator=(const FUiCanvasClip&) = delete;
+
+        private:
+            ImDrawList* drawList_ = nullptr;
+        };
 
         /// Shared by every string-returning binding: reports the length the caller needs and fills
         /// the buffer when there is room. A null buffer is the documented probe call.
@@ -337,8 +390,12 @@ namespace Modules::NextDotNet
         {
             if (ImGui::GetCurrentContext() != nullptr)
             {
+                // Relative to the canvas, so a game's own UI hit-testing lines up with where its
+                // widgets were drawn. Outside a canvas the origin is the viewport's, which is what
+                // ImGui already reports.
                 const ImVec2 position = ImGui::GetIO().MousePos;
-                StoreVec2(outPosition, position.x, position.y);
+                const ImVec2 origin = UiCanvasOrigin();
+                StoreVec2(outPosition, position.x - origin.x, position.y - origin.y);
                 return;
             }
             if (auto* engine = NextEngine::GetInstance())
@@ -569,6 +626,14 @@ namespace Modules::NextDotNet
             // it draws with UI_DrawText and UI_DrawRect, and those are in ImGui's coordinate space
             // — on a DPI-scaled display the two differ by the scale factor, which put every
             // centred HUD element off-centre by exactly that ratio.
+            //
+            // Under a host that gave the game a canvas (play-in-editor), the canvas *is* the
+            // game's screen: reporting the whole window here would centre the HUD on the editor.
+            if (GUiCanvas.IsActive())
+            {
+                StoreVec2(outSize, GUiCanvas.size.X, GUiCanvas.size.Y);
+                return;
+            }
             if (const ImGuiViewport* viewport = ImGui::GetMainViewport())
             {
                 StoreVec2(outSize, viewport->Size.x, viewport->Size.y);
@@ -590,9 +655,10 @@ namespace Modules::NextDotNet
             {
                 return;
             }
+            const FUiCanvasClip clip(drawList);
             drawList->AddText(nullptr,
                               ImGui::GetFontSize() * std::max(scale, 0.01f),
-                              ImVec2(x, y),
+                              UiCanvasToScreen(x, y),
                               color,
                               ToString(text).c_str());
         }
@@ -601,7 +667,9 @@ namespace Modules::NextDotNet
         {
             if (ImDrawList* drawList = ImGui::GetForegroundDrawList())
             {
-                drawList->AddRectFilled(ImVec2(x, y), ImVec2(x + width, y + height), color, rounding);
+                const FUiCanvasClip clip(drawList);
+                drawList->AddRectFilled(UiCanvasToScreen(x, y), UiCanvasToScreen(x + width, y + height), color,
+                                        rounding);
             }
         }
 
@@ -610,7 +678,9 @@ namespace Modules::NextDotNet
         {
             if (ImDrawList* drawList = ImGui::GetForegroundDrawList())
             {
-                drawList->AddRect(ImVec2(x, y), ImVec2(x + width, y + height), color, rounding, 0, thickness);
+                const FUiCanvasClip clip(drawList);
+                drawList->AddRect(UiCanvasToScreen(x, y), UiCanvasToScreen(x + width, y + height), color, rounding,
+                                  0, thickness);
             }
         }
 
@@ -663,6 +733,22 @@ namespace Modules::NextDotNet
             static_assert(alignof(FVec2) == alignof(ImVec2));
             const auto* drawPoints = reinterpret_cast<const ImVec2*>(points);
 
+            // Polyline and ConvexPolyFilled hand ImGui a pointer into the caller's array, so an
+            // offset canvas needs a translated copy rather than a per-point adjustment at the call
+            // site. Reused across frames; empty and untouched when no canvas is set.
+            static std::vector<ImVec2> translatedPoints;
+            if (GUiCanvas.IsActive() && pointCount > 0)
+            {
+                const ImVec2 origin = UiCanvasOrigin();
+                translatedPoints.resize(static_cast<size_t>(pointCount));
+                for (int32_t i = 0; i < pointCount; ++i)
+                {
+                    translatedPoints[static_cast<size_t>(i)] =
+                        ImVec2(drawPoints[i].x + origin.x, drawPoints[i].y + origin.y);
+                }
+                drawPoints = translatedPoints.data();
+            }
+
             for (int32_t index = 0; index < commandCount; ++index)
             {
                 const FUiDrawCommand& command = commands[index];
@@ -674,8 +760,9 @@ namespace Modules::NextDotNet
                     continue;
                 }
 
-                const ImVec2 p0(command.P0.X, command.P0.Y);
-                const ImVec2 p1(command.P1.X, command.P1.Y);
+                const FUiCanvasClip clip(drawList);
+                const ImVec2 p0 = UiCanvasToScreen(command.P0.X, command.P0.Y);
+                const ImVec2 p1 = UiCanvasToScreen(command.P1.X, command.P1.Y);
                 const float thickness = std::max(0.1f, command.Thickness);
                 switch (static_cast<EUiDrawCommandType>(command.Type))
                 {

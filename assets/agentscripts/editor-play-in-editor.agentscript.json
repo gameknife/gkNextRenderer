@@ -79,10 +79,10 @@
     { "type": "assert", "query": "game.pieActive", "op": "eq", "value": "flappy" },
     { "type": "cvar", "name": "ed.play", "set": "" },
     { "type": "wait-until", "query": "game.pieState", "op": "eq", "value": "Stopped" },
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running",
+      "comment": "Wait, do not assert: stopping queues a reload of the scene that was open before Play, and the engine sits in Loading while it parses." },
     { "type": "wait-frames", "n": 30 },
     { "type": "assert", "query": "scene.nodeCount", "op": "ge", "value": 10 },
-
-    { "type": "assert", "query": "engine.status", "op": "eq", "value": "Running" },
     { "type": "quit" }
   ]
 }

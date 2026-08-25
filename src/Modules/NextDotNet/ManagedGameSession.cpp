@@ -4,6 +4,7 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Subsystems/NextAudio.hpp"
 #include "Modules/NextDotNet/DotNetRuntime.hpp"
+#include "Modules/NextDotNet/EngineApi.hpp"
 
 #include <algorithm>
 
@@ -182,6 +183,17 @@ namespace Modules::NextDotNet
         }
     }
 
+    void ManagedGameSession::SetUiCanvas(float offsetX, float offsetY, float width, float height)
+    {
+        GUiCanvas.offset = {offsetX, offsetY};
+        GUiCanvas.size = {width, height};
+    }
+
+    void ManagedGameSession::ClearUiCanvas()
+    {
+        GUiCanvas.Clear();
+    }
+
     void ManagedGameSession::PerformLoad(FManagedGameManifest manifest)
     {
         lastError_.clear();
@@ -265,6 +277,7 @@ namespace Modules::NextDotNet
         }
 
         RestoreBaseline();
+        ClearUiCanvas();
         activeManifest_.reset();
         state_ = EGameSessionState::Idle;
 

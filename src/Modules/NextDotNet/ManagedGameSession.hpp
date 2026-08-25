@@ -68,6 +68,13 @@ namespace Modules::NextDotNet
         /// DotNetRuntime::SetInputEnabled — this is the editor's "eject" switch.
         void SetGameInputEnabled(bool enabled);
 
+        /// Confines the running game's UI to a rectangle in ImGui screen coordinates: the game
+        /// lays out against `width`/`height`, draws offset into the rect, and is clipped to it.
+        /// An editor hosting the game inside a viewport panel passes that panel's rect; a host
+        /// that owns the whole window never calls this. See FUiCanvas.
+        void SetUiCanvas(float offsetX, float offsetY, float width, float height);
+        void ClearUiCanvas();
+
         /// Rebuilds a game from its C# sources and publishes it where the next load will find it.
         /// If that game is the one currently running and it has hot reload on, the new assembly is
         /// picked up within the poll interval; otherwise it takes effect at the next load.

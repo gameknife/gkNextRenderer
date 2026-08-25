@@ -362,6 +362,10 @@ PIE 是刻意窄的：**Stop 不保留 Play 期间的编辑**，它只是把 Pla
 undo 历史都从头开始。Play 也总是走游戏自己的完整流程和场景，没有"用当前编辑器场景开始游戏"这回事。
 Stop 之后可以点 **Rebuild C#**，下一次 Play 就用新代码。
 
+你的 HUD 不需要为 PIE 做任何事：编辑器会把 viewport 面板作为游戏的"屏幕"交给它，`UI.GetScreenSize()`
+返回的是面板尺寸，你画的绝对坐标会被平移进面板并裁剪在里面。所以**始终按 `UI.GetScreenSize()` 布局，
+不要硬编码窗口尺寸**——这条本来就该遵守（玩家会拖窗口），在编辑器里只是又多了一个理由。
+
 Launcher 只在 CoreCLR 后端下构建。NativeAOT 把游戏静态链进 exe，一个 exe 只能有一个游戏——所以发布仍然
 是 per-game exe，就像 Unity 的 Editor 与 Player。
 

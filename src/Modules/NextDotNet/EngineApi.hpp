@@ -83,8 +83,30 @@ namespace Modules::NextDotNet
         void Clear() { *this = FSceneBuildContext{}; }
     };
 
+    /// The rectangle a hosted game's UI lives in, in ImGui screen coordinates.
+    ///
+    /// A game lays its HUD out against UI.GetScreenSize() and draws in absolute coordinates, which
+    /// is correct when the game owns the window: the canvas is the whole ImGui main viewport, and
+    /// that is what an inactive canvas (size 0) means. An editor running the game inside a docked
+    /// viewport panel is the other case — without this the HUD lays out against the whole editor
+    /// window and draws from its top-left corner, across the panels.
+    ///
+    /// Setting it makes the game see the panel as its screen: sizes reported to managed code are
+    /// the panel's, drawn coordinates are offset into it, mouse position is reported relative to
+    /// it, and drawing is clipped to it. No scaling — the game adapts to the panel the same way it
+    /// adapts to a resized window, which keeps text crisp and avoids inventing a design resolution.
+    struct FUiCanvas
+    {
+        FVec2 offset{0.0f, 0.0f};
+        FVec2 size{0.0f, 0.0f};
+
+        bool IsActive() const { return size.X > 0.0f && size.Y > 0.0f; }
+        void Clear() { *this = FUiCanvas{}; }
+    };
+
     extern FSceneBuildContext GSceneBuildContext;
     extern FInputState GInputState;
+    extern FUiCanvas GUiCanvas;
 
     /// Builds the table handed to managed code. Every def entry is filled; a binding declared
     /// without an implementation fails to compile.
