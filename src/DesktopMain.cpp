@@ -320,13 +320,22 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     }
 
     const int exitCode = GApplication->GetRequestedExitCode();
+    const bool fastExit = GOption != nullptr && GOption->FastExit;
     // Shutdown
 #if GK_MODULE_LIVECODING
     Modules::LiveCoding::Shutdown();
 #endif
     GApplication->End();
 
-    if (GOption && GOption->FastExit)
+    // The engine must be destroyed while the logging runtime is still alive. On macOS,
+    // std::exit() runs static destructors, and leaving GApplication alive here defers its
+    // destructor until after spdlog's global logger has already been torn down. Device::~Device()
+    // persists the Vulkan pipeline cache and logs its result, which then becomes a use-after-free.
+    GApplication.reset();
+    GOptionPtr.reset();
+    GOption = nullptr;
+
+    if (fastExit)
     {
 #if __APPLE__
         std::exit(exitCode);
@@ -334,7 +343,4 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
         std::quick_exit(exitCode);
 #endif
     }
-
-    GApplication.reset();
-    GOptionPtr.reset();
 }

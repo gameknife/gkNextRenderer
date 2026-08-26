@@ -342,8 +342,12 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
             SPDLOG_INFO("Headless agent validation disables hardware ray tracing");
         }
     }
+#if defined(__APPLE__) && !defined(IOS)
+    const bool showStartupSplash = false;
+#else
     const bool showStartupSplash = !options.AgentValidation && !options.HiddenWindow &&
                                    !options.Tui && !useHeadlessSurface && !options.Fullscreen;
+#endif
     Vulkan::Window::InitSDL(useSystemDpiScaling, options.VulkanDriver, useHeadlessSurface,
                             showStartupSplash);
     
