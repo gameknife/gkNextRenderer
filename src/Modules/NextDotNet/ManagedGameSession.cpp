@@ -266,8 +266,9 @@ namespace Modules::NextDotNet
         {
             runtime->CallLifecycleHook(EScriptHook::OnDestroy);
             runtime->UnloadGame();
-            // Input muting is a property of the session that just ended, not of the runtime.
+            // Input muting and pausing are properties of the session that just ended.
             runtime->SetInputEnabled(true);
+            runtime->SetPaused(false);
         }
 
         // Audio outlives the scene: nothing else stops a game's music once its code is gone.
@@ -289,6 +290,29 @@ namespace Modules::NextDotNet
         SPDLOG_INFO("[game] '{}' unloaded", id);
     }
 
+    void ManagedGameSession::SetAdjustWindow(bool adjustSize, bool adjustTitle)
+    {
+        adjustWindowSize_ = adjustSize;
+        adjustWindowTitle_ = adjustTitle;
+    }
+
+    void ManagedGameSession::SetPaused(bool paused)
+    {
+        if (auto* runtime = GetRuntime())
+        {
+            runtime->SetPaused(paused);
+        }
+    }
+
+    bool ManagedGameSession::IsPaused() const
+    {
+        if (auto* runtime = GetRuntime())
+        {
+            return runtime->IsPaused();
+        }
+        return false;
+    }
+
     void ManagedGameSession::CaptureBaseline()
     {
         // Captured once per host, not once per game: after a game has run and been restored, the
@@ -301,10 +325,16 @@ namespace Modules::NextDotNet
 
         baseline_.showFlags = engine_.GetShowFlags();
         baseline_.userSettings = engine_.GetUserSettings();
-        baseline_.windowTitle = engine_.GetWindow().GetTitle();
-        const VkExtent2D windowExtent = engine_.GetWindow().WindowSize();
-        baseline_.windowWidth = windowExtent.width;
-        baseline_.windowHeight = windowExtent.height;
+        if (adjustWindowTitle_)
+        {
+            baseline_.windowTitle = engine_.GetWindow().GetTitle();
+        }
+        if (adjustWindowSize_)
+        {
+            const VkExtent2D windowExtent = engine_.GetWindow().WindowSize();
+            baseline_.windowWidth = windowExtent.width;
+            baseline_.windowHeight = windowExtent.height;
+        }
 
         NextCVar::FCVarSystem& cvars = engine_.GetCVarSystem();
         baseline_.cvarValues.clear();
@@ -334,9 +364,12 @@ namespace Modules::NextDotNet
 
         engine_.GetShowFlags() = baseline_.showFlags;
         engine_.GetUserSettings() = baseline_.userSettings;
-        engine_.GetWindow().SetTitle(baseline_.windowTitle);
+        if (adjustWindowTitle_ && !baseline_.windowTitle.empty())
+        {
+            engine_.GetWindow().SetTitle(baseline_.windowTitle);
+        }
 
-        if (baseline_.windowWidth > 0 && baseline_.windowHeight > 0)
+        if (adjustWindowSize_ && baseline_.windowWidth > 0 && baseline_.windowHeight > 0)
         {
             engine_.GetWindow().SetSize(baseline_.windowWidth, baseline_.windowHeight);
             engine_.GetWindow().SetPositionCentered();
@@ -373,12 +406,12 @@ namespace Modules::NextDotNet
             engine_.GetUserSettings().ShowOverlay = *manifest.showFlags.overlay;
         }
 
-        if (!manifest.window.title.empty())
+        if (adjustWindowTitle_ && !manifest.window.title.empty())
         {
             engine_.GetWindow().SetTitle(manifest.window.title);
         }
 
-        if (manifest.window.width > 0 && manifest.window.height > 0)
+        if (adjustWindowSize_ && manifest.window.width > 0 && manifest.window.height > 0)
         {
             engine_.GetWindow().SetSize(manifest.window.width, manifest.window.height);
             engine_.GetWindow().SetPositionCentered();

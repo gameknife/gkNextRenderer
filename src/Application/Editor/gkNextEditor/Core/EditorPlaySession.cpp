@@ -32,7 +32,12 @@ namespace Editor
 
     struct FPlaySession::FImpl
     {
-        explicit FImpl(NextEngine& owner) : engine(owner), session(owner) {}
+        explicit FImpl(NextEngine& owner) : engine(owner), session(owner)
+        {
+            // In editor Play-in-Editor mode, never resize the main editor window or change title;
+            // games render directly inside the editor's embedded viewport.
+            session.SetAdjustWindow(false, false);
+        }
 
         NextEngine& engine;
         ManagedGameSession session;
@@ -210,6 +215,25 @@ namespace Editor
     }
 
     void FPlaySession::ToggleEject() { SetEjected(impl_->state == EPlayState::Playing); }
+
+    bool FPlaySession::IsPaused() const
+    {
+        return impl_->session.IsPaused();
+    }
+
+    void FPlaySession::SetPaused(bool paused)
+    {
+        if (impl_->state == EPlayState::Stopped)
+        {
+            return;
+        }
+        impl_->session.SetPaused(paused);
+    }
+
+    void FPlaySession::TogglePause()
+    {
+        SetPaused(!IsPaused());
+    }
 
     bool FPlaySession::Rebuild(const std::string& gameId, std::string& outError)
     {

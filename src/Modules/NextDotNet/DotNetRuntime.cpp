@@ -266,6 +266,7 @@ namespace Modules::NextDotNet
         const int32_t status = managed_->UnloadGame();
         gameLoaded_ = false;
         gameAssemblyPath_.clear();
+        isPaused_ = false;
 
         switch (static_cast<EGameStatus>(status))
         {
@@ -291,12 +292,26 @@ namespace Modules::NextDotNet
         // hook was suppressed for a UI-free screenshot, expire the previous frame here without
         // erasing any input event that already arrived for the current frame.
         GInputState.DiscardPressedBefore(engine_.GetTotalFrames());
-        if (managed_ != nullptr)
+        if (managed_ != nullptr && !isPaused_)
         {
             managed_->Tick(deltaSeconds);
         }
 
         TickHotReload(deltaSeconds);
+    }
+
+    void DotNetRuntime::SetPaused(bool paused)
+    {
+        if (isPaused_ == paused)
+        {
+            return;
+        }
+        isPaused_ = paused;
+        if (paused)
+        {
+            GInputState.Reset();
+        }
+        SPDLOG_INFO("[dotnet] game tick {}", paused ? "paused" : "resumed");
     }
 
     void DotNetRuntime::SetInputEnabled(bool enabled)

@@ -74,6 +74,11 @@ namespace Modules::NextDotNet
         void SetInputEnabled(bool enabled);
         bool IsInputEnabled() const { return inputEnabled_; }
 
+        /// Pauses or resumes game tick execution. While paused, the managed game's Tick is skipped,
+        /// freezing entity movement, physics updates and gameplay logic.
+        void SetPaused(bool paused);
+        bool IsPaused() const { return isPaused_; }
+
         /// Poll-style gamepad axes are forwarded by the thin application host. They deliberately
         /// do not add another managed lifecycle hook: gameplay reads the latest values through
         /// Input.GetGamepadAxis just like keyboard state.
@@ -115,6 +120,7 @@ namespace Modules::NextDotNet
         bool gameLoaded_ = false;
         bool hotReloadEnabled_ = false;
         bool inputEnabled_ = true;
+        bool isPaused_ = false;
         uint32_t unloadPendingStreak_ = 0;
     };
 }

@@ -74,6 +74,10 @@ namespace Editor
         void SetEjected(bool ejected);
         void ToggleEject();
 
+        bool IsPaused() const;
+        void SetPaused(bool paused);
+        void TogglePause();
+
         /// Republishes a game's C# from source. Only meaningful while stopped: a rebuild lands on
         /// disk, and the next Play picks it up.
         bool Rebuild(const std::string& gameId, std::string& outError);

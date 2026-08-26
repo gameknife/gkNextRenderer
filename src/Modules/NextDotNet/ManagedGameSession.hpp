@@ -99,6 +99,14 @@ namespace Modules::NextDotNet
         /// time, because a streak is precisely how a managed leak announces itself.
         uint32_t UnloadPendingStreak() const;
 
+        /// Whether to adjust engine window size/title on game load and restore. Defaults to true
+        /// (standalone hosts/launcher), false for Editor PlaySession.
+        void SetAdjustWindow(bool adjustSize, bool adjustTitle = true);
+
+        /// Pauses/resumes game tick execution through DotNetRuntime.
+        void SetPaused(bool paused);
+        bool IsPaused() const;
+
         /// A game called Engine.RequestClose(). Returning true means the session handled it and the
         /// process must stay alive; false lets the engine close as it always has.
         void SetCloseRequestHandler(std::function<bool()> handler);
@@ -161,5 +169,7 @@ namespace Modules::NextDotNet
         FWorldBaseline baseline_;
         std::string lastError_;
         bool hostInitialised_ = false;
+        bool adjustWindowSize_ = true;
+        bool adjustWindowTitle_ = true;
     };
 }
