@@ -666,6 +666,15 @@ bool Window::SetSize(uint32_t width, uint32_t height) const
     return true;
 }
 
+void Window::SetPositionCentered() const
+{
+    if (config_.HeadlessSurface || window_ == nullptr)
+    {
+        return;
+    }
+    SDL_SetWindowPosition(window_, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+}
+
 void Window::Minimize()
 {
     if (config_.HeadlessSurface)

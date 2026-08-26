@@ -73,6 +73,7 @@ public:
     bool IsMaximumed() const;
     void Show() const;
     bool SetSize(uint32_t width, uint32_t height) const;
+    void SetPositionCentered() const;
 
     // The title is the one window property a host changes after creation: a launcher that swaps
     // games in one process has to say which game is running. Config().Title stays as created.

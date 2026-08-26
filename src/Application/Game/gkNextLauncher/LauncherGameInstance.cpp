@@ -5,13 +5,22 @@
 #include "Engine/Runtime/Interface/AgentQueries.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Modules/NextDotNet/DotNetRuntime.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/UiTheme.hpp"
+#include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 #include <algorithm>
+#include <array>
+#include <string_view>
 
 using Modules::NextDotNet::EGameSessionState;
 using Modules::NextDotNet::FManagedGameManifest;
+using NextUI::Foundation::EColor;
+using NextUI::Foundation::Color;
+using NextUI::Foundation::ColorU32;
 
 namespace
 {
@@ -36,6 +45,56 @@ namespace
         }
         return "Idle";
     }
+
+    const char* GetGameIcon(std::string_view id)
+    {
+        if (id == "brotato3d")
+        {
+            return ICON_FA_SHIELD_HALVED;
+        }
+        if (id == "flappy")
+        {
+            return ICON_FA_FEATHER;
+        }
+        if (id == "sandbox")
+        {
+            return ICON_FA_CUBES;
+        }
+        return ICON_FA_GAMEPAD;
+    }
+
+    const char* GetGameSubtitle(std::string_view id)
+    {
+        if (id == "brotato3d")
+        {
+            return "Action Roguelike • High-density 3D arena with massive physics & node pooling";
+        }
+        if (id == "flappy")
+        {
+            return "Arcade Classic • Hot-reloadable C# gameplay, procedural pipes & audio";
+        }
+        if (id == "sandbox")
+        {
+            return "CoreCLR Playground • Interactive managed binding layer & minimal testbed";
+        }
+        return "Managed .NET 9 Game Module";
+    }
+
+    void DrawPillBadge(const char* icon, const char* label, ImVec4 bgCol, ImVec4 textCol, ImVec4 borderCol)
+    {
+        const std::string text = icon != nullptr && icon[0] != '\0' ? fmt::format("{} {}", icon, label) : std::string(label);
+        const ImVec2 textSize = ImGui::CalcTextSize(text.c_str());
+        const ImVec2 padding(8.0f, 3.0f);
+        const ImVec2 size(textSize.x + padding.x * 2.0f, textSize.y + padding.y * 2.0f);
+
+        const ImVec2 pos = ImGui::GetCursorScreenPos();
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), ImGui::GetColorU32(bgCol), 4.0f);
+        drawList->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), ImGui::GetColorU32(borderCol), 4.0f, 0, 1.0f);
+        drawList->AddText(ImVec2(pos.x + padding.x, pos.y + padding.y), ImGui::GetColorU32(textCol), text.c_str());
+
+        ImGui::Dummy(size);
+    }
 }
 
 LauncherGameInstance::LauncherGameInstance(Vulkan::WindowConfig& config,
@@ -45,10 +104,8 @@ LauncherGameInstance::LauncherGameInstance(Vulkan::WindowConfig& config,
                               options,
                               engine,
                               Modules::NextDotNet::FManagedGameHostOptions{
-                                  // No manifest: the launcher starts idle and loads what the player
-                                  // picks. Everything else about hosting a managed game is inherited.
                                   .manifestPath = {},
-                                  .window = {.title = "gkNextLauncher", .width = 1600, .height = 900, .forceSDR = true},
+                                  .window = {.title = "gkNextLauncher", .width = 860, .height = 540, .forceSDR = true},
                                   .linkedModules = kLinkedModules,
                               })
 {
@@ -61,9 +118,6 @@ void LauncherGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
         "Managed game to run: a game id from assets/configs/games, or empty to return to the menu",
         [this]()
         {
-            // Only records the request. Loading happens on the next tick, never inside a cvar
-            // callback, which can arrive from anywhere including the session's own baseline
-            // restore while a game is being torn down.
             pendingSelection_ = selectedGameId_;
             hasPendingSelection_ = true;
         });
@@ -76,15 +130,10 @@ void LauncherGameInstance::OnInit()
     GetEngine().GetShowFlags().DebugGraphicsPanel = false;
     GetEngine().GetUserSettings().ShowOverlay = false;
 
-    // game.select is this launcher's own control surface, not world state a game may disturb.
-    // Restoring it on unload would write the previous game's id back and re-trigger the callback,
-    // so stopping a game would immediately restart it.
     GetSession().SetBaselineExcludedCVars({"game.select"});
 
     RefreshEntries();
 
-    // A game calling Engine.RequestClose() means "I am done", not "kill the process". The managed
-    // side is unchanged: Brotato and Flappy quit exactly as they always did.
     GetSession().SetCloseRequestHandler(
         [this]() -> bool
         {
@@ -92,8 +141,6 @@ void LauncherGameInstance::OnInit()
             return true;
         });
 
-    // The menu needs a world to render into; without a committed scene the engine never reaches
-    // Running and no UI is drawn at all.
     GetEngine().RequestLoadScene({.filename = "Empty.proc"});
 }
 
@@ -113,9 +160,6 @@ void LauncherGameInstance::RefreshEntries()
         }
         else
         {
-            // The assembly is published beside the executable by CMake. A manifest can legitimately
-            // outlive its game — a target excluded from this build, a partial publish — and saying
-            // so beats an error the moment someone clicks it.
             const std::filesystem::path assemblyPath =
                 NextRenderer::GetExecutableDirectory() / "csharp" / entry.manifest.assembly;
             std::error_code ec;
@@ -148,8 +192,6 @@ void LauncherGameInstance::OnTick(double deltaSeconds)
     ApplyPendingRebuild();
     ApplyPendingSelection();
 
-    // Mirror the session back into the cvar so a console reader sees what is actually running.
-    // Skipped while a request is in flight, which would otherwise clobber it before it is applied.
     if (!hasPendingSelection_)
     {
         const auto* active = GetSession().GetActiveManifest();
@@ -163,8 +205,6 @@ void LauncherGameInstance::ApplyPendingSelection()
     {
         return;
     }
-    // Transitions are queued as ticked tasks; asking for another one mid-flight would interleave
-    // two loads. The request waits instead of being dropped.
     if (GetSession().GetState() == EGameSessionState::Loading ||
         GetSession().GetState() == EGameSessionState::Unloading)
     {
@@ -205,7 +245,6 @@ void LauncherGameInstance::ApplyPendingRebuild()
     if (GetSession().RebuildGame(entry.manifest, error))
     {
         rebuildStatus_ = "rebuilt " + entry.manifest.id;
-        // A game that failed to load because it was never published becomes available now.
         RefreshEntries();
     }
     else
@@ -232,9 +271,6 @@ void LauncherGameInstance::LoadEntry(size_t index)
 
 bool LauncherGameInstance::OnGameRequestedClose()
 {
-    // Reached when a game quits without the session's handler being installed yet (a failure during
-    // startup). Falling through to the default would close the process, which is never what the
-    // launcher wants.
     GetSession().RequestUnload();
     return true;
 }
@@ -253,7 +289,6 @@ bool LauncherGameInstance::OnHostKey(SDL_Event& event)
             GetSession().RequestUnload();
             return true;
         }
-        // Everything else belongs to the running game.
         return false;
     }
 
@@ -262,14 +297,38 @@ bool LauncherGameInstance::OnHostKey(SDL_Event& event)
         return false;
     }
 
+    constexpr int kGridColumns = 3;
+    const int total = static_cast<int>(entries_.size());
+
     switch (event.key.key)
     {
+    case SDLK_LEFT:
+        highlightedIndex_ = (highlightedIndex_ + total - 1) % total;
+        return true;
+    case SDLK_RIGHT:
+        highlightedIndex_ = (highlightedIndex_ + 1) % total;
+        return true;
     case SDLK_UP:
-        highlightedIndex_ = (highlightedIndex_ + static_cast<int>(entries_.size()) - 1) %
-                            static_cast<int>(entries_.size());
+        if (highlightedIndex_ - kGridColumns >= 0)
+        {
+            highlightedIndex_ -= kGridColumns;
+        }
+        else
+        {
+            int target = highlightedIndex_ + (total / kGridColumns) * kGridColumns;
+            if (target >= total) target -= kGridColumns;
+            if (target >= 0 && target < total) highlightedIndex_ = target;
+        }
         return true;
     case SDLK_DOWN:
-        highlightedIndex_ = (highlightedIndex_ + 1) % static_cast<int>(entries_.size());
+        if (highlightedIndex_ + kGridColumns < total)
+        {
+            highlightedIndex_ += kGridColumns;
+        }
+        else
+        {
+            highlightedIndex_ = highlightedIndex_ % kGridColumns;
+        }
         return true;
     case SDLK_RETURN:
     case SDLK_KP_ENTER:
@@ -292,85 +351,296 @@ bool LauncherGameInstance::OnHostRenderUI()
 
 void LauncherGameInstance::DrawMenu()
 {
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    const ImVec2 size(640.0f, 480.0f);
-    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + (viewport->WorkSize.x - size.x) * 0.5f,
-                                   viewport->WorkPos.y + (viewport->WorkSize.y - size.y) * 0.5f),
-                            ImGuiCond_Always);
-    ImGui::SetNextWindowSize(size, ImGuiCond_Always);
-    ImGui::Begin("gkNext Launcher", nullptr,
-                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+    NextUI::Foundation::ApplyTheme();
 
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(viewport->WorkSize, ImGuiCond_Always);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(28.0f, 20.0f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, Color(EColor::Background, 0.98f));
+
+    const ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoTitleBar |
+                                         ImGuiWindowFlags_NoResize |
+                                         ImGuiWindowFlags_NoMove |
+                                         ImGuiWindowFlags_NoCollapse |
+                                         ImGuiWindowFlags_NoSavedSettings |
+                                         ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+    ImGui::Begin("##gkNextLauncherMain", nullptr, windowFlags);
+
+    // Subtle background ambient glow decoration
+    ImDrawList* bgDrawList = ImGui::GetWindowDrawList();
+    const ImVec2 winPos = ImGui::GetWindowPos();
+    const ImVec2 winSize = ImGui::GetWindowSize();
+
+    // Subtle soft glows
+    bgDrawList->AddCircleFilled(ImVec2(winPos.x + 120.0f, winPos.y + 60.0f), 240.0f, ColorU32(EColor::Accent, 0.035f), 32);
+    bgDrawList->AddCircleFilled(ImVec2(winPos.x + winSize.x - 120.0f, winPos.y + winSize.y - 60.0f), 220.0f, ColorU32(EColor::Brand, 0.030f), 32);
+
+    ImFont* titleFont = NextUI::Theme::GetTitleFont(GetEngine());
+    ImFont* defaultFont = NextUI::Theme::GetDefaultFont(GetEngine());
+    if (defaultFont == nullptr)
+    {
+        defaultFont = ImGui::GetFont();
+    }
+    if (titleFont == nullptr)
+    {
+        titleFont = defaultFont;
+    }
+
+    // ==========================================
+    // 1. Minimal Header Bar
+    // ==========================================
+    ImGui::BeginGroup();
+    {
+        ImGui::PushFont(titleFont);
+        ImGui::TextColored(Color(EColor::Text), "gkNext Launcher");
+        ImGui::PopFont();
+
+        const std::string countStr = fmt::format("{} Games", entries_.size());
+        const float refreshWidth = 28.0f;
+        const float countWidth = ImGui::CalcTextSize(countStr.c_str()).x;
+        const float rightMargin = countWidth + refreshWidth + 16.0f;
+
+        if (ImGui::GetContentRegionAvail().x > rightMargin)
+        {
+            ImGui::SameLine(ImGui::GetWindowWidth() - 28.0f - rightMargin);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4.0f);
+            ImGui::TextColored(Color(EColor::TextDim), "%s", countStr.c_str());
+
+            ImGui::SameLine(0.0f, 10.0f);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 2.0f);
+            if (ImGui::Button(ICON_FA_ROTATE, ImVec2(refreshWidth, 24.0f)))
+            {
+                RefreshEntries();
+            }
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("Refresh game manifests");
+            }
+        }
+    }
+    ImGui::EndGroup();
+
+    ImGui::Spacing();
+    NextUI::Theme::DrawThinSeparator(0.40f);
+    ImGui::Spacing();
+
+    // Leak Alert Warning
     if (GetSession().IsLeaking())
     {
-        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
-                           "Previous games were not collected. Restart the launcher.");
-        ImGui::Separator();
+        ImGui::PushStyleColor(ImGuiCol_Text, Color(EColor::Danger));
+        ImGui::Text(ICON_FA_TRIANGLE_EXCLAMATION " Previous game sessions were not fully collected. Please restart gkNextLauncher.");
+        ImGui::PopStyleColor();
+        ImGui::Spacing();
     }
+
+    // ==========================================
+    // 2. Responsive Grid Tiles
+    // ==========================================
+    const float footerHeight = 36.0f;
+    ImGui::BeginChild("##GameCardsGrid", ImVec2(0.0f, -footerHeight), false,
+                      ImGuiWindowFlags_NoScrollbar);
 
     if (entries_.empty())
     {
-        ImGui::TextWrapped("No games found under %s.", Modules::NextDotNet::kManagedGameManifestDirectory);
+        ImGui::Spacing();
+        ImGui::TextColored(Color(EColor::TextMuted),
+                           ICON_FA_TRIANGLE_EXCLAMATION " No managed games found under %s.",
+                           Modules::NextDotNet::kManagedGameManifestDirectory);
+    }
+    else
+    {
+        constexpr int kGridCols = 3;
+        const float cardHeight = entries_.size() <= 3 ? 330.0f : 230.0f;
+        constexpr float kCardRounding = 8.0f;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 8.0f));
+        if (ImGui::BeginTable("##GameGridTable", kGridCols, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoSavedSettings))
+        {
+            for (size_t i = 0; i < entries_.size(); ++i)
+            {
+                const FEntry& entry = entries_[i];
+                const bool isHighlighted = static_cast<int>(i) == highlightedIndex_;
+                const bool canRebuild = !entry.manifest.project.empty();
+
+                ImGui::TableNextColumn();
+                ImGui::PushID(static_cast<int>(i));
+
+                const ImVec2 cardMin = ImGui::GetCursorScreenPos();
+                const float cardWidth = ImGui::GetContentRegionAvail().x;
+                const ImVec2 cardMax(cardMin.x + cardWidth, cardMin.y + cardHeight);
+
+                // Entire card is an interactive hit target
+                ImGui::InvisibleButton("##TileHit", ImVec2(cardWidth, cardHeight));
+                const bool isTileHovered = ImGui::IsItemHovered();
+                const bool isTileClicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+                const ImVec2 mousePos = ImGui::GetIO().MousePos;
+
+                // Rebuild button hit region (top-right 32x32)
+                const ImVec2 rbMin(cardMax.x - 34.0f, cardMin.y + 6.0f);
+                const ImVec2 rbMax(cardMax.x - 6.0f, cardMin.y + 34.0f);
+                const bool isRbHovered = canRebuild && (mousePos.x >= rbMin.x && mousePos.x <= rbMax.x &&
+                                                        mousePos.y >= rbMin.y && mousePos.y <= rbMax.y);
+
+                if (isTileHovered && !isRbHovered)
+                {
+                    highlightedIndex_ = static_cast<int>(i);
+                }
+
+                if (isTileClicked)
+                {
+                    if (isRbHovered)
+                    {
+                        pendingRebuildIndex_ = static_cast<int>(i);
+                        rebuildStatus_ = "Rebuilding " + entry.manifest.id + "...";
+                    }
+                    else if (entry.available)
+                    {
+                        LoadEntry(i);
+                    }
+                }
+
+                // Draw Tile Background & Border
+                ImDrawList* drawList = ImGui::GetWindowDrawList();
+                const ImU32 bgCol = isHighlighted ? ColorU32(EColor::SurfaceHover, 0.90f)
+                                                  : (isTileHovered ? ColorU32(EColor::SurfaceElevated, 0.82f)
+                                                                   : ColorU32(EColor::Surface, 0.58f));
+                const ImU32 borderCol = isHighlighted ? ColorU32(EColor::AccentHover, 0.85f)
+                                                      : (isTileHovered ? ColorU32(EColor::BorderStrong, 0.70f)
+                                                                       : ColorU32(EColor::Border, 0.35f));
+
+                drawList->AddRectFilled(cardMin, cardMax, bgCol, kCardRounding);
+                drawList->AddRect(cardMin, cardMax, borderCol, kCardRounding, 0, isHighlighted ? 1.5f : 1.0f);
+
+                // --- 1. Rebuild icon on top-right ---
+                if (canRebuild)
+                {
+                    if (isRbHovered)
+                    {
+                        drawList->AddRectFilled(rbMin, rbMax, ColorU32(EColor::SurfaceHover, 0.9f), 4.0f);
+                        ImGui::SetTooltip("Rebuild C# Project");
+                    }
+                    const ImVec2 hammerSize = ImGui::CalcTextSize(ICON_FA_HAMMER);
+                    const ImVec2 hammerPos(rbMin.x + (28.0f - hammerSize.x) * 0.5f,
+                                           rbMin.y + (28.0f - hammerSize.y) * 0.5f);
+                    drawList->AddText(hammerPos, isRbHovered ? ColorU32(EColor::Text) : ColorU32(EColor::TextDim),
+                                      ICON_FA_HAMMER);
+                }
+
+                // --- 2. Center Icon with Circular Badge ---
+                const char* iconStr = GetGameIcon(entry.manifest.id);
+                const float iconBoxSize = cardHeight <= 240.0f ? 54.0f : 68.0f;
+                const float iconAreaY = cardMin.y + (cardHeight <= 240.0f ? 24.0f : 40.0f);
+                const ImVec2 iconBoxMin(cardMin.x + (cardWidth - iconBoxSize) * 0.5f, iconAreaY);
+                const ImVec2 iconBoxMax(iconBoxMin.x + iconBoxSize, iconBoxMin.y + iconBoxSize);
+
+                const ImU32 iconBoxBg = isHighlighted ? ColorU32(EColor::Accent, 0.18f) : ColorU32(EColor::Background, 0.45f);
+                drawList->AddRectFilled(iconBoxMin, iconBoxMax, iconBoxBg, iconBoxSize * 0.5f);
+                drawList->AddRect(iconBoxMin, iconBoxMax, isHighlighted ? ColorU32(EColor::AccentHover, 0.5f) : ColorU32(EColor::Border, 0.35f), iconBoxSize * 0.5f);
+
+                ImGui::PushFont(titleFont);
+                const ImVec2 iconSize = ImGui::CalcTextSize(iconStr);
+                const ImVec2 iconPos(iconBoxMin.x + (iconBoxSize - iconSize.x) * 0.5f,
+                                     iconBoxMin.y + (iconBoxSize - iconSize.y) * 0.5f);
+                const ImU32 iconColor = entry.available ? (isHighlighted ? ColorU32(EColor::Text) : ColorU32(EColor::TextMuted))
+                                                        : ColorU32(EColor::TextDim);
+                drawList->AddText(iconPos, iconColor, iconStr);
+                ImGui::PopFont();
+
+                // --- 3. Title Text (Centered) ---
+                const float titleY = iconBoxMax.y + (cardHeight <= 240.0f ? 16.0f : 26.0f);
+                ImGui::PushFont(titleFont);
+                const ImVec2 titleSize = ImGui::CalcTextSize(entry.manifest.displayName.c_str());
+                const ImVec2 titlePos(cardMin.x + (cardWidth - titleSize.x) * 0.5f, titleY);
+                const ImU32 titleColor = entry.available ? (isHighlighted ? ColorU32(EColor::Text) : ColorU32(EColor::Text))
+                                                        : ColorU32(EColor::TextDim);
+                drawList->AddText(titlePos, titleColor, entry.manifest.displayName.c_str());
+                ImGui::PopFont();
+
+                // --- 4. Subtitle / Genre (Centered) ---
+                const float subY = titleY + titleSize.y + 8.0f;
+                std::string subtitle = GetGameSubtitle(entry.manifest.id);
+                if (const size_t dotPos = subtitle.find("•"); dotPos != std::string::npos)
+                {
+                    subtitle = subtitle.substr(0, dotPos - 1);
+                }
+                const ImVec2 subSize = ImGui::CalcTextSize(subtitle.c_str());
+                const ImVec2 subPos(cardMin.x + (cardWidth - subSize.x) * 0.5f, subY);
+                drawList->AddText(subPos, ColorU32(EColor::TextDim), subtitle.c_str());
+
+                // --- 5. Launch Button Area at Tile Bottom (Focused/Hovered) ---
+                if (isHighlighted || isTileHovered)
+                {
+                    const float btnWidth = 120.0f;
+                    const float btnHeight = 34.0f;
+                    const ImVec2 btnMin(cardMin.x + (cardWidth - btnWidth) * 0.5f, cardMax.y - btnHeight - 20.0f);
+                    const ImVec2 btnMax(btnMin.x + btnWidth, btnMin.y + btnHeight);
+
+                    drawList->AddRectFilled(btnMin, btnMax, isHighlighted ? ColorU32(EColor::Accent) : ColorU32(EColor::SurfaceElevated, 0.85f), 5.0f);
+                    if (!isHighlighted)
+                    {
+                        drawList->AddRect(btnMin, btnMax, ColorU32(EColor::Border, 0.6f), 5.0f);
+                    }
+                    const ImVec2 launchTextSize = ImGui::CalcTextSize("Launch");
+                    drawList->AddText(ImVec2(btnMin.x + (btnWidth - launchTextSize.x) * 0.5f,
+                                             btnMin.y + (btnHeight - launchTextSize.y) * 0.5f),
+                                      isHighlighted ? IM_COL32(255, 255, 255, 255) : ColorU32(EColor::Text), "Launch");
+                }
+
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
+        }
+        ImGui::PopStyleVar();
     }
 
-    for (size_t i = 0; i < entries_.size(); ++i)
+    ImGui::EndChild();
+
+    // ==========================================
+    // 3. Minimal Footer Bar
+    // ==========================================
+    NextUI::Theme::DrawThinSeparator(0.40f);
+    ImGui::Spacing();
+
+    ImGui::BeginGroup();
     {
-        const FEntry& entry = entries_[i];
-        ImGui::PushID(static_cast<int>(i));
-        ImGui::BeginDisabled(!entry.available);
+        // Minimal keyboard shortcut guide
+        ImGui::TextColored(Color(EColor::TextDim),
+                           ICON_FA_ARROW_LEFT " " ICON_FA_ARROW_RIGHT " " ICON_FA_ARROW_UP " " ICON_FA_ARROW_DOWN " Navigate    Enter Launch    Esc Return");
 
-        const bool highlighted = static_cast<int>(i) == highlightedIndex_;
-        if (highlighted)
+        // Rebuild / Error Status display
+        if (!rebuildStatus_.empty())
         {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
+            ImGui::SameLine(0.0f, 16.0f);
+            ImGui::TextColored(Color(EColor::Warning), ICON_FA_ROTATE " %s", rebuildStatus_.c_str());
         }
-        // The rebuild button is only reserved for when there is something to rebuild, so an
-        // installed build (no C# sources, no project field) gets the full width for the game.
-        const bool canRebuild = !entry.manifest.project.empty();
-        const float playWidth = canRebuild ? -90.0f : -1.0f;
-        if (ImGui::Button(entry.manifest.displayName.c_str(), ImVec2(playWidth, 40.0f)))
+        else if (!GetSession().GetLastError().empty())
         {
-            highlightedIndex_ = static_cast<int>(i);
-            LoadEntry(i);
-        }
-        if (highlighted)
-        {
-            ImGui::PopStyleColor();
+            ImGui::SameLine(0.0f, 16.0f);
+            ImGui::TextColored(Color(EColor::Danger), "%s", GetSession().GetLastError().c_str());
         }
 
-        ImGui::EndDisabled();
-
-        if (canRebuild)
+        // Right side GC status
+        if (GetSession().IsLeaking())
         {
-            ImGui::SameLine();
-            // Not disabled with the rest of the entry: rebuilding is exactly what fixes a game
-            // that is unavailable because it was never published.
-            if (ImGui::Button("Rebuild", ImVec2(-1.0f, 40.0f)))
+            const char* leakMsg = "GC Leak Detected";
+            const float leakWidth = ImGui::CalcTextSize(leakMsg).x + 10.0f;
+            if (ImGui::GetContentRegionAvail().x > leakWidth)
             {
-                pendingRebuildIndex_ = static_cast<int>(i);
-                rebuildStatus_ = "rebuilding " + entry.manifest.id + "...";
+                ImGui::SameLine(ImGui::GetWindowWidth() - 28.0f - leakWidth);
+                ImGui::TextColored(Color(EColor::Danger), "%s", leakMsg);
             }
         }
-
-        if (!entry.available)
-        {
-            ImGui::TextDisabled("  unavailable: %s", entry.unavailableReason.c_str());
-        }
-        ImGui::PopID();
     }
-
-    ImGui::Separator();
-    ImGui::TextDisabled("Up/Down to choose, Enter to start, Esc in game to come back.");
-    if (!rebuildStatus_.empty())
-    {
-        ImGui::TextDisabled("%s", rebuildStatus_.c_str());
-    }
-    if (!GetSession().GetLastError().empty())
-    {
-        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", GetSession().GetLastError().c_str());
-    }
+    ImGui::EndGroup();
 
     ImGui::End();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(3);
 }
 
 void LauncherGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegistry& reg)

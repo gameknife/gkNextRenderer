@@ -136,6 +136,8 @@ namespace Modules::NextDotNet
             /// "reset to default" would then restore the wrong value.
             std::vector<std::pair<std::string, std::string>> cvarValues;
             std::string windowTitle;
+            uint32_t windowWidth = 0;
+            uint32_t windowHeight = 0;
             bool captured = false;
         };
 

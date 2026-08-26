@@ -302,6 +302,9 @@ namespace Modules::NextDotNet
         baseline_.showFlags = engine_.GetShowFlags();
         baseline_.userSettings = engine_.GetUserSettings();
         baseline_.windowTitle = engine_.GetWindow().GetTitle();
+        const VkExtent2D windowExtent = engine_.GetWindow().WindowSize();
+        baseline_.windowWidth = windowExtent.width;
+        baseline_.windowHeight = windowExtent.height;
 
         NextCVar::FCVarSystem& cvars = engine_.GetCVarSystem();
         baseline_.cvarValues.clear();
@@ -332,6 +335,12 @@ namespace Modules::NextDotNet
         engine_.GetShowFlags() = baseline_.showFlags;
         engine_.GetUserSettings() = baseline_.userSettings;
         engine_.GetWindow().SetTitle(baseline_.windowTitle);
+
+        if (baseline_.windowWidth > 0 && baseline_.windowHeight > 0)
+        {
+            engine_.GetWindow().SetSize(baseline_.windowWidth, baseline_.windowHeight);
+            engine_.GetWindow().SetPositionCentered();
+        }
 
         NextCVar::FCVarSystem& cvars = engine_.GetCVarSystem();
         for (const auto& [name, value] : baseline_.cvarValues)
@@ -367,6 +376,12 @@ namespace Modules::NextDotNet
         if (!manifest.window.title.empty())
         {
             engine_.GetWindow().SetTitle(manifest.window.title);
+        }
+
+        if (manifest.window.width > 0 && manifest.window.height > 0)
+        {
+            engine_.GetWindow().SetSize(manifest.window.width, manifest.window.height);
+            engine_.GetWindow().SetPositionCentered();
         }
     }
 
