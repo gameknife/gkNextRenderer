@@ -139,6 +139,7 @@ func main() {
 	root.AddCommand(newTracyCommand(ctx))
 	root.AddCommand(newRiderCommand(ctx))
 	root.AddCommand(newVisualStudioCommand(ctx))
+	root.AddCommand(newWebsiteCommand(ctx))
 	root.AddCommand(newLegacyAgentCommand(ctx))
 	root.AddCommand(newInitCommand())
 
