@@ -131,8 +131,12 @@ public:
     ~Surface();
 
     const class Instance& Instance() const { return instance_; }
+    void Recreate();
 
 private:
+
+    void CreateSurface();
+    void DestroySurface();
 
     const class Instance& instance_;
 

@@ -250,6 +250,17 @@ namespace Vulkan
 
         std::array<LogicRendererFactory, ERT_Compatibility + 1> RendererFactories{};
 
+        bool ShouldWarmupRenderer(const ERendererType type)
+        {
+            if (type != ERT_PathTracing)
+            {
+                return true;
+            }
+
+            const NextEngine* engine = NextEngine::GetInstance();
+            return engine == nullptr || engine->IsEffectiveSharcEnabled();
+        }
+
         const std::array RendererDescriptors{
             RendererDescriptor{ERT_PathTracing, "PathTracing", {
                                    ESceneResource::Voxel | ESceneResource::Ambient | ESceneResource::TLAS | ESceneResource::SHARC |
@@ -679,7 +690,9 @@ namespace Vulkan
 
         pipelineWarmup_.active = true;
         pipelineWarmup_.completedRenderers = 0;
-        pipelineWarmup_.totalRenderers = static_cast<uint32_t>(logicRenderers_.registeredTypes.size()) +
+        const auto warmupRendererCount = std::count_if(
+            logicRenderers_.registeredTypes.begin(), logicRenderers_.registeredTypes.end(), ShouldWarmupRenderer);
+        pipelineWarmup_.totalRenderers = static_cast<uint32_t>(warmupRendererCount) +
             (frame_.sceneChainInitializationPending ? 1u : 0u) + (upscaler_ != nullptr ? 1u : 0u);
         pipelineWarmup_.pipelinesCreatedBeforeWarmup = ctx_.device->PipelineCreationCount();
         pipelineWarmup_.completedPipelines = 0;
@@ -718,9 +731,15 @@ namespace Vulkan
             return false;
         }
 
-        if (nextWarmupRenderer_ < logicRenderers_.registeredTypes.size())
+        while (nextWarmupRenderer_ < logicRenderers_.registeredTypes.size())
         {
-            const ERendererType type = logicRenderers_.registeredTypes[nextWarmupRenderer_];
+            const ERendererType type = logicRenderers_.registeredTypes[nextWarmupRenderer_++];
+            if (!ShouldWarmupRenderer(type))
+            {
+                SPDLOG_INFO("Vulkan pipeline warm-up: skipped {} (feature disabled)", GetRendererName(type));
+                continue;
+            }
+
             pipelineWarmup_.currentRenderer = GetRendererName(type);
             const uint32_t next = pipelineWarmup_.completedRenderers + 1;
             ctx_.window->SetTitle(fmt::format("{} - Optimizing shaders ({}/{})", warmupOriginalWindowTitle_, next,
@@ -739,7 +758,6 @@ namespace Vulkan
             SPDLOG_INFO("Vulkan pipeline warm-up [{}/{}] {}: {:.1f} ms ({} pipelines warmed, {} before warm-up)", next,
                         pipelineWarmup_.totalRenderers, pipelineWarmup_.currentRenderer, elapsed.count(),
                         pipelineWarmup_.completedPipelines, pipelineWarmup_.pipelinesCreatedBeforeWarmup);
-            ++nextWarmupRenderer_;
             return false;
         }
 
@@ -2060,6 +2078,12 @@ namespace Vulkan
 
         ctx_.device->WaitIdle();
         DeleteSwapChain();
+        if (surfaceLost_)
+        {
+            SPDLOG_INFO("Recreating Vulkan surface after surface loss");
+            ctx_.surface->Recreate();
+            surfaceLost_ = false;
+        }
         CreateSwapChain();
         if (atmosphere_)
         {

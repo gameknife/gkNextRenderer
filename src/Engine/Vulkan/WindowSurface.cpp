@@ -862,10 +862,15 @@ void Window::TerminateSDL()
 Surface::Surface(const class Instance& instance) :
     instance_(instance)
 {
-    if (instance.Window().IsHeadless())
+    CreateSurface();
+}
+
+void Surface::CreateSurface()
+{
+    if (instance_.Window().IsHeadless())
     {
         const auto createHeadlessSurface = reinterpret_cast<PFN_vkCreateHeadlessSurfaceEXT>(
-            vkGetInstanceProcAddr(instance.Handle(), "vkCreateHeadlessSurfaceEXT"));
+            vkGetInstanceProcAddr(instance_.Handle(), "vkCreateHeadlessSurfaceEXT"));
         if (createHeadlessSurface == nullptr)
         {
             Throw(std::runtime_error(
@@ -874,7 +879,7 @@ Surface::Surface(const class Instance& instance) :
         }
         VkHeadlessSurfaceCreateInfoEXT createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_HEADLESS_SURFACE_CREATE_INFO_EXT;
-        Check(createHeadlessSurface(instance.Handle(), &createInfo, nullptr, &surface_), "create headless surface");
+        Check(createHeadlessSurface(instance_.Handle(), &createInfo, nullptr, &surface_), "create headless surface");
         return;
     }
 #if WIN32
@@ -882,7 +887,7 @@ Surface::Surface(const class Instance& instance) :
     createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
     createInfo.hinstance = GetModuleHandleW(nullptr);
     createInfo.hwnd = static_cast<HWND>(SDL_GetPointerProperty(
-        SDL_GetWindowProperties(instance.Window().Handle()),
+        SDL_GetWindowProperties(instance_.Window().Handle()),
         SDL_PROP_WINDOW_WIN32_HWND_POINTER,
         nullptr));
     if (createInfo.hwnd == nullptr)
@@ -890,10 +895,10 @@ Surface::Surface(const class Instance& instance) :
         Throw(std::runtime_error("failed to obtain Win32 window handle from SDL."));
     }
     Check(Vulkan::Interposer().CreateWin32SurfaceKHR(
-              instance.Handle(), &createInfo, nullptr, &surface_),
+              instance_.Handle(), &createInfo, nullptr, &surface_),
           "create Win32 window surface");
 #else
-    if (!SDL_Vulkan_CreateSurface(instance.Window().Handle(), instance.Handle(), nullptr, &surface_))
+    if (!SDL_Vulkan_CreateSurface(instance_.Window().Handle(), instance_.Handle(), nullptr, &surface_))
     {
         Throw(std::runtime_error(fmt::format("create Vulkan window surface: {}", SDL_GetError())));
     }
@@ -904,13 +909,24 @@ Surface::Surface(const class Instance& instance) :
 #endif
 }
 
-Surface::~Surface()
+void Surface::DestroySurface()
 {
     if (surface_ != nullptr)
     {
         Vulkan::Interposer().DestroySurfaceKHR(instance_.Handle(), surface_, nullptr);
         surface_ = nullptr;
     }
+}
+
+void Surface::Recreate()
+{
+    DestroySurface();
+    CreateSurface();
+}
+
+Surface::~Surface()
+{
+    DestroySurface();
 }
 
 }

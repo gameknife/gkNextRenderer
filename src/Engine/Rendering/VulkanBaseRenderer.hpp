@@ -255,6 +255,11 @@ namespace Vulkan
         void DrawFrame();
         void ReloadShaders();
         void RequestRecreateSwapChain() { requestRecreateSwapChain_ = true; }
+        void NotifySurfaceLost()
+        {
+            surfaceLost_ = true;
+            requestRecreateSwapChain_ = true;
+        }
 
         // Scene-viewport override. An editor host presents the scene into a sub-rect of the
         // swapchain image (the dockspace central node), so the whole screen-space chain -- render
@@ -723,6 +728,7 @@ namespace Vulkan
         bool tracyCalibratedTimestampsAvailable_ = false;
         bool visualDebug_{};
         bool requestRecreateSwapChain_ = false;
+        bool surfaceLost_ = false;
         bool deferSceneChainForStartup_ = true;
         bool resetUpscalerHistory_ = true;
         Rendering::Upscaler::EUpscalerType activeUpscalerType_ =

@@ -379,8 +379,11 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     services_.cvarSystem->LoadDefaultFile("assets/configs/cvar_default.json");
     gameInstance_->ConfigureCVars(*services_.cvarSystem);
 #if ANDROID
-    // Use the low-overhead ray-query renderer by default; an archived user setting can still override it.
+    // Android devices need a lower-cost default than desktop. Keep these as platform defaults:
+    // an archived user setting can still override them after this block.
     services_.cvarSystem->ExecuteCommand("r.rendererType 5");
+    services_.cvarSystem->ExecuteCommand("r.samples 1");
+    services_.cvarSystem->ExecuteCommand("r.upscaler.qualityMode 1");
 #endif
     services_.cvarSystem->LoadUserFiles();
     
