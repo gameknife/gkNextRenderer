@@ -346,6 +346,8 @@ private:
     // Lifecycle helpers
     void InitPhysics();
     void TickHotReload();
+    void StartPipelineWarmup();
+    void PumpPipelineWarmupAfterPresent();
 
     // Configuration and user-facing toggles
     struct FConfigState
@@ -364,6 +366,11 @@ private:
         float frameRate = 0.0f;
         double lastFrameTime = 0.0;
     };
+
+    // The initial loading frame must be presented before a cold pipeline compile can block the
+    // main thread. This makes the normal ImGui loading popup a real progress display.
+    bool pipelineWarmupUiPresented_ = false;
+    bool startupWindowShown_ = false;
 
     // Event-driven pointer state. Remote input injects SDL events but does not
     // necessarily update SDL_GetMouseState(), so gameplay/editor picking must

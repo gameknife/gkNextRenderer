@@ -179,8 +179,9 @@ namespace Vulkan
         pipelineInfo.subpass = 0;
 
         VkPipeline pipeline = VK_NULL_HANDLE;
-        Check(vkCreateGraphicsPipelines(device_.Handle(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline),
+        Check(vkCreateGraphicsPipelines(device_.Handle(), device_.PipelineCache(), 1, &pipelineInfo, nullptr, &pipeline),
               errorLabel);
+        device_.RecordPipelineCreated(errorLabel);
         return pipeline;
     }
 }

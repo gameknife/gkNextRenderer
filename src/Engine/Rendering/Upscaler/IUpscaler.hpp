@@ -10,6 +10,9 @@ namespace Rendering::Upscaler
         virtual ~IUpscaler() = default;
 
         virtual void OnDeviceCreated(const FDeviceInfo& deviceInfo, FFeatureCaps& caps) = 0;
+        // Compile provider-owned pipelines even when this provider is not the selected upscaler.
+        // Startup warm-up deliberately leaves frame-sized history resources unallocated.
+        virtual void WarmupPipelines() {}
         // Called after swapchain selection resolves. Providers must keep GPU
         // resources only while one of their types is active.
         virtual void SetActiveType(EUpscalerType type) {}

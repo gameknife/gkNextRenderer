@@ -220,6 +220,18 @@ namespace Vulkan
         uint32_t row = 0;
     };
 
+    struct FPipelineWarmupProgress
+    {
+        bool active = false;
+        uint32_t completedRenderers = 0;
+        uint32_t totalRenderers = 0;
+        // Pipelines required to get the first loading frame on screen. Keep this separate
+        // from the actual warm-up delta so the progress UI can account for startup work.
+        uint32_t pipelinesCreatedBeforeWarmup = 0;
+        uint32_t completedPipelines = 0;
+        std::string currentRenderer;
+    };
+
     FReferenceViewLayout GetReferenceViewLayout(ERendererType type);
         
     class VulkanBaseRenderer
@@ -234,6 +246,12 @@ namespace Vulkan
         // Lifecycle
         void Start();
         void End();
+        void BeginPipelineWarmup();
+        // Completes exactly one renderer or provider warm-up group. Returns true once the full
+        // cache has been persisted and interactive startup may continue.
+        bool PumpPipelineWarmup();
+        void WarmupAllPipelines();
+        const FPipelineWarmupProgress& PipelineWarmupProgress() const { return pipelineWarmup_; }
         void DrawFrame();
         void ReloadShaders();
         void RequestRecreateSwapChain() { requestRecreateSwapChain_ = true; }
@@ -570,6 +588,9 @@ namespace Vulkan
             // exist", never "which renderer is this", so it stays correct no matter why they are
             // absent and cannot disagree with what was actually created.
             bool sceneChainCreated = false;
+            // The initial loading frame deliberately creates only the swapchain, depth buffer and
+            // UI. The scene chain is then created after that frame has been presented.
+            bool sceneChainInitializationPending = false;
         };
 
         struct BindlessStorageImages
@@ -629,6 +650,11 @@ namespace Vulkan
             std::set<ERendererType> swapChainCreatedTypes;
             ERendererType current = ERT_SoftwareModern;
         };
+
+        FPipelineWarmupProgress pipelineWarmup_;
+        uint32_t nextWarmupRenderer_ = 0;
+        bool warmupUpscalersPending_ = false;
+        std::string warmupOriginalWindowTitle_;
 
         struct ScreenshotResources
         {
@@ -697,6 +723,7 @@ namespace Vulkan
         bool tracyCalibratedTimestampsAvailable_ = false;
         bool visualDebug_{};
         bool requestRecreateSwapChain_ = false;
+        bool deferSceneChainForStartup_ = true;
         bool resetUpscalerHistory_ = true;
         Rendering::Upscaler::EUpscalerType activeUpscalerType_ =
             Rendering::Upscaler::EUpscalerType::None;
@@ -755,6 +782,7 @@ namespace Vulkan
             return GetRendererContract(logicRenderers_.current).outputs != ERenderOutput::None;
         }
         void CreateSceneSwapChainResources();
+        void CreateDeferredSceneSwapChainResources();
         // Creates the full screen-space RT set at [bankBase + RT_X]. bankBase 0 == primary view.
         void CreateRenderTargetBank(uint32_t bankBase);
         void CreateRenderTargetBank(uint32_t bankBase, VkExtent2D extent);
@@ -791,6 +819,7 @@ namespace Vulkan
         void BeforeNextFrame();
         // Scene-global pre-passes: camera-independent work that runs once per scene frame.
         void BeginSceneFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+        void ClearWarmupSwapchain(VkCommandBuffer commandBuffer, uint32_t imageIndex);
         // Per-view render: camera/bank-dependent pre-passes, logic renderer, and view-local post.
         void RenderViewToBank(VkCommandBuffer commandBuffer, uint32_t imageIndex,
                               RenderView& view, bool clearSwapchain, LogicRendererBase& logicRenderer);
@@ -839,6 +868,8 @@ namespace Vulkan
         virtual void OnDeviceSet() {};
         virtual void CreateSwapChain(const VkExtent2D& extent) {};
         virtual void DeleteSwapChain() {};
+        // Optional feature pipelines that would normally be created lazily are warmed here.
+        virtual void WarmupPipelines() {};
         virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) {};
         virtual void BeforeNextFrame() {};
         

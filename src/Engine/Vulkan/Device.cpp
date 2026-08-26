@@ -3,12 +3,16 @@
 #include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 #include "Engine/Utilities/Exception.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Vulkan/VulkanInterposer.hpp"
 #include "Engine/Vulkan/DeviceCreationAugmenter.hpp"
 #include <algorithm>
 #include <cstring>
+#include <array>
+#include <filesystem>
+#include <fstream>
 #include <set>
 #include <fmt/format.h>
 
@@ -16,6 +20,104 @@ namespace Vulkan {
 
 namespace
 {
+    constexpr uint32_t PipelineCacheFileVersion = 1;
+    constexpr uint64_t MaxPipelineCacheBytes = 128ull * 1024ull * 1024ull;
+
+    struct PipelineCacheFileHeader
+    {
+        std::array<char, 8> magic{'G', 'K', 'P', 'S', 'O', 'C', 'A', 'C'};
+        uint32_t version = PipelineCacheFileVersion;
+        uint32_t vendorId = 0;
+        uint32_t deviceId = 0;
+        uint32_t driverVersion = 0;
+        std::array<uint8_t, VK_UUID_SIZE> pipelineCacheUuid{};
+        uint64_t dataSize = 0;
+    };
+
+    std::filesystem::path GetPipelineCachePath(const VkPhysicalDeviceProperties& properties)
+    {
+        std::string uuid;
+        uuid.reserve(VK_UUID_SIZE * 2);
+        for (const uint8_t byte : properties.pipelineCacheUUID)
+        {
+            uuid += fmt::format("{:02x}", byte);
+        }
+        const std::string fileName = fmt::format("cache/vulkan_pipeline_{:04x}_{:04x}_{:08x}_{}.bin",
+                                                  properties.vendorID, properties.deviceID,
+                                                  properties.driverVersion, uuid);
+        return Utilities::FileHelper::GetWritableFilePath(fileName.c_str());
+    }
+
+    std::vector<uint8_t> LoadPipelineCacheData(const VkPhysicalDeviceProperties& properties)
+    {
+        const std::filesystem::path path = GetPipelineCachePath(properties);
+        std::ifstream input(path, std::ios::binary | std::ios::ate);
+        if (!input)
+        {
+            SPDLOG_INFO("Vulkan pipeline cache: no disk cache at {}", path.string());
+            return {};
+        }
+
+        const std::streamsize fileSize = input.tellg();
+        if (fileSize < static_cast<std::streamsize>(sizeof(PipelineCacheFileHeader)))
+        {
+            SPDLOG_WARN("Vulkan pipeline cache: ignoring truncated file {}", path.string());
+            return {};
+        }
+        input.seekg(0);
+
+        PipelineCacheFileHeader header{};
+        input.read(reinterpret_cast<char*>(&header), sizeof(header));
+        const bool compatible = header.magic == PipelineCacheFileHeader{}.magic &&
+                                header.version == PipelineCacheFileVersion &&
+                                header.vendorId == properties.vendorID &&
+                                header.deviceId == properties.deviceID &&
+                                header.driverVersion == properties.driverVersion &&
+                                header.pipelineCacheUuid == std::array<uint8_t, VK_UUID_SIZE>{
+                                    properties.pipelineCacheUUID[0], properties.pipelineCacheUUID[1],
+                                    properties.pipelineCacheUUID[2], properties.pipelineCacheUUID[3],
+                                    properties.pipelineCacheUUID[4], properties.pipelineCacheUUID[5],
+                                    properties.pipelineCacheUUID[6], properties.pipelineCacheUUID[7],
+                                    properties.pipelineCacheUUID[8], properties.pipelineCacheUUID[9],
+                                    properties.pipelineCacheUUID[10], properties.pipelineCacheUUID[11],
+                                    properties.pipelineCacheUUID[12], properties.pipelineCacheUUID[13],
+                                    properties.pipelineCacheUUID[14], properties.pipelineCacheUUID[15]};
+        if (!compatible || header.dataSize > MaxPipelineCacheBytes ||
+            header.dataSize != static_cast<uint64_t>(fileSize - sizeof(PipelineCacheFileHeader)))
+        {
+            SPDLOG_WARN("Vulkan pipeline cache: ignoring incompatible file {}", path.string());
+            return {};
+        }
+
+        std::vector<uint8_t> data(static_cast<size_t>(header.dataSize));
+        input.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(data.size()));
+        if (!input)
+        {
+            SPDLOG_WARN("Vulkan pipeline cache: failed to read {}", path.string());
+            return {};
+        }
+        SPDLOG_INFO("Vulkan pipeline cache: loaded {} KiB from {}", data.size() / 1024, path.string());
+        return data;
+    }
+
+    void CreatePipelineCache(VkDevice device, const VkPhysicalDeviceProperties& properties, VkPipelineCache& cache)
+    {
+        const std::vector<uint8_t> initialData = LoadPipelineCacheData(properties);
+        VkPipelineCacheCreateInfo createInfo{VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
+        createInfo.initialDataSize = initialData.size();
+        createInfo.pInitialData = initialData.empty() ? nullptr : initialData.data();
+
+        VkResult result = vkCreatePipelineCache(device, &createInfo, nullptr, &cache);
+        if (result != VK_SUCCESS && !initialData.empty())
+        {
+            SPDLOG_WARN("Vulkan pipeline cache: driver rejected disk data ({}); rebuilding", static_cast<int>(result));
+            createInfo.initialDataSize = 0;
+            createInfo.pInitialData = nullptr;
+            result = vkCreatePipelineCache(device, &createInfo, nullptr, &cache);
+        }
+        Check(result, "create Vulkan pipeline cache");
+    }
+
     std::vector<VkQueueFamilyProperties>::const_iterator FindQueue(
         const std::vector<VkQueueFamilyProperties>& queueFamilies,
         const std::string& name,
@@ -233,6 +335,7 @@ Device::Device(
     }
 
     vkGetPhysicalDeviceProperties(PhysicalDevice(), &deviceProp_);
+    CreatePipelineCache(device_, deviceProp_, pipelineCache_);
     
     deviceProcedures_.reset(new DeviceProcedures(*this, true, true));
     memoryAllocator_.reset(new MemoryAllocator(*this));
@@ -242,11 +345,88 @@ Device::~Device()
 {
     if (device_ != nullptr)
     {
+        PersistPipelineCache();
         memoryAllocator_.reset();
         deviceProcedures_.reset();
+        if (pipelineCache_ != VK_NULL_HANDLE)
+        {
+            vkDestroyPipelineCache(device_, pipelineCache_, nullptr);
+            pipelineCache_ = VK_NULL_HANDLE;
+        }
         Interposer().DestroyDevice(device_, nullptr);
         device_ = nullptr;
     }
+}
+
+void Device::PersistPipelineCache() const
+{
+    if (device_ == VK_NULL_HANDLE || pipelineCache_ == VK_NULL_HANDLE)
+    {
+        return;
+    }
+
+    size_t dataSize = 0;
+    VkResult result = vkGetPipelineCacheData(device_, pipelineCache_, &dataSize, nullptr);
+    if (result != VK_SUCCESS || dataSize > MaxPipelineCacheBytes)
+    {
+        SPDLOG_WARN("Vulkan pipeline cache: query data size failed ({})", static_cast<int>(result));
+        return;
+    }
+
+    std::vector<uint8_t> data(dataSize);
+    result = vkGetPipelineCacheData(device_, pipelineCache_, &dataSize, data.data());
+    if (result != VK_SUCCESS && result != VK_INCOMPLETE)
+    {
+        SPDLOG_WARN("Vulkan pipeline cache: read data failed ({})", static_cast<int>(result));
+        return;
+    }
+    data.resize(dataSize);
+
+    PipelineCacheFileHeader header{};
+    header.vendorId = deviceProp_.vendorID;
+    header.deviceId = deviceProp_.deviceID;
+    header.driverVersion = deviceProp_.driverVersion;
+    std::copy_n(deviceProp_.pipelineCacheUUID, VK_UUID_SIZE, header.pipelineCacheUuid.begin());
+    header.dataSize = data.size();
+
+    const std::filesystem::path path = GetPipelineCachePath(deviceProp_);
+    const std::filesystem::path temporaryPath = path.string() + ".tmp";
+    std::ofstream output(temporaryPath, std::ios::binary | std::ios::trunc);
+    if (!output)
+    {
+        SPDLOG_WARN("Vulkan pipeline cache: cannot write {}", temporaryPath.string());
+        return;
+    }
+    output.write(reinterpret_cast<const char*>(&header), sizeof(header));
+    output.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
+    output.close();
+    if (!output)
+    {
+        SPDLOG_WARN("Vulkan pipeline cache: write failed for {}", temporaryPath.string());
+        return;
+    }
+
+    std::error_code error;
+    std::filesystem::rename(temporaryPath, path, error);
+    if (error)
+    {
+        std::filesystem::remove(path, error);
+        error.clear();
+        std::filesystem::rename(temporaryPath, path, error);
+    }
+    if (error)
+    {
+        SPDLOG_WARN("Vulkan pipeline cache: cannot publish {} ({})", path.string(), error.message());
+        return;
+    }
+    SPDLOG_INFO("Vulkan pipeline cache: saved {} KiB to {}", data.size() / 1024, path.string());
+}
+
+void Device::RecordPipelineCreated(const char* label) const
+{
+    const uint32_t number = pipelineCreationCount_.fetch_add(1) + 1;
+    SPDLOG_DEBUG("Vulkan pipeline warm-up: created pipeline #{} ({})", number,
+                 label != nullptr ? label : "unnamed");
 }
 
 MemoryStatsSnapshot Device::CaptureMemoryStats(bool includeDetails) const

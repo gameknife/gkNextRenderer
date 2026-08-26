@@ -47,6 +47,14 @@ namespace Rendering::Upscaler
                 activeProvider_ = nullptr;
             }
 
+            void WarmupPipelines() override
+            {
+                for (auto& provider : providers_)
+                {
+                    provider->WarmupPipelines();
+                }
+            }
+
             void SetActiveType(EUpscalerType type) override
             {
                 for (auto& provider : providers_)

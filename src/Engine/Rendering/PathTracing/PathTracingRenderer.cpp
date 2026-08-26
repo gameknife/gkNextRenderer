@@ -68,6 +68,20 @@ namespace Vulkan::PathTracing
         samplePostChain_.DeleteSwapChain();
     }
 
+    void PathTracingRenderer::WarmupPipelines()
+    {
+        // SHARC and ReSTIR are normally instantiated only after their settings are enabled. They
+        // are small in number, so compiling them here keeps feature toggles out of the frame loop.
+        EnsureSharcPipelines();
+        baseRender_.RestirDIResources();
+        if (!restirSpatialPipeline_)
+        {
+            restirSpatialPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(
+                SwapChain(), "assets/shaders/Core.RestirSpatialShade.comp.slang.spv", GetScene(),
+                baseRender_.ActiveTLASHandle()));
+        }
+    }
+
     void PathTracingRenderer::EnsureSharcPipelines()
     {
         if (!sharcUpdatePipeline_)

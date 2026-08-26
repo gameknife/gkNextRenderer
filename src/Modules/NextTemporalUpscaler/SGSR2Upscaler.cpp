@@ -162,6 +162,14 @@ namespace Modules::NextTemporalUpscaler
                 }
             }
 
+            void WarmupPipelines() override
+            {
+                if (deviceReady_)
+                {
+                    EnsureStaticResources();
+                }
+            }
+
             void OnSwapChainDestroyed() override
             {
                 DestroyGpuResources();
@@ -457,9 +465,13 @@ namespace Modules::NextTemporalUpscaler
                 createInfo.layout = pipelineLayout_;
                 VkPipeline pipeline = VK_NULL_HANDLE;
                 const VkResult result = vkCreateComputePipelines(
-                    deviceInfo_.device, VK_NULL_HANDLE, 1, &createInfo, nullptr, &pipeline);
+                    deviceInfo_.device, deviceInfo_.pipelineCache, 1, &createInfo, nullptr, &pipeline);
                 vkDestroyShaderModule(deviceInfo_.device, shader, nullptr);
                 Vulkan::Check(result, "create SGSR2 compute pipeline");
+                if (deviceInfo_.onPipelineCreated)
+                {
+                    deviceInfo_.onPipelineCreated(shaderPath);
+                }
                 return pipeline;
             }
 

@@ -147,7 +147,7 @@ namespace
 
 } // namespace
 UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPool, const Vulkan::SwapChain& swapChain,
-                             const Vulkan::DepthBuffer& depthBuffer, Runtime::Config::UserSettings& userSettings,
+                             const Vulkan::DepthBuffer&, Runtime::Config::UserSettings& userSettings,
                              std::function<void()> funcPreConfig, std::function<void()> funcInit,
                              std::unique_ptr<IMultiViewportBackend> multiViewportBackend) :
     userSettings_(userSettings), multiViewportBackend_(std::move(multiViewportBackend)),
@@ -156,10 +156,6 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     vulkanRenderer_(std::make_unique<FImGuiVulkanRenderer>()), engine_(engine)
 {
     const auto& window = swapChain.Device().Surface().Instance().Window();
-
-    renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
-    renderPass_->SetDebugName("ImGui Render Pass");
-    CreateUiPipeline(swapChain);
 
     // Initialise ImGui
     contextHost_->Create();
@@ -966,15 +962,28 @@ void UserInterface::PrepareDrawData()
 {
     constexpr double loadingIndicatorDelaySeconds = 0.5;
     const bool isLoading = GetEngine().GetEngineStatus() == NextRenderer::EApplicationStatus::Loading;
+    const Vulkan::FPipelineWarmupProgress& pipelineWarmup =
+        GetEngine().GetRenderer().PipelineWarmupProgress();
     if (isLoading)
     {
-        if (loadingStartedAt_ < 0.0)
+        // Pipeline warm-up starts only after this UI has presented once. Show its detailed
+        // progress immediately; unlike ordinary scene loading, hiding it for 500ms would make
+        // the first cold compiler stall appear as an unresponsive window.
+        if (pipelineWarmup.active)
         {
-            loadingStartedAt_ = ImGui::GetTime();
-        }
-        if (ImGui::GetTime() - loadingStartedAt_ >= loadingIndicatorDelaySeconds)
-        {
+            loadingStartedAt_ = -1.0;
             DrawIndicator(GetEngine().GetTotalFrames(), true);
+        }
+        else
+        {
+            if (loadingStartedAt_ < 0.0)
+            {
+                loadingStartedAt_ = ImGui::GetTime();
+            }
+            if (ImGui::GetTime() - loadingStartedAt_ >= loadingIndicatorDelaySeconds)
+            {
+                DrawIndicator(GetEngine().GetTotalFrames(), true);
+            }
         }
     }
     else
@@ -1100,6 +1109,15 @@ bool UserInterface::WantsToCaptureMouse() const { return contextHost_->WantsToCa
 void UserInterface::DrawIndicator(uint32_t frameCount, bool show)
 {
     frameCount /= 60;
+    const Vulkan::FPipelineWarmupProgress& pipelineWarmup =
+        GetEngine().GetRenderer().PipelineWarmupProgress();
+    const bool isPipelineWarmup = pipelineWarmup.active;
+    if (isPipelineWarmup)
+    {
+        DrawPipelineWarmupOverlay(pipelineWarmup);
+        return;
+    }
+
     if (show)
     {
         ImGui::OpenPopup("Loading");
@@ -1126,6 +1144,106 @@ void UserInterface::DrawIndicator(uint32_t frameCount, bool show)
         }
         ImGui::EndPopup();
     }
+}
+
+void UserInterface::DrawPipelineWarmupOverlay(const Vulkan::FPipelineWarmupProgress& pipelineWarmup)
+{
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowBgAlpha(0.0f);
+    constexpr ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 6.0f * uiScale_));
+    if (!ImGui::Begin("##PipelineWarmup", nullptr, flags))
+    {
+        ImGui::End();
+        ImGui::PopStyleVar();
+        return;
+    }
+
+    ImFont* titleFont = titleBarFont_ != nullptr ? titleBarFont_ : defaultFont_;
+    if (titleFont == nullptr)
+    {
+        titleFont = ImGui::GetFont();
+    }
+
+    // Line 1: Header (Condensed font with icon + right-aligned group progress)
+    ImGui::PushFont(titleFont);
+    const std::string titleText = ICON_FA_MICROCHIP "  OPTIMIZING PIPELINE CACHE";
+    const std::string groupProgressText = fmt::format("{}/{}", pipelineWarmup.completedRenderers, pipelineWarmup.totalRenderers);
+    const float titleTextWidth = ImGui::CalcTextSize(titleText.c_str()).x;
+    const float groupTextWidth = ImGui::CalcTextSize(groupProgressText.c_str()).x;
+    const float minRequiredWidth = titleTextWidth + groupTextWidth + 24.0f * uiScale_;
+    const float panelWidth = std::max(360.0f * uiScale_, minRequiredWidth);
+    const float startPosX = ImGui::GetCursorPosX();
+
+    ImGui::PushStyleColor(ImGuiCol_Text, Foundation::Color(Foundation::EColor::Text));
+    ImGui::TextUnformatted(titleText.c_str());
+    ImGui::PopStyleColor();
+
+    ImGui::SameLine(startPosX + panelWidth - groupTextWidth);
+    ImGui::PushStyleColor(ImGuiCol_Text, Foundation::Color(Foundation::EColor::TextMuted));
+    ImGui::TextUnformatted(groupProgressText.c_str());
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
+
+    // Line 2: Minimal Progress Bar (3px height)
+    const float totalRenderers = static_cast<float>(std::max(pipelineWarmup.totalRenderers, 1u));
+    const float progressFraction = std::clamp(static_cast<float>(pipelineWarmup.completedRenderers) / totalRenderers, 0.0f, 1.0f);
+    const float barHeight = std::max(3.0f * uiScale_, 3.0f);
+    const ImVec2 barPos = ImGui::GetCursorScreenPos();
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+    drawList->AddRectFilled(
+        barPos,
+        ImVec2(barPos.x + panelWidth, barPos.y + barHeight),
+        Foundation::ColorU32(Foundation::EColor::BorderStrong, 0.45f),
+        1.5f * uiScale_);
+
+    if (progressFraction > 0.0f)
+    {
+        const float fillWidth = std::max(2.0f, panelWidth * progressFraction);
+        drawList->AddRectFilled(
+            barPos,
+            ImVec2(barPos.x + fillWidth, barPos.y + barHeight),
+            Foundation::ColorU32(Foundation::EColor::AccentHover),
+            1.5f * uiScale_);
+    }
+    ImGui::Dummy(ImVec2(panelWidth, barHeight));
+
+    // Line 3: Active Renderer Stage
+    const std::string activeRenderer = pipelineWarmup.currentRenderer.empty()
+        ? "Preparing pipeline cache..."
+        : pipelineWarmup.currentRenderer;
+
+    ImGui::PushStyleColor(ImGuiCol_Text, Foundation::Color(Foundation::EColor::AccentHover));
+    ImGui::TextUnformatted(ICON_FA_SLIDERS);
+    ImGui::PopStyleColor();
+    ImGui::SameLine(0.0f, 8.0f * uiScale_);
+    ImGui::PushStyleColor(ImGuiCol_Text, Foundation::Color(Foundation::EColor::Text));
+    ImGui::TextUnformatted(activeRenderer.c_str());
+    ImGui::PopStyleColor();
+
+    // Line 4: Pipelines Count & Baseline Detail
+    ImGui::PushStyleColor(ImGuiCol_Text, Foundation::Color(Foundation::EColor::TextDim));
+    ImGui::TextUnformatted(ICON_FA_BOLT);
+    ImGui::PopStyleColor();
+    ImGui::SameLine(0.0f, 8.0f * uiScale_);
+
+    std::string statsText = fmt::format("{} pipelines warmed", pipelineWarmup.completedPipelines);
+    if (pipelineWarmup.pipelinesCreatedBeforeWarmup > 0)
+    {
+        statsText += fmt::format(" ({} baseline)", pipelineWarmup.pipelinesCreatedBeforeWarmup);
+    }
+    ImGui::PushStyleColor(ImGuiCol_Text, Foundation::Color(Foundation::EColor::TextMuted));
+    ImGui::TextUnformatted(statsText.c_str());
+    ImGui::PopStyleColor();
+
+    ImGui::End();
+    ImGui::PopStyleVar();
 }
 
 

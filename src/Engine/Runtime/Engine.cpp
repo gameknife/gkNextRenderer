@@ -342,7 +342,10 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
             SPDLOG_INFO("Headless agent validation disables hardware ray tracing");
         }
     }
-    Vulkan::Window::InitSDL(useSystemDpiScaling, options.VulkanDriver, useHeadlessSurface);
+    const bool showStartupSplash = !options.AgentValidation && !options.HiddenWindow &&
+                                   !options.Tui && !useHeadlessSurface && !options.Fullscreen;
+    Vulkan::Window::InitSDL(useSystemDpiScaling, options.VulkanDriver, useHeadlessSurface,
+                            showStartupSplash);
     
     Vulkan::WindowConfig windowConfig{"gkNextEngine " + NextRenderer::GetBuildVersion(),
                                       options.Width,options.Height,
@@ -356,6 +359,7 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     // only works if this is already set.
     windowConfig.HiddenWindow =
         (options.AgentValidation && !options.AgentVisibleWindow) || options.HiddenWindow || options.Tui;
+    windowConfig.DeferShowUntilFirstPresent = !windowConfig.HiddenWindow && !windowConfig.HeadlessSurface;
 
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
     
@@ -481,6 +485,9 @@ void NextEngine::Start()
     const VkPresentModeKHR presentMode = options_->AgentValidation || options_->Tui ? VK_PRESENT_MODE_IMMEDIATE_KHR
                                              : static_cast<VkPresentModeKHR>(options_->PresentMode);
     config_.userSettings.PresentMode = static_cast<uint32_t>(presentMode);
+    // The constructor has completed core initialization; turn on the first startup light before
+    // entering the Vulkan/device startup path.
+    Vulkan::Window::AdvanceStartupSplashStage();
     renderer_.reset(NextRenderer::CreateRenderer(static_cast<uint32_t>(config_.userSettings.RendererType), window_.get(),
                                                  presentMode, GOption->Validation));
     
@@ -496,6 +503,8 @@ void NextEngine::Start()
     rendererDelegates.afterSubmit = [this]() -> void  { OnRendererAfterSubmit(); };
 
     renderer_->Start();
+    // Vulkan device, swapchain, and the registered Streamline/upscaler path are ready.
+    Vulkan::Window::AdvanceStartupSplashStage();
     
     for (auto it = renderFrameConsumers_.begin(); it != renderFrameConsumers_.end();)
     {
@@ -555,6 +564,8 @@ void NextEngine::Start()
 
     // gameinstance init
     gameInstance_->OnInit();
+    // All application startup hooks are complete; the remaining visible wait is pipeline warm-up.
+    Vulkan::Window::AdvanceStartupSplashStage();
     
     if (agentControl_ && agentControl_->IsRunning())
     {
@@ -581,7 +592,52 @@ void NextEngine::Start()
             return true;
         });
 
+    StartPipelineWarmup();
+
     GK_LOG_STAGE("---- Next Engine Started in {}", stopwatch.elapsed_ms());
+}
+
+void NextEngine::StartPipelineWarmup()
+{
+    if (!renderer_)
+    {
+        return;
+    }
+
+    renderer_->BeginPipelineWarmup();
+    if (renderer_->PipelineWarmupProgress().active)
+    {
+        pipelineWarmupUiPresented_ = false;
+        status_ = NextRenderer::EApplicationStatus::Loading;
+        // Prepare the dedicated warm-up overlay before DrawFrame records its first submit.
+        // Otherwise the first useful UI is produced only after the first present, and the Core
+        // scene-pipeline compile can leave a cold-start window black for several seconds.
+        if (userInterface_)
+        {
+            userInterface_->PreRender();
+            userInterface_->PrepareDrawData();
+        }
+    }
+}
+
+void NextEngine::PumpPipelineWarmupAfterPresent()
+{
+    if (!renderer_ || !renderer_->PipelineWarmupProgress().active)
+    {
+        return;
+    }
+
+    // With a UI, defer the first compile until its loading popup was submitted and presented.
+    // On a headless target there is no popup to wait for, so make forward progress immediately.
+    if (userInterface_ && !pipelineWarmupUiPresented_)
+    {
+        return;
+    }
+
+    if (renderer_->PumpPipelineWarmup())
+    {
+        status_ = NextRenderer::EApplicationStatus::Running;
+    }
 }
 
 bool NextEngine::HandleEvent(SDL_Event& event)
@@ -1520,6 +1576,19 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
 
 void NextEngine::OnRendererAfterSubmit()
 {
+    // The SDL window is created hidden during normal startup. The first successful present is
+    // the earliest point where showing it cannot expose a black/uninitialized swapchain.
+    if (window_ && window_->Config().DeferShowUntilFirstPresent && !startupWindowShown_)
+    {
+        window_->Show();
+        startupWindowShown_ = true;
+        Vulkan::Window::CloseStartupSplash();
+    }
+
+    // This callback runs after vkQueuePresentKHR. Keep the last loading frame on screen while a
+    // cold vkCreate*Pipelines call is in progress, then prepare the next frame with fresh state.
+    PumpPipelineWarmupAfterPresent();
+
     if (!userInterface_)
     {
         return;
@@ -1535,6 +1604,16 @@ void NextEngine::OnRendererAfterSubmit()
         const auto timeDelta = now - frameState_.lastFrameTime;
         frameState_.lastFrameTime = now;
         frameState_.frameRate = static_cast<float>(30 / timeDelta);
+    }
+
+    // While shader warm-up is active, the only ImGui output is the dedicated text overlay.
+    // Do not build game, overlay, physics, or developer UI behind it.
+    if (renderer_ && renderer_->PipelineWarmupProgress().active)
+    {
+        userInterface_->PreRender();
+        userInterface_->PrepareDrawData();
+        pipelineWarmupUiPresented_ = true;
+        return;
     }
 
     // Render the UI
@@ -1641,6 +1720,10 @@ void NextEngine::OnRendererAfterSubmit()
     {
         SCOPED_CPU_TIMER("imgui prepare draw data");
         userInterface_->PrepareDrawData();
+    }
+    if (renderer_ && renderer_->PipelineWarmupProgress().active)
+    {
+        pipelineWarmupUiPresented_ = true;
     }
 }
 

@@ -30,6 +30,9 @@ struct WindowConfig final
     // renders and can be captured; relax to SDL_WINDOW_NOT_FOCUSABLE if a driver refuses to
     // present a hidden swapchain.
     bool HiddenWindow {};
+    // Normal startup keeps the native window hidden until the first rendered frame has been
+    // presented. Unlike HiddenWindow, this still shows the window once Vulkan/ImGui is ready.
+    bool DeferShowUntilFirstPresent {};
     // Compatibility mode: let Windows bitmap-scale the whole application as a DPI-unaware process.
     bool SystemDpiScaling {};
     // Use VK_EXT_headless_surface instead of creating an SDL window. This is intended for
@@ -86,7 +89,10 @@ public:
     void ConfigureCustomTitleBarDrag(bool enabled, int titleBarHeight, int leftReservedWidth, int rightReservedWidth);
 
     // Static methods
-    static void InitSDL(bool systemDpiScaling, const std::string& vulkanDriver, bool headlessSurface = false);
+    static void InitSDL(bool systemDpiScaling, const std::string& vulkanDriver,
+                        bool headlessSurface = false, bool showStartupSplash = false);
+    static void AdvanceStartupSplashStage();
+    static void CloseStartupSplash();
     static void TerminateSDL();
 
 private:

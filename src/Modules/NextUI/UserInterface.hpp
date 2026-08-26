@@ -14,6 +14,11 @@
 
 union SDL_Event;
 
+namespace Vulkan
+{
+    struct FPipelineWarmupProgress;
+}
+
 namespace NextUI
 {
 class FImGuiContextHost;
@@ -82,6 +87,7 @@ private:
     NextEngine& GetEngine() {return *engine_;}
 
     void DrawIndicator(uint32_t frameCount, bool show);
+    void DrawPipelineWarmupOverlay(const Vulkan::FPipelineWarmupProgress& pipelineWarmup);
     void InitializeRendererBackend();
     void ShutdownRendererBackend();
     void BeginRendererBackendFrame();

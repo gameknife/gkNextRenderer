@@ -31,8 +31,9 @@ namespace Vulkan::PipelineCommon
             pipelineCreateInfo.layout = layout;
 
             VkPipeline pipeline = VK_NULL_HANDLE;
-            Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE, 1,
+            Check(vkCreateComputePipelines(device.Handle(), device.PipelineCache(), 1,
                 &pipelineCreateInfo, NULL, &pipeline), shaderfile);
+            device.RecordPipelineCreated(shaderfile);
             return pipeline;
         }
 

@@ -102,6 +102,7 @@ namespace
     // cause and where to find the log instead of letting Windows show a crash box.
     void ReportStartupFailure(const std::string& reason)
     {
+        Vulkan::Window::CloseStartupSplash();
         SPDLOG_ERROR("startup failed: {}", reason);
         spdlog::default_logger()->flush();
 

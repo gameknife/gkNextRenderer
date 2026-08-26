@@ -20,6 +20,7 @@ namespace Vulkan::PathTracing
 
         void CreateSwapChain(const VkExtent2D& extent) override;
         void DeleteSwapChain() override;
+        void WarmupPipelines() override;
         void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
         struct FSharcBuffer

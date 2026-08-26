@@ -652,9 +652,9 @@ namespace Vulkan
             atmosphere_->CreateDeviceResources();
         }
         CreateSwapChain();
-        // Keep hidden windows hidden (agent validation captures, unit-test engine fixture):
-        // showing here would override SDL_WINDOW_HIDDEN and pop a window that steals focus.
-        if (!ctx_.window->Config().HiddenWindow)
+        // Keep hidden windows hidden (agent validation captures, unit-test engine fixture), and
+        // let normal startup show only after its first presentable frame is ready.
+        if (!ctx_.window->Config().HiddenWindow && !ctx_.window->Config().DeferShowUntilFirstPresent)
         {
             ctx_.window->Show();
         }
@@ -668,6 +668,117 @@ namespace Vulkan
         SelectPhysicalDevice(GOption->GpuIdx);
         PrintVulkanSwapChainInformation(*this);
         frame_.currentFrame = 0;
+    }
+
+    void VulkanBaseRenderer::BeginPipelineWarmup()
+    {
+        if (!ctx_.device || !frame_.swapChain || pipelineWarmup_.active)
+        {
+            return;
+        }
+
+        pipelineWarmup_.active = true;
+        pipelineWarmup_.completedRenderers = 0;
+        pipelineWarmup_.totalRenderers = static_cast<uint32_t>(logicRenderers_.registeredTypes.size()) +
+            (frame_.sceneChainInitializationPending ? 1u : 0u) + (upscaler_ != nullptr ? 1u : 0u);
+        pipelineWarmup_.pipelinesCreatedBeforeWarmup = ctx_.device->PipelineCreationCount();
+        pipelineWarmup_.completedPipelines = 0;
+        pipelineWarmup_.currentRenderer = frame_.sceneChainInitializationPending
+            ? "Core scene pipelines"
+            : "Preparing Vulkan shader cache";
+        nextWarmupRenderer_ = 0;
+        warmupUpscalersPending_ = upscaler_ != nullptr;
+        warmupOriginalWindowTitle_ = ctx_.window->GetTitle();
+        SPDLOG_INFO("Vulkan pipeline warm-up: preparing {} pipeline groups", pipelineWarmup_.totalRenderers);
+    }
+
+    bool VulkanBaseRenderer::PumpPipelineWarmup()
+    {
+        if (!pipelineWarmup_.active)
+        {
+            return true;
+        }
+
+        if (frame_.sceneChainInitializationPending)
+        {
+            pipelineWarmup_.currentRenderer = "Core scene pipelines";
+            const uint32_t next = pipelineWarmup_.completedRenderers + 1;
+            ctx_.window->SetTitle(fmt::format("{} - Optimizing shaders ({}/{})", warmupOriginalWindowTitle_, next,
+                                              pipelineWarmup_.totalRenderers));
+
+            const auto start = std::chrono::steady_clock::now();
+            CreateDeferredSceneSwapChainResources();
+            const auto elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start);
+            pipelineWarmup_.completedRenderers = next;
+            pipelineWarmup_.completedPipelines =
+                ctx_.device->PipelineCreationCount() - pipelineWarmup_.pipelinesCreatedBeforeWarmup;
+            SPDLOG_INFO("Vulkan pipeline warm-up [{}/{}] {}: {:.1f} ms ({} pipelines warmed, {} before warm-up)", next,
+                        pipelineWarmup_.totalRenderers, pipelineWarmup_.currentRenderer, elapsed.count(),
+                        pipelineWarmup_.completedPipelines, pipelineWarmup_.pipelinesCreatedBeforeWarmup);
+            return false;
+        }
+
+        if (nextWarmupRenderer_ < logicRenderers_.registeredTypes.size())
+        {
+            const ERendererType type = logicRenderers_.registeredTypes[nextWarmupRenderer_];
+            pipelineWarmup_.currentRenderer = GetRendererName(type);
+            const uint32_t next = pipelineWarmup_.completedRenderers + 1;
+            ctx_.window->SetTitle(fmt::format("{} - Optimizing shaders ({}/{})", warmupOriginalWindowTitle_, next,
+                                              pipelineWarmup_.totalRenderers));
+
+            const auto start = std::chrono::steady_clock::now();
+            LogicRendererBase* renderer = EnsureLogicRenderer(type);
+            if (renderer)
+            {
+                renderer->WarmupPipelines();
+            }
+            const auto elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start);
+            pipelineWarmup_.completedRenderers = next;
+            pipelineWarmup_.completedPipelines =
+                ctx_.device->PipelineCreationCount() - pipelineWarmup_.pipelinesCreatedBeforeWarmup;
+            SPDLOG_INFO("Vulkan pipeline warm-up [{}/{}] {}: {:.1f} ms ({} pipelines warmed, {} before warm-up)", next,
+                        pipelineWarmup_.totalRenderers, pipelineWarmup_.currentRenderer, elapsed.count(),
+                        pipelineWarmup_.completedPipelines, pipelineWarmup_.pipelinesCreatedBeforeWarmup);
+            ++nextWarmupRenderer_;
+            return false;
+        }
+
+        // Each registered provider must compile even when another upscaler is currently selected.
+        // Keep their history images lazy: the cache only needs pipeline compilation, not a second
+        // screen-sized temporal history allocation at startup.
+        if (warmupUpscalersPending_)
+        {
+            pipelineWarmup_.currentRenderer = "Upscaler providers";
+            ctx_.window->SetTitle(fmt::format("{} - Optimizing shaders (upscalers)", warmupOriginalWindowTitle_));
+            const auto start = std::chrono::steady_clock::now();
+            upscaler_->WarmupPipelines();
+            const auto elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start);
+            pipelineWarmup_.completedPipelines =
+                ctx_.device->PipelineCreationCount() - pipelineWarmup_.pipelinesCreatedBeforeWarmup;
+            SPDLOG_INFO("Vulkan pipeline warm-up [upscalers] {:.1f} ms ({} pipelines warmed, {} before warm-up)",
+                        elapsed.count(), pipelineWarmup_.completedPipelines,
+                        pipelineWarmup_.pipelinesCreatedBeforeWarmup);
+            warmupUpscalersPending_ = false;
+            return false;
+        }
+
+        pipelineWarmup_.active = false;
+        pipelineWarmup_.currentRenderer.clear();
+        deferSceneChainForStartup_ = false;
+        ctx_.device->PersistPipelineCache();
+        ctx_.window->SetTitle(warmupOriginalWindowTitle_);
+        SPDLOG_INFO("Vulkan pipeline warm-up: complete ({} pipeline groups, {} pipelines warmed, {} before warm-up)",
+                    pipelineWarmup_.totalRenderers, pipelineWarmup_.completedPipelines,
+                    pipelineWarmup_.pipelinesCreatedBeforeWarmup);
+        return true;
+    }
+
+    void VulkanBaseRenderer::WarmupAllPipelines()
+    {
+        BeginPipelineWarmup();
+        while (!PumpPipelineWarmup())
+        {
+        }
     }
 
     void VulkanBaseRenderer::End()
@@ -1130,6 +1241,11 @@ namespace Vulkan
         {
             Rendering::Upscaler::FDeviceInfo deviceInfo{};
             deviceInfo.device = ctx_.device->Handle();
+            deviceInfo.pipelineCache = ctx_.device->PipelineCache();
+            deviceInfo.onPipelineCreated = [this](const char* label)
+            {
+                ctx_.device->RecordPipelineCreated(label);
+            };
             deviceInfo.instance = ctx_.instance->Handle();
             deviceInfo.physicalDevice = ctx_.device->PhysicalDevice();
             deviceInfo.computeQueueIndex = 0;
@@ -1550,6 +1666,30 @@ namespace Vulkan
         }
     }
 
+    void VulkanBaseRenderer::CreateDeferredSceneSwapChainResources()
+    {
+        if (!frame_.sceneChainInitializationPending || !frame_.swapChain)
+        {
+            return;
+        }
+
+        // Activating a native upscaler can itself create compute pipelines. Do it here rather
+        // than while constructing the first presentable UI frame.
+        if (upscaler_)
+        {
+            upscaler_->SetActiveType(temporalSuperResolutionActive_
+                ? activeUpscalerType_
+                : Rendering::Upscaler::EUpscalerType::None);
+        }
+
+        CreateRenderImages();
+        renderViews_->CreateSwapChain(SwapChain());
+        CreateSceneSwapChainResources();
+        frame_.sceneChainCreated = true;
+        frame_.sceneChainInitializationPending = false;
+        deferSceneChainForStartup_ = false;
+    }
+
     void VulkanBaseRenderer::CreateSwapChain()
     {
         const auto createSwapChainStart = std::chrono::steady_clock::now();
@@ -1642,7 +1782,10 @@ namespace Vulkan
             {
                 upscalerFallbackReported_ = false;
                 activeUpscalerType_ = requestedUpscalerType;
-                upscaler_->SetActiveType(activeUpscalerType_);
+                if (!deferSceneChainForStartup_)
+                {
+                    upscaler_->SetActiveType(activeUpscalerType_);
+                }
                 const auto optimal = upscaler_->GetOptimalRenderSettings(
                     effectiveSuperResolutionMode_,
                     sceneViewport.extent,
@@ -1681,7 +1824,7 @@ namespace Vulkan
             }
         }
 
-        if (upscaler_ && !temporalSuperResolutionActive_)
+        if (upscaler_ && !temporalSuperResolutionActive_ && !deferSceneChainForStartup_)
         {
             upscaler_->SetActiveType(Rendering::Upscaler::EUpscalerType::None);
         }
@@ -1733,7 +1876,9 @@ namespace Vulkan
         // created at all: every one of those pipelines binds the full bindless set.
         //
         // The one place the policy is consulted; from here on the frame path reads the flag.
-        frame_.sceneChainCreated = RendererDeclaresOutputs();
+        frame_.sceneChainInitializationPending =
+            deferSceneChainForStartup_ && RendererDeclaresOutputs();
+        frame_.sceneChainCreated = RendererDeclaresOutputs() && !frame_.sceneChainInitializationPending;
         if (frame_.sceneChainCreated)
         {
             CreateRenderImages();
@@ -1897,6 +2042,7 @@ namespace Vulkan
         frame_.depthBuffer.reset();
         frame_.swapChain.reset();
         frame_.sceneChainCreated = false;
+        frame_.sceneChainInitializationPending = false;
 
         frame_.currentFence = nullptr;
     }
@@ -2021,7 +2167,7 @@ namespace Vulkan
     {
         // Each of these dispatches through a shared pipeline that CreateSceneSwapChainResources
         // built; a renderer without outputs never got them.
-        if (!frame_.sceneChainCreated)
+        if (!frame_.sceneChainCreated || pipelineWarmup_.active)
         {
             return;
         }
@@ -2202,15 +2348,19 @@ namespace Vulkan
         frameSettings_.progressiveAccumulatedFrames = engine->GetProgressiveRenderAccumulatedFrames();
         frameSettings_.progressiveTargetFrames = engine->GetProgressiveRenderTargetFrames();
         const auto& settings = frameSettings_.userSettings;
+        const bool loading = engine->GetEngineStatus() == NextRenderer::EApplicationStatus::Loading;
         if (atmosphere_)
         {
             atmosphere_->SyncRuntimeResources();
         }
         const bool frameGenerationEnabled = !frameSettings_.progressiveRendering && settings.FrameGeneration &&
             SupportsFrameGeneration(activeUpscalerType_) && temporalSuperResolutionActive_ &&
-            engine->GetEngineStatus() != NextRenderer::EApplicationStatus::Loading;
+            !loading;
 
-        frame_.streamlineFrameToken = upscaler_
+        // Loading frames only clear the swapchain and render the warm-up overlay. Do not enter
+        // the upscaler frame path here: Streamline token/Reflex/marker calls add startup latency
+        // while no DLSS or frame-generation work can be recorded yet.
+        frame_.streamlineFrameToken = upscaler_ && !loading
             ? upscaler_->BeginFrame(static_cast<uint32_t>(frame_.frameCount),
                                     frameGenerationEnabled,
                                     frameGenerationEnabled ? settings.FrameGenerationFrameLimitFps : 0)
@@ -3100,8 +3250,41 @@ namespace Vulkan
             frame_.lastUBO);
     }
 
+    void VulkanBaseRenderer::ClearWarmupSwapchain(
+        VkCommandBuffer commandBuffer,
+        const uint32_t imageIndex)
+    {
+        // A newly acquired swapchain image has undefined contents. Keep every frame of the
+        // pipeline warm-up deterministic before the UI pass loads it.
+        const VkClearColorValue clearColor = {{0.05f, 0.05f, 0.06f, 1.0f}};
+        const VkImageSubresourceRange imageRange{
+            VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        TransitionSwapchainImage(
+            commandBuffer, imageIndex,
+            {.stages = PipelineCommon::ERenderStage::Transfer,
+             .access = PipelineCommon::EResourceAccess::TransferWrite,
+             .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+             .discardPreviousContents = true},
+            "pipeline warm-up clear");
+        vkCmdClearColorImage(commandBuffer, SwapChain().Images()[imageIndex],
+                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &imageRange);
+        TransitionSwapchainImage(
+            commandBuffer, imageIndex,
+            {.stages = PipelineCommon::ERenderStage::Present,
+             .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
+            "pipeline warm-up present");
+    }
+
     void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
+        // The loading overlay owns the whole presentation surface until warm-up completes. This
+        // also keeps later warm-up frames from entering the normal scene-output path.
+        if (pipelineWarmup_.active)
+        {
+            ClearWarmupSwapchain(commandBuffer, imageIndex);
+            return;
+        }
+
         // A renderer with no declared outputs owns the swapchain image: there is no RT bank to
         // resolve from, and none of the view/overlay machinery below has resources. It writes the
         // image itself, then hands it to the UI pass in PRESENT_SRC like every other path.
@@ -3339,6 +3522,11 @@ namespace Vulkan
 
     void VulkanBaseRenderer::PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
+        if (frame_.sceneChainInitializationPending || pipelineWarmup_.active)
+        {
+            return;
+        }
+
         if (ActiveRendererRequirements().requestAmbientCube && !ShouldSkipAmbientCubeUpdates())
         {
             const bool useHardware = caps_.supportRayTracing && !GOption->ForceSoftGen;
@@ -3350,6 +3538,11 @@ namespace Vulkan
 
     void VulkanBaseRenderer::UpdateUniformBuffer(const uint32_t imageIndex)
     {
+        if (frame_.sceneChainInitializationPending || pipelineWarmup_.active)
+        {
+            return;
+        }
+
         frame_.lastUBO = GetUniformBufferObject(frame_.swapChain->RenderOffset(), frame_.swapChain->OutputExtent());
         frame_.uniformBuffers[imageIndex].SetValue(frame_.lastUBO);
         SetRenderViewUbo(PrimaryView(), imageIndex, frame_.lastUBO);
