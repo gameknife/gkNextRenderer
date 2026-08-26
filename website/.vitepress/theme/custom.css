@@ -1,0 +1,238 @@
+/* Minimalist Monochrome Dark & Deep Gray Aesthetic with Muted Blue Accent for gkNextEngine */
+
+/* 默认 / 浅色模式 (Light Mode - Clean Slate) */
+:root {
+  --vp-c-brand-1: #2d68a8;
+  --vp-c-brand-2: #3b78c2;
+  --vp-c-brand-3: #528cd4;
+  --vp-c-brand-soft: rgba(59, 120, 194, 0.1);
+
+  --vp-c-bg: #f4f4f5;
+  --vp-c-bg-alt: #ffffff;
+  --vp-c-bg-elv: #ffffff;
+  --vp-c-bg-soft: #e4e4e7;
+
+  --vp-c-border: rgba(0, 0, 0, 0.08);
+  --vp-c-divider: rgba(0, 0, 0, 0.06);
+  --vp-c-gutter: rgba(0, 0, 0, 0.04);
+
+  --vp-c-text-1: #18181b;
+  --vp-c-text-2: #52525b;
+  --vp-c-text-3: #71717a;
+
+  --gk-highlight-white: #000000;
+  --gk-accent-blue: #3b78c2;
+  --gk-accent-blue-soft: rgba(59, 120, 194, 0.08);
+  --gk-accent-blue-border: rgba(59, 120, 194, 0.25);
+
+  --gk-card-bg: rgba(255, 255, 255, 0.85);
+  --gk-card-border: rgba(0, 0, 0, 0.08);
+  --gk-card-hover-border: rgba(59, 120, 194, 0.35);
+  --gk-card-glow: 0 10px 25px rgba(59, 120, 194, 0.06);
+
+  --gk-grid-color: rgba(0, 0, 0, 0.04);
+  --gk-gradient-text-start: #09090b;
+  --gk-gradient-text-end: #52525b;
+  --gk-nav-bg: rgba(244, 244, 245, 0.85);
+
+  --vp-nav-height: 64px;
+}
+
+/* 核心暗色模式 (Dark Mode - Deep Gray & Muted Nordic Blue Accent) */
+html.dark {
+  --vp-c-brand-1: #5b9bd5;
+  --vp-c-brand-2: #6ba5e7;
+  --vp-c-brand-3: #4a84cc;
+  --vp-c-brand-soft: rgba(91, 155, 213, 0.12);
+
+  --vp-c-bg: #0c0d10;         /* 极致深灰底色 */
+  --vp-c-bg-alt: #131519;     /* 次级深灰 */
+  --vp-c-bg-elv: #181b20;     /* 提升深灰 */
+  --vp-c-bg-soft: #14161a;    /* 柔和深灰 */
+
+  --vp-c-border: rgba(255, 255, 255, 0.08);
+  --vp-c-divider: rgba(255, 255, 255, 0.06);
+  --vp-c-gutter: rgba(255, 255, 255, 0.04);
+
+  --vp-c-text-1: #d4d4d8;     /* 正常文字：次亮白，舒适柔和 */
+  --vp-c-text-2: #a1a1aa;     /* 副标题与段落：中灰白 */
+  --vp-c-text-3: #71717a;     /* 辅助说明：深灰 */
+
+  --gk-highlight-white: #ffffff; /* 交互/高亮：纯白 */
+  
+  /* 低饱和、克制、沉稳的工程强调蓝 (Muted Nordic Blue) */
+  --gk-accent-blue: #5b9bd5;
+  --gk-accent-blue-soft: rgba(91, 155, 213, 0.1);
+  --gk-accent-blue-border: rgba(91, 155, 213, 0.25);
+
+  --gk-card-bg: rgba(19, 21, 25, 0.8);
+  --gk-card-border: rgba(255, 255, 255, 0.08);
+  --gk-card-hover-border: rgba(91, 155, 213, 0.35);
+  --gk-card-glow: 0 0 25px rgba(91, 155, 213, 0.05);
+
+  --gk-grid-color: rgba(255, 255, 255, 0.025);
+  --gk-gradient-text-start: #ffffff;
+  --gk-gradient-text-end: #a1a1aa;
+  --gk-nav-bg: rgba(12, 13, 16, 0.85);
+}
+
+html {
+  background-color: var(--vp-c-bg);
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--vp-c-bg);
+  color: var(--vp-c-text-1);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: -0.01em;
+  margin: 0;
+  padding: 0;
+}
+
+/* 顶栏定制 */
+.VPNav {
+  background-color: var(--gk-nav-bg) !important;
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--vp-c-border) !important;
+}
+
+/* 顶栏链接 Hover 高亮纯白 */
+.VPNavBarMenuLink:hover,
+.VPNavBarMenuLink.active {
+  color: var(--gk-highlight-white) !important;
+}
+
+/* 仅在无侧边栏的单页（首页）消除容器限制，使自定义组件完全铺满 */
+.VPContent:not(.has-sidebar) .VPDoc .container {
+  max-width: 100% !important;
+}
+
+.VPContent:not(.has-sidebar) .VPDoc .content-container {
+  max-width: 100% !important;
+  padding: 0 !important;
+}
+
+/* 带有侧边栏的文档页面：保证侧边栏正常显示、内容适度居中 */
+.VPDoc.has-sidebar .container {
+  max-width: 1160px !important;
+  margin: 0 auto;
+}
+
+.VPDoc.has-sidebar .content-container {
+  max-width: 820px !important;
+}
+
+/* 全局卡片通用质感 */
+.gk-card {
+  background: var(--gk-card-bg);
+  border: 1px solid var(--gk-card-border);
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.gk-card:hover {
+  border-color: var(--gk-card-hover-border);
+  box-shadow: var(--gk-card-glow);
+  transform: translateY(-2px);
+}
+
+/* 渐变标题文本 */
+.gk-gradient-text {
+  background: linear-gradient(135deg, var(--gk-gradient-text-start) 30%, var(--gk-gradient-text-end) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gk-gradient-brand {
+  background: linear-gradient(135deg, var(--gk-accent-blue) 0%, #7caad9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* 徽章微标签 - 融入低饱和强调蓝 */
+.gk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--gk-accent-blue-soft);
+  border: 1px solid var(--gk-accent-blue-border);
+  color: var(--gk-accent-blue);
+  transition: all 0.2s ease;
+}
+
+.gk-badge:hover {
+  border-color: var(--gk-accent-blue);
+  color: #ffffff;
+}
+
+/* 科技感网格背景 */
+.gk-grid-bg {
+  background-image: 
+    linear-gradient(to right, var(--gk-grid-color) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--gk-grid-color) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* 柔和微光 - 低调沉稳微光 */
+.gk-radial-glow {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(91, 155, 213, 0.04) 0%, transparent 70%);
+  pointer-events: none;
+  filter: blur(50px);
+}
+
+/* 代码与数字强调 */
+.gk-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+}
+
+/* 文档内代码块与表格质感 */
+.vp-doc pre {
+  background-color: var(--vp-c-bg-alt) !important;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 8px;
+}
+
+.vp-doc table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 20px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--vp-c-border);
+}
+
+.vp-doc th {
+  background: var(--vp-c-bg-soft);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--vp-c-border);
+  color: var(--gk-highlight-white);
+}
+
+.vp-doc td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--vp-c-divider);
+  color: var(--vp-c-text-1);
+}
+
+/* 文本超链接默认次亮白，Hover 高亮纯白带下划线 */
+a {
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--gk-highlight-white) !important;
+}

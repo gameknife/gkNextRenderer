@@ -1,0 +1,15 @@
+{
+  "name": "gknext-website",
+  "version": "1.0.0",
+  "description": "Modern lightweight official homepage for gkNextEngine",
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.3",
+    "vue": "^3.5.13"
+  }
+}

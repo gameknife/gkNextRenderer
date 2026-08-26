@@ -451,3 +451,8 @@ assets/paks/magicalego.pak
 # 本地草稿、宣传材料 — 不入库，仅本地保留
 marketing/
 assets/omr/outer
+
+# Website static build artifacts & dependencies
+website/node_modules/
+website/.vitepress/dist/
+website/.vitepress/cache/

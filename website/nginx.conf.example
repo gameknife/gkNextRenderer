@@ -1,0 +1,41 @@
+# gkNextEngine 静态主页 - 轻量级服务器 Nginx 推荐配置
+# 目标：极低内存/CPU占用、极小网络流量、极致缓存命中
+
+server {
+    listen 80;
+    server_name example.com; # 替换为您的域名或 IP
+
+    # 静态产物根目录 (指向 website/.vitepress/dist)
+    root /var/www/gknext-website/dist;
+    index index.html;
+
+    # 启用 gzip 静态预压缩与实时压缩 (优先使用构建阶段生成的 .gz 文件，零 CPU 消耗)
+    gzip on;
+    gzip_static on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript image/svg+xml;
+    gzip_vary on;
+
+    # 根路由与 SPA/SSG 路由回落
+    location / {
+        try_files $uri $uri/ $uri.html =404;
+    }
+
+    # 静态哈希资源 (JS, CSS, 字体, 图片) 永久长效强缓存 (1年)，二次访问 0 字节回源
+    location ~* \.(?:css|js|woff2?|svg|png|jpe?g|webp|avif|ico)$ {
+        expires 1y;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        access_log off;
+    }
+
+    # HTML 文件使用协商缓存，确保新版本发布后即刻生效
+    location ~* \.html$ {
+        expires -1;
+        add_header Cache-Control "no-cache, must-revalidate";
+    }
+
+    # 安全头部
+    add_header X-Content-Type-Options nosniff;
+    add_header X-Frame-Options SAMEORIGIN;
+    add_header X-XSS-Protection "1; mode=block";
+}
