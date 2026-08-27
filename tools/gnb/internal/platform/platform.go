@@ -97,7 +97,7 @@ func EnsureLinuxDesktopPackages() error {
 		return nil
 	}
 	missing := make([]string, 0)
-	for _, module := range []string{"xrandr", "wayland-protocols", "xkbcommon"} {
+	for _, module := range []string{"xcursor", "xrandr", "wayland-protocols", "xkbcommon"} {
 		cmd := exec.Command("pkg-config", "--exists", module)
 		if err := cmd.Run(); err != nil {
 			missing = append(missing, module)
@@ -107,11 +107,11 @@ func EnsureLinuxDesktopPackages() error {
 		return nil
 	}
 
-	hint := "Install packages that provide pkg-config modules: xrandr wayland-protocols xkbcommon"
+	hint := "Install packages that provide pkg-config modules: xcursor xrandr wayland-protocols xkbcommon"
 	if _, err := os.Stat("/etc/arch-release"); err == nil {
-		hint = "sudo pacman -S --needed libxrandr wayland-protocols libxkbcommon"
+		hint = "sudo pacman -S --needed libxcursor libxrandr wayland-protocols libxkbcommon"
 	} else if CommandExists("apt-get") {
-		hint = "sudo apt install libxrandr-dev wayland-protocols libxkbcommon-dev"
+		hint = "sudo apt install libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev"
 	}
 
 	return fmt.Errorf("missing Linux desktop packages: %v\n%s", missing, hint)
@@ -175,8 +175,22 @@ func ensureLinuxAptPackages() error {
 
 func ensureLinuxPacmanPackages() error {
 	// See ensureLinuxAptPackages for the rationale on what is/isn't included.
-	// base-devel already covers autotools on Arch; libxrandr pulls the rest of
-	// the X11 dev headers transitively.
+	// base-devel already covers autotools on Arch.
+	//
+	// Unlike Debian's xorg-dev metapackage there is no single Arch package that
+	// pulls the X11 dev headers SDL3's X11 backend needs, so every one the
+	// apt list spells out has to be named here too. libxrandr in particular
+	// only depends on libxrender/libx11 and does NOT pull libxcursor, whose
+	// absence fails the sdl3 port at configure time with
+	// "Couldn't find dependency package for XCURSOR".
+	//
+	// Not mirrored from the apt list: libxinerama-dev (SDL3 dropped the
+	// Xinerama checks entirely) and libibus-1.0-dev (our sdl3 overlay builds
+	// with -DSDL_IBUS=OFF).
+	//
+	// libxi, wayland and libglvnd are usually present transitively on a
+	// desktop install; they are listed explicitly so the build does not depend
+	// on that happening to be true.
 	packages := []string{
 		"base-devel",
 		"cmake",
@@ -186,10 +200,14 @@ func ensureLinuxPacmanPackages() error {
 		"unzip",
 		"tar",
 		"pkgconf",
+		"libxcursor",
+		"libxi",
 		"libxrandr",
 		"libxtst",
+		"wayland",
 		"wayland-protocols",
 		"libxkbcommon",
+		"libglvnd",
 	}
 	missing := make([]string, 0)
 	for _, pkg := range packages {
