@@ -31,8 +31,9 @@ namespace Vulkan::PipelineCommon
             pipelineCreateInfo.layout = layout;
 
             VkPipeline pipeline = VK_NULL_HANDLE;
-            Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE, 1,
+            Check(vkCreateComputePipelines(device.Handle(), device.PipelineCache(), 1,
                 &pipelineCreateInfo, NULL, &pipeline), shaderfile);
+            device.RecordPipelineCreated(shaderfile);
             return pipeline;
         }
 
@@ -231,7 +232,7 @@ namespace Vulkan::PipelineCommon
         pipeline_ = GraphicsPipelineBuilder(device)
             .SetShaders(vertShader, fragShader)
             .SetDynamicViewportAndScissor()
-            .SetDepth(true, true, VK_COMPARE_OP_LESS)
+            .SetDepth(true, true, VK_COMPARE_OP_GREATER)
             .SetColorAttachmentCount(static_cast<uint32_t>(kVisibilityPlanes.size()))
             .Build(pipelineLayout_->Handle(), renderPass_->Handle(), "create graphics pipeline");
     }
@@ -290,7 +291,7 @@ namespace Vulkan::PipelineCommon
             .SetShaders(vertShader, fragShader)
             .SetFixedViewport(viewportOffset, viewportExtent)
             .SetPolygonMode(isWireFrame && physicalDeviceFeatures.fillModeNonSolid ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL)
-            .SetDepth(true, false, VK_COMPARE_OP_LESS_OR_EQUAL)
+            .SetDepth(true, false, VK_COMPARE_OP_GREATER_OR_EQUAL)
             .SetAlphaBlend(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO)
             .Build(pipelineLayout_->Handle(), renderPass_->Handle(), "create graphics pipeline");
     }

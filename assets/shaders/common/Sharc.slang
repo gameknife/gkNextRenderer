@@ -265,7 +265,13 @@ public struct FSharcUpdateCache : IRadianceCache
 
     [mutating] public void OnSegmentThroughput(float3 rayColorBefore, float3 rayColorAfter)
     {
-        SharcSetPathThroughput(state, SharcComputeSegmentThroughput(rayColorBefore, rayColorAfter));
+        // A vertex's own direct lighting is the one term of its cached radiance that never passes
+        // through a segment throughput, so weighting throughput here scales bounce order n by
+        // MultiBounceIntensity^(n-1) and leaves once-bounced direct light untouched. That is the
+        // split between "sun bounced once" and "everything bounced further".
+        const float weight = max(Bindless.GetGpuscene().Camera[0].MultiBounceIntensity, 0.0f);
+        SharcSetPathThroughput(
+            state, SharcComputeSegmentThroughput(rayColorBefore, rayColorAfter) * weight);
     }
 
     [mutating] public void OnMiss(float3 radiance)
@@ -337,6 +343,9 @@ public struct FSharcQueryCache : IRadianceCache
         float4 cachedRadiance = float4(0, 0, 0, 0);
         if (SharcQuery(vertex.Position, vertex.Normal, cachedRadiance))
         {
+            // The cache hit is the whole indirect term for this path, so the artistic multiplier
+            // applies here and nowhere else in the query pass. Debug colors stay unscaled.
+            cachedRadiance.rgb *= Bindless.GetGpuscene().Camera[0].IndirectIntensity;
             radiance = DebugMode == 1u ? float4(0, 1, 0, 1) : cachedRadiance;
             return true;
         }

@@ -6,7 +6,7 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Utilities/AboutDialog.hpp"
 #include "Engine/Utilities/ImGui.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include <SDL3/SDL_misc.h>

@@ -62,7 +62,6 @@ package.
 | imgui_markdown | zlib |
 | ImAnim | MIT |
 | Font Awesome icon headers (`fontawesome`) | MIT (headers) / OFL 1.1 (fonts) |
-| QuickJS-ng (`quickjs-ng`) | MIT |
 | ozz-animation (`ozz`) | MIT |
 | miniaudio | Public domain (Unlicense) or MIT-0, at your option |
 | mikktspace | zlib |
@@ -115,7 +114,7 @@ Resolved from `vcpkg.json` at build time and statically linked unless noted.
 | Component | License |
 |---|---|
 | Slang shader compiler | Apache-2.0 with LLVM exception |
-| TypeScript compiler (`tools/tsc`) | Apache-2.0 |
+| .NET SDK / runtime (`gnb dotnet setup`, fetched on demand) | MIT |
 | CMake, Ninja, vcpkg (fetched on demand) | BSD-3-Clause / Apache-2.0 / MIT |
 | llama.cpp and Gemma model weights (`gnb llm`, opt-in download) | MIT / Gemma Terms of Use |
 

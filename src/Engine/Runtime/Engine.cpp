@@ -1,4 +1,5 @@
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Rendering/BuiltinRendererProviders.hpp"
 #include "Engine/Rendering/RendererChoices.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/Node.hpp"
@@ -11,19 +12,17 @@
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Config/EngineCVars.hpp"
 #include "Engine/Runtime/Subsystems/NextLocalization.hpp"
-#include "Engine/Runtime/ScreenShot.hpp"
-#include "Engine/Runtime/ScreenShotService.hpp"
+#include "Engine/Runtime/Interface/ScreenShotService.hpp"
 #include <cstdlib>
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Editor/UiFrameDispatcher.hpp"
 #include "Engine/Runtime/Interface/UiOverlay.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/Input/SyntheticInput.hpp"
 #include "Engine/Runtime/Interface/DebugUiProvider.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/Instance.hpp"
-#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
+#include "Engine/Runtime/Profiling/TracyIntegration.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 
@@ -35,7 +34,6 @@
 #include <initializer_list>
 #include <optional>
 #include <system_error>
-#include <nlohmann/json.hpp>
 
 #include "Engine/Runtime/Subsystems/NextAudio.hpp"
 #include "Engine/Options.hpp"
@@ -48,7 +46,6 @@
 
 #include <math.h>
 
-#include <entt/meta/factory.hpp>
 
 #define BUILDVER(X) std::string buildver(#X);
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
@@ -67,15 +64,6 @@
 #endif
 
 Runtime::Config::Options* GOption = nullptr;
-
-void NextEngine::RegisterReflection()
-{
-    using namespace entt::literals;
-
-    entt::meta_factory<NextEngine>()
-        .type("NextEngine"_hs)
-        .func<&NextEngine::GetTotalFrames>("GetTotalFrames");
-}
 
 namespace
 {
@@ -172,6 +160,7 @@ namespace NextRenderer
     Vulkan::VulkanBaseRenderer* CreateRenderer(uint32_t rendererType, Vulkan::Window* window,
                                                const VkPresentModeKHR presentMode, const bool enableValidationLayers)
     {
+        Vulkan::RegisterBuiltinRendererProviders();
         std::vector<const char*> validationLayers;
         if (enableValidationLayers)
         {
@@ -188,13 +177,25 @@ namespace NextRenderer
             SPDLOG_WARN("KosmicKrisp detected; disabling Vulkan timestamp queries to avoid device-loss on macOS");
             GOption->HardwareQuery = false;
         }
-        const bool hasFullAmbientCubeBudget = HasFullAmbientCubeBudget(physicalDevices[selectedGpuIdx]);
+        // Probed here, before the renderer exists: which renderers are worth registering at all is
+        // a device verdict, and registering one whose resources cannot be created only defers the
+        // failure to swapchain creation.
+        const bool hasFullBindlessBudget =
+            Vulkan::ProbeBindlessProfile(physicalDevices[selectedGpuIdx]) ==
+            Assets::FBindlessProfile::Full();
+        const bool hasFullAmbientCubeBudget =
+            hasFullBindlessBudget && HasFullAmbientCubeBudget(physicalDevices[selectedGpuIdx]);
         const bool useRayTracingRenderer =
             hasFullAmbientCubeBudget && !GOption->ForceNoRT &&
             instance->SupportsRayQuery(physicalDevices[selectedGpuIdx]);
 
         std::vector<Vulkan::ERendererType> supportedTypes;
-        if (hasFullAmbientCubeBudget)
+        if (!hasFullBindlessBudget)
+        {
+            // The only renderer that does not build the full bindless resource set.
+            supportedTypes = {Vulkan::ERT_Compatibility};
+        }
+        else if (hasFullAmbientCubeBudget)
         {
             supportedTypes = {Vulkan::ERT_SoftwareTracing, Vulkan::ERT_SoftwareModern,
                               Vulkan::ERT_VoxelTracing, Vulkan::ERT_SoftwareModernNoAmbient};
@@ -208,6 +209,7 @@ namespace NextRenderer
         if (useRayTracingRenderer)
         {
             supportedTypes.emplace_back(Vulkan::ERT_PathTracing);
+            supportedTypes.emplace_back(Vulkan::ERT_PathTracingLite);
         }
 
         for (auto type : supportedTypes)
@@ -217,7 +219,8 @@ namespace NextRenderer
 
         auto requestedType =
             Rendering::ResolveRendererChoice(static_cast<Vulkan::ERendererType>(rendererType),
-                                             {useRayTracingRenderer, hasFullAmbientCubeBudget});
+                                             {useRayTracingRenderer, hasFullAmbientCubeBudget,
+                                              hasFullBindlessBudget});
         if (std::find(supportedTypes.begin(), supportedTypes.end(), requestedType) == supportedTypes.end())
         {
             requestedType = *supportedTypes.begin();
@@ -235,8 +238,6 @@ namespace
 
 Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options& options)
 {
-    Runtime::Scene::SceneList::ScanScenes();
-
     Runtime::Config::UserSettings userSettings{};
     userSettings.BorderlessFullscreen = options.Fullscreen;
 
@@ -260,10 +261,16 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     // are captured too. This covers entry points that do not go through DesktopMain.
     Utilities::Logging::InstallFileSink();
 
-#if defined(__APPLE__) && !IOS
+#if defined(__APPLE__)
+    // Workaround, not a policy: any vertical-blank-synchronized present mode still drops the
+    // composited scene on some frames under MoltenVK, leaving the window black or flickering.
+    // MoltenVK advertises only FIFO and IMMEDIATE, so MAILBOX and FIFO_RELAXED silently degrade
+    // to FIFO and are unusable too - Immediate is the only mode that presents reliably.
+    // Deepening the swapchain to three images fixed the present pacing (77fps median / 16.3 stdev
+    // -> 111 / 4.5 on a 120Hz panel) but not the dropped frames, so the underlying defect is
+    // still open. Output colorspace is unaffected: EDR stays enabled.
     options.PresentMode = static_cast<uint32_t>(VK_PRESENT_MODE_IMMEDIATE_KHR);
-    options.ForceSDR = true;
-    SPDLOG_INFO("macOS display policy: forcing Immediate present mode and SDR output");
+    SPDLOG_INFO("Apple display workaround: forcing Immediate present mode");
 #endif
 
 #if ANDROID
@@ -273,7 +280,7 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     spdlog::set_default_logger(android_logger);
 #endif
 
-    SPDLOG_INFO("---- Next Engine Initializing...");
+    GK_LOG_STAGE("---- Next Engine Initializing...");
     spdlog::stopwatch stopwatch;
 
     instance_ = this;
@@ -282,20 +289,22 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     Reflection::RegisterAllReflection();
 
     status_ = NextRenderer::EApplicationStatus::Starting;
-    screenShotService_ = std::make_unique<Runtime::FScreenShotService>(*this);
-
     services_.packageFileSystem.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
     {
-        const std::string runtimePakPath = Utilities::FileHelper::GetPlatformFilePath("assets/paks/runtime.pak");
-        std::error_code ec;
-        if (std::filesystem::exists(runtimePakPath, ec))
+        // Paks every target may need. Game-specific ones (lego, brotato3d, ...)
+        // stay with their game; these three carry assets any scene can reference,
+        // so a missing mount would show up as an unexplained load failure rather
+        // than as a game that was not started.
+        for (const char* pak : {"assets/paks/runtime.pak",
+                                "assets/paks/optional.pak",
+                                "assets/paks/geo.pak"})
         {
-            services_.packageFileSystem->MountPak(runtimePakPath);
-        }
-        const std::string optionalPakPath = Utilities::FileHelper::GetPlatformFilePath("assets/paks/optional.pak");
-        if (std::filesystem::exists(optionalPakPath, ec))
-        {
-            services_.packageFileSystem->MountPak(optionalPakPath);
+            const std::string pakPath = Utilities::FileHelper::GetPlatformFilePath(pak);
+            std::error_code ec;
+            if (std::filesystem::exists(pakPath, ec))
+            {
+                services_.packageFileSystem->MountPak(pakPath);
+            }
         }
     }
 
@@ -333,7 +342,14 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
             SPDLOG_INFO("Headless agent validation disables hardware ray tracing");
         }
     }
-    Vulkan::Window::InitSDL(useSystemDpiScaling, options.VulkanDriver, useHeadlessSurface);
+#if defined(__APPLE__) && !defined(IOS)
+    const bool showStartupSplash = false;
+#else
+    const bool showStartupSplash = !options.AgentValidation && !options.HiddenWindow &&
+                                   !options.Tui && !useHeadlessSurface && !options.Fullscreen;
+#endif
+    Vulkan::Window::InitSDL(useSystemDpiScaling, options.VulkanDriver, useHeadlessSurface,
+                            showStartupSplash);
     
     Vulkan::WindowConfig windowConfig{"gkNextEngine " + NextRenderer::GetBuildVersion(),
                                       options.Width,options.Height,
@@ -341,7 +357,14 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
                                       options.SaveFile,userdata,options.ForceSDR};
     windowConfig.SystemDpiScaling = useSystemDpiScaling;
     windowConfig.HeadlessSurface = useHeadlessSurface;
-    
+    // Resolved before the game instance is created, not after: a game instance sizes its window in
+    // its constructor, and whether anyone will see that window is part of the decision. The editor
+    // sizes itself from the monitor when visible and from the requested size when hidden, which
+    // only works if this is already set.
+    windowConfig.HiddenWindow =
+        (options.AgentValidation && !options.AgentVisibleWindow) || options.HiddenWindow || options.Tui;
+    windowConfig.DeferShowUntilFirstPresent = !windowConfig.HiddenWindow && !windowConfig.HeadlessSurface;
+
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
     
     // reconfigure
@@ -355,6 +378,13 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     NextCVar::RegisterEngineCVars(*services_.cvarSystem, config_.userSettings, config_.showFlags, this);
     services_.cvarSystem->LoadDefaultFile("assets/configs/cvar_default.json");
     gameInstance_->ConfigureCVars(*services_.cvarSystem);
+#if ANDROID
+    // Android devices need a lower-cost default than desktop. Keep these as platform defaults:
+    // an archived user setting can still override them after this block.
+    services_.cvarSystem->ExecuteCommand("r.rendererType 5");
+    services_.cvarSystem->ExecuteCommand("r.samples 1");
+    services_.cvarSystem->ExecuteCommand("r.upscaler.qualityMode 1");
+#endif
     services_.cvarSystem->LoadUserFiles();
     
     for (const std::string& overrideCommand : options_->CVarOverrides)
@@ -368,35 +398,16 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     
     // window config tweaks
     windowConfig.Fullscreen = config_.userSettings.BorderlessFullscreen;
-    windowConfig.HiddenWindow =
-        (options.AgentValidation && !options.AgentVisibleWindow) || options.HiddenWindow || options.Tui;
     
     // create windows
     window_.reset(new Vulkan::Window(windowConfig));
     SetBorderlessFullscreen(config_.userSettings.BorderlessFullscreen);
 
-    // Start accepting gnb's connection before renderer startup. Software Vulkan ICDs can spend
-    // considerable time compiling the first pipeline; the control request is queued until Tick.
-    if (!options_->AgentControl.empty())
-    {
-        agentControl_ = std::make_unique<Runtime::Agent::FAgentControlServer>();
-        std::string error;
-        if (!agentControl_->Start(options_->AgentControl, options_->AgentControlToken, error))
-        {
-            SPDLOG_ERROR("[AgentControl] failed to start: {}", error);
-            RequestExit(3);
-        }
-        else
-        {
-            SPDLOG_INFO("[AgentControl] listening on {}", options_->AgentControl);
-        }
-    }
-    
     // localization
     services_.localization = std::make_unique<NextLocalization>();
     services_.localization->LoadFromTxt(fmt::format("assets/locale/{}.txt", options_->locale), options_->locale);
 
-    SPDLOG_INFO("---- Next Engine Initialized in {}", stopwatch.elapsed_ms());
+    GK_LOG_STAGE("---- Next Engine Initialized in {}", stopwatch.elapsed_ms());
 }
 
 void NextEngine::TickHotReload()
@@ -449,10 +460,22 @@ void NextEngine::RequestShaderHotReload()
 
 NextEngine::~NextEngine()
 {
+    // Before anything is torn down. GetInstance() is how the script bindings and several
+    // subsystems reach the engine, and leaving it pointing at freed memory turns every one of
+    // them into a use-after-free the moment something runs after shutdown. Guarded because tests
+    // construct and destroy engines in sequence.
+    if (instance_ == this)
+    {
+        instance_ = nullptr;
+    }
+
     uiOverlay_.reset();
     userInterface_.reset();
     scene_.reset();
     renderer_.reset();
+    // Scene and renderer teardown may still drain or query task state. Destroying
+    // the coordinator in End() made Scene::~Scene recreate it during shutdown.
+    Tasks::TaskCoordinator::DestroyInstance();
     window_.reset();
 
     Vulkan::Window::TerminateSDL();
@@ -462,13 +485,16 @@ void NextEngine::Start()
 {
     PERFORMANCEAPI_INSTRUMENT_FUNCTION();
 
-    SPDLOG_INFO("---- Next Engine Starting...");
+    GK_LOG_STAGE("---- Next Engine Starting...");
     spdlog::stopwatch stopwatch;
 
     // Initialize Renderer
     const VkPresentModeKHR presentMode = options_->AgentValidation || options_->Tui ? VK_PRESENT_MODE_IMMEDIATE_KHR
                                              : static_cast<VkPresentModeKHR>(options_->PresentMode);
     config_.userSettings.PresentMode = static_cast<uint32_t>(presentMode);
+    // The constructor has completed core initialization; turn on the first startup light before
+    // entering the Vulkan/device startup path.
+    Vulkan::Window::AdvanceStartupSplashStage();
     renderer_.reset(NextRenderer::CreateRenderer(static_cast<uint32_t>(config_.userSettings.RendererType), window_.get(),
                                                  presentMode, GOption->Validation));
     
@@ -484,6 +510,8 @@ void NextEngine::Start()
     rendererDelegates.afterSubmit = [this]() -> void  { OnRendererAfterSubmit(); };
 
     renderer_->Start();
+    // Vulkan device, swapchain, and the registered Streamline/upscaler path are ready.
+    Vulkan::Window::AdvanceStartupSplashStage();
     
     for (auto it = renderFrameConsumers_.begin(); it != renderFrameConsumers_.end();)
     {
@@ -496,8 +524,7 @@ void NextEngine::Start()
     }
 
     auto resolvedRendererType = Rendering::ResolveRendererChoice(
-        renderer_->CurrentLogicRendererType(),
-        {renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget()});
+        renderer_->CurrentLogicRendererType(), renderer_->RendererChoiceCapabilities());
     if (resolvedRendererType != renderer_->CurrentLogicRendererType())
     {
         renderer_->SwitchLogicRenderer(resolvedRendererType);
@@ -544,13 +571,80 @@ void NextEngine::Start()
 
     // gameinstance init
     gameInstance_->OnInit();
+    // All application startup hooks are complete; the remaining visible wait is pipeline warm-up.
+    Vulkan::Window::AdvanceStartupSplashStage();
     
     if (agentControl_ && agentControl_->IsRunning())
     {
         gameInstance_->RegisterAgentQueries(agentQueries_);
     }
 
-    SPDLOG_INFO("---- Next Engine Started in {}", stopwatch.elapsed_ms());
+    // SDL_INIT_GAMEPAD enumerates HID devices and costs ~190ms on Windows. Rendering and
+    // keyboard/mouse input do not need it, so it runs a couple of frames after the first
+    // scene is up instead of inside startup. TickGamepadInput sees no devices until then;
+    // SDL reports the already-connected ones once the subsystem comes up.
+    AddTickedTask(
+        [this, framesUntilInit = 2](double) mutable -> bool
+        {
+            if (status_ != NextRenderer::EApplicationStatus::Running || framesUntilInit-- > 0)
+            {
+                return false;
+            }
+            if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
+            {
+                SPDLOG_WARN("Gamepad subsystem unavailable: {}", SDL_GetError());
+                return true;
+            }
+            SPDLOG_INFO("Gamepad subsystem ready");
+            return true;
+        });
+
+    StartPipelineWarmup();
+
+    GK_LOG_STAGE("---- Next Engine Started in {}", stopwatch.elapsed_ms());
+}
+
+void NextEngine::StartPipelineWarmup()
+{
+    if (!renderer_)
+    {
+        return;
+    }
+
+    renderer_->BeginPipelineWarmup();
+    if (renderer_->PipelineWarmupProgress().active)
+    {
+        pipelineWarmupUiPresented_ = false;
+        status_ = NextRenderer::EApplicationStatus::Loading;
+        // Prepare the dedicated warm-up overlay before DrawFrame records its first submit.
+        // Otherwise the first useful UI is produced only after the first present, and the Core
+        // scene-pipeline compile can leave a cold-start window black for several seconds.
+        if (userInterface_)
+        {
+            userInterface_->PreRender();
+            userInterface_->PrepareDrawData();
+        }
+    }
+}
+
+void NextEngine::PumpPipelineWarmupAfterPresent()
+{
+    if (!renderer_ || !renderer_->PipelineWarmupProgress().active)
+    {
+        return;
+    }
+
+    // With a UI, defer the first compile until its loading popup was submitted and presented.
+    // On a headless target there is no popup to wait for, so make forward progress immediately.
+    if (userInterface_ && !pipelineWarmupUiPresented_)
+    {
+        return;
+    }
+
+    if (renderer_->PumpPipelineWarmup())
+    {
+        status_ = NextRenderer::EApplicationStatus::Running;
+    }
 }
 
 bool NextEngine::HandleEvent(SDL_Event& event)
@@ -567,6 +661,21 @@ bool NextEngine::HandleEvent(SDL_Event& event)
         userInterface_->HandleEvent(&event);
     }
     const bool rmlUiConsumed = uiOverlay_ && uiOverlay_->HandleEvent(event);
+
+#if IOS || ANDROID
+    // SDL also synthesizes mouse events for touches. Mobile camera gestures
+    // consume the finger events directly, so don't deliver the synthetic
+    // mouse stream a second time to gameplay/editor input.
+    if ((event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP) &&
+        event.button.which == SDL_TOUCH_MOUSEID)
+    {
+        return false;
+    }
+    if (event.type == SDL_EVENT_MOUSE_MOTION && event.motion.which == SDL_TOUCH_MOUSEID)
+    {
+        return false;
+    }
+#endif
 
     if (scriptRuntime_)
     {
@@ -671,6 +780,15 @@ bool NextEngine::HandleEvent(SDL_Event& event)
             OnScroll(event.wheel.x, event.wheel.y);
         }
         break;
+    case SDL_EVENT_FINGER_DOWN:
+    case SDL_EVENT_FINGER_MOTION:
+    case SDL_EVENT_FINGER_UP:
+    case SDL_EVENT_FINGER_CANCELED:
+        if (!rmlUiConsumed || event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED)
+        {
+            OnTouch(event);
+        }
+        break;
     case SDL_EVENT_DROP_FILE:
         OnDropFile(event.drop.data);
         break;
@@ -683,11 +801,6 @@ bool NextEngine::HandleEvent(SDL_Event& event)
 bool NextEngine::Tick(bool forcingDelta)
 {
     PERFORMANCEAPI_INSTRUMENT_FUNCTION();
-
-    if (Profiler())
-    {
-        Profiler()->BeginCpuFrame();
-    }
 
     {
         SCOPED_CPU_TIMER("engine");
@@ -705,7 +818,7 @@ bool NextEngine::Tick(bool forcingDelta)
         {
             auto requestedRendererType =
                 Rendering::ResolveRendererChoice(static_cast<Vulkan::ERendererType>(config_.userSettings.RendererType),
-                                                 {renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget()});
+                                                 renderer_->RendererChoiceCapabilities());
             if (requestedRendererType != static_cast<Vulkan::ERendererType>(config_.userSettings.RendererType))
             {
                 config_.userSettings.RendererType = static_cast<int32_t>(requestedRendererType);
@@ -713,6 +826,8 @@ bool NextEngine::Tick(bool forcingDelta)
             if (renderer_->CurrentLogicRendererType() != requestedRendererType)
             {
                 renderer_->SwitchLogicRenderer(requestedRendererType);
+                GkProfiling::Message(fmt::format("Renderer switched to {}",
+                                                 Vulkan::GetRendererName(requestedRendererType)));
             }
         }
 
@@ -720,12 +835,17 @@ bool NextEngine::Tick(bool forcingDelta)
         {
             const auto prevTime = frameState_.time;
             double currentTime = GetWindow().GetTime();
-            if (!forcingDelta && window_ && window_->IsMinimized())
+            double minimumTickInterval = 0.0;
+            if (window_ && window_->IsMinimized())
+            {
+                minimumTickInterval = minimizedTickIntervalSeconds;
+            }
+            if (!forcingDelta && minimumTickInterval > 0.0)
             {
                 const double elapsed = currentTime - prevTime;
-                if (elapsed < minimizedTickIntervalSeconds)
+                if (elapsed < minimumTickInterval)
                 {
-                    const double remainingSeconds = minimizedTickIntervalSeconds - std::max(0.0, elapsed);
+                    const double remainingSeconds = minimumTickInterval - std::max(0.0, elapsed);
                     const auto delayMilliseconds = static_cast<Uint32>(std::max(
                         1.0, std::ceil(remainingSeconds * 1000.0)));
                     SDL_Delay(delayMilliseconds);
@@ -842,6 +962,10 @@ bool NextEngine::Tick(bool forcingDelta)
             renderer_->DrawFrame();
         }
         frameState_.totalFrames = renderer_->FrameCount();
+        if (options_->ExitAfterFrames > 0 && frameState_.totalFrames >= options_->ExitAfterFrames)
+        {
+            RequestExit(0);
+        }
 
         if (progressiveRender_.enabled)
         {
@@ -858,7 +982,7 @@ bool NextEngine::Tick(bool forcingDelta)
 
         if (agentControl_)
         {
-            agentControl_->Pump([this](const std::string& method, const nlohmann::json& params) { return HandleAgentControlCommand(method, params); });
+            agentControl_->Pump();
         }
 
         if (!renderFrameConsumers_.empty())
@@ -870,10 +994,7 @@ bool NextEngine::Tick(bool forcingDelta)
         }
     }
 
-    if (Profiler())
-    {
-        Profiler()->EndCpuFrame();
-    }
+    GkProfiling::FrameMark();
     return closeRequested_;
 }
 
@@ -904,7 +1025,6 @@ void NextEngine::End()
     {
         Tasks::TaskCoordinator::GetInstance()->CancelAllParralledTasks();
         Tasks::TaskCoordinator::GetInstance()->WaitForAllTasks();
-        Tasks::TaskCoordinator::DestroyInstance();
     }
 
     if (services_.audio)
@@ -1134,7 +1254,21 @@ void NextEngine::AdvanceScreenShotCapture()
 void NextEngine::SaveScreenShot(const FScreenShotSpec& spec)
 {
     const bool allowOverlappingExports = spec.allowOverlappingExports;
-    Runtime::ScreenShot::SaveSwapChainToFile(
+    if (!screenShotService_)
+    {
+        SPDLOG_ERROR("Screenshot export requested without the NextCapture module");
+        screenShot_.exportPending = false;
+        if (screenShot_.asyncExportsInFlight > 0)
+        {
+            --screenShot_.asyncExportsInFlight;
+        }
+        if (spec.exitAfterCapture)
+        {
+            RequestExit(1);
+        }
+        return;
+    }
+    screenShotService_->SaveSwapChainToFile(
         renderer_.get(), spec.filename, spec.x, spec.y, spec.width, spec.height,
         spec.fileFormat,
         spec.sync,
@@ -1198,6 +1332,31 @@ void NextEngine::ResetProgressiveRenderingAccumulation()
     progressiveRender_.accumulatedFrames = 0;
 }
 
+bool NextEngine::SetReferenceMode(const bool enabled)
+{
+    if (options_ == nullptr || options_->ReferenceMode == enabled)
+    {
+        return false;
+    }
+
+    options_->ReferenceMode = enabled;
+    ApplyReferenceModeFromOptions();
+    return true;
+}
+
+void NextEngine::ApplyReferenceModeFromOptions()
+{
+    if (renderer_ == nullptr)
+    {
+        return;
+    }
+
+    renderer_->RenderViews().InvalidateAllTemporalHistory(Vulkan::EHistoryInvalidationReason::RendererChanged);
+    renderer_->RequestRecreateSwapChain();
+    ResetProgressiveRenderingAccumulation();
+    GkProfiling::Message(fmt::format("Reference comparison {}", options_->ReferenceMode ? "enabled" : "disabled"));
+}
+
 bool NextEngine::RequestRendererType(const Vulkan::ERendererType type)
 {
     if (!renderer_)
@@ -1205,8 +1364,8 @@ bool NextEngine::RequestRendererType(const Vulkan::ERendererType type)
         return false;
     }
 
-    const Vulkan::ERendererType resolved = Rendering::ResolveRendererChoice(
-        type, {renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget()});
+    const Vulkan::ERendererType resolved =
+        Rendering::ResolveRendererChoice(type, renderer_->RendererChoiceCapabilities());
     const bool changed = config_.userSettings.RendererType != static_cast<int32_t>(resolved) ||
         renderer_->CurrentLogicRendererType() != resolved;
     config_.userSettings.RendererType = static_cast<int32_t>(resolved);
@@ -1302,20 +1461,29 @@ void NextEngine::OnRendererDeviceSet()
         });
     }
 
-    // global textures
-    // texture id 0: dynamic hdri sky
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/river_road_2.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/canary_wharf_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_01_puresky_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_07_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/std_env.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/rainforest_trail_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_03_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_09_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/sunset_fairway_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/umhlanga_sunrise_1k.hdr");
-    Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/shanghai_bund_1k.hdr");
+    // Environment maps exist to be sampled; a profile that binds no scene textures would upload
+    // eleven of them for nothing. The scene itself is still built and committed below either way,
+    // so nothing downstream has to special-case a missing renderer scene.
+    if (renderer_->BindlessProfile().bindsSceneTextures)
+    {
+        // global textures
+        // texture id 0: dynamic hdri sky
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/river_road_2.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/canary_wharf_1k.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_01_puresky_1k.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/kloppenheim_07_1k.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/std_env.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/rainforest_trail_1k.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_03_1k.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/studio_small_09_1k.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/sunset_fairway_1k.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/umhlanga_sunrise_1k.hdr");
+        Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/shanghai_bund_1k.hdr");
+    }
 
+    // Single path on purpose: the renderer must always own a live scene, or every consumer that
+    // reaches GetScene() needs its own guard. Scene sizes its own ambient arena from the registered
+    // renderers' requirements, so a compatibility device gets the right-sized allocation for free.
     scene_.reset(new Assets::Scene(renderer_->CommandPool(), renderer_->SupportsRayTracing()));
     CommitSceneToRenderer({.rebuildMeshBuffer = false,
                            .resetFrameCounter = false,
@@ -1343,10 +1511,18 @@ void NextEngine::OnRendererCreateSwapChain()
         auto multiViewportBackend = window_->IsHeadless()
             ? std::unique_ptr<NextUI::IMultiViewportBackend>{}
             : gameInstance_->CreateMultiViewportBackend();
-        userInterface_.reset(new NextUI::UserInterface(
-            this, renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(), config_.userSettings,
-            [this]() -> void { gameInstance_->OnPreConfigUI(); }, [this]() -> void { gameInstance_->OnInitUI(); },
-            std::move(multiViewportBackend)));
+        if (userInterfaceFactory_)
+        {
+            userInterface_ = userInterfaceFactory_(
+                *this,
+                [this]() { gameInstance_->OnPreConfigUI(); },
+                [this]() { gameInstance_->OnInitUI(); },
+                std::move(multiViewportBackend));
+        }
+    }
+    if (!userInterface_)
+    {
+        return;
     }
     if (uiOverlay_.get() == nullptr && uiOverlayFactory_)
     {
@@ -1407,6 +1583,19 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
 
 void NextEngine::OnRendererAfterSubmit()
 {
+    // The SDL window is created hidden during normal startup. The first successful present is
+    // the earliest point where showing it cannot expose a black/uninitialized swapchain.
+    if (window_ && window_->Config().DeferShowUntilFirstPresent && !startupWindowShown_)
+    {
+        window_->Show();
+        startupWindowShown_ = true;
+        Vulkan::Window::CloseStartupSplash();
+    }
+
+    // This callback runs after vkQueuePresentKHR. Keep the last loading frame on screen while a
+    // cold vkCreate*Pipelines call is in progress, then prepare the next frame with fresh state.
+    PumpPipelineWarmupAfterPresent();
+
     if (!userInterface_)
     {
         return;
@@ -1422,6 +1611,16 @@ void NextEngine::OnRendererAfterSubmit()
         const auto timeDelta = now - frameState_.lastFrameTime;
         frameState_.lastFrameTime = now;
         frameState_.frameRate = static_cast<float>(30 / timeDelta);
+    }
+
+    // While shader warm-up is active, the only ImGui output is the dedicated text overlay.
+    // Do not build game, overlay, physics, or developer UI behind it.
+    if (renderer_ && renderer_->PipelineWarmupProgress().active)
+    {
+        userInterface_->PreRender();
+        userInterface_->PrepareDrawData();
+        pipelineWarmupUiPresented_ = true;
+        return;
     }
 
     // Render the UI
@@ -1444,6 +1643,16 @@ void NextEngine::OnRendererAfterSubmit()
     stats.TextureCount = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
     stats.ComputePassCount = 0;
     stats.LoadingStatus = status_ == NextRenderer::EApplicationStatus::Loading;
+
+    const auto& gpuDrivenStat = scene_->GetGpuDrivenStat();
+    const uint32_t visibleTriangleCount = gpuDrivenStat.TriangleCount > gpuDrivenStat.CulledTriangleCount
+        ? gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount
+        : 0u;
+    const auto memoryStats = renderer_->Device().CaptureMemoryStats();
+    GkProfiling::Plot("FPS", static_cast<int64_t>(std::lround(frameState_.frameRate)));
+    GkProfiling::Plot("Draw calls", static_cast<int64_t>(gpuDrivenStat.VisibleCount));
+    GkProfiling::Plot("Triangles", static_cast<int64_t>(visibleTriangleCount));
+    GkProfiling::Plot("VRAM used", static_cast<int64_t>(memoryStats.deviceLocalUsageBytes));
 
     // Renderer::visualDebug_ = config_.userSettings.ShowVisualDebug;
     {
@@ -1497,7 +1706,7 @@ void NextEngine::OnRendererAfterSubmit()
         if (debugUiProvider_ && config_.showFlags.DebugProfileOverlay)
         {
             SCOPED_CPU_TIMER("profile debug ui");
-            debugUiProvider_->DrawProfileOverlay(*this, stats, renderer_->Profiler(),
+            debugUiProvider_->DrawProfileOverlay(*this, stats,
                                                  gameInstance_->GetGraphicsDebugPanelTopOffset());
         }
     }
@@ -1507,7 +1716,7 @@ void NextEngine::OnRendererAfterSubmit()
     {
         SCOPED_CPU_TIMER("overlay ui");
         NextUI::FUiFrameDispatcher::DrawDeveloperLayers(
-            *this, stats, renderer_->Profiler(), developerLayers, config_.showFlags.DebugProfileOverlay);
+            *this, stats, developerLayers, config_.showFlags.DebugProfileOverlay);
     }
     if (debugUiProvider_)
     {
@@ -1519,134 +1728,10 @@ void NextEngine::OnRendererAfterSubmit()
         SCOPED_CPU_TIMER("imgui prepare draw data");
         userInterface_->PrepareDrawData();
     }
-}
-
-nlohmann::json NextEngine::HandleAgentControlCommand(const std::string& method, const nlohmann::json& params)
-{
-    using Runtime::Input::Synthetic::FPoint;
-    SDL_Window* window = GetWindow().Handle();
-    const SDL_WindowID windowId = window != nullptr ? SDL_GetWindowID(window) : 0;
-    const FPoint current{static_cast<float>(GetMousePos().x), static_cast<float>(GetMousePos().y)};
-    auto point = [](const nlohmann::json& value) -> FPoint
+    if (renderer_ && renderer_->PipelineWarmupProgress().active)
     {
-        if (!value.is_array() || value.size() < 2) throw std::runtime_error("point must be [x,y]");
-        return {value[0].get<float>(), value[1].get<float>()};
-    };
-    if (method == "handshake") return {{"protocolVersion", 1}, {"capabilities", {"input", "query", "cvar", "exec", "screenshot", "quit"}}};
-    if (method == "query")
-    {
-        const auto value = QueryAgentControl(params.value("query", ""));
-        if (!value) throw std::runtime_error("query not found");
-        return std::visit([](const auto& item) { return nlohmann::json(item); }, *value);
+        pipelineWarmupUiPresented_ = true;
     }
-    if (method == "key")
-    {
-        const std::string code = params.value("code", ""); const auto key = Runtime::Input::Synthetic::ResolveKeyCode(code);
-        if (key == SDLK_UNKNOWN) throw std::runtime_error("unknown key");
-        const auto scan = Runtime::Input::Synthetic::ResolveScanCode(key, code);
-        const auto modifiers = Runtime::Input::Synthetic::ResolveModifiers(params.value("mods", std::vector<std::string>{}));
-        const std::string action = params.value("action", "press");
-        if (action == "down") Runtime::Input::Synthetic::PushKey(windowId, key, scan, modifiers, true);
-        else if (action == "up") Runtime::Input::Synthetic::PushKey(windowId, key, scan, modifiers, false);
-        else Runtime::Input::Synthetic::PushKeyPress(windowId, key, scan, modifiers);
-        return {{"ok", true}};
-    }
-    if (method == "text") { Runtime::Input::Synthetic::PushText(windowId, params.value("value", "")); return {{"ok", true}}; }
-    if (method == "mouse-move")
-    {
-        const auto to = point(params.at("to"));
-        if (params.value("relative", false)) InjectRelativeMouse(to.x, to.y); else Runtime::Input::Synthetic::PushMouseMove(window, current, to);
-        return {{"ok", true}};
-    }
-    if (method == "mouse-button" || method == "click")
-    {
-        const auto at = params.contains("at") ? point(params["at"]) : current;
-        if (params.contains("at")) Runtime::Input::Synthetic::PushMouseMove(window, current, at);
-        const auto button = Runtime::Input::Synthetic::ResolveMouseButton(params.value("button", "left"));
-        const auto clicks = static_cast<Uint8>(std::max(1, params.value("count", 1)));
-        const std::string action = method == "click" ? "press" : params.value("action", "press");
-        if (action != "up") Runtime::Input::Synthetic::PushMouseButton(windowId, at, button, true, clicks);
-        if (action != "down") Runtime::Input::Synthetic::PushMouseButton(windowId, at, button, false, clicks);
-        return {{"ok", true}};
-    }
-    if (method == "drag")
-    {
-        const auto from = point(params.at("from")); const auto to = point(params.at("to"));
-        const auto button = Runtime::Input::Synthetic::ResolveMouseButton(params.value("button", "left"));
-        Runtime::Input::Synthetic::PushMouseMove(window, current, from); Runtime::Input::Synthetic::PushMouseButton(windowId, from, button, true);
-        Runtime::Input::Synthetic::PushMouseMove(window, from, to); Runtime::Input::Synthetic::PushMouseButton(windowId, to, button, false); return {{"ok", true}};
-    }
-    if (method == "scroll") { Runtime::Input::Synthetic::PushMouseWheel(windowId, current, params.value("x", 0.0f), params.value("y", 0.0f)); return {{"ok", true}}; }
-    if (method == "cvar")
-    {
-        const std::string name = params.value("name", "");
-        if (params.contains("set")) { std::string error; const std::string value = params["set"].is_string() ? params["set"].get<std::string>() : params["set"].dump(); if (!GetCVarSystem().SetValueFromString(name, value, NextCVar::ECVarSetBy::Console, &error)) throw std::runtime_error(error); return {{"value", value}}; }
-        bool found = false; const auto value = GetCVarSystem().GetValueString(name, &found); if (!found) throw std::runtime_error("cvar not found"); return {{"value", value}};
-    }
-    if (method == "exec") { const auto result = GetCVarSystem().ExecuteCommand(params.value("line", "")); if (!result.success) throw std::runtime_error(result.message); return {{"message", result.message}, {"output", result.output}}; }
-    if (method == "screenshot")
-    {
-        const std::string path = Utilities::FileHelper::GetPlatformFilePath(params.value("out", "screenshots/agent_validation").c_str());
-        Utilities::FileHelper::EnsureDirectoryExists(std::filesystem::path(path).parent_path().string());
-        for (const char* extension : {".jpg", ".avif"})
-        {
-            std::error_code errorCode;
-            std::filesystem::remove(path + extension, errorCode);
-            if (errorCode)
-            {
-                throw std::runtime_error("failed to remove existing screenshot " + path + extension + ": " +
-                                         errorCode.message());
-            }
-        }
-        const bool exitAfterCapture = params.value("quitAfterCapture", false);
-        SPDLOG_INFO("[AgentControl] screenshot requested; exitAfterCapture={}", exitAfterCapture);
-        RequestScreenShot({
-            .filename = path,
-            .accumulateFrames = params.value("accumulateFrames", 0u),
-            .sync = true,
-            .includeUi = params.value("ui", false),
-            .exitAfterCapture = exitAfterCapture,
-        });
-        return {{"path", path + ".jpg"}};
-    }
-    if (method == "quit")
-    {
-        const int exitCode = params.value("exitCode", 0);
-        SPDLOG_INFO("[AgentControl] exit requested with code {}", exitCode);
-        RequestExit(exitCode);
-        return {{"ok", true}};
-    }
-    throw std::runtime_error("unknown agent control method: " + method);
-}
-
-std::optional<Runtime::Agent::FAgentQueryValue> NextEngine::QueryAgentControl(const std::string& query) const
-{
-    if (query == "engine.totalFrames") return static_cast<int64_t>(GetTotalFrames());
-    if (query == "engine.frameRate") return static_cast<double>(GetFrameRate());
-    if (query == "engine.time") return GetTime();
-    if (query == "engine.status")
-    {
-        switch (GetEngineStatus()) { case NextRenderer::EApplicationStatus::Starting: return std::string("Starting"); case NextRenderer::EApplicationStatus::Running: return std::string("Running"); case NextRenderer::EApplicationStatus::Loading: return std::string("Loading"); default: return std::string("AsyncPreparing"); }
-    }
-    if (query == "engine.rendererType") return static_cast<int64_t>(renderer_->CurrentLogicRendererType());
-    if (query == "scene.nodeCount") return static_cast<int64_t>(GetScene().Nodes().size());
-    if (query == "scene.renderProxyCount")
-        return static_cast<int64_t>(GetScene().GetIndirectDrawBatchCount());
-    if (query == "scene.maxVisibleProxyIndex")
-        return static_cast<int64_t>(GetScene().GetGpuDrivenStat().MaxVisibleProxyIndex);
-    if (query == "scene.sunElevation")
-        return static_cast<double>(GetScene().GetEnvSettings().SunElevation);
-    if (query == "scene.atmosphereEnabled")
-        return GetScene().GetEnvSettings().AtmosphereEnabled;
-    if (query == "scene.aerialPerspectiveEnabled")
-        return GetScene().GetEnvSettings().AerialPerspectiveEnabled;
-    if (query == "scene.heightFogEnabled")
-        return GetScene().GetEnvSettings().HeightFogEnabled;
-    if (query == "scene.selectedId") return static_cast<int64_t>(GetScene().GetSelectedId());
-    if (query == "scene.selectedCount") return static_cast<int64_t>(GetScene().GetSelectedIds().size());
-    if (query.rfind("cvar.", 0) == 0) { bool found = false; auto value = GetCVarSystem().GetValueString(query.substr(5), &found); if (found) return value; return std::nullopt; }
-    if (query.rfind("game.", 0) == 0) return agentQueries_.Query(query.substr(5));
-    return std::nullopt;
 }
 
 void NextEngine::OnRendererBeforeNextFrame()

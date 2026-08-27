@@ -1,6 +1,6 @@
 #include <catch2/catch_all.hpp>
 
-#include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Modules/SceneContent/SceneList.hpp"
 #include "Modules/LDrawLoader/LDrawModule.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
 

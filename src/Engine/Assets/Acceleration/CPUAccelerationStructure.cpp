@@ -75,16 +75,39 @@ namespace
 
 using namespace Assets;
 
+FAmbientGridConfig FCPUAccelerationStructure::ResolveAmbientGridConfig(
+    const Runtime::Config::UserSettings& settings, uint32_t maxCascadeCapacity)
+{
+    FAmbientGridConfig config;
+    config.baseUnit = SanitizeAmbientCubeUnit(settings.AmbientCubeUnit);
+    config.offsetBias =
+        vec3(settings.AmbientCubeOffsetX, settings.AmbientCubeOffsetY, settings.AmbientCubeOffsetZ);
+    // Clamp to the GPU arena's allocated capacity so the per-cascade upload never writes out of bounds.
+    config.cascadeCount =
+        std::min(SanitizeAmbientCubeCascadeCount(settings.AmbientCubeCascadeCount), std::max(1u, maxCascadeCapacity));
+    config.cascadeRatio = SanitizeAmbientCubeCascadeRatio(settings.AmbientCubeCascadeRatio);
+    return config;
+}
+
+bool FCPUAccelerationStructure::TryGetAmbientGridConfig(FAmbientGridConfig& outConfig) const
+{
+    if (!hasCommittedAmbientGrid_)
+    {
+        return false;
+    }
+    outConfig = committedAmbientGrid_;
+    return true;
+}
+
 bool FCPUAccelerationStructure::InitCascadeBakers(const Runtime::Config::UserSettings& settings, uint32_t maxCascadeCapacity)
 {
-    const float baseUnit = SanitizeAmbientCubeUnit(settings.AmbientCubeUnit);
-    const vec3 cubeOffsetBias = vec3(settings.AmbientCubeOffsetX, settings.AmbientCubeOffsetY, settings.AmbientCubeOffsetZ);
-    // Clamp to the GPU arena's allocated capacity so the per-cascade upload never writes out of bounds.
-    const uint32_t cascadeCount =
-        std::min(SanitizeAmbientCubeCascadeCount(settings.AmbientCubeCascadeCount), std::max(1u, maxCascadeCapacity));
-    const float cascadeRatio = SanitizeAmbientCubeCascadeRatio(settings.AmbientCubeCascadeRatio);
+    const FAmbientGridConfig requested = ResolveAmbientGridConfig(settings, maxCascadeCapacity);
+    const float baseUnit = requested.baseUnit;
+    const vec3 cubeOffsetBias = requested.offsetBias;
+    const uint32_t cascadeCount = requested.cascadeCount;
+    const float cascadeRatio = requested.cascadeRatio;
 
-    bool needRebuild = cascadeBakers.size() != cascadeCount;
+    bool needRebuild = cascadeBakers.size() != cascadeCount || !hasCommittedAmbientGrid_;
     if (!needRebuild)
     {
         for (uint32_t i = 0; i < cascadeCount; ++i)
@@ -114,6 +137,10 @@ bool FCPUAccelerationStructure::InitCascadeBakers(const Runtime::Config::UserSet
         cascadeBakers[i].Init(i, unit, offset);
     }
 
+    // Publish only after the bakers exist: shading reads this to stay in step with the data.
+    committedAmbientGrid_ = requested;
+    hasCommittedAmbientGrid_ = true;
+
     cpuPageIndex.Init();
     return true;
 }
@@ -131,6 +158,10 @@ void FCPUAccelerationStructure::InitBVH(Scene& scene)
     for ( size_t m = 0; m < scene.Models().size(); ++m )
     {
         const Model& model = scene.Models()[m];
+        // A million-triangle model reallocates this array ~40 times without the hint, and the
+        // copies dominate the whole BLAS pass.
+        blasSet->contexts[m].triangles.reserve(model.CPUIndices().size());
+        blasSet->contexts[m].extinfos.reserve(model.CPUIndices().size() / 3);
         for (size_t i = 0; i < model.CPUIndices().size(); i += 3)
         {
             // Get the three vertices of the triangle
@@ -484,7 +515,9 @@ void FCPUAccelerationStructure::StartBuild(std::shared_ptr<FCPUTLASBuildInput> i
             std::shared_ptr<FCPUTLASBuildResult> result = BuildSnapshot(*input);
             std::lock_guard<std::mutex> lock(buildMutex_);
             completedBuildResult_ = std::move(result);
-        });
+        },
+        {},
+        "CPU TLAS build");
 }
 
 void FCPUAccelerationStructure::PollBVHBuild()
@@ -542,7 +575,6 @@ void FCPUAccelerationStructure::CancelRuntimeBuilds()
     buildInFlight_ = false;
     latestBuildInput_.reset();
     completedBuildResult_.reset();
-    pendingProbeRevision_ = 0;
 }
 
 FCPUTLASBuildStats FCPUAccelerationStructure::GetBuildStats() const
@@ -585,6 +617,9 @@ void FCPUAccelerationStructure::QueueFullProbeBake()
         }
     }
 
+    totalVoxelGroups_ = static_cast<uint32_t>(coordinates.size()) * GetActiveCascadeCount();
+    completedVoxelGroups_.store(0, std::memory_order_release);
+
     std::random_device rd;
     std::mt19937 generator(rd());
     std::shuffle(coordinates.begin(), coordinates.end(), generator);
@@ -599,16 +634,8 @@ void FCPUAccelerationStructure::QueueFullProbeBake()
     }
 }
 
-bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::DeviceMemory* voxelGpuMemory, bool incremental)
+bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::DeviceMemory* voxelGpuMemory)
 {
-    if (incremental)
-    {
-        // Geometry revisions must continue to coalesce while an older probe batch
-        // is running. The new batch is queued only after this revision publishes.
-        pendingProbeRevision_ = RequestRuntimeBuild(scene);
-        return true;
-    }
-
     if ( !Tasks::TaskCoordinator::GetInstance()->IsAllParralledTaskComplete() )
     {
         return false;
@@ -618,11 +645,15 @@ bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::D
         needUpdateGroups.pop();
     lastBatchTasks.clear();
 
+    // Drop the previous bake's flush state as well. Carrying a completed distance-field pass into
+    // the new bake makes Tick() take the "rebuild already done" branch on the first drained tick
+    // and upload the fresh voxels with the placeholder distance field, never rebuilding it.
+    needFlush = false;
+    distanceFieldRebuildScheduled_ = false;
+    distanceFieldRebuildTasks.clear();
+
     const Runtime::Config::UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
-    if (InitCascadeBakers(settings, scene.AmbientCubeCascadeCapacity()))
-    {
-        incremental = false;
-    }
+    InitCascadeBakers(settings, scene.AmbientCubeCascadeCapacity());
 
     for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
     {
@@ -632,6 +663,8 @@ bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::D
     }
 
     QueueFullProbeBake();
+    fullProbeBakePending_ = true;
+    ambientBakeIdle_ = false;
 
     return true;
 }
@@ -683,8 +716,10 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Sc
             {
                 // flush here
                 //bakerType == EBakerType::EBT_Probe ? probeBaker.UploadGPU(*GPUMemory) : farProbeBaker.UploadGPU(*FarGPUMemory);
+                completedVoxelGroups_.fetch_add(1, std::memory_order_release);
                 needFlush = true;
-            });
+            },
+            "Ambient probe bake");
 
     lastBatchTasks.push_back(taskId);
 }
@@ -692,7 +727,13 @@ void FCPUAccelerationStructure::ClearAllTasks()
 {
     CancelRuntimeBuilds();
 
-    // Wait for all parallel tasks to finish.
+    // Discard queued voxelization work before waiting. A full ambient-cube bake
+    // contains many independent groups; dispatching its entire queue here makes
+    // LoadScene wait for obsolete work from the outgoing scene.
+    Tasks::TaskCoordinator::GetInstance()->CancelAllParralledTasks();
+
+    // Wait for running groups and their main-thread completion callbacks before
+    // clearing the state those callbacks capture.
     Tasks::TaskCoordinator::GetInstance()->WaitForAllParralledTask();
     
     // Clear the pending-update queue.
@@ -708,6 +749,11 @@ void FCPUAccelerationStructure::ClearAllTasks()
     // Reset the refresh flag.
     needFlush = false;
     distanceFieldRebuildScheduled_ = false;
+    fullProbeBakePending_ = true;
+    ambientBakeIdle_ = false;
+    totalVoxelGroups_ = 0;
+    completedVoxelGroups_.store(0, std::memory_order_release);
+    cpuBrickTable = {};
     ClearNavRelevantDirtyBounds();
     PublishSnapshot(std::make_shared<FCPUTLASSnapshot>());
     blasSet_.reset();
@@ -715,15 +761,7 @@ void FCPUAccelerationStructure::ClearAllTasks()
 
 bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemory, Vulkan::DeviceMemory* voxelGpuMemory, Vulkan::DeviceMemory* pageIndexMemory)
 {
-    if (pendingProbeRevision_ != 0 &&
-        publishedRevision_.load(std::memory_order_acquire) >= pendingProbeRevision_)
-    {
-        QueueFullProbeBake();
-        pendingProbeRevision_ = 0;
-    }
-
     bool voxelUploadCompleted = false;
-    const bool batchComplete = lastBatchTasks.empty() || Tasks::TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks);
     NextEngine* engine = NextEngine::GetInstance();
     const Runtime::Config::UserSettings& settings = engine->GetUserSettings();
     const uint32_t currentFrame = engine->GetTotalFrames();
@@ -761,7 +799,45 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
                                 scene.AmbientActiveBrickListByteOffset());
     };
 
-    if (needFlush && batchComplete)
+    // Drive the voxelization queue before the flush below. Retiring the finished batch and popping
+    // the trailing fence here makes the drained state visible to the flush in this same tick;
+    // Scene::Tick only calls us every 30 frames, so each extra round trip costs half a second.
+    if (!lastBatchTasks.empty() && Tasks::TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks))
+    {
+        lastBatchTasks.clear();
+    }
+
+    if (lastBatchTasks.empty())
+    {
+        while (!needUpdateGroups.empty())
+        {
+            auto& group = needUpdateGroups.front();
+            ECubeProcType type = std::get<1>(group);
+            uint32_t cascadeIndex = std::get<3>(group);
+            if (type == ECubeProcType::ECPT_Fence)
+            {
+                if (!Tasks::TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks))
+                {
+                    break;
+                }
+                needUpdateGroups.pop();
+                continue;
+            }
+            AsyncProcessGroup(std::get<0>(group).x, std::get<0>(group).z, scene, std::get<1>(group), std::get<2>(group), cascadeIndex);
+            needUpdateGroups.pop();
+        }
+    }
+
+    // The distance field is a whole-cascade sweep over voxels that queued groups are still going to
+    // write, so it may only start once the queue is empty and every dispatched group has retired.
+    // Gating on the current batch alone scheduled it while the remaining cascades were still
+    // queued: their sweep ran on empty voxels, VoxelizeCube then overwrote the result with its
+    // placeholder seed, and the upload that clears needFlush shipped that placeholder to the GPU
+    // for good -- which is what left the far cascades with a uniform 15-cell clearance and let the
+    // DDA skip straight through their geometry.
+    const bool voxelizationDrained = needUpdateGroups.empty() && lastBatchTasks.empty();
+
+    if (needFlush && voxelizationDrained)
     {
         if (!distanceFieldRebuildScheduled_)
         {
@@ -774,7 +850,8 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
                     {
                         cascadeBakers[cascadeIndex].RebuildDistanceField();
                     },
-                    nullptr);
+                    nullptr,
+                    "Distance field rebuild");
                 distanceFieldRebuildTasks.push_back(taskId);
             }
             distanceFieldRebuildScheduled_ = true;
@@ -791,6 +868,14 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             {
                 cpuPageIndex.UpdateData(cascadeBakers);
                 rebuildBrickResidency();
+                if (fullProbeBakePending_)
+                {
+                    cpuBrickTable.MarkAllActiveDirty();
+                }
+                cpuBrickTable.UploadGPU(*voxelGpuMemory, scene.AmbientBrickTableByteOffset(),
+                                        scene.AmbientActiveBrickListByteOffset());
+                scene.SetAmbientActiveBrickCounts(cpuBrickTable.activeBricksPerCascade);
+                fullProbeBakePending_ = false;
             }
             cpuPageIndex.UploadGPU(*pageIndexMemory, scene.AmbientPagesByteOffset());
             needFlush = false;
@@ -799,38 +884,10 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             voxelUploadCompleted = true;
         }
     }
-    else if (!cpuBrickTable.brickTable.empty() &&
+    else if (!ambientBakeIdle_ && !cpuBrickTable.brickTable.empty() &&
              engine->GetRenderer().ActiveRendererRequirements().requestAmbientCube)
     {
         rebuildBrickResidency();
-    }
-
-    if (!lastBatchTasks.empty())
-    {
-        if (Tasks::TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks))
-        {
-            lastBatchTasks.clear();
-        }
-    }
-    else
-    {
-        while (!needUpdateGroups.empty())
-        {
-            auto& group = needUpdateGroups.front();
-            ECubeProcType type = std::get<1>(group);
-            uint32_t cascadeIndex = std::get<3>(group);
-            if (type == ECubeProcType::ECPT_Fence)
-            {
-                if (!Tasks::TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks))
-                {
-                    break; 
-                }
-                needUpdateGroups.pop();
-                continue;
-            }
-            AsyncProcessGroup(std::get<0>(group).x, std::get<0>(group).z, scene, std::get<1>(group), std::get<2>(group), cascadeIndex);
-            needUpdateGroups.pop();
-        }
     }
 
     return voxelUploadCompleted;
@@ -839,28 +896,47 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
 bool FCPUAccelerationStructure::HasPendingWork() const
 {
     std::lock_guard<std::mutex> lock(buildMutex_);
-    return buildInFlight_ || pendingProbeRevision_ != 0 || needFlush || !lastBatchTasks.empty() ||
+    return buildInFlight_ || needFlush || !lastBatchTasks.empty() ||
            !distanceFieldRebuildTasks.empty() || distanceFieldRebuildScheduled_ || !needUpdateGroups.empty();
 }
 
-void FCPUAccelerationStructure::RequestUpdate(vec3 worldPos, float radius)
+FProbeBakeProgress FCPUAccelerationStructure::GetProbeBakeProgress() const
 {
-    for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
-    {
-        FCPUProbeBaker& baker = cascadeBakers[cascadeIndex];
-        ivec3 center = ivec3((worldPos - baker.CUBE_OFFSET) / baker.UNIT_SIZE);
-        const int radiusInCells = static_cast<int>(radius / baker.UNIT_SIZE);
-        ivec3 min = center - ivec3(radiusInCells);
-        ivec3 max = center + ivec3(radiusInCells);
+    FProbeBakeProgress progress;
+    progress.completedVoxelGroups = completedVoxelGroups_.load(std::memory_order_acquire);
+    progress.totalVoxelGroups = totalVoxelGroups_;
 
-        for (int x = min.x; x <= max.x; ++x)
-        {
-            for (int z = min.z; z <= max.z; ++z)
-            {
-                ivec3 point(x, 1, z);
-                needUpdateGroups.push({point, ECubeProcType::ECPT_Voxelize, EBakerType::EBT_Probe, cascadeIndex});
-            }
-        }
+    if (!needUpdateGroups.empty() || !lastBatchTasks.empty())
+    {
+        progress.stage = EProbeBakeStage::VoxelData;
+    }
+    else if (needFlush || distanceFieldRebuildScheduled_ || !distanceFieldRebuildTasks.empty())
+    {
+        progress.stage = EProbeBakeStage::DistanceField;
+    }
+
+    return progress;
+}
+
+bool FCPUAccelerationStructure::HasProbeVoxelizationWork() const
+{
+    return needFlush || !lastBatchTasks.empty() || !distanceFieldRebuildTasks.empty() ||
+           distanceFieldRebuildScheduled_ || !needUpdateGroups.empty();
+}
+
+uint32_t FCPUAccelerationStructure::AmbientBakeDirtyBrickCount(uint32_t cascadeIndex) const
+{
+    return cascadeIndex < cpuBrickTable.dirtyBricksPerCascade.size()
+        ? cpuBrickTable.dirtyBricksPerCascade[cascadeIndex]
+        : 0u;
+}
+
+void FCPUAccelerationStructure::AcknowledgeAmbientBake(uint64_t revision)
+{
+    cpuBrickTable.AcknowledgeDirty(revision);
+    if (revision == cpuBrickTable.dirtyRevision)
+    {
+        ambientBakeIdle_ = true;
     }
 }
 

@@ -7,7 +7,7 @@
 #include "Engine/Runtime/Components/SceneReferenceComponent.hpp"
 #include "Modules/DevTools/Command/SelectionCommandUtils.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Modules/SceneContent/SceneList.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
 
 #include <algorithm>

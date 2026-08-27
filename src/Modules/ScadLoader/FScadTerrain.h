@@ -11,7 +11,7 @@
 //
 // TERR is a nested list literal, versioned with a "gkterr1" tag:
 //   ["gkterr1", [sizeX,sizeY], [cellsX,cellsY], seed,
-//    [baseHeight, relief, roughness], waterLevel|undef, "palette",
+//    [baseHeight, relief, roughness, paletteSpan?], waterLevel|undef, "palette",
 //    [ feature, ... ]]
 // Features (applied in order, each an ordered operator on the heightfield):
 //   ["mountain", [x,y], radius, height, rugged]
@@ -21,6 +21,18 @@
 //   ["river",    [[x,y],...], width, depth]     // carve + water surface
 //   ["road",     [[x,y],...], width]            // flatten + dirt color
 //   ["pad",      [x,y], [w,d], rotDeg]          // flat build site
+//   ["hmap",     path|[cols,rows][,grid], mode, zScale, zBias]  // sampled DEM
+//
+// The hmap operator stamps a sampled heightfield (real-world elevation, a
+// sculpted mask, ...) into the field. Two source forms:
+//   ["hmap", "assets/geo/<tile>/terrain.hmap", "set", 1, 0]
+//   ["hmap", [cols, rows], [h00, h01, ...], "set", 1, 0]
+// mode is "set" (replace) or "add". The side-car file is a little-endian blob:
+//   "GKHM", u32 version=1, u32 cols, u32 rows, f32 originX, originY,
+//   f32 cellX, cellY, f32 scale, bias, then int16[cols*rows] row-major
+//   (x fastest, +y with row index); height = raw * scale + bias.
+// Paths are runtime-root relative and read through the package file system, so
+// they behave identically in packed and loose builds.
 //
 // All geometry is produced in SCAD space (Z-up, centered on the origin) and
 // deterministic for a given spec (integer hashing only, no libc rand). The
@@ -56,6 +68,22 @@ namespace Assets::Scad
         Count
     };
 
+    // Sampled heightfield backing an ["hmap", ...] feature. Either decoded from
+    // a .hmap side-car asset or built from an inline TERR literal. Immutable and
+    // shared: identical sources resolve to one instance (see HeightGridCacheKey).
+    struct FHeightGrid
+    {
+        int cols = 0;
+        int rows = 0;
+        glm::dvec2 origin{0.0, 0.0}; // SCAD-space position of sample (0, 0)
+        glm::dvec2 cell{1.0, 1.0};   // sample spacing (meters)
+        std::vector<float> values;   // row-major, x fastest, +y with row index
+        uint64_t contentHash = 0;
+
+        // Bilinear sample; xy outside the grid clamps to the border value.
+        double Sample(double x, double y) const;
+    };
+
     struct FTerrainFeature
     {
         enum class EType : uint8_t
@@ -66,7 +94,8 @@ namespace Assets::Scad
             Lake,
             River,
             Road,
-            Pad
+            Pad,
+            Hmap
         };
 
         EType type = EType::Mountain;
@@ -79,6 +108,13 @@ namespace Assets::Scad
         double width = 0.0;        // ridge/river/road
         double rugged = 0.0;       // mountain noise perturbation [0..1]
         std::vector<glm::dvec2> pts; // ridge/river/road polyline
+
+        // hmap
+        std::string path;   // runtime-root-relative .hmap ("" => inline literal)
+        bool hmapAdd = false; // "add" mode; default "set" replaces the height
+        double zScale = 1.0;
+        double zBias = 0.0;
+        std::shared_ptr<const FHeightGrid> grid;
     };
 
     struct FTerrainSpec
@@ -87,6 +123,11 @@ namespace Assets::Scad
         glm::ivec2 cells{50, 50};
         uint64_t seed = 0;
         double baseHeight = 0.0;
+        // Relief the colour ramp is measured over, in metres above baseHeight.
+        // 0 means "use this terrain's own maximum", which is right for a single
+        // terrain and wrong for a grid of them: every part would derive its own
+        // ramp from its own highest point and the seams would change colour.
+        double paletteSpan = 0.0;
         double relief = 1.0;    // fbm amplitude (0 = perfectly flat base)
         double roughness = 0.5; // 0..1, mapped to fbm frequency/octaves
         bool hasWaterLevel = false;
@@ -158,5 +199,10 @@ namespace Assets::Scad
 
         // Compiles the heightfield and builds the triangulated mesh + masks.
         static std::shared_ptr<const FTerrainData> Build(const FTerrainSpec& spec);
+
+        // Decodes a .hmap blob (see the format note above). Exposed for tests
+        // and for tooling that wants to validate a generated file.
+        static std::shared_ptr<const FHeightGrid> DecodeHeightGrid(
+            const std::vector<uint8_t>& bytes, std::string& outError);
     };
 } // namespace Assets::Scad

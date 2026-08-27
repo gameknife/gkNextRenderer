@@ -69,7 +69,7 @@ jobs:
         run: |
           echo "BUILDVER(${{ github.ref_name }})" > src/build.version
           ./gnb.sh setup
-          ./gnb.sh build gkNextRenderer gkNextEditor gkNextMotionBenchmark Packager
+            ./gnb.sh build --tracy=off gkNextRenderer gkNextEditor gkNextMotionBenchmark Packager
       - name: Trace runtime assets with Lavapipe and package Linux
         run: |
           xvfb-run --auto-servernum ./gnb.sh package linux --package-preset default --trace-assets --version ${{ github.ref_name }}
@@ -129,7 +129,7 @@ jobs:
           "BUILDVER(${{ github.ref_name }})" | Set-Content src/build.version -NoNewline
           .\gnb.bat setup
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\gnb.bat build gkNextRenderer gkNextEditor gkNextMotionBenchmark
+            .\gnb.bat build --tracy=off gkNextRenderer gkNextEditor gkNextMotionBenchmark
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Download precise runtime paks
         uses: actions/download-artifact@v4
@@ -187,7 +187,7 @@ jobs:
         run: |
           echo "BUILDVER(${{ github.ref_name }})" > src/build.version
           ./gnb.sh setup
-          ./gnb.sh build gkNextRenderer gkNextEditor gkNextMotionBenchmark
+            ./gnb.sh build --tracy=off gkNextRenderer gkNextEditor gkNextMotionBenchmark
       - name: Download precise runtime paks
         uses: actions/download-artifact@v4
         with:

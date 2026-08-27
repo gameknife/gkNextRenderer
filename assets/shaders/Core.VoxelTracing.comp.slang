@@ -13,7 +13,8 @@ void OutputColor(int2 ipos, float3 total)
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     const uint2 outputSize = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SCENE_COLOR);
-    if (any(DTid.xy >= outputSize))
+    const uint2 shadingPixel = DTid.xy;
+    if (any(shadingPixel >= outputSize))
     {
         return;
     }
@@ -25,7 +26,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FHiVoxelDDARayTracer voxelTracer;
     FVoxelRayCaster rayCasterVoxel;
 
-    int2 ipos = int2(DTid.xy);
+    int2 ipos = int2(shadingPixel);
     int2 size = int2(outputSize);
     uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
 
@@ -38,7 +39,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float3 rayDir;
     float rayLength = 0.0;
     float2 pixelOffset = float2(0, 0);
-    if (rayCasterVoxel.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode, rayDir, rayLength, pixelOffset))
+    FPrimarySurfaceSample surfaceSample = FPrimarySurfaceSample();
+    if (rayCasterVoxel.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode, rayDir, rayLength, pixelOffset, surfaceSample))
     {
         float4 residencyDebugColor;
         if (TryAmbientResidencyDebug(hitVertex.Position, residencyDebugColor))
@@ -60,8 +62,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
     else
     {
-        outColor= float4(10,10,10,0);
-        noSkyBackground = !Camera.HasSky;
+        outColor = Camera.BackgroundMode == BACKGROUND_MODE_STUDIO
+            ? Common.SampleVisibleBackground(rayDir)
+            : float4(10, 10, 10, 0);
+        noSkyBackground = !Camera.HasSky && Camera.BackgroundMode != BACKGROUND_MODE_STUDIO;
     }
 
     const float exposure = max(Camera.PaperWhiteNit / 40000.0, 1.0e-6);

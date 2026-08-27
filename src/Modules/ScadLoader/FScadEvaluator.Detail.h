@@ -14,11 +14,13 @@
 #include "Modules/ScadLoader/FScadText.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cmath>
 #include <functional>
 #include <limits>
 #include <memory>
+#include <thread>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_transform.hpp>
@@ -34,6 +36,7 @@ namespace Assets::Scad
         struct ColoredSoup
         {
             glm::dvec4 color = glm::dvec4(0.78, 0.78, 0.78, 1.0);
+            ScadMaterialProperties material;
             bool hasColor = false;
             bool faceted = false; // terrain: keep flat shading in the loader
             bool terrainWater = false; // terrain water surface (dedicated node)
@@ -52,6 +55,20 @@ namespace Assets::Scad
                 return static_cast<uint32_t>(clamped * 255.0f + 0.5f);
             };
             return (q(c.r) << 24) | (q(c.g) << 16) | (q(c.b) << 8) | q(c.a);
+        }
+
+        inline uint64_t QuantizeMaterial(const glm::vec4& c, const ScadMaterialProperties& material)
+        {
+            auto q = [](float v) -> uint64_t
+            {
+                const float clamped = std::min(1.0f, std::max(0.0f, v));
+                return static_cast<uint64_t>(clamped * 65535.0f + 0.5f);
+            };
+            const float effectiveRoughness =
+                c.a < 0.99f && !material.explicitParameters ? 0.0f : material.roughness;
+            return (static_cast<uint64_t>(QuantizeColor(c)) << 32u) |
+                   (q(effectiveRoughness) << 16u) |
+                   q(material.metalness);
         }
 
         inline void AppendMove(GeomList& dst, GeomList&& src)
@@ -149,8 +166,16 @@ namespace Assets::Scad
                 DefinitionFrameGuard definitionFrame(*this);
                 RegisterLocalDefinitions(topLevel);
 
-                for (const StmtPtr& s : topLevel)
+                // A generated area is a run of independent top-level calls —
+                // one per 1 km part — and evaluating a dense part costs
+                // seconds, so a 5x5 is minutes of one core. When the tail of
+                // the file is nothing but instances they can be evaluated
+                // concurrently; see ParallelTopLevelStart for what "can" means.
+                const size_t parallelFrom = ParallelTopLevelStart(topLevel);
+
+                for (size_t i = 0; i < topLevel.size() && i < parallelFrom; ++i)
                 {
+                    const StmtPtr& s = topLevel[i];
                     if (!s)
                         continue;
                     if (s->kind == StmtKind::Assign)
@@ -159,14 +184,12 @@ namespace Assets::Scad
                     }
                     else if (s->kind == StmtKind::Instance)
                     {
-                        topLevelFallbackLabel_ = s->name;
-                        topLevelFallbackInstanceId_ = nextGroupInstanceId_++;
-                        currentTopLevelFallbackRoot_ = nullptr;
-                        EmitSceneGeometry(EvalInstance(*s, glm::dmat4(1.0), glm::dvec4(0.78, 0.78, 0.78, 1.0), false));
-                        currentTopLevelFallbackRoot_ = nullptr;
-                        topLevelFallbackLabel_.clear();
-                        topLevelFallbackInstanceId_ = 0;
+                        RunTopLevelInstance(*s);
                     }
+                }
+                if (parallelFrom < topLevel.size())
+                {
+                    RunTopLevelInstancesParallel(topLevel, parallelFrom);
                 }
 
                 // Snapshot the final top-level bindings (the global frame) so
@@ -183,7 +206,160 @@ namespace Assets::Scad
                 ctx_.Pop();
             }
 
+            // Evaluates one top-level instance into its own result, with a
+            // copy of the caller's globals. Used only by the parallel path;
+            // everything it touches is either its own state or immutable.
+            void RunIsolatedTopLevel(const Stmt& instance,
+                                     const std::unordered_map<std::string, Value>& globals,
+                                     const Scope& topLevel,
+                                     uint64_t idBase)
+            {
+                InitGlobals();
+                for (const auto& entry : globals)
+                {
+                    ctx_.Set(entry.first, entry.second);
+                }
+                // Disjoint id ranges. Node ids have to stay unique across the
+                // whole scene (the loader keys terrain payloads on them), and
+                // value identities key a per-evaluator memo whose entries would
+                // otherwise be shadowed by an identity minted in the parent.
+                nextGroupInstanceId_ = idBase;
+                nextValueIdentity_ = idBase;
+
+                DefinitionFrameGuard definitionFrame(*this);
+                RegisterLocalDefinitions(topLevel);
+                RunTopLevelInstance(instance);
+                FinalizeScene();
+                ctx_.Pop();
+            }
+
         private:
+            void RunTopLevelInstance(const Stmt& instance)
+            {
+                topLevelFallbackLabel_ = instance.name;
+                topLevelFallbackInstanceId_ = nextGroupInstanceId_++;
+                currentTopLevelFallbackRoot_ = nullptr;
+                EmitSceneGeometry(EvalInstance(instance, glm::dmat4(1.0), glm::dvec4(0.78, 0.78, 0.78, 1.0), false));
+                currentTopLevelFallbackRoot_ = nullptr;
+                topLevelFallbackLabel_.clear();
+                topLevelFallbackInstanceId_ = 0;
+            }
+
+            // Index of the first top-level instance of a tail made up entirely
+            // of instances, or topLevel.size() for "do not parallelise".
+            //
+            // The whole tail, not any run of instances: an instance evaluated
+            // out of band produces its scene roots in its own result, and
+            // interleaving those with roots the sequential path appended would
+            // mean tracking an ordering key through both. A generated scene
+            // puts every assignment first and every call last, which is the
+            // case worth having.
+            size_t ParallelTopLevelStart(const Scope& topLevel) const
+            {
+                const size_t none = topLevel.size();
+                if (!options_.parallelTopLevel || !IsSceneMode())
+                {
+                    return none;
+                }
+                if (std::thread::hardware_concurrency() < 2)
+                {
+                    return none;
+                }
+                size_t first = none;
+                size_t count = 0;
+                for (size_t i = 0; i < topLevel.size(); ++i)
+                {
+                    const StmtPtr& s = topLevel[i];
+                    if (!s)
+                    {
+                        continue;
+                    }
+                    if (s->kind != StmtKind::Instance)
+                    {
+                        // A statement of any other kind after an instance ends
+                        // the tail, and with it the opportunity.
+                        if (first != none)
+                        {
+                            return none;
+                        }
+                        continue;
+                    }
+                    if (first == none)
+                    {
+                        first = i;
+                    }
+                    ++count;
+                }
+                // Below this the thread handshake costs more than it saves, and
+                // every ordinary scene stays on the path it has always taken.
+                return count >= kMinParallelTopLevel ? first : none;
+            }
+
+            void RunTopLevelInstancesParallel(const Scope& topLevel, size_t from)
+            {
+                const size_t count = topLevel.size() - from;
+                std::vector<SceneEvalResult> partials(count);
+                // The globals frame is the shared input: the TERR literals, the
+                // palettes, $fn. Copied per worker rather than shared, because a
+                // worker's context is free to shadow them.
+                const std::unordered_map<std::string, Value> globals = ctx_.TopFrame();
+
+                std::atomic<size_t> cursor{0};
+                const unsigned hardware = std::max(1u, std::thread::hardware_concurrency());
+                const unsigned workers =
+                    static_cast<unsigned>(std::min<size_t>(hardware, count));
+                const auto run = [&]()
+                {
+                    for (;;)
+                    {
+                        const size_t k = cursor.fetch_add(1);
+                        if (k >= count)
+                        {
+                            break;
+                        }
+                        const StmtPtr& s = topLevel[from + k];
+                        if (!s)
+                        {
+                            continue;
+                        }
+                        Evaluator sub(modules_, functions_, options_, partials[k]);
+                        sub.RunIsolatedTopLevel(*s, globals, topLevel, kParallelIdStride * (k + 1));
+                    }
+                };
+                std::vector<std::thread> pool;
+                pool.reserve(workers > 0 ? workers - 1 : 0);
+                for (unsigned t = 1; t < workers; ++t)
+                {
+                    pool.emplace_back(run);
+                }
+                run();
+                for (std::thread& worker : pool)
+                {
+                    worker.join();
+                }
+
+                // Merged in statement order, so the scene is identical whatever
+                // order the workers finished in.
+                for (SceneEvalResult& partial : partials)
+                {
+                    for (SceneNode& root : partial.roots)
+                    {
+                        parallelRoots_.push_back(std::move(root));
+                    }
+                    for (SceneTerrain& terrain : partial.terrains)
+                    {
+                        sceneResult_->terrains.push_back(std::move(terrain));
+                    }
+                    sceneResult_->warningCount += partial.warningCount;
+                    sceneResult_->triangleCount += partial.triangleCount;
+                }
+            }
+
+            // One worker's id range. Wide enough that no single top-level call
+            // can run into the next worker's numbers.
+            static constexpr uint64_t kParallelIdStride = 1ull << 40;
+            static constexpr size_t kMinParallelTopLevel = 4;
+
             const std::unordered_map<std::string, StmtPtr>& modules_;
             const std::unordered_map<std::string, StmtPtr>& functions_;
             const ScadLoadOptions& options_;
@@ -202,9 +378,12 @@ namespace Assets::Scad
             };
             std::vector<GroupFrame> moduleCallStack_;
             std::vector<std::string> materialNameStack_;
+            std::vector<ScadMaterialProperties> materialPropertiesStack_;
             std::string topLevelFallbackLabel_;
             uint64_t topLevelFallbackInstanceId_ = 0;
             uint64_t nextGroupInstanceId_ = 1;
+            // Finished subtrees handed back by the parallel top-level workers.
+            std::vector<SceneNode> parallelRoots_;
             uint64_t nextValueIdentity_ = 1;
             int suppressSceneNodes_ = 0;
 
@@ -217,7 +396,7 @@ namespace Assets::Scad
                 std::vector<std::pair<std::string, Value>> parameters;
                 glm::dvec4 callColor = glm::dvec4(0.78, 0.78, 0.78, 1.0);
                 bool hasCallColor = false;
-                std::map<uint32_t, SceneMeshBucket> meshes;
+                std::map<uint64_t, SceneMeshBucket> meshes;
                 std::vector<std::unique_ptr<SceneNodeBuild>> children;
             };
             std::vector<std::unique_ptr<SceneNodeBuild>> sceneRoots_;
@@ -294,9 +473,10 @@ namespace Assets::Scad
                     const std::string groupName = cs.groupName.empty() ? std::string("part") : cs.groupName;
                     const uint64_t groupInstanceId =
                         cs.groupInstanceId == 0 ? nextGroupInstanceId_++ : cs.groupInstanceId;
-                    const BucketKey key{groupName, groupInstanceId, QuantizeColor(c)};
+                    const BucketKey key{groupName, groupInstanceId, QuantizeMaterial(c, cs.material)};
                     ColorBucket& bucket = flatResult_->buckets[key];
                     bucket.color = c;
+                    bucket.material = cs.material;
                     bucket.groupName = groupName;
                     bucket.faceted = bucket.faceted || cs.faceted;
                     bucket.tris.insert(bucket.tris.end(), cs.soup.begin(), cs.soup.end());
@@ -378,8 +558,9 @@ namespace Assets::Scad
                 for (const ColoredSoup& cs : geom)
                 {
                     const glm::vec4 c = cs.hasColor ? glm::vec4(cs.color) : glm::vec4(0.78f, 0.78f, 0.78f, 1.0f);
-                    SceneMeshBucket& bucket = owner->meshes[QuantizeColor(c)];
+                    SceneMeshBucket& bucket = owner->meshes[QuantizeMaterial(c, cs.material)];
                     bucket.color = c;
+                    bucket.material = cs.material;
                     if (bucket.materialName.empty() && !cs.materialName.empty())
                     {
                         bucket.materialName = cs.materialName;
@@ -422,11 +603,18 @@ namespace Assets::Scad
                 }
 
                 sceneResult_->roots.clear();
-                sceneResult_->roots.reserve(sceneRoots_.size());
+                sceneResult_->roots.reserve(sceneRoots_.size() + parallelRoots_.size());
                 for (const auto& root : sceneRoots_)
                 {
                     sceneResult_->roots.push_back(FinalizeSceneNode(*root));
                 }
+                // Workers finalise their own subtrees; they are appended in
+                // statement order (see RunTopLevelInstancesParallel).
+                for (SceneNode& root : parallelRoots_)
+                {
+                    sceneResult_->roots.push_back(std::move(root));
+                }
+                parallelRoots_.clear();
             }
 
             std::string CurrentGroupLabel() const
@@ -574,8 +762,40 @@ namespace Assets::Scad
                     }
                     return EvalScope(inst.children, xform, color, hasColor);
                 }
+                if (name == "gk_material")
+                {
+                    glm::dvec4 c = color;
+                    if (ResolveMaterialColor(inst, c))
+                    {
+                        ScadMaterialProperties material;
+                        material.explicitParameters = true;
+                        material.roughness = static_cast<float>(std::clamp(
+                            Arg(inst, "roughness", 1).AsNumber(1.0), 0.0, 1.0));
+                        material.metalness = static_cast<float>(std::clamp(
+                            Arg(inst, "metalness", 2).AsNumber(0.0), 0.0, 1.0));
+                        materialNameStack_.push_back(ResolveColorName(inst));
+                        materialPropertiesStack_.push_back(material);
+                        GeomList result = EvalScope(inst.children, xform, c, true);
+                        materialPropertiesStack_.pop_back();
+                        materialNameStack_.pop_back();
+                        return result;
+                    }
+                    return EvalScope(inst.children, xform, color, hasColor);
+                }
                 if (name == "union" || name == "group" || name == "render")
                 {
+                    return EvalScope(inst.children, xform, color, hasColor);
+                }
+                if (name == "gk_flatten")
+                {
+                    // Declares "everything below me is one piece of geometry, not
+                    // scene structure". A rule library that expands a data table
+                    // into thousands of small module calls (kit_road turning a
+                    // street network into per-segment slabs) would otherwise emit
+                    // one scene Node per call: measured at 7683 nodes for a 1km
+                    // city tile, which cost 1.2 s of physics shape cooking alone
+                    // because every node becomes its own Model and collider.
+                    SuppressSceneNodeGuard suppressGuard(*this);
                     return EvalScope(inst.children, xform, color, hasColor);
                 }
                 if (name == "minkowski")
@@ -691,6 +911,7 @@ namespace Assets::Scad
                 std::vector<TriSoup> negatives;
                 glm::dvec4 posColor = color;
                 bool posHas = hasColor;
+                ScadMaterialProperties posMaterial;
                 std::string posMaterialName;
                 std::string posGroupName = CurrentGroupLabel();
                 uint64_t posGroupInstanceId = CurrentGroupInstanceId();
@@ -716,6 +937,7 @@ namespace Assets::Scad
                             {
                                 posColor = cs.color;
                                 posHas = cs.hasColor;
+                                posMaterial = cs.material;
                                 posMaterialName = cs.materialName;
                                 posGroupName = cs.groupName.empty() ? posGroupName : cs.groupName;
                                 posGroupInstanceId = cs.groupInstanceId == 0 ? posGroupInstanceId : cs.groupInstanceId;
@@ -749,6 +971,7 @@ namespace Assets::Scad
                 ColoredSoup result;
                 result.color = posColor;
                 result.hasColor = posHas;
+                result.material = posMaterial;
                 result.materialName = posMaterialName;
                 result.groupName = posGroupName;
                 result.groupInstanceId = posGroupInstanceId;
@@ -766,6 +989,7 @@ namespace Assets::Scad
                 std::vector<TriSoup> operands;
                 glm::dvec4 firstColor = color;
                 bool firstHas = hasColor;
+                ScadMaterialProperties firstMaterial;
                 std::string firstMaterialName;
                 std::string firstGroupName = CurrentGroupLabel();
                 uint64_t firstGroupInstanceId = CurrentGroupInstanceId();
@@ -789,6 +1013,7 @@ namespace Assets::Scad
                         {
                             firstColor = cs.color;
                             firstHas = cs.hasColor;
+                            firstMaterial = cs.material;
                             firstMaterialName = cs.materialName;
                             firstGroupName = cs.groupName.empty() ? firstGroupName : cs.groupName;
                             firstGroupInstanceId = cs.groupInstanceId == 0 ? firstGroupInstanceId : cs.groupInstanceId;
@@ -812,6 +1037,7 @@ namespace Assets::Scad
                 ColoredSoup result;
                 result.color = firstColor;
                 result.hasColor = firstHas;
+                result.material = firstMaterial;
                 result.materialName = firstMaterialName;
                 result.groupName = firstGroupName;
                 result.groupInstanceId = firstGroupInstanceId;
@@ -827,6 +1053,7 @@ namespace Assets::Scad
                 std::vector<TriSoup> parts;
                 glm::dvec4 firstColor = color;
                 bool firstHas = hasColor;
+                ScadMaterialProperties firstMaterial;
                 std::string firstMaterialName;
                 std::string firstGroupName = CurrentGroupLabel();
                 uint64_t firstGroupInstanceId = CurrentGroupInstanceId();
@@ -837,6 +1064,7 @@ namespace Assets::Scad
                     {
                         firstColor = cs.color;
                         firstHas = cs.hasColor;
+                        firstMaterial = cs.material;
                         firstMaterialName = cs.materialName;
                         firstGroupName = cs.groupName.empty() ? firstGroupName : cs.groupName;
                         firstGroupInstanceId = cs.groupInstanceId == 0 ? firstGroupInstanceId : cs.groupInstanceId;
@@ -855,6 +1083,7 @@ namespace Assets::Scad
                 ColoredSoup result;
                 result.color = firstColor;
                 result.hasColor = firstHas;
+                result.material = firstMaterial;
                 result.materialName = firstMaterialName;
                 result.groupName = firstGroupName;
                 result.groupInstanceId = firstGroupInstanceId;
@@ -1093,6 +1322,10 @@ namespace Assets::Scad
             glm::dmat4 BuildMultmatrix(const Stmt& inst);
 
             bool ResolveColor(const Stmt& inst, glm::dvec4& out);
+
+            // gk_material() keeps roughness/metalness positional arguments
+            // separate from color's legacy positional alpha argument.
+            bool ResolveMaterialColor(const Stmt& inst, glm::dvec4& out);
 
             const ExprPtr& ColorArgExpr(const Stmt& inst) const;
 

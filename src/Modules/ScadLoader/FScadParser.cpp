@@ -517,6 +517,25 @@ namespace Assets::Scad
                         Advance();
                         return MakeExpr(ExprKind::Undef);
                     }
+                    // let(...) <expr> in expression position. This is the normal
+                    // way an OpenSCAD *function* body names a subexpression it
+                    // uses more than once; without it a rule library has to
+                    // inline every shared term, which is both unreadable and
+                    // recomputed on every use. Same node kind as the list
+                    // comprehension form -- the evaluator distinguishes them by
+                    // where it meets the node, not by kind.
+                    if (t.text == "let" && Peek(1).kind == Tok::LParen)
+                    {
+                        Advance();
+                        auto e = MakeExpr(ExprKind::CompLet);
+                        Expect(Tok::LParen, "'('");
+                        e->args = ParseArgs();
+                        Expect(Tok::RParen, "')'");
+                        // The body is a full expression: `let (a = 1) a + 2`
+                        // binds over the whole sum, not just the first term.
+                        e->list.push_back(ParseExpr());
+                        return e;
+                    }
                     const std::string name = Advance().text;
                     if (Accept(Tok::LParen))
                     {

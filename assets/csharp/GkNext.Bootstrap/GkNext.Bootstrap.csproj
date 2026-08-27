@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The never-unloaded entry assembly. Holds the [UnmanagedCallersOnly] exports, which cannot live
+    in a collectible AssemblyLoadContext (design section 3.3) — that constraint is the whole reason
+    the managed side is split in two.
+  -->
+
+  <PropertyGroup>
+    <RootNamespace>GkNext.Bootstrap</RootNamespace>
+    <AssemblyName>GkNext.Bootstrap</AssemblyName>
+    <!-- Each application that links a NativeAOT game needs its own native library, so the name is
+         overridable. Overriding AssemblyName from the command line instead would set it as a
+         global property on every referenced project too, and restore fails with an ambiguous
+         project name. -->
+    <AssemblyName Condition="'$(GkNativeName)' != ''">$(GkNativeName)</AssemblyName>
+    <OutputType>Library</OutputType>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <!-- NativeAOT: the shared library exports GkNext_Bootstrap directly. -->
+  <PropertyGroup Condition="'$(GkAot)' == 'true'">
+    <PublishAot>true</PublishAot>
+    <NativeLib>Shared</NativeLib>
+    <!-- iOS needs Static instead; set GkNativeLib=Static to switch. -->
+    <NativeLib Condition="'$(GkNativeLib)' != ''">$(GkNativeLib)</NativeLib>
+    <InvariantTimezone>true</InvariantTimezone>
+    <StackTraceSupport>false</StackTraceSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GkNext.Engine\GkNext.Engine.csproj" />
+  </ItemGroup>
+
+  <!-- Under AOT the game assembly is linked in and called directly; under CoreCLR it must NOT be
+       referenced, or it would resolve from the default ALC and never be reloadable.
+
+       Which game gets linked is per-application: each app that hosts C# publishes its own native
+       library with GkGameProject pointing at its game. -->
+  <PropertyGroup Condition="'$(GkGameProject)' == ''">
+    <GkGameProject>$(MSBuildThisFileDirectory)..\GkNext.Game\GkNext.Game.csproj</GkGameProject>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(GkAot)' == 'true'">
+    <ProjectReference Include="$(GkGameProject)" />
+  </ItemGroup>
+
+  <!-- On Windows a shared NativeAOT library is linked through its import library, which publish
+       does not copy. Put it next to the binary so consumers only ever need the publish directory. -->
+  <Target Name="GkPublishNativeImportLibrary" AfterTargets="CopyNativeBinary"
+          Condition="'$(GkAot)' == 'true' and '$(NativeLib)' == 'Shared' and '$(OS)' == 'Windows_NT'">
+    <PropertyGroup>
+      <GkNativeImportLibrary>$([System.IO.Path]::ChangeExtension('$(NativeBinary)', '.lib'))</GkNativeImportLibrary>
+    </PropertyGroup>
+    <Copy SourceFiles="$(GkNativeImportLibrary)" DestinationFolder="$(PublishDir)"
+          Condition="Exists('$(GkNativeImportLibrary)')" />
+  </Target>
+
+</Project>

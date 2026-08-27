@@ -56,6 +56,21 @@ namespace
     }
 } // namespace
 
+Assets::Camera NextEngine::GetActiveRenderCamera() const
+{
+    Assets::Camera renderCamera = scene_->GetRenderCamera();
+    if (gameInstance_)
+    {
+        gameInstance_->OverrideRenderCamera(renderCamera);
+    }
+
+    // This is an explicit global policy: changing r.camera.farPlane affects
+    // every main-view camera, including game/editor camera overrides.
+    renderCamera.FarPlane = std::max(
+        config_.userSettings.CameraFarPlane, renderCamera.NearPlane + 1.0e-3f);
+    return renderCamera;
+}
+
 Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
 {
     // Per-view temporal history now lives in the primary RenderView (bank 0). Multi-viewport will
@@ -63,8 +78,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     Vulkan::FViewRenderState& viewState = renderer_->PrimaryViewState();
 
     // a copy, simple struct
-    Assets::Camera renderCam = scene_->GetRenderCamera();
-    gameInstance_->OverrideRenderCamera(renderCam);
+    Assets::Camera renderCam = GetActiveRenderCamera();
     scene_->OverrideModelView(renderCam.ModelView);
     Assets::UniformBufferObject ubo = Vulkan::BuildViewCameraUbo({
         .scene = *scene_,
@@ -80,6 +94,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.SuperResolution = GOption->ReferenceMode ? 2 : renderer_->EffectiveSuperResolutionMode();
     ubo.UpscalerInvalidMotionMask = renderer_->RequiresInvalidMotionMask();
     ubo.RayReconstruction = renderer_->IsRayReconstructionActive();
+    ubo.CheckerboardSparseLighting = renderer_->IsSparseCheckerboardLightingActive();
 
     glm::mat4x4 projectionUnJit = ubo.Projection;
     const bool noAmbientRenderer = renderer_->CurrentLogicRendererType() == Vulkan::ERT_SoftwareModernNoAmbient;
@@ -133,7 +148,21 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         const auto cascades = scene_->GetEnvSettings().ComputeSunCascades(
             ubo.ViewProjectionUnJit, renderCam.NearPlane, renderCam.FarPlane, 400.f);
         const uint32_t frameIndex = static_cast<uint32_t>(std::max(renderer_->FrameCount(), 0));
+        bool cameraChanged = viewState.previousUniformBuffer.TotalFrames == 0;
+        for (uint32_t column = 0; column < 4 && !cameraChanged; ++column)
+        {
+            for (uint32_t row = 0; row < 4; ++row)
+            {
+                if (viewState.previousUniformBuffer.ViewProjectionUnJit[column][row] !=
+                    ubo.ViewProjectionUnJit[column][row])
+                {
+                    cameraChanged = true;
+                    break;
+                }
+            }
+        }
         const bool forceRefresh = !viewState.cachedSunCascadesValid ||
+                                  cameraChanged ||
                                   (bool)viewState.previousUniformBuffer.HasSun != hasSun ||
                                   viewState.previousUniformBuffer.SunDirection != sunDirection;
 
@@ -220,6 +249,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         ubo.SkyIntensity = 1.0f;
     }
     ubo.HasSky = scene_->GetEnvSettings().HasSky;
+    ubo.BackgroundMode = static_cast<uint32_t>(scene_->GetEnvSettings().BackgroundMode);
     ubo.AtmosphereParams = renderer_->AtmosphereParamsAddress();
     ubo.AtmosphereReserved0 = 0;
     if (auto* texturePool = Assets::GlobalTexturePool::GetInstance())
@@ -250,6 +280,10 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.GTAOQuality = static_cast<uint32_t>(std::clamp(config_.userSettings.GTAOQuality, 0, 3));
     ubo.LightObjectScreenSpaceShadow = config_.userSettings.LightObjectScreenSpaceShadow;
     ubo.LightObjectShadowDistance = std::max(config_.userSettings.LightObjectShadowDistance, 0.0f);
+    ubo.LightObjectMaxShadowedLights =
+        std::min(config_.userSettings.LightObjectMaxShadowedLights, 2u);
+    ubo.LightObjectShadowSteps =
+        std::clamp(config_.userSettings.LightObjectShadowSteps, 4u, 12u);
 
     // The light grid anchors to the camera, but the anchor is uploaded rather than re-derived in
     // each shader: the build pass and every query must agree on cell boundaries to the bit, and a
@@ -263,20 +297,35 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
 
     ubo.ProgressiveRender = progressiveRender_.enabled;
     ubo.SceneEpsilonScale = config_.userSettings.SceneEpsilonScale;
-    const float ambientCubeUnit = Assets::SanitizeAmbientCubeUnit(config_.userSettings.AmbientCubeUnit);
-    const glm::vec3 ambientCubeOffsetBias =
+    float ambientCubeUnit = Assets::SanitizeAmbientCubeUnit(config_.userSettings.AmbientCubeUnit);
+    glm::vec3 ambientCubeOffsetBias =
         glm::vec3(config_.userSettings.AmbientCubeOffsetX, config_.userSettings.AmbientCubeOffsetY,
                   config_.userSettings.AmbientCubeOffsetZ);
     uint32_t ambientCubeCascadeCount =
         Assets::SanitizeAmbientCubeCascadeCount(config_.userSettings.AmbientCubeCascadeCount);
+    float ambientCubeCascadeRatio =
+        Assets::SanitizeAmbientCubeCascadeRatio(config_.userSettings.AmbientCubeCascadeRatio);
     if (scene_)
     {
         // Never advertise more cascades than the arena was sized for (Phase 2 right-sizing).
         ambientCubeCascadeCount = std::min(ambientCubeCascadeCount, scene_->AmbientCubeCascadeCapacity());
+
+        // The scale is adjustable at runtime, but the voxel array and cube pool only move to a new
+        // grid when the CPU bakers are re-initialized. Shading the pending settings instead would
+        // sample the old data through the new grid for as long as the rebake takes, so follow the
+        // committed grid and let it flip once the bakers have adopted it.
+        Assets::CPU::FAmbientGridConfig committedGrid;
+        if (scene_->GetCPUAccelerationStructure().TryGetAmbientGridConfig(committedGrid))
+        {
+            ambientCubeUnit = committedGrid.baseUnit;
+            ambientCubeOffsetBias = committedGrid.offsetBias;
+            ambientCubeCascadeCount = std::min(committedGrid.cascadeCount, scene_->AmbientCubeCascadeCapacity());
+            ambientCubeCascadeRatio = committedGrid.cascadeRatio;
+        }
     }
-    const float ambientCubeCascadeRatio =
-        Assets::SanitizeAmbientCubeCascadeRatio(config_.userSettings.AmbientCubeCascadeRatio);
     ubo.AmbientCubeUnit = ambientCubeUnit;
+    ubo.IndirectIntensity = std::max(config_.userSettings.IndirectIntensity, 0.0f);
+    ubo.MultiBounceIntensity = std::max(config_.userSettings.MultiBounceIntensity, 0.0f);
     ubo.AmbientCubeOffset = Assets::CalculateAmbientCubeOffset(ambientCubeUnit, ambientCubeOffsetBias);
     ubo.AmbientCubeCascadeParams =
         glm::vec4(float(ambientCubeCascadeCount), ambientCubeCascadeRatio,

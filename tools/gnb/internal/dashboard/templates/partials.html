@@ -1202,7 +1202,7 @@
     { flag: '--locale',                   desc: '区域设置 (en / zhCN / RU)',            hasVal: true,  valDefault: 'en'   },
     { flag: '--fullscreen',               desc: '切换全屏模式',                         hasVal: false                     },
     { flag: '--savefile',                 desc: '基准测试完成后保存截图',               hasVal: false                     },
-    { flag: '--renderdoc',                desc: '附加 RenderDoc（如可用）',             hasVal: false                     },
+    { flag: '--renderdoc',                desc: '抓取首个稳定场景帧并打开 RenderDoc（如可用）', hasVal: false                     },
     { flag: '--forcesdr',                 desc: '即使支持 HDR 也强制使用 SDR',          hasVal: false                     },
     { flag: '--reference',                desc: '开启参考渲染器对比模式',              hasVal: false                     },
     { flag: '--forcenort',                desc: '强制不使用硬件光追',                   hasVal: false                     },
@@ -2780,12 +2780,20 @@
       grid-template-rows: auto minmax(0, 1fr);
       gap: 16px;
     }
-    .loc-contributions {
+    .loc-activity {
       grid-column: 1 / -1;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr);
+      gap: 16px;
+    }
+    .loc-contributions,
+    .loc-hourly {
       padding: 18px 20px 14px;
       border-bottom: 1px solid var(--border);
       min-width: 0;
     }
+    .loc-hourly { border-left: 1px solid var(--border); }
     .contrib-head,
     .contrib-foot {
       display: flex;
@@ -2882,6 +2890,98 @@
       color: var(--red);
       font-size: 12px;
     }
+    .hourly-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .hourly-head h2 {
+      margin: 0;
+      color: var(--fg);
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .hourly-head span,
+    .hourly-foot {
+      color: var(--fg-mute);
+      font-size: 11px;
+    }
+    .hourly-chart {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 8px;
+      height: 190px;
+      margin-top: 16px;
+    }
+    .hourly-y-axis {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding-bottom: 27px;
+      color: var(--fg-mute);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-align: right;
+    }
+    .hourly-y-axis::after {
+      content: '提交数';
+      position: absolute;
+      top: 50%;
+      left: -2px;
+      color: var(--fg-dim);
+      font-family: var(--font-sans);
+      font-size: 9px;
+      writing-mode: vertical-rl;
+      transform: translate(-100%, -50%) rotate(180deg);
+    }
+    .hourly-plot { position: relative; min-width: 0; padding-bottom: 27px; }
+    .hourly-grid,
+    .hourly-bars {
+      position: absolute;
+      inset: 0 0 27px;
+    }
+    .hourly-grid {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+    .hourly-grid-line { border-top: 1px solid var(--border); opacity: .7; }
+    .hourly-bars {
+      display: grid;
+      grid-template-columns: repeat(24, minmax(0, 1fr));
+      align-items: end;
+      gap: 3px;
+      border-bottom: 1px solid var(--border);
+    }
+    .hourly-bar {
+      min-height: 1px;
+      border-radius: 3px 3px 0 0;
+      background: linear-gradient(180deg, var(--accent), #6366f1);
+      opacity: .92;
+    }
+    .hourly-bar.zero { opacity: 0; }
+    .hourly-labels {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      display: grid;
+      grid-template-columns: repeat(24, minmax(0, 1fr));
+      gap: 3px;
+      color: var(--fg-mute);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      text-align: center;
+    }
+    .hourly-foot { margin-top: 10px; }
+    .hourly-error { margin-top: 12px; color: var(--red); font-size: 12px; }
+    @media (max-width: 980px) {
+      .loc-activity { grid-template-columns: 1fr; }
+      .loc-hourly { border-top: 1px solid var(--border); border-left: 0; }
+    }
     .loc-col {
       min-height: 0;
       overflow-y: auto;
@@ -2964,7 +3064,8 @@
     {{if .Error}}
       <div class="loc-col"><div class="loc-error">LOC 扫描失败：{{.Error}}</div></div>
     {{else}}
-      <div class="loc-contributions">
+      <div class="loc-activity">
+        <div class="loc-contributions">
         {{if .Contributions.Error}}
           <div class="contrib-head">
             <h2>{{intCommas .Contributions.Total}} commits in the last year</h2>
@@ -3016,6 +3117,44 @@
             </div>
           </div>
         {{end}}
+        </div>
+
+        <div class="loc-hourly">
+          <div class="hourly-head">
+            <h2>每日提交时段热度</h2>
+            <span>过去一年 · 当地时间</span>
+          </div>
+          {{if .HourlyCommits.Error}}
+            <div class="hourly-error">Unable to load hourly git history: {{.HourlyCommits.Error}}</div>
+          {{else}}
+            {{$hourlyMax := .HourlyCommits.Max}}
+            <div class="hourly-chart" aria-label="按当地时间统计的每小时提交数量">
+              <div class="hourly-y-axis">
+                <span>{{intCommas .HourlyCommits.Max}}</span>
+                <span>{{intCommas .HourlyCommits.Mid}}</span>
+                <span>0</span>
+              </div>
+              <div class="hourly-plot">
+                <div class="hourly-grid" aria-hidden="true">
+                  <span class="hourly-grid-line"></span>
+                  <span class="hourly-grid-line"></span>
+                  <span class="hourly-grid-line"></span>
+                </div>
+                <div class="hourly-bars">
+                  {{range .HourlyCommits.Hours}}
+                    <span class="hourly-bar{{if eq .Count 0}} zero{{end}}" style="height: {{locBarPct .Count $hourlyMax}}%;" title="{{.RangeLabel}}（当地时间）：{{.Count}} 次提交"></span>
+                  {{end}}
+                </div>
+                <div class="hourly-labels" aria-hidden="true">
+                  {{range .HourlyCommits.Hours}}
+                    <span>{{printf "%02d" .Hour}}</span>
+                  {{end}}
+                </div>
+              </div>
+            </div>
+            <div class="hourly-foot">{{intCommas .HourlyCommits.Total}} 次提交 · 06:00 → 次日 06:00</div>
+          {{end}}
+        </div>
       </div>
 
       <section class="loc-col">

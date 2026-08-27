@@ -23,11 +23,10 @@ namespace Modules::NextStreamline
             return;
         }
 
+        // Starts slInit on a worker and returns immediately; the first seam that needs
+        // Streamline joins it. Registering before the result is known is safe because each
+        // seam falls through to the native Vulkan path while IsInitialized() is false.
         StreamlineWrapper::Initialize();
-        if (!StreamlineWrapper::IsInitialized())
-        {
-            return;
-        }
 
         Vulkan::SetInterposer(&StreamlineWrapper::InterposerInstance());
         Vulkan::RegisterDeviceCreationAugmenter(&StreamlineWrapper::DeviceAugmenterInstance());

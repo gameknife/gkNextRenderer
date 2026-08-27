@@ -35,7 +35,6 @@ namespace Assets
     class Scene final
     {
     public:
-        static void RegisterReflection();
         static constexpr uint32_t kSunShadowCascadeCount = 4;
         static constexpr uint32_t kSunShadowResolution = 1024;
         static constexpr uint32_t kRenderProxyCapacity = MAX_RENDER_PROXIES;
@@ -150,6 +149,8 @@ namespace Assets
         VkDeviceSize SoftMeshShaderDrawArgByteOffset(uint32_t slot) const;
         uint32_t SoftMeshShaderDrawSlotForShadowCascade(uint32_t cascade) const;
         const Vulkan::Buffer& PrimAddressBuffer() const { return *primAddressBuffer_; }
+        // Per-section ModelData, indexed by the encoded model-section id in NodeProxy::modelId.
+        const Vulkan::Buffer& OffsetBuffer() const { return *offsetBuffer_; }
         const Vulkan::Buffer& LightGridBuffer() const { return *lightGridBuffer_; }
         bool HasLightGridBuffer() const { return lightGridBuffer_ != nullptr; }
 
@@ -210,6 +211,7 @@ namespace Assets
         void MarkSelectionDirty();
 
         std::vector<NodeProxy>& GetNodeProxies() { return nodeProxiesBackup; }
+        const std::vector<NodeProxy>& GetNodeProxies() const { return nodeProxiesBackup; }
 
         void OverrideModelView(glm::mat4& OutMatrix);
 
@@ -232,6 +234,10 @@ namespace Assets
         void ClearSkinUpdateRequests();
         const std::vector<uint32_t>& SkinUpdateRequests() const { return skinUpdateRequests_; }
         void EnsureNodePhysicsBody(Node* node);
+        /// Gives a node ownership of an explicitly created primitive body. Any implicit mesh body
+        /// previously created for the node is removed first. This is also valid for a detached
+        /// build-time node, before AddNode binds it to the scene.
+        bool BindPhysicsBody(Node& node, NextBodyID bodyId, Runtime::ENodeMobility mobility);
         std::shared_ptr<Node> RemoveNodeByInstanceId(uint32_t id);
         std::vector<std::shared_ptr<Node>> RemoveNodesByInstanceId(std::span<const uint32_t> ids);
         std::shared_ptr<Node> GetNodeSharedByInstanceId(uint32_t id) const;
@@ -275,7 +281,7 @@ namespace Assets
         const Vulkan::ImageView& SunShadowImageView(uint32_t cascade) const { return *sunShadowViews_[cascade]; }
         const Vulkan::Sampler& SunShadowSampler() const { return *sunShadowSampler_; }
 
-        Assets::CPU::FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
+        Assets::CPU::FCPUAccelerationStructure& GetCPUAccelerationStructure() { return *cpuAccelerationStructure_; }
         glm::vec3 GetSceneAABBMin() const { return sceneAABBMin_; }
         glm::vec3 GetSceneAABBMax() const { return sceneAABBMax_; }
 
@@ -401,7 +407,12 @@ namespace Assets
         std::unordered_map<uint32_t, std::shared_ptr<Node>> nodeByInstanceId_;
         uint32_t nextInstanceId_ = 0;
 
-        bool sceneDirtyForCpuAS_ = false;
+        // Scene edits still rebuild the CPU tinybvh, but they no longer restart the
+        // voxel / distance-field / ambient-cube bake pipeline.
+        bool cpuBvhDirty_ = false;
+        // Set only by Reload(), i.e. a full level transition. Appending content or
+        // ordinary scene edits must not schedule another full probe bake.
+        bool levelVoxelBakePending_ = false;
         bool sceneDirty_ = true;
         bool materialDirty_ = true;
         SceneRebuildProfile lastRebuildProfile_{};
@@ -426,7 +437,7 @@ namespace Assets
 
         Camera renderCamera_;
 
-        Assets::CPU::FCPUAccelerationStructure cpuAccelerationStructure_;
+        std::unique_ptr<Assets::CPU::FCPUAccelerationStructure> cpuAccelerationStructure_;
         bool allocateAmbientResources_ = true;
         bool enableCpuAcceleration_ = true;
 

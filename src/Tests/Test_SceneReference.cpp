@@ -7,7 +7,7 @@
 #include "Engine/Assets/Data/Skeleton.hpp"
 #include "Engine/Runtime/Components/EnvironmentComponent.hpp"
 #include "Engine/Runtime/Components/SceneReferenceComponent.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Modules/SceneContent/SceneList.hpp"
 #include "Modules/GltfLoader/GltfModule.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 

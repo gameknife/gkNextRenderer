@@ -1,0 +1,15 @@
+# VitePress build outputs & caches
+.vitepress/dist
+.vitepress/cache
+
+# Node.js dependencies & package manager logs
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment & OS files
+.env.local
+.DS_Store
+Thumbs.db

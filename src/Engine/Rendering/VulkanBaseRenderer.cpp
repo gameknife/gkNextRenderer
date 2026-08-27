@@ -1,7 +1,7 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Rendering/FrameSubmission.hpp"
 #include "Engine/Rendering/RenderSubsystems.hpp"
-#include "Engine/Vulkan/GpuQueryTimer.hpp"
+#include "Engine/Vulkan/TracyGpuProfilerBackend.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
 #include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
@@ -22,7 +22,6 @@
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/Core/Node.hpp"
-#include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
@@ -32,21 +31,19 @@
 #include "Engine/Common/CoreMinimal.hpp"
 
 #include "Engine/Options.hpp"
-#include "Engine/Rendering/SoftwareModern/SoftwareModernRenderer.hpp"
-#include "Engine/Rendering/SoftwareModern/SoftwareModernNoAmbientRenderer.hpp"
-#include "Engine/Rendering/SoftwareTracing/SoftwareTracingRenderer.hpp"
-#include "Engine/Rendering/PathTracing/PathTracingRenderer.hpp"
 #include "Engine/Rendering/ExternalPassRegistry.hpp"
+#include "Engine/Rendering/RendererChoices.hpp"
 #include "Engine/Rendering/Preview/RenderViewServices.hpp"
 #include "Engine/Rendering/RenderView.hpp"
-#include "Engine/Rendering/VoxelTracing/VoxelTracingRenderer.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
+#include "Engine/Runtime/Profiling/TracyIntegration.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Rendering/PipelineCommon/VisibilityBufferLayout.hpp"
 #include "Engine/Rendering/PipelineCommon/RestirDI.hpp"
 #include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
-#include "Engine/Rendering/Atmosphere/AtmosphereSubsystem.hpp"
+#include "Engine/Rendering/Interface/IAtmosphereSubsystem.hpp"
 #include "Engine/Rendering/Upscaler/IUpscaler.hpp"
 #include "Engine/Rendering/Upscaler/UpscalerRegistry.hpp"
 
@@ -57,6 +54,58 @@
 namespace
 {
     constexpr const char* kPortabilitySubsetExtensionName = "VK_KHR_portability_subset";
+
+    // The bindless arrays are declared at their full count, so the device has to be able to hold
+    // every descriptor the profile asks for -- not some round number. The totals come from the
+    // profile itself (see Assets::FBindlessProfile), which is also what sizes the layout.
+    //
+    // The limits queried are the *update-after-bind* ones, not VkPhysicalDeviceLimits. Every
+    // binding in this layout carries VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT and the set is
+    // created with UPDATE_AFTER_BIND_POOL (DescriptorSystem.cpp), and the spec excludes such
+    // bindings from the base maxPerStageDescriptor* limits. Reading the base limits instead
+    // demotes every Apple GPU: an M3 Max reports maxPerStageDescriptorSamplers = 16 while happily
+    // creating the full 17k-descriptor layout.
+    bool CanBackBindlessProfile(const VkPhysicalDeviceDescriptorIndexingProperties& limits,
+                                const VkPhysicalDeviceDescriptorIndexingFeatures& features,
+                                const Assets::FBindlessProfile& profile)
+    {
+        const bool hasFeatures = features.runtimeDescriptorArray &&
+            features.shaderSampledImageArrayNonUniformIndexing &&
+            features.descriptorBindingPartiallyBound &&
+            features.descriptorBindingSampledImageUpdateAfterBind &&
+            (profile.StorageImages() == 0 ||
+             (features.shaderStorageImageArrayNonUniformIndexing &&
+              features.descriptorBindingStorageImageUpdateAfterBind));
+
+        const uint32_t combinedImageSamplers = profile.CombinedImageSamplers();
+        const uint32_t storageImages = profile.StorageImages();
+        return hasFeatures &&
+            limits.maxPerStageDescriptorUpdateAfterBindSampledImages >= combinedImageSamplers &&
+            limits.maxPerStageDescriptorUpdateAfterBindSamplers >= combinedImageSamplers &&
+            limits.maxPerStageDescriptorUpdateAfterBindStorageImages >= storageImages &&
+            limits.maxDescriptorSetUpdateAfterBindSampledImages >= combinedImageSamplers &&
+            limits.maxDescriptorSetUpdateAfterBindSamplers >= combinedImageSamplers &&
+            limits.maxDescriptorSetUpdateAfterBindStorageImages >= storageImages &&
+            limits.maxPerStageUpdateAfterBindResources >= combinedImageSamplers + storageImages;
+    }
+
+    bool SupportsBCTextures(VkPhysicalDevice physicalDevice)
+    {
+        // Asked per format and usage rather than inferred from the platform: BC7 is what KTX2/Basis
+        // assets transcode to, and the only thing that matters is whether it can be sampled.
+        constexpr VkFormatFeatureFlags required =
+            VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+        for (const VkFormat format : {VK_FORMAT_BC7_UNORM_BLOCK, VK_FORMAT_BC7_SRGB_BLOCK})
+        {
+            VkFormatProperties properties = {};
+            vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &properties);
+            if ((properties.optimalTilingFeatures & required) != required)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
 
     void PrintVulkanSdkInformation()
     {
@@ -190,8 +239,6 @@ namespace Vulkan
 {
     namespace
     {
-        using RendererFactory = std::unique_ptr<LogicRendererBase> (*)(VulkanBaseRenderer&);
-
         struct RendererDescriptor
         {
             ERendererType type;
@@ -199,13 +246,19 @@ namespace Vulkan
             FRendererContract contract;
             uint32_t referenceColumn;
             uint32_t referenceRow;
-            RendererFactory factory;
         };
 
-        template <typename T>
-        std::unique_ptr<LogicRendererBase> CreateLogicRenderer(VulkanBaseRenderer& baseRenderer)
+        std::array<LogicRendererFactory, ERT_Compatibility + 1> RendererFactories{};
+
+        bool ShouldWarmupRenderer(const ERendererType type)
         {
-            return std::make_unique<T>(baseRenderer);
+            if (type != ERT_PathTracing)
+            {
+                return true;
+            }
+
+            const NextEngine* engine = NextEngine::GetInstance();
+            return engine == nullptr || engine->IsEffectiveSharcEnabled();
         }
 
         const std::array RendererDescriptors{
@@ -218,8 +271,17 @@ namespace Vulkan
                                    EPostProcess::Temporal | EPostProcess::Upscale |
                                        EPostProcess::RayReconstruction | EPostProcess::FrameGeneration |
                                        EPostProcess::DebugGBuffer,
-                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 1, 1,
-                               &CreateLogicRenderer<PathTracing::PathTracingRenderer>},
+                                    EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 1, 1},
+            RendererDescriptor{ERT_PathTracingLite, "PathTracingLite", {
+                                   ESceneResource::Voxel | ESceneResource::Ambient | ESceneResource::TLAS | ESceneResource::LightGrid,
+                                   EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility,
+                                   ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion | ERenderOutput::ObjectId |
+                                       ERenderOutput::Normal | ERenderOutput::Albedo | ERenderOutput::Diffuse | ERenderOutput::Specular,
+                                   EPostProcess::Temporal | EPostProcess::Upscale |
+                                       EPostProcess::RayReconstruction | EPostProcess::FrameGeneration |
+                                       EPostProcess::DebugGBuffer,
+                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId,
+                                    false, true}, 1, 1},
             RendererDescriptor{ERT_SoftwareTracing, "SoftwareTracing", {
                                    ESceneResource::Voxel | ESceneResource::Ambient | ESceneResource::LightGrid,
                                    EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility | EViewPrepass::CSM,
@@ -227,32 +289,39 @@ namespace Vulkan
                                        ERenderOutput::Normal | ERenderOutput::Albedo | ERenderOutput::Diffuse | ERenderOutput::Specular,
                                    EPostProcess::Temporal | EPostProcess::Upscale |
                                        EPostProcess::DebugGBuffer,
-                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 1, 0,
-                               &CreateLogicRenderer<SoftwareTracing::SoftwareTracingRenderer>},
+                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId,
+                                    false, true}, 1, 0},
             RendererDescriptor{ERT_SoftwareModern, "SoftwareModern", {
-                                   ESceneResource::Voxel | ESceneResource::Ambient,
+                                   ESceneResource::Voxel | ESceneResource::Ambient | ESceneResource::LightGrid,
                                    EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility | EViewPrepass::CSM,
                                    ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion | ERenderOutput::ObjectId |
                                        ERenderOutput::Normal | ERenderOutput::Albedo | ERenderOutput::Diffuse | ERenderOutput::Specular,
                                    EPostProcess::Temporal | EPostProcess::Upscale |
                                        EPostProcess::DebugGBuffer,
-                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 0, 0,
-                               &CreateLogicRenderer<SoftwareModern::SoftwareModernRenderer>},
+                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId,
+                                    false, true}, 0, 0},
             RendererDescriptor{ERT_VoxelTracing, "VoxelTracing", {
                                    ESceneResource::Voxel | ESceneResource::Ambient,
                                    EViewPrepass::None,
                                    ERenderOutput::Color,
                                    EPostProcess::Upscale,
-                                   EHistoryChannel::None, false}, 0, 1,
-                               &CreateLogicRenderer<VoxelTracing::VoxelTracingRenderer>},
+                                    EHistoryChannel::None, false}, 0, 1},
             RendererDescriptor{ERT_SoftwareModernNoAmbient, "SoftwareModernNoAmbient", {
                                    ESceneResource::LightGrid,
                                    EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility | EViewPrepass::CSM,
                                    ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion |
                                        ERenderOutput::ObjectId | ERenderOutput::Normal,
                                    EPostProcess::Upscale | EPostProcess::DebugGBuffer,
-                                   EHistoryChannel::None, true}, 0, 1,
-                               &CreateLogicRenderer<SoftwareModernNoAmbient::SoftwareModernNoAmbientRenderer>},
+                                    EHistoryChannel::None, true, true}, 0, 1},
+            // Everything None: no scene resources, no prepasses, no outputs. The empty `outputs`
+            // set is what tells the base renderer there is no screen-space chain to build or
+            // resolve from, so a constrained device never creates resources it cannot back.
+            RendererDescriptor{ERT_Compatibility, "Compatibility", {
+                                   ESceneResource::None,
+                                   EViewPrepass::None,
+                                   ERenderOutput::None,
+                                   EPostProcess::None,
+                                   EHistoryChannel::None, false, false}, 0, 0},
         };
 
         const RendererDescriptor& GetRendererDescriptor(ERendererType type)
@@ -265,6 +334,73 @@ namespace Vulkan
         }
     }
 
+    // Why the last ProbeBindlessProfile call chose the compatibility profile. Only SetPhysicalDevice
+    // prints it, so the verdict appears once even though the probe runs twice.
+    static std::string LastBindlessProfileDecision;
+
+    Assets::FBindlessProfile ProbeBindlessProfile(VkPhysicalDevice physicalDevice)
+    {
+        VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures = {};
+        indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+        VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {};
+        bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+        bufferDeviceAddressFeatures.pNext = &indexingFeatures;
+        VkPhysicalDeviceFeatures2 features = {};
+        features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        features.pNext = &bufferDeviceAddressFeatures;
+        vkGetPhysicalDeviceFeatures2(physicalDevice, &features);
+
+        VkPhysicalDeviceDescriptorIndexingProperties indexingProperties = {};
+        indexingProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES;
+        VkPhysicalDeviceProperties2 properties = {};
+        properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        properties.pNext = &indexingProperties;
+        vkGetPhysicalDeviceProperties2(physicalDevice, &properties);
+
+        const bool forceCompatibility = GOption != nullptr && GOption->ForceCompatibilityRenderer;
+        // Every renderer except ERT_Compatibility reads the scene through addresses in the GPUScene
+        // push constant, so a device without bufferDeviceAddress is just as constrained as one that
+        // cannot size the descriptor arrays -- same verdict, different reason.
+        const bool hasBufferDeviceAddress = bufferDeviceAddressFeatures.bufferDeviceAddress != VK_FALSE;
+        const Assets::FBindlessProfile full = Assets::FBindlessProfile::Full();
+        if (!forceCompatibility && hasBufferDeviceAddress &&
+            CanBackBindlessProfile(indexingProperties, indexingFeatures, full))
+        {
+            return full;
+        }
+
+        const Assets::FBindlessProfile compatibility = Assets::FBindlessProfile::Compatibility();
+        // Recorded rather than logged: this is a pure query, and renderer creation calls it once to
+        // pick the renderer set before SetPhysicalDevice calls it again to fill caps_. Logging here
+        // would print the verdict twice.
+        LastBindlessProfileDecision = fmt::format(
+            "GPU '{}' {} the full renderer contract (bufferDeviceAddress {}; update-after-bind "
+            "per-stage sampled/sampler/storage {}/{}/{}, per-set {}/{}/{}, resources {}; the "
+            "bindless layout needs {} combined image samplers and {} storage images); "
+            "using the compatibility profile",
+            properties.properties.deviceName,
+            forceCompatibility ? "was asked to ignore" : "cannot meet",
+            hasBufferDeviceAddress ? "supported" : "MISSING",
+            indexingProperties.maxPerStageDescriptorUpdateAfterBindSampledImages,
+            indexingProperties.maxPerStageDescriptorUpdateAfterBindSamplers,
+            indexingProperties.maxPerStageDescriptorUpdateAfterBindStorageImages,
+            indexingProperties.maxDescriptorSetUpdateAfterBindSampledImages,
+            indexingProperties.maxDescriptorSetUpdateAfterBindSamplers,
+            indexingProperties.maxDescriptorSetUpdateAfterBindStorageImages,
+            indexingProperties.maxPerStageUpdateAfterBindResources,
+            full.CombinedImageSamplers(), full.StorageImages());
+
+        if (!CanBackBindlessProfile(indexingProperties, indexingFeatures, compatibility))
+        {
+            Throw(std::runtime_error(fmt::format(
+                "GPU '{}' cannot back even the compatibility descriptor layout "
+                "({} combined image samplers, {} storage images)",
+                properties.properties.deviceName, compatibility.CombinedImageSamplers(),
+                compatibility.StorageImages())));
+        }
+        return compatibility;
+    }
+
     FRendererRequirements GetRendererRequirements(ERendererType type)
     {
         const FRendererContract& contract = GetRendererDescriptor(type).contract;
@@ -274,6 +410,16 @@ namespace Vulkan
             .requestRayTracing = HasAny(contract.sceneResources, ESceneResource::TLAS),
             .requestVoxelGeometry = HasAny(contract.sceneResources, ESceneResource::Voxel),
         };
+    }
+
+    void RegisterLogicRendererFactory(const ERendererType type, LogicRendererFactory factory)
+    {
+        const size_t index = static_cast<size_t>(type);
+        if (index >= RendererFactories.size())
+        {
+            Throw(std::invalid_argument("logic renderer type is out of range"));
+        }
+        RendererFactories[index] = factory;
     }
 
     const FRendererContract& GetRendererContract(const ERendererType type)
@@ -327,7 +473,7 @@ namespace Vulkan
         ambientCubeBaker_ = std::make_unique<AmbientCubeBaker>(*this);
         gpuDrivenPasses_ = std::make_unique<GpuDrivenPasses>(*this);
         lightGridBuilder_ = std::make_unique<LightGridBuilder>(*this);
-        atmosphere_ = std::make_unique<Rendering::Atmosphere::AtmosphereSubsystem>(*this);
+        atmosphere_ = Rendering::Atmosphere::CreateRegisteredAtmosphereSubsystem(*this);
     }
 
     VulkanBaseRenderer::~VulkanBaseRenderer()
@@ -345,7 +491,7 @@ namespace Vulkan
         restirDI_.reset();
         renderViews_.reset();
         upscaler_.reset();
-        ctx_.frameProfiler.reset();
+        ctx_.tracyGpuProfiler.reset();
         ctx_.globalTexturePool.reset();
         ctx_.commandPool.reset();
         ctx_.commandPool2.reset();
@@ -396,6 +542,15 @@ namespace Vulkan
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         };
 
+#if GK_TRACY_ENABLED
+        if (GOption != nullptr && GOption->HardwareQuery &&
+            HasDeviceExtension(physicalDevice, VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME))
+        {
+            requiredExtensions.push_back(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
+            tracyCalibratedTimestampsAvailable_ = true;
+        }
+#endif
+
         VkPhysicalDeviceFeatures deviceFeatures = {};
 
         VkPhysicalDeviceMemoryProperties memoryProperties = {};
@@ -441,21 +596,27 @@ namespace Vulkan
                         static_cast<uint64_t>(fullAmbientCubeAllocationSize / (1024 * 1024)));
         }
 
-        caps_.supportRayTracing = !GOption->ForceNoRT && ctx_.instance->SupportsRayQuery(physicalDevice);
+        // Resolved before any renderer decision below, and before any device resource is created:
+        // the profile decides which renderers may run at all, so correcting it afterwards would
+        // mean tearing down resources that were already sized for the wrong contract.
+        caps_.bindlessProfile = ProbeBindlessProfile(physicalDevice);
+        caps_.supportsBCTextures = SupportsBCTextures(physicalDevice);
+        if (!HasFullBindlessBudget())
+        {
+            SPDLOG_WARN("{}", LastBindlessProfileDecision);
+        }
+
+        caps_.supportRayTracing = !GOption->ForceNoRT && HasFullBindlessBudget() &&
+            ctx_.instance->SupportsRayQuery(physicalDevice);
         if (caps_.supportRayTracing)
         {
             rt_ = std::make_unique<RayTracingResources>();
         }
 
-        ERendererType resolvedRendererType = logicRenderers_.current;
-        if (!caps_.supportRayTracing && GetRendererRequirements(resolvedRendererType).requestRayTracing)
-        {
-            resolvedRendererType = ERT_SoftwareTracing;
-        }
-        if (!caps_.fullAmbientCubeBudget && GetRendererRequirements(resolvedRendererType).requestAmbientCube)
-        {
-            resolvedRendererType = ERT_SoftwareModernNoAmbient;
-        }
+        // One policy, shared with NextEngine::Start and the editor's renderer picker, rather than
+        // a second hand-rolled fallback chain here.
+        const ERendererType resolvedRendererType =
+            Rendering::ResolveRendererChoice(logicRenderers_.current, RendererChoiceCapabilities());
         if (resolvedRendererType != logicRenderers_.current)
         {
             SwitchLogicRenderer(resolvedRendererType);
@@ -483,14 +644,28 @@ namespace Vulkan
 
         SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
 
-        ctx_.globalTexturePool.reset(new Assets::GlobalTexturePool(*ctx_.device, *ctx_.commandPool2, *ctx_.commandPool));
+        ctx_.globalTexturePool.reset(new Assets::GlobalTexturePool(
+            *ctx_.device, *ctx_.commandPool2, *ctx_.commandPool, caps_.bindlessProfile,
+            caps_.supportsBCTextures));
+
+        // The compatibility profile renders no scene, so the subsystems that only exist to feed one
+        // are dropped here instead of being guarded at each of their use sites. Both are held in
+        // optional pointers that every caller already null-checks.
+        if (!HasFullBindlessBudget())
+        {
+            atmosphere_.reset();
+            upscaler_.reset();
+        }
 
         OnDeviceSet();
-        atmosphere_->CreateDeviceResources();
+        if (atmosphere_)
+        {
+            atmosphere_->CreateDeviceResources();
+        }
         CreateSwapChain();
-        // Keep hidden windows hidden (agent validation captures, unit-test engine fixture):
-        // showing here would override SDL_WINDOW_HIDDEN and pop a window that steals focus.
-        if (!ctx_.window->Config().HiddenWindow)
+        // Keep hidden windows hidden (agent validation captures, unit-test engine fixture), and
+        // let normal startup show only after its first presentable frame is ready.
+        if (!ctx_.window->Config().HiddenWindow && !ctx_.window->Config().DeferShowUntilFirstPresent)
         {
             ctx_.window->Show();
         }
@@ -506,6 +681,124 @@ namespace Vulkan
         frame_.currentFrame = 0;
     }
 
+    void VulkanBaseRenderer::BeginPipelineWarmup()
+    {
+        if (!ctx_.device || !frame_.swapChain || pipelineWarmup_.active)
+        {
+            return;
+        }
+
+        pipelineWarmup_.active = true;
+        pipelineWarmup_.completedRenderers = 0;
+        const auto warmupRendererCount = std::count_if(
+            logicRenderers_.registeredTypes.begin(), logicRenderers_.registeredTypes.end(), ShouldWarmupRenderer);
+        pipelineWarmup_.totalRenderers = static_cast<uint32_t>(warmupRendererCount) +
+            (frame_.sceneChainInitializationPending ? 1u : 0u) + (upscaler_ != nullptr ? 1u : 0u);
+        pipelineWarmup_.pipelinesCreatedBeforeWarmup = ctx_.device->PipelineCreationCount();
+        pipelineWarmup_.completedPipelines = 0;
+        pipelineWarmup_.currentRenderer = frame_.sceneChainInitializationPending
+            ? "Core scene pipelines"
+            : "Preparing Vulkan shader cache";
+        nextWarmupRenderer_ = 0;
+        warmupUpscalersPending_ = upscaler_ != nullptr;
+        warmupOriginalWindowTitle_ = ctx_.window->GetTitle();
+        SPDLOG_INFO("Vulkan pipeline warm-up: preparing {} pipeline groups", pipelineWarmup_.totalRenderers);
+    }
+
+    bool VulkanBaseRenderer::PumpPipelineWarmup()
+    {
+        if (!pipelineWarmup_.active)
+        {
+            return true;
+        }
+
+        if (frame_.sceneChainInitializationPending)
+        {
+            pipelineWarmup_.currentRenderer = "Core scene pipelines";
+            const uint32_t next = pipelineWarmup_.completedRenderers + 1;
+            ctx_.window->SetTitle(fmt::format("{} - Optimizing shaders ({}/{})", warmupOriginalWindowTitle_, next,
+                                              pipelineWarmup_.totalRenderers));
+
+            const auto start = std::chrono::steady_clock::now();
+            CreateDeferredSceneSwapChainResources();
+            const auto elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start);
+            pipelineWarmup_.completedRenderers = next;
+            pipelineWarmup_.completedPipelines =
+                ctx_.device->PipelineCreationCount() - pipelineWarmup_.pipelinesCreatedBeforeWarmup;
+            SPDLOG_INFO("Vulkan pipeline warm-up [{}/{}] {}: {:.1f} ms ({} pipelines warmed, {} before warm-up)", next,
+                        pipelineWarmup_.totalRenderers, pipelineWarmup_.currentRenderer, elapsed.count(),
+                        pipelineWarmup_.completedPipelines, pipelineWarmup_.pipelinesCreatedBeforeWarmup);
+            return false;
+        }
+
+        while (nextWarmupRenderer_ < logicRenderers_.registeredTypes.size())
+        {
+            const ERendererType type = logicRenderers_.registeredTypes[nextWarmupRenderer_++];
+            if (!ShouldWarmupRenderer(type))
+            {
+                SPDLOG_INFO("Vulkan pipeline warm-up: skipped {} (feature disabled)", GetRendererName(type));
+                continue;
+            }
+
+            pipelineWarmup_.currentRenderer = GetRendererName(type);
+            const uint32_t next = pipelineWarmup_.completedRenderers + 1;
+            ctx_.window->SetTitle(fmt::format("{} - Optimizing shaders ({}/{})", warmupOriginalWindowTitle_, next,
+                                              pipelineWarmup_.totalRenderers));
+
+            const auto start = std::chrono::steady_clock::now();
+            LogicRendererBase* renderer = EnsureLogicRenderer(type);
+            if (renderer)
+            {
+                renderer->WarmupPipelines();
+            }
+            const auto elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start);
+            pipelineWarmup_.completedRenderers = next;
+            pipelineWarmup_.completedPipelines =
+                ctx_.device->PipelineCreationCount() - pipelineWarmup_.pipelinesCreatedBeforeWarmup;
+            SPDLOG_INFO("Vulkan pipeline warm-up [{}/{}] {}: {:.1f} ms ({} pipelines warmed, {} before warm-up)", next,
+                        pipelineWarmup_.totalRenderers, pipelineWarmup_.currentRenderer, elapsed.count(),
+                        pipelineWarmup_.completedPipelines, pipelineWarmup_.pipelinesCreatedBeforeWarmup);
+            return false;
+        }
+
+        // Each registered provider must compile even when another upscaler is currently selected.
+        // Keep their history images lazy: the cache only needs pipeline compilation, not a second
+        // screen-sized temporal history allocation at startup.
+        if (warmupUpscalersPending_)
+        {
+            pipelineWarmup_.currentRenderer = "Upscaler providers";
+            ctx_.window->SetTitle(fmt::format("{} - Optimizing shaders (upscalers)", warmupOriginalWindowTitle_));
+            const auto start = std::chrono::steady_clock::now();
+            upscaler_->WarmupPipelines();
+            const auto elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start);
+            pipelineWarmup_.completedPipelines =
+                ctx_.device->PipelineCreationCount() - pipelineWarmup_.pipelinesCreatedBeforeWarmup;
+            SPDLOG_INFO("Vulkan pipeline warm-up [upscalers] {:.1f} ms ({} pipelines warmed, {} before warm-up)",
+                        elapsed.count(), pipelineWarmup_.completedPipelines,
+                        pipelineWarmup_.pipelinesCreatedBeforeWarmup);
+            warmupUpscalersPending_ = false;
+            return false;
+        }
+
+        pipelineWarmup_.active = false;
+        pipelineWarmup_.currentRenderer.clear();
+        deferSceneChainForStartup_ = false;
+        ctx_.device->PersistPipelineCache();
+        ctx_.window->SetTitle(warmupOriginalWindowTitle_);
+        SPDLOG_INFO("Vulkan pipeline warm-up: complete ({} pipeline groups, {} pipelines warmed, {} before warm-up)",
+                    pipelineWarmup_.totalRenderers, pipelineWarmup_.completedPipelines,
+                    pipelineWarmup_.pipelinesCreatedBeforeWarmup);
+        return true;
+    }
+
+    void VulkanBaseRenderer::WarmupAllPipelines()
+    {
+        BeginPipelineWarmup();
+        while (!PumpPipelineWarmup())
+        {
+        }
+    }
+
     void VulkanBaseRenderer::End()
     {
         if (ctx_.device)
@@ -519,7 +812,7 @@ namespace Vulkan
         {
             upscaler_->Shutdown();
         }
-        ctx_.frameProfiler.reset();
+        ctx_.tracyGpuProfiler.reset();
         ctx_.globalTexturePool.reset();
     }
 
@@ -562,6 +855,15 @@ namespace Vulkan
         resetUpscalerHistory_ = true;
     }
 
+    Rendering::FRendererChoiceCapabilities VulkanBaseRenderer::RendererChoiceCapabilities() const
+    {
+        return {
+            .supportsRayTracing = caps_.supportRayTracing,
+            .hasFullAmbientCubeBudget = caps_.fullAmbientCubeBudget,
+            .hasFullBindlessBudget = HasFullBindlessBudget(),
+        };
+    }
+
     void VulkanBaseRenderer::OnHdrShUpdated()
     {
         if (renderViewServices_)
@@ -578,6 +880,141 @@ namespace Vulkan
     uint32_t VulkanBaseRenderer::TemporalJitterFrameCount() const
     {
         return upscaler_ ? upscaler_->JitterPhaseCount() : 0;
+    }
+
+    bool VulkanBaseRenderer::IsCheckerboardRenderingActive() const
+    {
+        // Checkerboard is a shading *rate*, and a rate is only safe once something else guarantees
+        // dense surface data. That something is Core.SurfaceBuild, so checkerboard requires the
+        // Primary Surface path: renderers without a Build pass (PathTracing, PathTracingLite,
+        // VoxelTracing) simply shade at full rate.
+        return IsSurfacePathActive() &&
+            frameSettings_.userSettings.CheckerboardRendering &&
+            temporalSuperResolutionActive_ && ActiveViewBankBase() == 0u &&
+            !frameSettings_.progressiveRendering &&
+            !frameSettings_.offlineProgressivePathTracing &&
+            (!GOption || !GOption->ReferenceMode);
+    }
+
+    bool VulkanBaseRenderer::IsReferenceViewAccumulationActive() const
+    {
+        return GOption != nullptr && GOption->ReferenceMode && !ActiveRenderView().IsPrimary();
+    }
+
+    uint32_t VulkanBaseRenderer::ProgressiveSampleCountForActiveView() const
+    {
+        return IsReferenceViewAccumulationActive()
+            ? ActiveRenderView().State().progressiveFrame
+            : frameSettings_.progressiveAccumulatedFrames;
+    }
+
+    uint32_t VulkanBaseRenderer::CheckerboardDispatchWidth(
+        const uint32_t width, const Assets::GPUScene& gpuScene) const
+    {
+        return PipelineCommon::GetCheckerboardDispatchWidth(
+            width, (gpuScene.CustomData2 & PipelineCommon::checkerboardShadingFlag) != 0u);
+    }
+
+    void VulkanBaseRenderer::ConfigureCheckerboardShading(
+        Assets::GPUScene& gpuScene, const bool allowed) const
+    {
+        gpuScene.CustomData2 &= ~PipelineCommon::checkerboardShadingFlag;
+        if (allowed && IsCheckerboardRenderingActive())
+        {
+            gpuScene.CustomData2 |= PipelineCommon::checkerboardShadingFlag;
+        }
+    }
+
+    bool VulkanBaseRenderer::IsSurfacePathActive() const
+    {
+        return GetRendererContract(logicRenderers_.current).usesPrimarySurface;
+    }
+
+    bool VulkanBaseRenderer::IsSparseCheckerboardLightingActive() const
+    {
+        if (!IsCheckerboardRenderingActive())
+        {
+            return false;
+        }
+        // Only Native TAAU can consume a sparse image; every external upscaler contract requires a
+        // dense scene color, depth and motion triple.
+        if (activeUpscalerType_ != Rendering::Upscaler::EUpscalerType::NativeTAAU)
+        {
+            return false;
+        }
+        // A module pass that paints the scene color after the primary view writes every pixel and
+        // would turn the unshaded parity into plausible-looking garbage the upscaler cannot detect.
+        return !HasScenePassAfterPrimaryView();
+    }
+
+    bool VulkanBaseRenderer::HasScenePassAfterPrimaryView() const
+    {
+        const uint32_t availableOutputs =
+            static_cast<uint32_t>(GetRendererContract(logicRenderers_.current).outputs);
+        for (const auto& externalPass : overlay_.externalPasses)
+        {
+            const FExternalPassContract contract = externalPass->Contract();
+            if (externalPass->PaintsWholeSceneThisFrame() &&
+                contract.insertionPoint == EExternalPassInsertionPoint::AfterPrimaryView &&
+                contract.scope == EExternalPassScope::PrimaryView &&
+                AreExternalPassInputsAvailable(contract, availableOutputs))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void VulkanBaseRenderer::ResolveCheckerboardShading(
+        VkCommandBuffer commandBuffer,
+        const Assets::GPUScene& gpuScene,
+        const PipelineCommon::ECheckerboardResolveSet resolveSet)
+    {
+        if ((gpuScene.CustomData2 & PipelineCommon::checkerboardShadingFlag) == 0u ||
+            !overlay_.checkerboardResolvePipeline)
+        {
+            return;
+        }
+        // Sparse mode is exactly "do not run this pass": Native TAAU consumes the shaded parity and
+        // fills the rest from history, which is strictly better than a horizontal neighbour copy.
+        if (IsSparseCheckerboardLightingActive())
+        {
+            return;
+        }
+
+        constexpr auto compute = PipelineCommon::ERenderStage::Compute;
+        constexpr auto readWrite = PipelineCommon::EResourceAccess::ShaderRead |
+            PipelineCommon::EResourceAccess::ShaderWrite;
+        switch (resolveSet)
+        {
+        case PipelineCommon::ECheckerboardResolveSet::Tracing:
+            TransitionActiveViewImages(commandBuffer, {
+                {Assets::Bindless::RT_SINGLE_DIFFUSE, compute, readWrite},
+                {Assets::Bindless::RT_SINGLE_SPECULAR, compute, readWrite},
+                {Assets::Bindless::RT_DIFFUSE_HITDIST, compute, readWrite},
+                {Assets::Bindless::RT_SPECULAR_HITDIST, compute, readWrite},
+                // RT_ALBEDO is the compose demodulation guide, and Core overrides it to white at
+                // sky and emissive pixels, so it is a lighting channel here rather than a surface
+                // one. Every other surface RT stays out of the resolve.
+                {Assets::Bindless::RT_ALBEDO, compute, readWrite},
+            }, "checkerboard tracing lighting resolve");
+            break;
+        case PipelineCommon::ECheckerboardResolveSet::SoftwareModernNoAmbient:
+            TransitionActiveViewImages(commandBuffer, {
+                {Assets::Bindless::RT_SINGLE_DIFFUSE, compute, readWrite},
+                {Assets::Bindless::RT_AMBIENT, compute, readWrite},
+            }, "checkerboard software modern no ambient lighting resolve");
+            break;
+        }
+
+        SCOPED_GPU_TIMER("checkerboard resolve");
+        Assets::GPUScene resolveScene = gpuScene;
+        resolveScene.CustomData1 = static_cast<uint32_t>(resolveSet);
+        overlay_.checkerboardResolvePipeline->BindPipeline(commandBuffer, resolveScene);
+        const VkExtent2D extent = ActiveViewRenderExtent();
+        vkCmdDispatch(commandBuffer,
+                      Utilities::Math::GetSafeDispatchCount((extent.width + 1u) / 2u, 8),
+                      Utilities::Math::GetSafeDispatchCount(extent.height, 8), 1);
     }
 
     Assets::UniformBufferObject VulkanBaseRenderer::GetUniformBufferObject(
@@ -691,6 +1128,7 @@ namespace Vulkan
 
         VkPhysicalDeviceProperties deviceProperties = {};
         vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
+
         auto enableDeviceExtensionIfAvailable = [&](const char* extensionName)
         {
             if (HasDeviceExtension(physicalDevice, extensionName) &&
@@ -705,7 +1143,9 @@ namespace Vulkan
         enableDeviceExtensionIfAvailable(VK_KHR_16BIT_STORAGE_EXTENSION_NAME);
         enableDeviceExtensionIfAvailable(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
         enableDeviceExtensionIfAvailable(kPortabilitySubsetExtensionName);
-        if (deviceProperties.apiVersion < VK_API_VERSION_1_2 &&
+        // Only the full renderer needs addresses; the compatibility profile binds its buffers
+        // through descriptors precisely because devices like the A12X cannot provide them.
+        if (HasFullBindlessBudget() && deviceProperties.apiVersion < VK_API_VERSION_1_2 &&
             !HasDeviceExtension(physicalDevice, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
         {
             Throw(std::runtime_error("VK_KHR_buffer_device_address is required"));
@@ -749,6 +1189,7 @@ namespace Vulkan
         indexingFeatures.pNext = nextDeviceFeatures;
         indexingFeatures.runtimeDescriptorArray = supportedIndexingFeatures.runtimeDescriptorArray;
         indexingFeatures.shaderSampledImageArrayNonUniformIndexing = supportedIndexingFeatures.shaderSampledImageArrayNonUniformIndexing;
+        indexingFeatures.shaderStorageImageArrayNonUniformIndexing = supportedIndexingFeatures.shaderStorageImageArrayNonUniformIndexing;
         indexingFeatures.descriptorBindingPartiallyBound = supportedIndexingFeatures.descriptorBindingPartiallyBound;
         indexingFeatures.descriptorBindingSampledImageUpdateAfterBind = supportedIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind;
         indexingFeatures.descriptorBindingStorageImageUpdateAfterBind = supportedIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind;
@@ -758,7 +1199,12 @@ namespace Vulkan
         VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {};
         bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
         bufferDeviceAddressFeatures.pNext = &indexingFeatures;
-        bufferDeviceAddressFeatures.bufferDeviceAddress = supportedBufferDeviceAddressFeatures.bufferDeviceAddress;
+        // Left off under the compatibility profile even where the device offers it, so that forcing
+        // the profile on a capable GPU reproduces the constrained device exactly -- buffers lose the
+        // address usage, GetDeviceAddress reports null, and any code that quietly depended on an
+        // address fails here rather than only on the hardware nobody can debug on.
+        bufferDeviceAddressFeatures.bufferDeviceAddress =
+            HasFullBindlessBudget() ? supportedBufferDeviceAddressFeatures.bufferDeviceAddress : VK_FALSE;
 
         VkPhysicalDeviceHostQueryResetFeaturesEXT hostQueryResetFeatures = {};
         hostQueryResetFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES_EXT;
@@ -791,8 +1237,20 @@ namespace Vulkan
                                        &scalarBlockLayoutFeatures));
         ctx_.commandPool.reset(new class CommandPool(*ctx_.device, ctx_.device->GraphicsFamilyIndex(), 0, true));
         ctx_.commandPool2.reset(new class CommandPool(*ctx_.device, ctx_.device->TransferFamilyIndex(), 1, true));
-        ctx_.frameProfiler = std::make_unique<Runtime::FrameProfiler>(
-            std::make_unique<Vulkan::GpuQueryTimer>(*ctx_.device, 200, ctx_.device->DeviceProperties()));
+
+#if GK_TRACY_ENABLED
+        ctx_.tracyGpuProfiler = std::make_unique<Vulkan::TracyGpuProfilerBackend>(
+            ctx_.instance->Handle(), *ctx_.device, *ctx_.commandPool, tracyCalibratedTimestampsAvailable_);
+#endif
+
+#if defined(NDEBUG)
+        constexpr const char* buildConfig = "release";
+#else
+        constexpr const char* buildConfig = "debug";
+#endif
+        GkProfiling::AppInfo(fmt::format(
+            "target=gkNextRenderer;renderer={};gpu={};config={}",
+            GetRendererName(logicRenderers_.current), ctx_.device->DeviceProperties().deviceName, buildConfig));
     }
 
     void VulkanBaseRenderer::OnDeviceSet()
@@ -801,6 +1259,11 @@ namespace Vulkan
         {
             Rendering::Upscaler::FDeviceInfo deviceInfo{};
             deviceInfo.device = ctx_.device->Handle();
+            deviceInfo.pipelineCache = ctx_.device->PipelineCache();
+            deviceInfo.onPipelineCreated = [this](const char* label)
+            {
+                ctx_.device->RecordPipelineCreated(label);
+            };
             deviceInfo.instance = ctx_.instance->Handle();
             deviceInfo.physicalDevice = ctx_.device->PhysicalDevice();
             deviceInfo.computeQueueIndex = 0;
@@ -963,6 +1426,10 @@ namespace Vulkan
             bindless_.images.resize(bankBase + Assets::Bindless::RT_COUNT);
         }
 
+        // Progressive history belongs to the view bank. Rebuilding or reusing a bank must not
+        // carry a previous view's running average into the new view.
+        bindless_.images[bankBase + Assets::Bindless::RT_PROGRESSIVE_SCENE_COLOR].reset();
+
         CREATE_STORAGE_IMAGE(RT_SINGLE_DIFFUSE, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
         CREATE_STORAGE_IMAGE(RT_VISIBILITY_INSTANCE, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
         CREATE_STORAGE_IMAGE(RT_VISIBILITY_TRIANGLE, VK_FORMAT_R16_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
@@ -996,8 +1463,7 @@ namespace Vulkan
 
     void VulkanBaseRenderer::EnsureProgressiveRenderTarget()
     {
-        assert(ActiveViewBankBase() == 0);
-        const uint32_t bindlessIdx = Assets::Bindless::RT_PROGRESSIVE_SCENE_COLOR;
+        const uint32_t bindlessIdx = ActiveViewBankBase() + Assets::Bindless::RT_PROGRESSIVE_SCENE_COLOR;
         if (bindless_.images.size() <= bindlessIdx)
         {
             bindless_.images.resize(bindlessIdx + 1);
@@ -1015,7 +1481,7 @@ namespace Vulkan
                            "RT_PROGRESSIVE_SCENE_COLOR");
     }
 
-    void VulkanBaseRenderer::CreateRenderImages()
+    void VulkanBaseRenderer::CreateScreenShotBuffer()
     {
         const VkDeviceSize bufferSize = static_cast<VkDeviceSize>(frame_.swapChain->Extent().width) *
                                         frame_.swapChain->Extent().height *
@@ -1040,56 +1506,45 @@ namespace Vulkan
         screenshot_.captureReady = false;
         screenshot_.initialized = false;
         screenshot_.captureSubmitSerial = 0;
+    }
 
+    void VulkanBaseRenderer::CreateRenderImages()
+    {
         bindless_.images.resize(Assets::Bindless::RT_COUNT);
 
         // Primary view RT bank (bank 0 == legacy absolute layout).
         CreateRenderTargetBank(0);
         renderViews_->ResetSwapChainResources();
+        renderViews_->InvalidateAllTemporalHistory(EHistoryInvalidationReason::SwapchainRecreated);
         // Non-primary view resources were destroyed with the swapchain; recreate on demand.
         if (renderViewServices_)
         {
             renderViewServices_->OnSwapChainResourcesInvalidated(/*releaseOffscreenSampledOutputs*/ false);
         }
-        for (uint32_t i = 0; i != frame_.swapChain->Images().size(); i++)
+        lateToneMapping_.inputImage.reset();
+        lateToneMapping_.outputImage.reset();
+        lateToneMapping_.inputInitialized = false;
+        lateToneMapping_.outputInitialized = false;
         {
-            if (frame_.swapChain->SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT))
-            {
-                ctx_.globalTexturePool->BindStorageTexture(
-                    Assets::Bindless::RT_SWAPCHAIN0 + i, *frame_.swapChain->ImageViews()[i]);
-            }
-            else
-            {
-                ctx_.globalTexturePool->BindStorageTexture(
-                    Assets::Bindless::RT_SWAPCHAIN0 + i,
-                    GetViewStorageImage(Assets::Bindless::RT_SCENE_COLOR)->GetImageView());
-            }
-        }
+            lateToneMapping_.inputImage = std::make_unique<RenderImage>(
+                Device(), frame_.swapChain->OutputExtent(), VK_FORMAT_R16G16B16A16_SFLOAT,
+                VK_IMAGE_TILING_OPTIMAL,
+                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                false, "Late tone-mapping input");
+            ctx_.globalTexturePool->BindStorageTexture(
+                Assets::Bindless::RT_TONEMAP_INPUT, lateToneMapping_.inputImage->GetImageView());
 
-        lateToneMapping_.inputInitialized.clear();
-        {
-            const size_t imageCount = frame_.swapChain->Images().size();
-            if (Assets::Bindless::RT_TONEMAP_INPUT0 + imageCount > Assets::Bindless::RT_REMOTE_ENCODE0_Y)
-            {
-                Throw(std::runtime_error("Late tone-mapping bindless slot range exhausted"));
-            }
-            lateToneMapping_.inputInitialized.assign(imageCount, false);
-            for (size_t i = 0; i < imageCount; ++i)
-            {
-                const std::string debugName = fmt::format("Late tone-mapping input {}", i);
-                bindless_.images[Assets::Bindless::RT_TONEMAP_INPUT0 + i].reset(new RenderImage(
-                    Device(),
-                    frame_.swapChain->OutputExtent(),
-                    VK_FORMAT_R16G16B16A16_SFLOAT,
-                    VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
-                        VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-                    false,
-                    debugName.c_str()));
-                ctx_.globalTexturePool->BindStorageTexture(
-                    Assets::Bindless::RT_TONEMAP_INPUT0 + static_cast<uint32_t>(i),
-                    bindless_.images[Assets::Bindless::RT_TONEMAP_INPUT0 + i]->GetImageView());
-            }
+            // Unlike the input (which the upscaler and post filter write at view-local pixels),
+            // the tone-mapping output is addressed in swapchain pixels: every composed view writes
+            // it at its own output offset and blits that same rect out. It therefore has to cover
+            // the whole image, not just the rect the primary view happens to present into.
+            lateToneMapping_.outputImage = std::make_unique<RenderImage>(
+                Device(), frame_.swapChain->Extent(), VK_FORMAT_R16G16B16A16_SFLOAT,
+                VK_IMAGE_TILING_OPTIMAL,
+                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                false, "Late tone-mapping output");
+            ctx_.globalTexturePool->BindStorageTexture(
+                Assets::Bindless::RT_TONEMAP_OUTPUT, lateToneMapping_.outputImage->GetImageView());
         }
 
         frameGeneration_.hudlessImages.clear();
@@ -1102,9 +1557,11 @@ namespace Vulkan
             for (size_t i = 0; i < frame_.swapChain->Images().size(); ++i)
             {
                 const std::string debugName = fmt::format("Frame Generation HUD-less {}", i);
+                // HUD-less color is a copy of the presented swapchain image, so it is sized in
+                // swapchain pixels rather than by the rect the scene presents into.
                 frameGeneration_.hudlessImages.emplace_back(std::make_unique<RenderImage>(
                     Device(),
-                    frame_.swapChain->OutputExtent(),
+                    frame_.swapChain->Extent(),
                     frame_.swapChain->Format(),
                     VK_IMAGE_TILING_OPTIMAL,
                     VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -1113,58 +1570,35 @@ namespace Vulkan
             }
         }
 
-        temporalPostFilter_.pingImages.clear();
-        temporalPostFilter_.pongImages.clear();
-        temporalPostFilter_.pingInitialized.clear();
-        temporalPostFilter_.pongInitialized.clear();
+        temporalPostFilter_.pingImage.reset();
+        temporalPostFilter_.pongImage.reset();
+        temporalPostFilter_.pingInitialized = false;
+        temporalPostFilter_.pongInitialized = false;
         const bool temporalPostFilterActive = temporalSuperResolutionActive_ &&
             Rendering::Upscaler::GetUpscalerTypeInfo(
                 static_cast<uint32_t>(activeUpscalerType_)).supportsTemporalPostFilter;
         if (temporalPostFilterActive)
         {
-            const size_t imageCount = frame_.swapChain->Images().size();
-            if (Assets::Bindless::RT_TEMPORAL_POST_PONG0 + imageCount > Assets::Bindless::RT_REMOTE_ENCODE0_Y)
-            {
-                Throw(std::runtime_error("Temporal post-filter bindless slot range exhausted"));
-            }
-            temporalPostFilter_.pingImages.reserve(imageCount);
-            temporalPostFilter_.pongImages.reserve(imageCount);
-            temporalPostFilter_.pingInitialized.assign(imageCount, false);
-            temporalPostFilter_.pongInitialized.assign(imageCount, false);
-            for (size_t i = 0; i < imageCount; ++i)
-            {
-                const std::string pingDebugName = fmt::format("Temporal post-filter ping {}", i);
-                temporalPostFilter_.pingImages.emplace_back(std::make_unique<RenderImage>(
-                    Device(),
-                    frame_.swapChain->OutputExtent(),
-                    VK_FORMAT_R16G16B16A16_SFLOAT,
-                    VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_STORAGE_BIT,
-                    false,
-                    pingDebugName.c_str()));
-                ctx_.globalTexturePool->BindStorageTexture(
-                    Assets::Bindless::RT_TEMPORAL_POST_PING0 + static_cast<uint32_t>(i),
-                    temporalPostFilter_.pingImages.back()->GetImageView());
+            temporalPostFilter_.pingImage = std::make_unique<RenderImage>(
+                Device(), frame_.swapChain->OutputExtent(), VK_FORMAT_R16G16B16A16_SFLOAT,
+                VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "Temporal post-filter ping");
+            ctx_.globalTexturePool->BindStorageTexture(
+                Assets::Bindless::RT_TEMPORAL_POST_PING, temporalPostFilter_.pingImage->GetImageView());
 
-                const std::string pongDebugName = fmt::format("Temporal post-filter pong {}", i);
-                temporalPostFilter_.pongImages.emplace_back(std::make_unique<RenderImage>(
-                    Device(),
-                    frame_.swapChain->OutputExtent(),
-                    VK_FORMAT_R16G16B16A16_SFLOAT,
-                    VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_STORAGE_BIT,
-                    false,
-                    pongDebugName.c_str()));
-                ctx_.globalTexturePool->BindStorageTexture(
-                    Assets::Bindless::RT_TEMPORAL_POST_PONG0 + static_cast<uint32_t>(i),
-                    temporalPostFilter_.pongImages.back()->GetImageView());
-            }
+            temporalPostFilter_.pongImage = std::make_unique<RenderImage>(
+                Device(), frame_.swapChain->OutputExtent(), VK_FORMAT_R16G16B16A16_SFLOAT,
+                VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, false, "Temporal post-filter pong");
+            ctx_.globalTexturePool->BindStorageTexture(
+                Assets::Bindless::RT_TEMPORAL_POST_PONG, temporalPostFilter_.pongImage->GetImageView());
         }
     }
 
     void VulkanBaseRenderer::CreateSceneSwapChainResources()
     {
-        atmosphere_->CreateSwapChainPipelines();
+        if (atmosphere_)
+        {
+            atmosphere_->CreateSwapChainPipelines();
+        }
         overlay_.wireframePipeline.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframeFrameBuffers.reserve(frame_.swapChain->ImageViews().size());
@@ -1188,6 +1622,8 @@ namespace Vulkan
         overlay_.toneMappingPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(
             SwapChain(), "assets/shaders/Process.TonemapAfterUpscaler.comp.slang.spv", 52));
         overlay_.bufferClearPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*frame_.swapChain, "assets/shaders/Util.BufferClear.comp.slang.spv", 4));
+        overlay_.checkerboardResolvePipeline.reset(new PipelineCommon::ZeroBindPipeline(
+            *frame_.swapChain, "assets/shaders/Process.CheckerboardResolve.comp.slang.spv", GetScene()));
         // Shared swap-chain resources must cover every registered renderer because
         // switching logic renderers does not recreate the swap chain.
         if (RegisteredRendererRequirements().requestAmbientCube)
@@ -1248,14 +1684,39 @@ namespace Vulkan
         }
     }
 
+    void VulkanBaseRenderer::CreateDeferredSceneSwapChainResources()
+    {
+        if (!frame_.sceneChainInitializationPending || !frame_.swapChain)
+        {
+            return;
+        }
+
+        // Activating a native upscaler can itself create compute pipelines. Do it here rather
+        // than while constructing the first presentable UI frame.
+        if (upscaler_)
+        {
+            upscaler_->SetActiveType(temporalSuperResolutionActive_
+                ? activeUpscalerType_
+                : Rendering::Upscaler::EUpscalerType::None);
+        }
+
+        CreateRenderImages();
+        renderViews_->CreateSwapChain(SwapChain());
+        CreateSceneSwapChainResources();
+        frame_.sceneChainCreated = true;
+        frame_.sceneChainInitializationPending = false;
+        deferSceneChainForStartup_ = false;
+    }
+
     void VulkanBaseRenderer::CreateSwapChain()
     {
+        const auto createSwapChainStart = std::chrono::steady_clock::now();
+
         // SwapChain
         auto* engine = NextEngine::GetInstance();
         frameSettings_.userSettings = engine->GetUserSettings();
         frameSettings_.progressiveRendering = engine->IsProgressiveRendering();
         frameSettings_.offlineProgressivePathTracing = engine->IsOfflineProgressivePathTracing();
-        frameSettings_.effectiveSharc = engine->IsEffectiveSharcEnabled();
         frameSettings_.progressiveAccumulatedFrames = engine->GetProgressiveRenderAccumulatedFrames();
         frameSettings_.progressiveTargetFrames = engine->GetProgressiveRenderTargetFrames();
         const auto& settings = frameSettings_.userSettings;
@@ -1300,7 +1761,14 @@ namespace Vulkan
         frame_.currentImageIndex = 0;
         frame_.currentFence = nullptr;
         frame_.currentFenceSerial = 0;
-        VkExtent2D renderExtent = frame_.swapChain->Extent();
+
+        // Everything below sizes the screen-space chain against the presented scene rect, which is
+        // the whole image unless a host (the editor) reserves part of the window for its panels.
+        const VkRect2D sceneViewport = ResolveSceneViewportRect();
+        sceneViewport_.built = sceneViewport.extent;
+        sceneViewport_.lastResolved = sceneViewport;
+        sceneViewport_.unsettledFrames = 0;
+        VkExtent2D renderExtent = sceneViewport.extent;
         activeUpscalerType_ = Rendering::Upscaler::EUpscalerType::None;
         temporalSuperResolutionActive_ = false;
         effectiveSuperResolutionMode_ =
@@ -1309,7 +1777,7 @@ namespace Vulkan
         {
             const auto resolvedMode = Rendering::Upscaler::ResolveUpscaleMode(
                 settings.SuperResolution,
-                frame_.swapChain->Extent());
+                sceneViewport.extent);
             effectiveSuperResolutionMode_ = resolvedMode.mode;
 
             const FRendererContract& contract = GetRendererContract(logicRenderers_.current);
@@ -1330,11 +1798,15 @@ namespace Vulkan
 
             if (temporalSuperResolutionActive_)
             {
+                upscalerFallbackReported_ = false;
                 activeUpscalerType_ = requestedUpscalerType;
-                upscaler_->SetActiveType(activeUpscalerType_);
+                if (!deferSceneChainForStartup_)
+                {
+                    upscaler_->SetActiveType(activeUpscalerType_);
+                }
                 const auto optimal = upscaler_->GetOptimalRenderSettings(
                     effectiveSuperResolutionMode_,
-                    frame_.swapChain->Extent(),
+                    sceneViewport.extent,
                     true,
                     frame_.swapChain->IsHDR(),
                     activeUpscalerType_);
@@ -1343,23 +1815,41 @@ namespace Vulkan
                             typeInfo.name,
                             GetRendererName(logicRenderers_.current),
                             renderExtent.width, renderExtent.height,
-                            frame_.swapChain->Extent().width,
-                            frame_.swapChain->Extent().height);
+                            sceneViewport.extent.width,
+                            sceneViewport.extent.height);
             }
-            else if (requestedUpscalerType != Rendering::Upscaler::EUpscalerType::None)
+            else if (requestedUpscalerType != Rendering::Upscaler::EUpscalerType::None &&
+                     (!upscalerFallbackReported_ ||
+                      upscalerFallbackReportedType_ != requestedUpscalerType ||
+                      upscalerFallbackReportedRenderer_ != logicRenderers_.current))
             {
-                SPDLOG_WARN("{} is unavailable for {}; using native rendering",
-                            typeInfo.name, GetRendererName(logicRenderers_.current));
+                upscalerFallbackReported_ = true;
+                upscalerFallbackReportedType_ = requestedUpscalerType;
+                upscalerFallbackReportedRenderer_ = logicRenderers_.current;
+                // A contract without the required outputs is a design fact about the renderer, not a
+                // fault; anything else means the upscaler was expected to run and did not.
+                if (!hasRequiredOutputs || !supportsRequestedPostProcess)
+                {
+                    SPDLOG_INFO("{} does not apply to {}: the renderer's contract lacks the required "
+                                "outputs or post-process stage; using native rendering",
+                                typeInfo.name, GetRendererName(logicRenderers_.current));
+                }
+                else
+                {
+                    SPDLOG_WARN("{} is unavailable for {}; using native rendering",
+                                typeInfo.name, GetRendererName(logicRenderers_.current));
+                }
             }
         }
 
-        if (upscaler_ && !temporalSuperResolutionActive_)
+        if (upscaler_ && !temporalSuperResolutionActive_ && !deferSceneChainForStartup_)
         {
             upscaler_->SetActiveType(Rendering::Upscaler::EUpscalerType::None);
         }
 
         frame_.swapChain->UpdateRenderViewport(0, 0, renderExtent.width, renderExtent.height);
-        frame_.swapChain->UpdateOutputViewport( 0, 0, frame_.swapChain->Extent().width, frame_.swapChain->Extent().height);
+        frame_.swapChain->UpdateOutputViewport(sceneViewport.offset.x, sceneViewport.offset.y,
+                                               sceneViewport.extent.width, sceneViewport.extent.height);
 
         // Primary RenderView mirrors the swapchain's render rect (full-window, bank 0).
         {
@@ -1394,21 +1884,42 @@ namespace Vulkan
         frame_.queuedSignalSemaphores.clear();
         frame_.queuedSignalValues.clear();
 
-        // Shared render images.
-        CreateRenderImages();
-        renderViews_->CreateSwapChain(SwapChain());
-        CreateSceneSwapChainResources();
+        // Screenshots copy from the presented swapchain image, so they work under any renderer and
+        // the staging buffer is created before the scene-only resources below.
+        CreateScreenShotBuffer();
+
+        // Shared render images. A renderer without outputs presents into the swapchain image
+        // directly, so the whole screen-space chain -- RT banks, visibility, the shared compute
+        // pipelines -- is neither created nor needed. On a compatibility device it could not be
+        // created at all: every one of those pipelines binds the full bindless set.
+        //
+        // The one place the policy is consulted; from here on the frame path reads the flag.
+        frame_.sceneChainInitializationPending =
+            deferSceneChainForStartup_ && RendererDeclaresOutputs();
+        frame_.sceneChainCreated = RendererDeclaresOutputs() && !frame_.sceneChainInitializationPending;
+        if (frame_.sceneChainCreated)
+        {
+            CreateRenderImages();
+            renderViews_->CreateSwapChain(SwapChain());
+            CreateSceneSwapChainResources();
+        }
 
         // Delegate
         if (delegates_.createSwapChain)
         {
             delegates_.createSwapChain();
         }
+
+        SPDLOG_INFO("CreateSwapChain took {:.2f}ms",
+                    std::chrono::duration<float, std::milli>(
+                        std::chrono::steady_clock::now() - createSwapChainStart).count());
     }
 
     void VulkanBaseRenderer::RefreshSceneSwapChainResources()
     {
-        if (!frame_.swapChain)
+        // A renderer without outputs never built the screen-space chain, so a scene swap has
+        // nothing to rebuild here.
+        if (!frame_.swapChain || !frame_.sceneChainCreated)
         {
             return;
         }
@@ -1430,6 +1941,7 @@ namespace Vulkan
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframePipeline.reset();
         overlay_.bufferClearPipeline.reset();
+        overlay_.checkerboardResolvePipeline.reset();
         ambient_.softBake.reset();
         ambient_.clearCache.reset();
         if (rt_)
@@ -1455,12 +1967,18 @@ namespace Vulkan
         {
             return;
         }
+
+        // No compatibility branch: every step below is a reset/clear of something that a renderer
+        // without outputs simply never created, and the two subsystem calls are null-guarded.
         renderViews_->ClearSchedule();
         visibilityStateTracker_.Reset();
         swapchainStateTracker_.Reset();
         auxiliaryImageStateTracker_.Reset();
         shadowCameraFamilyCache_ = {};
-        atmosphere_->DestroySwapChainPipelines();
+        if (atmosphere_)
+        {
+            atmosphere_->DestroySwapChainPipelines();
+        }
 
         if (upscaler_)
         {
@@ -1503,15 +2021,19 @@ namespace Vulkan
         screenshot_.initialized = false;
         screenshot_.captureSubmitSerial = 0;
         frameGeneration_.hudlessImages.clear();
-        temporalPostFilter_.pingImages.clear();
-        temporalPostFilter_.pongImages.clear();
-        temporalPostFilter_.pingInitialized.clear();
-        temporalPostFilter_.pongInitialized.clear();
-        lateToneMapping_.inputInitialized.clear();
+        temporalPostFilter_.pingImage.reset();
+        temporalPostFilter_.pongImage.reset();
+        temporalPostFilter_.pingInitialized = false;
+        temporalPostFilter_.pongInitialized = false;
+        lateToneMapping_.inputImage.reset();
+        lateToneMapping_.outputImage.reset();
+        lateToneMapping_.inputInitialized = false;
+        lateToneMapping_.outputInitialized = false;
         frame_.commandBuffers.reset();
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframePipeline.reset();
         overlay_.bufferClearPipeline.reset();
+        overlay_.checkerboardResolvePipeline.reset();
         frame_.inFlightFenceSubmitSerials.clear();
         ambient_.softBake.reset();
         ambient_.clearCache.reset();
@@ -1537,6 +2059,8 @@ namespace Vulkan
         frame_.queuedSignalValues.clear();
         frame_.depthBuffer.reset();
         frame_.swapChain.reset();
+        frame_.sceneChainCreated = false;
+        frame_.sceneChainInitializationPending = false;
 
         frame_.currentFence = nullptr;
     }
@@ -1554,10 +2078,96 @@ namespace Vulkan
 
         ctx_.device->WaitIdle();
         DeleteSwapChain();
+        if (surfaceLost_)
+        {
+            SPDLOG_INFO("Recreating Vulkan surface after surface loss");
+            ctx_.surface->Recreate();
+            surfaceLost_ = false;
+        }
         CreateSwapChain();
-        atmosphere_->SyncRuntimeResources(true);
+        if (atmosphere_)
+        {
+            atmosphere_->SyncRuntimeResources(true);
+        }
         resetUpscalerHistory_ = true;
         NextEngine::GetInstance()->ResetProgressiveRenderingAccumulation();
+    }
+
+    void VulkanBaseRenderer::SetSceneViewportRect(const VkRect2D rect)
+    {
+        sceneViewport_.requested = rect;
+    }
+
+    void VulkanBaseRenderer::ClearSceneViewportRect()
+    {
+        if (!sceneViewport_.requested.has_value())
+        {
+            return;
+        }
+        sceneViewport_.requested.reset();
+        if (frame_.swapChain &&
+            (sceneViewport_.built.width != frame_.swapChain->Extent().width ||
+             sceneViewport_.built.height != frame_.swapChain->Extent().height))
+        {
+            RequestRecreateSwapChain();
+        }
+    }
+
+    VkRect2D VulkanBaseRenderer::ResolveSceneViewportRect() const
+    {
+        const VkExtent2D full = frame_.swapChain->Extent();
+        if (!sceneViewport_.requested.has_value() || full.width == 0 || full.height == 0)
+        {
+            return VkRect2D{{0, 0}, full};
+        }
+
+        VkRect2D rect = *sceneViewport_.requested;
+        rect.offset.x = std::clamp(rect.offset.x, 0, static_cast<int32_t>(full.width) - 1);
+        rect.offset.y = std::clamp(rect.offset.y, 0, static_cast<int32_t>(full.height) - 1);
+        rect.extent.width = std::clamp(
+            rect.extent.width, 1u, full.width - static_cast<uint32_t>(rect.offset.x));
+        rect.extent.height = std::clamp(
+            rect.extent.height, 1u, full.height - static_cast<uint32_t>(rect.offset.y));
+        return rect;
+    }
+
+    void VulkanBaseRenderer::UpdateSceneViewportRect()
+    {
+        if (!sceneViewport_.requested.has_value() || !frame_.swapChain)
+        {
+            return;
+        }
+
+        const VkRect2D resolved = ResolveSceneViewportRect();
+        const bool sizeMatchesResources =
+            resolved.extent.width == sceneViewport_.built.width &&
+            resolved.extent.height == sceneViewport_.built.height;
+
+        // The render targets, the late tone-mapping images and the upscaler are all sized for
+        // sceneViewport_.built. Until a rebuild lands, present no more than that so a viewport that
+        // just grew cannot make a pass store past its allocation; a viewport that shrank simply
+        // resolves down, exactly as it did before this override existed.
+        frame_.swapChain->UpdateOutputViewport(
+            resolved.offset.x,
+            resolved.offset.y,
+            std::min(resolved.extent.width, sceneViewport_.built.width),
+            std::min(resolved.extent.height, sceneViewport_.built.height));
+
+        if (sizeMatchesResources)
+        {
+            sceneViewport_.lastResolved = resolved;
+            sceneViewport_.unsettledFrames = 0;
+            return;
+        }
+
+        const bool settled =
+            resolved.extent.width == sceneViewport_.lastResolved.extent.width &&
+            resolved.extent.height == sceneViewport_.lastResolved.extent.height;
+        sceneViewport_.lastResolved = resolved;
+        if (settled || ++sceneViewport_.unsettledFrames >= kSceneViewportResizeDeferFrames)
+        {
+            RequestRecreateSwapChain();
+        }
     }
 
     void VulkanBaseRenderer::ReloadShaders()
@@ -1579,7 +2189,17 @@ namespace Vulkan
     // Camera-independent, runs once per scene per frame (shared across all views).
     void VulkanBaseRenderer::BeginSceneFrame(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        atmosphere_->BeginSceneFrame(commandBuffer, imageIndex);
+        // Each of these dispatches through a shared pipeline that CreateSceneSwapChainResources
+        // built; a renderer without outputs never got them.
+        if (!frame_.sceneChainCreated || pipelineWarmup_.active)
+        {
+            return;
+        }
+
+        if (atmosphere_)
+        {
+            atmosphere_->BeginSceneFrame(commandBuffer, imageIndex);
+        }
         rayTracingSceneBackend_->PrepareSceneFrame(commandBuffer, imageIndex);
         ambientCubeBaker_->PrepareSceneFrame(commandBuffer, imageIndex);
         lightGridBuilder_->PrepareSceneFrame(commandBuffer, imageIndex);
@@ -1611,9 +2231,21 @@ namespace Vulkan
         }
 
         PreRenderPerView(commandBuffer, imageIndex, clearSwapchain, contract);
-        atmosphere_->PrepareView(commandBuffer, imageIndex, view.IsPrimary(), contract);
+        if (atmosphere_)
+        {
+            atmosphere_->PrepareView(commandBuffer, imageIndex, view.IsPrimary(), contract);
+        }
         logicRenderer.Render(commandBuffer, imageIndex);
-        atmosphere_->ApplyToView(commandBuffer, imageIndex, view.IsPrimary(), contract);
+        if (IsReferenceViewAccumulationActive())
+        {
+            view.State().progressiveFrame = std::min(
+                view.State().progressiveFrame + 1,
+                frameSettings_.progressiveTargetFrames);
+        }
+        if (atmosphere_)
+        {
+            atmosphere_->ApplyToView(commandBuffer, imageIndex, view.IsPrimary(), contract);
+        }
         if (view.CopyObjectIdHistory() && HasAny(contract.history, EHistoryChannel::ObjectId))
         {
             CopyObjectIdHistory(commandBuffer);
@@ -1723,28 +2355,36 @@ namespace Vulkan
             return;
         }
 
+        UpdateSceneViewportRect();
+
         if (requestRecreateSwapChain_)
         {
             RecreateSwapChain();
             requestRecreateSwapChain_ = false;
             return;
         }
-        
+
         const auto noTimeout = std::numeric_limits<uint64_t>::max();
         auto* engine = NextEngine::GetInstance();
         frameSettings_.userSettings = engine->GetUserSettings();
         frameSettings_.progressiveRendering = engine->IsProgressiveRendering();
         frameSettings_.offlineProgressivePathTracing = engine->IsOfflineProgressivePathTracing();
-        frameSettings_.effectiveSharc = engine->IsEffectiveSharcEnabled();
         frameSettings_.progressiveAccumulatedFrames = engine->GetProgressiveRenderAccumulatedFrames();
         frameSettings_.progressiveTargetFrames = engine->GetProgressiveRenderTargetFrames();
         const auto& settings = frameSettings_.userSettings;
-        atmosphere_->SyncRuntimeResources();
+        const bool loading = engine->GetEngineStatus() == NextRenderer::EApplicationStatus::Loading;
+        if (atmosphere_)
+        {
+            atmosphere_->SyncRuntimeResources();
+        }
         const bool frameGenerationEnabled = !frameSettings_.progressiveRendering && settings.FrameGeneration &&
             SupportsFrameGeneration(activeUpscalerType_) && temporalSuperResolutionActive_ &&
-            engine->GetEngineStatus() != NextRenderer::EApplicationStatus::Loading;
+            !loading;
 
-        frame_.streamlineFrameToken = upscaler_
+        // Loading frames only clear the swapchain and render the warm-up overlay. Do not enter
+        // the upscaler frame path here: Streamline token/Reflex/marker calls add startup latency
+        // while no DLSS or frame-generation work can be recorded yet.
+        frame_.streamlineFrameToken = upscaler_ && !loading
             ? upscaler_->BeginFrame(static_cast<uint32_t>(frame_.frameCount),
                                     frameGenerationEnabled,
                                     frameGenerationEnabled ? settings.FrameGenerationFrameLimitFps : 0)
@@ -1768,11 +2408,6 @@ namespace Vulkan
         {
             upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::SimulationEnd,
                                  frame_.streamlineFrameToken);
-        }
-
-        {
-            SCOPED_CPU_TIMER("hwquery");
-            ctx_.frameProfiler->EndGpuFrame((*frame_.commandBuffers)[frame_.currentFrame]);
         }
 
         VkSemaphore imageAvailableSemaphore = VK_NULL_HANDLE;
@@ -1815,7 +2450,9 @@ namespace Vulkan
         }
 
         const auto commandBuffer = frame_.commandBuffers->Begin(frame_.currentFrame);
-        ctx_.frameProfiler->BeginGpuFrame(commandBuffer);
+#if GK_TRACY_ENABLED
+        GkProfiling::BeginGpuFrame(commandBuffer);
+#endif
 
         {
             SCOPED_GPU_TIMER("[gpu]");
@@ -2042,7 +2679,16 @@ namespace Vulkan
             return renderer->second.get();
         }
 
-        auto logicRenderer = GetRendererDescriptor(type).factory(*this);
+        const size_t factoryIndex = static_cast<size_t>(type);
+        const LogicRendererFactory factory = factoryIndex < RendererFactories.size()
+            ? RendererFactories[factoryIndex]
+            : nullptr;
+        if (factory == nullptr)
+        {
+            Throw(std::runtime_error(fmt::format(
+                "logic renderer implementation '{}' is not installed", GetRendererName(type))));
+        }
+        auto logicRenderer = factory(*this);
         LogicRendererBase* result = logicRenderer.get();
         logicRenderers_.renderers[type] = std::move(logicRenderer);
         if (ctx_.device)
@@ -2100,6 +2746,8 @@ namespace Vulkan
 
     void VulkanBaseRenderer::SwitchLogicRenderer(ERendererType type)
     {
+        // No compatibility guard: a constrained device registers only ERT_Compatibility, so every
+        // other type falls into the unregistered branch below.
         const ERendererType previousType = logicRenderers_.current;
         LogicRendererBase* logicRenderer = EnsureLogicRenderer(type);
         if (logicRenderer == nullptr)
@@ -2117,6 +2765,7 @@ namespace Vulkan
             SPDLOG_INFO("Renderer history invalidated: {} -> {}, generation {}",
                         GetRendererName(previousType), GetRendererName(type),
                         PrimaryView().State().historyGeneration);
+            GkProfiling::Message(fmt::format("Renderer switched to {}", GetRendererName(type)));
         }
     }
 
@@ -2155,14 +2804,13 @@ namespace Vulkan
     {
         const auto& settings = NextEngine::GetInstance()->GetUserSettings();
         if (!settings.TemporalUpscalerPostFilter || overlay_.temporalPostFilterPipeline == nullptr ||
-            imageIndex >= temporalPostFilter_.pingImages.size() ||
-            imageIndex >= temporalPostFilter_.pingInitialized.size())
+            temporalPostFilter_.pingImage == nullptr)
         {
             return false;
         }
 
-        RenderImage& output = *temporalPostFilter_.pingImages[imageIndex];
-        const bool initialized = temporalPostFilter_.pingInitialized[imageIndex];
+        RenderImage& output = *temporalPostFilter_.pingImage;
+        const bool initialized = temporalPostFilter_.pingInitialized;
         constexpr VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
         ImageMemoryBarrier::Insert(
             commandBuffer,
@@ -2174,7 +2822,7 @@ namespace Vulkan
             VK_ACCESS_SHADER_WRITE_BIT,
             initialized ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_GENERAL);
-        temporalPostFilter_.pingInitialized[imageIndex] = true;
+        temporalPostFilter_.pingInitialized = true;
         inputs.scalingOutputColor = MakeRenderImageResource(
             &output, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_USAGE_STORAGE_BIT);
         return true;
@@ -2186,10 +2834,8 @@ namespace Vulkan
         const Rendering::Upscaler::FFrameInputs& inputs)
     {
         SCOPED_GPU_TIMER("Temporal a-trous filter");
-        if (imageIndex >= temporalPostFilter_.pingImages.size() ||
-            imageIndex >= temporalPostFilter_.pongImages.size() ||
-            imageIndex >= temporalPostFilter_.pingInitialized.size() ||
-            imageIndex >= temporalPostFilter_.pongInitialized.size() ||
+        if (temporalPostFilter_.pingImage == nullptr ||
+            temporalPostFilter_.pongImage == nullptr ||
             overlay_.temporalPostFilterPipeline == nullptr)
         {
             return;
@@ -2232,8 +2878,8 @@ namespace Vulkan
         const bool useAlbedoGuide = HasAny(
             GetRendererContract(logicRenderers_.current).outputs, ERenderOutput::Albedo);
 
-        RenderImage* sourceImage = temporalPostFilter_.pingImages[imageIndex].get();
-        uint32_t sourceIndex = Assets::Bindless::RT_TEMPORAL_POST_PING0 + imageIndex;
+        RenderImage* sourceImage = temporalPostFilter_.pingImage.get();
+        uint32_t sourceIndex = Assets::Bindless::RT_TEMPORAL_POST_PING;
         const uint32_t passCount = std::clamp(settings.TemporalUpscalerPostFilterPasses, 1u, 4u);
         const float totalStrength = std::clamp(settings.TemporalUpscalerPostFilterStrength, 0.0f, 1.0f);
         const float passStrength =
@@ -2253,16 +2899,14 @@ namespace Vulkan
 
             const bool finalPass = pass + 1u == passCount;
             RenderImage* destinationImage = nullptr;
-            uint32_t destinationIndex = Assets::Bindless::RT_SWAPCHAIN0 + imageIndex;
-            int32_t destinationOffsetX = inputs.outputOffset.x;
-            int32_t destinationOffsetY = inputs.outputOffset.y;
+            uint32_t destinationIndex = 0;
+            int32_t destinationOffsetX = 0;
+            int32_t destinationOffsetY = 0;
             if (finalPass)
             {
-                destinationImage = bindless_.images[Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex].get();
-                destinationIndex = Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex;
-                destinationOffsetX = 0;
-                destinationOffsetY = 0;
-                const bool initialized = lateToneMapping_.inputInitialized[imageIndex];
+                destinationImage = lateToneMapping_.inputImage.get();
+                destinationIndex = Assets::Bindless::RT_TONEMAP_INPUT;
+                const bool initialized = lateToneMapping_.inputInitialized;
                 ImageMemoryBarrier::Insert(
                     commandBuffer,
                     initialized ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -2273,20 +2917,20 @@ namespace Vulkan
                     VK_ACCESS_SHADER_WRITE_BIT,
                     initialized ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED,
                     VK_IMAGE_LAYOUT_GENERAL);
-                lateToneMapping_.inputInitialized[imageIndex] = true;
+                lateToneMapping_.inputInitialized = true;
             }
             else
             {
-                const bool sourceIsPing = sourceIndex == Assets::Bindless::RT_TEMPORAL_POST_PING0 + imageIndex;
+                const bool sourceIsPing = sourceIndex == Assets::Bindless::RT_TEMPORAL_POST_PING;
                 destinationImage = sourceIsPing
-                    ? temporalPostFilter_.pongImages[imageIndex].get()
-                    : temporalPostFilter_.pingImages[imageIndex].get();
+                    ? temporalPostFilter_.pongImage.get()
+                    : temporalPostFilter_.pingImage.get();
                 destinationIndex = (sourceIsPing
-                    ? Assets::Bindless::RT_TEMPORAL_POST_PONG0
-                    : Assets::Bindless::RT_TEMPORAL_POST_PING0) + imageIndex;
+                    ? Assets::Bindless::RT_TEMPORAL_POST_PONG
+                    : Assets::Bindless::RT_TEMPORAL_POST_PING);
                 const bool destinationInitialized = sourceIsPing
-                    ? temporalPostFilter_.pongInitialized[imageIndex]
-                    : temporalPostFilter_.pingInitialized[imageIndex];
+                    ? temporalPostFilter_.pongInitialized
+                    : temporalPostFilter_.pingInitialized;
                 ImageMemoryBarrier::Insert(
                     commandBuffer,
                     destinationInitialized ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -2299,14 +2943,12 @@ namespace Vulkan
                     VK_IMAGE_LAYOUT_GENERAL);
                 if (sourceIsPing)
                 {
-                    temporalPostFilter_.pongInitialized[imageIndex] = true;
+                    temporalPostFilter_.pongInitialized = true;
                 }
                 else
                 {
-                    temporalPostFilter_.pingInitialized[imageIndex] = true;
+                    temporalPostFilter_.pingInitialized = true;
                 }
-                destinationOffsetX = 0;
-                destinationOffsetY = 0;
             }
 
             const FPushConstants pushConstants{
@@ -2352,25 +2994,20 @@ namespace Vulkan
         const Assets::UniformBufferObject& outputUbo)
     {
         if (overlay_.toneMappingPipeline == nullptr ||
-            imageIndex >= lateToneMapping_.inputInitialized.size())
+            lateToneMapping_.inputImage == nullptr || lateToneMapping_.outputImage == nullptr)
         {
             return;
         }
 
         SCOPED_GPU_TIMER("tone mapping after upscaler");
         constexpr VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-        const bool writesSwapchain = SwapChain().SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT);
         uint32_t inputIndex = Assets::Bindless::RT_SCENE_COLOR;
         VkExtent2D inputExtent = sourceExtent;
         if (sourceIsUpscaled)
         {
-            inputIndex = Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex;
+            inputIndex = Assets::Bindless::RT_TONEMAP_INPUT;
             inputExtent = outputExtent;
-            RenderImage* inputImage = bindless_.images[inputIndex].get();
-            if (inputImage == nullptr)
-            {
-                return;
-            }
+            RenderImage* inputImage = lateToneMapping_.inputImage.get();
             ImageMemoryBarrier::Insert(
                 commandBuffer,
                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -2383,39 +3020,26 @@ namespace Vulkan
                 VK_IMAGE_LAYOUT_GENERAL);
         }
 
-        const uint32_t outputIndex = writesSwapchain
-            ? Assets::Bindless::RT_SWAPCHAIN0 + imageIndex
-            : Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex;
-        RenderImage* offscreenOutput = writesSwapchain
-            ? nullptr
-            : bindless_.images[Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex].get();
-        if (!writesSwapchain && offscreenOutput == nullptr)
-        {
-            return;
-        }
-        if (offscreenOutput != nullptr)
-        {
-            const bool initialized = lateToneMapping_.inputInitialized[imageIndex];
-            ImageMemoryBarrier::Insert(
-                commandBuffer,
-                initialized ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT
-                             : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                offscreenOutput->GetImage().Handle(),
-                range,
-                initialized ? VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT : 0u,
-                VK_ACCESS_SHADER_WRITE_BIT,
-                initialized ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_GENERAL);
-            lateToneMapping_.inputInitialized[imageIndex] = true;
-        }
+        constexpr uint32_t outputIndex = Assets::Bindless::RT_TONEMAP_OUTPUT;
+        RenderImage* offscreenOutput = lateToneMapping_.outputImage.get();
+        const bool initialized = lateToneMapping_.outputInitialized;
+        ImageMemoryBarrier::Insert(
+            commandBuffer,
+            initialized ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT
+                        : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            offscreenOutput->GetImage().Handle(),
+            range,
+            initialized ? VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT : 0u,
+            VK_ACCESS_SHADER_WRITE_BIT,
+            initialized ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_GENERAL);
+        lateToneMapping_.outputInitialized = true;
 
         TransitionSwapchainImage(
             commandBuffer, imageIndex,
-            {.stages = writesSwapchain ? PipelineCommon::ERenderStage::Compute
-                                       : PipelineCommon::ERenderStage::Transfer,
-             .access = writesSwapchain ? PipelineCommon::EResourceAccess::ShaderWrite
-                                       : PipelineCommon::EResourceAccess::TransferWrite,
+            {.stages = PipelineCommon::ERenderStage::Transfer,
+             .access = PipelineCommon::EResourceAccess::TransferWrite,
              .layout = VK_IMAGE_LAYOUT_GENERAL},
             "tone mapping after upscaler");
 
@@ -2529,19 +3153,11 @@ namespace Vulkan
         if (upscaler_ && temporalUpscalerActive)
         {
             SCOPED_GPU_TIMER("temporal upscaler resolve");
-            TransitionSwapchainImage(
-                commandBuffer, imageIndex,
-                {.stages = PipelineCommon::ERenderStage::Compute,
-                 .access = PipelineCommon::EResourceAccess::ShaderWrite,
-                 .layout = VK_IMAGE_LAYOUT_GENERAL},
-                "temporal upscaler resolve");
-
             auto inputs = BuildUpscalerFrameInputs(commandBuffer, imageIndex, VK_IMAGE_LAYOUT_GENERAL);
             const auto& typeInfo = Rendering::Upscaler::GetUpscalerTypeInfo(
                 static_cast<uint32_t>(activeUpscalerType_));
             inputs.inputColorIsLinear = true;
-            RenderImage* toneMappingInput =
-                bindless_.images[Assets::Bindless::RT_TONEMAP_INPUT0 + imageIndex].get();
+            RenderImage* toneMappingInput = lateToneMapping_.inputImage.get();
             if (toneMappingInput == nullptr)
             {
                 return;
@@ -2554,7 +3170,7 @@ namespace Vulkan
                 PrepareTemporalPostFilterOutput(commandBuffer, imageIndex, inputs);
             if (!temporalPostFilterActive)
             {
-                const bool initialized = lateToneMapping_.inputInitialized[imageIndex];
+                const bool initialized = lateToneMapping_.inputInitialized;
                 constexpr VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
                 ImageMemoryBarrier::Insert(
                     commandBuffer,
@@ -2566,7 +3182,7 @@ namespace Vulkan
                     VK_ACCESS_SHADER_WRITE_BIT,
                     initialized ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED,
                     VK_IMAGE_LAYOUT_GENERAL);
-                lateToneMapping_.inputInitialized[imageIndex] = true;
+                lateToneMapping_.inputInitialized = true;
             }
             if (typeInfo.requiresStorageOutput)
             {
@@ -2644,7 +3260,7 @@ namespace Vulkan
             {
                 // The intermediate may contain a partially recorded failed dispatch. Discard it
                 // before the next attempt instead of treating it as a readable previous result.
-                temporalPostFilter_.pingInitialized[imageIndex] = false;
+                temporalPostFilter_.pingInitialized = false;
             }
         }
         ApplyToneMappingAfterUpscaler(
@@ -2658,8 +3274,58 @@ namespace Vulkan
             frame_.lastUBO);
     }
 
+    void VulkanBaseRenderer::ClearWarmupSwapchain(
+        VkCommandBuffer commandBuffer,
+        const uint32_t imageIndex)
+    {
+        // A newly acquired swapchain image has undefined contents. Keep every frame of the
+        // pipeline warm-up deterministic before the UI pass loads it.
+        const VkClearColorValue clearColor = {{0.05f, 0.05f, 0.06f, 1.0f}};
+        const VkImageSubresourceRange imageRange{
+            VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        TransitionSwapchainImage(
+            commandBuffer, imageIndex,
+            {.stages = PipelineCommon::ERenderStage::Transfer,
+             .access = PipelineCommon::EResourceAccess::TransferWrite,
+             .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+             .discardPreviousContents = true},
+            "pipeline warm-up clear");
+        vkCmdClearColorImage(commandBuffer, SwapChain().Images()[imageIndex],
+                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &imageRange);
+        TransitionSwapchainImage(
+            commandBuffer, imageIndex,
+            {.stages = PipelineCommon::ERenderStage::Present,
+             .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
+            "pipeline warm-up present");
+    }
+
     void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
+        // The loading overlay owns the whole presentation surface until warm-up completes. This
+        // also keeps later warm-up frames from entering the normal scene-output path.
+        if (pipelineWarmup_.active)
+        {
+            ClearWarmupSwapchain(commandBuffer, imageIndex);
+            return;
+        }
+
+        // A renderer with no declared outputs owns the swapchain image: there is no RT bank to
+        // resolve from, and none of the view/overlay machinery below has resources. It writes the
+        // image itself, then hands it to the UI pass in PRESENT_SRC like every other path.
+        if (!frame_.sceneChainCreated)
+        {
+            if (LogicRendererBase* renderer = EnsureLogicRenderer(logicRenderers_.current))
+            {
+                renderer->Render(commandBuffer, imageIndex);
+            }
+            TransitionSwapchainImage(
+                commandBuffer, imageIndex,
+                {.stages = PipelineCommon::ERenderStage::Present,
+                 .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
+                "compatibility present");
+            return;
+        }
+
         const auto preparePrimaryView = [this](const char* debugName) -> RenderView&
         {
             RenderView& primary = PrimaryView();
@@ -2713,6 +3379,14 @@ namespace Vulkan
                 DispatchScheduledRenderViews(commandBuffer, imageIndex);
             }
 
+            if (!overlay_.skipReportedRendererValid ||
+                overlay_.skipReportedRendererType != logicRenderers_.current)
+            {
+                overlay_.skipReportedPassNames.clear();
+                overlay_.skipReportedRendererType = logicRenderers_.current;
+                overlay_.skipReportedRendererValid = true;
+            }
+
             // Module content passes run before debug overlay passes.
             for (const auto& externalPass : overlay_.externalPasses)
             {
@@ -2723,9 +3397,15 @@ namespace Vulkan
                     passContract.scope != EExternalPassScope::PrimaryView ||
                     !AreExternalPassInputsAvailable(passContract, availableOutputs))
                 {
-                    SPDLOG_WARN("Skipping external pass {}: incompatible insertion/scope or missing outputs "
-                                "(required=0x{:x}, available=0x{:x})",
-                                passContract.name, passContract.requiredOutputs, availableOutputs);
+                    if (std::find(overlay_.skipReportedPassNames.begin(), overlay_.skipReportedPassNames.end(),
+                                  passContract.name) == overlay_.skipReportedPassNames.end())
+                    {
+                        overlay_.skipReportedPassNames.push_back(passContract.name);
+                        SPDLOG_INFO("Skipping external pass {} under {}: incompatible insertion/scope or missing "
+                                    "outputs (required=0x{:x}, available=0x{:x})",
+                                    passContract.name, GetRendererName(logicRenderers_.current),
+                                    passContract.requiredOutputs, availableOutputs);
+                    }
                     continue;
                 }
                 SCOPED_GPU_TIMER("external pass");
@@ -2866,15 +3546,15 @@ namespace Vulkan
 
     void VulkanBaseRenderer::PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
-        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        if (frame_.sceneChainInitializationPending || pipelineWarmup_.active)
+        {
+            return;
+        }
 
         if (ActiveRendererRequirements().requestAmbientCube && !ShouldSkipAmbientCubeUpdates())
         {
-            if (settings.BakeSpeedLevel != 2)
-            {
-                const bool useHardware = caps_.supportRayTracing && !GOption->ForceSoftGen;
-                BakeAmbientCubeCascade(commandBuffer, imageIndex, useHardware);
-            }
+            const bool useHardware = caps_.supportRayTracing && !GOption->ForceSoftGen;
+            BakeAmbientCubeCascade(commandBuffer, imageIndex, useHardware);
         }
 
         DispatchVisualDebugger(commandBuffer, imageIndex);
@@ -2882,6 +3562,11 @@ namespace Vulkan
 
     void VulkanBaseRenderer::UpdateUniformBuffer(const uint32_t imageIndex)
     {
+        if (frame_.sceneChainInitializationPending || pipelineWarmup_.active)
+        {
+            return;
+        }
+
         frame_.lastUBO = GetUniformBufferObject(frame_.swapChain->RenderOffset(), frame_.swapChain->OutputExtent());
         frame_.uniformBuffers[imageIndex].SetValue(frame_.lastUBO);
         SetRenderViewUbo(PrimaryView(), imageIndex, frame_.lastUBO);
@@ -2917,8 +3602,8 @@ namespace Vulkan
         copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
         copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
         copyRegion.extent = {
-            frame_.swapChain->OutputExtent().width,
-            frame_.swapChain->OutputExtent().height,
+            frame_.swapChain->Extent().width,
+            frame_.swapChain->Extent().height,
             1};
         vkCmdCopyImage(
             commandBuffer,
@@ -2978,7 +3663,7 @@ namespace Vulkan
         inputs.swapchain = swapChain.Handle();
         inputs.ubo = &frame_.lastUBO;
 
-        auto& camera = GetScene().GetRenderCamera();
+        const Assets::Camera camera = NextEngine::GetInstance()->GetActiveRenderCamera();
         inputs.camera.nearPlane = camera.NearPlane;
         inputs.camera.farPlane = camera.FarPlane;
         inputs.camera.verticalFovRadians = glm::radians(camera.FieldOfView);

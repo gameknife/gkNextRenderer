@@ -1,6 +1,7 @@
 #include "Engine/Options.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include <cxxopts.hpp>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
 
@@ -35,6 +36,13 @@ Options::Options(const int argc, const char* argv[])
         ("width", "Framebuffer width in pixels.", cxxopts::value<uint32_t>(Width)->default_value("1920"))
         ("height", "Framebuffer height in pixels.", cxxopts::value<uint32_t>(Height)->default_value("1080"))
         ("fullscreen", "Start borderless fullscreen instead of windowed.", cxxopts::value<bool>(Fullscreen)->default_value("false"))
+#if GK_WITH_VITURE
+        ("ar", "Enable VITURE AR head tracking.", cxxopts::value<bool>(ArMode)->default_value("false")->implicit_value("true"))
+        ("ar-world-units-per-meter", "World-unit scale applied to tracked physical translation.", cxxopts::value<float>(ArWorldUnitsPerMeter)->default_value("1.0"))
+        ("ar-prediction-ms", "VITURE pose prediction horizon in milliseconds (default: 20.0).", cxxopts::value<float>(ArPredictionMs)->default_value("20.0"))
+        ("ar-smoothing-hz", "AR pose low-pass smoothing frequency in Hz (0 disables smoothing; default: 0).", cxxopts::value<float>(ArSmoothingHz)->default_value("0.0"))
+        ("ar-dof", "VITURE Carina tracking mode: 3 or 6 (default: 6).", cxxopts::value<uint32_t>(ArDof)->default_value("6"))
+#endif
         ("present-mode", "Presentation mode (0 = Immediate, 1 = MailBox, 2 = FIFO, 3 = FIFO relaxed).", cxxopts::value<uint32_t>(PresentMode)->default_value("2"))
         ("forcesdr", "Force SDR output even when the display supports HDR.", cxxopts::value<bool>(ForceSDR)->default_value("false"))
         ("system-dpi-scaling", "Use legacy Windows bitmap DPI scaling instead of engine-native DPI scaling.",
@@ -43,6 +51,7 @@ Options::Options(const int argc, const char* argv[])
     options.add_options("Rendering")
         ("gpu", "Index of the GPU to render on. Use --hwquery to list capabilities.", cxxopts::value<uint32_t>(GpuIdx)->default_value("0"))
         ("forcenort", "Disable hardware ray tracing and fall back to the software renderers.", cxxopts::value<bool>(ForceNoRT)->default_value("false"))
+        ("force-compatibility-renderer", "Pretend the GPU cannot back the full bindless arrays, to exercise the compatibility renderer on a capable device.", cxxopts::value<bool>(ForceCompatibilityRenderer)->default_value("false")->implicit_value("true"))
         ("forcesoftgen", "Force software ray tracing for ambient cube generation.", cxxopts::value<bool>(ForceSoftGen)->default_value("false"))
         ("disable-streamline", "Disable NVIDIA Streamline (DLSS, Reflex, Frame Generation).", cxxopts::value<bool>(DisableStreamline)->default_value("false")->implicit_value("true"))
         ("disable-fidelityfx", "Disable AMD FidelityFX (FSR).", cxxopts::value<bool>(DisableFidelityFX)->default_value("false")->implicit_value("true"))
@@ -80,7 +89,7 @@ Options::Options(const int argc, const char* argv[])
         ("validation", "Enable Vulkan validation layers.", cxxopts::value<bool>(Validation)->default_value("false"))
         ("sync-validation", "Enable Vulkan synchronization validation. Implies --validation.", cxxopts::value<bool>(SyncValidation)->default_value("false")->implicit_value("true"))
         ("vulkan-driver", "Vulkan driver selection: native, lvp (Windows/Linux), or dozen (Windows).", cxxopts::value<std::string>(VulkanDriver)->default_value("native"))
-        ("renderdoc", "Attach RenderDoc if available.", cxxopts::value<bool>(RenderDoc)->default_value("false"))
+        ("renderdoc", "Capture the first ready scene frame and open it in RenderDoc if available.", cxxopts::value<bool>(RenderDoc)->default_value("false")->implicit_value("true"))
         ("hidden-window", "Create the window hidden: no popup and no focus steal.", cxxopts::value<bool>(HiddenWindow)->default_value("false")->implicit_value("true"))
         ("headless-surface", "Use VK_EXT_headless_surface and skip SDL window creation. Intended for headless-path testing.", cxxopts::value<bool>(HeadlessSurface)->default_value("false")->implicit_value("true"))
         ("benchmark-config", "Load a gkNextMotionBenchmark orchestration JSON.", cxxopts::value<std::string>(BenchmarkConfig)->default_value(""));
@@ -90,7 +99,9 @@ Options::Options(const int argc, const char* argv[])
         ("agent-visible-window", "Keep the window visible during agent validation.", cxxopts::value<bool>(AgentVisibleWindow)->default_value("false")->implicit_value("true"))
         ("agent-control", "Loopback endpoint for gnb runtime control (host:port).", cxxopts::value<std::string>(AgentControl)->default_value(""))
         ("agent-control-token", "One-time token for gnb runtime control.", cxxopts::value<std::string>(AgentControlToken)->default_value(""))
+        ("exit-after-frames", "Request a clean exit after this many rendered frames (0 disables).", cxxopts::value<uint32_t>(ExitAfterFrames)->default_value("0"))
         ("asset-trace", "Append successfully resolved runtime asset paths to this manifest.", cxxopts::value<std::string>(AssetTrace)->default_value(""))
+        ("dump-reflection", "Write the entt::meta reflection manifest to this path and exit. Source for the generated C# component wrappers; see `gnb csharpgen --refresh`.", cxxopts::value<std::string>(DumpReflection)->default_value(""))
         ("fastexit", "Skip task teardown on exit.", cxxopts::value<bool>(FastExit)->default_value("true"))
         ("update-baseline", "Update visual test baseline images from the current run.", cxxopts::value<bool>(UpdateVisualTestBaseline)->default_value("false")->implicit_value("true"))
         ("flappy-replay", "Run the Flappy deterministic replay and write trace output.", cxxopts::value<bool>(FlappyReplay)->default_value("false")->implicit_value("true"))
@@ -222,6 +233,21 @@ Options::Options(const int argc, const char* argv[])
         {
             Throw(std::out_of_range("Invalid present mode."));
         }
+
+#if GK_WITH_VITURE
+        if (!std::isfinite(ArPredictionMs) || ArPredictionMs < 0.0f || ArPredictionMs > 100.0f)
+        {
+            Throw(std::out_of_range("Invalid --ar-prediction-ms. Expected a value from 0 to 100."));
+        }
+        if (!std::isfinite(ArSmoothingHz) || ArSmoothingHz < 0.0f || ArSmoothingHz > 240.0f)
+        {
+            Throw(std::out_of_range("Invalid --ar-smoothing-hz. Expected a value from 0 to 240."));
+        }
+        if (ArDof != 3 && ArDof != 6)
+        {
+            Throw(std::out_of_range("Invalid --ar-dof. Expected 3 or 6."));
+        }
+#endif
     }
     catch (const cxxopts::exceptions::exception& e)
     {

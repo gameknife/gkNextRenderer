@@ -6,6 +6,50 @@ foreach(gkModule IN LISTS GK_MODULE_NAMES)
     endif()
 endforeach()
 
+if(TARGET NextUI)
+    target_link_libraries(NextUI PRIVATE SDL3::SDL3 imgui::imgui)
+endif()
+
+if(TARGET NextCapture)
+    target_link_libraries(NextCapture PRIVATE WebP::webp WebP::libwebpmux)
+    if(WITH_AVIF)
+        target_compile_definitions(NextCapture PRIVATE WITH_AVIF=1 AVIF_CODEC_AOM=SYSTEM)
+        target_include_directories(NextCapture PRIVATE
+            $<TARGET_PROPERTY:avif,INTERFACE_INCLUDE_DIRECTORIES>
+        )
+        target_link_libraries(NextCapture PRIVATE avif)
+    else()
+        target_compile_definitions(NextCapture PRIVATE WITH_AVIF=0)
+    endif()
+endif()
+
+if(TARGET DevTools AND TARGET NextUI)
+    target_link_libraries(DevTools PRIVATE NextUI)
+endif()
+
+if(TARGET NextRemote AND TARGET NextUI)
+    target_link_libraries(NextRemote PRIVATE NextUI)
+endif()
+
+if(TARGET NextUI AND TARGET SceneContent)
+    target_link_libraries(NextUI PRIVATE SceneContent)
+endif()
+
+if(TARGET DevTools AND TARGET SceneContent)
+    target_link_libraries(DevTools PRIVATE SceneContent)
+endif()
+
+if(IOS AND TARGET NextAudio)
+    # miniaudio's iOS backend includes Objective-C framework headers. Keep it
+    # out of the C++ unity source so Xcode invokes the Objective-C++ compiler.
+    set_source_files_properties(
+        ${GK_SOURCE_ROOT}/Modules/NextAudio/MiniaudioBackend.cpp
+        PROPERTIES
+            LANGUAGE OBJCXX
+            SKIP_UNITY_BUILD_INCLUSION ON
+    )
+endif()
+
 if(TARGET LiveCoding AND GK_ENABLE_CPP_LIVE_CODING)
     target_include_directories(LiveCoding SYSTEM PRIVATE
         "${GK_LIVEPP_RESOLVED_ROOT}/API/x64"
@@ -75,11 +119,41 @@ if(TARGET SplatLoader)
     target_link_libraries(SplatLoader PRIVATE WebP::webp ZLIB::ZLIB)
 endif()
 
-if(TARGET NextQuickJS)
-    target_compile_definitions(NextQuickJS PRIVATE
-        GK_NEXT_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+if(TARGET NextDotNet)
+    # Headers only: hostfxr is located and loaded at runtime, so nothing from the .NET installation
+    # is linked in and a build machine needs no SDK beyond the two headers.
+    target_include_directories(NextDotNet PRIVATE "${GK_DOTNET_RESOLVED_HOSTPACK}")
+    target_compile_definitions(NextDotNet PRIVATE
+        GK_DOTNET_USE_AOT=${GK_DOTNET_USE_AOT}
+        GK_DOTNET_ROOT="${GK_DOTNET_RESOLVED_ROOT}"
+        # Where the C# sources are, so a host can republish a game without a C++ build. This is the
+        # source tree, not the runtime root: only the published assemblies are copied next to the
+        # executable, and resolving "assets/csharp" against the runtime root finds nothing.
+        GK_DOTNET_MANAGED_SOURCE_ROOT="${GK_DOTNET_MANAGED_ROOT}"
     )
-    target_link_libraries(NextQuickJS PRIVATE quickjs SDL3::SDL3 imgui::imgui)
+    target_link_libraries(NextDotNet PRIVATE SDL3::SDL3 imgui::imgui)
+
+    # --- managed assemblies ------------------------------------------------------------------
+    # Only the bootstrap is published here, and only for CoreCLR: it is application-independent.
+    # Each application brings its own game assembly through gk_dotnet_managed_game(), because under
+    # NativeAOT the game is linked into a native library and two applications cannot share one.
+    if(NOT GK_DOTNET_USE_AOT)
+        set(gkBootstrapStamp "${CMAKE_CURRENT_BINARY_DIR}/managed-bootstrap.stamp")
+        add_custom_command(
+            OUTPUT ${gkBootstrapStamp}
+            COMMAND "${GK_DOTNET_EXE}" publish
+                "${GK_DOTNET_MANAGED_ROOT}/GkNext.Bootstrap/GkNext.Bootstrap.csproj"
+                -c Release -o "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/csharp" --nologo
+            COMMAND ${CMAKE_COMMAND} -E touch ${gkBootstrapStamp}
+            DEPENDS ${GK_DOTNET_MANAGED_SOURCES}
+            COMMENT "Publishing the managed bootstrap (CoreCLR)..."
+            VERBATIM
+        )
+        add_custom_target(gkNextManagedBootstrap DEPENDS ${gkBootstrapStamp})
+        add_dependencies(NextDotNet gkNextManagedBootstrap)
+        gk_dotnet_chain_publish(gkNextManagedBootstrap)
+        set_target_properties(gkNextManagedBootstrap PROPERTIES FOLDER "Modules")
+    endif()
 endif()
 
 if(TARGET NextPhysics)
@@ -112,6 +186,11 @@ if(TARGET NextFidelityFX)
         target_link_libraries(NextFidelityFX PRIVATE ${FIDELITYFX_LIB})
         file(COPY ${FIDELITYFX_DLL} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
     endif()
+endif()
+
+if(TARGET NextViture)
+    target_include_directories(NextViture PRIVATE "${GK_VITURE_SDK_INCLUDE_DIR}")
+    target_link_libraries(NextViture PRIVATE "${GK_VITURE_SDK_LIBRARY}" "-framework IOKit")
 endif()
 
 if(TARGET NextRemote)

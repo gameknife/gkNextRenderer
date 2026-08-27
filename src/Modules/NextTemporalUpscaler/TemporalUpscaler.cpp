@@ -36,6 +36,8 @@ namespace Modules::NextTemporalUpscaler
             float nearPlane = 0.1f;
             float farPlane = 1000.0f;
             float compressionScale = 1.0f;
+            // Sparse checkerboard colour: 0 = dense, otherwise the shaded parity's frame phase + 1.
+            uint32_t sparsePhasePlusOne = 0;
         };
         static_assert(sizeof(FPushConstants) == 64);
 
@@ -134,6 +136,14 @@ namespace Modules::NextTemporalUpscaler
                 }
             }
 
+            void WarmupPipelines() override
+            {
+                if (deviceReady_)
+                {
+                    EnsureStaticResources();
+                }
+            }
+
             void OnSwapChainDestroyed() override
             {
                 DestroyGpuResources();
@@ -216,6 +226,11 @@ namespace Modules::NextTemporalUpscaler
                 constants.renderSize = {inputs.renderExtent.width, inputs.renderExtent.height};
                 constants.outputSize = {inputs.outputExtent.width, inputs.outputExtent.height};
                 constants.jitter = {inputs.ubo->Jitter.x, inputs.ubo->Jitter.y};
+                // Sparse checkerboard colour: the shaded parity alternates with the frame, and the
+                // reproject pass renormalises its reconstruction and neighbourhood over it.
+                constants.sparsePhasePlusOne = inputs.ubo->CheckerboardSparseLighting
+                    ? (inputs.ubo->TotalFrames & 1u) + 1u
+                    : 0u;
                 constants.previousJitter = previousJitter_;
                 constants.reset = inputs.reset || !historyValid_ || exposureChanged ? 1u : 0u;
                 constants.sharpness = std::clamp(inputs.nativeTemporalSharpness, 0.0f, 1.0f);
@@ -412,9 +427,13 @@ namespace Modules::NextTemporalUpscaler
                 createInfo.layout = pipelineLayout_;
                 VkPipeline pipeline = VK_NULL_HANDLE;
                 const VkResult result = vkCreateComputePipelines(
-                    deviceInfo_.device, VK_NULL_HANDLE, 1, &createInfo, nullptr, &pipeline);
+                    deviceInfo_.device, deviceInfo_.pipelineCache, 1, &createInfo, nullptr, &pipeline);
                 vkDestroyShaderModule(deviceInfo_.device, shader, nullptr);
                 Vulkan::Check(result, "create NativeTemporal compute pipeline");
+                if (deviceInfo_.onPipelineCreated)
+                {
+                    deviceInfo_.onPipelineCreated(shaderPath);
+                }
                 return pipeline;
             }
 

@@ -2,6 +2,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <queue>
+#include <string>
 #include <thread>
 #include <atomic>
 #include "Engine/Common/CoreMinimal.hpp"
@@ -171,7 +172,7 @@ public:
     void enqueue(T t)
     {
         std::lock_guard<std::mutex> lock(m);
-        q.push(t);
+        q.push(std::move(t));
         c.notify_one();
     }
     
@@ -202,7 +203,7 @@ public:
             }
         }
 
-        result = q.front();
+        result = std::move(q.front());
         q.pop();
         return true;
     }
@@ -219,6 +220,7 @@ struct ResTask
     
     uint32_t task_id = 0;
     uint8_t priority = 0;
+    std::string taskName;
     TaskFunc task_func;
     TaskFunc complete_func;
     uint8_t task_context_1k[1024] = {};
@@ -234,6 +236,13 @@ struct ResTask
         std::memcpy( &context, task_context_1k, std::min(size_t(1024), sizeof(T)) );
     }
     
+};
+
+struct FTaskThreadStatus
+{
+    std::string name;
+    uint32_t queued = 0;
+    bool running = false;
 };
 
 class TaskCoordinator;
@@ -255,6 +264,21 @@ public:
     {
         std::lock_guard<std::mutex> lock(completedTaskMutex_);
         return completedTaskCount_ >= submittedTaskCount_.load(std::memory_order_acquire);
+    }
+
+    bool IsBusy() const
+    {
+        return busy_.load();
+    }
+
+    const std::string& GetThreadName() const
+    {
+        return threadName_;
+    }
+
+    uint32_t GetQueuedTaskCount() const
+    {
+        return static_cast<uint32_t>(taskQueue_.size());
     }
 
     void EnqueueTask(ResTask task)
@@ -294,9 +318,9 @@ public:
     ~TaskCoordinator();
    
 
-    void MarkTaskComplete(const ResTask& task)
+    void MarkTaskComplete(ResTask task)
     {
-        completeTaskQueue_.enqueue(task);
+        completeTaskQueue_.enqueue(std::move(task));
     }
 
     void MarkTaskEnd(const ResTask& task)
@@ -306,11 +330,15 @@ public:
     
     // Queues worker-thread CPU tasks. Use this for long-running work that must not touch scene/UI state directly.
     // complete_func runs back on the coordinator path after task_func finishes.
-    uint32_t AddTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func, uint8_t priority = 0);
-    uint32_t AddMainThreadTask(ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func, uint8_t priority = 0);
-    uint32_t AddParralledTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func );
+    uint32_t AddTask(ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc, uint8_t priority = 0,
+                     std::string taskName = {});
+    uint32_t AddMainThreadTask(ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc, uint8_t priority = 0,
+                               std::string taskName = {});
+    uint32_t AddParralledTask(ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc,
+                              std::string taskName = {});
     uint32_t AddNamedTask(
-        ENamedTaskThread namedThread, ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc = {});
+        ENamedTaskThread namedThread, ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc = {},
+        std::string taskName = {});
 
     void WaitForTask(uint32_t task_id)
     {
@@ -343,6 +371,8 @@ public:
 
     uint32_t GetMainTaskCount();
 
+    std::vector<FTaskThreadStatus> GetTaskThreadStatuses() const;
+
     uint32_t GetCompleteTaskQueueCount()
     {
         return uint32_t(completeTaskQueue_.size());
@@ -367,6 +397,14 @@ public:
     }
 
 private:
+    // Every queue retires into completedTaskIds_, so they must share one id space. Per-function
+    // counters handed out colliding ids and IsAllTaskComplete(tasks) then reported another
+    // queue's finished work as this caller's -- which let the ambient bake treat still-running
+    // voxelization groups as complete. Ids start at 1 so a default-constructed ResTask (task_id 0)
+    // can never be mistaken for a real one.
+    uint32_t AllocateTaskId() { return nextTaskId_.fetch_add(1, std::memory_order_relaxed); }
+
+    std::atomic<uint32_t> nextTaskId_{1};
     std::vector< std::unique_ptr<TaskThread> > threads_;
     // low-level thread, use for parallel task
     std::vector< std::unique_ptr<TaskThread> > lowThreads_;

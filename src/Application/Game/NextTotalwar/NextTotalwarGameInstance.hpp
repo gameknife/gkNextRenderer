@@ -84,6 +84,7 @@ namespace NextTotalwar
         int FindNearestEnemyRegiment(const FRegiment& regiment) const;
         void TickBattleSimulation(float step);
         void RestartBattle();
+        void DrawNavGridDebugOverlay() const;
         void DrawWorldOverlay() const;
         size_t SelectedCount() const;
         size_t MarchingCount() const;
@@ -103,6 +104,7 @@ namespace NextTotalwar
         bool sceneInjected_ = false;
         bool sceneReady_ = false;
         bool showDebug_ = false;
+        bool showNavGridDebug_ = false;
         glm::dvec2 mousePos_{};
         glm::dvec2 leftStart_{};
         glm::dvec2 rightStart_{};

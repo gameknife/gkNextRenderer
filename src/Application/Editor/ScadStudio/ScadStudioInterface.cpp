@@ -2,9 +2,9 @@
 
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
-#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
+#include "Modules/NextUI/ImGuiScaling.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/Math.hpp"
@@ -506,7 +506,7 @@ namespace ScadStudio
 
     void ScadStudioInterface::Render()
     {
-        NextUI::UserInterface* uiSys = engine_.GetUserInterface();
+        NextUI::IUserInterface* uiSys = engine_.GetUserInterface();
         if (uiSys == nullptr)
         {
             return;

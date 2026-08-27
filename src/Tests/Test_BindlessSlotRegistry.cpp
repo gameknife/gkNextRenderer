@@ -38,6 +38,7 @@ namespace
              static_cast<uint32_t>(Slots::RES_VIEW_SAMPLE_COUNT)},
             {"remote composite", static_cast<uint32_t>(Slots::RES_REMOTE_COMPOSITE_BASE),
              static_cast<uint32_t>(Slots::RES_REMOTE_COMPOSITE_COUNT)},
+            {"remote capture", static_cast<uint32_t>(Slots::RES_REMOTE_CAPTURE), 1u},
             {"remote encode", static_cast<uint32_t>(Slots::RES_REMOTE_ENCODE_BASE),
              static_cast<uint32_t>(Slots::RES_REMOTE_ENCODE_COUNT)},
             {"volume", static_cast<uint32_t>(Slots::RES_VOLUME_BASE),
@@ -78,6 +79,48 @@ TEST_CASE("Bindless slot registry partitions the address space", "[Unit][Bindles
     CHECK(Vulkan::FBankAllocator::kMaxConcurrentBanks * static_cast<uint32_t>(Slots::kViewRtBankStride) <=
           static_cast<uint32_t>(Slots::RES_HIGH_BASE));
     CHECK(Assets::GlobalTexturePool::kMaxBindlessSlots == static_cast<uint32_t>(Slots::RES_SLOT_COUNT));
+}
+
+TEST_CASE("Bindless profiles keep their scene-texture ceiling inside the array", "[Unit][Bindless]")
+{
+    using Assets::FBindlessProfile;
+
+    // The bug this guards: a ceiling larger than the array it indexes makes RegisterTexture pass
+    // its capacity check and then write a descriptor past the end of the binding.
+    for (const FBindlessProfile& profile : {FBindlessProfile::Full(), FBindlessProfile::Compatibility()})
+    {
+        CHECK(profile.sceneTextureCapacity <= profile.sampledTextureSlots);
+        CHECK(profile.sampledTextureSlots > 0u);
+    }
+
+    // Combined image samplers cost a sampled image *and* a sampler each, so shadow, sample and
+    // volume-sample arrays land in both per-stage totals; storage counts the two storage arrays.
+    const FBindlessProfile full = FBindlessProfile::Full();
+    CHECK(full.CombinedImageSamplers() ==
+          full.shadowMapSlots + full.sampledTextureSlots + full.volumeSlots);
+    CHECK(full.StorageImages() == full.storageTextureSlots + full.volumeSlots);
+    CHECK(full.sampledTextureSlots == static_cast<uint32_t>(Slots::RES_SLOT_COUNT));
+    CHECK(full.sceneTextureCapacity == static_cast<uint32_t>(Slots::RES_SCENE_TEXTURE_CAPACITY));
+
+    // The compatibility profile exists to fit a device that reports very few samplers; it must
+    // stay far below the full one on every axis or it buys nothing.
+    const FBindlessProfile compatibility = FBindlessProfile::Compatibility();
+    CHECK(compatibility.CombinedImageSamplers() < full.CombinedImageSamplers());
+    CHECK(compatibility.CombinedImageSamplers() <= 16u);
+    CHECK(compatibility.StorageImages() == 0u);
+    CHECK_FALSE(compatibility == full);
+}
+
+TEST_CASE("Final-output bindless resources reserve fixed non-overlapping slots", "[Unit][Bindless]")
+{
+    CHECK(static_cast<uint32_t>(Slots::RT_TEMPORAL_POST_PING) + 1u <=
+          static_cast<uint32_t>(Slots::RT_TEMPORAL_POST_PONG));
+    CHECK(static_cast<uint32_t>(Slots::RT_TEMPORAL_POST_PONG) + 1u <=
+          static_cast<uint32_t>(Slots::RT_TONEMAP_INPUT));
+    CHECK(static_cast<uint32_t>(Slots::RT_TONEMAP_INPUT) + 1u <=
+          static_cast<uint32_t>(Slots::RT_TONEMAP_OUTPUT));
+    CHECK(static_cast<uint32_t>(Slots::RT_TONEMAP_OUTPUT) + 1u <=
+          static_cast<uint32_t>(Slots::RT_COUNT));
 }
 
 TEST_CASE_METHOD(EngineTestFixture, "Bindless descriptor arrays cover every registered slot",

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -438,6 +439,29 @@ func DailyCommitCounts(repoRoot string, since time.Time) (map[string]int, error)
 		if date != "" {
 			counts[date]++
 		}
+	}
+	return counts, nil
+}
+
+// HourlyCommitCounts returns repository-wide commit counts grouped by the
+// local clock hour. All refs are included, matching DailyCommitCounts.
+func HourlyCommitCounts(repoRoot string, since time.Time) (map[int]int, error) {
+	out, err := run(repoRoot, "log",
+		"--all",
+		"--since="+since.Format("2006-01-02"),
+		"--date=format-local:%H",
+		"--pretty=format:%ad",
+	)
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[int]int)
+	for _, line := range strings.Split(out, "\n") {
+		hour, err := strconv.Atoi(strings.TrimSpace(line))
+		if err != nil || hour < 0 || hour > 23 {
+			continue
+		}
+		counts[hour]++
 	}
 	return counts, nil
 }

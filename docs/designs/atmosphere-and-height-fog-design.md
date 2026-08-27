@@ -264,7 +264,7 @@ sceneColor.rgb = L2                        alpha 不变
 
 新增 `Assets::AtmosphereSetting`（放在 `Engine/Assets/Core/Model.hpp`，与 `EnvironmentSetting` 并列），
 由 `Runtime::EnvironmentComponent` 持有并经 `REFLECT_COMPONENT` 暴露，从而自动获得：
-PropertyPanel 编辑 UI、undo/redo、QuickJS 绑定、场景序列化。
+PropertyPanel 编辑 UI、undo/redo、脚本绑定、场景序列化。
 
 场景功能开关属于 `EnvironmentSetting`，并由 `EnvironmentComponent` 反射和序列化：
 

@@ -16,16 +16,6 @@ $env:PATH = "$MockBin;$env:PATH"
 $MockCmake = Join-Path $MockBin "cmake.bat"
 "@echo off`necho MOCK_CMAKE_ARGS: %*" | Set-Content $MockCmake
 
-# Mock 'gradlew' (for Android test)
-$MockAndroidDir = Join-Path $ProjectRoot "android" 
-# Note: We won't actually run gradle in the android dir because build.ps1 pushes location.
-# But build.ps1 checks for existence of 'android' folder. 
-# We'll just rely on mocking the command execution if possible, 
-# but build.ps1 executes ./gradlew, which requires the file to exist.
-# For this test, we might skip full android execution or mock the file in the real path carefully?
-# Ideally, we don't want to modify the repo. 
-# Let's focus on CLI args parsing first.
-
 # Mock .vcpkg structure so Ensure-Vcpkg passes
 $VcpkgDir = Join-Path $ProjectRoot ".vcpkg/scripts/buildsystems"
 if (-not (Test-Path $VcpkgDir)) {

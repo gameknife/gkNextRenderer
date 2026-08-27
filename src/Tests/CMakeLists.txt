@@ -4,7 +4,6 @@ set(unitTestSources
     Test_Bindless3DTexture.cpp
     Test_Atmosphere.cpp
     Test_BindlessSlotRegistry.cpp
-    Test_GpuTimerLogic.cpp
     Test_GltfSkinning.cpp
     Test_FileHelperTrace.cpp
     Test_SequencerSerialization.cpp
@@ -25,6 +24,8 @@ set(unitTestSources
     Test_ScadTerrain.cpp
     Test_ScadLibraryTerrainProcess.cpp
     Test_TerrainWalkable.cpp
+    Test_GeoCityWalkable.cpp
+    Test_GeoPoiSidecar.cpp
     Test_SimKit.cpp
     Test_ScadRig.cpp
     Test_RigAnimator.cpp
@@ -60,6 +61,7 @@ set(unitTestSources
     Test_TerminalBlitter.cpp
     Test_PhysicsComponent.cpp
     Test_CPUAccelerationSnapshot.cpp
+    Test_AmbientBakeScheduler.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadOutline.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadPromptContext.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadSessionStore.cpp
@@ -111,11 +113,19 @@ set(unitTestSources
     ${GK_SOURCE_ROOT}/Application/Game/NextDayz/Zombies/ZombieVisualPool.cpp
 )
 
+if(GK_DOTNET_ENABLED)
+    list(APPEND unitTestSources Test_DotNetEngineApi.cpp)
+    list(APPEND unitTestSources Test_ReflectionManifest.cpp)
+endif()
+
 find_package(Catch2 3 REQUIRED)
 add_executable(gkNextUnitTests ${unitTestSources})
 
 gk_apply_target_defaults(gkNextUnitTests)
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
+# The reflection manifest test reads a committed source file, and the tests are launched from
+# whatever directory the caller happens to be in.
+target_compile_definitions(gkNextUnitTests PRIVATE GK_NEXT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_dependencies(gkNextUnitTests Assets)
 find_package(nlohmann_json CONFIG REQUIRED)
 
@@ -137,6 +147,9 @@ target_link_libraries(gkNextUnitTests PRIVATE
     fmt::fmt
 )
 set(unitTestRuntimeModules
+    SceneContent
+    NextValidation
+    NextUI
     DevTools
     NextPhysics
     GltfLoader
@@ -148,4 +161,12 @@ set(unitTestRuntimeModules
 if(TARGET NextTui)
     list(APPEND unitTestRuntimeModules NextTui)
 endif()
+if(TARGET NextDotNet)
+    list(APPEND unitTestRuntimeModules NextDotNet)
+endif()
 gk_target_runtime_modules(gkNextUnitTests MODULES ${unitTestRuntimeModules})
+
+if(TARGET NextDotNet)
+    # The tests exercise the native binding table, not the managed runtime, so they host no C#.
+    gk_dotnet_stub_game(gkNextUnitTests)
+endif()

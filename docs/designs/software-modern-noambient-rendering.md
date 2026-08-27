@@ -25,15 +25,26 @@ last_updated: 2026-07-17
 
 ## 当前 pass 顺序
 
-1. `Core.SwModernNoAmbient.comp.slang` 从 visibility buffer 重建表面并写 full-resolution G-buffer/output。
-2. 若 `r.gtao.enable`，`Core.GTAO.comp.slang` 在 half-resolution `R16_SFLOAT` 的 `RT_GTAO` 上计算 horizon visibility。
-3. `Process.GTAOCompose.comp.slang` 以 3×3 depth/normal joint bilateral 上采样 AO，合成天光，画 selection/hover/lock/danger outline，并编码 HDR 或做 SDR tonemap 到 `RT_SCENE_COLOR`。
+该 renderer 只有 [Primary Surface 路径](visibility-surface-gbuffer-shading-scheduler.md)一条路线
+（`r.surface.build` / `r.surface.scheduler` / `r.gtao.applyInCore` 开关与迁移前的单体入口
+`Core.SwModernNoAmbient` 都已删除）：
+
+1. `Core.SurfaceBuild.comp.slang` 从 visibility buffer 全率解析出 dense G-buffer。
+2. `Task.ShadingClassify` + `Task.ShadingClassifyFinalize` 把屏幕分成 8×8 tile 的 Background /
+   Emissive / Standard 三个桶。
+3. 若 `r.gtao.enable`，`Core.GTAO.comp.slang` 在 half-resolution `R16_SFLOAT` 的 `RT_GTAO` 上计算
+   horizon visibility。它排在着色**之前**——读的 depth/normal 来自 Build 而不是着色输出。
+4. 每个桶一次 indirect dispatch（`Core.SwModernNoAmbient{Standard,Background,Emissive}`），光照
+   逻辑都在 `common/NoAmbientShading.slang`。Standard kernel 用 3×3 depth/normal joint bilateral
+   把 AO 上采样到全分辨率，并把它乘进自己写出的 `RT_AMBIENT`。
+5. `Process.GTAOCompose.comp.slang` 把两个光照通道相加（AO 已经在里面了），画
+   selection/hover/lock/danger outline，并编码 HDR 或做 SDR tonemap 到 `RT_SCENE_COLOR`。
 
 着色阶段有意把光照拆开：
 
 - `RT_SINGLE_DIFFUSE` 保存太阳直接光、specular 与 emissive；
 - `RT_AMBIENT` 只保存 sky diffuse；
-- compose 只对 `RT_AMBIENT` 乘 `pow(saturate(ao), strength)`。
+- Standard shading kernel 只对 `RT_AMBIENT` 乘 `pow(saturate(ao), strength)`，compose 只做相加。
 
 不要在 GTAO pass 后对总颜色整体相乘；那会把已有 CSM 的太阳光再次压暗，也会错误遮蔽 specular 和 emissive。若增加新的环境光项，必须先判断它属于可遮蔽的 sky diffuse，还是应留在不受 GTAO 影响的直接/自发光通道。
 
@@ -50,7 +61,7 @@ GTAO 从 `RT_PREV_DEPTHBUFFER` 的 NDC depth 和 `RT_NORMAL` 的 world normal �
 | 2 | 4 | 8 | 64 |
 | 3 | 6 | 10 | 120 |
 
-distance falloff 限制世界半径，thickness heuristic 降低深度断层造成的 halo。shader 输出原始 visibility；用户 strength 只在 compose 应用一次。不要在采样 shader 和 compose 重复加权。
+distance falloff 限制世界半径，thickness heuristic 降低深度断层造成的 halo。shader 输出原始 visibility；用户 strength 只在 `GTAOSkyOcclusion`（Core Shading 调用）应用一次。不要在采样 shader 和着色/compose 重复加权。
 
 ## CVar 与调试
 

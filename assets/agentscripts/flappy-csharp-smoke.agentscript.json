@@ -1,0 +1,143 @@
+{
+  "name": "flappy-csharp-smoke",
+  "target": "FlappyCSharp",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 20000
+  },
+  "steps": [
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running"
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/flappy_csharp_ready"
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 600
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 600
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 600
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 600
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 600
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 600
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 600
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 600
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 600
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 600
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 600
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 600
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/flappy_csharp_smoke"
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

@@ -9,18 +9,19 @@
 #include <tuple>
 
 #include "Engine/Assets/Loaders/FProcModel.hpp"
+#include "Modules/SceneContent/SceneList.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/ScreenShotService.hpp"
+#include "Engine/Runtime/Interface/ScreenShotService.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
+#include "Modules/NextUI/ImGuiScaling.hpp"
 #include "Engine/Rendering/RendererChoices.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "Modules/DevTools/UI/DeveloperStatusBar.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
@@ -187,15 +188,18 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
     const ImVec2 panelSize(panelWidth,
                            viewport->Size.y - TitlebarSize - 50.0f - panelMargin);
 
-    if (!NextUI::Theme::BeginFloatingPanel("##RendererSettingsPanel", ICON_FA_SLIDERS,
-                                              "Renderer Settings", &uiState.showSettings,
-                                              panelPos, panelSize))
+    NextUI::Theme::FDetailPanelConfig panelConfig{};
+    panelConfig.WindowId = "##RendererSettingsPanel";
+    panelConfig.ContentWindowId = "##RendererSettingsContent";
+    panelConfig.Icon = ICON_FA_SLIDERS;
+    panelConfig.Title = "Renderer Settings";
+    panelConfig.Open = &uiState.showSettings;
+    panelConfig.Position = panelPos;
+    panelConfig.Size = panelSize;
+    if (!NextUI::Theme::BeginDetailPanel(panelConfig))
     {
         return;
     }
-
-    // Scrollable body
-    NextUI::Theme::BeginInsetPanel("##SettingsBody", ImVec2(0, 0), true, 0, ImVec2(10.0f, 10.0f), 0.30f);
 
     auto DrawFloatSetting = [&](const char* label, float* value, float minValue, float maxValue,
                                 const char* format, float dragSpeed)
@@ -373,6 +377,21 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
 
         ImGui::SeparatorText(LOCTEXT("Lighting"));
         environmentChanged |= DrawSettingCheckboxRow(LOCTEXT("HasSky"), &environment.HasSky);
+        static constexpr const char* backgroundModes[] = {"Sky Environment", "Studio Gray"};
+        int backgroundMode = static_cast<int>(environment.BackgroundMode);
+        backgroundMode = std::clamp(backgroundMode, 0, static_cast<int>(IM_ARRAYSIZE(backgroundModes) - 1));
+        environmentChanged |= DrawSettingRow(
+            "Visible Background",
+            [&]()
+            {
+                if (!ImGui::Combo("##VisibleBackground", &backgroundMode,
+                                  backgroundModes, IM_ARRAYSIZE(backgroundModes)))
+                {
+                    return false;
+                }
+                environment.BackgroundMode = static_cast<Assets::EBackgroundMode>(backgroundMode);
+                return true;
+            });
         if (environment.HasSky)
         {
             environmentChanged |= DrawIntSetting(LOCTEXT("SkyIdx"), &environment.SkyIdx, 0, 10);
@@ -531,7 +550,61 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
             NextUI::Theme::DrawTooltip("Progressive rendering always uses 1 spp per frame");
         }
         DrawSettingCheckboxRow(LOCTEXT("Exit After First"), &userSetting.ExitAfterFirst);
-        DrawIntSetting(LOCTEXT("Ambient Speed"), &userSetting.BakeSpeedLevel, 0, 2);
+        DrawFloatSetting(LOCTEXT("Indirect Intensity"), &userSetting.IndirectIntensity,
+                         0.0f, 8.0f, "%.2fx", 0.05f);
+        NextUI::Theme::DrawTooltip(
+            "Scales bounce light only (SHARC cache hit + ambient cube terminal). "
+            "Direct sun and sky are untouched, so this lifts GI without raising contrast. 1 = physical.");
+        DrawFloatSetting(LOCTEXT("Multi Bounce Intensity"), &userSetting.MultiBounceIntensity,
+                         0.0f, 4.0f, "%.2fx", 0.05f);
+        NextUI::Theme::DrawTooltip(
+            "Weights bounce orders past the first: order n scales by this^(n-1). "
+            "0 keeps only once-bounced direct light, 1 = physical. PathTracing (SHARC) only.");
+        NextUI::Theme::EndPanelSection();
+    }
+
+    if (NextUI::Theme::BeginPanelSection(LOCTEXT("Ambient Cube Grid"), true))
+    {
+        const Assets::Scene& scene = GetEngine().GetScene();
+        // Cascade 0 voxel size. The probe count per cascade is fixed, so a smaller unit resolves
+        // finer detail across a proportionally smaller volume: worth lowering for interiors, not for
+        // open terrain. Editing any of these re-voxelizes the scene and re-bakes every cascade;
+        // shading keeps using the previous grid until the bake has adopted the new one.
+        DrawFloatSetting(LOCTEXT("Cube Unit"), &userSetting.AmbientCubeUnit,
+                         0.02f, 2.0f, "%.3f m", 0.005f);
+        DrawIntSetting(LOCTEXT("Cascades"), &userSetting.AmbientCubeCascadeCount,
+                       1, Assets::CUBE_CASCADE_MAX);
+        DrawFloatSetting(LOCTEXT("Cascade Ratio"), &userSetting.AmbientCubeCascadeRatio,
+                         1.0f, 8.0f, "%.2f", 0.05f);
+        int bakeTargetFps = static_cast<int>(std::clamp(userSetting.AmbientCubeBakeTargetFps, 1u, 240u));
+        if (DrawIntSetting(LOCTEXT("Bake Target FPS"), &bakeTargetFps, 1, 240))
+        {
+            userSetting.AmbientCubeBakeTargetFps = static_cast<uint32_t>(bakeTargetFps);
+        }
+        NextUI::Theme::DrawTooltip(
+            "Ambient cube bake scales its next dispatch from total frame time to preserve this target FPS. "
+            "GPU timestamp queries are not required.");
+
+        const float baseUnit = Assets::SanitizeAmbientCubeUnit(userSetting.AmbientCubeUnit);
+        const float ratio = Assets::SanitizeAmbientCubeCascadeRatio(userSetting.AmbientCubeCascadeRatio);
+        const uint32_t cascadeCount = std::min(
+            Assets::SanitizeAmbientCubeCascadeCount(userSetting.AmbientCubeCascadeCount),
+            std::max(1u, scene.AmbientCubeCascadeCapacity()));
+        const float outerUnit = Assets::CalculateAmbientCubeCascadeUnit(baseUnit, ratio, cascadeCount - 1);
+        DrawSettingRow(LOCTEXT("Coverage"),
+                       [&]()
+                       {
+                           ImGui::TextDisabled("%.1f x %.1f x %.1f m",
+                                               outerUnit * Assets::CUBE_SIZE_XY,
+                                               outerUnit * Assets::CUBE_SIZE_Z,
+                                               outerUnit * Assets::CUBE_SIZE_XY);
+                           return false;
+                       });
+        if (cascadeCount < Assets::SanitizeAmbientCubeCascadeCount(userSetting.AmbientCubeCascadeCount))
+        {
+            ImGui::TextDisabled("Scene allocated %u cascades; reload to use more.",
+                                scene.AmbientCubeCascadeCapacity());
+        }
         NextUI::Theme::EndPanelSection();
     }
 
@@ -714,6 +787,5 @@ void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
         NextUI::Theme::EndPanelSection();
     }
 
-    NextUI::Theme::EndInsetPanel();
-    NextUI::Theme::EndFloatingPanel();
+    NextUI::Theme::EndDetailPanel();
 }

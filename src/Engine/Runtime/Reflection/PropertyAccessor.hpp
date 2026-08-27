@@ -21,6 +21,12 @@ namespace Reflection
         
         // Set a property value on a component
         static bool SetPropertyValue(entt::meta_type type, void* instance, const std::string& propName, const entt::meta_any& value);
+
+        // By-id variants. Script bindings address properties by the id from the reflection
+        // manifest, which is resolved when the C# wrapper is generated rather than per call —
+        // a per-frame property write should not be doing string comparisons.
+        static entt::meta_any GetPropertyValueById(entt::meta_type type, void* instance, uint32_t propId);
+        static bool SetPropertyValueById(entt::meta_type type, void* instance, uint32_t propId, const entt::meta_any& value);
         
         // Deduce PropertyType from entt::meta_type
         static PropertyType DeducePropertyType(entt::meta_type type);

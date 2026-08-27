@@ -261,9 +261,33 @@ namespace Vulkan
         Assets::UniformBufferObject ubo = renderer_.LastUniformBufferObject();
         ubo.ViewportRect = glm::vec4(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height));
         ubo.Jitter = glm::vec4(0.0f);
+        ubo.CheckerboardSparseLighting = false;
+        // Reference comparison is intentionally independent of any external temporal upscaler.
+        // Stochastic renderers consume one decorrelated sample per frame through their own
+        // progressive path; deterministic renderers can present this view directly.
+        ubo.NumberOfSamples = 1;
         ubo.TemporalFrames = 1;
-        ubo.PrimaryRayJitter = false;
-        ubo.ProgressiveRender = false;
+        ubo.PrimaryRayJitter = true;
+        ubo.ProgressiveRender = true;
+        bool cameraChanged = false;
+        for (uint32_t column = 0;
+             column < 4 && !view.State().resetHistory && !cameraChanged;
+             ++column)
+        {
+            for (uint32_t row = 0; row < 4; ++row)
+            {
+                if (view.State().previousUniformBuffer.ViewProjectionUnJit[column][row] !=
+                    ubo.ViewProjectionUnJit[column][row])
+                {
+                    cameraChanged = true;
+                    break;
+                }
+            }
+        }
+        if (cameraChanged)
+        {
+            view.InvalidateTemporalHistory(EHistoryInvalidationReason::CameraCut);
+        }
         renderer_.FinalizeTemporalUbo(view, ubo);
 
         renderer_.SetRenderViewUbo(view, imageIndex, ubo);

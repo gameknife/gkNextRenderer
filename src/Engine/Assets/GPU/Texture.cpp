@@ -79,12 +79,7 @@ namespace Assets
     uint32_t GlobalTexturePool::LoadTexture(const std::string& filename, bool srgb, ETextureLifetime lifetime)
     {
         auto& pakSystem = Utilities::Package::FPackageFileSystem::GetInstance();
-        const bool hasMountedEntry = pakSystem.HasMountedEntry(filename);
-        const std::string absPath = Utilities::FileHelper::GetPlatformFilePath(filename.c_str());
-        std::error_code existsError;
-        const bool hasOsFile = std::filesystem::exists(absPath, existsError);
-
-        if (!hasMountedEntry && !hasOsFile)
+        if (!Utilities::FileHelper::IsAssetAvailable(filename))
         {
             SPDLOG_WARN("Texture '{}' is unavailable; using a placeholder texture.", filename);
             return GetInstance()->RequestNewTextureMemAsync(
@@ -92,7 +87,12 @@ namespace Assets
         }
 
         std::vector<uint8_t> data;
-        pakSystem.LoadFile(filename, data);
+        if (!pakSystem.LoadFile(filename, data) || data.empty())
+        {
+            SPDLOG_WARN("Texture '{}' failed to load; using a placeholder texture.", filename);
+            return GetInstance()->RequestNewTextureMemAsync(
+                filename, "image/png", false, nullptr, 0, srgb, ETextureLifetime::ETL_Transient);
+        }
         std::filesystem::path path(filename);
         std::string mime = std::string("image/") + path.extension().string().substr(1);
         return GetInstance()->RequestNewTextureMemAsync(
@@ -109,12 +109,7 @@ namespace Assets
     uint32_t GlobalTexturePool::LoadHDRTexture(const std::string& filename)
     {
         auto& pakSystem = Utilities::Package::FPackageFileSystem::GetInstance();
-        const bool hasMountedEntry = pakSystem.HasMountedEntry(filename);
-        const std::string absPath = Utilities::FileHelper::GetPlatformFilePath(filename.c_str());
-        std::error_code existsError;
-        const bool hasOsFile = std::filesystem::exists(absPath, existsError);
-
-        if (!hasMountedEntry && !hasOsFile)
+        if (!Utilities::FileHelper::IsAssetAvailable(filename))
         {
             SPDLOG_WARN("HDR texture '{}' is unavailable; using a placeholder environment.", filename);
             return GetInstance()->RequestNewTextureMemAsync(
@@ -181,31 +176,46 @@ namespace Assets
     }
 
     GlobalTexturePool::GlobalTexturePool(const Vulkan::Device& device, Vulkan::CommandPool& commandPool,
-                                         Vulkan::CommandPool& commandPoolMt) :
+                                         Vulkan::CommandPool& commandPoolMt, const FBindlessProfile& profile,
+                                         const bool supportsBCTextures) :
         device_(device),
         commandPool_(commandPool),
         mainThreadCommandPool_(commandPoolMt),
-        textureWorkerUploadEnabled_(ShouldEnableTextureWorkerUpload(device))
+        textureWorkerUploadEnabled_(ShouldEnableTextureWorkerUpload(device)),
+        profile_(profile),
+        supportsBCTextures_(supportsBCTextures)
     {
         if (!textureWorkerUploadEnabled_)
         {
             SPDLOG_INFO("Texture uploads will run on the main thread because no dedicated transfer queue is available or validation mode is active");
         }
 
-        // Sized from the slot registry rather than the raw device maximum: the arrays are allocated
-        // at their full declared count, so declaring 65535 would burn ~4 MB of descriptor pool for
+        // Sized from the profile rather than the raw device maximum: the arrays are allocated at
+        // their full declared count, so declaring 65535 would burn ~4 MB of descriptor pool for
         // slots nothing can address. moltenVK also reports an unusable
         // limits.maxPerStageDescriptorSamplers, which is why this is not derived from the device.
-        static const uint32_t kMaxBindlessResources = kMaxBindlessSlots;
-        static const uint32_t kMaxBindlessShadowMaps = 16u;
-        const std::vector<Vulkan::DescriptorBinding> descriptorBindings =
+        //
+        // A zero-count array is dropped rather than declared: VkDescriptorPoolSize::descriptorCount
+        // must be greater than zero, and a pass that needs the binding should fail loudly at
+        // pipeline creation instead of silently binding into an array that does not exist.
+        std::vector<Vulkan::DescriptorBinding> descriptorBindings;
+        const auto addBinding = [&descriptorBindings](uint32_t binding, uint32_t count, VkDescriptorType type)
         {
-            {kShadowMapBinding, kMaxBindlessShadowMaps, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_ALL},
-            {kSampleTextureBinding, kMaxBindlessResources, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_ALL},
-            {kStorageTextureBinding, kMaxBindlessResources, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_ALL},
-            {kVolumeSampleTextureBinding, kMaxVolumeBindlessSlots, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_ALL},
-            {kVolumeStorageTextureBinding, kMaxVolumeBindlessSlots, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_ALL},
+            if (count > 0)
+            {
+                descriptorBindings.push_back({binding, count, type, VK_SHADER_STAGE_ALL});
+            }
         };
+        addBinding(kShadowMapBinding, profile_.shadowMapSlots, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        addBinding(kSampleTextureBinding, profile_.sampledTextureSlots, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        addBinding(kStorageTextureBinding, profile_.storageTextureSlots, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+        addBinding(kVolumeSampleTextureBinding, profile_.volumeSlots, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        addBinding(kVolumeStorageTextureBinding, profile_.volumeSlots, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+        SPDLOG_INFO("Bindless descriptor layout: sampled {}, storage {}, shadow {}, volume {} "
+                    "(per-stage cost: {} combined image samplers, {} storage images); BC textures {}",
+                    profile_.sampledTextureSlots, profile_.storageTextureSlots, profile_.shadowMapSlots,
+                    profile_.volumeSlots, profile_.CombinedImageSamplers(), profile_.StorageImages(),
+                    supportsBCTextures_ ? "supported" : "unsupported (transcoding to RGBA)");
         descriptorSetManager_.reset(new Vulkan::DescriptorSetManager(device, descriptorBindings, 1, true));
 
         // for hdr to bind
@@ -228,11 +238,40 @@ namespace Assets
         BindSampleTexture(textureIdx, textureImage.ImageView(), textureImage.Sampler());
     }
 
+    // Writing a descriptor past the end of its binding is undefined behaviour, not a clamped write:
+    // it corrupts whatever the driver has after the array. Every array here is sized by the active
+    // profile, so this is the last line of defence for all of them.
+    bool GlobalTexturePool::CanBindSlot(const uint32_t slot, const uint32_t declaredCount,
+                                        const EBindingArray array) const
+    {
+        if (slot < declaredCount)
+        {
+            return true;
+        }
+        static constexpr std::array<const char*, static_cast<size_t>(EBindingArray::Count)> names{
+            "sample texture", "storage texture", "shadow map", "volume sample", "volume storage",
+        };
+        const auto arrayIndex = static_cast<size_t>(array);
+        if (!overflowReported_[arrayIndex].test_and_set(std::memory_order_relaxed))
+        {
+            SPDLOG_WARN("Bindless '{}' array holds {} descriptors; slot {} and any later one are not "
+                        "bound under this profile.", names[arrayIndex], declaredCount, slot);
+        }
+        return false;
+    }
+
     void GlobalTexturePool::BindSampleTexture(uint32_t textureIdx, const Vulkan::ImageView& view,
                                               const Vulkan::Sampler& sampler)
     {
-        auto& descriptorSets = descriptorSetManager_->DescriptorSets();
         const bool isVolume = IsVolumeImage(view);
+        if (!CanBindSlot(isVolume ? VolumeDescriptorIndex(textureIdx) : textureIdx,
+                         isVolume ? profile_.volumeSlots : profile_.sampledTextureSlots,
+                         isVolume ? EBindingArray::VolumeSample : EBindingArray::SampleTexture))
+        {
+            return;
+        }
+
+        auto& descriptorSets = descriptorSetManager_->DescriptorSets();
         const VkDescriptorImageInfo imageInfo{
             sampler.Handle(),
             view.Handle(),
@@ -256,8 +295,15 @@ namespace Assets
 
     void GlobalTexturePool::BindStorageTexture(uint32_t textureIdx, const Vulkan::ImageView& textureImage)
     {
-        auto& descriptorSets = descriptorSetManager_->DescriptorSets();
         const bool isVolume = IsVolumeImage(textureImage);
+        if (!CanBindSlot(isVolume ? VolumeDescriptorIndex(textureIdx) : textureIdx,
+                         isVolume ? profile_.volumeSlots : profile_.storageTextureSlots,
+                         isVolume ? EBindingArray::VolumeStorage : EBindingArray::StorageTexture))
+        {
+            return;
+        }
+
+        auto& descriptorSets = descriptorSetManager_->DescriptorSets();
         const VkDescriptorImageInfo imageInfo{
             VK_NULL_HANDLE,
             textureImage.Handle(),
@@ -273,6 +319,11 @@ namespace Assets
 
     void GlobalTexturePool::BindShadowMap(uint32_t slot, const Vulkan::ImageView& view, const Vulkan::Sampler& sampler)
     {
+        if (!CanBindSlot(slot, profile_.shadowMapSlots, EBindingArray::ShadowMap))
+        {
+            return;
+        }
+
         auto& descriptorSets = descriptorSetManager_->DescriptorSets();
         const VkDescriptorImageInfo imageInfo{
             sampler.Handle(),
@@ -313,13 +364,16 @@ namespace Assets
         {
             textureIdx = static_cast<uint32_t>(textureImages_.size());
             // Past this point the texture index would address the explicitly-bound region
-            // (thumbnails, view outputs, volumes) and silently overwrite those descriptors.
-            if (textureIdx >= kMaxSceneTextures)
+            // (thumbnails, view outputs, volumes) and silently overwrite those descriptors -- or,
+            // under a constrained profile, run off the end of the sampled array entirely. The
+            // ceiling therefore comes from the same profile that sized the array.
+            if (profile_.bindsSceneTextures && textureIdx >= profile_.sceneTextureCapacity)
             {
                 Throw(std::runtime_error(fmt::format(
                     "scene texture capacity exhausted ({} registered, limit {}) while registering '{}'. "
-                    "Raise Bindless::RES_SCENE_TEXTURE_CAPACITY in assets/shaders/common/BindlessTexture.slang.",
-                    textureIdx, kMaxSceneTextures, textureName)));
+                    "Raise Bindless::RES_SCENE_TEXTURE_CAPACITY in assets/shaders/common/BindlessTexture.slang, "
+                    "or FBindlessProfile::Compatibility() when running the compatibility profile.",
+                    textureIdx, profile_.sceneTextureCapacity, textureName)));
             }
             textureNameMap_[textureName] = {textureIdx, ETextureStatus::ETS_Loaded, lifetime};
             textureImages_.push_back(std::move(textureImage));
@@ -384,8 +438,21 @@ namespace Assets
         }
         else
         {
+            // Same ceiling as RegisterTexture: this is the path every scene texture actually takes,
+            // so without the check here the ceiling was never enforced for scene content at all.
+            // A profile that does not sample scene textures has no ceiling to enforce -- its
+            // indices stay meaningful for materials and the bind is skipped instead.
+            const auto candidateIdx = static_cast<uint32_t>(textureImages_.size());
+            if (profile_.bindsSceneTextures && candidateIdx >= profile_.sceneTextureCapacity)
+            {
+                Throw(std::runtime_error(fmt::format(
+                    "scene texture capacity exhausted ({} registered, limit {}) while requesting '{}'. "
+                    "Raise Bindless::RES_SCENE_TEXTURE_CAPACITY in assets/shaders/common/BindlessTexture.slang.",
+                    candidateIdx, profile_.sceneTextureCapacity, texname)));
+            }
+
             textureImages_.emplace_back(nullptr);
-            newTextureIdx = static_cast<uint32_t>(textureImages_.size()) - 1;
+            newTextureIdx = candidateIdx;
             textureNameMap_[texname] = { newTextureIdx, ETextureStatus::ETS_Loaded, lifetime };
         }
 
@@ -476,7 +543,8 @@ namespace Assets
                     auto loadKtxFromMemory = [&]() -> bool {
                         result = ktxTexture2_CreateFromMemory(copiedData, bytelength, KTX_TEXTURE_CREATE_CHECK_GLTF_BASISU_BIT, &kTexture);
                         if (KTX_SUCCESS != result) return false;
-                        result = ktxTexture2_TranscodeBasis(kTexture, KTX_TTF_BC7_RGBA, 0);
+                        result = ktxTexture2_TranscodeBasis(
+                            kTexture, supportsBCTextures_ ? KTX_TTF_BC7_RGBA : KTX_TTF_RGBA32, 0);
                         if (KTX_SUCCESS != result) return false;
                         pixels = ktxTexture_GetData(ktxTexture(kTexture));
 
@@ -542,7 +610,14 @@ namespace Assets
                         // ldr texture, try cache fist
                         // hash the texname
                         std::string cacheFileName = Utilities::CookHelper::GetCookedFileName(fmt::format("{:016x}", hasher(texname)), "texktx");
-                        if (!std::filesystem::exists(cacheFileName))
+#if ANDROID
+                        // libktx's writer trips Android FORTIFY in appendLibId. The cache is optional,
+                        // so keep the in-memory compression path and avoid reading/writing KTX files.
+                        constexpr bool useKtxDiskCache = false;
+#else
+                        constexpr bool useKtxDiskCache = true;
+#endif
+                        if (!useKtxDiskCache || !std::filesystem::exists(cacheFileName))
                         {
                             // load from stbi and compress to ktx and cache
                             stbdata = stbi_load_from_memory(copiedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha);
@@ -572,7 +647,14 @@ namespace Assets
                             result = ktxTexture2_CompressBasisEx(kTexture, &params);
                             if (KTX_SUCCESS != result) Throw(std::runtime_error("failed to compress ktx2 image "));
                             // save to cache
-                            ktxTexture_WriteToNamedFile(ktxTexture(kTexture), cacheFileName.c_str());
+                            if (useKtxDiskCache)
+                            {
+                                result = ktxTexture_WriteToNamedFile(ktxTexture(kTexture), cacheFileName.c_str());
+                                if (result != KTX_SUCCESS)
+                                {
+                                    SPDLOG_WARN("Failed to cache KTX2 texture '{}': {}", texname, static_cast<int>(result));
+                                }
+                            }
                         }
                         else
                         {
@@ -581,7 +663,8 @@ namespace Assets
                         }
 
                         // next
-                        result = ktxTexture2_TranscodeBasis(kTexture, KTX_TTF_BC7_RGBA, 0);
+                        result = ktxTexture2_TranscodeBasis(
+                            kTexture, supportsBCTextures_ ? KTX_TTF_BC7_RGBA : KTX_TTF_RGBA32, 0);
                         if (result != KTX_SUCCESS) Throw(std::runtime_error("failed to transcode ktx2 image "));
 
                         pixels = ktxTexture_GetData(ktxTexture(kTexture));
@@ -590,7 +673,9 @@ namespace Assets
                         pixels += offset;
                         size = static_cast<uint32_t>(ktxTexture_GetImageSize(ktxTexture(kTexture), 0));
 
-                        format = srgb ? VK_FORMAT_BC7_SRGB_BLOCK : VK_FORMAT_BC7_UNORM_BLOCK;
+                        format = supportsBCTextures_
+                            ? (srgb ? VK_FORMAT_BC7_SRGB_BLOCK : VK_FORMAT_BC7_UNORM_BLOCK)
+                            : (srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM);
                         width = kTexture->baseWidth;
                         height = kTexture->baseHeight;
                         miplevel = 1;
@@ -672,11 +757,13 @@ namespace Assets
 
         if (textureWorkerUploadEnabled_)
         {
-            Tasks::TaskCoordinator::GetInstance()->AddTask(std::move(textureLoadTask), std::move(textureCompleteTask), 0);
+            Tasks::TaskCoordinator::GetInstance()->AddTask(
+                std::move(textureLoadTask), std::move(textureCompleteTask), 0, "Texture load");
         }
         else
         {
-            Tasks::TaskCoordinator::GetInstance()->AddMainThreadTask(std::move(textureLoadTask), std::move(textureCompleteTask), 0);
+            Tasks::TaskCoordinator::GetInstance()->AddMainThreadTask(
+                std::move(textureLoadTask), std::move(textureCompleteTask), 0, "Texture load");
         }
 
         return newTextureIdx;
@@ -828,12 +915,14 @@ namespace Assets
         if (textureWorkerUploadEnabled_)
         {
             Tasks::TaskCoordinator::GetInstance()->AddTask(
-                std::move(textureResidencyTask), std::move(textureResidencyCompleteTask), 0);
+                std::move(textureResidencyTask), std::move(textureResidencyCompleteTask), 0,
+                "HDR texture residency");
         }
         else
         {
             Tasks::TaskCoordinator::GetInstance()->AddMainThreadTask(
-                std::move(textureResidencyTask), std::move(textureResidencyCompleteTask), 0);
+                std::move(textureResidencyTask), std::move(textureResidencyCompleteTask), 0,
+                "HDR texture residency");
         }
     }
 

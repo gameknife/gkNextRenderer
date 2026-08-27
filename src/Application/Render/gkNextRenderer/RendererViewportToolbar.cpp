@@ -9,18 +9,19 @@
 #include <tuple>
 
 #include "Engine/Assets/Loaders/FProcModel.hpp"
+#include "Modules/SceneContent/SceneList.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/ScreenShotService.hpp"
+#include "Engine/Runtime/Interface/ScreenShotService.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
+#include "Modules/NextUI/ImGuiScaling.hpp"
 #include "Engine/Rendering/RendererChoices.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "Modules/DevTools/UI/DeveloperStatusBar.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
@@ -139,7 +140,7 @@ void NextRendererGameInstance::DrawModeRail(FRendererUiState& uiState)
         const ModeEntry topEntries[] = {
             {EWorkMode::Render,  ICON_FA_EYE,        "Render - Hide All Panels"},
             {EWorkMode::Detail,  ICON_FA_SLIDERS,    "Detail - Renderer Settings"},
-            {EWorkMode::Profile, ICON_FA_CHART_LINE, "Profile - Memory & Stats"},
+            {EWorkMode::Profile, ICON_FA_CHART_LINE, "Statistics - Memory & Rendering"},
         };
 
         for (const auto& entry : topEntries)
@@ -307,39 +308,51 @@ void NextRendererGameInstance::DrawViewportTopBar(
         }
 
         const int rendererOptionCount = Runtime::GraphicsDebugPanel::GetRendererOptionCount(GetEngine());
-        int currentRendererIndex =
-            Runtime::GraphicsDebugPanel::ResolveRendererOptionIndex(GetEngine(), userSetting, rendererOptionCount);
-        if (currentRendererIndex < 0)
+        if (rendererOptionCount <= 0)
         {
-            currentRendererIndex = 0;
-            GetEngine().RequestRendererType(
-                Runtime::GraphicsDebugPanel::GetRendererOption(GetEngine(), currentRendererIndex).type);
+            // A GPU that cannot back the full bindless arrays runs the compatibility renderer and
+            // has nothing to switch to. Show what is running rather than an empty combo.
+            ImGui::TextDisabled("%s",
+                                Runtime::GraphicsDebugPanel::GetCurrentRendererLabel(GetEngine(), userSetting));
+            NextUI::Theme::DrawTooltip("Renderer (no alternative on this GPU)");
+            ImGui::SameLine();
         }
-        ImGui::SetNextItemWidth(rendererWidth);
-        PushViewportPopupStyle();
-        if (ImGui::BeginCombo(
-                "##ViewportRenderer",
-                Runtime::GraphicsDebugPanel::GetRendererOption(GetEngine(), currentRendererIndex).displayName))
+        else
         {
-            for (int rendererIndex = 0; rendererIndex < rendererOptionCount; ++rendererIndex)
+            int currentRendererIndex =
+                Runtime::GraphicsDebugPanel::ResolveRendererOptionIndex(GetEngine(), userSetting, rendererOptionCount);
+            if (currentRendererIndex < 0)
             {
-                const bool selected = rendererIndex == currentRendererIndex;
-                if (DrawViewportComboOption(
-                        Runtime::GraphicsDebugPanel::GetRendererOption(GetEngine(), rendererIndex).displayName, selected))
-                {
-                    GetEngine().RequestRendererType(
-                        Runtime::GraphicsDebugPanel::GetRendererOption(GetEngine(), rendererIndex).type);
-                }
-                if (selected)
-                {
-                    ImGui::SetItemDefaultFocus();
-                }
+                currentRendererIndex = 0;
+                GetEngine().RequestRendererType(
+                    Runtime::GraphicsDebugPanel::GetRendererOption(GetEngine(), currentRendererIndex).type);
             }
-            ImGui::EndCombo();
+            ImGui::SetNextItemWidth(rendererWidth);
+            PushViewportPopupStyle();
+            if (ImGui::BeginCombo(
+                    "##ViewportRenderer",
+                    Runtime::GraphicsDebugPanel::GetRendererOption(GetEngine(), currentRendererIndex).displayName))
+            {
+                for (int rendererIndex = 0; rendererIndex < rendererOptionCount; ++rendererIndex)
+                {
+                    const bool selected = rendererIndex == currentRendererIndex;
+                    if (DrawViewportComboOption(
+                            Runtime::GraphicsDebugPanel::GetRendererOption(GetEngine(), rendererIndex).displayName, selected))
+                    {
+                        GetEngine().RequestRendererType(
+                            Runtime::GraphicsDebugPanel::GetRendererOption(GetEngine(), rendererIndex).type);
+                    }
+                    if (selected)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            PopViewportPopupStyle();
+            NextUI::Theme::DrawTooltip("Renderer");
+            ImGui::SameLine();
         }
-        PopViewportPopupStyle();
-        NextUI::Theme::DrawTooltip("Renderer");
-        ImGui::SameLine();
 
         const char* renderModeLabel = userSetting.ProgressiveRender ? "Progressive" : "Realtime";
         if (DrawFlatViewportButton(
@@ -521,7 +534,7 @@ namespace RendererViewportDetail
         {"Delete / Backspace", "Delete selection"},
         {"TRANSFORM GIZMO", nullptr},
         {"W / E / R", "Move / Rotate / Scale"},
-        {"Q", "Toggle Local / World"},
+        {"Q", "Selection mode (hide gizmo)"},
     }};
 }
 

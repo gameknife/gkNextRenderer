@@ -14,12 +14,15 @@
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "Modules/DevTools/UI/DeveloperStatusBar.hpp"
 #include "Modules/LiveCoding/LiveCodingModule.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
 #include "Modules/SceneExport/FSceneSaver.h"
+#if GK_WITH_VITURE
+#include "EditorMain.h"
+#endif
 
 namespace Editor
 {
@@ -286,6 +289,12 @@ namespace Editor
                 ImGui::MenuItem("Show Bounds", nullptr, &showFlags.DebugDraw_BoundingBox);
                 ImGui::MenuItem("Wireframe", nullptr, &showFlags.ShowWireframe);
                 ImGui::MenuItem("Gizmo Snap", nullptr, &ctx.settings.gizmoSnap);
+#if GK_WITH_VITURE
+                if (ctx.editor != nullptr && ctx.editor->HasVitureDebugPanel())
+                {
+                    ImGui::MenuItem("VITURE AR Debug", nullptr, &ctx.editor->GetVitureDebugPanelVisible());
+                }
+#endif
                 ImGui::EndMenu();
             }
 

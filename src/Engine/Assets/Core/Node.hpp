@@ -29,6 +29,9 @@ namespace Assets
         void SetTranslation(glm::vec3 translation);
         void SetRotation(glm::quat rotation);
         void SetScale(glm::vec3 scale);
+        /// Updates the complete local transform with a single hierarchy recalculation. Gameplay
+        /// object pools should prefer this over three independent setters.
+        void SetTransform(glm::vec3 translation, glm::quat rotation, glm::vec3 scale);
 
         glm::vec3& Translation() const { return translation_; }
         glm::quat& Rotation() const { return rotation_; }

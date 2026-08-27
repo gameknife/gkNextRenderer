@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
+#include "Engine/Rendering/Interface/IAtmosphereSubsystem.hpp"
 #include "Engine/Rendering/PipelineCommon/ResourceStateTracker.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
@@ -22,27 +23,27 @@ namespace Vulkan
 
 namespace Rendering::Atmosphere
 {
-    class AtmosphereSubsystem final
+    class AtmosphereSubsystem final : public IAtmosphereSubsystem
     {
     public:
         explicit AtmosphereSubsystem(Vulkan::VulkanBaseRenderer& renderer);
         ~AtmosphereSubsystem();
 
-        void CreateDeviceResources();
+        void CreateDeviceResources() override;
         void DestroyDeviceResources();
-        void CreateSwapChainPipelines();
-        void DestroySwapChainPipelines();
-        void SyncRuntimeResources(bool deviceIsIdle = false);
+        void CreateSwapChainPipelines() override;
+        void DestroySwapChainPipelines() override;
+        void SyncRuntimeResources(bool deviceIsIdle = false) override;
 
-        void BeginSceneFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+        void BeginSceneFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
         void PrepareView(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool isPrimaryView,
-                         const Vulkan::FRendererContract& contract);
+                         const Vulkan::FRendererContract& contract) override;
         void ApplyToView(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool isPrimaryView,
-                         const Vulkan::FRendererContract& contract);
+                         const Vulkan::FRendererContract& contract) override;
 
         bool Enabled() const;
-        VkDeviceAddress ParamsAddress() const;
-        glm::vec3 TransmittanceToSun(float cameraAltitudeKm, float sunZenithCosine) const;
+        VkDeviceAddress ParamsAddress() const override;
+        glm::vec3 TransmittanceToSun(float cameraAltitudeKm, float sunZenithCosine) const override;
 
     private:
         Assets::FAtmosphereParams BuildParams() const;

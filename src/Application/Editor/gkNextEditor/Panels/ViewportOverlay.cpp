@@ -7,8 +7,8 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "EditorActionDispatcher.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/SceneContent/SceneList.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "Modules/DevTools/GizmoController.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
@@ -166,8 +166,8 @@ namespace Editor
 
         Runtime::Config::UserSettings& userSettings = ctx.engine.GetUserSettings();
         auto& renderer = ctx.engine.GetRenderer();
-        const auto supportedRenderers = Rendering::AvailableRendererChoices({
-            renderer.SupportsRayTracing(), renderer.HasFullAmbientCubeBudget()});
+        const auto supportedRenderers =
+            Rendering::AvailableRendererChoices(renderer.RendererChoiceCapabilities());
         Vulkan::ERendererType currentRendererType = renderer.CurrentLogicRendererType();
         const auto currentChoice = std::find_if(
             supportedRenderers.begin(), supportedRenderers.end(),

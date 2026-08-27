@@ -5,6 +5,5 @@
 
 namespace Runtime
 {
-    void DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statistics& statistics, Runtime::FrameProfiler* profiler,
-                                 float topOffset);
+    void DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statistics& statistics, float topOffset);
 }

@@ -4,15 +4,15 @@
 
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Utilities/JsonHelpers.hpp"
 #include "Engine/Rendering/RendererChoices.hpp"
 #include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Modules/DevTools/CVarEditorPanel.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
-#include "Engine/Runtime/Editor/UI/UiWidgets.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/UiWidgets.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
-#include <fstream>
 #include <imgui.h>
 #include <nlohmann/json.hpp>
 
@@ -137,13 +137,9 @@ namespace Editor
         {
             try
             {
-                const std::string path =
-                    Utilities::FileHelper::GetPlatformFilePath("assets/configs/ui/settings_panel.json");
-                std::ifstream file(path);
-                if (file.is_open())
+                nlohmann::json root;
+                if (NextJson::TryLoadFile("assets/configs/ui/settings_panel.json", root))
                 {
-                    nlohmann::json root;
-                    file >> root;
                     FSettingsLayout layout = ParseLayout(root, cvars);
                     if (!layout.categories.empty())
                     {
@@ -189,10 +185,8 @@ namespace Editor
             std::vector<FSettingsOption> result;
             if (item.optionsProvider == "renderer")
             {
-                const Rendering::FRendererChoiceCapabilities capabilities{
-                    engine.GetRenderer().SupportsRayTracing(),
-                    engine.GetRenderer().HasFullAmbientCubeBudget(),
-                };
+                const Rendering::FRendererChoiceCapabilities capabilities =
+                    engine.GetRenderer().RendererChoiceCapabilities();
                 for (const Rendering::FRendererChoice* choice : Rendering::AvailableRendererChoices(capabilities))
                 {
                     result.push_back({static_cast<int>(choice->type), choice->displayName});

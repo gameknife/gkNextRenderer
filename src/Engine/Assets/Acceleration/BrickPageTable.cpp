@@ -31,14 +31,16 @@ bool FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint3
     const int BX = Assets::GPU_SCENE_AMBIENT_BRICKS_X;
     const int BY = Assets::GPU_SCENE_AMBIENT_BRICKS_Y;
     const int BZ = Assets::GPU_SCENE_AMBIENT_BRICKS_Z;
-    const int EDGE = Assets::GPU_SCENE_AMBIENT_BRICK_EDGE;
     const uint32_t BPC = static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
     const uint32_t kInvalid = Assets::GPU_SCENE_AMBIENT_BRICK_INVALID;
 
     const std::vector<uint32_t> oldBrickTable = brickTable;
+    const std::vector<uint8_t> oldDirtyBricks = dirtyBricks;
     brickTable.assign(static_cast<size_t>(cascadeCapacity) * BPC, kInvalid);
     activeBrickList.assign(static_cast<size_t>(cascadeCapacity) * poolBricksPerCascade, kInvalid);
     activeBricksPerCascade.assign(cascadeCapacity, 0u);
+    dirtyBricks.assign(static_cast<size_t>(cascadeCapacity) * BPC, 0u);
+    dirtyBricksPerCascade.assign(cascadeCapacity, 0u);
     candidateBricksPerCascade.assign(cascadeCapacity, 0u);
     recentlyHitBricksPerCascade.assign(cascadeCapacity, 0u);
     slotsToClear.clear();
@@ -69,14 +71,9 @@ bool FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint3
             {
                 continue;
             }
-            const uint32_t y = v / (Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY);
-            const uint32_t z = (v - y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY) / Assets::CUBE_SIZE_XY;
-            const uint32_t x = v - y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY - z * Assets::CUBE_SIZE_XY;
-            const int sbx = static_cast<int>(x) / EDGE;
-            const int sby = static_cast<int>(y) / EDGE;
-            const int sbz = static_cast<int>(z) / EDGE;
-            occupied[static_cast<uint32_t>(sby) * (BX * BZ) + static_cast<uint32_t>(sbz) * BX +
-                     static_cast<uint32_t>(sbx)] = 1;
+            // Voxel storage is brick-swizzled, so the brick a voxel belongs to is just its element
+            // index divided by the brick volume -- no coordinate round trip needed.
+            occupied[v / kVoxelBrickVolume] = 1;
         }
 
         for (uint32_t b = 0; b < BPC; ++b)
@@ -167,6 +164,10 @@ bool FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint3
                         brickTable[cascadeBase + b] = oldSlot;
                         newOwner[oldSlot] = b;
                         usedSlots[oldSlot] = 1u;
+                        if (cascadeBase + b < oldDirtyBricks.size())
+                        {
+                            dirtyBricks[cascadeBase + b] = oldDirtyBricks[cascadeBase + b];
+                        }
                     }
                 }
             }
@@ -191,17 +192,9 @@ bool FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint3
             brickTable[cascadeBase + b] = nextFreeSlot;
             newOwner[nextFreeSlot] = b;
             usedSlots[nextFreeSlot] = 1u;
+            MarkDirty(static_cast<uint32_t>(cascadeBase + b));
         }
 
-        uint32_t activeCount = 0u;
-        for (uint32_t b = 0; b < BPC; ++b)
-        {
-            if (brickTable[cascadeBase + b] == kInvalid)
-            {
-                continue;
-            }
-            activeBrickList[static_cast<size_t>(c) * poolBricksPerCascade + activeCount++] = b;
-        }
         for (uint32_t slot = 0; slot < poolBricksPerCascade; ++slot)
         {
             if (oldOwner[slot] != newOwner[slot] && oldOwner[slot] != kInvalid)
@@ -210,12 +203,134 @@ bool FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint3
             }
         }
 
-        activeBricksPerCascade[c] = activeCount;
-        totalActive += activeCount;
+        totalActive += static_cast<uint32_t>(std::count_if(
+            brickTable.begin() + static_cast<std::ptrdiff_t>(cascadeBase),
+            brickTable.begin() + static_cast<std::ptrdiff_t>(cascadeBase + BPC),
+            [](uint32_t slot) { return slot != Assets::GPU_SCENE_AMBIENT_BRICK_INVALID; }));
     }
 
+    RebuildActiveBrickList(cascadeCapacity, poolBricksPerCascade);
     activeBricksLastBuild = totalActive;
     return oldBrickTable != brickTable;
+}
+
+bool FCPUBrickTable::MarkDirty(uint32_t globalBrickIndex)
+{
+    if (globalBrickIndex >= dirtyBricks.size() || dirtyBricks[globalBrickIndex] != 0u)
+    {
+        return false;
+    }
+    dirtyBricks[globalBrickIndex] = 1u;
+    ++dirtyRevision;
+    return true;
+}
+
+void FCPUBrickTable::RebuildActiveBrickList(uint32_t cascadeCapacity, uint32_t poolBricksPerCascade)
+{
+    const uint32_t bricksPerCascade = static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
+    const uint32_t invalid = Assets::GPU_SCENE_AMBIENT_BRICK_INVALID;
+    activeBrickList.assign(static_cast<size_t>(cascadeCapacity) * poolBricksPerCascade, invalid);
+    activeBricksPerCascade.assign(cascadeCapacity, 0u);
+    dirtyBricksPerCascade.assign(cascadeCapacity, 0u);
+
+    for (uint32_t cascade = 0; cascade < cascadeCapacity; ++cascade)
+    {
+        const size_t brickBase = static_cast<size_t>(cascade) * bricksPerCascade;
+        const size_t listBase = static_cast<size_t>(cascade) * poolBricksPerCascade;
+        uint32_t writeIndex = 0u;
+        for (uint32_t dirtyPass = 1u; dirtyPass <= 2u; ++dirtyPass)
+        {
+            const bool wantDirty = dirtyPass == 1u;
+            for (uint32_t brick = 0; brick < bricksPerCascade; ++brick)
+            {
+                const size_t globalBrick = brickBase + brick;
+                if (globalBrick >= brickTable.size() || brickTable[globalBrick] == invalid ||
+                    (dirtyBricks[globalBrick] != 0u) != wantDirty)
+                {
+                    continue;
+                }
+                if (writeIndex < poolBricksPerCascade)
+                {
+                    activeBrickList[listBase + writeIndex++] = brick;
+                }
+            }
+            if (wantDirty)
+            {
+                dirtyBricksPerCascade[cascade] = writeIndex;
+            }
+        }
+        activeBricksPerCascade[cascade] = writeIndex;
+    }
+}
+
+void FCPUBrickTable::MarkAllActiveDirty()
+{
+    for (uint32_t brick = 0; brick < brickTable.size(); ++brick)
+    {
+        if (brickTable[brick] != Assets::GPU_SCENE_AMBIENT_BRICK_INVALID)
+        {
+            MarkDirty(brick);
+        }
+    }
+    const uint32_t cascadeCapacity = static_cast<uint32_t>(activeBricksPerCascade.size());
+    const uint32_t poolBricksPerCascade = cascadeCapacity == 0u
+        ? 0u
+        : static_cast<uint32_t>(activeBrickList.size() / cascadeCapacity);
+    RebuildActiveBrickList(cascadeCapacity, poolBricksPerCascade);
+}
+
+void FCPUBrickTable::MarkDirtyBounds(const std::vector<FCPUProbeBaker>& bakers,
+                                     const glm::vec3& worldMin, const glm::vec3& worldMax,
+                                     uint32_t poolBricksPerCascade)
+{
+    const int edge = Assets::GPU_SCENE_AMBIENT_BRICK_EDGE;
+    const int bx = Assets::GPU_SCENE_AMBIENT_BRICKS_X;
+    const int by = Assets::GPU_SCENE_AMBIENT_BRICKS_Y;
+    const int bz = Assets::GPU_SCENE_AMBIENT_BRICKS_Z;
+    const uint32_t bricksPerCascade = static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
+    const uint32_t cascadeCount = std::min<uint32_t>(static_cast<uint32_t>(bakers.size()),
+                                                     static_cast<uint32_t>(activeBricksPerCascade.size()));
+    for (uint32_t cascade = 0; cascade < cascadeCount; ++cascade)
+    {
+        const FCPUProbeBaker& baker = bakers[cascade];
+        const glm::ivec3 minCell = glm::clamp(glm::ivec3(glm::floor((worldMin - baker.CUBE_OFFSET) / baker.UNIT_SIZE)),
+                                              glm::ivec3(0), glm::ivec3(CUBE_SIZE_XY - 1, CUBE_SIZE_Z - 1, CUBE_SIZE_XY - 1));
+        const glm::ivec3 maxCell = glm::clamp(glm::ivec3(glm::ceil((worldMax - baker.CUBE_OFFSET) / baker.UNIT_SIZE)),
+                                              glm::ivec3(0), glm::ivec3(CUBE_SIZE_XY - 1, CUBE_SIZE_Z - 1, CUBE_SIZE_XY - 1));
+        const glm::ivec3 minBrick = glm::max(minCell / edge - glm::ivec3(1), glm::ivec3(0));
+        const glm::ivec3 maxBrick = glm::min(maxCell / edge + glm::ivec3(1), glm::ivec3(bx - 1, by - 1, bz - 1));
+        for (int y = minBrick.y; y <= maxBrick.y; ++y)
+        {
+            for (int z = minBrick.z; z <= maxBrick.z; ++z)
+            {
+                for (int x = minBrick.x; x <= maxBrick.x; ++x)
+                {
+                    const uint32_t localBrick = static_cast<uint32_t>(y * bx * bz + z * bx + x);
+                    const uint32_t globalBrick = cascade * bricksPerCascade + localBrick;
+                    if (globalBrick < brickTable.size() &&
+                        brickTable[globalBrick] != Assets::GPU_SCENE_AMBIENT_BRICK_INVALID)
+                    {
+                        MarkDirty(globalBrick);
+                    }
+                }
+            }
+        }
+    }
+    RebuildActiveBrickList(static_cast<uint32_t>(activeBricksPerCascade.size()), poolBricksPerCascade);
+}
+
+void FCPUBrickTable::AcknowledgeDirty(uint64_t revision)
+{
+    if (revision != dirtyRevision)
+    {
+        return;
+    }
+    std::fill(dirtyBricks.begin(), dirtyBricks.end(), uint8_t(0));
+    const uint32_t cascadeCapacity = static_cast<uint32_t>(activeBricksPerCascade.size());
+    const uint32_t poolBricksPerCascade = cascadeCapacity == 0u
+        ? 0u
+        : static_cast<uint32_t>(activeBrickList.size() / cascadeCapacity);
+    RebuildActiveBrickList(cascadeCapacity, poolBricksPerCascade);
 }
 
 void FCPUBrickTable::UploadGPU(Vulkan::DeviceMemory& deviceMemory, size_t tableByteOffset, size_t activeListByteOffset)
@@ -261,9 +376,10 @@ void FCPUPageIndex::UpdateData(const std::vector<FCPUProbeBaker>& bakers)
             }
 
             // convert to local position
-            uint y = gIdx / (CUBE_SIZE_XY * CUBE_SIZE_XY);
-            uint z = (gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY) / CUBE_SIZE_XY;
-            uint x = gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY - z * CUBE_SIZE_XY;
+            uint x;
+            uint y;
+            uint z;
+            DecodeVoxelAddress(gIdx, x, y, z);
 
             vec3 worldPos = vec3(x, y, z) * baker.UNIT_SIZE + baker.CUBE_OFFSET;
 

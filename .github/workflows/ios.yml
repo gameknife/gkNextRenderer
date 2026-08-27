@@ -23,13 +23,13 @@ jobs:
           path: |
             .vcpkg
             .vcpkg_bincache
-          key: ${{ steps.gnb.outputs.key }}-ios
+          key: ${{ steps.gnb.outputs.key }}-ios-device
       - run: ./gnb.sh setup --skip-paks
-      - run: ./gnb.sh ios --skip-codesign
+      - run: ./gnb.sh ios build
       - uses: actions/cache/save@v6
         if: steps.cache-vcpkg-restore.outputs.cache-hit != 'true'
         with:
           path: |
             .vcpkg
             .vcpkg_bincache
-          key: ${{ steps.gnb.outputs.key }}-ios
+          key: ${{ steps.gnb.outputs.key }}-ios-device

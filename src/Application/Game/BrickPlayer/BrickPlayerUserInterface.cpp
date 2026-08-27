@@ -1,6 +1,6 @@
 #include "BrickPlayerUserInterface.hpp"
 #include "BrickPlayerGameInstance.hpp"
-#include "Engine/Runtime/ScreenShotService.hpp"
+#include "Engine/Runtime/Interface/ScreenShotService.hpp"
 #include "Engine/Utilities/ImGui.hpp"
 #include <imgui_internal.h>
 

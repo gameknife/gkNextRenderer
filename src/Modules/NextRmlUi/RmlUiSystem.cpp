@@ -30,6 +30,7 @@
 #include <array>
 #include <cstring>
 #include <filesystem>
+#include <limits>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
@@ -798,8 +799,11 @@ scrollbarhorizontal sliderbar:active {
             int width = 0;
             int height = 0;
             int comp = 0;
-            const std::string platformPath = Utilities::FileHelper::GetPlatformFilePath(textureName.c_str());
-            if (stbi_info(platformPath.c_str(), &width, &height, &comp) != 0 && width > 0 && height > 0)
+            std::vector<uint8_t> imageData;
+            const bool loaded = Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(textureName, imageData);
+            if (loaded && imageData.size() <= static_cast<size_t>(std::numeric_limits<int>::max()) &&
+                stbi_info_from_memory(imageData.data(), static_cast<int>(imageData.size()),
+                                      &width, &height, &comp) != 0 && width > 0 && height > 0)
             {
                 textureDimensions = Rml::Vector2i(width, height);
             }

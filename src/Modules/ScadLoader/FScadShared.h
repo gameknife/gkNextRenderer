@@ -6,6 +6,7 @@
 // resolution and SCAD (Z-up) -> engine (Y-up) conversions.
 // ============================================================================
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -29,6 +30,12 @@ namespace Assets::Scad
     // Resolves filename (platform-relative or absolute), reads the file and its
     // use/include closure, and lexes/parses everything into outProgram.
     bool LoadScadProgram(const std::string& filename, ScadProgram& outProgram, std::string& outError);
+
+    // Reads a runtime-root-relative asset as raw bytes through the package file
+    // system (with a loose-file fallback). Same resolution the use/include
+    // closure uses, so binary side-car assets referenced from .scad (e.g. the
+    // terrain .hmap) work identically in packed and loose builds.
+    bool ScadReadAsset(const std::string& path, std::vector<uint8_t>& out);
 
     // Converts a SCAD (Z-up) point to engine (Y-up) space with uniform scale.
     glm::vec3 ScadToWorldPos(const glm::dvec3& p, double scale);

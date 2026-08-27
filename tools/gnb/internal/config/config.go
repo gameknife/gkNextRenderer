@@ -34,10 +34,24 @@ type VcpkgConfig struct {
 type ExternalConfig struct {
 	Streamline ExternalURLConfig `toml:"streamline"`
 	FidelityFX FidelityFXConfig  `toml:"fidelityfx"`
-	TSC        TSCConfig         `toml:"tsc"`
-	MoltenVK   ExternalURLConfig `toml:"moltenvk"`
 	VulkanSDK  VulkanSDKConfig   `toml:"vulkansdk"`
 	LLM        LLMConfig         `toml:"llm"`
+	DotNet     DotNetConfig      `toml:"dotnet"`
+	Tracy      TracyConfig       `toml:"tracy"`
+}
+
+type TracyConfig struct {
+	Version string `toml:"version"`
+	Root    string `toml:"root"`
+	URL     string `toml:"url"`
+}
+
+// DotNetConfig pins the .NET SDK used by the managed scripting layer. Version is the floor an
+// already-installed SDK must meet to be accepted; URLTemplate is only used when one has to be
+// downloaded into external/dotnet.
+type DotNetConfig struct {
+	Version     string `toml:"version"`
+	URLTemplate string `toml:"url_template"`
 }
 
 type FidelityFXConfig struct {
@@ -106,14 +120,6 @@ type ExternalURLConfig struct {
 	URL  string `toml:"url"`
 }
 
-type TSCConfig struct {
-	Version    string `toml:"version"`
-	Windows    string `toml:"windows"`
-	Linux      string `toml:"linux"`
-	MacOSAMD64 string `toml:"macos_amd64"`
-	MacOSArm64 string `toml:"macos_arm64"`
-}
-
 type VulkanSDKConfig struct {
 	Version string `toml:"version"`
 	Root    string `toml:"root"`
@@ -129,6 +135,10 @@ type PakAsset struct {
 	ID   string `toml:"id"`
 	Name string `toml:"name"`
 	Dest string `toml:"dest"`
+	// Optional marks a pak that the release may legitimately not carry yet, so a
+	// bulk `gnb setup` warns past it instead of failing. Asking for it by name
+	// (`gnb paks fetch geo`) still reports the download error.
+	Optional bool `toml:"optional"`
 }
 
 type PackageConfig struct {
@@ -205,6 +215,12 @@ func Load(repoRoot string) (Config, error) {
 	}
 	if cfg.Package.DefaultPreset == "" {
 		cfg.Package.DefaultPreset = "default"
+	}
+	if cfg.External.DotNet.Version == "" {
+		cfg.External.DotNet.Version = "10.0.300"
+	}
+	if cfg.External.DotNet.URLTemplate == "" {
+		cfg.External.DotNet.URLTemplate = "https://builds.dotnet.microsoft.com/dotnet/Sdk/{version}/dotnet-sdk-{version}-{rid}.{ext}"
 	}
 	applyLLMDefaults(&cfg.External.LLM)
 	aiconfig.ApplyDefaults(&cfg.AI)

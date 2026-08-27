@@ -1,5 +1,7 @@
 #include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
 
+// Directional-shadow implementation is part of the concrete renderer pack.
+
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Vertex.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"

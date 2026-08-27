@@ -1,6 +1,7 @@
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Modules/DevTools/RenderDoc.hpp"
 #include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
 #include "Modules/GltfLoader/GltfModule.hpp"
 #include "Modules/LiveCoding/LiveCodingModule.hpp"
@@ -8,23 +9,31 @@
 #include "Modules/NextPhysics/NextPhysicsModule.hpp"
 #include "Modules/NextRemote/NextRemoteModule.hpp"
 #include "Modules/NextTemporalUpscaler/NextTemporalUpscalerModule.hpp"
+#include "Modules/NextUI/NextUIModule.hpp"
+#include "Modules/NextCapture/NextCaptureModule.hpp"
+#include "Modules/NextValidation/NextValidationModule.hpp"
+#include "Modules/SceneContent/SceneContentModule.hpp"
 
 #include <fmt/format.h>
 #include <filesystem>
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
-
-#if WIN32
-#include "ThirdParty/renderdoc/renderdoc_app.h"
-#endif
 
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
 #include <cstdlib>
+#include <vector>
 
 std::unique_ptr<NextEngine> GApplication;
 std::unique_ptr<Runtime::Config::Options> GOptionPtr;
+
+#if WITH_RENDERDOC
+namespace
+{
+    bool GRenderDocAutoCaptureRequested = false;
+}
+#endif
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
@@ -32,6 +41,16 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     {
         return SDL_APP_SUCCESS;
     }
+#if WITH_RENDERDOC
+    const bool renderDocRequested = GOption != nullptr && GOption->RenderDoc;
+    if (renderDocRequested && !GRenderDocAutoCaptureRequested && Runtime::RenderDoc::IsSupported() &&
+        GApplication->GetEngineStatus() == NextRenderer::EApplicationStatus::Running &&
+        !GApplication->GetScene().Nodes().empty())
+    {
+        GRenderDocAutoCaptureRequested = Runtime::RenderDoc::RequestCapture();
+    }
+    Runtime::RenderDoc::Poll();
+#endif
     return SDL_APP_CONTINUE;
 }
 
@@ -47,8 +66,21 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
 #if ANDROID
-    const char* argv1[] = { "gkNextRenderer", "--renderer=0", "--forcesoftgen", "--load-scene=assets/models/conf_room.glb" };
-    GOptionPtr.reset(new Runtime::Config::Options(4, argv1));
+    std::vector<const char*> androidArguments = {
+        "gkNextRenderer",
+        "--gpu=0",
+        "--fullscreen",
+        "--load-scene=GIBootcamp.proc"
+    };
+    for (int argumentIndex = 1; argumentIndex < argc; ++argumentIndex)
+    {
+        if (argv != nullptr && argv[argumentIndex] != nullptr)
+        {
+            androidArguments.push_back(argv[argumentIndex]);
+        }
+    }
+    GOptionPtr.reset(new Runtime::Config::Options(
+        static_cast<int>(androidArguments.size()), androidArguments.data()));
 #else
     // Handle command line options.
     GOptionPtr.reset(new Runtime::Config::Options(argc, const_cast<const char**>(argv)));
@@ -62,17 +94,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 #endif   
     if(GOption->RenderDoc)
     {
-#if WIN32
-        RENDERDOC_API_1_1_2* rdoc_api = NULL;
-        const auto mod = LoadLibrary(L"renderdoc.dll");
-        if (mod)
-        {
-            pRENDERDOC_GetAPI RENDERDOC_GetAPI =
-                (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
-            RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void**)&rdoc_api);
-        }
-#endif
-            
 #if __linux__
         setenv("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1", 1);
 #endif
@@ -95,6 +116,10 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     Runtime::IDebugUiProvider& debugUiProvider = DevTools::DefaultDebugUiProvider();
     Modules::NextTemporalUpscaler::Install(*GOption);
     GApplication.reset( new NextEngine(*GOption) );
+    Modules::SceneContent::Install(*GApplication);
+    Modules::NextValidation::Install(*GApplication);
+    Modules::NextUI::Install(*GApplication);
+    Modules::NextCapture::Install(*GApplication);
     GApplication->SetDebugUiProvider(&debugUiProvider);
     Modules::Audio::Install(*GApplication);
     Modules::Physics::Install(*GApplication);
@@ -105,6 +130,15 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         GApplication->AddRenderFrameConsumer(Modules::NextRemote::CreateRemoteServer(*GOption));
     }
     GApplication->Start();
+#if WITH_RENDERDOC
+    // The launch path controls whether the RenderDoc layer is available;
+    // --renderdoc controls whether we resolve its API and capture. Keep
+    // normal launches completely free of RenderDoc state.
+    if (GOption->RenderDoc)
+    {
+        Runtime::RenderDoc::Initialize();
+    }
+#endif
     
     return SDL_APP_CONTINUE;
 }

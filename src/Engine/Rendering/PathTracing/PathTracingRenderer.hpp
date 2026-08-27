@@ -1,5 +1,7 @@
 #pragma once
 
+// Core renderer implementation owned by gkNextEngine.
+
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Rendering/PipelineCommon/SamplePostChain.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
@@ -18,6 +20,7 @@ namespace Vulkan::PathTracing
 
         void CreateSwapChain(const VkExtent2D& extent) override;
         void DeleteSwapChain() override;
+        void WarmupPipelines() override;
         void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
         struct FSharcBuffer
@@ -55,8 +58,6 @@ namespace Vulkan::PathTracing
 
     private:
 
-        // individual textures
-        std::unique_ptr<PipelineCommon::ZeroBindWithTLASPipeline> rayTracingPipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindWithTLASPipeline> sharcUpdatePipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindWithTLASPipeline> sharcQueryPipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindWithTLASPipeline> restirSpatialPipeline_;
@@ -75,8 +76,7 @@ namespace Vulkan::PathTracing
         void UpdateSharcParameters();
         void ClearSharcResources(VkCommandBuffer commandBuffer);
         void InsertSharcBarrier(VkCommandBuffer commandBuffer, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask) const;
-        void UpdateExtrasTable(bool sharcActive);
-        bool IsEffectiveSharcEnabled() const;
+        void UpdateExtrasTable();
         bool IsRestirEnabled() const;
     };
 

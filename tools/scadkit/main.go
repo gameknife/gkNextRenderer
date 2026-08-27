@@ -14,7 +14,6 @@
 //   - rewrites the original scene file to `use` the kit, keeping gameplay anchor
 //     modules (name pattern *_NN, looked up by games via scene node names) and
 //     the assembly statements in their original order.
-//
 package main
 
 import (
@@ -573,15 +572,15 @@ func main() {
 	}
 
 	v2 := job{
-		src:          filepath.Join(scadDir, "habor_city_v2.scad"),
+		src:          filepath.Join(scadDir, "source", "habor_city", "habor_city_v2.scad"),
 		kitOut:       filepath.Join(libDir, "kit_city_blocks.scad"),
-		consumerOut:  filepath.Join(scadDir, "habor_city_v2.scad"),
+		consumerOut:  filepath.Join(scadDir, "source", "habor_city", "habor_city_v2.scad"),
 		prefix:       "", // v2_* names are already namespaced
 		kitName:      "city_blocks",
 		extRenames:   hdRes.renames,
 		deleteConsts: hdRes.constNames,
 		kitUses:      []string{"kit_city_hd.scad"},
-		consumerUses: []string{"lib/kit_city_hd.scad", "lib/kit_city_blocks.scad"},
+		consumerUses: []string{"../../lib/kit_city_hd.scad", "../../lib/kit_city_blocks.scad"},
 	}
 	v2Res, err := runJob(v2)
 	if err != nil {
@@ -589,10 +588,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	themes := []struct{ file, prefix, name string }{
-		{"old_city", "oc_", "old_city"},
-		{"office", "of_", "office"},
-		{"airport", "ap_", "airport"},
+	themes := []struct{ file, prefix, name, scenePath, kitPath string }{
+		{"old_city", "oc_", "old_city", filepath.Join("source", "oldcity", "old_city.scad"), "../../lib/kit_old_city.scad"},
+		{"office", "of_", "office", filepath.Join("source", "office", "office.scad"), "../../lib/kit_office.scad"},
+		{"airport", "ap_", "airport", filepath.Join("source", "airport", "airport.scad"), "../../lib/kit_airport.scad"},
 	}
 	allRenames := map[string]map[string]string{
 		"kit_city_hd":     hdRes.renames,
@@ -600,13 +599,13 @@ func main() {
 	}
 	for _, t := range themes {
 		jb := job{
-			src:          filepath.Join(scadDir, t.file+".scad"),
+			src:          filepath.Join(scadDir, t.scenePath),
 			kitOut:       filepath.Join(libDir, "kit_"+t.name+".scad"),
-			consumerOut:  filepath.Join(scadDir, t.file+".scad"),
+			consumerOut:  filepath.Join(scadDir, t.scenePath),
 			prefix:       t.prefix,
 			kitName:      t.name,
 			anchorRe:     anchor,
-			consumerUses: []string{"lib/kit_" + t.name + ".scad"},
+			consumerUses: []string{t.kitPath},
 		}
 		r, err := runJob(jb)
 		if err != nil {
@@ -618,15 +617,15 @@ func main() {
 
 	// Leak verification over every emitted file.
 	checks := map[string][]string{
-		filepath.Join(libDir, "kit_city_hd.scad"):     {"kit_city_hd"},
-		filepath.Join(libDir, "kit_city_blocks.scad"): {"kit_city_blocks"},
-		filepath.Join(scadDir, "habor_city_v2.scad"):  {"kit_city_blocks"},
-		filepath.Join(libDir, "kit_old_city.scad"):    {"kit_old_city"},
-		filepath.Join(scadDir, "old_city.scad"):       {"kit_old_city"},
-		filepath.Join(libDir, "kit_office.scad"):      {"kit_office"},
-		filepath.Join(scadDir, "office.scad"):         {"kit_office"},
-		filepath.Join(libDir, "kit_airport.scad"):     {"kit_airport"},
-		filepath.Join(scadDir, "airport.scad"):        {"kit_airport"},
+		filepath.Join(libDir, "kit_city_hd.scad"):                            {"kit_city_hd"},
+		filepath.Join(libDir, "kit_city_blocks.scad"):                        {"kit_city_blocks"},
+		filepath.Join(scadDir, "source", "habor_city", "habor_city_v2.scad"): {"kit_city_blocks"},
+		filepath.Join(libDir, "kit_old_city.scad"):                           {"kit_old_city"},
+		filepath.Join(scadDir, "source", "oldcity", "old_city.scad"):         {"kit_old_city"},
+		filepath.Join(libDir, "kit_office.scad"):                             {"kit_office"},
+		filepath.Join(scadDir, "source", "office", "office.scad"):            {"kit_office"},
+		filepath.Join(libDir, "kit_airport.scad"):                            {"kit_airport"},
+		filepath.Join(scadDir, "source", "airport", "airport.scad"):          {"kit_airport"},
 	}
 	bad := false
 	for path, kits := range checks {

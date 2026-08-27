@@ -50,7 +50,6 @@ target_link_libraries(gkNextEngine PRIVATE
     xxHash::xxhash
     meshoptimizer::meshoptimizer
     fmt::fmt
-    CURL::libcurl
     glm::glm
     imgui::imgui
     draco::draco
@@ -60,6 +59,10 @@ target_link_libraries(gkNextEngine PRIVATE
     ${extra_libs}
 )
 target_link_libraries(gkNextEngine PUBLIC spdlog::spdlog)
+
+if(NOT IOS)
+    target_link_libraries(gkNextEngine PRIVATE CURL::libcurl)
+endif()
 
 if(IOS)
     get_target_property(imguiInterfaces imgui::imgui INTERFACE_LINK_LIBRARIES)

@@ -3,7 +3,7 @@
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
 #include "Modules/DevTools/PhysicsDebugOverlay.hpp"
 #include "Modules/DevTools/ProfileDebugOverlay.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "Modules/DevTools/ConsoleLogBuffer.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
 #include "Modules/DevTools/CVarEditorPanel.hpp"
@@ -48,13 +48,12 @@ namespace DevTools
             }
 
             void DrawUiPanels(NextEngine& engine, const NextUI::Statistics& statistics,
-                              Runtime::FrameProfiler* profiler, NextUI::EUiDeveloperLayer layers,
-                              bool suppressStatsOverlay) override
+                              NextUI::EUiDeveloperLayer layers, bool suppressStatsOverlay) override
             {
                 FUiDevPanels& panels = FUiDevPanels::Get();
                 if (NextUI::HasUiLayer(layers, NextUI::EUiDeveloperLayer::Statistics) && !suppressStatsOverlay)
                 {
-                    panels.DrawOverlay(statistics, profiler);
+                    panels.DrawOverlay(statistics);
                 }
                 if (NextUI::HasUiLayer(layers, NextUI::EUiDeveloperLayer::Console))
                 {
@@ -88,9 +87,9 @@ namespace DevTools
             }
 
             void DrawProfileOverlay(NextEngine& engine, const NextUI::Statistics& statistics,
-                                    Runtime::FrameProfiler* profiler, float topOffset) override
+                                    float topOffset) override
             {
-                Runtime::DrawProfileDebugOverlay(engine, statistics, profiler, topOffset);
+                Runtime::DrawProfileDebugOverlay(engine, statistics, topOffset);
             }
 
             bool HandleRendererShortcut(SDL_Keycode key, bool pressed, bool panelVisible, NextEngine& engine) override

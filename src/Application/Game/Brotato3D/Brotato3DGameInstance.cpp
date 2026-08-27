@@ -7,7 +7,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Brotato3DUI.hpp"
-#include "Engine/Runtime/Editor/FontLoader.hpp"
+#include "Modules/NextUI/FontLoader.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Platform/UserPaths.hpp"
 #include "Engine/Runtime/Subsystems/NextLocalization.hpp"

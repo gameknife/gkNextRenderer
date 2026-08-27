@@ -5,8 +5,6 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"crypto/sha256"
-	"debug/macho"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,17 +33,13 @@ func EnsureExternal(repoRoot string, cfg config.Config) error {
 
 func EnsureNamedExternal(repoRoot string, cfg config.Config, names []string) error {
 	if len(names) == 0 {
-		names = []string{"tsc", "vulkan", "streamline", "fidelityfx"}
+		names = []string{"vulkan", "streamline", "fidelityfx"}
 	}
 
 	for _, name := range names {
 		switch strings.ToLower(name) {
 		case "all":
 			return EnsureExternal(repoRoot, cfg)
-		case "tsc":
-			if err := ensureTSC(repoRoot, cfg); err != nil {
-				return err
-			}
 		case "vulkan", "vulkansdk", "vulkan-sdk":
 			if err := EnsureVulkanSDK(repoRoot, cfg); err != nil {
 				return err
@@ -78,6 +72,12 @@ func EnsureNamedExternal(repoRoot string, cfg config.Config, names []string) err
 }
 
 func EnsureVulkanSDK(repoRoot string, cfg config.Config) error {
+	if explicit := os.Getenv("VULKAN_SDK"); explicit != "" {
+		if normalizeVulkanSDKRoot(explicit) == "" {
+			return fmt.Errorf("VULKAN_SDK is set to an unusable path: %s", explicit)
+		}
+		return nil
+	}
 	if sdkRoot := DiscoverVulkanSDK(repoRoot, cfg); sdkRoot != "" {
 		return nil
 	}
@@ -130,13 +130,6 @@ func EnsureVulkanSDK(repoRoot string, cfg config.Config) error {
 	return writeCurrentVulkanSDKVersion(installBase, spec.Version)
 }
 
-func EnsureHostBuildTools(repoRoot string, cfg config.Config) error {
-	if runtime.GOOS == "darwin" && runtime.GOARCH == "amd64" {
-		return ensureTSC(repoRoot, cfg)
-	}
-	return nil
-}
-
 func DiscoverVulkanSDK(repoRoot string, cfg config.Config) string {
 	if sdkRoot := normalizeVulkanSDKRoot(os.Getenv("VULKAN_SDK")); sdkRoot != "" {
 		return sdkRoot
@@ -167,86 +160,18 @@ func DiscoverVulkanSDK(repoRoot string, cfg config.Config) string {
 		}
 	}
 
-	return ""
-}
-
-func EnsureIOSExternal(repoRoot string, cfg config.Config) error {
-	dstDir := filepath.Join(repoRoot, "external", "moltenvk-1.4.0")
-	sentinels := []string{
-		"MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a",
-		"MoltenVK/MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a",
-	}
-	for _, sentinel := range sentinels {
-		if _, err := os.Stat(filepath.Join(dstDir, filepath.FromSlash(sentinel))); err == nil {
-			return nil
-		}
-	}
-	return ensureArchive(repoRoot, cfg.External.MoltenVK.URL, dstDir, "MoltenVK/MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a")
-}
-
-func ensureTSC(repoRoot string, cfg config.Config) error {
-	filename := "tsc"
-	url := cfg.External.TSC.Linux
-	if runtime.GOOS == "windows" {
-		filename = "tsc.exe"
-		url = cfg.External.TSC.Windows
-	} else if runtime.GOOS == "darwin" {
-		if runtime.GOARCH == "amd64" {
-			url = cfg.External.TSC.MacOSAMD64
-		} else {
-			url = cfg.External.TSC.MacOSArm64
-		}
-	}
-	dir := filepath.Join(repoRoot, "tools", "tsc")
-	dst := filepath.Join(dir, filename)
-	versionFile := filepath.Join(dir, ".tsc_version")
-	if data, err := os.ReadFile(versionFile); err == nil && strings.TrimSpace(string(data)) == cfg.External.TSC.Version {
-		if _, err := os.Stat(dst); err == nil && tscMatchesHostArch(dst) {
-			return nil
-		}
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	if err := Download(url, dst); err != nil {
-		return err
-	}
-	if runtime.GOOS != "windows" {
-		if err := os.Chmod(dst, 0o755); err != nil {
-			return err
-		}
-	}
-	return os.WriteFile(versionFile, []byte(cfg.External.TSC.Version+"\n"), 0o644)
-}
-
-func tscMatchesHostArch(path string) bool {
-	if runtime.GOOS != "darwin" {
-		return true
-	}
-
-	wantCPU := macho.CpuArm64
-	if runtime.GOARCH == "amd64" {
-		wantCPU = macho.CpuAmd64
-	}
-
-	if fatFile, err := macho.OpenFat(path); err == nil {
-		defer fatFile.Close()
-		for _, arch := range fatFile.Arches {
-			if arch.Cpu == wantCPU {
-				return true
+	if home, err := os.UserHomeDir(); err == nil {
+		homeMatches, _ := filepath.Glob(filepath.Join(home, "VulkanSDK", "*"))
+		slices.Sort(homeMatches)
+		slices.Reverse(homeMatches)
+		for _, match := range homeMatches {
+			if sdkRoot := normalizeVulkanSDKRoot(match); sdkRoot != "" {
+				return sdkRoot
 			}
 		}
-		return false
-	} else if !errors.Is(err, macho.ErrNotFat) {
-		return false
 	}
 
-	file, err := macho.Open(path)
-	if err != nil {
-		return false
-	}
-	defer file.Close()
-	return file.Cpu == wantCPU
+	return ""
 }
 
 func ensureArchive(repoRoot string, url string, dstDir string, sentinel string) error {
@@ -375,8 +300,8 @@ func untar(src string, dst string, gz bool) error {
 		if err != nil {
 			return err
 		}
-		target := filepath.Join(dst, header.Name)
-		if !strings.HasPrefix(filepath.Clean(target), filepath.Clean(dst)+string(os.PathSeparator)) {
+		target, err := archiveEntryPath(dst, header.Name)
+		if err != nil {
 			return fmt.Errorf("tar entry escapes destination: %s", header.Name)
 		}
 		switch header.Typeflag {
@@ -413,6 +338,22 @@ func untar(src string, dst string, gz bool) error {
 			}
 		}
 	}
+}
+
+// archiveEntryPath resolves a tar entry beneath dst while allowing the archive's conventional
+// top-level "." directory entry. Comparing only with a dst+separator prefix rejects that legal
+// entry because filepath.Clean(filepath.Join(dst, "./")) is exactly dst.
+func archiveEntryPath(dst string, name string) (string, error) {
+	cleanDst := filepath.Clean(dst)
+	if filepath.IsAbs(name) {
+		return "", fmt.Errorf("absolute archive entry")
+	}
+	target := filepath.Clean(filepath.Join(cleanDst, name))
+	relative, err := filepath.Rel(cleanDst, target)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) {
+		return "", fmt.Errorf("archive entry outside destination")
+	}
+	return target, nil
 }
 
 func resolveVulkanDownloadSpec(requestedVersion string) (vulkanDownloadSpec, error) {

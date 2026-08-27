@@ -15,11 +15,14 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <map>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 #include <fmt/format.h>
@@ -30,17 +33,27 @@ namespace Assets
 {
     namespace
     {
-        Material ScadMaterialFromColor(const glm::vec4& color)
+        Material ScadMaterialFromColor(const glm::vec4& color, const Scad::ScadMaterialProperties& properties)
         {
             const glm::vec3 rgb(color.r, color.g, color.b);
             const float alpha = color.a;
+            const float roughness = std::clamp(
+                alpha < 0.99f && !properties.explicitParameters ? 0.0f : properties.roughness, 0.0f, 1.0f);
+            const float metalness = std::clamp(properties.metalness, 0.0f, 1.0f);
             if (alpha < 0.99f)
             {
-                Material material = Material::Dielectric(1.45f, 0.0f);
+                Material material = Material::Dielectric(1.45f, roughness);
                 material.Diffuse = glm::vec4(rgb, alpha);
                 return material;
             }
-            return Material::Lambertian(rgb);
+            if (roughness >= 0.999f && metalness <= 0.001f)
+            {
+                return Material::Lambertian(rgb);
+            }
+
+            Material material = Material::Mixture(rgb, roughness);
+            material.Metalness = metalness;
+            return material;
         }
 
         uint32_t QuantizeMaterialColor(const glm::vec4& color)
@@ -137,7 +150,7 @@ namespace Assets
 
         struct ScadBuildCache
         {
-            std::unordered_map<uint32_t, uint32_t> materialByColor;
+            std::unordered_map<uint64_t, uint32_t> materialByProperties;
             std::unordered_map<ScadMeshFingerprint, std::vector<uint32_t>, ScadMeshFingerprintHash> modelByMesh;
             // Scene-eval instanceId -> engine node + accumulated engine-space
             // world transform (for the TerrainComponent hookup).
@@ -146,20 +159,26 @@ namespace Assets
 
         uint32_t GetOrCreateScadMaterial(
             const glm::vec4& color,
+            const Scad::ScadMaterialProperties& properties,
             const std::string& sourceName,
             std::vector<FMaterial>& materials,
             ScadBuildCache& cache)
         {
-            const uint32_t colorKey = QuantizeMaterialColor(color);
-            auto found = cache.materialByColor.find(colorKey);
-            if (found != cache.materialByColor.end())
+            const float effectiveRoughness =
+                color.a < 0.99f && !properties.explicitParameters ? 0.0f : properties.roughness;
+            const uint64_t colorKey =
+                (static_cast<uint64_t>(QuantizeMaterialColor(color)) << 32u) |
+                (static_cast<uint64_t>(std::clamp(effectiveRoughness, 0.0f, 1.0f) * 65535.0f + 0.5f) << 16u) |
+                static_cast<uint64_t>(std::clamp(properties.metalness, 0.0f, 1.0f) * 65535.0f + 0.5f);
+            auto found = cache.materialByProperties.find(colorKey);
+            if (found != cache.materialByProperties.end())
             {
                 return found->second;
             }
 
             const uint32_t materialIdx = static_cast<uint32_t>(materials.size());
-            materials.push_back({ScadMaterialFromColor(color), ScadMaterialName(color, sourceName)});
-            cache.materialByColor[colorKey] = materialIdx;
+            materials.push_back({ScadMaterialFromColor(color, properties), ScadMaterialName(color, sourceName)});
+            cache.materialByProperties[colorKey] = materialIdx;
             return materialIdx;
         }
 
@@ -215,7 +234,8 @@ namespace Assets
                     indices.push_back(vertexOffset + i);
                 }
 
-                nodeMaterials[sectionIndex] = GetOrCreateScadMaterial(bucket.color, bucket.materialName, materials, cache);
+                nodeMaterials[sectionIndex] = GetOrCreateScadMaterial(
+                    bucket.color, bucket.material, bucket.materialName, materials, cache);
                 ++sectionIndex;
             }
 
@@ -443,6 +463,232 @@ namespace Assets
         }
     } // namespace
 
+    namespace
+    {
+        // ------------------------------------------------------------------
+        // Camera markers: gk_camera() / gk_camera_key() are zero-geometry
+        // virtual points (see assets/scad/lib/gk_camera.scad). Marker local
+        // space: front = +Y, up = +Z (SCAD Z-up); after the Z-up -> Y-up bake
+        // this matches the engine camera convention (front = -Z, up = +Y), so
+        // fixed and path cameras both reuse the glTF camera runtime path
+        // (EnvironmentSetting.cameras + Scene::HasCameraAnimation override).
+        // ------------------------------------------------------------------
+
+        const Scad::Value* FindScadParam(const Scad::SceneNode& node, const char* name)
+        {
+            for (const auto& [key, value] : node.parameters)
+            {
+                if (key == name)
+                {
+                    return &value;
+                }
+            }
+            return nullptr;
+        }
+
+        std::string ScadParamString(const Scad::SceneNode& node, const char* name, const std::string& fallback)
+        {
+            const Scad::Value* value = FindScadParam(node, name);
+            return (value && value->type == Scad::Value::Type::Str && !value->str.empty()) ? value->str : fallback;
+        }
+
+        float ScadParamNumber(const Scad::SceneNode& node, const char* name, float fallback)
+        {
+            const Scad::Value* value = FindScadParam(node, name);
+            return (value && value->IsNumber()) ? static_cast<float>(value->num) : fallback;
+        }
+
+        void DecomposeWorldTR(const glm::dmat4& world, glm::vec3& outTranslation, glm::quat& outRotation)
+        {
+            glm::dvec3 scaleD(1.0);
+            glm::dvec3 translationD(0.0);
+            glm::dvec3 skew(0.0);
+            glm::dvec4 perspective(0.0);
+            glm::dquat rotationD(1.0, 0.0, 0.0, 0.0);
+            if (glm::decompose(world, scaleD, rotationD, translationD, skew, perspective))
+            {
+                outTranslation = glm::vec3(translationD);
+                outRotation = glm::normalize(glm::quat(rotationD));
+            }
+            else
+            {
+                outTranslation = glm::vec3(0.0f);
+                outRotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+            }
+        }
+
+        glm::mat4 CameraModelViewFromWorld(const glm::dmat4& world)
+        {
+            glm::vec3 eye(0.0f);
+            glm::quat rotation(1.0f, 0.0f, 0.0f, 0.0f);
+            DecomposeWorldTR(world, eye, rotation);
+            return glm::lookAtRH(eye, eye + rotation * glm::vec3(0.0f, 0.0f, -1.0f),
+                                 rotation * glm::vec3(0.0f, 1.0f, 0.0f));
+        }
+
+        void CollectScadCameraMarkersRecursive(
+            const Scad::SceneNode& sceneNode,
+            std::vector<const Scad::SceneNode*>& outFixed,
+            std::vector<const Scad::SceneNode*>& outKeys)
+        {
+            if (sceneNode.name == "gk_camera")
+            {
+                outFixed.push_back(&sceneNode);
+            }
+            else if (sceneNode.name == "gk_camera_key")
+            {
+                outKeys.push_back(&sceneNode);
+            }
+            for (const Scad::SceneNode& child : sceneNode.children)
+            {
+                CollectScadCameraMarkersRecursive(child, outFixed, outKeys);
+            }
+        }
+
+        void BuildScadCameras(
+            const std::vector<Scad::SceneNode>& roots,
+            ScadBuildCache& cache,
+            std::vector<std::shared_ptr<Node>>& nodes,
+            EnvironmentSetting& cameraInit,
+            std::vector<AnimationTrack>& tracks)
+        {
+            std::vector<const Scad::SceneNode*> fixedMarkers;
+            std::vector<const Scad::SceneNode*> keyMarkers;
+            for (const Scad::SceneNode& root : roots)
+            {
+                CollectScadCameraMarkersRecursive(root, fixedMarkers, keyMarkers);
+            }
+            if (fixedMarkers.empty() && keyMarkers.empty())
+            {
+                return;
+            }
+
+            std::unordered_set<std::string> usedNodeNames;
+            for (const auto& node : nodes)
+            {
+                usedNodeNames.insert(node->GetName());
+            }
+            const auto uniqueName = [&usedNodeNames](const std::string& base)
+            {
+                std::string name = base;
+                for (int suffix = 1; usedNodeNames.count(name) != 0; ++suffix)
+                {
+                    name = fmt::format("{}_{}", base, suffix);
+                }
+                usedNodeNames.insert(name);
+                return name;
+            };
+            const auto findEntry = [&cache](const Scad::SceneNode& marker)
+                -> const std::pair<std::shared_ptr<Node>, glm::dmat4>*
+            {
+                const auto found = cache.nodeByInstanceId.find(marker.instanceId);
+                return found == cache.nodeByInstanceId.end() ? nullptr : &found->second;
+            };
+            const auto fillCameraParams = [](Camera& camera, const Scad::SceneNode& marker)
+            {
+                camera.FieldOfView = ScadParamNumber(marker, "fov", 55.0f);
+                camera.Aperture = ScadParamNumber(marker, "aperture", 0.0f);
+                camera.FocalDistance = ScadParamNumber(marker, "focal", 10.0f);
+                if (camera.FocalDistance <= 0.0f)
+                {
+                    camera.FocalDistance = 10.0f;
+                }
+            };
+
+            // ---- Fixed cameras: one cameras[] entry per gk_camera marker ----
+            for (const Scad::SceneNode* marker : fixedMarkers)
+            {
+                const auto* entry = findEntry(*marker);
+                if (!entry)
+                {
+                    continue;
+                }
+                const std::string cameraName = ScadParamString(*marker, "name", "cam");
+                const std::string nodeName = uniqueName(fmt::format("cam_{}", cameraName));
+                entry->first->SetName(nodeName);
+
+                Camera camera{};
+                camera.name = cameraName;
+                camera.NodeName_ = nodeName;
+                camera.ModelView = CameraModelViewFromWorld(entry->second);
+                fillCameraParams(camera, *marker);
+                cameraInit.cameras.push_back(std::move(camera));
+            }
+
+            // ---- Path cameras: group gk_camera_key markers by path, sort by t ----
+            std::map<std::string, std::vector<const Scad::SceneNode*>> keysByPath;
+            for (const Scad::SceneNode* marker : keyMarkers)
+            {
+                keysByPath[ScadParamString(*marker, "path", "fly")].push_back(marker);
+            }
+            for (auto& [pathName, keys] : keysByPath)
+            {
+                std::sort(keys.begin(), keys.end(),
+                          [](const Scad::SceneNode* a, const Scad::SceneNode* b)
+                          { return ScadParamNumber(*a, "t", 0.0f) < ScadParamNumber(*b, "t", 0.0f); });
+                if (keys.size() < 2)
+                {
+                    SPDLOG_WARN("SCAD: camera path '{}' has < 2 keys; skipping animation", pathName);
+                    continue;
+                }
+
+                const std::string nodeName = uniqueName(fmt::format("campath_{}", pathName));
+                AnimationTrack track;
+                track.AnimationName = pathName;
+                track.NodeName_ = nodeName;
+
+                glm::vec3 firstTranslation(0.0f);
+                glm::quat firstRotation(1.0f, 0.0f, 0.0f, 0.0f);
+                glm::dmat4 firstWorld(1.0);
+                for (size_t keyIndex = 0; keyIndex < keys.size(); ++keyIndex)
+                {
+                    const Scad::SceneNode& marker = *keys[keyIndex];
+                    const auto* entry = findEntry(marker);
+                    if (!entry)
+                    {
+                        continue;
+                    }
+                    // The path node sits at scene root, so keys are baked to world TRS.
+                    glm::vec3 translation(0.0f);
+                    glm::quat rotation(1.0f, 0.0f, 0.0f, 0.0f);
+                    DecomposeWorldTR(entry->second, translation, rotation);
+                    const float time = std::max(0.0f, ScadParamNumber(marker, "t", 0.0f));
+                    track.TranslationChannel.Keys.push_back({time, translation});
+                    track.RotationChannel.Keys.push_back({time, rotation});
+                    track.Duration_ = std::max(track.Duration_, time);
+                    if (track.TranslationChannel.Keys.size() == 1)
+                    {
+                        firstTranslation = translation;
+                        firstRotation = rotation;
+                        firstWorld = entry->second;
+                    }
+                    // Rename the key marker node for outliner readability.
+                    entry->first->SetName(uniqueName(fmt::format("camkey_{}_{}", pathName, keyIndex)));
+                }
+                if (track.Duration_ <= 0.0f)
+                {
+                    SPDLOG_WARN("SCAD: camera path '{}' has zero duration; skipping animation", pathName);
+                    continue;
+                }
+
+                auto pathNode = Node::CreateNode(nodeName, firstTranslation, firstRotation, glm::vec3(1.0f),
+                                                 static_cast<uint32_t>(nodes.size()));
+                nodes.push_back(pathNode);
+                tracks.push_back(std::move(track));
+
+                Camera camera{};
+                camera.name = pathName;
+                camera.NodeName_ = nodeName;
+                camera.ModelView = CameraModelViewFromWorld(firstWorld);
+                fillCameraParams(camera, *keys.front());
+                cameraInit.cameras.push_back(std::move(camera));
+            }
+
+            SPDLOG_INFO("SCAD: {} fixed camera(s), {} camera path(s) collected", fixedMarkers.size(),
+                        keysByPath.size());
+        }
+    } // namespace
+
     bool FScadLoader::LoadScadScene(
         const std::string& filename,
         EnvironmentSetting& cameraInit,
@@ -450,7 +696,7 @@ namespace Assets
         std::vector<Model>& models,
         std::vector<FMaterial>& materials,
         std::vector<LightObject>& /*lights*/,
-        std::vector<AnimationTrack>& /*tracks*/,
+        std::vector<AnimationTrack>& tracks,
         std::vector<Skeleton>& /*skeletons*/,
         const ScadLoadOptions& options)
     {
@@ -487,6 +733,9 @@ namespace Assets
         // ---- Terrain payloads -> TerrainComponent (height/water/biome queries) ----
         AttachTerrainComponents(result.terrains, scale, buildCache);
 
+        // ---- Camera markers -> cameras[] + path animation tracks ----
+        BuildScadCameras(result.roots, buildCache, nodes, cameraInit, tracks);
+
         // ---- Camera + environment ----
         cameraInit.HasSky = true;
         cameraInit.HasSun = true;
@@ -498,6 +747,21 @@ namespace Assets
         if (cameraInit.cameras.empty())
         {
             cameraInit.cameras.push_back(defaultCam);
+        }
+        else
+        {
+            // gk_camera markers are built from the marker alone. Extend their
+            // far plane against the loaded bounds so large generated areas are
+            // not clipped before the runtime global far-plane policy is applied.
+            glm::vec3 boundsMin(0.0f);
+            glm::vec3 boundsMax(0.0f);
+            if (SceneWorldBounds(nodes, models, boundsMin, boundsMax))
+            {
+                for (Camera& camera : cameraInit.cameras)
+                {
+                    ExtendCameraFarPlane(camera, boundsMin, boundsMax);
+                }
+            }
         }
 
         SPDLOG_INFO("SCAD: loaded {} -> {} root nodes, {} total nodes, {} triangles ({} warnings)",

@@ -17,12 +17,11 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
-#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
 #include "Engine/Utilities/Exception.hpp"
 
 #include <algorithm>
 #include <cmath>
-#include <entt/meta/factory.hpp>
 
 namespace Assets
 {
@@ -118,17 +117,6 @@ namespace Assets
         static_assert(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE * Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME ==
                       Assets::GPU_SCENE_AMBIENT_PER_CASCADE_COUNT);
         static_assert(sizeof(Assets::GPUScene) == 128);
-    }
-
-    void Scene::RegisterReflection()
-    {
-        using namespace entt::literals;
-
-        entt::meta_factory<Assets::Scene>()
-            .type("Scene"_hs)
-            .func<&Assets::Scene::GetIndicesCount>("GetIndicesCount")
-            .func<&Assets::Scene::FindNodeIdWithComponent>("FindNodeIdWithComponent")
-            .func<&Assets::Scene::GetNodeByInstanceId>("GetNodeById");
     }
 
     void Scene::RebuildNodeIndex()
@@ -239,6 +227,7 @@ namespace Assets
 
     Scene::Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing,
                  const bool allocateAmbientResources, const bool enableCpuAcceleration) :
+        cpuAccelerationStructure_(std::make_unique<Assets::CPU::FCPUAccelerationStructure>()),
         allocateAmbientResources_(allocateAmbientResources),
         enableCpuAcceleration_(enableCpuAcceleration),
         commandPool_(&commandPool)
@@ -440,7 +429,7 @@ namespace Assets
 
     Scene::~Scene()
     {
-        cpuAccelerationStructure_.ClearAllTasks();
+        cpuAccelerationStructure_->ClearAllTasks();
 
         for (const auto& node : nodes_)
         {
@@ -559,7 +548,7 @@ namespace Assets
         }
     }
 
-    void Scene::CleanUp() { cpuAccelerationStructure_.ClearAllTasks(); }
+    void Scene::CleanUp() { cpuAccelerationStructure_->ClearAllTasks(); }
 
     void Scene::AddNode(std::shared_ptr<Node> node)
     {
@@ -580,6 +569,44 @@ namespace Assets
         {
             AddNode(node);
         }
+    }
+
+    bool Scene::BindPhysicsBody(Node& node, NextBodyID bodyId, Runtime::ENodeMobility mobility)
+    {
+        NextEngine* engine = NextEngine::GetInstance();
+        NextPhysics* physicsEngine = engine ? engine->GetPhysicsEngine() : nullptr;
+        if (!physicsEngine || bodyId.IsInvalid() || !physicsEngine->GetBody(bodyId))
+        {
+            return false;
+        }
+
+        // A live render node may already own the implicit static mesh body created by AddNode.
+        // Manual primitive ownership supersedes it; leaving both would produce duplicate contacts.
+        if (auto staticBody = staticPhysicsBodies_.find(&node); staticBody != staticPhysicsBodies_.end())
+        {
+            physicsEngine->RemoveBody(staticBody->second);
+            staticPhysicsBodies_.erase(staticBody);
+        }
+
+        Runtime::PhysicsComponent* component = node.GetComponent<Runtime::PhysicsComponent>();
+        if (component)
+        {
+            const NextBodyID previousBody = component->GetPhysicsBody();
+            if (!previousBody.IsInvalid() && previousBody != bodyId)
+            {
+                physicsEngine->RemoveBody(previousBody);
+            }
+        }
+        else
+        {
+            auto newComponent = std::make_shared<Runtime::PhysicsComponent>();
+            component = newComponent.get();
+            node.AddComponent(std::move(newComponent));
+        }
+
+        component->SetMobility(mobility);
+        component->BindPhysicsBody(bodyId);
+        return true;
     }
 
     void Scene::EnsureNodePhysicsBody(Node* node)
@@ -1151,7 +1178,7 @@ namespace Assets
     void Scene::MarkDirty()
     {
         sceneDirty_ = true;
-        sceneDirtyForCpuAS_ = true;
+        cpuBvhDirty_ = true;
         NextEngine::GetInstance()->SetProgressiveRendering(false);
     }
 

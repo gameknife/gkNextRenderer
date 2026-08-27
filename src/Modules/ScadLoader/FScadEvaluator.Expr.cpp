@@ -68,8 +68,21 @@ namespace Assets::Scad::EvalDetail
         case ExprKind::Cond:
             return EvalExpr(e->list[0]).IsTruthy() ? EvalExpr(e->list[1]) : EvalExpr(e->list[2]);
         case ExprKind::Call: return EvalCall(e);
-        case ExprKind::CompFor:
         case ExprKind::CompLet:
+        {
+            // `let(...) expr` in expression position -- the function-body form.
+            // Inside a vector literal the same node is met by AppendElement
+            // instead, which splices elements rather than yielding one value.
+            ctx_.Push();
+            for (const CallArg& a : e->args)
+            {
+                if (!a.name.empty()) ctx_.Set(a.name, EvalExpr(a.value));
+            }
+            const Value bound = e->list.empty() ? Value() : EvalExpr(e->list[0]);
+            ctx_.Pop();
+            return bound;
+        }
+        case ExprKind::CompFor:
         case ExprKind::CompIf:
         case ExprKind::CompEach:
             return Value(); // only meaningful inside a VectorLit (see AppendElement)
@@ -330,16 +343,30 @@ namespace Assets::Scad::EvalDetail
     {
         auto num = [&](size_t i, double d = 0.0) { return i < a.size() ? a[i].AsNumber(d) : d; };
 
-        if (name == "max")
+        if (name == "max" || name == "min")
         {
-            double m = -std::numeric_limits<double>::infinity();
-            for (const Value& v : a) m = std::max(m, v.AsNumber(m));
-            return Value::MakeNumber(m);
-        }
-        if (name == "min")
-        {
-            double m = std::numeric_limits<double>::infinity();
-            for (const Value& v : a) m = std::min(m, v.AsNumber(m));
+            const bool wantMax = name == "max";
+            // OpenSCAD accepts both max(a, b, ...) and max([a, b, ...]); the
+            // single-vector form is the one a list comprehension produces, and
+            // silently folding the vector to its AsNumber() (0) used to yield
+            // -inf, which then poisoned every vertex derived from it.
+            const std::vector<Value>& args =
+                (a.size() == 1 && a[0].type == Value::Type::Vec) ? a[0].vec : a;
+            double m = wantMax ? -std::numeric_limits<double>::infinity()
+                               : std::numeric_limits<double>::infinity();
+            for (const Value& v : args)
+            {
+                if (!v.IsNumber())
+                {
+                    continue;
+                }
+                m = wantMax ? std::max(m, v.num) : std::min(m, v.num);
+            }
+            if (std::isinf(m))
+            {
+                Warn(name, name + "() got no numeric argument");
+                return Value();
+            }
             return Value::MakeNumber(m);
         }
         if (name == "abs") return Value::MakeNumber(std::abs(num(0)));

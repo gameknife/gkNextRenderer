@@ -2,6 +2,8 @@
 // distance field cascade rebuild.
 // Split from VulkanBaseRenderer.cpp; same class, separate TU.
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+
+// Ambient GI bake orchestration follows the scene-acceleration implementation.
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
@@ -9,6 +11,7 @@
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
+#include "Engine/Rendering/AmbientBakeScheduler.hpp"
 #include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.hpp"
@@ -23,7 +26,7 @@
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
-#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
 
 namespace Vulkan
 {
@@ -48,8 +51,7 @@ namespace Vulkan
             return false;
         }
 
-        return CurrentLogicRendererType() == ERendererType::ERT_PathTracing &&
-            NextEngine::GetInstance()->IsEffectiveSharcEnabled();
+        return CurrentLogicRendererType() == ERendererType::ERT_PathTracing;
     }
 
     void VulkanBaseRenderer::ClearAmbientCubeCache(VkCommandBuffer commandBuffer, uint32_t imageIndex)
@@ -98,42 +100,99 @@ namespace Vulkan
             return;
         }
 
-        const int cubesPerGroup = 64;
+        constexpr uint32_t cubesPerGroup = 64u;
+        constexpr uint32_t convergencePasses = AmbientCubePipelines::convergencePasses;
         const uint32_t cascadeCount = std::min(
             Assets::SanitizeAmbientCubeCascadeCount(NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount),
             GetScene().AmbientCubeCascadeCapacity());
-        const uint32_t safeCascadeCount = std::max(1u, cascadeCount);
-        const uint32_t cascadeIndex = static_cast<uint32_t>(frame_.frameCount % safeCascadeCount);
-        const uint32_t activeBrickCount = GetScene().AmbientActiveBrickCount(cascadeIndex);
-        if (activeBrickCount == 0u)
-        {
-            return;
-        }
-        const int activeProbeCount =
-            static_cast<int>(activeBrickCount * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME));
-        const int group = (activeProbeCount + cubesPerGroup - 1) / cubesPerGroup;
-
-        int temporalFrames = 120;
-        switch (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel)
-        {
-        case 0: temporalFrames = 30; break;
-        case 1: temporalFrames = 120; break;
-        case 2: temporalFrames = 300; break;
-        default: temporalFrames = 120; break;
-        }
-
-        SCOPED_GPU_TIMER(useHardware ? "hw-lightbake" : "sw-lightbake");
-
-        const int frame = static_cast<int>((frame_.frameCount / safeCascadeCount) % temporalFrames);
-        const int groupPerFrame = std::max(1, (group + temporalFrames - 1) / temporalFrames);
-        const int offset = frame * groupPerFrame;
-        if (offset >= group)
+        if (cascadeCount == 0u)
         {
             return;
         }
 
-        const int dispatchGroupCount = std::min(groupPerFrame, group - offset);
-        const int offsetInActiveProbes = offset * cubesPerGroup;
+        auto& cpuAcceleration = GetScene().GetCPUAccelerationStructure();
+        const uint64_t dirtyRevision = cpuAcceleration.AmbientBakeDirtyRevision();
+        if (dirtyRevision == 0u)
+        {
+            return;
+        }
+
+        uint32_t dirtyBrickTotal = 0u;
+        for (uint32_t cascade = 0; cascade < cascadeCount; ++cascade)
+        {
+            dirtyBrickTotal += cpuAcceleration.AmbientBakeDirtyBrickCount(cascade);
+        }
+        if (dirtyBrickTotal == 0u)
+        {
+            ambient_.dirtyRevision = 0u;
+            return;
+        }
+
+        if (ambient_.dirtyRevision != dirtyRevision)
+        {
+            ambient_.dirtyRevision = dirtyRevision;
+            ambient_.nextGroup.fill(0u);
+            ambient_.completedPasses.fill(0u);
+            ambient_.nextCascade = 0u;
+            SPDLOG_INFO("Ambient bake revision {} started: {} dirty bricks, {} tracing",
+                        dirtyRevision, dirtyBrickTotal, useHardware ? "hardware" : "software");
+        }
+
+        const double frameSeconds = NextEngine::GetInstance()->GetDeltaSeconds();
+        if (std::isfinite(frameSeconds) && frameSeconds > 0.0)
+        {
+            constexpr double smoothing = 0.2;
+            ambient_.smoothedFrameTimeSeconds = ambient_.smoothedFrameTimeSeconds > 0.0
+                ? ambient_.smoothedFrameTimeSeconds * (1.0 - smoothing) + frameSeconds * smoothing
+                : frameSeconds;
+            ambient_.groupsPerFrame = AmbientBake::PlanNextDispatchGroups(
+                ambient_.groupsPerFrame,
+                ambient_.smoothedFrameTimeSeconds,
+                NextEngine::GetInstance()->GetUserSettings().AmbientCubeBakeTargetFps);
+        }
+
+        const char* timerName = useHardware ? "hw-lightbake" : "sw-lightbake";
+        uint32_t cascadeIndex = cascadeCount;
+        for (uint32_t attempt = 0; attempt < cascadeCount; ++attempt)
+        {
+            const uint32_t candidate = (ambient_.nextCascade + attempt) % cascadeCount;
+            if (cpuAcceleration.AmbientBakeDirtyBrickCount(candidate) > 0u &&
+                ambient_.completedPasses[candidate] < convergencePasses)
+            {
+                cascadeIndex = candidate;
+                ambient_.nextCascade = (candidate + 1u) % cascadeCount;
+                break;
+            }
+        }
+
+        if (cascadeIndex == cascadeCount)
+        {
+            cpuAcceleration.AcknowledgeAmbientBake(dirtyRevision);
+            SPDLOG_INFO("Ambient bake revision {} converged after {} passes; scheduler idle",
+                        dirtyRevision, convergencePasses);
+            ambient_.dirtyRevision = 0u;
+            return;
+        }
+
+        const uint32_t dirtyBrickCount = cpuAcceleration.AmbientBakeDirtyBrickCount(cascadeIndex);
+        const uint32_t dirtyProbeCount =
+            dirtyBrickCount * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME);
+        const uint32_t totalGroups = (dirtyProbeCount + cubesPerGroup - 1u) / cubesPerGroup;
+        if (totalGroups == 0u)
+        {
+            return;
+        }
+
+        const uint32_t offset = std::min(ambient_.nextGroup[cascadeIndex], totalGroups);
+        const uint32_t dispatchGroupCount = std::min(ambient_.groupsPerFrame, totalGroups - offset);
+        const uint32_t offsetInActiveProbes = offset * cubesPerGroup;
+
+        SCOPED_GPU_TIMER(timerName);
+
+        if (dispatchGroupCount == 0u)
+        {
+            return;
+        }
         const VkBuffer cubeBuffer = GetScene().AmbientArenaBuffer().Handle();
         const VkBuffer pongBuffer = cubeBuffer;
         // The cube pool is laid out per cascade with poolCubesPerCascade cubes; the ping-pong copy and
@@ -178,6 +237,54 @@ namespace Vulkan
         vkCmdPushConstants(commandBuffer, pipeline->PipelineLayout().Handle(),
                            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
         vkCmdDispatch(commandBuffer, dispatchGroupCount, 1, 1);
+
+        ambient_.nextGroup[cascadeIndex] = offset + dispatchGroupCount;
+        if (ambient_.nextGroup[cascadeIndex] >= totalGroups)
+        {
+            ambient_.nextGroup[cascadeIndex] = 0u;
+            ++ambient_.completedPasses[cascadeIndex];
+        }
+    }
+
+    FAmbientBakeProgress VulkanBaseRenderer::GetAmbientBakeProgress()
+    {
+        FAmbientBakeProgress progress;
+        if (!ActiveRendererRequirements().requestAmbientCube || ShouldSkipAmbientCubeUpdates())
+        {
+            return progress;
+        }
+
+        const uint32_t cascadeCount = std::min(
+            Assets::SanitizeAmbientCubeCascadeCount(NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount),
+            GetScene().AmbientCubeCascadeCapacity());
+        auto& cpuAcceleration = GetScene().GetCPUAccelerationStructure();
+        const uint64_t dirtyRevision = cpuAcceleration.AmbientBakeDirtyRevision();
+        if (dirtyRevision == 0u || cascadeCount == 0u)
+        {
+            return progress;
+        }
+
+        constexpr uint32_t cubesPerGroup = 64u;
+        for (uint32_t cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
+        {
+            const uint32_t dirtyBrickCount = cpuAcceleration.AmbientBakeDirtyBrickCount(cascadeIndex);
+            const uint32_t probeCount =
+                dirtyBrickCount * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME);
+            const uint32_t groupsPerPass = (probeCount + cubesPerGroup - 1u) / cubesPerGroup;
+            progress.totalDispatchGroups += groupsPerPass * AmbientCubePipelines::convergencePasses;
+
+            if (ambient_.dirtyRevision == dirtyRevision)
+            {
+                const uint32_t completedPasses = std::min(
+                    ambient_.completedPasses[cascadeIndex], AmbientCubePipelines::convergencePasses);
+                const uint32_t currentGroup = std::min(ambient_.nextGroup[cascadeIndex], groupsPerPass);
+                progress.completedDispatchGroups += completedPasses * groupsPerPass + currentGroup;
+            }
+        }
+
+        progress.completedDispatchGroups = std::min(progress.completedDispatchGroups, progress.totalDispatchGroups);
+        progress.active = progress.totalDispatchGroups > 0u;
+        return progress;
     }
 
 }

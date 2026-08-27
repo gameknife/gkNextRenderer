@@ -84,7 +84,7 @@ Archer combat def。远程结算用少量地形高度采样拒绝隔山齐射；
 - LMB：点选/框选；Shift 加选；双击同兵种全选
 - RMB 拖拽：目标点 + 阵面朝向
 - WASD/方向键/MMB 拖拽：平移；Q/E：旋转；滚轮：缩放
-- F：跟随选中军团
+- F：跟随选中军团；F6：显示/隐藏 NavGrid 可行走（绿）与不可行走（红）区域
 - X/C/H/V：攻击/冲锋/停止/撤退
 - `[`/`]`：调整选中军团排数
 - Space/P：推进简报或暂停；1/2/3：0.5x/1x/2x；F1/F5：显示/隐藏战斗诊断
@@ -103,7 +103,7 @@ Finished，展示 Victory/Defeat/Draw 与 Rematch。左上显示阶段、时间�
   `aiDecisions`、`playerAttackOrders`、`enemyMarchingRegiments`
 - 士气/远程：`routingRegiments`、`waveringRegiments`、`rangedVolleys`、`remainingAmmo`、
   `activeArrows`、`arrowPoolCapacity`
-- 场景/相机：`regimentCount`、`soldierCount`、`renderProxyCount`、`navReady`、`camera*`
+- 场景/相机：`regimentCount`、`soldierCount`、`renderProxyCount`、`navReady`、`navGridVisible`、`camera*`
 - 战斗：`aliveSoldiers`、`factionStrength0/1`、`engagedRegiments`、`fightingSoldiers`、
   `destroyedRegiments`、`disengagingRegiments`、`pursuingRegiments`、`totalKills`、`combatTicks`
 - 表现：`corpseCount`、`flashingSoldiers`、`flashingCorpses`、`bloodStainCount`、
@@ -122,4 +122,5 @@ gnb.bat validate --script assets\agentscripts\nexttotalwar-battle.agentscript.js
 gnb.bat validate --script assets\agentscripts\nexttotalwar-battle-c2.agentscript.json
 gnb.bat validate --script assets\agentscripts\nexttotalwar-ai-idle-player.agentscript.json
 gnb.bat validate --script assets\agentscripts\nexttotalwar-product-loop.agentscript.json
+gnb.bat validate --script assets\agentscripts\nexttotalwar-navgrid-debug.agentscript.json
 ```

@@ -18,6 +18,9 @@ public static const int HDR_OUTPUT_MODE_SDR = 0;
 public static const int HDR_OUTPUT_MODE_HDR10_ST2084 = 1;
 public static const int HDR_OUTPUT_MODE_EXTENDED_SRGB_LINEAR = 2;
 
+public static const uint BACKGROUND_MODE_ENVIRONMENT = 0u;
+public static const uint BACKGROUND_MODE_STUDIO = 1u;
+
 public static const uint RENDER_PARTICIPATION_MAIN_VISIBILITY = 1u << 0;
 public static const uint RENDER_PARTICIPATION_SHADOW_CASTER = 1u << 1;
 public static const uint RENDER_PARTICIPATION_GPU_AS = 1u << 2;
@@ -193,8 +196,15 @@ public struct ALIGN_16 UniformBufferObject
     public float SceneEpsilonScale;
 
     public float AmbientCubeUnit;
-    public float AmbientCubeOffsetPadding0;
-    public float AmbientCubeOffsetPadding1;
+    // Artistic multiplier on the indirect (post-first-bounce) term only: the SHARC cache hit and
+    // the ambient-cube path terminal. Direct lighting and sky are untouched, so raising it lifts
+    // bounce light without the contrast blowout that comes from raising SunIntensity. 1 = physical.
+    public float IndirectIntensity;
+    // Per-order weight on bounces beyond the first. A SHARC entry's radiance is
+    // direct + T1*direct(next) + T1*T2*direct(next2) + ...; only the leading term skips every
+    // segment throughput, so weighting throughput scales bounce order n by this^(n-1) and
+    // leaves once-bounced direct light alone. 1 = physical.
+    public float MultiBounceIntensity;
     public float AmbientCubeOffsetPadding2;
 
     public float3 AmbientCubeOffset;
@@ -213,6 +223,8 @@ public struct ALIGN_16 UniformBufferObject
     public uint GTAOQuality;
     public bool LightObjectScreenSpaceShadow;
     public float LightObjectShadowDistance; // world units the screen-space light shadow marches
+    public uint LightObjectMaxShadowedLights;
+    public uint LightObjectShadowSteps;
 
     public uint LightGridCascadeCount;   // 0 disables the grid: every query falls back to the global CDF
     public float LightGridCullThreshold; // minimum per-cell contribution a light must reach to be stored
@@ -221,6 +233,18 @@ public struct ALIGN_16 UniformBufferObject
     // Stable extension point for procedural atmosphere. Zero preserves the legacy IBL path.
     public uint64_t AtmosphereParams;
     public uint64_t AtmosphereReserved0;
+
+    // Checkerboard lighting is handed to the temporal upscaler sparse: the missing parity is left
+    // unwritten instead of being reconstructed by a neighbour copy, and Native TAAU fills it from
+    // history. Every pass between Core Shading and the upscaler must then respect the shading rate,
+    // so this flag lives in the camera UBO rather than in one pass's CustomData word.
+    // Appended at the end deliberately: inserting into the middle of this struct shifts every
+    // following field, and C++ and Slang do not have to agree on how a bool is packed.
+    public bool CheckerboardSparseLighting;
+
+    // The visible camera background is independent from sky lighting: Studio keeps SkyIdx for
+    // irradiance/specular/path-tracing misses while replacing only the primary-ray presentation.
+    public uint BackgroundMode;
 };
 
 public struct ALIGN_16 NodeProxy
@@ -703,6 +727,18 @@ public struct ALIGN_8 GPUScene
 
     /* Others */
     uint64_t2 Reserved_AmbientBase_Address;
+
+    // Raw pass-local resource address, and the only one of its kind: GPUScene sits exactly at the
+    // 128-byte push-constant floor, so there is no second slot to hand out. TracingExtras below is
+    // the ReSTIR interpretation of this word; the shading scheduler interprets it as its tile-list
+    // buffer. Exactly one subsystem may claim it per pass - the interpretations are raw pointer
+    // casts, so a second claimant does not fail loudly, it reads the other one's data as its own
+    // and takes the device down. Today ReSTIR belongs to the hardware path tracer and the scheduler
+    // to the surface renderers, and those sets do not overlap.
+    public property uint64_t ReservedAddress0
+    {
+        get { return Reserved_AmbientBase_Address.x; }
+    }
 
     public property FTracingExtras* TracingExtras
     {

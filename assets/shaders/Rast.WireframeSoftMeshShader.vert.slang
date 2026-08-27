@@ -21,14 +21,17 @@ VertexOutput main(uint vertexIndex: SV_VertexID)
     NodeProxy proxy = scene.Nodes[visibilityId.x - 1];
     ModelData model = scene.Offsets[proxy.modelId];
 
-    GPUVertex* currentVertices = scene.Vertices;
+    uint localVertex = scene.Indices[model.indexOffset + visibilityId.y * 3 + corner];
+    uint vertexAddress = model.vertexOffset + localVertex;
+    GPUVertex packedVertex;
     if (proxy.skinId != 0xFFFFFFFF)
     {
-        currentVertices = scene.SkinnedVertices;
+        packedVertex = scene.SkinnedVertices[vertexAddress];
     }
-
-    uint localVertex = scene.Indices[model.indexOffset + visibilityId.y * 3 + corner];
-    GPUVertex packedVertex = currentVertices[model.vertexOffset + localVertex];
+    else
+    {
+        packedVertex = scene.Vertices[vertexAddress];
+    }
     output.position =
         mul(mul(scene.Camera[0].ViewProjection, proxy.worldTS), float4(packedVertex.Position_Tx.xyz, 1.0));
     output.position.z -= 0.000001f * output.position.w;

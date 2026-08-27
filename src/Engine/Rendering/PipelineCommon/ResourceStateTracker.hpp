@@ -3,6 +3,8 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
+#include <vulkan/vulkan.h>
+
 namespace Vulkan::PipelineCommon
 {
     enum class ERenderStage : uint32_t

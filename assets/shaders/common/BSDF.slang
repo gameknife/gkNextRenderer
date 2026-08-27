@@ -148,6 +148,31 @@ public FBSDFContext BuildBSDFContext(Vertex vertex, Material material, float3 in
     return context;
 }
 
+// Build a BSDF context from an already-resolved Primary Surface. Identical to BuildBSDFContext
+// except that base color, roughness and metalness are supplied rather than sampled: a surface
+// reconstructed from depth has no TexCoord, and those three values are precisely what the texture
+// samples in BuildBSDFContext produce. The material is still needed for the IOR and the model.
+public FBSDFContext BuildBSDFContextFromSurface(
+    float3 position, float3 normal, float3 incomingRayDirection, Material material,
+    float3 baseColor, float perceptualRoughness, float metalness)
+{
+    FBSDFContext context;
+    context.Position = position;
+    context.FrontFace = dot(incomingRayDirection, normal) <= 0.0f;
+    context.Normal = normalize(context.FrontFace ? normal : -normal);
+    context.Wo = normalize(-incomingRayDirection);
+    context.BaseColor = baseColor;
+    context.PerceptualRoughness = saturate(perceptualRoughness);
+    context.Metalness = saturate(metalness);
+    context.EtaOutside = 1.0f;
+    const float surfaceIor = material.MaterialModel == MaterialDielectric
+        ? material.RefractionIndex2
+        : material.RefractionIndex;
+    context.EtaInside = max(surfaceIor, 1.0001f);
+    context.MaterialModel = material.MaterialModel;
+    return context;
+}
+
 public float3 BSDFMaterialF0(FBSDFContext context)
 {
     const float3 dielectricF0 = BSDFDielectricF0(context.EtaInside / context.EtaOutside);

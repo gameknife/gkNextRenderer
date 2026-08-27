@@ -4,6 +4,7 @@
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <fstream>
+#include <vector>
 
 namespace
 {
@@ -18,22 +19,34 @@ namespace NextJson
 {
     nlohmann::json LoadFile(const std::string& path)
     {
-        const std::string absolutePath = Utilities::FileHelper::GetPlatformFilePath(path.c_str());
-        std::ifstream input(absolutePath);
-        if (!input.is_open())
+        std::vector<uint8_t> data;
+        bool loaded = false;
+        if (auto* package = Utilities::Package::FPackageFileSystem::TryGetInstance())
         {
-            LogAndThrow(fmt::format("Failed to open JSON file: {}", absolutePath));
+            loaded = package->LoadFile(path, data);
+        }
+        else
+        {
+            const std::filesystem::path loosePath = Utilities::FileHelper::GetRuntimeFilePath(path);
+            std::ifstream input(loosePath, std::ios::binary);
+            if (input.is_open())
+            {
+                data.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+                loaded = true;
+            }
+        }
+        if (!loaded)
+        {
+            LogAndThrow(fmt::format("Failed to open JSON file: {}", path));
         }
 
         try
         {
-            nlohmann::json document;
-            input >> document;
-            return document;
+            return nlohmann::json::parse(data.begin(), data.end());
         }
         catch (const std::exception& exception)
         {
-            LogAndThrow(fmt::format("Failed to parse JSON file {}: {}", absolutePath, exception.what()));
+            LogAndThrow(fmt::format("Failed to parse JSON file {}: {}", path, exception.what()));
         }
     }
 

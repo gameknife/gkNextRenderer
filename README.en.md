@@ -70,14 +70,14 @@ gkNextEngine is a cross-platform 3D game engine and rendering playground built w
 - **Real-Time Path Tracing & Hybrid Rendering**: Practical 1/2spp path tracing, denoising, and seamless multi-pipeline switching built for real runtime constraints.
 - **High-Performance GPU Architecture**: Fully bindless resources, Visibility Buffer, and single-draw GPU-driven submission to minimize CPU overhead.
 - **Radiance Caching & Sparse VRAM**: Leaning on SHARC cache reuse and on-demand residency to maximize rendering efficiency within fixed GPU budgets.
-- **Full Engine Stack & Gameplay Prototypes**: Integrated ECS, reflection, ImGui editor, QuickJS/TS hot reload, and Jolt Physics to support interactive prototyping.
+- **Full Engine Stack & Gameplay Prototypes**: Integrated ECS, reflection, ImGui editor, Slang shader hot reload, and Jolt Physics to support interactive prototyping.
 - **Multi-Format Structured Asset Pipelines**: Direct runtime import for glTF 2.0, LDraw (LEGO), OpenSCAD DSL, and PlayCanvas Gaussian Splatting.
 
 <p align="center">✦</p>
 
 ## ⚡ Performance & Rendering Efficiency
 
-Performance is one of the project's core constraints. The engine leans on radiance-cache reuse, sparse VRAM layouts, GPU-driven mass submission, on-demand residency, and multi-tier upscaling to produce more frame for a fixed GPU budget while keeping memory in check. Below is a set of **runtime performance references** for typical scenes, backed by a built-in per-pass profiler and a Superluminal integration for deeper analysis.
+Performance is one of the project's core constraints. The engine leans on radiance-cache reuse, sparse VRAM layouts, GPU-driven mass submission, on-demand residency, and multi-tier upscaling to produce more frame for a fixed GPU budget while keeping memory in check. Below is a set of **runtime performance references** for typical scenes, backed by Tracy and Superluminal integrations for deeper analysis.
 
 ### Performance Reference Data
 
@@ -96,18 +96,18 @@ Performance is one of the project's core constraints. The engine leans on radian
 > | Sampling | 3 s warmup + 3 s measurement per scene |
 > | Disabled | DLSS / FSR / GTAO / animation tick (pinned by the config cvars) |
 
-| Scene | Pipeline | Frame time (ms) | GPU time (ms) | FPS | VRAM | Draw AfterCull / View | Triangles AfterCull / View |
-|------|----------|-----------------|---------------|-----|------|---------------------------|--------------------------|
-| MaterialShowcase | PathTracing | 2.342 | 1.846 | 427 | 978 MiB | 15 / 15 | 13,862 / 13,862 |
-| MaterialShowcase | SoftwareModernNoAmbient | 0.619 | 0.249 | 1,614 | 925 MiB | 15 / 15 | 13,542 / 13,542 |
-| LightingShowcase | PathTracing | 2.836 | 2.408 | 353 | 978 MiB | 9 / 9 | 4,953 / 4,953 |
-| LightingShowcase | SoftwareModernNoAmbient | 0.707 | 0.275 | 1,414 | 925 MiB | 5 / 5 | 2,881 / 2,881 |
-| GIBootcamp | PathTracing | 4.950 | 4.455 | 202 | 925 MiB | 30 / 36 | 4,741 / 4,952 |
-| GIBootcamp | SoftwareModernNoAmbient | 0.994 | 0.547 | 1,006 | 925 MiB | 33 / 40 | 5,175 / 5,388 |
-| KilometerWorld | PathTracing | 1.651 | 1.255 | 606 | 925 MiB | 401 / 1,780 | 4,789 / 21,362 |
-| KilometerWorld | SoftwareModernNoAmbient | 0.991 | 0.496 | 1,009 | 925 MiB | 405 / 1,798 | 4,851 / 21,580 |
-| MassiveAsteroidBelt | PathTracing | 2.089 | 1.598 | 479 | 1,192 MiB | 34,265 / 67,786 | 2,733,342 / 5,422,850 |
-| MassiveAsteroidBelt | SoftwareModernNoAmbient | 0.987 | 0.595 | 1,013 | 1,139 MiB | 32,977 / 65,197 | 2,620,345 / 5,215,602 |
+| Scene | Pipeline | Frame time (ms) | FPS | VRAM | Draw AfterCull / View | Triangles AfterCull / View |
+|------|----------|-----------------|-----|------|---------------------------|--------------------------|
+| MaterialShowcase | PathTracing | 2.342 | 427 | 978 MiB | 15 / 15 | 13,862 / 13,862 |
+| MaterialShowcase | SoftwareModernNoAmbient | 0.619 | 1,614 | 925 MiB | 15 / 15 | 13,542 / 13,542 |
+| LightingShowcase | PathTracing | 2.836 | 353 | 978 MiB | 9 / 9 | 4,953 / 4,953 |
+| LightingShowcase | SoftwareModernNoAmbient | 0.707 | 1,414 | 925 MiB | 5 / 5 | 2,881 / 2,881 |
+| GIBootcamp | PathTracing | 4.950 | 202 | 925 MiB | 30 / 36 | 4,741 / 4,952 |
+| GIBootcamp | SoftwareModernNoAmbient | 0.994 | 1,006 | 925 MiB | 33 / 40 | 5,175 / 5,388 |
+| KilometerWorld | PathTracing | 1.651 | 606 | 925 MiB | 401 / 1,780 | 4,789 / 21,362 |
+| KilometerWorld | SoftwareModernNoAmbient | 0.991 | 1,009 | 925 MiB | 405 / 1,798 | 4,851 / 21,580 |
+| MassiveAsteroidBelt | PathTracing | 2.089 | 479 | 1,192 MiB | 34,265 / 67,786 | 2,733,342 / 5,422,850 |
+| MassiveAsteroidBelt | SoftwareModernNoAmbient | 0.987 | 1,013 | 1,139 MiB | 32,977 / 65,197 | 2,620,345 / 5,215,602 |
 
 > To reproduce (no optional asset packs needed - every scene is a built-in proc demo):
 >
@@ -122,13 +122,19 @@ Performance is one of the project's core constraints. The engine leans on radian
 
 </details>
 
-### 🔍 Built-in Profiler
+### 🔍 Profiling
 
-The engine ships a CPU / GPU per-pass timing system: every render pass is annotated with a named scope, `VulkanGpuTimer` collects per-pass GPU-side timings, and an ImGui overlay (`ProfileDebugOverlay`) shows per-pass frame time and statistics live at runtime. You can locate rendering hotspots and compare the cost of different pipelines and settings without any external tooling.
+The engine has no separate runtime CPU / GPU timing aggregator. Named scopes bind directly to Tracy (CPU/GPU) and Superluminal (CPU), so the engine does not retain a duplicate CPU timing tree, GPU query banks, or ImGui timing history.
+
+Development builds also enable the Tracy client by default (on-demand, so disconnected processes do not keep accumulating events). Run `gnb tracy fetch` to obtain the official GUI matching the vcpkg client, then `gnb tracy` to launch it; on Android use `gnb tracy --android` and connect to `127.0.0.1` through adb forwarding. See the [Tracy Profiling Guide](docs/guides/tracy-profiling.md). Release builds pass `--tracy=off` and do not ship the Tracy client.
 
 ### ⏱️ Superluminal Integration
 
-On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is installed (probed by default at `C:/Program Files/Superluminal/Performance/API`), the build automatically enables `WITH_SUPERLUMINAL` and forwards the engine's named CPU and GPU events to the Superluminal timeline (GPU events emitted from a dedicated replay thread), enabling fine-grained sampling profiles and cross-frame analysis. When it is not installed, the integration is skipped and the build is unaffected.
+On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is installed (probed by default at `C:/Program Files/Superluminal/Performance/API`), the build automatically enables `WITH_SUPERLUMINAL` and forwards the engine's named CPU events and debug markers to the Superluminal timeline, enabling fine-grained sampling profiles and cross-frame analysis. When it is not installed, the integration is skipped and the build is unaffected.
+
+### 🧪 RenderDoc Integration
+
+On Windows, if `C:/Program Files/RenderDoc/renderdoc_app.h` exists, the build automatically enables `WITH_RENDERDOC` and dynamically loads the RenderDoc application API from the same installation. Append `--renderdoc` to any desktop target to capture the first frame after the scene is ready and open it in the RenderDoc UI; when RenderDoc is not installed, the integration is skipped and the build is unaffected.
 
 <p align="center">✦</p>
 
@@ -146,7 +152,7 @@ On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is i
 
 - **ECS + reflection**: an entt component system and entt::meta reflection layer — one registration serves the runtime, editor property panels, undo / redo, and script bindings alike
 - **Visual editor**: scene editing, a node-based material graph, cvar tuning, and data-driven settings in a single ImGui workflow
-- **TypeScript hot reload**: a QuickJS runtime paired with the bundled TypeScript toolchain; script and shader edits apply live, with no external Node dependency
+- **Shader hot reload**: incremental Slang compilation plus pipeline rebuild, so shader edits apply live (the scripting layer is migrating from QuickJS/TS to C#; see `docs/designs/dotnet-scripting-design.md`)
 - **Physics and character runtime**: Jolt Physics backs collision, grab-and-drag, vehicles, and character movement
 
 ### 3️⃣ Content Pipelines
@@ -160,7 +166,7 @@ On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is i
 ### 4️⃣ Tooling and Automated Validation
 
 - **One CLI**: `gnb` covers dependency provisioning, builds, runs, tests, and asset packaging with the same interface across desktop and mobile
-- **Profiling**: a per-pass CPU / GPU timing overlay, with optional Superluminal timeline integration for fine-grained sampling
+- **Profiling**: Tracy CPU/GPU zones with optional Superluminal CPU timeline integration
 - **Automated regression**: headless screenshots, input-script assertions, visual regression, and benchmark CSV reports — all CI-ready
 - **Remote Play**: any desktop target can act as a WebRTC host, streaming to a zero-install browser client that routes keyboard, mouse, and virtual-gamepad input back; video uses Vulkan Video hardware encoding
 - **Local workbench**: a graphical dashboard for todos, builds, runs, tests, and Git, plus a bundled llama.cpp inference service shared by the toolchain and the runtime
@@ -168,7 +174,7 @@ On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is i
 ### 5️⃣ AI-Native Workflow
 
 - **A parseable content foundation**: the SCAD, LDraw, glTF, and splat pipelines give AI readable, editable, verifiable 3D content instead of opaque static assets
-- **A programmable runtime**: reflected components and TypeScript bindings expose engine state directly to scripts and models
+- **A programmable runtime**: reflected components expose engine state to the editor and to script bindings
 - **A machine-checkable loop**: screenshots, assertion scripts, replay parity, and benchmark reports close the "generate → run → validate → iterate" cycle
 - **Local inference**: a bundled llama.cpp / Gemma OpenAI-compatible service serves both content generation and in-game AI decisions
 
@@ -223,7 +229,7 @@ The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond 
 ./gnb.bat run gkNextRenderer
 ```
 
-Beyond host tools such as Visual Studio, remaining project dependencies are handled by `gnb`; the default workflow pulls project-versioned Vulkan SDK, Slang, and TypeScript toolchains directly into the workspace. On Windows, `gnb` uses **Ninja** as the generator (automatically discovering MSVC/SDK environments), with NVIDIA Streamline (DLSS) enabled by default.
+Beyond host tools such as Visual Studio, remaining project dependencies are handled by `gnb`; the default workflow pulls project-versioned Vulkan SDK and Slang directly into the workspace. On Windows, `gnb` uses **Ninja** as the generator (automatically discovering MSVC/SDK environments), with NVIDIA Streamline (DLSS) enabled by default.
 
 </details>
 
@@ -276,7 +282,7 @@ Notes:
 ./gnb.sh run gkNextRenderer
 ```
 
-`gnb setup` automatically downloads the project-specified Vulkan SDK, Slang, and TypeScript toolchains, removing the need to manually prepare these dependencies. If `VULKAN_SDK` is explicitly set, that environment SDK takes precedence.
+`gnb setup` automatically downloads the project-specified Vulkan SDK and Slang, removing the need to manually prepare these dependencies. If `VULKAN_SDK` is explicitly set, that environment SDK takes precedence.
 
 </details>
 
@@ -333,10 +339,10 @@ Notes:
       </div>
     </td>
     <td width="33%" align="center" valign="top" style="padding: 0;">
-      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="100%" style="display: block; width: 100%;" alt="FlappyJs" />
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="100%" style="display: block; width: 100%;" alt="FlappyCpp" />
       <div style="padding: 10px 8px 12px 8px;">
-        <strong>🐤 FlappyCpp / FlappyJs</strong><br>
-        <sub>Dual C++ & QuickJS/TS implementations validating engine replay parity</sub>
+        <strong>🐤 FlappyCpp</strong><br>
+        <sub>C++ baseline for deterministic replay parity (scripted counterpart is being migrated)</sub>
       </div>
     </td>
     <td width="33%" align="center" valign="top" style="padding: 0;">
@@ -390,7 +396,7 @@ Notes:
 - **`KongLie3D`**: Auto-chess / synergy / round-based combat simulation prototype.
 - **`NextRA`**: Deterministic RTS simulation prototype validating lockstep synchronization and replay.
 - **`CharacterDemo`**: Character actor mounting, NavGrid A* navigation, AI behavior tree, and combat interaction.
-- **`FlappyCpp` / `FlappyJs`**: Dual C++ and QuickJS/TS Flappy Bird implementations for verifying engine replay parity.
+- **`FlappyCpp`**: the C++ Flappy Bird implementation that serves as the baseline for deterministic replay parity (scripted counterpart is being migrated).
 - **`TruckerDemo` / `CitySolSim` / `NextDayz` / `NextTotalWar`**: Vehicle driving, city traffic, survival tactics, and army simulation prototypes.
 
 #### Benchmarks & Developer Utilities

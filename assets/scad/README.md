@@ -4,13 +4,41 @@
 和 AI adapter 的依据：
 
 - `lib/kit_*.scad`：只放可复用模块库，不放完整场景。
+- `lib/gk_camera.scad`：相机机位虚拟点标记库（`gk_camera` / `gk_camera_key` 零几何 marker），
+  场景 `use` 后即可内嵌定点/路径机位；不进 catalog。约定见 `docs/AGENT_GUIDE/SCADLoader.md`。
 - `evaluated/**/*.scad`：确定的 Kit 实例列表；支持对象选择、Gizmo 和定向对象 AI。
 - `source/**/*.scad`：保留循环、条件、变量和局部 module 的 SCAD 程序；只使用源码编辑和源码 AI。
 - `proc/**/*.scad`：带 `gk_terrain(TERR)` 与 `ter_*` 规则的过程场景；使用过程节点编辑和过程 AI。
 - `characters/*.scad`：角色 Rig 与角色资产，不出现在场景组装浏览器中。
 - `specs/*.json`：声明式场景规格。
+- **`gnb geo` 生成的真实城市 tile 不在这个目录下**，在 `assets/geo/<tile>/`：一个 tile 的
+  `.scad`、`terrain.hmap`、`poi.json`、`ATTRIBUTION.md` 同放一处，整体 gitignore 并由
+  `gnb geo pak` 打进 `assets/paks/geo.pak`。它们仍是 `proc` 类场景（顶层 `gk_terrain(TERR)`），
+  只是分发单位不同。
 - `source/generated/` 与 `proc/generated/`：由 `gnb scad compose` 生成的分类派生产物；重新
   生成时会覆盖手工改动。
+
+### 场景组装浏览器的分类
+
+ScadLibrary 的“场景”资源库不会再把所有 `.scad` 文件平铺显示，而是根据目录和文件名建立
+场景类别：
+
+- `source/<类别>/` 与 `proc/<类别>/` 会合并到同一个类别下。例如
+  `source/coldwar/` 和 `proc/coldwar/` 都显示在 `coldwar`，每个条目仍分别标注
+  `Source` 或 `Proc`。
+- `source/brotato3d/`、`proc/nexttotalwar/` 等游戏/展示目录会显示为对应的游戏分组；
+  `deadly_showcase.scad` 归入 `Brotato3D`，`tw_showcase.scad` 归入 `NextTotalwar`。
+- `source/generated/` 与 `proc/generated/` 分别归入生成场景分组；根目录下没有类别目录的
+  文件保留在普通 `Source`、`Proc` 或 `Evaluated` 分组。
+- 新增特殊游戏或 Showcase 场景时，优先在 `assets/scad/source/<类别>/` 或
+  `assets/scad/proc/<类别>/` 下放置文件。只要类别目录名称相同，Source/Proc 就会自动合并，
+  不需要额外维护注册表。
+- 具体项目场景也按项目目录归档：机场放在 `source/airport/`，办公室放在 `source/office/`，
+  Overhill 任务放在 `source/overhill/`，海港城市放在 `source/habor_city/`；对应的 kit 展示场景
+  使用根目录的 `airport_showcase.scad`、`office_showcase.scad`、`overhill_showcase.scad` 和
+  `habor_city_showcase.scad`，便于在 ScadLibrary 中直接浏览零件库。
+- Racing 的 `pit_lane.scad` 与 `kit_pitlane` 展示统一位于 `source/racing/`；Old City 的
+  `old_city.scad` 与 `kit_old_city` 展示统一位于 `source/oldcity/`。
 
 ## ScadLibrary 场景组装
 

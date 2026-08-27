@@ -134,6 +134,7 @@ namespace Runtime::Remote
         };
 
         bool EnsureSlotResources(FSlot& slot, Vulkan::VulkanBaseRenderer& renderer, size_t slotIndex);
+        bool EnsureSwapChainCapture(Vulkan::VulkanBaseRenderer& renderer);
         bool EnsureGpuSlotResources(FSlot& slot, Vulkan::VulkanBaseRenderer& renderer, size_t slotIndex);
         bool CreateGpuEncodeImage(FSlot& slot, const Vulkan::Device& device, size_t slotIndex);
         void RecordFrameFromSource(VkCommandBuffer commandBuffer, uint32_t imageIndex,
@@ -160,6 +161,9 @@ namespace Runtime::Remote
         // Capture slots (render thread records, encoder thread reads). The vector is filled once
         // on first RecordFrame and never resized afterwards.
         std::vector<std::unique_ptr<FSlot>> slots_;
+        std::unique_ptr<Vulkan::RenderImage> swapChainCapture_;
+        VkExtent2D swapChainCaptureExtent_{};
+        VkImageLayout swapChainCaptureLayout_ = VK_IMAGE_LAYOUT_UNDEFINED;
         const Vulkan::Device* device_ = nullptr;
         std::unique_ptr<Vulkan::PipelineCommon::ZeroBindCustomPushConstantPipeline> gpuConvertPipeline_;
         std::unique_ptr<Vulkan::TimelineSemaphore> graphicsCompletionSemaphore_;
@@ -170,6 +174,7 @@ namespace Runtime::Remote
         std::chrono::steady_clock::time_point nextFrameTime_;
         std::atomic<uint64_t> droppedFrames_{0};
         bool warnedHdr_ = false;
+        bool warnedMissingTransferSrc_ = false;
 
         // Encoder worker
         std::mutex encodeQueueMutex_;

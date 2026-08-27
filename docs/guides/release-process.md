@@ -21,6 +21,7 @@
 - [ ] `THIRD-PARTY-NOTICES.md` 覆盖所有随包分发的第三方组件
 - [ ] 仓库内无个人推广链接、无个人签名身份
 - [ ] `src/build.version` 会由 CI 覆盖，不需要手工改
+- [ ] 发布构建显式使用 `-DGK_ENABLE_TRACY=OFF`，并确认产物不监听 Tracy 端口
 
 ### 本地预演打包
 

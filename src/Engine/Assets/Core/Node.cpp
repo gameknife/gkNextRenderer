@@ -165,6 +165,14 @@ namespace Assets
         RecalcTransform(true);
     }
 
+    void Node::SetTransform(glm::vec3 translation, glm::quat rotation, glm::vec3 scale)
+    {
+        translation_ = translation;
+        rotation_ = rotation;
+        scaling_ = scale;
+        RecalcTransform(true);
+    }
+
     void Node::SetName(std::string name)
     {
         name_ = std::move(name);

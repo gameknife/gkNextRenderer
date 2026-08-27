@@ -28,8 +28,20 @@ jobs:
             .vcpkg
             .vcpkg_bincache
           key: ${{ steps.gnb.outputs.key }}-android
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            out/build/android-release/cache
+          key: ${{ runner.os }}-android-packaging-${{ hashFiles('tools/android/templates/gradle/wrapper/gradle-wrapper.properties', 'tools/android/CMakeLists.txt') }}
       - run: ./gnb.sh setup --skip-paks
       - run: ./gnb.sh android release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gkNextRenderer-android-release
+          path: out/build/android-release/apk/gkNextRenderer-release.apk
+          if-no-files-found: error
       - uses: actions/cache/save@v6
         if: steps.cache-vcpkg-restore.outputs.cache-hit != 'true'
         with:

@@ -32,6 +32,7 @@
 // STL includes
 #include <iostream>
 #include <cstdarg>
+#include <cmath>
 #include <thread>
 #include <glm/ext.hpp>
 
@@ -112,6 +113,9 @@ namespace
     constexpr float kTimeBeforeSleep = 0.35f;
     constexpr double kFixedDeltaTime = 1.0 / 60.0;
     constexpr int kMaxCollisionStepsPerTick = 4;
+    // Keep a generous margin below Jolt's cLargeFloat (1e15). Collision shapes add their own
+    // extents to this position before publishing broadphase bounds.
+    constexpr float kMaxKinematicTargetCoordinate = 1.0e12f;
     constexpr uint32_t kBroadPhaseOptimizeBatchSize = 32;
     constexpr float kDynamicSphereFriction = 0.8f;
     constexpr float kDynamicSphereLinearDamping = 0.35f;
@@ -147,6 +151,21 @@ namespace
         settings.mAngularDamping = kDynamicSphereAngularDamping;
         settings.mInertiaMultiplier = kDynamicSphereInertiaMultiplier;
         settings.mMotionQuality = EMotionQuality::LinearCast;
+    }
+
+    bool IsValidKinematicTarget(const glm::vec3& position, const glm::quat& rotation)
+    {
+        const auto isFiniteCoordinate = [](float value)
+        {
+            return std::isfinite(value) && std::abs(value) <= kMaxKinematicTargetCoordinate;
+        };
+        const bool hasValidPosition = isFiniteCoordinate(position.x) && isFiniteCoordinate(position.y) &&
+                                      isFiniteCoordinate(position.z);
+        const bool hasValidRotation = std::isfinite(rotation.w) && std::isfinite(rotation.x) &&
+                                      std::isfinite(rotation.y) && std::isfinite(rotation.z);
+        const float rotationLengthSquared = glm::dot(rotation, rotation);
+        return hasValidPosition && hasValidRotation && std::isfinite(rotationLengthSquared) &&
+               rotationLengthSquared > 1.0e-12f;
     }
 
     void WakeDynamicBody(BodyInterface& bodyInterface, const BodyID& bodyId)
@@ -556,6 +575,14 @@ void FJoltPhysicsBackend::KickTick(double deltaSeconds)
     accumulatedTime_ -= simulatedDelta;
 
     pendingDynamicBodyIds_ = dynamicBodyIds_;
+    std::vector<FKinematicTarget> kinematicTargets;
+    kinematicTargets.reserve(pendingKinematicTargets_.size());
+    for (const auto& [bodyId, target] : pendingKinematicTargets_)
+    {
+        (void)bodyId;
+        kinematicTargets.push_back(target);
+    }
+    pendingKinematicTargets_.clear();
 
     const bool optimizeBroadPhase = pendingBodyAddCount_ >= kBroadPhaseOptimizeBatchSize;
     const bool publishSleepingTransition = previousActiveRigidBodyCount_ > 0;
@@ -564,28 +591,64 @@ void FJoltPhysicsBackend::KickTick(double deltaSeconds)
 
     Tasks::TaskCoordinator::GetInstance()->AddNamedTask(
         Tasks::ENamedTaskThread::PHYSICS,
-        [this, simulatedDelta, collisionSteps, optimizeBroadPhase,
-         publishSleepingTransition](Tasks::ResTask&)
+        [this, collisionSteps, optimizeBroadPhase, publishSleepingTransition,
+         kinematicTargets = std::move(kinematicTargets)](Tasks::ResTask&)
         {
             if (optimizeBroadPhase)
             {
                 context_->physicsSystem.OptimizeBroadPhase();
             }
 
-            // Jolt waits for its internal jobs, but this outer task remains asynchronous to the frame.
-            const EPhysicsUpdateError updateError =
-                context_->physicsSystem.Update(static_cast<float>(simulatedDelta), collisionSteps,
-                                               &context_->tempAllocator, &context_->jobSystem);
-            pendingUpdate_.errorMask = static_cast<uint32_t>(updateError);
+            BodyInterface& bodyInterface = context_->physicsSystem.GetBodyInterface();
+            struct FKinematicStartTransform
+            {
+                glm::vec3 position;
+                glm::quat rotation;
+            };
+            std::vector<FKinematicStartTransform> kinematicStarts;
+            kinematicStarts.reserve(kinematicTargets.size());
+            for (const FKinematicTarget& target : kinematicTargets)
+            {
+                RVec3 position;
+                Quat rotation;
+                bodyInterface.GetPositionAndRotation(ToJoltBodyID(target.id), position, rotation);
+                kinematicStarts.push_back({
+                    glm::vec3(position.GetX(), position.GetY(), position.GetZ()),
+                    glm::quat(rotation.GetW(), rotation.GetX(), rotation.GetY(), rotation.GetZ())});
+            }
+
+            // MoveKinematic derives a velocity from its delta time. Submit one interpolated target
+            // per fixed Jolt step so a render-frame hitch cannot integrate that velocity repeatedly.
+            uint32_t errorMask = 0;
+            for (int step = 0; step < collisionSteps; ++step)
+            {
+                const float alpha = static_cast<float>(step + 1) / static_cast<float>(collisionSteps);
+                for (size_t targetIndex = 0; targetIndex < kinematicTargets.size(); ++targetIndex)
+                {
+                    const FKinematicTarget& target = kinematicTargets[targetIndex];
+                    const FKinematicStartTransform& start = kinematicStarts[targetIndex];
+                    const glm::vec3 position = glm::mix(start.position, target.position, alpha);
+                    const glm::quat rotation = glm::normalize(glm::slerp(start.rotation, target.rotation, alpha));
+                    bodyInterface.MoveKinematic(
+                        ToJoltBodyID(target.id), RVec3(position.x, position.y, position.z),
+                        Quat(rotation.x, rotation.y, rotation.z, rotation.w),
+                        static_cast<float>(kFixedDeltaTime));
+                }
+
+                // Jolt waits for its internal jobs, but this outer task remains asynchronous to the frame.
+                const EPhysicsUpdateError updateError = context_->physicsSystem.Update(
+                    static_cast<float>(kFixedDeltaTime), 1, &context_->tempAllocator, &context_->jobSystem);
+                errorMask |= static_cast<uint32_t>(updateError);
+            }
+            pendingUpdate_.errorMask = errorMask;
             pendingUpdate_.activeBodyCount =
                 context_->physicsSystem.GetNumActiveBodies(EBodyType::RigidBody);
             pendingUpdate_.collisionSteps = static_cast<uint32_t>(collisionSteps);
             pendingUpdate_.bodies.clear();
 
-            if (pendingUpdate_.activeBodyCount > 0 || publishSleepingTransition)
+            if (pendingUpdate_.activeBodyCount > 0 || publishSleepingTransition || !kinematicTargets.empty())
             {
-                BodyInterface& bodyInterface = context_->physicsSystem.GetBodyInterface();
-                pendingUpdate_.bodies.reserve(pendingDynamicBodyIds_.size());
+                pendingUpdate_.bodies.reserve(pendingDynamicBodyIds_.size() + kinematicTargets.size());
                 for (NextBodyID bodyId : pendingDynamicBodyIds_)
                 {
                     const BodyID joltBodyId = ToJoltBodyID(bodyId);
@@ -599,8 +662,23 @@ void FJoltPhysicsBackend::KickTick(double deltaSeconds)
                         glm::quat(rotation.GetW(), rotation.GetX(), rotation.GetY(), rotation.GetZ()),
                         glm::vec3(velocity.GetX(), velocity.GetY(), velocity.GetZ())});
                 }
+                for (const FKinematicTarget& target : kinematicTargets)
+                {
+                    const BodyID joltBodyId = ToJoltBodyID(target.id);
+                    RVec3 position;
+                    Quat rotation;
+                    bodyInterface.GetPositionAndRotation(joltBodyId, position, rotation);
+                    const Vec3 velocity = bodyInterface.GetLinearVelocity(joltBodyId);
+                    pendingUpdate_.bodies.push_back({
+                        target.id,
+                        glm::vec3(position.GetX(), position.GetY(), position.GetZ()),
+                        glm::quat(rotation.GetW(), rotation.GetX(), rotation.GetY(), rotation.GetZ()),
+                        glm::vec3(velocity.GetX(), velocity.GetY(), velocity.GetZ())});
+                }
             }
-        });
+        },
+        {},
+        "Physics update");
 }
 
 bool FJoltPhysicsBackend::TryCompleteTick()
@@ -798,14 +876,13 @@ NextBodyID FJoltPhysicsBackend::CreateMeshBody(const NextMeshShapeHandle& meshSh
 
     // Cooking can drop every triangle (e.g. centimeter-scale meshes fall below Jolt's
     // degenerate-triangle threshold). Feeding such settings to CreateAndAddBody trips a
-    // fatal assert, so validate here and skip the physics body instead.
-    if (const Shape::ShapeResult cooked = meshShapeSettings->Create(); cooked.HasError())
+    // fatal assert, so validate here and skip the physics body instead. Jolt caches the cooked
+    // shape on the settings, so this is free when the caller already cooked off the load path.
+    if (!CookMeshShape(meshShape))
     {
-        SPDLOG_WARN("[Physics] mesh shape cooking failed ({}); skipping collision body",
-                    cooked.GetError().c_str());
         return {};
     }
-    
+
     const float epsilon = 0.001f;
     bool isUniformScale = (glm::abs(scale.x - 1.0f) < epsilon && 
                           glm::abs(scale.y - 1.0f) < epsilon && 
@@ -881,6 +958,25 @@ NextMeshShapeHandle FJoltPhysicsBackend::CreateMeshShape(Assets::Model& model)
     return std::make_shared<FJoltMeshShape>(new MeshShapeSettings(inVertices, inTriangles, materials));
 }
 
+bool FJoltPhysicsBackend::CookMeshShape(const NextMeshShapeHandle& meshShape)
+{
+    const auto joltMeshShape = std::dynamic_pointer_cast<const FJoltMeshShape>(meshShape);
+    if (!joltMeshShape || !joltMeshShape->settings_)
+    {
+        return false;
+    }
+
+    // Create() builds the triangle tree on first call and returns the cached result afterwards.
+    // It touches nothing but the settings object, so cooking distinct shapes in parallel is safe.
+    if (const Shape::ShapeResult cooked = joltMeshShape->settings_->Create(); cooked.HasError())
+    {
+        SPDLOG_WARN("[Physics] mesh shape cooking failed ({}); skipping collision body",
+                    cooked.GetError().c_str());
+        return false;
+    }
+    return true;
+}
+
 void FJoltPhysicsBackend::AddForceToBody(NextBodyID bodyID, const glm::vec3& force)
 {
     CompleteTick();
@@ -893,14 +989,25 @@ void FJoltPhysicsBackend::MoveKinematicBody(NextBodyID bodyID, const glm::vec3& 
                                            const glm::quat& rotation, float deltaSeconds)
 {
     CompleteTick();
-    BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
-    bodyInterface.MoveKinematic(ToJoltBodyID(bodyID), RVec3(position.x, position.y, position.z),
-                               Quat(rotation.x, rotation.y, rotation.z, rotation.w), deltaSeconds);
-    if (bodies_.contains(bodyID))
+    (void)deltaSeconds;
+    const auto body = bodies_.find(bodyID);
+    if (body == bodies_.end() || body->second.motionType != NextMotionType::Kinematic)
     {
-        bodies_[bodyID].position = position;
-        bodies_[bodyID].rotation = rotation;
+        return;
     }
+    if (!IsValidKinematicTarget(position, rotation))
+    {
+        if (rejectedKinematicTargets_.insert(bodyID).second)
+        {
+            SPDLOG_ERROR("[Physics] rejected invalid kinematic target for body {}: position ({}, {}, {}), rotation ({}, {}, {}, {})",
+                         bodyID.Value(), position.x, position.y, position.z,
+                         rotation.w, rotation.x, rotation.y, rotation.z);
+        }
+        return;
+    }
+
+    rejectedKinematicTargets_.erase(bodyID);
+    pendingKinematicTargets_[bodyID] = {bodyID, position, glm::normalize(rotation)};
 }
 
 void FJoltPhysicsBackend::SetBodyTransform(NextBodyID bodyID, const glm::vec3& position,
@@ -911,6 +1018,7 @@ void FJoltPhysicsBackend::SetBodyTransform(NextBodyID bodyID, const glm::vec3& p
     {
         return;
     }
+    pendingKinematicTargets_.erase(bodyID);
 
     BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
     const BodyID joltBodyId = ToJoltBodyID(bodyID);
@@ -1010,6 +1118,8 @@ void FJoltPhysicsBackend::RemoveBody(NextBodyID bodyID)
     {
         return;
     }
+    pendingKinematicTargets_.erase(bodyID);
+    rejectedKinematicTargets_.erase(bodyID);
 
     BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
     const BodyID joltBodyId = ToJoltBodyID(bodyID);
@@ -1148,6 +1258,8 @@ void FJoltPhysicsBackend::OnSceneStarted()
     lastUpdateErrorMask_ = 0;
     pendingBodyAddCount_ = 0;
     previousActiveRigidBodyCount_ = 0;
+    pendingKinematicTargets_.clear();
+    rejectedKinematicTargets_.clear();
 }
 
 void FJoltPhysicsBackend::OnSceneDestroyed()
@@ -1176,6 +1288,8 @@ void FJoltPhysicsBackend::OnSceneDestroyed()
     
     bodies_.clear();
     dynamicBodyIds_.clear();
+    pendingKinematicTargets_.clear();
+    rejectedKinematicTargets_.clear();
 }
 
 NextVehicleID FJoltPhysicsBackend::CreateWheeledVehicle(const FNextVehicleSettings& settings)

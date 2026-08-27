@@ -1,6 +1,7 @@
 #include "TestCommon.hpp"
 
 #include "Engine/Assets/Acceleration/CPUAccelerationStructure.hpp"
+#include "Engine/Assets/Acceleration/CPUAccelerationStructure.Internal.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 
 #include <atomic>
@@ -200,4 +201,90 @@ TEST_CASE("CPU acceleration background build coalesces to the latest request",
     CHECK(stats.snapshotStaleness == 0);
     CHECK(stats.lastBuildMilliseconds >= 0.0);
     CHECK(stats.lastBuildToPublishMilliseconds >= stats.lastBuildMilliseconds);
+}
+
+TEST_CASE("Ambient brick table keeps newly dirty bricks at the front until acknowledged",
+          "[Unit][CPUAccelerationSnapshot][AmbientBake]")
+{
+    FCPUProbeBaker baker;
+    baker.Init(0, 1.0f, glm::vec3(0.0f));
+    // Voxel storage is brick-swizzled; go through the shared mapping so this stays a test about
+    // brick dirtiness rather than a second copy of the address arithmetic.
+    const auto voxelIndex = [](int x, int y, int z) { return static_cast<size_t>(GetVoxelAddress(x, y, z)); };
+
+    baker.voxels[voxelIndex(4, 4, 4)].matId = 1u;
+    FCPUBrickTable table;
+    const uint32_t poolCapacity = static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
+    REQUIRE(table.UpdateData({baker}, 1u, poolCapacity, 1, nullptr, 1u, false, false, 0u, 0u));
+    REQUIRE(table.dirtyBricksPerCascade[0] > 0u);
+    CHECK(table.dirtyBricksPerCascade[0] == table.activeBricksPerCascade[0]);
+
+    const uint64_t firstRevision = table.dirtyRevision;
+    table.AcknowledgeDirty(firstRevision);
+    CHECK(table.dirtyBricksPerCascade[0] == 0u);
+
+    baker.voxels[voxelIndex(Assets::CUBE_SIZE_XY - 5, 4, Assets::CUBE_SIZE_XY - 5)].matId = 1u;
+    REQUIRE(table.UpdateData({baker}, 1u, poolCapacity, 1, nullptr, 2u, false, false, 0u, 0u));
+    const uint32_t dirtyCount = table.dirtyBricksPerCascade[0];
+    REQUIRE(dirtyCount > 0u);
+    CHECK(dirtyCount < table.activeBricksPerCascade[0]);
+    for (uint32_t listIndex = 0; listIndex < dirtyCount; ++listIndex)
+    {
+        const uint32_t brick = table.activeBrickList[listIndex];
+        REQUIRE(brick < table.dirtyBricks.size());
+        CHECK(table.dirtyBricks[brick] != 0u);
+    }
+}
+
+TEST_CASE("Parallel task cancellation discards queued work and drains completions",
+          "[Unit][TaskCoordinator][Concurrency]")
+{
+    Tasks::TaskCoordinator* coordinator = Tasks::TaskCoordinator::GetInstance();
+    std::atomic_bool runningTaskStarted{false};
+    std::atomic_bool allowRunningTaskToFinish{false};
+    std::atomic_uint32_t executedTaskCount{0};
+    std::atomic_uint32_t completedTaskCount{0};
+
+    coordinator->AddParralledTask(
+        [&](Tasks::ResTask&)
+        {
+            runningTaskStarted.store(true, std::memory_order_release);
+            while (!allowRunningTaskToFinish.load(std::memory_order_acquire))
+            {
+                std::this_thread::yield();
+            }
+            executedTaskCount.fetch_add(1, std::memory_order_relaxed);
+        },
+        [&](Tasks::ResTask&)
+        {
+            completedTaskCount.fetch_add(1, std::memory_order_relaxed);
+        });
+    coordinator->Tick();
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (!runningTaskStarted.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::yield();
+    }
+    REQUIRE(runningTaskStarted.load(std::memory_order_acquire));
+
+    for (uint32_t taskIndex = 0; taskIndex < 8; ++taskIndex)
+    {
+        coordinator->AddParralledTask(
+            [&](Tasks::ResTask&)
+            {
+                executedTaskCount.fetch_add(1, std::memory_order_relaxed);
+            },
+            [&](Tasks::ResTask&)
+            {
+                completedTaskCount.fetch_add(1, std::memory_order_relaxed);
+            });
+    }
+
+    coordinator->CancelAllParralledTasks();
+    allowRunningTaskToFinish.store(true, std::memory_order_release);
+    coordinator->WaitForAllParralledTask();
+
+    CHECK(executedTaskCount.load(std::memory_order_relaxed) == 1u);
+    CHECK(completedTaskCount.load(std::memory_order_relaxed) == 1u);
 }

@@ -123,15 +123,44 @@ namespace NextGameplay::Sim
         NextGameplay::FNavGridSettings settings;
         settings.cellSize = config_.navCellSize;
         settings.agentRadius = config_.agentRadius;
-        settings.maxSlopeAngle = 50.0f;
-        settings.clearanceHeight = 1.7f;
-        settings.maxStepHeight = 0.35f;
-        settings.worldMin = glm::vec3(sceneMin.x - 2.0f, 0.0f, sceneMin.z - 2.0f);
-        settings.worldMax = glm::vec3(sceneMax.x + 2.0f, 0.0f, sceneMax.z + 2.0f);
-        settings.sampleCeiling = sceneMax.y + 5.0f;
-        settings.floorHeightTolerance = 1.0f;
+        settings.maxSlopeAngle = config_.navMaxSlopeAngle;
+        settings.clearanceHeight = config_.navClearanceHeight;
+        settings.maxStepHeight = config_.navMaxStepHeight;
+        const bool bounded = config_.navWorldMax.x > config_.navWorldMin.x &&
+                             config_.navWorldMax.z > config_.navWorldMin.z;
+        if (bounded)
+        {
+            settings.worldMin = config_.navWorldMin;
+            settings.worldMax = config_.navWorldMax;
+        }
+        else
+        {
+            settings.worldMin = glm::vec3(sceneMin.x - 2.0f, 0.0f, sceneMin.z - 2.0f);
+            settings.worldMax = glm::vec3(sceneMax.x + 2.0f, 0.0f, sceneMax.z + 2.0f);
+        }
+        settings.sampleCeiling = config_.navSampleCeiling > 0.0f
+                                     ? config_.navSampleCeiling
+                                     : sceneMax.y + 5.0f;
+        settings.floorHeightTolerance = config_.navFloorTolerance;
         navGrid_.Build(scene.GetCPUAccelerationStructure(), settings);
         navReady_ = navGrid_.IsBuilt();
+    }
+
+    void FCharacterPool::RebuildNavGrid(Assets::Scene& scene, const glm::vec3& worldMin,
+                                        const glm::vec3& worldMax)
+    {
+        config_.navWorldMin = worldMin;
+        config_.navWorldMax = worldMax;
+        BuildNavGrid(scene);
+    }
+
+    float FCharacterPool::GroundAt(float x, float z, float currentY) const
+    {
+        if (config_.groundSampler)
+        {
+            return config_.groundSampler(x, z, currentY);
+        }
+        return config_.groundY;
     }
 
     void FCharacterPool::OnSceneLoaded(Assets::Scene& scene)
@@ -259,11 +288,15 @@ namespace NextGameplay::Sim
     {
         character.scriptWaypoints.clear();
         glm::vec3 goal = target;
-        goal.y = config_.groundY;
+        goal.y = GroundAt(goal.x, goal.z, target.y);
         std::vector<glm::vec3> path;
         if (navReady_)
         {
-            path = navGrid_.FindPath(character.position, goal, config_.groundY);
+            // The reference height is the floor the *character* is standing on,
+            // not the goal's: it is what decides which storey the search may use,
+            // and starting the search on the destination's floor strands an agent
+            // whose own cell is a metre off.
+            path = navGrid_.FindPath(character.position, goal, character.position.y);
         }
         const bool found = !path.empty();
         if (!found)
@@ -284,7 +317,7 @@ namespace NextGameplay::Sim
         }
         for (glm::vec3& waypoint : waypoints)
         {
-            waypoint.y = config_.groundY;
+            waypoint.y = GroundAt(waypoint.x, waypoint.z, waypoint.y);
         }
         character.moveTarget = waypoints.back();
         character.follower.SetPath(std::move(waypoints), character.moveTarget);
@@ -360,7 +393,8 @@ namespace NextGameplay::Sim
             if (speed > 0.01f)
             {
                 character->position += velocity * deltaSeconds;
-                character->position.y = config_.groundY;
+                character->position.y = GroundAt(character->position.x, character->position.z,
+                                                 character->position.y);
                 const glm::vec3 direction = velocity / speed;
                 character->yaw = std::atan2(direction.x, direction.z);
                 character->anim = EAnimHint::Walk;

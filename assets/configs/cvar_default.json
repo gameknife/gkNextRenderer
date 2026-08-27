@@ -1,6 +1,7 @@
 {
   "r.temporalFrames": 16,
   "r.samples": 2,
+  "r.camera.farPlane": 10000.0,
   "r.bounces": 8,
   "r.rendererType": 0,
   "r.maxBounces": 10,
@@ -20,7 +21,7 @@
   "show.grid": true,
   "show.wireframe": false,
   "r.tracing.exitAfterFirst": false,
-  "r.bakeSpeedLevel": 1,
+  "r.ambientCube.bakeTargetFps": 60,
   "r.heatmapScale": 1.0,
   "r.paperWhiteNit": 600.0
 }

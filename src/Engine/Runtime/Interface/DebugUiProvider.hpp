@@ -24,7 +24,7 @@ namespace Runtime
         virtual void DrawGraphicsPanel(NextEngine& engine, bool& panelVisible, float topOffset) = 0;
         virtual void DrawCVarEditor(NextEngine& engine, bool& panelVisible) = 0;
         virtual void DrawProfileOverlay(NextEngine& engine, const NextUI::Statistics& statistics,
-                                        Runtime::FrameProfiler* profiler, float topOffset) = 0;
+                                        float topOffset) = 0;
         virtual bool HandleRendererShortcut(SDL_Keycode key, bool pressed, bool panelVisible, NextEngine& engine) = 0;
         virtual bool HandleViewModeShortcut(SDL_Keycode key, bool pressed, bool panelVisible,
                                             Runtime::Config::ShowFlags& showFlags) = 0;
@@ -32,8 +32,7 @@ namespace Runtime
         // Per-frame developer panels (statistics overlay, console). Called from
         // the core ImGui backend inside the frame.
         virtual void DrawUiPanels(NextEngine& engine, const NextUI::Statistics& statistics,
-                                  Runtime::FrameProfiler* profiler, NextUI::EUiDeveloperLayer layers,
-                                  bool suppressStatsOverlay) {}
+                                  NextUI::EUiDeveloperLayer layers, bool suppressStatsOverlay) {}
 
         // First-chance UI event hook (e.g. grave-key console toggle); return
         // true to consume the event before ImGui sees it.

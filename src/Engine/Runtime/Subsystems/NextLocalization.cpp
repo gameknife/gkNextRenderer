@@ -6,6 +6,7 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <sstream>
+#include <vector>
 
 namespace
 {
@@ -56,16 +57,30 @@ bool NextLocalization::LoadFromJson(const std::string& path, std::string_view la
 
 bool NextLocalization::LoadFromTxt(const std::string& path, std::string_view language)
 {
-    const std::string absolutePath = Utilities::FileHelper::GetPlatformFilePath(path.c_str());
-    std::ifstream input(absolutePath, std::ios::binary);
-    if (!input.is_open())
+    std::vector<uint8_t> data;
+    bool loaded = false;
+    if (auto* package = Utilities::Package::FPackageFileSystem::TryGetInstance())
     {
-        SPDLOG_WARN("[NextLocalization] Failed to open locale file: {}", absolutePath);
+        loaded = package->LoadFile(path, data);
+    }
+    else
+    {
+        const std::filesystem::path loosePath = Utilities::FileHelper::GetRuntimeFilePath(path);
+        std::ifstream input(loosePath, std::ios::binary);
+        if (input.is_open())
+        {
+            data.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+            loaded = true;
+        }
+    }
+    if (!loaded)
+    {
+        SPDLOG_WARN("[NextLocalization] Failed to open locale file: {}", path);
         return false;
     }
 
     SetLanguage(language);
-    std::string content((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    std::string content(reinterpret_cast<const char*>(data.data()), data.size());
     if (content.size() >= 3 &&
         static_cast<unsigned char>(content[0]) == 0xEF &&
         static_cast<unsigned char>(content[1]) == 0xBB &&

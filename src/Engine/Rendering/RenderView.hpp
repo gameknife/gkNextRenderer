@@ -88,7 +88,7 @@ namespace Vulkan
         mutable uint32_t sunShadowInitializedMask   = 0;
         mutable uint32_t sunShadowDirtyMask         = Assets::Scene::kSunShadowCascadeMask;
 
-        // Progressive accumulation counter for this view (path tracing convergence).
+        // Non-reprojected progressive accumulation counter for this view.
         mutable uint32_t progressiveFrame = 0;
 
         // Camera jumped / view resized / scene swapped -> drop temporal history next frame.
@@ -260,6 +260,7 @@ namespace Vulkan
             EHistoryInvalidationReason reason = EHistoryInvalidationReason::CameraCut)
         {
             state_.resetHistory = true;
+            state_.progressiveFrame = 0;
             ++state_.historyGeneration;
             state_.historyInvalidationReason = reason;
             prevDepthValid_ = false;

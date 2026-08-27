@@ -38,6 +38,12 @@ namespace Assets
         // angle share a smoothed normal (curved primitives); sharper edges stay
         // faceted. 0 => flat shading.
         float smoothAngleDegrees = 35.0f;
+
+        // Evaluate independent top-level instances on worker threads. Off is
+        // the single-threaded path, kept as the A/B for any suspicion that a
+        // scene evaluates differently in parallel (it must not: the parallel
+        // path is deterministic, see ScadEvaluator::RunScene).
+        bool parallelTopLevel = true;
     };
 
     namespace Scad

@@ -1,6 +1,6 @@
 #include "EditorUi.hpp"
 
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 
 #include <imgui.h>
 #include "Modules/DevTools/UiDevPanels.hpp"

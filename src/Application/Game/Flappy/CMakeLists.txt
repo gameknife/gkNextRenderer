@@ -5,4 +5,6 @@ set(GK_FLAPPY_COMMON_SOURCES
 )
 
 add_subdirectory(FlappyCpp)
-add_subdirectory(FlappyJs)
+if(GK_DOTNET_ENABLED)
+    add_subdirectory(FlappyCSharp)
+endif()

@@ -11,6 +11,10 @@ namespace Assets::Scad::EvalDetail
         ColoredSoup cs;
         cs.color = color;
         cs.hasColor = hasColor;
+        if (!materialPropertiesStack_.empty())
+        {
+            cs.material = materialPropertiesStack_.back();
+        }
         if (hasColor && !materialNameStack_.empty())
         {
             cs.materialName = materialNameStack_.back();
@@ -593,6 +597,31 @@ namespace Assets::Scad::EvalDetail
         const Value alpha = Arg(inst, "alpha", 1);
         if (alpha.IsNumber())
             out.a = alpha.num;
+        return true;
+    }
+
+    bool Evaluator::ResolveMaterialColor(const Stmt& inst, glm::dvec4& out)
+    {
+        const Value c = Arg(inst, "c", 0);
+        if (c.type == Value::Type::Vec)
+        {
+            out = glm::dvec4(0.0, 0.0, 0.0, 1.0);
+            c.AsVec4(out);
+        }
+        else if (c.type == Value::Type::Str)
+        {
+            out = NamedColor(c.str);
+        }
+        else
+        {
+            return false;
+        }
+
+        const Value alpha = Arg(inst, "alpha", -1);
+        if (alpha.IsNumber())
+        {
+            out.a = alpha.num;
+        }
         return true;
     }
 

@@ -1,6 +1,11 @@
 set(output_base_dir ${CMAKE_CURRENT_BINARY_DIR})
 if(ANDROID)
-    set(output_base_dir ${CMAKE_CURRENT_SOURCE_DIR}/../android/app/src/main/assets/assets/)
+    if(NOT GK_ANDROID_ASSET_OUTPUT_DIR)
+        message(FATAL_ERROR
+            "GK_ANDROID_ASSET_OUTPUT_DIR is required for Android builds. "
+            "Configure Android through tools/android so assets stay in the build tree.")
+    endif()
+    get_filename_component(output_base_dir "${GK_ANDROID_ASSET_OUTPUT_DIR}" ABSOLUTE)
 elseif(IOS)
     set(output_base_dir ${CMAKE_CURRENT_BINARY_DIR}/assets/)
 endif()
@@ -10,6 +15,10 @@ set(ASSET_DIRS
     brand
     configs
     fonts
+    # Generated city tiles (`gnb geo`). Gitignored and normally shipped inside
+    # assets/paks/geo.pak, so the directory is often absent — the EXISTS guard
+    # below skips it, and the pak covers the runtime either way.
+    geo
     legos
     locale
     models
@@ -23,8 +32,18 @@ set(ASSET_DIRS
     sfx
     sounds
     textures
-    typescript
 )
+
+# Android packages the generated asset tree directly through Gradle. Keep that
+# tree exact across CMake regenerations so removed source assets cannot survive
+# in a later APK. The stamps are removed together with their destinations so the
+# copy commands below repopulate every directory after the cleanup.
+if(ANDROID)
+    foreach(dir IN LISTS ASSET_DIRS)
+        file(REMOVE_RECURSE "${output_base_dir}/${dir}")
+        file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/${dir}.stamp")
+    endforeach()
+endif()
 
 set(all_asset_files "")
 set(all_asset_stamps "")
@@ -51,25 +70,6 @@ foreach(dir IN LISTS ASSET_DIRS)
         COMMENT "Copying ${dir}..."
     )
 endforeach()
-
-set(tsc_tool_dir "${CMAKE_CURRENT_SOURCE_DIR}/../tools/tsc")
-if(EXISTS "${tsc_tool_dir}")
-    file(GLOB_RECURSE tsc_tool_files CONFIGURE_DEPENDS "${tsc_tool_dir}/*")
-    set(tsc_tool_stamp "${CMAKE_CURRENT_BINARY_DIR}/tsc-tool.stamp")
-    list(APPEND all_asset_files ${tsc_tool_files})
-    list(APPEND all_asset_stamps ${tsc_tool_stamp})
-    add_custom_command(
-        OUTPUT ${tsc_tool_stamp}
-        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
-            "${tsc_tool_dir}"
-            "${output_base_dir}/../tools/tsc"
-        COMMAND ${CMAKE_COMMAND} -E touch ${tsc_tool_stamp}
-        DEPENDS ${tsc_tool_files}
-        COMMENT "Copying bundled TypeScript compiler..."
-    )
-else()
-    message(STATUS "Bundled TypeScript compiler not found at ${tsc_tool_dir}; QuickJS TS hot reload will be disabled in copied runtime layouts.")
-endif()
 
 if(NOT ANDROID AND NOT IOS AND Vulkan_SLANGC)
     get_filename_component(slangc_tool_dir "${Vulkan_SLANGC}" DIRECTORY)

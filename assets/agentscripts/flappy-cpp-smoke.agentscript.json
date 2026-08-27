@@ -1,0 +1,85 @@
+{
+  "name": "flappy-cpp-smoke",
+  "target": "FlappyCpp",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 15000
+  },
+  "steps": [
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running"
+    },
+    {
+      "type": "wait-frames",
+      "n": 30
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 650
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 650
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 650
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 650
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 650
+    },
+    {
+      "type": "key",
+      "code": "SPACE",
+      "action": "press"
+    },
+    {
+      "type": "wait-ms",
+      "ms": 650
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/flappy_cpp_smoke"
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

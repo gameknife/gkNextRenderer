@@ -13,14 +13,16 @@ import (
 )
 
 type BuildOptions struct {
-	Targets     []string
-	Clean       bool
-	Reconfigure bool
-	Jobs        int
-	NoUnity     bool
-	LTO         bool
-	MakeProgram string
-	PrintCmd    bool
+	Targets       []string
+	ConfigureArgs []string
+	Clean         bool
+	Reconfigure   bool
+	Jobs          int
+	NoUnity       bool
+	LTO           bool
+	MakeProgram   string
+	PrintCmd      bool
+	BuildToolArgs []string
 }
 
 func Build(repoRoot string, preset string, opts BuildOptions) error {
@@ -38,6 +40,7 @@ func BuildWithCMake(repoRoot string, cmakePath string, preset string, opts Build
 	}
 
 	configureArgs := []string{"--preset", preset}
+	configureArgs = append(configureArgs, opts.ConfigureArgs...)
 	if opts.NoUnity {
 		configureArgs = append(configureArgs, "-DENABLE_UNITY_BUILD=OFF")
 	}
@@ -48,7 +51,7 @@ func BuildWithCMake(repoRoot string, cmakePath string, preset string, opts Build
 		configureArgs = append(configureArgs, "-DCMAKE_MAKE_PROGRAM="+opts.MakeProgram)
 	}
 
-	needsConfigure := opts.Clean || opts.Reconfigure || opts.NoUnity || opts.LTO
+	needsConfigure := opts.Clean || opts.Reconfigure || opts.NoUnity || opts.LTO || len(opts.ConfigureArgs) > 0
 	if _, err := os.Stat(cache); os.IsNotExist(err) {
 		needsConfigure = true
 	}
@@ -68,11 +71,23 @@ func BuildWithCMake(repoRoot string, cmakePath string, preset string, opts Build
 		return err
 	}
 
-	return run(repoRoot, opts.PrintCmd, cmakePath, makeBuildArgs(preset, opts)...)
+	// CMakePresets.json intentionally contains configure presets only. Build
+	// the directory produced by that configure preset instead of relying on a
+	// separate build preset with the same name.
+	return run(repoRoot, opts.PrintCmd, cmakePath, makeBuildArgs(buildDir, opts)...)
 }
 
-func makeBuildArgs(preset string, opts BuildOptions) []string {
-	args := []string{"--build", "--preset", preset}
+// ConfigureWithCMake runs a configure preset without building any target.
+// This is useful for IDE generators such as Visual Studio, where the
+// generated solution is the requested artifact.
+func ConfigureWithCMake(repoRoot string, cmakePath string, preset string, configureArgs ...string) error {
+	args := []string{"--preset", preset}
+	args = append(args, configureArgs...)
+	return run(repoRoot, false, cmakePath, args...)
+}
+
+func makeBuildArgs(buildDir string, opts BuildOptions) []string {
+	args := []string{"--build", buildDir}
 	if len(opts.Targets) > 0 {
 		args = append(args, "--target")
 		args = append(args, opts.Targets...)
@@ -81,6 +96,10 @@ func makeBuildArgs(preset string, opts BuildOptions) []string {
 		args = append(args, "--parallel", fmt.Sprintf("%d", opts.Jobs))
 	} else {
 		args = append(args, "--parallel")
+	}
+	if len(opts.BuildToolArgs) > 0 {
+		args = append(args, "--")
+		args = append(args, opts.BuildToolArgs...)
 	}
 	return args
 }
@@ -93,7 +112,8 @@ func Clean(repoRoot string, preset string, target string) error {
 	if target == "" || target == "out" {
 		return os.RemoveAll(filepath.Join(repoRoot, "out"))
 	}
-	return run(repoRoot, false, "cmake", "--build", "--preset", preset, "--target", "clean")
+	buildDir := filepath.Join(repoRoot, "out", "build", preset)
+	return run(repoRoot, false, "cmake", "--build", buildDir, "--target", "clean")
 }
 
 func DefaultPreset() (string, error) {

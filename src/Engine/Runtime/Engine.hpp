@@ -9,19 +9,19 @@
 #include "Engine/Rendering/RenderView.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Command/CommandHistory.hpp"
+#include "Engine/Runtime/Interface/AgentControl.hpp"
 #include "Engine/Runtime/Interface/AgentQueries.hpp"
-#include "Engine/Runtime/AgentControlServer.hpp"
 #include "Engine/Runtime/Interface/DebugDraw.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Engine/Runtime/Interface/ScreenShotService.hpp"
+#include "Engine/Runtime/Interface/SceneContent.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Interface/ScriptRuntime.hpp"
 #include "Engine/Runtime/Interface/ShaderHotReload.hpp"
 #include "Engine/Runtime/Config/ShowFlags.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
-#include "Engine/Runtime/ScreenShot.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
-#include <nlohmann/json_fwd.hpp>
 
 namespace NextRenderer
 {
@@ -81,7 +81,6 @@ public:
     using FHotReloadStatus = Runtime::FShaderHotReloadStatus;
 
     // Construction and global access
-    static void RegisterReflection();
     static NextEngine* GetInstance() { return instance_; }
 
     NextEngine(Runtime::Config::Options& options, void* userdata = nullptr);
@@ -97,11 +96,11 @@ public:
 
     // Core runtime objects
     Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
-    Runtime::FrameProfiler* Profiler() const { return renderer_ ? renderer_->Profiler() : nullptr; }
     Assets::Scene& GetScene() { return *scene_; }
     Vulkan::Window& GetWindow() const { return *window_; }
     NextGameInstanceBase* GetGameInstance() { return gameInstance_.get(); }
     const NextGameInstanceBase* GetGameInstance() const { return gameInstance_.get(); }
+    Assets::Camera GetActiveRenderCamera() const;
 
     // Configuration state
     Runtime::Config::UserSettings& GetUserSettings() { return config_.userSettings; }
@@ -110,10 +109,24 @@ public:
     const Runtime::Config::Options& GetOptions() const { return *options_; }
 
     // Runtime services
-    NextUI::UserInterface* GetUserInterface() { return userInterface_.get(); }
+    NextUI::IUserInterface* GetUserInterface() { return userInterface_.get(); }
     Runtime::IUiOverlay* GetUiOverlay() { return uiOverlay_.get(); }
-    Runtime::FScreenShotService& GetScreenShotService() { return *screenShotService_; }
-    const Runtime::FScreenShotService& GetScreenShotService() const { return *screenShotService_; }
+    Runtime::IScreenShotService& GetScreenShotService()
+    {
+        if (!screenShotService_)
+        {
+            throw std::logic_error("screen capture service is not installed");
+        }
+        return *screenShotService_;
+    }
+    const Runtime::IScreenShotService& GetScreenShotService() const
+    {
+        if (!screenShotService_)
+        {
+            throw std::logic_error("screen capture service is not installed");
+        }
+        return *screenShotService_;
+    }
     NextAudio* GetAudio() { return services_.audio.get(); }
     const NextAudio* GetAudio() const { return services_.audio.get(); }
     NextLocalization* GetLocalization() { return services_.localization.get(); }
@@ -149,8 +162,7 @@ public:
 
     // Input forwarding
     void InjectRelativeMouse(float dx, float dy);
-    void OnTouch(bool down, double xpos, double ypos);
-    void OnTouchMove(double xpos, double ypos);
+    void OnTouch(SDL_Event& event);
 
     // Screen capture
     void RequestScreenShot(FScreenShotSpec spec);
@@ -171,17 +183,24 @@ public:
     void SetProgressiveRendering(bool enable);
     void ResetProgressiveRenderingAccumulation();
     bool RequestRendererType(Vulkan::ERendererType type);
+    bool SetReferenceMode(bool enabled);
+    void ApplyReferenceModeFromOptions();
     bool SetUpscalerConfiguration(Rendering::Upscaler::EUpscalerType type, uint32_t mode);
     bool ApplyUpscalerConfigurationFromSettings();
     bool IsProgressiveRendering() const { return progressiveRender_.enabled; }
     bool IsOfflineProgressivePathTracing() const
     {
         return progressiveRender_.enabled && renderer_ != nullptr &&
-            renderer_->CurrentLogicRendererType() == Vulkan::ERT_PathTracing;
+            renderer_->CurrentLogicRendererType() == Vulkan::ERT_PathTracingLite;
     }
     bool IsEffectiveSharcEnabled() const
     {
+#if ANDROID
+        // Qualcomm's Android Vulkan compiler crashes while creating Core.SharcUpdate.
+        return false;
+#else
         return config_.userSettings.SharcEnable && !IsOfflineProgressivePathTracing();
+#endif
     }
     uint32_t GetProgressiveRenderAccumulatedFrames() const { return progressiveRender_.accumulatedFrames; }
     uint32_t GetProgressiveRenderTargetFrames() const { return FProgressiveRenderState::TargetFrames; }
@@ -222,6 +241,32 @@ public:
     void SetUiOverlayFactory(std::function<std::unique_ptr<Runtime::IUiOverlay>(NextEngine&)> factory)
     {
         uiOverlayFactory_ = std::move(factory);
+    }
+
+    using UserInterfaceFactory = std::function<std::unique_ptr<NextUI::IUserInterface>(
+        NextEngine&,
+        std::function<void()>,
+        std::function<void()>,
+        std::unique_ptr<NextUI::IMultiViewportBackend>)>;
+    void SetUserInterfaceFactory(UserInterfaceFactory factory)
+    {
+        userInterfaceFactory_ = std::move(factory);
+    }
+
+    void SetScreenShotService(std::unique_ptr<Runtime::IScreenShotService> service)
+    {
+        screenShotService_ = std::move(service);
+    }
+
+    void SetAgentControlService(std::unique_ptr<Runtime::Agent::IAgentControlService> service)
+    {
+        agentControl_ = std::move(service);
+    }
+    const Runtime::Agent::FAgentQueryRegistry& GetAgentQueries() const { return agentQueries_; }
+
+    void SetSceneContentService(std::unique_ptr<Runtime::Scene::ISceneContentService> service)
+    {
+        sceneContent_ = std::move(service);
     }
 
     void SetAudioFactory(std::function<std::unique_ptr<NextAudio>()> factory)
@@ -295,14 +340,14 @@ private:
     void OnScroll(double xoffset, double yoffset);
     void OnDropFile(const char* path);
     void TickGamepadInput();
-    nlohmann::json HandleAgentControlCommand(const std::string& method, const nlohmann::json& params);
-    std::optional<Runtime::Agent::FAgentQueryValue> QueryAgentControl(const std::string& query) const;
     bool HandleGlobalCaptureShortcut(const SDL_Event& event);
     bool HandleDebugShortcut(SDL_Keycode key);
 
     // Lifecycle helpers
     void InitPhysics();
     void TickHotReload();
+    void StartPipelineWarmup();
+    void PumpPipelineWarmupAfterPresent();
 
     // Configuration and user-facing toggles
     struct FConfigState
@@ -321,6 +366,11 @@ private:
         float frameRate = 0.0f;
         double lastFrameTime = 0.0;
     };
+
+    // The initial loading frame must be presented before a cold pipeline compile can block the
+    // main thread. This makes the normal ImGui loading popup a real progress display.
+    bool pipelineWarmupUiPresented_ = false;
+    bool startupWindowShown_ = false;
 
     // Event-driven pointer state. Remote input injects SDL events but does not
     // necessarily update SDL_GetMouseState(), so gameplay/editor picking must
@@ -391,8 +441,9 @@ private:
     FInputState inputState_{};
     FProgressiveRenderState progressiveRender_{};
     FScreenShotState screenShot_{};
-    std::unique_ptr<Runtime::FScreenShotService> screenShotService_;
-    std::unique_ptr<Runtime::Agent::FAgentControlServer> agentControl_;
+    std::unique_ptr<Runtime::IScreenShotService> screenShotService_;
+    std::unique_ptr<Runtime::Scene::ISceneContentService> sceneContent_;
+    std::unique_ptr<Runtime::Agent::IAgentControlService> agentControl_;
     Runtime::Agent::FAgentQueryRegistry agentQueries_;
     int requestedExitCode_ = 0;
     bool closeRequested_ = false;
@@ -400,7 +451,8 @@ private:
     NextRenderer::EApplicationStatus status_{};
 
     // Runtime services and UI
-    std::unique_ptr<NextUI::UserInterface> userInterface_;
+    std::unique_ptr<NextUI::IUserInterface> userInterface_;
+    UserInterfaceFactory userInterfaceFactory_;
     std::unique_ptr<Runtime::IUiOverlay> uiOverlay_;
     std::function<std::unique_ptr<Runtime::IUiOverlay>(NextEngine&)> uiOverlayFactory_;
     std::vector<std::unique_ptr<Runtime::IRenderFrameConsumer>> renderFrameConsumers_{};

@@ -1,0 +1,62 @@
+{
+  "name": "launcher-game-switch",
+  "target": "gkNextLauncher",
+  "viewport": {
+    "width": 1600,
+    "height": 900
+  },
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 60000
+  },
+  "comment": "The regression net for hosting managed games in one process. Loads A, returns to the menu, loads B, returns, then loads A again: the A->B->A cycle is what proves the world reset actually resets (docs/designs/managed-game-launcher-design.md section 4.4). game.select is the launcher's control cvar; empty means 'back to the menu'.",
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running" },
+    { "type": "wait-frames", "n": 10 },
+
+    { "type": "assert", "query": "game.state", "op": "eq", "value": "Idle" },
+    { "type": "assert", "query": "game.count", "op": "ge", "value": 3 },
+    { "type": "assert", "query": "game.availableCount", "op": "ge", "value": 3,
+      "comment": "Every manifest that ships must be runnable by this host; a greyed-out entry here means a missing module or an unpublished assembly." },
+    { "type": "screenshot", "ui": true, "out": "screenshots/launcher_menu" },
+
+    { "type": "cvar", "name": "game.select", "set": "flappy" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Playing" },
+    { "type": "wait-until", "query": "scene.nodeCount", "op": "ge", "value": 10 },
+    { "type": "wait-frames", "n": 30 },
+    { "type": "assert", "query": "game.active", "op": "eq", "value": "flappy" },
+    { "type": "screenshot", "out": "screenshots/launcher_flappy_first" },
+
+    { "type": "cvar", "name": "game.select", "set": "" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Idle" },
+    { "type": "wait-frames", "n": 10 },
+    { "type": "assert", "query": "game.active", "op": "eq", "value": "" },
+    { "type": "wait-frames", "n": 120 },
+    { "type": "assert", "query": "game.state", "op": "eq", "value": "Idle",
+      "comment": "Idle has to stay idle: if game.select were part of the world baseline, restoring it would write the last game's id back and reload it a frame later." },
+    { "type": "screenshot", "ui": true, "out": "screenshots/launcher_menu_after_flappy" },
+
+    { "type": "cvar", "name": "game.select", "set": "brotato3d" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Playing" },
+    { "type": "wait-until", "query": "scene.nodeCount", "op": "ge", "value": 1000,
+      "comment": "The SCAD arena and the managed entity pools have committed." },
+    { "type": "wait-frames", "n": 60 },
+    { "type": "assert", "query": "game.active", "op": "eq", "value": "brotato3d" },
+    { "type": "screenshot", "ui": true, "out": "screenshots/launcher_brotato" },
+
+    { "type": "cvar", "name": "game.select", "set": "" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Idle" },
+    { "type": "wait-frames", "n": 10 },
+
+    { "type": "cvar", "name": "game.select", "set": "flappy" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Playing" },
+    { "type": "wait-until", "query": "scene.nodeCount", "op": "ge", "value": 10 },
+    { "type": "wait-frames", "n": 30 },
+    { "type": "assert", "query": "game.active", "op": "eq", "value": "flappy" },
+    { "type": "screenshot", "out": "screenshots/launcher_flappy_second",
+      "comment": "Compared against launcher_flappy_first: the same game, at the same frame offset, after another game has run and been unloaded in between." },
+
+    { "type": "assert", "query": "engine.status", "op": "eq", "value": "Running" },
+    { "type": "quit" }
+  ]
+}

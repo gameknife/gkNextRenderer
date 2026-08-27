@@ -9,7 +9,11 @@ set(gkNextRendererModules
     LDrawLoader
     ScadLoader
     SplatLoader
+    RenderViews
 )
+if(GK_ENABLE_VITURE)
+    list(APPEND gkNextRendererModules NextViture)
+endif()
 
 if(ANDROID)
     add_library(gkNextRenderer SHARED
@@ -18,6 +22,7 @@ if(ANDROID)
         ${src_files_engine}
         ${src_files_vulkan}
         ${src_files_rendering}
+        ${src_files_nextgameplay}
         ${src_files_thirdparty}
         ${src_files_modules_all}
         ${GK_APPLICATION_COMMON_SOURCES}
@@ -48,38 +53,37 @@ else()
 endif()
 
 if(IOS)
+    # Single source of truth: the target property and the gnb manifest below must
+    # agree, otherwise `gnb ios run` reports an identifier the bundle never had.
+    #
+    # Do not go back to com.tzy.gknext. That identifier was previously shipped
+    # from another checkout signed by a different Apple team, and macOS records
+    # the identity a bundle identifier is expected to carry. Re-signing it with
+    # this team trips an AMFI launch constraint, and the app is refused at spawn
+    # ("Launch Constraint Violation", launchd job spawn failed, POSIX 162) even
+    # though the signature and provisioning profile are perfectly valid.
+    set(GK_IOS_BUNDLE_ID "gknext.renderer" CACHE STRING
+        "Bundle identifier for the iOS app; must match an installed provisioning profile")
+
     set_target_properties(gkNextRenderer PROPERTIES
-        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/ios/Info.plist
+        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist
         MACOSX_BUNDLE_BUNDLE_NAME gkNextRenderer
-        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.tzy.gknext"
+        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "${GK_IOS_BUNDLE_ID}"
         XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
     )
 
-    if(IOS_SKIP_CODE_SIGN)
+    if(IOS_DEVELOPMENT_TEAM)
         set_target_properties(gkNextRenderer PROPERTIES
-            XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Manual"
-            XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
-            XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
-            XCODE_ATTRIBUTE_DEVELOPMENT_TEAM ""
-            XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY ""
-            XCODE_ATTRIBUTE_PROVISIONING_PROFILE_SPECIFIER ""
+            XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
+            XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "${IOS_DEVELOPMENT_TEAM}"
         )
     else()
-        # Signing identity is per-developer and must not be committed. Supply it at
-        # configure time, e.g.:
-        #   cmake --preset ios -DIOS_SKIP_CODE_SIGN=OFF \
-        #         -DIOS_DEVELOPMENT_TEAM=ABCDE12345 \
-        #         -DIOS_PROVISIONING_PROFILE=my.profile.name
-        if(NOT IOS_DEVELOPMENT_TEAM)
-            message(WARNING
-                "IOS_SKIP_CODE_SIGN=OFF but IOS_DEVELOPMENT_TEAM is empty; "
-                "Xcode will not be able to sign gkNextRenderer.")
-        endif()
+        # CI builds have no signing certificate or provisioning profile. Without
+        # this Xcode still demands a development identity and fails the build.
+        # The resulting bundle compiles and links but cannot be launched.
         set_target_properties(gkNextRenderer PROPERTIES
-            XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Manual"
-            XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "${IOS_DEVELOPMENT_TEAM}"
-            XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "${IOS_CODE_SIGN_IDENTITY}"
-            XCODE_ATTRIBUTE_PROVISIONING_PROFILE_SPECIFIER "${IOS_PROVISIONING_PROFILE}"
+            XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
+            XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
         )
     endif()
 
@@ -89,6 +93,7 @@ if(IOS)
         CoreFoundation
         Foundation
         AudioToolbox
+        ImageIO
         Metal
         QuartzCore
         CoreGraphics
@@ -101,8 +106,13 @@ if(IOS)
 
     add_custom_command(TARGET gkNextRenderer POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${PROJECT_BINARY_DIR}/assets
-            $<TARGET_BUNDLE_DIR:gkNextRenderer>
+            ${PROJECT_BINARY_DIR}/assets/assets
+            $<TARGET_BUNDLE_DIR:gkNextRenderer>/assets
         COMMENT "Copying assets to iOS bundle"
+    )
+
+    file(GENERATE
+        OUTPUT "${PROJECT_BINARY_DIR}/ios-app-$<CONFIG>.json"
+        CONTENT "{\n  \"bundle_path\": \"$<TARGET_BUNDLE_DIR:gkNextRenderer>\",\n  \"bundle_id\": \"${GK_IOS_BUNDLE_ID}\"\n}\n"
     )
 endif()

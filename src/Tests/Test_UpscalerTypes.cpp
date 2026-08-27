@@ -1,6 +1,8 @@
 #include <catch2/catch_all.hpp>
 
 #include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
+#include "Engine/Rendering/PipelineCommon/CheckerboardRendering.hpp"
+#include "Engine/Utilities/Math.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 
 TEST_CASE("Upscaler mode mapping is centralized", "[Unit][Upscaler]")
@@ -101,6 +103,20 @@ TEST_CASE("Upscaler reprojection transforms are inverse pairs", "[Unit][Upscaler
     }
 }
 
+TEST_CASE("Reverse-Z projection maps near to one and far to zero", "[Unit][Rendering]")
+{
+    const glm::mat4 projection = Utilities::Math::ReverseZPerspective(
+        glm::radians(60.0f), 16.0f / 9.0f, 0.1f, 1000.0f);
+    const auto depthAt = [&projection](float viewDistance)
+    {
+        const glm::vec4 clip = projection * glm::vec4(0.0f, 0.0f, -viewDistance, 1.0f);
+        return clip.z / clip.w;
+    };
+
+    CHECK(depthAt(0.1f) == Catch::Approx(1.0f).margin(0.00001f));
+    CHECK(depthAt(1000.0f) == Catch::Approx(0.0f).margin(0.00001f));
+}
+
 TEST_CASE("Upscaler motion vectors use pixel-space normalization", "[Unit][Upscaler]")
 {
     using namespace Rendering::Upscaler;
@@ -133,4 +149,26 @@ TEST_CASE("Upscaler types have one stable ordered selection", "[Unit][Upscaler]"
     CHECK(SupportsUpscalerType(nativeTypes, EUpscalerType::NativeTAAU));
     CHECK(SupportsUpscalerType(nativeTypes, EUpscalerType::SnapdragonGSR2));
     CHECK_FALSE(SupportsUpscalerType(nativeTypes, EUpscalerType::FidelityFXFSR));
+}
+
+TEST_CASE("Checkerboard shading covers opposite pixel parities on consecutive frames",
+          "[Unit][Upscaler][Checkerboard]")
+{
+    using namespace Vulkan::PipelineCommon;
+
+    CHECK(GetCheckerboardDispatchWidth(1920, true) == 960);
+    CHECK(GetCheckerboardDispatchWidth(1919, true) == 960);
+    CHECK(GetCheckerboardDispatchWidth(1919, false) == 1919);
+
+    for (uint32_t y = 0; y < 5; ++y)
+    {
+        for (uint32_t compactX = 0; compactX < 7; ++compactX)
+        {
+            const uint32_t evenFrameX = GetCheckerboardPixelX(compactX, y, 0);
+            const uint32_t oddFrameX = GetCheckerboardPixelX(compactX, y, 1);
+            CHECK((evenFrameX ^ oddFrameX) == 1u);
+            CHECK(GetCheckerboardMissingPixelX(compactX, y, 0) == oddFrameX);
+            CHECK(GetCheckerboardMissingPixelX(compactX, y, 1) == evenFrameX);
+        }
+    }
 }

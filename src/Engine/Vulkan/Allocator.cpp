@@ -326,9 +326,11 @@ namespace Vulkan
         vkGetPhysicalDeviceProperties(device_.PhysicalDevice(), &physicalDeviceProperties);
 
         VmaAllocatorCreateInfo createInfo{};
+        // The device-address flag makes VMA add VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT to every
+        // allocation, which is invalid when the feature was not enabled at device creation.
         createInfo.flags =
             VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT |
-            VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+            (device_.SupportsBufferDeviceAddress() ? VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT : 0);
         createInfo.physicalDevice = device_.PhysicalDevice();
         createInfo.device = device_.Handle();
         createInfo.instance = device_.Surface().Instance().Handle();

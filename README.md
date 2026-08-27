@@ -68,7 +68,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 - **实时路径追踪与 Hybrid 渲染**：面向真实运行时的 1/2spp 路径追踪、降噪与多管线无缝切换。
 - **高性能 GPU 架构**：全 Bindless、Visibility Buffer 与 GPU-Driven 单 Draw 提交，最小化 CPU 开销。
 - **辐射缓存与稀疏显存**：借助 SHARC 缓存复用与按需驻留，在固定 GPU 预算下最大化渲染效率。
-- **全栈引擎与玩法原型**：整合 ECS、反射、ImGui 编辑器、QuickJS/TS 热重载与 Jolt 物理，支撑丰富玩法验证。
+- **全栈引擎与玩法原型**：整合 ECS、反射、ImGui 编辑器、Slang 着色器热重载与 Jolt 物理，支撑丰富玩法验证。
 - **AI Native 基础设施**：配合自动化 Agent 验证与结构化内容管线，让 AI 可直接生成、理解并修改 3D 资产与脚本。
 - **多格式结构化资产导入**：原生支持 glTF 2.0、LDraw（乐高）、OpenSCAD DSL 与 PlayCanvas 高斯溅射（Gaussian Splatting）。
 
@@ -76,7 +76,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 ## ⚡ 性能与渲染效率
 
-性能是当前的核心约束之一。引擎围绕世界辐射缓存复用、稀疏显存布局、GPU-Driven 海量提交、按需驻留与多档上采等手段，在固定 GPU 预算下尽量多出画面、少占显存。下面给出一组**典型场景的运行时性能参考**，并配套内置的逐 pass profiler 与 Superluminal 集成做剖析。
+性能是当前的核心约束之一。引擎围绕世界辐射缓存复用、稀疏显存布局、GPU-Driven 海量提交、按需驻留与多档上采等手段，在固定 GPU 预算下尽量多出画面、少占显存。下面给出一组**典型场景的运行时性能参考**，并配套 Tracy 与 Superluminal 集成做剖析。
 
 ### 性能参考数据
 
@@ -95,18 +95,18 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 > | 采样 | 每场景 3 秒预热 + 3 秒统计 |
 > | 关闭项 | DLSS / FSR / GTAO / 动画 tick（由配置中的 cvars 固定） |
 
-| 场景 | 渲染管线 | 帧时间 (ms) | GPU 时间 (ms) | FPS | 显存 | Draw AfterCull / View | 三角形 AfterCull / View |
-|------|----------|------------|---------------|-----|------|------------------------|-------------------|
-| MaterialShowcase | PathTracing | 2.342 | 1.846 | 427 | 978 MiB | 15 / 15 | 13,862 / 13,862 |
-| MaterialShowcase | SoftwareModernNoAmbient | 0.619 | 0.249 | 1,614 | 925 MiB | 15 / 15 | 13,542 / 13,542 |
-| LightingShowcase | PathTracing | 2.836 | 2.408 | 353 | 978 MiB | 9 / 9 | 4,953 / 4,953 |
-| LightingShowcase | SoftwareModernNoAmbient | 0.707 | 0.275 | 1,414 | 925 MiB | 5 / 5 | 2,881 / 2,881 |
-| GIBootcamp | PathTracing | 4.950 | 4.455 | 202 | 925 MiB | 30 / 36 | 4,741 / 4,952 |
-| GIBootcamp | SoftwareModernNoAmbient | 0.994 | 0.547 | 1,006 | 925 MiB | 33 / 40 | 5,175 / 5,388 |
-| KilometerWorld | PathTracing | 1.651 | 1.255 | 606 | 925 MiB | 401 / 1,780 | 4,789 / 21,362 |
-| KilometerWorld | SoftwareModernNoAmbient | 0.991 | 0.496 | 1,009 | 925 MiB | 405 / 1,798 | 4,851 / 21,580 |
-| MassiveAsteroidBelt | PathTracing | 2.089 | 1.598 | 479 | 1,192 MiB | 34,265 / 67,786 | 2,733,342 / 5,422,850 |
-| MassiveAsteroidBelt | SoftwareModernNoAmbient | 0.987 | 0.595 | 1,013 | 1,139 MiB | 32,977 / 65,197 | 2,620,345 / 5,215,602 |
+| 场景 | 渲染管线 | 帧时间 (ms) | FPS | 显存 | Draw AfterCull / View | 三角形 AfterCull / View |
+|------|----------|------------|-----|------|------------------------|-------------------|
+| MaterialShowcase | PathTracing | 2.342 | 427 | 978 MiB | 15 / 15 | 13,862 / 13,862 |
+| MaterialShowcase | SoftwareModernNoAmbient | 0.619 | 1,614 | 925 MiB | 15 / 15 | 13,542 / 13,542 |
+| LightingShowcase | PathTracing | 2.836 | 353 | 978 MiB | 9 / 9 | 4,953 / 4,953 |
+| LightingShowcase | SoftwareModernNoAmbient | 0.707 | 1,414 | 925 MiB | 5 / 5 | 2,881 / 2,881 |
+| GIBootcamp | PathTracing | 4.950 | 202 | 925 MiB | 30 / 36 | 4,741 / 4,952 |
+| GIBootcamp | SoftwareModernNoAmbient | 0.994 | 1,006 | 925 MiB | 33 / 40 | 5,175 / 5,388 |
+| KilometerWorld | PathTracing | 1.651 | 606 | 925 MiB | 401 / 1,780 | 4,789 / 21,362 |
+| KilometerWorld | SoftwareModernNoAmbient | 0.991 | 1,009 | 925 MiB | 405 / 1,798 | 4,851 / 21,580 |
+| MassiveAsteroidBelt | PathTracing | 2.089 | 479 | 1,192 MiB | 34,265 / 67,786 | 2,733,342 / 5,422,850 |
+| MassiveAsteroidBelt | SoftwareModernNoAmbient | 0.987 | 1,013 | 1,139 MiB | 32,977 / 65,197 | 2,620,345 / 5,215,602 |
 
 > 复现方式（**不需要**可选资源包，全部为内置 proc demo 场景）：
 >
@@ -120,13 +120,19 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 </details>
 
-### Profiler
+### 性能剖析
 
-引擎内置一套 CPU / GPU 逐 pass 计时系统：每个渲染 pass 由命名 scope 标注，`VulkanGpuTimer` 采集各 pass 的 GPU 端耗时，运行时以 ImGui 叠加层（`ProfileDebugOverlay`）实时显示逐 pass 帧时间与统计。无需外部工具即可定位渲染热点、对比不同管线与设置的开销。
+引擎不再维护独立的 CPU / GPU 计时聚合器；命名 scope 直接绑定到 Tracy（CPU/GPU）和 Superluminal（CPU）。Tracy 使用自己的 Vulkan GPU context 采集 GPU 时间线，Superluminal 接收命名 CPU 事件，避免运行时保存重复的计时树、GPU query bank 和 ImGui timing history。
+
+开发构建默认还启用 Tracy client（on-demand，不连接时不持续积累事件）。运行 `gnb tracy fetch` 获取与 vcpkg client 同版本的官方 GUI，再运行 `gnb tracy` 启动；Android 使用 `gnb tracy --android`，通过 adb forward 后连接 `127.0.0.1`。完整步骤见 [Tracy Profiling Guide](docs/guides/tracy-profiling.md)。发布构建使用 `--tracy=off`，不携带 Tracy client。
 
 ### Superluminal 集成
 
-Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API（默认探测 `C:/Program Files/Superluminal/Performance/API`），构建会自动启用 `WITH_SUPERLUMINAL`，把引擎的 CPU 与 GPU 命名事件投递到 Superluminal 时间线（GPU 事件经独立回放线程标注），便于做细粒度采样剖析与跨帧分析。未安装时自动跳过，不影响构建。
+Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API（默认探测 `C:/Program Files/Superluminal/Performance/API`），构建会自动启用 `WITH_SUPERLUMINAL`，把引擎的命名 CPU 事件和调试 marker 投递到 Superluminal，便于做细粒度采样剖析与跨帧分析。未安装时自动跳过，不影响构建。
+
+### RenderDoc 集成
+
+Windows 上若存在 `C:/Program Files/RenderDoc/renderdoc_app.h`，构建会自动启用 `WITH_RENDERDOC`，并从同一安装目录动态加载 RenderDoc 应用 API。启动任意桌面目标时附加 `--renderdoc`，引擎会在首个场景就绪后自动捕获下一帧并打开 RenderDoc UI；未安装时自动跳过，不影响构建。
 
 <p align="center">✦</p>
 
@@ -144,7 +150,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 
 - **ECS + 反射**：entt 组件系统与 entt::meta 反射层，一次注册即同时服务运行时、编辑器属性面板、撤销 / 重做与脚本绑定
 - **可视化编辑器**：场景编辑、节点式材质图、cvar 调优与数据驱动设置集成在同一套 ImGui 工作流
-- **TypeScript 脚本热重载**：QuickJS 运行时搭配仓库自带的 TypeScript 工具链，脚本与着色器改动即时生效，无外部 Node 依赖
+- **着色器热重载**：Slang 增量编译 + pipeline 重建，着色器改动即时生效（脚本层正从 QuickJS/TS 迁移到 C#，见 `docs/designs/dotnet-scripting-design.md`）
 - **物理与角色运行时**：Jolt Physics 支撑碰撞、抓取拖拽、载具与角色移动
 
 ### 3️⃣ 内容管线
@@ -158,7 +164,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 ### 4️⃣ 工具链与自动化验证
 
 - **统一 CLI**：`gnb` 单一入口覆盖依赖准备、构建、运行、测试与资产打包，桌面与移动平台口径一致
-- **性能剖析**：逐 pass 的 CPU / GPU 计时叠加层，并可选接入 Superluminal 时间线做细粒度采样
+- **性能剖析**：Tracy CPU/GPU zones，并可选接入 Superluminal CPU 时间线做细粒度采样
 - **自动化回归**：无窗口截图、输入脚本驱动的断言验证、视觉回归与 benchmark CSV 报告，均可直接接入 CI
 - **Remote Play**：任意桌面 target 可作为 WebRTC host，浏览器零安装接入画面并回传键鼠与虚拟手柄输入，视频走 Vulkan Video 硬件编码
 - **本地工作台**：图形化 dashboard 汇总待办、构建、运行、测试与 Git，内置 llama.cpp 本地推理服务同时供工具链与运行时使用
@@ -166,7 +172,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 ### 5️⃣ AI Native 工作流
 
 - **可解析的内容基座**：SCAD、LDraw、glTF 与 Splat 管线让 AI 面对的是可读取、可修改、可校验的结构化 3D 内容，而非不可控的静态素材
-- **可编程的运行时**：反射组件与 TypeScript 绑定把引擎状态直接开放给脚本和模型
+- **可编程的运行时**：反射组件把引擎状态开放给编辑器与脚本绑定
 - **可自动判定的闭环**：截图、断言脚本、replay parity 与 benchmark 报告构成“生成 → 运行 → 验证 → 迭代”的机器可读回路
 - **本地推理**：集成 llama.cpp / Gemma 的本地 OpenAI 兼容服务，供内容生成与游戏内 AI 决策共用
 
@@ -220,7 +226,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 ./gnb.bat run gkNextRenderer
 ```
 
-除 Visual Studio 这类宿主工具外，其余项目依赖通常都由 `gnb` 自动准备；默认会拉取项目约定版本的 Vulkan SDK、Slang 与 TypeScript 工具链到仓库内。`gnb` 在 Windows 上默认使用 **Ninja** 极速构建生成器（自动管理 MSVC 与 SDK 环境路径），Windows 默认启用 NVIDIA Streamline（DLSS）。
+除 Visual Studio 这类宿主工具外，其余项目依赖通常都由 `gnb` 自动准备；默认会拉取项目约定版本的 Vulkan SDK 与 Slang 到仓库内。`gnb` 在 Windows 上默认使用 **Ninja** 极速构建生成器（自动管理 MSVC 与 SDK 环境路径），Windows 默认启用 NVIDIA Streamline（DLSS）。
 
 </details>
 
@@ -273,7 +279,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 ./gnb.sh run gkNextRenderer
 ```
 
-`gnb setup` 会自动下载项目使用的 Vulkan SDK、Slang 与 TypeScript 工具链，无需再单独准备这些项目级依赖。若显式设置 `VULKAN_SDK`，则优先使用该环境变量指向的 SDK。
+`gnb setup` 会自动下载项目使用的 Vulkan SDK 与 Slang，无需再单独准备这些项目级依赖。若显式设置 `VULKAN_SDK`，则优先使用该环境变量指向的 SDK。
 
 </details>
 
@@ -330,10 +336,10 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
       </div>
     </td>
     <td width="33%" align="center" valign="top" style="padding: 0;">
-      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="100%" style="display: block; width: 100%;" alt="FlappyJs" />
+      <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="100%" style="display: block; width: 100%;" alt="FlappyCpp" />
       <div style="padding: 10px 8px 12px 8px;">
-        <strong>🐤 FlappyCpp / FlappyJs</strong><br>
-        <sub>C++ 与 QuickJS/TS 双实现，验证引擎确定性 replay parity</sub>
+        <strong>🐤 FlappyCpp</strong><br>
+        <sub>确定性 replay parity 的 C++ 基线（脚本侧对照实现迁移中）</sub>
       </div>
     </td>
     <td width="33%" align="center" valign="top" style="padding: 0;">
@@ -387,7 +393,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 - **`KongLie3D`**：自走棋 / 羁绊 / 战斗回合模拟原型。
 - **`NextRA`**：确定性 RTS 模拟原型，验证 Lockstep 帧同步与 Replay 回放。
 - **`CharacterDemo`**：角色 Actor 挂载、NavGrid A* 导航、AI 行为树与战斗交互实验。
-- **`FlappyCpp` / `FlappyJs`**：Flappy Bird C++ / QuickJS TS 双实现，验证引擎重播与脚本行为一致性（Parity）。
+- **`FlappyCpp`**：Flappy Bird C++ 实现，作为引擎确定性重播 parity 的基线（脚本侧对照实现迁移中）。
 - **`TruckerDemo` / `CitySolSim` / `NextDayz` / `NextTotalWar`**：车辆驾驶、城市交通、生存战术与军团模拟原型。
 
 #### 基准测试与自动化工具 (Benchmark & Tools)

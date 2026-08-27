@@ -6,7 +6,8 @@ import Shader.PathTracing;
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     const uint2 size = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
-    if (any(DTid.xy >= size))
+    const uint2 pixel = DTid.xy;
+    if (any(pixel >= size))
     {
         return;
     }
@@ -28,7 +29,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.UseAmbientCubeTerminal = false;
     renderer.WriteOutputs = false;
     renderer.SecondaryDirectMode = 2;
-    renderer.Init(DTid.xy);
+    renderer.Init(pixel);
 
     if (!renderer.PrimaryHit(rayCaster))
     {

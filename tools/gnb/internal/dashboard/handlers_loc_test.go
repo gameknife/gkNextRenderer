@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"bytes"
 	"html/template"
 	"net/http/httptest"
 	"os"
@@ -8,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/loc"
 )
 
 func TestBuildContributionGraph(t *testing.T) {
@@ -82,6 +85,58 @@ func TestContributionLevel(t *testing.T) {
 	for _, test := range tests {
 		if got := contributionLevel(test.count, test.max); got != test.want {
 			t.Fatalf("contributionLevel(%d, %d) = %d, want %d", test.count, test.max, got, test.want)
+		}
+	}
+}
+
+func TestBuildHourlyCommitGraphStartsAtSixAM(t *testing.T) {
+	graph := buildHourlyCommitGraph(map[int]int{
+		0:  3,
+		5:  1,
+		6:  4,
+		7:  2,
+		23: 7,
+	})
+
+	if len(graph.Hours) != 24 {
+		t.Fatalf("expected 24 hourly buckets, got %d", len(graph.Hours))
+	}
+	if graph.Hours[0].Hour != 6 || graph.Hours[0].Label != "6 AM" {
+		t.Fatalf("unexpected first bucket: %+v", graph.Hours[0])
+	}
+	if graph.Hours[17].Hour != 23 || graph.Hours[18].Hour != 0 || graph.Hours[23].Hour != 5 {
+		t.Fatalf("hour buckets should wrap at midnight from 23 to 0: %+v", graph.Hours)
+	}
+	if graph.Hours[0].RangeLabel != "06:00–07:00" || graph.Hours[18].RangeLabel != "00:00–01:00" {
+		t.Fatalf("unexpected range labels: first=%q midnight=%q", graph.Hours[0].RangeLabel, graph.Hours[18].RangeLabel)
+	}
+	if graph.Total != 17 || graph.Max != 7 || graph.Mid != 4 {
+		t.Fatalf("unexpected graph summary: total=%d max=%d mid=%d", graph.Total, graph.Max, graph.Mid)
+	}
+}
+
+func TestTabLocRendersHourlyCommitGraph(t *testing.T) {
+	graph := buildHourlyCommitGraph(map[int]int{6: 4, 23: 2, 0: 1})
+	var out bytes.Buffer
+	err := parseDashboardTemplates(t).ExecuteTemplate(&out, "tab_loc", indexVM{
+		LocVM: locVM{
+			Snapshot:      &loc.Snapshot{},
+			HourlyCommits: graph,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := out.String()
+	for _, want := range []string{
+		"每日提交时段热度",
+		"06:00 → 次日 06:00",
+		"title=\"06:00–07:00（当地时间）：4 次提交\"",
+		"title=\"00:00–01:00（当地时间）：1 次提交\"",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("hourly contribution chart missing %q:\n%s", want, body)
 		}
 	}
 }

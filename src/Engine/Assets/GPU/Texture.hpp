@@ -37,6 +37,77 @@ namespace Assets
         bool Hdr = false;
     };
     
+    // How many descriptors the bindless arrays declare. The full profile mirrors the slot registry
+    // in assets/shaders/common/BindlessTexture.slang; a device that cannot back arrays that large
+    // (MoltenVK on A12X-class GPUs) gets the compatibility profile instead.
+    //
+    // One struct, three readers: the descriptor layout GlobalTexturePool builds, the scene-texture
+    // ceiling in RegisterTexture, and the device-capability probe in VulkanBaseRenderer. They have
+    // to agree -- if the ceiling outgrows the array, RegisterTexture writes past the end of its
+    // binding, and if the probe undercounts, a layout the device cannot create passes the check.
+    struct FBindlessProfile
+    {
+        uint32_t sampledTextureSlots = 0;
+        uint32_t storageTextureSlots = 0;
+        uint32_t shadowMapSlots = 0;
+        uint32_t volumeSlots = 0;
+        // Scene textures may only take indices below this. The rest of the sampled array is handed
+        // out explicitly (thumbnails, offscreen view outputs), so overrunning it would silently
+        // overwrite those descriptors.
+        uint32_t sceneTextureCapacity = 0;
+        // Whether any shader in this profile samples the scene-texture array. The compatibility
+        // renderer shades from material constants alone, so its textures are still loaded and
+        // uploaded (materials keep meaningful ids for later) but never bound -- which is why its
+        // tiny array is not a content limit there, and why exhausting it is not an error.
+        bool bindsSceneTextures = true;
+
+        // What vkCreateDescriptorSetLayout charges against the per-stage limits. A
+        // COMBINED_IMAGE_SAMPLER element costs one sampled image *and* one sampler, so the shadow,
+        // sample and volume-sample arrays land in both totals.
+        constexpr uint32_t CombinedImageSamplers() const
+        {
+            return shadowMapSlots + sampledTextureSlots + volumeSlots;
+        }
+        constexpr uint32_t StorageImages() const { return storageTextureSlots + volumeSlots; }
+
+        constexpr bool operator==(const FBindlessProfile&) const = default;
+
+        static constexpr FBindlessProfile Full();
+        static constexpr FBindlessProfile Compatibility();
+    };
+
+    constexpr FBindlessProfile FBindlessProfile::Full()
+    {
+        return {
+            .sampledTextureSlots = static_cast<uint32_t>(Bindless::RES_SLOT_COUNT),
+            .storageTextureSlots = static_cast<uint32_t>(Bindless::RES_SLOT_COUNT),
+            .shadowMapSlots = 16,
+            .volumeSlots = static_cast<uint32_t>(Bindless::RES_VOLUME_COUNT),
+            .sceneTextureCapacity = static_cast<uint32_t>(Bindless::RES_SCENE_TEXTURE_CAPACITY),
+            .bindsSceneTextures = true,
+        };
+    }
+
+    // Sized against the tightest limit on the target class of device: MoltenVK on an A12X reports
+    // maxPerStageDescriptorSamplers = 16. Shadow maps, volumes and storage images all belong to
+    // passes the compatibility renderer never runs, so they are zero.
+    //
+    // The sampled array is small on purpose and is NOT a cap on scene content: nothing in this
+    // profile samples it, so a scene with more textures than slots simply leaves the extras
+    // unbound. Raise a field here (and re-run the probe) before adding a compatibility pass that
+    // actually reads a texture.
+    constexpr FBindlessProfile FBindlessProfile::Compatibility()
+    {
+        return {
+            .sampledTextureSlots = 8,
+            .storageTextureSlots = 0,
+            .shadowMapSlots = 0,
+            .volumeSlots = 0,
+            .sceneTextureCapacity = 8,
+            .bindsSceneTextures = false,
+        };
+    }
+
     class GlobalTexturePool final
     {
     public:
@@ -54,8 +125,13 @@ namespace Assets
             FullMip,
         };
 
-        GlobalTexturePool(const Vulkan::Device& device, Vulkan::CommandPool& command_pool, Vulkan::CommandPool& command_pool_mt);
+        GlobalTexturePool(const Vulkan::Device& device, Vulkan::CommandPool& command_pool,
+                          Vulkan::CommandPool& command_pool_mt,
+                          const FBindlessProfile& profile = FBindlessProfile::Full(),
+                          bool supportsBCTextures = true);
         ~GlobalTexturePool();
+
+        const FBindlessProfile& Profile() const { return profile_; }
 
         VkDescriptorSetLayout Layout() const { return descriptorSetManager_->DescriptorSetLayout().Handle(); }
         VkDescriptorSet DescriptorSet(uint32_t index) const { return descriptorSetManager_->DescriptorSets().Handle(0); }
@@ -128,12 +204,30 @@ namespace Assets
 
         void QueueHDRTextureResidency(uint32_t textureIdx, EHDRTextureResidency targetResidency);
 
+        enum class EBindingArray : uint8
+        {
+            SampleTexture,
+            StorageTexture,
+            ShadowMap,
+            VolumeSample,
+            VolumeStorage,
+            Count,
+        };
+        bool CanBindSlot(uint32_t slot, uint32_t declaredCount, EBindingArray array) const;
+
+        // Texture uploads finish on task-coordinator workers, so the warn-once state is atomic.
+        mutable std::array<std::atomic_flag, static_cast<size_t>(EBindingArray::Count)> overflowReported_{};
+
         static GlobalTexturePool* instance_;
 
         const class Vulkan::Device& device_;
         Vulkan::CommandPool& commandPool_;
         Vulkan::CommandPool& mainThreadCommandPool_;
         bool textureWorkerUploadEnabled_ {};
+        FBindlessProfile profile_ = FBindlessProfile::Full();
+        // KTX2/Basis assets transcode to BC7 where the device can sample it and to plain RGBA
+        // otherwise. Mobile and Apple GPUs take the second path.
+        bool supportsBCTextures_ = true;
 
         std::vector<std::unique_ptr<TextureImage>> textureImages_;
         std::unordered_map<std::string, FTextureBindingGroup> textureNameMap_;

@@ -7,7 +7,8 @@ import Shader.PathTracing;
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     const uint2 size = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
-    if (any(DTid.xy >= size))
+    const uint2 pixel = DTid.xy;
+    if (any(pixel >= size))
     {
         return;
     }
@@ -27,7 +28,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.ForceExitAfterFirst = false;
     renderer.UseAmbientCubeTerminal = false;
     renderer.SecondaryDirectMode = 1;
-    renderer.Init(DTid.xy);
+    renderer.Init(pixel);
 
     // ReSTIR is primary-view-only (see Core.PathTracing.comp.slang).
     const bool restirActive = RestirIsAvailable() && Bindless.GetGpuscene().CustomData0 == 0;
@@ -37,15 +38,15 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     if (params.DebugMode == 3u)
     {
-        renderer.WriteDebugColor(float4(SharcDebugOccupancy(uint2(DTid.xy), screenSize), 1));
-        END_SHADERCLOCK(DTid.xy)
+        renderer.WriteDebugColor(float4(SharcDebugOccupancy(pixel, screenSize), 1));
+        END_SHADERCLOCK(pixel)
         return;
     }
 
     if (params.DebugMode == 5u)
     {
-        renderer.WriteDebugColor(float4(SharcDebugSampleStale(uint2(DTid.xy), screenSize), 1));
-        END_SHADERCLOCK(DTid.xy)
+        renderer.WriteDebugColor(float4(SharcDebugSampleStale(pixel, screenSize), 1));
+        END_SHADERCLOCK(pixel)
         return;
     }
 
@@ -53,9 +54,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
     {
         if (restirActive)
         {
-            RestirStoreEmpty(int2(DTid.xy));
+            RestirStoreEmpty(int2(pixel));
         }
-        END_SHADERCLOCK(DTid.xy)
+        END_SHADERCLOCK(pixel)
         return;
     }
     // Primary-hit data for the ReSTIR temporal gates (see Core.PathTracing.comp.slang).
@@ -67,7 +68,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         Material primaryMat = Bindless.GetGpuscene().GetMaterial(renderer.GetPrimaryVertex().MaterialIndex);
         if (primaryMat.MaterialModel == MaterialDiffuseLight)
         {
-            RestirStoreEmpty(int2(DTid.xy));
+            RestirStoreEmpty(int2(pixel));
         }
     }
 
@@ -77,7 +78,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         float4 cachedRadiance = float4(0, 0, 0, 1);
         bool hit = SharcQuery(primaryVertex.Position, primaryVertex.Normal, cachedRadiance);
         renderer.WriteDebugCachedRadiance(cachedRadiance, hit);
-        END_SHADERCLOCK(DTid.xy)
+        END_SHADERCLOCK(pixel)
         return;
     }
 
@@ -85,7 +86,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     cache.RoughnessMin = params.QueryRoughnessMin;
     cache.MinBounce = params.QueryMinBounce;
     cache.DebugMode = params.DebugMode;
-    int sampleMultiplier = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MOTIONMOMENT)[DTid.xy] > 0 ? 4 : 1;
+    int sampleMultiplier = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MOTIONMOMENT)[pixel] > 0 ? 4 : 1;
     renderer.Render(tracer, dIlluminator, cache, sampleMultiplier);
-    END_SHADERCLOCK(DTid.xy)
+    END_SHADERCLOCK(pixel)
 }

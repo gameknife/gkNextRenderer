@@ -13,7 +13,7 @@
   "steps": [
     { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
     { "type": "cvar", "name": "r.restir.enable", "set": false },
-    { "type": "cvar", "name": "r.sharc.enable", "set": false },
+    { "type": "cvar", "name": "r.rendererType", "set": 5 },
     { "type": "cvar", "name": "r.temporalFrames", "set": 16 },
     { "type": "cvar", "name": "r.samples", "set": 8 },
     { "type": "wait-frames", "n": 200 },

@@ -3,6 +3,8 @@
 #include "Modules/GltfLoader/GltfModule.hpp"
 #include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
 #include "Modules/NextPhysics/NextPhysicsModule.hpp"
+#include "Modules/NextValidation/NextValidationModule.hpp"
+#include "Modules/SceneContent/SceneContentModule.hpp"
 #include "Modules/SplatLoader/SplatModule.hpp"
 
 #include <thread>
@@ -38,6 +40,8 @@ EngineTestFixture::EngineTestFixture()
     GOption = options_.get();
 
     engine_ = std::make_unique<NextEngine>(*GOption);
+    Modules::SceneContent::Install(*engine_);
+    Modules::NextValidation::Install(*engine_);
     DevTools::Install(*engine_);
     Modules::Splat::Install(*engine_);
     Modules::Physics::Install(*engine_);

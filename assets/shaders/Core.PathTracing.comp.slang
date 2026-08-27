@@ -7,7 +7,8 @@ import Shader.PathTracing;
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     const uint2 size = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
-    if (any(DTid.xy >= size))
+    const uint2 pixel = DTid.xy;
+    if (any(pixel >= size))
     {
         return;
     }
@@ -25,7 +26,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.FuzzyTracing = false;
     renderer.ForceExitAfterFirst = false;
     renderer.SecondaryDirectMode = 0;
-    renderer.Init(DTid.xy);
+    renderer.Init(pixel);
 
     // ReSTIR is primary-view-only: reservoirs are sized for the primary extent, so the
     // recorded view bank base gates every non-primary view off the buffers.
@@ -36,9 +37,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
     {
         if (restirActive)
         {
-            RestirStoreEmpty(int2(DTid.xy));
+            RestirStoreEmpty(int2(pixel));
         }
-        END_SHADERCLOCK(DTid.xy)
+        END_SHADERCLOCK(pixel)
         return;
     }
     // Primary-hit data for the ReSTIR temporal gates must come from renderer state, not
@@ -52,7 +53,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         Material primaryMat = Bindless.GetGpuscene().GetMaterial(renderer.GetPrimaryVertex().MaterialIndex);
         if (primaryMat.MaterialModel == MaterialDiffuseLight)
         {
-            RestirStoreEmpty(int2(DTid.xy));
+            RestirStoreEmpty(int2(pixel));
         }
     }
 
@@ -60,12 +61,12 @@ void main(uint3 DTid : SV_DispatchThreadID)
     if (TryAmbientResidencyDebug(renderer.GetPrimaryVertex().Position, residencyDebugColor))
     {
         renderer.WriteDebugColor(residencyDebugColor);
-        END_SHADERCLOCK(DTid.xy)
+        END_SHADERCLOCK(pixel)
         return;
     }
 
     FNullRadianceCache cache;
-    int sampleMultiplier = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MOTIONMOMENT)[DTid.xy] > 0 ? 4 : 1;
+    int sampleMultiplier = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MOTIONMOMENT)[pixel] > 0 ? 4 : 1;
     renderer.Render(tracer, dIlluminator, cache, sampleMultiplier);
-    END_SHADERCLOCK(DTid.xy)
+    END_SHADERCLOCK(pixel)
 }

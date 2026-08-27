@@ -821,6 +821,7 @@ namespace
         extras["SkyIntensity"] = tinygltf::Value(static_cast<double>(env.SkyIntensity));
         extras["SkyRotation"] = tinygltf::Value(static_cast<double>(env.SkyRotation));
         extras["SkyColor"] = serializeColor(env.SkyColor);
+        extras["BackgroundMode"] = tinygltf::Value(static_cast<int>(env.BackgroundMode));
         extras["SunIntensity"] = tinygltf::Value(static_cast<double>(env.SunIntensity));
         extras["SunRotation"] = tinygltf::Value(static_cast<double>(env.SunRotation));
         extras["SunElevation"] = tinygltf::Value(static_cast<double>(env.SunElevation));

@@ -1,0 +1,21 @@
+{
+  "id": "flappy",
+  "displayName": "Flappy (C#)",
+  "assembly": "flappy/FlappyCSharp.dll",
+  "project": "Flappy/FlappyCSharp/FlappyCSharp.csproj",
+  "window": {
+    "title": "FlappyCSharp",
+    "width": 1280,
+    "height": 720,
+    "forceSDR": true
+  },
+  "requiredModules": ["NextAudio"],
+  "initialScene": "Empty.proc",
+  "showFlags": {
+    "debugGraphicsPanel": false,
+    "debugPhysicsOverlay": false,
+    "overlay": false
+  },
+  "hotReload": true,
+  "compileManagedSources": false
+}

@@ -189,6 +189,11 @@ public:
                                       NextObjectLayer layer) = 0;
     virtual NextBodyID CreatePlaneBody(glm::vec3 position, glm::vec3 normal, NextMotionType motionType) = 0;
     virtual NextMeshShapeHandle CreateMeshShape(Assets::Model& model) = 0;
+    // Builds the backend's collision representation for a shape produced by CreateMeshShape, and
+    // reports whether the result is usable. Both calls only touch the shape itself -- never the
+    // physics world -- so a caller holding one handle per model may run them on worker threads.
+    // CreateMeshBody cooks on demand anyway; doing it here just moves the cost off the load path.
+    virtual bool CookMeshShape(const NextMeshShapeHandle& meshShape) = 0;
 
     virtual void AddForceToBody(NextBodyID bodyID, const glm::vec3& force) = 0;
 

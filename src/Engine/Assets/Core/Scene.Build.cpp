@@ -9,6 +9,7 @@
 #include "Engine/Assets/Core/LightObject.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
 #include "Engine/Vulkan/Device.hpp"
 
@@ -22,7 +23,7 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
-#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
 #include "Engine/Utilities/Exception.hpp"
 
 #include <algorithm>
@@ -133,7 +134,8 @@ namespace Assets
         sceneAABBMin_ = glm::vec3(0.0f);
         sceneAABBMax_ = glm::vec3(0.0f);
         sceneDirty_ = true;
-        sceneDirtyForCpuAS_ = true;
+        cpuBvhDirty_ = true;
+        levelVoxelBakePending_ = true;
         materialDirty_ = true;
     }
 
@@ -271,7 +273,7 @@ namespace Assets
 
         if (enableCpuAcceleration_)
         {
-            cpuAccelerationStructure_.InitBVH(*this);
+            cpuAccelerationStructure_->InitBVH(*this);
         }
 
         // force static flag
@@ -359,17 +361,44 @@ namespace Assets
             }
             staticPhysicsBodies_.clear();
 
-            cachedMeshShapes_.clear();
-            for (auto& model : models_)
+            // Build and cook every mesh shape up front, in parallel. Each model owns an
+            // independent shape, and neither call reaches the physics world, so the only ordering
+            // this needs is the barrier below before bodies start referencing the shapes. Leaving
+            // the cook to CreateMeshBody instead put the whole triangle-tree build on the main
+            // thread, serialized behind body creation.
+            cachedMeshShapes_.assign(models_.size(), NextMeshShapeHandle{});
+            std::vector<uint32_t> shapeCookTasks;
+            shapeCookTasks.reserve(models_.size());
+            for (size_t modelIndex = 0; modelIndex < models_.size(); ++modelIndex)
             {
-                if (model.NumberOfIndices() < 65535 * 3 && model.NumberOfIndices() > 0)
+                const Model& model = models_[modelIndex];
+                if (model.NumberOfIndices() >= 65535 * 3 || model.NumberOfIndices() == 0)
                 {
-                    cachedMeshShapes_.push_back(physicsEngine->CreateMeshShape(model));
+                    continue;
                 }
-                else
-                {
-                    cachedMeshShapes_.push_back(nullptr);
-                }
+
+                shapeCookTasks.push_back(Tasks::TaskCoordinator::GetInstance()->AddParralledTask(
+                    [this, physicsEngine, modelIndex](Tasks::ResTask&)
+                    {
+                        NextMeshShapeHandle shape = physicsEngine->CreateMeshShape(models_[modelIndex]);
+                        if (shape && physicsEngine->CookMeshShape(shape))
+                        {
+                            cachedMeshShapes_[modelIndex] = std::move(shape);
+                        }
+                        else
+                        {
+                            // Name the model: a bare cooking failure is unactionable
+                            // in a generated scene with a hundred models.
+                            SPDLOG_WARN("[Physics] no collision for model '{}' ({} indices)",
+                                        models_[modelIndex].Name(), models_[modelIndex].NumberOfIndices());
+                        }
+                    },
+                    nullptr,
+                    "Physics shape cooking"));
+            }
+            if (!shapeCookTasks.empty())
+            {
+                Tasks::TaskCoordinator::GetInstance()->WaitForAllParralledTask();
             }
             lastRebuildProfile_.physicsShapeCookingMs =
                 std::chrono::duration<float, std::milli>(Clock::now() - shapeCookingStart).count();
@@ -448,7 +477,28 @@ namespace Assets
         std::vector<uint32_t> reorders;
         std::vector<uint32_t> primitiveIndices;
 
+        // Size everything from the model tables first: a multi-million vertex scene otherwise
+        // spends most of this loop copying these arrays into successively larger allocations.
+        // The index-derived counts are upper bounds -- models past ten sections get truncated
+        // below -- which is what reserve wants anyway.
+        {
+            size_t totalVertices = 0;
+            size_t totalIndices = 0;
+            for (const auto& model : models_)
+            {
+                totalVertices += model.CPUVertices().size();
+                totalIndices += model.CPUIndices().size();
+            }
+            vertices.reserve(totalVertices);
+            indices.reserve(totalIndices);
+            allWeights.reserve(totalVertices);
+            allJoints.reserve(totalVertices);
+            reorders.reserve(totalVertices + totalIndices / 3);
+            primitiveIndices.reserve(totalIndices);
+        }
+
         offsets_.clear();
+        offsets_.reserve(models_.size() * kModelSectionStride);
         for (auto& model : models_)
         {
             // Remember the index, vertex offsets.
@@ -654,11 +704,17 @@ namespace Assets
         
         MarkDirty();
 
-        if (enableCpuAcceleration_ && ambientArenaBufferMemory_ &&
-            (!NextEngine::GetInstance() ||
-             NextEngine::GetInstance()->GetRenderer().ActiveRendererRequirements().requestAmbientCube))
+        if (levelVoxelBakePending_)
         {
-            cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), false);
+            // Consume the transition here even when the active renderer does not need ambient
+            // data. A later Append()/GPU refresh must never turn that old transition into a bake.
+            levelVoxelBakePending_ = false;
+            if (enableCpuAcceleration_ && ambientArenaBufferMemory_ &&
+                (!NextEngine::GetInstance() ||
+                 NextEngine::GetInstance()->GetRenderer().ActiveRendererRequirements().requestAmbientCube))
+            {
+                cpuAccelerationStructure_->AsyncProcessFull(*this, ambientArenaBufferMemory_.get());
+            }
         }
 
         const auto rebuildEnd = Clock::now();

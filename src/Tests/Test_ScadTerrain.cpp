@@ -14,7 +14,9 @@
 #include "Modules/ScadLoader/FScadTerrain.h"
 
 #include <chrono>
+#include <cstring>
 #include <filesystem>
+#include <functional>
 #include <fstream>
 #include <fmt/format.h>
 #include <map>
@@ -306,6 +308,197 @@ TEST_CASE("ScadTerrain decode: rejects malformed TERR", "[Unit][Scad][ScadTerrai
     CHECK(spec.features.size() == 6);
 }
 
+namespace
+{
+    // Encodes a .hmap blob (see FScadTerrain.h) from raw sample values.
+    std::vector<uint8_t> MakeHmapBlob(int cols, int rows, glm::dvec2 origin, glm::dvec2 cell,
+                                      double scale, double bias, const std::vector<double>& heights)
+    {
+        std::vector<uint8_t> out;
+        auto putU32 = [&](uint32_t v)
+        {
+            for (int i = 0; i < 4; ++i) out.push_back(static_cast<uint8_t>((v >> (i * 8)) & 0xFFu));
+        };
+        auto putF32 = [&](double v)
+        {
+            const float f = static_cast<float>(v);
+            uint32_t bits = 0;
+            std::memcpy(&bits, &f, sizeof(bits));
+            putU32(bits);
+        };
+        out.insert(out.end(), {'G', 'K', 'H', 'M'});
+        putU32(1);
+        putU32(static_cast<uint32_t>(cols));
+        putU32(static_cast<uint32_t>(rows));
+        putF32(origin.x);
+        putF32(origin.y);
+        putF32(cell.x);
+        putF32(cell.y);
+        putF32(scale);
+        putF32(bias);
+        for (double h : heights)
+        {
+            const int16_t raw = static_cast<int16_t>(std::lround((h - bias) / scale));
+            out.push_back(static_cast<uint8_t>(raw & 0xFF));
+            out.push_back(static_cast<uint8_t>((raw >> 8) & 0xFF));
+        }
+        return out;
+    }
+
+    // A flat terrain whose only feature is an inline hmap of `heights`.
+    Value MakeInlineHmapSpecValue(int cols, int rows, const std::vector<double>& heights,
+                                  const char* mode, double baseHeight = 0.0)
+    {
+        std::vector<Value> grid;
+        grid.reserve(heights.size());
+        for (double h : heights) grid.push_back(NumV(h));
+        return VecV({StrV("gkterr1"), PtV(100, 100), PtV(20, 20), NumV(3),
+                     VecV({NumV(baseHeight), NumV(0), NumV(0.5)}), Value(), StrV("temperate"),
+                     VecV({VecV({StrV("hmap"), PtV(cols, rows), VecV(grid), StrV(mode)})})});
+    }
+} // namespace
+
+TEST_CASE("ScadTerrain hmap: decodes a .hmap blob and samples bilinearly",
+          "[Unit][Scad][ScadTerrain][Hmap]")
+{
+    // 2x2 ramp over [0,10]^2: 0 at the origin corner, 30 at the far corner.
+    const std::vector<uint8_t> blob =
+        MakeHmapBlob(2, 2, {0.0, 0.0}, {10.0, 10.0}, 0.01, 0.0, {0.0, 10.0, 20.0, 30.0});
+    std::string err;
+    const auto grid = ScadTerrain::DecodeHeightGrid(blob, err);
+    REQUIRE(grid);
+    CHECK(err.empty());
+    CHECK(grid->cols == 2);
+    CHECK(grid->rows == 2);
+
+    // Corners reproduce the stored samples (0.01 quantisation).
+    CHECK(grid->Sample(0.0, 0.0) == Catch::Approx(0.0).margin(0.01));
+    CHECK(grid->Sample(10.0, 0.0) == Catch::Approx(10.0).margin(0.01));
+    CHECK(grid->Sample(0.0, 10.0) == Catch::Approx(20.0).margin(0.01));
+    CHECK(grid->Sample(10.0, 10.0) == Catch::Approx(30.0).margin(0.01));
+    // Bilinear interior.
+    CHECK(grid->Sample(5.0, 5.0) == Catch::Approx(15.0).margin(0.01));
+    CHECK(grid->Sample(5.0, 0.0) == Catch::Approx(5.0).margin(0.01));
+    // Outside the grid clamps to the border rather than extrapolating.
+    CHECK(grid->Sample(-100.0, -100.0) == Catch::Approx(0.0).margin(0.01));
+    CHECK(grid->Sample(999.0, 999.0) == Catch::Approx(30.0).margin(0.01));
+}
+
+TEST_CASE("ScadTerrain hmap: rejects malformed blobs", "[Unit][Scad][ScadTerrain][Hmap]")
+{
+    std::string err;
+    CHECK_FALSE(ScadTerrain::DecodeHeightGrid({}, err));
+    CHECK_FALSE(err.empty());
+
+    std::vector<uint8_t> badMagic = MakeHmapBlob(2, 2, {0, 0}, {1, 1}, 1.0, 0.0, {0, 0, 0, 0});
+    badMagic[0] = 'X';
+    CHECK_FALSE(ScadTerrain::DecodeHeightGrid(badMagic, err));
+
+    std::vector<uint8_t> badVersion = MakeHmapBlob(2, 2, {0, 0}, {1, 1}, 1.0, 0.0, {0, 0, 0, 0});
+    badVersion[4] = 9;
+    CHECK_FALSE(ScadTerrain::DecodeHeightGrid(badVersion, err));
+
+    std::vector<uint8_t> truncated = MakeHmapBlob(4, 4, {0, 0}, {1, 1}, 1.0, 0.0,
+                                                  std::vector<double>(16, 1.0));
+    truncated.resize(truncated.size() - 6);
+    CHECK_FALSE(ScadTerrain::DecodeHeightGrid(truncated, err));
+}
+
+TEST_CASE("ScadTerrain hmap: set replaces the field, add offsets it",
+          "[Unit][Scad][ScadTerrain][Hmap]")
+{
+    const std::vector<double> flat(9, 5.0);
+    FTerrainSpec spec;
+    std::string err;
+    std::vector<std::string> warnings;
+
+    REQUIRE(ScadTerrain::DecodeSpec(MakeInlineHmapSpecValue(3, 3, flat, "set", 2.0), spec, err,
+                                    warnings));
+    CHECK(warnings.empty());
+    REQUIRE(spec.features.size() == 1);
+    CHECK(spec.features[0].type == FTerrainFeature::EType::Hmap);
+    CHECK_FALSE(spec.features[0].hmapAdd);
+    {
+        // "set" discards the base height; relief is 0 so the field is exactly 5.
+        const auto data = ScadTerrain::Build(spec);
+        for (const glm::dvec3& v : data->verts)
+        {
+            REQUIRE(v.z == Catch::Approx(5.0).margin(1e-9));
+        }
+    }
+
+    warnings.clear();
+    REQUIRE(ScadTerrain::DecodeSpec(MakeInlineHmapSpecValue(3, 3, flat, "add", 2.0), spec, err,
+                                    warnings));
+    CHECK(spec.features[0].hmapAdd);
+    {
+        const auto data = ScadTerrain::Build(spec);
+        for (const glm::dvec3& v : data->verts)
+        {
+            REQUIRE(v.z == Catch::Approx(7.0).margin(1e-9));
+        }
+    }
+}
+
+TEST_CASE("ScadTerrain hmap: an inline ramp drives the built mesh",
+          "[Unit][Scad][ScadTerrain][Hmap]")
+{
+    // 3x3 grid over the 100x100 domain: height = 10 per column step (+x).
+    const std::vector<double> ramp = {0, 10, 20, 0, 10, 20, 0, 10, 20};
+    FTerrainSpec spec;
+    std::string err;
+    std::vector<std::string> warnings;
+    REQUIRE(ScadTerrain::DecodeSpec(MakeInlineHmapSpecValue(3, 3, ramp, "set"), spec, err, warnings));
+    CHECK(warnings.empty());
+
+    const auto data = ScadTerrain::Build(spec);
+    // Height rises monotonically with x and is flat along y.
+    CHECK(data->HeightAt(-49.0, 0.0) < data->HeightAt(0.0, 0.0));
+    CHECK(data->HeightAt(0.0, 0.0) < data->HeightAt(49.0, 0.0));
+    CHECK(data->HeightAt(0.0, -40.0) == Catch::Approx(data->HeightAt(0.0, 40.0)).margin(1e-6));
+    CHECK(data->HeightAt(0.0, 0.0) == Catch::Approx(10.0).margin(0.6));
+
+    // Mesh vertices and the height query agree, exactly as for the other features.
+    for (const glm::dvec3& v : data->verts)
+    {
+        REQUIRE(data->HeightAt(v.x, v.y) == Catch::Approx(v.z).margin(1e-6));
+    }
+}
+
+TEST_CASE("ScadTerrain hmap: a missing file warns and skips the feature",
+          "[Unit][Scad][ScadTerrain][Hmap]")
+{
+    const Value v = VecV({StrV("gkterr1"), PtV(100, 100), PtV(20, 20), NumV(3),
+                          VecV({NumV(1.0), NumV(0), NumV(0.5)}), Value(), StrV("temperate"),
+                          VecV({VecV({StrV("hmap"), StrV("assets/geo/__does_not_exist.hmap")})})});
+    FTerrainSpec spec;
+    std::string err;
+    std::vector<std::string> warnings;
+    REQUIRE(ScadTerrain::DecodeSpec(v, spec, err, warnings));
+    CHECK(spec.features.empty());
+    REQUIRE(warnings.size() == 1);
+    CHECK(warnings[0].find("hmap") != std::string::npos);
+}
+
+TEST_CASE("ScadTerrain hmap: cache key tracks the grid contents",
+          "[Unit][Scad][ScadTerrain][Hmap]")
+{
+    FTerrainSpec a;
+    FTerrainSpec b;
+    std::string err;
+    std::vector<std::string> warnings;
+    REQUIRE(ScadTerrain::DecodeSpec(MakeInlineHmapSpecValue(3, 3, std::vector<double>(9, 5.0), "set"),
+                                    a, err, warnings));
+    REQUIRE(ScadTerrain::DecodeSpec(MakeInlineHmapSpecValue(3, 3, std::vector<double>(9, 5.0), "set"),
+                                    b, err, warnings));
+    CHECK(ScadTerrain::SpecCacheKey(a) == ScadTerrain::SpecCacheKey(b));
+
+    std::vector<double> altered(9, 5.0);
+    altered[4] = 6.0;
+    REQUIRE(ScadTerrain::DecodeSpec(MakeInlineHmapSpecValue(3, 3, altered, "set"), b, err, warnings));
+    CHECK(ScadTerrain::SpecCacheKey(a) != ScadTerrain::SpecCacheKey(b));
+}
+
 TEST_CASE("ScadTerrain decode: matches the C++ mirror spec", "[Unit][Scad][ScadTerrain]")
 {
     FTerrainSpec decoded;
@@ -585,6 +778,51 @@ TEST_CASE("ScadTerrain scene: faceted + water flags and terrain payload", "[Unit
     }
     CHECK(sawFaceted);
     CHECK(sawWater);
+}
+
+TEST_CASE("Scad gk_flatten: collapses a rule library's module calls into one node",
+          "[Unit][Scad][Flatten]")
+{
+    // A rule library expands a data table into many small module calls. Without
+    // gk_flatten every call is a scene Node — and therefore its own Model and
+    // collider, which is what made a generated city cost seconds of shape
+    // cooking. Inside gk_flatten the geometry lands on the enclosing node.
+    const char* kLib =
+        "module piece(i) { translate([i * 2, 0, 0]) cube(1); }\n"
+        "module loose() { for (i = [0 : 5]) piece(i); }\n"
+        "module packed() { gk_flatten() for (i = [0 : 5]) piece(i); }\n";
+
+    std::function<void(const SceneNode&, int&, size_t&)> walk =
+        [&](const SceneNode& node, int& nodes, size_t& verts)
+    {
+        ++nodes;
+        for (const SceneMeshBucket& bucket : node.meshes)
+        {
+            verts += bucket.tris.size();
+        }
+        for (const SceneNode& child : node.children)
+        {
+            walk(child, nodes, verts);
+        }
+    };
+
+    int looseNodes = 0;
+    size_t looseVerts = 0;
+    const SceneEvalResult loose = EvalSceneProgram(std::string(kLib) + "loose();\n");
+    REQUIRE(loose.roots.size() == 1);
+    walk(loose.roots[0], looseNodes, looseVerts);
+    CHECK(looseNodes == 7); // loose() + one per piece()
+
+    int packedNodes = 0;
+    size_t packedVerts = 0;
+    const SceneEvalResult packed = EvalSceneProgram(std::string(kLib) + "packed();\n");
+    REQUIRE(packed.roots.size() == 1);
+    walk(packed.roots[0], packedNodes, packedVerts);
+    CHECK(packedNodes == 1);
+
+    // Same geometry either way — only the scene structure collapses.
+    CHECK(packedVerts > 0);
+    CHECK(packedVerts == looseVerts);
 }
 
 TEST_CASE("ScadTerrain scene: non-terrain geometry keeps default flags", "[Unit][Scad][ScadTerrain]")

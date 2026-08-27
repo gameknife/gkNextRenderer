@@ -15,7 +15,7 @@ function(gk_enable_unity_build target batchSize)
 endfunction()
 
 function(gk_enable_fast_dev_link target)
-    if(MSVC AND GK_FAST_DEV_LINK)
+    if(MSVC AND GK_FAST_DEV_LINK AND NOT GK_ENABLE_ASAN)
         target_link_options(${target} PRIVATE
             /INCREMENTAL
             /OPT:NOREF
@@ -24,6 +24,17 @@ function(gk_enable_fast_dev_link target)
         )
         target_compile_options(${target} PRIVATE
             /Zf
+        )
+    endif()
+endfunction()
+
+function(gk_copy_asan_runtime target)
+    if(MSVC AND GK_ENABLE_ASAN)
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${GK_ASAN_RUNTIME_DLL}"
+                "$<TARGET_FILE_DIR:${target}>"
+            COMMENT "Copying MSVC AddressSanitizer runtime for ${target}"
         )
     endif()
 endfunction()
@@ -57,6 +68,11 @@ function(gk_apply_target_defaults target)
 
     set_target_properties(${target} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 
+    get_target_property(targetType ${target} TYPE)
+    if(targetType STREQUAL "EXECUTABLE")
+        gk_copy_asan_runtime(${target})
+    endif()
+
     target_include_directories(${target} PRIVATE
         ${GK_SOURCE_ROOT}
         ${STB_INCLUDE_DIRS}
@@ -77,6 +93,7 @@ function(gk_apply_target_defaults target)
         GK_WITH_TUI=$<BOOL:${GK_WITH_TUI}>
         GK_WITH_RMLUI=1
         GK_WITH_REMOTE=$<BOOL:${GK_REMOTE_ENABLED}>
+        GK_WITH_VITURE=$<BOOL:${GK_ENABLE_VITURE}>
     )
 
     if(WIN32)
@@ -136,6 +153,11 @@ function(gk_apply_target_defaults target)
                 -Wno-stringop-overflow
                 -Wno-ignored-attributes
             )
+            if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16)
+                # GCC 16 reports a false positive in nlohmann/json's shared
+                # output adapter destruction when optimization is enabled.
+                target_compile_options(${target} PRIVATE -Wno-array-bounds)
+            endif()
         endif()
         if(UNIX AND NOT APPLE AND NOT ANDROID AND
            CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
@@ -182,6 +204,31 @@ function(gk_target_runtime_modules target)
             message(FATAL_ERROR "Runtime module target '${module}' is unavailable for '${target}'")
         endif()
         set_property(TARGET ${target} APPEND PROPERTY GK_RUNTIME_MODULES "${module}")
+
+        if(module STREQUAL "NextViture")
+            if(NOT TARGET gkNextVitureRuntime)
+                set(gkVitureRuntimeGlasses "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/libglasses.dylib")
+                set(gkVitureRuntimeVio "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/libcarina_vio.dylib")
+                add_custom_command(
+                    OUTPUT "${gkVitureRuntimeGlasses}" "${gkVitureRuntimeVio}"
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${GK_VITURE_SDK_LIBRARY}" "${gkVitureRuntimeGlasses}"
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${GK_VITURE_VIO_LIBRARY}" "${gkVitureRuntimeVio}"
+                    # The SDK's libglasses.dylib currently carries an invalid
+                    # embedded signature. macOS rejects it only once --ar causes
+                    # dyld to load it, so repair the copied development runtime.
+                    COMMAND "${GK_VITURE_CODESIGN_EXECUTABLE}" --force --sign - "${gkVitureRuntimeGlasses}"
+                    DEPENDS "${GK_VITURE_ARCHIVE}" "${GK_VITURE_SDK_LIBRARY}" "${GK_VITURE_VIO_LIBRARY}"
+                    COMMENT "Preparing VITURE XR runtime"
+                    VERBATIM
+                )
+                add_custom_target(gkNextVitureRuntime DEPENDS
+                    "${gkVitureRuntimeGlasses}" "${gkVitureRuntimeVio}")
+                set_target_properties(gkNextVitureRuntime PROPERTIES FOLDER "Modules")
+            endif()
+            add_dependencies(${target} gkNextVitureRuntime)
+        endif()
     endforeach()
 endfunction()
 
@@ -252,6 +299,37 @@ function(gk_link_engine_feature_dependencies target)
         target_compile_definitions(${target} PUBLIC WITH_SUPERLUMINAL=0)
     endif()
 
+    if(GK_ENABLE_TRACY AND TARGET Tracy::TracyClient)
+        # TracyIntegration.hpp is visible through Engine headers and can be
+        # parsed by modules as well as the engine target. Keep Tracy's header
+        # mode consistent for every consumer, not only the library that owns
+        # the client link.
+        target_compile_definitions(${target} PUBLIC
+            GK_TRACY_ENABLED=1
+            TRACY_ENABLE
+            TRACY_ON_DEMAND
+            TRACY_NO_CRASH_HANDLER
+        )
+        target_link_libraries(${target} PRIVATE Tracy::TracyClient)
+    else()
+        target_compile_definitions(${target} PUBLIC GK_TRACY_ENABLED=0)
+    endif()
+
+    if(WITH_RENDERDOC)
+        target_compile_definitions(${target} PUBLIC WITH_RENDERDOC=1)
+        if(GK_RENDERDOC_ANDROID)
+            target_compile_definitions(${target} PUBLIC GK_RENDERDOC_ANDROID=1)
+        else()
+            target_compile_definitions(${target} PUBLIC
+                GK_RENDERDOC_ANDROID=0
+                GK_RENDERDOC_DLL_PATH="${GK_RENDERDOC_DLL_PATH}"
+            )
+        endif()
+        target_include_directories(${target} SYSTEM PUBLIC ${GK_RENDERDOC_API_DIR})
+    else()
+        target_compile_definitions(${target} PUBLIC WITH_RENDERDOC=0 GK_RENDERDOC_ANDROID=0)
+    endif()
+
     target_link_libraries(${target} PRIVATE ozz KTX::ktx)
 
     if(WITH_AVIF)
@@ -291,6 +369,7 @@ function(gk_configure_android_runtime target)
         imgui::imgui
         draco::draco
         WebP::webp
+        WebP::libwebpmux
         RmlUi::RmlUi
         Jolt::Jolt
         ${Vulkan_LIBRARIES}

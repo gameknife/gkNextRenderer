@@ -14,10 +14,7 @@ namespace Runtime::GraphicsDebugPanel
     {
         Rendering::FRendererChoiceCapabilities GetCapabilities(NextEngine& engine)
         {
-            return {
-                engine.GetRenderer().SupportsRayTracing(),
-                engine.GetRenderer().HasFullAmbientCubeBudget(),
-            };
+            return engine.GetRenderer().RendererChoiceCapabilities();
         }
 
         void DrawAmbientCubeBrickStats(NextEngine& engine)
@@ -74,6 +71,16 @@ namespace Runtime::GraphicsDebugPanel
                               const float width)
     {
         const int rendererOptionCount = GetRendererOptionCount(engine);
+        if (rendererOptionCount <= 0)
+        {
+            // A device that cannot back the full bindless arrays runs the compatibility renderer
+            // and has nothing to switch to. Report what is running instead of offering an empty
+            // combo whose first entry does not exist.
+            ImGui::TextDisabled("%s (no alternative on this GPU)",
+                                Vulkan::GetRendererName(engine.GetRenderer().CurrentLogicRendererType()));
+            return;
+        }
+
         int currentRendererIndex = ResolveRendererOptionIndex(engine, userSetting, rendererOptionCount);
         if (currentRendererIndex < 0)
         {
@@ -97,6 +104,10 @@ namespace Runtime::GraphicsDebugPanel
                                         const Runtime::Config::UserSettings& userSetting)
     {
         const int rendererOptionCount = GetRendererOptionCount(engine);
+        if (rendererOptionCount <= 0)
+        {
+            return Vulkan::GetRendererName(engine.GetRenderer().CurrentLogicRendererType());
+        }
         const int currentRendererIndex = ResolveRendererOptionIndex(engine, userSetting, rendererOptionCount);
         return currentRendererIndex >= 0 ? GetRendererOption(engine, currentRendererIndex).displayName : "Unknown";
     }

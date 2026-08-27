@@ -9,10 +9,13 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <mutex>
 #include <string>
+#include <thread>
 
 #if WITH_STREAMLINE && WIN32
 #include <dxgi1_6.h>
@@ -74,7 +77,7 @@ namespace
     }
 
 #if WITH_STREAMLINE && WIN32
-    bool HasNvidiaAdapter()
+    bool QueryNvidiaAdapter()
     {
         HMODULE dxgiModule = LoadLibraryW(L"dxgi.dll");
         if (!dxgiModule)
@@ -130,6 +133,15 @@ namespace
         return hasNvidiaAdapter;
     }
 
+    bool HasNvidiaAdapter()
+    {
+        // CreateDXGIFactory1 is this process's first touch of the graphics stack and costs
+        // 15-30ms; the module install path and Initialize both ask, and the answer cannot
+        // change while the process runs.
+        static const bool hasNvidiaAdapter = QueryNvidiaAdapter();
+        return hasNvidiaAdapter;
+    }
+
     std::wstring ToWidePath(const char* path)
     {
         if (path == nullptr || path[0] == '\0')
@@ -137,6 +149,27 @@ namespace
             return L"sl.interposer.dll";
         }
         return std::filesystem::path(path).wstring();
+    }
+
+    // Deliberately independent of Streamline's init state: the init worker resolves this while
+    // holding the context lock, so it cannot go through the joining accessor.
+    const char* ResolveInterposerPath()
+    {
+        static const std::string path = []
+        {
+            if (std::filesystem::exists("sl.interposer.dll"))
+            {
+                return std::string("sl.interposer.dll");
+            }
+#if defined(GK_STREAMLINE_INTERPOSER_DLL)
+            if (std::filesystem::exists(GK_STREAMLINE_INTERPOSER_DLL))
+            {
+                return std::string(GK_STREAMLINE_INTERPOSER_DLL);
+            }
+#endif
+            return std::string("sl.interposer.dll");
+        }();
+        return path.c_str();
     }
 
     sl::DLSSMode ToDLSSMode(uint32_t rawMode)
@@ -294,7 +327,7 @@ namespace
             HMODULE module = GetModuleHandleW(L"sl.interposer.dll");
             if (module == nullptr)
             {
-                const std::wstring path = ToWidePath(StreamlineWrapper::PreferredVulkanLoaderPath());
+                const std::wstring path = ToWidePath(ResolveInterposerPath());
                 module = LoadLibraryW(path.c_str());
             }
 
@@ -556,12 +589,56 @@ namespace
     class FStreamlineContext
     {
     public:
+        ~FStreamlineContext()
+        {
+            EnsureInitialized();
+        }
+
         bool ShouldInitialize() const
         {
             return HasNvidiaAdapter();
         }
 
-        void Initialize()
+        // Starts slInit on a worker and returns. slInit loads and NGX-probes every Streamline
+        // plugin sitting next to the executable - measured at ~730ms with only the plugins the
+        // engine deploys - and nothing before vkCreateInstance needs the result, so it overlaps
+        // with reflection registration, pak mounting, SDL init and window creation.
+        void BeginInitialize()
+        {
+            if (initStarted_.exchange(true))
+            {
+                return;
+            }
+            initThread_ = std::thread([this] { InitializeBlocking(); });
+        }
+
+        // Joins the worker. Every entry point that observes Streamline state must call this
+        // BEFORE taking mutex_: the worker holds mutex_ for the whole of slInit, so locking
+        // first and joining second would deadlock.
+        void EnsureInitialized()
+        {
+            if (!initStarted_.load(std::memory_order_acquire) ||
+                initJoined_.load(std::memory_order_acquire))
+            {
+                return;
+            }
+
+            std::lock_guard lock(joinMutex_);
+            if (initThread_.joinable())
+            {
+                // How much of slInit the engine's own startup failed to cover. Together with
+                // the slInit duration this says whether moving more startup work ahead of
+                // instance creation would buy anything.
+                const auto waitStart = std::chrono::steady_clock::now();
+                initThread_.join();
+                const auto waitMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - waitStart).count();
+                SPDLOG_INFO("Streamline init blocked engine startup for {} ms", waitMs);
+            }
+            initJoined_.store(true, std::memory_order_release);
+        }
+
+        void InitializeBlocking()
         {
             std::lock_guard lock(mutex_);
             if (initAttempted_)
@@ -599,12 +676,18 @@ namespace
             pref.featuresToLoad = kFeatures;
             pref.numFeaturesToLoad = static_cast<uint32_t>(std::size(kFeatures));
 
+            const auto initStart = std::chrono::steady_clock::now();
             sl::Result result = slInit(pref);
+            const auto initMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - initStart).count();
             if (result != sl::Result::eOk)
             {
-                SPDLOG_ERROR("Streamline slInit failed: {}", static_cast<int>(result));
+                SPDLOG_ERROR("Streamline slInit failed after {} ms: {}", initMs, static_cast<int>(result));
                 return;
             }
+            // Dominated by NGX loading the nvngx_* snippets next to the executable; it runs on
+            // a worker so this is not necessarily time the engine waited.
+            SPDLOG_INFO("Streamline slInit took {} ms", initMs);
 
             caps_.streamlineInitialized = true;
             initialized_ = true;
@@ -614,6 +697,8 @@ namespace
 
         void Shutdown()
         {
+            EnsureInitialized();
+
             std::lock_guard lock(mutex_);
             if (!initialized_)
             {
@@ -636,37 +721,16 @@ namespace
             deviceExtensions_.clear();
         }
 
-        bool IsInitialized() const
+        bool IsInitialized()
         {
+            EnsureInitialized();
             return initialized_;
         }
 
-        const char* PreferredVulkanLoaderPath() const
+        const char* PreferredVulkanLoaderPath()
         {
-            if (!initialized_)
-            {
-                return nullptr;
-            }
-
-            static std::string path;
-            if (path.empty())
-            {
-                if (std::filesystem::exists("sl.interposer.dll"))
-                {
-                    path = "sl.interposer.dll";
-                }
-#if defined(GK_STREAMLINE_INTERPOSER_DLL)
-                else if (std::filesystem::exists(GK_STREAMLINE_INTERPOSER_DLL))
-                {
-                    path = GK_STREAMLINE_INTERPOSER_DLL;
-                }
-#endif
-                else
-                {
-                    path = "sl.interposer.dll";
-                }
-            }
-            return path.c_str();
+            EnsureInitialized();
+            return initialized_ ? ResolveInterposerPath() : nullptr;
         }
 
         VkResult CreateInstance(
@@ -739,6 +803,8 @@ namespace
             const VkAllocationCallbacks* allocator,
             VkDevice* device)
         {
+            EnsureInitialized();
+
             std::lock_guard lock(mutex_);
             if (!initialized_ || proxyInstance_ == VK_NULL_HANDLE)
             {
@@ -757,6 +823,8 @@ namespace
 
         void DestroyDevice(VkDevice device, const VkAllocationCallbacks* allocator)
         {
+            EnsureInitialized();
+
             std::lock_guard lock(mutex_);
             if (initialized_ && proxyDevice_ == device)
             {
@@ -771,6 +839,8 @@ namespace
 
         void AppendRequiredInstanceExtensions(std::vector<const char*>& extensions)
         {
+            EnsureInitialized();
+
             std::lock_guard lock(mutex_);
             if (!initialized_)
             {
@@ -795,6 +865,8 @@ namespace
             VkPhysicalDevice physicalDevice,
             std::vector<const char*>& extensions)
         {
+            EnsureInitialized();
+
             std::lock_guard lock(mutex_);
             if (!initialized_)
             {
@@ -822,6 +894,8 @@ namespace
 
         void SetVulkanInfo(const Rendering::Upscaler::FDeviceInfo& info)
         {
+            EnsureInitialized();
+
             std::lock_guard lock(mutex_);
             if (!initialized_)
             {
@@ -882,14 +956,18 @@ namespace
                         caps_.supportPCL);
         }
 
-        Rendering::Upscaler::FFeatureCaps Caps() const
+        Rendering::Upscaler::FFeatureCaps Caps()
         {
+            EnsureInitialized();
+
             std::lock_guard lock(mutex_);
             return caps_;
         }
 
         Rendering::Upscaler::FFrameToken GetFrameToken(uint32_t frameIndex)
         {
+            EnsureInitialized();
+
             std::lock_guard lock(mutex_);
             Rendering::Upscaler::FFrameToken result{};
             result.frameIndex = frameIndex;
@@ -1001,6 +1079,10 @@ namespace
         }
 
         mutable std::mutex mutex_;
+        std::mutex joinMutex_;
+        std::thread initThread_;
+        std::atomic<bool> initStarted_{false};
+        std::atomic<bool> initJoined_{false};
         bool initAttempted_ = false;
         bool initialized_ = false;
         bool deviceReady_ = false;
@@ -1565,7 +1647,7 @@ namespace
             constants.cameraFar = inputs.camera.farPlane;
             constants.cameraFOV = inputs.camera.verticalFovRadians;
             constants.cameraAspectRatio = inputs.camera.aspectRatio;
-            constants.depthInverted = sl::Boolean::eFalse;
+            constants.depthInverted = sl::Boolean::eTrue;
             constants.cameraMotionIncluded = sl::Boolean::eTrue;
             constants.motionVectors3D = sl::Boolean::eFalse;
             constants.reset = inputs.reset ? sl::Boolean::eTrue : sl::Boolean::eFalse;
@@ -1701,6 +1783,14 @@ namespace
                                        std::vector<const char*>& requiredExtensions,
                                        void* featureChain) override
         {
+            // Same contract as the interposer: registered before slInit finished, so a failed
+            // init must not leave the NVX extension requests behind.
+            if (!StreamlineWrapper::IsInitialized())
+            {
+                GStreamlineDeviceExtsEnabled = false;
+                return featureChain;
+            }
+
             const auto streamlineCaps =
                 StreamlineWrapper::AppendRequiredDeviceExtensions(physicalDevice, requiredExtensions);
             const bool hasLegacyStreamlineExtensions =
@@ -1748,6 +1838,12 @@ namespace
 
         void AppendRequiredInstanceExtensions(std::vector<const char*>& extensions) override
         {
+            // The module installs this seam before slInit has finished, so a failed init must
+            // leave instance creation exactly as it would be without Streamline.
+            if (!StreamlineWrapper::IsInitialized())
+            {
+                return;
+            }
             AppendUnique(extensions, VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME);
             AppendUnique(extensions, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
             StreamlineWrapper::AppendRequiredInstanceExtensions(extensions);
@@ -1861,7 +1957,7 @@ namespace StreamlineWrapper
     void Initialize()
     {
 #if WITH_STREAMLINE && WIN32
-        StreamlineContext().Initialize();
+        StreamlineContext().BeginInitialize();
 #endif
     }
 

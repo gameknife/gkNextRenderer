@@ -1,6 +1,7 @@
 implementing PathTracing;
 
 #include "PreProcessor.slang"
+import Shader.SurfaceBuffer;
 
 // FPathTracingRenderer: the multi-bounce path tracer. Drives any IRayTracer +
 // IDirectIlluminator + IRadianceCache. Direct-lighting strategies and the sun/light
@@ -42,6 +43,9 @@ public struct FPathTracingRenderer{
     public bool FuzzyTracing = false;
     public bool ForceExitAfterFirst = false;
     public bool EnableSoftTracingAdaptiveOffset = false;
+    // Tangential jitter radius for fuzzy ambient-cube samples, in local cube-cell units.
+    // Kept disabled by default so non-ambient renderers retain their existing sampling sequence.
+    public float AmbientCubePositionJitter = 0.0f;
     public bool UseAmbientCubeTerminal = true;
     public bool WriteOutputs = true;
     // Secondary (post-first-bounce) direct lighting strategy, decoupled from any cache:
@@ -70,7 +74,11 @@ public struct FPathTracingRenderer{
     {
         if (UseAmbientCubeTerminal)
         {
-            return interpolateAmbientCubes<FullAmbientCubeSampler>(vertex.Position, vertex.Normal);
+            float4 terminal = interpolateAmbientCubes<FullAmbientCubeSampler>(vertex.Position, vertex.Normal);
+            // The terminal is the path's remaining indirect energy, so it takes the same artistic
+            // multiplier as a SHARC cache hit (see FSharcQueryCache.TryQueryRadiance).
+            terminal.rgb *= Bindless.GetGpuscene().Camera[0].IndirectIntensity;
+            return terminal;
         }
         return float4(0, 0, 0, 1);
     }
@@ -321,7 +329,8 @@ public struct FPathTracingRenderer{
     // the bounce outcome is returned. RNG draw order defines the sampling and must be kept.
     FBounceResult ScatterAndTrace(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir,
                                   inout float4 rayColor, inout uint4 randomSeed,
-                                  bool suppressDiffuseEmitter, bool suppressSpecularEmitter)
+                                  bool suppressDiffuseEmitter, bool suppressSpecularEmitter,
+                                  bool usePrimarySurfaceMaterial)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
         FBounceResult result = FBounceResult();
@@ -330,7 +339,17 @@ public struct FPathTracingRenderer{
         const float startPosOffset = mat.MaterialModel == MaterialDielectric ? 0.0f : 1.0f;
         float roughness = mat.Fuzziness;
         float metalness = mat.Metalness;
-        if (mat.MRATextureId >= 0)
+        if (usePrimarySurfaceMaterial)
+        {
+            // A vertex reconstructed from the Primary Surface has no TexCoord, so the MRA sample
+            // below is unavailable - but its result is exactly what the surface already stores.
+            // Note the surface metalness has the material-model override applied (Metallic -> 1,
+            // Dielectric -> 0) while the raw path does not; for those two models the lobe choice
+            // at bounce 0 therefore follows the model rather than the authored value.
+            roughness = primaryRoughness_;
+            metalness = primaryMetalness_;
+        }
+        else if (mat.MRATextureId >= 0)
         {
             float4 mra = Bindless.GetSampleTexture(mat.MRATextureId).SampleLevel(inVertex.TexCoord, 0);
             roughness = roughness * mra.g;
@@ -377,10 +396,59 @@ public struct FPathTracingRenderer{
         float surfaceOffset = EnableSoftTracingAdaptiveOffset
             ? max(HitNormalOffset, GetAmbientCubeUnitAtPosition(inVertex.Position) * 0.5f)
             : HitNormalOffset;
-        const float3 traceOrigin = inVertex.Position + inVertex.Normal * surfaceOffset * startPosOffset;
+        const float3 originalTraceOrigin =
+            inVertex.Position + inVertex.Normal * surfaceOffset * startPosOffset;
+        float3 traceOrigin = originalTraceOrigin;
+        float jitterRadius = 0.0f;
+        if (FuzzyTracing && AmbientCubePositionJitter > 0.0f)
+        {
+            // Keep the jitter on the shading plane. A full 3D offset can move the query through
+            // the surface and turn the ambient-cube leak test into a source of dark/firefly hits.
+            float3 tangent;
+            float3 bitangent;
+            orthonormalBasis(normalize(inVertex.Normal), tangent, bitangent);
+            jitterRadius = AmbientCubePositionJitter * GetAmbientCubeUnitAtPosition(inVertex.Position);
+            const float2 jitter = RandomInUnitDisk(randomSeed) * jitterRadius;
+            traceOrigin += tangent * jitter.x + bitangent * jitter.y;
+        }
         float hitDist = 0.0f;
-        if (!tracer.TraceRay(traceOrigin, traceDir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode,
-                             tempColor, hitDist))
+        bool traceHit = false;
+        if (FuzzyTracing && jitterRadius > 0.0f)
+        {
+            // The unjittered query is the conservative leak guard. Only use the jittered color
+            // when the original position also sees an ambient-cube hit; otherwise a tangent
+            // offset that crossed a thin occluder could pull light from its far side.
+            Vertex originalVertex = inVertex;
+            NodeProxy originalNode = {};
+            float4 originalColor = float4(0, 0, 0, 1);
+            float originalHitDist = 0.0f;
+            const bool originalHit = tracer.TraceRay(
+                originalTraceOrigin, traceDir, PT_MAX_TRACE_DISTANCE, originalVertex, originalNode,
+                originalColor, originalHitDist);
+            if (originalHit)
+            {
+                Vertex jitterVertex = originalVertex;
+                NodeProxy jitterNode = originalNode;
+                float4 jitterColor = float4(0, 0, 0, 1);
+                float jitterHitDist = 0.0f;
+                const bool jitterHit = tracer.TraceRay(
+                    traceOrigin, traceDir, PT_MAX_TRACE_DISTANCE, jitterVertex, jitterNode,
+                    jitterColor, jitterHitDist);
+
+                inVertex = originalVertex;
+                hitNode = originalNode;
+                tempColor = jitterHit ? (originalColor + jitterColor) * 0.5f : originalColor;
+                hitDist = originalHitDist;
+                traceHit = true;
+            }
+        }
+        else
+        {
+            traceHit = tracer.TraceRay(traceOrigin, traceDir, PT_MAX_TRACE_DISTANCE, inVertex,
+                                       hitNode, tempColor, hitDist);
+        }
+
+        if (!traceHit)
         {
             // Miss: escaped into the sky.
             const float4 skyColor = Common.SampleSkyRadiance(traceDir, 0.0f);
@@ -486,7 +554,8 @@ public struct FPathTracingRenderer{
                 const bool suppressSpecularEmitter = (b == 0);
                 FBounceResult bounce = ScatterAndTrace(tracer, vertexStart, direction, RayColor,
                                                        RandomSeed_, suppressDiffuseEmitter,
-                                                       suppressSpecularEmitter);
+                                                       suppressSpecularEmitter,
+                                                       hasPrimarySurface_ && b == 0);
 
                 if (b == 0)
                 {
@@ -612,8 +681,11 @@ public struct FPathTracingRenderer{
         FinalSpecularHitDist /= float(sample);
 
         Material primaryMaterial = Bindless.GetGpuscene().GetMaterial(hitPrimaryVertex_.MaterialIndex);
-        FBSDFContext primaryContext =
-            BuildBSDFContext(hitPrimaryVertex_, primaryMaterial, primaryRayDir_);
+        FBSDFContext primaryContext = hasPrimarySurface_
+            ? BuildBSDFContextFromSurface(hitPrimaryVertex_.Position, hitPrimaryVertex_.Normal,
+                                          primaryRayDir_, primaryMaterial, primaryAlbedo_.rgb,
+                                          primaryRoughness_, primaryMetalness_)
+            : BuildBSDFContext(hitPrimaryVertex_, primaryMaterial, primaryRayDir_);
         FDirectLighting directLighting = FDirectLighting();
         directIllum.DirectIlluminatePrimary(RandomSeed_, pixel_, primaryContext, directLighting);
         FinalColor.rgb += max(directLighting.DiffuseDemodulated, float3(0, 0, 0));
@@ -636,75 +708,124 @@ public struct FPathTracingRenderer{
     {
         let Camera = Bindless.GetGpuscene().Camera[0];
 
-        if (!primaryRayCaster.TracePrimaryRay(pixel_, size_, RandomSeed_, hitPrimaryVertex_, hitPrimaryNode_, primaryRayDir_, primaryRayLength_, primaryPixelOffset_))
+        FPrimarySurfaceSample surfaceSample = FPrimarySurfaceSample();
+        const bool hit = primaryRayCaster.TracePrimaryRay(
+            pixel_, size_, RandomSeed_, hitPrimaryVertex_, hitPrimaryNode_, primaryRayDir_,
+            primaryRayLength_, primaryPixelOffset_, surfaceSample);
+        // On the Primary Surface path Core.SurfaceBuild owns every surface-class RT (normal,
+        // object id, motion, depth, BSDF word, specular albedo) and already wrote them at full
+        // rate. This pass then writes lighting only, which is what lets the checkerboard resolve
+        // stop neighbour-copying geometry.
+        hasPrimarySurface_ = surfaceSample.Valid;
+        const bool writeSurface = WriteOutputs && !hasPrimarySurface_;
+
+        if (!hit)
         {
-            float4 skyColor = Common.SampleSkyRadiance(primaryRayDir_, 0.0f);
-            skyColor.rgb += Common.EvaluateAnalyticSunDisk(primaryRayDir_);
+            float4 skyColor = Common.SampleVisibleBackground(primaryRayDir_);
+            if (Camera.BackgroundMode != BACKGROUND_MODE_STUDIO)
+            {
+                skyColor.rgb += Common.EvaluateAnalyticSunDisk(primaryRayDir_);
+            }
             float2 skyMotionPixels =
                 Common.CalculateSkyMotionVector(Camera, primaryRayDir_) * size_;
 
             if (WriteOutputs)
             {
                 OutSingleDiffuse.Store(pixel_, skyColor);
-                OutMotionVector.Store(pixel_, float4(skyMotionPixels, 0, 0));
-                OutAlbedo.Store(pixel_, float4(1, 1, 1, 1));
-                OutNormal.Store(pixel_, float4(0, 1, 0, 1));
-                OutObjectID.Store(pixel_, 0);
+                OutSingleSpecular.Store(pixel_, float4(0, 0, 0, 0));
                 OutDiffuseHitDist.Store(pixel_, 1000);
                 OutSpecularHitDist.Store(pixel_, 1000);
+                // RT_ALBEDO doubles as the compose demodulation guide (scene color is
+                // diffuse * albedo + specular), so the background has to read white here even
+                // though Build stored a surface albedo for it. That dual role is why albedo
+                // stays in the lighting resolve set while the other surface RTs leave it.
+                OutAlbedo.Store(pixel_, float4(1, 1, 1, 1));
+            }
+            if (writeSurface)
+            {
+                OutMotionVector.Store(pixel_, float4(skyMotionPixels, 0, 0));
+                OutNormal.Store(pixel_, float4(0, 1, 0, 1));
+                OutObjectID.Store(pixel_, 0);
                 OutSpecularAlbedo.Store(pixel_, float4(0, 0, 0, 0));
-                OutBSDFData.Store(pixel_, uint2(0xFFFFFFFFu, 0u));
+                OutBSDFData.Store(pixel_, uint2(Surface.kInvalidMaterialId, 0u));
             }
 
             return false;
         }
 
-        float4 clipPos = mul(Camera.ViewProjectionUnJit, float4(hitPrimaryVertex_.Position, 1.0));
-        float ndcDepth = clipPos.z / clipPos.w;
-        float2 motion = Common.CalculateMotionVector(Camera, hitPrimaryNode_, hitPrimaryVertex_, pixel_);
-        primaryMotionPixels_ = motion * size_;
-        float4 gbuffer = float4(0, 0, 0, 0);
         Material material = Bindless.GetGpuscene().GetMaterial(hitPrimaryVertex_.MaterialIndex);
-        Common.FetchGBuffer(hitPrimaryVertex_, material, hitPrimaryNode_, primaryRayDir_, primaryAlbedo_, gbuffer);
-        FBSDFContext outputContext =
-            BuildBSDFContext(hitPrimaryVertex_, material, primaryRayDir_);
+        FBSDFContext outputContext;
+        if (hasPrimarySurface_)
+        {
+            primaryAlbedo_ = surfaceSample.Albedo;
+            primaryRoughness_ = surfaceSample.Roughness;
+            primaryMetalness_ = surfaceSample.Metalness;
+            primaryMotionPixels_ = surfaceSample.MotionPixels;
+            outputContext = BuildBSDFContextFromSurface(
+                hitPrimaryVertex_.Position, hitPrimaryVertex_.Normal, primaryRayDir_, material,
+                primaryAlbedo_.rgb, primaryRoughness_, primaryMetalness_);
+        }
+        else
+        {
+            float4 clipPos = mul(Camera.ViewProjectionUnJit, float4(hitPrimaryVertex_.Position, 1.0));
+            float ndcDepth = clipPos.z / clipPos.w;
+            float2 motion = Common.CalculateMotionVector(Camera, hitPrimaryNode_, hitPrimaryVertex_, pixel_);
+            primaryMotionPixels_ = motion * size_;
+            float4 gbuffer = float4(0, 0, 0, 0);
+            Common.FetchGBuffer(hitPrimaryVertex_, material, hitPrimaryNode_, primaryRayDir_, primaryAlbedo_, gbuffer);
+            outputContext = BuildBSDFContext(hitPrimaryVertex_, material, primaryRayDir_);
+            primaryRoughness_ = outputContext.PerceptualRoughness;
+            primaryMetalness_ = outputContext.Metalness;
+
+            if (WriteOutputs)
+            {
+                OutNormal.Store(pixel_, gbuffer);
+                const bool selected = hitPrimaryNode_.reserved1 != 0;
+                const bool hovered = (hitPrimaryNode_.reserved2 & 1u) != 0;
+                const bool locked = (hitPrimaryNode_.reserved2 & 2u) != 0;
+                const bool danger = (hitPrimaryNode_.reserved2 & 4u) != 0;
+                OutObjectID.Store(pixel_, Common.EncodeObjectId(hitPrimaryNode_.instanceId, selected, hovered, locked, danger));
+                // The engine-wide upscaler contract stores motion in render-pixel
+                // units. Streamline and FidelityFX can therefore both use a 1:1
+                // motion-vector scale.
+                OutMotionVector.Store(pixel_, float4(primaryMotionPixels_, 0, 0));
+                OutPrevDepth.Store(pixel_, ndcDepth);
+                // RT_BSDF_DATA is the Primary Surface material word: x = resolved material id,
+                // y = f16 effective metalness | shading-strategy flags (Shader/SurfaceBuffer.slang).
+                OutBSDFData.Store(pixel_, uint2(hitPrimaryVertex_.MaterialIndex,
+                                               Surface.PackBsdfWord(outputContext.Metalness,
+                                                                    Common.MakeSurfaceFlags(material))));
+            }
+        }
 
         if (WriteOutputs)
         {
             OutAlbedo.Store(pixel_, primaryAlbedo_);
-            OutNormal.Store(pixel_, gbuffer);
-            const bool selected = hitPrimaryNode_.reserved1 != 0;
-            const bool hovered = (hitPrimaryNode_.reserved2 & 1u) != 0;
-            const bool locked = (hitPrimaryNode_.reserved2 & 2u) != 0;
-            const bool danger = (hitPrimaryNode_.reserved2 & 4u) != 0;
-            OutObjectID.Store(pixel_, Common.EncodeObjectId(hitPrimaryNode_.instanceId, selected, hovered, locked, danger));
-            // The engine-wide upscaler contract stores motion in render-pixel
-            // units. Streamline and FidelityFX can therefore both use a 1:1
-            // motion-vector scale.
-            OutMotionVector.Store(pixel_, float4(primaryMotionPixels_, 0, 0));
-            OutPrevDepth.Store(pixel_, ndcDepth);
-            OutBSDFData.Store(pixel_, uint2(hitPrimaryVertex_.MaterialIndex,
-                                           asuint(outputContext.Metalness)));
         }
 
         if (material.MaterialModel == MaterialDiffuseLight)
         {
             if (WriteOutputs)
             {
+                // Emitted radiance is absolute, so the demodulation guide must be white or
+                // compose would multiply the emitter by its own base color.
                 OutAlbedo.Store(pixel_, float4(1, 1, 1, 0));
                 OutSingleDiffuse.Store(pixel_, primaryAlbedo_);
                 OutSingleSpecular.Store(pixel_, float4(0, 0, 0, 0));
                 OutDiffuseHitDist.Store(pixel_, 10);
                 OutSpecularHitDist.Store(pixel_, 10);
+            }
+            if (writeSurface)
+            {
                 OutSpecularAlbedo.Store(pixel_, float4(0, 0, 0, 0));
-                OutBSDFData.Store(pixel_, uint2(0xFFFFFFFFu, 0u));
+                OutBSDFData.Store(pixel_, uint2(Surface.kInvalidMaterialId, 0u));
             }
             return false;
         }
 
-        float4 specAlbedo = material.MaterialModel == MaterialMetallic ? primaryAlbedo_ : float4(1, 1, 1, 1);
-        if (WriteOutputs)
+        if (writeSurface)
         {
+            float4 specAlbedo = material.MaterialModel == MaterialMetallic ? primaryAlbedo_ : float4(1, 1, 1, 1);
             OutSpecularAlbedo.Store(pixel_, specAlbedo);
         }
 
@@ -742,11 +863,11 @@ public struct FPathTracingRenderer{
         OutNormal.Store(pixel_, float4(0, 1, 0, 1));
         OutObjectID.Store(pixel_, 0);
         OutMotionVector.Store(pixel_, float4(0, 0, 0, 0));
-        OutPrevDepth.Store(pixel_, 1.0f);
+        OutPrevDepth.Store(pixel_, 0.0f);
         OutDiffuseHitDist.Store(pixel_, 1000.0f);
         OutSpecularHitDist.Store(pixel_, 1000.0f);
         OutSpecularAlbedo.Store(pixel_, float4(0, 0, 0, 0));
-        OutBSDFData.Store(pixel_, uint2(0xFFFFFFFFu, 0u));
+        OutBSDFData.Store(pixel_, uint2(Surface.kInvalidMaterialId, 0u));
     }
 
     // Debug view: cached radiance modulated by primary albedo. The cache query
@@ -783,6 +904,9 @@ public struct FPathTracingRenderer{
         primaryPixelOffset_ = float2(0, 0);
         primaryMotionPixels_ = float2(0, 0);
         primaryAlbedo_ = float4(0, 0, 0, 0);
+        primaryRoughness_ = 0.0f;
+        primaryMetalness_ = 0.0f;
+        hasPrimarySurface_ = false;
 
         OutAlbedo = Bindless.GetViewStorageTexture<float4>(Bindless.RT_ALBEDO);
         OutNormal = Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL);
@@ -808,6 +932,11 @@ public struct FPathTracingRenderer{
     float2 primaryPixelOffset_;
     float2 primaryMotionPixels_;
     float4 primaryAlbedo_;
+    // Primary material parameters. On the Primary Surface path they come from the G-buffer instead
+    // of from texture samples, because a depth-reconstructed vertex has no TexCoord.
+    float primaryRoughness_;
+    float primaryMetalness_;
+    bool hasPrimarySurface_;
 
     RWTexture2D<float4> OutAlbedo;
     RWTexture2D<float4> OutNormal;

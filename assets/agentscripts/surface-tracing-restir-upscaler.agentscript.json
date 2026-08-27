@@ -1,0 +1,426 @@
+{
+  "name": "surface-tracing-restir-upscaler",
+  "target": "gkNextRenderer",
+  "scene": "assets/models/playground.glb",
+  "defaults": {
+    "waitFrames": 0,
+    "stepTimeoutMs": 90000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running",
+      "timeoutMs": 30000
+    },
+    {
+      "type": "cvar",
+      "name": "sys.tickPhysics",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "sys.tickAnimation",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.type",
+      "set": 0
+    },
+    {
+      "type": "cvar",
+      "name": "r.checkerboardRendering",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 1
+    },
+    {
+      "type": "cvar",
+      "name": "r.samples",
+      "set": 64
+    },
+    {
+      "type": "cvar",
+      "name": "r.restir.enable",
+      "set": true
+    },
+    {
+      "type": "log",
+      "message": "=== restir legacy A ==="
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3r_legacyA",
+      "accumulateFrames": 192,
+      "timeoutMs": 90000
+    },
+    {
+      "type": "wait-frames",
+      "n": 10
+    },
+    {
+      "type": "log",
+      "message": "=== restir surface ==="
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3r_surface",
+      "accumulateFrames": 192,
+      "timeoutMs": 90000
+    },
+    {
+      "type": "wait-frames",
+      "n": 10
+    },
+    {
+      "type": "log",
+      "message": "=== restir legacy B ==="
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3r_legacyB",
+      "accumulateFrames": 192,
+      "timeoutMs": 90000
+    },
+    {
+      "type": "wait-frames",
+      "n": 10
+    },
+    {
+      "type": "cvar",
+      "name": "r.restir.enable",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "r.samples",
+      "set": 2
+    },
+    {
+      "type": "cvar",
+      "name": "r.checkerboardRendering",
+      "set": true
+    },
+    {
+      "type": "log",
+      "message": "=== upscaler fsr | swtracing ==="
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 1
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.type",
+      "set": 3
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.qualityMode",
+      "set": 1
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "assert",
+      "query": "engine.frameRate",
+      "op": "gt",
+      "value": 0
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3u_fsr_swtracing"
+    },
+    {
+      "type": "log",
+      "message": "=== upscaler fsr | swmodern ==="
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 2
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.type",
+      "set": 3
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.qualityMode",
+      "set": 1
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "assert",
+      "query": "engine.frameRate",
+      "op": "gt",
+      "value": 0
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3u_fsr_swmodern"
+    },
+    {
+      "type": "log",
+      "message": "=== upscaler fsr | noambient ==="
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 4
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.type",
+      "set": 3
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.qualityMode",
+      "set": 1
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "assert",
+      "query": "engine.frameRate",
+      "op": "gt",
+      "value": 0
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3u_fsr_noambient"
+    },
+    {
+      "type": "log",
+      "message": "=== upscaler taau | swtracing ==="
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 1
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.type",
+      "set": 4
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.qualityMode",
+      "set": 1
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "assert",
+      "query": "engine.frameRate",
+      "op": "gt",
+      "value": 0
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3u_taau_swtracing"
+    },
+    {
+      "type": "log",
+      "message": "=== upscaler taau | swmodern ==="
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 2
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.type",
+      "set": 4
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.qualityMode",
+      "set": 1
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "assert",
+      "query": "engine.frameRate",
+      "op": "gt",
+      "value": 0
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3u_taau_swmodern"
+    },
+    {
+      "type": "log",
+      "message": "=== upscaler taau | noambient ==="
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 4
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.type",
+      "set": 4
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.qualityMode",
+      "set": 1
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "assert",
+      "query": "engine.frameRate",
+      "op": "gt",
+      "value": 0
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3u_taau_noambient"
+    },
+    {
+      "type": "log",
+      "message": "=== upscaler sgsr2 | swtracing ==="
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 1
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.type",
+      "set": 5
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.qualityMode",
+      "set": 1
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "assert",
+      "query": "engine.frameRate",
+      "op": "gt",
+      "value": 0
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3u_sgsr2_swtracing"
+    },
+    {
+      "type": "log",
+      "message": "=== upscaler sgsr2 | swmodern ==="
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 2
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.type",
+      "set": 5
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.qualityMode",
+      "set": 1
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "assert",
+      "query": "engine.frameRate",
+      "op": "gt",
+      "value": 0
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3u_sgsr2_swmodern"
+    },
+    {
+      "type": "log",
+      "message": "=== upscaler sgsr2 | noambient ==="
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 4
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.type",
+      "set": 5
+    },
+    {
+      "type": "cvar",
+      "name": "r.upscaler.qualityMode",
+      "set": 1
+    },
+    {
+      "type": "wait-frames",
+      "n": 40
+    },
+    {
+      "type": "assert",
+      "query": "engine.frameRate",
+      "op": "gt",
+      "value": 0
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/surface_m3u_sgsr2_noambient"
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

@@ -10,17 +10,16 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/RemoteProtocol.hpp"
-#include "Engine/Runtime/ScreenShotService.hpp"
+#include "Engine/Runtime/Interface/ScreenShotService.hpp"
 #include "Engine/Runtime/Interface/DebugUiProvider.hpp"
 #include "Engine/Runtime/Interface/UiOverlay.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
-#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
 #include "Engine/Utilities/Localization.hpp"
 
 #include <SDL3/SDL.h>
@@ -67,7 +66,8 @@ void NextEngine::OnKey(SDL_Event& event)
         }
     }
 
-    if (userInterface_->WantsToCaptureKeyboard() || (uiOverlay_ && uiOverlay_->WantsToCaptureKeyboard()))
+    if ((userInterface_ && userInterface_->WantsToCaptureKeyboard()) ||
+        (uiOverlay_ && uiOverlay_->WantsToCaptureKeyboard()))
     {
         return;
     }
@@ -144,7 +144,7 @@ bool NextEngine::HandleGlobalCaptureShortcut(const SDL_Event& event)
     const std::string tag = hasShift ? "global-hotkey-ui" : "global-hotkey";
     if (event.key.key == SDLK_F9)
     {
-        (void)GetScreenShotService().Request(Runtime::FScreenShotService::FRequest{
+        (void)GetScreenShotService().Request(Runtime::IScreenShotService::FRequest{
             .tag = tag,
             .includeUi = hasShift,
             .forceUiHidden = !hasShift,
@@ -152,10 +152,10 @@ bool NextEngine::HandleGlobalCaptureShortcut(const SDL_Event& event)
     }
     else
     {
-        (void)GetScreenShotService().RequestThreeSecondVideo(Runtime::FScreenShotService::FThreeSecondVideoRequest{
+        (void)GetScreenShotService().RequestThreeSecondVideo(Runtime::IScreenShotService::FThreeSecondVideoRequest{
             .tag = tag,
-            .format = Runtime::FScreenShotService::EAnimationFormat::Both,
-            .outputScale = Runtime::FScreenShotService::EVideoOutputScale::Half,
+            .format = Runtime::IScreenShotService::EAnimationFormat::Both,
+            .outputScale = Runtime::IScreenShotService::EVideoOutputScale::Half,
             .includeUi = hasShift,
             .forceUiHidden = !hasShift,
         });
@@ -239,12 +239,23 @@ bool NextEngine::HandleDebugShortcut(SDL_Keycode key)
     return true;
 }
 
-void NextEngine::OnTouch(bool down, double xpos, double ypos)
+void NextEngine::OnTouch(SDL_Event& event)
 {
-    // OnMouseButton(GLFW_MOUSE_BUTTON_RIGHT, down ? GLFW_PRESS : GLFW_RELEASE, 0);
-}
+    const bool touchEnded = event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED;
+    if (!renderer_->HasSwapChain() ||
+        (!touchEnded && uiOverlay_ && uiOverlay_->WantsToCaptureMouse()))
+    {
+        return;
+    }
 
-void NextEngine::OnTouchMove(double xpos, double ypos) { OnCursorPosition(xpos, ypos); }
+    if (!touchEnded && userInterface_ && userInterface_->WantsToCaptureMouse() &&
+        !gameInstance_->WantsMouseInputWhenUiCaptures())
+    {
+        return;
+    }
+
+    (void)gameInstance_->OnTouch(event);
+}
 
 void NextEngine::InjectRelativeMouse(float dx, float dy)
 {
@@ -261,7 +272,8 @@ void NextEngine::OnCursorPosition(const double xpos, const double ypos)
     }
 
     const bool wantsMouseThroughUi = gameInstance_->WantsMouseInputWhenUiCaptures();
-    if ((userInterface_->WantsToCaptureKeyboard() || userInterface_->WantsToCaptureMouse()) && !wantsMouseThroughUi)
+    if (userInterface_ &&
+        (userInterface_->WantsToCaptureKeyboard() || userInterface_->WantsToCaptureMouse()) && !wantsMouseThroughUi)
     {
         return;
     }
@@ -279,7 +291,8 @@ void NextEngine::OnMouseButton(SDL_Event& event)
         return;
     }
 
-    if (userInterface_->WantsToCaptureMouse() && !gameInstance_->WantsMouseInputWhenUiCaptures())
+    if (userInterface_ && userInterface_->WantsToCaptureMouse() &&
+        !gameInstance_->WantsMouseInputWhenUiCaptures())
     {
         return;
     }
@@ -297,7 +310,8 @@ void NextEngine::OnScroll(const double xoffset, const double yoffset)
         return;
     }
 
-    if (userInterface_->WantsToCaptureMouse() && !gameInstance_->WantsMouseInputWhenUiCaptures())
+    if (userInterface_ && userInterface_->WantsToCaptureMouse() &&
+        !gameInstance_->WantsMouseInputWhenUiCaptures())
     {
         return;
     }
@@ -310,7 +324,7 @@ void NextEngine::OnDropFile(const char* dropPath)
     const std::string path(dropPath);
     const std::filesystem::path droppedPath(path);
 
-    if (Runtime::Scene::SceneList::IsSupportedScenePath(droppedPath))
+    if (sceneContent_ && sceneContent_->IsSupportedScenePath(droppedPath))
     {
         RequestLoadScene({.filename = path});
         return;

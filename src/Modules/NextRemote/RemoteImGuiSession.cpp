@@ -1,8 +1,8 @@
 #include "Modules/NextRemote/RemoteImGuiSession.hpp"
 
 #include "Engine/Runtime/Interface/DebugUiProvider.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/Editor/UI/UiTheme.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
+#include "Modules/NextUI/UI/UiTheme.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/RemoteProtocol.hpp"
 #include "Engine/Utilities/Exception.hpp"
@@ -93,7 +93,7 @@ namespace Runtime::Remote
         : engine_(engine)
         , sessionId_(std::move(sessionId))
     {
-        NextUI::UserInterface* userInterface = engine_.GetUserInterface();
+        NextUI::IUserInterface* userInterface = engine_.GetUserInterface();
         if (userInterface == nullptr)
         {
             Throw(std::runtime_error("remote imgui session requires an initialized UserInterface"));
@@ -112,7 +112,7 @@ namespace Runtime::Remote
         }
 
         FContextScope scope(context_);
-        if (NextUI::UserInterface* userInterface = engine_.GetUserInterface())
+        if (NextUI::IUserInterface* userInterface = engine_.GetUserInterface())
         {
             auto& io = ImGui::GetIO();
             io.BackendRendererName = nullptr;
@@ -137,7 +137,7 @@ namespace Runtime::Remote
         io.ConfigFlags &= ~ImGuiConfigFlags_ViewportsEnable;
         io.ConfigWindowsMoveFromTitleBarOnly = moveWindowsFromTitleBarOnly;
         io.BackendPlatformName = "gk_remote_headless";
-        if (NextUI::UserInterface* userInterface = engine_.GetUserInterface())
+        if (NextUI::IUserInterface* userInterface = engine_.GetUserInterface())
         {
             userInterface->AttachRendererBackendToCurrentContext();
         }
@@ -196,7 +196,7 @@ namespace Runtime::Remote
         io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
         io.DeltaTime = std::max(1.0f / 240.0f, static_cast<float>(engine_.GetDeltaSeconds()));
 
-        if (NextUI::UserInterface* userInterface = engine_.GetUserInterface())
+        if (NextUI::IUserInterface* userInterface = engine_.GetUserInterface())
         {
             userInterface->AttachRendererBackendToCurrentContext();
         }

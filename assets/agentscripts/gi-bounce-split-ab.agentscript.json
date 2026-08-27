@@ -1,0 +1,79 @@
+{
+  "name": "gi-bounce-split-ab",
+  "target": "gkNextRenderer",
+  "scene": "CornellBox.proc",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running",
+      "timeoutMs": 20000
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "set": 0
+    },
+    {
+      "type": "cvar",
+      "name": "r.gi.indirectIntensity",
+      "set": 1.0
+    },
+    {
+      "type": "cvar",
+      "name": "r.gi.multiBounceIntensity",
+      "set": 1.0
+    },
+    {
+      "type": "wait-frames",
+      "n": 180
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/gi_split_multi_1x"
+    },
+    {
+      "type": "cvar",
+      "name": "r.gi.multiBounceIntensity",
+      "set": 0.0
+    },
+    {
+      "type": "wait-frames",
+      "n": 180
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/gi_split_multi_0x"
+    },
+    {
+      "type": "cvar",
+      "name": "r.gi.multiBounceIntensity",
+      "set": 2.5
+    },
+    {
+      "type": "wait-frames",
+      "n": 180
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/gi_split_multi_2p5x"
+    },
+    {
+      "type": "cvar",
+      "name": "r.gi.multiBounceIntensity",
+      "set": 1.0
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

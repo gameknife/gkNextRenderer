@@ -367,7 +367,7 @@ namespace Vulkan::GaussianSplat
         pipeline_ = GraphicsPipelineBuilder(device)
             .SetShaders(vertexShader, fragmentShader)
             .SetFixedViewport({0, 0}, extent)
-            .SetDepth(true, false, VK_COMPARE_OP_LESS_OR_EQUAL)
+            .SetDepth(true, false, VK_COMPARE_OP_GREATER_OR_EQUAL)
             .SetAlphaBlend(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
             .Build(pipelineLayout_->Handle(), renderPass_, "create Gaussian splat graphics pipeline");
     }
@@ -428,7 +428,7 @@ namespace Vulkan::GaussianSplat
             (activeSplatCount + splatSortGroupSize - 1) / splatSortGroupSize,
             std::max(sortGroupCountCapacity_, 1u));
         const VkExtent2D extent = renderer_.SwapChain().RenderExtent();
-        const auto camera = NextEngine::GetInstance()->GetScene().GetRenderCamera();
+        const auto camera = NextEngine::GetInstance()->GetActiveRenderCamera();
         const float nearPlane = std::max(camera.NearPlane, 1e-4f);
         const float farPlane = std::max(camera.FarPlane, camera.NearPlane + 1e-3f);
         const Assets::UniformBufferObject& currentUbo = renderer_.PrimaryViewState().previousUniformBuffer;
@@ -520,6 +520,12 @@ namespace Vulkan::GaussianSplat
         });
         lastSortCacheKey_ = sortCacheKey;
         sortCacheValid_ = true;
+    }
+
+    bool GaussianSplatPass::PaintsWholeSceneThisFrame() const
+    {
+        const auto settings = Modules::Splat::GetSettings(*NextEngine::GetInstance());
+        return pipeline_ != nullptr && settings != nullptr && settings->visible;
     }
 
     void GaussianSplatPass::Execute(VkCommandBuffer commandBuffer, uint32_t imageIndex)

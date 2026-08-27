@@ -21,6 +21,18 @@ namespace Vulkan::PipelineCommon
         composePipeline_.reset();
     }
 
+    FSamplePostSettings MakeSamplePostSettings(const VulkanBaseRenderer& baseRenderer)
+    {
+        const FFrameRenderSettings& frameSettings = baseRenderer.FrameSettings();
+        return {
+            .progressiveRender =
+                (baseRenderer.ActiveRenderView().IsPrimary() && frameSettings.progressiveRendering) ||
+                baseRenderer.IsReferenceViewAccumulationActive(),
+            .progressiveSampleCount = baseRenderer.ProgressiveSampleCountForActiveView(),
+            .progressiveTargetSampleCount = frameSettings.progressiveTargetFrames,
+        };
+    }
+
     void SamplePostChain::Run(
         VulkanBaseRenderer& baseRenderer,
         VkCommandBuffer commandBuffer,

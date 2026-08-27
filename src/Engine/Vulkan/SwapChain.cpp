@@ -82,6 +82,7 @@ namespace
         return format.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 ||
                format.format == VK_FORMAT_A2R10G10B10_UNORM_PACK32;
     }
+    
 }
 
 SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentMode, bool forceSDR) :
@@ -100,7 +101,7 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
     const auto surfaceFormat = ChooseSwapSurfaceFormat(details.Formats, forceSDR);
     const auto actualPresentMode = ChooseSwapPresentMode(details.PresentModes, presentMode);
     auto extent = ChooseSwapExtent(window, details.Capabilities);
-    const auto imageCount = ChooseImageCount(details.Capabilities);
+    const auto imageCount = ChooseImageCount(details.Capabilities, actualPresentMode);
 
 #if ANDROID
     float aspect = extent.width / static_cast<float>(extent.height);
@@ -118,7 +119,6 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
         extent.height = 1280;
         extent.width = floorf(1280 / aspect);
     }
-    SDL_SetWindowFullscreen(window.Handle(), true);
 #endif
     
     VkSwapchainCreateInfoKHR createInfo = {};
@@ -137,25 +137,13 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
             "surface usage 0x{:x} lacks required COLOR_ATTACHMENT/TRANSFER_DST flags 0x{:x}",
             details.Capabilities.supportedUsageFlags, requiredUsage));
     }
-    VkImageUsageFlags optionalUsage =
-        details.Capabilities.supportedUsageFlags &
-        (VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT);
-    // Dozen advertises STORAGE on its surfaces but hands out DXGI back buffers, which cannot
-    // be typed UAVs for BGRA8 in D3D12. Creating such a swapchain leaves its D3D12 device in
-    // a state where every later allocation fails with VK_ERROR_OUT_OF_DEVICE_MEMORY, so drop
-    // the flag here: the renderer already falls back to an intermediate target plus a blit.
-    if (GOption != nullptr && GOption->VulkanDriver == "dozen")
-    {
-        optionalUsage &= ~VK_IMAGE_USAGE_STORAGE_BIT;
-    }
-    // Headless swapchains are implementation-owned virtual images. Some ICDs advertise
-    // STORAGE usage for them but corrupt compute stores (notably MoltenVK's
-    // VK_EXT_headless_surface path). Use the established intermediate-target + blit
-    // path instead; it is also portable to display-less Linux drivers.
-    if (window.IsHeadless())
-    {
-        optionalUsage &= ~VK_IMAGE_USAGE_STORAGE_BIT;
-    }
+    // Surface-provided images are not used as storage images. Although several drivers
+    // advertise STORAGE, using a presentable image as a UAV is not portable (for example,
+    // Dozen's BGRA back buffers and MoltenVK headless images). The renderer consequently
+    // always writes its intermediate target and resolves it with the transfer-destination
+    // path, which is supported by every swapchain we create.
+    const VkImageUsageFlags optionalUsage =
+        details.Capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     createInfo.imageUsage = requiredUsage | optionalUsage;
     createInfo.preTransform = details.Capabilities.currentTransform;
     createInfo.compositeAlpha = ChooseCompositeAlpha(details.Capabilities.supportedCompositeAlpha);
@@ -178,10 +166,15 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
         createInfo.pQueueFamilyIndices = nullptr; // Optional
     }
 
+    const auto createStart = std::chrono::steady_clock::now();
     Check(Interposer().CreateSwapchainKHR(device.Handle(), &createInfo, nullptr, &swapChain_),
         "create swap chain!");
+    const float createMs = std::chrono::duration<float, std::milli>(
+        std::chrono::steady_clock::now() - createStart).count();
 
-    minImageCount_ = std::max(2u, details.Capabilities.minImageCount);
+    // Report what was actually requested: secondary ImGui viewport swapchains are created
+    // with this count and need the same triple-buffering policy as the main swapchain.
+    minImageCount_ = imageCount;
     presentMode_ = actualPresentMode;
     format_ = surfaceFormat.format;
     colorSpace_ = surfaceFormat.colorSpace;
@@ -190,14 +183,15 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
     renderExtent_ = extent_;
     renderOffset_ = {0,0};
 
-    SPDLOG_INFO("Swap Chain format: {} ({}) colorSpace: {} ({}) outputMode: {} usage: 0x{:x} compositeAlpha: 0x{:x}",
+    SPDLOG_INFO("Swap Chain format: {} ({}) colorSpace: {} ({}) outputMode: {} usage: 0x{:x} compositeAlpha: 0x{:x}"
+                " (vkCreateSwapchainKHR {:.2f}ms)",
                 FormatName(format_), static_cast<int>(format_),
                 ColorSpaceName(colorSpace_), static_cast<int>(colorSpace_),
                 static_cast<int>(outputMode_), imageUsage_,
-                static_cast<uint32_t>(createInfo.compositeAlpha));
+                static_cast<uint32_t>(createInfo.compositeAlpha), createMs);
     if (!SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT))
     {
-        SPDLOG_WARN("Swapchain STORAGE usage is unavailable; using intermediate render target + blit fallback");
+        SPDLOG_INFO("Swapchain STORAGE usage is disabled; using intermediate render target + blit path");
     }
     if (!SupportsUsage(VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
     {
@@ -268,10 +262,10 @@ VkSurfaceFormatKHR SwapChain::ChooseSwapSurfaceFormat(const std::vector<VkSurfac
     // hdr first
     if(!forceSDR)
     {
-#if _APPLE_
+#if defined(__APPLE__)
+        // MoltenVK exposes EDR through extended-sRGB linear; prefer it over HDR10 on Apple.
         for (const auto& format : formats)
         {
-
             if (IsExtendedSrgbLinearSurfaceFormat(format))
             {
                 outputMode_ = ESwapChainOutputMode::ExtendedSrgbLinear;
@@ -392,13 +386,24 @@ VkExtent2D SwapChain::ChooseSwapExtent(const Window& window, const VkSurfaceCapa
     return actualExtent;
 }
 
-uint32_t SwapChain::ChooseImageCount(const VkSurfaceCapabilitiesKHR& capabilities)
+uint32_t SwapChain::ChooseImageCount(const VkSurfaceCapabilitiesKHR& capabilities,
+                                     const VkPresentModeKHR presentMode)
 {
-    // The implementation specifies the minimum amount of images to function properly
-    // and we'll try to have one more than that to properly implement triple buffering.
-    // (tanguyf: or not, we can just rely on VK_PRESENT_MODE_MAILBOX_KHR with two buffers)
-    uint32_t imageCount = std::max(2u, capabilities.minImageCount);// +1; 
-    
+    // The implementation specifies the minimum amount of images to function properly.
+    // Two images only suffice when presentation never has to wait: either the engine
+    // discards a queued request (MAILBOX) or it does not synchronize at all (IMMEDIATE).
+    // Any vertical-blank-synchronized mode needs a third image, otherwise the renderer
+    // stalls on the previous frame's presentation every frame.
+    //
+    // This is what broke Apple: MoltenVK advertises only FIFO and IMMEDIATE, so the
+    // MAILBOX assumption never held there. A two-image FIFO swapchain becomes a
+    // CAMetalLayer with maximumDrawableCount == 2 and displaySyncEnabled, whose drawable
+    // pool starves - present pacing on a 120Hz panel measured 77fps median with a 16.3
+    // stdev (beating between 60 and 120), against 114/7.3 with three images.
+    const bool presentationCanWait = presentMode != VK_PRESENT_MODE_MAILBOX_KHR &&
+        presentMode != VK_PRESENT_MODE_IMMEDIATE_KHR;
+    uint32_t imageCount = std::max(2u, capabilities.minImageCount) + (presentationCanWait ? 1u : 0u);
+
     if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount)
     {
         imageCount = capabilities.maxImageCount;

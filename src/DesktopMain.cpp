@@ -8,6 +8,20 @@
 #endif
 #if GK_MODULE_DEVTOOLS
 #include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
+#include "Modules/DevTools/ReflectionDump.hpp"
+#include "Modules/DevTools/RenderDoc.hpp"
+#endif
+#if GK_MODULE_NEXTUI
+#include "Modules/NextUI/NextUIModule.hpp"
+#endif
+#if GK_MODULE_NEXTCAPTURE
+#include "Modules/NextCapture/NextCaptureModule.hpp"
+#endif
+#if GK_MODULE_NEXTVALIDATION
+#include "Modules/NextValidation/NextValidationModule.hpp"
+#endif
+#if GK_MODULE_SCENECONTENT
+#include "Modules/SceneContent/SceneContentModule.hpp"
 #endif
 #if GK_MODULE_LIVECODING
 #include "Modules/LiveCoding/LiveCodingModule.hpp"
@@ -37,10 +51,6 @@
 #include "Modules/NextTui/NextTuiModule.hpp"
 #endif
 
-#if WIN32
-#include "ThirdParty/renderdoc/renderdoc_app.h"
-#endif
-
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -57,6 +67,10 @@ std::unique_ptr<Runtime::Config::Options> GOptionPtr;
 
 namespace
 {
+#if WITH_RENDERDOC && GK_MODULE_DEVTOOLS
+    bool GRenderDocAutoCaptureRequested = false;
+#endif
+
     // Last-resort handler for exceptions that escape a thread or a noexcept context.
     // Without it the process dies through std::terminate with no log line at all.
     void InstallTerminateHandler()
@@ -88,6 +102,7 @@ namespace
     // cause and where to find the log instead of letting Windows show a crash box.
     void ReportStartupFailure(const std::string& reason)
     {
+        Vulkan::Window::CloseStartupSplash();
         SPDLOG_ERROR("startup failed: {}", reason);
         spdlog::default_logger()->flush();
 
@@ -113,6 +128,16 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     {
         return SDL_APP_SUCCESS;
     }
+#if WITH_RENDERDOC && GK_MODULE_DEVTOOLS
+    if (GOption != nullptr && GOption->RenderDoc && !GRenderDocAutoCaptureRequested &&
+        GApplication != nullptr &&
+        GApplication->GetEngineStatus() == NextRenderer::EApplicationStatus::Running &&
+        !GApplication->GetScene().Nodes().empty())
+    {
+        GRenderDocAutoCaptureRequested = Runtime::RenderDoc::RequestCapture();
+    }
+    Runtime::RenderDoc::Poll();
+#endif
     return SDL_APP_CONTINUE;
 }
 
@@ -141,18 +166,28 @@ static SDL_AppResult InitializeApplication(int argc, char *argv[])
         Utilities::FileHelper::SetAssetTracePath(GOption->AssetTrace);
     }
 
+    // Before anything creates a device: the manifest comes from entt::meta alone, and requiring a
+    // working GPU to regenerate source would make code generation fail on build machines.
+#if GK_MODULE_DEVTOOLS
+    if (!GOption->DumpReflection.empty())
+    {
+        const bool dumped = Reflection::DumpManifest(GOption->DumpReflection);
+        spdlog::default_logger()->flush();
+        std::exit(dumped ? 0 : 1);
+    }
+#endif
+
+#if WITH_RENDERDOC && GK_MODULE_DEVTOOLS
+    // RenderDoc must be opt-in. Its application API is loaded before Vulkan
+    // creation only when the user explicitly requests a capture workflow.
+    if (GOption->RenderDoc)
+    {
+        Runtime::RenderDoc::Initialize();
+    }
+#endif
+
     if(GOption->RenderDoc)
     {
-#if WIN32
-        RENDERDOC_API_1_1_2* rdoc_api = NULL;
-        const auto mod = LoadLibrary(L"renderdoc.dll");
-        if (mod)
-        {
-            pRENDERDOC_GetAPI RENDERDOC_GetAPI =
-                (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
-            RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void**)&rdoc_api);
-        }
-#endif
             
 #if __linux__
         setenv("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1", 1);
@@ -189,6 +224,18 @@ static SDL_AppResult InitializeApplication(int argc, char *argv[])
     Modules::NextTemporalUpscaler::Install(*GOption);
 #endif
     GApplication.reset( new NextEngine(*GOption) );
+#if GK_MODULE_SCENECONTENT
+    Modules::SceneContent::Install(*GApplication);
+#endif
+#if GK_MODULE_NEXTVALIDATION
+    Modules::NextValidation::Install(*GApplication);
+#endif
+#if GK_MODULE_NEXTUI
+    Modules::NextUI::Install(*GApplication);
+#endif
+#if GK_MODULE_NEXTCAPTURE
+    Modules::NextCapture::Install(*GApplication);
+#endif
 #if GK_MODULE_DEVTOOLS
     DevTools::Install(*GApplication);
 #endif
@@ -273,13 +320,22 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     }
 
     const int exitCode = GApplication->GetRequestedExitCode();
+    const bool fastExit = GOption != nullptr && GOption->FastExit;
     // Shutdown
 #if GK_MODULE_LIVECODING
     Modules::LiveCoding::Shutdown();
 #endif
     GApplication->End();
 
-    if (GOption && GOption->FastExit)
+    // The engine must be destroyed while the logging runtime is still alive. On macOS,
+    // std::exit() runs static destructors, and leaving GApplication alive here defers its
+    // destructor until after spdlog's global logger has already been torn down. Device::~Device()
+    // persists the Vulkan pipeline cache and logs its result, which then becomes a use-after-free.
+    GApplication.reset();
+    GOptionPtr.reset();
+    GOption = nullptr;
+
+    if (fastExit)
     {
 #if __APPLE__
         std::exit(exitCode);
@@ -287,7 +343,4 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
         std::quick_exit(exitCode);
 #endif
     }
-
-    GApplication.reset();
-    GOptionPtr.reset();
 }

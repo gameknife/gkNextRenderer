@@ -205,6 +205,8 @@ namespace Rendering::Upscaler
     struct FDeviceInfo
     {
         VkDevice device = VK_NULL_HANDLE;
+        VkPipelineCache pipelineCache = VK_NULL_HANDLE;
+        std::function<void(const char* label)> onPipelineCreated;
         VkInstance instance = VK_NULL_HANDLE;
         VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
         uint32_t computeQueueIndex = 0;

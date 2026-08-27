@@ -30,8 +30,16 @@ namespace Runtime::Camera
 
         mouseLeftPressed_ = false;
         mouseRightPressed_ = false;
+        keyboardInput_.Reset();
+        gamepadInput_.Reset();
+        touchInput_.Reset();
 
-        mouseSensitive_ = 0.0002;
+        // Mouse rotation is measured in radians per physical pixel.  Keep the
+        // accumulated mouse delta independent from the render frame rate; the
+        // pending delta is consumed once by UpdateCamera(). Free look is three
+        // times faster, while orbiting retains its original sensitivity.
+        mouseSensitive_ = 0.0006;
+        orbitMouseSensitive_ = 0.0002;
 
         fieldOfView_ = renderCamera.FieldOfView;
 
@@ -146,6 +154,8 @@ namespace Runtime::Camera
         const auto pixelDeltaY = static_cast<float>(ypos - mousePosY_);
         const auto deltaX = pixelDeltaX * mouseSensitive_;
         const auto deltaY = pixelDeltaY * mouseSensitive_;
+        const auto orbitDeltaX = pixelDeltaX * orbitMouseSensitive_;
+        const auto orbitDeltaY = pixelDeltaY * orbitMouseSensitive_;
 
         // Mouse Right Button Handling
         if (mouseRightPressed_)
@@ -156,7 +166,7 @@ namespace Runtime::Camera
             if (altPressed_ && orbitTarget_.has_value())
             {
                 // Orbit Mode
-                Orbit(deltaX, deltaY);
+                Orbit(orbitDeltaX, orbitDeltaY);
             }
             else
             {
@@ -235,6 +245,21 @@ namespace Runtime::Camera
         focusAnimation_.Start(glm::vec3(position_), currentRot, targetPos, currentRot);
     }
 
+    void ModelViewController::FocusImmediate(const glm::vec3& focusPoint, float radius)
+    {
+        // Calculate the same fit distance as Focus(), but apply it directly so
+        // scene initialization does not animate the camera into place.
+        float fovRad = glm::radians(fieldOfView_);
+        float halfFovTan = glm::tan(fovRad * 0.5f);
+        float safeRadius = std::max(radius, 0.001f);
+        float dist = safeRadius / std::max(halfFovTan, 0.001f) * 1.1f;
+
+        glm::vec3 fwd = GetForward();
+        position_ = glm::vec4(focusPoint - fwd * dist, 1.0f);
+        focusAnimation_.Cancel();
+        UpdateVectors();
+    }
+
     void ModelViewController::Orbit(float deltaX, float deltaY)
     {
         if (!orbitTarget_.has_value())
@@ -273,6 +298,49 @@ namespace Runtime::Camera
         mousePosY_ = ypos;
 
         return true;
+    }
+
+    void ModelViewController::OnTouchMove(const bool pan, const double deltaX, const double deltaY)
+    {
+        if (deltaX == 0.0 && deltaY == 0.0)
+        {
+            return;
+        }
+
+        focusAnimation_.Cancel();
+
+        if (pan)
+        {
+            const float targetDistance =
+                orbitTarget_ ? glm::distance(glm::vec3(position_), *orbitTarget_) : std::max(navigationScale_, 1.0f);
+            const float panScale = std::max(targetDistance, std::max(navigationScale_ * 0.1f, 0.5f)) * 0.0008f;
+            const glm::vec3 translation =
+                (-static_cast<float>(deltaX) * glm::vec3(right_) + static_cast<float>(deltaY) * glm::vec3(up_)) * panScale;
+            position_ += glm::vec4(translation, 0.0f);
+            if (orbitTarget_)
+            {
+                *orbitTarget_ += translation;
+            }
+            movedByEvent_ = true;
+            return;
+        }
+
+        // Match free-look mouse rotation: horizontal drag is yaw and vertical
+        // drag is pitch. The accumulated deltas are consumed by UpdateCamera().
+        constexpr double mobileRotationSensitivityScale = 4.0;
+        cameraRotXAbs_ += deltaX * mouseSensitive_ * mobileRotationSensitivityScale;
+        cameraRotYAbs_ += deltaY * mouseSensitive_ * mobileRotationSensitivityScale;
+    }
+
+    void ModelViewController::SetTouchMovement(const float right, const float forward)
+    {
+        touchInput_.right = std::clamp(right, -1.0f, 1.0f);
+        touchInput_.forward = std::clamp(forward, -1.0f, 1.0f);
+        touchInput_.up = 0.0f;
+        if (touchInput_.IsActive())
+        {
+            focusAnimation_.Cancel();
+        }
     }
 
     void ModelViewController::SetKeyHeld(SDL_Keycode key, bool held)
@@ -401,9 +469,9 @@ namespace Runtime::Camera
         const auto d = static_cast<float>(speed * timeDelta);
 
         // Combine keyboard and gamepad input
-        float totalRight = keyboardInput_.right + gamepadInput_.right;
-        float totalForward = keyboardInput_.forward + gamepadInput_.forward;
-        float totalUp = keyboardInput_.up + gamepadInput_.up;
+        float totalRight = keyboardInput_.right + gamepadInput_.right + touchInput_.right;
+        float totalForward = keyboardInput_.forward + gamepadInput_.forward + touchInput_.forward;
+        float totalUp = keyboardInput_.up + gamepadInput_.up + touchInput_.up;
 
         if (totalRight != 0.0f)
         {
@@ -421,11 +489,14 @@ namespace Runtime::Camera
         modelRotX_ = glm::mix(modelRotX_, rawModelRotX_, 0.5);
         modelRotY_ = glm::mix(modelRotY_, rawModelRotY_, 0.5);
 
-        const double rotationDiv = 1 / timeDelta;
-        Rotate(static_cast<float>(cameraRotX_ / rotationDiv + cameraRotXAbs_),
-               static_cast<float>(cameraRotY_ / rotationDiv + cameraRotYAbs_));
+        // Gamepad rotation is a per-frame input and therefore needs the frame
+        // delta.  Mouse rotation is accumulated from actual pixel movement in
+        // OnCursorPosition(), so applying it directly keeps the same angular
+        // result at different render frame rates.
+        Rotate(static_cast<float>(cameraRotX_ * timeDelta + cameraRotXAbs_),
+               static_cast<float>(cameraRotY_ * timeDelta + cameraRotYAbs_));
 
-        const bool hasMovement = keyboardInput_.IsActive() || gamepadInput_.IsActive();
+        const bool hasMovement = keyboardInput_.IsActive() || gamepadInput_.IsActive() || touchInput_.IsActive();
         const bool updated = hasMovement || (cameraRotY_ + cameraRotYAbs_) != 0.0 ||
             (cameraRotX_ + cameraRotXAbs_) != 0.0 || glm::abs(rawModelRotX_ - modelRotX_) > 0.01 ||
             glm::abs(rawModelRotY_ - modelRotY_) > 0.01 || movedByEvent_;

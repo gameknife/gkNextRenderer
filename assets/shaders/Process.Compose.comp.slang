@@ -2,6 +2,7 @@ import Shader.Bindless;
 import Shader.Types;
 import Shader.GpuScene;
 import Shader.Tonemap;
+import Shader.ShadingScheduler;
 
 // Direct sample compose. Realtime rendering reads the current diffuse/specular sample;
 // explicit offline progressive rendering reads the running-average linear scene color instead.
@@ -77,6 +78,14 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         return;
     }
 
+    // Sparse checkerboard lighting: the parity Core Shading did not write is left untouched all the
+    // way to Native TAAU, which reconstructs it from history instead of from a neighbour copy.
+    if (Scheduler.ShouldSkipPixel(dispatchThreadId.xy, camera.CheckerboardSparseLighting, true,
+                                  camera.TotalFrames))
+    {
+        return;
+    }
+
     const bool progressiveRender = Bindless.GetGpuscene().CustomData1 != 0u;
     let objectId0 = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_0);
     let objectId1 = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_1);
@@ -87,6 +96,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     float3 total = max(LoadComposedRadiance(pixel, progressiveRender), 0.0) * exposure;
 
     const bool noSkyBackground =
+        camera.BackgroundMode != BACKGROUND_MODE_STUDIO &&
         !camera.HasSky && !HasObjectFlag(objectId0[pixel], OBJECT_ID_FLAG_VALID);
     if (noSkyBackground)
     {

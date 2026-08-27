@@ -2,6 +2,8 @@
 // visibility, sun shadow, wireframe overlay and visual debugger passes.
 // Split from VulkanBaseRenderer.cpp; same class, separate TU.
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+
+// GPU-driven pass implementation belongs to the concrete renderer feature pack.
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
@@ -25,7 +27,7 @@
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
-#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
 
 namespace Vulkan
 {
@@ -300,7 +302,7 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         std::array<VkClearValue, 3> clearValues = {};
         clearValues[0].color.uint32[0] = 0u;
         clearValues[1].color.uint32[0] = 0u;
-        clearValues[2].depthStencil = {1.0f, 0};
+        clearValues[2].depthStencil = {0.0f, 0};
 
         VkRenderPassBeginInfo renderPassInfo = {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -436,13 +438,19 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         auto& scene = GetScene();
         const uint32_t indirectDrawBatchCount = scene.GetIndirectDrawBatchCount();
         const uint32_t groupCount = (indirectDrawBatchCount + 63) / 64;
-        const FViewRenderState& viewState = ActiveRenderView().State();
+        // Reference views deliberately share the primary camera and shadow-map set. Their own
+        // RenderView state is only temporal image history; using it for CSM scheduling leaves the
+        // update mask at its initial zero value after the first reference frame.
+        const bool sharedPrimaryShadow = GOption != nullptr && GOption->ReferenceMode;
+        const FViewRenderState& viewState = sharedPrimaryShadow
+            ? PrimaryView().State()
+            : ActiveRenderView().State();
         uint32_t activeCascadeMask = viewState.sunShadowCascadeUpdateMask;
-        const bool sameCameraFamily = shadowCameraFamilyCache_.valid &&
+        const bool sameCameraFamily = sharedPrimaryShadow || (shadowCameraFamilyCache_.valid &&
             shadowCameraFamilyCache_.scene == &scene &&
             shadowCameraFamilyCache_.sceneGeneration == SceneGeneration() &&
             std::memcmp(&shadowCameraFamilyCache_.cascades, &viewState.cachedSunCascades,
-                        sizeof(Assets::CascadeShadowSetup)) == 0;
+                        sizeof(Assets::CascadeShadowSetup)) == 0);
         if (!sameCameraFamily)
         {
             // A shared shadow image set currently contains another camera family's cascades.
@@ -634,27 +642,32 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         {
             return;
         }
-        if (!SwapChain().SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT))
+        SCOPED_GPU_TIMER("visual debugger");
+        constexpr uint32_t outputIndex = Assets::Bindless::RT_TONEMAP_OUTPUT;
+        RenderImage* intermediateOutput = lateToneMapping_.outputImage.get();
+        if (intermediateOutput == nullptr)
         {
-            static bool warnedMissingStorage = false;
-            if (!warnedMissingStorage)
-            {
-                SPDLOG_WARN("Visual debugger requires swapchain STORAGE usage; skipping overlay");
-                warnedMissingStorage = true;
-            }
+            SPDLOG_ERROR("Visual debugger has no intermediate output");
             return;
         }
 
-        SCOPED_GPU_TIMER("visual debugger");
-        TransitionSwapchainImage(
-            commandBuffer, imageIndex,
-            {.stages = PipelineCommon::ERenderStage::Compute,
-             .access = PipelineCommon::EResourceAccess::ShaderWrite,
-             .layout = VK_IMAGE_LAYOUT_GENERAL},
-            "visual debugger");
+        constexpr VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        const bool initialized = lateToneMapping_.outputInitialized;
+        ImageMemoryBarrier::Insert(
+            commandBuffer,
+            initialized ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT
+                        : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            intermediateOutput->GetImage().Handle(),
+            range,
+            initialized ? VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT : 0u,
+            VK_ACCESS_SHADER_WRITE_BIT,
+            initialized ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_GENERAL);
+        lateToneMapping_.outputInitialized = true;
 
         std::array<uint32_t, 5> pushConst = {
-            imageIndex,
+            outputIndex,
             uint32_t(SwapChain().OutputOffset().x), uint32_t(SwapChain().OutputOffset().y),
             uint32_t(SwapChain().OutputExtent().width), uint32_t(SwapChain().OutputExtent().height)
         };
@@ -663,6 +676,48 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
             commandBuffer,
             Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, 8),
             Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().height, 8), 1);
+
+        ImageMemoryBarrier::Insert(
+            commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            intermediateOutput->GetImage().Handle(),
+            range,
+            VK_ACCESS_SHADER_WRITE_BIT,
+            VK_ACCESS_TRANSFER_READ_BIT,
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_LAYOUT_GENERAL);
+        TransitionSwapchainImage(
+            commandBuffer, imageIndex,
+            {.stages = PipelineCommon::ERenderStage::Transfer,
+             .access = PipelineCommon::EResourceAccess::TransferWrite,
+             .layout = VK_IMAGE_LAYOUT_GENERAL},
+            "visual debugger blit");
+        VkImageBlit blitRegion{};
+        blitRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        blitRegion.srcOffsets[0] = {0, 0, 0};
+        blitRegion.srcOffsets[1] = {
+            static_cast<int32_t>(SwapChain().OutputExtent().width),
+            static_cast<int32_t>(SwapChain().OutputExtent().height),
+            1};
+        blitRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        blitRegion.dstOffsets[0] = {
+            SwapChain().OutputOffset().x,
+            SwapChain().OutputOffset().y,
+            0};
+        blitRegion.dstOffsets[1] = {
+            SwapChain().OutputOffset().x + static_cast<int32_t>(SwapChain().OutputExtent().width),
+            SwapChain().OutputOffset().y + static_cast<int32_t>(SwapChain().OutputExtent().height),
+            1};
+        vkCmdBlitImage(
+            commandBuffer,
+            intermediateOutput->GetImage().Handle(),
+            VK_IMAGE_LAYOUT_GENERAL,
+            SwapChain().Images()[imageIndex],
+            VK_IMAGE_LAYOUT_GENERAL,
+            1,
+            &blitRegion,
+            VK_FILTER_NEAREST);
 
         TransitionSwapchainImage(
             commandBuffer, imageIndex,

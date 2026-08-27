@@ -86,6 +86,11 @@ namespace
 void DrawBenchmarkStatsOverlay(NextEngine& engine)
 {
     const Assets::Scene& scene = engine.GetScene();
+    const Vulkan::VulkanBaseRenderer& renderer = engine.GetRenderer();
+    const std::string rendererName = Vulkan::GetRendererName(renderer.CurrentLogicRendererType());
+    const Rendering::Upscaler::EUpscalerType activeUpscalerType = renderer.ActiveUpscalerType();
+    const auto& upscalerInfo = Rendering::Upscaler::GetUpscalerTypeInfo(
+        static_cast<uint32_t>(activeUpscalerType));
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(
         ImVec2(viewport->GetCenter().x, viewport->Pos.y + 12.0f),
@@ -103,13 +108,36 @@ void DrawBenchmarkStatsOverlay(NextEngine& engine)
 
     if (ImGui::Begin("##BenchmarkStats", nullptr, flags))
     {
-        ImGui::Text(
-            "FPS %.0f  |  Nodes %zu  |  Models %zu  |  Materials %zu  |  Triangles %u",
+        const auto DrawCenteredText = [](const std::string& text)
+        {
+            const float textWidth = ImGui::CalcTextSize(text.c_str()).x;
+            const float availableWidth = ImGui::GetContentRegionAvail().x;
+            if (availableWidth > textWidth)
+            {
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (availableWidth - textWidth) * 0.5f);
+            }
+            ImGui::TextUnformatted(text.c_str());
+        };
+
+        std::string renderInfo;
+        if (activeUpscalerType == Rendering::Upscaler::EUpscalerType::None)
+        {
+            renderInfo = fmt::format("{} | None", rendererName);
+        }
+        else
+        {
+            const auto& upscaleModeInfo = Rendering::Upscaler::GetUpscaleModeInfo(
+                renderer.EffectiveSuperResolutionMode());
+            renderInfo = fmt::format("{} | {} ({})", rendererName, upscalerInfo.name, upscaleModeInfo.name);
+        }
+        DrawCenteredText(renderInfo);
+        DrawCenteredText(fmt::format(
+            "FPS {:.0f}  |  Nodes {}  |  Models {}  |  Materials {}  |  Triangles {}",
             engine.GetFrameRate(),
             scene.Nodes().size(),
             scene.Models().size(),
             scene.Materials().size(),
-            scene.GetTriangleCount());
+            scene.GetTriangleCount()));
     }
     ImGui::End();
 }
@@ -129,7 +157,7 @@ BenchMarker::BenchMarker(FBenchmarkSettings settings) : settings_(std::move(sett
 
     benchmarkCsvReportFile.open(reportFilename);
     benchmarkCsvReportFile << fmt::format(
-        "#,scene,renderer,gpu,driver,resolution,frame_time_ms,gpu_time_ms,fps,vram_mib,draw_calls_actual,draw_calls_total,tris_actual,tris_total,frames,duration_s,upscaler_type,super_resolution\n");
+        "#,scene,renderer,gpu,driver,resolution,frame_time_ms,fps,vram_mib,draw_calls_actual,draw_calls_total,tris_actual,tris_total,frames,duration_s,upscaler_type,super_resolution\n");
 }
 
 BenchMarker::~BenchMarker() { benchmarkCsvReportFile.close(); }
@@ -138,10 +166,8 @@ void BenchMarker::OnSceneStart(double nowInSeconds)
 {
     periodTotalFrames_ = 0;
     benchmarkTotalFrames_ = 0;
-    gpuSampleCount_ = 0;
     gpuDrivenSampleCount_ = 0;
     frameTimeTotalMilliseconds_ = 0.0;
-    gpuTimeTotalMilliseconds_ = 0.0;
     drawCallsActualTotal_ = 0.0;
     drawCallsTotal_ = 0.0;
     trisActualTotal_ = 0.0;
@@ -207,15 +233,6 @@ bool BenchMarker::OnTick(double nowInSeconds, Vulkan::VulkanBaseRenderer* render
     frameTimeTotalMilliseconds_ += frameSeconds * 1000.0;
     benchmarkTotalFrames_++;
 
-    if (renderer != nullptr && renderer->Profiler() != nullptr)
-    {
-        const float gpuMilliseconds = renderer->Profiler()->GetGpuTime("[gpu]");
-        if (gpuMilliseconds > 0.0f)
-        {
-            gpuTimeTotalMilliseconds_ += gpuMilliseconds;
-            gpuSampleCount_++;
-        }
-    }
     if (renderer != nullptr)
     {
         const Assets::GPUDrivenStat& stat = renderer->GetScene().GetGpuDrivenStat();
@@ -249,9 +266,6 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, const std::string
     const double frameTimeMilliseconds = benchmarkTotalFrames_ > 0
                                              ? frameTimeTotalMilliseconds_ / static_cast<double>(benchmarkTotalFrames_)
                                              : 0.0;
-    const double gpuTimeMilliseconds = gpuSampleCount_ > 0
-                                           ? gpuTimeTotalMilliseconds_ / static_cast<double>(gpuSampleCount_)
-                                           : 0.0;
     const double drawCallsActual = SafeAverage(drawCallsActualTotal_, gpuDrivenSampleCount_);
     const double drawCallsTotal = SafeAverage(drawCallsTotal_, gpuDrivenSampleCount_);
     const double trisActual = SafeAverage(trisActualTotal_, gpuDrivenSampleCount_);
@@ -267,7 +281,7 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, const std::string
     vkGetPhysicalDeviceProperties(renderer->Device().PhysicalDevice(), &deviceProp1);
     const std::string driverInfo = GetPhysicalDeviceDriverInfo(renderer->Device().PhysicalDevice(), deviceProp1);
 
-    benchmarkCsvReportFile << fmt::format("{},{},{},{},{},{},{:.3f},{:.3f},{:.2f},{:.1f},{:.2f},{:.2f},{:.2f},{:.2f},{},{:.3f},{},{}\n",
+    benchmarkCsvReportFile << fmt::format("{},{},{},{},{},{},{:.3f},{:.2f},{:.1f},{:.2f},{:.2f},{:.2f},{:.2f},{},{:.3f},{},{}\n",
                                           benchUnit_++,
                                           sceneName,
                                           rendererName,
@@ -275,7 +289,6 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, const std::string
                                           driverInfo,
                                           resolution,
                                           frameTimeMilliseconds,
-                                          gpuTimeMilliseconds,
                                           fps,
                                           vramMiB,
                                           drawCallsActual,
@@ -288,9 +301,9 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, const std::string
                                           userSettings.SuperResolution);
     benchmarkCsvReportFile.flush();
 
-    SPDLOG_INFO("[Benchmark] scene={} renderer={} gpu={} driver={} frame={:.3f}ms gpu={:.3f}ms fps={:.2f} vram={:.1f}MiB draw={:.2f}/{:.2f} tris={:.2f}/{:.2f}",
+    SPDLOG_INFO("[Benchmark] scene={} renderer={} gpu={} driver={} frame={:.3f}ms fps={:.2f} vram={:.1f}MiB draw={:.2f}/{:.2f} tris={:.2f}/{:.2f}",
                 sceneName, rendererName, deviceProp1.deviceName, driverInfo, frameTimeMilliseconds,
-                gpuTimeMilliseconds, fps, vramMiB, drawCallsActual, drawCallsTotal, trisActual, trisTotal);
+                fps, vramMiB, drawCallsActual, drawCallsTotal, trisActual, trisTotal);
 
     std::string imgEncoded{};
     if (uploadScreen || saveScreen)
@@ -307,7 +320,6 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, const std::string
                            {"driver", driverInfo},
                            {"fps", fps},
                            {"frame_time_ms", frameTimeMilliseconds},
-                           {"gpu_time_ms", gpuTimeMilliseconds},
                            {"vram_mib", vramMiB},
                            {"draw_calls_actual", drawCallsActual},
                            {"draw_calls_total", drawCallsTotal},

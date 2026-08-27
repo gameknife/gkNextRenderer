@@ -2,6 +2,7 @@ implementing PathTracing;
 
 #include "PreProcessor.slang"
 import Shader.VisibilityBuffer;
+import Shader.SurfaceBuffer;
 
 // Scene-space sampling helpers shared across the renderer: object-id encoding, page
 // index, motion vectors, spherical-harmonic / IBL evaluation, G-buffer fetch and the
@@ -31,11 +32,34 @@ namespace Common
         return objectId;
     }
 
-    public uint GetPageIndex(float3 pagePos)
+    // Shading-strategy flags for the Primary Surface (Shader/SurfaceBuffer.slang). Material
+    // *identity* stays in the resolved material id; these say how the pixel has to be shaded, which
+    // is what a scheduler buckets on. Kept next to the other G-buffer encoders so every writer of
+    // RT_BSDF_DATA derives them the same way.
+    public uint MakeSurfaceFlags(in Material material)
     {
-        // Calculate the page index based on the page position
-        uint pageIndex = uint(pagePos.x) + uint(pagePos.z) * PAGE_COUNT;
-        return clamp(pageIndex, 0, 4095);
+        uint flags = 0u;
+        if (material.MaterialModel == MaterialDiffuseLight)
+        {
+            flags |= Surface.kFlagEmissive;
+        }
+        if (material.MaterialModel == MaterialMetallic)
+        {
+            flags |= Surface.kFlagMetallic;
+        }
+        if (material.MaterialModel == MaterialDielectric)
+        {
+            flags |= Surface.kFlagDielectric;
+        }
+        if (material.MRATextureId >= 0)
+        {
+            flags |= Surface.kFlagHasMra;
+        }
+        if (material.NormalTextureId >= 0)
+        {
+            flags |= Surface.kFlagHasNormalMap;
+        }
+        return flags;
     }
 
     float3 CalculateRayAABBEntry(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax)
@@ -216,68 +240,58 @@ namespace Common
         return min(float4(10, 10, 10, 1), Bindless.GetSampleTexture(skyIdx).SampleLevel(t, roughness * 8.0f));
     };
 
-    public bool TraceInScreenSpace(float3 position, float3 rayDir, float maxDistance, float depthTolerance,
-                                   out float3 outPosition, out float3 outNormal, out uint outMaterialIdx)
+    // Screen-space trace against the Primary Surface: each step reads the resolved surface instead
+    // of running a full get_material_data (three vertex fetches, a barycentric solve and attribute
+    // interpolation) per step. Only the software tracing renderer marches here, and it always has a
+    // surface.
+    public bool TraceInScreenSpace(float3 position, float3 rayDir, float maxDistance,
+                                   float depthTolerance, out float3 outPosition,
+                                   out float3 outNormal, out uint outMaterialIdx)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
-        GPUVertex* Vertices = Bindless.GetGpuscene().Vertices;
-        NodeProxy* NodeProxies = Bindless.GetGpuscene().Nodes;
-        ModelData* Models = Bindless.GetGpuscene().Offsets;
-        uint* PrimAddress = Bindless.GetGpuscene().Indices;
+        const uint viewBase = Bindless.GetGpuscene().CustomData0;
 
         const int maxSteps = 5;
-        float stepSize = maxDistance / float(maxSteps);
-        float3 rayStart = position + rayDir * 0.1;
+        const float stepSize = maxDistance / float(maxSteps);
+        const float3 rayStart = position + rayDir * 0.1;
 
         outPosition = float3(0, 0, 0);
         outNormal = float3(0, 0, 1);
         outMaterialIdx = 0;
 
+        const int2 size = int2(Surface.Dimensions(viewBase));
+
         for (int i = 0; i < maxSteps; i++)
         {
-            float3 currentPos = rayStart + rayDir * (i * stepSize);
+            const float3 currentPos = rayStart + rayDir * (i * stepSize);
             float4 currentPosProj = mul(Camera.ViewProjection, float4(currentPos, 1.0));
             currentPosProj.xyz /= currentPosProj.w;
-            float2 currentUV = currentPosProj.xy * 0.5 + 0.5;
+            const float2 currentUV = currentPosProj.xy * 0.5 + 0.5;
             if (any(currentUV < float2(0.0)) || any(currentUV > float2(1.0)))
                 continue;
 
-            int2 size = int2(Visibility.Dimensions(gpuScene.CustomData0));
-
-            int2 sampleCoord = clamp(int2(currentUV * float2(size)), int2(0), size - 1);
-            uint2 vBufferSample = Visibility.Load(sampleCoord, gpuScene.CustomData0);
-            if (!Visibility.IsValid(vBufferSample))
+            const int2 sampleCoord = clamp(int2(currentUV * float2(size)), int2(0), size - 1);
+            const Surface.FSurfaceGeometry sample = Surface.LoadGeometry(viewBase, sampleCoord);
+            if (!Surface.IsValid(sample.Depth))
                 continue;
 
-            float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
-            const float2 sampleNdc =
-                ((float2(sampleCoord) + 0.5f) / float2(size)) * 2.0f - 1.0f;
-            float4 target = mul(Camera.ProjectionInverse, float4(sampleNdc, 1, 1));
-            float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
-            float3 ray_dir = normalize(dir.xyz);
+            const float3 samplePosition = Surface.ReconstructPosition(
+                Camera.ProjectionInverse, Camera.ModelViewInverse, sampleCoord, uint2(size),
+                sample.Depth);
+            const float viewSpaceCurrentDepth = mul(Camera.ModelView, float4(currentPos, 1.0)).z;
+            const float viewSpaceSampleDepth = mul(Camera.ModelView, float4(samplePosition, 1.0)).z;
 
-            Vertex sampleVertex;
-            if (!Common.get_material_data(
-                    vBufferSample, origin.xyz, ray_dir, NodeProxies, Models,
-                    Vertices, PrimAddress, sampleVertex))
+            if (viewSpaceCurrentDepth < viewSpaceSampleDepth &&
+                viewSpaceCurrentDepth > viewSpaceSampleDepth - depthTolerance)
             {
-                continue;
-            }
-
-            float viewSpaceCurrentDepth = mul(Camera.ModelView, float4(currentPos, 1.0)).z;
-            float viewSpaceSampleDepth = mul(Camera.ModelView, float4(sampleVertex.Position, 1.0)).z;
-
-            if (viewSpaceCurrentDepth < viewSpaceSampleDepth && viewSpaceCurrentDepth > viewSpaceSampleDepth - (depthTolerance))
-            {
-                outPosition = sampleVertex.Position;
-                outNormal = normalize(sampleVertex.Normal.rgb);
-                NodeProxy hitNode = NodeProxies[vBufferSample.x - 1];
-                outMaterialIdx = hitNode.matId[sampleVertex.MaterialIndex];
+                outPosition = samplePosition;
+                outNormal = normalize(sample.Normal);
+                outMaterialIdx = Surface.LoadMaterialId(viewBase, sampleCoord);
                 return true;
             }
         }
         return false;
-    };
+    }
 
     // Interleaved-gradient spatial hash, decorrelated per frame by the golden ratio so a temporal
     // resolve sees a genuinely new offset every frame. Core.GTAO deliberately drifts far slower
@@ -289,56 +303,39 @@ namespace Common
         return frac(52.9829189f * frac(seed) + float(frame) * 0.6180339887f);
     }
 
-    // World position and camera-facing geometric plane of the surface the visibility buffer holds
-    // at a pixel. An occlusion query needs only those, so it must not pay for the attribute
-    // interpolation get_material_data performs: the pixel's primary ray provably hits the stored
-    // triangle, which makes a plane intersection exact and a barycentric solve redundant.
-    bool LoadVisibilitySurfacePlane(int2 pixel, int2 size, out float3 worldPosition,
-                                    out float3 worldNormal)
+    // World position and camera-facing plane of the occluder at a pixel, read from the Primary
+    // Surface: a march step costs two texture reads instead of fetching three vertices, re-skinning
+    // them, transforming them and intersecting the triangle plane.
+    //
+    // The plane it reports is the *shading* plane, not the exact geometric triangle plane: normal
+    // maps and smooth vertex normals perturb it. For an occlusion approximation that is the right
+    // trade (see the accuracy caveats on ScreenSpaceShadowVisibility); a caller that genuinely
+    // needs the exact triangle plane has to intersect the visibility buffer itself.
+    bool LoadOccluderPlane(int2 pixel, int2 size, out float3 worldPosition,
+                           out float3 worldNormal)
     {
         worldPosition = float3(0, 0, 0);
         worldNormal = float3(0, 0, 1);
-        GPUScene scene = Bindless.GetGpuscene();
-        const uint2 vBuffer = Visibility.Load(pixel, scene.CustomData0);
-        if (!Visibility.IsValid(vBuffer))
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+        const Surface.FSurfaceGeometry geometry =
+            Surface.LoadGeometry(Bindless.GetGpuscene().CustomData0, pixel);
+        if (!Surface.IsValid(geometry.Depth))
+        {
+            return false;
+        }
+        const float normalLengthSquared = dot(geometry.Normal, geometry.Normal);
+        if (normalLengthSquared < 1e-8f)
         {
             return false;
         }
 
-        UniformBufferObject Camera = scene.Camera[0];
-        NodeProxy proxy = scene.Nodes[vBuffer.x - 1];
-        ModelData model = scene.Offsets[proxy.modelId];
-        GPUVertex* vertices = proxy.skinId != 0xFFFFFFFF ? scene.SkinnedVertices : scene.Vertices;
-
-        float3 corners[3];
-        [unroll]
-        for (uint i = 0u; i < 3u; ++i)
-        {
-            const uint vertexIndex = scene.Indices[model.indexOffset + vBuffer.y * 3u + i];
-            const float3 local = float3(vertices[model.vertexOffset + vertexIndex].Position_Tx.xyz);
-            corners[i] = mul(proxy.worldTS, float4(local, 1.0f)).xyz;
-        }
-
-        const float3 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1)).xyz;
-        const float2 ndc = ((float2(pixel) + 0.5f) / float2(size)) * 2.0f - 1.0f;
-        const float4 target = mul(Camera.ProjectionInverse, float4(ndc, 1.0f, 1.0f));
-        const float3 rayDir = normalize(mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0.0f)).xyz);
-
-        const float3 planeNormal = cross(corners[1] - corners[0], corners[2] - corners[0]);
-        const float denominator = dot(planeNormal, rayDir);
-        if (abs(denominator) <= 1e-12f)
-        {
-            return false;
-        }
-        const float t = dot(planeNormal, corners[0] - origin) / denominator;
-        if (t <= 0.0f)
-        {
-            return false;
-        }
-        worldPosition = origin + rayDir * t;
-        // Orient the plane toward the camera: the visibility buffer stores the face the camera
-        // sees, and callers reason about what lies in front of or behind that face.
-        worldNormal = normalize(planeNormal) * (denominator > 0.0f ? -1.0f : 1.0f);
+        worldPosition = Surface.ReconstructPosition(
+            Camera.ProjectionInverse, Camera.ModelViewInverse, pixel, uint2(size), geometry.Depth);
+        // Orient toward the camera for the same reason the visibility plane does: callers reason
+        // about what lies in front of or behind the face the camera can see.
+        const float3 eye = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1)).xyz;
+        const float3 normal = geometry.Normal * rsqrt(normalLengthSquared);
+        worldNormal = dot(normal, worldPosition - eye) > 0.0f ? -normal : normal;
         return true;
     }
 
@@ -402,7 +399,17 @@ namespace Common
         const int2 size = int2(Visibility.Dimensions(gpuScene.CustomData0));
         const float dither = ScreenSpaceHash(screenPixel, temporalDither ? Camera.TotalFrames : 0u);
 
-        const uint stepCount = 12u;
+        // Short projected segments do not benefit from twelve visibility lookups. Scale the march
+        // budget in screen space so distant/small lights use 4 steps, medium segments 8, and only
+        // long rays pay the original 12-step cost.
+        const float4 clippedEnd = lerp(clipStart, clipEnd, endFraction);
+        const float2 startPixel = (clipStart.xy / clipStart.w) * (0.5f * float2(size));
+        const float2 endPixel = (clippedEnd.xy / clippedEnd.w) * (0.5f * float2(size));
+        const float projectedLength = length(endPixel - startPixel);
+        const uint maximumSteps = clamp(Camera.LightObjectShadowSteps, 4u, 12u);
+        const uint stepCount = projectedLength <= 24.0f
+            ? min(4u, maximumSteps)
+            : (projectedLength <= 96.0f ? min(8u, maximumSteps) : maximumSteps);
         for (uint i = 0u; i < stepCount; ++i)
         {
             // Quadratic spacing concentrates the budget near the receiver, where contact shadows
@@ -425,7 +432,7 @@ namespace Common
             float3 occluderPosition;
             float3 occluderNormal;
             const int2 sampleCoord = clamp(int2(uv * float2(size)), int2(0), size - 1);
-            if (!LoadVisibilitySurfacePlane(sampleCoord, size, occluderPosition, occluderNormal))
+            if (!LoadOccluderPlane(sampleCoord, size, occluderPosition, occluderNormal))
             {
                 continue;
             }

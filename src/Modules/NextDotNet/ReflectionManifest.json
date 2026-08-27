@@ -1,0 +1,969 @@
+{
+  "types": [
+    {
+      "kind": "component",
+      "name": "RenderComponent",
+      "properties": [
+        {
+          "category": "Rendering",
+          "displayName": "Cast Shadows",
+          "hidden": false,
+          "name": "CastShadows",
+          "propId": 2207922471,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Whether the object casts shadows",
+          "type": "Bool"
+        },
+        {
+          "category": "Rendering",
+          "displayName": "Main Visible",
+          "hidden": false,
+          "name": "MainVisible",
+          "propId": 191143274,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Whether the object is drawn in the main visibility pass",
+          "type": "Bool"
+        },
+        {
+          "category": "Rendering",
+          "displayName": "Materials",
+          "elementType": "Unknown",
+          "hidden": false,
+          "name": "Materials",
+          "propId": 3553418121,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Material indices for each submesh",
+          "type": "Array"
+        },
+        {
+          "category": "Mesh",
+          "displayName": "Model",
+          "hidden": false,
+          "name": "ModelId",
+          "propId": 2704773975,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "The model resource",
+          "type": "UInt32"
+        },
+        {
+          "category": "Rendering",
+          "displayName": "Raycast Visible",
+          "hidden": false,
+          "name": "RayCastVisible",
+          "propId": 1665393986,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Whether the object is visible to raycasts",
+          "type": "Bool"
+        },
+        {
+          "category": "Rendering",
+          "displayName": "Ray Trace Visible",
+          "hidden": false,
+          "name": "RayTraceVisible",
+          "propId": 3917588094,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Whether the object participates in GPU ray tracing acceleration structures",
+          "type": "Bool"
+        },
+        {
+          "category": "Rendering",
+          "displayName": "Receive GI",
+          "hidden": false,
+          "name": "ReceiveGI",
+          "propId": 4248519970,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Whether the object receives global illumination",
+          "type": "Bool"
+        },
+        {
+          "category": "Animation",
+          "displayName": "Skin Index",
+          "hidden": false,
+          "name": "SkinIndex",
+          "propId": 1205595124,
+          "readOnly": true,
+          "scriptExposed": true,
+          "tooltip": "Skinning data index for skeletal animation",
+          "type": "Int32"
+        },
+        {
+          "category": "Rendering",
+          "displayName": "Visible",
+          "hidden": false,
+          "name": "Visible",
+          "propId": 1495943489,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Whether the object is visible",
+          "type": "Bool"
+        }
+      ],
+      "typeId": 3393791048
+    },
+    {
+      "kind": "component",
+      "name": "EnvironmentComponent",
+      "properties": [
+        {
+          "category": "Atmosphere",
+          "displayName": "Aerial Perspective",
+          "hidden": false,
+          "name": "AerialPerspectiveEnabled",
+          "propId": 387175588,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Apply atmospheric aerial perspective to scene geometry",
+          "type": "Bool"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "AP Max Distance",
+          "hidden": false,
+          "name": "AerialPerspectiveMaxDistance",
+          "propId": 3870206480,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Aerial perspective range in world units",
+          "type": "Float"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "Enabled",
+          "hidden": false,
+          "name": "AtmosphereEnabled",
+          "propId": 1084452750,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Enable the procedural atmosphere sky",
+          "type": "Bool"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "Bottom Radius",
+          "hidden": false,
+          "name": "BottomRadius",
+          "propId": 2891865288,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Planet radius (km)",
+          "type": "Float"
+        },
+        {
+          "category": "Camera",
+          "displayName": "Control Speed",
+          "hidden": false,
+          "name": "ControlSpeed",
+          "propId": 1572793409,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Default scene camera control speed",
+          "type": "Float"
+        },
+        {
+          "category": "Height Fog",
+          "displayName": "Base Height",
+          "hidden": false,
+          "name": "FogBaseHeight",
+          "propId": 2827099729,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Fog base height in world units",
+          "type": "Float"
+        },
+        {
+          "category": "Height Fog",
+          "displayName": "Fog Density",
+          "hidden": false,
+          "name": "FogDensity",
+          "propId": 2839077681,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Sea-level extinction density",
+          "type": "Float"
+        },
+        {
+          "category": "Height Fog",
+          "displayName": "Height Falloff",
+          "hidden": false,
+          "name": "FogHeightFalloff",
+          "propId": 1716069486,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Exponential height falloff",
+          "type": "Float"
+        },
+        {
+          "category": "Height Fog",
+          "displayName": "Fog Color",
+          "hidden": false,
+          "name": "FogInscatteringColor",
+          "propId": 195291665,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Height-fog in-scattering color",
+          "type": "Vec3"
+        },
+        {
+          "category": "Height Fog",
+          "displayName": "Max Opacity",
+          "hidden": false,
+          "name": "FogMaxOpacity",
+          "propId": 2261275876,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Maximum fog opacity",
+          "type": "Float"
+        },
+        {
+          "category": "Height Fog",
+          "displayName": "Start Distance",
+          "hidden": false,
+          "name": "FogStartDistance",
+          "propId": 2194124594,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Distance before fog begins",
+          "type": "Float"
+        },
+        {
+          "category": "Environment",
+          "displayName": "Gamma Correction",
+          "hidden": false,
+          "name": "GammaCorrection",
+          "propId": 2108403150,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Enable gamma correction",
+          "type": "Bool"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "Ground Albedo",
+          "hidden": false,
+          "name": "GroundAlbedo",
+          "propId": 1932013783,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Planet ground albedo",
+          "type": "Vec3"
+        },
+        {
+          "category": "Environment",
+          "displayName": "Has Sky",
+          "hidden": false,
+          "name": "HasSky",
+          "propId": 49852520,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Enable HDR sky lighting",
+          "type": "Bool"
+        },
+        {
+          "category": "Environment",
+          "displayName": "Has Sun",
+          "hidden": false,
+          "name": "HasSun",
+          "propId": 432088995,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Enable directional sunlight",
+          "type": "Bool"
+        },
+        {
+          "category": "Height Fog",
+          "displayName": "Enabled",
+          "hidden": false,
+          "name": "HeightFogEnabled",
+          "propId": 3683330743,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Enable exponential height fog",
+          "type": "Bool"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "Mie Absorption",
+          "hidden": false,
+          "name": "MieAbsorption",
+          "propId": 3277627131,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Mie absorption coefficients (1/km)",
+          "type": "Vec3"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "Mie Scale Height",
+          "hidden": false,
+          "name": "MieDensityH",
+          "propId": 1276607738,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Mie density scale height (km)",
+          "type": "Float"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "Mie Phase G",
+          "hidden": false,
+          "name": "MiePhaseG",
+          "propId": 1994066170,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Henyey-Greenstein anisotropy",
+          "type": "Float"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "Mie Scattering",
+          "hidden": false,
+          "name": "MieScattering",
+          "propId": 1707658648,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Mie scattering coefficients (1/km)",
+          "type": "Vec3"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "Ozone Absorption",
+          "hidden": false,
+          "name": "OzoneAbsorption",
+          "propId": 4046689145,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Ozone absorption coefficients (1/km)",
+          "type": "Vec3"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "Ozone Center",
+          "hidden": false,
+          "name": "OzoneCenterAltitude",
+          "propId": 421270859,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Ozone layer center altitude (km)",
+          "type": "Float"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "Ozone Width",
+          "hidden": false,
+          "name": "OzoneWidth",
+          "propId": 2743778364,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Ozone layer half width (km)",
+          "type": "Float"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "Rayleigh Scale Height",
+          "hidden": false,
+          "name": "RayleighDensityH",
+          "propId": 3151995328,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Rayleigh density scale height (km)",
+          "type": "Float"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "Rayleigh Scattering",
+          "hidden": false,
+          "name": "RayleighScattering",
+          "propId": 1769753322,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Rayleigh scattering coefficients (1/km)",
+          "type": "Vec3"
+        },
+        {
+          "category": "Environment",
+          "displayName": "Sky Color",
+          "hidden": false,
+          "name": "SkyColor",
+          "propId": 263037657,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Sky lighting tint",
+          "type": "Vec3"
+        },
+        {
+          "category": "Environment",
+          "displayName": "Sky Index",
+          "hidden": false,
+          "name": "SkyIdx",
+          "propId": 2615143049,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "HDR sky texture index",
+          "type": "Int32"
+        },
+        {
+          "category": "Environment",
+          "displayName": "Sky Intensity",
+          "hidden": false,
+          "name": "SkyIntensity",
+          "propId": 3743349703,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Sky lighting intensity",
+          "type": "Float"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "Sky Luminance Scale",
+          "hidden": false,
+          "name": "SkyLuminanceScale",
+          "propId": 2034213710,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Procedural sky luminance multiplier",
+          "type": "Float"
+        },
+        {
+          "category": "Environment",
+          "displayName": "Sky Rotation",
+          "hidden": false,
+          "name": "SkyRotation",
+          "propId": 3206945724,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Horizontal sky rotation",
+          "type": "Float"
+        },
+        {
+          "category": "Environment",
+          "displayName": "Sun Color",
+          "hidden": false,
+          "name": "SunColor",
+          "propId": 2480114180,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Directional sunlight color",
+          "type": "Vec3"
+        },
+        {
+          "category": "Environment",
+          "displayName": "Sun Elevation",
+          "hidden": false,
+          "name": "SunElevation",
+          "propId": 4143095712,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Sun elevation in radians",
+          "type": "Float"
+        },
+        {
+          "category": "Environment",
+          "displayName": "Sun Intensity",
+          "hidden": false,
+          "name": "SunIntensity",
+          "propId": 1225170262,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Sun light intensity",
+          "type": "Float"
+        },
+        {
+          "category": "Environment",
+          "displayName": "Sun Rotation",
+          "hidden": false,
+          "name": "SunRotation",
+          "propId": 317392707,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Sun azimuth rotation",
+          "type": "Float"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "Top Radius",
+          "hidden": false,
+          "name": "TopRadius",
+          "propId": 2693582434,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Atmosphere top radius (km)",
+          "type": "Float"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "Origin Altitude",
+          "hidden": false,
+          "name": "WorldOriginAltitude",
+          "propId": 1590130703,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Altitude of world y=0 (km)",
+          "type": "Float"
+        },
+        {
+          "category": "Atmosphere",
+          "displayName": "World Units Per Km",
+          "hidden": false,
+          "name": "WorldUnitsPerKm",
+          "propId": 3055890125,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "World-to-kilometre conversion",
+          "type": "Float"
+        }
+      ],
+      "typeId": 3983330361
+    },
+    {
+      "kind": "component",
+      "name": "LightComponent",
+      "properties": [
+        {
+          "category": "Light",
+          "displayName": "Enabled",
+          "hidden": false,
+          "name": "Enabled",
+          "propId": 2626085950,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Whether this light emits",
+          "type": "Bool"
+        },
+        {
+          "category": "Light",
+          "displayName": "Light Count",
+          "hidden": false,
+          "name": "LightCount",
+          "propId": 2939991638,
+          "readOnly": true,
+          "scriptExposed": true,
+          "tooltip": "Number of light primitives on this node",
+          "type": "UInt32"
+        },
+        {
+          "category": "Light",
+          "displayName": "Light Type",
+          "hidden": false,
+          "max": 1.0,
+          "min": 0.0,
+          "name": "LightType",
+          "propId": 2404094935,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "0 = area, 1 = point",
+          "type": "UInt32"
+        },
+        {
+          "category": "Light",
+          "displayName": "Material Index",
+          "hidden": false,
+          "name": "MaterialIndex",
+          "propId": 3183644636,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Diffuse-light material index",
+          "type": "UInt32"
+        },
+        {
+          "category": "Light Geometry",
+          "displayName": "Normal / Area",
+          "hidden": false,
+          "name": "NormalArea",
+          "propId": 3768954967,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Local normal in xyz and sampling area in w",
+          "type": "Vec4"
+        },
+        {
+          "category": "Light Geometry",
+          "displayName": "P0 / Position",
+          "hidden": false,
+          "name": "P0",
+          "propId": 553643949,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Area corner or point position/radius",
+          "type": "Vec4"
+        },
+        {
+          "category": "Light Geometry",
+          "displayName": "P1",
+          "hidden": false,
+          "name": "P1",
+          "propId": 536866330,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Second area-light corner",
+          "type": "Vec4"
+        },
+        {
+          "category": "Light Geometry",
+          "displayName": "P3",
+          "hidden": false,
+          "name": "P3",
+          "propId": 503311092,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Third area-light corner",
+          "type": "Vec4"
+        }
+      ],
+      "typeId": 4257272042
+    },
+    {
+      "kind": "component",
+      "name": "PhysicsComponent",
+      "properties": [
+        {
+          "category": "Physics",
+          "displayName": "Angular Damping",
+          "hidden": false,
+          "name": "AngularDamping",
+          "propId": 527193057,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Angular velocity damping",
+          "type": "Float"
+        },
+        {
+          "category": "Physics",
+          "displayName": "Collision Presets",
+          "hidden": false,
+          "name": "CollisionPresets",
+          "propId": 1479790545,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Collision response preset",
+          "type": "String"
+        },
+        {
+          "category": "Physics",
+          "displayName": "Enable Gravity",
+          "hidden": false,
+          "name": "EnableGravity",
+          "propId": 500762548,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Apply gravity to this body",
+          "type": "Bool"
+        },
+        {
+          "category": "Physics",
+          "displayName": "Linear Damping",
+          "hidden": false,
+          "name": "LinearDamping",
+          "propId": 427950278,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Linear velocity damping",
+          "type": "Float"
+        },
+        {
+          "category": "Physics",
+          "displayName": "Mobility",
+          "enumTypeId": 4013199321,
+          "hidden": false,
+          "name": "Mobility",
+          "propId": 3056913780,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Physics body mobility type",
+          "type": "Enum"
+        },
+        {
+          "category": "Physics",
+          "displayName": "Physics Material",
+          "hidden": false,
+          "name": "PhysicsMaterial",
+          "propId": 2749179543,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Physics material preset",
+          "type": "String"
+        },
+        {
+          "category": "Physics",
+          "displayName": "Physics Offset",
+          "hidden": false,
+          "name": "PhysicsOffset",
+          "propId": 1677701989,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Offset from node origin for physics body",
+          "type": "Vec3"
+        },
+        {
+          "category": "Physics",
+          "displayName": "Simulate Physics",
+          "hidden": false,
+          "name": "SimulatePhysics",
+          "propId": 1284827756,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Enable dynamic rigid-body simulation",
+          "type": "Bool"
+        }
+      ],
+      "typeId": 338477249
+    },
+    {
+      "kind": "component",
+      "name": "SkinnedMeshComponent",
+      "properties": [
+        {
+          "category": "Animation",
+          "displayName": "Current Animation",
+          "hidden": false,
+          "name": "CurrentAnimation",
+          "propId": 2069512920,
+          "readOnly": true,
+          "scriptExposed": true,
+          "tooltip": "Name of the currently playing animation",
+          "type": "String"
+        },
+        {
+          "category": "Animation",
+          "displayName": "Is Playing",
+          "hidden": false,
+          "name": "IsPlaying",
+          "propId": 3836956773,
+          "readOnly": true,
+          "scriptExposed": true,
+          "tooltip": "Whether an animation is currently playing",
+          "type": "Bool"
+        },
+        {
+          "category": "Animation",
+          "displayName": "Play Speed",
+          "hidden": false,
+          "max": 10.0,
+          "min": 0.0,
+          "name": "PlaySpeed",
+          "propId": 1962350526,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Animation playback speed multiplier",
+          "type": "Float"
+        }
+      ],
+      "typeId": 3847717573
+    },
+    {
+      "kind": "component",
+      "name": "SceneReferenceComponent",
+      "properties": [
+        {
+          "category": "Scene Reference",
+          "displayName": "Asset Path",
+          "hidden": false,
+          "name": "AssetPath",
+          "propId": 3880040812,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Referenced scene asset path",
+          "type": "String"
+        },
+        {
+          "category": "Scene Reference",
+          "displayName": "Error",
+          "hidden": false,
+          "name": "Error",
+          "propId": 4086144241,
+          "readOnly": true,
+          "scriptExposed": true,
+          "tooltip": "Last reference load error",
+          "type": "String"
+        },
+        {
+          "category": "Scene Reference",
+          "displayName": "Loaded Nodes",
+          "hidden": false,
+          "name": "LoadedNodeCount",
+          "propId": 3409791187,
+          "readOnly": true,
+          "scriptExposed": true,
+          "tooltip": "Number of internal nodes loaded from the asset",
+          "type": "UInt32"
+        },
+        {
+          "category": "Scene Reference",
+          "displayName": "Resolved Path",
+          "hidden": false,
+          "name": "ResolvedPath",
+          "propId": 1541864310,
+          "readOnly": true,
+          "scriptExposed": true,
+          "tooltip": "Normalized referenced asset path",
+          "type": "String"
+        },
+        {
+          "category": "Scene Reference",
+          "displayName": "Status",
+          "hidden": false,
+          "name": "Status",
+          "propId": 6222351,
+          "readOnly": true,
+          "scriptExposed": true,
+          "tooltip": "Reference load status",
+          "type": "String"
+        }
+      ],
+      "typeId": 1130626983
+    },
+    {
+      "kind": "component",
+      "name": "TerrainComponent",
+      "properties": [
+        {
+          "category": "Terrain",
+          "displayName": "Cells X",
+          "hidden": false,
+          "name": "CellsX",
+          "propId": 3884278206,
+          "readOnly": true,
+          "scriptExposed": true,
+          "tooltip": "Heightfield cells along local X",
+          "type": "Int32"
+        },
+        {
+          "category": "Terrain",
+          "displayName": "Cells Y",
+          "hidden": false,
+          "name": "CellsY",
+          "propId": 3901055825,
+          "readOnly": true,
+          "scriptExposed": true,
+          "tooltip": "Heightfield cells along local Y",
+          "type": "Int32"
+        },
+        {
+          "category": "Terrain",
+          "displayName": "Seed",
+          "hidden": false,
+          "name": "Seed",
+          "propId": 3497134284,
+          "readOnly": true,
+          "scriptExposed": true,
+          "tooltip": "Deterministic generation seed",
+          "type": "Int32"
+        },
+        {
+          "category": "Terrain",
+          "displayName": "Size X",
+          "hidden": false,
+          "name": "SizeX",
+          "propId": 3869557420,
+          "readOnly": true,
+          "scriptExposed": true,
+          "tooltip": "Local domain size along X",
+          "type": "Float"
+        },
+        {
+          "category": "Terrain",
+          "displayName": "Size Y",
+          "hidden": false,
+          "name": "SizeY",
+          "propId": 3886335039,
+          "readOnly": true,
+          "scriptExposed": true,
+          "tooltip": "Local domain size along Y",
+          "type": "Float"
+        }
+      ],
+      "typeId": 1338567229
+    },
+    {
+      "kind": "node",
+      "name": "Node",
+      "properties": [
+        {
+          "category": "Transform",
+          "displayName": "InstanceId",
+          "hidden": false,
+          "name": "InstanceId",
+          "propId": 49567391,
+          "readOnly": true,
+          "scriptExposed": true,
+          "tooltip": "Node instance id",
+          "type": "UInt32"
+        },
+        {
+          "category": "Metadata",
+          "displayName": "Layer",
+          "hidden": false,
+          "name": "Layer",
+          "propId": 2950437782,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Node layer",
+          "type": "String"
+        },
+        {
+          "category": "Transform",
+          "displayName": "Name",
+          "hidden": false,
+          "name": "Name",
+          "propId": 266367750,
+          "readOnly": true,
+          "scriptExposed": true,
+          "tooltip": "Node name",
+          "type": "String"
+        },
+        {
+          "category": "Transform",
+          "displayName": "Rotation",
+          "hidden": false,
+          "name": "Rotation",
+          "propId": 36861823,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Local rotation",
+          "type": "Quat"
+        },
+        {
+          "category": "Transform",
+          "displayName": "Scale",
+          "hidden": false,
+          "name": "Scale",
+          "propId": 676498961,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Local scale",
+          "type": "Vec3"
+        },
+        {
+          "category": "Metadata",
+          "displayName": "Tag",
+          "hidden": false,
+          "name": "Tag",
+          "propId": 4169356339,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Node tag",
+          "type": "String"
+        },
+        {
+          "category": "Transform",
+          "displayName": "Translation",
+          "hidden": false,
+          "name": "Translation",
+          "propId": 613888204,
+          "readOnly": false,
+          "scriptExposed": true,
+          "tooltip": "Local translation",
+          "type": "Vec3"
+        }
+      ],
+      "typeId": 879231789
+    }
+  ],
+  "version": 1
+}

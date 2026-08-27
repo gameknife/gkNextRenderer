@@ -13,6 +13,7 @@ namespace NextCVar
 
 namespace NextUI
 {
+    class IUserInterface;
     class IMultiViewportBackend;
     class UserInterface;
     struct Statistics;
@@ -20,11 +21,10 @@ namespace NextUI
 
 namespace Runtime
 {
-    class FrameProfiler;
     class IDebugUiProvider;
     class IRenderFrameConsumer;
+    class IScreenShotService;
     class IScriptRuntime;
-    class FScreenShotService;
     class IUiOverlay;
 }
 

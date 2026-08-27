@@ -10,13 +10,12 @@
 #include <imgui.h>
 
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Utilities/Format.hpp"
 #include "Engine/Vulkan/Allocator.hpp"
-#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 #include "Modules/DevTools/UI/DiagnosticWidgets.hpp"
 
 namespace
@@ -24,8 +23,6 @@ namespace
     using Utilities::FormatBytes;
     using Runtime::DevToolsUI::DrawSectionHeader;
     using Runtime::DevToolsUI::DrawValueRow;
-    constexpr int maxCpuTimerRows = 18;
-
     std::string FormatCount(uint64_t value)
     {
         return Utilities::metricFormatter(static_cast<double>(value), "");
@@ -87,71 +84,9 @@ namespace
         ImGui::EndTable();
     }
 
-    void DrawCpuTimers(Runtime::FrameProfiler* profiler)
-    {
-        if (profiler == nullptr)
-        {
-            return;
-        }
-
-        const std::vector<Runtime::ProfileTimerStat> timers = profiler->FetchCpuTimes(3);
-        if (timers.empty())
-        {
-            ImGui::TextColored(ImVec4(0.72f, 0.76f, 0.82f, 1.0f), "No CPU timer samples yet");
-            return;
-        }
-
-        float rootTotalMs = 0.0f;
-        for (const auto& timer : timers)
-        {
-            if (timer.depth == 0)
-            {
-                rootTotalMs += timer.milliseconds;
-            }
-        }
-
-        if (ImGui::BeginTable("##CpuProfileTimers", 3,
-                              ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
-                                  ImGuiTableFlags_SizingFixedFit))
-        {
-            ImGui::TableSetupColumn("Pass", ImGuiTableColumnFlags_WidthFixed, 170.0f);
-            ImGui::TableSetupColumn("ms", ImGuiTableColumnFlags_WidthFixed, 58.0f);
-            ImGui::TableSetupColumn("%", ImGuiTableColumnFlags_WidthFixed, 42.0f);
-            ImGui::TableHeadersRow();
-
-            int rowCount = 0;
-            for (const auto& timer : timers)
-            {
-                if (rowCount >= maxCpuTimerRows)
-                {
-                    break;
-                }
-
-                const float ratio = rootTotalMs > 0.001f ? timer.milliseconds / rootTotalMs : 0.0f;
-                const ImVec4 rowColor = timer.depth == 0
-                    ? ImVec4(0.93f, 0.96f, 1.0f, 1.0f)
-                    : ImVec4(0.72f, 0.76f, 0.82f, 1.0f);
-
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
-                ImGui::Indent(static_cast<float>(timer.depth) * 12.0f);
-                ImGui::TextColored(rowColor, "%s", timer.name.c_str());
-                ImGui::Unindent(static_cast<float>(timer.depth) * 12.0f);
-
-                ImGui::TableSetColumnIndex(1);
-                ImGui::TextColored(rowColor, "%.2f", timer.milliseconds);
-
-                ImGui::TableSetColumnIndex(2);
-                ImGui::TextColored(rowColor, "%.0f", ratio * 100.0f);
-                ++rowCount;
-            }
-            ImGui::EndTable();
-        }
-    }
 }
 
-void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statistics& statistics, Runtime::FrameProfiler* profiler,
-                                      float topOffset)
+void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statistics& statistics, float topOffset)
 {
     Assets::Scene& scene = engine.GetScene();
     const auto& gpuDrivenStat = scene.GetGpuDrivenStat();
@@ -184,7 +119,7 @@ void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statisti
         ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoInputs;
 
-    if (ImGui::Begin("CPU Profile", nullptr, flags))
+    if (ImGui::Begin("Statistics", nullptr, flags))
     {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 6.0f));
 
@@ -245,9 +180,6 @@ void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statisti
             DrawValueRow("Heaps", FormatCount(memoryStats.heaps.size()));
             ImGui::EndTable();
         }
-
-        DrawSectionHeader("CPU Timers");
-        DrawCpuTimers(profiler);
 
         ImGui::PopStyleVar();
     }

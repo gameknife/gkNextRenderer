@@ -226,7 +226,11 @@ namespace Vulkan
         template <typename T>
         void SetObjectName(const T& object, const char* name, VkObjectType type) const
         {
-#if !ANDROID
+            if (vkSetDebugUtilsObjectNameEXT_ == nullptr || device_ == VK_NULL_HANDLE || name == nullptr)
+            {
+                return;
+            }
+
             VkDebugUtilsObjectNameInfoEXT info = {};
             info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
             info.pNext = nullptr;
@@ -234,8 +238,10 @@ namespace Vulkan
             info.objectType = type;
             info.pObjectName = name;
 
-            Check(vkSetDebugUtilsObjectNameEXT_(device_, &info), "set object name");
-#endif
+            // Debug annotations are optional instrumentation. A driver that
+            // exposes the entry point may still reject a particular object
+            // type, which must not abort the renderer.
+            static_cast<void>(vkSetDebugUtilsObjectNameEXT_(device_, &info));
         }
 
         const PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT_;

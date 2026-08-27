@@ -9,9 +9,9 @@
 #include "EditorActionDispatcher.hpp"
 #include "Application/Editor/Common/Preview/AssetThumbnailRenderer.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/SceneContent/SceneList.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/FileHelper.hpp"
 
@@ -918,7 +918,7 @@ namespace Editor
         ImGui::Begin("Content Browser", nullptr);
         {
             static const std::filesystem::path rootPath =
-                std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets"));
+                Utilities::FileHelper::GetRuntimeFilePath("assets");
             static DirectoryCache directoryCache;
             static DirectoryVisibilityCache visibilityCache;
             auto& browserState = ui.contentBrowserState;
@@ -982,7 +982,7 @@ namespace Editor
                         ImTextureID thumbnailTextureId = 0;
                         if (visual.kind == EContentAssetKind::Texture)
                         {
-                            const NextUI::UserInterface::FUiTextureHandle texture = ctx.ui.RequestUiTexture(assetPath);
+                            const NextUI::IUserInterface::FUiTextureHandle texture = ctx.ui.RequestUiTexture(assetPath);
                             if (texture.valid)
                             {
                                 thumbnailTextureId = texture.textureId;

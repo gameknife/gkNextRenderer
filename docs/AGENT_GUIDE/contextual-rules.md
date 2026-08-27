@@ -18,7 +18,8 @@
 
 ### 构建输出管理
 - **桌面端**: 输出到 `out/build/<preset>/bin/`。
-- **Android**: 输出到 `android/app/build/outputs/apk/`。
+- **Android**: CMake driver 位于 `tools/android/`；固定 APK 输出到 `out/build/android-<variant>/apk/`，不要直接调用 Gradle。
+- **Android 工具链**: 使用 JDK 17–23；NDK libc++ 必须支持 C++20 `<ranges>`，driver 会在 configure 阶段校验。
 
 ## 🧪 测试和验证规则
 

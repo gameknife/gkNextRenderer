@@ -261,7 +261,8 @@ public void RestirPrimaryGather(inout uint4 randomSeed, int2 pixel, FBSDFContext
                                                 lightPosition, EPS2);
             const float3 visibilityTarget = Common.GetLightVisibilityTarget(
                 reservoir.LightIndex, shadowOrigin, lightPosition);
-            if (tracer.TraceAreaLightSegment(shadowOrigin, visibilityTarget, EPS))
+            if (tracer.TraceAreaLightSegment(shadowOrigin, visibilityTarget, EPS,
+                                             reservoir.LightIndex))
             {
                 reservoir.WeightW = 0.0f;
             }

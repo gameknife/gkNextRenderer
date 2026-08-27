@@ -40,8 +40,10 @@ public bool IsOccludedVolume(float3 min, float3 max, float4x4 wvp)
                 }
 
                 float previousDepth = Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[pixelCoord];
-                float currentDepth = ndc.z - 0.00001;
-                if (previousDepth > currentDepth)
+                // Reverse-Z: larger NDC depth is closer. A previous sample that is farther than
+                // this volume means the volume may be visible, so it must not be culled.
+                float currentDepth = ndc.z + 0.00001;
+                if (previousDepth < currentDepth)
                 {
                     return false;
                 }

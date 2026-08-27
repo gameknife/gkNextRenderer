@@ -1,5 +1,7 @@
 #include "Modules/DevTools/ConsoleLogBuffer.hpp"
 
+#include "Engine/Utilities/LogFormatting.hpp"
+
 #include <algorithm>
 #include <atomic>
 #include <mutex>
@@ -29,6 +31,10 @@ namespace Runtime::Editor
         if (!GConsoleLogSink)
         {
             GConsoleLogSink = std::make_shared<ConsoleLogSink>(maxLines);
+            // Stage milestones carry ANSI highlighting for the terminal; the ImGui console
+            // renders escape codes as garbage, so strip them on the way into the buffer.
+            GConsoleLogSink->set_formatter(
+                std::make_unique<Utilities::Logging::FAnsiStrippingFormatter>("%+"));
         }
         if (!GConsoleSequenceSink)
         {

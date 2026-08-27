@@ -5,7 +5,9 @@
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
+#include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
+#include "Engine/Assets/Loaders/LoaderRegistry.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
@@ -14,13 +16,14 @@
 #include "Engine/Runtime/Interface/UiOverlay.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
+#include "Engine/Utilities/LogFormatting.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
-#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
+#include "Engine/Runtime/Profiling/TracyIntegration.hpp"
 #include "Engine/Utilities/Localization.hpp"
 
 #include <SDL3/SDL.h>
@@ -35,6 +38,40 @@ namespace
         float elapsed;
         std::array<char, 256> outputInfo;
     };
+
+    bool LoadRegisteredScene(
+        const std::string& filename,
+        Assets::EnvironmentSetting& environment,
+        std::vector<std::shared_ptr<Assets::Node>>& nodes,
+        std::vector<Assets::Model>& models,
+        std::vector<Assets::FMaterial>& materials,
+        std::vector<Assets::LightObject>& lights,
+        std::vector<Assets::AnimationTrack>& tracks,
+        std::vector<Assets::Skeleton>& skeletons)
+    {
+        materials.push_back({Assets::Material::Lambertian(glm::vec3(0.73f)), "root_default"});
+        std::string extension = std::filesystem::path(filename).extension().string();
+        std::transform(extension.begin(), extension.end(), extension.begin(),
+                       [](unsigned char value) { return static_cast<char>(std::tolower(value)); });
+
+        Assets::FLoaderRegistry& registry = Assets::FLoaderRegistry::Get();
+        if (extension == ".proc")
+        {
+            if (const Assets::FProcSceneFn* build = registry.FindProcScene(filename))
+            {
+                (*build)(environment, nodes, models, materials, lights, tracks);
+                return true;
+            }
+        }
+        else if (const Assets::FSceneLoaderFn* load = registry.FindSceneLoader(extension))
+        {
+            return (*load)(filename, environment, nodes, models, materials, lights, tracks, skeletons);
+        }
+
+        SPDLOG_ERROR("No registered scene loader for '{}'; install SceneContent for catalog/reference support",
+                     filename);
+        return false;
+    }
 }
 
 void NextEngine::RequestLoadScene(FSceneLoadRequest request)
@@ -127,7 +164,13 @@ void NextEngine::RequestAddSceneReference(std::string assetPath, glm::vec3 trans
             renderer_->Device().WaitIdle();
             PrepareRendererForSceneMutation();
 
-            auto proxy = Runtime::Scene::SceneList::AddSceneReferenceToScene(*scene_, assetPath, translation);
+            if (!sceneContent_)
+            {
+                SPDLOG_ERROR("Scene content service is not installed");
+                status_ = NextRenderer::EApplicationStatus::Running;
+                return true;
+            }
+            auto proxy = sceneContent_->AddSceneReference(*scene_, assetPath, translation);
             if (proxy)
             {
                 scene_->SetSelectedId(proxy->GetInstanceId());
@@ -171,13 +214,18 @@ void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<vo
 
     // dispatch in thread task and reset in main thread
     Tasks::TaskCoordinator::GetInstance()->AddTask(
-        [ctx, sceneFileName](Tasks::ResTask& task)
+        [ctx, sceneFileName, sceneContent = sceneContent_.get()](Tasks::ResTask& task)
         {
             SceneTaskContext taskContext{};
             const auto timer = std::chrono::high_resolution_clock::now();
 
-            taskContext.success = Runtime::Scene::SceneList::LoadScene(sceneFileName, *ctx.cameraState, *ctx.nodes, *ctx.models,
-                                                       *ctx.materials, *ctx.lights, *ctx.tracks, *ctx.skeletons);
+            taskContext.success = sceneContent
+                ? sceneContent->LoadScene(
+                      sceneFileName, *ctx.cameraState, *ctx.nodes, *ctx.models,
+                      *ctx.materials, *ctx.lights, *ctx.tracks, *ctx.skeletons)
+                : LoadRegisteredScene(
+                      sceneFileName, *ctx.cameraState, *ctx.nodes, *ctx.models,
+                      *ctx.materials, *ctx.lights, *ctx.tracks, *ctx.skeletons);
 
             taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
                                       std::chrono::high_resolution_clock::now() - timer)
@@ -218,7 +266,8 @@ void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<vo
 
             status_ = NextRenderer::EApplicationStatus::Running;
         },
-        1);
+        1,
+        "Scene load");
 }
 
 void NextEngine::LoadScene(const FSceneLoadRequest& request)
@@ -290,6 +339,19 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
                 rebuild.physicsShapeCookingMs + rebuild.physicsBodyCreationMs,
                 rebuild.physicsShapeCookingMs, rebuild.physicsBodyCreationMs,
                 rebuild.cpuPreparationMs, outsideRebuildMs);
+            GkProfiling::Message(fmt::format("committed scene [{}]",
+                                             std::filesystem::path(request.filename).filename().string()));
+
+            // Process-level startup cost, reported once: everything from PlatformInit to the
+            // first scene being renderable. Later scene loads are covered by the line above.
+            static bool startupReported = false;
+            if (!startupReported)
+            {
+                startupReported = true;
+                GK_LOG_STAGE("---- Startup complete in {:.2f}ms (first scene [{}] ready)",
+                             NextRenderer::GetMillisecondsSinceProcessStart(),
+                             std::filesystem::path(request.filename).filename().string());
+            }
         });
 }
 

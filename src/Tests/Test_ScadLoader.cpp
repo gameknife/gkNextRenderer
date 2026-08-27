@@ -369,7 +369,46 @@ TEST_CASE("Scad translucent color() becomes a dielectric material", "[Unit][Scad
 
     REQUIRE(materials.size() == 1);
     CHECK(materials[0].gpuMaterial_.MaterialModel == Assets::Material::Enum::Dielectric);
+    CHECK(materials[0].gpuMaterial_.Fuzziness == Catch::Approx(0.0f).margin(1e-3f));
     CHECK(materials[0].gpuMaterial_.Diffuse.a == Catch::Approx(0.3f).margin(1e-3f));
+}
+
+TEST_CASE("Scad gk_material carries roughness and metalness", "[Unit][Scad]")
+{
+    ScopedDir dir;
+    const std::filesystem::path mainPath = dir.Write(
+        "material.scad",
+        "gk_material([0.18,0.22,0.28], roughness=0.06, metalness=0.85) cube([2,2,2]);\n"
+        "color([0.18,0.22,0.28]) translate([3,0,0]) cube([2,2,2]);\n");
+
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
+
+    REQUIRE(materials.size() == 2);
+    const Assets::Material* reflective = nullptr;
+    const Assets::Material* legacy = nullptr;
+    for (const Assets::FMaterial& material : materials)
+    {
+        if (material.gpuMaterial_.MaterialModel == Assets::Material::Enum::Mixture)
+            reflective = &material.gpuMaterial_;
+        if (material.gpuMaterial_.MaterialModel == Assets::Material::Enum::Lambertian)
+            legacy = &material.gpuMaterial_;
+    }
+
+    REQUIRE(reflective);
+    REQUIRE(legacy);
+    CHECK(reflective->Fuzziness == Catch::Approx(0.06f).margin(1e-3f));
+    CHECK(reflective->Metalness == Catch::Approx(0.85f).margin(1e-3f));
+    CHECK(legacy->Fuzziness == Catch::Approx(1.0f).margin(1e-3f));
+    CHECK(legacy->Metalness == Catch::Approx(0.0f).margin(1e-3f));
 }
 
 TEST_CASE("Scad loader: recreates module hierarchy with module names", "[Unit][Scad]")
@@ -690,6 +729,37 @@ TEST_CASE("Scad list comprehension drives a for-loop", "[Unit][Scad]")
     CHECK(TotalTriangles(dependent) == 60); // i=1 has 2 j values, i=2 has 3
 }
 
+TEST_CASE("Scad let() binds inside a function body", "[Unit][Scad]")
+{
+    // The rule libraries (kit_geo_city, kit_road) name shared subexpressions in
+    // function bodies. Without expression-level let, a footprint offset has to
+    // recompute every normal three times and reads as one unbroken line.
+    const EvalResult single =
+        EvalProgram("function f(v) = let (l = v * 2) l + l;\n"
+                    "for (i = [0 : f(1) - 1]) translate([i,0,0]) cube([1,1,1]);\n");
+    CHECK(single.warningCount == 0);
+    CHECK(TotalTriangles(single) == 48); // f(1) = 4 -> i = 0..3
+
+    // The body is the whole expression, not just the first term, and later
+    // bindings see earlier ones.
+    const EvalResult chained =
+        EvalProgram("function g(a) = let (b = a + 1, c = b * 2) c + b;\n"
+                    "for (i = [1 : g(1)]) translate([i,0,0]) cube([1,1,1]);\n");
+    CHECK(TotalTriangles(chained) == 72); // g(1): b=2, c=4 -> 6 cubes
+
+    // The binding must not leak out of the let.
+    const EvalResult scoped =
+        EvalProgram("q = 3;\n"
+                    "function h() = let (q = 99) 1;\n"
+                    "for (i = [1 : h() + q]) translate([i,0,0]) cube([1,1,1]);\n");
+    CHECK(TotalTriangles(scoped) == 48); // 1 + 3 = 4 cubes, not 100
+
+    // The comprehension form still splices rather than yielding one value.
+    const EvalResult comprehension =
+        EvalProgram("for (x = [for (i = [1:3]) let (d = i * 2) d]) translate([x,0,0]) cube([1,1,1]);\n");
+    CHECK(TotalTriangles(comprehension) == 36);
+}
+
 TEST_CASE("Scad echo / assert / str are accepted", "[Unit][Scad]")
 {
     const EvalResult result = EvalProgram("echo(str(\"size=\", 5));\n"
@@ -819,6 +889,73 @@ TEST_CASE("Scad loader: parse errors fail the load", "[Unit][Scad]")
                                                    tracks, skeletons));
 }
 
+TEST_CASE("Scad loader: gk_camera markers become fixed and path cameras", "[Unit][Scad]")
+{
+    ScopedDir dir;
+    // Marker modules are zero-geometry virtual points (assets/scad/lib/gk_camera.scad);
+    // inline copies keep the test independent of the asset tree.
+    const std::filesystem::path mainPath = dir.Write("cams.scad",
+                                                     "module gk_camera(name=\"cam\", fov=55, aperture=0, focal=0) {}\n"
+                                                     "module gk_camera_key(path=\"fly\", t=0, fov=55, aperture=0, focal=0) {}\n"
+                                                     "cube([10,10,1], center=true);\n"
+                                                     "translate([0,-10,2]) gk_camera(name=\"entry\", fov=40);\n"
+                                                     "translate([0,0,2]) gk_camera_key(path=\"fly\", t=0, fov=50);\n"
+                                                     "translate([10,0,2]) gk_camera_key(path=\"fly\", t=4);\n");
+
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
+
+    // One fixed + one path camera; the auto-focus fallback must not be appended.
+    REQUIRE(environment.cameras.size() == 2);
+
+    // Fixed camera: SCAD (0,-10,2) -> engine (x, z, -y) = (0, 2, 10).
+    const Assets::Camera& fixed = environment.cameras[0];
+    CHECK(fixed.name == "entry");
+    CHECK(fixed.FieldOfView == Catch::Approx(40.0f));
+    CHECK(fixed.NodeName_ == "cam_entry");
+    const glm::vec3 fixedEye = glm::vec3(glm::inverse(fixed.ModelView)[3]);
+    CHECK(fixedEye.x == Catch::Approx(0.0f).margin(1e-4f));
+    CHECK(fixedEye.y == Catch::Approx(2.0f).margin(1e-4f));
+    CHECK(fixedEye.z == Catch::Approx(10.0f).margin(1e-4f));
+    // Identity marker rotation: front = SCAD +Y -> engine -Z.
+    const glm::vec3 fixedFwd = -glm::normalize(glm::vec3(fixed.ModelView[2]));
+    CHECK(fixedFwd.z == Catch::Approx(-1.0f).margin(1e-4f));
+
+    // Path camera: one NodeTransform track with world-baked keys.
+    const Assets::Camera& path = environment.cameras[1];
+    CHECK(path.name == "fly");
+    CHECK(path.NodeName_ == "campath_fly");
+    REQUIRE(tracks.size() == 1);
+    const Assets::AnimationTrack& track = tracks[0];
+    CHECK(track.Target_ == Assets::AnimationTrack::Target::NodeTransform);
+    CHECK(track.AnimationName == "fly");
+    CHECK(track.NodeName_ == "campath_fly");
+    CHECK(track.Duration_ == Catch::Approx(4.0f));
+    REQUIRE(track.TranslationChannel.Keys.size() == 2);
+    REQUIRE(track.RotationChannel.Keys.size() == 2);
+    CHECK(track.TranslationChannel.Keys[0].Time == Catch::Approx(0.0f));
+    CHECK(track.TranslationChannel.Keys[1].Time == Catch::Approx(4.0f));
+    // Keys are baked to engine world space: scad (10,0,2) -> engine (10, 2, 0).
+    CHECK(track.TranslationChannel.Keys[1].Value.x == Catch::Approx(10.0f).margin(1e-4f));
+    CHECK(track.TranslationChannel.Keys[1].Value.y == Catch::Approx(2.0f).margin(1e-4f));
+    CHECK(track.TranslationChannel.Keys[1].Value.z == Catch::Approx(0.0f).margin(1e-4f));
+
+    // The animated path node exists so Scene::EvaluateTracks can resolve it.
+    const auto pathNode = std::ranges::find_if(nodes, [](const std::shared_ptr<Assets::Node>& node)
+    { return node->GetName() == "campath_fly"; });
+    REQUIRE(pathNode != nodes.end());
+    CHECK((*pathNode)->Translation().x == Catch::Approx(0.0f).margin(1e-4f));
+    CHECK((*pathNode)->Translation().y == Catch::Approx(2.0f).margin(1e-4f));
+}
+
 TEST_CASE("Scad loader: Z-up converts to engine Y-up", "[Unit][Scad]")
 {
     ScopedDir dir;
@@ -844,10 +981,10 @@ TEST_CASE("Scad loader: Z-up converts to engine Y-up", "[Unit][Scad]")
 TEST_CASE("Scad loader: loads the bundled old_city sample when present", "[Unit][Scad]")
 {
     const std::filesystem::path samplePath =
-        std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets/scad/source/old_city.scad"));
+        std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets/scad/source/oldcity/old_city.scad"));
     if (!std::filesystem::exists(samplePath))
     {
-        WARN("assets/scad/source/old_city.scad not present in runtime root; skipping sample load");
+    WARN("assets/scad/source/oldcity/old_city.scad not present in runtime root; skipping sample load");
         return;
     }
 
@@ -859,7 +996,7 @@ TEST_CASE("Scad loader: loads the bundled old_city sample when present", "[Unit]
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
-    REQUIRE(Assets::FScadLoader::LoadScadScene("assets/scad/source/old_city.scad", environment, nodes, models, materials,
+    REQUIRE(Assets::FScadLoader::LoadScadScene("assets/scad/source/oldcity/old_city.scad", environment, nodes, models, materials,
                                                lights, tracks, skeletons));
 
     CHECK(nodes.size() > 1);

@@ -5,22 +5,24 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <random>
 #include <tuple>
 
 #include "Engine/Assets/Loaders/FProcModel.hpp"
+#include "Modules/SceneContent/SceneList.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/ScreenShotService.hpp"
+#include "Engine/Runtime/Interface/ScreenShotService.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
+#include "Modules/NextUI/ImGuiScaling.hpp"
 #include "Engine/Rendering/RendererChoices.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "Modules/DevTools/UI/DeveloperStatusBar.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
@@ -42,6 +44,11 @@
 #include "Engine/Vulkan/Device.hpp"
 #include "Modules/LDrawLoader/LDrawModule.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
+#include "Modules/RenderViews/OffscreenRenderViewController.hpp"
+#if GK_WITH_VITURE
+#include "Modules/DevTools/VitureDebugPanel.hpp"
+#include "Modules/NextViture/VitureModule.hpp"
+#endif
 #include "Application/Common/DemoScenes.hpp"
 
 
@@ -123,6 +130,7 @@ static void UpdateUiScaledMetrics()
 {
     float scale = 1.0f;
 
+#if !ANDROID
     if (Vulkan::SwapChain::UiContentScale() < 1.0f)
     {
         scale *= 0.75f / Vulkan::SwapChain::UiContentScale();
@@ -137,6 +145,7 @@ static void UpdateUiScaledMetrics()
             scale *= fontSize / referenceFontSize;
         }
     }
+#endif
 
     TitlebarSize = constTitlebarSize * scale;
     TitlebarRightInfoWidth = constTitlebarRightInfoWidth * scale;
@@ -160,6 +169,11 @@ NextRendererGameInstance::NextRendererGameInstance(Vulkan::WindowConfig& config,
 
 void NextRendererGameInstance::OnInit()
 {
+    // Reference comparison is an auxiliary multi-view render path. Keep the
+    // provider installed even when the application starts in normal mode so
+    // r.reference can switch it on without restarting the process.
+    RenderViews::OffscreenViews(GetEngine().GetRenderer());
+
     // Keep the viewport clean on startup. The Stats button remains available in
     // the bottom status bar for sessions that need the diagnostic overlay.
     GetEngine().GetUserSettings().ShowOverlay = false;
@@ -187,20 +201,99 @@ void NextRendererGameInstance::OnInit()
     }
 
     GetEngine().RequestLoadScene({.filename = initializedScene});
+
+#if GK_WITH_VITURE
+    if (GOption != nullptr && GOption->ArMode)
+    {
+        headPoseTracker_ = Modules::Viture::CreateHeadPoseTracker(
+            GOption->ArDof == 6, static_cast<double>(GOption->ArPredictionMs) * 0.001);
+        if (!headPoseTracker_->Start())
+        {
+            SPDLOG_ERROR("AR mode could not start {}: {}", headPoseTracker_->Name(), headPoseTracker_->Status());
+        }
+    }
+#endif
 }
 
 void NextRendererGameInstance::OnTick(double deltaSeconds)
 {
+    bool arMoving = false;
+#if GK_WITH_VITURE
+    arMoving = UpdateArTracking(deltaSeconds);
+#endif
     if (playbackPaused_ && !stepRequested_)
     {
-        GetEngine().SetProgressiveRendering(GetEngine().GetUserSettings().ProgressiveRender);
+        GetEngine().SetProgressiveRendering(GetEngine().GetUserSettings().ProgressiveRender && !arMoving);
         return;
     }
 
-    const bool moving = modelViewController_.UpdateCamera(10.0f, deltaSeconds);
+    const bool moving = modelViewController_.UpdateCamera(10.0f, deltaSeconds) || arMoving;
     GetEngine().SetProgressiveRendering(GetEngine().GetUserSettings().ProgressiveRender && !moving);
     stepRequested_ = false;
 }
+
+void NextRendererGameInstance::OnDestroy()
+{
+#if GK_WITH_VITURE
+    if (headPoseTracker_)
+    {
+        headPoseTracker_->Stop();
+    }
+#endif
+}
+
+#if GK_WITH_VITURE
+bool NextRendererGameInstance::UpdateArTracking(const double deltaSeconds)
+{
+    if (!headPoseTracker_)
+    {
+        return false;
+    }
+
+    const std::optional<Modules::Viture::FHeadPose> pose = headPoseTracker_->PollPose();
+    latestArPose_ = pose;
+    const float smoothingHz = GOption != nullptr ? GOption->ArSmoothingHz : 0.0f;
+    return pose.has_value() && arCamera_.Update(*pose, deltaSeconds, smoothingHz);
+}
+
+void NextRendererGameInstance::DrawVitureDebugPanel()
+{
+    if (!headPoseTracker_)
+    {
+        return;
+    }
+
+    const float worldUnitsPerMeter = GOption != nullptr ? GOption->ArWorldUnitsPerMeter : 1.0f;
+    const float predictionMs = GOption != nullptr ? GOption->ArPredictionMs : 20.0f;
+    const float smoothingHz = GOption != nullptr ? GOption->ArSmoothingHz : 0.0f;
+    DevTools::FVitureDebugPanelData data{};
+    data.tracker = headPoseTracker_.get();
+    data.pose = latestArPose_.has_value() ? &latestArPose_.value() : nullptr;
+    const std::optional<glm::quat> relativeOrientation = arCamera_.RelativeOrientation();
+    const std::optional<glm::vec3> cameraEulerDegrees = latestArPose_.has_value() && relativeOrientation.has_value()
+        ? std::optional<glm::vec3>(glm::degrees(glm::eulerAngles(*relativeOrientation)))
+        : std::nullopt;
+    data.cameraEulerDegrees = cameraEulerDegrees.has_value() ? &cameraEulerDegrees.value() : nullptr;
+    data.sixDof = GOption == nullptr || GOption->ArDof == 6;
+    data.worldUnitsPerMeter = worldUnitsPerMeter;
+    data.predictionMs = predictionMs;
+    data.pollHz = 25.0f;
+    data.smoothingHz = smoothingHz;
+    data.recenter = [this]() { return arCamera_.Recenter(); };
+    data.restart = [this]()
+    {
+        latestArPose_.reset();
+        arCamera_ = {};
+        const bool started = headPoseTracker_ != nullptr && headPoseTracker_->Start();
+        if (!started && headPoseTracker_ != nullptr)
+        {
+            SPDLOG_ERROR("AR mode could not restart {}: {}", headPoseTracker_->Name(), headPoseTracker_->Status());
+        }
+        return started;
+    };
+    DevTools::DrawVitureDebugPanel(vitureDebugPanelVisible_, data, GetGraphicsDebugPanelTopOffset());
+}
+#endif
 
 std::vector<Assets::FMaterial> MatPreparedForAdd;
 
@@ -354,6 +447,12 @@ bool NextRendererGameInstance::DrawRendererUi(const FGameUiFrameContext& context
     }
 
     DrawTitleBar(context, uiState);
+#if GK_WITH_VITURE
+    if (context.surfaceKind == FGameUiFrameContext::ESurfaceKind::MainWindow)
+    {
+        DrawVitureDebugPanel();
+    }
+#endif
     DrawModeRail(uiState);
     DrawSettings(uiState);
     DrawViewportTopBar(context, uiState);
@@ -421,7 +520,7 @@ void NextRendererGameInstance::RequestScreenshot(bool openFolder, const std::str
     }
 
     isTakingScreenshot_ = true;
-    Runtime::FScreenShotService::FRequest request;
+    Runtime::IScreenShotService::FRequest request;
     request.tag = tag;
     request.onCompleted = [this, openFolder](const std::string&) {
         if (openFolder)
@@ -440,7 +539,7 @@ void NextRendererGameInstance::RequestScreenshot(bool openFolder, const std::str
 }
 
 void NextRendererGameInstance::RequestThreeSecondVideo(
-    const Runtime::FScreenShotService::EVideoOutputScale outputScale)
+    const Runtime::IScreenShotService::EVideoOutputScale outputScale)
 {
     if (isTakingScreenshot_ || isRecordingVideo_ || GetEngine().GetScreenShotService().IsBusy())
     {
@@ -448,12 +547,12 @@ void NextRendererGameInstance::RequestThreeSecondVideo(
     }
 
     isRecordingVideo_ = true;
-    Runtime::FScreenShotService::FThreeSecondVideoRequest request;
+    Runtime::IScreenShotService::FThreeSecondVideoRequest request;
     // Without ffmpeg only the libwebp path can produce output; asking for Both would
     // just log an encoding error for the GIF half.
-    request.format = Runtime::FScreenShotService::IsGifEncodingAvailable()
-        ? Runtime::FScreenShotService::EAnimationFormat::Both
-        : Runtime::FScreenShotService::EAnimationFormat::AnimatedWebp;
+    request.format = GetEngine().GetScreenShotService().IsGifEncodingAvailable()
+        ? Runtime::IScreenShotService::EAnimationFormat::Both
+        : Runtime::IScreenShotService::EAnimationFormat::AnimatedWebp;
     request.outputScale = outputScale;
     request.onCaptureFinished = [this]()
     {
@@ -481,15 +580,15 @@ void NextRendererGameInstance::RequestThreeSecondVideo(
 
 void NextRendererGameInstance::DrawVideoCaptureMenuItems()
 {
-    const auto outputScaleLabel = [](const Runtime::FScreenShotService::EVideoOutputScale outputScale)
+    const auto outputScaleLabel = [](const Runtime::IScreenShotService::EVideoOutputScale outputScale)
     {
         switch (outputScale)
         {
-        case Runtime::FScreenShotService::EVideoOutputScale::Half:
+        case Runtime::IScreenShotService::EVideoOutputScale::Half:
             return "50% Swapchain";
-        case Runtime::FScreenShotService::EVideoOutputScale::Quarter:
+        case Runtime::IScreenShotService::EVideoOutputScale::Quarter:
             return "25% Swapchain";
-        case Runtime::FScreenShotService::EVideoOutputScale::Full:
+        case Runtime::IScreenShotService::EVideoOutputScale::Full:
         default:
             return "100% Swapchain";
         }
@@ -501,13 +600,13 @@ void NextRendererGameInstance::DrawVideoCaptureMenuItems()
     {
         struct FVideoOutputScaleOption
         {
-            Runtime::FScreenShotService::EVideoOutputScale scale;
+            Runtime::IScreenShotService::EVideoOutputScale scale;
             const char* label;
         };
         static constexpr std::array<FVideoOutputScaleOption, 3> options{{
-            {Runtime::FScreenShotService::EVideoOutputScale::Full, "100% Swapchain"},
-            {Runtime::FScreenShotService::EVideoOutputScale::Half, "50% Swapchain"},
-            {Runtime::FScreenShotService::EVideoOutputScale::Quarter, "25% Swapchain"},
+            {Runtime::IScreenShotService::EVideoOutputScale::Full, "100% Swapchain"},
+            {Runtime::IScreenShotService::EVideoOutputScale::Half, "50% Swapchain"},
+            {Runtime::IScreenShotService::EVideoOutputScale::Quarter, "25% Swapchain"},
         }};
 
         for (const FVideoOutputScaleOption& option : options)
@@ -522,7 +621,7 @@ void NextRendererGameInstance::DrawVideoCaptureMenuItems()
 
     // GIF encoding needs ffmpeg next to the executable, which release packages do not
     // ship. Say so in the menu instead of failing silently into the log.
-    const bool gifAvailable = Runtime::FScreenShotService::IsGifEncodingAvailable();
+    const bool gifAvailable = GetEngine().GetScreenShotService().IsGifEncodingAvailable();
     if (ImGui::MenuItem(gifAvailable ? "Record 3s GIF + Animated WebP" : "Record 3s Animated WebP"))
     {
         RequestThreeSecondVideo(videoOutputScale_);
@@ -537,6 +636,13 @@ bool NextRendererGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCam
 {
     outRenderCamera.ModelView = modelViewController_.ModelView();
     outRenderCamera.FieldOfView = modelViewController_.FieldOfView();
+#if GK_WITH_VITURE
+    if (headPoseTracker_ && GOption != nullptr)
+    {
+        outRenderCamera.ModelView = arCamera_.BuildModelView(
+            outRenderCamera.ModelView, GOption->ArWorldUnitsPerMeter);
+    }
+#endif
     return true;
 }
 
@@ -552,6 +658,14 @@ bool NextRendererGameInstance::OnKey(SDL_Event& event)
 
     if (event.key.type == SDL_EVENT_KEY_DOWN)
     {
+#if GK_WITH_VITURE
+        if (event.key.key == SDLK_R && headPoseTracker_ && arCamera_.Recenter())
+        {
+            SPDLOG_INFO("VITURE AR: tracking origin recentered");
+            return true;
+        }
+#endif
+
         switch (event.key.key)
         {
         case SDLK_ESCAPE:
@@ -644,7 +758,23 @@ bool NextRendererGameInstance::OnMouseButton(SDL_Event& event)
         auto mousePos = GetEngine().GetMousePos();
         glm::vec3 org;
         glm::vec3 dir;
-        Runtime::EngineHelper::GetScreenToWorldRay(mousePos, org, dir);
+        if (GetEngine().GetOptions().ReferenceMode)
+        {
+            // Reference views occupy a 2x2 grid. Keep picking anchored to the first
+            // view so the shared scene camera is unprojected with that view's aspect.
+            const auto& renderExtent = GetEngine().GetRenderer().SwapChain().RenderExtent();
+            const glm::vec2 referenceExtent{
+                static_cast<float>(std::max(1u, renderExtent.width / 2u)),
+                static_cast<float>(std::max(1u, renderExtent.height / 2u))};
+            Assets::Camera pickCamera = GetEngine().GetScene().GetRenderCamera();
+            OverrideRenderCamera(pickCamera);
+            Runtime::EngineHelper::GetScreenToWorldRayWithCamera(
+                pickCamera, mousePos, glm::vec2(0.0f), referenceExtent, org, dir);
+        }
+        else
+        {
+            Runtime::EngineHelper::GetScreenToWorldRay(mousePos, org, dir);
+        }
         GetEngine().RayCast( org, dir, [this](Assets::RayCastResult result)
         {
             if (result.Hit)
@@ -665,6 +795,89 @@ bool NextRendererGameInstance::OnMouseButton(SDL_Event& event)
     }
 
     return true;
+}
+
+bool NextRendererGameInstance::OnTouch(SDL_Event& event)
+{
+#if IOS || ANDROID
+    const SDL_TouchFingerEvent& touch = event.tfinger;
+
+    if (event.type == SDL_EVENT_FINGER_DOWN)
+    {
+        uint64_t& activeFinger = touch.x < 0.5f ? mobilePanFinger_ : mobileRotateFinger_;
+        if (activeFinger == 0)
+        {
+            activeFinger = touch.fingerID;
+            if (touch.x < 0.5f)
+            {
+                mobilePanCenter_ = {touch.x, touch.y};
+                modelViewController_.SetTouchMovement(0.0f, 0.0f);
+            }
+        }
+        return true;
+    }
+
+    if (event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED)
+    {
+        if (mobilePanFinger_ == touch.fingerID)
+        {
+            mobilePanFinger_ = 0;
+            modelViewController_.SetTouchMovement(0.0f, 0.0f);
+        }
+        if (mobileRotateFinger_ == touch.fingerID)
+        {
+            mobileRotateFinger_ = 0;
+        }
+        return true;
+    }
+
+    const bool pan = mobilePanFinger_ == touch.fingerID;
+    const bool rotate = mobileRotateFinger_ == touch.fingerID;
+    if (event.type != SDL_EVENT_FINGER_MOTION || (!pan && !rotate))
+    {
+        return true;
+    }
+
+    if (mainUiState_.gizmoController.IsInteracting())
+    {
+        if (pan)
+        {
+            modelViewController_.SetTouchMovement(0.0f, 0.0f);
+        }
+        return true;
+    }
+
+    const VkExtent2D windowSize = GetEngine().GetWindow().WindowSize();
+    const double windowWidth = static_cast<double>(std::max(1u, windowSize.width));
+    const double windowHeight = static_cast<double>(std::max(1u, windowSize.height));
+    if (pan)
+    {
+        const double deltaX = (static_cast<double>(touch.x) - mobilePanCenter_.x) * windowWidth;
+        const double deltaY = (static_cast<double>(touch.y) - mobilePanCenter_.y) * windowHeight;
+        const double distance = std::sqrt(deltaX * deltaX + deltaY * deltaY);
+        const double joystickRadius = std::min(windowWidth, windowHeight) * 0.2;
+        const float magnitude = static_cast<float>(std::min(distance / joystickRadius, 1.0));
+        if (distance > 0.0001)
+        {
+            modelViewController_.SetTouchMovement(
+                static_cast<float>(deltaX / distance) * magnitude,
+                -static_cast<float>(deltaY / distance) * magnitude);
+        }
+        else
+        {
+            modelViewController_.SetTouchMovement(0.0f, 0.0f);
+        }
+        return true;
+    }
+
+    const double pixelDeltaX = static_cast<double>(touch.dx) * windowWidth;
+    const double pixelDeltaY = static_cast<double>(touch.dy) * windowHeight;
+    modelViewController_.OnTouchMove(false, pixelDeltaX, pixelDeltaY);
+    return true;
+#else
+    (void)event;
+    return false;
+#endif
 }
 
 bool NextRendererGameInstance::OnScroll(double xoffset, double yoffset)

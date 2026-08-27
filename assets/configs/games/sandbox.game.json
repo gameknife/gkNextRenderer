@@ -1,0 +1,23 @@
+{
+  "id": "sandbox",
+  "displayName": "Managed Sandbox",
+  "assembly": "game/GkNext.Game.dll",
+  "project": "GkNext.Game/GkNext.Game.csproj",
+  "window": {
+    "title": "DotNetSandbox",
+    "width": 1280,
+    "height": 720,
+    "forceSDR": true
+  },
+  "requiredModules": [],
+  "initialScene": "Empty.proc",
+  "showFlags": {
+    "debugGraphicsPanel": false,
+    "overlay": false
+  },
+  "hotReload": true,
+  "compileManagedSources": true,
+
+  "_comment": "The smallest runnable managed game: no gameplay, just the binding layer running inside the real engine. Doubles as the launcher's minimal sample.",
+  "_comment_compileManagedSources": "The only game that rebuilds assets/csharp on start; this is the target used while iterating on the bindings themselves."
+}

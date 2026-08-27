@@ -9,5 +9,5 @@ import Shader.PathTracing;
 void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
     FHardwareRayTracer tracer;
-    RestirSpatialShade(dispatchThreadId, tracer);
+    RestirSpatialShade(uint3(dispatchThreadId.xy, dispatchThreadId.z), tracer);
 }

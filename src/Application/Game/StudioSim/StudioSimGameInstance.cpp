@@ -16,7 +16,8 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Engine/Utilities/Math.hpp"
+#include "Modules/SceneContent/SceneList.hpp"
 #include "Modules/NextAI/AIService.hpp"
 
 #include "Modules/ScadLoader/ScadModule.hpp"
@@ -453,7 +454,7 @@ void StudioSimGameInstance::OnInit()
     // NavGrid is built from the scene CPU BVH, so keep CPU mesh data alive.
     GOption->KeepCPUMeshData = true;
 
-    std::string initialScene = "assets/scad/source/office.scad";
+    std::string initialScene = "assets/scad/source/office/office.scad";
     if (!GOption->SceneName.empty())
     {
         initialScene = GOption->SceneName;
@@ -920,7 +921,7 @@ int StudioSimGameInstance::PickEmployeeAtScreen(const glm::vec2& screenPosition)
 
     const float aspect = viewport->Size.x / viewport->Size.y;
     const glm::mat4 viewProjection =
-        glm::perspective(glm::radians(kOfficeFov), aspect, 0.05f, 2000.0f) * ViewMatrix();
+        Utilities::Math::ReverseZPerspective(glm::radians(kOfficeFov), aspect, 0.05f, 2000.0f) * ViewMatrix();
     int pickedIndex = -1;
     float nearestDistance = kEmployeePickRadiusPixels;
     const auto& employees = employeeSystem_.Employees();
@@ -1037,7 +1038,7 @@ bool StudioSimGameInstance::OnRenderUI()
                                  ? viewport->Size.x / viewport->Size.y
                                  : 16.0f / 9.0f;
         const glm::mat4 viewProjection =
-            glm::perspective(glm::radians(kOfficeFov), aspect, 0.05f, 2000.0f) * ViewMatrix();
+            Utilities::Math::ReverseZPerspective(glm::radians(kOfficeFov), aspect, 0.05f, 2000.0f) * ViewMatrix();
         ui_.DrawOverlay(viewProjection, officeMap_, employeeSystem_, worldState_);
     }
     return true;

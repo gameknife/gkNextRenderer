@@ -1,0 +1,38 @@
+{
+  "name": "launcher-rebuild",
+  "target": "gkNextLauncher",
+  "viewport": {
+    "width": 1600,
+    "height": 900
+  },
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 120000
+  },
+  "comment": "Rebuilding a game's C# from inside the launcher, then running it. This is the Unity-shaped loop the whole design exists for: edit C#, press a button, play — no C++ build, no process restart. The click lands on Flappy's Rebuild button; a publish takes seconds, hence the generous timeout.",
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running" },
+    { "type": "wait-frames", "n": 10 },
+    { "type": "assert", "query": "game.state", "op": "eq", "value": "Idle" },
+
+    { "type": "mouse-move", "to": { "norm": [0.668, 0.34] },
+      "comment": "Flappy's Rebuild button. The menu is centred at a fixed 640x480 inside a 1600x900 window, so this is stable. Move and press are separate steps with frames in between: ImGui hit-tests against the position it saw last frame, so a move and a press delivered together land on nothing." },
+    { "type": "wait-frames", "n": 5 },
+    { "type": "mouse-button", "button": "left", "action": "down" },
+    { "type": "wait-frames", "n": 5 },
+    { "type": "mouse-button", "button": "left", "action": "up" },
+    { "type": "wait-frames", "n": 5 },
+    { "type": "wait-until", "query": "game.rebuildStatus", "op": "eq", "value": "rebuilt flappy", "timeoutMs": 120000 },
+
+    { "type": "cvar", "name": "game.select", "set": "flappy" },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "Playing" },
+    { "type": "wait-until", "query": "scene.nodeCount", "op": "ge", "value": 10 },
+    { "type": "wait-frames", "n": 20 },
+    { "type": "assert", "query": "game.active", "op": "eq", "value": "flappy",
+      "comment": "The freshly published assembly is what actually loaded." },
+    { "type": "screenshot", "out": "screenshots/launcher_rebuilt_flappy" },
+
+    { "type": "assert", "query": "engine.status", "op": "eq", "value": "Running" },
+    { "type": "quit" }
+  ]
+}

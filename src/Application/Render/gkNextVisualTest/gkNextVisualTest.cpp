@@ -1,4 +1,5 @@
 #include "gkNextVisualTest.hpp"
+#include "Modules/SceneContent/SceneList.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"

@@ -14,7 +14,7 @@ namespace NextUI
         explicit MultiViewportBackend(NextEngine& engine);
         ~MultiViewportBackend() override;
 
-        void Initialize(UserInterface& userInterface) override;
+        void Initialize(IUserInterface& userInterface) override;
         void Shutdown() override;
         void OnUiPipelineDestroyed() override;
         void RenderPlatformWindows() override;
@@ -42,7 +42,7 @@ namespace NextUI
         static void SwapPlatformViewportBuffersCallback(ImGuiViewport* viewport, void* renderArg);
 
         NextEngine& engine_;
-        UserInterface* userInterface_ = nullptr;
+        IUserInterface* userInterface_ = nullptr;
         VkPipeline uiPlatformViewportPipeline_ = VK_NULL_HANDLE;
         VkRenderPass uiPlatformViewportRenderPass_ = VK_NULL_HANDLE;
         void (*platformCreateWindow_)(ImGuiViewport*) = nullptr;

@@ -20,8 +20,7 @@ RGB9E5 是单个 32-bit radiance 值的编码选择，不是块压缩。它保�
 ## Renderer 使用关系
 
 - SoftwareTracing、SoftwareModern 和 VoxelTracing 请求 Voxel + Ambient。
-- PathTracing 的 contract 声明 Voxel、Ambient、TLAS、SHARC；当 SHARC 实际启用时，`ShouldSkipAmbientCubeUpdates()` 会跳过 PT 的 AmbientCube 更新。
-- `r.sharc.enable` 的用户默认值当前为 true，但 offline progressive path tracing 会令 `IsEffectiveSharcEnabled()` 返回 false。判断运行时行为要看 effective 值，不只看归档 CVar。
+- PathTracing 的 contract 声明 Voxel、Ambient、TLAS、SHARC，并固定使用 SHARC；`ShouldSkipAmbientCubeUpdates()` 会跳过其 AmbientCube 更新。PathTracingLite 声明 Voxel、Ambient、TLAS，保留 AmbientCube 更新，且不创建 SHARC 或 ReSTIR 资源。
 - SoftwareModernNoAmbient 不请求任何 scene GI resource；它使用直接/IBL/CSM 与屏幕空间 GTAO，不会因为 VoxelData 存在就自动获得体素天光遮蔽。
 
 ## Ambient arena
@@ -82,3 +81,10 @@ SHARC 使用 vendored NVIDIA header，经 `assets/shaders/common/Sharc.slang` �
 - NoAmbient 的 voxel sky-visibility soft trace。
 
 这些旧设计可以作为历史研究，但不是当前 roadmap。若重新立项，应先用现有 arena/brick/effective renderer contract 建立基线，不能从旧结构尺寸或旧阶段继续施工。
+
+## 磁盘缓存（计划中）
+
+voxelize / distance field / ambient cube 目前每次加载都完整重算，虽然在同一场景与同一网格配置下结果稳定。
+把这条链路做成 tile 级本地磁盘缓存的执行方案见 [GI Bake 磁盘缓存开发计划](../plans/gi-bake-disk-cache-plan.md)。
+其中两条约束会影响本文档描述的结构，改动这些区域前先读：distance field 是整 cascade 的 chamfer 扫描
+（不能按区块局部重算），cube pool slot 是每次分类压缩出来的运行时产物（缓存必须按 logical brick 索引）。

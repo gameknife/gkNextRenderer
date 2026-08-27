@@ -59,6 +59,9 @@ func main() {
 		}
 	}
 	preset, _ := cmakerun.DefaultPreset()
+	if explicit := explicitPreset(); explicit != "" {
+		preset = explicit
+	}
 	ctx := appContext{repoRoot: repoRoot, cfg: cfg, preset: preset}
 
 	root := &cobra.Command{
@@ -73,6 +76,8 @@ func main() {
 	}
 	var repoRootFlag string
 	root.PersistentFlags().StringVar(&repoRootFlag, "repo-root", "", "explicit repository root (also GNB_REPO_ROOT)")
+	var presetFlag string
+	root.PersistentFlags().StringVar(&presetFlag, "preset", "", "CMake preset to use instead of the host default")
 	// Commands listed here run without a discovered repository — everything
 	// else fails fast with a friendly hint instead of crashing inside a
 	// command implementation that assumed a repo root.
@@ -111,6 +116,7 @@ func main() {
 	root.AddCommand(newVisualCommand(ctx))
 	root.AddCommand(newShotCommand(ctx))
 	root.AddCommand(newScadCommand(ctx))
+	root.AddCommand(newGeoCommand(ctx))
 	root.AddCommand(newValidateCommand(ctx))
 	root.AddCommand(newTuiCommand(ctx))
 	root.AddCommand(newEditorCommand(ctx))
@@ -126,8 +132,14 @@ func main() {
 	root.AddCommand(newLocCommand(ctx))
 	root.AddCommand(newTyposCommand(ctx))
 	root.AddCommand(newGitCommand(ctx))
+	root.AddCommand(newDotNetCommand(ctx))
+	root.AddCommand(newCSharpGenCommand(ctx))
 	root.AddCommand(newLLMCommand(ctx))
 	root.AddCommand(newAICommand(ctx))
+	root.AddCommand(newTracyCommand(ctx))
+	root.AddCommand(newRiderCommand(ctx))
+	root.AddCommand(newVisualStudioCommand(ctx))
+	root.AddCommand(newWebsiteCommand(ctx))
 	root.AddCommand(newLegacyAgentCommand(ctx))
 	root.AddCommand(newInitCommand())
 
@@ -146,6 +158,18 @@ func explicitRepoRoot() string {
 		}
 		if arg == "--repo-root" && i+2 < len(os.Args) {
 			return os.Args[i+2]
+		}
+	}
+	return ""
+}
+
+func explicitPreset() string {
+	for i, arg := range os.Args[1:] {
+		if strings.HasPrefix(arg, "--preset=") {
+			return strings.TrimSpace(strings.TrimPrefix(arg, "--preset="))
+		}
+		if arg == "--preset" && i+2 < len(os.Args) {
+			return strings.TrimSpace(os.Args[i+2])
 		}
 	}
 	return ""
@@ -309,7 +333,7 @@ func newDepsCommand(ctx appContext) *cobra.Command {
 	}
 
 	fetch := &cobra.Command{
-		Use:   "fetch [all|tsc|vulkan|streamline|fidelityfx]",
+		Use:   "fetch [all|vulkan|streamline|fidelityfx]",
 		Short: "Fetch one or more external dependencies",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return fetcher.EnsureNamedExternal(ctx.repoRoot, ctx.cfg, args)
@@ -324,11 +348,19 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 	opts := cmakerun.BuildOptions{}
 	skipSetup := false
 	allTargets := false
+	tracyMode := ""
 	cmd := &cobra.Command{
 		Use:   "build [targets...]",
 		Short: "Configure and build the native project",
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if tracyMode != "" {
+				mode := strings.ToLower(strings.TrimSpace(tracyMode))
+				if mode != "on" && mode != "off" {
+					return fmt.Errorf("--tracy expects on or off, got %q", tracyMode)
+				}
+				opts.ConfigureArgs = append(opts.ConfigureArgs, "-DGK_ENABLE_TRACY="+strings.ToUpper(mode))
+			}
 			startTime := time.Now()
 			if len(args) == 0 && !allTargets {
 				opts.Targets = []string{"gkNextRenderer", "gkNextUnitTests"}
@@ -357,11 +389,6 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 					return err
 				}
 			}
-			if !opts.PrintCmd {
-				if err := fetcher.EnsureHostBuildTools(ctx.repoRoot, ctx.cfg); err != nil {
-					return err
-				}
-			}
 			if err := platform.EnsureLinuxDesktopPackages(); err != nil {
 				return err
 			}
@@ -372,7 +399,7 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if ctx.preset == "windows" || ctx.preset == "windows-ninja" || ctx.preset == "linux" || ctx.preset == "linux-arm64" || ctx.preset == "macos-arm64" {
+			if usesNinjaPreset(ctx.preset) {
 				ninjaPath, err := vcpkg.EnsureBundledNinja(ctx.repoRoot, ctx.cfg)
 				if err != nil {
 					return err
@@ -388,6 +415,7 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&allTargets, "all", false, "build all targets in the project")
+	cmd.Flags().StringVar(&tracyMode, "tracy", "", "override Tracy client for this configure (on or off)")
 	cmd.Flags().BoolVar(&opts.Clean, "clean", false, "delete the CMake build directory before building")
 	cmd.Flags().BoolVar(&opts.Reconfigure, "reconfigure", false, "force CMake configure")
 	cmd.Flags().IntVar(&opts.Jobs, "jobs", 0, "parallel build jobs")
@@ -396,6 +424,16 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.PrintCmd, "print-cmd", false, "print cmake commands without executing")
 	cmd.Flags().BoolVar(&skipSetup, "skip-setup", false, "do not auto-bootstrap vcpkg/external dependencies")
 	return cmd
+}
+
+func usesNinjaPreset(preset string) bool {
+	switch preset {
+	case "windows", "windows-no-unity", "windows-asan", "windows-ninja",
+		"linux", "linux-asan", "linux-arm64", "macos-arm64", "macos-arm64-asan":
+		return true
+	default:
+		return false
+	}
 }
 
 func newGraphCommand(ctx appContext) *cobra.Command {
@@ -769,57 +807,239 @@ func newEditorCommand(ctx appContext) *cobra.Command {
 }
 
 func newAndroidCommand(ctx appContext) *cobra.Command {
-	return &cobra.Command{
-		Use:   "android [debug|release]",
-		Short: "Run Android Gradle build/install",
-		Args:  cobra.MaximumNArgs(1),
+	root := &cobra.Command{
+		Use:   "android",
+		Short: "Build and launch the Android app",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			mode := "debug"
-			if len(args) == 1 {
-				mode = args[0]
-			}
-			return android.Run(ctx.repoRoot, ctx.cfg, mode)
+			return cmd.Help()
 		},
 	}
+
+	build := &cobra.Command{
+		Use:   "build [relwithdebinfo|debug|release]",
+		Short: "Build an Android APK (default: release)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			variant := ""
+			if len(args) == 1 {
+				variant = args[0]
+			}
+			artifact, err := android.Build(ctx.repoRoot, ctx.cfg, variant)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "[android] built %s\n", artifact.APKPath)
+			fmt.Fprintln(cmd.OutOrStdout(), "[android] install and launch it with `gnb android run`")
+			return nil
+		},
+	}
+	root.AddCommand(build)
+
+	serial := ""
+	avd := ""
+	run := &cobra.Command{
+		Use:   "run [relwithdebinfo|debug|release]",
+		Short: "Install and launch a built Android APK on adb or a local AVD",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			variant := ""
+			if len(args) == 1 {
+				variant = args[0]
+			}
+			result, err := android.Run(ctx.repoRoot, variant, serial, avd)
+			if err != nil {
+				return err
+			}
+			if result.EmulatorStarted {
+				fmt.Fprintf(cmd.OutOrStdout(), "[android] started AVD %s\n", result.AVD)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "[android] installed and launched on %s\n", result.Serial)
+			return nil
+		},
+	}
+	run.Flags().StringVar(&serial, "serial", "", "use this online adb device serial")
+	run.Flags().StringVar(&avd, "avd", "", "start this local AVD when no adb device is online")
+	root.AddCommand(run)
+
+	captureSerial := ""
+	capture := &cobra.Command{
+		Use:   "capture",
+		Short: "Capture the existing shared release APK through RenderDoc and open the first capture",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result, err := android.Capture(ctx.repoRoot, ctx.cfg, captureSerial)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "[android] RenderDoc captured and opened on %s: %s\n", result.Serial, result.CapturePath)
+			return nil
+		},
+	}
+	capture.Flags().StringVar(&captureSerial, "serial", "", "use this online adb device serial")
+	root.AddCommand(capture)
+
+	renderDocSerial := ""
+	renderDoc := &cobra.Command{
+		Use:   "renderdoc",
+		Short: "Open RenderDoc connected to an adb Android device",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result, err := android.OpenRenderDoc(ctx.repoRoot, renderDocSerial)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "[android] RenderDoc opened for %s; select this device in Replay Context\n", result.Serial)
+			return nil
+		},
+	}
+	renderDoc.Flags().StringVar(&renderDocSerial, "serial", "", "use this online adb device serial")
+	root.AddCommand(renderDoc)
+
+	connect := &cobra.Command{
+		Use:   "connect <host>:<port>",
+		Short: "Connect adb to a remote Android device",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return android.Connect(ctx.repoRoot, args[0])
+		},
+	}
+	root.AddCommand(connect)
+
+	devices := &cobra.Command{
+		Use:   "devices",
+		Short: "List adb-connected Android devices",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return android.ListDevices(ctx.repoRoot, cmd.OutOrStdout())
+		},
+	}
+	root.AddCommand(devices)
+	return root
 }
 
 func newIOSCommand(ctx appContext) *cobra.Command {
-	skipCodeSign := true
-	codeSign := false
-	cmd := &cobra.Command{
+	root := &cobra.Command{
 		Use:   "ios",
-		Short: "Build iOS target with CMake preset",
+		Short: "Build the CMake-generated iOS device app",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			return cmd.Help()
+		},
+	}
+
+	buildOpts := cmakerun.BuildOptions{}
+	teamID := ""
+	verbose := false
+	build := &cobra.Command{
+		Use:   "build",
+		Short: "Build gkNextRenderer for an arm64 iOS device",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if _, err := os.Stat(vcpkg.Toolchain(ctx.repoRoot, ctx.cfg)); err != nil {
+				if err := vcpkg.Ensure(ctx.repoRoot, ctx.cfg, false); err != nil {
+					return err
+				}
+			}
+			if err := vcpkg.EnsureBootstrapped(ctx.repoRoot, ctx.cfg); err != nil {
+				return err
+			}
 			if err := fetcher.EnsureExternal(ctx.repoRoot, ctx.cfg); err != nil {
 				return err
 			}
-			if err := fetcher.EnsureIOSExternal(ctx.repoRoot, ctx.cfg); err != nil {
-				return err
-			}
-			skip, err := resolveIOSSkipCodeSign(cmd, skipCodeSign, codeSign)
+			cmakePath, err := vcpkg.EnsureBundledCMake(ctx.repoRoot, ctx.cfg)
 			if err != nil {
 				return err
 			}
-			cmakePath, err := vcpkg.ResolveCMake(ctx.repoRoot, ctx.cfg)
+			staged, err := ios.Build(ctx.repoRoot, cmakePath, teamID, !verbose, buildOpts)
 			if err != nil {
 				return err
 			}
-			return ios.Build(ctx.repoRoot, cmakePath, skip)
+			if staged.WrapperPath == "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "[ios] built an unsigned bundle; pass --team-id <TEAM_ID> to produce a launchable app\n")
+				return nil
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "[ios] Designed-for-iPad app staged: %s\n", staged.WrapperPath)
+			fmt.Fprintf(cmd.OutOrStdout(), "[ios] launch it with `gnb ios run`\n")
+			if staged.Restaged {
+				fmt.Fprintf(cmd.OutOrStdout(), "[ios] current bundle replaced inside the persistent Designed-for-iPad wrapper\n")
+			}
+			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&skipCodeSign, "skip-codesign", true, "disable code signing")
-	cmd.Flags().BoolVar(&codeSign, "codesign", false, "enable code signing")
-	return cmd
-}
+	build.Flags().BoolVar(&buildOpts.Clean, "clean", false, "delete the selected iOS build directory first")
+	build.Flags().BoolVar(&buildOpts.Reconfigure, "reconfigure", false, "force CMake configure")
+	build.Flags().IntVar(&buildOpts.Jobs, "jobs", 0, "parallel build jobs")
+	build.Flags().StringVar(&teamID, "team-id", "", "Apple Developer Team ID for automatic device signing")
+	build.Flags().BoolVar(&verbose, "verbose", false, "show normal Xcode build progress output")
 
-func resolveIOSSkipCodeSign(cmd *cobra.Command, skipCodeSign bool, codeSign bool) (bool, error) {
-	if cmd.Flags().Changed("skip-codesign") && cmd.Flags().Changed("codesign") {
-		return false, fmt.Errorf("cannot use --skip-codesign and --codesign together")
+	root.AddCommand(build)
+	devices := &cobra.Command{
+		Use:   "device",
+		Short: "List available iOS run devices",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return ios.ListDevices(cmd.OutOrStdout())
+		},
 	}
-	if cmd.Flags().Changed("codesign") {
-		return !codeSign, nil
+	root.AddCommand(devices)
+
+	requestedDevice := ""
+	run := &cobra.Command{
+		Use:   "run",
+		Short: "Install and launch the signed iOS app on a selected device",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			artifact, device, err := ios.Run(ctx.repoRoot, requestedDevice, cmd.InOrStdin(), cmd.OutOrStdout())
+			if err != nil {
+				return err
+			}
+			if device.IsMac() {
+				fmt.Fprintf(cmd.OutOrStdout(), "[ios] launched %s on %s (%s)\n", artifact.BundleID, device.Name, artifact.WrapperPath)
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "[ios] installed and launched %s on %s (%s)\n", artifact.BundleID, device.Name, device.Identifier)
+			}
+			if device.IsMac() && artifact.Restaged {
+				fmt.Fprintf(cmd.OutOrStdout(), "[ios] launched the current bundle from the persistent Designed-for-iPad wrapper\n")
+			}
+			return nil
+		},
 	}
-	return skipCodeSign, nil
+	run.Flags().StringVar(&requestedDevice, "device", "", "device ID, UDID, or name; prompts when multiple devices are available")
+
+	root.AddCommand(run)
+	teams := &cobra.Command{
+		Use:   "teams",
+		Short: "List locally provisioned Apple Developer teams",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("locate home directory: %w", err)
+			}
+			teams, warnings := ios.Teams(homeDir)
+			for _, warning := range warnings {
+				fmt.Fprintf(cmd.ErrOrStderr(), "[warning] %v\n", warning)
+			}
+			if len(teams) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No local iOS provisioning profiles found. Sign an iOS app once in Xcode, then run this command again.")
+				return nil
+			}
+
+			fmt.Fprintln(cmd.OutOrStdout(), "Apple Developer teams available from local provisioning profiles:")
+			for _, team := range teams {
+				name := team.Name
+				if name == "" {
+					name = "(unnamed team)"
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "  %s\t%s\n", name, team.ID)
+			}
+			return nil
+		},
+	}
+
+	root.AddCommand(teams)
+	return root
 }
 
 func newPaksCommand(ctx appContext) *cobra.Command {

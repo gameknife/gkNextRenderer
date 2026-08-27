@@ -30,6 +30,12 @@
 
 每个 user module 调用实例形成逻辑 Node；直属几何按量化 RGBA 分桶并尽量合并进多-section Model。材质槽超过引擎上限时拆成同名 render 子节点。alpha `< 0.99` 的 bucket 使用透明 Dielectric 路径。
 
+**`gk_flatten() { ... }`**：声明"以下全是几何、不是场景结构"，抑制子树内的 Node 创建，
+几何并入最近的外层 Node。规则库（`kit_road` 把一张路网表展开成几千个子段调用）必须用它——
+否则每个 module 调用各成一个 Node，也就各成一个 Model 和碰撞体。实测 1km 香港 tile
+不加是 7683 个 Node、物理 shape cooking 1.2 秒；加上后 90 个 Node、34 毫秒。
+分块粒度仍由调用方控制，每块要留在 65535 三角的 Model 上限之下。
+
 `SceneEvalResult::SceneNode` 同时保留 module 调用的源行、求值后的具名参数、调用点颜色和
 局部变换。ScadLibrary 使用这些作者元数据沿 module 调用树提取最终 Kit 实例；它不改变
 运行时 Node/Model 的装配语义。
@@ -53,17 +59,49 @@ ScadLibrary 场景对象 Gizmo 在引擎 Y-up 与 SCAD Z-up 之间用 `ScadToWor
 
 - **图元 3D**：`cube`、`sphere`、`cylinder`(含 r1/r2 圆锥)、`polyhedron`
 - **图元 2D**（在 extrude 内）：`circle`、`square`、`polygon`(含 `paths` 洞)、`text`(FreeType, CJK)
-- **变换**：`translate`、`rotate`(欧拉/角轴)、`scale`、`mirror`、`multmatrix`、`color`(rgba/命名色)
+- **变换**：`translate`、`rotate`(欧拉/角轴)、`scale`、`mirror`、`multmatrix`、`color`(rgba/命名色)、
+  `gk_material`(颜色 + roughness/metalness)
 - **CSG**：`union`、`difference`、`intersection`、`hull`（Manifold）；`minkowski`(近似为 union)
 - **拉伸**：`linear_extrude`(凹/带洞/嵌套变换)、`rotate_extrude`(angle，360 闭合/部分端盖)
 - **控制流**：`for`(笛卡尔多绑定)、`if/else`、`let`、`intersection_for`(按 for)
+- **表达式位置的 `let`**：`function f(v) = let (l = norm(v)) [v[0]/l, v[1]/l];`。规则库的
+  函数体靠它给共享子式命名（`kit_geo_city` 的轮廓外扩、`kit_road` 的单位向量）；
+  没有它只能把每个共享项内联展开，既难读又重复求值。绑定不外泄，且 `let` 覆盖的是
+  **整个**后续表达式（`let (a = 1) a + 2` 得 3）。列表推导里的 `let` 语义不变（拼接元素）。
 - **语言**：`module`/`function` 定义（含局部 helper 与后向引用）与默认参/关键字参、`children()`/`children(i)`/`$children`、list comprehension(`for`/`if`/`let`/`each`)、`echo`/`assert`/`str`、`$fn`/`$fa`/`$fs`
 - **内置函数**：`max min abs floor ceil round sqrt pow exp ln log sign sin cos tan asin acos atan atan2 len norm concat str`（三角函数为角度制）
 - **引擎扩展（`gk_` 前缀，非 OpenSCAD 标准）**：`gk_terrain(TERR)` 低模高度场地形 module +
   `gk_terrain_height(TERR,x,y)` / `gk_terrain_info(TERR,x,y)` 纯函数（`FScadTerrain.{h,cpp}`）。
+  TERR 的 `["hmap", ...]` 算子可引用 `.hmap` 二进制 side-car（真实 DEM 等采样高度场），
+  路径为 runtime-root 相对、经 `ScadReadAsset` 读取，pak 与 loose 行为一致。
   地形桶带 faceted 标志（loader 跳过法线平滑）、水面桶拆分为 `__water` 子节点（rayCast 不可见、
   无物理体）、地形数据经 `SceneTerrain` payload 挂成引擎 `TerrainComponent`。
   详见 `AGENT_GUIDE/ScadTerrain.md`。
+
+`gk_material(c, roughness = 1, metalness = 0, alpha = 1) children();` 是材质表达扩展。
+`roughness` 和 `metalness` 都会被限制到 `0..1`，并随几何桶传入 GPU 材质；未包在
+`gk_material` 中的旧 `color()` 仍然生成 roughness=1、metalness=0 的 Lambertian，
+因此既有资产不改变外观。材质参数也参与颜色桶合并键，避免相同颜色的玻璃和墙面被错误合并。
+
+## 相机机位（虚拟点）
+
+场景可内嵌零几何相机标记（`use <../lib/gk_camera.scad>`，marker 是空 module，**不产生三角面、
+不进 kit/catalog**）。Loader（`FScadLoader.cpp` `BuildScadCameras`）识别标记节点并转换为与
+glTF 相机完全相同的运行时结构：定点机位进 `EnvironmentSetting.cameras`（UI 相机列表可选），
+路径机位额外生成根级动画节点 + `AnimationTrack`（选中该机位且 track 播放时由
+`Scene::HasCameraAnimation` 驱动画面跟随）。
+
+- `gk_camera(name=..., fov=55, aperture=0, focal=0)` — 定点机位。文件中第一个 `gk_camera`
+  即场景默认入场视角（`cameras[0]`）。
+- `gk_camera_key(path=..., t=秒, fov=...)` — 路径关键帧。同一 `path` 名 ≥2 个 key 生成一条
+  相机动画（按 t 升序，key 世界变换烘焙进 track，引擎侧 ping-pong 回放）。
+- 推荐用 lookat 便捷模块免除手写旋转：`gk_camera_lookat(eye, target, name, fov, focal)` /
+  `gk_camera_lookat_key(eye, target, path, t, fov)`（focal 缺省取 eye→target 距离）。
+- **朝向约定**：手动摆放时相机局部 front = +Y、up = +Z（SCAD 空间），即
+  `translate(eye) rotate([pitch,0,yaw])`（pitch 正=抬头；yaw 0=朝 +Y，-90=朝 +X）。
+  该约定经 Z-up→Y-up 转换后与引擎相机 front=-Z/up=+Y 一致。
+- marker 节点保留在场景层级中（重命名为 `cam_<name>` / `camkey_<path>_<i>` /
+  `campath_<path>`），Outliner 可见、便于排查。
 
 变量采用调用链可见的动态作用域，定义使用局部 definition stack；它与 OpenSCAD 的所有边角语义不保证完全一致。遇到不支持语法应补最小 parser/evaluator test，而不是在资产中依赖偶然降级。
 
@@ -77,7 +115,7 @@ ScadLibrary 场景对象 Gizmo 在引擎 Y-up 与 SCAD Z-up 之间用 `ScadToWor
 
 ## 资产与 compose
 
-现行手写验证场景使用 `assets/scad/source/beer_cup.scad`、`source/old_city.scad` 等。Kit 位于
+现行手写验证场景使用 `assets/scad/source/beer_cup.scad`、`source/oldcity/old_city.scad` 等。Kit 位于
 `assets/scad/lib/`，严格 JSON spec 位于 `assets/scad/specs/`，派生场景按结构位于
 `assets/scad/source/generated/` 或 `assets/scad/proc/generated/`。生成管线见
 `docs/designs/scad-scene-compose-design.md`。
@@ -87,7 +125,7 @@ ScadLibrary 场景对象 Gizmo 在引擎 Y-up 与 SCAD Z-up 之间用 `ScadToWor
 ```bash
 ./gnb.sh build gkNextRenderer gkNextUnitTests
 ./out/build/<preset>/bin/gkNextUnitTests "[Scad]"
-./gnb.sh shot --scene assets/scad/source/old_city.scad
+./gnb.sh shot --scene assets/scad/source/oldcity/old_city.scad
 ./gnb.sh shot --target ScadStudio --scene assets/scad/source/beer_cup.scad --frames 60
 ```
 

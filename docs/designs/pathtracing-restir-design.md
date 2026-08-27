@@ -4,17 +4,23 @@ category: design
 status: 现行
 owner: engine/rendering
 created: 2026-07-19
-last_updated: 2026-07-24
+last_updated: 2026-08-16
 ---
 
 # Tracing Direct Lighting 与 ReSTIR DI 架构
 
-PathTracing 与 SoftwareTracing 使用公共 BSDF-aware direct-lighting 层，并可为 primary 表面的
-**有限/点光 diffuse lobe** 启用 ReSTIR DI（蓄水池时空重采样）。两者共享 BSDF、估计器、reservoir
-与复用算法，只在可见性实现上不同：PathTracing 使用 ray query，SoftwareTracing 使用有限长度的
-级联 voxel DDA。`r.restir.enable` 关闭时运行经典 BSDF-aware 单样本 light NEE；开启后仅以
-material-aware ReSTIR 替换 Lambertian/Mixture 的 diffuse light 项，specular 与解析太阳仍由主 tracing
-pass 独立估计。
+PathTracing 与 SoftwareTracing 使用公共 BSDF-aware direct-lighting 层
+（`FTracingDirectIlluminator`），只在可见性实现上不同：PathTracing 使用 ray query，SoftwareTracing
+使用有限长度的级联 voxel DDA。这一层两者共用，**ReSTIR DI 则只属于 PathTracing**。
+
+`r.restir.enable` 关闭时（以及在 SoftwareTracing 上始终）运行经典 BSDF-aware 单样本 light NEE；
+开启后仅以 material-aware ReSTIR 替换 PathTracing 里 Lambertian/Mixture 的 diffuse light 项，
+specular 与解析太阳仍由主 tracing pass 独立估计。
+
+> **2026-08-16：SoftwareTracing 的 ReSTIR 支持已移除。** 它在该平台从未达到 `<1ms` 的增量预算
+> （见 §8 的历史数据），而 ReSTIR 与 shading scheduler 都要独占 `GPUScene.ReservedAddress0` 和
+> `CustomData1`——GPUScene 已经正好是 128B push constant 下限，没有第三个槽可发。为了让 SoftwareTracing
+> 的管线只剩一条路径，ReSTIR 从它上面整体去掉：面光/点光的经典 NEE、CSM 太阳与 BSDF 层都保留不变。
 
 ## 1. 范围与边界
 
@@ -50,13 +56,15 @@ pass 独立估计。
         classic → BSDF-aware NEE
         ReSTIR → 初始 RIS + 初始可见性 + 时域合并 → 写 intermediate
   [barrier: reservoir + RT_SINGLE_DIFFUSE / G-buffer]
-Core.RestirSpatialShade / Core.SwRestirSpatialShade
+Core.RestirSpatialShade
   G-buffer 重建表面 → center 胜者最终可见性 → 写 final buffer（时域历史）
   → 空间邻居合并 → shading 可见性 → RT_SINGLE_DIFFUSE += direct
   [之后进入 SamplePostChain：当前样本直接 compose → DLSS/FSR/native]
 ```
 
-两条第二阶段入口都调用 `common/RestirSpatialShade.slang` 的同一算法主体；硬件入口使用 `ZeroBindWithTLASPipeline + FHardwareRayTracer`，软件入口使用不含 TLAS descriptor 的 `ZeroBindPipeline + FSoftwareRayTracer`。`FSoftwareTracingDirectIlluminator` 单独承载 CSM sun + light NEE，不能把 tracing light 逻辑塞回 `FShadowMapDirectIlluminator`，否则会无意改变 SoftwareModern。
+第二阶段入口 `Core.RestirSpatialShade` 调用 `common/RestirSpatialShade.slang` 的算法主体，使用 `ZeroBindWithTLASPipeline + FHardwareRayTracer`。`RestirSpatialShade` 仍然对 tracer 泛型，但现在只有硬件 tracer 实例化它。
+
+`FSoftwareTracingDirectIlluminator` 单独承载 CSM sun + light NEE，不能把 tracing light 逻辑塞回 `FShadowMapDirectIlluminator`，否则会无意改变 SoftwareModern。它的 `RestirPrimary` 恒为 false，因此 `DirectIlluminatePrimary` 走经典分支——这一点是 SoftwareTracing 保住面光 NEE 而不再有 ReSTIR 的全部机制。
 
 经典 direct 使用 `Common.EvaluateLightDirectSample`；ReSTIR gather、重评估和 final shading
 统一使用 `Common.EvaluateLightDiffuseSample`。两者都调用 `EvaluateSurfaceBSDF`，不得重新内嵌
@@ -64,7 +72,9 @@ Lambert/GGX 公式。
 
 ## 3. 数据契约
 
-**资源挂载**：`GPUScene` push constant 已满 128B，扩展资源经 `ReservedAddress0 → FTracingExtras` 表。可用性按**字段**判定（`HashEntries != 0` = SHARC、`RestirParameters != 0` = ReSTIR），不判表指针。PathTracing 的表可同时填 SHARC 与 ReSTIR 地址；SoftwareTracing 使用 ReSTIR 服务自己的只含 ReSTIR 地址表。表内容必须 view 无关，仅在地址变化时重写（稳态零 host 写，见 §9-③）。
+**资源挂载**：`GPUScene` push constant 已满 128B，扩展资源经 `ReservedAddress0 → FTracingExtras` 表。可用性按**字段**判定（`HashEntries != 0` = SHARC、`RestirParameters != 0` = ReSTIR），不判表指针。PathTracing 的表可同时填 SHARC 与 ReSTIR 地址。表内容必须 view 无关，仅在地址变化时重写（稳态零 host 写，见 §9-③）。
+
+`ReservedAddress0` 是**唯一**的 pass-local 资源槽，shading scheduler 在 surface renderer 上把它当 tile buffer 用（见 [Visibility Surface 设计](visibility-surface-gbuffer-shading-scheduler.md)）。两种解释都是裸指针 cast，同时占用不会报错、只会把对方的数据当自己的读——实测是 device lost。今天 ReSTIR 属于 PathTracing、scheduler 属于 surface renderer，两个集合不相交；再加第三个使用者之前必须先解决这个槽位问题。
 
 **所有权**：`VulkanBaseRenderer` 按需持有唯一 `PipelineCommon::RestirDI`，统一拥有双 reservoir、runtime parameters、extent、clear、barrier、frame stamp 和 history 连续性。PathTracing/SoftwareTracing 往返切换只复用这份内存；`historyGeneration` 与帧不连续会禁止首帧 temporal merge。`r.restir.enable=false` 时不会新分配或 dispatch 第二阶段；已经分配的资源保留到 renderer/device 生命周期结束，避免 CVar 抖动造成 allocation churn。
 
@@ -100,7 +110,6 @@ spatial gate 除 ObjectId/normal/depth 外还要求 material index 相同，避�
 ## 6. 已知偏差与精度
 
 - PathTracing RIS-only：与经典 NEE 收敛逐位一致量级（signed diff ≈ -0.03/255）。
-- SoftwareTracing CornellBox 600 帧：RIS-only 相对经典 NEE 的 RGB signed mean 为 `+0.053/+0.054/+0.050`（/255），RGB MAE 为 `0.582/0.569/0.588`（/255）。
 - 时域：visibility-reuse 记账带来 ≈ -0.08/255，不可见。
 - 空间：半影带局部 ≤ 0.7%（-1.7/255）变暗——有偏合并在可见性边界的固有代价，肉眼不可辨；调 `spatialRadius`/`spatialSamples` 可进一步换取。
 - estimator 偏差验证直接比较 single/progressive 输出；引擎不再有颜色 history clamp 干扰结果。
@@ -123,10 +132,12 @@ Debug 视图由 pass 2 从本地合并状态渲染（race-free）；颜色用 0�
 | 路径 | 平台 / 场景 | 结果 |
 |---|---|---|
 | PathTracing | RTX 4070，720p ManyLights（64 灯） | 全链 +0.50ms |
-| SoftwareTracing classic | Apple M3 Max / MoltenVK，1280×720 ManyLights | 59.88 FPS |
-| SoftwareTracing ReSTIR | 同上，8 candidates / temporal+spatial | 46.88 FPS（总帧时间约 +4.65ms，约 +27.7%） |
 
-Apple 数据来自 hidden immediate-mode 的 `engine.frameRate`，只能表示端到端相对开销，不能替代隔离 GPU timer；SoftwareTracing 在该平台未达到 `<1ms` 的理想增量，因此保持实验性、默认关闭。超预算先降 `candidates`/`spatialSamples`，不删除最终可见性查询。
+历史数据（SoftwareTracing，功能已移除）：Apple M3 Max / MoltenVK，1280×720 ManyLights，classic
+59.88 FPS vs ReSTIR 46.88 FPS——总帧时间约 +4.65ms（+27.7%），远超 `<1ms` 的增量预算。这个数字是
+2026-08-16 把 ReSTIR 从 SoftwareTracing 上整体去掉的主要理由之一，保留在此以免有人再试一遍。
+
+超预算时先降 `candidates`/`spatialSamples`，不删除最终可见性查询。
 
 ## 9. 修改护栏（实施中验证过的失败模式）
 
@@ -154,6 +165,5 @@ Apple 数据来自 hidden immediate-mode 的 `engine.frameRate`，只能表示�
   `bsdf-direct-smoke.agentscript.json` 分别以 classic / ReSTIR temporal+spatial 独立进程运行
   `MaterialShowcase.proc`，覆盖 Lambertian/Metallic/Mixture/Dielectric roughness 矩阵。截图后需
   留出实际时间等待 JPEG flush；只等待若干 engine frame 可能得到截断文件和伪灰块。
-- SoftwareTracing 脚本：`swrestir-smoke`（classic/RIS/temporal/spatial/debug）、`swrestir-converge-nee` 与 `swrestir-converge-ris`（真正的 accumulated screenshot）、`swrestir-temporal`、`swrestir-switch`、`swrestir-perf`。
 - 无偏判定方法：restir on/off 两个独立进程在 offline progressive RIS-only 模式各自收敛后 diff；signed mean 与半影区域分布是关键指标，不是只看 mean abs。
 - 2026-07-22 macOS/MoltenVK 主机路径已通过；Android `gradle build` 尚未进入 native 编译，因为验证机的 Android SDK 缺少项目指定的 CMake 3.31.6。补齐该 SDK component 后必须补跑 Android shader/C++ 构建。

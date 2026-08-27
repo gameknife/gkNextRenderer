@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <SDL3/SDL_thread.h>
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
 
 namespace Tasks
 {
@@ -23,6 +24,10 @@ TaskThread::TaskThread(std::string threadName, bool highPriority)
             PerformanceAPI::SetCurrentThreadName(threadName_.c_str());
         }
 #endif
+        if (!threadName_.empty())
+        {
+            GkProfiling::SetThreadName(threadName_.c_str());
+        }
         while (true)
         {
             if(terminate_->is_set())
@@ -34,10 +39,14 @@ TaskThread::TaskThread(std::string threadName, bool highPriority)
             if (taskQueue_.dequeue(task, false))
             {
                 busy_.store(true);
-                task.task_func(task);
+                {
+                    const char* taskName = task.taskName.empty() ? "TaskCoordinator task" : task.taskName.c_str();
+                    SCOPED_CPU_TIMER(taskName);
+                    task.task_func(task);
+                }
 
                 // sync add to mainthread complete queue
-                TaskCoordinator::GetInstance()->MarkTaskComplete(task);
+                TaskCoordinator::GetInstance()->MarkTaskComplete(std::move(task));
                 busy_.store(false);
                 {
                     std::lock_guard<std::mutex> lock(completedTaskMutex_);
@@ -78,50 +87,53 @@ TaskCoordinator::~TaskCoordinator()
     }
 }
 
-uint32_t TaskCoordinator::AddTask( ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc, uint8_t priority)
+uint32_t TaskCoordinator::AddTask(ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc, uint8_t priority,
+                                  std::string taskName)
 {
-    static uint32_t taskId = 0;
     ResTask task;
-    task.task_id = taskId++;
+    task.task_id = AllocateTaskId();
     task.priority = priority;
+    task.taskName = std::move(taskName);
     task.task_func = std::move(taskFunc);
     task.complete_func = std::move(completeFunc);
     threads_[priority]->EnqueueTask(std::move(task));
     return task.task_id;
 }
 
-uint32_t TaskCoordinator::AddMainThreadTask(ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc, uint8_t priority)
+uint32_t TaskCoordinator::AddMainThreadTask(ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc,
+                                            uint8_t priority, std::string taskName)
 {
-    static uint32_t taskId = 0;
     ResTask task;
-    task.task_id = taskId++;
+    task.task_id = AllocateTaskId();
     task.priority = priority;
+    task.taskName = std::move(taskName);
     task.task_func = std::move(taskFunc);
     task.complete_func = std::move(completeFunc);
-    mainthreadTaskQueue_.enqueue(task);
+    mainthreadTaskQueue_.enqueue(std::move(task));
     return task.task_id;
 }
 
-uint32_t TaskCoordinator::AddParralledTask(ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc)
+uint32_t TaskCoordinator::AddParralledTask(ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc,
+                                           std::string taskName)
 {
-    static uint32_t taskId = 0;
     ResTask task;
-    task.task_id = taskId++;
+    task.task_id = AllocateTaskId();
     task.priority = 3;
+    task.taskName = std::move(taskName);
     task.task_func = std::move(taskFunc);
     task.complete_func = std::move(completeFunc);
 
-    parralledTaskQueue_.enqueue(task);
+    parralledTaskQueue_.enqueue(std::move(task));
 
     return task.task_id;
 }
 
 uint32_t TaskCoordinator::AddNamedTask(
-    ENamedTaskThread namedThread, ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc)
+    ENamedTaskThread namedThread, ResTask::TaskFunc taskFunc, ResTask::TaskFunc completeFunc, std::string taskName)
 {
-    static std::atomic<uint32_t> taskId = 0;
     ResTask task;
-    task.task_id = taskId.fetch_add(1, std::memory_order_relaxed);
+    task.task_id = AllocateTaskId();
+    task.taskName = std::move(taskName);
     task.task_func = std::move(taskFunc);
     task.complete_func = std::move(completeFunc);
 
@@ -138,16 +150,15 @@ uint32_t TaskCoordinator::AddNamedTask(
 
 void TaskCoordinator::WaitForAllParralledTask()
 {
-    while( parralledTaskQueue_.size() > 0 )
+    // A parallel task is not fully retired when its worker becomes idle: its
+    // main-thread completion callback can still be queued in completeTaskQueue_.
+    // Keep ticking until both the work and those callbacks have drained. This is
+    // required before a Scene releases state captured by ambient-cube bake tasks.
+    while (parralledTaskQueue_.size() > 0 || !IsAllParralledTaskComplete() ||
+           completeTaskQueue_.size() > 0)
     {
         Tick();
-        std::this_thread::sleep_for(std::chrono::milliseconds(0));
-    }
-    
-    // wait for all idle
-    while( !IsAllParralledTaskComplete() )
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(0));
+        std::this_thread::yield();
     }
 }
 
@@ -181,6 +192,32 @@ uint32_t TaskCoordinator::GetMainTaskCount()
     return count;
 }
 
+std::vector<FTaskThreadStatus> TaskCoordinator::GetTaskThreadStatuses() const
+{
+    std::vector<FTaskThreadStatus> statuses;
+
+    const auto AppendThreadStatuses = [&statuses](const std::vector<std::unique_ptr<TaskThread>>& threads)
+    {
+        for (const auto& thread : threads)
+        {
+            statuses.push_back({
+                .name = thread->GetThreadName(),
+                .queued = thread->GetQueuedTaskCount(),
+                .running = thread->IsBusy(),
+            });
+        }
+    };
+
+    AppendThreadStatuses(threads_);
+    AppendThreadStatuses(lowThreads_);
+    for (const auto& threadPool : namedThreadPools_)
+    {
+        AppendThreadStatuses(threadPool);
+    }
+
+    return statuses;
+}
+
 bool TaskCoordinator::IsAllTaskComplete(std::vector<uint32_t>& tasks)
 {
     for (uint32_t taskId : tasks)
@@ -198,10 +235,12 @@ void TaskCoordinator::Tick()
     ResTask task;
     if( mainthreadTaskQueue_.dequeue(task, false))
     {
+        const char* taskName = task.taskName.empty() ? "TaskCoordinator main-thread task" : task.taskName.c_str();
+        SCOPED_CPU_TIMER(taskName);
         task.task_func(task);
         if(task.complete_func != nullptr)
         {
-            MarkTaskComplete(task);
+            MarkTaskComplete(std::move(task));
         }
     }
     

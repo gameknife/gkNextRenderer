@@ -29,6 +29,10 @@ public:
     bool ForceSDR{};
     bool ReferenceMode{};
     bool ForceNoRT{};
+    // Pretend the GPU cannot back the full bindless arrays. The compatibility renderer otherwise
+    // only runs on constrained devices (MoltenVK on A12X-class GPUs), where it cannot be exercised
+    // as part of a desktop change.
+    bool ForceCompatibilityRenderer{};
     bool ForceSoftGen{};
     bool HardwareQuery{};
     bool Validation{};
@@ -36,8 +40,16 @@ public:
     bool FastExit{true};
     bool AgentValidation{};
     bool AgentVisibleWindow{};
+#if GK_WITH_VITURE
+    bool ArMode{};
+    float ArWorldUnitsPerMeter{1.0f};
+    float ArPredictionMs{20.0f};
+    float ArSmoothingHz{0.0f};
+    uint32_t ArDof{6};
+#endif
     std::string AgentControl;
     std::string AgentControlToken;
+    uint32_t ExitAfterFrames{};
     bool HiddenWindow{};
     // Force VK_EXT_headless_surface instead of creating an SDL window. Intended
     // for validating the headless render path on hosts with a desktop session.
@@ -76,6 +88,8 @@ public:
     // Benchmark options used by gkNextMotionBenchmark.
     std::string BenchmarkConfig{};
     std::string AssetTrace{};
+    // When set, write the reflection manifest to this path and exit without touching Vulkan.
+    std::string DumpReflection{};
 
     
     // Scene options.

@@ -199,14 +199,55 @@ struct FCPUBrickTable
     std::vector<uint32_t> recentlyHitBricksPerCascade;
     std::vector<uint32_t> candidateFirstSeenFrames;
     std::vector<uint32_t> slotsToClear;
+    std::vector<uint8_t> dirtyBricks;
+    std::vector<uint32_t> dirtyBricksPerCascade;
     uint32_t activeBricksLastBuild = 0;
+    uint64_t dirtyRevision = 0;
 
     bool UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint32_t cascadeCapacity,
                     uint32_t poolBricksPerCascade, int dilationRadius,
                     const std::vector<Assets::AmbientBrickResidency>* residency,
                     uint32_t currentFrame, bool hitDriven, bool bounceHitAffectsResidency,
                     uint32_t graceFrames, uint32_t evictFrames);
+    void MarkAllActiveDirty();
+    void MarkDirtyBounds(const std::vector<FCPUProbeBaker>& bakers,
+                         const glm::vec3& worldMin, const glm::vec3& worldMax,
+                         uint32_t poolBricksPerCascade);
+    void AcknowledgeDirty(uint64_t revision);
     void UploadGPU(Vulkan::DeviceMemory& deviceMemory, size_t tableByteOffset, size_t activeListByteOffset);
+
+private:
+    void RebuildActiveBrickList(uint32_t cascadeCapacity, uint32_t poolBricksPerCascade);
+    bool MarkDirty(uint32_t globalBrickIndex);
+};
+
+// The ambient/voxel grid the cascade bakers were actually built with. User settings can change at
+// any time, but the CPU voxel array and the GPU cube pool only adopt a new grid when the bakers are
+// re-initialized, so consumers that must agree with the baked data (the shading UBO above all) read
+// this instead of the pending settings.
+struct FAmbientGridConfig
+{
+    float baseUnit = Assets::CUBE_UNIT;
+    glm::vec3 offsetBias{0.0f};
+    uint32_t cascadeCount = 1;
+    float cascadeRatio = 2.0f;
+};
+
+// UI-facing state for the CPU half of the ambient GI bake pipeline. Voxel work
+// is counted in 16x16 XZ groups; distance-field reconstruction runs once all
+// groups across the cascade set have completed.
+enum class EProbeBakeStage : uint8_t
+{
+    Idle,
+    VoxelData,
+    DistanceField,
+};
+
+struct FProbeBakeProgress
+{
+    EProbeBakeStage stage = EProbeBakeStage::Idle;
+    uint32_t completedVoxelGroups = 0;
+    uint32_t totalVoxelGroups = 0;
 };
 
 class FCPUAccelerationStructure
@@ -224,14 +265,22 @@ public:
     
     Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
     
-    bool AsyncProcessFull(Assets::Scene& scene, Vulkan::DeviceMemory* VoxelGPUMemory, bool Incremental = false);
+    bool AsyncProcessFull(Assets::Scene& scene, Vulkan::DeviceMemory* VoxelGPUMemory);
     void AsyncProcessGroup(int xInMeter, int zInMeter, Assets::Scene& scene, ECubeProcType procType, EBakerType bakerType,
                            uint32_t cascadeIndex);
     
     bool Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory, Vulkan::DeviceMemory* PageIndexMemory);
     bool HasPendingWork() const;
 
-    void RequestUpdate(glm::vec3 worldPos, float radius);
+    FProbeBakeProgress GetProbeBakeProgress() const;
+
+    uint64_t AmbientBakeDirtyRevision() const { return cpuBrickTable.dirtyRevision; }
+    uint32_t AmbientBakeDirtyBrickCount(uint32_t cascadeIndex) const;
+    void AcknowledgeAmbientBake(uint64_t revision);
+
+    // The grid the current voxel/cube data was produced with. False until the bakers exist, which is
+    // the case for scenes created without CPU acceleration.
+    bool TryGetAmbientGridConfig(FAmbientGridConfig& outConfig) const;
     bool ConsumeNavRelevantDirtyBounds(glm::vec3& outWorldMin, glm::vec3& outWorldMax);
     void ClearNavRelevantDirtyBounds();
 
@@ -242,6 +291,8 @@ private:
     friend struct FCPUAccelerationStructureTestAccess;
 
     bool InitCascadeBakers(const Runtime::Config::UserSettings& settings, uint32_t maxCascadeCapacity);
+    static FAmbientGridConfig ResolveAmbientGridConfig(const Runtime::Config::UserSettings& settings,
+                                                       uint32_t maxCascadeCapacity);
     uint32_t GetActiveCascadeCount() const { return static_cast<uint32_t>(cascadeBakers.size()); }
 
     void UpdateBVH(Assets::Scene& scene);
@@ -254,6 +305,7 @@ private:
     void CancelRuntimeBuilds();
     void MergeNavDirtyBounds(const FCPUTLASBuildResult& result);
     void QueueFullProbeBake();
+    bool HasProbeVoxelizationWork() const;
 
 #if defined(__cpp_lib_atomic_shared_ptr) && __cpp_lib_atomic_shared_ptr >= 201711L
     std::atomic<SnapshotPtr> activeSnapshot_;
@@ -280,7 +332,10 @@ private:
     double lastCaptureMilliseconds_ = 0.0;
     double lastBuildToPublishMilliseconds_ = 0.0;
     std::vector<double> buildToPublishSamples_;
-    uint64_t pendingProbeRevision_ = 0;
+    bool fullProbeBakePending_ = true;
+    bool ambientBakeIdle_ = false;
+    uint32_t totalVoxelGroups_ = 0;
+    std::atomic<uint32_t> completedVoxelGroups_{0};
         
     std::vector<uint32_t> lastBatchTasks;
     std::vector<uint32_t> distanceFieldRebuildTasks;
@@ -295,6 +350,8 @@ private:
     glm::vec3 navRelevantDirtyWorldMax_{0.0f};
 
     std::vector<FCPUProbeBaker> cascadeBakers;
+    FAmbientGridConfig committedAmbientGrid_;
+    bool hasCommittedAmbientGrid_ = false;
     FCPUPageIndex cpuPageIndex;
     FCPUBrickTable cpuBrickTable;
 };

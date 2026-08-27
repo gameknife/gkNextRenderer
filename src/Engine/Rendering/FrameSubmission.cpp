@@ -83,6 +83,15 @@ namespace Vulkan
             renderer.RecreateSwapChain();
             return false;
         }
+        if (result == VK_ERROR_SURFACE_LOST_KHR)
+        {
+            // Android destroys the SurfaceView before SDL can finish delivering the pause event.
+            // Keep the current frame drop-safe and let the minimized/restore lifecycle drive the
+            // deferred swapchain recreation instead of aborting the native thread.
+            SPDLOG_WARN("Vulkan surface lost while acquiring an image; deferring swapchain recreation");
+            renderer.NotifySurfaceLost();
+            return false;
+        }
         if (result != VK_SUCCESS)
         {
             Throw(std::runtime_error(std::string("failed to acquire next image (") + ToString(result) + ")"));
@@ -156,6 +165,12 @@ namespace Vulkan
         if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
         {
             renderer.RecreateSwapChain();
+            return false;
+        }
+        if (result == VK_ERROR_SURFACE_LOST_KHR)
+        {
+            SPDLOG_WARN("Vulkan surface lost while presenting; deferring swapchain recreation");
+            renderer.NotifySurfaceLost();
             return false;
         }
         if (result != VK_SUCCESS)

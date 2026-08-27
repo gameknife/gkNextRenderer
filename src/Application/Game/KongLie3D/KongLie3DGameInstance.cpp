@@ -13,7 +13,7 @@
 #include "Engine/Assets/Loaders/FProcModel.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
-#include "Engine/Runtime/Editor/FontLoader.hpp"
+#include "Modules/NextUI/FontLoader.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Scene/NodeUtils.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"

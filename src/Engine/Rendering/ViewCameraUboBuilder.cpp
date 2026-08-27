@@ -1,6 +1,9 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Rendering/ViewCameraUboBuilder.hpp"
+
+// Camera UBO assembly is part of the concrete renderer implementation pack.
 #include "Engine/Assets/Core/Scene.hpp"
+#include "Engine/Utilities/Math.hpp"
 
 namespace Vulkan
 {
@@ -15,14 +18,14 @@ namespace Vulkan
                 static_cast<float>(std::max(1u, extent.height));
             ubo.ModelView = camera.ModelView;
             ubo.ModelViewInverse = glm::inverse(camera.ModelView);
-            ubo.Projection =
-                glm::perspective(glm::radians(camera.FieldOfView), aspect, camera.NearPlane, camera.FarPlane);
+            ubo.Projection = Utilities::Math::ReverseZPerspective(
+                glm::radians(camera.FieldOfView), aspect, camera.NearPlane, camera.FarPlane);
             ubo.Projection[1][1] *= -1.0f;
             ubo.ProjectionUnJit = ubo.Projection;
 #if ANDROID
             glm::mat4 preRotate = glm::mat4(1.0f);
             preRotate = glm::rotate(preRotate, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-            ubo.Projection = glm::perspective(
+            ubo.Projection = Utilities::Math::ReverseZPerspective(
                 glm::radians(camera.FieldOfView),
                 static_cast<float>(std::max(1u, extent.height)) / static_cast<float>(std::max(1u, extent.width)),
                 0.1f,
@@ -38,6 +41,7 @@ namespace Vulkan
             ubo.PrevViewProjection = ubo.ViewProjection;
             ubo.PrevViewProjectionUnJit = ubo.ViewProjectionUnJit;
             ubo.Jitter = glm::vec4(0.0f);
+            ubo.CheckerboardSparseLighting = false;
             ubo.ViewportRect =
                 glm::vec4(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height));
         }
@@ -70,6 +74,7 @@ namespace Vulkan
             ubo.SkyIntensity = env.SkyIntensity;
             ubo.SkyIdx = static_cast<uint32_t>(std::max(env.SkyIdx, 0));
             ubo.HasSky = env.HasSky;
+            ubo.BackgroundMode = static_cast<uint32_t>(env.BackgroundMode);
             ubo.LightCount = scene.GetLightCount();
         }
 
@@ -105,6 +110,8 @@ namespace Vulkan
             ubo.GTAOQuality = 0;
             ubo.LightObjectScreenSpaceShadow = false;
             ubo.LightObjectShadowDistance = 0.0f;
+            ubo.LightObjectMaxShadowedLights = 0;
+            ubo.LightObjectShadowSteps = 4;
             // Thumbnails render off the primary camera's grid anchor, so disable the grid for them
             // and let every light query take the global-CDF fallback.
             ubo.LightGridCascadeCount = 0;
@@ -118,6 +125,13 @@ namespace Vulkan
         Assets::UniformBufferObject ubo = request.baseUbo != nullptr
             ? *request.baseUbo
             : Assets::UniformBufferObject{};
+        if (request.baseUbo == nullptr)
+        {
+            // Value-initialization zeroes the UBO, and a zero indirect multiplier would silently
+            // black out every bounce in this view. Views without a base inherit the physical default.
+            ubo.IndirectIntensity = 1.0f;
+            ubo.MultiBounceIntensity = 1.0f;
+        }
 
         FillCameraMatrices(ubo, request.camera, request.extent);
         if (request.fillSunCascades)

@@ -150,6 +150,11 @@ TEST_CASE("Renderer contracts describe prepasses outputs and history", "[Unit][R
     CHECK(HasAll(path.history, EHistoryChannel::Diffuse | EHistoryChannel::Specular |
                                EHistoryChannel::Albedo | EHistoryChannel::ObjectId));
 
+    const auto& pathLite = GetRendererContract(ERT_PathTracingLite);
+    CHECK(HasAny(pathLite.sceneResources, ESceneResource::TLAS));
+    CHECK_FALSE(HasAny(pathLite.sceneResources, ESceneResource::SHARC));
+    CHECK(HasAll(pathLite.post, EPostProcess::Upscale | EPostProcess::RayReconstruction));
+
     const auto& softwareTracing = GetRendererContract(ERT_SoftwareTracing);
     const auto& softwareModern = GetRendererContract(ERT_SoftwareModern);
     CHECK(HasAny(softwareTracing.post, EPostProcess::Upscale));

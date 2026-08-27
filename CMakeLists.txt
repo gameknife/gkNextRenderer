@@ -2,8 +2,16 @@ cmake_minimum_required(VERSION 3.26)
 
 project(gkNextRenderer LANGUAGES CXX C)
 
+if(IOS)
+    enable_language(OBJCXX)
+endif()
+
 include(cmake/SetupPlatform.cmake)
 include(cmake/ProjectOptions.cmake)
+
+# The optional VITURE SDK is activated only when its official archive is
+# deliberately placed under external/viture/.
+include(cmake/SetupViture.cmake)
 
 option(ENABLE_AVIF "Enable AVIF support" OFF)
 set(WITH_AVIF ${ENABLE_AVIF})
@@ -34,6 +42,16 @@ endif()
 
 option(GK_ENABLE_HOT_RELOAD "Enable desktop Slang shader hot reload" ON)
 option(GK_ENABLE_CPP_LIVE_CODING "Enable Windows C++ live coding through Live++" OFF)
+if(IOS)
+    set(GK_ENABLE_TRACY_DEFAULT OFF)
+else()
+    set(GK_ENABLE_TRACY_DEFAULT ON)
+endif()
+option(GK_ENABLE_TRACY "Enable Tracy CPU/GPU profiling client" ${GK_ENABLE_TRACY_DEFAULT})
+if(IOS AND GK_ENABLE_TRACY)
+    message(STATUS "Tracy is not supported on iOS; disabling GK_ENABLE_TRACY")
+    set(GK_ENABLE_TRACY OFF CACHE BOOL "Enable Tracy CPU/GPU profiling client" FORCE)
+endif()
 set(GK_LIVEPP_ROOT "$ENV{LIVEPP_ROOT}" CACHE PATH
     "Path to the Live++ root directory (the directory containing API/ and Agent/)")
 if(WIN32)
@@ -44,6 +62,9 @@ endif()
 option(GK_ENABLE_SHADER_CLOCK "Enable shader clock heatmap instrumentation" ${GK_ENABLE_SHADER_CLOCK_DEFAULT})
 
 if(GK_ENABLE_CPP_LIVE_CODING)
+    if(GK_ENABLE_ASAN)
+        message(FATAL_ERROR "GK_ENABLE_CPP_LIVE_CODING is incompatible with GK_ENABLE_ASAN")
+    endif()
     if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
         message(FATAL_ERROR "GK_ENABLE_CPP_LIVE_CODING currently requires 64-bit Windows")
     endif()
@@ -73,6 +94,7 @@ if (ANDROID OR IOS)
 endif()
 
 include(cmake/SetupExternalLibs.cmake)
+include(cmake/SetupDotNet.cmake)
 include(cmake/SetupDependencies.cmake)
 
 add_subdirectory(assets)

@@ -175,6 +175,10 @@ namespace Editor
 
         // Current scene file path (set on load, used by Ctrl+S save)
         std::string currentScenePath;
+
+        // Play-in-editor: which game F5 starts, and whether the picker is showing.
+        std::string lastPlayedGameId;
+        bool playGamePickerOpen = false;
         std::mutex sceneDialogMutex;
         std::string pendingOpenScenePath;
         std::string pendingSaveScenePath;

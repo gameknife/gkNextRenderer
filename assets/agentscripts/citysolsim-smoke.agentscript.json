@@ -1,7 +1,7 @@
 {
   "name": "citysolsim-smoke",
   "target": "CitySolSim",
-  "scene": "assets/scad/source/habor_city_v2.scad",
+  "scene": "assets/scad/source/habor_city/habor_city_v2.scad",
   "defaults": {
     "waitFrames": 2,
     "stepTimeoutMs": 15000

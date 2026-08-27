@@ -4,11 +4,13 @@
 
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Modules/DevTools/Command/DuplicateNodesCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Editor/UI/UiWidgets.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "Modules/DevTools/Command/TransformNodesCommand.hpp"
 #include "ThirdParty/ImGuizmo/ImGuizmo.h"
+#include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include <algorithm>
 #include <glm/gtc/type_ptr.hpp>
@@ -21,7 +23,12 @@ namespace NextUI
 
 namespace
 {
-    constexpr float kToolbarEdgePadding = 5.0f;
+    constexpr float kToolbarFooterGap = 8.0f;
+    constexpr float kFooterHeight = 30.0f;
+    constexpr float kSelectionInfoGap = 4.0f;
+    constexpr float kToolbarWidth = 710.0f;
+    constexpr float kToolbarPadY = 7.0f;
+    constexpr float kToolbarButtonHeight = 6.0f;
     constexpr uint32_t InvalidNodeId = static_cast<uint32_t>(-1);
 
     std::vector<uint32_t> BuildSelectionList(Assets::Scene& scene)
@@ -148,20 +155,21 @@ void GizmoController::HandleShortcuts(const ImGuiIO& io)
     if (ImGui::IsKeyPressed(ImGuiKey_W))
     {
         operation_ = static_cast<int>(ImGuizmo::TRANSLATE);
+        selectionMode_ = false;
     }
     if (ImGui::IsKeyPressed(ImGuiKey_E))
     {
         operation_ = static_cast<int>(ImGuizmo::ROTATE);
+        selectionMode_ = false;
     }
     if (ImGui::IsKeyPressed(ImGuiKey_R))
     {
         operation_ = static_cast<int>(ImGuizmo::SCALE);
+        selectionMode_ = false;
     }
     if (ImGui::IsKeyPressed(ImGuiKey_Q))
     {
-        mode_ = (mode_ == static_cast<int>(ImGuizmo::LOCAL))
-                    ? static_cast<int>(ImGuizmo::WORLD)
-                    : static_cast<int>(ImGuizmo::LOCAL);
+        selectionMode_ = true;
     }
 }
 
@@ -178,17 +186,17 @@ void GizmoController::ResetState()
     dragStartGizmoMatrix_ = glm::mat4(1.0f);
 }
 
-void GizmoController::DrawToolbar()
+void GizmoController::DrawSelectionInfo(const std::string& objectName, const std::string& meshName,
+                                        const std::string& materialName)
 {
-    EnsureDefaults();
-
     constexpr float kToolbarPadX = 8.0f;
-    constexpr float kToolbarPadY = 6.0f;
 
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(kToolbarPadX, kToolbarPadY));
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.5f));
-    ImGui::Begin("GizmoToolbar", nullptr,
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, Theme::Color(Theme::EColor::Background, 0.74f));
+    ImGui::PushStyleColor(ImGuiCol_Border, Theme::Color(Theme::EColor::BorderStrong, 0.56f));
+    ImGui::Begin("GizmoSelectionInfo", nullptr,
         ImGuiWindowFlags_NoDecoration |
         ImGuiWindowFlags_AlwaysAutoResize |
         ImGuiWindowFlags_NoSavedSettings |
@@ -196,55 +204,122 @@ void GizmoController::DrawToolbar()
         ImGuiWindowFlags_NoNav |
         ImGuiWindowFlags_NoDocking);
 
-    if (ImGui::RadioButton("Move", operation_ == static_cast<int>(ImGuizmo::TRANSLATE)))
+    const auto DrawSelectionValue = [](const char* label, const std::string& value)
     {
-        operation_ = static_cast<int>(ImGuizmo::TRANSLATE);
-    }
-    Foundation::Tooltip("Translate (W)");
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Rotate", operation_ == static_cast<int>(ImGuizmo::ROTATE)))
-    {
-        operation_ = static_cast<int>(ImGuizmo::ROTATE);
-    }
-    Foundation::Tooltip("Rotate (E)");
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Scale", operation_ == static_cast<int>(ImGuizmo::SCALE)))
-    {
-        operation_ = static_cast<int>(ImGuizmo::SCALE);
-    }
-    Foundation::Tooltip("Scale (R)");
-    ImGui::SameLine();
-    ImGui::TextUnformatted("|");
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Pivot", pivotMode_ == static_cast<int>(EGizmoPivotMode::Pivot)))
-    {
-        pivotMode_ = static_cast<int>(EGizmoPivotMode::Pivot);
-    }
-    Foundation::Tooltip("Use individual pivot for each selected node");
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Bounds", pivotMode_ == static_cast<int>(EGizmoPivotMode::SelectionBounds)))
-    {
-        pivotMode_ = static_cast<int>(EGizmoPivotMode::SelectionBounds);
-    }
-    Foundation::Tooltip("Use combined selection bounds as pivot");
-    ImGui::SameLine();
-    ImGui::TextUnformatted("|");
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Local", mode_ == static_cast<int>(ImGuizmo::LOCAL)))
-    {
-        mode_ = static_cast<int>(ImGuizmo::LOCAL);
-    }
-    Foundation::Tooltip("Local axes (Q)");
-    ImGui::SameLine();
-    if (ImGui::RadioButton("World", mode_ == static_cast<int>(ImGuizmo::WORLD)))
-    {
-        mode_ = static_cast<int>(ImGuizmo::WORLD);
-    }
-    Foundation::Tooltip("World axes (Q)");
+        ImGui::TextColored(Theme::Color(Theme::EColor::TextDim), "%s", label);
+        ImGui::SameLine(0.0f, 4.0f);
+        ImGui::TextColored(Theme::Color(Theme::EColor::Text), "%s", value.c_str());
+    };
+    DrawSelectionValue("Object", objectName);
+    ImGui::SameLine(0.0f, 12.0f);
+    DrawSelectionValue("Mesh", meshName);
+    ImGui::SameLine(0.0f, 12.0f);
+    DrawSelectionValue("Mat0", materialName);
 
     ImGui::End();
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(3);
+}
+
+void GizmoController::DrawToolbar()
+{
+    EnsureDefaults();
+
+    constexpr float kToolbarPadX = 8.0f;
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(kToolbarPadX, kToolbarPadY));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, Theme::Color(Theme::EColor::Background, 0.74f));
+    ImGui::PushStyleColor(ImGuiCol_Border, Theme::Color(Theme::EColor::BorderStrong, 0.56f));
+    ImGui::Begin("GizmoToolbar", nullptr,
+        ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoFocusOnAppearing |
+        ImGuiWindowFlags_NoNav |
+        ImGuiWindowFlags_NoDocking);
+
+    Theme::PushViewportToolbarStyle();
+
+    const float buttonHeight = ImGui::GetFontSize() + kToolbarButtonHeight;
+    const ImVec2 selectionButtonSize(84.0f, buttonHeight);
+    const ImVec2 moveButtonSize(76.0f, buttonHeight);
+    const ImVec2 rotateButtonSize(80.0f, buttonHeight);
+    const ImVec2 scaleButtonSize(74.0f, buttonHeight);
+    const ImVec2 pivotButtonSize(76.0f, buttonHeight);
+    const ImVec2 boundsButtonSize(86.0f, buttonHeight);
+    const ImVec2 localButtonSize(76.0f, buttonHeight);
+    const ImVec2 worldButtonSize(80.0f, buttonHeight);
+
+    if (Theme::DrawFlatViewportButton(
+            ICON_FA_ARROW_POINTER " Select", "Selection mode (Q)", selectionMode_, selectionButtonSize))
+    {
+        selectionMode_ = true;
+    }
+    ImGui::SameLine();
+    if (Theme::DrawFlatViewportButton(
+            ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT " Move", "Translate (W)",
+            !selectionMode_ && operation_ == static_cast<int>(ImGuizmo::TRANSLATE), moveButtonSize))
+    {
+        operation_ = static_cast<int>(ImGuizmo::TRANSLATE);
+        selectionMode_ = false;
+    }
+    ImGui::SameLine();
+    if (Theme::DrawFlatViewportButton(
+            ICON_FA_ROTATE " Rotate", "Rotate (E)",
+            !selectionMode_ && operation_ == static_cast<int>(ImGuizmo::ROTATE), rotateButtonSize))
+    {
+        operation_ = static_cast<int>(ImGuizmo::ROTATE);
+        selectionMode_ = false;
+    }
+    ImGui::SameLine();
+    if (Theme::DrawFlatViewportButton(
+            ICON_FA_EXPAND " Scale", "Scale (R)",
+            !selectionMode_ && operation_ == static_cast<int>(ImGuizmo::SCALE), scaleButtonSize))
+    {
+        operation_ = static_cast<int>(ImGuizmo::SCALE);
+        selectionMode_ = false;
+    }
+
+    Theme::DrawVerticalSeparator(buttonHeight, 5.0f, 0.65f);
+    if (Theme::DrawFlatViewportButton(
+            ICON_FA_LOCATION_CROSSHAIRS " Pivot", "Use individual pivot for each selected node",
+            pivotMode_ == static_cast<int>(EGizmoPivotMode::Pivot), pivotButtonSize))
+    {
+        pivotMode_ = static_cast<int>(EGizmoPivotMode::Pivot);
+        selectionMode_ = false;
+    }
+    ImGui::SameLine();
+    if (Theme::DrawFlatViewportButton(
+            ICON_FA_CROP_SIMPLE " Bounds", "Use combined selection bounds as pivot",
+            pivotMode_ == static_cast<int>(EGizmoPivotMode::SelectionBounds), boundsButtonSize))
+    {
+        pivotMode_ = static_cast<int>(EGizmoPivotMode::SelectionBounds);
+        selectionMode_ = false;
+    }
+
+    Theme::DrawVerticalSeparator(buttonHeight, 5.0f, 0.65f);
+    if (Theme::DrawFlatViewportButton(
+            ICON_FA_CUBE " Local", "Local axes",
+            mode_ == static_cast<int>(ImGuizmo::LOCAL), localButtonSize))
+    {
+        mode_ = static_cast<int>(ImGuizmo::LOCAL);
+        selectionMode_ = false;
+    }
+    ImGui::SameLine();
+    if (Theme::DrawFlatViewportButton(
+            ICON_FA_GLOBE " World", "World axes",
+            mode_ == static_cast<int>(ImGuizmo::WORLD), worldButtonSize))
+    {
+        mode_ = static_cast<int>(ImGuizmo::WORLD);
+        selectionMode_ = false;
+    }
+
+    Theme::PopViewportToolbarStyle();
+
+    ImGui::End();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(4);
 }
 
 void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, const glm::vec2& viewportSize,
@@ -252,6 +327,9 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
                            const Assets::UniformBufferObject* viewUbo, ImGuiWindow* alternativeWindow)
 {
     ImGuizmo::SetAlternativeWindow(alternativeWindow);
+
+    ImGuiIO& io = ImGui::GetIO();
+    HandleShortcuts(io);
 
     Assets::Scene& scene = engine.GetScene();
     std::vector<uint32_t> selectedIds = BuildSelectionList(scene);
@@ -289,16 +367,58 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
     isShowing_ = true;
     EnsureDefaults(defaultOperation);
 
-    ImGuiIO& io = ImGui::GetIO();
-    HandleShortcuts(io);
-
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    const ImVec2 toolbarPos(viewportPos.x + viewportSize.x * 0.5f,
-                            viewportPos.y + viewportSize.y - kToolbarEdgePadding);
+    const float toolbarBottom = viewportPos.y + viewportSize.y - kFooterHeight - kToolbarFooterGap;
+    const float toolbarHeight = ImGui::GetFontSize() + kToolbarButtonHeight + kToolbarPadY * 2.0f;
+    const ImVec2 toolbarPos(viewportPos.x + viewportSize.x * 0.5f, toolbarBottom);
+    const ImVec2 selectionInfoPos(
+        viewportPos.x + viewportSize.x * 0.5f,
+        toolbarBottom - toolbarHeight - kSelectionInfoGap);
+    ImGui::SetNextWindowViewport(viewport->ID);
+    ImGui::SetNextWindowPos(selectionInfoPos, ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+    ImGui::SetNextWindowBgAlpha(0.5f);
+
+    const auto DisplayNameOrPlaceholder = [](const std::string& name)
+    {
+        return name.empty() ? std::string("-") : name;
+    };
+    const std::string objectName = DisplayNameOrPlaceholder(activeNode->GetName());
+    std::string meshName = "-";
+    std::string materialName = "-";
+    if (const Runtime::RenderComponent* renderComponent =
+            activeNode->GetComponent<Runtime::RenderComponent>(); renderComponent != nullptr)
+    {
+        if (const Assets::Model* model = scene.GetModel(renderComponent->GetModelId()); model != nullptr)
+        {
+            meshName = DisplayNameOrPlaceholder(model->Name());
+        }
+
+        if (const Assets::FMaterial* material = scene.GetMaterial(renderComponent->GetMaterials()[0]);
+            material != nullptr)
+        {
+            materialName = DisplayNameOrPlaceholder(material->name_);
+        }
+    }
+    DrawSelectionInfo(objectName, meshName, materialName);
+
     ImGui::SetNextWindowViewport(viewport->ID);
     ImGui::SetNextWindowPos(toolbarPos, ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+    ImGui::SetNextWindowSize(ImVec2(kToolbarWidth, toolbarHeight), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.5f);
     DrawToolbar();
+
+    if (selectionMode_)
+    {
+        isUsing_ = false;
+        isOver_ = false;
+        wasUsing_ = false;
+        dragActive_ = false;
+        dragInstanceIds_.clear();
+        dragStartWorldMatrices_.clear();
+        dragStartSnapshots_.clear();
+        dragStartGizmoMatrix_ = glm::mat4(1.0f);
+        return;
+    }
 
     const auto& ubo = viewUbo != nullptr ? *viewUbo : engine.GetLastUniformBufferObject();
     const glm::mat4& view = ubo.ModelView;

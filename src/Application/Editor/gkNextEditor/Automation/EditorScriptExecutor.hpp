@@ -33,15 +33,9 @@ namespace Editor
     public:
         explicit FEditorScriptExecutor(NextEngine& engine);
 
-        // Register Editor.* JS helper functions into the QuickJS context
-        void RegisterEditorBindings(void* jsContext);
-
         // Execute editorscript text (one command per line)
         void ExecuteScriptText(const std::string& scriptText, EditorContext* editorContext = nullptr,
                                bool deferHighRiskActions = false);
-
-        // Execute JavaScript code via QuickJS eval
-        void EvalJavaScript(const std::string& code);
 
         // Get and clear execution logs
         std::vector<ScriptLogEntry> TakeLog();
@@ -49,11 +43,9 @@ namespace Editor
 
         bool ExecuteDeferredAction(const FDeferredEditorAction& deferredAction, EditorContext& editorContext);
 
-        // Public for JS callback access
-        void Log(const std::string& message);
-        static FEditorScriptExecutor* activeInstance_;
-
     private:
+        void Log(const std::string& message);
+
         // EditorScript command handlers
         void ExecSelect(const std::vector<std::string>& tokens);
         void ExecRename(const std::vector<std::string>& tokens);

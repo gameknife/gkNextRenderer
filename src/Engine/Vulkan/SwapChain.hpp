@@ -66,7 +66,7 @@ namespace Vulkan
         VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats, bool forceSDR);
         static VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& presentModes, VkPresentModeKHR presentMode);
         static VkExtent2D ChooseSwapExtent(const Window& window, const VkSurfaceCapabilitiesKHR& capabilities);
-        static uint32_t ChooseImageCount(const VkSurfaceCapabilitiesKHR& capabilities);
+        static uint32_t ChooseImageCount(const VkSurfaceCapabilitiesKHR& capabilities, VkPresentModeKHR presentMode);
 
         const VkPhysicalDevice physicalDevice_;
         const class Device& device_;

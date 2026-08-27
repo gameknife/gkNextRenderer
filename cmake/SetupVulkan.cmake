@@ -5,6 +5,8 @@ function(gk_collect_vulkan_sdk_candidates outputVar)
 
     if(DEFINED ENV{VULKAN_SDK} AND NOT "$ENV{VULKAN_SDK}" STREQUAL "")
         list(APPEND candidates "$ENV{VULKAN_SDK}")
+        set(${outputVar} "${candidates}" PARENT_SCOPE)
+        return()
     endif()
 
     set(projectSdkDir "${CMAKE_SOURCE_DIR}/external/VulkanSDK")
@@ -15,18 +17,20 @@ function(gk_collect_vulkan_sdk_candidates outputVar)
         endif()
     endif()
     file(GLOB projectCandidates LIST_DIRECTORIES true "${projectSdkDir}/*")
+    list(SORT projectCandidates COMPARE NATURAL ORDER DESCENDING)
     list(APPEND candidates ${projectCandidates})
 
     if(WIN32)
         file(GLOB systemCandidates LIST_DIRECTORIES true "C:/VulkanSDK/*")
+        list(SORT systemCandidates COMPARE NATURAL ORDER DESCENDING)
         list(APPEND candidates ${systemCandidates})
     elseif(DEFINED ENV{HOME} AND NOT "$ENV{HOME}" STREQUAL "")
         file(GLOB homeCandidates LIST_DIRECTORIES true "$ENV{HOME}/VulkanSDK/*")
+        list(SORT homeCandidates COMPARE NATURAL ORDER DESCENDING)
         list(APPEND candidates ${homeCandidates})
     endif()
 
     list(REMOVE_DUPLICATES candidates)
-    list(SORT candidates COMPARE NATURAL ORDER DESCENDING)
     set(${outputVar} "${candidates}" PARENT_SCOPE)
 endfunction()
 
@@ -77,11 +81,11 @@ function(gk_resolve_ios_vulkan_sdk outputVar)
     foreach(candidate IN LISTS candidates)
         foreach(root IN ITEMS
             "${candidate}"
-            "${candidate}/iOS"
-            "${candidate}/../iOS"
+            "${candidate}/macOS"
         )
             if(EXISTS "${root}/include/vulkan/vulkan.h" AND
-               EXISTS "${root}/lib/vulkan.framework/vulkan")
+               EXISTS "${root}/bin/slangc" AND
+               EXISTS "${root}/lib/MoltenVK.xcframework/Info.plist")
                 get_filename_component(root "${root}" ABSOLUTE)
                 set(${outputVar} "${root}" PARENT_SCOPE)
                 return()
@@ -125,32 +129,44 @@ function(gk_apply_desktop_vulkan_sdk sdkRoot)
 endfunction()
 
 function(gk_apply_ios_vulkan_sdk sdkRoot)
-    get_filename_component(sdkParent "${sdkRoot}" DIRECTORY)
-    set(hostToolsRoot "${sdkRoot}")
-    if(EXISTS "${sdkParent}/macOS/bin/slangc")
-        set(hostToolsRoot "${sdkParent}/macOS")
+    if(NOT CMAKE_OSX_SYSROOT STREQUAL "iphoneos")
+        message(FATAL_ERROR
+            "Unsupported iOS sysroot '${CMAKE_OSX_SYSROOT}'. Only iphoneos device builds are supported.")
     endif()
 
-    set(ENV{VULKAN_SDK} "${hostToolsRoot}")
+    set(moltenVKSlice "ios-arm64")
+    set(moltenVKLibrary
+        "${sdkRoot}/lib/MoltenVK.xcframework/${moltenVKSlice}/libMoltenVK.a")
+    if(NOT EXISTS "${moltenVKLibrary}")
+        message(FATAL_ERROR
+            "MoltenVK slice not found. SDK root: '${sdkRoot}', sysroot: "
+            "'${CMAKE_OSX_SYSROOT}', expected: '${moltenVKLibrary}'")
+    endif()
+
+    set(ENV{VULKAN_SDK} "${sdkRoot}")
     set(Vulkan_FOUND TRUE PARENT_SCOPE)
     set(Vulkan_INCLUDE_DIRS "${sdkRoot}/include" PARENT_SCOPE)
-    set(Vulkan_LIBRARIES "${sdkRoot}/lib/vulkan.framework/vulkan" PARENT_SCOPE)
+    set(Vulkan_LIBRARIES "${moltenVKLibrary}" PARENT_SCOPE)
     set(Vulkan_INCLUDE_DIR "${sdkRoot}/include" CACHE PATH "Vulkan include directory" FORCE)
-    set(Vulkan_LIBRARY "${sdkRoot}/lib/vulkan.framework/vulkan" CACHE FILEPATH "Vulkan library" FORCE)
+    set(Vulkan_LIBRARY "${moltenVKLibrary}" CACHE FILEPATH "Vulkan library" FORCE)
+    set(MOLTENVK_LIBRARY "${moltenVKLibrary}" CACHE FILEPATH "MoltenVK static library" FORCE)
 endfunction()
 
 if(IOS)
     gk_resolve_ios_vulkan_sdk(vulkanSdkRoot)
     if(NOT vulkanSdkRoot)
-        message(FATAL_ERROR "No usable iOS Vulkan SDK found. Run `gnb setup` or `gnb ios` first.")
+        if(DEFINED ENV{VULKAN_SDK} AND NOT "$ENV{VULKAN_SDK}" STREQUAL "")
+            message(FATAL_ERROR
+                "VULKAN_SDK is set to unusable Apple SDK path '$ENV{VULKAN_SDK}'. Expected "
+                "include/vulkan/vulkan.h, bin/slangc and lib/MoltenVK.xcframework/Info.plist.")
+        else()
+            message(FATAL_ERROR
+                "No usable Apple Vulkan SDK found for iOS. Expected include/vulkan/vulkan.h, "
+                "bin/slangc and lib/MoltenVK.xcframework/Info.plist. Run `gnb setup` first.")
+        endif()
     endif()
-    message(STATUS "Using iOS Vulkan SDK: ${vulkanSdkRoot}")
+    message(STATUS "Using Apple Vulkan SDK for iOS: ${vulkanSdkRoot}")
     gk_apply_ios_vulkan_sdk("${vulkanSdkRoot}")
-
-    set(MOLTENVK_LIBRARY "${MOLTENVK_ROOT}/lib/libMoltenVK.a" CACHE FILEPATH "MoltenVK static library" FORCE)
-    if(NOT EXISTS "${MOLTENVK_LIBRARY}")
-        message(FATAL_ERROR "MoltenVK library not found at ${MOLTENVK_LIBRARY}. Run `gnb setup` or `gnb ios` first.")
-    endif()
 elseif(ANDROID)
     find_package(Vulkan REQUIRED)
 else()

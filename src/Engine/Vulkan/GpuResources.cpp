@@ -343,7 +343,13 @@ Buffer::Buffer(const class Device& device, const size_t size, const VkBufferUsag
     uint32_t queueFamilyIndexCount = 0;
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size = size;
-    bufferInfo.usage = usage;
+    // Requesting a device address on a device that did not enable the feature is invalid, and the
+    // flag is set unconditionally all over the engine. Masking it here keeps every one of those
+    // call sites correct without a capability check apiece; GetDeviceAddress then reports null,
+    // and only the compatibility renderer -- which never reads an address -- runs in that state.
+    bufferInfo.usage = device.SupportsBufferDeviceAddress()
+        ? usage
+        : (usage & ~static_cast<VkBufferUsageFlags>(VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
     SetupQueueSharing(device_, bufferInfo.sharingMode, queueFamilyIndexCount, queueFamilyIndices, queueFamilyIndexStorage);
     bufferInfo.queueFamilyIndexCount = queueFamilyIndexCount;
     bufferInfo.pQueueFamilyIndices = queueFamilyIndices;
@@ -383,6 +389,14 @@ VkMemoryRequirements Buffer::GetMemoryRequirements() const
 
 VkDeviceAddress Buffer::GetDeviceAddress() const
 {
+    // vkGetBufferDeviceAddress is illegal without the feature. Returning null keeps the ~50 call
+    // sites that fill GPUScene harmless on such a device: the addresses are stored and never
+    // dereferenced, because no renderer that reads them can be registered there.
+    if (!device_.SupportsBufferDeviceAddress())
+    {
+        return 0;
+    }
+
     VkBufferDeviceAddressInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     info.pNext = nullptr;

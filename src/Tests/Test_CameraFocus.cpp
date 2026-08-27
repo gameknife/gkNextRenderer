@@ -22,6 +22,22 @@ TEST_CASE("Camera focus moves closer for small targets", "[Unit][Camera]")
     CHECK(finalDistance == Catch::Approx(0.060434f).margin(0.01f));
 }
 
+TEST_CASE("Immediate camera focus skips the transition", "[Unit][Camera]")
+{
+    Assets::Camera camera{};
+    camera.FieldOfView = 40.0f;
+    camera.ModelView =
+        glm::lookAtRH(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
+    Runtime::Camera::ModelViewController controller;
+    controller.Reset(camera);
+    controller.FocusImmediate(glm::vec3(0.0f), 0.02f);
+
+    const float finalDistance = glm::distance(controller.GetPosition(), glm::vec3(0.0f));
+    CHECK(finalDistance == Catch::Approx(0.060434f).margin(0.01f));
+    CHECK_FALSE(controller.UpdateCamera(1.0, 1.0 / 60.0));
+}
+
 TEST_CASE("Orbit camera movement reports updated state", "[Unit][Camera]")
 {
     Assets::Camera camera{};
@@ -45,6 +61,41 @@ TEST_CASE("Orbit camera movement reports updated state", "[Unit][Camera]")
 
     CHECK(glm::distance(controller.GetPosition(), initialPosition) > 0.0001f);
     CHECK(controller.UpdateCamera(1.0, 1.0 / 60.0));
+}
+
+TEST_CASE("Mouse camera rotation is frame-rate independent", "[Unit][Camera]")
+{
+    Assets::Camera camera{};
+    camera.FieldOfView = 40.0f;
+    camera.ModelView =
+        glm::lookAtRH(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
+    const auto simulateDrag = [&camera](double timeDelta)
+    {
+        Runtime::Camera::ModelViewController controller;
+        controller.Reset(camera);
+
+        SDL_Event event{};
+        event.button.button = SDL_BUTTON_RIGHT;
+        event.button.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        event.button.x = 0.0f;
+        event.button.y = 0.0f;
+        controller.OnMouseButton(event);
+        controller.OnCursorPosition(100.0, 0.0);
+        controller.UpdateCamera(1.0, timeDelta);
+        return controller.ModelView();
+    };
+
+    const glm::mat4 thirtyFpsView = simulateDrag(1.0 / 30.0);
+    const glm::mat4 oneHundredTwentyFpsView = simulateDrag(1.0 / 120.0);
+    for (int column = 0; column < 4; ++column)
+    {
+        for (int row = 0; row < 4; ++row)
+        {
+            CHECK(thirtyFpsView[column][row] ==
+                  Catch::Approx(oneHundredTwentyFpsView[column][row]).margin(1e-6f));
+        }
+    }
 }
 
 TEST_CASE("Model view camera left drag pans when enabled", "[Unit][Camera]")

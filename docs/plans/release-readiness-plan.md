@@ -50,7 +50,7 @@
 | 缺失目录 | 谁在读 |
 |---|---|
 | `assets/configs` | `Engine.cpp:321`（cvar_default.json）、`SettingsPanel.cpp:135`（Editor 设置面板 schema）、`EditorMain.cpp:87` |
-| `assets/scripts` | QuickJS runtime（Editor 脚本控制台 / FlappyJs） |
+| `assets/scripts` | MagicaLego `.mlscript`（脚本运行时已随 QuickJS 删除，见 `docs/plans/dotnet-scripting-plan.md`） |
 | `assets/remote` | Remote Play 浏览器客户端，缺了 `--remote` 直接 404 |
 | `assets/sounds` / `assets/anims` | NextAudio / 动画资产 |
 

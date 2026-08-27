@@ -2,6 +2,7 @@
 
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
+#include "Engine/Utilities/LogFormatting.hpp"
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/rotating_file_sink.h>
@@ -42,7 +43,8 @@ namespace Utilities::Logging
             constexpr size_t maxFileSize = 8 * 1024 * 1024;
             constexpr size_t maxFiles = 3;
             auto sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(path, maxFileSize, maxFiles);
-            sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
+            sink->set_formatter(
+                std::make_unique<FAnsiStrippingFormatter>("[%Y-%m-%d %H:%M:%S.%e] [%l] %v"));
             spdlog::default_logger()->sinks().push_back(sink);
             LogFilePathStorage() = path;
         }

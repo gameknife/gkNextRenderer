@@ -5,6 +5,8 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 
+#include <vulkan/vulkan.h>
+
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -39,6 +41,9 @@ private:
     Editor::EditorUiState uiState_{};
     std::unordered_map<std::string, Editor::EditorUiState> remoteUiStates_;
     std::string imguiIniPath_;
+    // Last scene rect handed to the renderer, in framebuffer pixels. Kept here because the
+    // swapchain's output viewport now lags a resize by the frames it takes to rebuild.
+    VkRect2D sceneViewportRect_{};
 
     bool firstRun_ = true;
 };

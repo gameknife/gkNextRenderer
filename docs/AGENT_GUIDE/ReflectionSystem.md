@@ -1,6 +1,10 @@
 # Reflection System
 
-当前反射层用 `entt::meta` 同时服务编辑器 PropertyWidgets、QuickJS component/node proxy 和属性命令历史。实现位于 `src/Engine/Runtime/Reflection/`；不要按已删除的“自注册 builder”设计工作，那套方案没有落地。
+当前反射层用 `entt::meta` 同时服务编辑器 PropertyWidgets 和属性命令历史。实现位于 `src/Engine/Runtime/Reflection/`；不要按已删除的“自注册 builder”设计工作，那套方案没有落地。
+
+反射层有三个消费者：编辑器 PropertyWidgets、属性命令历史，以及 C# 脚本绑定。第三个是从反射清单
+自动生成的强类型 component wrapper，见下文“脚本绑定”与
+[.NET Bindings](DotNetBindings.md)。
 
 ## 当前结构
 
@@ -13,7 +17,6 @@ PropertyTypes.hpp         封闭的 widget type enum
 PropertyAccessor.*        meta data 枚举、类型推断、get/set
 
 Editor/PropertyWidgets.*  ImGui widget + PropertyCommand
-NextQuickJS/Reflection/   JS 转换与 TypeScript 定义
 ```
 
 `REFLECT_COMPONENT(ClassName)` 只生成 `GetTypeName/GetTypeId/GetMetaType` 和 `static RegisterReflection()` 声明。它不是 fluent registration macro，也不会触发静态初始化。
@@ -61,23 +64,23 @@ void MyComponent::RegisterReflection()
 }
 ```
 
-优先注册 setter/getter，而不是直接暴露 private field。read-only 属性使用 `.data<nullptr, &Getter>()`；可调用 JS method 使用 `.func<&Method>("Method")`。property name 是编辑器命令、QuickJS 和 TS 定义共同使用的稳定 API，改名需要同步脚本和兼容处理。
+优先注册 setter/getter，而不是直接暴露 private field。read-only 属性使用 `.data<nullptr, &Getter>()`；可调用脚本 method 使用 `.func<&Method>("Method")`。property name 是编辑器命令与脚本绑定共同使用的稳定 API，改名需要同步兼容处理。
 
 ## PropertyMeta
 
-`PropertyPresets` 提供 Editable、ReadOnly、Range、Hidden、Transient。默认 metadata 带 `JSExposed`；如果属性只供编辑器使用，要显式去掉该 flag，而不是假定未生成 TS 就不可访问。
+`PropertyPresets` 提供 Editable、ReadOnly、Range、Hidden、Transient。默认 metadata 带 `ScriptExposed`；如果属性只供编辑器使用，要显式去掉该 flag——默认值会让它出现在生成的 C# wrapper 里。
 
-- `ReadOnly`：PropertyWidgets 和 JS object 不提供 setter。
+- `ReadOnly`：PropertyWidgets 和脚本对象不提供 setter。
 - `Hidden`：编辑器隐藏；不要把它当序列化策略。
-- `JSExposed`：QuickJS proxy/TS 输出包含该属性。
+- `ScriptExposed`：脚本绑定包含该属性，即 `Components.g.cs` 会为它生成 C# 属性。旧名 `JSExposed` 保留为 deprecated 别名一个版本周期。
 - `Transient`：意图为不持久化；当前 SceneExport 并不会自动序列化所有反射属性。
 - `HasRange`：numeric widget 使用 min/max。
 
-缺少 custom metadata 时，`PropertyAccessor` 使用 property name 和 `General` category；这会默认 JS exposed，敏感/内部状态不要依赖默认值。
+缺少 custom metadata 时，`PropertyAccessor` 使用 property name 和 `General` category；这会默认 script exposed，敏感/内部状态不要依赖默认值。
 
 ## 类型与容器限制
 
-`PropertyAccessor::DeducePropertyType()` 当前识别 Bool、Int32、UInt32、Float、Double、String、Vec2/3/4、Quat、Mat4、Enum 和 Array。编辑器有常用 scalar/vector/quat/enum/array widget；Mat4 虽能识别和供 JS 转换，但当前没有专用 PropertyWidgets case。`AssetRef` enum 值只是预留，当前没有推断路径。
+`PropertyAccessor::DeducePropertyType()` 当前识别 Bool、Int32、UInt32、Float、Double、String、Vec2/3/4、Quat、Mat4、Enum 和 Array。编辑器有常用 scalar/vector/quat/enum/array widget；Mat4 虽能识别，但当前没有专用 PropertyWidgets case。`AssetRef` enum 值只是预留，当前没有推断路径。
 
 已知 container registry 只有：
 
@@ -94,18 +97,26 @@ Enum 要先以 `entt::meta_factory<Enum>()` 注册所有 value，再把 enum pro
 
 因此 editor property side effect 应放在 setter/command 可重复执行的路径，保证 execute/undo/redo 一致。不要在 ImGui 绘制分支中额外修改 Scene，否则 redo 无法重放。
 
-## QuickJS
+## 脚本绑定
 
-`NextQuickJS` 枚举 `PropertyAccessor::GetProperties()`，过滤 `JSExposed`，把非 read-only property 定义成 JS getter/setter，并从 meta funcs 生成 method。`assets/typescript/Engine.d.ts` 是对外契约；反射属性变更后要同步/重新生成并做脚本回归。
+C# 侧的 `assets/csharp/GkNext.Engine/Components.g.cs` 由 `gnb csharpgen` 从提交的反射清单
+`src/Modules/NextDotNet/ReflectionManifest.json` 生成，清单本身由 `gkNextRenderer --dump-reflection`
+导出。生成器消费的正是 `PropertyAccessor::GetProperties()` 过滤 `ScriptExposed` 后的集合。
 
-QuickJS 支持的值转换面与 PropertyWidgets 不完全相同。新增 `PropertyType` 时至少审计：
+**改了反射注册就要 `gnb csharpgen --refresh` 并提交清单与生成文件。**
+`Test_ReflectionManifest.cpp` 会拿提交的清单和实时反射逐项比对，忘了刷新是测试失败而不是静默漂移。
+
+property name 与 propId（name 的 entt hash）是生成 C# 的编译期常量，改名等于改脚本侧 API。
+
+新增 `PropertyType` 时要审计五处：
 
 - `PropertyAccessor::DeducePropertyType`；
 - `PropertyWidgets`；
-- `QuickJSTypeConverter` 的 JS 与 TS 双向转换；
 - container/enum handling；
-- undo/redo 的 `meta_any` copy 语义。
+- undo/redo 的 `meta_any` copy 语义；
+- 脚本侧类型映射：`tools/gnb/internal/csharpgen/components.go` 的 `accessors`（绑定它）或
+  `skipReasons`（明确声明还不绑定，理由会写进生成文件）。生成器对未知类型直接报错，不会静默跳过。
 
 ## 验证
 
-Engine 内建反射改动构建 `gkNextRenderer gkNextUnitTests`；模块类型还构建一个安装该模块的 consumer。运行对应 unit tag，并在 Editor 中验证显示、范围、undo/redo；JS exposed 属性再运行 QuickJS binding/Flappy parity 测试。只验证 `entt::resolve<T>()` 非空不足以证明 UI、命令和 JS 三条链都可用。
+Engine 内建反射改动构建 `gkNextRenderer gkNextUnitTests`；模块类型还构建一个安装该模块的 consumer。运行对应 unit tag，并在 Editor 中验证显示、范围、undo/redo。只验证 `entt::resolve<T>()` 非空不足以证明 UI 与命令两条链都可用；P5 之后还要加上 C# wrapper 一条。

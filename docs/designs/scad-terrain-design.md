@@ -388,8 +388,8 @@ public:
 };
 ```
 
-`REFLECT_COMPONENT` 注册（尺寸/seed 等只读展示）→ 编辑器可视、QuickJS 自动可查
-（TS 游戏也能 `SampleHeight` 贴地）。
+`REFLECT_COMPONENT` 注册（尺寸/seed 等只读展示）→ 编辑器可视，脚本层恢复后自动可查
+（脚本侧游戏也能 `SampleHeight` 贴地）。
 
 ### 7.3 寻路 / 物理 / 水面语义
 
@@ -456,7 +456,7 @@ public:
 1. `gk_terrain_info` 返回 biomeId 的枚举表放哪（TERR palette 段内自描述 vs 全局约定）——倾向前者。
 2. pad 是否要在 catalog/compose 里与建筑 footprint 自动关联（放 `oc_bldg_house` 自动生成 pad）——
    v1 手写 pad，观察 LLM 实际错误率再决定。
-3. TS/QuickJS 侧是否需要 `Scene.GetTerrain()` 便捷入口——待 TerrainComponent 反射落地后看使用体感。
+3. 脚本侧是否需要 `Scene.GetTerrain()` 便捷入口——待 TerrainComponent 反射落地后看使用体感。
 
 ---
 

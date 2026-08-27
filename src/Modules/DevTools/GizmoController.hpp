@@ -30,6 +30,8 @@ public:
     int Mode() const { return mode_; }
 
 private:
+    void DrawSelectionInfo(const std::string& objectName, const std::string& meshName,
+                           const std::string& materialName);
     void DrawToolbar();
     void EnsureDefaults(int defaultOperation = 0);
     void HandleShortcuts(const ImGuiIO& io);
@@ -44,6 +46,7 @@ private:
     int operation_ = 0;
     int mode_ = 0;
     int pivotMode_ = static_cast<int>(EGizmoPivotMode::Pivot);
+    bool selectionMode_ = true;
     bool isUsing_ = false;
     bool isOver_ = false;
     bool isShowing_ = false;

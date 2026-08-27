@@ -23,15 +23,10 @@ namespace NextUI
     struct Statistics;
 }
 
-namespace Runtime
-{
-    class FrameProfiler;
-}
-
 namespace DevTools
 {
     // Developer console + statistics overlay, extracted from the engine core
-    // ImGui backend (NextUI::UserInterface). Driven per-frame through the
+    // ImGui backend (NextUI::IUserInterface). Driven per-frame through the
     // IDebugUiProvider hooks in DevToolsDebugUiProvider.
     class FUiDevPanels final
     {
@@ -50,7 +45,7 @@ namespace DevTools
         void RenderConsoleOverlay();
 
         // Statistics overlay
-        void DrawOverlay(const NextUI::Statistics& statistics, Runtime::FrameProfiler* profiler);
+        void DrawOverlay(const NextUI::Statistics& statistics);
         void SetStatisticsDetachedViewport(bool detached) { statisticsDetachedViewport_ = detached; }
 
         // Memory statistics
@@ -72,24 +67,6 @@ namespace DevTools
         int HandleConsoleInputTextCallback(ImGuiInputTextCallbackData* data);
         void DrawConsoleLogOutputInternal(const char* childId, const ImVec2& size, bool bordered);
 
-        struct TimingSample
-        {
-            double sampleTime = 0.0;
-            float milliseconds = 0.0f;
-        };
-
-        struct TimingHistory
-        {
-            std::deque<TimingSample> samples;
-            std::string displayName;
-            double lastSeenTime = 0.0;
-            float average = 0.0f;
-            float minimum = 0.0f;
-            float maximum = 0.0f;
-            int depth = 0;
-            uint32_t displayOrder = 0;
-        };
-
         std::vector<std::string> consoleHistory_;
         std::vector<std::string> consoleMatches_;
         std::string consoleInput_;
@@ -106,9 +83,6 @@ namespace DevTools
         bool requestConsoleFocus_ = false;
         bool suppressConsoleToggleTextInput_ = false;
         uint64_t consoleLogRevision_ = 0;
-        std::unordered_map<std::string, TimingHistory> gpuTimeHistory_;
-        std::unordered_map<std::string, TimingHistory> cpuTimeHistory_;
-
         static constexpr int kOverlaySparklineSampleCount = 64;
         static constexpr int kOverlaySparklineSampleStride = 2;
         std::array<float, kOverlaySparklineSampleCount> frameRateSamples_{};

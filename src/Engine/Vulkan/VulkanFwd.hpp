@@ -20,6 +20,7 @@ namespace Vulkan
     class RenderPass;
     class Sampler;
     class SwapChain;
+    class TracyGpuProfilerBackend;
     class VulkanBaseRenderer;
     class Window;
 

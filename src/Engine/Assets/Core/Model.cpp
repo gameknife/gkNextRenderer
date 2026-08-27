@@ -70,10 +70,11 @@ namespace Assets
         const glm::vec3 lightDir = glm::normalize(-sunDir);
         const glm::mat4 invCamVP = glm::inverse(cameraViewProj);
 
-        // Eight main-camera frustum corners: z=0 is Vulkan's near plane (GLM_FORCE_DEPTH_ZERO_TO_ONE), z=1 is far.
+        // Eight main-camera frustum corners. Reverse-Z puts the Vulkan near plane at z=1 and
+        // the far plane at z=0; keep the first four corners as near and the last four as far.
         const glm::vec4 ndc[8] = {
-            {-1, -1, 0, 1}, {1, -1, 0, 1}, {1, 1, 0, 1}, {-1, 1, 0, 1},
             {-1, -1, 1, 1}, {1, -1, 1, 1}, {1, 1, 1, 1}, {-1, 1, 1, 1},
+            {-1, -1, 0, 1}, {1, -1, 0, 1}, {1, 1, 0, 1}, {-1, 1, 0, 1},
         };
         glm::vec3 worldFull[8];
         for (int i = 0; i < 8; ++i)
@@ -143,7 +144,12 @@ namespace Assets
             auto& keyNext = Keys[i + 1];
             if (time >= key.Time && time < keyNext.Time)
             {
-                float t = (time - key.Time) / (keyNext.Time - key.Time);
+                const float interval = keyNext.Time - key.Time;
+                if (interval <= 1.0e-8f)
+                {
+                    return keyNext.Value;
+                }
+                float t = (time - key.Time) / interval;
                 return glm::mix(key.Value, keyNext.Value, t);
             }
 
@@ -174,7 +180,12 @@ namespace Assets
             auto& keyNext = Keys[i + 1];
             if (time >= key.Time && time < keyNext.Time)
             {
-                float t = (time - key.Time) / (keyNext.Time - key.Time);
+                const float interval = keyNext.Time - key.Time;
+                if (interval <= 1.0e-8f)
+                {
+                    return keyNext.Value;
+                }
+                float t = (time - key.Time) / interval;
                 return glm::slerp(key.Value, keyNext.Value, t);
             }
 

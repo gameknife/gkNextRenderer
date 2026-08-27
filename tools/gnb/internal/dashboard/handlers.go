@@ -113,6 +113,7 @@ type locVM struct {
 	Error             string
 	MaxCategoryLines  int
 	Contributions     contributionGraphVM
+	HourlyCommits     hourlyCommitGraphVM
 	DepthOptions      []locDepthOption
 	SelectedDepth     string
 	TableRows         []locTableRowVM
@@ -155,6 +156,21 @@ type contributionGraphVM struct {
 	Total  int
 	Max    int
 	Error  string
+}
+
+type hourlyCommitVM struct {
+	Hour       int
+	Label      string
+	RangeLabel string
+	Count      int
+}
+
+type hourlyCommitGraphVM struct {
+	Hours []hourlyCommitVM
+	Total int
+	Max   int
+	Mid   int
+	Error string
 }
 
 type gitVM struct {
@@ -436,6 +452,12 @@ func (s *Server) buildLocVM(includeThirdParty bool, selectedDepth string) locVM 
 	} else {
 		vm.Contributions = buildContributionGraph(counts, today)
 	}
+	hourlyCounts, err := gitops.HourlyCommitCounts(s.opts.RepoRoot, chartStart)
+	if err != nil {
+		vm.HourlyCommits.Error = err.Error()
+	} else {
+		vm.HourlyCommits = buildHourlyCommitGraph(hourlyCounts)
+	}
 	return vm
 }
 
@@ -589,6 +611,48 @@ func contributionLevel(count, maxCount int) int {
 		return 4
 	}
 	return level
+}
+
+func buildHourlyCommitGraph(counts map[int]int) hourlyCommitGraphVM {
+	vm := hourlyCommitGraphVM{
+		Hours: make([]hourlyCommitVM, 0, 24),
+	}
+	for offset := 0; offset < 24; offset++ {
+		hour := (6 + offset) % 24
+		count := counts[hour]
+		vm.Hours = append(vm.Hours, hourlyCommitVM{
+			Hour:       hour,
+			Label:      formatHourLabel(hour),
+			RangeLabel: fmt.Sprintf("%02d:00–%02d:00", hour, (hour+1)%24),
+			Count:      count,
+		})
+		vm.Total += count
+		if count > vm.Max {
+			vm.Max = count
+		}
+	}
+	if vm.Max > 0 {
+		vm.Mid = (vm.Max + 1) / 2
+	}
+	return vm
+}
+
+func formatHourLabel(hour int) string {
+	if hour < 0 || hour > 23 {
+		return ""
+	}
+	period := "AM"
+	displayHour := hour
+	if hour >= 12 {
+		period = "PM"
+		if displayHour > 12 {
+			displayHour -= 12
+		}
+	}
+	if displayHour == 0 {
+		displayHour = 12
+	}
+	return fmt.Sprintf("%d %s", displayHour, period)
 }
 
 func dateOnly(value time.Time) time.Time {

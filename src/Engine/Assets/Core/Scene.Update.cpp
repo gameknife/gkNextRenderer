@@ -21,7 +21,8 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
-#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Profiling/ProfilerMacros.hpp"
+#include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Utilities/Exception.hpp"
 
 #include <algorithm>
@@ -375,7 +376,7 @@ namespace Assets
     {
         if (enableCpuAcceleration_)
         {
-            cpuAccelerationStructure_.PollBVHBuild();
+            cpuAccelerationStructure_->PollBVHBuild();
         }
 
         if (NextEngine::GetInstance()->GetUserSettings().TickAnimation)
@@ -453,7 +454,6 @@ namespace Assets
                         node->SetRotation(rotation);
                         node->SetScale(scaling);
                         node->RecalcTransform(true);
-
                         MarkDirty();
 
                         // to physicSys
@@ -462,7 +462,10 @@ namespace Assets
                             if (!n)
                                 return;
                             auto* phys = n->GetComponent<Runtime::PhysicsComponent>();
-                            if (phys)
+                            // Only kinematic bodies are valid MoveKinematic targets. Skipping other
+                            // mobilities here also avoids a blocking CompleteTick per animated node,
+                            // which would serialize the async physics tick.
+                            if (phys && phys->GetMobility() == Runtime::ENodeMobility::Kinematic)
                             {
                                 NextBodyID bodyID = phys->GetPhysicsBody();
                                 if (!bodyID.IsInvalid())
@@ -470,7 +473,7 @@ namespace Assets
                                     if (NextPhysics* physics = NextEngine::GetInstance()->GetPhysicsEngine())
                                     {
                                         physics->MoveKinematicBody(
-                                            bodyID, n->WorldTranslation(), n->WorldRotation(), 0.01f);
+                                            bodyID, n->WorldTranslation(), n->WorldRotation(), 1.0f / 60.0f);
                                     }
                                 }
                             }
@@ -561,21 +564,14 @@ namespace Assets
 
             if (shouldUpdateVoxel && ambientArenaBufferMemory_)
             {
-                const bool voxelUploadCompleted = cpuAccelerationStructure_.Tick(
+                cpuAccelerationStructure_->Tick(
                     *this, ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get());
-
-                if (sceneDirtyForCpuAS_)
-                {
-                    if (cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), true))
-                    {
-                        sceneDirtyForCpuAS_ = false;
-                    }
-                }
             }
-            else if (sceneDirtyForCpuAS_)
+
+            if (cpuBvhDirty_)
             {
-                cpuAccelerationStructure_.RebuildBVHOnly(*this);
-                sceneDirtyForCpuAS_ = false;
+                cpuAccelerationStructure_->RebuildBVHOnly(*this);
+                cpuBvhDirty_ = false;
             }
         }
     }
@@ -908,7 +904,8 @@ namespace Assets
                             }
                             nodeProxyTasksRemaining_.fetch_sub(1, std::memory_order_acq_rel);
                         },
-                        {});
+                        {},
+                        "Scene node proxy update");
                 }
             }
             return true;

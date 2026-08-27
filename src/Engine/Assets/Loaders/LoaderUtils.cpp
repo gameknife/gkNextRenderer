@@ -86,49 +86,113 @@ namespace Assets
         genTangSpaceDefault(&mikktspaceContext);
     }
 
+    namespace
+    {
+        constexpr float defaultAutoCameraNearPlane = 0.5f;
+        constexpr float smallSceneMinAutoCameraNearPlane = 0.02f;
+        constexpr float smallSceneAutoCameraNearScale = 0.025f;
+        constexpr float smallSceneDiagonal = 20.0f;
+
+        float AutoCameraNearPlane(const glm::vec3& extent)
+        {
+            const float sceneDiagonal = glm::length(extent);
+            if (sceneDiagonal >= smallSceneDiagonal)
+            {
+                return defaultAutoCameraNearPlane;
+            }
+
+            // Reverse-Z puts the useful floating-point precision at the far
+            // end, so normal-sized scenes can move the near plane out to 0.5m.
+            // Tiny previews retain a proportional near plane to avoid clipping
+            // the model as soon as the camera is framed.
+            return std::clamp(sceneDiagonal * smallSceneAutoCameraNearScale,
+                              smallSceneMinAutoCameraNearPlane, defaultAutoCameraNearPlane);
+        }
+
+        // The 8 world-space corners of a node's local AABB.
+        void AppendWorldCorners(const glm::mat4& worldTransform, const glm::vec3& aabbMin,
+                                const glm::vec3& aabbMax, glm::vec3& boundsMin, glm::vec3& boundsMax)
+        {
+            const glm::vec3 corners[8] = {
+                {aabbMin.x, aabbMin.y, aabbMin.z},
+                {aabbMax.x, aabbMin.y, aabbMin.z},
+                {aabbMin.x, aabbMax.y, aabbMin.z},
+                {aabbMax.x, aabbMax.y, aabbMin.z},
+                {aabbMin.x, aabbMin.y, aabbMax.z},
+                {aabbMax.x, aabbMin.y, aabbMax.z},
+                {aabbMin.x, aabbMax.y, aabbMax.z},
+                {aabbMax.x, aabbMax.y, aabbMax.z}
+            };
+            for (const glm::vec3& corner : corners)
+            {
+                const glm::vec4 worldPos = worldTransform * glm::vec4(corner, 1.0f);
+                boundsMin = glm::min(boundsMin, glm::vec3(worldPos));
+                boundsMax = glm::max(boundsMax, glm::vec3(worldPos));
+            }
+        }
+    } // namespace
+
+    bool SceneWorldBounds(const std::vector<std::shared_ptr<Node>>& nodes,
+                          const std::vector<Model>& models,
+                          glm::vec3& outMin,
+                          glm::vec3& outMax)
+    {
+        glm::vec3 boundsMin(FLT_MAX);
+        glm::vec3 boundsMax(-FLT_MAX);
+        bool hasModel = false;
+        for (const auto& node : nodes)
+        {
+            auto render = node->GetComponent<Runtime::RenderComponent>();
+            if (!render || !render->IsDrawable())
+            {
+                continue;
+            }
+            const uint32_t modelIdx = render->GetModelId();
+            if (modelIdx >= models.size())
+            {
+                continue;
+            }
+            const Model& model = models[modelIdx];
+            AppendWorldCorners(node->WorldTransform(), model.GetLocalAABBMin(), model.GetLocalAABBMax(),
+                               boundsMin, boundsMax);
+            hasModel = true;
+        }
+        if (!hasModel)
+        {
+            return false;
+        }
+        outMin = boundsMin;
+        outMax = boundsMax;
+        return true;
+    }
+
+    void ExtendCameraFarPlane(Camera& camera, const glm::vec3& boundsMin, const glm::vec3& boundsMax)
+    {
+        // ModelView is a view matrix, so the eye is the translation of its
+        // inverse.
+        const glm::vec3 eye = glm::vec3(glm::inverse(camera.ModelView)[3]);
+        float farthest = 0.0f;
+        for (int k = 0; k < 8; ++k)
+        {
+            const glm::vec3 corner(
+                (k & 1) ? boundsMax.x : boundsMin.x,
+                (k & 2) ? boundsMax.y : boundsMin.y,
+                (k & 4) ? boundsMax.z : boundsMin.z);
+            farthest = glm::max(farthest, glm::length(corner - eye));
+        }
+        // Only ever extends. An authored camera that already reaches past the
+        // scene keeps what it asked for; one that does not would otherwise
+        // clip the scene away entirely. The runtime global far-plane policy
+        // still applies to the active camera after loading.
+        camera.FarPlane = glm::max(camera.FarPlane, farthest * 1.05f + 1.0f);
+    }
+
     Camera AutoFocusCamera(EnvironmentSetting& cameraInit, std::vector<std::shared_ptr<Node>>& nodes,
                            std::vector<Model>& models, const bool obliqueView)
     {
         //auto center camera by scene bounds
         glm::vec3 boundsMin(FLT_MAX), boundsMax(-FLT_MAX);
-        bool hasModel = false;
-
-        for (const auto& node : nodes)
-        {
-            auto render = node->GetComponent<Runtime::RenderComponent>();
-            if (render && render->IsDrawable())
-            {
-                uint32_t modelIdx = render->GetModelId();
-                if (modelIdx < models.size())
-                {
-                    auto& model = models[modelIdx];
-                    glm::vec3 aabbMin = model.GetLocalAABBMin();
-                    glm::vec3 aabbMax = model.GetLocalAABBMax();
-
-                    // Transform 8 corners
-                    glm::vec3 corners[8] = {
-                        {aabbMin.x, aabbMin.y, aabbMin.z},
-                        {aabbMax.x, aabbMin.y, aabbMin.z},
-                        {aabbMin.x, aabbMax.y, aabbMin.z},
-                        {aabbMax.x, aabbMax.y, aabbMin.z},
-                        {aabbMin.x, aabbMin.y, aabbMax.z},
-                        {aabbMax.x, aabbMin.y, aabbMax.z},
-                        {aabbMin.x, aabbMax.y, aabbMax.z},
-                        {aabbMax.x, aabbMax.y, aabbMax.z}
-                    };
-
-                    const glm::mat4& worldTransform = node->WorldTransform();
-
-                    for (int k = 0; k < 8; k++)
-                    {
-                        glm::vec4 worldPos = worldTransform * glm::vec4(corners[k], 1.0f);
-                        boundsMin = glm::min(boundsMin, glm::vec3(worldPos));
-                        boundsMax = glm::max(boundsMax, glm::vec3(worldPos));
-                    }
-                    hasModel = true;
-                }
-            }
-        }
+        const bool hasModel = SceneWorldBounds(nodes, models, boundsMin, boundsMax);
 
         if (!hasModel)
         {
@@ -152,8 +216,8 @@ namespace Assets
         newCamera.Aperture = 0.0f;
         newCamera.FocalDistance = cameraDistance;
         newCamera.name = "AutoCamera";
-        newCamera.NearPlane = sphereRadius < 25.0f ? 0.01f : glm::max(0.05f, sphereRadius * 0.001f);
-        newCamera.FarPlane = glm::max(cameraDistance + sphereRadius * 1.5f, newCamera.NearPlane * 10.0f);
+        newCamera.NearPlane = AutoCameraNearPlane(extent);
+        newCamera.FarPlane = glm::max(defaultCameraFarPlane, cameraDistance + sphereRadius * 1.5f);
         cameraInit.ControlSpeed = glm::max(cameraInit.ControlSpeed, sphereRadius * 0.04f);
 
         return newCamera;

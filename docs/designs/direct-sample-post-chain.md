@@ -18,8 +18,8 @@ spatial denoiser；renderer 生成的当前帧 diffuse/specular 样本直接 com
 
 1. renderer 写 `RT_SINGLE_DIFFUSE`、`RT_SINGLE_SPECULAR`、`RT_ALBEDO` 和 upscaler 所需
    G-buffer/motion/hit-distance。
-2. PathTracing 或 SoftwareTracing 开启 ReSTIR 时，分别由 `Core.RestirSpatialShade` 或
-   `Core.SwRestirSpatialShade` 先把面光直接项加入 `RT_SINGLE_DIFFUSE`。两者共享 reservoir
+2. PathTracing 开启 ReSTIR 时，由 `Core.RestirSpatialShade` 先把面光直接项加入
+   `RT_SINGLE_DIFFUSE`（SoftwareTracing 的 ReSTIR 支持已移除）。它共享 reservoir
    和算法主体；ReSTIR 时域复用是光照采样器自身状态，不是颜色历史。
 3. `Process.Compose.comp.slang` 直接读取 single diffuse/specular 与当前 albedo，叠加编辑器
    outline，输出 HDR 编码或 SDR tonemap 后的 `RT_SCENE_COLOR`。

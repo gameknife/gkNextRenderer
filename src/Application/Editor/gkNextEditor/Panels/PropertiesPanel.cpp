@@ -9,8 +9,8 @@
 #include "Application/Editor/Common/Preview/AssetThumbnailRenderer.hpp"
 #include "Modules/DevTools/Command/RenameNodeCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "Engine/Runtime/Reflection/PropertyAccessor.hpp"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"

@@ -4,10 +4,6 @@
     "repository": "https://github.com/microsoft/vcpkg",
     "baseline": "56bb2411609227288b70117ead2c47585ba07713"
   },
-  "overlay-triplets": [
-    "android/custom-triplets",
-    "android/custom-triplets/community"
-  ],
   "overlay-ports": [
     "cmake/vcpkg-overlays"
   ]

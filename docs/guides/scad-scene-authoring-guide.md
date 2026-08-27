@@ -19,8 +19,9 @@ SCAD 资产按结构放入 `evaluated / source / proc`。可以直接维护 `sou
 - 复用 kit、批量布局、城市矩阵、AI 生成或希望 JSON 易审查：使用 spec/compose。
 - 通用零件：放到 `assets/scad/lib/kit_*.scad`，补 catalog 元数据并重跑 catalog。
 
-当前可参考的手写场景位于 `assets/scad/source/`，包括 `beer_cup.scad`、`old_city.scad`、
-`airport.scad`、`office.scad`、`habor_city*.scad` 和 showcase 场景。生成示例位于
+当前可参考的手写场景位于 `assets/scad/source/`，包括 `beer_cup.scad`、`oldcity/old_city.scad`、
+`airport/airport.scad`、`office/office.scad`、`overhill/overhill_mission.scad`、
+`habor_city/*.scad` 和根目录下的 kit showcase 场景。生成示例位于
 `assets/scad/specs/` 与两个分类的 `generated/` 目录。
 
 ## 坐标、材质与兼容子集

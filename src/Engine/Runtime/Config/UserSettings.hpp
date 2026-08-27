@@ -37,10 +37,10 @@ struct UserSettings final
     uint32_t FrameGenerationFrameLimitFps = 0;
     uint32_t UpscalerJitterFrames = 16;
     bool UpscalerJitterInvertY = false;
-    int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low
-
+    bool CheckerboardRendering = false;
     // Camera
     int CameraIdx;
+    float CameraFarPlane = Assets::defaultCameraFarPlane;
 
     // Profiler
     float HeatmapScale;
@@ -61,6 +61,8 @@ struct UserSettings final
     int GTAODebugMode = 0;
     bool LightObjectScreenSpaceShadow = false;
     float LightObjectShadowDistance = 6.0f;
+    uint32_t LightObjectMaxShadowedLights = 2;
+    uint32_t LightObjectShadowSteps = 12;
 
     // Cascaded world-space light grid. 0 cascades disables it: every light query falls back to the
     // global CDF, which restores the pre-grid behaviour exactly.
@@ -83,13 +85,21 @@ struct UserSettings final
     int AmbientCubeCascadeCount = 3;
     float AmbientCubeCascadeRatio = 2.0f;
     float AmbientCubePoolBrickRatio = 0.5f;
+    uint32_t AmbientCubeBakeTargetFps = 60;
     bool AmbientCubeHitDrivenResidency = false;
     bool AmbientCubeBounceHitAffectsResidency = false;
     uint32_t AmbientCubeEvictFrames = 180;
     uint32_t AmbientCubeGraceFrames = 30;
     float AmbientCubeHitMarkTileRatio = 0.25f;
     int AmbientCubeResidencyDebug = 0;
+    // Multiplier on the indirect term only (SHARC cache hit + ambient-cube path terminal).
+    // 1 = physically accumulated GI; raise it to lift bounce light without touching direct/sky.
+    float IndirectIntensity = 1.0f;
+    // Per-order weight on bounces past the first, so once-bounced sunlight and multi-bounce
+    // fill can be dialed independently. SHARC (PathTracing) only. 1 = physical.
+    float MultiBounceIntensity = 1.0f;
     bool StreamHDRTextures = true;
+    // Required by NextEngine::IsEffectiveSharcEnabled; Android still overrides this to false.
     bool SharcEnable = true;
     uint32_t SharcEntriesPow2 = 21;
     float SharcUpdateSampleRatio = 0.25f;

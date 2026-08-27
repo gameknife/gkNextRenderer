@@ -20,6 +20,7 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Utilities/Math.hpp"
 #include "Engine/Runtime/Interface/AgentQueries.hpp"
 #include "Engine/Runtime/Scene/NodeUtils.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
@@ -232,7 +233,7 @@ bool CitySolSimGameInstance::OnRenderUI()
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     const float aspect = viewport->Size.y > 1.0f ? viewport->Size.x / viewport->Size.y : 16.0f / 9.0f;
     const glm::mat4 viewProjection =
-        glm::perspective(glm::radians(kCityFov), aspect, 0.1f, 1800.0f) * ViewMatrix();
+        Utilities::Math::ReverseZPerspective(glm::radians(kCityFov), aspect, 0.1f, 1800.0f) * ViewMatrix();
     ui_.Draw(viewProjection, cameraEye_, time_, traffic_, citizens_);
     return true;
 }
@@ -334,7 +335,7 @@ bool CitySolSimGameInstance::PickAtScreen(const glm::vec2& screenPosition)
     }
     const float aspect = viewport->Size.x / viewport->Size.y;
     const glm::mat4 viewProjection =
-        glm::perspective(glm::radians(kCityFov), aspect, 0.1f, 1800.0f) * ViewMatrix();
+        Utilities::Math::ReverseZPerspective(glm::radians(kCityFov), aspect, 0.1f, 1800.0f) * ViewMatrix();
     float bestDistance = 18.0f;
     int bestVehicle = -1;
     int bestCitizen = -1;
@@ -392,7 +393,6 @@ void CitySolSimGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     std::string error;
     cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
     cvars.SetDefaultFromString("r.samples", "2", &error);
-    cvars.SetDefaultFromString("r.sharc.enable", "true", &error);
     cvars.SetDefaultFromString("r.upscaler.type", "1", &error);
 }
 

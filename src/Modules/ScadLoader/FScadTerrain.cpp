@@ -11,8 +11,12 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <map>
+#include <mutex>
 #include <unordered_map>
+
+#include "Modules/ScadLoader/FScadShared.h"
 
 namespace Assets::Scad
 {
@@ -195,6 +199,14 @@ namespace Assets::Scad
             double rockSlopeDeg = 38.0;   // steeper than this => rock
             double dryFrac = 0.45;        // dry grass above base + frac * span
             double minReliefForSnow = 6.0;
+            // Floor under the green line, in metres above the datum. The bands
+            // are fractions of the tile's own relief, which asks the wrong
+            // question of a city: Manhattan's built-up ground spans 27 m, so
+            // 55% of it is 15 m, and half of midtown came out painted as
+            // hillside. Greenery needs a real hill under it, not the upper
+            // half of whatever this tile happens to contain. 0 disables it,
+            // which is what a natural palette wants.
+            double minGreenRiseM = 0.0;
         };
 
         const FPaletteDef* FindPalette(const std::string& name)
@@ -248,9 +260,36 @@ namespace Assets::Scad
                 {0.28f, 0.26f, 0.24f, 1.0f},
                 0.55, 34.0, 0.35, 4.0};
 
+            // Built-up coastal land. The usual green-to-snow ramp is wrong for a
+            // city tile: the flat low ground is concrete and asphalt, and it is
+            // the *hills* that stay green (Mid-Levels, country parks). Snow is
+            // disabled outright — a 120m urban hill must never get a white cap.
+            static const FPaletteDef urban = {
+                {
+                    {0.25f, 0.25f, 0.24f, 1.0f}, // Grass     -> concrete
+                    {0.21f, 0.21f, 0.21f, 1.0f}, // GrassDark -> asphalt patch
+                    {0.20f, 0.25f, 0.15f, 1.0f}, // DryGrass  -> hillside greenery
+                    {0.30f, 0.29f, 0.27f, 1.0f}, // Sand      -> quayside, not beach
+                    {0.28f, 0.27f, 0.25f, 1.0f}, // Rock      -> retaining wall
+                    {0.17f, 0.23f, 0.13f, 1.0f}, // RockHigh  -> wooded slope
+                    {0.19f, 0.24f, 0.15f, 1.0f}, // Snow      -> never reached
+                    {0.20f, 0.20f, 0.18f, 1.0f}, // Bed       -> harbour silt
+                    {0.17f, 0.17f, 0.18f, 1.0f}, // Road
+                    {0.27f, 0.27f, 0.26f, 1.0f}, // Pad
+                },
+                {0.12f, 0.26f, 0.29f, 1.0f},
+                {0.24f, 0.23f, 0.22f, 1.0f},
+                // dryFrac 0.55: only the genuine hillside goes green. A lower
+                // line turns the flat downtown into a meadow, because span is
+                // set by the single highest corner of the tile.
+                // minGreenRiseM 40: and nothing goes green at all below 40 m of
+                // rise, which is what keeps a city with no hills in it grey.
+                4.0, 36.0, 0.55, 3000.0, 40.0};
+
             if (name == "temperate") return &temperate;
             if (name == "arid") return &arid;
             if (name == "alpine") return &alpine;
+            if (name == "urban") return &urban;
             return nullptr;
         }
 
@@ -435,6 +474,10 @@ namespace Assets::Scad
                     c.bboxMax = f.at + glm::dvec2(pad);
                     break;
                 }
+                case FTerrainFeature::EType::Hmap:
+                    // Unbounded on purpose: the grid clamps at its border, so a
+                    // DEM that covers the tile has no seam at the domain edge.
+                    break;
                 case FTerrainFeature::EType::Lake:
                 {
                     const double pad = f.radius * 1.4 + 2.0;
@@ -537,6 +580,13 @@ namespace Assets::Scad
 
                 switch (f.type)
                 {
+                case FTerrainFeature::EType::Hmap:
+                {
+                    if (!f.grid) return;
+                    const double v = f.grid->Sample(p.x, p.y) * f.zScale + f.zBias;
+                    h = f.hmapAdd ? h + v : v;
+                    return;
+                }
                 case FTerrainFeature::EType::Mountain:
                 {
                     const double d = glm::length(p - f.at) / std::max(1e-6, f.radius);
@@ -865,6 +915,142 @@ namespace Assets::Scad
     }
 
     // ----------------------------------------------------------------------
+    // Sampled heightfields (hmap)
+    // ----------------------------------------------------------------------
+    double FHeightGrid::Sample(double x, double y) const
+    {
+        if (cols <= 0 || rows <= 0 || values.empty())
+        {
+            return 0.0;
+        }
+        const double gx = std::clamp((x - origin.x) / std::max(1e-9, cell.x), 0.0,
+                                     static_cast<double>(cols - 1));
+        const double gy = std::clamp((y - origin.y) / std::max(1e-9, cell.y), 0.0,
+                                     static_cast<double>(rows - 1));
+        const int x0 = static_cast<int>(gx);
+        const int y0 = static_cast<int>(gy);
+        const int x1 = std::min(x0 + 1, cols - 1);
+        const int y1 = std::min(y0 + 1, rows - 1);
+        const double tx = gx - static_cast<double>(x0);
+        const double ty = gy - static_cast<double>(y0);
+        const double h00 = values[static_cast<size_t>(y0) * cols + x0];
+        const double h10 = values[static_cast<size_t>(y0) * cols + x1];
+        const double h01 = values[static_cast<size_t>(y1) * cols + x0];
+        const double h11 = values[static_cast<size_t>(y1) * cols + x1];
+        return (h00 * (1.0 - tx) + h10 * tx) * (1.0 - ty) + (h01 * (1.0 - tx) + h11 * tx) * ty;
+    }
+
+    std::shared_ptr<const FHeightGrid> ScadTerrain::DecodeHeightGrid(
+        const std::vector<uint8_t>& bytes, std::string& outError)
+    {
+        outError.clear();
+        // "GKHM" + version + cols + rows + 6 floats = 4 + 4*3 + 4*6 = 40 bytes.
+        constexpr size_t kHeaderSize = 40;
+        if (bytes.size() < kHeaderSize || std::memcmp(bytes.data(), "GKHM", 4) != 0)
+        {
+            outError = "not a .hmap blob (bad magic)";
+            return nullptr;
+        }
+        auto readU32 = [&](size_t offset)
+        {
+            uint32_t v = 0;
+            std::memcpy(&v, bytes.data() + offset, sizeof(v));
+            return v;
+        };
+        auto readF32 = [&](size_t offset)
+        {
+            float v = 0.0f;
+            std::memcpy(&v, bytes.data() + offset, sizeof(v));
+            return v;
+        };
+
+        const uint32_t version = readU32(4);
+        if (version != 1u)
+        {
+            outError = "unsupported .hmap version " + std::to_string(version);
+            return nullptr;
+        }
+        const uint32_t cols = readU32(8);
+        const uint32_t rows = readU32(12);
+        if (cols < 2u || rows < 2u || cols > 8192u || rows > 8192u)
+        {
+            outError = "bad .hmap dimensions";
+            return nullptr;
+        }
+        const size_t expected = kHeaderSize + static_cast<size_t>(cols) * rows * 2u;
+        if (bytes.size() < expected)
+        {
+            outError = "truncated .hmap payload";
+            return nullptr;
+        }
+
+        auto grid = std::make_shared<FHeightGrid>();
+        grid->cols = static_cast<int>(cols);
+        grid->rows = static_cast<int>(rows);
+        grid->origin = glm::dvec2(readF32(16), readF32(20));
+        grid->cell = glm::dvec2(readF32(24), readF32(28));
+        const double scale = readF32(32);
+        const double bias = readF32(36);
+        if (grid->cell.x <= 0.0 || grid->cell.y <= 0.0)
+        {
+            outError = "bad .hmap cell size";
+            return nullptr;
+        }
+
+        grid->values.resize(static_cast<size_t>(cols) * rows);
+        uint64_t hash = 1469598103934665603ull;
+        for (size_t i = 0; i < grid->values.size(); ++i)
+        {
+            int16_t raw = 0;
+            std::memcpy(&raw, bytes.data() + kHeaderSize + i * 2u, sizeof(raw));
+            grid->values[i] = static_cast<float>(raw * scale + bias);
+            hash = (hash ^ static_cast<uint64_t>(static_cast<uint16_t>(raw))) * 1099511628211ull;
+        }
+        grid->contentHash = HashMix(hash);
+        return grid;
+    }
+
+    namespace
+    {
+        // Process-level cache: one decode per .hmap, shared across scenes and
+        // across the many TERR copies the evaluator makes of the same spec.
+        std::shared_ptr<const FHeightGrid> LoadHeightGridCached(const std::string& path,
+                                                                std::string& outError)
+        {
+            static std::mutex mutex;
+            static std::unordered_map<std::string, std::shared_ptr<const FHeightGrid>> cache;
+
+            std::lock_guard<std::mutex> lock(mutex);
+            auto found = cache.find(path);
+            if (found != cache.end())
+            {
+                if (!found->second)
+                {
+                    outError = "cannot read '" + path + "'";
+                }
+                return found->second;
+            }
+
+            std::vector<uint8_t> bytes;
+            std::shared_ptr<const FHeightGrid> grid;
+            if (!ScadReadAsset(path, bytes))
+            {
+                outError = "cannot read '" + path + "'";
+            }
+            else
+            {
+                grid = ScadTerrain::DecodeHeightGrid(bytes, outError);
+                if (!grid)
+                {
+                    outError = path + ": " + outError;
+                }
+            }
+            cache.emplace(path, grid);
+            return grid;
+        }
+    } // namespace
+
+    // ----------------------------------------------------------------------
     // Spec decoding
     // ----------------------------------------------------------------------
     bool ScadTerrain::DecodeSpec(const Value& value, FTerrainSpec& outSpec,
@@ -914,6 +1100,10 @@ namespace Assets::Scad
             if (!base.vec.empty()) outSpec.baseHeight = base.vec[0].AsNumber(0.0);
             if (base.vec.size() > 1) outSpec.relief = std::max(0.0, base.vec[1].AsNumber(1.0));
             if (base.vec.size() > 2) outSpec.roughness = Clamp01(base.vec[2].AsNumber(0.5));
+            // Optional 4th element: the colour ramp's relief. Absent means
+            // "derive it from this terrain", which is what every hand-written
+            // TERR does and what a single tile wants.
+            if (base.vec.size() > 3) outSpec.paletteSpan = std::max(0.0, base.vec[3].AsNumber(0.0));
         }
         else if (base.IsNumber())
         {
@@ -1005,6 +1195,81 @@ namespace Assets::Scad
                 f.rot = num(3, 0.0);
                 ok = ok && f.size.x > 0.0 && f.size.y > 0.0;
             }
+            else if (kind == "hmap")
+            {
+                f.type = FTerrainFeature::EType::Hmap;
+                size_t tail = 2; // first index after the source operand(s)
+                if (fv.vec.size() >= 2 && fv.vec[1].type == Value::Type::Str)
+                {
+                    f.path = fv.vec[1].str;
+                    std::string err;
+                    f.grid = LoadHeightGridCached(f.path, err);
+                    if (!f.grid)
+                    {
+                        outWarnings.push_back("hmap " + err + "; skipped");
+                        continue;
+                    }
+                }
+                else if (fv.vec.size() >= 3 && fv.vec[1].type == Value::Type::Vec &&
+                         fv.vec[2].type == Value::Type::Vec)
+                {
+                    glm::dvec2 dims(0.0, 0.0);
+                    if (!ReadVec2(fv.vec[1], dims))
+                    {
+                        outWarnings.push_back("inline hmap needs [cols, rows]; skipped");
+                        continue;
+                    }
+                    auto grid = std::make_shared<FHeightGrid>();
+                    grid->cols = static_cast<int>(std::lround(dims.x));
+                    grid->rows = static_cast<int>(std::lround(dims.y));
+                    const size_t need = static_cast<size_t>(std::max(0, grid->cols)) *
+                                        static_cast<size_t>(std::max(0, grid->rows));
+                    if (grid->cols < 2 || grid->rows < 2 || fv.vec[2].vec.size() < need)
+                    {
+                        outWarnings.push_back("inline hmap grid does not match [cols, rows]; skipped");
+                        continue;
+                    }
+                    // Inline grids span the whole terrain domain, centred on the origin.
+                    grid->origin = -outSpec.size * 0.5;
+                    grid->cell = glm::dvec2(outSpec.size.x / (grid->cols - 1),
+                                            outSpec.size.y / (grid->rows - 1));
+                    grid->values.resize(need);
+                    uint64_t hash = 1469598103934665603ull;
+                    for (size_t i = 0; i < need; ++i)
+                    {
+                        const double v = fv.vec[2].vec[i].AsNumber(0.0);
+                        grid->values[i] = static_cast<float>(v);
+                        uint32_t bits = 0;
+                        const float fv32 = grid->values[i];
+                        std::memcpy(&bits, &fv32, sizeof(bits));
+                        hash = (hash ^ static_cast<uint64_t>(bits)) * 1099511628211ull;
+                    }
+                    grid->contentHash = HashMix(hash);
+                    f.grid = std::move(grid);
+                    tail = 3;
+                }
+                else
+                {
+                    outWarnings.push_back("hmap needs a path or [cols, rows] + grid; skipped");
+                    continue;
+                }
+
+                if (tail < fv.vec.size() && fv.vec[tail].type == Value::Type::Str)
+                {
+                    const std::string& mode = fv.vec[tail].str;
+                    if (mode == "add")
+                    {
+                        f.hmapAdd = true;
+                    }
+                    else if (mode != "set")
+                    {
+                        outWarnings.push_back("unknown hmap mode '" + mode + "' (using set)");
+                    }
+                    ++tail;
+                }
+                f.zScale = num(tail, 1.0);
+                f.zBias = num(tail + 1, 0.0);
+            }
             else
             {
                 outWarnings.push_back("unknown terrain feature '" + kind + "'; skipped");
@@ -1035,6 +1300,7 @@ namespace Assets::Scad
         AppendKeyNumber(key, spec.baseHeight);
         AppendKeyNumber(key, spec.relief);
         AppendKeyNumber(key, spec.roughness);
+        AppendKeyNumber(key, spec.paletteSpan);
         AppendKeyNumber(key, spec.hasWaterLevel ? 1.0 : 0.0);
         AppendKeyNumber(key, spec.waterLevel);
         key += spec.palette;
@@ -1052,6 +1318,17 @@ namespace Assets::Scad
             AppendKeyNumber(key, f.depth);
             AppendKeyNumber(key, f.width);
             AppendKeyNumber(key, f.rugged);
+            if (f.type == FTerrainFeature::EType::Hmap)
+            {
+                key += f.path;
+                key += '|';
+                AppendKeyNumber(key, f.hmapAdd ? 1.0 : 0.0);
+                AppendKeyNumber(key, f.zScale);
+                AppendKeyNumber(key, f.zBias);
+                // Content hash, so an edited .hmap invalidates the cache even
+                // when the TERR literal is byte-identical.
+                AppendKeyNumber(key, f.grid ? static_cast<double>(f.grid->contentHash >> 11) : 0.0);
+            }
             for (const glm::dvec2& p : f.pts)
             {
                 AppendKeyNumber(key, p.x);
@@ -1147,8 +1424,20 @@ namespace Assets::Scad
         data->cellWater.resize(static_cast<size_t>(cx) * cy, 0.0);
         data->cellBiome.resize(static_cast<size_t>(cx) * cy, static_cast<uint8_t>(ETerrainBiome::Grass));
 
-        const double span = std::max(0.0, maxH - spec.baseHeight);
-        const bool snowEligible = span >= pal.minReliefForSnow;
+        // The ramp is measured over the whole area when the spec says so, not
+        // over this terrain's own extremes. A grid of terrains would otherwise
+        // give each part its own colour ramp, and two parts of one hillside
+        // would meet at the seam in different colours.
+        const double localSpan = std::max(0.0, maxH - spec.baseHeight);
+        double span = spec.paletteSpan > 0.0 ? spec.paletteSpan : localSpan;
+        // Keep the green line above minGreenRiseM by widening the ramp rather
+        // than by special-casing one band: the wooded-slope band has to move
+        // with it or it appears below the greenery it belongs above.
+        if (pal.minGreenRiseM > 0.0 && pal.dryFrac > 1e-3)
+        {
+            span = std::max(span, pal.minGreenRiseM / pal.dryFrac);
+        }
+        const bool snowEligible = localSpan >= pal.minReliefForSnow;
         const double snowLine = spec.baseHeight + pal.snowFrac * span;
         const double rockHighZ = spec.baseHeight + 0.5 * span;
         const double dryLine = span >= 3.0 ? spec.baseHeight + pal.dryFrac * span : 1e30;

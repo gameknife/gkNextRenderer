@@ -343,9 +343,6 @@ build
 assets/shaders/Platform.glsl
 assets/package
 assets/textures/thumb
-android/.gradle/
-android/app/src/main/assets/
-android/local.properties
 slang/
 
 tools/node/
@@ -422,13 +419,18 @@ assets/paks/ldraw.pak
 
 assets/models/KayKit_Platformer_Pack/
 
+# Generated real-world city tiles (gnb geo). Bulky, part binary, and fully
+# reproducible from external/geocache, so they ship as assets/paks/geo.pak via
+# gnb paks fetch instead of living in git. landmarks.json is the hand-maintained
+# input to the generator, so it stays.
+assets/geo/*
+!assets/geo/landmarks.json
+assets/paks/geo.pak
+
 # Optional binary assets — fetched via gnb paks fetch.
 assets/sog/
 assets/sfx/*.mp3
 assets/sfx/*.wav
-
-# SDL3 Android archive — pulled by android/app/build.gradle's downloadSdlAar task.
-android/app/libs/SDL3-*.aar
 
 # Phase 3 占位资产 — 受版权保护，不得入库
 assets/_placeholder/*
@@ -444,3 +446,8 @@ assets/paks/magicalego.pak
 # 本地草稿、宣传材料 — 不入库，仅本地保留
 marketing/
 assets/omr/outer
+
+# Website static build artifacts & dependencies
+website/node_modules/
+website/.vitepress/dist/
+website/.vitepress/cache/

@@ -1,5 +1,5 @@
-// FCPUProbeBaker: ambient cube voxelization, chamfer distance field and GPU
-// upload for the software GI probe cascades.
+// FCPUProbeBaker: ambient cube voxelization, Chebyshev (L-infinity) distance field
+// and GPU upload for the software GI probe cascades.
 // Split from CPUAccelerationStructure.cpp; same namespace, separate TU.
 #include "Engine/Assets/Acceleration/CPUAccelerationStructure.hpp"
 #include "Engine/Assets/Acceleration/CPUAccelerationStructure.Internal.hpp"
@@ -17,19 +17,9 @@ namespace Assets::CPU
 
 namespace
 {
-    uint8_t GetPackedNibbleX(uint32_t packedValue)
-    {
-        return static_cast<uint8_t>(packedValue & 0xFu);
-    }
-
     uint32_t SetPackedNibbleX(uint32_t packedValue, uint8_t value)
     {
         return (packedValue & 0xFFFFFFF0u) | (value & 0xFu);
-    }
-
-    uint32_t GetVoxelAddress(int x, int y, int z)
-    {
-        return static_cast<uint32_t>(y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x);
     }
 
     struct FChamferNeighbor
@@ -40,36 +30,42 @@ namespace
         float weight;
     };
 
+    // All 26 neighbours carry weight 1, which makes the two-sweep chamfer produce an exact
+    // Chebyshev (L-infinity) distance transform rather than a Euclidean approximation. The
+    // shader consumes this field as "every cell within `d` of me in every axis is empty", and
+    // only L-infinity supports that reading: with Euclidean weights a diagonal ray can leave
+    // the guaranteed-empty region after d/sqrt(3) cells, which is how the skip used to tunnel
+    // through thin geometry. See TraceRayDDA in common/RayTracers.slang.
     constexpr std::array<FChamferNeighbor, 13> kForwardChamferNeighbors = {
-        FChamferNeighbor{-1, -1, -1, 1.73205081f},
-        FChamferNeighbor{0, -1, -1, 1.41421356f},
-        FChamferNeighbor{1, -1, -1, 1.73205081f},
-        FChamferNeighbor{-1, -1, 0, 1.41421356f},
+        FChamferNeighbor{-1, -1, -1, 1.0f},
+        FChamferNeighbor{0, -1, -1, 1.0f},
+        FChamferNeighbor{1, -1, -1, 1.0f},
+        FChamferNeighbor{-1, -1, 0, 1.0f},
         FChamferNeighbor{0, -1, 0, 1.0f},
-        FChamferNeighbor{1, -1, 0, 1.41421356f},
-        FChamferNeighbor{-1, -1, 1, 1.73205081f},
-        FChamferNeighbor{0, -1, 1, 1.41421356f},
-        FChamferNeighbor{1, -1, 1, 1.73205081f},
-        FChamferNeighbor{-1, 0, -1, 1.41421356f},
+        FChamferNeighbor{1, -1, 0, 1.0f},
+        FChamferNeighbor{-1, -1, 1, 1.0f},
+        FChamferNeighbor{0, -1, 1, 1.0f},
+        FChamferNeighbor{1, -1, 1, 1.0f},
+        FChamferNeighbor{-1, 0, -1, 1.0f},
         FChamferNeighbor{0, 0, -1, 1.0f},
-        FChamferNeighbor{1, 0, -1, 1.41421356f},
+        FChamferNeighbor{1, 0, -1, 1.0f},
         FChamferNeighbor{-1, 0, 0, 1.0f},
     };
 
     constexpr std::array<FChamferNeighbor, 13> kBackwardChamferNeighbors = {
         FChamferNeighbor{1, 0, 0, 1.0f},
-        FChamferNeighbor{-1, 0, 1, 1.41421356f},
+        FChamferNeighbor{-1, 0, 1, 1.0f},
         FChamferNeighbor{0, 0, 1, 1.0f},
-        FChamferNeighbor{1, 0, 1, 1.41421356f},
-        FChamferNeighbor{-1, 1, -1, 1.73205081f},
-        FChamferNeighbor{0, 1, -1, 1.41421356f},
-        FChamferNeighbor{1, 1, -1, 1.73205081f},
-        FChamferNeighbor{-1, 1, 0, 1.41421356f},
+        FChamferNeighbor{1, 0, 1, 1.0f},
+        FChamferNeighbor{-1, 1, -1, 1.0f},
+        FChamferNeighbor{0, 1, -1, 1.0f},
+        FChamferNeighbor{1, 1, -1, 1.0f},
+        FChamferNeighbor{-1, 1, 0, 1.0f},
         FChamferNeighbor{0, 1, 0, 1.0f},
-        FChamferNeighbor{1, 1, 0, 1.41421356f},
-        FChamferNeighbor{-1, 1, 1, 1.73205081f},
-        FChamferNeighbor{0, 1, 1, 1.41421356f},
-        FChamferNeighbor{1, 1, 1, 1.73205081f},
+        FChamferNeighbor{1, 1, 0, 1.0f},
+        FChamferNeighbor{-1, 1, 1, 1.0f},
+        FChamferNeighbor{0, 1, 1, 1.0f},
+        FChamferNeighbor{1, 1, 1, 1.0f},
     };
 
     void ApplyChamferPass(std::vector<float>& distanceField, const std::array<FChamferNeighbor, 13>& neighbors, bool reverseSweep)
@@ -134,19 +130,6 @@ uint PackNibbles(glm::u32vec4 low, glm::u32vec4 high)
 #define FLOAT3 vec3
 #define FLOAT4 vec4
 
-float DetectDistance(const FCPUTLASSnapshot& snapshot, FLOAT3 origin, FLOAT3 rayDir, float cubeUnit)
-{
-    vec3 outNormal;
-    float outRayDist;
-    uint tempMaterialId;
-    uint tempInstanceId;
-    if (TraceRay(snapshot, origin, rayDir, cubeUnit * 64.0f, outNormal, tempMaterialId, outRayDist, tempInstanceId))
-    {
-        return outRayDist;
-    }
-    return 255;
-}
-
 bool InsideGeometry(const FCPUTLASSnapshot& snapshot, FLOAT3& origin, FLOAT3 rayDir, VoxelData& outCube,
                     float& distance, float cubeUnit)
 {
@@ -201,20 +184,6 @@ void VoxelizeCube(const FCPUTLASSnapshot& snapshot, VoxelData& cube, FLOAT3 orig
     InsideGeometry(snapshot, origin, FLOAT3(0, 0, 1), cube, distPZ, cubeUnit);
     InsideGeometry(snapshot, origin, FLOAT3(0, 0, -1), cube, distNZ, cubeUnit);
 
-    // get the min dist of each direction
-    float minDist = std::min({distPY, distNY, distPX, distNX, distPZ, distNZ});
-    if (minDist > 254.0f)
-    {
-        minDist = std::min({minDist, DetectDistance(snapshot, origin, FLOAT3(1, 1, 1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(snapshot, origin, FLOAT3(-1, 1, 1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(snapshot, origin, FLOAT3(-1, -1, 1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(snapshot, origin, FLOAT3(-1, 1, 1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(snapshot, origin, FLOAT3(1, 1, -1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(snapshot, origin, FLOAT3(-1, 1, -1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(snapshot, origin, FLOAT3(-1, -1, -1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(snapshot, origin, FLOAT3(-1, 1, -1), cubeUnit)});
-    }
-
     // Each voxel now has a distance field that can be used for fast skipping.
     distPY = glm::fclamp(distPY / cubeUnit, 0.0f, 1.0f);
     distNY = glm::fclamp(distNY / cubeUnit, 0.0f, 1.0f);
@@ -225,8 +194,11 @@ void VoxelizeCube(const FCPUTLASSnapshot& snapshot, VoxelData& cube, FLOAT3 orig
 
     float inside = distPY * distNY * distPX * distNX * distPZ * distNZ;
 
+    // Nibble x is the L-infinity distance field. It is a whole-cascade sweep, so only a
+    // placeholder goes in here; RebuildDistanceField() overwrites every voxel once the cascade
+    // has finished voxelizing.
     cube.distanceToSolid = PackNibbles(
-        glm::u32vec4(std::min<uint32_t>(static_cast<uint32_t>(minDist / cubeUnit), 15u),
+        glm::u32vec4(kMaxDistanceFieldSeed,
                      static_cast<uint>(inside * 15.0f),
                      static_cast<uint>(distPZ * 15.0f),
                      static_cast<uint>(distNZ * 15.0f)),
@@ -312,7 +284,11 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType,
             {
                 VoxelizeCube(*snapshot, voxel, probePos, UNIT_SIZE);
             }
-            distanceToSolidSeeds[addressIdx] = GetPackedNibbleX(voxel.distanceToSolid);
+            // Seed the transform from occupancy alone. The DDA only ever reports a hit on a
+            // voxel with matId != 0, so the distance to the nearest such voxel is exactly the
+            // clearance a ray is allowed to skip -- an axis-ray distance seed could only make
+            // the field smaller than that and cost traversal steps for nothing.
+            distanceToSolidSeeds[addressIdx] = voxel.matId > 0 ? uint8_t{0} : kMaxDistanceFieldSeed;
             break;
     }
 }

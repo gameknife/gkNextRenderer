@@ -13,14 +13,15 @@
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Runtime/Editor/ImGuiScaling.hpp"
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Modules/NextUI/ImGuiScaling.hpp"
+#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
-#include "Engine/Runtime/Editor/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "Modules/ScadLoader/FScadEvaluator.h"
 #include "Modules/ScadLoader/FScadLexer.h"
 #include "Modules/ScadLoader/FScadParser.h"
@@ -35,6 +36,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -51,18 +53,518 @@
 #include <limits>
 #include <optional>
 #include <regex>
+#include <set>
 #include <spdlog/spdlog.h>
 #include <sstream>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
 
 namespace ScadLibrary
 {
     namespace
     {
         constexpr float kTitleBarHeight = 48.0f;
-        constexpr float kBottomBarHeight = 28.0f;
+        constexpr float kBottomBarHeight = 48.0f;
         constexpr float kCollapsedRailWidth = 46.0f;
         constexpr int kBenchGridColumns = 6;
         constexpr float kBenchGridStep = 14.0f;
+
+        struct FScadRawArgument
+        {
+            std::string name;
+            std::string source;
+            bool named = false;
+        };
+
+        struct FScadParameterEditor
+        {
+            std::string name;
+            std::string defaultSource;
+            std::string source;
+            Assets::Scad::ExprPtr expression;
+            bool explicitValue = false;
+        };
+
+        std::string TrimScadText(std::string_view text)
+        {
+            size_t begin = 0;
+            while (begin < text.size() && std::isspace(static_cast<unsigned char>(text[begin])))
+            {
+                ++begin;
+            }
+            size_t end = text.size();
+            while (end > begin && std::isspace(static_cast<unsigned char>(text[end - 1])))
+            {
+                --end;
+            }
+            return std::string(text.substr(begin, end - begin));
+        }
+
+        std::vector<std::string> SplitTopLevelScadArguments(const std::string& source)
+        {
+            std::vector<std::string> parts;
+            if (TrimScadText(source).empty())
+            {
+                return parts;
+            }
+
+            size_t begin = 0;
+            int parentheses = 0;
+            int brackets = 0;
+            int braces = 0;
+            bool quoted = false;
+            bool escaped = false;
+            for (size_t index = 0; index < source.size(); ++index)
+            {
+                const char character = source[index];
+                if (quoted)
+                {
+                    if (escaped)
+                    {
+                        escaped = false;
+                    }
+                    else if (character == '\\')
+                    {
+                        escaped = true;
+                    }
+                    else if (character == '"')
+                    {
+                        quoted = false;
+                    }
+                    continue;
+                }
+                if (character == '"')
+                {
+                    quoted = true;
+                    continue;
+                }
+                switch (character)
+                {
+                case '(':
+                    ++parentheses;
+                    break;
+                case ')':
+                    parentheses = std::max(0, parentheses - 1);
+                    break;
+                case '[':
+                    ++brackets;
+                    break;
+                case ']':
+                    brackets = std::max(0, brackets - 1);
+                    break;
+                case '{':
+                    ++braces;
+                    break;
+                case '}':
+                    braces = std::max(0, braces - 1);
+                    break;
+                case ',':
+                    if (parentheses == 0 && brackets == 0 && braces == 0)
+                    {
+                        parts.push_back(TrimScadText(std::string_view(source).substr(begin, index - begin)));
+                        begin = index + 1;
+                    }
+                    break;
+                default:
+                    break;
+                }
+            }
+            parts.push_back(TrimScadText(std::string_view(source).substr(begin)));
+            parts.erase(std::remove_if(parts.begin(), parts.end(), [](const std::string& part) { return part.empty(); }),
+                        parts.end());
+            return parts;
+        }
+
+        std::optional<size_t> FindTopLevelScadAssignment(const std::string& source)
+        {
+            int parentheses = 0;
+            int brackets = 0;
+            int braces = 0;
+            bool quoted = false;
+            bool escaped = false;
+            for (size_t index = 0; index < source.size(); ++index)
+            {
+                const char character = source[index];
+                if (quoted)
+                {
+                    if (escaped)
+                    {
+                        escaped = false;
+                    }
+                    else if (character == '\\')
+                    {
+                        escaped = true;
+                    }
+                    else if (character == '"')
+                    {
+                        quoted = false;
+                    }
+                    continue;
+                }
+                if (character == '"')
+                {
+                    quoted = true;
+                    continue;
+                }
+                switch (character)
+                {
+                case '(':
+                    ++parentheses;
+                    break;
+                case ')':
+                    parentheses = std::max(0, parentheses - 1);
+                    break;
+                case '[':
+                    ++brackets;
+                    break;
+                case ']':
+                    brackets = std::max(0, brackets - 1);
+                    break;
+                case '{':
+                    ++braces;
+                    break;
+                case '}':
+                    braces = std::max(0, braces - 1);
+                    break;
+                case '=':
+                    if (parentheses == 0 && brackets == 0 && braces == 0 &&
+                        (index == 0 || source[index - 1] != '=') &&
+                        (index + 1 >= source.size() || source[index + 1] != '='))
+                    {
+                        return index;
+                    }
+                    break;
+                default:
+                    break;
+                }
+            }
+            return std::nullopt;
+        }
+
+        bool IsScadIdentifier(const std::string& text)
+        {
+            if (text.empty())
+            {
+                return false;
+            }
+            const auto isFirst = [](unsigned char character)
+            { return std::isalpha(character) || character == '_' || character == '$'; };
+            const auto isRest = [](unsigned char character)
+            { return std::isalnum(character) || character == '_' || character == '$'; };
+            if (!isFirst(static_cast<unsigned char>(text.front())))
+            {
+                return false;
+            }
+            return std::all_of(text.begin() + 1, text.end(),
+                               [&](char character) { return isRest(static_cast<unsigned char>(character)); });
+        }
+
+        bool ParseScadExpression(const std::string& source, Assets::Scad::ExprPtr& outExpression)
+        {
+            if (TrimScadText(source).empty())
+            {
+                outExpression.reset();
+                return false;
+            }
+            const std::string wrapper = fmt::format(
+                "module __scadlibrary_expression_probe__() {{ __scadlibrary_expression__({}); }}", source);
+            std::vector<Assets::Scad::Token> tokens;
+            std::string error;
+            Assets::Scad::Scope scope;
+            if (!Assets::Scad::ScadLexer::Tokenize(wrapper, tokens, error) ||
+                !Assets::Scad::ScadParser::Parse(tokens, scope, error) || scope.size() != 1 ||
+                scope.front() == nullptr || scope.front()->body.size() != 1 ||
+                scope.front()->body.front() == nullptr || scope.front()->body.front()->args.size() != 1)
+            {
+                outExpression.reset();
+                return false;
+            }
+            outExpression = scope.front()->body.front()->args.front().value;
+            return outExpression != nullptr;
+        }
+
+        bool ParseScadModuleParameters(const FKitModuleInfo& moduleInfo,
+                                       std::vector<FScadParameterEditor>& outParameters)
+        {
+            outParameters.clear();
+            for (const std::string& part : SplitTopLevelScadArguments(moduleInfo.params))
+            {
+                const std::optional<size_t> assignment = FindTopLevelScadAssignment(part);
+                const std::string name = TrimScadText(
+                    assignment ? std::string_view(part).substr(0, *assignment) : std::string_view(part));
+                if (!IsScadIdentifier(name))
+                {
+                    outParameters.clear();
+                    return false;
+                }
+                FScadParameterEditor parameter;
+                parameter.name = name;
+                if (assignment)
+                {
+                    parameter.defaultSource = TrimScadText(std::string_view(part).substr(*assignment + 1));
+                }
+                outParameters.push_back(std::move(parameter));
+            }
+            return true;
+        }
+
+        std::vector<FScadRawArgument> ParseScadCallArguments(const std::string& source)
+        {
+            std::vector<FScadRawArgument> arguments;
+            for (const std::string& part : SplitTopLevelScadArguments(source))
+            {
+                const std::optional<size_t> assignment = FindTopLevelScadAssignment(part);
+                if (assignment)
+                {
+                    const std::string name = TrimScadText(std::string_view(part).substr(0, *assignment));
+                    if (IsScadIdentifier(name))
+                    {
+                        arguments.push_back({name, TrimScadText(std::string_view(part).substr(*assignment + 1)), true});
+                        continue;
+                    }
+                }
+                arguments.push_back({{}, part, false});
+            }
+            return arguments;
+        }
+
+        std::vector<FScadParameterEditor> MakeScadParameterEditors(const FKitModuleInfo& moduleInfo,
+                                                                     const std::string& currentArguments,
+                                                                     std::vector<FScadRawArgument>& outUnknown)
+        {
+            std::vector<FScadParameterEditor> parameters;
+            if (!ParseScadModuleParameters(moduleInfo, parameters))
+            {
+                return parameters;
+            }
+            const std::vector<FScadRawArgument> arguments = ParseScadCallArguments(currentArguments);
+            std::vector<bool> used(arguments.size(), false);
+            size_t positionalIndex = 0;
+            for (FScadParameterEditor& parameter : parameters)
+            {
+                for (size_t index = 0; index < arguments.size(); ++index)
+                {
+                    if (!used[index] && arguments[index].named && arguments[index].name == parameter.name)
+                    {
+                        parameter.source = arguments[index].source;
+                        parameter.explicitValue = true;
+                        used[index] = true;
+                        break;
+                    }
+                }
+                if (!parameter.explicitValue)
+                {
+                    while (positionalIndex < arguments.size() &&
+                           (used[positionalIndex] || arguments[positionalIndex].named))
+                    {
+                        ++positionalIndex;
+                    }
+                    if (positionalIndex < arguments.size())
+                    {
+                        parameter.source = arguments[positionalIndex].source;
+                        parameter.explicitValue = true;
+                        used[positionalIndex] = true;
+                        ++positionalIndex;
+                    }
+                    else
+                    {
+                        parameter.source = parameter.defaultSource;
+                    }
+                }
+                ParseScadExpression(parameter.source, parameter.expression);
+            }
+            for (size_t index = 0; index < arguments.size(); ++index)
+            {
+                if (!used[index])
+                {
+                    outUnknown.push_back(arguments[index]);
+                }
+            }
+            return parameters;
+        }
+
+        std::string ScadParameterValueSource(const FScadParameterEditor& parameter)
+        {
+            if (parameter.expression == nullptr)
+            {
+                return parameter.source;
+            }
+            return parameter.source;
+        }
+
+        std::string ComposeScadArguments(const std::vector<FScadParameterEditor>& parameters,
+                                         const std::vector<FScadRawArgument>& unknown)
+        {
+            std::string result;
+            const auto append = [&](const std::string& value)
+            {
+                if (value.empty())
+                {
+                    return;
+                }
+                if (!result.empty())
+                {
+                    result += ", ";
+                }
+                result += value;
+            };
+            for (const FScadParameterEditor& parameter : parameters)
+            {
+                if (!parameter.source.empty())
+                {
+                    append(fmt::format("{} = {}", parameter.name, ScadParameterValueSource(parameter)));
+                }
+            }
+            for (const FScadRawArgument& argument : unknown)
+            {
+                append(argument.named ? fmt::format("{} = {}", argument.name, argument.source)
+                                       : argument.source);
+            }
+            return result;
+        }
+
+        bool IsColorScadParameter(const std::string& name)
+        {
+            std::string lower;
+            lower.reserve(name.size());
+            for (const char character : name)
+            {
+                lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(character))));
+            }
+            return lower == "c" || lower == "color" || lower == "colour" || lower == "skin" ||
+                lower.ends_with("color") || lower.ends_with("colour");
+        }
+
+        std::string ScadParameterDescription(const std::string& name)
+        {
+            std::string lower;
+            lower.reserve(name.size());
+            for (const char character : name)
+            {
+                lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(character))));
+            }
+            if (lower == "seed" || lower.ends_with("seed"))
+            {
+                return "随机种子：相同 seed 会产生相同的确定性变体";
+            }
+            if (IsColorScadParameter(name))
+            {
+                return "颜色参数：通常为 RGB 或 RGBA 向量";
+            }
+            if (lower == "plinth" || lower == "dual" || lower == "laptop" || lower == "tablet" ||
+                lower == "sticky" || lower == "closed" || lower == "porch" || lower == "randomrotation")
+            {
+                return "布尔开关参数";
+            }
+            if (lower == "l" || lower == "w" || lower == "d" || lower == "h" || lower == "t" ||
+                lower == "len" || lower == "width" || lower == "height" || lower == "depth" ||
+                lower == "radius" || lower == "r")
+            {
+                return "几何尺寸参数，单位遵循当前 Kit 的 scaleClass";
+            }
+            return "SCAD 模块参数";
+        }
+
+        bool ReadScadNumericLiteral(const Assets::Scad::ExprPtr& expression, double& outValue)
+        {
+            if (expression == nullptr)
+            {
+                return false;
+            }
+            if (expression->kind == Assets::Scad::ExprKind::Number)
+            {
+                outValue = expression->num;
+                return true;
+            }
+            if (expression->kind == Assets::Scad::ExprKind::Unary && expression->list.size() == 1 &&
+                expression->list.front() != nullptr &&
+                expression->list.front()->kind == Assets::Scad::ExprKind::Number &&
+                (expression->str == "+" || expression->str == "-"))
+            {
+                outValue = expression->str == "-" ? -expression->list.front()->num : expression->list.front()->num;
+                return true;
+            }
+            return false;
+        }
+
+        std::string QuoteScadString(const std::string& value)
+        {
+            std::string result;
+            result.reserve(value.size() + 2);
+            result.push_back('"');
+            for (const char character : value)
+            {
+                if (character == '\\' || character == '"')
+                {
+                    result.push_back('\\');
+                }
+                result.push_back(character);
+            }
+            result.push_back('"');
+            return result;
+        }
+
+        std::string ReadScadModuleComment(const FKitInfo& kit, const FKitModuleInfo& module)
+        {
+            if (kit.filePath.empty() || module.line <= 1)
+            {
+                return {};
+            }
+
+            static std::unordered_map<std::string, std::string> commentCache;
+            const std::string cacheKey = fmt::format("{}#{}", kit.filePath, module.line);
+            const auto cached = commentCache.find(cacheKey);
+            if (cached != commentCache.end())
+            {
+                return cached->second;
+            }
+
+            std::ifstream input(kit.filePath, std::ios::binary);
+            if (!input)
+            {
+                return {};
+            }
+            std::vector<std::string> lines;
+            std::string line;
+            while (std::getline(input, line))
+            {
+                lines.push_back(std::move(line));
+            }
+            std::string comment;
+            const size_t moduleLine = static_cast<size_t>(module.line - 1);
+            if (moduleLine <= lines.size())
+            {
+                for (size_t index = moduleLine; index > 0;)
+                {
+                    --index;
+                    const std::string trimmed = TrimScadText(lines[index]);
+                    if (trimmed.empty())
+                    {
+                        break;
+                    }
+                    if (!trimmed.starts_with("//"))
+                    {
+                        break;
+                    }
+                    const std::string text = TrimScadText(std::string_view(trimmed).substr(2));
+                    if (text.empty() || std::all_of(text.begin(), text.end(), [](unsigned char character)
+                                                     { return character == '-' || character == '=' || character == ' '; }))
+                    {
+                        continue;
+                    }
+                    comment = comment.empty() ? text : text + "\n" + comment;
+                }
+            }
+            commentCache.emplace(cacheKey, comment);
+            return comment;
+        }
+
+        // Kit file change watch: how often the gather task runs, and how long a
+        // detected change is debounced before the preview reload actually fires
+        // (merges consecutive writes from an external agent).
+        constexpr double kKitWatchPollIntervalSeconds = 0.5;
+        constexpr std::chrono::milliseconds kKitWatchReloadDebounce{300};
 
         std::optional<EScadSceneKind> SceneKindFromRelativePath(const std::filesystem::path& relativePath)
         {
@@ -100,6 +602,200 @@ namespace ScadLibrary
             return "Scene";
         }
 
+        const char* SceneKindIcon(EScadSceneKind kind)
+        {
+            switch (kind)
+            {
+            case EScadSceneKind::Evaluated:
+                return ICON_FA_CUBE;
+            case EScadSceneKind::Source:
+                return ICON_FA_FILE_CODE;
+            case EScadSceneKind::Procedural:
+                return ICON_FA_TROWEL_BRICKS;
+            }
+            return ICON_FA_FILE;
+        }
+
+        ImVec4 SceneKindIconColor(EScadSceneKind kind)
+        {
+            switch (kind)
+            {
+            case EScadSceneKind::Evaluated:
+                return ImVec4(1.0f, 0.68f, 0.25f, 1.0f);
+            case EScadSceneKind::Source:
+                return ImVec4(0.36f, 0.70f, 1.0f, 1.0f);
+            case EScadSceneKind::Procedural:
+                return ImVec4(0.40f, 0.86f, 0.56f, 1.0f);
+            }
+            return ImVec4(0.70f, 0.72f, 0.76f, 1.0f);
+        }
+
+        std::string LowercaseAscii(std::string value)
+        {
+            std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character)
+            {
+                return static_cast<char>(std::tolower(character));
+            });
+            return value;
+        }
+
+        bool HasSuffix(const std::string& value, const std::string& suffix)
+        {
+            return value.size() >= suffix.size() &&
+                value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+        }
+
+        std::string NormalizeSceneCategoryName(std::string value)
+        {
+            value = LowercaseAscii(std::move(value));
+            if (value == "deadly")
+            {
+                return "brotato3d";
+            }
+            if (value == "tw")
+            {
+                return "nexttotalwar";
+            }
+            return value;
+        }
+
+        std::string SceneCategoryKeyFromRelativePath(const std::filesystem::path& relativePath)
+        {
+            const std::filesystem::path parent = relativePath.parent_path();
+            const std::string root = relativePath.empty()
+                ? std::string()
+                : LowercaseAscii(relativePath.begin()->string());
+            const std::string stem = LowercaseAscii(relativePath.stem().string());
+
+            std::string folder;
+            auto parentIt = parent.begin();
+            if (parentIt != parent.end())
+            {
+                const auto categoryIt = std::next(parentIt);
+                if (categoryIt != parent.end())
+                {
+                    folder = LowercaseAscii(categoryIt->string());
+                }
+            }
+
+            if (folder == "generated")
+            {
+                return "generated/" + root;
+            }
+
+            std::string category = folder;
+            if (category.empty() && HasSuffix(stem, "_showcase"))
+            {
+                category = stem.substr(0, stem.size() - std::string("_showcase").size());
+            }
+            if (category.empty())
+            {
+                return root.empty() ? "other" : root;
+            }
+
+            // The temporary `others` bucket still contains a few named
+            // showcase scenes. Promote those names to their real game group.
+            if (category == "others" && stem.starts_with("coldwar_"))
+            {
+                category = "coldwar";
+            }
+            category = NormalizeSceneCategoryName(std::move(category));
+            if (category == "others")
+            {
+                return "other/others";
+            }
+            if (root == "evaluated")
+            {
+                return "evaluated/" + category;
+            }
+            return "showcase/" + category;
+        }
+
+        std::string SceneCategoryDisplayName(std::string category)
+        {
+            category = NormalizeSceneCategoryName(std::move(category));
+            if (category == "brotato3d")
+            {
+                return "brotato3d";
+            }
+            if (category == "coldwar")
+            {
+                return "coldwar";
+            }
+            if (category == "nexttotalwar")
+            {
+                return "nexttotalwar";
+            }
+            std::replace(category.begin(), category.end(), '_', ' ');
+            if (!category.empty())
+            {
+                category[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(category[0])));
+            }
+            return category;
+        }
+
+        std::string SceneCategoryLabelFromKey(const std::string& key)
+        {
+            if (key == "evaluated")
+            {
+                return "对象场景 / Evaluated";
+            }
+            if (key == "source")
+            {
+                return "普通源码场景 / Source";
+            }
+            if (key == "proc")
+            {
+                return "普通过程场景 / Proc";
+            }
+            if (key.starts_with("showcase/"))
+            {
+                return SceneCategoryDisplayName(key.substr(std::string("showcase/").size()));
+            }
+            if (key.starts_with("generated/"))
+            {
+                return "生成场景 / " + SceneCategoryDisplayName(key.substr(std::string("generated/").size()));
+            }
+            if (key.starts_with("evaluated/"))
+            {
+                return "对象场景 / " + SceneCategoryDisplayName(key.substr(std::string("evaluated/").size()));
+            }
+            if (key.starts_with("other/"))
+            {
+                return "其它场景 / " + SceneCategoryDisplayName(key.substr(std::string("other/").size()));
+            }
+            return "其它场景 / " + SceneCategoryDisplayName(key);
+        }
+
+        int SceneCategorySortRank(const std::string& key)
+        {
+            if (key.starts_with("showcase/"))
+            {
+                return 0;
+            }
+            if (key == "evaluated")
+            {
+                return 10;
+            }
+            if (key.starts_with("evaluated/"))
+            {
+                return 11;
+            }
+            if (key.starts_with("generated/"))
+            {
+                return 20;
+            }
+            if (key == "source")
+            {
+                return 30;
+            }
+            if (key == "proc")
+            {
+                return 31;
+            }
+            return 40;
+        }
+
         glm::mat4 SceneObjectWorldMatrix(const FBenchItem& item)
         {
             const glm::dmat4 scadMatrix = glm::translate(glm::dmat4(1.0), glm::dvec3(item.x, item.y, item.z)) *
@@ -107,6 +803,28 @@ namespace ScadLibrary
                 glm::scale(glm::dmat4(1.0), glm::dvec3(item.scale, item.scaleY, item.scaleZ));
             const glm::dmat4 basis = Assets::Scad::ScadToWorldBasis(1.0);
             return glm::mat4(basis * scadMatrix * glm::inverse(basis));
+        }
+
+        void AccumulateNodeBounds(const Assets::Scene& scene, const Assets::Node& node, glm::vec3& minBounds,
+                                  glm::vec3& maxBounds, bool& found)
+        {
+            glm::vec3 center;
+            float radius = 0.0f;
+            if (scene.GetNodeBounds(node.GetInstanceId(), center, radius))
+            {
+                const glm::vec3 extent(radius);
+                minBounds = glm::min(minBounds, center - extent);
+                maxBounds = glm::max(maxBounds, center + extent);
+                found = true;
+            }
+
+            for (const std::shared_ptr<Assets::Node>& child : node.Children())
+            {
+                if (child != nullptr)
+                {
+                    AccumulateNodeBounds(scene, *child, minBounds, maxBounds, found);
+                }
+            }
         }
 
         std::filesystem::path WorkspaceDir() { return std::filesystem::current_path() / "scad_library"; }
@@ -477,6 +1195,101 @@ namespace ScadLibrary
             }
             return blocks;
         }
+
+        // ------------------------------------------------------------------ kit file watch
+
+        // A browsable parts library file: kit_*.scad (excluding the combinator
+        // rule libraries kit_layout.scad / kit_terrain.scad / kit_road.scad /
+        // kit_geo_city.scad),
+        // mirroring the filter in KitCatalog::ScanKits.
+        bool IsBrowsableKitFile(const std::filesystem::path& path)
+        {
+            const std::string filename = path.filename().string();
+            return path.extension() == ".scad" && filename.rfind("kit_", 0) == 0 &&
+                filename != "kit_layout.scad" && filename != "kit_terrain.scad" &&
+                filename != "kit_road.scad" && filename != "kit_geo_city.scad";
+        }
+
+        struct FKitWatchGatherResult
+        {
+            std::vector<std::string> changedPaths; // kit files edited or vanished
+            bool treeChanged = false;              // kit_*.scad added or removed in the lib dir
+        };
+
+        // Runs on a TaskCoordinator worker thread: only touches the copied-in
+        // paths/timestamps, never UI or scene state. Detects content edits by
+        // comparing last_write_time against the previous snapshot, and kit
+        // add/remove by enumerating the lib directory (entry membership, not
+        // directory mtime, so it is reliable across platforms).
+        FKitWatchGatherResult GatherKitFileChanges(
+            const std::vector<std::string>& watchPaths,
+            const std::vector<std::pair<std::string, std::filesystem::file_time_type>>& prevStamps,
+            const std::string& libDir)
+        {
+            FKitWatchGatherResult result;
+            std::error_code ec;
+
+            std::set<std::string> seenFiles;
+            for (const std::string& path : watchPaths)
+            {
+                const std::filesystem::path filePath(path);
+                const std::filesystem::file_time_type stamp = std::filesystem::last_write_time(filePath, ec);
+                if (ec)
+                {
+                    ec.clear();
+                    // File vanished or unreadable: treat as a change so the tree is rescanned.
+                    result.changedPaths.push_back(path);
+                    continue;
+                }
+                seenFiles.insert(filePath.filename().string());
+
+                bool unchanged = false;
+                for (const auto& [prevPath, prevStamp] : prevStamps)
+                {
+                    if (prevPath == path)
+                    {
+                        unchanged = prevStamp == stamp;
+                        break;
+                    }
+                }
+                if (!unchanged)
+                {
+                    result.changedPaths.push_back(path);
+                }
+            }
+
+            std::set<std::string> onDiskFiles;
+            if (std::filesystem::is_directory(std::filesystem::path(libDir), ec))
+            {
+                for (const std::filesystem::directory_entry& entry :
+                     std::filesystem::directory_iterator(libDir, ec))
+                {
+                    if (ec)
+                    {
+                        ec.clear();
+                        continue;
+                    }
+                    if (!entry.is_regular_file(ec))
+                    {
+                        ec.clear();
+                        continue;
+                    }
+                    if (IsBrowsableKitFile(entry.path()))
+                    {
+                        onDiskFiles.insert(entry.path().filename().string());
+                    }
+                }
+            }
+            if (onDiskFiles != seenFiles)
+            {
+                result.treeChanged = true;
+            }
+
+            std::sort(result.changedPaths.begin(), result.changedPaths.end());
+            result.changedPaths.erase(
+                std::unique(result.changedPaths.begin(), result.changedPaths.end()), result.changedPaths.end());
+            return result;
+        }
     } // namespace
 
     ScadLibraryInterface::ScadLibraryInterface(NextEngine& engine, std::string startupAssemblyPath) :
@@ -491,7 +1304,13 @@ namespace ScadLibrary
         RescanAssemblies();
     }
 
-    ScadLibraryInterface::~ScadLibraryInterface() = default;
+    ScadLibraryInterface::~ScadLibraryInterface()
+    {
+        // Drain any in-flight kit watch task before members are torn down: its
+        // completion callback runs on the main thread and touches `this`.
+        // TaskCoordinator outlives the game instance (destroyed in NextEngine::End).
+        Tasks::TaskCoordinator::GetInstance()->WaitForAllTasks();
+    }
 
     void ScadLibraryInterface::Config()
     {
@@ -557,7 +1376,7 @@ namespace ScadLibrary
             }
             else if (!bench_.empty())
             {
-                ReloadBench();
+                ReloadBench(false);
             }
             else if (selectedKit_ >= 0 && !selectedModule_.empty())
             {
@@ -568,14 +1387,37 @@ namespace ScadLibrary
         {
             designerDirty_ = true;
         }
-        else
+        else if (mode == EWorkspaceMode::CharacterWorkbench)
         {
             workbenchReloadRequested_ = true;
+        }
+        else
+        {
+            rigPreview_.SetActive(false);
+            if (kitBrowserSelectedKit_ < 0 && !kits_.empty())
+            {
+                kitBrowserSelectedKit_ = 0;
+            }
+            if (kitBrowserSelectedKit_ >= 0 && kitBrowserSelectedKit_ < static_cast<int>(kits_.size()) &&
+                !kits_[kitBrowserSelectedKit_].modules.empty())
+            {
+                kitBrowserSelectedModule_ = 0;
+                PreviewModule(kitBrowserSelectedKit_, kits_[kitBrowserSelectedKit_].modules[0].name);
+            }
+            else
+            {
+                kitBrowserSelectedModule_ = -1;
+            }
         }
     }
 
     void ScadLibraryInterface::Render()
     {
+        // Auto-refresh when an external agent edits a kit_*.scad file. The
+        // filesystem probe runs on a worker thread; this only performs the
+        // deferred preview reload / tree rescan when it is safe to do so.
+        PollKitFileChanges();
+
         // First frame: open a real kit-based scene when available.
         if (!welcomeLoaded_)
         {
@@ -610,6 +1452,33 @@ namespace ScadLibrary
 
         const float panelY = viewport->Pos.y + kTitleBarHeight;
         const float panelHeight = std::max(1.0f, viewport->Size.y - kTitleBarHeight - kBottomBarHeight);
+        const bool kitBrowserMode = workspaceMode_ == EWorkspaceMode::KitBrowser;
+        if (kitBrowserMode)
+        {
+            constexpr float kitBrowserHeaderHeight = 56.0f;
+            constexpr float kitBrowserGap = 10.0f;
+            const float kitBrowserLeftWidth = std::clamp(viewport->Size.x * 0.22f, 280.0f, 360.0f);
+            const float kitBrowserRightWidth = std::clamp(viewport->Size.x * 0.31f, 430.0f, 520.0f);
+            const ImVec2 kitBrowserViewportPos(
+                viewport->Pos.x + kitBrowserLeftWidth + kitBrowserGap, panelY + kitBrowserHeaderHeight);
+            const ImVec2 kitBrowserViewportSize(
+                std::max(1.0f, viewport->Size.x - kitBrowserLeftWidth - kitBrowserRightWidth - kitBrowserGap * 2.0f),
+                std::max(1.0f, panelHeight - kitBrowserHeaderHeight));
+            DrawKitBrowserPanel(ImVec2(viewport->Pos.x, panelY), ImVec2(viewport->Size.x, panelHeight));
+            viewportPosition_ = {kitBrowserViewportPos.x, kitBrowserViewportPos.y};
+            viewportSize_ = {kitBrowserViewportSize.x, kitBrowserViewportSize.y};
+            sceneToolbarVisible_ = false;
+            DrawViewportAxis(kitBrowserViewportPos, kitBrowserViewportSize);
+            const NextUI::Scaling::FViewportRect framebufferViewport =
+                NextUI::Scaling::ImGuiToMainFramebufferViewport(kitBrowserViewportPos, kitBrowserViewportSize);
+            engine_.GetRenderer().SwapChain().UpdateOutputViewport(
+                Utilities::Math::floorToInt(framebufferViewport.Position.x),
+                Utilities::Math::floorToInt(framebufferViewport.Position.y),
+                Utilities::Math::ceilToInt(framebufferViewport.Size.x),
+                Utilities::Math::ceilToInt(framebufferViewport.Size.y));
+            return;
+        }
+
         const bool composeMode = workspaceMode_ == EWorkspaceMode::SceneAssembly;
         const bool workbenchMode = workspaceMode_ == EWorkspaceMode::CharacterWorkbench;
         const float leftFullWidth = workbenchMode ? std::clamp(viewport->Size.x * 0.16f, 230.0f, 290.0f)
@@ -635,6 +1504,10 @@ namespace ScadLibrary
         const bool showTimeline = workspaceMode_ == EWorkspaceMode::CharacterWorkbench && workbenchEditorTab_ == 0 &&
             workbenchEverLoaded_ && rigPreview_.HasRig();
         const float timelineHeight = showTimeline ? std::clamp(viewport->Size.y * 0.38f, 320.0f, 390.0f) : 0.0f;
+        viewportPosition_ = {viewport->Pos.x + leftWidth, panelY};
+        viewportSize_ = {std::max(1.0f, viewport->Size.x - leftWidth - rightWidth),
+                         std::max(1.0f, panelHeight - timelineHeight)};
+        sceneToolbarVisible_ = false;
         if (showTimeline)
         {
             DrawAnimationTimelinePanel(
@@ -703,6 +1576,30 @@ namespace ScadLibrary
             Utilities::Math::ceilToInt(framebufferViewport.Size.y));
     }
 
+    bool ScadLibraryInterface::ConsumeFocusSelectedRequest()
+    {
+        const bool requested = focusSelectedRequested_;
+        focusSelectedRequested_ = false;
+        return requested;
+    }
+
+    bool ScadLibraryInterface::ConsumeFrameAllRequest()
+    {
+        const bool requested = frameAllRequested_;
+        frameAllRequested_ = false;
+        return requested;
+    }
+
+    bool ScadLibraryInterface::IsViewportPoint(const double x, const double y) const
+    {
+        const bool insideViewport = x >= viewportPosition_.x && y >= viewportPosition_.y &&
+            x < viewportPosition_.x + viewportSize_.x && y < viewportPosition_.y + viewportSize_.y;
+        const bool insideSceneToolbar = sceneToolbarVisible_ && x >= sceneToolbarPosition_.x &&
+            y >= sceneToolbarPosition_.y && x < sceneToolbarPosition_.x + sceneToolbarSize_.x &&
+            y < sceneToolbarPosition_.y + sceneToolbarSize_.y;
+        return insideViewport && !insideSceneToolbar;
+    }
+
     void ScadLibraryInterface::DrawTitleBar()
     {
         NextUI::Theme::FAppTitleBarConfig config{};
@@ -711,7 +1608,7 @@ namespace ScadLibrary
         config.RightWindowId = "ScadLibraryWindowControls";
         config.AppName = "SCAD Library";
         config.Height = kTitleBarHeight;
-        config.RightContentWidth = 468.0f;
+        config.RightContentWidth = 0.0f;
         config.DrawMenuBar = [&]() -> float
         {
             float menuRight = ImGui::GetCursorScreenPos().x;
@@ -750,7 +1647,7 @@ namespace ScadLibrary
                     }
                 }
                 bool inspectorOpen = !benchCollapsed_;
-                if (ImGui::MenuItem("Inspector", nullptr, inspectorOpen))
+                if (workspaceMode_ != EWorkspaceMode::KitBrowser && ImGui::MenuItem("Inspector", nullptr, inspectorOpen))
                 {
                     benchCollapsed_ = !benchCollapsed_;
                 }
@@ -760,130 +1657,100 @@ namespace ScadLibrary
 
             return menuRight;
         };
-        config.DrawRightContent = [&]()
-        {
-            ImGui::SetCursorPos(ImVec2(8.0f, 10.0f));
-            if (workspaceMode_ == EWorkspaceMode::SceneAssembly)
-            {
-                ImGui::BeginDisabled(openedAssemblyPath_.empty());
-                if (NextUI::Theme::ToolbarButton(ICON_FA_FLOPPY_DISK " 保存", "保存当前场景", false,
-                                                 ImVec2(72.0f, 32.0f)))
-                {
-                    SaveAssembly(false);
-                }
-                ImGui::EndDisabled();
-                ImGui::SameLine();
-                ImGui::BeginDisabled(assemblySource_.empty() && bench_.empty());
-                if (NextUI::Theme::ToolbarButton(ICON_FA_PLAY " 预览", "预览当前未保存内容", false,
-                                                 ImVec2(72.0f, 32.0f)))
-                {
-                    PreviewAssemblySource();
-                }
-                ImGui::EndDisabled();
-            }
-            else if (workspaceMode_ == EWorkspaceMode::CharacterDesigner)
-            {
-                if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE_RIGHT " 刷新", "刷新角色预览", false,
-                                                 ImVec2(72.0f, 32.0f)))
-                {
-                    ReloadDesigner();
-                }
-                ImGui::SameLine();
-                if (NextUI::Theme::ToolbarButton(ICON_FA_FILE_EXPORT " 导出", "导出当前角色", true,
-                                                 ImVec2(72.0f, 32.0f)))
-                {
-                    ExportCharacter();
-                }
-            }
-            else
-            {
-                if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE_RIGHT " 刷新", "重新载入动作与装备", false,
-                                                 ImVec2(72.0f, 32.0f)))
-                {
-                    workbenchReloadRequested_ = true;
-                }
-            }
-            ImGui::SameLine();
-            if (NextUI::Theme::ToolbarButton(ICON_FA_WAND_MAGIC_SPARKLES " AI", "打开 AI 创作面板",
-                                             inspectorPrimaryTab_ == 1, ImVec2(58.0f, 32.0f)))
-            {
-                benchCollapsed_ = false;
-                aiOpenRequested_ = true;
-            }
-            ImGui::SameLine(0.0f, 14.0f);
-            ImGui::SetCursorPosY(std::floor((kTitleBarHeight - ImGui::GetTextLineHeight()) * 0.5f));
-            size_t moduleCount = 0;
-            for (const FKitInfo& kit : kits_)
-            {
-                moduleCount += kit.modules.size();
-            }
-            ImGui::TextDisabled("%zu Kits  ·  %zu 模块", kits_.size(), moduleCount);
-        };
         config.IsMaximized = engine_.IsMaximized();
         config.OnMinimize = [&]() { engine_.RequestMinimize(); };
         config.OnToggleMaximize = [&]() { engine_.ToggleMaximize(); };
         config.OnClose = [&]() { engine_.RequestClose(); };
         NextUI::Theme::DrawAppTitleBar(engine_, config);
+    }
 
-        ImGuiViewport* viewport = ImGui::GetMainViewport();
-        const float availableTabWidth = std::max(360.0f, viewport->Size.x - 260.0f - 560.0f);
-        const ImVec2 tabsSize(std::min(492.0f, availableTabWidth), 46.0f);
-        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + 260.0f, viewport->Pos.y + 3.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(tabsSize, ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.0f);
-        const ImGuiWindowFlags tabsFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking |
-            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings;
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 0.0f));
-        if (ImGui::Begin("##ScadLibraryWorkspaceTabs", nullptr, tabsFlags))
+    void ScadLibraryInterface::DrawWorkspaceToolbar()
+    {
+        constexpr float buttonWidth = 144.0f;
+        const float buttonHeight = std::max(32.0f, kBottomBarHeight - 8.0f);
+        const auto modeButton = [&](const char* label, const char* shortcut, EWorkspaceMode mode)
         {
-            const float buttonWidth = std::floor((tabsSize.x - 4.0f) / 3.0f);
-            const auto modeButton = [&](const char* label, const char* shortcut, EWorkspaceMode mode)
+            if (NextUI::Theme::ToolbarButton(label, shortcut, workspaceMode_ == mode,
+                                              ImVec2(buttonWidth, buttonHeight)))
             {
-                const bool active = workspaceMode_ == mode;
-                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
-                if (active)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.30f));
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                          NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.42f));
-                    ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::Text));
-                }
-                else
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                          NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.70f));
-                    ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted));
-                }
-                if (ImGui::Button(label, ImVec2(buttonWidth, 44.0f)))
-                {
-                    SetWorkspaceMode(mode);
-                }
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::SetTooltip("%s", shortcut);
-                }
-                if (active)
-                {
-                    const ImVec2 min = ImGui::GetItemRectMin();
-                    const ImVec2 max = ImGui::GetItemRectMax();
-                    ImGui::GetWindowDrawList()->AddRectFilled(
-                        ImVec2(min.x + 10.0f, max.y - 3.0f), ImVec2(max.x - 10.0f, max.y),
-                        ImGui::GetColorU32(NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover)), 2.0f);
-                }
-                ImGui::PopStyleColor(3);
-                ImGui::PopStyleVar();
-            };
-            modeButton(ICON_FA_PERSON "  动作与装备", "Ctrl+3", EWorkspaceMode::CharacterWorkbench);
-            ImGui::SameLine();
-            modeButton(ICON_FA_CUBES_STACKED "  角色合成", "Ctrl+2", EWorkspaceMode::CharacterDesigner);
-            ImGui::SameLine();
-            modeButton(ICON_FA_CITY "  场景组装", "Ctrl+1", EWorkspaceMode::SceneAssembly);
+                SetWorkspaceMode(mode);
+            }
+        };
+
+        modeButton(ICON_FA_PERSON "  动作与装备", "Ctrl+3", EWorkspaceMode::CharacterWorkbench);
+        ImGui::SameLine(0.0f, 4.0f);
+        modeButton(ICON_FA_CUBES_STACKED "  角色合成", "Ctrl+2", EWorkspaceMode::CharacterDesigner);
+        ImGui::SameLine(0.0f, 4.0f);
+        modeButton(ICON_FA_CITY "  场景组装", "Ctrl+1", EWorkspaceMode::SceneAssembly);
+        ImGui::SameLine(0.0f, 4.0f);
+        modeButton(ICON_FA_BOOK_OPEN "  Kit 浏览", "Ctrl+4", EWorkspaceMode::KitBrowser);
+    }
+
+    void ScadLibraryInterface::DrawActionToolbar()
+    {
+        constexpr float buttonWidth = 72.0f;
+        constexpr float buttonHeight = 40.0f;
+        constexpr float itemGap = 4.0f;
+        const auto actionButton = [&](const char* label, const char* tooltip, bool active = false)
+        {
+            return NextUI::Theme::ToolbarButton(label, tooltip, active, ImVec2(buttonWidth, buttonHeight));
+        };
+
+        if (workspaceMode_ == EWorkspaceMode::SceneAssembly)
+        {
+            ImGui::BeginDisabled(openedAssemblyPath_.empty());
+            if (actionButton(ICON_FA_FLOPPY_DISK " 保存", "保存当前场景"))
+            {
+                SaveAssembly(false);
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine(0.0f, itemGap);
+            ImGui::BeginDisabled(assemblySource_.empty() && bench_.empty());
+            if (actionButton(ICON_FA_PLAY " 预览", "预览当前未保存内容"))
+            {
+                PreviewAssemblySource();
+            }
+            ImGui::EndDisabled();
         }
-        ImGui::End();
-        ImGui::PopStyleVar(2);
+        else if (workspaceMode_ == EWorkspaceMode::CharacterDesigner)
+        {
+            if (actionButton(ICON_FA_ROTATE_RIGHT " 刷新", "刷新角色预览"))
+            {
+                ReloadDesigner();
+            }
+            ImGui::SameLine(0.0f, itemGap);
+            if (actionButton(ICON_FA_FILE_EXPORT " 导出", "导出当前角色", true))
+            {
+                ExportCharacter();
+            }
+        }
+        else if (workspaceMode_ == EWorkspaceMode::CharacterWorkbench)
+        {
+            if (actionButton(ICON_FA_ROTATE_RIGHT " 刷新", "重新载入动作与装备"))
+            {
+                workbenchReloadRequested_ = true;
+            }
+        }
+        else
+        {
+            if (actionButton(ICON_FA_ROTATE_RIGHT " 刷新", "重新扫描 Kit 目录"))
+            {
+                RescanKits();
+            }
+        }
+
+        if (workspaceMode_ != EWorkspaceMode::KitBrowser)
+        {
+            ImGui::SameLine(0.0f, itemGap);
+            if (NextUI::Theme::ToolbarButton(ICON_FA_WAND_MAGIC_SPARKLES " AI", "打开 AI 创作面板",
+                                             inspectorPrimaryTab_ == 1, ImVec2(58.0f, buttonHeight)))
+            {
+                benchCollapsed_ = false;
+                aiOpenRequested_ = true;
+            }
+        }
+        ImGui::SameLine(0.0f, 10.0f);
+        ImGui::TextDisabled("FPS %.0f", engine_.GetFrameRate());
     }
 
     void ScadLibraryInterface::DrawBottomBar()
@@ -891,7 +1758,11 @@ namespace ScadLibrary
         NextUI::Theme::FBottomBarConfig config{};
         config.WindowId = "ScadLibraryBottomBar";
         config.Height = kBottomBarHeight;
-        config.RightWidth = 170.0f;
+        config.CenterWidth = 588.0f;
+        config.RightWidth = workspaceMode_ == EWorkspaceMode::SceneAssembly ||
+                workspaceMode_ == EWorkspaceMode::CharacterDesigner
+            ? 300.0f
+            : (workspaceMode_ == EWorkspaceMode::CharacterWorkbench ? 220.0f : 160.0f);
         config.DrawLeftContent = [&]()
         {
             if (!statusLine_.empty())
@@ -910,14 +1781,397 @@ namespace ScadLibrary
                 {
                     ImGui::TextDisabled("选择部件与颜色，生成可复用角色");
                 }
-                else
+                else if (workspaceMode_ == EWorkspaceMode::CharacterWorkbench)
                 {
                     ImGui::TextDisabled("编辑动作关键帧与骨架装备");
                 }
+                else
+                {
+                    ImGui::TextDisabled("浏览 Kit、模块分类与几何度量");
+                }
             }
         };
-        config.DrawRightContent = [&]() { ImGui::TextDisabled("FPS %.0f", engine_.GetFrameRate()); };
+        config.DrawCenterContent = [&]() { DrawWorkspaceToolbar(); };
+        config.DrawRightContent = [&]() { DrawActionToolbar(); };
         NextUI::Theme::DrawBottomBar(config);
+    }
+
+    void ScadLibraryInterface::DrawKitBrowserPanel(const ImVec2& pos, const ImVec2& size)
+    {
+        constexpr float headerHeight = 56.0f;
+        constexpr float gap = 10.0f;
+        const float leftWidth = std::clamp(size.x * 0.22f, 280.0f, 360.0f);
+        const float rightWidth = std::clamp(size.x * 0.31f, 430.0f, 520.0f);
+        const float contentHeight = std::max(1.0f, size.y - headerHeight);
+        const ImVec2 viewportPos(pos.x + leftWidth + gap, pos.y + headerHeight);
+        const ImVec2 viewportSize(std::max(1.0f, size.x - leftWidth - rightWidth - gap * 2.0f), contentHeight);
+        const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking |
+            ImGuiWindowFlags_NoSavedSettings;
+
+        // Keep the central area uncovered so the renderer can show the selected module.
+        ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(size.x, headerHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.98f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f, 10.0f));
+        if (ImGui::Begin("##ScadLibraryKitBrowserHeader", nullptr, flags))
+        {
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(ICON_FA_BOOK_OPEN "  Kit 浏览器");
+            ImGui::SameLine();
+            ImGui::TextDisabled("%zu 个 Kit · 选择模块查看 3D 预览与详细信息", kits_.size());
+            ImGui::SameLine(ImGui::GetWindowWidth() - 54.0f);
+            if (NextUI::Theme::IconButton(ICON_FA_ARROWS_ROTATE "##kit_browser_rescan", "重新扫描 Kit 目录", false,
+                                          ImVec2(30.0f, 30.0f)))
+            {
+                RescanKits();
+            }
+        }
+        ImGui::End();
+        ImGui::PopStyleVar(3);
+
+        // Kit catalog.
+        ImGui::SetNextWindowPos(ImVec2(pos.x, pos.y + headerHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(leftWidth, contentHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.98f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 12.0f));
+        if (ImGui::Begin("##ScadLibraryKitCatalog", nullptr, flags))
+        {
+            ImGui::TextUnformatted(ICON_FA_LIST "  Kit 目录");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::InputTextWithHint("##kit_browser_filter", ICON_FA_MAGNIFYING_GLASS " 搜索 Kit、模块或尺度…",
+                                     kitBrowserFilterBuf_, sizeof(kitBrowserFilterBuf_));
+            ImGui::TextDisabled("%zu 个 Kit", kits_.size());
+            ImGui::Separator();
+            std::vector<int> visibleKitIndices;
+            for (int kitIndex = 0; kitIndex < static_cast<int>(kits_.size()); ++kitIndex)
+            {
+                const FKitInfo& kit = kits_[kitIndex];
+                bool matches = kitBrowserFilterBuf_[0] == '\0' ||
+                    kit.name.find(kitBrowserFilterBuf_) != std::string::npos ||
+                    kit.scaleClass.find(kitBrowserFilterBuf_) != std::string::npos;
+                if (!matches)
+                {
+                    matches = std::any_of(kit.modules.begin(), kit.modules.end(), [&](const FKitModuleInfo& module)
+                                          {
+                                              return module.name.find(kitBrowserFilterBuf_) != std::string::npos ||
+                                                  module.category.find(kitBrowserFilterBuf_) != std::string::npos;
+                                          });
+                }
+                if (!matches)
+                {
+                    continue;
+                }
+                visibleKitIndices.push_back(kitIndex);
+            }
+
+            if (visibleKitIndices.empty())
+            {
+                ImGui::TextDisabled(kits_.empty() ? "assets/scad/lib 下没有 Kit" : "没有匹配的 Kit");
+            }
+            else if (ImGui::BeginTable("##kit_browser_catalog_table", 3,
+                                       ImGuiTableFlags_Sortable | ImGuiTableFlags_RowBg |
+                                           ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersOuter |
+                                           ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable |
+                                           ImGuiTableFlags_ScrollY,
+                                       ImVec2(0.0f, 0.0f)))
+            {
+                ImGui::TableSetupColumn("Kit", ImGuiTableColumnFlags_DefaultSort);
+                ImGui::TableSetupColumn("模块数");
+                ImGui::TableSetupColumn("尺度");
+                ImGui::TableHeadersRow();
+
+                const ImGuiTableSortSpecs* sortSpecs = ImGui::TableGetSortSpecs();
+                if (sortSpecs != nullptr && sortSpecs->SpecsCount > 0)
+                {
+                    const ImGuiTableColumnSortSpecs& spec = sortSpecs->Specs[0];
+                    std::stable_sort(visibleKitIndices.begin(), visibleKitIndices.end(), [&](int lhs, int rhs)
+                    {
+                        const FKitInfo& leftKit = kits_[lhs];
+                        const FKitInfo& rightKit = kits_[rhs];
+                        int result = 0;
+                        if (spec.ColumnIndex == 0)
+                        {
+                            result = leftKit.name.compare(rightKit.name);
+                        }
+                        else if (spec.ColumnIndex == 1)
+                        {
+                            result = leftKit.modules.size() < rightKit.modules.size()
+                                ? -1
+                                : (leftKit.modules.size() > rightKit.modules.size() ? 1 : 0);
+                        }
+                        else
+                        {
+                            const std::string leftScale = leftKit.scaleClass.empty() ? "未标注" : leftKit.scaleClass;
+                            const std::string rightScale = rightKit.scaleClass.empty() ? "未标注" : rightKit.scaleClass;
+                            result = leftScale.compare(rightScale);
+                        }
+                        if (result == 0)
+                        {
+                            result = leftKit.name.compare(rightKit.name);
+                        }
+                        return spec.SortDirection == ImGuiSortDirection_Descending ? result > 0 : result < 0;
+                    });
+                }
+
+                for (const int kitIndex : visibleKitIndices)
+                {
+                    const FKitInfo& kit = kits_[kitIndex];
+                    ImGui::TableNextRow(ImGuiTableRowFlags_None, 36.0f);
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::PushID(kitIndex);
+                    if (ImGui::Selectable(kit.name.c_str(), kitBrowserSelectedKit_ == kitIndex,
+                                          ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap,
+                                          ImVec2(0.0f, 0.0f)))
+                    {
+                        kitBrowserSelectedKit_ = kitIndex;
+                        kitBrowserSelectedModule_ = kit.modules.empty() ? -1 : 0;
+                        if (!kit.modules.empty())
+                        {
+                            PreviewModule(kitIndex, kit.modules[0].name);
+                        }
+                    }
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("%s", kit.filePath.c_str());
+                    }
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%zu", kit.modules.size());
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::TextDisabled("%s", kit.scaleClass.empty() ? "未标注" : kit.scaleClass.c_str());
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
+            }
+        }
+        ImGui::End();
+        ImGui::PopStyleVar(3);
+
+        // Selected Kit details and module list.
+        ImGui::SetNextWindowPos(ImVec2(pos.x + size.x - rightWidth, pos.y + headerHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(rightWidth, contentHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.98f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 12.0f));
+        if (ImGui::Begin("##ScadLibraryKitDetails", nullptr, flags))
+        {
+            if (kits_.empty())
+            {
+                ImGui::TextDisabled("未找到 kit_*.scad。可以点击顶部刷新，或检查 assets/scad/lib。");
+                ImGui::End();
+                ImGui::PopStyleVar(3);
+                return;
+            }
+
+            kitBrowserSelectedKit_ = std::clamp(kitBrowserSelectedKit_, 0, static_cast<int>(kits_.size()) - 1);
+            const FKitInfo& selectedKit = kits_[kitBrowserSelectedKit_];
+            std::set<std::string> categories;
+            size_t metricCount = 0;
+            int triangleCount = 0;
+            float maxFootprintX = 0.0f;
+            float maxFootprintY = 0.0f;
+            float maxHeight = 0.0f;
+            for (const FKitModuleInfo& module : selectedKit.modules)
+            {
+                categories.insert(module.category);
+                if (module.hasMetrics)
+                {
+                    ++metricCount;
+                    triangleCount += module.triangles;
+                    maxFootprintX = std::max(maxFootprintX, module.footprintX);
+                    maxFootprintY = std::max(maxFootprintY, module.footprintY);
+                    maxHeight = std::max(maxHeight, module.height);
+                }
+            }
+
+            ImGui::Text(ICON_FA_CUBES_STACKED "  %s", selectedKit.name.c_str());
+            ImGui::TextDisabled("尺度分类：%s", selectedKit.scaleClass.empty() ? "未标注" : selectedKit.scaleClass.c_str());
+            ImGui::TextWrapped("文件：%s", selectedKit.filePath.c_str());
+            ImGui::Separator();
+            ImGui::Text("模块 %zu  ·  分类 %zu  ·  度量 %zu / %zu", selectedKit.modules.size(), categories.size(),
+                        metricCount, selectedKit.modules.size());
+            ImGui::Text("三角形 %d", triangleCount);
+            if (metricCount > 0)
+            {
+                ImGui::SameLine();
+                ImGui::TextDisabled("最大尺寸 %.1f × %.1f × %.1f", maxFootprintX, maxFootprintY, maxHeight);
+            }
+            ImGui::Separator();
+
+            ImGui::TextUnformatted("模块清单");
+            ImGui::SameLine();
+            ImGui::TextDisabled("（点击模块预览）");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::InputTextWithHint("##kit_browser_module_filter", ICON_FA_MAGNIFYING_GLASS " 搜索模块、分类或参数…",
+                                     kitBrowserModuleFilterBuf_, sizeof(kitBrowserModuleFilterBuf_));
+
+            if (kitBrowserSelectedModule_ >= 0 &&
+                kitBrowserSelectedModule_ < static_cast<int>(selectedKit.modules.size()))
+            {
+                const FKitModuleInfo& selectedModule = selectedKit.modules[kitBrowserSelectedModule_];
+                const std::string selectedModuleLabel = selectedModule.params.empty()
+                    ? selectedModule.name
+                    : fmt::format("{}({})", selectedModule.name, selectedModule.params);
+                ImGui::TextDisabled("当前模块：%s", selectedModuleLabel.c_str());
+            }
+
+            std::vector<int> visibleModuleIndices;
+            for (int moduleIndex = 0; moduleIndex < static_cast<int>(selectedKit.modules.size()); ++moduleIndex)
+            {
+                const FKitModuleInfo& module = selectedKit.modules[moduleIndex];
+                const bool matches = kitBrowserModuleFilterBuf_[0] == '\0' ||
+                    module.name.find(kitBrowserModuleFilterBuf_) != std::string::npos ||
+                    module.category.find(kitBrowserModuleFilterBuf_) != std::string::npos ||
+                    module.params.find(kitBrowserModuleFilterBuf_) != std::string::npos;
+                if (!matches)
+                {
+                    continue;
+                }
+                visibleModuleIndices.push_back(moduleIndex);
+            }
+
+            if (visibleModuleIndices.empty())
+            {
+                ImGui::TextDisabled("没有匹配的模块");
+            }
+            else if (ImGui::BeginTable("##kit_browser_module_table_v3", 5,
+                                       ImGuiTableFlags_Sortable | ImGuiTableFlags_RowBg |
+                                           ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersOuter |
+                                           ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Resizable |
+                                           ImGuiTableFlags_ScrollY,
+                                       ImVec2(0.0f, 0.0f)))
+            {
+                ImGui::TableSetupColumn("模块", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthFixed, 108.0f);
+                ImGui::TableSetupColumn("分类", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+                ImGui::TableSetupColumn("行", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+                ImGui::TableSetupColumn("尺寸", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+                ImGui::TableSetupColumn("tris", ImGuiTableColumnFlags_WidthFixed, 38.0f);
+                ImGui::TableHeadersRow();
+
+                const ImGuiTableSortSpecs* sortSpecs = ImGui::TableGetSortSpecs();
+                if (sortSpecs != nullptr && sortSpecs->SpecsCount > 0)
+                {
+                    const ImGuiTableColumnSortSpecs& spec = sortSpecs->Specs[0];
+                    std::stable_sort(visibleModuleIndices.begin(), visibleModuleIndices.end(),
+                                     [&](int lhs, int rhs)
+                    {
+                        const FKitModuleInfo& leftModule = selectedKit.modules[lhs];
+                        const FKitModuleInfo& rightModule = selectedKit.modules[rhs];
+                        int result = 0;
+                        if (spec.ColumnIndex == 0)
+                        {
+                            result = leftModule.name.compare(rightModule.name);
+                        }
+                        else if (spec.ColumnIndex == 1)
+                        {
+                            result = leftModule.category.compare(rightModule.category);
+                        }
+                        else if (spec.ColumnIndex == 2)
+                        {
+                            result = leftModule.line < rightModule.line ? -1 : (leftModule.line > rightModule.line ? 1 : 0);
+                        }
+                        else if (spec.ColumnIndex == 3)
+                        {
+                            if (leftModule.hasMetrics != rightModule.hasMetrics)
+                            {
+                                result = leftModule.hasMetrics ? 1 : -1;
+                            }
+                            else
+                            {
+                                const float leftSize = leftModule.footprintX * leftModule.footprintY * leftModule.height;
+                                const float rightSize = rightModule.footprintX * rightModule.footprintY * rightModule.height;
+                                result = leftSize < rightSize ? -1 : (leftSize > rightSize ? 1 : 0);
+                            }
+                        }
+                        else
+                        {
+                            result = leftModule.triangles < rightModule.triangles
+                                ? -1
+                                : (leftModule.triangles > rightModule.triangles ? 1 : 0);
+                        }
+                        if (result == 0)
+                        {
+                            result = leftModule.name.compare(rightModule.name);
+                        }
+                        return spec.SortDirection == ImGuiSortDirection_Descending ? result > 0 : result < 0;
+                    });
+                }
+
+                for (const int moduleIndex : visibleModuleIndices)
+                {
+                    const FKitModuleInfo& module = selectedKit.modules[moduleIndex];
+                    ImGui::TableNextRow(ImGuiTableRowFlags_None, 32.0f);
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::PushID(moduleIndex);
+                    if (ImGui::Selectable(module.name.c_str(), kitBrowserSelectedModule_ == moduleIndex,
+                                          ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap,
+                                          ImVec2(0.0f, 0.0f)))
+                    {
+                        kitBrowserSelectedModule_ = moduleIndex;
+                        PreviewModule(kitBrowserSelectedKit_, module.name);
+                    }
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("%s%s%s", module.name.c_str(), module.params.empty() ? "" : "\n参数：",
+                                          module.params.empty() ? "" : module.params.c_str());
+                    }
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::TextDisabled("%s", CategoryLabel(module.category));
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::TextDisabled("L%d", module.line);
+                    ImGui::TableSetColumnIndex(3);
+                    if (module.hasMetrics)
+                    {
+                        ImGui::TextDisabled("%.1f × %.1f × %.1f", module.footprintX, module.footprintY,
+                                           module.height);
+                    }
+                    else
+                    {
+                        ImGui::TextDisabled("—");
+                    }
+                    ImGui::TableSetColumnIndex(4);
+                    ImGui::TextDisabled("%d", module.triangles);
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
+            }
+        }
+        ImGui::End();
+        ImGui::PopStyleVar(3);
+
+        // A small overlay keeps the viewport self-describing and exposes frame-all.
+        ImGui::SetNextWindowPos(ImVec2(viewportPos.x + 12.0f, viewportPos.y + 12.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.90f);
+        const ImGuiWindowFlags toolbarFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoSavedSettings;
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5.0f, 5.0f));
+        if (ImGui::Begin("##ScadLibraryKitPreviewToolbar", nullptr, toolbarFlags))
+        {
+            if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE_LEFT, "回到全览视图", false))
+            {
+                frameAllRequested_ = true;
+            }
+            ImGui::SameLine();
+            if (kitBrowserSelectedKit_ >= 0 && kitBrowserSelectedKit_ < static_cast<int>(kits_.size()) &&
+                kitBrowserSelectedModule_ >= 0 &&
+                kitBrowserSelectedModule_ < static_cast<int>(kits_[kitBrowserSelectedKit_].modules.size()))
+            {
+                ImGui::Text("%s", kits_[kitBrowserSelectedKit_].modules[kitBrowserSelectedModule_].name.c_str());
+            }
+            else
+            {
+                ImGui::TextDisabled("选择模块以预览");
+            }
+        }
+        ImGui::End();
+        ImGui::PopStyleVar(2);
     }
 
     void ScadLibraryInterface::DrawBrowserPanel(const ImVec2& pos, const ImVec2& size)
@@ -987,6 +2241,14 @@ namespace ScadLibrary
                                     procCount);
                 ImGui::Spacing();
                 ImGui::BeginChild("##assembly_files", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
+
+                struct FAssemblyGroupView
+                {
+                    std::string key;
+                    std::string label;
+                    std::vector<int> indices;
+                };
+                std::vector<FAssemblyGroupView> groups;
                 for (int index = 0; index < static_cast<int>(assemblies_.size()); ++index)
                 {
                     const FSceneAssemblyInfo& assembly = assemblies_[index];
@@ -997,24 +2259,123 @@ namespace ScadLibrary
                     {
                         continue;
                     }
-                    const char* icon = assembly.generated ? ICON_FA_WAND_MAGIC_SPARKLES : ICON_FA_FILE_CODE;
-                    if (ImGui::Selectable(fmt::format("{}  [{}] {}##assembly_{}", icon,
-                                                      SceneKindLabel(assembly.kind), assembly.relativePath, index)
-                                              .c_str(),
-                                          index == selectedAssembly_, 0, ImVec2(0.0f, 29.0f)))
+                    auto groupIt = std::find_if(groups.begin(), groups.end(), [&](const FAssemblyGroupView& group)
                     {
-                        selectedAssembly_ = index;
-                        OpenAssembly(assembly.relativePath);
-                    }
-                    if (ImGui::IsItemHovered())
+                        return group.key == assembly.categoryKey;
+                    });
+                    if (groupIt == groups.end())
                     {
-                        ImGui::SetTooltip("依赖: %s%s", dependencies.c_str(),
-                                          assembly.generated ? "\n由规格或工具生成，手改可能被覆盖" : "");
+                        groups.push_back({assembly.categoryKey, assembly.categoryLabel, {}});
+                        groupIt = std::prev(groups.end());
                     }
+                    groupIt->indices.push_back(index);
                 }
-                if (assemblies_.empty())
+
+                std::sort(groups.begin(), groups.end(), [](const FAssemblyGroupView& left,
+                                                           const FAssemblyGroupView& right)
                 {
-                    ImGui::TextDisabled("未找到引用 kit_*.scad 的场景");
+                    const int leftRank = SceneCategorySortRank(left.key);
+                    const int rightRank = SceneCategorySortRank(right.key);
+                    return leftRank != rightRank ? leftRank < rightRank : left.key < right.key;
+                });
+
+                for (FAssemblyGroupView& group : groups)
+                {
+                    std::stable_sort(group.indices.begin(), group.indices.end(), [&](int leftIndex, int rightIndex)
+                    {
+                        const FSceneAssemblyInfo& left = assemblies_[leftIndex];
+                        const FSceneAssemblyInfo& right = assemblies_[rightIndex];
+                        if (left.kind != right.kind)
+                        {
+                            return static_cast<int>(left.kind) < static_cast<int>(right.kind);
+                        }
+                        return left.relativePath < right.relativePath;
+                    });
+
+                    size_t sourceInGroup = 0;
+                    size_t procInGroup = 0;
+                    size_t evaluatedInGroup = 0;
+                    for (const int index : group.indices)
+                    {
+                        switch (assemblies_[index].kind)
+                        {
+                        case EScadSceneKind::Evaluated:
+                            ++evaluatedInGroup;
+                            break;
+                        case EScadSceneKind::Source:
+                            ++sourceInGroup;
+                            break;
+                        case EScadSceneKind::Procedural:
+                            ++procInGroup;
+                            break;
+                        }
+                    }
+
+                    const std::string groupTitle = fmt::format("{}  {} 个场景##assembly_group_{}",
+                                                                group.label, group.indices.size(), group.key);
+                    const bool showcaseGroup = group.key.starts_with("showcase/");
+                    if (!ImGui::CollapsingHeader(groupTitle.c_str(),
+                                                 showcaseGroup ? ImGuiTreeNodeFlags_DefaultOpen : 0))
+                    {
+                        continue;
+                    }
+                    std::string kindSummary;
+                    auto appendKindCount = [&](const char* label, size_t count)
+                    {
+                        if (count == 0)
+                        {
+                            return;
+                        }
+                        if (!kindSummary.empty())
+                        {
+                            kindSummary += "  ·  ";
+                        }
+                        kindSummary += fmt::format("{} {}", label, count);
+                    };
+                    appendKindCount("Evaluated", evaluatedInGroup);
+                    appendKindCount("Source", sourceInGroup);
+                    appendKindCount("Proc", procInGroup);
+                    ImGui::TextDisabled("%s", kindSummary.c_str());
+                    ImGui::Indent(8.0f);
+                    for (const int index : group.indices)
+                    {
+                        const FSceneAssemblyInfo& assembly = assemblies_[index];
+                        const std::string dependencies = fmt::format("{}", fmt::join(assembly.kitDependencies, ", "));
+                        constexpr float rowHeight = 29.0f;
+                        const ImVec2 rowPosition = ImGui::GetCursorScreenPos();
+                        const float rowWidth = ImGui::GetContentRegionAvail().x;
+                        const bool rowSelected = index == selectedAssembly_;
+                        const bool rowClicked = ImGui::Selectable(fmt::format("##assembly_row_{}", index).c_str(),
+                                                                  rowSelected, 0,
+                                                                  ImVec2(rowWidth, rowHeight));
+                        const bool rowHovered = ImGui::IsItemHovered();
+
+                        ImGui::SetCursorScreenPos(ImVec2(rowPosition.x + 8.0f,
+                                                         rowPosition.y +
+                                                             std::floor((rowHeight - ImGui::GetTextLineHeight()) * 0.5f)));
+                        ImGui::TextColored(SceneKindIconColor(assembly.kind), "%s", SceneKindIcon(assembly.kind));
+                        ImGui::SameLine(0.0f, 7.0f);
+                        const std::string pureName = std::filesystem::path(assembly.relativePath).stem().string();
+                        ImGui::TextUnformatted(pureName.c_str());
+                        ImGui::SetCursorScreenPos(ImVec2(rowPosition.x,
+                                                         rowPosition.y + rowHeight + ImGui::GetStyle().ItemSpacing.y));
+
+                        if (rowClicked)
+                        {
+                            selectedAssembly_ = index;
+                            OpenAssembly(assembly.relativePath);
+                        }
+                        if (rowHovered)
+                        {
+                            ImGui::SetTooltip("类别: %s\n依赖: %s%s", group.label.c_str(), dependencies.c_str(),
+                                              assembly.generated ? "\n由规格或工具生成，手改可能被覆盖" : "");
+                        }
+                    }
+                    ImGui::Unindent(8.0f);
+                }
+                if (groups.empty())
+                {
+                    ImGui::TextDisabled(assemblies_.empty() ? "未找到引用 kit_*.scad 的场景" : "没有匹配的场景");
                 }
                 ImGui::EndChild();
                 ImGui::EndTabItem();
@@ -1658,6 +3019,7 @@ namespace ScadLibrary
                 {
                     assemblySource_ = candidate.source;
                     openedAssemblyPath_.clear();
+                    RefreshAssemblyWatchBaseline();
                     openedAssemblyKits_ = FindKitDependencies(assemblySource_);
                     assemblySourceDirty_ = true;
                     assemblyStructured_ = false;
@@ -2598,6 +3960,23 @@ namespace ScadLibrary
                         changed |= editPoint("尺寸", feature.size);
                         changed |= editNumber("旋转", feature.rot, 1.0f, "%.1f°");
                         break;
+                    case EType::Hmap:
+                        // Sampled heightfield (generated from real elevation
+                        // data). Not structurally editable here; the source page
+                        // owns it. Only the cheap scalars are exposed.
+                        ImGui::TextDisabled("采样高度场%s",
+                                            feature.path.empty() ? "（内联）" : "");
+                        if (!feature.path.empty())
+                        {
+                            ImGui::TextWrapped("%s", feature.path.c_str());
+                        }
+                        if (feature.grid)
+                        {
+                            ImGui::TextDisabled("%d x %d 采样", feature.grid->cols, feature.grid->rows);
+                        }
+                        changed |= editNumber("高度缩放", feature.zScale);
+                        changed |= editNumber("高度偏移", feature.zBias);
+                        break;
                     }
                     ImGui::TreePop();
                 }
@@ -2922,6 +4301,252 @@ namespace ScadLibrary
         }
     }
 
+    bool ScadLibraryInterface::DrawBenchItemParameters(FBenchItem& benchItem)
+    {
+        const FKitModuleInfo* moduleInfo = nullptr;
+        if (benchItem.kitIndex >= 0 && benchItem.kitIndex < static_cast<int>(kits_.size()))
+        {
+            const FKitInfo& kit = kits_[benchItem.kitIndex];
+            const auto found = std::find_if(kit.modules.begin(), kit.modules.end(),
+                                            [&](const FKitModuleInfo& module) { return module.name == benchItem.moduleName; });
+            if (found != kit.modules.end())
+            {
+                moduleInfo = &*found;
+            }
+        }
+
+        std::vector<FScadParameterEditor> parameters;
+        if (moduleInfo == nullptr || !ParseScadModuleParameters(*moduleInfo, parameters))
+        {
+            const bool changed = ImGui::InputTextWithHint("原始参数##scad_raw_args",
+                                                          "SCAD 参数，例如 seed = 3",
+                                                          benchItem.args, sizeof(benchItem.args));
+            ImGui::SetItemTooltip("模块签名无法结构化解析，保留原始 SCAD 参数编辑\n%s",
+                                  moduleInfo == nullptr ? "未找到模块签名" : moduleInfo->params.c_str());
+            return changed;
+        }
+
+        std::vector<FScadRawArgument> unknown;
+        parameters = MakeScadParameterEditors(*moduleInfo, benchItem.args, unknown);
+        const std::string moduleComment =
+            ReadScadModuleComment(kits_[benchItem.kitIndex], *moduleInfo);
+        if (parameters.empty())
+        {
+            if (!unknown.empty())
+            {
+                std::string rawUnknown;
+                for (const FScadRawArgument& argument : unknown)
+                {
+                    if (!rawUnknown.empty())
+                    {
+                        rawUnknown += ", ";
+                    }
+                    rawUnknown += argument.named ? fmt::format("{} = {}", argument.name, argument.source)
+                                                  : argument.source;
+                }
+                if (ImGui::InputTextWithHint("原始参数##scad_raw_args", "SCAD 参数", &rawUnknown))
+                {
+                    if (rawUnknown.size() < sizeof(benchItem.args))
+                    {
+                        std::snprintf(benchItem.args, sizeof(benchItem.args), "%s", rawUnknown.c_str());
+                        return true;
+                    }
+                    statusLine_ = "参数文本过长，最多支持 511 个字符";
+                    statusError_ = true;
+                }
+            }
+            else
+            {
+                ImGui::TextDisabled("该模块没有可编辑参数");
+            }
+            return false;
+        }
+
+        bool changed = false;
+        for (size_t index = 0; index < parameters.size(); ++index)
+        {
+            FScadParameterEditor& parameter = parameters[index];
+            const std::string label = fmt::format("{}##scad_parameter_{}", parameter.name, index);
+            const Assets::Scad::ExprPtr& expression = parameter.expression;
+            const auto setTooltip = [&](const char* type)
+            {
+                const std::string defaultValue = parameter.defaultSource.empty() ? "无默认值（必填）"
+                                                                                   : parameter.defaultSource;
+                const std::string tooltip = fmt::format("{}\n类型: {}\n默认值: {}",
+                                                         ScadParameterDescription(parameter.name), type,
+                                                         defaultValue);
+                if (moduleComment.empty())
+                {
+                    ImGui::SetItemTooltip("%s", tooltip.c_str());
+                }
+                else
+                {
+                    ImGui::SetItemTooltip("%s\n\n模块注释:\n%s", tooltip.c_str(), moduleComment.c_str());
+                }
+            };
+
+            double number = 0.0;
+            if (ReadScadNumericLiteral(expression, number))
+            {
+                if (ImGui::DragScalar(label.c_str(), ImGuiDataType_Double, &number, 0.01f, nullptr, nullptr,
+                                      "%.4g"))
+                {
+                    parameter.source = fmt::format("{:.9g}", number);
+                    changed = true;
+                }
+                setTooltip("数值");
+                continue;
+            }
+
+            if (expression != nullptr && expression->kind == Assets::Scad::ExprKind::Bool)
+            {
+                bool value = expression->boolean;
+                if (ImGui::Checkbox(label.c_str(), &value))
+                {
+                    parameter.source = value ? "true" : "false";
+                    changed = true;
+                }
+                setTooltip("布尔");
+                continue;
+            }
+
+            if (expression != nullptr && expression->kind == Assets::Scad::ExprKind::Str)
+            {
+                std::string value = expression->str;
+                if (ImGui::InputText(label.c_str(), &value))
+                {
+                    parameter.source = QuoteScadString(value);
+                    changed = true;
+                }
+                setTooltip("字符串");
+                continue;
+            }
+
+            bool numericVector = expression != nullptr && expression->kind == Assets::Scad::ExprKind::VectorLit &&
+                expression->list.size() >= 1 && expression->list.size() <= 4;
+            std::vector<double> vectorValues;
+            if (numericVector)
+            {
+                vectorValues.reserve(expression->list.size());
+                for (const Assets::Scad::ExprPtr& element : expression->list)
+                {
+                    double value = 0.0;
+                    if (!ReadScadNumericLiteral(element, value))
+                    {
+                        numericVector = false;
+                        break;
+                    }
+                    vectorValues.push_back(value);
+                }
+            }
+            if (numericVector)
+            {
+                bool vectorChanged = false;
+                if (IsColorScadParameter(parameter.name) &&
+                    (vectorValues.size() == 3 || vectorValues.size() == 4))
+                {
+                    float color[4] = {static_cast<float>(vectorValues[0]), static_cast<float>(vectorValues[1]),
+                                      static_cast<float>(vectorValues[2]),
+                                      vectorValues.size() == 4 ? static_cast<float>(vectorValues[3]) : 1.0f};
+                    vectorChanged = vectorValues.size() == 3
+                        ? ImGui::ColorEdit3(label.c_str(), color)
+                        : ImGui::ColorEdit4(label.c_str(), color);
+                    if (vectorChanged)
+                    {
+                        parameter.source = vectorValues.size() == 3
+                            ? fmt::format("[{:.5f}, {:.5f}, {:.5f}]", color[0], color[1], color[2])
+                            : fmt::format("[{:.5f}, {:.5f}, {:.5f}, {:.5f}]", color[0], color[1], color[2],
+                                          color[3]);
+                    }
+                    setTooltip(vectorValues.size() == 3 ? "RGB 颜色" : "RGBA 颜色");
+                }
+                else if (vectorValues.size() == 1)
+                {
+                    vectorChanged = ImGui::DragScalar(label.c_str(), ImGuiDataType_Double, vectorValues.data(),
+                                                      0.01f, nullptr, nullptr, "%.4g");
+                    if (vectorChanged)
+                    {
+                        parameter.source = fmt::format("[{:.9g}]", vectorValues[0]);
+                    }
+                    setTooltip("数值向量");
+                }
+                else
+                {
+                    vectorChanged = ImGui::DragScalarN(label.c_str(), ImGuiDataType_Double, vectorValues.data(),
+                                                       static_cast<int>(vectorValues.size()), 0.01f, nullptr, nullptr,
+                                                       "%.4g");
+                    if (vectorChanged)
+                    {
+                        parameter.source = "[";
+                        for (size_t component = 0; component < vectorValues.size(); ++component)
+                        {
+                            if (component > 0)
+                            {
+                                parameter.source += ", ";
+                            }
+                            parameter.source += fmt::format("{:.9g}", vectorValues[component]);
+                        }
+                        parameter.source += "]";
+                    }
+                    setTooltip(fmt::format("{}D 数值向量", vectorValues.size()).c_str());
+                }
+                changed |= vectorChanged;
+                continue;
+            }
+
+            std::string expressionText = parameter.source;
+            if (ImGui::InputTextWithHint(label.c_str(), "SCAD 表达式", &expressionText))
+            {
+                parameter.source = std::move(expressionText);
+                changed = true;
+            }
+            setTooltip("表达式");
+        }
+
+        if (!unknown.empty())
+        {
+            ImGui::TextDisabled("未在模块签名中识别的参数");
+            std::string unknownText;
+            for (const FScadRawArgument& argument : unknown)
+            {
+                if (!unknownText.empty())
+                {
+                    unknownText += ", ";
+                }
+                unknownText += argument.named ? fmt::format("{} = {}", argument.name, argument.source)
+                                              : argument.source;
+            }
+            if (ImGui::InputTextWithHint("高级参数##scad_unknown_args", "保留的 SCAD 参数", &unknownText))
+            {
+                if (unknownText.size() < sizeof(benchItem.args))
+                {
+                    const std::string composed = ComposeScadArguments(parameters, ParseScadCallArguments(unknownText));
+                    if (composed.size() < sizeof(benchItem.args))
+                    {
+                        std::snprintf(benchItem.args, sizeof(benchItem.args), "%s", composed.c_str());
+                        return true;
+                    }
+                }
+                statusLine_ = "参数文本过长，最多支持 511 个字符";
+                statusError_ = true;
+            }
+        }
+
+        if (!changed)
+        {
+            return false;
+        }
+        const std::string composed = ComposeScadArguments(parameters, unknown);
+        if (composed.size() >= sizeof(benchItem.args))
+        {
+            statusLine_ = "参数文本过长，最多支持 511 个字符";
+            statusError_ = true;
+            return false;
+        }
+        std::snprintf(benchItem.args, sizeof(benchItem.args), "%s", composed.c_str());
+        return true;
+    }
+
     void ScadLibraryInterface::DrawBenchContent()
     {
         ImGui::Spacing();
@@ -3014,6 +4639,8 @@ namespace ScadLibrary
                     {
                         bench_.clear();
                         selectedBenchItem_ = -1;
+                        engine_.GetScene().ClearSelection();
+                        engine_.GetShowFlags().ShowEdge = false;
                         benchDirty_ = true;
                     }
                     ImGui::Separator();
@@ -3067,6 +4694,7 @@ namespace ScadLibrary
                                     ResolveSceneObjectNode(benchItem, SceneObjectWorldMatrix(benchItem)))
                             {
                                 engine_.GetScene().SetSelectedId(selectedNode->GetInstanceId());
+                                engine_.GetShowFlags().ShowEdge = true;
                             }
                         }
                         ImGui::SameLine(ImGui::GetContentRegionAvail().x - 52.0f);
@@ -3109,7 +4737,7 @@ namespace ScadLibrary
                             {
                                 benchDirty_ = true;
                             }
-                            if (ImGui::InputTextWithHint("参数", "如 seed = 3", benchItem.args, sizeof(benchItem.args)))
+                            if (DrawBenchItemParameters(benchItem))
                             {
                                 benchDirty_ = true;
                             }
@@ -3200,6 +4828,15 @@ namespace ScadLibrary
         const std::string libDir = AuthoringPath("assets/scad/lib").string();
         bool fromCatalog = false;
         kits_ = LoadKits(libDir, fromCatalog);
+        kitBrowserSelectedModule_ = -1;
+        if (kits_.empty())
+        {
+            kitBrowserSelectedKit_ = -1;
+        }
+        else if (kitBrowserSelectedKit_ < 0 || kitBrowserSelectedKit_ >= static_cast<int>(kits_.size()))
+        {
+            kitBrowserSelectedKit_ = 0;
+        }
         size_t moduleCount = 0;
         for (const FKitInfo& kit : kits_)
         {
@@ -3233,6 +4870,253 @@ namespace ScadLibrary
         }
         designer_.SetKit(kitCharIndex_ >= 0 ? &kits_[kitCharIndex_] : nullptr);
         designerEverLoaded_ = false;
+
+        // The watch compares against this snapshot; keep it in sync so manual
+        // rescans (F5 / AI save) do not re-trigger the auto-reload path.
+        RefreshKitWatchBaseline();
+    }
+
+    void ScadLibraryInterface::RefreshKitWatchBaseline()
+    {
+        kitWatchStamps_.clear();
+        kitWatchStamps_.reserve(kits_.size());
+        std::error_code ec;
+        for (const FKitInfo& kit : kits_)
+        {
+            const std::filesystem::file_time_type stamp =
+                std::filesystem::last_write_time(std::filesystem::path(kit.filePath), ec);
+            if (!ec)
+            {
+                kitWatchStamps_.emplace_back(kit.filePath, stamp);
+            }
+            ec.clear();
+        }
+    }
+
+    void ScadLibraryInterface::RefreshAssemblyWatchBaseline()
+    {
+        assemblyWatchPath_ = openedAssemblyPath_;
+        assemblyWatchChanged_ = false;
+        assemblyWatchStampValid_ = false;
+        if (assemblyWatchPath_.empty())
+        {
+            return;
+        }
+
+        std::error_code ec;
+        assemblyWatchStamp_ = std::filesystem::last_write_time(assemblyWatchPath_, ec);
+        assemblyWatchStampValid_ = !ec;
+    }
+
+    void ScadLibraryInterface::TickKitFileWatch(double deltaSeconds)
+    {
+        kitWatchElapsed_ += deltaSeconds;
+        if (kitWatchElapsed_ < kKitWatchPollIntervalSeconds)
+        {
+            return;
+        }
+        kitWatchElapsed_ = 0.0;
+
+        // The currently opened assembly is authored outside ScadLibrary quite
+        // often (for example by ScadStudio or an editor). Check its timestamp
+        // on the main thread alongside the kit worker poll. The file metadata
+        // query is tiny, while the actual scene parse/rebuild remains deferred
+        // to Render() where it is safe to touch UI and engine state.
+        if (!assemblyWatchPath_.empty())
+        {
+            std::error_code ec;
+            const std::filesystem::file_time_type stamp =
+                std::filesystem::last_write_time(assemblyWatchPath_, ec);
+            if (ec)
+            {
+                if (assemblyWatchStampValid_)
+                {
+                    assemblyWatchStampValid_ = false;
+                    assemblyWatchChanged_ = true;
+                    kitWatchPending_ = true;
+                    kitWatchReloadAt_ = std::chrono::steady_clock::now() + kKitWatchReloadDebounce;
+                }
+            }
+            else if (!assemblyWatchStampValid_ || stamp != assemblyWatchStamp_)
+            {
+                assemblyWatchStamp_ = stamp;
+                assemblyWatchStampValid_ = true;
+                assemblyWatchChanged_ = true;
+                kitWatchPending_ = true;
+                kitWatchReloadAt_ = std::chrono::steady_clock::now() + kKitWatchReloadDebounce;
+            }
+        }
+
+        // Do not submit another gather while a detected change is waiting for
+        // the debounced rescan. Its snapshot would use the old baseline and
+        // report the same change again after RescanKits updates the stamps.
+        if (kitWatchTaskInFlight_ || kitWatchPending_)
+        {
+            return;
+        }
+
+        struct FKitWatchTaskContext
+        {
+            FKitWatchGatherResult result;
+        };
+        auto context = std::make_shared<FKitWatchTaskContext>();
+
+        std::vector<std::string> watchPaths;
+        watchPaths.reserve(kits_.size());
+        for (const FKitInfo& kit : kits_)
+        {
+            watchPaths.push_back(kit.filePath);
+        }
+        const std::vector<std::pair<std::string, std::filesystem::file_time_type>> prevStamps = kitWatchStamps_;
+        const std::string libDir = AuthoringPath("assets/scad/lib").string();
+
+        kitWatchTaskInFlight_ = true;
+        Tasks::TaskCoordinator::GetInstance()->AddTask(
+            [context, watchPaths = std::move(watchPaths), prevStamps = std::move(prevStamps), libDir](Tasks::ResTask& task)
+            {
+                (void)task;
+                context->result = GatherKitFileChanges(watchPaths, prevStamps, libDir);
+            },
+            [this, context](Tasks::ResTask& task)
+            {
+                (void)task;
+                FinishKitFileChanges(std::move(context->result.changedPaths), context->result.treeChanged);
+            },
+            0,
+            "ScadLibrary kit watch");
+    }
+
+    void ScadLibraryInterface::FinishKitFileChanges(std::vector<std::string> changedPaths, bool treeChanged)
+    {
+        kitWatchTaskInFlight_ = false;
+        if (changedPaths.empty() && !treeChanged)
+        {
+            return;
+        }
+
+        // Resolve the "preview kit changed" flag on the main thread while the
+        // current kit indices are still valid (the tree has not been rescanned yet).
+        kitWatchChangedPreviewKit_ = false;
+        if (selectedKit_ >= 0 && selectedKit_ < static_cast<int>(kits_.size()) && !selectedModule_.empty())
+        {
+            const std::string& previewPath = kits_[selectedKit_].filePath;
+            kitWatchChangedPreviewKit_ =
+                std::find(changedPaths.begin(), changedPaths.end(), previewPath) != changedPaths.end();
+        }
+
+        // In Scene Assembly the visible preview is usually bench.scad (or a
+        // generated terrain/source preview), not preview.scad. Track whether
+        // any kit used by that current assembly changed so the visible scene
+        // can be rebuilt as well.
+        kitWatchChangedAssembly_ = false;
+        if (workspaceMode_ == EWorkspaceMode::SceneAssembly && !modulePreviewActive_)
+        {
+            const auto usesKitPath = [&](const std::string& changedPath)
+            {
+                const std::string changedKitName = std::filesystem::path(changedPath).stem().string();
+                if (std::find(openedAssemblyKits_.begin(), openedAssemblyKits_.end(), changedKitName) !=
+                    openedAssemblyKits_.end())
+                {
+                    return true;
+                }
+                for (const FBenchItem& benchItem : bench_)
+                {
+                    if (benchItem.kitIndex >= 0 && benchItem.kitIndex < static_cast<int>(kits_.size()) &&
+                        kits_[benchItem.kitIndex].filePath == changedPath)
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            kitWatchChangedAssembly_ =
+                std::any_of(changedPaths.begin(), changedPaths.end(), usesKitPath);
+        }
+
+        kitWatchFilesChanged_ = true;
+        kitWatchPending_ = true;
+        kitWatchReloadAt_ = std::chrono::steady_clock::now() + kKitWatchReloadDebounce;
+    }
+
+    void ScadLibraryInterface::PollKitFileChanges()
+    {
+        const bool assemblyPreviewVisible = workspaceMode_ == EWorkspaceMode::SceneAssembly && !modulePreviewActive_;
+        const bool modulePreviewVisible = modulePreviewActive_;
+        if (!kitWatchPending_ &&
+            !(assemblyPreviewVisible && (assemblyWatchChanged_ || kitWatchChangedAssembly_)) &&
+            !(modulePreviewVisible && kitWatchChangedPreviewKit_))
+        {
+            return;
+        }
+        // Same deferred-reload guard as bench/designer: never rebuild the scene
+        // while the user is dragging a widget.
+        if (ImGui::IsAnyItemActive())
+        {
+            return;
+        }
+        if (std::chrono::steady_clock::now() < kitWatchReloadAt_)
+        {
+            return;
+        }
+        kitWatchPending_ = false;
+
+        const bool kitFilesChanged = kitWatchFilesChanged_;
+        const bool previewChanged = kitWatchChangedPreviewKit_;
+        const bool assemblyKitChanged = kitWatchChangedAssembly_;
+        const bool assemblyFileChanged = assemblyWatchChanged_;
+        kitWatchFilesChanged_ = false;
+        kitWatchChangedPreviewKit_ = false;
+        kitWatchChangedAssembly_ = false;
+
+        bool refreshedAssembly = false;
+        if (assemblyPreviewVisible && assemblyFileChanged && !openedAssemblyPath_.empty())
+        {
+            // Re-read the source into the editor model first. This covers
+            // direct edits to the currently opened scene, while the preserve
+            // flag keeps the camera controller untouched when the engine
+            // receives the replacement scene.
+            refreshedAssembly = OpenAssembly(openedAssemblyPath_, true);
+            assemblyWatchChanged_ = false;
+        }
+        else if (assemblyPreviewVisible && assemblyKitChanged)
+        {
+            ReloadCurrentAssemblyPreview();
+            refreshedAssembly = true;
+        }
+
+        // Reload the preview first while the old kit indices are still valid,
+        // keeping the camera (and the AI editing context) intact.
+        if (!refreshedAssembly && modulePreviewVisible && previewChanged &&
+            selectedKit_ >= 0 && selectedKit_ < static_cast<int>(kits_.size()) &&
+            !selectedModule_.empty())
+        {
+            preserveCameraOnNextSceneLoad_ = true;
+            WriteAndLoad("preview.scad", BuildModulePreviewSource(selectedKit_, selectedModule_));
+        }
+
+        // RescanKits resets statusLine_, so report the auto-refresh afterwards.
+        if (kitFilesChanged)
+        {
+            RescanKits();
+        }
+
+        SPDLOG_INFO("[ScadLibrary] source file(s) changed externally, auto-refreshed (assembly reload: {}, "
+                    "module reload: {})",
+                    refreshedAssembly, !refreshedAssembly && modulePreviewVisible && previewChanged);
+
+        if (refreshedAssembly)
+        {
+            statusLine_ = assemblyFileChanged ? "当前场景文件已变化，已自动刷新预览" : "场景依赖 Kit 已变化，已自动刷新预览";
+        }
+        else if (previewChanged && modulePreviewVisible)
+        {
+            statusLine_ = fmt::format("kit 文件已变化，已自动刷新预览 {}", selectedModule_);
+        }
+        else if (kitFilesChanged)
+        {
+            statusLine_ = "kit 文件已变化，资源库已自动刷新";
+        }
+        statusError_ = false;
     }
 
     void ScadLibraryInterface::RescanAssemblies()
@@ -3273,6 +5157,8 @@ namespace ScadLibrary
             info.kind = *kind;
             const auto secondPart = std::next(relative.begin());
             info.generated = secondPart != relative.end() && secondPart->string() == "generated";
+            info.categoryKey = SceneCategoryKeyFromRelativePath(relative);
+            info.categoryLabel = SceneCategoryLabelFromKey(info.categoryKey);
             assemblies_.push_back(std::move(info));
         }
         std::sort(assemblies_.begin(), assemblies_.end(),
@@ -3311,7 +5197,17 @@ namespace ScadLibrary
         aiKitContextActive_ = true;
         aiController_->Reset();
         rigPreview_.SetActive(false);
+        modulePreviewActive_ = true;
 
+        if (WriteAndLoad("preview.scad", BuildModulePreviewSource(kitIndex, moduleName)))
+        {
+            statusLine_ = fmt::format("预览 {}", moduleName);
+            statusError_ = false;
+        }
+    }
+
+    std::string ScadLibraryInterface::BuildModulePreviewSource(int kitIndex, const std::string& moduleName) const
+    {
         std::string source;
         source += "// ScadLibrary module preview\n";
         source += fmt::format("$fn = {};\n", fnSegments_);
@@ -3319,11 +5215,7 @@ namespace ScadLibrary
         std::replace(usePath.begin(), usePath.end(), '\\', '/');
         source += fmt::format("use <{}>\n\n", usePath);
         source += fmt::format("{}();\n", moduleName);
-        if (WriteAndLoad("preview.scad", source))
-        {
-            statusLine_ = fmt::format("预览 {}", moduleName);
-            statusError_ = false;
-        }
+        return source;
     }
 
     void ScadLibraryInterface::AddToBench(int kitIndex, const std::string& moduleName)
@@ -3746,7 +5638,7 @@ namespace ScadLibrary
         return true;
     }
 
-    bool ScadLibraryInterface::OpenAssembly(const std::string& path)
+    bool ScadLibraryInterface::OpenAssembly(const std::string& path, bool preserveCamera)
     {
         const std::filesystem::path scadRoot = AuthoringPath("assets/scad");
         std::filesystem::path sourcePath(path);
@@ -3789,6 +5681,7 @@ namespace ScadLibrary
         }
 
         rigPreview_.SetActive(false);
+        modulePreviewActive_ = false;
         openedAssemblyPath_ = sourcePath.string();
         openedSceneKind_ = *sceneKind;
         aiKitContextActive_ = false;
@@ -3837,7 +5730,8 @@ namespace ScadLibrary
                 break;
             }
         }
-        preserveCameraOnNextSceneLoad_ = false;
+        RefreshAssemblyWatchBaseline();
+        preserveCameraOnNextSceneLoad_ = preserveCamera;
         engine_.RequestLoadScene({.filename = openedAssemblyPath_});
         const char* editMode = openedSceneKind_ == EScadSceneKind::Evaluated
             ? " · Evaluated 对象编辑"
@@ -3903,7 +5797,11 @@ namespace ScadLibrary
     void ScadLibraryInterface::PreviewAssemblySource()
     {
         rigPreview_.SetActive(false);
-        preserveCameraOnNextSceneLoad_ = assemblyProcedural_;
+        modulePreviewActive_ = false;
+        // Previewing edited assembly data is an in-place reload. Keep the
+        // current view for Source, Evaluated, and Proc alike; only opening a
+        // different assembly should perform the initial framing.
+        preserveCameraOnNextSceneLoad_ = true;
         if (WriteAndLoad("assembly_preview.scad", BuildAssemblyPreviewSource()))
         {
             statusLine_ = assemblyProcedural_
@@ -4008,12 +5906,16 @@ namespace ScadLibrary
         {
             assemblyProcedural_ = ImportTerrainProcessAssembly(openedAssemblyPath_, source);
         }
+        modulePreviewActive_ = false;
+        RefreshAssemblyWatchBaseline();
         const std::filesystem::path repoRoot = scadRoot.parent_path().parent_path();
         const std::string relativePath = targetPath.lexically_relative(repoRoot).generic_string();
         std::snprintf(assemblyPathBuf_, sizeof(assemblyPathBuf_), "%s", relativePath.c_str());
         if (reloadScene)
         {
-            preserveCameraOnNextSceneLoad_ = assemblyProcedural_;
+            // Saving and reloading the current assembly must not move the
+            // user's camera, including when an Evaluated scene is re-evaluated.
+            preserveCameraOnNextSceneLoad_ = true;
             engine_.RequestLoadScene({.filename = openedAssemblyPath_});
         }
         RescanAssemblies();
@@ -4036,6 +5938,7 @@ namespace ScadLibrary
             return;
         }
         rigPreview_.SetActive(false);
+        modulePreviewActive_ = false;
         preserveCameraOnNextSceneLoad_ = true;
         if (WriteAndLoad("terrain_process.scad", BuildAssemblyPreviewSource()))
         {
@@ -4048,21 +5951,44 @@ namespace ScadLibrary
         preserveCameraOnNextSceneLoad_ = false;
     }
 
-    void ScadLibraryInterface::ReloadBench()
+    void ScadLibraryInterface::ReloadCurrentAssemblyPreview()
+    {
+        if (assemblyProcedural_)
+        {
+            ReloadTerrainProcess();
+        }
+        else if (assemblyStructured_ || assemblyEvaluated_)
+        {
+            ReloadBench();
+        }
+        else
+        {
+            PreviewAssemblySource();
+        }
+    }
+
+    void ScadLibraryInterface::ReloadBench(bool preserveCamera)
     {
         benchDirty_ = false;
         rigPreview_.SetActive(false);
+        modulePreviewActive_ = false;
         if (bench_.empty())
         {
             statusLine_ = "场景对象为空";
             statusError_ = false;
             return;
         }
+        // Parameter/transform edits in an Evaluated scene rebuild this preview
+        // scene. Preserve the camera while replacing the scene contents. A
+        // workspace switch passes false because it is a new preview context.
+        preserveCameraOnNextSceneLoad_ = preserveCamera;
         if (WriteAndLoad("bench.scad", BuildBenchSource()))
         {
             statusLine_ = fmt::format("场景组装 {} 个对象已重载", bench_.size());
             statusError_ = false;
+            return;
         }
+        preserveCameraOnNextSceneLoad_ = false;
     }
 
     void ScadLibraryInterface::ExportBench()
@@ -4706,6 +6632,28 @@ namespace ScadLibrary
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5.0f, 5.0f));
         if (ImGui::Begin("##SceneObjectGizmoToolbar", nullptr, flags))
         {
+            sceneToolbarVisible_ = true;
+            sceneToolbarPosition_ = {ImGui::GetWindowPos().x, ImGui::GetWindowPos().y};
+            sceneToolbarSize_ = {ImGui::GetWindowSize().x, ImGui::GetWindowSize().y};
+            if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE_LEFT, "回到全览视图", false))
+            {
+                frameAllRequested_ = true;
+            }
+            ImGui::SameLine();
+
+            glm::vec3 selectedCenter;
+            float selectedRadius = 0.0f;
+            const bool hasSelection = GetSelectedSceneObjectBounds(selectedCenter, selectedRadius);
+            ImGui::BeginDisabled(!hasSelection);
+            if (NextUI::Theme::ToolbarButton(ICON_FA_CROSSHAIRS, "聚焦选中 Kit（F）", false))
+            {
+                focusSelectedRequested_ = true;
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            NextUI::Theme::DrawVerticalSeparator(20.0f, 8.0f, 0.65f);
+            ImGui::SameLine();
+
             if (NextUI::Theme::ToolbarButton(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT, "移动对象", sceneGizmoOperation_ == 0))
             {
                 sceneGizmoOperation_ = 0;
@@ -4808,7 +6756,7 @@ namespace ScadLibrary
 
         // Engine mouse events use framebuffer pixels, while the overlay handles
         // are stored in ImGui's logical coordinate space.
-        const NextUI::UserInterface* ui = engine_.GetUserInterface();
+        const NextUI::IUserInterface* ui = engine_.GetUserInterface();
         const float uiScale = ui != nullptr ? ui->UiScale() : 1.0f;
         const glm::vec2 mouse(static_cast<float>(x) / uiScale, static_cast<float>(y) / uiScale);
         for (const FTerrainFeatureHandle& handle : terrainFeatureHandles_)
@@ -4960,6 +6908,8 @@ namespace ScadLibrary
                 return IM_COL32(255, 218, 84, alpha);
             case EType::Pad:
                 return IM_COL32(255, 108, 196, alpha);
+            case EType::Hmap:
+                return IM_COL32(150, 160, 170, alpha);
             }
             return IM_COL32(255, 255, 255, alpha);
         };
@@ -5500,7 +7450,7 @@ namespace ScadLibrary
         }
 
         const glm::vec2 mouse(ImGui::GetIO().MousePos.x, ImGui::GetIO().MousePos.y);
-        const NextUI::UserInterface* ui = engine_.GetUserInterface();
+        const NextUI::IUserInterface* ui = engine_.GetUserInterface();
         const float uiScale = ui != nullptr ? ui->UiScale() : 1.0f;
         const glm::vec2 framebufferMouse = mouse * uiScale;
         int hoveredHandle = -1;
@@ -5799,6 +7749,49 @@ namespace ScadLibrary
         SaveAssembly(true, false);
     }
 
+    bool ScadLibraryInterface::GetSelectedSceneObjectBounds(glm::vec3& center, float& radius)
+    {
+        if (workspaceMode_ != EWorkspaceMode::SceneAssembly || selectedBenchItem_ < 0 ||
+            selectedBenchItem_ >= static_cast<int>(bench_.size()))
+        {
+            return false;
+        }
+
+        FBenchItem& item = bench_[selectedBenchItem_];
+        Assets::Node* selectedNode = ResolveSceneObjectNode(item, SceneObjectWorldMatrix(item));
+        if (selectedNode == nullptr)
+        {
+            return engine_.GetScene().GetSelectedNodeBounds(center, radius);
+        }
+
+        glm::vec3 minBounds(FLT_MAX);
+        glm::vec3 maxBounds(-FLT_MAX);
+        bool found = false;
+        AccumulateNodeBounds(engine_.GetScene(), *selectedNode, minBounds, maxBounds, found);
+        if (!found)
+        {
+            return engine_.GetScene().GetSelectedNodeBounds(center, radius);
+        }
+
+        center = (minBounds + maxBounds) * 0.5f;
+        radius = std::max(glm::length(maxBounds - minBounds) * 0.5f, 0.001f);
+
+        if (item.kitIndex >= 0 && item.kitIndex < static_cast<int>(kits_.size()))
+        {
+            const auto moduleIt = std::find_if(
+                kits_[item.kitIndex].modules.begin(), kits_[item.kitIndex].modules.end(),
+                [&item](const FKitModuleInfo& module) { return module.name == item.moduleName; });
+            if (moduleIt != kits_[item.kitIndex].modules.end() && moduleIt->hasMetrics)
+            {
+                const glm::vec3 scaledExtents(
+                    moduleIt->footprintX * std::abs(item.scale), moduleIt->footprintY * std::abs(item.scaleY),
+                    moduleIt->height * std::abs(item.scaleZ));
+                radius = std::max(glm::length(scaledExtents) * 0.5f, 0.001f);
+            }
+        }
+        return true;
+    }
+
     bool ScadLibraryInterface::SelectSceneObjectFromViewport(uint32_t hitInstanceId)
     {
         if (workspaceMode_ != EWorkspaceMode::SceneAssembly || bench_.empty())
@@ -5812,6 +7805,7 @@ namespace ScadLibrary
         {
             selectedBenchItem_ = -1;
             scene.ClearSelection();
+            engine_.GetShowFlags().ShowEdge = false;
             return false;
         }
 
@@ -5840,6 +7834,7 @@ namespace ScadLibrary
                 scrollToSelectedBenchItem_ = true;
                 sceneGizmoAwaitingPickRelease_ = true;
                 scene.SetSelectedId(hitInstanceId);
+                engine_.GetShowFlags().ShowEdge = true;
                 statusLine_ = fmt::format("已从视口选择 {} #{}", found->moduleName, selectedBenchItem_);
                 statusError_ = false;
                 return true;
@@ -5884,6 +7879,7 @@ namespace ScadLibrary
                 scrollToSelectedBenchItem_ = true;
                 sceneGizmoAwaitingPickRelease_ = true;
                 scene.SetSelectedId(hitInstanceId);
+                engine_.GetShowFlags().ShowEdge = true;
                 statusLine_ = fmt::format("已从视口选择 {} #{}", selected.moduleName, selectedBenchItem_);
                 statusError_ = false;
                 return true;
@@ -5892,6 +7888,7 @@ namespace ScadLibrary
 
         selectedBenchItem_ = -1;
         scene.ClearSelection();
+        engine_.GetShowFlags().ShowEdge = false;
         statusLine_ = "点选内容不属于可编辑 Kit 实例";
         statusError_ = false;
         return false;

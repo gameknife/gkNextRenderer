@@ -1,5 +1,7 @@
 #pragma once
 
+// Shared only by concrete renderer implementations in this module.
+
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
@@ -28,8 +30,10 @@ namespace Vulkan::PipelineCommon
         uint32_t progressiveTargetSampleCount = 1;
     };
 
-    // Converts the current renderer sample directly into scene color. The only history path
-    // retained here is explicit offline progressive accumulation of composed linear radiance;
+    FSamplePostSettings MakeSamplePostSettings(const VulkanBaseRenderer& baseRenderer);
+
+    // Converts the current renderer sample directly into scene color. The history paths retained
+    // here are explicit non-reprojected progressive accumulations of linear radiance;
     // realtime rendering never reprojects or spatially filters the sample before a temporal
     // upscaler consumes it. Compose pre-exposes the result so display white is near 1.0;
     // display encoding is applied by the final output pass.

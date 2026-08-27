@@ -3,11 +3,17 @@
 $fn = 12;
 use <../lib/kit_old_city.scad>
 use <../lib/kit_city_hd.scad>
+use <../lib/kit_airport.scad>
 
 color([0.50, 0.51, 0.53]) translate([0, 0, -0.15]) cube([98.0, 98.0, 0.3], center = true);
 
-translate([-14.0000, 8.0000, 0.0000]) rotate([0.0000, 0.0000, 12.0000]) scale([1.00000, 1.00000, 1.00000]) oc_bldg_house(seed = 3);
+translate([-14.0000, 8.0000, 0.0000]) rotate([0.0000, 0.0000, 12.0000]) scale([1.00000, 1.00000, 1.00000]) oc_bldg_house(seed = 255, L = 25, D = 20);
 translate([14.8445, -1.5087, 0.0000]) rotate([0.0000, 0.0000, -18.0000]) scale([1.00000, 1.00000, 1.00000]) oc_bldg_house(seed = 7);
 translate([11.6598, -8.0000, 0.0000]) rotate([0.0000, -0.0000, 0.0000]) scale([1.00000, 1.00000, 1.00000]) oc_prop_well();
 translate([-9.0000, -17.0456, 0.0000]) rotate([0.0000, -0.0000, 0.0000]) scale([1.10000, 1.10000, 1.10000]) hc_nature_tree(1.0, 4);
 translate([5.4065, -18.9976, 0.0000]) rotate([0.0000, -0.0000, 0.0000]) scale([1.20000, 1.20000, 1.20000]) oc_nature_pine(1.0);
+translate([-8.0169, 0.0000, 0.0000]) rotate([0.0000, -0.0000, 0.0000]) scale([1.00000, 1.00000, 1.00000]) ap_furn_atm();
+translate([-2.2398, 3.6280, 0.0000]) rotate([0.0000, -0.0000, 0.0000]) scale([1.00000, 1.00000, 1.00000]) ap_furn_checkout();
+translate([4.4806, 0.0000, 0.0000]) rotate([0.0000, -0.0000, 0.0000]) scale([1.00000, 1.00000, 1.00000]) ap_furn_gate_door(label = "GATE 101");
+translate([0.0000, 0.0000, 0.0000]) rotate([0.0000, 0.0000, 0.0000]) scale([1.00000, 1.00000, 1.00000]) ap_furn_gondola();
+translate([5.2000, -8.1303, 0.0000]) rotate([0.0000, -0.0000, 0.0000]) scale([1.00000, 1.00000, 1.00000]) ap_furn_staff_desk();
