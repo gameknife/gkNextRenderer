@@ -343,6 +343,30 @@ NativeAOT 下会失效。`FlappyConfig.cs` 是可以直接抄的模板，包含�
 
 ## 8. 开发循环
 
+### 在 IDE 里打开托管工程
+
+C# 的编辑入口是 **`assets/csharp/GkNextManaged.sln`**，Rider / Visual Studio / VS Code 都打开它。
+不要直接打开单个 `.csproj`：`GkNext.Engine`（引擎绑定，`Engine.g.cs` 和 `Components.g.cs` 都在里面）
+和 `GkNext.SourceGen`（把 `[GameInstance]` 展开成入口的源生成器）是通过 `ProjectReference` 引进来的，
+没有解决方案时 IDE 没有理由去加载它们，于是 `Engine.*`、`Scene.*`、组件包装器全部解析不出来，文件退化
+成没有高亮的纯文本。csproj 里的依赖本身是对的——`dotnet build` 一直是通的——缺的只是这个入口。
+
+解决方案是生成的。新增托管工程之后跑一次：
+
+```bash
+gnb dotnet sln          # 重新生成；--check 只校验，gnb dotnet ci 会跑这一步
+```
+
+它扫描 `assets/csharp` 下所有 csproj，带 `[GameInstance]` 的归到 `Games` 组，其余归到 `Engine` 组；
+GUID 由路径推导，所以在任何机器上重新生成都是同样的字节，不会产生噪声 diff。
+
+`assets/csharp/global.json` 把 SDK 下限钉在 .NET 10，让 IDE 和 CMake 用同一个 SDK：缺 SDK 时报的是
+"需要 10.0.100 以上"，而不是"不认识 net10.0"。
+
+IDE 里按 Build 产出的是 `bin/Debug/`，**引擎不从那里加载**。要让改动生效，用下面的循环。
+
+### 构建与运行
+
 ```bash
 gnb build FlappyCSharp        # 构建（C++ 壳 + 托管发布一起做）
 gnb run FlappyCSharp          # 运行它自己的 exe

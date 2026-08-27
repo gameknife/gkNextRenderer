@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/cmakerun"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/csharpgen"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/csharpsln"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/dotnetsdk"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/vcpkg"
@@ -21,10 +23,46 @@ func newDotNetCommand(ctx appContext) *cobra.Command {
 	}
 	root.AddCommand(newDotNetSetupCommand(ctx))
 	root.AddCommand(newDotNetStatusCommand(ctx))
+	root.AddCommand(newDotNetSlnCommand(ctx))
 	root.AddCommand(newDotNetBuildCommand(ctx))
 	root.AddCommand(newDotNetProbeCommand(ctx))
 	root.AddCommand(newDotNetCICommand(ctx))
 	return root
+}
+
+func newDotNetSlnCommand(ctx appContext) *cobra.Command {
+	var check bool
+	cmd := &cobra.Command{
+		Use:   "sln",
+		Short: "Regenerate the IDE solution for assets/csharp",
+		Long: "Writes assets/csharp/GkNextManaged.sln from the csproj files on disk. The solution is\n" +
+			"what an IDE needs to load GkNext.Engine and the source generator alongside a game, which\n" +
+			"is what gives the game's C# working navigation and completion; the build itself never\n" +
+			"reads it. Run this after adding a managed project. --check fails instead of writing.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result, err := csharpsln.Run(ctx.repoRoot, check)
+			if err != nil {
+				return err
+			}
+			console.Label("solution", csharpsln.SolutionPath)
+			console.Label("projects", strconv.Itoa(len(result.Projects)))
+			for _, project := range result.Projects {
+				console.Info("%s/%s", project.Folder, project.Name)
+			}
+			switch {
+			case check:
+				console.Success("%s is up to date", csharpsln.SolutionPath)
+			case result.Changed:
+				console.Success("wrote %s", csharpsln.SolutionPath)
+			default:
+				console.Info("%s already up to date", csharpsln.SolutionPath)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&check, "check", false, "fail instead of writing when the solution is stale")
+	return cmd
 }
 
 func newDotNetSetupCommand(ctx appContext) *cobra.Command {
@@ -183,6 +221,14 @@ func newDotNetCICommand(ctx appContext) *cobra.Command {
 			// matches the two committed sources.
 			console.Success("%s matches %s", csharpgen.OutputPath, csharpgen.DefPath)
 			console.Success("%s matches %s", csharpgen.ComponentsOutputPath, csharpgen.ManifestPath)
+
+			// A managed project missing from the solution still builds — CMake publishes it by
+			// path — so nothing else would notice until someone opened the tree in an IDE and
+			// found half the code unresolved.
+			if _, err := csharpsln.Run(ctx.repoRoot, true); err != nil {
+				return err
+			}
+			console.Success("%s lists every managed project", csharpsln.SolutionPath)
 
 			if err := newDotNetProbe(ctx, dotnetsdk.ProbeOptions{Configuration: "Release"}); err != nil {
 				return err

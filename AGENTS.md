@@ -80,6 +80,7 @@ because concurrent Windows builds can lock `.obj`, executables, or vcpkg state f
 - Source-line stats: `./gnb.sh loc` (CLI) — also browsable in `./gnb.sh dashboard`
 - Managed bindings: `./gnb.sh csharpgen` (regenerate) / `./gnb.sh csharpgen --check` (CI guard)
 - .NET verification: `./gnb.sh dotnet probe` (two-backend ABI) / `./gnb.sh dotnet ci` (full)
+- Managed IDE solution: `./gnb.sh dotnet sln` (regenerate) / `./gnb.sh dotnet sln --check` (CI guard)
 - Dashboard: `./gnb.sh dashboard` (Wails window on Windows/macOS, browser fallback on Linux; todo/build/run/test/git/chat/LOC tabs)
 
 Desktop binaries can be launched from any working directory; no `cd out/build/<preset>/bin` is required.
@@ -259,6 +260,10 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 - `gnb dotnet ci` is the enforcement point: generated-file check, two-backend probe, and an engine
   build under both backends. Run it when touching the ABI, the hosts, or the managed layer.
 - `gnb dotnet setup|status|build|probe` drive the toolchain; `DotNetSandbox` is the reference host
+- **C# is edited through `assets/csharp/GkNextManaged.sln`**, not by opening a single csproj: with
+  no solution an IDE never loads `GkNext.Engine` or the source generator alongside a game, and the
+  game's code degrades to unhighlighted text even though `dotnet build` is fine. The solution is
+  generated — run `gnb dotnet sln` after adding a managed project (`gnb dotnet ci` checks it)
 - Write a game by deriving from `NextGameInstance` and marking it `[GameInstance]`; a source
   generator emits the entry point, and a missing/duplicate/invalid one is a compile error.
   `docs/AGENT_GUIDE/CSharpGameDevelopment.md` is the getting-started guide; `FlappyCSharp` is its
