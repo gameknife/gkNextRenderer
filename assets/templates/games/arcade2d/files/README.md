@@ -28,6 +28,20 @@ It does not need one: the launcher and the editor run it straight from the manif
 a standalone `.exe`, add `src/Application/Game/{{ProjectName}}/` with a CMakeLists and a ~15-line
 `Main.cpp` — see `docs/AGENT_GUIDE/CSharpGameDevelopment.md` section 2.
 
+## Before you write a helper
+
+`GkNext.Engine` already carries the parts every game needs, and each one is there because writing it
+per game meant writing the same bug per game:
+
+| | |
+|---|---|
+| `Rng` | Deterministic random. `System.Random` changes its sequence between runtimes, so the same seed stops meaning the same run. |
+| `MoveAxis.Poll()` | WASD, arrows and the gamepad stick as one normalised stick. |
+| `Mathx` / `Quat` | `Clamp`, `Lerp`, `TurnTowards` (shortest way round an angle), `Quat.AroundY`, `Quat.LookAlong`. |
+| `Sky.Apply(...)` | Sky and sun for a procedurally built scene, which starts with neither. |
+| `ManagedImGui` + `HudPalette` | Panels, buttons, progress bars, shadowed text — one draw list per frame. |
+| `SceneReady` | On `NextGameInstance`. False until the scene is committed and node ids resolve. |
+
 ## Where to look next
 
 - `docs/AGENT_GUIDE/CSharpGameDevelopment.md` — the whole managed game surface, written for people

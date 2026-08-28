@@ -131,7 +131,7 @@ if(TARGET NextDotNet)
         # executable, and resolving "assets/csharp" against the runtime root finds nothing.
         GK_DOTNET_MANAGED_SOURCE_ROOT="${GK_DOTNET_MANAGED_ROOT}"
     )
-    target_link_libraries(NextDotNet PRIVATE SDL3::SDL3 imgui::imgui)
+    target_link_libraries(NextDotNet PRIVATE SDL3::SDL3 imgui::imgui NextUI)
 
     # --- managed assemblies ------------------------------------------------------------------
     # Only the bootstrap is published here, and only for CoreCLR: it is application-independent.

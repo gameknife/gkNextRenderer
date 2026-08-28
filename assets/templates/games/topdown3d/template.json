@@ -4,7 +4,7 @@
   "description": "WASD around an arena while pooled enemies close in. Health, score, a follow camera and a spawn director — the skeleton behind an arena survivor.",
   "sortOrder": 30,
   "highlights": [
-    "WASD movement polled from Input, with a follow camera",
+    "MoveAxis movement — keyboard and gamepad — with a follow camera",
     "Enemy pool: nodes are reused and hidden, never destroyed",
     "Spawn director, contact damage and a game-over restart"
   ],

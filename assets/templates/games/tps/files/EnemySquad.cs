@@ -69,8 +69,7 @@ internal sealed class EnemySquad(int capacity)
                 continue;
             }
 
-            Vector3 position = new(x, 0.0f, z);
-            uint rig = Rig.Acquire(poolId, in position, 0.0f, in tint);
+            uint rig = Rig.Acquire(poolId, new Vector3(x, 0.0f, z), 0.0f, in tint);
             if (rig == 0)
             {
                 return false;
@@ -127,7 +126,7 @@ internal sealed class EnemySquad(int capacity)
 
             float toX = playerX - positionX[i];
             float toZ = playerZ - positionZ[i];
-            float distance = MathF.Sqrt(toX * toX + toZ * toZ);
+            float distance = Mathx.LengthXZ(toX, toZ);
             if (distance > 0.0001f && states[i] == EnemyState.Chasing)
             {
                 float step = speed * deltaSeconds;
@@ -155,8 +154,7 @@ internal sealed class EnemySquad(int capacity)
             // Facing follows the player even while stunned: yaw is atan2(x, z) because the engine's
             // forward is +Z, not +X.
             float yaw = MathF.Atan2(toX, toZ);
-            Vector3 position = new(positionX[i], 0.0f, positionZ[i]);
-            Rig.SetTransform(rigIds[i], in position, yaw);
+            Rig.SetTransform(rigIds[i], new Vector3(positionX[i], 0.0f, positionZ[i]), yaw);
         }
         return contacts;
     }
@@ -177,7 +175,7 @@ internal sealed class EnemySquad(int capacity)
 
             float toX = positionX[i] - fromX;
             float toZ = positionZ[i] - fromZ;
-            float distance = MathF.Sqrt(toX * toX + toZ * toZ);
+            float distance = Mathx.LengthXZ(toX, toZ);
             if (distance < 0.0001f || distance > bestDistance)
             {
                 continue;
@@ -186,7 +184,7 @@ internal sealed class EnemySquad(int capacity)
             // Flat dot product: aim height is cosmetic here, and comparing in 3D would make a shot
             // miss because the camera was looking slightly down.
             float dot = (toX / distance) * direction.X + (toZ / distance) * direction.Z;
-            float flatLength = MathF.Sqrt(direction.X * direction.X + direction.Z * direction.Z);
+            float flatLength = Mathx.LengthXZ(direction.X, direction.Z);
             if (flatLength < 0.0001f || dot / flatLength < maxAngleCos)
             {
                 continue;

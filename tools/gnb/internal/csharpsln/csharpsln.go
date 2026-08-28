@@ -104,7 +104,7 @@ func Discover(repoRoot string) ([]Project, error) {
 			return err
 		}
 		if entry.IsDir() {
-			if isBuildDir(entry.Name()) {
+			if isBuildDir(entry.Name()) || isScratchDir(entry.Name()) {
 				return fs.SkipDir
 			}
 			return nil
@@ -177,6 +177,14 @@ func declaresGameInstance(projectDir string) (bool, error) {
 		return nil
 	})
 	return found, err
+}
+
+// isScratchDir reports the throwaway projects `gnb dotnet templates` instantiates to check that
+// the shipped game templates still compile. They live under assets/csharp because the generated
+// csproj reaches GkNext.Engine by relative path, and they are deleted as soon as the check is
+// done — but an interrupted run must not leave a phantom project in the IDE solution.
+func isScratchDir(name string) bool {
+	return strings.HasPrefix(name, "_templatecheck_")
 }
 
 // bin/ and obj/ hold NuGet's restore copies of the project file and generated sources; walking

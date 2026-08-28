@@ -339,10 +339,49 @@ public sealed class ManagedImGui
                          scale);
     }
 
-    public void DrawTextCenteredX(string text, float y, Color color, float scale = 1.0f)
+    public void DrawTextCenteredX(string text, float y, Color color, float scale = 1.0f,
+                                  bool shadow = false)
     {
         Vector2 size = UI.CalcTextSize(text, scale);
-        drawList.AddText(text, new Vector2((ScreenSize.X - size.X) * 0.5f, y), color, scale);
+        DrawText(text, (ScreenSize.X - size.X) * 0.5f, y, color, scale, shadow);
+    }
+
+    /// <summary>
+    /// HUD text at a pixel position, optionally with a drop shadow.
+    /// </summary>
+    /// <remarks>
+    /// The shadow is worth asking for on anything drawn over the scene rather than over a panel.
+    /// A HUD sits on whatever the camera happens to be looking at, and pale text on a pale wall is
+    /// simply not there; one dark copy offset by a pixel costs nothing and always reads.
+    /// </remarks>
+    public void DrawText(string text, float x, float y, Color color, float scale = 1.0f,
+                         bool shadow = false)
+    {
+        if (shadow)
+        {
+            drawList.AddText(text, new Vector2(x + 1.0f, y + 1.0f), HudPalette.Shadow, scale);
+        }
+        drawList.AddText(text, new Vector2(x, y), color, scale);
+    }
+
+    /// <summary>Text pinned to the bottom right, where a control hint or a build stamp goes.</summary>
+    public void DrawTextBottomRight(string text, float margin, Color color, float scale = 1.0f,
+                                    bool shadow = true)
+    {
+        Vector2 size = UI.CalcTextSize(text, scale);
+        DrawText(text, ScreenSize.X - size.X - margin, ScreenSize.Y - size.Y - margin, color, scale,
+                 shadow);
+    }
+
+    /// <summary>
+    /// A panel centred horizontally, returning the rectangle it occupies so its contents can be
+    /// laid out against it.
+    /// </summary>
+    public UiRect PanelCenteredX(float width, float y, float height, float rounding = 14.0f)
+    {
+        UiRect rect = new((ScreenSize.X - width) * 0.5f, y, width, height);
+        Panel(rect, rounding);
+        return rect;
     }
 }
 

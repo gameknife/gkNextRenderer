@@ -86,6 +86,7 @@ because concurrent Windows builds can lock `.obj`, executables, or vcpkg state f
 - Managed bindings: `./gnb.sh csharpgen` (regenerate) / `./gnb.sh csharpgen --check` (CI guard)
 - .NET verification: `./gnb.sh dotnet probe` (two-backend ABI) / `./gnb.sh dotnet ci` (full)
 - Managed IDE solution: `./gnb.sh dotnet sln` (regenerate) / `./gnb.sh dotnet sln --check` (CI guard)
+- Game templates: `./gnb.sh dotnet templates` (instantiate every `assets/templates/games/` template and build it)
 - Dashboard: `./gnb.sh dashboard` (Wails window on Windows/macOS, browser fallback on Linux; todo/build/run/test/git/chat/LOC tabs)
 
 Desktop binaries can be launched from any working directory; no `cd out/build/<preset>/bin` is required.
@@ -262,8 +263,16 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
   `GkBool`), no strings inside structs, no optional struct fields, colors as `GkColor32`
 - Backend: CMake option `GK_DOTNET_BACKEND=CoreCLR|AOT`, default CoreCLR. Managed code is identical
   under both; the only allowed difference is hot reload, which CoreCLR has and AOT does not.
-- `gnb dotnet ci` is the enforcement point: generated-file check, two-backend probe, and an engine
-  build under both backends. Run it when touching the ABI, the hosts, or the managed layer.
+- `gnb dotnet ci` is the enforcement point: generated-file check, game-template build, two-backend
+  probe, and an engine build under both backends. Run it when touching the ABI, the hosts, or the
+  managed layer.
+- **`GkNext.Engine/Gameplay/` is the shared gameplay layer** — `Rng` (deterministic xorshift),
+  `MoveAxis.Poll()` (normalised WASD + arrows + gamepad stick), `Mathx`/`Quat`, `Sky.Apply`,
+  `HudPalette` — plus `ManagedImGui` for HUD and `NextGameInstance.SceneReady`. Reach for these
+  before writing another RNG, key ladder or quaternion by hand; the templates are the worked
+  examples. Nothing there is privileged: it is ordinary C# over `Scene.*` / `Input.*` / `UI.*`.
+- Touching a template, or anything in `GkNext.Engine` a template uses, means `gnb dotnet templates`.
+  Nothing else in the tree compiles them.
 - `gnb dotnet setup|status|build|probe` drive the toolchain; `DotNetSandbox` is the reference host
 - **Android 上只有 NativeAOT**：`cmake/SetupDotNet.cmake` 在 Android 上强制 AOT 后端并交叉编译到
   `linux-bionic-arm64`，产出的 `libGkNext.Bootstrap.<target>.so` 经 jniLibs 打进 APK。不托管 C#

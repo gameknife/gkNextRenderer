@@ -5,7 +5,7 @@
   "sortOrder": 40,
   "highlights": [
     "Yaw/pitch look from mouse delta, camera driven by OnOverrideCamera",
-    "WASD + Shift movement resolved against the camera basis",
+    "MoveAxis + Shift movement resolved against the camera basis",
     "Procedural block field with a seeded layout"
   ],
   "requiredModules": [],

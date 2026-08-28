@@ -5,11 +5,13 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/cmakerun"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/csharpgen"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/csharpsln"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/csharptemplates"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/dotnetsdk"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/vcpkg"
@@ -26,6 +28,7 @@ func newDotNetCommand(ctx appContext) *cobra.Command {
 	root.AddCommand(newDotNetSlnCommand(ctx))
 	root.AddCommand(newDotNetBuildCommand(ctx))
 	root.AddCommand(newDotNetProbeCommand(ctx))
+	root.AddCommand(newDotNetTemplatesCommand(ctx))
 	root.AddCommand(newDotNetCICommand(ctx))
 	return root
 }
@@ -201,6 +204,58 @@ func backendDirName(aot bool) string {
 	return "coreclr"
 }
 
+// newDotNetTemplatesCommand builds every shipped game template. The templates are the first code a
+// user of the managed layer reads, and until this existed nothing in the tree compiled them: a
+// rename in GkNext.Engine broke them silently and the failure surfaced as a wall of compiler errors
+// in somebody's brand new project.
+func newDotNetTemplatesCommand(ctx appContext) *cobra.Command {
+	var configuration string
+	cmd := &cobra.Command{
+		Use:   "templates [id...]",
+		Short: "Build the shipped C# game templates",
+		Long: "Instantiates each template under assets/templates/games the way the New Game Project " +
+			"dialog does, builds the result, and deletes it again. With no arguments every template " +
+			"is checked; naming one or more ids checks only those.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			toolchain, err := dotnetsdk.Resolve(ctx.repoRoot, ctx.cfg.External.DotNet)
+			if err != nil {
+				return err
+			}
+			return checkGameTemplates(ctx, toolchain, args, configuration)
+		},
+	}
+	cmd.Flags().StringVar(&configuration, "configuration", "Debug", "build configuration")
+	return cmd
+}
+
+// checkGameTemplates reports every template rather than stopping at the first failure: when an
+// engine change breaks the templates it usually breaks several, and fixing them one run at a time
+// is the slowest possible way to find that out.
+func checkGameTemplates(ctx appContext, toolchain dotnetsdk.Toolchain, ids []string, configuration string) error {
+	results, err := csharptemplates.Check(ctx.repoRoot, toolchain, ids, configuration)
+	if err != nil {
+		return err
+	}
+
+	failed := 0
+	for _, result := range results {
+		if result.Err == nil {
+			console.Success("template %s builds", result.ID)
+			continue
+		}
+		failed++
+		console.Error("template %s failed", result.ID)
+		if trimmed := strings.TrimSpace(result.Output); trimmed != "" {
+			fmt.Fprintln(os.Stderr, trimmed)
+		}
+	}
+	if failed > 0 {
+		return fmt.Errorf("%d of %d game templates do not compile", failed, len(results))
+	}
+	console.Success("all %d game templates build", len(results))
+	return nil
+}
+
 // newDotNetCICommand is the enforcement point for the rule in design section 3.4: AOT
 // compatibility rots silently unless something builds it on every change. Running only the
 // CoreCLR half is what "we will fix it before release" looks like in practice.
@@ -229,6 +284,16 @@ func newDotNetCICommand(ctx appContext) *cobra.Command {
 				return err
 			}
 			console.Success("%s lists every managed project", csharpsln.SolutionPath)
+
+			// Before the expensive half. A template that no longer compiles is a broken first
+			// experience for every new managed game, and it costs seconds to catch here.
+			toolchain, err := dotnetsdk.Resolve(ctx.repoRoot, ctx.cfg.External.DotNet)
+			if err != nil {
+				return err
+			}
+			if err := checkGameTemplates(ctx, toolchain, nil, "Debug"); err != nil {
+				return err
+			}
 
 			if err := newDotNetProbe(ctx, dotnetsdk.ProbeOptions{Configuration: "Release"}); err != nil {
 				return err

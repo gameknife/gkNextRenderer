@@ -88,17 +88,18 @@ internal sealed class TpsCamera(float sensitivity)
             lastMousePosition = mouse;
 
             Yaw += deltaX * sensitivity;
-            Pitch += deltaY * sensitivity;
-            Pitch = MathF.Max(PitchMin, MathF.Min(PitchMax, Pitch));
+            Pitch = Mathx.Clamp(Pitch + deltaY * sensitivity, PitchMin, PitchMax);
         }
 
         // Eased rather than snapped: the camera moving in is the feedback that says "you are
         // aiming now", and a cut reads as a glitch.
         float targetDistance = Aiming ? AimDistance : HipDistance;
         float targetShoulder = Aiming ? AimShoulder : HipShoulder;
+        // Frame-rate independent easing: a plain lerp by a constant factor converges faster on a
+        // fast machine, so the same camera feels different at 60fps and 144fps.
         float blend = 1.0f - MathF.Exp(-10.0f * deltaSeconds);
-        distance += (targetDistance - distance) * blend;
-        shoulder += (targetShoulder - shoulder) * blend;
+        distance = Mathx.Lerp(distance, targetDistance, blend);
+        shoulder = Mathx.Lerp(shoulder, targetShoulder, blend);
     }
 
     /// <summary>Fills the engine's camera for a player standing at <paramref name="focus"/>.</summary>

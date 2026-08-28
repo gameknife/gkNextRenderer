@@ -5,7 +5,7 @@
   "sortOrder": 20,
   "highlights": [
     "Fixed-timestep simulation with an accumulator",
-    "Deterministic xorshift RNG and a recycled obstacle pool",
+    "Deterministic Rng and a recycled obstacle pool",
     "Ready / Playing / Dead state machine with a restart"
   ],
   "requiredModules": [],

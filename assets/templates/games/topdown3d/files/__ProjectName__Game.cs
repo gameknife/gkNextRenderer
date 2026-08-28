@@ -7,10 +7,10 @@ namespace {{Namespace}};
 /// {{DisplayName}} — move, survive, watch the arena fill up.
 /// </summary>
 /// <remarks>
-/// The three pieces worth keeping when you replace the gameplay: held keys are polled from
-/// <c>Input</c> rather than taken from events, the enemies live in a pool that is built once and
-/// recycled forever, and the camera is driven from <see cref="OnOverrideCamera"/> so it follows
-/// without a node of its own.
+/// The three pieces worth keeping when you replace the gameplay: movement is polled as a
+/// <see cref="MoveAxis"/> rather than assembled from key events, the enemies live in a pool that is
+/// built once and recycled forever, and the camera is driven from <see cref="OnOverrideCamera"/> so
+/// it follows without a node of its own.
 /// </remarks>
 [GameInstance]
 public sealed class {{ProjectName}}Game : NextGameInstance
@@ -22,6 +22,7 @@ public sealed class {{ProjectName}}Game : NextGameInstance
     private const float EnemyRadius = 0.5f;
     private const float EnemySpeed = 3.6f;
     private const int EnemyCapacity = 48;
+
     /// Inside the walls: there is no collision, so an enemy spawned outside would visibly walk
     /// through one on its way in.
     private const float SpawnRingRadius = 19.0f;
@@ -32,11 +33,11 @@ public sealed class {{ProjectName}}Game : NextGameInstance
     private const float MaxHealth = 100.0f;
     private const uint RngSeed = 20260828u;
 
+    private readonly Rng rng = new(RngSeed);
+    private readonly ManagedImGui gui = new();
     private readonly EnemySwarm enemies = new(EnemyCapacity, EnemyRadius);
 
     private uint playerNode = NodeIds.Invalid;
-    private uint rngState = RngSeed;
-
     private float playerX;
     private float playerZ;
     private float health = MaxHealth;
@@ -45,84 +46,61 @@ public sealed class {{ProjectName}}Game : NextGameInstance
     private int score;
     private int best;
     private bool alive = true;
-    private bool sceneReady;
 
     protected override void BeforeSceneRebuild()
     {
-        Vector3 unitMin = new(-0.5f, -0.5f, -0.5f);
-        Vector3 unitMax = new(0.5f, 0.5f, 0.5f);
-        uint boxModel = SceneBuild.AddBoxModel(in unitMin, in unitMax);
+        uint boxModel = SceneBuild.AddBoxModel(new(-0.5f, -0.5f, -0.5f), new(0.5f, 0.5f, 0.5f));
+        uint wallMaterial = SceneBuild.AddLambertianMaterial(new(0.16f, 0.19f, 0.23f));
 
-        Vector3 groundColor = new(0.24f, 0.27f, 0.31f);
-        Vector3 wallColor = new(0.16f, 0.19f, 0.23f);
-        Vector3 playerColor = new(0.30f, 0.80f, 0.95f);
-        Vector3 enemyColor = new(0.92f, 0.32f, 0.30f);
-        uint groundMaterial = SceneBuild.AddLambertianMaterial(in groundColor);
-        uint wallMaterial = SceneBuild.AddLambertianMaterial(in wallColor);
-        uint playerMaterial = SceneBuild.AddLambertianMaterial(in playerColor);
-        uint enemyMaterial = SceneBuild.AddLambertianMaterial(in enemyColor);
-
-        RenderNodeSpec ground = new RenderNodeSpec(boxModel, groundMaterial)
-            .WithTranslation(new Vector3(0.0f, -0.5f, 0.0f))
-            .WithScale(new Vector3(ArenaHalfSize * 2.0f, 1.0f, ArenaHalfSize * 2.0f));
-        SceneBuild.AddRenderNode("{{ProjectName}}_Ground", in ground);
+        SceneBuild.AddRenderNode("{{ProjectName}}_Ground",
+            new RenderNodeSpec(boxModel, SceneBuild.AddLambertianMaterial(new(0.24f, 0.27f, 0.31f)))
+                .WithTranslation(new Vector3(0.0f, -0.5f, 0.0f))
+                .WithScale(new Vector3(ArenaHalfSize * 2.0f, 1.0f, ArenaHalfSize * 2.0f)));
 
         AddWall(boxModel, wallMaterial, 0.0f, ArenaHalfSize, ArenaHalfSize * 2.0f, 1.0f);
         AddWall(boxModel, wallMaterial, 0.0f, -ArenaHalfSize, ArenaHalfSize * 2.0f, 1.0f);
         AddWall(boxModel, wallMaterial, ArenaHalfSize, 0.0f, 1.0f, ArenaHalfSize * 2.0f);
         AddWall(boxModel, wallMaterial, -ArenaHalfSize, 0.0f, 1.0f, ArenaHalfSize * 2.0f);
 
-        Vector3 origin = Vector3.Zero;
-        uint playerModel = SceneBuild.AddSphereModel(in origin, PlayerRadius);
-        RenderNodeSpec player = new RenderNodeSpec(playerModel, playerMaterial)
-            .WithTranslation(new Vector3(0.0f, PlayerRadius, 0.0f));
-        playerNode = SceneBuild.AddRenderNode("{{ProjectName}}_Player", in player);
+        playerNode = SceneBuild.AddRenderNode("{{ProjectName}}_Player",
+            new RenderNodeSpec(SceneBuild.AddSphereModel(Vector3.Zero, PlayerRadius),
+                               SceneBuild.AddLambertianMaterial(new(0.30f, 0.80f, 0.95f)))
+                .WithTranslation(new Vector3(0.0f, PlayerRadius, 0.0f)));
 
         // The whole pool, built once and hidden. Nothing is created or destroyed during play.
-        uint enemyModel = SceneBuild.AddSphereModel(in origin, EnemyRadius);
-        Vector3 parked = new(0.0f, -20.0f, 0.0f);
+        RenderNodeSpec enemy = new RenderNodeSpec(SceneBuild.AddSphereModel(Vector3.Zero, EnemyRadius),
+                                                  SceneBuild.AddLambertianMaterial(new(0.92f, 0.32f, 0.30f)))
+            .WithTranslation(new Vector3(0.0f, -20.0f, 0.0f))
+            .WithVisible(false);
         for (int i = 0; i < enemies.Capacity; i++)
         {
-            RenderNodeSpec enemy = new RenderNodeSpec(enemyModel, enemyMaterial)
-                .WithTranslation(parked)
-                .WithVisible(false);
-            enemies.SetNode(i, SceneBuild.AddRenderNode("{{ProjectName}}_Enemy", in enemy));
+            enemies.SetNode(i, SceneBuild.AddRenderNode("{{ProjectName}}_Enemy", enemy));
         }
     }
 
     private static void AddWall(uint model, uint material, float x, float z, float sizeX, float sizeZ)
     {
-        RenderNodeSpec wall = new RenderNodeSpec(model, material)
-            .WithTranslation(new Vector3(x, 0.75f, z))
-            .WithScale(new Vector3(sizeX, 1.5f, sizeZ));
-        SceneBuild.AddRenderNode("{{ProjectName}}_Wall", in wall);
+        SceneBuild.AddRenderNode("{{ProjectName}}_Wall",
+            new RenderNodeSpec(model, material)
+                .WithTranslation(new Vector3(x, 0.75f, z))
+                .WithScale(new Vector3(sizeX, 1.5f, sizeZ)));
     }
 
     protected override void OnSceneLoaded()
     {
-        EnvironmentComponent environment = new NodeRef(Scene.GetEnvironmentNodeId()).Environment;
-        if (environment.Exists)
-        {
-            environment.HasSky = true;
-            environment.SkyIdx = 0;
-            environment.SkyIntensity = 300.0f;
-            environment.HasSun = true;
-            environment.SunIntensity = 300.0f;
-            environment.SunRotation = 0.9f;
-            environment.SunElevation = 1.0f;
-        }
-
-        sceneReady = true;
+        Sky.Apply(sunRotation: 0.9f, sunElevation: 1.0f);
         ResetRun();
     }
 
     protected override void OnTick(double deltaSeconds)
     {
-        if (!sceneReady)
+        if (!SceneReady)
         {
             return;
         }
 
+        // Clamped: a frame that took a quarter of a second is a breakpoint or a scene load, and
+        // stepping the simulation by it would teleport every enemy into the player.
         float delta = MathF.Min((float)deltaSeconds, 0.1f);
         if (alive)
         {
@@ -133,9 +111,8 @@ public sealed class {{ProjectName}}Game : NextGameInstance
             ResolveContacts();
         }
 
-        Vector3 playerPosition = new(playerX, PlayerRadius, playerZ);
-        Scene.SetNodeTranslation(playerNode, in playerPosition);
-        enemies.SyncNodes(0.0f);
+        Scene.SetNodeTranslation(playerNode, new Vector3(playerX, PlayerRadius, playerZ));
+        enemies.SyncNodes();
 
         // Once per tick, for everything moved above. Without it the renderer keeps drawing the
         // transforms the nodes were built with.
@@ -144,53 +121,30 @@ public sealed class {{ProjectName}}Game : NextGameInstance
 
     private void UpdatePlayer(float deltaSeconds)
     {
-        float moveX = 0.0f;
-        float moveZ = 0.0f;
-        if (Input.IsKeyDown("w") || Input.IsKeyDown("up"))
-        {
-            moveZ -= 1.0f;
-        }
-        if (Input.IsKeyDown("s") || Input.IsKeyDown("down"))
-        {
-            moveZ += 1.0f;
-        }
-        if (Input.IsKeyDown("a") || Input.IsKeyDown("left"))
-        {
-            moveX -= 1.0f;
-        }
-        if (Input.IsKeyDown("d") || Input.IsKeyDown("right"))
-        {
-            moveX += 1.0f;
-        }
-
-        // Normalised, or moving on the diagonal would be 41% faster than moving straight.
-        float length = MathF.Sqrt(moveX * moveX + moveZ * moveZ);
-        if (length > 0.0001f)
-        {
-            float step = PlayerSpeed * deltaSeconds / length;
-            playerX += moveX * step;
-            playerZ += moveZ * step;
-        }
-
+        // Already normalised, so the diagonal is not 41% faster than the straight line, and the
+        // gamepad stick is included without this code knowing about it.
+        MoveAxis move = MoveAxis.Poll();
+        float step = PlayerSpeed * deltaSeconds;
         float limit = ArenaHalfSize - 1.0f - PlayerRadius;
-        playerX = MathF.Max(-limit, MathF.Min(limit, playerX));
-        playerZ = MathF.Max(-limit, MathF.Min(limit, playerZ));
+
+        // Forward is away from the camera, which looks down -Z here.
+        playerX = Mathx.Clamp(playerX + move.Right * step, -limit, limit);
+        playerZ = Mathx.Clamp(playerZ - move.Forward * step, -limit, limit);
     }
 
     private void UpdateSpawns(float deltaSeconds)
     {
         // Interval falls from SpawnIntervalStart to SpawnIntervalFloor over SpawnRampSeconds; the
         // whole difficulty curve of this template is this one line.
-        float ramp = MathF.Min(1.0f, survivedSeconds / SpawnRampSeconds);
-        float interval = SpawnIntervalStart + (SpawnIntervalFloor - SpawnIntervalStart) * ramp;
+        float interval = Mathx.Lerp(SpawnIntervalStart, SpawnIntervalFloor,
+                                    Mathx.Saturate(survivedSeconds / SpawnRampSeconds));
 
         spawnTimer += deltaSeconds;
         while (spawnTimer >= interval)
         {
             spawnTimer -= interval;
-
-            float angle = NextFloat() * MathF.Tau;
-            enemies.TrySpawn(MathF.Cos(angle) * SpawnRingRadius, MathF.Sin(angle) * SpawnRingRadius);
+            Vector3 direction = rng.NextDirectionXZ();
+            enemies.TrySpawn(direction.X * SpawnRingRadius, direction.Z * SpawnRingRadius);
         }
     }
 
@@ -237,32 +191,25 @@ public sealed class {{ProjectName}}Game : NextGameInstance
 
     protected override bool OnRenderUI()
     {
-        Vector2 screen = UI.GetScreenSize();
-
-        UI.DrawRectFilled(20.0f, 20.0f, 260.0f, 92.0f, Color.FromBytes(14, 20, 28, 205), 10.0f);
-        UI.DrawRect(20.0f, 20.0f, 260.0f, 92.0f, Color.FromBytes(255, 255, 255, 38), 10.0f, 1.0f);
+        gui.BeginFrame();
 
         float healthFraction = health / MaxHealth;
-        UI.DrawRectFilled(36.0f, 36.0f, 228.0f, 14.0f, Color.FromBytes(40, 48, 58), 7.0f);
-        UI.DrawRectFilled(36.0f, 36.0f, 228.0f * healthFraction, 14.0f,
-                          healthFraction > 0.35f ? Color.FromBytes(96, 210, 140) : Color.FromBytes(226, 96, 88),
-                          7.0f);
-        UI.DrawText($"survived {survivedSeconds:F1}s", 36.0f, 60.0f, Color.FromBytes(200, 216, 226));
-        UI.DrawText($"cleared {score}    swarm {enemies.AliveCount}", 36.0f, 84.0f,
-                    Color.FromBytes(160, 186, 200));
+        gui.Panel(new UiRect(20.0f, 20.0f, 260.0f, 92.0f), 10.0f);
+        gui.ProgressBar(new UiRect(36.0f, 36.0f, 228.0f, 14.0f), healthFraction,
+                        HudPalette.Bar(healthFraction));
+        gui.DrawText($"survived {survivedSeconds:F1}s", 36.0f, 60.0f, HudPalette.Text);
+        gui.DrawText($"cleared {score}    swarm {enemies.AliveCount}", 36.0f, 84.0f, HudPalette.Muted);
 
         if (!alive)
         {
-            float panelWidth = 400.0f;
-            float x = (screen.X - panelWidth) * 0.5f;
-            float y = screen.Y * 0.5f - 66.0f;
-            UI.DrawRectFilled(x, y, panelWidth, 132.0f, Color.FromBytes(18, 26, 36, 220), 16.0f);
-            UI.DrawRect(x, y, panelWidth, 132.0f, Color.FromBytes(255, 255, 255, 46), 16.0f, 1.5f);
-            DrawCentered("OVERRUN", y + 22.0f, 1.7f, Color.FromBytes(255, 132, 120), in screen);
-            DrawCentered($"cleared {score}    best {best}", y + 64.0f, 1.1f, Color.White, in screen);
-            DrawCentered("SPACE TO RESTART", y + 98.0f, 1.0f, Color.FromBytes(124, 230, 168), in screen);
+            float y = gui.ScreenSize.Y * 0.5f - 66.0f;
+            gui.PanelCenteredX(400.0f, y, 132.0f, 16.0f);
+            gui.DrawTextCenteredX("OVERRUN", y + 22.0f, HudPalette.Danger, 1.7f);
+            gui.DrawTextCenteredX($"cleared {score}    best {best}", y + 64.0f, HudPalette.Text, 1.1f);
+            gui.DrawTextCenteredX("SPACE TO RESTART", y + 98.0f, HudPalette.Accent);
         }
 
+        gui.EndFrame();
         return false;
     }
 
@@ -280,7 +227,7 @@ public sealed class {{ProjectName}}Game : NextGameInstance
     private void ResetRun()
     {
         enemies.Reset();
-        rngState = RngSeed;
+        rng.Reset(RngSeed);
         playerX = 0.0f;
         playerZ = 0.0f;
         health = MaxHealth;
@@ -288,21 +235,5 @@ public sealed class {{ProjectName}}Game : NextGameInstance
         spawnTimer = 0.0f;
         score = 0;
         alive = true;
-    }
-
-    /// <summary>Uniform in [0,1) from a seeded xorshift, so a run is reproducible. System.Random
-    /// would make the same seed mean different things on different runtimes.</summary>
-    private float NextFloat()
-    {
-        rngState ^= rngState << 13;
-        rngState ^= rngState >> 17;
-        rngState ^= rngState << 5;
-        return (rngState >> 8) * (1.0f / 16777216.0f);
-    }
-
-    private static void DrawCentered(string text, float y, float scale, Color color, in Vector2 screen)
-    {
-        Vector2 size = UI.CalcTextSize(text, scale);
-        UI.DrawText(text, (screen.X - size.X) * 0.5f, y, color, scale);
     }
 }

@@ -14,6 +14,20 @@ public abstract class NextGameInstance : IGameModule
 {
     private readonly FrameAllocationGuard allocationGuard = new();
 
+    /// <summary>
+    /// True once the scene has been committed and node ids resolve.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="OnTick"/> starts before the first scene is ready, so anything that addresses a
+    /// node has to wait. Every game needs the same guard, and a game that forgets writes to node
+    /// ids that do not exist yet — which fails silently, because the ids it holds are simply the
+    /// zeros its fields were initialised to.
+    ///
+    /// Set before <see cref="OnSceneLoaded"/> is raised and cleared at the start of
+    /// <see cref="BeforeSceneRebuild"/>, so it is false across a scene swap as well as at startup.
+    /// </remarks>
+    protected bool SceneReady { get; private set; }
+
     /// <summary>Called once after the module is loaded, before the first tick.</summary>
     protected virtual void OnInit() { }
 
@@ -103,9 +117,11 @@ public abstract class NextGameInstance : IGameModule
                 RaiseDestroy();
                 return false;
             case ScriptHook.BeforeSceneRebuild:
+                SceneReady = false;
                 BeforeSceneRebuild();
                 return false;
             case ScriptHook.OnSceneLoaded:
+                SceneReady = true;
                 OnSceneLoaded();
                 return false;
             case ScriptHook.OnRenderUI:

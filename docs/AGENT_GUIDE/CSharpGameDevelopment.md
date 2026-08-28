@@ -66,7 +66,7 @@ assets/configs/games/<id>.game.json   # manifest
 **没有 CMake target，也不需要。** manifest 就是声明来源，launcher 和编辑器都从它加载运行——生成完
 立刻能玩。想要独立 exe 时再照下一节补 `src/Application/Game/<Name>/`。
 
-四个模板：
+五个模板，每一个都是能直接跑的完整循环：
 
 | 模板 | 生成的东西 | 适合 |
 |---|---|---|
@@ -84,6 +84,15 @@ assets/configs/games/<id>.game.json   # manifest
 
 新增一个模板同样不需要改代码：`assets/templates/games/` 下建一个目录，放 `template.json` 和
 `files/` 文件树，文件名和内容里的 `__ProjectName__` / `{{Namespace}}` 等 token 会被替换。
+
+改完模板（或改了 `GkNext.Engine` 里模板用到的东西）跑一次：
+
+```bash
+gnb dotnet templates
+```
+
+它按 New Game Project 的方式实例化每个模板、编译、再删掉。`gnb dotnet ci` 会先跑这一步——模板编译不过
+是新用户能碰到的最糟糕的第一印象，而在这里发现只要几秒。
 
 ## 3. 一个 C# 应用由四个文件组成
 
@@ -157,6 +166,24 @@ csproj 里只有一处不能改：对 `GkNext.Engine` 的引用必须带 `<Priva
 `<ExcludeAssets>runtime</ExcludeAssets>`。它必须由宿主的加载上下文解析；跟着游戏程序集复制一份会
 产生第二个副本，类型标识对不上，热重载直接崩。
 
+### 引擎自带的 gameplay 工具（先看这里，别自己重写）
+
+`GkNext.Engine` 除了绑定层，还带一层很薄的 gameplay 工具。它们存在的理由都一样：这几件事**每个游戏
+都要做**，而每个游戏自己写一遍就会各写各的，并且各自带一份 bug。
+
+| 类型 | 用途 | 不用它的代价 |
+|---|---|---|
+| `Rng` | 确定性随机（xorshift32），同种子同序列 | `System.Random` 的序列是运行时实现细节，换个 .NET 版本同一个种子就是另一个关卡，录像回放和 bug 复现全废 |
+| `MoveAxis.Poll()` | 读一帧的移动摇杆：WASD + 方向键 + 手柄左摇杆，**已归一化** | 手写按键梯子的人一半忘了除以长度，斜着走比直着走快 41%；另一半忘了手柄 |
+| `Mathx` | `Clamp` / `Saturate` / `Lerp` / `MoveTowards` / `TurnTowards` / `LengthXZ` / `OverlapsXZ` | `TurnTowards` 是**角度**插值：不绕最短路径的话，角色在 ±π 附近会几乎转一整圈，这是角色控制器最经典的 bug |
+| `Quat` | `Identity` / `AroundY` / `AroundAxis` / `LookAlong` | 否则每个想转个盒子的游戏都要在调用点手写半角三角函数 |
+| `Sky.Apply(...)` | 给程序化场景加天空和太阳 | 程序化场景默认没有 environment 节点，不设就是"我的材质怎么全黑" |
+| `ManagedImGui` + `HudPalette` | HUD：面板、按钮、进度条、带描边的文字 | 见 §7 |
+| `NextGameInstance.SceneReady` | 场景是否已提交、节点 id 是否可用 | 见 §4 |
+
+这一层是**可选的**：它没有任何特权，全部是 `Scene.*` / `Input.*` / `UI.*` 之上的普通 C#。看不顺眼就
+自己写一份——但先看一眼它为什么长这样，注释里写的都是踩过的坑。
+
 ## 4. 生命周期
 
 ```csharp
@@ -184,6 +211,18 @@ public sealed class MyGame : NextGameInstance
 | `Input.GetKeyDown` | `OnInputEvent` | 事件推送；也有轮询式 `Input.*` |
 | `Camera.main` | `OnOverrideCamera` | 引擎每帧来问你，返回 `true` 才生效 |
 | `OnDestroy` | `OnDestroy` | 卸载前，热重载也会触发 |
+
+基类还提供 `SceneReady`：`OnTick` 在第一个场景提交之前就已经开始跑了，任何按 id 访问节点的代码都得
+等。忘了这个 guard 不会报错——它会往还不存在的节点 id 上写，而那个 id 正好是字段的初始值 0，于是
+"第一个节点"被静默改坏。所以模板里每个 `OnTick` 的第一行都是：
+
+```csharp
+protected override void OnTick(double deltaSeconds)
+{
+    if (!SceneReady) return;
+    ...
+}
+```
 
 `OnInit` 与 `OnDestroy` **保证只调用一次**（基类做了收敛：宿主的加载/卸载和 C++ 壳的钩子都会到达，
 基类只放行第一次）。热重载会创建**新实例**，所以新实例上会重新触发一次 `OnInit`。
@@ -331,6 +370,24 @@ Input.IsGamepadButtonDown("a");
 在每帧路径上不划算。`KeyCodes` 里只有 `Escape` / `Space` / `Return` 三个常量，其余自己写数值。
 轮询式 `Input.IsKeyDown(name)` 接受 SDL 键名字符串，空字符串表示"任意键"。
 
+**移动不要自己写按键梯子**，用 `MoveAxis`：
+
+```csharp
+MoveAxis move = MoveAxis.Poll();       // WASD + 方向键 + 手柄左摇杆，已归一化
+if (move.IsMoving)
+{
+    // Right / Forward 是意图，不是方向：由你决定映到哪个世界轴或相机基
+    playerX += move.Right   * speed * delta;
+    playerZ -= move.Forward * speed * delta;         // 俯视角：Forward 是 -Z
+}
+```
+
+它返回的是**摇杆**而不是方向：`Right`/`Forward` 表达"玩家想往哪走"，映射到世界轴（俯视角）还是相机
+基（第一/第三人称）由游戏自己决定。归一化和手柄死区都在里面，两件每个手写版本都会漏掉的事。
+
+选择哪种方式的规则很简单：**按住的是状态，用轮询；按一下的是事件，用 `OnInputEvent`**。用事件流处理
+按住的键，拿到的是操作系统的按键重复，表现为一顿一顿而不是连续移动。
+
 ## 7. UI
 
 立即模式，等价于 Unity 的 `OnGUI` 而不是 uGUI——每帧重画，没有控件树，没有布局系统。
@@ -353,6 +410,42 @@ protected override bool OnRenderUI()
 高 DPI 屏上也对得上。也有 `UI.Begin/End/Text/SetCursorPos` 一组窗口式调用，用于调试面板。
 
 `Color` 是 0..1 的 float，`Color.FromBytes(r, g, b, a)` 接受 0..255。
+
+### 实际画 HUD 用 `ManagedImGui`
+
+上面那组 `UI.Draw*` 是最底层的原语，每次调用都过一次 ABI。真要画 HUD 用 `ManagedImGui`：它把一帧的
+命令攒进一个 C# 侧的 draw list，**整帧只过一次边界**，而且带控件——`Button` / `Checkbox` /
+`SliderFloat` / `ProgressBar` 都在里面，`UI.Draw*` 一个都没有。所有模板和 `Brotato3DCSharp` 用的都是它。
+
+```csharp
+private readonly ManagedImGui gui = new();
+
+protected override bool OnRenderUI()
+{
+    gui.BeginFrame();                                    // 必须成对
+    gui.Panel(new UiRect(20, 20, 260, 92), rounding: 10.0f);
+    gui.ProgressBar(new UiRect(36, 36, 228, 14), healthFraction, HudPalette.Bar(healthFraction));
+    gui.DrawText($"score {score}", 36, 60, HudPalette.Text);
+
+    // 居中面板：返回它占的矩形，内容照着排
+    UiRect panel = gui.PanelCenteredX(width: 400, y: 240, height: 132);
+    gui.DrawTextCenteredX("GAME OVER", panel.Y + 22, HudPalette.Danger, 1.7f);
+
+    if (gui.Button(1, new UiRect(panel.X + 40, panel.Y + 70, 320, 44), "RETRY"))
+    {
+        ResetRun();
+    }
+    gui.EndFrame();                                      // 这里才真正提交
+    return false;
+}
+```
+
+`HudPalette` 是一组**按用途命名**的颜色（`Text` / `Muted` / `Accent` / `Highlight` / `Danger` /
+`Bar(fraction)`）。用它而不是到处写 `Color.FromBytes(124, 230, 168)`，换配色时改一个文件而不是四十个
+调用点。
+
+`gui.DrawText(..., shadow: true)` 会先画一层深色偏移副本。画在场景之上的文字都该开：HUD 压着的是相机
+当时正好看到的东西，浅色文字压在浅色墙上就是不存在。
 
 ## 8. 相机、音频、配置、文件
 
@@ -510,11 +603,13 @@ GK_DOTNET_ALLOC_BUDGET=8192    # 可调
 | 完整 C# 玩法纵切 | `assets/csharp/Brotato3D/Brotato3DCSharp/` |
 | 程序化建场景 | 同上，`BeforeSceneRebuild` |
 | HUD | 同上，`OnRenderUI` |
-| C# drawlist 控件 | `assets/csharp/GkNext.Engine/UI/ManagedImGui.cs` |
+| HUD / C# drawlist 控件 | `assets/csharp/GkNext.Engine/ManagedImGui.cs` |
 | 固定物理池 / kinematic 推挤 | `assets/csharp/Brotato3D/Brotato3DCSharp/BrotatoPhysicsSystem.cs` |
 | 定步长模拟 | 同上，`OnTick` + `FixedStep` |
 | AOT 安全的 JSON 配置 | `assets/csharp/Flappy/FlappyCSharp/FlappyConfig.cs` |
-| 确定性随机 | `assets/csharp/Flappy/FlappyCSharp/FlappyRng.cs` |
+| 确定性随机 | `Rng`（`assets/csharp/GkNext.Engine/Gameplay/Rng.cs`）；`Flappy` 自带一份是因为要逐位复刻 C++ 的序列 |
+| 移动输入 / 定步长 / 对象池 | `assets/templates/games/arcade2d/`、`topdown3d/` |
+| gameplay 工具层 | `assets/csharp/GkNext.Engine/Gameplay/`（`Rng` / `Mathx` / `Quat` / `MoveAxis` / `Sky` / `HudPalette`）|
 | 纯逻辑对象 | `FlappyBird.cs` / `FlappyPipes.cs` / `FlappyParallax.cs` |
 | C++ 壳（15 行的全部） | `src/Application/Game/Flappy/FlappyCSharp/FlappyCSharpMain.cpp` |
 | 游戏清单 | `assets/configs/games/flappy.game.json` |

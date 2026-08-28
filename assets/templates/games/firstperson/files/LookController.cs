@@ -60,27 +60,24 @@ internal sealed class LookController(float sensitivity)
         Vector2 mouse = Input.GetMousePosition();
         bool held = Input.IsMouseButtonDown(RightMouseButton);
 
-        // The frame the drag starts contributes no rotation: without this the first frame uses a
-        // stale anchor and the view snaps by however far the pointer travelled since the last drag.
-        if (held && !dragging)
-        {
-            dragging = true;
-            lastMousePosition = mouse;
-            return;
-        }
-
         if (!held)
         {
             dragging = false;
             return;
         }
 
-        float deltaX = mouse.X - lastMousePosition.X;
-        float deltaY = mouse.Y - lastMousePosition.Y;
-        lastMousePosition = mouse;
+        // The frame the drag starts contributes no rotation: without this the first frame uses a
+        // stale anchor and the view snaps by however far the pointer travelled since the last drag.
+        if (!dragging)
+        {
+            dragging = true;
+            lastMousePosition = mouse;
+            return;
+        }
 
-        Yaw += deltaX * sensitivity;
-        Pitch -= deltaY * sensitivity;
-        Pitch = MathF.Max(-PitchLimit, MathF.Min(PitchLimit, Pitch));
+        Yaw += (mouse.X - lastMousePosition.X) * sensitivity;
+        Pitch = Mathx.Clamp(Pitch - (mouse.Y - lastMousePosition.Y) * sensitivity,
+                            -PitchLimit, PitchLimit);
+        lastMousePosition = mouse;
     }
 }

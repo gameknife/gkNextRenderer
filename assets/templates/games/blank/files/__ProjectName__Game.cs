@@ -11,13 +11,17 @@ namespace {{Namespace}};
 /// state in fields here and advance all of it from <see cref="OnTick"/>; plain C# classes with no
 /// engine base type are the way to split it up once this file grows.
 ///
-/// See docs/AGENT_GUIDE/CSharpGameDevelopment.md for the full picture.
+/// Every hook is present and in the order the engine raises them, which is what this template is
+/// for. See docs/AGENT_GUIDE/CSharpGameDevelopment.md for the full picture.
 /// </remarks>
 [GameInstance]
 public sealed class {{ProjectName}}Game : NextGameInstance
 {
     private const float CubeHeight = 1.0f;
     private const float SpinSpeed = 1.2f;
+
+    /// <summary>The HUD layer. One draw list, submitted to the engine once per frame.</summary>
+    private readonly ManagedImGui gui = new();
 
     private uint cubeNode = NodeIds.Invalid;
     private float spinAngle;
@@ -37,43 +41,26 @@ public sealed class {{ProjectName}}Game : NextGameInstance
     /// </summary>
     protected override void BeforeSceneRebuild()
     {
-        Vector3 groundMin = new(-24.0f, -0.5f, -24.0f);
-        Vector3 groundMax = new(24.0f, 0.5f, 24.0f);
-        uint groundModel = SceneBuild.AddBoxModel(in groundMin, in groundMax);
-        Vector3 groundColor = new(0.34f, 0.36f, 0.40f);
-        uint groundMaterial = SceneBuild.AddLambertianMaterial(in groundColor);
-        RenderNodeSpec groundSpec = new RenderNodeSpec(groundModel, groundMaterial)
-            .WithTranslation(new Vector3(0.0f, -0.5f, 0.0f));
-        SceneBuild.AddRenderNode("{{ProjectName}}_Ground", in groundSpec);
+        // Models and materials are scene-wide and shared by every node that uses them. Build one
+        // of each and hand out the ids; a material per node grows the material table with
+        // duplicates that all say the same thing.
+        uint boxModel = SceneBuild.AddBoxModel(new(-0.5f, -0.5f, -0.5f), new(0.5f, 0.5f, 0.5f));
 
-        Vector3 cubeMin = new(-0.5f, -0.5f, -0.5f);
-        Vector3 cubeMax = new(0.5f, 0.5f, 0.5f);
-        uint cubeModel = SceneBuild.AddBoxModel(in cubeMin, in cubeMax);
-        Vector3 cubeColor = new(0.95f, 0.55f, 0.16f);
-        uint cubeMaterial = SceneBuild.AddLambertianMaterial(in cubeColor);
-        RenderNodeSpec cubeSpec = new RenderNodeSpec(cubeModel, cubeMaterial)
-            .WithTranslation(new Vector3(0.0f, CubeHeight, 0.0f));
-        cubeNode = SceneBuild.AddRenderNode("{{ProjectName}}_Cube", in cubeSpec);
+        SceneBuild.AddRenderNode("{{ProjectName}}_Ground",
+            new RenderNodeSpec(boxModel, SceneBuild.AddLambertianMaterial(new(0.34f, 0.36f, 0.40f)))
+                .WithTranslation(new Vector3(0.0f, -0.5f, 0.0f))
+                .WithScale(new Vector3(48.0f, 1.0f, 48.0f)));
+
+        cubeNode = SceneBuild.AddRenderNode("{{ProjectName}}_Cube",
+            new RenderNodeSpec(boxModel, SceneBuild.AddLambertianMaterial(new(0.95f, 0.55f, 0.16f)))
+                .WithTranslation(new Vector3(0.0f, CubeHeight, 0.0f)));
     }
 
     /// <summary>The scene is committed and node ids resolve. Reach for components here.</summary>
     protected override void OnSceneLoaded()
     {
-        // A procedural scene has no environment node until something asks for one, which this does.
-        EnvironmentComponent environment = new NodeRef(Scene.GetEnvironmentNodeId()).Environment;
-        if (!environment.Exists)
-        {
-            Log.Warn("[{{ProjectName}}] no environment node; default lighting will be used");
-            return;
-        }
-
-        environment.HasSky = true;
-        environment.SkyIdx = 0;
-        environment.SkyIntensity = 300.0f;
-        environment.HasSun = true;
-        environment.SunIntensity = 300.0f;
-        environment.SunRotation = 0.6f;
-        environment.SunElevation = 0.9f;
+        // A procedurally built scene has no sky or sun until something asks for one.
+        Sky.Apply(sunRotation: 0.6f, sunElevation: 0.9f);
     }
 
     /// <summary>
@@ -84,42 +71,34 @@ public sealed class {{ProjectName}}Game : NextGameInstance
     {
         elapsedSeconds += deltaSeconds;
 
-        if (spinning && NodeIds.IsValid(cubeNode))
+        // SceneReady comes from the base class: OnTick starts before the first scene is committed,
+        // and cubeNode does not address anything until it is.
+        if (!SceneReady || !spinning)
         {
-            spinAngle += (float)deltaSeconds * SpinSpeed;
-
-            // Quaternion around Y, written out rather than built by a helper: there is no vector
-            // math library on this side of the boundary, only the interop structs.
-            float half = spinAngle * 0.5f;
-            Vector4 rotation = new(0.0f, MathF.Sin(half), 0.0f, MathF.Cos(half));
-            Scene.SetNodeRotation(cubeNode, in rotation);
-
-            // Required once per tick by anything that moves a node: the scene graph is updated
-            // immediately, but the renderer only re-uploads instance transforms when told to.
-            Scene.MarkTransformDirty();
+            return;
         }
+
+        spinAngle += (float)deltaSeconds * SpinSpeed;
+        Scene.SetNodeRotation(cubeNode, Quat.AroundY(spinAngle));
+
+        // Required once per tick by anything that moves a node: the scene graph is updated
+        // immediately, but the renderer only re-uploads instance transforms when told to.
+        Scene.MarkTransformDirty();
     }
 
     /// <summary>Immediate-mode HUD. Return true to tell the host the frame was consumed.</summary>
     protected override bool OnRenderUI()
     {
-        Vector2 screen = UI.GetScreenSize();
+        gui.BeginFrame();
 
-        UI.DrawRectFilled(20.0f, 20.0f, 300.0f, 96.0f, Color.FromBytes(18, 24, 32, 200), 10.0f);
-        UI.DrawRect(20.0f, 20.0f, 300.0f, 96.0f, Color.FromBytes(255, 255, 255, 40), 10.0f, 1.0f);
-        UI.DrawText("{{DisplayName}}", 36.0f, 34.0f, Color.White, 1.2f);
-        UI.DrawText($"time {elapsedSeconds:F1}s", 36.0f, 62.0f, Color.FromBytes(168, 200, 214));
-        UI.DrawText(spinning ? "SPACE: pause spin" : "SPACE: resume spin", 36.0f, 84.0f,
-                    Color.FromBytes(124, 230, 168));
+        gui.Panel(new UiRect(20.0f, 20.0f, 300.0f, 96.0f), 10.0f);
+        gui.DrawText("{{DisplayName}}", 36.0f, 34.0f, HudPalette.Text, 1.2f);
+        gui.DrawText($"time {elapsedSeconds:F1}s", 36.0f, 62.0f, HudPalette.Muted);
+        gui.DrawText(spinning ? "SPACE: pause spin" : "SPACE: resume spin", 36.0f, 84.0f,
+                     HudPalette.Accent);
+        gui.DrawTextBottomRight("ESC quits", 18.0f, HudPalette.Muted);
 
-        // Drawn twice: HUD text sits over whatever the scene happens to be, and plain white is
-        // invisible against a bright floor.
-        const string hint = "ESC quits";
-        Vector2 hintSize = UI.CalcTextSize(hint);
-        float hintX = screen.X - hintSize.X - 20.0f;
-        float hintY = screen.Y - hintSize.Y - 16.0f;
-        UI.DrawText(hint, hintX + 1.0f, hintY + 1.0f, Color.FromBytes(10, 14, 20, 170));
-        UI.DrawText(hint, hintX, hintY, Color.FromBytes(255, 255, 255, 190));
+        gui.EndFrame();
         return false;
     }
 
