@@ -115,6 +115,8 @@ set(unitTestSources
 
 if(GK_DOTNET_ENABLED)
     list(APPEND unitTestSources Test_DotNetEngineApi.cpp)
+    list(APPEND unitTestSources Test_ManagedGameTemplate.cpp)
+    list(APPEND unitTestSources Test_TemplateRigClips.cpp)
     list(APPEND unitTestSources Test_ReflectionManifest.cpp)
 endif()
 

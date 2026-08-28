@@ -13,6 +13,7 @@
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
 #include "Engine/Runtime/Subsystems/NextAudio.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Subsystems/NextRig.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <imgui.h>
@@ -597,6 +598,111 @@ namespace Modules::NextDotNet
             outState->MotionType = ConvertMotionType(body->motionType);
             outState->Active = physics->GetBodyDebugState(ToBodyId(bodyId)).isActive ? 1 : 0;
             outState->Valid = 1;
+        }
+
+        // --- character rigs -----------------------------------------------------------------------
+
+        NextRig* GetRigSubsystem()
+        {
+            NextEngine* engine = NextEngine::GetInstance();
+            return engine != nullptr ? engine->GetRig() : nullptr;
+        }
+
+        GkBool Rig_IsAvailable() { return GetRigSubsystem() != nullptr ? 1 : 0; }
+
+        uint32_t Rig_DeclarePool(GkStr rigPath, int32_t capacity)
+        {
+            NextRig* rig = GetRigSubsystem();
+            if (rig == nullptr)
+            {
+                SPDLOG_WARN("[dotnet] Rig.DeclarePool: this build has no rig subsystem installed");
+                return NextRig::kInvalidId;
+            }
+            // Outside a scene build there is no model list to inject into, and injecting later
+            // would not reach the GPU: the primitive buffer is sized from that list once.
+            if (!RequireSceneBuild("Rig.DeclarePool"))
+            {
+                return NextRig::kInvalidId;
+            }
+            return rig->DeclarePool(ToString(rigPath), capacity, *GSceneBuildContext.models,
+                                    *GSceneBuildContext.materials);
+        }
+
+        GkBool Rig_HasClip(uint32_t poolId, GkStr clip)
+        {
+            NextRig* rig = GetRigSubsystem();
+            return rig != nullptr && rig->HasClip(poolId, ToString(clip)) ? 1 : 0;
+        }
+
+        uint32_t Rig_Acquire(uint32_t poolId, const FVec3* position, float yawRadians, const FVec3* tint)
+        {
+            NextRig* rig = GetRigSubsystem();
+            if (rig == nullptr)
+            {
+                return NextRig::kInvalidId;
+            }
+            return rig->Acquire(poolId, ToGlm(position), yawRadians,
+                                tint != nullptr ? ToGlm(tint) : glm::vec3(0.8f));
+        }
+
+        void Rig_Release(uint32_t instanceId)
+        {
+            if (NextRig* rig = GetRigSubsystem(); rig != nullptr)
+            {
+                rig->Release(instanceId);
+            }
+        }
+
+        GkBool Rig_IsAlive(uint32_t instanceId)
+        {
+            NextRig* rig = GetRigSubsystem();
+            return rig != nullptr && rig->IsAlive(instanceId) ? 1 : 0;
+        }
+
+        void Rig_SetTransform(uint32_t instanceId, const FVec3* position, float yawRadians)
+        {
+            if (NextRig* rig = GetRigSubsystem(); rig != nullptr)
+            {
+                rig->SetTransform(instanceId, ToGlm(position), yawRadians);
+            }
+        }
+
+        void Rig_SetVisible(uint32_t instanceId, GkBool visible)
+        {
+            if (NextRig* rig = GetRigSubsystem(); rig != nullptr)
+            {
+                rig->SetVisible(instanceId, visible != 0);
+            }
+        }
+
+        void Rig_PlayClip(uint32_t instanceId, GkStr clip, float fadeSeconds)
+        {
+            if (NextRig* rig = GetRigSubsystem(); rig != nullptr)
+            {
+                rig->PlayClip(instanceId, ToString(clip), fadeSeconds);
+            }
+        }
+
+        void Rig_SetPlaySpeed(uint32_t instanceId, float speed)
+        {
+            if (NextRig* rig = GetRigSubsystem(); rig != nullptr)
+            {
+                rig->SetPlaySpeed(instanceId, speed);
+            }
+        }
+
+        uint32_t Rig_GetRootNodeId(uint32_t instanceId)
+        {
+            NextRig* rig = GetRigSubsystem();
+            const int32_t nodeId = rig != nullptr ? rig->GetRootNodeId(instanceId) : -1;
+            return nodeId < 0 ? GK_INVALID_NODE_ID : static_cast<uint32_t>(nodeId);
+        }
+
+        uint32_t Rig_GetBoneNodeId(uint32_t instanceId, GkStr boneName)
+        {
+            NextRig* rig = GetRigSubsystem();
+            const int32_t nodeId = rig != nullptr ? rig->GetBoneNodeId(instanceId, ToString(boneName)) : -1;
+            return nodeId < 0 ? GK_INVALID_NODE_ID : static_cast<uint32_t>(nodeId);
         }
 
         // --- immediate-mode UI --------------------------------------------------------------------

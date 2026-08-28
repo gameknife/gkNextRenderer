@@ -30,6 +30,7 @@
 #include "Modules/NextViture/VitureModule.hpp"
 #endif
 #include "Application/Common/DemoScenes.hpp"
+#include "Gameplay/Rig/RigSubsystem.h"
 #include "Application/Editor/Common/MultiViewportBackend.hpp"
 
 #include <algorithm>
@@ -42,6 +43,12 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
     Modules::LDraw::Register();
     Modules::Scad::Register();
     AppCommon::RegisterDemoScenes();
+    // ScadRig characters, so a played-in-editor game that has them behaves as it does in the
+    // launcher. Costs nothing for a scene without characters.
+    if (engine != nullptr)
+    {
+        NextGameplay::Rig::Install(*engine);
+    }
     return std::make_unique<EditorGameInstance>(config, options, engine);
 }
 
@@ -123,6 +130,15 @@ void EditorGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     cvars.RegisterBool("ed.playEject", false, &playEjectCVar_, NextCVar::ECVarFlags::None,
                        "While playing: take input and the camera back from the game",
                        [this]() { playSession_.SetEjected(playEjectCVar_); });
+    cvars.RegisterBool("ed.newProject", false, &newProjectCVar_, NextCVar::ECVarFlags::None,
+                       "Open the new game project dialog",
+                       [this]()
+                       {
+                           if (newProjectCVar_)
+                           {
+                               playSession_.OpenNewProjectDialog();
+                           }
+                       });
 }
 
 void EditorGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegistry& reg)
@@ -140,6 +156,10 @@ void EditorGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegistr
     reg.Add("pieAvailable", [this]() -> Runtime::Agent::FAgentQueryValue { return playSession_.IsAvailable(); });
     reg.Add("pieGameCount", [this]() -> Runtime::Agent::FAgentQueryValue
             { return static_cast<int64_t>(playSession_.Games().size()); });
+    reg.Add("newProjectOpen", [this]() -> Runtime::Agent::FAgentQueryValue
+            { return playSession_.IsNewProjectDialogOpen(); });
+    reg.Add("canCreateProject", [this]() -> Runtime::Agent::FAgentQueryValue
+            { return playSession_.CanCreateProject(); });
     reg.Add("scenePath", [this]() -> Runtime::Agent::FAgentQueryValue
             { return GetEditorInterface().GetEditorUiState().currentScenePath; });
     reg.Add("selectedId", [this]() -> Runtime::Agent::FAgentQueryValue
@@ -560,6 +580,13 @@ void EditorGameInstance::OnRemoteUiSessionClosed(std::string_view sessionId)
 
 bool EditorGameInstance::OnKey(SDL_Event& event)
 {
+    // A modal owns the keyboard while it is up; F5 starting a game underneath it would be a
+    // surprise, and Escape has to reach the dialog rather than the editor's own handling.
+    if (playSession_.IsNewProjectDialogOpen())
+    {
+        return false;
+    }
+
     if (event.key.type == SDL_EVENT_KEY_DOWN)
     {
         switch (event.key.key)

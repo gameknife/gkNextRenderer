@@ -109,6 +109,21 @@ namespace Editor
             menuRight = std::max(menuRight, ImGui::GetItemRectMax().x);
             if (fileMenuOpen)
             {
+                if (ctx.editor != nullptr)
+                {
+                    Editor::FPlaySession& play = ctx.editor->GetPlaySession();
+                    const bool canCreateProject = play.CanCreateProject();
+                    if (ImGui::MenuItem("New Game Project...", nullptr, false, canCreateProject))
+                    {
+                        play.OpenNewProjectDialog();
+                    }
+                    if (!canCreateProject && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    {
+                        ImGui::SetTooltip("%s", play.NewProjectUnavailableReason().c_str());
+                    }
+                    ImGui::Separator();
+                }
+
                 if (ImGui::MenuItem("Open Scene...", "Ctrl+O"))
                 {
                     auto* dialogContext = new FOpenSceneDialogContext{&ui};

@@ -31,6 +31,10 @@ namespace
         "DevTools",      "GltfLoader",  "LDrawLoader",   "LiveCoding",     "NextAudio",
         "NextCapture",   "NextDotNet",  "NextFidelityFX", "NextPhysics",   "NextRemote",
         "NextStreamline", "NextTemporalUpscaler", "NextValidation", "NextUI",
+        // Not a module under src/Modules, but the same question a manifest is asking: was this
+        // host linked with it? Without it Rig.* does nothing and a game built on characters
+        // renders an empty world.
+        "NextGameplay",
         "ScadLoader",    "SceneContent", "SplatLoader",
     };
 
@@ -121,6 +125,21 @@ void LauncherGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
             pendingSelection_ = selectedGameId_;
             hasPendingSelection_ = true;
         });
+
+    // A control channel for the console and for scripted validation, which cannot click a card.
+    cvars.RegisterString("game.newProject", "", &newProjectRequest_, NextCVar::ECVarFlags::None,
+                         "Set to 1 to open the new-project dialog, or 0 to close it",
+                         [this]()
+                         {
+                             if (newProjectRequest_ == "0" || newProjectRequest_.empty())
+                             {
+                                 newProjectDialog_.Close();
+                             }
+                             else
+                             {
+                                 newProjectDialog_.Open();
+                             }
+                         });
 }
 
 void LauncherGameInstance::OnInit()
@@ -130,7 +149,7 @@ void LauncherGameInstance::OnInit()
     GetEngine().GetShowFlags().DebugGraphicsPanel = false;
     GetEngine().GetUserSettings().ShowOverlay = false;
 
-    GetSession().SetBaselineExcludedCVars({"game.select"});
+    GetSession().SetBaselineExcludedCVars({"game.select", "game.newProject"});
 
     RefreshEntries();
 
@@ -282,6 +301,12 @@ bool LauncherGameInstance::OnHostKey(SDL_Event& event)
         return false;
     }
 
+    // The dialog is a modal: while it is up, Enter belongs to it, not to the grid behind it.
+    if (newProjectDialog_.IsOpen())
+    {
+        return false;
+    }
+
     if (GetSession().IsPlaying())
     {
         if (event.key.key == SDLK_ESCAPE)
@@ -292,13 +317,9 @@ bool LauncherGameInstance::OnHostKey(SDL_Event& event)
         return false;
     }
 
-    if (entries_.empty())
-    {
-        return false;
-    }
-
     constexpr int kGridColumns = 3;
-    const int total = static_cast<int>(entries_.size());
+    // The trailing "new project" cell is navigable like any other, so the keyboard can reach it.
+    const int total = static_cast<int>(entries_.size()) + 1;
 
     switch (event.key.key)
     {
@@ -332,7 +353,14 @@ bool LauncherGameInstance::OnHostKey(SDL_Event& event)
         return true;
     case SDLK_RETURN:
     case SDLK_KP_ENTER:
-        LoadEntry(static_cast<size_t>(highlightedIndex_));
+        if (highlightedIndex_ == NewProjectCellIndex())
+        {
+            newProjectDialog_.Open();
+        }
+        else
+        {
+            LoadEntry(static_cast<size_t>(highlightedIndex_));
+        }
         return true;
     default:
         return false;
@@ -402,8 +430,9 @@ void LauncherGameInstance::DrawMenu()
 
         const std::string countStr = fmt::format("{} Games", entries_.size());
         const float refreshWidth = 28.0f;
+        const float newWidth = 108.0f;
         const float countWidth = ImGui::CalcTextSize(countStr.c_str()).x;
-        const float rightMargin = countWidth + refreshWidth + 16.0f;
+        const float rightMargin = countWidth + refreshWidth + newWidth + 26.0f;
 
         if (ImGui::GetContentRegionAvail().x > rightMargin)
         {
@@ -420,6 +449,16 @@ void LauncherGameInstance::DrawMenu()
             if (ImGui::IsItemHovered())
             {
                 ImGui::SetTooltip("Refresh game manifests");
+            }
+
+            ImGui::SameLine(0.0f, 10.0f);
+            if (ImGui::Button(ICON_FA_PLUS " New Project", ImVec2(newWidth, 24.0f)))
+            {
+                newProjectDialog_.Open();
+            }
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("Create a C# game project from a template");
             }
         }
     }
@@ -442,21 +481,33 @@ void LauncherGameInstance::DrawMenu()
     // 2. Responsive Grid Tiles
     // ==========================================
     const float footerHeight = 36.0f;
-    ImGui::BeginChild("##GameCardsGrid", ImVec2(0.0f, -footerHeight), false,
-                      ImGuiWindowFlags_NoScrollbar);
+    // Scrollable: with enough games installed the grid outgrows the window, and a clipped row is
+    // indistinguishable from a game that failed to appear.
+    ImGui::BeginChild("##GameCardsGrid", ImVec2(0.0f, -footerHeight), false);
 
     if (entries_.empty())
     {
         ImGui::Spacing();
         ImGui::TextColored(Color(EColor::TextMuted),
-                           ICON_FA_TRIANGLE_EXCLAMATION " No managed games found under %s.",
+                           ICON_FA_TRIANGLE_EXCLAMATION " No managed games found under %s. Start one below.",
                            Modules::NextDotNet::kManagedGameManifestDirectory);
+        ImGui::Spacing();
     }
-    else
+
     {
         constexpr int kGridCols = 3;
-        const float cardHeight = entries_.size() <= 3 ? 330.0f : 230.0f;
         constexpr float kCardRounding = 8.0f;
+        constexpr float kCellPaddingY = 8.0f;
+
+        // Sized to the rows that actually have to fit, rather than to a fixed height per count:
+        // with a "new project" cell always present, a fixed 230 put the second row half below the
+        // window and clipped it away.
+        const int totalCells = static_cast<int>(entries_.size()) + 1;
+        const int rowCount = std::max(1, (totalCells + kGridCols - 1) / kGridCols);
+        const float availableHeight = ImGui::GetContentRegionAvail().y;
+        const float cardHeight =
+            std::clamp((availableHeight - rowCount * kCellPaddingY * 2.0f) / static_cast<float>(rowCount),
+                       150.0f, 330.0f);
 
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8.0f, 8.0f));
         if (ImGui::BeginTable("##GameGridTable", kGridCols, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoSavedSettings))
@@ -593,6 +644,16 @@ void LauncherGameInstance::DrawMenu()
 
                 ImGui::PopID();
             }
+
+            ImGui::TableNextColumn();
+            ImGui::PushID("NewProject");
+            if (DrawNewProjectCard(ImGui::GetContentRegionAvail().x, cardHeight,
+                                   highlightedIndex_ == NewProjectCellIndex()))
+            {
+                newProjectDialog_.Open();
+            }
+            ImGui::PopID();
+
             ImGui::EndTable();
         }
         ImGui::PopStyleVar();
@@ -641,6 +702,98 @@ void LauncherGameInstance::DrawMenu()
     ImGui::End();
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(3);
+
+    // After the menu window is closed and its style is popped: a modal drawn inside it would
+    // inherit that window's padding and clipping rectangle rather than standing on its own.
+    DrawNewProjectDialog();
+}
+
+bool LauncherGameInstance::DrawNewProjectCard(float cardWidth, float cardHeight, bool highlighted)
+{
+    // Deliberately not a copy of the game card: this one opens a dialog rather than launching
+    // anything, and looking different is what says so before it is clicked.
+    const ImVec2 cardMin = ImGui::GetCursorScreenPos();
+    const ImVec2 cardMax(cardMin.x + cardWidth, cardMin.y + cardHeight);
+
+    ImGui::InvisibleButton("##NewProjectHit", ImVec2(cardWidth, cardHeight));
+    const bool hovered = ImGui::IsItemHovered();
+    const bool clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+    if (hovered)
+    {
+        highlightedIndex_ = NewProjectCellIndex();
+    }
+
+    const bool active = highlighted || hovered;
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    drawList->AddRectFilled(cardMin, cardMax,
+                            active ? ColorU32(EColor::SurfaceHover, 0.55f) : ColorU32(EColor::Surface, 0.28f),
+                            8.0f);
+    drawList->AddRect(cardMin, cardMax,
+                      active ? ColorU32(EColor::AccentHover, 0.85f) : ColorU32(EColor::Border, 0.45f), 8.0f, 0,
+                      active ? 1.5f : 1.0f);
+
+    ImFont* titleFont = NextUI::Theme::GetTitleFont(GetEngine());
+    if (titleFont == nullptr)
+    {
+        titleFont = ImGui::GetFont();
+    }
+
+    // Laid out from the same measurements as a game card, so the plus sits where a game's icon does.
+    const float iconBoxSize = cardHeight <= 240.0f ? 54.0f : 68.0f;
+    const float iconAreaY = cardMin.y + (cardHeight <= 240.0f ? 24.0f : 40.0f);
+    const ImVec2 iconBoxMin(cardMin.x + (cardWidth - iconBoxSize) * 0.5f, iconAreaY);
+    const ImVec2 iconBoxMax(iconBoxMin.x + iconBoxSize, iconBoxMin.y + iconBoxSize);
+    drawList->AddRectFilled(iconBoxMin, iconBoxMax,
+                            active ? ColorU32(EColor::Accent, 0.18f) : ColorU32(EColor::Background, 0.45f),
+                            iconBoxSize * 0.5f);
+    drawList->AddRect(iconBoxMin, iconBoxMax,
+                      active ? ColorU32(EColor::AccentHover, 0.5f) : ColorU32(EColor::Border, 0.35f),
+                      iconBoxSize * 0.5f);
+
+    ImGui::PushFont(titleFont);
+    const ImVec2 iconSize = ImGui::CalcTextSize(ICON_FA_PLUS);
+    drawList->AddText(ImVec2(iconBoxMin.x + (iconBoxSize - iconSize.x) * 0.5f,
+                             iconBoxMin.y + (iconBoxSize - iconSize.y) * 0.5f),
+                      active ? ColorU32(EColor::Text) : ColorU32(EColor::TextMuted), ICON_FA_PLUS);
+    ImGui::PopFont();
+
+    const float titleY = iconBoxMax.y + (cardHeight <= 240.0f ? 16.0f : 26.0f);
+    ImGui::PushFont(titleFont);
+    const char* title = "New Project";
+    const ImVec2 titleSize = ImGui::CalcTextSize(title);
+    drawList->AddText(ImVec2(cardMin.x + (cardWidth - titleSize.x) * 0.5f, titleY),
+                      active ? ColorU32(EColor::Text) : ColorU32(EColor::TextMuted), title);
+    ImGui::PopFont();
+
+    const char* subtitle = "Start from a template";
+    const ImVec2 subtitleSize = ImGui::CalcTextSize(subtitle);
+    drawList->AddText(ImVec2(cardMin.x + (cardWidth - subtitleSize.x) * 0.5f,
+                             titleY + titleSize.y + 8.0f),
+                      ColorU32(EColor::TextDim), subtitle);
+
+    return clicked;
+}
+
+void LauncherGameInstance::DrawNewProjectDialog()
+{
+    const Modules::NextDotNet::FNewGameProjectOutcome outcome = newProjectDialog_.Draw(&GetSession());
+    if (!outcome.created)
+    {
+        return;
+    }
+
+    // The new manifest is on disk now, so the menu has to be rescanned before it can select it.
+    RefreshEntries();
+    for (size_t i = 0; i < entries_.size(); ++i)
+    {
+        if (entries_[i].manifest.id == outcome.gameId)
+        {
+            highlightedIndex_ = static_cast<int>(i);
+            break;
+        }
+    }
+    rebuildStatus_ = outcome.built ? "created " + outcome.gameId + " — ready to play"
+                                   : "created " + outcome.gameId + " — not built yet";
 }
 
 void LauncherGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegistry& reg)
@@ -661,10 +814,18 @@ void LauncherGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegis
             });
     reg.Add("highlighted", [this]() -> Runtime::Agent::FAgentQueryValue
             {
+                if (highlightedIndex_ == NewProjectCellIndex())
+                {
+                    return std::string("*new-project");
+                }
                 return highlightedIndex_ >= 0 && highlightedIndex_ < static_cast<int>(entries_.size())
                            ? entries_[static_cast<size_t>(highlightedIndex_)].manifest.id
                            : std::string();
             });
+    reg.Add("newProjectOpen", [this]() -> Runtime::Agent::FAgentQueryValue
+            { return newProjectDialog_.IsOpen(); });
+    reg.Add("templateCount", [this]() -> Runtime::Agent::FAgentQueryValue
+            { return static_cast<int64_t>(Modules::NextDotNet::ScanGameTemplates().size()); });
     reg.Add("lastError", [this]() -> Runtime::Agent::FAgentQueryValue { return GetSession().GetLastError(); });
     reg.Add("unloadPending", [this]() -> Runtime::Agent::FAgentQueryValue
             { return static_cast<int64_t>(GetSession().UnloadPendingStreak()); });

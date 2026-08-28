@@ -43,6 +43,7 @@ NativeAOT 换体积与启动速度，切换只改一个 CMake option，托管代
 - 脚本内的交互式 eval / REPL。NativeAOT 下无 JIT，能力不存在；不要设计成 CoreCLR 独占能力，
   那会破坏"两种后端行为一致"这条根本约束。
 - Android/iOS 的托管运行时落地。AOT 是唯一可行路径，但设备验证不在首版范围。
+  （后续：Android 已落地并打进 APK，见 9 节；iOS 仍未做。）
 
 ## 2. 为什么用 C# 完全替换 QuickJS
 
@@ -196,7 +197,7 @@ AOT 下没有 collectible ALC，`GkNext.Game` 静态链接进来直接调用。�
 | 热重载 | 秒级（collectible ALC） | 无 |
 | 启动时间 | ~150ms | ~5ms |
 | 分发体积 | +70MB（self-contained） | +5MB/程序 |
-| 移动端 | 不可用 | 可用（iOS 需 `--staticlib` 静态链接） |
+| 移动端 | 不可用 | Android 可用（`linux-bionic-arm64`）；iOS 需 `--staticlib`，未落地 |
 | 调试 | mixed-mode（VS 可同时调 C++/C#） | native only |
 
 **允许存在的差异只有迭代速度，不允许存在语义差异。** 任何"CoreCLR 下能用、AOT 下不能用"的
@@ -324,7 +325,7 @@ FlappyCSharp 写 replay trace 走"引擎给路径 + BCL 写文件"，与 QuickJS
 ## 5. 目录结构与所有权
 
 ```text
-src/Modules/NextDotNet/            引擎侧宿主（可选模块，非 Android/iOS 首版）
+src/Modules/NextDotNet/            引擎侧宿主（可选模块；Android 走 AOT，iOS 未落地）
   NextDotNetModule.hpp/.cpp        Install/Get，对齐现有 NextQuickJSModule
   DotNetRuntime.cpp                实现 Runtime::IScriptRuntime
   Interop.h                        FEngineApi / FManagedApi / GkStr —— 唯一跨界 ABI
@@ -408,8 +409,13 @@ LINQ 与闭包。`NextGameInstance` 基类应内置 dev-only 的 per-frame 分�
 **iOS 需要静态链接。** `--staticlib` 路径与动态库路径在符号可见性上有差异，首版只要求编译通过，
 不做设备验证。
 
-**首版不覆盖 Android/iOS 运行。** 有先例：QuickJS 在 Android 上本来就被排除
-（`src/cmake/SourceFiles.cmake:73-75`）。
+**Android 已落地，iOS 未落地。** Android 走 `linux-bionic-arm64` RID：托管层与桌面完全同源，
+只是交叉编译。SDK 不把 bionic 当一等目标，所以有三处必须手工补齐，都写在
+`GkNext.Bootstrap.csproj` 与 `cmake/SetupDotNet.cmake` 里：跨 OS 编译的拦截要显式关掉、跑在
+构建机上的 ILCompiler 包要自己引用、链接必须用 NDK 的 clang driver（ILC 只按名字在 PATH 上找
+它，找到桌面 clang 就会链出一个 glibc x86-64 的产物）。产物是一个 `lib*.so`，经 jniLibs 打进
+APK，引擎库通过 DT_NEEDED 依赖它——所以 soname 和 `lib` 前缀也得自己写，SDK 在 Windows 宿主上
+两个都不给。iOS 仍未落地：它需要静态库路径与签名，两者都还没做。
 
 **Flappy parity 实测结果（P4）：两种后端的 trace 逐字段完全相同，与 C++ 的最大偏差 2.4e-7。**
 放宽门槛没有被用到，但保留——它买的是不必用 `Math.fround` 手段对齐浮点。

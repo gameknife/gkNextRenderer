@@ -20,10 +20,12 @@
 </p>
 
 <p align="center">
+  <a href="https://gameknife.github.io/gkNextEngine/">Website</a> &nbsp;·&nbsp;
   <a href="README.en.md">English</a> &nbsp;·&nbsp;
   <a href="README.md">简体中文</a> &nbsp;·&nbsp;
   <a href="https://deepwiki.com/gameknife/gkNextEngine">DeepWiki</a> &nbsp;·&nbsp;
   <a href="AGENTS.md">AGENTS.md</a> &nbsp;·&nbsp;
+  <a href="https://github.com/gameknife/gkNextEngine/discussions">Community</a> &nbsp;·&nbsp;
   <a href="https://github.com/gameknife/gkNextEngine/issues">Issues</a>
 </p>
 
@@ -45,14 +47,16 @@
   <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/gknexteditor.webp" width="100%" alt="gkNextEditor" />
 </p>
 
-gkNextEngine is a cross-platform 3D game engine and rendering playground built with modern C++20 and Vulkan. The project is renderer-first, while continuously expanding around editor tooling, scripting, physics, asset import, and multiple gameplay prototypes (such as MagicaLego, Brotato3D, KongLie3D, BrickPlayer), alongside SCAD, LDraw, and Gaussian Splat structured pipelines — forming the groundwork for AI-native content generation, scene understanding, gameplay iteration, and automated validation.
+gkNextEngine is a cross-platform 3D game engine and rendering playground built with modern C++20 and Vulkan. The renderer is the core; around it sit the editor, C# scripting, Jolt Physics, structured content pipelines (SCAD / LDraw / glTF / Gaussian Splat), and a dozen-plus gameplay prototypes (MagicaLego, Brotato3D, KongLie3D, BrickPlayer, and others) — together forming the groundwork for AI-native content generation, scene understanding, gameplay iteration, and automated validation.
+
+The scripting layer is **C#**: a game is declared by a single JSON manifest, created from a template, loaded and run in-process, and hot-reloaded from the launcher or the editor — no C++, no CMake target. All five platforms (Windows / Linux / macOS / Android / iOS) share one codebase and one `gnb` command to build and run.
 
 <hr>
 
 > [!NOTE]
 > **Core Goals**
 > - **Real-Time Visual Performance**: Deliver visually compelling results with real-time path tracing, hybrid rendering, and HDR lighting that reliably hold up inside a live runtime.
-> - **Full-Stack Engine Evolution**: Build extensible runtime systems suited for gameplay prototyping and AI-native workflows to drive long-term engine evolution.
+> - **Full-Stack Engine Capability**: Rendering, editor, scripting, physics, and content pipelines form one runnable, extensible engine that serves gameplay prototyping and AI-native workflows.
 
 > [!TIP]
 > **Key Focus Areas**
@@ -63,21 +67,27 @@ gkNextEngine is a cross-platform 3D game engine and rendering playground built w
 
 **Supported platforms:** Windows x86_64 · Linux x86_64 · macOS arm64 · Android arm64 · iOS arm64
 
+<sub>The three desktop platforms are feature-aligned, mobile ships a touch input layer, and Steam Deck / Arch gets a dedicated PathTracingLite tier; devices that cannot meet the bindless budget or lack `bufferDeviceAddress` (an A12X iPad, for example) run the compatibility renderer.</sub>
+
 <p align="center">✦</p>
 
 ## ✨ Project Highlights
 
-- **Real-Time Path Tracing & Hybrid Rendering**: Practical 1/2spp path tracing, denoising, and seamless multi-pipeline switching built for real runtime constraints.
+- **Real-Time Path Tracing & Hybrid Rendering**: 1/2spp path tracing, denoising, and seamless multi-pipeline switching, with checkerboard shading halving the shading cost again.
 - **High-Performance GPU Architecture**: Fully bindless resources, Visibility Buffer, and single-draw GPU-driven submission to minimize CPU overhead.
-- **Radiance Caching & Sparse VRAM**: Leaning on SHARC cache reuse and on-demand residency to maximize rendering efficiency within fixed GPU budgets.
-- **Full Engine Stack & Gameplay Prototypes**: Integrated ECS, reflection, ImGui editor, Slang shader hot reload, and Jolt Physics to support interactive prototyping.
-- **Multi-Format Structured Asset Pipelines**: Direct runtime import for glTF 2.0, LDraw (LEGO), OpenSCAD DSL, and PlayCanvas Gaussian Splatting.
+- **Radiance Caching & Sparse VRAM**: SHARC cache reuse and on-demand residency maximize rendering efficiency within fixed GPU budgets.
+- **One Codebase, Five Platforms**: Desktop, mobile, and handheld all build and run through the same `gnb` commands; devices that fall short of the required capabilities run a compatibility renderer.
+- **C# Scripting Layer**: The one scripting implementation is .NET — CoreCLR for hot reload during development, NativeAOT for release and mobile, with the same managed code unchanged.
+- **Data-Driven C# Game Projects**: One `*.game.json` manifest is one game — scaffolded from a template, loaded and run in-process, rebuilt from a menu, without a line of C++.
+- **Full Engine Stack & Gameplay Prototypes**: ECS, entt::meta reflection, an ImGui editor, Slang shader hot reload, and Jolt Physics.
+- **AI-Native Infrastructure**: Automated agent validation plus structured content pipelines let AI generate, understand, and modify 3D assets and scripts directly.
+- **Multi-Format Structured Assets**: glTF 2.0, LDraw (LEGO), OpenSCAD DSL, PlayCanvas Gaussian Splatting, and real-world city levels generated from SRTM + OpenStreetMap.
 
 <p align="center">✦</p>
 
 ## ⚡ Performance & Rendering Efficiency
 
-Performance is one of the project's core constraints. The engine leans on radiance-cache reuse, sparse VRAM layouts, GPU-driven mass submission, on-demand residency, and multi-tier upscaling to produce more frame for a fixed GPU budget while keeping memory in check. Below is a set of **runtime performance references** for typical scenes, backed by Tracy and Superluminal integrations for deeper analysis.
+Performance is one of the project's core constraints. The engine leans on radiance-cache reuse, sparse VRAM layouts, GPU-driven mass submission, on-demand residency, and multi-tier upscaling to produce more frame for a fixed GPU budget while keeping memory in check.
 
 ### Performance Reference Data
 
@@ -122,6 +132,17 @@ Performance is one of the project's core constraints. The engine leans on radian
 
 </details>
 
+### 🚀 Startup & Load Time
+
+Cold start to first frame is a separately constrained path:
+
+- **Persistent pipeline cache**: `VkPipelineCache` is written to disk and reused, so a second launch skips graphics / compute pipeline compilation
+- **Parallel Streamline init**: `slInit` has to load and NGX-probe every Streamline plugin, so it runs on a worker thread overlapped with reflection registration, pak mounting, SDL init, and window creation, and logs how many milliseconds it actually blocked startup
+- **Asset caching**: `FileHelper`, scene build, CPU acceleration structures, and the texture upload path share one cache, so the same data is read and parsed once
+- **Startup splash**: staged progress appears as soon as the window exists
+
+On the development machine, cold start to first frame lands at roughly **1.3 seconds** (with DLSS off).
+
 ### 🔍 Profiling
 
 The engine has no separate runtime CPU / GPU timing aggregator. Named scopes bind directly to Tracy (CPU/GPU) and Superluminal (CPU), so the engine does not retain a duplicate CPU timing tree, GPU query banks, or ImGui timing history.
@@ -144,37 +165,56 @@ On Windows, if `C:/Program Files/RenderDoc/renderdoc_app.h` exists, the build au
 
 - **Real-time path tracing**: 1/2spp sampling with temporal reuse, reprojection, and denoising — aimed at frames that hold up at runtime, not offline stills
 - **Modern GPU raster pipeline**: Visibility Buffer, fully bindless resources, single-draw GPU-driven submission, Soft Mesh Shader, and GPU CSM shadows
-- **Hot-swappable renderers**: PathTracing, SoftwareTracing, and SoftwareModern / NoAmbient share one scene and asset set, so image quality, performance, and platform fit compare directly
+- **Unified surface pipeline**: surface build and scheduling are the default path, so the renderers share one set of dense surface render targets
+- **Checkerboard shading**: only half the pixels are shaded each frame and a resolve pass reconstructs the rest; available on both the Tracing and NoAmbient paths (`r.checkerboardRendering`)
+- **Hot-swappable renderers**: PathTracing, PathTracingLite, SoftwareTracing, SoftwareModern / NoAmbient, and VoxelTracing share one scene and asset set, so image quality, performance, and platform fit compare directly
+- **Compatibility renderer**: a device that cannot meet the bindless descriptor budget or lacks `bufferDeviceAddress` switches to the `Compatibility` renderer, which declares no screen-space chain; scenes, UI, and input all work. This is a device verdict, not a quality tier
 - **Global illumination and upscaling**: SHARC world radiance cache, ReSTIR DI, plus DLSS / DLSS-RR / FSR / SGSR2 / Native TAAU
 - **Gaussian Splat co-rendering**: PlayCanvas SOG v2 splats run through a hardware-billboard path and share the frame with mesh scenes
 
 ### 2️⃣ Runtime and Editor
 
-- **ECS + reflection**: an entt component system and entt::meta reflection layer — one registration serves the runtime, editor property panels, undo / redo, and script bindings alike
+- **ECS + reflection**: an entt component system and entt::meta reflection layer — one registration serves the runtime, editor property panels, undo / redo, and the C# bindings alike
 - **Visual editor**: scene editing, a node-based material graph, cvar tuning, and data-driven settings in a single ImGui workflow
-- **Shader hot reload**: incremental Slang compilation plus pipeline rebuild, so shader edits apply live (the scripting layer is migrating from QuickJS/TS to C#; see `docs/designs/dotnet-scripting-design.md`)
+- **Play in editor**: F5 runs a C# game inside the editor, F8 ejects back to the editor to inspect and edit the running scene, and Stop restores the scene that was open before Play
+- **Shader hot reload**: incremental Slang compilation plus pipeline rebuild, so shader edits apply live
 - **Physics and character runtime**: Jolt Physics backs collision, grab-and-drag, vehicles, and character movement
+- **Mobile touch**: Android and iOS share one input layer — a virtual stick on the left half of the screen moves, dragging the right half turns the camera
 
-### 3️⃣ Content Pipelines
+### 3️⃣ C# Scripting and Game Projects
+
+The only implementation of `Runtime::IScriptRuntime` is `Modules/NextDotNet`; there is no second scripting language in the engine.
+
+- **Two backends, one set of managed code**: CoreCLR for hot reload and debugging during development, NativeAOT for release and mobile where size and startup matter. Switching is one CMake option and not a single line of C# changes; `gnb dotnet ci` is the enforcement point for the two-backend ABI
+- **The binding surface is declared once**: an engine function is one line in `EngineApi.def.h`, a component property reuses the `entt::meta` reflection, and `gnb csharpgen` emits the C# wrappers
+- **One game = one manifest**: `assets/configs/games/<id>.game.json` declares the window, assembly, required modules, initial scene, and hot-reload policy; the per-game native shell is 15 lines, and the eight engine hooks share one forwarding implementation
+- **Scaffold from a template**: the launcher's New Project card or the editor's File > New Game Project, with five templates (blank, 2D arcade, top-down survivor, first-person explorer, third-person shooter) covering the usual starting points. Adding a template means dropping a directory into `assets/templates/games/` — no code changes
+- **In-process load and unload**: `gkNextLauncher` uses a collectible `AssemblyLoadContext` to select, load, and unload any managed game in a single process, and can rebuild the C# from its menu. Unloading runs a full world reset (scene, physics, audio, cvars, show flags, window title), and repeated failures to collect are treated as a leak that demands a restart
+- **Parity as the regression**: `FlappyCpp` and `FlappyCSharp` are line-for-line counterparts compared frame by frame through deterministic replay, so binding regressions surface immediately
+
+Start with [CSharpGameDevelopment](docs/AGENT_GUIDE/CSharpGameDevelopment.md); the architecture is in [.NET Scripting Runtime](docs/designs/dotnet-scripting-design.md) and [Managed Game Launcher](docs/designs/managed-game-launcher-design.md).
+
+### 4️⃣ Content Pipelines
 
 - **glTF 2.0**: full import of scenes, materials, animation, and skeletal meshes, plus partial export of runtime content
 - **LDraw**: `.ldr` / `.mpd` load straight into the runtime, with the official color table and LGEO realistic materials mapped onto engine PBR, and brick connectivity preserved as data building gameplay can use
 - **OpenSCAD DSL**: a built-in parser and evaluator turn procedural scripts into renderable meshes — geometry via Manifold CSG, text via FreeType
 - **ScadRig**: SCAD describes rigid-body bone hierarchies and animation clips that drive characters in the simulation prototypes
 - **Gaussian Splat**: load PlayCanvas `.sog` directly and place it in the same runtime scene as meshes, materials, and cameras
+- **Real-world geography**: `gnb geo` turns SRTM elevation and OpenStreetMap vectors into renderable, walkable `.scad` city levels — changing location means changing a latitude and longitude, and 1 km parts tile up into 3–5 km blocks
 
-### 4️⃣ Tooling and Automated Validation
+### 5️⃣ Tooling and Automated Validation
 
-- **One CLI**: `gnb` covers dependency provisioning, builds, runs, tests, and asset packaging with the same interface across desktop and mobile
-- **Profiling**: Tracy CPU/GPU zones with optional Superluminal CPU timeline integration
+- **One CLI**: `gnb` covers dependency provisioning, builds, runs, tests, packaging, and the project website, with the same interface across desktop and mobile (`gnb android build/run` and `gnb ios build/run` deploy straight to a device)
+- **Profiling**: Tracy 0.14.1 CPU/GPU zones (`gnb tracy fetch` pulls the matching GUI; Android connects over adb forwarding), with optional Superluminal CPU timeline and RenderDoc frame capture
 - **Automated regression**: headless screenshots, input-script assertions, visual regression, and benchmark CSV reports — all CI-ready
 - **Remote Play**: any desktop target can act as a WebRTC host, streaming to a zero-install browser client that routes keyboard, mouse, and virtual-gamepad input back; video uses Vulkan Video hardware encoding
 - **Local workbench**: a graphical dashboard for todos, builds, runs, tests, and Git, plus a bundled llama.cpp inference service shared by the toolchain and the runtime
 
-### 5️⃣ AI-Native Workflow
+### 6️⃣ AI-Native Workflow
 
-- **A parseable content foundation**: the SCAD, LDraw, glTF, and splat pipelines give AI readable, editable, verifiable 3D content instead of opaque static assets
-- **A programmable runtime**: reflected components expose engine state to the editor and to script bindings
+- **A parseable content foundation**: the SCAD, LDraw, glTF, and splat pipelines give AI readable, editable, verifiable 3D content rather than opaque static assets
+- **A programmable runtime**: reflected components expose engine state to both the editor and the C# bindings
 - **A machine-checkable loop**: screenshots, assertion scripts, replay parity, and benchmark reports close the "generate → run → validate → iterate" cycle
 - **Local inference**: a bundled llama.cpp / Gemma OpenAI-compatible service serves both content generation and in-game AI decisions
 
@@ -201,14 +241,14 @@ On Windows, if `C:/Program Files/RenderDoc/renderdoc_app.h` exists, the build au
 > packs from GitHub and the vcpkg upstream. Make sure those hosts are reachable, or configure a vcpkg
 > mirror, before running `gnb setup`.
 
-The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond the host-side basics you must already have installed (compiler / IDE, CMake, platform SDKs, and similar tools), project-specific dependencies, external toolchains, and optional assets are now prepared by `gnb` whenever possible. You will need a network environment that can access GitHub during dependency setup.
+The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond the host-side basics you must already have installed (compiler / IDE, CMake, platform SDKs), project-specific dependencies, external toolchains, and optional assets are prepared by `gnb`. You will need a network environment that can access GitHub during dependency setup.
 
 ### General Notes
 
 - First run `./gnb.sh doctor` (Windows: `gnb.bat doctor`) to check host tool readiness
 - `./gnb.sh setup` (Windows: `gnb.bat setup`) prepares vcpkg, external toolchains, and optional pak assets; running `./gnb.sh build` automatically fetches core toolchains on first build if missing
 - Desktop platforms build and run through `gnb` directly; no `cd out/build/<platform>/bin` is needed
-- Consolidated CMake presets: `windows`, `linux`, `macos-arm64`, `ios`
+- Available CMake presets: `windows`, `linux`, `macos-arm64`, `ios`
 
 ### Platform Builds
 
@@ -295,12 +335,35 @@ Notes:
 # Editor
 ./gnb.sh run gkNextEditor
 
+# C# game launcher (load / unload / rebuild any managed game in-process)
+./gnb.sh run gkNextLauncher
+
 # TUI terminal mode (headless, frame streamed to the terminal)
 ./gnb.sh tui --scene assets/models/playground.glb
 
 # Remote Play (browser-based WebRTC host)
 ./gnb.sh remote --target gkNextRenderer --scene assets/models/playground.glb --res 1280x720
 ```
+
+### Mobile Platforms
+
+```shell
+./gnb.sh android build      # build the release APK
+./gnb.sh android run        # install and launch (starts an AVD when no device is online)
+./gnb.sh ios build
+./gnb.sh ios run            # install and run on a paired physical device
+```
+
+### Creating a Game in C#
+
+No C++, and no new CMake target:
+
+1. Run `gnb run gkNextLauncher` and click the **New Project** card at the end of the grid (or **File > New Game Project...** in the editor)
+2. Enter a project name, pick one of the five templates (blank, 2D arcade, top-down survivor, first-person explorer, third-person shooter), and tick Publish
+3. Two things are generated and immediately playable: `assets/csharp/<ProjectName>/` and `assets/configs/games/<id>.game.json`
+4. Run `gnb dotnet sln` so the new project joins `assets/csharp/GkNextManaged.sln`; after editing C#, hit **Rebuild C#** in the launcher or the editor — with hot reload on, the running game picks up the new assembly directly
+
+See [Developing gkNextEngine Applications in C#](docs/AGENT_GUIDE/CSharpGameDevelopment.md).
 
 <p align="center">✦</p>
 
@@ -341,8 +404,8 @@ Notes:
     <td width="33%" align="center" valign="top" style="padding: 0;">
       <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="100%" style="display: block; width: 100%;" alt="FlappyCpp" />
       <div style="padding: 10px 8px 12px 8px;">
-        <strong>🐤 FlappyCpp</strong><br>
-        <sub>C++ baseline for deterministic replay parity (scripted counterpart is being migrated)</sub>
+        <strong>🐤 FlappyCpp / FlappyCSharp</strong><br>
+        <sub>Line-for-line C++ and C# implementations compared frame by frame for binding parity</sub>
       </div>
     </td>
     <td width="33%" align="center" valign="top" style="padding: 0;">
@@ -385,6 +448,8 @@ Notes:
 - **`gkNextRenderer`**: Main renderer supporting real-time path tracing, hybrid rendering, denoising, and multi-pipeline comparison.
 - **`gkNextEditor`**: ImGui editor for scenes, material node workflow, and runtime cvar tuning.
 - **`ScadStudio`**: OpenSCAD (`.scad`) procedural DSL modeling, evaluation, scene generation, and ScadRig character binding.
+- **`ScadLibrary`**: The unified authoring tool for SCAD assets — kit browsing, object-based scene composition, terrain rules, and character clip editing, with live agent-assisted iteration.
+- **`gkNextLauncher`**: C# game launcher that selects, loads, and unloads any managed game in one process, scaffolds new projects from templates, and rebuilds C# from its menu (CoreCLR only).
 - **`RmlUiDemo`**: RmlUi runtime HTML/CSS UI engine integration and interactive demo.
 
 #### Gameplay & Simulation Prototypes
@@ -396,7 +461,9 @@ Notes:
 - **`KongLie3D`**: Auto-chess / synergy / round-based combat simulation prototype.
 - **`NextRA`**: Deterministic RTS simulation prototype validating lockstep synchronization and replay.
 - **`CharacterDemo`**: Character actor mounting, NavGrid A* navigation, AI behavior tree, and combat interaction.
-- **`FlappyCpp`**: the C++ Flappy Bird implementation that serves as the baseline for deterministic replay parity (scripted counterpart is being migrated).
+- **`FlappyCpp` / `FlappyCSharp`**: Line-for-line C++ and C# Flappy Bird implementations serving as the deterministic replay parity baseline for the binding surface.
+- **`Brotato3DCSharp`**: The C# implementation of Brotato3D, exercising the managed binding surface at full gameplay scale.
+- **`NextWorldTravel`**: A real-world location browser with Walk / Aerial / Focus views over city tiles generated by `gnb geo`.
 - **`TruckerDemo` / `CitySolSim` / `NextDayz` / `NextTotalWar`**: Vehicle driving, city traffic, survival tactics, and army simulation prototypes.
 
 #### Benchmarks & Developer Utilities
@@ -406,7 +473,7 @@ Notes:
 - **`gkNextUnitTests`**: Catch2 unit test suite.
 - **`Packager`**: Asset packaging tool bundling scenes and textures into `.pkg` archives.
 
-> Desktop targets can be launched via `./gnb remote --target <Target>` as Remote Play hosts (zero-install WebRTC browser play). `src/Application/Game/Voyage3D` remains in tree as a sailing / port / naval-combat source prototype.
+> Desktop targets can be launched via `./gnb remote --target <Target>` as Remote Play hosts (zero-install WebRTC browser play). `src/Application/Game/Voyage3D` is a sailing / port / naval-combat source prototype.
 
 </details>
 
@@ -425,13 +492,15 @@ Notes:
 Issues and PRs are welcome.
 
 - See `AGENTS.md` for collaboration guidelines
-- If you are interested in real-time path tracing, modern rendering architecture, rendering performance optimization, LDraw, editor tooling, AI-native workflows, or gameplay prototyping, feel free to reach out
+- Website and docs: <https://gameknife.github.io/gkNextEngine/> (source in `website/`, `gnb website` for local hot reload)
+- Community: [GitHub Discussions](https://github.com/gameknife/gkNextEngine/discussions)
+- If you are interested in real-time path tracing, modern rendering architecture, rendering performance optimization, the C# scripting layer, LDraw, editor tooling, AI-native workflows, or gameplay prototyping, feel free to reach out
 
 <p align="center">✦</p>
 
 ## 📦 Third-Party Dependencies
 
-cpptrace · cxxopts · sdl3 · glm · imgui · stb · curl · nlohmann-json · tinygltf · draco · fmt · meshoptimizer · ktx · joltphysics · xxhash · spdlog · cpp-base64 · catch2 · entt · libwebp · vulkan-loader · libavif
+tracy · cpptrace · cxxopts · sdl3 · vulkan-headers · vulkan-loader · vulkan-memory-allocator · glm · imgui · rmlui · stb · curl · nlohmann-json · tinygltf · draco · fmt · meshoptimizer · ktx · joltphysics · manifold · earcut-hpp · freetype · xxhash · spdlog · cpp-base64 · catch2 · entt · libwebp · libdatachannel · cpp-httplib · libavif (optional)
 
 <p align="center">✦</p>
 

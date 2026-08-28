@@ -43,32 +43,32 @@ namespace Modules::NextDotNet
             return {};
 #endif
         }
+    }
 
-        /// The C# sources, for the two operations that compile rather than load: the start-up
-        /// rebuild and a host-initiated republish.
-        ///
-        /// Not resolved through the asset path: assets/csharp is not copied next to the executable
-        /// — only its published output is — so resolving it against the runtime root silently finds
-        /// nothing, which is how the start-up rebuild used to no-op in a normal build tree. The
-        /// baked source path is the only thing that knows where the tree is; an installed build has
-        /// no sources and correctly gets an empty path.
-        std::filesystem::path ResolveManagedSourceRoot()
+    /// The C# sources, for everything that compiles or writes rather than loads: the start-up
+    /// rebuild, a host-initiated republish, and scaffolding a new game from a template.
+    ///
+    /// Not resolved through the asset path: assets/csharp is not copied next to the executable
+    /// — only its published output is — so resolving it against the runtime root silently finds
+    /// nothing, which is how the start-up rebuild used to no-op in a normal build tree. The
+    /// baked source path is the only thing that knows where the tree is; an installed build has
+    /// no sources and correctly gets an empty path.
+    std::filesystem::path DotNetRuntime::ManagedSourceRoot()
+    {
+        if (const char* fromEnv = std::getenv("GK_DOTNET_MANAGED_SOURCES");
+            fromEnv != nullptr && *fromEnv != '\0')
         {
-            if (const char* fromEnv = std::getenv("GK_DOTNET_MANAGED_SOURCES");
-                fromEnv != nullptr && *fromEnv != '\0')
-            {
-                return std::filesystem::path(fromEnv);
-            }
-#if defined(GK_DOTNET_MANAGED_SOURCE_ROOT)
-            std::error_code ec;
-            const std::filesystem::path baked(GK_DOTNET_MANAGED_SOURCE_ROOT);
-            if (std::filesystem::exists(baked, ec))
-            {
-                return baked;
-            }
-#endif
-            return {};
+            return std::filesystem::path(fromEnv);
         }
+#if defined(GK_DOTNET_MANAGED_SOURCE_ROOT)
+        std::error_code ec;
+        const std::filesystem::path baked(GK_DOTNET_MANAGED_SOURCE_ROOT);
+        if (std::filesystem::exists(baked, ec))
+        {
+            return baked;
+        }
+#endif
+        return {};
     }
 
     std::filesystem::path DotNetRuntime::ManagedRoot()
@@ -90,7 +90,7 @@ namespace Modules::NextDotNet
         outError = "the managed game is linked into this binary; rebuild the executable instead";
         return false;
 #else
-        const std::filesystem::path sourceRoot = ResolveManagedSourceRoot();
+        const std::filesystem::path sourceRoot = ManagedSourceRoot();
         if (sourceRoot.empty())
         {
             outError = "no C# sources are reachable from this build";
@@ -516,7 +516,7 @@ namespace Modules::NextDotNet
         // Deliberately shallow: the authoritative build happens in CMake, which publishes into the
         // binary directory. This only exists so editing C# and pressing run picks the change up
         // without a C++ rebuild, and it stays quiet when the SDK is not reachable.
-        const std::filesystem::path sourceRoot = ResolveManagedSourceRoot();
+        const std::filesystem::path sourceRoot = ManagedSourceRoot();
         std::error_code ec;
         if (sourceRoot.empty())
         {

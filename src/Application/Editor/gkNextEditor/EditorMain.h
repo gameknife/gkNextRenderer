@@ -128,6 +128,8 @@ private:
     std::string pendingPlayRequest_;
     bool hasPendingPlayRequest_ = false;
     bool playEjectCVar_ = false;
+    /// Backing store for ed.newProject, which is how a script or the console opens the dialog.
+    bool newProjectCVar_ = false;
     std::unique_ptr<EditorInterface> editorUserInterface_;
     Runtime::Camera::ModelViewController modelViewController_;
 #if GK_WITH_VITURE

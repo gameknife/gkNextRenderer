@@ -66,11 +66,18 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
 #if ANDROID
+    // There is no command line on Android, so the launch arguments are baked in. The scene is the
+    // one thing that differs per application; the renderer showcase is the default, and an
+    // application that loads its own scene from a manifest overrides it through the SCENE argument
+    // of gk_add_android_application rather than paying to build that showcase first.
+#ifndef GK_ANDROID_DEFAULT_SCENE
+#define GK_ANDROID_DEFAULT_SCENE "GIBootcamp.proc"
+#endif
     std::vector<const char*> androidArguments = {
         "gkNextRenderer",
         "--gpu=0",
         "--fullscreen",
-        "--load-scene=GIBootcamp.proc"
+        "--load-scene=" GK_ANDROID_DEFAULT_SCENE
     };
     for (int argumentIndex = 1; argumentIndex < argc; ++argumentIndex)
     {

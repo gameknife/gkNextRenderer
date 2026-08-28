@@ -27,7 +27,9 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
   StudioSim, AirportSim, CitySolSim, NextWorldTravel, Voyage3D
   - `gkNextLauncher` 在同一个进程内加载/卸载任意 C# 游戏（Unity 的 Play 模型）；三个 C# 目标
     与它共用 `ManagedGameHostInstance`，差异全部在 `assets/configs/games/*.game.json`。
-    `gkNextEditor` 用同一个 `ManagedGameSession` 实现 play-in-editor。CoreCLR 专属——
+    `gkNextEditor` 用同一个 `ManagedGameSession` 实现 play-in-editor。两者都能从模板**新建**
+    C# 游戏项目（launcher 的 New Project 卡片 / 编辑器的 File > New Game Project），模板是
+    `assets/templates/games/` 下的内容目录，加模板不用改代码。CoreCLR 专属——
     launcher 在 AOT 配置下不构建，编辑器的 PIE 在 AOT 下报告不可用。见
     [托管游戏 Launcher](docs/designs/managed-game-launcher-design.md)
 - Util: Packager (asset paking), ScadCatalog
@@ -42,7 +44,10 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 - Core build (default): `./gnb.sh build` (Windows: `gnb.bat build` —— 默认仅构建核心目标 `gkNextRenderer` 与 `gkNextUnitTests`)
 - Full build (all targets): `./gnb.sh build --all` (Windows: `gnb.bat build --all` —— 构建全量 15+ 子项目)
 - Specific target: `./gnb.sh build gkNextEditor`
-- Android: `./gnb.sh android debug`（构建、安装、启动）或 `./gnb.sh android release`（仅生成 APK）
+- Android: `./gnb.sh android build debug` 生成 APK，`./gnb.sh android run debug` 装到设备并启动
+  - APK 里装哪个程序由 `--app` 决定，默认 `gkNextRenderer`；`--app FlappyCSharp` 打的是 C# 游戏，
+    托管层走 NativeAOT 交叉编译（`linux-bionic-arm64`）。每个 app 有各自的 applicationId 与
+    build 目录，可同时装在一台设备上。
 - Clean rebuild: `./gnb.sh build --clean`
 - Force vcpkg update: `./gnb.sh setup --refresh`
 
@@ -75,7 +80,7 @@ because concurrent Windows builds can lock `.obj`, executables, or vcpkg state f
 - Editor shortcut: `./gnb.sh editor`
 - Visual test shortcut: `./gnb.sh visual`
 - TUI terminal mode: `./gnb.sh tui --scene assets/models/playground.glb`
-- Android: `./gnb.sh android debug` / `./gnb.sh android release`
+- Android: `./gnb.sh android build <variant> [--app <target>]` / `./gnb.sh android run <variant> [--app <target>]`
 - Optional assets: `./gnb.sh paks fetch` / `./gnb.sh paks list`
 - Source-line stats: `./gnb.sh loc` (CLI) — also browsable in `./gnb.sh dashboard`
 - Managed bindings: `./gnb.sh csharpgen` (regenerate) / `./gnb.sh csharpgen --check` (CI guard)
@@ -260,6 +265,10 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 - `gnb dotnet ci` is the enforcement point: generated-file check, two-backend probe, and an engine
   build under both backends. Run it when touching the ABI, the hosts, or the managed layer.
 - `gnb dotnet setup|status|build|probe` drive the toolchain; `DotNetSandbox` is the reference host
+- **Android 上只有 NativeAOT**：`cmake/SetupDotNet.cmake` 在 Android 上强制 AOT 后端并交叉编译到
+  `linux-bionic-arm64`，产出的 `libGkNext.Bootstrap.<target>.so` 经 jniLibs 打进 APK。不托管 C#
+  的 Android 程序（如 `gkNextRenderer`）不会编译 NextDotNet 的源码——它的 CoreCLR host 需要设备上
+  不存在的 hostfxr 头。
 - **C# is edited through `assets/csharp/GkNextManaged.sln`**, not by opening a single csproj: with
   no solution an IDE never loads `GkNext.Engine` or the source generator alongside a game, and the
   game's code degrades to unhighlighted text even though `dotnet build` is fine. The solution is
@@ -346,7 +355,8 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
     1km part 拼成，`gnb geo grow` 增量扩缩，地形整块算完再切片（否则接缝错台 1m）
   - `NextWorldTravel.md` - 生成 tile 的浏览器：Walk / Aerial / Focus 三视图，`poi.json` 地点标签
     sidecar、鸟瞰 POI 地图与绕物取景、滑动 NavGrid 窗口、街面出生点选择
-  - `ScadRig.md` - ScadRig rigid-body character rigs (bone_ modules + anim_* clips, FRigAnimator runtime)
+  - `ScadRig.md` - ScadRig rigid-body character rigs (bone_ modules + anim_* clips, FRigAnimator
+    runtime)。角色也能从 C# 驱动：`NextRig` 子系统 + `Rig.*` 绑定，`tps` 模板是完整用例
   - `MagicaLego.md` - MagicaLego subproject notes
   - `Brotato3D.md` - Brotato3D code structure (god-class + per-system split, runtime data model, object pools)
   - `CharacterDemo.md` - CharacterDemo + NextGameplay shared layer (CharacterActor facade, ECS components, NavGrid A*, AI behavior tree)

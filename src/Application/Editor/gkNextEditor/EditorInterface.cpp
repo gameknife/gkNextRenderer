@@ -461,6 +461,21 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
             {
                 ImGui::TextDisabled("no games under assets/configs/games");
             }
+
+            // The list is also where a game that does not exist yet gets started from: with no
+            // games at all this is the only thing in it, which is exactly when it is needed most.
+            ImGui::Separator();
+            const bool canCreateProject = play.CanCreateProject();
+            ImGui::BeginDisabled(!canCreateProject);
+            if (ImGui::Selectable(ICON_FA_PLUS "  New Game Project..."))
+            {
+                play.OpenNewProjectDialog();
+            }
+            ImGui::EndDisabled();
+            if (!canCreateProject && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            {
+                ImGui::SetTooltip("%s", play.NewProjectUnavailableReason().c_str());
+            }
             ImGui::EndCombo();
         }
         ImGui::PopStyleColor(3);
@@ -567,6 +582,13 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
 
     ImGui::PopStyleVar();
     ImGui::End();
+
+    // Outside the toolbar window on purpose: a modal opened from inside a window that is repositioned
+    // and resized every frame inherits its clipping, and the dialog would be drawn into a 40px strip.
+    if (const std::string createdGameId = play.DrawNewProjectDialog(); !createdGameId.empty())
+    {
+        uiState.lastPlayedGameId = createdGameId;
+    }
 }
 
 void EditorInterface::Render()

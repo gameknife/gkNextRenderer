@@ -378,3 +378,51 @@ function(gk_configure_android_runtime target)
     gk_link_engine_feature_dependencies(${target})
     add_dependencies(${target} Assets)
 endfunction()
+
+# Builds one Android application library.
+#
+# Android has no static engine libraries: src/Engine, src/Modules and src/Gameplay are compiled
+# straight into the application's .so (see src/CMakeLists.txt), so every APK owns a full copy of
+# the engine and exactly one application is built per Gradle invocation. That is why the whole
+# source list is repeated per target instead of being linked, and why this function exists.
+#
+#   gk_add_android_application(<target> SOURCES <application sources> MODULES <runtime modules>
+#                              [SCENE <initial scene>])
+function(gk_add_android_application target)
+    cmake_parse_arguments(ARG "" "SCENE" "SOURCES;MODULES" ${ARGN})
+
+    # Unrequested modules are normally compiled in and left inert behind their GK_MODULE_* define.
+    # NextDotNet cannot be: its CoreCLR host includes hostfxr headers that only a .NET installation
+    # provides, so an application that does not host C# must not compile it at all.
+    set(moduleSources ${src_files_modules_all})
+    if(GK_DOTNET_ENABLED AND NOT "NextDotNet" IN_LIST ARG_MODULES)
+        list(REMOVE_ITEM moduleSources ${src_files_module_NextDotNet})
+    endif()
+
+    add_library(${target} SHARED
+        ${src_files_assets}
+        ${src_files_utilities}
+        ${src_files_engine}
+        ${src_files_vulkan}
+        ${src_files_rendering}
+        ${src_files_nextgameplay}
+        ${src_files_thirdparty}
+        ${moduleSources}
+        ${GK_APPLICATION_COMMON_SOURCES}
+        ${ARG_SOURCES}
+        ${GK_SOURCE_ROOT}/AndroidMain.cpp
+    )
+    gk_configure_android_runtime(${target})
+    gk_target_runtime_modules(${target} MODULES ${ARG_MODULES})
+
+    if(ARG_SCENE)
+        target_compile_definitions(${target} PRIVATE GK_ANDROID_DEFAULT_SCENE="${ARG_SCENE}")
+    endif()
+
+    # On desktop this comes from the NextDotNet module target, which Android does not build. It
+    # must not be missed: without it the sources fall back to the CoreCLR host, which needs
+    # hostfxr.h and a runtime the device does not have.
+    if(GK_DOTNET_ENABLED AND "NextDotNet" IN_LIST ARG_MODULES)
+        target_compile_definitions(${target} PRIVATE GK_DOTNET_USE_AOT=${GK_DOTNET_USE_AOT})
+    endif()
+endfunction()

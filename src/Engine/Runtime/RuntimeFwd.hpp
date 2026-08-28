@@ -5,6 +5,7 @@ class NextEngine;
 class NextGameInstanceBase;
 class NextLocalization;
 class NextPhysics;
+class NextRig;
 
 namespace NextCVar
 {

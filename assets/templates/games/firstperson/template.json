@@ -1,0 +1,16 @@
+{
+  "id": "firstperson",
+  "displayName": "First-Person Explorer",
+  "description": "Walk a procedurally scattered block field in first person: WASD to move, hold the right mouse button to look. The starting point for a walkthrough, a level greybox or a scene viewer.",
+  "sortOrder": 40,
+  "highlights": [
+    "Yaw/pitch look from mouse delta, camera driven by OnOverrideCamera",
+    "WASD + Shift movement resolved against the camera basis",
+    "Procedural block field with a seeded layout"
+  ],
+  "requiredModules": [],
+  "initialScene": "Empty.proc",
+  "window": { "width": 1280, "height": 720, "forceSDR": true },
+  "showFlags": { "debugGraphicsPanel": false, "overlay": false },
+  "hotReload": true
+}

@@ -20,10 +20,12 @@
 </p>
 
 <p align="center">
+  <a href="https://gameknife.github.io/gkNextEngine/">官网</a> &nbsp;·&nbsp;
   <a href="README.en.md">English</a> &nbsp;·&nbsp;
   <a href="README.md">简体中文</a> &nbsp;·&nbsp;
   <a href="https://deepwiki.com/gameknife/gkNextEngine">DeepWiki</a> &nbsp;·&nbsp;
   <a href="AGENTS.md">AGENTS.md</a> &nbsp;·&nbsp;
+  <a href="https://github.com/gameknife/gkNextEngine/discussions">社区</a> &nbsp;·&nbsp;
   <a href="https://github.com/gameknife/gkNextEngine/issues">Issues</a>
 </p>
 
@@ -45,12 +47,14 @@
   <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/gknexteditor.webp" width="100%" alt="gkNextEditor" />
 </p>
 
-gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎 / 渲染实验场。项目以渲染器能力为核心，同时持续扩展编辑器、脚本、物理、内容导入与多游戏原型（如 MagicaLego、Brotato3D、KongLie3D、BrickPlayer 等），以及 SCAD、LDraw、Gaussian Splat 等结构化内容管线，为 AI Native 的内容生成、场景理解、玩法迭代和自动化验证打下基础。
+gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎 / 渲染实验场。渲染器是核心，外围是编辑器、C# 脚本、Jolt 物理、结构化内容管线（SCAD / LDraw / glTF / Gaussian Splat）与十余个玩法原型（MagicaLego、Brotato3D、KongLie3D、BrickPlayer 等），共同构成 AI Native 内容生成、场景理解、玩法迭代与自动化验证的基座。
+
+脚本层是 **C#**：一个游戏由一份 JSON manifest 声明，在 launcher 或编辑器里从模板新建、进程内加载运行并热重载，不写 C++、不加 CMake target。五个平台（Windows / Linux / macOS / Android / iOS）共用同一份代码，由 `gnb` 一条命令构建运行。
 
 > [!NOTE]
 > **引擎核心目标**
 > - **实时视觉表现**：用实时路径追踪、Hybrid Rendering 与 TrueHDR 做出真正有展示力、且能稳定运行的画面。
-> - **全栈架构演进**：用可运行、可扩展、可用于玩法原型验证与 AI Native 工作流的引擎能力支撑长期演进。
+> - **全栈引擎能力**：渲染、编辑器、脚本、物理与内容管线构成一套可运行、可扩展的引擎，服务玩法原型验证与 AI Native 工作流。
 
 > [!TIP]
 > **适用关注方向**
@@ -61,22 +65,27 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 **支持平台：** Windows x86_64 · Linux x86_64 · macOS arm64 · Android arm64 · iOS arm64
 
+<sub>桌面三平台功能对齐，移动端带触控输入层，Steam Deck / Arch 有专用的 PathTracingLite 档位；不满足 bindless 预算或缺 `bufferDeviceAddress` 的设备（如 A12X iPad）走兼容渲染器。</sub>
+
 <p align="center">✦</p>
 
 ## ✨ 项目特性
 
-- **实时路径追踪与 Hybrid 渲染**：面向真实运行时的 1/2spp 路径追踪、降噪与多管线无缝切换。
+- **实时路径追踪与 Hybrid 渲染**：1/2spp 路径追踪、降噪与多管线无缝切换，棋盘格着色再省一半着色开销。
 - **高性能 GPU 架构**：全 Bindless、Visibility Buffer 与 GPU-Driven 单 Draw 提交，最小化 CPU 开销。
-- **辐射缓存与稀疏显存**：借助 SHARC 缓存复用与按需驻留，在固定 GPU 预算下最大化渲染效率。
-- **全栈引擎与玩法原型**：整合 ECS、反射、ImGui 编辑器、Slang 着色器热重载与 Jolt 物理，支撑丰富玩法验证。
-- **AI Native 基础设施**：配合自动化 Agent 验证与结构化内容管线，让 AI 可直接生成、理解并修改 3D 资产与脚本。
-- **多格式结构化资产导入**：原生支持 glTF 2.0、LDraw（乐高）、OpenSCAD DSL 与 PlayCanvas 高斯溅射（Gaussian Splatting）。
+- **辐射缓存与稀疏显存**：SHARC 缓存复用与按需驻留，在固定 GPU 预算下最大化渲染效率。
+- **五平台同一份代码**：桌面、移动与掌机由同一套 `gnb` 命令构建运行，能力不足的设备走兼容渲染器。
+- **C# 脚本层**：唯一脚本实现是 .NET，开发用 CoreCLR 热重载、发布与移动端用 NativeAOT，同一份托管代码零改动。
+- **数据驱动的 C# 游戏工程**：一份 `*.game.json` manifest 就是一个游戏，从模板新建、进程内加载运行、菜单里重编译，不写一行 C++。
+- **全栈引擎与玩法原型**：ECS、entt::meta 反射、ImGui 编辑器、Slang 着色器热重载与 Jolt 物理。
+- **AI Native 基础设施**：自动化 Agent 验证加结构化内容管线，让 AI 直接生成、理解并修改 3D 资产与脚本。
+- **多格式结构化资产**：glTF 2.0、LDraw（乐高）、OpenSCAD DSL、PlayCanvas 高斯溅射，以及 SRTM + OpenStreetMap 生成的真实地理城市关卡。
 
 <p align="center">✦</p>
 
 ## ⚡ 性能与渲染效率
 
-性能是当前的核心约束之一。引擎围绕世界辐射缓存复用、稀疏显存布局、GPU-Driven 海量提交、按需驻留与多档上采等手段，在固定 GPU 预算下尽量多出画面、少占显存。下面给出一组**典型场景的运行时性能参考**，并配套 Tracy 与 Superluminal 集成做剖析。
+性能是核心约束之一。引擎围绕世界辐射缓存复用、稀疏显存布局、GPU-Driven 海量提交、按需驻留与多档上采，在固定 GPU 预算下尽量多出画面、少占显存。
 
 ### 性能参考数据
 
@@ -120,9 +129,20 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 </details>
 
+### 启动与加载
+
+冷启动到首帧同样是一条被单独约束的路径：
+
+- **管线缓存持久化**：`VkPipelineCache` 落盘复用，二次启动跳过图形 / 计算管线编译
+- **Streamline 并行初始化**：`slInit` 要加载并 NGX 探测每一个 Streamline 插件，跑在 worker 线程上，与反射注册、pak 挂载、SDL 初始化和窗口创建重叠，并记录它实际阻塞启动的毫秒数
+- **资产缓存**：`FileHelper`、场景构建、CPU 加速结构与纹理上传路径共享缓存，同一份数据只读一次、只解析一次
+- **启动闪屏**：窗口创建后立刻显示分阶段进度
+
+开发机上冷启动到首帧约 **1.3 秒**（关闭 DLSS 的口径）。
+
 ### 性能剖析
 
-引擎不再维护独立的 CPU / GPU 计时聚合器；命名 scope 直接绑定到 Tracy（CPU/GPU）和 Superluminal（CPU）。Tracy 使用自己的 Vulkan GPU context 采集 GPU 时间线，Superluminal 接收命名 CPU 事件，避免运行时保存重复的计时树、GPU query bank 和 ImGui timing history。
+命名 scope 直接绑定到 Tracy（CPU/GPU）与 Superluminal（CPU），引擎自身不维护计时聚合器。Tracy 用自己的 Vulkan GPU context 采集 GPU 时间线，Superluminal 接收命名 CPU 事件。
 
 开发构建默认还启用 Tracy client（on-demand，不连接时不持续积累事件）。运行 `gnb tracy fetch` 获取与 vcpkg client 同版本的官方 GUI，再运行 `gnb tracy` 启动；Android 使用 `gnb tracy --android`，通过 adb forward 后连接 `127.0.0.1`。完整步骤见 [Tracy Profiling Guide](docs/guides/tracy-profiling.md)。发布构建使用 `--tracy=off`，不携带 Tracy client。
 
@@ -142,37 +162,56 @@ Windows 上若存在 `C:/Program Files/RenderDoc/renderdoc_app.h`，构建会自
 
 - **实时路径追踪**：1/2 spp 采样配合时域复用、重投影与降噪，目标是可稳定运行的实时画面，而非离线出图
 - **现代 GPU 光栅管线**：Visibility Buffer、全 Bindless、GPU-Driven 单 Draw 提交、Soft Mesh Shader 与 GPU CSM 阴影
-- **多渲染器热切换**：PathTracing、SoftwareTracing、SoftwareModern / NoAmbient 共享同一套场景与资产，可直接对比画质、性能与平台适配
+- **统一 Surface 管线**：surface build 与调度是默认路径，各渲染器共用同一套稠密 surface RT
+- **棋盘格着色**：每帧只着色一半像素、由 resolve pass 重建另一半，Tracing 与 NoAmbient 两条路径均可开关（`r.checkerboardRendering`）
+- **多渲染器热切换**：PathTracing、PathTracingLite、SoftwareTracing、SoftwareModern / NoAmbient、VoxelTracing 共享同一套场景与资产，可直接对比画质、性能与平台适配
+- **兼容渲染器**：撑不住 bindless descriptor 预算、或缺 `bufferDeviceAddress` 的设备自动切到无 screen-space 链的 `Compatibility` 渲染器，场景、UI 与输入照常可用；这是设备判定，不是画质档位
 - **全局光照与上采**：SHARC 世界辐射缓存、ReSTIR DI，以及 DLSS / DLSS-RR / FSR / SGSR2 / Native TAAU
 - **高斯溅射共渲染**：PlayCanvas SOG v2 splat 走硬件 billboard 路径，与 mesh 场景在同一帧共存
 
 ### 2️⃣ 运行时与编辑器
 
-- **ECS + 反射**：entt 组件系统与 entt::meta 反射层，一次注册即同时服务运行时、编辑器属性面板、撤销 / 重做与脚本绑定
+- **ECS + 反射**：entt 组件系统与 entt::meta 反射层，一次注册即同时服务运行时、编辑器属性面板、撤销 / 重做与 C# 绑定
 - **可视化编辑器**：场景编辑、节点式材质图、cvar 调优与数据驱动设置集成在同一套 ImGui 工作流
-- **着色器热重载**：Slang 增量编译 + pipeline 重建，着色器改动即时生效（脚本层正从 QuickJS/TS 迁移到 C#，见 `docs/designs/dotnet-scripting-design.md`）
+- **Play in Editor**：F5 在编辑器里跑 C# 游戏，F8 弹出回编辑器检视并编辑运行中的场景，Stop 还原 Play 前的场景
+- **着色器热重载**：Slang 增量编译 + pipeline 重建，着色器改动即时生效
 - **物理与角色运行时**：Jolt Physics 支撑碰撞、抓取拖拽、载具与角色移动
+- **移动端触控**：Android / iOS 走同一套输入层——左半屏虚拟摇杆移动、右半屏拖拽转视角
 
-### 3️⃣ 内容管线
+### 3️⃣ C# 脚本与游戏工程
+
+`Runtime::IScriptRuntime` 的唯一实现是 `Modules/NextDotNet`，引擎里没有第二种脚本语言。
+
+- **双后端、同一份托管代码**：开发用 CoreCLR 换热重载与调试，发布 / 移动端用 NativeAOT 换体积与启动速度，切换只改一个 CMake option，C# 一行不动；`gnb dotnet ci` 强制校验双后端 ABI
+- **绑定面只声明一次**：引擎函数在 `EngineApi.def.h` 加一行，组件属性复用 `entt::meta` 反射，`gnb csharpgen` 生成 C# 封装
+- **一个游戏 = 一份 manifest**：`assets/configs/games/<id>.game.json` 声明窗口、程序集、依赖模块、初始场景与热重载策略；per-game 的原生壳只有 15 行，8 个引擎 hook 共用唯一一份转发实现
+- **从模板新建**：launcher 的 New Project 卡片或编辑器的 File > New Game Project，五个模板覆盖常见起点（空白 / 2D 街机 / 俯视角生存 / 第一人称漫游 / 第三人称射击）；加模板只要往 `assets/templates/games/` 放一个目录，不改代码
+- **进程内装卸**：`gkNextLauncher` 用可回收 `AssemblyLoadContext` 在同一个进程里选择、加载、卸载任意托管游戏，菜单里就能 Rebuild C#；卸载走全量世界重置（场景 / 物理 / 音频 / cvar / showflags / 窗口标题），连续未回收会被判定为泄漏并要求重启
+- **parity 作为回归**：`FlappyCpp` 与 `FlappyCSharp` 是逐行对照实现，用确定性 replay 逐帧比对，绑定回归会立刻暴露
+
+入门见 [CSharpGameDevelopment](docs/AGENT_GUIDE/CSharpGameDevelopment.md)，架构见 [.NET 脚本运行时](docs/designs/dotnet-scripting-design.md) 与 [托管游戏 Launcher](docs/designs/managed-game-launcher-design.md)。
+
+### 4️⃣ 内容管线
 
 - **glTF 2.0**：场景、材质、动画与骨骼蒙皮完整导入，并支持将部分运行时内容回写
 - **LDraw**：`.ldr` / `.mpd` 直接进入运行时，官方色表与 LGEO 真实材质映射为引擎 PBR，零件连接语义转换为搭建玩法可用的数据
 - **OpenSCAD DSL**：内置解析与求值器，几何走 Manifold CSG、文字走 FreeType，把程序化脚本变成可渲染网格
 - **ScadRig**：以 SCAD 描述刚体骨骼层级与动画片段，驱动模拟类原型中的角色表现
 - **Gaussian Splat**：直接加载 PlayCanvas `.sog`，与 mesh、材质、相机共处同一运行时场景
+- **真实地理数据**：`gnb geo` 从 SRTM 高程与 OpenStreetMap 矢量生成可渲染、可行走的 `.scad` 城市关卡，换地点只改经纬度；1km part 可拼成 3–5km 大地块
 
-### 4️⃣ 工具链与自动化验证
+### 5️⃣ 工具链与自动化验证
 
-- **统一 CLI**：`gnb` 单一入口覆盖依赖准备、构建、运行、测试与资产打包，桌面与移动平台口径一致
-- **性能剖析**：Tracy CPU/GPU zones，并可选接入 Superluminal CPU 时间线做细粒度采样
+- **统一 CLI**：`gnb` 单一入口覆盖依赖准备、构建、运行、测试、打包与官网站点；移动端同样是一条命令（`gnb android build/run`、`gnb ios build/run` 直连真机）
+- **性能剖析**：Tracy 0.14.1 CPU/GPU zones（`gnb tracy fetch` 拉取匹配版本 GUI，Android 走 adb forward），可选接入 Superluminal CPU 时间线与 RenderDoc 帧捕获
 - **自动化回归**：无窗口截图、输入脚本驱动的断言验证、视觉回归与 benchmark CSV 报告，均可直接接入 CI
 - **Remote Play**：任意桌面 target 可作为 WebRTC host，浏览器零安装接入画面并回传键鼠与虚拟手柄输入，视频走 Vulkan Video 硬件编码
 - **本地工作台**：图形化 dashboard 汇总待办、构建、运行、测试与 Git，内置 llama.cpp 本地推理服务同时供工具链与运行时使用
 
-### 5️⃣ AI Native 工作流
+### 6️⃣ AI Native 工作流
 
 - **可解析的内容基座**：SCAD、LDraw、glTF 与 Splat 管线让 AI 面对的是可读取、可修改、可校验的结构化 3D 内容，而非不可控的静态素材
-- **可编程的运行时**：反射组件把引擎状态开放给编辑器与脚本绑定
+- **可编程的运行时**：反射组件把引擎状态同时开放给编辑器与 C# 绑定
 - **可自动判定的闭环**：截图、断言脚本、replay parity 与 benchmark 报告构成“生成 → 运行 → 验证 → 迭代”的机器可读回路
 - **本地推理**：集成 llama.cpp / Gemma 的本地 OpenAI 兼容服务，供内容生成与游戏内 AI 决策共用
 
@@ -198,14 +237,14 @@ Windows 上若存在 `C:/Program Files/RenderDoc/renderdoc_app.h`，构建会自
 > **网络前置条件**：构建过程需要稳定访问 GitHub 与 vcpkg 上游（下载依赖库、外部工具链与可选资源包）。
 > 若所在网络访问不稳定，请自行准备可靠的网络环境或 vcpkg 镜像后再执行 `gnb setup`。
 
-项目使用 CMake + Ninja，依赖由 vcpkg 管理。除了宿主机本身必须具备的基础工具（编译器 / IDE、CMake、平台 SDK 等），项目级依赖、外部工具链和可选资源包现在都尽量交给 `gnb` 准备。构建依赖下载阶段需要可访问 GitHub 的网络环境。
+项目使用 CMake + Ninja，依赖由 vcpkg 管理。除了宿主机必须具备的基础工具（编译器 / IDE、CMake、平台 SDK），项目级依赖、外部工具链和可选资源包都由 `gnb` 准备。依赖下载阶段需要可访问 GitHub 的网络环境。
 
 ### 通用说明
 
 - 推荐先执行 `./gnb.sh doctor`（Windows: `gnb.bat doctor`）检查宿主机缺失的基础工具
 - `./gnb.sh setup`（Windows: `gnb.bat setup`）会准备 vcpkg、项目外部工具链与可选资源包；如果直接执行 `./gnb.sh build`，首次缺少 toolchain 时也会自动补齐核心依赖
-- 桌面平台现在通过 `gnb` 统一构建和运行，通常不再需要先 `cd` 到 `out/build/<platform>/bin`
-- 可用 CMake 预设收敛为：`windows`、`linux`、`macos-arm64`、`ios`
+- 桌面平台通过 `gnb` 统一构建和运行，不需要先 `cd` 到 `out/build/<platform>/bin`
+- 可用 CMake 预设：`windows`、`linux`、`macos-arm64`、`ios`
 
 ### 平台构建
 
@@ -241,7 +280,7 @@ Windows 上若存在 `C:/Program Files/RenderDoc/renderdoc_app.h`，构建会自
 
 - 在 apt / pacman 环境下，`gnb setup` 与 Linux 首轮 `gnb build` 会在 vcpkg bootstrap 前自动安装桌面构建所需系统包
 - 如果自动安装不可用，再手动补齐：`sudo apt install build-essential cmake ninja-build curl zip unzip tar pkg-config libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev`
-- 非 apt/pacman 发行版仍会给出缺失桌面依赖提示
+- 非 apt/pacman 发行版会给出缺失桌面依赖提示
 
 </details>
 
@@ -292,12 +331,35 @@ Windows 上若存在 `C:/Program Files/RenderDoc/renderdoc_app.h`，构建会自
 # Editor
 ./gnb.sh run gkNextEditor
 
+# C# 游戏 launcher（进程内加载 / 卸载 / 重编任意托管游戏）
+./gnb.sh run gkNextLauncher
+
 # TUI 终端模式（无窗口，画面刷到终端）
 ./gnb.sh tui --scene assets/models/playground.glb
 
 # Remote Play（浏览器 WebRTC 远程游玩 host）
 ./gnb.sh remote --target gkNextRenderer --scene assets/models/playground.glb --res 1280x720
 ```
+
+### 移动平台
+
+```shell
+./gnb.sh android build      # 构建 release APK
+./gnb.sh android run        # 安装并启动（无在线设备时自动起 AVD）
+./gnb.sh ios build
+./gnb.sh ios run            # 直连真机安装运行
+```
+
+### 用 C# 新建一个游戏
+
+不需要写 C++，也不需要新增 CMake target：
+
+1. 启动 `gnb run gkNextLauncher`，点网格末尾的 **New Project** 卡片（或在编辑器里 **File > New Game Project...**）
+2. 填工程名，从五个模板里挑一个（空白 / 2D 街机 / 俯视角生存 / 第一人称漫游 / 第三人称射击），勾上 Publish
+3. 生成两样东西并立刻可玩：`assets/csharp/<ProjectName>/` 与 `assets/configs/games/<id>.game.json`
+4. `gnb dotnet sln` 让新工程进 `assets/csharp/GkNextManaged.sln`；改完 C# 在 launcher 或编辑器里点 **Rebuild C#**，开着热重载时正在跑的游戏会直接接手新程序集
+
+详见 [用 C# 开发 gkNextEngine 应用](docs/AGENT_GUIDE/CSharpGameDevelopment.md)。
 
 <p align="center">✦</p>
 
@@ -338,8 +400,8 @@ Windows 上若存在 `C:/Program Files/RenderDoc/renderdoc_app.h`，构建会自
     <td width="33%" align="center" valign="top" style="padding: 0;">
       <img src="https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/flappyjs.webp" width="100%" style="display: block; width: 100%;" alt="FlappyCpp" />
       <div style="padding: 10px 8px 12px 8px;">
-        <strong>🐤 FlappyCpp</strong><br>
-        <sub>确定性 replay parity 的 C++ 基线（脚本侧对照实现迁移中）</sub>
+        <strong>🐤 FlappyCpp / FlappyCSharp</strong><br>
+        <sub>逐行对照的 C++ / C# 双实现，确定性 replay 逐帧比对绑定 parity</sub>
       </div>
     </td>
     <td width="33%" align="center" valign="top" style="padding: 0;">
@@ -382,6 +444,8 @@ Windows 上若存在 `C:/Program Files/RenderDoc/renderdoc_app.h`，构建会自
 - **`gkNextRenderer`**：主渲染器，支持实时路径追踪 / Hybrid Rendering / 降噪与多管线对比。
 - **`gkNextEditor`**：ImGui 综合编辑器，面向场景、材质节点工作流（material node editor）与运行时 cvar 调优。
 - **`ScadStudio`**：OpenSCAD（`.scad`）程序化 DSL 建模求值、场景生成与 ScadRig 角色绑定实验场。
+- **`ScadLibrary`**：SCAD 资产的统一作者工具——kit 浏览、对象化场景编排、地形规则与角色动作编辑，支持与 Agent 实时协作迭代。
+- **`gkNextLauncher`**：C# 游戏启动器，在同一个进程内选择 / 加载 / 卸载任意托管游戏，可从模板新建工程并在菜单里 Rebuild C#（CoreCLR 专属）。
 - **`RmlUiDemo`**：RmlUi 运行时 HTML/CSS UI 引擎集成与交互验证 demo。
 
 #### 玩法与生态模拟 (Game & Simulation)
@@ -393,7 +457,9 @@ Windows 上若存在 `C:/Program Files/RenderDoc/renderdoc_app.h`，构建会自
 - **`KongLie3D`**：自走棋 / 羁绊 / 战斗回合模拟原型。
 - **`NextRA`**：确定性 RTS 模拟原型，验证 Lockstep 帧同步与 Replay 回放。
 - **`CharacterDemo`**：角色 Actor 挂载、NavGrid A* 导航、AI 行为树与战斗交互实验。
-- **`FlappyCpp`**：Flappy Bird C++ 实现，作为引擎确定性重播 parity 的基线（脚本侧对照实现迁移中）。
+- **`FlappyCpp` / `FlappyCSharp`**：Flappy Bird 的 C++ 与 C# 逐行对照实现，作为绑定面确定性重播 parity 的回归基线。
+- **`Brotato3DCSharp`**：Brotato3D 的 C# 实现，验证完整玩法规模下的托管绑定面。
+- **`NextWorldTravel`**：真实地点浏览器，用 Walk / Aerial / Focus 三视图浏览 `gnb geo` 生成的城市 tile。
 - **`TruckerDemo` / `CitySolSim` / `NextDayz` / `NextTotalWar`**：车辆驾驶、城市交通、生存战术与军团模拟原型。
 
 #### 基准测试与自动化工具 (Benchmark & Tools)
@@ -403,7 +469,7 @@ Windows 上若存在 `C:/Program Files/RenderDoc/renderdoc_app.h`，构建会自
 - **`gkNextUnitTests`**：Catch2 单元测试套件。
 - **`Packager`**：资产打包工具，将场景与纹理打包为 `.pkg` 归档文件。
 
-> 所有桌面 Target 均可配合 `./gnb remote --target <Target>` 进入 Remote Play host 模式（WebRTC 浏览器零安装游玩）。`src/Application/Game/Voyage3D` 仍保留为航海/港口/海战源码原型。
+> 所有桌面 Target 均可配合 `./gnb remote --target <Target>` 进入 Remote Play host 模式（WebRTC 浏览器零安装游玩）。`src/Application/Game/Voyage3D` 是航海 / 港口 / 海战源码原型。
 
 </details>
 
@@ -422,13 +488,15 @@ Windows 上若存在 `C:/Program Files/RenderDoc/renderdoc_app.h`，构建会自
 欢迎 Issue / PR。
 
 - 开发协作说明见 `AGENTS.md`
-- 如果你对实时路径追踪、现代渲染架构、渲染性能优化、LDraw、编辑器工具链、AI Native 工作流或玩法原型验证感兴趣，欢迎交流
+- 官网与文档站：<https://gameknife.github.io/gkNextEngine/>（源码在 `website/`，`gnb website` 本地热重载）
+- 社区讨论：[GitHub Discussions](https://github.com/gameknife/gkNextEngine/discussions)
+- 如果你对实时路径追踪、现代渲染架构、渲染性能优化、C# 脚本层、LDraw、编辑器工具链、AI Native 工作流或玩法原型验证感兴趣，欢迎交流
 
 <p align="center">✦</p>
 
 ## 📦 第三方依赖
 
-cpptrace · cxxopts · sdl3 · glm · imgui · stb · curl · nlohmann-json · tinygltf · draco · fmt · meshoptimizer · ktx · joltphysics · xxhash · spdlog · cpp-base64 · catch2 · entt · libwebp · vulkan-loader · libavif
+tracy · cpptrace · cxxopts · sdl3 · vulkan-headers · vulkan-loader · vulkan-memory-allocator · glm · imgui · rmlui · stb · curl · nlohmann-json · tinygltf · draco · fmt · meshoptimizer · ktx · joltphysics · manifold · earcut-hpp · freetype · xxhash · spdlog · cpp-base64 · catch2 · entt · libwebp · libdatachannel · cpp-httplib · libavif（可选）
 
 <p align="center">✦</p>
 

@@ -52,6 +52,18 @@ namespace GkNext.Interop
         public delegate* unmanaged<uint, Vector3*, Vector3*, void> Physics_SetBodyVelocity;
         public delegate* unmanaged<uint, Vector3*, void> Physics_AddForceToBody;
         public delegate* unmanaged<uint, PhysicsBodyState*, void> Physics_GetBodyState;
+        public delegate* unmanaged<int> Rig_IsAvailable;
+        public delegate* unmanaged<GkStr, int, uint> Rig_DeclarePool;
+        public delegate* unmanaged<uint, GkStr, int> Rig_HasClip;
+        public delegate* unmanaged<uint, Vector3*, float, Vector3*, uint> Rig_Acquire;
+        public delegate* unmanaged<uint, void> Rig_Release;
+        public delegate* unmanaged<uint, int> Rig_IsAlive;
+        public delegate* unmanaged<uint, Vector3*, float, void> Rig_SetTransform;
+        public delegate* unmanaged<uint, int, void> Rig_SetVisible;
+        public delegate* unmanaged<uint, GkStr, float, void> Rig_PlayClip;
+        public delegate* unmanaged<uint, float, void> Rig_SetPlaySpeed;
+        public delegate* unmanaged<uint, uint> Rig_GetRootNodeId;
+        public delegate* unmanaged<uint, GkStr, uint> Rig_GetBoneNodeId;
         public delegate* unmanaged<GkStr, int, int> UI_Begin;
         public delegate* unmanaged<void> UI_End;
         public delegate* unmanaged<GkStr, void> UI_Text;
@@ -121,7 +133,7 @@ namespace GkNext.Interop
     /// <summary>Number of bindings in the table, checked against the native side.</summary>
     public static class EngineApiInfo
     {
-        public const int EntryCount = 98;
+        public const int EntryCount = 110;
     }
 }
 
@@ -426,6 +438,110 @@ namespace GkNext
             PhysicsBodyState result = default;
             Api.Table->Physics_GetBodyState(bodyId, &result);
             return result;
+        }
+    }
+
+    public static unsafe class Rig
+    {
+        public static bool IsAvailable()
+        {
+            return Api.Table->Rig_IsAvailable() != 0;
+        }
+
+        public static uint DeclarePool(string rigPath, int capacity)
+        {
+            var mark = Utf8Arena.Mark();
+            try
+            {
+                return Api.Table->Rig_DeclarePool(Utf8Arena.Encode(rigPath), capacity);
+            }
+            finally
+            {
+                Utf8Arena.Release(mark);
+            }
+        }
+
+        public static bool HasClip(uint poolId, string clip)
+        {
+            var mark = Utf8Arena.Mark();
+            try
+            {
+                return Api.Table->Rig_HasClip(poolId, Utf8Arena.Encode(clip)) != 0;
+            }
+            finally
+            {
+                Utf8Arena.Release(mark);
+            }
+        }
+
+        public static uint Acquire(uint poolId, in Vector3 position, float yawRadians, in Vector3 tint)
+        {
+            fixed (Vector3* p_position = &position)
+            {
+                fixed (Vector3* p_tint = &tint)
+                {
+                    return Api.Table->Rig_Acquire(poolId, p_position, yawRadians, p_tint);
+                }
+            }
+        }
+
+        public static void Release(uint instanceId)
+        {
+            Api.Table->Rig_Release(instanceId);
+        }
+
+        public static bool IsAlive(uint instanceId)
+        {
+            return Api.Table->Rig_IsAlive(instanceId) != 0;
+        }
+
+        public static void SetTransform(uint instanceId, in Vector3 position, float yawRadians)
+        {
+            fixed (Vector3* p_position = &position)
+            {
+                Api.Table->Rig_SetTransform(instanceId, p_position, yawRadians);
+            }
+        }
+
+        public static void SetVisible(uint instanceId, bool visible)
+        {
+            Api.Table->Rig_SetVisible(instanceId, visible ? 1 : 0);
+        }
+
+        public static void PlayClip(uint instanceId, string clip, float fadeSeconds = 0.15f)
+        {
+            var mark = Utf8Arena.Mark();
+            try
+            {
+                Api.Table->Rig_PlayClip(instanceId, Utf8Arena.Encode(clip), fadeSeconds);
+            }
+            finally
+            {
+                Utf8Arena.Release(mark);
+            }
+        }
+
+        public static void SetPlaySpeed(uint instanceId, float speed)
+        {
+            Api.Table->Rig_SetPlaySpeed(instanceId, speed);
+        }
+
+        public static uint GetRootNodeId(uint instanceId)
+        {
+            return Api.Table->Rig_GetRootNodeId(instanceId);
+        }
+
+        public static uint GetBoneNodeId(uint instanceId, string boneName)
+        {
+            var mark = Utf8Arena.Mark();
+            try
+            {
+                return Api.Table->Rig_GetBoneNodeId(instanceId, Utf8Arena.Encode(boneName));
+            }
+            finally
+            {
+                Utf8Arena.Release(mark);
+            }
         }
     }
 

@@ -31,6 +31,8 @@ set(ASSET_DIRS
     scripts
     sfx
     sounds
+    # Game project templates, read by the "new project" dialog in gkNextLauncher and gkNextEditor.
+    templates
     textures
 )
 

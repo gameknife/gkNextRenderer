@@ -153,7 +153,7 @@ Idle ──Load──> Loading ──ok──> Playing ──Stop/RequestClose�
 
 ## 5. 验证
 
-五条 agent 脚本，都是长期回归网：
+七条 agent 脚本，都是长期回归网：
 
 | 脚本 | 覆盖 |
 |---|---|
@@ -162,6 +162,12 @@ Idle ──Load──> Loading ──ok──> Playing ──Stop/RequestClose�
 | `launcher-swap-stress` | 7 轮切换 + 键盘路径（Down/Enter/Esc），每次卸载后断言 `game.unloadPending == 0` |
 | `launcher-rebuild` | 在 launcher 里点 Rebuild 重新发布 C#，然后加载运行 |
 | `editor-play-in-editor` | 编辑器里 Play brotato3d → eject → 点 Outliner 选中运行中游戏的节点 → resume → Stop 回到原场景 → 再 Play/Stop 一轮 flappy |
+| `launcher-new-project` / `editor-new-project` | 新建项目对话框在两个宿主里都能打开、能列出模板、Esc 能关掉（§8）。**不**脚本化"创建"这一步——它要往源码树里写文件，validation run 不该做这种事，那一半由 `Test_ManagedGameTemplate` 覆盖 |
+
+`Test_ManagedGameTemplate`（`[Unit][DotNet][Template]`）盯的是会写磁盘的那一半：id 推导、模板可读性
+（每个模板都得有 csproj 和游戏类）、校验必须在建目录**之前**拒绝坏名字，以及一次真实 scaffold 的
+产物——token 全部替换掉、assembly 前缀等于 manifest id（否则 rebuild 会发布到下次加载不去找的地方）。
+它把 `GK_DOTNET_MANAGED_SOURCES` 指向临时目录，所以跑测试不会在仓库里留下工程。
 
 实测结果：
 
@@ -248,17 +254,77 @@ Stop 之后就可以改 C# 并用工具栏的 **Rebuild C#** 就地重新发布�
 工具栏把按钮置灰并说明原因。没有 .NET SDK 的构建也一样：`EditorPlaySession.cpp` 里有一份 no-op 实现，
 所以 `gkNextEditor` 不需要为此写任何条件编译。
 
-## 8. 已决定的取舍
+## 8. 从模板新建游戏项目
+
+launcher 的网格末尾有一张 **New Project** 卡片（标题栏也有同名按钮），编辑器在 **File > New Game
+Project...** 和 play 工具栏的游戏下拉里各有一个入口。三处打开的是同一个对话框
+`Modules::NextDotNet::FNewGameProjectDialog`——scaffold 这件事在两个宿主里是同一件事，写两份的话
+先漂移的一定是校验，而校验正是决定"要不要往磁盘上写目录"的那一半。
+
+**模板是内容，不是代码。** 一个模板就是 `assets/templates/games/<id>/` 下的一个目录：
+
+```
+assets/templates/games/blank/
+├── template.json          # 元数据：显示名、描述、要点、窗口、requiredModules、initialScene
+└── files/                 # 原样拷贝的文件树
+    ├── __ProjectName__.csproj
+    ├── __ProjectName__Game.cs
+    └── README.md
+```
+
+文件名和文件内容里的 `__Token__` / `{{Token}}` 会被替换：`ProjectName`、`Namespace`、
+`AssemblyName`、`DisplayName`、`GameId`、`TemplateId`。引擎、launcher、编辑器里没有任何地方枚举
+模板 id，所以新增一个模板只要建目录，不需要改代码、不需要重新编译。现有五个：`blank`（全生命周期
+钩子 + 旋转方块）、`arcade2d`（固定步长 + 对象池 + 状态机）、`topdown3d`（WASD + 敌人池 + 跟随
+相机）、`firstperson`（yaw/pitch 相机 + 程序化街区）、`tps`（ScadRig 角色 + 越肩相机 + 命中判定，
+见 [ScadRig](../AGENT_GUIDE/ScadRig.md#从-c-驱动rig-绑定)）。
+
+`tps` 是唯一一个需要宿主具备额外能力的模板：它的 manifest 要求 `ScadLoader` 和 `NextGameplay`，
+launcher 和编辑器都链接了这两者并安装 `NextRig` 子系统，所以两边都能跑。别的宿主没有，会在菜单里
+直接标灰说明原因——这正是 `requiredModules` 存在的意义。
+
+**创建一个游戏 = 写一个工程 + 写一份 manifest。** 不需要 CMake target：manifest 就是声明来源，
+launcher 和编辑器都从它加载。想要独立 exe 时再补 `src/Application/Game/<Name>/`（§2 的表格）。
+
+写到哪里，为什么：
+
+| 产物 | 位置 | 理由 |
+|---|---|---|
+| C# 工程 | `<源码树>/assets/csharp/<ProjectName>/` | `dotnet publish` 只能从源码树构建；`DotNetRuntime::ManagedSourceRoot()` 是唯一知道它在哪的东西 |
+| manifest | `<源码树>/assets/configs/games/<id>.game.json` | 它要能被提交进版本库 |
+| manifest 副本 | `<运行时根>/assets/configs/games/` | 构建树里的 assets 是**拷贝**，而运行中的宿主扫的是那份拷贝。只写源码树的话，新游戏要等下次构建才出现；只写运行时的话，下次 configure 就丢了 |
+
+因此 installed build 里这个功能整体不可用（没有 C# 源码可写），对话框会直接说明原因而不是画一个
+点不动的表单。
+
+创建**不**顺带构建：工程写出来是否正确与本机有没有 .NET SDK 无关，为了 `dotnet` 缺失而回滚一个好
+工程是错的。对话框上的勾选项调用的是 §6 那条已有的 `RebuildGame` 路径，失败时如实说"工程建好了，
+但没编译"。创建与发布都是阻塞几秒的操作，所以和 §6 的 Rebuild 一样：点击只记录请求，先画一帧说明
+在做什么，下一帧再真正动手。
+
+校验在写任何文件之前完成，逐帧运行而不是等到提交时才报错。工程名当作 C# 标识符校验（它同时是目录名、
+程序集名、命名空间和类名），id 必须小写，`GkNext` 前缀被拒（那是共享程序集的命名空间），已存在的目录
+或 id 也被拒。中途失败会把已建的目录整个删掉——半个工程比没有工程更糟，因为它挡住重试。
+
+生成的工程**不会**自动进 `assets/csharp/GkNextManaged.sln`：那个文件由 `gnb dotnet sln` 生成，
+CI 用 `--check` 守着。对话框完成后会把这条提示写在结果面板上。
+
+## 9. 已决定的取舍
 
 - **Launcher 放 `Application/Game/`**，不是 `Util/`：它是玩家入口，不是工具。
 - **不做"最近游玩/收藏"持久化**：没有需求支撑复杂度。
 - **`GkNext.Game`（ProbeGame）登记为 `sandbox` manifest**：作为绑定层的最小可运行样本，
   既是 `DotNetSandbox` 的游戏，也是 launcher 菜单里最小的那条。
 - **控制通道用 cvar 而不是新命令机制**：launcher 的 `game.select`（设为 id 即运行，设为空即回菜单）
-  和编辑器的 `ed.play` / `ed.playEject`。它们同时是控制台入口和 agent 脚本入口，不需要第二套机制。
-  代价是必须把它们排除在世界 baseline 之外，见 §4.1。
+  和 `game.newProject`，编辑器的 `ed.play` / `ed.playEject` / `ed.newProject`。它们同时是控制台
+  入口和 agent 脚本入口，不需要第二套机制。代价是必须把它们排除在世界 baseline 之外，见 §4.1。
+- **模板用文件树 + token 替换，不用代码生成器**：模板的价值在于它是一份**读得懂、跑得起来**的样例
+  代码，而能被直接打开和修改的文件树本身就是那份样例；生成器会让"模板长什么样"这个问题只能靠运行
+  它来回答。
+- **新建不写 CMake target**：数据驱动的 manifest 已经足够让 launcher 和编辑器跑起来，独立 exe 是
+  后来才需要的东西。让"新建项目"去改 CMakeLists 会把一个几秒的操作变成一次需要 C++ 构建的操作。
 
-## 9. 已知缺陷（不属于本设计，但会在这里撞上）
+## 10. 已知缺陷（不属于本设计，但会在这里撞上）
 
 **SCAD 场景里的节点 InstanceId 不唯一。** 在编辑器里加载 `deadly_town.scad`（直接打开或通过 PIE 跑
 brotato3d 都一样）后点击 Outliner，ImGui 会报 "4 visible items with conflicting ID"：被标红的四行

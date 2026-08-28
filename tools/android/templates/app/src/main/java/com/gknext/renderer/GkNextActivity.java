@@ -130,11 +130,15 @@ public class GkNextActivity extends SDLActivity {
         return new String[0];
     }
 
+    /**
+     * The application library this APK was built around. Every application shares this activity,
+     * so the name is a build config field rather than a constant here.
+     */
     @Override
     protected String[] getLibraries() {
         String nativeLibrary = "debug".equalsIgnoreCase(BuildConfig.BUILD_TYPE)
-            ? "gkNextRendererd"
-            : "gkNextRenderer";
+            ? BuildConfig.GK_NATIVE_LIBRARY + "d"
+            : BuildConfig.GK_NATIVE_LIBRARY;
         return new String[] { "SDL3", nativeLibrary };
     }
 

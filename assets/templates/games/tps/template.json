@@ -1,0 +1,16 @@
+{
+  "id": "tps",
+  "displayName": "Third-Person Shooter",
+  "description": "A ScadRig survivor in an arena, an orbit camera behind the shoulder, and infected that walk it down. Aim, fire, reload, reset — the loop is complete, and every character is a real rig with real clips rather than a box.",
+  "sortOrder": 50,
+  "highlights": [
+    "ScadRig characters: pools declared at scene build, clips played per state",
+    "Orbit camera + camera-relative movement, aim on the right mouse button",
+    "Hitscan fire with tracers, an enemy pool, health, ammo and reload"
+  ],
+  "requiredModules": ["ScadLoader", "NextGameplay"],
+  "initialScene": "Empty.proc",
+  "window": { "width": 1280, "height": 720, "forceSDR": true },
+  "showFlags": { "debugGraphicsPanel": false, "overlay": false },
+  "hotReload": true
+}

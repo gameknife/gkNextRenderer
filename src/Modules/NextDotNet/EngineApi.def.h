@@ -77,6 +77,29 @@ GK_API(Physics, SetBodyVelocity,    void,    (uint32_t bodyId, const FVec3* line
 GK_API(Physics, AddForceToBody,     void,    (uint32_t bodyId, const FVec3* force))
 GK_API(Physics, GetBodyState,       void,    (uint32_t bodyId, FPhysicsBodyState* outState))
 
+// --- Character rigs ------------------------------------------------------------------------
+// ScadRig characters (docs/AGENT_GUIDE/ScadRig.md), through the NextRig subsystem. Pools and
+// instances are opaque uint32 handles; 0 is "none" for both, so a default-initialised handle is
+// not a live character.
+//
+// The lifecycle is the engine's, not a choice: DeclarePool only works from inside
+// BeforeSceneRebuild, because that is when the scene's model list exists and it is sized once.
+// Everything else works only after the scene is committed. IsAvailable is false in a host that
+// linked neither NextGameplay nor ScadLoader, which is why a game using rigs declares them in its
+// manifest's requiredModules.
+GK_API(Rig, IsAvailable,   GkBool,   ())
+GK_API(Rig, DeclarePool,   uint32_t, (GkStr rigPath, int32_t capacity))
+GK_API(Rig, HasClip,       GkBool,   (uint32_t poolId, GkStr clip))
+GK_API(Rig, Acquire,       uint32_t, (uint32_t poolId, const FVec3* position, float yawRadians, const FVec3* tint))
+GK_API(Rig, Release,       void,     (uint32_t instanceId))
+GK_API(Rig, IsAlive,       GkBool,   (uint32_t instanceId))
+GK_API(Rig, SetTransform,  void,     (uint32_t instanceId, const FVec3* position, float yawRadians))
+GK_API(Rig, SetVisible,    void,     (uint32_t instanceId, GkBool visible))
+GK_API(Rig, PlayClip,      void,     (uint32_t instanceId, GkStr clip, float fadeSeconds))  //= fadeSeconds:0.15f
+GK_API(Rig, SetPlaySpeed,  void,     (uint32_t instanceId, float speed))
+GK_API(Rig, GetRootNodeId, uint32_t, (uint32_t instanceId))
+GK_API(Rig, GetBoneNodeId, uint32_t, (uint32_t instanceId, GkStr boneName))
+
 // --- Immediate-mode UI ---------------------------------------------------------------------
 GK_API(UI, Begin,              GkBool, (GkStr name, int32_t flags))                                            //= flags:0
 GK_API(UI, End,                void,   ())

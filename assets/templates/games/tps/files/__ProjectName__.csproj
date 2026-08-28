@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    {{DisplayName}} — generated from the gkNextEngine "{{TemplateId}}" game template.
+
+    Everything shared by managed assemblies (target framework, nullable, AOT analyzers) comes from
+    assets/csharp/Directory.Build.props; keep this file to what is actually specific to this game.
+  -->
+
+  <PropertyGroup>
+    <RootNamespace>{{Namespace}}</RootNamespace>
+    <AssemblyName>{{ProjectName}}</AssemblyName>
+    <!-- Required: the host loads this assembly into a collectible AssemblyLoadContext. -->
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Turns [GameInstance] into the entry point the host looks for. -->
+    <ProjectReference Include="..\GkNext.SourceGen\GkNext.SourceGen.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\GkNext.Engine\GkNext.Engine.csproj">
+      <!-- Do not change these two. GkNext.Engine must resolve from the host's load context; a copy
+           published beside this assembly gives two versions of every type and hot reload breaks. -->
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

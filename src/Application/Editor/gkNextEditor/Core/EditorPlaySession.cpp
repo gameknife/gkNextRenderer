@@ -6,6 +6,7 @@
 #include "Modules/NextDotNet/DotNetRuntime.hpp"
 #include "Modules/NextDotNet/ManagedGameManifest.hpp"
 #include "Modules/NextDotNet/ManagedGameSession.hpp"
+#include "Modules/NextDotNet/NewGameProjectDialog.hpp"
 #include "Modules/NextDotNet/NextDotNetModule.hpp"
 #endif
 
@@ -26,6 +27,9 @@ namespace Editor
             "DevTools",       "GltfLoader",           "LDrawLoader",    "LiveCoding", "NextAudio",
             "NextCapture",    "NextDotNet",           "NextFidelityFX", "NextPhysics", "NextRemote",
             "NextStreamline", "NextTemporalUpscaler", "NextValidation", "NextUI",     "RenderViews",
+            // Not a module under src/Modules, but the same question: was this host linked with it?
+            // The editor is, so a game built on ScadRig characters plays here too.
+            "NextGameplay",
             "ScadLoader",     "SceneContent",         "SceneExport",    "SplatLoader",
         };
     }
@@ -52,6 +56,9 @@ namespace Editor
         std::string returnScene;
         std::string unavailableReason;
         bool available = false;
+        /// The same dialog gkNextLauncher uses. Scaffolding a project is identical work in both
+        /// hosts, so it is the same code and not a second implementation that can disagree.
+        FNewGameProjectDialog newProjectDialog;
 
         const FManagedGameManifest* FindManifest(const std::string& id) const
         {
@@ -251,6 +258,37 @@ namespace Editor
         return true;
     }
 
+    bool FPlaySession::CanCreateProject() const
+    {
+        return impl_->available && FNewGameProjectDialog::UnavailableReason().empty();
+    }
+
+    std::string FPlaySession::NewProjectUnavailableReason() const
+    {
+        if (!impl_->available)
+        {
+            return impl_->unavailableReason;
+        }
+        return FNewGameProjectDialog::UnavailableReason();
+    }
+
+    void FPlaySession::OpenNewProjectDialog() { impl_->newProjectDialog.Open(); }
+
+    bool FPlaySession::IsNewProjectDialogOpen() const { return impl_->newProjectDialog.IsOpen(); }
+
+    std::string FPlaySession::DrawNewProjectDialog()
+    {
+        const FNewGameProjectOutcome outcome = impl_->newProjectDialog.Draw(&impl_->session);
+        if (!outcome.created)
+        {
+            return {};
+        }
+
+        // A new manifest is on disk; the toolbar's list is stale until this runs.
+        impl_->RefreshGames();
+        return outcome.gameId;
+    }
+
     void FPlaySession::OnTick(double deltaSeconds)
     {
         impl_->session.OnHostTick(deltaSeconds);
@@ -365,6 +403,11 @@ namespace Editor
         outError = impl_->unavailableReason;
         return false;
     }
+    bool FPlaySession::CanCreateProject() const { return false; }
+    std::string FPlaySession::NewProjectUnavailableReason() const { return impl_->unavailableReason; }
+    void FPlaySession::OpenNewProjectDialog() {}
+    bool FPlaySession::IsNewProjectDialogOpen() const { return false; }
+    std::string FPlaySession::DrawNewProjectDialog() { return {}; }
     void FPlaySession::OnTick(double) {}
     bool FPlaySession::OnRenderGameUI(float, float, float, float) { return false; }
     void FPlaySession::OnBeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>&,

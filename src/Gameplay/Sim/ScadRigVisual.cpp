@@ -35,14 +35,13 @@ namespace NextGameplay::Sim
         worldNode_->AddComponent(physics);
         scene.AddNode(worldNode_);
 
-        std::vector<Assets::Node*> boneNodes;
-        auto rigRoot = NextGameplay::FRigInstance::Instantiate(scene, asset, desc, boneNodes);
+        auto rigRoot = NextGameplay::FRigInstance::Instantiate(scene, asset, desc, boneNodes_);
         if (rigRoot)
         {
             rigRoot->SetParent(worldNode_);
             worldNode_->RecalcTransform(true);
         }
-        animator_.Bind(asset_, std::move(boneNodes), worldNode_.get());
+        animator_.Bind(asset_, boneNodes_, worldNode_.get());
         animator_.SetPhaseOffset(static_cast<float>(poolSlot) * 0.37f);
         animator_.Play(asset.FindClip("idle") != nullptr ? "idle" : "", 0.0f);
     }
@@ -67,6 +66,38 @@ namespace NextGameplay::Sim
         }
         const char* wanted = ClipName(hint);
         animator_.Play(asset_->FindClip(wanted) != nullptr ? wanted : "idle");
+    }
+
+    void FScadRigVisual::PlayClip(std::string_view clip, float fadeSeconds)
+    {
+        // Deliberately leaves the hint alone. A consumer drives this visual either by hint or by
+        // clip name; interleaving the two would need a "no hint" state that the shared enum does
+        // not have, and inventing one would change what SetAnimHint means for every existing
+        // consumer. A game with more states than the four hints uses this exclusively.
+        animator_.Play(clip, fadeSeconds);
+    }
+
+    const std::string& FScadRigVisual::CurrentClip() const { return animator_.CurrentClip(); }
+
+    void FScadRigVisual::SetPlaySpeed(float speed) { animator_.SetPlaySpeed(speed); }
+
+    int32_t FScadRigVisual::RootNodeId() const
+    {
+        return worldNode_ ? static_cast<int32_t>(worldNode_->GetInstanceId()) : -1;
+    }
+
+    int32_t FScadRigVisual::BoneNodeId(std::string_view boneName) const
+    {
+        if (asset_ == nullptr)
+        {
+            return -1;
+        }
+        const int32_t bone = asset_->FindBone(boneName);
+        if (bone < 0 || static_cast<size_t>(bone) >= boneNodes_.size() || boneNodes_[bone] == nullptr)
+        {
+            return -1;
+        }
+        return static_cast<int32_t>(boneNodes_[bone]->GetInstanceId());
     }
 
     void FScadRigVisual::SetMoveSpeed(float metersPerSecond)

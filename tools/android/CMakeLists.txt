@@ -5,6 +5,8 @@ project(gkNextAndroidDriver LANGUAGES NONE)
 set(GK_ANDROID_VARIANT "release" CACHE STRING "Android build variant (relwithdebinfo, debug, or release)")
 set_property(CACHE GK_ANDROID_VARIANT PROPERTY STRINGS relwithdebinfo debug release)
 set(GK_ANDROID_ABI "arm64-v8a" CACHE STRING "Android ABI")
+set(GK_ANDROID_APP "gkNextRenderer" CACHE STRING "Application target packaged into the APK")
+set_property(CACHE GK_ANDROID_APP PROPERTY STRINGS gkNextRenderer FlappyCSharp)
 set(GK_ANDROID_SDK_ROOT "" CACHE PATH "Android SDK root")
 set(GK_ANDROID_NDK_ROOT "" CACHE PATH "Android NDK root")
 set(GK_ANDROID_JAVA_HOME "" CACHE PATH "JDK root")
@@ -18,11 +20,26 @@ if(NOT GK_ANDROID_ABI STREQUAL "arm64-v8a")
     message(FATAL_ERROR "Only arm64-v8a is supported during the Android build migration")
 endif()
 
+# Each application gets its own applicationId so a device can hold more than one of them, but they
+# all share the com.gknext.renderer Java package: the activity is identical, and only the native
+# library it loads differs. That split is why the manifest names an app id and the activity is
+# still addressed as com.gknext.renderer.GkNextActivity.
+if(GK_ANDROID_APP STREQUAL "gkNextRenderer")
+    set(GK_ANDROID_APPLICATION_ID "com.gknext.renderer")
+    set(GK_ANDROID_APP_LABEL "gkNextRenderer")
+elseif(GK_ANDROID_APP STREQUAL "FlappyCSharp")
+    set(GK_ANDROID_APPLICATION_ID "com.gknext.flappycsharp")
+    set(GK_ANDROID_APP_LABEL "FlappyCSharp")
+else()
+    message(FATAL_ERROR "Unknown GK_ANDROID_APP '${GK_ANDROID_APP}'")
+endif()
+
 get_filename_component(GK_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 set(GK_GRADLE_DIR "${CMAKE_BINARY_DIR}/gradle")
 set(GK_NATIVE_DIR "${CMAKE_BINARY_DIR}/native")
 set(GK_ASSET_ROOT "${CMAKE_BINARY_DIR}/assets")
 set(GK_ANDROID_ASSET_OUTPUT_DIR "${GK_ASSET_ROOT}/assets")
+set(GK_JNILIBS_DIR "${CMAKE_BINARY_DIR}/jniLibs")
 set(GK_CACHE_DIR "${CMAKE_BINARY_DIR}/cache")
 set(GK_APK_DIR "${CMAKE_BINARY_DIR}/apk")
 
@@ -253,6 +270,7 @@ foreach(pathVariable IN ITEMS
     GK_VCPKG_TOOLCHAIN
     GK_SLANGC
     GK_SDL_AAR
+    GK_JNILIBS_DIR
     GK_ANDROID_SIGNING_PROPERTIES
 )
     file(TO_CMAKE_PATH "${${pathVariable}}" ${pathVariable})
@@ -265,6 +283,11 @@ configure_file(
 configure_file(
     "${CMAKE_CURRENT_LIST_DIR}/templates/app/src/main/AndroidManifest.xml"
     "${GK_GRADLE_DIR}/app/src/main/AndroidManifest.xml"
+    @ONLY
+)
+configure_file(
+    "${CMAKE_CURRENT_LIST_DIR}/templates/app/src/main/res/values/strings.xml"
+    "${GK_GRADLE_DIR}/app/src/main/res/values/strings.xml"
     @ONLY
 )
 
@@ -294,7 +317,7 @@ else()
         set(gradleApk "${GK_GRADLE_DIR}/app/build/outputs/apk/release/app-release-unsigned.apk")
     endif()
 endif()
-set(archivedApk "${GK_APK_DIR}/gkNextRenderer-${GK_ANDROID_VARIANT}.apk")
+set(archivedApk "${GK_APK_DIR}/${GK_ANDROID_APP}-${GK_ANDROID_VARIANT}.apk")
 
 add_custom_command(
     OUTPUT "${CMAKE_BINARY_DIR}/android-prepare.stamp"
@@ -368,6 +391,7 @@ add_custom_target(android-logcat
     VERBATIM
 )
 
+message(STATUS "Android application: ${GK_ANDROID_APP} (${GK_ANDROID_APPLICATION_ID})")
 message(STATUS "Android driver variant: ${GK_ANDROID_VARIANT}")
 message(STATUS "Android SDK: ${GK_ANDROID_SDK_ROOT}")
 message(STATUS "Android NDK: ${GK_ANDROID_NDK_ROOT}")

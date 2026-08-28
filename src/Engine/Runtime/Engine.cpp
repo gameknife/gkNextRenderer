@@ -49,6 +49,7 @@
 
 #define BUILDVER(X) std::string buildver(#X);
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
+#include "Engine/Runtime/Subsystems/NextRig.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.hpp"
 #include "build.version"
 
@@ -549,6 +550,12 @@ void NextEngine::Start()
         }
     }
 
+    // Optional character rigs (NextGameplay). Applications without characters never install one.
+    if (rigFactory_)
+    {
+        services_.rig = rigFactory_();
+    }
+
     // Optional audio module.
     if (audioFactory_)
     {
@@ -941,6 +948,14 @@ bool NextEngine::Tick(bool forcingDelta)
                     ++it;
                 }
             }
+        }
+
+        // Before StartUpdateNodes: an animator writes bone TRS and refreshes its subtree, so it
+        // has to have run by the time the scene's node update is kicked off.
+        if (services_.rig)
+        {
+            SCOPED_CPU_TIMER("rig animation");
+            services_.rig->Tick(static_cast<float>(frameState_.deltaSeconds));
         }
 
         if (config_.userSettings.TickPhysics && services_.physics)

@@ -139,6 +139,56 @@ Additive → Action FullBody Override。资产和运行时契约见
 - 多实例去同步：`SetPhaseOffset`；行走速度匹配：`SetPlaySpeed(speed / baseSpeed)`。
 - 单测：`gkNextUnitTests "[ScadRig]"`（loader）、`"[Rig]"`（animator/实例化链路，含真实资产站姿数值验证）。
 
+## 从 C# 驱动：Rig 绑定
+
+C# 游戏没有 gameplay 层的类型，所以 rig 通过一个引擎子系统暴露：`NextRig`
+（`src/Engine/Runtime/Subsystems/NextRig.hpp`）声明接口，`NextGameplay::Rig::Install(engine)`
+（`src/Gameplay/Rig/RigSubsystem.*`）装上实现，`Modules/NextDotNet` 的 `Rig.*` 绑定调用它。理由与
+`NextPhysics` 完全相同：引擎拥有帧和场景，领域实现在别处，而 C# 侧只能看到句柄。
+
+实现刻意**不是** `FCharacterPool`：那是 sim 池，带导航网格与路径跟随，是它大部分的开销、也是自己驱动
+角色的游戏不需要的部分。两者共享的是 `FScadRigVisual`（世界节点 + rig 子树 + animator）。
+
+生命周期是引擎的，不是选择：
+
+| 时机 | 能做什么 | 为什么 |
+|---|---|---|
+| `BeforeSceneRebuild` | `Rig.DeclarePool(path, capacity)` | 只有此刻 part model 能注入；GPU-driven primitive buffer 定容一次，之后无法凭空多出实例 |
+| `OnSceneLoaded` | `Rig.Acquire(pool, pos, yaw, tint)` | 节点此时才存在 |
+| 每帧 | `Rig.SetTransform` / `Rig.PlayClip` / `Rig.SetPlaySpeed` / `Rig.Release` | 普通 gameplay |
+
+```csharp
+protected override void BeforeSceneRebuild()
+    => enemyPool = Rig.DeclarePool("assets/scad/characters/nextdayz_infected.scad", 20);
+
+protected override void OnSceneLoaded()
+    => enemy = Rig.Acquire(enemyPool, in spawn, 0.0f, in tint);
+
+protected override void OnTick(double dt)
+{
+    Rig.SetTransform(enemy, in position, MathF.Atan2(dx, dz));   // 引擎朝向 +Z，所以是 atan2(x, z)
+    Rig.PlayClip(enemy, "walk");                                  // 播当前 clip 是 no-op，可每帧调
+}
+```
+
+要点：
+
+- **动画由引擎推进**。子系统每帧 tick 所有活着的 animator，并自己 `MarkTransformDirty()`；驱动
+  rig 的 C# 游戏**不需要**为角色调 `Scene.MarkTransformDirty()`（移动普通 render node 仍然需要）。
+- **clip 名写错不报错**，角色会退回绑定姿态；名字来自数据时先问 `Rig.HasClip(pool, name)`。
+  回归测试 `Test_TemplateRigClips.cpp` 用这条契约守住 `tps` 模板与两个资产的耦合。
+- **句柄不复用**：released 实例的 id 永远读作 dead，不会变成接手该槽位的那个角色。
+- `tint` 只影响资产标了可染色（`ROLECOLOR` / `ch_TINT()` 占位）的 section；`nextdayz_survivor` 和
+  `nextdayz_infected` 都是显式配色的，传什么颜色都不变。
+- **宿主必须链接** `NextGameplay` + `ScadLoader` 并调用 `Install`。`gkNextLauncher` 和
+  `gkNextEditor` 都做了，所以 manifest 里写 `"requiredModules": ["ScadLoader", "NextGameplay"]`
+  的游戏在两边都能跑；别的宿主会在菜单里标灰。`Rig.IsAvailable()` 是运行时的同一个问题。
+- 上手最快的路径是 launcher / 编辑器的 **New Game Project → Third-Person Shooter** 模板，它是这套
+  API 的完整用例（玩家 + 敌人池 + 状态驱动的 clip 切换）。
+
+需要分层混合（locomotion + aim + recoil 叠加）时，C# 侧目前没有对应绑定；那条路是 native 的
+`FRigLayeredAnimator`，NextDayz 是参考实现。
+
 ## Sim Kit 与 AirportSim 接入结论
 
 - `src/Gameplay/Sim/ScadRigVisual.*` 实现 `FScadRigVisual`：世界 Node（位置/yaw/体型微缩放/PhysicsComponent）+ rig 子树 + animator；`FCharacterPool` 统一负责注入、实例化、动画提示与 box fallback。AirportSim、StudioSim 和 CitySolSim 都走这条共享路径。

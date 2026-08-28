@@ -28,6 +28,34 @@
     <StackTraceSupport>false</StackTraceSupport>
   </PropertyGroup>
 
+  <!-- Android: NativeAOT cross-compiles from the desktop host to Android's bionic libc, published
+       under the linux-bionic-* RIDs. The SDK does not treat those as a first-class target, so the
+       normal AOT route has to be opted into by hand. -->
+  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('linux-bionic'))">
+    <PublishAotUsingRuntimePack>true</PublishAotUsingRuntimePack>
+    <DisableUnsupportedError>true</DisableUnsupportedError>
+    <!-- Android's dynamic linker only loads lib*.so out of an APK, and it resolves a dependency by
+         the DT_SONAME recorded in it. The SDK writes neither on a Windows host targeting bionic:
+         the prefix has to be asked for, and the ELF soname is set for Apple platforms only. -->
+    <NativeBinaryPrefix>lib</NativeBinaryPrefix>
+  </PropertyGroup>
+
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('linux-bionic')) and '$(NativeLib)' == 'Shared'">
+    <LinkerArg Include="-Wl,-soname,lib$(TargetName).so" />
+    <!-- Match the engine's own Android link options. Devices with 16 KB pages refuse to load a
+         library laid out for 4 KB, and every .so in the APK has to agree. -->
+    <LinkerArg Include="-Wl,-z,max-page-size=16384" />
+    <LinkerArg Include="-Wl,-z,common-page-size=16384" />
+  </ItemGroup>
+
+  <!-- Cross-compiling means two ILCompiler packages: the runtime pack for the target RID, which the
+       SDK resolves, and the compiler that runs *here*, which it does not. Both are derived from the
+       SDK's own properties so the two can never drift to different versions. -->
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('linux-bionic'))">
+    <PackageReference Include="runtime.$(NETCoreSdkPortableRuntimeIdentifier).Microsoft.DotNet.ILCompiler"
+                      Version="$(BundledNETCoreAppPackageVersion)" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\GkNext.Engine\GkNext.Engine.csproj" />
   </ItemGroup>

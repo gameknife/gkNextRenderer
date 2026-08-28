@@ -1,0 +1,33 @@
+{
+  "name": "editor-new-project",
+  "target": "gkNextEditor",
+  "scene": "assets/models/playground.glb",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "defaults": {
+    "waitFrames": 3,
+    "stepTimeoutMs": 60000
+  },
+  "comment": "The editor can scaffold a C# game from a template, the same way gkNextLauncher can — same dialog, same code. ed.newProject is the control channel; a person reaches it from File > New Game Project or from the play toolbar's game list. Creating a project is not scripted: it writes into the source tree, which a validation run must not do. Test_ManagedGameTemplate covers that half.",
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running" },
+    { "type": "wait-frames", "n": 20 },
+    { "type": "assert", "query": "game.canCreateProject", "op": "eq", "value": true },
+    { "type": "assert", "query": "game.newProjectOpen", "op": "eq", "value": false },
+
+    { "type": "cvar", "name": "ed.newProject", "set": "true" },
+    { "type": "wait-frames", "n": 10 },
+    { "type": "assert", "query": "game.newProjectOpen", "op": "eq", "value": true },
+    { "type": "screenshot", "ui": true, "out": "screenshots/editor_new_project_dialog" },
+
+    { "type": "key", "code": "Escape", "action": "press",
+      "comment": "A modal closes on Escape, and the editor must come back rather than stay half-modal." },
+    { "type": "wait-frames", "n": 10 },
+    { "type": "assert", "query": "game.newProjectOpen", "op": "eq", "value": false },
+    { "type": "assert", "query": "game.pieState", "op": "eq", "value": "Stopped" },
+    { "type": "assert", "query": "engine.status", "op": "eq", "value": "Running" },
+    { "type": "quit" }
+  ]
+}

@@ -18,7 +18,7 @@ Android 平台模块源直接并入单一 SHARED target；`NextTui` 仅桌面 + 
 | SplatLoader | Gaussian Splat / SOG 加载与渲染 pass |
 | SceneContent | 场景扫描、scene reference 装配与递归引用解析 |
 | SceneExport | 场景保存/导出（`FSceneSaver`） |
-| NextDotNet | C# 脚本运行时：CoreCLR/NativeAOT 双后端宿主、EngineApi 绑定表 |
+| NextDotNet | C# 脚本运行时：CoreCLR/NativeAOT 双后端宿主、EngineApi 绑定表、游戏 manifest 与会话、模板脚手架 |
 | NextPhysics | Jolt 物理后端 |
 | NextAudio | miniaudio 音频后端 |
 | NextAI | 轻量 LLM Chat / Structured Output 客户端（`FAIService`、`GnbAIClient`）；provider 路由与凭据由 gnb 管理 |

@@ -16,6 +16,10 @@ gk_configure_application(gkNextLauncher MODULES
     SplatLoader
 )
 
+# ScadRig characters. The launcher installs the rig subsystem for whichever game needs one, which
+# is what makes the Rig.* script bindings work in a game it loads at runtime.
+target_link_libraries(gkNextLauncher PRIVATE NextGameplay)
+
 # Every managed game this launcher can start has to be published before it is worth running. The
 # launcher itself brings no C# of its own: it loads assemblies chosen at runtime, which is exactly
 # what gk_dotnet_stub_game exists to say.

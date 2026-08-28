@@ -1,0 +1,16 @@
+{
+  "id": "blank",
+  "displayName": "Blank Game",
+  "description": "The smallest game that is still a game: a lit ground plane, one spinning cube and a HUD. Every lifecycle hook is present and commented, so this is the one to start from when the gameplay is entirely yours.",
+  "sortOrder": 10,
+  "highlights": [
+    "Every NextGameInstance hook, in order, with comments",
+    "Procedural scene built in BeforeSceneRebuild",
+    "HUD, camera override and keyboard input"
+  ],
+  "requiredModules": [],
+  "initialScene": "Empty.proc",
+  "window": { "width": 1280, "height": 720, "forceSDR": true },
+  "showFlags": { "debugGraphicsPanel": false, "overlay": false },
+  "hotReload": true
+}

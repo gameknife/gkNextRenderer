@@ -134,6 +134,10 @@ public:
     NextCVar::FCVarSystem& GetCVarSystem() { return *services_.cvarSystem; }
     const NextCVar::FCVarSystem& GetCVarSystem() const { return *services_.cvarSystem; }
     NextPhysics* GetPhysicsEngine() { return services_.physics.get(); }
+    /// Null in a build or an application that never installed a rig provider; every caller has to
+    /// cope, because most applications have no characters and pay nothing for them.
+    NextRig* GetRig() { return services_.rig.get(); }
+    const NextRig* GetRig() const { return services_.rig.get(); }
     Utilities::Package::FPackageFileSystem& GetPakSystem() { return *services_.packageFileSystem; }
 
     // Frame state
@@ -277,6 +281,14 @@ public:
     void SetPhysicsFactory(std::function<std::unique_ptr<NextPhysics>()> factory)
     {
         physicsFactory_ = std::move(factory);
+    }
+
+    /// Installed by NextGameplay for applications that use ScadRig characters. Like the physics
+    /// factory this is a factory rather than an instance so the engine keeps ownership and the
+    /// lifetime question has one answer.
+    void SetRigFactory(std::function<std::unique_ptr<NextRig>()> factory)
+    {
+        rigFactory_ = std::move(factory);
     }
     
     void SetExternalService(const std::string& key, std::shared_ptr<void> service)
@@ -423,6 +435,7 @@ private:
         std::unique_ptr<NextCVar::FCVarSystem> cvarSystem;
         std::unique_ptr<NextAudio> audio;
         std::unique_ptr<NextPhysics> physics;
+        std::unique_ptr<NextRig> rig;
         std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem;
         std::unique_ptr<Runtime::IShaderHotReloader> shaderHotReloader;
         std::unordered_map<std::string, std::shared_ptr<void>> externalServices;
@@ -460,6 +473,7 @@ private:
     Runtime::ShaderHotReloaderFactory shaderHotReloaderFactory_;
     std::function<std::unique_ptr<NextAudio>()> audioFactory_;
     std::function<std::unique_ptr<NextPhysics>()> physicsFactory_;
+    std::function<std::unique_ptr<NextRig>()> rigFactory_;
     std::unique_ptr<Runtime::IScriptRuntime> scriptRuntime_;
     FRuntimeServices services_{};
     Runtime::IDebugUiProvider* debugUiProvider_ = nullptr;

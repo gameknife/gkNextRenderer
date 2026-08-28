@@ -16,21 +16,10 @@ if(GK_ENABLE_VITURE)
 endif()
 
 if(ANDROID)
-    add_library(gkNextRenderer SHARED
-        ${src_files_assets}
-        ${src_files_utilities}
-        ${src_files_engine}
-        ${src_files_vulkan}
-        ${src_files_rendering}
-        ${src_files_nextgameplay}
-        ${src_files_thirdparty}
-        ${src_files_modules_all}
-        ${GK_APPLICATION_COMMON_SOURCES}
-        ${gkNextRendererSources}
-        ${GK_SOURCE_ROOT}/AndroidMain.cpp
+    gk_add_android_application(gkNextRenderer
+        SOURCES ${gkNextRendererSources}
+        MODULES ${gkNextRendererModules}
     )
-    gk_configure_android_runtime(gkNextRenderer)
-    gk_target_runtime_modules(gkNextRenderer MODULES ${gkNextRendererModules})
 else()
     if(IOS)
         add_executable(gkNextRenderer MACOSX_BUNDLE

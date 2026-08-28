@@ -1,0 +1,16 @@
+{
+  "id": "arcade2d",
+  "displayName": "2D Arcade Runner",
+  "description": "A side-on arcade loop: steer between scrolling walls, score, die, restart. Runs on a fixed timestep with a seeded RNG, so a run is reproducible.",
+  "sortOrder": 20,
+  "highlights": [
+    "Fixed-timestep simulation with an accumulator",
+    "Deterministic xorshift RNG and a recycled obstacle pool",
+    "Ready / Playing / Dead state machine with a restart"
+  ],
+  "requiredModules": [],
+  "initialScene": "Empty.proc",
+  "window": { "width": 1280, "height": 720, "forceSDR": true },
+  "showFlags": { "debugGraphicsPanel": false, "overlay": false },
+  "hotReload": true
+}

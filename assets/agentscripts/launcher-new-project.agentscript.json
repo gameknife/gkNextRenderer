@@ -1,0 +1,34 @@
+{
+  "name": "launcher-new-project",
+  "target": "gkNextLauncher",
+  "viewport": {
+    "width": 1600,
+    "height": 900
+  },
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 20000
+  },
+  "comment": "The new-project dialog opens and finds the shipped templates. Driven through the game.newProject cvar rather than by clicking the card, because the card's position depends on how many games are installed. Creating a project is not scripted: it writes into the source tree, which a validation run must not do — Test_ManagedGameTemplate covers that half.",
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running" },
+    { "type": "wait-frames", "n": 10 },
+    { "type": "assert", "query": "game.state", "op": "eq", "value": "Idle" },
+    { "type": "assert", "query": "game.templateCount", "op": "ge", "value": 1,
+      "comment": "Templates are content under assets/templates/games; zero here means they were not shipped." },
+    { "type": "assert", "query": "game.newProjectOpen", "op": "eq", "value": false },
+
+    { "type": "cvar", "name": "game.newProject", "set": "1" },
+    { "type": "wait-frames", "n": 5 },
+    { "type": "assert", "query": "game.newProjectOpen", "op": "eq", "value": true },
+    { "type": "screenshot", "out": "screenshots/launcher_new_project_dialog", "ui": true },
+
+    { "type": "cvar", "name": "game.newProject", "set": "0" },
+    { "type": "wait-frames", "n": 5 },
+    { "type": "assert", "query": "game.newProjectOpen", "op": "eq", "value": false },
+    { "type": "screenshot", "out": "screenshots/launcher_new_project_card", "ui": true },
+
+    { "type": "assert", "query": "engine.status", "op": "eq", "value": "Running" },
+    { "type": "quit" }
+  ]
+}

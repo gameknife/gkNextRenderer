@@ -82,6 +82,22 @@ namespace Editor
         /// disk, and the next Play picks it up.
         bool Rebuild(const std::string& gameId, std::string& outError);
 
+        // --- new project from a template -------------------------------------------------------
+
+        /// False when this build cannot scaffold a C# game: no managed runtime, no C# sources (an
+        /// installed build never has them), or no templates. NewProjectUnavailableReason() says
+        /// which, so the menu entry can explain itself instead of doing nothing.
+        bool CanCreateProject() const;
+        std::string NewProjectUnavailableReason() const;
+
+        void OpenNewProjectDialog();
+        bool IsNewProjectDialogOpen() const;
+
+        /// Draws the modal when it is open. Returns the id of a game created this frame, empty
+        /// otherwise — the caller uses it to select the new game in the play toolbar. Call once per
+        /// frame, outside any window, the way an ImGui modal wants to be called.
+        std::string DrawNewProjectDialog();
+
         // --- hooks forwarded by EditorGameInstance ---------------------------------------------
 
         void OnTick(double deltaSeconds);

@@ -96,6 +96,11 @@ namespace Modules::NextDotNet
         /// Static because callers need it before — and after — any runtime exists.
         static std::filesystem::path ManagedRoot();
 
+        /// The C# *source* tree (assets/csharp), or empty when this build cannot reach one — which
+        /// is the normal state of an installed build, where only published assemblies were shipped.
+        /// Anything that writes or rebuilds managed sources has to check this first.
+        static std::filesystem::path ManagedSourceRoot();
+
         /// Publishes a managed project into the managed root, the way CMake does at build time.
         /// Development-only: it needs the .NET SDK and the source tree, and does nothing useful in
         /// an installed build. Returns false and fills outError when the SDK is missing or the

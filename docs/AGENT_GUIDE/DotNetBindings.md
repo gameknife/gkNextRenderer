@@ -53,6 +53,22 @@ physics handle 返回 `PhysicsBodyIds.Invalid`，带 `Valid` 字段的状态返�
 指针参数为空就直接 return。静默无操作是脚本“看起来对但屏幕上什么都不动”的主要来源，
 所以未知 node id 会 warn 一次（`FindNodeOrWarn`）。
 
+### 绑定背后需要一个子系统时
+
+有些能力不能直接在 `EngineApi.cpp` 里实现：`NextDotNet` 不允许依赖 `NextGameplay` 或某个内容模块。
+`Rig.*`（ScadRig 角色）是现成的样板，和 `NextPhysics` 走的是同一条路：
+
+1. 在 `src/Engine/Runtime/Subsystems/` 声明一个纯虚接口（`NextRig.hpp`），只用引擎类型和不透明句柄；
+2. 引擎持有它（`SetRigFactory` / `GetRig()`），并负责 tick 与场景生命周期；
+3. 真正的实现放在有资格依赖领域库的地方（`src/Gameplay/Rig/RigSubsystem.cpp`），由应用一行
+   `NextGameplay::Rig::Install(engine)` 装上；
+4. 绑定函数只做 `engine->GetRig()`，拿不到就记一次日志返回无害值，并提供一个
+   `Rig.IsAvailable()` 让脚本能提前问。
+
+判据是"这个能力属于引擎的哪一层"，不是"实现起来方便不方便"：绑定层放不下的东西，说明它需要一个
+子系统，而不是一条 `#include`。宿主没装时，游戏应在 manifest 的 `requiredModules` 里声明依赖，
+菜单会直接标灰而不是加载到一半才失败。
+
 ## 加一个属性
 
 不用碰 `EngineApi.def.h`。属性走反射：

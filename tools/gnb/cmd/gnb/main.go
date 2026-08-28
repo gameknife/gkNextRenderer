@@ -816,6 +816,7 @@ func newAndroidCommand(ctx appContext) *cobra.Command {
 		},
 	}
 
+	buildApp := ""
 	build := &cobra.Command{
 		Use:   "build [relwithdebinfo|debug|release]",
 		Short: "Build an Android APK (default: release)",
@@ -825,7 +826,7 @@ func newAndroidCommand(ctx appContext) *cobra.Command {
 			if len(args) == 1 {
 				variant = args[0]
 			}
-			artifact, err := android.Build(ctx.repoRoot, ctx.cfg, variant)
+			artifact, err := android.Build(ctx.repoRoot, ctx.cfg, variant, buildApp)
 			if err != nil {
 				return err
 			}
@@ -834,10 +835,12 @@ func newAndroidCommand(ctx appContext) *cobra.Command {
 			return nil
 		},
 	}
+	build.Flags().StringVar(&buildApp, "app", "", "application to package (gkNextRenderer or FlappyCSharp)")
 	root.AddCommand(build)
 
 	serial := ""
 	avd := ""
+	runApp := ""
 	run := &cobra.Command{
 		Use:   "run [relwithdebinfo|debug|release]",
 		Short: "Install and launch a built Android APK on adb or a local AVD",
@@ -847,7 +850,7 @@ func newAndroidCommand(ctx appContext) *cobra.Command {
 			if len(args) == 1 {
 				variant = args[0]
 			}
-			result, err := android.Run(ctx.repoRoot, variant, serial, avd)
+			result, err := android.Run(ctx.repoRoot, variant, runApp, serial, avd)
 			if err != nil {
 				return err
 			}
@@ -860,6 +863,7 @@ func newAndroidCommand(ctx appContext) *cobra.Command {
 	}
 	run.Flags().StringVar(&serial, "serial", "", "use this online adb device serial")
 	run.Flags().StringVar(&avd, "avd", "", "start this local AVD when no adb device is online")
+	run.Flags().StringVar(&runApp, "app", "", "application to install (gkNextRenderer or FlappyCSharp)")
 	root.AddCommand(run)
 
 	captureSerial := ""

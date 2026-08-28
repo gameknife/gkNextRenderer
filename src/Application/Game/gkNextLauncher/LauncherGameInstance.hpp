@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Modules/NextDotNet/ManagedGameHostInstance.hpp"
+#include "Modules/NextDotNet/NewGameProjectDialog.hpp"
 
 /// One process that runs any managed game, instead of one executable per game.
 ///
@@ -39,6 +40,13 @@ private:
     void LoadEntry(size_t index);
 
     void DrawMenu();
+    /// The trailing grid cell that starts a new project from a template. Returns true when it was
+    /// clicked, so the caller can open the dialog after the grid has finished drawing.
+    bool DrawNewProjectCard(float cardWidth, float cardHeight, bool highlighted);
+    void DrawNewProjectDialog();
+
+    /// Index of the "new project" cell: one past the last game.
+    int NewProjectCellIndex() const { return static_cast<int>(entries_.size()); }
 
     std::vector<FEntry> entries_;
     int highlightedIndex_ = 0;
@@ -54,4 +62,10 @@ private:
     /// frame saying what it is doing before the process stops responding.
     int pendingRebuildIndex_ = -1;
     std::string rebuildStatus_;
+
+    /// Scaffolding a new game from a template. The dialog owns the form and the file writing; the
+    /// launcher only opens it and reacts to what it created.
+    Modules::NextDotNet::FNewGameProjectDialog newProjectDialog_;
+    /// Backing store for the game.newProject cvar, which is how a script opens the dialog.
+    std::string newProjectRequest_;
 };
