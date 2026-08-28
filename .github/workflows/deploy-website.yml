@@ -6,10 +6,16 @@ on:
     paths:
       - 'website/**'
       - '.github/workflows/deploy-website.yml'
+  # 论坛主题是构建期从 Discussions 抓的快照，所以定时重建一次，
+  # 新发的主题不用等下一次 push 才上线。
+  schedule:
+    - cron: '0 18 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
+  # 抓 Announcements 分类的讨论列表要读 Discussions。
+  discussions: read
   pages: write
   id-token: write
 
@@ -35,6 +41,8 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
+        with:
+          enablement: true
 
       - name: Install dependencies
         run: cd website && npm install
@@ -42,6 +50,10 @@ jobs:
       - name: Build with VitePress
         env:
           GITHUB_PAGES: 'true'
+          # npm run build 会先跑 scripts/fetch-discussions.mjs；没 token 时它会
+          # 沿用仓库里已提交的快照，不会让构建失败。
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CF_BEACON_TOKEN: ${{ secrets.CF_BEACON_TOKEN }}
         run: cd website && npm run build
 
       - name: Upload artifact

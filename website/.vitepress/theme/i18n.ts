@@ -82,6 +82,22 @@ export interface I18nContent {
       category: string
       items: Array<{ name: string; role: string }>
     }>
+  },
+  community: {
+    badge: string
+    title: string
+    desc: string
+    notice: string
+    empty: string
+    emptyHint: string
+    viewOnGitHub: string
+    replies: string
+    upvotes: string
+    postedBy: string
+    backToBoard: string
+    repliesHeading: string
+    signInHint: string
+    lockedHint: string
   }
 }
 
@@ -374,6 +390,22 @@ export const zhCN: I18nContent = {
         ]
       }
     ]
+  },
+  community: {
+    badge: '社区论坛',
+    title: '公告与讨论',
+    desc: '',
+    notice: '这里只展示维护者发布的主题；访客可以自由回帖、点赞，但无法新开主题。有新想法请到 GitHub Discussions 的 Ideas / Q&A 分类。',
+    empty: '还没有发布任何主题',
+    emptyHint: '维护者在 Announcements 分类发出第一个讨论后，它会在下一次站点构建时出现在这里。',
+    viewOnGitHub: '在 GitHub 上查看',
+    replies: '回帖',
+    upvotes: '赞同',
+    postedBy: '发布者',
+    backToBoard: '← 返回论坛',
+    repliesHeading: '回帖',
+    signInHint: '使用 GitHub 账号登录即可回帖，评论数据保存在本仓库的 Discussions 里。',
+    lockedHint: '该主题已锁定，暂不接受新的回帖。'
   }
 }
 
@@ -666,5 +698,21 @@ export const enUS: I18nContent = {
         ]
       }
     ]
+  },
+  community: {
+    badge: 'Community Forum',
+    title: 'Announcements & Discussion',
+    desc: '',
+    notice: 'Only maintainer-authored topics appear here. Visitors can reply and react freely, but cannot start new topics — for that, use the Ideas / Q&A categories on GitHub Discussions.',
+    empty: 'No topics published yet',
+    emptyHint: 'Once the first discussion lands in the Announcements category, it shows up here on the next site build.',
+    viewOnGitHub: 'View on GitHub',
+    replies: 'replies',
+    upvotes: 'upvotes',
+    postedBy: 'Posted by',
+    backToBoard: '← Back to forum',
+    repliesHeading: 'Replies',
+    signInHint: 'Sign in with GitHub to reply. Comments live in the Discussions of this repository.',
+    lockedHint: 'This topic is locked and no longer accepts replies.'
   }
 }

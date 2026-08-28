@@ -7,6 +7,8 @@ import ShowcaseGrid from './components/ShowcaseGrid.vue'
 import BenchmarkData from './components/BenchmarkData.vue'
 import QuickStartCli from './components/QuickStartCli.vue'
 import EcosystemTech from './components/EcosystemTech.vue'
+import CommunityBoard from './components/CommunityBoard.vue'
+import CommunityTopic from './components/CommunityTopic.vue'
 import './custom.css'
 
 export default {
@@ -19,5 +21,7 @@ export default {
     app.component('BenchmarkData', BenchmarkData)
     app.component('QuickStartCli', QuickStartCli)
     app.component('EcosystemTech', EcosystemTech)
+    app.component('CommunityBoard', CommunityBoard)
+    app.component('CommunityTopic', CommunityTopic)
   }
 } satisfies Theme
