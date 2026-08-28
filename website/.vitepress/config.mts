@@ -1,6 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { defineConfig } from 'vitepress'
+import { defineConfig, type HeadConfig } from 'vitepress'
+
+import { cfBeaconToken } from './community.mjs'
 
 function syncBrandAssetsPlugin() {
   const brandSourceDir = path.resolve(__dirname, '../../assets/brand')
@@ -38,6 +40,17 @@ function syncBrandAssetsPlugin() {
   }
 }
 
+// Cloudflare Web Analytics 的 beacon。token 平时写在 .vitepress/community.mjs，
+// CI 里可以用 CF_BEACON_TOKEN 环境变量覆盖；两边都为空就整段不注入。
+const analyticsToken = process.env.CF_BEACON_TOKEN || cfBeaconToken
+const analyticsHead: HeadConfig[] = analyticsToken
+  ? [['script', {
+      defer: '',
+      src: 'https://static.cloudflareinsights.com/beacon.min.js',
+      'data-cf-beacon': JSON.stringify({ token: analyticsToken })
+    }]]
+  : []
+
 export default defineConfig({
   base: process.env.GITHUB_PAGES ? '/gkNextEngine/' : '/',
   title: 'gkNextEngine',
@@ -51,6 +64,7 @@ export default defineConfig({
     ['meta', { property: 'og:title', content: 'gkNextEngine - 轻量、现代、极速光追的跨平台 3D 游戏引擎' }],
     ['meta', { property: 'og:description', content: '基于 C++20 与 Vulkan，为实时路径追踪、游戏原型与 AI Native 工作流打造。' }],
     ['meta', { property: 'og:image', content: 'https://github.com/gameknife/gkNextEngine/releases/download/readme-assets-v1/still.webp' }],
+    ...analyticsHead,
   ],
 
   locales: {
@@ -64,6 +78,7 @@ export default defineConfig({
           { text: '子项目展厅', link: '/#showcase' },
           { text: '性能指标', link: '/#benchmarks' },
           { text: '快速开始', link: '/#quickstart' },
+          { text: '社区论坛', link: '/community/' },
           {
             text: '文档手册',
             items: [
@@ -115,6 +130,7 @@ export default defineConfig({
           { text: 'Showcase', link: '/en/#showcase' },
           { text: 'Benchmarks', link: '/en/#benchmarks' },
           { text: 'Quick Start', link: '/en/#quickstart' },
+          { text: 'Community', link: '/en/community/' },
           {
             text: 'Documentation',
             items: [

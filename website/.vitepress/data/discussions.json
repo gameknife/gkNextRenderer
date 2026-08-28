@@ -1,0 +1,25 @@
+{
+  "repo": "gameknife/gkNextEngine",
+  "category": "Announcements",
+  "generatedAt": "2026-08-28T02:47:55.710Z",
+  "topics": [
+    {
+      "number": 248,
+      "title": "功能需求征集：想要什么，在这里提",
+      "url": "https://github.com/gameknife/gkNextEngine/discussions/248",
+      "bodyHTML": "<p dir=\"auto\">这是 gkNextEngine 的<strong>功能需求入口</strong>。想要什么、觉得哪里该更好用，直接在下面回帖 —— 论坛只有我能开主题，需求统一收在这一帖里，条数多是好事。</p>\n<h2 dir=\"auto\">怎么提</h2>\n<p dir=\"auto\">一条回帖一个需求。写清两件事就够了：<strong>想要什么</strong>，以及<strong>你在做什么、现在卡在哪</strong>。</p>\n<p dir=\"auto\">后者比前者重要 —— 讲清楚真实场景，我才能判断有没有成本更低的解法；只给一个功能名词，我只能靠猜。</p>\n<h2 dir=\"auto\">我会怎么处理</h2>\n<p dir=\"auto\">每一条都会看，并回一个明确的态度：</p>\n<ul dir=\"auto\">\n<li>✅ <strong>接受</strong> —— 转成独立 Issue 跟踪并排入计划</li>\n<li>🔍 <strong>研判中</strong> —— 方向认可，实现路径和架构影响还要想清楚</li>\n<li>🔁 <strong>已有替代</strong> —— 现在就能做到，我告诉你怎么做（多半是文档没写清，算我的问题）</li>\n<li>❌ <strong>暂不做</strong> —— 会说明理由，通常不是\"不好\"，而是\"不属于这个引擎该长的方向\"</li>\n</ul>\n<p dir=\"auto\"><strong>接受不等于承诺时间。</strong> 这是我一个人维护的 R&amp;D 引擎，排期按精力走，我不给假的时间表。</p>\n<p dir=\"auto\">引擎的取舍是明确的：<strong>核心保持精简，能力靠 Modules 挂上去</strong>。让现有能力更好用、或者能做成独立 Module 的需求最容易被接受；要动核心渲染管线、或者把这里推向通用商业引擎的方向，需要更多说服。</p>\n<h2 dir=\"auto\">走错门的</h2>\n<p dir=\"auto\">崩溃和编译失败提 <a href=\"https://github.com/gameknife/gkNextEngine/issues\">Issues</a>，用法问题去 <a href=\"https://github.com/gameknife/gkNextEngine/discussions/categories/q-a\">Q&amp;A</a>，想直接实现就开 PR（先在这里说一声，避免撞车）。</p>",
+      "excerpt": "这是 gkNextEngine 的功能需求入口。想要什么、觉得哪里该更好用，直接在下面回帖 —— 论坛只有我能开主题，需求统一收在这一帖里，条数多是好事。 一条回帖一个需求。写清两件事就够了：想要什么，以及你在做什么、现在卡在哪。",
+      "createdAt": "2026-08-28T02:44:59Z",
+      "updatedAt": "2026-08-28T02:44:59Z",
+      "upvotes": 1,
+      "locked": false,
+      "replies": 0,
+      "author": {
+        "login": "gameknife",
+        "url": "https://github.com/gameknife",
+        "avatar": "https://avatars.githubusercontent.com/u/2137741?u=3b5d013efc6781589854d72b7ffd1b8e3ba42f6b&v=4"
+      },
+      "labels": []
+    }
+  ]
+}

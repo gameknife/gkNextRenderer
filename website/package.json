@@ -4,9 +4,11 @@
   "description": "Modern lightweight official homepage for gkNextEngine",
   "type": "module",
   "scripts": {
-    "dev": "vitepress dev",
-    "build": "vitepress build",
-    "preview": "vitepress preview"
+    "dev": "npm run fetch:discussions && vitepress dev",
+    "build": "npm run fetch:discussions && vitepress build",
+    "preview": "vitepress preview",
+    "fetch:discussions": "node scripts/fetch-discussions.mjs",
+    "check:discussions": "node scripts/fetch-discussions.mjs --check"
   },
   "devDependencies": {
     "vitepress": "^1.6.3",
