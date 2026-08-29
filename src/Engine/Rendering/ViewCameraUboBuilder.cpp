@@ -21,19 +21,15 @@ namespace Vulkan
             ubo.Projection = Utilities::Math::ReverseZPerspective(
                 glm::radians(camera.FieldOfView), aspect, camera.NearPlane, camera.FarPlane);
             ubo.Projection[1][1] *= -1.0f;
-            ubo.ProjectionUnJit = ubo.Projection;
 #if ANDROID
-            glm::mat4 preRotate = glm::mat4(1.0f);
-            preRotate = glm::rotate(preRotate, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-            ubo.Projection = Utilities::Math::ReverseZPerspective(
-                glm::radians(camera.FieldOfView),
-                static_cast<float>(std::max(1u, extent.height)) / static_cast<float>(std::max(1u, extent.width)),
-                0.1f,
-                10000.0f);
-            ubo.Projection[1][1] *= -1.0f;
-            ubo.Projection = preRotate * ubo.Projection;
-            ubo.ProjectionUnJit = ubo.Projection;
+            // Android reports this surface as VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR.  The
+            // swapchain keeps that transform as its pre-transform, so rotate the camera basis
+            // into the surface coordinate system as well.  Keep `aspect` based on the real
+            // swapchain extent above: rotating the basis must not swap the projection aspect.
+            ubo.Projection = glm::rotate(
+                glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)) * ubo.Projection;
 #endif
+            ubo.ProjectionUnJit = ubo.Projection;
             ubo.ProjectionInverse = glm::inverse(ubo.Projection);
             ubo.ProjectionInverseUnJit = ubo.ProjectionInverse;
             ubo.ViewProjection = ubo.Projection * camera.ModelView;

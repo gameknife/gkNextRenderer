@@ -131,11 +131,6 @@ static void UpdateUiScaledMetrics()
     float scale = 1.0f;
 
 #if !ANDROID
-    if (Vulkan::SwapChain::UiContentScale() < 1.0f)
-    {
-        scale *= 0.75f / Vulkan::SwapChain::UiContentScale();
-    }
-
     if (ImGui::GetCurrentContext() != nullptr)
     {
         const float fontSize = ImGui::GetFontSize();

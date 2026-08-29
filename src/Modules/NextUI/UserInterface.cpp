@@ -876,7 +876,6 @@ void UserInterface::PreRender()
     BeginRendererBackendFrame();
     if (sdlPlatformBackendInitialized_)
     {
-        ImGui_ImplSDL3_SetFramebufferScaleBias(Vulkan::SwapChain::UiContentScale());
         ImGui_ImplSDL3_NewFrame();
     }
     else
