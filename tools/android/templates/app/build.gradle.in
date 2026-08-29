@@ -35,7 +35,11 @@ android {
         externalNativeBuild {
             cmake {
                 targets '@GK_ANDROID_APP@'
-                arguments '-DANDROID_STL=c++_shared',
+                // GK_MOBILE_APP is what makes the engine configure declare this application at
+                // all: an Android configure adds exactly one application directory, so asking
+                // Gradle for a target the configure was not told about would find nothing.
+                arguments '-DGK_MOBILE_APP=@GK_ANDROID_APP@',
+                        '-DANDROID_STL=c++_shared',
                         '-DANDROID_PLATFORM=android-33',
                         '-DANDROID_NATIVE_API_LEVEL=33',
                         '-DVCPKG_CMAKE_SYSTEM_VERSION=33',

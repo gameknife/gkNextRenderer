@@ -1,8 +1,9 @@
 file(GLOB_RECURSE citySolSimSources CONFIGURE_DEPENDS "*.cpp" "*.hpp" "*.h")
 
-add_executable(CitySolSim ${citySolSimSources} ${GK_DESKTOP_MAIN_SOURCE})
-gk_configure_application(CitySolSim MODULES
-    ${GK_STANDARD_RUNTIME_MODULES}
-    ScadLoader
+gk_add_application(CitySolSim
+    SOURCES ${citySolSimSources}
+    MODULES
+        ${GK_STANDARD_RUNTIME_MODULES}
+        ScadLoader
+    LINK NextGameplay
 )
-target_link_libraries(CitySolSim PRIVATE NextGameplay)

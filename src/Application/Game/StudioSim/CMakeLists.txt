@@ -1,8 +1,10 @@
 file(GLOB_RECURSE studioSimSources CONFIGURE_DEPENDS "*.cpp" "*.hpp" "*.h")
 
-add_executable(StudioSim ${studioSimSources} ${GK_DESKTOP_MAIN_SOURCE})
-gk_configure_application(StudioSim MODULES
-    ${GK_STANDARD_RUNTIME_MODULES}
-    ScadLoader
+gk_add_application(StudioSim
+    SOURCES ${studioSimSources}
+    MODULES
+        ${GK_STANDARD_RUNTIME_MODULES}
+        ScadLoader
+        NextAI
+    LINK NextGameplay
 )
-target_link_libraries(StudioSim PRIVATE NextAI NextGameplay)

@@ -71,6 +71,9 @@
 - [Editor Sequencer 与动画轨道编辑](designs/editor-sequencer.md)
 - [GI 缓存与体素资源架构](designs/gi-cache-architecture.md)
 - [Gaussian Splat / SOG v2 格式与集成](designs/gaussian-splatting-sog-design.md)
+- [移动端 application 目标：注册表 + 统一 `gk_add_application`](designs/mobile-application-targets.md)（现行；
+  Android/iOS 可打包 `src/Application/` 下任意登记过的 application，目录/包名/bundle id
+  统一由 `src/Application/MobileApplications.json` 描述）
 - [iOS A12X Compatibility Minimal Render MVP](designs/ios-a12x-compatibility-minimal-render-mvp.md)（M0–M2 已实施：
   `ERT_Compatibility` + `FBindlessProfile`，无 descriptor set 的 base-color raster pass；
   M3 起的法线/纹理/CSM 待实施）

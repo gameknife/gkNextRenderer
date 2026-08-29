@@ -1,8 +1,9 @@
 file(GLOB_RECURSE nextTotalwarSources CONFIGURE_DEPENDS "*.cpp" "*.hpp" "*.h")
 
-add_executable(NextTotalwar ${nextTotalwarSources} ${GK_DESKTOP_MAIN_SOURCE})
-gk_configure_application(NextTotalwar MODULES
-    ${GK_STANDARD_RUNTIME_MODULES}
-    ScadLoader
+gk_add_application(NextTotalwar
+    SOURCES ${nextTotalwarSources}
+    MODULES
+        ${GK_STANDARD_RUNTIME_MODULES}
+        ScadLoader
+    LINK NextGameplay
 )
-target_link_libraries(NextTotalwar PRIVATE NextGameplay)

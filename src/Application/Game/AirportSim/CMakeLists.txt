@@ -1,8 +1,10 @@
 file(GLOB_RECURSE airportSimSources CONFIGURE_DEPENDS "*.cpp" "*.hpp" "*.h")
 
-add_executable(AirportSim ${airportSimSources} ${GK_DESKTOP_MAIN_SOURCE})
-gk_configure_application(AirportSim MODULES
-    ${GK_STANDARD_RUNTIME_MODULES}
-    ScadLoader
+gk_add_application(AirportSim
+    SOURCES ${airportSimSources}
+    MODULES
+        ${GK_STANDARD_RUNTIME_MODULES}
+        ScadLoader
+        NextAI
+    LINK NextGameplay
 )
-target_link_libraries(AirportSim PRIVATE NextAI NextGameplay)

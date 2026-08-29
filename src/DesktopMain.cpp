@@ -154,8 +154,13 @@ static SDL_AppResult InitializeApplication(int argc, char *argv[])
 {
     // Handle command line options.
 #if IOS
-    const char* argv1[] = { "gkNextRenderer", "--load-scene=assets/models/conf_room.glb" };
-    GOptionPtr.reset(new Runtime::Config::Options(2, argv1));
+    // There is no command line in an iOS bundle, so the application identity is baked in. Scene
+    // loading stays with the application; each application owns its own initial-scene policy.
+#ifndef GK_APPLICATION_NAME
+#define GK_APPLICATION_NAME "gkNextRenderer"
+#endif
+    const char* argv1[] = { GK_APPLICATION_NAME };
+    GOptionPtr.reset(new Runtime::Config::Options(1, argv1));
 #else
     GOptionPtr.reset(new Runtime::Config::Options(argc, const_cast<const char**>(argv)));
 #endif

@@ -7,49 +7,40 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/config"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/fetcher"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/mobileapps"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/vcpkg"
 )
 
 const (
 	defaultVariant = "release"
-	defaultApp     = "gkNextRenderer"
 	// Every application reuses the same activity class, so only the application id varies.
 	activityClass = "com.gknext.renderer.GkNextActivity"
 	packageName   = "com.gknext.renderer"
 	activityName  = packageName + "/" + activityClass
+	// fallbackApp is used only where a build directory has to be named without a registry read
+	// being able to fail. Which applications exist, and which one is the default, is the
+	// registry's answer everywhere it can be asked properly.
+	fallbackApp = "gkNextRenderer"
 )
 
-// androidApps maps a CMake application target to the application id its APK installs under. They
-// differ so a device can hold more than one of them at a time; keep this in sync with the same
-// mapping in tools/android/CMakeLists.txt.
-var androidApps = map[string]string{
-	"gkNextRenderer": "com.gknext.renderer",
-	"FlappyCSharp":   "com.gknext.flappycsharp",
+// resolveApp maps an application name onto its registry entry. An empty name selects the default.
+func resolveApp(repoRoot, app string) (mobileapps.App, error) {
+	return mobileapps.Resolve(repoRoot, mobileapps.Android, app)
 }
 
-// normalizeApp resolves an application name, case-insensitively, to its canonical target name.
-func normalizeApp(app string) (string, error) {
-	if app == "" {
-		return defaultApp, nil
+// defaultApp names the application a build directory is called after when none was requested.
+func defaultApp(repoRoot string) string {
+	resolved, err := resolveApp(repoRoot, "")
+	if err != nil {
+		return fallbackApp
 	}
-	for target := range androidApps {
-		if strings.EqualFold(target, app) {
-			return target, nil
-		}
-	}
-	names := make([]string, 0, len(androidApps))
-	for target := range androidApps {
-		names = append(names, target)
-	}
-	sort.Strings(names)
-	return "", fmt.Errorf("unsupported Android app %q (expected one of %s)", app, strings.Join(names, ", "))
+	return resolved.Target
 }
 
 // Artifact identifies the APK emitted by the Android CMake driver.
@@ -141,10 +132,11 @@ func Build(repoRoot string, cfg config.Config, variant, app string) (Artifact, e
 	if err != nil {
 		return Artifact{}, err
 	}
-	app, err = normalizeApp(app)
+	resolved, err := resolveApp(repoRoot, app)
 	if err != nil {
 		return Artifact{}, err
 	}
+	app = resolved.Target
 	if err := vcpkg.Ensure(repoRoot, cfg, false); err != nil {
 		return Artifact{}, err
 	}
@@ -233,7 +225,7 @@ func ForwardPort(repoRoot, variant, requestedSerial string, port int) (RunResult
 	if port <= 0 || port > 65535 {
 		return RunResult{}, fmt.Errorf("invalid Tracy port %d", port)
 	}
-	artifact, err := ReadArtifact(repoRoot, variant, defaultApp)
+	artifact, err := ReadArtifact(repoRoot, variant, defaultApp(repoRoot))
 	if err != nil {
 		return RunResult{}, err
 	}
@@ -261,7 +253,7 @@ func ForwardPort(repoRoot, variant, requestedSerial string, port int) (RunResult
 // perform its official Android injection and target-control capture flow.
 func Capture(repoRoot string, _ config.Config, requestedSerial string) (RunResult, error) {
 	const variant = "release"
-	artifact, err := ReadArtifact(repoRoot, variant, defaultApp)
+	artifact, err := ReadArtifact(repoRoot, variant, defaultApp(repoRoot))
 	if err != nil {
 		return RunResult{}, err
 	}
@@ -307,10 +299,11 @@ func ReadArtifact(repoRoot, variant, app string) (Artifact, error) {
 	if err != nil {
 		return Artifact{}, err
 	}
-	app, err = normalizeApp(app)
+	resolved, err := resolveApp(repoRoot, app)
 	if err != nil {
 		return Artifact{}, err
 	}
+	app = resolved.Target
 	buildDir := buildDirectory(repoRoot, variant, app)
 	apkPath := filepath.Join(buildDir, "apk", app+"-"+variant+".apk")
 	info, err := os.Stat(apkPath)
@@ -327,7 +320,7 @@ func ReadArtifact(repoRoot, variant, app string) (Artifact, error) {
 	if err != nil {
 		return Artifact{}, err
 	}
-	return Artifact{APKPath: apkPath, SDKRoot: sdkRoot, App: app, ApplicationID: androidApps[app]}, nil
+	return Artifact{APKPath: apkPath, SDKRoot: sdkRoot, App: app, ApplicationID: resolved.AndroidID}, nil
 }
 
 func normalizeVariant(variant string) (string, error) {
@@ -346,14 +339,14 @@ func normalizeVariant(variant string) (string, error) {
 // every switch. The default application keeps the historical path.
 func buildDirectory(repoRoot, variant, app string) string {
 	name := "android-" + variant
-	if app != "" && app != defaultApp {
+	if app != "" && app != defaultApp(repoRoot) {
 		name += "-" + app
 	}
 	return filepath.Join(repoRoot, "out", "build", name)
 }
 
 func discoverSDKRoot(repoRoot, variant string) (string, error) {
-	return discoverSDKRootFromBuildDir(repoRoot, buildDirectory(repoRoot, variant, defaultApp))
+	return discoverSDKRootFromBuildDir(repoRoot, buildDirectory(repoRoot, variant, defaultApp(repoRoot)))
 }
 
 func discoverSDKRootFromBuildDir(repoRoot, buildDir string) (string, error) {

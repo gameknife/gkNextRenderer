@@ -5,8 +5,7 @@ project(gkNextAndroidDriver LANGUAGES NONE)
 set(GK_ANDROID_VARIANT "release" CACHE STRING "Android build variant (relwithdebinfo, debug, or release)")
 set_property(CACHE GK_ANDROID_VARIANT PROPERTY STRINGS relwithdebinfo debug release)
 set(GK_ANDROID_ABI "arm64-v8a" CACHE STRING "Android ABI")
-set(GK_ANDROID_APP "gkNextRenderer" CACHE STRING "Application target packaged into the APK")
-set_property(CACHE GK_ANDROID_APP PROPERTY STRINGS gkNextRenderer FlappyCSharp)
+set(GK_ANDROID_APP "" CACHE STRING "Application target packaged into the APK")
 set(GK_ANDROID_SDK_ROOT "" CACHE PATH "Android SDK root")
 set(GK_ANDROID_NDK_ROOT "" CACHE PATH "Android NDK root")
 set(GK_ANDROID_JAVA_HOME "" CACHE PATH "JDK root")
@@ -20,21 +19,22 @@ if(NOT GK_ANDROID_ABI STREQUAL "arm64-v8a")
     message(FATAL_ERROR "Only arm64-v8a is supported during the Android build migration")
 endif()
 
+get_filename_component(GK_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+
+# Every application the APK can be built around, and the identity each one installs under, come
+# from the same registry the engine configure reads. Hard-coding them here is how the driver and
+# the engine used to disagree about which applications exist.
+#
 # Each application gets its own applicationId so a device can hold more than one of them, but they
 # all share the com.gknext.renderer Java package: the activity is identical, and only the native
 # library it loads differs. That split is why the manifest names an app id and the activity is
 # still addressed as com.gknext.renderer.GkNextActivity.
-if(GK_ANDROID_APP STREQUAL "gkNextRenderer")
-    set(GK_ANDROID_APPLICATION_ID "com.gknext.renderer")
-    set(GK_ANDROID_APP_LABEL "gkNextRenderer")
-elseif(GK_ANDROID_APP STREQUAL "FlappyCSharp")
-    set(GK_ANDROID_APPLICATION_ID "com.gknext.flappycsharp")
-    set(GK_ANDROID_APP_LABEL "FlappyCSharp")
-else()
-    message(FATAL_ERROR "Unknown GK_ANDROID_APP '${GK_ANDROID_APP}'")
-endif()
-
-get_filename_component(GK_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+include("${GK_REPO_ROOT}/src/cmake/MobileApplications.cmake")
+set_property(CACHE GK_ANDROID_APP PROPERTY STRINGS ${GK_ANDROID_APPLICATIONS})
+gk_resolve_mobile_application("android" "${GK_ANDROID_APP}" gkResolvedAndroidApp)
+set(GK_ANDROID_APP "${gkResolvedAndroidApp}")
+set(GK_ANDROID_APPLICATION_ID "${GK_MOBILE_APP_${GK_ANDROID_APP}_ANDROID_ID}")
+set(GK_ANDROID_APP_LABEL "${GK_MOBILE_APP_${GK_ANDROID_APP}_LABEL}")
 set(GK_GRADLE_DIR "${CMAKE_BINARY_DIR}/gradle")
 set(GK_NATIVE_DIR "${CMAKE_BINARY_DIR}/native")
 set(GK_ASSET_ROOT "${CMAKE_BINARY_DIR}/assets")

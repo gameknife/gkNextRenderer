@@ -1,8 +1,9 @@
 file(GLOB_RECURSE nextDayzSources CONFIGURE_DEPENDS "*.cpp" "*.hpp" "*.h")
 
-add_executable(NextDayz ${nextDayzSources} ${GK_DESKTOP_MAIN_SOURCE})
-gk_configure_application(NextDayz MODULES
-    ${GK_STANDARD_RUNTIME_MODULES}
-    ScadLoader
+gk_add_application(NextDayz
+    SOURCES ${nextDayzSources}
+    MODULES
+        ${GK_STANDARD_RUNTIME_MODULES}
+        ScadLoader
+    LINK NextGameplay
 )
-target_link_libraries(NextDayz PRIVATE NextGameplay)

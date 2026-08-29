@@ -1,8 +1,9 @@
 file(GLOB_RECURSE magicaLegoSources CONFIGURE_DEPENDS "*.cpp" "*.hpp" "*.h")
 
-add_executable(MagicaLego ${magicaLegoSources} ${GK_DESKTOP_MAIN_SOURCE})
-gk_configure_application(MagicaLego MODULES ${GK_STANDARD_RUNTIME_MODULES})
-target_link_libraries(MagicaLego PRIVATE NextAI)
+gk_add_application(MagicaLego
+    SOURCES ${magicaLegoSources}
+    MODULES ${GK_STANDARD_RUNTIME_MODULES} NextAI
+)
 
 if(MSVC)
     set(ffmpegPath ${GK_SOURCE_ROOT}/ThirdParty/ffmpeg/bin/ffmpeg.exe)

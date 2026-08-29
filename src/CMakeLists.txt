@@ -3,6 +3,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(GK_SOURCE_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 
 include(cmake/SourceFiles.cmake)
+include(cmake/MobileApplications.cmake)
 include(cmake/TargetHelpers.cmake)
 include(cmake/RuntimeFeatures.cmake)
 

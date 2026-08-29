@@ -379,7 +379,7 @@ function(gk_configure_android_runtime target)
     add_dependencies(${target} Assets)
 endfunction()
 
-# Builds one Android application library.
+# Builds one Android application library. Called through gk_add_application, never directly.
 #
 # Android has no static engine libraries: src/Engine, src/Modules and src/Gameplay are compiled
 # straight into the application's .so (see src/CMakeLists.txt), so every APK owns a full copy of
@@ -387,9 +387,9 @@ endfunction()
 # source list is repeated per target instead of being linked, and why this function exists.
 #
 #   gk_add_android_application(<target> SOURCES <application sources> MODULES <runtime modules>
-#                              [SCENE <initial scene>])
+#                              [ENTRY <entry point source>])
 function(gk_add_android_application target)
-    cmake_parse_arguments(ARG "" "SCENE" "SOURCES;MODULES" ${ARGN})
+    cmake_parse_arguments(ARG "" "ENTRY" "SOURCES;MODULES" ${ARGN})
 
     # Unrequested modules are normally compiled in and left inert behind their GK_MODULE_* define.
     # NextDotNet cannot be: its CoreCLR host includes hostfxr headers that only a .NET installation
@@ -408,21 +408,196 @@ function(gk_add_android_application target)
         ${src_files_nextgameplay}
         ${src_files_thirdparty}
         ${moduleSources}
-        ${GK_APPLICATION_COMMON_SOURCES}
         ${ARG_SOURCES}
-        ${GK_SOURCE_ROOT}/AndroidMain.cpp
+        ${ARG_ENTRY}
     )
     gk_configure_android_runtime(${target})
     gk_target_runtime_modules(${target} MODULES ${ARG_MODULES})
-
-    if(ARG_SCENE)
-        target_compile_definitions(${target} PRIVATE GK_ANDROID_DEFAULT_SCENE="${ARG_SCENE}")
-    endif()
 
     # On desktop this comes from the NextDotNet module target, which Android does not build. It
     # must not be missed: without it the sources fall back to the CoreCLR host, which needs
     # hostfxr.h and a runtime the device does not have.
     if(GK_DOTNET_ENABLED AND "NextDotNet" IN_LIST ARG_MODULES)
         target_compile_definitions(${target} PRIVATE GK_DOTNET_USE_AOT=${GK_DOTNET_USE_AOT})
+    endif()
+endfunction()
+
+# Turns an executable into a launchable iOS application bundle. Called through gk_add_application,
+# never directly.
+#
+# Every identity here comes from the mobile application registry, so the bundle identifier CMake
+# stamps on the target and the one `gnb ios run` reads back out of the generated manifest cannot
+# drift apart.
+#
+# Do not hand any application the identifier com.tzy.gknext. It was previously shipped from another
+# checkout signed by a different Apple team, and macOS records the identity a bundle identifier is
+# expected to carry. Re-signing it with this team trips an AMFI launch constraint and the app is
+# refused at spawn ("Launch Constraint Violation", launchd job spawn failed, POSIX 162) even though
+# the signature and provisioning profile are perfectly valid.
+function(gk_configure_ios_application target)
+    set(bundleId "${GK_MOBILE_APP_${target}_IOS_BUNDLE_ID}")
+    set(bundleLabel "${GK_MOBILE_APP_${target}_LABEL}")
+    if(NOT bundleId OR NOT bundleLabel)
+        message(FATAL_ERROR
+            "${target} has no iOS identity. Add it to ${GK_MOBILE_APPLICATIONS_MANIFEST}.")
+    endif()
+
+    # An application may ship its own Info.plist; everything else gets the shared one, named after
+    # itself. GK_IOS_BUNDLE_DISPLAY_NAME is what the template substitutes.
+    set(infoPlist "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist")
+    if(NOT EXISTS "${infoPlist}")
+        set(GK_IOS_BUNDLE_DISPLAY_NAME "${bundleLabel}")
+        set(infoPlist "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
+        configure_file("${GK_SOURCE_ROOT}/Application/Info.plist.in" "${infoPlist}" @ONLY)
+    endif()
+
+    set_target_properties(${target} PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST "${infoPlist}"
+        MACOSX_BUNDLE_BUNDLE_NAME "${target}"
+        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "${bundleId}"
+        XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
+    )
+
+    if(IOS_DEVELOPMENT_TEAM)
+        set_target_properties(${target} PROPERTIES
+            XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
+            XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "${IOS_DEVELOPMENT_TEAM}"
+        )
+    else()
+        # CI builds have no signing certificate or provisioning profile. Without this Xcode still
+        # demands a development identity and fails the build. The resulting bundle compiles and
+        # links but cannot be launched.
+        set_target_properties(${target} PROPERTIES
+            XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
+            XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
+        )
+    endif()
+
+    foreach(frameworkName IN ITEMS
+        AVFoundation
+        CoreAudio
+        CoreFoundation
+        Foundation
+        AudioToolbox
+        ImageIO
+        Metal
+        QuartzCore
+        CoreGraphics
+        IOSurface
+        UIKit
+    )
+        find_library(${frameworkName}_FRAMEWORK ${frameworkName} REQUIRED)
+        target_link_libraries(${target} PRIVATE ${${frameworkName}_FRAMEWORK})
+    endforeach()
+
+    add_custom_command(TARGET ${target} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${PROJECT_BINARY_DIR}/assets/assets
+            $<TARGET_BUNDLE_DIR:${target}>/assets
+        COMMENT "Copying assets to iOS bundle"
+    )
+
+    # What `gnb ios run` installs and launches. Exactly one application is configured per iOS build
+    # tree, so this manifest names it without any further selection.
+    file(GENERATE
+        OUTPUT "${PROJECT_BINARY_DIR}/ios-app-$<CONFIG>.json"
+        CONTENT "{\n  \"app\": \"${target}\",\n  \"bundle_path\": \"$<TARGET_BUNDLE_DIR:${target}>\",\n  \"bundle_id\": \"${bundleId}\"\n}\n"
+    )
+endfunction()
+
+# Applies the parts of a mobile application that are the same on both platforms. It has no command
+# line, so its identity is compiled in; its initial scene remains application-owned.
+function(gk_configure_mobile_application target)
+    if(NOT target IN_LIST GK_MOBILE_APPLICATIONS)
+        message(FATAL_ERROR
+            "${target} is not a mobile application. Add it to ${GK_MOBILE_APPLICATIONS_MANIFEST}.")
+    endif()
+
+    target_compile_definitions(${target} PRIVATE GK_APPLICATION_NAME="${target}")
+
+    if(IOS)
+        gk_configure_ios_application(${target})
+    endif()
+endfunction()
+
+# Declares one application, on whichever platform is being configured.
+#
+# This is the only way an application should be created. The three platforms disagree about what an
+# application even is — a desktop executable, an iOS bundle, or an Android shared library carrying
+# its own copy of the engine — and routing every application through here is what lets the mobile
+# registry package any of them instead of the one that happened to have a hand-written Android
+# branch.
+#
+#   gk_add_application(<target>
+#       SOURCES  <application sources>
+#       [MODULES <runtime modules>]   Optional engine modules, resolved per platform.
+#       [LINK    <libraries>]         Engine libraries (NextGameplay, ...) that Android compiles
+#                                     into the application instead of linking.
+#       [DEFINES <definitions>]       PRIVATE compile definitions.
+#       [INCLUDES <directories>]      PRIVATE include directories.
+#       [NO_DEFAULT_MAIN]             The application brings its own SDL entry point.
+#       [CORE_ONLY] [NO_UNITY] [NO_FAST_LINK] [MINIMAL_LINK])
+function(gk_add_application target)
+    cmake_parse_arguments(ARG
+        "CORE_ONLY;NO_UNITY;NO_FAST_LINK;MINIMAL_LINK;NO_DEFAULT_MAIN"
+        ""
+        "SOURCES;MODULES;LINK;DEFINES;INCLUDES"
+        ${ARGN})
+
+    if(NOT ARG_SOURCES)
+        message(FATAL_ERROR "gk_add_application(${target}) requires SOURCES")
+    endif()
+
+    set(entryPoint "")
+    if(NOT ARG_NO_DEFAULT_MAIN)
+        if(ANDROID)
+            set(entryPoint "${GK_SOURCE_ROOT}/AndroidMain.cpp")
+        else()
+            set(entryPoint "${GK_DESKTOP_MAIN_SOURCE}")
+        endif()
+    endif()
+
+    if(ANDROID)
+        gk_add_android_application(${target}
+            SOURCES ${ARG_SOURCES}
+            ENTRY ${entryPoint}
+            MODULES ${ARG_MODULES}
+        )
+    else()
+        set(bundleType "")
+        if(IOS)
+            set(bundleType MACOSX_BUNDLE)
+        endif()
+        add_executable(${target} ${bundleType} ${ARG_SOURCES} ${entryPoint})
+
+        set(configureOptions "")
+        foreach(optionName IN ITEMS CORE_ONLY NO_UNITY NO_FAST_LINK MINIMAL_LINK)
+            if(ARG_${optionName})
+                list(APPEND configureOptions ${optionName})
+            endif()
+        endforeach()
+        gk_configure_application(${target} ${configureOptions} MODULES ${ARG_MODULES})
+    endif()
+
+    # Engine libraries only exist where the engine is a library. Android compiles the same sources
+    # straight into the application, so there is nothing left to link there.
+    foreach(library IN LISTS ARG_LINK)
+        if(TARGET ${library})
+            target_link_libraries(${target} PRIVATE ${library})
+        elseif(NOT ANDROID)
+            message(FATAL_ERROR
+                "gk_add_application(${target}) links '${library}', which is not a target here")
+        endif()
+    endforeach()
+
+    if(ARG_DEFINES)
+        target_compile_definitions(${target} PRIVATE ${ARG_DEFINES})
+    endif()
+    if(ARG_INCLUDES)
+        target_include_directories(${target} PRIVATE ${ARG_INCLUDES})
+    endif()
+
+    if(ANDROID OR IOS)
+        gk_configure_mobile_application(${target})
     endif()
 endfunction()

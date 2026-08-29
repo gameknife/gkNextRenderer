@@ -45,9 +45,15 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 - Full build (all targets): `./gnb.sh build --all` (Windows: `gnb.bat build --all` —— 构建全量 15+ 子项目)
 - Specific target: `./gnb.sh build gkNextEditor`
 - Android: `./gnb.sh android build debug` 生成 APK，`./gnb.sh android run debug` 装到设备并启动
-  - APK 里装哪个程序由 `--app` 决定，默认 `gkNextRenderer`；`--app FlappyCSharp` 打的是 C# 游戏，
-    托管层走 NativeAOT 交叉编译（`linux-bionic-arm64`）。每个 app 有各自的 applicationId 与
-    build 目录，可同时装在一台设备上。
+  - APK 里装哪个程序由 `--app` 决定，可选的是
+    [`src/Application/MobileApplications.json`](src/Application/MobileApplications.json) 里
+    列出的 application（默认取该文件第一条，即 `gkNextRenderer`），**不再只有固化的两个**。
+    每个 app 有各自的 applicationId、启动 label 与 build 目录，可同时装在一台设备上。
+  - `--app FlappyCSharp` 这类 C# 游戏托管层走 NativeAOT 交叉编译（`linux-bionic-arm64`）。
+- iOS: `./gnb.sh ios build [--app <target>] --team-id <TEAM_ID>` / `./gnb.sh ios run`
+  - 同一份注册表决定 iOS 能打哪些 application；bundle id 与显示名都取自那里。
+  - 移动端一次配置只声明一个 application（Android 的 .so 自带整份引擎，逐个声明代价太大），
+    换 app 会触发 reconfigure。
 - Clean rebuild: `./gnb.sh build --clean`
 - Force vcpkg update: `./gnb.sh setup --refresh`
 
@@ -81,6 +87,7 @@ because concurrent Windows builds can lock `.obj`, executables, or vcpkg state f
 - Visual test shortcut: `./gnb.sh visual`
 - TUI terminal mode: `./gnb.sh tui --scene assets/models/playground.glb`
 - Android: `./gnb.sh android build <variant> [--app <target>]` / `./gnb.sh android run <variant> [--app <target>]`
+- iOS: `./gnb.sh ios build [--app <target>]` / `./gnb.sh ios run`
 - Optional assets: `./gnb.sh paks fetch` / `./gnb.sh paks list`
 - Source-line stats: `./gnb.sh loc` (CLI) — also browsable in `./gnb.sh dashboard`
 - Managed bindings: `./gnb.sh csharpgen` (regenerate) / `./gnb.sh csharpgen --check` (CI guard)
@@ -240,6 +247,25 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 ```
 
 ## Key Architectural Patterns
+
+**Application targets (`gk_add_application`):**
+- 每个 application 的 `CMakeLists.txt` 只调用 `gk_add_application(<target> SOURCES ... MODULES ...
+  [LINK ...] [DEFINES ...] [INCLUDES ...])`。**不要**再手写 `add_executable` +
+  `gk_configure_application`：三个平台对"什么是一个 application"的答案不同（桌面 exe / iOS bundle /
+  Android 自带整份引擎的 .so），这个入口就是把差异收在一处的地方。
+- 桌面接 `DesktopMain.cpp`、Android 接 `AndroidMain.cpp`，由入口自动挑选；自带 `main()` 的程序
+  （`Packager`、`ScadCatalog`、`gkNextMinimalRenderer`）传 `NO_DEFAULT_MAIN`。
+- `MODULES` 走 `gk_target_runtime_modules`，三平台都可用；`LINK` 留给 `NextGameplay` 这类
+  **引擎库**——Android 把同样的源码直接编进 .so，所以那里会跳过链接。
+- 能上移动端的 application 列在
+  [`src/Application/MobileApplications.json`](src/Application/MobileApplications.json)：目录、
+  applicationId / bundle id、显示名、是否需要 .NET。不在表里 = 仅桌面。
+  `src/cmake/MobileApplications.cmake`、`tools/android/CMakeLists.txt` 和 gnb 读的都是这一份。
+- 移动端配置**只 add_subdirectory 被选中的那一个 application 目录**，所以每个 application 目录必须
+  自洽——不能依赖上层 `CMakeLists.txt` 设的变量（这就是 benchmark/editor/flappy 的 common 源码
+  globs 下沉到各自叶子目录的原因）。选谁由 `GK_MOBILE_APP` 决定，Gradle 与 `gnb ios build --app`
+  会传进来。
+- 详见 [移动端 application 目标设计](docs/designs/mobile-application-targets.md)。
 
 **Reflection System (entt::meta):**
 - Provides auto-generated editor UI via PropertyPanel

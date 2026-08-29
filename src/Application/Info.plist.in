@@ -1,11 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+    Shared iOS Info.plist for every application in the mobile registry. The display name is the
+    only thing that differs per application, so an application only needs its own Info.plist when
+    it needs a capability, orientation set or URL scheme this one does not describe; drop that file
+    next to its CMakeLists.txt and gk_configure_ios_application picks it up instead.
+-->
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>gkNextRenderer</string>
+    <string>@GK_IOS_BUNDLE_DISPLAY_NAME@</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>

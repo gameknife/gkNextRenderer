@@ -3,19 +3,23 @@ file(GLOB_RECURSE gkNextStillBenchmarkSources CONFIGURE_DEPENDS
     "*.hpp"
     "*.h"
 )
+file(GLOB_RECURSE gkNextBenchmarkCommonSources CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/../Common/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../Common/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../Common/*.h"
+)
 
-add_executable(gkNextStillBenchmark
-    ${gkNextStillBenchmarkSources}
-    ${GK_BENCHMARK_COMMON_SOURCES}
-    ${GK_APPLICATION_COMMON_SOURCES}
-    ${GK_DESKTOP_MAIN_SOURCE}
-)
 # Intentionally mirrors the minimal renderer module footprint. DemoScenes need no asset loaders.
-gk_configure_application(gkNextStillBenchmark MINIMAL_LINK MODULES
-    SceneContent
-    NextValidation
-    NextCapture
-    NextPhysics
-    NextTemporalUpscaler
+gk_add_application(gkNextStillBenchmark MINIMAL_LINK
+    SOURCES
+        ${gkNextStillBenchmarkSources}
+        ${gkNextBenchmarkCommonSources}
+        ${GK_APPLICATION_COMMON_SOURCES}
+    MODULES
+        SceneContent
+        NextValidation
+        NextCapture
+        NextPhysics
+        NextTemporalUpscaler
+    INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
-target_include_directories(gkNextStillBenchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)

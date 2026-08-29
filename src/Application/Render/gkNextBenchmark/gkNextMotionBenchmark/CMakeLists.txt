@@ -3,20 +3,24 @@ file(GLOB_RECURSE gkNextMotionBenchmarkSources CONFIGURE_DEPENDS
     "*.hpp"
     "*.h"
 )
+file(GLOB_RECURSE gkNextBenchmarkCommonSources CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/../Common/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../Common/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../Common/*.h"
+)
 
-add_executable(gkNextMotionBenchmark
-    ${gkNextMotionBenchmarkSources}
-    ${GK_BENCHMARK_COMMON_SOURCES}
-    ${GK_APPLICATION_COMMON_SOURCES}
-    ${GK_DESKTOP_MAIN_SOURCE}
-)
 # DemoScenes need no asset loaders, but the benchmark overlay requires the ImGui backend.
-gk_configure_application(gkNextMotionBenchmark MINIMAL_LINK MODULES
-    SceneContent
-    NextValidation
-    NextUI
-    NextCapture
-    NextPhysics
-    NextTemporalUpscaler
+gk_add_application(gkNextMotionBenchmark MINIMAL_LINK
+    SOURCES
+        ${gkNextMotionBenchmarkSources}
+        ${gkNextBenchmarkCommonSources}
+        ${GK_APPLICATION_COMMON_SOURCES}
+    MODULES
+        SceneContent
+        NextValidation
+        NextUI
+        NextCapture
+        NextPhysics
+        NextTemporalUpscaler
+    INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
-target_include_directories(gkNextMotionBenchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)

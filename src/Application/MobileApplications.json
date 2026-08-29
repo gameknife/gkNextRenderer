@@ -1,0 +1,230 @@
+{
+    "comment": [
+        "Applications that can be packaged for a mobile platform, and the identity each one ships",
+        "under. This file is the single source of truth for three consumers that used to hard-code",
+        "gkNextRenderer: src/cmake/MobileApplications.cmake (which application directory a mobile",
+        "configure adds), tools/android (applicationId and launcher label baked into the APK), and",
+        "gnb (the --app flag of `gnb android` and `gnb ios`).",
+        "",
+        "An application that is absent from this list is desktop-only; nothing else marks it as such.",
+        "",
+        "Fields:",
+        "  target          CMake target name, and the name passed to --app.",
+        "  directory       Application directory, relative to src/Application. A mobile configure adds",
+        "                  exactly this one directory, so it has to be self-contained.",
+        "  label           Launcher / bundle display name.",
+        "  platforms       Which mobile platforms can package it.",
+        "  androidId       applicationId of the APK. Distinct per application so one device can hold",
+        "                  more than one of them at a time.",
+        "  iosBundleId     Bundle identifier of the .app. Must match an installed provisioning profile;",
+        "                  see the note in gk_configure_ios_application about never reusing an",
+        "                  identifier another Apple team has already shipped.",
+        "  requiresDotNet  The application hosts C#, so it can only be configured where the managed",
+        "                  scripting layer exists (Android NativeAOT; never iOS)."
+    ],
+    "applications": [
+        {
+            "target": "gkNextRenderer",
+            "directory": "Render/gkNextRenderer",
+            "label": "gkNextRenderer",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.renderer",
+            "iosBundleId": "gknext.renderer"
+        },
+        {
+            "target": "gkNextMotionBenchmark",
+            "directory": "Render/gkNextBenchmark/gkNextMotionBenchmark",
+            "label": "Motion Benchmark",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.motionbenchmark",
+            "iosBundleId": "gknext.motionbenchmark"
+        },
+        {
+            "target": "gkNextStillBenchmark",
+            "directory": "Render/gkNextBenchmark/gkNextStillBenchmark",
+            "label": "Still Benchmark",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.stillbenchmark",
+            "iosBundleId": "gknext.stillbenchmark"
+        },
+        {
+            "target": "RmlUiDemo",
+            "directory": "Render/RmlUiDemo",
+            "label": "RmlUi Demo",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.rmluidemo",
+            "iosBundleId": "gknext.rmluidemo"
+        },
+        {
+            "target": "gkNextEditor",
+            "directory": "Editor/gkNextEditor",
+            "label": "gkNextEditor",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.editor",
+            "iosBundleId": "gknext.editor"
+        },
+        {
+            "target": "ScadStudio",
+            "directory": "Editor/ScadStudio",
+            "label": "ScadStudio",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.scadstudio",
+            "iosBundleId": "gknext.scadstudio"
+        },
+        {
+            "target": "ScadLibrary",
+            "directory": "Editor/ScadLibrary",
+            "label": "ScadLibrary",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.scadlibrary",
+            "iosBundleId": "gknext.scadlibrary"
+        },
+        {
+            "target": "MagicaLego",
+            "directory": "Game/MagicaLego",
+            "label": "MagicaLego",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.magicalego",
+            "iosBundleId": "gknext.magicalego"
+        },
+        {
+            "target": "KongLie3D",
+            "directory": "Game/KongLie3D",
+            "label": "KongLie3D",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.konglie3d",
+            "iosBundleId": "gknext.konglie3d"
+        },
+        {
+            "target": "Brotato3D",
+            "directory": "Game/Brotato3D",
+            "label": "Brotato3D",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.brotato3d",
+            "iosBundleId": "gknext.brotato3d"
+        },
+        {
+            "target": "Brotato3DCSharp",
+            "directory": "Game/Brotato3DCSharp",
+            "label": "Brotato3D C#",
+            "platforms": ["android"],
+            "androidId": "com.gknext.brotato3dcsharp",
+            "iosBundleId": "gknext.brotato3dcsharp",
+            "requiresDotNet": true
+        },
+        {
+            "target": "NextRA",
+            "directory": "Game/NextRA",
+            "label": "NextRA",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.nextra",
+            "iosBundleId": "gknext.nextra"
+        },
+        {
+            "target": "FlappyCpp",
+            "directory": "Game/Flappy/FlappyCpp",
+            "label": "Flappy C++",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.flappycpp",
+            "iosBundleId": "gknext.flappycpp"
+        },
+        {
+            "target": "FlappyCSharp",
+            "directory": "Game/Flappy/FlappyCSharp",
+            "label": "FlappyCSharp",
+            "platforms": ["android"],
+            "androidId": "com.gknext.flappycsharp",
+            "iosBundleId": "gknext.flappycsharp",
+            "requiresDotNet": true
+        },
+        {
+            "target": "BrickPlayer",
+            "directory": "Game/BrickPlayer",
+            "label": "BrickPlayer",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.brickplayer",
+            "iosBundleId": "gknext.brickplayer"
+        },
+        {
+            "target": "CharacterDemo",
+            "directory": "Game/CharacterDemo",
+            "label": "CharacterDemo",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.characterdemo",
+            "iosBundleId": "gknext.characterdemo"
+        },
+        {
+            "target": "NextDayz",
+            "directory": "Game/NextDayz",
+            "label": "NextDayz",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.nextdayz",
+            "iosBundleId": "gknext.nextdayz"
+        },
+        {
+            "target": "TruckerDemo",
+            "directory": "Game/TruckerDemo",
+            "label": "TruckerDemo",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.truckerdemo",
+            "iosBundleId": "gknext.truckerdemo"
+        },
+        {
+            "target": "StudioSim",
+            "directory": "Game/StudioSim",
+            "label": "StudioSim",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.studiosim",
+            "iosBundleId": "gknext.studiosim"
+        },
+        {
+            "target": "AirportSim",
+            "directory": "Game/AirportSim",
+            "label": "AirportSim",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.airportsim",
+            "iosBundleId": "gknext.airportsim"
+        },
+        {
+            "target": "CitySolSim",
+            "directory": "Game/CitySolSim",
+            "label": "CitySolSim",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.citysolsim",
+            "iosBundleId": "gknext.citysolsim"
+        },
+        {
+            "target": "NextWorldTravel",
+            "directory": "Game/NextWorldTravel",
+            "label": "NextWorldTravel",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.nextworldtravel",
+            "iosBundleId": "gknext.nextworldtravel"
+        },
+        {
+            "target": "Voyage3D",
+            "directory": "Game/Voyage3D",
+            "label": "Voyage3D",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.voyage3d",
+            "iosBundleId": "gknext.voyage3d"
+        },
+        {
+            "target": "NextTotalwar",
+            "directory": "Game/NextTotalwar",
+            "label": "NextTotalwar",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.nexttotalwar",
+            "iosBundleId": "gknext.nexttotalwar"
+        },
+        {
+            "target": "DotNetSandbox",
+            "directory": "Game/DotNetSandbox",
+            "label": "DotNetSandbox",
+            "platforms": ["android"],
+            "androidId": "com.gknext.dotnetsandbox",
+            "iosBundleId": "gknext.dotnetsandbox",
+            "requiresDotNet": true
+        }
+    ]
+}

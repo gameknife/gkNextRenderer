@@ -19,6 +19,7 @@ import (
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/fetcher"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ios"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/mobileapps"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/loc"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/packager"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/paks"
@@ -835,7 +836,8 @@ func newAndroidCommand(ctx appContext) *cobra.Command {
 			return nil
 		},
 	}
-	build.Flags().StringVar(&buildApp, "app", "", "application to package (gkNextRenderer or FlappyCSharp)")
+	build.Flags().StringVar(&buildApp, "app", "",
+		mobileapps.FlagHelp(ctx.repoRoot, mobileapps.Android, "application to package"))
 	root.AddCommand(build)
 
 	serial := ""
@@ -863,7 +865,8 @@ func newAndroidCommand(ctx appContext) *cobra.Command {
 	}
 	run.Flags().StringVar(&serial, "serial", "", "use this online adb device serial")
 	run.Flags().StringVar(&avd, "avd", "", "start this local AVD when no adb device is online")
-	run.Flags().StringVar(&runApp, "app", "", "application to install (gkNextRenderer or FlappyCSharp)")
+	run.Flags().StringVar(&runApp, "app", "",
+		mobileapps.FlagHelp(ctx.repoRoot, mobileapps.Android, "application to install"))
 	root.AddCommand(run)
 
 	captureSerial := ""
@@ -935,9 +938,10 @@ func newIOSCommand(ctx appContext) *cobra.Command {
 	buildOpts := cmakerun.BuildOptions{}
 	teamID := ""
 	verbose := false
+	buildApp := ""
 	build := &cobra.Command{
 		Use:   "build",
-		Short: "Build gkNextRenderer for an arm64 iOS device",
+		Short: "Build an application for an arm64 iOS device",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if _, err := os.Stat(vcpkg.Toolchain(ctx.repoRoot, ctx.cfg)); err != nil {
@@ -955,7 +959,7 @@ func newIOSCommand(ctx appContext) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			staged, err := ios.Build(ctx.repoRoot, cmakePath, teamID, !verbose, buildOpts)
+			staged, err := ios.Build(ctx.repoRoot, cmakePath, teamID, buildApp, !verbose, buildOpts)
 			if err != nil {
 				return err
 			}
@@ -976,6 +980,8 @@ func newIOSCommand(ctx appContext) *cobra.Command {
 	build.Flags().IntVar(&buildOpts.Jobs, "jobs", 0, "parallel build jobs")
 	build.Flags().StringVar(&teamID, "team-id", "", "Apple Developer Team ID for automatic device signing")
 	build.Flags().BoolVar(&verbose, "verbose", false, "show normal Xcode build progress output")
+	build.Flags().StringVar(&buildApp, "app", "",
+		mobileapps.FlagHelp(ctx.repoRoot, mobileapps.IOS, "application to bundle"))
 
 	root.AddCommand(build)
 	devices := &cobra.Command{

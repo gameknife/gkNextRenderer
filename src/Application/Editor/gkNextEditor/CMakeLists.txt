@@ -3,13 +3,12 @@ file(GLOB_RECURSE gkNextEditorSources CONFIGURE_DEPENDS
     "*.hpp"
     "*.h"
 )
-
-add_executable(gkNextEditor
-    ${gkNextEditorSources}
-    ${GK_EDITOR_COMMON_SOURCES}
-    ${GK_APPLICATION_COMMON_SOURCES}
-    ${GK_DESKTOP_MAIN_SOURCE}
+file(GLOB_RECURSE gkNextEditorCommonSources CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/../Common/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../Common/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../Common/*.h"
 )
+
 set(gkNextEditorModules
     ${GK_STANDARD_RUNTIME_MODULES}
     LDrawLoader
@@ -26,10 +25,17 @@ endif()
 if(TARGET NextDotNet)
     list(APPEND gkNextEditorModules NextDotNet)
 endif()
-gk_configure_application(gkNextEditor MODULES ${gkNextEditorModules})
-target_link_libraries(gkNextEditor PRIVATE NextGameplay)
 
-if(GK_DOTNET_ENABLED)
+gk_add_application(gkNextEditor
+    SOURCES
+        ${gkNextEditorSources}
+        ${gkNextEditorCommonSources}
+        ${GK_APPLICATION_COMMON_SOURCES}
+    MODULES ${gkNextEditorModules}
+    LINK NextGameplay
+)
+
+if(TARGET NextDotNet)
     # The editor hosts games chosen at runtime and brings no C# of its own. Under NativeAOT this
     # supplies the bootstrap symbol the linker wants; play-in-editor then reports itself unavailable
     # at runtime, because an AOT binary has exactly one game linked in and nothing to choose.

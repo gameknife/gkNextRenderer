@@ -4,5 +4,8 @@ file(GLOB_RECURSE gkNextMinimalRendererSources CONFIGURE_DEPENDS
     "*.h"
 )
 
-add_executable(gkNextMinimalRenderer ${gkNextMinimalRendererSources})
-gk_configure_application(gkNextMinimalRenderer CORE_ONLY MINIMAL_LINK)
+# MinimalMain.cpp is this application's whole point: it starts the engine without the shared
+# desktop entry point, so nothing but engine core is exercised.
+gk_add_application(gkNextMinimalRenderer CORE_ONLY MINIMAL_LINK NO_DEFAULT_MAIN
+    SOURCES ${gkNextMinimalRendererSources}
+)

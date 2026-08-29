@@ -4,14 +4,13 @@ file(GLOB_RECURSE gkNextVisualTestSources CONFIGURE_DEPENDS
     "*.h"
 )
 
-add_executable(gkNextVisualTest
-    ${gkNextVisualTestSources}
-    ${GK_APPLICATION_COMMON_SOURCES}
-    ${GK_DESKTOP_MAIN_SOURCE}
-)
-gk_configure_application(gkNextVisualTest MODULES
-    ${GK_STANDARD_RUNTIME_MODULES}
-    LDrawLoader
-    ScadLoader
-    SplatLoader
+gk_add_application(gkNextVisualTest
+    SOURCES
+        ${gkNextVisualTestSources}
+        ${GK_APPLICATION_COMMON_SOURCES}
+    MODULES
+        ${GK_STANDARD_RUNTIME_MODULES}
+        LDrawLoader
+        ScadLoader
+        SplatLoader
 )

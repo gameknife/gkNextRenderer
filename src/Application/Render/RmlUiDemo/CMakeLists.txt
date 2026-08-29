@@ -4,11 +4,9 @@ file(GLOB_RECURSE rmlUiDemoSources CONFIGURE_DEPENDS
     "*.h"
 )
 
-add_executable(RmlUiDemo
-    ${rmlUiDemoSources}
-    ${GK_DESKTOP_MAIN_SOURCE}
-)
-gk_configure_application(RmlUiDemo MODULES
-    ${GK_STANDARD_RUNTIME_MODULES}
-    NextRmlUi
+gk_add_application(RmlUiDemo
+    SOURCES ${rmlUiDemoSources}
+    MODULES
+        ${GK_STANDARD_RUNTIME_MODULES}
+        NextRmlUi
 )
