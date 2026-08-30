@@ -96,6 +96,9 @@ public:
     virtual bool IsAppDebugShortcutActive(SDL_Keycode key) const { return false; }
     virtual bool SetAppDebugShortcutActive(SDL_Keycode key, bool active) { return false; }
     virtual bool WantsMouseInputWhenUiCaptures() const { return false; }
+    // Some editor-level shortcuts remain meaningful when a non-text ImGui
+    // widget (for example an outliner row) has keyboard focus.
+    virtual bool WantsKeyboardInputWhenUiCaptures() const { return false; }
     virtual bool OnKey(SDL_Event& event) { return false; }
     virtual bool OnCursorPosition(double xpos, double ypos) { return false; }
     virtual bool OnMouseButton(SDL_Event& event) { return false; }

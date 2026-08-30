@@ -40,6 +40,7 @@ public:
     bool OnMouseButton(SDL_Event& event) override;
     bool OnScroll(double xoffset, double yoffset) override;
     bool WantsMouseInputWhenUiCaptures() const override { return true; }
+    bool WantsKeyboardInputWhenUiCaptures() const override { return true; }
 
 private:
     void FocusSelectedSceneObject();

@@ -212,6 +212,14 @@ bool ScadLibraryGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCame
 
 bool ScadLibraryGameInstance::OnKey(SDL_Event& event)
 {
+    // The engine also forwards non-text shortcuts while an ImGui outliner row
+    // owns keyboard focus. Keep actual text editing isolated from camera/input
+    // handling when the focused widget is an InputText.
+    if (ImGui::GetIO().WantTextInput)
+    {
+        return true;
+    }
+
     const bool modeShortcut = event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat &&
         (event.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0 && !ImGui::GetIO().WantTextInput;
     if (modeShortcut)
@@ -245,7 +253,9 @@ bool ScadLibraryGameInstance::OnKey(SDL_Event& event)
 
     if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && !ImGui::GetIO().WantTextInput)
     {
-        if (event.key.key == SDLK_F && ui_->WorkspaceMode() == ScadLibrary::EWorkspaceMode::SceneAssembly)
+        if (event.key.key == SDLK_F &&
+            (ui_->WorkspaceMode() == ScadLibrary::EWorkspaceMode::SceneAssembly ||
+             ui_->WorkspaceMode() == ScadLibrary::EWorkspaceMode::KitBrowser))
         {
             FocusSelectedSceneObject();
             return true;
@@ -266,7 +276,9 @@ bool ScadLibraryGameInstance::OnCursorPosition(double xpos, double ypos)
 {
     glm::vec3 center;
     float radius = 0.0f;
-    const bool hasSelectedSceneObject = ui_->WorkspaceMode() == ScadLibrary::EWorkspaceMode::SceneAssembly &&
+    const bool hasSelectedSceneObject =
+        (ui_->WorkspaceMode() == ScadLibrary::EWorkspaceMode::SceneAssembly ||
+         ui_->WorkspaceMode() == ScadLibrary::EWorkspaceMode::KitBrowser) &&
         ui_->GetSelectedSceneObjectBounds(center, radius);
     if (hasSelectedSceneObject || GetEngine().GetScene().GetSelectedNodeBounds(center, radius))
     {

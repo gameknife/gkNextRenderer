@@ -66,8 +66,9 @@ void NextEngine::OnKey(SDL_Event& event)
         }
     }
 
-    if ((userInterface_ && userInterface_->WantsToCaptureKeyboard()) ||
-        (uiOverlay_ && uiOverlay_->WantsToCaptureKeyboard()))
+    if (((userInterface_ && userInterface_->WantsToCaptureKeyboard()) ||
+         (uiOverlay_ && uiOverlay_->WantsToCaptureKeyboard())) &&
+        !gameInstance_->WantsKeyboardInputWhenUiCaptures())
     {
         return;
     }

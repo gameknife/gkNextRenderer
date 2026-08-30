@@ -5404,7 +5404,13 @@ namespace ScadLibrary
                 }
                 if (selectedSegment_ == static_cast<int>(segmentIndex) && scrollToSelectedSegment_)
                 {
-                    ImGui::SetScrollHereY(0.35f);
+                    // Selection from the viewport may target a row outside the
+                    // current view, but clicking an already visible Outliner
+                    // row must not move the user's scroll position.
+                    if (!ImGui::IsItemVisible())
+                    {
+                        ImGui::SetScrollHereY(0.35f);
+                    }
                     scrollToSelectedSegment_ = false;
                 }
                 if (instance != nullptr && ImGui::IsItemHovered())
@@ -6372,6 +6378,10 @@ namespace ScadLibrary
         {
             return;
         }
+        // A module preview replaces the assembly scene. Do not leave an old
+        // assembly item selected, otherwise the gizmo/focus code can resolve
+        // that stale item against the newly loaded preview scene.
+        ClearEditableSceneSelection();
         selectedKit_ = kitIndex;
         selectedModule_ = moduleName;
         aiKitContextActive_ = true;
@@ -9067,6 +9077,36 @@ namespace ScadLibrary
 
     bool ScadLibraryInterface::GetSelectedSceneObjectBounds(glm::vec3& center, float& radius)
     {
+        // A standalone module preview has no FBenchItem. Its only editable
+        // selection is the module shown in the preview scene, so use that
+        // scene's bounds as the focus target.
+        if (modulePreviewActive_ &&
+            (workspaceMode_ == EWorkspaceMode::SceneAssembly || workspaceMode_ == EWorkspaceMode::KitBrowser))
+        {
+            const Assets::Scene& scene = engine_.GetScene();
+            const glm::vec3 minBounds = scene.GetSceneAABBMin();
+            const glm::vec3 maxBounds = scene.GetSceneAABBMax();
+            if (!glm::all(glm::lessThan(minBounds, maxBounds)))
+            {
+                return false;
+            }
+            center = (minBounds + maxBounds) * 0.5f;
+            radius = std::max(glm::length(maxBounds - minBounds) * 0.5f, 0.5f);
+            return true;
+        }
+
+        // Source/module rows in the structure Outliner are represented by a
+        // cached world-space OBB rather than an FBenchItem. The overlay already
+        // uses these bounds; use the same selection for F so both paths focus
+        // the object the user sees selected.
+        if (workspaceMode_ == EWorkspaceMode::SceneAssembly && selectedStructureBoundsValid_ &&
+            selectedStructureBoundsSegment_ == selectedSegment_)
+        {
+            center = (selectedStructureBoundsMin_ + selectedStructureBoundsMax_) * 0.5f;
+            radius = std::max(glm::length(selectedStructureBoundsMax_ - selectedStructureBoundsMin_) * 0.5f, 0.05f);
+            return true;
+        }
+
         if (workspaceMode_ != EWorkspaceMode::SceneAssembly || selectedBenchItem_ < 0 ||
             selectedBenchItem_ >= static_cast<int>(Bench().size()))
         {
