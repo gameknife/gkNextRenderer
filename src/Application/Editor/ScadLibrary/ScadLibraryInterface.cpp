@@ -5427,7 +5427,11 @@ namespace ScadLibrary
                 ImGui::TableSetColumnIndex(3);
                 ImGui::TextDisabled("%s", segment.line > 0 ? fmt::format("L{}", segment.line).c_str() : "新增");
 
-                if (segment.kind == EScadSegmentKind::Terrain)
+                // The terrain assignment (for example `TERR = [...]`) and the
+                // gk_terrain(TERR) call are both top-level Terrain segments,
+                // but only the call owns the feature/rule children. Expanding
+                // both would render the same operators twice.
+                if (segment.kind == EScadSegmentKind::Terrain && segment.name == "gk_terrain")
                 {
                     const Assets::Scad::FTerrainSpec& terrain = TerrainProcess().Terrain();
                     for (size_t featureIndex = 0; featureIndex < terrain.features.size(); ++featureIndex)
@@ -5611,7 +5615,7 @@ namespace ScadLibrary
                 }
             }
 
-            if (segment.kind == EScadSegmentKind::Terrain)
+            if (segment.kind == EScadSegmentKind::Terrain && segment.name == "gk_terrain")
             {
                 ImGui::Indent(18.0f);
                 Assets::Scad::FTerrainSpec& terrain = TerrainProcess().Terrain();
