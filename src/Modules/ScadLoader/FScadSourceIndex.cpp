@@ -4,6 +4,7 @@
 #include "Modules/ScadLoader/FScadLexer.h"
 #include "Modules/ScadLoader/FScadParser.h"
 
+#include <algorithm>
 #include <cctype>
 
 namespace Assets::Scad
@@ -97,6 +98,45 @@ namespace Assets::Scad
         }
     } // namespace
 
+    std::string ApplyScadSourceEdits(const std::string& source, std::vector<FScadSourceEdit> edits)
+    {
+        // Apply back-to-front so earlier offsets stay valid. Ties (several
+        // insertions at one offset) are applied in reverse queue order, which
+        // leaves them in queue order in the result.
+        std::vector<size_t> order(edits.size());
+        for (size_t index = 0; index < order.size(); ++index)
+        {
+            order[index] = index;
+        }
+        std::sort(order.begin(), order.end(), [&](size_t left, size_t right)
+        {
+            if (edits[left].begin != edits[right].begin)
+            {
+                return edits[left].begin > edits[right].begin;
+            }
+            return left > right;
+        });
+
+        std::string result = source;
+        size_t lowestApplied = std::string::npos;
+        for (const size_t editIndex : order)
+        {
+            const FScadSourceEdit& edit = edits[editIndex];
+            if (edit.begin > edit.end || edit.end > source.size())
+            {
+                continue;
+            }
+            if (lowestApplied != std::string::npos && edit.end > lowestApplied)
+            {
+                // Overlaps an edit already applied further down the file.
+                continue;
+            }
+            result.replace(edit.begin, edit.end - edit.begin, edit.text);
+            lowestApplied = edit.begin;
+        }
+        return result;
+    }
+
     const FScadDefinitionSpan* FScadSourceIndex::Find(EScadDefinitionKind kind, std::string_view name) const
     {
         const auto found = std::find_if(definitions.begin(), definitions.end(), [&](const FScadDefinitionSpan& item)
@@ -107,6 +147,8 @@ namespace Assets::Scad
     bool BuildScadSourceIndex(const std::string& source, FScadSourceIndex& outIndex, std::string& outError)
     {
         outIndex.definitions.clear();
+        outIndex.statements.clear();
+        outIndex.topLevel.clear();
         const std::string masked = MaskDirectives(source);
         std::vector<Token> tokens;
         if (!ScadLexer::Tokenize(masked, tokens, outError))
@@ -114,9 +156,34 @@ namespace Assets::Scad
             return false;
         }
         Scope parsed;
-        if (!ScadParser::Parse(tokens, parsed, outError))
+        std::vector<FScadTopLevelSpan> spans;
+        if (!ScadParser::Parse(tokens, parsed, outError, &spans))
         {
             return false;
+        }
+        if (spans.size() != parsed.size())
+        {
+            outError = "internal: top-level span count does not match the parsed scope";
+            return false;
+        }
+
+        outIndex.topLevel = parsed;
+        outIndex.statements.reserve(parsed.size());
+        for (size_t index = 0; index < parsed.size(); ++index)
+        {
+            const StmtPtr& statement = parsed[index];
+            FScadStatementSpan span;
+            span.begin = spans[index].begin;
+            span.end = spans[index].end;
+            span.line = spans[index].line;
+            span.endLine = spans[index].endLine;
+            if (statement)
+            {
+                span.kind = statement->kind;
+                span.name = statement->name;
+                span.modifiers = statement->modifiers;
+            }
+            outIndex.statements.push_back(std::move(span));
         }
 
         int braceDepth = 0;

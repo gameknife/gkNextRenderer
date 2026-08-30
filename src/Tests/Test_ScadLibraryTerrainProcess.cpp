@@ -6,6 +6,7 @@
 #include "Modules/ScadLoader/FScadLexer.h"
 #include "Modules/ScadLoader/FScadParser.h"
 #include "Modules/ScadLoader/FScadShared.h"
+#include "Modules/ScadLoader/FScadSourceIndex.h"
 
 #include <chrono>
 #include <filesystem>
@@ -23,7 +24,7 @@ namespace
 {
     struct FParsedProcessSource
     {
-        Scope topLevel;
+        FScadSourceIndex index;
         std::map<std::string, Value> variables;
     };
 
@@ -54,23 +55,18 @@ namespace
         return Utilities::FileHelper::GetPlatformFilePath("assets/scad/proc/terrain_layout_demo.scad");
     }
 
-    FParsedProcessSource ParseAndEvaluate(std::string source)
+    FParsedProcessSource ParseAndEvaluate(const std::string& source)
     {
-        // The parser normally receives source after LoadScadProgram has
-        // resolved use/include. Keep line breaks so AST line numbers still
-        // point into the original source used by the process document.
-        source = std::regex_replace(source, std::regex(R"((?:use|include)\s*<[^>]+>)"), "");
-
-        std::vector<Token> tokens;
+        // BuildScadSourceIndex masks use/include in place, so every span it
+        // reports still addresses the caller's bytes exactly.
+        FParsedProcessSource result;
         std::string error;
-        REQUIRE(ScadLexer::Tokenize(source, tokens, error));
-        Scope parsed;
-        REQUIRE(ScadParser::Parse(tokens, parsed, error));
+        REQUIRE(BuildScadSourceIndex(source, result.index, error));
 
         std::unordered_map<std::string, StmtPtr> modules;
         std::unordered_map<std::string, StmtPtr> functions;
-        FParsedProcessSource result;
-        for (const StmtPtr& statement : parsed)
+        Scope topLevel;
+        for (const StmtPtr& statement : result.index.topLevel)
         {
             if (statement->kind == StmtKind::ModuleDef)
             {
@@ -82,13 +78,13 @@ namespace
             }
             else
             {
-                result.topLevel.push_back(statement);
+                topLevel.push_back(statement);
             }
         }
 
         ScadLoadOptions options;
         SceneEvalResult evaluated;
-        REQUIRE(ScadEvaluator::EvaluateScene(result.topLevel, modules, functions, options, evaluated, error));
+        REQUIRE(ScadEvaluator::EvaluateScene(topLevel, modules, functions, options, evaluated, error));
         result.variables = std::move(evaluated.topLevelVariables);
         return result;
     }
@@ -125,7 +121,7 @@ TEST_CASE("ScadLibrary terrain process editor round-trips terrain_layout_demo",
     FTerrainProcessDocument document;
     std::string error;
     std::vector<std::string> warnings;
-    REQUIRE(document.Parse(source, parsed.topLevel, parsed.variables, error, warnings));
+    REQUIRE(document.Parse(source, parsed.index, parsed.variables, error, warnings));
     CHECK(warnings.empty());
     REQUIRE(document.Terrain().features.size() == 8);
     CHECK(document.Terrain().features[0].type == FTerrainFeature::EType::Mountain);
@@ -179,7 +175,7 @@ TEST_CASE("ScadLibrary terrain process editor round-trips terrain_layout_demo",
 
     const FParsedProcessSource reparsed = ParseAndEvaluate(generated);
     FTerrainProcessDocument roundTripped;
-    REQUIRE(roundTripped.Parse(generated, reparsed.topLevel, reparsed.variables, error, warnings));
+    REQUIRE(roundTripped.Parse(generated, reparsed.index, reparsed.variables, error, warnings));
     REQUIRE(roundTripped.Terrain().features.size() == 8);
     CHECK(roundTripped.Terrain().features[0].height == Catch::Approx(31.0));
     CHECK(roundTripped.ActiveRuleCount() == 13);

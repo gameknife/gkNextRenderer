@@ -4,7 +4,7 @@ category: project
 status: 现行
 owner: ScadLibrary/NextAI
 created: 2026-07-28
-last_updated: 2026-07-28
+last_updated: 2026-08-30
 ---
 
 # ScadLibrary AI 创作实现
@@ -12,25 +12,29 @@ last_updated: 2026-07-28
 ScadLibrary 已内建基于 NextAI 的受约束创作链。入口位于右侧 Inspector 的 `AI` 页签和标题栏
 `AI` 按钮；Kit 浏览器模块的右键菜单还提供“AI 编辑此模块”。
 
-AI 面板不再提供手动“编辑源”选择器。上下文由资产类别唯一决定：
+AI 面板不再提供手动“编辑源”选择器。场景文件也不再有类型——同一个文件可以同时含实例、
+地形和源码结构（见 `assets/scad/README.md`），所以上下文由**当前正在编辑的那一页**决定：
 
-- `assets/scad/evaluated/` → `SceneObjects`，可携带 viewport/对象列表中的精确实例选择；
-- `assets/scad/source/` → `SceneSource`，保留程序结构，不伪装成可寻址实例；
-- `assets/scad/proc/` → `TerrainProcess`，编辑 feature/rule；
-- 左侧预览 Kit module → `KitModule`；重新打开场景即返回该场景类别的 adapter。
+- 「对象」页且场景有实例 → `SceneObjects`，可携带 viewport/对象列表中的精确实例选择；
+- 「过程」页（仅当文件含 `gk_terrain`）→ `TerrainProcess`，编辑 feature/rule；
+- 「源码」/「结构」页 → `SceneSource`，保留程序结构，不伪装成可寻址实例；
+- 左侧预览 Kit module → `KitModule`；重新打开场景即回到场景 adapter。
 
-Source → Evaluated 必须由用户点击“转换为 Evaluated 副本”显式触发。转换结果写入
-`assets/scad/evaluated/<原名>_evaluated.scad`，原 Source 不会被求值结果覆盖。
+因此同一个场景可以先用 `SceneObjects` 调实例、再切到「过程」页用 `TerrainProcess` 调地形，
+不需要任何转换。把一段程序结构变成可寻址实例的操作在「结构」页逐节点进行（关闭并展开），
+不再是整文件的 Source → Evaluated 转换。
 
 ## 已实现链路
 
 - Kit module：模型返回一个完整且同名、同签名的 module definition；本地通过 parser-aware
   byte span 替换到 Kit clone。应用后只进入 Kit 草稿。显式保存时加载完整依赖闭包、用真实
   evaluator 重算目标 module metrics，并原子提交 Kit 与 `catalog.json`。
-- 场景源码：模型返回完整 candidate source；本地 lexer/parser 校验后可预览、应用到
-  `assemblySource_`、撤销，再走原有显式场景保存。
+- 场景源码：模型返回完整 candidate source；本地 lexer/parser 校验后可预览、应用（整份源码
+  重新解析成统一文档，对象与地形页随之刷新）、撤销，再走原有显式场景保存。
 - 结构化场景：模型只返回 `add/update/remove/duplicate/reorder` 操作。操作引用 snapshot id，
-  module 受当前 catalog allowlist 限制，arguments 必须仍解析为单一 module call。
+  module 受当前 catalog allowlist 限制，arguments 必须仍解析为单一 module call。应用时
+  被保留的实例改写回它原来的那条语句、被删除的实例整条切掉、新增的追加，文件里的循环、
+  地形和注释不受影响。
 - 过程场景：模型只返回 Terrain/feature/rule typed operation；`rN` 会保留原 rule source span，
   删除规则会走 `removed`，因此注释、自由 SCAD 和未识别内容仍由
   `FTerrainProcessDocument` byte-preserving 地保留。

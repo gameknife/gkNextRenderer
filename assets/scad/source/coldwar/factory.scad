@@ -35,12 +35,12 @@ translate([-10, -30, 0]) cw_prop_sign_road(seed = 2);
 
 // ================= 车间群 =================
 translate([-24, 12, 0]) cw_bldg_factory_hall(seed = 1, L = 18, D = 11);
-translate([-2, 12, 0]) cw_bldg_factory_saw(seed = 2, L = 16, D = 11);
+translate([-2.0000, 12.0000, 27.9212]) rotate([0.0000, -0.0000, 0.0000]) scale([1.00000, 1.00000, 1.00000]) cw_bldg_factory_saw(seed = 2, L = 16, D = 11);
 translate([-30, -22, 0]) cw_bldg_warehouse(seed = 3, L = 14, D = 9);
-translate([24, -20, 0]) rotate([0, 0, 90]) cw_bldg_factory_hall(seed = 4, L = 14, D = 9);
+translate([18.0161, -21.9161, -0.0890]) rotate([0.0000, -0.0000, 90.0000]) scale([1.00000, 1.00000, 1.00000]) cw_bldg_factory_hall(seed = 4, L = 14, D = 9);
 translate([-42, 2, 0]) rotate([0, 0, -90]) cw_bldg_hq(seed = 2, L = 12, D = 8);   // 厂办
 translate([16, 12, 0]) cw_bldg_smokestack(seed = 0, h = 16);
-translate([21, 8, 0]) cw_bldg_smokestack(seed = 1, h = 11);
+translate([24.2246, 8.5615, 0.2691]) rotate([0.0000, -0.0000, 0.0000]) scale([1.00000, 1.00000, 1.00000]) cw_bldg_smokestack(seed = 1, h = 11);
 translate([30, 28, 0]) cw_bldg_water_tower(seed = 0);
 translate([42, -6, 0]) cw_bldg_ruin(seed = 5, L = 9, D = 7);
 
@@ -67,9 +67,9 @@ translate([-10, -3, 0]) cw_prop_debris(seed = 2);
 translate([8, -2, 0]) cw_prop_pallet(seed = 7);
 translate([11, -1, 0]) cw_prop_crate_ammo(seed = 8);
 translate([-25, -14, 0]) cw_prop_dumpster();
-translate([5, -14, 0]) cw_veh_truck_canvas(seed = 1);
+translate([5.0000, -14.0000, -4.0987]) rotate([0.0000, -0.0000, 0.0000]) scale([1.00000, 1.00000, 1.00000]) cw_veh_truck_canvas(seed = 1);
 translate([-12, -25, 0]) rotate([0, 0, 12]) cw_veh_tractor(seed = 1);
-translate([14, -27, 0]) rotate([0, 0, 176]) cw_veh_wreck(seed = 4);
+translate([15.4047, -6.9116, 0.0000]) rotate([0.0000, -0.0000, 176.0000]) scale([1.00000, 1.00000, 1.00000]) cw_veh_wreck(seed = 4);
 translate([-38, -28, 0]) cw_prop_woodpile(seed = 4);
 for (x = [-16, 4, 26])
     translate([x, -5, 0]) cw_prop_lamp();

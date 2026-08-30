@@ -23,6 +23,7 @@ set(unitTestSources
     Test_ScadLoader.cpp
     Test_ScadTerrain.cpp
     Test_ScadLibraryTerrainProcess.cpp
+    Test_ScadSceneDocument.cpp
     Test_TerrainWalkable.cpp
     Test_GeoCityWalkable.cpp
     Test_GeoPoiSidecar.cpp
@@ -66,6 +67,7 @@ set(unitTestSources
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadPromptContext.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadSessionStore.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/TerrainProcessDocument.cpp
+    ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/ScadSceneDocument.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/CharacterWorkbench.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/AI/ScadAIContracts.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadLibrary/AI/ScadAIController.cpp

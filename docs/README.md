@@ -88,6 +88,7 @@
 - [场景导出 glTF/GLB 契约](designs/scene-export-gltf-contract.md)
 - [NextAI 产品化边界](designs/nextai-product-focused-architecture.md)
 - [ScadLibrary AI 融合创作架构](designs/scadlibrary-ai-authoring-integration.md)
+- [SCAD 统一场景文档](designs/scad-unified-scene-document.md)（一个 .scad 文件同时含实例/地形/源码结构，按节点编辑，按语句写回）
 - [SCAD Scene Compose](designs/scad-scene-compose-design.md)
 - [SCAD Terrain 地形架构](designs/scad-terrain-design.md)（M0–M4 已落地）
 - [真实地理数据 → OpenSCAD 城市关卡](designs/geo-city-generation-design.md)（现行；`gnb geo`

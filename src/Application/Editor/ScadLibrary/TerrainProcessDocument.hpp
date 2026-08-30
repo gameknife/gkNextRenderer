@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Modules/ScadLoader/FScadSourceIndex.h"
 #include "Modules/ScadLoader/FScadTerrain.h"
 #include "Modules/ScadLoader/FScadTypes.h"
 
@@ -64,6 +65,11 @@ namespace ScadLibrary
         bool removed = false;
         size_t sourceBegin = std::string::npos;
         size_t sourceEnd = std::string::npos;
+
+        // How this rule serialized at parse time. A rule that still serializes
+        // identically is left byte-for-byte alone on write, so a file that also
+        // holds hand-written structure is never reformatted just by opening it.
+        std::string parsedSerialization;
     };
 
     // Structured editor model for the engine-specific terrain dialect. It
@@ -72,7 +78,9 @@ namespace ScadLibrary
     class FTerrainProcessDocument
     {
     public:
-        bool Parse(const std::string& source, const Assets::Scad::Scope& topLevel,
+        // `index` must be the statement index of `source` itself (see
+        // BuildScadSourceIndex); its spans are what the writer splices.
+        bool Parse(const std::string& source, const Assets::Scad::FScadSourceIndex& index,
                    const std::map<std::string, Assets::Scad::Value>& topLevelVariables, std::string& outError,
                    std::vector<std::string>& outWarnings);
 
@@ -87,6 +95,12 @@ namespace ScadLibrary
         void RemoveRule(size_t index);
         size_t ActiveRuleCount() const;
 
+        // Byte-range edits this document owns, against the source it parsed.
+        // Callers that own a larger document (FScadSceneDocument) merge these
+        // with their own edits and apply them once, so a file can hold terrain
+        // rules and hand-written structure side by side.
+        void CollectEdits(std::vector<Assets::Scad::FScadSourceEdit>& outEdits) const;
+
         std::string BuildSource() const;
 
         static const char* FeatureTypeName(Assets::Scad::FTerrainFeature::EType type);
@@ -96,6 +110,7 @@ namespace ScadLibrary
         std::string source_;
         std::string terrainVariable_ = "TERR";
         Assets::Scad::FTerrainSpec terrain_;
+        std::string parsedTerrainSerialization_;
         std::vector<FTerrainProcessRule> rules_;
         size_t terrainAssignmentBegin_ = std::string::npos;
         size_t terrainAssignmentEnd_ = std::string::npos;

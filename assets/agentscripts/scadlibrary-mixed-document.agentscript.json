@@ -1,0 +1,131 @@
+{
+  "name": "scadlibrary-mixed-document",
+  "target": "ScadLibrary",
+  "scene": "assets/scad/source/oldcity/old_city.scad",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 30000
+  },
+  "viewport": {
+    "width": 1600,
+    "height": 900
+  },
+  "steps": [
+    {
+      "type": "log",
+      "message": "A source/ program opens with the object, structure and source editors at once; nothing is converted."
+    },
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running",
+      "timeoutMs": 20000
+    },
+    {
+      "type": "wait-until",
+      "query": "scene.nodeCount",
+      "op": "ge",
+      "value": 100,
+      "timeoutMs": 30000
+    },
+    {
+      "type": "wait-frames",
+      "n": 30
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/scadlibrary_mixed_objects",
+      "ui": true
+    },
+    {
+      "type": "log",
+      "message": "Open the structure tab: every top-level node of the file, whatever its kind."
+    },
+    {
+      "type": "mouse-move",
+      "to": {
+        "px": [
+          1553,
+          381
+        ]
+      }
+    },
+    {
+      "type": "wait-frames",
+      "n": 3
+    },
+    {
+      "type": "mouse-button",
+      "button": "left",
+      "action": "down"
+    },
+    {
+      "type": "wait-frames",
+      "n": 3
+    },
+    {
+      "type": "mouse-button",
+      "button": "left",
+      "action": "up"
+    },
+    {
+      "type": "wait-frames",
+      "n": 6
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/scadlibrary_mixed_structure",
+      "ui": true
+    },
+    {
+      "type": "log",
+      "message": "Select one source structure; its switch-off / explode actions appear inline."
+    },
+    {
+      "type": "mouse-move",
+      "to": {
+        "px": [
+          1675,
+          568
+        ]
+      }
+    },
+    {
+      "type": "wait-frames",
+      "n": 3
+    },
+    {
+      "type": "mouse-button",
+      "button": "left",
+      "action": "down"
+    },
+    {
+      "type": "wait-frames",
+      "n": 3
+    },
+    {
+      "type": "mouse-button",
+      "button": "left",
+      "action": "up"
+    },
+    {
+      "type": "wait-frames",
+      "n": 6
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/scadlibrary_mixed_segment_selected",
+      "ui": true
+    },
+    {
+      "type": "assert",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running"
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

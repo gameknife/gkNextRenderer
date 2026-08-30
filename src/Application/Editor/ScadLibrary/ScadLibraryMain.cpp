@@ -307,19 +307,13 @@ bool ScadLibraryGameInstance::OnMouseButton(SDL_Event& event)
     }
     cameraController_.OnMouseButton(event);
     if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT &&
-        ui_->WorkspaceMode() == ScadLibrary::EWorkspaceMode::SceneAssembly && !ui_->IsTerrainProcessAssembly() &&
+        ui_->WorkspaceMode() == ScadLibrary::EWorkspaceMode::SceneAssembly && !ui_->HasActiveProceduralHandles() &&
         ui_->IsViewportPoint(uiMousePos.x, uiMousePos.y))
     {
         glm::vec3 origin;
         glm::vec3 direction;
         Runtime::EngineHelper::GetScreenToWorldRay(mousePos, origin, direction);
-        GetEngine().RayCast(origin, direction,
-                            [this](Assets::RayCastResult result)
-                            {
-                                ui_->SelectSceneObjectFromViewport(result.Hit ? result.InstanceId
-                                                                              : std::numeric_limits<uint32_t>::max());
-                                return true;
-                            });
+        ui_->SelectSceneObjectFromViewport(origin, direction);
     }
     return true;
 }

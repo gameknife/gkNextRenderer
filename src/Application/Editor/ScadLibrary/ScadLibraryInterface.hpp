@@ -4,10 +4,12 @@
 #include "AI/ScadAIContracts.hpp"
 #include "AI/ScadStudioSessionImporter.hpp"
 #include "KitCatalog.hpp"
+#include "ScadSceneDocument.hpp"
 #include "TerrainProcessDocument.hpp"
 
 #include <nlohmann/json.hpp>
 #include <chrono>
+#include <map>
 #include <cstdint>
 #include <filesystem>
 #include <limits>
@@ -40,33 +42,15 @@ namespace ScadLibrary
         KitBrowser,
     };
 
-    enum class EScadSceneKind
+    // Which directory of assets/scad a scene lives in. This is a filing
+    // convention for the browser only: it no longer decides which editors a
+    // scene gets, because a single file can hold instances, terrain and free
+    // source at the same time (see FScadSceneDocument).
+    enum class EScadSceneFolder
     {
         Evaluated,
         Source,
         Procedural,
-    };
-
-    // One placed instance in a scene assembly.
-    struct FBenchItem
-    {
-        int kitIndex = -1;
-        std::string moduleName;
-        float x = 0.0f;
-        float y = 0.0f;
-        float z = 0.0f;
-        float rotX = 0.0f;
-        float rotY = 0.0f;
-        float rotZ = 0.0f;
-        float scale = 1.0f;
-        float scaleY = 1.0f;
-        float scaleZ = 1.0f;
-        float color[4] = {0.78f, 0.78f, 0.78f, 1.0f};
-        bool hasColor = false;
-        char args[512] = {}; // extra call arguments, e.g. "seed = 3"
-        bool evaluated = false;
-        int sourceLine = 0;
-        uint32_t runtimeNodeId = std::numeric_limits<uint32_t>::max();
     };
 
     struct FSceneAssemblyInfo
@@ -74,7 +58,12 @@ namespace ScadLibrary
         std::string relativePath;
         std::string absolutePath;
         std::vector<std::string> kitDependencies;
-        EScadSceneKind kind = EScadSceneKind::Source;
+        EScadSceneFolder folder = EScadSceneFolder::Source;
+        // Cheap text-only composition hints for the browser badge; the real
+        // classification happens per statement when the scene is opened.
+        bool hasTerrain = false;
+        bool hasProcRules = false;
+        bool hasFreeStructure = false;
         bool generated = false;
         std::string categoryKey;
         std::string categoryLabel;
@@ -93,16 +82,18 @@ namespace ScadLibrary
         void SetWorkspaceMode(EWorkspaceMode mode);
         EWorkspaceMode WorkspaceMode() const { return workspaceMode_; }
         void SaveCurrentAssembly() { SaveAssembly(false); }
-        bool SelectSceneObjectFromViewport(uint32_t hitInstanceId);
+        bool SelectSceneObjectFromViewport(const glm::vec3& rayOrigin, const glm::vec3& rayDirection);
         bool GetSelectedSceneObjectBounds(glm::vec3& center, float& radius);
         bool ConsumeFocusSelectedRequest();
         bool ConsumeFrameAllRequest();
         bool IsViewportPoint(double x, double y) const;
         bool TerrainFeatureConsumesMouse(double x, double y) const;
-        bool IsTerrainFeatureDragging() const { return terrainFeatureDragging_ || terrainRuleDragging_; }
+        bool IsTerrainFeatureDragging() const
+        { return terrainFeatureDragging_ || terrainRuleDragging_ || layScatterDragging_; }
+        bool HasActiveProceduralHandles() const;
         bool IsTerrainProcessAssembly() const
         {
-            return workspaceMode_ == EWorkspaceMode::SceneAssembly && assemblyProcedural_;
+            return workspaceMode_ == EWorkspaceMode::SceneAssembly && document_.HasTerrain();
         }
         bool ConsumePreserveCameraOnNextSceneLoad();
 
@@ -124,7 +115,13 @@ namespace ScadLibrary
         void DrawModePanel(const ImVec2& pos, const ImVec2& size);
         void DrawAIContent();
         void DrawBenchContent();
+        void DrawStructureContent();
+        void DrawStructureOutliner();
         void DrawTerrainProcessContent();
+        bool DrawTerrainFeatureDetails(int featureIndex);
+        bool DrawTerrainRuleDetails(int ruleIndex);
+        bool DrawLayScatterDetails(size_t segmentIndex);
+        void DrawLayScatterOverlay(const ImVec2& viewportPos, const ImVec2& viewportSize);
         void DrawDesignerContent();
         void DrawWorkbenchContent();
         bool DrawBenchItemParameters(FBenchItem& benchItem);
@@ -133,6 +130,12 @@ namespace ScadLibrary
         void DrawViewportToolbar(const ImVec2& viewportPos);
         void DrawSceneGizmoToolbar(const ImVec2& viewportPos);
         void DrawSceneObjectGizmo(const ImVec2& viewportPos, const ImVec2& viewportSize);
+        void ClearEditableSceneSelection();
+        void UpdateSelectedStructureBounds();
+        void ClearSelectedStructureBounds();
+        void DrawSelectedStructureBounds(const ImVec2& viewportPos, const ImVec2& viewportSize) const;
+        bool ComputeSegmentWorldBounds(size_t segmentIndex, glm::vec3& outMin, glm::vec3& outMax);
+        bool RefreshSourceStructureBounds();
         void DrawTerrainFeatureToolbar(const ImVec2& viewportPos);
         void DrawTerrainFeatureOverlay(const ImVec2& viewportPos, const ImVec2& viewportSize);
         void RefreshTerrainFeatureOverlayCache();
@@ -150,15 +153,27 @@ namespace ScadLibrary
         void ReloadCurrentAssemblyPreview();
         void ExportBench();
         bool OpenAssembly(const std::string& path, bool preserveCamera = false);
-        void ConvertSourceToEvaluated();
+
+        // Reparses `source` into the unified document. Every editor reads the
+        // result, so a scene never has to be "converted" to gain one of them.
+        // Re-indexing the statements is cheap (lex + parse); evaluating the
+        // use/include closure is not, and only the terrain spec needs it. Pass
+        // reevaluate=false right after writing a file the editor itself
+        // produced - moving an instance cannot change a top-level variable, so
+        // the cached bindings still hold and a gizmo release stays responsive.
+        bool ReparseDocument(const std::string& source, const std::string& documentPath, bool reevaluate = true);
+        // Evaluates the whole file and returns the kit instances one top-level
+        // structure produced, so it can be switched off and replaced by them.
+        std::vector<FBenchItem> EvaluateSegmentInstances(size_t segmentIndex, std::string& outError) const;
+        void ExplodeSelectedSegment();
+        bool IsKitModuleName(const std::string& moduleName) const;
+        int FindKitIndex(const std::string& moduleName) const;
+        // `use <...>` paths (relative to `outputPath`) every placed instance needs.
+        std::vector<std::string> RequiredKitUsePaths(const std::filesystem::path& outputPath) const;
+
         void PreviewAssemblySource();
         void SaveAssembly(bool saveAs, bool reloadScene = true);
-        bool ParseStructuredAssembly(const std::string& source);
-        bool ImportEvaluatedAssembly(const std::string& sourcePath);
-        bool ImportAssemblyTerrains(const std::string& source);
-        bool ImportTerrainProcessAssembly(const std::string& sourcePath, const std::string& source);
         std::string BuildAssemblyPreviewSource() const;
-        std::string BuildTerrainProcessSource() const;
         void ReloadTerrainProcess();
         void MarkTerrainProcessDirty();
         void ReloadDesigner();
@@ -182,7 +197,6 @@ namespace ScadLibrary
                              bool markDirty);
         void SaveAIKitDraft();
         std::string KitCharUsePath(bool relative) const;
-        std::string BuildBenchSource(const std::filesystem::path& outputPath = {}) const;
         bool WriteWorkspaceFile(const std::string& fileName, const std::string& source, std::string& outAbsPath);
         bool WriteAndLoad(const std::string& fileName, const std::string& source);
 
@@ -204,8 +218,15 @@ namespace ScadLibrary
         std::string startupAssemblyPath_;
 
         std::vector<FKitInfo> kits_;
-        std::vector<FBenchItem> bench_;
         std::vector<FSceneAssemblyInfo> assemblies_;
+
+        // The opened scene. Instances, terrain and free source all live here;
+        // Bench() is the instance list the object editor works on.
+        FScadSceneDocument document_;
+        std::vector<FBenchItem>& Bench() { return document_.Instances(); }
+        const std::vector<FBenchItem>& Bench() const { return document_.Instances(); }
+        FTerrainProcessDocument& TerrainProcess() { return document_.Terrain(); }
+        const FTerrainProcessDocument& TerrainProcess() const { return document_.Terrain(); }
 
         // Kit file change watch state. The gather task runs on a TaskCoordinator
         // worker thread; only the stamps snapshot and the pending flag cross the
@@ -270,22 +291,40 @@ namespace ScadLibrary
         // the structured item list.
         bool autoReload_ = true;
         bool benchDirty_ = false;
-        bool showFloor_ = true;
+        // $fn read from the opened scene; used for standalone kit-module
+        // previews, which are generated files rather than edited ones.
         int fnSegments_ = 12;
         char exportNameBuf_[128] = "my_scene";
         char assemblyPathBuf_[512] = "assets/scad/evaluated/my_scene.scad";
         std::string openedAssemblyPath_;
-        EScadSceneKind openedSceneKind_ = EScadSceneKind::Evaluated;
+        // Live text buffer behind the source tab. It can run ahead of
+        // document_ while the user types; ReparseDocument reconciles them
+        // before any preview, save or structural edit.
         std::string assemblySource_;
         std::vector<std::string> openedAssemblyKits_;
-        std::vector<std::string> assemblyTerrainSources_;
-        FTerrainProcessDocument terrainProcess_;
+        // Evaluated top-level bindings of the opened scene, kept so a re-index
+        // after the editor's own write does not have to evaluate again.
+        std::map<std::string, Assets::Scad::Value> documentVariables_;
         std::vector<std::string> terrainProcessWarnings_;
         bool assemblySourceDirty_ = false;
-        bool assemblyStructured_ = false;
-        bool assemblyEvaluated_ = false;
-        bool assemblyProcedural_ = false;
+        bool sourceBufferDirty_ = false;
         bool terrainProcessDirty_ = false;
+        int selectedSegment_ = -1;
+        bool scrollToSelectedSegment_ = false;
+        bool structureInspectorRequested_ = false;
+        int selectedStructureBoundsSegment_ = -1;
+        bool selectedStructureBoundsValid_ = false;
+        glm::vec3 selectedStructureBoundsMin_{0.0f};
+        glm::vec3 selectedStructureBoundsMax_{0.0f};
+        struct FSourceStructureBounds
+        {
+            bool valid = false;
+            glm::vec3 min{0.0f};
+            glm::vec3 max{0.0f};
+        };
+        std::vector<FSourceStructureBounds> sourceStructureBounds_;
+        bool sourceStructureBoundsDirty_ = true;
+        char segmentFilterBuf_[128] = {};
         bool preserveCameraOnNextSceneLoad_ = false;
         bool modulePreviewActive_ = false;
         int assemblyEditorTab_ = 0;
@@ -352,6 +391,16 @@ namespace ScadLibrary
         bool terrainDragCopyRequested_ = false;
         bool terrainDragCopied_ = false;
         std::vector<FTerrainRuleHandle> terrainRuleHandles_;
+        struct FLayScatterHandle
+        {
+            int corner = -1;
+            glm::vec2 screen{0.0f};
+            float worldHeight = 0.0f;
+        };
+        std::vector<FLayScatterHandle> layScatterHandles_;
+        bool layScatterDragging_ = false;
+        int layScatterDragCorner_ = -1;
+        float layScatterDragPlaneHeight_ = 0.0f;
         std::string terrainFeatureOverlayCacheKey_;
         std::shared_ptr<const Assets::Scad::FTerrainData> terrainFeatureOverlayData_;
         // Placement cursor for newly added items (footprint-aware row layout).

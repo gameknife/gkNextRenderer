@@ -65,9 +65,9 @@ for (y = [2, -12, -22])
     translate([1.8, y, 0.26]) is_prop_lamp();
 
 // ================= 伙伴小屋区（主路两侧；门面向主路） =================
-translate([-16, -3, 0.26]) rotate([0, 0, 90]) is_bldg_house(seed = 0);     // A：门朝东
+translate([-6.0001, -5.7551, 0.1057]) rotate([0.0000, -0.0000, 90.0000]) scale([1.00000, 1.00000, 1.00000]) is_bldg_house(seed = 0);     // A：门朝东
 translate([14, -7, 0.26]) rotate([0, 0, -90]) is_bldg_house(seed = 4);     // B：门朝西
-translate([-12, -18, 0.26]) rotate([0, 0, 100]) is_bldg_house(seed = 9);   // C：门朝东北
+translate([-10.6056, -17.7541, 0.2600]) rotate([0.0000, -0.0000, 100.0000]) scale([1.00000, 1.00000, 1.00000]) is_bldg_house(seed = 9);   // C：门朝东北
 translate([17, -21, 0.26]) rotate([0, 0, -75]) is_bldg_house(seed = 13);   // D：门朝西南
 // 院子与生活道具
 translate([-16, 2.5, 0.26]) rotate([0, 0, 0]) is_prop_fence(len = 7, seed = 1);
@@ -94,7 +94,7 @@ lay_scatter(n = 6, x0 = -36, x1 = -18, y0 = 2, y1 = 22, seed = 42)
 
 // ================= 东部：农田 =================
 translate([28, 14, 0.265]) is_ground_field(L = 12, D = 8, seed = 21, crop = 1);   // 萝卜田
-translate([28, 5, 0.265]) is_ground_field(L = 10, D = 7, seed = 22, crop = 2);    // 白菜田
+translate([28.0000, 1.7479, 0.2650]) rotate([0.0000, -0.0000, 0.0000]) scale([1.00000, 1.00000, 1.00000]) is_ground_field(L = 10, D = 7, seed = 22, crop = 2);    // 白菜田
 translate([31.5, 19.5, 0.265]) is_prop_scarecrow(seed = 1);
 translate([22.5, 9.5, 0.265]) is_prop_wateringcan();
 translate([34, 9.5, 0.265]) is_prop_crate(seed = 6);

@@ -18,7 +18,8 @@ translate([-6.8, -8.875, 0.40]) of_wall_knee(10.4);
 translate([6.8, -8.875, 0.40]) of_wall_knee(10.4);
 
 // West boardroom behind glass.
-translate([-11.7, 1.0, FZ]) of_part_glass_wall(10.8, 8.2, 9.7);
+*translate([-11.7, 1.0, FZ]) of_part_glass_wall(10.8, 8.2, 9.7);
+translate([-11.7000, 1.9796, 0.1500]) rotate([0.0000, -0.0000, 0.0000]) scale([1.00000, 1.00000, 1.00000]) of_part_glass_wall(len = 10.8, g0 = 8.2, g1 = 9.7);
 translate([-0.9, 1.0, FZ]) rotate([0, 0, 90]) of_part_glass_wall(7.8);
 translate([-6.2, 5.0, FZ]) of_prop_rug(8.4, 5.6, [0.40, 0.46, 0.52]);
 translate([-6.2, 5.0, FZ]) of_furn_conf_table();

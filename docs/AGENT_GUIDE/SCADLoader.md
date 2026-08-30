@@ -11,6 +11,10 @@
 - `FScadEvaluator.cpp`、`.Expr.cpp`、`.Geometry.cpp`：作用域、语言求值和几何分发。
 - `FScadGeometry.*` / `FScadCsg.*` / `FScadTess.*` / `FScadText.*`：图元、Manifold boolean、earcut 和 FreeType text。
 - `FScadShared.*`：scene 与 rig 共用的 `use/include` 闭包、坐标转换和法线工具。
+- `FScadSourceIndex.*`：顶层语句与 module/function 定义的**字节区间索引**。parser 在解析时
+  记录每条顶层语句的 `[begin, end)`（`ScadParser::Parse` 的 `outTopLevelSpans`），`use/include`
+  只做掩码不删字节，因此索引里的偏移直接寻址调用方的原始源码。编辑器靠它做单语句改写；
+  `ApplyScadSourceEdits` 从后往前套用编辑并丢弃重叠的陈旧区间。
 - `FScadLoader.*`：颜色桶、module 调用树、Model/Node/材质组装。
 - `FScadRig.*`：ScadRig 资产读取；约定见 [ScadRig](ScadRig.md)。
 
@@ -37,23 +41,54 @@
 分块粒度仍由调用方控制，每块要留在 65535 三角的 Model 上限之下。
 
 `SceneEvalResult::SceneNode` 同时保留 module 调用的源行、求值后的具名参数、调用点颜色和
-局部变换。ScadLibrary 使用这些作者元数据沿 module 调用树提取最终 Kit 实例；它不改变
+局部变换。ScadLibrary 使用这些作者元数据沿 module 调用树提取 Kit 实例；它不改变
 运行时 Node/Model 的装配语义。
 
-ScadLibrary 场景对象 Gizmo 在引擎 Y-up 与 SCAD Z-up 之间用 `ScadToWorldBasis` 双向转换。
+## ScadLibrary 的统一场景文档
+
+**一个 `.scad` 根文件没有"类型"。** `FScadSceneDocument`（`Application/Editor/ScadLibrary/
+ScadSceneDocument.*`）把打开的文件解析成一串顶层节点，逐条分类：
+
+| 节点 | 源码形态 | 归谁编辑 |
+| --- | --- | --- |
+| `Instance` | `[color] translate rotate scale kit_module(args);` | 对象列表 + 视口 Gizmo |
+| `Terrain` | `TERR = [...]` 赋值与 `gk_terrain(TERR)` 调用 | 地形画布 |
+| `TerrainRule` | 顶层 `ter_*` 贴地规则 | 过程规则列表 |
+| `Source` | 其余一切：循环、条件、`module`/`function` 定义、自由几何 | 源码页，可整条开关 |
+
+四类在同一个文件里共存：`source/` 下的程序可以直接加实例和地形，`evaluated/` 下的实例
+列表也可以加循环。目录只决定归档位置，不再决定能用哪个编辑器。
+
+被识别为 `Instance` 的条件是保守的：变换参数必须是字面量，且按 `color → translate →
+rotate → scale` 顺序最多各出现一次，终点是 kit 表里能解析到的 module。不满足就留作
+`Source`——对象编辑器只认领它能逐字写回的语句。终点调用的实参**从源码字节切片**读取，
+所以 AST 打印不回来的表达式也能原样保留。
+
+写回是**按语句拼接**（`FScadSceneDocument::BuildSource` + `ApplyScadSourceEdits`），只重写
+真正改动过的语句：文档保留解析时的实例副本与 terrain/规则序列化快照，逐条比对。打开再保存
+一个没动过的场景是字节级 no-op，注释、格式和不支持的语法全部保留。`Test_ScadSceneDocument.cpp`
+用 `old_city.scad` 与 `terrain_layout_demo.scad` 守这条不变量。
+
+### 逐节点关闭与展开
+
+`Source` 节点里的**调用语句**可以原地关掉——在语句前加 OpenSCAD 的 `*` 修饰符，求值器
+（`FScadEvaluator.Detail.h` 与 `.Geometry.cpp`）本来就跳过它。赋值和 `module`/`function`
+定义不接受修饰符，`FScadSceneDocument::IsSwitchable` 会拒绝。
+
+"关闭并展开为实例"求值**整个文件**（结构依赖它前面的变量和 module，片段无法单独求值），
+按顶层语句的行区间 `[line, endLine]` 把 root SceneNode 归属回该语句，转成实例写在它后面，
+再关闭原语句。这是过去"整文件 Source → Evaluated 转换"的逐结构替代品；保存前可撤销。
+若该结构只产生图元或未知模块（没有可归属的 Kit root），操作会带原因失败，而不是静默产出空结果。
+
+### Gizmo 与点选
+
+场景对象 Gizmo 在引擎 Y-up 与 SCAD Z-up 之间用 `ScadToWorldBasis` 双向转换。
 拖动期间直接更新匹配实例的运行时 Node，并用 `Scene::MarkTransformDirty()` 刷新 GPU 变换；
-松手只持久化文件，不触发 SCAD 重载。平铺场景会把三轴 `translate` / `rotate` 写回原 SCAD；
-复杂 Source 场景经显式转换后写入 `assets/scad/evaluated/*_evaluated.scad` 的确定实例副本，禁止用展开结果
-覆盖原程序结构。
+松手把该实例写回它所在的那条语句，不重写文件其余部分，也不触发 SCAD 重载。
 
 视口点选使用引擎 CPU Picking 返回的 render-node instance ID，再沿 `Node::GetParent()` 向上
-追溯 Kit 调用节点。求值场景优先匹配 evaluator 保留的稳定 instance ID；平铺场景以模块名
-和世界变换消除同名实例歧义。选中状态同步到对象列表和 Gizmo；首次点选的同一次鼠标按压
-不会立即抓取刚出现的 Gizmo。
-
-程序化场景扁平化时，ScadLibrary 会从原源码独立提取 TERR 声明与 `gk_terrain(...)` 语句，
-并在 Kit 实例列表之前原样写入预览/可编辑副本。Terrain 仍由原生 `gk_terrain` evaluator
-重建，不应被转换为普通 Kit 实例或在 Gizmo 保存时丢弃。
+追溯 Kit 调用节点，优先匹配 evaluator 保留的稳定 instance ID，同名实例以世界变换消歧。
+选中状态同步到对象列表和 Gizmo；首次点选的同一次鼠标按压不会立即抓取刚出现的 Gizmo。
 
 ## 当前语言面
 
@@ -116,9 +151,11 @@ glTF 相机完全相同的运行时结构：定点机位进 `EnvironmentSetting.
 ## 资产与 compose
 
 现行手写验证场景使用 `assets/scad/source/beer_cup.scad`、`source/oldcity/old_city.scad` 等。Kit 位于
-`assets/scad/lib/`，严格 JSON spec 位于 `assets/scad/specs/`，派生场景按结构位于
+`assets/scad/lib/`，严格 JSON spec 位于 `assets/scad/specs/`，派生场景位于
 `assets/scad/source/generated/` 或 `assets/scad/proc/generated/`。生成管线见
-`docs/designs/scad-scene-compose-design.md`。
+`docs/designs/scad-scene-compose-design.md`。`gnb scad compose` 仍按 spec 有没有 `terrain`
+段选择输出目录，但那只是归档：产物打开后照样能同时用对象、地形和结构三个编辑器。
+目录约定见 `assets/scad/README.md`。
 
 ## 验证
 
@@ -127,6 +164,8 @@ glTF 相机完全相同的运行时结构：定点机位进 `EnvironmentSetting.
 ./out/build/<preset>/bin/gkNextUnitTests "[Scad]"
 ./gnb.sh shot --scene assets/scad/source/oldcity/old_city.scad
 ./gnb.sh shot --target ScadStudio --scene assets/scad/source/beer_cup.scad --frames 60
+./out/build/<preset>/bin/gkNextUnitTests "[SceneDocument]"
+./gnb.sh validate --script assets/agentscripts/scadlibrary-mixed-document.agentscript.json
 ```
 
 排查顺序：先看 `SCAD:` warning 与 include 路径，再看节点/三角形/颜色 bucket 数；几何黑面检查 face winding 和 normal smoothing；复杂 boolean 慢时缩小 CSG 范围，不要对整座场景做一次巨型 operation。
