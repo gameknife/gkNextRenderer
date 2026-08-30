@@ -7,8 +7,9 @@
 // ordered list of top-level statements, each of which the editor classifies on
 // its own:
 //
-//   Instance     a `[color] translate rotate scale kit_module(...)` chain that
-//                the object list and the viewport gizmo can edit directly
+//   Instance     a `[color] translate rotate scale kit_module(...)` chain (or
+//                a local zero-argument wrapper around one) that the object
+//                list and the viewport gizmo can edit directly
 //   Terrain      the TERR spec assignment and its gk_terrain() call
 //   TerrainRule  a top-level ter_* placement rule
 //   Source       everything else - loops, conditionals, module/function
@@ -57,7 +58,13 @@ namespace ScadLibrary
     struct FBenchItem
     {
         int kitIndex = -1;
+        // The exact module invoked by the scene statement. This is kept for
+        // source-preserving writes and for resolving the runtime scene node.
         std::string moduleName;
+        // A local no-argument wrapper can be editable when it resolves to a
+        // catalogued kit module. In that case the catalog name supplies the
+        // inspector signature and OBB metrics while moduleName stays intact.
+        std::string catalogModuleName;
         float x = 0.0f;
         float y = 0.0f;
         float z = 0.0f;
@@ -84,6 +91,10 @@ namespace ScadLibrary
         bool removed = false;
 
         bool SamePlacement(const FBenchItem& other) const;
+        const std::string& CatalogModuleName() const
+        {
+            return catalogModuleName.empty() ? moduleName : catalogModuleName;
+        }
     };
 
     struct FScadSceneSegment
@@ -103,6 +114,18 @@ namespace ScadLibrary
         int instanceIndex = -1;        // Instance segments
         int ruleIndex = -1;            // TerrainRule segments
         int explodedInstances = 0;     // instances this Source segment produced
+    };
+
+    // A numeric assignment declared directly by the opened scene file. The
+    // evaluated value drives the controls, while segmentIndex points at the
+    // original assignment that will be rewritten on commit.
+    struct FScadSceneVariable
+    {
+        std::string name;
+        std::string expression;
+        double value = 0.0;
+        size_t segmentIndex = std::string::npos;
+        int line = 0;
     };
 
     // Extra inputs BuildSource needs that the document does not own.
@@ -131,6 +154,8 @@ namespace ScadLibrary
 
         const std::string& Source() const { return source_; }
         const std::vector<FScadSceneSegment>& Segments() const { return segments_; }
+        const std::vector<FScadSceneVariable>& SceneVariables() const { return sceneVariables_; }
+        bool SetSceneVariableNumber(size_t variableIndex, double value);
         std::vector<FBenchItem>& Instances() { return instances_; }
         const std::vector<FBenchItem>& Instances() const { return instances_; }
         FTerrainProcessDocument& Terrain() { return terrain_; }
@@ -178,9 +203,10 @@ namespace ScadLibrary
         static std::string SerializeInstance(const FBenchItem& item);
 
     private:
-        // Recognizes `[color] translate rotate scale kit_module(args);`. The
-        // transforms must be literal and in canonical order, so writing the
-        // statement back reproduces it exactly; anything else stays Source.
+        // Recognizes `[color] translate rotate scale kit_module(args);` and a
+        // local zero-argument wrapper around a kit module. Transform values
+        // may reference evaluated top-level numeric constants; source writes
+        // patch only changed components so the expressions remain intact.
         bool ClassifyInstance(const Assets::Scad::Stmt& statement, const Assets::Scad::FScadStatementSpan& span,
                               const std::function<bool(const std::string&)>& isKitModule, FBenchItem& outItem) const;
         void RebuildSegmentLabels();
@@ -188,8 +214,11 @@ namespace ScadLibrary
 
         std::string source_;
         std::vector<FScadSceneSegment> segments_;
+        std::vector<FScadSceneVariable> sceneVariables_;
         std::vector<FBenchItem> instances_;
         std::vector<FBenchItem> parsedInstances_; // pristine copies for dirty checks
+        std::map<std::string, Assets::Scad::Value> topLevelVariables_;
+        std::map<std::string, std::string> localWrapperKitModules_;
         std::map<size_t, std::string> sourceSegmentReplacements_;
         // Statements whose instance the object list deleted; their bytes are
         // still in `source_` and have to be spliced out on write.

@@ -115,6 +115,7 @@ namespace ScadLibrary
         void DrawModePanel(const ImVec2& pos, const ImVec2& size);
         void DrawAIContent();
         void DrawBenchContent();
+        void DrawSceneVariableProperties();
         void DrawStructureContent();
         void DrawStructureOutliner();
         void DrawTerrainProcessContent();

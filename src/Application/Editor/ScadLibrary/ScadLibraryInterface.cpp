@@ -4692,12 +4692,22 @@ namespace ScadLibrary
 
     bool ScadLibraryInterface::DrawBenchItemParameters(FBenchItem& benchItem)
     {
+        if (!benchItem.catalogModuleName.empty())
+        {
+            ImGui::Text("本地模块：%s", benchItem.moduleName.c_str());
+            ImGui::TextDisabled("底层 Kit：%s", benchItem.catalogModuleName.c_str());
+            ImGui::TextWrapped("该无参包装模块的固定参数保留在 module 定义中；这里可编辑它的放置变换，"
+                               "不会把 Kit 参数错误写进包装调用。");
+            return false;
+        }
+
         const FKitModuleInfo* moduleInfo = nullptr;
         if (benchItem.kitIndex >= 0 && benchItem.kitIndex < static_cast<int>(kits_.size()))
         {
             const FKitInfo& kit = kits_[benchItem.kitIndex];
             const auto found = std::find_if(kit.modules.begin(), kit.modules.end(),
-                                            [&](const FKitModuleInfo& module) { return module.name == benchItem.moduleName; });
+                                            [&](const FKitModuleInfo& module)
+                                            { return module.name == benchItem.CatalogModuleName(); });
             if (found != kit.modules.end())
             {
                 moduleInfo = &*found;
@@ -4936,6 +4946,60 @@ namespace ScadLibrary
         return true;
     }
 
+    void ScadLibraryInterface::DrawSceneVariableProperties()
+    {
+        const std::vector<FScadSceneVariable>& variables = document_.SceneVariables();
+        if (variables.empty())
+        {
+            return;
+        }
+
+        ImGui::TextDisabled("场景变量与常量 · %zu 项", variables.size());
+        ImGui::TextWrapped("这里的数值会作用于整个场景。编辑表达式变量时，将把该赋值改为数值常量。"
+                           "引用它的 translate、过程规则和模块会一起重载。");
+        for (size_t index = 0; index < variables.size(); ++index)
+        {
+            const FScadSceneVariable& variable = variables[index];
+            double value = variable.value;
+            ImGui::PushID(static_cast<int>(index));
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(variable.name.c_str());
+            ImGui::SameLine(92.0f);
+            ImGui::SetNextItemWidth(-1.0f);
+            bool changed = false;
+            if (variable.name == "$fn")
+            {
+                int segments = std::max(3, static_cast<int>(std::lround(value)));
+                changed = ImGui::DragInt("##scene_variable", &segments, 1.0f, 3, 256);
+                value = static_cast<double>(segments);
+            }
+            else
+            {
+                changed = ImGui::DragScalar("##scene_variable", ImGuiDataType_Double, &value, 0.05f, nullptr,
+                                            nullptr, "%.4f");
+            }
+            if (changed)
+            {
+                if (document_.SetSceneVariableNumber(index, value))
+                {
+                    documentVariables_[variable.name] = Assets::Scad::Value::MakeNumber(value);
+                    assemblySourceDirty_ = true;
+                    benchDirty_ = true;
+                    terrainProcessDirty_ = document_.HasTerrain();
+                    sourceStructureBoundsDirty_ = true;
+                    statusLine_ = fmt::format("已更新场景变量 {} = {:.4g}", variable.name, value);
+                    statusError_ = false;
+                }
+            }
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("第 %d 行原表达式：%s", variable.line, variable.expression.c_str());
+            }
+            ImGui::PopID();
+        }
+        ImGui::Separator();
+    }
+
     void ScadLibraryInterface::DrawBenchContent()
     {
         ImGui::Spacing();
@@ -4983,6 +5047,7 @@ namespace ScadLibrary
             ImGui::PopStyleColor();
         }
         ImGui::Separator();
+        DrawSceneVariableProperties();
 
         if (ImGui::BeginTabBar("##assembly_editor_tabs"))
         {
@@ -5236,6 +5301,7 @@ namespace ScadLibrary
             }
             const FScadSceneSegment& segment = document_.Segments()[segmentIndex];
             selectedSegment_ = segmentIndex;
+            scrollToSelectedSegment_ = true;
             structureInspectorRequested_ = true;
             assemblyEditorTab_ = 3;
             if (segment.kind == EScadSegmentKind::Instance && segment.instanceIndex >= 0)
@@ -5276,84 +5342,166 @@ namespace ScadLibrary
         };
 
         ImGui::BeginChild("##left_structure_tree", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
-        for (size_t segmentIndex = 0; segmentIndex < document_.Segments().size(); ++segmentIndex)
+        const ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
+            ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp;
+        if (ImGui::BeginTable("##structure_table", 4, tableFlags, ImVec2(0.0f, 0.0f)))
         {
-            const FScadSceneSegment& segment = document_.Segments()[segmentIndex];
-            if (segment.kind == EScadSegmentKind::TerrainRule ||
-                (segmentFilterBuf_[0] != '\0' && segment.name.find(segmentFilterBuf_) == std::string::npos &&
-                 segment.label.find(segmentFilterBuf_) == std::string::npos))
+            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 28.0f);
+            ImGui::TableSetupColumn("名称", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("类型", ImGuiTableColumnFlags_WidthFixed, 54.0f);
+            ImGui::TableSetupColumn("行", ImGuiTableColumnFlags_WidthFixed, 42.0f);
+            ImGui::TableHeadersRow();
+
+            for (size_t segmentIndex = 0; segmentIndex < document_.Segments().size(); ++segmentIndex)
             {
-                continue;
-            }
-            ImGui::PushID(static_cast<int>(segmentIndex));
-            const std::string line = segment.line > 0 ? fmt::format("L{}", segment.line) : "新增";
-            const bool layoutGenerator = segment.kind == EScadSegmentKind::Source && segment.name == "lay_scatter";
-            const std::string label = fmt::format("{}  {}  ·  {}", layoutGenerator ? ICON_FA_WAND_MAGIC_SPARKLES
-                                                                                      : SegmentKindIcon(segment.kind),
-                                                  segment.name.empty() ? segment.label : segment.name, line);
-            if (ImGui::Selectable(label.c_str(), selectedSegment_ == static_cast<int>(segmentIndex)))
-            {
-                selectSegment(static_cast<int>(segmentIndex));
-            }
-            if (segment.kind == EScadSegmentKind::Terrain)
-            {
-                ImGui::Indent(18.0f);
-                const Assets::Scad::FTerrainSpec& terrain = TerrainProcess().Terrain();
-                for (size_t featureIndex = 0; featureIndex < terrain.features.size(); ++featureIndex)
+                const FScadSceneSegment& segment = document_.Segments()[segmentIndex];
+                const FBenchItem* instance =
+                    segment.kind == EScadSegmentKind::Instance && segment.instanceIndex >= 0 &&
+                        segment.instanceIndex < static_cast<int>(Bench().size())
+                    ? &Bench()[segment.instanceIndex]
+                    : nullptr;
+                const FKitModuleInfo* moduleInfo = nullptr;
+                if (instance != nullptr && instance->kitIndex >= 0 && instance->kitIndex < static_cast<int>(kits_.size()))
                 {
-                    ImGui::PushID(fmt::format("feature_{}", featureIndex).c_str());
-                    const bool selected = selectedSegment_ == static_cast<int>(segmentIndex) && !terrainSelectionIsRule_ &&
-                                          selectedTerrainFeature_ == static_cast<int>(featureIndex);
-                    if (ImGui::Selectable(fmt::format("{}  {}", ICON_FA_MOUNTAIN_SUN,
-                                                       FTerrainProcessDocument::FeatureTypeName(terrain.features[featureIndex].type))
-                                              .c_str(),
-                                          selected))
+                    const std::vector<FKitModuleInfo>& modules = kits_[instance->kitIndex].modules;
+                    const auto module = std::find_if(modules.begin(), modules.end(), [&](const FKitModuleInfo& candidate)
+                                                     { return candidate.name == instance->CatalogModuleName(); });
+                    if (module != modules.end())
                     {
-                        ClearEditableSceneSelection();
-                        ClearSelectedStructureBounds();
-                        selectedSegment_ = static_cast<int>(segmentIndex);
-                        selectedTerrainFeature_ = static_cast<int>(featureIndex);
-                        terrainSelectionIsRule_ = false;
-                        structureInspectorRequested_ = true;
-                        assemblyEditorTab_ = 3;
+                        moduleInfo = &*module;
                     }
-                    ImGui::PopID();
                 }
-                const std::vector<FTerrainProcessRule>& rules = TerrainProcess().Rules();
-                for (size_t ruleIndex = 0; ruleIndex < rules.size(); ++ruleIndex)
+                const std::string& displayName = instance != nullptr
+                    ? instance->moduleName
+                    : (segment.name.empty() ? segment.label : segment.name);
+                const bool filterMiss = segmentFilterBuf_[0] != '\0' &&
+                    displayName.find(segmentFilterBuf_) == std::string::npos &&
+                    segment.label.find(segmentFilterBuf_) == std::string::npos &&
+                    (moduleInfo == nullptr || moduleInfo->category.find(segmentFilterBuf_) == std::string::npos);
+                if (segment.kind == EScadSegmentKind::TerrainRule || filterMiss)
                 {
-                    if (rules[ruleIndex].removed)
-                    {
-                        continue;
-                    }
-                    ImGui::PushID(fmt::format("rule_{}", ruleIndex).c_str());
-                    const bool selected = terrainSelectionIsRule_ && selectedTerrainRule_ == static_cast<int>(ruleIndex);
-                    if (ImGui::Selectable(fmt::format("{}  {}", ICON_FA_WAND_MAGIC_SPARKLES,
-                                                       FTerrainProcessDocument::RuleTypeName(rules[ruleIndex].type))
-                                              .c_str(),
-                                          selected))
-                    {
-                        const auto found = std::find_if(document_.Segments().begin(), document_.Segments().end(),
-                                                        [ruleIndex](const FScadSceneSegment& candidate)
-                                                        {
-                                                            return candidate.kind == EScadSegmentKind::TerrainRule &&
-                                                                candidate.ruleIndex == static_cast<int>(ruleIndex);
-                                                        });
-                        ClearEditableSceneSelection();
-                        ClearSelectedStructureBounds();
-                        selectedSegment_ = found == document_.Segments().end()
-                            ? static_cast<int>(segmentIndex)
-                            : static_cast<int>(std::distance(document_.Segments().begin(), found));
-                        selectedTerrainRule_ = static_cast<int>(ruleIndex);
-                        terrainSelectionIsRule_ = true;
-                        structureInspectorRequested_ = true;
-                        assemblyEditorTab_ = 3;
-                    }
-                    ImGui::PopID();
+                    continue;
                 }
-                ImGui::Unindent(18.0f);
+
+                const bool layoutGenerator = segment.kind == EScadSegmentKind::Source && segment.name == "lay_scatter";
+                const bool procedural = segment.kind == EScadSegmentKind::Terrain || layoutGenerator;
+                const char* structureType = instance != nullptr ? "可编辑" : (procedural ? "过程" : "源码");
+                const char* icon = instance != nullptr ? ICON_FA_CUBE
+                    : (layoutGenerator ? ICON_FA_WAND_MAGIC_SPARKLES : SegmentKindIcon(segment.kind));
+                const ImVec4 iconColor = segment.disabled
+                    ? ImVec4(0.52f, 0.53f, 0.56f, 1.0f)
+                    : (procedural ? SegmentKindColor(EScadSegmentKind::TerrainRule) : SegmentKindColor(segment.kind));
+
+                ImGui::PushID(static_cast<int>(segmentIndex));
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextColored(iconColor, "%s", icon);
+                ImGui::TableSetColumnIndex(1);
+                if (ImGui::Selectable(fmt::format("{}##segment_{}", displayName, segmentIndex).c_str(),
+                                      selectedSegment_ == static_cast<int>(segmentIndex)))
+                {
+                    selectSegment(static_cast<int>(segmentIndex));
+                }
+                if (selectedSegment_ == static_cast<int>(segmentIndex) && scrollToSelectedSegment_)
+                {
+                    ImGui::SetScrollHereY(0.35f);
+                    scrollToSelectedSegment_ = false;
+                }
+                if (instance != nullptr && ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("%s%s%s\n%s", instance->moduleName.c_str(), instance->catalogModuleName.empty()
+                                                                 ? ""
+                                                                 : "  → ",
+                                      instance->catalogModuleName.c_str(), moduleInfo == nullptr
+                                          ? "可编辑实例"
+                                          : fmt::format("{} · {}", CategoryLabel(moduleInfo->category), moduleInfo->params).c_str());
+                }
+                ImGui::TableSetColumnIndex(2);
+                ImGui::TextDisabled("%s", structureType);
+                ImGui::TableSetColumnIndex(3);
+                ImGui::TextDisabled("%s", segment.line > 0 ? fmt::format("L{}", segment.line).c_str() : "新增");
+
+                if (segment.kind == EScadSegmentKind::Terrain)
+                {
+                    const Assets::Scad::FTerrainSpec& terrain = TerrainProcess().Terrain();
+                    for (size_t featureIndex = 0; featureIndex < terrain.features.size(); ++featureIndex)
+                    {
+                        ImGui::PushID(fmt::format("feature_{}", featureIndex).c_str());
+                        const bool selected = selectedSegment_ == static_cast<int>(segmentIndex) &&
+                            !terrainSelectionIsRule_ && selectedTerrainFeature_ == static_cast<int>(featureIndex);
+                        ImGui::TableNextRow();
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::TextColored(SegmentKindColor(EScadSegmentKind::TerrainRule), "%s", ICON_FA_MOUNTAIN_SUN);
+                        ImGui::TableSetColumnIndex(1);
+                        ImGui::Indent(14.0f);
+                        const bool clicked = ImGui::Selectable(
+                            fmt::format("{}##terrain_feature_{}", FTerrainProcessDocument::FeatureTypeName(terrain.features[featureIndex].type),
+                                        featureIndex).c_str(), selected);
+                        ImGui::Unindent(14.0f);
+                        if (clicked)
+                        {
+                            ClearEditableSceneSelection();
+                            ClearSelectedStructureBounds();
+                            selectedSegment_ = static_cast<int>(segmentIndex);
+                            selectedTerrainFeature_ = static_cast<int>(featureIndex);
+                            terrainSelectionIsRule_ = false;
+                            scrollToSelectedSegment_ = true;
+                            structureInspectorRequested_ = true;
+                            assemblyEditorTab_ = 3;
+                        }
+                        ImGui::TableSetColumnIndex(2);
+                        ImGui::TextDisabled("特征");
+                        ImGui::TableSetColumnIndex(3);
+                        ImGui::TextDisabled("—");
+                        ImGui::PopID();
+                    }
+                    const std::vector<FTerrainProcessRule>& rules = TerrainProcess().Rules();
+                    for (size_t ruleIndex = 0; ruleIndex < rules.size(); ++ruleIndex)
+                    {
+                        if (rules[ruleIndex].removed)
+                        {
+                            continue;
+                        }
+                        ImGui::PushID(fmt::format("rule_{}", ruleIndex).c_str());
+                        const bool selected = terrainSelectionIsRule_ && selectedTerrainRule_ == static_cast<int>(ruleIndex);
+                        ImGui::TableNextRow();
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::TextColored(SegmentKindColor(EScadSegmentKind::TerrainRule), "%s", ICON_FA_WAND_MAGIC_SPARKLES);
+                        ImGui::TableSetColumnIndex(1);
+                        ImGui::Indent(14.0f);
+                        const bool clicked = ImGui::Selectable(
+                            fmt::format("{}##terrain_rule_{}", FTerrainProcessDocument::RuleTypeName(rules[ruleIndex].type), ruleIndex).c_str(),
+                            selected);
+                        ImGui::Unindent(14.0f);
+                        if (clicked)
+                        {
+                            const auto found = std::find_if(document_.Segments().begin(), document_.Segments().end(),
+                                                            [ruleIndex](const FScadSceneSegment& candidate)
+                                                            {
+                                                                return candidate.kind == EScadSegmentKind::TerrainRule &&
+                                                                    candidate.ruleIndex == static_cast<int>(ruleIndex);
+                                                            });
+                            ClearEditableSceneSelection();
+                            ClearSelectedStructureBounds();
+                            selectedSegment_ = found == document_.Segments().end()
+                                ? static_cast<int>(segmentIndex)
+                                : static_cast<int>(std::distance(document_.Segments().begin(), found));
+                            selectedTerrainRule_ = static_cast<int>(ruleIndex);
+                            terrainSelectionIsRule_ = true;
+                            scrollToSelectedSegment_ = true;
+                            structureInspectorRequested_ = true;
+                            assemblyEditorTab_ = 3;
+                        }
+                        ImGui::TableSetColumnIndex(2);
+                        ImGui::TextDisabled("规则");
+                        ImGui::TableSetColumnIndex(3);
+                        ImGui::TextDisabled("—");
+                        ImGui::PopID();
+                    }
+                }
+                ImGui::PopID();
             }
-            ImGui::PopID();
+            ImGui::EndTable();
         }
         if (document_.Segments().empty())
         {
@@ -6417,7 +6565,7 @@ namespace ScadLibrary
 
         for (FBenchItem& item : document_.Instances())
         {
-            item.kitIndex = FindKitIndex(item.moduleName);
+            item.kitIndex = FindKitIndex(item.CatalogModuleName());
             item.evaluated = true;
         }
         assemblySource_ = document_.Source();
@@ -8929,33 +9077,34 @@ namespace ScadLibrary
         Assets::Node* selectedNode = ResolveSceneObjectNode(item, SceneObjectWorldMatrix(item));
         if (selectedNode == nullptr)
         {
-            return engine_.GetScene().GetSelectedNodeBounds(center, radius);
+            // The document selection is authoritative in ScadLibrary: the
+            // engine selection is intentionally cleared to suppress its edge
+            // outline. A temporarily unresolved runtime node should still let
+            // F frame the selected instance at its authored transform.
+            center = glm::vec3(SceneObjectWorldMatrix(item)[3]);
+            radius = 0.5f;
+            return true;
         }
 
-        glm::vec3 minBounds(FLT_MAX);
-        glm::vec3 maxBounds(-FLT_MAX);
-        bool found = false;
-        AccumulateNodeBounds(engine_.GetScene(), *selectedNode, minBounds, maxBounds, found);
-        if (!found)
+        glm::vec3 localMin;
+        glm::vec3 localMax;
+        if (!GetNodeOrientedBounds(engine_.GetScene(), *selectedNode, localMin, localMax))
         {
-            return engine_.GetScene().GetSelectedNodeBounds(center, radius);
+            center = glm::vec3(selectedNode->WorldTransform()[3]);
+            radius = 0.5f;
+            return true;
         }
 
-        center = (minBounds + maxBounds) * 0.5f;
-        radius = std::max(glm::length(maxBounds - minBounds) * 0.5f, 0.001f);
-
-        if (item.kitIndex >= 0 && item.kitIndex < static_cast<int>(kits_.size()))
+        const glm::mat4& world = selectedNode->WorldTransform();
+        center = glm::vec3(world * glm::vec4((localMin + localMax) * 0.5f, 1.0f));
+        radius = 0.001f;
+        for (int corner = 0; corner < 8; ++corner)
         {
-            const auto moduleIt = std::find_if(
-                kits_[item.kitIndex].modules.begin(), kits_[item.kitIndex].modules.end(),
-                [&item](const FKitModuleInfo& module) { return module.name == item.moduleName; });
-            if (moduleIt != kits_[item.kitIndex].modules.end() && moduleIt->hasMetrics)
-            {
-                const glm::vec3 scaledExtents(
-                    moduleIt->footprintX * std::abs(item.scale), moduleIt->footprintY * std::abs(item.scaleY),
-                    moduleIt->height * std::abs(item.scaleZ));
-                radius = std::max(glm::length(scaledExtents) * 0.5f, 0.001f);
-            }
+            const glm::vec3 localPoint((corner & 1) != 0 ? localMax.x : localMin.x,
+                                       (corner & 2) != 0 ? localMax.y : localMin.y,
+                                       (corner & 4) != 0 ? localMax.z : localMin.z);
+            const glm::vec3 worldPoint = glm::vec3(world * glm::vec4(localPoint, 1.0f));
+            radius = std::max(radius, glm::length(worldPoint - center));
         }
         return true;
     }

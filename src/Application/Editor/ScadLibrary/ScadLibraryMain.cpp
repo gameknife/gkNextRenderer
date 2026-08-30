@@ -171,10 +171,15 @@ void ScadLibraryGameInstance::FocusSelectedSceneObject()
         return;
     }
 
-    cameraController_.SetNavigationScale(radius);
+    // Scene loading uses a conservative 0.5m near plane for big scenes. A
+    // selected kit can be much smaller, so lower it before framing to avoid
+    // clipping the focused OBB away.
+    Assets::Camera& sceneCamera = GetEngine().GetScene().GetRenderCamera();
+    sceneCamera.NearPlane = std::min(sceneCamera.NearPlane, std::max(0.01f, radius * 0.08f));
+    cameraController_.SetNavigationScale(std::max(radius, 0.05f));
     cameraController_.SetOrbitTarget(center);
     cameraController_.SetAltPressed(true);
-    cameraController_.Focus(center, radius);
+    cameraController_.FocusImmediate(center, radius);
 }
 
 void ScadLibraryGameInstance::FrameAllSceneObjects()
