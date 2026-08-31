@@ -111,7 +111,7 @@ namespace NextUI::Foundation
                 ImGui::Dummy(ImVec2(options.brandIconSize, options.brandIconSize));
                 ImGui::SameLine(0.0f, options.brandTextSpacing);
                 ImGui::PushFont(titleFont);
-                ImGui::SetCursorPosY(std::floor((options.height - ImGui::GetTextLineHeight()) * 0.5f) - 1.0f);
+                ImGui::SetCursorPosY((options.height - ImGui::GetTextLineHeight()) * 0.5f);
                 ImGui::TextUnformatted(options.appName != nullptr ? options.appName : "");
                 ImGui::PopFont();
             }
@@ -119,7 +119,7 @@ namespace NextUI::Foundation
 
         ImGui::SetNextWindowPos(
             ImVec2(viewport->Pos.x + brandWidth,
-                   viewport->Pos.y + (options.height - ImGui::GetTextLineHeight()) * 0.5f),
+                   viewport->Pos.y + (options.height - ImGui::GetTextLineHeight() - ImGui::GetStyle().FramePadding.y * 2.0f) * 0.5f),
             ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(menuWidth, options.height), ImGuiCond_Always);
         ImGui::SetNextWindowViewport(viewport->ID);
