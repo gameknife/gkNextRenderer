@@ -339,11 +339,7 @@ namespace Vulkan
 
     void AssetThumbnailRenderer::BeforeNextFrame()
     {
-        if (releaseThumbnailView_)
-        {
-            RenderViewResourceFactory(renderer_).DestroyView(thumbnailRenderView_);
-            releaseThumbnailView_ = false;
-        }
+        CollectRetiredScenes();
         if (materialPreviewEnabled_)
         {
             EnsureMaterialPreviewScene();
@@ -356,20 +352,41 @@ namespace Vulkan
         {
             view->InvalidateTemporalHistory();
             view->SetSceneOverride(nullptr);
+            view->SetVisibilityFramebuffer(nullptr);
         }
         if (RenderView* view = MaterialPreviewView())
         {
             view->InvalidateTemporalHistory();
             view->SetSceneOverride(nullptr);
+            view->SetVisibilityFramebuffer(nullptr);
         }
 
+        // Scene loading waits for the device before it calls SetScene(), so no submitted command
+        // can still reference either preview scene here. Destroy them now rather than retaining
+        // a scene across the renderer's scene-resource rebuild.
         thumbnailScene_.reset();
         thumbnailSceneReady_ = false;
         materialPreviewScene_.reset();
         materialPreviewSceneReady_ = false;
         materialPreviewDirty_ = true;
-        ClearThumbnailCache();
+
+        // A main-scene commit rebuilds the shared render passes and view RT banks. Keep the
+        // sampled thumbnail images (they are independent Vulkan images), but discard the
+        // transient views and framebuffer objects that reference the old pass/bank resources.
+        // Leaving either view alive makes the next thumbnail render dereference a stale Vulkan
+        // object after a Kit thumbnail starts a new scene load.
+        RenderViewResourceFactory resources(renderer_);
+        resources.DestroyView(thumbnailRenderView_);
+        resources.DestroyView(materialPreviewView_);
         thumbnailTarget_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
+        materialPreviewTarget_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
+
+        // Kit-gallery thumbnails are keyed by their catalog-wide module index and source hash, so a
+        // main-scene change does not invalidate them. Clearing the cache here used to destroy their
+        // sampled images before the previous frame had completed. Besides making a quick Kit switch
+        // unsafe, it also forced every gallery page to re-render.
+        // Keep these GPU resources alive; a changed module source naturally invalidates its own cache
+        // entry through RequestThumbnail().
     }
 
     void AssetThumbnailRenderer::OnHdrShUpdated()
@@ -439,6 +456,33 @@ namespace Vulkan
             }
             QueueThumbnail(index);
         }
+    }
+
+    void AssetThumbnailRenderer::RetireScene(std::unique_ptr<Assets::Scene>& scene)
+    {
+        if (!scene)
+        {
+            return;
+        }
+
+        // A thumbnail Scene owns buffers addressed directly by the scheduled GPU work. ScheduleViews
+        // runs after the frame fence wait, but BeforeNextFrame runs before it, so immediate destruction
+        // on the next UI tick can invalidate commands that are still in flight. Keep the scene through
+        // the following submitted frame; this also covers scene changes that occur before a new frame
+        // has acquired its fence.
+        retiredScenes_.push_back({
+            .scene = std::move(scene),
+            .releaseAfterSubmitSerial = renderer_.RecordingSubmitSerial() + 1u,
+        });
+    }
+
+    void AssetThumbnailRenderer::CollectRetiredScenes()
+    {
+        const uint64_t completedSubmitSerial = renderer_.CompletedSubmitSerial();
+        std::erase_if(retiredScenes_, [completedSubmitSerial](const FRetiredScene& retired)
+        {
+            return retired.releaseAfterSubmitSerial <= completedSubmitSerial;
+        });
     }
 
     std::unique_ptr<Assets::Scene> AssetThumbnailRenderer::CreateMaterialSphereScene(
@@ -526,6 +570,7 @@ namespace Vulkan
         camera.FarPlane = 20.0f;
         camera.ModelView = glm::lookAt(glm::vec3(0.0f, 0.0f, 4.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
+        RetireScene(thumbnailScene_);
         thumbnailScene_ = CreateMaterialSphereScene(
             std::move(previewMaterial),
             "__MaterialThumbnailSphere",
@@ -543,6 +588,7 @@ namespace Vulkan
             return;
         }
 
+        RetireScene(materialPreviewScene_);
         materialPreviewScene_ = CreateMaterialSphereScene(
             materialPreview_,
             "__MaterialPreviewSphere",
@@ -595,6 +641,7 @@ namespace Vulkan
 
     void AssetThumbnailRenderer::RebuildMeshThumbnailScene(const Assets::Model& model)
     {
+        RetireScene(thumbnailScene_);
         thumbnailScene_ = std::make_unique<Assets::Scene>(
             renderer_.CommandPool(), false, /*allocateAmbientResources*/ false, /*enableCpuAcceleration*/ false);
 
@@ -694,6 +741,7 @@ namespace Vulkan
             scene->GetRenderCamera() = cameraInit.cameras.front();
         }
         scene->SyncUpdateScene();
+        RetireScene(thumbnailScene_);
         thumbnailScene_ = std::move(scene);
         thumbnailSceneKind_ = EThumbnailKind::ScadKit;
         thumbnailSceneReady_ = true;
@@ -938,7 +986,6 @@ namespace Vulkan
                     }
                 }
                 view.SetSceneOverride(nullptr);
-                releaseThumbnailView_ = true;
             });
 
         return true;

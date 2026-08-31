@@ -115,6 +115,12 @@ namespace Vulkan
             bool pending = false;
         };
 
+        struct FRetiredScene
+        {
+            std::unique_ptr<Assets::Scene> scene;
+            uint64_t releaseAfterSubmitSerial = 0;
+        };
+
         static uint64_t HashMaterialThumbnail(const Assets::FMaterial& material);
         static uint64_t HashMeshThumbnail(const Assets::Model& model);
         uint32_t RequestThumbnail(
@@ -126,6 +132,8 @@ namespace Vulkan
         void QueueThumbnail(uint32_t poolIndex);
         void ClearThumbnailCache();
         void EnqueueExistingThumbnailImages();
+        void RetireScene(std::unique_ptr<Assets::Scene>& scene);
+        void CollectRetiredScenes();
         std::unique_ptr<Assets::Scene> CreateMaterialSphereScene(
             Assets::FMaterial material,
             const char* nodeName,
@@ -153,9 +161,9 @@ namespace Vulkan
         std::vector<FThumbnailSlot> thumbnailSlots_;
         std::unordered_map<FThumbnailKey, uint32_t, FThumbnailKeyHash> thumbnailLookup_;
         std::vector<uint32_t> pendingThumbnails_;
+        std::vector<FRetiredScene> retiredScenes_;
         EThumbnailKind thumbnailSceneKind_ = EThumbnailKind::Material;
         bool thumbnailSceneReady_ = false;
-        bool releaseThumbnailView_ = false;
         FRenderViewTargetResources thumbnailTarget_;
         FRenderViewTargetResources materialPreviewTarget_;
         VkExtent2D materialPreviewExtent_{256, 256};

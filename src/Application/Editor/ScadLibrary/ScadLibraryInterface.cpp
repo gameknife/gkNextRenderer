@@ -37,6 +37,7 @@
 #include <imgui_stdlib.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -53,6 +54,8 @@
 #include <glm/gtx/norm.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <limits>
+#include <map>
+#include <numeric>
 #include <optional>
 #include <regex>
 #include <set>
@@ -69,6 +72,7 @@ namespace ScadLibrary
         constexpr float kTitleBarHeight = 48.0f;
         constexpr float kBottomBarHeight = 48.0f;
         constexpr float kCollapsedRailWidth = 46.0f;
+        constexpr float kKitBrowserHeaderHeight = 56.0f;
         constexpr int kBenchGridColumns = 6;
         constexpr float kBenchGridStep = 14.0f;
         constexpr const char* kScadKitDragDropPayload = "SCAD_LIBRARY_KIT_MODULE";
@@ -78,6 +82,127 @@ namespace ScadLibrary
             int32_t kitIndex = -1;
             int32_t moduleIndex = -1;
         };
+
+        struct FKitThumbnailControlResult
+        {
+            bool clicked = false;
+            bool hovered = false;
+        };
+
+        std::string KitThumbnailDisplayName(const std::string& name)
+        {
+            const size_t kitPrefixEnd = name.find('_');
+            if (kitPrefixEnd == std::string::npos)
+            {
+                return name;
+            }
+            const size_t categoryPrefixEnd = name.find('_', kitPrefixEnd + 1);
+            if (categoryPrefixEnd == std::string::npos || categoryPrefixEnd + 1 >= name.size())
+            {
+                return name;
+            }
+            return name.substr(categoryPrefixEnd + 1);
+        }
+
+        std::array<std::string, 2> MakeKitThumbnailLabel(
+            const std::string& name,
+            const float maxWidth,
+            const float fontScale)
+        {
+            std::array<std::string, 2> lines;
+            size_t sourceOffset = 0;
+            for (size_t lineIndex = 0; lineIndex < lines.size() && sourceOffset < name.size(); ++lineIndex)
+            {
+                std::string& line = lines[lineIndex];
+                while (sourceOffset < name.size())
+                {
+                    const std::string candidate = line + name[sourceOffset];
+                    if (!line.empty() && ImGui::CalcTextSize(candidate.c_str()).x * fontScale > maxWidth)
+                    {
+                        break;
+                    }
+                    line = candidate;
+                    ++sourceOffset;
+                }
+
+                if (line.empty())
+                {
+                    line.assign(1, name[sourceOffset++]);
+                }
+            }
+
+            if (sourceOffset < name.size())
+            {
+                std::string& lastLine = lines.back();
+                constexpr std::string_view ellipsis = "...";
+                while (!lastLine.empty() &&
+                       ImGui::CalcTextSize((lastLine + std::string(ellipsis)).c_str()).x * fontScale > maxWidth)
+                {
+                    lastLine.pop_back();
+                }
+                lastLine += ellipsis;
+            }
+            return lines;
+        }
+
+        FKitThumbnailControlResult DrawKitThumbnailControl(
+            const char* id,
+            const ImTextureID textureId,
+            const std::string& label,
+            const float thumbnailSize,
+            const bool selected)
+        {
+            const ImVec2 thumbnailPos = ImGui::GetCursorScreenPos();
+            ImGui::PushStyleColor(ImGuiCol_Button,
+                                  selected ? ImVec4(0.16f, 0.31f, 0.50f, 1.0f)
+                                           : ImVec4(0.10f, 0.12f, 0.15f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.20f, 0.39f, 0.60f, 1.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+            const bool clicked = textureId != 0
+                ? ImGui::ImageButton(id, textureId, ImVec2(thumbnailSize, thumbnailSize))
+                : ImGui::Button(ICON_FA_CUBES_STACKED, ImVec2(thumbnailSize, thumbnailSize));
+            const bool hovered = ImGui::IsItemHovered();
+            ImGui::PopStyleVar(2);
+            ImGui::PopStyleColor(2);
+
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            const ImVec2 thumbnailEnd = thumbnailPos + ImVec2(thumbnailSize, thumbnailSize);
+
+            constexpr float labelFontScale = 0.75f;
+            const std::string displayLabel = KitThumbnailDisplayName(label);
+            const std::array<std::string, 2> labelLines = MakeKitThumbnailLabel(
+                displayLabel, thumbnailSize - 8.0f, labelFontScale);
+            const int labelLineCount = labelLines[1].empty() ? 1 : 2;
+            const float textLineHeight = ImGui::GetTextLineHeight() * labelFontScale;
+            const float labelHeight = textLineHeight * static_cast<float>(labelLineCount) + 6.0f;
+            const ImVec2 labelMin(thumbnailPos.x + 1.0f, thumbnailEnd.y - labelHeight - 1.0f);
+            drawList->AddRectFilled(labelMin, thumbnailEnd - ImVec2(1.0f, 1.0f), IM_COL32(8, 10, 14, 210));
+            for (int lineIndex = 0; lineIndex < labelLineCount; ++lineIndex)
+            {
+                const ImVec2 textSize = ImGui::CalcTextSize(labelLines[lineIndex].c_str()) * labelFontScale;
+                drawList->AddText(
+                    ImGui::GetFont(), ImGui::GetFontSize() * labelFontScale,
+                    ImVec2(thumbnailPos.x + (thumbnailSize - textSize.x) * 0.5f,
+                           labelMin.y + 3.0f + textLineHeight * static_cast<float>(lineIndex)),
+                    ImGui::GetColorU32(ImGuiCol_Text), labelLines[lineIndex].c_str());
+            }
+
+            // Borders are deliberately emitted last so the label overlay can never hide interaction state.
+            drawList->AddRect(thumbnailPos + ImVec2(0.5f, 0.5f), thumbnailEnd - ImVec2(0.5f, 0.5f),
+                              IM_COL32(92, 104, 122, 210), 0.0f, 0, 1.0f);
+            if (selected || hovered)
+            {
+                const float stateBorderWidth = selected ? 2.0f : 1.0f;
+                const float stateInset = stateBorderWidth * 0.5f;
+                drawList->AddRect(
+                    thumbnailPos + ImVec2(stateInset, stateInset),
+                    thumbnailEnd - ImVec2(stateInset, stateInset),
+                    selected ? IM_COL32(91, 173, 255, 255) : IM_COL32(160, 205, 255, 235),
+                    0.0f, 0, stateBorderWidth);
+            }
+            return {.clicked = clicked, .hovered = hovered};
+        }
 
         uint64_t Fnv1a64(std::string_view value)
         {
@@ -1611,15 +1736,16 @@ namespace ScadLibrary
         const bool kitBrowserMode = workspaceMode_ == EWorkspaceMode::KitBrowser;
         if (kitBrowserMode)
         {
-            constexpr float kitBrowserHeaderHeight = 56.0f;
             constexpr float kitBrowserGap = 10.0f;
             const float kitBrowserLeftWidth = std::clamp(viewport->Size.x * 0.22f, 280.0f, 360.0f);
-            const float kitBrowserRightWidth = std::clamp(viewport->Size.x * 0.31f, 430.0f, 520.0f);
-            const ImVec2 kitBrowserViewportPos(
-                viewport->Pos.x + kitBrowserLeftWidth + kitBrowserGap, panelY + kitBrowserHeaderHeight);
+            const float kitBrowserContentHeight = std::max(1.0f, panelHeight - kKitBrowserHeaderHeight);
+            const float kitBrowserCatalogHeight = std::clamp(kitBrowserContentHeight * 0.42f, 220.0f, 420.0f);
+            const ImVec2 kitBrowserViewportPos(viewport->Pos.x,
+                                                panelY + kKitBrowserHeaderHeight + kitBrowserCatalogHeight +
+                                                    kitBrowserGap);
             const ImVec2 kitBrowserViewportSize(
-                std::max(1.0f, viewport->Size.x - kitBrowserLeftWidth - kitBrowserRightWidth - kitBrowserGap * 2.0f),
-                std::max(1.0f, panelHeight - kitBrowserHeaderHeight));
+                kitBrowserLeftWidth,
+                std::max(1.0f, kitBrowserContentHeight - kitBrowserCatalogHeight - kitBrowserGap));
             DrawKitBrowserPanel(ImVec2(viewport->Pos.x, panelY), ImVec2(viewport->Size.x, panelHeight));
             viewportPosition_ = {kitBrowserViewportPos.x, kitBrowserViewportPos.y};
             viewportSize_ = {kitBrowserViewportSize.x, kitBrowserViewportSize.y};
@@ -1990,12 +2116,29 @@ namespace ScadLibrary
             ImGui::InvisibleButton("##ScadLibraryKitDropTargetButton", size);
             if (ImGui::BeginDragDropTarget())
             {
-                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kScadKitDragDropPayload))
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
+                        kScadKitDragDropPayload, ImGuiDragDropFlags_AcceptBeforeDelivery))
                 {
                     if (payload->DataSize == sizeof(FScadKitDragPayload))
                     {
                         const auto* data = static_cast<const FScadKitDragPayload*>(payload->Data);
-                        PlaceKitFromDrop(data->kitIndex, data->moduleIndex);
+                        if (data->kitIndex >= 0 && data->kitIndex < static_cast<int>(kits_.size()) &&
+                            data->moduleIndex >= 0 &&
+                            data->moduleIndex < static_cast<int>(kits_[data->kitIndex].modules.size()))
+                        {
+                            glm::vec3 scadPosition;
+                            if (GetKitDropPlacement(scadPosition))
+                            {
+                                DrawKitDropPreview(kits_[data->kitIndex].modules[data->moduleIndex], scadPosition,
+                                                   pos, size);
+                            }
+                            if (payload->IsDelivery() && PlaceKitFromDrop(data->kitIndex, data->moduleIndex))
+                            {
+                                // Commit only on mouse release. The preview above stays lightweight while the
+                                // pointer moves; the real scene is refreshed exactly once after the drop.
+                                ReloadCurrentAssemblyPreview();
+                            }
+                        }
                     }
                 }
                 ImGui::EndDragDropTarget();
@@ -2005,22 +2148,8 @@ namespace ScadLibrary
         ImGui::PopStyleVar(2);
     }
 
-    void ScadLibraryInterface::PlaceKitFromDrop(const int kitIndex, const int moduleIndex)
+    bool ScadLibraryInterface::GetKitDropPlacement(glm::vec3& outScadPosition) const
     {
-        if (openedAssemblyPath_.empty())
-        {
-            statusLine_ = "请先打开一个场景，再从 Kit 库拖拽模块";
-            statusError_ = true;
-            return;
-        }
-        if (kitIndex < 0 || kitIndex >= static_cast<int>(kits_.size()) || moduleIndex < 0 ||
-            moduleIndex >= static_cast<int>(kits_[kitIndex].modules.size()))
-        {
-            statusLine_ = "无法放置：Kit 模块已不存在，请先刷新资源库";
-            statusError_ = true;
-            return;
-        }
-
         const glm::vec2 mousePosition = glm::vec2(engine_.GetMousePos());
         const NextUI::IUserInterface* userInterface = engine_.GetUserInterface();
         const float uiScale = userInterface != nullptr ? userInterface->UiScale() : 1.0f;
@@ -2039,7 +2168,6 @@ namespace ScadLibrary
             }
             return true;
         });
-        bool hasPlacement = hitSurface;
 
         // An empty scene has no BVH hit yet. Use the SCAD ground plane in that
         // case, which also gives a useful placement target when the view is
@@ -2050,38 +2178,81 @@ namespace ScadLibrary
             if (distance > 0.0f)
             {
                 worldPosition = rayOrigin + rayDirection * distance;
-                hasPlacement = true;
+                hitSurface = true;
             }
         }
 
-        if (!hasPlacement)
+        if (!hitSurface)
         {
-            statusLine_ = "无法确定落点：请把 Kit 拖到场景几何体或地面方向";
-            statusError_ = true;
-            return;
+            return false;
         }
 
         // SCAD is Z-up with +Y pointing toward the opposite engine-Z axis.
-        AddToBenchAt(kitIndex, kits_[kitIndex].modules[moduleIndex].name,
-                     glm::vec3(worldPosition.x, -worldPosition.z, worldPosition.y));
+        outScadPosition = glm::vec3(worldPosition.x, -worldPosition.z, worldPosition.y);
+        return true;
+    }
+
+    void ScadLibraryInterface::DrawKitDropPreview(const FKitModuleInfo& module, const glm::vec3& scadPosition,
+                                                   const ImVec2& viewportPos, const ImVec2& viewportSize) const
+    {
+        // catalog.json contains extents rather than the complete local bbox. Kit modules conventionally sit on
+        // the Z=0 plane, so use their footprint centered on the placement cursor and their measured height.
+        const float footprintX = module.hasMetrics ? std::max(module.footprintX, 0.25f) : 1.0f;
+        const float footprintY = module.hasMetrics ? std::max(module.footprintY, 0.25f) : 1.0f;
+        const float height = module.hasMetrics ? std::max(module.height, 0.25f) : 1.0f;
+        const glm::vec3 localMin(-footprintX * 0.5f, -footprintY * 0.5f, 0.0f);
+        const glm::vec3 localMax(footprintX * 0.5f, footprintY * 0.5f, height);
+        const float scale = engine_.GetUserSettings().ScadToWorldScale;
+        const glm::mat4 worldTransform = glm::mat4(Assets::Scad::ScadToWorldBasis(scale)) *
+            glm::translate(glm::mat4(1.0f), scadPosition);
+        DrawOrientedBoxOverlay(engine_.GetLastUniformBufferObject(), viewportPos, viewportSize, worldTransform,
+                               localMin, localMax, IM_COL32(255, 193, 74, 255));
+    }
+
+    bool ScadLibraryInterface::PlaceKitFromDrop(const int kitIndex, const int moduleIndex)
+    {
+        if (openedAssemblyPath_.empty())
+        {
+            statusLine_ = "请先打开一个场景，再从 Kit 库拖拽模块";
+            statusError_ = true;
+            return false;
+        }
+        if (kitIndex < 0 || kitIndex >= static_cast<int>(kits_.size()) || moduleIndex < 0 ||
+            moduleIndex >= static_cast<int>(kits_[kitIndex].modules.size()))
+        {
+            statusLine_ = "无法放置：Kit 模块已不存在，请先刷新资源库";
+            statusError_ = true;
+            return false;
+        }
+
+        glm::vec3 scadPosition;
+        if (!GetKitDropPlacement(scadPosition))
+        {
+            statusLine_ = "无法确定落点：请把 Kit 拖到场景几何体或地面方向";
+            statusError_ = true;
+            return false;
+        }
+
+        AddToBenchAt(kitIndex, kits_[kitIndex].modules[moduleIndex].name, scadPosition);
+        return true;
     }
 
     void ScadLibraryInterface::DrawKitBrowserPanel(const ImVec2& pos, const ImVec2& size)
     {
-        constexpr float headerHeight = 56.0f;
         constexpr float gap = 10.0f;
         const float leftWidth = std::clamp(size.x * 0.22f, 280.0f, 360.0f);
-        const float rightWidth = std::clamp(size.x * 0.31f, 430.0f, 520.0f);
-        const float contentHeight = std::max(1.0f, size.y - headerHeight);
-        const ImVec2 viewportPos(pos.x + leftWidth + gap, pos.y + headerHeight);
-        const ImVec2 viewportSize(std::max(1.0f, size.x - leftWidth - rightWidth - gap * 2.0f), contentHeight);
+        const float contentHeight = std::max(1.0f, size.y - kKitBrowserHeaderHeight);
+        const float catalogHeight = std::clamp(contentHeight * 0.42f, 220.0f, 420.0f);
+        const ImVec2 viewportPos(pos.x, pos.y + kKitBrowserHeaderHeight + catalogHeight + gap);
+        const ImVec2 viewportSize(leftWidth, std::max(1.0f, contentHeight - catalogHeight - gap));
+        const ImVec2 galleryPos(pos.x + leftWidth + gap, pos.y + kKitBrowserHeaderHeight);
+        const ImVec2 gallerySize(std::max(1.0f, size.x - leftWidth - gap), contentHeight);
         const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking |
             ImGuiWindowFlags_NoSavedSettings;
 
-        // Keep the central area uncovered so the renderer can show the selected module.
         ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(size.x, headerHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(size.x, kKitBrowserHeaderHeight), ImGuiCond_Always);
         ImGui::SetNextWindowBgAlpha(0.98f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -2091,7 +2262,7 @@ namespace ScadLibrary
             ImGui::AlignTextToFramePadding();
             ImGui::TextUnformatted(ICON_FA_BOOK_OPEN "  Kit 浏览器");
             ImGui::SameLine();
-            ImGui::TextDisabled("%zu 个 Kit · 选择模块查看 3D 预览与详细信息", kits_.size());
+            ImGui::TextDisabled("%zu 个 Kit · 批量浏览并选择模块预览", kits_.size());
             ImGui::SameLine(ImGui::GetWindowWidth() - 54.0f);
             if (NextUI::Theme::IconButton(ICON_FA_ARROWS_ROTATE "##kit_browser_rescan", "重新扫描 Kit 目录", false,
                                           ImVec2(30.0f, 30.0f)))
@@ -2102,9 +2273,241 @@ namespace ScadLibrary
         ImGui::End();
         ImGui::PopStyleVar(3);
 
+        // The right side is a complete Kit gallery. Selecting any card drives the compact preview in the left rail.
+        ImGui::SetNextWindowPos(galleryPos, ImGuiCond_Always);
+        ImGui::SetNextWindowSize(gallerySize, ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.98f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 12.0f));
+        if (ImGui::Begin("##ScadLibraryKitGallery", nullptr, flags))
+        {
+            ImGui::TextUnformatted(ICON_FA_IMAGES "  全部 Kit 模块");
+            ImGui::SameLine();
+            ImGui::TextDisabled("%zu 个 Kit · %zu 个模块", kits_.size(),
+                                std::accumulate(kits_.begin(), kits_.end(), size_t{0},
+                                                [](const size_t total, const FKitInfo& kit)
+                                                {
+                                                    return total + kit.modules.size();
+                                                }));
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::InputTextWithHint("##kit_browser_gallery_filter", ICON_FA_MAGNIFYING_GLASS " 搜索 Kit、模块或分类…",
+                                     kitBrowserGalleryFilterBuf_, sizeof(kitBrowserGalleryFilterBuf_));
+            std::map<std::string, size_t> galleryCategoryCounts;
+            for (const FKitInfo& kit : kits_)
+            {
+                for (const FKitModuleInfo& module : kit.modules)
+                {
+                    if (!module.category.empty())
+                    {
+                        ++galleryCategoryCounts[module.category];
+                    }
+                }
+            }
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 2.0f));
+            const auto drawCategoryChip = [&](const char* label, const bool selected)
+            {
+                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 999.0f);
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 0.0f));
+                ImGui::PushStyleColor(ImGuiCol_Button,
+                                      selected ? ImVec4(0.18f, 0.42f, 0.70f, 1.0f) : ImVec4(0.12f, 0.15f, 0.20f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.49f, 0.78f, 1.0f));
+                const bool clicked = ImGui::Button(label);
+                ImGui::PopStyleColor(2);
+                ImGui::PopStyleVar(2);
+                return clicked;
+            };
+            
+            const float categoryRowRight = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+            float categoryRowUsedWidth = 0.0f;
+            const auto placeCategoryChip = [&](const std::string& label, const bool selected, const auto& onClick)
+            {
+                constexpr float chipGap = 6.0f;
+                const float chipWidth = ImGui::CalcTextSize(label.c_str()).x;
+                if (categoryRowUsedWidth > 0.0f)
+                {
+                    if (categoryRowUsedWidth > categoryRowRight)
+                    {
+                        ImGui::NewLine();
+                        categoryRowUsedWidth = 0.0f;
+                        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - ImGui::GetTextLineHeight() * 0.5f);
+                    }
+                    else
+                    {
+                        ImGui::SameLine(0.0f, chipGap);
+                        categoryRowUsedWidth += chipGap;
+                    }
+                }
+                if (drawCategoryChip(label.c_str(), selected))
+                {
+                    onClick();
+                }
+                categoryRowUsedWidth += chipWidth;
+            };
+            placeCategoryChip("全部##kit_browser_category_all", kitBrowserGalleryCategory_.empty(), [&]()
+            {
+                kitBrowserGalleryCategory_.clear();
+            });
+            size_t rareCategoryCount = 0;
+            for (const auto& [category, count] : galleryCategoryCounts)
+            {
+                if (count <= 10)
+                {
+                    ++rareCategoryCount;
+                    continue;
+                }
+                placeCategoryChip(fmt::format("{}##kit_browser_category_{}", CategoryLabel(category), category),
+                                  kitBrowserGalleryCategory_ == category, [&]()
+                {
+                    kitBrowserGalleryCategory_ = category;
+                });
+            }
+            if (rareCategoryCount > 0)
+            {
+                placeCategoryChip(fmt::format("更多分类 ({})##kit_browser_category_more", rareCategoryCount),
+                                  kitBrowserShowRareCategories_, [&]()
+                {
+                    kitBrowserShowRareCategories_ = !kitBrowserShowRareCategories_;
+                });
+            }
+            if (kitBrowserShowRareCategories_)
+            {
+                for (const auto& [category, count] : galleryCategoryCounts)
+                {
+                    if (count > 10)
+                    {
+                        continue;
+                    }
+                    placeCategoryChip(fmt::format("{}##kit_browser_category_{}", CategoryLabel(category), category),
+                                      kitBrowserGalleryCategory_ == category, [&]()
+                    {
+                        kitBrowserGalleryCategory_ = category;
+                    });
+                }
+            }
+            ImGui::PopStyleVar();
+            ImGui::Separator();
+
+            if (kits_.empty())
+            {
+                ImGui::TextDisabled("assets/scad/lib 下没有 Kit");
+            }
+            else
+            {
+                NextUI::IUserInterface* userInterface = engine_.GetUserInterface();
+                Vulkan::AssetThumbnailRenderer* thumbnails = userInterface != nullptr
+                    ? &EditorPreview::AssetThumbnails(engine_.GetRenderer())
+                    : nullptr;
+                constexpr float thumbnailGap = 10.0f;
+                constexpr float thumbnailSize = 96.0f;
+                const int columnCount = std::max(
+                    1, static_cast<int>((ImGui::GetContentRegionAvail().x + thumbnailGap) /
+                                         (thumbnailSize + thumbnailGap)));
+                const float rowHeight = thumbnailSize + thumbnailGap;
+
+                ImGui::BeginChild("##kit_browser_gallery_scroll", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
+                uint32_t thumbnailIndexBase = 0;
+                bool foundAnyModule = false;
+                for (int kitIndex = 0; kitIndex < static_cast<int>(kits_.size()); ++kitIndex)
+                {
+                    const FKitInfo& kit = kits_[kitIndex];
+                    std::vector<int> visibleModuleIndices;
+                    visibleModuleIndices.reserve(kit.modules.size());
+                    for (int moduleIndex = 0; moduleIndex < static_cast<int>(kit.modules.size()); ++moduleIndex)
+                    {
+                        const FKitModuleInfo& module = kit.modules[moduleIndex];
+                        const bool textMatches = kitBrowserGalleryFilterBuf_[0] == '\0' ||
+                            kit.name.find(kitBrowserGalleryFilterBuf_) != std::string::npos ||
+                            kit.scaleClass.find(kitBrowserGalleryFilterBuf_) != std::string::npos ||
+                            module.name.find(kitBrowserGalleryFilterBuf_) != std::string::npos ||
+                            module.category.find(kitBrowserGalleryFilterBuf_) != std::string::npos ||
+                            module.params.find(kitBrowserGalleryFilterBuf_) != std::string::npos;
+                        const bool categoryMatches = kitBrowserGalleryCategory_.empty() ||
+                            module.category == kitBrowserGalleryCategory_;
+                        if (textMatches && categoryMatches)
+                        {
+                            visibleModuleIndices.push_back(moduleIndex);
+                        }
+                    }
+                    if (!visibleModuleIndices.empty())
+                    {
+                        foundAnyModule = true;
+                        const std::string kitHeader = fmt::format(
+                            "{}  {} 个模块##kit_browser_gallery_group_{}", kit.name, visibleModuleIndices.size(), kitIndex);
+                        if (ImGui::CollapsingHeader(kitHeader.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+                        {
+                            const int rowCount =
+                                (static_cast<int>(visibleModuleIndices.size()) + columnCount - 1) / columnCount;
+                            ImGuiListClipper clipper;
+                            clipper.Begin(rowCount, rowHeight);
+                            while (clipper.Step())
+                            {
+                                for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row)
+                                {
+                                    for (int column = 0; column < columnCount; ++column)
+                                    {
+                                        const int visibleIndex = row * columnCount + column;
+                                        if (visibleIndex >= static_cast<int>(visibleModuleIndices.size()))
+                                        {
+                                            break;
+                                        }
+                                        const int moduleIndex = visibleModuleIndices[visibleIndex];
+                                        const FKitModuleInfo& module = kit.modules[moduleIndex];
+                                        if (column > 0)
+                                        {
+                                            ImGui::SameLine(0.0f, thumbnailGap);
+                                        }
+                                        ImGui::PushID(static_cast<int>(thumbnailIndexBase) + moduleIndex);
+                                        ImTextureID textureId = 0;
+                                        std::string thumbnailSource;
+                                        uint64_t thumbnailHash = 0;
+                                        if (thumbnails != nullptr &&
+                                            EnsureKitThumbnailSource(kitIndex, moduleIndex, thumbnailSource, thumbnailHash))
+                                        {
+                                            const uint32_t sampleSlot = thumbnails->RequestScadKitThumbnail(
+                                                thumbnailIndexBase + static_cast<uint32_t>(moduleIndex), thumbnailSource,
+                                                thumbnailHash);
+                                            if (sampleSlot != std::numeric_limits<uint32_t>::max())
+                                            {
+                                                textureId = userInterface->RequestImTextureIdRaw(sampleSlot);
+                                            }
+                                        }
+                                        const FKitThumbnailControlResult thumbnailControl = DrawKitThumbnailControl(
+                                            "##kit_browser_gallery_thumbnail", textureId, module.name, thumbnailSize,
+                                            kitBrowserSelectedKit_ == kitIndex && kitBrowserSelectedModule_ == moduleIndex);
+                                        if (thumbnailControl.clicked)
+                                        {
+                                            kitBrowserSelectedKit_ = kitIndex;
+                                            kitBrowserSelectedModule_ = moduleIndex;
+                                            PreviewModule(kitIndex, module.name);
+                                        }
+                                        if (thumbnailControl.hovered)
+                                        {
+                                            ImGui::SetTooltip("%s%s%s", module.name.c_str(),
+                                                              module.params.empty() ? "" : "\n参数：",
+                                                              module.params.empty() ? "" : module.params.c_str());
+                                        }
+                                        ImGui::PopID();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    thumbnailIndexBase += static_cast<uint32_t>(kit.modules.size());
+                }
+                if (!foundAnyModule)
+                {
+                    ImGui::TextDisabled("没有匹配的 Kit 模块");
+                }
+                ImGui::EndChild();
+            }
+        }
+        ImGui::End();
+        ImGui::PopStyleVar(3);
+
         // Kit catalog.
-        ImGui::SetNextWindowPos(ImVec2(pos.x, pos.y + headerHeight), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(leftWidth, contentHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(pos.x, pos.y + kKitBrowserHeaderHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(leftWidth, catalogHeight), ImGuiCond_Always);
         ImGui::SetNextWindowBgAlpha(0.98f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
@@ -2213,199 +2616,6 @@ namespace ScadLibrary
                     ImGui::Text("%zu", kit.modules.size());
                     ImGui::TableSetColumnIndex(2);
                     ImGui::TextDisabled("%s", kit.scaleClass.empty() ? "未标注" : kit.scaleClass.c_str());
-                    ImGui::PopID();
-                }
-                ImGui::EndTable();
-            }
-        }
-        ImGui::End();
-        ImGui::PopStyleVar(3);
-
-        // Selected Kit details and module list.
-        ImGui::SetNextWindowPos(ImVec2(pos.x + size.x - rightWidth, pos.y + headerHeight), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(rightWidth, contentHeight), ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.98f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 12.0f));
-        if (ImGui::Begin("##ScadLibraryKitDetails", nullptr, flags))
-        {
-            if (kits_.empty())
-            {
-                ImGui::TextDisabled("未找到 kit_*.scad。可以点击顶部刷新，或检查 assets/scad/lib。");
-                ImGui::End();
-                ImGui::PopStyleVar(3);
-                return;
-            }
-
-            kitBrowserSelectedKit_ = std::clamp(kitBrowserSelectedKit_, 0, static_cast<int>(kits_.size()) - 1);
-            const FKitInfo& selectedKit = kits_[kitBrowserSelectedKit_];
-            std::set<std::string> categories;
-            size_t metricCount = 0;
-            int triangleCount = 0;
-            float maxFootprintX = 0.0f;
-            float maxFootprintY = 0.0f;
-            float maxHeight = 0.0f;
-            for (const FKitModuleInfo& module : selectedKit.modules)
-            {
-                categories.insert(module.category);
-                if (module.hasMetrics)
-                {
-                    ++metricCount;
-                    triangleCount += module.triangles;
-                    maxFootprintX = std::max(maxFootprintX, module.footprintX);
-                    maxFootprintY = std::max(maxFootprintY, module.footprintY);
-                    maxHeight = std::max(maxHeight, module.height);
-                }
-            }
-
-            ImGui::Text(ICON_FA_CUBES_STACKED "  %s", selectedKit.name.c_str());
-            ImGui::TextDisabled("尺度分类：%s", selectedKit.scaleClass.empty() ? "未标注" : selectedKit.scaleClass.c_str());
-            ImGui::TextWrapped("文件：%s", selectedKit.filePath.c_str());
-            ImGui::Separator();
-            ImGui::Text("模块 %zu  ·  分类 %zu  ·  度量 %zu / %zu", selectedKit.modules.size(), categories.size(),
-                        metricCount, selectedKit.modules.size());
-            ImGui::Text("三角形 %d", triangleCount);
-            if (metricCount > 0)
-            {
-                ImGui::SameLine();
-                ImGui::TextDisabled("最大尺寸 %.1f × %.1f × %.1f", maxFootprintX, maxFootprintY, maxHeight);
-            }
-            ImGui::Separator();
-
-            ImGui::TextUnformatted("模块清单");
-            ImGui::SameLine();
-            ImGui::TextDisabled("（点击模块预览）");
-            ImGui::SetNextItemWidth(-1.0f);
-            ImGui::InputTextWithHint("##kit_browser_module_filter", ICON_FA_MAGNIFYING_GLASS " 搜索模块、分类或参数…",
-                                     kitBrowserModuleFilterBuf_, sizeof(kitBrowserModuleFilterBuf_));
-
-            if (kitBrowserSelectedModule_ >= 0 &&
-                kitBrowserSelectedModule_ < static_cast<int>(selectedKit.modules.size()))
-            {
-                const FKitModuleInfo& selectedModule = selectedKit.modules[kitBrowserSelectedModule_];
-                const std::string selectedModuleLabel = selectedModule.params.empty()
-                    ? selectedModule.name
-                    : fmt::format("{}({})", selectedModule.name, selectedModule.params);
-                ImGui::TextDisabled("当前模块：%s", selectedModuleLabel.c_str());
-            }
-
-            std::vector<int> visibleModuleIndices;
-            for (int moduleIndex = 0; moduleIndex < static_cast<int>(selectedKit.modules.size()); ++moduleIndex)
-            {
-                const FKitModuleInfo& module = selectedKit.modules[moduleIndex];
-                const bool matches = kitBrowserModuleFilterBuf_[0] == '\0' ||
-                    module.name.find(kitBrowserModuleFilterBuf_) != std::string::npos ||
-                    module.category.find(kitBrowserModuleFilterBuf_) != std::string::npos ||
-                    module.params.find(kitBrowserModuleFilterBuf_) != std::string::npos;
-                if (!matches)
-                {
-                    continue;
-                }
-                visibleModuleIndices.push_back(moduleIndex);
-            }
-
-            if (visibleModuleIndices.empty())
-            {
-                ImGui::TextDisabled("没有匹配的模块");
-            }
-            else if (ImGui::BeginTable("##kit_browser_module_table_v3", 5,
-                                       ImGuiTableFlags_Sortable | ImGuiTableFlags_RowBg |
-                                           ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersOuter |
-                                           ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Resizable |
-                                           ImGuiTableFlags_ScrollY,
-                                       ImVec2(0.0f, 0.0f)))
-            {
-                ImGui::TableSetupColumn("模块", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthFixed, 108.0f);
-                ImGui::TableSetupColumn("分类", ImGuiTableColumnFlags_WidthFixed, 40.0f);
-                ImGui::TableSetupColumn("行", ImGuiTableColumnFlags_WidthFixed, 40.0f);
-                ImGui::TableSetupColumn("尺寸", ImGuiTableColumnFlags_WidthFixed, 90.0f);
-                ImGui::TableSetupColumn("tris", ImGuiTableColumnFlags_WidthFixed, 38.0f);
-                ImGui::TableHeadersRow();
-
-                const ImGuiTableSortSpecs* sortSpecs = ImGui::TableGetSortSpecs();
-                if (sortSpecs != nullptr && sortSpecs->SpecsCount > 0)
-                {
-                    const ImGuiTableColumnSortSpecs& spec = sortSpecs->Specs[0];
-                    std::stable_sort(visibleModuleIndices.begin(), visibleModuleIndices.end(),
-                                     [&](int lhs, int rhs)
-                    {
-                        const FKitModuleInfo& leftModule = selectedKit.modules[lhs];
-                        const FKitModuleInfo& rightModule = selectedKit.modules[rhs];
-                        int result = 0;
-                        if (spec.ColumnIndex == 0)
-                        {
-                            result = leftModule.name.compare(rightModule.name);
-                        }
-                        else if (spec.ColumnIndex == 1)
-                        {
-                            result = leftModule.category.compare(rightModule.category);
-                        }
-                        else if (spec.ColumnIndex == 2)
-                        {
-                            result = leftModule.line < rightModule.line ? -1 : (leftModule.line > rightModule.line ? 1 : 0);
-                        }
-                        else if (spec.ColumnIndex == 3)
-                        {
-                            if (leftModule.hasMetrics != rightModule.hasMetrics)
-                            {
-                                result = leftModule.hasMetrics ? 1 : -1;
-                            }
-                            else
-                            {
-                                const float leftSize = leftModule.footprintX * leftModule.footprintY * leftModule.height;
-                                const float rightSize = rightModule.footprintX * rightModule.footprintY * rightModule.height;
-                                result = leftSize < rightSize ? -1 : (leftSize > rightSize ? 1 : 0);
-                            }
-                        }
-                        else
-                        {
-                            result = leftModule.triangles < rightModule.triangles
-                                ? -1
-                                : (leftModule.triangles > rightModule.triangles ? 1 : 0);
-                        }
-                        if (result == 0)
-                        {
-                            result = leftModule.name.compare(rightModule.name);
-                        }
-                        return spec.SortDirection == ImGuiSortDirection_Descending ? result > 0 : result < 0;
-                    });
-                }
-
-                for (const int moduleIndex : visibleModuleIndices)
-                {
-                    const FKitModuleInfo& module = selectedKit.modules[moduleIndex];
-                    ImGui::TableNextRow(ImGuiTableRowFlags_None, 32.0f);
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::PushID(moduleIndex);
-                    if (ImGui::Selectable(module.name.c_str(), kitBrowserSelectedModule_ == moduleIndex,
-                                          ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap,
-                                          ImVec2(0.0f, 0.0f)))
-                    {
-                        kitBrowserSelectedModule_ = moduleIndex;
-                        PreviewModule(kitBrowserSelectedKit_, module.name);
-                    }
-                    if (ImGui::IsItemHovered())
-                    {
-                        ImGui::SetTooltip("%s%s%s", module.name.c_str(), module.params.empty() ? "" : "\n参数：",
-                                          module.params.empty() ? "" : module.params.c_str());
-                    }
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::TextDisabled("%s", CategoryLabel(module.category));
-                    ImGui::TableSetColumnIndex(2);
-                    ImGui::TextDisabled("L%d", module.line);
-                    ImGui::TableSetColumnIndex(3);
-                    if (module.hasMetrics)
-                    {
-                        ImGui::TextDisabled("%.1f × %.1f × %.1f", module.footprintX, module.footprintY,
-                                           module.height);
-                    }
-                    else
-                    {
-                        ImGui::TextDisabled("—");
-                    }
-                    ImGui::TableSetColumnIndex(4);
-                    ImGui::TextDisabled("%d", module.triangles);
                     ImGui::PopID();
                 }
                 ImGui::EndTable();
@@ -2661,7 +2871,35 @@ namespace ScadLibrary
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::InputTextWithHint("##filter", ICON_FA_MAGNIFYING_GLASS " 搜索 Kit 或模块…", filterBuf_,
                                          sizeof(filterBuf_));
+                ImGui::TextUnformatted("缩略图布局");
+                ImGui::SameLine();
+                for (const int columns : {2, 3, 4})
+                {
+                    const std::string label = fmt::format("{} 列##kit_thumbnail_columns_{}", columns, columns);
+                    if (ImGui::RadioButton(label.c_str(), kitThumbnailColumns_ == columns))
+                    {
+                        kitThumbnailColumns_ = columns;
+                    }
+                    if (columns != 4)
+                    {
+                        ImGui::SameLine();
+                    }
+                }
                 ImGui::Spacing();
+
+                if (kitThumbnailExpanded_.size() != kits_.size())
+                {
+                    kitThumbnailExpanded_.assign(kits_.size(), false);
+                }
+                if (kitThumbnailScrollY_ > 0.0f && kitThumbnailStickyKit_ >= 0 &&
+                    kitThumbnailStickyKit_ < static_cast<int>(kits_.size()))
+                {
+                    const FKitInfo& stickyKit = kits_[kitThumbnailStickyKit_];
+                    const std::string stickyHeader = fmt::format(
+                        "{}  {} 个模块##kit_thumbnail_sticky_header", stickyKit.name, stickyKit.modules.size());
+                    ImGui::SetNextItemOpen(kitThumbnailExpanded_[kitThumbnailStickyKit_], ImGuiCond_Always);
+                    kitThumbnailExpanded_[kitThumbnailStickyKit_] = ImGui::CollapsingHeader(stickyHeader.c_str());
+                }
 
                 ImGui::BeginChild("##kit_preview_library", ImVec2(0, 0), ImGuiChildFlags_None);
                 NextUI::IUserInterface* userInterface = engine_.GetUserInterface();
@@ -2671,14 +2909,15 @@ namespace ScadLibrary
                     thumbnails = &EditorPreview::AssetThumbnails(engine_.GetRenderer());
                 }
 
-                const float availableWidth = std::max(1.0f, ImGui::GetContentRegionAvail().x);
                 constexpr float cardGap = 8.0f;
-                const int columnCount = std::max(1, static_cast<int>((availableWidth + cardGap) / 132.0f));
-                const float cardWidth = std::max(96.0f,
-                                                 (availableWidth - cardGap * static_cast<float>(columnCount - 1)) /
-                                                     static_cast<float>(columnCount));
-                const float thumbnailSize = std::max(64.0f, cardWidth - 12.0f);
-                const float rowHeight = thumbnailSize + ImGui::GetTextLineHeightWithSpacing() * 2.0f + 18.0f;
+                const float availableWidth = std::max(1.0f, ImGui::GetContentRegionAvail().x);
+                const int columnCount = std::clamp(kitThumbnailColumns_, 2, 4);
+                const float thumbnailSize = std::max(
+                    1.0f, (availableWidth - cardGap * static_cast<float>(columnCount - 1)) /
+                              static_cast<float>(columnCount));
+                const float rowHeight = thumbnailSize + cardGap;
+                const float currentScrollY = ImGui::GetScrollY();
+                int stickyCandidate = -1;
 
                 uint32_t thumbnailIndexBase = 0;
                 for (int kitIndex = 0; kitIndex < static_cast<int>(kits_.size()); ++kitIndex)
@@ -2705,9 +2944,19 @@ namespace ScadLibrary
                         continue;
                     }
 
-                    ImGui::TextColored(ImVec4(0.72f, 0.82f, 1.0f, 1.0f), "%s", kit.name.c_str());
-                    ImGui::SameLine();
-                    ImGui::TextDisabled("%zu 个模块", kit.modules.size());
+                    const std::string kitHeader =
+                        fmt::format("{}  {} 个模块##kit_thumbnail_group_{}", kit.name, visibleModuleIndices.size(), kitIndex);
+                    if (ImGui::GetCursorPosY() <= currentScrollY + 1.0f)
+                    {
+                        stickyCandidate = kitIndex;
+                    }
+                    ImGui::SetNextItemOpen(kitThumbnailExpanded_[kitIndex], ImGuiCond_Always);
+                    kitThumbnailExpanded_[kitIndex] = ImGui::CollapsingHeader(kitHeader.c_str());
+                    if (!kitThumbnailExpanded_[kitIndex])
+                    {
+                        thumbnailIndexBase += static_cast<uint32_t>(kit.modules.size());
+                        continue;
+                    }
 
                     ImGuiListClipper clipper;
                     const int rowCount = (static_cast<int>(visibleModuleIndices.size()) + columnCount - 1) /
@@ -2750,15 +2999,9 @@ namespace ScadLibrary
                                     }
                                 }
 
-                                ImGui::PushStyleColor(ImGuiCol_Button,
-                                                      selected ? ImVec4(0.16f, 0.31f, 0.50f, 1.0f)
-                                                               : ImVec4(0.10f, 0.12f, 0.15f, 1.0f));
-                                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.20f, 0.39f, 0.60f, 1.0f));
-                                const bool clicked = textureId != 0
-                                    ? ImGui::ImageButton("##kit_preview", textureId, ImVec2(thumbnailSize, thumbnailSize))
-                                    : ImGui::Button(ICON_FA_CUBES_STACKED, ImVec2(thumbnailSize, thumbnailSize));
-                                ImGui::PopStyleColor(2);
-                                if (clicked)
+                                const FKitThumbnailControlResult thumbnailControl = DrawKitThumbnailControl(
+                                    "##kit_preview", textureId, module.name, thumbnailSize, selected);
+                                if (thumbnailControl.clicked)
                                 {
                                     // Selecting a card is deliberately local to the library. The old
                                     // PreviewModule() path remains available from the context menu for
@@ -2781,8 +3024,7 @@ namespace ScadLibrary
                                     ImGui::EndDragDropSource();
                                 }
 
-                                ImGui::TextWrapped("%s", module.name.c_str());
-                                if (ImGui::IsItemHovered())
+                                if (thumbnailControl.hovered)
                                 {
                                     if (module.hasMetrics)
                                     {
@@ -2820,6 +3062,11 @@ namespace ScadLibrary
                 if (kits_.empty())
                 {
                     ImGui::TextDisabled("assets/scad/lib 下没有 kit_*.scad");
+                }
+                kitThumbnailScrollY_ = ImGui::GetScrollY();
+                if (stickyCandidate >= 0)
+                {
+                    kitThumbnailStickyKit_ = stickyCandidate;
                 }
                 ImGui::EndChild();
                 ImGui::EndTabItem();

@@ -110,6 +110,9 @@ namespace ScadLibrary
         void DrawWorkspaceToolbar();
         void DrawActionToolbar();
         void DrawKitDropTarget(const ImVec2& pos, const ImVec2& size);
+        bool GetKitDropPlacement(glm::vec3& outScadPosition) const;
+        void DrawKitDropPreview(const FKitModuleInfo& module, const glm::vec3& scadPosition,
+                                const ImVec2& viewportPos, const ImVec2& viewportSize) const;
         void DrawKitBrowserPanel(const ImVec2& pos, const ImVec2& size);
         void DrawBrowserPanel(const ImVec2& pos, const ImVec2& size);
         void DrawBoneHierarchyPanel(const ImVec2& pos, const ImVec2& size);
@@ -153,7 +156,7 @@ namespace ScadLibrary
         void AddToBench(int kitIndex, const std::string& moduleName);
         void AddToBenchAt(int kitIndex, const std::string& moduleName, const glm::vec3& scadPosition);
         bool EnsureKitThumbnailSource(int kitIndex, int moduleIndex, std::string& outPath, uint64_t& outHash);
-        void PlaceKitFromDrop(int kitIndex, int moduleIndex);
+        bool PlaceKitFromDrop(int kitIndex, int moduleIndex);
         void ReloadBench(bool preserveCamera = true);
         void ReloadCurrentAssemblyPreview();
         void ExportBench();
@@ -282,7 +285,13 @@ namespace ScadLibrary
         char assemblyFilterBuf_[128] = {};
         char objectFilterBuf_[128] = {};
         char kitBrowserFilterBuf_[128] = {};
-        char kitBrowserModuleFilterBuf_[128] = {};
+        char kitBrowserGalleryFilterBuf_[128] = {};
+        std::string kitBrowserGalleryCategory_;
+        bool kitBrowserShowRareCategories_ = false;
+        int kitThumbnailColumns_ = 3;
+        int kitThumbnailStickyKit_ = -1;
+        float kitThumbnailScrollY_ = 0.0f;
+        std::vector<bool> kitThumbnailExpanded_;
         int selectedKit_ = -1;
         int kitBrowserSelectedKit_ = -1;
         int kitBrowserSelectedModule_ = -1;
