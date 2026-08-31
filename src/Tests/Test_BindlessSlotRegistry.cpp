@@ -44,10 +44,8 @@ namespace
             {"volume", static_cast<uint32_t>(Slots::RES_VOLUME_BASE),
              static_cast<uint32_t>(Slots::RES_VOLUME_COUNT)},
             {"material preview", static_cast<uint32_t>(Slots::RES_MATERIAL_PREVIEW), 1u},
-            {"mesh thumbnail", static_cast<uint32_t>(Slots::RES_MESH_THUMBNAIL_BASE),
-             static_cast<uint32_t>(Slots::RES_MESH_THUMBNAIL_COUNT)},
-            {"material thumbnail", static_cast<uint32_t>(Slots::RES_MATERIAL_THUMBNAIL_BASE),
-             static_cast<uint32_t>(Slots::RES_MATERIAL_THUMBNAIL_COUNT)},
+            {"thumbnail residency pool", static_cast<uint32_t>(Slots::RES_THUMBNAIL_BASE),
+             static_cast<uint32_t>(Slots::RES_THUMBNAIL_COUNT)},
         };
     }
 }

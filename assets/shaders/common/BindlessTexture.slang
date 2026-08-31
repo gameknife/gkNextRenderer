@@ -47,9 +47,8 @@
 //   16401..16448      48  1        NextRemote VideoPipeline        NV12 encode planes (3 x 16)
 //   16449..16456       8  3+4      volume resources                3D froxel grids / LUTs
 //   16457              1  0        AssetThumbnailRenderer          material preview
-//   16458..16969     512  0        AssetThumbnailRenderer          mesh thumbnails
-//   16970..17481     512  0        AssetThumbnailRenderer          material thumbnails
-//   -> RES_SLOT_COUNT = 17482 descriptors in each 2D array (3D arrays have 8 descriptors)
+//   16458..16969     512  0        AssetThumbnailRenderer          shared thumbnail residency pool
+//   -> RES_SLOT_COUNT = 16970 descriptors in each 2D array (3D arrays have 8 descriptors)
 
 namespace Bindless
 {
@@ -92,14 +91,14 @@ namespace Bindless
     // Editor material preview (AssetThumbnailRenderer).
     public static const int RES_MATERIAL_PREVIEW = RES_VOLUME_BASE + RES_VOLUME_COUNT;
 
-    // Editor thumbnail caches (AssetThumbnailRenderer): slot = base + asset index.
-    public static const int RES_MESH_THUMBNAIL_BASE = RES_MATERIAL_PREVIEW + 1;
-    public static const int RES_MESH_THUMBNAIL_COUNT = 512;
-    public static const int RES_MATERIAL_THUMBNAIL_BASE = RES_MESH_THUMBNAIL_BASE + RES_MESH_THUMBNAIL_COUNT;
-    public static const int RES_MATERIAL_THUMBNAIL_COUNT = 512;
+    // Editor thumbnail residency pool (AssetThumbnailRenderer). Material, mesh, SCAD kit and
+    // future thumbnail producers share this bounded working set; catalog size must not grow the
+    // global descriptor layout.
+    public static const int RES_THUMBNAIL_BASE = RES_MATERIAL_PREVIEW + 1;
+    public static const int RES_THUMBNAIL_COUNT = 512;
 
     // Total capacity of each bindless array == end of the last range above.
-    public static const int RES_SLOT_COUNT = RES_MATERIAL_THUMBNAIL_BASE + RES_MATERIAL_THUMBNAIL_COUNT;
+    public static const int RES_SLOT_COUNT = RES_THUMBNAIL_BASE + RES_THUMBNAIL_COUNT;
 
     // --- Screen-space RT slots (0..30): per-RenderView, resolved through ViewRT() ---
 
@@ -184,10 +183,8 @@ namespace Bindless
     static_assert(RES_REMOTE_ENCODE_BASE >= RES_REMOTE_COMPOSITE_BASE + RES_REMOTE_COMPOSITE_COUNT, "range overlap");
     static_assert(RES_VOLUME_BASE >= RES_REMOTE_ENCODE_BASE + RES_REMOTE_ENCODE_COUNT, "range overlap");
     static_assert(RES_MATERIAL_PREVIEW >= RES_VOLUME_BASE + RES_VOLUME_COUNT, "range overlap");
-    static_assert(RES_MESH_THUMBNAIL_BASE > RES_MATERIAL_PREVIEW, "range overlap");
-    static_assert(RES_MATERIAL_THUMBNAIL_BASE >= RES_MESH_THUMBNAIL_BASE + RES_MESH_THUMBNAIL_COUNT,
-                  "material thumbnails would overlap mesh thumbnails");
-    static_assert(RES_SLOT_COUNT >= RES_MATERIAL_THUMBNAIL_BASE + RES_MATERIAL_THUMBNAIL_COUNT,
+    static_assert(RES_THUMBNAIL_BASE > RES_MATERIAL_PREVIEW, "range overlap");
+    static_assert(RES_SLOT_COUNT >= RES_THUMBNAIL_BASE + RES_THUMBNAIL_COUNT,
                   "array capacity must cover every registered range");
 #endif
 }

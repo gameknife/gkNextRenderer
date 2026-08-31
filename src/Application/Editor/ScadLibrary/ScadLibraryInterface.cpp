@@ -10,6 +10,7 @@
 #include "AI/NextAIScadTransport.hpp"
 #include "AI/ScadAIController.hpp"
 #include "AI/ScadAIPanel.hpp"
+#include "Application/Editor/Common/Preview/AssetThumbnailRenderer.hpp"
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
@@ -70,6 +71,36 @@ namespace ScadLibrary
         constexpr float kCollapsedRailWidth = 46.0f;
         constexpr int kBenchGridColumns = 6;
         constexpr float kBenchGridStep = 14.0f;
+        constexpr const char* kScadKitDragDropPayload = "SCAD_LIBRARY_KIT_MODULE";
+
+        struct FScadKitDragPayload
+        {
+            int32_t kitIndex = -1;
+            int32_t moduleIndex = -1;
+        };
+
+        uint64_t Fnv1a64(std::string_view value)
+        {
+            uint64_t hash = 1469598103934665603ull;
+            for (const unsigned char character : value)
+            {
+                hash ^= character;
+                hash *= 1099511628211ull;
+            }
+            return hash;
+        }
+
+        std::string PreviewFileToken(std::string value)
+        {
+            for (char& character : value)
+            {
+                if (!std::isalnum(static_cast<unsigned char>(character)) && character != '_' && character != '-')
+                {
+                    character = '_';
+                }
+            }
+            return value;
+        }
 
         struct FScadRawArgument
         {
@@ -1647,6 +1678,7 @@ namespace ScadLibrary
         {
             const ImVec2 sceneViewportPos(viewport->Pos.x + leftWidth, panelY);
             const ImVec2 sceneViewportSize(std::max(1.0f, viewport->Size.x - leftWidth - rightWidth), panelHeight);
+            DrawKitDropTarget(sceneViewportPos, sceneViewportSize);
             // Terrain operators are selected from the Structure outliner. The
             // TERR tab edits only base data, while a selected operator keeps
             // its visual handles visible in the viewport.
@@ -1928,6 +1960,110 @@ namespace ScadLibrary
         config.DrawCenterContent = [&]() { DrawWorkspaceToolbar(); };
         config.DrawRightContent = [&]() { DrawActionToolbar(); };
         NextUI::Theme::DrawBottomBar(config);
+    }
+
+    void ScadLibraryInterface::DrawKitDropTarget(const ImVec2& pos, const ImVec2& size)
+    {
+        if (ImGui::GetDragDropPayload() == nullptr || size.x <= 0.0f || size.y <= 0.0f)
+        {
+            return;
+        }
+
+        ImGuiViewport* viewport = ImGui::GetMainViewport();
+        if (viewport == nullptr)
+        {
+            return;
+        }
+
+        ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
+        ImGui::SetNextWindowSize(size, ImGuiCond_Always);
+        ImGui::SetNextWindowViewport(viewport->ID);
+        ImGui::SetNextWindowBgAlpha(0.0f);
+        const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
+            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollWithMouse |
+            ImGuiWindowFlags_NoBringToFrontOnFocus;
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        if (ImGui::Begin("##ScadLibraryKitDropTarget", nullptr, flags))
+        {
+            ImGui::InvisibleButton("##ScadLibraryKitDropTargetButton", size);
+            if (ImGui::BeginDragDropTarget())
+            {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kScadKitDragDropPayload))
+                {
+                    if (payload->DataSize == sizeof(FScadKitDragPayload))
+                    {
+                        const auto* data = static_cast<const FScadKitDragPayload*>(payload->Data);
+                        PlaceKitFromDrop(data->kitIndex, data->moduleIndex);
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+        }
+        ImGui::End();
+        ImGui::PopStyleVar(2);
+    }
+
+    void ScadLibraryInterface::PlaceKitFromDrop(const int kitIndex, const int moduleIndex)
+    {
+        if (openedAssemblyPath_.empty())
+        {
+            statusLine_ = "请先打开一个场景，再从 Kit 库拖拽模块";
+            statusError_ = true;
+            return;
+        }
+        if (kitIndex < 0 || kitIndex >= static_cast<int>(kits_.size()) || moduleIndex < 0 ||
+            moduleIndex >= static_cast<int>(kits_[kitIndex].modules.size()))
+        {
+            statusLine_ = "无法放置：Kit 模块已不存在，请先刷新资源库";
+            statusError_ = true;
+            return;
+        }
+
+        const glm::vec2 mousePosition = glm::vec2(engine_.GetMousePos());
+        const NextUI::IUserInterface* userInterface = engine_.GetUserInterface();
+        const float uiScale = userInterface != nullptr ? userInterface->UiScale() : 1.0f;
+        glm::vec3 rayOrigin;
+        glm::vec3 rayDirection;
+        Runtime::EngineHelper::GetScreenToWorldRay(mousePosition * uiScale, rayOrigin, rayDirection);
+
+        glm::vec3 worldPosition(0.0f);
+        bool hitSurface = false;
+        engine_.RayCast(rayOrigin, rayDirection, [&](Assets::RayCastResult result)
+        {
+            if (result.Hit)
+            {
+                worldPosition = glm::vec3(result.HitPoint);
+                hitSurface = true;
+            }
+            return true;
+        });
+        bool hasPlacement = hitSurface;
+
+        // An empty scene has no BVH hit yet. Use the SCAD ground plane in that
+        // case, which also gives a useful placement target when the view is
+        // aimed below the horizon.
+        if (!hitSurface && std::abs(rayDirection.y) > 1.0e-5f)
+        {
+            const float distance = -rayOrigin.y / rayDirection.y;
+            if (distance > 0.0f)
+            {
+                worldPosition = rayOrigin + rayDirection * distance;
+                hasPlacement = true;
+            }
+        }
+
+        if (!hasPlacement)
+        {
+            statusLine_ = "无法确定落点：请把 Kit 拖到场景几何体或地面方向";
+            statusError_ = true;
+            return;
+        }
+
+        // SCAD is Z-up with +Y pointing toward the opposite engine-Z axis.
+        AddToBenchAt(kitIndex, kits_[kitIndex].modules[moduleIndex].name,
+                     glm::vec3(worldPosition.x, -worldPosition.z, worldPosition.y));
     }
 
     void ScadLibraryInterface::DrawKitBrowserPanel(const ImVec2& pos, const ImVec2& size)
@@ -2523,92 +2659,163 @@ namespace ScadLibrary
             {
                 ImGui::Spacing();
                 ImGui::SetNextItemWidth(-1.0f);
-                ImGui::InputTextWithHint("##filter", ICON_FA_MAGNIFYING_GLASS " 搜索模块…", filterBuf_,
+                ImGui::InputTextWithHint("##filter", ICON_FA_MAGNIFYING_GLASS " 搜索 Kit 或模块…", filterBuf_,
                                          sizeof(filterBuf_));
                 ImGui::Spacing();
 
-                ImGui::BeginChild("##kit_tree", ImVec2(0, 0), ImGuiChildFlags_None);
-                for (size_t k = 0; k < kits_.size(); ++k)
+                ImGui::BeginChild("##kit_preview_library", ImVec2(0, 0), ImGuiChildFlags_None);
+                NextUI::IUserInterface* userInterface = engine_.GetUserInterface();
+                Vulkan::AssetThumbnailRenderer* thumbnails = nullptr;
+                if (userInterface != nullptr)
                 {
-                    const FKitInfo& kit = kits_[k];
-                    if (!ImGui::CollapsingHeader(
-                            fmt::format("{}  {} 个模块##kit{}", kit.name, kit.modules.size(), k).c_str(),
-                            k == 0 ? ImGuiTreeNodeFlags_DefaultOpen : 0))
+                    thumbnails = &EditorPreview::AssetThumbnails(engine_.GetRenderer());
+                }
+
+                const float availableWidth = std::max(1.0f, ImGui::GetContentRegionAvail().x);
+                constexpr float cardGap = 8.0f;
+                const int columnCount = std::max(1, static_cast<int>((availableWidth + cardGap) / 132.0f));
+                const float cardWidth = std::max(96.0f,
+                                                 (availableWidth - cardGap * static_cast<float>(columnCount - 1)) /
+                                                     static_cast<float>(columnCount));
+                const float thumbnailSize = std::max(64.0f, cardWidth - 12.0f);
+                const float rowHeight = thumbnailSize + ImGui::GetTextLineHeightWithSpacing() * 2.0f + 18.0f;
+
+                uint32_t thumbnailIndexBase = 0;
+                for (int kitIndex = 0; kitIndex < static_cast<int>(kits_.size()); ++kitIndex)
+                {
+                    const FKitInfo& kit = kits_[kitIndex];
+                    std::vector<int> visibleModuleIndices;
+                    visibleModuleIndices.reserve(kit.modules.size());
+                    for (int moduleIndex = 0; moduleIndex < static_cast<int>(kit.modules.size()); ++moduleIndex)
                     {
+                        const FKitModuleInfo& module = kit.modules[moduleIndex];
+                        const bool matches = filterBuf_[0] == '\0' ||
+                            kit.name.find(filterBuf_) != std::string::npos ||
+                            PassesFilter(module, filterBuf_) ||
+                            module.params.find(filterBuf_) != std::string::npos;
+                        if (matches)
+                        {
+                            visibleModuleIndices.push_back(moduleIndex);
+                        }
+                    }
+
+                    if (visibleModuleIndices.empty())
+                    {
+                        thumbnailIndexBase += static_cast<uint32_t>(kit.modules.size());
                         continue;
                     }
-                    std::string currentCategory;
-                    bool categoryOpen = false;
-                    for (const FKitModuleInfo& moduleInfo : kit.modules)
+
+                    ImGui::TextColored(ImVec4(0.72f, 0.82f, 1.0f, 1.0f), "%s", kit.name.c_str());
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("%zu 个模块", kit.modules.size());
+
+                    ImGuiListClipper clipper;
+                    const int rowCount = (static_cast<int>(visibleModuleIndices.size()) + columnCount - 1) /
+                        columnCount;
+                    clipper.Begin(rowCount, rowHeight);
+                    while (clipper.Step())
                     {
-                        if (!PassesFilter(moduleInfo, filterBuf_))
+                        for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row)
                         {
-                            continue;
-                        }
-                        if (moduleInfo.category != currentCategory)
-                        {
-                            if (categoryOpen)
+                            for (int column = 0; column < columnCount; ++column)
                             {
-                                ImGui::TreePop();
+                                const int visibleIndex = row * columnCount + column;
+                                if (visibleIndex >= static_cast<int>(visibleModuleIndices.size()))
+                                {
+                                    break;
+                                }
+                                const int moduleIndex = visibleModuleIndices[visibleIndex];
+                                const FKitModuleInfo& module = kit.modules[moduleIndex];
+                                const uint32_t thumbnailIndex = thumbnailIndexBase +
+                                    static_cast<uint32_t>(moduleIndex);
+                                if (column > 0)
+                                {
+                                    ImGui::SameLine(0.0f, cardGap);
+                                }
+
+                                ImGui::PushID(static_cast<int>(thumbnailIndex));
+                                ImGui::BeginGroup();
+                                const bool selected = selectedKit_ == kitIndex && selectedModule_ == module.name;
+                                ImTextureID textureId = 0;
+                                std::string thumbnailSource;
+                                uint64_t thumbnailHash = 0;
+                                if (thumbnails != nullptr &&
+                                    EnsureKitThumbnailSource(kitIndex, moduleIndex, thumbnailSource, thumbnailHash))
+                                {
+                                    const uint32_t sampleSlot = thumbnails->RequestScadKitThumbnail(
+                                        thumbnailIndex, thumbnailSource, thumbnailHash);
+                                    if (sampleSlot != std::numeric_limits<uint32_t>::max())
+                                    {
+                                        textureId = userInterface->RequestImTextureIdRaw(sampleSlot);
+                                    }
+                                }
+
+                                ImGui::PushStyleColor(ImGuiCol_Button,
+                                                      selected ? ImVec4(0.16f, 0.31f, 0.50f, 1.0f)
+                                                               : ImVec4(0.10f, 0.12f, 0.15f, 1.0f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.20f, 0.39f, 0.60f, 1.0f));
+                                const bool clicked = textureId != 0
+                                    ? ImGui::ImageButton("##kit_preview", textureId, ImVec2(thumbnailSize, thumbnailSize))
+                                    : ImGui::Button(ICON_FA_CUBES_STACKED, ImVec2(thumbnailSize, thumbnailSize));
+                                ImGui::PopStyleColor(2);
+                                if (clicked)
+                                {
+                                    // Selecting a card is deliberately local to the library. The old
+                                    // PreviewModule() path remains available from the context menu for
+                                    // the standalone kit editor, but browsing must not replace the scene.
+                                    selectedKit_ = kitIndex;
+                                    selectedModule_ = module.name;
+                                }
+
+                                if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
+                                {
+                                    const FScadKitDragPayload payload{kitIndex, moduleIndex};
+                                    ImGui::SetDragDropPayload(kScadKitDragDropPayload, &payload, sizeof(payload));
+                                    if (textureId != 0)
+                                    {
+                                        ImGui::Image(textureId, ImVec2(64.0f, 64.0f));
+                                        ImGui::SameLine();
+                                    }
+                                    ImGui::TextUnformatted(module.name.c_str());
+                                    ImGui::TextDisabled("拖到中央视口放置");
+                                    ImGui::EndDragDropSource();
+                                }
+
+                                ImGui::TextWrapped("%s", module.name.c_str());
+                                if (ImGui::IsItemHovered())
+                                {
+                                    if (module.hasMetrics)
+                                    {
+                                        ImGui::SetTooltip("%s%s%s\n脚印 %.1f × %.1f  · 高 %.1f\n三角形 %d\n拖到中央视口即可放置",
+                                                          module.name.c_str(), module.params.empty() ? "" : "\n参数：",
+                                                          module.params.empty() ? "" : module.params.c_str(),
+                                                          module.footprintX, module.footprintY, module.height,
+                                                          module.triangles);
+                                    }
+                                    else
+                                    {
+                                        ImGui::SetTooltip("%s\n拖到中央视口即可放置", module.name.c_str());
+                                    }
+                                }
+                                if (ImGui::BeginPopupContextItem("##kit_module_context"))
+                                {
+                                    if (ImGui::MenuItem("AI 编辑此模块"))
+                                    {
+                                        PreviewModule(kitIndex, module.name);
+                                        inspectorPrimaryTab_ = 1;
+                                        aiOpenRequested_ = true;
+                                        benchCollapsed_ = false;
+                                    }
+                                    ImGui::EndPopup();
+                                }
+                                ImGui::EndGroup();
+                                ImGui::PopID();
                             }
-                            currentCategory = moduleInfo.category;
-                            categoryOpen = ImGui::TreeNodeEx(
-                                fmt::format("{}##cat_{}_{}", CategoryLabel(currentCategory), k, currentCategory)
-                                    .c_str(),
-                                filterBuf_[0] != '\0' ? ImGuiTreeNodeFlags_DefaultOpen : 0);
-                        }
-                        if (!categoryOpen)
-                        {
-                            continue;
-                        }
-                        const bool isSelected =
-                            selectedKit_ == static_cast<int>(k) && selectedModule_ == moduleInfo.name;
-                        if (ImGui::Selectable(
-                                fmt::format("{}##sel_{}_{}", moduleInfo.name, k, moduleInfo.name).c_str(), isSelected,
-                                0, ImVec2(ImGui::GetContentRegionAvail().x - 34.0f, 27.0f)))
-                        {
-                            PreviewModule(static_cast<int>(k), moduleInfo.name);
-                        }
-                        if (ImGui::IsItemHovered())
-                        {
-                            if (moduleInfo.hasMetrics)
-                            {
-                                ImGui::SetTooltip("%s(%s)\n脚印 %.1f x %.1f  高 %.1f  三角形 %d",
-                                                  moduleInfo.name.c_str(), moduleInfo.params.c_str(),
-                                                  moduleInfo.footprintX, moduleInfo.footprintY, moduleInfo.height,
-                                                  moduleInfo.triangles);
-                            }
-                            else if (!moduleInfo.params.empty())
-                            {
-                                ImGui::SetTooltip("%s(%s)", moduleInfo.name.c_str(), moduleInfo.params.c_str());
-                            }
-                        }
-                        if (ImGui::BeginPopupContextItem(
-                                fmt::format("##module_context_{}_{}", k, moduleInfo.name).c_str()))
-                        {
-                            if (ImGui::MenuItem("AI 编辑此模块"))
-                            {
-                                PreviewModule(static_cast<int>(k), moduleInfo.name);
-                                inspectorPrimaryTab_ = 1;
-                                aiOpenRequested_ = true;
-                                benchCollapsed_ = false;
-                            }
-                            ImGui::EndPopup();
-                        }
-                        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 24.0f);
-                        if (ImGui::SmallButton(fmt::format(ICON_FA_PLUS "##add_{}_{}", k, moduleInfo.name).c_str()))
-                        {
-                            AddToBench(static_cast<int>(k), moduleInfo.name);
-                        }
-                        if (ImGui::IsItemHovered())
-                        {
-                            ImGui::SetTooltip("加入场景组装");
                         }
                     }
-                    if (categoryOpen)
-                    {
-                        ImGui::TreePop();
-                    }
+                    clipper.End();
+                    ImGui::Spacing();
+                    thumbnailIndexBase += static_cast<uint32_t>(kit.modules.size());
                 }
                 if (kits_.empty())
                 {
@@ -6010,6 +6217,7 @@ namespace ScadLibrary
         const std::string libDir = AuthoringPath("assets/scad/lib").string();
         bool fromCatalog = false;
         kits_ = LoadKits(libDir, fromCatalog);
+        kitThumbnailSources_.clear();
         kitBrowserSelectedModule_ = -1;
         if (kits_.empty())
         {
@@ -6376,6 +6584,49 @@ namespace ScadLibrary
         }
     }
 
+    bool ScadLibraryInterface::EnsureKitThumbnailSource(
+        const int kitIndex,
+        const int moduleIndex,
+        std::string& outPath,
+        uint64_t& outHash)
+    {
+        if (kitIndex < 0 || kitIndex >= static_cast<int>(kits_.size()) || moduleIndex < 0 ||
+            moduleIndex >= static_cast<int>(kits_[kitIndex].modules.size()))
+        {
+            return false;
+        }
+
+        const FKitInfo& kit = kits_[kitIndex];
+        const FKitModuleInfo& module = kit.modules[moduleIndex];
+        const std::string key = kit.filePath + "#" + module.name;
+        const std::string source = BuildModulePreviewSource(kitIndex, module.name);
+        const uint64_t sourceHash = Fnv1a64(source);
+        auto cached = kitThumbnailSources_.find(key);
+        if (cached == kitThumbnailSources_.end() || cached->second.sourceHash != sourceHash ||
+            cached->second.path.empty())
+        {
+            const std::string fileName = fmt::format("kit_thumbnail_{}_{}.scad",
+                                                      PreviewFileToken(kit.name), PreviewFileToken(module.name));
+            std::string absolutePath;
+            if (!WriteWorkspaceFile(fileName, source, absolutePath))
+            {
+                return false;
+            }
+            cached = kitThumbnailSources_.insert_or_assign(
+                key, FKitThumbnailSource{std::move(absolutePath), sourceHash}).first;
+        }
+
+        std::error_code ec;
+        const auto stamp = std::filesystem::last_write_time(kit.filePath, ec);
+        const std::string stampText = ec ? "missing" : fmt::format("{}", stamp.time_since_epoch().count());
+        outPath = cached->second.path;
+        // The kit file timestamp is part of the thumbnail identity. A changed
+        // kit therefore invalidates the rendered image even though the tiny
+        // wrapper source itself is unchanged.
+        outHash = Fnv1a64(fmt::format("{}|{}|{}", sourceHash, kit.filePath, stampText));
+        return true;
+    }
+
     void ScadLibraryInterface::PreviewModule(int kitIndex, const std::string& moduleName)
     {
         if (kitIndex < 0 || kitIndex >= static_cast<int>(kits_.size()))
@@ -6414,10 +6665,11 @@ namespace ScadLibrary
 
     void ScadLibraryInterface::AddToBench(int kitIndex, const std::string& moduleName)
     {
+        if (kitIndex < 0 || kitIndex >= static_cast<int>(kits_.size()))
+        {
+            return;
+        }
         aiKitContextActive_ = false;
-        FBenchItem benchItem;
-        benchItem.kitIndex = kitIndex;
-        benchItem.moduleName = moduleName;
 
         // Row cursor: advance by the module's catalog footprint so city blocks
         // and hand-scale props both land side by side without overlap.
@@ -6444,18 +6696,41 @@ namespace ScadLibrary
             benchRowDepth_ = 0.0f;
             benchColCount_ = 0;
         }
-        benchItem.x = benchCursorX_;
-        benchItem.y = benchCursorY_;
+        const glm::vec3 placement(benchCursorX_, benchCursorY_, 0.0f);
         benchCursorX_ += step;
         benchRowDepth_ = std::max(benchRowDepth_, step);
         benchColCount_++;
 
+        AddToBenchAt(kitIndex, moduleName, placement);
+    }
+
+    void ScadLibraryInterface::AddToBenchAt(
+        const int kitIndex,
+        const std::string& moduleName,
+        const glm::vec3& scadPosition)
+    {
+        if (kitIndex < 0 || kitIndex >= static_cast<int>(kits_.size()) ||
+            !std::any_of(kits_[kitIndex].modules.begin(), kits_[kitIndex].modules.end(),
+                         [&](const FKitModuleInfo& module) { return module.name == moduleName; }))
+        {
+            statusLine_ = "无法放置：Kit 模块已不存在，请先刷新资源库";
+            statusError_ = true;
+            return;
+        }
+
+        aiKitContextActive_ = false;
+        FBenchItem benchItem;
+        benchItem.kitIndex = kitIndex;
+        benchItem.moduleName = moduleName;
+        benchItem.x = scadPosition.x;
+        benchItem.y = scadPosition.y;
+        benchItem.z = scadPosition.z;
         selectedBenchItem_ = document_.AddInstance(std::move(benchItem));
         selectedSegment_ = Bench()[selectedBenchItem_].segmentIndex;
         scrollToSelectedSegment_ = true;
         assemblyEditorTab_ = 3;
         benchDirty_ = true;
-        statusLine_ = fmt::format("已添加结构节点 translate(...) {}(...)", moduleName);
+        statusLine_ = fmt::format("已放置 {} · 可继续拖拽调整位置", moduleName);
         statusError_ = false;
     }
 

@@ -12,6 +12,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Assets
@@ -34,14 +36,10 @@ namespace Vulkan
         // Slot ranges come from the bindless registry (assets/shaders/common/BindlessTexture.slang);
         // do not reintroduce literals here -- that is how the old 64500 collision with the remote
         // composite range happened.
-        static constexpr uint32_t kMaterialThumbnailSampleSlotBase =
-            static_cast<uint32_t>(Assets::Bindless::RES_MATERIAL_THUMBNAIL_BASE);
-        static constexpr uint32_t kMaterialThumbnailMaxSlots =
-            static_cast<uint32_t>(Assets::Bindless::RES_MATERIAL_THUMBNAIL_COUNT);
-        static constexpr uint32_t kMeshThumbnailSampleSlotBase =
-            static_cast<uint32_t>(Assets::Bindless::RES_MESH_THUMBNAIL_BASE);
-        static constexpr uint32_t kMeshThumbnailMaxSlots =
-            static_cast<uint32_t>(Assets::Bindless::RES_MESH_THUMBNAIL_COUNT);
+        static constexpr uint32_t kThumbnailSampleSlotBase =
+            static_cast<uint32_t>(Assets::Bindless::RES_THUMBNAIL_BASE);
+        static constexpr uint32_t kThumbnailMaxSlots =
+            static_cast<uint32_t>(Assets::Bindless::RES_THUMBNAIL_COUNT);
         static constexpr uint32_t kMaterialPreviewSampleSlot =
             static_cast<uint32_t>(Assets::Bindless::RES_MATERIAL_PREVIEW);
 
@@ -52,6 +50,11 @@ namespace Vulkan
         uint32_t RequestMaterialThumbnail(uint32_t materialIndex, const Assets::FMaterial& material);
         uint32_t RequestMeshThumbnail(uint32_t modelIndex, uint64_t modelHash);
         uint32_t RequestMeshThumbnail(uint32_t modelIndex, const Assets::Model& model);
+        // Request a thumbnail for a generated SCAD source that contains one
+        // module call. The source path is kept by the cache and evaluated only
+        // when the thumbnail is scheduled, so the UI remains cheap while
+        // scrolling a large kit library.
+        uint32_t RequestScadKitThumbnail(uint32_t thumbnailIndex, const std::string& sourcePath, uint64_t sourceHash);
 
         void BeforeNextFrame() override;
         void OnMainSceneChanged() override;
@@ -80,32 +83,49 @@ namespace Vulkan
         {
             Material,
             Mesh,
+            ScadKit,
             Count,
         };
-        static constexpr size_t kThumbnailKindCount = 2;
-
-        struct FThumbnailCache
+        struct FThumbnailKey
         {
-            uint32_t sampleSlotBase = 0;
-            uint32_t maxSlots = 0;
-            std::vector<std::unique_ptr<RenderImage>> images;
-            std::vector<uint64_t> hashes;
-            std::vector<uint32_t> pending;
+            EThumbnailKind kind = EThumbnailKind::Material;
+            uint32_t assetIndex = 0;
+
+            constexpr bool operator==(const FThumbnailKey&) const = default;
         };
 
-        static constexpr size_t ThumbnailKindIndex(EThumbnailKind kind)
+        struct FThumbnailKeyHash
         {
-            return static_cast<size_t>(kind);
-        }
+            size_t operator()(const FThumbnailKey& key) const
+            {
+                return (static_cast<size_t>(key.kind) << 32u) ^ static_cast<size_t>(key.assetIndex);
+            }
+        };
 
-        FThumbnailCache& ThumbnailCache(EThumbnailKind kind);
-        const FThumbnailCache& ThumbnailCache(EThumbnailKind kind) const;
+        struct FThumbnailSlot
+        {
+            FThumbnailKey key{};
+            uint64_t contentHash = 0;
+            uint64_t lastRequestedFrame = 0;
+            uint64_t generation = 0;
+            std::unique_ptr<RenderImage> image;
+            std::string sourcePath;
+            bool occupied = false;
+            bool ready = false;
+            bool pending = false;
+        };
+
         static uint64_t HashMaterialThumbnail(const Assets::FMaterial& material);
         static uint64_t HashMeshThumbnail(const Assets::Model& model);
-        uint32_t RequestThumbnail(EThumbnailKind kind, uint32_t assetIndex, uint64_t assetHash);
-        void ClearThumbnailCaches();
-        void EnqueueExistingThumbnailImages(FThumbnailCache& cache);
-        bool HasPendingThumbnail(EThumbnailKind kind) const;
+        uint32_t RequestThumbnail(
+            EThumbnailKind kind,
+            uint32_t assetIndex,
+            uint64_t assetHash,
+            const std::string& sourcePath = {});
+        uint32_t AcquireThumbnailSlot(const FThumbnailKey& key, uint64_t currentFrame);
+        void QueueThumbnail(uint32_t poolIndex);
+        void ClearThumbnailCache();
+        void EnqueueExistingThumbnailImages();
         std::unique_ptr<Assets::Scene> CreateMaterialSphereScene(
             Assets::FMaterial material,
             const char* nodeName,
@@ -116,12 +136,12 @@ namespace Vulkan
         void EnsureMaterialThumbnailScene();
         void EnsureMaterialPreviewScene();
         void RebuildMeshThumbnailScene(const Assets::Model& model);
+        bool RebuildScadKitThumbnailScene(const std::string& sourcePath);
         void EnsureThumbnailRenderTarget();
         void EnsureMaterialPreviewRenderTarget();
-        RenderImage& EnsureThumbnailImage(FThumbnailCache& cache, uint32_t assetIndex, const char* debugName);
+        RenderImage& EnsureThumbnailImage(uint32_t poolIndex, const char* debugName);
         void CopyThumbnailViewOutput(VkCommandBuffer commandBuffer, RenderView& view, RenderImage& dst);
         void CopyMaterialPreviewOutput(VkCommandBuffer commandBuffer, RenderView& view);
-        bool ScheduleNextThumbnail(EThumbnailKind kind, VkCommandBuffer commandBuffer, uint32_t imageIndex);
         RenderView* ThumbnailView() const;
         RenderView* MaterialPreviewView() const;
 
@@ -130,7 +150,9 @@ namespace Vulkan
         FRenderViewHandle materialPreviewView_;
         std::unique_ptr<Assets::Scene> thumbnailScene_;
         std::unique_ptr<Assets::Scene> materialPreviewScene_;
-        std::array<FThumbnailCache, kThumbnailKindCount> thumbnailCaches_{};
+        std::vector<FThumbnailSlot> thumbnailSlots_;
+        std::unordered_map<FThumbnailKey, uint32_t, FThumbnailKeyHash> thumbnailLookup_;
+        std::vector<uint32_t> pendingThumbnails_;
         EThumbnailKind thumbnailSceneKind_ = EThumbnailKind::Material;
         bool thumbnailSceneReady_ = false;
         bool releaseThumbnailView_ = false;

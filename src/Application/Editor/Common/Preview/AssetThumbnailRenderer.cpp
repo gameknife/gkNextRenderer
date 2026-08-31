@@ -12,7 +12,9 @@
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
+#include "Modules/ScadLoader/FScadLoader.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -32,10 +34,7 @@ namespace Vulkan
     AssetThumbnailRenderer::AssetThumbnailRenderer(VulkanBaseRenderer& renderer)
         : renderer_(renderer)
     {
-        ThumbnailCache(EThumbnailKind::Material).sampleSlotBase = kMaterialThumbnailSampleSlotBase;
-        ThumbnailCache(EThumbnailKind::Material).maxSlots = kMaterialThumbnailMaxSlots;
-        ThumbnailCache(EThumbnailKind::Mesh).sampleSlotBase = kMeshThumbnailSampleSlotBase;
-        ThumbnailCache(EThumbnailKind::Mesh).maxSlots = kMeshThumbnailMaxSlots;
+        thumbnailSlots_.resize(kThumbnailMaxSlots);
         materialPreview_.gpuMaterial_ = Assets::Material::Lambertian(glm::vec3(0.75f));
         materialPreview_.name_ = "__material_preview";
     }
@@ -45,17 +44,6 @@ namespace Vulkan
         RenderViewResourceFactory factory(renderer_);
         factory.DestroyView(thumbnailRenderView_);
         factory.DestroyView(materialPreviewView_);
-    }
-
-    AssetThumbnailRenderer::FThumbnailCache& AssetThumbnailRenderer::ThumbnailCache(const EThumbnailKind kind)
-    {
-        return thumbnailCaches_[ThumbnailKindIndex(kind)];
-    }
-
-    const AssetThumbnailRenderer::FThumbnailCache& AssetThumbnailRenderer::ThumbnailCache(
-        const EThumbnailKind kind) const
-    {
-        return thumbnailCaches_[ThumbnailKindIndex(kind)];
     }
 
     uint32_t AssetThumbnailRenderer::RequestMaterialThumbnail(
@@ -82,6 +70,18 @@ namespace Vulkan
         const Assets::Model& model)
     {
         return RequestMeshThumbnail(modelIndex, HashMeshThumbnail(model));
+    }
+
+    uint32_t AssetThumbnailRenderer::RequestScadKitThumbnail(
+        const uint32_t thumbnailIndex,
+        const std::string& sourcePath,
+        const uint64_t sourceHash)
+    {
+        if (sourcePath.empty())
+        {
+            return std::numeric_limits<uint32_t>::max();
+        }
+        return RequestThumbnail(EThumbnailKind::ScadKit, thumbnailIndex, sourceHash, sourcePath);
     }
 
     uint64_t AssetThumbnailRenderer::HashMaterialThumbnail(const Assets::FMaterial& material)
@@ -160,34 +160,115 @@ namespace Vulkan
     uint32_t AssetThumbnailRenderer::RequestThumbnail(
         const EThumbnailKind kind,
         const uint32_t assetIndex,
-        const uint64_t assetHash)
+        const uint64_t assetHash,
+        const std::string& sourcePath)
     {
-        FThumbnailCache& cache = ThumbnailCache(kind);
-        if (assetIndex >= cache.maxSlots)
+        if (kThumbnailSampleSlotBase + kThumbnailMaxSlots > renderer_.BindlessProfile().sampledTextureSlots)
         {
             return std::numeric_limits<uint32_t>::max();
         }
 
-        if (cache.hashes.size() <= assetIndex)
+        const FThumbnailKey key{kind, assetIndex};
+        const uint64_t currentFrame = static_cast<uint64_t>(std::max(renderer_.FrameCount(), 0));
+        uint32_t poolIndex = std::numeric_limits<uint32_t>::max();
+        if (const auto found = thumbnailLookup_.find(key); found != thumbnailLookup_.end())
         {
-            cache.hashes.resize(static_cast<size_t>(assetIndex) + 1, 0);
+            poolIndex = found->second;
         }
-        if (cache.images.size() <= assetIndex)
+        else
         {
-            cache.images.resize(static_cast<size_t>(assetIndex) + 1);
+            poolIndex = AcquireThumbnailSlot(key, currentFrame);
+            if (poolIndex == std::numeric_limits<uint32_t>::max())
+            {
+                return poolIndex;
+            }
         }
 
-        if (cache.images[assetIndex] != nullptr && cache.hashes[assetIndex] == assetHash)
+        FThumbnailSlot& slot = thumbnailSlots_[poolIndex];
+        slot.lastRequestedFrame = currentFrame;
+        if (!sourcePath.empty())
         {
-            return cache.sampleSlotBase + assetIndex;
+            slot.sourcePath = sourcePath;
         }
 
-        cache.hashes[assetIndex] = assetHash;
-        if (std::find(cache.pending.begin(), cache.pending.end(), assetIndex) == cache.pending.end())
+        if (slot.contentHash != assetHash)
         {
-            cache.pending.push_back(assetIndex);
+            slot.contentHash = assetHash;
+            slot.ready = false;
+            ++slot.generation;
         }
+
+        if (slot.ready)
+        {
+            return kThumbnailSampleSlotBase + poolIndex;
+        }
+
+        QueueThumbnail(poolIndex);
         return std::numeric_limits<uint32_t>::max();
+    }
+
+    uint32_t AssetThumbnailRenderer::AcquireThumbnailSlot(
+        const FThumbnailKey& key,
+        const uint64_t currentFrame)
+    {
+        uint32_t selected = std::numeric_limits<uint32_t>::max();
+        for (uint32_t index = 0; index < thumbnailSlots_.size(); ++index)
+        {
+            if (!thumbnailSlots_[index].occupied)
+            {
+                selected = index;
+                break;
+            }
+        }
+
+        if (selected == std::numeric_limits<uint32_t>::max())
+        {
+            uint64_t oldestFrame = std::numeric_limits<uint64_t>::max();
+            for (uint32_t index = 0; index < thumbnailSlots_.size(); ++index)
+            {
+                const FThumbnailSlot& candidate = thumbnailSlots_[index];
+                // A slot requested this frame may already be encoded in ImGui draw data. Never
+                // repurpose it until a later frame; if all 512 are visible, the newcomer waits.
+                if (candidate.lastRequestedFrame < currentFrame && candidate.lastRequestedFrame < oldestFrame)
+                {
+                    selected = index;
+                    oldestFrame = candidate.lastRequestedFrame;
+                }
+            }
+        }
+
+        if (selected == std::numeric_limits<uint32_t>::max())
+        {
+            return selected;
+        }
+
+        FThumbnailSlot& slot = thumbnailSlots_[selected];
+        if (slot.occupied)
+        {
+            thumbnailLookup_.erase(slot.key);
+            std::erase(pendingThumbnails_, selected);
+        }
+
+        slot.key = key;
+        slot.contentHash = 0;
+        slot.lastRequestedFrame = currentFrame;
+        ++slot.generation;
+        slot.sourcePath.clear();
+        slot.occupied = true;
+        slot.ready = false;
+        slot.pending = false;
+        thumbnailLookup_.emplace(key, selected);
+        return selected;
+    }
+
+    void AssetThumbnailRenderer::QueueThumbnail(const uint32_t poolIndex)
+    {
+        if (poolIndex >= thumbnailSlots_.size() || thumbnailSlots_[poolIndex].pending)
+        {
+            return;
+        }
+        thumbnailSlots_[poolIndex].pending = true;
+        pendingThumbnails_.push_back(poolIndex);
     }
 
     void AssetThumbnailRenderer::SetEnabled(const bool enabled)
@@ -267,10 +348,6 @@ namespace Vulkan
         {
             EnsureMaterialPreviewScene();
         }
-        if (HasPendingThumbnail(EThumbnailKind::Material))
-        {
-            EnsureMaterialThumbnailScene();
-        }
     }
 
     void AssetThumbnailRenderer::OnMainSceneChanged()
@@ -291,7 +368,7 @@ namespace Vulkan
         materialPreviewScene_.reset();
         materialPreviewSceneReady_ = false;
         materialPreviewDirty_ = true;
-        ClearThumbnailCaches();
+        ClearThumbnailCache();
         thumbnailTarget_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
     }
 
@@ -306,8 +383,7 @@ namespace Vulkan
             materialPreviewScene_->UpdateHDRSH();
         }
 
-        EnqueueExistingThumbnailImages(ThumbnailCache(EThumbnailKind::Material));
-        EnqueueExistingThumbnailImages(ThumbnailCache(EThumbnailKind::Mesh));
+        EnqueueExistingThumbnailImages();
         if (RenderView* view = ThumbnailView())
         {
             view->InvalidateTemporalHistory();
@@ -332,56 +408,37 @@ namespace Vulkan
         }
     }
 
-    bool AssetThumbnailRenderer::ScheduleNextThumbnail(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
-    {
-        if (ScheduleNextThumbnail(EThumbnailKind::Material, commandBuffer, imageIndex))
-        {
-            return true;
-        }
-        return ScheduleNextThumbnail(EThumbnailKind::Mesh, commandBuffer, imageIndex);
-    }
-
     bool AssetThumbnailRenderer::HasPendingThumbnail() const
     {
-        return HasPendingThumbnail(EThumbnailKind::Material) || HasPendingThumbnail(EThumbnailKind::Mesh);
+        return !pendingThumbnails_.empty();
     }
 
-    void AssetThumbnailRenderer::ClearThumbnailCaches()
+    void AssetThumbnailRenderer::ClearThumbnailCache()
     {
-        for (FThumbnailCache& cache : thumbnailCaches_)
+        Assets::GlobalTexturePool* texturePool = Assets::GlobalTexturePool::GetInstance();
+        for (uint32_t index = 0; index < thumbnailSlots_.size(); ++index)
         {
-            for (uint32_t index = 0; index < cache.images.size(); ++index)
+            FThumbnailSlot& slot = thumbnailSlots_[index];
+            if (slot.image != nullptr && texturePool != nullptr)
             {
-                if (cache.images[index] != nullptr)
-                {
-                    Assets::GlobalTexturePool::GetInstance()->BindDefaultSampleTexture(
-                        cache.sampleSlotBase + index);
-                }
+                texturePool->BindDefaultSampleTexture(kThumbnailSampleSlotBase + index);
             }
-            cache.images.clear();
-            cache.hashes.clear();
-            cache.pending.clear();
+            slot = {};
         }
+        thumbnailLookup_.clear();
+        pendingThumbnails_.clear();
     }
 
-    void AssetThumbnailRenderer::EnqueueExistingThumbnailImages(FThumbnailCache& cache)
+    void AssetThumbnailRenderer::EnqueueExistingThumbnailImages()
     {
-        for (uint32_t index = 0; index < cache.images.size(); ++index)
+        for (uint32_t index = 0; index < thumbnailSlots_.size(); ++index)
         {
-            if (cache.images[index] == nullptr)
+            if (!thumbnailSlots_[index].occupied || thumbnailSlots_[index].image == nullptr)
             {
                 continue;
             }
-            if (std::find(cache.pending.begin(), cache.pending.end(), index) == cache.pending.end())
-            {
-                cache.pending.push_back(index);
-            }
+            QueueThumbnail(index);
         }
-    }
-
-    bool AssetThumbnailRenderer::HasPendingThumbnail(const EThumbnailKind kind) const
-    {
-        return !ThumbnailCache(kind).pending.empty();
     }
 
     std::unique_ptr<Assets::Scene> AssetThumbnailRenderer::CreateMaterialSphereScene(
@@ -599,6 +656,50 @@ namespace Vulkan
         thumbnailSceneReady_ = true;
     }
 
+    bool AssetThumbnailRenderer::RebuildScadKitThumbnailScene(const std::string& sourcePath)
+    {
+        auto scene = std::make_unique<Assets::Scene>(
+            renderer_.CommandPool(), false, /*allocateAmbientResources*/ false, /*enableCpuAcceleration*/ false);
+
+        Assets::EnvironmentSetting cameraInit;
+        std::vector<std::shared_ptr<Assets::Node>> nodes;
+        std::vector<Assets::Model> models;
+        std::vector<Assets::FMaterial> materials;
+        std::vector<Assets::LightObject> lights;
+        std::vector<Assets::AnimationTrack> tracks;
+        std::vector<Assets::Skeleton> skeletons;
+
+        Assets::ScadLoadOptions options;
+        // A thumbnail contains one module call. Keep evaluation deterministic
+        // and avoid spending worker-thread overhead on this small scene.
+        options.parallelTopLevel = false;
+        if (!Assets::FScadLoader::LoadScadScene(
+                sourcePath, cameraInit, nodes, models, materials, lights, tracks, skeletons, options))
+        {
+            return false;
+        }
+        const bool hasGeometry = std::any_of(
+            models.begin(), models.end(), [](const Assets::Model& model) { return model.NumberOfVertices() > 0; });
+        if (!hasGeometry)
+        {
+            return false;
+        }
+
+        scene->Reload(nodes, models, materials, lights, tracks);
+        scene->PostLoad(skeletons);
+        scene->RebuildMeshBuffer(renderer_.CommandPool(), false);
+        scene->GetEnvSettings() = cameraInit;
+        if (!cameraInit.cameras.empty())
+        {
+            scene->GetRenderCamera() = cameraInit.cameras.front();
+        }
+        scene->SyncUpdateScene();
+        thumbnailScene_ = std::move(scene);
+        thumbnailSceneKind_ = EThumbnailKind::ScadKit;
+        thumbnailSceneReady_ = true;
+        return true;
+    }
+
     void AssetThumbnailRenderer::CopyThumbnailViewOutput(
         VkCommandBuffer commandBuffer,
         RenderView& view,
@@ -620,24 +721,20 @@ namespace Vulkan
     }
 
     RenderImage& AssetThumbnailRenderer::EnsureThumbnailImage(
-        FThumbnailCache& cache,
-        const uint32_t assetIndex,
+        const uint32_t poolIndex,
         const char* debugName)
     {
-        if (cache.images.size() <= assetIndex)
-        {
-            cache.images.resize(static_cast<size_t>(assetIndex) + 1);
-        }
-        if (!cache.images[assetIndex])
+        FThumbnailSlot& slot = thumbnailSlots_[poolIndex];
+        if (!slot.image)
         {
             RenderViewResourceFactory resources(renderer_);
-            cache.images[assetIndex] = resources.CreateSampledColorImage(kThumbnailExtent, debugName);
+            slot.image = resources.CreateSampledColorImage(kThumbnailExtent, debugName);
             resources.BindSampledColorImage(
-                cache.sampleSlotBase + assetIndex,
-                *cache.images[assetIndex],
+                kThumbnailSampleSlotBase + poolIndex,
+                *slot.image,
                 *thumbnailTarget_.offscreenSampler);
         }
-        return *cache.images[assetIndex];
+        return *slot.image;
     }
 
     bool AssetThumbnailRenderer::ScheduleMaterialPreview(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
@@ -708,26 +805,32 @@ namespace Vulkan
     }
 
     bool AssetThumbnailRenderer::ScheduleNextThumbnail(
-        const EThumbnailKind kind,
         VkCommandBuffer commandBuffer,
         const uint32_t imageIndex)
     {
-        FThumbnailCache& cache = ThumbnailCache(kind);
-        if (cache.pending.empty())
+        if (pendingThumbnails_.empty())
         {
             return false;
         }
 
+        const uint32_t poolIndex = pendingThumbnails_.front();
+        pendingThumbnails_.erase(pendingThumbnails_.begin());
+        if (poolIndex >= thumbnailSlots_.size())
+        {
+            return false;
+        }
+
+        FThumbnailSlot& slot = thumbnailSlots_[poolIndex];
+        slot.pending = false;
+        if (!slot.occupied)
+        {
+            return false;
+        }
+
+        const EThumbnailKind kind = slot.key.kind;
+        const uint32_t assetIndex = slot.key.assetIndex;
         auto mainScene = renderer_.GetSceneShared();
-        if (!mainScene)
-        {
-            cache.pending.clear();
-            return false;
-        }
-
-        const uint32_t assetIndex = cache.pending.front();
-        cache.pending.erase(cache.pending.begin());
-        if (assetIndex >= cache.maxSlots)
+        if (!mainScene && kind != EThumbnailKind::ScadKit)
         {
             return false;
         }
@@ -752,7 +855,7 @@ namespace Vulkan
             viewDebugName = "material thumbnail view";
             imageDebugName = fmt::format("Material Thumbnail {}", assetIndex);
         }
-        else
+        else if (kind == EThumbnailKind::Mesh)
         {
             if (assetIndex >= mainScene->Models().size())
             {
@@ -773,11 +876,20 @@ namespace Vulkan
             viewDebugName = "mesh thumbnail view";
             imageDebugName = fmt::format("Mesh Thumbnail {}", assetIndex);
         }
+        else
+        {
+            if (slot.sourcePath.empty() || !RebuildScadKitThumbnailScene(slot.sourcePath))
+            {
+                return false;
+            }
+            viewDebugName = "SCAD kit thumbnail view";
+            imageDebugName = fmt::format("SCAD Kit Thumbnail {}", assetIndex);
+        }
 
         EnsureThumbnailRenderTarget();
         RenderView* thumbnailRenderView = ThumbnailView();
         assert(thumbnailRenderView != nullptr);
-        EnsureThumbnailImage(cache, assetIndex, imageDebugName.c_str());
+        EnsureThumbnailImage(poolIndex, imageDebugName.c_str());
 
         LogicRendererBase* logicRenderer = renderer_.EnsureLogicRenderer(ERT_SoftwareModernNoAmbient);
         if (logicRenderer == nullptr)
@@ -809,16 +921,21 @@ namespace Vulkan
         thumbnailRenderView->SetVisibilityFramebuffer(thumbnailTarget_.visibilityFramebuffer.get());
         thumbnailRenderView->SetSceneOverride(thumbnailScene_.get());
         thumbnailRenderView->SetPrevDepthValid(false);
+        const uint64_t generation = slot.generation;
         renderer_.ScheduleRenderView(
             *thumbnailRenderView,
             *logicRenderer,
             /*clearSwapchain*/ false,
-            [this, commandBuffer, kind, assetIndex](RenderView& view)
+            [this, commandBuffer, poolIndex, generation](RenderView& view)
             {
-                FThumbnailCache& cache = ThumbnailCache(kind);
-                if (assetIndex < cache.images.size() && cache.images[assetIndex])
+                if (poolIndex < thumbnailSlots_.size())
                 {
-                    CopyThumbnailViewOutput(commandBuffer, view, *cache.images[assetIndex]);
+                    FThumbnailSlot& completedSlot = thumbnailSlots_[poolIndex];
+                    if (completedSlot.occupied && completedSlot.generation == generation && completedSlot.image)
+                    {
+                        CopyThumbnailViewOutput(commandBuffer, view, *completedSlot.image);
+                        completedSlot.ready = true;
+                    }
                 }
                 view.SetSceneOverride(nullptr);
                 releaseThumbnailView_ = true;
