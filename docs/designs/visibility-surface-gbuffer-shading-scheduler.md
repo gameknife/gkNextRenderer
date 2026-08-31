@@ -4,14 +4,12 @@ category: design
 status: 现行（M0–M4 + M5a/b/c 已实现）
 owner: engine/rendering
 created: 2026-08-16
-last_updated: 2026-08-16
-related_plan: ../plans/visibility-surface-gbuffer-plan.md
+last_updated: 2026-08-31
 ---
 
 # Visibility Surface、G-buffer 与 Shading Scheduler
 
-本文描述**当前实现**的职责链、数据契约与调度抽象。执行记录、实测数据与决策门结论见
-[开发计划](../plans/visibility-surface-gbuffer-plan.md)。
+本文描述**当前实现**的职责链、数据契约、调度抽象，以及实施期保留下来的实测结论。
 
 **这条链路上已经没有开关**。SoftwareTracing、SoftwareModern、SoftwareModernNoAmbient、
 PathTracingLite 一律先跑 Surface Build，再由 tile 分类分配 per-bucket indirect dispatch；GTAO 由
@@ -74,7 +72,7 @@ dense depth（`RT_PREV_DEPTHBUFFER`）与 normal（`RT_NORMAL`）过去是 Core 
 - GTAO 被迫排在 Core 之后，因为它读的 depth/normal 由 Core 写出。
 
 Surface Build 前置打破了这个环：屏幕空间消费者现在读两张纹理而不是重放一次几何解码，
-实测 screen-space shadow 的 march 成本下降约 45%（数据见开发计划）。
+实测 screen-space shadow 的 march 成本下降约 45%。
 
 ### Visibility 不是 surface
 
@@ -223,7 +221,7 @@ Standard kernel 去掉 miss/emissive 分支后确实变快（1080p 0.186→0.152
 0.04 ms（1080p）/ 0.09 ms（4K）是固定成本，对 SwTracing 的 2.9 ms kernel 只占 1.4%，对 NoAmbient 的
 0.12 ms kernel 就占了三分之一。**这条 1.10× 是保留调度器、删除解析式路径时明知接受的代价**：两套
 allocation 并存的维护与漂移成本高于这点固定开销，而 bucket 抽象本身（parity 知识收进 allocation
-层、材质特征桶的落脚点）才是它存在的理由。数字见开发计划。
+层、材质特征桶的落脚点）才是它存在的理由；本节数字就是保留的决策依据。
 
 ### Resolve 收缩与 upscaler 契约
 
@@ -291,7 +289,7 @@ albedo / roughness / metalness / motion。这是必要的，因为从 depth 重�
 ## 验证入口
 
 - `assets/agentscripts/surface-legacy-parity.agentscript.json`：四个 renderer 的输出快照，改动前后
-  各跑一次做回归。NoAmbient 是确定性的；三个随机采样器只能与自身的噪声地板比较（做法见开发计划 M3）。
+  各跑一次做回归。NoAmbient 是确定性的；三个随机采样器只能与自身的噪声地板比较。
 - `assets/agentscripts/checkerboard-renderers-smoke.agentscript.json`：三个 surface renderer 的
   full / checkerboard 冒烟。
 - `assets/agentscripts/surface-ssshadow-ab.agentscript.json`：screen-space shadow march 成本对照。
@@ -302,7 +300,7 @@ albedo / roughness / metalness / motion。这是必要的，因为从 depth 重�
 - GPU pass timing is inspected in Tracy; agent validation only asserts runtime state and frame-rate health.
 
 「legacy vs surface」「analytic vs scheduler」两类 A/B 脚本随两条路径一起删除；它们的结论已经落在
-本文与开发计划里。
+本文中。
 
 **DLSS 例外**：`gnb validate` / `gnb shot` 会强制禁用 Streamline，因此上述脚本不能证明 DLSS 生效。
 需要验证 DLSS 时必须在 Windows NVIDIA 环境用非 hidden、非 agent-validation 的正常窗口路径。

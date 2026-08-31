@@ -9,7 +9,7 @@ Always communicate with the user in Chinese (中文).
 
 ## Project Overview
 
-gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vulkan, featuring hardware/software ray tracing, real-time global illumination, GPU-driven rendering, and GPU CSM shadows. The Engine core remains below the 50k LOC target (36,492 on 2026-08-08); all first-party Engine, Modules, Gameplay, applications and tests total 183,437 lines across 933 files. Treat these as snapshots and use `gnb loc` for the current count.
+gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vulkan, featuring hardware/software ray tracing, real-time global illumination, GPU-driven rendering, and GPU CSM shadows. The Engine core follows a 50k LOC budget; use `gnb loc` for current counts instead of copying a dated snapshot into documentation.
 
 **Key Technologies:**
 - C++20/C11, Vulkan API, Slang shader language (ray query, not ray pipeline)
@@ -42,7 +42,7 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 **Build (vcpkg is auto-bootstrapped on first run):**
 - Setup once: `./gnb.sh setup` (Windows: `gnb.bat setup`)
 - Core build (default): `./gnb.sh build` (Windows: `gnb.bat build` —— 默认仅构建核心目标 `gkNextRenderer` 与 `gkNextUnitTests`)
-- Full build (all targets): `./gnb.sh build --all` (Windows: `gnb.bat build --all` —— 构建全量 15+ 子项目)
+- Full build (all targets): `./gnb.sh build --all` (Windows: `gnb.bat build --all` —— 构建当前配置的全部目标)
 - Specific target: `./gnb.sh build gkNextEditor`
 - Android: `./gnb.sh android build debug` 生成 APK，`./gnb.sh android run debug` 装到设备并启动
   - APK 里装哪个程序由 `--app` 决定，可选的是
@@ -222,7 +222,7 @@ src/
 │   │   ├── Preview/         # RenderView services (thumbnails, offscreen cameras)
 │   │   └── Upscaler/        # IUpscaler abstraction (impl injected by NextStreamline)
 │   └── Utilities/           # Misc helpers
-├── Modules/                 # 18 optional engine modules (static libs, linked per app; see src/Modules/README.md)
+├── Modules/                 # 23 optional engine modules (static libs, linked per app; see src/Modules/README.md)
 │   ├── GltfLoader/, LDrawLoader/, ScadLoader/, SplatLoader/, SceneExport/  # Content pipelines
 │   ├── NextDotNet/, NextPhysics/, NextAudio/, NextAI/, NextRmlUi/          # Runtime capabilities
 │   ├── NextRemote/, NextStreamline/, NextFidelityFX/, NextTemporalUpscaler/,
@@ -374,7 +374,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 
 - **`docs/README.md`** - 现行文档索引与生命周期规则；架构设计、项目说明和仍有效计划从这里进入
 - **`docs/AGENT_GUIDE/`** - Layered documentation:
-  - `core-patterns.md` / `contextual-rules.md` / `coding-standards.md` / `quick-commands.md` - General rules
+  - `coding-standards.md` - Detailed code-review and style guidance; build/verification rules live in this file
   - `ReflectionSystem.md` - entt::meta reflection (editor UI + generated C# wrappers)
   - `DotNetBindings.md` - C# binding surface: adding a function vs exposing a property
   - `CSharpGameDevelopment.md` - Writing an application in C# (start here for a new C# game)

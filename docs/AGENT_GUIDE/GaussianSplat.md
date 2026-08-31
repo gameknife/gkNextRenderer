@@ -2,7 +2,7 @@
 
 当前实现位于可选模块 `src/Modules/SplatLoader/`。`SplatModule::Install()` 注册 `.sog` loader、反射组件、运行时 CVar 和 external render pass；Engine 核心不直接拥有 SOG 解析器。
 
-SOG v2 的反量化、坐标/covariance 转换、Scene 产物和 external-pass 契约见 [现行设计](../docs/designs/gaussian-splatting-sog-design.md)。修改 loader 时必须同时遵守该格式契约，不能只以某个示例资产“看起来能开”为准。
+SOG v2 的反量化、坐标/covariance 转换、Scene 产物和 external-pass 契约见 [现行设计](../designs/gaussian-splatting-sog-design.md)。修改 loader 时必须同时遵守该格式契约，不能只以某个示例资产“看起来能开”为准。
 
 PlayCanvas SOG v2 可以是打包 `.sog`，也可以由 loader 内部读取 `meta.json + WebP` 条目。示例 `assets/sog/Grape.sog` 属于可选资产，不应假定 source tree 一定存在；缺少时先检查 `./gnb.sh paks list`。
 
@@ -13,7 +13,7 @@ PlayCanvas SOG v2 可以是打包 `.sog`，也可以由 loader 内部读取 `met
 ./gnb.sh shot --scene assets/sog/Grape.sog --frames 120
 ```
 
-Windows 使用对应的 `gnb.bat`。成功日志包含 `decoded SOG`、`uploaded ... Gaussian splats` 和 `uploaded scene [Grape.sog] to gpu`。没有可选样例时，以当前可用 `.sog` 输入替代，不要把资产缺失写成 loader 平台限制。
+Windows 使用对应的 `gnb.bat`。成功日志包含 `decoded SOG`、`uploaded ... Gaussian splats` 和 `committed scene [Grape.sog]`。没有可选样例时，以当前可用 `.sog` 输入替代，不要把资产缺失写成 loader 平台限制。
 
 ## 当前渲染路径
 

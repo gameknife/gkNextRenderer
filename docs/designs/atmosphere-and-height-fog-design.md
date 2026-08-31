@@ -4,7 +4,7 @@ category: design
 status: 现行
 owner: engine/rendering
 created: 2026-07-29
-last_updated: 2026-07-29
+last_updated: 2026-08-31
 ---
 
 # 大气散射与高度雾架构
@@ -16,9 +16,8 @@ last_updated: 2026-07-29
 实现入口：`src/Engine/Rendering/Atmosphere/`、`assets/shaders/Sky.*.comp.slang`、
 `assets/shaders/common/Sky.slang`、`assets/shaders/Process.AtmosphereComposite.comp.slang`。
 
-M0–M3 已于 2026-07-29 实现并验收。历史任务分解见
-[大气散射与高度雾开发计划](../plans/atmosphere-and-height-fog-plan.md)；M4 是按需候选方向，
-不属于当前实现承诺。
+M0–M3 已于 2026-07-29 实现并验收。体积雾光轴与真正的介质散射是按需候选方向，不属于当前
+实现承诺。
 
 ## 当前实现与验证入口
 

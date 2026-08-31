@@ -5,7 +5,6 @@ status: M0–M3 已实施（几何 + base color + 法线/Lambert），贴图与 
 owner: engine
 created: 2026-08-22
 last_updated: 2026-08-22
-related_design: ios-a12x-non-bindless-compatibility.md
 ---
 
 # iOS A12X Compatibility Minimal Render MVP
@@ -431,9 +430,9 @@ FragmentOutput main(FragmentInput input)
 - 兼容 shader 不被桌面默认 renderer 误选；
 - 普通 visibility、Surface Build、Visual Test 不受 MVP 代码影响。
 
-## 11. 与前一份设计的关系
+## 11. 后续优先级
 
-前一份 [iOS A12X Non-Bindless 兼容路径：适配复盘与重构设计](ios-a12x-non-bindless-compatibility.md) 仍然保留故障根因、格式边界和 MoltenVK typed array 的排障记录，但其中“实现完整 non-bindless backend”的目标被本文件的最小兼容 MVP 取代。
-
-当前优先级应是：窗口/UI 不变量 → Soft Mesh 几何 → 直接 albedo color → 基础材质，再决定是否需要真正的 visibility ID 和更完整的兼容资源模型。
+故障复盘中的有效结论已并入本文：兼容设备在物理设备选择阶段确定独立 profile，不创建完整 bindless
+RT bank，不用 float16 保存 visibility ID，也不混用 typed storage array。当前优先级是贴图与 CSM，
+之后再按实机收益决定是否需要真正的 visibility ID 和更完整的兼容资源模型。
 

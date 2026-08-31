@@ -13,9 +13,7 @@ supersedes_iteration: combat-depth
 > 状态：**📝 待实现**。本文是交付给后续 AI agent / 开发者接手实现的**架构设计**，配套开发计划见 [`economy-build-plan.md`](economy-build-plan.md)。
 >
 > **前置必读**（已落地的地基，本设计建立在其之上，**不重复**这些内容）：
-> - [`docs/designs/nextra-rts-mvp-design.md`](../../designs/nextra-rts-mvp-design.md) §4.2 不变量、§5 确定性仿真层 —— 全部继续生效，本轮**一字不改地继承**。
-> - [`combat-depth-design.md`](combat-depth-design.md) §7 红线（R-NEW1..5）—— 全部继续生效。
-> - [`roadmap.md`](roadmap.md)（方向库与技术债总账，本轮选定 **D2**）。
+> - [`architecture.md`](architecture.md) 的确定性仿真、order/replay 与表现层隔离不变量全部继续生效。
 > - [`AGENTS.md`](../../../AGENTS.md)（构建 / 测试纪律）。
 >
 > **本轮代号 / 范围一句话**：D1 把战斗做出了深度；本轮把"免费随便造"的战斗沙盒推进到**红警基础 Playable**——采矿 → 资金 → 建造场侧边栏造建筑 → 地图放置 → 多生产线出兵 → 与走同一经济循环的 AI 对抗。**仍不碰**真联机（网络栈激活留给 D4）。
@@ -61,7 +59,7 @@ supersedes_iteration: combat-depth
 | 战斗表现 | 纯表现层弹道 tracer / 炮口闪光 / 死亡反馈（P1 可裁剪） | sim 层投射物、溅射、动画、音效 |
 | 联机 | **不做**（沿用单机 playerCount=1 + AI 注入） | 真双 World lockstep（D4） |
 
-### 1.5 三个关键决策（roadmap D2 挂起项，本轮采用的默认取向）
+### 1.5 三个关键决策
 
 | 决策点 | 本轮取向 | 理由 |
 | --- | --- | --- |
@@ -305,7 +303,8 @@ struct FUnitDef
 
 ### 10.1 继承（一字不改）
 
-MVP design §4.2 全部不变量 + D1 的 R-NEW1..R-NEW5（[`combat-depth-design.md`](combat-depth-design.md) §7）继续生效。
+[`architecture.md`](architecture.md) 中的确定性仿真、统一 order、codec/replay 与 sim/render 隔离
+不变量继续生效。
 
 ### 10.2 本轮新增红线（违反即 desync / 联机隐患）
 
@@ -353,4 +352,4 @@ src/Application/Game/NextRA/CMakeLists.txt 及测试源集 [改] ResourceGrid/Pl
 
 ---
 
-*本设计与 [`combat-depth-design.md`](combat-depth-design.md) 互补：D1 定"战斗深度"，本轮定"经济与建造循环"。落地顺序与验收见 [`economy-build-plan.md`](economy-build-plan.md)。*
+*当前战斗深度以代码与 [`architecture.md`](architecture.md) 为准；本文件定义经济与建造循环，落地顺序与验收见 [`economy-build-plan.md`](economy-build-plan.md)。*

@@ -9,9 +9,8 @@ last_updated: 2026-07-26
 
 # NextDayz 复杂 3C 与 ScadRig 分层动画设计
 
-> 本文以 2026-07-26 的当前代码为基线，设计 NextDayz 的蹲姿、四方向移动、步行/跑步/冲刺、举枪瞄准、开火后坐力和 loot 动作。它取代
-> [NextDayz MVP 设计](nextdayz-mvp-design.md) 中 §5.1～§5.3 关于后续 3C/角色动画的简化方案，但不改变其地图、背包、昼夜和 HUD 边界。
-> 对应执行顺序见 [开发计划](nextdayz-3c-scadrig-development-plan.md)。
+> 本文记录 NextDayz 的蹲姿、四方向移动、步行/跑步/冲刺、举枪瞄准、开火后坐力和 loot 动作。
+> 生存、背包、昼夜与 HUD 的现行边界见 [PVE 生存循环产品化设计](nextdayz-productization-design.md)。
 >
 > **实现状态（2026-07-26）**：P0～P7 已落地。本文中的状态模型、动态胶囊、四层动画图、
 > shot event 和 loot 两阶段提交均为现行实现；NextDayz 专用资产为

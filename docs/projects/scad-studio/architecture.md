@@ -4,7 +4,7 @@ category: project
 status: 现行
 owner: ScadStudio
 created: 2026-07-17
-last_updated: 2026-07-28
+last_updated: 2026-08-31
 ---
 
 # ScadStudio 会话、生成与预览架构
@@ -16,7 +16,6 @@ ScadStudio 是 Sessions | Viewport | Chat 三栏的 SCAD authoring application�
 ScadStudio 的自然语言创作能力已经以首版纵向链路迁入 ScadLibrary，按 Kit module、场景、
 Terrain 过程节点和 Rig 动作分别生成受约束 proposal；当前实现、设计与后续收口见
 [ScadLibrary AI 创作实现](../scadlibrary/ai-authoring.md)、
-[ScadLibrary AI 融合创作架构](../../designs/scadlibrary-ai-authoring-integration.md) 和
 [开发计划](../../plans/scadlibrary-ai-authoring-plan.md)。
 
 ScadLibrary 已能只读扫描旧 session 并导入为未保存场景草稿，但本文件描述的 standalone

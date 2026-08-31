@@ -3,7 +3,7 @@ title: Brotato3D 开发者指南
 category: project
 status: 现行
 owner: docs
-last_updated: 2026-05-10
+last_updated: 2026-08-31
 ---
 
 # Brotato3D 开发者指南
@@ -424,7 +424,7 @@ HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpnes
 ## 8. 改完之后怎么验证
 
 1. **构建**：`./gnb.bat build Brotato3D --reconfigure`（Windows）/ `./gnb build Brotato3D --reconfigure`。
-2. **跑**：`./gnb run Brotato3D`，看 log `uploaded scene [...] to gpu` 表示初始化通过。
+2. **跑**：`./gnb run Brotato3D`，看 log `committed scene [...]` 表示初始化通过。
 3. **配置出错**：`Brotato3D failed to load required data` 抛在 `OnInit()`，常见原因是 JSON 字段缺失（敌人缺 `hp`、武器缺 `damage` 等，必填字段在 [Brotato3DDataLoader.cpp:108](../../../src/Application/Game/Brotato3D/Brotato3DDataLoader.cpp) 校验）。
 4. **跑数值平衡**：用 `DEV_MODE` 的 K 键和 1~6 键一边玩一边喷怪 + 切武器，看 TTK / 受伤量。
 5. **波次推进卡住**：检查 `extractionRequiredSec > 0` 才会进入 DuskSurge；boss 波必须 `bgmCue="boss"`。
@@ -444,5 +444,5 @@ HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpnes
 ## 10. 进一步阅读
 
 - [introduction.md](introduction.md) — 项目定位与系统概览
-- [`AGENT_GUIDE/Brotato3D.md`](../../../AGENT_GUIDE/Brotato3D.md) — Brotato3D 代码结构梳理（god-class + 子系统拆分、对象池、数据模型）
-- 引擎层文档：[`AGENT_GUIDE/`](../../../AGENT_GUIDE/) 与 [`AGENTS.md`](../../../AGENTS.md)
+- [`AGENT_GUIDE/Brotato3D.md`](../../AGENT_GUIDE/Brotato3D.md) — Brotato3D 代码结构梳理（god-class + 子系统拆分、对象池、数据模型）
+- 引擎层文档：[`AGENT_GUIDE/`](../../AGENT_GUIDE/) 与 [`AGENTS.md`](../../../AGENTS.md)

@@ -3,7 +3,7 @@
 `NextTotalwar` 是运行在 400×400 m low-poly 战场上的军团级即时战术产品切片。当前代码具备
 蓝军指挥、数据驱动部署、统一订单、敌方 Commander AI、定向行军、固定步长近战、弓兵齐射、
 士气/溃逃/重整、胜负与同进程重赛，以及默认隐藏诊断信息的产品 UI。设计依据见
-[基础战斗循环产品化设计](../docs/projects/nexttotalwar/nexttotalwar-productization-design.md)。
+[基础战斗循环产品化设计](../projects/nexttotalwar/nexttotalwar-productization-design.md)。
 
 ## 入口与文件地图
 

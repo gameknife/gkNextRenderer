@@ -1,7 +1,7 @@
 # SCAD Terrain（gk_terrain 低模可行走地形）
 
 语言/数据描述 → 连续 low-poly 高度场地形（山/河/湖/路/建筑基座）→ 可渲染、可寻路、可物理行走。
-设计：`docs/designs/scad-terrain-design.md`；执行记录：`docs/plans/scad-terrain-plan.md`。
+设计：`docs/designs/scad-terrain-design.md`。
 
 ## 三种用法（从高到低）
 

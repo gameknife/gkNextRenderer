@@ -14,7 +14,6 @@
 - [ ] `gnb test` 全绿（本机跑全量；CI 只跑 `~[GPU]` 子集）
 - [ ] `gnb visual` 无视觉回归
 - [ ] 三个 target 在本机能正常启动、切换全部渲染器、截图、正常退出
-- [ ] MagicaLego 能加载 `legobricks.glb`、显示缩略图、播放放置音效并读写示例存档
 - [ ] 100 / 125 / 150 / 200% DPI 下两个 GUI target 无文字裁切
 - [ ] 无硬件光追的设备上（或 `--forcenort`）回退链路正常
 - [ ] `README.md` / `README.en.md` / `AGENTS.md` / `docs/README.md` 与代码一致
@@ -28,17 +27,15 @@
 CI 出问题时排查成本高，建议先在本机跑一遍完整链路：
 
 ```bash
-gnb build gkNextRenderer gkNextEditor gkNextMotionBenchmark MagicaLego Packager
+gnb build gkNextRenderer gkNextEditor gkNextMotionBenchmark Packager
 ```
 
 ```bash
 gnb package windows --package-preset default --trace-assets --version v0.1.2.0
-gnb package windows --package-preset magicalego --trace-assets --version v0.1.2.0
 ```
 
 ```bash
 gnb smoke gknextrenderer_win64_v0.1.2.0.7z --launch
-gnb smoke MagicaLego_win64_v0.1.2.0.7z --launch
 ```
 
 `gnb smoke` 会把 7z 解压到一个干净目录并验证：包内没有 `.pdb` / `.ilk` 等构建产物、
@@ -72,8 +69,7 @@ CI 会依次执行：
 
 三个桌面 Release job 与 `desktop.yml` 使用相同 runner：`ubuntu-24.04`、`windows-latest`、
 `macos-latest`。它们也使用相同的 `gnb info --bincache-key` 和 `.vcpkg` / `.vcpkg_bincache`
-缓存路径，因此 Release 可以直接复用日常 Desktop CI 已生成的 vcpkg 二进制缓存。Windows 的
-`default` 与 `magicalego` 位于同一个 job，共享同一台 runner、依赖目录和 CMake build tree。
+缓存路径，因此 Release 可以直接复用日常 Desktop CI 已生成的 vcpkg 二进制缓存。
 Android 当前不属于发布支持平台，也不会产生 Release 产物。
 
 ### 产物命名
@@ -99,8 +95,8 @@ THIRD-PARTY-NOTICES.md
 `--include-gnb`；打包器届时会加入 `bin/gnb[.exe]` 和 `bin/gnb-agent-manifest.json`。
 
 打包目标由 `gnb.toml` 的 `[package.presets.<name>]` 配置；`default` 是标准三程序发布，
-`magicalego` 是单程序发布。通过 `--package-preset <name>` 选择，省略时使用
-`[package].default_preset`。所有 preset 共用同一套 trace、runtime.pak、sidecar、文档和 7z 流程。
+仓库也可以保留供本地或按需交付使用的其他 preset，但 tag 触发的 Release 只发布 `default`。
+通过 `--package-preset <name>` 选择，省略时使用 `[package].default_preset`。所有 preset 共用同一套 trace、runtime.pak、sidecar、文档和 7z 流程。
 
 推荐的精确模式 `--trace-assets` 会依次以隐藏 Agent Validation 模式运行
 `gkNextRenderer`、`gkNextEditor`、`gkNextMotionBenchmark`，合并 `FileHelper` 成功解析的磁盘文件与
@@ -116,15 +112,14 @@ Packager 会从原始资产目录或已有 Pak 中提取每个命中项，不会
 发布功能，因此精确打包会无条件合并全部 SPIR-V 文件。场景扫描还会用当前安装目录和已挂载 Pak
 再次校验逻辑资产路径，避免旧的按需解包缓存让未随当前版本发布的场景重新出现在选择器中。
 其他必须进入精确包、但不保证在采样流程中加载的资产，分别配置在各 preset 的
-`always_include_assets`。当前 `default` 固定包含 `conf_room.glb`、`pbr.glb` 和 `playground.glb`；
-`magicalego` 不继承这三个场景，而是独立补齐交互阶段才读取的音效和示例 `.mls` 存档。
+`always_include_assets`。当前 `default` 固定包含 `conf_room.glb`、`pbr.glb` 和 `playground.glb`。
 
 精确包只保证覆盖采样时实际走到的功能。发布前应以代表性的场景与交互流程扩充清单，并始终执行
 `gnb smoke <7z> --launch`。不传上述两个参数时仍保留目录白名单模式，作为 CI 与问题排查的保守回退。
 
 桌面发布归档使用 7z/LZMA2 最高压缩级别、128 MiB 字典和 solid 模式。gnb 依次查找
 `GNB_7Z`、PATH 中的 `7zz` / `7z` / `7za`，Windows 还会查找标准的 `Program Files/7-Zip`。
-`gnb smoke` 仍可读取旧 `.zip`，但新的桌面与 MagicaLego 发布物统一输出 `.7z`。
+`gnb smoke` 仍可读取旧 `.zip`，新的桌面发布物统一输出 `.7z`。
 
 ---
 
@@ -193,4 +188,3 @@ Release 出现阻断问题时：
 | `tools/gnb/internal/packager/packager.go` | 打包清单、资产白名单、包内 README |
 | `tools/gnb/internal/packager/smoke.go` | 解压即用冒烟校验 |
 | `THIRD-PARTY-NOTICES.md` | 第三方 attribution，随包分发 |
-| `docs/plans/release-readiness-plan.md` | 本轮发布准备的问题清单与批次任务 |

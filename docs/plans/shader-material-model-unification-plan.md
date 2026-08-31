@@ -4,14 +4,13 @@ category: plan
 status: 待审阅
 owner: engine/rendering
 created: 2026-07-24
-last_updated: 2026-07-24
+last_updated: 2026-08-31
 ---
 
 # PathTracing 材质模型统一（Stage 3 设计增量）
 
-> 这是 [shader-library-refactor-plan.md](shader-library-refactor-plan.md) **Stage 3** 的动手前
-> design 增量。Stage 0–2 已完成（结构重构 + 文件重组 + GetRayColor/Render 拆解，全部 behavior-
-> preserving 并验证等价）。本文件描述统一材质模型的设计、映射、分阶段实现与**待 owner 拍板的决策**。
+> shader library 的结构重构、文件重组和 `GetRayColor`/`Render` 拆解已经完成；这些已完成阶段不再保留独立执行计划。
+> 本文件只跟踪尚未实施的材质模型统一，描述设计、映射、分阶段实现与**待 owner 拍板的决策**。
 > 验收标准沿用主计划：**理论正确即可，RNG 序不必保证，输出可与旧版不同**，判据 = 收敛到 PT ground
 > truth。
 

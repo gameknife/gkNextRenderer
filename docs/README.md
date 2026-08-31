@@ -1,166 +1,118 @@
 # gkNextRenderer 文档索引
 
-本目录只保留仍能解释当前代码、当前操作方式或明确待办工作的文档。已完成的一次性实施计划、被替代的架构草案和重复审计不原样保留；但计划中仍约束现有实现的设计理由、不变量、格式契约和失败教训，必须先提炼进现行 design/guide，不能只以“Git 里还能找到”为由删除。
+本目录只保留能解释当前代码、当前操作方式或明确剩余工作的文档。已完成的一次性实施计划、被取代的
+方案和重复审计已退出文档面；历史过程通过 Git 与 `.spec/journal/` 追溯。
 
-## 阅读优先级
+## 权威性与生命周期
 
-后续 agent 遇到冲突时按以下顺序判断：
+发生冲突时按以下顺序判断：
 
-1. 当前代码、CMake、配置和 `AGENTS.md`。
-2. 本索引标为“现行”的 guide/design，以及 `AGENT_GUIDE/`。
-3. `.spec/TODO.md` 中未完成的任务及其显式链接的当前 design/plan；独立 plan 不构成授权。
-4. `.spec/journal/` 与 `.spec/ARCHIVE.md` 仅是历史证据，不能据此恢复已删除架构。
+1. 当前代码、CMake、配置与 `AGENTS.md`；
+2. 本索引中的 guide/design 与 `AGENT_GUIDE/`；
+3. `.spec/TODO.md` 的未完成任务及其显式链接；
+4. `.spec/ARCHIVE.md`、journal 和 Git 历史只作历史证据。
 
-不要因为文档中曾出现过某个类、目录或命令就假定它仍存在；先用 `rg`、`gnb <command> --help` 和 `git log -- <path>` 核对。
+`guide` 说明现在怎么做，`design` 记录仍成立的边界与契约，`plan` 只保留尚未完成且范围明确的执行
+顺序。完成 plan 中仍有价值的内容应并入 design/guide，然后删除 plan；不要长期保留旧文件清单、行号、
+进度表和一次性验收日志。
 
-## 文档生命周期
+## 当前任务状态
 
-- `guide` 解释当前如何使用、扩展或排障；命令、路径和默认值必须能由当前仓库验证。
-- `design` 记录仍成立的边界、所有权、数据契约和关键取舍。功能完成后 design 通常应保留并改写成“当前架构”，而不是随 plan 一起删除。
-- `plan` 只记录尚未完成且已确认的执行顺序。完成、放弃或被替代后应退出现行文档面；删除前先把耐久知识提炼到 design/guide。
-- `.spec/journal/`、Git 提交和旧 plan 是审计证据，不是现行架构入口。它们能回答“当时做了什么”，不能替代一份可发现的当前设计说明。
+- `.spec/TODO.md` 的下一项是 `#00068` WebRTC Remote Play 后续；开始实现前仍需补充本轮可验证目标。
+- `#00011` 持久 TODO 服务仍在“待规划”，不是活动开发任务。
+- 下方“剩余计划”是可发现的设计积压，不等于已授权执行；实际调度仍以 `.spec/TODO.md` 为准。
 
-清理文档时逐项判断“这段内容是否解释了当前代码为何如此、修改时必须守住什么、或哪条看似合理的路线其实未实现”。只删除进度表、过期文件清单、旧行号、一次性验收日志和已被代码否定的方案。
+## 操作指南
 
-## Guides（现行操作说明）
+- 构建与工具：[CMake 结构](guides/cmake-structure.md) · [gnb CLI](guides/gnb-cli.md) ·
+  [gnb 架构](guides/gnb-architecture.md) · [发布流程](guides/release-process.md)
+- 平台与显示：[SDR/HDR10/EDR](guides/display-output-modes.md) ·
+  [macOS/MoltenVK FIFO 排障](guides/macos-moltenvk-fifo-present-troubleshooting.md) ·
+  [Windows Dozen 排障](guides/dozen-vulkan-backend-troubleshooting.md) ·
+  [Steam Deck 部署](notes/steamdeck-deployment-notes.md)
+- 渲染扩展：[DLSS/Streamline](guides/dlss-streamline.md) ·
+  [FidelityFX FSR](guides/fidelityfx-fsr.md) · [Tracy](guides/tracy-profiling.md) ·
+  [Soft Mesh Shader](guides/soft-mesh-shader-gpu-driven-submit.md)
+- 内容与交互：[SCAD 场景创作](guides/scad-scene-authoring-guide.md) ·
+  [TUI 模式](guides/tui-mode.md) · [VITURE Carina AR](guides/viture-ar.md)
 
-- [CMake 结构](guides/cmake-structure.md)
-- [SDR / HDR10 / EDR 输出模式](guides/display-output-modes.md)
-- [NVIDIA Streamline / DLSS / DLSS-G](guides/dlss-streamline.md)
-- [AMD FidelityFX FSR 3.1 / Frame Generation](guides/fidelityfx-fsr.md)
-- [gnb 架构与代码导览](guides/gnb-architecture.md)
-- [gnb CLI](guides/gnb-cli.md)
-- [macOS / MoltenVK FIFO 黑屏与闪烁排障](guides/macos-moltenvk-fifo-present-troubleshooting.md)
-- [发布流程（打 tag → CI → 验收 → release notes → 回滚）](guides/release-process.md)
-- [Tracy Profiler 使用与 Android adb 连接](guides/tracy-profiling.md)
-- [SCAD 场景生成指引](guides/scad-scene-authoring-guide.md)
-- [Windows Dozen Vulkan 后端排障](guides/dozen-vulkan-backend-troubleshooting.md)
-- [SCAD 资产目录与 ScadLibrary 场景组装约定](../assets/scad/README.md)
-- [SCAD Terrain 使用速查](AGENT_GUIDE/ScadTerrain.md)
-- [NextWorldTravel 真实地点浏览器](AGENT_GUIDE/NextWorldTravel.md)（加载 `gnb geo` 城市 tile：Walk 让 ScadRig
-  角色在可行走街面上 AI 漫游或 WASD 操控，Aerial 把 OSM 地点铺成鸟瞰地图，Focus 逐个绕物取景）
-- [Soft Mesh Shader GPU-Driven 提交路径](guides/soft-mesh-shader-gpu-driven-submit.md)
-- [TUI 终端模式](guides/tui-mode.md)
-- [VITURE Carina AR（可选模块）](guides/viture-ar.md)
+## 当前架构
 
-## Designs（当前架构）
+### Runtime、渲染与平台
 
-- [用 C# 开发应用](AGENT_GUIDE/CSharpGameDevelopment.md)（现行；面向 Unity 背景的上手指南，
-  以 FlappyCSharp 为样例）
-- [.NET 脚本运行时架构](designs/dotnet-scripting-design.md)（现行；C# 脚本运行时已完整落地——
-  双后端、绑定表 codegen、反射组件 wrapper，Flappy 在两种后端下 parity 通过。日常用法见
-  [.NET Bindings](AGENT_GUIDE/DotNetBindings.md)）
-- [托管游戏 Launcher / 进程内启动 C# 游戏](designs/managed-game-launcher-design.md)（现行；
-  `gkNextLauncher` 在同进程内加载/卸载任意 C# 游戏，`gkNextEditor` 用同一套 session 实现
-  play-in-editor（F5 Play / F8 eject 后可在 Outliner 与 Properties 里编辑运行中游戏的节点），
-  per-game exe 与它们共用 `ManagedGameHostInstance`，差异全部收进 `assets/configs/games/*.game.json`。
-  含 manifest 契约、会话状态机、世界重置契约与 PIE 的边界。CoreCLR 专属——NativeAOT 一个 exe 只能链
-  一个游戏，对应 Unity 的 Editor/Player 分工）
-- [用 C# 绑定实现 Brotato3D 的能力缺口与可行性](designs/csharp-binding-brotato3d-feasibility.md)（提案，
-  未实施；盘点 `EngineApi.def.h` 现有 68 项绑定面对 Brotato3D 的覆盖度，列出物理 body、节点 parent/材质、
-  运行时材质创建、手柄摇杆轴、UI 与 ScadRig 的缺口，给出跨界调用成本估算与分档落地顺序）
-- [脚本绑定面基线（QuickJS 誊本）](designs/script-binding-surface-baseline.md)（历史证据；
-  QuickJS 退场前誊下的完整绑定面，已由 `EngineApi.def.h` 与反射清单取代，保留用于追溯取舍来源）
-- [Agent 输入驱动验证](designs/agent-validation-input-driver.md)
-- [Desktop UI Foundation](designs/desktop-ui-foundation.md)
-- [AmbientCube 命中驱动驻留](designs/ambientcube-hit-driven-residency-design.md)
-- [大气散射与高度雾架构](designs/atmosphere-and-height-fog-design.md)（现行；程序化天空、大气透视、高度雾、
-  昼夜 Demo 与人工/Agent 验证入口均已完成。体积雾光轴与 PathTracing 介质散射按需另立任务）
-- [Editor 材质创作架构](designs/editor-material-authoring.md)
-- [Editor Settings 与 CVar 架构](designs/editor-settings-and-cvars.md)
-- [Editor Sequencer 与动画轨道编辑](designs/editor-sequencer.md)
-- [GI 缓存与体素资源架构](designs/gi-cache-architecture.md)
-- [Gaussian Splat / SOG v2 格式与集成](designs/gaussian-splatting-sog-design.md)
-- [移动端 application 目标：注册表 + 统一 `gk_add_application`](designs/mobile-application-targets.md)（现行；
-  Android/iOS 可打包 `src/Application/` 下任意登记过的 application，目录/包名/bundle id
-  统一由 `src/Application/MobileApplications.json` 描述）
-- [iOS A12X Compatibility Minimal Render MVP](designs/ios-a12x-compatibility-minimal-render-mvp.md)（M0–M2 已实施：
-  `ERT_Compatibility` + `FBindlessProfile`，无 descriptor set 的 base-color raster pass；
-  M3 起的法线/纹理/CSM 待实施）
-- [iOS A12X Non-Bindless 兼容路径：适配复盘与重构设计](designs/ios-a12x-non-bindless-compatibility.md)（根因复盘；目标已由简化 MVP 取代）
-- [gnb AI Bridge Protocol v2](designs/gnb-ai-bridge-protocol-v2.md)
-- [Massive Rendering Mode 与双 uint Visibility Buffer](designs/massive-visibility-buffer-design.md)（提案，未实现；[开发计划](plans/massive-rendering-mode-plan.md)）
-- [Visibility Surface、G-buffer 与 Shading Scheduler](designs/visibility-surface-gbuffer-shading-scheduler.md)（现行；三个 software renderer 与 PathTracingLite 一律走 Surface Build + tile 调度器 + Core 内 GTAO + Native TAAU sparse checkerboard，
-  `r.surface.build` / `r.surface.scheduler` / `r.gtao.applyInCore` / `r.taau.sparseCheckerboard` 四个 cvar 与各自的另一条路径已删除，且 checkerboard 只在 surface 路径下存在。实测数据与决策门结论见[开发计划](plans/visibility-surface-gbuffer-plan.md)）
-- [Tracing Direct Lighting 与 ReSTIR DI 架构](designs/pathtracing-restir-design.md)
-- [RenderView 多视图架构](designs/multi-viewport-renderview-design.md)
 - [渲染运行时架构与契约](designs/rendering-runtime-architecture.md)
-- [场景导出 glTF/GLB 契约](designs/scene-export-gltf-contract.md)
-- [NextAI 产品化边界](designs/nextai-product-focused-architecture.md)
-- [ScadLibrary AI 融合创作架构](designs/scadlibrary-ai-authoring-integration.md)
-- [SCAD 统一场景文档](designs/scad-unified-scene-document.md)（一个 .scad 文件同时含实例/地形/源码结构，按节点编辑，按语句写回）
-- [SCAD Scene Compose](designs/scad-scene-compose-design.md)
-- [SCAD Terrain 地形架构](designs/scad-terrain-design.md)（M0–M4 已落地）
-- [真实地理数据 → OpenSCAD 城市关卡](designs/geo-city-generation-design.md)（现行；`gnb geo`
-  从 SRTM 高程 + OpenStreetMap 生成可渲染、可行走的城市 tile。沿海与内陆均已验证
-  （香港/纽约/里约/巴黎/成都），换地点只需换 `--at`）
-- [SoftwareModernNoAmbient 渲染与 GTAO](designs/software-modern-noambient-rendering.md)
+- [双平面 Visibility Buffer](designs/massive-visibility-buffer-design.md)
+- [Visibility Surface、G-buffer 与 Shading Scheduler](designs/visibility-surface-gbuffer-shading-scheduler.md)
 - [直接样本后处理与 Upscaler 输入链](designs/direct-sample-post-chain.md)
+- [Tracing Direct Lighting 与 ReSTIR DI](designs/pathtracing-restir-design.md)
+- [SoftwareModernNoAmbient 与 GTAO](designs/software-modern-noambient-rendering.md)
+- [大气散射与高度雾](designs/atmosphere-and-height-fog-design.md)
+- [GI 缓存与体素资源](designs/gi-cache-architecture.md)
+- [AmbientCube 命中驱动驻留](designs/ambientcube-hit-driven-residency-design.md)
+- [CPU TLAS 快照与后台重建](designs/cpu-tlas-snapshot-architecture.md)
+- [RenderView 多视图](designs/multi-viewport-renderview-design.md)
+- [Gaussian Splat / SOG v2](designs/gaussian-splatting-sog-design.md)
+- [iOS A12X Compatibility Minimal Render](designs/ios-a12x-compatibility-minimal-render-mvp.md)
+- [移动端 application 目标](designs/mobile-application-targets.md)
+- [Agent 输入驱动验证](designs/agent-validation-input-driver.md)
 - [WebRTC Remote Play](designs/webrtc-remoteplay-design.md)
 
-## Projects
+### Editor、脚本与内容管线
 
-- Brotato3D：[介绍](projects/brotato-3d/introduction.md) · [配置与玩法开发指南](projects/brotato-3d/developer-guide.md)
-- Flappy 脚本 parity：[介绍与验证方式](projects/flappy-bird-parity/introduction.md)（C++ / C# 双实现，双后端）
-- AirportSim：[架构与确定性边界](projects/airport-sim/architecture.md)
-- NextRA：[架构不变量](projects/nextra/architecture.md) · [现状与后续方向](projects/nextra/roadmap.md)
-- ScadStudio：[会话、生成与预览架构](projects/scad-studio/architecture.md)
-- ScadLibrary：[AI 创作当前实现](projects/scadlibrary/ai-authoring.md) · [架构契约](designs/scadlibrary-ai-authoring-integration.md) · [后续收口计划](plans/scadlibrary-ai-authoring-plan.md)
-- StudioSim：[架构与 AI 边界](projects/studio-sim/architecture.md)
-- NextDayz：[MVP 基线设计](projects/nextdayz/nextdayz-mvp-design.md) ·
-  [复杂 3C 与 ScadRig 分层动画设计](projects/nextdayz/nextdayz-3c-scadrig-design.md) ·
-  [PVE 生存循环现行架构](projects/nextdayz/nextdayz-productization-design.md)
-- NextTotalwar：[行军 MVP 设计与历史实测](projects/nexttotalwar/nexttotalwar-mvp-design.md) ·
-  [战斗 MVP 设计（C0～C2 部分实现）](projects/nexttotalwar/nexttotalwar-battle-mvp-design.md) ·
-  [基础战斗循环现行架构](projects/nexttotalwar/nexttotalwar-productization-design.md) ·
-  [代码导览](AGENT_GUIDE/NextTotalwar.md)
-- TruckerDemo（迭代计划）：[SnowRunner 风格越野运输 Demo 迭代计划](projects/trucker-demo/trucker-demo-iteration-plan.md)
+- [Desktop UI Foundation](designs/desktop-ui-foundation.md)
+- [Editor 材质创作](designs/editor-material-authoring.md) ·
+  [Settings/CVar](designs/editor-settings-and-cvars.md) · [Sequencer](designs/editor-sequencer.md)
+- [.NET 脚本运行时](designs/dotnet-scripting-design.md) ·
+  [托管游戏 Launcher 与 PIE](designs/managed-game-launcher-design.md)
+- [NextAI 产品化边界](designs/nextai-product-focused-architecture.md) ·
+  [gnb AI Bridge v2](designs/gnb-ai-bridge-protocol-v2.md)
+- [SCAD Scene Compose](designs/scad-scene-compose-design.md) ·
+  [统一场景文档](designs/scad-unified-scene-document.md) ·
+  [Terrain](designs/scad-terrain-design.md) ·
+  [ScadLibrary AI 创作实现](projects/scadlibrary/ai-authoring.md)
+- [真实地理数据生成城市关卡](designs/geo-city-generation-design.md)
+- [场景导出 glTF/GLB 契约](designs/scene-export-gltf-contract.md)
 
-## Plans（待实施）
+## AGENT 专题指南
 
-- [Engine 核心精炼 Round 5](plans/engine-core-refactor-round5.md)（已完成并修订边界；`src/Engine` 40,862 → 35,702，
-  Minimal 仅依赖完整核心，UI/捕获/validation/scene catalog/upscaler 保持可选）
-  （待实施；统一 Engine UI 主题、语义控件、Toolbar/Combo、应用 chrome、领域选项目录与 DevTools 边界）
-- [Android 纯 CMake 驱动构建重构方案](plans/android-cmake-build-refactor-plan.md)（实施中；源码迁移已完成，待兼容 NDK 环境完成 APK/AVD 验收）
-- [iOS 纯 CMake 驱动构建重构方案](plans/ios-pure-cmake-build-refactor-plan.md)（device-only 实施；复用 macOS Vulkan SDK 解析，保留 `gnb ios build` 薄入口）
-- [阶段性 Release 准备计划](plans/release-readiness-plan.md)（现行；发布流水线、崩溃兜底、UI 收口、
-  合规与文档一致性的问题清单与分批任务，覆盖 gkNextRenderer / gkNextEditor / gkNextMotionBenchmark）
-- [CPU TLAS 异步与并行更新计划](plans/cpu-tlas-parallel-update-plan.md)
-- [GI Bake 磁盘缓存开发计划](plans/gi-bake-disk-cache-plan.md)（待实施；voxelize/DF/ambient cube 的 tile 级
-  本地缓存、`gnb gicache` 管理工具与离线 background 生成；架构边界见
-  [GI 缓存与体素资源架构](designs/gi-cache-architecture.md)）
-- [Visibility Surface / G-buffer / Shading Scheduler 开发计划](plans/visibility-surface-gbuffer-plan.md)（待实施；M0–M4 里程碑，含决策门与回退）
-- [PathTracing Slang Shader 库重构计划](plans/shader-library-refactor-plan.md)（计划中）
-- [PathTracing 材质模型统一（Stage 3 设计增量）](plans/shader-material-model-unification-plan.md)（待审阅）
-- CitySolSim 经营循环：[架构设计](projects/citysolsim/management-loop-design.md) ·
-  [开发计划](projects/citysolsim/management-loop-plan.md)（待实现）
-- NextRA 经济与建造：[架构设计](projects/nextra/economy-build-design.md) ·
-  [开发计划](projects/nextra/economy-build-plan.md)（待实现）
+- C#：[开发应用](AGENT_GUIDE/CSharpGameDevelopment.md) ·
+  [.NET Bindings](AGENT_GUIDE/DotNetBindings.md) · [反射](AGENT_GUIDE/ReflectionSystem.md) ·
+  [Hot Reload](AGENT_GUIDE/HotReload.md)
+- SCAD：[Loader](AGENT_GUIDE/SCADLoader.md) · [资产 Playbook](AGENT_GUIDE/ScadAssetPlaybook.md) ·
+  [Terrain](AGENT_GUIDE/ScadTerrain.md) · [ScadRig](AGENT_GUIDE/ScadRig.md)
+- Loader/渲染：[LDraw](AGENT_GUIDE/LDrawLoader.md) · [Gaussian Splat](AGENT_GUIDE/GaussianSplat.md) ·
+  [Native Temporal Upscaler](AGENT_GUIDE/NativeTemporalUpscaler.md)
+- Gameplay：[CharacterDemo](AGENT_GUIDE/CharacterDemo.md) · [SimKit](AGENT_GUIDE/SimKit.md) ·
+  [Brotato3D](AGENT_GUIDE/Brotato3D.md) · [MagicaLego](AGENT_GUIDE/MagicaLego.md) ·
+  [NextTotalwar](AGENT_GUIDE/NextTotalwar.md) · [NextWorldTravel](AGENT_GUIDE/NextWorldTravel.md)
+- 通用代码审查：[编码规范](AGENT_GUIDE/coding-standards.md)
 
-## 已完成计划（保留作为实现依据，待下次文档清理时归档）
+## 项目文档
 
-这些 plan 的 `status` 已是“已完成 / 已实施”。按本页的生命周期规则它们应退出现行文档面；
-在把其中仍成立的契约提炼进对应 design 之前先在此列出，避免成为无人索引的游离文档。
+- [AirportSim](projects/airport-sim/architecture.md)
+- Brotato3D：[项目介绍](projects/brotato-3d/introduction.md) ·
+  [配置与玩法开发](projects/brotato-3d/developer-guide.md)
+- CitySolSim：[经营循环设计](projects/citysolsim/management-loop-design.md) ·
+  [剩余计划](projects/citysolsim/management-loop-plan.md)
+- [Flappy C++/C# parity](projects/flappy-bird-parity/introduction.md)
+- NextDayz：[3C 与 ScadRig](projects/nextdayz/nextdayz-3c-scadrig-design.md) ·
+  [PVE 生存循环](projects/nextdayz/nextdayz-productization-design.md)
+- NextRA：[架构不变量](projects/nextra/architecture.md) ·
+  [经济与建造设计](projects/nextra/economy-build-design.md) ·
+  [剩余计划](projects/nextra/economy-build-plan.md)
+- NextTotalwar：[行军/地图约束](projects/nexttotalwar/nexttotalwar-mvp-design.md) ·
+  [基础战斗循环](projects/nexttotalwar/nexttotalwar-productization-design.md)
+- [ScadStudio](projects/scad-studio/architecture.md) ·
+  [ScadLibrary AI 实现](projects/scadlibrary/ai-authoring.md) ·
+  [StudioSim](projects/studio-sim/architecture.md) ·
+  [TruckerDemo](projects/trucker-demo/architecture.md)
 
-- [.NET 脚本运行时开发计划](plans/dotnet-scripting-plan.md)（P0–P5 已完成 →
-  [design](designs/dotnet-scripting-design.md) · [guide](AGENT_GUIDE/DotNetBindings.md)；
-  每个阶段的结果段记录了实测才暴露的失败与原因，是这条链路最完整的排障线索）
-- [Tracy Profiler 接入与 CPU/GPU 计时设施重构计划](plans/tracy-profiler-integration-plan.md)（M0–M5 已完成 →
-  [Tracy 使用指南](guides/tracy-profiling.md)）
-- [大气散射与高度雾开发计划](plans/atmosphere-and-height-fog-plan.md)（已完成 → [design](designs/atmosphere-and-height-fog-design.md)）
-- [Bindless 3D 纹理支持计划](plans/bindless-3d-texture-support-plan.md)（已完成）
-- [BSDF-aware Direct Lighting 计划](plans/bsdf-aware-direct-lighting-plan.md)（已实施 → [design](designs/pathtracing-restir-design.md)）
-- [SCAD Terrain 开发计划](plans/scad-terrain-plan.md)（M0–M4 已完成 → [design](designs/scad-terrain-design.md)）
-- [地理城市生成剩余计划](plans/geo-city-generation-plan.md)（P0–P5 已完成并并入 design；
-  余下 P6 高精度 DTM、Overpass 健壮性、`building:part`/街具，以及两项待用户决策：入库范围与地图尺寸）
-- [NextDayz 复杂 3C 与 ScadRig 分层动画开发计划](projects/nextdayz/nextdayz-3c-scadrig-development-plan.md)（已完成）
-- [NextDayz PVE 生存循环产品化开发计划](projects/nextdayz/nextdayz-productization-development-plan.md)（已完成）
-- [NextTotalwar 基础战斗循环产品化开发计划](projects/nexttotalwar/nexttotalwar-productization-development-plan.md)（已完成）
+## 剩余计划
 
-## 环境记录
+- [GI Bake 磁盘缓存](plans/gi-bake-disk-cache-plan.md)（待实施）
+- [PathTracing 材质模型统一](plans/shader-material-model-unification-plan.md)（待审阅）
+- [地理城市生成剩余项](plans/geo-city-generation-plan.md)（P0–P5 已完成；只保留未完成项）
+- [ScadLibrary AI 创作收口](plans/scadlibrary-ai-authoring-plan.md)（M0–M4 已完成；只剩 ScadStudio 退役门槛）
 
-- [Steam Deck / Arch Linux 部署注意事项](notes/steamdeck-deployment-notes.md)
-
-## 更稳定的专题入口
-
-反射、热重载、各 loader 和具体游戏代码结构优先阅读 `AGENT_GUIDE/`；它们由 `AGENTS.md` 的 Key References 维护，不在这里复制一份容易漂移的版本。
+未在本页重复列出的具体 loader、游戏代码入口和验证命令，以对应 `AGENT_GUIDE/`、代码旁注释与
+`gnb <command> --help` 为准。

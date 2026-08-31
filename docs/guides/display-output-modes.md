@@ -4,7 +4,7 @@ category: guides
 status: current
 owner: gkNextRenderer
 created: 2026-06-21
-last_updated: 2026-07-17
+last_updated: 2026-08-31
 ---
 
 # SDR / HDR10 / EDR 输出模式
@@ -74,7 +74,7 @@ ImGui UI 也使用同一个模式语义：
 ./gnb.sh shot --scene assets/models/playground.glb --frames 30
 ```
 
-`gnb shot` 日志里应出现 `uploaded scene [...] to gpu`，并打印实际 swapchain format/colorSpace/outputMode。macOS 上截图应正常显示低多边形 playground 颜色，而不是蓝紫色 debug-like 图像。
+`gnb shot` 日志里应出现 `committed scene [...]`，并打印实际 swapchain format/colorSpace/outputMode。macOS 上截图应正常显示低多边形 playground 颜色，而不是蓝紫色 debug-like 图像。
 
 ## 与 DLSS-G 的关系
 

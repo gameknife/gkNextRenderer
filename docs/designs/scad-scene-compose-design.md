@@ -43,7 +43,8 @@ kit 新增、删除或修改导出 module 后必须重跑 `scad catalog`。compo
 - 显式与批量布局：`placements`、`grids`、`rows`、`rings`、`scatters`、`alongs`
 - 城市矩阵：`blockTypes`、`blockGrids`
 
-具体结构以 `tools/gnb/internal/scadcompose/spec.go` 为准。不要根据旧设计加入尚不存在的字段；例如 terrain/snap/where 仍属于 [SCAD Terrain 计划](../plans/scad-terrain-plan.md)，在落地前不是合法 schema。
+具体结构以 `tools/gnb/internal/scadcompose/spec.go` 为准。Terrain、snap 与过滤字段已经进入现行
+SCAD/TERR 工作流；不要根据旧计划猜 schema，使用当前结构定义和校验错误作为事实来源。
 
 ## 确定性与维护规则
 

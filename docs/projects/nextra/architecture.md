@@ -61,6 +61,9 @@ sim actor 由 `FSimWorld` 的 entt registry 拥有；scene node 由引擎 Scene 
 
 ## 验证
 
-功能现状与候选后续方向见 [roadmap](roadmap.md)。涉及 sim/order 的改动至少应验证：相同 seed + 相同 order stream 得到相同逐 tick sync hash、codec/replay round-trip、不同 render FPS 不改变结果，以及 delay/drop/reorder 注入不会让未到齐 tick 被错误推进。
+当前尚未落地的产品方向是[经济与建造循环](economy-build-design.md)，执行拆分见
+[开发计划](economy-build-plan.md)。涉及 sim/order 的改动至少应验证：相同 seed + 相同 order stream
+得到相同逐 tick sync hash、codec/replay round-trip、不同 render FPS 不改变结果，以及
+delay/drop/reorder 注入不会让未到齐 tick 被错误推进。
 
 真实联网若立项，验收应是两个独立进程交换同一 order stream 并比较 hash；不能用 loopback UI 截图代替。

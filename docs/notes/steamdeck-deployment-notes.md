@@ -4,7 +4,7 @@ category: note
 status: 现行环境说明
 owner: build
 created: 2026-05-31
-last_updated: 2026-07-17
+last_updated: 2026-08-31
 ---
 
 # Steam Deck / Arch Linux 部署注意事项
@@ -33,4 +33,4 @@ Steam Deck 桌面模式按 Linux x86_64 路径构建。旧记录中某次 LDraw 
 
 ## 验收口径
 
-构建成功不等于运行成功。至少确认日志出现 `uploaded scene [...] to gpu`，运行相关单测，并用 `gnb shot` 检查截图。若特定 loader 失败，记录当前输入文件、测试名和 commit；不要把临时失败写成永久平台限制。
+构建成功不等于运行成功。至少确认日志出现 `committed scene [...]`，运行相关单测，并用 `gnb shot` 检查截图。若特定 loader 失败，记录当前输入文件、测试名和 commit；不要把临时失败写成永久平台限制。

@@ -1,11 +1,10 @@
 ---
 title: "双平面 Visibility Buffer"
 category: design
-status: 已实现
+status: 现行
 owner: engine
 created: 2026-07-30
-last_updated: 2026-08-02
-related_plan: ../plans/massive-rendering-mode-plan.md
+last_updated: 2026-08-31
 ---
 
 # 双平面 Visibility Buffer

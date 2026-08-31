@@ -1,10 +1,10 @@
 ---
 title: "SCAD Terrain：语言描述的低模可行走地形（设计方案）"
 category: design
-status: ✅ M0–M4 已落地
+status: 现行（M0–M5a 已落地）
 owner: engine
 created: 2026-07-17
-last_updated: 2026-07-17
+last_updated: 2026-08-31
 ---
 
 # SCAD Terrain：语言描述的低模可行走地形
@@ -15,7 +15,6 @@ last_updated: 2026-07-17
 >
 > 前置阅读：`AGENT_GUIDE/SCADLoader.md`（loader 全貌）、`docs/designs/scad-scene-compose-design.md`
 > （Kit/catalog/layout 组合子/spec+compose/LLM generate 三层管线，本方案是它的第四块拼图）。
-> 开发计划见 `docs/plans/scad-terrain-plan.md`。
 
 ---
 
@@ -261,7 +260,7 @@ h(x,y) = base.height + relief · fbm(seed, x·f, y·f)          // 基底
 - 每 cell 两三角形，对角线方向按 seed 交替翻转——与抖动共同构成经典 low-poly 不规则三角划分。
 - **faceted 平直着色**：地形三角汤在 GeomList 上带 `faceted` 标志，loader 对带标志的桶**跳过法线
   平滑**（现有 `smoothAngleDegrees=35°` 会把缓坡地形抹成光滑渐变，杀死低模颗粒感）。
-  这是对既有管线唯一的侵入式小改动（标志透传，见开发计划 M0）。
+  这是对既有管线唯一的侵入式小改动（标志透传已随 M0 落地）。
 - 封闭实体：四周裙边下延 + 底盖（`base.height - 裙深`），观感干净、bbox/阴影稳定。
 
 ### 5.5 builtin 接口（语言面）
@@ -472,5 +471,4 @@ public:
 | **M5a 过程编辑器** | ScadLibrary TERR feature + `ter_*` 类型化编辑、地表轮廓/折线控制点、增量源码往返、demo 自动验证 | ✅ 2026-07-27 |
 | M5b（后续） | 不透明水回退 / 分块大地图（>180² cells 物理分块）/ 侵蚀风格化 | 非本期 |
 
-执行细节、验收记录与偏差说明见 `docs/plans/scad-terrain-plan.md`；使用速查见
-`AGENT_GUIDE/ScadTerrain.md`。
+使用速查见 `AGENT_GUIDE/ScadTerrain.md`；实施期的逐步验收只在 Git 历史中保留。

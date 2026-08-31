@@ -131,7 +131,9 @@ manifest 是这个游戏唯一的声明来源——它自己的 exe 和 `gkNextL
 CMake 侧只有两处是你要填的：
 
 ```cmake
-gk_configure_application(MyGame MODULES ${GK_STANDARD_RUNTIME_MODULES} NextDotNet)
+gk_add_application(MyGame
+    SOURCES ${myGameSources}
+    MODULES ${GK_STANDARD_RUNTIME_MODULES} NextDotNet)
 
 gk_dotnet_managed_game(MyGame
     PROJECT "${GK_DOTNET_MANAGED_ROOT}/MyGame/MyGame.csproj"

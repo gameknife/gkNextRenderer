@@ -4,7 +4,7 @@ category: design
 status: 现行
 owner: desktop-ui
 created: 2026-08-09
-last_updated: 2026-08-09
+last_updated: 2026-08-31
 ---
 
 # Desktop UI Foundation
@@ -42,5 +42,22 @@ RemoteView 的 developer mask 为 None，且不执行本地主窗口命令。
 `UserInterface` 保持窄 facade，内部由 `FImGuiContextHost`、`FImGuiVulkanRenderer`、
 `FUiTextureResolver` 和 `FUiFrameDispatcher` 分担 Context、Vulkan pipeline、纹理与 layer 调度。
 
-功能基线见 [ui-foundation-manual-baseline.md](../notes/ui-foundation-manual-baseline.md)。本轮以编译、
-单元测试和 agent script 为主，不做像素比较。开发环境可用 `ui.catalog true` 打开 UI Catalog。
+## 稳定交互与验证基线
+
+- 主 DockSpace ID `MyDockSpace`，以及窗口/popup 的 `###`/`##` 后缀，都是持久化协议；显示文案变化
+  不能顺手改 stable ID。
+- `F2` 切换 Graphics Debug，面板内 `Q` 循环 Renderer、`1..9` 切换 View Mode；grave 键切换
+  Console。ImGui ini key、Settings manifest id 与 CVar 名同样视为持久化协议。
+- Overlay 默认无边框；Section indent/unindent 必须对称；disabled 控件仍可显示原因；任何 collapsed、
+  close 或 early-return 路径都要保持 Window/Style 栈平衡。
+- MainWindow 可执行本地主窗口命令；RemoteView 与 capture surface 禁止额外窗口副作用。hidden-UI
+  capture 不绘制 UI，include-UI capture 按 `FUiFrameResult` 绘制。
+
+自动化入口：
+
+- `assets/agentscripts/ui-foundation-renderer-{normal,compact}.agentscript.json`
+- `assets/agentscripts/ui-foundation-editor-{normal,compact}.agentscript.json`
+
+脚本验证功能和栈稳定性，不是像素基线。发布前仍需在 Windows 100%、125%、150%、200% 缩放下人工
+检查 titlebar、toolbar、popup、footer、dockspace 的 hit target、裁剪与文本基线。开发环境可用
+`ui.catalog true` 打开 UI Catalog。

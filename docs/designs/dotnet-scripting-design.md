@@ -4,8 +4,7 @@ category: design
 status: 现行；P0–P5 全部落地
 owner: engine/scripting
 created: 2026-08-14
-last_updated: 2026-08-15
-plan: ../plans/dotnet-scripting-plan.md
+last_updated: 2026-08-31
 ---
 
 # .NET 脚本运行时架构
@@ -14,7 +13,7 @@ plan: ../plans/dotnet-scripting-plan.md
 与 NativeAOT 两种后端下无差别运行**：开发期用 CoreCLR 换热重载与调试，release 与移动端用
 NativeAOT 换体积与启动速度，切换只改一个 CMake option，托管代码一行不动。
 
-本文记录边界、契约与取舍。实施顺序见 [.NET 脚本运行时开发计划](../plans/dotnet-scripting-plan.md)。
+本文记录当前边界、契约与取舍；日常扩展方式见 [.NET Bindings](../AGENT_GUIDE/DotNetBindings.md)。
 
 ## 决策摘要
 
@@ -65,8 +64,8 @@ QuickJS 的实际依赖面只有两个 target：`FlappyJs` 与 `gkNextEditor`。
 
 替换后同时消失的还有：TypeScript 工具链（`tools/tsc`、tsc fetcher、TS 编译与热重载约 90 行）、
 `Engine.d.ts` 的字符串拼接生成器（108 行手写字符串）、以及 vendored 的
-`src/ThirdParty/quickjs-ng`（2.9MB）。退场前的绑定面誊本见
-[脚本绑定面基线](script-binding-surface-baseline.md)。
+`src/ThirdParty/quickjs-ng`（2.9MB）。迁移前的绑定面只作为 Git 历史保留；当前唯一事实来源是
+`EngineApi.def.h` 与反射 manifest。
 
 顺带修掉一个现存漂移：`NextEngine::RegisterReflection()` 只注册了 `GetTotalFrames`，而 QuickJS 的
 `class_<NextEngine>` 注册了 4 个方法——反射与绑定不是同一份事实。**修法是删掉重复的那一份而不是
@@ -262,8 +261,7 @@ Source Generator：后者复杂度高、难调试，在这里没有额外收益�
 
 ### 4.4 跨界类型规约与四项定稿取舍
 
-[脚本绑定面基线](script-binding-surface-baseline.md) 誊写 QuickJS 绑定面时暴露了四处不能照抄的
-地方。结论如下，P2 按此实施。
+QuickJS 迁移审计暴露了四处不能照抄的地方。结论如下，当前 ABI 已按此实施。
 
 **1. 颜色用打包 `GkColor32`，不用 4 个 float。**
 

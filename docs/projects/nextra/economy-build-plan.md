@@ -12,7 +12,8 @@ supersedes_iteration: combat-depth
 
 > 状态：**📝 待实现**。本文是交付给后续 AI agent / 开发者的**分阶段开发计划**，与架构设计配套：**先读 [`economy-build-design.md`](economy-build-design.md)**（目标架构 + 约束 + 风险），本文只讲**落地顺序、每阶段任务 / 交付物 / 验收 / 验证命令**。
 >
-> **前置必读**：[`economy-build-design.md`](economy-build-design.md)（本轮设计）、[`combat-depth-design.md`](combat-depth-design.md) §7 红线（继承生效）、[`docs/designs/nextra-rts-mvp-design.md`](../../designs/nextra-rts-mvp-design.md) §4.2 不变量、[`AGENTS.md`](../../../AGENTS.md)（构建/测试纪律）。
+> **前置必读**：[`economy-build-design.md`](economy-build-design.md)（本轮设计）、
+> [`architecture.md`](architecture.md)（确定性 sim/order 不变量）、[`AGENTS.md`](../../../AGENTS.md)（构建/测试纪律）。
 >
 > **迭代北极星**（design §1.3）：一局"开局仅建造场 → 采矿 → 建造 → 出兵 → 打垮走同一经济的 AI"的完整红警基础对局，全程确定性。**不碰**真联机。
 
@@ -213,7 +214,7 @@ supersedes_iteration: combat-depth
 - [ ] 开局配置终稿：双方建造场 + 2500 资金（可选常量：附赠 2 步兵护卫）；矿区布局对称性复核。
 - [ ] 胜负条件复核：沿用基地判负；"全建筑清除判负"留常量开关（默认关）。
 - [ ] 地图尺寸评估：48×48 若拥挤则常量升 64×64（A\* 与 grid 均按常量伸缩，改后跑全部单测 + 双跑）。
-- [ ] 文档收口：README（可玩状态/操作说明）、[`roadmap.md`](roadmap.md)（§3 对照表 D2 行翻绿、§4 D2 标已交付、§5 技术债 T3/T5/T8/T9 状态更新）、design/plan 勾选与 `文件:行号` 引用校准。
+- [ ] 文档收口：更新 [`architecture.md`](architecture.md) 与本 design/plan 的状态、操作说明和技术债结论；删除实施期文件行号快照。
 - [ ] 全量回归：`gkNextUnitTests` 全绿 + 复合场景双跑（采矿+建造+低电+AI 全程）+ `gnb shot` 系列截图 + 一局人机完整对局跑通。
 
 **验收**：即 §4 总体 DoD 全项达成。
@@ -252,8 +253,8 @@ CMake（NextRA + 测试源集）          [改] ResourceGrid/Placement 入 gkNex
 3. **经济博弈成立**：打掉对方矿车/精炼厂能显著拖垮其出兵速度。
 4. **确定性不破**：E1/E2/E5 双跑硬性全过；复合场景（采矿+建造+低电+AI 整局）逐 tick hash 一致。
 5. **红线全守住**：R-ECO1..5 + 继承的 MVP/D1 全部红线；`Sim/` 内 grep 无新增 float。
-6. 技术债：T3、T9 消化完成；T5、T8 状态在 roadmap §5 更新（消化或明确归属）。
-7. 文档：design/plan 勾选与状态更新；README 可玩说明更新；roadmap §3/§4/§5/§6 同步。
+6. 技术债：T3、T9 消化完成；T5、T8 在架构文档中明确归属或关闭。
+7. 文档：design/plan 与 `architecture.md` 状态更新，README 补齐可玩说明。
 
 ---
 
@@ -268,4 +269,4 @@ CMake（NextRA + 测试源集）          [改] ResourceGrid/Placement 入 gkNex
 
 ---
 
-*实现遵循 design 文档约束（[`economy-build-design.md`](economy-build-design.md) §10 红线）。每里程碑完成后更新本文勾选与状态、并同步 roadmap 总账。*
+*实现遵循 design 文档约束（[`economy-build-design.md`](economy-build-design.md) §10 红线）。每里程碑完成后更新本文与 `architecture.md` 的状态。*

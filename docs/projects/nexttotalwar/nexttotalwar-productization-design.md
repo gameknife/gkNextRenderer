@@ -9,7 +9,7 @@ last_updated: 2026-08-02
 
 # NextTotalwar 基础战斗循环产品化设计
 
-本文记录 `NextTotalwar` 可独立游玩的单场战斗纵切之现行产品边界、运行时架构和验收契约。2026-08-02 已完成配套开发计划：数据驱动 scenario、蓝军所有权、统一订单、士气/溃逃/重整、弓兵齐射、Commander AI、BattleSession、产品 HUD、胜负与同进程重赛均已接入。旧 [行军 MVP 设计](nexttotalwar-mvp-design.md) 继续解释地图、编队和渲染约束；代码地图与当前数据流见 [NextTotalwar 代码导览](../../../AGENT_GUIDE/NextTotalwar.md)。
+本文记录 `NextTotalwar` 可独立游玩的单场战斗纵切之现行产品边界、运行时架构和验收契约。2026-08-02 已完成配套开发计划：数据驱动 scenario、蓝军所有权、统一订单、士气/溃逃/重整、弓兵齐射、Commander AI、BattleSession、产品 HUD、胜负与同进程重赛均已接入。[行军、地图与大规模表现约束](nexttotalwar-mvp-design.md) 解释战场、编队和渲染契约；代码地图与当前数据流见 [NextTotalwar 代码导览](../../AGENT_GUIDE/NextTotalwar.md)。
 
 ## 1. 决策摘要
 

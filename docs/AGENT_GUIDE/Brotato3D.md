@@ -2,7 +2,7 @@
 
 本文梳理 `src/Application/Game/Brotato3D/` 目录下 Brotato3D 小游戏的**代码结构与工程模式**，目标是让你在动手改 **C++** 之前先建立整体心智模型：知道每个文件负责什么、一帧数据怎么流、对象怎么复用、约定有哪些。
 
-> **分工**：本文讲"代码怎么组织"。如果你只想**调数值 / 加敌人武器物品 / 改波次**（多数情况只改 JSON），请读 [`docs/projects/brotato-3d/developer-guide.md`](../docs/projects/brotato-3d/developer-guide.md)（配置/玩法向）。两篇互补。
+> **分工**：本文讲"代码怎么组织"。如果你只想**调数值 / 加敌人武器物品 / 改波次**（多数情况只改 JSON），请读 [`docs/projects/brotato-3d/developer-guide.md`](../projects/brotato-3d/developer-guide.md)（配置/玩法向）。两篇互补。
 
 ---
 
@@ -27,8 +27,8 @@ Brotato3DGameInstance  (类声明集中在 Brotato3DGameInstance.hpp)
 **为什么这么拆？** 把 130+ 个方法塞进一个 `.cpp` 会让编译变慢、阅读困难；按"游戏子系统"切分翻译单元是这套代码的核心组织手法。**所有 `*System.cpp` 第一行都是 `#include "Brotato3DGameInstance.hpp"`**，因为它们实现的都是这同一个类。
 
 独立于上帝类、可单独复用/测试的有两块：
-- `FWaveSystem`（[Brotato3DWaveSystem.hpp](../src/Application/Game/Brotato3D/Brotato3DWaveSystem.hpp)）—— 波次/黄昏状态机，纯逻辑、无渲染依赖。
-- `FShop`（[Brotato3DShop.hpp](../src/Application/Game/Brotato3D/Brotato3DShop.hpp)）—— 商店抽卡，纯逻辑。
+- `FWaveSystem`（[Brotato3DWaveSystem.hpp](../../src/Application/Game/Brotato3D/Brotato3DWaveSystem.hpp)）—— 波次/黄昏状态机，纯逻辑、无渲染依赖。
+- `FShop`（[Brotato3DShop.hpp](../../src/Application/Game/Brotato3D/Brotato3DShop.hpp)）—— 商店抽卡，纯逻辑。
 
 > **架构启示**：要加一个新子系统（例如"天气系统"），优先开一个新的 `Brotato3DXxxSystem.cpp`，在 `Brotato3DGameInstance.hpp` 里加成员/方法声明，在 `OnTick` 里插入调用——而不是往现有大文件里堆。能做成无渲染依赖的纯逻辑类（像 `FWaveSystem`）就更好，可单测。
 
@@ -79,7 +79,7 @@ Brotato3DGameInstance  (类声明集中在 Brotato3DGameInstance.hpp)
 
 ## 4. 一帧的数据流（`OnTick`）
 
-`Brotato3DGameInstance::OnTick` 是总编排器（[Brotato3DGameInstance.cpp](../src/Application/Game/Brotato3D/Brotato3DGameInstance.cpp)）：
+`Brotato3DGameInstance::OnTick` 是总编排器（[Brotato3DGameInstance.cpp](../../src/Application/Game/Brotato3D/Brotato3DGameInstance.cpp)）：
 
 ```
 1. SetWorldPhysicsPaused(state != Playing)        // 非游玩态冻结 Jolt
@@ -106,7 +106,7 @@ Brotato3DGameInstance  (类声明集中在 Brotato3DGameInstance.hpp)
 
 **两个刻意设计，别"优化"掉**（代码里有注释守护）：
 
-1. **慢动作下武器仍用真实 dt**：Boss 击杀后子弹/敌人/碎块用 `effectiveDt` 爬行，但玩家可以正常开火——这是"savor the kill"的演出节奏。注释在 [Brotato3DProjectileSystem.cpp](../src/Application/Game/Brotato3D/Brotato3DProjectileSystem.cpp) `UpdateWeapons` 上方。
+1. **慢动作下武器仍用真实 dt**：Boss 击杀后子弹/敌人/碎块用 `effectiveDt` 爬行，但玩家可以正常开火——这是"savor the kill"的演出节奏。注释在 [Brotato3DProjectileSystem.cpp](../../src/Application/Game/Brotato3D/Brotato3DProjectileSystem.cpp) `UpdateWeapons` 上方。
 2. **事件用 `Consume*()` 一次性拉取**：`FWaveSystem` 不回调主类、不持有主类指针，而是把"本波结束了""该开商店了"等事件存成 bool，主类每帧用 `std::exchange` 语义的 `ConsumeXxx()` 取走。这让波次逻辑保持零渲染依赖、可单测。
 
 ### 状态机
@@ -217,7 +217,7 @@ glm::vec3 Brotato3DGameInstance::ResolveEnemyGroundedPosition(
 gnb.bat build Brotato3D      # Windows
 ./gnb.sh build Brotato3D     # macOS/Linux
 
-# 运行：看到 "uploaded scene [...] to gpu" 即初始化通过
+# 运行：看到 "committed scene [...]" 即初始化通过
 ./gnb.sh run Brotato3D
 ```
 - 配置缺字段会在 `OnInit()` 抛 `Brotato3D failed to load required data`。
@@ -227,7 +227,7 @@ gnb.bat build Brotato3D      # Windows
 
 ## 8. 进一步阅读
 
-- [`docs/projects/brotato-3d/developer-guide.md`](../docs/projects/brotato-3d/developer-guide.md) —— 配置/数值/加内容向开发指南（本文的姊妹篇）
-- [`docs/projects/brotato-3d/introduction.md`](../docs/projects/brotato-3d/introduction.md) —— 项目定位
+- [`docs/projects/brotato-3d/developer-guide.md`](../projects/brotato-3d/developer-guide.md) —— 配置/数值/加内容向开发指南（本文的姊妹篇）
+- [`docs/projects/brotato-3d/introduction.md`](../projects/brotato-3d/introduction.md) —— 项目定位
 - [`AGENT_GUIDE/MagicaLego.md`](MagicaLego.md) —— 另一个 C++ 小游戏的同类梳理，可对照
-- [`AGENTS.md`](../AGENTS.md) —— 引擎全局规范、构建/命名/目录约定
+- [`AGENTS.md`](../../AGENTS.md) —— 引擎全局规范、构建/命名/目录约定
