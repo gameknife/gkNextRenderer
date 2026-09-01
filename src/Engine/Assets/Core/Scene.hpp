@@ -94,7 +94,8 @@ namespace Assets
         Scene& operator=(Scene&&) = delete;
 
         Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing,
-              bool allocateAmbientResources = true, bool enableCpuAcceleration = true);
+              bool allocateAmbientResources = true, bool enableCpuAcceleration = true,
+              bool enablePhysics = true);
         ~Scene();
 
         void PostLoad(const std::vector<Skeleton>& skeletons);
@@ -440,6 +441,10 @@ namespace Assets
         std::unique_ptr<Assets::CPU::FCPUAccelerationStructure> cpuAccelerationStructure_;
         bool allocateAmbientResources_ = true;
         bool enableCpuAcceleration_ = true;
+        // Preview-only scenes are rendered but never simulated or queried for collisions. Keeping
+        // this separate from CPU acceleration lets thumbnails retain render proxies while
+        // skipping Jolt shape cooking, body creation and animation mobility setup.
+        bool enablePhysics_ = true;
 
         Assets::GPUDrivenStat gpuDrivenStat_;
         std::array<Assets::GPUDrivenStat, kSunShadowCascadeCount> shadowGpuDrivenStats_{};

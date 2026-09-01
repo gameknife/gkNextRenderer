@@ -276,31 +276,36 @@ namespace Assets
             cpuAccelerationStructure_->InitBVH(*this);
         }
 
-        // force static flag
-        std::function<void(Node*)> SetKinematicRecursive = [&](Node* node)
+        if (enablePhysics_)
         {
-            if (node == nullptr)
-                return;
-            if (auto phys = node->GetComponent<Runtime::PhysicsComponent>())
+            // Animated nodes must not be represented by static collision bodies. Thumbnail scenes
+            // never simulate or answer collision queries, so omit both this setup and the later
+            // Jolt shape/body build entirely.
+            std::function<void(Node*)> SetKinematicRecursive = [&](Node* node)
             {
-                phys->SetMobility(Node::ENodeMobility::Kinematic);
-            }
-            else
-            {
-                auto newPhys = std::make_shared<Runtime::PhysicsComponent>();
-                newPhys->SetMobility(Node::ENodeMobility::Kinematic);
-                node->AddComponent(newPhys);
-            }
-            for (auto& child : node->Children())
-            {
-                SetKinematicRecursive(child.get());
-            }
-        };
+                if (node == nullptr)
+                    return;
+                if (auto phys = node->GetComponent<Runtime::PhysicsComponent>())
+                {
+                    phys->SetMobility(Node::ENodeMobility::Kinematic);
+                }
+                else
+                {
+                    auto newPhys = std::make_shared<Runtime::PhysicsComponent>();
+                    newPhys->SetMobility(Node::ENodeMobility::Kinematic);
+                    node->AddComponent(newPhys);
+                }
+                for (auto& child : node->Children())
+                {
+                    SetKinematicRecursive(child.get());
+                }
+            };
 
-        for (auto& track : tracks_)
-        {
-            Node* node = GetNode(track.NodeName_);
-            SetKinematicRecursive(node);
+            for (auto& track : tracks_)
+            {
+                Node* node = GetNode(track.NodeName_);
+                SetKinematicRecursive(node);
+            }
         }
 
         // calculate the scene aabb
@@ -349,7 +354,9 @@ namespace Assets
         }
 
         // static mesh to jolt mesh shape
-        if (NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine())
+        NextPhysics* physicsEngine =
+            enablePhysics_ ? NextEngine::GetInstance()->GetPhysicsEngine() : nullptr;
+        if (physicsEngine != nullptr)
         {
             const auto shapeCookingStart = Clock::now();
             // RebuildMeshBuffer is also used after appending content. Remove the previous scene-owned

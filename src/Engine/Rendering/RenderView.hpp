@@ -53,7 +53,7 @@ namespace Vulkan
     {
         Persistent,  // every frame (realtime multi-camera)
         OnDemand,    // only when camera/scene/selection is dirty (static preview)
-        Transient,   // render to convergence (or N frames) then recycle the bank (thumbnails)
+        Transient,   // explicitly scheduled one-shot view (thumbnails)
     };
 
     enum class EHistoryInvalidationReason

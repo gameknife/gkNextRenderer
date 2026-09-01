@@ -2320,7 +2320,7 @@ namespace ScadLibrary
                 return clicked;
             };
             
-            const float categoryRowRight = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+            const float categoryRowRight = gallerySize.x * 3.0f;
             float categoryRowUsedWidth = 0.0f;
             const auto placeCategoryChip = [&](const std::string& label, const bool selected, const auto& onClick)
             {
@@ -2332,7 +2332,7 @@ namespace ScadLibrary
                     {
                         ImGui::NewLine();
                         categoryRowUsedWidth = 0.0f;
-                        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - ImGui::GetTextLineHeight() * 0.5f);
+                        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - ImGui::GetTextLineHeight() * 0.8f);
                     }
                     else
                     {
@@ -2388,6 +2388,7 @@ namespace ScadLibrary
                 }
             }
             ImGui::PopStyleVar();
+            ImGui::NewLine();
             ImGui::Separator();
 
             if (kits_.empty())

@@ -226,10 +226,12 @@ namespace Assets
     }
 
     Scene::Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing,
-                 const bool allocateAmbientResources, const bool enableCpuAcceleration) :
+                 const bool allocateAmbientResources, const bool enableCpuAcceleration,
+                 const bool enablePhysics) :
         cpuAccelerationStructure_(std::make_unique<Assets::CPU::FCPUAccelerationStructure>()),
         allocateAmbientResources_(allocateAmbientResources),
         enableCpuAcceleration_(enableCpuAcceleration),
+        enablePhysics_(enablePhysics),
         commandPool_(&commandPool)
     {
         int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
@@ -611,7 +613,7 @@ namespace Assets
 
     void Scene::EnsureNodePhysicsBody(Node* node)
     {
-        if (!node)
+        if (!enablePhysics_ || !node)
         {
             return;
         }

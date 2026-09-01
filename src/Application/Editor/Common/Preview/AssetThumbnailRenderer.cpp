@@ -21,6 +21,11 @@
 
 namespace Vulkan
 {
+    namespace
+    {
+        constexpr uint32_t kThumbnailRenderFrames = 1;
+    }
+
     RenderView* AssetThumbnailRenderer::ThumbnailView() const
     {
         return renderer_.RenderViews().Resolve(thumbnailRenderView_);
@@ -273,8 +278,19 @@ namespace Vulkan
 
     void AssetThumbnailRenderer::SetEnabled(const bool enabled)
     {
+        if (materialPreviewEnabled_ == enabled)
+        {
+            return;
+        }
+
         materialPreviewEnabled_ = enabled;
-        if (!materialPreviewEnabled_)
+        if (materialPreviewEnabled_)
+        {
+            // Opening the panel needs one complete frame even when the selected material has not
+            // changed since it was last closed.
+            materialPreviewDirty_ = true;
+        }
+        else
         {
             if (RenderView* view = MaterialPreviewView()) view->SetSceneOverride(nullptr);
         }
@@ -290,6 +306,7 @@ namespace Vulkan
         }
 
         materialPreviewExtent_ = extent;
+        materialPreviewDirty_ = true;
         if (RenderView* view = MaterialPreviewView())
         {
             view->SetRenderExtent(materialPreviewExtent_);
@@ -335,6 +352,7 @@ namespace Vulkan
         {
             view->InvalidateTemporalHistory();
         }
+        materialPreviewDirty_ = true;
     }
 
     void AssetThumbnailRenderer::BeforeNextFrame()
@@ -399,6 +417,7 @@ namespace Vulkan
         {
             materialPreviewScene_->UpdateHDRSH();
         }
+        materialPreviewDirty_ = true;
 
         EnqueueExistingThumbnailImages();
         if (RenderView* view = ThumbnailView())
@@ -415,6 +434,7 @@ namespace Vulkan
     {
         thumbnailTarget_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
         materialPreviewTarget_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
+        materialPreviewDirty_ = true;
         if (RenderView* view = ThumbnailView())
         {
             view->SetSceneOverride(nullptr);
@@ -493,7 +513,8 @@ namespace Vulkan
         const Assets::Camera& camera)
     {
         auto scene = std::make_unique<Assets::Scene>(
-            renderer_.CommandPool(), false, /*allocateAmbientResources*/ false, /*enableCpuAcceleration*/ false);
+            renderer_.CommandPool(), false, /*allocateAmbientResources*/ false, /*enableCpuAcceleration*/ false,
+            /*enablePhysics*/ false);
 
         std::vector<std::shared_ptr<Assets::Node>> nodes;
         std::vector<Assets::Model> models;
@@ -627,7 +648,7 @@ namespace Vulkan
         FViewDesc viewDesc{};
         viewDesc.renderExtent = materialPreviewExtent_;
         viewDesc.outputKind = EViewOutputKind::OffscreenTexture;
-        viewDesc.schedule = EViewSchedule::Persistent;
+        viewDesc.schedule = EViewSchedule::OnDemand;
 
         RenderViewResourceFactory resources(renderer_);
         RenderView& view = resources.EnsureView(materialPreviewView_, viewDesc, "material preview view", false);
@@ -643,7 +664,8 @@ namespace Vulkan
     {
         RetireScene(thumbnailScene_);
         thumbnailScene_ = std::make_unique<Assets::Scene>(
-            renderer_.CommandPool(), false, /*allocateAmbientResources*/ false, /*enableCpuAcceleration*/ false);
+            renderer_.CommandPool(), false, /*allocateAmbientResources*/ false, /*enableCpuAcceleration*/ false,
+            /*enablePhysics*/ false);
 
         const glm::vec3 aabbMin = model.GetLocalAABBMin();
         const glm::vec3 aabbMax = model.GetLocalAABBMax();
@@ -706,7 +728,8 @@ namespace Vulkan
     bool AssetThumbnailRenderer::RebuildScadKitThumbnailScene(const std::string& sourcePath)
     {
         auto scene = std::make_unique<Assets::Scene>(
-            renderer_.CommandPool(), false, /*allocateAmbientResources*/ false, /*enableCpuAcceleration*/ false);
+            renderer_.CommandPool(), false, /*allocateAmbientResources*/ false, /*enableCpuAcceleration*/ false,
+            /*enablePhysics*/ false);
 
         Assets::EnvironmentSetting cameraInit;
         std::vector<std::shared_ptr<Assets::Node>> nodes;
@@ -787,7 +810,7 @@ namespace Vulkan
 
     bool AssetThumbnailRenderer::ScheduleMaterialPreview(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        if (!materialPreviewEnabled_)
+        if (!materialPreviewEnabled_ || !materialPreviewDirty_)
         {
             return false;
         }
@@ -811,7 +834,6 @@ namespace Vulkan
             }
             materialPreviewScene_->UpdateAllMaterials();
             materialPreviewScene_->SyncUpdateScene();
-            materialPreviewDirty_ = false;
         }
 
         LogicRendererBase* logicRenderer = renderer_.EnsureLogicRenderer(ERT_SoftwareModernNoAmbient);
@@ -830,7 +852,7 @@ namespace Vulkan
             .camera = materialPreviewScene_->GetRenderCamera(),
             .extent = materialPreviewExtent_,
             .cascadeDistance = 20.0f,
-            .totalFrames = static_cast<uint32_t>(std::max(renderer_.FrameCount(), 1)),
+            .totalFrames = kThumbnailRenderFrames,
             .fillSceneLighting = true,
             .thumbnailDefaults = true,
         });
@@ -848,6 +870,7 @@ namespace Vulkan
                 CopyMaterialPreviewOutput(commandBuffer, view);
                 view.SetSceneOverride(nullptr);
             });
+        materialPreviewDirty_ = false;
 
         return true;
     }
@@ -957,7 +980,9 @@ namespace Vulkan
             .camera = thumbnailScene_->GetRenderCamera(),
             .extent = kThumbnailExtent,
             .cascadeDistance = 20.0f,
-            .totalFrames = static_cast<uint32_t>(std::max(renderer_.FrameCount(), 1)),
+            // Thumbnail outputs are final after this scheduled render. Do not inherit the main
+            // view's frame counter: it can select temporal phases despite no history being kept.
+            .totalFrames = kThumbnailRenderFrames,
             .fillSceneLighting = true,
             .thumbnailDefaults = true,
         });

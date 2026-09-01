@@ -73,7 +73,7 @@ namespace Vulkan
         void SetCameraOrbit(float yawRadians, float pitchRadians, float distance);
         uint32_t SampleSlot() const { return kMaterialPreviewSampleSlot; }
         bool IsReady() const { return materialPreviewTarget_.offscreenImage != nullptr; }
-        bool HasMaterialPreviewWork() const { return materialPreviewEnabled_; }
+        bool HasMaterialPreviewWork() const { return materialPreviewEnabled_ && materialPreviewDirty_; }
         bool ScheduleMaterialPreview(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
     private:

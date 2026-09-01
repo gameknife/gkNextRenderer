@@ -898,7 +898,11 @@ namespace Vulkan
 
     bool VulkanBaseRenderer::IsReferenceViewAccumulationActive() const
     {
-        return GOption != nullptr && GOption->ReferenceMode && !ActiveRenderView().IsPrimary();
+        // Transient views are complete after their single scheduled render. In particular, editor
+        // thumbnails must not enter reference-mode progressive accumulation just because they use
+        // a secondary RT bank.
+        return GOption != nullptr && GOption->ReferenceMode && !ActiveRenderView().IsPrimary() &&
+            ActiveRenderView().Schedule() != EViewSchedule::Transient;
     }
 
     uint32_t VulkanBaseRenderer::ProgressiveSampleCountForActiveView() const
