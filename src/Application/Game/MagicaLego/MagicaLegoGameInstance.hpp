@@ -105,6 +105,15 @@ struct FMagicaLegoSave
     void Load(std::string filename);
 };
 
+inline std::filesystem::path GetMagicaLegoSavePath(const std::string& filename, const bool writable)
+{
+    const std::filesystem::path safeFilename = std::filesystem::path(filename).filename();
+    const std::filesystem::path relativePath = std::filesystem::path("assets/legos") /
+        (safeFilename.string() + ".mls");
+    return writable ? Utilities::FileHelper::ResolveWritablePath(relativePath)
+                    : Utilities::FileHelper::GetRuntimeFilePath(relativePath);
+}
+
 class MagicaLegoGameInstance : public NextGameInstanceBase
 {
 public:

@@ -135,12 +135,15 @@ void VisualTestGameInstance::OnInit()
     }
     
     // Ensure output directory exists
-    std::string fullOutputDir = Utilities::FileHelper::GetPlatformFilePath(outputDir_.c_str());
-    Utilities::FileHelper::EnsureDirectoryExists(fullOutputDir);
+    const std::string fullOutputDir = Utilities::FileHelper::GetWritableDirectoryPath(
+        std::filesystem::path(outputDir_)).string();
+    const std::string fullBaselineDir = updateBaseline_
+        ? Utilities::FileHelper::GetWritableDirectoryPath(std::filesystem::path(baselineDir_)).string()
+        : Utilities::FileHelper::GetPlatformFilePath(baselineDir_.c_str());
     
     SPDLOG_INFO("[VisualTest] Starting visual test with {} scenes", scenes_.size());
     SPDLOG_INFO("[VisualTest] Output directory: {}", fullOutputDir);
-    SPDLOG_INFO("[VisualTest] Baseline directory: {}{}", Utilities::FileHelper::GetPlatformFilePath(baselineDir_.c_str()),
+    SPDLOG_INFO("[VisualTest] Baseline directory: {}{}", fullBaselineDir,
                 updateBaseline_ ? " (update enabled)" : "");
     
     // Load first scene
@@ -438,7 +441,8 @@ void VisualTestGameInstance::CaptureAndAdvance()
 {
     // Generate screenshot filename
     std::string screenshotName = GetScreenshotFilename();
-    std::string fullOutputDir = Utilities::FileHelper::GetPlatformFilePath(outputDir_.c_str());
+    const std::string fullOutputDir = Utilities::FileHelper::GetWritableDirectoryPath(
+        std::filesystem::path(outputDir_)).string();
     std::string screenshotPath = fullOutputDir + "/" + screenshotName;
 
     if (!captureRequested_)
@@ -497,7 +501,9 @@ void VisualTestGameInstance::CaptureAndAdvance()
 
 void VisualTestGameInstance::EvaluateBaseline(VisualTestResult& result, const std::string& currentImagePath)
 {
-    const std::string baselineDir = Utilities::FileHelper::GetPlatformFilePath(baselineDir_.c_str());
+    const std::string baselineDir = updateBaseline_
+        ? Utilities::FileHelper::GetWritableDirectoryPath(std::filesystem::path(baselineDir_)).string()
+        : Utilities::FileHelper::GetPlatformFilePath(baselineDir_.c_str());
     const std::string baselineFilename = GetBaselineFilename(result);
     const std::string baselinePath = baselineDir + "/" + baselineFilename;
     result.baselinePath = baselineFilename;
@@ -515,7 +521,7 @@ void VisualTestGameInstance::EvaluateBaseline(VisualTestResult& result, const st
 
     if (updateBaseline_)
     {
-        Utilities::FileHelper::EnsureDirectoryExists(baselineDir);
+        Utilities::FileHelper::GetWritableDirectoryPath(std::filesystem::path(baselineDir_));
         if (stbi_write_png(baselinePath.c_str(), currentWidth, currentHeight, 4, currentPixels, currentWidth * 4) == 0)
         {
             result.baselineStatus = "baseline update failed";
@@ -601,7 +607,8 @@ void VisualTestGameInstance::EvaluateBaseline(VisualTestResult& result, const st
         result.baselineStatus = "compared";
     }
 
-    const std::string fullOutputDir = Utilities::FileHelper::GetPlatformFilePath(outputDir_.c_str());
+    const std::string fullOutputDir = Utilities::FileHelper::GetWritableDirectoryPath(
+        std::filesystem::path(outputDir_)).string();
     const std::string diffStem = std::filesystem::path(result.screenshotPath).stem().string();
     result.diffImagePath = diffStem + "_diff.png";
     const std::string diffPath = fullOutputDir + "/" + result.diffImagePath;
@@ -648,7 +655,8 @@ void VisualTestGameInstance::RecordFailureAndAdvance(const std::string& errorMes
 
 void VisualTestGameInstance::GenerateReport()
 {
-    std::string fullOutputDir = Utilities::FileHelper::GetPlatformFilePath(outputDir_.c_str());
+    const std::string fullOutputDir = Utilities::FileHelper::GetWritableDirectoryPath(
+        std::filesystem::path(outputDir_)).string();
     std::string reportPath = fullOutputDir + "/visual_test_report.md";
     
     std::ofstream report(reportPath);
@@ -753,9 +761,12 @@ void VisualTestGameInstance::GenerateReport()
 
 void VisualTestGameInstance::GenerateHtmlReport()
 {
-    const std::string fullOutputDir = Utilities::FileHelper::GetPlatformFilePath(outputDir_.c_str());
+    const std::string fullOutputDir = Utilities::FileHelper::GetWritableDirectoryPath(
+        std::filesystem::path(outputDir_)).string();
     const std::string reportPath = fullOutputDir + "/visual_test_report.html";
-    const std::string fullBaselineDir = Utilities::FileHelper::GetPlatformFilePath(baselineDir_.c_str());
+    const std::string fullBaselineDir = updateBaseline_
+        ? Utilities::FileHelper::GetWritableDirectoryPath(std::filesystem::path(baselineDir_)).string()
+        : Utilities::FileHelper::GetPlatformFilePath(baselineDir_.c_str());
 
     std::ofstream report(reportPath);
     if (!report.is_open())
@@ -884,7 +895,8 @@ std::string VisualTestGameInstance::GetBaselineFilename(const VisualTestResult& 
 
 void VisualTestGameInstance::GenerateAgentManifest()
 {
-    std::string fullOutputDir = Utilities::FileHelper::GetPlatformFilePath(outputDir_.c_str());
+    const std::string fullOutputDir = Utilities::FileHelper::GetWritableDirectoryPath(
+        std::filesystem::path(outputDir_)).string();
     std::string manifestPath = fullOutputDir + "/agent_review_manifest.json";
 
     json manifest;

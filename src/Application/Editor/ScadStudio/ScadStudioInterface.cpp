@@ -445,7 +445,7 @@ namespace ScadStudio
     ScadStudioInterface::ScadStudioInterface(NextEngine& engine)
         : engine_(engine)
         , ai_(engine)
-        , store_(std::filesystem::current_path() / "scad_studio")
+        , store_(Utilities::FileHelper::GetWritableRuntimeRoot() / "scad_studio")
     {
         // Restore persisted sessions.
         sessions_ = store_.LoadAll();
@@ -479,7 +479,7 @@ namespace ScadStudio
     void ScadStudioInterface::Config()
     {
         ImGuiIO& io = ImGui::GetIO();
-        imguiIniPath_ = Utilities::FileHelper::GetPlatformFilePath("scadstudio.ini");
+        imguiIniPath_ = Utilities::FileHelper::GetWritableFilePath("scadstudio.ini");
         io.IniFilename = imguiIniPath_.c_str();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         io.ConfigFlags &= ~ImGuiConfigFlags_DockingEnable;
@@ -1890,12 +1890,15 @@ namespace ScadStudio
         {
             return;
         }
-        // Export next to the executable with a friendly name; the workspace copy stays.
+        // Keep exports in the application data directory. The executable/bundle directory
+        // is read-only on installed mobile builds; the workspace copy stays separate.
         std::error_code ec;
         if (session.files.empty())
         {
             const std::filesystem::path dest =
-                std::filesystem::current_path(ec) / (session.id + "_export.scad");
+                Utilities::FileHelper::GetWritableRuntimeRoot() / "exports" / "scad_studio" /
+                (session.id + "_export.scad");
+            std::filesystem::create_directories(dest.parent_path(), ec);
             std::ofstream out(dest, std::ios::binary | std::ios::trunc);
             if (out)
             {
@@ -1909,7 +1912,9 @@ namespace ScadStudio
         }
         else
         {
-            const std::filesystem::path destDir = std::filesystem::current_path(ec) / (session.id + "_export");
+            const std::filesystem::path destDir =
+                Utilities::FileHelper::GetWritableRuntimeRoot() / "exports" / "scad_studio" /
+                (session.id + "_export");
             std::filesystem::create_directories(destDir, ec);
             for (const FScadProjectFile& file : session.files)
             {

@@ -8,6 +8,7 @@
 #include "Core/EditorLayoutConstants.hpp"
 #include "Core/SceneSavePolicy.hpp"
 #include "EditorUtils.h"
+#include "EditorMain.h"
 
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_dialog.h>
@@ -20,9 +21,6 @@
 #include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
 #include "Modules/SceneExport/FSceneSaver.h"
-#if GK_WITH_VITURE
-#include "EditorMain.h"
-#endif
 
 namespace Editor
 {

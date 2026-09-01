@@ -113,12 +113,14 @@ void EditorInterface::Config()
 {
     auto& io = ImGui::GetIO();
 
-    imguiIniPath_ = Utilities::FileHelper::GetPlatformFilePath("editor.ini");
+    imguiIniPath_ = Utilities::FileHelper::GetWritableFilePath("editor.ini");
     io.IniFilename = imguiIniPath_.c_str();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad; // Enable Gamepad Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // Enable Docking
+#if !IOS
     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+#endif
     io.ConfigWindowsMoveFromTitleBarOnly = true;
 }
 

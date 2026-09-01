@@ -89,7 +89,7 @@ namespace Modules::NextTui
 
     std::unique_ptr<FProcessLogCapture> CreateProcessLogCapture()
     {
-        const std::string logPath = Utilities::FileHelper::GetPlatformFilePath("logs/tui.log");
+        const std::string logPath = Utilities::FileHelper::GetWritableFilePath("logs/tui.log");
         Utilities::FileHelper::EnsureDirectoryExists(std::filesystem::path(logPath).parent_path().string());
         auto capture = std::make_unique<FProcessLogCapture>(logPath);
         if (!capture->IsActive())

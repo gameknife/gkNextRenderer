@@ -5,6 +5,7 @@
 #include <map>
 #include <fstream>
 #include <fmt/printf.h>
+#include <spdlog/spdlog.h>
 #include "ThirdParty/lzav/lzav.h"
 #include <assert.h>
 #include <regex>
@@ -30,9 +31,18 @@ namespace Utilities
         static std::filesystem::path GetRuntimeRoot()
         {
 #if ANDROID
-            return std::filesystem::path(SDL_GetAndroidExternalStoragePath());
+            if (const char* externalStoragePath = SDL_GetAndroidExternalStoragePath();
+                externalStoragePath != nullptr && externalStoragePath[0] != '\0')
+            {
+                return std::filesystem::path(externalStoragePath);
+            }
+            return std::filesystem::temp_directory_path();
 #elif IOS
-            return std::filesystem::path(SDL_GetBasePath());
+            if (const char* basePath = SDL_GetBasePath(); basePath != nullptr && basePath[0] != '\0')
+            {
+                return std::filesystem::path(basePath);
+            }
+            return std::filesystem::temp_directory_path();
 #else
             return GetDesktopRuntimeRoot();
 #endif
@@ -76,9 +86,10 @@ namespace Utilities
                 char* preferences = SDL_GetPrefPath("gkNext", NextRenderer::GetApplicationIdentity().c_str());
                 if (preferences == nullptr)
                 {
-                    // Nothing else is writable for certain, so fall back to the install
-                    // directory; individual writes still fail gracefully.
-                    return GetDesktopRuntimeRoot();
+                    // SDL could not resolve the platform preference directory. Keep writes
+                    // functional even when the executable is installed read-only.
+                    return std::filesystem::temp_directory_path() / "gkNextRenderer" /
+                        NextRenderer::GetApplicationIdentity();
                 }
                 std::filesystem::path resolved = std::filesystem::path(preferences).lexically_normal();
                 SDL_free(preferences);
@@ -90,9 +101,33 @@ namespace Utilities
         static std::filesystem::path GetWritableRuntimeRoot()
         {
 #if ANDROID
-            return std::filesystem::path(SDL_GetAndroidExternalStoragePath());
+            const char* externalStoragePath = SDL_GetAndroidExternalStoragePath();
+            if (externalStoragePath != nullptr && externalStoragePath[0] != '\0')
+            {
+                return std::filesystem::path(externalStoragePath);
+            }
+            return std::filesystem::temp_directory_path() / "gkNextRenderer" /
+                NextRenderer::GetApplicationIdentity();
 #elif IOS
-            return std::filesystem::path(SDL_GetPrefPath("gknext", "renderer"));
+            static const std::filesystem::path preferencesRoot = []
+            {
+                char* preferences = SDL_GetPrefPath("gkNextRenderer", NextRenderer::GetApplicationIdentity().c_str());
+                if (preferences == nullptr || preferences[0] == '\0')
+                {
+                    SPDLOG_ERROR("Cannot resolve iOS writable application directory: {}", SDL_GetError());
+                    if (preferences != nullptr)
+                    {
+                        SDL_free(preferences);
+                    }
+                    return std::filesystem::temp_directory_path() / "gkNextRenderer" /
+                        NextRenderer::GetApplicationIdentity();
+                }
+
+                const std::filesystem::path resolved = std::filesystem::path(preferences).lexically_normal();
+                SDL_free(preferences);
+                return resolved;
+            }();
+            return preferencesRoot;
 #else
             return GetDesktopWritableRoot();
 #endif
@@ -116,7 +151,12 @@ namespace Utilities
 
         static void EnsureDirectoryExists(const std::filesystem::path& path)
         {
-            std::filesystem::create_directories(path);
+            std::error_code errorCode;
+            std::filesystem::create_directories(path, errorCode);
+            if (errorCode)
+            {
+                SPDLOG_WARN("Failed to create directory {}: {}", path.string(), errorCode.message());
+            }
         }
         
         static std::filesystem::path GetAbsolutePath( const std::filesystem::path& srcPath )
@@ -129,14 +169,67 @@ namespace Utilities
             return ResolvePlatformFilePath(srcPath);
         }
 
+        // Resolves application-generated data. Relative paths are always rooted in the
+        // per-application writable directory; absolute paths are preserved for explicit
+        // user-selected export destinations.
+        static std::filesystem::path ResolveWritablePath(const std::filesystem::path& srcPath)
+        {
+            if (srcPath.is_absolute())
+            {
+                return srcPath.lexically_normal();
+            }
+
+            // Relative application paths must not be able to escape the per-app data root.
+            // Normalize ordinary `a/../b` segments, and discard leading parent segments from
+            // untrusted/user-provided relative output names.
+            const std::filesystem::path normalized = srcPath.lexically_normal();
+            std::filesystem::path safeRelative;
+            bool escapedRoot = false;
+            for (const std::filesystem::path& component : normalized)
+            {
+                if (component == "." || component.empty())
+                {
+                    continue;
+                }
+                if (component == "..")
+                {
+                    escapedRoot = true;
+                    continue;
+                }
+                safeRelative /= component;
+            }
+            if (escapedRoot)
+            {
+                SPDLOG_WARN("Ignoring parent segments in writable path {}", srcPath.string());
+            }
+            return (GetWritableRuntimeRoot() / safeRelative).lexically_normal();
+        }
+
+        static std::filesystem::path GetWritableDirectoryPath(const std::filesystem::path& relativePath)
+        {
+            const std::filesystem::path directory = ResolveWritablePath(relativePath);
+            std::error_code errorCode;
+            std::filesystem::create_directories(directory, errorCode);
+            if (errorCode)
+            {
+                SPDLOG_WARN("Failed to create writable directory {}: {}", directory.string(), errorCode.message());
+            }
+            return directory;
+        }
+
         // Path for data the application produces (settings, logs, screenshots, layout).
         // Always use this instead of GetPlatformFilePath for writes: the runtime root is
         // read-only for an installed release.
         static std::string GetWritableFilePath( const char* srcPath )
         {
-            std::filesystem::path fullPath = GetWritableRuntimeRoot() / srcPath;
+            const std::filesystem::path fullPath = ResolveWritablePath(std::filesystem::path(srcPath));
             std::error_code errorCode;
             std::filesystem::create_directories(fullPath.parent_path(), errorCode);
+            if (errorCode)
+            {
+                SPDLOG_WARN("Failed to create writable parent directory for {}: {}",
+                            fullPath.string(), errorCode.message());
+            }
             return fullPath.string();
         }
 
@@ -144,7 +237,7 @@ namespace Utilities
         // root so existing portable installs and in-repo development keep working.
         static std::string ResolveWritableFileForRead( const char* srcPath )
         {
-            const std::filesystem::path writablePath = GetWritableRuntimeRoot() / srcPath;
+            const std::filesystem::path writablePath = ResolveWritablePath(std::filesystem::path(srcPath));
             std::error_code errorCode;
             if (std::filesystem::exists(writablePath, errorCode))
             {
@@ -198,7 +291,13 @@ namespace Utilities
         static std::string GetCookedFileName(const std::string& filehash, const std::string& cooktype)
         {
             const std::filesystem::path cookedDirectory = FileHelper::GetWritableRuntimeRoot() / "cooked";
-            std::filesystem::create_directories(cookedDirectory);
+            std::error_code errorCode;
+            std::filesystem::create_directories(cookedDirectory, errorCode);
+            if (errorCode)
+            {
+                SPDLOG_WARN("Failed to create cooked cache directory {}: {}",
+                            cookedDirectory.string(), errorCode.message());
+            }
             return (cookedDirectory / (cooktype + filehash + ".gncook")).string();
         }
     }

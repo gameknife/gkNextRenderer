@@ -1073,10 +1073,23 @@ void MagicaLegoGameInstance::CleanUp()
 
 void FMagicaLegoSave::Save(std::string filename)
 {
-    std::string path = Utilities::FileHelper::GetPlatformFilePath("assets/legos/") + filename + ".mls";
+    const std::filesystem::path path = GetMagicaLegoSavePath(filename, true);
+    std::error_code errorCode;
+    std::filesystem::create_directories(path.parent_path(), errorCode);
+    if (errorCode)
+    {
+        SPDLOG_ERROR("MagicaLego: failed to create save directory {}: {}",
+                     path.parent_path().string(), errorCode.message());
+        return;
+    }
 
     // direct save records to file
     std::ofstream outFile(path, std::ios::binary);
+    if (!outFile)
+    {
+        SPDLOG_ERROR("MagicaLego: failed to open save file {}", path.string());
+        return;
+    }
 
     outFile.write(reinterpret_cast<const char*>(&version), sizeof(version));
     size_t size = brushs.size();
@@ -1086,11 +1099,20 @@ void FMagicaLegoSave::Save(std::string filename)
     outFile.write(reinterpret_cast<const char*>(&size), sizeof(size));
     outFile.write(reinterpret_cast<const char*>(records.data()), size * sizeof(FPlacedBlock));
     outFile.close();
+    if (!outFile)
+    {
+        SPDLOG_ERROR("MagicaLego: failed to write save file {}", path.string());
+    }
 }
 
 void FMagicaLegoSave::Load(std::string filename)
 {
-    std::string path = Utilities::FileHelper::GetPlatformFilePath("assets/legos/") + filename + ".mls";
+    const std::filesystem::path writablePath = GetMagicaLegoSavePath(filename, true);
+    const std::filesystem::path runtimePath = GetMagicaLegoSavePath(filename, false);
+    std::error_code errorCode;
+    const std::filesystem::path path = std::filesystem::exists(writablePath, errorCode)
+        ? writablePath
+        : runtimePath;
 
     std::ifstream inFile(path, std::ios::binary);
     if (inFile.is_open())
@@ -1360,8 +1382,11 @@ void MagicaLegoGameInstance::GenerateThumbnail()
         {
             cameraArm_ = 0.7f;
         }
+        const std::filesystem::path thumbnailPath = Utilities::FileHelper::ResolveWritablePath(
+            std::filesystem::path("thumbview") /
+            fmt::format("thumb_{}_{}", BasicNodes[currTask].type, BasicNodes[currTask].name));
         GetEngine().RequestScreenShot({
-            .filename = fmt::format("../../../assets/textures/thumb/thumb_{}_{}", BasicNodes[currTask].type, BasicNodes[currTask].name),
+            .filename = thumbnailPath.string(),
             .x = 1920 / 2 - thumbSize / 2,
             .y = 960 / 2 - thumbSize / 2,
             .width = thumbSize,

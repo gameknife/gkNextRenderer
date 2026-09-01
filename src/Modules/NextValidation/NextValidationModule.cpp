@@ -157,7 +157,7 @@ namespace
             }
             if (method == "screenshot")
             {
-                const std::string path = Utilities::FileHelper::GetPlatformFilePath(
+                const std::string path = Utilities::FileHelper::GetWritableFilePath(
                     params.value("out", "screenshots/agent_validation").c_str());
                 Utilities::FileHelper::EnsureDirectoryExists(
                     std::filesystem::path(path).parent_path().string());

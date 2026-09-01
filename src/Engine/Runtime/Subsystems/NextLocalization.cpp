@@ -59,11 +59,31 @@ bool NextLocalization::LoadFromTxt(const std::string& path, std::string_view lan
 {
     std::vector<uint8_t> data;
     bool loaded = false;
+
+    // Saved translations are user data. Prefer that overlay before consulting a mounted pak,
+    // otherwise SaveToTxt() would appear to succeed but a subsequent load would still return the
+    // packaged read-only copy.
+    const std::filesystem::path writablePath =
+        Utilities::FileHelper::ResolveWritablePath(std::filesystem::path(path));
+    std::error_code errorCode;
+    if (std::filesystem::is_regular_file(writablePath, errorCode))
+    {
+        std::ifstream input(writablePath, std::ios::binary);
+        if (input.is_open())
+        {
+            data.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+            loaded = true;
+        }
+    }
+
     if (auto* package = Utilities::Package::FPackageFileSystem::TryGetInstance())
     {
-        loaded = package->LoadFile(path, data);
+        if (!loaded)
+        {
+            loaded = package->LoadFile(path, data);
+        }
     }
-    else
+    else if (!loaded)
     {
         const std::filesystem::path loosePath = Utilities::FileHelper::GetRuntimeFilePath(path);
         std::ifstream input(loosePath, std::ios::binary);
@@ -112,7 +132,7 @@ bool NextLocalization::LoadFromTxt(const std::string& path, std::string_view lan
 
 bool NextLocalization::SaveToTxt(const std::string& path) const
 {
-    const std::string normalizedPath = Utilities::FileHelper::GetNormalizedFilePath(path.c_str());
+    const std::string normalizedPath = Utilities::FileHelper::GetWritableFilePath(path.c_str());
     std::ofstream output(normalizedPath, std::ios::binary | std::ios::trunc);
     if (!output.is_open())
     {

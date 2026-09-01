@@ -1,6 +1,7 @@
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 // Android compiles every module into the application library, so a header is always there to
 // include. Which modules the application actually asked for is still a per-application choice, and
 // GK_MODULE_* is how gk_add_application states it -- exactly as in DesktopMain.
@@ -41,7 +42,6 @@
 
 #include <fmt/format.h>
 #include <filesystem>
-#include "Engine/Runtime/Platform/PlatformCommon.hpp"
 
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL.h>
@@ -96,6 +96,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 #ifndef GK_APPLICATION_NAME
 #define GK_APPLICATION_NAME "gkNextRenderer"
 #endif
+    NextRenderer::SetApplicationIdentity(GK_APPLICATION_NAME);
     std::vector<const char*> androidArguments = {
         GK_APPLICATION_NAME,
         "--gpu=0",

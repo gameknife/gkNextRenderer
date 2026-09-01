@@ -8,6 +8,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Runtime/Components/EnvironmentComponent.hpp"
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/SceneReferenceComponent.hpp"
@@ -1059,13 +1060,18 @@ namespace SceneExport
 {
     bool SaveScene(const Assets::Scene& scene, const std::string& path)
     {
-        if (path.ends_with(".glb") || path.ends_with(".GLB"))
+        const std::filesystem::path requestedPath(path);
+        const std::string resolvedPath = requestedPath.is_absolute()
+            ? requestedPath.lexically_normal().string()
+            : Utilities::FileHelper::ResolveWritablePath(requestedPath).string();
+        Utilities::FileHelper::EnsureDirectoryExists(std::filesystem::path(resolvedPath).parent_path());
+        if (resolvedPath.ends_with(".glb") || resolvedPath.ends_with(".GLB"))
         {
-            return Assets::FSceneSaver::SaveGLBScene(path, scene);
+            return Assets::FSceneSaver::SaveGLBScene(resolvedPath, scene);
         }
-        if (path.ends_with(".gltf") || path.ends_with(".GLTF"))
+        if (resolvedPath.ends_with(".gltf") || resolvedPath.ends_with(".GLTF"))
         {
-            return Assets::FSceneSaver::SaveGLTFScene(path, scene);
+            return Assets::FSceneSaver::SaveGLTFScene(resolvedPath, scene);
         }
         SPDLOG_ERROR("Unsupported file extension. Use .glb or .gltf");
         return false;

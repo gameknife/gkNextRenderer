@@ -673,7 +673,7 @@ namespace Runtime::Tui
             return;
         }
 
-        const std::string resolvedPath = Utilities::FileHelper::GetPlatformFilePath("screenshots/tui_capture");
+        const std::string resolvedPath = Utilities::FileHelper::GetWritableFilePath("screenshots/tui_capture");
         Utilities::FileHelper::EnsureDirectoryExists(std::filesystem::path(resolvedPath).parent_path().string());
         engine_.RequestScreenShot({.filename = resolvedPath});
         statusState_.Message = "shot -> " + resolvedPath + ".jpg";

@@ -4,6 +4,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
 #include "Gameplay/Rig/RigInstance.h"
 #include "Modules/ScadLoader/FScadRig.h"
 
@@ -251,7 +252,7 @@ namespace ScadLibrary
         attachments_.reserve(equipment.size());
         bool allLoaded = true;
         std::vector<std::string> errors;
-        const std::filesystem::path workspace = std::filesystem::current_path() / "scad_library";
+        const std::filesystem::path workspace = Utilities::FileHelper::GetWritableRuntimeRoot() / "scad_library";
         std::error_code ec;
         std::filesystem::create_directories(workspace, ec);
 

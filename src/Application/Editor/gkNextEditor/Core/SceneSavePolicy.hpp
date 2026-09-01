@@ -5,6 +5,14 @@
 
 namespace Editor
 {
+    inline bool IsPathWithin(const std::filesystem::path& path, const std::filesystem::path& root)
+    {
+        const std::filesystem::path relative =
+            path.lexically_normal().lexically_relative(root.lexically_normal());
+        const std::string generic = relative.generic_string();
+        return !generic.empty() && generic != ".." && !generic.starts_with("../");
+    }
+
     inline bool IsWritableGltfScenePath(const std::filesystem::path& path)
     {
         const std::string extension = path.extension().string();
@@ -62,6 +70,15 @@ namespace Editor
             return false;
         }
 
+        // Installed mobile applications keep their assets in a read-only bundle. A scene
+        // loaded from there must be saved through Save As into the writable sandbox.
+#if ANDROID || IOS
+        if (IsPathWithin(filesystemPath, Utilities::FileHelper::GetRuntimeRoot()))
+        {
+            return false;
+        }
+#endif
+
         // A scene may exist both in assets/ on disk and in optional.pak. That is still writable:
         // only pak-only scenes are considered non-writable.
         return std::filesystem::exists(filesystemPath, ec)
@@ -70,6 +87,9 @@ namespace Editor
 
     inline std::filesystem::path DefaultSceneSaveDirectory()
     {
+#if ANDROID || IOS
+        return Utilities::FileHelper::GetWritableRuntimeRoot() / "assets";
+#else
         std::error_code ec;
         const std::filesystem::path sourceAssets = std::filesystem::absolute("assets", ec);
         if (!ec && std::filesystem::exists(sourceAssets, ec))
@@ -78,6 +98,7 @@ namespace Editor
         }
 
         return Utilities::FileHelper::GetWritableRuntimeRoot() / "assets";
+#endif
     }
 
     inline std::string NormalizeSaveAsScenePath(std::string path, const std::string_view defaultExtension = ".glb")

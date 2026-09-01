@@ -3,6 +3,7 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Utilities/Exception.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 
@@ -374,6 +375,12 @@ namespace Runtime::ScreenShot
             Throw(std::runtime_error("screenshot crop is empty"));
         }
 
+        const std::filesystem::path requestedPath(filePathWithoutExtension);
+        const std::filesystem::path resolvedPath = requestedPath.is_absolute()
+            ? requestedPath.lexically_normal()
+            : Utilities::FileHelper::ResolveWritablePath(requestedPath);
+        Utilities::FileHelper::EnsureDirectoryExists(resolvedPath.parent_path());
+
         renderer->CaptureScreenShot();
         FRawScreenshot screenshot = ReadbackScreenshot(renderer, rect, swapChain.OutputMode());
         if (onReadbackCompleted)
@@ -381,7 +388,8 @@ namespace Runtime::ScreenShot
             onReadbackCompleted();
         }
 
-        auto encodeAndWrite = [screenshot = std::move(screenshot), filePathWithoutExtension, fileFormat]() mutable
+        auto encodeAndWrite = [screenshot = std::move(screenshot),
+                               filePathWithoutExtension = resolvedPath.string(), fileFormat]() mutable
         {
             try
             {

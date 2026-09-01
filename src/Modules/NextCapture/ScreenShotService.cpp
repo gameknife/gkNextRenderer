@@ -635,7 +635,7 @@ namespace Runtime
 
     std::string FScreenShotService::GetDirectory() const
     {
-        return Utilities::FileHelper::GetWritableFilePath("screenshots");
+        return Utilities::FileHelper::GetWritableDirectoryPath("screenshots").string();
     }
 
     void FScreenShotService::EnsureDirectory() const

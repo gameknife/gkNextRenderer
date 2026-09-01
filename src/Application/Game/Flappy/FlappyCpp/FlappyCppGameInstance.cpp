@@ -9,6 +9,7 @@
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
 #include "Engine/Runtime/Scene/NodeUtils.hpp"
 #include "Engine/Runtime/Subsystems/NextAudio.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
 
 #include <glm/ext.hpp>
 #include <imgui.h>
@@ -53,23 +54,6 @@ namespace
                event.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH;
     }
 
-    std::filesystem::path FindProjectRoot()
-    {
-        std::filesystem::path cursor = std::filesystem::current_path();
-        for (int depth = 0; depth < 8; ++depth)
-        {
-            if (std::filesystem::exists(cursor / "AGENTS.md") && std::filesystem::exists(cursor / "assets"))
-            {
-                return cursor;
-            }
-            if (!cursor.has_parent_path())
-            {
-                break;
-            }
-            cursor = cursor.parent_path();
-        }
-        return std::filesystem::current_path();
-    }
 }
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
@@ -615,9 +599,10 @@ void FlappyCppGameInstance::WriteReplayTrace(const std::vector<Flappy::FFlappyTr
         });
     }
 
-    const std::filesystem::path outputDir = FindProjectRoot() / "out";
-    std::filesystem::create_directories(outputDir);
-    const std::filesystem::path outputPath = outputDir / "flappy_cpp_trace.json";
+    const std::filesystem::path outputPath = Utilities::FileHelper::ResolveWritablePath(
+        "replays/flappy_cpp_trace.json");
+    std::error_code errorCode;
+    std::filesystem::create_directories(outputPath.parent_path(), errorCode);
     std::ofstream output(outputPath);
     output << document.dump(2) << '\n';
     SPDLOG_INFO("[FlappyCpp] replay trace written to {}", outputPath.string());

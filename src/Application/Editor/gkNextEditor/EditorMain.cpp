@@ -91,7 +91,11 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Runtime::Co
 
 std::unique_ptr<NextUI::IMultiViewportBackend> EditorGameInstance::CreateMultiViewportBackend()
 {
+#if IOS
+    return nullptr;
+#else
     return std::make_unique<NextUI::MultiViewportBackend>(GetEngine());
+#endif
 }
 
 void EditorGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)

@@ -1275,7 +1275,10 @@ namespace ScadLibrary
             drawList->PopClipRect();
         }
 
-        std::filesystem::path WorkspaceDir() { return std::filesystem::current_path() / "scad_library"; }
+        std::filesystem::path WorkspaceDir()
+        {
+            return Utilities::FileHelper::GetWritableRuntimeRoot() / "scad_library";
+        }
 
         // Authoring tools must prefer the repository source tree even when the
         // executable is launched with out/build/<preset>/bin as its cwd. A
@@ -1302,6 +1305,11 @@ namespace ScadLibrary
                     break;
                 }
                 cursor = parent;
+            }
+            const std::filesystem::path writablePath = Utilities::FileHelper::ResolveWritablePath(relativePath);
+            if (std::filesystem::exists(writablePath, ec))
+            {
+                return writablePath;
             }
             return Utilities::FileHelper::GetPlatformFilePath(relativePath.string().c_str());
         }
@@ -1377,6 +1385,56 @@ namespace ScadLibrary
             }
             const std::filesystem::path relative = canonicalPath.lexically_relative(canonicalRoot);
             return !relative.empty() && *relative.begin() != "..";
+        }
+
+        std::filesystem::path WritableAuthoringPath(const std::filesystem::path& relativePath)
+        {
+            if (relativePath.is_absolute())
+            {
+                return relativePath;
+            }
+
+            const std::filesystem::path authoringPath = AuthoringPath(relativePath);
+            if (!IsPathWithin(authoringPath, Utilities::FileHelper::GetRuntimeRoot()))
+            {
+                // Keep the source-tree authoring workflow used by desktop development.
+                return authoringPath;
+            }
+            return Utilities::FileHelper::ResolveWritablePath(relativePath);
+        }
+
+        bool PrepareWritableAuthoringTree(const std::filesystem::path& relativePath)
+        {
+            const std::filesystem::path authoringPath = AuthoringPath(relativePath);
+            if (!IsPathWithin(authoringPath, Utilities::FileHelper::GetRuntimeRoot()))
+            {
+                return true;
+            }
+
+            const std::filesystem::path writablePath = Utilities::FileHelper::ResolveWritablePath(relativePath);
+            const std::filesystem::path sourcePath = Utilities::FileHelper::GetRuntimeFilePath(relativePath);
+            if (writablePath.lexically_normal() == sourcePath.lexically_normal())
+            {
+                return true;
+            }
+            std::error_code errorCode;
+            if (!std::filesystem::is_directory(sourcePath, errorCode))
+            {
+                SPDLOG_WARN("[ScadLibrary] authoring source directory is unavailable: {}", sourcePath.string());
+                return false;
+            }
+            errorCode.clear();
+            std::filesystem::copy(sourcePath, writablePath,
+                                  std::filesystem::copy_options::recursive |
+                                      std::filesystem::copy_options::skip_existing,
+                                  errorCode);
+            if (errorCode)
+            {
+                SPDLOG_WARN("[ScadLibrary] failed to seed writable authoring tree {}: {}",
+                            writablePath.string(), errorCode.message());
+                return false;
+            }
+            return true;
         }
 
         std::string ReadAssemblyTextFile(const std::filesystem::path& path)
@@ -1600,7 +1658,7 @@ namespace ScadLibrary
     void ScadLibraryInterface::Config()
     {
         ImGuiIO& io = ImGui::GetIO();
-        imguiIniPath_ = Utilities::FileHelper::GetPlatformFilePath("scadlibrary.ini");
+        imguiIniPath_ = Utilities::FileHelper::GetWritableFilePath("scadlibrary.ini");
         io.IniFilename = imguiIniPath_.c_str();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         io.ConfigFlags &= ~ImGuiConfigFlags_DockingEnable;
@@ -3611,7 +3669,7 @@ namespace ScadLibrary
             if (ImGui::Button("扫描旧会话"))
             {
                 aiLegacySessions_ = AI::FScadStudioSessionImporter::Scan(
-                    std::filesystem::current_path() / "scad_studio", aiLegacyImportWarnings_);
+                    Utilities::FileHelper::GetWritableRuntimeRoot() / "scad_studio", aiLegacyImportWarnings_);
             }
             for (const std::string& warning : aiLegacyImportWarnings_)
             {
@@ -4207,8 +4265,23 @@ namespace ScadLibrary
         {
             return;
         }
-        const std::filesystem::path libRoot = AuthoringPath("assets/scad/lib");
-        const std::filesystem::path kitPath = std::filesystem::path(aiKitDraftPath_).lexically_normal();
+        const std::filesystem::path originalLibRoot = AuthoringPath("assets/scad/lib");
+        if (!PrepareWritableAuthoringTree("assets/scad/lib"))
+        {
+            statusLine_ = "无法准备可写的 Kit 目录";
+            statusError_ = true;
+            return;
+        }
+        const std::filesystem::path libRoot = WritableAuthoringPath("assets/scad/lib");
+        std::filesystem::path kitPath = std::filesystem::path(aiKitDraftPath_).lexically_normal();
+        if (!kitPath.is_absolute())
+        {
+            kitPath = libRoot / kitPath;
+        }
+        else if (IsPathWithin(kitPath, originalLibRoot) && originalLibRoot != libRoot)
+        {
+            kitPath = libRoot / kitPath.lexically_relative(originalLibRoot);
+        }
         if (!IsPathWithin(kitPath, libRoot) || kitPath.extension() != ".scad")
         {
             statusLine_ = "Kit 草稿路径不在 assets/scad/lib";
@@ -5126,7 +5199,7 @@ namespace ScadLibrary
         bool changed = false;
         changed |= ImGui::DragInt("数量", &scatter.count, 1.0f, 0, 100000);
         double region[4] = {scatter.x0, scatter.y0, scatter.x1, scatter.y1};
-        if (ImGui::DragScalarN("区域 x0/y0/x1/y1", ImGuiDataType_Double, region, 0.5f))
+        if (ImGui::DragScalarN("区域 x0/y0/x1/y1", ImGuiDataType_Double, region, 4, 0.5f))
         {
             scatter.x0 = region[0];
             scatter.y0 = region[1];
@@ -7544,7 +7617,14 @@ namespace ScadLibrary
         {
             return;
         }
-        const std::filesystem::path scadRoot = AuthoringPath("assets/scad");
+        const std::filesystem::path originalScadRoot = AuthoringPath("assets/scad");
+        if (!PrepareWritableAuthoringTree("assets/scad"))
+        {
+            statusLine_ = "无法准备可写的 SCAD 目录";
+            statusError_ = true;
+            return;
+        }
+        const std::filesystem::path scadRoot = WritableAuthoringPath("assets/scad");
         std::filesystem::path targetPath =
             saveAs ? std::filesystem::path(assemblyPathBuf_) : std::filesystem::path(openedAssemblyPath_);
         if (targetPath.empty())
@@ -7558,6 +7638,10 @@ namespace ScadLibrary
             const std::string generic = targetPath.generic_string();
             constexpr std::string_view prefix = "assets/scad/";
             targetPath = generic.starts_with(prefix) ? scadRoot / generic.substr(prefix.size()) : scadRoot / targetPath;
+        }
+        else if (IsPathWithin(targetPath, originalScadRoot) && originalScadRoot != scadRoot)
+        {
+            targetPath = scadRoot / targetPath.lexically_relative(originalScadRoot);
         }
         if (targetPath.extension().empty())
         {
@@ -7683,7 +7767,13 @@ namespace ScadLibrary
         {
             cleanName = "my_scene";
         }
-        const std::filesystem::path sceneDir = AuthoringPath("assets/scad") / "evaluated";
+        if (!PrepareWritableAuthoringTree("assets/scad"))
+        {
+            statusLine_ = "无法准备可写的 SCAD 导出目录";
+            statusError_ = true;
+            return;
+        }
+        const std::filesystem::path sceneDir = WritableAuthoringPath("assets/scad") / "evaluated";
         std::error_code ec;
         std::filesystem::create_directories(sceneDir, ec);
         const std::filesystem::path outPath = sceneDir / (cleanName + ".scad");
@@ -7826,7 +7916,13 @@ namespace ScadLibrary
         {
             clean = "my_character";
         }
-        const std::filesystem::path charDir = AuthoringPath("assets/scad") / "characters";
+        if (!PrepareWritableAuthoringTree("assets/scad"))
+        {
+            statusLine_ = "无法准备可写的角色导出目录";
+            statusError_ = true;
+            return;
+        }
+        const std::filesystem::path charDir = WritableAuthoringPath("assets/scad") / "characters";
         std::error_code ec;
         std::filesystem::create_directories(charDir, ec);
         const std::filesystem::path outPath = charDir / (clean + ".scad");
@@ -7970,18 +8066,30 @@ namespace ScadLibrary
         workbenchReloadRequested_ = false;
         workbenchEquipmentRebuildRequested_ = false;
 
+        const std::filesystem::path originalScadRoot = AuthoringPath("assets/scad");
         const std::filesystem::path sourcePath = AuthoringPath(rigSourceBuf_);
+        if (!PrepareWritableAuthoringTree("assets/scad"))
+        {
+            statusLine_ = "无法准备可写的角色工作目录";
+            statusError_ = true;
+            return;
+        }
+        const std::filesystem::path writableScadRoot = WritableAuthoringPath("assets/scad");
+        const std::filesystem::path editableSourcePath =
+            IsPathWithin(sourcePath, originalScadRoot) && originalScadRoot != writableScadRoot
+                ? writableScadRoot / sourcePath.lexically_relative(originalScadRoot)
+                : sourcePath;
 
         std::string error;
         std::vector<std::string> warnings;
-        if (!rigPreview_.LoadRig(sourcePath.string(), error, &warnings))
+        if (!rigPreview_.LoadRig(editableSourcePath.string(), error, &warnings))
         {
             statusLine_ = fmt::format("角色载入失败: {}", error);
             statusError_ = true;
             rigPreview_.SetActive(false);
             return;
         }
-        if (!workbench_.CaptureRig(sourcePath.string(), rigPreview_.Asset(), error))
+        if (!workbench_.CaptureRig(editableSourcePath.string(), rigPreview_.Asset(), error))
         {
             statusLine_ = fmt::format("动作编辑器初始化失败: {}", error);
             statusError_ = true;
@@ -7996,6 +8104,12 @@ namespace ScadLibrary
                 if (kit.name == "kit_coldwar")
                 {
                     coldwarPath = kit.filePath;
+                    if (IsPathWithin(std::filesystem::path(coldwarPath), originalScadRoot) &&
+                        originalScadRoot != writableScadRoot)
+                    {
+                        coldwarPath = (writableScadRoot /
+                                       std::filesystem::path(coldwarPath).lexically_relative(originalScadRoot)).string();
+                    }
                     break;
                 }
             }

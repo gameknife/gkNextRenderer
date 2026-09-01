@@ -141,13 +141,17 @@ namespace
     {
         if (!requestedFilename.empty())
         {
-            return requestedFilename;
+            const std::filesystem::path requestedPath(requestedFilename);
+            const std::filesystem::path resolvedPath = requestedPath.is_absolute()
+                ? requestedPath.lexically_normal()
+                : Utilities::FileHelper::ResolveWritablePath(requestedPath);
+            Utilities::FileHelper::EnsureDirectoryExists(resolvedPath.parent_path());
+            return resolvedPath.string();
         }
 
         const auto now = std::time(nullptr);
         const std::string filename = fmt::format("{}_{:%Y-%m-%d-%H-%M-%S}", defaultPrefix, *std::localtime(&now));
-        const std::string directory = Utilities::FileHelper::GetWritableFilePath("screenshots");
-        Utilities::FileHelper::EnsureDirectoryExists(directory);
+        const std::string directory = Utilities::FileHelper::GetWritableDirectoryPath("screenshots").string();
         return (std::filesystem::path(directory) / filename).string();
     }
 } // namespace

@@ -3,12 +3,14 @@
 #include "Engine/Options.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 
+#if !IOS
 #include <nlohmann/json.hpp>
 #include "cpp-base64/base64.cpp"
 #include "curl/curl.h"
-#include "stb_image_write.h"
 
 using json = nlohmann::json;
+#endif
+#include "stb_image_write.h"
 
 #define _USE_MATH_DEFINES
 #include <algorithm>
@@ -149,13 +151,19 @@ BenchMarker::BenchMarker() : BenchMarker(FBenchmarkSettings{})
 BenchMarker::BenchMarker(FBenchmarkSettings settings) : settings_(std::move(settings))
 {
     const std::string reportFilename = settings_.outputPath.empty() ? MakeDefaultReportFilename() : settings_.outputPath;
-    const std::filesystem::path reportPath(reportFilename);
-    if (reportPath.has_parent_path())
+    const std::filesystem::path requestedReportPath(reportFilename);
+    const std::filesystem::path reportPath = requestedReportPath.is_absolute()
+        ? requestedReportPath.lexically_normal()
+        : Utilities::FileHelper::ResolveWritablePath(requestedReportPath);
+    std::error_code errorCode;
+    std::filesystem::create_directories(reportPath.parent_path(), errorCode);
+    if (errorCode)
     {
-        std::filesystem::create_directories(reportPath.parent_path());
+        SPDLOG_WARN("[Benchmark] failed to create report directory {}: {}",
+                    reportPath.parent_path().string(), errorCode.message());
     }
 
-    benchmarkCsvReportFile.open(reportFilename);
+    benchmarkCsvReportFile.open(reportPath);
     benchmarkCsvReportFile << fmt::format(
         "#,scene,renderer,gpu,driver,resolution,frame_time_ms,fps,vram_mib,draw_calls_actual,draw_calls_total,tris_actual,tris_total,frames,duration_s,upscaler_type,super_resolution\n");
 }
@@ -305,12 +313,21 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, const std::string
                 sceneName, rendererName, deviceProp1.deviceName, driverInfo, frameTimeMilliseconds,
                 fps, vramMiB, drawCallsActual, drawCallsTotal, trisActual, trisTotal);
 
+#if !IOS
     std::string imgEncoded{};
-    if (uploadScreen || saveScreen)
+#endif
+#if IOS
+    (void)uploadScreen;
+    const bool captureScreen = saveScreen;
+#else
+    const bool captureScreen = uploadScreen || saveScreen;
+#endif
+    if (captureScreen)
     {
         NextEngine::GetInstance()->RequestScreenShot({.filename = sceneName});
     }
 
+#if !IOS
     // perf server upload
     if (NextRenderer::GetBuildVersion() != "v0.0.0.0")
     {
@@ -357,4 +374,5 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, const std::string
             curl_easy_cleanup(curl);
         }
     }
+#endif
 }

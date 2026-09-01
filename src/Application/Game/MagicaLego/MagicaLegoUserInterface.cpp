@@ -20,6 +20,7 @@
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
 #include <spdlog/spdlog.h>
+#include <set>
 #include <utility>
 
 // ============================================================================
@@ -30,6 +31,20 @@ namespace
 {
     using namespace MagicaLego;
     using namespace MagicaLego::UIHelpers;
+
+    std::string ResolveMagicaLegoThumbnailPath(const FBasicBlock& block)
+    {
+        const std::string bundledRelativePath =
+            fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", block.type, block.name);
+        const std::filesystem::path generatedPath = Utilities::FileHelper::ResolveWritablePath(
+            std::filesystem::path("thumbview") / fmt::format("thumb_{}_{}.jpg", block.type, block.name));
+        std::error_code errorCode;
+        if (std::filesystem::is_regular_file(generatedPath, errorCode))
+        {
+            return generatedPath.string();
+        }
+        return Utilities::FileHelper::GetPlatformFilePath(bundledRelativePath.c_str());
+    }
 
     // Layout constants (aliases for brevity)
     constexpr float titlebarSize = UI::TitleBarHeight;
@@ -197,10 +212,11 @@ void MagicaLegoUserInterface::OnInitUI()
 
 void MagicaLegoUserInterface::OnSceneLoaded()
 {
-    if (!std::filesystem::exists(Utilities::FileHelper::GetPlatformFilePath("bin/record.txt")))
+    const std::string recordPath = Utilities::FileHelper::GetWritableFilePath("bin/record.txt");
+    if (!std::filesystem::exists(recordPath))
     {
         // write the record.txt
-        std::ofstream recordFile(Utilities::FileHelper::GetPlatformFilePath("bin/record.txt"));
+        std::ofstream recordFile(recordPath);
         // write timestamp
         recordFile << fmt::format("{}", std::time(nullptr));
         recordFile.close();
@@ -345,8 +361,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
                 return false;
             case 513:
                 {
-                    std::string localPath = Utilities::FileHelper::GetPlatformFilePath("screenshots");
-                    Utilities::FileHelper::EnsureDirectoryExists(Utilities::FileHelper::GetAbsolutePath(localPath));
+                    const std::string localPath = Utilities::FileHelper::GetWritableDirectoryPath("screenshots").string();
                     auto time = std::time(nullptr);
                     std::string filename = fmt::format("shot_{:%Y-%m-%d-%H-%M-%S}", *std::localtime(&time));
                     GetGameInstance()->GetEngine().RequestScreenShot({.filename = localPath + "/" + filename});
@@ -360,9 +375,8 @@ void MagicaLegoUserInterface::DrawTitleBar()
                 GetGameInstance()->SetCapturing(false);
                 ShowNotify("Screenshot captured, open in explorer?", []()-> void
                 {
-                    std::string localPath = Utilities::FileHelper::GetPlatformFilePath("screenshots");
-                    auto absPath = Utilities::FileHelper::GetAbsolutePath(localPath);
-                    Utilities::FileHelper::EnsureDirectoryExists(absPath);
+                    const std::filesystem::path absPath =
+                        Utilities::FileHelper::GetWritableDirectoryPath("screenshots");
 
                     NextRenderer::OSCommand(absPath.string().c_str());
                 });
@@ -692,10 +706,8 @@ void MagicaLegoUserInterface::RecordTimeline(bool autoRotate)
     auto maxStep = GetGameInstance()->GetMaxStep(); // add 5 step to stop the final still
     // round to latest 360 degree
     maxStep = maxStep + (autoRotate ? 360 : 30);
-    std::string localPath = Utilities::FileHelper::GetPlatformFilePath("captures");
-    std::string localTempPath = Utilities::FileHelper::GetPlatformFilePath("temps");
-    Utilities::FileHelper::EnsureDirectoryExists(Utilities::FileHelper::GetAbsolutePath(localPath));
-    Utilities::FileHelper::EnsureDirectoryExists(Utilities::FileHelper::GetAbsolutePath(localTempPath));
+    const std::string localPath = Utilities::FileHelper::GetWritableDirectoryPath("captures").string();
+    const std::string localTempPath = Utilities::FileHelper::GetWritableDirectoryPath("temps").string();
     auto time = std::time(nullptr);
     std::string filename = fmt::format("{}/magicalLego_{:%Y-%m-%d-%H-%M-%S}", localPath, *std::localtime(&time));
     PushLayout(0x0);
@@ -727,9 +739,8 @@ void MagicaLegoUserInterface::RecordTimeline(bool autoRotate)
 
             ShowNotify("Video recorded, open in explorer?", []()-> void
             {
-                std::string localPath = Utilities::FileHelper::GetPlatformFilePath("captures");
-                auto absPath = Utilities::FileHelper::GetAbsolutePath(localPath);
-                Utilities::FileHelper::EnsureDirectoryExists(absPath);
+                const std::filesystem::path absPath =
+                    Utilities::FileHelper::GetWritableDirectoryPath("captures");
                 NextRenderer::OSCommand(absPath.string().c_str());
             });
 
@@ -910,17 +921,29 @@ void MagicaLegoUserInterface::DrawLeftBar()
         static std::string newFilename = "magicalego";
         if (ImGui::BeginListBox("##listbox 2", ImVec2(-FLT_MIN, 8 * ImGui::GetTextLineHeightWithSpacing())))
         {
-            std::string path = Utilities::FileHelper::GetPlatformFilePath("assets/legos/");
-            Utilities::FileHelper::EnsureDirectoryExists(path);
-            for (const auto& entry : std::filesystem::directory_iterator(path))
+            std::set<std::string> saveNames;
+            for (const std::filesystem::path& path : {
+                     Utilities::FileHelper::GetRuntimeFilePath("assets/legos"),
+                     Utilities::FileHelper::ResolveWritablePath("assets/legos")})
             {
-                if (entry.path().extension() != ".mls")
+                std::error_code errorCode;
+                if (!std::filesystem::is_directory(path, errorCode))
                 {
                     continue;
                 }
-                std::string filename = entry.path().filename().string();
-                filename = filename.substr(0, filename.size() - 4);
+                for (const auto& entry : std::filesystem::directory_iterator(
+                         path, std::filesystem::directory_options::skip_permission_denied, errorCode))
+                {
+                    if (entry.path().extension() == ".mls")
+                    {
+                        std::string filename = entry.path().stem().string();
+                        saveNames.insert(std::move(filename));
+                    }
+                }
+            }
 
+            for (const std::string& filename : saveNames)
+            {
                 bool isSelected = (selectedFilename == filename);
                 ImGuiSelectableFlags flags = (selectedFilename == filename) ? ImGuiSelectableFlags_Highlight : 0;
                 if (ImGui::Selectable(filename.c_str(), isSelected, flags))
@@ -1045,7 +1068,7 @@ void MagicaLegoUserInterface::DrawRightBar()
 
             for (auto& block : basicBlocks)
             {
-                std::string filename = fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", block.type, block.name);
+                const std::string filename = ResolveMagicaLegoThumbnailPath(block);
                 const NextUI::IUserInterface::FUiTextureHandle texture =
                     GetGameInstance()->GetEngine().GetUserInterface()->RequestUiTexture(filename);
                 ImTextureID id = texture.valid ? texture.textureId : static_cast<ImTextureID>(0);
@@ -1274,8 +1297,6 @@ void MagicaLegoUserInterface::DrawScriptLoadPopup()
 
         // List script files
         std::string scriptsPath = Utilities::FileHelper::GetPlatformFilePath("assets/scripts/");
-        Utilities::FileHelper::EnsureDirectoryExists(scriptsPath);
-
         if (ImGui::BeginListBox("##scriptlist", ImVec2(300, 8 * ImGui::GetTextLineHeightWithSpacing())))
         {
             try

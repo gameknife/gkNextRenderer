@@ -99,3 +99,17 @@ TEST_CASE("Pak memory reads and directory probes do not materialize assets", "[U
     std::filesystem::remove(pakPath, errorCode);
     std::filesystem::remove(cachePath, errorCode);
 }
+
+TEST_CASE("Writable paths stay inside the application data root", "[Unit][FileHelper]")
+{
+    const std::filesystem::path writableRoot = Utilities::FileHelper::GetWritableRuntimeRoot();
+
+    CHECK(Utilities::FileHelper::ResolveWritablePath("settings/../layout.ini") ==
+          (writableRoot / "layout.ini").lexically_normal());
+    CHECK(Utilities::FileHelper::ResolveWritablePath("../../outside.ini") ==
+          (writableRoot / "outside.ini").lexically_normal());
+
+    const std::filesystem::path explicitPath =
+        (std::filesystem::temp_directory_path() / "gknext_explicit_output.ini").lexically_normal();
+    CHECK(Utilities::FileHelper::ResolveWritablePath(explicitPath) == explicitPath);
+}

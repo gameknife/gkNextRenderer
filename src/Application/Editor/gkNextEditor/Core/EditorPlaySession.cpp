@@ -398,6 +398,9 @@ namespace Editor
     void FPlaySession::Stop() {}
     void FPlaySession::SetEjected(bool) {}
     void FPlaySession::ToggleEject() {}
+    bool FPlaySession::IsPaused() const { return false; }
+    void FPlaySession::SetPaused(bool) {}
+    void FPlaySession::TogglePause() {}
     bool FPlaySession::Rebuild(const std::string&, std::string& outError)
     {
         outError = impl_->unavailableReason;
