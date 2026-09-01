@@ -79,6 +79,9 @@ namespace ScadLibrary
         char args[512] = {}; // extra call arguments, e.g. "seed = 3"
         bool evaluated = false;
         int sourceLine = 0;
+        // Exact SCAD call-site offset, shared with the runtime root node's
+        // placement tag. Unlike a module name, it disambiguates duplicates.
+        size_t placementId = 0;
         uint32_t runtimeNodeId = std::numeric_limits<uint32_t>::max();
 
         // Document bookkeeping.
@@ -194,6 +197,11 @@ namespace ScadLibrary
 
         int AddInstance(FBenchItem item);
         void RemoveInstance(int instanceIndex);
+
+        // Finds the same authored instance after this document has been
+        // reparsed. Ambiguous duplicates return -1 rather than silently
+        // selecting a different object.
+        int FindMatchingInstance(const FBenchItem& previous) const;
 
         // Existing statements keep their bytes unless their instance actually
         // moved, so opening and saving an untouched file is a no-op.

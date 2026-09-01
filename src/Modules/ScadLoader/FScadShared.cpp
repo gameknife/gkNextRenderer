@@ -331,6 +331,11 @@ namespace Assets::Scad
         return basis;
     }
 
+    std::string ScadPlacementTag(size_t sourceOffset)
+    {
+        return fmt::format("scad-placement:{}", sourceOffset);
+    }
+
     void ScadLocalToEngineTRS(
         const glm::dmat4& scadLocal,
         double scale,

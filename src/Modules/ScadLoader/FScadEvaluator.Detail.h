@@ -393,6 +393,7 @@ namespace Assets::Scad
                 uint64_t instanceId = 0;
                 glm::dmat4 localTransform = glm::dmat4(1.0);
                 int sourceLine = 0;
+                size_t sourceOffset = 0;
                 std::vector<std::pair<std::string, Value>> parameters;
                 glm::dvec4 callColor = glm::dvec4(0.78, 0.78, 0.78, 1.0);
                 bool hasCallColor = false;
@@ -501,6 +502,7 @@ namespace Assets::Scad
                 node->instanceId = nextGroupInstanceId_++;
                 node->localTransform = localTransform;
                 node->sourceLine = call.line;
+                node->sourceOffset = call.sourceOffset;
                 node->callColor = color;
                 node->hasCallColor = hasColor;
                 node->parameters.reserve(definition.params.size());
@@ -579,6 +581,7 @@ namespace Assets::Scad
                 node.instanceId = build.instanceId;
                 node.localTransform = build.localTransform;
                 node.sourceLine = build.sourceLine;
+                node.sourceOffset = build.sourceOffset;
                 node.parameters = build.parameters;
                 node.callColor = build.callColor;
                 node.hasCallColor = build.hasCallColor;

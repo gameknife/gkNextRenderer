@@ -10,6 +10,7 @@
 #include "Modules/ScadLoader/FScadLexer.h"
 #include "Modules/ScadLoader/FScadLoader.h"
 #include "Modules/ScadLoader/FScadParser.h"
+#include "Modules/ScadLoader/FScadShared.h"
 #include "Modules/ScadLoader/FScadText.h"
 
 #include <chrono>
@@ -782,6 +783,35 @@ TEST_CASE("Scad negative-determinant transforms keep outward winding", "[Unit][S
         const glm::dvec3 centroid = (tris[i + 0] + tris[i + 1] + tris[i + 2]) / 3.0;
         CHECK(glm::dot(normal, centroid - center) > 0.0);
     }
+}
+
+TEST_CASE("Scad loader tags same-named roots by exact call-site placement", "[Unit][Scad]")
+{
+    ScopedDir dir;
+    const std::string source =
+        "module chair() { cube([1,1,1]); }\n"
+        "translate([0,0,0]) chair(); translate([2,0,0]) chair();\n";
+    const std::filesystem::path mainPath = dir.Write("same_named.scad", source);
+
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
+    REQUIRE(nodes.size() == 2);
+
+    const size_t firstCall = source.find("chair();", source.find('\n') + 1);
+    const size_t secondCall = source.find("chair();", firstCall + 1);
+    REQUIRE(firstCall != std::string::npos);
+    REQUIRE(secondCall != std::string::npos);
+    CHECK(nodes[0]->GetTag() == Assets::Scad::ScadPlacementTag(firstCall));
+    CHECK(nodes[1]->GetTag() == Assets::Scad::ScadPlacementTag(secondCall));
+    CHECK(nodes[0]->GetTag() != nodes[1]->GetTag());
 }
 
 TEST_CASE("Scad loader: use imports definitions without executing previews", "[Unit][Scad]")

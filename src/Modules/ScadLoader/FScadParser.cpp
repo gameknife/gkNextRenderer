@@ -126,6 +126,7 @@ namespace Assets::Scad
                 auto s = std::make_shared<Stmt>();
                 s->kind = StmtKind::ModuleDef;
                 s->line = Cur().line;
+                s->sourceOffset = Cur().begin;
                 Advance(); // 'module'
                 if (!Check(Tok::Ident))
                 {
@@ -145,6 +146,7 @@ namespace Assets::Scad
                 auto s = std::make_shared<Stmt>();
                 s->kind = StmtKind::FunctionDef;
                 s->line = Cur().line;
+                s->sourceOffset = Cur().begin;
                 Advance(); // 'function'
                 if (!Check(Tok::Ident))
                 {
@@ -166,6 +168,7 @@ namespace Assets::Scad
                 auto s = std::make_shared<Stmt>();
                 s->kind = StmtKind::Assign;
                 s->line = Cur().line;
+                s->sourceOffset = Cur().begin;
                 s->name = Advance().text; // ident or special
                 Expect(Tok::Assign, "'='");
                 s->value = ParseExpr();
@@ -197,6 +200,7 @@ namespace Assets::Scad
                     s->kind = StmtKind::Instance;
                     s->name = "union";
                     s->line = Cur().line;
+                    s->sourceOffset = Cur().begin;
                     s->modifiers = modifiers;
                     s->children = ParseChild();
                     return s;
@@ -211,6 +215,7 @@ namespace Assets::Scad
                 auto s = std::make_shared<Stmt>();
                 s->kind = StmtKind::Instance;
                 s->line = Cur().line;
+                s->sourceOffset = Cur().begin;
                 s->name = Advance().text;
                 s->modifiers = modifiers;
 

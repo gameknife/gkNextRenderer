@@ -962,6 +962,7 @@ namespace ScadLibrary
             outItem.catalogModuleName = std::move(catalogModuleName);
         }
         outItem.sourceLine = cursor->line;
+        outItem.placementId = cursor->sourceOffset;
         outItem.sourceBegin = span.begin;
         outItem.sourceEnd = span.end;
         outItem.disabled = span.Disabled();
@@ -1221,6 +1222,65 @@ namespace ScadLibrary
                 segments_[static_cast<size_t>(owner)].instanceIndex = static_cast<int>(index);
             }
         }
+    }
+
+    int FScadSceneDocument::FindMatchingInstance(const FBenchItem& previous) const
+    {
+        const auto hasSameAuthoredIdentity = [&previous](const FBenchItem& candidate)
+        {
+            return candidate.moduleName == previous.moduleName &&
+                candidate.catalogModuleName == previous.catalogModuleName && candidate.disabled == previous.disabled &&
+                std::strncmp(candidate.args, previous.args, sizeof(candidate.args)) == 0;
+        };
+
+        std::vector<int> candidates;
+        for (size_t index = 0; index < instances_.size(); ++index)
+        {
+            if (hasSameAuthoredIdentity(instances_[index]))
+            {
+                candidates.push_back(static_cast<int>(index));
+            }
+        }
+        if (candidates.empty())
+        {
+            return -1;
+        }
+
+        // An external edit normally retains the statement's source line even
+        // when it changes the selected object's transform.
+        std::vector<int> sameLine;
+        for (const int index : candidates)
+        {
+            if (instances_[index].sourceLine == previous.sourceLine)
+            {
+                sameLine.push_back(index);
+            }
+        }
+        if (sameLine.size() == 1)
+        {
+            return sameLine.front();
+        }
+
+        // Gizmo and numeric edits update the document before it is written,
+        // so the full placement remains an exact match even if earlier file
+        // changes shifted this statement to a different line.
+        std::vector<int> samePlacement;
+        for (const int index : candidates)
+        {
+            if (instances_[index].SamePlacement(previous))
+            {
+                samePlacement.push_back(index);
+            }
+        }
+        if (samePlacement.size() == 1)
+        {
+            return samePlacement.front();
+        }
+
+        // A unique module invocation is still safe to restore. Multiple
+        // otherwise identical invocations cannot be distinguished reliably
+        // after a reparse.
+        return candidates.size() == 1 ? candidates.front() : -1;
     }
 
     std::string FScadSceneDocument::BuildSource(const FScadSceneWriteOptions& options) const

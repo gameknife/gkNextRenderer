@@ -2132,11 +2132,11 @@ namespace ScadLibrary
                                 DrawKitDropPreview(kits_[data->kitIndex].modules[data->moduleIndex], scadPosition,
                                                    pos, size);
                             }
-                            if (payload->IsDelivery() && PlaceKitFromDrop(data->kitIndex, data->moduleIndex))
+                            if (payload->IsDelivery())
                             {
-                                // Commit only on mouse release. The preview above stays lightweight while the
-                                // pointer moves; the real scene is refreshed exactly once after the drop.
-                                ReloadCurrentAssemblyPreview();
+                                // PlaceKitFromDrop persists and reloads the structural edit so its
+                                // placement IDs are rebuilt against the scene that was just loaded.
+                                PlaceKitFromDrop(data->kitIndex, data->moduleIndex);
                             }
                         }
                     }
@@ -2236,6 +2236,11 @@ namespace ScadLibrary
         }
 
         AddToBenchAt(kitIndex, kits_[kitIndex].modules[moduleIndex].name, scadPosition);
+        // A newly inserted statement changes source offsets for the placement
+        // index. Write the authoritative scene and rebuild its runtime roots
+        // now; a workspace-only preview would leave document and node IDs out
+        // of sync.
+        SaveAssembly(false);
         return true;
     }
 
@@ -6424,6 +6429,11 @@ namespace ScadLibrary
             selectedSegment_ = -1;
             assemblySourceDirty_ = true;
             benchDirty_ = true;
+            // Deletion cannot be applied to an existing runtime node like a
+            // gizmo transform can. Persist the document edit and reload now,
+            // rather than merely waiting for optional auto-preview, so the
+            // object cannot reappear after reopening the scene.
+            SaveAssembly(false);
         }
         if (duplicateInstanceRequest >= 0 && duplicateInstanceRequest < static_cast<int>(Bench().size()))
         {
@@ -6436,6 +6446,9 @@ namespace ScadLibrary
             scrollToSelectedSegment_ = true;
             assemblySourceDirty_ = true;
             benchDirty_ = true;
+            // Duplicating inserts a new statement, so rebuild the document
+            // index and runtime placement IDs from the saved scene.
+            SaveAssembly(false);
         }
 
         if (toggleRequest >= 0 && document_.SetSegmentDisabled(static_cast<size_t>(toggleRequest), toggleTo))
@@ -7054,8 +7067,19 @@ namespace ScadLibrary
     }
 
     bool ScadLibraryInterface::ReparseDocument(const std::string& source, const std::string& documentPath,
-                                               bool reevaluate)
+                                               bool reevaluate, bool preserveRuntimeNodeLinks)
     {
+        std::optional<FBenchItem> previousSelection;
+        if (selectedBenchItem_ >= 0 && selectedBenchItem_ < static_cast<int>(Bench().size()))
+        {
+            previousSelection = Bench()[selectedBenchItem_];
+        }
+        // A gizmo write can reparse the bytes it just wrote while retaining
+        // the live scene. Keep links only in that narrow case. A subsequent
+        // scene reload assigns fresh instance IDs, so carrying them over would
+        // bind same-named modules to the wrong OBB and picker target.
+        const std::vector<FBenchItem> previousInstances = preserveRuntimeNodeLinks ? Bench() : std::vector<FBenchItem>{};
+
         terrainProcessWarnings_.clear();
 
         Assets::Scad::FScadSourceIndex index;
@@ -7107,12 +7131,31 @@ namespace ScadLibrary
             item.kitIndex = FindKitIndex(item.CatalogModuleName());
             item.evaluated = true;
         }
+        for (const FBenchItem& previous : previousInstances)
+        {
+            if (previous.runtimeNodeId == std::numeric_limits<uint32_t>::max())
+            {
+                continue;
+            }
+            const int matchingIndex = document_.FindMatchingInstance(previous);
+            if (matchingIndex >= 0)
+            {
+                FBenchItem& current = Bench()[matchingIndex];
+                // The live scene was not reloaded, so its root still carries
+                // the prior source-offset tag even if rewriting a numeric
+                // transform shifted the terminal call within the text.
+                current.placementId = previous.placementId;
+                current.runtimeNodeId = previous.runtimeNodeId;
+            }
+        }
         assemblySource_ = document_.Source();
         sourceBufferDirty_ = false;
         terrainProcessDirty_ = false;
         benchDirty_ = false;
-        selectedBenchItem_ = -1;
-        selectedSegment_ = -1;
+        selectedBenchItem_ = previousSelection ? document_.FindMatchingInstance(*previousSelection) : -1;
+        selectedSegment_ = selectedBenchItem_ >= 0 ? Bench()[selectedBenchItem_].segmentIndex : -1;
+        scrollToSelectedBenchItem_ = selectedBenchItem_ >= 0;
+        scrollToSelectedSegment_ = selectedSegment_ >= 0;
         ClearSelectedStructureBounds();
         sourceStructureBounds_.clear();
         sourceStructureBoundsDirty_ = true;
@@ -7560,7 +7603,7 @@ namespace ScadLibrary
         // at the bytes on disk again. The write came from the editors' own
         // state, so the evaluated bindings are still valid and re-evaluating
         // the use/include closure here would stall every gizmo release.
-        ReparseDocument(source, openedAssemblyPath_, false);
+        ReparseDocument(source, openedAssemblyPath_, false, !reloadScene);
         assemblySourceDirty_ = false;
         RefreshAssemblyWatchBaseline();
         const std::filesystem::path repoRoot = scadRoot.parent_path().parent_path();
@@ -9740,10 +9783,18 @@ namespace ScadLibrary
     Assets::Node* ScadLibraryInterface::ResolveSceneObjectNode(FBenchItem& item, const glm::mat4& expectedWorld)
     {
         Assets::Scene& scene = engine_.GetScene();
+        const std::string placementTag = item.sourceLine > 0
+            ? Assets::Scad::ScadPlacementTag(item.placementId)
+            : std::string{};
+        const auto matchesPlacement = [&item, &placementTag](const Assets::Node& candidate)
+        {
+            return candidate.GetName() == item.moduleName &&
+                (placementTag.empty() || candidate.GetTag() == placementTag);
+        };
         if (item.runtimeNodeId != std::numeric_limits<uint32_t>::max())
         {
             Assets::Node* resolved = scene.GetNodeByInstanceId(item.runtimeNodeId);
-            if (resolved != nullptr && resolved->GetName() == item.moduleName)
+            if (resolved != nullptr && matchesPlacement(*resolved))
             {
                 return resolved;
             }
@@ -9755,6 +9806,19 @@ namespace ScadLibrary
         for (const std::shared_ptr<Assets::Node>& candidate : scene.Nodes())
         {
             if (candidate == nullptr || candidate->GetName() != item.moduleName)
+            {
+                continue;
+            }
+
+            // The SCAD loader tags each root with the terminal call's exact
+            // source offset. This is the authoritative placement identity:
+            // equal module names, parameters or matrices cannot collide.
+            if (!placementTag.empty() && candidate->GetTag() == placementTag)
+            {
+                item.runtimeNodeId = candidate->GetInstanceId();
+                return candidate.get();
+            }
+            if (!placementTag.empty())
             {
                 continue;
             }

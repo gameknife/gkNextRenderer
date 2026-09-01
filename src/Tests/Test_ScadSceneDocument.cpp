@@ -225,6 +225,38 @@ TEST_CASE("Scad scene document rewrites only the instance that moved", "[Unit][S
     CHECK(reparsed.HasTerrain());
 }
 
+TEST_CASE("Scad scene document restores a selected instance after a reparse",
+          "[Unit][Scad][ScadLibrary][SceneDocument]")
+{
+    std::vector<std::string> warnings;
+    FScadSceneDocument document = ParseDocument(
+        "translate([0, 0, 0]) kit_crate();\ntranslate([10, 0, 0]) kit_crate();\n", warnings);
+    REQUIRE(document.Instances().size() == 2);
+    const FBenchItem selected = document.Instances()[1];
+
+    std::vector<std::string> reparsedWarnings;
+    const FScadSceneDocument reparsed = ParseDocument(
+        "translate([0, 0, 0]) kit_crate();\ntranslate([14, 0, 0]) kit_crate();\n", reparsedWarnings);
+
+    REQUIRE(reparsed.FindMatchingInstance(selected) == 1);
+}
+
+TEST_CASE("Scad scene document clears selection when its instance was removed",
+          "[Unit][Scad][ScadLibrary][SceneDocument]")
+{
+    std::vector<std::string> warnings;
+    FScadSceneDocument document = ParseDocument(
+        "translate([0, 0, 0]) kit_crate();\ntranslate([10, 0, 0]) kit_lamp();\n", warnings);
+    REQUIRE(document.Instances().size() == 2);
+    const FBenchItem selected = document.Instances()[1];
+
+    std::vector<std::string> reparsedWarnings;
+    const FScadSceneDocument reparsed =
+        ParseDocument("translate([0, 0, 0]) kit_crate();\n", reparsedWarnings);
+
+    REQUIRE(reparsed.FindMatchingInstance(selected) == -1);
+}
+
 TEST_CASE("Scad scene document switches one structure off in place", "[Unit][Scad][ScadLibrary][SceneDocument]")
 {
     std::vector<std::string> warnings;

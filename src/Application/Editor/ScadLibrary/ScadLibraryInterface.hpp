@@ -169,7 +169,8 @@ namespace ScadLibrary
         // reevaluate=false right after writing a file the editor itself
         // produced - moving an instance cannot change a top-level variable, so
         // the cached bindings still hold and a gizmo release stays responsive.
-        bool ReparseDocument(const std::string& source, const std::string& documentPath, bool reevaluate = true);
+        bool ReparseDocument(const std::string& source, const std::string& documentPath, bool reevaluate = true,
+                             bool preserveRuntimeNodeLinks = false);
         // Evaluates the whole file and returns the kit instances one top-level
         // structure produced, so it can be switched off and replaced by them.
         std::vector<FBenchItem> EvaluateSegmentInstances(size_t segmentIndex, std::string& outError) const;

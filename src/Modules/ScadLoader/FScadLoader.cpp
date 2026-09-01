@@ -306,6 +306,10 @@ namespace Assets
                 localRotation,
                 localScale,
                 static_cast<uint32_t>(sceneNode.instanceId));
+            if (!parent && sceneNode.sourceLine > 0)
+            {
+                node->SetTag(Scad::ScadPlacementTag(sceneNode.sourceOffset));
+            }
             if (parent)
             {
                 node->SetParent(parent);

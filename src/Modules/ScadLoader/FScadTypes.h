@@ -12,6 +12,7 @@
 // engine (right-handed, Y-up) via a -90 deg rotation about X.
 // ============================================================================
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -200,6 +201,10 @@ namespace Assets
         {
             StmtKind kind = StmtKind::Instance;
             int line = 0;
+            // Byte offset of the statement's first non-modifier token in the
+            // source file. This is an unambiguous placement identity for a
+            // module call, including multiple calls on one source line.
+            size_t sourceOffset = 0;
 
             std::string name;  // assign target / def name / instance (module/builtin/control) name
             ExprPtr value;     // assign value / function body

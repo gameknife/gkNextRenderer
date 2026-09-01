@@ -6,6 +6,7 @@
 // resolution and SCAD (Z-up) -> engine (Y-up) conversions.
 // ============================================================================
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -42,6 +43,11 @@ namespace Assets::Scad
 
     // Basis matrix for the Z-up -> Y-up change (pure rotation times scale).
     glm::dmat4 ScadToWorldBasis(double scale);
+
+    // Stable per-load identity for a concrete SCAD call site. It is based on
+    // the call's source byte offset, so same-named modules on one line remain
+    // distinct placement targets.
+    std::string ScadPlacementTag(size_t sourceOffset);
 
     // Conjugates a SCAD-local transform into engine space and decomposes it.
     void ScadLocalToEngineTRS(
