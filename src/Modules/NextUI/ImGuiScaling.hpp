@@ -15,6 +15,8 @@ namespace NextUI::Scaling
     // Vulkan viewport rectangles use framebuffer pixels, while ImGui and ImGuizmo use
     // logical screen coordinates. Keep the conversion in one place so high-DPI
     // applications do not accidentally mix the two coordinate spaces.
+    ImVec2 MainFramebufferToImGuiPoint(const ImVec2& position);
+    ImVec2 ImGuiToMainFramebufferPoint(const ImVec2& position);
     FViewportRect MainFramebufferToImGuiViewport(const ImVec2& position, const ImVec2& size);
     FViewportRect ImGuiToMainFramebufferViewport(const ImVec2& position, const ImVec2& size);
 }

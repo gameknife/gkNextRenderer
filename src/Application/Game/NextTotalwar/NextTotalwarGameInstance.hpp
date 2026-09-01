@@ -59,7 +59,6 @@ namespace NextTotalwar
         void TickRegiments(float deltaSeconds);
         void TickSoldiers(float deltaSeconds);
         float GroundHeight(float x, float z) const;
-        float UiScale() const;
         glm::dvec2 ToLogicalMouse(double x, double y) const;
         glm::vec2 ToFramebufferMouse(const glm::dvec2& logicalMouse) const;
         bool TryGroundHit(const glm::dvec2& screen, glm::vec3& hit) const;

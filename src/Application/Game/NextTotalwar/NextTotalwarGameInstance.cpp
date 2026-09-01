@@ -8,12 +8,12 @@
 #include "Engine/Runtime/Components/RenderComponent.hpp"
 #include "Engine/Runtime/Components/TerrainComponent.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
-#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Interface/AgentQueries.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Gameplay/Rig/RigInstance.h"
+#include "Modules/NextUI/ImGuiScaling.hpp"
 #include "Modules/ScadLoader/FScadRig.h"
 #include "Modules/ScadLoader/ScadModule.hpp"
 
@@ -525,12 +525,6 @@ namespace NextTotalwar
         return height;
     }
 
-    float FGameInstance::UiScale() const
-    {
-        const NextUI::IUserInterface* ui = GetEngine().GetUserInterface();
-        return ui ? std::max(ui->UiScale(), 0.001f) : 1.0f;
-    }
-
     glm::dvec2 FGameInstance::ToLogicalMouse(double x, double y) const
     {
 #if WIN32
@@ -539,8 +533,9 @@ namespace NextTotalwar
         // Agent 输入协议本身使用 viewport 逻辑坐标，不再重复缩放。
         if (!GOption->AgentValidation)
         {
-            const double scale = static_cast<double>(UiScale());
-            return {x / scale, y / scale};
+            const ImVec2 logical = NextUI::Scaling::MainFramebufferToImGuiPoint(
+                ImVec2(static_cast<float>(x), static_cast<float>(y)));
+            return {logical.x, logical.y};
         }
 #endif
         return {x, y};
@@ -548,9 +543,11 @@ namespace NextTotalwar
 
     glm::vec2 FGameInstance::ToFramebufferMouse(const glm::dvec2& logicalMouse) const
     {
-        // EngineHelper::GetScreenToWorldRay 使用 SwapChain OutputExtent，
-        // 因而需要 framebuffer 像素；ScadLibrary 也在射线调用前做同一转换。
-        return glm::vec2(logicalMouse) * UiScale();
+        // EngineHelper::GetScreenToWorldRay uses SwapChain OutputExtent and
+        // therefore needs framebuffer pixels.
+        const ImVec2 framebuffer = NextUI::Scaling::ImGuiToMainFramebufferPoint(
+            ImVec2(static_cast<float>(logicalMouse.x), static_cast<float>(logicalMouse.y)));
+        return {framebuffer.x, framebuffer.y};
     }
 
     void FGameInstance::OnTick(double deltaSeconds)

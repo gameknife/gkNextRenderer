@@ -24,12 +24,25 @@ namespace NextUI::Scaling
         return std::max(0.75f, std::min(viewport->Size.x / baseWidth, viewport->Size.y / baseHeight));
     }
 
-    FViewportRect MainFramebufferToImGuiViewport(const ImVec2& position, const ImVec2& size)
+    ImVec2 MainFramebufferToImGuiPoint(const ImVec2& position)
     {
         const ImVec2 scale = GetFramebufferScale();
         const ImVec2 origin = ImGui::GetMainViewport()->Pos;
+        return ImVec2(origin.x + position.x / scale.x, origin.y + position.y / scale.y);
+    }
+
+    ImVec2 ImGuiToMainFramebufferPoint(const ImVec2& position)
+    {
+        const ImVec2 scale = GetFramebufferScale();
+        const ImVec2 origin = ImGui::GetMainViewport()->Pos;
+        return ImVec2((position.x - origin.x) * scale.x, (position.y - origin.y) * scale.y);
+    }
+
+    FViewportRect MainFramebufferToImGuiViewport(const ImVec2& position, const ImVec2& size)
+    {
+        const ImVec2 scale = GetFramebufferScale();
         return {
-            .Position = ImVec2(origin.x + position.x / scale.x, origin.y + position.y / scale.y),
+            .Position = MainFramebufferToImGuiPoint(position),
             .Size = ImVec2(size.x / scale.x, size.y / scale.y),
         };
     }
@@ -37,9 +50,8 @@ namespace NextUI::Scaling
     FViewportRect ImGuiToMainFramebufferViewport(const ImVec2& position, const ImVec2& size)
     {
         const ImVec2 scale = GetFramebufferScale();
-        const ImVec2 origin = ImGui::GetMainViewport()->Pos;
         return {
-            .Position = ImVec2((position.x - origin.x) * scale.x, (position.y - origin.y) * scale.y),
+            .Position = ImGuiToMainFramebufferPoint(position),
             .Size = ImVec2(size.x * scale.x, size.y * scale.y),
         };
     }

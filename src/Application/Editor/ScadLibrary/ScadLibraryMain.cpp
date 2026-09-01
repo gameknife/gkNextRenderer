@@ -6,8 +6,8 @@
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
+#include "Modules/NextUI/ImGuiScaling.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
 
 #include <glm/glm.hpp>
@@ -301,12 +301,11 @@ bool ScadLibraryGameInstance::OnMouseButton(SDL_Event& event)
     }
 
     const glm::vec2 mousePos = GetEngine().GetMousePos();
-    const NextUI::IUserInterface* userInterface = GetEngine().GetUserInterface();
-    const float uiScale = userInterface != nullptr ? userInterface->UiScale() : 1.0f;
     // SDL mouse coordinates are framebuffer pixels on DPI-aware Windows, while
     // IsViewportPoint stores the viewport and toolbar in ImGui logical pixels.
     // Keep mousePos unchanged for GetScreenToWorldRay, which consumes framebuffer pixels.
-    const glm::vec2 uiMousePos = mousePos / std::max(uiScale, 1.0f);
+    const ImVec2 uiMouse = NextUI::Scaling::MainFramebufferToImGuiPoint(ImVec2(mousePos.x, mousePos.y));
+    const glm::vec2 uiMousePos(uiMouse.x, uiMouse.y);
 
     // Don't start a pan drag or a scene pick when the cursor is over a panel/widget.
     if (ImGui::GetIO().WantCaptureMouse && event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)

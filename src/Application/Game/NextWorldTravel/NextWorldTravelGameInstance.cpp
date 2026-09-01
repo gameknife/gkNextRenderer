@@ -10,12 +10,12 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Components/TerrainComponent.hpp"
-#include "Engine/Runtime/Interface/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Interface/AgentQueries.hpp"
 #include "Engine/Runtime/Interface/ScreenShotService.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
+#include "Modules/NextUI/ImGuiScaling.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
 
 #include <imgui.h>
@@ -1076,20 +1076,13 @@ bool NextWorldTravelGameInstance::OnMouseButton(SDL_Event& event)
     {
         return false;
     }
-    // Label projection and ImGui both use logical coordinates. On a DPI-scaled
-    // desktop SDL reports mouse button positions in physical pixels, while
-    // synthetic validation input is already expressed in logical pixels. Try
-    // the normalized event position first, then retain the logical fallback so
-    // both input sources hit the same cached label plate.
+    // Label projection and ImGui both use logical coordinates. Desktop SDL
+    // events are framebuffer pixels, while validation input is logical.
     const glm::vec2 eventPosition(event.button.x, event.button.y);
-    const float uiScale = GetEngine().GetUserInterface() != nullptr
-                              ? std::max(1.0f, GetEngine().GetUserInterface()->UiScale())
-                              : 1.0f;
-    int picked = poiLayer_.PickAt(eventPosition / uiScale);
-    if (picked < 0 && uiScale > 1.0f)
-    {
-        picked = poiLayer_.PickAt(eventPosition);
-    }
+    const ImVec2 logicalMouse = GOption != nullptr && GOption->AgentValidation
+        ? ImVec2(eventPosition.x, eventPosition.y)
+        : NextUI::Scaling::MainFramebufferToImGuiPoint(ImVec2(eventPosition.x, eventPosition.y));
+    const int picked = poiLayer_.PickAt(glm::vec2(logicalMouse.x, logicalMouse.y));
     if (picked < 0)
     {
         return false;
