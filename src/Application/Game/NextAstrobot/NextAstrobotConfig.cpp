@@ -25,8 +25,21 @@ namespace NextAstrobot
             move.HoverFallSpeed = object.value("hoverFallSpeed", move.HoverFallSpeed);
             move.StompBounceSpeed = object.value("stompBounceSpeed", move.StompBounceSpeed);
             move.PunchSeconds = object.value("punchSeconds", move.PunchSeconds);
+            move.PunchSeconds2 = object.value("punchSeconds2", move.PunchSeconds2);
+            move.KickSeconds = object.value("kickSeconds", move.KickSeconds);
+            move.ComboWindowSeconds = object.value("comboWindowSeconds", move.ComboWindowSeconds);
+            move.ComboBufferSeconds = object.value("comboBufferSeconds", move.ComboBufferSeconds);
             move.PunchRange = object.value("punchRange", move.PunchRange);
             move.PunchArcDegrees = object.value("punchArcDegrees", move.PunchArcDegrees);
+            move.KickRange = object.value("kickRange", move.KickRange);
+            move.KickArcDegrees = object.value("kickArcDegrees", move.KickArcDegrees);
+            move.PunchLungeSpeed = object.value("punchLungeSpeed", move.PunchLungeSpeed);
+            move.KickLungeSpeed = object.value("kickLungeSpeed", move.KickLungeSpeed);
+            move.SkidMinSpeed = object.value("skidMinSpeed", move.SkidMinSpeed);
+            move.SkidSeconds = object.value("skidSeconds", move.SkidSeconds);
+            move.SkidReverseDot = object.value("skidReverseDot", move.SkidReverseDot);
+            move.SkidDecel = object.value("skidDecel", move.SkidDecel);
+            move.SkidTurnScale = object.value("skidTurnScale", move.SkidTurnScale);
             move.ControllerHeight = object.value("controllerHeight", move.ControllerHeight);
             move.ControllerRadius = object.value("controllerRadius", move.ControllerRadius);
             move.MaxStepHeight = object.value("maxStepHeight", move.MaxStepHeight);
@@ -49,6 +62,13 @@ namespace NextAstrobot
             camera.SpringArmHideRigDistance =
                 object.value("springArmHideRigDistance", camera.SpringArmHideRigDistance);
             camera.SpringArmReturnRate = object.value("springArmReturnRate", camera.SpringArmReturnRate);
+            camera.FocusDistance = object.value("focusDistance", camera.FocusDistance);
+            camera.FocusHeight = object.value("focusHeight", camera.FocusHeight);
+            camera.FocusTargetHeight = object.value("focusTargetHeight", camera.FocusTargetHeight);
+            camera.FocusFov = object.value("focusFov", camera.FocusFov);
+            camera.FocusBlendSeconds = object.value("focusBlendSeconds", camera.FocusBlendSeconds);
+            camera.FocusOrbitRate = object.value("focusOrbitRate", camera.FocusOrbitRate);
+            camera.FocusOffsetDegrees = object.value("focusOffsetDegrees", camera.FocusOffsetDegrees);
         }
 
         void ReadWorld(const json& object, FWorldConfig& world)

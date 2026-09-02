@@ -40,8 +40,10 @@ namespace NextAstrobot
 
         void SetVisible(bool visible);
         /// Places the rig at the character's foot position and picks the clip for the state.
+        /// `punchStage` is the controller's combo stage (0 none, 1 jab, 2 cross, 3 kick);
+        /// it is what separates the three attack clips from each other.
         void Update(const glm::vec3& footPosition, float yaw, ELocomotion state, float horizontalSpeed,
-                    float runReferenceSpeed, float deltaSeconds);
+                    float runReferenceSpeed, int punchStage, float deltaSeconds);
 
         bool HasRig() const { return hasRig_; }
         const std::string& CurrentClip() const { return currentClip_; }
@@ -71,7 +73,8 @@ namespace NextAstrobot
         Assets::Scene* scene_ = nullptr;
         std::shared_ptr<Assets::Node> worldNode_;
         std::vector<Assets::Node*> boneNodes_;
-        Assets::Node* jetBone_ = nullptr;
+        /// One beam per foot; both are hidden except while hovering.
+        std::vector<Assets::Node*> jetBones_;
         NextGameplay::FRigAnimator animator_;
         bool bound_ = false;
         bool visible_ = true;

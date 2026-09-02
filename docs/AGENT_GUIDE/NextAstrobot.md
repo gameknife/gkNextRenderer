@@ -158,10 +158,37 @@ nodes" 钉住了这个形状，加新 kit 件时它会告诉你几何落在哪�
 ## 被救机器人
 
 `FRescueRigVisual` 在 `OnSceneLoaded` 按 `index_.RescueTotal()` 预建同样多个 astro_bot rig
-实例（共用主角注入的 model / material，只换 tint），停在地下并隐藏。救出一个就把 kit 的静态
-几何（`ab_char_bot_lost` 本体，或牢笼里那个 `ab_char_bot` 子节点）藏掉，把一个实例摆到原地、
-朝向玩家、播 `wave`（走近救的）或 `win`（拳击开笼的），并**沿远离玩家的方向让开 0.8 m**——
-不让开的话，站在笼子正中央开笼会把机器人生成在玩家身体里。预建是为了救援当帧不建节点树。
+实例（共用主角注入的 model / material，只换 tint），停在地下并隐藏。预建是为了救援当帧不建
+节点树。
+
+救出一个，`InteractableSystem` 当帧把 kit 的静态几何（`ab_char_bot_lost` 本体，或牢笼里那个
+`ab_char_bot` 子节点）藏掉，rig 实例**接在静态件原来站的位置上**，然后自己走完一段演出：
+
+| 阶段 | 做什么 | 时长 |
+| --- | --- | --- |
+| `Emerge` | 沿远离玩家的方向走开 0.8 m，播 `run`（0.55 倍速），朝向 = 行进方向 | 距离 / 1.6 m/s，钳在 0.4~1.1 s |
+| `Cheer` | 站定，0.35 s 内转回来面向玩家，播一次性的 `cheer` | `cheer` clip 时长（1.6 s） |
+| `Wave` | 切到循环的 `wave` 常驻 | — |
+
+两个要点：
+
+1. **起点是静态件的位置，不是让开之后的位置。** 从原地走出去才没有瞬移；直接摆到终点就是
+   之前那个"啪一下被拉过去然后开始发呆"。让开 0.8 m 本身是必须的——站在笼子正中央开笼，
+   不让开会把机器人生成在玩家身体里。
+2. **`Place` 返回这段演出的总时长**，游戏拿它去定特写镜头的持续时间，镜头正好在机器人演完
+   的那一刻还回去。
+
+### 救援特写镜头
+
+`FFollowCamera::BeginFocus(subject, viewer, holdSeconds)` 借走镜头去拍被救的机器人：
+
+- **跟随相机在底下照常模拟，特写只在 `Fill()` 里按权重混进去**（`Smoothstep01`）。所以进出
+  都是连续的，不是硬切；而且 `Forward()` / `Right()` 仍然用底下那个 yaw，
+  **玩家的移动方向不会在特写期间被镜头带跑**。玩法全程不暂停。
+- 机位取"玩家 → 机器人"这条线**偏 `FocusOffsetDegrees` 54°** 的三分之四视角，并以
+  `FocusOrbitRate` 缓慢绕行。正对着这条线拍只会拍到玩家的后脑勺贴着镜头——第一版就是这样。
+- `Snap()`（换关、复活、跳过开场）会取消特写，不会把半混完的镜头留在新画面上。
+- 查询 `game.camFocus`（0 = 纯跟随，1 = 纯特写）。
 
 ## 帧顺序（`TickWorld`）
 
@@ -192,16 +219,94 @@ nodes" 钉住了这个形状，加新 kit 件时它会告诉你几何落在哪�
 
 ## 主角 rig：`assets/scad/characters/astro_bot.scad`
 
-8 骨骼（`bone_root` / `bone_torso` / `bone_head` / `bone_arm_l` / `bone_arm_r` / `bone_leg_l` /
-`bone_leg_r` / `bone_jet`），外观复用 `kit_astro` 的配色与材质包装，所以和关卡里的 NPC 机器人
-一致。`ROLECOLOR`（纯品红）占位腰带 / 手 / 脚 / 眼灯，运行时染成 `ab_BLUE()`。
+9 骨骼（`bone_root` / `bone_torso` / `bone_head` / `bone_arm_l` / `bone_arm_r` / `bone_leg_l` /
+`bone_leg_r` / `bone_jet_l` / `bone_jet_r`），外观复用 `kit_astro` 的配色与材质包装，所以和关卡
+里的 NPC 机器人一致。`ROLECOLOR`（纯品红）占位腰带 / 手 / 脚 / 眼灯，运行时染成 `ab_BLUE()`。
 
-必需 clip（`Test_NextAstrobot.cpp` 硬性检查）：`idle` `run` `jump` `fall` `hover` `land`
-`punch` `hurt` `win` `zip` `wave`；其中 `jump/land/punch/hurt` 非循环。`run` 周期 0.5 s 对应
-6 m/s，`PlayerRigVisual` 按实际水平速度缩放播放速度。`bone_jet` 默认隐藏，只在悬浮时显形。
+必需 clip（`Test_NextAstrobot.cpp` 硬性检查）：`idle` `run` `skid` `jump` `fall` `hover` `land`
+`punch` `punch2` `kick` `hurt` `win` `zip` `wave` `cheer`；其中
+`jump/land/skid/punch/punch2/kick/hurt/cheer` 非循环。`run` 周期 0.5 s 对应 6 m/s，
+`PlayerRigVisual` 按实际水平速度缩放播放速度。
+
+**喷焰是两道，挂在脚下。** `bone_jet_l` / `bone_jet_r` 是 `bone_leg_*` 的子骨骼，各是一根
+2.2 m（约 1.4 个身高）的细长光束，`hover` 用 `scale` 的 z 分量在 1.8~3.5 m 之间脉动，两只脚
+错开半拍。这是照 PS5《宇宙机器人》改的：那边不是躯干下面一个短胖的锥，而是脚下两道又细又长
+的光柱，这也是"悬浮"最强的视觉信号。三条配套约束：
+
+1. **`hover` 里腿必须基本垂直**（±9° 以内）。喷焰挂在脚上，腿一收光束就朝两边斜出去。
+2. **谁都不能默认亮着。** `SetVisibleRecursive` 是递归的，所以 `FPlayerRigVisual::SetVisible`
+   显示 rig 之后要立刻把喷焰关掉（下一帧 `Update` 会按状态重开），
+   `FRescueRigVisual::Place` 显示实例之后同理——被救机器人永远不喷。少了这两处，画面上就是
+   每个机器人脚下插着两根 2 m 的钉子。
+3. 只有 `ELocomotion::Hover` 亮。落地那几帧也必须灭，否则光束会戳穿地板。
+
+**通道选择是这个 rig 唯一的硬坑。** 手臂和腿是绕自身局部 Z 轴对称的圆柱 + 球，所以
+`rot` 的 **Z 分量转了也看不见**：
+
+| 想要 | 用哪个分量 |
+| --- | --- |
+| 四肢前后摆动 | `X`，负 = 向前 |
+| 四肢外张 / 上举 | `Y`，左肢正 = 向外，右肢负 = 向外 |
+| 躯干 / 头 / 根骨骼的俯仰、侧倾、扭身 | `X` / `Y` / `Z` 都有效（这三个骨骼不轴对称） |
+
+初版的 `hover` / `win` / `wave` / `zip` 把"张开手臂"写成了 Z 分量，结果是这四个动作在画面上
+几乎等于绑定姿态——悬浮看不出在悬浮、被救机器人看着像在发呆。`Test_NextAstrobot.cpp` 现在
+直接采样这几个 clip 的手臂四元数，要求手至少离开身侧 60°，写回 Z 通道会立刻红。
+
+动作要点：
+
+- `run` 有三个特征，缺一个就不像那个机器人（都是从参考视频逐帧量的）：
+  **小碎步高步频**（周期 0.34 s ≈ 6 步/秒，视频里脚每 0.167 s 交错一次；腿只摆 ±26° 收在
+  身体下面，摆大步反而不像）、**上身后仰**（根骨骼 −6° + 躯干 −12°，头顶落在脚跟后面）、
+  **手臂摊开**（Y 外张 50~75° 是主角度，两臂交替一高一低地扇，X 前后摆只留 ±16° 点缀）。
+  注意后仰这一条：直觉会往田径式前倾写，这个角色恰恰相反，是大头往后坐。
+- `skid` 是 `run` 的反面：上身甩成后仰、前脚蹬出去撑住、双臂张开找平衡，收在 0.34 s 内。
+- `hover` 是"这不是在下落"的全部依据：双臂平举 76~88°、腿垂直、上身后仰、0.14 m 的上下起伏
+  加左右飘移，外加脚下两道脉动的长光束。`fall` 则刻意写成没控制住的样子，两者不会看混。
+- `jump` 的重点是**俯仰要摆一下**：蹬地帧上身前倾 16°，收腿的同时甩成后仰 20°，收在后仰 12°
+  接 `fall`。原来全程只后仰 6~10°，起跳和站着看着是同一个姿势。
+- `punch` / `punch2` / `kick` 是连招三段，见下一节。
+- `cheer` 是被救机器人的一次性欢呼（蓄力下蹲 → 跳起双臂高举 → 落地 → 两下挥拳），播完才
+  切到循环的 `wave`。
 
 生命周期铁律（同 ScadRig 指南）：`OnInit` LoadRig → `BeforeSceneRebuild` InjectAssets →
 `OnSceneLoaded` Instantiate；`OnSceneUnloaded` **只清运行时指针**，不能清注入产物。
+
+## 三段连招
+
+拳击不是一个动作而是一条链：**左直拳 → 右重拳 → 回旋踢**，由 `FPlayerController` 的
+`punchStage_`（0 = 没出招，1/2/3 = 三段）驱动，rig 按它选 `punch` / `punch2` / `kick`。
+
+| | 左直拳 | 右重拳 | 回旋踢 |
+| --- | --- | --- | --- |
+| 时长 | `PunchSeconds` 0.30 | `PunchSeconds2` 0.32 | `KickSeconds` 0.55 |
+| 判定 | `PunchRange` 1.2 / `PunchArcDegrees` 90° | 同左 | `KickRange` 1.9 / `KickArcDegrees` **360°** |
+| 前冲 | `PunchLungeSpeed` 3.4 m/s | 同左 | `KickLungeSpeed` 1.8 m/s |
+
+三条规则各有原因：
+
+1. **接招窗口 (`ComboWindowSeconds`) 和输入缓冲 (`ComboBufferSeconds`) 是两回事。** 窗口是
+   一段结束后还能接下一段的时间；缓冲是**出招过程中**按下的那一下不被丢掉，等这一段打完
+   立刻兑现。缺了缓冲就必须卡着恢复帧按，玩家一连打只会掉招。
+2. **出招期间脚下生根但仍然前冲。** 玩家自己的输入被压到 25%，方向由 `lunge_`（按 `Damp`
+   衰减）沿朝向给，转身速率降到 35%。三段原地播放看着像三个动画，带前冲才像打中了。
+3. **判定半径跟着段数走。** `player_.PunchRange()` / `PunchArcDegrees()` 是查询，敌人与
+   可交互物都用它，不再读 config——回旋踢因此能扫到身后的东西。
+
+`PunchStarted()` 每段各触发一次，所以一次连招能依次打碎三个箱子。查询 `game.punchStage`。
+
+## 急停变向
+
+全速反向输入会先插一段刹车，而不是让跑步加速度直接把速度翻过来：
+
+- 触发条件：着地、水平速度 ≥ `SkidMinSpeed` 3.4、且输入方向与当前速度夹角超过约 110°
+  （`SkidReverseDot` -0.35）。出招会取消 skid（刹车姿势和出招姿势抢同一批骨骼）。
+- 生效 `SkidSeconds` 0.34 s：目标速度归零、用 `SkidDecel` 26 刹车、转身速率降到
+  `SkidTurnScale` 30%——**身体还朝着原来的方向、脚在打滑**，这个滞后就是"急停"的全部读法。
+- 状态是 `ELocomotion::Skid`，clip 是 `skid`。查询 `game.locomotion == "skid"`。
+
+不做这一段的话，反向输入是 12 m/s 的速度差除以 50 的加速度 = 0.24 s 的倒着滑行，身上还播着
+前倾的跑步循环，看着像动画错帧而不是像转身。
 
 ## 关卡流转
 
@@ -246,16 +351,22 @@ Campaign 合计在 flow 第一次进入 `Result` 时累加一次（`levelTallied
 
 F5 切换调试面板。Agent queries 前缀 `game.`：`state` `locomotion` `clip` `player{X,Y,Z}`
 `onGround` `punching` `yaw` `coins(Total)` `puzzles(Total)` `rescued(Total)` `deaths`
-`checkpoint` `enemiesAlive` `killPlaneY` `springArm` `cam{X,Y,Z}` `rescueRigs`
+`checkpoint` `enemiesAlive` `killPlaneY` `springArm` `punchStage` `camFocus` `cam{X,Y,Z}`
+`rescueRigs`
 `level` `levelId` `levelCount` `campaign{Coins,Deaths}`
 `index.{coins,puzzles,mechanisms,enemies,hazards,warnings}` `mech.<name>.t`（机关归一化相位，
 名字见上面的机关表：`spikeball` `laser` `fan` `fountain` `windmill` `chest` `lever_2`
 `flag_1` `flag_2` …）。
 
-验收脚本：`smoke` / `locomotion` / `collect` / `mechanisms` / `goal` / `props` / `levels`。
-`props` 覆盖非 ★ 活动件、弹簧臂与被救机器人（靠 `astro.ride` 的自动转向完成拳击类断言）；
-`levels` 覆盖两关流转：结算→下一关→campaign 累加→最后一关→重开清零，顺带验第二关自己的
-拉杆门、风区与喷泉。
+验收脚本：`smoke` / `locomotion` / `collect` / `mechanisms` / `goal` / `props` / `levels` /
+`combat`。`props` 覆盖非 ★ 活动件、弹簧臂与被救机器人（靠 `astro.ride` 的自动转向完成拳击类
+断言）；`levels` 覆盖两关流转：结算→下一关→campaign 累加→最后一关→重开清零，顺带验第二关
+自己的拉杆门、风区与喷泉；`combat` 覆盖三段连招（逐段断言 `punchStage` 与 `clip`）、急停变向、
+以及救援特写从升起到自己还回去的整条曲线，并截下 kick / skid / run / jump / 救援五张图。
+
+写 `combat` 时踩到的一条：**截图会卡住时钟**。原来把跑步截图插在"跑 → 反向"中间，截图那一下
+的停顿足够让角色跑出小岛，反向时已经不在地面上，skid 永远不触发。需要摆姿势的截图要放在自己
+的片段里，不要插在有速度前提的两步之间。
 
 ```bash
 gnb.bat build NextAstrobot gkNextUnitTests
@@ -265,6 +376,7 @@ gnb.bat validate --script assets/agentscripts/nextastrobot-locomotion.agentscrip
 gnb.bat validate --script assets/agentscripts/nextastrobot-collect.agentscript.json
 gnb.bat validate --script assets/agentscripts/nextastrobot-mechanisms.agentscript.json
 gnb.bat validate --script assets/agentscripts/nextastrobot-goal.agentscript.json
+gnb.bat validate --script assets/agentscripts/nextastrobot-combat.agentscript.json
 gnb.bat shot --target NextAstrobot --ui --frames 120
 ```
 

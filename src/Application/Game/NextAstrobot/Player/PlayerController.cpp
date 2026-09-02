@@ -15,6 +15,7 @@ namespace NextAstrobot
         {
         case ELocomotion::Idle: return "idle";
         case ELocomotion::Run: return "run";
+        case ELocomotion::Skid: return "skid";
         case ELocomotion::Jump: return "jump";
         case ELocomotion::Fall: return "fall";
         case ELocomotion::Hover: return "hover";
@@ -23,6 +24,16 @@ namespace NextAstrobot
         case ELocomotion::Dead: return "dead";
         }
         return "unknown";
+    }
+
+    float FPlayerController::PunchRange() const
+    {
+        return punchStage_ >= 3 ? config_.KickRange : config_.PunchRange;
+    }
+
+    float FPlayerController::PunchArcDegrees() const
+    {
+        return punchStage_ >= 3 ? config_.KickArcDegrees : config_.PunchArcDegrees;
     }
 
     void FPlayerController::Create(NextPhysics* physics, const glm::vec3& spawnFootPosition, float yaw)
@@ -51,6 +62,11 @@ namespace NextAstrobot
         jumpRising_ = false;
         punchTimer_ = 0.0f;
         punchStarted_ = false;
+        punchStage_ = 0;
+        comboTimer_ = 0.0f;
+        punchBuffer_ = 0.0f;
+        lunge_ = 0.0f;
+        skidTimer_ = 0.0f;
     }
 
     void FPlayerController::Destroy()
@@ -120,6 +136,11 @@ namespace NextAstrobot
         hoverUsed_ = false;
         hoverRemaining_ = config_.HoverMaxSeconds;
         punchTimer_ = 0.0f;
+        punchStage_ = 0;
+        comboTimer_ = 0.0f;
+        punchBuffer_ = 0.0f;
+        lunge_ = 0.0f;
+        skidTimer_ = 0.0f;
         jumpRising_ = false;
     }
 
@@ -214,12 +235,33 @@ namespace NextAstrobot
             }
         }
 
-        if (input.punchPressed && punchTimer_ <= 0.0f)
-        {
-            punchTimer_ = config_.PunchSeconds;
-            punchStarted_ = true;
-        }
+        // --- three-hit combo: left jab -> right cross -> spin kick ---
+        // A press thrown mid-swing is buffered rather than dropped: without that the
+        // player has to wait for the recovery frames to end and the chain never lands.
+        punchBuffer_ = input.punchPressed ? config_.ComboBufferSeconds
+                                          : std::max(0.0f, punchBuffer_ - deltaSeconds);
         punchTimer_ = std::max(0.0f, punchTimer_ - deltaSeconds);
+        comboTimer_ = std::max(0.0f, comboTimer_ - deltaSeconds);
+        if (punchBuffer_ > 0.0f && punchTimer_ <= 0.0f)
+        {
+            // comboTimer_ still running means the previous stage is within its chain
+            // window; past the last stage the chain restarts at the jab.
+            punchStage_ = (comboTimer_ > 0.0f && punchStage_ >= 1 && punchStage_ < 3) ? punchStage_ + 1 : 1;
+            punchTimer_ = punchStage_ == 3   ? config_.KickSeconds
+                          : punchStage_ == 2 ? config_.PunchSeconds2
+                                             : config_.PunchSeconds;
+            comboTimer_ = punchTimer_ + config_.ComboWindowSeconds;
+            punchBuffer_ = 0.0f;
+            punchStarted_ = true;
+            lunge_ = punchStage_ == 3 ? config_.KickLungeSpeed : config_.PunchLungeSpeed;
+            // Attacking cancels a skid: the brake pose and the swing fight over the same bones.
+            skidTimer_ = 0.0f;
+        }
+        if (punchTimer_ <= 0.0f && comboTimer_ <= 0.0f)
+        {
+            punchStage_ = 0;
+        }
+        lunge_ = punchTimer_ > 0.0f ? Damp(lunge_, 0.0f, 9.0f, deltaSeconds) : 0.0f;
 
         // --- horizontal ---
         const glm::vec3 forward = glm::normalize(glm::vec3(cameraForward.x, 0.0f, cameraForward.z));
@@ -231,6 +273,26 @@ namespace NextAstrobot
             wish /= wishLength;
         }
 
+        // --- skid stop: a hard reversal at speed brakes before it turns ---
+        // Left to the run accel alone a full reversal takes about a quarter second of
+        // the character sliding backwards with a forward-leaning run cycle on it, which
+        // reads as an animation glitch rather than as a turn.
+        if (skidTimer_ > 0.0f)
+        {
+            skidTimer_ = onGround_ ? std::max(0.0f, skidTimer_ - deltaSeconds) : 0.0f;
+        }
+        else if (onGround_ && punchTimer_ <= 0.0f && wishLength > 0.5f)
+        {
+            const glm::vec3 travel(velocity_.x, 0.0f, velocity_.z);
+            const float travelSpeed = glm::length(travel);
+            if (travelSpeed >= config_.SkidMinSpeed &&
+                glm::dot(travel / travelSpeed, wish / wishLength) <= config_.SkidReverseDot)
+            {
+                skidTimer_ = config_.SkidSeconds;
+            }
+        }
+        const bool skidding = skidTimer_ > 0.0f;
+
         const float control = onGround_ ? 1.0f : config_.AirControl;
         // Steering happens relative to the air: in a draught the target velocity is the
         // player's own run added to whatever the fan is doing to the air around them.
@@ -240,8 +302,20 @@ namespace NextAstrobot
         // just annoying.
         constexpr float kGroundWindScale = 0.25f;
         const glm::vec3 stream = draught * (onGround_ ? kGroundWindScale : 1.0f);
-        const glm::vec3 desired = wish * config_.RunSpeed + glm::vec3(stream.x, 0.0f, stream.z);
-        const float accel = config_.RunAccel * control;
+        // While skidding the target is a standstill, so the brake is the only thing acting
+        // on the velocity; while attacking the stage carries the character forward and the
+        // stick only trims it, which is what makes a combo close the distance.
+        glm::vec3 run = wish * config_.RunSpeed;
+        if (skidding)
+        {
+            run = glm::vec3(0.0f);
+        }
+        else if (punchTimer_ > 0.0f)
+        {
+            run = wish * config_.RunSpeed * 0.25f + Facing() * lunge_;
+        }
+        const glm::vec3 desired = run + glm::vec3(stream.x, 0.0f, stream.z);
+        const float accel = skidding ? config_.SkidDecel : config_.RunAccel * control;
         velocity_.x = Approach(velocity_.x, desired.x, accel, deltaSeconds);
         velocity_.z = Approach(velocity_.z, desired.z, accel, deltaSeconds);
 
@@ -252,7 +326,10 @@ namespace NextAstrobot
             float delta = targetYaw - yaw_;
             while (delta > kPi) delta -= 2.0f * kPi;
             while (delta < -kPi) delta += 2.0f * kPi;
-            const float step = glm::radians(config_.TurnRateDegrees) * deltaSeconds;
+            const float turnScale = skidding                ? config_.SkidTurnScale
+                                    : punchTimer_ > 0.0f    ? 0.35f
+                                                            : 1.0f;
+            const float step = glm::radians(config_.TurnRateDegrees) * turnScale * deltaSeconds;
             yaw_ += std::clamp(delta, -step, step);
         }
 
@@ -349,7 +426,9 @@ namespace NextAstrobot
         }
         else if (onGround_)
         {
-            state_ = HorizontalSpeed() > 0.4f ? ELocomotion::Run : ELocomotion::Idle;
+            state_ = skidding                  ? ELocomotion::Skid
+                     : HorizontalSpeed() > 0.4f ? ELocomotion::Run
+                                                : ELocomotion::Idle;
         }
         else if (hovering)
         {

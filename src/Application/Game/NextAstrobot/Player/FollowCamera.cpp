@@ -151,6 +151,9 @@ namespace NextAstrobot
 
     void FFollowCamera::Snap(const glm::vec3& footPosition, float yaw)
     {
+        // A snap is a level load, a respawn or ejecting from a cutscene; none of them
+        // should leave a half-blended close-up on top of the new shot.
+        CancelFocus();
         yaw_ = yaw;
         boomScale_ = 1.0f;
         target_ = footPosition + glm::vec3(0.0f, config_.TargetHeight, 0.0f);
@@ -165,10 +168,58 @@ namespace NextAstrobot
         manualIdleSeconds_ = 0.0f;
     }
 
+    void FFollowCamera::BeginFocus(const glm::vec3& subject, const glm::vec3& viewer, float holdSeconds)
+    {
+        if (!(holdSeconds > 0.0f))
+        {
+            return;
+        }
+        if (focusWeight_ <= 0.0f)
+        {
+            // Three-quarter view: shooting along the player-to-subject line frames the
+            // player's back a metre from the lens and nothing else, so the shot is set up
+            // off to one side of it with both of them in frame.
+            const glm::vec3 toSubject = subject - viewer;
+            const float axis = glm::length(glm::vec2(toSubject.x, toSubject.z)) > 0.05f
+                                   ? std::atan2(toSubject.x, toSubject.z)
+                                   : yaw_;
+            focusYaw_ = WrapAngle(axis + glm::radians(config_.FocusOffsetDegrees));
+        }
+        focusSubject_ = subject;
+        focusRemaining_ = std::max(focusRemaining_, holdSeconds);
+    }
+
+    void FFollowCamera::CancelFocus()
+    {
+        focusRemaining_ = 0.0f;
+        focusWeight_ = 0.0f;
+    }
+
+    void FFollowCamera::UpdateFocus(float deltaSeconds)
+    {
+        const bool holding = focusRemaining_ > 0.0f;
+        focusRemaining_ = std::max(0.0f, focusRemaining_ - deltaSeconds);
+        const float blend = std::max(config_.FocusBlendSeconds, 0.01f);
+        const float step = deltaSeconds / blend;
+        focusWeight_ = holding ? std::min(1.0f, focusWeight_ + step) : std::max(0.0f, focusWeight_ - step);
+        if (focusWeight_ <= 0.0f)
+        {
+            return;
+        }
+        // A slow orbit keeps the close-up alive while the robot performs; a still lens on
+        // a looping animation reads as a frozen frame.
+        focusYaw_ = WrapAngle(focusYaw_ + config_.FocusOrbitRate * deltaSeconds);
+        focusTarget_ = focusSubject_;
+        focusPosition_ = focusSubject_ + glm::vec3(-std::sin(focusYaw_) * config_.FocusDistance,
+                                                   config_.FocusHeight,
+                                                   -std::cos(focusYaw_) * config_.FocusDistance);
+    }
+
     void FFollowCamera::Update(const glm::vec3& footPosition, const glm::vec3& horizontalVelocity,
                                float deltaSeconds, Assets::Scene* scene)
     {
         manualIdleSeconds_ += deltaSeconds;
+        UpdateFocus(deltaSeconds);
 
         // Auto-yaw: once the player has stopped steering the camera, drift it behind the
         // direction of travel so a chase does not need constant stick work.
@@ -224,8 +275,20 @@ namespace NextAstrobot
 
     void FFollowCamera::Fill(Assets::Camera& outCamera) const
     {
-        outCamera.ModelView = glm::lookAt(position_, target_, glm::vec3(0.0f, 1.0f, 0.0f));
-        outCamera.FieldOfView = config_.Fov;
+        glm::vec3 eye = position_;
+        glm::vec3 look = target_;
+        float fov = config_.Fov;
+        if (focusWeight_ > 0.0f)
+        {
+            // Smoothstep rather than the raw ramp: the ends of the move are what sell it
+            // as a camera cut and not as a lerp.
+            const float weight = Smoothstep01(focusWeight_);
+            eye = glm::mix(position_, focusPosition_, weight);
+            look = glm::mix(target_, focusTarget_, weight);
+            fov = glm::mix(config_.Fov, config_.FocusFov, weight);
+        }
+        outCamera.ModelView = glm::lookAt(eye, look, glm::vec3(0.0f, 1.0f, 0.0f));
+        outCamera.FieldOfView = fov;
         outCamera.NearPlane = 0.1f;
         outCamera.FarPlane = 1200.0f;
     }

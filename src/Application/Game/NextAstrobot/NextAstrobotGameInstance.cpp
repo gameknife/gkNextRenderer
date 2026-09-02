@@ -147,6 +147,7 @@ void NextAstrobotGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
     // A toy-plastic level with a lot of small props: the rasteriser plus software GI is
     // the cheapest path that still shows the kit's gloss.
     cvars.SetDefaultFromString("r.rendererType", "0", &error);
+    cvars.SetDefaultFromString("r.upscaler.type", "2", &error);
 
     cvars.RegisterBool("astro.god", false, &godMode_, NextCVar::ECVarFlags::None,
                        "Ignore hazards, enemies and the kill plane",
@@ -526,7 +527,7 @@ void NextAstrobotGameInstance::TickWorld(float deltaSeconds)
     const FEnemyOutcome enemyOutcome =
         enemies_.Update(levelTime_, deltaSeconds, foot, player_.ControllerHeight(), fallSpeedBefore,
                         player_.PunchActive(), foot + glm::vec3(0.0f, player_.ControllerHeight() * 0.5f, 0.0f),
-                        player_.Facing(), config_.Move.PunchRange, config_.Move.PunchArcDegrees);
+                        player_.Facing(), player_.PunchRange(), player_.PunchArcDegrees());
     if (enemyOutcome.stomped)
     {
         player_.Bounce(config_.Move.StompBounceSpeed);
@@ -540,7 +541,7 @@ void NextAstrobotGameInstance::TickWorld(float deltaSeconds)
     const FInteractionEvent interaction =
         interactables_.Update(deltaSeconds, foot, player_.PunchStarted(),
                               foot + glm::vec3(0.0f, player_.ControllerHeight() * 0.5f, 0.0f), player_.Facing(),
-                              config_.Move.PunchRange, config_.Move.PunchArcDegrees);
+                              player_.PunchRange(), player_.PunchArcDegrees());
     if (interaction.rescued > 0)
     {
         stats.rescued += interaction.rescued;
@@ -548,16 +549,22 @@ void NextAstrobotGameInstance::TickWorld(float deltaSeconds)
     }
     for (const FRescueEvent& freed : interaction.freed)
     {
-        // Step the robot clear of whoever let it out and turn it to face them; a caged one
-        // cheers, a stranded one waves. Without the step a cage punched from directly on
-        // top of it would stand the robot inside the player. The kit geometry it replaces
-        // was hidden by InteractableSystem.
+        // The rig takes over exactly where the kit geometry stood (InteractableSystem hid
+        // it this frame) and walks itself clear of whoever let it out, so the swap has no
+        // teleport in it. Without the step a cage punched from directly on top of it would
+        // stand the robot inside the player.
         glm::vec3 away(freed.position.x - foot.x, 0.0f, freed.position.z - foot.z);
         const float distance = glm::length(away);
         away = distance > 0.3f ? away / distance : player_.Facing();
         const glm::vec3 spot = freed.position + away * 0.8f;
         const glm::vec3 toPlayer = foot - spot;
-        rescueRigs_.Place(spot, std::atan2(toPlayer.x, toPlayer.z), freed.fromCage ? "win" : "wave");
+        const float showcase = rescueRigs_.Place(freed.position, spot, std::atan2(toPlayer.x, toPlayer.z));
+        if (showcase > 0.0f)
+        {
+            // Hold the close-up for exactly as long as the walk-out and the cheer take, so
+            // the shot hands itself back the moment the performance is over.
+            camera_.BeginFocus(spot + glm::vec3(0.0f, config_.Camera.FocusTargetHeight, 0.0f), foot, showcase);
+        }
     }
     rescueRigs_.Update(deltaSeconds);
     if (interaction.coinsFromSmash > 0)
@@ -638,7 +645,7 @@ void NextAstrobotGameInstance::OnTick(double deltaSeconds)
     }
 
     rig_.Update(player_.Position(), player_.Yaw(), player_.State(), player_.HorizontalSpeed(),
-                config_.Move.RunSpeed, dt);
+                config_.Move.RunSpeed, player_.PunchStage(), dt);
     // With the spring arm fully collapsed the lens is inside the character; drawing the
     // rig then is just a wall of white plastic.
     rig_.SetVisible(camera_.BoomDistance() > config_.Camera.SpringArmHideRigDistance);
@@ -866,6 +873,8 @@ void NextAstrobotGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryR
     reg.Add("killPlaneY", [this]() -> Value { return static_cast<double>(hazards_.KillPlaneY()); });
 
     reg.Add("springArm", [this]() -> Value { return static_cast<double>(camera_.SpringArm01()); });
+    reg.Add("punchStage", [this]() -> Value { return static_cast<int64_t>(player_.PunchStage()); });
+    reg.Add("camFocus", [this]() -> Value { return static_cast<double>(camera_.FocusWeight()); });
     reg.Add("camX", [this]() -> Value { return static_cast<double>(camera_.Position().x); });
     reg.Add("camY", [this]() -> Value { return static_cast<double>(camera_.Position().y); });
     reg.Add("camZ", [this]() -> Value { return static_cast<double>(camera_.Position().z); });

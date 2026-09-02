@@ -33,7 +33,12 @@ anim_sit = [ ["loop", false], ["bone_root","pos",[[0,[0,0,-0.42]]]] ];   // 单�
 4. 通道 `rot`（度，OpenSCAD rotate 语义）/ `pos`（SCAD 单位）/ `scale`；key 时间单调递增，线性插值（rot 加载期转 quat 后 slerp）。`["loop", bool]` 元数据行，默认 true；duration = 最大 key 时间。
 5. 合成语义：`L_final = L_bind · T(pos) · R(rot) · S(scale)`，空 clip = 绑定姿态。
 6. 1 unit = 1 m，Z-up，根骨骼原点落地；引用未知骨骼的通道 → warning + 丢弃。
-7. 引擎面朝 +Z = SCAD 的 −Y（鼻子/鞋尖朝 −Y 建模）。
+7. **轴对称的肢体，绕自身对称轴的旋转是看不见的。** 手臂/腿常常是一根沿局部 Z 轴的圆柱
+   加一个球，那么 `rot` 的 Z 分量在画面上就是空操作：前后摆动要写 X，外张/上举要写 Y。
+   这一条不报 warning（数据完全合法），症状是动作"播了但角色像站着不动"。
+   `astro_bot.scad` 的 hover/win/wave/zip 初版就整批写在了 Z 上；
+   `Test_NextAstrobot.cpp` 现在采样手部四元数把它钉住，新 rig 值得照抄这个断言。
+8. 引擎面朝 +Z = SCAD 的 −Y（鼻子/鞋尖朝 −Y 建模）。
 
 示例资产：`assets/scad/characters/agent_basic.scad`（7 骨骼、~250 tris、idle/walk/sit/work）。
 

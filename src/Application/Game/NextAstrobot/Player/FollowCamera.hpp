@@ -66,6 +66,17 @@ namespace NextAstrobot
         /// Right stick / RMB drag, in normalized units per second.
         void AddManualYaw(float amount);
 
+        /// Cuts a close-up on `subject` for `holdSeconds`, then hands the shot back. The
+        /// chase boom keeps simulating underneath and Fill() blends between the two, so
+        /// both the way in and the way out are continuous rather than a hard cut, and the
+        /// movement basis (Forward/Right) never moves under the player's fingers.
+        /// `viewer` is where the player is standing: the shot is set up off to the side of
+        /// the line between the two so neither of them stands in front of the other.
+        void BeginFocus(const glm::vec3& subject, const glm::vec3& viewer, float holdSeconds);
+        void CancelFocus();
+        /// 0 = pure chase camera, 1 = pure close-up.
+        float FocusWeight() const { return focusWeight_; }
+
         void Fill(Assets::Camera& outCamera) const;
         float Yaw() const { return yaw_; }
         /// 1.0 when the boom is at full length, less while something is in the way.
@@ -77,11 +88,22 @@ namespace NextAstrobot
         glm::vec3 Position() const { return position_; }
 
     private:
+        void UpdateFocus(float deltaSeconds);
+
         FCameraConfig config_{};
         float yaw_ = 0.0f;
         float manualIdleSeconds_ = 10.0f;
         float boomScale_ = 1.0f;
         glm::vec3 position_{0.0f, 5.0f, 10.0f};
         glm::vec3 target_{0.0f};
+
+        // Close-up state. focusRemaining_ counts the hold down; focusWeight_ is the blend
+        // and outlives it by the blend time, which is how the shot eases back.
+        glm::vec3 focusSubject_{0.0f};
+        float focusRemaining_ = 0.0f;
+        float focusWeight_ = 0.0f;
+        float focusYaw_ = 0.0f;
+        glm::vec3 focusPosition_{0.0f};
+        glm::vec3 focusTarget_{0.0f};
     };
 }

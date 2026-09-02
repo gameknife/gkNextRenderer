@@ -149,10 +149,14 @@ namespace NextAstrobot
             currentClip_ = "idle";
             bound_ = true;
         }
-        jetBone_ = BoneNode("bone_jet");
-        if (jetBone_)
+        jetBones_.clear();
+        for (const char* jet : {"bone_jet_l", "bone_jet_r"})
         {
-            Assets::NodeUtils::SetVisibleRecursive(jetBone_->shared_from_this(), false);
+            if (Assets::Node* node = BoneNode(jet))
+            {
+                jetBones_.push_back(node);
+                Assets::NodeUtils::SetVisibleRecursive(node->shared_from_this(), false);
+            }
         }
         wasAirborne_ = false;
         landTimer_ = 0.0f;
@@ -165,7 +169,7 @@ namespace NextAstrobot
         scene_ = nullptr;
         worldNode_.reset();
         boneNodes_.clear();
-        jetBone_ = nullptr;
+        jetBones_.clear();
         bound_ = false;
         currentClip_.clear();
     }
@@ -180,11 +184,18 @@ namespace NextAstrobot
         if (worldNode_)
         {
             SetSubtreeVisible(worldNode_, visible);
+            // That call is recursive, so showing the rig also shows the thruster beams;
+            // the next Update lights them again if the player is still hovering, and one
+            // frame without a beam beats one frame of two metre spikes on the ground.
+            for (Assets::Node* jet : jetBones_)
+            {
+                Assets::NodeUtils::SetVisibleRecursive(jet->shared_from_this(), false);
+            }
         }
     }
 
     void FPlayerRigVisual::Update(const glm::vec3& footPosition, float yaw, ELocomotion state, float horizontalSpeed,
-                                  float runReferenceSpeed, float deltaSeconds)
+                                  float runReferenceSpeed, int punchStage, float deltaSeconds)
     {
         if (!bound_ || !worldNode_)
         {
@@ -205,6 +216,9 @@ namespace NextAstrobot
 
         const char* clip = "idle";
         float playSpeed = 1.0f;
+        // Combat reads as three separate hits only if the clips swap almost instantly; the
+        // locomotion fade stays long enough to hide the run/idle seam.
+        float fade = 0.12f;
         switch (state)
         {
         case ELocomotion::Idle: clip = landTimer_ > 0.0f ? "land" : "idle"; break;
@@ -213,26 +227,35 @@ namespace NextAstrobot
             // The run clip is authored at the config's run speed; scale it with the actual one.
             playSpeed = runReferenceSpeed > 0.1f ? std::clamp(horizontalSpeed / runReferenceSpeed, 0.4f, 1.6f) : 1.0f;
             break;
+        case ELocomotion::Skid:
+            clip = "skid";
+            fade = 0.06f;
+            break;
         case ELocomotion::Jump: clip = "jump"; break;
         case ELocomotion::Fall: clip = "fall"; break;
         case ELocomotion::Hover: clip = "hover"; break;
         case ELocomotion::Zip: clip = "zip"; break;
-        case ELocomotion::Punch: clip = "punch"; break;
+        case ELocomotion::Punch:
+            clip = punchStage >= 3 ? "kick" : punchStage == 2 ? "punch2" : "punch";
+            fade = 0.05f;
+            break;
         case ELocomotion::Dead: clip = "hurt"; break;
         }
 
         if (currentClip_ != clip)
         {
-            animator_.Play(clip, 0.12f);
+            animator_.Play(clip, fade);
             currentClip_ = clip;
         }
         animator_.SetPlaySpeed(playSpeed);
         animator_.Update(deltaSeconds);
 
-        if (jetBone_)
+        // The beams are long enough to reach the ground from a low hover, so they have to
+        // be off in every other state - including the frames right after a landing.
+        const bool jetsLit = visible_ && state == ELocomotion::Hover;
+        for (Assets::Node* jet : jetBones_)
         {
-            Assets::NodeUtils::SetVisibleRecursive(jetBone_->shared_from_this(),
-                                                   visible_ && state == ELocomotion::Hover);
+            Assets::NodeUtils::SetVisibleRecursive(jet->shared_from_this(), jetsLit);
         }
     }
 }

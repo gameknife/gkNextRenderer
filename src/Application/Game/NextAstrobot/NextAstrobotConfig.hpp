@@ -26,9 +26,36 @@ namespace NextAstrobot
         float HoverMaxSeconds = 1.0f;
         float HoverFallSpeed = -1.0f;
         float StompBounceSpeed = 5.0f;
-        float PunchSeconds = 0.35f;
+        // Three-hit combo: left jab -> right cross -> spin kick. Each stage has its own
+        // length; pressing again inside ComboWindowSeconds after a stage ends advances to
+        // the next one, otherwise the next press starts over at the jab.
+        float PunchSeconds = 0.30f;
+        float PunchSeconds2 = 0.32f;
+        float KickSeconds = 0.55f;
+        float ComboWindowSeconds = 0.45f;
+        // How long a press thrown mid-swing stays queued. Long enough to cover a whole
+        // stage, because a combo the player has to time to the frame is one they mash at
+        // and lose hits from.
+        float ComboBufferSeconds = 0.45f;
         float PunchRange = 1.2f;
         float PunchArcDegrees = 90.0f;
+        // The spin kick sweeps the whole circle, so it reaches further and hits behind.
+        float KickRange = 1.9f;
+        float KickArcDegrees = 360.0f;
+        // Each hit carries the character forward a little, which is what makes a combo
+        // feel like it lands rather than like three animations played on the spot.
+        float PunchLungeSpeed = 3.4f;
+        float KickLungeSpeed = 1.8f;
+        // Skid stop: reversing at speed brakes first instead of flipping the velocity
+        // through the run accel, so a hard turn reads as a slide with a plant.
+        float SkidMinSpeed = 3.4f;
+        float SkidSeconds = 0.34f;
+        // Cosine between travel and wish direction under which a turn counts as a reversal.
+        float SkidReverseDot = -0.35f;
+        float SkidDecel = 26.0f;
+        // The body keeps facing where it was going while the feet slide; that lag is the
+        // whole read, so the turn rate is scaled down for the length of the skid.
+        float SkidTurnScale = 0.3f;
         float ControllerHeight = 1.5f;
         float ControllerRadius = 0.35f;
         float MaxStepHeight = 0.55f;
@@ -54,6 +81,18 @@ namespace NextAstrobot
         // below this the rig is hidden rather than filling the lens.
         float SpringArmHideRigDistance = 1.0f;
         float SpringArmReturnRate = 7.0f;     // m/s the boom extends again once clear
+        // Rescue close-up: the lens leaves the boom and orbits the freed robot while it
+        // walks out and cheers. Blended in and out rather than cut, so the shot stays
+        // continuous with the chase camera it came from and returns to.
+        float FocusDistance = 4.0f;
+        float FocusHeight = 1.9f;
+        float FocusTargetHeight = 1.0f;
+        float FocusFov = 38.0f;
+        float FocusBlendSeconds = 0.45f;
+        float FocusOrbitRate = 0.3f;          // rad/s the close-up drifts around the subject
+        // How far off the player-to-subject line the close-up sits. Shooting straight down
+        // that line puts the player's back across the lens, which is all you see.
+        float FocusOffsetDegrees = 54.0f;
     };
 
     struct FWorldConfig

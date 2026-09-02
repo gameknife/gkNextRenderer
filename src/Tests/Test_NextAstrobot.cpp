@@ -176,24 +176,25 @@ TEST_CASE("astro_bot rig meets the NextAstrobot animation contract", "[Unit][Sca
     CHECK(warnings.empty());
 
     for (const char* bone : {"bone_root", "bone_torso", "bone_head", "bone_arm_l", "bone_arm_r", "bone_leg_l",
-                             "bone_leg_r", "bone_jet"})
+                             "bone_leg_r", "bone_jet_l", "bone_jet_r"})
     {
         INFO(bone);
         REQUIRE(rig.FindBone(bone) >= 0);
     }
-    CHECK(rig.bones.size() == 8);
+    CHECK(rig.bones.size() == 9);
     CHECK(rig.bones[0].name == "bone_root");
     // The root is the ground anchor: the character stands on its own origin.
     CHECK(rig.bones[0].bindT.y == Catch::Approx(0.0f).margin(1e-4));
 
     // PlayerRigVisual selects among exactly these; a missing one silently falls back to
     // the bind pose, which reads as a frozen character rather than an error.
-    for (const char* clip : {"idle", "run", "jump", "fall", "hover", "land", "punch", "hurt", "win", "zip", "wave"})
+    for (const char* clip : {"idle", "run", "skid", "jump", "fall", "hover", "land", "punch", "punch2", "kick",
+                             "hurt", "win", "zip", "wave", "cheer"})
     {
         INFO(clip);
         REQUIRE(rig.FindClip(clip) != nullptr);
     }
-    for (const char* oneShot : {"jump", "land", "punch", "hurt"})
+    for (const char* oneShot : {"jump", "land", "skid", "punch", "punch2", "kick", "hurt", "cheer"})
     {
         INFO(oneShot);
         CHECK_FALSE(rig.FindClip(oneShot)->loop);
@@ -203,8 +204,41 @@ TEST_CASE("astro_bot rig meets the NextAstrobot animation contract", "[Unit][Sca
         INFO(looping);
         CHECK(rig.FindClip(looping)->loop);
     }
+
+    // Arms and legs are cylinders and spheres centred on their own local Z axis, so a
+    // rotation about Z moves nothing on them: every spread and raise has to be authored on
+    // the Y channel. This is not a style rule, it is the difference between a hovering
+    // robot with its arms out and one standing in the bind pose. Sampling the poses is the
+    // only way to catch a clip that went back to the Z channel.
+    for (const char* clip : {"hover", "win", "wave", "zip"})
+    {
+        INFO(clip);
+        const Assets::FRigClip* found = rig.FindClip(clip);
+        REQUIRE(found != nullptr);
+        // -1 = hanging straight down (the bind pose), 0 = held out level, +1 = overhead.
+        float raised = -1.0f;
+        for (const Assets::FRigChannel& channel : found->channels)
+        {
+            const std::string& bone = rig.bones[channel.bone].name;
+            if (bone != "bone_arm_l" && bone != "bone_arm_r")
+            {
+                continue;
+            }
+            for (const Assets::AnimationKey<glm::quat>& key : channel.rotation.Keys)
+            {
+                // The hand hangs along bone-local -Y in engine space; how far the pose
+                // lifts it is what "the arm actually moved" means.
+                const glm::vec3 hand = key.Value * glm::vec3(0.0f, -1.0f, 0.0f);
+                raised = std::max(raised, hand.y);
+            }
+        }
+        // -cos(60 degrees): anything lower and the arm never left the side of the body.
+        CHECK(raised > -0.5f);
+    }
     // The run cycle is authored for the config's 6 m/s so PlayerRigVisual can scale it.
-    CHECK(rig.FindClip("run")->duration == Catch::Approx(0.5f).margin(1e-4));
+    // 0.34 s is the cadence measured off the PS5 reference: small steps at about six a
+    // second, not a long stride.
+    CHECK(rig.FindClip("run")->duration == Catch::Approx(0.34f).margin(1e-4));
 
     // The character is 1.6 m tall, which is what every jump height and platform gap in
     // kit_astro was laid out against.

@@ -25,6 +25,8 @@ namespace NextAstrobot
     {
         Idle,
         Run,
+        /// Braking through a hard reversal: the feet slide while the body swings round.
+        Skid,
         Jump,
         Fall,
         Hover,
@@ -94,6 +96,12 @@ namespace NextAstrobot
         bool PunchActive() const { return punchTimer_ > 0.0f; }
         /// True on the frame the punch started, so a hit resolves exactly once.
         bool PunchStarted() const { return punchStarted_; }
+        /// 0 while not attacking, then 1 left jab, 2 right cross, 3 spin kick. The rig
+        /// picks its clip from this and the hit test its reach.
+        int PunchStage() const { return punchStage_; }
+        /// Reach and arc of the stage being thrown; the kick sweeps the full circle.
+        float PunchRange() const;
+        float PunchArcDegrees() const;
         float ControllerHeight() const { return config_.ControllerHeight; }
         /// Foot-centred forward direction the punch cone is built around.
         glm::vec3 Facing() const;
@@ -124,6 +132,14 @@ namespace NextAstrobot
         bool jumpRising_ = false;
         float punchTimer_ = 0.0f;
         bool punchStarted_ = false;
+        int punchStage_ = 0;
+        /// Time left to chain into the next stage; outlives punchTimer_ by the combo window.
+        float comboTimer_ = 0.0f;
+        /// A press thrown during the previous stage, spent the moment that stage ends.
+        float punchBuffer_ = 0.0f;
+        /// Forward carry of the stage being thrown, in m/s, damped to zero.
+        float lunge_ = 0.0f;
+        float skidTimer_ = 0.0f;
 
         glm::vec3 zipFrom_{0.0f};
         glm::vec3 zipTo_{0.0f};
