@@ -16,6 +16,14 @@
       "titleCamera": "overview",
       "introCameraPath": "level-flythrough",
       "killPlaneOffset": -20.0
+    },
+    {
+      "id": "frost_peak",
+      "displayName": "极光冰峰",
+      "scene": "assets/scad/source/astro/frost_peak.scad",
+      "titleCamera": "overview",
+      "introCameraPath": "level-flythrough",
+      "killPlaneOffset": -20.0
     }
   ]
 }

@@ -5,12 +5,13 @@
 移动平台、摆锤、跷跷板、旋转盘、传送带、滑索穿过悬浮岛，吃金币、捡拼图、救出被困机器人，抵达
 终点门结算，然后接着打下一关。
 
-现有两关，顺序由 `assets/configs/nextastrobot/levels.json` 决定：
+现有三关，顺序由 `assets/configs/nextastrobot/levels.json` 决定：
 
 | # | id | 名字 | 场景 | 教什么 |
 | --- | --- | --- | --- | --- |
 | 1 | `sky_garden` | 星尘花园 | `assets/scad/source/astro/sky_garden.scad` | 平台机关：移动平台、摆锤、跷跷板、易碎石板、旋转盘、弹跳垫、滑索 |
 | 2 | `dune_relay` | 落日沙洲 | `assets/scad/source/astro/dune_relay.scad` | 非 ★ 活动件：风扇顺风、双激光节奏、喷泉托举、拉杆开门、摆动刺球 |
+| 3 | `frost_peak` | 极光冰峰 | `assets/scad/source/astro/frost_peak.scad` | 冰雪全要素与大结局：雪原浮岛、冰晶簇、雪松、冰泉托举、高塔牢笼救援与高空超长滑索 |
 
 本文是**现行契约**。改机关、改关卡、加关卡之前先读这里。
 
@@ -51,7 +52,7 @@ src/Application/Game/NextAstrobot/
 ├── World/RescueRigVisual.{hpp,cpp}      被救机器人的 rig 实例池（复用主角 rig 资产）
 └── UI/AstroHud.{hpp,cpp}                HUD 与标题 / 暂停 / 结算画面
 assets/configs/nextastrobot/{gameplay.json, levels.json}
-assets/scad/source/astro/{sky_garden,dune_relay}.scad   两关
+assets/scad/source/astro/{sky_garden,dune_relay,frost_peak}.scad   三关
 assets/scad/characters/astro_bot.scad    主角 rig（8 骨骼，11 个 clip）
 assets/agentscripts/nextastrobot-*.agentscript.json
 ```
