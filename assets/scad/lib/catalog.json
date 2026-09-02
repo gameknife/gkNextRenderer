@@ -13,7 +13,7 @@
           "category": "furn",
           "params": "",
           "paramList": [],
-          "line": 522,
+          "line": 619,
           "footprint": [
             0.77,
             0.57
@@ -34,7 +34,7 @@
           "category": "furn",
           "params": "",
           "paramList": [],
-          "line": 244,
+          "line": 341,
           "footprint": [
             2.32,
             0.56
@@ -55,7 +55,7 @@
           "category": "furn",
           "params": "",
           "paramList": [],
-          "line": 1074,
+          "line": 1171,
           "footprint": [
             1.51,
             0.96
@@ -76,7 +76,7 @@
           "category": "furn",
           "params": "",
           "paramList": [],
-          "line": 311,
+          "line": 408,
           "footprint": [
             3.52,
             0.7
@@ -102,7 +102,7 @@
               "default": "ap_BROWNC()"
             }
           ],
-          "line": 334,
+          "line": 431,
           "footprint": [
             1.38,
             1.55
@@ -128,19 +128,19 @@
               "default": "\"1\""
             }
           ],
-          "line": 159,
+          "line": 160,
           "footprint": [
-            2.45,
+            2.49,
             1.96
           ],
-          "height": 2.98,
+          "height": 3.04,
           "zMin": 0.0,
           "center": [
-            -0.24,
+            -0.22,
             0.62
           ],
-          "triangles": 374,
-          "colors": 13,
+          "triangles": 1070,
+          "colors": 22,
           "warnings": 0,
           "ok": true
         },
@@ -149,7 +149,7 @@
           "category": "furn",
           "params": "",
           "paramList": [],
-          "line": 465,
+          "line": 562,
           "footprint": [
             1.6,
             0.68
@@ -175,7 +175,7 @@
               "default": "true"
             }
           ],
-          "line": 1196,
+          "line": 1293,
           "footprint": [
             1.6,
             0.7
@@ -196,7 +196,7 @@
           "category": "furn",
           "params": "",
           "paramList": [],
-          "line": 114,
+          "line": 115,
           "footprint": [
             3.2,
             1.9
@@ -217,7 +217,7 @@
           "category": "furn",
           "params": "",
           "paramList": [],
-          "line": 1027,
+          "line": 1124,
           "footprint": [
             5.12,
             0.81
@@ -238,7 +238,7 @@
           "category": "furn",
           "params": "",
           "paramList": [],
-          "line": 1211,
+          "line": 1308,
           "footprint": [
             1.3,
             0.69
@@ -264,7 +264,7 @@
               "default": "[0.80, 0.30, 0.28]"
             }
           ],
-          "line": 455,
+          "line": 552,
           "footprint": [
             1.02,
             0.63
@@ -290,7 +290,7 @@
               "default": "\"GATE 1\""
             }
           ],
-          "line": 220,
+          "line": 317,
           "footprint": [
             3.54,
             2.09
@@ -311,7 +311,7 @@
           "category": "furn",
           "params": "",
           "paramList": [],
-          "line": 441,
+          "line": 538,
           "footprint": [
             2.2,
             0.92
@@ -332,7 +332,7 @@
           "category": "furn",
           "params": "",
           "paramList": [],
-          "line": 662,
+          "line": 759,
           "footprint": [
             2.54,
             1.85
@@ -353,7 +353,7 @@
           "category": "furn",
           "params": "",
           "paramList": [],
-          "line": 178,
+          "line": 275,
           "footprint": [
             0.62,
             0.52
@@ -379,7 +379,7 @@
               "default": "5"
             }
           ],
-          "line": 1060,
+          "line": 1157,
           "footprint": [
             5.0,
             0.77
@@ -400,7 +400,7 @@
           "category": "furn",
           "params": "",
           "paramList": [],
-          "line": 1182,
+          "line": 1279,
           "footprint": [
             1.25,
             0.32
@@ -430,7 +430,7 @@
               "default": "0.52"
             }
           ],
-          "line": 135,
+          "line": 136,
           "footprint": [
             0.52,
             0.18
@@ -451,7 +451,7 @@
           "category": "furn",
           "params": "",
           "paramList": [],
-          "line": 188,
+          "line": 285,
           "footprint": [
             2.25,
             3.15
@@ -472,7 +472,7 @@
           "category": "furn",
           "params": "",
           "paramList": [],
-          "line": 682,
+          "line": 779,
           "footprint": [
             1.5,
             1.46
@@ -498,7 +498,7 @@
               "default": "[0.45, 0.47, 0.52]"
             }
           ],
-          "line": 146,
+          "line": 147,
           "footprint": [
             0.54,
             0.57
@@ -524,7 +524,7 @@
               "default": "[0.80, 0.30, 0.28]"
             }
           ],
-          "line": 651,
+          "line": 748,
           "footprint": [
             0.92,
             0.53
@@ -550,7 +550,7 @@
               "default": "false"
             }
           ],
-          "line": 475,
+          "line": 572,
           "footprint": [
             1.72,
             0.2
@@ -571,7 +571,7 @@
           "category": "furn",
           "params": "",
           "paramList": [],
-          "line": 494,
+          "line": 591,
           "footprint": [
             4.41,
             1.15
@@ -592,7 +592,7 @@
           "category": "ground",
           "params": "",
           "paramList": [],
-          "line": 59,
+          "line": 60,
           "footprint": [
             72.0,
             58.0
@@ -613,13 +613,13 @@
           "category": "ground",
           "params": "",
           "paramList": [],
-          "line": 46,
+          "line": 47,
           "footprint": [
             84.0,
             80.0
           ],
-          "height": 0.13,
-          "zMin": -0.13,
+          "height": 0.08,
+          "zMin": -0.12,
           "center": [
             0.0,
             7.0
@@ -634,13 +634,13 @@
           "category": "ground",
           "params": "",
           "paramList": [],
-          "line": 49,
+          "line": 50,
           "footprint": [
             60.0,
             40.0
           ],
           "height": 0.15,
-          "zMin": 0.13,
+          "zMin": 0.12,
           "center": [
             0.0,
             8.0
@@ -655,7 +655,7 @@
           "category": "ground",
           "params": "",
           "paramList": [],
-          "line": 74,
+          "line": 75,
           "footprint": [
             84.0,
             78.0
@@ -683,7 +683,7 @@
               "name": "x1"
             }
           ],
-          "line": 1221,
+          "line": 1318,
           "footprint": [
             0.02,
             0.1
@@ -716,7 +716,7 @@
               "default": "-1"
             }
           ],
-          "line": 1227,
+          "line": 1324,
           "footprint": [
             1.0,
             0.11
@@ -742,7 +742,7 @@
               "default": "[0.90, 0.55, 0.25]"
             }
           ],
-          "line": 980,
+          "line": 1077,
           "footprint": [
             0.9,
             0.34
@@ -763,7 +763,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 956,
+          "line": 1053,
           "footprint": [
             2.85,
             0.35
@@ -784,7 +784,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 934,
+          "line": 1031,
           "footprint": [
             1.55,
             0.58
@@ -810,7 +810,7 @@
               "default": "\"AIRPORT\""
             }
           ],
-          "line": 128,
+          "line": 129,
           "footprint": [
             4.6,
             0.23
@@ -831,7 +831,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 715,
+          "line": 812,
           "footprint": [
             0.62,
             0.28
@@ -852,7 +852,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 1010,
+          "line": 1107,
           "footprint": [
             1.06,
             0.34
@@ -873,7 +873,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 945,
+          "line": 1042,
           "footprint": [
             3.3,
             1.3
@@ -894,7 +894,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 704,
+          "line": 801,
           "footprint": [
             0.36,
             0.06
@@ -915,7 +915,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 882,
+          "line": 979,
           "footprint": [
             0.26,
             0.26
@@ -941,7 +941,7 @@
               "default": "[0.55, 0.58, 0.64]"
             }
           ],
-          "line": 875,
+          "line": 972,
           "footprint": [
             1.55,
             1.41
@@ -966,7 +966,7 @@
               "name": "len"
             }
           ],
-          "line": 971,
+          "line": 1068,
           "footprint": [
             1.0,
             0.08
@@ -987,7 +987,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 283,
+          "line": 380,
           "footprint": [
             2.2,
             0.15
@@ -1008,7 +1008,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 515,
+          "line": 612,
           "footprint": [
             0.36,
             0.33
@@ -1042,7 +1042,7 @@
               "default": "true"
             }
           ],
-          "line": 297,
+          "line": 394,
           "footprint": [
             2.8,
             0.16
@@ -1068,7 +1068,7 @@
               "default": "2.2"
             }
           ],
-          "line": 928,
+          "line": 1025,
           "footprint": [
             2.2,
             0.55
@@ -1089,7 +1089,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 909,
+          "line": 1006,
           "footprint": [
             0.28,
             1.07
@@ -1110,7 +1110,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 889,
+          "line": 986,
           "footprint": [
             1.6,
             0.44
@@ -1131,7 +1131,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 423,
+          "line": 520,
           "footprint": [
             1.6,
             0.08
@@ -1152,7 +1152,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 963,
+          "line": 1060,
           "footprint": [
             0.62,
             0.13
@@ -1173,7 +1173,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 721,
+          "line": 818,
           "footprint": [
             1.7,
             1.62
@@ -1199,7 +1199,7 @@
               "default": "1.6"
             }
           ],
-          "line": 732,
+          "line": 829,
           "footprint": [
             1.6,
             0.34
@@ -1225,7 +1225,7 @@
               "default": "5"
             }
           ],
-          "line": 272,
+          "line": 369,
           "footprint": [
             4.68,
             0.28
@@ -1246,7 +1246,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 692,
+          "line": 789,
           "footprint": [
             0.7,
             0.62
@@ -1280,7 +1280,7 @@
               "default": "[0.20, 0.40, 0.68]"
             }
           ],
-          "line": 433,
+          "line": 530,
           "footprint": [
             4.96,
             0.26
@@ -1301,7 +1301,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 262,
+          "line": 359,
           "footprint": [
             0.28,
             0.28
@@ -1322,7 +1322,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 920,
+          "line": 1017,
           "footprint": [
             1.36,
             1.24
@@ -1343,7 +1343,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 993,
+          "line": 1090,
           "footprint": [
             0.65,
             1.5
@@ -1364,7 +1364,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 901,
+          "line": 998,
           "footprint": [
             1.05,
             0.34
@@ -1394,7 +1394,7 @@
               "default": "[0.25, 0.45, 0.75]"
             }
           ],
-          "line": 743,
+          "line": 840,
           "footprint": [
             15.12,
             10.98
@@ -1424,7 +1424,7 @@
               "default": "[0.35, 0.55, 0.75]"
             }
           ],
-          "line": 835,
+          "line": 932,
           "footprint": [
             1.6,
             0.98
@@ -1445,7 +1445,7 @@
           "category": "veh",
           "params": "",
           "paramList": [],
-          "line": 825,
+          "line": 922,
           "footprint": [
             1.7,
             1.26
@@ -1471,7 +1471,7 @@
               "default": "[0.25, 0.45, 0.75]"
             }
           ],
-          "line": 804,
+          "line": 901,
           "footprint": [
             8.64,
             2.42
@@ -1497,7 +1497,7 @@
               "default": "[0.75, 0.28, 0.24]"
             }
           ],
-          "line": 785,
+          "line": 882,
           "footprint": [
             4.16,
             2.06
@@ -1518,7 +1518,7 @@
           "category": "veh",
           "params": "",
           "paramList": [],
-          "line": 848,
+          "line": 945,
           "footprint": [
             4.43,
             1.76
@@ -1539,7 +1539,7 @@
           "category": "veh",
           "params": "",
           "paramList": [],
-          "line": 860,
+          "line": 957,
           "footprint": [
             1.62,
             3.78
@@ -1560,7 +1560,7 @@
           "category": "veh",
           "params": "",
           "paramList": [],
-          "line": 796,
+          "line": 893,
           "footprint": [
             4.16,
             2.06
@@ -1581,7 +1581,7 @@
           "category": "wall",
           "params": "",
           "paramList": [],
-          "line": 105,
+          "line": 106,
           "footprint": [
             0.36,
             0.36
@@ -1606,7 +1606,7 @@
               "name": "len"
             }
           ],
-          "line": 96,
+          "line": 97,
           "footprint": [
             1.0,
             0.3
@@ -1635,7 +1635,7 @@
               "default": "[0.84, 0.82, 0.88]"
             }
           ],
-          "line": 108,
+          "line": 109,
           "footprint": [
             1.0,
             0.15
@@ -1648,6 +1648,3288 @@
           ],
           "triangles": 12,
           "colors": 1,
+          "warnings": 0,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "kit_astro",
+      "file": "kit_astro.scad",
+      "prefix": "ab_",
+      "scaleClass": "mid",
+      "modules": [
+        {
+          "name": "ab_bldg_arch",
+          "category": "bldg",
+          "params": "w = 5, h = 5, seed = 0",
+          "paramList": [
+            {
+              "name": "w",
+              "default": "5"
+            },
+            {
+              "name": "h",
+              "default": "5"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 624,
+          "footprint": [
+            6.4,
+            1.4
+          ],
+          "height": 5.42,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 600,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_bldg_billboard",
+          "category": "bldg",
+          "params": "seed = 0, dir = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "dir",
+              "default": "0"
+            }
+          ],
+          "line": 733,
+          "footprint": [
+            4.6,
+            0.39
+          ],
+          "height": 3.9,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.1
+          ],
+          "triangles": 240,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_bldg_gantry",
+          "category": "bldg",
+          "params": "w = 6, h = 6",
+          "paramList": [
+            {
+              "name": "w",
+              "default": "6"
+            },
+            {
+              "name": "h",
+              "default": "6"
+            }
+          ],
+          "line": 720,
+          "footprint": [
+            7.0,
+            1.0
+          ],
+          "height": 6.16,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 264,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_bldg_goal",
+          "category": "bldg",
+          "params": "r = 2.6",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "2.6"
+            }
+          ],
+          "line": 520,
+          "footprint": [
+            9.45,
+            8.4
+          ],
+          "height": 6.83,
+          "zMin": 0.0,
+          "center": [
+            0.52,
+            0.0
+          ],
+          "triangles": 2004,
+          "colors": 48,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_bldg_house",
+          "category": "bldg",
+          "params": "seed = 0, L = 5, D = 4.5",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "L",
+              "default": "5"
+            },
+            {
+              "name": "D",
+              "default": "4.5"
+            }
+          ],
+          "line": 693,
+          "footprint": [
+            6.2,
+            5.7
+          ],
+          "height": 4.83,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 592,
+          "colors": 15,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_bldg_pipe",
+          "category": "bldg",
+          "params": "L = 6, r = 1.5, c = ab_GREENL()",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "6"
+            },
+            {
+              "name": "r",
+              "default": "1.5"
+            },
+            {
+              "name": "c",
+              "default": "ab_GREENL()"
+            }
+          ],
+          "line": 659,
+          "footprint": [
+            6.0,
+            3.36
+          ],
+          "height": 3.38,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 312,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_bldg_pipe_up",
+          "category": "bldg",
+          "params": "h = 2.2, r = 1.2, c = ab_GREENL()",
+          "paramList": [
+            {
+              "name": "h",
+              "default": "2.2"
+            },
+            {
+              "name": "r",
+              "default": "1.2"
+            },
+            {
+              "name": "c",
+              "default": "ab_GREENL()"
+            }
+          ],
+          "line": 677,
+          "footprint": [
+            2.7,
+            2.7
+          ],
+          "height": 2.2,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 240,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_bldg_ship",
+          "category": "bldg",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 552,
+          "footprint": [
+            6.11,
+            6.22
+          ],
+          "height": 3.16,
+          "zMin": 0.0,
+          "center": [
+            -0.01,
+            0.0
+          ],
+          "triangles": 972,
+          "colors": 18,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_bldg_startpad",
+          "category": "bldg",
+          "params": "r = 3.5",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "3.5"
+            }
+          ],
+          "line": 536,
+          "footprint": [
+            7.0,
+            7.0
+          ],
+          "height": 0.67,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 1008,
+          "colors": 13,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_bldg_tower",
+          "category": "bldg",
+          "params": "h = 8, r = 1.5, seed = 0",
+          "paramList": [
+            {
+              "name": "h",
+              "default": "8"
+            },
+            {
+              "name": "r",
+              "default": "1.5"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 582,
+          "footprint": [
+            3.8,
+            3.8
+          ],
+          "height": 11.03,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 1512,
+          "colors": 25,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_bldg_wall_break",
+          "category": "bldg",
+          "params": "L = 4, h = 3, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "4"
+            },
+            {
+              "name": "h",
+              "default": "3"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 639,
+          "footprint": [
+            3.95,
+            0.64
+          ],
+          "height": 2.96,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.0
+          ],
+          "triangles": 564,
+          "colors": 29,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_bldg_windmill",
+          "category": "bldg",
+          "params": "h = 7, seed = 0",
+          "paramList": [
+            {
+              "name": "h",
+              "default": "7"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 603,
+          "footprint": [
+            6.44,
+            4.9
+          ],
+          "height": 10.52,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.25
+          ],
+          "triangles": 348,
+          "colors": 14,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_capsule_up",
+          "category": "capsule",
+          "params": "r = 0.3, h = 1",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "0.3"
+            },
+            {
+              "name": "h",
+              "default": "1"
+            }
+          ],
+          "line": 915,
+          "footprint": [
+            0.6,
+            0.6
+          ],
+          "height": 1.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 144,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_char_bot",
+          "category": "char",
+          "params": "seed = 0, pose = 0, s = 1.0, hat = -1",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "pose",
+              "default": "0"
+            },
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "hat",
+              "default": "-1"
+            }
+          ],
+          "line": 1358,
+          "footprint": [
+            1.0,
+            0.79
+          ],
+          "height": 1.75,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.02
+          ],
+          "triangles": 1870,
+          "colors": 22,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_char_bot_lost",
+          "category": "char",
+          "params": "seed = 0, kind = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "kind",
+              "default": "0"
+            }
+          ],
+          "line": 1408,
+          "footprint": [
+            1.9,
+            1.9
+          ],
+          "height": 1.09,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 982,
+          "colors": 11,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_char_enemy_flyer",
+          "category": "char",
+          "params": "seed = 0, hover = 2.0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "hover",
+              "default": "2.0"
+            }
+          ],
+          "line": 1451,
+          "footprint": [
+            1.11,
+            1.08
+          ],
+          "height": 2.99,
+          "zMin": 1.96,
+          "center": [
+            0.04,
+            0.0
+          ],
+          "triangles": 828,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_char_enemy_spiky",
+          "category": "char",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1467,
+          "footprint": [
+            0.84,
+            1.85
+          ],
+          "height": 1.16,
+          "zMin": -0.0,
+          "center": [
+            0.0,
+            -0.0
+          ],
+          "triangles": 1344,
+          "colors": 14,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_char_enemy_walker",
+          "category": "char",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1434,
+          "footprint": [
+            1.2,
+            0.95
+          ],
+          "height": 1.42,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.02
+          ],
+          "triangles": 1440,
+          "colors": 13,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_ground_grass",
+          "category": "ground",
+          "params": "L = 6, D = 6, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "6"
+            },
+            {
+              "name": "D",
+              "default": "6"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 226,
+          "footprint": [
+            6.0,
+            6.0
+          ],
+          "height": 0.09,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 252,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_ground_island",
+          "category": "ground",
+          "params": "L = 20, D = 16, seed = 0, top = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "20"
+            },
+            {
+              "name": "D",
+              "default": "16"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "top",
+              "default": "0"
+            }
+          ],
+          "line": 169,
+          "footprint": [
+            20.0,
+            16.0
+          ],
+          "height": 0.01,
+          "zMin": -7.55,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 612,
+          "colors": 14,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_ground_island_round",
+          "category": "ground",
+          "params": "r = 8, seed = 0, top = 0",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "8"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "top",
+              "default": "0"
+            }
+          ],
+          "line": 196,
+          "footprint": [
+            16.0,
+            16.0
+          ],
+          "height": 0.01,
+          "zMin": -7.45,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 432,
+          "colors": 9,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_ground_lava",
+          "category": "ground",
+          "params": "L = 8, D = 6, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "8"
+            },
+            {
+              "name": "D",
+              "default": "6"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 258,
+          "footprint": [
+            8.0,
+            6.0
+          ],
+          "height": 0.7,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 424,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_ground_path",
+          "category": "ground",
+          "params": "L = 8, W = 1.6, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "8"
+            },
+            {
+              "name": "W",
+              "default": "1.6"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 273,
+          "footprint": [
+            7.51,
+            1.44
+          ],
+          "height": 0.1,
+          "zMin": 0.0,
+          "center": [
+            -0.09,
+            -0.06
+          ],
+          "triangles": 288,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_ground_pool",
+          "category": "ground",
+          "params": "L = 8, D = 6, depth = 0.6",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "8"
+            },
+            {
+              "name": "D",
+              "default": "6"
+            },
+            {
+              "name": "depth",
+              "default": "0.6"
+            }
+          ],
+          "line": 246,
+          "footprint": [
+            8.0,
+            6.0
+          ],
+          "height": 0.8,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 244,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_ground_sand",
+          "category": "ground",
+          "params": "L = 6, D = 6, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "6"
+            },
+            {
+              "name": "D",
+              "default": "6"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 236,
+          "footprint": [
+            6.0,
+            6.0
+          ],
+          "height": 0.09,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 120,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_ground_tile",
+          "category": "ground",
+          "params": "L = 8, D = 8, cell = 1.0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "8"
+            },
+            {
+              "name": "D",
+              "default": "8"
+            },
+            {
+              "name": "cell",
+              "default": "1.0"
+            }
+          ],
+          "line": 213,
+          "footprint": [
+            8.0,
+            8.0
+          ],
+          "height": 0.17,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 404,
+          "colors": 33,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_item_coin",
+          "category": "item",
+          "params": "hover = 0.8, r = 0.35",
+          "paramList": [
+            {
+              "name": "hover",
+              "default": "0.8"
+            },
+            {
+              "name": "r",
+              "default": "0.35"
+            }
+          ],
+          "line": 1275,
+          "footprint": [
+            0.7,
+            0.1
+          ],
+          "height": 1.5,
+          "zMin": 0.8,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 144,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_item_coin_arc",
+          "category": "item",
+          "params": "n = 7, L = 6, h = 2.5, hover = 0.8",
+          "paramList": [
+            {
+              "name": "n",
+              "default": "7"
+            },
+            {
+              "name": "L",
+              "default": "6"
+            },
+            {
+              "name": "h",
+              "default": "2.5"
+            },
+            {
+              "name": "hover",
+              "default": "0.8"
+            }
+          ],
+          "line": 1293,
+          "footprint": [
+            6.7,
+            0.1
+          ],
+          "height": 4.0,
+          "zMin": 0.8,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 1008,
+          "colors": 14,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_item_coin_ring",
+          "category": "item",
+          "params": "n = 8, R = 2, hover = 1.0",
+          "paramList": [
+            {
+              "name": "n",
+              "default": "8"
+            },
+            {
+              "name": "R",
+              "default": "2"
+            },
+            {
+              "name": "hover",
+              "default": "1.0"
+            }
+          ],
+          "line": 1303,
+          "footprint": [
+            4.1,
+            4.1
+          ],
+          "height": 1.7,
+          "zMin": 1.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 1152,
+          "colors": 16,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_item_coin_row",
+          "category": "item",
+          "params": "n = 5, dx = 1.2, hover = 0.8",
+          "paramList": [
+            {
+              "name": "n",
+              "default": "5"
+            },
+            {
+              "name": "dx",
+              "default": "1.2"
+            },
+            {
+              "name": "hover",
+              "default": "0.8"
+            }
+          ],
+          "line": 1287,
+          "footprint": [
+            5.5,
+            0.1
+          ],
+          "height": 1.5,
+          "zMin": 0.8,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 720,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_item_gem",
+          "category": "item",
+          "params": "hover = 0.8, seed = 0",
+          "paramList": [
+            {
+              "name": "hover",
+              "default": "0.8"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1325,
+          "footprint": [
+            0.6,
+            0.6
+          ],
+          "height": 1.44,
+          "zMin": 0.8,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_item_key",
+          "category": "item",
+          "params": "hover = 0.8",
+          "paramList": [
+            {
+              "name": "hover",
+              "default": "0.8"
+            }
+          ],
+          "line": 1336,
+          "footprint": [
+            0.85,
+            0.1
+          ],
+          "height": 1.35,
+          "zMin": 0.85,
+          "center": [
+            0.18,
+            0.0
+          ],
+          "triangles": 324,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_item_puzzle",
+          "category": "item",
+          "params": "hover = 0.8, s = 0.9",
+          "paramList": [
+            {
+              "name": "hover",
+              "default": "0.8"
+            },
+            {
+              "name": "s",
+              "default": "0.9"
+            }
+          ],
+          "line": 1309,
+          "footprint": [
+            1.08,
+            0.16
+          ],
+          "height": 2.08,
+          "zMin": 1.0,
+          "center": [
+            0.09,
+            0.0
+          ],
+          "triangles": 124,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_item_star",
+          "category": "item",
+          "params": "hover = 0.8, s = 1.0",
+          "paramList": [
+            {
+              "name": "hover",
+              "default": "0.8"
+            },
+            {
+              "name": "s",
+              "default": "1.0"
+            }
+          ],
+          "line": 1348,
+          "footprint": [
+            0.95,
+            0.16
+          ],
+          "height": 1.8,
+          "zMin": 0.9,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 36,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_bevel",
+          "category": "misc",
+          "params": "L = 2, D = 2, H = 1, b = 0.15",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "2"
+            },
+            {
+              "name": "D",
+              "default": "2"
+            },
+            {
+              "name": "H",
+              "default": "1"
+            },
+            {
+              "name": "b",
+              "default": "0.15"
+            }
+          ],
+          "line": 105,
+          "footprint": [
+            2.0,
+            2.0
+          ],
+          "height": 1.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 20,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_boxc",
+          "category": "misc",
+          "params": "s",
+          "paramList": [
+            {
+              "name": "s"
+            }
+          ],
+          "line": 92,
+          "footprint": [
+            1.0,
+            1.0
+          ],
+          "height": 0.5,
+          "zMin": -0.5,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_chrome",
+          "category": "misc",
+          "params": "c",
+          "paramList": [
+            {
+              "name": "c"
+            }
+          ],
+          "line": 86,
+          "ok": false
+        },
+        {
+          "name": "ab_dome",
+          "category": "misc",
+          "params": "r = 1, squash = 1.0",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "1"
+            },
+            {
+              "name": "squash",
+              "default": "1.0"
+            }
+          ],
+          "line": 130,
+          "footprint": [
+            2.0,
+            2.0
+          ],
+          "height": 1.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 70,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_ellipsoid",
+          "category": "misc",
+          "params": "rx = 1, ry = 1, rz = 1",
+          "paramList": [
+            {
+              "name": "rx",
+              "default": "1"
+            },
+            {
+              "name": "ry",
+              "default": "1"
+            },
+            {
+              "name": "rz",
+              "default": "1"
+            }
+          ],
+          "line": 94,
+          "footprint": [
+            2.0,
+            2.0
+          ],
+          "height": 1.0,
+          "zMin": -1.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 120,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_glass",
+          "category": "misc",
+          "params": "c",
+          "paramList": [
+            {
+              "name": "c"
+            }
+          ],
+          "line": 88,
+          "ok": false
+        },
+        {
+          "name": "ab_gloss",
+          "category": "misc",
+          "params": "c",
+          "paramList": [
+            {
+              "name": "c"
+            }
+          ],
+          "line": 80,
+          "ok": false
+        },
+        {
+          "name": "ab_gold",
+          "category": "misc",
+          "params": "",
+          "paramList": [],
+          "line": 87,
+          "ok": false
+        },
+        {
+          "name": "ab_leaf",
+          "category": "misc",
+          "params": "c",
+          "paramList": [
+            {
+              "name": "c"
+            }
+          ],
+          "line": 84,
+          "ok": false
+        },
+        {
+          "name": "ab_matte",
+          "category": "misc",
+          "params": "c",
+          "paramList": [
+            {
+              "name": "c"
+            }
+          ],
+          "line": 82,
+          "ok": false
+        },
+        {
+          "name": "ab_metal",
+          "category": "misc",
+          "params": "c",
+          "paramList": [
+            {
+              "name": "c"
+            }
+          ],
+          "line": 85,
+          "ok": false
+        },
+        {
+          "name": "ab_plastic",
+          "category": "misc",
+          "params": "c",
+          "paramList": [
+            {
+              "name": "c"
+            }
+          ],
+          "line": 81,
+          "ok": false
+        },
+        {
+          "name": "ab_rbox",
+          "category": "misc",
+          "params": "L = 2, D = 2, H = 1, r = 0.3",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "2"
+            },
+            {
+              "name": "D",
+              "default": "2"
+            },
+            {
+              "name": "H",
+              "default": "1"
+            },
+            {
+              "name": "r",
+              "default": "0.3"
+            }
+          ],
+          "line": 97,
+          "footprint": [
+            2.0,
+            2.0
+          ],
+          "height": 1.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 60,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_rcube",
+          "category": "misc",
+          "params": "s = 1, r = 0.1",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1"
+            },
+            {
+              "name": "r",
+              "default": "0.1"
+            }
+          ],
+          "line": 116,
+          "footprint": [
+            1.0,
+            1.0
+          ],
+          "height": 0.5,
+          "zMin": -0.5,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 44,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_rubber",
+          "category": "misc",
+          "params": "c",
+          "paramList": [
+            {
+              "name": "c"
+            }
+          ],
+          "line": 83,
+          "ok": false
+        },
+        {
+          "name": "ab_slab",
+          "category": "misc",
+          "params": "L = 4, D = 4, t = 0.2",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "4"
+            },
+            {
+              "name": "D",
+              "default": "4"
+            },
+            {
+              "name": "t",
+              "default": "0.2"
+            }
+          ],
+          "line": 93,
+          "footprint": [
+            4.0,
+            4.0
+          ],
+          "height": 0.2,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_star",
+          "category": "misc",
+          "params": "ro = 0.5, ri = 0.22, t = 0.1",
+          "paramList": [
+            {
+              "name": "ro",
+              "default": "0.5"
+            },
+            {
+              "name": "ri",
+              "default": "0.22"
+            },
+            {
+              "name": "t",
+              "default": "0.1"
+            }
+          ],
+          "line": 140,
+          "footprint": [
+            0.95,
+            0.9
+          ],
+          "height": 0.1,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.05
+          ],
+          "triangles": 36,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_torus",
+          "category": "misc",
+          "params": "R = 1, r = 0.1, angle = 360",
+          "paramList": [
+            {
+              "name": "R",
+              "default": "1"
+            },
+            {
+              "name": "r",
+              "default": "0.1"
+            },
+            {
+              "name": "angle",
+              "default": "360"
+            }
+          ],
+          "line": 127,
+          "footprint": [
+            2.2,
+            2.2
+          ],
+          "height": 0.1,
+          "zMin": -0.1,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 288,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_water",
+          "category": "misc",
+          "params": "c",
+          "paramList": [
+            {
+              "name": "c"
+            }
+          ],
+          "line": 89,
+          "ok": false
+        },
+        {
+          "name": "ab_nature_bush",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 793,
+          "footprint": [
+            1.85,
+            1.45
+          ],
+          "height": 1.15,
+          "zMin": -0.05,
+          "center": [
+            0.03,
+            -0.08
+          ],
+          "triangles": 180,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_nature_cactus",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 899,
+          "footprint": [
+            1.96,
+            0.64
+          ],
+          "height": 2.62,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 648,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_nature_cloud",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 854,
+          "footprint": [
+            3.75,
+            2.45
+          ],
+          "height": 2.0,
+          "zMin": 0.0,
+          "center": [
+            0.03,
+            0.07
+          ],
+          "triangles": 600,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_nature_crystal",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 925,
+          "footprint": [
+            1.45,
+            1.64
+          ],
+          "height": 1.6,
+          "zMin": 0.0,
+          "center": [
+            -0.02,
+            -0.12
+          ],
+          "triangles": 240,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_nature_flower",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 805,
+          "footprint": [
+            1.28,
+            1.13
+          ],
+          "height": 1.63,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 1128,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_nature_fruit",
+          "category": "nature",
+          "params": "kind = 0, s = 1.0",
+          "paramList": [
+            {
+              "name": "kind",
+              "default": "0"
+            },
+            {
+              "name": "s",
+              "default": "1.0"
+            }
+          ],
+          "line": 867,
+          "footprint": [
+            1.8,
+            1.8
+          ],
+          "height": 2.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 288,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_nature_grass_tuft",
+          "category": "nature",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 820,
+          "footprint": [
+            0.65,
+            0.74
+          ],
+          "height": 0.59,
+          "zMin": -0.03,
+          "center": [
+            -0.01,
+            -0.03
+          ],
+          "triangles": 288,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_nature_lilypad",
+          "category": "nature",
+          "params": "r = 0.9, seed = 0",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "0.9"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 938,
+          "footprint": [
+            1.8,
+            1.8
+          ],
+          "height": 0.21,
+          "zMin": -0.11,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 216,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_nature_mushroom",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 840,
+          "footprint": [
+            2.3,
+            2.3
+          ],
+          "height": 1.73,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 838,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_nature_palm",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 775,
+          "footprint": [
+            5.27,
+            5.32
+          ],
+          "height": 5.45,
+          "zMin": 0.0,
+          "center": [
+            -0.11,
+            -0.94
+          ],
+          "triangles": 1440,
+          "colors": 15,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_nature_rock",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 829,
+          "footprint": [
+            1.91,
+            2.08
+          ],
+          "height": 1.15,
+          "zMin": -0.05,
+          "center": [
+            0.16,
+            0.0
+          ],
+          "triangles": 240,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_nature_tree_ball",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 746,
+          "footprint": [
+            3.3,
+            3.0
+          ],
+          "height": 5.3,
+          "zMin": 0.0,
+          "center": [
+            0.1,
+            0.0
+          ],
+          "triangles": 528,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_nature_tree_cone",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 761,
+          "footprint": [
+            3.0,
+            3.0
+          ],
+          "height": 5.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 192,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_part_hazard",
+          "category": "part",
+          "params": "L = 3, h = 0.2",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "3"
+            },
+            {
+              "name": "h",
+              "default": "0.2"
+            }
+          ],
+          "line": 158,
+          "footprint": [
+            3.0,
+            0.03
+          ],
+          "height": 0.1,
+          "zMin": -0.1,
+          "center": [
+            -0.0,
+            0.0
+          ],
+          "triangles": 84,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_part_roof",
+          "category": "part",
+          "params": "L = 5, D = 4, h = 1.8, ov = 0.6, c = [0.6, 0.2, 0.15]",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "5"
+            },
+            {
+              "name": "D",
+              "default": "4"
+            },
+            {
+              "name": "h",
+              "default": "1.8"
+            },
+            {
+              "name": "ov",
+              "default": "0.6"
+            },
+            {
+              "name": "c",
+              "default": "[0.6, 0.2, 0.15]"
+            }
+          ],
+          "line": 147,
+          "footprint": [
+            6.2,
+            5.2
+          ],
+          "height": 1.8,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 8,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_block",
+          "category": "plat",
+          "params": "L = 2, D = 2, H = 1, c = ab_YELLOW()",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "2"
+            },
+            {
+              "name": "D",
+              "default": "2"
+            },
+            {
+              "name": "H",
+              "default": "1"
+            },
+            {
+              "name": "c",
+              "default": "ab_YELLOW()"
+            }
+          ],
+          "line": 285,
+          "footprint": [
+            2.0,
+            2.0
+          ],
+          "height": 1.02,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 32,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_bounce",
+          "category": "plat",
+          "params": "r = 1.2",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "1.2"
+            }
+          ],
+          "line": 377,
+          "footprint": [
+            2.76,
+            2.76
+          ],
+          "height": 0.85,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 502,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_bridge",
+          "category": "plat",
+          "params": "L = 8, W = 1.8, sag = 0.35",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "8"
+            },
+            {
+              "name": "W",
+              "default": "1.8"
+            },
+            {
+              "name": "sag",
+              "default": "0.35"
+            }
+          ],
+          "line": 431,
+          "footprint": [
+            8.48,
+            2.14
+          ],
+          "height": 1.2,
+          "zMin": -0.29,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 5484,
+          "colors": 55,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_conveyor",
+          "category": "plat",
+          "params": "L = 6, W = 2",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "6"
+            },
+            {
+              "name": "W",
+              "default": "2"
+            }
+          ],
+          "line": 449,
+          "footprint": [
+            6.4,
+            2.3
+          ],
+          "height": 0.52,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 248,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_crumble",
+          "category": "plat",
+          "params": "L = 2, D = 2, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "2"
+            },
+            {
+              "name": "D",
+              "default": "2"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 363,
+          "footprint": [
+            2.0,
+            2.0
+          ],
+          "height": 0.41,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 108,
+          "colors": 9,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_float",
+          "category": "plat",
+          "params": "r = 2, c = ab_TEAL()",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "2"
+            },
+            {
+              "name": "c",
+              "default": "ab_TEAL()"
+            }
+          ],
+          "line": 300,
+          "footprint": [
+            4.0,
+            4.0
+          ],
+          "height": 0.52,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 164,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_moving",
+          "category": "plat",
+          "params": "rail = 10, L = 3, W = 2, t = 0.5, c = ab_ORANGE()",
+          "paramList": [
+            {
+              "name": "rail",
+              "default": "10"
+            },
+            {
+              "name": "L",
+              "default": "3"
+            },
+            {
+              "name": "W",
+              "default": "2"
+            },
+            {
+              "name": "t",
+              "default": "0.5"
+            },
+            {
+              "name": "c",
+              "default": "ab_ORANGE()"
+            }
+          ],
+          "line": 312,
+          "footprint": [
+            10.0,
+            2.04
+          ],
+          "height": 0.72,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 992,
+          "colors": 34,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_pendulum",
+          "category": "plat",
+          "params": "h = 7, arm = 5, ang = 25, w = 2.2",
+          "paramList": [
+            {
+              "name": "h",
+              "default": "7"
+            },
+            {
+              "name": "arm",
+              "default": "5"
+            },
+            {
+              "name": "ang",
+              "default": "25"
+            },
+            {
+              "name": "w",
+              "default": "2.2"
+            }
+          ],
+          "line": 414,
+          "footprint": [
+            3.76,
+            5.6
+          ],
+          "height": 7.16,
+          "zMin": 0.0,
+          "center": [
+            -1.38,
+            0.0
+          ],
+          "triangles": 312,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_pillar",
+          "category": "plat",
+          "params": "h = 4, r = 1.2, c = ab_TEAL()",
+          "paramList": [
+            {
+              "name": "h",
+              "default": "4"
+            },
+            {
+              "name": "r",
+              "default": "1.2"
+            },
+            {
+              "name": "c",
+              "default": "ab_TEAL()"
+            }
+          ],
+          "line": 462,
+          "footprint": [
+            2.4,
+            2.4
+          ],
+          "height": 4.02,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 308,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_roller",
+          "category": "plat",
+          "params": "L = 5, r = 1.0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "5"
+            },
+            {
+              "name": "r",
+              "default": "1.0"
+            }
+          ],
+          "line": 397,
+          "footprint": [
+            5.9,
+            2.0
+          ],
+          "height": 2.3,
+          "zMin": -0.02,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 408,
+          "colors": 13,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_seesaw",
+          "category": "plat",
+          "params": "L = 6, W = 2, tilt = 8",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "6"
+            },
+            {
+              "name": "W",
+              "default": "2"
+            },
+            {
+              "name": "tilt",
+              "default": "8"
+            }
+          ],
+          "line": 349,
+          "footprint": [
+            5.97,
+            2.04
+          ],
+          "height": 1.49,
+          "zMin": -0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 428,
+          "colors": 33,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_spin",
+          "category": "plat",
+          "params": "r = 3",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "3"
+            }
+          ],
+          "line": 335,
+          "footprint": [
+            6.1,
+            6.1
+          ],
+          "height": 0.65,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 592,
+          "colors": 11,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_spring",
+          "category": "plat",
+          "params": "r = 0.8, h = 1.2",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "0.8"
+            },
+            {
+              "name": "h",
+              "default": "1.2"
+            }
+          ],
+          "line": 387,
+          "footprint": [
+            2.0,
+            2.0
+          ],
+          "height": 1.22,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 1584,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_stairs",
+          "category": "plat",
+          "params": "n = 4, w = 3, rise = 0.5, run = 0.9, seed = 0",
+          "paramList": [
+            {
+              "name": "n",
+              "default": "4"
+            },
+            {
+              "name": "w",
+              "default": "3"
+            },
+            {
+              "name": "rise",
+              "default": "0.5"
+            },
+            {
+              "name": "run",
+              "default": "0.9"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 292,
+          "footprint": [
+            3.6,
+            3.0
+          ],
+          "height": 2.02,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 128,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_toyblock",
+          "category": "plat",
+          "params": "s = 1.5, c = ab_RED()",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.5"
+            },
+            {
+              "name": "c",
+              "default": "ab_RED()"
+            }
+          ],
+          "line": 501,
+          "footprint": [
+            1.53,
+            1.53
+          ],
+          "height": 1.52,
+          "zMin": 0.0,
+          "center": [
+            -0.0,
+            0.0
+          ],
+          "triangles": 104,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_toyblocks",
+          "category": "plat",
+          "params": "seed = 0, s = 1.5",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "s",
+              "default": "1.5"
+            }
+          ],
+          "line": 510,
+          "footprint": [
+            2.23,
+            2.08
+          ],
+          "height": 4.52,
+          "zMin": 0.0,
+          "center": [
+            0.01,
+            0.02
+          ],
+          "triangles": 312,
+          "colors": 18,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_plat_zipline",
+          "category": "plat",
+          "params": "L = 14, drop = 4, t = 0.3",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "14"
+            },
+            {
+              "name": "drop",
+              "default": "4"
+            },
+            {
+              "name": "t",
+              "default": "0.3"
+            }
+          ],
+          "line": 477,
+          "footprint": [
+            14.9,
+            0.9
+          ],
+          "height": 3.11,
+          "zMin": -4.0,
+          "center": [
+            7.0,
+            0.0
+          ],
+          "triangles": 556,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_balloon",
+          "category": "prop",
+          "params": "seed = 0, n = 3",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "n",
+              "default": "3"
+            }
+          ],
+          "line": 1121,
+          "footprint": [
+            1.56,
+            1.67
+          ],
+          "height": 3.25,
+          "zMin": -0.15,
+          "center": [
+            -0.12,
+            0.0
+          ],
+          "triangles": 988,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_barrel",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1264,
+          "footprint": [
+            0.67,
+            0.67
+          ],
+          "height": 0.92,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 192,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_bench",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 1239,
+          "footprint": [
+            1.8,
+            0.53
+          ],
+          "height": 1.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.01
+          ],
+          "triangles": 144,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_bubble",
+          "category": "prop",
+          "params": "r = 0.9",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "0.9"
+            }
+          ],
+          "line": 1223,
+          "footprint": [
+            1.8,
+            1.8
+          ],
+          "height": 1.8,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 120,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_bumper",
+          "category": "prop",
+          "params": "r = 0.7",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "0.7"
+            }
+          ],
+          "line": 1141,
+          "footprint": [
+            1.6,
+            1.6
+          ],
+          "height": 1.05,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 180,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_button",
+          "category": "prop",
+          "params": "r = 1.0",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "1.0"
+            }
+          ],
+          "line": 1088,
+          "footprint": [
+            2.4,
+            2.4
+          ],
+          "height": 0.58,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 166,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_cage",
+          "category": "prop",
+          "params": "seed = 0, r = 1.1, h = 2.3",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "r",
+              "default": "1.1"
+            },
+            {
+              "name": "h",
+              "default": "2.3"
+            }
+          ],
+          "line": 969,
+          "footprint": [
+            2.5,
+            2.5
+          ],
+          "height": 2.89,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 3118,
+          "colors": 36,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_capsule",
+          "category": "prop",
+          "params": "seed = 0, r = 0.5",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "r",
+              "default": "0.5"
+            }
+          ],
+          "line": 1201,
+          "footprint": [
+            1.04,
+            1.04
+          ],
+          "height": 1.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 428,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_checkpoint",
+          "category": "prop",
+          "params": "h = 3",
+          "paramList": [
+            {
+              "name": "h",
+              "default": "3"
+            }
+          ],
+          "line": 1229,
+          "footprint": [
+            2.15,
+            2.0
+          ],
+          "height": 3.09,
+          "zMin": 0.0,
+          "center": [
+            0.08,
+            0.0
+          ],
+          "triangles": 320,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_chest",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1150,
+          "footprint": [
+            1.34,
+            1.11
+          ],
+          "height": 1.52,
+          "zMin": -0.01,
+          "center": [
+            0.0,
+            0.09
+          ],
+          "triangles": 384,
+          "colors": 12,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_cone",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 1256,
+          "footprint": [
+            0.5,
+            0.5
+          ],
+          "height": 0.7,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 116,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_crate",
+          "category": "prop",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 951,
+          "footprint": [
+            1.04,
+            1.04
+          ],
+          "height": 1.01,
+          "zMin": -0.01,
+          "center": [
+            -0.0,
+            0.0
+          ],
+          "triangles": 236,
+          "colors": 17,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_fan",
+          "category": "prop",
+          "params": "s = 1.0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            }
+          ],
+          "line": 1069,
+          "footprint": [
+            2.0,
+            1.2
+          ],
+          "height": 2.5,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 528,
+          "colors": 12,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_fence",
+          "category": "prop",
+          "params": "len = 4, c = ab_CREAM()",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "4"
+            },
+            {
+              "name": "c",
+              "default": "ab_CREAM()"
+            }
+          ],
+          "line": 1014,
+          "footprint": [
+            4.18,
+            0.18
+          ],
+          "height": 1.09,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 768,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_flag",
+          "category": "prop",
+          "params": "h = 4, seed = 0",
+          "paramList": [
+            {
+              "name": "h",
+              "default": "4"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1005,
+          "footprint": [
+            1.44,
+            0.18
+          ],
+          "height": 4.09,
+          "zMin": 0.0,
+          "center": [
+            0.63,
+            0.0
+          ],
+          "triangles": 176,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_fountain_jet",
+          "category": "prop",
+          "params": "h = 4, r = 0.45",
+          "paramList": [
+            {
+              "name": "h",
+              "default": "4"
+            },
+            {
+              "name": "r",
+              "default": "0.45"
+            }
+          ],
+          "line": 1180,
+          "footprint": [
+            1.64,
+            1.7
+          ],
+          "height": 3.84,
+          "zMin": 0.0,
+          "center": [
+            0.07,
+            -0.0
+          ],
+          "triangles": 1032,
+          "colors": 9,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_gate_bars",
+          "category": "prop",
+          "params": "w = 4, h = 3",
+          "paramList": [
+            {
+              "name": "w",
+              "default": "4"
+            },
+            {
+              "name": "h",
+              "default": "3"
+            }
+          ],
+          "line": 1108,
+          "footprint": [
+            4.4,
+            0.52
+          ],
+          "height": 3.3,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.06
+          ],
+          "triangles": 520,
+          "colors": 12,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_hoop",
+          "category": "prop",
+          "params": "R = 1.4",
+          "paramList": [
+            {
+              "name": "R",
+              "default": "1.4"
+            }
+          ],
+          "line": 1213,
+          "footprint": [
+            3.0,
+            1.0
+          ],
+          "height": 3.9,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 640,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_ladder",
+          "category": "prop",
+          "params": "h = 3",
+          "paramList": [
+            {
+              "name": "h",
+              "default": "3"
+            }
+          ],
+          "line": 1247,
+          "footprint": [
+            0.7,
+            0.1
+          ],
+          "height": 3.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 480,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_lamp",
+          "category": "prop",
+          "params": "h = 3.2",
+          "paramList": [
+            {
+              "name": "h",
+              "default": "3.2"
+            }
+          ],
+          "line": 1027,
+          "footprint": [
+            1.24,
+            0.68
+          ],
+          "height": 3.52,
+          "zMin": 0.0,
+          "center": [
+            0.32,
+            0.0
+          ],
+          "triangles": 384,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_laser",
+          "category": "prop",
+          "params": "L = 6",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "6"
+            }
+          ],
+          "line": 1169,
+          "footprint": [
+            6.6,
+            0.6
+          ],
+          "height": 1.0,
+          "zMin": 0.0,
+          "center": [
+            3.0,
+            0.0
+          ],
+          "triangles": 184,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_lever",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 1096,
+          "footprint": [
+            0.86,
+            0.5
+          ],
+          "height": 1.25,
+          "zMin": 0.0,
+          "center": [
+            -0.13,
+            0.0
+          ],
+          "triangles": 236,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_pot",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1192,
+          "footprint": [
+            0.8,
+            0.8
+          ],
+          "height": 1.58,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 1272,
+          "colors": 13,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_sign_arrow",
+          "category": "prop",
+          "params": "seed = 0, dir = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "dir",
+              "default": "0"
+            }
+          ],
+          "line": 985,
+          "footprint": [
+            1.68,
+            0.14
+          ],
+          "height": 2.01,
+          "zMin": 0.0,
+          "center": [
+            0.06,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_sign_board",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 995,
+          "footprint": [
+            1.6,
+            0.23
+          ],
+          "height": 1.85,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.07
+          ],
+          "triangles": 240,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_spike_ball",
+          "category": "prop",
+          "params": "r = 0.7",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "0.7"
+            }
+          ],
+          "line": 1046,
+          "footprint": [
+            2.1,
+            2.1
+          ],
+          "height": 2.1,
+          "zMin": -0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 792,
+          "colors": 15,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_spike_ball_chain",
+          "category": "prop",
+          "params": "h = 4, r = 0.7",
+          "paramList": [
+            {
+              "name": "h",
+              "default": "4"
+            },
+            {
+              "name": "r",
+              "default": "0.7"
+            }
+          ],
+          "line": 1058,
+          "footprint": [
+            2.1,
+            2.1
+          ],
+          "height": 4.03,
+          "zMin": -0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 3096,
+          "colors": 23,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_prop_spikes",
+          "category": "prop",
+          "params": "len = 3, w = 1.0",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "3"
+            },
+            {
+              "name": "w",
+              "default": "1.0"
+            }
+          ],
+          "line": 1037,
+          "footprint": [
+            3.0,
+            1.0
+          ],
+          "height": 0.57,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 596,
+          "colors": 13,
           "warnings": 0,
           "ok": true
         }
@@ -3394,17 +6676,17 @@
           "paramList": [],
           "line": 543,
           "footprint": [
-            610.15,
+            609.99,
             306.64
           ],
           "height": 3.25,
           "zMin": 0.15,
           "center": [
-            -21.75,
+            -21.84,
             120.0
           ],
-          "triangles": 64740,
-          "colors": 2071,
+          "triangles": 55272,
+          "colors": 1774,
           "warnings": 0,
           "ok": true
         },
@@ -3428,17 +6710,17 @@
           ],
           "line": 515,
           "footprint": [
-            592.43,
-            6.57
+            412.25,
+            6.48
           ],
-          "height": 3.25,
+          "height": 2.65,
           "zMin": 0.15,
           "center": [
-            -22.91,
-            0.04
+            -113.0,
+            0.08
           ],
-          "triangles": 5388,
-          "colors": 173,
+          "triangles": 3792,
+          "colors": 124,
           "warnings": 0,
           "ok": true
         },
@@ -11746,7 +15028,7 @@
               "default": "2.6"
             }
           ],
-          "line": 327,
+          "line": 344,
           "footprint": [
             8.25,
             2.6
@@ -11776,7 +15058,7 @@
               "default": "3"
             }
           ],
-          "line": 308,
+          "line": 325,
           "footprint": [
             13.97,
             3.0
@@ -11810,7 +15092,7 @@
               "default": "9"
             }
           ],
-          "line": 255,
+          "line": 272,
           "footprint": [
             14.0,
             12.07
@@ -11844,7 +15126,7 @@
               "default": "6"
             }
           ],
-          "line": 231,
+          "line": 248,
           "footprint": [
             8.7,
             7.92
@@ -11874,7 +15156,7 @@
               "default": "0"
             }
           ],
-          "line": 353,
+          "line": 370,
           "footprint": [
             3.0,
             3.0
@@ -11908,7 +15190,7 @@
               "default": "7"
             }
           ],
-          "line": 284,
+          "line": 301,
           "footprint": [
             9.6,
             9.27
@@ -11954,7 +15236,7 @@
               "default": "10"
             }
           ],
-          "line": 122,
+          "line": 131,
           "footprint": [
             34.6,
             35.56
@@ -11992,7 +15274,7 @@
               "default": "1"
             }
           ],
-          "line": 186,
+          "line": 203,
           "footprint": [
             10.0,
             8.0
@@ -12026,7 +15308,7 @@
               "default": "0"
             }
           ],
-          "line": 144,
+          "line": 161,
           "footprint": [
             12.0,
             10.0
@@ -12060,7 +15342,7 @@
               "default": "0"
             }
           ],
-          "line": 174,
+          "line": 191,
           "footprint": [
             10.08,
             2.4
@@ -12090,7 +15372,7 @@
               "default": "14"
             }
           ],
-          "line": 155,
+          "line": 172,
           "footprint": [
             18.0,
             14.0
@@ -12124,7 +15406,7 @@
               "default": "0"
             }
           ],
-          "line": 128,
+          "line": 145,
           "footprint": [
             10.0,
             8.0
@@ -12158,7 +15440,7 @@
               "default": "0"
             }
           ],
-          "line": 217,
+          "line": 234,
           "footprint": [
             16.0,
             3.2
@@ -12171,6 +15453,56 @@
           ],
           "triangles": 120,
           "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "is_ground_water_blob",
+          "category": "ground",
+          "params": "L = 40, D = 30, t = 0.12, c = is_SEASHAL(), seed = 0, fn = 10, roughness = is_WATER_ROUGH_SHALLOW()",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "40"
+            },
+            {
+              "name": "D",
+              "default": "30"
+            },
+            {
+              "name": "t",
+              "default": "0.12"
+            },
+            {
+              "name": "c",
+              "default": "is_SEASHAL()"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "fn",
+              "default": "10"
+            },
+            {
+              "name": "roughness",
+              "default": "is_WATER_ROUGH_SHALLOW()"
+            }
+          ],
+          "line": 137,
+          "footprint": [
+            34.6,
+            35.56
+          ],
+          "height": 0.12,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 48,
+          "colors": 1,
           "warnings": 0,
           "ok": true
         },
@@ -12188,7 +15520,7 @@
               "default": "0"
             }
           ],
-          "line": 746,
+          "line": 763,
           "footprint": [
             0.58,
             0.37
@@ -12214,7 +15546,7 @@
               "default": "0"
             }
           ],
-          "line": 756,
+          "line": 773,
           "footprint": [
             0.54,
             0.36
@@ -12239,7 +15571,7 @@
               "name": "s"
             }
           ],
-          "line": 63,
+          "line": 65,
           "footprint": [
             1.0,
             1.0
@@ -12273,7 +15605,7 @@
               "default": "0.2"
             }
           ],
-          "line": 64,
+          "line": 66,
           "footprint": [
             4.0,
             4.0
@@ -12303,7 +15635,7 @@
               "default": "0"
             }
           ],
-          "line": 393,
+          "line": 410,
           "footprint": [
             3.0,
             2.9
@@ -12333,7 +15665,7 @@
               "default": "0"
             }
           ],
-          "line": 438,
+          "line": 455,
           "footprint": [
             1.43,
             1.1
@@ -12363,7 +15695,7 @@
               "default": "0"
             }
           ],
-          "line": 411,
+          "line": 428,
           "footprint": [
             6.91,
             6.15
@@ -12389,7 +15721,7 @@
               "default": "0"
             }
           ],
-          "line": 464,
+          "line": 481,
           "footprint": [
             0.69,
             0.65
@@ -12427,7 +15759,7 @@
               "default": "[0.34, 0.51, 0.23]"
             }
           ],
-          "line": 380,
+          "line": 397,
           "footprint": [
             3.0,
             2.9
@@ -12457,7 +15789,7 @@
               "default": "0"
             }
           ],
-          "line": 449,
+          "line": 466,
           "footprint": [
             6.38,
             1.1
@@ -12487,7 +15819,7 @@
               "default": "0"
             }
           ],
-          "line": 394,
+          "line": 411,
           "footprint": [
             3.0,
             2.9
@@ -12517,7 +15849,7 @@
               "default": "0"
             }
           ],
-          "line": 395,
+          "line": 412,
           "footprint": [
             3.0,
             2.9
@@ -12547,7 +15879,7 @@
               "default": "0"
             }
           ],
-          "line": 478,
+          "line": 495,
           "footprint": [
             1.54,
             1.02
@@ -12577,7 +15909,7 @@
               "default": "0"
             }
           ],
-          "line": 398,
+          "line": 415,
           "footprint": [
             2.8,
             2.8
@@ -12611,7 +15943,7 @@
               "default": "[0.38, 0.27, 0.17]"
             }
           ],
-          "line": 81,
+          "line": 90,
           "footprint": [
             1.31,
             0.2
@@ -12657,7 +15989,7 @@
               "default": "[0.28, 0.42, 0.30]"
             }
           ],
-          "line": 70,
+          "line": 79,
           "footprint": [
             8.6,
             7.6
@@ -12683,7 +16015,7 @@
               "default": "0.32"
             }
           ],
-          "line": 99,
+          "line": 108,
           "footprint": [
             0.78,
             0.61
@@ -12713,7 +16045,7 @@
               "default": "1.0"
             }
           ],
-          "line": 111,
+          "line": 120,
           "footprint": [
             0.9,
             0.19
@@ -12734,7 +16066,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 611,
+          "line": 628,
           "footprint": [
             0.84,
             0.42
@@ -12755,7 +16087,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 506,
+          "line": 523,
           "footprint": [
             1.8,
             0.63
@@ -12776,7 +16108,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 667,
+          "line": 684,
           "footprint": [
             0.36,
             0.39
@@ -12802,7 +16134,7 @@
               "default": "0"
             }
           ],
-          "line": 703,
+          "line": 720,
           "footprint": [
             0.7,
             0.54
@@ -12832,7 +16164,7 @@
               "default": "0"
             }
           ],
-          "line": 491,
+          "line": 508,
           "footprint": [
             4.0,
             0.15
@@ -12853,7 +16185,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 687,
+          "line": 704,
           "footprint": [
             1.97,
             1.9
@@ -12879,7 +16211,7 @@
               "default": "7"
             }
           ],
-          "line": 545,
+          "line": 562,
           "footprint": [
             1.45,
             0.48
@@ -12905,7 +16237,7 @@
               "default": "1.0"
             }
           ],
-          "line": 561,
+          "line": 578,
           "footprint": [
             3.52,
             3.52
@@ -12926,7 +16258,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 519,
+          "line": 536,
           "footprint": [
             0.44,
             0.97
@@ -12947,7 +16279,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 597,
+          "line": 614,
           "footprint": [
             1.9,
             0.64
@@ -12968,7 +16300,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 532,
+          "line": 549,
           "footprint": [
             0.44,
             0.44
@@ -12994,7 +16326,7 @@
               "default": "0"
             }
           ],
-          "line": 623,
+          "line": 640,
           "footprint": [
             1.35,
             0.84
@@ -13020,7 +16352,7 @@
               "default": "0"
             }
           ],
-          "line": 652,
+          "line": 669,
           "footprint": [
             1.9,
             0.27
@@ -13041,7 +16373,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 678,
+          "line": 695,
           "footprint": [
             0.34,
             0.34
@@ -13062,7 +16394,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 582,
+          "line": 599,
           "footprint": [
             2.62,
             2.59
@@ -13083,7 +16415,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 643,
+          "line": 660,
           "footprint": [
             0.85,
             0.42
@@ -13109,7 +16441,7 @@
               "default": "0"
             }
           ],
-          "line": 722,
+          "line": 739,
           "footprint": [
             6.21,
             1.48
@@ -13124,6 +16456,22 @@
           "colors": 9,
           "warnings": 0,
           "ok": true
+        },
+        {
+          "name": "is_water_surface",
+          "category": "water",
+          "params": "c, roughness = is_WATER_ROUGH_SHALLOW()",
+          "paramList": [
+            {
+              "name": "c"
+            },
+            {
+              "name": "roughness",
+              "default": "is_WATER_ROUGH_SHALLOW()"
+            }
+          ],
+          "line": 70,
+          "ok": false
         }
       ]
     },

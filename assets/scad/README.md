@@ -43,6 +43,8 @@ ScadLibrary 的"场景"资源库按类别（目录名）分组，条目上标注
   `habor_city_showcase.scad`。
 - Racing 的 `pit_lane.scad` 与 `kit_pitlane` 展示统一位于 `source/racing/`；Old City 的
   `old_city.scad` 与 `kit_old_city` 展示统一位于 `source/oldcity/`。
+- AstroBot 风格 3D 平台跳跃（`kit_astro`，真实比例、主角 1.6 m）：demo 关卡 `sky_garden.scad` 与
+  角色/收集物特写 `bot_closeup.scad` 位于 `source/astro/`，零件总览用根目录 `astro_showcase.scad`。
 
 ## ScadLibrary 场景组装
 

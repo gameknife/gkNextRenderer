@@ -60,6 +60,14 @@ function cw_rnd(s, m) = cw_sq(cw_sq(((s % 65521) + 65521) % 65521) + 11) % m;
 - `difference` 只准出现在零件内部（女儿墙、轮胎、钢盔、井圈）；布局层一律 union。
 - **交叉杆件（拒马类）反例**：以原点为中心 rotate 建模会有一半埋进地下，必须整体
   `translate([0,0,h])` 抬到交点离地高度。写完在心里过一遍"最低点在哪"。
+- **`sphere` / `circle` 的半径必须具名写 `r = x`**：本 evaluator 只按名字解析半径，
+  `sphere(0.3)` 这种位置写法会静默退化成默认半径 1（catalog 不报错，footprint/zMin 会突然变大——
+  kit_astro 首版 65 处球体全部因此放大，是靠 catalog 的 zMin 异常抓出来的）。`cube`/`square` 的
+  位置尺寸参数正常，`cylinder` 也一律写 `h = / r = / r1 = / r2 =`。
+- **透明材质慎用**：`alpha < 0.99` 走透明 Dielectric，在 SCAD 默认的暗天空下玻璃球/水柱/激光束
+  会渲染成黑球黑线；玩具风格的玻璃、泡泡、光束用不透明高光色（roughness 0.05）表达更稳。
+- **PBR 金属在暗天空下发黑**：metalness 1.0 的金币/金属件只反射环境，默认暗天空里就是黑色；
+  要保留固有色就用半金属（metalness 0.5~0.6、roughness 0.3~0.4），见 `kit_astro` 的 `ab_gold`/`ab_metal`。
 
 #### 倾斜支腿的符号（塔/桁架/A 字腿，最容易系统性搞反）
 
