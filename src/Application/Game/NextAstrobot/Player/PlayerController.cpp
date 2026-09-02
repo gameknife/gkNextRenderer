@@ -234,7 +234,13 @@ namespace NextAstrobot
         const float control = onGround_ ? 1.0f : config_.AirControl;
         // Steering happens relative to the air: in a draught the target velocity is the
         // player's own run added to whatever the fan is doing to the air around them.
-        const glm::vec3 desired = wish * config_.RunSpeed + glm::vec3(draught.x, 0.0f, draught.z);
+        // A fan is a jump aid, so it barely tugs at someone standing: at full strength on
+        // the ground it shoves the player off the small discs it is supposed to help them
+        // reach, and a platformer that slides you off a ledge you are standing still on is
+        // just annoying.
+        constexpr float kGroundWindScale = 0.25f;
+        const glm::vec3 stream = draught * (onGround_ ? kGroundWindScale : 1.0f);
+        const glm::vec3 desired = wish * config_.RunSpeed + glm::vec3(stream.x, 0.0f, stream.z);
         const float accel = config_.RunAccel * control;
         velocity_.x = Approach(velocity_.x, desired.x, accel, deltaSeconds);
         velocity_.z = Approach(velocity_.z, desired.z, accel, deltaSeconds);

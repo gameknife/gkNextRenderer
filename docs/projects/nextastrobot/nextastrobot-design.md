@@ -478,8 +478,13 @@ P4 打磨项（2026-09-02 第二轮，三项已完成）：
 | 非 ★ 活动件 | **已完成**。八件都拆出了 `ab_part_*` 并接进 `MechanismSystem`：刺球摆动（致命判定跟随活动件）、激光按占空比开关（灭时不致命）、风扇风区（`FMechanismEffects::wind`，m/s 折进水平目标速度）、喷泉托举（`liftSpeed` 给竖直速度设下限）、风车叶片、宝箱盖（打碎 = 掀盖，箱子留在世界里）、拉杆（拳击触发同 idx 栅栏门）、检查点旗帜（踩到后升旗）。`sky_garden` 补了风扇塔（峡谷顺风）、喷泉高台与拉杆宝箱格 |
 | 相机弹簧臂 | **已完成**。`FFollowCamera` 收可选 `Scene*` 做 `RayCastInCPU`；两个反直觉的坑写进了 AGENT_GUIDE：不能设最小臂长（会把镜头顶穿墙），臂长必须是对阻尼结果的**钳位**而非缩放（缩放会复利收敛到注视点，`glm::lookAt` 退化） |
 | 被救机器人换 rig 实例 | **已完成**。`FRescueRigVisual` 复用主角注入的 rig 资产建实例池，救出即换掉 kit 静态几何并播 `wave` / `win`，且沿远离玩家的方向让开 0.8 m |
-| 第二关 | 未做。`levels.json` 已支持多关顺序，但通关后没有「下一关」流转 |
+| 第二关 + 流转 | **已完成**。新增 `dune_relay.scad`「落日沙洲」（三座沙洲，57 金币 / 3 拼图 / 3 救援 / 17 机关），主题就是教这一轮做的非 ★ 活动件；结算画面按 `levels.json` 顺序走：有下一关就 `[Space] Next: <名字>`，最后一关变成 RUN COMPLETE + campaign 合计 + `[Space] Start over`。新增 `astro.level` cvar 与 `game.{level,levelId,levelCount,campaignCoins,campaignDeaths}` 查询 |
 | ScadRig PBR 段 | 未做。§6.3；落地后主角机身会有高光 |
 
-第二轮的验收在 `assets/agentscripts/nextastrobot-props.agentscript.json`：八件活动件、弹簧臂
-（`game.springArm` / `game.cam{X,Y,Z}`）与被救机器人（`game.rescueRigs`）各有断言。
+第二轮的验收在两个脚本里：`nextastrobot-props` 覆盖八件活动件、弹簧臂（`game.springArm` /
+`game.cam{X,Y,Z}`）与被救机器人（`game.rescueRigs`）；`nextastrobot-levels` 覆盖两关流转与第二
+关自身的机关。
+
+两个踩过的坑记在 AGENT_GUIDE 里：**风力对站着的玩家要减弱**（满强度会把人从它本该帮忙够到的
+小圆盘上推下去），以及 **`game.levelId` 必须报真正加载完的关**（`levelCursor_` 在请求加载那一
+刻就变了，脚本等 cursor 会拿着旧场景跑下一步）。

@@ -126,6 +126,16 @@ void NextAstrobotGameInstance::OnInit()
     if (!GOption->SceneName.empty())
     {
         scene = GOption->SceneName;
+        // A --scene override that names a level in the list should also select it, or the
+        // HUD and the result screen would report whichever level happened to be first.
+        for (size_t i = 0; i < config_.Levels.size(); ++i)
+        {
+            if (config_.Levels[i].Scene == scene)
+            {
+                levelCursor_ = i;
+                break;
+            }
+        }
     }
     SPDLOG_INFO("[NextAstrobot] loading level '{}'", scene);
     GetEngine().RequestLoadScene({.filename = scene});
@@ -187,6 +197,41 @@ void NextAstrobotGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
                                  SPDLOG_WARN("[NextAstrobot] astro.ride: no mechanism named '{}'", rideRequest_);
                              }
                              rideRequest_.clear();
+                         });
+    cvars.RegisterString("astro.level", "", &levelRequest_, NextCVar::ECVarFlags::None,
+                         "Load a level by id or 1-based index, and start its run tally over",
+                         [this]()
+                         {
+                             if (levelRequest_.empty())
+                             {
+                                 return;
+                             }
+                             size_t target = config_.Levels.size();
+                             for (size_t i = 0; i < config_.Levels.size(); ++i)
+                             {
+                                 if (config_.Levels[i].Id == levelRequest_)
+                                 {
+                                     target = i;
+                                     break;
+                                 }
+                             }
+                             if (target == config_.Levels.size())
+                             {
+                                 const int index = std::atoi(levelRequest_.c_str());
+                                 if (index >= 1 && static_cast<size_t>(index) <= config_.Levels.size())
+                                 {
+                                     target = static_cast<size_t>(index - 1);
+                                 }
+                             }
+                             if (target < config_.Levels.size())
+                             {
+                                 LoadLevel(target, true);
+                             }
+                             else
+                             {
+                                 SPDLOG_WARN("[NextAstrobot] astro.level: no level '{}'", levelRequest_);
+                             }
+                             levelRequest_.clear();
                          });
     cvars.RegisterString("astro.state", "", &forcedState_, NextCVar::ECVarFlags::None,
                          "Force the level flow into \"title\", \"playing\" or \"result\"",
@@ -293,6 +338,8 @@ void NextAstrobotGameInstance::OnSceneLoaded()
     levelTime_ = 0.0f;
     toast_.clear();
     toastTimer_ = 0.0f;
+    levelTallied_ = false;
+    loadedLevelId_ = CurrentLevel().Id;
     sceneReady_ = true;
     SPDLOG_INFO("[NextAstrobot] level ready: {} coins, {} puzzles, {} mechanisms, {} enemies, {} rescues",
                 index_.coins.size(), index_.puzzles.size(), index_.mechanisms.size(), index_.enemies.size(),
@@ -302,6 +349,7 @@ void NextAstrobotGameInstance::OnSceneLoaded()
 void NextAstrobotGameInstance::OnSceneUnloaded()
 {
     sceneReady_ = false;
+    loadedLevelId_.clear();
     player_.Destroy();
     // Only runtime pointers and body ids: injected rig assets belong to the scene being built.
     mechanisms_.Unbind();
@@ -328,6 +376,35 @@ void NextAstrobotGameInstance::RestartLevel()
         return;
     }
     GetEngine().RequestLoadScene({.filename = CurrentLevel().Scene});
+}
+
+void NextAstrobotGameInstance::LoadLevel(size_t index, bool restartCampaign)
+{
+    if (config_.Levels.empty())
+    {
+        return;
+    }
+    levelCursor_ = std::min(index, config_.Levels.size() - 1);
+    if (restartCampaign)
+    {
+        campaign_ = FRunStats{};
+    }
+    SPDLOG_INFO("[NextAstrobot] loading level {} '{}'", levelCursor_ + 1, CurrentLevel().Id);
+    GetEngine().RequestLoadScene({.filename = CurrentLevel().Scene});
+}
+
+void NextAstrobotGameInstance::AdvanceLevel()
+{
+    // Past the last level the only way on is round again, which also clears the campaign
+    // tally so the next run scores from zero.
+    if (HasNextLevel())
+    {
+        LoadLevel(levelCursor_ + 1, false);
+    }
+    else
+    {
+        LoadLevel(0, true);
+    }
 }
 
 FPlayerInput NextAstrobotGameInstance::CollectInput() const
@@ -543,6 +620,22 @@ void NextAstrobotGameInstance::OnTick(double deltaSeconds)
     {
         ApplyRespawn();
     }
+    if (flow_.State() == ELevelState::Result && !levelTallied_)
+    {
+        // Fold the finished level into the run total exactly once; the result screen can
+        // sit there for as long as the player likes.
+        const FRunStats& stats = flow_.Stats();
+        levelTallied_ = true;
+        campaign_.coins += stats.coins;
+        campaign_.coinsTotal += stats.coinsTotal;
+        campaign_.puzzles += stats.puzzles;
+        campaign_.puzzlesTotal += stats.puzzlesTotal;
+        campaign_.rescued += stats.rescued;
+        campaign_.rescuedTotal += stats.rescuedTotal;
+        campaign_.gems += stats.gems;
+        campaign_.deaths += stats.deaths;
+        campaign_.elapsedSeconds += stats.elapsedSeconds;
+    }
 
     rig_.Update(player_.Position(), player_.Yaw(), player_.State(), player_.HorizontalSpeed(),
                 config_.Move.RunSpeed, dt);
@@ -601,7 +694,14 @@ bool NextAstrobotGameInstance::OnRenderUI()
     FHudContext context;
     context.state = flow_.State();
     context.stats = &flow_.Stats();
+    context.campaign = &campaign_;
     context.levelName = CurrentLevel().DisplayName;
+    context.levelIndex = static_cast<int>(levelCursor_);
+    context.levelCount = static_cast<int>(config_.Levels.size());
+    if (HasNextLevel())
+    {
+        context.nextLevelName = config_.Levels[levelCursor_ + 1].DisplayName;
+    }
     context.toast = toast_;
     context.toastAlpha = std::clamp(toastTimer_ / std::max(kToastSeconds * 0.4f, 0.01f), 0.0f, 1.0f);
     context.deathFade = flow_.DeathFade01();
@@ -639,7 +739,16 @@ bool NextAstrobotGameInstance::OnKey(SDL_Event& event)
         jumpHeld_ = pressed;
         if (pressed && !event.key.repeat)
         {
-            jumpPressed_ = true;
+            // On the result screen the jump key is what carries the run forward, which is
+            // also what the title screen taught the player to press.
+            if (flow_.State() == ELevelState::Result)
+            {
+                AdvanceLevel();
+            }
+            else
+            {
+                jumpPressed_ = true;
+            }
         }
         return true;
     case SDLK_X:
@@ -654,10 +763,25 @@ bool NextAstrobotGameInstance::OnKey(SDL_Event& event)
             RestartLevel();
         }
         return true;
+    case SDLK_RETURN:
+        if (pressed && !event.key.repeat && flow_.State() == ELevelState::Result)
+        {
+            AdvanceLevel();
+        }
+        return true;
     case SDLK_ESCAPE:
         if (pressed && !event.key.repeat)
         {
-            flow_.RequestPause(flow_.State() != ELevelState::Paused);
+            if (flow_.State() == ELevelState::Result)
+            {
+                // The result screen offers [Esc] Quit; pausing a screen that is already a
+                // stop would just stack one overlay on another.
+                GetEngine().RequestExit(0);
+            }
+            else
+            {
+                flow_.RequestPause(flow_.State() != ELevelState::Paused);
+            }
         }
         return true;
     case SDLK_F5:
@@ -746,6 +870,13 @@ void NextAstrobotGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryR
     reg.Add("camY", [this]() -> Value { return static_cast<double>(camera_.Position().y); });
     reg.Add("camZ", [this]() -> Value { return static_cast<double>(camera_.Position().z); });
     reg.Add("rescueRigs", [this]() -> Value { return static_cast<int64_t>(rescueRigs_.PlacedCount()); });
+    // 1-based, so a script reads the same number the result screen prints.
+    reg.Add("level", [this]() -> Value { return static_cast<int64_t>(levelCursor_ + 1); });
+    // The level that is actually running, not the one a load was just requested for.
+    reg.Add("levelId", [this]() -> Value { return loadedLevelId_; });
+    reg.Add("levelCount", [this]() -> Value { return static_cast<int64_t>(config_.Levels.size()); });
+    reg.Add("campaignCoins", [this]() -> Value { return static_cast<int64_t>(campaign_.coins); });
+    reg.Add("campaignDeaths", [this]() -> Value { return static_cast<int64_t>(campaign_.deaths); });
 
     // game.mech.<name>.t - a mechanism's normalized phase, so a script can assert that a
     // platform really is moving instead of eyeballing a screenshot.

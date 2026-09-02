@@ -16,7 +16,14 @@ namespace NextAstrobot
     {
         ELevelState state = ELevelState::Playing;
         const FRunStats* stats = nullptr;
+        /// Every level finished so far in this run, this one included. Only shown on the
+        /// last level's result screen, where it is the campaign score.
+        const FRunStats* campaign = nullptr;
         std::string levelName;
+        /// Empty on the last level: that is what turns the result screen into the run's end.
+        std::string nextLevelName;
+        int levelIndex = 0;
+        int levelCount = 1;
         std::string toast;
         float toastAlpha = 0.0f;
         float deathFade = 0.0f;

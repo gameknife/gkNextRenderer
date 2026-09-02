@@ -1,10 +1,18 @@
 {
-  "_comment": "Level order for NextAstrobot. killPlaneOffset is relative to the lowest island surface the level index finds.",
+  "_comment": "Level order for NextAstrobot. killPlaneOffset is relative to the lowest island surface the level index finds. The goal screen walks this list in order; the last entry ends the run.",
   "levels": [
     {
       "id": "sky_garden",
       "displayName": "星尘花园",
       "scene": "assets/scad/source/astro/sky_garden.scad",
+      "titleCamera": "overview",
+      "introCameraPath": "level-flythrough",
+      "killPlaneOffset": -20.0
+    },
+    {
+      "id": "dune_relay",
+      "displayName": "落日沙洲",
+      "scene": "assets/scad/source/astro/dune_relay.scad",
       "titleCamera": "overview",
       "introCameraPath": "level-flythrough",
       "killPlaneOffset": -20.0

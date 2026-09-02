@@ -59,6 +59,12 @@ public:
 private:
     void TickWorld(float deltaSeconds);
     void RestartLevel();
+    /// Loads level `index`, clamped to the list. Pass restartCampaign to zero the running
+    /// totals, which is what going back to the first level after a finished run does.
+    void LoadLevel(size_t index, bool restartCampaign);
+    /// Result screen: next level, or back to the first one when the run is over.
+    void AdvanceLevel();
+    bool HasNextLevel() const { return levelCursor_ + 1 < config_.Levels.size(); }
     void ApplyRespawn();
     NextAstrobot::FPlayerInput CollectInput() const;
     glm::vec3 SpawnFootPosition() const;
@@ -80,6 +86,15 @@ private:
 
     std::vector<std::string> indexWarnings_;
     size_t levelCursor_ = 0;
+    /// Totals across every level finished in this run. Accumulated once per level, when
+    /// the flow first reaches Result.
+    NextAstrobot::FRunStats campaign_{};
+    bool levelTallied_ = false;
+    std::string levelRequest_;
+    /// Id of the level whose scene is actually live. levelCursor_ moves the moment a load
+    /// is requested, so a script that waited on the cursor would run its next step against
+    /// the level it just left.
+    std::string loadedLevelId_;
     bool sceneReady_ = false;
     float levelTime_ = 0.0f;
     // Last frame's foot position: the mechanisms run before the character does, so the

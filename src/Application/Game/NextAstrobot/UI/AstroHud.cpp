@@ -63,9 +63,15 @@ namespace NextAstrobot::AstroHud
         {
             drawList.AddRectFilled(ImVec2(0.0f, 0.0f), screen, IM_COL32(8, 10, 18, 195));
             const FRunStats& stats = *context.stats;
-            float y = screen.y * 0.24f;
-            DrawCentered(drawList, screen, y, kAccent, "LEVEL COMPLETE", 3.0f);
-            y += 80.0f;
+            const bool finished = context.nextLevelName.empty();
+            float y = screen.y * 0.20f;
+            DrawCentered(drawList, screen, y, kAccent, finished ? "RUN COMPLETE" : "LEVEL COMPLETE", 3.0f);
+            y += 44.0f;
+            DrawCentered(drawList, screen, y, kInk,
+                         fmt::format("{}   ({} / {})", context.levelName, context.levelIndex + 1,
+                                     context.levelCount),
+                         1.4f);
+            y += 44.0f;
             DrawCentered(drawList, screen, y, kInk, fmt::format("Coins      {} / {}", stats.coins, stats.coinsTotal),
                          1.6f);
             y += 36.0f;
@@ -79,8 +85,29 @@ namespace NextAstrobot::AstroHud
             y += 36.0f;
             DrawCentered(drawList, screen, y, kInk, fmt::format("Time       {}", FormatClock(stats.elapsedSeconds)),
                          1.6f);
-            y += 64.0f;
-            DrawCentered(drawList, screen, y, kInk, "[R] Replay      [Esc] Quit", 1.3f);
+            y += 46.0f;
+            // The campaign line only means anything once more than one level is behind us.
+            if (finished && context.campaign != nullptr && context.levelCount > 1)
+            {
+                const FRunStats& total = *context.campaign;
+                DrawCentered(drawList, screen, y, kAccent,
+                             fmt::format("Campaign   {} coins   {} puzzles   {} rescued   {} deaths   {}",
+                                         total.coins, total.puzzles, total.rescued, total.deaths,
+                                         FormatClock(total.elapsedSeconds)),
+                             1.4f);
+                y += 46.0f;
+            }
+            if (finished)
+            {
+                DrawCentered(drawList, screen, y, kInk, "[R] Replay      [Space] Start over      [Esc] Quit", 1.3f);
+            }
+            else
+            {
+                DrawCentered(drawList, screen, y, kAccent,
+                             fmt::format("[Space] Next: {}", context.nextLevelName), 1.6f);
+                y += 34.0f;
+                DrawCentered(drawList, screen, y, kInk, "[R] Replay      [Esc] Quit", 1.3f);
+            }
         }
     }
 

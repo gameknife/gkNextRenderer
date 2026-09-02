@@ -1,9 +1,16 @@
 # NextAstrobot — AstroBot 风格 3D 平台跳跃
 
 `NextAstrobot` 是原生 C++ 子应用（目标 `NextAstrobot`，源码 `src/Application/Game/NextAstrobot/`），
-把 `kit_astro` 零件库和 `sky_garden.scad`「星尘花园」做成可完整游玩的一关：机器人从出生岛出发，
-跑、跳、悬浮、拳击，踩着移动平台、摆锤、跷跷板、旋转盘、传送带、滑索穿过三座悬浮岛，吃金币、
-捡拼图、救出被困机器人，最后抵达糖果条纹终点门并结算。
+把 `kit_astro` 零件库做成一趟可完整游玩的流程：机器人从出生岛出发，跑、跳、悬浮、拳击，踩着
+移动平台、摆锤、跷跷板、旋转盘、传送带、滑索穿过悬浮岛，吃金币、捡拼图、救出被困机器人，抵达
+终点门结算，然后接着打下一关。
+
+现有两关，顺序由 `assets/configs/nextastrobot/levels.json` 决定：
+
+| # | id | 名字 | 场景 | 教什么 |
+| --- | --- | --- | --- | --- |
+| 1 | `sky_garden` | 星尘花园 | `assets/scad/source/astro/sky_garden.scad` | 平台机关：移动平台、摆锤、跷跷板、易碎石板、旋转盘、弹跳垫、滑索 |
+| 2 | `dune_relay` | 落日沙洲 | `assets/scad/source/astro/dune_relay.scad` | 非 ★ 活动件：风扇顺风、双激光节奏、喷泉托举、拉杆开门、摆动刺球 |
 
 本文是**现行契约**。改机关、改关卡、加关卡之前先读这里。
 
@@ -44,6 +51,7 @@ src/Application/Game/NextAstrobot/
 ├── World/RescueRigVisual.{hpp,cpp}      被救机器人的 rig 实例池（复用主角 rig 资产）
 └── UI/AstroHud.{hpp,cpp}                HUD 与标题 / 暂停 / 结算画面
 assets/configs/nextastrobot/{gameplay.json, levels.json}
+assets/scad/source/astro/{sky_garden,dune_relay}.scad   两关
 assets/scad/characters/astro_bot.scad    主角 rig（8 骨骼，11 个 clip）
 assets/agentscripts/nextastrobot-*.agentscript.json
 ```
@@ -195,16 +203,33 @@ nodes" 钉住了这个形状，加新 kit 件时它会告诉你几何落在哪�
 生命周期铁律（同 ScadRig 指南）：`OnInit` LoadRig → `BeforeSceneRebuild` InjectAssets →
 `OnSceneLoaded` Instantiate；`OnSceneUnloaded` **只清运行时指针**，不能清注入产物。
 
+## 关卡流转
+
+`levels.json` 的顺序就是流程。`levelCursor_` 指向当前关，结算画面按它决定说什么：
+
+- 还有下一关 → 「LEVEL COMPLETE」+ `[Space] Next: <下一关名字>`；`[R]` 重打本关。
+- 已是最后一关 → 「RUN COMPLETE」+ 整轮 campaign 合计（金币 / 拼图 / 救援 / 死亡 / 用时）+
+  `[Space] Start over`（回到第一关并把 campaign 清零）。
+
+Campaign 合计在 flow 第一次进入 `Result` 时累加一次（`levelTallied_` 防重复），换关不清零，
+只有回到第一关才清零。`AdvanceLevel()` 是唯一的推进入口，`LoadLevel(index, restartCampaign)`
+是唯一的加载入口。
+
+**`game.levelId` 报的是真正加载完的那一关**，不是刚请求的那一关：`levelCursor_` 在
+`RequestLoadScene` 的那一刻就变了，脚本若等 cursor 会拿着旧场景继续跑下一步。等 `levelId`
+才安全。
+
 ## 加一关
 
-1. 写 `assets/scad/source/astro/levelNN_<name>.scad`，用 kit_astro 摆件，末尾放
+1. 写 `assets/scad/source/astro/<name>.scad`，用 kit_astro 摆件，末尾放
    `gk_camera_lookat(name = "overview", ...)` 和一条 `gk_camera_lookat_key(path = "level-flythrough", ...)`。
-2. 关卡里必须有 `ab_bldg_startpad`（出生点 = 顶面中心）与 `ab_bldg_goal`（终点）；
-   检查点用 `ab_prop_checkpoint(idx = N)`，按钮与栅栏用同一个 `idx` 配对。
+2. 关卡里必须有 `ab_bldg_startpad`（出生点 = 顶面中心，朝向 +x）与 `ab_bldg_goal`（终点）；
+   检查点用 `ab_prop_checkpoint(idx = N)`，按钮 / 拉杆与栅栏用同一个 `idx` 配对。
 3. 在 `assets/configs/nextastrobot/levels.json` 追加一条。
 
 **零 C++ 改动**。索引、机关、危险、敌人、收集全部按模块名工作；`game.index.warnings` 会告诉你
-缺了 startpad / goal / 岛屿。
+缺了 startpad / goal / 岛屿。摆完之后用 `astro.level <id>` + 一串 `astro.teleport` 把路线上的
+落脚点走一遍（断言 `game.onGround`），比截图更快能发现「这一跳过不去」。
 
 ## 调试与验收
 
@@ -217,16 +242,20 @@ nodes" 钉住了这个形状，加新 kit 件时它会告诉你几何落在哪�
 | `astro.teleport "x,y,z"` | 传送到世界坐标 |
 | `astro.ride "<机关名>"` | 传送到某个机关的站立点或身前（`moving` / `spin` / `conveyor` / `seesaw` / `bounce` / `crumble` / `button_1` / `cage` / `chest` / `lever_2` / `fountain` / `fan` / `laser` / `spikeball` …）。落点在道具**身前**时还会把玩家转过去面对它，脚本可以直接拳击，不必先猜朝向 |
 | `astro.state "title\|playing\|result"` | 强制流程状态 |
+| `astro.level "<id 或 1-based 序号>"` | 直接加载某一关，并把 campaign 合计清零 |
 
 F5 切换调试面板。Agent queries 前缀 `game.`：`state` `locomotion` `clip` `player{X,Y,Z}`
 `onGround` `punching` `yaw` `coins(Total)` `puzzles(Total)` `rescued(Total)` `deaths`
 `checkpoint` `enemiesAlive` `killPlaneY` `springArm` `cam{X,Y,Z}` `rescueRigs`
+`level` `levelId` `levelCount` `campaign{Coins,Deaths}`
 `index.{coins,puzzles,mechanisms,enemies,hazards,warnings}` `mech.<name>.t`（机关归一化相位，
 名字见上面的机关表：`spikeball` `laser` `fan` `fountain` `windmill` `chest` `lever_2`
 `flag_1` `flag_2` …）。
 
-验收脚本：`smoke` / `locomotion` / `collect` / `mechanisms` / `goal` / `props`。最后一个覆盖
-本轮的非 ★ 活动件、弹簧臂与被救机器人；它靠 `astro.ride` 的自动转向来完成拳击类断言。
+验收脚本：`smoke` / `locomotion` / `collect` / `mechanisms` / `goal` / `props` / `levels`。
+`props` 覆盖非 ★ 活动件、弹簧臂与被救机器人（靠 `astro.ride` 的自动转向完成拳击类断言）；
+`levels` 覆盖两关流转：结算→下一关→campaign 累加→最后一关→重开清零，顺带验第二关自己的
+拉杆门、风区与喷泉。
 
 ```bash
 gnb.bat build NextAstrobot gkNextUnitTests
