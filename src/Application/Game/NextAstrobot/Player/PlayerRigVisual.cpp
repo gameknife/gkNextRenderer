@@ -21,8 +21,15 @@ namespace NextAstrobot
         // Parked far below the level until the first Update places the rig.
         constexpr float kParkedY = -1000.0f;
         constexpr float kLandClipSeconds = 0.3f;
-        // The kit's own blue, so the player matches the NPC robots around them.
-        constexpr glm::vec3 kTintColor{0.08f, 0.30f, 0.66f};
+        // The kit's own blue for the player, so they match the NPC robots around them;
+        // the rest are for rescued robots, which read better as a crowd when they are not
+        // all the same colour. Same values as kit_astro's ab_BLUE / TEAL / ORANGE / PINK.
+        constexpr std::array<glm::vec3, 4> kTintColors{
+            glm::vec3{0.08f, 0.30f, 0.66f},
+            glm::vec3{0.10f, 0.54f, 0.52f},
+            glm::vec3{0.84f, 0.42f, 0.08f},
+            glm::vec3{0.84f, 0.44f, 0.55f},
+        };
 
         void SetSubtreeVisible(const std::shared_ptr<Assets::Node>& node, bool visible)
         {
@@ -70,8 +77,20 @@ namespace NextAstrobot
             models.push_back(asset_.partModels[part.modelIndex]);
             partModelIds_.push_back(static_cast<uint32_t>(models.size() - 1));
         }
-        tintMaterialId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, kTintColor);
+        tintMaterialIds_.clear();
+        for (const glm::vec3& color : kTintColors)
+        {
+            tintMaterialIds_.push_back(Assets::SceneBuilder::AddLambertianMaterial(materials, color));
+        }
         injected_ = true;
+    }
+
+    NextGameplay::FRigInstanceDesc FPlayerRigVisual::BaseInstanceDesc() const
+    {
+        NextGameplay::FRigInstanceDesc desc;
+        desc.partModelIds = partModelIds_;
+        desc.partMaterialIds = partMaterialIds_;
+        return desc;
     }
 
     Assets::Node* FPlayerRigVisual::BoneNode(std::string_view boneName)
@@ -102,10 +121,9 @@ namespace NextAstrobot
         worldNode_->AddComponent(physics);
         scene.AddNode(worldNode_);
 
-        NextGameplay::FRigInstanceDesc desc;
+        NextGameplay::FRigInstanceDesc desc = BaseInstanceDesc();
         desc.namePrefix = "astro_player";
-        desc.partModelIds = partModelIds_;
-        desc.partMaterialIds = partMaterialIds_;
+        const uint32_t playerTint = tintMaterialIds_.empty() ? 0 : tintMaterialIds_.front();
         for (size_t partIndex = 0; partIndex < asset_.parts.size(); ++partIndex)
         {
             const Assets::FRigPart& part = asset_.parts[partIndex];
@@ -113,7 +131,7 @@ namespace NextAstrobot
             {
                 if (part.sectionTintable[section])
                 {
-                    desc.partMaterialIds[partIndex][section] = tintMaterialId_;
+                    desc.partMaterialIds[partIndex][section] = playerTint;
                 }
             }
         }

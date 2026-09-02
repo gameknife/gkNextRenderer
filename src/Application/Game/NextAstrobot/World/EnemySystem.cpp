@@ -6,7 +6,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "Engine/Assets/Core/Node.hpp"
-#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
 
 #include "Application/Game/NextAstrobot/Mechanisms/MechanismCurves.hpp"
 
@@ -14,18 +14,6 @@ namespace NextAstrobot
 {
     namespace
     {
-        void SetEnemyVisible(Assets::Node* node, bool visible)
-        {
-            if (!node)
-            {
-                return;
-            }
-            if (auto* render = node->GetComponent<Runtime::RenderComponent>())
-            {
-                render->SetVisible(visible);
-            }
-        }
-
         float EnemyHeight(EEnemyKind kind)
         {
             switch (kind)
@@ -74,7 +62,7 @@ namespace NextAstrobot
             enemy.alive = true;
             enemy.knockback = 0.0f;
             enemy.position = enemy.origin;
-            SetEnemyVisible(enemy.node, true);
+            Assets::NodeUtils::SetVisibleRecursive(enemy.node, true);
         }
     }
 
@@ -148,7 +136,7 @@ namespace NextAstrobot
                     else
                     {
                         enemy.alive = false;
-                        SetEnemyVisible(enemy.node, false);
+                        Assets::NodeUtils::SetVisibleRecursive(enemy.node, false);
                         continue;
                     }
                 }
@@ -165,7 +153,7 @@ namespace NextAstrobot
             if (aboveHead && playerFallSpeed < -0.5f && enemy.kind != EEnemyKind::Spiky)
             {
                 enemy.alive = false;
-                SetEnemyVisible(enemy.node, false);
+                Assets::NodeUtils::SetVisibleRecursive(enemy.node, false);
                 outcome.stomped = true;
                 continue;
             }

@@ -5,6 +5,9 @@
 
 #include <glm/gtc/quaternion.hpp>
 
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+
 namespace NextAstrobot
 {
     namespace
@@ -20,6 +23,19 @@ namespace NextAstrobot
             }
             const float t = std::clamp(glm::dot(point - a, ab) / lengthSq, 0.0f, 1.0f);
             return glm::length(point - (a + ab * t));
+        }
+
+        /// A hazard whose piece can be switched off is only lethal while it is drawn.
+        /// Reading the node's visibility keeps the rule where the player can see it
+        /// instead of duplicating the mechanism's duty cycle in a second timer.
+        bool PartVisible(const Assets::Node* part)
+        {
+            if (!part)
+            {
+                return true;
+            }
+            const auto* render = part->GetComponent<Runtime::RenderComponent>();
+            return render == nullptr || render->GetVisible();
         }
     }
 
@@ -38,6 +54,7 @@ namespace NextAstrobot
         {
             FHazard hazard;
             hazard.kind = static_cast<EHazardKind>(entry.kind);
+            hazard.part = entry.node.part;
             hazard.worldPos = entry.node.worldPos;
             hazard.worldRot = entry.node.worldRot;
             switch (hazard.kind)
@@ -78,8 +95,12 @@ namespace NextAstrobot
             case EHazardKind::SpikeBall:
             {
                 const float ballRadius = static_cast<float>(entry.node.Number("r", 0.7));
+                const float chain = static_cast<float>(entry.node.Number("h", 4.0));
                 hazard.radius = ballRadius + 0.45f;
                 hazard.surfaceHeight = ballRadius + 0.35f;
+                // Ball centre in the swinging piece's own frame: the chain hangs the
+                // full length below the pivot, and the ball sits on the end of it.
+                hazard.extent.y = -chain + ballRadius + 0.35f;
                 break;
             }
             }
@@ -125,6 +146,11 @@ namespace NextAstrobot
                 break;
             case EHazardKind::Laser:
             {
+                // A blinking emitter is harmless while the beam is off.
+                if (!PartVisible(hazard.part))
+                {
+                    break;
+                }
                 // The beam runs from the emitter to the receiver at SCAD z = 0.7.
                 const glm::vec3 from = hazard.worldPos + hazard.worldRot * glm::vec3(0.3f, hazard.surfaceHeight, 0.0f);
                 const glm::vec3 to =
@@ -137,7 +163,14 @@ namespace NextAstrobot
             }
             case EHazardKind::SpikeBall:
             {
-                const glm::vec3 ball = hazard.worldPos + hazard.worldRot * glm::vec3(0.0f, hazard.surfaceHeight, 0.0f);
+                // The ball hangs under a node the mechanism swings, so ask that node
+                // where it is now; the module origin is only the mount point.
+                glm::vec3 ball = hazard.worldPos + hazard.worldRot * glm::vec3(0.0f, hazard.surfaceHeight, 0.0f);
+                if (hazard.part)
+                {
+                    ball = hazard.part->WorldTranslation() +
+                           hazard.part->WorldRotation() * glm::vec3(0.0f, hazard.extent.y, 0.0f);
+                }
                 if (glm::length(centre - ball) < hazard.radius + playerHeight * 0.25f)
                 {
                     return "spike_ball";

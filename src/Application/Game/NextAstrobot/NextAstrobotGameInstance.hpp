@@ -26,6 +26,7 @@
 #include "Application/Game/NextAstrobot/World/EnemySystem.hpp"
 #include "Application/Game/NextAstrobot/World/HazardSystem.hpp"
 #include "Application/Game/NextAstrobot/World/InteractableSystem.hpp"
+#include "Application/Game/NextAstrobot/World/RescueRigVisual.hpp"
 
 class NextAstrobotGameInstance : public NextGameInstanceBase
 {
@@ -75,6 +76,7 @@ private:
     NextAstrobot::FHazardSystem hazards_;
     NextAstrobot::FEnemySystem enemies_;
     NextAstrobot::FInteractableSystem interactables_;
+    NextAstrobot::FRescueRigVisual rescueRigs_;
 
     std::vector<std::string> indexWarnings_;
     size_t levelCursor_ = 0;

@@ -41,6 +41,7 @@ src/Application/Game/NextAstrobot/
 ├── Player/PlayerRigVisual.{hpp,cpp}     astro_bot.scad rig 注入 / 实例化 / clip 选择
 ├── Player/FollowCamera.{hpp,cpp}        跟随相机 + FLevelCameras（标题机位与入场飞越）
 ├── World/{Collectible,Hazard,Enemy,Interactable}System.{hpp,cpp}
+├── World/RescueRigVisual.{hpp,cpp}      被救机器人的 rig 实例池（复用主角 rig 资产）
 └── UI/AstroHud.{hpp,cpp}                HUD 与标题 / 暂停 / 结算画面
 assets/configs/nextastrobot/{gameplay.json, levels.json}
 assets/scad/characters/astro_bot.scad    主角 rig（8 骨骼，11 个 clip）
@@ -64,7 +65,8 @@ assets/agentscripts/nextastrobot-*.agentscript.json
 6. `ab_part_roof` / `ab_part_hazard` 是**几何 helper**，不是活动件。运行时按具体件名索引
    （`LevelIndex.cpp` 的 `kMechanismSpecs` 表），不靠 `ab_part_*` 前缀通配。
 
-当前 13 个机关及其活动件：
+当前 21 个机关及其活动件（前 13 个是玩法机关，后 8 个是「非 ★ 活动件」：
+不是平台，但同样是 `ab_part_*` + 运行时驱动）：
 
 | 机关 | 活动件 | 运行时 | 碰撞 |
 | --- | --- | --- | --- |
@@ -81,6 +83,41 @@ assets/agentscripts/nextastrobot-*.agentscript.json
 | `ab_plat_spin` | 无 | 盘节点绕 z 转，脚下给 ω×r 表面速度 | 隐式静态 |
 | `ab_plat_conveyor` | 无 | 脚下给 +x 表面速度 | 隐式静态 |
 | `ab_plat_bounce` | 无 | 脚底在半径内且着地 → 竖直发射 `launch` m | 隐式静态 |
+| `ab_prop_spike_ball_chain` | `ab_part_spike_ball` | 绕吊钩 `ang·sin` 摆动；**致命判定跟着这个节点走**，不是模块原点 | 无 |
+| `ab_prop_laser` | `ab_part_laser_beam` | 按 `period`/`duty`/`phase` 整根隐藏／显示；**不可见时不致命** | 无 |
+| `ab_prop_fan` | `ab_part_fan_blades` | 叶片绕 SCAD y 自转；沿 front 方向 `range` 米的圆柱风区给 `power` m/s 风速 | 无（护圈是静态壳） |
+| `ab_prop_fountain_jet` | `ab_part_fountain_column` | 水柱按 `period` 沿 z 缩放涨落；柱内玩家上升 `lift` m/s | 无（池座是静态壳） |
+| `ab_bldg_windmill` | `ab_part_windmill_blades` | 绕 SCAD y 自转（`speed`），纯装饰 | 无 |
+| `ab_prop_chest` | `ab_part_chest_lid` | 拳击后盖子绕 SCAD x 掀开 −55°，**箱子不消失** | 无 |
+| `ab_prop_lever` | `ab_part_lever_arm` | 拳击后绕 SCAD y 扳过去，并触发同 `idx` 的栅栏门 | 无 |
+| `ab_prop_checkpoint` | `ab_part_checkpoint_flag` | 踩到后旗子从杆脚升到 `h−0.1` | 无 |
+
+**一个模块可以同时是好几样东西。** `FLevelIndex::Build` 的机关表先跑、并且**故意不 continue**：
+牢笼既是机关又是救援点，宝箱既是机关又是可打碎物，激光和刺球既是机关又是危险物，检查点既是
+机关又是复活点。加新件时如果它也属于别的桶，就照这个模式来，不要在机关分支里 `continue`。
+
+风区与水柱这两条**改的是玩家的速度，不是位置**：`FMechanismEffects::wind`（m/s，折进
+`PlayerController` 的水平目标速度里，所以玩家能顶着风走但走不赢比自己跑速快的风）和
+`liftSpeed`（m/s，给竖直速度设下限）。风若按力（m/s²）实现会被跑步阻尼当帧吃掉，形同没有。
+
+### 一个 kit 对象 = 一棵子树
+
+ScadLoader 把**每一次 user module 调用**都变成一个 Node，而 kit 的材质包装（`ab_gold` /
+`ab_plastic` / `ab_gloss` / `ab_metal` …）本身就是 module。于是 `LevelIndex` 按模块名索引到的
+那个节点，**经常自己一个三角形都不画**：
+
+| 模块 | 几何在哪 |
+| --- | --- |
+| `ab_prop_crate`、`ab_bldg_wall_break`、`ab_item_puzzle` / `_key` / `_star`、`ab_char_enemy_*`、`ab_char_bot_lost` | 全在子节点，根节点没有 RenderComponent |
+| `ab_item_coin`、`ab_item_gem` | 拆开：builtin `gk_material` 的部分留在根，`ab_gold()` 的部分在子节点 |
+| 所有 `ab_part_*`（自身包了 `gk_flatten`） | 就在根节点 |
+
+所以隐藏、显示或测量一个 kit 对象的代码一律走 `Assets::NodeUtils::SetVisibleRecursive` /
+`SetRayCastVisibleRecursive` / `GetSubtreeWorldBounds`，不要自己写
+`node->GetComponent<RenderComponent>()->SetVisible()`。只碰根节点会得到三类症状：打碎的箱子
+还立在原地并继续挡路、吃掉的收集物留下静止残影、拾取判定落在锚点上（比看到的东西低约一米，
+`hover` 参数造成）。`Test_NextAstrobot.cpp` 的 "Astro kit props keep their geometry in child
+nodes" 钉住了这个形状，加新 kit 件时它会告诉你几何落在哪一层。
 
 ### 碰撞策略
 
@@ -95,6 +132,29 @@ assets/agentscripts/nextastrobot-*.agentscript.json
 **无碰撞名单**在 `NextAstrobotGameInstance.cpp` 顶部（`kNoCollisionModules` /
 `kNoCollisionParts` / `kNoCollisionDecor`）。加了新的收集物或装饰件就往那里加一行。
 
+## 相机弹簧臂
+
+`FFollowCamera::Update` 收一个可选的 `Assets::Scene*`；给了它，就从注视点沿吊臂方向做一次
+`RayCastInCPU`，把吊臂缩短到障碍物前 `SpringArmRadius` 米。收拢是**瞬时**的（看穿柱子一帧比
+硬切更糟），伸回按 `SpringArmReturnRate` 缓动。三条来之不易的规则：
+
+1. **障碍永远赢，不设最小臂长。** 「最小距离」听起来更安全，实际相反：玩家背贴比最小值还近的
+   柱子时，它会把镜头顶穿墙进去，画面全黑。宁可贴到角色肩上。
+2. **臂长是对阻尼结果的钳位，不是缩放。** 每帧对已阻尼的偏移再乘一次比例会复利收敛，吊臂塌到
+   注视点上，`glm::lookAt` 退化成奇异矩阵，画面同样全黑。
+3. 吊臂短于 `SpringArmHideRigDistance` 时把主角 rig 隐掉，否则镜头里只剩一面白塑料。
+
+收集物、敌人、装饰和主角 rig 本来就在 no-raycast 名单上，所以只有玩家真能站上去的实体会拉近
+镜头。查询 `game.springArm`（1.0 = 全长）与 `game.cam{X,Y,Z}`。
+
+## 被救机器人
+
+`FRescueRigVisual` 在 `OnSceneLoaded` 按 `index_.RescueTotal()` 预建同样多个 astro_bot rig
+实例（共用主角注入的 model / material，只换 tint），停在地下并隐藏。救出一个就把 kit 的静态
+几何（`ab_char_bot_lost` 本体，或牢笼里那个 `ab_char_bot` 子节点）藏掉，把一个实例摆到原地、
+朝向玩家、播 `wave`（走近救的）或 `win`（拳击开笼的），并**沿远离玩家的方向让开 0.8 m**——
+不让开的话，站在笼子正中央开笼会把机器人生成在玩家身体里。预建是为了救援当帧不建节点树。
+
 ## 帧顺序（`TickWorld`）
 
 刻意的先后关系，改动前先读这一段：
@@ -103,7 +163,8 @@ assets/agentscripts/nextastrobot-*.agentscript.json
    （`previousFoot_`），因为跷跷板和表面速度判定要的是玩家真正站过的地方。
 2. **PlayerController**：合成水平速度（相机相对输入 + 表面速度）与竖直速度（重力 20、
    跳 8.9、悬浮钳 −1、发射 `√(2gh)`），交给 `NextCharacterController::UpdateWithVelocity`。
-3. CollectibleSystem → HazardSystem → EnemySystem → InteractableSystem。
+3. CollectibleSystem → HazardSystem → EnemySystem → InteractableSystem（其 `freed` 事件驱动
+   `FRescueRigVisual::Place`）。
 4. `PlayerRigVisual` / `FollowCamera` / HUD，最后 `Scene::MarkTransformDirty()` 一次。
 
 `FLevelFlow::WorldRunning()` 为假时整个 1–4 跳过，并 `physics->SetPaused(true)`。
@@ -154,13 +215,18 @@ assets/agentscripts/nextastrobot-*.agentscript.json
 | `astro.god` | 免疫危险、敌人与击杀平面 |
 | `astro.timescale` | 玩法 delta 倍率（0.05~4） |
 | `astro.teleport "x,y,z"` | 传送到世界坐标 |
-| `astro.ride "<机关名>"` | 传送到某个机关的站立点（`moving` / `spin` / `conveyor` / `seesaw` / `bounce` / `crumble` / `button_1` / `cage` …） |
+| `astro.ride "<机关名>"` | 传送到某个机关的站立点或身前（`moving` / `spin` / `conveyor` / `seesaw` / `bounce` / `crumble` / `button_1` / `cage` / `chest` / `lever_2` / `fountain` / `fan` / `laser` / `spikeball` …）。落点在道具**身前**时还会把玩家转过去面对它，脚本可以直接拳击，不必先猜朝向 |
 | `astro.state "title\|playing\|result"` | 强制流程状态 |
 
-F4 切换调试面板。Agent queries 前缀 `game.`：`state` `locomotion` `clip` `player{X,Y,Z}`
+F5 切换调试面板。Agent queries 前缀 `game.`：`state` `locomotion` `clip` `player{X,Y,Z}`
 `onGround` `punching` `yaw` `coins(Total)` `puzzles(Total)` `rescued(Total)` `deaths`
-`checkpoint` `enemiesAlive` `killPlaneY` `index.{coins,puzzles,mechanisms,enemies,hazards,warnings}`
-`mech.<name>.t`（机关归一化相位）。
+`checkpoint` `enemiesAlive` `killPlaneY` `springArm` `cam{X,Y,Z}` `rescueRigs`
+`index.{coins,puzzles,mechanisms,enemies,hazards,warnings}` `mech.<name>.t`（机关归一化相位，
+名字见上面的机关表：`spikeball` `laser` `fan` `fountain` `windmill` `chest` `lever_2`
+`flag_1` `flag_2` …）。
+
+验收脚本：`smoke` / `locomotion` / `collect` / `mechanisms` / `goal` / `props`。最后一个覆盖
+本轮的非 ★ 活动件、弹簧臂与被救机器人；它靠 `astro.ride` 的自动转向来完成拳击类断言。
 
 ```bash
 gnb.bat build NextAstrobot gkNextUnitTests

@@ -9,7 +9,7 @@
 
 #include "Engine/Assets/Core/Node.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.hpp"
 
 #include "Application/Game/NextAstrobot/Mechanisms/MechanismCurves.hpp"
@@ -44,12 +44,18 @@ namespace NextAstrobot
             return local.x * local.x + local.z * local.z <= radius * radius;
         }
 
-        void SetNodeVisible(Assets::Node& node, bool visible)
+        /// A capsule-free cylinder test used by the fan draught and the fountain column:
+        /// `local` is already in the module's frame, `axis` its centre line from the
+        /// origin, `length` how far the stream reaches and `radius` how wide it is.
+        bool InCylinder(const glm::vec3& local, const glm::vec3& axis, float length, float radius)
         {
-            if (auto* render = node.GetComponent<Runtime::RenderComponent>())
+            const float along = glm::dot(local, axis);
+            if (along < 0.0f || along > length)
             {
-                render->SetVisible(visible);
+                return false;
             }
+            const glm::vec3 offset = local - axis * along;
+            return glm::dot(offset, offset) <= radius * radius;
         }
     }
 
@@ -85,6 +91,7 @@ namespace NextAstrobot
         runtime_.reserve(index.mechanisms.size());
         int gateCounter = 0;
         int movingCounter = 0;
+        int chestCounter = 0;
         for (const FMechanismRecord& record : index.mechanisms)
         {
             FRuntime runtime;
@@ -93,6 +100,10 @@ namespace NextAstrobot
             {
                 runtime.rootBindRotation = record.root.node->Rotation();
             }
+            if (record.part)
+            {
+                runtime.partBindScale = record.part->Scale();
+            }
             switch (record.kind)
             {
             case EMechanismKind::Gate:
@@ -100,6 +111,16 @@ namespace NextAstrobot
                 break;
             case EMechanismKind::Button:
                 runtime.queryName = fmt::format("button_{}", static_cast<int>(record.root.Number("idx", 0.0)));
+                break;
+            case EMechanismKind::Lever:
+                runtime.queryName = fmt::format("lever_{}", static_cast<int>(record.root.Number("idx", 0.0)));
+                break;
+            case EMechanismKind::CheckpointFlag:
+                runtime.queryName = fmt::format("flag_{}", static_cast<int>(record.root.Number("idx", 0.0)));
+                break;
+            case EMechanismKind::ChestLid:
+                runtime.queryName = chestCounter == 0 ? "chest" : fmt::format("chest_{}", chestCounter);
+                ++chestCounter;
                 break;
             case EMechanismKind::MovingPlatform:
                 runtime.queryName = movingCounter == 0 ? "moving" : fmt::format("moving_{}", movingCounter);
@@ -199,14 +220,15 @@ namespace NextAstrobot
     }
 
     void FMechanismSystem::ApplyPart(FRuntime& runtime, const glm::vec3& localTranslation,
-                                     const glm::quat& localRotation, float deltaSeconds)
+                                     const glm::quat& localRotation, float deltaSeconds,
+                                     const glm::vec3* localScale)
     {
         Assets::Node* part = runtime.record.part;
         if (!part)
         {
             return;
         }
-        part->SetTransform(localTranslation, localRotation, part->Scale());
+        part->SetTransform(localTranslation, localRotation, localScale ? *localScale : part->Scale());
         if (!runtime.body.IsInvalid() && physics_)
         {
             const glm::quat worldRot = part->WorldRotation();
@@ -237,16 +259,21 @@ namespace NextAstrobot
         }
     }
 
-    bool FMechanismSystem::OpenCage(const Assets::Node* cageNode)
+    bool FMechanismSystem::Latch(EMechanismKind kind, const Assets::Node* root)
     {
         for (FRuntime& runtime : runtime_)
         {
-            if (runtime.record.kind == EMechanismKind::Cage && runtime.record.root.node == cageNode &&
-                !runtime.latched)
+            if (runtime.record.kind != kind || runtime.record.root.node != root || runtime.latched)
             {
-                runtime.latched = true;
-                return true;
+                continue;
             }
+            runtime.latched = true;
+            if (kind == EMechanismKind::Lever)
+            {
+                // A lever is a punch-driven button: same idx namespace, same gates.
+                TriggerGate(static_cast<int>(runtime.record.root.Number("idx", 0.0)));
+            }
+            return true;
         }
         return false;
     }
@@ -325,6 +352,30 @@ namespace NextAstrobot
                 outPoint = root.worldPos + root.worldRot * glm::vec3(0.0f, 0.26f + 0.32f * radius + 0.05f, 0.0f);
                 return true;
             }
+            case EMechanismKind::LaserBeam:
+                // Standing in the beam line is the point: a script waits for the dark half
+                // of the cycle and runs through.
+                outPoint = root.worldPos +
+                           root.worldRot * glm::vec3(static_cast<float>(root.Number("L", 6.0)) * 0.5f, 0.2f, 0.0f);
+                return true;
+            case EMechanismKind::Fan:
+                // Two metres downstream of the hub, inside the draught.
+                outPoint = root.worldPos + root.worldRot * glm::vec3(0.0f, 0.2f, 2.0f);
+                return true;
+            case EMechanismKind::Fountain:
+                outPoint = root.worldPos + root.worldRot * glm::vec3(0.0f, 0.4f, 0.0f);
+                return true;
+            case EMechanismKind::Windmill:
+                outPoint = root.worldPos + root.worldRot * glm::vec3(3.0f, 0.2f, 0.0f);
+                return true;
+            case EMechanismKind::ChestLid:
+            case EMechanismKind::Lever:
+                // In front of the prop (kit front is SCAD -y, which is the module's +z),
+                // within punch range.
+                outPoint = root.worldPos + root.worldRot * glm::vec3(0.0f, 0.2f, 1.2f);
+                return true;
+            case EMechanismKind::SpikeBall:
+            case EMechanismKind::CheckpointFlag:
             case EMechanismKind::Zipline:
             case EMechanismKind::Gate:
             case EMechanismKind::Cage:
@@ -333,6 +384,25 @@ namespace NextAstrobot
             case EMechanismKind::Count:
                 return false;
             }
+        }
+        return false;
+    }
+
+    bool FMechanismSystem::TryGetFaceYaw(const std::string& name, const glm::vec3& from, float& outYaw) const
+    {
+        for (const FRuntime& runtime : runtime_)
+        {
+            if (runtime.queryName != name)
+            {
+                continue;
+            }
+            const glm::vec3 toRoot = runtime.record.root.worldPos - from;
+            if (toRoot.x * toRoot.x + toRoot.z * toRoot.z <= 0.04f)
+            {
+                return false;
+            }
+            outYaw = std::atan2(toRoot.x, toRoot.z);
+            return true;
         }
         return false;
     }
@@ -474,7 +544,7 @@ namespace NextAstrobot
                               runtime.record.partBindRotation, deltaSeconds);
                     if (Assets::Node* part = runtime.record.part)
                     {
-                        SetNodeVisible(*part, drop < 1.15f);
+                        Assets::NodeUtils::SetVisibleRecursive(part, drop < 1.15f);
                     }
                     if (runtime.timer >= respawn)
                     {
@@ -486,7 +556,7 @@ namespace NextAstrobot
                         }
                         if (Assets::Node* part = runtime.record.part)
                         {
-                            SetNodeVisible(*part, true);
+                            Assets::NodeUtils::SetVisibleRecursive(part, true);
                         }
                     }
                 }
@@ -619,6 +689,118 @@ namespace NextAstrobot
                 runtime.phase = Approach(runtime.phase, target, 1.0f, deltaSeconds);
                 ApplyPart(runtime,
                           runtime.record.partBindTranslation + glm::vec3(0.0f, runtime.phase * 1.5f, 0.0f),
+                          runtime.record.partBindRotation, deltaSeconds);
+                break;
+            }
+            case EMechanismKind::SpikeBall:
+            {
+                const float amplitude = static_cast<float>(root.Number("ang", 35.0));
+                const float period = static_cast<float>(root.Number("period", 2.6));
+                const float phase01 = static_cast<float>(root.Number("phase", 0.0));
+                runtime.value = Swing(time, period, phase01, amplitude);
+                runtime.phase = period > 0.0f ? std::fmod(time / period, 1.0f) : 0.0f;
+                // The lethal volume is not computed here: HazardSystem follows the ball
+                // node itself, so the swing and the kill test cannot drift apart.
+                ApplyPart(runtime, runtime.record.partBindTranslation, ScadRotY(runtime.value), deltaSeconds);
+                break;
+            }
+            case EMechanismKind::LaserBeam:
+            {
+                const float period = static_cast<float>(root.Number("period", 2.4));
+                const float duty = static_cast<float>(root.Number("duty", 0.55));
+                const float phase01 = static_cast<float>(root.Number("phase", 0.0));
+                runtime.phase = period > 0.0f ? std::fmod(time / period + phase01, 1.0f) : 0.0f;
+                // Visible means lethal: HazardSystem reads the beam node's own visibility
+                // rather than keeping a second copy of this timing.
+                const bool lit = duty >= 1.0f || runtime.phase < duty;
+                runtime.value = lit ? 1.0f : 0.0f;
+                if (Assets::Node* beam = runtime.record.part)
+                {
+                    Assets::NodeUtils::SetVisibleRecursive(beam, lit);
+                }
+                break;
+            }
+            case EMechanismKind::Fan:
+            {
+                const float scale = static_cast<float>(root.Number("s", 1.0));
+                const float speed = static_cast<float>(root.Number("speed", 520.0));
+                const float power = static_cast<float>(root.Number("power", 6.0));
+                const float range = static_cast<float>(root.Number("range", 7.0));
+                runtime.value = std::fmod(runtime.value + speed * deltaSeconds, 360.0f);
+                runtime.phase = runtime.value / 360.0f;
+                ApplyPart(runtime, runtime.record.partBindTranslation, ScadRotY(runtime.value), deltaSeconds);
+                // The draught is a cylinder down the module's front (SCAD -y, the local
+                // +z), starting at the hub. It is tested against the player's chest: the
+                // stream is a metre and a half off the ground, so a foot test never
+                // reaches it while the player is in the air where the push matters.
+                const glm::vec3 hub(0.0f, 1.5f * scale, 0.0f);
+                const glm::vec3 chestLocal =
+                    ToLocal(runtime.record, playerFoot + glm::vec3(0.0f, 0.75f, 0.0f)) - hub;
+                if (InCylinder(chestLocal, glm::vec3(0.0f, 0.0f, 1.0f), range, 1.1f * scale + 0.9f))
+                {
+                    effects_.wind += root.worldRot * glm::vec3(0.0f, 0.0f, power);
+                }
+                break;
+            }
+            case EMechanismKind::Fountain:
+            {
+                const float height = static_cast<float>(root.Number("h", 4.0));
+                const float radius = static_cast<float>(root.Number("r", 0.45));
+                const float period = static_cast<float>(root.Number("period", 3.2));
+                const float phase01 = static_cast<float>(root.Number("phase", 0.0));
+                const float lift = static_cast<float>(root.Number("lift", 6.0));
+                // The column breathes between 55% and 100% of its authored height, and
+                // only lifts as far as it currently reaches.
+                runtime.phase = PingPong01(time + phase01 * period, period);
+                const float swell = 0.55f + 0.45f * runtime.phase;
+                runtime.value = swell;
+                const glm::vec3 columnScale = runtime.partBindScale * glm::vec3(1.0f, swell, 1.0f);
+                ApplyPart(runtime, runtime.record.partBindTranslation, runtime.record.partBindRotation,
+                          deltaSeconds, &columnScale);
+                const glm::vec3 local = ToLocal(runtime.record, playerFoot) - glm::vec3(0.0f, 0.3f, 0.0f);
+                if (lift > 0.0f &&
+                    InCylinder(local, glm::vec3(0.0f, 1.0f, 0.0f), height * swell, radius + 0.9f))
+                {
+                    effects_.liftSpeed = std::max(effects_.liftSpeed, lift);
+                }
+                break;
+            }
+            case EMechanismKind::Windmill:
+            {
+                const float speed = static_cast<float>(root.Number("speed", 26.0));
+                runtime.value = std::fmod(runtime.value + speed * deltaSeconds, 360.0f);
+                runtime.phase = runtime.value / 360.0f;
+                ApplyPart(runtime, runtime.record.partBindTranslation, ScadRotY(runtime.value), deltaSeconds);
+                break;
+            }
+            case EMechanismKind::ChestLid:
+            {
+                const float target = runtime.latched ? 1.0f : 0.0f;
+                // A punched chest throws its lid back fast and leaves it open.
+                runtime.phase = Approach(runtime.phase, target, 3.0f, deltaSeconds);
+                ApplyPart(runtime, runtime.record.partBindTranslation,
+                          runtime.record.partBindRotation * ScadRotX(-55.0f * runtime.phase), deltaSeconds);
+                break;
+            }
+            case EMechanismKind::Lever:
+            {
+                const float target = runtime.latched ? 1.0f : 0.0f;
+                runtime.phase = Approach(runtime.phase, target, 2.5f, deltaSeconds);
+                // Bind pose is -30 degrees about SCAD y; a punch swings it through to +30.
+                ApplyPart(runtime, runtime.record.partBindTranslation,
+                          runtime.record.partBindRotation * ScadRotY(60.0f * runtime.phase), deltaSeconds);
+                break;
+            }
+            case EMechanismKind::CheckpointFlag:
+            {
+                const float height = static_cast<float>(root.Number("h", 3.0));
+                const float target = runtime.latched ? 1.0f : 0.0f;
+                runtime.phase = Approach(runtime.phase, target, 1.2f, deltaSeconds);
+                // Authored furled at the foot of the pole; reaching the checkpoint runs it
+                // up to just under the finial.
+                const float rise = std::max(height - 1.0f, 0.0f);
+                ApplyPart(runtime,
+                          runtime.record.partBindTranslation + glm::vec3(0.0f, runtime.phase * rise, 0.0f),
                           runtime.record.partBindRotation, deltaSeconds);
                 break;
             }

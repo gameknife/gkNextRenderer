@@ -24,6 +24,15 @@ namespace NextAstrobot
 {
     class FMechanismSystem;
 
+    /// One robot that got free this frame, so the game can stand an animated rig
+    /// where the static kit geometry was.
+    struct FRescueEvent
+    {
+        glm::vec3 position{0.0f};
+        /// True for a caged robot: it cheers rather than waving as it walks out.
+        bool fromCage = false;
+    };
+
     struct FInteractionEvent
     {
         int rescued = 0;
@@ -31,7 +40,9 @@ namespace NextAstrobot
         int coinsFromSmash = 0;
         int checkpointReached = -1;   // -1 = none this frame
         bool goalReached = false;
+        bool leverPulled = false;
         std::string toast;            // short HUD message, empty when nothing happened
+        std::vector<FRescueEvent> freed;
     };
 
     class FInteractableSystem
@@ -64,6 +75,9 @@ namespace NextAstrobot
         struct FRescue
         {
             Assets::Node* node = nullptr;
+            /// The static kit geometry to hide once the robot is out: the lost-bot module
+            /// itself, or the ab_char_bot standing inside a cage.
+            Assets::Node* botNode = nullptr;
             bool inCage = false;       // freed by punching the cage open, not by walking up
             glm::vec3 position{0.0f};
             float hold = 0.0f;
@@ -71,9 +85,16 @@ namespace NextAstrobot
         };
         struct FCheckpoint
         {
+            Assets::Node* node = nullptr;
             glm::vec3 position{0.0f};
             int index = 0;
             bool reached = false;
+        };
+        struct FLever
+        {
+            Assets::Node* node = nullptr;
+            glm::vec3 position{0.0f};
+            bool pulled = false;
         };
 
         FWorldConfig config_{};
@@ -81,6 +102,7 @@ namespace NextAstrobot
         std::vector<FBreakable> breakables_;
         std::vector<FRescue> rescues_;
         std::vector<FCheckpoint> checkpoints_;
+        std::vector<FLever> levers_;
         glm::vec3 goalPosition_{0.0f};
         bool hasGoal_ = false;
         bool goalReached_ = false;

@@ -38,6 +38,8 @@ namespace NextAstrobot
         position_ = spawnFootPosition;
         velocity_ = glm::vec3(0.0f);
         surfaceVelocity_ = glm::vec3(0.0f);
+        wind_ = glm::vec3(0.0f);
+        lift_ = 0.0f;
         yaw_ = yaw;
         onGround_ = false;
         state_ = ELocomotion::Fall;
@@ -110,6 +112,8 @@ namespace NextAstrobot
         position_ = footPosition;
         velocity_ = glm::vec3(0.0f);
         surfaceVelocity_ = glm::vec3(0.0f);
+        wind_ = glm::vec3(0.0f);
+        lift_ = 0.0f;
         yaw_ = yaw;
         state_ = ELocomotion::Fall;
         deathReason_.clear();
@@ -175,7 +179,11 @@ namespace NextAstrobot
     {
         punchStarted_ = false;
         const glm::vec3 inheritedSurface = surfaceVelocity_;
+        const glm::vec3 draught = wind_;
+        const float lift = lift_;
         surfaceVelocity_ = glm::vec3(0.0f);
+        wind_ = glm::vec3(0.0f);
+        lift_ = 0.0f;
 
         if (!controller_.IsValid() || deltaSeconds <= 0.0f)
         {
@@ -224,7 +232,9 @@ namespace NextAstrobot
         }
 
         const float control = onGround_ ? 1.0f : config_.AirControl;
-        const glm::vec3 desired = wish * config_.RunSpeed;
+        // Steering happens relative to the air: in a draught the target velocity is the
+        // player's own run added to whatever the fan is doing to the air around them.
+        const glm::vec3 desired = wish * config_.RunSpeed + glm::vec3(draught.x, 0.0f, draught.z);
         const float accel = config_.RunAccel * control;
         velocity_.x = Approach(velocity_.x, desired.x, accel, deltaSeconds);
         velocity_.z = Approach(velocity_.z, desired.z, accel, deltaSeconds);
@@ -293,6 +303,18 @@ namespace NextAstrobot
         {
             // Releasing the button ends this hover for good; it recharges on landing.
             hoverUsed_ = true;
+        }
+
+        // A fountain carries. It lands after the jump arc so it reads as the world acting
+        // on the player rather than as a different jump. The fan is already folded into
+        // the horizontal target above: a draught changes where "standing still" is.
+        if (lift > 0.0f)
+        {
+            velocity_.y = std::max(velocity_.y, lift);
+            // Clearing the ground flag stops the stick-to-floor bias from swallowing the
+            // first frame of the ride.
+            onGround_ = false;
+            jumpRising_ = false;
         }
 
         const glm::vec3 stepVelocity = velocity_ + glm::vec3(inheritedSurface.x, 0.0f, inheritedSurface.z);

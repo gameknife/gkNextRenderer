@@ -6,7 +6,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "Engine/Assets/Core/Node.hpp"
-#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
 
 #include "Application/Game/NextAstrobot/Mechanisms/MechanismCurves.hpp"
 
@@ -20,16 +20,20 @@ namespace NextAstrobot
         // running height reachable without crouching the capsule into it.
         constexpr float kPlayerChestHeight = 0.8f;
 
-        void SetItemVisible(Assets::Node* node, bool visible)
+        // A kit item's node origin is its authoring anchor, not its rendered centre, and the
+        // geometry can sit anywhere in the subtree: `ab_item_coin` splits across the module
+        // node and an `ab_gold` child, while `ab_item_puzzle` / `_key` / `_star` put every
+        // triangle in a child. Measure the whole subtree or the pickup fires at the anchor,
+        // a metre or so below the thing the player is reaching for.
+        glm::vec3 ItemCentre(const Assets::Scene& scene, const FIndexedNode& entry)
         {
-            if (!node)
+            glm::vec3 boundsMin(0.0f);
+            glm::vec3 boundsMax(0.0f);
+            if (!Assets::NodeUtils::GetSubtreeWorldBounds(scene, entry.node, boundsMin, boundsMax))
             {
-                return;
+                return entry.worldPos;
             }
-            if (auto* render = node->GetComponent<Runtime::RenderComponent>())
-            {
-                render->SetVisible(visible);
-            }
+            return (boundsMin + boundsMax) * 0.5f;
         }
     }
 
@@ -40,16 +44,16 @@ namespace NextAstrobot
         puzzlesTotal_ = 0;
     }
 
-    void FCollectibleSystem::Bind(const FLevelIndex& index)
+    void FCollectibleSystem::Bind(const Assets::Scene& scene, const FLevelIndex& index)
     {
         Unbind();
-        const auto add = [this](const std::vector<FIndexedNode>& source, ECollectibleKind kind, bool spins)
+        const auto add = [this, &scene](const std::vector<FIndexedNode>& source, ECollectibleKind kind, bool spins)
         {
             for (const FIndexedNode& entry : source)
             {
                 FItem item;
                 item.node = entry.node;
-                item.position = entry.worldPos;
+                item.position = ItemCentre(scene, entry);
                 item.bindRotation = entry.node ? entry.node->Rotation() : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
                 item.kind = kind;
                 item.spins = spins;
@@ -100,7 +104,7 @@ namespace NextAstrobot
             }
 
             item.taken = true;
-            SetItemVisible(item.node, false);
+            Assets::NodeUtils::SetVisibleRecursive(item.node, false);
             switch (item.kind)
             {
             case ECollectibleKind::Coin: ++event.coins; break;

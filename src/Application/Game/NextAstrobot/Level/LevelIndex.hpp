@@ -41,6 +41,14 @@ namespace NextAstrobot
         Button,
         Gate,
         Cage,
+        SpikeBall,
+        LaserBeam,
+        Fan,
+        Fountain,
+        Windmill,
+        ChestLid,
+        Lever,
+        CheckpointFlag,
         Count,
     };
 
@@ -83,6 +91,10 @@ namespace NextAstrobot
     struct FIndexedNode
     {
         Assets::Node* node = nullptr;
+        /// The module's ab_part_* child, when it has one. A hazard whose lethal volume
+        /// moves (the swinging spike ball) or switches off (the blinking laser) reads it
+        /// straight off this node instead of the bind-pose transform.
+        Assets::Node* part = nullptr;
         uint32_t id = 0;
         Assets::Scad::FMetadata meta;
         glm::vec3 worldPos{0.0f};

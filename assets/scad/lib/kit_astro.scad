@@ -686,7 +686,7 @@ module ab_bldg_tower(h = 8, r = 1.5, seed = 0)
 }
 
 // 风车（front = -y，底面 z=0）：锥台塔身 + 圆锥顶 + 四叶风车叶
-module ab_bldg_windmill(h = 7, seed = 0)
+module ab_bldg_windmill(h = 7, seed = 0, speed = 26)
 {
     c = ab_wall_c(seed);
     ab_plastic(c) cylinder(h = h, r1 = 2.2, r2 = 1.5, $fn = 12);
@@ -694,7 +694,13 @@ module ab_bldg_windmill(h = 7, seed = 0)
     ab_plastic(ab_WOODD()) translate([0, -1.95, 1.0]) rotate([90, 0, 0]) cylinder(h = 0.24, r = 0.55, $fn = 10, center = true);
     ab_plastic(ab_WOODD()) translate([0, -2.0, 0.5]) ab_boxc([1.1, 0.24, 1.0]);
     ab_metal(ab_METALD()) translate([0, -1.6, h + 0.3]) rotate([90, 0, 0]) cylinder(h = 1.0, r = 0.12, $fn = 8);
-    translate([0, -2.5, h + 0.3])
+    translate([0, -2.5, h + 0.3]) ab_part_windmill_blades();
+}
+
+// 风车叶片（活动件）：原点 = 主轴中心；绕 SCAD y 轴自转。
+module ab_part_windmill_blades()
+{
+    gk_flatten()
     {
         ab_metal(ab_METAL()) rotate([90, 0, 0]) cylinder(h = 0.4, r = 0.3, $fn = 10, center = true);
         for (i = [0 : 3])
@@ -1152,34 +1158,53 @@ module ab_prop_spike_ball(r = 0.7)
     }
 }
 
-// 吊挂刺球（底面 z=0，吊钩顶 z=h）：挂在门架横梁下；链条 + 刺球
-module ab_prop_spike_ball_chain(h = 4, r = 0.7)
+// 摆动的链条 + 刺球（活动件）：原点 = 吊钩转轴，几何全部挂在原点**下方**（z 为负）。
+//   运行时绕 SCAD y 轴摆动，刺球的杀伤判定跟着这个节点的世界位置走。
+module ab_part_spike_ball(h = 4, r = 0.7)
 {
-    zb = 2 * r + 0.7;
-    ab_metal(ab_METAL()) translate([0, 0, h - 0.15]) rotate([90, 0, 0]) ab_torus(0.14, 0.035);
-    n = max(1, floor((h - 0.3 - zb) / 0.22));
-    for (i = [0 : n - 1])
-        ab_metal(ab_METAL()) translate([0, 0, zb + 0.1 + i * 0.22]) rotate([i % 2 == 0 ? 90 : 0, 0, 0]) ab_torus(0.09, 0.025);
-    ab_prop_spike_ball(r);
+    gk_flatten()
+    {
+        zb = 2 * r + 0.7;
+        n = max(1, floor((h - 0.3 - zb) / 0.22));
+        for (i = [0 : n - 1])
+            ab_metal(ab_METAL()) translate([0, 0, zb + 0.1 + i * 0.22 - h]) rotate([i % 2 == 0 ? 90 : 0, 0, 0]) ab_torus(0.09, 0.025);
+        translate([0, 0, -h]) ab_prop_spike_ball(r);
+    }
 }
 
-// 风扇（front = -y，向 -y 吹风，底面 z=0）：底座 + 立杆 + 护圈 + 四叶
-module ab_prop_fan(s = 1.0)
+// 吊挂刺球（底面 z=0，吊钩顶 z=h）：挂在门架横梁下；静态吊钩 + 摆动的链条刺球
+//   ang 摆幅（°）、period 周期（秒）、phase 相位 0..1。ang=0 就是一颗静止的刺球。
+module ab_prop_spike_ball_chain(h = 4, r = 0.7, ang = 35, period = 2.6, phase = 0)
 {
-    scale([s, s, s])
+    ab_metal(ab_METAL()) translate([0, 0, h - 0.15]) rotate([90, 0, 0]) ab_torus(0.14, 0.035);
+    translate([0, 0, h]) ab_part_spike_ball(h, r);
+}
+
+// 风扇叶片（活动件）：原点 = 桨毂中心 = 转轴；绕 SCAD y 轴自转。
+module ab_part_fan_blades(s = 1.0)
+{
+    gk_flatten() scale([s, s, s])
+    {
+        ab_metal(ab_METAL()) rotate([90, 0, 0]) translate([0, 0, -0.1]) cylinder(h = 0.3, r = 0.16, $fn = 8);
+        for (i = [0 : 3])
+            ab_gloss(ab_BLUEL()) rotate([0, i * 90, 0]) translate([0.5, 0, 0]) rotate([15, 0, 0]) ab_boxc([0.75, 0.03, 0.34]);
+        for (i = [0 : 3])
+            ab_metal(ab_METAL()) rotate([0, i * 90 + 45, 0]) translate([0.47, 0, 0]) ab_boxc([0.95, 0.03, 0.03]);
+    }
+}
+
+// 风扇（front = -y，向 -y 吹风，底面 z=0）：底座 + 立杆 + 护圈 + 旋转四叶
+//   speed 叶片转速（°/s）、power 风速（m/s，沿 -y 吹）、range 风区长度（m）。
+//   风区是一个从桨毂沿 -y 伸出 range、半径 = 护圈半径的圆柱，站进去会被推着走／吹得起来。
+module ab_prop_fan(s = 1.0, speed = 520, power = 6, range = 7)
+{
+    gk_flatten() scale([s, s, s])
     {
         ab_metal(ab_METALD()) cylinder(h = 0.15, r = 0.6, $fn = 12);
         ab_metal(ab_METALD()) cylinder(h = 1.3, r = 0.08, $fn = 8);
-        translate([0, 0, 1.5])
-        {
-            ab_metal(ab_METAL()) rotate([90, 0, 0]) ab_torus(0.95, 0.05);
-            ab_metal(ab_METAL()) rotate([90, 0, 0]) translate([0, 0, -0.1]) cylinder(h = 0.3, r = 0.16, $fn = 8);
-            for (i = [0 : 3])
-                ab_gloss(ab_BLUEL()) rotate([0, i * 90, 0]) translate([0.5, 0, 0]) rotate([15, 0, 0]) ab_boxc([0.75, 0.03, 0.34]);
-            for (i = [0 : 3])
-                ab_metal(ab_METAL()) rotate([0, i * 90 + 45, 0]) translate([0.47, 0, 0]) ab_boxc([0.95, 0.03, 0.03]);
-        }
+        translate([0, 0, 1.5]) ab_metal(ab_METAL()) rotate([90, 0, 0]) ab_torus(0.95, 0.05);
     }
+    translate([0, 0, 1.5 * s]) ab_part_fan_blades(s);
 }
 
 // 按钮帽（活动件）：原点 = 帽底面中心；踩下后下压 0.15 m。无碰撞（底座是静态壳）。
@@ -1200,16 +1225,26 @@ module ab_prop_button(r = 1.0, idx = 0)
     translate([0, 0, 0.26]) ab_part_button_cap(r);
 }
 
-// 拉杆开关（front = -y，底面 z=0）：基座 + 倾斜拉杆 + 红球
-module ab_prop_lever()
+// 拉杆（活动件）：原点 = 轴销中心；拳击后绕 SCAD y 轴扳过去（-30° → +30°）。
+module ab_part_lever_arm()
 {
-    ab_metal(ab_METALD()) ab_bevel(0.6, 0.5, 0.35, 0.05);
-    ab_metal(ab_METAL()) translate([0, 0, 0.35]) rotate([90, 0, 0]) cylinder(h = 0.4, r = 0.06, center = true, $fn = 8);
-    translate([0, 0, 0.35]) rotate([0, -30, 0])
+    gk_flatten()
     {
         ab_metal(ab_METAL()) cylinder(h = 0.9, r = 0.035, $fn = 6);
         ab_gloss(ab_RED()) translate([0, 0, 0.92]) sphere(r = 0.1, $fn = 8);
     }
+}
+
+// 拉杆开关（front = -y，底面 z=0）：基座 + 倾斜拉杆 + 红球
+//   idx 是联动编号：拳击扳下后触发同 idx 的栅栏门，和 ab_prop_button 共用一套编号。
+module ab_prop_lever(idx = 0)
+{
+    gk_flatten()
+    {
+        ab_metal(ab_METALD()) ab_bevel(0.6, 0.5, 0.35, 0.05);
+        ab_metal(ab_METAL()) translate([0, 0, 0.35]) rotate([90, 0, 0]) cylinder(h = 0.4, r = 0.06, center = true, $fn = 8);
+    }
+    translate([0, 0, 0.35]) rotate([0, -30, 0]) ab_part_lever_arm();
 }
 
 // 栅栏门的栏栅（活动件）：原点 = 栏栅底；触发后整体升起 h+0.2
@@ -1268,14 +1303,10 @@ module ab_prop_bumper(r = 0.7)
 }
 
 // 宝箱（front = -y，底面 z=0）：木箱 + 半开箱盖 + 金币堆
-module ab_prop_chest(seed = 0)
+// 宝箱盖（活动件）：原点 = 后沿铰链；绕 SCAD x 轴掀开（0 度关 → -55 度开）。
+module ab_part_chest_lid()
 {
-    ab_plastic(ab_WOOD()) ab_bevel(1.3, 0.9, 0.7, 0.05);
-    for (sx = [-1, 1]) ab_metal(ab_METALD()) translate([sx * 0.45, 0, 0.35]) ab_boxc([0.08, 0.94, 0.72]);
-    ab_gold() translate([0, 0, 0.72]) ab_slab(1.1, 0.7, 0.16);
-    for (i = [0 : 5])
-        ab_gold() translate([ab_rndr(seed + i * 3, -0.4, 0.4), ab_rndr(seed + i * 5 + 1, -0.2, 0.2), 0.88]) cylinder(h = 0.04, r = 0.12, $fn = 8);
-    translate([0, 0.45, 0.7]) rotate([-55, 0, 0]) translate([0, -0.45, 0])
+    gk_flatten() translate([0, -0.45, 0])
     {
         ab_plastic(ab_WOODD()) difference()
         {
@@ -1286,25 +1317,65 @@ module ab_prop_chest(seed = 0)
     }
 }
 
-// 激光发射器（沿 +x 发射，底面 z=0）：发射盒 + 红色光束 + 接收器
-module ab_prop_laser(L = 6)
+// 宝箱（front = -y，底面 z=0）：箱体 + 金币堆 + 可掀开的盖子（拳击后弹开，箱子不消失）
+module ab_prop_chest(seed = 0)
 {
-    ab_metal(ab_METALD()) ab_bevel(0.6, 0.6, 1.0, 0.05);
-    ab_gloss(ab_RED()) translate([0.3, 0, 0.7]) rotate([0, 90, 0]) cylinder(h = 0.05, r = 0.12, $fn = 8);
-    ab_gloss([0.95, 0.16, 0.10]) translate([0.3, 0, 0.7]) rotate([0, 90, 0]) cylinder(h = L - 0.6, r = 0.05, $fn = 6);
-    ab_metal(ab_METALD()) translate([L, 0, 0]) ab_bevel(0.6, 0.6, 1.0, 0.05);
-    ab_gloss(ab_DARK()) translate([L - 0.3, 0, 0.7]) rotate([0, 90, 0]) cylinder(h = 0.05, r = 0.12, $fn = 8);
+    gk_flatten()
+    {
+        ab_plastic(ab_WOOD()) ab_bevel(1.3, 0.9, 0.7, 0.05);
+        for (sx = [-1, 1]) ab_metal(ab_METALD()) translate([sx * 0.45, 0, 0.35]) ab_boxc([0.08, 0.94, 0.72]);
+        ab_gold() translate([0, 0, 0.72]) ab_slab(1.1, 0.7, 0.16);
+        for (i = [0 : 5])
+            ab_gold() translate([ab_rndr(seed + i * 3, -0.4, 0.4), ab_rndr(seed + i * 5 + 1, -0.2, 0.2), 0.88]) cylinder(h = 0.04, r = 0.12, $fn = 8);
+    }
+    translate([0, 0.45, 0.7]) ab_part_chest_lid();
+}
+
+// 激光发射器（沿 +x 发射，底面 z=0）：发射盒 + 红色光束 + 接收器
+// 激光束（活动件）：原点 = 发射口，沿 +x 射向接收端。运行时按占空比整根隐藏／显示，
+//   不可见时不致命——玩法就是数着节奏冲过去。
+module ab_part_laser_beam(L = 6)
+{
+    gk_flatten() ab_gloss([0.95, 0.16, 0.10]) rotate([0, 90, 0]) cylinder(h = L - 0.6, r = 0.05, $fn = 6);
+}
+
+// 激光门（沿 +x 延伸 L，底面 z=0）：发射座 + 会开关的光束 + 接收座
+//   period 一次开关的周期（秒）、duty 亮的比例 0..1、phase 相位 0..1。duty>=1 就是常亮。
+module ab_prop_laser(L = 6, period = 2.4, duty = 0.55, phase = 0)
+{
+    gk_flatten()
+    {
+        ab_metal(ab_METALD()) ab_bevel(0.6, 0.6, 1.0, 0.05);
+        ab_gloss(ab_RED()) translate([0.3, 0, 0.7]) rotate([0, 90, 0]) cylinder(h = 0.05, r = 0.12, $fn = 8);
+        translate([L, 0, 0]) ab_metal(ab_METALD()) ab_bevel(0.6, 0.6, 1.0, 0.05);
+        ab_gloss(ab_DARK()) translate([L - 0.3, 0, 0.7]) rotate([0, 90, 0]) cylinder(h = 0.05, r = 0.12, $fn = 8);
+    }
+    translate([0.3, 0, 0.7]) ab_part_laser_beam(L);
 }
 
 // 喷泉水柱（底面 z=0，顶 z=h）：喷嘴 + 亮蓝水柱 + 顶部浪花（可把角色托起）
-module ab_prop_fountain_jet(h = 4, r = 0.45)
+// 喷泉水柱（活动件）：原点 = 喷口，几何向 +z 长到 h；运行时整体沿 z 缩放做涨落。
+module ab_part_fountain_column(h = 4, r = 0.45)
 {
-    ab_metal(ab_METALD()) cylinder(h = 0.2, r = r + 0.3, $fn = 12);
-    ab_gloss(ab_BLUEL()) translate([0, 0, 0.2]) cylinder(h = 0.15, r = r + 0.1, $fn = 12);
-    ab_gloss([0.50, 0.78, 0.88]) translate([0, 0, 0.3]) cylinder(h = h - 0.5, r1 = r * 0.8, r2 = r, $fn = 10);
-    ab_gloss([0.80, 0.86, 0.88]) translate([0, 0, h - 0.3]) ab_torus(r + 0.15, 0.14);
-    for (i = [0 : 4])
-        ab_gloss([0.80, 0.86, 0.88]) rotate([0, 0, i * 72]) translate([r + 0.35, 0, h - 0.5]) sphere(r = 0.09, $fn = 6);
+    gk_flatten()
+    {
+        ab_gloss([0.50, 0.78, 0.88]) cylinder(h = h - 0.5, r1 = r * 0.8, r2 = r, $fn = 10);
+        ab_gloss([0.80, 0.86, 0.88]) translate([0, 0, h - 0.6]) ab_torus(r + 0.15, 0.14);
+        for (i = [0 : 4])
+            ab_gloss([0.80, 0.86, 0.88]) rotate([0, 0, i * 72]) translate([r + 0.35, 0, h - 0.8]) sphere(r = 0.09, $fn = 6);
+    }
+}
+
+// 喷泉（底面 z=0）：池座 + 涨落的水柱。站进柱子里会被水托着往上升。
+//   period 涨落周期（秒）、phase 相位 0..1、lift 托举速度（m/s，0 = 纯装饰）。
+module ab_prop_fountain_jet(h = 4, r = 0.45, period = 3.2, phase = 0, lift = 6)
+{
+    gk_flatten()
+    {
+        ab_metal(ab_METALD()) cylinder(h = 0.2, r = r + 0.3, $fn = 12);
+        ab_gloss(ab_BLUEL()) translate([0, 0, 0.2]) cylinder(h = 0.15, r = r + 0.1, $fn = 12);
+    }
+    translate([0, 0, 0.3]) ab_part_fountain_column(h, r);
 }
 
 // 花盆（底面 z=0）：陶土盆 + 土 + 小花
@@ -1346,13 +1417,24 @@ module ab_prop_bubble(r = 0.9)
 
 // 检查点（底面 z=0）：蓝白圆环底座 + 旗杆 + 蓝旗
 //   idx 是复活点序号（沿关卡流程递增）；旗帜活动件留到 P4，本期整杆是静态壳。
+// 检查点旗（活动件）：原点 = 旗子贴杆的那个角；未激活时垂在杆脚，激活后升到杆顶。
+module ab_part_checkpoint_flag()
+{
+    gk_flatten() ab_gloss(ab_BLUE()) rotate([90, 0, 0]) translate([0, 0, -0.015]) linear_extrude(0.03) polygon([[0, 0], [1.1, -0.35], [0, -0.7]]);
+}
+
+// 检查点（底面 z=0）：圆盘 + 旗杆 + 会升起的旗子
+//   idx 决定复活顺序；踩到后旗子从杆脚升到 z = h-0.1。
 module ab_prop_checkpoint(h = 3, idx = 0)
 {
-    ab_gloss(ab_CREAM()) cylinder(h = 0.12, r = 1.0, $fn = 16);
-    ab_gloss(ab_BLUE()) translate([0, 0, 0.12]) rotate_extrude() translate([0.6, 0]) square([0.25, 0.02]);
-    ab_metal(ab_METAL()) cylinder(h = h, r = 0.05, $fn = 8);
-    ab_gold() translate([0, 0, h]) sphere(r = 0.09, $fn = 6);
-    ab_gloss(ab_BLUE()) translate([0.05, 0, h - 0.1]) rotate([90, 0, 0]) translate([0, 0, -0.015]) linear_extrude(0.03) polygon([[0, 0], [1.1, -0.35], [0, -0.7]]);
+    gk_flatten()
+    {
+        ab_gloss(ab_CREAM()) cylinder(h = 0.12, r = 1.0, $fn = 16);
+        ab_gloss(ab_BLUE()) translate([0, 0, 0.12]) rotate_extrude() translate([0.6, 0]) square([0.25, 0.02]);
+        ab_metal(ab_METAL()) cylinder(h = h, r = 0.05, $fn = 8);
+        ab_gold() translate([0, 0, h]) sphere(r = 0.09, $fn = 6);
+    }
+    translate([0.05, 0, 0.9]) ab_part_checkpoint_flag();
 }
 
 // 玩具长椅（front = -y，底面 z=0）

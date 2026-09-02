@@ -46,6 +46,17 @@ namespace NextAstrobot
         bool HasRig() const { return hasRig_; }
         const std::string& CurrentClip() const { return currentClip_; }
 
+        // --- shared with FRescueRigVisual: a freed robot is the same rig in another
+        //     colour, so it reuses the asset and the models injected for the player ---
+        bool HasInjectedAssets() const { return hasRig_ && injected_; }
+        const Assets::FRigAsset& Asset() const { return asset_; }
+        /// Model and material ids as injected, with the tintable sections left alone so
+        /// the caller can pick the body colour.
+        NextGameplay::FRigInstanceDesc BaseInstanceDesc() const;
+        /// Body colours available to instances: the player's blue first, then the spares
+        /// the level's rescued robots cycle through.
+        const std::vector<uint32_t>& TintMaterialIds() const { return tintMaterialIds_; }
+
     private:
         Assets::Node* BoneNode(std::string_view boneName);
 
@@ -55,7 +66,7 @@ namespace NextAstrobot
 
         std::vector<uint32_t> partModelIds_;
         std::vector<std::array<uint32_t, 16>> partMaterialIds_;
-        uint32_t tintMaterialId_ = 0;
+        std::vector<uint32_t> tintMaterialIds_;
 
         Assets::Scene* scene_ = nullptr;
         std::shared_ptr<Assets::Node> worldNode_;

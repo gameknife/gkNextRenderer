@@ -2,11 +2,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
+#include <string_view>
 
 #include <fmt/format.h>
 
 #include "Engine/Assets/Core/Node.hpp"
-#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
 
 #include "Application/Game/NextAstrobot/Mechanisms/MechanismSystem.hpp"
 
@@ -14,18 +16,14 @@ namespace NextAstrobot
 {
     namespace
     {
+        // A kit prop keeps its geometry in the material-group children the SCAD loader made,
+        // so the module node itself usually draws nothing: touching only that node leaves a
+        // smashed crate standing there, still blocking the way.
         void SetInteractableVisible(Assets::Node* node, bool visible)
         {
-            if (!node)
-            {
-                return;
-            }
-            if (auto* render = node->GetComponent<Runtime::RenderComponent>())
-            {
-                render->SetVisible(visible);
-                // A smashed crate must stop blocking the way, not just disappear.
-                render->SetRayCastVisible(visible);
-            }
+            Assets::NodeUtils::SetVisibleRecursive(node, visible);
+            // A smashed crate must stop blocking the way, not just disappear.
+            Assets::NodeUtils::SetRayCastVisibleRecursive(node, visible);
         }
 
         float BreakableRadius(EInteractableKind kind)
@@ -38,6 +36,18 @@ namespace NextAstrobot
             case EInteractableKind::LostBot: return 1.0f;
             }
             return 1.0f;
+        }
+
+        Assets::Node* FindChildNamed(Assets::Node& parent, std::string_view name)
+        {
+            for (const std::shared_ptr<Assets::Node>& child : parent.Children())
+            {
+                if (child->GetName() == name)
+                {
+                    return child.get();
+                }
+            }
+            return nullptr;
         }
 
         int CoinsFromSmash(EInteractableKind kind)
@@ -58,6 +68,7 @@ namespace NextAstrobot
         breakables_.clear();
         rescues_.clear();
         checkpoints_.clear();
+        levers_.clear();
         hasGoal_ = false;
         goalReached_ = false;
         rescueTotal_ = 0;
@@ -86,6 +97,7 @@ namespace NextAstrobot
             {
                 FRescue rescue;
                 rescue.node = entry.node.node;
+                rescue.botNode = entry.node.node;
                 rescue.position = entry.node.worldPos;
                 rescues_.push_back(rescue);
                 continue;
@@ -102,6 +114,9 @@ namespace NextAstrobot
         {
             FRescue rescue;
             rescue.node = cage.node;
+            // The prisoner is the ab_char_bot the cage module puts on its floor; it is
+            // what gets swapped for an animated rig once the dome comes off.
+            rescue.botNode = cage.node ? FindChildNamed(*cage.node, "ab_char_bot") : nullptr;
             rescue.inCage = true;
             rescue.position = cage.worldPos;
             rescues_.push_back(rescue);
@@ -110,7 +125,19 @@ namespace NextAstrobot
 
         for (const FIndexedNode& checkpoint : index.checkpoints)
         {
-            checkpoints_.push_back({checkpoint.worldPos, static_cast<int>(checkpoint.Number("idx", 0.0)), false});
+            checkpoints_.push_back({checkpoint.node, checkpoint.worldPos,
+                                    static_cast<int>(checkpoint.Number("idx", 0.0)), false});
+        }
+
+        // Levers live in the mechanism table (they are an ab_part_* piece), but the punch
+        // test belongs here with the crates and the cages, which run after the player has
+        // moved and therefore see this frame's punch rather than last frame's.
+        for (const FMechanismRecord& record : index.mechanisms)
+        {
+            if (record.kind == EMechanismKind::Lever)
+            {
+                levers_.push_back({record.root.node, record.root.worldPos, false});
+            }
         }
 
         hasGoal_ = index.hasGoal;
@@ -157,9 +184,35 @@ namespace NextAstrobot
                     continue;
                 }
                 breakable.broken = true;
-                SetInteractableVisible(breakable.node, false);
+                if (breakable.kind == EInteractableKind::Chest)
+                {
+                    // A chest is not destroyed, it is opened: the lid flips back and the
+                    // box stays in the world as a landmark that this pocket is done.
+                    if (mechanisms_)
+                    {
+                        mechanisms_->Latch(EMechanismKind::ChestLid, breakable.node);
+                    }
+                }
+                else
+                {
+                    SetInteractableVisible(breakable.node, false);
+                }
                 ++event.smashed;
                 event.coinsFromSmash += CoinsFromSmash(breakable.kind);
+            }
+
+            for (FLever& lever : levers_)
+            {
+                if (lever.pulled || !inPunchCone(lever.position + glm::vec3(0.0f, 0.6f, 0.0f), 0.8f))
+                {
+                    continue;
+                }
+                if (mechanisms_ && mechanisms_->Latch(EMechanismKind::Lever, lever.node))
+                {
+                    lever.pulled = true;
+                    event.leverPulled = true;
+                    event.toast = "Lever pulled!";
+                }
             }
         }
 
@@ -173,10 +226,12 @@ namespace NextAstrobot
             {
                 // Caged robots are freed by punching the cage open.
                 if (punchStarted && mechanisms_ && inPunchCone(rescue.position + glm::vec3(0.0f, 1.0f, 0.0f), 1.4f) &&
-                    mechanisms_->OpenCage(rescue.node))
+                    mechanisms_->Latch(EMechanismKind::Cage, rescue.node))
                 {
                     rescue.freed = true;
+                    SetInteractableVisible(rescue.botNode, false);
                     ++event.rescued;
+                    event.freed.push_back({rescue.position, true});
                     event.toast = "Robot freed!";
                 }
                 continue;
@@ -190,8 +245,9 @@ namespace NextAstrobot
                 if (rescue.hold >= config_.RescueHoldSeconds)
                 {
                     rescue.freed = true;
-                    SetInteractableVisible(rescue.node, false);
+                    SetInteractableVisible(rescue.botNode, false);
                     ++event.rescued;
+                    event.freed.push_back({rescue.position, false});
                     event.toast = "Robot rescued!";
                 }
             }
@@ -212,6 +268,10 @@ namespace NextAstrobot
                 std::abs(delta.y) < 3.0f)
             {
                 checkpoint.reached = true;
+                if (mechanisms_)
+                {
+                    mechanisms_->Latch(EMechanismKind::CheckpointFlag, checkpoint.node);
+                }
                 activeCheckpoint_ = checkpoint.index;
                 respawnPosition_ = checkpoint.position + glm::vec3(0.0f, 0.2f, 0.0f);
                 event.checkpointReached = checkpoint.index;

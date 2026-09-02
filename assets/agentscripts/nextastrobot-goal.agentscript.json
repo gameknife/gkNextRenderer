@@ -17,6 +17,7 @@
     { "type": "cvar", "name": "astro.teleport", "set": "-46,0.3,8" },
     { "type": "wait-ms", "ms": 900 },
     { "type": "assert", "query": "game.rescued", "op": "eq", "value": 1 },
+    { "type": "assert", "query": "game.rescueRigs", "op": "eq", "value": 1 },
 
     { "type": "log", "message": "a punch smashes a crate and spills its coins" },
     { "type": "cvar", "name": "astro.teleport", "set": "-50,0.3,-8" },
@@ -38,6 +39,7 @@
     { "type": "key", "code": "X", "action": "press" },
     { "type": "wait-frames", "n": 20 },
     { "type": "assert", "query": "game.rescued", "op": "ge", "value": 2 },
+    { "type": "assert", "query": "game.rescueRigs", "op": "ge", "value": 2 },
     { "type": "wait-until", "query": "game.mech.cage.t", "op": "ge", "value": 0.9, "timeoutMs": 4000 },
     { "type": "screenshot", "out": "screenshots/nextastrobot_cage", "ui": true },
 

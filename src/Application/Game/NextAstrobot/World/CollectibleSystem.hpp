@@ -35,7 +35,7 @@ namespace NextAstrobot
     {
     public:
         void Configure(const FWorldConfig& config) { config_ = config; }
-        void Bind(const FLevelIndex& index);
+        void Bind(const Assets::Scene& scene, const FLevelIndex& index);
         void Unbind();
 
         /// Spins the remaining pickups and collects anything within reach of the player.

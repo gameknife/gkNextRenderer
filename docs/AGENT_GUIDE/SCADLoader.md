@@ -34,6 +34,13 @@
 
 每个 user module 调用实例形成逻辑 Node；直属几何按量化 RGBA 分桶并尽量合并进多-section Model。材质槽超过引擎上限时拆成同名 render 子节点。alpha `< 0.99` 的 bucket 使用透明 Dielectric 路径。
 
+**"直属"是字面意思**：只有 module body 里由 builtin 产生的几何留在该 Node 上，body 里每一次
+user module 调用都另开一个子 Node 带走自己的几何。库里的材质包装（`ab_gold(c) { ... }` 这类
+`gk_material` 的一行别名）也是 user module，所以一个 kit 件的调用节点常常自己不画任何东西，
+几何全在下面一两层。玩法代码按模块名索引到的是那个调用节点，隐藏/显示/量尺寸要走
+`Assets::NodeUtils` 的 `SetVisibleRecursive` / `SetRayCastVisibleRecursive` /
+`GetSubtreeWorldBounds`，只改根节点会静默无效。
+
 **`gk_flatten() { ... }`**：声明"以下全是几何、不是场景结构"，抑制子树内的 Node 创建，
 几何并入最近的外层 Node。规则库（`kit_road` 把一张路网表展开成几千个子段调用）必须用它——
 否则每个 module 调用各成一个 Node，也就各成一个 Model 和碰撞体。实测 1km 香港 tile

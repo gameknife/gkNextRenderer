@@ -3,8 +3,9 @@
 // ============================================================================
 // FollowCamera.hpp - Third-person chase camera for the platformer: a damped
 // boom behind a yaw that drifts toward the direction of travel and can be
-// steered manually. Also owns the title / intro camera, which is read from the
-// level's own gk_camera markers rather than authored in code.
+// steered manually, with a spring arm that pulls in when the level gets between
+// the player and the lens. Also owns the title / intro camera, which is read
+// from the level's own gk_camera markers rather than authored in code.
 // ============================================================================
 
 #include <string>
@@ -57,13 +58,20 @@ namespace NextAstrobot
 
         /// Places the camera immediately (level load, respawn, ejecting from a cutscene).
         void Snap(const glm::vec3& footPosition, float yaw);
-        void Update(const glm::vec3& footPosition, const glm::vec3& horizontalVelocity, float deltaSeconds);
+        /// `scene` is optional: pass it and the boom shortens against the level geometry,
+        /// leave it null (or before the scene is ready) and the boom stays at full length.
+        void Update(const glm::vec3& footPosition, const glm::vec3& horizontalVelocity, float deltaSeconds,
+                    Assets::Scene* scene = nullptr);
 
         /// Right stick / RMB drag, in normalized units per second.
         void AddManualYaw(float amount);
 
         void Fill(Assets::Camera& outCamera) const;
         float Yaw() const { return yaw_; }
+        /// 1.0 when the boom is at full length, less while something is in the way.
+        float SpringArm01() const { return boomScale_; }
+        /// How far the lens actually ended up from what it is looking at, in metres.
+        float BoomDistance() const { return glm::length(position_ - target_); }
         glm::vec3 Forward() const;
         glm::vec3 Right() const;
         glm::vec3 Position() const { return position_; }
@@ -72,6 +80,7 @@ namespace NextAstrobot
         FCameraConfig config_{};
         float yaw_ = 0.0f;
         float manualIdleSeconds_ = 10.0f;
+        float boomScale_ = 1.0f;
         glm::vec3 position_{0.0f, 5.0f, 10.0f};
         glm::vec3 target_{0.0f};
     };

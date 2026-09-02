@@ -60,6 +60,9 @@ lay_scatter(n = 10, x0 = -66, x1 = -38, y0 = -11, y1 = 11, seed = 11)
     lay_pick($seed) { ab_nature_grass_tuft(seed = $seed); ab_nature_flower(s = 0.5, seed = $seed); ab_nature_grass_tuft(seed = $seed + 3); }
 
 // ================= 峡谷：三块递升悬浮圆盘（顶面 1.0 / 2.0 / 3.0） =================
+// 风扇塔：顺着峡谷往东吹，三块圆盘都在风区里，跨越时被推着走
+translate([-37, 1.5, 0]) ab_plat_block(L = 2.4, D = 2.4, H = 1.2, c = ab_TEAL());
+translate([-37, 1.5, 1.2]) rotate([0, 0, 90]) ab_prop_fan(s = 1.2, speed = 540, power = 6, range = 15);
 translate([-33.5, 2, 0.5]) ab_plat_float(r = 1.6);
 translate([-28.5, 0.5, 1.5]) ab_plat_float(r = 1.5, c = ab_ORANGE());
 translate([-23, 2.5, 2.5]) ab_plat_float(r = 1.6, c = ab_PURPLE());
@@ -132,13 +135,13 @@ translate([47, 0, 3]) ab_ground_island(L = 30, D = 22, seed = 3);
 translate([35, 7.5, 3]) ab_prop_checkpoint(idx = 2);
 // 摆动刺球门架
 translate([38, 0, 3]) ab_bldg_gantry(w = 6, h = 6);
-translate([38, 0, 9]) rotate([0, 35, 0]) translate([0, 0, -4.8]) ab_prop_spike_ball_chain(h = 4.8, r = 0.6);
+translate([38, 0, 4.2]) ab_prop_spike_ball_chain(h = 4.8, r = 0.6, ang = 38, period = 2.8);
 // 北支线：逆行传送带 → 拼图
 translate([40, 7, 3]) rotate([0, 0, 180]) ab_plat_conveyor(L = 6, W = 2, speed = 2);
 translate([40, 7, 3.5]) ab_item_coin_row(n = 4, dx = 1.3, hover = 0.6);
 translate([45, 7, 3.5]) ab_item_puzzle();
 // 南支线：激光 → 宝石（刺背敌人巡逻）
-translate([36, -7, 3]) ab_prop_laser(L = 7);
+translate([36, -7, 3]) ab_prop_laser(L = 7, period = 2.6, duty = 0.5);
 translate([44.5, -7, 3]) ab_item_gem(seed = 3);
 translate([39.5, -9.5, 3]) ab_char_enemy_spiky(seed = 1);
 // 岩浆池 + 滚筒 + 上空金币
@@ -154,10 +157,20 @@ translate([51, 5, 3]) rotate([0, 0, -40]) ab_char_bot(seed = 11, pose = 3);
 translate([51, -5, 3]) rotate([0, 0, 40]) ab_char_bot(seed = 12, pose = 3);
 translate([59, 7, 3]) ab_prop_balloon(seed = 3, n = 4);
 translate([59, -7, 3]) ab_prop_balloon(seed = 5, n = 4);
+// 喷泉托举：站进水柱被托上高台，高台上是宝石
+translate([42, -3.5, 3]) ab_prop_fountain_jet(h = 5.5, r = 0.5, period = 3.0, lift = 7.5);
+translate([42, -6.3, 7.3]) ab_plat_float(r = 1.4, c = ab_TEAL());
+translate([42, -6.3, 7.8]) ab_item_gem(seed = 5);
+// 拉杆 → 栅栏门：拳击扳下拉杆，门升起放出后面的宝箱（idx 和按钮共用一套编号）
+translate([49, 8.5, 3]) ab_prop_lever(idx = 2);
+translate([52.5, 8.5, 3]) rotate([0, 0, 90]) ab_prop_gate_bars(w = 3, h = 2.6, idx = 2);
+translate([52.5, 6.6, 3]) rotate([0, 0, 90]) ab_prop_fence(len = 2.4);
+translate([52.5, 10.4, 3]) rotate([0, 0, 90]) ab_prop_fence(len = 2.4);
+translate([55, 8.5, 3]) ab_prop_chest(seed = 6);
 // 装饰
 translate([34, 9.5, 3]) ab_nature_palm(s = 1.0, seed = 4);
 translate([34, -9.5, 3]) ab_nature_palm(s = 0.9, seed = 6);
-translate([56, -8.5, 3]) ab_bldg_windmill(h = 6, seed = 2);
+translate([56, -8.5, 3]) ab_bldg_windmill(h = 6, seed = 2, speed = 24);
 translate([59.5, 8, 3]) ab_nature_tree_ball(s = 1.0, seed = 12);
 translate([47, 9, 3]) ab_nature_fruit(kind = 1, s = 1.0);
 translate([50, -8, 3]) ab_nature_cactus(s = 0.9, seed = 2);

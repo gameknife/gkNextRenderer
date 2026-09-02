@@ -47,6 +47,13 @@ namespace NextAstrobot
         float AutoYawRate = 1.5f;      // rad/s, camera drifting to face travel direction
         float ManualYawRate = 2.5f;    // rad/s, right stick / RMB drag
         float AutoYawIdleSeconds = 1.0f;
+        // Spring arm: the boom is pulled in when something solid sits between the player
+        // and the camera, and eases back out once the view is clear again.
+        float SpringArmRadius = 0.45f;        // keep-out sphere around the camera
+        // Backed into a corner the boom can end up shorter than the character is wide, so
+        // below this the rig is hidden rather than filling the lens.
+        float SpringArmHideRigDistance = 1.0f;
+        float SpringArmReturnRate = 7.0f;     // m/s the boom extends again once clear
     };
 
     struct FWorldConfig

@@ -1,0 +1,76 @@
+{
+  "name": "nextastrobot-props",
+  "target": "NextAstrobot",
+  "scene": "assets/scad/source/astro/sky_garden.scad",
+  "defaults": { "waitFrames": 2, "stepTimeoutMs": 20000 },
+  "viewport": { "width": 1600, "height": 900 },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "wait-frames", "n": 30 },
+    { "type": "cvar", "name": "astro.state", "set": "playing" },
+    { "type": "wait-frames", "n": 40 },
+
+    { "type": "log", "message": "the spring arm shortens the boom when the toy house gets behind the camera" },
+    { "type": "assert", "query": "game.springArm", "op": "eq", "value": 1.0 },
+    { "type": "cvar", "name": "astro.teleport", "set": "9,3.2,-1" },
+    { "type": "wait-ms", "ms": 1200 },
+    { "type": "assert", "query": "game.deaths", "op": "eq", "value": 0 },
+    { "type": "assert", "query": "game.onGround", "op": "eq", "value": true },
+    { "type": "assert", "query": "game.springArm", "op": "lt", "value": 0.75 },
+    { "type": "assert", "query": "game.springArm", "op": "gt", "value": 0.3 },
+    { "type": "assert", "query": "game.camX", "op": "gt", "value": 5.0 },
+    { "type": "screenshot", "out": "screenshots/nextastrobot_springarm", "ui": false },
+
+    { "type": "log", "message": "the free-running pieces turn on their own" },
+    { "type": "assert", "query": "game.mech.windmill.t", "op": "gt", "value": 0.0 },
+    { "type": "assert", "query": "game.mech.fan.t", "op": "gt", "value": 0.0 },
+    { "type": "assert", "query": "game.mech.fountain.t", "op": "gt", "value": 0.0 },
+
+    { "type": "log", "message": "the laser blinks: its phase has to sweep the whole cycle" },
+    { "type": "wait-until", "query": "game.mech.laser.t", "op": "gt", "value": 0.8, "timeoutMs": 6000 },
+    { "type": "wait-until", "query": "game.mech.laser.t", "op": "lt", "value": 0.2, "timeoutMs": 6000 },
+
+    { "type": "log", "message": "reaching a checkpoint runs its flag up the pole" },
+    { "type": "assert", "query": "game.mech.flag_1.t", "op": "lt", "value": 0.05 },
+    { "type": "cvar", "name": "astro.teleport", "set": "-15,3.4,-2" },
+    { "type": "wait-frames", "n": 30 },
+    { "type": "assert", "query": "game.checkpoint", "op": "eq", "value": 1 },
+    { "type": "wait-until", "query": "game.mech.flag_1.t", "op": "ge", "value": 0.95, "timeoutMs": 4000 },
+
+    { "type": "log", "message": "a punched chest throws its lid back and stays in the world" },
+    { "type": "assert", "query": "game.mech.chest.t", "op": "lt", "value": 0.05 },
+    { "type": "cvar", "name": "astro.ride", "set": "chest" },
+    { "type": "wait-frames", "n": 30 },
+    { "type": "key", "code": "X", "action": "press" },
+    { "type": "wait-until", "query": "game.mech.chest.t", "op": "ge", "value": 0.9, "timeoutMs": 4000 },
+    { "type": "screenshot", "out": "screenshots/nextastrobot_chest", "ui": false },
+
+    { "type": "log", "message": "a punched lever pulls the gate that shares its idx" },
+    { "type": "assert", "query": "game.mech.gate_2.t", "op": "lt", "value": 0.05 },
+    { "type": "wait-until", "query": "game.punching", "op": "eq", "value": false, "timeoutMs": 4000 },
+    { "type": "cvar", "name": "astro.ride", "set": "lever_2" },
+    { "type": "wait-frames", "n": 30 },
+    { "type": "key", "code": "X", "action": "press" },
+    { "type": "wait-until", "query": "game.mech.lever_2.t", "op": "ge", "value": 0.9, "timeoutMs": 4000 },
+    { "type": "wait-until", "query": "game.mech.gate_2.t", "op": "ge", "value": 0.95, "timeoutMs": 4000 },
+    { "type": "screenshot", "out": "screenshots/nextastrobot_lever", "ui": false },
+
+    { "type": "log", "message": "the fountain column carries the player off the ground" },
+    { "type": "cvar", "name": "astro.ride", "set": "fountain" },
+    { "type": "wait-frames", "n": 20 },
+    { "type": "wait-until", "query": "game.playerY", "op": "gt", "value": 6.0, "timeoutMs": 6000 },
+    { "type": "wait-frames", "n": 20 },
+    { "type": "screenshot", "out": "screenshots/nextastrobot_fountain", "ui": false },
+
+    { "type": "log", "message": "the swinging spike ball kills where it actually is, not at its mount" },
+    { "type": "cvar", "name": "astro.ride", "set": "spikeball" },
+    { "type": "wait-until", "query": "game.deaths", "op": "ge", "value": 1, "timeoutMs": 10000 },
+    { "type": "wait-ms", "ms": 2500 },
+
+    { "type": "log", "message": "the canyon draught carries a standing player east on its own" },
+    { "type": "cvar", "name": "astro.teleport", "set": "-33.5,1.2,-2" },
+    { "type": "wait-frames", "n": 30 },
+    { "type": "wait-until", "query": "game.playerX", "op": "gt", "value": -31.5, "timeoutMs": 6000 },
+    { "type": "quit" }
+  ]
+}

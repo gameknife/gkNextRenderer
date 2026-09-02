@@ -471,12 +471,15 @@ agentscript（smoke / locomotion / collect / mechanisms / goal）。实施过程
 - **拳击判定是水平扇区**，不是 3D 锥：站在牢笼底下或面对比自己高的积木墙时，3D 锥会判不中。
 - **§6.3 的 ScadRig PBR 段没有做**（设计里就标了「可延后」）：主角仍是 Lambertian。
 
-剩余 P4 打磨项（都不阻塞一关的完整体验）：
+P4 打磨项（2026-09-02 第二轮，三项已完成）：
 
-| 项 | 说明 |
+| 项 | 状态 |
 | --- | --- |
-| 非 ★ 活动件 | 刺球摆动、激光光束、风扇风区、喷泉托举、风车叶片、宝箱盖、拉杆、检查点旗帜。刺球与激光目前按绑定姿态作为静止危险体参与判定，其余是纯装饰 |
-| 相机弹簧臂 | `RayCastInCPU` 探测遮挡拉近；贴着立柱背面时目前会被挡住 |
-| 第二关 | `levels.json` 已支持多关顺序，但通关后没有「下一关」流转 |
-| ScadRig PBR 段 | §6.3；落地后主角机身会有高光 |
-| 被救机器人换 rig 实例 | `NextRig` 池 + `wave` / `win` clip |
+| 非 ★ 活动件 | **已完成**。八件都拆出了 `ab_part_*` 并接进 `MechanismSystem`：刺球摆动（致命判定跟随活动件）、激光按占空比开关（灭时不致命）、风扇风区（`FMechanismEffects::wind`，m/s 折进水平目标速度）、喷泉托举（`liftSpeed` 给竖直速度设下限）、风车叶片、宝箱盖（打碎 = 掀盖，箱子留在世界里）、拉杆（拳击触发同 idx 栅栏门）、检查点旗帜（踩到后升旗）。`sky_garden` 补了风扇塔（峡谷顺风）、喷泉高台与拉杆宝箱格 |
+| 相机弹簧臂 | **已完成**。`FFollowCamera` 收可选 `Scene*` 做 `RayCastInCPU`；两个反直觉的坑写进了 AGENT_GUIDE：不能设最小臂长（会把镜头顶穿墙），臂长必须是对阻尼结果的**钳位**而非缩放（缩放会复利收敛到注视点，`glm::lookAt` 退化） |
+| 被救机器人换 rig 实例 | **已完成**。`FRescueRigVisual` 复用主角注入的 rig 资产建实例池，救出即换掉 kit 静态几何并播 `wave` / `win`，且沿远离玩家的方向让开 0.8 m |
+| 第二关 | 未做。`levels.json` 已支持多关顺序，但通关后没有「下一关」流转 |
+| ScadRig PBR 段 | 未做。§6.3；落地后主角机身会有高光 |
+
+第二轮的验收在 `assets/agentscripts/nextastrobot-props.agentscript.json`：八件活动件、弹簧臂
+（`game.springArm` / `game.cam{X,Y,Z}`）与被救机器人（`game.rescueRigs`）各有断言。

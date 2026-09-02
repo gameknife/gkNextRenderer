@@ -41,17 +41,28 @@ namespace
     // characters are pure geometry the game tests against, decorations would trip the
     // player up, and the movable pieces listed here are driven without collision.
     // (Design section 5.2.)
-    constexpr std::array<std::string_view, 12> kNoCollisionModules = {
-        "ab_item_coin",       "ab_item_puzzle",   "ab_item_gem",         "ab_item_key",
-        "ab_item_star",       "ab_char_bot",      "ab_char_bot_lost",    "ab_char_enemy_walker",
-        "ab_char_enemy_flyer", "ab_char_enemy_spiky", "ab_prop_laser",   "ab_prop_spike_ball_chain",
+    constexpr std::array kNoCollisionModules = {
+        std::string_view{"ab_item_coin"},        std::string_view{"ab_item_puzzle"},
+        std::string_view{"ab_item_gem"},         std::string_view{"ab_item_key"},
+        std::string_view{"ab_item_star"},        std::string_view{"ab_char_bot"},
+        std::string_view{"ab_char_bot_lost"},    std::string_view{"ab_char_enemy_walker"},
+        std::string_view{"ab_char_enemy_flyer"}, std::string_view{"ab_char_enemy_spiky"},
+        std::string_view{"ab_prop_laser"},       std::string_view{"ab_prop_spike_ball_chain"},
     };
-    constexpr std::array<std::string_view, 6> kNoCollisionParts = {
-        "ab_part_button_cap", "ab_part_spring_cap", "ab_part_zipline_car",
-        "ab_part_laser_beam", "ab_part_spike_ball", "ab_part_cage_dome",
+    // Every ab_part_* that is animated without a kinematic body of its own. Leaving one
+    // out is not a subtle bug: the piece keeps the implicit static collider it was born
+    // with, which then hangs in mid-air at the bind pose blocking the player.
+    constexpr std::array kNoCollisionParts = {
+        std::string_view{"ab_part_button_cap"},      std::string_view{"ab_part_spring_cap"},
+        std::string_view{"ab_part_zipline_car"},     std::string_view{"ab_part_laser_beam"},
+        std::string_view{"ab_part_spike_ball"},      std::string_view{"ab_part_cage_dome"},
+        std::string_view{"ab_part_fan_blades"},      std::string_view{"ab_part_fountain_column"},
+        std::string_view{"ab_part_windmill_blades"}, std::string_view{"ab_part_chest_lid"},
+        std::string_view{"ab_part_lever_arm"},       std::string_view{"ab_part_checkpoint_flag"},
     };
-    constexpr std::array<std::string_view, 4> kNoCollisionDecor = {
-        "ab_nature_grass_tuft", "ab_nature_flower", "ab_prop_balloon", "ab_prop_bubble",
+    constexpr std::array kNoCollisionDecor = {
+        std::string_view{"ab_nature_grass_tuft"}, std::string_view{"ab_nature_flower"},
+        std::string_view{"ab_prop_balloon"},      std::string_view{"ab_prop_bubble"},
     };
 
     bool Contains(std::span<const std::string_view> names, const std::string& name)
@@ -161,6 +172,13 @@ void NextAstrobotGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
                              if (mechanisms_.TryGetRidePoint(rideRequest_, point))
                              {
                                  player_.Teleport(point);
+                                 float yaw = player_.Yaw();
+                                 if (mechanisms_.TryGetFaceYaw(rideRequest_, point, yaw))
+                                 {
+                                     // Dropped in front of a prop rather than on top of a
+                                     // platform: face it, so the next punch lands.
+                                     player_.SetYaw(yaw);
+                                 }
                                  previousFoot_ = point;
                                  camera_.Snap(point, player_.Yaw());
                              }
@@ -234,7 +252,7 @@ void NextAstrobotGameInstance::OnSceneLoaded()
 
     NextPhysics* physics = GetEngine().GetPhysicsEngine();
     mechanisms_.Bind(scene, physics, index_);
-    collectibles_.Bind(index_);
+    collectibles_.Bind(scene, index_);
     // Scene::RebuildMeshBuffer installs an infinite floor plane at the scene AABB
     // minimum, so a fall never actually goes on forever: the kill plane has to sit
     // above that floor or the player just lands on nothing and stands there.
@@ -254,6 +272,13 @@ void NextAstrobotGameInstance::OnSceneLoaded()
     player_.SetGodMode(godMode_);
     previousFoot_ = spawn;
     rig_.OnSceneLoaded(scene);
+    if (rig_.HasInjectedAssets())
+    {
+        // One parked instance per robot the level can free, so a rescue never has to
+        // build a node tree in the middle of a frame.
+        rescueRigs_.Create(scene, rig_.Asset(), rig_.BaseInstanceDesc(), rig_.TintMaterialIds(),
+                           static_cast<int>(index_.RescueTotal()));
+    }
     camera_.Snap(spawn, spawnYaw_);
 
     levelCameras_.Bind(scene, CurrentLevel().TitleCamera, CurrentLevel().IntroCameraPath);
@@ -284,6 +309,7 @@ void NextAstrobotGameInstance::OnSceneUnloaded()
     hazards_.Unbind();
     enemies_.Unbind();
     interactables_.Unbind();
+    rescueRigs_.Destroy();
     rig_.OnSceneUnloaded();
     levelCameras_.Clear();
     index_ = FLevelIndex{};
@@ -350,6 +376,14 @@ void NextAstrobotGameInstance::TickWorld(float deltaSeconds)
     if (effects.surfaceVelocity != glm::vec3(0.0f))
     {
         player_.AddSurfaceVelocity(effects.surfaceVelocity);
+    }
+    if (effects.wind != glm::vec3(0.0f))
+    {
+        player_.AddWind(effects.wind);
+    }
+    if (effects.liftSpeed > 0.0f && !player_.IsZipping())
+    {
+        player_.ApplyLift(effects.liftSpeed);
     }
     if (effects.launch && !player_.IsZipping())
     {
@@ -435,6 +469,20 @@ void NextAstrobotGameInstance::TickWorld(float deltaSeconds)
         stats.rescued += interaction.rescued;
         Audio::PlayRescue(engine);
     }
+    for (const FRescueEvent& freed : interaction.freed)
+    {
+        // Step the robot clear of whoever let it out and turn it to face them; a caged one
+        // cheers, a stranded one waves. Without the step a cage punched from directly on
+        // top of it would stand the robot inside the player. The kit geometry it replaces
+        // was hidden by InteractableSystem.
+        glm::vec3 away(freed.position.x - foot.x, 0.0f, freed.position.z - foot.z);
+        const float distance = glm::length(away);
+        away = distance > 0.3f ? away / distance : player_.Facing();
+        const glm::vec3 spot = freed.position + away * 0.8f;
+        const glm::vec3 toPlayer = foot - spot;
+        rescueRigs_.Place(spot, std::atan2(toPlayer.x, toPlayer.z), freed.fromCage ? "win" : "wave");
+    }
+    rescueRigs_.Update(deltaSeconds);
     if (interaction.coinsFromSmash > 0)
     {
         stats.coins += interaction.coinsFromSmash;
@@ -498,6 +546,9 @@ void NextAstrobotGameInstance::OnTick(double deltaSeconds)
 
     rig_.Update(player_.Position(), player_.Yaw(), player_.State(), player_.HorizontalSpeed(),
                 config_.Move.RunSpeed, dt);
+    // With the spring arm fully collapsed the lens is inside the character; drawing the
+    // rig then is just a wall of white plastic.
+    rig_.SetVisible(camera_.BoomDistance() > config_.Camera.SpringArmHideRigDistance);
     if (flow_.State() == ELevelState::Title || flow_.State() == ELevelState::Intro)
     {
         // Keep the chase camera parked on the character so ejecting from the opening shot
@@ -511,7 +562,8 @@ void NextAstrobotGameInstance::OnTick(double deltaSeconds)
     else
     {
         camera_.AddManualYaw(stickCameraYaw_ * config_.Camera.ManualYawRate * dt);
-        camera_.Update(player_.Position(), player_.HorizontalVelocity(), dt);
+        // The scene is what lets the spring arm shorten against a pillar or a wall.
+        camera_.Update(player_.Position(), player_.HorizontalVelocity(), dt, &GetEngine().GetScene());
     }
 
     jumpPressed_ = false;
@@ -608,7 +660,7 @@ bool NextAstrobotGameInstance::OnKey(SDL_Event& event)
             flow_.RequestPause(flow_.State() != ELevelState::Paused);
         }
         return true;
-    case SDLK_F4:
+    case SDLK_F5:
         if (pressed && !event.key.repeat)
         {
             showDebugPanel_ = !showDebugPanel_;
@@ -689,10 +741,17 @@ void NextAstrobotGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryR
     reg.Add("index.warnings", [this]() -> Value { return static_cast<int64_t>(indexWarnings_.size()); });
     reg.Add("killPlaneY", [this]() -> Value { return static_cast<double>(hazards_.KillPlaneY()); });
 
+    reg.Add("springArm", [this]() -> Value { return static_cast<double>(camera_.SpringArm01()); });
+    reg.Add("camX", [this]() -> Value { return static_cast<double>(camera_.Position().x); });
+    reg.Add("camY", [this]() -> Value { return static_cast<double>(camera_.Position().y); });
+    reg.Add("camZ", [this]() -> Value { return static_cast<double>(camera_.Position().z); });
+    reg.Add("rescueRigs", [this]() -> Value { return static_cast<int64_t>(rescueRigs_.PlacedCount()); });
+
     // game.mech.<name>.t - a mechanism's normalized phase, so a script can assert that a
     // platform really is moving instead of eyeballing a screenshot.
     for (const char* name : {"moving", "pendulum", "seesaw", "spin", "crumble", "roller", "conveyor", "zipline",
-                             "spring", "bounce", "cage", "gate_1", "button_1"})
+                             "spring", "bounce", "cage", "gate_1", "gate_2", "button_1", "lever_2",
+                             "spikeball", "laser", "fan", "fountain", "windmill", "chest", "flag_1", "flag_2"})
     {
         reg.Add(fmt::format("mech.{}.t", name),
                 [this, key = std::string(name)]() -> Value

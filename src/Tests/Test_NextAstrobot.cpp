@@ -1,10 +1,18 @@
 #include <catch2/catch_all.hpp>
 
 #include <algorithm>
+#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
+#include "Engine/Assets/Core/Model.hpp"
+#include "Engine/Assets/Core/Node.hpp"
+#include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/Data/RigAsset.hpp"
+#include "Engine/Runtime/Components/RenderComponent.hpp"
+#include "Engine/Runtime/Scene/NodeUtils.hpp"
+#include "Modules/ScadLoader/FScadLoader.h"
 #include "Modules/ScadLoader/FScadRig.h"
 
 #include "Application/Game/NextAstrobot/Level/LevelFlow.hpp"
@@ -218,4 +226,112 @@ TEST_CASE("astro_bot rig meets the NextAstrobot animation contract", "[Unit][Sca
     }
     CHECK(headHeight > 1.15f);
     CHECK(headHeight < 1.35f);
+}
+
+TEST_CASE("Astro kit props keep their geometry in child nodes", "[Unit][NextAstrobot][Scad]")
+{
+    // The SCAD evaluator turns every user-module call into its own node, and the kit's
+    // material wrappers (ab_gold, ab_plastic, ab_gloss ...) are user modules. So the node
+    // gameplay indexes by module name is often an empty container with the triangles one
+    // or more levels below it. Everything that hides, unhides or measures a kit object has
+    // to walk the subtree; this test pins the shape that makes that necessary.
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FScadLoader::LoadScadScene("assets/scad/source/astro/sky_garden.scad", environment, nodes, models,
+                                               materials, lights, tracks, skeletons));
+
+    const auto findNode = [&nodes](const std::string& name) -> Assets::Node*
+    {
+        for (const std::shared_ptr<Assets::Node>& node : nodes)
+        {
+            if (node->GetName() == name)
+            {
+                return node.get();
+            }
+        }
+        return nullptr;
+    };
+
+    const auto drawsItself = [&models](const Assets::Node& node)
+    {
+        const auto* render = node.GetComponent<Runtime::RenderComponent>();
+        return render != nullptr && render->GetModelId() < models.size();
+    };
+
+    const std::function<int(const Assets::Node&)> countDrawingNodes = [&](const Assets::Node& node)
+    {
+        int count = drawsItself(node) ? 1 : 0;
+        for (const std::shared_ptr<Assets::Node>& child : node.Children())
+        {
+            count += countDrawingNodes(*child);
+        }
+        return count;
+    };
+
+    const std::function<int(const Assets::Node&)> countVisibleNodes = [&](const Assets::Node& node)
+    {
+        const auto* render = node.GetComponent<Runtime::RenderComponent>();
+        int count = (render != nullptr && render->GetVisible()) ? 1 : 0;
+        for (const std::shared_ptr<Assets::Node>& child : node.Children())
+        {
+            count += countVisibleNodes(*child);
+        }
+        return count;
+    };
+
+    SECTION("a prop's module node draws nothing at all")
+    {
+        // ab_prop_crate's body is nothing but ab_plastic() calls, so hiding the crate node
+        // on its own is a no-op: the smashed crate stays standing and keeps blocking.
+        for (const char* moduleName : {"ab_prop_crate", "ab_item_puzzle", "ab_char_enemy_walker"})
+        {
+            INFO(moduleName);
+            Assets::Node* node = findNode(moduleName);
+            REQUIRE(node != nullptr);
+            CHECK_FALSE(drawsItself(*node));
+            CHECK(countDrawingNodes(*node) > 0);
+        }
+    }
+
+    SECTION("a coin splits across its module node and a child")
+    {
+        // The builtin gk_material() faces stay on the coin node while ab_gold() takes the
+        // disc into a child: hiding only the root leaves the disc drawn as a static ghost.
+        Assets::Node* coin = findNode("ab_item_coin");
+        REQUIRE(coin != nullptr);
+        CHECK(drawsItself(*coin));
+        CHECK(countDrawingNodes(*coin) > 1);
+
+        // ... and the geometry sits a metre up on the kit's `hover`, nowhere near the node
+        // origin the level index records. A pickup test against the origin fires early, at
+        // about knee height below the coin the player is reaching for.
+        const auto* render = coin->GetComponent<Runtime::RenderComponent>();
+        REQUIRE(render != nullptr);
+        REQUIRE(render->GetModelId() < models.size());
+        CHECK(models[render->GetModelId()].GetLocalAABBMin().y > 0.5f);
+    }
+
+    SECTION("only the recursive setters actually take a prop off screen")
+    {
+        Assets::Node* crate = findNode("ab_prop_crate");
+        REQUIRE(crate != nullptr);
+        const int drawing = countDrawingNodes(*crate);
+        REQUIRE(drawing > 0);
+        REQUIRE(countVisibleNodes(*crate) == drawing);
+
+        // What the game used to do when a punch smashed the crate.
+        Assets::NodeUtils::SetVisible(crate, false);
+        CHECK(countVisibleNodes(*crate) == drawing);
+
+        Assets::NodeUtils::SetVisibleRecursive(crate, false);
+        CHECK(countVisibleNodes(*crate) == 0);
+        Assets::NodeUtils::SetVisibleRecursive(crate, true);
+        CHECK(countVisibleNodes(*crate) == drawing);
+    }
 }

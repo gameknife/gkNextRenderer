@@ -45,6 +45,10 @@ namespace NextAstrobot
             camera.AutoYawRate = object.value("autoYawRate", camera.AutoYawRate);
             camera.ManualYawRate = object.value("manualYawRate", camera.ManualYawRate);
             camera.AutoYawIdleSeconds = object.value("autoYawIdleSeconds", camera.AutoYawIdleSeconds);
+            camera.SpringArmRadius = object.value("springArmRadius", camera.SpringArmRadius);
+            camera.SpringArmHideRigDistance =
+                object.value("springArmHideRigDistance", camera.SpringArmHideRigDistance);
+            camera.SpringArmReturnRate = object.value("springArmReturnRate", camera.SpringArmReturnRate);
         }
 
         void ReadWorld(const json& object, FWorldConfig& world)

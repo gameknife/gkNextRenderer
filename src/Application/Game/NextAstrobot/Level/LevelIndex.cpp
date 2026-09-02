@@ -38,6 +38,17 @@ namespace NextAstrobot
             FMechanismSpec{"ab_prop_button", EMechanismKind::Button, "ab_part_button_cap"},
             FMechanismSpec{"ab_prop_gate_bars", EMechanismKind::Gate, "ab_part_gate_grid"},
             FMechanismSpec{"ab_prop_cage", EMechanismKind::Cage, "ab_part_cage_dome"},
+            // The non-star pieces. Several of these modules are also something else -
+            // the laser and the spike ball are hazards, the chest is breakable, the
+            // checkpoint is a respawn flag - so Build must not stop at the first match.
+            FMechanismSpec{"ab_prop_spike_ball_chain", EMechanismKind::SpikeBall, "ab_part_spike_ball"},
+            FMechanismSpec{"ab_prop_laser", EMechanismKind::LaserBeam, "ab_part_laser_beam"},
+            FMechanismSpec{"ab_prop_fan", EMechanismKind::Fan, "ab_part_fan_blades"},
+            FMechanismSpec{"ab_prop_fountain_jet", EMechanismKind::Fountain, "ab_part_fountain_column"},
+            FMechanismSpec{"ab_bldg_windmill", EMechanismKind::Windmill, "ab_part_windmill_blades"},
+            FMechanismSpec{"ab_prop_chest", EMechanismKind::ChestLid, "ab_part_chest_lid"},
+            FMechanismSpec{"ab_prop_lever", EMechanismKind::Lever, "ab_part_lever_arm"},
+            FMechanismSpec{"ab_prop_checkpoint", EMechanismKind::CheckpointFlag, "ab_part_checkpoint_flag"},
         };
 
         constexpr std::array<std::pair<std::string_view, EHazardKind>, 5> kHazardSpecs = {{
@@ -110,6 +121,14 @@ namespace NextAstrobot
         case EMechanismKind::Button: return "button";
         case EMechanismKind::Gate: return "gate";
         case EMechanismKind::Cage: return "cage";
+        case EMechanismKind::SpikeBall: return "spikeball";
+        case EMechanismKind::LaserBeam: return "laser";
+        case EMechanismKind::Fan: return "fan";
+        case EMechanismKind::Fountain: return "fountain";
+        case EMechanismKind::Windmill: return "windmill";
+        case EMechanismKind::ChestLid: return "chest";
+        case EMechanismKind::Lever: return "lever";
+        case EMechanismKind::CheckpointFlag: return "flag";
         case EMechanismKind::Count: break;
         }
         return "unknown";
@@ -157,6 +176,39 @@ namespace NextAstrobot
             Assets::Node& node = *nodePtr;
             const std::string& name = node.GetName();
 
+            // A module can be several things at once: a cage is a mechanism and a rescue,
+            // a chest is a mechanism and a breakable, a laser is a mechanism and a hazard.
+            // So the mechanism pass runs first and deliberately falls through to the
+            // category tables below instead of claiming the node.
+            Assets::Node* movablePart = nullptr;
+            if (auto mechanism = mechanismByName.find(name); mechanism != mechanismByName.end())
+            {
+                const FMechanismSpec& spec = *mechanism->second;
+                FMechanismRecord record;
+                record.kind = spec.kind;
+                record.root = MakeIndexedNode(node);
+                if (!spec.partName.empty())
+                {
+                    movablePart = FindChildNamed(node, spec.partName);
+                    record.part = movablePart;
+                    record.root.part = movablePart;
+                    if (!movablePart)
+                    {
+                        warn(fmt::format("{} is missing its movable piece '{}'", name, spec.partName));
+                    }
+                    else
+                    {
+                        record.partBindTranslation = movablePart->Translation();
+                        record.partBindRotation = movablePart->Rotation();
+                    }
+                }
+                index.mechanisms.push_back(std::move(record));
+                if (spec.kind == EMechanismKind::Cage)
+                {
+                    index.cages.push_back(MakeIndexedNode(node));
+                }
+            }
+
             if (name == "ab_bldg_startpad")
             {
                 if (!index.hasSpawn)
@@ -177,7 +229,9 @@ namespace NextAstrobot
             }
             if (name == "ab_prop_checkpoint")
             {
-                index.checkpoints.push_back(MakeIndexedNode(node));
+                FIndexedNode checkpoint = MakeIndexedNode(node);
+                checkpoint.part = movablePart;
+                index.checkpoints.push_back(std::move(checkpoint));
                 continue;
             }
             if (name == "ab_ground_island" || name == "ab_ground_island_round")
@@ -187,33 +241,6 @@ namespace NextAstrobot
                 const float top = node.WorldTranslation().y;
                 index.lowestGroundY = sawGround ? std::min(index.lowestGroundY, top) : top;
                 sawGround = true;
-                continue;
-            }
-
-            if (auto mechanism = mechanismByName.find(name); mechanism != mechanismByName.end())
-            {
-                const FMechanismSpec& spec = *mechanism->second;
-                FMechanismRecord record;
-                record.kind = spec.kind;
-                record.root = MakeIndexedNode(node);
-                if (!spec.partName.empty())
-                {
-                    record.part = FindChildNamed(node, spec.partName);
-                    if (!record.part)
-                    {
-                        warn(fmt::format("{} is missing its movable piece '{}'", name, spec.partName));
-                    }
-                    else
-                    {
-                        record.partBindTranslation = record.part->Translation();
-                        record.partBindRotation = record.part->Rotation();
-                    }
-                }
-                index.mechanisms.push_back(std::move(record));
-                if (spec.kind == EMechanismKind::Cage)
-                {
-                    index.cages.push_back(MakeIndexedNode(node));
-                }
                 continue;
             }
 
@@ -245,7 +272,9 @@ namespace NextAstrobot
             {
                 if (name == moduleName)
                 {
-                    index.hazards.push_back({MakeIndexedNode(node), static_cast<uint8_t>(kind)});
+                    FIndexedNode hazard = MakeIndexedNode(node);
+                    hazard.part = movablePart;
+                    index.hazards.push_back({std::move(hazard), static_cast<uint8_t>(kind)});
                     matched = true;
                     break;
                 }
@@ -273,7 +302,9 @@ namespace NextAstrobot
             {
                 if (name == moduleName)
                 {
-                    index.interactables.push_back({MakeIndexedNode(node), static_cast<uint8_t>(kind)});
+                    FIndexedNode interactable = MakeIndexedNode(node);
+                    interactable.part = movablePart;
+                    index.interactables.push_back({std::move(interactable), static_cast<uint8_t>(kind)});
                     break;
                 }
             }

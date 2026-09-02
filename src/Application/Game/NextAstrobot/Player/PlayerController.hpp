@@ -8,6 +8,7 @@
 // character keep its footing on a moving platform.
 // ============================================================================
 
+#include <algorithm>
 #include <string>
 
 #include <glm/glm.hpp>
@@ -56,6 +57,12 @@ namespace NextAstrobot
         // --- world feedback, applied by the systems before the next Update ---
         /// Extra horizontal velocity from a conveyor / spinning disc / roller, in m/s.
         void AddSurfaceVelocity(const glm::vec3& velocity) { surfaceVelocity_ += velocity; }
+        /// A fan draught, in m/s. The run controller steers against the moving air, so
+        /// the player leans across a stream slower than their run speed and is carried by
+        /// a faster one. Adding it as a force instead would vanish into the run damping.
+        void AddWind(const glm::vec3& velocity) { wind_ += velocity; }
+        /// A fountain column: while the player is inside it, they rise at least this fast.
+        void ApplyLift(float speed) { lift_ = std::max(lift_, speed); }
         /// Launches the player to `height` metres above the current foot position.
         void Launch(float height);
         void Bounce(float speed);
@@ -64,6 +71,9 @@ namespace NextAstrobot
         void SetGodMode(bool enabled) { godMode_ = enabled; }
         bool GodMode() const { return godMode_; }
         void Teleport(const glm::vec3& footPosition);
+        /// Turns the character on the spot. Used by the astro.ride debug cvar so a script
+        /// that drops the player in front of a prop is also facing it.
+        void SetYaw(float yaw) { yaw_ = yaw; }
 
         /// Attaches to a zipline: the controller stops simulating and is driven along the
         /// segment until it reaches the end (or the player jumps off).
@@ -98,6 +108,8 @@ namespace NextAstrobot
         glm::vec3 position_{0.0f};
         glm::vec3 velocity_{0.0f};
         glm::vec3 surfaceVelocity_{0.0f};
+        glm::vec3 wind_{0.0f};
+        float lift_ = 0.0f;
         float yaw_ = 0.0f;
         bool onGround_ = false;
         bool godMode_ = false;
