@@ -1580,6 +1580,77 @@ namespace
                                        broadPhaseFilter, objectLayerFilter, {}, {}, tempAllocator_);
         }
 
+        void UpdateWithVelocity(const glm::vec3& worldVelocity, bool inheritGround, float deltaSeconds) override
+        {
+            if (!character_)
+            {
+                return;
+            }
+
+            // Jolt's CharacterVirtualTest recipe: refresh the ground velocity, then keep the part
+            // of the character's own velocity that is not already supplied by the platform. Without
+            // this a character standing on a moving kinematic body is left behind by it.
+            Vec3 newVelocity(worldVelocity.x, worldVelocity.y, worldVelocity.z);
+            if (inheritGround)
+            {
+                character_->UpdateGroundVelocity();
+                const Vec3 groundVelocity = character_->GetGroundVelocity();
+                if (character_->GetGroundState() == CharacterVirtual::EGroundState::OnGround)
+                {
+                    // Only inherit upward platform motion: a descending platform must not drag the
+                    // character through it, gravity already carries them down onto it.
+                    const float inheritedY = std::max(groundVelocity.GetY(), 0.0f);
+                    newVelocity += Vec3(groundVelocity.GetX(), 0.0f, groundVelocity.GetZ());
+                    if (newVelocity.GetY() < inheritedY)
+                    {
+                        newVelocity.SetY(inheritedY);
+                    }
+                }
+            }
+
+            character_->SetLinearVelocity(newVelocity);
+            velocity_ = glm::vec3(newVelocity.GetX(), newVelocity.GetY(), newVelocity.GetZ());
+
+            const BroadPhaseLayerFilter& broadPhaseFilter =
+                physicsSystem_.GetDefaultBroadPhaseLayerFilter(NextLayers::MOVING);
+            const ObjectLayerFilter& objectLayerFilter =
+                physicsSystem_.GetDefaultLayerFilter(NextLayers::MOVING);
+            // The game already integrated gravity into worldVelocity; passing zero here keeps
+            // ExtendedUpdate's stick-to-floor / walk-stairs behaviour without double gravity.
+            character_->ExtendedUpdate(deltaSeconds, Vec3::sZero(), updateSettings_, broadPhaseFilter,
+                                       objectLayerFilter, {}, {}, tempAllocator_);
+        }
+
+        glm::vec3 GetGroundVelocity() const override
+        {
+            if (!character_ || character_->GetGroundState() != CharacterVirtual::EGroundState::OnGround)
+            {
+                return glm::vec3(0.0f);
+            }
+            const Vec3 velocity = character_->GetGroundVelocity();
+            return glm::vec3(velocity.GetX(), velocity.GetY(), velocity.GetZ());
+        }
+
+        glm::vec3 GetGroundNormal() const override
+        {
+            if (!character_)
+            {
+                return glm::vec3(0.0f, 1.0f, 0.0f);
+            }
+            const Vec3 normal = character_->GetGroundNormal();
+            return glm::vec3(normal.GetX(), normal.GetY(), normal.GetZ());
+        }
+
+        NextBodyID GetGroundBodyID() const override
+        {
+            if (!character_)
+            {
+                return NextBodyID();
+            }
+            const BodyID ground = character_->GetGroundBodyID();
+            return ground.IsInvalid() ? NextBodyID() : FromJoltBodyID(ground);
+        }
+
         bool TrySetHeight(float height) override
         {
             constexpr float kMinCylinderHeight = 0.02f;

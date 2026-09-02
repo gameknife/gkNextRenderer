@@ -28,6 +28,34 @@ void NextCharacterController::Update(const glm::vec3& inputDirection, float spee
     }
 }
 
+void NextCharacterController::UpdateWithVelocity(const glm::vec3& worldVelocity, bool inheritGround,
+                                                 float deltaSeconds)
+{
+    CompletePhysics();
+    if (backend_)
+    {
+        backend_->UpdateWithVelocity(worldVelocity, inheritGround, deltaSeconds);
+    }
+}
+
+glm::vec3 NextCharacterController::GetGroundVelocity() const
+{
+    CompletePhysics();
+    return backend_ ? backend_->GetGroundVelocity() : glm::vec3(0.0f);
+}
+
+glm::vec3 NextCharacterController::GetGroundNormal() const
+{
+    CompletePhysics();
+    return backend_ ? backend_->GetGroundNormal() : glm::vec3(0.0f, 1.0f, 0.0f);
+}
+
+NextBodyID NextCharacterController::GetGroundBodyID() const
+{
+    CompletePhysics();
+    return backend_ ? backend_->GetGroundBodyID() : NextBodyID();
+}
+
 bool NextCharacterController::TrySetHeight(float height)
 {
     CompletePhysics();

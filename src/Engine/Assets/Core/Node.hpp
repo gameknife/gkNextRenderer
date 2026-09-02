@@ -49,6 +49,12 @@ namespace Assets
         void SetTag(std::string tag) { tag_ = std::move(tag); }
         const std::string& GetLayer() const { return layer_; }
         void SetLayer(std::string layer) { layer_ = std::move(layer); }
+        /// Loader-authored key/value payload in "k=v;k=v" form. The SCAD loader writes the
+        /// evaluated named parameters of a user-module call here so gameplay can recover the
+        /// authoring intent (rail length, swing period, button index). Not reflected, not shown
+        /// in the outliner, never serialized: it is rebuilt on every load.
+        const std::string& GetMetadata() const { return metadata_; }
+        void SetMetadata(std::string metadata) { metadata_ = std::move(metadata); }
 
         bool IsSceneReferenceInternal() const { return sceneReferenceOwnerProxyId_ != invalidNodeId; }
         uint32_t GetSceneReferenceOwnerProxyId() const { return sceneReferenceOwnerProxyId_; }
@@ -110,6 +116,7 @@ namespace Assets
         std::string name_;
         std::string tag_ = "Untagged";
         std::string layer_ = "Default";
+        std::string metadata_;
 
         mutable glm::vec3 translation_;
         mutable glm::quat rotation_;

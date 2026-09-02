@@ -25,6 +25,15 @@ public:
     /// @param deltaSeconds    Frame delta time.
     void Update(const glm::vec3& inputDirection, float speed, bool jump, float deltaSeconds);
 
+    /// Steps the character with a velocity the game integrated itself (gravity, jump arc, hover
+    /// clamp, launch pads). With inheritGround the ground body's velocity is added while standing,
+    /// which is what keeps a platformer character on a moving platform or a rotating disc.
+    void UpdateWithVelocity(const glm::vec3& worldVelocity, bool inheritGround, float deltaSeconds);
+
+    glm::vec3 GetGroundVelocity() const;
+    glm::vec3 GetGroundNormal() const;
+    NextBodyID GetGroundBodyID() const;
+
     /// Changes the controller height while keeping its foot position fixed.
     /// Growing fails if the added volume is obstructed.
     bool TrySetHeight(float height);

@@ -14,6 +14,18 @@
 //   * 悬浮敌人 ab_char_enemy_flyer 底面 z=hover。
 // 类别：ground 地面岛屿 / plat 平台机关 / bldg 结构 / nature 植被地景 / prop 道具机关 /
 //       item 收集物 / char 角色（主角机器人、被困机器人、敌人）。
+// 活动件契约（机关要能在运行时动起来，见 docs/projects/nextastrobot/）：
+//   1. 可动机关 = gk_flatten() { 静态壳 } + 若干 ab_part_<机关>_<件>() 活动件调用。
+//      活动件调用**不得**放进 gk_flatten，否则会折进父节点、运行时就找不到它了。
+//   2. 活动件模块自身的几何整体包在 gk_flatten() 里：一件 = 一个 Node = 一个 Model。
+//   3. 活动件局部原点 = 运动基准：转动件原点在转轴上、平移件在行程基准、升降件在落位。
+//      父模块用 translate/rotate 把它摆到绑定姿态；运行时只改活动件节点的**局部** TRS。
+//   4. 玩法参数（period 秒 / phase 0..1 / speed m/s 或 °/s / amp ° / idx 序号 / locked 布尔）
+//      作为模块的具名参数声明，即使几何不用；loader 把它们写进 Node::metadata。
+//   5. 旧签名向后兼容：ab_plat_moving 的 t、ab_plat_pendulum 的 ang、ab_plat_seesaw 的 tilt
+//      仍表示绑定姿态；新增参数一律带默认值。
+//   6. ab_part_roof / ab_part_hazard 是**几何 helper**，不是活动件（它们只在 gk_flatten
+//      内部或静态件里出现）；运行时按具体件名索引，不靠前缀通配。
 // 材质：ab_gloss / ab_plastic / ab_matte / ab_rubber / ab_leaf / ab_metal / ab_chrome / ab_gold /
 //       ab_glass / ab_water 包装 gk_material，提供 roughness/metalness，PT 管线下呈现
 //       玩具塑料 / 金属 / 玻璃 / 水面质感。全库不用透明 alpha：透明 Dielectric 在默认暗天空下渲染成黑球，
@@ -309,20 +321,10 @@ module ab_plat_float(r = 2, c = ab_TEAL())
     ab_gloss(ab_BLUEL()) cylinder(h = 0.1, r1 = 0.35, r2 = 0.55, $fn = 10);
 }
 
-// 轨道移动平台（轨道沿 x 长 rail，底面 z=0；平台顶面 z=0.7，t∈[0,1] 为当前位置）
-module ab_plat_moving(rail = 10, L = 3, W = 2, t = 0.5, c = ab_ORANGE())
+// 轨道移动平台的车厢（活动件）：原点 = 车厢底面中心，就是轨道基面；父模块只 translate x。
+module ab_part_moving_car(L = 3, W = 2, c = ab_ORANGE())
 {
-    n = max(1, floor(rail / 2.5));
-    for (sy = [-1, 1])
-    {
-        ab_metal(ab_METAL()) translate([0, sy * (W / 2 - 0.2), 0.32]) rotate([0, 90, 0]) cylinder(h = rail, r = 0.07, center = true, $fn = 8);
-        for (i = [0 : n])
-            ab_metal(ab_METALD()) translate([-rail / 2 + 0.4 + i * (rail - 0.8) / n, sy * (W / 2 - 0.2), 0]) cylinder(h = 0.32, r = 0.06, $fn = 6);
-        for (sx = [-1, 1])
-            ab_plastic(ab_RED()) translate([sx * (rail / 2 - 0.1), sy * (W / 2 - 0.2), 0.32]) ab_boxc([0.2, 0.3, 0.3]);
-    }
-    px = -rail / 2 + L / 2 + t * (rail - L);
-    translate([px, 0, 0])
+    gk_flatten()
     {
         for (sx = [-1, 1], sy = [-1, 1])
             ab_rubber(ab_DARK()) translate([sx * (L / 2 - 0.4), sy * (W / 2 - 0.2), 0.32]) rotate([90, 0, 0]) cylinder(h = 0.16, r = 0.16, center = true, $fn = 10);
@@ -332,8 +334,28 @@ module ab_plat_moving(rail = 10, L = 3, W = 2, t = 0.5, c = ab_ORANGE())
     }
 }
 
+// 轨道移动平台（轨道沿 x 长 rail，底面 z=0；平台顶面 z=0.7，t∈[0,1] 为当前位置）
+//   speed 为往返速度（m/s），phase 为起始相位（0..1）；运行时驱动车厢在轨道内往返。
+module ab_plat_moving(rail = 10, L = 3, W = 2, t = 0.5, c = ab_ORANGE(), speed = 2.5, phase = 0)
+{
+    n = max(1, floor(rail / 2.5));
+    gk_flatten()
+        for (sy = [-1, 1])
+        {
+            ab_metal(ab_METAL()) translate([0, sy * (W / 2 - 0.2), 0.32]) rotate([0, 90, 0]) cylinder(h = rail, r = 0.07, center = true, $fn = 8);
+            for (i = [0 : n])
+                ab_metal(ab_METALD()) translate([-rail / 2 + 0.4 + i * (rail - 0.8) / n, sy * (W / 2 - 0.2), 0]) cylinder(h = 0.32, r = 0.06, $fn = 6);
+            for (sx = [-1, 1])
+                ab_plastic(ab_RED()) translate([sx * (rail / 2 - 0.1), sy * (W / 2 - 0.2), 0.32]) ab_boxc([0.2, 0.3, 0.3]);
+        }
+    px = -rail / 2 + L / 2 + t * (rail - L);
+    translate([px, 0, 0]) ab_part_moving_car(L, W, c);
+}
+
 // 旋转圆盘平台（底面 z=0，顶面 z=0.55）：四色扇区 + 中心毂 + 白色转向箭头
-module ab_plat_spin(r = 3)
+//   旋转对称：没有活动件，整盘节点绕 z 转即可；碰撞体不动，运行时按脚下半径给表面速度。
+//   speed 为角速度（°/s，正 = 逆时针）。
+module ab_plat_spin(r = 3, speed = 30)
 {
     ab_metal(ab_METALD()) cylinder(h = 0.25, r = 0.6, $fn = 12);
     for (i = [0 : 3])
@@ -346,12 +368,10 @@ module ab_plat_spin(r = 3)
                 polygon([[-0.45, -0.18], [0.15, -0.18], [0.15, -0.38], [0.5, 0], [0.15, 0.38], [0.15, 0.18], [-0.45, 0.18]]);
 }
 
-// 跷跷板（沿 x，底面 z=0）：红色三角支点 + 倾斜板 + 两端踏板
-module ab_plat_seesaw(L = 6, W = 2, tilt = 8)
+// 跷跷板踏板（活动件）：原点 = 轴心，板面绕局部 y 轴倾斜
+module ab_part_seesaw_plank(L = 6, W = 2)
 {
-    ab_plastic(ab_RED()) rotate([90, 0, 0]) translate([0, 0, -W * 0.25]) linear_extrude(W * 0.5) polygon([[-0.9, 0], [0.9, 0], [0, 0.95]]);
-    ab_metal(ab_METAL()) translate([0, 0, 0.92]) rotate([90, 0, 0]) cylinder(h = W * 0.7, r = 0.1, center = true, $fn = 8);
-    translate([0, 0, 0.98]) rotate([0, tilt, 0])
+    gk_flatten()
     {
         ab_plastic(ab_BLUEL()) ab_boxc([L, W, 0.18]);
         for (sx = [-1, 1])
@@ -360,22 +380,45 @@ module ab_plat_seesaw(L = 6, W = 2, tilt = 8)
     }
 }
 
-// 开裂易碎石板（底面 z=0，顶面 z=0.4）：踩上后塌落的踏板
-module ab_plat_crumble(L = 2, D = 2, seed = 0)
+// 跷跷板（沿 x，底面 z=0）：红色三角支点 + 倾斜板 + 两端踏板
+//   amp 为最大倾角（°），speed 为逼近速度（°/s）；tilt 仍是绑定姿态。
+module ab_plat_seesaw(L = 6, W = 2, tilt = 8, amp = 12, speed = 25)
 {
-    ab_matte(ab_ROCKD()) ab_slab(L, D, 0.3);
-    for (sx = [-1, 1], sy = [-1, 1])
-        ab_matte(ab_ROCK())
-            translate([sx * L / 4 + ab_rndr(seed + sx * 3 + sy, -0.03, 0.03), sy * D / 4 + ab_rndr(seed + sy * 5, -0.03, 0.03), 0.3])
-                rotate([0, 0, ab_rndr(seed + sx + sy * 2, -3, 3)]) ab_slab(L / 2 - 0.14, D / 2 - 0.14, 0.1);
-    for (i = [0 : 3])
-        ab_matte(ab_ROCKD())
-            translate([ab_rndr(seed * 5 + i * 7, -L / 2 + 0.4, L / 2 - 0.4), ab_rndr(seed * 3 + i * 11, -D / 2 + 0.4, D / 2 - 0.4), 0.4])
-                rotate([0, 0, ab_rnd(seed + i, 180)]) ab_slab(0.6, 0.04, 0.012);
+    gk_flatten()
+    {
+        ab_plastic(ab_RED()) rotate([90, 0, 0]) translate([0, 0, -W * 0.25]) linear_extrude(W * 0.5) polygon([[-0.9, 0], [0.9, 0], [0, 0.95]]);
+        ab_metal(ab_METAL()) translate([0, 0, 0.92]) rotate([90, 0, 0]) cylinder(h = W * 0.7, r = 0.1, center = true, $fn = 8);
+    }
+    translate([0, 0, 0.98]) rotate([0, tilt, 0]) ab_part_seesaw_plank(L, W);
 }
 
-// 弹跳垫（底面 z=0）：金属底座 + 黄圈 + 红色橡胶穹顶 + 白色环纹；踩上弹起约 6 m
-module ab_plat_bounce(r = 1.2)
+// 易碎石板的板体（活动件）：原点 = 板底面中心；运行时抖动、下坠并隐藏
+module ab_part_crumble_slab(L = 2, D = 2, seed = 0)
+{
+    gk_flatten()
+    {
+        ab_matte(ab_ROCKD()) ab_slab(L, D, 0.3);
+        for (sx = [-1, 1], sy = [-1, 1])
+            ab_matte(ab_ROCK())
+                translate([sx * L / 4 + ab_rndr(seed + sx * 3 + sy, -0.03, 0.03), sy * D / 4 + ab_rndr(seed + sy * 5, -0.03, 0.03), 0.3])
+                    rotate([0, 0, ab_rndr(seed + sx + sy * 2, -3, 3)]) ab_slab(L / 2 - 0.14, D / 2 - 0.14, 0.1);
+        for (i = [0 : 3])
+            ab_matte(ab_ROCKD())
+                translate([ab_rndr(seed * 5 + i * 7, -L / 2 + 0.4, L / 2 - 0.4), ab_rndr(seed * 3 + i * 11, -D / 2 + 0.4, D / 2 - 0.4), 0.4])
+                    rotate([0, 0, ab_rnd(seed + i, 180)]) ab_slab(0.6, 0.04, 0.012);
+    }
+}
+
+// 开裂易碎石板（底面 z=0，顶面 z=0.4）：踩上后塌落的踏板
+//   warn 为踩上后开始塌落的延迟（秒），respawn 为复位延迟（秒）。整块板都是活动件，没有静态壳。
+module ab_plat_crumble(L = 2, D = 2, seed = 0, warn = 0.6, respawn = 4)
+{
+    ab_part_crumble_slab(L, D, seed);
+}
+
+// 弹跳垫（底面 z=0）：金属底座 + 黄圈 + 红色橡胶穹顶 + 白色环纹；踩上弹起约 launch m
+//   没有活动件：碰撞保持隐式静态体，运行时按脚底距离触发竖直发射。
+module ab_plat_bounce(r = 1.2, launch = 6)
 {
     ab_metal(ab_METALD()) cylinder(h = 0.2, r = r + 0.18, $fn = 16);
     ab_plastic(ab_YELLOW()) translate([0, 0, 0.2]) cylinder(h = 0.1, r = r + 0.06, $fn = 16);
@@ -384,48 +427,81 @@ module ab_plat_bounce(r = 1.2)
     ab_plastic(ab_CREAM()) translate([0, 0, 0.3 + 0.45 * r - 0.02]) cylinder(h = 0.03, r = 0.12, $fn = 8);
 }
 
-// 弹簧发射台（底面 z=0，顶面 z=h）：金属线圈 + 蓝色顶盘
-module ab_plat_spring(r = 0.8, h = 1.2)
+// 弹簧发射台的顶盘（活动件）：原点 = 顶盘底面；触发后压缩再弹回（纯视觉）
+module ab_part_spring_cap(r = 0.8)
 {
-    ab_metal(ab_METALD()) cylinder(h = 0.15, r = r + 0.2, $fn = 14);
-    for (i = [0 : 4])
-        ab_metal(ab_METAL()) translate([0, 0, 0.27 + i * (h - 0.55) / 4]) ab_torus(r, 0.09);
-    ab_plastic(ab_BLUE()) translate([0, 0, h - 0.15]) cylinder(h = 0.15, r = r + 0.15, $fn = 14);
-    ab_plastic(ab_CREAM()) translate([0, 0, h]) cylinder(h = 0.02, r = r * 0.6, $fn = 14);
+    gk_flatten()
+    {
+        ab_plastic(ab_BLUE()) cylinder(h = 0.15, r = r + 0.15, $fn = 14);
+        ab_plastic(ab_CREAM()) translate([0, 0, 0.15]) cylinder(h = 0.02, r = r * 0.6, $fn = 14);
+    }
+}
+
+// 弹簧发射台（底面 z=0，顶面 z=h）：金属线圈 + 蓝色顶盘；踩上弹起约 launch m
+module ab_plat_spring(r = 0.8, h = 1.2, launch = 8)
+{
+    gk_flatten()
+    {
+        ab_metal(ab_METALD()) cylinder(h = 0.15, r = r + 0.2, $fn = 14);
+        for (i = [0 : 4])
+            ab_metal(ab_METAL()) translate([0, 0, 0.27 + i * (h - 0.55) / 4]) ab_torus(r, 0.09);
+    }
+    translate([0, 0, h - 0.15]) ab_part_spring_cap(r);
+}
+
+// 滚筒的筒体（活动件）：原点 = 轴心，绕局部 x 轴自转
+module ab_part_roller_drum(L = 5, r = 1.0)
+{
+    n = max(2, floor(L / 0.8));
+    gk_flatten()
+        for (i = [0 : n - 1])
+            ab_plastic(i % 2 == 0 ? ab_CREAM() : ab_ORANGE())
+                translate([-L / 2 + (i + 0.5) * L / n, 0, 0]) rotate([0, 90, 0]) cylinder(h = L / n + 0.004, r = r, center = true, $fn = 14);
 }
 
 // 滚筒（沿 x，底面 z=0）：A 形支架 + 分段双色旋转圆筒；筒顶 z = 2r + 0.3
-module ab_plat_roller(L = 5, r = 1.0)
+//   旋转对称：碰撞保持隐式静态体，运行时按 speed（m/s，表面线速度，正 = 推向 -y）给表面速度。
+module ab_plat_roller(L = 5, r = 1.0, speed = 2.5)
 {
     H = r + 0.3;
-    for (sx = [-1, 1])
+    gk_flatten()
     {
-        for (sy = [-1, 1])
-            ab_metal(ab_METALD()) translate([sx * (L / 2 + 0.3), sy * 0.5, H / 2]) rotate([sy * 18, 0, 0]) ab_boxc([0.14, 0.14, H / cos(18)]);
-        ab_metal(ab_METALD()) translate([sx * (L / 2 + 0.3), 0, H * 0.5]) ab_boxc([0.14, 1.1, 0.1]);
+        for (sx = [-1, 1])
+        {
+            for (sy = [-1, 1])
+                ab_metal(ab_METALD()) translate([sx * (L / 2 + 0.3), sy * 0.5, H / 2]) rotate([sy * 18, 0, 0]) ab_boxc([0.14, 0.14, H / cos(18)]);
+            ab_metal(ab_METALD()) translate([sx * (L / 2 + 0.3), 0, H * 0.5]) ab_boxc([0.14, 1.1, 0.1]);
+        }
+        ab_metal(ab_METAL()) translate([0, 0, H]) rotate([0, 90, 0]) cylinder(h = L + 0.9, r = 0.1, center = true, $fn = 8);
     }
-    ab_metal(ab_METAL()) translate([0, 0, H]) rotate([0, 90, 0]) cylinder(h = L + 0.9, r = 0.1, center = true, $fn = 8);
-    n = max(2, floor(L / 0.8));
-    for (i = [0 : n - 1])
-        ab_plastic(i % 2 == 0 ? ab_CREAM() : ab_ORANGE())
-            translate([-L / 2 + (i + 0.5) * L / n, 0, H]) rotate([0, 90, 0]) cylinder(h = L / n + 0.004, r = r, center = true, $fn = 14);
+    translate([0, 0, H]) ab_part_roller_drum(L, r);
 }
 
-// 摆锤平台（底面 z=0）：门架（立柱在 ±y）+ 摆臂 + 黄色平台；ang 为当前摆角（xz 面内）
-module ab_plat_pendulum(h = 7, arm = 5, ang = 25, w = 2.2)
+// 摆锤的摆臂（活动件）：原点 = 铰点，臂沿 -z 垂下；运行时绕局部 y 轴摆动
+module ab_part_pendulum_arm(arm = 5, w = 2.2)
 {
-    for (sy = [-1, 1])
-    {
-        ab_metal(ab_METALD()) translate([0, sy * (w / 2 + 1.2), 0]) cylinder(h = h, r = 0.16, $fn = 8);
-        ab_metal(ab_METALD()) translate([0, sy * (w / 2 + 1.2), 0]) cylinder(h = 0.2, r = 0.5, $fn = 10);
-    }
-    ab_metal(ab_METALD()) translate([0, 0, h]) rotate([90, 0, 0]) cylinder(h = w + 2.8, r = 0.16, center = true, $fn = 8);
-    translate([0, 0, h]) rotate([0, ang, 0])
+    gk_flatten()
     {
         ab_metal(ab_METAL()) translate([0, 0, -arm / 2]) cylinder(h = arm, r = 0.1, center = true, $fn = 8);
         ab_plastic(ab_YELLOW()) translate([0, 0, -arm]) ab_boxc([2.4, w, 0.3]);
         ab_plastic(ab_CHECKD()) translate([0, 0, -arm + 0.16]) ab_boxc([2.0, w - 0.3, 0.02]);
     }
+}
+
+// 摆锤平台（底面 z=0）：门架（立柱在 ±y）+ 摆臂 + 黄色平台；ang 为当前摆角（xz 面内）
+//   period 为一个完整来回的周期（秒），phase 为起始相位（0..1）。
+module ab_plat_pendulum(h = 7, arm = 5, ang = 25, w = 2.2, period = 3, phase = 0)
+{
+    gk_flatten()
+    {
+        for (sy = [-1, 1])
+        {
+            ab_metal(ab_METALD()) translate([0, sy * (w / 2 + 1.2), 0]) cylinder(h = h, r = 0.16, $fn = 8);
+            ab_metal(ab_METALD()) translate([0, sy * (w / 2 + 1.2), 0]) cylinder(h = 0.2, r = 0.5, $fn = 10);
+        }
+        ab_metal(ab_METALD()) translate([0, 0, h]) rotate([90, 0, 0]) cylinder(h = w + 2.8, r = 0.16, center = true, $fn = 8);
+    }
+    translate([0, 0, h]) rotate([0, ang, 0]) ab_part_pendulum_arm(arm, w);
 }
 
 // 绳桥（沿 x）：桥面端点 z≈0.1、中段下垂 sag（zMin 为负是预期）+ 两端立柱 + 分段扶手绳
@@ -447,7 +523,8 @@ module ab_plat_bridge(L = 8, W = 1.8, sag = 0.35)
 }
 
 // 传送带（沿 x，底面 z=0，带面 z=0.5）：深色橡胶带 + 黄色 V 形箭头（指向 +x）+ 两端滚轴
-module ab_plat_conveyor(L = 6, W = 2)
+//   没有活动件：碰撞保持隐式静态体，运行时给站在带上的角色附加 +x 表面速度 speed（m/s）。
+module ab_plat_conveyor(L = 6, W = 2, speed = 2)
 {
     ab_metal(ab_METALD()) ab_bevel(L + 0.4, W + 0.3, 0.32, 0.06);
     ab_rubber(ab_DARK()) translate([0, 0, 0.32]) ab_slab(L, W - 0.1, 0.18);
@@ -474,28 +551,36 @@ module ab_plat_pillar(h = 4, r = 1.2, c = ab_TEAL())
     ab_plastic(ab_CREAM()) translate([0, 0, h]) cylinder(h = 0.02, r = r - 0.2, $fn = 14);
 }
 
-// 滑索（沿 +x）：起点柱落 z=0（缆高 2.9），终点柱落 z=-drop；t 为滑车位置。zMin 为负是预期。
-module ab_plat_zipline(L = 14, drop = 4, t = 0.3)
+// 滑索滑车（活动件）：原点 = 滑车挂点（缆绳上）；纯视觉，无碰撞
+module ab_part_zipline_car()
 {
-    for (p = [[0, 0], [L, -drop]])
-    {
-        ab_metal(ab_METALD()) translate([p[0], 0, p[1]]) cylinder(h = 0.15, r = 0.45, $fn = 10);
-        ab_metal(ab_METAL()) translate([p[0], 0, p[1]]) cylinder(h = 3.1, r = 0.1, $fn = 8);
-        ab_metal(ab_METAL()) translate([p[0], 0, p[1] + 3.05]) rotate([90, 0, 0]) cylinder(h = 0.9, r = 0.06, center = true, $fn = 8);
-    }
-    ab_rubber(ab_DARK()) hull()
-    {
-        translate([0, 0, 2.9]) sphere(r = 0.035, $fn = 6);
-        translate([L, 0, 2.9 - drop]) sphere(r = 0.035, $fn = 6);
-    }
-    tx = t * L;
-    tz = 2.9 - t * drop;
-    translate([tx, 0, tz])
+    gk_flatten()
     {
         ab_plastic(ab_YELLOW()) translate([0, 0, 0.02]) ab_boxc([0.5, 0.2, 0.28]);
         ab_metal(ab_METAL()) translate([0, 0, -0.5]) cylinder(h = 0.9, r = 0.035, $fn = 6);
         ab_rubber(ab_DARK()) translate([0, 0, -0.52]) rotate([0, 90, 0]) cylinder(h = 0.7, r = 0.05, center = true, $fn = 8);
     }
+}
+
+// 滑索（沿 +x）：起点柱落 z=0（缆高 2.9），终点柱落 z=-drop；t 为滑车位置。zMin 为负是预期。
+//   speed 为滑行速度（m/s）。
+module ab_plat_zipline(L = 14, drop = 4, t = 0.3, speed = 8)
+{
+    gk_flatten()
+    {
+        for (p = [[0, 0], [L, -drop]])
+        {
+            ab_metal(ab_METALD()) translate([p[0], 0, p[1]]) cylinder(h = 0.15, r = 0.45, $fn = 10);
+            ab_metal(ab_METAL()) translate([p[0], 0, p[1]]) cylinder(h = 3.1, r = 0.1, $fn = 8);
+            ab_metal(ab_METAL()) translate([p[0], 0, p[1] + 3.05]) rotate([90, 0, 0]) cylinder(h = 0.9, r = 0.06, center = true, $fn = 8);
+        }
+        ab_rubber(ab_DARK()) hull()
+        {
+            translate([0, 0, 2.9]) sphere(r = 0.035, $fn = 6);
+            translate([L, 0, 2.9 - drop]) sphere(r = 0.035, $fn = 6);
+        }
+    }
+    translate([t * L, 0, 2.9 - t * drop]) ab_part_zipline_car();
 }
 
 // 单个字母积木块（底面 z=0）：圆角立方 + 四面浅色内嵌方
@@ -966,19 +1051,32 @@ module ab_prop_crate(s = 1.0, seed = 0)
     }
 }
 
+// 牢笼穹顶（活动件）：原点 = 穹顶底环；拳击后升起 1.5 m 放出被困机器人
+module ab_part_cage_dome(r = 1.1)
+{
+    gk_flatten()
+    {
+        ab_metal(ab_METALD()) ab_torus(r, 0.06);
+        ab_metal(ab_METALD()) difference()
+        {
+            ab_dome(r + 0.05, 0.5);
+            translate([0, 0, -0.1]) ab_dome(r - 0.05, 0.5);
+        }
+        ab_metal(ab_METAL()) translate([0, 0, (r + 0.05) * 0.5 + 0.12]) rotate([90, 0, 0]) ab_torus(0.16, 0.035);
+    }
+}
+
 // 牢笼（底面 z=0）：金属栏杆 + 穹顶 + 吊环，内困一名挥手求救的机器人
+//   笼内的 ab_char_bot 留在壳外：运行时要给它换姿态/换成 rig，不能折进静态壳。
 module ab_prop_cage(seed = 0, r = 1.1, h = 2.3)
 {
-    ab_metal(ab_METALD()) cylinder(h = 0.12, r = r + 0.15, $fn = 12);
-    for (i = [0 : 9])
-        ab_metal(ab_METAL()) rotate([0, 0, i * 36]) translate([r, 0, 0.12]) cylinder(h = h - 0.3, r = 0.04, $fn = 6);
-    ab_metal(ab_METALD()) translate([0, 0, h - 0.3]) ab_torus(r, 0.06);
-    ab_metal(ab_METALD()) translate([0, 0, h - 0.3]) difference()
+    gk_flatten()
     {
-        ab_dome(r + 0.05, 0.5);
-        translate([0, 0, -0.1]) ab_dome(r - 0.05, 0.5);
+        ab_metal(ab_METALD()) cylinder(h = 0.12, r = r + 0.15, $fn = 12);
+        for (i = [0 : 9])
+            ab_metal(ab_METAL()) rotate([0, 0, i * 36]) translate([r, 0, 0.12]) cylinder(h = h - 0.3, r = 0.04, $fn = 6);
     }
-    ab_metal(ab_METAL()) translate([0, 0, h - 0.3 + (r + 0.05) * 0.5 + 0.12]) rotate([90, 0, 0]) ab_torus(0.16, 0.035);
+    translate([0, 0, h - 0.3]) ab_part_cage_dome(r);
     translate([0, 0, 0.12]) ab_char_bot(seed = seed, pose = 1);
 }
 
@@ -1084,12 +1182,22 @@ module ab_prop_fan(s = 1.0)
     }
 }
 
-// 地面大按钮（底面 z=0）：金属底座 + 黄圈 + 红色穹顶（踩下触发机关）
-module ab_prop_button(r = 1.0)
+// 按钮帽（活动件）：原点 = 帽底面中心；踩下后下压 0.15 m。无碰撞（底座是静态壳）。
+module ab_part_button_cap(r = 1.0)
 {
-    ab_metal(ab_METALD()) cylinder(h = 0.18, r = r + 0.2, $fn = 16);
-    ab_plastic(ab_YELLOW()) translate([0, 0, 0.18]) cylinder(h = 0.08, r = r + 0.1, $fn = 16);
-    ab_gloss(ab_RED()) translate([0, 0, 0.26]) ab_dome(r, 0.32);
+    gk_flatten() ab_gloss(ab_RED()) ab_dome(r, 0.32);
+}
+
+// 地面大按钮（底面 z=0）：金属底座 + 黄圈 + 红色穹顶（踩下触发机关）
+//   idx 是联动编号：踩下后触发同 idx 的栅栏门。
+module ab_prop_button(r = 1.0, idx = 0)
+{
+    gk_flatten()
+    {
+        ab_metal(ab_METALD()) cylinder(h = 0.18, r = r + 0.2, $fn = 16);
+        ab_plastic(ab_YELLOW()) translate([0, 0, 0.18]) cylinder(h = 0.08, r = r + 0.1, $fn = 16);
+    }
+    translate([0, 0, 0.26]) ab_part_button_cap(r);
 }
 
 // 拉杆开关（front = -y，底面 z=0）：基座 + 倾斜拉杆 + 红球
@@ -1104,17 +1212,30 @@ module ab_prop_lever()
     }
 }
 
-// 栅栏门（沿 x，front = -y，底面 z=0）：双柱 + 竖栏 + 顶梁 + 红色锁灯（按钮触发后升起）
-module ab_prop_gate_bars(w = 4, h = 3)
+// 栅栏门的栏栅（活动件）：原点 = 栏栅底；触发后整体升起 h+0.2
+module ab_part_gate_grid(w = 4, h = 3)
 {
-    for (sx = [-1, 1])
-        ab_metal(ab_METALD()) translate([sx * w / 2, 0, 0]) ab_bevel(0.4, 0.4, h + 0.3, 0.05);
-    ab_metal(ab_METALD()) translate([0, 0, h + 0.15]) ab_boxc([w, 0.34, 0.3]);
     n = max(2, floor(w / 0.45));
-    for (i = [1 : n - 1])
-        ab_metal(ab_METAL()) translate([-w / 2 + i * w / n, 0, 0.05]) cylinder(h = h + 0.1, r = 0.04, $fn = 6);
-    ab_metal(ab_METAL()) translate([0, 0, h * 0.5]) ab_boxc([w - 0.4, 0.06, 0.1]);
-    ab_gloss(ab_RED()) translate([0, -0.2, h + 0.15]) sphere(r = 0.12, $fn = 8);
+    gk_flatten()
+    {
+        for (i = [1 : n - 1])
+            ab_metal(ab_METAL()) translate([-w / 2 + i * w / n, 0, 0]) cylinder(h = h + 0.1, r = 0.04, $fn = 6);
+        ab_metal(ab_METAL()) translate([0, 0, h * 0.5 - 0.05]) ab_boxc([w - 0.4, 0.06, 0.1]);
+    }
+}
+
+// 栅栏门（沿 x，front = -y，底面 z=0）：双柱 + 竖栏 + 顶梁 + 红色锁灯（按钮触发后升起）
+//   idx 是联动编号（与 ab_prop_button 对应）；locked = true 时需要钥匙。
+module ab_prop_gate_bars(w = 4, h = 3, idx = 0, locked = false)
+{
+    gk_flatten()
+    {
+        for (sx = [-1, 1])
+            ab_metal(ab_METALD()) translate([sx * w / 2, 0, 0]) ab_bevel(0.4, 0.4, h + 0.3, 0.05);
+        ab_metal(ab_METALD()) translate([0, 0, h + 0.15]) ab_boxc([w, 0.34, 0.3]);
+        ab_gloss(ab_RED()) translate([0, -0.2, h + 0.15]) sphere(r = 0.12, $fn = 8);
+    }
+    translate([0, 0, 0.05]) ab_part_gate_grid(w, h);
 }
 
 // 气球束（底面 z=0）：配重 + 细绳 + 彩色气球（可作悬浮踏点提示）
@@ -1224,7 +1345,8 @@ module ab_prop_bubble(r = 0.9)
 }
 
 // 检查点（底面 z=0）：蓝白圆环底座 + 旗杆 + 蓝旗
-module ab_prop_checkpoint(h = 3)
+//   idx 是复活点序号（沿关卡流程递增）；旗帜活动件留到 P4，本期整杆是静态壳。
+module ab_prop_checkpoint(h = 3, idx = 0)
 {
     ab_gloss(ab_CREAM()) cylinder(h = 0.12, r = 1.0, $fn = 16);
     ab_gloss(ab_BLUE()) translate([0, 0, 0.12]) rotate_extrude() translate([0.6, 0]) square([0.25, 0.02]);

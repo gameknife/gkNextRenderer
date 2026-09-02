@@ -1197,3 +1197,160 @@ TEST_CASE("Scad scene eval top-level snapshot ignores module-local bindings", "[
     CHECK(result.topLevelVariables.at("anim_walk").num == Catch::Approx(1.0));
     CHECK(result.topLevelVariables.count("local_only") == 0);
 }
+
+TEST_CASE("Scad user-module named parameters land in Node metadata", "[Unit][Scad]")
+{
+    ScopedDir dir;
+    const std::filesystem::path mainPath = dir.Write(
+        "meta.scad",
+        "module m(a = 1, b = true, c = \"x\", v = [1, 2]) { cube([1, 1, 1]); }\n"
+        "m();\n"
+        "m(a = 2.5, b = false);\n");
+
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FScadLoader::LoadScadScene(mainPath.string(), environment, nodes, models, materials, lights, tracks,
+                                               skeletons));
+
+    std::vector<std::string> metadata;
+    for (const std::shared_ptr<Assets::Node>& node : nodes)
+    {
+        if (node->GetName() == "m")
+        {
+            metadata.push_back(node->GetMetadata());
+        }
+    }
+    REQUIRE(metadata.size() == 2);
+    // Vectors have no single-token spelling, so `v` is dropped by design.
+    CHECK(metadata[0] == "a=1;b=true;c=x");
+    CHECK(metadata[1] == "a=2.5;b=false;c=x");
+
+    const FMetadata parsed = ParseScadMetadata(metadata[1]);
+    CHECK(MetadataNumber(parsed, "a", 0.0) == Catch::Approx(2.5));
+    CHECK(MetadataNumber(parsed, "missing", 7.0) == Catch::Approx(7.0));
+    CHECK(MetadataBool(parsed, "b", true) == false);
+    CHECK(MetadataBool(parsed, "missing", true) == true);
+    CHECK(MetadataString(parsed, "c", "") == "x");
+}
+
+TEST_CASE("Scad metadata parser tolerates malformed records", "[Unit][Scad]")
+{
+    const FMetadata parsed = ParseScadMetadata("a=1;;=novalue;b=;c=3");
+    CHECK(MetadataNumber(parsed, "a", 0.0) == Catch::Approx(1.0));
+    CHECK(MetadataNumber(parsed, "b", 9.0) == Catch::Approx(9.0)); // empty value falls back
+    CHECK(MetadataNumber(parsed, "c", 0.0) == Catch::Approx(3.0));
+    CHECK(ParseScadMetadata("").empty());
+}
+
+// ---------------------------------------------------------------------------
+// NextAstrobot mechanism contract (docs/projects/nextastrobot/): every movable
+// mechanism piece is its own ab_part_* node hanging off the mechanism node,
+// whose static shell is folded into a single gk_flatten'd model. Loading the
+// real level guards both the kit split and the level's gameplay parameters.
+// ---------------------------------------------------------------------------
+TEST_CASE("Astro mechanisms expose movable ab_part_ nodes", "[Unit][Scad][Astro]")
+{
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FScadLoader::LoadScadScene("assets/scad/source/astro/sky_garden.scad", environment, nodes, models,
+                                               materials, lights, tracks, skeletons));
+
+    const auto findFirst = [&](std::string_view name) -> Assets::Node* {
+        for (const std::shared_ptr<Assets::Node>& node : nodes)
+        {
+            if (node->GetName() == name)
+            {
+                return node.get();
+            }
+        }
+        return nullptr;
+    };
+    const auto childNamed = [](Assets::Node& parent, std::string_view name) -> Assets::Node* {
+        Assets::Node* found = nullptr;
+        for (const std::shared_ptr<Assets::Node>& child : parent.Children())
+        {
+            if (child->GetName() == name)
+            {
+                CHECK(found == nullptr); // exactly one movable piece per mechanism here
+                found = child.get();
+            }
+        }
+        return found;
+    };
+
+    Assets::Node* pendulum = findFirst("ab_plat_pendulum");
+    REQUIRE(pendulum != nullptr);
+    // The shell is gk_flatten'd, so the mechanism node itself carries the render data.
+    CHECK(pendulum->GetComponent<Runtime::RenderComponent>() != nullptr);
+    Assets::Node* arm = childNamed(*pendulum, "ab_part_pendulum_arm");
+    REQUIRE(arm != nullptr);
+    CHECK(arm->GetComponent<Runtime::RenderComponent>() != nullptr);
+    CHECK(MetadataNumber(ParseScadMetadata(pendulum->GetMetadata()), "period", 0.0) == Catch::Approx(3.2));
+    CHECK(MetadataNumber(ParseScadMetadata(arm->GetMetadata()), "arm", 0.0) == Catch::Approx(4.5));
+
+    Assets::Node* moving = findFirst("ab_plat_moving");
+    REQUIRE(moving != nullptr);
+    REQUIRE(childNamed(*moving, "ab_part_moving_car") != nullptr);
+    const FMetadata movingMeta = ParseScadMetadata(moving->GetMetadata());
+    CHECK(MetadataNumber(movingMeta, "rail", 0.0) == Catch::Approx(16.0));
+    CHECK(MetadataNumber(movingMeta, "speed", 0.0) == Catch::Approx(2.5));
+
+    Assets::Node* seesaw = findFirst("ab_plat_seesaw");
+    REQUIRE(seesaw != nullptr);
+    REQUIRE(childNamed(*seesaw, "ab_part_seesaw_plank") != nullptr);
+    CHECK(MetadataNumber(ParseScadMetadata(seesaw->GetMetadata()), "amp", 0.0) == Catch::Approx(12.0));
+
+    Assets::Node* gate = findFirst("ab_prop_gate_bars");
+    REQUIRE(gate != nullptr);
+    REQUIRE(childNamed(*gate, "ab_part_gate_grid") != nullptr);
+    CHECK(MetadataNumber(ParseScadMetadata(gate->GetMetadata()), "idx", -1.0) == Catch::Approx(1.0));
+    CHECK(MetadataBool(ParseScadMetadata(gate->GetMetadata()), "locked", true) == false);
+
+    Assets::Node* button = findFirst("ab_prop_button");
+    REQUIRE(button != nullptr);
+    REQUIRE(childNamed(*button, "ab_part_button_cap") != nullptr);
+    CHECK(MetadataNumber(ParseScadMetadata(button->GetMetadata()), "idx", -1.0) == Catch::Approx(1.0));
+
+    Assets::Node* cage = findFirst("ab_prop_cage");
+    REQUIRE(cage != nullptr);
+    REQUIRE(childNamed(*cage, "ab_part_cage_dome") != nullptr);
+    // The trapped robot stays outside the flattened shell so gameplay can re-pose it.
+    REQUIRE(childNamed(*cage, "ab_char_bot") != nullptr);
+
+    for (const char* mechanism : {"ab_plat_crumble", "ab_plat_spring", "ab_plat_roller", "ab_plat_zipline"})
+    {
+        Assets::Node* node = findFirst(mechanism);
+        INFO(mechanism);
+        REQUIRE(node != nullptr);
+    }
+    REQUIRE(childNamed(*findFirst("ab_plat_spring"), "ab_part_spring_cap") != nullptr);
+    REQUIRE(childNamed(*findFirst("ab_plat_roller"), "ab_part_roller_drum") != nullptr);
+    REQUIRE(childNamed(*findFirst("ab_plat_zipline"), "ab_part_zipline_car") != nullptr);
+    // The crumbling slab is entirely movable, so the mechanism node is the part itself.
+    REQUIRE(childNamed(*findFirst("ab_plat_crumble"), "ab_part_crumble_slab") != nullptr);
+
+    // Two checkpoints, numbered along the route; the static hero placeholder is gone.
+    int checkpoints = 0;
+    for (const std::shared_ptr<Assets::Node>& node : nodes)
+    {
+        if (node->GetName() == "ab_prop_checkpoint")
+        {
+            ++checkpoints;
+            const double idx = MetadataNumber(ParseScadMetadata(node->GetMetadata()), "idx", 0.0);
+            CHECK(idx >= 1.0);
+        }
+    }
+    CHECK(checkpoints == 2);
+}

@@ -1677,7 +1677,7 @@
               "default": "0"
             }
           ],
-          "line": 624,
+          "line": 710,
           "footprint": [
             6.4,
             1.4
@@ -1707,7 +1707,7 @@
               "default": "0"
             }
           ],
-          "line": 733,
+          "line": 819,
           "footprint": [
             4.6,
             0.39
@@ -1737,7 +1737,7 @@
               "default": "6"
             }
           ],
-          "line": 720,
+          "line": 806,
           "footprint": [
             7.0,
             1.0
@@ -1763,7 +1763,7 @@
               "default": "2.6"
             }
           ],
-          "line": 520,
+          "line": 606,
           "footprint": [
             9.45,
             8.4
@@ -1797,7 +1797,7 @@
               "default": "4.5"
             }
           ],
-          "line": 693,
+          "line": 779,
           "footprint": [
             6.2,
             5.7
@@ -1831,7 +1831,7 @@
               "default": "ab_GREENL()"
             }
           ],
-          "line": 659,
+          "line": 745,
           "footprint": [
             6.0,
             3.36
@@ -1865,7 +1865,7 @@
               "default": "ab_GREENL()"
             }
           ],
-          "line": 677,
+          "line": 763,
           "footprint": [
             2.7,
             2.7
@@ -1891,7 +1891,7 @@
               "default": "0"
             }
           ],
-          "line": 552,
+          "line": 638,
           "footprint": [
             6.11,
             6.22
@@ -1917,7 +1917,7 @@
               "default": "3.5"
             }
           ],
-          "line": 536,
+          "line": 622,
           "footprint": [
             7.0,
             7.0
@@ -1951,7 +1951,7 @@
               "default": "0"
             }
           ],
-          "line": 582,
+          "line": 668,
           "footprint": [
             3.8,
             3.8
@@ -1985,7 +1985,7 @@
               "default": "0"
             }
           ],
-          "line": 639,
+          "line": 725,
           "footprint": [
             3.95,
             0.64
@@ -2015,7 +2015,7 @@
               "default": "0"
             }
           ],
-          "line": 603,
+          "line": 689,
           "footprint": [
             6.44,
             4.9
@@ -2045,7 +2045,7 @@
               "default": "1"
             }
           ],
-          "line": 915,
+          "line": 1001,
           "footprint": [
             0.6,
             0.6
@@ -2083,7 +2083,7 @@
               "default": "-1"
             }
           ],
-          "line": 1358,
+          "line": 1478,
           "footprint": [
             1.0,
             0.79
@@ -2113,7 +2113,7 @@
               "default": "0"
             }
           ],
-          "line": 1408,
+          "line": 1528,
           "footprint": [
             1.9,
             1.9
@@ -2143,7 +2143,7 @@
               "default": "2.0"
             }
           ],
-          "line": 1451,
+          "line": 1571,
           "footprint": [
             1.11,
             1.08
@@ -2169,7 +2169,7 @@
               "default": "0"
             }
           ],
-          "line": 1467,
+          "line": 1587,
           "footprint": [
             0.84,
             1.85
@@ -2195,7 +2195,7 @@
               "default": "0"
             }
           ],
-          "line": 1434,
+          "line": 1554,
           "footprint": [
             1.2,
             0.95
@@ -2229,7 +2229,7 @@
               "default": "0"
             }
           ],
-          "line": 226,
+          "line": 239,
           "footprint": [
             6.0,
             6.0
@@ -2267,7 +2267,7 @@
               "default": "0"
             }
           ],
-          "line": 169,
+          "line": 182,
           "footprint": [
             20.0,
             16.0
@@ -2301,7 +2301,7 @@
               "default": "0"
             }
           ],
-          "line": 196,
+          "line": 209,
           "footprint": [
             16.0,
             16.0
@@ -2335,7 +2335,7 @@
               "default": "0"
             }
           ],
-          "line": 258,
+          "line": 271,
           "footprint": [
             8.0,
             6.0
@@ -2369,7 +2369,7 @@
               "default": "0"
             }
           ],
-          "line": 273,
+          "line": 286,
           "footprint": [
             7.51,
             1.44
@@ -2403,7 +2403,7 @@
               "default": "0.6"
             }
           ],
-          "line": 246,
+          "line": 259,
           "footprint": [
             8.0,
             6.0
@@ -2437,7 +2437,7 @@
               "default": "0"
             }
           ],
-          "line": 236,
+          "line": 249,
           "footprint": [
             6.0,
             6.0
@@ -2471,7 +2471,7 @@
               "default": "1.0"
             }
           ],
-          "line": 213,
+          "line": 226,
           "footprint": [
             8.0,
             8.0
@@ -2501,7 +2501,7 @@
               "default": "0.35"
             }
           ],
-          "line": 1275,
+          "line": 1395,
           "footprint": [
             0.7,
             0.1
@@ -2539,7 +2539,7 @@
               "default": "0.8"
             }
           ],
-          "line": 1293,
+          "line": 1413,
           "footprint": [
             6.7,
             0.1
@@ -2573,7 +2573,7 @@
               "default": "1.0"
             }
           ],
-          "line": 1303,
+          "line": 1423,
           "footprint": [
             4.1,
             4.1
@@ -2607,7 +2607,7 @@
               "default": "0.8"
             }
           ],
-          "line": 1287,
+          "line": 1407,
           "footprint": [
             5.5,
             0.1
@@ -2637,7 +2637,7 @@
               "default": "0"
             }
           ],
-          "line": 1325,
+          "line": 1445,
           "footprint": [
             0.6,
             0.6
@@ -2663,7 +2663,7 @@
               "default": "0.8"
             }
           ],
-          "line": 1336,
+          "line": 1456,
           "footprint": [
             0.85,
             0.1
@@ -2693,7 +2693,7 @@
               "default": "0.9"
             }
           ],
-          "line": 1309,
+          "line": 1429,
           "footprint": [
             1.08,
             0.16
@@ -2723,7 +2723,7 @@
               "default": "1.0"
             }
           ],
-          "line": 1348,
+          "line": 1468,
           "footprint": [
             0.95,
             0.16
@@ -2761,7 +2761,7 @@
               "default": "0.15"
             }
           ],
-          "line": 105,
+          "line": 118,
           "footprint": [
             2.0,
             2.0
@@ -2786,7 +2786,7 @@
               "name": "s"
             }
           ],
-          "line": 92,
+          "line": 105,
           "footprint": [
             1.0,
             1.0
@@ -2811,7 +2811,7 @@
               "name": "c"
             }
           ],
-          "line": 86,
+          "line": 99,
           "ok": false
         },
         {
@@ -2828,7 +2828,7 @@
               "default": "1.0"
             }
           ],
-          "line": 130,
+          "line": 143,
           "footprint": [
             2.0,
             2.0
@@ -2862,7 +2862,7 @@
               "default": "1"
             }
           ],
-          "line": 94,
+          "line": 107,
           "footprint": [
             2.0,
             2.0
@@ -2887,7 +2887,7 @@
               "name": "c"
             }
           ],
-          "line": 88,
+          "line": 101,
           "ok": false
         },
         {
@@ -2899,7 +2899,7 @@
               "name": "c"
             }
           ],
-          "line": 80,
+          "line": 93,
           "ok": false
         },
         {
@@ -2907,7 +2907,7 @@
           "category": "misc",
           "params": "",
           "paramList": [],
-          "line": 87,
+          "line": 100,
           "ok": false
         },
         {
@@ -2919,7 +2919,7 @@
               "name": "c"
             }
           ],
-          "line": 84,
+          "line": 97,
           "ok": false
         },
         {
@@ -2931,7 +2931,7 @@
               "name": "c"
             }
           ],
-          "line": 82,
+          "line": 95,
           "ok": false
         },
         {
@@ -2943,7 +2943,7 @@
               "name": "c"
             }
           ],
-          "line": 85,
+          "line": 98,
           "ok": false
         },
         {
@@ -2955,7 +2955,7 @@
               "name": "c"
             }
           ],
-          "line": 81,
+          "line": 94,
           "ok": false
         },
         {
@@ -2980,7 +2980,7 @@
               "default": "0.3"
             }
           ],
-          "line": 97,
+          "line": 110,
           "footprint": [
             2.0,
             2.0
@@ -3010,7 +3010,7 @@
               "default": "0.1"
             }
           ],
-          "line": 116,
+          "line": 129,
           "footprint": [
             1.0,
             1.0
@@ -3035,7 +3035,7 @@
               "name": "c"
             }
           ],
-          "line": 83,
+          "line": 96,
           "ok": false
         },
         {
@@ -3056,7 +3056,7 @@
               "default": "0.2"
             }
           ],
-          "line": 93,
+          "line": 106,
           "footprint": [
             4.0,
             4.0
@@ -3090,7 +3090,7 @@
               "default": "0.1"
             }
           ],
-          "line": 140,
+          "line": 153,
           "footprint": [
             0.95,
             0.9
@@ -3124,7 +3124,7 @@
               "default": "360"
             }
           ],
-          "line": 127,
+          "line": 140,
           "footprint": [
             2.2,
             2.2
@@ -3149,7 +3149,7 @@
               "name": "c"
             }
           ],
-          "line": 89,
+          "line": 102,
           "ok": false
         },
         {
@@ -3166,7 +3166,7 @@
               "default": "0"
             }
           ],
-          "line": 793,
+          "line": 879,
           "footprint": [
             1.85,
             1.45
@@ -3196,7 +3196,7 @@
               "default": "0"
             }
           ],
-          "line": 899,
+          "line": 985,
           "footprint": [
             1.96,
             0.64
@@ -3226,7 +3226,7 @@
               "default": "0"
             }
           ],
-          "line": 854,
+          "line": 940,
           "footprint": [
             3.75,
             2.45
@@ -3256,7 +3256,7 @@
               "default": "0"
             }
           ],
-          "line": 925,
+          "line": 1011,
           "footprint": [
             1.45,
             1.64
@@ -3286,7 +3286,7 @@
               "default": "0"
             }
           ],
-          "line": 805,
+          "line": 891,
           "footprint": [
             1.28,
             1.13
@@ -3316,7 +3316,7 @@
               "default": "1.0"
             }
           ],
-          "line": 867,
+          "line": 953,
           "footprint": [
             1.8,
             1.8
@@ -3342,7 +3342,7 @@
               "default": "0"
             }
           ],
-          "line": 820,
+          "line": 906,
           "footprint": [
             0.65,
             0.74
@@ -3372,7 +3372,7 @@
               "default": "0"
             }
           ],
-          "line": 938,
+          "line": 1024,
           "footprint": [
             1.8,
             1.8
@@ -3402,7 +3402,7 @@
               "default": "0"
             }
           ],
-          "line": 840,
+          "line": 926,
           "footprint": [
             2.3,
             2.3
@@ -3432,7 +3432,7 @@
               "default": "0"
             }
           ],
-          "line": 775,
+          "line": 861,
           "footprint": [
             5.27,
             5.32
@@ -3462,7 +3462,7 @@
               "default": "0"
             }
           ],
-          "line": 829,
+          "line": 915,
           "footprint": [
             1.91,
             2.08
@@ -3492,7 +3492,7 @@
               "default": "0"
             }
           ],
-          "line": 746,
+          "line": 832,
           "footprint": [
             3.3,
             3.0
@@ -3522,7 +3522,7 @@
               "default": "0"
             }
           ],
-          "line": 761,
+          "line": 847,
           "footprint": [
             3.0,
             3.0
@@ -3535,6 +3535,122 @@
           ],
           "triangles": 192,
           "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_part_button_cap",
+          "category": "part",
+          "params": "r = 1.0",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "1.0"
+            }
+          ],
+          "line": 1186,
+          "footprint": [
+            2.0,
+            2.0
+          ],
+          "height": 0.32,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 70,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_part_cage_dome",
+          "category": "part",
+          "params": "r = 1.1",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "1.1"
+            }
+          ],
+          "line": 1055,
+          "footprint": [
+            2.32,
+            2.32
+          ],
+          "height": 0.89,
+          "zMin": -0.06,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 720,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_part_crumble_slab",
+          "category": "part",
+          "params": "L = 2, D = 2, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "2"
+            },
+            {
+              "name": "D",
+              "default": "2"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 396,
+          "footprint": [
+            2.0,
+            2.0
+          ],
+          "height": 0.41,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 108,
+          "colors": 9,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_part_gate_grid",
+          "category": "part",
+          "params": "w = 4, h = 3",
+          "paramList": [
+            {
+              "name": "w",
+              "default": "4"
+            },
+            {
+              "name": "h",
+              "default": "3"
+            }
+          ],
+          "line": 1216,
+          "footprint": [
+            3.6,
+            0.08
+          ],
+          "height": 3.1,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 348,
+          "colors": 8,
           "warnings": 0,
           "ok": true
         },
@@ -3552,7 +3668,7 @@
               "default": "0.2"
             }
           ],
-          "line": 158,
+          "line": 171,
           "footprint": [
             3.0,
             0.03
@@ -3565,6 +3681,100 @@
           ],
           "triangles": 84,
           "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_part_moving_car",
+          "category": "part",
+          "params": "L = 3, W = 2, c = ab_ORANGE()",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "3"
+            },
+            {
+              "name": "W",
+              "default": "2"
+            },
+            {
+              "name": "c",
+              "default": "ab_ORANGE()"
+            }
+          ],
+          "line": 325,
+          "footprint": [
+            3.0,
+            2.04
+          ],
+          "height": 0.72,
+          "zMin": 0.16,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 368,
+          "colors": 18,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_part_pendulum_arm",
+          "category": "part",
+          "params": "arm = 5, w = 2.2",
+          "paramList": [
+            {
+              "name": "arm",
+              "default": "5"
+            },
+            {
+              "name": "w",
+              "default": "2.2"
+            }
+          ],
+          "line": 481,
+          "footprint": [
+            2.4,
+            2.2
+          ],
+          "height": 0.0,
+          "zMin": -5.15,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 72,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_part_roller_drum",
+          "category": "part",
+          "params": "L = 5, r = 1.0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "5"
+            },
+            {
+              "name": "r",
+              "default": "1.0"
+            }
+          ],
+          "line": 453,
+          "footprint": [
+            5.0,
+            2.0
+          ],
+          "height": 1.0,
+          "zMin": -1.0,
+          "center": [
+            -0.0,
+            0.0
+          ],
+          "triangles": 288,
+          "colors": 6,
           "warnings": 0,
           "ok": true
         },
@@ -3594,7 +3804,7 @@
               "default": "[0.6, 0.2, 0.15]"
             }
           ],
-          "line": 147,
+          "line": 160,
           "footprint": [
             6.2,
             5.2
@@ -3607,6 +3817,83 @@
           ],
           "triangles": 8,
           "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_part_seesaw_plank",
+          "category": "part",
+          "params": "L = 6, W = 2",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "6"
+            },
+            {
+              "name": "W",
+              "default": "2"
+            }
+          ],
+          "line": 372,
+          "footprint": [
+            6.0,
+            2.04
+          ],
+          "height": 0.11,
+          "zMin": -0.09,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 372,
+          "colors": 31,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_part_spring_cap",
+          "category": "part",
+          "params": "r = 0.8",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "0.8"
+            }
+          ],
+          "line": 431,
+          "footprint": [
+            1.9,
+            1.9
+          ],
+          "height": 0.17,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ab_part_zipline_car",
+          "category": "part",
+          "params": "",
+          "paramList": [],
+          "line": 555,
+          "footprint": [
+            0.7,
+            0.2
+          ],
+          "height": 0.4,
+          "zMin": -0.57,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 108,
+          "colors": 3,
           "warnings": 0,
           "ok": true
         },
@@ -3632,7 +3919,7 @@
               "default": "ab_YELLOW()"
             }
           ],
-          "line": 285,
+          "line": 298,
           "footprint": [
             2.0,
             2.0
@@ -3651,14 +3938,18 @@
         {
           "name": "ab_plat_bounce",
           "category": "plat",
-          "params": "r = 1.2",
+          "params": "r = 1.2, launch = 6",
           "paramList": [
             {
               "name": "r",
               "default": "1.2"
+            },
+            {
+              "name": "launch",
+              "default": "6"
             }
           ],
-          "line": 377,
+          "line": 421,
           "footprint": [
             2.76,
             2.76
@@ -3692,7 +3983,7 @@
               "default": "0.35"
             }
           ],
-          "line": 431,
+          "line": 508,
           "footprint": [
             8.48,
             2.14
@@ -3711,7 +4002,7 @@
         {
           "name": "ab_plat_conveyor",
           "category": "plat",
-          "params": "L = 6, W = 2",
+          "params": "L = 6, W = 2, speed = 2",
           "paramList": [
             {
               "name": "L",
@@ -3720,9 +4011,13 @@
             {
               "name": "W",
               "default": "2"
+            },
+            {
+              "name": "speed",
+              "default": "2"
             }
           ],
-          "line": 449,
+          "line": 527,
           "footprint": [
             6.4,
             2.3
@@ -3741,7 +4036,7 @@
         {
           "name": "ab_plat_crumble",
           "category": "plat",
-          "params": "L = 2, D = 2, seed = 0",
+          "params": "L = 2, D = 2, seed = 0, warn = 0.6, respawn = 4",
           "paramList": [
             {
               "name": "L",
@@ -3754,9 +4049,17 @@
             {
               "name": "seed",
               "default": "0"
+            },
+            {
+              "name": "warn",
+              "default": "0.6"
+            },
+            {
+              "name": "respawn",
+              "default": "4"
             }
           ],
-          "line": 363,
+          "line": 414,
           "footprint": [
             2.0,
             2.0
@@ -3786,7 +4089,7 @@
               "default": "ab_TEAL()"
             }
           ],
-          "line": 300,
+          "line": 313,
           "footprint": [
             4.0,
             4.0
@@ -3805,7 +4108,7 @@
         {
           "name": "ab_plat_moving",
           "category": "plat",
-          "params": "rail = 10, L = 3, W = 2, t = 0.5, c = ab_ORANGE()",
+          "params": "rail = 10, L = 3, W = 2, t = 0.5, c = ab_ORANGE(), speed = 2.5, phase = 0",
           "paramList": [
             {
               "name": "rail",
@@ -3826,9 +4129,17 @@
             {
               "name": "c",
               "default": "ab_ORANGE()"
+            },
+            {
+              "name": "speed",
+              "default": "2.5"
+            },
+            {
+              "name": "phase",
+              "default": "0"
             }
           ],
-          "line": 312,
+          "line": 339,
           "footprint": [
             10.0,
             2.04
@@ -3847,7 +4158,7 @@
         {
           "name": "ab_plat_pendulum",
           "category": "plat",
-          "params": "h = 7, arm = 5, ang = 25, w = 2.2",
+          "params": "h = 7, arm = 5, ang = 25, w = 2.2, period = 3, phase = 0",
           "paramList": [
             {
               "name": "h",
@@ -3864,9 +4175,17 @@
             {
               "name": "w",
               "default": "2.2"
+            },
+            {
+              "name": "period",
+              "default": "3"
+            },
+            {
+              "name": "phase",
+              "default": "0"
             }
           ],
-          "line": 414,
+          "line": 493,
           "footprint": [
             3.76,
             5.6
@@ -3900,7 +4219,7 @@
               "default": "ab_TEAL()"
             }
           ],
-          "line": 462,
+          "line": 540,
           "footprint": [
             2.4,
             2.4
@@ -3919,7 +4238,7 @@
         {
           "name": "ab_plat_roller",
           "category": "plat",
-          "params": "L = 5, r = 1.0",
+          "params": "L = 5, r = 1.0, speed = 2.5",
           "paramList": [
             {
               "name": "L",
@@ -3928,9 +4247,13 @@
             {
               "name": "r",
               "default": "1.0"
+            },
+            {
+              "name": "speed",
+              "default": "2.5"
             }
           ],
-          "line": 397,
+          "line": 464,
           "footprint": [
             5.9,
             2.0
@@ -3949,7 +4272,7 @@
         {
           "name": "ab_plat_seesaw",
           "category": "plat",
-          "params": "L = 6, W = 2, tilt = 8",
+          "params": "L = 6, W = 2, tilt = 8, amp = 12, speed = 25",
           "paramList": [
             {
               "name": "L",
@@ -3962,9 +4285,17 @@
             {
               "name": "tilt",
               "default": "8"
+            },
+            {
+              "name": "amp",
+              "default": "12"
+            },
+            {
+              "name": "speed",
+              "default": "25"
             }
           ],
-          "line": 349,
+          "line": 385,
           "footprint": [
             5.97,
             2.04
@@ -3983,14 +4314,18 @@
         {
           "name": "ab_plat_spin",
           "category": "plat",
-          "params": "r = 3",
+          "params": "r = 3, speed = 30",
           "paramList": [
             {
               "name": "r",
               "default": "3"
+            },
+            {
+              "name": "speed",
+              "default": "30"
             }
           ],
-          "line": 335,
+          "line": 358,
           "footprint": [
             6.1,
             6.1
@@ -4009,7 +4344,7 @@
         {
           "name": "ab_plat_spring",
           "category": "plat",
-          "params": "r = 0.8, h = 1.2",
+          "params": "r = 0.8, h = 1.2, launch = 8",
           "paramList": [
             {
               "name": "r",
@@ -4018,9 +4353,13 @@
             {
               "name": "h",
               "default": "1.2"
+            },
+            {
+              "name": "launch",
+              "default": "8"
             }
           ],
-          "line": 387,
+          "line": 441,
           "footprint": [
             2.0,
             2.0
@@ -4062,7 +4401,7 @@
               "default": "0"
             }
           ],
-          "line": 292,
+          "line": 305,
           "footprint": [
             3.6,
             3.0
@@ -4092,7 +4431,7 @@
               "default": "ab_RED()"
             }
           ],
-          "line": 501,
+          "line": 587,
           "footprint": [
             1.53,
             1.53
@@ -4122,7 +4461,7 @@
               "default": "1.5"
             }
           ],
-          "line": 510,
+          "line": 596,
           "footprint": [
             2.23,
             2.08
@@ -4141,7 +4480,7 @@
         {
           "name": "ab_plat_zipline",
           "category": "plat",
-          "params": "L = 14, drop = 4, t = 0.3",
+          "params": "L = 14, drop = 4, t = 0.3, speed = 8",
           "paramList": [
             {
               "name": "L",
@@ -4154,9 +4493,13 @@
             {
               "name": "t",
               "default": "0.3"
+            },
+            {
+              "name": "speed",
+              "default": "8"
             }
           ],
-          "line": 477,
+          "line": 567,
           "footprint": [
             14.9,
             0.9
@@ -4186,7 +4529,7 @@
               "default": "3"
             }
           ],
-          "line": 1121,
+          "line": 1242,
           "footprint": [
             1.56,
             1.67
@@ -4212,7 +4555,7 @@
               "default": "0"
             }
           ],
-          "line": 1264,
+          "line": 1384,
           "footprint": [
             0.67,
             0.67
@@ -4233,7 +4576,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 1239,
+          "line": 1359,
           "footprint": [
             1.8,
             0.53
@@ -4259,7 +4602,7 @@
               "default": "0.9"
             }
           ],
-          "line": 1223,
+          "line": 1342,
           "footprint": [
             1.8,
             1.8
@@ -4285,7 +4628,7 @@
               "default": "0.7"
             }
           ],
-          "line": 1141,
+          "line": 1262,
           "footprint": [
             1.6,
             1.6
@@ -4304,14 +4647,18 @@
         {
           "name": "ab_prop_button",
           "category": "prop",
-          "params": "r = 1.0",
+          "params": "r = 1.0, idx = 0",
           "paramList": [
             {
               "name": "r",
               "default": "1.0"
+            },
+            {
+              "name": "idx",
+              "default": "0"
             }
           ],
-          "line": 1088,
+          "line": 1193,
           "footprint": [
             2.4,
             2.4
@@ -4345,7 +4692,7 @@
               "default": "2.3"
             }
           ],
-          "line": 969,
+          "line": 1071,
           "footprint": [
             2.5,
             2.5
@@ -4375,7 +4722,7 @@
               "default": "0.5"
             }
           ],
-          "line": 1201,
+          "line": 1320,
           "footprint": [
             1.04,
             1.04
@@ -4394,14 +4741,18 @@
         {
           "name": "ab_prop_checkpoint",
           "category": "prop",
-          "params": "h = 3",
+          "params": "h = 3, idx = 0",
           "paramList": [
             {
               "name": "h",
               "default": "3"
+            },
+            {
+              "name": "idx",
+              "default": "0"
             }
           ],
-          "line": 1229,
+          "line": 1349,
           "footprint": [
             2.15,
             2.0
@@ -4427,7 +4778,7 @@
               "default": "0"
             }
           ],
-          "line": 1150,
+          "line": 1271,
           "footprint": [
             1.34,
             1.11
@@ -4448,7 +4799,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 1256,
+          "line": 1376,
           "footprint": [
             0.5,
             0.5
@@ -4478,7 +4829,7 @@
               "default": "0"
             }
           ],
-          "line": 951,
+          "line": 1037,
           "footprint": [
             1.04,
             1.04
@@ -4504,7 +4855,7 @@
               "default": "1.0"
             }
           ],
-          "line": 1069,
+          "line": 1167,
           "footprint": [
             2.0,
             1.2
@@ -4534,7 +4885,7 @@
               "default": "ab_CREAM()"
             }
           ],
-          "line": 1014,
+          "line": 1113,
           "footprint": [
             4.18,
             0.18
@@ -4564,7 +4915,7 @@
               "default": "0"
             }
           ],
-          "line": 1005,
+          "line": 1104,
           "footprint": [
             1.44,
             0.18
@@ -4594,7 +4945,7 @@
               "default": "0.45"
             }
           ],
-          "line": 1180,
+          "line": 1300,
           "footprint": [
             1.64,
             1.7
@@ -4613,7 +4964,7 @@
         {
           "name": "ab_prop_gate_bars",
           "category": "prop",
-          "params": "w = 4, h = 3",
+          "params": "w = 4, h = 3, idx = 0, locked = false",
           "paramList": [
             {
               "name": "w",
@@ -4622,9 +4973,17 @@
             {
               "name": "h",
               "default": "3"
+            },
+            {
+              "name": "idx",
+              "default": "0"
+            },
+            {
+              "name": "locked",
+              "default": "false"
             }
           ],
-          "line": 1108,
+          "line": 1229,
           "footprint": [
             4.4,
             0.52
@@ -4650,7 +5009,7 @@
               "default": "1.4"
             }
           ],
-          "line": 1213,
+          "line": 1332,
           "footprint": [
             3.0,
             1.0
@@ -4676,7 +5035,7 @@
               "default": "3"
             }
           ],
-          "line": 1247,
+          "line": 1367,
           "footprint": [
             0.7,
             0.1
@@ -4702,7 +5061,7 @@
               "default": "3.2"
             }
           ],
-          "line": 1027,
+          "line": 1126,
           "footprint": [
             1.24,
             0.68
@@ -4713,8 +5072,8 @@
             0.32,
             0.0
           ],
-          "triangles": 384,
-          "colors": 5,
+          "triangles": 264,
+          "colors": 4,
           "warnings": 0,
           "ok": true
         },
@@ -4728,7 +5087,7 @@
               "default": "6"
             }
           ],
-          "line": 1169,
+          "line": 1290,
           "footprint": [
             6.6,
             0.6
@@ -4749,7 +5108,7 @@
           "category": "prop",
           "params": "",
           "paramList": [],
-          "line": 1096,
+          "line": 1204,
           "footprint": [
             0.86,
             0.5
@@ -4775,7 +5134,7 @@
               "default": "0"
             }
           ],
-          "line": 1192,
+          "line": 1311,
           "footprint": [
             0.8,
             0.8
@@ -4805,7 +5164,7 @@
               "default": "0"
             }
           ],
-          "line": 985,
+          "line": 1084,
           "footprint": [
             1.68,
             0.14
@@ -4831,7 +5190,7 @@
               "default": "0"
             }
           ],
-          "line": 995,
+          "line": 1094,
           "footprint": [
             1.6,
             0.23
@@ -4857,7 +5216,7 @@
               "default": "0.7"
             }
           ],
-          "line": 1046,
+          "line": 1144,
           "footprint": [
             2.1,
             2.1
@@ -4887,7 +5246,7 @@
               "default": "0.7"
             }
           ],
-          "line": 1058,
+          "line": 1156,
           "footprint": [
             2.1,
             2.1
@@ -4917,7 +5276,7 @@
               "default": "1.0"
             }
           ],
-          "line": 1037,
+          "line": 1135,
           "footprint": [
             3.0,
             1.0

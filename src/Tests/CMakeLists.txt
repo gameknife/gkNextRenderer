@@ -61,6 +61,8 @@ set(unitTestSources
     Test_SogLoader.cpp
     Test_TerminalBlitter.cpp
     Test_PhysicsComponent.cpp
+    Test_CharacterGroundVelocity.cpp
+    Test_NextAstrobot.cpp
     Test_CPUAccelerationSnapshot.cpp
     Test_AmbientBakeScheduler.cpp
     ${GK_SOURCE_ROOT}/Application/Editor/ScadStudio/ScadOutline.cpp
@@ -103,6 +105,7 @@ set(unitTestSources
     ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/AI/CommanderAI.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Data/BattleData.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextTotalwar/Render/BattleCamera.cpp
+    ${GK_SOURCE_ROOT}/Application/Game/NextAstrobot/Level/LevelFlow.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextDayz/Data/ItemDefs.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextDayz/Inventory/Inventory.cpp
     ${GK_SOURCE_ROOT}/Application/Game/NextDayz/Player/PlayerActionController.cpp

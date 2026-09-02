@@ -1,0 +1,37 @@
+{
+  "name": "nextastrobot-collect",
+  "target": "NextAstrobot",
+  "scene": "assets/scad/source/astro/sky_garden.scad",
+  "defaults": { "waitFrames": 2, "stepTimeoutMs": 20000 },
+  "viewport": { "width": 1600, "height": 900 },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "wait-frames", "n": 30 },
+    { "type": "cvar", "name": "astro.state", "set": "playing" },
+    { "type": "wait-frames", "n": 40 },
+    { "type": "assert", "query": "game.coins", "op": "eq", "value": 0 },
+    { "type": "assert", "query": "game.coinsTotal", "op": "eq", "value": 85 },
+
+    { "type": "log", "message": "run the five-coin guide row on the spawn island" },
+    { "type": "cvar", "name": "astro.teleport", "set": "-53.5,0.4,0" },
+    { "type": "wait-frames", "n": 30 },
+    { "type": "assert", "query": "game.onGround", "op": "eq", "value": true },
+    { "type": "key", "code": "W", "action": "down" },
+    { "type": "wait-ms", "ms": 1600 },
+    { "type": "key", "code": "W", "action": "up" },
+    { "type": "assert", "query": "game.coins", "op": "eq", "value": 5 },
+    { "type": "screenshot", "out": "screenshots/nextastrobot_collect", "ui": true },
+
+    { "type": "log", "message": "the blue block platform holds a puzzle piece" },
+    { "type": "cvar", "name": "astro.teleport", "set": "-39.5,2.2,-3" },
+    { "type": "wait-frames", "n": 40 },
+    { "type": "assert", "query": "game.puzzles", "op": "eq", "value": 1 },
+    { "type": "assert", "query": "game.puzzlesTotal", "op": "eq", "value": 3 },
+
+    { "type": "log", "message": "a gem is worth ten coins" },
+    { "type": "cvar", "name": "astro.teleport", "set": "15,3.4,4" },
+    { "type": "wait-frames", "n": 40 },
+    { "type": "assert", "query": "game.coins", "op": "ge", "value": 15 },
+    { "type": "quit" }
+  ]
+}

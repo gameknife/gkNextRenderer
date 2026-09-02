@@ -162,6 +162,14 @@
             "iosBundleId": "gknext.nextdayz"
         },
         {
+            "target": "NextAstrobot",
+            "directory": "Game/NextAstrobot",
+            "label": "NextAstrobot",
+            "platforms": ["android", "ios"],
+            "androidId": "com.gknext.nextastrobot",
+            "iosBundleId": "gknext.nextastrobot"
+        },
+        {
             "target": "TruckerDemo",
             "directory": "Game/TruckerDemo",
             "label": "TruckerDemo",

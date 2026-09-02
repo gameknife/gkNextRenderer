@@ -1,0 +1,13 @@
+{
+  "_comment": "Level order for NextAstrobot. killPlaneOffset is relative to the lowest island surface the level index finds.",
+  "levels": [
+    {
+      "id": "sky_garden",
+      "displayName": "星尘花园",
+      "scene": "assets/scad/source/astro/sky_garden.scad",
+      "titleCamera": "overview",
+      "introCameraPath": "level-flythrough",
+      "killPlaneOffset": -20.0
+    }
+  ]
+}

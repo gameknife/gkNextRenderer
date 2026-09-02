@@ -1,0 +1,50 @@
+{
+  "_comment": "NextAstrobot tuning. Distances are metres, speeds m/s, angles degrees.",
+  "move": {
+    "runSpeed": 6.0,
+    "runAccel": 50.0,
+    "airControl": 0.8,
+    "gravity": 20.0,
+    "jumpSpeed": 8.9,
+    "jumpCutMultiplier": 0.5,
+    "coyoteSeconds": 0.12,
+    "jumpBufferSeconds": 0.15,
+    "hoverMaxSeconds": 1.0,
+    "hoverFallSpeed": -1.0,
+    "stompBounceSpeed": 5.0,
+    "punchSeconds": 0.35,
+    "punchRange": 1.2,
+    "punchArcDegrees": 90.0,
+    "controllerHeight": 1.5,
+    "controllerRadius": 0.35,
+    "maxStepHeight": 0.55,
+    "maxSlopeDegrees": 50.0,
+    "deathFadeSeconds": 0.8,
+    "turnRateDegrees": 900.0
+  },
+  "camera": {
+    "distance": 7.5,
+    "height": 4.2,
+    "targetHeight": 1.2,
+    "fov": 45.0,
+    "damping": 8.0,
+    "autoYawRate": 1.5,
+    "manualYawRate": 2.5,
+    "autoYawIdleSeconds": 1.0
+  },
+  "world": {
+    "pickupRadius": 0.9,
+    "hazardRadius": 0.9,
+    "enemyRadius": 0.8,
+    "stompMargin": 0.2,
+    "interactRadius": 1.2,
+    "rescueHoldSeconds": 0.5,
+    "checkpointRadius": 1.6,
+    "goalRadius": 3.0,
+    "enemyPatrolHalfLength": 3.0,
+    "enemyPatrolSpeed": 1.4,
+    "flyerOrbitRadius": 1.8,
+    "flyerOrbitSpeed": 0.8,
+    "footContactTolerance": 0.15
+  }
+}

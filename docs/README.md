@@ -84,7 +84,8 @@
   [Native Temporal Upscaler](AGENT_GUIDE/NativeTemporalUpscaler.md)
 - Gameplay：[CharacterDemo](AGENT_GUIDE/CharacterDemo.md) · [SimKit](AGENT_GUIDE/SimKit.md) ·
   [Brotato3D](AGENT_GUIDE/Brotato3D.md) · [MagicaLego](AGENT_GUIDE/MagicaLego.md) ·
-  [NextTotalwar](AGENT_GUIDE/NextTotalwar.md) · [NextWorldTravel](AGENT_GUIDE/NextWorldTravel.md)
+  [NextTotalwar](AGENT_GUIDE/NextTotalwar.md) · [NextWorldTravel](AGENT_GUIDE/NextWorldTravel.md) ·
+  [NextAstrobot](AGENT_GUIDE/NextAstrobot.md)
 - 通用代码审查：[编码规范](AGENT_GUIDE/coding-standards.md)
 
 ## 项目文档
@@ -95,6 +96,8 @@
 - CitySolSim：[经营循环设计](projects/citysolsim/management-loop-design.md) ·
   [剩余计划](projects/citysolsim/management-loop-plan.md)
 - [Flappy C++/C# parity](projects/flappy-bird-parity/introduction.md)
+- NextAstrobot：[3D 平台跳跃设计](projects/nextastrobot/nextastrobot-design.md)（已实施；
+  现行契约见 [AGENT_GUIDE/NextAstrobot.md](AGENT_GUIDE/NextAstrobot.md)，设计文末 §11 列剩余打磨项）
 - NextDayz：[3C 与 ScadRig](projects/nextdayz/nextdayz-3c-scadrig-design.md) ·
   [PVE 生存循环](projects/nextdayz/nextdayz-productization-design.md)
 - NextRA：[架构不变量](projects/nextra/architecture.md) ·

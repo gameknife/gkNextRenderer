@@ -145,6 +145,15 @@ class INextCharacterControllerBackend
 public:
     virtual ~INextCharacterControllerBackend() = default;
     virtual void Update(const glm::vec3& inputDirection, float speed, bool jump, float deltaSeconds) = 0;
+    /// Sets the character velocity for this step exactly as given (the game integrates gravity,
+    /// jump, hover and launch itself), then runs ExtendedUpdate. When inheritGround is true and the
+    /// character is on ground, the ground body velocity at the contact point is added, so a
+    /// character riding a kinematic platform or a rotating disc keeps its footing.
+    virtual void UpdateWithVelocity(const glm::vec3& worldVelocity, bool inheritGround, float deltaSeconds) = 0;
+    /// Velocity of the body the character is standing on, at the contact point (zero when in air).
+    virtual glm::vec3 GetGroundVelocity() const = 0;
+    virtual glm::vec3 GetGroundNormal() const = 0;
+    virtual NextBodyID GetGroundBodyID() const = 0;
     /// Changes the foot-anchored character height. Growing the shape fails when
     /// the added volume is obstructed; on failure the previous shape is kept.
     virtual bool TrySetHeight(float height) = 0;

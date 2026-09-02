@@ -1,0 +1,37 @@
+{
+  "name": "nextastrobot-smoke",
+  "target": "NextAstrobot",
+  "scene": "assets/scad/source/astro/sky_garden.scad",
+  "defaults": { "waitFrames": 2, "stepTimeoutMs": 20000 },
+  "viewport": { "width": 1600, "height": 900 },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "wait-frames", "n": 30 },
+
+    { "type": "log", "message": "the level index found everything the level author placed" },
+    { "type": "wait-until", "query": "game.index.coins", "op": "ge", "value": 40, "timeoutMs": 20000 },
+    { "type": "assert", "query": "game.index.warnings", "op": "eq", "value": 0 },
+    { "type": "assert", "query": "game.index.mechanisms", "op": "ge", "value": 10 },
+    { "type": "assert", "query": "game.index.enemies", "op": "ge", "value": 5 },
+    { "type": "assert", "query": "game.index.puzzles", "op": "ge", "value": 3 },
+    { "type": "assert", "query": "game.coinsTotal", "op": "ge", "value": 40 },
+    { "type": "assert", "query": "game.rescuedTotal", "op": "ge", "value": 4 },
+
+    { "type": "log", "message": "the run starts on the title screen, on the landing pad" },
+    { "type": "assert", "query": "game.state", "op": "eq", "value": "title" },
+    { "type": "assert", "query": "game.playerX", "op": "lt", "value": -59.5 },
+    { "type": "assert", "query": "game.playerX", "op": "gt", "value": -60.5 },
+    { "type": "assert", "query": "game.playerZ", "op": "lt", "value": 1.5 },
+    { "type": "assert", "query": "game.playerZ", "op": "gt", "value": 0.5 },
+    { "type": "screenshot", "out": "screenshots/nextastrobot_title", "ui": true },
+
+    { "type": "log", "message": "space skips into the level and the character settles on the pad" },
+    { "type": "cvar", "name": "astro.state", "set": "playing" },
+    { "type": "wait-frames", "n": 40 },
+    { "type": "assert", "query": "game.state", "op": "eq", "value": "playing" },
+    { "type": "assert", "query": "game.onGround", "op": "eq", "value": true },
+    { "type": "assert", "query": "game.deaths", "op": "eq", "value": 0 },
+    { "type": "screenshot", "out": "screenshots/nextastrobot_smoke", "ui": true },
+    { "type": "quit" }
+  ]
+}

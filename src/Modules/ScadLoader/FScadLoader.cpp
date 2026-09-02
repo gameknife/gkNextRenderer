@@ -284,6 +284,47 @@ namespace Assets
             return true;
         }
 
+        // Serializes the evaluated named parameters of a user-module call as
+        // "k=v;k=v" for Node::SetMetadata. Only scalars survive: gameplay reads
+        // authoring intent (rail length, swing period, button index) out of
+        // these, and vectors/ranges have no single-token spelling worth
+        // committing to. Empty when the module takes no scalar parameters.
+        std::string SerializeScadNodeMetadata(const Scad::SceneNode& sceneNode)
+        {
+            std::string out;
+            for (const auto& [key, value] : sceneNode.parameters)
+            {
+                std::string text;
+                switch (value.type)
+                {
+                case Scad::Value::Type::Number:
+                    text = fmt::format("{:g}", value.num);
+                    break;
+                case Scad::Value::Type::Bool:
+                    text = value.boolean ? "true" : "false";
+                    break;
+                case Scad::Value::Type::Str:
+                    // A ';' or '=' inside the string would corrupt the record; skip those.
+                    if (value.str.find_first_of(";=") != std::string::npos)
+                    {
+                        continue;
+                    }
+                    text = value.str;
+                    break;
+                default:
+                    continue;
+                }
+                if (!out.empty())
+                {
+                    out.push_back(';');
+                }
+                out.append(key);
+                out.push_back('=');
+                out.append(text);
+            }
+            return out;
+        }
+
         void BuildScadSceneNodeRecursive(
             const Scad::SceneNode& sceneNode,
             const std::shared_ptr<Node>& parent,
@@ -310,6 +351,7 @@ namespace Assets
             {
                 node->SetTag(Scad::ScadPlacementTag(sceneNode.sourceOffset));
             }
+            node->SetMetadata(SerializeScadNodeMetadata(sceneNode));
             if (parent)
             {
                 node->SetParent(parent);

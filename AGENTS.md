@@ -22,9 +22,9 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
   gkNextStillBenchmark and gkNextMotionBenchmark (both under the `Render/gkNextBenchmark/` directory)
 - Editor: gkNextEditor (ImGui editor + node-based material editor + play-in-editor for C# games),
   ScadStudio, ScadLibrary
-- Game: MagicaLego, Brotato3D, KongLie3D, NextRA, NextDayz, NextTotalwar, BrickPlayer, CharacterDemo,
-  FlappyCpp/FlappyCSharp (`Game/Flappy/`), Brotato3DCSharp, DotNetSandbox, gkNextLauncher, TruckerDemo,
-  StudioSim, AirportSim, CitySolSim, NextWorldTravel, Voyage3D
+- Game: MagicaLego, Brotato3D, KongLie3D, NextRA, NextDayz, NextAstrobot, NextTotalwar, BrickPlayer,
+  CharacterDemo, FlappyCpp/FlappyCSharp (`Game/Flappy/`), Brotato3DCSharp, DotNetSandbox, gkNextLauncher,
+  TruckerDemo, StudioSim, AirportSim, CitySolSim, NextWorldTravel, Voyage3D
   - `gkNextLauncher` 在同一个进程内加载/卸载任意 C# 游戏（Unity 的 Play 模型）；三个 C# 目标
     与它共用 `ManagedGameHostInstance`，差异全部在 `assets/configs/games/*.game.json`。
     `gkNextEditor` 用同一个 `ManagedGameSession` 实现 play-in-editor。两者都能从模板**新建**
@@ -395,6 +395,9 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
   - `MagicaLego.md` - MagicaLego subproject notes
   - `Brotato3D.md` - Brotato3D code structure (god-class + per-system split, runtime data model, object pools)
   - `CharacterDemo.md` - CharacterDemo + NextGameplay shared layer (CharacterActor facade, ECS components, NavGrid A*, AI behavior tree)
+  - `NextAstrobot.md` - AstroBot 风格 3D 平台跳跃：`.scad` 关卡即运行时对象、kit_astro 活动件契约
+    （`ab_part_*` + `gk_flatten` 静态壳 + `Node::metadata` 玩法参数）、机关碰撞策略、帧顺序、
+    `UpdateWithVelocity` 地面速度继承、加一关的零代码路径
 - **README.en.md** - Project overview and quick start
 - **.clang-tidy** - Naming conventions (source of truth)
 

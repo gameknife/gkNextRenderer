@@ -1,10 +1,12 @@
 // sky_garden.scad —— AstroBot 风格 3D 平台跳跃解密 demo 关卡「星尘花园」
 // 真实世界比例：主角机器人 1.6 m，单跳 ≈ 2 m，悬浮跨越 ≈ 5 m，弹跳垫弹起 ≈ 6 m。
+// 出生点 = ab_bldg_startpad 顶面中心 (-60, -1, 0.25)，朝向 +x（主角由 NextAstrobot 运行时放置）。
 // 关卡流程（自西向东，三座悬浮岛 + 两处秘境）：
 //   岛 A 出生岛（z=0）  ：降落台 + 飞船 → 金币引导 → 积木台阶/高台拼图 → 沙坑/倒栽葱被困机器人 →
 //                          弹跳垫秘密云朵金币环 → 三块递升悬浮圆盘跨越峡谷
 //   岛 B 机关花园（z=3）：检查点 → 北线：水池易碎石板 → 旋转盘 → 弹跳垫 → 立柱顶牢笼救援
 //                          南线：踩按钮开栅栏门 → 跷跷板 → 拳击积木墙露出金币/宝石
+//                          北缘：摆锤平台 → 秘境弹跳垫
 //                          东端：弹簧上立柱 → 滑索速降 / 轨道移动平台稳妥过桥
 //   岛 C 终点岛（z=3）  ：摆动刺球门架 → 逆行传送带拼图支线 / 激光宝石支线 → 岩浆池滚筒 →
 //                          糖果条纹终点门 + 欢呼机器人 + 气球
@@ -21,7 +23,6 @@ $fn = 12;
 translate([-52, 0, 0]) ab_ground_island(L = 30, D = 24, seed = 1);
 translate([-60, -1, 0]) ab_bldg_startpad(r = 3.2);
 translate([-60, 7.5, 0]) ab_bldg_ship();
-translate([-57, -1, 0.25]) ab_char_bot(seed = 0, pose = 0, hat = 0);          // 主角
 translate([-53, -4, 0]) ab_prop_sign_arrow(seed = 0, dir = 0);
 translate([-49.5, 0, 0]) ab_item_coin_row(n = 5, dx = 1.2);
 // 积木台阶 → 蓝色高台（拼图）
@@ -69,25 +70,25 @@ translate([-20.5, 2.5, 3.2]) ab_item_coin_arc(n = 5, L = 4, h = 1.2, hover = 0.6
 
 // ================= 岛 B：机关花园（z=3，36×26，x -18..18，y -13..13） =================
 translate([0, 0, 3]) ab_ground_island(L = 36, D = 26, seed = 2);
-translate([-15, 2, 3]) ab_prop_checkpoint();
+translate([-15, 2, 3]) ab_prop_checkpoint(idx = 1);
 translate([-14, -3, 3]) ab_prop_sign_board(seed = 2);
 // 北线：水池 + 易碎石板 + 睡莲 → 旋转盘（金币环）→ 弹跳垫 → 立柱顶牢笼
 translate([-6, 7, 3]) ab_ground_pool(L = 10, D = 6);
-for (x = [-9, -7, -5, -3]) translate([x, 7, 3.45]) ab_plat_crumble(L = 1.6, D = 1.6, seed = x + 20);
+for (x = [-9, -7, -5, -3]) translate([x, 7, 3.45]) ab_plat_crumble(L = 1.6, D = 1.6, seed = x + 20, warn = 0.6, respawn = 4);
 translate([-9.5, 5, 3.62]) ab_nature_lilypad(r = 0.7, seed = 1);
 translate([-4, 9, 3.62]) ab_nature_lilypad(r = 0.6, seed = 3);
 translate([-6, 7, 3]) ab_char_enemy_flyer(seed = 0, hover = 2.6);
-translate([4, 8, 3]) ab_plat_spin(r = 3);
+translate([4, 8, 3]) ab_plat_spin(r = 3, speed = 30);
 translate([4, 8, 3]) ab_item_coin_ring(n = 8, R = 2.2, hover = 1.2);
-translate([9.5, 8, 3]) ab_plat_bounce(r = 1.1);
+translate([9.5, 8, 3]) ab_plat_bounce(r = 1.1, launch = 6);
 translate([13, 9, 3]) ab_plat_pillar(h = 4, r = 1.3, c = ab_PINK());
 translate([13, 9, 7]) ab_prop_cage(seed = 2);
 // 南线：按钮 → 栅栏门（两侧围栏封路）→ 跷跷板 → 积木墙 → 金币/宝石/宝箱
-translate([-9, -7, 3]) ab_prop_button(r = 0.9);
-translate([-3, -7, 3]) rotate([0, 0, 90]) ab_prop_gate_bars(w = 4, h = 3);
+translate([-9, -7, 3]) ab_prop_button(r = 0.9, idx = 1);
+translate([-3, -7, 3]) rotate([0, 0, 90]) ab_prop_gate_bars(w = 4, h = 3, idx = 1);
 translate([-3, -11, 3]) rotate([0, 0, 90]) ab_prop_fence(len = 4);
 translate([-3, -4, 3]) rotate([0, 0, 90]) ab_prop_fence(len = 2);
-translate([3, -7, 3]) ab_plat_seesaw(L = 6, W = 2);
+translate([3, -7, 3]) ab_plat_seesaw(L = 6, W = 2, amp = 12, speed = 25);
 translate([9, -7, 3]) ab_item_coin_arc(n = 5, L = 4, h = 1.5, hover = 0.8);
 translate([12, -7, 3]) rotate([0, 0, -90]) ab_bldg_wall_break(L = 4, h = 2.5, seed = 1);
 translate([14.5, -7, 3]) rotate([0, 0, 90]) ab_item_coin_row(n = 3, dx = 0.9, hover = 0.5);
@@ -102,14 +103,17 @@ translate([6.5, 0, 3]) ab_prop_lamp();
 translate([7, -3, 3]) rotate([0, 0, -30]) ab_char_enemy_walker(seed = 3);
 translate([-3, -0.5, 3]) ab_char_bot(seed = 7, pose = 1);
 // 东端：弹簧 → 立柱 → 滑索速降；轨道移动平台桥接 B→C
-translate([10, 4, 3]) ab_plat_spring(r = 0.8, h = 1.2);
+translate([10, 4, 3]) ab_plat_spring(r = 0.8, h = 1.2, launch = 8);
 translate([14, 4, 3]) ab_plat_pillar(h = 5, r = 1.5, c = ab_TEAL());
-translate([14, 4, 8]) ab_plat_zipline(L = 19, drop = 5, t = 0.35);
-translate([25, -1, 3]) ab_plat_moving(rail = 16, L = 3, W = 2, t = 0.3);
+translate([14, 4, 8]) ab_plat_zipline(L = 19, drop = 5, t = 0.35, speed = 8);
+translate([25, -1, 3]) ab_plat_moving(rail = 16, L = 3, W = 2, t = 0.3, speed = 2.5);
 translate([25, -1, 3]) ab_item_coin_row(n = 7, dx = 2.0, hover = 1.2);
 translate([16.5, -3, 3]) ab_prop_sign_arrow(seed = 1, dir = 0);
+// 摆锤：北缘的摆动平台，摆到位可跳上北秘境弹跳垫那一侧
+translate([0, 10, 3]) ab_plat_pendulum(h = 6, arm = 4.5, ang = 20, w = 2.2, period = 3.2);
+translate([0, 10, 4.9]) ab_item_coin_row(n = 3, dx = 1.1, hover = 0.6);
 // 北秘境弹跳垫
-translate([-8, 11.5, 3]) ab_plat_bounce(r = 1.0);
+translate([-8, 11.5, 3]) ab_plat_bounce(r = 1.0, launch = 6);
 // 装饰
 translate([-15, 10, 3]) ab_nature_tree_ball(s = 1.2, seed = 6);
 translate([-16, -10, 3]) ab_nature_fruit(kind = 0, s = 1.0);
@@ -125,12 +129,12 @@ translate([0, 0, 3]) lay_scatter(n = 5, x0 = -17, x1 = 17, y0 = -12, y1 = 12, se
 
 // ================= 岛 C：终点岛（z=3，30×22，x 32..62，y -11..11） =================
 translate([47, 0, 3]) ab_ground_island(L = 30, D = 22, seed = 3);
-translate([35, 7.5, 3]) ab_prop_checkpoint();
+translate([35, 7.5, 3]) ab_prop_checkpoint(idx = 2);
 // 摆动刺球门架
 translate([38, 0, 3]) ab_bldg_gantry(w = 6, h = 6);
 translate([38, 0, 9]) rotate([0, 35, 0]) translate([0, 0, -4.8]) ab_prop_spike_ball_chain(h = 4.8, r = 0.6);
 // 北支线：逆行传送带 → 拼图
-translate([40, 7, 3]) rotate([0, 0, 180]) ab_plat_conveyor(L = 6, W = 2);
+translate([40, 7, 3]) rotate([0, 0, 180]) ab_plat_conveyor(L = 6, W = 2, speed = 2);
 translate([40, 7, 3.5]) ab_item_coin_row(n = 4, dx = 1.3, hover = 0.6);
 translate([45, 7, 3.5]) ab_item_puzzle();
 // 南支线：激光 → 宝石（刺背敌人巡逻）
@@ -139,7 +143,7 @@ translate([44.5, -7, 3]) ab_item_gem(seed = 3);
 translate([39.5, -9.5, 3]) ab_char_enemy_spiky(seed = 1);
 // 岩浆池 + 滚筒 + 上空金币
 translate([46, 0, 3]) ab_ground_lava(L = 6, D = 6, seed = 2);
-translate([46, 0, 3]) ab_plat_roller(L = 6, r = 1.0);
+translate([46, 0, 3]) ab_plat_roller(L = 6, r = 1.0, speed = 2.5);
 translate([46, 0, 5.6]) ab_item_coin_row(n = 4, dx = 1.2, hover = 0.5);
 translate([46, 0, 3]) ab_char_enemy_flyer(seed = 2, hover = 4.0);
 // 终点门（front 朝 -x）+ 金星 + 金币环 + 欢呼机器人 + 气球

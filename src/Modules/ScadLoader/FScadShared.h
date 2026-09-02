@@ -9,7 +9,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -62,4 +64,18 @@ namespace Assets::Scad
 
     // Per-corner smoothed normals for a triangle soup (see FScadLoader).
     std::vector<glm::vec3> ScadComputeSmoothNormals(const std::vector<glm::vec3>& pos, float angleThresholdDeg);
+
+    // ------------------------------------------------------------------
+    // Node metadata: the evaluated named parameters of a user-module call,
+    // serialized as "k=v;k=v" into Assets::Node::SetMetadata by the scene
+    // loader. Numbers use %g, bools "true"/"false", strings are copied
+    // verbatim; vectors and ranges are skipped (gameplay reads scalars).
+    // ------------------------------------------------------------------
+    using FMetadata = std::vector<std::pair<std::string, std::string>>;
+
+    FMetadata ParseScadMetadata(std::string_view metadata);
+    // Reads one key out of an already parsed metadata table.
+    double MetadataNumber(const FMetadata& metadata, std::string_view key, double fallback);
+    bool MetadataBool(const FMetadata& metadata, std::string_view key, bool fallback);
+    std::string MetadataString(const FMetadata& metadata, std::string_view key, std::string_view fallback);
 } // namespace Assets::Scad

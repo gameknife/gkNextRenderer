@@ -1,0 +1,58 @@
+{
+  "name": "nextastrobot-locomotion",
+  "target": "NextAstrobot",
+  "scene": "assets/scad/source/astro/sky_garden.scad",
+  "defaults": { "waitFrames": 2, "stepTimeoutMs": 20000 },
+  "viewport": { "width": 1600, "height": 900 },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 20000 },
+    { "type": "wait-frames", "n": 30 },
+    { "type": "cvar", "name": "astro.state", "set": "playing" },
+    { "type": "wait-frames", "n": 40 },
+    { "type": "assert", "query": "game.state", "op": "eq", "value": "playing" },
+    { "type": "assert", "query": "game.onGround", "op": "eq", "value": true },
+    { "type": "assert", "query": "game.locomotion", "op": "eq", "value": "idle" },
+
+    { "type": "log", "message": "run: the camera starts behind the character looking down +X" },
+    { "type": "key", "code": "W", "action": "down" },
+    { "type": "wait-ms", "ms": 1000 },
+    { "type": "assert", "query": "game.locomotion", "op": "eq", "value": "run" },
+    { "type": "assert", "query": "game.clip", "op": "eq", "value": "run" },
+    { "type": "assert", "query": "game.playerX", "op": "gt", "value": -56.5 },
+    { "type": "key", "code": "W", "action": "up" },
+    { "type": "wait-frames", "n": 30 },
+
+    { "type": "log", "message": "jump: an 8.9 m/s launch under 20 m/s^2 gravity clears 1.8 m" },
+    { "type": "cvar", "name": "astro.teleport", "set": "-60,0.25,1" },
+    { "type": "wait-frames", "n": 40 },
+    { "type": "key", "code": "SPACE", "action": "down" },
+    { "type": "wait-ms", "ms": 400 },
+    { "type": "assert", "query": "game.playerY", "op": "gt", "value": 1.9 },
+    { "type": "assert", "query": "game.onGround", "op": "eq", "value": false },
+
+    { "type": "log", "message": "hover: holding jump past the apex clamps the fall for a second" },
+    { "type": "wait-ms", "ms": 700 },
+    { "type": "assert", "query": "game.locomotion", "op": "eq", "value": "hover" },
+    { "type": "assert", "query": "game.clip", "op": "eq", "value": "hover" },
+    { "type": "screenshot", "out": "screenshots/nextastrobot_hover", "ui": true },
+    { "type": "wait-ms", "ms": 200 },
+    { "type": "assert", "query": "game.locomotion", "op": "eq", "value": "hover" },
+    { "type": "key", "code": "SPACE", "action": "up" },
+    { "type": "wait-until", "query": "game.onGround", "op": "eq", "value": true, "timeoutMs": 6000 },
+
+    { "type": "log", "message": "death: falling below the kill plane costs a life and respawns at the pad" },
+    { "type": "cvar", "name": "astro.teleport", "set": "-60,-60,1" },
+    { "type": "wait-until", "query": "game.deaths", "op": "eq", "value": 1, "timeoutMs": 8000 },
+    { "type": "wait-until", "query": "game.state", "op": "eq", "value": "playing", "timeoutMs": 8000 },
+    { "type": "assert", "query": "game.playerX", "op": "lt", "value": -59.0 },
+    { "type": "assert", "query": "game.playerX", "op": "gt", "value": -61.0 },
+
+    { "type": "log", "message": "god mode makes the same fall survivable" },
+    { "type": "cvar", "name": "astro.god", "set": true },
+    { "type": "cvar", "name": "astro.teleport", "set": "-60,-60,1" },
+    { "type": "wait-ms", "ms": 1200 },
+    { "type": "assert", "query": "game.deaths", "op": "eq", "value": 1 },
+    { "type": "cvar", "name": "astro.god", "set": false },
+    { "type": "quit" }
+  ]
+}
