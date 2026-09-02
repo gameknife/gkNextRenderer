@@ -23,6 +23,8 @@ namespace NextAstrobot
             move.JumpBufferSeconds = object.value("jumpBufferSeconds", move.JumpBufferSeconds);
             move.HoverMaxSeconds = object.value("hoverMaxSeconds", move.HoverMaxSeconds);
             move.HoverFallSpeed = object.value("hoverFallSpeed", move.HoverFallSpeed);
+            move.HoverBoostSeconds = object.value("hoverBoostSeconds", move.HoverBoostSeconds);
+            move.HoverBoostHeight = object.value("hoverBoostHeight", move.HoverBoostHeight);
             move.StompBounceSpeed = object.value("stompBounceSpeed", move.StompBounceSpeed);
             move.PunchSeconds = object.value("punchSeconds", move.PunchSeconds);
             move.PunchSeconds2 = object.value("punchSeconds2", move.PunchSeconds2);

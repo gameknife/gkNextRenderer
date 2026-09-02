@@ -313,9 +313,16 @@ nodes" 钉住了这个形状，加新 kit 件时它会告诉你几何落在哪�
 
 `levels.json` 的顺序就是流程。`levelCursor_` 指向当前关，结算画面按它决定说什么：
 
-- 还有下一关 → 「LEVEL COMPLETE」+ `[Space] Next: <下一关名字>`；`[R]` 重打本关。
+- 还有下一关 → 「LEVEL COMPLETE」+ `[Space / (X)] Next: <下一关名字>`；`[R]` 重打本关。
 - 已是最后一关 → 「RUN COMPLETE」+ 整轮 campaign 合计（金币 / 拼图 / 救援 / 死亡 / 用时）+
-  `[Space] Start over`（回到第一关并把 campaign 清零）。
+  `[Space / (X)] Start over`（回到第一关并把 campaign 清零）。
+
+手柄控制映射：
+- 左摇杆：玩家移动（D-Pad 方向键亦可移动）
+- 右摇杆：相机水平旋转
+- 右侧功能键下（PS ✕ / Xbox A）：开始菜单确定、片头跳过、结算进入下一关、局内跳跃；起跳后空中再次按住进入悬浮（初期 1 秒内上浮 1.6 米的高升空冲刺，随后平稳滑翔）
+- 右侧功能键左（PS ◻ / Xbox X）：地面直拳/摆拳/旋风腿三段攻击；空中直接触发 360° 回旋踢
+- Start 键：暂停 / 恢复游戏（暂停时 PS ○ / Xbox B 亦可返回）
 
 Campaign 合计在 flow 第一次进入 `Result` 时累加一次（`levelTallied_` 防重复），换关不清零，
 只有回到第一关才清零。`AdvanceLevel()` 是唯一的推进入口，`LoadLevel(index, restartCampaign)`

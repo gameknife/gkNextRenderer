@@ -5,6 +5,7 @@
 #include <cstdlib>
 
 #include <SDL3/SDL_events.h>
+#include <SDL3/SDL_gamepad.h>
 #include <SDL3/SDL_keycode.h>
 #include <SDL3/SDL_mouse.h>
 #include <fmt/format.h>
@@ -726,80 +727,173 @@ bool NextAstrobotGameInstance::OnRenderUI()
 
 bool NextAstrobotGameInstance::OnKey(SDL_Event& event)
 {
-    if (event.type != SDL_EVENT_KEY_DOWN && event.type != SDL_EVENT_KEY_UP)
+    if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP)
     {
-        return false;
-    }
-    const bool pressed = event.type == SDL_EVENT_KEY_DOWN;
-    if (pressed && !event.key.repeat)
-    {
-        anyKeyPressed_ = true;
-    }
-
-    switch (event.key.key)
-    {
-    case SDLK_W: case SDLK_UP: keyMove_[0] = pressed; return true;
-    case SDLK_S: case SDLK_DOWN: keyMove_[1] = pressed; return true;
-    case SDLK_A: case SDLK_LEFT: keyMove_[2] = pressed; return true;
-    case SDLK_D: case SDLK_RIGHT: keyMove_[3] = pressed; return true;
-    case SDLK_SPACE:
-        jumpHeld_ = pressed;
+        const bool pressed = event.type == SDL_EVENT_KEY_DOWN;
         if (pressed && !event.key.repeat)
         {
-            // On the result screen the jump key is what carries the run forward, which is
-            // also what the title screen taught the player to press.
-            if (flow_.State() == ELevelState::Result)
+            anyKeyPressed_ = true;
+        }
+
+        switch (event.key.key)
+        {
+        case SDLK_W: case SDLK_UP: keyMove_[0] = pressed; return true;
+        case SDLK_S: case SDLK_DOWN: keyMove_[1] = pressed; return true;
+        case SDLK_A: case SDLK_LEFT: keyMove_[2] = pressed; return true;
+        case SDLK_D: case SDLK_RIGHT: keyMove_[3] = pressed; return true;
+        case SDLK_SPACE:
+            jumpHeld_ = pressed;
+            if (pressed && !event.key.repeat)
+            {
+                // On the result screen the jump key is what carries the run forward, which is
+                // also what the title screen taught the player to press.
+                if (flow_.State() == ELevelState::Result)
+                {
+                    AdvanceLevel();
+                }
+                else
+                {
+                    jumpPressed_ = true;
+                }
+            }
+            return true;
+        case SDLK_X:
+            if (pressed && !event.key.repeat)
+            {
+                punchPressed_ = true;
+            }
+            return true;
+        case SDLK_R:
+            if (pressed && !event.key.repeat && flow_.State() == ELevelState::Result)
+            {
+                RestartLevel();
+            }
+            return true;
+        case SDLK_RETURN:
+            if (pressed && !event.key.repeat && flow_.State() == ELevelState::Result)
             {
                 AdvanceLevel();
             }
-            else
+            return true;
+        case SDLK_ESCAPE:
+            if (pressed && !event.key.repeat)
             {
-                jumpPressed_ = true;
+                if (flow_.State() == ELevelState::Result)
+                {
+                    // The result screen offers [Esc] Quit; pausing a screen that is already a
+                    // stop would just stack one overlay on another.
+                    GetEngine().RequestExit(0);
+                }
+                else
+                {
+                    flow_.RequestPause(flow_.State() != ELevelState::Paused);
+                }
             }
-        }
-        return true;
-    case SDLK_X:
-        if (pressed && !event.key.repeat)
-        {
-            punchPressed_ = true;
-        }
-        return true;
-    case SDLK_R:
-        if (pressed && !event.key.repeat && flow_.State() == ELevelState::Result)
-        {
-            RestartLevel();
-        }
-        return true;
-    case SDLK_RETURN:
-        if (pressed && !event.key.repeat && flow_.State() == ELevelState::Result)
-        {
-            AdvanceLevel();
-        }
-        return true;
-    case SDLK_ESCAPE:
-        if (pressed && !event.key.repeat)
-        {
-            if (flow_.State() == ELevelState::Result)
+            return true;
+        case SDLK_F5:
+            if (pressed && !event.key.repeat)
             {
-                // The result screen offers [Esc] Quit; pausing a screen that is already a
-                // stop would just stack one overlay on another.
-                GetEngine().RequestExit(0);
+                showDebugPanel_ = !showDebugPanel_;
             }
-            else
-            {
-                flow_.RequestPause(flow_.State() != ELevelState::Paused);
-            }
+            return true;
+        default:
+            return false;
         }
-        return true;
-    case SDLK_F5:
-        if (pressed && !event.key.repeat)
-        {
-            showDebugPanel_ = !showDebugPanel_;
-        }
-        return true;
-    default:
-        return false;
     }
+    if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || event.type == SDL_EVENT_GAMEPAD_BUTTON_UP)
+    {
+        const bool pressed = event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+        switch (event.gbutton.button)
+        {
+        case SDL_GAMEPAD_BUTTON_SOUTH:
+            // Right-side button down (PS Cross / X, Xbox A):
+            // 1. Confirm on Title menu, skip during Intro
+            // 2. Advance to next level on Result screen
+            // 3. Resume when paused
+            // 4. Jump and hold to hover during gameplay
+            if (flow_.State() == ELevelState::Title || flow_.State() == ELevelState::Intro)
+            {
+                if (pressed)
+                {
+                    anyKeyPressed_ = true;
+                }
+                jumpHeld_ = false;
+                jumpPressed_ = false;
+            }
+            else if (flow_.State() == ELevelState::Result)
+            {
+                if (pressed)
+                {
+                    AdvanceLevel();
+                }
+                jumpHeld_ = false;
+                jumpPressed_ = false;
+            }
+            else if (flow_.State() == ELevelState::Paused)
+            {
+                if (pressed)
+                {
+                    flow_.RequestPause(false);
+                }
+            }
+            else
+            {
+                jumpHeld_ = pressed;
+                if (pressed)
+                {
+                    jumpPressed_ = true;
+                }
+            }
+            return true;
+        case SDL_GAMEPAD_BUTTON_WEST:
+            // Right-side button left (PS Square, Xbox X): attack / punch
+            if (pressed)
+            {
+                punchPressed_ = true;
+            }
+            return true;
+        case SDL_GAMEPAD_BUTTON_START:
+            if (pressed)
+            {
+                if (flow_.State() == ELevelState::Result)
+                {
+                    AdvanceLevel();
+                }
+                else
+                {
+                    flow_.RequestPause(flow_.State() != ELevelState::Paused);
+                }
+            }
+            return true;
+        case SDL_GAMEPAD_BUTTON_EAST:
+            if (pressed && flow_.State() == ELevelState::Paused)
+            {
+                flow_.RequestPause(false);
+            }
+            return true;
+        case SDL_GAMEPAD_BUTTON_NORTH:
+            if (pressed && flow_.State() == ELevelState::Result)
+            {
+                RestartLevel();
+            }
+            return true;
+        case SDL_GAMEPAD_BUTTON_DPAD_UP:
+            keyMove_[0] = pressed;
+            return true;
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+            keyMove_[1] = pressed;
+            return true;
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+            keyMove_[2] = pressed;
+            return true;
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+            keyMove_[3] = pressed;
+            return true;
+        default:
+            return false;
+        }
+    }
+    return false;
 }
 
 bool NextAstrobotGameInstance::OnMouseButton(SDL_Event& event)

@@ -102,6 +102,7 @@ namespace NextAstrobot
         /// Reach and arc of the stage being thrown; the kick sweeps the full circle.
         float PunchRange() const;
         float PunchArcDegrees() const;
+        bool HoverActive() const { return hoverActive_; }
         float ControllerHeight() const { return config_.ControllerHeight; }
         /// Foot-centred forward direction the punch cone is built around.
         glm::vec3 Facing() const;
@@ -128,7 +129,10 @@ namespace NextAstrobot
         float coyoteTimer_ = 0.0f;
         float jumpBufferTimer_ = 0.0f;
         float hoverRemaining_ = 0.0f;
+        float hoverBoostTimer_ = 0.0f;
         bool hoverUsed_ = false;
+        bool hoverActive_ = false;
+        bool jumpReleasedInAir_ = false;
         bool jumpRising_ = false;
         float punchTimer_ = 0.0f;
         bool punchStarted_ = false;

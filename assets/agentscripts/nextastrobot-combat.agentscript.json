@@ -79,6 +79,17 @@
     { "type": "assert", "query": "game.clip", "op": "eq", "value": "jump" },
     { "type": "screenshot", "out": "screenshots/nextastrobot_jump", "ui": false },
     { "type": "wait-until", "query": "game.onGround", "op": "eq", "value": true, "timeoutMs": 6000 },
+
+    { "type": "log", "message": "air attack: pressing attack in mid-air immediately executes the spin kick" },
+    { "type": "key", "code": "SPACE", "action": "press" },
+    { "type": "wait-ms", "ms": 120 },
+    { "type": "assert", "query": "game.onGround", "op": "eq", "value": false },
+    { "type": "key", "code": "X", "action": "press" },
+    { "type": "wait-until", "query": "game.punchStage", "op": "eq", "value": 3, "timeoutMs": 2000 },
+    { "type": "assert", "query": "game.locomotion", "op": "eq", "value": "punch" },
+    { "type": "assert", "query": "game.clip", "op": "eq", "value": "kick" },
+    { "type": "screenshot", "out": "screenshots/nextastrobot_air_kick", "ui": false },
+    { "type": "wait-until", "query": "game.onGround", "op": "eq", "value": true, "timeoutMs": 6000 },
     { "type": "quit" }
   ]
 }

@@ -99,12 +99,12 @@ namespace NextAstrobot::AstroHud
             }
             if (finished)
             {
-                DrawCentered(drawList, screen, y, kInk, "[R] Replay      [Space] Start over      [Esc] Quit", 1.3f);
+                DrawCentered(drawList, screen, y, kInk, "[R] Replay      [Space / (X)] Start over      [Esc] Quit", 1.3f);
             }
             else
             {
                 DrawCentered(drawList, screen, y, kAccent,
-                             fmt::format("[Space] Next: {}", context.nextLevelName), 1.6f);
+                             fmt::format("[Space / (X)] Next: {}", context.nextLevelName), 1.6f);
                 y += 34.0f;
                 DrawCentered(drawList, screen, y, kInk, "[R] Replay      [Esc] Quit", 1.3f);
             }
@@ -142,17 +142,17 @@ namespace NextAstrobot::AstroHud
                                                   kBandEdge, kBandEdge);
             }
             DrawCentered(*drawList, screen, screen.y * 0.36f, kAccent, context.levelName, 3.4f);
-            DrawCentered(*drawList, screen, screen.y * 0.50f, kInk, "Press Space to start", 1.6f);
-            DrawCentered(*drawList, screen, screen.y * 0.56f, kInk, "WASD run   Space jump / hold to hover   X punch",
-                         1.1f);
+            DrawCentered(*drawList, screen, screen.y * 0.50f, kInk, "Press Space / (X) to start", 1.6f);
+            DrawCentered(*drawList, screen, screen.y * 0.56f, kInk,
+                         "WASD / Stick: Run   Space / (X): Jump (Air: Hover boost)   X / [Square]: Punch (Air: Kick)", 1.1f);
             break;
         case ELevelState::Intro:
-            DrawCentered(*drawList, screen, screen.y * 0.88f, kInk, "Press any key to skip", 1.2f);
+            DrawCentered(*drawList, screen, screen.y * 0.88f, kInk, "Press any key / (X) to skip", 1.2f);
             break;
         case ELevelState::Paused:
             drawList->AddRectFilled(ImVec2(0.0f, 0.0f), screen, IM_COL32(8, 10, 18, 150));
             DrawCentered(*drawList, screen, screen.y * 0.42f, kAccent, "PAUSED", 3.0f);
-            DrawCentered(*drawList, screen, screen.y * 0.54f, kInk, "[Esc] Resume", 1.4f);
+            DrawCentered(*drawList, screen, screen.y * 0.54f, kInk, "[Esc / Start] Resume", 1.4f);
             break;
         case ELevelState::Result:
             DrawResult(*drawList, screen, context);

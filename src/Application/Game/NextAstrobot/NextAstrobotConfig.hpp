@@ -23,8 +23,11 @@ namespace NextAstrobot
         float JumpCutMultiplier = 0.5f;
         float CoyoteSeconds = 0.12f;
         float JumpBufferSeconds = 0.15f;
-        float HoverMaxSeconds = 1.0f;
+        float HoverMaxSeconds = 2.0f;
         float HoverFallSpeed = -1.0f;
+        // Ascending boost at the start of hover: duration and total vertical climb.
+        float HoverBoostSeconds = 1.0f;
+        float HoverBoostHeight = 1.6f;
         float StompBounceSpeed = 5.0f;
         // Three-hit combo: left jab -> right cross -> spin kick. Each stage has its own
         // length; pressing again inside ComboWindowSeconds after a stage ends advances to

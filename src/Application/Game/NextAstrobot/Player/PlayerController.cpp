@@ -58,7 +58,10 @@ namespace NextAstrobot
         coyoteTimer_ = 0.0f;
         jumpBufferTimer_ = 0.0f;
         hoverRemaining_ = config_.HoverMaxSeconds;
+        hoverBoostTimer_ = 0.0f;
         hoverUsed_ = false;
+        hoverActive_ = false;
+        jumpReleasedInAir_ = false;
         jumpRising_ = false;
         punchTimer_ = 0.0f;
         punchStarted_ = false;
@@ -107,6 +110,9 @@ namespace NextAstrobot
         jumpRising_ = false;
         coyoteTimer_ = 0.0f;
         hoverUsed_ = false;
+        hoverActive_ = false;
+        hoverBoostTimer_ = 0.0f;
+        jumpReleasedInAir_ = true;
         hoverRemaining_ = config_.HoverMaxSeconds;
         state_ = ELocomotion::Jump;
     }
@@ -134,6 +140,9 @@ namespace NextAstrobot
         state_ = ELocomotion::Fall;
         deathReason_.clear();
         hoverUsed_ = false;
+        hoverActive_ = false;
+        hoverBoostTimer_ = 0.0f;
+        jumpReleasedInAir_ = false;
         hoverRemaining_ = config_.HoverMaxSeconds;
         punchTimer_ = 0.0f;
         punchStage_ = 0;
@@ -227,6 +236,8 @@ namespace NextAstrobot
                 // Bail out of the ride: keep the momentum and give a small hop.
                 state_ = ELocomotion::Jump;
                 velocity_.y = config_.JumpSpeed * 0.6f;
+                jumpReleasedInAir_ = false;
+                hoverActive_ = false;
             }
             else
             {
@@ -244,18 +255,37 @@ namespace NextAstrobot
         comboTimer_ = std::max(0.0f, comboTimer_ - deltaSeconds);
         if (punchBuffer_ > 0.0f && punchTimer_ <= 0.0f)
         {
-            // comboTimer_ still running means the previous stage is within its chain
-            // window; past the last stage the chain restarts at the jab.
-            punchStage_ = (comboTimer_ > 0.0f && punchStage_ >= 1 && punchStage_ < 3) ? punchStage_ + 1 : 1;
-            punchTimer_ = punchStage_ == 3   ? config_.KickSeconds
-                          : punchStage_ == 2 ? config_.PunchSeconds2
-                                             : config_.PunchSeconds;
-            comboTimer_ = punchTimer_ + config_.ComboWindowSeconds;
-            punchBuffer_ = 0.0f;
-            punchStarted_ = true;
-            lunge_ = punchStage_ == 3 ? config_.KickLungeSpeed : config_.PunchLungeSpeed;
-            // Attacking cancels a skid: the brake pose and the swing fight over the same bones.
-            skidTimer_ = 0.0f;
+            if (!onGround_)
+            {
+                // In the air, an attack immediately performs the spin kick (stage 3).
+                punchStage_ = 3;
+                punchTimer_ = config_.KickSeconds;
+                comboTimer_ = 0.0f;
+                punchBuffer_ = 0.0f;
+                punchStarted_ = true;
+                lunge_ = config_.KickLungeSpeed;
+                skidTimer_ = 0.0f;
+                if (hoverActive_)
+                {
+                    hoverActive_ = false;
+                    hoverUsed_ = true;
+                    hoverBoostTimer_ = 0.0f;
+                }
+            }
+            else
+            {
+                // Ground combo: left jab -> right cross -> spin kick.
+                punchStage_ = (comboTimer_ > 0.0f && punchStage_ >= 1 && punchStage_ < 3) ? punchStage_ + 1 : 1;
+                punchTimer_ = punchStage_ == 3   ? config_.KickSeconds
+                              : punchStage_ == 2 ? config_.PunchSeconds2
+                                                 : config_.PunchSeconds;
+                comboTimer_ = punchTimer_ + config_.ComboWindowSeconds;
+                punchBuffer_ = 0.0f;
+                punchStarted_ = true;
+                lunge_ = punchStage_ == 3 ? config_.KickLungeSpeed : config_.PunchLungeSpeed;
+                // Attacking cancels a skid: the brake pose and the swing fight over the same bones.
+                skidTimer_ = 0.0f;
+            }
         }
         if (punchTimer_ <= 0.0f && comboTimer_ <= 0.0f)
         {
@@ -345,6 +375,8 @@ namespace NextAstrobot
             jumpBufferTimer_ = 0.0f;
             coyoteTimer_ = 0.0f;
             onGround_ = false;
+            jumpReleasedInAir_ = false;
+            hoverActive_ = false;
         }
         else if (onGround_ && velocity_.y <= 0.0f)
         {
@@ -353,7 +385,21 @@ namespace NextAstrobot
             velocity_.y = -1.0f;
             jumpRising_ = false;
             hoverUsed_ = false;
+            hoverActive_ = false;
+            jumpReleasedInAir_ = false;
             hoverRemaining_ = config_.HoverMaxSeconds;
+        }
+        else if (!onGround_ && punchTimer_ > 0.0f && punchStage_ == 3)
+        {
+            // Air spin kick: reduce vertical descent so the kick sweeps horizontally across the air
+            if (velocity_.y < -1.8f)
+            {
+                velocity_.y = Approach(velocity_.y, -1.8f, config_.Gravity * 1.5f, deltaSeconds);
+            }
+            else
+            {
+                velocity_.y -= config_.Gravity * 0.4f * deltaSeconds;
+            }
         }
         else
         {
@@ -370,22 +416,66 @@ namespace NextAstrobot
             jumpRising_ = false;
         }
 
-        bool hovering = false;
-        if (!onGround_ && input.jumpHeld && !jumpRising_ && velocity_.y < config_.HoverFallSpeed &&
-            hoverRemaining_ > 0.0f && !hoverUsed_)
+        if (!onGround_ && !input.jumpHeld)
         {
-            velocity_.y = config_.HoverFallSpeed;
-            hoverRemaining_ -= deltaSeconds;
-            hovering = true;
-            if (hoverRemaining_ <= 0.0f)
-            {
-                hoverUsed_ = true;
-            }
+            jumpReleasedInAir_ = true;
         }
-        else if (!input.jumpHeld && hoverRemaining_ < config_.HoverMaxSeconds && !onGround_)
+
+        // Hover does not transition automatically from a held jump. Instead, the player must
+        // release the jump key after takeoff, then press and hold it again in mid-air.
+        // On activation it gives an ascending boost climbing HoverBoostHeight across HoverBoostSeconds
+        // (default: 1.6m in 1.0s), then eases into the downward hover glide.
+        if (!onGround_ && !hoverUsed_ && hoverRemaining_ > 0.0f && jumpReleasedInAir_ && !hoverActive_ &&
+            input.jumpPressed)
         {
-            // Releasing the button ends this hover for good; it recharges on landing.
-            hoverUsed_ = true;
+            hoverActive_ = true;
+            jumpRising_ = false;
+            hoverBoostTimer_ = config_.HoverBoostSeconds;
+        }
+
+        if (hoverActive_)
+        {
+            if (input.jumpHeld && hoverRemaining_ > 0.0f && !onGround_)
+            {
+                hoverRemaining_ -= deltaSeconds;
+                if (hoverBoostTimer_ > 0.0f)
+                {
+                    hoverBoostTimer_ -= deltaSeconds;
+                    const float boostFrac =
+                        std::clamp(1.0f - (hoverBoostTimer_ / std::max(config_.HoverBoostSeconds, 0.05f)), 0.0f, 1.0f);
+                    const float vAvg = config_.HoverBoostHeight / std::max(config_.HoverBoostSeconds, 0.05f);
+                    // Linear ease from 1.5*vAvg to 0.5*vAvg over HoverBoostSeconds:
+                    // the integral over [0, T] is exactly vAvg * T = HoverBoostHeight (e.g. 1.6m in 1.0s).
+                    const float vStart = vAvg * 1.5f;
+                    const float vEnd = vAvg * 0.5f;
+                    velocity_.y = glm::mix(vStart, vEnd, boostFrac);
+                }
+                else
+                {
+                    if (velocity_.y > config_.HoverFallSpeed)
+                    {
+                        velocity_.y =
+                            Approach(velocity_.y, config_.HoverFallSpeed, config_.Gravity * 0.8f, deltaSeconds);
+                    }
+                    else
+                    {
+                        velocity_.y = config_.HoverFallSpeed;
+                    }
+                }
+                if (hoverRemaining_ <= 0.0f)
+                {
+                    hoverActive_ = false;
+                    hoverUsed_ = true;
+                    hoverBoostTimer_ = 0.0f;
+                }
+            }
+            else
+            {
+                // Releasing the button ends this hover for good; it recharges on landing.
+                hoverActive_ = false;
+                hoverUsed_ = true;
+                hoverBoostTimer_ = 0.0f;
+            }
         }
 
         // A fountain carries. It lands after the jump arc so it reads as the world acting
@@ -410,6 +500,9 @@ namespace NextAstrobot
         if (onGround_ && !wasOnGround)
         {
             hoverUsed_ = false;
+            hoverActive_ = false;
+            hoverBoostTimer_ = 0.0f;
+            jumpReleasedInAir_ = false;
             hoverRemaining_ = config_.HoverMaxSeconds;
         }
         // A ceiling or a wall can eat the requested motion; keep the internal velocity in
@@ -418,6 +511,7 @@ namespace NextAstrobot
         {
             velocity_.y = 0.0f;
             jumpRising_ = false;
+            hoverBoostTimer_ = 0.0f;
         }
 
         if (punchTimer_ > 0.0f)
@@ -430,7 +524,7 @@ namespace NextAstrobot
                      : HorizontalSpeed() > 0.4f ? ELocomotion::Run
                                                 : ELocomotion::Idle;
         }
-        else if (hovering)
+        else if (hoverActive_)
         {
             state_ = ELocomotion::Hover;
         }
