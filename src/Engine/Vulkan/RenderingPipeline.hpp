@@ -35,6 +35,13 @@ namespace Vulkan
         RenderPass(const SwapChain& swapChain, std::span<const VkFormat> colorFormats,
                    const DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp,
                    VkAttachmentLoadOp depthBufferLoadOp);
+        // Offscreen multi-render-target pass. Unlike the swapchain-oriented overload above, the
+        // caller supplies the attachment layouts explicitly so a following compute pass can read
+        // the color outputs without pretending that they were presented.
+        RenderPass(const SwapChain& swapChain, std::span<const VkFormat> colorFormats,
+                   const DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp,
+                   VkAttachmentLoadOp depthBufferLoadOp, VkImageLayout colorInitialLayout,
+                   VkImageLayout colorFinalLayout);
         ~RenderPass();
 
         const class SwapChain& SwapChain() const { return swapChain_; }

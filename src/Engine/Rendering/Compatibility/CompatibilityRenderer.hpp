@@ -14,8 +14,10 @@ namespace Vulkan::Compatibility
     // screen-space chain (RT banks, visibility buffer, shared compute pipelines) and this class
     // owns the swapchain image directly.
     //
-    // What it draws: one raster pass, clearing to a background colour and filling every render
-    // proxy with its material base-colour factor.
+    // What it draws: one raster pass fills a deliberately small G-buffer (base colour + normal),
+    // then an explicitly-bound compute shader applies the preview lighting and blits its output to
+    // the swapchain. The entire mini chain is owned here rather than by the full screen-space RT
+    // bank, which this hardware cannot create.
     //
     // The two resource rules that define this path, both forced by the target hardware:
     //   * no bindless descriptor set -- it binds its own small set of five storage buffers;
@@ -24,22 +26,27 @@ namespace Vulkan::Compatibility
     //
     // What it deliberately does not do (see the design doc for why each is deferred): no GPU cull /
     // soft-mesh expansion (those compute passes bind the bindless set), no skinning, no albedo
-    // textures, no lighting, no shadows, no visibility IDs, no frustum culling.
+    // textures, no shadows, no visibility IDs, no frustum culling.
     // docs/designs/ios-a12x-compatibility-minimal-render-mvp.md
     class CompatibilityRenderer final : public LogicRendererBase
     {
     public:
-        // Matches CompatibilityPushConstants in Rast.CompatibilityAlbedo.{vert,frag}.slang.
-        // 116 bytes, padded to the 128-byte push-constant floor the engine already targets.
-        struct FPushConstants
+        // Matches CompatibilityDrawPushConstants in Rast.CompatibilityAlbedo.vert.slang. It stays
+        // free of GPUScene addresses: that type cannot even be constructed on the target hardware.
+        struct FDrawPushConstants
         {
             glm::mat4 ViewProjection;
+            uint32_t ProxyIndex;
+        };
+
+        // Matches CompatibilityShadePushConstants in Core.CompatibilityShade.comp.slang. The
+        // preview deliberately uses light hues, not scene radiance, because it cannot sample the
+        // sky IBL used to calibrate the full renderer's intensity values.
+        struct FShadePushConstants
+        {
             glm::vec4 SunDirection;
-            // rgb from UniformBufferObject; w carries HasSun / HasSky so the shader needs no branch.
-            // Intensities are deliberately not folded in -- see the fragment shader.
             glm::vec4 SunColor;
             glm::vec4 SkyColor;
-            uint32_t ProxyIndex;
         };
 
         // Storage-buffer bindings of set 0, mirroring the shader declarations. EB_VertexWords is
@@ -54,6 +61,14 @@ namespace Vulkan::Compatibility
             EB_Count,
         };
 
+        enum EShadeBinding : uint32_t
+        {
+            ESB_Albedo = 0,
+            ESB_Normal = 1,
+            ESB_SceneColor = 2,
+            ESB_Count,
+        };
+
         explicit CompatibilityRenderer(VulkanBaseRenderer& baseRender) : LogicRendererBase(baseRender) {}
         ~CompatibilityRenderer() override;
 
@@ -66,12 +81,23 @@ namespace Vulkan::Compatibility
         // bound handles first, so a scene reload rewrites the descriptors and a steady frame does
         // nothing.
         void BindSceneBuffers(const Assets::Scene& scene);
+        void TransitionGBufferForRaster(VkCommandBuffer commandBuffer);
+        void TransitionGBufferForShading(VkCommandBuffer commandBuffer);
+        void TransitionSceneColorForShading(VkCommandBuffer commandBuffer);
 
-        std::unique_ptr<class RenderPass> renderPass_;
-        std::unique_ptr<class PipelineLayout> pipelineLayout_;
-        std::unique_ptr<class DescriptorSetManager> descriptorSetManager_;
-        std::vector<class FrameBuffer> frameBuffers_;
+        std::unique_ptr<class RenderImage> gbufferAlbedo_;
+        std::unique_ptr<class RenderImage> gbufferNormal_;
+        std::unique_ptr<class RenderImage> sceneColor_;
+        std::unique_ptr<class RenderPass> gbufferRenderPass_;
+        std::unique_ptr<class FrameBuffer> gbufferFrameBuffer_;
+        std::unique_ptr<class PipelineLayout> drawPipelineLayout_;
+        std::unique_ptr<class DescriptorSetManager> drawDescriptorSetManager_;
+        std::unique_ptr<class PipelineLayout> shadePipelineLayout_;
+        std::unique_ptr<class DescriptorSetManager> shadeDescriptorSetManager_;
         std::array<VkBuffer, EB_Count> boundBuffers_{};
-        VkPipeline pipeline_ = VK_NULL_HANDLE;
+        VkPipeline drawPipeline_ = VK_NULL_HANDLE;
+        VkPipeline shadePipeline_ = VK_NULL_HANDLE;
+        bool gbufferInitialized_ = false;
+        bool sceneColorInitialized_ = false;
     };
 }

@@ -27,17 +27,12 @@ import Shader.Types;
 [[vk::binding(2, 0)]] StructuredBuffer<uint> Indices;
 [[vk::binding(3, 0)]] StructuredBuffer<ModelData> Offsets;
 
-struct CompatibilityPushConstants
+struct CompatibilityDrawPushConstants
 {
     float4x4 ViewProjection;
-    // .xyz points toward the sun, matching UniformBufferObject::SunDirection. Radiance already has
-    // intensity folded in and is zeroed when the scene has no sun/sky, so neither shader branches.
-    float4 SunDirection;
-    float4 SunColor;
-    float4 SkyColor;
     uint ProxyIndex;
 };
-[[vk::push_constant]] CompatibilityPushConstants pushConstants;
+[[vk::push_constant]] CompatibilityDrawPushConstants pushConstants;
 
 // GPUVertex is three half4s = 24 bytes = 6 uints (Assets::GPUVertex in Vertex.hpp is 12 uint16s).
 // Word 0..1 is Position_Tx, 2..3 Normal_Ty, 4..5 Tangent.

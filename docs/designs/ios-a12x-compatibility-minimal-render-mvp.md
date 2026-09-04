@@ -1,15 +1,15 @@
 ---
 title: "iOS A12X Compatibility Minimal Render MVP"
 category: design
-status: M0–M3 已实施（几何 + base color + 法线/Lambert），贴图与 CSM 待实施
+status: M0–M3 已实施（mini G-buffer + compute Lambert），贴图与 CSM 待实施
 owner: engine
 created: 2026-08-22
-last_updated: 2026-08-22
+last_updated: 2026-09-04
 ---
 
 # iOS A12X Compatibility Minimal Render MVP
 
-## 0. 实施现状（2026-08-22）
+## 0. 实施现状（2026-09-04）
 
 M0 的骨架已落地，形态与本文 §8 的描述一致，但把"兼容"表达成了两个数据决策点而不是一组条件分支：
 
@@ -31,9 +31,9 @@ M0 的骨架已落地，形态与本文 §8 的描述一致，但把"兼容"表�
 按基础上限判会把每一台 Apple GPU 都降级（M3 Max 报 `maxPerStageDescriptorSamplers = 16`，却能正常
 创建 17k descriptor 的完整 layout）。重新按 A12X 的 update-after-bind 上限核对本文结论时要注意这点。
 
-与本文原计划的差异：兼容模式**照常提交真实场景**（`conf_room.glb` / `playground.glb` 都能 commit），
-只是不绘制它——场景的 CPU/GPU 数据、节点树、UI、输入全部可用，`Scene` 也会依据已注册 renderer 的
-requirements 自动把 ambient arena 收缩到 1 个 cascade。因此 §6.3 验收顺序的第 1–4 步已具备。
+兼容模式照常提交并绘制真实场景（`conf_room.glb` / `playground.glb` 都能 commit）。场景的 CPU/GPU
+数据、节点树、UI、输入全部可用，`Scene` 也会依据已注册 renderer 的 requirements 自动把 ambient arena
+收缩到 1 个 cascade；不过本 renderer 不会创建完整 RT bank。
 
 ### A12X 的第二条硬约束：没有 bufferDeviceAddress
 
@@ -52,31 +52,33 @@ descriptor 数组，**也完全不能用 GPUScene**。
 `ERT_Compatibility`。并且**兼容 profile 下即使设备支持 BDA 也不启用它**——这样在桌面 GPU 上加
 `--force-compatibility-renderer` 就能精确复现真机，而不是只复现一半。
 
-### 绘制路径（M1 + M2 合并实施）
+### 绘制与 compute 着色（M1–M3）
 
 `CompatibilityRenderer` 现在真的画场景，但**没有走 §5.2 的 Soft Mesh GPU-driven 链路**：
 cull / finalize / expand 三个 compute pass 都是 `ZeroBindPipeline`，其 layout 里带着
 `GlobalTexturePool` 的 descriptor set，兼容 profile 建不出来。改用最短的等价路径：
 
-- **自带一个 5 个 storage buffer 的 descriptor set**（Nodes / VertexWords / Indices / Offsets /
-  Materials），不碰 bindless set。shader 只 `import Shader.Types`，**不 import `Shader.Bindless`**。
+- raster 自带一个 5 个 storage buffer 的 descriptor set（Nodes / VertexWords / Indices / Offsets /
+  Materials）；compute 再自带一个 2 sampled + 1 storage image 的 descriptor set（Albedo / Normal /
+  SceneColor）。二者都不碰 bindless set；shader 只用显式 binding，**不 import `Shader.Bindless`**。
 - 用 storage buffer 而不是 uniform buffer：std430 的 array stride 与 CPU 结构体一致，
   std140 会把 `NodeProxy::matId[16]` 从 4 字节/元素撑到 16。已核对 SPIR-V 的 `ArrayStride`：
   NodeProxy 224、ModelData 64、Material 64、uint 4，与 `GPU_SCENE_*_SIZE` 逐个吻合。
-- push constant 是 `float4x4 ViewProjection` + 太阳/天空 `float4` × 3 + `uint ProxyIndex`
-  （116 B，补齐到引擎既有的 128 B push constant 上限）。相机矩阵和光照参数直接推进去，
-  省掉一个 camera descriptor 和它的 layout 风险。
+- raster push constant 是 `float4x4 ViewProjection + uint ProxyIndex`；compute push constant 是太阳/
+  天空 `float4` × 3。二者都省掉 camera descriptor 与 GPUScene address。
 - 每个 render proxy 一次 `vkCmdPushConstants` + `vkCmdDraw(model.indexCount)`；
   vertex shader 用 `SV_VertexID` 做 vertex pulling，没有 vertex input binding。
-- 单个 raster pass 直接画进 swapchain image：`LOAD_OP_CLEAR` 顺带完成背景清屏，
-  initial/final layout 都是 `COLOR_ATTACHMENT_OPTIMAL`，之后由 base renderer 转 `PRESENT_SRC`。
-- fragment 输出 `Material.Diffuse.rgb`（base-color factor）乘以一个法线光照项，见下。
+- raster pass 写两张 `R8G8B8A8_UNORM` attachment：`Material.Diffuse.rgb` 与编码 world normal；
+  normal alpha 同时是 coverage sentinel。它们在 graphics→compute barrier 后以 sampled image 读取。
+- compute 写独立的 `R8G8B8A8_UNORM` SceneColor storage image，之后 transfer blit 到 swapchain；
+  base renderer 照常负责 `PRESENT_SRC` 和 UI 的 `LOAD + STORE` pass。
 
 ### 光照：预览量级，不是 radiance
 
 顶点法线从 vertex buffer 的 word 2..3 解出，用 `worldTS` 的左上 3x3 变到世界空间（不做
 inverse-transpose：场景节点通常是刚体+均匀缩放，非均匀缩放只会让明暗过渡略微偏斜）。
-fragment 做一个太阳 Lambert 项 + 一个半球天空补光。
+compute shader 做一个太阳 Lambert 项 + 一个半球天空补光。这样照明脱离 geometry draw，后续的
+compatibility-only 屏幕空间效果可以消费同一对固定 descriptor 输入，而无需引入完整 Primary Surface。
 
 **关键：不能直接用 `SunIntensity` / `SkyIntensity`。** 这两个量是相对**天空 IBL 贴图**标定的——
 典型场景 `SkyIntensity = 100`、`SunColor = 500`，因为 `SampleIBL()` 返回的是很小的数值。
@@ -109,13 +111,17 @@ lighting = (sunTint·NoL·0.75·hasSun + skyTint·hemisphere·0.55·hasSky)
 
 ```bash
 spirv-dis <out>/assets/shaders/Rast.CompatibilityAlbedo.vert.slang.spv | grep -E "OpCapability|DescriptorSet"
+spirv-dis <out>/assets/shaders/Core.CompatibilityShade.comp.slang.spv | grep -E "OpCapability|DescriptorSet|OpTypeImage"
 ```
 
-应当只看到 `Shader` / `DrawParameters` 两个 capability，以及 set 0 的 4 个 binding；
-出现 `PhysicalStorageBufferAddresses`、`Float16` 或 `UniformAndStorageBuffer16BitAccess` 即为回归。
+vertex 应当只看到 `Shader` / `DrawParameters`，compute 应当只有 `Shader` / `ImageQuery` 和三个
+set 0 image binding；SceneColor 的 `OpTypeImage` 必须是 `Rgba8`，不能是 `Unknown`，否则会重新要求
+`shaderStorageImage*WithoutFormat`。任一 shader 出现 `PhysicalStorageBufferAddresses`、`Float16` 或
+`UniformAndStorageBuffer16BitAccess` 即为回归。
 
-已验证：`playground.glb` / `conf_room.glb` 几何、变换、深度、逐材质颜色均正确；相机可自由移动；
-ImGui 正常叠加；开 `--validation` 相对普通路径**零新增** validation error。
+已验证：`playground.glb` 几何、变换、深度、逐材质颜色、compute 着色与 UI 正常；相机可自由移动。
+`compatibility-renderer-smoke` 在 `--force-compatibility-renderer` 下通过，截图确认 mini G-buffer
+compute 结果可正常 present。
 
 ### 兼容 profile 不绑定场景纹理
 
@@ -152,9 +158,9 @@ gnb validate --script assets/agentscripts/compatibility-renderer-smoke.agentscri
 当前目标不是实现一套完整的 non-bindless renderer，而是在 A12X 这类 constrained bindless 设备上，先建立一条最短、稳定、可继续扩展的兼容绘制路径：
 
 1. 窗体、swapchain、present 和 ImGui/UI 正常工作；
-2. 场景通过现有 Soft Mesh GPU-driven 提交路径绘制；
+2. 场景通过显式的 CPU per-proxy `vkCmdDraw` 路径绘制；
 3. 不生成 visibility ID、不建立完整 G-buffer、不运行 Surface Build；
-4. fragment shader 直接输出一个简化的 albedo color；
+4. raster 只输出独立 mini G-buffer，compute shader 输出简化 scene color；
 5. 先能看到场景几何、窗体和 UI，再逐步增加材质、阴影和调试能力。
 
 这里的“mesh shader”指仓库现有的 Soft Mesh Shader 路径：GPU cull / finalize / expand 生成 indirect draw argument，随后使用 raster vertex/fragment pass 绘制展开后的三角形。第一版不引入或依赖 `VK_EXT_mesh_shader` 硬件 mesh shader。
@@ -166,9 +172,11 @@ gnb validate --script assets/agentscripts/compatibility-renderer-smoke.agentscri
 ```text
 现有 WindowSurface / SwapChain / Present
         ↓
-现有 GPUScene / Soft Mesh GPU-driven submit
+显式 descriptor set / CPU per-proxy draw
         ↓
-Compatibility Color Pass
+Compatibility mini G-buffer raster pass
+        ↓
+Compatibility compute shade
         ↓
 Intermediate Scene Color
         ↓ blit/copy
@@ -199,14 +207,14 @@ Present
 - visibility instance/triangle ID；
 - `R32_UINT` visibility attachments；
 - Surface Build、visibility decode 和 shading scheduler；
-- 完整 G-buffer、normal、motion、object ID、albedo storage images；
+- 桌面 Primary Surface 的完整 G-buffer（motion、object ID、BSDF、history 与 bindless albedo storage）；
 - PathTracing、SoftwareTracing、AmbientCube 和硬件 ray tracing；
 - temporal accumulation、DLSS、Native TAAU、SGSR2 和 frame generation；
 - 完整材质纹理 bindless；
 - 多 RenderView、thumbnail、offscreen material preview；
 - 与桌面版完全一致的 Visual Debug 多格子资源浏览器。
 
-这些功能不是永久禁止，而是必须在 MVP 的“窗口/UI + 直接颜色场景”稳定之后逐项加入。
+这些功能不是永久禁止，而是必须在 MVP 的“窗口/UI + mini G-buffer + compute scene color”稳定之后逐项加入。
 
 ## 4. 资源模型
 
@@ -214,68 +222,69 @@ Present
 
 兼容路径只创建和使用：
 
-- Frame/camera UBO；
-- GPUScene 中的 node、mesh、vertex、index、material 常量和 GPU-driven buffers；
+- push constant 中的 camera / light 数据；
+- scene 的 node、mesh、vertex、index、material storage buffer；
 - 一个 depth attachment；
-- 一个 scene-color attachment 或 intermediate image；
+- 两张 `R8G8B8A8_UNORM` mini G-buffer attachment（albedo、normal + coverage）；
+- 一个 `R8G8B8A8_UNORM` SceneColor storage / transfer-source image；
 - UI 自己需要的字体/atlas 资源。
 
 不要为兼容路径创建完整 renderer 的 storage image bank。尤其不要因为未来可能需要 visibility、G-buffer 或 temporal，就提前创建一套会触发 MoltenVK typed resource array 编译的资源。
 
-### 4.2 可以继续复用现有小规模 descriptor 能力
+### 4.2 固定 descriptor 的边界
 
-这个 MVP 不要求“完全没有 descriptor indexing”。如果现有 GPUScene/scene buffer descriptor 在 A12X 上可以稳定使用，可以继续复用；但兼容路径不应依赖：
+兼容路径只使用两个独立、固定大小的 descriptor set：raster pass 的五个 scene SSBO，以及
+compute pass 的两张 sampled mini G-buffer image 和一张 storage SceneColor image。它不依赖：
 
+- `GPUScene` 或 buffer device address；
 - 大型全局 sampled texture array；
 - 大型全局 storage image array；
 - 多个 `RWTexture2D<T>` 通过同一全局数组动态转换；
 - 完整 renderer 的所有 RT bank 和 pass resource contract。
 
-因此这是一条“最小资源契约的 compatibility path”，不是把整个引擎重新实现成严格 non-bindless 模式。
+因此这是资源和 shader 契约都独立的 compatibility path；没有把整个引擎重新实现成严格
+non-bindless 模式，但也不会暗中回退到 full renderer 的 bindless/GPUScene 依赖。
 
 ### 4.3 scene color 的推荐格式
 
-优先使用现有 swapchain/intermediate 支持的 float color 格式，例如 `R16G16B16A16_SFLOAT`。它只保存颜色，不保存 ID，所以不会有 float16 精度保存整数的问题。
+当前实现使用 `R8G8B8A8_UNORM`：预览光照已归一化到 LDR 范围，并将 compute output 的 SPIR-V image
+format 固定为 `Rgba8`，避免要求 A12X 不保证提供的 `shaderStorageImage*WithoutFormat` feature。
 
-scene color 可以有两种实现：
-
-1. 直接作为 graphics color attachment，完成后 transfer 到 swapchain；
-2. 使用一个固定 storage color image，但 shader 中只访问单一的 `float4` 输出资源。
-
-第一版优先方案 1，因为它和 visibility/debug 的整数资源无关，且最容易与 UI 的 `LOAD + STORE` 流程衔接。
+当前实现固定采用 storage SceneColor：compute shader 只访问一个显式的 `float4` 输出资源，再以
+`vkCmdBlitImage` 复制到 swapchain。mini G-buffer 仍是 raster color attachment，因此 graphics、compute
+与 UI 的职责和资源状态保持清晰。
 
 ## 5. 最简绘制流程
 
 ### 5.1 CPU/scene 准备
 
-复用现有 scene commit 和 GPUScene 构建：
+复用现有 scene commit 和 scene storage buffer 构建：
 
 1. 解析 glTF/场景；
 2. 创建 NodeProxy、ModelData、vertex/index/material buffers；
-3. 更新 GPUScene；
-4. 确保 Soft Mesh primitive stream 和 indirect draw argument buffer 已准备完成。
+3. 上传 node / vertex / index / model-offset / material buffer。
 
-这一步不需要 visibility buffer。GPUScene 仍然可以保存现有字段，但兼容 color pass 只读取位置、索引、变换和最小材质颜色信息。
+这一步不需要 visibility buffer 或 GPUScene address。兼容路径只读取位置、索引、变换和最小材质颜色信息。
 
-### 5.2 GPU-driven 提交
+### 5.2 显式 draw 提交
 
-复用当前 Soft Mesh GPU-driven 的最短链路：
+兼容 profile 不复用 Soft Mesh GPU-driven 的 cull / finalize / expand 链路：三个 compute pass 都绑定
+`GlobalTexturePool` 且依赖 GPUScene address。它直接按 scene proxy 提交：
 
 ```text
-GPU cull / compact
+for each visible proxy
     ↓
-Finalize draw arguments
+push ViewProjection + ProxyIndex
     ↓
-Expand primitive stream
-    ↓
-vkCmdDrawIndirect
+vkCmdDraw(model.indexCount)
 ```
 
-第一版可以采用兼容设备上已经验证过的保守行为：只要 render proxy 有三角形就生成 draw entry，不加入复杂的屏幕图像依赖、深度测试反馈或 subgroup fast path。正确性稳定后再恢复真正的 frustum/occlusion culling。
+这是可预期的保守实现：不做 frustum / occlusion culling、skinning 或 alpha test；正确性和描述符契约优先。
 
-### 5.3 Compatibility Color Pass
+### 5.3 Compatibility mini G-buffer + compute shade
 
-新增一个只输出颜色的 raster pass。它可以复用现有 visibility vertex shader 的大部分 mesh/transform 解码逻辑，但必须去掉 visibility ID 输出：
+新增一个双输出 raster pass。它复用 compatibility vertex pulling 的 mesh / transform 解码，但不输出
+visibility ID：
 
 ```slang
 struct VertexOutput
@@ -286,37 +295,40 @@ struct VertexOutput
 
 struct FragmentOutput
 {
-    [[vk::location(0)]] float4 color : SV_Target0;
+    [[vk::location(0)]] float4 albedo : SV_Target0;
+    [[vk::location(1)]] float4 normal : SV_Target1;
 };
 ```
 
-fragment shader 第一版直接输出 material 的 `BaseColorFactor`：
+fragment shader 写 material 的 `BaseColorFactor` 与编码 normal；独立 compute pass 读取它们，写
+SceneColor：
 
 ```slang
 FragmentOutput main(FragmentInput input)
 {
-    const MaterialData material = FetchMaterial(input.materialId);
-    return FragmentOutput(float4(material.BaseColorFactor.rgb, 1.0f));
+    output.albedo = float4(material.Diffuse.rgb, 1.0f);
+    output.normal = float4(normalize(input.worldNormal) * 0.5f + 0.5f, 1.0f);
 }
 ```
 
 这里的 albedo color 指材质常量中的 base-color factor，不要求第一版采样 albedo texture。这样可以先验证：
 
-- GPU-driven mesh 提交正确；
+- 显式 mesh 提交正确；
 - vertex/index/transform 正确；
 - material ID 到 material constant 的访问正确；
 - depth test/write 正常；
-- scene color 能被 present 和 UI 继续加载。
+- graphics→compute barrier、SceneColor blit、present 与 UI LOAD 都正确。
 
-如果材质常量访问本身在 A12X 上仍然依赖过大的 bindless buffer array，则第一版可以先输出一个按 `materialId` hash 得到的稳定颜色，随后再接入 base-color factor。这比回退到 float ID 或创建完整 G-buffer 更安全。
+这两个 G-buffer image 是 renderer 私有的固定 descriptor；它们不注册到 `GlobalTexturePool`，也不扩张
+compatibility profile 的 storage array。
 
 ### 5.4 Depth
 
 使用现有 depth buffer，开启：
 
-- depth test：`LESS`；
+- depth test：`GREATER`（reverse-Z）；
 - depth write：`true`；
-- clear depth：`1.0`。
+- clear depth：`0.0`。
 
 不把 depth 转成 storage image，不建立额外 depth history，不依赖 temporal pass。
 
@@ -360,7 +372,7 @@ FragmentOutput main(FragmentInput input)
 - 默认：输出 `BaseColorFactor` 或稳定 material color；
 - Visual Debug 开启：可以输出 material ID hash、primitive hash 或纯色诊断模式；
 - 输出仍然是 scene color，不读取 visibility image；
-- 不新增 uint image、不新增 G-buffer、不新增 storage array。
+- 不新增额外 uint image、完整 G-buffer 或全局 storage array。
 
 这样可以验证“Debug Layer 开关确实影响了兼容渲染”，同时不把 debug 工具重新绑定到完整 bindless 资源模型。
 
@@ -368,28 +380,28 @@ FragmentOutput main(FragmentInput input)
 
 ### M0：窗口/UI 基线
 
-- compatibility mode 只创建 scene color 和 depth；
+- compatibility mode 只创建私有 mini G-buffer、scene color 和 depth；
 - 绘制固定颜色 quad/triangle；
 - 验证 swapchain、blit、ImGui 和 present；
 - `gnb ios run --device 2` 连续运行 60 秒。
 
-### M1：Soft Mesh GPU-driven 几何
+### M1：显式 raster 几何
 
-- 接入 GPU cull / finalize / expand / indirect draw；
+- 按 render proxy 直接提交 draw；
 - vertex shader 解码真实 scene mesh；
 - fragment shader 输出固定颜色；
 - 验证 `conf_room.glb` 有完整几何且无 device lost。
 
-### M2：最小 albedo color
+### M2：mini G-buffer
 
-- 输出 material `BaseColorFactor`；
+- 输出 material `BaseColorFactor` 与编码 normal；
 - 暂不采样 albedo texture；
 - 没有 material constant 时使用白色 fallback；
-- 增加 material ID hash debug mode。
+- 以 coverage alpha 区分背景。
 
 ### M3：基础兼容视觉质量
 
-- 加入明确的法线/简单 Lambert 计算；
+- 固定 descriptor compute pass 做 Lambert / 半球天空光照，并 blit SceneColor 到 swapchain；
 - 评估是否加入单张或固定数量的显式 albedo texture；
 - 评估 CSM，但仍不引入完整 G-buffer/visibility storage 链路。
 
@@ -435,4 +447,3 @@ FragmentOutput main(FragmentInput input)
 故障复盘中的有效结论已并入本文：兼容设备在物理设备选择阶段确定独立 profile，不创建完整 bindless
 RT bank，不用 float16 保存 visibility ID，也不混用 typed storage array。当前优先级是贴图与 CSM，
 之后再按实机收益决定是否需要真正的 visibility ID 和更完整的兼容资源模型。
-

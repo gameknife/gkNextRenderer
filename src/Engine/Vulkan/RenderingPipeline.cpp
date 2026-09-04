@@ -101,6 +101,23 @@ RenderPass::RenderPass(const Vulkan::SwapChain& swapChain, std::span<const VkFor
     Init(spec);
 }
 
+RenderPass::RenderPass(const Vulkan::SwapChain& swapChain, std::span<const VkFormat> colorFormats,
+                       const Vulkan::DepthBuffer& depthBuffer, const VkAttachmentLoadOp colorBufferLoadOp,
+                       const VkAttachmentLoadOp depthBufferLoadOp, const VkImageLayout colorInitialLayout,
+                       const VkImageLayout colorFinalLayout) : swapChain_(swapChain), depthBuffer_(depthBuffer)
+{
+    FRenderPassSpec spec;
+    spec.colorFormats.assign(colorFormats.begin(), colorFormats.end());
+    spec.hasDepth = true;
+    spec.colorLoadOp = colorBufferLoadOp;
+    spec.depthLoadOp = depthBufferLoadOp;
+    spec.depthStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+    spec.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    spec.colorInitialLayout = colorInitialLayout;
+    spec.colorFinalLayout = colorFinalLayout;
+    Init(spec);
+}
+
 void RenderPass::Init(const FRenderPassSpec& spec)
 {
     std::vector<VkAttachmentDescription> attachments;
