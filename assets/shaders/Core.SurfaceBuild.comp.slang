@@ -69,7 +69,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    NodeProxy hitNode = nodes[vBuffer.x - 1];
+    NodeProxy hitNode = nodes[Visibility.ProxyIndex(vBuffer)];
     hitVertex.MaterialIndex = FetchMaterialId(hitNode, hitVertex.MaterialIndex);
     const Material material = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
 

@@ -217,6 +217,34 @@ namespace
             if (query == "scene.renderProxyCount") return static_cast<int64_t>(scene.GetIndirectDrawBatchCount());
             if (query == "scene.maxVisibleProxyIndex")
                 return static_cast<int64_t>(scene.GetGpuDrivenStat().MaxVisibleProxyIndex);
+            // Triangles the GPU-driven cull actually submitted last frame. This is what makes a LOD
+            // change measurable on a machine whose frame rate is bound by something else entirely.
+            if (query == "scene.drawnTriangleCount")
+                return static_cast<int64_t>(scene.GetGpuDrivenStat().TriangleCount);
+            if (query == "scene.drawnProxyCount")
+                return static_cast<int64_t>(scene.GetGpuDrivenStat().ProcessedCount);
+            // What the drawn proxies would have cost at LOD0; compare against drawnTriangleCount
+            // to get what discrete LOD removed.
+            if (query == "scene.lod0TriangleCount")
+                return static_cast<int64_t>(scene.GetGpuDrivenStat().Lod0TriangleCount);
+            // Occlusion-culled counts. Separate from the totals above because they come from the
+            // previous frame's depth and can oscillate on their own, independently of anything the
+            // frustum test does.
+            if (query == "scene.culledTriangleCount")
+                return static_cast<int64_t>(scene.GetGpuDrivenStat().CulledTriangleCount);
+            if (query == "scene.culledProxyCount")
+                return static_cast<int64_t>(scene.GetGpuDrivenStat().CulledCount);
+            // Triangles per drawn proxy, which is the LOD level the cull pass picked (80/40/20/10
+            // for a scene of faceted asteroids) independent of where the camera is. Computed here
+            // rather than by dividing two separate queries: the stats are refreshed every frame, so
+            // two queries can land on different frames and their ratio is meaningless.
+            if (query == "scene.drawnTrianglesPerProxy")
+            {
+                const auto& stat = scene.GetGpuDrivenStat();
+                return stat.ProcessedCount > 0
+                    ? static_cast<double>(stat.TriangleCount) / static_cast<double>(stat.ProcessedCount)
+                    : 0.0;
+            }
             if (query == "scene.sunElevation") return static_cast<double>(scene.GetEnvSettings().SunElevation);
             if (query == "scene.atmosphereEnabled") return scene.GetEnvSettings().AtmosphereEnabled;
             if (query == "scene.aerialPerspectiveEnabled") return scene.GetEnvSettings().AerialPerspectiveEnabled;

@@ -1,0 +1,129 @@
+{
+  "name": "softmesh-lod-asteroid",
+  "target": "gkNextRenderer",
+  "scene": "AsteroidBelt.proc",
+  "defaults": {
+    "stepTimeoutMs": 120000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    {
+      "type": "log",
+      "message": "Discrete LOD on the full soft-mesh path. Unlike the compatibility path, here the selected level has to survive a round trip: cull encodes it in the visibility id, the raster vertex stage resolves the index range from it, and Core.SurfaceBuild / get_material_data must reconstruct the SAME triangle from the visibility pixel. A mismatch does not look like missing geometry -- it looks like wrong normals and materials, because reconstruction lands on a LOD0 triangle that was never drawn."
+    },
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running"
+    },
+    {
+      "type": "wait-until",
+      "query": "scene.nodeCount",
+      "op": "gt",
+      "value": 1000
+    },
+    {
+      "type": "cvar",
+      "name": "sys.tickAnimation",
+      "set": false
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "comment": "SoftwareModernNoAmbient: deferred over the visibility buffer plus CSM, so it exercises the reconstruction path and the shadow cull's per-cascade level choice together.",
+      "set": 4
+    },
+    {
+      "type": "wait-frames",
+      "n": 120
+    },
+    {
+      "type": "assert",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running"
+    },
+    {
+      "type": "cvar",
+      "name": "r.lod.baseThreshold",
+      "set": 0
+    },
+    {
+      "type": "wait-frames",
+      "n": 120
+    },
+    {
+      "type": "assert",
+      "query": "scene.drawnTrianglesPerProxy",
+      "op": "gt",
+      "value": 0,
+      "comment": "Triangles per drawn proxy: 80 = LOD0, 10 = the coarsest level. One atomic query, since the stats refresh every frame and two separate reads cannot be paired."
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/softmesh_lod_off.jpg",
+      "comment": "Baseline: full detail everywhere."
+    },
+    {
+      "type": "cvar",
+      "name": "r.lod.baseThreshold",
+      "set": 8
+    },
+    {
+      "type": "wait-frames",
+      "n": 120
+    },
+    {
+      "type": "assert",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running"
+    },
+    {
+      "type": "assert",
+      "query": "scene.drawnTrianglesPerProxy",
+      "op": "gt",
+      "value": 0,
+      "comment": "Triangles per drawn proxy: 80 = LOD0, 10 = the coarsest level. One atomic query, since the stats refresh every frame and two separate reads cannot be paired."
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/softmesh_lod_mixed.jpg",
+      "comment": "Four levels live at once. Shading must stay correct, not just geometry: this is the capture that would expose a decode that dropped or misplaced the LOD bits."
+    },
+    {
+      "type": "cvar",
+      "name": "r.lod.baseThreshold",
+      "set": 128
+    },
+    {
+      "type": "wait-frames",
+      "n": 120
+    },
+    {
+      "type": "assert",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running"
+    },
+    {
+      "type": "assert",
+      "query": "scene.drawnTrianglesPerProxy",
+      "op": "gt",
+      "value": 0,
+      "comment": "Triangles per drawn proxy: 80 = LOD0, 10 = the coarsest level. One atomic query, since the stats refresh every frame and two separate reads cannot be paired."
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/softmesh_lod_on.jpg",
+      "comment": "Shipping threshold."
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

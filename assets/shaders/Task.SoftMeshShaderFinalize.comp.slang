@@ -20,13 +20,20 @@ void main(uint3 DTid : SV_DispatchThreadID)
     totalTri = min(totalTri, triangleCapacity);
     itemCount = min(itemCount, uint(MAX_RENDER_PROXIES));
 
+    // FrameStamp is written here rather than in the cull pass: this dispatch is ordered after
+    // every cull workgroup, so a non-zero stamp guarantees the whole block is populated. Stamping
+    // from the cull itself let the first workgroup to finish mark a block the others had not
+    // contributed to yet, and the CPU could sample that partial state.
+    const uint stamp = scene.Camera[0].TotalFrames + 1u;
     if (slot == 0u)
     {
         scene.GPUDrivenStats[0].VisibleCount = itemCount;
+        scene.GPUDrivenStats[0].FrameStamp = stamp;
     }
     else
     {
         scene.ShadowGPUDrivenStats[slot - 1u].VisibleCount = itemCount;
+        scene.ShadowGPUDrivenStats[slot - 1u].FrameStamp = stamp;
     }
 
     drawArgs[slot].vertexCount = totalTri * 3;

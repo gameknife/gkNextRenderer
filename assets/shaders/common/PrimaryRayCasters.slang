@@ -82,7 +82,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         {
             return false;
         }
-        outNode = nodes[vBuffer.x - 1];
+        outNode = nodes[Visibility.ProxyIndex(vBuffer)];
         outVertex.MaterialIndex = FetchMaterialId(outNode, outVertex.MaterialIndex);
         outRayLength = length(outVertex.Position - origin.xyz);
         return true;

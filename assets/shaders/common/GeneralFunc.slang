@@ -16,7 +16,7 @@ namespace Common
     {
         // Fetch the triangle selected by the visibility pass, then reconstruct the
         // perspective-correct attributes at the same camera sample.
-        NodeProxy proxy = NodeProxies[vBuffer.x - 1];
+        NodeProxy proxy = NodeProxies[Visibility.ProxyIndex(vBuffer)];
         ModelData model = Models[proxy.modelId];
 
         result = {};
@@ -28,7 +28,10 @@ namespace Common
         uint primitive_index = vBuffer.y; // triangle index in model, so has to add by modelinfo
 
         for (int i = 0; i != 3; ++i) {
-            const uint vertexAddress = model.vertexOffset + PrimAddress[model.indexOffset + primitive_index * 3 + i];
+            // Reconstruction must read the same index range the raster pass drew from, which is
+            // the LOD level encoded in the visibility id -- not ModelData's own LOD0 range.
+            const uint vertexAddress =
+                model.vertexOffset + PrimAddress[model.lodIndexOffset[Visibility.LodLevel(vBuffer)] + primitive_index * 3 + i];
             GPUVertex packedVertex;
             if (proxy.skinId != 0xFFFFFFFF)
             {

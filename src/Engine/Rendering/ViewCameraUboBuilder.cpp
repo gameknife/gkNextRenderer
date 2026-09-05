@@ -72,6 +72,9 @@ namespace Vulkan
             ubo.HasSky = env.HasSky;
             ubo.BackgroundMode = static_cast<uint32_t>(env.BackgroundMode);
             ubo.LightCount = scene.GetLightCount();
+            // Secondary views (thumbnails, offscreen cameras) render at full detail: they are
+            // small, infrequent, and often the reference image something else is compared against.
+            ubo.LodBaseThreshold = 0.0f;
         }
 
         void FillThumbnailDefaults(

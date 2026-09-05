@@ -57,6 +57,10 @@ struct UserSettings final
     int GTAOQuality = 1;
     float GTAORadius = 1.0f;
     float GTAOStrength = 5.0f; // master sky-occlusion strength
+
+    // Projected pixel extent at or above which a proxy draws at LOD0; each further level halves it.
+    // 0 pins everything to LOD0, which is the A/B baseline for measuring what LOD actually buys.
+    float LodBaseThreshold = 128.0f;
     float GTAOThickness = 0.5f;
     int GTAODebugMode = 0;
     bool LightObjectScreenSpaceShadow = false;

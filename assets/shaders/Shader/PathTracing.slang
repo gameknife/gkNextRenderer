@@ -1,4 +1,6 @@
 import Shader.Bindless;
+// Visibility ids carry a LOD level; the reconstruction in GeneralFunc.slang decodes through it.
+import Shader.VisibilityBuffer;
 
 module PathTracing;
 

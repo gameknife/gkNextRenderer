@@ -36,7 +36,7 @@ namespace Assets
     {
     public:
         static constexpr uint32_t kSunShadowCascadeCount = 4;
-        static constexpr uint32_t kSunShadowResolution = 1024;
+        static constexpr uint32_t kSunShadowResolution = SUN_SHADOW_RESOLUTION;
         static constexpr uint32_t kRenderProxyCapacity = MAX_RENDER_PROXIES;
         static constexpr uint32_t kMaxTrianglesPerSection = 65535;
         static constexpr uint32_t kMaxLightCount = 1024;
@@ -164,6 +164,11 @@ namespace Assets
         int32_t FindNodeIdWithComponent(const std::string& componentType) const;
 
         const Assets::GPUDrivenStat& GetGpuDrivenStat() const { return gpuDrivenStat_; }
+        // Exponentially smoothed copy for display. The raw counters are read back without a fence,
+        // so even with the reset on the GPU timeline a sample can land mid-accumulation and read
+        // low; that is invisible in aggregate but makes an on-screen number twitch every frame.
+        // Measurement and assertions should keep using the raw stat above.
+        const Assets::GPUDrivenStat& GetSmoothedGpuDrivenStat() const { return smoothedGpuDrivenStat_; }
         const std::array<Assets::GPUDrivenStat, kSunShadowCascadeCount>& GetShadowGpuDrivenStats() const
         {
             return shadowGpuDrivenStats_;
@@ -447,6 +452,9 @@ namespace Assets
         bool enablePhysics_ = true;
 
         Assets::GPUDrivenStat gpuDrivenStat_;
+        Assets::GPUDrivenStat smoothedGpuDrivenStat_{};
+        bool smoothedGpuDrivenStatValid_ = false;
+        void UpdateSmoothedGpuDrivenStats();
         std::array<Assets::GPUDrivenStat, kSunShadowCascadeCount> shadowGpuDrivenStats_{};
         mutable Assets::GPUScene gpuScene_;
 

@@ -257,6 +257,11 @@ namespace Assets
         std::vector<Vertex>& CPUVertices() { return vertices_; }
         const std::vector<uint32_t>& CPUIndices() const { return indices_; }
 
+        // Simplified index streams for levels 1..N, in decreasing detail. Indices address the same
+        // vertex range as CPUIndices(), so a level needs no vertex offset of its own. Empty when
+        // the mesh was too small to simplify or simplification hit a topological floor.
+        const std::vector<std::vector<uint32_t>>& CPULodIndices() const { return lodIndices_; }
+
         const std::vector<glm::vec4>& CPUWeights() const { return weights_; }
         std::vector<glm::vec4>& CPUWeights() { return weights_; }
         const std::vector<glm::uvec4>& CPUJoints() const { return joints_; }
@@ -270,6 +275,10 @@ namespace Assets
         uint32_t MaterialSlotCount() const { return materialSlotCount; }
         uint32_t SectionCount() const { return sectionCount; }
         void SetSectionCount(uint32_t count) { sectionCount = count; }
+
+        // Builds CPULodIndices(). Runs after tangents exist so a level that has to synthesise
+        // vertices inherits a valid tangent frame. Safe to call twice; the second call is a no-op.
+        void BuildLods();
 
         void FreeMemory();
 
@@ -291,6 +300,7 @@ namespace Assets
         
         std::vector<Vertex> vertices_;
         std::vector<uint32_t> indices_;
+        std::vector<std::vector<uint32_t>> lodIndices_;
         std::vector<glm::vec4> weights_;
         std::vector<glm::uvec4> joints_;
         

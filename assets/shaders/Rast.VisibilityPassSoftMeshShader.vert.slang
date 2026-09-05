@@ -21,10 +21,12 @@ VertexOutput main(uint vertexIndex: SV_VertexID)
     uint2 visibilityId = Visibility.LoadExpandedPrimitive(softMeshShader.Prim, vertexIndex / 3);
     uint corner = vertexIndex % 3;
 
-    NodeProxy proxy = scene.Nodes[visibilityId.x - 1];
+    NodeProxy proxy = scene.Nodes[Visibility.ProxyIndex(visibilityId)];
     ModelData model = scene.Offsets[proxy.modelId];
 
-    uint localVertex = scene.Indices[model.indexOffset + visibilityId.y * 3 + corner];
+    // The level the cull pass chose travels in the id, so the triangle ordinal is resolved against
+    // that level's index range rather than LOD0's.
+    uint localVertex = scene.Indices[model.lodIndexOffset[Visibility.LodLevel(visibilityId)] + visibilityId.y * 3 + corner];
     uint vertexAddress = model.vertexOffset + localVertex;
     GPUVertex packedVertex;
     if (proxy.skinId != 0xFFFFFFFF)

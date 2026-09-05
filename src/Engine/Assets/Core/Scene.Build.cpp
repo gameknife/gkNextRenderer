@@ -504,6 +504,20 @@ namespace Assets
             primitiveIndices.reserve(totalIndices);
         }
 
+        // Discrete LODs are built here rather than in the Model constructor: skin weights are
+        // attached to a model after construction, and BuildLods has to see them to opt out.
+        // Levels only ever append index data, so they cost nothing until a cull pass selects one.
+        {
+            const auto lodBuildStart = Clock::now();
+            for (auto& model : models_)
+            {
+                model.BuildLods();
+            }
+            SPDLOG_INFO("Model LOD build took {:.1f}ms for {} models",
+                        std::chrono::duration<float, std::milli>(Clock::now() - lodBuildStart).count(),
+                        models_.size());
+        }
+
         offsets_.clear();
         offsets_.reserve(models_.size() * kModelSectionStride);
         for (auto& model : models_)
@@ -555,9 +569,11 @@ namespace Assets
 
                 const auto& localIndiceCount = slicedIndices[slice];
                 uint32_t realSize = uint32_t(localIndiceCount.size());
+                // Trailing 1 is lodCount: every section starts as LOD0-only and the LOD table pass
+                // below raises it for the sections that got simplified levels.
                 offsets_.push_back({localIndexOffset, realSize, vertexOffset, model.NumberOfVertices(),
                                     vec4(model.GetLocalAABBMin(), 1), vec4(model.GetLocalAABBMax(), 1), 0, 0,
-                                    localReorderOffset, 0});
+                                    localReorderOffset, 1});
 
                 std::vector<uint32_t> provoke(localIndiceCount.size());
                 std::vector<uint32_t> reorder(localVertices.size() + localIndiceCount.size() / 3);
@@ -593,11 +609,66 @@ namespace Assets
             {
                 offsets_.push_back({indexOffset, 0, vertexOffset, model.NumberOfVertices(),
                                     vec4(model.GetLocalAABBMin(), 1), vec4(model.GetLocalAABBMax(), 1), 0, 0,
-                                    reorderOffset, 0});
+                                    reorderOffset, 1});
             }
 
             model.SetSectionCount(processSection);
+        }
 
+        // LOD index data is appended only after every section's LOD0 is in place. `indices` and
+        // `primitiveIndices` are parallel arrays addressed by one ModelData::indexOffset, and only
+        // primitiveIndices is reachable from the shaders (GPUScene::Indices points at it), so
+        // interleaving the levels would desynchronise the two for every later model.
+        {
+            for (ModelData& section : offsets_)
+            {
+                // Level 0 mirrors the section itself so a shader can index by level unconditionally.
+                section.lodIndexOffset[0] = section.indexOffset;
+                section.lodIndexCount[0] = section.indexCount;
+            }
+
+            uint32_t simplifiedLevelCount = 0;
+            for (uint32_t modelIndex = 0; modelIndex < models_.size(); ++modelIndex)
+            {
+                const Model& model = models_[modelIndex];
+                // A multi-section model was split because it exceeded the per-section triangle
+                // limit; its simplified streams are whole-model and cannot be attributed to one
+                // slice. Those keep lodCount == 1 and always draw at full detail.
+                if (model.SectionCount() != 1 || model.CPULodIndices().empty())
+                {
+                    continue;
+                }
+                uint32_t encodedModelSection = 0;
+                if (!TryEncodeModelSection(modelIndex, 0, encodedModelSection) ||
+                    encodedModelSection >= offsets_.size())
+                {
+                    continue;
+                }
+
+                uint32_t lodCount = 1;
+                for (const std::vector<uint32_t>& lodIndices : model.CPULodIndices())
+                {
+                    if (lodCount >= static_cast<uint32_t>(MAX_MODEL_LOD_COUNT) || lodIndices.empty())
+                    {
+                        break;
+                    }
+                    // Indices are already model-relative, exactly like the LOD0 stream, so they
+                    // need no rebasing: the shader adds ModelData::vertexOffset either way.
+                    ModelData& section = offsets_[encodedModelSection];
+                    section.lodIndexOffset[lodCount] = static_cast<uint32_t>(primitiveIndices.size());
+                    section.lodIndexCount[lodCount] = static_cast<uint32_t>(lodIndices.size());
+                    primitiveIndices.insert(primitiveIndices.end(), lodIndices.begin(), lodIndices.end());
+                    ++lodCount;
+                    ++simplifiedLevelCount;
+                }
+                offsets_[encodedModelSection].lodCount = lodCount;
+            }
+            SPDLOG_INFO("Model LOD table: {} simplified levels across {} sections", simplifiedLevelCount,
+                        offsets_.size());
+        }
+
+        for (auto& model : models_)
+        {
             // Retain CPU mesh data in editor mode for scene saving.
             if (!GOption->KeepCPUMeshData)
             {

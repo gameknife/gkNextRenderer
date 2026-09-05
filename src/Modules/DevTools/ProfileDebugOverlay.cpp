@@ -50,6 +50,20 @@ namespace
         return fmt::format("{} / {}", FormatCount(visibleCount), FormatCount(totalCount));
     }
 
+    // Triangles discrete LOD removed: what the drawn proxies would have cost at LOD0 minus what
+    // they actually cost. Without this the win is invisible -- the Triangles row alone cannot say
+    // whether a low count means LOD worked or simply that little was on screen.
+    std::string FormatLodSavings(const Assets::GPUDrivenStat& stat)
+    {
+        if (stat.Lod0TriangleCount == 0)
+        {
+            return "n/a";
+        }
+        const uint32_t saved = SaturatingSubtract(stat.Lod0TriangleCount, stat.TriangleCount);
+        const double percent = 100.0 * static_cast<double>(saved) / static_cast<double>(stat.Lod0TriangleCount);
+        return fmt::format("{} ({:.0f}%)", FormatCount(saved), percent);
+    }
+
     void DrawShadowCascadeStats(const std::array<Assets::GPUDrivenStat, Assets::Scene::kSunShadowCascadeCount>& stats)
     {
         if (!ImGui::BeginTable("##ShadowCascadeStats", 3,
@@ -89,7 +103,9 @@ namespace
 void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statistics& statistics, float topOffset)
 {
     Assets::Scene& scene = engine.GetScene();
-    const auto& gpuDrivenStat = scene.GetGpuDrivenStat();
+    // Smoothed, not raw: these counters are read back without a fence, so the raw values flicker
+    // frame to frame even when nothing in the scene changed.
+    const auto& gpuDrivenStat = scene.GetSmoothedGpuDrivenStat();
     const auto& shadowGpuDrivenStats = scene.GetShadowGpuDrivenStats();
     const uint32_t visibleDrawCount = SaturatingSubtract(gpuDrivenStat.ProcessedCount, gpuDrivenStat.CulledCount);
     const uint32_t visibleTriangleCount =
@@ -161,6 +177,7 @@ void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statisti
             DrawValueRow("Culled draws", FormatCount(gpuDrivenStat.CulledCount));
             DrawValueRow("Triangles", FormatVisibleOverTotal(visibleTriangleCount, gpuDrivenStat.TriangleCount));
             DrawValueRow("Culled tris", FormatCount(gpuDrivenStat.CulledTriangleCount));
+            DrawValueRow("LOD saved", FormatLodSavings(gpuDrivenStat));
             DrawValueRow("Batches", FormatCount(scene.GetIndirectDrawBatchCount()));
             ImGui::EndTable();
         }

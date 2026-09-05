@@ -197,6 +197,23 @@ namespace Vulkan
 
             vkCmdFillBuffer(commandBuffer, scene.SoftMeshShaderCounterBuffer().Handle(), 0, VK_WHOLE_SIZE, 0);
 
+            // Reset the main GPU-driven stat block here rather than from the CPU readback. The
+            // readback maps host-visible memory without a fence, so clearing there raced the cull
+            // and could clear either side of an accumulation, making the overlay alternate between
+            // one and two frames' worth of counts. Clearing on the GPU timeline puts the reset and
+            // the accumulation in the same ordered stream, so a read sees at most one frame.
+            // Only the main block: shadow cascades are cleared per-cascade by ShadowMapPass, since
+            // an inactive cascade must retain its last values instead of reporting zero.
+            vkCmdFillBuffer(commandBuffer, scene.NodeMatrixBuffer().Handle(),
+                            Assets::GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET,
+                            sizeof(Assets::GPUDrivenStat), 0);
+
+            BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                        scene.NodeMatrixBuffer().Handle(), VK_ACCESS_TRANSFER_WRITE_BIT,
+                                        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                                        Assets::GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET,
+                                        sizeof(Assets::GPUDrivenStat));
+
             BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                                         scene.SoftMeshShaderCounterBuffer().Handle(), VK_ACCESS_TRANSFER_WRITE_BIT,
                                         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
@@ -511,6 +528,29 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
             vkCmdFillBuffer(commandBuffer, scene.SoftMeshShaderCounterBuffer().Handle(), 0, VK_WHOLE_SIZE, 0);
             vkCmdFillBuffer(commandBuffer, scene.SoftMeshShaderDrawArgBuffer().Handle(), sizeof(VkDrawIndirectCommand),
                             sizeof(VkDrawIndirectCommand) * Assets::Scene::kSunShadowCascadeCount, 0);
+
+            // Clear the stat block of each cascade this dispatch will actually rebuild. Cascades
+            // refresh on a rotating schedule, so clearing all four would zero the ones that are
+            // being skipped; leaving them uncleared (the previous behaviour) instead accumulated
+            // them without bound, and the overlay's shadow rows climbed for as long as the scene
+            // stayed loaded.
+            for (uint32_t cascade = 0; cascade < Assets::Scene::kSunShadowCascadeCount; ++cascade)
+            {
+                if ((activeCascadeMask & (1u << cascade)) == 0u)
+                {
+                    continue;
+                }
+                const VkDeviceSize statOffset =
+                    Assets::GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET +
+                    static_cast<VkDeviceSize>(cascade) * sizeof(Assets::GPUDrivenStat);
+                vkCmdFillBuffer(commandBuffer, scene.NodeMatrixBuffer().Handle(), statOffset,
+                                sizeof(Assets::GPUDrivenStat), 0);
+                BufferMemoryBarrier::Insert(
+                    commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    scene.NodeMatrixBuffer().Handle(), VK_ACCESS_TRANSFER_WRITE_BIT,
+                    VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, statOffset,
+                    sizeof(Assets::GPUDrivenStat));
+            }
 
             BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, {
                 BufferMemoryBarrier::Make(scene.SoftMeshShaderCounterBuffer().Handle(), VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT),

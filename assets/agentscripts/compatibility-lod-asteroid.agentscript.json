@@ -1,0 +1,124 @@
+{
+  "name": "compatibility-lod-asteroid",
+  "target": "gkNextRenderer",
+  "scene": "AsteroidBelt.proc",
+  "args": [
+    "--force-compatibility-renderer"
+  ],
+  "defaults": {
+    "stepTimeoutMs": 120000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    {
+      "type": "log",
+      "message": "Discrete LOD on the compatibility soft-mesh path. AsteroidBelt.proc is 30000 proxies x 80 triangles of unshared, flat-shaded geometry -- the case that made the single indirect draw's vertex stage the whole frame on A10-class hardware. The two captures are an A/B on r.lod.baseThreshold: 0 pins every proxy to LOD0, 128 is the shipping default."
+    },
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running"
+    },
+    {
+      "type": "assert",
+      "query": "engine.rendererType",
+      "op": "eq",
+      "value": 6,
+      "comment": "ERT_Compatibility; otherwise this measures the wrong path entirely."
+    },
+    {
+      "type": "wait-until",
+      "query": "scene.nodeCount",
+      "op": "gt",
+      "value": 1000
+    },
+    {
+      "type": "cvar",
+      "name": "r.lod.baseThreshold",
+      "set": 0
+    },
+    {
+      "type": "wait-frames",
+      "n": 180
+    },
+    {
+      "type": "assert",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running"
+    },
+    {
+      "type": "assert",
+      "query": "engine.frameRate",
+      "op": "gt",
+      "value": 0,
+      "comment": "Always passes; the report's `actual` is the LOD0 baseline frame rate this A/B exists to compare against."
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/compat_lod_asteroid_off.jpg",
+      "comment": "Baseline: every proxy at full detail."
+    },
+    {
+      "type": "cvar",
+      "name": "r.lod.baseThreshold",
+      "set": 128
+    },
+    {
+      "type": "wait-frames",
+      "n": 180
+    },
+    {
+      "type": "assert",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running",
+      "comment": "Selecting a level must not desynchronise expansion from the indirect draw args."
+    },
+    {
+      "type": "assert",
+      "query": "engine.frameRate",
+      "op": "gt",
+      "value": 0,
+      "comment": "Frame rate at the shipping threshold."
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/compat_lod_asteroid_on.jpg",
+      "comment": "LOD active. Compared against the baseline this should differ only in distant silhouette detail -- no holes, no missing rocks, no scrambled triangles."
+    },
+    {
+      "type": "cvar",
+      "name": "r.lod.baseThreshold",
+      "set": 8
+    },
+    {
+      "type": "wait-frames",
+      "n": 180
+    },
+    {
+      "type": "assert",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running"
+    },
+    {
+      "type": "assert",
+      "query": "engine.frameRate",
+      "op": "gt",
+      "value": 0
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/compat_lod_asteroid_mixed.jpg",
+      "comment": "The one that actually exercises the mechanism. At this threshold the default camera splits the belt roughly 3200/14500/8800/3500 across all four levels, so a single indirect draw carries proxies pointing at four different index ranges at once. A mistake in the cull->expand->vertex offset handoff shows up here as scrambled or missing triangles; at the shipping threshold the whole belt collapses to one level and would hide it."
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

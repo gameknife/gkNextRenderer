@@ -14,6 +14,14 @@ public static const int MAX_RENDER_PROXIES = 131072;
 public static const int MAX_MATERIALS = 16384;
 public static const int MAX_HDR_SH = 100;
 
+// Discrete LOD levels per model section, including LOD0. Every section owns exactly this many
+// consecutive ModelLod entries so a shader can index by level without a per-model table offset.
+public static const int MAX_MODEL_LOD_COUNT = 4;
+
+// Per-cascade sun shadow map edge. Shared so the shadow cull pass can size a proxy's projected
+// extent in shadow-map pixels using the same number the pass actually renders at.
+public static const int SUN_SHADOW_RESOLUTION = 1024;
+
 public static const int HDR_OUTPUT_MODE_SDR = 0;
 public static const int HDR_OUTPUT_MODE_HDR10_ST2084 = 1;
 public static const int HDR_OUTPUT_MODE_EXTENDED_SRGB_LINEAR = 2;
@@ -109,8 +117,15 @@ public struct ALIGN_16 GPUDrivenStat
     public uint TriangleCount;
     public uint CulledTriangleCount;
     public uint MaxVisibleProxyIndex;
-    public uint ReservedAlign2;
-    public uint ReservedAlign3;
+    // What TriangleCount would have been with every proxy pinned to LOD0. The difference between
+    // the two is the geometry discrete LOD removed this frame, which is otherwise invisible: a
+    // scene that halves its triangles looks identical to one that simply culled more.
+    public uint Lod0TriangleCount;
+    // Frame index the cull pass stamped when it populated this block. The reset that precedes the
+    // pass zeroes it, so a CPU reader that sees 0 knows it caught the window between the reset and
+    // the accumulation and must keep its previous values instead of reporting an empty frame. The
+    // readback is deliberately fenceless, so that window is reachable.
+    public uint FrameStamp;
 };
 
 // Logical visibility identity shared by the expanded primitive stream and visibility consumers.
@@ -245,6 +260,12 @@ public struct ALIGN_16 UniformBufferObject
     // The visible camera background is independent from sky lighting: Studio keeps SkyIdx for
     // irradiance/specular/path-tracing misses while replacing only the primary-ray presentation.
     public uint BackgroundMode;
+
+    // Projected pixel extent at or above which a proxy draws at LOD0; each further level halves it.
+    // 0 pins everything to LOD0. Lives here rather than in a pass CustomData word because all three
+    // of those are already claimed by the cull passes, and because shadow and main cull must agree
+    // on the policy even though they run with different viewports.
+    public float LodBaseThreshold;
 };
 
 public struct ALIGN_16 NodeProxy
@@ -279,7 +300,20 @@ public struct ALIGN_16 ModelData
     public uint modelType;
     public uint voxelDataIdx;
     public uint reorderOffset;
-    public uint reserved2;
+    // Populated LOD levels for this section, always >= 1. Sections that never got simplified
+    // report 1, which makes every LOD query resolve back to level 0.
+    public uint lodCount;
+
+    // Discrete levels of detail, embedded rather than kept in a side buffer: GPUScene already sits
+    // exactly at the 128-byte push-constant floor and has no address slot left, and both the cull
+    // and vertex stages load ModelData anyway, so a level costs no extra fetch.
+    //
+    // Simplified levels only ever add index data -- meshopt_simplify emits indices into the
+    // existing vertex range, and the flat-shaded case that needs fresh normals appends its
+    // vertices to the same model -- so vertexOffset never varies by level. Entry 0 mirrors
+    // indexOffset/indexCount above so a shader can index by level without branching.
+    public uint lodIndexOffset[MAX_MODEL_LOD_COUNT];
+    public uint lodIndexCount[MAX_MODEL_LOD_COUNT];
 };
 
 // size = 10 x 4 bytes, 40 bytes

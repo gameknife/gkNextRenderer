@@ -606,6 +606,39 @@ namespace Assets
         }
     }
 
+    void Scene::UpdateSmoothedGpuDrivenStats()
+    {
+        // A first-order IIR filter over the per-frame counters. 0.15 settles in roughly 20 frames,
+        // which is fast enough that the overlay tracks a camera cut without the reader noticing a
+        // lag, and slow enough that single-frame sampling noise stops being legible.
+        constexpr float smoothing = 0.15f;
+        if (!smoothedGpuDrivenStatValid_)
+        {
+            smoothedGpuDrivenStat_ = gpuDrivenStat_;
+            smoothedGpuDrivenStatValid_ = true;
+            return;
+        }
+
+        const auto blend = [](uint32_t previous, uint32_t current)
+        {
+            const float value = static_cast<float>(previous) +
+                (static_cast<float>(current) - static_cast<float>(previous)) * smoothing;
+            // Round rather than truncate: repeatedly truncating a converging value stalls it one
+            // short of the target and the display never reaches the real count.
+            return static_cast<uint32_t>(value + 0.5f);
+        };
+        smoothedGpuDrivenStat_.ProcessedCount = blend(smoothedGpuDrivenStat_.ProcessedCount, gpuDrivenStat_.ProcessedCount);
+        smoothedGpuDrivenStat_.VisibleCount = blend(smoothedGpuDrivenStat_.VisibleCount, gpuDrivenStat_.VisibleCount);
+        smoothedGpuDrivenStat_.CulledCount = blend(smoothedGpuDrivenStat_.CulledCount, gpuDrivenStat_.CulledCount);
+        smoothedGpuDrivenStat_.TriangleCount = blend(smoothedGpuDrivenStat_.TriangleCount, gpuDrivenStat_.TriangleCount);
+        smoothedGpuDrivenStat_.CulledTriangleCount =
+            blend(smoothedGpuDrivenStat_.CulledTriangleCount, gpuDrivenStat_.CulledTriangleCount);
+        smoothedGpuDrivenStat_.Lod0TriangleCount =
+            blend(smoothedGpuDrivenStat_.Lod0TriangleCount, gpuDrivenStat_.Lod0TriangleCount);
+        // Not smoothed: a high-water mark, where an average is meaningless.
+        smoothedGpuDrivenStat_.MaxVisibleProxyIndex = gpuDrivenStat_.MaxVisibleProxyIndex;
+    }
+
     void Scene::StartUpdateNodes()
     {
         UpdateLights();
@@ -614,22 +647,38 @@ namespace Assets
             DrawAreaLights();
         }
         GPUDrivenStat zero{};
-        // read back gpu driven stats
+        // Read back GPU-driven stats. This is a plain map of host-visible memory with no fence, so
+        // it is a snapshot of whatever the GPU has accumulated so far -- deliberately cheap. The
+        // zeroing that pairs with it happens on the GPU timeline immediately before the cull pass
+        // (VulkanBaseRenderer.GpuDriven.cpp), not here: clearing from the CPU raced the cull and
+        // produced readings that were sometimes exactly two frames' worth, which showed up in the
+        // overlay as values flipping between N and 2N.
         const auto data = sceneDynamicBufferMemory_->Map(
             Assets::GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET,
             sizeof(Assets::GPUDrivenStat) * (1 + Assets::Scene::kSunShadowCascadeCount));
         // download
         GPUDrivenStat* gpuData = static_cast<GPUDrivenStat*>(data);
-        std::memcpy(&gpuDrivenStat_, gpuData, sizeof(GPUDrivenStat));
-        std::memcpy(shadowGpuDrivenStats_.data(), gpuData + 1,
-                    sizeof(Assets::GPUDrivenStat) * Assets::Scene::kSunShadowCascadeCount);
-        gpuData[0] = zero;
+        // FrameStamp is zero only while the block sits between its GPU-side reset and the cull pass
+        // that refills it. Adopting such a sample would report an empty frame, which is what made
+        // the overlay blink to zero after the reset moved onto the GPU timeline.
+        if (gpuData[0].FrameStamp != 0)
+        {
+            std::memcpy(&gpuDrivenStat_, gpuData, sizeof(GPUDrivenStat));
+        }
+        for (uint32_t cascade = 0; cascade < Assets::Scene::kSunShadowCascadeCount; ++cascade)
+        {
+            if (gpuData[1 + cascade].FrameStamp != 0)
+            {
+                shadowGpuDrivenStats_[cascade] = gpuData[1 + cascade];
+            }
+        }
         if (!GetEnvSettings().HasSun)
         {
             std::fill(shadowGpuDrivenStats_.begin(), shadowGpuDrivenStats_.end(), zero);
-            std::fill_n(gpuData + 1, Assets::Scene::kSunShadowCascadeCount, zero);
         }
         sceneDynamicBufferMemory_->Unmap();
+
+        UpdateSmoothedGpuDrivenStats();
 
 
         // if mat dirty, update

@@ -2,7 +2,8 @@ import Shader.Bindless;
 import Shader.Types;
 import Shader.GpuScene;
 
-import Shader.SoftMeshShaderCull; // IsAABBInFrustum
+import Shader.SoftMeshShaderCull; // IsAABBInFrustum / ComputeScreenExtent / SelectLod
+import Shader.VisibilityBuffer;
 
 // ---------------------------------------------------------------------------
 // Subgroup (wave) fast path of the soft-mesh shadow GPU cull (plan Phase 3).
@@ -30,13 +31,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
     bool inRange = (DTid.x < scene.CustomData1) && (DTid.x < MAX_RENDER_PROXIES);
     NodeProxy node;
     ModelData model;
-    uint triangleCount = 0;
     bool isCandidate = false;
     if (inRange)
     {
         node = scene.Nodes[DTid.x];
         model = scene.Offsets[node.modelId];
-        triangleCount = model.indexCount / 3;
         isCandidate = (node.visible & RENDER_PARTICIPATION_SHADOW_CASTER) != 0u;
     }
 
@@ -49,9 +48,17 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
         bool shouldDraw = false;
         bool emit = false;
+        uint triangleCount = 0;
+        uint lod = 0;
         if (inRange)
         {
             float4x4 lightMvp = mul(scene.Camera[0].SunCascadeViewProjection[cascadeIdx], node.worldTS);
+            // Must match the LDS variant exactly; see its note on per-cascade selection.
+            lod = SelectLod(
+                ComputeScreenExtent(model.localAabbMin.xyz, model.localAabbMax.xyz, lightMvp,
+                                    float2(SUN_SHADOW_RESOLUTION, SUN_SHADOW_RESOLUTION)),
+                max(model.lodCount, 1u), scene.Camera[0].LodBaseThreshold);
+            triangleCount = scene.Offsets[node.modelId].lodIndexCount[lod] / 3;
             shouldDraw = isCandidate && IsAABBInFrustum(model.localAabbMin.xyz, model.localAabbMax.xyz, lightMvp);
             emit = shouldDraw && triangleCount > 0;
         }
@@ -92,7 +99,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
             {
                 SoftMeshShaderVisibleItem item;
                 item.primBase = cascadeIdx * maxSceneTriangles + primBase;
-                item.instanceIdx = DTid.x + 1;
+                item.instanceIdx = Visibility.MakeIdWithLod(DTid.x + 1, 0, lod).x;
                 item.modelOffsetIdx = node.modelId;
                 item.triCount = triangleCount;
                 visibleItems[slot * MAX_RENDER_PROXIES + itemIdx] = item;

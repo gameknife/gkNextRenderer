@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fmt/format.h>
 
+#include <meshoptimizer.h>
 #include <xxhash.h>
 
 #include "Engine/Runtime/Engine.hpp"
@@ -253,10 +254,132 @@ namespace Assets
         }
     }
 
+    void Model::BuildLods()
+    {
+        if (!lodIndices_.empty() || indices_.empty() || vertices_.empty())
+        {
+            return;
+        }
+
+        // Skinned meshes are excluded: the synthesised-vertex path would have to extend the
+        // parallel weight/joint arrays too, and Scene::Reload silently drops a model's skin data
+        // when those arrays disagree with the vertex count. Characters are also not what the
+        // vertex-bound scenes are made of.
+        if (!weights_.empty())
+        {
+            return;
+        }
+
+        const size_t indexCount = indices_.size();
+        // Below this a level costs more in table/draw bookkeeping than it saves in vertex work.
+        constexpr size_t minTrianglesForLod = 32;
+        if (indexCount < minTrianglesForLod * 3)
+        {
+            return;
+        }
+
+        // meshopt_simplify collapses edges, and an edge only exists between vertices that are the
+        // same vertex. A flat-shaded mesh gives every triangle its own three vertices, so nothing
+        // is ever adjacent and simplification silently returns the input unchanged. Welding on
+        // position alone rebuilds the adjacency without touching the real vertex buffer.
+        std::vector<uint32_t> remap(vertices_.size());
+        const meshopt_Stream positionStream{&vertices_[0].Position, sizeof(glm::vec3), sizeof(Vertex)};
+        const size_t weldedCount = meshopt_generateVertexRemapMulti(
+            remap.data(), indices_.data(), indexCount, vertices_.size(), &positionStream, 1);
+        if (weldedCount == 0)
+        {
+            return;
+        }
+
+        std::vector<uint32_t> weldedIndices(indexCount);
+        meshopt_remapIndexBuffer(weldedIndices.data(), indices_.data(), indexCount, remap.data());
+        std::vector<glm::vec3> weldedPositions(weldedCount);
+        std::vector<uint32_t> firstOriginal(weldedCount, ~0u);
+        for (uint32_t original = 0; original < vertices_.size(); ++original)
+        {
+            const uint32_t welded = remap[original];
+            weldedPositions[welded] = vertices_[original].Position;
+            if (firstOriginal[welded] == ~0u)
+            {
+                firstOriginal[welded] = original;
+            }
+        }
+
+        // Welding that collapses most of the buffer means the seams were attribute seams, i.e. the
+        // mesh is flat shaded. Mapping a simplified corner back to some original vertex would then
+        // hand it a normal belonging to a face that no longer exists -- measured at 39-55 degrees
+        // of error on the faceted asteroids, with outright flips at the coarsest level. Those
+        // levels get freshly synthesised vertices carrying the recomputed face normal instead.
+        // A smooth mesh keeps sharing its original vertices, which costs no extra memory.
+        const bool synthesizeVertices = weldedCount * 2 < vertices_.size();
+
+        size_t previousIndexCount = indexCount;
+        for (uint32_t level = 1; level < static_cast<uint32_t>(MAX_MODEL_LOD_COUNT); ++level)
+        {
+            const float ratio = std::pow(0.5f, static_cast<float>(level));
+            const size_t targetIndexCount = static_cast<size_t>(static_cast<double>(indexCount) * ratio) / 3 * 3;
+            std::vector<uint32_t> simplified(indexCount);
+            const size_t resultCount = meshopt_simplify(
+                simplified.data(), weldedIndices.data(), indexCount, &weldedPositions[0].x, weldedCount,
+                sizeof(glm::vec3), targetIndexCount, 1.0f, 0, nullptr);
+
+            // Simplification stops short when topology runs out. A level that saved nothing over
+            // the previous one would only add a table entry and a pop, so end the chain there.
+            if (resultCount < 3 || resultCount * 4 > previousIndexCount * 3)
+            {
+                break;
+            }
+            simplified.resize(resultCount);
+
+            if (synthesizeVertices)
+            {
+                std::vector<uint32_t> emitted(resultCount);
+                for (size_t triangle = 0; triangle + 2 < resultCount; triangle += 3)
+                {
+                    const glm::vec3& a = weldedPositions[simplified[triangle]];
+                    const glm::vec3& b = weldedPositions[simplified[triangle + 1]];
+                    const glm::vec3& c = weldedPositions[simplified[triangle + 2]];
+                    const glm::vec3 edge0 = b - a;
+                    const glm::vec3 edge1 = c - a;
+                    const glm::vec3 crossProduct = glm::cross(edge0, edge1);
+                    const float crossLength = glm::length(crossProduct);
+                    for (uint32_t corner = 0; corner < 3; ++corner)
+                    {
+                        // Everything except position and normal is inherited: a degenerate sliver
+                        // keeps the source normal rather than a normalised zero vector.
+                        Vertex vertex = vertices_[firstOriginal[simplified[triangle + corner]]];
+                        if (crossLength > 0.0f)
+                        {
+                            vertex.Normal = crossProduct / crossLength;
+                        }
+                        emitted[triangle + corner] = static_cast<uint32_t>(vertices_.size());
+                        vertices_.push_back(vertex);
+                    }
+                }
+                simplified = std::move(emitted);
+            }
+            else
+            {
+                for (uint32_t& index : simplified)
+                {
+                    index = firstOriginal[index];
+                }
+            }
+
+            previousIndexCount = resultCount;
+            lodIndices_.push_back(std::move(simplified));
+        }
+
+        // Synthesised levels grew the vertex buffer; the AABB is unchanged because every new
+        // position is one that already existed.
+        vertexCount = uint32_t(vertices_.size());
+    }
+
     void Model::FreeMemory()
     {
         vertices_ = std::vector<Vertex>();
         indices_ = std::vector<uint32_t>();
+        lodIndices_ = std::vector<std::vector<uint32_t>>();
     }
 
     Model::Model(const std::string& name, std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, bool needGenTSpace) :

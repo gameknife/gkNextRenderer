@@ -1,41 +1,30 @@
-// Compatibility raster pass (see docs/designs/ios-a12x-compatibility-minimal-render-mvp.md).
+// Compatibility soft-mesh raster vertex stage.
 //
-// Three things this shader must not do, because the target device supports none of them:
+// The full soft-mesh path follows device addresses from GPUScene to locate the expanded primitive
+// stream. This version reaches every buffer through one fixed descriptor set instead: binding 5
+// holds uint2(proxyIndex, indexBufferOffset) records written by Task.CompatibilitySoftMeshExpand.
+// That preserves one indirect draw without Shader.Bindless or bufferDeviceAddress.
 //
-//   1. No `import Shader.Bindless` -- that declares the unbounded __DynamicResource arrays, whose
-//      descriptor counts a constrained device cannot back.
-//   2. No GPUScene push constant -- every pointer in it is a buffer device address, and the A12X
-//      does not support bufferDeviceAddress at all. Dereferencing one takes the device down.
-//   3. No 16-bit types at all -- reading GPUVertex as half4 makes SPIR-V require
-//      UniformAndStorageBuffer16BitAccess (which the engine never enables), and even f16tof32
-//      lowers to a bitcast through `half`, requiring the Float16 capability. The vertex buffer is
-//      therefore read as raw uints and decoded with integer math, leaving `Shader` and
-//      `DrawParameters` (from SV_VertexID) as the only capabilities this module declares.
+// The record's index offset is already resolved to the LOD the cull pass chose, so this stage is
+// LOD-agnostic and reads ModelData only for vertexOffset, which is shared by every level.
 //
-// So the scene arrives through an ordinary descriptor set of storage buffers, and the only thing in
-// the push constant is the camera matrix plus which proxy is being drawn. Storage buffers rather
-// than a uniform buffer on purpose: std430 array stride matches the CPU-side struct layout, while
-// std140 would pad NodeProxy::matId[16] from 4 to 16 bytes per element.
-//
-// One draw per render proxy: the host sets ProxyIndex and issues vkCmdDraw(indexCount). There is no
-// GPU cull / soft-mesh expansion here, because those compute passes do bind the bindless set.
+// This module also intentionally avoids 16-bit shader types. GPUVertex is read as raw uint words
+// and decoded with integer math, so the target only needs ordinary 32-bit storage-buffer support.
 import Shader.Types;
 
 [[vk::binding(0, 0)]] StructuredBuffer<NodeProxy> Nodes;
-// GPUVertex as six raw uints; see kVertexWordCount below.
 [[vk::binding(1, 0)]] StructuredBuffer<uint> VertexWords;
 [[vk::binding(2, 0)]] StructuredBuffer<uint> Indices;
 [[vk::binding(3, 0)]] StructuredBuffer<ModelData> Offsets;
+[[vk::binding(5, 0)]] StructuredBuffer<uint2> ExpandedPrimitives;
 
 struct CompatibilityDrawPushConstants
 {
     float4x4 ViewProjection;
-    uint ProxyIndex;
 };
 [[vk::push_constant]] CompatibilityDrawPushConstants pushConstants;
 
 // GPUVertex is three half4s = 24 bytes = 6 uints (Assets::GPUVertex in Vertex.hpp is 12 uint16s).
-// Word 0..1 is Position_Tx, 2..3 Normal_Ty, 4..5 Tangent.
 static const uint kVertexWordCount = 6;
 
 // IEEE binary16 -> binary32 with integer math only. f16tof32 would be shorter but Slang lowers it
@@ -47,7 +36,6 @@ float HalfBitsToFloat(uint h)
     const uint mantissa = h & 0x3FFu;
     if (exponent == 0u)
     {
-        // Zero or subnormal; 2^-24 is the value of the lowest mantissa bit.
         const float magnitude = float(mantissa) * 5.9604644775390625e-8f;
         return (sign != 0u) ? -magnitude : magnitude;
     }
@@ -55,7 +43,6 @@ float HalfBitsToFloat(uint h)
     {
         return asfloat(sign | 0x7F800000u | (mantissa << 13u)); // inf / NaN
     }
-    // Re-bias the exponent: half bias 15 -> float bias 127.
     return asfloat(sign | ((exponent + 112u) << 23u) | (mantissa << 13u));
 }
 
@@ -101,16 +88,13 @@ VertexOutput main(uint vertexIndex: SV_VertexID)
 {
     VertexOutput output;
 
-    const NodeProxy proxy = Nodes[pushConstants.ProxyIndex];
+    const uint2 primitive = ExpandedPrimitives[vertexIndex / 3u];
+    const uint corner = vertexIndex % 3u;
+    const NodeProxy proxy = Nodes[primitive.x];
     const ModelData model = Offsets[proxy.modelId];
-
-    const uint localVertex = Indices[model.indexOffset + vertexIndex];
-    // Skinned meshes keep their deformed copy in a separate buffer, but the skinning compute pass
-    // is one of the scene-frame prepasses this profile does not run. Read the bind pose rather than
-    // a buffer nothing has written this frame.
+    const uint localVertex = Indices[primitive.y + corner];
     const uint vertexWord = (model.vertexOffset + localVertex) * kVertexWordCount;
 
-    // Word 0..1: Position_Tx, word 2..3: Normal_Ty (see the GPUVertex field order above).
     const float2 positionXY = UnpackHalf2(VertexWords[vertexWord + 0]);
     const float2 positionZ_TexU = UnpackHalf2(VertexWords[vertexWord + 1]);
     const float3 localPosition = float3(positionXY, positionZ_TexU.x);
@@ -119,15 +103,10 @@ VertexOutput main(uint vertexIndex: SV_VertexID)
     const float2 normalZ_TexV = UnpackHalf2(VertexWords[vertexWord + 3]);
     const float3 localNormal = float3(normalXY, normalZ_TexV.x);
 
-    // Tangent.w packs the per-vertex material slot in its low byte (see UnpackVertex): the half sits
-    // in the upper 16 bits of the last word, and the slot is that half's low byte.
+    // Tangent.w packs the per-vertex material slot in its low byte (see UnpackVertex).
     const uint materialSlot = (VertexWords[vertexWord + 5] >> 16u) & 0xFFu;
-
     output.position =
         mul(mul(pushConstants.ViewProjection, proxy.worldTS), float4(localPosition, 1.0));
-    // The upper 3x3 rather than its inverse-transpose: correct for the rigid, uniformly scaled
-    // transforms scene nodes normally carry, and this pass is not worth a per-node normal matrix.
-    // Non-uniformly scaled nodes get a slightly skewed normal, which only shifts the shading ramp.
     output.worldNormal = mul((float3x3)proxy.worldTS, localNormal);
     output.materialId = FetchNodeMaterialId(proxy, materialSlot);
     return output;

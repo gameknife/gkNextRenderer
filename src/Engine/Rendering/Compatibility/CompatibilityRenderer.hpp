@@ -20,23 +20,40 @@ namespace Vulkan::Compatibility
     // bank, which this hardware cannot create.
     //
     // The two resource rules that define this path, both forced by the target hardware:
-    //   * no bindless descriptor set -- it binds its own small set of five storage buffers;
+    //   * no bindless descriptor set -- it binds a fixed scene/scratch storage-buffer set and a
+    //     fixed mini G-buffer image set;
     //   * no buffer device addresses -- the GPUScene push constant is entirely made of them, so
-    //     this pass uses its own push constant (camera matrix + proxy index) instead.
+    //     this pass uses its own camera/cull push constants instead.
     //
-    // What it deliberately does not do (see the design doc for why each is deferred): no GPU cull /
-    // soft-mesh expansion (those compute passes bind the bindless set), no skinning, no albedo
-    // textures, no shadows, no visibility IDs, no frustum culling.
+    // Geometry is submitted through a compatibility-local soft-mesh path: fixed-descriptor compute
+    // passes compact frustum-visible proxies, expand their triangles into a private primitive list,
+    // and issue one indirect draw. This has the same submission shape as the full soft-mesh path,
+    // but no GPUScene address table, bindless set, skinning, occlusion culling, textures, shadows,
+    // or visibility IDs.
     // docs/designs/ios-a12x-compatibility-minimal-render-mvp.md
     class CompatibilityRenderer final : public LogicRendererBase
     {
     public:
-        // Matches CompatibilityDrawPushConstants in Rast.CompatibilityAlbedo.vert.slang. It stays
-        // free of GPUScene addresses: that type cannot even be constructed on the target hardware.
+        // Matches CompatibilityDrawPushConstants in Rast.CompatibilitySoftMesh.vert.slang. It
+        // stays free of GPUScene addresses: that type cannot even be constructed on the target
+        // hardware.
         struct FDrawPushConstants
         {
             glm::mat4 ViewProjection;
-            uint32_t ProxyIndex;
+        };
+
+        // Matches CompatibilitySoftMeshCullPushConstants in the cull and finalize compute
+        // shaders. The triangle capacity bounds a private expanded-primitive buffer, never a
+        // device-address range.
+        struct FSoftMeshCullPushConstants
+        {
+            glm::mat4 ViewProjection;
+            uint32_t RenderProxyCount;
+            uint32_t TriangleCapacity;
+            glm::vec2 ViewportSize;
+            // Projected pixel extent at or above which a proxy keeps LOD0; each level halves it.
+            float LodBaseThreshold;
+            float Padding;
         };
 
         // Matches CompatibilityShadePushConstants in Core.CompatibilityShade.comp.slang. The
@@ -49,8 +66,9 @@ namespace Vulkan::Compatibility
             glm::vec4 SkyColor;
         };
 
-        // Storage-buffer bindings of set 0, mirroring the shader declarations. EB_VertexWords is
-        // the vertex buffer read as raw uints -- see the shader for why it cannot be typed.
+        // Storage-buffer bindings of set 0, mirroring the raster and compatibility soft-mesh
+        // compute shader declarations. EB_VertexWords is the vertex buffer read as raw uints --
+        // see the shader for why it cannot be typed.
         enum EBinding : uint32_t
         {
             EB_Nodes = 0,
@@ -58,6 +76,11 @@ namespace Vulkan::Compatibility
             EB_Indices = 2,
             EB_Offsets = 3,
             EB_Materials = 4,
+            EB_ExpandedPrimitives = 5,
+            EB_VisibleItems = 6,
+            EB_Counters = 7,
+            EB_DrawArgs = 8,
+            EB_DispatchArgs = 9,
             EB_Count,
         };
 
@@ -77,10 +100,15 @@ namespace Vulkan::Compatibility
         void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
     private:
-        // Re-points set 0 at the current scene's buffers. Cheap and idempotent: it compares the
-        // bound handles first, so a scene reload rewrites the descriptors and a steady frame does
-        // nothing.
+        void CreateSoftMeshScratchBuffers(uint32_t triangleCapacity);
+        void DeleteSoftMeshScratchBuffers();
+        void EnsureSoftMeshScratchCapacity(const Assets::Scene& scene);
+
+        // Re-points set 0 at the current scene and private scratch buffers. Cheap and idempotent:
+        // it compares the bound handles first, so a scene reload rewrites the descriptors and a
+        // steady frame does nothing.
         void BindSceneBuffers(const Assets::Scene& scene);
+        void DispatchSoftMesh(VkCommandBuffer commandBuffer, const Assets::Scene& scene);
         void TransitionGBufferForRaster(VkCommandBuffer commandBuffer);
         void TransitionGBufferForShading(VkCommandBuffer commandBuffer);
         void TransitionSceneColorForShading(VkCommandBuffer commandBuffer);
@@ -91,11 +119,27 @@ namespace Vulkan::Compatibility
         std::unique_ptr<class RenderPass> gbufferRenderPass_;
         std::unique_ptr<class FrameBuffer> gbufferFrameBuffer_;
         std::unique_ptr<class PipelineLayout> drawPipelineLayout_;
+        std::unique_ptr<class PipelineLayout> softMeshCullPipelineLayout_;
+        std::unique_ptr<class PipelineLayout> softMeshPipelineLayout_;
         std::unique_ptr<class DescriptorSetManager> drawDescriptorSetManager_;
         std::unique_ptr<class PipelineLayout> shadePipelineLayout_;
         std::unique_ptr<class DescriptorSetManager> shadeDescriptorSetManager_;
+        std::unique_ptr<class Buffer> softMeshPrimitiveBuffer_;
+        std::unique_ptr<class DeviceMemory> softMeshPrimitiveMemory_;
+        std::unique_ptr<class Buffer> softMeshVisibleItemBuffer_;
+        std::unique_ptr<class DeviceMemory> softMeshVisibleItemMemory_;
+        std::unique_ptr<class Buffer> softMeshCounterBuffer_;
+        std::unique_ptr<class DeviceMemory> softMeshCounterMemory_;
+        std::unique_ptr<class Buffer> softMeshDrawArgBuffer_;
+        std::unique_ptr<class DeviceMemory> softMeshDrawArgMemory_;
+        std::unique_ptr<class Buffer> softMeshDispatchArgBuffer_;
+        std::unique_ptr<class DeviceMemory> softMeshDispatchArgMemory_;
         std::array<VkBuffer, EB_Count> boundBuffers_{};
+        uint32_t softMeshTriangleCapacity_ = 0;
         VkPipeline drawPipeline_ = VK_NULL_HANDLE;
+        VkPipeline softMeshCullPipeline_ = VK_NULL_HANDLE;
+        VkPipeline softMeshFinalizePipeline_ = VK_NULL_HANDLE;
+        VkPipeline softMeshExpandPipeline_ = VK_NULL_HANDLE;
         VkPipeline shadePipeline_ = VK_NULL_HANDLE;
         bool gbufferInitialized_ = false;
         bool sceneColorInitialized_ = false;

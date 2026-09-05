@@ -1,0 +1,84 @@
+{
+  "name": "softmesh-lod-shading",
+  "target": "gkNextRenderer",
+  "scene": "assets/models/playground.glb",
+  "defaults": {
+    "stepTimeoutMs": 120000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    {
+      "type": "log",
+      "message": "Shading correctness for LOD on the full soft-mesh path. playground is lit, textured and shadowed, so a reconstruction that resolves the wrong index range shows up loudly: get_material_data's barycentric test rejects the sample and the pixel falls back to background, or the surface picks up a neighbouring triangle's normal. AsteroidBelt is too dark to judge this on."
+    },
+    {
+      "type": "wait-until",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running"
+    },
+    {
+      "type": "wait-until",
+      "query": "scene.nodeCount",
+      "op": "gt",
+      "value": 0
+    },
+    {
+      "type": "cvar",
+      "name": "r.rendererType",
+      "comment": "SoftwareModernNoAmbient: visibility-buffer deferred plus CSM.",
+      "set": 4
+    },
+    {
+      "type": "wait-frames",
+      "n": 120
+    },
+    {
+      "type": "assert",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running"
+    },
+    {
+      "type": "cvar",
+      "name": "r.lod.baseThreshold",
+      "set": 0
+    },
+    {
+      "type": "wait-frames",
+      "n": 120
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/softmesh_shading_lod_off.jpg",
+      "comment": "Reference image: LOD0 everywhere."
+    },
+    {
+      "type": "cvar",
+      "name": "r.lod.baseThreshold",
+      "comment": "Deliberately extreme so even playground's few simplified models drop a level, and so the shadow cull picks coarse levels in every cascade.",
+      "set": 512
+    },
+    {
+      "type": "wait-frames",
+      "n": 120
+    },
+    {
+      "type": "assert",
+      "query": "engine.status",
+      "op": "eq",
+      "value": "Running"
+    },
+    {
+      "type": "screenshot",
+      "out": "screenshots/softmesh_shading_lod_on.jpg",
+      "comment": "Compare against the reference: lighting, materials and shadows must still be right. Silhouette differences on simplified models are expected; black holes, wrong colours or missing shadows are not."
+    },
+    {
+      "type": "quit"
+    }
+  ]
+}

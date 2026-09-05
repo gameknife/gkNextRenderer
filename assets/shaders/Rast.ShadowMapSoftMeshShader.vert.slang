@@ -24,10 +24,12 @@ VertexOutput main(uint vertexIndex: SV_VertexID)
         softMeshShader.ShadowPrim, scene.CustomData2 + vertexIndex / 3);
     uint corner = vertexIndex % 3;
 
-    NodeProxy proxy = scene.Nodes[visibilityId.x - 1];
+    NodeProxy proxy = scene.Nodes[Visibility.ProxyIndex(visibilityId)];
     ModelData model = scene.Offsets[proxy.modelId];
 
-    uint localVertex = scene.Indices[model.indexOffset + visibilityId.y * 3 + corner];
+    // Shadow cull picks a level per cascade, so this resolves against whatever level this
+    // cascade's cull pass reserved triangles for.
+    uint localVertex = scene.Indices[model.lodIndexOffset[Visibility.LodLevel(visibilityId)] + visibilityId.y * 3 + corner];
     uint vertexAddress = model.vertexOffset + localVertex;
     GPUVertex packedVertex;
     if (proxy.skinId != 0xFFFFFFFF)
