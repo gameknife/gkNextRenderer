@@ -1603,7 +1603,10 @@ namespace Vulkan
         {
             atmosphere_->CreateSwapChainPipelines();
         }
-        overlay_.wireframePipeline.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
+        overlay_.wireframePipeline.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true, true));
+        // X-ray variant: identical except it ignores scene depth, so interior and back-facing
+        // edges stay visible. Shares the render pass layout, so both can use the same framebuffers.
+        overlay_.wireframeXrayPipeline.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true, false));
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframeFrameBuffers.reserve(frame_.swapChain->ImageViews().size());
         for (size_t i = 0; i < frame_.swapChain->ImageViews().size(); ++i)
@@ -1943,6 +1946,7 @@ namespace Vulkan
         overlay_.visibilityFrameBuffer.reset();
         overlay_.sunShadowPass.reset();
         overlay_.wireframeFrameBuffers.clear();
+        overlay_.wireframeXrayPipeline.reset();
         overlay_.wireframePipeline.reset();
         overlay_.bufferClearPipeline.reset();
         overlay_.checkerboardResolvePipeline.reset();
@@ -2035,6 +2039,7 @@ namespace Vulkan
         lateToneMapping_.outputInitialized = false;
         frame_.commandBuffers.reset();
         overlay_.wireframeFrameBuffers.clear();
+        overlay_.wireframeXrayPipeline.reset();
         overlay_.wireframePipeline.reset();
         overlay_.bufferClearPipeline.reset();
         overlay_.checkerboardResolvePipeline.reset();

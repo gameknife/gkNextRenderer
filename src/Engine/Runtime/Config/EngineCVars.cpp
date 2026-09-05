@@ -87,6 +87,10 @@ namespace NextCVar
         GK_CVAR_FLOAT_RANGE("r.lod.baseThreshold", settings, LodBaseThreshold, 128.0f, ECVarFlags::Archive,
                             "Projected pixel extent at or above which a mesh draws at LOD0; each further level halves it (0 = always LOD0)",
                             0.0, 4096.0);
+        GK_CVAR_FLOAT_RANGE("r.lod.shadowThresholdScale", settings, LodShadowThresholdScale, 1.0f,
+                            ECVarFlags::Archive,
+                            "Multiplier on r.lod.baseThreshold for sun shadow cascades (1 = same as the main view)",
+                            0.0, 64.0);
         GK_CVAR_FLOAT("r.gtao.radius", settings, GTAORadius, 1.0f, ECVarFlags::Archive, "GTAO world-space sampling radius");
         GK_CVAR_FLOAT("r.gtao.strength", settings, GTAOStrength, 5.0f, ECVarFlags::Archive, "Master sky-occlusion strength: scales GTAO sky darkening (1=natural, lower=lighter)");
         GK_CVAR_FLOAT("r.gtao.thickness", settings, GTAOThickness, 0.5f, ECVarFlags::Archive, "GTAO depth-discontinuity thickness heuristic in world units");
@@ -177,6 +181,10 @@ namespace NextCVar
         GK_CVAR_BOOL("show.debugSkeleton", showFlags, ShowDebugSkeleton, false, ECVarFlags::None, "Show debug skeleton");
         GK_CVAR_BOOL("show.grid", showFlags, ShowGrid, true, ECVarFlags::None, "Show grid");
         GK_CVAR_BOOL("show.wireframe", showFlags, ShowWireframe, false, ECVarFlags::None, "Show wireframe");
+        GK_CVAR_BOOL("show.wireframe.xray", settings, WireframeXRay, false, ECVarFlags::Archive,
+                     "Draw wireframe edges through geometry instead of letting scene depth occlude them");
+        GK_CVAR_UINT("show.wireframe.colorMode", settings, WireframeColorMode, 0, ECVarFlags::Archive,
+                     "Wireframe colouring (0=uniform, 1=tint by LOD level)");
     }
 
 }

@@ -247,7 +247,8 @@ namespace Vulkan::PipelineCommon
     const DepthBuffer& depthBuffer,
     const std::vector<Assets::UniformBuffer>& uniformBuffers,
     const Assets::Scene& scene,
-    const bool isWireFrame) :
+    const bool isWireFrame,
+    const bool depthTest) :
     PipelineBase(swapChain)
     {
         (void)uniformBuffers;
@@ -266,7 +267,8 @@ namespace Vulkan::PipelineCommon
         };
 
         VkPushConstantRange pushConstantRange{};
-        pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        // The fragment stage reads its presentation options out of the same GPUScene block.
+        pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
         pushConstantRange.offset = 0;
         pushConstantRange.size = sizeof(Assets::GPUScene);
 
@@ -291,7 +293,7 @@ namespace Vulkan::PipelineCommon
             .SetShaders(vertShader, fragShader)
             .SetFixedViewport(viewportOffset, viewportExtent)
             .SetPolygonMode(isWireFrame && physicalDeviceFeatures.fillModeNonSolid ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL)
-            .SetDepth(true, false, VK_COMPARE_OP_GREATER_OR_EQUAL)
+            .SetDepth(depthTest, false, VK_COMPARE_OP_GREATER_OR_EQUAL)
             .SetAlphaBlend(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO)
             .Build(pipelineLayout_->Handle(), renderPass_->Handle(), "create graphics pipeline");
     }

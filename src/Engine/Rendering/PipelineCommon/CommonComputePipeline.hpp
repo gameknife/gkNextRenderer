@@ -75,12 +75,17 @@ namespace Vulkan::PipelineCommon
 
         VULKAN_NON_COPIABLE(GraphicsPipeline)
 
+        // depthTest false draws every edge regardless of what is in front of it (x-ray); true keeps
+        // the pass occluded by scene depth. Two pipelines rather than a dynamic state, because
+        // toggling depth test dynamically needs Vulkan 1.3 / extended dynamic state and this
+        // renderer still targets iOS and Android.
         GraphicsPipeline(
-            const SwapChain& swapChain, 
+            const SwapChain& swapChain,
             const DepthBuffer& depthBuffer,
             const std::vector<Assets::UniformBuffer>& uniformBuffers,
             const Assets::Scene& scene,
-            bool isWireFrame);
+            bool isWireFrame,
+            bool depthTest = true);
         ~GraphicsPipeline();
         
         const class RenderPass& RenderPass() const { return *renderPass_; }

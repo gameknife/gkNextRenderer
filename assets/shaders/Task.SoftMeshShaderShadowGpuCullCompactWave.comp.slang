@@ -53,17 +53,33 @@ void main(uint3 DTid : SV_DispatchThreadID)
         if (inRange)
         {
             float4x4 lightMvp = mul(scene.Camera[0].SunCascadeViewProjection[cascadeIdx], node.worldTS);
-            // Must match the LDS variant exactly; see its note on per-cascade selection.
-            lod = SelectLod(
-                ComputeScreenExtent(model.localAabbMin.xyz, model.localAabbMax.xyz, lightMvp,
-                                    float2(SUN_SHADOW_RESOLUTION, SUN_SHADOW_RESOLUTION)),
-                max(model.lodCount, 1u), scene.Camera[0].LodBaseThreshold);
-            triangleCount = scene.Offsets[node.modelId].lodIndexCount[lod] / 3;
             shouldDraw = isCandidate && IsAABBInFrustum(model.localAabbMin.xyz, model.localAabbMax.xyz, lightMvp);
+
+            // Frustum first, level second: selecting a level costs eight corner projections plus
+            // a bounds reduction, and a proxy outside this cascade never uses the result. In the
+            // asteroid belt 99.5% of shadow candidates are rejected here, so that work was almost
+            // entirely wasted.
+            //
+            // This also fixes the stats. triangleCount is now zero for anything the cascade
+            // frustum dropped, so TriangleCount stops counting the candidate pool and starts
+            // counting what is actually rasterised, and CulledTriangleCount falls to zero. The
+            // panel's `visible = TriangleCount - CulledTriangleCount` therefore reads the real
+            // shadow load. The proxy counters are untouched, so how many casters were considered
+            // and how many the frustum rejected is still visible.
+            // Must match the LDS variant exactly, ordering included.
+            if (shouldDraw)
+            {
+                lod = SelectLod(
+                    ComputeScreenExtent(model.localAabbMin.xyz, model.localAabbMax.xyz, lightMvp,
+                                        float2(SUN_SHADOW_RESOLUTION, SUN_SHADOW_RESOLUTION)),
+                    max(model.lodCount, 1u), scene.Camera[0].LodShadowThreshold);
+                triangleCount = scene.Offsets[node.modelId].lodIndexCount[lod] / 3;
+            }
             emit = shouldDraw && triangleCount > 0;
         }
 
-        // Stats口径与 LDS 版对齐：candidate 计 Processed/Triangle；candidate && !shouldDraw 计 Culled（含 frustum）。
+        // Same口径 as the LDS variant: proxy counters stay candidate-wide, triangle counters now
+        // cover only what the cascade frustum kept.
         bool culled = isCandidate && !shouldDraw;
         uint sP  = WaveActiveSum(isCandidate ? 1u : 0u);
         uint sPT = WaveActiveSum(isCandidate ? triangleCount : 0u);

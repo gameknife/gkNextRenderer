@@ -69,18 +69,37 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Lid : SV_GroupThreadID)
         if (inRange)
         {
             float4x4 lightMvp = mul(scene.Camera[0].SunCascadeViewProjection[cascadeIdx], node.worldTS);
-            // Per-cascade, not per-node: each cascade projects the same proxy at a different scale,
-            // so a distant cascade legitimately shadows with coarser geometry than cascade 0.
-            lod = SelectLod(
-                ComputeScreenExtent(model.localAabbMin.xyz, model.localAabbMax.xyz, lightMvp,
-                                    float2(SUN_SHADOW_RESOLUTION, SUN_SHADOW_RESOLUTION)),
-                max(model.lodCount, 1u), scene.Camera[0].LodBaseThreshold);
-            triangleCount = scene.Offsets[node.modelId].lodIndexCount[lod] / 3;
             shouldDraw = isCandidate && IsAABBInFrustum(model.localAabbMin.xyz, model.localAabbMax.xyz, lightMvp);
+
+            // Frustum first, level second: selecting a level costs eight corner projections plus
+            // a bounds reduction, and a proxy outside this cascade never uses the result. In the
+            // asteroid belt 99.5% of shadow candidates are rejected here, so that work was almost
+            // entirely wasted.
+            //
+            // This also fixes the stats. triangleCount is now zero for anything the cascade
+            // frustum dropped, so TriangleCount stops counting the candidate pool and starts
+            // counting what is actually rasterised, and CulledTriangleCount falls to zero. The
+            // panel's `visible = TriangleCount - CulledTriangleCount` therefore reads the real
+            // shadow load. The proxy counters are untouched, so how many casters were considered
+            // and how many the frustum rejected is still visible.
+            // Per-cascade, not per-node: each cascade projects the same proxy at a different
+            // scale, so a distant cascade legitimately shadows with coarser geometry than cascade 0.
+            if (shouldDraw)
+            {
+                lod = SelectLod(
+                    ComputeScreenExtent(model.localAabbMin.xyz, model.localAabbMax.xyz, lightMvp,
+                                        float2(SUN_SHADOW_RESOLUTION, SUN_SHADOW_RESOLUTION)),
+                    max(model.lodCount, 1u), scene.Camera[0].LodShadowThreshold);
+                triangleCount = scene.Offsets[node.modelId].lodIndexCount[lod] / 3;
+            }
             emit = shouldDraw && triangleCount > 0;
         }
 
-        // Stats口径与现状逐字对齐：candidate 计 Processed/Triangle；candidate && !shouldDraw 计 Culled（含 frustum 剔除）。
+        // Proxy counters keep the candidate口径: Processed = candidate, Culled = candidate &&
+        // !shouldDraw. The triangle counters no longer follow it -- triangleCount is zero outside
+        // the cascade frustum -- so TriangleCount is the rasterised total and CulledTriangleCount
+        // is zero. That is deliberate: the old candidate-wide triangle total looked like a render
+        // cost and was not one.
         bool culled = isCandidate && !shouldDraw;
         g_proc[lid]    = isCandidate ? 1u : 0u;
         g_procTri[lid] = isCandidate ? triangleCount : 0u;

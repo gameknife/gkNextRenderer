@@ -266,6 +266,10 @@ public struct ALIGN_16 UniformBufferObject
     // of those are already claimed by the cull passes, and because shadow and main cull must agree
     // on the policy even though they run with different viewports.
     public float LodBaseThreshold;
+    // The same policy for the sun shadow cascades, pre-multiplied on the CPU. A shadow only needs
+    // enough geometry for its silhouette, so this is normally the larger of the two -- a larger
+    // threshold means a proxy has to project bigger before it earns full detail.
+    public float LodShadowThreshold;
 };
 
 public struct ALIGN_16 NodeProxy

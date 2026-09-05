@@ -251,6 +251,8 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.HasSky = scene_->GetEnvSettings().HasSky;
     ubo.BackgroundMode = static_cast<uint32_t>(scene_->GetEnvSettings().BackgroundMode);
     ubo.LodBaseThreshold = config_.userSettings.LodBaseThreshold;
+    ubo.LodShadowThreshold =
+        config_.userSettings.LodBaseThreshold * config_.userSettings.LodShadowThresholdScale;
     ubo.AtmosphereParams = renderer_->AtmosphereParamsAddress();
     ubo.AtmosphereReserved0 = 0;
     if (auto* texturePool = Assets::GlobalTexturePool::GetInstance())

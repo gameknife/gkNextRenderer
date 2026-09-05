@@ -64,18 +64,24 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Lid : SV_GroupThreadID)
         // agree with, and jitter there would pop objects in and out at the screen edge.
         float4x4 occlusionMvp = mul(scene.Camera[0].PrevViewProjection, node.worldTS);
 
-        // Level selection happens once per proxy, before the triangle count is reserved, so the
-        // whole compaction downstream is sized for the level this proxy actually draws.
-        lod = SelectLod(
-            ComputeScreenExtent(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp,
-                                float2(scene.Camera[0].ViewportRect.zw)),
-            max(model.lodCount, 1u), scene.Camera[0].LodBaseThreshold);
-        triangleCount = scene.Offsets[node.modelId].lodIndexCount[lod] / 3;
-
         bool shouldDraw = ((node.visible & RENDER_PARTICIPATION_MAIN_VISIBILITY) != 0u) &&
             IsAABBInFrustum(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp);
         // IsOccludedVolume is expensive (6^3 samples) so it is only evaluated for drawn nodes, as before.
         bool occluded = shouldDraw && IsOccludedVolume(model.localAabbMin.xyz, model.localAabbMax.xyz, occlusionMvp);
+
+        // Frustum first, level second. Selecting a level costs eight corner projections plus a
+        // bounds reduction, and a proxy outside the frustum never uses the result -- in the
+        // asteroid belt 99.5% of shadow candidates and a large share of main-view proxies are
+        // rejected here. Level selection stays on the shouldDraw side (not !occluded) so the
+        // stats keep counting exactly the population they counted before.
+        if (shouldDraw)
+        {
+            lod = SelectLod(
+                ComputeScreenExtent(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp,
+                                    float2(scene.Camera[0].ViewportRect.zw)),
+                max(model.lodCount, 1u), scene.Camera[0].LodBaseThreshold);
+            triangleCount = scene.Offsets[node.modelId].lodIndexCount[lod] / 3;
+        }
         emit = shouldDraw && !occluded && triangleCount > 0;
 
         // Stats口径与现状逐字对齐：Processed/Triangle = shouldDraw；Culled/CulledTriangle = occlusion 命中。

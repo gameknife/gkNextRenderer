@@ -38,6 +38,12 @@ struct UserSettings final
     uint32_t UpscalerJitterFrames = 16;
     bool UpscalerJitterInvertY = false;
     bool CheckerboardRendering = false;
+
+    // Wireframe overlay (show.wireframe). The pass draws the soft-mesh expanded primitive stream,
+    // so it shows exactly the geometry that survived culling, at the LOD it was drawn with.
+    bool WireframeXRay = false;
+    uint32_t WireframeColorMode = 0; // 0 = uniform, 1 = tint by LOD level
+
     // Camera
     int CameraIdx;
     float CameraFarPlane = Assets::defaultCameraFarPlane;
@@ -61,6 +67,15 @@ struct UserSettings final
     // Projected pixel extent at or above which a proxy draws at LOD0; each further level halves it.
     // 0 pins everything to LOD0, which is the A/B baseline for measuring what LOD actually buys.
     float LodBaseThreshold = 128.0f;
+    // Multiplier applied to LodBaseThreshold for the sun shadow cascades. >1 makes shadows drop to
+    // coarser levels sooner than the main view, which is safe because a cascade only needs the
+    // silhouette, not surface detail.
+    //
+    // Defaults to 1 (same policy as the main view) because that is what was measured: in the scenes
+    // available here the cascades already resolve to the coarsest level at the main-view threshold,
+    // so raising this changes nothing. It is a knob for content that is not represented yet -- high
+    // poly assets shadowed at close range, where a cascade would otherwise hold LOD0.
+    float LodShadowThresholdScale = 1.0f;
     float GTAOThickness = 0.5f;
     int GTAODebugMode = 0;
     bool LightObjectScreenSpaceShadow = false;

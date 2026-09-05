@@ -234,6 +234,17 @@ namespace
                 return static_cast<int64_t>(scene.GetGpuDrivenStat().CulledTriangleCount);
             if (query == "scene.culledProxyCount")
                 return static_cast<int64_t>(scene.GetGpuDrivenStat().CulledCount);
+            // Rasterised sun shadow geometry, summed over cascades. Since the cull pass selects a
+            // LOD only after the cascade frustum test, TriangleCount covers exactly what is drawn.
+            if (query == "scene.shadowVisibleTriangleCount")
+            {
+                int64_t total = 0;
+                for (const auto& cascade : scene.GetShadowGpuDrivenStats())
+                {
+                    total += static_cast<int64_t>(cascade.TriangleCount);
+                }
+                return total;
+            }
             // Triangles per drawn proxy, which is the LOD level the cull pass picked (80/40/20/10
             // for a scene of faceted asteroids) independent of where the camera is. Computed here
             // rather than by dividing two separate queries: the stats are refreshed every frame, so

@@ -329,7 +329,7 @@ namespace Editor
         {
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 10));
             auto& showFlags = ctx.engine.GetShowFlags();
-            Utilities::UI::DrawShowFlagsCommon(showFlags);
+            Utilities::UI::DrawShowFlagsCommon(showFlags, &ctx.engine.GetUserSettings());
 
             ImGui::PopStyleVar();
             ImGui::EndPopup();

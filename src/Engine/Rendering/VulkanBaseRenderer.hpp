@@ -610,6 +610,7 @@ namespace Vulkan
         struct OverlayPipelines
         {
             std::unique_ptr<PipelineCommon::GraphicsPipeline> wireframePipeline;
+            std::unique_ptr<PipelineCommon::GraphicsPipeline> wireframeXrayPipeline;
             std::unique_ptr<PipelineCommon::VisibilityPipeline> visibilityPipeline;
             std::unique_ptr<Shadow::ShadowMapPass> sunShadowPass;
             std::vector<std::unique_ptr<IExternalRenderPass>> externalPasses;

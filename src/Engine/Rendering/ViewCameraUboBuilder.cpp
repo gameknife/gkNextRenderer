@@ -75,6 +75,7 @@ namespace Vulkan
             // Secondary views (thumbnails, offscreen cameras) render at full detail: they are
             // small, infrequent, and often the reference image something else is compared against.
             ubo.LodBaseThreshold = 0.0f;
+            ubo.LodShadowThreshold = 0.0f;
         }
 
         void FillThumbnailDefaults(

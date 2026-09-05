@@ -635,7 +635,11 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
 
     void VulkanBaseRenderer::DrawWireframeOverlay(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
-        if (!overlay_.wireframePipeline || imageIndex >= overlay_.wireframeFrameBuffers.size())
+        // Depth-tested by default (edges sit on the surfaces they belong to); x-ray shows every
+        // edge including those behind geometry.
+        const bool xray = FrameSettings().userSettings.WireframeXRay;
+        auto* selectedPipeline = xray ? overlay_.wireframeXrayPipeline.get() : overlay_.wireframePipeline.get();
+        if (!selectedPipeline || imageIndex >= overlay_.wireframeFrameBuffers.size())
         {
             return;
         }
@@ -649,7 +653,7 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
 
         VkRenderPassBeginInfo renderPassInfo = {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        auto& activeWireframePipeline = *overlay_.wireframePipeline;
+        auto& activeWireframePipeline = *selectedPipeline;
         renderPassInfo.renderPass = activeWireframePipeline.RenderPass().Handle();
         renderPassInfo.framebuffer = overlay_.wireframeFrameBuffers[imageIndex].Handle();
         renderPassInfo.renderArea.offset = {0, 0};
@@ -660,13 +664,16 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
         {
             const auto& scene = GetScene();
-            const Assets::GPUScene& gpuScene = scene.FetchGPUScene(imageIndex, ActiveViewBankBase());
+            Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex, ActiveViewBankBase());
+            // Pass-local copy, so borrowing CustomData1 for the colour mode affects nothing else.
+            gpuScene.CustomData1 = FrameSettings().userSettings.WireframeColorMode;
 
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, activeWireframePipeline.Handle());
             activeWireframePipeline.PipelineLayout().BindDescriptorSets(
                 commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
             vkCmdPushConstants(commandBuffer, activeWireframePipeline.PipelineLayout().Handle(),
-                               VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
+                               VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                               sizeof(Assets::GPUScene), &gpuScene);
             if (scene.GetIndirectDrawBatchCount() > 0)
             {
                 vkCmdDrawIndirect(commandBuffer, scene.SoftMeshShaderDrawArgBuffer().Handle(), 0,

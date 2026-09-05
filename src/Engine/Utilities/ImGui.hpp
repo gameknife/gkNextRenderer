@@ -6,6 +6,7 @@
 #include <fmt/format.h>
 #include <ThirdParty/fontawesome/IconsFontAwesome6.h>
 #include "Engine/Runtime/Config/ShowFlags.hpp"
+#include "Engine/Runtime/Config/UserSettings.hpp"
 
 namespace Utilities
 {
@@ -88,7 +89,25 @@ namespace Utilities
             }
         }
 
-        inline void DrawShowFlagsCommon(Runtime::Config::ShowFlags& showFlags) {
+        // Wireframe draws the soft-mesh expanded primitives, so these two decide how that geometry
+        // reads: whether scene depth hides edges behind surfaces, and whether edges are tinted by
+        // the LOD level each proxy was drawn at. Sub-items of the Wireframe toggle rather than
+        // separate entries, since neither does anything while the overlay is off.
+        inline void DrawWireframeOptions(Runtime::Config::UserSettings& settings, bool enabled) {
+            if (!enabled)
+            {
+                return;
+            }
+            ImGui::Indent();
+            DrawShowFlagItem("  X-Ray (ignore depth)", settings.WireframeXRay);
+            bool tintByLod = settings.WireframeColorMode == 1;
+            DrawShowFlagItem("  Tint by LOD", tintByLod);
+            settings.WireframeColorMode = tintByLod ? 1u : 0u;
+            ImGui::Unindent();
+        }
+
+        inline void DrawShowFlagsCommon(Runtime::Config::ShowFlags& showFlags,
+                                        Runtime::Config::UserSettings* settings = nullptr) {
             DrawShowFlagItem("Grid", showFlags.ShowGrid);
             ImGui::Separator();
             DrawShowFlagItem("Lighting", showFlags.DebugDraw_Lighting);
@@ -100,6 +119,10 @@ namespace Utilities
             DrawShowFlagItem("Skeleton", showFlags.ShowDebugSkeleton);
             ImGui::Separator();
             DrawShowFlagItem("Wireframe", showFlags.ShowWireframe);
+            if (settings != nullptr)
+            {
+                DrawWireframeOptions(*settings, showFlags.ShowWireframe);
+            }
         }
 
         inline void TextCentered(std::string text)

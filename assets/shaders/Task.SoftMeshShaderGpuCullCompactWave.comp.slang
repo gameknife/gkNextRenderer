@@ -56,19 +56,27 @@ void main(uint3 DTid : SV_DispatchThreadID)
         // agree with, and jitter there would pop objects in and out at the screen edge.
         float4x4 occlusionMvp = mul(scene.Camera[0].PrevViewProjection, node.worldTS);
 
-        // Same level policy as the LDS variant; the two must agree or switching paths per device
-        // would change what gets drawn.
-        lod = SelectLod(
-            ComputeScreenExtent(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp,
-                                float2(scene.Camera[0].ViewportRect.zw)),
-            max(model.lodCount, 1u), scene.Camera[0].LodBaseThreshold);
-        triangleCount = scene.Offsets[node.modelId].lodIndexCount[lod] / 3;
-        // What this proxy would cost without LOD, for the savings figure in the stat overlay.
-        lod0TriangleCount = model.lodIndexCount[0] / 3;
-
         shouldDraw = ((node.visible & RENDER_PARTICIPATION_MAIN_VISIBILITY) != 0u) &&
             IsAABBInFrustum(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp);
         occluded = shouldDraw && IsOccludedVolume(model.localAabbMin.xyz, model.localAabbMax.xyz, occlusionMvp);
+
+        // Frustum first, level second. Selecting a level costs eight corner projections plus a
+        // bounds reduction, and a proxy outside the frustum never uses the result -- in the
+        // asteroid belt 99.5% of shadow candidates and a large share of main-view proxies are
+        // rejected here. Level selection stays on the shouldDraw side (not !occluded) so the
+        // stats keep counting exactly the population they counted before.
+        // Must match the LDS variant exactly, ordering included, or switching paths per device
+        // would change what gets drawn.
+        if (shouldDraw)
+        {
+            lod = SelectLod(
+                ComputeScreenExtent(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp,
+                                    float2(scene.Camera[0].ViewportRect.zw)),
+                max(model.lodCount, 1u), scene.Camera[0].LodBaseThreshold);
+            triangleCount = scene.Offsets[node.modelId].lodIndexCount[lod] / 3;
+            // What this proxy would cost without LOD, for the savings figure in the stat overlay.
+            lod0TriangleCount = model.lodIndexCount[0] / 3;
+        }
         emit = shouldDraw && !occluded && triangleCount > 0;
     }
 
