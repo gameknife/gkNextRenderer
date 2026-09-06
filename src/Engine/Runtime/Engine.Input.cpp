@@ -194,8 +194,12 @@ bool NextEngine::HandleDebugShortcut(SDL_Keycode key)
         break;
     case SDLK_F3:
         shortcutOps = FDebugShortcutOps{
-            .IsActive = [this]() { return config_.showFlags.DebugProfileOverlay; },
-            .SetActive = [this](bool active) { config_.showFlags.DebugProfileOverlay = active; },
+            .IsActive = [this]() { return config_.userSettings.ShowOverlay; },
+            .SetActive = [this](bool active)
+            {
+                config_.userSettings.ShowOverlay = active;
+                config_.showFlags.DebugProfileOverlay = active;
+            },
         };
         break;
     case SDLK_F4:
@@ -221,14 +225,13 @@ bool NextEngine::HandleDebugShortcut(SDL_Keycode key)
     }
 
     const bool isActive = shortcutOps->IsActive();
-    const bool engineOwnsShortcut = key == SDLK_F1 || key == SDLK_F2 || key == SDLK_F3 || key == SDLK_F4;
+    const bool engineOwnsShortcut = key == SDLK_F1 || key == SDLK_F2 || key == SDLK_F4;
 
     if (engineOwnsShortcut)
     {
         config_.showFlags.DebugPhysicsOverlay = false;
         config_.showFlags.DebugGraphicsPanel = false;
         config_.showFlags.DebugCVarPanel = false;
-        config_.showFlags.DebugProfileOverlay = false;
         if (!isActive)
         {
             shortcutOps->SetActive(true);

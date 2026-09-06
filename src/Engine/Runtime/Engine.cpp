@@ -1729,12 +1729,6 @@ void NextEngine::OnRendererAfterSubmit()
             SCOPED_CPU_TIMER("cvar editor ui");
             debugUiProvider_->DrawCVarEditor(*this, config_.showFlags.DebugCVarPanel);
         }
-        if (debugUiProvider_ && config_.showFlags.DebugProfileOverlay)
-        {
-            SCOPED_CPU_TIMER("profile debug ui");
-            debugUiProvider_->DrawProfileOverlay(*this, stats,
-                                                 gameInstance_->GetGraphicsDebugPanelTopOffset());
-        }
     }
     const NextUI::EUiDeveloperLayer developerLayers =
         uiResult.requestedDeveloperLayers & uiContext.policy.allowedDeveloperLayers;
@@ -1742,7 +1736,7 @@ void NextEngine::OnRendererAfterSubmit()
     {
         SCOPED_CPU_TIMER("overlay ui");
         NextUI::FUiFrameDispatcher::DrawDeveloperLayers(
-            *this, stats, developerLayers, config_.showFlags.DebugProfileOverlay);
+            *this, stats, developerLayers, false);
     }
     if (debugUiProvider_)
     {

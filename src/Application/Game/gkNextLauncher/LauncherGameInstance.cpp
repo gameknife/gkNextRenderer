@@ -824,7 +824,7 @@ void LauncherGameInstance::RegisterAgentQueries(Runtime::Agent::FAgentQueryRegis
             });
     reg.Add("newProjectOpen", [this]() -> Runtime::Agent::FAgentQueryValue
             { return newProjectDialog_.IsOpen(); });
-    reg.Add("templateCount", [this]() -> Runtime::Agent::FAgentQueryValue
+    reg.Add("templateCount", []() -> Runtime::Agent::FAgentQueryValue
             { return static_cast<int64_t>(Modules::NextDotNet::ScanGameTemplates().size()); });
     reg.Add("lastError", [this]() -> Runtime::Agent::FAgentQueryValue { return GetSession().GetLastError(); });
     reg.Add("unloadPending", [this]() -> Runtime::Agent::FAgentQueryValue

@@ -92,7 +92,10 @@ void NextRendererGameInstance::DrawTitleBar(const FGameUiFrameContext& context, 
             UpdateMenuRight();
             auto& showFlags = GetEngine().GetShowFlags();
             Utilities::UI::DrawShowFlagsCommon(showFlags, &GetEngine().GetUserSettings());
-            ImGui::MenuItem("Statistics Overlay", nullptr, &GetEngine().GetUserSettings().ShowOverlay);
+            if (ImGui::MenuItem("Statistics Overlay", "F3", &GetEngine().GetUserSettings().ShowOverlay))
+            {
+                GetEngine().GetShowFlags().DebugProfileOverlay = GetEngine().GetUserSettings().ShowOverlay;
+            }
 #if GK_WITH_VITURE
             if (HasVitureDebugPanel())
             {
@@ -147,7 +150,10 @@ void NextRendererGameInstance::DrawTitleBar(const FGameUiFrameContext& context, 
         {
             UpdateMenuRight();
             ImGui::MenuItem("Render Settings", nullptr, &uiState.showSettings);
-            ImGui::MenuItem("Stats Overlay", nullptr, &GetEngine().GetUserSettings().ShowOverlay);
+            if (ImGui::MenuItem("Stats Overlay", "F3", &GetEngine().GetUserSettings().ShowOverlay))
+            {
+                GetEngine().GetShowFlags().DebugProfileOverlay = GetEngine().GetUserSettings().ShowOverlay;
+            }
             ImGui::EndMenu();
         }
         else

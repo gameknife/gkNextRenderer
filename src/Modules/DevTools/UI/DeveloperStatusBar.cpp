@@ -295,8 +295,10 @@ namespace Runtime::DevToolsUI
 #else
         constexpr bool renderDocSupported = false;
 #endif
-        const float fpsWidth = ImGui::CalcTextSize(fpsText.c_str()).x + 12.0f;
-        const float memoryWidth = ImGui::CalcTextSize(memoryText.c_str()).x + 12.0f;
+        constexpr float minFpsWidth = 76.0f;
+        const float fpsWidth = std::max(minFpsWidth, ImGui::CalcTextSize(fpsText.c_str()).x + 16.0f);
+        constexpr float minMemoryWidth = 140.0f;
+        const float memoryWidth = std::max(minMemoryWidth, ImGui::CalcTextSize(memoryText.c_str()).x + 16.0f);
         const float rightWidth = consoleWidth + toolWidth * (3.0f + (renderDocSupported ? 1.0f : 0.0f)) +
             fpsWidth + memoryWidth + 98.0f + (renderDocSupported ? 20.0f : 0.0f);
 
@@ -361,13 +363,22 @@ namespace Runtime::DevToolsUI
             }
 
             DrawSeparator();
-            if (StatusButton(fpsText.c_str(), "Toggle Stats Overlay", engine.GetUserSettings().ShowOverlay,
+            const std::string fpsButtonId = fmt::format("{}###BottomBarFps", fpsText);
+            if (StatusButton(fpsButtonId.c_str(), "Toggle Stats Overlay (F3)", engine.GetUserSettings().ShowOverlay,
                              ImVec2(fpsWidth, buttonHeight)))
             {
-                engine.GetUserSettings().ShowOverlay = !engine.GetUserSettings().ShowOverlay;
+                static uint64_t lastFpsToggleTimeMs = 0;
+                const uint64_t now = SDL_GetTicks();
+                if (now - lastFpsToggleTimeMs > 200)
+                {
+                    lastFpsToggleTimeMs = now;
+                    engine.GetUserSettings().ShowOverlay = !engine.GetUserSettings().ShowOverlay;
+                    engine.GetShowFlags().DebugProfileOverlay = engine.GetUserSettings().ShowOverlay;
+                }
             }
             DrawSeparator();
-            if (StatusButton(memoryText.c_str(), "Show VRAM details", panels.IsMemoryStatisticsOpen(),
+            const std::string memoryButtonId = fmt::format("{}###BottomBarMemory", memoryText);
+            if (StatusButton(memoryButtonId.c_str(), "Show VRAM details", panels.IsMemoryStatisticsOpen(),
                              ImVec2(memoryWidth, buttonHeight)))
             {
                 panels.ToggleMemoryStatistics();

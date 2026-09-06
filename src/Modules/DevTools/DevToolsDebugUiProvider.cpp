@@ -89,7 +89,9 @@ namespace DevTools
             void DrawProfileOverlay(NextEngine& engine, const NextUI::Statistics& statistics,
                                     float topOffset) override
             {
-                Runtime::DrawProfileDebugOverlay(engine, statistics, topOffset);
+                (void)engine;
+                (void)statistics;
+                (void)topOffset;
             }
 
             bool HandleRendererShortcut(SDL_Keycode key, bool pressed, bool panelVisible, NextEngine& engine) override
