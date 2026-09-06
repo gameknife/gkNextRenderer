@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -150,6 +151,8 @@ namespace ScadLibrary
         void DrawBoneGizmo(const ImVec2& viewportPos, const ImVec2& viewportSize);
         void UpsertGizmoKey(EEditableRigChannel type, const glm::vec3& value);
         void DrawEquipmentEditor();
+        void SelectWorkbenchClip(int clipIndex);
+        void OpenRigFileDialog();
         void RescanKits();
         void RescanAssemblies();
         void PreviewModule(int kitIndex, const std::string& moduleName);
@@ -275,13 +278,24 @@ namespace ScadLibrary
         int timelineSelectedKey_ = -1;
         bool timelineDraggingKey_ = false;
         float timelineVisibleDuration_ = 0.0f;
+        bool timelineShowAllBones_ = false;
+        bool timelineSnapToFrames_ = true;
+        bool timelineAutoKey_ = true;
+        bool timelineIsPlaying_ = true;
+        int timelineFps_ = 30;
+        float timelineTrackHeaderWidth_ = 220.0f;
+        char timelineFilterBuf_[128] = {};
         int workbenchEditorTab_ = 0;
         int boneGizmoOperation_ = 1;
         char boneFilterBuf_[128] = {};
+        char clipFilterBuf_[128] = {};
+        std::mutex fileDialogMutex_;
+        std::string pendingRigSourcePath_;
         EWorkspaceMode workspaceMode_ = EWorkspaceMode::SceneAssembly;
         char rigSourceBuf_[512] = "assets/scad/characters/nextdayz_survivor.scad";
 
         // Browser state.
+        int libraryPrimaryTab_ = 0; // 0: 场景, 1: Kit, 2: Outliner
         char filterBuf_[128] = {};
         char assemblyFilterBuf_[128] = {};
         char objectFilterBuf_[128] = {};

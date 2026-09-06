@@ -32,6 +32,7 @@
 #include "ThirdParty/ImGuizmo/ImGuizmo.h"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
+#include <SDL3/SDL_dialog.h>
 #include <imgui.h>
 #include <imgui_freetype.h>
 #include <imgui_stdlib.h>
@@ -76,6 +77,166 @@ namespace ScadLibrary
         constexpr int kBenchGridColumns = 6;
         constexpr float kBenchGridStep = 14.0f;
         constexpr const char* kScadKitDragDropPayload = "SCAD_LIBRARY_KIT_MODULE";
+
+        void BeginCard(const char* id, float height = 0.0f, ImGuiWindowFlags extraFlags = 0)
+        {
+            ImGui::Dummy(ImVec2(0.0f, 2.0f));
+            const float cardWidth = std::max(0.0f, ImGui::GetContentRegionAvail().x - 2.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated, 0.38f));
+            ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.75f));
+            if (height > 0.0f)
+            {
+                ImGui::BeginChild(id, ImVec2(cardWidth, height), ImGuiChildFlags_Borders, extraFlags);
+            }
+            else
+            {
+                ImGui::BeginChild(id, ImVec2(cardWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY, extraFlags);
+            }
+            ImGui::PopStyleColor(2);
+            ImGui::PopStyleVar(3);
+        }
+
+        void EndCard()
+        {
+            ImGui::EndChild();
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        }
+
+        void DrawCardHeader(const char* icon, const char* title, const char* badge = nullptr)
+        {
+            ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::Blue), "%s  %s", icon ? icon : "", title ? title : "");
+            if (badge && badge[0] != '\0')
+            {
+                ImGui::SameLine();
+                ImGui::TextDisabled("·  %s", badge);
+            }
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        }
+
+        template <typename T>
+        bool DrawSegmentedPills(const char* id, const std::vector<std::pair<T, std::string>>& options,
+                                T* currentValue, float totalWidth = -1.0f, float itemHeight = 26.0f)
+        {
+            if (options.empty() || currentValue == nullptr) return false;
+
+            ImGui::PushID(id);
+            const float availWidth = totalWidth > 0.0f ? totalWidth : ImGui::GetContentRegionAvail().x;
+            constexpr float spacing = 4.0f;
+            const float itemWidth = std::max(24.0f, (availWidth - spacing * static_cast<float>(options.size() - 1)) / static_cast<float>(options.size()));
+
+            bool changed = false;
+            for (size_t i = 0; i < options.size(); ++i)
+            {
+                if (i > 0)
+                {
+                    ImGui::SameLine(0.0f, spacing);
+                }
+                const bool isSelected = (*currentValue == options[i].first);
+
+                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+                if (isSelected)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.85f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, NextUI::Theme::Color(NextUI::Theme::EColor::Accent));
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+                }
+                else
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated, 0.45f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.70f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover));
+                    ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted));
+                }
+
+                if (ImGui::Button(options[i].second.c_str(), ImVec2(itemWidth, itemHeight)))
+                {
+                    if (!isSelected)
+                    {
+                        *currentValue = options[i].first;
+                        changed = true;
+                    }
+                }
+                ImGui::PopStyleColor(4);
+                ImGui::PopStyleVar();
+            }
+            ImGui::PopID();
+            return changed;
+        }
+
+        bool Draw3AxisFloatDrag(const char* label, float values[3], float speed = 0.1f,
+                                float min = 0.0f, float max = 0.0f, const char* format = "%.2f")
+        {
+            ImGui::PushID(label);
+            const float availWidth = ImGui::GetContentRegionAvail().x;
+            const float labelWidth = 52.0f;
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(label);
+            ImGui::SameLine(labelWidth);
+
+            const float inputAreaWidth = availWidth - labelWidth;
+            constexpr float tagWidth = 18.0f;
+            constexpr float spacing = 3.0f;
+            const float itemWidth = std::max(20.0f, (inputAreaWidth - (tagWidth + spacing) * 3 - spacing * 2) / 3.0f);
+
+            bool changed = false;
+            struct FAxisDef {
+                const char* name;
+                ImVec4 tagBg;
+                ImVec4 tagText;
+            };
+            const FAxisDef axes[3] = {
+                {"X", ImVec4(0.55f, 0.18f, 0.18f, 0.85f), ImVec4(1.0f, 0.75f, 0.75f, 1.0f)},
+                {"Y", ImVec4(0.18f, 0.50f, 0.22f, 0.85f), ImVec4(0.75f, 1.0f, 0.75f, 1.0f)},
+                {"Z", ImVec4(0.18f, 0.32f, 0.65f, 0.85f), ImVec4(0.75f, 0.88f, 1.0f, 1.0f)}
+            };
+
+            for (int i = 0; i < 3; ++i)
+            {
+                if (i > 0)
+                {
+                    ImGui::SameLine(0.0f, spacing);
+                }
+                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+                ImGui::PushStyleColor(ImGuiCol_Button, axes[i].tagBg);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, axes[i].tagBg);
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, axes[i].tagBg);
+                ImGui::PushStyleColor(ImGuiCol_Text, axes[i].tagText);
+                ImGui::Button(axes[i].name, ImVec2(tagWidth, ImGui::GetFrameHeight()));
+                ImGui::PopStyleColor(4);
+                ImGui::PopStyleVar();
+
+                ImGui::SameLine(0.0f, 1.0f);
+                ImGui::SetNextItemWidth(itemWidth);
+                const std::string inputId = fmt::format("##axis_{}", axes[i].name);
+                if (ImGui::DragFloat(inputId.c_str(), &values[i], speed, min, max, format))
+                {
+                    changed = true;
+                }
+            }
+            ImGui::PopID();
+            return changed;
+        }
+
+        void DrawTagChip(const char* label, const ImVec4& color, const char* tooltip = nullptr)
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(color.x, color.y, color.z, 0.18f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(color.x, color.y, color.z, 0.28f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(color.x, color.y, color.z, 0.35f));
+            ImGui::PushStyleColor(ImGuiCol_Text, color);
+            ImGui::SmallButton(label);
+            if (tooltip && ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("%s", tooltip);
+            }
+            ImGui::PopStyleColor(4);
+            ImGui::PopStyleVar(2);
+        }
 
         struct FScadKitDragPayload
         {
@@ -2016,31 +2177,24 @@ namespace ScadLibrary
 
     void ScadLibraryInterface::DrawWorkspaceToolbar()
     {
-        constexpr float buttonWidth = 144.0f;
-        const float buttonHeight = std::max(32.0f, kBottomBarHeight - 8.0f);
-        const auto modeButton = [&](const char* label, const char* shortcut, EWorkspaceMode mode)
-        {
-            if (NextUI::Theme::ToolbarButton(label, shortcut, workspaceMode_ == mode,
-                                              ImVec2(buttonWidth, buttonHeight)))
-            {
-                SetWorkspaceMode(mode);
-            }
+        const std::vector<std::pair<EWorkspaceMode, std::string>> modes = {
+            {EWorkspaceMode::SceneAssembly, ICON_FA_CITY "  场景组装"},
+            {EWorkspaceMode::CharacterDesigner, ICON_FA_CUBES_STACKED "  角色合成"},
+            {EWorkspaceMode::CharacterWorkbench, ICON_FA_PERSON "  动作与装备"},
+            {EWorkspaceMode::KitBrowser, ICON_FA_BOOK_OPEN "  Kit 浏览"}
         };
-
-        modeButton(ICON_FA_PERSON "  动作与装备", "Ctrl+3", EWorkspaceMode::CharacterWorkbench);
-        ImGui::SameLine(0.0f, 4.0f);
-        modeButton(ICON_FA_CUBES_STACKED "  角色合成", "Ctrl+2", EWorkspaceMode::CharacterDesigner);
-        ImGui::SameLine(0.0f, 4.0f);
-        modeButton(ICON_FA_CITY "  场景组装", "Ctrl+1", EWorkspaceMode::SceneAssembly);
-        ImGui::SameLine(0.0f, 4.0f);
-        modeButton(ICON_FA_BOOK_OPEN "  Kit 浏览", "Ctrl+4", EWorkspaceMode::KitBrowser);
+        EWorkspaceMode currentMode = workspaceMode_;
+        if (DrawSegmentedPills("##WorkspaceTabs", modes, &currentMode, 580.0f, 32.0f))
+        {
+            SetWorkspaceMode(currentMode);
+        }
     }
 
     void ScadLibraryInterface::DrawActionToolbar()
     {
         constexpr float buttonWidth = 72.0f;
-        constexpr float buttonHeight = 40.0f;
-        constexpr float itemGap = 4.0f;
+        constexpr float buttonHeight = 32.0f;
+        constexpr float itemGap = 5.0f;
         const auto actionButton = [&](const char* label, const char* tooltip, bool active = false)
         {
             return NextUI::Theme::ToolbarButton(label, tooltip, active, ImVec2(buttonWidth, buttonHeight));
@@ -2048,15 +2202,27 @@ namespace ScadLibrary
 
         if (workspaceMode_ == EWorkspaceMode::SceneAssembly)
         {
+            const bool dirty = assemblySourceDirty_ || benchDirty_ || sourceBufferDirty_ || terrainProcessDirty_;
             ImGui::BeginDisabled(openedAssemblyPath_.empty());
-            if (actionButton(ICON_FA_FLOPPY_DISK " 保存", "保存当前场景"))
+            if (dirty)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.85f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            }
+            if (actionButton(ICON_FA_FLOPPY_DISK " 保存", dirty ? "保存修改 (Ctrl+S)" : "当前已是最新"))
             {
                 SaveAssembly(false);
             }
+            if (dirty)
+            {
+                ImGui::PopStyleColor(3);
+            }
             ImGui::EndDisabled();
+
             ImGui::SameLine(0.0f, itemGap);
             ImGui::BeginDisabled(assemblySource_.empty() && Bench().empty());
-            if (actionButton(ICON_FA_PLAY " 预览", "预览当前未保存内容"))
+            if (actionButton(ICON_FA_PLAY " 预览", "预览当前未保存内容 (F5)"))
             {
                 PreviewAssemblySource();
             }
@@ -2099,8 +2265,14 @@ namespace ScadLibrary
                 aiOpenRequested_ = true;
             }
         }
+
         ImGui::SameLine(0.0f, 10.0f);
-        ImGui::TextDisabled("FPS %.0f", engine_.GetFrameRate());
+        const float fps = engine_.GetFrameRate();
+        const ImVec4 fpsColor = fps >= 55.0f ? NextUI::Theme::Color(NextUI::Theme::EColor::Success)
+                                            : (fps >= 30.0f ? NextUI::Theme::Color(NextUI::Theme::EColor::Warning)
+                                                            : NextUI::Theme::Color(NextUI::Theme::EColor::Danger));
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextColored(fpsColor, "%.0f FPS", fps);
     }
 
     void ScadLibraryInterface::DrawBottomBar()
@@ -2115,10 +2287,25 @@ namespace ScadLibrary
             : (workspaceMode_ == EWorkspaceMode::CharacterWorkbench ? 220.0f : 160.0f);
         config.DrawLeftContent = [&]()
         {
+            const bool dirty = (workspaceMode_ == EWorkspaceMode::SceneAssembly &&
+                                (assemblySourceDirty_ || benchDirty_ || sourceBufferDirty_ || terrainProcessDirty_)) ||
+                               (workspaceMode_ == EWorkspaceMode::CharacterDesigner && designerDirty_);
+            const ImU32 dotColor = statusError_
+                ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger)
+                : (dirty ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Warning)
+                         : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success));
+
+            const ImVec2 pos = ImGui::GetCursorScreenPos();
+            constexpr float radius = 4.0f;
+            const float centerY = pos.y + ImGui::GetFrameHeight() * 0.5f;
+            ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(pos.x + radius + 2.0f, centerY), radius, dotColor);
+            ImGui::Dummy(ImVec2(radius * 2.0f + 6.0f, 0.0f));
+            ImGui::SameLine();
+
             if (!statusLine_.empty())
             {
                 const ImVec4 color = statusError_ ? NextUI::Theme::Color(NextUI::Theme::EColor::Danger)
-                                                  : NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted);
+                                                  : NextUI::Theme::Color(NextUI::Theme::EColor::Text);
                 ImGui::TextColored(color, "%s", statusLine_.c_str());
             }
             else
@@ -2766,10 +2953,16 @@ namespace ScadLibrary
         }
         NextUI::Theme::DrawThinSeparator(0.72f);
 
-        if (ImGui::BeginTabBar("##library_tabs", ImGuiTabBarFlags_FittingPolicyResizeDown))
+        const std::vector<std::pair<int, std::string>> libraryTabs = {
+            {0, fmt::format(ICON_FA_CITY " 场景 ({})", assemblies_.size())},
+            {1, fmt::format(ICON_FA_CUBES_STACKED " Kit ({})", kits_.size())},
+            {2, fmt::format(ICON_FA_CODE_BRANCH " 结构 ({})", document_.Segments().size())}
+        };
+        DrawSegmentedPills("##library_tabs", libraryTabs, &libraryPrimaryTab_, -1.0f, 26.0f);
+        ImGui::Spacing();
+
+        if (libraryPrimaryTab_ == 0)
         {
-            if (ImGui::BeginTabItem(fmt::format(ICON_FA_CITY "  场景  {}", assemblies_.size()).c_str()))
-            {
                 ImGui::Spacing();
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::InputTextWithHint("##assembly_filter", ICON_FA_MAGNIFYING_GLASS " 搜索场景路径或 Kit…",
@@ -2897,12 +3090,17 @@ namespace ScadLibrary
                         if (assembly.hasTerrain)
                         {
                             ImGui::SameLine(0.0f, 6.0f);
-                            ImGui::TextColored(SegmentKindColor(EScadSegmentKind::Terrain), ICON_FA_MOUNTAIN_SUN);
+                            DrawTagChip("地形", SegmentKindColor(EScadSegmentKind::Terrain), "含地形与过程规则");
                         }
                         if (assembly.hasFreeStructure)
                         {
-                            ImGui::SameLine(0.0f, 6.0f);
-                            ImGui::TextColored(SegmentKindColor(EScadSegmentKind::Source), ICON_FA_CODE_BRANCH);
+                            ImGui::SameLine(0.0f, 4.0f);
+                            DrawTagChip("结构", SegmentKindColor(EScadSegmentKind::Source), "含程序/源码结构");
+                        }
+                        if (assembly.generated)
+                        {
+                            ImGui::SameLine(0.0f, 4.0f);
+                            DrawTagChip("Gen", NextUI::Theme::Color(NextUI::Theme::EColor::Warning), "由规格或工具生成");
                         }
                         ImGui::SetCursorScreenPos(ImVec2(rowPosition.x,
                                                          rowPosition.y + rowHeight + ImGui::GetStyle().ItemSpacing.y));
@@ -2928,29 +3126,21 @@ namespace ScadLibrary
                     ImGui::TextDisabled(assemblies_.empty() ? "未找到引用 kit_*.scad 的场景" : "没有匹配的场景");
                 }
                 ImGui::EndChild();
-                ImGui::EndTabItem();
-            }
-
-            if (ImGui::BeginTabItem(fmt::format(ICON_FA_CUBES_STACKED "  Kit  {}", kits_.size()).c_str()))
-            {
+        }
+        else if (libraryPrimaryTab_ == 1)
+        {
                 ImGui::Spacing();
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::InputTextWithHint("##filter", ICON_FA_MAGNIFYING_GLASS " 搜索 Kit 或模块…", filterBuf_,
                                          sizeof(filterBuf_));
-                ImGui::TextUnformatted("缩略图布局");
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextDisabled("布局:");
                 ImGui::SameLine();
-                for (const int columns : {2, 3, 4})
-                {
-                    const std::string label = fmt::format("{} 列##kit_thumbnail_columns_{}", columns, columns);
-                    if (ImGui::RadioButton(label.c_str(), kitThumbnailColumns_ == columns))
-                    {
-                        kitThumbnailColumns_ = columns;
-                    }
-                    if (columns != 4)
-                    {
-                        ImGui::SameLine();
-                    }
-                }
+                const std::vector<std::pair<int, std::string>> colPills = {
+                    {2, "2列"}, {3, "3列"}, {4, "4列"}
+                };
+                DrawSegmentedPills("##kit_thumbnail_columns", colPills, &kitThumbnailColumns_, 140.0f, 22.0f);
+                ImGui::Spacing();
                 ImGui::Spacing();
 
                 if (kitThumbnailExpanded_.size() != kits_.size())
@@ -3135,15 +3325,10 @@ namespace ScadLibrary
                     kitThumbnailStickyKit_ = stickyCandidate;
                 }
                 ImGui::EndChild();
-                ImGui::EndTabItem();
-            }
-
-            if (ImGui::BeginTabItem(fmt::format(ICON_FA_CODE_BRANCH "  Outliner  {}", document_.Segments().size()).c_str()))
-            {
-                DrawStructureOutliner();
-                ImGui::EndTabItem();
-            }
-            ImGui::EndTabBar();
+        }
+        else if (libraryPrimaryTab_ == 2)
+        {
+            DrawStructureOutliner();
         }
         ImGui::End();
     }
@@ -3322,23 +3507,24 @@ namespace ScadLibrary
         ImGui::AlignTextToFramePadding();
         if (workspaceMode_ == EWorkspaceMode::SceneAssembly)
         {
+            ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover), "%s  场景检查器", ICON_FA_SLIDERS);
+            ImGui::SameLine();
             if (document_.HasTerrain())
             {
-                ImGui::Text(ICON_FA_SLIDERS "  场景属性  ·  %zu 对象 / %zu 特征 / %zu 规则", Bench().size(),
-                            TerrainProcess().Terrain().features.size(), TerrainProcess().ActiveRuleCount());
+                ImGui::TextDisabled("· %zu 对象 / %zu 特征", Bench().size(), TerrainProcess().Terrain().features.size());
             }
             else
             {
-                ImGui::Text(ICON_FA_SLIDERS "  场景属性  ·  %zu 对象", Bench().size());
+                ImGui::TextDisabled("· %zu 对象", Bench().size());
             }
         }
         else if (workspaceMode_ == EWorkspaceMode::CharacterDesigner)
         {
-            ImGui::TextUnformatted(ICON_FA_SLIDERS "  角色属性");
+            ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover), "%s  角色属性", ICON_FA_SLIDERS);
         }
         else
         {
-            ImGui::TextUnformatted(ICON_FA_SLIDERS "  动作与装备属性");
+            ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover), "%s  动作与装备属性", ICON_FA_SLIDERS);
         }
         ImGui::SameLine(ImGui::GetWindowWidth() - 43.0f);
         if (NextUI::Theme::IconButton(ICON_FA_CHEVRON_RIGHT "##collapse_bench", "收起属性面板", false,
@@ -3348,34 +3534,37 @@ namespace ScadLibrary
         }
         NextUI::Theme::DrawThinSeparator(0.72f);
 
-        if (ImGui::BeginTabBar("##inspector_primary_tabs"))
+        if (aiOpenRequested_)
         {
-            if (ImGui::BeginTabItem("属性"))
-            {
-                inspectorPrimaryTab_ = 0;
-                if (workspaceMode_ == EWorkspaceMode::SceneAssembly)
-                {
-                    DrawBenchContent();
-                }
-                else if (workspaceMode_ == EWorkspaceMode::CharacterDesigner)
-                {
-                    DrawDesignerContent();
-                }
-                else
-                {
-                    DrawWorkbenchContent();
-                }
-                ImGui::EndTabItem();
-            }
-            if (ImGui::BeginTabItem("AI", nullptr,
-                                    aiOpenRequested_ ? ImGuiTabItemFlags_SetSelected : 0))
-            {
-                inspectorPrimaryTab_ = 1;
-                DrawAIContent();
-                ImGui::EndTabItem();
-            }
-            ImGui::EndTabBar();
+            inspectorPrimaryTab_ = 1;
             aiOpenRequested_ = false;
+        }
+
+        const std::vector<std::pair<int, std::string>> inspectorTabs = {
+            {0, ICON_FA_SLIDERS "  属性检查器"},
+            {1, ICON_FA_WAND_MAGIC_SPARKLES "  AI 创作助理"}
+        };
+        DrawSegmentedPills("##inspector_primary_tabs", inspectorTabs, &inspectorPrimaryTab_, -1.0f, 28.0f);
+        ImGui::Spacing();
+
+        if (inspectorPrimaryTab_ == 0)
+        {
+            if (workspaceMode_ == EWorkspaceMode::SceneAssembly)
+            {
+                DrawBenchContent();
+            }
+            else if (workspaceMode_ == EWorkspaceMode::CharacterDesigner)
+            {
+                DrawDesignerContent();
+            }
+            else
+            {
+                DrawWorkbenchContent();
+            }
+        }
+        else
+        {
+            DrawAIContent();
         }
         ImGui::End();
     }
@@ -5537,28 +5726,30 @@ namespace ScadLibrary
 
     void ScadLibraryInterface::DrawBenchContent()
     {
-        ImGui::Spacing();
-        ImGui::TextDisabled("资源文件");
+        BeginCard("##SceneFileCard");
+        DrawCardHeader(ICON_FA_FILE_CODE, "场景文件", openedAssemblyPath_.empty() ? "未加载" : nullptr);
+
         ImGui::SetNextItemWidth(-1.0f);
         ImGui::InputTextWithHint("##assembly_path", "assets/scad/evaluated/my_scene.scad", assemblyPathBuf_,
                                  sizeof(assemblyPathBuf_));
-        if (ImGui::Button(ICON_FA_FOLDER_OPEN " 打开"))
+
+        if (ImGui::Button(ICON_FA_FOLDER_OPEN " 打开", ImVec2(76.0f, 26.0f)))
         {
             OpenAssembly(assemblyPathBuf_);
         }
-        ImGui::SameLine();
+        ImGui::SameLine(0.0f, 6.0f);
         ImGui::BeginDisabled(assemblySource_.empty() && Bench().empty());
-        if (ImGui::Button(ICON_FA_COPY " 另存为"))
+        if (ImGui::Button(ICON_FA_COPY " 另存为", ImVec2(86.0f, 26.0f)))
         {
             SaveAssembly(true);
         }
         ImGui::EndDisabled();
-        ImGui::SameLine();
-        ImGui::TextDisabled("保存与预览位于顶部工具栏");
 
         if (!openedAssemblyPath_.empty())
         {
-            ImGui::TextDisabled("%s%s", openedAssemblyPath_.c_str(), assemblySourceDirty_ ? "  *" : "");
+            ImGui::Spacing();
+            ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted), "%s%s",
+                               openedAssemblyPath_.c_str(), assemblySourceDirty_ ? "  *" : "");
         }
         if (!openedAssemblyKits_.empty())
         {
@@ -5571,8 +5762,6 @@ namespace ScadLibrary
             ImGui::TextWrapped("generated/ 文件可能由 specs/ 重新生成；保存的手工修改可能被覆盖。");
             ImGui::PopStyleColor();
         }
-        // Composition, not classification: the same file can offer all of these
-        // at once and gains any of them without being converted.
         ImGui::TextDisabled("节点: %zu 实例  ·  %zu 源码结构%s", Bench().size(), document_.SourceSegmentCount(),
                             document_.HasTerrain() ? "  ·  含地形" : "");
         for (const std::string& warning : terrainProcessWarnings_)
@@ -5581,237 +5770,65 @@ namespace ScadLibrary
             ImGui::TextWrapped("%s", warning.c_str());
             ImGui::PopStyleColor();
         }
-        ImGui::Separator();
+        EndCard();
+
+        BeginCard("##SceneVariablesCard");
+        DrawCardHeader(ICON_FA_SLIDERS, "全局参数 ($fn)");
         DrawSceneVariableProperties();
+        EndCard();
 
-        if (ImGui::BeginTabBar("##assembly_editor_tabs"))
+        if (structureInspectorRequested_)
         {
-            if (document_.HasTerrain() &&
-                ImGui::BeginTabItem(fmt::format("过程 ({} + {})", TerrainProcess().Terrain().features.size(),
-                                                TerrainProcess().ActiveRuleCount())
-                                        .c_str()))
-            {
-                assemblyEditorTab_ = 2;
-                DrawTerrainProcessContent();
-                ImGui::EndTabItem();
-            }
-
-            {
-                const std::string objectTabLabel = fmt::format("对象 ({})", Bench().size());
-                if (false && ImGui::BeginTabItem(objectTabLabel.c_str()))
-                {
-                    assemblyEditorTab_ = 0;
-                    ImGui::Checkbox("自动刷新", &autoReload_);
-                    ImGui::SameLine();
-                    ImGui::TextDisabled("$fn 等全局设置是源码语句，在“结构”或“源码”页编辑");
-                    if (document_.SourceSegmentCount() > 0)
-                    {
-                        ImGui::TextDisabled("该场景还有 %zu 个源码结构；在“结构”页可以逐个关闭或展开为实例。",
-                                            document_.SourceSegmentCount());
-                    }
-
-                    if (ImGui::Button(ICON_FA_ROTATE_RIGHT " 刷新对象"))
-                    {
-                        ReloadBench();
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button(ICON_FA_TRASH " 清空") && !Bench().empty())
-                    {
-                        Bench().clear();
-                        selectedBenchItem_ = -1;
-                        engine_.GetScene().ClearSelection();
-                        engine_.GetShowFlags().ShowEdge = false;
-                        benchDirty_ = true;
-                    }
-                    ImGui::Separator();
-                    ImGui::SetNextItemWidth(-1.0f);
-                    ImGui::InputTextWithHint("##object_filter", "搜索对象模块或参数…", objectFilterBuf_,
-                                             sizeof(objectFilterBuf_));
-
-                    int removeIndex = -1;
-                    int duplicateIndex = -1;
-                    ImGui::BeginChild("##bench_list", ImVec2(0, -62.0f), ImGuiChildFlags_None);
-                    for (size_t i = 0; i < Bench().size(); ++i)
-                    {
-                        FBenchItem& benchItem = Bench()[i];
-                        if (objectFilterBuf_[0] != '\0' &&
-                            benchItem.moduleName.find(objectFilterBuf_) == std::string::npos &&
-                            std::string_view(benchItem.args).find(objectFilterBuf_) == std::string_view::npos)
-                        {
-                            continue;
-                        }
-                        ImGui::PushID(static_cast<int>(i));
-                        ImGuiTreeNodeFlags objectFlags =
-                            ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_FramePadding;
-                        if (Bench().size() <= 64)
-                        {
-                            objectFlags |= ImGuiTreeNodeFlags_DefaultOpen;
-                        }
-                        if (selectedBenchItem_ == static_cast<int>(i))
-                        {
-                            objectFlags |= ImGuiTreeNodeFlags_Selected;
-                            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.34f, 0.68f, 0.82f));
-                            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.14f, 0.42f, 0.80f, 0.92f));
-                            ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.16f, 0.48f, 0.92f, 1.0f));
-                        }
-                        const std::string objectLabel = benchItem.sourceLine > 0
-                            ? fmt::format("{} #{}  ·  L{}", benchItem.moduleName, i, benchItem.sourceLine)
-                            : fmt::format("{} #{}", benchItem.moduleName, i);
-                        const bool open = ImGui::TreeNodeEx(objectLabel.c_str(), objectFlags);
-                        if (selectedBenchItem_ == static_cast<int>(i))
-                        {
-                            ImGui::PopStyleColor(3);
-                            if (scrollToSelectedBenchItem_)
-                            {
-                                ImGui::SetScrollHereY(0.35f);
-                                scrollToSelectedBenchItem_ = false;
-                            }
-                        }
-                        if (ImGui::IsItemClicked())
-                        {
-                            selectedBenchItem_ = static_cast<int>(i);
-                            if (Assets::Node* selectedNode =
-                                    ResolveSceneObjectNode(benchItem, SceneObjectWorldMatrix(benchItem)))
-                            {
-                                engine_.GetScene().SetSelectedId(selectedNode->GetInstanceId());
-                                engine_.GetShowFlags().ShowEdge = false;
-                            }
-                        }
-                        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 52.0f);
-                        if (ImGui::SmallButton(ICON_FA_COPY "##dup"))
-                        {
-                            duplicateIndex = static_cast<int>(i);
-                        }
-                        ImGui::SameLine();
-                        if (ImGui::SmallButton(ICON_FA_XMARK "##del"))
-                        {
-                            removeIndex = static_cast<int>(i);
-                        }
-                        if (open)
-                        {
-                            float position[3] = {benchItem.x, benchItem.y, benchItem.z};
-                            if (ImGui::DragFloat3("位置", position, 0.5f))
-                            {
-                                benchItem.x = position[0];
-                                benchItem.y = position[1];
-                                benchItem.z = position[2];
-                                benchDirty_ = true;
-                            }
-                            float rotation[3] = {benchItem.rotX, benchItem.rotY, benchItem.rotZ};
-                            if (ImGui::DragFloat3("旋转", rotation, 1.0f, -360.0f, 360.0f, "%.1f°"))
-                            {
-                                benchItem.rotX = rotation[0];
-                                benchItem.rotY = rotation[1];
-                                benchItem.rotZ = rotation[2];
-                                benchDirty_ = true;
-                            }
-                            float scale[3] = {benchItem.scale, benchItem.scaleY, benchItem.scaleZ};
-                            if (ImGui::DragFloat3("缩放", scale, 0.02f, 0.001f, 100.0f, "%.3f"))
-                            {
-                                benchItem.scale = scale[0];
-                                benchItem.scaleY = scale[1];
-                                benchItem.scaleZ = scale[2];
-                                benchDirty_ = true;
-                            }
-                            if (benchItem.hasColor && ImGui::ColorEdit4("颜色", benchItem.color))
-                            {
-                                benchDirty_ = true;
-                            }
-                            if (DrawBenchItemParameters(benchItem))
-                            {
-                                benchDirty_ = true;
-                            }
-                            ImGui::TreePop();
-                        }
-                        ImGui::PopID();
-                    }
-                    if (Bench().empty())
-                    {
-                        ImGui::TextDisabled("从左侧 Kit 零件库点 \"+\" 添加模块，");
-                        ImGui::TextDisabled("在这里调整位置、角度和参数。");
-                    }
-                    ImGui::EndChild();
-
-                    if (removeIndex >= 0)
-                    {
-                        Bench().erase(Bench().begin() + removeIndex);
-                        if (selectedBenchItem_ == removeIndex)
-                        {
-                            selectedBenchItem_ = -1;
-                        }
-                        else if (selectedBenchItem_ > removeIndex)
-                        {
-                            --selectedBenchItem_;
-                        }
-                        benchDirty_ = true;
-                    }
-                    if (duplicateIndex >= 0)
-                    {
-                        FBenchItem copy = Bench()[duplicateIndex];
-                        copy.x += kBenchGridStep * 0.5f;
-                        copy.y += kBenchGridStep * 0.5f;
-                        copy.runtimeNodeId = std::numeric_limits<uint32_t>::max();
-                        Bench().push_back(copy);
-                        selectedBenchItem_ = static_cast<int>(Bench().size()) - 1;
-                        benchDirty_ = true;
-                    }
-
-                    ImGui::Separator();
-                    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 116.0f);
-                    ImGui::InputTextWithHint("##export_name", "新场景文件名", exportNameBuf_, sizeof(exportNameBuf_));
-                    ImGui::SameLine();
-                    if (ImGui::Button(ICON_FA_FILE_EXPORT " 导出场景") && !Bench().empty())
-                    {
-                        ExportBench();
-                    }
-                    if (ImGui::IsItemHovered())
-                    {
-                        ImGui::SetTooltip("写入 assets/scad/evaluated/<名>.scad");
-                    }
-                    ImGui::EndTabItem();
-                }
-            }
-
-            if (ImGui::BeginTabItem("详情", nullptr,
-                                    structureInspectorRequested_ ? ImGuiTabItemFlags_SetSelected : 0))
-            {
-                assemblyEditorTab_ = 3;
-                DrawStructureContent();
-                ImGui::EndTabItem();
-            }
-
-            if (ImGui::BeginTabItem("源码"))
-            {
-                assemblyEditorTab_ = 1;
-                if (sourceBufferDirty_)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::Warning));
-                    ImGui::TextWrapped("源码已改动。预览或保存会重新解析，对象与地形面板随后刷新。");
-                    ImGui::PopStyleColor();
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton(ICON_FA_ROTATE_RIGHT " 立即解析"))
-                    {
-                        ReparseDocument(assemblySource_, openedAssemblyPath_);
-                        assemblySourceDirty_ = true;
-                    }
-                }
-                else
-                {
-                    ImGui::TextDisabled("支持完整 SCAD；预览不会先覆盖源文件。");
-                }
-                if (ImGui::InputTextMultiline("##assembly_source", &assemblySource_, ImVec2(-1.0f, -1.0f),
-                                              ImGuiInputTextFlags_AllowTabInput))
-                {
-                    // Reparsing per keystroke would re-evaluate the whole
-                    // use/include closure; the buffer is reconciled on preview,
-                    // save, or the explicit button above.
-                    assemblySourceDirty_ = true;
-                    sourceBufferDirty_ = true;
-                }
-                ImGui::EndTabItem();
-            }
-            ImGui::EndTabBar();
+            assemblyEditorTab_ = 3;
             structureInspectorRequested_ = false;
+        }
+
+        std::vector<std::pair<int, std::string>> subTabs;
+        subTabs.push_back({3, ICON_FA_CIRCLE_INFO " 详情"});
+        if (document_.HasTerrain())
+        {
+            subTabs.push_back({2, fmt::format(ICON_FA_MOUNTAIN_SUN " 过程 ({}+{})",
+                                              TerrainProcess().Terrain().features.size(),
+                                              TerrainProcess().ActiveRuleCount())});
+        }
+        subTabs.push_back({1, ICON_FA_CODE " 源码"});
+
+        DrawSegmentedPills("##assembly_editor_tabs", subTabs, &assemblyEditorTab_, -1.0f, 26.0f);
+        ImGui::Spacing();
+
+        if (assemblyEditorTab_ == 2 && document_.HasTerrain())
+        {
+            DrawTerrainProcessContent();
+        }
+        else if (assemblyEditorTab_ == 1)
+        {
+            if (sourceBufferDirty_)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::Warning));
+                ImGui::TextWrapped("源码已改动。预览或保存会重新解析，对象与地形面板随后刷新。");
+                ImGui::PopStyleColor();
+                ImGui::SameLine();
+                if (ImGui::SmallButton(ICON_FA_ROTATE_RIGHT " 立即解析"))
+                {
+                    ReparseDocument(assemblySource_, openedAssemblyPath_);
+                    assemblySourceDirty_ = true;
+                }
+            }
+            else
+            {
+                ImGui::TextDisabled("支持完整 SCAD；预览不会先覆盖源文件。");
+            }
+            if (ImGui::InputTextMultiline("##assembly_source", &assemblySource_, ImVec2(-1.0f, -1.0f),
+                                          ImGuiInputTextFlags_AllowTabInput))
+            {
+                assemblySourceDirty_ = true;
+                sourceBufferDirty_ = true;
+            }
+        }
+        else
+        {
+            assemblyEditorTab_ = 3;
+            DrawStructureContent();
         }
 
         if (benchDirty_)
@@ -6057,9 +6074,6 @@ namespace ScadLibrary
 
     void ScadLibraryInterface::DrawStructureContent()
     {
-        ImGui::TextDisabled("结构节点详情");
-        ImGui::Separator();
-
         int explodeRequest = -1;
         int collapseRequest = -1;
         int toggleRequest = -1;
@@ -6310,26 +6324,34 @@ namespace ScadLibrary
         ImGui::EndChild();
         }
 
-        ImGui::BeginChild("##structure_inspector", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
+        ImGui::BeginChild("##structure_inspector", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
         if (selectedSegment_ < 0 || selectedSegment_ >= static_cast<int>(document_.Segments().size()))
         {
-            ImGui::TextDisabled("选择左侧 Outliner 中的节点以查看和编辑细节。");
+            BeginCard("##StructureEmptyCard");
+            DrawCardHeader(ICON_FA_CIRCLE_INFO, "节点检查器");
+            ImGui::TextDisabled("在左侧「结构」或视口中选择任意节点，\n即可在此处调整空间变换、模块参数与颜色。");
+            EndCard();
         }
         else
         {
             const FScadSceneSegment& selectedSegment = document_.Segments()[selectedSegment_];
-            ImGui::Text("%s", selectedSegment.kind == EScadSegmentKind::Source && selectedSegment.name == "lay_scatter"
+            const char* kindLabel = selectedSegment.kind == EScadSegmentKind::Source && selectedSegment.name == "lay_scatter"
                                   ? "布局过程算子"
-                                  : ScadSegmentKindLabel(selectedSegment.kind));
-            ImGui::TextDisabled("%s", selectedSegment.label.c_str());
-            ImGui::Separator();
+                                  : ScadSegmentKindLabel(selectedSegment.kind);
+
+            BeginCard("##SelectedNodeHeaderCard");
+            DrawCardHeader(ICON_FA_CUBE, selectedSegment.label.c_str(), kindLabel);
+            EndCard();
 
             if (selectedSegment.kind == EScadSegmentKind::Instance && selectedSegment.instanceIndex >= 0 &&
                 selectedSegment.instanceIndex < static_cast<int>(Bench().size()))
             {
                 FBenchItem& item = Bench()[selectedSegment.instanceIndex];
+
+                BeginCard("##TransformCard");
+                DrawCardHeader(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT, "空间变换 (Transform)");
                 float position[3] = {item.x, item.y, item.z};
-                if (ImGui::DragFloat3("位置", position, 0.5f))
+                if (Draw3AxisFloatDrag("位置", position, 0.5f))
                 {
                     item.x = position[0];
                     item.y = position[1];
@@ -6337,7 +6359,7 @@ namespace ScadLibrary
                     benchDirty_ = true;
                 }
                 float rotation[3] = {item.rotX, item.rotY, item.rotZ};
-                if (ImGui::DragFloat3("旋转", rotation, 1.0f, -360.0f, 360.0f, "%.1f°"))
+                if (Draw3AxisFloatDrag("旋转", rotation, 1.0f, -360.0f, 360.0f, "%.1f°"))
                 {
                     item.rotX = rotation[0];
                     item.rotY = rotation[1];
@@ -6345,13 +6367,17 @@ namespace ScadLibrary
                     benchDirty_ = true;
                 }
                 float scale[3] = {item.scale, item.scaleY, item.scaleZ};
-                if (ImGui::DragFloat3("缩放", scale, 0.02f, 0.001f, 100.0f, "%.3f"))
+                if (Draw3AxisFloatDrag("缩放", scale, 0.02f, 0.001f, 100.0f, "%.3f"))
                 {
                     item.scale = scale[0];
                     item.scaleY = scale[1];
                     item.scaleZ = scale[2];
                     benchDirty_ = true;
                 }
+                EndCard();
+
+                BeginCard("##ModuleParamsCard");
+                DrawCardHeader(ICON_FA_SLIDERS, "模块属性与参数");
                 if (item.hasColor && ImGui::ColorEdit4("颜色", item.color))
                 {
                     benchDirty_ = true;
@@ -6360,15 +6386,21 @@ namespace ScadLibrary
                 {
                     benchDirty_ = true;
                 }
-                if (ImGui::Button(ICON_FA_COPY " 复制节点"))
+                ImGui::Spacing();
+                if (ImGui::Button(ICON_FA_COPY " 复制节点", ImVec2(96.0f, 26.0f)))
                 {
                     duplicateInstanceRequest = selectedSegment.instanceIndex;
                 }
-                ImGui::SameLine();
-                if (ImGui::Button(ICON_FA_TRASH " 删除节点"))
+                ImGui::SameLine(0.0f, 8.0f);
+                ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Danger, 0.22f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::Danger, 0.45f));
+                ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::Danger));
+                if (ImGui::Button(ICON_FA_TRASH " 删除节点", ImVec2(96.0f, 26.0f)))
                 {
                     removeInstanceRequest = selectedSegment.instanceIndex;
                 }
+                ImGui::PopStyleColor(3);
+                EndCard();
             }
             else if ((selectedSegment.kind == EScadSegmentKind::TerrainRule && selectedSegment.ruleIndex >= 0) ||
                      (selectedSegment.kind == EScadSegmentKind::Terrain && terrainSelectionIsRule_))
@@ -6462,16 +6494,17 @@ namespace ScadLibrary
 
             if (document_.IsSwitchable(static_cast<size_t>(selectedSegment_)))
             {
-                ImGui::Separator();
+                BeginCard("##NodeStateCard");
+                DrawCardHeader(ICON_FA_TOGGLE_ON, "节点状态控制");
                 if (selectedSegment.disabled)
                 {
-                    if (ImGui::Button(ICON_FA_EYE " 启用"))
+                    if (ImGui::Button(ICON_FA_EYE " 启用节点", ImVec2(96.0f, 26.0f)))
                     {
                         toggleRequest = selectedSegment_;
                         toggleTo = false;
                     }
                 }
-                else if (ImGui::Button(ICON_FA_EYE_SLASH " 关闭"))
+                else if (ImGui::Button(ICON_FA_EYE_SLASH " 禁用节点 (*)", ImVec2(106.0f, 26.0f)))
                 {
                     toggleRequest = selectedSegment_;
                     toggleTo = true;
@@ -6481,16 +6514,17 @@ namespace ScadLibrary
                     ImGui::SameLine();
                     if (selectedSegment.explodedInstances > 0)
                     {
-                        if (ImGui::Button(ICON_FA_ARROWS_ROTATE " 撤销展开"))
+                        if (ImGui::Button(ICON_FA_ARROWS_ROTATE " 撤销展开", ImVec2(96.0f, 26.0f)))
                         {
                             collapseRequest = selectedSegment_;
                         }
                     }
-                    else if (!selectedSegment.disabled && ImGui::Button(ICON_FA_CODE_BRANCH " 关闭并展开"))
+                    else if (!selectedSegment.disabled && ImGui::Button(ICON_FA_CODE_BRANCH " 展开为实例", ImVec2(106.0f, 26.0f)))
                     {
                         explodeRequest = selectedSegment_;
                     }
                 }
+                EndCard();
             }
         }
         ImGui::EndChild();
@@ -7568,6 +7602,23 @@ namespace ScadLibrary
         }
         RefreshAssemblyWatchBaseline();
         preserveCameraOnNextSceneLoad_ = preserveCamera;
+        if (!Bench().empty())
+        {
+            selectedBenchItem_ = 0;
+            if (Bench()[0].segmentIndex >= 0)
+            {
+                selectedSegment_ = Bench()[0].segmentIndex;
+            }
+        }
+        else if (!document_.Segments().empty())
+        {
+            selectedSegment_ = 0;
+        }
+        else
+        {
+            selectedSegment_ = -1;
+            selectedBenchItem_ = -1;
+        }
         engine_.RequestLoadScene({.filename = openedAssemblyPath_});
         statusLine_ = fmt::format("已打开 {} · {} 个 Kit · {} 实例 / {} 源码结构{}", relativePath,
                                   openedAssemblyKits_.size(), Bench().size(), document_.SourceSegmentCount(),
@@ -8137,7 +8188,7 @@ namespace ScadLibrary
                                         static_cast<int>(rigPreview_.Asset().bones.size()) - 1);
         }
         rigPreview_.SetActive(true);
-        rigPreview_.SetPaused(false);
+        rigPreview_.SetPaused(!timelineIsPlaying_);
         rigPreview_.SetPlaySpeed(1.0f);
         if (!workbench_.Clips().empty())
         {
@@ -8187,169 +8238,378 @@ namespace ScadLibrary
         rigPreview_.SetCurrentTime(std::min(rigPreview_.CurrentTime(), rigPreview_.CurrentDuration()));
     }
 
+    void ScadLibraryInterface::SelectWorkbenchClip(int clipIndex)
+    {
+        if (workbench_.Clips().empty())
+        {
+            return;
+        }
+        workbenchClip_ = std::clamp(clipIndex, 0, static_cast<int>(workbench_.Clips().size()) - 1);
+        timelineSelectedChannel_ = -1;
+        timelineSelectedKey_ = -1;
+        timelineDraggingKey_ = false;
+        timelineVisibleDuration_ = 0.0f;
+        if (!workbench_.Clips()[workbenchClip_].channels.empty())
+        {
+            timelineSelectedChannel_ = 0;
+            workbenchBone_ = std::clamp(workbench_.Clips()[workbenchClip_].channels.front().bone, 0,
+                                        static_cast<int>(rigPreview_.Asset().bones.size()) - 1);
+        }
+        const bool shouldPlay = timelineIsPlaying_;
+        rigPreview_.PlayClip(workbench_.Clips()[workbenchClip_].name);
+        rigPreview_.SetCurrentTime(0.0f);
+        rigPreview_.SetPaused(!shouldPlay);
+    }
+
+    void ScadLibraryInterface::OpenRigFileDialog()
+    {
+        struct FOpenRigDialogContext
+        {
+            ScadLibraryInterface* self = nullptr;
+        };
+
+        auto* dialogContext = new FOpenRigDialogContext{this};
+        constexpr SDL_DialogFileFilter kFilters[] = {
+            {"SCAD Character (*.scad)", "scad"},
+            {"All Files (*.*)", "*"}
+        };
+
+        std::string defaultLocation;
+        std::error_code ec;
+        const std::filesystem::path charDir = AuthoringPath("assets/scad/characters");
+        if (std::filesystem::exists(charDir, ec))
+        {
+            defaultLocation = charDir.string();
+        }
+
+        SDL_ShowOpenFileDialog(
+            [](void* userdata, const char* const* filelist, int /*filter*/)
+            {
+                std::unique_ptr<FOpenRigDialogContext> ctx(static_cast<FOpenRigDialogContext*>(userdata));
+                if (!ctx || !ctx->self)
+                {
+                    return;
+                }
+
+                if (filelist && filelist[0])
+                {
+                    SPDLOG_INFO("Open Rig File: {}", filelist[0]);
+                    std::scoped_lock lock(ctx->self->fileDialogMutex_);
+                    ctx->self->pendingRigSourcePath_ = filelist[0];
+                }
+                else
+                {
+                    SPDLOG_DEBUG("Open Rig File dialog cancelled");
+                }
+            },
+            dialogContext,
+            engine_.GetWindow().Handle(),
+            kFilters, 2, defaultLocation.empty() ? nullptr : defaultLocation.c_str(), false);
+    }
+
     void ScadLibraryInterface::DrawWorkbenchContent()
     {
-        ImGui::Spacing();
-        ImGui::SetNextItemWidth(-88.0f);
-        ImGui::InputTextWithHint("##rig_source", "ScadRig .scad 路径", rigSourceBuf_, sizeof(rigSourceBuf_));
-        ImGui::SameLine();
-        if (ImGui::Button("打开", ImVec2(80.0f, 0.0f)))
+        // 1. Process pending file dialog result safely on main thread
         {
-            workbenchReloadRequested_ = true;
+            std::scoped_lock lock(fileDialogMutex_);
+            if (!pendingRigSourcePath_.empty())
+            {
+                std::filesystem::path selected(pendingRigSourcePath_);
+                pendingRigSourcePath_.clear();
+
+                std::error_code ec;
+                std::filesystem::path root = std::filesystem::current_path();
+                while (!root.empty())
+                {
+                    if (std::filesystem::exists(root / "AGENTS.md", ec))
+                    {
+                        break;
+                    }
+                    const std::filesystem::path parent = root.parent_path();
+                    if (parent == root)
+                    {
+                        root.clear();
+                        break;
+                    }
+                    root = parent;
+                }
+                if (!root.empty())
+                {
+                    const auto rel = std::filesystem::relative(selected, root, ec);
+                    if (!ec && !rel.empty() && rel.string().rfind("..", 0) != 0)
+                    {
+                        selected = rel;
+                    }
+                }
+                const std::string pathStr = selected.generic_string();
+                std::strncpy(rigSourceBuf_, pathStr.c_str(), sizeof(rigSourceBuf_) - 1);
+                rigSourceBuf_[sizeof(rigSourceBuf_) - 1] = '\0';
+                workbenchReloadRequested_ = true;
+            }
         }
+
+        // 2. Character File & Status Card
+        BeginCard("WorkbenchFileCard");
+        {
+            ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::Text), ICON_FA_USER_GEAR "  角色文件与配置");
+            ImGui::SameLine();
+            if (workbench_.RigDirty() || workbench_.EquipmentDirty())
+            {
+                DrawTagChip("未保存", NextUI::Theme::Color(NextUI::Theme::EColor::Warning), "动作或装备有未保存的修改");
+            }
+            else
+            {
+                DrawTagChip("已同步", NextUI::Theme::Color(NextUI::Theme::EColor::Success), "角色资源与磁盘一致");
+            }
+
+            ImGui::Spacing();
+            const float btnWidth = 68.0f;
+            const float openBtnWidth = 86.0f;
+            const float spacing = ImGui::GetStyle().ItemSpacing.x;
+            ImGui::SetNextItemWidth(std::max(120.0f, ImGui::GetContentRegionAvail().x - btnWidth - openBtnWidth - spacing * 2.0f));
+            if (ImGui::InputTextWithHint("##rig_source", "ScadRig .scad 路径", rigSourceBuf_, sizeof(rigSourceBuf_),
+                                         ImGuiInputTextFlags_EnterReturnsTrue))
+            {
+                workbenchReloadRequested_ = true;
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_FOLDER_OPEN " 打开…", ImVec2(openBtnWidth, 0.0f)))
+            {
+                OpenRigFileDialog();
+            }
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("从磁盘选择 .scad 角色文件并载入");
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_ROTATE " 重载", ImVec2(btnWidth, 0.0f)))
+            {
+                workbenchReloadRequested_ = true;
+            }
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("从磁盘重新载入当前指定的角色模型");
+            }
+
+            if (workbenchEverLoaded_ && rigPreview_.HasRig())
+            {
+                ImGui::Spacing();
+                ImGui::TextDisabled(ICON_FA_FILE_CODE "  %s", workbench_.SourcePath().c_str());
+
+                ImGui::Spacing();
+                const float halfWidth = std::max(80.0f, (ImGui::GetContentRegionAvail().x - spacing) * 0.5f);
+                if (workbench_.RigDirty())
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Accent));
+                }
+                if (ImGui::Button(workbench_.RigDirty() ? ICON_FA_FLOPPY_DISK " 保存动作 *" : ICON_FA_FLOPPY_DISK " 保存动作",
+                                  ImVec2(halfWidth, 0.0f)))
+                {
+                    std::string error;
+                    if (workbench_.SaveRig(error))
+                    {
+                        statusLine_ = fmt::format("动作已保存到 {}", workbench_.SourcePath());
+                        statusError_ = false;
+                    }
+                    else
+                    {
+                        statusLine_ = fmt::format("动作保存失败: {}", error);
+                        statusError_ = true;
+                    }
+                }
+                if (workbench_.RigDirty())
+                {
+                    ImGui::PopStyleColor();
+                }
+
+                ImGui::SameLine();
+                if (workbench_.EquipmentDirty())
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Accent));
+                }
+                if (ImGui::Button(workbench_.EquipmentDirty() ? ICON_FA_SHIELD_HALVED " 保存装备 *" : ICON_FA_SHIELD_HALVED " 保存装备",
+                                  ImVec2(halfWidth, 0.0f)))
+                {
+                    std::string error;
+                    if (workbench_.SaveEquipment(error))
+                    {
+                        statusLine_ = fmt::format("装备已保存到 {}", workbench_.EquipmentPath());
+                        statusError_ = false;
+                    }
+                    else
+                    {
+                        statusLine_ = fmt::format("装备保存失败: {}", error);
+                        statusError_ = true;
+                    }
+                }
+                if (workbench_.EquipmentDirty())
+                {
+                    ImGui::PopStyleColor();
+                }
+            }
+        }
+        EndCard();
 
         if (!workbenchEverLoaded_ || !rigPreview_.HasRig() || workspaceMode_ != EWorkspaceMode::CharacterWorkbench)
         {
+            ImGui::Spacing();
             ImGui::TextDisabled("正在载入角色工作室…");
             return;
         }
 
-        ImGui::TextDisabled("%s", workbench_.SourcePath().c_str());
-        if (ImGui::Button(workbench_.RigDirty() ? "保存动作 *" : "保存动作"))
-        {
-            std::string error;
-            if (workbench_.SaveRig(error))
-            {
-                statusLine_ = fmt::format("动作已保存到 {}", workbench_.SourcePath());
-                statusError_ = false;
-            }
-            else
-            {
-                statusLine_ = fmt::format("动作保存失败: {}", error);
-                statusError_ = true;
-            }
-        }
-        ImGui::SameLine();
-        if (ImGui::Button(workbench_.EquipmentDirty() ? "保存装备 *" : "保存装备"))
-        {
-            std::string error;
-            if (workbench_.SaveEquipment(error))
-            {
-                statusLine_ = fmt::format("装备已保存到 {}", workbench_.EquipmentPath());
-                statusError_ = false;
-            }
-            else
-            {
-                statusLine_ = fmt::format("装备保存失败: {}", error);
-                statusError_ = true;
-            }
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("从磁盘重载"))
-        {
-            workbenchReloadRequested_ = true;
-        }
+        // 3. Segmented Pills for Subtabs: 动作列表 (N) vs 装备配件 (M)
+        ImGui::Spacing();
+        const std::vector<std::pair<int, std::string>> workbenchTabs = {
+            {0, fmt::format(ICON_FA_PERSON_RUNNING "  动作列表 ({})", workbench_.Clips().size())},
+            {1, fmt::format(ICON_FA_SHIELD_HALVED "  装备配件 ({})", workbench_.Equipment().size())}
+        };
+        DrawSegmentedPills("##workbench_sub_tabs", workbenchTabs, &workbenchEditorTab_, -1.0f, 28.0f);
+        ImGui::Spacing();
 
-        if (!workbench_.Clips().empty())
+        if (workbenchEditorTab_ == 0)
         {
-            workbenchClip_ = std::clamp(workbenchClip_, 0, static_cast<int>(workbench_.Clips().size()) - 1);
-            FEditableRigClip& clip = workbench_.Clips()[workbenchClip_];
-            if (ImGui::BeginCombo("动作", clip.name.c_str()))
+            // 4. Action Clips List Card
+            const float remaining = ImGui::GetContentRegionAvail().y;
+            const float clipsCardHeight = std::max(180.0f, remaining - 4.0f);
+
+            BeginCard("WorkbenchClipsCard", clipsCardHeight);
             {
-                for (int index = 0; index < static_cast<int>(workbench_.Clips().size()); ++index)
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputTextWithHint("##clip_filter", ICON_FA_MAGNIFYING_GLASS "  搜索动作名称…", clipFilterBuf_, sizeof(clipFilterBuf_));
+                ImGui::Spacing();
+
+                if (ImGui::BeginChild("##WorkbenchClipsScroll", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None))
                 {
-                    const bool selected = index == workbenchClip_;
-                    if (ImGui::Selectable(workbench_.Clips()[index].name.c_str(), selected))
+                    std::string filter = clipFilterBuf_;
+                    std::transform(filter.begin(), filter.end(), filter.begin(), [](unsigned char c) { return std::tolower(c); });
+
+                    int visibleCount = 0;
+                    for (int index = 0; index < static_cast<int>(workbench_.Clips().size()); ++index)
                     {
-                        workbenchClip_ = index;
-                        timelineSelectedChannel_ = -1;
-                        timelineSelectedKey_ = -1;
-                        timelineDraggingKey_ = false;
-                        timelineVisibleDuration_ = 0.0f;
-                        if (!workbench_.Clips()[index].channels.empty())
+                        const FEditableRigClip& clip = workbench_.Clips()[index];
+                        if (!filter.empty())
                         {
-                            timelineSelectedChannel_ = 0;
-                            workbenchBone_ = std::clamp(workbench_.Clips()[index].channels.front().bone, 0,
-                                                        static_cast<int>(rigPreview_.Asset().bones.size()) - 1);
+                            std::string nameLower = clip.name;
+                            std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), [](unsigned char c) { return std::tolower(c); });
+                            if (nameLower.find(filter) == std::string::npos)
+                            {
+                                continue;
+                            }
                         }
-                        rigPreview_.PlayClip(workbench_.Clips()[index].name);
+                        visibleCount++;
+
+                        const bool isSelected = (index == workbenchClip_);
+                        const bool isPlaying = isSelected && !rigPreview_.Paused();
+                        constexpr float rowHeight = 30.0f;
+                        const float startY = ImGui::GetCursorPosY();
+                        const float rowWidth = ImGui::GetContentRegionAvail().x;
+
+                        ImGui::PushID(index);
+                        const bool rowClicked = ImGui::Selectable("##clip_row", isSelected, 0, ImVec2(rowWidth, rowHeight));
+                        const bool rowHovered = ImGui::IsItemHovered();
+
+                        const char* icon = isPlaying ? ICON_FA_CIRCLE_PLAY : (isSelected ? ICON_FA_PERSON_RUNNING : ICON_FA_PERSON);
+                        const ImVec4 iconColor = isSelected ? NextUI::Theme::Color(NextUI::Theme::EColor::Accent) : NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted);
+
+                        ImGui::SetCursorPosY(startY + std::floor((rowHeight - ImGui::GetTextLineHeight()) * 0.5f));
+                        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8.0f);
+                        ImGui::TextColored(iconColor, "%s", icon);
+                        ImGui::SameLine(0.0f, 8.0f);
+
+                        if (isSelected)
+                        {
+                            ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::Text), "%s", clip.name.c_str());
+                        }
+                        else
+                        {
+                            ImGui::TextUnformatted(clip.name.c_str());
+                        }
+
+                        const std::string durStr = fmt::format("{:.2f}s", clip.duration);
+                        const std::string chStr = fmt::format("{}轨", clip.channels.size());
+                        constexpr float badgeWidth = 105.0f;
+                        ImGui::SameLine(std::max(ImGui::GetCursorPosX(), rowWidth - badgeWidth));
+                        DrawTagChip(durStr.c_str(), NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover));
+                        ImGui::SameLine(0.0f, 4.0f);
+                        DrawTagChip(chStr.c_str(), NextUI::Theme::Color(NextUI::Theme::EColor::Blue));
+
+                        ImGui::SetCursorPosY(startY + rowHeight + ImGui::GetStyle().ItemSpacing.y);
+                        ImGui::Dummy(ImVec2(0.0f, 0.0f));
+
+                        if (rowClicked)
+                        {
+                            if (index == workbenchClip_)
+                            {
+                                timelineIsPlaying_ = !timelineIsPlaying_;
+                                rigPreview_.SetPaused(!timelineIsPlaying_);
+                                if (timelineIsPlaying_ && rigPreview_.CurrentTime() >= rigPreview_.CurrentDuration())
+                                {
+                                    rigPreview_.SetCurrentTime(0.0f);
+                                }
+                            }
+                            else
+                            {
+                                SelectWorkbenchClip(index);
+                            }
+                        }
+                        if (rowHovered)
+                        {
+                            ImGui::SetTooltip("动作: %s\n类型: %s\n时长: %.3f 秒\n轨道数: %zu 条\n点击切换动作%s",
+                                              clip.name.c_str(), clip.loop ? "循环动作" : "单次动作",
+                                              clip.duration, clip.channels.size(),
+                                              isSelected ? "（再次点击切换播放/暂停）" : "");
+                        }
+
+                        ImGui::PopID();
+                    }
+
+                    if (visibleCount == 0)
+                    {
+                        ImGui::Spacing();
+                        ImGui::TextDisabled("  无匹配的动作");
                     }
                 }
-                ImGui::EndCombo();
+                ImGui::EndChild();
             }
-
-            if (ImGui::Button(rigPreview_.Paused() ? "播放" : "暂停"))
-            {
-                rigPreview_.SetPaused(!rigPreview_.Paused());
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("回到开头"))
-            {
-                rigPreview_.SetPaused(true);
-                rigPreview_.SetCurrentTime(0.0f);
-            }
-            ImGui::SameLine();
-            float speed = rigPreview_.PlaySpeed();
-            ImGui::SetNextItemWidth(100.0f);
-            if (ImGui::DragFloat("速度", &speed, 0.05f, -3.0f, 3.0f, "%.2fx"))
-            {
-                rigPreview_.SetPlaySpeed(speed);
-            }
-            float time = rigPreview_.CurrentTime();
-            if (ImGui::SliderFloat("时间", &time, 0.0f, std::max(rigPreview_.CurrentDuration(), 0.001f), "%.3f s"))
-            {
-                rigPreview_.SetPaused(true);
-                rigPreview_.SetCurrentTime(time);
-            }
+            EndCard();
         }
-
-        ImGui::Separator();
-        if (ImGui::BeginTabBar("##workbench_modes"))
+        else
         {
-            if (ImGui::BeginTabItem("动作修改"))
-            {
-                workbenchEditorTab_ = 0;
-                ImGui::TextDisabled("关键帧编辑器已停靠在视口底部。");
-                if (!workbench_.Clips().empty())
-                {
-                    const FEditableRigClip& activeClip = workbench_.Clips()[workbenchClip_];
-                    ImGui::Spacing();
-                    ImGui::Text("%s", activeClip.name.c_str());
-                    ImGui::TextDisabled("%.3f 秒 / %zu 条轨道", activeClip.duration, activeClip.channels.size());
-                    ImGui::TextDisabled("左侧骨骼树选择骨骼，右侧时间轴编辑轨道。");
-                }
-                ImGui::EndTabItem();
-            }
-            if (ImGui::BeginTabItem(fmt::format("装备 ({})", workbench_.Equipment().size()).c_str()))
-            {
-                workbenchEditorTab_ = 1;
-                DrawEquipmentEditor();
-                ImGui::EndTabItem();
-            }
-            ImGui::EndTabBar();
+            // Equipment Subtab
+            DrawEquipmentEditor();
         }
     }
 
     void ScadLibraryInterface::DrawViewportToolbar(const ImVec2& viewportPos)
     {
-        ImGui::SetNextWindowPos(ImVec2(viewportPos.x + 12.0f, viewportPos.y + 12.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.94f);
+        ImGui::SetNextWindowPos(ImVec2(viewportPos.x + 14.0f, viewportPos.y + 14.0f), ImGuiCond_Always);
         const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking |
             ImGuiWindowFlags_AlwaysAutoResize;
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5.0f, 5.0f));
+        NextUI::Theme::PushViewportToolbarStyle();
         if (ImGui::Begin("##ScadLibraryViewportToolbar", nullptr, flags))
         {
-            if (NextUI::Theme::ToolbarButton(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT, "移动骨骼", boneGizmoOperation_ == 0))
+            if (NextUI::Theme::ToolbarButton(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT, "移动骨骼 (W)", boneGizmoOperation_ == 0))
             {
                 boneGizmoOperation_ = 0;
             }
             ImGui::SameLine();
-            if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE, "旋转骨骼", boneGizmoOperation_ == 1))
+            if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE, "旋转骨骼 (E)", boneGizmoOperation_ == 1))
             {
                 boneGizmoOperation_ = 1;
             }
             ImGui::SameLine();
-            if (NextUI::Theme::ToolbarButton(ICON_FA_EXPAND, "缩放骨骼", boneGizmoOperation_ == 2))
+            if (NextUI::Theme::ToolbarButton(ICON_FA_EXPAND, "缩放骨骼 (R)", boneGizmoOperation_ == 2))
             {
                 boneGizmoOperation_ = 2;
             }
             NextUI::Theme::DrawVerticalSeparator(20.0f, 8.0f, 0.65f);
-            ImGui::TextDisabled("本地  ·  透视");
+            ImGui::TextDisabled("本地 · 透视");
         }
         ImGui::End();
-        ImGui::PopStyleVar(2);
+        NextUI::Theme::PopViewportToolbarStyle();
     }
 
     void ScadLibraryInterface::UpsertGizmoKey(EEditableRigChannel type, const glm::vec3& value)
@@ -8419,13 +8679,11 @@ namespace ScadLibrary
 
     void ScadLibraryInterface::DrawSceneGizmoToolbar(const ImVec2& viewportPos)
     {
-        ImGui::SetNextWindowPos(ImVec2(viewportPos.x + 12.0f, viewportPos.y + 12.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.94f);
+        ImGui::SetNextWindowPos(ImVec2(viewportPos.x + 14.0f, viewportPos.y + 14.0f), ImGuiCond_Always);
         const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
             ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoSavedSettings;
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5.0f, 5.0f));
+        NextUI::Theme::PushViewportToolbarStyle();
         if (ImGui::Begin("##SceneObjectGizmoToolbar", nullptr, flags))
         {
             sceneToolbarVisible_ = true;
@@ -8450,28 +8708,31 @@ namespace ScadLibrary
             NextUI::Theme::DrawVerticalSeparator(20.0f, 8.0f, 0.65f);
             ImGui::SameLine();
 
-            if (NextUI::Theme::ToolbarButton(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT, "移动对象", sceneGizmoOperation_ == 0))
+            if (NextUI::Theme::ToolbarButton(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT, "移动对象 (W)", sceneGizmoOperation_ == 0))
             {
                 sceneGizmoOperation_ = 0;
             }
             ImGui::SameLine();
-            if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE, "旋转对象", sceneGizmoOperation_ == 1))
+            if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE, "旋转对象 (E)", sceneGizmoOperation_ == 1))
             {
                 sceneGizmoOperation_ = 1;
             }
             NextUI::Theme::DrawVerticalSeparator(20.0f, 8.0f, 0.65f);
+            ImGui::SameLine();
             if (selectedBenchItem_ >= 0 && selectedBenchItem_ < static_cast<int>(Bench().size()))
             {
-                ImGui::Text("%s", Bench()[selectedBenchItem_].moduleName.c_str());
+                ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover));
+                ImGui::Text("%s  %s", ICON_FA_CUBE, Bench()[selectedBenchItem_].moduleName.c_str());
+                ImGui::PopStyleColor();
                 NextUI::Theme::DrawTooltip("松开鼠标后写回 SCAD");
             }
             else
             {
-                ImGui::TextDisabled("选择右侧对象以编辑");
+                ImGui::TextDisabled("无选中对象");
             }
         }
         ImGui::End();
-        ImGui::PopStyleVar(2);
+        NextUI::Theme::PopViewportToolbarStyle();
     }
 
     void ScadLibraryInterface::ClearEditableSceneSelection()
@@ -10118,6 +10379,7 @@ namespace ScadLibrary
             return;
         }
 
+        timelineIsPlaying_ = false;
         rigPreview_.SetPaused(true);
         glm::mat4 parentWorld(1.0f);
         if (Assets::Node* parent = boneNode->GetParent())
@@ -10140,17 +10402,20 @@ namespace ScadLibrary
             return;
         }
         rotation = glm::normalize(rotation);
-        if (boneGizmoOperation_ == 0)
+        if (timelineAutoKey_)
         {
-            UpsertGizmoKey(EEditableRigChannel::Position, FCharacterWorkbench::EnginePositionToScad(translation));
-        }
-        else if (boneGizmoOperation_ == 1)
-        {
-            UpsertGizmoKey(EEditableRigChannel::Rotation, FCharacterWorkbench::EngineRotationToScad(rotation));
-        }
-        else
-        {
-            UpsertGizmoKey(EEditableRigChannel::Scale, FCharacterWorkbench::EngineScaleToScad(scale));
+            if (boneGizmoOperation_ == 0)
+            {
+                UpsertGizmoKey(EEditableRigChannel::Position, FCharacterWorkbench::EnginePositionToScad(translation));
+            }
+            else if (boneGizmoOperation_ == 1)
+            {
+                UpsertGizmoKey(EEditableRigChannel::Rotation, FCharacterWorkbench::EngineRotationToScad(rotation));
+            }
+            else
+            {
+                UpsertGizmoKey(EEditableRigChannel::Scale, FCharacterWorkbench::EngineScaleToScad(scale));
+            }
         }
     }
 
@@ -10158,15 +10423,17 @@ namespace ScadLibrary
     {
         ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
         ImGui::SetNextWindowSize(size, ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.98f);
+        ImGui::SetNextWindowBgAlpha(0.96f);
         const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking;
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking |
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
         if (!ImGui::Begin("##ScadLibraryAnimationTimeline", nullptr, flags))
         {
             ImGui::End();
-            ImGui::PopStyleVar(2);
+            ImGui::PopStyleVar(3);
             return;
         }
 
@@ -10174,7 +10441,7 @@ namespace ScadLibrary
         {
             ImGui::TextDisabled("当前角色没有可编辑动作或骨架。");
             ImGui::End();
-            ImGui::PopStyleVar(2);
+            ImGui::PopStyleVar(3);
             return;
         }
 
@@ -10210,307 +10477,755 @@ namespace ScadLibrary
             return channel.keys.back().value;
         };
 
-        ImGui::TextUnformatted(ICON_FA_FILM " 动作时间轴");
-        ImGui::SameLine();
-        ImGui::TextDisabled("%s  ·  %.3f 秒  ·  %zu 条轨道", clip.name.c_str(), clip.duration, clip.channels.size());
-        ImGui::SameLine();
-        ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), ImGui::GetWindowWidth() - 244.0f));
-        if (ImGui::SmallButton(boneGizmoOperation_ == 0 ? "[移动]" : "移动"))
-        {
-            boneGizmoOperation_ = 0;
-        }
-        ImGui::SameLine();
-        if (ImGui::SmallButton(boneGizmoOperation_ == 1 ? "[旋转]" : "旋转"))
-        {
-            boneGizmoOperation_ = 1;
-        }
-        ImGui::SameLine();
-        if (ImGui::SmallButton(boneGizmoOperation_ == 2 ? "[缩放]" : "缩放"))
-        {
-            boneGizmoOperation_ = 2;
-        }
-        ImGui::SameLine();
-        ImGui::TextDisabled("拖动 Gizmo 自动 K 帧");
-        ImGui::Separator();
+        const float fps = static_cast<float>(std::max(1, timelineFps_));
+        const float currentTime = rigPreview_.CurrentTime();
+        const float clipDuration = std::max(clip.duration, 0.05f);
+        timelineVisibleDuration_ = std::max(timelineVisibleDuration_, std::max(clipDuration * 1.15f, 0.2f));
+        const float duration = timelineVisibleDuration_;
+        const int currentFrame = static_cast<int>(std::round(currentTime * fps));
+        const int totalFrames = static_cast<int>(std::round(clipDuration * fps));
 
         workbenchBone_ = std::clamp(workbenchBone_, 0, static_cast<int>(rigPreview_.Asset().bones.size()) - 1);
-        ImGui::BeginChild("##timeline_editor", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
+        const Assets::FRigBone& activeBone = rigPreview_.Asset().bones[workbenchBone_];
 
-        if (ImGui::SmallButton(ICON_FA_BACKWARD_STEP))
+        // Keyboard Shortcuts (Sequencer standard)
+        const bool panelFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+        if (panelFocused && !ImGui::GetIO().WantTextInput)
         {
-            rigPreview_.SetPaused(true);
-            rigPreview_.SetCurrentTime(0.0f);
+            if (ImGui::IsKeyPressed(ImGuiKey_Space))
+            {
+                const bool willPlay = rigPreview_.Paused();
+                timelineIsPlaying_ = willPlay;
+                rigPreview_.SetPaused(!willPlay);
+                if (willPlay && currentTime >= duration)
+                {
+                    rigPreview_.SetCurrentTime(0.0f);
+                }
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
+            {
+                timelineIsPlaying_ = false;
+                rigPreview_.SetPaused(true);
+                float t = std::max(0.0f, currentTime - 1.0f / fps);
+                if (timelineSnapToFrames_)
+                {
+                    t = std::round(t * fps) / fps;
+                }
+                rigPreview_.SetCurrentTime(t);
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_RightArrow))
+            {
+                timelineIsPlaying_ = false;
+                rigPreview_.SetPaused(true);
+                float t = std::min(duration, currentTime + 1.0f / fps);
+                if (timelineSnapToFrames_)
+                {
+                    t = std::round(t * fps) / fps;
+                }
+                rigPreview_.SetCurrentTime(t);
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_Home))
+            {
+                timelineIsPlaying_ = false;
+                rigPreview_.SetPaused(true);
+                rigPreview_.SetCurrentTime(0.0f);
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_End))
+            {
+                timelineIsPlaying_ = false;
+                rigPreview_.SetPaused(true);
+                rigPreview_.SetCurrentTime(clip.duration);
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_Delete) || ImGui::IsKeyPressed(ImGuiKey_Backspace))
+            {
+                if (timelineSelectedChannel_ >= 0 && timelineSelectedChannel_ < static_cast<int>(clip.channels.size()) &&
+                    timelineSelectedKey_ >= 0 &&
+                    timelineSelectedKey_ < static_cast<int>(clip.channels[timelineSelectedChannel_].keys.size()))
+                {
+                    clip.channels[timelineSelectedChannel_].keys.erase(
+                        clip.channels[timelineSelectedChannel_].keys.begin() + timelineSelectedKey_);
+                    timelineSelectedKey_ = -1;
+                    edited = true;
+                }
+            }
         }
-        ImGui::SameLine();
-        if (ImGui::SmallButton(rigPreview_.Paused() ? ICON_FA_PLAY : ICON_FA_PAUSE))
-        {
-            rigPreview_.SetPaused(!rigPreview_.Paused());
-        }
-        ImGui::SameLine();
-        if (ImGui::SmallButton(ICON_FA_STOP))
-        {
-            rigPreview_.SetPaused(true);
-        }
-        ImGui::SameLine();
-        if (ImGui::SmallButton(ICON_FA_FORWARD_STEP))
-        {
-            rigPreview_.SetPaused(true);
-            rigPreview_.SetCurrentTime(clip.duration);
-        }
-        ImGui::SameLine();
-        ImGui::TextDisabled("%.3f s", rigPreview_.CurrentTime());
-        ImGui::SameLine();
-        if (ImGui::Checkbox("循环", &clip.loop))
-        {
-            edited = true;
-        }
-        ImGui::SameLine();
-        ImGui::TextDisabled("%.3f s / %zu 通道", clip.duration, clip.channels.size());
 
-        const Assets::FRigBone& selectedBone = rigPreview_.Asset().bones[workbenchBone_];
-        ImGui::SameLine();
-        ImGui::TextDisabled("当前骨骼: %s", selectedBone.name.c_str());
-
-        bool hasPosition = false;
-        bool hasRotation = false;
-        bool hasScale = false;
-        for (const FEditableRigChannel& channel : clip.channels)
+        // Collect visible channels
+        std::vector<int> visibleChannels;
+        for (int chIdx = 0; chIdx < static_cast<int>(clip.channels.size()); ++chIdx)
         {
-            if (channel.bone != workbenchBone_)
+            const FEditableRigChannel& ch = clip.channels[chIdx];
+            if (!timelineShowAllBones_ && ch.bone != workbenchBone_)
             {
                 continue;
             }
-            hasPosition |= channel.type == EEditableRigChannel::Position;
-            hasRotation |= channel.type == EEditableRigChannel::Rotation;
-            hasScale |= channel.type == EEditableRigChannel::Scale;
+            if (timelineFilterBuf_[0] != '\0')
+            {
+                const std::string boneName = (ch.bone >= 0 && ch.bone < static_cast<int>(rigPreview_.Asset().bones.size()))
+                    ? rigPreview_.Asset().bones[ch.bone].name : "";
+                const char* typeName = FCharacterWorkbench::ChannelName(ch.type);
+                const std::string combined = boneName + " " + typeName;
+                auto toLower = [](std::string s) {
+                    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+                    return s;
+                };
+                if (toLower(combined).find(toLower(timelineFilterBuf_)) == std::string::npos)
+                {
+                    continue;
+                }
+            }
+            visibleChannels.push_back(chIdx);
         }
-
-        const auto addChannel = [&](const char* label, EEditableRigChannel type, bool exists)
-        {
-            if (exists)
-            {
-                ImGui::BeginDisabled();
-            }
-            const bool pressed = ImGui::SmallButton(label);
-            if (exists)
-            {
-                ImGui::EndDisabled();
-            }
-            if (pressed)
-            {
-                FEditableRigChannel channel;
-                channel.bone = workbenchBone_;
-                channel.type = type;
-                channel.keys.push_back({rigPreview_.CurrentTime(),
-                                        type == EEditableRigChannel::Scale ? glm::vec3(1.0f) : glm::vec3(0.0f)});
-                clip.channels.push_back(std::move(channel));
-                timelineSelectedChannel_ = static_cast<int>(clip.channels.size()) - 1;
-                timelineSelectedKey_ = 0;
-                edited = true;
-            }
-        };
-
-        ImGui::TextDisabled("添加轨道");
-        ImGui::SameLine();
-        addChannel("+ pos", EEditableRigChannel::Position, hasPosition);
-        ImGui::SameLine();
-        addChannel("+ rot", EEditableRigChannel::Rotation, hasRotation);
-        ImGui::SameLine();
-        addChannel("+ scale", EEditableRigChannel::Scale, hasScale);
 
         if (timelineSelectedChannel_ >= static_cast<int>(clip.channels.size()))
         {
             timelineSelectedChannel_ = -1;
             timelineSelectedKey_ = -1;
         }
-        if (timelineSelectedChannel_ >= 0 && clip.channels[timelineSelectedChannel_].bone != workbenchBone_)
+        if (timelineSelectedChannel_ >= 0 && !timelineShowAllBones_ &&
+            clip.channels[timelineSelectedChannel_].bone != workbenchBone_)
         {
             timelineSelectedChannel_ = -1;
             timelineSelectedKey_ = -1;
         }
-
-        std::vector<int> visibleChannels;
-        for (int channelIndex = 0; channelIndex < static_cast<int>(clip.channels.size()); ++channelIndex)
+        if (timelineSelectedChannel_ >= 0 &&
+            timelineSelectedKey_ >= static_cast<int>(clip.channels[timelineSelectedChannel_].keys.size()))
         {
-            if (clip.channels[channelIndex].bone == workbenchBone_)
+            timelineSelectedKey_ = -1;
+        }
+
+        // Stepping / Key search helper
+        const auto findPrevNextKey = [&](float curTime, float& outPrev, float& outNext) -> bool
+        {
+            outPrev = -1.0f;
+            outNext = std::numeric_limits<float>::max();
+            bool foundPrev = false;
+            bool foundNext = false;
+            const std::vector<int>& searchChannels =
+                (timelineSelectedChannel_ >= 0 ? std::vector<int>{timelineSelectedChannel_} : visibleChannels);
+            for (int chIdx : searchChannels)
             {
-                visibleChannels.push_back(channelIndex);
+                if (chIdx >= 0 && chIdx < static_cast<int>(clip.channels.size()))
+                {
+                    for (const FEditableRigKey& k : clip.channels[chIdx].keys)
+                    {
+                        if (k.time < curTime - 0.001f && k.time > outPrev)
+                        {
+                            outPrev = k.time;
+                            foundPrev = true;
+                        }
+                        if (k.time > curTime + 0.001f && k.time < outNext)
+                        {
+                            outNext = k.time;
+                            foundNext = true;
+                        }
+                    }
+                }
             }
+            return foundPrev || foundNext;
+        };
+
+        // Channel types for current bone
+        bool hasPosition = false;
+        bool hasRotation = false;
+        bool hasScale = false;
+        for (const FEditableRigChannel& ch : clip.channels)
+        {
+            if (ch.bone != workbenchBone_) continue;
+            hasPosition |= (ch.type == EEditableRigChannel::Position);
+            hasRotation |= (ch.type == EEditableRigChannel::Rotation);
+            hasScale |= (ch.type == EEditableRigChannel::Scale);
         }
 
-        ImGui::SameLine();
-        const bool hasSelectedTrack = timelineSelectedChannel_ >= 0;
-        if (!hasSelectedTrack)
+        constexpr float kBarItemH = 26.0f;
+        const auto addChannel = [&](const char* label, EEditableRigChannel type, bool exists, const ImVec4& color)
         {
-            ImGui::BeginDisabled();
-        }
-        if (ImGui::SmallButton(ICON_FA_PLUS " 关键帧"))
-        {
-            FEditableRigChannel& channel = clip.channels[timelineSelectedChannel_];
-            channel.keys.push_back({rigPreview_.CurrentTime(), sampleChannel(channel, rigPreview_.CurrentTime())});
-            timelineSelectedKey_ = static_cast<int>(channel.keys.size()) - 1;
-            edited = true;
-        }
-        if (!hasSelectedTrack)
-        {
-            ImGui::EndDisabled();
-        }
-
-        timelineVisibleDuration_ = std::max(timelineVisibleDuration_, std::max(clip.duration * 1.1f, 0.1f));
-        const float duration = timelineVisibleDuration_;
-        const float rowHeight = 28.0f;
-        const float rulerHeight = 30.0f;
-        const float labelWidth = 104.0f;
-        const ImU32 rulerColor = ImGui::GetColorU32(ImGuiCol_FrameBg);
-        const ImU32 rowColor = ImGui::GetColorU32(ImGuiCol_TableRowBg);
-        const ImU32 alternateRowColor = ImGui::GetColorU32(ImGuiCol_TableRowBgAlt);
-        const ImU32 gridColor = ImGui::GetColorU32(ImGuiCol_Border, 0.46f);
-        const ImU32 textColor = ImGui::GetColorU32(ImGuiCol_TextDisabled);
-        const ImU32 accentColor = ImGui::GetColorU32(NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover));
-        const ImU32 selectedColor = ImGui::GetColorU32(ImGuiCol_Text);
-
-        const ImVec2 rulerPos = ImGui::GetCursorScreenPos();
-        const float totalWidth = ImGui::GetContentRegionAvail().x;
-        const float timeWidth = std::max(totalWidth - labelWidth, 80.0f);
-        ImGui::InvisibleButton("##timeline_ruler", ImVec2(totalWidth, rulerHeight));
-        ImDrawList* drawList = ImGui::GetWindowDrawList();
-        drawList->AddRectFilled(rulerPos, ImVec2(rulerPos.x + totalWidth, rulerPos.y + rulerHeight), rulerColor);
-        drawList->AddLine(ImVec2(rulerPos.x + labelWidth, rulerPos.y),
-                          ImVec2(rulerPos.x + labelWidth, rulerPos.y + rulerHeight), gridColor);
-        drawList->AddText(ImVec2(rulerPos.x + 7.0f, rulerPos.y + 7.0f), textColor, "属性轨道");
-
-        const float roughStep = duration / std::max(2.0f, std::floor(timeWidth / 75.0f));
-        const float tickOptions[] = {0.01f, 0.02f, 0.05f, 0.1f, 0.2f, 0.5f, 1.0f, 2.0f, 5.0f, 10.0f};
-        float tickStep = tickOptions[std::size(tickOptions) - 1];
-        for (float option : tickOptions)
-        {
-            if (option >= roughStep)
+            if (exists) ImGui::BeginDisabled();
+            ImGui::PushStyleColor(ImGuiCol_Text, exists ? ImVec4(0.5f, 0.5f, 0.5f, 0.6f) : color);
+            const bool pressed = ImGui::Button(label, ImVec2(50.0f, kBarItemH));
+            ImGui::PopStyleColor();
+            if (exists) ImGui::EndDisabled();
+            if (pressed)
             {
-                tickStep = option;
+                FEditableRigChannel ch;
+                ch.bone = workbenchBone_;
+                ch.type = type;
+                ch.keys.push_back({rigPreview_.CurrentTime(),
+                                   type == EEditableRigChannel::Scale ? glm::vec3(1.0f) : glm::vec3(0.0f)});
+                clip.channels.push_back(std::move(ch));
+                timelineSelectedChannel_ = static_cast<int>(clip.channels.size()) - 1;
+                timelineSelectedKey_ = 0;
+                edited = true;
+            }
+        };
+
+        // DCC Channel Colors
+        constexpr ImU32 dccColorPos = IM_COL32(239, 68, 68, 255);    // Red
+        constexpr ImU32 dccColorRot = IM_COL32(16, 185, 129, 255);   // Green
+        constexpr ImU32 dccColorScale = IM_COL32(59, 130, 246, 255);  // Blue
+        const auto getChannelColor = [](EEditableRigChannel type) -> ImU32
+        {
+            switch (type)
+            {
+            case EEditableRigChannel::Position: return dccColorPos;
+            case EEditableRigChannel::Rotation: return dccColorRot;
+            case EEditableRigChannel::Scale: return dccColorScale;
+            }
+            return IM_COL32(200, 200, 200, 255);
+        };
+        const auto getChannelIcon = [](EEditableRigChannel type) -> const char*
+        {
+            switch (type)
+            {
+            case EEditableRigChannel::Position: return ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT;
+            case EEditableRigChannel::Rotation: return ICON_FA_ROTATE_LEFT;
+            case EEditableRigChannel::Scale: return ICON_FA_EXPAND;
+            }
+            return ICON_FA_SLIDERS;
+        };
+
+        // ==========================================
+        // 1. TOP HEADER TOOLBAR (Sequencer Control Bar)
+        // ==========================================
+        {
+            const float startRowY = ImGui::GetCursorPosY();
+
+            // Left: Title & Track Scope
+            ImGui::SetCursorPosY(startRowY + std::floor((kBarItemH - ImGui::GetTextLineHeight()) * 0.5f));
+            ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::Blue), "%s", ICON_FA_FILM);
+            ImGui::SameLine(0.0f, 6.0f);
+            ImGui::SetCursorPosY(startRowY);
+
+            // Scope Pills: [当前] [全部]
+            int scopeIndex = timelineShowAllBones_ ? 1 : 0;
+            const std::vector<std::pair<int, std::string>> scopeOptions = {
+                {0, "当前"}, {1, "全部"}
+            };
+            if (DrawSegmentedPills("##timeline_scope", scopeOptions, &scopeIndex, 90.0f, kBarItemH))
+            {
+                timelineShowAllBones_ = (scopeIndex == 1);
+            }
+
+            ImGui::SameLine(0.0f, 4.0f);
+            addChannel("+位移", EEditableRigChannel::Position, hasPosition, ImVec4(0.94f, 0.35f, 0.35f, 1.0f));
+            ImGui::SameLine(0.0f, 2.0f);
+            addChannel("+旋转", EEditableRigChannel::Rotation, hasRotation, ImVec4(0.20f, 0.85f, 0.45f, 1.0f));
+            ImGui::SameLine(0.0f, 2.0f);
+            addChannel("+缩放", EEditableRigChannel::Scale, hasScale, ImVec4(0.30f, 0.65f, 0.98f, 1.0f));
+
+            ImGui::SameLine(0.0f, 4.0f);
+            const bool canAddKey = timelineSelectedChannel_ >= 0 || !visibleChannels.empty();
+            if (!canAddKey) ImGui::BeginDisabled();
+            if (ImGui::Button(ICON_FA_KEY " K帧", ImVec2(52.0f, kBarItemH)))
+            {
+                if (timelineSelectedChannel_ >= 0 && timelineSelectedChannel_ < static_cast<int>(clip.channels.size()))
+                {
+                    FEditableRigChannel& channel = clip.channels[timelineSelectedChannel_];
+                    channel.keys.push_back({rigPreview_.CurrentTime(), sampleChannel(channel, rigPreview_.CurrentTime())});
+                    timelineSelectedKey_ = static_cast<int>(channel.keys.size()) - 1;
+                    edited = true;
+                }
+                else
+                {
+                    // Add key on all visible channels of the active bone
+                    for (int chIdx : visibleChannels)
+                    {
+                        FEditableRigChannel& channel = clip.channels[chIdx];
+                        channel.keys.push_back({rigPreview_.CurrentTime(), sampleChannel(channel, rigPreview_.CurrentTime())});
+                    }
+                    edited = true;
+                }
+            }
+            if (!canAddKey) ImGui::EndDisabled();
+
+            // Center: Media Transport
+            ImGui::SameLine(0.0f, 6.0f);
+            if (ImGui::Button(ICON_FA_BACKWARD_STEP "##first", ImVec2(26.0f, kBarItemH)))
+            {
+                timelineIsPlaying_ = false;
+                rigPreview_.SetPaused(true);
+                rigPreview_.SetCurrentTime(0.0f);
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("跳转到首帧 (Home)");
+
+            ImGui::SameLine(0.0f, 2.0f);
+            float prevKeyTime = 0.0f, nextKeyTime = 0.0f;
+            findPrevNextKey(currentTime, prevKeyTime, nextKeyTime);
+            if (prevKeyTime < 0.0f) ImGui::BeginDisabled();
+            if (ImGui::Button(ICON_FA_CHEVRON_LEFT "##prev_key", ImVec2(26.0f, kBarItemH)))
+            {
+                timelineIsPlaying_ = false;
+                rigPreview_.SetPaused(true);
+                rigPreview_.SetCurrentTime(prevKeyTime);
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("上一关键帧");
+            if (prevKeyTime < 0.0f) ImGui::EndDisabled();
+
+            ImGui::SameLine(0.0f, 2.0f);
+            if (ImGui::Button(ICON_FA_CARET_LEFT "##step_back", ImVec2(26.0f, kBarItemH)))
+            {
+                timelineIsPlaying_ = false;
+                rigPreview_.SetPaused(true);
+                float t = std::max(0.0f, currentTime - 1.0f / fps);
+                if (timelineSnapToFrames_) t = std::round(t * fps) / fps;
+                rigPreview_.SetCurrentTime(t);
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("后退 1 帧 (Left Arrow)");
+
+            ImGui::SameLine(0.0f, 2.0f);
+            const bool isPaused = rigPreview_.Paused();
+            ImGui::PushStyleColor(ImGuiCol_Button, isPaused ? NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated, 0.7f)
+                                                            : NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.85f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover));
+            if (ImGui::Button(isPaused ? ICON_FA_PLAY : ICON_FA_PAUSE, ImVec2(28.0f, kBarItemH)))
+            {
+                timelineIsPlaying_ = isPaused;
+                rigPreview_.SetPaused(!timelineIsPlaying_);
+                if (timelineIsPlaying_ && currentTime >= duration)
+                {
+                    rigPreview_.SetCurrentTime(0.0f);
+                }
+            }
+            ImGui::PopStyleColor(2);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(isPaused ? "播放 (Space)" : "暂停 (Space)");
+
+            ImGui::SameLine(0.0f, 2.0f);
+            if (ImGui::Button(ICON_FA_CARET_RIGHT "##step_forward", ImVec2(26.0f, kBarItemH)))
+            {
+                timelineIsPlaying_ = false;
+                rigPreview_.SetPaused(true);
+                float t = std::min(duration, currentTime + 1.0f / fps);
+                if (timelineSnapToFrames_) t = std::round(t * fps) / fps;
+                rigPreview_.SetCurrentTime(t);
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("前进 1 帧 (Right Arrow)");
+
+            ImGui::SameLine(0.0f, 2.0f);
+            if (nextKeyTime >= std::numeric_limits<float>::max() - 1.0f) ImGui::BeginDisabled();
+            if (ImGui::Button(ICON_FA_CHEVRON_RIGHT "##next_key", ImVec2(26.0f, kBarItemH)))
+            {
+                timelineIsPlaying_ = false;
+                rigPreview_.SetPaused(true);
+                rigPreview_.SetCurrentTime(nextKeyTime);
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("下一关键帧");
+            if (nextKeyTime >= std::numeric_limits<float>::max() - 1.0f) ImGui::EndDisabled();
+
+            ImGui::SameLine(0.0f, 2.0f);
+            if (ImGui::Button(ICON_FA_FORWARD_STEP "##last", ImVec2(26.0f, kBarItemH)))
+            {
+                timelineIsPlaying_ = false;
+                rigPreview_.SetPaused(true);
+                rigPreview_.SetCurrentTime(clip.duration);
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("跳转到末尾 (End)");
+
+            ImGui::SameLine(0.0f, 3.0f);
+            ImGui::PushStyleColor(ImGuiCol_Button, clip.loop ? NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.65f)
+                                                             : NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated, 0.45f));
+            if (ImGui::Button(ICON_FA_REPEAT, ImVec2(26.0f, kBarItemH)))
+            {
+                clip.loop = !clip.loop;
+                edited = true;
+            }
+            ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(clip.loop ? "循环播放: 已开启" : "循环播放: 已关闭");
+
+            // Right Group: HUD, Snap, Gizmo, Auto-key Checkbox
+            const float rightGroupWidth = 328.0f;
+            const float cursorX = ImGui::GetCursorPosX();
+            const float rightTargetX = ImGui::GetWindowWidth() - rightGroupWidth - 12.0f;
+            if (rightTargetX > cursorX + 8.0f)
+            {
+                ImGui::SameLine(rightTargetX);
+            }
+            else
+            {
+                ImGui::SameLine(0.0f, 6.0f);
+            }
+
+            // Timecode HUD pill
+            const std::string hudText = fmt::format("{:.2f}s · {}/{}f", currentTime, currentFrame, totalFrames);
+            ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated, 0.65f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated, 0.85f));
+            ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover));
+            ImGui::Button(hudText.c_str(), ImVec2(105.0f, kBarItemH));
+            ImGui::PopStyleColor(3);
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("当前时间码与基准帧率 (%d FPS)", static_cast<int>(fps));
+            }
+
+            ImGui::SameLine(0.0f, 3.0f);
+            // Snapping toggle
+            ImGui::PushStyleColor(ImGuiCol_Button, timelineSnapToFrames_ ? NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.75f)
+                                                                         : NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated, 0.45f));
+            if (ImGui::Button(ICON_FA_MAGNET, ImVec2(26.0f, kBarItemH)))
+            {
+                timelineSnapToFrames_ = !timelineSnapToFrames_;
+            }
+            ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(timelineSnapToFrames_ ? "磁性吸附帧 (已开启)" : "磁性吸附帧 (已关闭)");
+
+            ImGui::SameLine(0.0f, 3.0f);
+            // Gizmo mode pills
+            int gizmoIdx = boneGizmoOperation_;
+            const std::vector<std::pair<int, std::string>> gizmoOptions = {
+                {0, "W"}, {1, "E"}, {2, "R"}
+            };
+            if (DrawSegmentedPills("##timeline_gizmo", gizmoOptions, &gizmoIdx, 66.0f, kBarItemH))
+            {
+                boneGizmoOperation_ = gizmoIdx;
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("视口操作 Gizmo: W 平移 / E 旋转 / R 缩放");
+
+            ImGui::SameLine(0.0f, 6.0f);
+            // Auto-key Checkbox switch with icon
+            const float cbHeight = ImGui::GetFrameHeight();
+            const float offsetY = std::floor((kBarItemH - cbHeight) * 0.5f);
+            const float beforeCbY = ImGui::GetCursorPosY();
+            ImGui::SetCursorPosY(beforeCbY + offsetY);
+
+            ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
+            if (timelineAutoKey_)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.50f, 0.50f, 1.0f));
+            }
+            ImGui::Checkbox(ICON_FA_CIRCLE_DOT " 自动记录", &timelineAutoKey_);
+            if (timelineAutoKey_)
+            {
+                ImGui::PopStyleColor();
+            }
+            ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("自动记录 (Auto-Key): 开启后，在视口拖动骨骼 Gizmo 或在检查器中调姿时，自动向当前时间插入/更新关键帧");
+            }
+
+            ImGui::SetCursorPosY(startRowY + kBarItemH + 4.0f);
+        }
+
+        ImGui::Separator();
+        ImGui::Dummy(ImVec2(0.0f, 2.0f));
+
+        // ==========================================
+        // 2. MIDDLE TRACK TREE & DOPE SHEET CANVAS
+        // ==========================================
+        const float detailHeight = (timelineSelectedChannel_ >= 0) ? 68.0f : 30.0f;
+        const float middleTotalHeight = std::max(120.0f, ImGui::GetContentRegionAvail().y - detailHeight - 4.0f);
+        const float rulerHeight = 26.0f;
+        const float tracksHeight = middleTotalHeight - rulerHeight;
+        const float trackHeaderWidth = std::clamp(timelineTrackHeaderWidth_, 180.0f, 260.0f);
+        const float totalAvailWidth = ImGui::GetContentRegionAvail().x;
+        const float canvasTimeWidth = std::max(totalAvailWidth - trackHeaderWidth, 80.0f);
+        const float rowHeight = 30.0f;
+
+        const ImU32 gridColor = ImGui::GetColorU32(ImGuiCol_Border, 0.30f);
+        const ImU32 majorGridColor = ImGui::GetColorU32(ImGuiCol_Border, 0.65f);
+        const ImU32 textDimColor = ImGui::GetColorU32(ImGuiCol_TextDisabled);
+        const ImU32 accentColor = ImGui::GetColorU32(NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover));
+        const ImU32 playheadColor = IM_COL32(0, 229, 255, 255); // Vibrant Cyan
+
+        // A. RULER BAR
+        const ImVec2 rulerStartPos = ImGui::GetCursorScreenPos();
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+        // Ruler Left Header (Track Title & count)
+        const ImVec2 rulerHeaderPos = rulerStartPos;
+        drawList->AddRectFilled(rulerHeaderPos,
+                                ImVec2(rulerHeaderPos.x + trackHeaderWidth, rulerHeaderPos.y + rulerHeight),
+                                IM_COL32(22, 25, 33, 255));
+        drawList->AddLine(ImVec2(rulerHeaderPos.x + trackHeaderWidth, rulerHeaderPos.y),
+                          ImVec2(rulerHeaderPos.x + trackHeaderWidth, rulerHeaderPos.y + rulerHeight),
+                          majorGridColor);
+
+        const std::string trackCountStr = fmt::format("轨道 ({}) · {}", visibleChannels.size(), activeBone.name);
+        drawList->AddText(ImVec2(rulerHeaderPos.x + 8.0f, rulerHeaderPos.y + 6.0f),
+                          ImGui::GetColorU32(ImGuiCol_Text), trackCountStr.c_str());
+
+        // Ruler Right Canvas (Time & Frames)
+        const ImVec2 rulerCanvasPos(rulerStartPos.x + trackHeaderWidth, rulerStartPos.y);
+        drawList->AddRectFilled(rulerCanvasPos,
+                                ImVec2(rulerCanvasPos.x + canvasTimeWidth, rulerCanvasPos.y + rulerHeight),
+                                IM_COL32(18, 21, 28, 255));
+
+        // Active clip working region highlight
+        const float activeEndRatio = std::clamp(clipDuration / duration, 0.0f, 1.0f);
+        drawList->AddRectFilled(rulerCanvasPos,
+                                ImVec2(rulerCanvasPos.x + activeEndRatio * canvasTimeWidth, rulerCanvasPos.y + rulerHeight),
+                                IM_COL32(35, 48, 68, 120));
+
+        // Bracket markers [ and ]
+        drawList->AddText(ImVec2(rulerCanvasPos.x + 2.0f, rulerCanvasPos.y + 5.0f),
+                          IM_COL32(16, 185, 129, 255), "[");
+        const float bracketOutX = rulerCanvasPos.x + activeEndRatio * canvasTimeWidth;
+        drawList->AddText(ImVec2(bracketOutX - 6.0f, rulerCanvasPos.y + 5.0f),
+                          IM_COL32(239, 68, 68, 255), "]");
+
+        // Ruler ticks & frame numbers
+        const float roughTickStep = duration / std::max(2.0f, std::floor(canvasTimeWidth / 65.0f));
+        const float tickIntervals[] = {0.03333f, 0.06667f, 0.1f, 0.2f, 0.5f, 1.0f, 2.0f, 5.0f};
+        float chosenTick = tickIntervals[std::size(tickIntervals) - 1];
+        for (float interval : tickIntervals)
+        {
+            if (interval >= roughTickStep)
+            {
+                chosenTick = interval;
                 break;
             }
         }
-        for (float tick = 0.0f; tick <= duration + tickStep * 0.5f; tick += tickStep)
+
+        for (float tick = 0.0f; tick <= duration + chosenTick * 0.5f; tick += chosenTick)
         {
-            const float x = rulerPos.x + labelWidth + (tick / duration) * timeWidth;
-            drawList->AddLine(ImVec2(x, rulerPos.y + rulerHeight - 8.0f), ImVec2(x, rulerPos.y + rulerHeight),
-                              gridColor);
-            drawList->AddText(ImVec2(x + 3.0f, rulerPos.y + 5.0f), textColor, fmt::format("{:.2f}", tick).c_str());
-        }
-        const float currentTime = std::clamp(rigPreview_.CurrentTime(), 0.0f, duration);
-        const float rulerPlayheadX = rulerPos.x + labelWidth + (currentTime / duration) * timeWidth;
-        drawList->AddTriangleFilled(ImVec2(rulerPlayheadX - 5.0f, rulerPos.y),
-                                    ImVec2(rulerPlayheadX + 5.0f, rulerPos.y),
-                                    ImVec2(rulerPlayheadX, rulerPos.y + 8.0f), accentColor);
-        drawList->AddLine(ImVec2(rulerPlayheadX, rulerPos.y + 8.0f), ImVec2(rulerPlayheadX, rulerPos.y + rulerHeight),
-                          accentColor, 2.0f);
-        if (ImGui::IsItemHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
-            ImGui::GetIO().MousePos.x >= rulerPos.x + labelWidth)
-        {
-            const float time =
-                std::clamp((ImGui::GetIO().MousePos.x - rulerPos.x - labelWidth) / timeWidth, 0.0f, 1.0f) * duration;
-            rigPreview_.SetPaused(true);
-            rigPreview_.SetCurrentTime(time);
+            const float x = rulerCanvasPos.x + (tick / duration) * canvasTimeWidth;
+            drawList->AddLine(ImVec2(x, rulerCanvasPos.y + rulerHeight - 7.0f),
+                              ImVec2(x, rulerCanvasPos.y + rulerHeight), majorGridColor);
+            const int frameNum = static_cast<int>(std::round(tick * fps));
+            const std::string tickLabel = fmt::format("{}f", frameNum);
+            drawList->AddText(ImVec2(x + 3.0f, rulerCanvasPos.y + 4.0f), textDimColor, tickLabel.c_str());
         }
 
-        const float detailHeight = timelineSelectedChannel_ >= 0 && timelineSelectedKey_ >= 0 ? 102.0f : 34.0f;
-        const float timelineHeight = std::max(88.0f, ImGui::GetContentRegionAvail().y - detailHeight);
-        ImGui::BeginChild("##timeline_tracks", ImVec2(0.0f, timelineHeight), ImGuiChildFlags_Borders,
+        // Invisible button over ruler for scrubbing
+        ImGui::SetCursorScreenPos(rulerStartPos);
+        ImGui::InvisibleButton("##timeline_ruler_btn", ImVec2(totalAvailWidth, rulerHeight));
+        if (ImGui::IsItemActive() && ImGui::GetIO().MousePos.x >= rulerCanvasPos.x)
+        {
+            float scrubbedTime =
+                std::clamp((ImGui::GetIO().MousePos.x - rulerCanvasPos.x) / canvasTimeWidth, 0.0f, 1.0f) * duration;
+            if (timelineSnapToFrames_)
+            {
+                scrubbedTime = std::round(scrubbedTime * fps) / fps;
+            }
+            timelineIsPlaying_ = false;
+            rigPreview_.SetPaused(true);
+            rigPreview_.SetCurrentTime(scrubbedTime);
+            ImGui::SetTooltip("%.3f s  (%d f)", scrubbedTime, static_cast<int>(std::round(scrubbedTime * fps)));
+        }
+
+        // Playhead Needle on ruler
+        const float playheadClampedTime = std::clamp(currentTime, 0.0f, duration);
+        const float playheadRulerX = rulerCanvasPos.x + (playheadClampedTime / duration) * canvasTimeWidth;
+        const ImVec2 needleHead[5] = {
+            ImVec2(playheadRulerX - 5.0f, rulerCanvasPos.y),
+            ImVec2(playheadRulerX + 5.0f, rulerCanvasPos.y),
+            ImVec2(playheadRulerX + 5.0f, rulerCanvasPos.y + 11.0f),
+            ImVec2(playheadRulerX, rulerCanvasPos.y + 19.0f),
+            ImVec2(playheadRulerX - 5.0f, rulerCanvasPos.y + 11.0f)
+        };
+        drawList->AddConvexPolyFilled(needleHead, 5, playheadColor);
+        drawList->AddPolyline(needleHead, 5, IM_COL32(255, 255, 255, 220), ImDrawFlags_Closed, 1.0f);
+        drawList->AddLine(ImVec2(playheadRulerX, rulerCanvasPos.y + 19.0f),
+                          ImVec2(playheadRulerX, rulerCanvasPos.y + rulerHeight), playheadColor, 1.5f);
+
+        // B. TRACKS SCROLLING BODY
+        ImGui::SetCursorScreenPos(ImVec2(rulerStartPos.x, rulerStartPos.y + rulerHeight));
+        ImGui::BeginChild("##timeline_tracks_canvas", ImVec2(0.0f, tracksHeight), ImGuiChildFlags_None,
                           ImGuiWindowFlags_AlwaysVerticalScrollbar);
+
         const ImVec2 canvasPos = ImGui::GetCursorScreenPos();
-        const float canvasWidth = ImGui::GetContentRegionAvail().x;
-        const float canvasTimeWidth = std::max(canvasWidth - labelWidth, 80.0f);
-        const float canvasHeight =
-            std::max(ImGui::GetContentRegionAvail().y, rowHeight * static_cast<float>(visibleChannels.size()));
-        ImGui::InvisibleButton("##timeline_canvas", ImVec2(canvasWidth, canvasHeight));
+        const float totalCanvasHeight = std::max(ImGui::GetContentRegionAvail().y,
+                                                 rowHeight * static_cast<float>(visibleChannels.size()));
+        ImGui::InvisibleButton("##timeline_tracks_interact", ImVec2(totalAvailWidth, totalCanvasHeight));
+        const bool canvasHovered = ImGui::IsItemHovered();
+        const ImVec2 mouse = ImGui::GetIO().MousePos;
         drawList = ImGui::GetWindowDrawList();
+
+        int channelToDelete = -1;
 
         for (int rowIndex = 0; rowIndex < static_cast<int>(visibleChannels.size()); ++rowIndex)
         {
             const int channelIndex = visibleChannels[rowIndex];
-            const FEditableRigChannel& channel = clip.channels[channelIndex];
+            FEditableRigChannel& channel = clip.channels[channelIndex];
             const float y = canvasPos.y + rowIndex * rowHeight;
-            const bool selectedTrack = channelIndex == timelineSelectedChannel_;
-            drawList->AddRectFilled(ImVec2(canvasPos.x, y), ImVec2(canvasPos.x + canvasWidth, y + rowHeight),
-                                    selectedTrack ? ImGui::GetColorU32(ImGuiCol_Header)
-                                                  : (rowIndex % 2 == 0 ? rowColor : alternateRowColor));
-            drawList->AddLine(ImVec2(canvasPos.x, y + rowHeight), ImVec2(canvasPos.x + canvasWidth, y + rowHeight),
-                              gridColor);
-            drawList->AddLine(ImVec2(canvasPos.x + labelWidth, y), ImVec2(canvasPos.x + labelWidth, y + rowHeight),
-                              gridColor);
+            const bool selectedTrack = (channelIndex == timelineSelectedChannel_);
+            const ImU32 chColor = getChannelColor(channel.type);
 
-            const std::string label = FCharacterWorkbench::ChannelName(channel.type);
-            drawList->PushClipRect(ImVec2(canvasPos.x, y), ImVec2(canvasPos.x + labelWidth - 4.0f, y + rowHeight),
-                                   true);
-            drawList->AddText(ImVec2(canvasPos.x + 7.0f, y + 6.0f), selectedTrack ? selectedColor : textColor,
-                              label.c_str());
+            // Left Header Area [canvasPos.x, canvasPos.x + trackHeaderWidth]
+            const ImVec2 headerMin(canvasPos.x, y);
+            const ImVec2 headerMax(canvasPos.x + trackHeaderWidth, y + rowHeight);
+
+            // Background
+            const ImU32 headerBg = selectedTrack
+                ? IM_COL32(35, 55, 85, 220)
+                : (rowIndex % 2 == 0 ? IM_COL32(25, 28, 35, 200) : IM_COL32(20, 23, 29, 200));
+            drawList->AddRectFilled(headerMin, headerMax, headerBg);
+            drawList->AddLine(ImVec2(headerMin.x, headerMax.y), headerMax, gridColor);
+            drawList->AddLine(ImVec2(headerMax.x, headerMin.y), headerMax, majorGridColor);
+
+            // Left accent color strip (3px)
+            drawList->AddRectFilled(headerMin, ImVec2(headerMin.x + 3.5f, headerMax.y), chColor);
+
+            // Icon & Channel Name
+            const char* icon = getChannelIcon(channel.type);
+            const char* typeName = FCharacterWorkbench::ChannelName(channel.type);
+            std::string displayName;
+            if (timelineShowAllBones_ && channel.bone >= 0 &&
+                channel.bone < static_cast<int>(rigPreview_.Asset().bones.size()))
+            {
+                displayName = fmt::format("{} · {}", rigPreview_.Asset().bones[channel.bone].name, typeName);
+            }
+            else
+            {
+                displayName = typeName;
+            }
+
+            drawList->PushClipRect(ImVec2(headerMin.x + 7.0f, headerMin.y),
+                                   ImVec2(headerMax.x - 70.0f, headerMax.y), true);
+            drawList->AddText(ImVec2(headerMin.x + 8.0f, headerMin.y + 6.0f), chColor, icon);
+            drawList->AddText(ImVec2(headerMin.x + 26.0f, headerMin.y + 6.0f),
+                              selectedTrack ? IM_COL32(255, 255, 255, 255) : ImGui::GetColorU32(ImGuiCol_Text),
+                              displayName.c_str());
             drawList->PopClipRect();
 
-            for (float tick = 0.0f; tick <= duration + tickStep * 0.5f; tick += tickStep)
+            // Right inline badges & actions in header
+            const std::string keyCountText = fmt::format("{}f", channel.keys.size());
+            const float countWidth = 24.0f;
+            const ImVec2 countMin(headerMax.x - countWidth - 4.0f, headerMin.y + 5.0f);
+            const ImVec2 countMax(headerMax.x - 4.0f, headerMin.y + 23.0f);
+            drawList->AddRectFilled(countMin, countMax, IM_COL32(40, 44, 55, 200), 3.0f);
+            drawList->AddText(ImVec2(countMin.x + 4.0f, countMin.y + 2.0f), textDimColor, keyCountText.c_str());
+
+            // Right Lane Area [canvasPos.x + trackHeaderWidth, canvasPos.x + totalAvailWidth]
+            const ImVec2 laneMin(canvasPos.x + trackHeaderWidth, y);
+            const ImVec2 laneMax(canvasPos.x + totalAvailWidth, y + rowHeight);
+
+            const ImU32 laneBg = rowIndex % 2 == 0 ? IM_COL32(18, 20, 26, 180) : IM_COL32(14, 16, 22, 180);
+            drawList->AddRectFilled(laneMin, laneMax, laneBg);
+            drawList->AddLine(ImVec2(laneMin.x, laneMax.y), laneMax, gridColor);
+
+            // Vertical tick lines in lane
+            for (float tick = 0.0f; tick <= duration + chosenTick * 0.5f; tick += chosenTick)
             {
-                const float x = canvasPos.x + labelWidth + (tick / duration) * canvasTimeWidth;
-                drawList->AddLine(ImVec2(x, y), ImVec2(x, y + rowHeight), gridColor);
+                const float x = laneMin.x + (tick / duration) * canvasTimeWidth;
+                drawList->AddLine(ImVec2(x, laneMin.y), ImVec2(x, laneMax.y), gridColor);
             }
-            for (int keyIndex = 0; keyIndex < static_cast<int>(channel.keys.size()); ++keyIndex)
+
+            // Active Span Ribbon between keys (UE Sequencer / Blender Dope Sheet standard)
+            if (channel.keys.size() >= 2)
             {
-                const FEditableRigKey& key = channel.keys[keyIndex];
-                const float x =
-                    canvasPos.x + labelWidth + (std::clamp(key.time, 0.0f, duration) / duration) * canvasTimeWidth;
-                const float centerY = y + rowHeight * 0.5f;
-                const bool selectedKey = channelIndex == timelineSelectedChannel_ && keyIndex == timelineSelectedKey_;
-                const ImU32 keyColor = selectedKey ? selectedColor : accentColor;
-                const ImVec2 points[] = {ImVec2(x, centerY - 6.0f), ImVec2(x + 6.0f, centerY),
-                                         ImVec2(x, centerY + 6.0f), ImVec2(x - 6.0f, centerY)};
-                drawList->AddConvexPolyFilled(points, 4, keyColor);
+                float minKeyTime = channel.keys.front().time;
+                float maxKeyTime = channel.keys.back().time;
+                for (const auto& k : channel.keys)
+                {
+                    minKeyTime = std::min(minKeyTime, k.time);
+                    maxKeyTime = std::max(maxKeyTime, k.time);
+                }
+                const float spanX1 = laneMin.x + (std::clamp(minKeyTime, 0.0f, duration) / duration) * canvasTimeWidth;
+                const float spanX2 = laneMin.x + (std::clamp(maxKeyTime, 0.0f, duration) / duration) * canvasTimeWidth;
+                if (spanX2 > spanX1 + 2.0f)
+                {
+                    const ImU32 spanBg = (chColor & 0x00FFFFFF) | 0x30000000;
+                    const ImU32 spanBorder = (chColor & 0x00FFFFFF) | 0x70000000;
+                    drawList->AddRectFilled(ImVec2(spanX1, y + 9.0f), ImVec2(spanX2, y + rowHeight - 9.0f), spanBg, 3.0f);
+                    drawList->AddRect(ImVec2(spanX1, y + 9.0f), ImVec2(spanX2, y + rowHeight - 9.0f), spanBorder, 3.0f);
+                }
+            }
+
+            // Keyframe Diamonds
+            for (int kIdx = 0; kIdx < static_cast<int>(channel.keys.size()); ++kIdx)
+            {
+                const FEditableRigKey& key = channel.keys[kIdx];
+                const float keyX = laneMin.x + (std::clamp(key.time, 0.0f, duration) / duration) * canvasTimeWidth;
+                const float keyCenterY = y + rowHeight * 0.5f;
+                const bool isKeySelected = (selectedTrack && kIdx == timelineSelectedKey_);
+
+                const float radius = isKeySelected ? 6.5f : 4.5f;
+                const ImVec2 diamondPts[4] = {
+                    ImVec2(keyX, keyCenterY - radius),
+                    ImVec2(keyX + radius, keyCenterY),
+                    ImVec2(keyX, keyCenterY + radius),
+                    ImVec2(keyX - radius, keyCenterY)
+                };
+
+                if (isKeySelected)
+                {
+                    // Glowing outer halo
+                    const ImVec2 haloPts[4] = {
+                        ImVec2(keyX, keyCenterY - radius - 2.5f),
+                        ImVec2(keyX + radius + 2.5f, keyCenterY),
+                        ImVec2(keyX, keyCenterY + radius + 2.5f),
+                        ImVec2(keyX - radius - 2.5f, keyCenterY)
+                    };
+                    drawList->AddConvexPolyFilled(haloPts, 4, IM_COL32(255, 230, 120, 90));
+                    drawList->AddConvexPolyFilled(diamondPts, 4, IM_COL32(255, 220, 80, 255));
+                    drawList->AddPolyline(diamondPts, 4, IM_COL32(255, 255, 255, 255), ImDrawFlags_Closed, 1.5f);
+                }
+                else
+                {
+                    drawList->AddConvexPolyFilled(diamondPts, 4, chColor);
+                    drawList->AddPolyline(diamondPts, 4, IM_COL32(20, 20, 20, 200), ImDrawFlags_Closed, 1.0f);
+                }
+
+                // Tooltip on hover
+                if (canvasHovered && std::abs(mouse.x - keyX) <= 8.0f && std::abs(mouse.y - keyCenterY) <= 8.0f)
+                {
+                    ImGui::SetTooltip("关键帧 #%d · %.3f s (%d f)\n数值: (%.2f, %.2f, %.2f)",
+                                      kIdx + 1, key.time, static_cast<int>(std::round(key.time * fps)),
+                                      key.value.x, key.value.y, key.value.z);
+                }
             }
         }
 
-        const float bodyPlayheadX = canvasPos.x + labelWidth + (currentTime / duration) * canvasTimeWidth;
-        drawList->AddLine(ImVec2(bodyPlayheadX, canvasPos.y), ImVec2(bodyPlayheadX, canvasPos.y + canvasHeight),
-                          accentColor, 2.0f);
+        // Vertical Playhead Line across all tracks
+        const float bodyPlayheadX = canvasPos.x + trackHeaderWidth + (playheadClampedTime / duration) * canvasTimeWidth;
+        drawList->AddLine(ImVec2(bodyPlayheadX, canvasPos.y), ImVec2(bodyPlayheadX, canvasPos.y + totalCanvasHeight),
+                          playheadColor, 1.5f);
 
-        const bool timelineHovered = ImGui::IsItemHovered();
-        if (timelineHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        // Canvas Interactions (Click, Drag, Double-click)
+        if (canvasHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
-            const ImVec2 mouse = ImGui::GetIO().MousePos;
-            const int row = static_cast<int>(std::floor((mouse.y - canvasPos.y) / rowHeight));
-            if (row >= 0 && row < static_cast<int>(visibleChannels.size()))
+            const int clickedRow = static_cast<int>(std::floor((mouse.y - canvasPos.y) / rowHeight));
+            if (clickedRow >= 0 && clickedRow < static_cast<int>(visibleChannels.size()))
             {
-                timelineSelectedChannel_ = visibleChannels[row];
+                const int clickedChannel = visibleChannels[clickedRow];
+                timelineSelectedChannel_ = clickedChannel;
                 timelineSelectedKey_ = -1;
-                if (mouse.x >= canvasPos.x + labelWidth)
+                workbenchBone_ = clip.channels[clickedChannel].bone;
+
+                if (mouse.x >= canvasPos.x + trackHeaderWidth)
                 {
-                    const float clickedTime =
-                        std::clamp((mouse.x - canvasPos.x - labelWidth) / canvasTimeWidth, 0.0f, 1.0f) * duration;
-                    float nearestDistance = 9.0f;
-                    for (int keyIndex = 0;
-                         keyIndex < static_cast<int>(clip.channels[timelineSelectedChannel_].keys.size()); ++keyIndex)
+                    // Check if clicked directly on a keyframe
+                    float nearestDist = 9.0f;
+                    int nearestKeyIdx = -1;
+                    const FEditableRigChannel& ch = clip.channels[clickedChannel];
+                    for (int kIdx = 0; kIdx < static_cast<int>(ch.keys.size()); ++kIdx)
                     {
-                        const float keyX = canvasPos.x + labelWidth +
-                            (clip.channels[timelineSelectedChannel_].keys[keyIndex].time / duration) * canvasTimeWidth;
-                        const float distance = std::abs(mouse.x - keyX);
-                        if (distance < nearestDistance)
+                        const float kX = canvasPos.x + trackHeaderWidth +
+                            (std::clamp(ch.keys[kIdx].time, 0.0f, duration) / duration) * canvasTimeWidth;
+                        const float dist = std::abs(mouse.x - kX);
+                        if (dist < nearestDist)
                         {
-                            nearestDistance = distance;
-                            timelineSelectedKey_ = keyIndex;
+                            nearestDist = dist;
+                            nearestKeyIdx = kIdx;
                         }
                     }
-                    if (timelineSelectedKey_ >= 0)
+
+                    if (nearestKeyIdx >= 0)
                     {
+                        timelineSelectedKey_ = nearestKeyIdx;
                         timelineDraggingKey_ = true;
+                        timelineIsPlaying_ = false;
                         rigPreview_.SetPaused(true);
-                        rigPreview_.SetCurrentTime(
-                            clip.channels[timelineSelectedChannel_].keys[timelineSelectedKey_].time);
+                        rigPreview_.SetCurrentTime(ch.keys[nearestKeyIdx].time);
                     }
                     else
                     {
+                        float clickedTime =
+                            std::clamp((mouse.x - canvasPos.x - trackHeaderWidth) / canvasTimeWidth, 0.0f, 1.0f) * duration;
+                        if (timelineSnapToFrames_)
+                        {
+                            clickedTime = std::round(clickedTime * fps) / fps;
+                        }
+                        timelineIsPlaying_ = false;
                         rigPreview_.SetPaused(true);
                         rigPreview_.SetCurrentTime(clickedTime);
+
+                        // Double click inserts keyframe!
                         if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
                         {
-                            FEditableRigChannel& channel = clip.channels[timelineSelectedChannel_];
-                            channel.keys.push_back({clickedTime, sampleChannel(channel, clickedTime)});
-                            timelineSelectedKey_ = static_cast<int>(channel.keys.size()) - 1;
+                            FEditableRigChannel& chMutable = clip.channels[clickedChannel];
+                            chMutable.keys.push_back({clickedTime, sampleChannel(chMutable, clickedTime)});
+                            timelineSelectedKey_ = static_cast<int>(chMutable.keys.size()) - 1;
                             edited = true;
                         }
                     }
@@ -10518,6 +11233,7 @@ namespace ScadLibrary
             }
         }
 
+        // Key dragging in time
         if (timelineDraggingKey_ && timelineSelectedChannel_ >= 0 && timelineSelectedKey_ >= 0)
         {
             if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
@@ -10525,10 +11241,12 @@ namespace ScadLibrary
                 FEditableRigChannel& channel = clip.channels[timelineSelectedChannel_];
                 if (timelineSelectedKey_ < static_cast<int>(channel.keys.size()))
                 {
-                    const float draggedTime =
-                        std::clamp((ImGui::GetIO().MousePos.x - canvasPos.x - labelWidth) / canvasTimeWidth, 0.0f,
-                                   1.0f) *
-                        duration;
+                    float draggedTime =
+                        std::clamp((ImGui::GetIO().MousePos.x - canvasPos.x - trackHeaderWidth) / canvasTimeWidth, 0.0f, 1.0f) * duration;
+                    if (timelineSnapToFrames_)
+                    {
+                        draggedTime = std::round(draggedTime * fps) / fps;
+                    }
                     channel.keys[timelineSelectedKey_].time = draggedTime;
                     rigPreview_.SetCurrentTime(draggedTime);
                     edited = true;
@@ -10539,56 +11257,133 @@ namespace ScadLibrary
                 timelineDraggingKey_ = false;
             }
         }
+
         ImGui::EndChild();
 
-        if (timelineSelectedChannel_ >= 0)
+        // ==========================================
+        // 3. BOTTOM KEYFRAME INSPECTOR / DETAILS BAR
+        // ==========================================
+        ImGui::SetCursorPosY(ImGui::GetWindowHeight() - detailHeight - 4.0f);
+        if (timelineSelectedChannel_ >= 0 && timelineSelectedChannel_ < static_cast<int>(clip.channels.size()) &&
+            timelineSelectedKey_ >= 0 &&
+            timelineSelectedKey_ < static_cast<int>(clip.channels[timelineSelectedChannel_].keys.size()))
         {
             FEditableRigChannel& channel = clip.channels[timelineSelectedChannel_];
-            ImGui::Text("%s / %s", rigPreview_.Asset().bones[channel.bone].name.c_str(),
-                        FCharacterWorkbench::ChannelName(channel.type));
-            ImGui::SameLine();
-            if (timelineSelectedKey_ >= 0 && timelineSelectedKey_ < static_cast<int>(channel.keys.size()))
+            FEditableRigKey& key = channel.keys[timelineSelectedKey_];
+
+            BeginCard("##timeline_inspector_card", detailHeight);
+
+            // Row 1: Target Chips & Time Step
+            const std::string boneName = (channel.bone >= 0 && channel.bone < static_cast<int>(rigPreview_.Asset().bones.size()))
+                ? rigPreview_.Asset().bones[channel.bone].name : "bone";
+            DrawTagChip(boneName.c_str(), NextUI::Theme::Color(NextUI::Theme::EColor::Blue), "当前骨骼");
+            ImGui::SameLine(0.0f, 4.0f);
+            DrawTagChip(FCharacterWorkbench::ChannelName(channel.type),
+                        channel.type == EEditableRigChannel::Position ? ImVec4(0.9f, 0.3f, 0.3f, 1.0f)
+                        : (channel.type == EEditableRigChannel::Rotation ? ImVec4(0.2f, 0.8f, 0.4f, 1.0f)
+                                                                         : ImVec4(0.3f, 0.6f, 0.9f, 1.0f)),
+                        "当前属性轨道");
+            ImGui::SameLine(0.0f, 4.0f);
+            DrawTagChip(fmt::format("#{} / {}", timelineSelectedKey_ + 1, channel.keys.size()).c_str(),
+                        NextUI::Theme::Color(NextUI::Theme::EColor::Accent), "关键帧序号");
+
+            ImGui::SameLine(0.0f, 12.0f);
+            ImGui::SetNextItemWidth(100.0f);
+            if (ImGui::DragFloat("时间##sel_key_time", &key.time, 0.005f, 0.0f, std::max(clip.duration + 1.0f, 1.0f), "%.3f s"))
             {
-                ImGui::TextDisabled("关键帧 %d", timelineSelectedKey_ + 1);
-                FEditableRigKey& key = channel.keys[timelineSelectedKey_];
-                ImGui::SetNextItemWidth(112.0f);
-                if (ImGui::DragFloat("时间##selected_key", &key.time, 0.005f, 0.0f,
-                                     std::max(clip.duration + 2.0f, 2.0f), "%.3f s"))
+                if (timelineSnapToFrames_) key.time = std::round(key.time * fps) / fps;
+                rigPreview_.SetPaused(true);
+                rigPreview_.SetCurrentTime(key.time);
+                edited = true;
+            }
+
+            ImGui::SameLine(0.0f, 8.0f);
+            ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Danger, 0.22f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::Danger, 0.85f));
+            if (ImGui::SmallButton(ICON_FA_TRASH " 删除关键帧"))
+            {
+                channel.keys.erase(channel.keys.begin() + timelineSelectedKey_);
+                timelineSelectedKey_ = -1;
+                edited = true;
+            }
+            ImGui::PopStyleColor(2);
+
+            // Row 2: 3-Axis RGB Styled Value Drag
+            const float speed = channel.type == EEditableRigChannel::Rotation ? 0.25f : 0.005f;
+            const char* valFormat = channel.type == EEditableRigChannel::Rotation ? "%.1f°" : "%.3f";
+            float vals[3] = { key.value.x, key.value.y, key.value.z };
+            if (Draw3AxisFloatDrag("关键帧数值", vals, speed, 0.0f, 0.0f, valFormat))
+            {
+                key.value = glm::vec3(vals[0], vals[1], vals[2]);
+                edited = true;
+            }
+
+            EndCard();
+        }
+        else if (timelineSelectedChannel_ >= 0 && timelineSelectedChannel_ < static_cast<int>(clip.channels.size()))
+        {
+            FEditableRigChannel& channel = clip.channels[timelineSelectedChannel_];
+            BeginCard("##timeline_inspector_track_card", detailHeight);
+
+            // Row 1: Info & Actions
+            const std::string boneName = (channel.bone >= 0 && channel.bone < static_cast<int>(rigPreview_.Asset().bones.size()))
+                ? rigPreview_.Asset().bones[channel.bone].name : "bone";
+            DrawTagChip(boneName.c_str(), NextUI::Theme::Color(NextUI::Theme::EColor::Blue), "当前骨骼");
+            ImGui::SameLine(0.0f, 4.0f);
+            DrawTagChip(FCharacterWorkbench::ChannelName(channel.type),
+                        channel.type == EEditableRigChannel::Position ? ImVec4(0.9f, 0.3f, 0.3f, 1.0f)
+                        : (channel.type == EEditableRigChannel::Rotation ? ImVec4(0.2f, 0.8f, 0.4f, 1.0f)
+                                                                         : ImVec4(0.3f, 0.6f, 0.9f, 1.0f)),
+                        "属性轨道");
+            ImGui::SameLine(0.0f, 4.0f);
+            DrawTagChip(fmt::format("共 {} 关键帧", channel.keys.size()).c_str(),
+                        NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover));
+
+            ImGui::SameLine(0.0f, 12.0f);
+            if (ImGui::SmallButton(ICON_FA_PLUS " 在当前游标打帧"))
+            {
+                channel.keys.push_back({rigPreview_.CurrentTime(), sampleChannel(channel, rigPreview_.CurrentTime())});
+                timelineSelectedKey_ = static_cast<int>(channel.keys.size()) - 1;
+                edited = true;
+            }
+
+            ImGui::SameLine(0.0f, 8.0f);
+            ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Danger, 0.22f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::Danger, 0.85f));
+            if (ImGui::SmallButton(ICON_FA_TRASH " 删除整条轨道"))
+            {
+                clip.channels.erase(clip.channels.begin() + timelineSelectedChannel_);
+                timelineSelectedChannel_ = -1;
+                timelineSelectedKey_ = -1;
+                edited = true;
+            }
+            ImGui::PopStyleColor(2);
+
+            // Row 2: 3-Axis RGB Styled Value Drag (Live sample at currentTime!)
+            const float speed = channel.type == EEditableRigChannel::Rotation ? 0.25f : 0.005f;
+            const char* valFormat = channel.type == EEditableRigChannel::Rotation ? "%.1f°" : "%.3f";
+            glm::vec3 liveVal = sampleChannel(channel, currentTime);
+            float vals[3] = { liveVal.x, liveVal.y, liveVal.z };
+            if (Draw3AxisFloatDrag("当前游标数值", vals, speed, 0.0f, 0.0f, valFormat))
+            {
+                if (timelineAutoKey_)
                 {
-                    rigPreview_.SetPaused(true);
-                    rigPreview_.SetCurrentTime(key.time);
-                    edited = true;
-                }
-                ImGui::SameLine();
-                if (ImGui::SmallButton(ICON_FA_TRASH " 删除关键帧"))
-                {
-                    channel.keys.erase(channel.keys.begin() + timelineSelectedKey_);
-                    timelineSelectedKey_ = -1;
-                    edited = true;
-                }
-                const float dragSpeed = channel.type == EEditableRigChannel::Rotation ? 0.25f : 0.005f;
-                const char* format = channel.type == EEditableRigChannel::Rotation ? "%.2f deg" : "%.4f";
-                if (timelineSelectedKey_ >= 0 &&
-                    ImGui::DragFloat3("值##selected_key", &channel.keys[timelineSelectedKey_].value.x, dragSpeed, 0.0f,
-                                      0.0f, format))
-                {
+                    UpsertGizmoKey(channel.type, glm::vec3(vals[0], vals[1], vals[2]));
                     edited = true;
                 }
             }
-            else
-            {
-                ImGui::TextDisabled("点击菱形关键帧；双击轨道空白处创建");
-                ImGui::SameLine();
-                if (ImGui::SmallButton(ICON_FA_TRASH " 删除轨道"))
-                {
-                    clip.channels.erase(clip.channels.begin() + timelineSelectedChannel_);
-                    timelineSelectedChannel_ = -1;
-                    timelineSelectedKey_ = -1;
-                    edited = true;
-                }
-            }
+
+            EndCard();
+        }
+        else
+        {
+            // Nothing selected: Shortcut helper bar
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextDim),
+                               ICON_FA_KEYBOARD "  快捷操作: [Space] 播放/暂停  ·  [← / →] 单帧步进  ·  [Home / End] 起止跳转  ·  [Del] 删除帧  ·  [双击轨道] 快速插帧  ·  拖动视口 Gizmo 实时更新关键帧");
         }
 
+        // Post-edit commit & selection sync
         if (edited)
         {
             float selectedTime = -1.0f;
@@ -10615,9 +11410,9 @@ namespace ScadLibrary
                 }
             }
         }
-        ImGui::EndChild();
+
         ImGui::End();
-        ImGui::PopStyleVar(2);
+        ImGui::PopStyleVar(3);
     }
 
     void ScadLibraryInterface::DrawEquipmentEditor()
