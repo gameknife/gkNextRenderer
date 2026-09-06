@@ -440,6 +440,11 @@ bool NextRendererGameInstance::DrawRendererUi(const FGameUiFrameContext& context
         uiState.workMode = EWorkMode::Render;
         uiState.lastWorkMode = EWorkMode::Count;
     }
+    else if (uiState.workMode == EWorkMode::Detail && !uiState.showSettings)
+    {
+        uiState.workMode = EWorkMode::Render;
+        uiState.lastWorkMode = EWorkMode::Count;
+    }
 
     DrawTitleBar(context, uiState);
 #if GK_WITH_VITURE

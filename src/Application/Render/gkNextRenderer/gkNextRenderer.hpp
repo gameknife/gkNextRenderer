@@ -61,12 +61,26 @@ public:
         Count,
     };
 
+    enum class ESettingsCategory : uint8_t
+    {
+        Renderer = 0,
+        Environment,
+        Camera,
+        Quality,
+        VoxelGI,
+        Scene,
+        Animation,
+        PostProcess,
+        Count,
+    };
+
 private:
     struct FRendererUiState
     {
         NextUI::GizmoController gizmoController;
         EWorkMode workMode = EWorkMode::Render;
         EWorkMode lastWorkMode = EWorkMode::Render;
+        ESettingsCategory settingsCategory = ESettingsCategory::Renderer;
         bool showSettings = false;
         bool showCheatSheet = true;
         bool showAbout = false;

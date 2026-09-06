@@ -6,7 +6,10 @@
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Utilities/Localization.hpp"
+#include "Modules/NextUI/UI/DesktopUI.hpp"
+#include "Modules/NextUI/UI/UiTheme.hpp"
 #include "UI/DiagnosticWidgets.hpp"
+#include <ThirdParty/fontawesome/IconsFontAwesome6.h>
 
 namespace Runtime::GraphicsDebugPanel
 {
@@ -35,8 +38,11 @@ namespace Runtime::GraphicsDebugPanel
             const uint32_t totalBricks =
                 cascadeCapacity * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
             const std::string brickStats = fmt::format("{} / {}", activeBricks, totalBricks);
-            DevToolsUI::DrawValueRow(
-                LOCTEXT("AC Bricks"), brickStats.c_str(), ImVec4(0.70f, 0.94f, 1.0f, 1.0f));
+            const ImVec4 colLabel = NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted);
+            const ImVec4 colVal = NextUI::Theme::Color(NextUI::Theme::EColor::Text);
+            ImGui::TextColored(colLabel, "%s", LOCTEXT("AC Bricks"));
+            ImGui::SameLine(0.0f, 4.0f);
+            ImGui::TextColored(colVal, "%s", brickStats.c_str());
         }
     }
 
@@ -242,61 +248,199 @@ namespace Runtime::GraphicsDebugPanel
 
         Runtime::Config::UserSettings& userSetting = engine.GetUserSettings();
         Runtime::Config::ShowFlags& showFlags = engine.GetShowFlags();
-        ImGuiViewport* viewport = ImGui::GetMainViewport();
-        constexpr float margin = 12.0f;
-        const float rightReservedWidth = userSetting.ShowOverlay ? 400.0f : 0.0f;
-        ImGui::SetNextWindowPos(
-            ImVec2(viewport->Pos.x + viewport->Size.x - margin - rightReservedWidth,
-                   viewport->Pos.y + topOffset + margin),
-            ImGuiCond_Always,
-            ImVec2(1.0f, 0.0f));
-        ImGui::SetNextWindowBgAlpha(0.88f);
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        constexpr float distance = 12.0f;
+        constexpr float panelWidth = 380.0f;
 
-        constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoInputs;
-        if (ImGui::Begin("Graphics Debug", nullptr, flags))
+        const float rightOffset = distance + (userSetting.ShowOverlay ? 380.0f + 10.0f : 0.0f);
+        const ImVec2 pos = ImVec2(viewport->Pos.x + viewport->Size.x - rightOffset - panelWidth,
+                                  viewport->Pos.y + distance + (topOffset > 0.0f ? topOffset : 44.0f));
+        const float panelHeight = std::max(420.0f, viewport->Size.y - distance - 86.0f);
+
+        NextUI::Theme::FDetailPanelConfig panelConfig{};
+        panelConfig.WindowId = "##GraphicsDebugPanel";
+        panelConfig.ContentWindowId = "##GraphicsDebugContent";
+        panelConfig.Icon = ICON_FA_MICROCHIP;
+        panelConfig.Title = "Graphics Debug";
+        panelConfig.Open = &panelVisible;
+        panelConfig.Position = pos;
+        panelConfig.Size = ImVec2(panelWidth, panelHeight);
+
+        if (!NextUI::Theme::BeginDetailPanel(panelConfig))
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 7.0f));
-            const EViewMode currentViewMode = ResolveViewMode(showFlags);
-            const char* currentViewModeLabel = currentViewMode == EViewMode::Custom
-                ? LOCTEXT("Custom")
-                : LOCTEXT(ViewModeLabels[static_cast<size_t>(currentViewMode)]);
+            return;
+        }
 
-            DevToolsUI::DrawSectionHeader(LOCTEXT("Renderer"));
-            DevToolsUI::DrawValueRow(
-                LOCTEXT("Current"), GetCurrentRendererLabel(engine, userSetting), ImVec4(0.93f, 0.96f, 1.0f, 1.0f));
-            DrawAmbientCubeBrickStats(engine);
-            ImGui::TextColored(ImVec4(0.52f, 0.57f, 0.65f, 1.0f), "%s", LOCTEXT("Available Renderers"));
-            for (int index = 0; index < GetRendererOptionCount(engine); ++index)
+        constexpr float cardHorizontalInset = 4.0f;
+        auto BeginCard = [&](const char* id, float height = 0.0f, ImGuiWindowFlags extraFlags = 0)
+        {
+            ImGui::Dummy(ImVec2(0.0f, 2.0f));
+            const float cardWidth = std::max(0.0f, ImGui::GetContentRegionAvail().x - cardHorizontalInset * 2.0f);
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + cardHorizontalInset);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated, 0.38f));
+            ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.84f));
+            if (height > 0.0f)
+            {
+                ImGui::BeginChild(id, ImVec2(cardWidth, height), ImGuiChildFlags_Borders, extraFlags);
+            }
+            else
+            {
+                ImGui::BeginChild(id, ImVec2(cardWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY, extraFlags);
+            }
+        };
+
+        auto EndCard = [&]()
+        {
+            ImGui::EndChild();
+            ImGui::PopStyleColor(2);
+            ImGui::PopStyleVar(3);
+        };
+
+        const ImVec4 colHeader = NextUI::Theme::Color(NextUI::Theme::EColor::Blue);
+        const ImVec4 colLabel = NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted);
+        const ImVec4 colVal = NextUI::Theme::Color(NextUI::Theme::EColor::Text);
+        const ImVec4 colWarn = NextUI::Theme::Color(NextUI::Theme::EColor::Warning);
+
+        auto CompactStat = [&](const char* label, const std::string& value)
+        {
+            ImGui::TextColored(colLabel, "%s", label);
+            ImGui::SameLine(0.0f, 4.0f);
+            ImGui::TextColored(colVal, "%s", value.c_str());
+        };
+
+        const EViewMode currentViewMode = ResolveViewMode(showFlags);
+        const std::string currentViewModeLabel = currentViewMode == EViewMode::Custom
+            ? std::string(LOCTEXT("Custom"))
+            : std::string(LOCTEXT(ViewModeLabels[static_cast<size_t>(currentViewMode)]));
+
+        // 1. Renderer Pipeline Card
+        BeginCard("##GraphicsRendererCard", 0.0f);
+        ImGui::TextColored(colHeader, "%s", LOCTEXT("Renderer Pipeline"));
+        ImGui::Dummy(ImVec2(0.0f, 2.0f));
+
+        const std::string currentRendererLabel = GetCurrentRendererLabel(engine, userSetting);
+        CompactStat(LOCTEXT("Current"), currentRendererLabel);
+        DrawAmbientCubeBrickStats(engine);
+
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        ImGui::TextColored(colLabel, "%s", LOCTEXT("Available Renderers"));
+        const int rendererOptionCount = GetRendererOptionCount(engine);
+        if (rendererOptionCount <= 0)
+        {
+            ImGui::TextDisabled("%s (%s)",
+                                Vulkan::GetRendererName(engine.GetRenderer().CurrentLogicRendererType()),
+                                LOCTEXT("no alternative on this GPU"));
+        }
+        else
+        {
+            for (int index = 0; index < rendererOptionCount; ++index)
             {
                 const Rendering::FRendererChoice& option = GetRendererOption(engine, index);
                 const bool isActive = option.type == static_cast<Vulkan::ERendererType>(userSetting.RendererType);
-                DevToolsUI::DrawShortcutRow(
-                    isActive ? LOCTEXT("Active") : LOCTEXT("Inactive"), option.displayName, isActive);
+                ImGui::PushID(index);
+                if (isActive)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.45f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover, 0.65f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover, 0.85f));
+                }
+                else
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated, 0.25f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.50f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.80f));
+                }
+                const std::string btnText = fmt::format("{}  {}{}",
+                    isActive ? ICON_FA_CIRCLE_CHECK : ICON_FA_CIRCLE,
+                    option.displayName,
+                    isActive ? "  (Active)" : "");
+                if (ImGui::Button(btnText.c_str(), ImVec2(ImGui::GetContentRegionAvail().x, 26.0f)))
+                {
+                    engine.RequestRendererType(option.type);
+                }
+                ImGui::PopStyleColor(3);
+                ImGui::PopID();
             }
+        }
+        EndCard();
 
-            DevToolsUI::DrawSectionHeader(LOCTEXT("View Mode"));
-            DevToolsUI::DrawValueRow(
-                LOCTEXT("Current"), currentViewModeLabel, ImVec4(0.93f, 0.96f, 1.0f, 1.0f));
-            ImGui::TextColored(ImVec4(0.52f, 0.57f, 0.65f, 1.0f), "%s", LOCTEXT("Mode Shortcuts"));
+        // 2. View Mode Card
+        BeginCard("##GraphicsViewModeCard", 0.0f);
+        ImGui::TextColored(colHeader, "%s", LOCTEXT("View Mode"));
+        ImGui::Dummy(ImVec2(0.0f, 2.0f));
+
+        CompactStat(LOCTEXT("Current Mode"), currentViewModeLabel);
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+
+        if (ImGui::BeginTable("##ViewModesTable", 2, ImGuiTableFlags_SizingStretchProp))
+        {
             for (int index = 0; index < static_cast<int>(ViewModeLabels.size()); ++index)
             {
+                ImGui::TableNextColumn();
                 const auto mode = static_cast<EViewMode>(index);
-                const std::string shortcut = fmt::format("[{}]", index + 1);
-                DevToolsUI::DrawShortcutRow(
-                    shortcut.c_str(), LOCTEXT(ViewModeLabels[index]), mode == currentViewMode);
+                const bool isActive = (mode == currentViewMode);
+                ImGui::PushID(index);
+                if (isActive)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.45f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover, 0.65f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover, 0.85f));
+                }
+                else
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated, 0.25f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.50f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.80f));
+                }
+                const std::string label = fmt::format("[{}] {}", index + 1, LOCTEXT(ViewModeLabels[index]));
+                if (ImGui::Button(label.c_str(), ImVec2(ImGui::GetContentRegionAvail().x, 26.0f)))
+                {
+                    ApplyViewMode(showFlags, mode);
+                }
+                ImGui::PopStyleColor(3);
+                ImGui::PopID();
             }
-            if (currentViewMode == EViewMode::Custom)
-            {
-                ImGui::TextDisabled("%s", LOCTEXT("Custom View Mode Hint"));
-            }
-
-            DevToolsUI::DrawSectionHeader(LOCTEXT("Panel Shortcuts"));
-            DevToolsUI::DrawShortcutRow("Q", LOCTEXT("Q: cycle renderer."), false);
-            DevToolsUI::DrawShortcutRow("F2", LOCTEXT("F2: toggle Graphics Debug."), false);
-            ImGui::PopStyleVar();
+            ImGui::EndTable();
         }
-        ImGui::End();
+
+        if (currentViewMode == EViewMode::Custom)
+        {
+            ImGui::Dummy(ImVec2(0.0f, 2.0f));
+            ImGui::TextColored(colWarn, "%s", LOCTEXT("Custom View Mode Hint"));
+        }
+        EndCard();
+
+        // 3. Shortcuts Card
+        BeginCard("##GraphicsShortcutsCard", 0.0f);
+        ImGui::TextColored(colHeader, "%s", LOCTEXT("Shortcuts"));
+        ImGui::Dummy(ImVec2(0.0f, 2.0f));
+
+        if (ImGui::BeginTable("##GraphicsShortcutsTable", 2, ImGuiTableFlags_SizingStretchProp))
+        {
+            ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+            ImGui::TableSetupColumn("Desc", ImGuiTableColumnFlags_WidthStretch);
+
+            auto ShortcutRow = [&](const char* key, const char* desc)
+            {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextColored(colHeader, "%s", key);
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextColored(colLabel, "%s", desc);
+            };
+
+            ShortcutRow("Q", LOCTEXT("Cycle renderer"));
+            ShortcutRow("1 ~ 9", LOCTEXT("Switch view mode"));
+            ShortcutRow("F1", LOCTEXT("Physics Debug Overlay"));
+            ShortcutRow("F2", LOCTEXT("Graphics Debug Panel"));
+            ShortcutRow("F3", LOCTEXT("Statistics Overlay"));
+            ImGui::EndTable();
+        }
+        EndCard();
+
+        NextUI::Theme::EndDetailPanel();
     }
 }
