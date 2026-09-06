@@ -59,7 +59,14 @@ public:
     Next_Window* Handle() const { return window_; }
     bool IsHeadless() const { return config_.HeadlessSurface; }
 
+    // Content display scale relative to the window's *pixel* size: what the user expects UI to be
+    // magnified by once it is already measured in framebuffer pixels. This is what the Windows and
+    // Android UI paths scale by.
     float ContentScale() const;
+    // FramebufferSize() / WindowSize(): how many pixels one window coordinate covers. 1.0 on every
+    // platform except iOS, where SDL reports the window in UIKit points and the back buffer at the
+    // display's native density.
+    float PixelDensity() const;
     VkExtent2D FramebufferSize() const;
     VkExtent2D WindowSize() const;
 

@@ -163,8 +163,9 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
     renderExtent_ = extent_;
     renderOffset_ = {0,0};
 
-    SPDLOG_INFO("Swap Chain format: {} ({}) colorSpace: {} ({}) outputMode: {} usage: 0x{:x} compositeAlpha: 0x{:x}"
-                " (vkCreateSwapchainKHR {:.2f}ms)",
+    SPDLOG_INFO("Swap Chain extent: {}x{} format: {} ({}) colorSpace: {} ({}) outputMode: {} usage: 0x{:x}"
+                " compositeAlpha: 0x{:x} (vkCreateSwapchainKHR {:.2f}ms)",
+                extent_.width, extent_.height,
                 FormatName(format_), static_cast<int>(format_),
                 ColorSpaceName(colorSpace_), static_cast<int>(colorSpace_),
                 static_cast<int>(outputMode_), imageUsage_,

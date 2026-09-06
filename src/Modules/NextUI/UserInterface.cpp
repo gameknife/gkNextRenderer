@@ -203,17 +203,37 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     // PreRender maps that coordinate space onto the DPI-sized framebuffer and
     // normalizes input to the same space.
     const float scaleFactor = std::max(1.0f, window.ContentScale());
+#elif IOS
+    // SDL hands Dear ImGui a point-sized DisplaySize with a DisplayFramebufferScale equal to the
+    // window's pixel density, so the UI arrives magnified by that density alone - 3x on most
+    // iPhones, ~2.61x on an iPhone 7 Plus - which reads as oversized on a phone-sized panel.
+    // Halve it: PreRender doubles the logical space and folds the difference back into
+    // DisplayFramebufferScale, landing the net magnification near 1.5x.
+    constexpr float iosUiScale = 0.5f;
+    const float scaleFactor = iosUiScale;
 #else
     const float scaleFactor = 1.0f;
 #endif
     uiScale_ = scaleFactor;
+    // Glyph density is deliberately decoupled from uiScale_ on iOS. Glyphs go into one static
+    // atlas (this renderer backend does not advertise ImGuiBackendFlags_RendererHasTextures) and
+    // the default font carries the full Chinese range: raising the density to match the window's
+    // pixel density overflows the atlas and crashes, while following the 0.5 UI scale would bake
+    // half-size glyphs only to magnify them again. Bake iOS at 1x and accept text softened by
+    // DisplayFramebufferScale; a sharper result needs a smaller glyph set or dynamic font
+    // textures, not a different density.
+#if IOS
+    constexpr float fontRasterizerDensity = 1.0f;
+#else
+    const float fontRasterizerDensity = scaleFactor;
+#endif
     constexpr float fontSize = 16.0f;
 
     NextUI::Foundation::ApplyTheme();
 // The high-DPI path below reduces DisplaySize and scales the framebuffer
 // transform, which scales every ImGui primitive (including text) uniformly.
 // Do not additionally scale style metrics on those platforms.
-#if !WIN32 && !ANDROID
+#if !WIN32 && !ANDROID && !IOS
     ImGui::GetStyle().ScaleAllSizes(scaleFactor);
 #endif
 
@@ -229,7 +249,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
             .filePath = "assets/fonts/Roboto-Regular.ttf",
             .pixelSize = fontSize,
             .includeChineseFull = true,
-            .rasterizerDensity = scaleFactor,
+            .rasterizerDensity = fontRasterizerDensity,
         });
     if (defaultFont_ == nullptr)
     {
@@ -253,7 +273,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
         .includeChineseFull = false,
         .glyphRanges = iconRange,
         .fontConfig = &config,
-        .rasterizerDensity = scaleFactor,
+        .rasterizerDensity = fontRasterizerDensity,
         .warnOnFailure = false,
     });
     NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
@@ -262,7 +282,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
         .includeChineseFull = false,
         .glyphRanges = iconRange,
         .fontConfig = &config,
-        .rasterizerDensity = scaleFactor,
+        .rasterizerDensity = fontRasterizerDensity,
         .warnOnFailure = false,
     });
     NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
@@ -271,7 +291,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
         .includeChineseFull = false,
         .glyphRanges = iconRange,
         .fontConfig = &config,
-        .rasterizerDensity = scaleFactor,
+        .rasterizerDensity = fontRasterizerDensity,
         .warnOnFailure = false,
     });
 
@@ -282,7 +302,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
         .pixelSize = fontSize,
         .glyphRanges = io.Fonts->GetGlyphRangesChineseSimplifiedCommon(),
         .fontConfig = &configLocale,
-        .rasterizerDensity = scaleFactor,
+        .rasterizerDensity = fontRasterizerDensity,
         .warnOnFailure = false,
     });
 
@@ -306,7 +326,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
             .includeChineseFull = false,
             .glyphRanges = iconRange,
             .fontConfig = &titleIconConfig,
-            .rasterizerDensity = scaleFactor,
+            .rasterizerDensity = fontRasterizerDensity,
             .warnOnFailure = false,
         });
         NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
@@ -315,7 +335,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
             .includeChineseFull = false,
             .glyphRanges = iconRange,
             .fontConfig = &titleIconConfig,
-            .rasterizerDensity = scaleFactor,
+            .rasterizerDensity = fontRasterizerDensity,
             .warnOnFailure = false,
         });
         NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
@@ -324,7 +344,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
             .includeChineseFull = false,
             .glyphRanges = iconRange,
             .fontConfig = &titleIconConfig,
-            .rasterizerDensity = scaleFactor,
+            .rasterizerDensity = fontRasterizerDensity,
             .warnOnFailure = false,
         });
     }
@@ -886,9 +906,9 @@ void UserInterface::PreRender()
         io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
         io.DeltaTime = 1.0f / 60.0f;
     }
-#if WIN32 || ANDROID
+#if WIN32 || ANDROID || IOS
     auto& io = ImGui::GetIO();
-#if ANDROID
+#if ANDROID || IOS
     if (uiScale_ != 1.0f)
 #else
     if (uiScale_ > 1.0f)
@@ -1078,7 +1098,10 @@ void UserInterface::HandleEvent(const SDL_Event* event)
             return;
         }
     }
-#elif ANDROID
+#elif ANDROID || IOS
+    // Touches arrive as SDL's synthesized mouse stream, in window coordinates. PreRender rescaled
+    // the ImGui coordinate space by uiScale_, so the pointer has to be rescaled the same way or it
+    // lands on the wrong widget.
     if (uiScale_ != 1.0f && event->type == SDL_EVENT_MOUSE_MOTION)
     {
         SDL_Window* window = SDL_GetWindowFromID(event->motion.windowID);

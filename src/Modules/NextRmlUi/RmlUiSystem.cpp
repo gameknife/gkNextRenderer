@@ -1119,9 +1119,13 @@ void RmlUiSystem::BeginFrame()
         return;
     }
 
-    const VkExtent2D extent = impl_->engine.GetWindow().WindowSize();
+    const Vulkan::Window& window = impl_->engine.GetWindow();
+    const VkExtent2D extent = window.WindowSize();
     impl_->context->SetDimensions(Rml::Vector2i(static_cast<int>(extent.width), static_cast<int>(extent.height)));
-    impl_->context->SetDensityIndependentPixelRatio(impl_->engine.GetWindow().ContentScale());
+    // The context is measured in window coordinates, but ContentScale() is relative to the
+    // window's pixel size. Divide the pixel density back out so a `dp` stays the same physical
+    // size on iOS, where the two spaces differ; everywhere else the density is 1.0.
+    impl_->context->SetDensityIndependentPixelRatio(window.ContentScale() / window.PixelDensity());
     impl_->textInputHandler.UpdateTextInputArea();
 }
 

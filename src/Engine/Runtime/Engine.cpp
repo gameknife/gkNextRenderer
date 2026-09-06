@@ -389,6 +389,13 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     services_.cvarSystem->ExecuteCommand("r.rendererType 5");
     services_.cvarSystem->ExecuteCommand("r.samples 1");
     services_.cvarSystem->ExecuteCommand("r.upscaler.qualityMode 1");
+#elif IOS
+    // The swapchain is now the panel's native pixel count, not UIKit's point count, so the
+    // default output extent jumped by the square of the display's pixel density (a 1080p phone
+    // goes from ~0.3MP to ~2.1MP). Auto would still resolve that to Native at exactly 1080p;
+    // pick the same balanced upscale Android uses and let the upscaler own the render extent.
+    // An archived user setting still overrides this below.
+    services_.cvarSystem->ExecuteCommand("r.upscaler.qualityMode 1");
 #endif
     services_.cvarSystem->LoadUserFiles();
     

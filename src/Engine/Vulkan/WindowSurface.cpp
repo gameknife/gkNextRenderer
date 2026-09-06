@@ -422,6 +422,15 @@ Window::Window(const WindowConfig& config) :
     {
         flags |= SDL_WINDOW_BORDERLESS;
     }
+#if IOS
+    // UIKit measures windows in points, and without this flag SDL sizes the CAMetalLayer drawable
+    // in points too. On a 1080p iPhone 7 Plus that is a 414x736 swapchain the compositor then
+    // stretches back over 1080x1920 - every frame is a 2.6x blow-up of a third-resolution image.
+    // Take the native-density back buffer instead and handle the extra pixels the way the desktop
+    // high-DPI path does: Dear ImGui stays in point space and scales through
+    // DisplayFramebufferScale, while the scene's render resolution is the upscaler's decision.
+    flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
+#endif
     if (config.HiddenWindow || config.DeferShowUntilFirstPresent)
     {
         // Keep startup out of the way until the first rendered frame is ready. A permanently
@@ -499,6 +508,16 @@ Window::Window(const WindowConfig& config) :
         Throw(std::runtime_error("failed to init SDL Window."));
     }
 
+#if IOS
+    {
+        const VkExtent2D pointExtent = WindowSize();
+        const VkExtent2D pixelExtent = FramebufferSize();
+        SPDLOG_INFO("iOS window: {}x{} points, {}x{} pixels (density {:.3f})",
+                    pointExtent.width, pointExtent.height,
+                    pixelExtent.width, pixelExtent.height, PixelDensity());
+    }
+#endif
+
     if (config.HideTitleBar)
     {
         if (!SDL_SetWindowBordered(window_, false))
@@ -544,6 +563,16 @@ float Window::ContentScale() const
     float xscale = 1;
     xscale = SDL_GetWindowDisplayScale(window_);
     return xscale;
+}
+
+float Window::PixelDensity() const
+{
+    if (config_.HeadlessSurface)
+    {
+        return 1.0f;
+    }
+    const float density = SDL_GetWindowPixelDensity(window_);
+    return std::isfinite(density) && density > 0.0f ? density : 1.0f;
 }
 
 VkExtent2D Window::FramebufferSize() const
