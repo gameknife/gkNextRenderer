@@ -303,6 +303,15 @@ namespace Editor
             }
             ImGui::PopID();
         }
+        const char* GetCategoryIcon(const std::string& id)
+        {
+            if (id == "rendering" || id == "render") return ICON_FA_SLIDERS;
+            if (id == "editor" || id == "interface") return ICON_FA_DESKTOP;
+            if (id == "camera" || id == "viewport") return ICON_FA_CAMERA;
+            if (id == "input" || id == "controls") return ICON_FA_KEYBOARD;
+            if (id == "physics") return ICON_FA_ATOM;
+            return ICON_FA_GEAR;
+        }
     }
 
     void DrawSettingsPanel(EditorContext& ctx, EditorUiState& ui)
@@ -349,14 +358,40 @@ namespace Editor
         }
 
         const float footerHeight = ImGui::GetFrameHeightWithSpacing() + 10.0f;
-        NextUI::Theme::BeginInsetPanel("##SettingsCategories", ImVec2(190.0f, -footerHeight));
+        NextUI::Theme::BeginInsetPanel("##SettingsCategories", ImVec2(200.0f, -footerHeight));
         for (int i = 0; i < static_cast<int>(layout.categories.size()); ++i)
         {
-            if (ImGui::Selectable(layout.categories[i].label.c_str(), panelState.selectedCategory == i,
-                                  ImGuiSelectableFlags_None, ImVec2(0.0f, 30.0f)))
+            const bool isSelected = (panelState.selectedCategory == i);
+            const std::string& catId = layout.categories[i].id;
+            const std::string itemText = fmt::format("{}  {}", GetCategoryIcon(catId), layout.categories[i].label);
+
+            const ImVec2 itemPos = ImGui::GetCursorScreenPos();
+            const float itemWidth = ImGui::GetContentRegionAvail().x;
+            constexpr float itemHeight = 32.0f;
+
+            if (isSelected)
+            {
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    itemPos, itemPos + ImVec2(itemWidth, itemHeight),
+                    NextUI::Theme::ColorU32(NextUI::Theme::EColor::Accent, 0.18f),
+                    4.0f);
+                NextUI::Theme::DrawSelectionAccentStrip(itemPos, itemPos + ImVec2(itemWidth, itemHeight));
+            }
+
+            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover, 0.4f));
+            ImGui::PushStyleColor(ImGuiCol_HeaderActive, NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.3f));
+
+            if (ImGui::Selectable(fmt::format("##Cat_{}", i).c_str(), isSelected, ImGuiSelectableFlags_None, ImVec2(itemWidth, itemHeight)))
             {
                 panelState.selectedCategory = i;
             }
+
+            ImGui::PopStyleColor(3);
+
+            ImGui::GetWindowDrawList()->AddText(itemPos + ImVec2(10.0f, 7.0f),
+                isSelected ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::AccentHover) : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Text),
+                itemText.c_str());
         }
         NextUI::Theme::EndInsetPanel();
         ImGui::SameLine();
@@ -391,7 +426,19 @@ namespace Editor
         }
         NextUI::Theme::EndInsetPanel();
 
-        if (ImGui::Button("Reset Category"))
+        ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.85f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, NextUI::Theme::Color(NextUI::Theme::EColor::Accent, 0.65f));
+        if (ImGui::Button(ICON_FA_FLOPPY_DISK " Apply & Save"))
+        {
+            if (!cvars.SaveUserFiles())
+            {
+                SPDLOG_ERROR("Failed to save editor settings");
+            }
+        }
+        ImGui::PopStyleColor(3);
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_ROTATE_LEFT " Reset Category"))
         {
             for (const FSettingsGroup& group : category.groups)
             {
@@ -402,15 +449,7 @@ namespace Editor
             }
         }
         ImGui::SameLine();
-        if (ImGui::Button("Apply & Save"))
-        {
-            if (!cvars.SaveUserFiles())
-            {
-                SPDLOG_ERROR("Failed to save editor settings");
-            }
-        }
-        ImGui::SameLine();
-        ImGui::TextDisabled("Changes apply immediately");
+        ImGui::TextDisabled("Changes apply immediately to active session");
         NextUI::Theme::PopToolWindowContentStyle();
         ImGui::End();
         NextUI::Theme::PopToolWindowStyle();

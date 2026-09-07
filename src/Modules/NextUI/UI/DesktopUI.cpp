@@ -372,7 +372,16 @@ namespace NextUI::Theme
         ImGui::PushStyleColor(ImGuiCol_ChildBg, Color(EColor::Background, backgroundAlpha));
         ImGui::PushStyleColor(ImGuiCol_Border, Color(EColor::Border, 0.82f));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, padding);
-        return ImGui::BeginChild(id, size, border, flags);
+        // ChildBorderSize is 0 in this theme, so ImGuiChildFlags_Borders alone would draw nothing;
+        // a caller that asks for a border gets the size restored with it. The padding is requested
+        // explicitly either way -- ImGui otherwise ties it to the border flag, so dropping the
+        // border would silently drop the inset padding and shift every child's contents.
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, border ? 1.0f : 0.0f);
+        const ImGuiChildFlags childFlags = ImGuiChildFlags_AlwaysUseWindowPadding |
+            (border ? ImGuiChildFlags_Borders : ImGuiChildFlags_None);
+        const bool visible = ImGui::BeginChild(id, size, childFlags, flags);
+        ImGui::PopStyleVar();
+        return visible;
     }
 
     void EndInsetPanel()
@@ -380,6 +389,144 @@ namespace NextUI::Theme
         ImGui::EndChild();
         ImGui::PopStyleVar();
         ImGui::PopStyleColor(2);
+    }
+
+    void BeginCard(const char* id, float height, ImGuiWindowFlags flags)
+    {
+        ImGui::Dummy(ImVec2(0.0f, 2.0f));
+        const float width = std::max(0.0f, ImGui::GetContentRegionAvail().x - 2.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, Color(EColor::SurfaceElevated, 0.40f));
+        ImGui::PushStyleColor(ImGuiCol_Border, Color(EColor::Border, 0.70f));
+        const ImGuiChildFlags childFlags = height > 0.0f
+            ? ImGuiChildFlags_Borders
+            : ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY;
+        ImGui::BeginChild(id, ImVec2(width, std::max(0.0f, height)), childFlags, flags);
+        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar(3);
+    }
+
+    void EndCard()
+    {
+        ImGui::EndChild();
+        ImGui::Dummy(ImVec2(0.0f, 3.0f));
+    }
+
+    void DrawSelectionAccentStrip(ImVec2 itemMin, ImVec2 itemMax, float verticalPadding,
+                                  float horizontalOffset)
+    {
+        constexpr float stripWidth = 3.0f;
+        const float x = itemMin.x + horizontalOffset;
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            ImVec2(x, itemMin.y + verticalPadding), ImVec2(x + stripWidth, itemMax.y - verticalPadding),
+            ColorU32(EColor::AccentHover), stripWidth * 0.5f);
+    }
+
+    void TagChip(const char* label, const ImVec4& color, const char* tooltip)
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(color.x, color.y, color.z, 0.18f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(color.x, color.y, color.z, 0.28f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(color.x, color.y, color.z, 0.35f));
+        ImGui::PushStyleColor(ImGuiCol_Text, color);
+        ImGui::SmallButton(label);
+        if (tooltip != nullptr && ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("%s", tooltip);
+        }
+        ImGui::PopStyleColor(4);
+        ImGui::PopStyleVar(2);
+    }
+
+    bool SegmentedPills(const char* id, std::span<const FPillOption> options, int& value, float totalWidth,
+                        float itemHeight)
+    {
+        if (options.empty())
+        {
+            return false;
+        }
+
+        ImGui::PushID(id);
+        const float available = totalWidth > 0.0f ? totalWidth : ImGui::GetContentRegionAvail().x;
+        constexpr float spacing = 3.0f;
+        const float count = static_cast<float>(options.size());
+        const float itemWidth = std::max(20.0f, (available - spacing * (count - 1.0f)) / count);
+
+        bool changed = false;
+        for (size_t i = 0; i < options.size(); ++i)
+        {
+            if (i > 0)
+            {
+                ImGui::SameLine(0.0f, spacing);
+            }
+            const bool selected = value == options[i].Value;
+
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+            if (selected)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, Color(EColor::Accent, 0.85f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Color(EColor::AccentHover));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, Color(EColor::Accent));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            }
+            else
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, Color(EColor::SurfaceElevated, 0.45f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Color(EColor::SurfaceHover, 0.75f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, Color(EColor::SurfaceHover));
+                ImGui::PushStyleColor(ImGuiCol_Text, Color(EColor::TextMuted));
+            }
+
+            if (ImGui::Button(options[i].Label, ImVec2(itemWidth, itemHeight)) && !selected)
+            {
+                value = options[i].Value;
+                changed = true;
+            }
+            ImGui::PopStyleColor(4);
+            ImGui::PopStyleVar();
+        }
+        ImGui::PopID();
+        return changed;
+    }
+
+    void SameLineRightAligned(float groupWidth, float minLeadingGap)
+    {
+        const float available = ImGui::GetContentRegionAvail().x;
+        if (available > groupWidth + minLeadingGap)
+        {
+            ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - groupWidth - ImGui::GetStyle().WindowPadding.x);
+        }
+        else
+        {
+            ImGui::SameLine();
+        }
+    }
+
+    std::string TruncateWithEllipsis(const std::string& text, float maxWidth)
+    {
+        if (text.empty() || ImGui::CalcTextSize(text.c_str()).x <= maxWidth)
+        {
+            return text;
+        }
+
+        static constexpr const char* kEllipsis = "...";
+        const float ellipsisWidth = ImGui::CalcTextSize(kEllipsis).x;
+        if (ellipsisWidth >= maxWidth)
+        {
+            return kEllipsis;
+        }
+
+        // ImFont measures up to a width budget in one pass and reports where it stopped, which beats
+        // probing one character at a time for every card, every frame.
+        const char* begin = text.c_str();
+        const char* end = begin + text.size();
+        const char* remaining = begin;
+        ImGui::GetFont()->CalcTextSizeA(ImGui::GetFontSize(), maxWidth - ellipsisWidth, 0.0f, begin, end,
+                                        &remaining);
+        return std::string(begin, remaining) + kEllipsis;
     }
 
     bool BeginOverlayPanel(const FOverlayPanelConfig& config)
@@ -519,16 +666,7 @@ namespace NextUI::Theme
 
         if (active)
         {
-            // 4px accent strip on the left edge, like the mockup.
-            ImDrawList* drawList = ImGui::GetWindowDrawList();
-            const ImVec2 itemMin = ImGui::GetItemRectMin();
-            const ImVec2 itemMax = ImGui::GetItemRectMax();
-            const float stripWidth = 3.0f;
-            const float stripPad = 6.0f;
-            drawList->AddRectFilled(
-                ImVec2(itemMin.x - 4.0f, itemMin.y + stripPad),
-                ImVec2(itemMin.x - 4.0f + stripWidth, itemMax.y - stripPad),
-                ColorU32(EColor::AccentHover), stripWidth * 0.5f);
+            DrawSelectionAccentStrip(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), 6.0f, -4.0f);
         }
 
         DrawTooltip(tooltip);

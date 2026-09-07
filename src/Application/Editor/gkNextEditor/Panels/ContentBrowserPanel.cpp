@@ -34,6 +34,9 @@ namespace Editor
     {
         float GContentBrowserIconSize = 82.0f;
         constexpr float kCardAspect = 1.65f;
+        // Left mode rail: same widget the renderer's rail uses, so the two read as one system.
+        constexpr float kContentModeRailButtonSize = 30.0f;
+        constexpr float kContentModeRailWidth = 42.0f;
 
         struct ContentBrowserCallbacks
         {
@@ -135,6 +138,8 @@ namespace Editor
                                                    EContentAssetKind::LDraw};
             static const ContentAssetVisual kConfig{ICON_FA_FILE_LINES, IM_COL32(230, 205, 80, 255),
                                                     EContentAssetKind::Config};
+            static const ContentAssetVisual kAudio{ICON_FA_VOLUME_HIGH, IM_COL32(168, 85, 247, 255),
+                                                   EContentAssetKind::Unsupported};
 
             struct ExtensionVisual
             {
@@ -142,16 +147,25 @@ namespace Editor
                 const ContentAssetVisual* visual = nullptr;
             };
 
-            static const std::array<ExtensionVisual, 9> kVisuals{
+            static const std::array<ExtensionVisual, 18> kVisuals{
                 ExtensionVisual{".hdr", &kHdri},
                 ExtensionVisual{".js", &kScript},
+                ExtensionVisual{".cs", &kScript},
+                ExtensionVisual{".mlscript", &kScript},
+                ExtensionVisual{".slang", &kScript},
+                ExtensionVisual{".hlsl", &kScript},
+                ExtensionVisual{".glsl", &kScript},
                 ExtensionVisual{".png", &kTexture},
                 ExtensionVisual{".jpg", &kTexture},
                 ExtensionVisual{".jpeg", &kTexture},
                 ExtensionVisual{".tga", &kTexture},
+                ExtensionVisual{".bmp", &kTexture},
                 ExtensionVisual{".ldr", &kLDraw},
                 ExtensionVisual{".mpd", &kLDraw},
                 ExtensionVisual{".json", &kConfig},
+                ExtensionVisual{".wav", &kAudio},
+                ExtensionVisual{".mp3", &kAudio},
+                ExtensionVisual{".ogg", &kAudio},
             };
 
             if (Runtime::Scene::SceneList::IsSupportedSceneExtension(extension))
@@ -446,19 +460,23 @@ namespace Editor
                                        DirectoryVisibilityCache& visibilityCache)
         {
             (void)ui;
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.48f));
-            ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
-            ImGui::BeginChild("ContentBrowserSidebar", ImVec2(200.0f, 0.0f), true);
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.40f));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 4.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 14.0f);
+            ImGui::BeginChild("ContentBrowserSidebar", ImVec2(200.0f, 0.0f), false);
+            ImGui::Dummy(ImVec2(0.0f, 2.0f));
             ImGui::TextDisabled("Favorites");
             DrawQuickAccessDirectory(ICON_FA_STAR " Assets", rootPath, currentPath);
             DrawQuickAccessDirectory(ICON_FA_FOLDER " Models", rootPath / "models", currentPath);
             DrawQuickAccessDirectory(ICON_FA_FOLDER " Materials", rootPath / "materials", currentPath);
             DrawQuickAccessDirectory(ICON_FA_FOLDER " Textures", rootPath / "textures", currentPath);
-            NextUI::Theme::DrawThinSeparator(0.70f);
+            ImGui::Spacing();
             ImGui::TextDisabled("Project");
             DrawDirectoryTreeNode(rootPath, rootPath, currentPath, directoryCache, visibilityCache, true);
             ImGui::EndChild();
-            ImGui::PopStyleColor(2);
+            ImGui::PopStyleVar(3);
+            ImGui::PopStyleColor(1);
         }
 
         void DrawContentBrowserNavigation(const std::filesystem::path& rootPath, std::filesystem::path& currentPath,
@@ -472,13 +490,23 @@ namespace Editor
                 currentPath = rootPath;
             }
 
+            // 返回上一级
+            const bool hasParent = currentPath != rootPath;
+            ImGui::BeginDisabled(!hasParent);
+            if (NextUI::Theme::GhostButton(ICON_FA_ARROW_UP, "Go Up One Directory"))
+            {
+                currentPath = currentPath.parent_path();
+            }
+            ImGui::EndDisabled();
+
+            ImGui::SameLine();
             if (NextUI::Theme::GhostButton(ICON_FA_HOUSE, "Assets Root"))
             {
                 currentPath = rootPath;
             }
 
             ImGui::SameLine();
-            if (NextUI::Theme::GhostButton(ICON_FA_ROTATE, "Refresh Current Folder"))
+            if (NextUI::Theme::GhostButton(ICON_FA_ROTATE, "Refresh Directory Cache"))
             {
                 directoryCache.clear();
                 visibilityCache.clear();
@@ -491,7 +519,9 @@ namespace Editor
                 for (const auto& part : rel)
                 {
                     ImGui::SameLine();
-                    ImGui::TextUnformatted(">");
+                    ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted, 0.7f));
+                    ImGui::TextUnformatted(ICON_FA_CHEVRON_RIGHT);
+                    ImGui::PopStyleColor();
                     ImGui::SameLine();
 
                     std::string label = part.string();
@@ -502,9 +532,18 @@ namespace Editor
 
                     crumbPath /= part;
                     ImGui::PushID(label.c_str());
+                    const bool isCurrentLeaf = (crumbPath == currentPath);
+                    if (isCurrentLeaf)
+                    {
+                        ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::Accent));
+                    }
                     if (NextUI::Theme::GhostButton(label.c_str()))
                     {
                         currentPath = crumbPath;
+                    }
+                    if (isCurrentLeaf)
+                    {
+                        ImGui::PopStyleColor();
                     }
                     ImGui::PopID();
                 }
@@ -565,32 +604,31 @@ namespace Editor
             struct FSectionEntry
             {
                 EBrowserSection section;
-                const char* label;
+                const char* icon;
+                const char* tooltip;
             };
 
             static const std::array<FSectionEntry, 4> entries{{
-                {EBrowserSection::Content, ICON_FA_FOLDER_TREE},
-                {EBrowserSection::Material, ICON_FA_CIRCLE_HALF_STROKE},
-                {EBrowserSection::Texture, ICON_FA_IMAGE},
-                {EBrowserSection::Mesh, ICON_FA_BOXES_PACKING},
+                {EBrowserSection::Content, ICON_FA_FOLDER_TREE, "Content Browser (Assets)"},
+                {EBrowserSection::Material, ICON_FA_CIRCLE_HALF_STROKE, "Material Library"},
+                {EBrowserSection::Texture, ICON_FA_IMAGE, "Texture Pool"},
+                {EBrowserSection::Mesh, ICON_FA_BOXES_PACKING, "Mesh Buffers"},
             }};
 
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.48f));
-            ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
-            ImGui::BeginChild("ContentBrowserModeSidebar", ImVec2(40.0f, 0.0f), true);
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.40f));
+            ImGui::BeginChild("ContentBrowserModeSidebar", ImVec2(kContentModeRailWidth, 0.0f), false);
 
             for (const auto& entry : entries)
             {
-                const bool selected = section == entry.section;
-                const float rowWidth = ImGui::GetContentRegionAvail().x;
-                if (ImGui::Selectable(entry.label, selected, ImGuiSelectableFlags_None,
-                                      ImVec2(rowWidth, 20.0f)))
+                if (NextUI::Theme::ModeRailButton(entry.icon, entry.tooltip, section == entry.section,
+                                                  kContentModeRailButtonSize))
                 {
                     section = entry.section;
                 }
+                ImGui::Spacing();
             }
             ImGui::EndChild();
-            ImGui::PopStyleColor(2);
+            ImGui::PopStyleColor(1);
         }
 
         uint32_t Fnv1a32(std::string_view s)
@@ -661,30 +699,52 @@ namespace Editor
                                        ImTextureID thumbnailTextureId = 0)
         {
             ImGui::BeginGroup();
-            if (ui.bigIcon)
-            {
-                ImGui::PushFont(ui.bigIcon);
-            }
             
-            const ImVec2 cardMin = ImGui::GetCursorPos() + ImGui::GetWindowPos() - ImVec2(0, ImGui::GetScrollY());
+            const ImVec2 cardMin = ImGui::GetCursorScreenPos();
             const ImVec2 cardMid = cardMin + ImVec2(0, GContentBrowserIconSize);
             const ImVec2 cardMax = cardMin + ImVec2(GContentBrowserIconSize, GContentBrowserIconSize * kCardAspect);
-            
-            ImGui::GetWindowDrawList()->AddRectFilled(
-            cardMin, cardMax,NextUI::Theme::ColorU32(NextUI::Theme::EColor::Background, 0.84f), 6);
-            
+            const bool selected = (selectionId == globalId);
+
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+            // 卡片整体底色
+            drawList->AddRectFilled(
+                cardMin, cardMax,
+                NextUI::Theme::ColorU32(NextUI::Theme::EColor::Background, 0.84f),
+                6.0f);
+
+            // 预览按钮/图标
             ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Background));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover));
             ImGui::PushID(static_cast<int>(globalId));
             
             ImTextureID textureId = thumbnailTextureId != 0 ? thumbnailTextureId : ctx.ui.RequestImTextureId(globalId);
             if ((iconOrTex && thumbnailTextureId == 0) || textureId == 0)
             {
+                if (ui.bigIcon)
+                {
+                    ImGui::PushFont(ui.bigIcon);
+                }
+                // Logo 呈现纯白色，类型颜色展示在中间装饰条上
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(245, 245, 245, 240));
                 ImGui::Button(icon, ImVec2(GContentBrowserIconSize, GContentBrowserIconSize));
+                ImGui::PopStyleColor();
+                if (ui.bigIcon)
+                {
+                    ImGui::PopFont();
+                }
             }
             else
             {
-                ImGui::Image(textureId, ImVec2(GContentBrowserIconSize, GContentBrowserIconSize));
+                constexpr float pad = 4.0f;
+                const ImVec2 imgMin = cardMin + ImVec2(pad, pad);
+                const ImVec2 imgSize(GContentBrowserIconSize - pad * 2.0f, GContentBrowserIconSize - pad * 2.0f);
+                ImGui::SetCursorScreenPos(imgMin);
+                ImGui::Image(textureId, imgSize);
+
+                ImGui::SetCursorScreenPos(cardMin);
+                ImGui::InvisibleButton("##CardImgHit", ImVec2(GContentBrowserIconSize, GContentBrowserIconSize));
             }
 
             if (callbacks.onDragSource && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
@@ -694,13 +754,10 @@ namespace Editor
             }
 
             ImGui::PopID();
-            ImGui::PopStyleColor(2);
-            if (ui.bigIcon)
-            {
-                ImGui::PopFont();
-            }
+            ImGui::PopStyleColor(3);
 
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_None))
+            const bool hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_None);
+            if (hovered)
             {
                 if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
                 {
@@ -710,50 +767,73 @@ namespace Editor
                         callbacks.onDoubleClick();
                     }
                 }
-                if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                else if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
                 {
                     selectionId = globalId;
                 }
             }
-            
-            const bool selected = selectionId == globalId;
-            
-            ImGui::GetWindowDrawList()->AddRect(
-                cardMin, cardMax,
-                selected ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::AccentHover, 0.92f)
-                         : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Border, 0.84f),
-                6, 0, selected ? 1.4f : 1.0f);
-            ImGui::GetWindowDrawList()->AddRectFilled(
+
+            // 卡片下半部底色（文字托盘）
+            drawList->AddRectFilled(
                 cardMid, cardMax,
                 selected ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Accent, 0.72f)
-                         : NextUI::Theme::ColorU32(NextUI::Theme::EColor::SurfaceElevated),
-                6);
-            ImGui::GetWindowDrawList()->AddLine(cardMid, cardMid + ImVec2(GContentBrowserIconSize, 0), color, 2);
+                         : hovered ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::SurfaceHover)
+                                   : NextUI::Theme::ColorU32(NextUI::Theme::EColor::SurfaceElevated),
+                6.0f, ImDrawFlags_RoundCornersBottom);
 
-            float cursorPosY = ImGui::GetCursorPosY();
-            ImGui::PushItemWidth(GContentBrowserIconSize);
-            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + GContentBrowserIconSize);
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 5);
-            ImGui::Text("%s", name.c_str());
-            ImGui::PopTextWrapPos();
-            ImGui::PopItemWidth();
-            
-            ImGui::SetCursorPosY(cursorPosY);
+            // 中间装饰条：根据类型的颜色展示
+            drawList->AddLine(
+                ImVec2(cardMin.x, cardMid.y),
+                ImVec2(cardMax.x, cardMid.y),
+                color, 2.0f);
 
-            ImGui::Dummy(ImVec2(0.0f, GContentBrowserIconSize * (kCardAspect - 1.0f)));
+            // 选中或悬停时的焦点轮廓
+            if (selected)
+            {
+                drawList->AddRect(cardMin, cardMax, NextUI::Theme::ColorU32(NextUI::Theme::EColor::AccentHover, 0.95f), 6.0f, 0, 1.4f);
+            }
+            else if (hovered)
+            {
+                drawList->AddRect(cardMin, cardMax, IM_COL32(255, 255, 255, 30), 6.0f, 0, 1.0f);
+            }
+
+            // 核心修复：文字严格截断并限制在卡片内部，绝对不溢出破坏 Grid
+            constexpr float textPadX = 5.0f;
+            const float maxTextW = GContentBrowserIconSize - textPadX * 2.0f;
+            const std::string truncatedName = NextUI::Theme::TruncateWithEllipsis(name, maxTextW);
+            const ImVec2 textSize = ImGui::CalcTextSize(truncatedName.c_str());
+            const float textX = cardMin.x + std::floor((GContentBrowserIconSize - textSize.x) * 0.5f);
+            const float textY = cardMid.y + 7.0f;
+
+            drawList->PushClipRect(cardMid, cardMax, true);
+            drawList->AddText(ImVec2(textX, textY),
+                              selected ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Text)
+                                       : hovered ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Text)
+                                                 : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Text, 0.90f),
+                              truncatedName.c_str());
+            drawList->PopClipRect();
+
+            if (hovered)
+            {
+                NextUI::Theme::DrawTooltip(name.c_str());
+            }
+
+            // 恢复光标到卡片精确尺寸，绝不对外溢出任何像素
+            ImGui::SetCursorScreenPos(cardMin);
+            ImGui::Dummy(ImVec2(GContentBrowserIconSize, GContentBrowserIconSize * kCardAspect));
             
-            // draw badge at top layer
+            // 右上角来源 Badge
             if (sourceBadge != nullptr && sourceBadge[0] != '\0')
             {
                 ImFont* badgeFont = ImGui::GetFont();
-                const float badgeFontSize = ImGui::GetFontSize() * 0.75f;
-                const ImVec2 badgePadding(10.0f, 2.0f);
+                const float badgeFontSize = ImGui::GetFontSize() * 0.70f;
+                const ImVec2 badgePadding(5.0f, 1.5f);
                 const ImVec2 badgeTextSize = badgeFont->CalcTextSizeA(badgeFontSize, FLT_MAX, 0.0f, sourceBadge);
-                const ImVec2 badgeMin(cardMax.x - badgeTextSize.x - badgePadding.x * 2.0f - 3.0f, cardMin.y + 3.0f);
-                const ImVec2 badgeMax(cardMax.x - 3.0f, badgeMin.y + badgeTextSize.y + badgePadding.y * 2.0f);
-                ImGui::GetWindowDrawList()->AddRectFilled(badgeMin, badgeMax, sourceBadgeColor, badgeTextSize.y * 0.5f);
-                ImGui::GetWindowDrawList()->AddText(badgeFont, badgeFontSize, badgeMin + badgePadding,
-                                                    IM_COL32(255, 255, 255, 255), sourceBadge);
+                const ImVec2 badgeMin(cardMax.x - badgeTextSize.x - badgePadding.x * 2.0f - 4.0f, cardMin.y + 4.0f);
+                const ImVec2 badgeMax(cardMax.x - 4.0f, badgeMin.y + badgeTextSize.y + badgePadding.y * 2.0f);
+                drawList->AddRectFilled(badgeMin, badgeMax, sourceBadgeColor, 3.0f);
+                drawList->AddText(badgeFont, badgeFontSize, badgeMin + badgePadding,
+                                  IM_COL32(255, 255, 255, 250), sourceBadge);
             }
             
             ImGui::EndGroup();
@@ -937,23 +1017,54 @@ namespace Editor
             ImGui::SameLine();
 
             ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.28f));
-            ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
-            //ImGui::BeginChild("ContentBrowserSectionFrame", ImVec2(0.0f, 0.0f), true);
             {
                 DrawContentBrowserSidebar(ui, rootPath, browserState.currentPath, directoryCache, visibilityCache);
                 ImGui::SameLine();
                 ImGui::BeginChild("ContentRightFrame", ImVec2(0.0f, 0.0f), 0, ImGuiWindowFlags_NoBackground);
                 if (currentSection == EBrowserSection::Content)
                 {
-                    ImGui::BeginChild("ContentBrowserMain", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), true);
+                    ImGui::BeginChild("ContentBrowserMain", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), false);
 
+                    // 突出式导航与搜索工具栏容器
+                    const float navBarHeight = ImGui::GetFrameHeight() + 8.0f;
+                    const ImVec2 navBarMin = ImGui::GetCursorScreenPos();
+                    const float availWidth = ImGui::GetContentRegionAvail().x;
+                    const ImVec2 navBarMax = navBarMin + ImVec2(availWidth, navBarHeight);
+
+                    ImDrawList* dl = ImGui::GetWindowDrawList();
+                    dl->AddRectFilled(navBarMin, navBarMax,
+                        NextUI::Theme::ColorU32(NextUI::Theme::EColor::SurfaceElevated, 1.0f), 6.0f);
+
+                    ImGui::SetCursorScreenPos(navBarMin + ImVec2(6.0f, 4.0f));
+                    ImGui::BeginGroup();
                     DrawContentBrowserNavigation(rootPath, browserState.currentPath, directoryCache, visibilityCache);
-                    ImGui::SameLine();
-                    ImGui::SetNextItemWidth(190.0f);
-                    browserState.contentFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##ContentBrowserFilter", 190.0f);
+                    ImGui::EndGroup();
 
-                    NextUI::Theme::DrawThinSeparator(0.70f);
-                    ImGui::BeginChild("Content Items", ImVec2(0.0f, 0.0f));
+                    const float searchWidth = 200.0f;
+                    const float searchX = navBarMax.x - searchWidth - 6.0f;
+                    if (searchX > ImGui::GetItemRectMax().x + 8.0f)
+                    {
+                        ImGui::SameLine();
+                        ImGui::SetCursorScreenPos(ImVec2(searchX, navBarMin.y + 4.0f));
+                    }
+                    else
+                    {
+                        ImGui::SameLine();
+                    }
+                    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+                    ImGui::PushStyleColor(ImGuiCol_FrameBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.75f));
+                    ImGui::SetNextItemWidth(searchWidth);
+                    browserState.contentFilter.Draw("##ContentBrowserFilter", searchWidth);
+                    if (!ImGui::IsItemActive() && browserState.contentFilter.InputBuf[0] == '\0')
+                    {
+                        const ImVec2 hintMin = ImGui::GetItemRectMin() + ImVec2(7.0f, 3.5f);
+                        dl->AddText(hintMin, NextUI::Theme::ColorU32(NextUI::Theme::EColor::TextDim), ICON_FA_MAGNIFYING_GLASS " Search...");
+                    }
+                    ImGui::PopStyleColor();
+                    ImGui::PopStyleVar();
+
+                    ImGui::SetCursorScreenPos(ImVec2(navBarMin.x, navBarMax.y + 6.0f));
+                    ImGui::BeginChild("Content Items", ImVec2(0.0f, 0.0f), false);
 
                     auto& entries = GetCachedDirectoryEntries(rootPath, browserState.currentPath, directoryCache);
                     ContentGridLayout grid = BeginContentGrid();
@@ -1065,8 +1176,8 @@ namespace Editor
                 {
                     ImGui::SetNextItemWidth(220.0f);
                     browserState.materialFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##MaterialBrowserFilter", 220.0f);
-                    NextUI::Theme::DrawThinSeparator(0.70f);
-                    ImGui::BeginChild("Material Items", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), true);
+                    ImGui::Spacing();
+                    ImGui::BeginChild("Material Items", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), false);
                     itemCount = DrawMaterialBrowserContents(ctx, ui, &browserState.materialFilter);
                     ImGui::EndChild();
                     selectedCount = ui.selectedMaterialId != InvalidId ? 1 : 0;
@@ -1076,8 +1187,8 @@ namespace Editor
                 {
                     ImGui::SetNextItemWidth(220.0f);
                     browserState.textureFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##TextureBrowserFilter", 220.0f);
-                    NextUI::Theme::DrawThinSeparator(0.70f);
-                    ImGui::BeginChild("Texture Items", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), true);
+                    ImGui::Spacing();
+                    ImGui::BeginChild("Texture Items", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), false);
                     itemCount = DrawTextureBrowserContents(ctx, ui, &browserState.textureFilter);
                     ImGui::EndChild();
                     selectedCount = ui.selectedTextureId != InvalidId ? 1 : 0;
@@ -1087,8 +1198,8 @@ namespace Editor
                 {
                     ImGui::SetNextItemWidth(220.0f);
                     browserState.meshFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##MeshBrowserFilter", 220.0f);
-                    NextUI::Theme::DrawThinSeparator(0.70f);
-                    ImGui::BeginChild("Mesh Items", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), true);
+                    ImGui::Spacing();
+                    ImGui::BeginChild("Mesh Items", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing()), false);
                     itemCount = DrawMeshBrowserContents(ctx, ui, &browserState.meshFilter);
                     ImGui::EndChild();
                     selectedCount = ui.selectedMeshId != InvalidId ? 1 : 0;
@@ -1096,8 +1207,7 @@ namespace Editor
                 }
                 ImGui::EndChild();
             }
-            //ImGui::EndChild();
-            ImGui::PopStyleColor(2);
+            ImGui::PopStyleColor(1);
         }
         ImGui::End();
     }

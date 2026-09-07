@@ -28,6 +28,10 @@ public:
     bool IsShowing() const { return isShowing_; }
     int Operation() const { return operation_; }
     int Mode() const { return mode_; }
+    bool IsSelectionMode() const { return selectionMode_; }
+    void SetOperation(int op) { operation_ = op; selectionMode_ = false; }
+    void SetSelectionMode(bool select) { selectionMode_ = select; }
+    void SetMode(int mode) { mode_ = mode; }
 
 private:
     void DrawSelectionInfo(const std::string& objectName, const std::string& meshName,

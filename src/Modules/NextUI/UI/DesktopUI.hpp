@@ -5,6 +5,8 @@
 #include "Engine/Runtime/RuntimeFwd.hpp"
 
 #include <functional>
+#include <span>
+#include <string>
 #include <imgui.h>
 
 namespace NextUI::Theme
@@ -111,12 +113,45 @@ namespace NextUI::Theme
     bool BeginSection(const char* icon, const char* label, bool defaultOpen = true);
     void EndSection();
     void BeginFormRow(const char* label, float ratio = 0.40f, float minLabelWidth = 96.0f, float maxLabelWidth = 140.0f);
-    bool BeginInsetPanel(const char* id, ImVec2 size = ImVec2(0.0f, 0.0f), bool border = true,
+    // Recessed panel: a darker child that reads as carved into the surface. Flat by default --
+    // the theme draws children borderless (ChildBorderSize is 0), and separation comes from the
+    // background step, not an outline. Pass border = true to opt an individual panel back in;
+    // that now restores the border size too, where previously it silently drew nothing.
+    bool BeginInsetPanel(const char* id, ImVec2 size = ImVec2(0.0f, 0.0f), bool border = false,
                          ImGuiWindowFlags flags = 0, ImVec2 padding = ImVec2(10.0f, 10.0f),
                          float backgroundAlpha = 0.30f);
     void EndInsetPanel();
+    // Elevated card: rounded SurfaceElevated child with a visible border, sized to its content when
+    // height <= 0. Adds a small vertical gap before and after so stacked cards breathe.
+    void BeginCard(const char* id, float height = 0.0f, ImGuiWindowFlags flags = 0);
+    void EndCard();
     bool BeginOverlayPanel(const FOverlayPanelConfig& config);
     void EndOverlayPanel();
+
+    // Small filled label used to tag a row or a header with a category.
+    void TagChip(const char* label, const ImVec4& color, const char* tooltip = nullptr);
+
+    // Rounded accent strip on the left edge of a selected row / rail button. The single motif that
+    // marks "this is the active one" across the mode rail, the Outliner and the settings nav.
+    void DrawSelectionAccentStrip(ImVec2 itemMin, ImVec2 itemMax, float verticalPadding = 1.0f,
+                                  float horizontalOffset = 0.0f);
+
+    // Horizontal group of mutually exclusive pills, sharing the available width evenly.
+    // Returns true when the selection changed.
+    struct FPillOption
+    {
+        int Value = 0;
+        const char* Label = "";
+    };
+    bool SegmentedPills(const char* id, std::span<const FPillOption> options, int& value,
+                        float totalWidth = -1.0f, float itemHeight = 22.0f);
+
+    // Places the next item on the same line, right-aligned to the window content edge.
+    // Falls back to a plain SameLine() when the row is too narrow to hold the group.
+    void SameLineRightAligned(float groupWidth, float minLeadingGap = 30.0f);
+
+    // Shortens text to fit maxWidth, appending an ellipsis. Single-pass, unlike a per-character probe.
+    std::string TruncateWithEllipsis(const std::string& text, float maxWidth);
 
     // Floating panel matching the new design language: rounded surface, single-line title with optional close X.
     // pOpen may be null. Returns true when the panel body is visible (matches ImGui::Begin semantics).

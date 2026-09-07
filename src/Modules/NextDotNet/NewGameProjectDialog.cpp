@@ -376,7 +376,7 @@ namespace Modules::NextDotNet
 
             const float panelWidth = std::min(600.0f, ImGui::GetContentRegionAvail().x - 40.0f);
             ImGui::SetCursorPosX((ImGui::GetWindowWidth() - panelWidth) * 0.5f);
-            if (NextUI::Theme::BeginInsetPanel("##UnavReasonBox", ImVec2(panelWidth, 100.0f), true, 0,
+            if (NextUI::Theme::BeginInsetPanel("##UnavReasonBox", ImVec2(panelWidth, 100.0f), false, 0,
                                                ImVec2(16.0f, 16.0f), 0.40f))
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, Color(EColor::TextMuted));
@@ -412,7 +412,7 @@ namespace Modules::NextDotNet
             const float contentWidth = dialogSize.x - 48.0f;
 
             // Details Inset Panel
-            if (NextUI::Theme::BeginInsetPanel("##DoneDetails", ImVec2(contentWidth, 140.0f), true, 0,
+            if (NextUI::Theme::BeginInsetPanel("##DoneDetails", ImVec2(contentWidth, 140.0f), false, 0,
                                                ImVec2(16.0f, 12.0f), 0.35f))
             {
                 ImGui::TextColored(Color(EColor::TextDim), ICON_FA_FOLDER "  Project Directory:");
@@ -449,7 +449,7 @@ namespace Modules::NextDotNet
             ImGui::SetCursorPosX(24.0f);
 
             // Guidance Inset Panel
-            if (NextUI::Theme::BeginInsetPanel("##DoneGuidance", ImVec2(contentWidth, 110.0f), true, 0,
+            if (NextUI::Theme::BeginInsetPanel("##DoneGuidance", ImVec2(contentWidth, 110.0f), false, 0,
                                                ImVec2(16.0f, 12.0f), 0.20f))
             {
                 ImGui::TextColored(Color(EColor::AccentHover), ICON_FA_LIGHTBULB "  Next Steps");
@@ -580,7 +580,7 @@ namespace Modules::NextDotNet
             if (selectedTmpl != nullptr)
             {
                 // Top: Template Overview Inset Panel
-                if (NextUI::Theme::BeginInsetPanel("##TmplOverview", ImVec2(0.0f, 152.0f), true, 0,
+                if (NextUI::Theme::BeginInsetPanel("##TmplOverview", ImVec2(0.0f, 152.0f), false, 0,
                                                    ImVec2(14.0f, 10.0f), 0.25f))
                 {
                     ImGui::BeginGroup();

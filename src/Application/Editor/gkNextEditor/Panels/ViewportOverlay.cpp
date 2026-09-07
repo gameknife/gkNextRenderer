@@ -10,6 +10,7 @@
 #include "Modules/SceneContent/SceneList.hpp"
 #include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "Modules/DevTools/GizmoController.hpp"
+#include <ThirdParty/ImGuizmo/ImGuizmo.h>
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
 #include "Engine/Rendering/RendererChoices.hpp"
@@ -209,9 +210,29 @@ namespace Editor
         const float upscalerComboWidth = comboWidth(ImGui::CalcTextSize(upscalerLabel.c_str()).x);
         const float showButtonWidth =
             buttonWidth(ImGui::CalcTextSize(ICON_FA_EYE " Show").x);
+
+        NextUI::GizmoController* gizmo = ctx.gizmoController;
+        const bool isSelection = gizmo != nullptr && gizmo->IsSelectionMode();
+        const int currentOp = gizmo ? gizmo->Operation() : static_cast<int>(ImGuizmo::TRANSLATE);
+        const int currentMode = gizmo ? gizmo->Mode() : static_cast<int>(ImGuizmo::LOCAL);
+        const bool isWorld = currentMode == static_cast<int>(ImGuizmo::WORLD);
+        const bool snapActive = ctx.settings.gizmoSnap;
+
+        constexpr float gizmoSquareBtnW = 28.0f;
+        constexpr float gizmoSepSpacing = 5.0f;
+        constexpr float gizmoSepWidth = gizmoSepSpacing * 2.0f + 1.0f;
+
+        const char* spaceLabel = isWorld ? ICON_FA_GLOBE " World" : ICON_FA_CUBE " Local";
+        const float spaceButtonWidth = buttonWidth(ImGui::CalcTextSize(spaceLabel).x);
+
+        const float transformToolsWidth = (gizmoSquareBtnW * 4.0f) + (toolbarItemSpacing * 3.0f);
+        const float gizmoGroupWidth = transformToolsWidth + gizmoSepWidth + spaceButtonWidth + gizmoSepWidth +
+            gizmoSquareBtnW + gizmoSepWidth;
+
+        const float renderGroupWidth = rendererComboWidth + progressiveButtonWidth + upscalerComboWidth +
+            showButtonWidth + (toolbarItemSpacing * 3.0f);
         const float availableToolbarWidth = std::max(0.0f, size.x - padding * 3.0f - toolW);
-        const float fullToolbarWidth = rendererComboWidth + progressiveButtonWidth + upscalerComboWidth +
-            showButtonWidth + toolbarItemSpacing * 3.0f + 8.0f;
+        const float fullToolbarWidth = gizmoGroupWidth + renderGroupWidth + 8.0f;
         const bool showUpscalerSelector = fullToolbarWidth <= availableToolbarWidth;
         const float toolbarWidth = fullToolbarWidth -
             (showUpscalerSelector ? 0.0f : upscalerComboWidth + toolbarItemSpacing);
@@ -220,15 +241,86 @@ namespace Editor
         toolbarConfig.WindowId = "ViewportToolbar";
         toolbarConfig.Position = pos + ImVec2(padding, padding);
         toolbarConfig.Size = ImVec2(std::min(toolbarWidth, availableToolbarWidth), toolbarHeight);
-        toolbarConfig.Padding = ImVec2(4.0f, 8.0f);
+        toolbarConfig.Padding = ImVec2(6.0f, 6.0f);
         toolbarConfig.ItemSpacing = ImVec2(toolbarItemSpacing, 0.0f);
-        toolbarConfig.Rounding = 5.0f;
-        toolbarConfig.BackgroundAlpha = 0.74f;
+        toolbarConfig.Rounding = 6.0f;
+        toolbarConfig.BackgroundAlpha = 0.85f;
 
         if (NextUI::Theme::BeginOverlayPanel(toolbarConfig))
         {
             NextUI::Theme::PushViewportToolbarStyle();
+            const float frameHeight = ImGui::GetFrameHeight();
 
+            // 1. Transform & Selection Tools (Q / W / E / R). Selection is the odd one out -- it is a
+            // mode rather than an operation -- so it carries a sentinel instead of an ImGuizmo op.
+            constexpr int kSelectionTool = -1;
+            struct FGizmoTool
+            {
+                const char* icon;
+                const char* tooltip;
+                int operation;
+            };
+            static const FGizmoTool kTools[] = {
+                {ICON_FA_ARROW_POINTER, "Select (Q)", kSelectionTool},
+                {ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT, "Translate (W)", static_cast<int>(ImGuizmo::TRANSLATE)},
+                {ICON_FA_ROTATE, "Rotate (E)", static_cast<int>(ImGuizmo::ROTATE)},
+                {ICON_FA_EXPAND, "Scale (R)", static_cast<int>(ImGuizmo::SCALE)},
+            };
+
+            ImGui::BeginDisabled(gizmo == nullptr);
+            for (size_t i = 0; i < IM_ARRAYSIZE(kTools); ++i)
+            {
+                if (i > 0)
+                {
+                    ImGui::SameLine();
+                }
+                const bool isSelectionTool = kTools[i].operation == kSelectionTool;
+                const bool active = isSelectionTool ? isSelection
+                                                    : (!isSelection && currentOp == kTools[i].operation);
+                if (NextUI::Theme::DrawFlatViewportButton(kTools[i].icon, kTools[i].tooltip, active,
+                                                          ImVec2(gizmoSquareBtnW, frameHeight)) &&
+                    gizmo != nullptr)
+                {
+                    if (isSelectionTool)
+                    {
+                        gizmo->SetSelectionMode(true);
+                    }
+                    else
+                    {
+                        gizmo->SetOperation(kTools[i].operation);
+                    }
+                }
+            }
+
+            NextUI::Theme::DrawVerticalSeparator(frameHeight * 0.70f, gizmoSepSpacing, 0.40f);
+
+            // 2. Coordinate Space Toggle (Local / World)
+            const char* spaceTooltip = isWorld ? "Coordinate Space: World (Click to toggle)"
+                                               : "Coordinate Space: Local (Click to toggle)";
+            if (NextUI::Theme::DrawFlatViewportButton(
+                    spaceLabel, spaceTooltip, false,
+                    ImVec2(spaceButtonWidth, frameHeight)) &&
+                gizmo != nullptr)
+            {
+                gizmo->SetMode(isWorld ? static_cast<int>(ImGuizmo::LOCAL) : static_cast<int>(ImGuizmo::WORLD));
+            }
+            ImGui::EndDisabled();
+
+            NextUI::Theme::DrawVerticalSeparator(frameHeight * 0.70f, gizmoSepSpacing, 0.40f);
+
+            // 3. Grid Snap Toggle
+            const char* snapTooltip = snapActive ? "Grid Snap: ON (Click to toggle)"
+                                                 : "Grid Snap: OFF (Click to toggle)";
+            if (NextUI::Theme::DrawFlatViewportButton(
+                    ICON_FA_MAGNET, snapTooltip, snapActive,
+                    ImVec2(gizmoSquareBtnW, frameHeight)))
+            {
+                ctx.settings.gizmoSnap = !ctx.settings.gizmoSnap;
+            }
+
+            NextUI::Theme::DrawVerticalSeparator(frameHeight * 0.70f, gizmoSepSpacing, 0.40f);
+
+            // 4. Viewport Renderer & Display Options
             ImGui::SetNextItemWidth(rendererComboWidth);
             NextUI::Theme::PushViewportPopupStyle();
             const Rendering::FRendererChoice* selectedRendererChoice =
@@ -340,38 +432,55 @@ namespace Editor
 
         const uint32_t progressiveAccumulatedFrames = ctx.engine.GetProgressiveRenderAccumulatedFrames();
         const uint32_t progressiveTargetFrames = ctx.engine.GetProgressiveRenderTargetFrames();
-        const int progressiveDigits = static_cast<int>(std::max(
-            std::to_string(progressiveAccumulatedFrames).size(),
-            std::to_string(progressiveTargetFrames).size()));
-        const std::string progressiveFramesText =
-            fmt::format("{:>{}}/{:>{}}",
-                        progressiveAccumulatedFrames, progressiveDigits,
-                        progressiveTargetFrames, progressiveDigits);
-        const std::string progressiveTemplateText =
-            fmt::format("{0:0>{1}}/{0:0>{1}}", 0, progressiveDigits);
-        const float progressiveValueWidth = ImGui::CalcTextSize(progressiveTemplateText.c_str()).x;
-        const float progressiveLabelWidth = ImGui::CalcTextSize("Render:").x;
-        const float progressivePanelWidth = progressiveLabelWidth + progressiveValueWidth + 30.0f;
+        const float progressRatio = progressiveTargetFrames > 0
+            ? std::clamp(static_cast<float>(progressiveAccumulatedFrames) / static_cast<float>(progressiveTargetFrames), 0.0f, 1.0f)
+            : 0.0f;
+        const bool isProgressive = ctx.engine.IsProgressiveRendering();
+
+        const std::string progressiveFramesText = fmt::format("{}/{}", progressiveAccumulatedFrames, progressiveTargetFrames);
+        const float progressiveTextWidth = ImGui::CalcTextSize(progressiveFramesText.c_str()).x;
+        const float progressivePanelWidth = progressiveTextWidth + 66.0f;
+        constexpr float progressiveHeight = 28.0f;
 
         NextUI::Theme::FOverlayPanelConfig progressiveConfig{};
         progressiveConfig.WindowId = "ViewportProgressiveStatus";
         progressiveConfig.Position = pos + ImVec2(
             std::max(padding, size.x - progressivePanelWidth - padding),
             padding + toolH + 8.0f);
-        progressiveConfig.Size = ImVec2(progressivePanelWidth, 28.0f);
+        progressiveConfig.Size = ImVec2(progressivePanelWidth, progressiveHeight);
         progressiveConfig.Padding = ImVec2(10.0f, 4.0f);
-        progressiveConfig.ItemSpacing = ImVec2(8.0f, 0.0f);
-        progressiveConfig.BackgroundAlpha = 0.0f;
+        progressiveConfig.ItemSpacing = ImVec2(6.0f, 0.0f);
+        progressiveConfig.Rounding = 14.0f;
+        progressiveConfig.BackgroundAlpha = 0.85f;
 
-        NextUI::Theme::BeginOverlayPanel(progressiveConfig);
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted("Render:");
-        ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(
-            ctx.engine.IsProgressiveRendering() ? NextUI::Theme::EColor::Text : NextUI::Theme::EColor::TextMuted));
-        ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - progressiveValueWidth - ImGui::GetStyle().WindowPadding.x);
-        ImGui::TextUnformatted(progressiveFramesText.c_str());
-        ImGui::PopStyleColor();
+        if (NextUI::Theme::BeginOverlayPanel(progressiveConfig))
+        {
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const ImVec2 pMin = ImGui::GetWindowPos();
+            const ImVec2 pMax = pMin + ImGui::GetWindowSize();
+
+            if (isProgressive && progressiveTargetFrames > 0)
+            {
+                const float barWidth = (pMax.x - pMin.x - 16.0f) * progressRatio;
+                dl->AddLine(
+                    ImVec2(pMin.x + 8.0f, pMax.y - 3.0f),
+                    ImVec2(pMin.x + 8.0f + barWidth, pMax.y - 3.0f),
+                    progressRatio >= 1.0f ? IM_COL32(52, 199, 89, 220) : IM_COL32(59, 130, 246, 220),
+                    2.0f);
+            }
+
+            ImGui::AlignTextToFramePadding();
+            ImGui::PushStyleColor(ImGuiCol_Text, isProgressive ? IM_COL32(59, 130, 246, 255) : IM_COL32(140, 140, 140, 200));
+            ImGui::TextUnformatted(isProgressive ? (progressRatio >= 1.0f ? ICON_FA_CIRCLE_CHECK : ICON_FA_SPINNER) : ICON_FA_CLOCK);
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::TextDisabled("SPP");
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(
+                isProgressive ? NextUI::Theme::EColor::Text : NextUI::Theme::EColor::TextMuted));
+            ImGui::TextUnformatted(progressiveFramesText.c_str());
+            ImGui::PopStyleColor();
+        }
         NextUI::Theme::EndOverlayPanel();
 
         // AmbientCube brick residency is an engine-internal diagnostic; it stays behind
@@ -402,25 +511,32 @@ namespace Editor
             ambientBrickConfig.Size = ImVec2(ambientBrickPanelWidth, 28.0f);
             ambientBrickConfig.Padding = ImVec2(10.0f, 4.0f);
             ambientBrickConfig.ItemSpacing = ImVec2(8.0f, 0.0f);
-            ambientBrickConfig.BackgroundAlpha = 0.0f;
+            ambientBrickConfig.Rounding = 6.0f;
+            ambientBrickConfig.BackgroundAlpha = 0.85f;
 
-            NextUI::Theme::BeginOverlayPanel(ambientBrickConfig);
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted("AC Bricks:");
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(
-                ImGui::GetWindowContentRegionMax().x - ambientBrickValueWidth - ImGui::GetStyle().WindowPadding.x);
-            ImGui::TextUnformatted(ambientBrickText.c_str());
-            NextUI::Theme::DrawTooltip("AmbientCube resident bricks / total bricks across allocated cascades");
+            if (NextUI::Theme::BeginOverlayPanel(ambientBrickConfig))
+            {
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextUnformatted("AC Bricks:");
+                NextUI::Theme::SameLineRightAligned(ambientBrickValueWidth, 0.0f);
+                ImGui::TextUnformatted(ambientBrickText.c_str());
+                NextUI::Theme::DrawTooltip("AmbientCube resident bricks / total bricks across allocated cascades");
+            }
             NextUI::Theme::EndOverlayPanel();
         }
         
-        const ImVec2 axisOrigin = pos + ImVec2(38.0f, size.y - 42.0f);
+        const ImVec2 axisOrigin = pos + ImVec2(44.0f, size.y - 44.0f);
         ImDrawList* foreground = ImGui::GetForegroundDrawList(viewport);
         const Assets::Camera viewportCamera = ctx.editor
             ? ctx.editor->BuildSceneViewportCamera()
             : ctx.scene.GetRenderCamera();
         const glm::mat3 viewRotation(viewportCamera.ModelView);
+
+        // 视口方向罗盘：半透明磨砂底盘与微妙边框
+        constexpr float compassRadius = 34.0f;
+        foreground->AddCircleFilled(axisOrigin, compassRadius, IM_COL32(18, 20, 24, 160), 28);
+        foreground->AddCircle(axisOrigin, compassRadius, IM_COL32(255, 255, 255, 22), 28, 1.0f);
+
         struct FPreviewAxis
         {
             const char* label;
@@ -428,11 +544,11 @@ namespace Editor
             glm::vec3 projected;
         };
         std::array<FPreviewAxis, 3> previewAxes = {{
-            {"X", NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger),
+            {"X", IM_COL32(239, 68, 68, 255),
              viewRotation * glm::vec3(1.0f, 0.0f, 0.0f)},
-            {"Y", NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success),
+            {"Y", IM_COL32(34, 197, 94, 255),
              viewRotation * glm::vec3(0.0f, 1.0f, 0.0f)},
-            {"Z", NextUI::Theme::ColorU32(NextUI::Theme::EColor::Blue),
+            {"Z", IM_COL32(59, 130, 246, 255),
              viewRotation * glm::vec3(0.0f, 0.0f, 1.0f)},
         }};
         // Draw the axes pointing farther into the view first so nearer axes remain legible.
@@ -442,7 +558,7 @@ namespace Editor
                       return lhs.projected.z < rhs.projected.z;
                   });
 
-        constexpr float axisLength = 28.0f;
+        constexpr float axisLength = 23.0f;
         for (const FPreviewAxis& axis : previewAxes)
         {
             const ImVec2 screenDirection(axis.projected.x, -axis.projected.y);
@@ -450,20 +566,23 @@ namespace Editor
                 screenDirection.x * screenDirection.x + screenDirection.y * screenDirection.y);
             if (projectedLength < 0.08f)
             {
-                foreground->AddCircleFilled(axisOrigin, 3.0f, axis.color);
+                foreground->AddCircleFilled(axisOrigin, 3.5f, axis.color);
                 continue;
             }
 
             const ImVec2 axisEnd = axisOrigin + screenDirection * axisLength;
             const ImVec2 labelDirection = screenDirection * (1.0f / projectedLength);
+            const ImVec2 labelPos = axisEnd + labelDirection * 7.0f;
+            
+            foreground->AddLine(axisOrigin, axisEnd, axis.color, 2.5f);
+            foreground->AddCircleFilled(axisEnd, 5.0f, axis.color);
+            foreground->AddCircle(axisEnd, 5.0f, IM_COL32(255, 255, 255, 120), 12, 1.0f);
+
             const ImVec2 labelSize = ImGui::CalcTextSize(axis.label);
-            const ImVec2 labelPos = axisEnd + labelDirection * 6.0f - labelSize * 0.5f;
-            foreground->AddLine(axisOrigin, axisEnd, axis.color, 2.0f);
-            foreground->AddCircleFilled(axisEnd, 2.5f, axis.color);
-            foreground->AddText(labelPos, axis.color, axis.label);
+            foreground->AddText(labelPos - labelSize * 0.5f, IM_COL32(255, 255, 255, 230), axis.label);
         }
-        foreground->AddCircleFilled(
-            axisOrigin, 4.0f, NextUI::Theme::ColorU32(NextUI::Theme::EColor::TextMuted));
+        foreground->AddCircleFilled(axisOrigin, 4.0f, IM_COL32(200, 200, 205, 220));
+        foreground->AddCircle(axisOrigin, 4.0f, IM_COL32(0, 0, 0, 160), 12, 1.0f);
 
         NextUI::Theme::FOverlayPanelConfig toolConfig{};
         toolConfig.WindowId = "ViewportTool";
@@ -471,8 +590,8 @@ namespace Editor
         toolConfig.Size = ImVec2(toolW, toolH);
         toolConfig.Padding = ImVec2(4.0f, 8.0f);
         toolConfig.ItemSpacing = ImVec2(toolbarItemSpacing, 0.0f);
-        toolConfig.Rounding = 5.0f;
-        toolConfig.BackgroundAlpha = 0.74f;
+        toolConfig.Rounding = 6.0f;
+        toolConfig.BackgroundAlpha = 0.85f;
 
         NextUI::Theme::BeginOverlayPanel(toolConfig);
         NextUI::Theme::PushViewportToolbarStyle();

@@ -378,7 +378,7 @@ void DevTools::FUiDevPanels::DrawMemoryStatisticsPanel(NextEngine& engine)
     ImGui::SameLine(0.0f, 14.0f);
     DrawAllocationLegendItem("Free", NextUI::Theme::Color(NextUI::Theme::EColor::TextDim, 0.28f));
     ImGui::Dummy(ImVec2(0.0f, 8.0f));
-    if (NextUI::Theme::BeginInsetPanel("##MemoryBlockDetailsPanel", ImVec2(0.0f, 0.0f), true,
+    if (NextUI::Theme::BeginInsetPanel("##MemoryBlockDetailsPanel", ImVec2(0.0f, 0.0f), false,
                                        ImGuiWindowFlags_AlwaysVerticalScrollbar, ImVec2(12.0f, 10.0f), 0.18f))
     {
         DrawMemoryBlockDetails(memoryStats);

@@ -25,7 +25,7 @@ namespace
 {
     constexpr float kToolbarFooterGap = 8.0f;
     constexpr float kFooterHeight = 30.0f;
-    constexpr float kSelectionInfoGap = 4.0f;
+    constexpr float kSelectionInfoGap = 14.0f;
     constexpr float kToolbarWidth = 710.0f;
     constexpr float kToolbarPadY = 7.0f;
     constexpr float kToolbarButtonHeight = 6.0f;

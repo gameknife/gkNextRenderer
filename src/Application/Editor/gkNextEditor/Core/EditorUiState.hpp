@@ -4,6 +4,7 @@
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Runtime/Command/CommandHistory.hpp"
+#include "NodeClassification.hpp"
 
 #include <imgui.h>
 
@@ -20,6 +21,12 @@ namespace Editor
     constexpr uint32_t InvalidId = std::numeric_limits<uint32_t>::max();
     constexpr size_t kRecentScenesCap = 10;
     constexpr size_t kMaxCameraViewports = 3;
+
+    enum class EOutlinerTab
+    {
+        SceneGraph = 0,
+        Layers = 1,
+    };
 
     enum class EEditorViewportId
     {
@@ -51,6 +58,10 @@ namespace Editor
             uint32_t pendingScrollTargetId = InvalidId;
             bool suppressNextSelectionAutoScroll = false;
             ImGuiTextFilter nodeFilter;
+            EOutlinerTab currentTab = EOutlinerTab::SceneGraph;
+            ENodeKind typeFilter = ENodeKind::All;
+            bool expandAllRequested = false;
+            bool collapseAllRequested = false;
         };
 
         struct PropertiesState

@@ -253,14 +253,15 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
     ImDrawList* toolbarDrawList = ImGui::GetWindowDrawList();
     const ImVec2 toolbarMin = ImGui::GetWindowPos();
     const ImVec2 toolbarMax = toolbarMin + ImGui::GetWindowSize();
-    toolbarDrawList->AddLine(toolbarMin, ImVec2(toolbarMax.x, toolbarMin.y),
-                             NextUI::Theme::ColorU32(NextUI::Theme::EColor::Border, 0.50f), 1.0f);
     toolbarDrawList->AddLine(ImVec2(toolbarMin.x, toolbarMax.y - 1.0f), toolbarMax,
-                             NextUI::Theme::ColorU32(NextUI::Theme::EColor::Border, 0.75f), 1.0f);
+                             NextUI::Theme::ColorU32(NextUI::Theme::EColor::Border, 0.18f), 1.0f);
 
     constexpr float kControlHeight = 28.0f;
     const float cursorY = (kToolbarSize - kControlHeight) * 0.5f;
 
+    // ==========================================
+    // Center: Play-in-Editor Capsule
+    // ==========================================
     Editor::FPlaySession& play = ctx.editor->GetPlaySession();
     const bool playing = play.IsRunning();
     const bool ejected = play.State() == Editor::EPlayState::Ejected;
@@ -295,11 +296,11 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
     const bool canRebuild = !playing && selected != nullptr && selected->canRebuild;
 
     // Measure centered control group widths
-    const float playButtonWidth = playing ? 78.0f : 74.0f;
+    const float playButtonWidth = playing ? 82.0f : 78.0f;
     const float comboWidth = 180.0f;
-    const float rebuildButtonWidth = 112.0f;
-    const float pauseButtonWidth = 88.0f;
-    const float ejectButtonWidth = ejected ? 96.0f : 84.0f;
+    const float rebuildButtonWidth = 116.0f;
+    const float pauseButtonWidth = 90.0f;
+    const float ejectButtonWidth = ejected ? 98.0f : 86.0f;
     constexpr float kItemGap = 6.0f;
 
     float centerGroupWidth = playButtonWidth;
@@ -318,28 +319,23 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
 
     const float centerX = std::floor((viewport->Size.x - centerGroupWidth) * 0.5f);
 
-    // ==========================================
-    // 1. Centered Play-in-Editor Capsule
-    // ==========================================
-    constexpr float kPadX = 6.0f;
+    constexpr float kPadX = 7.0f;
     constexpr float kPadY = 3.0f;
     const ImVec2 capMin(toolbarMin.x + centerX - kPadX, toolbarMin.y + cursorY - kPadY);
     const ImVec2 capMax(toolbarMin.x + centerX + centerGroupWidth + kPadX, toolbarMin.y + cursorY + kControlHeight + kPadY);
-    toolbarDrawList->AddRectFilled(capMin, capMax, NextUI::Theme::ColorU32(NextUI::Theme::EColor::SurfaceElevated, 0.85f), 6.0f);
-    toolbarDrawList->AddRect(capMin, capMax, NextUI::Theme::ColorU32(NextUI::Theme::EColor::Border, 0.65f), 6.0f);
+    toolbarDrawList->AddRectFilled(capMin, capMax, NextUI::Theme::ColorU32(NextUI::Theme::EColor::SurfaceElevated, 0.88f), 6.0f);
 
     // Position cursor at center capsule
     ImGui::SetCursorPos(ImVec2(centerX, cursorY));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(kItemGap, 0.0f));
 
-    // Ensure unified control heights across Button, Combo, etc.
     const float fontSize = ImGui::GetFontSize();
     const float framePadY = std::floor((kControlHeight - fontSize) * 0.5f);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, framePadY));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
 
-    // --- Play / Stop Custom Button (Green Icon for Play, Red Icon for Stop) ---
+    // --- Play / Stop Custom Button ---
     std::string playTooltip;
     if (!play.IsAvailable())
     {
@@ -376,15 +372,15 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
         const ImU32 accentCol = playing ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger)
                                         : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success);
         const ImU32 bgCol = playDisabled ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Surface, 0.5f)
-                                         : (isPlayHovered ? (playing ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger, 0.22f)
-                                                                     : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success, 0.22f))
-                                                          : (playing ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger, 0.12f)
-                                                                     : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success, 0.12f)));
+                                         : (isPlayHovered ? (playing ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger, 0.28f)
+                                                                     : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success, 0.28f))
+                                                          : (playing ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger, 0.16f)
+                                                                     : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success, 0.16f)));
         const ImU32 borderCol = playDisabled ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Border, 0.4f)
-                                             : (isPlayHovered ? (playing ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger, 0.75f)
-                                                                         : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success, 0.75f))
-                                                              : (playing ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger, 0.45f)
-                                                                         : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success, 0.45f)));
+                                             : (isPlayHovered ? (playing ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger, 0.85f)
+                                                                         : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success, 0.85f))
+                                                              : (playing ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Danger, 0.55f)
+                                                                         : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Success, 0.55f)));
 
         toolbarDrawList->AddRectFilled(playBtnMin, playBtnMax, bgCol, 4.0f);
         toolbarDrawList->AddRect(playBtnMin, playBtnMax, borderCol, 4.0f, 0, 1.0f);
@@ -464,8 +460,6 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
                 ImGui::TextDisabled("no games under assets/configs/games");
             }
 
-            // The list is also where a game that does not exist yet gets started from: with no
-            // games at all this is the only thing in it, which is exactly when it is needed most.
             ImGui::Separator();
             const bool canCreateProject = play.CanCreateProject();
             ImGui::BeginDisabled(!canCreateProject);
@@ -512,15 +506,16 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
     }
     else
     {
-        // Playing state: 1) Pause / Resume toggle, 2) Eject / Resume toggle
         const bool paused = play.IsPaused();
 
+        // Pause / Eject are toggles: the active state has to stay legible in a borderless theme, so
+        // both the fill and the outline are pushed together with the border size they need.
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Button, paused ? NextUI::Theme::Color(NextUI::Theme::EColor::Warning, 0.22f)
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, paused ? 1.0f : 0.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button, paused ? NextUI::Theme::Color(NextUI::Theme::EColor::Warning, 0.25f)
                                                        : NextUI::Theme::Color(NextUI::Theme::EColor::Surface, 0.95f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover));
-        ImGui::PushStyleColor(ImGuiCol_Border, paused ? NextUI::Theme::Color(NextUI::Theme::EColor::Warning, 0.75f)
-                                                       : NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.70f));
+        ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Warning, 0.75f));
 
         const char* pauseLabel = paused ? ICON_FA_PLAY " Resume" : ICON_FA_PAUSE " Pause";
         if (ImGui::Button(pauseLabel, ImVec2(pauseButtonWidth, kControlHeight)))
@@ -532,13 +527,14 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
             ImGui::SetTooltip(paused ? "Resume game tick" : "Pause game tick");
         }
         ImGui::PopStyleColor(3);
+        ImGui::PopStyleVar();
 
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Button, ejected ? NextUI::Theme::Color(NextUI::Theme::EColor::Success, 0.18f)
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, ejected ? 1.0f : 0.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button, ejected ? NextUI::Theme::Color(NextUI::Theme::EColor::Success, 0.22f)
                                                        : NextUI::Theme::Color(NextUI::Theme::EColor::Surface, 0.95f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover));
-        ImGui::PushStyleColor(ImGuiCol_Border, ejected ? NextUI::Theme::Color(NextUI::Theme::EColor::Success, 0.6f)
-                                                       : NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.70f));
+        ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Success, 0.65f));
 
         const char* ejectLabel = ejected ? ICON_FA_GAMEPAD " Eject: Off" : ICON_FA_ARROW_POINTER " Eject";
         if (ImGui::Button(ejectLabel, ImVec2(ejectButtonWidth, kControlHeight)))
@@ -551,21 +547,24 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
                                       : "Eject camera and edit scene while game runs (F8)");
         }
         ImGui::PopStyleColor(3);
+        ImGui::PopStyleVar();
     }
 
     ImGui::PopStyleVar(3); // FramePadding, FrameRounding, FrameBorderSize
     ImGui::PopStyleVar();  // ItemSpacing
 
     // ==========================================
-    // 2. Right Side Action Area
+    // 3. Right Side: Actions & Utility Capsule
     // ==========================================
-    const float launchButtonWidth = 140.0f;
-    const float rightTotalWidth = launchButtonWidth + kToolbarIconWidth + 18.0f;
-    const float rightStart = viewport->Size.x - rightTotalWidth;
+    constexpr float kRightItemGap = 6.0f;
+    const float launchButtonWidth = 120.0f;
+    const float rightGroupWidth = launchButtonWidth + (kToolbarIconWidth * 2.0f) + (kRightItemGap * 2.0f);
+    const float rightStart = viewport->Size.x - 12.0f - rightGroupWidth;
 
     ImGui::SetCursorPos(ImVec2(rightStart, cursorY));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(kRightItemGap, 0.0f));
 
+    // Detached Launch button
     if (NextUI::Foundation::Button(
             ICON_FA_UP_RIGHT_FROM_SQUARE " Detached",
             {.variant = NextUI::Foundation::EButtonVariant::Secondary,
@@ -575,8 +574,17 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
         LaunchRendererDetached();
     }
 
+    // Reset Layout button
     ImGui::SameLine();
-    if (NextUI::Theme::ToolbarButton(ICON_FA_GEAR, "Editor Settings", uiState.settingsPanel,
+    if (NextUI::Theme::ToolbarButton(ICON_FA_ROTATE_LEFT, "Reset Layout to Default", false,
+                                     ImVec2(kToolbarIconWidth, kControlHeight)))
+    {
+        uiState.dockResetRequested = true;
+    }
+
+    // Settings / Preferences button
+    ImGui::SameLine();
+    if (NextUI::Theme::ToolbarButton(ICON_FA_GEAR, "Editor Preferences", uiState.settingsPanel,
                                      ImVec2(kToolbarIconWidth, kControlHeight)))
     {
         uiState.settingsPanel = !uiState.settingsPanel;
@@ -585,8 +593,6 @@ void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiSta
     ImGui::PopStyleVar();
     ImGui::End();
 
-    // Outside the toolbar window on purpose: a modal opened from inside a window that is repositioned
-    // and resized every frame inherits its clipping, and the dialog would be drawn into a 40px strip.
     if (const std::string createdGameId = play.DrawNewProjectDialog(); !createdGameId.empty())
     {
         uiState.lastPlayedGameId = createdGameId;

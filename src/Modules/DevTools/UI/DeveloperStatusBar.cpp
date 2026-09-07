@@ -58,48 +58,94 @@ namespace Runtime::DevToolsUI
             Complete,
         };
 
+        // Shared chrome for the borderless status pills in the developer bar: elevated background,
+        // status dot (haloed while busy) and the leading label. Returns where the pill content
+        // (progress bar, thread dots, ...) starts, so callers only lay out what is theirs.
+        struct FStatusPillMetrics
+        {
+            ImVec2 position;
+            ImVec2 size;
+            float contentStartX = 0.0f;
+            float textY = 0.0f;
+            float textSize = 0.0f;
+            bool hovered = false;
+        };
+
+        constexpr float kStatusPillHeight = 22.0f;
+        constexpr float kStatusPillRounding = 4.0f;
+        constexpr float kStatusPillTextScale = 0.78f;
+        constexpr float kStatusPillLabelX = 18.0f;
+        constexpr float kStatusPillDotX = 10.0f;
+
+        FStatusPillMetrics DrawStatusPillChrome(const char* label, float labelToContentGap, float contentWidth,
+                                                float trailingWidth, NextUI::Foundation::EColor statusColor,
+                                                bool busy)
+        {
+            ImFont* font = ImGui::GetFont();
+            const float textSize = ImGui::GetFontSize() * kStatusPillTextScale;
+            const ImVec2 labelSize = font->CalcTextSizeA(textSize, FLT_MAX, 0.0f, label);
+
+            FStatusPillMetrics metrics;
+            metrics.position = ImGui::GetCursorScreenPos();
+            metrics.size = ImVec2(kStatusPillLabelX + labelSize.x + labelToContentGap + contentWidth + trailingWidth,
+                                  kStatusPillHeight);
+            metrics.contentStartX = metrics.position.x + kStatusPillLabelX + labelSize.x + labelToContentGap;
+            metrics.textSize = textSize;
+            metrics.textY = metrics.position.y + (kStatusPillHeight - textSize) * 0.5f;
+
+            ImGui::Dummy(metrics.size);
+            metrics.hovered = ImGui::IsItemHovered();
+
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            drawList->AddRectFilled(metrics.position, metrics.position + metrics.size,
+                                    NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::SurfaceElevated,
+                                                                 metrics.hovered ? 0.85f : 0.45f),
+                                    kStatusPillRounding);
+
+            const ImVec2 dotCenter(metrics.position.x + kStatusPillDotX,
+                                   metrics.position.y + kStatusPillHeight * 0.5f);
+            if (busy)
+            {
+                drawList->AddCircleFilled(dotCenter, 4.2f, NextUI::Foundation::ColorU32(statusColor, 0.25f));
+            }
+            drawList->AddCircleFilled(dotCenter, 2.5f, NextUI::Foundation::ColorU32(statusColor, 0.90f));
+
+            drawList->AddText(font, textSize, ImVec2(metrics.position.x + kStatusPillLabelX, metrics.textY),
+                              NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::TextMuted), label);
+            return metrics;
+        }
+
         void DrawBakeActivity(NextEngine& engine)
         {
             const auto DrawActivity = [](const char* label, const char* value, const float fraction,
                                          const bool indeterminate, const EBakeStatus status, const char* tooltip)
             {
-                constexpr float height = 20.0f;
-                constexpr float rounding = 7.0f;
-                constexpr float progressWidth = 76.0f;
-                constexpr float progressHeight = 4.0f;
-                constexpr float textScale = 0.78f;
+                constexpr float progressWidth = 56.0f;
+                constexpr float progressHeight = 3.5f;
+                constexpr float contentGap = 7.0f;
 
-                const ImVec2 position = ImGui::GetCursorScreenPos();
-                ImFont* font = ImGui::GetFont();
-                const float textSize = ImGui::GetFontSize() * textScale;
-                const ImVec2 labelSize = font->CalcTextSizeA(textSize, FLT_MAX, 0.0f, label);
-                const ImVec2 valueSize = font->CalcTextSizeA(textSize, FLT_MAX, 0.0f, value);
-                const ImVec2 size(22.0f + labelSize.x + 10.0f + progressWidth + 8.0f + valueSize.x + 10.0f,
-                                  height);
-                const ImVec2 maximum = position + size;
-                const ImVec2 progressMin(position.x + 22.0f + labelSize.x + 10.0f,
-                                         position.y + (height - progressHeight) * 0.5f);
-                const ImVec2 progressMax(progressMin.x + progressWidth, progressMin.y + progressHeight);
-                ImDrawList* drawList = ImGui::GetWindowDrawList();
                 const NextUI::Foundation::EColor statusColor = status == EBakeStatus::Disabled
                     ? NextUI::Foundation::EColor::TextDim
                     : status == EBakeStatus::Complete
                         ? NextUI::Foundation::EColor::Success
                         : NextUI::Foundation::EColor::AccentHover;
 
-                drawList->AddRectFilled(position, maximum,
-                                        NextUI::Foundation::ColorU32(
-                                            NextUI::Foundation::EColor::SurfaceElevated, 0.90f),
-                                        rounding);
-                drawList->AddRect(position, maximum,
-                                  NextUI::Foundation::ColorU32(
-                                      statusColor, status == EBakeStatus::Disabled ? 0.20f : 0.32f),
-                                  rounding);
-                drawList->AddCircleFilled(ImVec2(position.x + 11.0f, position.y + height * 0.5f), 3.0f,
-                                          NextUI::Foundation::ColorU32(statusColor));
-                const float textY = position.y + (height - textSize) * 0.5f;
-                drawList->AddText(font, textSize, ImVec2(position.x + 22.0f, textY),
-                                  NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::TextMuted), label);
+                ImFont* font = ImGui::GetFont();
+                const float probeSize = ImGui::GetFontSize() * kStatusPillTextScale;
+                const float valueWidth = font->CalcTextSizeA(probeSize, FLT_MAX, 0.0f, value).x;
+                const FStatusPillMetrics pill = DrawStatusPillChrome(
+                    label, contentGap, progressWidth, contentGap + valueWidth + 8.0f, statusColor,
+                    status == EBakeStatus::Progress);
+
+                ImDrawList* drawList = ImGui::GetWindowDrawList();
+                const float textSize = pill.textSize;
+                const float textY = pill.textY;
+                const bool isHovered = pill.hovered;
+
+                const ImVec2 progressMin(pill.contentStartX,
+                                         pill.position.y + (kStatusPillHeight - progressHeight) * 0.5f);
+                const ImVec2 progressMax(progressMin.x + progressWidth, progressMin.y + progressHeight);
+
                 drawList->AddRectFilled(progressMin, progressMax,
                                         NextUI::Foundation::ColorU32(
                                             NextUI::Foundation::EColor::Background, 0.85f),
@@ -107,7 +153,7 @@ namespace Runtime::DevToolsUI
 
                 if (status != EBakeStatus::Disabled && indeterminate)
                 {
-                    constexpr float segmentWidth = 22.0f;
+                    constexpr float segmentWidth = 18.0f;
                     const float phase = std::fmod(static_cast<float>(ImGui::GetTime()) * 0.9f, 1.0f);
                     const float segmentStart = progressMin.x - segmentWidth +
                         phase * (progressWidth + segmentWidth * 2.0f);
@@ -123,15 +169,14 @@ namespace Runtime::DevToolsUI
                     const float fillWidth = std::max(
                         progressHeight, progressWidth * std::clamp(fraction, 0.0f, 1.0f));
                     drawList->AddRectFilled(progressMin, ImVec2(progressMin.x + fillWidth, progressMax.y),
-                                            NextUI::Foundation::ColorU32(statusColor),
+                                            NextUI::Foundation::ColorU32(statusColor, status == EBakeStatus::Complete ? 0.70f : 0.95f),
                                             progressHeight * 0.5f);
                 }
 
-                drawList->AddText(font, textSize, ImVec2(progressMax.x + 8.0f, textY),
+                drawList->AddText(font, textSize, ImVec2(progressMax.x + contentGap, textY),
                                   NextUI::Foundation::ColorU32(statusColor), value);
 
-                ImGui::Dummy(size);
-                if (ImGui::IsItemHovered())
+                if (isHovered && tooltip)
                 {
                     NextUI::Theme::DrawTooltip(tooltip);
                 }
@@ -186,23 +231,15 @@ namespace Runtime::DevToolsUI
         {
             const std::vector<Tasks::FTaskThreadStatus> statuses =
                 Tasks::TaskCoordinator::GetInstance()->GetTaskThreadStatuses();
-            constexpr float height = 20.0f;
-            constexpr float rounding = 7.0f;
-            constexpr float textScale = 0.78f;
-            constexpr float blockSize = 7.0f;
-            constexpr float blockGap = 3.0f;
+            constexpr float dotRadius = 2.5f;
+            constexpr float dotGap = 3.5f;
+            constexpr float contentGap = 8.0f;
 
-            ImFont* font = ImGui::GetFont();
-            const float textSize = ImGui::GetFontSize() * textScale;
-            const ImVec2 labelSize = font->CalcTextSizeA(textSize, FLT_MAX, 0.0f, "Tasks");
-            const float blockCount = static_cast<float>(statuses.size());
-            const float blocksWidth = statuses.empty()
+            const float threadCount = static_cast<float>(statuses.size());
+            const float dotsWidth = statuses.empty()
                 ? 0.0f
-                : blockCount * blockSize + (blockCount - 1.0f) * blockGap;
-            const ImVec2 size(22.0f + labelSize.x + 8.0f + blocksWidth + 10.0f, height);
-            ImGui::SameLine(0.0f, 6.0f);
-            const ImVec2 position = ImGui::GetCursorScreenPos();
-            const ImVec2 maximum = position + size;
+                : threadCount * (dotRadius * 2.0f) + (threadCount - 1.0f) * dotGap;
+
             const bool hasActiveThread = std::any_of(
                 statuses.begin(), statuses.end(), [](const Tasks::FTaskThreadStatus& thread)
                 {
@@ -213,60 +250,70 @@ namespace Runtime::DevToolsUI
                 : hasActiveThread
                     ? NextUI::Foundation::EColor::Warning
                     : NextUI::Foundation::EColor::Success;
-            ImDrawList* drawList = ImGui::GetWindowDrawList();
-            drawList->AddRectFilled(position, maximum,
-                                    NextUI::Foundation::ColorU32(
-                                        NextUI::Foundation::EColor::SurfaceElevated, 0.90f),
-                                    rounding);
-            drawList->AddRect(position, maximum,
-                              NextUI::Foundation::ColorU32(
-                                  statusColor, statuses.empty() ? 0.20f : 0.32f),
-                              rounding);
-            drawList->AddCircleFilled(ImVec2(position.x + 11.0f, position.y + height * 0.5f), 3.0f,
-                                      NextUI::Foundation::ColorU32(statusColor));
-            const float textY = position.y + (height - textSize) * 0.5f;
-            drawList->AddText(font, textSize, ImVec2(position.x + 22.0f, textY),
-                              NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::TextMuted), "Tasks");
 
-            const float blocksStartX = position.x + 22.0f + labelSize.x + 8.0f;
-            const float blocksStartY = position.y + (height - blockSize) * 0.5f;
+            ImGui::SameLine(0.0f, 6.0f);
+            const FStatusPillMetrics pill = DrawStatusPillChrome("Tasks", contentGap, dotsWidth, 8.0f,
+                                                                 statusColor, hasActiveThread);
+
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            const bool isHovered = pill.hovered;
+            const float dotsStartX = pill.contentStartX + dotRadius;
+            const float dotsCenterY = pill.position.y + kStatusPillHeight * 0.5f;
             for (size_t index = 0; index < statuses.size(); ++index)
             {
                 const Tasks::FTaskThreadStatus& thread = statuses[index];
                 const bool active = thread.running || thread.queued > 0u;
-                const NextUI::Foundation::EColor threadColor = active
-                    ? NextUI::Foundation::EColor::Warning
-                    : NextUI::Foundation::EColor::Success;
-                const float blockX = blocksStartX + static_cast<float>(index) * (blockSize + blockGap);
-                const ImVec2 blockMin(blockX, blocksStartY);
-                const ImVec2 blockMax = blockMin + ImVec2(blockSize, blockSize);
-                drawList->AddRectFilled(blockMin, blockMax,
-                                        NextUI::Foundation::ColorU32(threadColor, 0.90f), 2.0f);
-                drawList->AddRect(blockMin, blockMax,
-                                  NextUI::Foundation::ColorU32(threadColor, 0.40f), 2.0f);
+                const float dotX = dotsStartX + static_cast<float>(index) * (dotRadius * 2.0f + dotGap);
+                const ImVec2 threadDotCenter(dotX, dotsCenterY);
+
+                if (active)
+                {
+                    // Active running/queued worker: energetic warning glow + full dot
+                    drawList->AddCircleFilled(threadDotCenter, dotRadius + 1.2f,
+                                              NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::Warning, 0.30f));
+                    drawList->AddCircleFilled(threadDotCenter, dotRadius,
+                                              NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::Warning, 0.95f));
+                }
+                else
+                {
+                    // Idle worker: calm, subtle translucent success dot with no border
+                    drawList->AddCircleFilled(threadDotCenter, dotRadius,
+                                              NextUI::Foundation::ColorU32(NextUI::Foundation::EColor::Success, 0.40f));
+                }
             }
 
-            ImGui::Dummy(size);
-            if (ImGui::IsItemHovered())
+            if (isHovered)
             {
+                bool hitSpecificThread = false;
                 for (size_t index = 0; index < statuses.size(); ++index)
                 {
-                    const float blockX = blocksStartX + static_cast<float>(index) * (blockSize + blockGap);
-                    const ImVec2 blockMin(blockX, blocksStartY);
-                    const ImVec2 blockMax = blockMin + ImVec2(blockSize, blockSize);
-                    if (!ImGui::IsMouseHoveringRect(blockMin, blockMax))
+                    const float dotX = dotsStartX + static_cast<float>(index) * (dotRadius * 2.0f + dotGap);
+                    const ImVec2 threadHitMin(dotX - dotRadius - 1.5f, dotsCenterY - dotRadius - 4.0f);
+                    const ImVec2 threadHitMax(dotX + dotRadius + 1.5f, dotsCenterY + dotRadius + 4.0f);
+                    if (ImGui::IsMouseHoveringRect(threadHitMin, threadHitMax))
                     {
-                        continue;
+                        const Tasks::FTaskThreadStatus& thread = statuses[index];
+                        const char* state = thread.running
+                            ? (thread.queued > 0u ? "Running + queued" : "Running")
+                            : (thread.queued > 0u ? "Queued" : "Idle");
+                        const std::string tooltip = fmt::format(
+                            "{}\nStatus: {}\nQueued: {}", thread.name, state, thread.queued);
+                        NextUI::Theme::DrawTooltip(tooltip.c_str());
+                        hitSpecificThread = true;
+                        break;
                     }
-
-                    const Tasks::FTaskThreadStatus& thread = statuses[index];
-                    const char* state = thread.running
-                        ? (thread.queued > 0u ? "Running + queued" : "Running")
-                        : (thread.queued > 0u ? "Queued" : "Idle");
-                    const std::string tooltip = fmt::format(
-                        "{}\nStatus: {}\nQueued: {}", thread.name, state, thread.queued);
-                    NextUI::Theme::DrawTooltip(tooltip.c_str());
-                    break;
+                }
+                if (!hitSpecificThread)
+                {
+                    uint32_t activeCount = 0;
+                    for (const auto& t : statuses)
+                    {
+                        if (t.running || t.queued > 0u) ++activeCount;
+                    }
+                    const std::string summaryTooltip = fmt::format(
+                        "Task Thread Pool\nThreads: {} ({} active, {} idle)",
+                        statuses.size(), activeCount, statuses.size() - activeCount);
+                    NextUI::Theme::DrawTooltip(summaryTooltip.c_str());
                 }
             }
         }
