@@ -113,9 +113,24 @@ namespace Assets
                     RigBucket& bucket = buckets[RigQuantizeColor(mesh.color)];
                     bucket.color = mesh.color;
                     bucket.tris.reserve(bucket.tris.size() + mesh.tris.size());
-                    for (const glm::dvec3& p : mesh.tris)
+                    const bool flipWinding = glm::determinant(glm::dmat3(accum)) < 0.0;
+                    const auto transform = [&accum](const glm::dvec3& point)
                     {
-                        bucket.tris.push_back(glm::dvec3(accum * glm::dvec4(p, 1.0)));
+                        return glm::dvec3(accum * glm::dvec4(point, 1.0));
+                    };
+                    for (size_t i = 0; i + 2 < mesh.tris.size(); i += 3)
+                    {
+                        bucket.tris.push_back(transform(mesh.tris[i]));
+                        if (flipWinding)
+                        {
+                            bucket.tris.push_back(transform(mesh.tris[i + 2]));
+                            bucket.tris.push_back(transform(mesh.tris[i + 1]));
+                        }
+                        else
+                        {
+                            bucket.tris.push_back(transform(mesh.tris[i + 1]));
+                            bucket.tris.push_back(transform(mesh.tris[i + 2]));
+                        }
                     }
                 }
 

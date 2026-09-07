@@ -345,6 +345,10 @@ TEST_CASE("ScadRig bakes mirror inside the bone body into geometry", "[Unit][Sca
     const Model& right = asset.partModels[asset.parts[1].modelIndex];
     const glm::vec3 center = (right.GetLocalAABBMin() + right.GetLocalAABBMax()) * 0.5f;
     CHECK(center.x == Catch::Approx(-0.5f).margin(1e-4));
+    for (const Vertex& vertex : right.CPUVertices())
+    {
+        CHECK(glm::dot(vertex.Normal, vertex.Position - center) > 0.0f);
+    }
 }
 
 TEST_CASE("ScadRig loads the shipped agent_basic character", "[Unit][ScadRig]")
