@@ -39,6 +39,12 @@ struct UserSettings final
     bool UpscalerJitterInvertY = false;
     bool CheckerboardRendering = false;
 
+    // Frame pacing. Under a vsync present mode the interval a frame is on screen for is the display
+    // period, not the wall-clock gap between two CPU frames; the two only agree while the
+    // presentation path releases swapchain images one per vblank. See Runtime::FFramePacer.
+    bool FramePacing = true;
+    bool FramePacingLimitBurst = true;
+
     // Wireframe overlay (show.wireframe). The pass draws the soft-mesh expanded primitive stream,
     // so it shows exactly the geometry that survived culling, at the LOD it was drawn with.
     bool WireframeXRay = false;

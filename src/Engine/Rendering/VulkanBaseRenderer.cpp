@@ -1761,6 +1761,14 @@ namespace Vulkan
             frameGenerationSwapchainRequested_
                 ? VK_PRESENT_MODE_IMMEDIATE_KHR
                 : presentMode_;
+        // Before the swapchain exists, and with the device idle: a frame-generation provider that
+        // proxies presentation (Streamline's DLFG) may only take or release that ownership here.
+        // Leaving it installed for a swapchain that never generates frames is not free -- the proxy
+        // hands images back in bursts, which a vsync-paced frame loop turns into visible judder.
+        if (upscaler_)
+        {
+            upscaler_->SetFrameGenerationFeatureEnabled(frameGenerationSwapchainRequested_);
+        }
         frame_.swapChain.reset(new class SwapChain(*ctx_.device, requestedPresentMode, forceSDR_));
         swapchainStateTracker_.Reset();
         auxiliaryImageStateTracker_.Reset();

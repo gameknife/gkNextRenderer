@@ -422,6 +422,38 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     GK_LOG_STAGE("---- Next Engine Initialized in {}", stopwatch.elapsed_ms());
 }
 
+void NextEngine::UpdateFramePacerConfig()
+{
+    Runtime::FFramePacer::FConfig config{};
+    config.paceDelta = config_.userSettings.FramePacing;
+    config.limitBurst = config_.userSettings.FramePacingLimitBurst;
+    // Only a vsync present mode has a cadence to pace against. Immediate and Mailbox loops are
+    // meant to run free, and their wall-clock delta is already the interval the frame is shown for.
+    if (renderer_ && renderer_->HasSwapChain())
+    {
+        const VkPresentModeKHR presentMode = renderer_->SwapChain().PresentMode();
+        config.vsyncPresentMode = presentMode == VK_PRESENT_MODE_FIFO_KHR ||
+            presentMode == VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+    }
+    config.displayRefreshHz = window_ ? window_->DisplayRefreshRateHz() : 0.0;
+
+    // Whether the simulation is following the display cadence is exactly the question to ask when
+    // a build judders, so say it out loud whenever the answer changes rather than leaving it to be
+    // rediscovered with a profiler.
+    const auto& previous = framePacer_.Config();
+    if (config.paceDelta != previous.paceDelta || config.limitBurst != previous.limitBurst ||
+        config.vsyncPresentMode != previous.vsyncPresentMode ||
+        config.displayRefreshHz != previous.displayRefreshHz)
+    {
+        SPDLOG_INFO("Frame pacing: delta={} burstLimit={} presentMode={} display={:.2f}Hz",
+                    config.paceDelta ? "display cadence" : "wall clock",
+                    config.limitBurst ? "on" : "off",
+                    config.vsyncPresentMode ? "vsync" : "unsynchronized",
+                    config.displayRefreshHz);
+    }
+    framePacer_.Configure(config);
+}
+
 void NextEngine::TickHotReload()
 {
 #if GK_ENABLE_HOT_RELOAD
@@ -852,6 +884,14 @@ bool NextEngine::Tick(bool forcingDelta)
         // delta time calc
         {
             const auto prevTime = frameState_.time;
+            // Held before the timestamp is taken: the wait belongs to this frame's period, not the
+            // next one's. On a loop the presentation path is pacing correctly this does nothing.
+            UpdateFramePacerConfig();
+            if (!forcingDelta)
+            {
+                SCOPED_CPU_TIMER("frame pacing");
+                framePacer_.Hold();
+            }
             double currentTime = GetWindow().GetTime();
             double minimumTickInterval = 0.0;
             if (window_ && window_->IsMinimized())
@@ -871,9 +911,17 @@ bool NextEngine::Tick(bool forcingDelta)
                 }
             }
             frameState_.time = currentTime;
-            frameState_.deltaSeconds = frameState_.time - prevTime;
+            frameState_.rawDeltaSeconds = frameState_.time - prevTime;
+            frameState_.deltaSeconds = frameState_.rawDeltaSeconds;
             if (forcingDelta)
+            {
                 frameState_.deltaSeconds = 1.0 / 30.0;
+                framePacer_.Reset();
+            }
+            else
+            {
+                frameState_.deltaSeconds = framePacer_.Pace(frameState_.rawDeltaSeconds);
+            }
             float invDelta = static_cast<float>(frameState_.deltaSeconds) / 60.0f;
             frameState_.smoothedDeltaSeconds =
                 glm::mix(frameState_.smoothedDeltaSeconds, frameState_.deltaSeconds, invDelta * 100.0f);

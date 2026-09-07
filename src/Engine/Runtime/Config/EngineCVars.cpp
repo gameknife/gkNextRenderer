@@ -117,6 +117,8 @@ namespace NextCVar
         GK_CVAR_BOOL_CB("r.frameGeneration", settings, FrameGeneration, false, ECVarFlags::Archive, "Enable frame generation for the selected upscaler type", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_UINT_CB("r.frameGeneration.multiplier", settings, FrameGenerationMultiplier, 2, ECVarFlags::Archive, "Frame generation multiplier (2-4 when supported)", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_UINT("r.frameGeneration.frameLimitFps", settings, FrameGenerationFrameLimitFps, 0, ECVarFlags::Archive, "Base frame-rate limit while frame generation is enabled (0=unlimited)");
+        GK_CVAR_BOOL("r.framePacing", settings, FramePacing, true, ECVarFlags::Archive, "Advance the simulation by the display period per presented frame instead of by the wall-clock loop period (vsync present modes only)");
+        GK_CVAR_BOOL("r.framePacing.limitBurst", settings, FramePacingLimitBurst, true, ECVarFlags::Archive, "Stop the frame loop from draining a burst of acquired swapchain images faster than the display can show them");
         GK_CVAR_UINT("r.upscaler.jitterFrames", settings, UpscalerJitterFrames, 16, ECVarFlags::Archive, "Fallback temporal upscaler projection jitter sequence length (clamped to 1-256)");
         GK_CVAR_BOOL("r.upscaler.jitterInvertY", settings, UpscalerJitterInvertY, false, ECVarFlags::Archive, "Invert temporal upscaler projection jitter Y for diagnostics");
         GK_CVAR_BOOL("r.checkerboardRendering", settings, CheckerboardRendering, false, ECVarFlags::Archive, "Shade one checkerboard pixel parity per frame and reconstruct the missing parity before temporal upscaling");

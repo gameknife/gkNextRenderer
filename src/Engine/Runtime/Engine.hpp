@@ -19,6 +19,7 @@
 #include "Engine/Runtime/Interface/ShaderHotReload.hpp"
 #include "Engine/Runtime/Config/ShowFlags.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
+#include "Engine/Runtime/FramePacer.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
@@ -360,6 +361,10 @@ private:
     void TickHotReload();
     void StartPipelineWarmup();
     void PumpPipelineWarmupAfterPresent();
+    // Present mode, display refresh rate and the user's pacing toggles, refreshed per tick because
+    // all three can change under the engine (a swapchain rebuild, a window dragged to another
+    // monitor, a cvar).
+    void UpdateFramePacerConfig();
 
     // Configuration and user-facing toggles
     struct FConfigState
@@ -373,6 +378,9 @@ private:
     {
         uint32_t totalFrames = 0;
         double time = 0.0;
+        // The wall-clock period of the loop. deltaSeconds is what the simulation advances by, which
+        // the frame pacer may set to the display period instead -- see FFramePacer.
+        double rawDeltaSeconds = 0.0;
         double deltaSeconds = 0.0;
         double smoothedDeltaSeconds = 0.0;
         float frameRate = 0.0f;
@@ -451,6 +459,7 @@ private:
     // Engine state
     FConfigState config_{};
     FFrameState frameState_{};
+    Runtime::FFramePacer framePacer_{};
     FInputState inputState_{};
     FProgressiveRenderState progressiveRender_{};
     FScreenShotState screenShot_{};

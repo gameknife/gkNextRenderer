@@ -610,7 +610,31 @@ std::vector<const char*> Window::GetRequiredInstanceExtensions() const
 
 double Window::GetTime() const
 {
-    return SDL_GetTicks() / 1000.0;
+    // Nanoseconds, not SDL_GetTicks(): the same epoch, but a millisecond-quantised clock cannot
+    // measure a frame loop that runs faster than 1 kHz, and frame pacing reads this delta.
+    return static_cast<double>(SDL_GetTicksNS()) / 1'000'000'000.0;
+}
+
+float Window::DisplayRefreshRateHz() const
+{
+    if (config_.HeadlessSurface || window_ == nullptr)
+    {
+        return 0.0f;
+    }
+
+    const SDL_DisplayID display = SDL_GetDisplayForWindow(window_);
+    if (display == 0)
+    {
+        return 0.0f;
+    }
+
+    // A fullscreen window is scanned out at its own mode; a windowed one follows the desktop mode.
+    const SDL_DisplayMode* mode = SDL_GetWindowFullscreenMode(window_);
+    if (mode == nullptr)
+    {
+        mode = SDL_GetCurrentDisplayMode(display);
+    }
+    return mode != nullptr && mode->refresh_rate > 0.0f ? mode->refresh_rate : 0.0f;
 }
 
 void Window::Close()

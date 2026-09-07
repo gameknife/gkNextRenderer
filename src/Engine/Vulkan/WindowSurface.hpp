@@ -73,6 +73,10 @@ public:
     // GLFW instance properties (i.e. not bound to a window handler).
     std::vector<const char*> GetRequiredInstanceExtensions() const;
     double GetTime() const;
+    // Refresh rate of the display the window is currently on, or 0 when SDL cannot report one
+    // (headless surfaces, and drivers that leave the mode's refresh rate unset). Frame pacing
+    // treats 0 as "unknown" rather than guessing a period.
+    float DisplayRefreshRateHz() const;
 
     // Methods
     void Close();

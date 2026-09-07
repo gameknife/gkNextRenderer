@@ -47,6 +47,14 @@ namespace Rendering::Upscaler
                 activeProvider_ = nullptr;
             }
 
+            void SetFrameGenerationFeatureEnabled(bool enabled) override
+            {
+                for (auto& provider : providers_)
+                {
+                    provider->SetFrameGenerationFeatureEnabled(enabled);
+                }
+            }
+
             void WarmupPipelines() override
             {
                 for (auto& provider : providers_)
