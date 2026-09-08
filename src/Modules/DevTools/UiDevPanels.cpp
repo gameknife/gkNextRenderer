@@ -980,9 +980,9 @@ void FUiDevPanels::DrawConsoleWindow()
         return;
     }
 
-    constexpr float kBottomBarReservedHeight = 34.0f;
+    const float reservedHeight = bottomBarReservedHeight_ > 0.0f ? bottomBarReservedHeight_ : 34.0f;
     const ImVec2 windowPos = viewport->Pos;
-    const ImVec2 windowSize(viewport->Size.x, std::max(140.0f, viewport->Size.y - kBottomBarReservedHeight));
+    const ImVec2 windowSize(viewport->Size.x, std::max(140.0f, viewport->Size.y - reservedHeight));
 
     ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always);
     ImGui::SetNextWindowSize(windowSize, ImGuiCond_Always);

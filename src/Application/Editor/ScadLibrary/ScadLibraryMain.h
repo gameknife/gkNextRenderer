@@ -24,6 +24,7 @@ public:
     void OnTick(double deltaSeconds) override;
     void OnDestroy() override;
     bool OnRenderUI() override;
+    NextUI::FUiFrameResult RenderUiFrame(const FGameUiFrameContext& context) override;
     void OnPreConfigUI() override;
     void OnInitUI() override;
     void BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Assets::Model>& models,

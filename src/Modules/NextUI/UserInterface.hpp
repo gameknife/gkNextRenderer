@@ -45,7 +45,7 @@ public:
     void PrepareDrawData();
     void RenderPreparedDrawData(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx,
                                 bool suppressAllUi = false);
-    void HandleEvent(const SDL_Event* event);
+    bool HandleEvent(const SDL_Event* event) override;
 
     bool WantsToCaptureKeyboard() const;
     bool WantsToCaptureMouse() const;

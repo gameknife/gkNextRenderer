@@ -706,10 +706,7 @@ bool NextEngine::HandleEvent(SDL_Event& event)
 
     const bool globalCaptureShortcut = HandleGlobalCaptureShortcut(event);
 
-    if (userInterface_)
-    {
-        userInterface_->HandleEvent(&event);
-    }
+    const bool uiConsumed = userInterface_ && userInterface_->HandleEvent(&event);
     const bool rmlUiConsumed = uiOverlay_ && uiOverlay_->HandleEvent(event);
 
 #if IOS || ANDROID
@@ -737,7 +734,7 @@ bool NextEngine::HandleEvent(SDL_Event& event)
         case SDL_EVENT_GAMEPAD_BUTTON_UP:
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         case SDL_EVENT_MOUSE_BUTTON_UP:
-            if (!rmlUiConsumed)
+            if (!rmlUiConsumed && !uiConsumed)
             {
                 scriptRuntime_->HandleEvent(event);
             }
@@ -773,7 +770,7 @@ bool NextEngine::HandleEvent(SDL_Event& event)
     case SDL_EVENT_KEY_UP:
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
     case SDL_EVENT_GAMEPAD_BUTTON_UP:
-        if (!rmlUiConsumed && !globalCaptureShortcut)
+        if (!rmlUiConsumed && !uiConsumed && !globalCaptureShortcut)
         {
             OnKey(event);
         }

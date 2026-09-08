@@ -61,7 +61,7 @@ namespace NextUI
                                             const Vulkan::SwapChain& swapChain,
                                             uint32_t imageIdx,
                                             bool suppressAllUi = false) = 0;
-        virtual void HandleEvent(const SDL_Event* event) = 0;
+        virtual bool HandleEvent(const SDL_Event* event) = 0;
 
         virtual bool WantsToCaptureKeyboard() const = 0;
         virtual bool WantsToCaptureMouse() const = 0;

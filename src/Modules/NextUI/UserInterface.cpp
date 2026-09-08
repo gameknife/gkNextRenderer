@@ -1057,18 +1057,18 @@ void UserInterface::RenderPreparedDrawData(VkCommandBuffer commandBuffer, const 
     }
 }
 
-void UserInterface::HandleEvent(const SDL_Event* event)
+bool UserInterface::HandleEvent(const SDL_Event* event)
 {
     if (!event)
     {
-        return;
+        return false;
     }
 
     if (Runtime::IDebugUiProvider* provider = GetEngine().GetDebugUiProvider())
     {
         if (provider->HandleUiEvent(*event))
         {
-            return;
+            return true;
         }
     }
 
@@ -1095,7 +1095,7 @@ void UserInterface::HandleEvent(const SDL_Event* event)
                                        ? ImGuiMouseSource_TouchScreen
                                        : ImGuiMouseSource_Mouse);
             io.AddMousePosEvent(logicalPosition.x, logicalPosition.y);
-            return;
+            return false;
         }
     }
 #elif ANDROID || IOS
@@ -1112,7 +1112,7 @@ void UserInterface::HandleEvent(const SDL_Event* event)
                                        ? ImGuiMouseSource_TouchScreen
                                        : ImGuiMouseSource_Mouse);
             io.AddMousePosEvent(event->motion.x / uiScale_, event->motion.y / uiScale_);
-            return;
+            return false;
         }
     }
 #endif
@@ -1120,6 +1120,7 @@ void UserInterface::HandleEvent(const SDL_Event* event)
     {
         ImGui_ImplSDL3_ProcessEvent(event);
     }
+    return false;
 }
 
 bool UserInterface::WantsToCaptureKeyboard() const { return contextHost_->WantsToCaptureKeyboard(); }

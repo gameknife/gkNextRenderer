@@ -43,6 +43,7 @@ namespace DevTools
         void ToggleConsole();
         bool IsConsoleOpen() const { return showConsole_; }
         void RenderConsoleOverlay();
+        void SetBottomBarReservedHeight(float height) { bottomBarReservedHeight_ = height; }
 
         // Statistics overlay
         void DrawOverlay(const NextUI::Statistics& statistics);
@@ -82,6 +83,7 @@ namespace DevTools
         bool consoleScrollToBottom_ = false;
         bool requestConsoleFocus_ = false;
         bool suppressConsoleToggleTextInput_ = false;
+        float bottomBarReservedHeight_ = 34.0f;
         uint64_t consoleLogRevision_ = 0;
         static constexpr int kOverlaySparklineSampleCount = 64;
         static constexpr int kOverlaySparklineSampleStride = 2;

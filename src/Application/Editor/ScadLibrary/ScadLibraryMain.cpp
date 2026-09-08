@@ -7,6 +7,7 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.hpp"
+#include "Modules/DevTools/UiDevPanels.hpp"
 #include "Modules/NextUI/ImGuiScaling.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
 
@@ -162,6 +163,13 @@ bool ScadLibraryGameInstance::OnRenderUI()
     return true;
 }
 
+NextUI::FUiFrameResult ScadLibraryGameInstance::RenderUiFrame(const FGameUiFrameContext& context)
+{
+    (void)context;
+    OnRenderUI();
+    return {NextUI::EUiDeveloperLayer::Console};
+}
+
 void ScadLibraryGameInstance::FocusSelectedSceneObject()
 {
     glm::vec3 center;
@@ -212,6 +220,17 @@ bool ScadLibraryGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCame
 
 bool ScadLibraryGameInstance::OnKey(SDL_Event& event)
 {
+    if (DevTools::FUiDevPanels::Get().IsConsoleOpen())
+    {
+        return true;
+    }
+
+    if (event.type == SDL_EVENT_KEY_DOWN &&
+        (event.key.key == SDLK_GRAVE || event.key.scancode == SDL_SCANCODE_GRAVE))
+    {
+        return true;
+    }
+
     // The engine also forwards non-text shortcuts while an ImGui outliner row
     // owns keyboard focus. Keep actual text editing isolated from camera/input
     // handling when the focused widget is an InputText.
@@ -274,6 +293,11 @@ bool ScadLibraryGameInstance::OnKey(SDL_Event& event)
 
 bool ScadLibraryGameInstance::OnCursorPosition(double xpos, double ypos)
 {
+    if (DevTools::FUiDevPanels::Get().IsConsoleOpen())
+    {
+        return true;
+    }
+
     glm::vec3 center;
     float radius = 0.0f;
     const bool hasSelectedSceneObject =
@@ -294,6 +318,11 @@ bool ScadLibraryGameInstance::OnCursorPosition(double xpos, double ypos)
 
 bool ScadLibraryGameInstance::OnMouseButton(SDL_Event& event)
 {
+    if (DevTools::FUiDevPanels::Get().IsConsoleOpen())
+    {
+        return true;
+    }
+
     if (event.button.button == SDL_BUTTON_RIGHT)
     {
         cameraController_.OnMouseButton(event);
@@ -336,7 +365,7 @@ bool ScadLibraryGameInstance::OnMouseButton(SDL_Event& event)
 
 bool ScadLibraryGameInstance::OnScroll(double xoffset, double yoffset)
 {
-    if (ImGui::GetIO().WantCaptureMouse)
+    if (DevTools::FUiDevPanels::Get().IsConsoleOpen() || ImGui::GetIO().WantCaptureMouse)
     {
         return true;
     }

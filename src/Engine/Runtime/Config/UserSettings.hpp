@@ -72,7 +72,7 @@ struct UserSettings final
 
     // Projected pixel extent at or above which a proxy draws at LOD0; each further level halves it.
     // 0 pins everything to LOD0, which is the A/B baseline for measuring what LOD actually buys.
-    float LodBaseThreshold = 128.0f;
+    float LodBaseThreshold = 64.0f;
     // Multiplier applied to LodBaseThreshold for the sun shadow cascades. >1 makes shadows drop to
     // coarser levels sooner than the main view, which is safe because a cascade only needs the
     // silhouette, not surface detail.

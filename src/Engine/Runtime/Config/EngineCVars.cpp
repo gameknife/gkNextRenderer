@@ -84,7 +84,7 @@ namespace NextCVar
         GK_CVAR_UINT("r.maxBounces", settings, MaxNumberOfBounces, 10, ECVarFlags::Archive, "Maximum ray bounce count");
         GK_CVAR_BOOL("r.gtao.enable", settings, GTAOEnable, true, ECVarFlags::Archive, "Enable half-resolution GTAO for SoftwareModernNoAmbient sky lighting");
         GK_CVAR_INT("r.gtao.quality", settings, GTAOQuality, 1, ECVarFlags::Archive, "GTAO sampling quality (0=low 16 taps,1=medium 36 taps,2=high 64 taps,3=ultra 120 taps)");
-        GK_CVAR_FLOAT_RANGE("r.lod.baseThreshold", settings, LodBaseThreshold, 128.0f, ECVarFlags::Archive,
+        GK_CVAR_FLOAT_RANGE("r.lod.baseThreshold", settings, LodBaseThreshold, 64.0f, ECVarFlags::Archive,
                             "Projected pixel extent at or above which a mesh draws at LOD0; each further level halves it (0 = always LOD0)",
                             0.0, 4096.0);
         GK_CVAR_FLOAT_RANGE("r.lod.shadowThresholdScale", settings, LodShadowThresholdScale, 1.0f,

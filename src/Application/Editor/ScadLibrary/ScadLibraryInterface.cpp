@@ -23,6 +23,7 @@
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
+#include "Modules/DevTools/UiDevPanels.hpp"
 #include "Modules/NextUI/UI/DesktopUI.hpp"
 #include "Modules/ScadLoader/FScadEvaluator.h"
 #include "Modules/ScadLoader/FScadLexer.h"
@@ -2162,6 +2163,12 @@ namespace ScadLibrary
                 {
                     benchCollapsed_ = !benchCollapsed_;
                 }
+                ImGui::Separator();
+                const bool consoleOpen = DevTools::FUiDevPanels::Get().IsConsoleOpen();
+                if (ImGui::MenuItem("控制台", "`", consoleOpen))
+                {
+                    DevTools::FUiDevPanels::Get().ToggleConsole();
+                }
                 ImGui::EndMenu();
             }
             menuRight = std::max(menuRight, ImGui::GetItemRectMax().x);
@@ -2266,6 +2273,14 @@ namespace ScadLibrary
             }
         }
 
+        ImGui::SameLine(0.0f, itemGap);
+        if (NextUI::Theme::ToolbarButton(ICON_FA_TERMINAL " 控制台", "切换控制台 (`)",
+                                         DevTools::FUiDevPanels::Get().IsConsoleOpen(),
+                                         ImVec2(78.0f, buttonHeight)))
+        {
+            DevTools::FUiDevPanels::Get().ToggleConsole();
+        }
+
         ImGui::SameLine(0.0f, 10.0f);
         const float fps = engine_.GetFrameRate();
         const ImVec4 fpsColor = fps >= 55.0f ? NextUI::Theme::Color(NextUI::Theme::EColor::Success)
@@ -2277,14 +2292,15 @@ namespace ScadLibrary
 
     void ScadLibraryInterface::DrawBottomBar()
     {
+        DevTools::FUiDevPanels::Get().SetBottomBarReservedHeight(kBottomBarHeight);
         NextUI::Theme::FBottomBarConfig config{};
         config.WindowId = "ScadLibraryBottomBar";
         config.Height = kBottomBarHeight;
         config.CenterWidth = 588.0f;
         config.RightWidth = workspaceMode_ == EWorkspaceMode::SceneAssembly ||
                 workspaceMode_ == EWorkspaceMode::CharacterDesigner
-            ? 300.0f
-            : (workspaceMode_ == EWorkspaceMode::CharacterWorkbench ? 220.0f : 160.0f);
+            ? 390.0f
+            : (workspaceMode_ == EWorkspaceMode::CharacterWorkbench ? 310.0f : 250.0f);
         config.DrawLeftContent = [&]()
         {
             const bool dirty = (workspaceMode_ == EWorkspaceMode::SceneAssembly &&
